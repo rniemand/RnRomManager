@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using RnRomManager.Api.Configuration;
 using RnRomManager.Core.Configuration;
+using RnRomManager.Core.Database;
 using RnRomManager.Core.Storage;
 
 namespace RnRomManager.Api;
@@ -15,7 +16,8 @@ namespace RnRomManager.Api;
 public sealed class StartupRunner(
     ILogger<StartupRunner> logger,
     IServiceProvider services,
-    IOptions<PathsOptions> paths) : IHostedService
+    IOptions<PathsOptions> paths,
+    IDatabaseLifecycle database) : IHostedService
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -23,7 +25,7 @@ public sealed class StartupRunner(
         typeof(StartupRunner).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
         ?? "0.0.0-dev";
 
-    public Task StartAsync(CancellationToken cancellationToken)
+    public async Task StartAsync(CancellationToken cancellationToken)
     {
         // Step 3
         logger.LogInformation("RnRomManager {Version} starting", Version);
@@ -31,7 +33,10 @@ public sealed class StartupRunner(
 
         // Step 4 (system folders are added with the system handlers)
         StorageFolders.EnsureRoots(paths.Value);
-        return Task.CompletedTask;
+
+        // Steps 5–6
+        await database.WaitUntilAvailableAsync(cancellationToken);
+        database.Migrate();
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

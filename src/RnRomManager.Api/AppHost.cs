@@ -1,7 +1,11 @@
 using Microsoft.AspNetCore.StaticFiles;
+using Microsoft.Extensions.Options;
 using RnRomManager.Api.Configuration;
 using RnRomManager.Api.Endpoints;
 using RnRomManager.Api.Logging;
+using RnRomManager.Core.Configuration;
+using RnRomManager.Core.Database;
+using RnRomManager.Data;
 
 namespace RnRomManager.Api;
 
@@ -13,6 +17,12 @@ public static class AppHost
         var builder = WebApplication.CreateBuilder(args);
         NLogSetup.Configure(builder);
         builder.Services.AddAppOptions(builder.Configuration);
+        builder.Services.AddSingleton(TimeProvider.System);
+        // Parsed when first resolved (startup step 5), after config validation.
+        builder.Services.AddSingleton(sp =>
+            new MySqlConnectionFactory(sp.GetRequiredService<IOptions<ConnectionStringsOptions>>().Value.Default));
+        builder.Services.AddSingleton<IDbConnectionFactory>(sp => sp.GetRequiredService<MySqlConnectionFactory>());
+        builder.Services.AddSingleton<IDatabaseLifecycle, MySqlDatabaseLifecycle>();
         builder.Services.AddHostedService<StartupRunner>();
         var app = builder.Build();
 

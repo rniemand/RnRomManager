@@ -11,6 +11,7 @@
     <PackageReference Include="NSubstitute" />
     <PackageReference Include="NUnit" />
     <PackageReference Include="NUnit3TestAdapter" />
+    <PackageReference Include="Testcontainers.MariaDb" />
   </ItemGroup>
 
   <ItemGroup>
@@ -20,6 +21,10 @@
   <ItemGroup>
     <ProjectReference Include="../../src/RnRomManager.Data/RnRomManager.Data.csproj" />
     <ProjectReference Include="../RnRomManager.TestData/RnRomManager.TestData.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Migrations/*.sql" />
   </ItemGroup>
 
 </Project>

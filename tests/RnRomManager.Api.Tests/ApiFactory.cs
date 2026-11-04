@@ -1,6 +1,10 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using NLog;
+using NSubstitute;
+using RnRomManager.Core.Database;
 
 namespace RnRomManager.Api.Tests;
 
@@ -21,7 +25,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["Paths:Logs"] = Path.Combine(Root, "logs"),
             ["Paths:Cache"] = Path.Combine(Root, "cache"),
         };
+        Database.PingAsync(Arg.Any<CancellationToken>()).Returns(true);
     }
+
+    /// <summary>Stands in for MariaDB: wait/migrate succeed, ping is healthy unless a test says otherwise.</summary>
+    public IDatabaseLifecycle Database { get; } = Substitute.For<IDatabaseLifecycle>();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -29,6 +37,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseEnvironment("Testing");
         foreach (var (key, value) in Settings)
             builder.UseSetting(key, value);
+
+        builder.ConfigureTestServices(services => services.AddSingleton(Database));
     }
 
     protected override void Dispose(bool disposing)
