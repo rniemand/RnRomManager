@@ -65,7 +65,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S05 | Dockerfile + `build-docker.ps1` | #5 |
 | [x] | S06 | CI + release workflows, `test-all.ps1` | #6 |
 | [x] | S07 | DB plumbing, DbUp, dev DB, `/health/ready` | #7 |
-| [ ] | S08 | Schema migrations (all tables) | |
+| [x] | S08 | Schema migrations (all tables) | #8 |
 | [ ] | S09 | Users, password hashing, admin seed, Data Protection keys | |
 | [ ] | S10 | Login, session, antiforgery, lockout, rate limit | |
 | [ ] | S11 | User admin endpoints + `--reset-password` CLI | |

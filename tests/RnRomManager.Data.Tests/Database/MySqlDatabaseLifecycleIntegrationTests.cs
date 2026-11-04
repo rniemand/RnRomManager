@@ -50,14 +50,6 @@ public class MySqlDatabaseLifecycleIntegrationTests
     }
 
     [Test]
-    public async Task Migrate_EmptyDatabase_WithNoScripts_Succeeds()
-    {
-        var cs = await MariaDbFixture.CreateDatabaseAsync();
-
-        Assert.DoesNotThrow(() => Lifecycle(cs).Migrate());
-    }
-
-    [Test]
     public async Task Migrate_AppliesScriptsOnce_AndJournalsThemInSchemaVersions()
     {
         var cs = await MariaDbFixture.CreateDatabaseAsync();
