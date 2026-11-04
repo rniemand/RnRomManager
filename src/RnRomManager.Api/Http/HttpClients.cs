@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using Microsoft.Extensions.Http.Resilience;
 using Polly;
+using RnRomManager.Core.Media;
 
 namespace RnRomManager.Api.Http;
 
@@ -13,11 +14,19 @@ namespace RnRomManager.Api.Http;
 public static class HttpClients
 {
     public const string Dats = "dats";
+    public const string Thumbnails = "thumbnails";
 
     public static IServiceCollection AddExternalHttpClients(this IServiceCollection services)
     {
         services.AddTransient<RequestLoggingHandler>();
-        services.AddHttpClient(Dats, client => client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent))
+        Configure(services.AddHttpClient(Dats, client => client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent)));
+        // Typed client: a fresh HttpClient per resolve, so pooled handlers still rotate.
+        Configure(services.AddHttpClient<MediaService>(Thumbnails, client => client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent)));
+        return services;
+    }
+
+    private static void Configure(IHttpClientBuilder builder) =>
+        builder
             .AddHttpMessageHandler<RequestLoggingHandler>()
             .AddResilienceHandler("external", pipeline => pipeline
                 .AddRetry(new HttpRetryStrategyOptions
@@ -29,8 +38,6 @@ public static class HttpClients
                     ShouldHandle = args => ValueTask.FromResult(IsTransient(args.Outcome)),
                 })
                 .AddTimeout(TimeSpan.FromSeconds(20)));
-        return services;
-    }
 
     public static string UserAgent => $"RnRomManager/{StartupRunner.Version.Split('+')[0]}";
 
