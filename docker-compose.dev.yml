@@ -1,6 +1,7 @@
 # Local dev database (spec §16). Start: docker compose -f docker-compose.dev.yml up -d
-# Connection string: Server=localhost;Port=3306;Database=rnrommanager;User ID=rnrommanager;Password=rnrommanager
-# Dev-only credentials: never reuse them anywhere else.
+# The password comes from RNRM_DEV_DB_PASSWORD, e.g. a line `RNRM_DEV_DB_PASSWORD=<something>` in a
+# git-ignored `.env` next to this file (compose reads it automatically). Never commit it.
+# Connection string: Server=localhost;Port=3306;Database=rnrommanager;User ID=rnrommanager;Password=<that value>
 services:
   mariadb:
     image: mariadb:11.4
@@ -10,7 +11,7 @@ services:
     environment:
       MARIADB_DATABASE: rnrommanager
       MARIADB_USER: rnrommanager
-      MARIADB_PASSWORD: rnrommanager
+      MARIADB_PASSWORD: ${RNRM_DEV_DB_PASSWORD:?set RNRM_DEV_DB_PASSWORD (see the comment at the top of this file)}
       MARIADB_RANDOM_ROOT_PASSWORD: "1"
     ports:
       - "3306:3306"
