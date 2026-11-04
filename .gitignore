@@ -1,0 +1,35 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+TestResults/
+coverage/
+coverage*.xml
+*.coverage
+
+# Node / SvelteKit
+node_modules/
+.svelte-kit/
+src/RnRomManager.Web/build/
+src/RnRomManager.Api/wwwroot/
+
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+playwright/.cache/
+
+# Local dev data + config (never commit)
+.dev/
+appsettings.Development.json
+.env
+
+# Editors / OS
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+.DS_Store
+Thumbs.db

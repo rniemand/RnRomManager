@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RnRomManager.Api/RnRomManager.Api.csproj" />
+    <Project Path="src/RnRomManager.Core/RnRomManager.Core.csproj" />
+    <Project Path="src/RnRomManager.Data/RnRomManager.Data.csproj" />
+    <Project Path="src/RnRomManager.Systems.GameBoy/RnRomManager.Systems.GameBoy.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RnRomManager.Api.Tests/RnRomManager.Api.Tests.csproj" />
+    <Project Path="tests/RnRomManager.Core.Tests/RnRomManager.Core.Tests.csproj" />
+    <Project Path="tests/RnRomManager.Data.Tests/RnRomManager.Data.Tests.csproj" />
+    <Project Path="tests/RnRomManager.Systems.GameBoy.Tests/RnRomManager.Systems.GameBoy.Tests.csproj" />
+    <Project Path="tests/RnRomManager.TestData/RnRomManager.TestData.csproj" />
+  </Folder>
+</Solution>
