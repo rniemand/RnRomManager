@@ -1,6 +1,6 @@
 # RnRomManager — Initial Application Spec
 
-> Status: **v0.7 — ready for breakdown into implementation steps.** Third gap review done 2026-11-04 (DATs, thumbnails and Pan Docs re-verified live). Confirmed decisions are listed in §21; open items in §20.
+> Status: **v0.8 — ready for breakdown into implementation steps.** Fourth gap review done 2026-11-04 (DATs, metadat, thumbnails and Pan Docs re-verified live). Confirmed decisions are listed in §21; open items in §20.
 
 ## 1. Purpose
 
@@ -189,8 +189,8 @@ Each `(…)` group after the base title is classified left to right. Groups are 
 | title | string | ✓ | §6.1 |
 | displayTitle | string | ✓ | §6.1 |
 | releaseYear | int? | | from metadat (§10) |
-| developer | string? | | |
-| publisher | string? | | |
+| developers | string[] | ✓ | may be empty; distinct, DAT order (§10.1) |
+| publishers | string[] | ✓ | as above |
 | genres | string[] | ✓ | may be empty |
 | description | string? | | Admin-edited only in MVP |
 | roms | Rom[] | ✓ | ≥1 |
@@ -227,6 +227,7 @@ Each `(…)` group after the base title is classified left to right. Groups are 
 | source | `libretro-thumbnails` \| `default` | ✓ | |
 | sourceUrl | string? | | |
 | isDefault | bool | ✓ | |
+| sizeBytes | long | ✓ | entry size (checked by §9.3 / §12.1) |
 | sha1 | hex | ✓ | |
 | width / height | int | ✓ | read from the PNG IHDR (no image library) |
 | dateAdded | ISO-8601 UTC | ✓ | |
@@ -257,9 +258,9 @@ Started manually by an Admin from the UI (`POST /api/jobs/ingest`). Runs as a si
 | 4 | **Header + identify**: read the header with every handler of the folder's family (§22). Look up SHA1 in all of the family's DATs. Match → system = the matching DAT's system (D23). No match → system = header classification. | — |
 | 5 | **No DAT match**: `RomHeader.IsPlausible == false` (GB/GBC: logo invalid **and** header checksum invalid) → `Failed` `InvalidHeader` → `_failed/`. Otherwise → `Review` `NoDatMatch`: upsert `ingest_review_items` (unique on SHA1) with hashes, header, top-5 suggestions (§10.3); file stays in ingest. | |
 | 6 | **Group**: games owning a `roms` row with the same `system_id` + `base_title` (case-insensitive). One → that game. None → a new game (`title` = base title). **More than one** (possible after a partial move, §11) → `Review` `AmbiguousGroup`: the review item stores the DAT identification and the candidate game IDs; the file stays in ingest (D32). | |
-| 7 | **Metadata** (new game only): year/developer/publisher/genres from metadat by the CRC of the DAT entry the release is identified with (for `Unverified`, the chosen entry's CRC, §7.5). Manual releases get none. | missing data → nulls |
+| 7 | **Metadata** (new game only): year/developers/publishers/genres from metadat by the CRC of the DAT entry the release is identified with (for `Unverified`, the chosen entry's CRC, §7.5). Manual releases get none. | missing data → nulls |
 | 8 | **Media**: new game, or existing game whose box art `isDefault` → fetch box art + snap (§10.2). | not found / HTTP failure → default box art, no snap, `Warn` |
-| 9 | **Package**: atomic ZIP write + verify (§6.1) | verify/IO failure → `Error`, tmp deleted, source untouched. Existing game's ZIP missing/unreadable → `Error` `TargetZipUnreadable`; newer schema → `Error` `InfoJsonNewerSchema` (source untouched) |
+| 9 | **Package**: atomic ZIP write + verify (§6.1) | verify/IO failure → `Error` (`VerifyFailed` / `IoError`), tmp deleted, source untouched. Verify covers copied entries too, so a corrupt existing entry blocks new releases for that game; `details` names the entry (fix: self-repair §7.2 step 3, or delete that release). Existing game's ZIP missing/unreadable → `Error` `TargetZipUnreadable`; newer schema → `Error` `InfoJsonNewerSchema` (source untouched) |
 | 10 | **Mirror**: replace the game's DB rows in one transaction | DB failure → `Error`; ZIP stays; DB repaired by the next integrity run; source **not** deleted |
 | 11 | **Clean up**: delete the source (archive: §7.3) | delete failure → `Warn` (next run sees a `Duplicate`) |
 
@@ -290,7 +291,7 @@ Started manually by an Admin from the UI (`POST /api/jobs/ingest`). Runs as a si
 | Manual entry (title, regions, languages, revision, flags) | `method = Manual`; `fileName` = `Sanitize({title}{ ({regions joined ", "})}{ ({revision})}{ ({flag})…})` + ext, empty groups omitted; `baseTitle` = title; grouped by title (step 6; several candidates → the request fails `409 AmbiguousGroup`, use Attach) |
 | Dismiss | Loose file → `_failed/` with reason `Dismissed`; archive entry → archive untouched (§7.3). Item `Dismissed` |
 
-The ROM extension follows the resolved system's handler. A resolved item becomes `Resolved` with the `game_id`. Resolution runs steps 6–10 of §7.2 synchronously; on success the loose source file is deleted (step 11).
+Before any action the source file (loose) or archive (entry) must still exist, else `409 SourceMissing` and the row is deleted. The ROM extension follows the resolved system's handler (`RomExtensions[0]`). A resolved item becomes `Resolved` with the `game_id`. Resolution runs steps 6–10 of §7.2 synchronously; on success the loose source file is deleted (step 11).
 
 ## 8. Game Boy / Game Boy Color header extractor
 
@@ -330,7 +331,7 @@ Unknown table values are reported as `Unknown (0xNN)`.
 | MBC1 multicart (MBC1M) | Size 1 MiB + MBC1 type + valid logo at `0x40104` → `isMbc1Multicart = true`; header fields come from bank 0. Identified by hash like any ROM. |
 | Bad dump / garbage | Identified by hash only. Unmatched with an invalid logo **and** checksum → `InvalidHeader` (§7.2 step 5). |
 | Copier header (512 bytes) | Not a GB convention; no stripping. Such files won't DAT-match → review. |
-| Extension ≠ classification | DAT match: the DAT ROM name decides. Unmatched: renamed to the classified system's extension, `Warn`. |
+| Extension ≠ classification | DAT match: the DAT ROM name decides. Unmatched: renamed to the classified handler's `RomExtensions[0]`, `Warn`. |
 
 - The header title is **not** trusted for naming; it feeds suggestions (§10.3) only.
 - `MaxRomSizeBytes` = **16 MiB** (the current DATs hold 8 KiB–16 MiB ROMs, including aftermarket carts).
@@ -372,11 +373,11 @@ Verified live 2026-11-04: all 10 DAT files return 200 (GB DAT `2026.10.07`, 2,11
 | Box art, snap | `{ThumbnailBaseUrl}/<DatName>/Named_Boxarts/<key>.png`, `…/Named_Snaps/<key>.png` |
 
 ### 10.1 DATs
-- **Format:** clrmamepro text (not XML). The header `clrmamepro ( name, version, … )` gives `datName` + `datVersion`. Each `game ( name "…" [region "…"] [serial "…"] rom ( name "…" size N crc X md5 X sha1 X ) )`. Metadat files: `game ( comment "…" <field> "…" rom ( crc X ) )`. The parser accepts repeated field lines (none exist today). Metadat headers have **no `version`** (`dats.json` stores null); `identification.datVersion` always comes from the no-intro DAT.
+- **Format:** clrmamepro text (not XML). The header `clrmamepro ( name, version, … )` gives `datName` + `datVersion`. Each `game ( name "…" [region "…"] [serial "…"] rom ( name "…" size N crc X md5 X sha1 X ) )`. Metadat files: `game ( comment "…" <field> "…" rom ( crc X ) )`. Unknown fields are ignored (`serial`, `releaseyear/month/day` in no-intro; `franchise`, `name`, `description` in metadat). **Several metadat blocks can share one CRC** (e.g. Pokémon: developers `Nintendo` + `Game Freak`): values are merged distinct in file order into `developers[]` / `publishers[]` / `genres[]`; for `releaseyear` the first wins. A metadat value is never split (`Music / Dancing`, `Hiro Co., Ltd.` stay whole). Metadat CRCs with no no-intro entry are ignored. Metadat headers have **no `version`** (`dats.json` stores null); `identification.datVersion` always comes from the no-intro DAT.
 - **No `cloneof`/parent data** is present, so grouping is name-based (§6.1, D23).
 - Regions and languages are parsed from the ROM-name tags (§6.1.1). The DAT `region` field is ignored because it's missing for World releases.
 - Parsed into memory per system at startup and after a refresh (≈2–3k entries each): SHA1 → entry, CRC → metadat values, plus a name list for search/suggestions.
-- **Refresh DATs** (Admin, `DatRefresh` job): downloads all 10 files (2 systems × no-intro + 4 metadat) to a temp dir → parses each → swaps them into `cache/dats/` all at once → writes `dats.json` `{datName, version, downloadedAt, sha1}`. Any failure keeps the old set. No automatic refresh (D18).
+- **Refresh DATs** (Admin, `DatRefresh` job): downloads all 10 files (2 systems × no-intro + 4 metadat) to a temp dir → parses each → swaps them into `cache/dats/` all at once → writes `dats.json` (one entry per file: `{file, datName, version, downloadedAt, sha1}`). Any failure keeps the old set. On load each file's SHA1 is recomputed; a missing file, SHA1 mismatch or parse error = corrupt (§4.1 step 9). No automatic refresh (D18).
 - **Offline:** cached DATs keep working. With no cache, ingestion fails fast with `DatsMissing` (§7.1).
 - The GitHub API isn't used (unauthenticated limit of 60/h). Raw downloads only.
 
@@ -415,7 +416,7 @@ Verified live 2026-11-04: all 10 DAT files return 200 (GB DAT `2026.10.07`, 2,11
 | Login | `/login` | anon | username/password, generic error |
 | Change password | `/change-password` | auth | current + new + confirm, policy hint |
 | Library | `/` | auth | Grid (box art, 2/3/4/6 cols at xs/md/lg/xl) or list (table) toggle, remembered in `localStorage`. Filters: system, letter (`All`, `#`, `A–Z`), region (any release; options from `/api/systems` `regions`), search (debounced 300 ms, ≥2 chars). Sort: title (default, asc) / year (nulls last) / date added; tie-break `id`. 48 per page. Filters live in the URL query. |
-| Game detail | `/games/{id}` | auth | Box art + snap, displayTitle, year/dev/publisher/genres. Releases table: fileName, region, revision, flags, primary badge, size, CRC32/SHA1 with copy buttons, expandable header. Download ZIP / single ROM. The header is shown as a generic key/value table from `header` (no system-specific UI). **Admin:** Edit metadata (title, year, developer, publisher, genres, description), Retry media, Move release (to an existing game via typeahead, or to a new game with a title), Delete release, Delete game — each behind a confirm modal. |
+| Game detail | `/games/{id}` | auth | Box art + snap, displayTitle, year/developers/publishers/genres. Releases table: fileName, region, revision, flags, primary badge, size, CRC32/SHA1 with copy buttons, expandable header. Download ZIP / single ROM. The header is shown as a generic key/value table from `header` (no system-specific UI). **Admin:** Edit metadata (title, year, developers, publishers, genres, description), Retry media, Move release (to an existing game via typeahead, or to a new game with a title), Delete release, Delete game — each behind a confirm modal. |
 | Ingestion | `/ingestion` | Admin | Pending files per system (name, size, modified); Start / Cancel; progress bar (current/total + current file); last 10 runs → run detail. No DATs loaded → empty state with a link to Admin → DATs instead of Start. |
 | Job detail | `/jobs/{id}` | Admin | Any job type: status, times, summary counts, error; ingest items table (filter by outcome) |
 | Review queue | `/review` | Admin | Pending list (file, system, size, header title, reason, added). Detail: header + hashes; `NoDatMatch`: suggestions with scores, DAT search, attach-to-game (game typeahead + Hack/Translated), manual form; `AmbiguousGroup`: the DAT identity + candidate games, attach as a normal release; Dismiss. |
@@ -435,7 +436,7 @@ Verified live 2026-11-04: all 10 DAT files return 200 (GB DAT `2026.10.07`, 2,11
 ### 12.1 Rules
 | Mode | Per ZIP under `roms/<system>/` |
 |---|---|
-| Quick | If a DB row exists with equal `zip_size_bytes` + `zip_mtime_utc` → only check location/name. Else open the ZIP, parse `info.json`, compare the entry list + sizes to `info.json`, check box art, repair the DB. |
+| Quick | If a DB row exists with equal `zip_size_bytes` + `zip_mtime_utc` (file mtime truncated to whole seconds, UTC; survives FS/SMB precision differences) → only check location/name. Else open the ZIP, parse `info.json`, compare the entry list + sizes to `info.json`, check box art, repair the DB. |
 | Deep | Open every ZIP; all quick checks + recompute the SHA1 of every ROM and image entry. |
 
 Both modes also: list orphan files (anything that isn't a `.zip` in the library tree, stale `*.zip.tmp`), check every DB `games` row still has its ZIP, and detect duplicate `gameId`s and SHA1s.
@@ -482,22 +483,22 @@ Both modes also: list orphan files (anything that isn't a `.zip` in the library 
 | Fatal | config/migration/startup failures |
 
 - **Redaction:** passwords, cookies, antiforgery tokens and the `Admin:InitialPassword` value are never logged. Connection strings are only logged via `MySqlConnectionStringBuilder` with `Password` removed. Request/response bodies aren't logged.
-- **Download logs** (`GET /api/admin/logs`, Admin): a ZIP of every `*.log` in `Paths:Logs` plus `settings.json` (redacted effective config) and `version.txt`. Built with `SafePath` and streamed.
+- **Download logs** (`GET /api/admin/logs`, Admin): a ZIP of every `*.log` in `Paths:Logs` plus `settings.json` (redacted effective config) and `version.txt`. Built with `SafePath` and streamed; log files are opened with `FileShare.ReadWrite` because NLog may hold today's file open.
 
 ## 14. Database
 
 All tables InnoDB, `utf8mb4` / `utf8mb4_unicode_ci`. Times are `DATETIME(6)` UTC. GUIDs are `CHAR(36)`. JSON columns use the `JSON` type (stored as text; no JSON functions are queried). Column names avoid MySQL 8 reserved words (hence `system_id`, `trigger_source`).
 
 ### 14.1 Tables
-**users** — `id` INT PK AI · `username` VARCHAR(64) UNIQUE · `password_hash` VARCHAR(255) · `role` VARCHAR(16) (`Admin`/`User`) · `is_disabled` BOOL · `must_change_password` BOOL · `failed_login_count` INT · `lockout_until` DATETIME NULL · `security_stamp` CHAR(32) · `created_at`, `updated_at`, `last_login_at` NULL
+**users** — `id` INT PK AI · `username` VARCHAR(64) UNIQUE · `password_hash` VARCHAR(255) · `role` VARCHAR(16) (`Admin`/`User`) · `is_disabled` BOOL · `must_change_password` BOOL · `failed_login_count` INT · `lockout_until` NULL · `security_stamp` CHAR(32) · `created_at`, `updated_at`, `last_login_at` NULL
 
-**games** — `id` CHAR(36) PK · `system_id` VARCHAR(16) · `title` VARCHAR(255) · `display_title` VARCHAR(255) · `zip_path` VARCHAR(512) UNIQUE (relative to `Paths:Roms`, `/` separators) · `bucket` CHAR(1) · `release_year` SMALLINT NULL · `developer`, `publisher` VARCHAR(255) NULL · `genres` JSON · `description` TEXT NULL · `has_default_boxart` BOOL · `zip_size_bytes` BIGINT · `zip_mtime_utc` DATETIME · `info_schema_version` INT · `created_at`, `updated_at`
+**games** — `id` CHAR(36) PK · `system_id` VARCHAR(16) · `title` VARCHAR(255) · `display_title` VARCHAR(255) · `zip_path` VARCHAR(512) UNIQUE (relative to `Paths:Roms`, `/` separators) · `bucket` CHAR(1) · `release_year` SMALLINT NULL · `developers`, `publishers`, `genres` JSON · `description` TEXT NULL · `has_default_boxart` BOOL · `zip_size_bytes` BIGINT · `zip_mtime_utc` DATETIME(0) (whole seconds, §12.1) · `info_schema_version` INT · `created_at`, `updated_at`
 Indexes: (`system_id`, `bucket`, `title`), (`title`), (`created_at`)
 
 **roms** — `id` BIGINT PK AI · `game_id` FK→games ON DELETE CASCADE · `system_id` VARCHAR(16) · `file_name` VARCHAR(255) · `original_file_name` VARCHAR(255) · `base_title` VARCHAR(255) · `regions`, `languages`, `flags` JSON · `region_key` VARCHAR(255) (`|USA|Europe|`, with leading and trailing `|`; filter `LIKE '%|USA|%'`) · `revision` VARCHAR(32) NULL · `is_primary` BOOL · `id_method` VARCHAR(16) · `dat_name`, `dat_version`, `dat_game_name` NULL · `size_bytes` BIGINT · `crc32` CHAR(8) · `md5` CHAR(32) · `sha1` CHAR(40) UNIQUE · `header` JSON NULL · `date_added`, `date_modified`
 Indexes: (`game_id`), (`system_id`, `base_title`), (`crc32`)
 
-**images** — `id` BIGINT PK AI · `game_id` FK CASCADE · `file_name` VARCHAR(255) · `type` VARCHAR(16) · `source` VARCHAR(32) · `source_url` VARCHAR(1024) NULL · `is_default` BOOL · `sha1` CHAR(40) · `width`, `height` INT · `date_added` · UNIQUE (`game_id`, `file_name`)
+**images** — `id` BIGINT PK AI · `game_id` FK CASCADE · `file_name` VARCHAR(255) · `type` VARCHAR(16) · `source` VARCHAR(32) · `source_url` VARCHAR(1024) NULL · `is_default` BOOL · `size_bytes` BIGINT · `sha1` CHAR(40) · `width`, `height` INT · `date_added` · UNIQUE (`game_id`, `file_name`)
 
 **jobs** — `id` CHAR(36) PK · `type` VARCHAR(16) (`Ingest`/`Integrity`/`DatRefresh`) · `mode` VARCHAR(16) NULL (`Quick`/`Deep`) · `trigger_source` VARCHAR(16) (`Manual`/`Schedule`) · `status` VARCHAR(16) (`Running`/`Completed`/`Cancelled`/`Failed`/`Aborted`) · `requested_by` INT NULL FK→users · `started_at`, `finished_at` NULL · `summary` JSON NULL (counts) · `error` TEXT NULL · index (`type`, `started_at`)
 
@@ -525,7 +526,7 @@ Indexes: (`game_id`), (`system_id`, `base_title`), (`crc32`)
 | Component | Tests |
 |---|---|
 | GB header extractor | every field, both checksums (valid/invalid), CGB/SGB variants, unknown table values, MBC2 RAM, MBC1 multicart detection, size mismatch, < 0x150 bytes, random garbage |
-| DAT parser | header/version, games with/without region, quoted names containing `(`, metadat repeatable fields, malformed input |
+| DAT parser | header/version, games with/without region, quoted names containing `(`, unknown fields ignored, several metadat blocks per CRC merged distinct, `dats.json` SHA1 mismatch = corrupt, malformed input |
 | Naming | base title, displayTitle article rule, sanitize (every illegal char, reserved names, length), bucket, clash suffixes, §6.1.1 tag parsing (ROM name ≠ game name, `(SGB Enhanced, GB Compatible)`, `(Proto 2)`, `(v1.0.3)`), revision order, primary ranking incl. `Unverified` |
 | Thumbnail key | escaping of every special char + URL encoding |
 | Suggestions | scoring, threshold, size boost, top-5 |
@@ -542,8 +543,8 @@ Indexes: (`game_id`), (`system_id`, `base_title`), (`crc32`)
 - Rule: every non-trivial class has unit tests; behaviour changes need a test before merge. Coverage reported in CI without a gate (D21).
 
 ### 15.2 Synthetic ROMs & fixture DAT (no copyrighted ROMs)
-- `RnRomManager.TestData` holds `SyntheticRomBuilder`: deterministic bytes from a seed; sets title, CGB/SGB flags, cart type, ROM/RAM size, licensee, destination and the Nintendo logo (48-byte bitmap from Pan Docs, needed for `logoValid`); computes both checksums; options to corrupt either checksum, the logo or the size.
-- `FixtureDatWriter` writes clrmamepro DATs (no-intro + the 4 metadat) for a named ROM set, using the real hashes of the generated ROMs, with versions like `fixture-1`.
+- `RnRomManager.TestData` holds `SyntheticRomBuilder`: deterministic bytes from a seed; sets title, CGB/SGB flags, cart type, ROM/RAM size, licensee, destination and the Nintendo logo (48-byte bitmap from Pan Docs, needed for `logoValid`); computes both checksums; options to corrupt either checksum, the logo or the size, and to build a 1 MiB MBC1 multicart (second logo at `0x40104`).
+- `FixtureDatWriter` writes clrmamepro DATs (no-intro + the 4 metadat) for a named ROM set, using the real hashes of the generated ROMs, with versions like `fixture-1`, plus a matching `dats.json` (§10.1), so the app loads them like a refresh.
 - **Built-in sets:** `Basic` (3 GB + 2 GBC games, multiple regions/revs, one article title, one dual-mode cart in `ingest/gb/`, one duplicate, one unmatched → review, one invalid header, one zip + one 7z archive) and `Full` (`Basic` + 200 generated games for paging).
 - CLI: `dotnet run --project tests/RnRomManager.TestData -- --ingest <dir> --cache <dir> --set Basic|Full`.
 - **7z fixture:** SharpCompress can't write 7z, so `tests/RnRomManager.TestData/Fixtures/basic.7z` is committed (a few KiB). It holds one `SyntheticRomBuilder` ROM from a fixed seed; a unit test asserts the extracted bytes equal the builder output, so the fixture DAT hashes stay valid. `Fixtures/README.md` records how it was made (`7z a` with the seed). ZIP archives are generated at run time with `System.IO.Compression`.
@@ -692,6 +693,7 @@ None. New questions found during implementation get added here.
 | D31 | 2026-11-04 | Defaults applied in the second gap review: tags parsed from the DAT ROM name (§6.1.1) with defined revision order; `MinRomSizeBytes` on `ISystemHandler`; Data Protection keys in DB table `data_protection_keys`; CSP `script-src` hashes computed by the API from `index.html`, theme script moved to `/theme.js`; Docker `TARGETARCH` → .NET arch mapping; `--healthcheck` handled before host build; integrity DB repair skips `DuplicateSha1` ZIPs; review rows auto-resolve/delete on re-runs; `TargetZipUnreadable` / `InfoJsonNewerSchema` → `Error`; cancel waits for a whole archive; 180-day retention for jobs + closed issues; usernames `[A-Za-z0-9._-]{3,64}` case-insensitive; login rate limit 10/min/IP; admin reset clears lockout + forces change; `region_key` pipe-delimited both ends; `regions` on `/api/systems`; `Sources:DatBaseUrl` / `Sources:ThumbnailBaseUrl` config (empty thumbnails = offline e2e); `ci.yml` skips `main` pushes; single instance per DB; `info.json` field `region` → `regions`. |
 | D32 | 2026-11-04 | When a new release's base title is held by more than one game (after a partial move), it goes to the review queue as `AmbiguousGroup`; the Admin attaches it to one of the candidate games as a normal release (`flag: None`, DAT identification kept). |
 | D33 | 2026-11-04 | Defaults applied in the third gap review: `DatsMissing` checked before a job row exists (409); `IsPlausible` replaces GB-specific wording in Core; bucket upper-cases a lowercase first letter; file-name comparisons case-insensitive; NFC in Sanitize; displayTitle articles include `Die/Der/Das/Le/La/Les/El/Il`; stored bytes = `NormalizeForHashing` output; dismissed SHA1s re-queue (loose) or fail the archive (entry); resolved archive entries count as `Ingested` for archive fate; metadata for `Unverified` from the chosen entry's CRC, none for Manual; media skips releases without `datGameName`; Retry media covers `MissingBoxArt`; move-to-new-game runs metadata + media; change-password re-signs the current session; persistent 7-day cookie, no absolute limit; MEL min level `Trace` with NLog filtering; log retention done by the app, one file per UTC day; app forces `DateTimeKind=Utc`/`GuidFormat=Char36`; DB must pre-exist; CI tests MariaDB 11.4 only; MinVer CLI only (no package); healthcheck port from `ASPNETCORE_HTTP_PORTS`; committed `basic.7z` fixture; no schedule catch-up; consolidated code list (§23.1); `/jobs/{id}` page, navbar, 404 page, static cache headers. |
+| D34 | 2026-11-04 | `developer`/`publisher` become `developers[]`/`publishers[]` (info.json v1, DB JSON) because metadat repeats a CRC per credited company. Defaults applied in the fourth gap review: metadat blocks per CRC merged distinct, unknown DAT fields ignored, values never split; `Image.sizeBytes` + `images.size_bytes` (entry size checks need it); `zip_mtime_utc` compared in whole seconds; package verify failure on a corrupt existing entry is `VerifyFailed` naming the entry; `dats.json` per-file SHA1 checked on load, written by `FixtureDatWriter`; `409 SourceMissing` for review actions whose source is gone; unmatched renames use `RomExtensions[0]`; log download opens files `FileShare.ReadWrite`; builder MBC1M option. |
 
 ## 22. Extensibility — `ISystemHandler`
 
@@ -743,7 +745,7 @@ JSON, camelCase. Errors are RFC 7807 ProblemDetails with an extra `code` (§23.1
 | GET | `/api/games/{id}/images/{imageId}` | auth | → `image/png`, `ETag` = sha1, `Cache-Control: private, max-age=86400` |
 | GET | `/api/games/{id}/download` | auth | → ZIP file (range support, `Content-Disposition` with RFC 5987 `filename*`) |
 | GET | `/api/games/{id}/roms/{romId}/download` | auth | → ROM bytes streamed from the ZIP |
-| PATCH | `/api/games/{id}` | Admin | `{title?,releaseYear?,developer?,publisher?,genres?,description?}` → game · 409 |
+| PATCH | `/api/games/{id}` | Admin | `{title?,releaseYear?,developers?,publishers?,genres?,description?}` → game · 409 `JobRunning` / `InfoJsonNewerSchema` / `TargetZipUnreadable` |
 | DELETE | `/api/games/{id}` | Admin | → 204 (ROMs → `_removed/`) |
 | DELETE | `/api/games/{id}/roms/{romId}` | Admin | → 204 (last ROM → game deleted) |
 | POST | `/api/games/{id}/roms/{romId}/move` | Admin | `{targetGameId}` or `{newGameTitle}` → `{targetGameId}` |
@@ -759,8 +761,8 @@ JSON, camelCase. Errors are RFC 7807 ProblemDetails with an extra `code` (§23.1
 | POST | `/api/jobs/{id}/cancel` | Admin | → 202 · 404 if not running |
 | GET | `/api/review` | Admin | `?status=Pending&page&pageSize` → page of `{id,system,reason,fileName,sizeBytes,headerTitle,createdAt}` (`fileName` = `originalFileName`) |
 | GET | `/api/review/{id}` | Admin | → item incl. header, hashes, suggestions, `datIdentification`, `candidateGames[{id,displayTitle}]` |
-| POST | `/api/review/{id}/resolve` | Admin | `{action:"Dat",datSystem,datGameName}` (→ `Unverified`, §7.5) · `{action:"Attach",targetGameId,flag:"Hack"\|"Translated"\|"None"}` (`None` only for `AmbiguousGroup`) · `{action:"Manual",title,regions[],languages[],revision?,flags[]}` → `{gameId}` · 409 `JobRunning` / `AmbiguousGroup` · 400 `ValidationFailed` |
-| POST | `/api/review/{id}/dismiss` | Admin | → 204 |
+| POST | `/api/review/{id}/resolve` | Admin | `{action:"Dat",datSystem,datGameName}` (→ `Unverified`, §7.5) · `{action:"Attach",targetGameId,flag:"Hack"\|"Translated"\|"None"}` (`None` only for `AmbiguousGroup`) · `{action:"Manual",title,regions[],languages[],revision?,flags[]}` → `{gameId}` · 409 `JobRunning` / `AmbiguousGroup` / `SourceMissing` · 400 `ValidationFailed` |
+| POST | `/api/review/{id}/dismiss` | Admin | → 204 · 409 `JobRunning` / `SourceMissing` |
 | GET | `/api/dat/search` | Admin | `?system&q&limit=20` → `[{gameName,romName,sizeBytes,crc32}]` |
 | GET | `/api/integrity/status` | Admin | → `{lastQuick,lastDeep,nextScheduledAt}` |
 | GET | `/api/integrity/issues` | Admin | `?status&type&page&pageSize` → page of issues |
@@ -779,6 +781,7 @@ JSON, camelCase. Errors are RFC 7807 ProblemDetails with an extra `code` (§23.1
 | `ValidationFailed` (400), `AntiforgeryInvalid` (400) | API | bad input / missing XSRF header |
 | `InvalidCredentials` (401), `PasswordChangeRequired` (403), `TooManyRequests` (429) | API | §9 |
 | `NotFound` (404) | API | unknown id, or `cancel` with no running job |
+| `SourceMissing` (409) | API | review resolve/dismiss whose source file (or archive) is gone; the row is deleted |
 | `JobRunning`, `DatsMissing`, `LastAdmin`, `UsernameTaken`, `AmbiguousGroup`, `InfoJsonNewerSchema`, `TargetZipUnreadable` (409) | API | conflicts; the last two when a library edit hits such a ZIP |
 | `UnsupportedType`, `TooSmall`, `TooLarge`, `ArchiveUnsafe`, `ArchiveCorrupt`, `ArchiveEncrypted`, `InvalidHeader`, `Dismissed` | `job_items.reason` (`Failed`) | file problems (§7.2, §7.3, §7.5) |
 | `IoError`, `VerifyFailed`, `DbWriteFailed`, `TargetZipUnreadable`, `InfoJsonNewerSchema`, `Unexpected` | `job_items.reason` (`Error`) | environment problems; source left in place |
