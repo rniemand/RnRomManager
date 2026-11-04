@@ -75,7 +75,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S15 | GB/GBC header extractor | #15 |
 | [x] | S16 | `ISystemHandler` + GB/GBC handlers | #16 |
 | [x] | S17 | Naming + tag parsing + primary ranking | #17 |
-| [ ] | S18 | DAT parser, DAT store, `FixtureDatWriter` | |
+| [x] | S18 | DAT parser, DAT store, `FixtureDatWriter` | #18 |
 | [ ] | S19 | `info.json` model, validation, upgraders | |
 | [ ] | S20 | Library ZIP reader/writer + PNG IHDR | |
 | [ ] | S21 | Job runner + jobs API + crash recovery | |
