@@ -1,0 +1,51 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
+
+namespace RnRomManager.Api.Security;
+
+/// <summary>
+/// spec §9.2 response headers on every response. <c>script-src</c> allows the inline scripts of
+/// <c>wwwroot/index.html</c> (SvelteKit's bootstrap) by hash, computed once at startup.
+/// </summary>
+public static partial class SecurityHeaders
+{
+    public static WebApplication UseSecurityHeaders(this WebApplication app)
+    {
+        var index = app.Environment.WebRootFileProvider.GetFileInfo("index.html");
+        string? html = null;
+        if (index.Exists)
+        {
+            using var reader = new StreamReader(index.CreateReadStream(), Encoding.UTF8);
+            html = reader.ReadToEnd();
+        }
+        var csp = ContentSecurityPolicy(html);
+
+        app.Use((ctx, next) =>
+        {
+            var headers = ctx.Response.Headers;
+            headers.ContentSecurityPolicy = csp;
+            headers.XContentTypeOptions = "nosniff";
+            headers["Referrer-Policy"] = "no-referrer";
+            return next(ctx);
+        });
+        return app;
+    }
+
+    /// <param name="indexHtml">null when there's no built SPA (API-only dev): <c>script-src 'self'</c>.</param>
+    public static string ContentSecurityPolicy(string? indexHtml)
+    {
+        var scriptSrc = string.Join(' ', ["'self'", .. InlineScriptHashes(indexHtml ?? "")]);
+        return $"default-src 'self'; script-src {scriptSrc}; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'";
+    }
+
+    /// <summary>CSP source for each inline <c>&lt;script&gt;</c> body, hashed exactly as served (whitespace included).</summary>
+    public static IEnumerable<string> InlineScriptHashes(string html) =>
+        InlineScript().Matches(html)
+            .Select(m => $"'sha256-{Convert.ToBase64String(SHA256.HashData(Encoding.UTF8.GetBytes(m.Groups[1].Value)))}'")
+            .Distinct();
+
+    // shortcut: regex, not an HTML parser; fine for SvelteKit's generated page, revisit if index.html gets hand-written scripts with "</script>" in strings.
+    [GeneratedRegex(@"<script(?![^>]*\ssrc\s*=)[^>]*>(.*?)</script>", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
+    private static partial Regex InlineScript();
+}

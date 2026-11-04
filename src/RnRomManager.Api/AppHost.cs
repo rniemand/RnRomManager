@@ -8,6 +8,7 @@ using RnRomManager.Api.Auth;
 using RnRomManager.Api.Configuration;
 using RnRomManager.Api.Endpoints;
 using RnRomManager.Api.Logging;
+using RnRomManager.Api.Security;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Users;
@@ -24,6 +25,7 @@ public static class AppHost
         var builder = CreateBuilder(args);
         builder.Services.AddHostedService<StartupRunner>();
         var app = builder.Build();
+        app.UseSecurityHeaders();
 
         var staticFiles = new StaticFileOptions { OnPrepareResponse = ctx => SetCacheHeaders(ctx) };
         app.UseStaticFiles(staticFiles);
