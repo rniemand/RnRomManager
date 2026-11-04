@@ -5,31 +5,43 @@ using Microsoft.Extensions.DependencyInjection;
 using NLog;
 using NSubstitute;
 using RnRomManager.Core.Database;
+using RnRomManager.Core.Users;
 
 namespace RnRomManager.Api.Tests;
 
-/// <summary>Test host with valid config pointing every path into its own temp folder (deleted on dispose).</summary>
+/// <summary>
+/// Test host with valid config pointing every path into its own temp folder (deleted on dispose).
+/// Without a connection string the database is stubbed (no MariaDB needed); with one, the real migrations,
+/// admin seed and key storage run against it (Integration tests).
+/// </summary>
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
-    public string Root { get; } = Directory.CreateTempSubdirectory("rnrm-api-").FullName;
-
-    public Dictionary<string, string?> Settings { get; }
-
-    public ApiFactory()
+    public ApiFactory(string? connectionString = null)
     {
+        UsesRealDatabase = connectionString is not null;
         Settings = new()
         {
-            ["ConnectionStrings:Default"] = "Server=localhost;Database=rnrommanager_test;User ID=test;Password=hunter2",
+            ["ConnectionStrings:Default"] = connectionString ?? "Server=localhost;Database=rnrommanager_test;User ID=test;Password=hunter2",
             ["Paths:Roms"] = Path.Combine(Root, "roms"),
             ["Paths:Ingest"] = Path.Combine(Root, "ingest"),
             ["Paths:Logs"] = Path.Combine(Root, "logs"),
             ["Paths:Cache"] = Path.Combine(Root, "cache"),
         };
         Database.PingAsync(Arg.Any<CancellationToken>()).Returns(true);
+        Users.CountAsync(Arg.Any<CancellationToken>()).Returns(1);
     }
 
-    /// <summary>Stands in for MariaDB: wait/migrate succeed, ping is healthy unless a test says otherwise.</summary>
+    public string Root { get; } = Directory.CreateTempSubdirectory("rnrm-api-").FullName;
+
+    public Dictionary<string, string?> Settings { get; }
+
+    public bool UsesRealDatabase { get; }
+
+    /// <summary>Stub DB lifecycle (stub mode only): wait/migrate succeed, ping is healthy unless a test says otherwise.</summary>
     public IDatabaseLifecycle Database { get; } = Substitute.For<IDatabaseLifecycle>();
+
+    /// <summary>Stub users table (stub mode only): reports one user, so startup doesn't seed.</summary>
+    public IUserRepository Users { get; } = Substitute.For<IUserRepository>();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -38,7 +50,14 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         foreach (var (key, value) in Settings)
             builder.UseSetting(key, value);
 
-        builder.ConfigureTestServices(services => services.AddSingleton(Database));
+        if (!UsesRealDatabase)
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.AddSingleton(Database);
+                services.AddSingleton(Users);
+            });
+        }
     }
 
     protected override void Dispose(bool disposing)
