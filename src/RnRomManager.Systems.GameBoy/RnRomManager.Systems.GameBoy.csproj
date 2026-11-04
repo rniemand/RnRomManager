@@ -6,5 +6,6 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources/header-tables.json" />
+    <EmbeddedResource Include="Resources/boxart/*.png" />
   </ItemGroup>
 </Project>

@@ -11,9 +11,11 @@ using RnRomManager.Api.Logging;
 using RnRomManager.Api.Security;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
+using RnRomManager.Core.Systems;
 using RnRomManager.Core.Users;
 using RnRomManager.Data;
 using RnRomManager.Data.Repositories;
+using RnRomManager.Systems.GameBoy;
 
 namespace RnRomManager.Api;
 
@@ -59,6 +61,8 @@ public static class AppHost
         builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
         builder.Services.AddSingleton<AdminSeeder>();
         builder.Services.AddAppAuth();
+        builder.Services.AddSystemHandler<GameBoyHandler>();
+        builder.Services.AddSystemHandler<GameBoyColorHandler>();
 
         // Keys live in the DB so cookies survive restarts (spec §9.2).
         builder.Services.AddSingleton<IXmlRepository, DbXmlRepository>();

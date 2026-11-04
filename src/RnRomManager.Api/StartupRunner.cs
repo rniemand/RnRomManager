@@ -6,6 +6,7 @@ using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Users;
 using RnRomManager.Core.Storage;
+using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api;
 
@@ -19,6 +20,7 @@ public sealed class StartupRunner(
     IServiceProvider services,
     IOptions<PathsOptions> paths,
     IDatabaseLifecycle database,
+    ISystemRegistry systems,
     AdminSeeder adminSeeder) : IHostedService
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -33,8 +35,9 @@ public sealed class StartupRunner(
         logger.LogInformation("RnRomManager {Version} starting", Version);
         logger.LogInformation("Effective config: {Config}", JsonSerializer.Serialize(EffectiveSettings.From(services), Json));
 
-        // Step 4 (system folders are added with the system handlers)
+        // Step 4
         StorageFolders.EnsureRoots(paths.Value);
+        StorageFolders.EnsureSystemFolders(paths.Value, systems.All);
 
         // Steps 5–6
         await database.WaitUntilAvailableAsync(cancellationToken);
