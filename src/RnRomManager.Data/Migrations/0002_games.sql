@@ -1,0 +1,25 @@
+-- Spec §14.1 games. zip_path is case-insensitive but accent-sensitive (D41), matching the app's clash check.
+CREATE TABLE games (
+    id                  CHAR(36)     NOT NULL,
+    system_id           VARCHAR(16)  NOT NULL,
+    title               VARCHAR(255) NOT NULL,
+    display_title       VARCHAR(255) NOT NULL,
+    zip_path            VARCHAR(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_uca1400_as_ci NOT NULL,
+    bucket              CHAR(1)      NOT NULL,
+    release_year        SMALLINT     NULL,
+    developers          JSON         NOT NULL,
+    publishers          JSON         NOT NULL,
+    genres              JSON         NOT NULL,
+    description         TEXT         NULL,
+    has_default_boxart  TINYINT(1)   NOT NULL DEFAULT 0,
+    zip_size_bytes      BIGINT       NOT NULL,
+    zip_mtime_utc       DATETIME(0)  NOT NULL,
+    info_schema_version INT          NOT NULL,
+    created_at          DATETIME(6)  NOT NULL,
+    updated_at          DATETIME(6)  NOT NULL,
+    CONSTRAINT pk_games PRIMARY KEY (id),
+    CONSTRAINT ux_games_zip_path UNIQUE (zip_path),
+    INDEX ix_games_system_bucket_title (system_id, bucket, title),
+    INDEX ix_games_title (title),
+    INDEX ix_games_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

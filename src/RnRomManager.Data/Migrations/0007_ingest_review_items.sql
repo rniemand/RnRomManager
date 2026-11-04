@@ -1,0 +1,28 @@
+-- Spec §14.1 ingest_review_items, §7.2, §10.3. One row per SHA1 (upserted on re-runs).
+CREATE TABLE ingest_review_items (
+    id                 BIGINT        NOT NULL AUTO_INCREMENT,
+    system_id          VARCHAR(16)   NOT NULL,
+    reason             VARCHAR(16)   NOT NULL,
+    source_path        VARCHAR(1024) NOT NULL,
+    archive_path       VARCHAR(1024) NULL,
+    archive_entry      VARCHAR(512)  NULL,
+    original_file_name VARCHAR(255)  NOT NULL,
+    size_bytes         BIGINT        NOT NULL,
+    crc32              CHAR(8)       NOT NULL,
+    md5                CHAR(32)      NOT NULL,
+    sha1               CHAR(40)      NOT NULL,
+    header             JSON          NULL,
+    suggestions        JSON          NOT NULL,
+    dat_identification JSON          NULL,
+    candidate_game_ids JSON          NULL,
+    status             VARCHAR(16)   NOT NULL,
+    game_id            CHAR(36)      NULL,
+    created_at         DATETIME(6)   NOT NULL,
+    last_seen_job_id   CHAR(36)      NOT NULL,
+    resolved_at        DATETIME(6)   NULL,
+    resolved_by        INT           NULL,
+    CONSTRAINT pk_ingest_review_items PRIMARY KEY (id),
+    CONSTRAINT ux_ingest_review_items_sha1 UNIQUE (sha1),
+    CONSTRAINT fk_ingest_review_items_resolved_by FOREIGN KEY (resolved_by) REFERENCES users (id),
+    INDEX ix_ingest_review_items_status_created_at (status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
