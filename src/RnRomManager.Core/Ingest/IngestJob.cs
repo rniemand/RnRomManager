@@ -154,7 +154,7 @@ public sealed class IngestJob(
     /// </summary>
     private void ApplyFate(IngestFile archive, Guid jobId, IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes)
     {
-        var kinds = outcomes.Select(o => o.Result?.Outcome).ToList();
+        var kinds = outcomes.Select(o => o.Result is { ResolvedArchiveDuplicate: true } ? IngestOutcome.Ingested : o.Result?.Outcome).ToList();
         if (kinds.Any(k => k is null or IngestOutcome.Review or IngestOutcome.Error))
         {
             logger.LogInformation("{Path}: kept in ingest (an entry needs review or hit an error)", archive.FullPath);
@@ -191,7 +191,9 @@ public sealed class IngestJob(
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             logger.LogError(ex, "{Path}: unexpected failure", file.FullPath);
-            return IngestItemResult.Error(IngestErrors.Unexpected, ex.Message, file.SystemId);
+            var result = IngestItemResult.Error(IngestErrors.Unexpected, ex.Message, file.SystemId);
+            await reviews.CompleteSourceAsync(file.SourcePath, file.ArchiveEntry, result, jobId, time.GetUtcNow().UtcDateTime, cancellationToken).ConfigureAwait(false);
+            return result;
         }
     }
 

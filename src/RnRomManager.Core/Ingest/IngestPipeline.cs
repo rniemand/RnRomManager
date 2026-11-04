@@ -18,6 +18,9 @@ namespace RnRomManager.Core.Ingest;
 public sealed record IngestItemResult(
     string Outcome, string? Reason = null, string? Details = null, string? SystemId = null, Guid? GameId = null, string? Sha1 = null)
 {
+    /// <summary>Only affects archive fate: a previously resolved entry counts as ingested (§7.3).</summary>
+    public bool ResolvedArchiveDuplicate { get; init; }
+
     public static IngestItemResult Error(string reason, string? details, string? systemId = null, string? sha1 = null) =>
         new(IngestOutcome.Error, reason, details, systemId, Sha1: sha1);
 }
@@ -53,14 +56,23 @@ public sealed class IngestPipeline(
     IGameRepository games,
     ILibraryMirror mirror,
     IIntegrityIssueRepository issues,
+    IIngestReviewRepository reviews,
     InfoJsonReader reader,
     MediaService media,
     IOptions<PathsOptions> paths,
     TimeProvider time,
     ILogger<IngestPipeline> logger)
 {
-    /// <returns>null when the file isn't handled yet and stays in ingest untouched.</returns>
+    /// <summary>Processes one source and completes any pending review row for that source.</summary>
     public async Task<IngestItemResult?> ProcessAsync(IngestFile file, Guid jobId, CircuitBreaker breaker, CancellationToken cancellationToken)
+    {
+        var result = await ProcessCoreAsync(file, jobId, breaker, cancellationToken).ConfigureAwait(false);
+        if (result is not null)
+            await reviews.CompleteSourceAsync(file.SourcePath, file.ArchiveEntry, result, jobId, time.GetUtcNow().UtcDateTime, cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+
+    private async Task<IngestItemResult?> ProcessCoreAsync(IngestFile file, Guid jobId, CircuitBreaker breaker, CancellationToken cancellationToken)
     {
         // Step 1: validate.
         var folder = systems.ById(file.SystemId) ?? throw new InvalidOperationException($"No handler for ingest folder '{file.SystemId}'.");
@@ -87,9 +99,29 @@ public sealed class IngestPipeline(
         var hashes = new RomHashes(bytes);
         logger.LogDebug("{Path}: {Size} bytes, crc32 {Crc32}, sha1 {Sha1}", file.FullPath, bytes.Length, hashes.Crc32, hashes.Sha1);
 
-        // Step 3: global dedupe, or self-repair of a damaged library entry. shortcut: review-item rules come in S29.
+        // Step 3: global dedupe, self-repair, and review-item lifecycle.
+        var review = await reviews.GetBySha1Async(hashes.Sha1, cancellationToken).ConfigureAwait(false);
         if (await roms.GetBySha1Async(hashes.Sha1, cancellationToken).ConfigureAwait(false) is { } known)
-            return await DuplicateOrRepairAsync(file, known, bytes, hashes.Sha1, cancellationToken).ConfigureAwait(false);
+        {
+            var duplicate = await DuplicateOrRepairAsync(file, known, bytes, hashes.Sha1, cancellationToken).ConfigureAwait(false);
+            return duplicate with { ResolvedArchiveDuplicate = duplicate.Outcome == IngestOutcome.Duplicate &&
+                file.ArchivePath is not null && review is { Status: "Resolved" } && review.ArchivePath == file.ArchivePath };
+        }
+        if (review is { Status: "Pending" } && review.SourcePath != file.SourcePath)
+        {
+            logger.LogWarning("{Path}: duplicate of pending review source {ReviewPath} (crc32 {Crc32}, md5 {Md5}, sha1 {Sha1})",
+                file.SourcePath, review.SourcePath, hashes.Crc32, hashes.Md5, hashes.Sha1);
+            return (file.ArchiveEntry is null ? MoveToDuplicates(file) : null) ??
+                new IngestItemResult(IngestOutcome.Duplicate, Details: $"same as pending review source {review.SourcePath}", SystemId: review.SystemId, Sha1: hashes.Sha1);
+        }
+        if (review is { Status: "Dismissed" } && file.ArchivePath is not null && review.ArchivePath == file.ArchivePath)
+            return FailFile(file, jobId, "Dismissed", "this entry was dismissed from this archive", hashes.Sha1);
+        if (review is { Status: "Dismissed" } && file.ArchivePath is null)
+            await reviews.UpsertAsync(review with
+            {
+                SourcePath = file.SourcePath, ArchivePath = null, ArchiveEntry = null, OriginalFileName = file.Name,
+                LastSeenJobId = jobId,
+            }, cancellationToken).ConfigureAwait(false);
 
         // Step 4: header from every handler of the family; the DAT match decides the system (D23).
         var headers = family.ToDictionary(h => h.Id, h => h.ReadHeader(bytes));
@@ -103,11 +135,12 @@ public sealed class IngestPipeline(
             var found = headers.Values.FirstOrDefault(h => h is not null);
             if (found is { IsPlausible: false })
                 return FailFile(file, jobId, IngestFailures.InvalidHeader, "no DAT match, and the header's logo and checksum are both invalid", hashes.Sha1);
+            var classified = family.FirstOrDefault(h => h.Id == found?.ClassifiedSystemId) ?? folder;
+            var originalName = file.Name;
             if (file.ArchiveEntry is null)
-                RenameToClassifiedExtension(file, found, family);
-            // shortcut: Review NoDatMatch (upsert + suggestions) comes in S29; until then the file waits in ingest.
-            logger.LogDebug("{Path}: no DAT match; left for the review step", file.FullPath);
-            return null;
+                file = RenameToClassifiedExtension(file, found, family);
+            return await QueueReviewAsync(file, originalName, classified.Id, "NoDatMatch", hashes, bytes.Length, found, jobId,
+                SuggestionEngine.Find(dats.For(classified.Id), found?.Title, originalName, bytes.Length), null, null, cancellationToken).ConfigureAwait(false);
         }
         var (system, store, datRom) = (match.Handler, match.Store!, match.Rom);
         if (system.Id != file.SystemId)
@@ -118,9 +151,9 @@ public sealed class IngestPipeline(
         var owners = await roms.ListGameIdsByBaseTitleAsync(system.Id, baseTitle, cancellationToken).ConfigureAwait(false);
         if (owners.Count > 1)
         {
-            // shortcut: Review AmbiguousGroup (D32) comes with the review steps; left in ingest.
-            logger.LogDebug("{Path}: {Count} games share base title '{BaseTitle}'; left for review", file.FullPath, owners.Count, baseTitle);
-            return null;
+            return await QueueReviewAsync(file, file.Name, system.Id, "AmbiguousGroup", hashes, bytes.Length, headers[system.Id], jobId,
+                [], new { datName = store.DatName, datVersion = store.Version, datGameName = datRom.GameName, romName = datRom.RomName },
+                owners, cancellationToken).ConfigureAwait(false);
         }
 
         var now = time.GetUtcNow();
@@ -358,22 +391,43 @@ public sealed class IngestPipeline(
     /// §8.4: an unmatched file whose extension doesn't fit its header classification is renamed in place to the
     /// classified handler's first extension (<c>Warn</c>).
     /// </summary>
-    private void RenameToClassifiedExtension(IngestFile file, RomHeader? header, IReadOnlyList<ISystemHandler> family)
+    private IngestFile RenameToClassifiedExtension(IngestFile file, RomHeader? header, IReadOnlyList<ISystemHandler> family)
     {
         var classified = family.FirstOrDefault(h => h.Id == header?.ClassifiedSystemId);
         if (classified is null || classified.RomExtensions.Contains(Path.GetExtension(file.Name), StringComparer.OrdinalIgnoreCase))
-            return;
+            return file;
         var directory = Path.GetDirectoryName(file.FullPath)!;
         var renamed = FileNameRules.FirstFreeIn(directory, Path.GetFileNameWithoutExtension(file.Name) + classified.RomExtensions[0]);
         try
         {
             File.Move(file.FullPath, Path.Combine(directory, renamed));
             logger.LogWarning("{Path}: header says {System}; renamed to {Name}", file.FullPath, classified.Id, renamed);
+            return file with { FullPath = Path.Combine(directory, renamed), Name = renamed };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogWarning("{Path}: couldn't rename to {Name}: {Error}", file.FullPath, renamed, ex.Message);
         }
+        return file;
+    }
+
+    private async Task<IngestItemResult> QueueReviewAsync(IngestFile file, string originalName, string systemId, string reason,
+        RomHashes hashes, long sizeBytes, RomHeader? header, Guid jobId, IReadOnlyList<Suggestion> suggestions,
+        object? identification, IReadOnlyList<Guid>? candidates, CancellationToken cancellationToken)
+    {
+        var json = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+        await reviews.UpsertAsync(new ReviewItem
+        {
+            SystemId = systemId, Reason = reason, SourcePath = file.SourcePath, ArchivePath = file.ArchivePath,
+            ArchiveEntry = file.ArchiveEntry, OriginalFileName = originalName, SizeBytes = sizeBytes,
+            Crc32 = hashes.Crc32, Md5 = hashes.Md5, Sha1 = hashes.Sha1,
+            Header = header is null ? null : JsonSerializer.Serialize(header.Fields, json),
+            Suggestions = JsonSerializer.Serialize(suggestions, json),
+            DatIdentification = identification is null ? null : JsonSerializer.Serialize(identification, json),
+            CandidateGameIds = candidates is null ? null : JsonSerializer.Serialize(candidates, json),
+            CreatedAt = time.GetUtcNow().UtcDateTime, LastSeenJobId = jobId,
+        }, cancellationToken).ConfigureAwait(false);
+        return new IngestItemResult(IngestOutcome.Review, reason, SystemId: systemId, Sha1: hashes.Sha1);
     }
 
     /// <summary>Steps 9–11.</summary>

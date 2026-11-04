@@ -141,7 +141,7 @@ public class IngestArchiveTests
         await RunAsync();
 
         Assert.That(File.Exists(archive), Is.True);
-        Assert.That(_items.Single().Outcome, Is.EqualTo(IngestOutcome.Ingested), "the matched entry is still ingested");
+        Assert.That(_items.Select(i => i.Outcome), Is.EquivalentTo(new[] { IngestOutcome.Ingested, IngestOutcome.Review }));
     }
 
     [Test]
