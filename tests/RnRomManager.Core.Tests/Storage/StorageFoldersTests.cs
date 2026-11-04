@@ -1,6 +1,8 @@
 using System.Runtime.Versioning;
 using RnRomManager.Core.Configuration;
+using NSubstitute;
 using RnRomManager.Core.Storage;
+using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Tests.Storage;
 
@@ -81,5 +83,59 @@ public class StorageFoldersTests
 
         Assert.That(ex!.Message, Does.StartWith($"Paths:Ingest '{paths.Ingest}' is not writable by UID "));
         Assert.That(ex.Message, Does.Contain("/ GID "));
+    }
+
+    private static ISystemHandler Handler(string id)
+    {
+        var handler = Substitute.For<ISystemHandler>();
+        handler.Id.Returns(id);
+        return handler;
+    }
+
+    [Test]
+    public void EnsureSystemFolders_CreatesLetterAndIngestFoldersPerSystem()
+    {
+        var paths = Paths();
+
+        StorageFolders.EnsureSystemFolders(paths, [Handler("gb"), Handler("gbc")]);
+
+        foreach (var id in new[] { "gb", "gbc" })
+        {
+            Assert.That(Directory.GetDirectories(Path.Combine(paths.Roms, id)).Select(Path.GetFileName),
+                Is.EquivalentTo(new[] { "#" }.Concat(Enumerable.Range('A', 26).Select(c => ((char)c).ToString()))));
+            Assert.That(Directory.GetDirectories(Path.Combine(paths.Ingest, id)).Select(Path.GetFileName),
+                Is.EquivalentTo(new[] { "_duplicates", "_failed", "_removed" }));
+        }
+    }
+
+    [Test]
+    public void EnsureSystemFolders_IsIdempotent_AndKeepsExistingFiles()
+    {
+        var paths = Paths();
+        StorageFolders.EnsureSystemFolders(paths, [Handler("gb")]);
+        var keep = Path.Combine(paths.Roms, "gb", "T", "Tetris.zip");
+        File.WriteAllText(keep, "x");
+
+        StorageFolders.EnsureSystemFolders(paths, [Handler("gb")]);
+
+        Assert.That(File.ReadAllText(keep), Is.EqualTo("x"));
+    }
+
+    [Test]
+    public void EnsureSystemFolders_TraversingHandlerId_IsRefused()
+    {
+        Assert.Throws<UnsafePathException>(() => StorageFolders.EnsureSystemFolders(Paths(), [Handler("../escape")]));
+    }
+
+    [Test]
+    public void EnsureSystemFolders_BlockedByAFile_ThrowsNamingTheFolder()
+    {
+        var paths = Paths();
+        Directory.CreateDirectory(Path.Combine(paths.Roms, "gb"));
+        File.WriteAllText(Path.Combine(paths.Roms, "gb", "A"), "file where a folder should be");
+
+        var ex = Assert.Throws<StorageNotWritableException>(() => StorageFolders.EnsureSystemFolders(paths, [Handler("gb")]));
+
+        Assert.That(ex!.Message, Does.Contain(Path.Combine(paths.Roms, "gb", "A")));
     }
 }

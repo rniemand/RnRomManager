@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Game Boy). Made for this project; MIT licensed like the rest of the repo.
+       Exported to gb.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#dde1e6"/>
+  <!-- cartridge shell with the cut top-right corner -->
+  <path d="M140 64 H336 L380 108 V432 Q380 448 364 448 H148 Q132 448 132 432 V72 Q132 64 140 64 Z"
+        fill="#a3a3a9" stroke="#5c5c63" stroke-width="4"/>
+  <!-- grip ridges -->
+  <g stroke="#5c5c63" stroke-width="4" stroke-linecap="round" opacity="0.55">
+    <line x1="160" y1="86" x2="312" y2="86"/>
+    <line x1="160" y1="100" x2="324" y2="100"/>
+    <line x1="160" y1="114" x2="336" y2="114"/>
+  </g>
+  <!-- label recess and label -->
+  <rect x="160" y="140" width="192" height="216" rx="10" fill="#5c5c63" opacity="0.35"/>
+  <rect x="170" y="150" width="172" height="196" rx="6" fill="#f4f1e8"/>
+  <text x="256" y="238" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="30" font-weight="700" fill="#3a3a40">GAME</text>
+  <text x="256" y="278" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="30" font-weight="700" fill="#3a3a40">BOY</text>
+  <!-- insert arrow and contacts -->
+  <path d="M244 380 L268 380 L256 398 Z" fill="#5c5c63" opacity="0.6"/>
+  <g fill="#5c5c63" opacity="0.45">
+    <rect x="176" y="418" width="160" height="18" rx="3"/>
+  </g>
+</svg>
