@@ -13,6 +13,9 @@ public interface IRomRepository
 
     Task<RomRow?> GetBySha1Async(string sha1, CancellationToken cancellationToken);
 
+    /// <summary>Games owning a ROM with this system + base title, case-insensitively (§7.2 step 6 grouping).</summary>
+    Task<IReadOnlyList<Guid>> ListGameIdsByBaseTitleAsync(string systemId, string baseTitle, CancellationToken cancellationToken);
+
     /// <summary>Every ROM's (game, SHA1): the sync's <c>DuplicateSha1</c> check.</summary>
     Task<IReadOnlyList<(Guid GameId, string Sha1)>> ListSha1sAsync(CancellationToken cancellationToken);
 }

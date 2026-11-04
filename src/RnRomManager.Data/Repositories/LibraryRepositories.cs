@@ -95,6 +95,15 @@ public sealed class RomRepository : IRomRepository
             new CommandDefinition($"{Select} WHERE sha1 = @sha1", new { sha1 }, cancellationToken: cancellationToken));
     }
 
+    public async Task<IReadOnlyList<Guid>> ListGameIdsByBaseTitleAsync(string systemId, string baseTitle, CancellationToken cancellationToken)
+    {
+        // utf8mb4_unicode_ci: the comparison is case-insensitive.
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<Guid>(new CommandDefinition(
+            "SELECT DISTINCT game_id FROM roms WHERE system_id = @systemId AND base_title = @baseTitle",
+            new { systemId, baseTitle }, cancellationToken: cancellationToken))).AsList();
+    }
+
     public async Task<IReadOnlyList<(Guid GameId, string Sha1)>> ListSha1sAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();
