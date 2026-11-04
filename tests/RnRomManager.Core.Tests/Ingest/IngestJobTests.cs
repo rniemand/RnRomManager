@@ -70,7 +70,11 @@ public class IngestJobTests
         var roms = Substitute.For<IRomRepository>();
         roms.ListSha1sAsync(default).ReturnsForAnyArgs([]);
         var sync = new DbSync(_games, roms, _mirror, _reader, _systems, Options.Create(_paths), NullLogger<DbSync>.Instance);
-        return new IngestJob(_dats, _systems, sync, _reviews, _items, _scanner, TimeProvider.System, NullLogger<IngestJob>.Instance);
+        var media = new RnRomManager.Core.Media.MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }),
+            NullLogger<RnRomManager.Core.Media.MediaService>.Instance);
+        var pipeline = new IngestPipeline(_dats, _systems, roms, _games, _mirror, _reader, media, Options.Create(_paths), TimeProvider.System,
+            NullLogger<IngestPipeline>.Instance);
+        return new IngestJob(_dats, _systems, sync, _reviews, _items, _scanner, pipeline, TimeProvider.System, NullLogger<IngestJob>.Instance);
     }
 
     private Task<object?> RunAsync(JobProgress? progress = null) =>

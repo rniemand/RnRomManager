@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
+using RnRomManager.Core.Media;
 using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Ingest;
@@ -9,7 +10,8 @@ namespace RnRomManager.Core.Ingest;
 /// <summary>
 /// The <c>Ingest</c> job (spec §7.1): refuses with <c>DatsMissing</c> before any row exists, then the DB sync pre-pass,
 /// stale <c>Pending</c> review rows, and the snapshot (files younger than 10 s are <c>Skipped</c> <c>TooRecent</c>).
-/// The per-file pipeline (§7.2) plugs in at <see cref="ProcessAsync"/>.
+/// Each other file goes through <see cref="IngestPipeline"/>; one <c>job_items</c> row per item. An item's unexpected
+/// exception is <c>Error</c> <c>Unexpected</c> and the next file continues; <c>DbWriteFailed</c> stops the job as <c>Failed</c>.
 /// </summary>
 public sealed class IngestJob(
     DatCache dats,
@@ -18,6 +20,7 @@ public sealed class IngestJob(
     IIngestReviewRepository reviews,
     IJobItemRepository items,
     IngestFileScanner scanner,
+    IngestPipeline pipeline,
     TimeProvider time,
     ILogger<IngestJob> logger) : IJob
 {
@@ -52,6 +55,7 @@ public sealed class IngestJob(
         context.Progress.SetTotal(snapshot.Count);
         var counts = IngestOutcome.All.ToDictionary(o => o, _ => 0);
         var now = time.GetUtcNow().UtcDateTime;
+        var breaker = new CircuitBreaker(); // one per job (§10.2)
         foreach (var file in snapshot)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -59,11 +63,16 @@ public sealed class IngestJob(
             var fileId = Guid.NewGuid();
             using (logger.BeginScope(new Dictionary<string, object> { ["FileId"] = fileId }))
             {
-                var outcome = now - file.ModifiedAtUtc < MinFileAge
-                    ? await RecordAsync(context, file, fileId, IngestOutcome.Skipped, IngestReason.TooRecent, cancellationToken).ConfigureAwait(false)
-                    : await ProcessAsync(context, file, fileId, cancellationToken).ConfigureAwait(false);
-                if (outcome is not null)
-                    counts[outcome]++;
+                var result = now - file.ModifiedAtUtc < MinFileAge
+                    ? new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent, SystemId: file.SystemId)
+                    : await ProcessAsync(file, breaker, cancellationToken).ConfigureAwait(false);
+                if (result is not null)
+                {
+                    await RecordAsync(context, file, fileId, result, cancellationToken).ConfigureAwait(false);
+                    counts[result.Outcome]++;
+                    if (result.Reason == IngestErrors.DbWriteFailed)
+                        throw new IngestStoppedException($"{file.Name}: DB write failed ({result.Details}); the job stopped so no later file groups against a stale DB");
+                }
             }
             context.Progress.ItemDone();
         }
@@ -71,28 +80,40 @@ public sealed class IngestJob(
         return counts;
     }
 
-    /// <summary>§7.2 per-file pipeline. shortcut: not implemented until S26; files are left untouched for the next run.</summary>
-    private Task<string?> ProcessAsync(JobContext context, IngestFile file, Guid fileId, CancellationToken cancellationToken)
+    private async Task<IngestItemResult?> ProcessAsync(IngestFile file, CircuitBreaker breaker, CancellationToken cancellationToken)
     {
-        _ = (context, fileId, cancellationToken);
-        logger.LogDebug("{Path}: waiting for the ingest pipeline", file.FullPath);
-        return Task.FromResult<string?>(null);
+        try
+        {
+            return await pipeline.ProcessAsync(file, breaker, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            logger.LogError(ex, "{Path}: unexpected failure", file.FullPath);
+            return IngestItemResult.Error(IngestErrors.Unexpected, ex.Message, file.SystemId);
+        }
     }
 
-    private async Task<string?> RecordAsync(
-        JobContext context, IngestFile file, Guid fileId, string outcome, string? reason, CancellationToken cancellationToken)
+    private async Task RecordAsync(JobContext context, IngestFile file, Guid fileId, IngestItemResult result, CancellationToken cancellationToken)
     {
         await items.InsertAsync(new JobItem
         {
             JobId = context.JobId,
             FileId = fileId,
-            SystemId = file.SystemId,
+            SystemId = result.SystemId ?? file.SystemId,
             SourcePath = file.FullPath,
-            Outcome = outcome,
-            Reason = reason,
+            Outcome = result.Outcome,
+            Reason = result.Reason,
+            Details = result.Details,
+            GameId = result.GameId,
+            Sha1 = result.Sha1,
             CreatedAt = time.GetUtcNow().UtcDateTime,
-        }, cancellationToken).ConfigureAwait(false);
-        logger.LogInformation("{Path}: {Outcome} {Reason}", file.FullPath, outcome, reason);
-        return outcome;
+        }, CancellationToken.None).ConfigureAwait(false);
+        if (result.Outcome == IngestOutcome.Error)
+            logger.LogError("{Path}: {Outcome} {Reason} {Details}", file.FullPath, result.Outcome, result.Reason, result.Details);
+        else
+            logger.LogInformation("{Path}: {Outcome} {Reason}", file.FullPath, result.Outcome, result.Reason);
     }
 }
+
+/// <summary>An item hit <c>DbWriteFailed</c>: the job ends <c>Failed</c> with this message (§7.2 step 10).</summary>
+public sealed class IngestStoppedException(string message) : Exception(message);
