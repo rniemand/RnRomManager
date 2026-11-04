@@ -14,6 +14,7 @@ using RnRomManager.Api.Security;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Database;
+using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Systems;
@@ -49,7 +50,8 @@ public static class AppHost
             .MapAuthEndpoints()
             .MapUserEndpoints()
             .MapJobEndpoints()
-            .MapDatEndpoints();
+            .MapDatEndpoints()
+            .MapIngestEndpoints();
         app.MapFallbackEndpoints(staticFiles);
         return app;
     }
@@ -81,6 +83,10 @@ public static class AppHost
         builder.Services.AddSingleton<InfoJsonReader>();
         builder.Services.AddSingleton<DbSync>();
         builder.Services.AddSingleton<DatCache>();
+        builder.Services.AddSingleton<IIngestReviewRepository, IngestReviewRepository>();
+        builder.Services.AddSingleton<IngestFileScanner>();
+        // One per start: a job instance holds per-run state (and, later, the per-job circuit breaker).
+        builder.Services.AddTransient<IngestJob>();
         builder.Services.AddExternalHttpClients();
         // §3.1: a running job gets 30 s to stop on SIGTERM (compose sets stop_grace_period: 35s).
         builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(30));

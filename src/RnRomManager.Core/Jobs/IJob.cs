@@ -10,8 +10,17 @@ public interface IJob
     JobType Type { get; }
     JobMode? Mode { get; }
 
+    /// <summary>Checked with the lock held, before the <c>jobs</c> row: a §23.1 code refuses the start (409), e.g. <c>DatsMissing</c>.</summary>
+    string? Preflight() => null;
+
     /// <returns>The summary (counts), serialized to <c>jobs.summary</c>; null for none.</returns>
     Task<object?> RunAsync(JobContext context, CancellationToken cancellationToken);
+}
+
+/// <summary>The job's <see cref="IJob.Preflight"/> refused the start; no row was written and the lock is free again.</summary>
+public sealed class JobRefusedException(string code) : Exception($"Job refused: {code}.")
+{
+    public string Code { get; } = code;
 }
 
 public sealed record JobContext(Guid JobId, JobProgress Progress);

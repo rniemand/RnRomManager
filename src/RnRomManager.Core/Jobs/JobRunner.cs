@@ -17,6 +17,7 @@ public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, TimeProvider
     public JobSnapshot? Current => Volatile.Read(ref _current)?.Snapshot();
 
     /// <returns>The started job, or null when the lock is busy (<c>409 JobRunning</c>).</returns>
+    /// <exception cref="JobRefusedException"><see cref="IJob.Preflight"/> refused; the lock is released.</exception>
     /// <exception cref="Exception">The <c>jobs</c> insert failed; the lock is released.</exception>
     public async Task<StartedJob?> StartAsync(IJob job, JobTrigger trigger, int? requestedBy, CancellationToken cancellationToken)
     {
@@ -27,6 +28,8 @@ public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, TimeProvider
         Job row;
         try
         {
+            if (job.Preflight() is { } refused)
+                throw new JobRefusedException(refused);
             row = new Job
             {
                 Id = Guid.NewGuid(),
