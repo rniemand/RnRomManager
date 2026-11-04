@@ -1,6 +1,6 @@
 # RnRomManager — Initial Application Spec
 
-> Status: **DRAFT v0.3** — being refined over several sessions. Items marked **[OPEN]** need a decision; items marked **[PROPOSED]** are my recommendation and need confirmation. Confirmed decisions are listed in §21.
+> Status: **v0.4 — ready for breakdown into implementation steps.** All earlier [OPEN]/[PROPOSED] items are resolved. Confirmed decisions are listed in §21.
 
 ## 1. Purpose
 
@@ -23,7 +23,7 @@ A self-hosted web app for managing a personal backup collection of game ROM file
 | DB | MySQL / MariaDB (external, shared instance; app uses its own database, e.g. `rnrommanager`, no table prefix) |
 | Migrations | DbUp (`dbup-mysql`) — plain embedded `.sql` scripts, applied on startup, journal table `schema_versions` |
 | Logging | NLog — console + rolling text file |
-| Backend tests | NUnit + NSubstitute (+ Shouldly or NUnit constraints — **[OPEN]**) |
+| Backend tests | NUnit (`Assert.That` constraints, no extra assertion lib) + NSubstitute |
 | Integration tests | Testcontainers (MariaDB) for repository/migration tests; temp-dir file system for ingestion tests |
 | Frontend | Svelte 5 — SvelteKit with `adapter-static` (SPA mode), TypeScript |
 | CSS | Bootstrap 5.3 (native `data-bs-theme` dark/light) |
@@ -44,7 +44,7 @@ Browser (Svelte SPA) ──HTTP/JSON──> ASP.NET Core API ──Dapper──>
                                           └── outbound HTTPS: libretro DATs + thumbnails
 ```
 
-### Solution layout **[PROPOSED]**
+### Solution layout
 ```
 /src
   RnRomManager.Api/            # endpoints, auth, hosting, static UI
@@ -75,8 +75,9 @@ All settings via `appsettings.json`, overridable by environment variables (Docke
 | Paths:Logs | `Paths__Logs` | `/app/logs` |
 | Paths:Cache | `Paths__Cache` | `/app/cache` (downloaded DATs, image cache) |
 | Admin:InitialPassword | `Admin__InitialPassword` | *(see §9)* |
-| Integrity:Schedule | `Integrity__Interval` | `24:00:00` **[OPEN]** |
-| Logging level | `Logging__MinLevel` | `Debug` **[OPEN]** |
+| Integrity:QuickCheckTime | `Integrity__QuickCheckTime` | `03:00` (daily, server local time; empty = disabled) |
+| Logging:RetentionDays | `Logging__RetentionDays` | `14` |
+| Logging level | `Logging__MinLevel` | `Debug` |
 
 Paths being configurable is what allows tests and manual testing to point ingestion at a **temporary directory** seeded with test files.
 
@@ -93,7 +94,7 @@ Paths being configurable is what allows tests and manual testing to point ingest
   ingest/
     gb/           # user drops files here
       _duplicates/   # byte-identical dupes moved here (logged)
-      _failed/       # unidentifiable / corrupt / errors (logged, with .error.txt sidecar?) [OPEN]
+      _failed/       # corrupt files / errors / dismissed review items; each gets a `<name>.error.txt` sidecar with the reason + run ID
     gbc/
   logs/
   cache/
@@ -122,7 +123,7 @@ Tetris.zip
 - Writes are atomic: build to `*.zip.tmp` in the same folder, then rename over the original. Never edit a ZIP in place.
 - Compression: Deflate, optimal.
 
-### 6.1 `info.json` schema (v1) **[PROPOSED]**
+### 6.1 `info.json` schema (v1)
 
 ```jsonc
 {
@@ -250,7 +251,7 @@ Cartridge header lives at `0x0100–0x014F`. Files smaller than `0x150` bytes ar
 
 ## 10. External data sources (free, no API key)
 
-**[PROPOSED]** primary sources — both free, no account required:
+Primary sources — free, no account or API key required:
 
 | Need | Source |
 |---|---|
@@ -258,7 +259,7 @@ Cartridge header lives at `0x0100–0x014F`. Files smaller than `0x150` bytes ar
 | Year, developer, publisher, genre | libretro-database `metadat/{releaseyear,developer,publisher,genre}/…dat` (matched by CRC) |
 | Box art, gameplay snap, title screen | [libretro-thumbnails](https://thumbnails.libretro.com/) — `Named_Boxarts`, `Named_Snaps`, `Named_Titles`, keyed by No-Intro name (`&*/:\`<>?\|"` → `_`) |
 
-- DATs are downloaded on first use into `Paths:Cache`, refreshed on demand from the UI / on a schedule. Pinned to a commit SHA? **[OPEN]**
+- DATs are downloaded from libretro-database `master` on first use into `Paths:Cache`; Admins refresh them with a **"Refresh DATs"** button (no automatic refresh). The commit SHA + date of the DATs used is recorded per ROM in `info.json` (`identification.datVersion`). If the download fails and no cached copy exists, ingestion is blocked with a clear error.
 - Image lookup tries the exact release name, then the parent/World/USA/Europe release name.
 - HTTP client: `IHttpClientFactory` + resilience (retry w/ backoff, timeout), descriptive `User-Agent`.
 - Optional later (needs a free user-supplied key): ScreenScraper, TheGamesDB or IGDB for descriptions and better art coverage.
@@ -274,11 +275,11 @@ Cartridge header lives at `0x0100–0x014F`. Files smaller than `0x150` bytes ar
   - **Review queue** (Admin) — unmatched ROMs with header info + hashes; actions: pick a suggested DAT entry, search the DAT, attach to an existing game as a hack/translation, or enter a name manually; or dismiss (moves file to `_failed/`)
   - **Integrity** — last run, schedule, "Run now", discrepancies list
   - **Admin** — users (create/disable/reset password), settings view, DAT refresh
-- Progress updates: **[PROPOSED]** polling a job-status endpoint every 1–2 s (no SignalR in MVP).
+- Progress updates: polling a job-status endpoint every 1–2 s (no SignalR in MVP).
 
 ## 12. Integrity checker
 
-Background hosted service on a configurable interval, plus "Run now" in the UI.
+Background hosted service runs the quick check daily at `Integrity:QuickCheckTime` (default 03:00), skipped and logged if an ingestion is running; plus "Run now" (quick or deep) in the UI. Ingestion and integrity never run at the same time.
 
 Checks:
 - Every ZIP in `roms/` has a valid `info.json` and a matching DB row (and vice-versa).
@@ -290,14 +291,14 @@ Action: the **DB is auto-repaired** from `info.json` (insert/update/delete rows;
 
 ## 13. Logging
 
-- NLog targets: console + rolling file `logs/rnrommanager-${shortdate}.log`, archive after N days **[OPEN: retention]**.
+- NLog targets: console + rolling file `logs/rnrommanager-${shortdate}.log`, kept `Logging:RetentionDays` (default 14) days.
 - Layout includes: timestamp (UTC, ISO-8601), level, logger, thread, correlation ID (`IngestRunId`, `FileId`, HTTP `TraceIdentifier`), message, full exception with stack trace and inner exceptions.
 - Structured properties captured for every ingestion step: source path, file size, hashes, header fields, DAT match result, chosen game, target ZIP, HTTP URLs + status codes + durations for outbound calls.
 - Default min level `Debug` for app namespaces, `Warn` for Microsoft/System.
 - Never log passwords, cookies or connection-string passwords.
-- **[OPEN]** Should the UI have a "Download logs" button for admins?
+- Admin page has a **"Download logs"** button returning a ZIP of the current log files (for troubleshooting reports).
 
-## 14. Database (initial tables) **[PROPOSED]**
+## 14. Database (initial tables)
 
 `users`, `games`, `roms`, `images`, `ingest_runs`, `ingest_run_items`, `ingest_review_items`, `integrity_runs`, `integrity_issues`, `schema_versions` (DbUp).
 `games` holds title/sortTitle/system/year/publisher/developer/zip path + JSON of genres; `roms` holds one row per release with hashes and flattened header fields; `images` holds metadata only. Full-text index on `games.title` for search. No table prefix — the app gets its own database on the shared instance.
@@ -305,12 +306,12 @@ Action: the **DB is auto-repaired** from `info.json` (insert/update/delete rows;
 ## 15. Testing
 
 - Rule: every non-trivial class has unit tests; behaviour changes need a test before merge.
-- Core/system logic: NUnit + NSubstitute, file system abstracted via `System.IO.Abstractions` **[OPEN]** or real temp dirs.
+- Core/system logic: NUnit + NSubstitute, file-touching code tested against **real temp directories** (created/deleted per test), no file-system mocking library.
 - Ingestion integration tests: a temp dir per test, seeded with **synthetic** ROMs (valid headers, generated bytes) + a tiny fixture DAT; HTTP sources stubbed. No real ROMs committed.
 - Data tests: Testcontainers MariaDB, migrations applied from scratch.
 - API tests: `WebApplicationFactory`.
 - UI: Vitest component tests; Playwright smoke tests (login, start ingestion on seeded synthetic ROMs, browse/search, game detail) against the built container + MariaDB in CI.
-- Coverage reported in CI (no hard gate initially **[OPEN]**).
+- Coverage collected and reported in CI; no minimum gate.
 
 ## 16. Dev tooling (`/scripts`, PowerShell 7)
 
@@ -325,7 +326,7 @@ Action: the **DB is auto-repaired** from `info.json` (insert/update/delete rows;
 ## 17. Container
 
 - Multi-stage Dockerfile: `node` stage builds UI → `sdk:10.0` stage publishes API (with UI in `wwwroot`) → runtime.
-- Runtime base: **[OPEN]** `aspnet:10.0-noble-chiseled-extra` (no shell, smallest attack surface) vs. `aspnet:10.0-alpine` (has a shell for debugging). PUID/PGID is **not** needed, so either works.
+- Runtime base: `mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra` — no shell or package manager, non-root, includes ICU/tzdata. Troubleshooting is via logs, the Download-logs button and `/health` (no `docker exec` shell). The Docker `HEALTHCHECK` therefore can't use curl; rely on orchestrator/compose checks or a tiny `--healthcheck` mode of the app binary.
 - Runs as non-root (UID 1654 `app`); volumes: `/app/roms`, `/app/ingest`, `/app/logs`, `/app/cache`. No PUID/PGID mapping: users set `user:` in compose and own the volumes accordingly (documented in `docs/deployment.md`).
 - Port `8080`. Health endpoint `/health` (DB reachable, paths writable).
 - Example `docker-compose.yml` in docs.
@@ -344,14 +345,9 @@ Action: the **DB is auto-repaired** from `info.json` (insert/update/delete rows;
 - `CONTRIBUTING.md`, `LICENSE` (MIT), Docker Hub description synced from README.
 - Rule: each implementation step updates the relevant doc in the same PR.
 
-## 20. Open questions (summary)
+## 20. Open questions
 
-1. Container runtime base: chiseled vs. Alpine (§17).
-2. DAT source: always latest libretro-database `master`, or pinned to a commit SHA updated by the app/maintainer (§10)?
-3. Logging: file retention (days), and an Admin "Download logs" button (§13)?
-4. Test assertions: Shouldly vs. plain NUnit constraints; file system: real temp dirs vs. `System.IO.Abstractions`; coverage gate (§15)?
-5. Integrity quick-check interval (default 24h?) (§4, §12).
-6. Confirm `info.json` schema v1 (§6.1), solution layout (§3), and polling for job progress (§11).
+None. New questions found during implementation get added here.
 
 ## 21. Decisions log
 
@@ -373,3 +369,9 @@ Action: the **DB is auto-repaired** from `info.json` (insert/update/delete rows;
 | D14 | 2026-11-04 | App uses its own database on the shared MariaDB, no table prefix. |
 | D15 | 2026-11-04 | DbUp, SvelteKit static SPA, Testcontainers MariaDB accepted. |
 | D16 | 2026-11-04 | UI tests: Vitest + Playwright smoke tests in CI. |
+| D17 | 2026-11-04 | Runtime base `aspnet:10.0-noble-chiseled-extra`. |
+| D18 | 2026-11-04 | DATs from libretro-database `master`, manual "Refresh DATs" by Admin; DAT version recorded per ROM. |
+| D19 | 2026-11-04 | Logs kept 14 days (configurable); Admin "Download logs" button. |
+| D20 | 2026-11-04 | Quick integrity check daily at 03:00 (configurable); never concurrent with ingestion. |
+| D21 | 2026-11-04 | C# tests: NUnit constraints, real temp dirs, coverage reported without a gate. |
+| D22 | 2026-11-04 | `info.json` schema v1, solution layout and progress polling accepted as drafted. |
