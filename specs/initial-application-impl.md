@@ -88,7 +88,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S28 | Ingest: archives (zip + 7z) | |
 | [x] | S29 | Ingest: review queue + suggestions | #29 |
 | [x] | S30 | Review resolution + DAT search API | #30 |
-| [ ] | S31 | TestData CLI, seed sets, `seed-ingest.ps1` | |
+| [x] | S31 | TestData CLI, seed sets, `seed-ingest.ps1` | #31 |
 | [ ] | S32 | Library read API (systems, list, detail, images, downloads) | |
 | [ ] | S33 | Library edits: PATCH, delete release/game | |
 | [ ] | S34 | Library edits: move + merge | |
