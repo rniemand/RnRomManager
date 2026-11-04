@@ -37,6 +37,8 @@ public class IngestJobTests
         ISystemHandler[] handlers = [Handler("gb", Gb), Handler("gbc", Gbc)];
         _systems = Substitute.For<ISystemRegistry>();
         _systems.All.Returns(handlers);
+        _systems.ById(Arg.Any<string>()).Returns(c => handlers.FirstOrDefault(h => h.Id == c.Arg<string>()));
+        _systems.ByFamily("gameboy").Returns(handlers);
         _dats = new DatCache(Options.Create(_paths), _systems, NullLogger<DatCache>.Instance);
         _games = Substitute.For<IGameRepository>();
         _games.ListSyncStateAsync(default).ReturnsForAnyArgs([]);
@@ -56,6 +58,10 @@ public class IngestJobTests
         var handler = Substitute.For<ISystemHandler>();
         handler.Id.Returns(id);
         handler.DatName.Returns(datName);
+        handler.Family.Returns("gameboy");
+        handler.RomExtensions.Returns(["." + id]);
+        handler.MinRomSizeBytes.Returns(0x150);
+        handler.MaxRomSizeBytes.Returns(16L * 1024 * 1024);
         return handler;
     }
 
@@ -72,7 +78,7 @@ public class IngestJobTests
         var sync = new DbSync(_games, roms, _mirror, _reader, _systems, Options.Create(_paths), NullLogger<DbSync>.Instance);
         var media = new RnRomManager.Core.Media.MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }),
             NullLogger<RnRomManager.Core.Media.MediaService>.Instance);
-        var pipeline = new IngestPipeline(_dats, _systems, roms, _games, _mirror, _reader, media, Options.Create(_paths), TimeProvider.System,
+        var pipeline = new IngestPipeline(_dats, _systems, roms, _games, _mirror, Substitute.For<RnRomManager.Core.Integrity.IIntegrityIssueRepository>(), _reader, media, Options.Create(_paths), TimeProvider.System,
             NullLogger<IngestPipeline>.Instance);
         return new IngestJob(_dats, _systems, sync, _reviews, _items, _scanner, pipeline, TimeProvider.System, NullLogger<IngestJob>.Instance);
     }
@@ -132,7 +138,7 @@ public class IngestJobTests
     }
 
     [Test]
-    public async Task TooRecentFiles_AreSkipped_OlderOnesWait()
+    public async Task TooRecentFiles_AreSkipped_OlderOnesProcessed()
     {
         var recent = Drop("gb", "copying.gb", TimeSpan.FromSeconds(2));
         Drop("gbc", "ready.gbc", TimeSpan.FromMinutes(5));
@@ -143,8 +149,11 @@ public class IngestJobTests
         await _items.Received(1).InsertAsync(Arg.Is<JobItem>(i =>
             i.SourcePath == recent && i.SystemId == "gb" && i.Outcome == IngestOutcome.Skipped && i.Reason == IngestReason.TooRecent),
             Arg.Any<CancellationToken>());
-        await _items.Received(1).InsertAsync(Arg.Any<JobItem>(), Arg.Any<CancellationToken>());
+        // The older 3-byte file is processed: too small for a GBC ROM.
+        await _items.Received(1).InsertAsync(Arg.Is<JobItem>(i => i.Outcome == IngestOutcome.Failed && i.Reason == IngestFailures.TooSmall),
+            Arg.Any<CancellationToken>());
         Assert.That(summary[IngestOutcome.Skipped], Is.EqualTo(1));
+        Assert.That(summary[IngestOutcome.Failed], Is.EqualTo(1));
         Assert.That((progress.Current, progress.Total), Is.EqualTo((2, 2)));
         Assert.That(File.Exists(recent), Is.True, "file untouched");
     }

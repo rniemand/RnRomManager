@@ -34,6 +34,9 @@ public static class MariaDbServer
     /// <summary>A fresh, empty <c>utf8mb4_unicode_ci</c> database, so tests don't share state.</summary>
     public static async Task<string> CreateDatabaseAsync()
     {
+        // Each test database gets its own connection pool; idle ones from earlier tests would pile up past the
+        // server's max_connections (151) and later hosts would time out waiting for the DB.
+        await MySqlConnection.ClearAllPoolsAsync();
         var name = "t_" + Guid.NewGuid().ToString("N")[..16];
         await using var connection = new MySqlConnection(ServerConnectionString);
         await connection.OpenAsync();
