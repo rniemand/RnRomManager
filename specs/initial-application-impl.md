@@ -85,7 +85,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S25 | Ingest job start: pre-pass, snapshot, pending API | |
 | [x] | S26 | Ingest pipeline: loose-file happy path | |
 | [x] | S27 | Ingest: dedupe, self-repair, failures | |
-| [ ] | S28 | Ingest: archives (zip + 7z) | |
+| [x] | S28 | Ingest: archives (zip + 7z) | |
 | [ ] | S29 | Ingest: review queue + suggestions | |
 | [ ] | S30 | Review resolution + DAT search API | |
 | [ ] | S31 | TestData CLI, seed sets, `seed-ingest.ps1` | |

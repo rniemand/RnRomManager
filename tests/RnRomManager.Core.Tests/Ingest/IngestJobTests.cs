@@ -80,7 +80,8 @@ public class IngestJobTests
             NullLogger<RnRomManager.Core.Media.MediaService>.Instance);
         var pipeline = new IngestPipeline(_dats, _systems, roms, _games, _mirror, Substitute.For<RnRomManager.Core.Integrity.IIntegrityIssueRepository>(), _reader, media, Options.Create(_paths), TimeProvider.System,
             NullLogger<IngestPipeline>.Instance);
-        return new IngestJob(_dats, _systems, sync, _reviews, _items, _scanner, pipeline, TimeProvider.System, NullLogger<IngestJob>.Instance);
+        return new IngestJob(_dats, _systems, sync, _reviews, _items, _scanner, pipeline, new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance),
+            Options.Create(_paths), TimeProvider.System, NullLogger<IngestJob>.Instance);
     }
 
     private Task<object?> RunAsync(JobProgress? progress = null) =>

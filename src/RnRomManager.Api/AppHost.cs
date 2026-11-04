@@ -88,6 +88,7 @@ public static class AppHost
         // One per start: a job instance holds per-run state (and, later, the per-job circuit breaker).
         builder.Services.AddTransient<IngestJob>();
         builder.Services.AddTransient<IngestPipeline>();
+        builder.Services.AddSingleton<ArchiveExtractor>();
         builder.Services.AddSingleton<RnRomManager.Core.Integrity.IIntegrityIssueRepository, IntegrityIssueRepository>();
         builder.Services.AddExternalHttpClients();
         // §3.1: a running job gets 30 s to stop on SIGTERM (compose sets stop_grace_period: 35s).
