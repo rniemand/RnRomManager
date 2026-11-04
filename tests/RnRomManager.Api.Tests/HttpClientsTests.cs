@@ -66,4 +66,24 @@ public class HttpClientsTests
         Assert.That(HttpClients.IsTransient(Polly.Outcome.FromException<HttpResponseMessage>(new Polly.Timeout.TimeoutRejectedException())), Is.True);
         Assert.That(HttpClients.IsTransient(Polly.Outcome.FromException<HttpResponseMessage>(new InvalidOperationException())), Is.False);
     }
+
+    [Test]
+    public async Task MediaService_UsesTheThumbnailsClient()
+    {
+        var server = new StubHttpHandler(_ => StubHttpHandler.Status(HttpStatusCode.NotFound));
+        var services = new ServiceCollection()
+            .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
+            .AddLogging()
+            .AddSingleton(Microsoft.Extensions.Options.Options.Create(new RnRomManager.Core.Configuration.SourcesOptions { ThumbnailBaseUrl = "https://thumbs.test" }))
+            .AddExternalHttpClients();
+        services.AddHttpClient(HttpClients.Thumbnails).ConfigurePrimaryHttpMessageHandler(() => server);
+        var media = services.BuildServiceProvider().GetRequiredService<RnRomManager.Core.Media.MediaService>();
+        var handler = new RnRomManager.Systems.GameBoy.GameBoyHandler();
+
+        var result = await media.FindAsync(handler, ["Tetris (World)"], new RnRomManager.Core.Media.CircuitBreaker(), CancellationToken.None);
+
+        Assert.That(result.BoxArt.IsDefault, Is.True);
+        Assert.That(server.Requests, Has.Count.EqualTo(2), "404s aren't retried");
+        Assert.That(server.Requests.First().Headers.UserAgent.ToString(), Does.StartWith("RnRomManager/"));
+    }
 }
