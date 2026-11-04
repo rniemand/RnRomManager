@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.Repositories;
@@ -11,6 +12,7 @@ using RnRomManager.Api.Logging;
 using RnRomManager.Api.Security;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
+using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Systems;
 using RnRomManager.Core.Users;
 using RnRomManager.Data;
@@ -26,6 +28,8 @@ public static class AppHost
     {
         var builder = CreateBuilder(args);
         builder.Services.AddHostedService<StartupRunner>();
+        // Registered after StartupRunner, so it stops first (hosted services stop in reverse order).
+        builder.Services.AddHostedService<JobShutdownService>();
         var app = builder.Build();
         app.UseSecurityHeaders();
 
@@ -40,7 +44,8 @@ public static class AppHost
             .RequireAuthorization(AuthSetup.Authenticated)
             .RequireAntiforgery()
             .MapAuthEndpoints()
-            .MapUserEndpoints();
+            .MapUserEndpoints()
+            .MapJobEndpoints();
         app.MapFallbackEndpoints(staticFiles);
         return app;
     }
@@ -60,6 +65,14 @@ public static class AppHost
         builder.Services.AddSingleton<IUserRepository, UserRepository>();
         builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
         builder.Services.AddSingleton<AdminSeeder>();
+        builder.Services.AddSingleton<IJobRepository, JobRepository>();
+        builder.Services.AddSingleton<IJobItemRepository, JobItemRepository>();
+        builder.Services.AddSingleton<JobLock>();
+        builder.Services.AddSingleton<JobRunner>();
+        builder.Services.AddSingleton<CrashRecovery>();
+        // §3.1: a running job gets 30 s to stop on SIGTERM (compose sets stop_grace_period: 35s).
+        builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(30));
+        builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
         builder.Services.AddAppAuth();
         builder.Services.AddSystemHandler<GameBoyHandler>();
         builder.Services.AddSystemHandler<GameBoyColorHandler>();
