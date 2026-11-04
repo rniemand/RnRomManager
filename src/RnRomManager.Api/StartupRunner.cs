@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Extensions.Options;
 using RnRomManager.Api.Configuration;
 using RnRomManager.Core.Configuration;
+using RnRomManager.Core.Dats;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Users;
@@ -23,7 +24,8 @@ public sealed class StartupRunner(
     IDatabaseLifecycle database,
     ISystemRegistry systems,
     CrashRecovery crashRecovery,
-    AdminSeeder adminSeeder) : IHostedService
+    AdminSeeder adminSeeder,
+    DatCache datCache) : IHostedService
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -50,6 +52,9 @@ public sealed class StartupRunner(
 
         // Step 8
         await adminSeeder.SeedAsync(cancellationToken);
+
+        // Step 9: missing/corrupt DATs are logged at Error; that system just has none.
+        datCache.Load();
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

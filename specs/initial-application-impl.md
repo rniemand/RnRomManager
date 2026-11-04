@@ -80,7 +80,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S20 | Library ZIP reader/writer + PNG IHDR | |
 | [x] | S21 | Job runner + jobs API + crash recovery | |
 | [x] | S22 | Game repositories + mirror write + DB auto-repair | |
-| [ ] | S23 | HTTP client + `DatRefresh` job + DAT loading at startup | |
+| [x] | S23 | HTTP client + `DatRefresh` job + DAT loading at startup | |
 | [ ] | S24 | Thumbnails + media service | |
 | [ ] | S25 | Ingest job start: pre-pass, snapshot, pending API | |
 | [ ] | S26 | Ingest pipeline: loose-file happy path | |
