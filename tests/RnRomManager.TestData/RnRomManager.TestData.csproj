@@ -8,4 +8,8 @@
     <PackageReference Include="MySqlConnector" />
     <PackageReference Include="Testcontainers.MariaDb" />
   </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/RnRomManager.Core/RnRomManager.Core.csproj" />
+  </ItemGroup>
 </Project>

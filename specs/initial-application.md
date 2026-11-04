@@ -125,7 +125,7 @@ All settings via `appsettings.json`, overridable by environment variables. Valid
     gbc/
   logs/
   cache/
-    dats/            # <datName>.dat + dats.json (§10.1)
+    dats/            # <kind>/<datName>.dat (kind = no-intro, releaseyear, developer, publisher, genre) + dats.json (§10.1, D43)
     work/<jobId>/    # archive extraction, deleted at job end and on startup
 ```
 
@@ -387,7 +387,7 @@ Verified live 2026-11-04: all 10 DAT files return 200 (GB DAT `2026.10.07`, 2,11
 - **No `cloneof`/parent data** is present, so grouping is name-based (§6.1, D23).
 - Regions and languages are parsed from the ROM-name tags (§6.1.1). The DAT `region` field is ignored because it's missing for World releases.
 - Parsed into memory per system at startup and after a refresh (≈2–3k entries each): SHA1 → entry, CRC → metadat values, plus a name list for search/suggestions.
-- **Refresh DATs** (Admin, `DatRefresh` job): downloads all 10 files (2 systems × no-intro + 4 metadat) to a temp dir → parses each → swaps them into `cache/dats/` all at once → writes `dats.json` (one entry per file: `{file, datName, version, downloadedAt, sha1}`). Any failure keeps the old set. On load each file's SHA1 is recomputed; a missing file, SHA1 mismatch or parse error = corrupt (§4.1 step 9). No automatic refresh (D18).
+- **Refresh DATs** (Admin, `DatRefresh` job): downloads all 10 files (2 systems × no-intro + 4 metadat) to a temp dir → parses each → swaps them into `cache/dats/` all at once → writes `dats.json` (one entry per file: `{file, datName, version, downloadedAt, sha1}`, `file` relative to `cache/dats/`, e.g. `no-intro/Nintendo - Game Boy.dat`). Any failure keeps the old set. On load each file's SHA1 is recomputed; a missing file, SHA1 mismatch or parse error = corrupt (§4.1 step 9). No automatic refresh (D18).
 - **Offline:** cached DATs keep working. With no cache, ingestion fails fast with `DatsMissing` (§7.1).
 - The GitHub API isn't used (unauthenticated limit of 60/h). Raw downloads only.
 
@@ -733,6 +733,7 @@ None. New questions found during implementation get added here.
 | D40 | 2026-11-04 | Seventh review (consistency): review Attach continues at §7.2 step 7 (step 6 skipped); `/api/integrity/status` null rules; `/api/about` licences from an embedded `licenses.json`; local Node ≥ 24 accepted (CI/Docker pin 24); ReportGenerator added to the tool manifest; `ci.yml` triggers on `pull_request` + `workflow_call` only (no branch-push runs, so PRs aren't tested twice). Implementation plan: one branch + PR per step, MVP = Docker Hub image deployed with the §17.3 compose file on the owner's host. |
 | D41 | 2026-11-04 | Found in S08: `games.zip_path` uses column collation `utf8mb4_uca1400_as_ci` (case-insensitive, **accent-sensitive**, MariaDB 10.10+), so the DB unique key agrees with the app's case-insensitive ordinal clash check (`Café.zip` ≠ `Cafe.zip`); the table default `utf8mb4_unicode_ci` would have made accent-only differences fail as `DbWriteFailed`. MySQL 8 doesn't have this collation, so MySQL support (best effort) needs `utf8mb4_0900_as_ci` there. `roms.dat_name`, `dat_version`, `dat_game_name` are `VARCHAR(255) NULL`. |
 | D42 | 2026-11-04 | Found in S10: the must-change-password gate also lets `GET /api/auth/antiforgery` and `POST /api/auth/login` through (otherwise a must-change user whose session-scoped antiforgery cookie expired couldn't get a token for change-password or logout). A missing/invalid session is `401 Unauthorized` and a wrong role `403 Forbidden`, both ProblemDetails like every other error. |
+| D43 | 2026-11-04 | Found in S18: each system has 5 DAT files sharing one `datName`, so `cache/dats/` mirrors the source layout: `cache/dats/<kind>/<datName>.dat` (`no-intro`, `releaseyear`, `developer`, `publisher`, `genre`), and `dats.json` stores each path relative to `cache/dats/`. Files are always looked up by that fixed layout, never by a path read from `dats.json`. |
 
 ## 22. Extensibility — `ISystemHandler`
 
