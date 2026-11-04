@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.Options;
+using RnRomManager.Api.Auth;
 using RnRomManager.Api.Configuration;
 using RnRomManager.Api.Endpoints;
 using RnRomManager.Api.Logging;
@@ -32,6 +33,7 @@ public static class AppHost
         builder.Services.AddSingleton<IUserRepository, UserRepository>();
         builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
         builder.Services.AddSingleton<AdminSeeder>();
+        builder.Services.AddAppAuth();
 
         // Keys live in the DB so cookies survive restarts (spec ยง9.2).
         builder.Services.AddSingleton<IXmlRepository, DbXmlRepository>();
@@ -45,7 +47,14 @@ public static class AppHost
         var staticFiles = new StaticFileOptions { OnPrepareResponse = ctx => SetCacheHeaders(ctx) };
         app.UseStaticFiles(staticFiles);
 
+        app.UseAppAuth();
+
         app.MapHealthEndpoints();
+        // Deny by default: every /api endpoint needs a session unless it opts out (spec ง23).
+        app.MapGroup("/api")
+            .RequireAuthorization(AuthSetup.Authenticated)
+            .RequireAntiforgery()
+            .MapAuthEndpoints();
         app.MapFallbackEndpoints(staticFiles);
         return app;
     }

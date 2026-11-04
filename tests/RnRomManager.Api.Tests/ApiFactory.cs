@@ -37,6 +37,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     public bool UsesRealDatabase { get; }
 
+    /// <summary>Replaces the app's clock when set (lockout tests).</summary>
+    public TimeProvider? Time { get; init; }
+
     /// <summary>Stub DB lifecycle (stub mode only): wait/migrate succeed, ping is healthy unless a test says otherwise.</summary>
     public IDatabaseLifecycle Database { get; } = Substitute.For<IDatabaseLifecycle>();
 
@@ -49,6 +52,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         builder.UseEnvironment("Testing");
         foreach (var (key, value) in Settings)
             builder.UseSetting(key, value);
+
+        if (Time is not null)
+            builder.ConfigureTestServices(services => services.AddSingleton(Time));
 
         if (!UsesRealDatabase)
         {
