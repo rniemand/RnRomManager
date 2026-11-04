@@ -1,6 +1,6 @@
 # RnRomManager — Initial Application Spec
 
-> Status: **v0.10 — ready for breakdown into implementation steps.** Sixth gap review done 2026-11-04 (DATs, thumbnails incl. URL escaping, Pan Docs and the libretro-database licence re-verified live). Confirmed decisions are listed in §21; open items in §20.
+> Status: **v0.11 — broken down into implementation steps in [initial-application-impl.md](initial-application-impl.md).** Seventh review done 2026-11-04 (consistency fixes only, D40). Confirmed decisions are listed in §21; open items in §20.
 
 ## 1. Purpose
 
@@ -294,11 +294,11 @@ Started manually by an Admin from the UI (`POST /api/jobs/ingest`). Runs as a si
 |---|---|
 | Pick a suggestion / DAT search result (`NoDatMatch` items) | Hashes differ from that DAT entry, so it's recorded as **unverified** (D30): `method = Manual`, `identification.dat*` set to the chosen entry, base title/tags from its ROM name + flag `Unverified`; `fileName` = DAT ROM stem + ` (Unverified)` + ext. Continues at step 6. |
 | Attach to an existing game as `Hack` or `Translated` | `method = Manual`; `fileName` = `Sanitize(original stem) + " (Hack\|Translated)" + ext`; joins the chosen game |
-| Attach as `None` (`AmbiguousGroup` items only; target must be one of the candidates) | Keeps the DAT identification (`method = Dat`, DAT `fileName`); joins the chosen game; continues at step 8 |
+| Attach as `None` (`AmbiguousGroup` items only; target must be one of the candidates) | Keeps the DAT identification (`method = Dat`, DAT `fileName`); joins the chosen game; continues at step 7 (fills only empty metadata fields) |
 | Manual entry (title, regions, languages, revision, flags) | `method = Manual`; `fileName` = `Sanitize({title}{ ({regions joined ", "})}{ ({revision})}{ ({flag})…})` + ext, empty groups omitted; `baseTitle` = title; grouped by title (step 6; several candidates → the request fails `409 AmbiguousGroup`, use Attach) |
 | Dismiss | Loose file → `_failed/` with reason `Dismissed`; archive entry → archive untouched (§7.3). Item `Dismissed` |
 
-Before any action the source file (loose) or archive (entry) must still exist, else `409 SourceMissing` and the row is deleted. The ROM extension follows the resolved system's handler (`RomExtensions[0]`). A resolved item becomes `Resolved` with the `game_id`. Resolution runs steps 6–10 of §7.2 synchronously; on success the loose source file is deleted (step 11).
+Before any action the source file (loose) or archive (entry) must still exist, else `409 SourceMissing` and the row is deleted. The ROM extension follows the resolved system's handler (`RomExtensions[0]`). A resolved item becomes `Resolved` with the `game_id`. Resolution runs steps 6–10 of §7.2 synchronously (step 6 is skipped for Attach, since the target game is chosen); on success the loose source file is deleted (step 11).
 
 - **Known limit:** a `Manual`/`Unverified` release whose SHA1 appears in a later DAT is not upgraded automatically (its SHA1 is in `roms`, so re-ingesting is a `Duplicate`). Fix: delete the release (→ `_removed/`), move the file back into `ingest/<system>/`, ingest.
 
@@ -582,7 +582,7 @@ All scripts: `$ErrorActionPreference = 'Stop'`, non-zero exit on failure, run fr
 
 | Script | Parameters | Does |
 |---|---|---|
-| `setup-dev.ps1` | `-SkipDb` | Checks .NET 10 SDK, Node 24 LTS, Docker. `dotnet restore`, `npm ci` (Web), Playwright browsers. Starts MariaDB via `docker-compose.dev.yml` (port 3306, db/user `rnrommanager`). Creates `./.dev/{roms,ingest,logs,cache}` and `appsettings.Development.json` pointing there (git-ignored). |
+| `setup-dev.ps1` | `-SkipDb` | Checks .NET 10 SDK, Node ≥ 24 (CI and the Dockerfile pin 24), Docker. `dotnet restore`, `npm ci` (Web), Playwright browsers. Starts MariaDB via `docker-compose.dev.yml` (port 3306, db/user `rnrommanager`). Creates `./.dev/{roms,ingest,logs,cache}` and `appsettings.Development.json` pointing there (git-ignored). |
 | `start-dev.ps1` | `-ApiOnly`, `-WebOnly` | `dotnet watch` API on :5080 + Vite dev server (proxy `/api`, `/health` → API); Ctrl+C stops both |
 | `test-all.ps1` | `-SkipIntegration` (no Testcontainers), `-SkipWeb`, `-Coverage` | `dotnet test` (+ coverlet + ReportGenerator HTML into `./.dev/coverage`), `npm run lint`, `npm run check`, `npm test` |
 | `test-e2e.ps1` | `-SkipBuild`, `-Headed` | §15.3 |
@@ -646,7 +646,7 @@ Pull the new tag and restart. DbUp applies new migrations on start; `info.json` 
 
 ## 18. CI/CD (GitHub Actions)
 
-**`ci.yml`** — on `pull_request`, `push` (`branches-ignore: [main]`, no tags; `main` and tags are tested through `release.yml`, so nothing runs twice) and `workflow_call`:
+**`ci.yml`** — on `pull_request` and `workflow_call` (`main` and tags are tested through `release.yml`; branch pushes aren't a trigger, so a PR branch isn't tested twice):
 | Job | Steps |
 |---|---|
 | backend | checkout → setup-dotnet 10 → `dotnet tool restore` → `dotnet restore` → `dotnet build -c Release --no-restore -warnaserror` → `dotnet test --no-build --collect "XPlat Code Coverage"` (incl. Testcontainers) → ReportGenerator summary to the job summary |
@@ -664,6 +664,7 @@ Pull the new tag and restart. DbUp applies new migrations on start; `info.json` 
 - Both workflows: `permissions: contents: read`. `release.yml` uses `concurrency: release-${{ github.ref }}` (no cancel-in-progress), so pushes to the same ref publish in order.
 - E2E runs on the amd64 image only; the arm64 image is built but not smoke-tested (accepted, since it's a cross-compiled copy of the same code).
 - **Secrets:** `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (Docker Hub PAT with Read/Write/Delete; the description update needs it).
+- **Tool manifest** `.config/dotnet-tools.json`: `minver-cli` and `dotnet-reportgenerator-globaltool`.
 - **Versioning:** MinVer as the **CLI tool only** (`minver-cli` in `.config/dotnet-tools.json`, `--tag-prefix v`); no MinVer package in the csproj, because `.git` isn't in the Docker build context. The version reaches the build as `-p:Version=$VERSION` (Dockerfile `ARG VERSION=0.0.0-dev`); plain local builds are `0.0.0-dev`. Untagged commits get `X.Y.Z-alpha.0.N` (logged at startup, shown on About). Releases are made by pushing an annotated `vX.Y.Z` tag on `main`.
 
 ## 19. Documentation
@@ -729,6 +730,7 @@ None. New questions found during implementation get added here.
 | D37 | 2026-11-04 | Admin password recovery = CLI mode `--reset-password <username>` run via `docker exec` (no shell needed); random password to the console only, forces a change, re-enables the user and promotes them to Admin if no enabled Admin is left. |
 | D38 | 2026-11-04 | Bulk `MediaRetry` background job ("Retry missing media" on the Integrity page) next to the per-game Retry media; same job lock, progress and cancel. |
 | D39 | 2026-11-04 | Defaults applied in the sixth gap review: ingest starts with a DB sync pre-pass (fixes duplicate entries/`(2)` ZIPs after a crash or DB failure); `DbWriteFailed` stops the ingest job; every write builds from the ZIP's `info.json`, never from DB rows; thumbnail circuit breaker (3 consecutive network failures per job); `info.json` validation rules defined, unknown properties ignored; SIGTERM cancels the job with a 30 s shutdown timeout (compose `stop_grace_period: 35s`); a review upsert resets a row in any status to `Pending`; null `ReadHeader` → ingest folder's handler; integrity scope (ZIPs outside their bucket → `WrongLocation`, unregistered system folders → `OrphanFile`); `Thumbs.db`/`desktop.ini` ignored; game typeahead via `/api/games`; game detail response and sort directions defined; DbUp journal name set explicitly; compose DB healthcheck gate; NLog flushed before exit; Manual/Unverified → DAT upgrade is a documented known limit; README uses absolute URLs for Docker Hub. |
+| D40 | 2026-11-04 | Seventh review (consistency): review Attach continues at §7.2 step 7 (step 6 skipped); `/api/integrity/status` null rules; `/api/about` licences from an embedded `licenses.json`; local Node ≥ 24 accepted (CI/Docker pin 24); ReportGenerator added to the tool manifest; `ci.yml` triggers on `pull_request` + `workflow_call` only (no branch-push runs, so PRs aren't tested twice). Implementation plan: one branch + PR per step, MVP = Docker Hub image deployed with the §17.3 compose file on the owner's host. |
 
 ## 22. Extensibility — `ISystemHandler`
 
@@ -801,12 +803,12 @@ JSON, camelCase. Errors are RFC 7807 ProblemDetails with an extra `code` (§23.1
 | POST | `/api/review/{id}/resolve` | Admin | `{action:"Dat",datSystem,datGameName}` (→ `Unverified`, §7.5) · `{action:"Attach",targetGameId,flag:"Hack"\|"Translated"\|"None"}` (`None` only for `AmbiguousGroup`) · `{action:"Manual",title,regions[],languages[],revision?,flags[]}` → `{gameId}` · 409 `JobRunning` / `AmbiguousGroup` / `SourceMissing` · 400 `ValidationFailed` |
 | POST | `/api/review/{id}/dismiss` | Admin | → 204 · 409 `JobRunning` / `SourceMissing` |
 | GET | `/api/dat/search` | Admin | `?system&q&limit=20` → `[{gameName,romName,sizeBytes,crc32}]` |
-| GET | `/api/integrity/status` | Admin | → `{lastQuick,lastDeep,nextScheduledAt}` |
+| GET | `/api/integrity/status` | Admin | → `{lastQuick,lastDeep,nextScheduledAt}` (`lastQuick`/`lastDeep` = latest job of that mode or null; `nextScheduledAt` UTC, null when the schedule is disabled) |
 | GET | `/api/integrity/issues` | Admin | `?status&type&page&pageSize` → page of issues |
 | GET | `/api/admin/dats` | Admin | → `[{datName,version,downloadedAt}]` |
 | GET | `/api/admin/settings` | Admin | → effective config, secrets masked |
 | GET | `/api/admin/logs` | Admin | → ZIP (§13) |
-| GET | `/api/about` | auth | → `{version,licenses[]}` |
+| GET | `/api/about` | auth | → `{version,licenses[]}` (`licenses` = a hand-maintained embedded `licenses.json`: `[{name,license,url}]` for the app, every direct NuGet/npm dependency and libretro-database) |
 | GET | `/health/live`, `/health/ready` | anon | → 200 / 503 |
 
 - Every Admin library mutation (PATCH/DELETE game, delete/move rom, merge, media retry) takes the job lock and can return `409 JobRunning`, `InfoJsonNewerSchema` or `TargetZipUnreadable`, plus `404 NotFound` for a stale id (§11).
