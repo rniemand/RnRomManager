@@ -1,6 +1,6 @@
 # RnRomManager — Initial Application Spec
 
-> Status: **DRAFT v0.2** — being refined over several sessions. Items marked **[OPEN]** need a decision; items marked **[PROPOSED]** are my recommendation and need confirmation. Confirmed decisions are listed in §21.
+> Status: **DRAFT v0.3** — being refined over several sessions. Items marked **[OPEN]** need a decision; items marked **[PROPOSED]** are my recommendation and need confirmation. Confirmed decisions are listed in §21.
 
 ## 1. Purpose
 
@@ -20,16 +20,16 @@ A self-hosted web app for managing a personal backup collection of game ROM file
 |---|---|
 | Backend | .NET 10 ASP.NET Core Web API |
 | Data access | Dapper + MySqlConnector |
-| DB | MySQL / MariaDB (external, shared instance) |
-| Migrations | **[PROPOSED]** DbUp (`dbup-mysql`) — plain embedded `.sql` scripts, applied on startup, journal table `schema_versions` |
+| DB | MySQL / MariaDB (external, shared instance; app uses its own database, e.g. `rnrommanager`, no table prefix) |
+| Migrations | DbUp (`dbup-mysql`) — plain embedded `.sql` scripts, applied on startup, journal table `schema_versions` |
 | Logging | NLog — console + rolling text file |
 | Backend tests | NUnit + NSubstitute (+ Shouldly or NUnit constraints — **[OPEN]**) |
-| Integration tests | **[PROPOSED]** Testcontainers (MariaDB) for repository/migration tests; temp-dir file system for ingestion tests |
-| Frontend | Svelte 5 — **[PROPOSED]** SvelteKit with `adapter-static` (SPA mode), TypeScript |
+| Integration tests | Testcontainers (MariaDB) for repository/migration tests; temp-dir file system for ingestion tests |
+| Frontend | Svelte 5 — SvelteKit with `adapter-static` (SPA mode), TypeScript |
 | CSS | Bootstrap 5.3 (native `data-bs-theme` dark/light) |
 | Icons | Bootstrap Icons (primary) + Font Awesome Free (for gaps, e.g. brand logos) |
 | Archive input | `System.IO.Compression` (ZIP) + SharpCompress (7z) |
-| Frontend tests | **[PROPOSED]** Vitest + @testing-library/svelte; Playwright e2e **[OPEN]** |
+| Frontend tests | Vitest + @testing-library/svelte; Playwright smoke e2e |
 | Container | Single image; API serves the built UI from `wwwroot` |
 | CI/CD | GitHub Actions → Docker Hub `niemandr/rnrommanager` |
 
@@ -118,7 +118,7 @@ Tetris.zip
 ```
 
 - ZIP name = English (or World/USA/Europe) release title with region/revision tags stripped, filesystem-safe characters only.
-- All releases (regions, revisions), and **[OPEN]** hacks/translations, of the same game live in the same ZIP.
+- All releases (regions, revisions) **and** hacks/translations of the same game live in the same ZIP. Hacks/translations are flagged (`"Hack"`, `"Translated"`) in `info.json` and are never `isPrimary`.
 - Writes are atomic: build to `*.zip.tmp` in the same folder, then rename over the original. Never edit a ZIP in place.
 - Compression: Deflate, optimal.
 
@@ -265,7 +265,7 @@ Cartridge header lives at `0x0100–0x014F`. Files smaller than `0x150` bytes ar
 
 ## 11. UI
 
-- Svelte 5 SPA, Bootstrap 5.3, dark/light/auto toggle persisted per browser (`localStorage`) **[OPEN]** or per user account?
+- Svelte 5 SPA, Bootstrap 5.3, dark/light/auto toggle (auto = OS setting) persisted per browser in `localStorage`.
 - Pages (MVP):
   - **Login** / change password
   - **Library** — grid (box art) + list view, filter by system/letter/region, search by title, pagination
@@ -282,11 +282,11 @@ Background hosted service on a configurable interval, plus "Run now" in the UI.
 
 Checks:
 - Every ZIP in `roms/` has a valid `info.json` and a matching DB row (and vice-versa).
-- `info.json` ROM/image lists match ZIP entries; ROM SHA1s match (full re-hash is expensive → **[OPEN]** quick mode by size/timestamp, deep mode on demand?).
+- `info.json` ROM/image lists match ZIP entries; ROM SHA1s match (two modes: **quick** (scheduled; ZIP size/timestamp vs. last check, `info.json` vs. entry list) and **deep** (on demand from the UI; full SHA1 re-hash of every ROM).
 - Each game has a BoxArt.
 - ZIP is in the correct system/letter folder.
 
-Action: **[OPEN]** report-only, or auto-repair (DB is rebuilt from `info.json`; files are never auto-deleted)? **[PROPOSED]** DB auto-repaired from ZIPs; file-side problems reported only.
+Action: the **DB is auto-repaired** from `info.json` (insert/update/delete rows; every change logged at `Info` and recorded as a resolved issue). **File-side problems** (corrupt ZIP, hash mismatch, missing box art, wrong folder, orphan files) are **reported only** in `integrity_issues`; the app never moves or deletes library files automatically.
 
 ## 13. Logging
 
@@ -300,7 +300,7 @@ Action: **[OPEN]** report-only, or auto-repair (DB is rebuilt from `info.json`; 
 ## 14. Database (initial tables) **[PROPOSED]**
 
 `users`, `games`, `roms`, `images`, `ingest_runs`, `ingest_run_items`, `ingest_review_items`, `integrity_runs`, `integrity_issues`, `schema_versions` (DbUp).
-`games` holds title/sortTitle/system/year/publisher/developer/zip path + JSON of genres; `roms` holds one row per release with hashes and flattened header fields; `images` holds metadata only. Full-text index on `games.title` for search. Table prefix (shared instance)? **[OPEN]**
+`games` holds title/sortTitle/system/year/publisher/developer/zip path + JSON of genres; `roms` holds one row per release with hashes and flattened header fields; `images` holds metadata only. Full-text index on `games.title` for search. No table prefix — the app gets its own database on the shared instance.
 
 ## 15. Testing
 
@@ -309,7 +309,7 @@ Action: **[OPEN]** report-only, or auto-repair (DB is rebuilt from `info.json`; 
 - Ingestion integration tests: a temp dir per test, seeded with **synthetic** ROMs (valid headers, generated bytes) + a tiny fixture DAT; HTTP sources stubbed. No real ROMs committed.
 - Data tests: Testcontainers MariaDB, migrations applied from scratch.
 - API tests: `WebApplicationFactory`.
-- UI: Vitest component tests; Playwright smoke test against the container **[OPEN]**.
+- UI: Vitest component tests; Playwright smoke tests (login, start ingestion on seeded synthetic ROMs, browse/search, game detail) against the built container + MariaDB in CI.
 - Coverage reported in CI (no hard gate initially **[OPEN]**).
 
 ## 16. Dev tooling (`/scripts`, PowerShell 7)
@@ -325,32 +325,33 @@ Action: **[OPEN]** report-only, or auto-repair (DB is rebuilt from `info.json`; 
 ## 17. Container
 
 - Multi-stage Dockerfile: `node` stage builds UI → `sdk:10.0` stage publishes API (with UI in `wwwroot`) → runtime.
-- Runtime base: **[PROPOSED]** `mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra` (no shell/package manager, non-root, includes ICU/tzdata). Alternative: `aspnet:10.0-alpine`.
-- Runs as non-root (UID 1654 `app`); volumes: `/app/roms`, `/app/ingest`, `/app/logs`, `/app/cache`. **[OPEN]** PUID/PGID support for NAS users (Unraid/Synology)? That requires a shell-ful base image.
+- Runtime base: **[OPEN]** `aspnet:10.0-noble-chiseled-extra` (no shell, smallest attack surface) vs. `aspnet:10.0-alpine` (has a shell for debugging). PUID/PGID is **not** needed, so either works.
+- Runs as non-root (UID 1654 `app`); volumes: `/app/roms`, `/app/ingest`, `/app/logs`, `/app/cache`. No PUID/PGID mapping: users set `user:` in compose and own the volumes accordingly (documented in `docs/deployment.md`).
 - Port `8080`. Health endpoint `/health` (DB reachable, paths writable).
 - Example `docker-compose.yml` in docs.
 
 ## 18. CI/CD (GitHub Actions)
 
 - `ci.yml` on PR + push: restore, build, `dotnet test`, UI lint/test/build.
-- `release.yml` on push to `main` and tags `v*`: run all tests → build image (multi-arch `linux/amd64,linux/arm64` **[OPEN]**) → push `niemandr/rnrommanager:{latest, x.y.z, sha}`.
+- `release.yml` on push to `main` and tags `v*`: run all tests → build multi-arch image (`linux/amd64,linux/arm64` via buildx + QEMU) → push `niemandr/rnrommanager:{latest, x.y.z, sha}`.
 - Secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`.
-- Versioning: **[OPEN]** git tags / MinVer / manual.
+- Versioning: **MinVer** — version comes from git tags `vX.Y.Z`; pushes to `main` get a pre-release version and tag `latest`/`sha`; pushing a `v*` tag publishes `X.Y.Z`, `X.Y`, `latest`.
 
 ## 19. Documentation (maintained alongside code)
 
 - `README.md` — what it is, screenshots, quick start (docker compose), legal disclaimer.
 - `docs/deployment.md`, `docs/configuration.md`, `docs/features.md`, `docs/zip-format.md` (info.json schema), `docs/adding-a-system.md`, `docs/development.md`.
-- `CONTRIBUTING.md`, `LICENSE` **[OPEN: MIT?]**, Docker Hub description synced from README.
+- `CONTRIBUTING.md`, `LICENSE` (MIT), Docker Hub description synced from README.
 - Rule: each implementation step updates the relevant doc in the same PR.
 
 ## 20. Open questions (summary)
 
-1. Hacks/translations: once resolved in the review queue, always grouped into the parent game ZIP, or allowed as their own ZIP?
-2. Integrity checker: report-only vs. DB auto-repair; deep re-hash schedule.
-3. Multi-arch image; PUID/PGID support; versioning scheme; license.
-4. Theme preference stored per browser or per user.
-5. DB table prefix for the shared instance.
+1. Container runtime base: chiseled vs. Alpine (§17).
+2. DAT source: always latest libretro-database `master`, or pinned to a commit SHA updated by the app/maintainer (§10)?
+3. Logging: file retention (days), and an Admin "Download logs" button (§13)?
+4. Test assertions: Shouldly vs. plain NUnit constraints; file system: real temp dirs vs. `System.IO.Abstractions`; coverage gate (§15)?
+5. Integrity quick-check interval (default 24h?) (§4, §12).
+6. Confirm `info.json` schema v1 (§6.1), solution layout (§3), and polling for job progress (§11).
 
 ## 21. Decisions log
 
@@ -364,3 +365,11 @@ Action: **[OPEN]** report-only, or auto-repair (DB is rebuilt from `info.json`; 
 | D6 | 2026-11-04 | `.zip` and `.7z` archives in ingest are unpacked and each ROM inside ingested (SharpCompress for 7z). |
 | D7 | 2026-11-04 | Uppercase `A`–`Z` + `#` buckets; leading "The" is kept (bucket = first char of ZIP name). |
 | D8 | 2026-11-04 | Bootstrap Icons primary, Font Awesome Free for gaps. |
+| D9 | 2026-11-04 | Hacks/translations go into the parent game ZIP, flagged in `info.json`. |
+| D10 | 2026-11-04 | Integrity: DB auto-repaired from `info.json`; file problems reported only. Quick scheduled check + deep re-hash on demand. |
+| D11 | 2026-11-04 | Docker image `linux/amd64` + `linux/arm64`, non-root, no PUID/PGID. |
+| D12 | 2026-11-04 | MinVer (git-tag versions) + MIT license. |
+| D13 | 2026-11-04 | Theme preference per browser (`localStorage`), default auto. |
+| D14 | 2026-11-04 | App uses its own database on the shared MariaDB, no table prefix. |
+| D15 | 2026-11-04 | DbUp, SvelteKit static SPA, Testcontainers MariaDB accepted. |
+| D16 | 2026-11-04 | UI tests: Vitest + Playwright smoke tests in CI. |
