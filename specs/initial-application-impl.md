@@ -82,7 +82,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S22 | Game repositories + mirror write + DB auto-repair | |
 | [x] | S23 | HTTP client + `DatRefresh` job + DAT loading at startup | |
 | [x] | S24 | Thumbnails + media service | |
-| [ ] | S25 | Ingest job start: pre-pass, snapshot, pending API | |
+| [x] | S25 | Ingest job start: pre-pass, snapshot, pending API | |
 | [ ] | S26 | Ingest pipeline: loose-file happy path | |
 | [ ] | S27 | Ingest: dedupe, self-repair, failures | |
 | [ ] | S28 | Ingest: archives (zip + 7z) | |
