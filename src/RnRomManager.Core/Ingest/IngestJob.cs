@@ -65,7 +65,7 @@ public sealed class IngestJob(
             {
                 var result = now - file.ModifiedAtUtc < MinFileAge
                     ? new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent, SystemId: file.SystemId)
-                    : await ProcessAsync(file, breaker, cancellationToken).ConfigureAwait(false);
+                    : await ProcessAsync(file, context.JobId, breaker, cancellationToken).ConfigureAwait(false);
                 if (result is not null)
                 {
                     await RecordAsync(context, file, fileId, result, cancellationToken).ConfigureAwait(false);
@@ -80,11 +80,11 @@ public sealed class IngestJob(
         return counts;
     }
 
-    private async Task<IngestItemResult?> ProcessAsync(IngestFile file, CircuitBreaker breaker, CancellationToken cancellationToken)
+    private async Task<IngestItemResult?> ProcessAsync(IngestFile file, Guid jobId, CircuitBreaker breaker, CancellationToken cancellationToken)
     {
         try
         {
-            return await pipeline.ProcessAsync(file, breaker, cancellationToken).ConfigureAwait(false);
+            return await pipeline.ProcessAsync(file, jobId, breaker, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {

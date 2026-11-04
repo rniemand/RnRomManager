@@ -27,11 +27,13 @@ public class IngestPipelineTests
 
     private ApiFactory _factory = null!;
     private ILibraryMirror? _mirrorOverride;
+    private Action<IServiceCollection>? _extraServices;
 
     [SetUp]
     public async Task SetUp()
     {
         _mirrorOverride = null;
+        _extraServices = null;
         _factory = CreateFactory(await MariaDbServer.CreateDatabaseAsync());
         _ = _factory.Services;
         LoadDats();
@@ -48,6 +50,7 @@ public class IngestPipelineTests
             {
                 if (_mirrorOverride is not null)
                     services.AddSingleton(_mirrorOverride);
+                _extraServices?.Invoke(services);
             },
         };
         factory.Settings["Sources:ThumbnailBaseUrl"] = ""; // default art, no network
@@ -83,7 +86,7 @@ public class IngestPipelineTests
     }
 
     private Task<IngestItemResult?> IngestAsync(IngestFile file) =>
-        _factory.Services.GetRequiredService<IngestPipeline>().ProcessAsync(file, new CircuitBreaker(), CancellationToken.None);
+        _factory.Services.GetRequiredService<IngestPipeline>().ProcessAsync(file, Guid.NewGuid(), new CircuitBreaker(), CancellationToken.None);
 
     private InfoJsonGame ReadZip(string relative)
     {
@@ -241,5 +244,190 @@ public class IngestPipelineTests
         await items.Received(1).InsertAsync(Arg.Any<JobItem>(), Arg.Any<CancellationToken>());
         Assert.That(File.Exists(first.FullPath) && File.Exists(later.FullPath), Is.True);
         Assert.That(File.Exists(Path.Combine(Roms, "gb", "T", "Tetris.zip")), Is.True, "the ZIP stays; the next pre-pass repairs the DB");
+    }
+
+    // --- S27: failures, duplicates, self-repair ---
+
+    private string Ingest(string system) => Path.Combine(_factory.Root, "ingest", system);
+
+    [Test]
+    public async Task UnsupportedType_MovesToFailed_WithErrorTxt()
+    {
+        var jobId = Guid.NewGuid();
+        var file = Drop("gb", "readme.txt", [1, 2, 3]);
+
+        var result = await _factory.Services.GetRequiredService<IngestPipeline>().ProcessAsync(file, jobId, new CircuitBreaker(), CancellationToken.None);
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+        Assert.That(File.Exists(file.FullPath), Is.False);
+        var moved = Path.Combine(Ingest("gb"), "_failed", "readme.txt");
+        Assert.That(File.Exists(moved), Is.True);
+        var errorTxt = File.ReadAllText(moved + ".error.txt");
+        Assert.That(errorTxt, Does.Contain("UnsupportedType").And.Contain(jobId.ToString()).And.Contain("time: "));
+    }
+
+    [Test]
+    public async Task FailedNameClash_GetsASuffix()
+    {
+        Directory.CreateDirectory(Path.Combine(Ingest("gb"), "_failed"));
+        File.WriteAllBytes(Path.Combine(Ingest("gb"), "_failed", "README.TXT"), [0]);
+
+        await IngestAsync(Drop("gb", "readme.txt", [1]));
+
+        Assert.That(File.Exists(Path.Combine(Ingest("gb"), "_failed", "readme (2).txt")), Is.True);
+        Assert.That(File.Exists(Path.Combine(Ingest("gb"), "_failed", "readme (2).txt.error.txt")), Is.True);
+    }
+
+    [Test]
+    public async Task TooSmall_And_TooLarge_Fail()
+    {
+        var small = await IngestAsync(Drop("gb", "tiny.gb", new byte[0x14F]));
+        var big = Drop("gb", "huge.gb", [1]) with { SizeBytes = 16L * 1024 * 1024 + 1 };
+        var large = await IngestAsync(big);
+
+        Assert.That(small!.Reason, Is.EqualTo(IngestFailures.TooSmall));
+        Assert.That(large!.Reason, Is.EqualTo(IngestFailures.TooLarge));
+        Assert.That(Directory.GetFiles(Path.Combine(Ingest("gb"), "_failed"), "*.gb"), Has.Length.EqualTo(2));
+    }
+
+    [Test]
+    public async Task UnmatchedWithInvalidLogoAndChecksum_IsInvalidHeader()
+    {
+        var garbage = new SyntheticRomBuilder { Seed = 50, CorruptLogo = true, CorruptHeaderChecksum = true }.Build();
+
+        var result = await IngestAsync(Drop("gb", "garbage.gb", garbage));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.InvalidHeader)));
+        Assert.That(result.Sha1, Is.EqualTo(Convert.ToHexStringLower(SHA1.HashData(garbage))));
+        Assert.That(File.Exists(Path.Combine(Ingest("gb"), "_failed", "garbage.gb")), Is.True);
+    }
+
+    [Test]
+    public async Task UnmatchedPlausible_WrongExtension_IsRenamedAndWaits()
+    {
+        var gbcOnly = new SyntheticRomBuilder { Seed = 51, CgbFlag = 0xC0 }.Build();
+        var file = Drop("gb", "mystery.gb", gbcOnly);
+
+        var result = await IngestAsync(file);
+
+        Assert.That(result, Is.Null, "no DAT match: waits for the review step (S29)");
+        Assert.That(File.Exists(file.FullPath), Is.False);
+        Assert.That(File.Exists(Path.Combine(Ingest("gb"), "mystery.gbc")), Is.True);
+    }
+
+    [Test]
+    public async Task SameSha1AgainIsADuplicate_MovedToDuplicates()
+    {
+        var first = await IngestAsync(Drop("gb", "a.gb", TetrisJ));
+        var copy = Drop("gb", "copy.gb", TetrisJ);
+
+        var result = await IngestAsync(copy);
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Duplicate));
+        Assert.That(result.GameId, Is.EqualTo(first!.GameId));
+        Assert.That(result.Details, Does.Contain("gb/T/Tetris.zip"));
+        Assert.That(File.Exists(Path.Combine(Ingest("gb"), "_duplicates", "copy.gb")), Is.True);
+        Assert.That(File.Exists(copy.FullPath), Is.False);
+    }
+
+    [Test]
+    public async Task OpenHashMismatch_SelfRepairsTheEntry_AndResolvesTheIssue()
+    {
+        await IngestAsync(Drop("gb", "a.gb", TetrisJ));
+        var zipPath = Path.Combine(Roms, "gb", "T", "Tetris.zip");
+        CorruptEntry(zipPath, "roms/Tetris (Japan).gb", TetrisJ.Length);
+        var issueId = await InsertIssueAsync("HashMismatch", "gb/T/Tetris.zip", "roms/Tetris (Japan).gb");
+        var copy = Drop("gb", "good-copy.gb", TetrisJ);
+
+        var result = await IngestAsync(copy);
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Repaired), result.Details);
+        Assert.That(File.Exists(copy.FullPath), Is.False);
+        using (var zip = LibraryZip.Open(zipPath, Service<InfoJsonReader>()))
+        using (var entry = zip.OpenEntry("roms/Tetris (Japan).gb", TetrisJ.Length))
+        using (var buffer = new MemoryStream())
+        {
+            entry.CopyTo(buffer);
+            Assert.That(buffer.ToArray(), Is.EqualTo(TetrisJ));
+        }
+        Assert.That(await IssueStatusAsync(issueId), Is.EqualTo("Resolved"));
+    }
+
+    [Test]
+    public async Task ReadFailure_IsErrorIoError()
+    {
+        var gone = new IngestFile("gb", Path.Combine(Ingest("gb"), "vanished.gb"), "vanished.gb", TetrisJ.Length, DateTime.UtcNow.AddMinutes(-1));
+
+        var result = await IngestAsync(gone);
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Error, IngestErrors.IoError)));
+    }
+
+    [Test]
+    [Platform("Win")] // only Windows refuses to delete a file another handle has open without FileShare.Delete
+    public async Task DeleteFailure_IsAWarning_ItemStillIngested()
+    {
+        var file = Drop("gb", "a.gb", TetrisJ);
+        using var held = new FileStream(file.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        var result = await IngestAsync(file);
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Ingested));
+        Assert.That(File.Exists(file.FullPath), Is.True);
+    }
+
+    [Test]
+    public async Task UnexpectedException_IsErrorUnexpected_AndTheJobContinues()
+    {
+        var connectionString = _factory.Settings["ConnectionStrings:Default"]!;
+        _factory.Dispose();
+        var roms = Substitute.For<IRomRepository>();
+        roms.ListSha1sAsync(default).ReturnsForAnyArgs([]);
+        roms.GetBySha1Async(default!, default).ThrowsAsyncForAnyArgs(new InvalidOperationException("boom"));
+        _extraServices = services => services.AddSingleton(roms);
+        _factory = CreateFactory(connectionString);
+        _ = _factory.Services;
+        LoadDats();
+        foreach (var name in new[] { "a.gb", "b.gb" })
+            File.SetLastWriteTimeUtc(Drop("gb", name, TetrisJ).FullPath, DateTime.UtcNow.AddMinutes(-1));
+        var items = Substitute.For<IJobItemRepository>();
+        var job = ActivatorUtilities.CreateInstance<IngestJob>(_factory.Services, items);
+
+        var summary = (Dictionary<string, int>)(await job.RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None))!;
+
+        Assert.That(summary[IngestOutcome.Error], Is.EqualTo(2));
+        await items.Received(2).InsertAsync(Arg.Is<JobItem>(i => i.Reason == IngestErrors.Unexpected && i.Details == "boom"), Arg.Any<CancellationToken>());
+    }
+
+    private static void CorruptEntry(string zipPath, string entryName, int length)
+    {
+        using var zip = ZipFile.Open(zipPath, ZipArchiveMode.Update);
+        zip.GetEntry(entryName)!.Delete();
+        using var w = zip.CreateEntry(entryName).Open();
+        w.Write(new byte[length]); // same size, wrong bytes
+    }
+
+    private async Task<long> InsertIssueAsync(string type, string zipPath, string entryName)
+    {
+        await using var connection = new MySqlConnector.MySqlConnection(_factory.Settings["ConnectionStrings:Default"]);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "INSERT INTO integrity_issues (type, severity, system_id, zip_path, entry_name, status, first_seen_job_id, last_seen_job_id, detected_at) "
+            + "VALUES (@type, 'Error', 'gb', @zip, @entry, 'Open', @job, @job, UTC_TIMESTAMP(6)); SELECT LAST_INSERT_ID();";
+        command.Parameters.AddWithValue("@type", type);
+        command.Parameters.AddWithValue("@zip", zipPath);
+        command.Parameters.AddWithValue("@entry", entryName);
+        command.Parameters.AddWithValue("@job", Guid.NewGuid().ToString());
+        return Convert.ToInt64(await command.ExecuteScalarAsync(), System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    private async Task<string?> IssueStatusAsync(long id)
+    {
+        await using var connection = new MySqlConnector.MySqlConnection(_factory.Settings["ConnectionStrings:Default"]);
+        await connection.OpenAsync();
+        await using var command = connection.CreateCommand();
+        command.CommandText = "SELECT status FROM integrity_issues WHERE id = @id";
+        command.Parameters.AddWithValue("@id", id);
+        return (string?)await command.ExecuteScalarAsync();
     }
 }
