@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.StaticFiles;
+using RnRomManager.Api.Configuration;
 using RnRomManager.Api.Endpoints;
+using RnRomManager.Api.Logging;
 
 namespace RnRomManager.Api;
 
@@ -9,6 +11,9 @@ public static class AppHost
     public static WebApplication Build(string[] args)
     {
         var builder = WebApplication.CreateBuilder(args);
+        NLogSetup.Configure(builder);
+        builder.Services.AddAppOptions(builder.Configuration);
+        builder.Services.AddHostedService<StartupRunner>();
         var app = builder.Build();
 
         var staticFiles = new StaticFileOptions { OnPrepareResponse = ctx => SetCacheHeaders(ctx) };

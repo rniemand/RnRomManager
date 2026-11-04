@@ -61,7 +61,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S01 | Repo + solution scaffold | #1 |
 | [x] | S02 | Web app scaffold | #2 |
 | [x] | S03 | API host, health/live, static UI, `--healthcheck` | #3 |
-| [ ] | S04 | Configuration, NLog, startup steps 1–4 | |
+| [x] | S04 | Configuration, NLog, startup steps 1–4 | #4 |
 | [ ] | S05 | Dockerfile + `build-docker.ps1` | |
 | [ ] | S06 | CI + release workflows, `test-all.ps1` | |
 | [ ] | S07 | DB plumbing, DbUp, dev DB, `/health/ready` | |

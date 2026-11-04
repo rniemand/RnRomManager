@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace RnRomManager.Api.Tests;
 
@@ -9,21 +8,18 @@ public class AppHostTests
 {
     private const string IndexHtml = "<!doctype html><title>spa</title>";
 
-    private string _webRoot = null!;
-    private WebApplicationFactory<Program> _factory = null!;
+    private ApiFactory _factory = null!;
     private HttpClient _client = null!;
 
     [SetUp]
     public void SetUp()
     {
-        _webRoot = Directory.CreateTempSubdirectory("rnrm-wwwroot-").FullName;
-        File.WriteAllText(Path.Combine(_webRoot, "index.html"), IndexHtml);
-        Directory.CreateDirectory(Path.Combine(_webRoot, "_app", "immutable"));
-        File.WriteAllText(Path.Combine(_webRoot, "_app", "immutable", "x.js"), "console.log(1);");
-
-        _factory = new WebApplicationFactory<Program>()
-            // Not Development: that overlays the project's own wwwroot via static web assets.
-            .WithWebHostBuilder(b => b.UseEnvironment("Testing").UseSetting(WebHostDefaults.WebRootKey, _webRoot));
+        _factory = new ApiFactory();
+        var webRoot = Path.Combine(_factory.Root, "wwwroot");
+        Directory.CreateDirectory(Path.Combine(webRoot, "_app", "immutable"));
+        File.WriteAllText(Path.Combine(webRoot, "index.html"), IndexHtml);
+        File.WriteAllText(Path.Combine(webRoot, "_app", "immutable", "x.js"), "console.log(1);");
+        _factory.Settings[WebHostDefaults.WebRootKey] = webRoot;
         _client = _factory.CreateClient();
     }
 
@@ -32,7 +28,6 @@ public class AppHostTests
     {
         _client.Dispose();
         _factory.Dispose();
-        Directory.Delete(_webRoot, recursive: true);
     }
 
     [Test]

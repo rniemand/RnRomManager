@@ -6,6 +6,15 @@
     <ProjectReference Include="../RnRomManager.Systems.GameBoy/RnRomManager.Systems.GameBoy.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="MySqlConnector" />
+    <PackageReference Include="NLog.Web.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="nlog.config" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- Local Release convenience: bundle the built SPA if it exists. The Dockerfile does the real copy. -->
   <Target Name="CopyWebBuild" BeforeTargets="BeforeBuild" Condition="'$(Configuration)' == 'Release' And Exists('../RnRomManager.Web/build/index.html')">
     <ItemGroup>
