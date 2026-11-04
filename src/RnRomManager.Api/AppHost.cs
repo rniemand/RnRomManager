@@ -13,6 +13,7 @@ using RnRomManager.Api.Security;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Jobs;
+using RnRomManager.Core.Library;
 using RnRomManager.Core.Systems;
 using RnRomManager.Core.Users;
 using RnRomManager.Data;
@@ -70,6 +71,12 @@ public static class AppHost
         builder.Services.AddSingleton<JobLock>();
         builder.Services.AddSingleton<JobRunner>();
         builder.Services.AddSingleton<CrashRecovery>();
+        builder.Services.AddSingleton<IGameRepository, GameRepository>();
+        builder.Services.AddSingleton<IRomRepository, RomRepository>();
+        builder.Services.AddSingleton<IImageRepository, ImageRepository>();
+        builder.Services.AddSingleton<ILibraryMirror, LibraryMirror>();
+        builder.Services.AddSingleton<InfoJsonReader>();
+        builder.Services.AddSingleton<DbSync>();
         // §3.1: a running job gets 30 s to stop on SIGTERM (compose sets stop_grace_period: 35s).
         builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(30));
         builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
