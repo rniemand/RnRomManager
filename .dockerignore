@@ -1,0 +1,17 @@
+.git
+.github
+.dev
+.vs
+.vscode
+.idea
+**/bin
+**/obj
+**/node_modules
+**/.svelte-kit
+src/RnRomManager.Web/build
+src/RnRomManager.Api/wwwroot
+tests
+docs
+specs
+scripts
+*.md
