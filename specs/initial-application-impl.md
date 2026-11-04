@@ -71,7 +71,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S11 | User admin endpoints + `--reset-password` CLI | #11 |
 | [x] | S12 | Security headers + CSP hashes | #12 |
 | [x] | S13 | `SafePath` + limit stream | #13 |
-| [ ] | S14 | `SyntheticRomBuilder` | |
+| [x] | S14 | `SyntheticRomBuilder` | #14 |
 | [ ] | S15 | GB/GBC header extractor | |
 | [ ] | S16 | `ISystemHandler` + GB/GBC handlers | |
 | [ ] | S17 | Naming + tag parsing + primary ranking | |
