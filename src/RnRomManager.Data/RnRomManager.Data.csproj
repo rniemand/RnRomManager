@@ -5,7 +5,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Dapper" />
     <PackageReference Include="dbup-mysql" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
     <PackageReference Include="MySqlConnector" />
   </ItemGroup>

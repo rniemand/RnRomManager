@@ -3,4 +3,9 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MySqlConnector" />
+    <PackageReference Include="Testcontainers.MariaDb" />
+  </ItemGroup>
 </Project>

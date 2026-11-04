@@ -1,3 +1,7 @@
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.Repositories;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.Options;
 using RnRomManager.Api.Configuration;
@@ -5,7 +9,9 @@ using RnRomManager.Api.Endpoints;
 using RnRomManager.Api.Logging;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
+using RnRomManager.Core.Users;
 using RnRomManager.Data;
+using RnRomManager.Data.Repositories;
 
 namespace RnRomManager.Api;
 
@@ -23,6 +29,16 @@ public static class AppHost
             new MySqlConnectionFactory(sp.GetRequiredService<IOptions<ConnectionStringsOptions>>().Value.Default));
         builder.Services.AddSingleton<IDbConnectionFactory>(sp => sp.GetRequiredService<MySqlConnectionFactory>());
         builder.Services.AddSingleton<IDatabaseLifecycle, MySqlDatabaseLifecycle>();
+        builder.Services.AddSingleton<IUserRepository, UserRepository>();
+        builder.Services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+        builder.Services.AddSingleton<AdminSeeder>();
+
+        // Keys live in the DB so cookies survive restarts (spec §9.2).
+        builder.Services.AddSingleton<IXmlRepository, DbXmlRepository>();
+        builder.Services.AddDataProtection().SetApplicationName("RnRomManager");
+        builder.Services.AddOptions<KeyManagementOptions>()
+            .Configure<IXmlRepository>((options, repository) => options.XmlRepository = repository);
+
         builder.Services.AddHostedService<StartupRunner>();
         var app = builder.Build();
 

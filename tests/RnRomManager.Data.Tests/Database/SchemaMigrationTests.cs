@@ -1,3 +1,4 @@
+using RnRomManager.TestData;
 using Microsoft.Extensions.Logging.Abstractions;
 using MySqlConnector;
 
@@ -18,7 +19,7 @@ public class SchemaMigrationTests
     [OneTimeSetUp]
     public async Task MigrateOnce()
     {
-        _cs = await MariaDbFixture.CreateDatabaseAsync();
+        _cs = await MariaDbServer.CreateDatabaseAsync();
         Lifecycle(_cs).Migrate();
     }
 
@@ -203,7 +204,7 @@ public class SchemaMigrationTests
     /// <summary>Tests that write rows get their own database so they can't affect the shared schema checks.</summary>
     private static async Task<string> FreshSchemaAsync()
     {
-        var cs = await MariaDbFixture.CreateDatabaseAsync();
+        var cs = await MariaDbServer.CreateDatabaseAsync();
         Lifecycle(cs).Migrate();
         return cs;
     }

@@ -1,3 +1,4 @@
+using RnRomManager.TestData;
 using Microsoft.Extensions.Logging.Abstractions;
 using MySqlConnector;
 using RnRomManager.Core.Database;
@@ -21,7 +22,7 @@ public class MySqlDatabaseLifecycleIntegrationTests
     [Test]
     public async Task WaitUntilAvailable_ReachableDatabase_Returns()
     {
-        var cs = await MariaDbFixture.CreateDatabaseAsync();
+        var cs = await MariaDbServer.CreateDatabaseAsync();
 
         await Assert.DoesNotThrowAsync(() => Lifecycle(cs).WaitUntilAvailableAsync(CancellationToken.None));
     }
@@ -29,7 +30,7 @@ public class MySqlDatabaseLifecycleIntegrationTests
     [Test]
     public async Task WaitUntilAvailable_UnknownDatabase_FailsImmediatelyNamingIt()
     {
-        var cs = new MySqlConnectionStringBuilder(MariaDbFixture.ServerConnectionString) { Database = "does_not_exist" }.ConnectionString;
+        var cs = new MySqlConnectionStringBuilder(MariaDbServer.ServerConnectionString) { Database = "does_not_exist" }.ConnectionString;
         var started = DateTime.UtcNow;
 
         var ex = await Assert.ThrowsAsync<DatabaseUnavailableException>(() => Lifecycle(cs).WaitUntilAvailableAsync(CancellationToken.None));
@@ -41,7 +42,7 @@ public class MySqlDatabaseLifecycleIntegrationTests
     [Test]
     public async Task WaitUntilAvailable_AccessDenied_FailsImmediately()
     {
-        var cs = new MySqlConnectionStringBuilder(await MariaDbFixture.CreateDatabaseAsync()) { Password = "wrong" }.ConnectionString;
+        var cs = new MySqlConnectionStringBuilder(await MariaDbServer.CreateDatabaseAsync()) { Password = "wrong" }.ConnectionString;
 
         var ex = await Assert.ThrowsAsync<DatabaseUnavailableException>(() => Lifecycle(cs).WaitUntilAvailableAsync(CancellationToken.None));
 
@@ -52,7 +53,7 @@ public class MySqlDatabaseLifecycleIntegrationTests
     [Test]
     public async Task Migrate_AppliesScriptsOnce_AndJournalsThemInSchemaVersions()
     {
-        var cs = await MariaDbFixture.CreateDatabaseAsync();
+        var cs = await MariaDbServer.CreateDatabaseAsync();
         var lifecycle = Lifecycle(cs, withTestScripts: true);
 
         lifecycle.Migrate();
@@ -66,7 +67,7 @@ public class MySqlDatabaseLifecycleIntegrationTests
     [Test]
     public async Task Migrate_FailingScript_ThrowsNamingTheScript()
     {
-        var cs = await MariaDbFixture.CreateDatabaseAsync();
+        var cs = await MariaDbServer.CreateDatabaseAsync();
         // The test script inserts into a table it creates; pre-creating it with an incompatible shape breaks it.
         await ExecuteAsync(cs, "CREATE TABLE migration_test (other INT NOT NULL)");
 
@@ -78,7 +79,7 @@ public class MySqlDatabaseLifecycleIntegrationTests
     [Test]
     public async Task Ping_ReachableDatabase_True_UnknownDatabase_False()
     {
-        var cs = await MariaDbFixture.CreateDatabaseAsync();
+        var cs = await MariaDbServer.CreateDatabaseAsync();
         var missing = new MySqlConnectionStringBuilder(cs) { Database = "does_not_exist" }.ConnectionString;
 
         Assert.That(await Lifecycle(cs).PingAsync(CancellationToken.None), Is.True);
@@ -88,7 +89,7 @@ public class MySqlDatabaseLifecycleIntegrationTests
     [Test]
     public async Task Connections_ReadDatetimeAsUtc()
     {
-        var factory = new MySqlConnectionFactory(await MariaDbFixture.CreateDatabaseAsync());
+        var factory = new MySqlConnectionFactory(await MariaDbServer.CreateDatabaseAsync());
         await using var connection = factory.Create();
         await connection.OpenAsync();
         await using var command = connection.CreateCommand();
