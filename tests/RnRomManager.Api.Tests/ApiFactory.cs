@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using NLog;
 using NSubstitute;
 using RnRomManager.Core.Database;
+using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Users;
 
 namespace RnRomManager.Api.Tests;
@@ -29,6 +30,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         };
         Database.PingAsync(Arg.Any<CancellationToken>()).Returns(true);
         Users.CountAsync(Arg.Any<CancellationToken>()).Returns(1);
+        Jobs.AbortRunningAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>());
     }
 
     public string Root { get; } = Directory.CreateTempSubdirectory("rnrm-api-").FullName;
@@ -46,6 +48,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Stub users table (stub mode only): reports one user, so startup doesn't seed.</summary>
     public IUserRepository Users { get; } = Substitute.For<IUserRepository>();
 
+    /// <summary>Stub jobs table (stub mode only): nothing to abort at startup.</summary>
+    public IJobRepository Jobs { get; } = Substitute.For<IJobRepository>();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // Not Development: that overlays the project's own wwwroot via static web assets.
@@ -62,6 +67,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             {
                 services.AddSingleton(Database);
                 services.AddSingleton(Users);
+                services.AddSingleton(Jobs);
             });
         }
     }

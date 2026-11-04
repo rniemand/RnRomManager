@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using RnRomManager.Api.Configuration;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
+using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Users;
 using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
@@ -21,6 +22,7 @@ public sealed class StartupRunner(
     IOptions<PathsOptions> paths,
     IDatabaseLifecycle database,
     ISystemRegistry systems,
+    CrashRecovery crashRecovery,
     AdminSeeder adminSeeder) : IHostedService
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -43,7 +45,9 @@ public sealed class StartupRunner(
         await database.WaitUntilAvailableAsync(cancellationToken);
         database.Migrate();
 
-        // Step 7 (crash recovery) comes with the job runner.
+        // Step 7
+        await crashRecovery.RunAsync(cancellationToken);
+
         // Step 8
         await adminSeeder.SeedAsync(cancellationToken);
     }
