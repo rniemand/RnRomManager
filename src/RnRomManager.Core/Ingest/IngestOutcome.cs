@@ -26,6 +26,12 @@ public sealed record PendingReviewSource(long Id, string SourcePath, string? Arc
 
 public interface IIngestReviewRepository
 {
+    Task<ReviewItem?> GetBySha1Async(string sha1, CancellationToken cancellationToken);
+
+    Task UpsertAsync(ReviewItem item, CancellationToken cancellationToken);
+
+    Task CompleteSourceAsync(string sourcePath, string? archiveEntry, IngestItemResult result, Guid jobId, DateTime now, CancellationToken cancellationToken);
+
     Task<IReadOnlyList<PendingReviewSource>> ListPendingSourcesAsync(CancellationToken cancellationToken);
 
     Task DeleteAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken);

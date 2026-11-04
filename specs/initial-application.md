@@ -405,6 +405,7 @@ Verified live 2026-11-04: all 10 DAT files return 200 (GB DAT `2026.10.07`, 2,11
 - **Suggestions:** compare two inputs to every DAT base title of the classified system: the header title and the original file-name stem cut at the first ` (` or ` [` (often a No-Intro name). Score per input = max(token Jaccard, 1 − Levenshtein/maxLen on space-free strings); take the higher input, +0.1 when the DAT ROM size equals the file size. Empty inputs are skipped. Keep scores ≥ 0.4, top 5, stored with their score.
 - **DAT search:** case-insensitive substring over game names of a chosen system, 20 results.
 - Suggestions are computed when the item is created or re-seen by an ingest run, so they reflect the DATs loaded at that time.
+- The top 5 contain distinct base titles. For each base title, retain the highest-scoring release after the size boost; break ties by ROM name (ordinal ascending). Sort the retained suggestions by descending score, then ROM name (D45).
 
 ### 10.4 HTTP, limits, attribution
 - `IHttpClientFactory` + `Microsoft.Extensions.Http.Resilience`: 20 s timeout, 3 retries (exponential backoff from 1 s) on 5xx/408/timeouts; 404 is not retried. Requests are sequential (ingestion is serial).
@@ -735,6 +736,7 @@ None. New questions found during implementation get added here.
 | D42 | 2026-11-04 | Found in S10: the must-change-password gate also lets `GET /api/auth/antiforgery` and `POST /api/auth/login` through (otherwise a must-change user whose session-scoped antiforgery cookie expired couldn't get a token for change-password or logout). A missing/invalid session is `401 Unauthorized` and a wrong role `403 Forbidden`, both ProblemDetails like every other error. |
 | D43 | 2026-11-04 | Found in S18: each system has 5 DAT files sharing one `datName`, so `cache/dats/` mirrors the source layout: `cache/dats/<kind>/<datName>.dat` (`no-intro`, `releaseyear`, `developer`, `publisher`, `genre`), and `dats.json` stores each path relative to `cache/dats/`. Files are always looked up by that fixed layout, never by a path read from `dats.json`. |
 | D44 | 2026-11-04 | Found in S20: on Windows, `File.Move(overwrite)` gets access denied when the target is open, even with `FileShare.Delete`. The ZIP writer closes the existing ZIP it was given before the move; another reader holding the ZIP open on a Windows dev machine makes the move fail after the 3 retries (`IoError`). Linux (production) is unaffected. §3.1 corrected. |
+| D45 | 2026-11-04 | S29 owner decision: suggestions contain distinct base titles. For each title, retain the highest-scoring release after the size boost; break ties by ROM name. ROM-name ties use ordinal ascending order. |
 
 ## 22. Extensibility — `ISystemHandler`
 

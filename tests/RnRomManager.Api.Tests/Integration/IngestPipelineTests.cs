@@ -310,7 +310,7 @@ public class IngestPipelineTests
 
         var result = await IngestAsync(file);
 
-        Assert.That(result, Is.Null, "no DAT match: waits for the review step (S29)");
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "gbc")));
         Assert.That(File.Exists(file.FullPath), Is.False);
         Assert.That(File.Exists(Path.Combine(Ingest("gb"), "mystery.gbc")), Is.True);
     }
