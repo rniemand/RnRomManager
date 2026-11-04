@@ -7,5 +7,8 @@
     <LangVersion>latest</LangVersion>
     <!-- NFC normalisation (spec §6.1) needs ICU -->
     <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- Plain local builds; CI/Docker pass -p:Version=$VERSION from MinVer (spec §18). -->
+    <Version>0.0.0-dev</Version>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 </Project>
