@@ -42,6 +42,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Replaces the app's clock when set (lockout tests).</summary>
     public TimeProvider? Time { get; init; }
 
+    /// <summary>Extra service overrides (e.g. a stub HTTP handler).</summary>
+    public Action<IServiceCollection>? TestServices { get; init; }
+
     /// <summary>Stub DB lifecycle (stub mode only): wait/migrate succeed, ping is healthy unless a test says otherwise.</summary>
     public IDatabaseLifecycle Database { get; } = Substitute.For<IDatabaseLifecycle>();
 
@@ -60,6 +63,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
         if (Time is not null)
             builder.ConfigureTestServices(services => services.AddSingleton(Time));
+        if (TestServices is not null)
+            builder.ConfigureTestServices(TestServices);
 
         if (!UsesRealDatabase)
         {

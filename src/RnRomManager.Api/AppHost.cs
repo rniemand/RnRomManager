@@ -8,9 +8,11 @@ using Microsoft.Extensions.Options;
 using RnRomManager.Api.Auth;
 using RnRomManager.Api.Configuration;
 using RnRomManager.Api.Endpoints;
+using RnRomManager.Api.Http;
 using RnRomManager.Api.Logging;
 using RnRomManager.Api.Security;
 using RnRomManager.Core.Configuration;
+using RnRomManager.Core.Dats;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
@@ -46,7 +48,8 @@ public static class AppHost
             .RequireAntiforgery()
             .MapAuthEndpoints()
             .MapUserEndpoints()
-            .MapJobEndpoints();
+            .MapJobEndpoints()
+            .MapDatEndpoints();
         app.MapFallbackEndpoints(staticFiles);
         return app;
     }
@@ -77,6 +80,8 @@ public static class AppHost
         builder.Services.AddSingleton<ILibraryMirror, LibraryMirror>();
         builder.Services.AddSingleton<InfoJsonReader>();
         builder.Services.AddSingleton<DbSync>();
+        builder.Services.AddSingleton<DatCache>();
+        builder.Services.AddExternalHttpClients();
         // §3.1: a running job gets 30 s to stop on SIGTERM (compose sets stop_grace_period: 35s).
         builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(30));
         builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
