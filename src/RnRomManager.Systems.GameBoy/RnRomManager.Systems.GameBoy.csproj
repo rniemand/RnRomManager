@@ -3,4 +3,8 @@
   <ItemGroup>
     <ProjectReference Include="../RnRomManager.Core/RnRomManager.Core.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources/header-tables.json" />
+  </ItemGroup>
 </Project>

@@ -114,7 +114,9 @@ public sealed record SyntheticRomBuilder
         Encoding.ASCII.GetBytes(Title.Length > 16 ? Title[..16] : Title, title);
         if (ManufacturerCode is not null)
             Encoding.ASCII.GetBytes(ManufacturerCode, rom.AsSpan(ManufacturerCodeOffset, 4));
-        rom[CgbFlagOffset] = CgbFlag;
+        // Original GB carts may use 0x0143 as the 16th title character; only a CGB cart needs the flag there.
+        if (CgbFlag != 0)
+            rom[CgbFlagOffset] = CgbFlag;
         if (NewLicensee is not null)
             Encoding.ASCII.GetBytes(NewLicensee, rom.AsSpan(NewLicenseeOffset, 2));
         else
