@@ -1,0 +1,50 @@
+# Spec §18. main and tags are tested through release.yml (workflow_call), so branch pushes aren't a trigger.
+name: ci
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - run: dotnet tool restore
+      - run: dotnet restore
+      - run: dotnet build -c Release --no-restore -warnaserror
+      # Includes Testcontainers tests (Docker is available on ubuntu runners).
+      - run: dotnet test -c Release --no-build --collect "XPlat Code Coverage" --results-directory ./coverage-raw
+      - name: Coverage summary
+        if: always()
+        run: |
+          if compgen -G "./coverage-raw/*/coverage.cobertura.xml" > /dev/null; then
+            dotnet reportgenerator -reports:"./coverage-raw/*/coverage.cobertura.xml" -targetdir:./coverage -reporttypes:MarkdownSummaryGithub
+            cat ./coverage/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No coverage files." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/RnRomManager.Web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/RnRomManager.Web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run check
+      - run: npm test
+      - run: npm run build
