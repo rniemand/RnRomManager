@@ -1,6 +1,6 @@
 # RnRomManager — Initial Application Spec
 
-> Status: **v0.6 — ready for breakdown into implementation steps.** Second gap review done 2026-11-04 (DATs, thumbnails and Pan Docs re-verified live). Confirmed decisions are listed in §21; open items in §20.
+> Status: **v0.7 — ready for breakdown into implementation steps.** Third gap review done 2026-11-04 (DATs, thumbnails and Pan Docs re-verified live). Confirmed decisions are listed in §21; open items in §20.
 
 ## 1. Purpose
 
@@ -21,9 +21,9 @@ A self-hosted web app for managing a personal backup collection of game ROM file
 | Concern | Choice |
 |---|---|
 | Backend | .NET 10 ASP.NET Core Web API (minimal APIs) |
-| Data access | Dapper + MySqlConnector (`DateTimeKind=Utc` in the connection string; all times stored UTC) |
-| DB | MariaDB 10.11+ (tested); MySQL 8.0+ best effort. External, shared instance; app uses its own database (e.g. `rnrommanager`), no table prefix |
-| Migrations | DbUp (`dbup-mysql`) — embedded `.sql` scripts, applied on startup, journal table `schema_versions` (§14.3) |
+| Data access | Dapper + MySqlConnector. The app forces `DateTimeKind=Utc` and `GuidFormat=Char36` on the configured connection string via `MySqlConnectionStringBuilder` (users don't add them); all times stored UTC |
+| DB | MariaDB 10.11+ (CI tests 11.4); MySQL 8.0+ best effort. External, shared instance; app uses its own database (e.g. `rnrommanager`), no table prefix. The database must already exist (the app never creates it); the app user needs `ALL` on that database only |
+| Migrations | DbUp (`dbup-mysql` 6.x, which uses MySqlConnector) — embedded `.sql` scripts, applied on startup, journal table `schema_versions` (§14.3) |
 | Logging | NLog (`NLog.Web.AspNetCore`) — console + rolling text file (§13) |
 | Backend tests | NUnit (`Assert.That` constraints, no extra assertion lib) + NSubstitute |
 | Integration tests | Testcontainers (MariaDB) for repository/migration tests; real temp dirs for file tests |
@@ -72,6 +72,8 @@ Browser (Svelte SPA) ──HTTP/JSON──> ASP.NET Core API ──Dapper──>
 - Lock busy → manual start returns `409 JobRunning`; scheduled integrity is skipped and logged at `Info`.
 - Jobs persist to `jobs` (§14); live progress is held in memory and read via `GET /api/jobs/current`.
 - Cancel: sets a flag checked between ingest files (an archive counts as one file: all its entries finish) and between ZIPs; status `Cancelled`.
+- Progress: `total` = files in the snapshot (Ingest), ZIPs found (Integrity) or files to download (DatRefresh); `current` = items finished; `currentItem` = file name (`archive.zip › entry.gb` for archive entries).
+- **Library ZIP replacement vs readers:** downloads and integrity open library ZIPs with `FileShare.Read | FileShare.Delete`, so the atomic `File.Move` (§6.1) also works on Windows dev machines while a download is streaming (Linux keeps the old inode). A move that still fails with `IOException` is retried 3× at 500 ms, then the item is `Error`.
 
 ## 4. Configuration
 
@@ -85,7 +87,7 @@ All settings via `appsettings.json`, overridable by environment variables. Valid
 | Paths:Logs | `Paths__Logs` | `/app/logs` | as above |
 | Paths:Cache | `Paths__Cache` | `/app/cache` | as above |
 | Admin:InitialPassword | `Admin__InitialPassword` | *(empty)* | empty or meets §9 password policy; used only at first seed |
-| Integrity:QuickCheckTime | `Integrity__QuickCheckTime` | `03:00` | `HH:mm` or empty (= disabled); container local time (`TZ`) |
+| Integrity:QuickCheckTime | `Integrity__QuickCheckTime` | `03:00` | `HH:mm` or empty (= disabled); container local time (`TZ`). A run missed while the app was down is not caught up. DST: a skipped local time runs at the first valid minute after it; a repeated one runs once |
 | Logging:MinLevel | `Logging__MinLevel` | `Debug` | NLog level name; applies to `RnRomManager.*` |
 | Logging:RetentionDays | `Logging__RetentionDays` | `14` | 1–365 |
 | Sources:DatBaseUrl | `Sources__DatBaseUrl` | `https://raw.githubusercontent.com/libretro/libretro-database/master/metadat` | absolute http(s) URL |
@@ -93,12 +95,13 @@ All settings via `appsettings.json`, overridable by environment variables. Valid
 
 - The four paths must be distinct and none may be inside another.
 - Write probe: create + delete `.rnrm-probe` in each path. Failure message names the path and the process UID/GID (§17.2).
-- Behind a TLS reverse proxy set the built-in `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` so `Secure` cookies and scheme work.
+- Behind a TLS reverse proxy set the built-in `ASPNETCORE_FORWARDEDHEADERS_ENABLED=true` so `Secure` cookies and scheme work. It trusts `X-Forwarded-For` from any sender, so set it **only** when the port isn't reachable except through the proxy (otherwise the login rate limit, §9.1, can be bypassed). docs/deployment.md says so.
+- The listen port is the ASP.NET default `ASPNETCORE_HTTP_PORTS` (image default `8080`); `--healthcheck` reads the first port from the same variable (§17.1).
 - Everything else (limits, auth numbers, HTTP timeouts) is a **constant** in code, listed where used.
 - Paths being configurable is what lets tests and manual testing point ingestion at a temp directory (§15.4).
 
 ### 4.1 Startup sequence
-1. Load + validate config → 2. NLog → 3. log version + redacted effective config (`Info`) → 4. create folders (§5) → 5. wait for DB → 6. DbUp migrate (failure = exit 1) → 7. crash recovery (§7.4) → 8. seed admin (§9) → 9. load cached DATs → 10. start integrity scheduler → 11. listen on `8080`.
+1. Load + validate config → 2. NLog → 3. log version + redacted effective config (`Info`) → 4. create folders (§5) → 5. wait for DB (unknown database or access denied → `Fatal` naming the database, exit 1) → 6. DbUp migrate (failure = exit 1) → 7. crash recovery (§7.4) → 8. seed admin (§9) → 9. load cached DATs (missing/corrupt file or `dats.json` → `Error`, that system counts as having no DATs) → 10. start the scheduler (integrity + daily log purge, §13) → 11. listen on `ASPNETCORE_HTTP_PORTS` (default `8080`).
 
 ## 5. File system layout
 
@@ -124,9 +127,10 @@ All settings via `appsettings.json`, overridable by environment variables. Valid
 ```
 
 - Letter folders are **uppercase** `A`–`Z`; `#` holds everything else (digits, symbols, non-ASCII).
-- Bucket = first character of the ZIP file name. ZIP names keep the No-Intro article form (`Legend of Zelda, The - …` → `L/`) (D24).
+- Bucket = first character of the ZIP file name, upper-cased if it is an ASCII letter (`seaQuest DSV.zip` → `S/`, `uCity.zip` → `U/`). ZIP names keep the No-Intro article form (`Legend of Zelda, The - …` → `L/`) (D24).
 - The ingest folder is a hint only: the final system comes from §7.2 step 4. A GBC ROM dropped into `ingest/gb/` is stored under `roms/gbc/` (logged at `Info`).
-- All system, letter and `_*` folders are created on startup if missing. Ingestion ignores `_*` folders and dot-files.
+- All system, letter and `_*` folders are created on startup if missing. Ingestion ignores subfolders (including `_*`) and dot-files. Extensions match case-insensitively (`.GB` = `.gb`).
+- **File-name comparisons are case-insensitive** everywhere (clash checks, `WrongLocation`, `zip_path`), matching the DB collation and keeping the library portable to Windows/macOS file systems.
 - Moving a file into `_failed/`, `_duplicates/` or `_removed/` when the name is taken appends ` (2)`, ` (3)`, … before the extension.
 
 ## 6. ZIP format (one ZIP per game)
@@ -147,12 +151,12 @@ Tetris.zip
 |---|---|
 | Base title | DAT game name up to the first ` (` (No-Intro always puts region first). Grouping key (D23). |
 | Tags | Parsed from the **DAT ROM name** stem, not `game.name`: in 1,171 entries the ROM name adds tags (e.g. `(Aftermarket) (Unl)`). See §6.1.1. |
-| Game `title` | Base title of the release that created the game; Admin-editable. Never auto-changes. |
-| `displayTitle` | `title` with a trailing article moved to the front: `^(.*?), (The\|A\|An)( - .*)?$` → `$2 $1$3`. Shown in the UI. |
+| Game `title` | Base title of the release that created the game; Admin-editable (1–255 chars after trim, must not sanitize to empty). Never auto-changes. |
+| `displayTitle` | `title` with a trailing article moved to the front: `^(.*?), (The\|A\|An\|Die\|Der\|Das\|Le\|La\|Les\|El\|Il)( - .*)?$` → `$2 $1$3` (the DATs hold 212 English and ~15 German/French/Italian cases, e.g. `Maus, Die`). Shown in the UI. |
 | ZIP name | `Sanitize(title) + ".zip"` |
 | ROM `fileName` | DAT ROM name (DAT-matched), else §7.5 rules |
-| Sanitize | Replace `\ / : * ? " < > \|` and control chars with `_`; trim spaces/trailing dots; max 180 chars; Windows reserved names (`CON`, `NUL`, …) get a `_` prefix |
-| ZIP name clash | Existing ZIP at the target path with a different `gameId` → append ` (2)`, ` (3)`, … |
+| Sanitize | Unicode NFC-normalise; replace `\ / : * ? " < > \|` and control chars with `_`; trim spaces/trailing dots; max 180 chars; Windows reserved names (`CON`, `NUL`, …) get a `_` prefix |
+| ZIP name clash | Existing ZIP at the target path (case-insensitive) with a different `gameId` → append ` (2)`, ` (3)`, … |
 | Entry name clash in a ZIP | Append ` (2)`… before the extension |
 | Images | `images/boxart-01.png`, `images/snap-01.png`. Only one of each in MVP. |
 
@@ -228,6 +232,8 @@ Each `(…)` group after the base title is classified left to right. Groups are 
 | dateAdded | ISO-8601 UTC | ✓ | |
 
 - `info.json` is the **source of truth**; the DB is a rebuildable mirror (content only, no image bytes).
+- Hashes are lowercase hex everywhere (DAT values are upper-case and are lower-cased when parsed).
+- `roms[].metadata.dateModified` = last time that entry's bytes were (re)written (ingest or self-repair); `createdAt`/`updatedAt` = first / latest write of the ZIP.
 - **Schema versioning:** readers accept `schemaVersion ≤ current`, upgrading older versions in memory through a chain of `IInfoJsonUpgrader` (vN→vN+1). The file is rewritten in the new version only on the next normal write. `schemaVersion > current` → read-only: integrity reports `InfoJsonNewerSchema` and ingestion/edits refuse to touch that ZIP.
 
 ## 7. Ingestion pipeline
@@ -235,22 +241,23 @@ Each `(…)` group after the base title is classified left to right. Groups are 
 Started manually by an Admin from the UI (`POST /api/jobs/ingest`). Runs as a single background job (§3.1).
 
 ### 7.1 Job start
-1. Take the job lock; create a `jobs` row (`Ingest`, `Running`).
-2. DATs must be loaded for every system with an ingest folder, else fail the job with `DatsMissing` (no download attempt; the Admin uses "Refresh DATs").
-3. Delete `ingest_review_items` rows still `Pending` whose source file no longer exists (log `Info`).
-4. Snapshot the files in every `ingest/<system>/` (non-recursive). Skip files modified < **10 s** ago (still copying; outcome `Skipped`, file untouched). Files added later wait for the next run.
+1. Take the job lock (busy → `409 JobRunning`).
+2. DATs must be loaded for every registered system, else release the lock and return `409 DatsMissing`; no job row is created and nothing is downloaded (the Admin uses "Refresh DATs"; the Ingestion page shows this as its empty state).
+3. Create a `jobs` row (`Ingest`, `Running`) and return `202`; the rest runs in the background.
+4. Delete `ingest_review_items` rows still `Pending` whose source file no longer exists (log `Info`).
+5. Snapshot the files in every `ingest/<system>/` (non-recursive). Skip files modified < **10 s** ago (still copying; outcome `Skipped` `TooRecent`, file untouched). Files added later wait for the next run.
 
 ### 7.2 Per file (correlation scope `JobId` + `FileId`)
 | # | Step | Failure → outcome, file fate |
 |---|---|---|
 | 1 | **Validate**: extension is a supported ROM ext of any handler, `.zip` or `.7z`; ROM files (and every extracted ROM entry) between the handler's `MinRomSizeBytes` and `MaxRomSizeBytes` (§22); archives are limited by §7.3 | `Failed` `UnsupportedType` / `TooSmall` / `TooLarge` → `_failed/` |
 | 1a | **Unpack** archives into `cache/work/<jobId>/<fileId>/` (§7.3). Each ROM entry continues as its own item from step 2. | `Failed` `ArchiveUnsafe` / `ArchiveCorrupt` / `ArchiveEncrypted` → `_failed/` |
-| 2 | **Hash**: CRC32, MD5, SHA1 of the raw bytes (one read pass) | IO error → `Error`, source untouched |
-| 3 | **Global dedupe**: SHA1 already in `roms`. **Self-repair:** if that ROM's entry has an open `HashMismatch` / `EntryMissing` / `EntrySizeMismatch` issue (§12), rewrite the entry from this file (atomic write §6.1), mark the issue `Resolved`, outcome `Repaired`, delete the source. SHA1 equals a `Pending` review item from another source path → `Duplicate`. | `Duplicate` → `_duplicates/`, `Warn` with both paths + hashes |
+| 2 | **Hash**: `NormalizeForHashing` (§22; identity for GB/GBC), then CRC32, MD5, SHA1 of the normalised bytes (one read pass). The normalised bytes are what gets stored. | IO error → `Error`, source untouched |
+| 3 | **Global dedupe**: SHA1 already in `roms`. **Self-repair:** if that ROM's entry has an open `HashMismatch` / `EntryMissing` / `EntrySizeMismatch` issue (§12), rewrite the entry from this file (atomic write §6.1), mark the issue `Resolved`, outcome `Repaired`, delete the source. SHA1 equals a `Pending` review item from another source path → `Duplicate`. SHA1 equals a `Dismissed` review item → loose file: the row is reset to `Pending` with the new paths and continues at step 4; archive entry from the same `archive_path` → `Failed` `Dismissed` (§7.3). | `Duplicate` → `_duplicates/`, `Warn` with both paths + hashes |
 | 4 | **Header + identify**: read the header with every handler of the folder's family (§22). Look up SHA1 in all of the family's DATs. Match → system = the matching DAT's system (D23). No match → system = header classification. | — |
-| 5 | **No DAT match**: logo invalid **and** header checksum invalid → `Failed` `InvalidHeader` → `_failed/`. Otherwise → `Review`: upsert `ingest_review_items` (unique on SHA1) with hashes, header, top-5 suggestions (§10.3); file stays in ingest. | |
-| 6 | **Group**: find a `roms` row with the same `system_id` + `base_title` (case-insensitive) → its game. Else a new game (`title` = base title). | |
-| 7 | **Metadata** (new game only): year/developer/publisher/genres from metadat by CRC of this release. | missing data → nulls |
+| 5 | **No DAT match**: `RomHeader.IsPlausible == false` (GB/GBC: logo invalid **and** header checksum invalid) → `Failed` `InvalidHeader` → `_failed/`. Otherwise → `Review` `NoDatMatch`: upsert `ingest_review_items` (unique on SHA1) with hashes, header, top-5 suggestions (§10.3); file stays in ingest. | |
+| 6 | **Group**: games owning a `roms` row with the same `system_id` + `base_title` (case-insensitive). One → that game. None → a new game (`title` = base title). **More than one** (possible after a partial move, §11) → `Review` `AmbiguousGroup`: the review item stores the DAT identification and the candidate game IDs; the file stays in ingest (D32). | |
+| 7 | **Metadata** (new game only): year/developer/publisher/genres from metadat by the CRC of the DAT entry the release is identified with (for `Unverified`, the chosen entry's CRC, §7.5). Manual releases get none. | missing data → nulls |
 | 8 | **Media**: new game, or existing game whose box art `isDefault` → fetch box art + snap (§10.2). | not found / HTTP failure → default box art, no snap, `Warn` |
 | 9 | **Package**: atomic ZIP write + verify (§6.1) | verify/IO failure → `Error`, tmp deleted, source untouched. Existing game's ZIP missing/unreadable → `Error` `TargetZipUnreadable`; newer schema → `Error` `InfoJsonNewerSchema` (source untouched) |
 | 10 | **Mirror**: replace the game's DB rows in one transaction | DB failure → `Error`; ZIP stays; DB repaired by the next integrity run; source **not** deleted |
@@ -265,9 +272,9 @@ Started manually by an Admin from the UI (`POST /api/jobs/ingest`). Runs as a si
 ### 7.3 Archives
 - Limits (constants): ≤ **100** entries, ≤ **256 MiB** total uncompressed, each ROM entry ≤ handler `MaxRomSizeBytes`. Sizes are enforced on the actual bytes streamed (a limit stream), not only the declared sizes.
 - Reject the whole archive (`ArchiveUnsafe`) on: an entry name that is absolute, contains `..` or resolves outside the work dir (§9.3), a symlink entry, or a limit breach.
-- Non-ROM entries and nested archives are skipped and logged at `Info` (not extracted).
-- **Archive fate** after all its entries are processed: any entry `Review` or `Error` → archive stays; else any `Failed` → `_failed/` (the `.error.txt` lists every entry's outcome); else all `Duplicate` → `_duplicates/`; else deleted.
-- A review item from an archive stores `archive_path` + `archive_entry`; resolution re-extracts that entry.
+- Non-ROM entries and nested archives are skipped and logged at `Info` (not extracted). Entries in subfolders are allowed: `archive_entry` keeps the full entry path, `originalFileName` is the file-name part.
+- **Archive fate** after all its entries are processed: any entry `Review` or `Error` → archive stays; else any `Failed` → `_failed/` (the `.error.txt` lists every entry's outcome); else all `Duplicate` → `_duplicates/`; else deleted. A `Duplicate` whose SHA1 belongs to a review item `Resolved` from the same `archive_path` counts as `Ingested` here, so a fully resolved archive is deleted on the next run.
+- A review item from an archive stores `archive_path` + `archive_entry`; resolution re-extracts that entry. Resolving or dismissing an archive item never moves the archive itself; the next ingest run re-processes the archive and applies the fate above (a dismissed entry becomes `Failed` `Dismissed` → archive to `_failed/`).
 
 ### 7.4 Crash recovery (startup)
 - `jobs` rows still `Running` → `Aborted` (log `Warn`).
@@ -277,12 +284,13 @@ Started manually by an Admin from the UI (`POST /api/jobs/ingest`). Runs as a si
 ### 7.5 Review resolution (Admin, synchronous, takes the job lock)
 | Action | Result |
 |---|---|
-| Pick a suggestion / DAT search result | Hashes differ from that DAT entry, so it's recorded as **unverified** (D30): `method = Manual`, `identification.dat*` set to the chosen entry, base title/tags from its ROM name + flag `Unverified`; `fileName` = DAT ROM stem + ` (Unverified)` + ext. Continues at step 6. |
+| Pick a suggestion / DAT search result (`NoDatMatch` items) | Hashes differ from that DAT entry, so it's recorded as **unverified** (D30): `method = Manual`, `identification.dat*` set to the chosen entry, base title/tags from its ROM name + flag `Unverified`; `fileName` = DAT ROM stem + ` (Unverified)` + ext. Continues at step 6. |
 | Attach to an existing game as `Hack` or `Translated` | `method = Manual`; `fileName` = `Sanitize(original stem) + " (Hack\|Translated)" + ext`; joins the chosen game |
-| Manual entry (title, regions, languages, revision, flags) | `method = Manual`; `fileName` = `{title} ({regions}){ (revision)}{ (flags)}` + ext; grouped by title (step 6) |
-| Dismiss | File → `_failed/` with reason `Dismissed`; item `Dismissed` |
+| Attach as `None` (`AmbiguousGroup` items only; target must be one of the candidates) | Keeps the DAT identification (`method = Dat`, DAT `fileName`); joins the chosen game; continues at step 8 |
+| Manual entry (title, regions, languages, revision, flags) | `method = Manual`; `fileName` = `Sanitize({title}{ ({regions joined ", "})}{ ({revision})}{ ({flag})…})` + ext, empty groups omitted; `baseTitle` = title; grouped by title (step 6; several candidates → the request fails `409 AmbiguousGroup`, use Attach) |
+| Dismiss | Loose file → `_failed/` with reason `Dismissed`; archive entry → archive untouched (§7.3). Item `Dismissed` |
 
-The ROM extension follows the resolved system's handler. A resolved item becomes `Resolved` with the `game_id`.
+The ROM extension follows the resolved system's handler. A resolved item becomes `Resolved` with the `game_id`. Resolution runs steps 6–10 of §7.2 synchronously; on success the loose source file is deleted (step 11).
 
 ## 8. Game Boy / Game Boy Color header extractor
 
@@ -317,7 +325,8 @@ Unknown table values are reported as `Unknown (0xNN)`.
 ### 8.4 Edge cases
 | Case | Handling |
 |---|---|
-| Size ≠ header ROM size (small 8/16 KiB carts, overdumps, trimmed dumps) | `sizeMatchesHeader = false`; hash the file as-is (no trimming or padding). No DAT match → review. |
+| Size ≠ header ROM size (small 8/16 KiB carts, overdumps, trimmed dumps) | `sizeMatchesHeader = false`; hash the file as-is (no trimming or padding, and no "try the trimmed prefix" lookup in MVP). No DAT match → review. |
+| Header ROM size byte can't express the size (16 MiB aftermarket carts) | `romSizeBytes = null`, `sizeMatchesHeader = false`; identified by hash. |
 | MBC1 multicart (MBC1M) | Size 1 MiB + MBC1 type + valid logo at `0x40104` → `isMbc1Multicart = true`; header fields come from bank 0. Identified by hash like any ROM. |
 | Bad dump / garbage | Identified by hash only. Unmatched with an invalid logo **and** checksum → `InvalidHeader` (§7.2 step 5). |
 | Copier header (512 bytes) | Not a GB convention; no stripping. Such files won't DAT-match → review. |
@@ -340,21 +349,21 @@ Unknown table values are reported as `Unknown (0xNN)`.
 - While `must_change_password` is set, every API call except `me`, `change-password` and `logout` returns `403 PasswordChangeRequired`.
 
 ### 9.2 Session & CSRF
-- Cookie auth: name `rnrm.auth`, HttpOnly, `SameSite=Strict`, `Secure` = same as request (§4 forwarded headers), sliding expiry **7 days**. API returns 401/403 instead of redirecting.
-- `users.security_stamp` is stored in the cookie and re-checked on every request. It changes on password change/reset, disable and role change, so existing sessions die.
-- **Anti-forgery for the SPA:** ASP.NET `IAntiforgery` with header `X-XSRF-TOKEN`. `GET /api/auth/antiforgery` sets the readable cookie `XSRF-TOKEN`; login and logout re-issue it (tokens are bound to the signed-in user). Every `POST/PUT/PATCH/DELETE` under `/api` (login included) must send the header, else `400 AntiforgeryInvalid`. The SPA fetch wrapper adds it automatically.
+- Cookie auth: name `rnrm.auth`, HttpOnly, `SameSite=Strict`, `Secure` = same as request (§4 forwarded headers), persistent, sliding expiry **7 days**, no absolute limit. API returns 401/403 instead of redirecting.
+- `users.security_stamp` is stored in the cookie and re-checked on every request. It changes on password change/reset, disable and role change, so existing sessions die. `change-password` then re-signs the **current** session with the new stamp (other sessions die) and re-issues the antiforgery token.
+- **Anti-forgery for the SPA:** ASP.NET `IAntiforgery` with header `X-XSRF-TOKEN`. The SPA calls `GET /api/auth/antiforgery` once on boot; it sets the readable cookie `XSRF-TOKEN`; login, logout and change-password re-issue it (tokens are bound to the signed-in user). Every `POST/PUT/PATCH/DELETE` under `/api` (login included) must send the header, else `400 AntiforgeryInvalid`. The SPA fetch wrapper adds it automatically.
 - **Data Protection keys** (they sign the auth and antiforgery cookies) are persisted in the DB table `data_protection_keys` through a small Dapper `IXmlRepository`, application name `RnRomManager`. Without this, every container restart would log everyone out. Keys aren't encrypted at rest (the DB is trusted).
 - Response headers: `Content-Security-Policy: default-src 'self'; script-src 'self' <hashes>; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`. At startup the API computes a `'sha256-…'` hash of every inline `<script>` in `wwwroot/index.html` (SvelteKit's bootstrap) for `<hashes>`. `kit.csp` isn't used (it isn't reliable on the `adapter-static` fallback page). The theme script is an external `/theme.js` (§11).
 
 ### 9.3 File-path safety
 - One helper, `SafePath.Resolve(root, relative)`: `Path.GetFullPath(Path.Combine(root, relative))` must start with `GetFullPath(root) + separator`, else it throws `UnsafePathException`. Every computed path goes through it: ZIP paths, ingest/_failed moves, archive extraction, work dirs, log download.
 - The API never accepts a file path. Images and ROMs are addressed by `gameId` + DB id / `info.json` entry lookup, never by concatenating a name.
-- Library ZIPs read by the app: `info.json` ≤ 1 MiB; entry sizes must match `info.json`; entries outside `roms/`, `images/` and `info.json` are reported (`EntryUnlisted`), never extracted.
+- Library ZIPs read by the app: `info.json` ≤ 1 MiB and every entry read through the same limit stream as §7.3 (actual bytes, not declared sizes); entry sizes must match `info.json`; entries outside `roms/`, `images/` and `info.json` are reported (`EntryUnlisted`), never extracted.
 - Archive input limits: §7.3.
 
 ## 10. External data sources (free, no API key)
 
-Verified live 2026-11-04: all 10 DAT files return 200 (GB DAT `2026.10.07`, 2,115 games). Every game has exactly one ROM, there are no duplicate SHA1s across both DATs, and ROM sizes range from 8 KiB to 16 MiB. Thumbnail checks: `…Asteroids & Missile Command…` → 404, `…Asteroids _ Missile Command…` → 200, `Tetris (World)` → 404, `Tetris (World) (Rev 1)` → 200 (so the fallback order matters).
+Verified live 2026-11-04: all 10 DAT files return 200 (GB DAT `2026.10.07`, 2,115 games; GBC DAT 2,433 games). The GB DAT holds only `.gb` and the GBC DAT only `.gbc` ROM names; all names are ASCII with no filesystem-illegal characters; 5 base titles start with a lowercase letter (`seaQuest`, `uCity`, …). Every game has exactly one ROM, there are no duplicate SHA1s across both DATs, and ROM sizes range from 8 KiB to 16 MiB. Thumbnail checks: `…Asteroids & Missile Command…` → 404, `…Asteroids _ Missile Command…` → 200, `Tetris (World)` → 404, `Tetris (World) (Rev 1)` → 200 (so the fallback order matters).
 
 | Need | Source (`Sources:*` base URLs, §4) |
 |---|---|
@@ -372,16 +381,17 @@ Verified live 2026-11-04: all 10 DAT files return 200 (GB DAT `2026.10.07`, 2,11
 - The GitHub API isn't used (unauthenticated limit of 60/h). Raw downloads only.
 
 ### 10.2 Thumbnails
-- **Key:** the DAT `game.name` with `& * / : \` < > ? \ | "` each replaced by `_`, then the path segment URL-encoded (`Uri.EscapeDataString`). Verified: `&` → 404, `_` → 200.
-- **Lookup order:** the primary release's game name → other releases in primary-rank order (§6.1). The first 200 for each type wins.
+- **Key:** the DAT `game.name` with each of these 11 characters replaced by `_`: ``&`` ``*`` ``/`` ``:`` `` ` `` ``<`` ``>`` ``?`` ``\`` ``|`` ``"``; then the path segment URL-encoded (`Uri.EscapeDataString`). Verified: `&` → 404, `_` → 200.
+- **Lookup order:** the primary release's `datGameName` → other releases in primary-rank order (§6.1); releases without `datGameName` (Manual) are skipped, so an all-Manual game gets the default box art. The first 200 for each type wins.
 - **Validation:** PNG signature, ≤ 5 MiB; dimensions read from IHDR.
 - `Sources:ThumbnailBaseUrl` empty → no lookup; default box art, no snap (no `Warn`).
-- "Retry media" (Admin, game detail) re-runs the lookup when the box art is the default or the snap is missing.
+- "Retry media" (Admin, game detail) re-runs the lookup when the box art is the default or missing (`MissingBoxArt`) or the snap is missing.
 
 ### 10.3 Suggestions & search (review queue)
 - **Normalise:** uppercase; drop everything except `A–Z0–9` and spaces; collapse spaces.
 - **Suggestions:** compare the header title to every DAT base title of the classified system. Score = max(token Jaccard, 1 − Levenshtein/maxLen on space-free strings), +0.1 when the DAT ROM size equals the file size. Keep scores ≥ 0.4, top 5, stored with their score.
 - **DAT search:** case-insensitive substring over game names of a chosen system, 20 results.
+- Suggestions are computed when the item is created or re-seen by an ingest run, so they reflect the DATs loaded at that time.
 
 ### 10.4 HTTP, limits, attribution
 - `IHttpClientFactory` + `Microsoft.Extensions.Http.Resilience`: 20 s timeout, 3 retries (exponential backoff from 1 s) on 5xx/408/timeouts; 404 is not retried. Requests are sequential (ingestion is serial).
@@ -396,22 +406,27 @@ Verified live 2026-11-04: all 10 DAT files return 200 (GB DAT `2026.10.07`, 2,11
 - **Routing/guards:** unauthenticated → `/login?returnUrl=…`; `mustChangePassword` → `/change-password`; Admin pages show a "Not allowed" page to `User`.
 - **Polling:** `GET /api/jobs/current` every 1.5 s while a job is running (pages: Ingestion, Integrity, Admin → DATs); stop when idle.
 - **Shared states:** loading = spinner/placeholder cards; empty = message + next action (Admin: link to Ingestion); error = dismissible alert with the ProblemDetails `title` + Retry; `409 JobRunning` = toast.
+- **Navbar:** Library, plus for Admin: Ingestion, Review (badge = pending count), Integrity, Admin. User menu: Change password, Logout. Theme toggle.
+- Times are shown in the browser's local time zone; sizes in KiB/MiB.
+- Unknown route → "Page not found" with a link to the Library.
 
 | Page | Route | Role | Behaviour |
 |---|---|---|---|
 | Login | `/login` | anon | username/password, generic error |
 | Change password | `/change-password` | auth | current + new + confirm, policy hint |
-| Library | `/` | auth | Grid (box art, 2/3/4/6 cols at xs/md/lg/xl) or list (table) toggle, remembered in `localStorage`. Filters: system, letter (`All`, `#`, `A–Z`), region (any release; options from `/api/systems` `regions`), search (debounced 300 ms, ≥2 chars). Sort: title / year / date added. 48 per page. Filters live in the URL query. |
-| Game detail | `/games/{id}` | auth | Box art + snap, displayTitle, year/dev/publisher/genres. Releases table: fileName, region, revision, flags, primary badge, size, CRC32/SHA1 with copy buttons, expandable header. Download ZIP / single ROM. **Admin:** Edit metadata (title, year, developer, publisher, genres, description), Retry media, Move release (to an existing game via typeahead, or to a new game with a title), Delete release, Delete game — each behind a confirm modal. |
-| Ingestion | `/ingestion` | Admin | Pending files per system (name, size, modified); Start / Cancel; progress bar (current/total + current file); last 10 runs → run detail with per-item outcomes (filter by outcome) |
-| Review queue | `/review` | Admin | Pending list (file, system, size, header title, added). Detail: header + hashes, suggestions with scores, DAT search, attach-to-game (game typeahead + Hack/Translated), manual form, Dismiss. |
+| Library | `/` | auth | Grid (box art, 2/3/4/6 cols at xs/md/lg/xl) or list (table) toggle, remembered in `localStorage`. Filters: system, letter (`All`, `#`, `A–Z`), region (any release; options from `/api/systems` `regions`), search (debounced 300 ms, ≥2 chars). Sort: title (default, asc) / year (nulls last) / date added; tie-break `id`. 48 per page. Filters live in the URL query. |
+| Game detail | `/games/{id}` | auth | Box art + snap, displayTitle, year/dev/publisher/genres. Releases table: fileName, region, revision, flags, primary badge, size, CRC32/SHA1 with copy buttons, expandable header. Download ZIP / single ROM. The header is shown as a generic key/value table from `header` (no system-specific UI). **Admin:** Edit metadata (title, year, developer, publisher, genres, description), Retry media, Move release (to an existing game via typeahead, or to a new game with a title), Delete release, Delete game — each behind a confirm modal. |
+| Ingestion | `/ingestion` | Admin | Pending files per system (name, size, modified); Start / Cancel; progress bar (current/total + current file); last 10 runs → run detail. No DATs loaded → empty state with a link to Admin → DATs instead of Start. |
+| Job detail | `/jobs/{id}` | Admin | Any job type: status, times, summary counts, error; ingest items table (filter by outcome) |
+| Review queue | `/review` | Admin | Pending list (file, system, size, header title, reason, added). Detail: header + hashes; `NoDatMatch`: suggestions with scores, DAT search, attach-to-game (game typeahead + Hack/Translated), manual form; `AmbiguousGroup`: the DAT identity + candidate games, attach as a normal release; Dismiss. |
 | Integrity | `/integrity` | Admin | Last quick/deep run, next scheduled, Run quick / Run deep, issues table (filter by status/type), history |
 | Admin | `/admin/users`, `/admin/dats`, `/admin/settings`, `/admin/about` | Admin | Users (create, enable/disable, role, reset password); DAT versions + Refresh; effective settings (read-only, secrets masked) + Download logs; version, licences, attribution |
 
-- **Library edits:** deleting a release/game moves the ROM bytes to `ingest/<system>/_removed/` (never hard-deleted) and rebuilds or deletes the ZIP. Moving a release rebuilds both ZIPs (an emptied game is deleted). The moved ROM keeps its `baseTitle`, so later releases with that base title follow it automatically (D23).
+- **Library edits:** deleting a release/game moves the ROM bytes to `ingest/<system>/_removed/` (never hard-deleted) and rebuilds or deletes the ZIP. Moving a release rebuilds both ZIPs (an emptied game is deleted). The moved ROM keeps its `baseTitle`, so later releases with that base title follow it automatically when it's the only game with that base title (D23); if both games keep that base title, later releases go to review as `AmbiguousGroup` (D32). Moving to a new game runs §7.2 steps 7–8 for it (metadata + media from the moved ROM).
+- **Static files:** `/_app/immutable/*` → `Cache-Control: public, max-age=31536000, immutable`; `index.html` and other files → `no-cache`.
 - **Responsive:** navbar collapses below `lg`; tables use `table-responsive`; usable from 360 px wide.
 - **Accessibility:** WCAG 2.2 AA target. Every control is keyboard reachable with a visible focus ring. Labels on all inputs. Box art `alt` = "`displayTitle` box art". Progress region `aria-live="polite"`. Modals use Bootstrap focus trapping. Contrast checked in both themes. Playwright runs axe on each smoke page and fails on `serious`/`critical`.
-- **Icons:** a single `Icon.svelte` maps semantic names (e.g. `download`, `ingest`, `review`, `integrity`, `system-gb`) to Bootstrap Icons classes. Font Awesome only where BI has no match (e.g. the GitHub brand on About). Decorative icons get `aria-hidden="true"`; icon-only buttons need an `aria-label`.
+- **Icons:** a single `Icon.svelte` maps semantic names (e.g. `download`, `ingest`, `review`, `integrity`, `system-gb`) to Bootstrap Icons classes. An unmapped `system-<id>` falls back to `bi-controller`, so a new system needs no UI change. Font Awesome only where BI has no match (e.g. the GitHub brand on About). Decorative icons get `aria-hidden="true"`; icon-only buttons need an `aria-label`.
 
 ## 12. Integrity checker
 
@@ -436,13 +451,13 @@ Both modes also: list orphan files (anything that isn't a `.zip` in the library 
 | `HashMismatch` (deep) | Error | — |
 | `MissingBoxArt` | Error | — |
 | `DefaultBoxArt` | Info | — |
-| `WrongLocation` (system/bucket/name ≠ §6.1) | Warn | — |
+| `WrongLocation` (system/bucket/name ≠ §6.1; a clash suffix ` (N)` on the expected name is accepted) | Warn | — |
 | `OrphanFile` | Warn | — |
 | `DuplicateGameId` | Error | DB repair skipped for those ZIPs |
 | `DuplicateSha1` (same ROM in two games) | Warn | DB repair skipped for the later ZIP (`zip_path` ordinal), since `roms.sha1` is unique |
 | `DbRowInserted` / `DbRowUpdated` / `DbRowDeleted` | Info | yes → recorded as `AutoRepaired` |
 
-- **Fields:** `type`, `severity`, `system_id`, `zip_path`, `game_id`, `entry_name`, `details` (text), `status` (`Open` | `AutoRepaired` | `Resolved`), `first_seen_job_id`, `last_seen_job_id`, `detected_at`, `resolved_at`.
+- **Fields:** see `integrity_issues` (§14.1).
 - **Dedup:** an open issue with the same (`type`, `zip_path`, `entry_name`) is updated (`last_seen_job_id`), not duplicated. An open issue not seen again in a run of the same or deeper mode → `Resolved`.
 - **DB auto-repair** (D10): game rows are replaced from `info.json` in one transaction. Rows whose ZIP is gone are deleted, unless the same `gameId` was found at another path (then `zip_path` is updated). File-side problems are reported only; the checker never moves or deletes library files. ZIPs with `ZipUnreadable` / `InfoJsonMissing` / `InfoJsonInvalid` / `InfoJsonNewerSchema` keep their existing DB rows unchanged.
 - **Self-repair:** `HashMismatch` / `EntryMissing` / `EntrySizeMismatch` can be fixed by ingesting a byte-identical copy (§7.2 step 3).
@@ -451,7 +466,9 @@ Both modes also: list orphan files (anything that isn't a `.zip` in the library 
 ## 13. Logging
 
 - `nlog.config` in the API project; `Paths:Logs`, `Logging:MinLevel` and `Logging:RetentionDays` are injected as NLog variables at startup.
-- **Targets:** console (single line, for `docker logs`) and file `${logDir}/rnrommanager-${shortdate}.log` with `maxArchiveDays = RetentionDays`.
+- `builder.Logging.ClearProviders().SetMinimumLevel(LogLevel.Trace)` + `UseNLog()`: Microsoft.Extensions.Logging would otherwise default to `Information` and drop `Debug` events before NLog sees them. NLog rules do all filtering.
+- **Targets:** console (single line, for `docker logs`) and file `${logDir}/rnrommanager-${date:universalTime=true:format=yyyy-MM-dd}.log` (one file per UTC day, no NLog archiving).
+- **Retention:** the app deletes `rnrommanager-*.log` files in `Paths:Logs` older than `RetentionDays` at startup and daily at 00:05 UTC (scheduler, §4.1). Doing it in code avoids relying on NLog archive cleanup of date-based file names.
 - **Layout:** `${date:universalTime=true:format=o}|${level:uppercase=true}|${logger}|${threadid}|${scopeproperty:JobId}|${scopeproperty:FileId}|${aspnet-TraceIdentifier}|${message}${onexception:${newline}${exception:format=tostring}}` (`tostring` includes inner exceptions and stack traces).
 - **Correlation:** `JobId` (every job), `FileId` (per ingestion item, a GUID also stored in `job_items`), HTTP `TraceIdentifier` (returned as `traceId` in ProblemDetails). Set with `ILogger.BeginScope`.
 - Levels: `Logging:MinLevel` for `RnRomManager.*`; `Warn` for `Microsoft.*`/`System.*`, except `Microsoft.Hosting.Lifetime` at `Info`.
@@ -486,9 +503,9 @@ Indexes: (`game_id`), (`system_id`, `base_title`), (`crc32`)
 
 **job_items** — `id` BIGINT PK AI · `job_id` FK CASCADE · `file_id` CHAR(36) · `system_id` VARCHAR(16) NULL · `source_path` VARCHAR(1024) · `archive_entry` VARCHAR(512) NULL · `outcome` VARCHAR(16) · `reason` VARCHAR(64) NULL (code) · `details` TEXT NULL · `game_id` CHAR(36) NULL · `sha1` CHAR(40) NULL · `created_at` · index (`job_id`, `outcome`)
 
-**ingest_review_items** — `id` BIGINT PK AI · `system_id` VARCHAR(16) · `source_path` VARCHAR(1024) · `archive_path` VARCHAR(1024) NULL · `archive_entry` VARCHAR(512) NULL · `size_bytes` · `crc32`, `md5`, `sha1` (UNIQUE) · `header` JSON NULL · `suggestions` JSON · `status` VARCHAR(16) (`Pending`/`Resolved`/`Dismissed`) · `game_id` NULL · `created_at`, `last_seen_job_id`, `resolved_at` NULL, `resolved_by` INT NULL
+**ingest_review_items** — `id` BIGINT PK AI · `system_id` VARCHAR(16) · `reason` VARCHAR(16) (`NoDatMatch`/`AmbiguousGroup`) · `source_path` VARCHAR(1024) · `archive_path` VARCHAR(1024) NULL · `archive_entry` VARCHAR(512) NULL · `original_file_name` VARCHAR(255) · `size_bytes` BIGINT · `crc32` CHAR(8) · `md5` CHAR(32) · `sha1` CHAR(40) UNIQUE · `header` JSON NULL · `suggestions` JSON (`[{datGameName,romName,score}]`; empty for `AmbiguousGroup`) · `dat_identification` JSON NULL (`{datName,datVersion,datGameName,romName}`, `AmbiguousGroup` only) · `candidate_game_ids` JSON NULL (`AmbiguousGroup` only) · `status` VARCHAR(16) (`Pending`/`Resolved`/`Dismissed`) · `game_id` CHAR(36) NULL · `created_at` · `last_seen_job_id` CHAR(36) · `resolved_at` NULL · `resolved_by` INT NULL FK→users · index (`status`, `created_at`)
 
-**integrity_issues** — fields per §12.2 · `id` BIGINT PK AI · index (`status`, `type`), (`zip_path`)
+**integrity_issues** — `id` BIGINT PK AI · `type` VARCHAR(32) · `severity` VARCHAR(8) (`Info`/`Warn`/`Error`) · `system_id` VARCHAR(16) NULL · `zip_path` VARCHAR(512) NULL · `game_id` CHAR(36) NULL · `entry_name` VARCHAR(512) NULL · `details` TEXT NULL · `status` VARCHAR(16) (`Open`/`AutoRepaired`/`Resolved`) · `first_seen_job_id`, `last_seen_job_id` CHAR(36) · `detected_at`, `resolved_at` NULL · index (`status`, `type`), (`zip_path`)
 
 **data_protection_keys** — `id` INT PK AI · `friendly_name` VARCHAR(255) · `xml` TEXT · `created_at` (§9.2)
 
@@ -512,7 +529,7 @@ Indexes: (`game_id`), (`system_id`, `base_title`), (`crc32`)
 | Naming | base title, displayTitle article rule, sanitize (every illegal char, reserved names, length), bucket, clash suffixes, §6.1.1 tag parsing (ROM name ≠ game name, `(SGB Enhanced, GB Compatible)`, `(Proto 2)`, `(v1.0.3)`), revision order, primary ranking incl. `Unverified` |
 | Thumbnail key | escaping of every special char + URL encoding |
 | Suggestions | scoring, threshold, size boost, top-5 |
-| Ingestion pipeline (temp dirs) | every outcome row of §7.2 incl. `Repaired`, archive fates + limits + traversal, min file age, global dedupe, review-row lifecycle on re-runs, new release into an existing ZIP, unreadable/newer-schema target ZIP, cancellation mid-archive, crash-recovery cleanup, review resolution actions (suggestion → `Unverified`) |
+| Ingestion pipeline (temp dirs) | every outcome row of §7.2 incl. `Repaired`, archive fates + limits + traversal, min file age, global dedupe, review-row lifecycle on re-runs (incl. dismissed SHA1 re-dropped, archive entry dismissed/resolved → archive fate), `AmbiguousGroup` + attach as `None`, lowercase-first-letter bucket, case-insensitive ZIP clash, new release into an existing ZIP, unreadable/newer-schema target ZIP, cancellation mid-archive, crash-recovery cleanup, review resolution actions (suggestion → `Unverified`) |
 | ZIP writer | atomic write, verify failure leaves the original intact, `info.json` round-trip, schema upgrade chain, newer-schema refusal |
 | Integrity | each issue type, quick-vs-deep, DB repair (skips `DuplicateGameId`/`DuplicateSha1`), issue dedup/resolve, retention purge |
 | Auth | lockout + reset, login rate limit, last-admin rule, security stamp invalidation, must-change gate, antiforgery required, Data Protection keys survive a restart (Testcontainers) |
@@ -529,6 +546,7 @@ Indexes: (`game_id`), (`system_id`, `base_title`), (`crc32`)
 - `FixtureDatWriter` writes clrmamepro DATs (no-intro + the 4 metadat) for a named ROM set, using the real hashes of the generated ROMs, with versions like `fixture-1`.
 - **Built-in sets:** `Basic` (3 GB + 2 GBC games, multiple regions/revs, one article title, one dual-mode cart in `ingest/gb/`, one duplicate, one unmatched → review, one invalid header, one zip + one 7z archive) and `Full` (`Basic` + 200 generated games for paging).
 - CLI: `dotnet run --project tests/RnRomManager.TestData -- --ingest <dir> --cache <dir> --set Basic|Full`.
+- **7z fixture:** SharpCompress can't write 7z, so `tests/RnRomManager.TestData/Fixtures/basic.7z` is committed (a few KiB). It holds one `SyntheticRomBuilder` ROM from a fixed seed; a unit test asserts the extracted bytes equal the builder output, so the fixture DAT hashes stay valid. `Fixtures/README.md` records how it was made (`7z a` with the seed). ZIP archives are generated at run time with `System.IO.Compression`.
 
 ### 15.3 CI integration
 - Testcontainers runs on GitHub's `ubuntu-latest` (Docker preinstalled); image `mariadb:11.4`.
@@ -556,7 +574,7 @@ All scripts: `$ErrorActionPreference = 'Stop'`, non-zero exit on failure, run fr
 - Multi-stage Dockerfile. `node:24` and `sdk:10.0` stages run on `$BUILDPLATFORM`: UI build → `dotnet publish -a <arch> -p:Version=$VERSION` (UI copied into `wwwroot`), where `<arch>` maps Docker's `$TARGETARCH` to .NET's names: `amd64` → `x64`, `arm64` → `arm64` (.NET rejects `amd64`). Runtime = `mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra` (D17). Cross-compiling instead of building under QEMU.
 - The runtime stage creates `/app/{roms,ingest,logs,cache}` owned by `1654:1654` (`COPY --chown`), so new named volumes inherit writable ownership.
 - `USER 1654`, `EXPOSE 8080`, `ENTRYPOINT ["/app/RnRomManager.Api"]`, `VOLUME` the four paths.
-- `HEALTHCHECK --interval=30s --timeout=5s --start-period=60s CMD ["/app/RnRomManager.Api", "--healthcheck"]`. That mode is handled first in `Main`, before the host is built (no config validation, NLog or DB): it GETs `http://127.0.0.1:8080/health/live` with a 3 s timeout and exits 0/1 (no shell or curl needed).
+- `HEALTHCHECK --interval=30s --timeout=5s --start-period=60s CMD ["/app/RnRomManager.Api", "--healthcheck"]`. That mode is handled first in `Main`, before the host is built (no config validation, NLog or DB): it GETs `http://127.0.0.1:<port>/health/live` (port = first entry of `ASPNETCORE_HTTP_PORTS`, default `8080`) with a 3 s timeout and exits 0/1 (no shell or curl needed).
 - `/health/live` (process up, anonymous) and `/health/ready` (DB reachable + paths writable; 503 otherwise).
 - `.dockerignore` excludes `.git`, `node_modules`, `bin/obj`, `.dev`, tests.
 
@@ -602,27 +620,27 @@ Pull the new tag and restart. DbUp applies new migrations on start; `info.json` 
 **`ci.yml`** — on `pull_request`, `push` (`branches-ignore: [main]`, no tags; `main` and tags are tested through `release.yml`, so nothing runs twice) and `workflow_call`:
 | Job | Steps |
 |---|---|
-| backend | checkout (`fetch-depth: 0` for MinVer) → setup-dotnet 10 → `dotnet restore` → `dotnet build -c Release --no-restore -warnaserror` → `dotnet test --no-build --collect "XPlat Code Coverage"` (incl. Testcontainers) → ReportGenerator summary to the job summary |
+| backend | checkout → setup-dotnet 10 → `dotnet tool restore` → `dotnet restore` → `dotnet build -c Release --no-restore -warnaserror` → `dotnet test --no-build --collect "XPlat Code Coverage"` (incl. Testcontainers) → ReportGenerator summary to the job summary |
 | web | setup-node 24 + npm cache → `npm ci` → `npm run lint` (eslint + prettier check) → `npm run check` (svelte-check) → `npm test` → `npm run build` |
 | e2e | needs backend + web → `pwsh scripts/test-e2e.ps1` → upload Playwright report on failure |
 
 **`release.yml`** — on `push` to `main` and tags `v*`:
 1. `uses: ./.github/workflows/ci.yml` (all tests must pass).
-2. checkout (`fetch-depth: 0`) → `dotnet tool run minver` (tool manifest) → `VERSION`.
+2. checkout (`fetch-depth: 0`, so MinVer sees tags) → `dotnet tool restore` → `dotnet minver --tag-prefix v` → `VERSION`.
 3. `setup-buildx-action` (no QEMU: the runtime stage only copies files) → `login-action` (Docker Hub).
 4. `docker/metadata-action` tags: main → `edge`, `sha-<7>`; `vX.Y.Z` tag → `X.Y.Z`, `X.Y`, `latest` (D27).
 5. `build-push-action`: `platforms: linux/amd64,linux/arm64`, `build-args: VERSION`, `cache-from/to: type=gha`.
 6. Tag builds only: `peter-evans/dockerhub-description` pushes `README.md` as the Docker Hub description.
 
 - **Secrets:** `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` (Docker Hub PAT with Read/Write/Delete; the description update needs it).
-- **Versioning:** MinVer, `MinVerTagPrefix=v`. Untagged commits get `X.Y.Z-alpha.0.N` (logged at startup, shown on About). Releases are made by pushing an annotated `vX.Y.Z` tag on `main`.
+- **Versioning:** MinVer as the **CLI tool only** (`minver-cli` in `.config/dotnet-tools.json`, `--tag-prefix v`); no MinVer package in the csproj, because `.git` isn't in the Docker build context. The version reaches the build as `-p:Version=$VERSION` (Dockerfile `ARG VERSION=0.0.0-dev`); plain local builds are `0.0.0-dev`. Untagged commits get `X.Y.Z-alpha.0.N` (logged at startup, shown on About). Releases are made by pushing an annotated `vX.Y.Z` tag on `main`.
 
 ## 19. Documentation
 
 | Doc | Content | Updated when |
 |---|---|---|
 | `README.md` | what it is, screenshots, quick start (compose §17.3), legal disclaimer, attribution | user-visible feature or deployment change |
-| `docs/deployment.md` | compose, volumes/permissions, reverse proxy + forwarded headers, TZ, backups, upgrades | §17 changes |
+| `docs/deployment.md` | compose, creating the database + grants (§2), volumes/permissions, reverse proxy + forwarded headers (and when not to enable them, §4), TZ, backups, upgrades | §17 changes |
 | `docs/configuration.md` | the §4 table | any config key added/changed |
 | `docs/features.md` | user guide per page | UI behaviour changes |
 | `docs/zip-format.md` | §6 incl. the `info.json` field tables + version history | any schema change (bump `schemaVersion` + upgrader) |
@@ -672,6 +690,9 @@ None. New questions found during implementation get added here.
 | D29 | 2026-11-04 | Defaults applied in the gap review: global SHA1 dedupe; 10 s min file age; archive limits 100 entries / 256 MiB; ROM max 16 MiB; `Error` outcome leaves the source for retry; password 12–128 chars, lockout 5/15 min, 7-day sliding session, security stamp; SPA antiforgery via `XSRF-TOKEN` cookie + `X-XSRF-TOKEN` header; generated admin password goes to the console only; `--healthcheck` mode + `/health/live`/`/health/ready`; cross-compiled multi-arch build; lazy `info.json` schema upgrades. |
 | D30 | 2026-11-04 | Picking a DAT suggestion for a file whose hashes don't match records the release as **unverified**: `method = Manual`, flag `Unverified`, `fileName` + ` (Unverified)`, never ranked above a verified dump. Ingesting a byte-identical copy of a library ROM with an open `HashMismatch`/`EntryMissing`/`EntrySizeMismatch` issue **repairs** the entry (outcome `Repaired`). |
 | D31 | 2026-11-04 | Defaults applied in the second gap review: tags parsed from the DAT ROM name (§6.1.1) with defined revision order; `MinRomSizeBytes` on `ISystemHandler`; Data Protection keys in DB table `data_protection_keys`; CSP `script-src` hashes computed by the API from `index.html`, theme script moved to `/theme.js`; Docker `TARGETARCH` → .NET arch mapping; `--healthcheck` handled before host build; integrity DB repair skips `DuplicateSha1` ZIPs; review rows auto-resolve/delete on re-runs; `TargetZipUnreadable` / `InfoJsonNewerSchema` → `Error`; cancel waits for a whole archive; 180-day retention for jobs + closed issues; usernames `[A-Za-z0-9._-]{3,64}` case-insensitive; login rate limit 10/min/IP; admin reset clears lockout + forces change; `region_key` pipe-delimited both ends; `regions` on `/api/systems`; `Sources:DatBaseUrl` / `Sources:ThumbnailBaseUrl` config (empty thumbnails = offline e2e); `ci.yml` skips `main` pushes; single instance per DB; `info.json` field `region` → `regions`. |
+| D32 | 2026-11-04 | When a new release's base title is held by more than one game (after a partial move), it goes to the review queue as `AmbiguousGroup`; the Admin attaches it to one of the candidate games as a normal release (`flag: None`, DAT identification kept). |
+| D33 | 2026-11-04 | Defaults applied in the third gap review: `DatsMissing` checked before a job row exists (409); `IsPlausible` replaces GB-specific wording in Core; bucket upper-cases a lowercase first letter; file-name comparisons case-insensitive; NFC in Sanitize; displayTitle articles include `Die/Der/Das/Le/La/Les/El/Il`; stored bytes = `NormalizeForHashing` output; dismissed SHA1s re-queue (loose) or fail the archive (entry); resolved archive entries count as `Ingested` for archive fate; metadata for `Unverified` from the chosen entry's CRC, none for Manual; media skips releases without `datGameName`; Retry media covers `MissingBoxArt`; move-to-new-game runs metadata + media; change-password re-signs the current session; persistent 7-day cookie, no absolute limit; MEL min level `Trace` with NLog filtering; log retention done by the app, one file per UTC day; app forces `DateTimeKind=Utc`/`GuidFormat=Char36`; DB must pre-exist; CI tests MariaDB 11.4 only; MinVer CLI only (no package); healthcheck port from `ASPNETCORE_HTTP_PORTS`; committed `basic.7z` fixture; no schedule catch-up; consolidated code list (§23.1); `/jobs/{id}` page, navbar, 404 page, static cache headers. |
+
 ## 22. Extensibility — `ISystemHandler`
 
 ```csharp
@@ -697,11 +718,13 @@ public sealed record RomHeader(
 ```
 
 - Registered with `services.AddSystemHandler<T>()`. Core enumerates handlers for folders, DATs, extensions and limits; nothing in Core/Data/UI is GB-specific. DB `system_id` is a `VARCHAR` (no enum migrations), and `/api/systems` drives the UI filters.
-- Adding SNES/GBA = a new `RnRomManager.Systems.X` project + registration + docs/tests; no core changes. Extracted ROMs are hashed after `NormalizeForHashing`.
+- Adding SNES/GBA = a new `RnRomManager.Systems.X` project + registration + docs/tests; no core changes. Every ROM (loose or extracted) is hashed and stored after `NormalizeForHashing` (§7.2 step 2), so stored bytes, `info.json` hashes and deep-check hashes always agree.
+- **Contract limits:** one file per release (cartridge systems; multi-file/CD systems would need a contract change); the whole ROM is read into memory for `ReadHeader` (bounded by `MaxRomSizeBytes`); `RomHeader.Fields` values must be JSON-serialisable primitives (string, number, bool, null), since the UI renders them as a generic table.
+- Ingest folders are per handler `Id` (`ingest/gb/`, `ingest/gbc/`); `Family` only decides which handlers' headers and DATs are tried for a file (§7.2 step 4).
 
 ## 23. API
 
-JSON, camelCase. Errors are RFC 7807 ProblemDetails with an extra `code` (e.g. `JobRunning`, `DatsMissing`, `LastAdmin`, `ValidationFailed`) and `traceId`; validation errors include `errors{field:[…]}`. Lists use `?page=1&pageSize=48` (max 200) → `{ items, page, pageSize, total }`. Every `/api` route except login/antiforgery needs auth; mutations need the XSRF header (§9.2).
+JSON, camelCase. Errors are RFC 7807 ProblemDetails with an extra `code` (§23.1) and `traceId`; validation errors include `errors{field:[…]}`. Lists use `?page=1&pageSize=48` (max 200) → `{ items, page, pageSize, total }`. Every `/api` route except login/antiforgery needs auth; mutations need the XSRF header (§9.2).
 
 | Method | Route | Role | Request → Response |
 |---|---|---|---|
@@ -734,9 +757,9 @@ JSON, camelCase. Errors are RFC 7807 ProblemDetails with an extra `code` (e.g. `
 | GET | `/api/jobs/{id}` | Admin | → job incl. `summary` |
 | GET | `/api/jobs/{id}/items` | Admin | `?outcome&page&pageSize` → page of `job_items` |
 | POST | `/api/jobs/{id}/cancel` | Admin | → 202 · 404 if not running |
-| GET | `/api/review` | Admin | `?status=Pending&page&pageSize` → page of review items |
-| GET | `/api/review/{id}` | Admin | → item incl. header, hashes, suggestions |
-| POST | `/api/review/{id}/resolve` | Admin | `{action:"Dat",datSystem,datGameName}` (→ `Unverified`, §7.5) · `{action:"Attach",targetGameId,flag:"Hack"\|"Translated"}` · `{action:"Manual",title,regions[],languages[],revision?,flags[]}` → `{gameId}` · 409 |
+| GET | `/api/review` | Admin | `?status=Pending&page&pageSize` → page of `{id,system,reason,fileName,sizeBytes,headerTitle,createdAt}` (`fileName` = `originalFileName`) |
+| GET | `/api/review/{id}` | Admin | → item incl. header, hashes, suggestions, `datIdentification`, `candidateGames[{id,displayTitle}]` |
+| POST | `/api/review/{id}/resolve` | Admin | `{action:"Dat",datSystem,datGameName}` (→ `Unverified`, §7.5) · `{action:"Attach",targetGameId,flag:"Hack"\|"Translated"\|"None"}` (`None` only for `AmbiguousGroup`) · `{action:"Manual",title,regions[],languages[],revision?,flags[]}` → `{gameId}` · 409 `JobRunning` / `AmbiguousGroup` · 400 `ValidationFailed` |
 | POST | `/api/review/{id}/dismiss` | Admin | → 204 |
 | GET | `/api/dat/search` | Admin | `?system&q&limit=20` → `[{gameName,romName,sizeBytes,crc32}]` |
 | GET | `/api/integrity/status` | Admin | → `{lastQuick,lastDeep,nextScheduledAt}` |
@@ -748,3 +771,16 @@ JSON, camelCase. Errors are RFC 7807 ProblemDetails with an extra `code` (e.g. `
 | GET | `/health/live`, `/health/ready` | anon | → 200 / 503 |
 
 - Unknown `/api/*` → 404 ProblemDetails; any other unknown path → `index.html` (SPA fallback).
+- No CORS (the SPA is same-origin; the Vite dev server proxies `/api`).
+
+### 23.1 Codes
+| Code | Where | Meaning |
+|---|---|---|
+| `ValidationFailed` (400), `AntiforgeryInvalid` (400) | API | bad input / missing XSRF header |
+| `InvalidCredentials` (401), `PasswordChangeRequired` (403), `TooManyRequests` (429) | API | §9 |
+| `NotFound` (404) | API | unknown id, or `cancel` with no running job |
+| `JobRunning`, `DatsMissing`, `LastAdmin`, `UsernameTaken`, `AmbiguousGroup`, `InfoJsonNewerSchema`, `TargetZipUnreadable` (409) | API | conflicts; the last two when a library edit hits such a ZIP |
+| `UnsupportedType`, `TooSmall`, `TooLarge`, `ArchiveUnsafe`, `ArchiveCorrupt`, `ArchiveEncrypted`, `InvalidHeader`, `Dismissed` | `job_items.reason` (`Failed`) | file problems (§7.2, §7.3, §7.5) |
+| `IoError`, `VerifyFailed`, `DbWriteFailed`, `TargetZipUnreadable`, `InfoJsonNewerSchema`, `Unexpected` | `job_items.reason` (`Error`) | environment problems; source left in place |
+| `NoDatMatch`, `AmbiguousGroup` | `job_items.reason` (`Review`) + `ingest_review_items.reason` | §7.2 steps 5–6 |
+| `TooRecent` | `job_items.reason` (`Skipped`) | modified < 10 s ago (§7.1) |
