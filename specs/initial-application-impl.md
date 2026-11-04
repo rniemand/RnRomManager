@@ -72,7 +72,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S12 | Security headers + CSP hashes | #12 |
 | [x] | S13 | `SafePath` + limit stream | #13 |
 | [x] | S14 | `SyntheticRomBuilder` | #14 |
-| [ ] | S15 | GB/GBC header extractor | |
+| [x] | S15 | GB/GBC header extractor | #15 |
 | [ ] | S16 | `ISystemHandler` + GB/GBC handlers | |
 | [ ] | S17 | Naming + tag parsing + primary ranking | |
 | [ ] | S18 | DAT parser, DAT store, `FixtureDatWriter` | |
