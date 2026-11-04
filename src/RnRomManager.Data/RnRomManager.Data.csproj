@@ -3,4 +3,15 @@
   <ItemGroup>
     <ProjectReference Include="../RnRomManager.Core/RnRomManager.Core.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="dbup-mysql" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="MySqlConnector" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- DbUp applies these in name order (spec §14.3). -->
+    <EmbeddedResource Include="Migrations/*.sql" />
+  </ItemGroup>
 </Project>

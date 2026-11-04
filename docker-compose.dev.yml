@@ -1,0 +1,27 @@
+# Local dev database (spec §16). Start: docker compose -f docker-compose.dev.yml up -d
+# The password comes from RNRM_DEV_DB_PASSWORD, e.g. a line `RNRM_DEV_DB_PASSWORD=<something>` in a
+# git-ignored `.env` next to this file (compose reads it automatically). Never commit it.
+# Connection string: Server=localhost;Port=3306;Database=rnrommanager;User ID=rnrommanager;Password=<that value>
+services:
+  mariadb:
+    image: mariadb:11.4
+    container_name: rnrommanager-dev-db
+    restart: unless-stopped
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      MARIADB_DATABASE: rnrommanager
+      MARIADB_USER: rnrommanager
+      MARIADB_PASSWORD: ${RNRM_DEV_DB_PASSWORD:?}
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    ports:
+      - "3306:3306"
+    volumes:
+      - rnrommanager-dev-db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  rnrommanager-dev-db:
