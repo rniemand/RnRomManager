@@ -59,7 +59,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | ✓ | Step | Title | PR |
 |---|---|---|---|
 | [x] | S01 | Repo + solution scaffold | #1 |
-| [ ] | S02 | Web app scaffold | |
+| [x] | S02 | Web app scaffold | #2 |
 | [ ] | S03 | API host, health/live, static UI, `--healthcheck` | |
 | [ ] | S04 | Configuration, NLog, startup steps 1–4 | |
 | [ ] | S05 | Dockerfile + `build-docker.ps1` | |
