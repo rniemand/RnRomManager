@@ -74,7 +74,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S14 | `SyntheticRomBuilder` | #14 |
 | [x] | S15 | GB/GBC header extractor | #15 |
 | [x] | S16 | `ISystemHandler` + GB/GBC handlers | #16 |
-| [ ] | S17 | Naming + tag parsing + primary ranking | |
+| [x] | S17 | Naming + tag parsing + primary ranking | #17 |
 | [ ] | S18 | DAT parser, DAT store, `FixtureDatWriter` | |
 | [ ] | S19 | `info.json` model, validation, upgraders | |
 | [ ] | S20 | Library ZIP reader/writer + PNG IHDR | |
