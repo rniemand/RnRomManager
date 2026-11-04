@@ -6,4 +6,12 @@
     <ProjectReference Include="../RnRomManager.Systems.GameBoy/RnRomManager.Systems.GameBoy.csproj" />
   </ItemGroup>
 
+  <!-- Local Release convenience: bundle the built SPA if it exists. The Dockerfile does the real copy. -->
+  <Target Name="CopyWebBuild" BeforeTargets="BeforeBuild" Condition="'$(Configuration)' == 'Release' And Exists('../RnRomManager.Web/build/index.html')">
+    <ItemGroup>
+      <WebBuildFile Include="../RnRomManager.Web/build/**" />
+    </ItemGroup>
+    <Copy SourceFiles="@(WebBuildFile)" DestinationFiles="@(WebBuildFile->'wwwroot/%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>
