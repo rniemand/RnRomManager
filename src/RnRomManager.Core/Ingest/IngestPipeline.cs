@@ -59,8 +59,6 @@ public sealed class IngestPipeline(
     TimeProvider time,
     ILogger<IngestPipeline> logger)
 {
-    private static readonly string[] ArchiveExtensions = [".zip", ".7z"];
-
     /// <returns>null when the file isn't handled yet and stays in ingest untouched.</returns>
     public async Task<IngestItemResult?> ProcessAsync(IngestFile file, Guid jobId, CircuitBreaker breaker, CancellationToken cancellationToken)
     {
@@ -68,19 +66,13 @@ public sealed class IngestPipeline(
         var folder = systems.ById(file.SystemId) ?? throw new InvalidOperationException($"No handler for ingest folder '{file.SystemId}'.");
         var family = systems.ByFamily(folder.Family);
         var extension = Path.GetExtension(file.Name);
-        if (ArchiveExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
-        {
-            // shortcut: archives are left in ingest until S28.
-            logger.LogDebug("{Path}: archives are handled from S28; left in ingest", file.FullPath);
-            return null;
-        }
         var byExtension = family.FirstOrDefault(h => h.RomExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase));
         if (byExtension is null)
-            return Fail(file, jobId, IngestFailures.UnsupportedType, $"'{extension}' isn't a ROM extension of the {folder.Family} family");
+            return FailFile(file, jobId, IngestFailures.UnsupportedType, $"'{extension}' isn't a ROM extension of the {folder.Family} family");
         if (file.SizeBytes < byExtension.MinRomSizeBytes)
-            return Fail(file, jobId, IngestFailures.TooSmall, $"{file.SizeBytes} bytes; {byExtension.Id} ROMs are at least {byExtension.MinRomSizeBytes}");
+            return FailFile(file, jobId, IngestFailures.TooSmall, $"{file.SizeBytes} bytes; {byExtension.Id} ROMs are at least {byExtension.MinRomSizeBytes}");
         if (file.SizeBytes > byExtension.MaxRomSizeBytes)
-            return Fail(file, jobId, IngestFailures.TooLarge, $"{file.SizeBytes} bytes; {byExtension.Id} ROMs are at most {byExtension.MaxRomSizeBytes}");
+            return FailFile(file, jobId, IngestFailures.TooLarge, $"{file.SizeBytes} bytes; {byExtension.Id} ROMs are at most {byExtension.MaxRomSizeBytes}");
 
         // Step 2: hash the normalised bytes (what gets stored).
         byte[] bytes;
@@ -110,8 +102,9 @@ public sealed class IngestPipeline(
             // Step 5. Every ReadHeader null (headerless system) counts as plausible.
             var found = headers.Values.FirstOrDefault(h => h is not null);
             if (found is { IsPlausible: false })
-                return Fail(file, jobId, IngestFailures.InvalidHeader, "no DAT match, and the header's logo and checksum are both invalid", hashes.Sha1);
-            RenameToClassifiedExtension(file, found, family);
+                return FailFile(file, jobId, IngestFailures.InvalidHeader, "no DAT match, and the header's logo and checksum are both invalid", hashes.Sha1);
+            if (file.ArchiveEntry is null)
+                RenameToClassifiedExtension(file, found, family);
             // shortcut: Review NoDatMatch (upsert + suggestions) comes in S29; until then the file waits in ingest.
             logger.LogDebug("{Path}: no DAT match; left for the review step", file.FullPath);
             return null;
@@ -144,7 +137,7 @@ public sealed class IngestPipeline(
             IsPrimary = false,
             Identification = new InfoJsonIdentification(IdentificationMethod.Dat, store.DatName, store.Version, datRom.GameName),
             Header = headers[system.Id] is { } header ? JsonSerializer.SerializeToNode(header.Fields) as JsonObject : null,
-            Metadata = new InfoJsonRomMetadata(bytes.Length, hashes.Crc32, hashes.Md5, hashes.Sha1, now, now, file.FullPath),
+            Metadata = new InfoJsonRomMetadata(bytes.Length, hashes.Crc32, hashes.Md5, hashes.Sha1, now, now, file.SourcePath),
         };
         var metadata = store.MetadataFor(datRom.Crc32);
         var result = new IngestItemResult(IngestOutcome.Ingested, SystemId: system.Id, Sha1: hashes.Sha1);
@@ -286,8 +279,9 @@ public sealed class IngestPipeline(
         {
             logger.LogWarning("{Path}: duplicate of {Zip} › {Entry} (sha1 {Sha1}, size {Size})",
                 file.FullPath, game?.ZipPath, entryName, sha1, bytes.Length);
-            var moved = MoveAside(file, StorageFolders.DuplicatesFolder);
-            return moved.Error ?? new IngestItemResult(IngestOutcome.Duplicate, Details: $"same as {game?.ZipPath} › {entryName}",
+            // An archive entry isn't moved on its own: the archive's fate covers it (§7.3).
+            var moveError = file.ArchiveEntry is null ? MoveToDuplicates(file) : null;
+            return moveError ?? new IngestItemResult(IngestOutcome.Duplicate, Details: $"same as {game?.ZipPath} › {entryName}",
                 SystemId: known.SystemId, GameId: known.GameId, Sha1: sha1);
         }
 
@@ -310,10 +304,21 @@ public sealed class IngestPipeline(
         }
     }
 
-    /// <summary>A file problem: move it to <c>_failed/</c> with <c>&lt;name&gt;.error.txt</c> (spec §5).</summary>
-    private IngestItemResult Fail(IngestFile file, Guid jobId, string reason, string details, string? sha1 = null)
+    /// <summary>
+    /// A file problem: <c>Failed</c>, and the file moves to <c>_failed/</c> with <c>&lt;name&gt;.error.txt</c> (spec §5).
+    /// An archive entry stays put: its archive's fate decides (§7.3).
+    /// </summary>
+    public IngestItemResult FailFile(IngestFile file, Guid jobId, string reason, string details, string? sha1 = null)
     {
-        logger.LogWarning("{Path}: Failed {Reason}: {Details}", file.FullPath, reason, details);
+        logger.LogWarning("{Path}: Failed {Reason}: {Details}", file.ArchiveEntry is null ? file.FullPath : $"{file.ArchivePath} › {file.ArchiveEntry}", reason, details);
+        var moveError = file.ArchiveEntry is null ? MoveToFailed(file, jobId, reason, details) : null;
+        return moveError ?? new IngestItemResult(IngestOutcome.Failed, reason, details, file.SystemId, Sha1: sha1);
+    }
+
+    /// <summary>Moves the file to <c>_failed/</c> and writes its <c>.error.txt</c> (reason, details, job, UTC time).</summary>
+    /// <returns>An <c>Error IoError</c> result when the move failed, else null.</returns>
+    public IngestItemResult? MoveToFailed(IngestFile file, Guid jobId, string reason, string details)
+    {
         var moved = MoveAside(file, StorageFolders.FailedFolder);
         if (moved.Error is not null)
             return moved.Error;
@@ -326,8 +331,11 @@ public sealed class IngestPipeline(
         {
             logger.LogWarning("{Path}: couldn't write the .error.txt: {Error}", moved.Path, ex.Message);
         }
-        return new IngestItemResult(IngestOutcome.Failed, reason, details, file.SystemId, Sha1: sha1);
+        return null;
     }
+
+    /// <returns>An <c>Error IoError</c> result when the move failed, else null.</returns>
+    public IngestItemResult? MoveToDuplicates(IngestFile file) => MoveAside(file, StorageFolders.DuplicatesFolder).Error;
 
     /// <summary>Moves the source into <c>ingest/&lt;system&gt;/&lt;folder&gt;/</c>, with a ` (N)` suffix on a clash (any case).</summary>
     private (string Path, IngestItemResult? Error) MoveAside(IngestFile file, string folder)

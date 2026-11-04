@@ -4,8 +4,18 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Ingest;
 
-/// <summary>A file waiting in <c>ingest/&lt;system&gt;/</c>.</summary>
-public sealed record IngestFile(string SystemId, string FullPath, string Name, long SizeBytes, DateTime ModifiedAtUtc);
+/// <summary>A file waiting in <c>ingest/&lt;system&gt;/</c>, or a ROM entry extracted from an archive there.</summary>
+public sealed record IngestFile(string SystemId, string FullPath, string Name, long SizeBytes, DateTime ModifiedAtUtc)
+{
+    /// <summary>Set for an archive entry: the archive in ingest (<c>FullPath</c> is then the extracted copy).</summary>
+    public string? ArchivePath { get; init; }
+
+    /// <summary>Set for an archive entry: its full path inside the archive.</summary>
+    public string? ArchiveEntry { get; init; }
+
+    /// <summary>The ingest path recorded as the source (§6.2 <c>sourcePath</c>): the archive for an entry.</summary>
+    public string SourcePath => ArchivePath ?? FullPath;
+}
 
 /// <summary>
 /// Lists <c>ingest/&lt;system&gt;/</c> for every registered system (spec §5, §7.1 step 6): top level only (subfolders,
