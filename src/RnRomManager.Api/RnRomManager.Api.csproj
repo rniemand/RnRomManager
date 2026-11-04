@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="../RnRomManager.Core/RnRomManager.Core.csproj" />
+    <ProjectReference Include="../RnRomManager.Data/RnRomManager.Data.csproj" />
+    <ProjectReference Include="../RnRomManager.Systems.GameBoy/RnRomManager.Systems.GameBoy.csproj" />
+  </ItemGroup>
+
+</Project>

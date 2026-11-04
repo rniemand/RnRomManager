@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "minver-cli": {
+      "version": "8.0.0",
+      "commands": [
+        "minver"
+      ],
+      "rollForward": false
+    },
+    "dotnet-reportgenerator-globaltool": {
+      "version": "5.5.12",
+      "commands": [
+        "reportgenerator"
+      ],
+      "rollForward": false
+    }
+  }
+}

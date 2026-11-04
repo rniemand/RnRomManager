@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../RnRomManager.Core/RnRomManager.Core.csproj" />
+  </ItemGroup>
+</Project>
