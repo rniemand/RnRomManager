@@ -63,7 +63,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S03 | API host, health/live, static UI, `--healthcheck` | #3 |
 | [x] | S04 | Configuration, NLog, startup steps 1–4 | #4 |
 | [x] | S05 | Dockerfile + `build-docker.ps1` | #5 |
-| [ ] | S06 | CI + release workflows, `test-all.ps1` | |
+| [x] | S06 | CI + release workflows, `test-all.ps1` | #6 |
 | [ ] | S07 | DB plumbing, DbUp, dev DB, `/health/ready` | |
 | [ ] | S08 | Schema migrations (all tables) | |
 | [ ] | S09 | Users, password hashing, admin seed, Data Protection keys | |
