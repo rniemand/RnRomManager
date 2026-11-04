@@ -180,9 +180,23 @@ public sealed class IngestPipeline(
             : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes, breaker, result, now, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>Shared steps 6–11 for synchronous review resolution; Attach supplies a target and skips grouping.</summary>
+    public async Task<IngestItemResult> StoreReleaseAsync(IngestFile file, ISystemHandler system, InfoJsonRom rom,
+        DatMetadata metadata, byte[] bytes, Guid? targetGameId, Func<Guid, Task> afterMirror, CancellationToken cancellationToken)
+    {
+        var owners = targetGameId is { } target ? new[] { target } :
+            await roms.ListGameIdsByBaseTitleAsync(system.Id, rom.BaseTitle, cancellationToken).ConfigureAwait(false);
+        if (owners.Count > 1)
+            return IngestItemResult.Error("AmbiguousGroup", "Several games own this base title; use Attach.");
+        var result = new IngestItemResult(IngestOutcome.Ingested, SystemId: system.Id, Sha1: rom.Metadata.Sha1);
+        return owners.Count == 0
+            ? await NewGameAsync(file, system, rom, metadata, bytes, new CircuitBreaker(), result, time.GetUtcNow(), cancellationToken, afterMirror).ConfigureAwait(false)
+            : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes, new CircuitBreaker(), result, time.GetUtcNow(), cancellationToken, afterMirror).ConfigureAwait(false);
+    }
+
     private async Task<IngestItemResult> NewGameAsync(
         IngestFile file, ISystemHandler system, InfoJsonRom rom, DatMetadata metadata, byte[] bytes, CircuitBreaker breaker,
-        IngestItemResult result, DateTimeOffset now, CancellationToken cancellationToken)
+        IngestItemResult result, DateTimeOffset now, CancellationToken cancellationToken, Func<Guid, Task>? afterMirror = null)
     {
         // Step 7: a new game takes every metadata field. Step 8: media.
         var found = await media.FindAsync(system, [rom.Identification.DatGameName], breaker, cancellationToken).ConfigureAwait(false);
@@ -213,12 +227,12 @@ public sealed class IngestPipeline(
 
         var entries = new Dictionary<string, Func<Stream>> { [LibraryZip.RomEntry(rom.FileName)] = () => new MemoryStream(bytes) };
         AddImages(entries, found.BoxArt, found.Snap);
-        return await PackageAsync(file, null, zipPath, game, entries, result, cancellationToken).ConfigureAwait(false);
+        return await PackageAsync(file, null, zipPath, game, entries, result, cancellationToken, afterMirror).ConfigureAwait(false);
     }
 
     private async Task<IngestItemResult> AddToGameAsync(
         IngestFile file, ISystemHandler system, Guid gameId, InfoJsonRom rom, DatMetadata metadata, byte[] bytes, CircuitBreaker breaker,
-        IngestItemResult result, DateTimeOffset now, CancellationToken cancellationToken)
+        IngestItemResult result, DateTimeOffset now, CancellationToken cancellationToken, Func<Guid, Task>? afterMirror = null)
     {
         var row = await games.GetAsync(gameId, cancellationToken).ConfigureAwait(false);
         if (row is null)
@@ -265,12 +279,12 @@ public sealed class IngestPipeline(
                 AddImages(entries, newBoxArt, newSnap);
             }
 
-            return await PackageAsync(file, existing, row.ZipPath, game, entries, result with { GameId = gameId }, cancellationToken).ConfigureAwait(false);
+            return await PackageAsync(file, existing, row.ZipPath, game, entries, result with { GameId = gameId }, cancellationToken, afterMirror).ConfigureAwait(false);
         }
     }
 
     /// <summary>§6.1: every write starts from the ZIP's own <c>info.json</c>.</summary>
-    private (LibraryZip? Zip, InfoJsonGame? Game, IngestItemResult? Error) OpenTarget(string zipPath, string systemId, string? sha1)
+    internal (LibraryZip? Zip, InfoJsonGame? Game, IngestItemResult? Error) OpenTarget(string zipPath, string systemId, string? sha1)
     {
         LibraryZip zip;
         try
@@ -333,7 +347,7 @@ public sealed class IngestPipeline(
             var result = new IngestItemResult(IngestOutcome.Repaired, Details: $"rewrote {game.ZipPath} › {entryName} ({string.Join(", ", open.Select(i => i.Type))})",
                 SystemId: known.SystemId, GameId: known.GameId, Sha1: sha1);
             return await PackageAsync(file, existing, game.ZipPath, repaired, entries, result, cancellationToken,
-                () => issues.ResolveAsync(open.Select(i => i.Id).ToList(), now.UtcDateTime, cancellationToken)).ConfigureAwait(false);
+                _ => issues.ResolveAsync(open.Select(i => i.Id).ToList(), now.UtcDateTime, cancellationToken)).ConfigureAwait(false);
         }
     }
 
@@ -434,7 +448,7 @@ public sealed class IngestPipeline(
     /// <param name="afterMirror">Runs once the DB is updated, before the source is deleted.</param>
     private async Task<IngestItemResult> PackageAsync(
         IngestFile file, LibraryZip? existing, string zipPath, InfoJsonGame game, Dictionary<string, Func<Stream>> entries,
-        IngestItemResult result, CancellationToken cancellationToken, Func<Task>? afterMirror = null)
+        IngestItemResult result, CancellationToken cancellationToken, Func<Guid, Task>? afterMirror = null)
     {
         result = result with { GameId = game.GameId };
         var target = SafePath.Resolve(paths.Value.Roms, zipPath);
@@ -464,7 +478,14 @@ public sealed class IngestPipeline(
             return result with { Outcome = IngestOutcome.Error, Reason = IngestErrors.DbWriteFailed, Details = ex.Message };
         }
         if (afterMirror is not null)
-            await afterMirror().ConfigureAwait(false);
+        {
+            try { await afterMirror(game.GameId).ConfigureAwait(false); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "{Path}: post-mirror DB update failed", file.FullPath);
+                return result with { Outcome = IngestOutcome.Error, Reason = IngestErrors.DbWriteFailed, Details = ex.Message };
+            }
+        }
 
         try
         {

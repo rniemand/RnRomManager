@@ -26,6 +26,12 @@ public sealed record PendingReviewSource(long Id, string SourcePath, string? Arc
 
 public interface IIngestReviewRepository
 {
+    Task<ReviewItem?> GetAsync(long id, CancellationToken cancellationToken);
+
+    Task<RnRomManager.Core.Database.Page<ReviewItem>> ListAsync(string status, int page, int pageSize, CancellationToken cancellationToken);
+
+    Task SetResolutionAsync(long id, string status, Guid? gameId, int userId, DateTime now, CancellationToken cancellationToken);
+
     Task<ReviewItem?> GetBySha1Async(string sha1, CancellationToken cancellationToken);
 
     Task UpsertAsync(ReviewItem item, CancellationToken cancellationToken);

@@ -51,7 +51,8 @@ public static class AppHost
             .MapUserEndpoints()
             .MapJobEndpoints()
             .MapDatEndpoints()
-            .MapIngestEndpoints();
+            .MapIngestEndpoints()
+            .MapReviewEndpoints();
         app.MapFallbackEndpoints(staticFiles);
         return app;
     }
@@ -88,6 +89,7 @@ public static class AppHost
         // One per start: a job instance holds per-run state (and, later, the per-job circuit breaker).
         builder.Services.AddTransient<IngestJob>();
         builder.Services.AddTransient<IngestPipeline>();
+        builder.Services.AddTransient<ReviewResolver>();
         builder.Services.AddSingleton<ArchiveExtractor>();
         builder.Services.AddSingleton<RnRomManager.Core.Integrity.IIntegrityIssueRepository, IntegrityIssueRepository>();
         builder.Services.AddExternalHttpClients();

@@ -7,18 +7,47 @@ namespace RnRomManager.Data.Repositories;
 /// <summary><c>ingest_review_items</c> (spec §14.1). Grows with the review steps.</summary>
 public sealed class IngestReviewRepository(IDbConnectionFactory connections) : IIngestReviewRepository
 {
+    private const string Select = """
+        SELECT id AS Id, system_id AS SystemId, reason AS Reason, source_path AS SourcePath,
+            archive_path AS ArchivePath, archive_entry AS ArchiveEntry, original_file_name AS OriginalFileName,
+            size_bytes AS SizeBytes, crc32 AS Crc32, md5 AS Md5, sha1 AS Sha1, header AS Header,
+            suggestions AS Suggestions, dat_identification AS DatIdentification, candidate_game_ids AS CandidateGameIds,
+            status AS Status, game_id AS GameId, created_at AS CreatedAt, last_seen_job_id AS LastSeenJobId,
+            resolved_at AS ResolvedAt, resolved_by AS ResolvedBy FROM ingest_review_items
+        """;
+
     public async Task<ReviewItem?> GetBySha1Async(string sha1, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
-        return await connection.QuerySingleOrDefaultAsync<ReviewItem>(new CommandDefinition("""
-            SELECT id AS Id, system_id AS SystemId, reason AS Reason, source_path AS SourcePath,
-                archive_path AS ArchivePath, archive_entry AS ArchiveEntry, original_file_name AS OriginalFileName,
-                size_bytes AS SizeBytes, crc32 AS Crc32, md5 AS Md5, sha1 AS Sha1, header AS Header,
-                suggestions AS Suggestions, dat_identification AS DatIdentification, candidate_game_ids AS CandidateGameIds,
-                status AS Status, game_id AS GameId, created_at AS CreatedAt, last_seen_job_id AS LastSeenJobId,
-                resolved_at AS ResolvedAt, resolved_by AS ResolvedBy
-            FROM ingest_review_items WHERE sha1 = @sha1
-            """, new { sha1 }, cancellationToken: cancellationToken));
+        return await connection.QuerySingleOrDefaultAsync<ReviewItem>(new CommandDefinition(
+            Select + " WHERE sha1 = @sha1", new { sha1 }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<ReviewItem?> GetAsync(long id, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return await connection.QuerySingleOrDefaultAsync<ReviewItem>(new CommandDefinition(
+            Select + " WHERE id = @id", new { id }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<Page<ReviewItem>> ListAsync(string status, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        var args = new { status, pageSize, offset = (long)(page - 1) * pageSize };
+        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            "SELECT COUNT(*) FROM ingest_review_items WHERE status = @status", args, cancellationToken: cancellationToken));
+        var rows = await connection.QueryAsync<ReviewItem>(new CommandDefinition(
+            Select + " WHERE status = @status ORDER BY created_at, id LIMIT @pageSize OFFSET @offset", args, cancellationToken: cancellationToken));
+        return new Page<ReviewItem>(rows.AsList(), page, pageSize, total);
+    }
+
+    public async Task SetResolutionAsync(long id, string status, Guid? gameId, int userId, DateTime now, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE ingest_review_items SET status = @status, game_id = @gameId, resolved_at = @now, resolved_by = @userId
+            WHERE id = @id AND status = 'Pending'
+            """, new { id, status, gameId, userId, now }, cancellationToken: cancellationToken));
     }
 
     public async Task UpsertAsync(ReviewItem item, CancellationToken cancellationToken)

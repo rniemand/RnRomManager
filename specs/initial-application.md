@@ -293,7 +293,7 @@ Started manually by an Admin from the UI (`POST /api/jobs/ingest`). Runs as a si
 | Action | Result |
 |---|---|
 | Pick a suggestion / DAT search result (`NoDatMatch` items) | Hashes differ from that DAT entry, so it's recorded as **unverified** (D30): `method = Manual`, `identification.dat*` set to the chosen entry, base title/tags from its ROM name + flag `Unverified`; `fileName` = DAT ROM stem + ` (Unverified)` + ext. Continues at step 6. |
-| Attach to an existing game as `Hack` or `Translated` | `method = Manual`; `fileName` = `Sanitize(original stem) + " (Hack\|Translated)" + ext`; joins the chosen game |
+| Attach to an existing game as `Hack` or `Translated` | `method = Manual`; `fileName` = `Sanitize(original stem) + " (Hack\|Translated)" + ext`; joins the chosen game. `baseTitle` is the target game's title; regions/languages empty, revision null, flags contain only the selected flag (D46). |
 | Attach as `None` (`AmbiguousGroup` items only; target must be one of the candidates) | Keeps the DAT identification (`method = Dat`, DAT `fileName`); joins the chosen game; continues at step 7 (fills only empty metadata fields) |
 | Manual entry (title, regions, languages, revision, flags) | `method = Manual`; `fileName` = `Sanitize({title}{ ({regions joined ", "})}{ ({revision})}{ ({flag})…})` + ext, empty groups omitted; `baseTitle` = title; grouped by title (step 6; several candidates → the request fails `409 AmbiguousGroup`, use Attach) |
 | Dismiss | Loose file → `_failed/` with reason `Dismissed`; archive entry → archive untouched (§7.3). Item `Dismissed` |
@@ -301,6 +301,7 @@ Started manually by an Admin from the UI (`POST /api/jobs/ingest`). Runs as a si
 Before any action the source file (loose) or archive (entry) must still exist, else `409 SourceMissing` and the row is deleted. The ROM extension follows the resolved system's handler (`RomExtensions[0]`). A resolved item becomes `Resolved` with the `game_id`. Resolution runs steps 6–10 of §7.2 synchronously (step 6 is skipped for Attach, since the target game is chosen); on success the loose source file is deleted (step 11).
 
 - **Known limit:** a `Manual`/`Unverified` release whose SHA1 appears in a later DAT is not upgraded automatically (its SHA1 is in `roms`, so re-ingesting is a `Duplicate`). Fix: delete the release (→ `_removed/`), move the file back into `ingest/<system>/`, ingest.
+- Synchronous resolution failures return ProblemDetails preserving the reason code: `TargetZipUnreadable` / `InfoJsonNewerSchema` → 409; `IoError` / `VerifyFailed` / `DbWriteFailed` → 500. Failures keep the review item Pending for retry (D47).
 
 ## 8. Game Boy / Game Boy Color header extractor
 
@@ -737,6 +738,8 @@ None. New questions found during implementation get added here.
 | D43 | 2026-11-04 | Found in S18: each system has 5 DAT files sharing one `datName`, so `cache/dats/` mirrors the source layout: `cache/dats/<kind>/<datName>.dat` (`no-intro`, `releaseyear`, `developer`, `publisher`, `genre`), and `dats.json` stores each path relative to `cache/dats/`. Files are always looked up by that fixed layout, never by a path read from `dats.json`. |
 | D44 | 2026-11-04 | Found in S20: on Windows, `File.Move(overwrite)` gets access denied when the target is open, even with `FileShare.Delete`. The ZIP writer closes the existing ZIP it was given before the move; another reader holding the ZIP open on a Windows dev machine makes the move fail after the 3 retries (`IoError`). Linux (production) is unaffected. §3.1 corrected. |
 | D45 | 2026-11-04 | S29 owner decision: suggestions contain distinct base titles. For each title, retain the highest-scoring release after the size boost; break ties by ROM name. ROM-name ties use ordinal ascending order. |
+| D46 | 2026-11-04 | S30 owner decision: Hack/Translated attachments use the target game's title as baseTitle, empty regions/languages, null revision and only the selected flag. |
+| D47 | 2026-11-04 | S30 owner decision: synchronous resolution returns 409 for TargetZipUnreadable/InfoJsonNewerSchema and 500 for IoError/VerifyFailed/DbWriteFailed, preserving reason codes and keeping failures Pending. |
 
 ## 22. Extensibility — `ISystemHandler`
 
@@ -806,7 +809,7 @@ JSON, camelCase. Errors are RFC 7807 ProblemDetails with an extra `code` (§23.1
 | POST | `/api/jobs/{id}/cancel` | Admin | → 202 · 404 if not running |
 | GET | `/api/review` | Admin | `?status=Pending&page&pageSize` → page of `{id,system,reason,fileName,sizeBytes,headerTitle,createdAt}` (`fileName` = `originalFileName`) |
 | GET | `/api/review/{id}` | Admin | → item incl. header, hashes, suggestions, `datIdentification`, `candidateGames[{id,displayTitle}]` |
-| POST | `/api/review/{id}/resolve` | Admin | `{action:"Dat",datSystem,datGameName}` (→ `Unverified`, §7.5) · `{action:"Attach",targetGameId,flag:"Hack"\|"Translated"\|"None"}` (`None` only for `AmbiguousGroup`) · `{action:"Manual",title,regions[],languages[],revision?,flags[]}` → `{gameId}` · 409 `JobRunning` / `AmbiguousGroup` / `SourceMissing` · 400 `ValidationFailed` |
+| POST | `/api/review/{id}/resolve` | Admin | `{action:"Dat",datSystem,datGameName}` (→ `Unverified`, §7.5) · `{action:"Attach",targetGameId,flag:"Hack"\|"Translated"\|"None"}` (`None` only for `AmbiguousGroup`) · `{action:"Manual",title,regions[],languages[],revision?,flags[]}` → `{gameId}` · 409 `JobRunning` / `AmbiguousGroup` / `SourceMissing` / `TargetZipUnreadable` / `InfoJsonNewerSchema` · 500 `IoError` / `VerifyFailed` / `DbWriteFailed` (keeps Pending, D47) · 400 `ValidationFailed` |
 | POST | `/api/review/{id}/dismiss` | Admin | → 204 · 409 `JobRunning` / `SourceMissing` |
 | GET | `/api/dat/search` | Admin | `?system&q&limit=20` → `[{gameName,romName,sizeBytes,crc32}]` |
 | GET | `/api/integrity/status` | Admin | → `{lastQuick,lastDeep,nextScheduledAt}` (`lastQuick`/`lastDeep` = latest job of that mode or null; `nextScheduledAt` UTC, null when the schedule is disabled) |
