@@ -22,6 +22,7 @@ public static class AuthSetup
     public static IServiceCollection AddAppAuth(this IServiceCollection services)
     {
         services.AddSingleton<AccountService>();
+        services.AddSingleton<UserAdminService>();
         services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
             .AddCookie(options =>
             {
@@ -76,7 +77,7 @@ public static class AuthSetup
         return app;
     }
 
-    /// <summary>Every mutating call in the group needs a valid <c>X-XSRF-TOKEN</c> header (spec ง9.2).</summary>
+    /// <summary>Every mutating call in the group needs a valid <c>X-XSRF-TOKEN</c> header (spec ยง9.2).</summary>
     public static RouteGroupBuilder RequireAntiforgery(this RouteGroupBuilder group) =>
         group.AddEndpointFilter(async (ctx, next) =>
         {

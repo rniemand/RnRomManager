@@ -20,9 +20,14 @@ public sealed class AuthClient(HttpClient http) : IDisposable
 
     public async Task<HttpResponseMessage> GetAsync(string url) => Capture(await http.GetAsync(url));
 
-    public async Task<HttpResponseMessage> PostAsync(string url, object? body = null, bool sendXsrf = true)
+    public Task<HttpResponseMessage> PostAsync(string url, object? body = null, bool sendXsrf = true) =>
+        SendAsync(HttpMethod.Post, url, body, sendXsrf);
+
+    public Task<HttpResponseMessage> PatchAsync(string url, object? body = null) => SendAsync(HttpMethod.Patch, url, body, true);
+
+    public async Task<HttpResponseMessage> SendAsync(HttpMethod method, string url, object? body, bool sendXsrf)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = body is null ? null : JsonContent.Create(body) };
+        using var request = new HttpRequestMessage(method, url) { Content = body is null ? null : JsonContent.Create(body) };
         if (sendXsrf && _xsrf is not null)
             request.Headers.Add("X-XSRF-TOKEN", _xsrf);
         return Capture(await http.SendAsync(request));

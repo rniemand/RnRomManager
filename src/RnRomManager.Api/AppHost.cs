@@ -21,6 +21,29 @@ public static class AppHost
 {
     public static WebApplication Build(string[] args)
     {
+        var builder = CreateBuilder(args);
+        builder.Services.AddHostedService<StartupRunner>();
+        var app = builder.Build();
+
+        var staticFiles = new StaticFileOptions { OnPrepareResponse = ctx => SetCacheHeaders(ctx) };
+        app.UseStaticFiles(staticFiles);
+
+        app.UseAppAuth();
+
+        app.MapHealthEndpoints();
+        // Deny by default: every /api endpoint needs a session unless it opts out (spec §23).
+        app.MapGroup("/api")
+            .RequireAuthorization(AuthSetup.Authenticated)
+            .RequireAntiforgery()
+            .MapAuthEndpoints()
+            .MapUserEndpoints();
+        app.MapFallbackEndpoints(staticFiles);
+        return app;
+    }
+
+    /// <summary>Config, NLog (startup step 2) and every service; shared with the CLI modes that need the DB.</summary>
+    public static WebApplicationBuilder CreateBuilder(string[] args)
+    {
         var builder = WebApplication.CreateBuilder(args);
         NLogSetup.Configure(builder);
         builder.Services.AddAppOptions(builder.Configuration);
@@ -41,22 +64,7 @@ public static class AppHost
         builder.Services.AddOptions<KeyManagementOptions>()
             .Configure<IXmlRepository>((options, repository) => options.XmlRepository = repository);
 
-        builder.Services.AddHostedService<StartupRunner>();
-        var app = builder.Build();
-
-        var staticFiles = new StaticFileOptions { OnPrepareResponse = ctx => SetCacheHeaders(ctx) };
-        app.UseStaticFiles(staticFiles);
-
-        app.UseAppAuth();
-
-        app.MapHealthEndpoints();
-        // Deny by default: every /api endpoint needs a session unless it opts out (spec �23).
-        app.MapGroup("/api")
-            .RequireAuthorization(AuthSetup.Authenticated)
-            .RequireAntiforgery()
-            .MapAuthEndpoints();
-        app.MapFallbackEndpoints(staticFiles);
-        return app;
+        return builder;
     }
 
     // spec §11: hashed SvelteKit assets are immutable; everything else (index.html, theme.js) must revalidate.

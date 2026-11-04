@@ -1,5 +1,4 @@
 using System.Net;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using RnRomManager.Core.Users;
@@ -11,7 +10,7 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class AuthTests
 {
-    private const string Password = "correct-horse-battery";
+    private const string Password = TestUsers.Password;
 
     private FakeTimeProvider _time = null!;
     private ApiFactory _factory = null!;
@@ -35,22 +34,8 @@ public class AuthTests
 
     private IUserRepository Users => _factory.Services.GetRequiredService<IUserRepository>();
 
-    private async Task<User> CreateUserAsync(string username = "richard", bool mustChangePassword = false)
-    {
-        var now = _time.GetUtcNow().UtcDateTime;
-        var user = new User
-        {
-            Username = username,
-            PasswordHash = "",
-            Role = UserRole.User,
-            MustChangePassword = mustChangePassword,
-            SecurityStamp = Secrets.NewSecurityStamp(),
-            CreatedAt = now,
-            UpdatedAt = now,
-        };
-        user = user with { PasswordHash = new PasswordHasher<User>().HashPassword(user, Password) };
-        return user with { Id = await Users.InsertAsync(user, CancellationToken.None) };
-    }
+    private Task<User> CreateUserAsync(string username = "richard", bool mustChangePassword = false) =>
+        TestUsers.CreateAsync(_factory, username, mustChangePassword: mustChangePassword);
 
     [Test]
     public async Task Login_SetsTheSessionCookieAndReturnsTheUser()

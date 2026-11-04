@@ -86,9 +86,9 @@ public class UserRepositoryTests
     {
         await _repository.InsertAsync(NewUser("admin"), CancellationToken.None);
 
-        var ex = await Assert.ThrowsAsync<MySqlException>(() => _repository.InsertAsync(NewUser("ADMIN"), CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<UsernameTakenException>(() => _repository.InsertAsync(NewUser("ADMIN"), CancellationToken.None));
 
-        Assert.That(ex!.ErrorCode, Is.EqualTo(MySqlErrorCode.DuplicateKeyEntry));
+        Assert.That(ex!.InnerException, Is.InstanceOf<MySqlException>());
     }
 
     [Test]
@@ -141,5 +141,49 @@ public class UserRepositoryTests
         await _repository.RecordSuccessfulLoginAsync(id, now, CancellationToken.None);
         var loggedIn = await _repository.GetByIdAsync(id, CancellationToken.None);
         Assert.That((loggedIn!.FailedLoginCount, loggedIn.LockoutUntil, loggedIn.LastLoginAt), Is.EqualTo((0, (DateTime?)null, (DateTime?)now)));
+    }
+
+    [Test]
+    public async Task List_ReturnsEveryUserOrderedByName()
+    {
+        await _repository.InsertAsync(NewUser("zed"), CancellationToken.None);
+        await _repository.InsertAsync(NewUser("amy"), CancellationToken.None);
+
+        var users = await _repository.ListAsync(CancellationToken.None);
+
+        Assert.That(users.Select(u => u.Username), Is.EqualTo(new[] { "amy", "zed" }));
+    }
+
+    [Test]
+    public async Task UpdateUnlessLastAdmin_RefusesToRemoveTheLastEnabledAdmin()
+    {
+        var one = NewUser("one") with { Role = UserRole.Admin };
+        one = one with { Id = await _repository.InsertAsync(one, CancellationToken.None) };
+        var two = NewUser("two") with { Role = UserRole.Admin };
+        two = two with { Id = await _repository.InsertAsync(two, CancellationToken.None) };
+
+        Assert.That(await _repository.UpdateUnlessLastAdminAsync(one with { IsDisabled = true }, CancellationToken.None), Is.True);
+        Assert.That(await _repository.UpdateUnlessLastAdminAsync(two with { Role = UserRole.User }, CancellationToken.None), Is.False);
+        Assert.That(await _repository.UpdateUnlessLastAdminAsync(two with { IsDisabled = true }, CancellationToken.None), Is.False);
+        Assert.That(await _repository.UpdateUnlessLastAdminAsync(two with { PasswordHash = "changed" }, CancellationToken.None), Is.True);
+
+        var stored = await _repository.GetByIdAsync(two.Id, CancellationToken.None);
+        Assert.That((stored!.Role, stored.IsDisabled, stored.PasswordHash), Is.EqualTo((UserRole.Admin, false, "changed")));
+    }
+
+    [Test]
+    public async Task UpdateUnlessLastAdmin_ParallelDemotions_LeaveOneAdmin()
+    {
+        var one = NewUser("one") with { Role = UserRole.Admin };
+        one = one with { Id = await _repository.InsertAsync(one, CancellationToken.None) };
+        var two = NewUser("two") with { Role = UserRole.Admin };
+        two = two with { Id = await _repository.InsertAsync(two, CancellationToken.None) };
+
+        var results = await Task.WhenAll(
+            _repository.UpdateUnlessLastAdminAsync(one with { Role = UserRole.User }, CancellationToken.None),
+            _repository.UpdateUnlessLastAdminAsync(two with { Role = UserRole.User }, CancellationToken.None));
+
+        Assert.That(results.Count(r => r), Is.EqualTo(1));
+        Assert.That((await _repository.ListAsync(CancellationToken.None)).Count(u => u.Role == UserRole.Admin), Is.EqualTo(1));
     }
 }
