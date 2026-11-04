@@ -357,7 +357,7 @@ Unknown table values are reported as `Unknown (0xNN)`.
 - **Login rate limit:** ASP.NET `RateLimiter`, fixed window 10 requests/min per client IP (after forwarded headers) on `/api/auth/login` → `429 TooManyRequests`. Stops one client locking out every account.
 - The last enabled Admin can't be disabled or demoted (`409 LastAdmin`). Users are disabled, never deleted.
 - **Password recovery (CLI, D37):** `docker exec <container> /app/RnRomManager.Api --reset-password <username>` (no shell needed). Handled in `Main` before the web host: loads + validates config, waits for the DB (§4.1 steps 1, 2 and 5; no migrations), then sets a random 20-char password printed once via `Console.Out`, clears the lockout, sets `must_change_password`, rotates `security_stamp` and re-enables the user. If no enabled Admin would remain otherwise, the user is also made `Admin`. Unknown user or DB failure → message on stderr, exit 1; success → exit 0. Logged at `Warn` (username only). Works while the app is running.
-- While `must_change_password` is set, every API call except `me`, `change-password` and `logout` returns `403 PasswordChangeRequired`.
+- While `must_change_password` is set, every API call except `me`, `change-password`, `logout`, `antiforgery` and `login` returns `403 PasswordChangeRequired` (D42: the SPA must still be able to fetch an XSRF token after a browser restart).
 
 ### 9.2 Session & CSRF
 - Cookie auth: name `rnrm.auth`, HttpOnly, `SameSite=Strict`, `Secure` = same as request (§4 forwarded headers), persistent, sliding expiry **7 days**, no absolute limit. API returns 401/403 instead of redirecting.
@@ -732,6 +732,7 @@ None. New questions found during implementation get added here.
 | D39 | 2026-11-04 | Defaults applied in the sixth gap review: ingest starts with a DB sync pre-pass (fixes duplicate entries/`(2)` ZIPs after a crash or DB failure); `DbWriteFailed` stops the ingest job; every write builds from the ZIP's `info.json`, never from DB rows; thumbnail circuit breaker (3 consecutive network failures per job); `info.json` validation rules defined, unknown properties ignored; SIGTERM cancels the job with a 30 s shutdown timeout (compose `stop_grace_period: 35s`); a review upsert resets a row in any status to `Pending`; null `ReadHeader` → ingest folder's handler; integrity scope (ZIPs outside their bucket → `WrongLocation`, unregistered system folders → `OrphanFile`); `Thumbs.db`/`desktop.ini` ignored; game typeahead via `/api/games`; game detail response and sort directions defined; DbUp journal name set explicitly; compose DB healthcheck gate; NLog flushed before exit; Manual/Unverified → DAT upgrade is a documented known limit; README uses absolute URLs for Docker Hub. |
 | D40 | 2026-11-04 | Seventh review (consistency): review Attach continues at §7.2 step 7 (step 6 skipped); `/api/integrity/status` null rules; `/api/about` licences from an embedded `licenses.json`; local Node ≥ 24 accepted (CI/Docker pin 24); ReportGenerator added to the tool manifest; `ci.yml` triggers on `pull_request` + `workflow_call` only (no branch-push runs, so PRs aren't tested twice). Implementation plan: one branch + PR per step, MVP = Docker Hub image deployed with the §17.3 compose file on the owner's host. |
 | D41 | 2026-11-04 | Found in S08: `games.zip_path` uses column collation `utf8mb4_uca1400_as_ci` (case-insensitive, **accent-sensitive**, MariaDB 10.10+), so the DB unique key agrees with the app's case-insensitive ordinal clash check (`Café.zip` ≠ `Cafe.zip`); the table default `utf8mb4_unicode_ci` would have made accent-only differences fail as `DbWriteFailed`. MySQL 8 doesn't have this collation, so MySQL support (best effort) needs `utf8mb4_0900_as_ci` there. `roms.dat_name`, `dat_version`, `dat_game_name` are `VARCHAR(255) NULL`. |
+| D42 | 2026-11-04 | Found in S10: the must-change-password gate also lets `GET /api/auth/antiforgery` and `POST /api/auth/login` through (otherwise a must-change user whose session-scoped antiforgery cookie expired couldn't get a token for change-password or logout). A missing/invalid session is `401 Unauthorized` and a wrong role `403 Forbidden`, both ProblemDetails like every other error. |
 
 ## 22. Extensibility — `ISystemHandler`
 
@@ -822,6 +823,7 @@ JSON, camelCase. Errors are RFC 7807 ProblemDetails with an extra `code` (§23.1
 | Code | Where | Meaning |
 |---|---|---|
 | `ValidationFailed` (400), `AntiforgeryInvalid` (400) | API | bad input / missing XSRF header |
+| `Unauthorized` (401), `Forbidden` (403) | API | no valid session / role not allowed (D42) |
 | `InvalidCredentials` (401), `PasswordChangeRequired` (403), `TooManyRequests` (429) | API | §9 |
 | `NotFound` (404) | API | unknown id, or `cancel` with no running job |
 | `SourceMissing` (409) | API | review resolve/dismiss whose source file (or archive) is gone; the row is deleted |

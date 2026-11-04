@@ -15,6 +15,21 @@ public static class Problems
                 ["traceId"] = Activity.Current?.Id ?? ctx.TraceIdentifier,
             });
 
+    public static IResult Validation(HttpContext ctx, IDictionary<string, string[]> errors) =>
+        Results.ValidationProblem(
+            errors,
+            extensions: new Dictionary<string, object?>
+            {
+                ["code"] = "ValidationFailed",
+                ["traceId"] = Activity.Current?.Id ?? ctx.TraceIdentifier,
+            });
+
+    public static IResult Unauthorized(HttpContext ctx) =>
+        Create(ctx, StatusCodes.Status401Unauthorized, "Unauthorized", "Not signed in");
+
+    public static IResult Forbidden(HttpContext ctx) =>
+        Create(ctx, StatusCodes.Status403Forbidden, "Forbidden", "Not allowed");
+
     public static IResult NotFound(HttpContext ctx) =>
         Create(ctx, StatusCodes.Status404NotFound, "NotFound", "Not found");
 }

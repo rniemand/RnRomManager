@@ -28,6 +28,13 @@ public sealed class UserRepository(IDbConnectionFactory connections) : IUserRepo
             new CommandDefinition($"{Select} WHERE username = @username", new { username }, cancellationToken: cancellationToken));
     }
 
+    public async Task<User?> GetByIdAsync(int id, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return await connection.QuerySingleOrDefaultAsync<User>(
+            new CommandDefinition($"{Select} WHERE id = @id", new { id }, cancellationToken: cancellationToken));
+    }
+
     public async Task<int> InsertAsync(User user, CancellationToken cancellationToken)
     {
         const string sql = """
@@ -52,5 +59,56 @@ public sealed class UserRepository(IDbConnectionFactory connections) : IUserRepo
             user.UpdatedAt,
             user.LastLoginAt,
         }, cancellationToken: cancellationToken));
+    }
+
+    public async Task UpdateAsync(User user, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE users SET password_hash = @PasswordHash, role = @Role, is_disabled = @IsDisabled,
+                             must_change_password = @MustChangePassword, failed_login_count = @FailedLoginCount,
+                             lockout_until = @LockoutUntil, security_stamp = @SecurityStamp, updated_at = @UpdatedAt,
+                             last_login_at = @LastLoginAt
+            WHERE id = @Id
+            """;
+        await using var connection = connections.Create();
+        await connection.ExecuteAsync(new CommandDefinition(sql, new
+        {
+            user.Id,
+            user.PasswordHash,
+            Role = user.Role.ToString(),
+            user.IsDisabled,
+            user.MustChangePassword,
+            user.FailedLoginCount,
+            user.LockoutUntil,
+            user.SecurityStamp,
+            user.UpdatedAt,
+            user.LastLoginAt,
+        }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<int> IncrementFailedLoginCountAsync(int id, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE users SET failed_login_count = LAST_INSERT_ID(failed_login_count + 1) WHERE id = @id;
+            SELECT LAST_INSERT_ID();
+            """;
+        await using var connection = connections.Create();
+        return await connection.ExecuteScalarAsync<int>(new CommandDefinition(sql, new { id }, cancellationToken: cancellationToken));
+    }
+
+    public async Task LockOutAsync(int id, DateTime until, DateTime now, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE users SET lockout_until = @until, failed_login_count = 0, updated_at = @now WHERE id = @id",
+            new { id, until, now }, cancellationToken: cancellationToken));
+    }
+
+    public async Task RecordSuccessfulLoginAsync(int id, DateTime now, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE users SET failed_login_count = 0, lockout_until = NULL, last_login_at = @now WHERE id = @id",
+            new { id, now }, cancellationToken: cancellationToken));
     }
 }
