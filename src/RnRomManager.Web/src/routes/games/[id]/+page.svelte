@@ -1,16 +1,23 @@
 <script lang="ts">
 	import { SvelteSet } from 'svelte/reactivity';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { GameDetail, RomDetail } from '#lib/api/types.js';
 	import CopyButton from '#lib/components/CopyButton.svelte';
+	import GameAdminModal, {
+		type AdminAction,
+		type AdminOutcome
+	} from '#lib/components/GameAdminModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import { formatKey, formatSize, formatValue } from '#lib/format.js';
+	import { auth } from '#lib/stores/auth.svelte.js';
+	import { toasts } from '#lib/stores/toasts.svelte.js';
 
 	const changedMessage = 'This game changed, please retry.';
 
@@ -20,6 +27,7 @@
 	let notice = $state<string | null>(null);
 	const expanded = new SvelteSet<number>();
 	let reload = $state(0);
+	let action = $state<AdminAction | null>(null);
 
 	const id = $derived(page.params.id ?? '');
 	const boxArt = $derived(game?.images.find((i) => i.type === 'BoxArt'));
@@ -80,6 +88,20 @@
 
 	function toggle(romId: number): void {
 		if (!expanded.delete(romId)) expanded.add(romId);
+	}
+
+	async function onAdminDone(outcome: AdminOutcome): Promise<void> {
+		if ('game' in outcome) {
+			game = outcome.game;
+			toasts.show(outcome.message, 'success');
+		} else if ('goTo' in outcome) {
+			toasts.show(outcome.message, 'success');
+			await goto(outcome.goTo ? resolve('/games/[id]', { id: outcome.goTo }) : resolve('/'));
+		} else {
+			if (outcome.warning) notice = outcome.message ?? null;
+			else if (outcome.message) toasts.show(outcome.message, 'success');
+			reload++;
+		}
 	}
 
 	const list = (items: string[]) => (items.length ? items.join(', ') : '—');
@@ -151,6 +173,38 @@
 			>
 				<Icon name="download" /> Download ZIP
 			</button>
+			{#if auth.isAdmin}
+				<div class="d-flex flex-wrap gap-2 mt-3" role="group" aria-label="Admin actions">
+					<button
+						type="button"
+						class="btn btn-outline-secondary"
+						onclick={() => (action = { kind: 'edit' })}
+					>
+						<Icon name="edit" /> Edit metadata
+					</button>
+					<button
+						type="button"
+						class="btn btn-outline-secondary"
+						onclick={() => (action = { kind: 'retry' })}
+					>
+						<Icon name="retry" /> Retry media
+					</button>
+					<button
+						type="button"
+						class="btn btn-outline-secondary"
+						onclick={() => (action = { kind: 'merge' })}
+					>
+						<Icon name="merge" /> Merge into…
+					</button>
+					<button
+						type="button"
+						class="btn btn-outline-danger"
+						onclick={() => (action = { kind: 'deleteGame' })}
+					>
+						<Icon name="delete" /> Delete game
+					</button>
+				</div>
+			{/if}
 		</div>
 	</div>
 
@@ -209,6 +263,24 @@
 							>
 								<Icon name="download" />
 							</button>
+							{#if auth.isAdmin}
+								<button
+									type="button"
+									class="btn btn-sm btn-outline-secondary"
+									aria-label="Move {rom.fileName}"
+									onclick={() => (action = { kind: 'move', rom })}
+								>
+									<Icon name="move" />
+								</button>
+								<button
+									type="button"
+									class="btn btn-sm btn-outline-danger"
+									aria-label="Delete {rom.fileName}"
+									onclick={() => (action = { kind: 'deleteRom', rom })}
+								>
+									<Icon name="delete" />
+								</button>
+							{/if}
 						</td>
 					</tr>
 					{#if rom.header && expanded.has(rom.id)}
@@ -232,4 +304,8 @@
 			</tbody>
 		</table>
 	</div>
+
+	{#if auth.isAdmin}
+		<GameAdminModal {game} bind:action ondone={onAdminDone} />
+	{/if}
 {/if}

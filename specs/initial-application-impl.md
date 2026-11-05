@@ -100,7 +100,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S40 | UI: Login + Change password | #40 |
 | [x] | S41 | UI: Library page | #41 |
 | [x] | S42 | UI: Game detail (read + download) | #42 |
-| [ ] | S43 | UI: Game detail admin actions | |
+| [x] | S43 | UI: Game detail admin actions | #43 |
 | [ ] | S44 | UI: Ingestion + Job detail | |
 | [ ] | S45 | UI: Review queue | |
 | [ ] | S46 | UI: Integrity page | |
