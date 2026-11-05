@@ -2,20 +2,24 @@ using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RnRomManager.Core.Configuration;
+using RnRomManager.Core.Dats;
 using RnRomManager.Core.Jobs;
+using RnRomManager.Core.Media;
 using RnRomManager.Core.Naming;
 using RnRomManager.Core.Storage;
+using RnRomManager.Core.Systems;
 using static RnRomManager.Core.Library.LibraryEditResult;
 
 namespace RnRomManager.Core.Library;
 
 /// <summary>
-/// Admin library edits (spec §11, §23, D28): metadata PATCH, delete release, delete game. Each takes the global job lock
+/// Admin library edits (spec §11, §23, D28, D35): metadata PATCH, delete release/game, move release, merge. Each takes the global job lock
 /// (§3.1) and follows the sync rule (§14.2): the ZIP is written (or deleted) first, then the DB. Every write starts from
 /// the ZIP's own <c>info.json</c> (§6.1). Removed ROM bytes go to <c>ingest/&lt;system&gt;/_removed/</c>, never deleted.
 /// </summary>
 public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRepository roms, ILibraryMirror mirror,
-    InfoJsonReader reader, IOptions<PathsOptions> paths, TimeProvider time, ILogger<LibraryEditor> logger)
+    InfoJsonReader reader, DatCache dats, ISystemRegistry systems, MediaService media, IOptions<PathsOptions> paths, TimeProvider time,
+    ILogger<LibraryEditor> logger)
 {
     public async Task<LibraryEditResult> PatchAsync(Guid gameId, GamePatch patch, CancellationToken ct)
     {
@@ -46,20 +50,16 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         // §6.1: the ZIP name follows the title. Names compare case-insensitively (§5), so a case-only change keeps the
         // file where it is (and keeps any clash suffix it already has).
         var zipPath = row.ZipPath;
-        var zipName = FileNameSanitizer.Sanitize(title) + ".zip";
-        if (!string.Equals(FileNameSanitizer.Sanitize(current.Title) + ".zip", zipName, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(FileNameSanitizer.Sanitize(current.Title), FileNameSanitizer.Sanitize(title), StringComparison.OrdinalIgnoreCase))
         {
-            var folder = Path.Combine(paths.Value.Roms, game.System, Bucket.For(zipName));
             try
             {
-                Directory.CreateDirectory(folder);
-                zipName = FileNameRules.FirstFreeIn(folder, zipName);
+                zipPath = NewZipPath(game.System, title);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 return new(IoError, ex.Message);
             }
-            zipPath = $"{game.System}/{Bucket.For(zipName)}/{zipName}";
         }
 
         var result = await WriteAsync(existing, zipPath, game).ConfigureAwait(false);
@@ -115,6 +115,226 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             logger.LogInformation("Game {GameId} deleted ({ZipPath})", gameId, row.ZipPath);
         return result;
     }
+
+    /// <summary>
+    /// §11 move release, to an existing game (<paramref name="targetGameId"/>) or a new one (<paramref name="newGameTitle"/>,
+    /// which runs §7.2 steps 7–8 for it). The release keeps its <c>baseTitle</c> (D23). Order: target ZIP (now holding the
+    /// ROM), source ZIP rebuilt, one DB transaction, then an emptied source ZIP is deleted.
+    /// </summary>
+    public async Task<LibraryEditResult> MoveReleaseAsync(Guid gameId, long romId, Guid? targetGameId, string? newGameTitle, CancellationToken ct)
+    {
+        using var held = jobLock.TryAcquire();
+        if (held is null)
+            return new(JobRunning);
+        if (targetGameId == gameId)
+            return Invalid("targetGameId", "Choose a different game.");
+        if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
+            || await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
+            return new(NotFound);
+        GameRow? targetRow = null;
+        if (targetGameId is { } targetId)
+        {
+            targetRow = await games.GetAsync(targetId, ct).ConfigureAwait(false);
+            if (targetRow is null)
+                return new(NotFound);
+            if (targetRow.SystemId != row.SystemId)
+                return Invalid("targetGameId", "The target game must be in the same system.");
+        }
+
+        var source = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
+        if (source.Code is not null)
+            return new(source.Code, source.Details);
+        using var sourceZip = source.Zip!;
+        if (source.Game!.Roms.FirstOrDefault(r => r.Metadata.Sha1 == romRow.Sha1) is not { } rom)
+            return new(NotFound, $"{row.ZipPath} no longer lists SHA1 {romRow.Sha1}");
+        var target = targetRow is null ? null : LibraryTarget.Open(paths.Value.Roms, targetRow.ZipPath, reader);
+        if (target?.Code is not null)
+            return new(target.Code, target.Details);
+        using var targetZip = target?.Zip;
+
+        var now = time.GetUtcNow();
+        var moved = rom with { FileName = FreeName(rom.FileName, target?.Game!.Roms.Select(r => r.FileName) ?? []) };
+        var entries = new Dictionary<string, Func<Stream>>
+        {
+            [LibraryZip.RomEntry(moved.FileName)] = () => sourceZip.OpenEntry(LibraryZip.RomEntry(rom.FileName), rom.Metadata.SizeBytes),
+        };
+
+        InfoJsonGame targetGame;
+        string targetPath;
+        if (target is null)
+        {
+            // §7.2 step 7 (all metadata from the release's DAT entry) and step 8 (media) for the new game.
+            var handler = systems.ById(row.SystemId)!;
+            var metadata = MetadataFor(row.SystemId, rom);
+            var found = await media.FindAsync(handler, [rom.Identification.DatGameName], new CircuitBreaker(), ct).ConfigureAwait(false);
+            targetGame = new InfoJsonGame
+            {
+                SchemaVersion = InfoJsonReader.CurrentVersion,
+                GameId = Guid.NewGuid(),
+                System = row.SystemId,
+                Title = newGameTitle!,
+                DisplayTitle = DisplayTitle.From(newGameTitle!),
+                ReleaseYear = metadata.ReleaseYear,
+                Developers = metadata.Developers,
+                Publishers = metadata.Publishers,
+                Genres = metadata.Genres,
+                Description = null,
+                Roms = PrimaryRelease.Apply([moved]),
+                Images = [found.BoxArt.ToInfoJson(now), .. found.Snap is { } snap ? [snap.ToInfoJson(now)] : Array.Empty<InfoJsonImage>()],
+                Metadata = new InfoJsonGameMetadata(now, now, AppInfo.Version),
+            };
+            foreach (var image in new[] { found.BoxArt, found.Snap }.OfType<MediaImage>())
+                entries[LibraryZip.ImageEntry(image.FileName)] = () => new MemoryStream(image.Bytes);
+            try
+            {
+                targetPath = NewZipPath(row.SystemId, newGameTitle!);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return new(IoError, ex.Message);
+            }
+        }
+        else
+        {
+            targetGame = target.Game! with { Roms = PrimaryRelease.Apply([.. target.Game.Roms, moved]), Metadata = Touched(target.Game) };
+            targetPath = targetRow!.ZipPath;
+        }
+
+        var remaining = source.Game.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
+        var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining), Metadata = Touched(source.Game) };
+
+        if (await WriteZipAsync(targetZip, targetPath, targetGame, entries).ConfigureAwait(false) is { } failed)
+            return failed;
+        if (sourceGame is not null && await WriteZipAsync(sourceZip, row.ZipPath, sourceGame, []).ConfigureAwait(false) is { } sourceFailed)
+        {
+            await UndoTargetWriteAsync(targetPath, target?.Game).ConfigureAwait(false);
+            return sourceFailed;
+        }
+
+        var result = await MirrorAsync(() => mirror.ApplyAsync(
+            [Mirror(targetPath, targetGame), .. sourceGame is null ? Array.Empty<MirrorEntry>() : [Mirror(row.ZipPath, sourceGame)]],
+            sourceGame is null ? [gameId] : [], CancellationToken.None), targetPath).ConfigureAwait(false);
+        if (sourceGame is null)
+        {
+            sourceZip.Dispose(); // Windows can't delete an open file.
+            DeleteOldZip(row.ZipPath, gameId);
+        }
+        if (result.Code is null)
+            logger.LogInformation("Release {FileName} moved from game {GameId} to {TargetId} ({ZipPath})", rom.FileName, gameId, targetGame.GameId, targetPath);
+        return result with { GameId = targetGame.GameId };
+    }
+
+    /// <summary>
+    /// §11 Merge into… (D35): every release of the source moves into the target in one write. The target keeps its title,
+    /// metadata and images; empty fields are filled from the source, a default box art is replaced by a real source one,
+    /// and the source snap is used only when the target has none. Target ZIP + DB commit, then the source ZIP is deleted.
+    /// </summary>
+    public async Task<LibraryEditResult> MergeAsync(Guid gameId, Guid targetGameId, CancellationToken ct)
+    {
+        using var held = jobLock.TryAcquire();
+        if (held is null)
+            return new(JobRunning);
+        if (targetGameId == gameId)
+            return Invalid("targetGameId", "Choose a different game.");
+        if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row
+            || await games.GetAsync(targetGameId, ct).ConfigureAwait(false) is not { } targetRow)
+            return new(NotFound);
+        if (targetRow.SystemId != row.SystemId)
+            return Invalid("targetGameId", "The target game must be in the same system.");
+
+        var source = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
+        if (source.Code is not null)
+            return new(source.Code, source.Details);
+        using var sourceZip = source.Zip!;
+        var target = LibraryTarget.Open(paths.Value.Roms, targetRow.ZipPath, reader);
+        if (target.Code is not null)
+            return new(target.Code, target.Details);
+        using var targetZip = target.Zip!;
+        var (from, into) = (source.Game!, target.Game!);
+
+        var entries = new Dictionary<string, Func<Stream>>();
+        var names = into.Roms.Select(r => r.FileName).ToList();
+        var merged = new List<InfoJsonRom>(into.Roms);
+        foreach (var rom in from.Roms)
+        {
+            var moved = rom with { FileName = FreeName(rom.FileName, names) };
+            names.Add(moved.FileName);
+            merged.Add(moved);
+            entries[LibraryZip.RomEntry(moved.FileName)] = () => sourceZip.OpenEntry(LibraryZip.RomEntry(rom.FileName), rom.Metadata.SizeBytes);
+        }
+
+        var images = into.Images.ToList();
+        var intoBoxArt = into.Images.FirstOrDefault(i => i.Type == ImageType.BoxArt);
+        if (from.Images.FirstOrDefault(i => i.Type == ImageType.BoxArt) is { IsDefault: false } boxArt && intoBoxArt is null or { IsDefault: true })
+            TakeImage(boxArt, MediaImage.BoxArtFileName);
+        if (from.Images.FirstOrDefault(i => i.Type == ImageType.Snap) is { } snap && !into.Images.Any(i => i.Type == ImageType.Snap))
+            TakeImage(snap, MediaImage.SnapFileName);
+
+        var targetGame = into with
+        {
+            ReleaseYear = into.ReleaseYear ?? from.ReleaseYear,
+            Developers = into.Developers.Count > 0 ? into.Developers : from.Developers,
+            Publishers = into.Publishers.Count > 0 ? into.Publishers : from.Publishers,
+            Genres = into.Genres.Count > 0 ? into.Genres : from.Genres,
+            Description = string.IsNullOrEmpty(into.Description) ? from.Description : into.Description,
+            Roms = PrimaryRelease.Apply(merged),
+            Images = images,
+            Metadata = Touched(into),
+        };
+
+        if (await WriteZipAsync(targetZip, targetRow.ZipPath, targetGame, entries).ConfigureAwait(false) is { } failed)
+            return failed;
+        var result = await MirrorAsync(() => mirror.ApplyAsync([Mirror(targetRow.ZipPath, targetGame)], [gameId], CancellationToken.None),
+            targetRow.ZipPath).ConfigureAwait(false);
+        sourceZip.Dispose();
+        DeleteOldZip(row.ZipPath, gameId);
+        if (result.Code is null)
+            logger.LogInformation("Game {GameId} merged into {TargetId} ({ZipPath})", gameId, targetGameId, targetRow.ZipPath);
+        return result with { GameId = targetGameId };
+
+        void TakeImage(InfoJsonImage image, string fileName)
+        {
+            images.RemoveAll(i => i.Type == image.Type || string.Equals(i.FileName, fileName, StringComparison.OrdinalIgnoreCase));
+            images.Add(image with { FileName = fileName });
+            entries[LibraryZip.ImageEntry(fileName)] = () => sourceZip.OpenEntry(LibraryZip.ImageEntry(image.FileName), image.SizeBytes);
+        }
+    }
+
+    /// <summary>A failed source rebuild after the target was written: put the target back, so the ROM isn't in two ZIPs.</summary>
+    private async Task UndoTargetWriteAsync(string targetPath, InfoJsonGame? before)
+    {
+        var path = SafePath.Resolve(paths.Value.Roms, targetPath);
+        try
+        {
+            if (before is null)
+            {
+                File.Delete(path);
+                return;
+            }
+            // The written target still has every entry it had before, so it can be rewritten from itself.
+            await new LibraryZipWriter(reader).WriteAsync(path, LibraryZip.Open(path, reader),
+                new LibraryZipChanges(before, new Dictionary<string, Func<Stream>>())).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Couldn't undo the write of {ZipPath}; the moved ROM is in two ZIPs until one is fixed by hand", targetPath);
+        }
+    }
+
+    /// <summary>§7.2 step 7: metadat by the CRC of the DAT entry the release is identified with (Unverified: the chosen entry).</summary>
+    private DatMetadata MetadataFor(string systemId, InfoJsonRom rom)
+    {
+        if (rom.Identification.DatGameName is not { } name || dats.For(systemId) is not { } store)
+            return DatMetadata.Empty;
+        var entry = rom.Identification.Method == IdentificationMethod.Dat
+            ? store.BySha1(rom.Metadata.Sha1)
+            : store.Roms.FirstOrDefault(r => r.GameName == name);
+        return entry is null ? DatMetadata.Empty : store.MetadataFor(entry.Crc32);
+    }
+
+    /// <summary>§6.1 entry name clash: ` (2)`… before the extension, case-insensitively.</summary>
+    private static string FreeName(string fileName, IEnumerable<string> taken) =>
+        FileNameRules.FirstFree(fileName, taken.ToHashSet(StringComparer.OrdinalIgnoreCase).Contains);
 
     private Task<LibraryEditResult> RemoveGameAsync(LibraryZip existing, GameRow row, InfoJsonGame current) =>
         RemoveRomsAsync(existing, current, current.Roms, async () =>
@@ -203,13 +423,20 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     }
 
     /// <summary>Atomic ZIP write (§6.1) then the DB mirror. Not cancellable once started, so a ZIP is never left half-applied.</summary>
-    private async Task<LibraryEditResult> WriteAsync(LibraryZip existing, string zipPath, InfoJsonGame game)
+    private async Task<LibraryEditResult> WriteAsync(LibraryZip existing, string zipPath, InfoJsonGame game) =>
+        await WriteZipAsync(existing, zipPath, game, []).ConfigureAwait(false)
+        ?? await MirrorAsync(() => mirror.ReplaceAsync(Mirror(zipPath, game), CancellationToken.None), zipPath).ConfigureAwait(false);
+
+    /// <param name="existing">The game's current ZIP (disposed by the writer), or null for a new game.</param>
+    /// <returns>null when written and verified.</returns>
+    private async Task<LibraryEditResult?> WriteZipAsync(LibraryZip? existing, string zipPath, InfoJsonGame game,
+        Dictionary<string, Func<Stream>> newEntries)
     {
-        var target = SafePath.Resolve(paths.Value.Roms, zipPath);
         try
         {
-            await new LibraryZipWriter(reader).WriteAsync(target, existing, new LibraryZipChanges(game, new Dictionary<string, Func<Stream>>()))
-                .ConfigureAwait(false);
+            await new LibraryZipWriter(reader).WriteAsync(SafePath.Resolve(paths.Value.Roms, zipPath), existing,
+                new LibraryZipChanges(game, newEntries)).ConfigureAwait(false);
+            return null;
         }
         catch (LibraryZipVerifyException ex)
         {
@@ -221,10 +448,22 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             logger.LogError(ex, "Writing {ZipPath} failed", zipPath);
             return new(IoError, ex.Message);
         }
+    }
 
-        var info = new FileInfo(target);
-        return await MirrorAsync(() => mirror.ReplaceAsync(new MirrorEntry(game, zipPath, info.Length, info.LastWriteTimeUtc), CancellationToken.None),
-            zipPath).ConfigureAwait(false);
+    private MirrorEntry Mirror(string zipPath, InfoJsonGame game)
+    {
+        var info = new FileInfo(SafePath.Resolve(paths.Value.Roms, zipPath));
+        return new MirrorEntry(game, zipPath, info.Length, info.LastWriteTimeUtc);
+    }
+
+    /// <summary>§6.1: <c>Sanitize(title).zip</c> in <c>roms/&lt;system&gt;/&lt;bucket&gt;/</c>, ` (2)`… on a clash (any case).</summary>
+    private string NewZipPath(string systemId, string title)
+    {
+        var zipName = FileNameSanitizer.Sanitize(title) + ".zip";
+        var folder = Path.Combine(paths.Value.Roms, systemId, Bucket.For(zipName));
+        Directory.CreateDirectory(folder);
+        zipName = FileNameRules.FirstFreeIn(folder, zipName);
+        return $"{systemId}/{Bucket.For(zipName)}/{zipName}";
     }
 
     /// <summary>The ZIP already changed; a DB failure is healed later by the ingest pre-pass or integrity (§14.2).</summary>
@@ -242,7 +481,10 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         }
     }
 
-    /// <summary>§6.1 title rename: the new ZIP is written and committed, then the old one goes.</summary>
+    /// <summary>
+    /// After the DB commit: the old ZIP of a renamed game (§6.1), or the emptied source of a move/merge (§11). A leftover
+    /// shows up in integrity as <c>DuplicateGameId</c> / <c>DuplicateSha1</c> (§12.2); deleting it by hand fixes it.
+    /// </summary>
     private void DeleteOldZip(string zipPath, Guid gameId)
     {
         try
@@ -251,8 +493,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Integrity reports both copies as DuplicateGameId (§12.2); deleting the old one by hand fixes it.
-            logger.LogError(ex, "Game {GameId} was renamed but the old {ZipPath} couldn't be deleted", gameId, zipPath);
+            logger.LogError(ex, "The DB no longer points game {GameId} at {ZipPath}, but that ZIP couldn't be deleted", gameId, zipPath);
         }
     }
 

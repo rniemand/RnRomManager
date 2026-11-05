@@ -85,7 +85,7 @@ public static class LibraryEndpoints
                 : Results.Stream(stream!, "application/octet-stream", rom.FileName);
         });
 
-        // Admin edits (§11, D28): each takes the job lock inside LibraryEditor.
+        // Admin edits (§11, D28, D35): each takes the job lock inside LibraryEditor.
         games.MapPatch("/{id:guid}", async (Guid id, JsonElement body, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
             IRomRepository roms, IImageRepository images) =>
         {
@@ -101,6 +101,24 @@ public static class LibraryEndpoints
 
         games.MapDelete("/{id:guid}/roms/{romId:long}", async (Guid id, long romId, HttpContext ctx, LibraryEditor editor) =>
             ToResult(ctx, await editor.DeleteReleaseAsync(id, romId, ctx.RequestAborted))).RequireAuthorization(AuthSetup.AdminOnly);
+
+        games.MapPost("/{id:guid}/roms/{romId:long}/move", async (Guid id, long romId, MoveReleaseRequest request, HttpContext ctx,
+            LibraryEditor editor) =>
+        {
+            var errors = Validate(request);
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+            var result = await editor.MoveReleaseAsync(id, romId, request.TargetGameId, request.NewGameTitle?.Trim(), ctx.RequestAborted);
+            return result.Code is null ? Results.Ok(new { targetGameId = result.GameId }) : ToProblem(ctx, result);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
+        games.MapPost("/{id:guid}/merge", async (Guid id, MergeRequest request, HttpContext ctx, LibraryEditor editor) =>
+        {
+            if (request.TargetGameId is not { } target || target == Guid.Empty)
+                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["targetGameId"] = ["A target game is required."] });
+            var result = await editor.MergeAsync(id, target, ctx.RequestAborted);
+            return result.Code is null ? Results.Ok(new { targetGameId = result.GameId }) : ToProblem(ctx, result);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         return api;
     }
@@ -120,11 +138,30 @@ public static class LibraryEndpoints
     /// <summary>§23 mutation bullet: 409 for the lock and unwritable ZIPs, 404 for a stale id, 500 for write failures.</summary>
     private static IResult ToProblem(HttpContext ctx, LibraryEditResult result) => result.Code switch
     {
+        LibraryEditResult.ValidationFailed => Problems.Validation(ctx, result.Errors!),
         LibraryEditResult.NotFound => Problems.NotFound(ctx),
         LibraryEditResult.JobRunning or LibraryTarget.InfoJsonNewerSchema or LibraryTarget.TargetZipUnreadable =>
             Problems.Create(ctx, StatusCodes.Status409Conflict, result.Code, result.Code),
         _ => Problems.Create(ctx, StatusCodes.Status500InternalServerError, result.Code!, result.Code!),
     };
+
+    private const string TitleRule = "Must contain 1–255 characters and produce a nonempty filename.";
+
+    /// <summary>§6.1 game title: 1–255 chars after trim, must not sanitize to empty.</summary>
+    private static bool IsValidTitle(string? trimmed) =>
+        trimmed is { Length: >= 1 and <= 255 } && FileNameSanitizer.Sanitize(trimmed).Length > 0;
+
+    /// <summary><c>move</c> body (§23): <c>{targetGameId}</c> or <c>{newGameTitle}</c>, not both.</summary>
+    public static Dictionary<string, string[]> Validate(MoveReleaseRequest request)
+    {
+        var errors = new Dictionary<string, string[]>();
+        var hasTarget = request.TargetGameId is { } target && target != Guid.Empty;
+        if (hasTarget == request.NewGameTitle is not null)
+            errors["targetGameId"] = ["Give either targetGameId or newGameTitle."];
+        else if (request.NewGameTitle is not null && !IsValidTitle(request.NewGameTitle.Trim()))
+            errors["newGameTitle"] = [TitleRule];
+        return errors;
+    }
 
     /// <summary>
     /// <c>PATCH /api/games/{id}</c> body (§23): an absent property is left unchanged; <c>releaseYear</c> and
@@ -143,8 +180,8 @@ public static class LibraryEndpoints
         if (body.TryGetProperty("title", out var title))
         {
             var value = title.ValueKind == JsonValueKind.String ? title.GetString()!.Trim() : null;
-            if (value is not { Length: >= 1 and <= 255 } || FileNameSanitizer.Sanitize(value).Length == 0)
-                errors["title"] = ["Must contain 1–255 characters and produce a nonempty filename."];
+            if (!IsValidTitle(value))
+                errors["title"] = [TitleRule];
             patch = patch with { Title = value };
         }
 
