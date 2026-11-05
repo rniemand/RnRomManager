@@ -104,6 +104,16 @@ describe('api client', () => {
 		expect(navigate).not.toHaveBeenCalled();
 	});
 
+	it('403 PasswordChangeRequired on /change-password itself does not navigate again (no loop)', async () => {
+		window.history.replaceState(null, '', '/change-password');
+		responses.push(json(403, { code: 'PasswordChangeRequired', title: 'Change your password' }));
+
+		await expect(api.get('/api/review?status=Pending&pageSize=1')).rejects.toMatchObject({
+			code: 'PasswordChangeRequired'
+		});
+		expect(navigate).not.toHaveBeenCalled();
+	});
+
 	it('ProblemDetails become a typed ApiError', async () => {
 		responses.push(
 			json(400, {

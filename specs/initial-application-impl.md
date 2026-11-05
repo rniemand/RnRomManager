@@ -105,7 +105,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S45 | UI: Review queue | #45 |
 | [x] | S46 | UI: Integrity page | #46 |
 | [x] | S47 | UI: Admin pages | #47 |
-| [ ] | S48 | Dev scripts complete (`setup-dev`, `start-dev`) | |
+| [x] | S48 | Dev scripts complete (`setup-dev`, `start-dev`) | #48 |
 | [ ] | S49 | E2E: Playwright + axe, compose, CI job | |
 | [ ] | S50 | Documentation pass | |
 | [ ] | S51 | Release `v0.1.0` | |

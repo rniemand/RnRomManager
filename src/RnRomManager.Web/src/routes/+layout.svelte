@@ -57,7 +57,8 @@
 	});
 
 	async function loadReviewCount(): Promise<void> {
-		if (!auth.isAdmin) return;
+		// Every /api call but me/change-password/logout is 403 until the password is changed (§9.1).
+		if (!auth.isAdmin || auth.me?.mustChangePassword) return;
 		try {
 			reviewCount = (await api.get<Page<unknown>>('/api/review?status=Pending&pageSize=1')).total;
 		} catch {
