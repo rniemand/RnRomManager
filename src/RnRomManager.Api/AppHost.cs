@@ -58,7 +58,8 @@ public static class AppHost
             .MapIngestEndpoints()
             .MapReviewEndpoints()
             .MapLibraryEndpoints()
-            .MapIntegrityEndpoints();
+            .MapIntegrityEndpoints()
+            .MapAdminEndpoints();
         app.MapFallbackEndpoints(staticFiles);
         return app;
     }
@@ -96,6 +97,7 @@ public static class AppHost
         builder.Services.AddTransient<MediaRetryJob>();
         builder.Services.AddSingleton<IntegrityJobFactory>(sp => mode => ActivatorUtilities.CreateInstance<IntegrityJob>(sp, mode));
         builder.Services.AddSingleton<LogRetention>();
+        builder.Services.AddSingleton<LogArchive>();
         // The container's local time (TZ) drives Integrity:QuickCheckTime (§4).
         builder.Services.AddSingleton(TimeZoneInfo.Local);
         builder.Services.AddSingleton<Scheduler>();

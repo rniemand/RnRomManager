@@ -14,6 +14,8 @@
 
   <ItemGroup>
     <Content Update="nlog.config" CopyToOutputDirectory="PreserveNewest" />
+    <Content Remove="licenses.json" />
+    <EmbeddedResource Include="licenses.json" LogicalName="RnRomManager.Api.licenses.json" />
   </ItemGroup>
 
   <!-- Local Release convenience: bundle the built SPA if it exists. The Dockerfile does the real copy. -->

@@ -1,6 +1,6 @@
 # Features
 
-Implementation is in progress; this guide covers the ingestion review behaviour implemented through S30, the library read API from S32, the library edits from S33–S34, media retry from S35 and the integrity checker and its API from S36–S37.
+Implementation is in progress; this guide covers the ingestion review behaviour implemented through S30, the library read API from S32, the library edits from S33–S34, media retry from S35, the integrity checker and its API from S36–S37, and the Admin settings, log download and About endpoints from S38.
 
 ## Ingestion review queue
 
@@ -92,3 +92,13 @@ All integrity endpoints need an Admin session; the POST also needs the antiforge
 - `POST /api/jobs/integrity` with `{"mode": "Quick"}` or `{"mode": "Deep"}` starts a run and returns `202 {jobId}` (`409 JobRunning` when busy, `400 ValidationFailed` for another mode). Follow it with `GET /api/jobs/{jobId}`.
 - `GET /api/integrity/status` returns `{lastQuick, lastDeep, nextScheduledAt}`: the latest job of each mode (or `null`) and the next scheduled quick check in UTC (`null` when the schedule is disabled).
 - `GET /api/integrity/issues?status=&type=&page=&pageSize=` returns a page of issues, newest first. `status` is `Open`, `AutoRepaired` or `Resolved`; `type` is any issue type above.
+
+## Admin settings, logs and About
+
+The Admin pages arrive in S47.
+
+- `GET /api/admin/settings` (Admin) returns the effective configuration: the same redacted model that is logged at startup. The connection string has its password removed, and `adminInitialPassword` shows `***` when one is set.
+- `GET /api/admin/logs` (Admin) downloads `rnrommanager-logs-<UTC time>.zip`. It contains every `*.log` file in `Paths:Logs` (including today's file while the app is writing to it), `settings.json` (the redacted configuration) and `version.txt`.
+- `GET /api/about` (any signed-in user) returns `{version, licenses[]}`. Each licence entry is `{name, license, url}`, covering the app, libretro-database (CC BY-SA 4.0) and every direct NuGet and npm dependency. The list lives in `src/RnRomManager.Api/licenses.json`; a test fails when a dependency is added to `Directory.Packages.props` or `package.json` without an entry there.
+
+Every `/api` endpoint's required role (anonymous, any user, or Admin) is checked by a single table-driven test that fails when a new endpoint has no entry.
