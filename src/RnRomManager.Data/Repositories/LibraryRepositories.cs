@@ -32,6 +32,7 @@ public sealed class GameRepository : IGameRepository
         SELECT id AS Id, system_id AS SystemId, title AS Title, display_title AS DisplayTitle, zip_path AS ZipPath,
                bucket AS Bucket, release_year AS ReleaseYear, developers AS Developers, publishers AS Publishers,
                genres AS Genres, description AS Description, has_default_boxart AS HasDefaultBoxArt,
+               rating AS Rating, favourite AS Favourite,
                zip_size_bytes AS ZipSizeBytes, zip_mtime_utc AS ZipMtimeUtc, info_schema_version AS InfoSchemaVersion,
                created_at AS CreatedAt, updated_at AS UpdatedAt
         FROM games
@@ -105,14 +106,16 @@ public sealed class GameRepository : IGameRepository
             SELECT g.id AS Id, g.system_id AS SystemId, g.display_title AS DisplayTitle, g.release_year AS ReleaseYear,
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount,
                    (SELECT GROUP_CONCAT(r.region_key SEPARATOR '') FROM roms r WHERE r.game_id = g.id) AS RegionKeys,
-                   (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.type = 'BoxArt') AS BoxArtImageId
+                   (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.type = 'BoxArt') AS BoxArtImageId,
+                   g.rating AS Rating, g.favourite AS Favourite
             FROM games g {filter}
             ORDER BY {order}
             LIMIT @pageSize OFFSET @offset
             """, args, cancellationToken: cancellationToken));
 
         var items = rows.Select(r => new GameListItem(
-            r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId)).ToList();
+            r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId,
+            r.Rating, r.Favourite)).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, total);
     }
 
@@ -158,6 +161,8 @@ public sealed class GameRepository : IGameRepository
         public long RomCount { get; init; }
         public string? RegionKeys { get; init; }
         public long? BoxArtImageId { get; init; }
+        public int? Rating { get; init; }
+        public bool Favourite { get; init; }
     }
 }
 
@@ -275,10 +280,10 @@ public sealed class LibraryMirror : ILibraryMirror
         {
             await connection.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO games (id, system_id, title, display_title, zip_path, bucket, release_year, developers, publishers,
-                                   genres, description, has_default_boxart, zip_size_bytes, zip_mtime_utc, info_schema_version,
+                                   genres, description, has_default_boxart, rating, favourite, zip_size_bytes, zip_mtime_utc, info_schema_version,
                                    created_at, updated_at)
                 VALUES (@Id, @SystemId, @Title, @DisplayTitle, @ZipPath, @Bucket, @ReleaseYear, @Developers, @Publishers,
-                        @Genres, @Description, @HasDefaultBoxArt, @ZipSizeBytes, @ZipMtimeUtc, @InfoSchemaVersion,
+                        @Genres, @Description, @HasDefaultBoxArt, @Rating, @Favourite, @ZipSizeBytes, @ZipMtimeUtc, @InfoSchemaVersion,
                         @CreatedAt, @UpdatedAt)
                 """, game, transaction, cancellationToken: cancellationToken));
 

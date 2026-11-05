@@ -1,7 +1,7 @@
 namespace RnRomManager.Core.Library;
 
 /// <summary>
-/// <c>info.json</c> at the root of a library ZIP (spec §6.2, schema v1): the source of truth for a game. ✓ fields are
+/// <c>info.json</c> at the root of a library ZIP (spec §6.2, schema v2): the source of truth for a game. ✓ fields are
 /// <c>required</c> and non-nullable, so a file missing one (or holding null) fails to deserialize.
 /// </summary>
 public sealed record InfoJsonGame
@@ -19,6 +19,12 @@ public sealed record InfoJsonGame
     public required IReadOnlyList<string> Publishers { get; init; }
     public required IReadOnlyList<string> Genres { get; init; }
     public string? Description { get; init; }
+    /// <summary>Shared 1–5 star rating; null = not rated (v2).</summary>
+    public required int? Rating { get; init; }
+
+    /// <summary>Shared favourite flag (v2).</summary>
+    public required bool Favourite { get; init; }
+
     public required IReadOnlyList<InfoJsonRom> Roms { get; init; }
     public required IReadOnlyList<InfoJsonImage> Images { get; init; }
     public required InfoJsonGameMetadata Metadata { get; init; }

@@ -39,7 +39,7 @@ public class LibraryZipTests
         handler.Id.Returns("gb");
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns([handler]);
-        return new InfoJsonReader(upgraders, registry);
+        return new InfoJsonReader([new InfoJsonUpgraderV1(), .. upgraders], registry);
     }
 
     private static byte[] RomBytes(int seed) => new SyntheticRomBuilder { Seed = seed }.Build();
@@ -90,6 +90,8 @@ public class LibraryZipTests
         Publishers = [],
         Genres = [],
         Description = null,
+        Rating = null,
+        Favourite = false,
         Roms = roms,
         Images = images ?? [],
         Metadata = new InfoJsonGameMetadata(When, When, "0.1.0"),

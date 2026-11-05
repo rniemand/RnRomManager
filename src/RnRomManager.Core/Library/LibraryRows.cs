@@ -20,6 +20,8 @@ public sealed record GameRow
     public required IReadOnlyList<string> Genres { get; init; }
     public string? Description { get; init; }
     public bool HasDefaultBoxArt { get; init; }
+    public int? Rating { get; init; }
+    public bool Favourite { get; init; }
     public required long ZipSizeBytes { get; init; }
 
     /// <summary>Whole seconds, UTC (§12.1).</summary>
@@ -105,6 +107,8 @@ public sealed record MirrorEntry(InfoJsonGame Info, string ZipPath, long ZipSize
             Genres = Info.Genres,
             Description = Info.Description,
             HasDefaultBoxArt = Info.Images.Any(i => i.Type == ImageType.BoxArt && i.IsDefault),
+            Rating = Info.Rating,
+            Favourite = Info.Favourite,
             ZipSizeBytes = ZipSizeBytes,
             ZipMtimeUtc = WholeSeconds(ZipMtimeUtc),
             InfoSchemaVersion = Info.SchemaVersion,

@@ -82,7 +82,7 @@ public class LibraryMirrorTests
             FileName = "boxart-01.png", Type = ImageType.BoxArt, Source = InfoJsonImage.SourceDefault, SourceUrl = null, IsDefault = true,
             SizeBytes = 99, Sha1 = new string('c', 40), Width = 512, Height = 512, DateAdded = When,
         };
-        var game = Game("Tetris", rom) with { ReleaseYear = 1989, Developers = ["Nintendo"], Genres = ["Puzzle"], Images = [image] };
+        var game = Game("Tetris", rom) with { ReleaseYear = 1989, Developers = ["Nintendo"], Genres = ["Puzzle"], Images = [image], Rating = 3, Favourite = true };
 
         await _mirror.ReplaceAsync(Entry(game, "gb/T/Tetris.zip"), CancellationToken.None);
 
@@ -90,11 +90,13 @@ public class LibraryMirrorTests
         Assert.That(row with { Developers = [], Publishers = [], Genres = [] }, Is.EqualTo(new GameRow
         {
             Id = game.GameId, SystemId = "gb", Title = "Tetris", DisplayTitle = "Tetris", ZipPath = "gb/T/Tetris.zip", Bucket = "T",
-            ReleaseYear = 1989, Developers = [], Publishers = [], Genres = [], Description = null, HasDefaultBoxArt = true,
-            ZipSizeBytes = 1234, ZipMtimeUtc = Mtime, InfoSchemaVersion = 1, CreatedAt = When.UtcDateTime, UpdatedAt = When.UtcDateTime,
+            ReleaseYear = 1989, Developers = [], Publishers = [], Genres = [], Description = null, HasDefaultBoxArt = true, Rating = 3, Favourite = true,
+            ZipSizeBytes = 1234, ZipMtimeUtc = Mtime, InfoSchemaVersion = 2, CreatedAt = When.UtcDateTime, UpdatedAt = When.UtcDateTime,
         }));
         Assert.That(row.Developers, Is.EqualTo(new[] { "Nintendo" }));
         Assert.That(row.Genres, Is.EqualTo(new[] { "Puzzle" }));
+        var item = (await _games.ListAsync(new GameQuery(), CancellationToken.None)).Items.Single();
+        Assert.That((item.Rating, item.Favourite), Is.EqualTo(((int?)3, true)));
 
         var romRow = (await _roms.ListByGameAsync(game.GameId, CancellationToken.None)).Single();
         Assert.That(romRow.RegionKey, Is.EqualTo("|USA|Europe|"));

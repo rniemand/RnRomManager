@@ -20,7 +20,7 @@ public class InfoJsonTests
         ISystemHandler[] handlers = [Handler("gb"), Handler("gbc")];
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns(handlers);
-        return new InfoJsonReader(upgraders, registry);
+        return new InfoJsonReader([new InfoJsonUpgraderV1(), .. upgraders], registry);
     }
 
     private static ISystemHandler Handler(string id)
@@ -61,7 +61,7 @@ public class InfoJsonTests
 
     private static InfoJsonGame Game() => new()
     {
-        SchemaVersion = 1,
+        SchemaVersion = 2,
         GameId = Guid.Parse("6f1f6c3e-8a54-4f39-9d2b-0d2a7c1e9b11"),
         System = "gb",
         Title = "Tetris",
@@ -71,6 +71,8 @@ public class InfoJsonTests
         Publishers = ["Nintendo"],
         Genres = [],
         Description = null,
+        Rating = 4,
+        Favourite = true,
         Roms = [Rom("Tetris (World) (Rev 1).gb")],
         Images = [Image("boxart-01.png", ImageType.BoxArt)],
         Metadata = new InfoJsonGameMetadata(When, When, "0.1.0"),
@@ -113,7 +115,7 @@ public class InfoJsonTests
         var text = Encoding.UTF8.GetString(bytes);
 
         Assert.That(bytes[0], Is.EqualTo((byte)'{'), "no BOM");
-        Assert.That(text, Does.Contain("\n  \"schemaVersion\": 1"));
+        Assert.That(text, Does.Contain("\n  \"schemaVersion\": 2"));
         Assert.That(text, Does.Contain("\"description\": null"));
         Assert.That(text, Does.Contain("\"method\": \"Dat\""));
         Assert.That(text, Does.Contain("\"type\": \"BoxArt\""));
@@ -161,9 +163,9 @@ public class InfoJsonTests
     [Test]
     public void NewerSchema_IsDetected_NotParsedFurther()
     {
-        var result = ReadJson("""{ "schemaVersion": 2, "anything": "goes" }""");
+        var result = ReadJson("""{ "schemaVersion": 3, "anything": "goes" }""");
 
-        Assert.That((result.Kind, result.FileVersion), Is.EqualTo((InfoJsonReadResult.Outcome.NewerSchema, (int?)2)));
+        Assert.That((result.Kind, result.FileVersion), Is.EqualTo((InfoJsonReadResult.Outcome.NewerSchema, (int?)3)));
     }
 
     [Test]
@@ -180,9 +182,45 @@ public class InfoJsonTests
         var result = reader.Read(Encoding.UTF8.GetBytes(v0.ToJsonString()));
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
-        Assert.That((result.FileVersion, result.Game!.SchemaVersion), Is.EqualTo(((int?)0, 1)));
+        Assert.That((result.FileVersion, result.Game!.SchemaVersion), Is.EqualTo(((int?)0, 2)));
         Assert.That(result.Game.Genres, Is.EqualTo(new[] { "Puzzle" }));
         upgrader.Received(1).Upgrade(Arg.Any<JsonObject>());
+    }
+
+    [Test]
+    public void V1File_ReadsAsV2_NotRatedNotFavourite()
+    {
+        var result = ReadEdited(d =>
+        {
+            d["schemaVersion"] = 1;
+            d.Remove("rating");
+            d.Remove("favourite");
+        });
+
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Rating, result.Game.Favourite),
+            Is.EqualTo(((int?)1, 2, (int?)null, false)));
+    }
+
+    [Test]
+    public void V2_WithoutFavourite_IsInvalid()
+    {
+        Assert.That(RuleOf(ReadEdited(d => d.Remove("favourite"))), Does.Contain("missing or wrongly typed"));
+    }
+
+    [Test]
+    public void V2_NullRating_IsValid()
+    {
+        var result = ReadEdited(d => d["rating"] = null);
+
+        Assert.That((result.Kind, result.Game?.Rating), Is.EqualTo((InfoJsonReadResult.Outcome.Ok, (int?)null)), result.Rule);
+    }
+
+    [TestCase(0)]
+    [TestCase(6)]
+    public void RatingOutOfRange_IsInvalid(int rating)
+    {
+        Assert.That(RuleOf(ReadEdited(d => d["rating"] = rating)), Is.EqualTo("rating must be null or 1-5"));
     }
 
     [Test]

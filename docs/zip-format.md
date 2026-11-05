@@ -56,7 +56,7 @@ All releases of a game (regions, revisions) **and** its hacks and translations l
 - Writes are atomic: the new ZIP is streamed to `<name>.zip.tmp` next to the target, re-opened, every ROM entry's SHA1 checked against `info.json`, then moved over the old file. A ZIP is never edited in place. When the path changes (a title edit), the new ZIP is written and the database committed before the old ZIP is deleted.
 - Compression: Deflate, optimal level. `info.json` is UTF-8 without a BOM, indented, camelCase, with nulls written.
 
-## `info.json` (schema version 1)
+## `info.json` (schema version 2)
 
 Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 
@@ -64,7 +64,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `schemaVersion` | int | ✓ | `1` |
+| `schemaVersion` | int | ✓ | `2` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
 | `system` | string | ✓ | system id (`gb`, `gbc`) |
 | `title` | string | ✓ | see Naming |
@@ -74,6 +74,8 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 | `publishers` | string[] | ✓ | as above |
 | `genres` | string[] | ✓ | may be empty |
 | `description` | string? | | Admin-edited only |
+| `rating` | int? | ✓ | shared 1–5 star rating; `null` = not rated (the key must be present) |
+| `favourite` | bool | ✓ | shared favourite flag |
 | `roms` | Rom[] | ✓ | at least one |
 | `images` | Image[] | ✓ | exactly one `BoxArt`; at most one `Snap` |
 | `metadata.createdAt` / `updatedAt` | string | ✓ | first / latest write of the ZIP |
@@ -119,7 +121,7 @@ Game Boy / Game Boy Color `header`: `title`, `manufacturerCode`, `cgbFlag` and `
 
 ### Validation
 
-Checked on every read (after upgrading an older version): valid UTF-8 JSON of at most 1 MiB; every required field present with the right type; `gameId` a GUID; `system` a registered system; at least one ROM and exactly one `isPrimary`; file names unique (case-insensitively) within `roms` and within `images`, and free of `/`, `\` and `..`; hashes lowercase hex of the right length; exactly one `BoxArt` image (none is reported as `MissingBoxArt`) and at most one `Snap`. Unknown properties are ignored on read and dropped on the next write. A failing file is reported by the integrity checker as `InfoJsonInvalid`, naming the first rule it breaks, and is left alone.
+Checked on every read (after upgrading an older version): valid UTF-8 JSON of at most 1 MiB; every required field present with the right type; `gameId` a GUID; `system` a registered system; `rating` null or 1–5; at least one ROM and exactly one `isPrimary`; file names unique (case-insensitively) within `roms` and within `images`, and free of `/`, `\` and `..`; hashes lowercase hex of the right length; exactly one `BoxArt` image (none is reported as `MissingBoxArt`) and at most one `Snap`. Unknown properties are ignored on read and dropped on the next write. A failing file is reported by the integrity checker as `InfoJsonInvalid`, naming the first rule it breaks, and is left alone.
 
 ## Versions
 
@@ -130,3 +132,4 @@ A schema change bumps `schemaVersion`, adds an upgrader and adds a row here.
 | Version | App version | Changes |
 |---|---|---|
 | 1 | 0.1.0 | Initial format. |
+| 2 | next release after 0.1.0 | Adds `rating` (int?, null) and `favourite` (bool, false); the v1→v2 upgrader adds both with those defaults. App 0.1.0 treats a v2 file as `InfoJsonNewerSchema` (read-only). |
