@@ -2,7 +2,7 @@
 
 RnRomManager ships as one Docker image, [`niemandr/rnrommanager`](https://hub.docker.com/r/niemandr/rnrommanager), for `linux/amd64` and `linux/arm64`. It serves the web UI and the API on port 8080, and needs a MariaDB (10.11+; MySQL 8.0+ on a best-effort basis) database.
 
-Tags: `X.Y.Z`, `X.Y` and `latest` for releases; `edge` and `sha-<commit>` for the latest `main`. Pin a release tag in production.
+Tags: `X.Y.Z`, `X.Y` and `latest` for releases; `edge` for the latest `main`. Pin a release tag in production.
 
 ## Docker Compose
 
