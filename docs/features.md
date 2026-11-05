@@ -1,6 +1,6 @@
 # Features
 
-Implementation is in progress; this guide covers the ingestion review behaviour implemented through S30 , the library read API from S32 and the library edits from S33.
+Implementation is in progress; this guide covers the ingestion review behaviour implemented through S30, the library read API from S32 and the library edits from S33–S34.
 
 ## Ingestion review queue
 
@@ -51,7 +51,7 @@ ROM and image ids change whenever a game is rewritten. A stale id, an image or R
 
 ## Edit the library through the API
 
-Admins can edit metadata and delete releases or games; the Game detail admin actions arrive in S43. These requests need the antiforgery header. Each edit takes the global job lock, so it returns `409 JobRunning` while a job or another edit runs. Every edit starts from the game ZIP's own `info.json`, writes the ZIP atomically, then updates the database.
+Admins can edit metadata, delete, move and merge; the Game detail admin actions arrive in S43. These requests need the antiforgery header. Each edit takes the global job lock, so it returns `409 JobRunning` while a job or another edit runs. Every edit starts from the game ZIP's own `info.json`, writes the ZIP atomically, then updates the database.
 
 - `PATCH /api/games/{id}` takes any of `title`, `releaseYear`, `developers`, `publishers`, `genres` and `description`, and returns the updated game (same shape as `GET /api/games/{id}`). Omitted fields stay unchanged; `releaseYear` and `description` accept `null` to clear them.
   - `title`: 1–255 characters after trimming, and it must not sanitize to an empty file name. `displayTitle` is always derived from it.
@@ -59,6 +59,9 @@ Admins can edit metadata and delete releases or games; the Game detail admin act
   - A title change renames the ZIP (`roms/<system>/<letter>/<title>.zip`, with ` (2)`, ` (3)`, … if another game already has the name). The new ZIP is written and committed before the old one is deleted. A change that only differs in letter case keeps the existing file, because file names compare case-insensitively.
 - `DELETE /api/games/{id}/roms/{romId}` returns 204. It moves the ROM's bytes to `ingest/<system>/_removed/` (adding ` (2)`, … on a name clash), rebuilds the ZIP without it and recomputes the primary release. Removing the last release deletes the game.
 - `DELETE /api/games/{id}` returns 204. It moves every ROM to `_removed/`, then deletes the ZIP and the game's rows.
+- `POST /api/games/{id}/roms/{romId}/move` takes `{targetGameId}` (an existing game) or `{newGameTitle}` (a new game), and returns `{targetGameId}`. Both games' ZIPs are rebuilt with the primary release recomputed, and a game left without releases is deleted. A new game gets the metadata of the moved release's DAT entry and its own box art and snap lookup; an existing target's metadata and images stay as they are. If the source ZIP can't be rebuilt after the target was written, the target is put back.
+- `POST /api/games/{id}/merge` takes `{targetGameId}` and returns it. Every release of the source moves into the target in one write; then the database is updated and the source ZIP deleted. The target keeps its title, metadata and images, except that empty fields (year, developers, publishers, genres, description) are filled from the source, a default target box art is replaced by a real source box art, and the source snap is used only when the target has none.
+- Move and merge targets must be a different game in the same system (`400 ValidationFailed` otherwise); an unknown target is `404 NotFound`. A moved release keeps its file name (with ` (2)`, … on a clash) and its base title. Later releases with that base title therefore follow it when it is the only game holding the title; if the source still holds it too, later releases go to review as `AmbiguousGroup`.
 
 Removed ROMs are never hard-deleted, and ingestion ignores `_removed/`; move a file back into `ingest/<system>/` to re-ingest it. A ROM whose ZIP entry no longer matches its recorded SHA1 is still moved as it is; a listed entry that is absent from the ZIP has nothing to move and is skipped.
 
