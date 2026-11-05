@@ -15,4 +15,4 @@ If a spec turns out unclear or wrong while implementing, don't guess: ask, then 
 Every non-trivial class gets unit tests (NUnit `Assert.That`, NSubstitute). File tests use real temp dirs; database tests use Testcontainers (Docker must be running). `pwsh scripts/test-all.ps1` (the .NET build with warnings as errors, every test project, and the web app's lint, type check and tests) and `pwsh scripts/test-e2e.ps1` must pass before a PR is opened; CI runs the same jobs. See [docs/development.md](docs/development.md) for the setup.
 
 ## Doc rule
-The PR that implements or changes a behaviour updates the doc(s) it belongs to (spec §19). Spec changes go into the spec and its decisions log (§21).
+The PR that implements or changes a behaviour updates the doc(s) it belongs to (the MVP spec's §19 maps behaviours to docs). Spec changes go into the spec and its Decisions section.
