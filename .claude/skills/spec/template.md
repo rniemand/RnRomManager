@@ -2,7 +2,6 @@
 title: <Title>
 status: draft # draft | ready | in-progress | completed
 created: <YYYY-MM-DD>
-branch: dev/<slug>
 ---
 
 # <Title>

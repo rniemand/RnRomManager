@@ -11,7 +11,7 @@ Two modes, chosen from the arguments:
 - `implement <path>` (or the user pastes a spec's kickoff prompt) → **Implement**.
 - Anything else → **Create**, with the arguments as the request. No arguments: ask what to spec.
 
-Specs live in `specs/pending/` (reviewed, not started), `specs/current/` (in progress) and `specs/completed/`. One file per spec, named `YYYY-MM-DD-<slug>.md` (today's date, a 2–5 word kebab-case slug; add `-2`, `-3`… while the slug is already used by a file in any `specs/` folder on the current branch or `origin/main`, or by a `spec/<slug>` or `dev/<slug>` branch locally or on `origin`; `git fetch --prune` before checking). The slug is the file name without the date and `.md` (so it includes any `-2`), and it is the same everywhere: `branch: dev/<slug>`. A spec lives on its `dev/<slug>` branch from creation to its single PR: it reaches `main` only with its finished implementation, so an abandoned branch leaves `main` untouched. The frontmatter `status` tracks the folder: `draft` or `ready` in `pending/`, `in-progress` in `current/`, `completed` in `completed/`. Spec template: [template.md](template.md).
+Specs live in `specs/pending/` (reviewed, not started), `specs/current/` (in progress) and `specs/completed/`. One file per spec, named `YYYY-MM-DD-<slug>.md` (today's date, a 2–5 word kebab-case slug; add `-2`, `-3`… while the slug is already used by a file in any `specs/` folder on the current branch or `origin/main`, or by a `spec/<slug>` or `dev/<slug>` branch locally or on `origin`; `git fetch --prune` before checking). The slug is the file name without the date and `.md` (so it includes any `-2`), and it names the branch: `dev/<slug>`. A spec lives on its `dev/<slug>` branch from creation to its single PR: it reaches `main` only with its finished implementation, so an abandoned branch leaves `main` untouched. The frontmatter `status` tracks the folder: `draft` or `ready` in `pending/`, `in-progress` in `current/`, `completed` in `completed/`. Spec template: [template.md](template.md).
 
 Repo rules that apply to both modes are in `CONTRIBUTING.md` (test rule, doc rule) and `docs/development.md` (architecture, conventions). Read them once per session, not per step. Never commit secrets or dev passwords; GitGuardian scans every PR.
 
@@ -37,10 +37,10 @@ Keep the user's time and the token count low: read only what the request touches
 ## Implement
 
 1. **Find the spec and the state.** The argument may be a path or just the file name. The branch is `dev/<slug>` (the slug from the file name). Run `git fetch --prune` first (so branches deleted on GitHub don't count). All work happens on that branch; never commit spec work to `main`.
-   - Already in `specs/completed/` on `main`: say so and stop.
+   - Already in `specs/completed/` on `origin/main`: say so and stop.
    - No `dev/<slug>` locally or on `origin`: say so and stop (Create makes the branch).
-   - Otherwise: the working tree must be clean; if it isn't, tell the user what's uncommitted and stop. Switch to `dev/<slug>` (if it exists both locally and on `origin`, `git pull` it), then check `git log main..`.
-     - Spec in `specs/pending/` (start): `status` isn't `ready`: say so and stop. Otherwise `git mv` the spec to `specs/current/`, set `status: in-progress`, commit `Start spec: <title>`, and push.
+   - Otherwise: the working tree must be clean; if it isn't, tell the user what's uncommitted and stop. Switch to `dev/<slug>` (if it exists both locally and on `origin`, `git pull` it), then check `git log origin/main..`.
+     - Spec in `specs/pending/` (start): `status` isn't `ready`: say so and stop. Otherwise `git merge origin/main` (merge, not rebase: the branch is already pushed; if it conflicts, tell the user and stop), `git mv` the spec to `specs/current/`, set `status: in-progress`, commit `Start spec: <title>`, and push.
      - Spec in `specs/current/` (resume): work continues at the first unticked step. If the ticks don't match the commits, tell the user what you found and ask before doing anything.
      - Spec not found on the branch: say so and stop.
 2. **Read** the whole spec once, then the files the current step names.
@@ -52,7 +52,7 @@ Keep the user's time and the token count low: read only what the request touches
    5. Report in 2–4 lines (what changed, test result, anything surprising) and ask the user to continue, change something, or stop. If the user said to run all steps without stopping, continue unless a step fails or the spec turns out wrong.
 4. **Spec turns out wrong or unclear:** don't guess and don't silently match the spec to the code. Ask the user, update the spec section and § Decisions in the same commit as the code.
 5. **Finish**, after the last step:
-   1. `pwsh scripts/test-all.ps1` and `pwsh scripts/test-e2e.ps1` must both pass (Docker running). If one fails, fix it on the branch and rerun; never open the PR with failing tests.
+   1. `git merge origin/main` (resolve conflicts on the branch, asking the user when the right resolution isn't clear), then `pwsh scripts/test-all.ps1` and `pwsh scripts/test-e2e.ps1` must both pass (Docker running). If one fails, fix it on the branch and rerun; never open the PR with failing tests.
    2. Check the doc rule: every changed behaviour is in its doc (`docs/`, `README.md`, spec).
    3. `git mv` the spec to `specs/completed/`, set `status: completed`, commit `Complete spec: <title>`.
    4. Push and open a PR from `dev/<slug>` to `main` titled `<title>` — the branch's first and only PR, carrying the spec and its implementation together. The body is the spec's summary, the steps done, test results and anything deferred or risky. Stop there: merging is the maintainer's call.
