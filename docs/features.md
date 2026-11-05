@@ -102,3 +102,8 @@ The Admin pages arrive in S47.
 - `GET /api/about` (any signed-in user) returns `{version, licenses[]}`. Each licence entry is `{name, license, url}`, covering the app, libretro-database (CC BY-SA 4.0) and every direct NuGet and npm dependency. The list lives in `src/RnRomManager.Api/licenses.json`; a test fails when a dependency is added to `Directory.Packages.props` or `package.json` without an entry there.
 
 Every `/api` endpoint's required role (anonymous, any user, or Admin) is checked by a single table-driven test that fails when a new endpoint has no entry.
+
+## Web UI: sign in and change password
+
+- **Sign in** (`/login`): username and password. Any failure (unknown user, wrong password, locked or disabled account) shows the same "Invalid username or password." message; after 10 attempts a minute from one address the page asks you to wait. After signing in you return to the page you were sent from (`returnUrl`, same-site paths only), or to the Library.
+- **Change password** (`/change-password`, from the user menu): current password, new password and confirmation. The form shows the policy (12–128 characters, not your username) and checks it, and the confirmation, before sending. A user whose password must be changed (a new account, the first Admin, or after an Admin reset) is sent here and can't use other pages until it's done. Changing the password signs out your other sessions but keeps this one.
