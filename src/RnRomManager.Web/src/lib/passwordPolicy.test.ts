@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { policyHint, validateChangePassword } from './passwordPolicy';
+import { passwordError, policyHint, usernameError, validateChangePassword } from './passwordPolicy';
 import { fakePassword } from './testing/fakePassword';
 
 const next = fakePassword('next');
@@ -47,4 +47,19 @@ describe('change-password validation (§9.1)', () => {
 
 	it('the hint states the policy', () =>
 		expect(policyHint).toBe('12–128 characters, and not the same as your username.'));
+});
+
+describe('admin user rules', () => {
+	it('usernames: 3–64 of [A-Za-z0-9._-]', () => {
+		expect(usernameError('ab')).toBeDefined();
+		expect(usernameError('a'.repeat(65))).toBeDefined();
+		expect(usernameError('bad name')).toBeDefined();
+		expect(usernameError('j.doe_2-x')).toBeUndefined();
+	});
+
+	it('passwords: 12–128 chars and not the username', () => {
+		expect(passwordError('short', 'bob')).toBeDefined();
+		expect(passwordError('Abcdefghijkl', 'abcdefghijkl')).toBeDefined();
+		expect(passwordError(fakePassword('ok'), 'bob')).toBeUndefined();
+	});
 });

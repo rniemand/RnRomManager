@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateTime, formatKey, formatSize, formatValue } from './format';
+import { flattenSettings, formatDateTime, formatKey, formatSize, formatValue } from './format';
 
 // The number part follows the browser's locale, so expectations are built the same way.
 const oneDecimal = (n: number) =>
@@ -70,5 +70,23 @@ describe('header formatting', () => {
 		expect(formatValue(0)).toBe('0');
 		expect(formatValue('0x80')).toBe('0x80');
 		expect(formatValue({ a: 1 })).toBe('{"a":1}');
+	});
+});
+
+describe('flattenSettings', () => {
+	it('flattens nested objects to dotted keys and keeps arrays and nulls', () => {
+		expect(
+			flattenSettings({
+				connectionString: 'Server=db',
+				paths: { roms: '/app/roms' },
+				a: [1],
+				b: null
+			})
+		).toEqual([
+			['connectionString', 'Server=db'],
+			['paths.roms', '/app/roms'],
+			['a', [1]],
+			['b', null]
+		]);
 	});
 });
