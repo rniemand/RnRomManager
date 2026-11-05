@@ -9,7 +9,7 @@ public abstract class GameBoyHandlerBase : ISystemHandler
 
     private readonly Lazy<ReadOnlyMemory<byte>> _boxArt;
 
-    protected GameBoyHandlerBase() => _boxArt = new(() => LoadResource($"boxart.{Id}.png"));
+    protected GameBoyHandlerBase() => _boxArt = new(() => EmbeddedResources.Load($"boxart.{Id}.png"));
 
     public abstract string Id { get; }
     public abstract string DisplayName { get; }
@@ -26,13 +26,4 @@ public abstract class GameBoyHandlerBase : ISystemHandler
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => GameBoyHeaderReader.Read(rom);
-
-    private static ReadOnlyMemory<byte> LoadResource(string name)
-    {
-        using var stream = typeof(GameBoyHandlerBase).Assembly.GetManifestResourceStream($"RnRomManager.Systems.GameBoy.Resources.{name}")
-            ?? throw new InvalidOperationException($"Embedded resource {name} is missing.");
-        using var copy = new MemoryStream();
-        stream.CopyTo(copy);
-        return copy.ToArray();
-    }
 }

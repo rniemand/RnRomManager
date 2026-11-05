@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Game Boy Advance). Made for this project; MIT licensed like the rest of the repo.
+       Exported to gba.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#dde3f2"/>
+  <!-- landscape cartridge shell with the raised grip tab on top -->
+  <path d="M96 150 H200 Q208 150 212 142 L220 126 Q224 118 232 118 H280 Q288 118 292 126 L300 142 Q304 150 312 150 H416
+           Q432 150 432 166 V378 Q432 394 416 394 H96 Q80 394 80 378 V166 Q80 150 96 150 Z"
+        fill="#4b5a8f" stroke="#26305a" stroke-width="4"/>
+  <!-- grip ridges on the tab -->
+  <g stroke="#26305a" stroke-width="4" stroke-linecap="round" opacity="0.55">
+    <line x1="236" y1="132" x2="276" y2="132"/>
+    <line x1="230" y1="144" x2="282" y2="144"/>
+  </g>
+  <!-- label recess and label -->
+  <rect x="112" y="176" width="288" height="168" rx="10" fill="#26305a" opacity="0.35"/>
+  <rect x="122" y="186" width="268" height="148" rx="6" fill="#f8f9ff"/>
+  <text x="256" y="252" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="30" font-weight="700" fill="#26305a">GAME BOY</text>
+  <text x="256" y="292" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="30" font-weight="700" fill="#26305a">ADVANCE</text>
+  <!-- contacts -->
+  <rect x="152" y="362" width="208" height="18" rx="3" fill="#26305a" opacity="0.45"/>
+</svg>

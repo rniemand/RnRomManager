@@ -62,6 +62,7 @@ public class IngestPipelineTests
         var cache = _factory.Services.GetRequiredService<DatCache>();
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
+            [IngestSeeder.GbaDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },

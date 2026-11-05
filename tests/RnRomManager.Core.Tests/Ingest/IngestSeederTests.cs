@@ -24,7 +24,7 @@ public class IngestSeederTests
         Assert.That(files.All(f => File.GetLastWriteTimeUtc(f) == _time.GetUtcNow().AddMinutes(-1).UtcDateTime), Is.True);
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "gb", "01-orbit-world.gb")), Is.EqualTo(File.ReadAllBytes(Path.Combine(ingest, "gb", "90-duplicate.gb"))));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "gb", "04-color-garden.gbc"))[SyntheticRomBuilder.CgbFlagOffset], Is.EqualTo(0x80));
-        Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(10));
+        Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(15));
     }
 
     [Test]

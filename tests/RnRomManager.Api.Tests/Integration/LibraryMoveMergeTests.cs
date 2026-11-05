@@ -57,6 +57,7 @@ public class LibraryMoveMergeTests
         var cache = Service<DatCache>();
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
+            [IngestSeeder.GbaDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld) { ReleaseYear = 1989, Developers = ["Nintendo"] },

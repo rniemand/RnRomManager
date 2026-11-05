@@ -42,6 +42,7 @@ public class IngestReviewTests
         var cache = Service<DatCache>();
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
+            [IngestSeeder.GbaDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", bytes)],
             ["Nintendo - Game Boy Color"] = [],
         });
@@ -98,6 +99,7 @@ public class IngestReviewTests
         var cache = Service<DatCache>();
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
+            [IngestSeeder.GbaDat] = [],
             [Gb] = [new FixtureGame("Tetris Deluxe (World)", "Tetris Deluxe (World).gb", Known)],
             ["Nintendo - Game Boy Color"] = [],
         });

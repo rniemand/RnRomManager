@@ -37,6 +37,7 @@ public class LibraryEndpointsTests
         var cache = Service<DatCache>();
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
+            [IngestSeeder.GbaDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld) { ReleaseYear = 1989, Developers = ["Nintendo"], Genres = ["Puzzle"] },
@@ -112,7 +113,7 @@ public class LibraryEndpointsTests
 
         var systems = await GetJson("/api/systems");
 
-        Assert.That(systems.GetArrayLength(), Is.EqualTo(2));
+        Assert.That(systems.GetArrayLength(), Is.EqualTo(3));
         var gb = systems[0];
         Assert.That((gb.GetProperty("id").GetString(), gb.GetProperty("displayName").GetString()), Is.EqualTo(("gb", "Game Boy")));
         Assert.That((gb.GetProperty("gameCount").GetInt32(), gb.GetProperty("romCount").GetInt32()), Is.EqualTo((1, 2)));
@@ -120,6 +121,7 @@ public class LibraryEndpointsTests
         var gbc = systems[1];
         Assert.That((gbc.GetProperty("id").GetString(), gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()),
             Is.EqualTo(("gbc", 0, 0)));
+        Assert.That(systems[2].GetProperty("id").GetString(), Is.EqualTo("gba"));
     }
 
     [Test]

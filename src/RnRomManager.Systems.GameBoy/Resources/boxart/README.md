@@ -1,6 +1,6 @@
 # Default box art
 
-`gb.svg` / `gbc.svg` are the sources (made for this project, MIT). The embedded `gb.png` / `gbc.png` are
+`gb.svg` / `gbc.svg` / `gba.svg` are the sources (made for this project, MIT). The embedded `gb.png` / `gbc.png` / `gba.png` are
 512×512 renders of them (spec §6.1). After editing an SVG, re-export it with headless Edge or Chrome:
 
 ```bash
