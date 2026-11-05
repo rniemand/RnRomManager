@@ -479,7 +479,7 @@ Both modes also: list orphan files (anything that isn't a `.zip` in the library 
 | `DbRowInserted` / `DbRowUpdated` / `DbRowDeleted` | Info | yes → recorded as `AutoRepaired` |
 
 - **Fields:** see `integrity_issues` (§14.1).
-- **Dedup:** an open issue with the same (`type`, `zip_path`, `entry_name`) is updated (`last_seen_job_id`), not duplicated. An open issue not seen again in a `Completed` run of the same or deeper mode → `Resolved` (`Cancelled`/`Aborted` runs resolve nothing).
+- **Dedup:** an open issue with the same (`type`, `zip_path`, `entry_name`) is updated (`last_seen_job_id`), not duplicated. An open issue not seen again in a `Completed` run → `Resolved`, but only when that run actually performed the check (D48): a ZIP that a quick run didn't open (unchanged size + mtime) resolves only `WrongLocation`; `HashMismatch` needs a deep run; `OrphanFile`, `DuplicateGameId` and `DuplicateSha1` are re-checked by every run; a ZIP gone from disk resolves its issues. `Cancelled`/`Aborted` runs resolve nothing.
 - **DB auto-repair** (D10): game rows are replaced from `info.json` in one transaction. Rows whose ZIP is gone are deleted, unless the same `gameId` was found at another path (then `zip_path` is updated). File-side problems are reported only; the checker never moves or deletes library files. ZIPs with `ZipUnreadable` / `InfoJsonMissing` / `InfoJsonInvalid` / `InfoJsonNewerSchema` keep their existing DB rows unchanged.
 - **Self-repair:** `HashMismatch` / `EntryMissing` / `EntrySizeMismatch` can be fixed by ingesting a byte-identical copy (§7.2 step 3).
 - **Retention:** at the end of each integrity run, delete `jobs` (and their `job_items`) and non-`Open` issues older than **180 days**.
@@ -740,6 +740,7 @@ None. New questions found during implementation get added here.
 | D45 | 2026-11-04 | S29 owner decision: suggestions contain distinct base titles. For each title, retain the highest-scoring release after the size boost; break ties by ROM name. ROM-name ties use ordinal ascending order. |
 | D46 | 2026-11-04 | S30 owner decision: Hack/Translated attachments use the target game's title as baseTitle, empty regions/languages, null revision and only the selected flag. |
 | D47 | 2026-11-04 | S30 owner decision: synchronous resolution returns 409 for TargetZipUnreadable/InfoJsonNewerSchema and 500 for IoError/VerifyFailed/DbWriteFailed, preserving reason codes and keeping failures Pending. |
+| D48 | 2026-11-05 | S36 owner decision: an open integrity issue is resolved only by a completed run that actually performed that check on that ZIP (a quick run doesn't open unchanged ZIPs, so it can't clear their entry/info.json issues; `HashMismatch` needs deep). Replaces the literal "not seen in a run of the same or deeper mode" rule. |
 
 ## 22. Extensibility — `ISystemHandler`
 

@@ -35,6 +35,13 @@ public sealed class JobRepository(IDbConnectionFactory connections) : IJobReposi
         }, cancellationToken: cancellationToken));
     }
 
+    public async Task<int> PurgeAsync(DateTime cutoff, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM jobs WHERE started_at < @cutoff AND status <> 'Running'", new { cutoff }, cancellationToken: cancellationToken));
+    }
+
     public async Task FinishAsync(Guid id, JobStatus status, DateTime finishedAt, string? summary, string? error, CancellationToken cancellationToken)
     {
         const string sql = "UPDATE jobs SET status = @status, finished_at = @finishedAt, summary = @summary, error = @error WHERE id = @id";

@@ -1,23 +1,21 @@
 namespace RnRomManager.Core.Integrity;
 
-/// <summary><c>integrity_issues.type</c> values used so far (spec §12.2).</summary>
-public static class IntegrityIssueType
-{
-    public const string HashMismatch = "HashMismatch";
-    public const string EntryMissing = "EntryMissing";
-    public const string EntrySizeMismatch = "EntrySizeMismatch";
-
-    /// <summary>The issues ingesting a byte-identical copy can fix (§7.2 step 3, D30).</summary>
-    public static IReadOnlyList<string> SelfRepairable { get; } = [HashMismatch, EntryMissing, EntrySizeMismatch];
-}
-
-public sealed record OpenIssue(long Id, string Type);
-
-/// <summary><c>integrity_issues</c> (spec §14.1). Grows with the integrity checker (S36).</summary>
+/// <summary><c>integrity_issues</c> (spec §14.1, §12.2).</summary>
 public interface IIntegrityIssueRepository
 {
     /// <summary>Open issues of these types on one ZIP entry.</summary>
     Task<IReadOnlyList<OpenIssue>> ListOpenAsync(string zipPath, string entryName, IReadOnlyCollection<string> types, CancellationToken cancellationToken);
 
+    /// <summary>Every <c>Open</c> issue.</summary>
+    Task<IReadOnlyList<IntegrityIssue>> ListAllOpenAsync(CancellationToken cancellationToken);
+
+    Task<long> InsertAsync(IntegrityIssue issue, CancellationToken cancellationToken);
+
+    /// <summary>An open issue seen again: <c>last_seen_job_id</c> plus the latest severity, details and game.</summary>
+    Task TouchAsync(long id, Guid jobId, string severity, string? details, Guid? gameId, CancellationToken cancellationToken);
+
     Task ResolveAsync(IReadOnlyCollection<long> ids, DateTime resolvedAt, CancellationToken cancellationToken);
+
+    /// <summary>Retention (§12.2): deletes non-<c>Open</c> issues resolved (or, if never resolved, detected) before <paramref name="cutoff"/>.</summary>
+    Task<int> PurgeAsync(DateTime cutoff, CancellationToken cancellationToken);
 }

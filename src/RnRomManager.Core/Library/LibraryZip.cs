@@ -76,6 +76,9 @@ public sealed class LibraryZip : IDisposable
 
     public bool HasEntry(string fullName) => _archive.GetEntry(fullName) is not null;
 
+    /// <summary>The entry's uncompressed size from the central directory, or null when there's no such entry.</summary>
+    public long? EntryLength(string fullName) => _archive.GetEntry(fullName)?.Length;
+
     private static InfoJsonReadResult? ReadInfoJson(ZipArchive archive, InfoJsonReader reader)
     {
         var entry = archive.GetEntry(InfoJsonEntry);
