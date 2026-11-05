@@ -1,6 +1,6 @@
 # RnRomManager — Initial Application Spec
 
-> Status: **v0.11 — broken down into implementation steps in [initial-application-impl.md](initial-application-impl.md).** Seventh review done 2026-11-04 (consistency fixes only, D40); implementation decisions from D41 on. Confirmed decisions are listed in §21; open items in §20.
+> Status: **v1.0 — MVP live** (v0.1.0 deployed to the owner's host 2026-11-05). Built step by step from [initial-application-impl.md](initial-application-impl.md). Seventh review done 2026-11-04 (consistency fixes only, D40); implementation decisions from D41 on. Confirmed decisions are listed in §21; open items in §20.
 
 ## 1. Purpose
 
