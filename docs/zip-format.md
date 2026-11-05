@@ -132,4 +132,4 @@ A schema change bumps `schemaVersion`, adds an upgrader and adds a row here.
 | Version | App version | Changes |
 |---|---|---|
 | 1 | 0.1.0 | Initial format. |
-| 2 | next release after 0.1.0 | Adds `rating` (int?, null) and `favourite` (bool, false); the v1→v2 upgrader adds both with those defaults. App 0.1.0 treats a v2 file as `InfoJsonNewerSchema` (read-only). |
+| 2 | 0.2.0 | Adds `rating` (int?, null) and `favourite` (bool, false); the v1→v2 upgrader adds both with those defaults. App 0.1.0 treats a v2 file as `InfoJsonNewerSchema` (read-only). |
