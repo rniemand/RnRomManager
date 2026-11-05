@@ -1,6 +1,6 @@
 # Features
 
-Implementation is in progress; this guide covers the ingestion review behaviour implemented through S30, the library read API from S32, the library edits from S33–S34 and media retry from S35.
+Implementation is in progress; this guide covers the ingestion review behaviour implemented through S30, the library read API from S32, the library edits from S33–S34, media retry from S35 and the integrity checker from S36.
 
 ## Ingestion review queue
 
@@ -74,3 +74,15 @@ Thumbnails come from libretro-thumbnails, looked up by the primary release's DAT
 - `POST /api/games/{id}/media/retry` (Game detail, S43) re-runs the lookup for one game whose box art is the default or missing, or which has no snap, and returns the game. A found box art replaces only a default one, and a missing box art gets at least the default. A found snap is added only when the game has none. The game is rewritten only when something changed; finding nothing still returns 200 with the game unchanged. Errors are the same as for the other library edits.
 - `POST /api/jobs/media-retry` (Integrity page, S46) starts a `MediaRetry` job and returns `202 {jobId}`. It runs the same lookup for every game with the default box art, no box art or no snap, ordered by title. Games where every release is Manual are skipped. Per-game errors are logged and the job continues. The summary is `{updated, notFound, skipped, error}`; there are no job items.
 - After 3 consecutive network failures (timeouts, connection errors, or 5xx/408 after retries; a 404 doesn't count), the job stops and ends `Failed` with the error `thumbnail host unreachable`. Games already updated keep their new media.
+
+## Integrity checker
+
+The `Integrity` job checks the library against its `info.json` files and the database. Starting it from the API and the daily schedule arrive in S37, and the Integrity page in S46. It takes the global job lock and never moves or deletes library files.
+
+1. **Database repair.** Each ZIP's database rows are replaced from its `info.json`; rows whose ZIP is gone are deleted unless the same game id turned up at another path. Every repair is recorded as an `AutoRepaired` issue (`DbRowInserted`, `DbRowUpdated`, `DbRowDeleted`). ZIPs with a duplicate game id, or with a ROM another game already holds, keep their existing rows and are reported as `DuplicateGameId` / `DuplicateSha1`.
+2. **Scan.** Every file directly in `roms/`, everything under a folder that isn't a registered system, and every non-ZIP file (including stale `*.zip.tmp`) under a system folder is an `OrphanFile`; these are never opened. Every `.zip` under a system folder is checked.
+3. **Per ZIP.** Quick mode opens a ZIP only when its size or whole-second modification time differs from its database row; otherwise it checks only the location. Deep mode opens every ZIP and also recomputes the SHA1 of every ROM and image entry (`HashMismatch`). An opened ZIP is checked for `ZipUnreadable`, `InfoJsonMissing` / `InfoJsonInvalid` / `InfoJsonNewerSchema`, `EntryMissing`, `EntrySizeMismatch`, `EntryUnlisted`, `MissingBoxArt` and `DefaultBoxArt` (Info). Every ZIP is checked for `WrongLocation`: system folder, letter folder and file name must match its title (case-insensitively; a ` (2)`-style clash suffix is accepted).
+
+An issue found again updates the open issue with the same type, path and entry rather than adding a new one. A completed run resolves an open issue it didn't find again, but only if it actually performed that check: a quick run can't clear entry or `info.json` problems on a ZIP it didn't open, and only a deep run clears `HashMismatch`. Orphans and duplicates are re-checked by every run, and an issue on a ZIP that no longer exists is resolved. A cancelled run records what it found but resolves nothing.
+
+At the end of each completed run, jobs started more than 180 days ago (with their items) and resolved or auto-repaired issues older than 180 days are deleted. The job summary holds `zips`, `opened`, `issues`, `newIssues`, `resolved`, `repaired`, `purgedJobs` and `purgedIssues`.

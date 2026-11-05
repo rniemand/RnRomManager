@@ -52,6 +52,12 @@ public sealed class GameRepository : IGameRepository
             new CommandDefinition($"{Select} WHERE id = @id", new { id }, cancellationToken: cancellationToken));
     }
 
+    public async Task<IReadOnlyList<GameRow>> ListAllAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<GameRow>(new CommandDefinition(Select, cancellationToken: cancellationToken))).AsList();
+    }
+
     public async Task<IReadOnlyList<GameSyncState>> ListSyncStateAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();

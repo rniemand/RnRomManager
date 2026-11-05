@@ -16,6 +16,9 @@ public interface IJobRepository
     /// <summary>Marks every <c>Running</c> row <c>Aborted</c> (§7.4).</summary>
     /// <returns>The ids it aborted.</returns>
     Task<IReadOnlyList<Guid>> AbortRunningAsync(DateTime finishedAt, CancellationToken cancellationToken);
+
+    /// <summary>Retention (§12.2): deletes finished jobs started before <paramref name="cutoff"/> (their items cascade).</summary>
+    Task<int> PurgeAsync(DateTime cutoff, CancellationToken cancellationToken);
 }
 
 public interface IJobItemRepository
