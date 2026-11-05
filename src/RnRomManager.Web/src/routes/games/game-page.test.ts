@@ -44,6 +44,8 @@ function game(romIds: number[]): GameDetail {
 		genres: [],
 		description: null,
 		hasDefaultBoxArt: false,
+		rating: null,
+		favourite: false,
 		metadata: { createdAt: '', updatedAt: '' },
 		roms: romIds.map((id, i) => rom(id, `Tetris ${id}.gb`, i === 0)),
 		images: [{ id: 9, type: 'BoxArt', isDefault: false, width: 512, height: 512, url: '/img/9' }]

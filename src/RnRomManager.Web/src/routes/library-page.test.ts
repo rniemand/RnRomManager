@@ -32,7 +32,10 @@ const games = {
 			releaseYear: 1992,
 			regions: ['USA'],
 			romCount: 1,
-			boxArtUrl: '/api/games/g1/images/7'
+			boxArtUrl: '/api/games/g1/images/7',
+			systemName: 'Game Boy',
+			rating: null,
+			favourite: false
 		}
 	],
 	page: 1,

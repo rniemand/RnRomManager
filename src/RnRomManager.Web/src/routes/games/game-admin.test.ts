@@ -56,6 +56,8 @@ const game = (romIds: number[]) => ({
 	genres: [],
 	description: null,
 	hasDefaultBoxArt: false,
+	rating: null,
+	favourite: false,
 	metadata: { createdAt: '', updatedAt: '' },
 	roms: romIds.map(rom),
 	images: []

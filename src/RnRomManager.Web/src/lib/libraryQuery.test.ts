@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { gamesApiUrl, parseFilters, toSearch, type LibraryFilters } from './libraryQuery';
+import {
+	gamesApiUrl,
+	hasFilters,
+	parseFilters,
+	toSearch,
+	type LibraryFilters
+} from './libraryQuery';
 
 const parse = (search: string) => parseFilters(new URLSearchParams(search));
 
@@ -13,6 +19,7 @@ describe('library filters ↔ URL', () => {
 			q: '',
 			sort: 'title',
 			dir: null,
+			favourite: false,
 			page: 1
 		});
 		expect(toSearch(filters)).toBe('');
@@ -26,6 +33,7 @@ describe('library filters ↔ URL', () => {
 			q: 'zelda & co',
 			sort: 'year',
 			dir: 'desc',
+			favourite: true,
 			page: 3
 		};
 		const search = toSearch(filters);
@@ -40,8 +48,25 @@ describe('library filters ↔ URL', () => {
 		expect(toSearch({ ...parse(''), sort: 'added', dir: 'asc' })).toBe('?sort=added&dir=asc');
 	});
 
+	it('rating sort defaults to desc; favourite round trips', () => {
+		expect(parse('sort=rating').dir).toBeNull();
+		expect(toSearch({ ...parse(''), sort: 'rating', dir: 'desc' })).toBe('?sort=rating');
+		expect(toSearch({ ...parse(''), sort: 'rating', dir: 'asc' })).toBe('?sort=rating&dir=asc');
+		expect(parse('sort=rating&favourite=true')).toMatchObject({ sort: 'rating', favourite: true });
+		expect(gamesApiUrl(parse('favourite=true&sort=rating'))).toBe(
+			'/api/games?sort=rating&favourite=true&pageSize=48'
+		);
+	});
+
+	it('hasFilters counts favourite, not the rating sort', () => {
+		expect(hasFilters(parse('favourite=true'))).toBe(true);
+		expect(hasFilters(parse('sort=rating'))).toBe(false);
+	});
+
 	it('bad or stale values fall back to defaults', () => {
-		expect(parse('letter=ab&sort=size&dir=up&page=-2&system=&q=%20a%20')).toEqual(parse(''));
+		expect(parse('letter=ab&sort=size&dir=up&page=-2&system=&q=%20a%20&favourite=True')).toEqual(
+			parse('')
+		);
 		expect(parse('letter=m&page=2.5').letter).toBe('M');
 		expect(parse('page=2.5').page).toBe(1);
 	});

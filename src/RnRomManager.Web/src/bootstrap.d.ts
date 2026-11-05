@@ -9,6 +9,18 @@ declare module 'bootstrap/dist/js/bootstrap.bundle.min.js' {
 		hide(): void;
 		dispose(): void;
 	}
-	const bootstrap: { Modal: typeof Modal };
+	export class Tooltip {
+		constructor(
+			element: Element,
+			options?: {
+				title?: string;
+				placement?: 'top' | 'bottom' | 'left' | 'right';
+				trigger?: string;
+			}
+		);
+		setContent(content: Record<string, string>): void;
+		dispose(): void;
+	}
+	const bootstrap: { Modal: typeof Modal; Tooltip: typeof Tooltip };
 	export default bootstrap;
 }
