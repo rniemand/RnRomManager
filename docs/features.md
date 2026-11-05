@@ -1,6 +1,6 @@
 # Features
 
-RnRomManager keeps a personal backup collection of Game Boy and Game Boy Color ROMs. You drop files into an ingest folder; ingestion identifies each one against the No-Intro DATs, names it, groups it with the game's other releases, fetches box art and stores it as one ZIP per game. Everyone can browse and download; Admins run ingestion, resolve files it couldn't identify, edit the library and keep it healthy.
+RnRomManager keeps a personal backup collection of Game Boy, Game Boy Color and Game Boy Advance ROMs. You drop files into an ingest folder; ingestion identifies each one against the No-Intro DATs, names it, groups it with the game's other releases, fetches box art and stores it as one ZIP per game. Everyone can browse and download; Admins run ingestion, resolve files it couldn't identify, edit the library and keep it healthy.
 
 ## Roles
 
@@ -50,9 +50,9 @@ Edits and jobs take turns: while a job runs, an edit shows "Another job is runni
 
 ## Ingestion
 
-`/ingestion` (Admin) lists the files waiting in each system's ingest folder (`ingest/gb/`, `ingest/gbc/`) with size and time.
+`/ingestion` (Admin) lists the files waiting in each system's ingest folder (`ingest/gb/`, `ingest/gbc/`, `ingest/gba/`) with size and time.
 
-- Drop `.gb`/`.gbc` files, or `.zip`/`.7z` archives of them, into either folder: the cartridge header decides whether a game is stored as Game Boy or Game Boy Color. Subfolders, hidden files and files changed in the last 10 seconds are left for the next run.
+- Drop `.gb`/`.gbc` files, or `.zip`/`.7z` archives of them, into either of those two folders: the cartridge header decides whether a game is stored as Game Boy or Game Boy Color. Drop `.gba` files (or archives of them) into `ingest/gba/`. Game Boy and Game Boy Advance are separate families, so a `.gba` file in a GB folder (or a `.gb`/`.gbc` file in `ingest/gba/`) fails as `UnsupportedType`. Size limits: 336 bytes–16 MiB for GB/GBC, 192 bytes–32 MiB for GBA. Subfolders, hidden files and files changed in the last 10 seconds are left for the next run.
 - **Start ingestion** runs through every waiting file, showing progress and the current file; **Cancel** stops after the current item (a whole archive is finished first). Ingestion needs the DATs: until they've been downloaded the page shows a link to **Admin → DATs** instead of Start.
 - **Last runs** lists the 10 most recent runs with their outcome counts; open one for the details.
 

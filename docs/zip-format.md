@@ -12,6 +12,7 @@ roms/
       Tetris.zip
       Legend of Zelda, The - Link's Awakening.zip     (in L/)
   gbc/                  GBC-only and dual-mode carts
+  gba/                  Game Boy Advance
 ```
 
 Inside a game's ZIP:
@@ -66,7 +67,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 |---|---|---|---|
 | `schemaVersion` | int | ✓ | `2` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
 | `releaseYear` | int? | | from the DAT metadata |
@@ -104,6 +105,8 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 | `metadata.sourcePath` | string | ✓ | ingest path at ingestion (the archive's path for an archive entry) |
 
 Game Boy / Game Boy Color `header`: `title`, `manufacturerCode`, `cgbFlag` and `sgbFlag` (hex strings), `cartridgeType`, `romSizeBytes` (null if the header can't express it), `ramSizeBytes`, `destination` (`Japan` or `Overseas`), `licensee`, `version`, `logoValid`, `headerChecksumValid`, `globalChecksumValid`, `sizeMatchesHeader`, `isMbc1Multicart`.
+
+Game Boy Advance `header`: `title` (12 chars at 0xA0), `gameCode` (4 chars at 0xAC, null unless A–Z/0–9), `destination` (from the game code's 4th char: `Japan`, `USA`, `Europe`, `Germany`, `France`, `Italy`, `Spain`, `Netherlands`, `Korea` or `Unknown (X)`), `makerCode` (2 chars at 0xB0, null unless A–Z/0–9), `maker` (the GB new-licensee name, or `Unknown (0xHHHH)`), `unitCode` and `deviceType` (hex strings), `version`, `fixedValueValid` (0xB2 is 0x96), `logoValid`, `headerChecksumValid` (the 0xBD complement check), `romSizeBytes` (the file length; GBA headers store no size).
 
 ### Image
 

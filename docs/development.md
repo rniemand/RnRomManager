@@ -18,9 +18,9 @@ One container: the API serves the built SPA from `wwwroot` and everything under 
 | `src/RnRomManager.Api` | hosting and the startup sequence (`StartupRunner`), minimal-API endpoints per area (`Endpoints/<Area>Endpoints.cs`), auth, security headers, the job runner and scheduler, the `--healthcheck` / `--reset-password` CLI modes |
 | `src/RnRomManager.Core` | domain and services: ingestion, review, library edits, integrity, DAT parsing, naming, `info.json`, ZIP reader/writer, the `ISystemHandler` contract; repository interfaces |
 | `src/RnRomManager.Data` | Dapper repositories (one per table) and the DbUp migrations (embedded `.sql`) |
-| `src/RnRomManager.Systems.GameBoy` | the `gb` and `gbc` handlers: header reader, lookup tables, default box art |
+| `src/RnRomManager.Systems.GameBoy` | the `gb`, `gbc` and `gba` handlers: header readers, lookup tables, default box art |
 | `src/RnRomManager.Web` | the SvelteKit SPA (see below) |
-| `tests/RnRomManager.TestData` | synthetic ROM builder, fixture DAT writer and the seed CLI (also a library for the test projects) |
+| `tests/RnRomManager.TestData` | synthetic GB and GBA ROM builders, fixture DAT writer and the seed CLI (also a library for the test projects) |
 | `tests/*.Tests` | NUnit + NSubstitute; database tests use Testcontainers (`[Category("Integration")]`) |
 | `tests/e2e` | Playwright + axe against the real image |
 
@@ -56,14 +56,14 @@ Both sets use deterministic builder seeds and fixture DAT version `fixture-1`. Z
 
 | Set | Library after first ingest | Outcomes on an empty library |
 |---|---|---|
-| Basic | 5 games, 7 releases (3 GB games, 2 GBC games) | Ingested 7, Duplicate 1, Review 1, Failed 1; all others 0 |
-| Full | 205 games, 207 releases | Ingested 207, Duplicate 1, Review 1, Failed 1; all others 0 |
+| Basic | 6 games, 8 releases (3 GB games, 2 GBC games, 1 GBA game) | Ingested 8, Duplicate 1, Review 1, Failed 1; all others 0 |
+| Full | 206 games, 208 releases | Ingested 208, Duplicate 1, Review 1, Failed 1; all others 0 |
 
-Basic contains Orbit Blocks (World, Japan, World Rev 1), Quest, The (USA, Europe), Seven Zip Demo (World), Color Garden (World, dual-mode) and Color Racer (USA, GBC-only). Quest is in a ZIP and Seven Zip Demo in the 7z. Color Garden is deliberately dropped in `ingest/gb/`. A byte-identical Orbit Blocks copy tests deduplication; a plausible unmatched file tests review suggestions; another file has both invalid logo and header checksum. Full adds 200 generated games, split evenly between GB and GBC.
+Basic contains Orbit Blocks (World, Japan, World Rev 1), Quest, The (USA, Europe), Seven Zip Demo (World), Color Garden (World, dual-mode) and Color Racer (USA, GBC-only) and Star Courier (USA, GBA, loose in `ingest/gba/`). Quest is in a ZIP and Seven Zip Demo in the 7z. Color Garden is deliberately dropped in `ingest/gb/`. A byte-identical Orbit Blocks copy tests deduplication; a plausible unmatched file tests review suggestions; another file has both invalid logo and header checksum. Full adds 200 generated games, split evenly between GB and GBC.
 
 For a manual run (§15.4): seed, `start-dev.ps1`, sign in as an Admin, Ingestion → Start, and check the run's summary against the table. Set `Sources__ThumbnailBaseUrl` to an empty string for an offline test using default art. Generated library ZIPs are under `.dev/roms`; the unmatched file shows in the Review queue and stays in ingest, and duplicate/invalid files move to their side folders.
 
-The `SeedIngestTests` API integration tests seed both sets, let startup load the fixture DATs, start ingestion through the authenticated endpoint, and verify counts, grouping, primary revision, article display, GBC classification, review suggestions and default art. Standard checks run with `pwsh scripts/test-all.ps1` (Docker required).
+The `SeedIngestTests` API integration tests seed both sets, let startup load the fixture DATs, start ingestion through the authenticated endpoint, and verify counts, grouping, primary revision, article display, GBC classification, the GBA game and its header, review suggestions and default art. Standard checks run with `pwsh scripts/test-all.ps1` (Docker required).
 
 ## End-to-end tests
 
