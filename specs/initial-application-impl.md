@@ -102,7 +102,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S42 | UI: Game detail (read + download) | #42 |
 | [x] | S43 | UI: Game detail admin actions | #43 |
 | [x] | S44 | UI: Ingestion + Job detail | #44 |
-| [ ] | S45 | UI: Review queue | |
+| [x] | S45 | UI: Review queue | #45 |
 | [ ] | S46 | UI: Integrity page | |
 | [ ] | S47 | UI: Admin pages | |
 | [ ] | S48 | Dev scripts complete (`setup-dev`, `start-dev`) | |
