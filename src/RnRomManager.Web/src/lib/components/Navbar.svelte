@@ -10,9 +10,11 @@
 		/** Pending review items (Admin); null until loaded. */
 		reviewCount: number | null;
 		onlogout: () => void;
+		/** Opens the global search; the button is hidden while the password must be changed. */
+		onsearch?: () => void;
 	}
 
-	let { me, reviewCount, onlogout }: Props = $props();
+	let { me, reviewCount, onlogout, onsearch }: Props = $props();
 
 	// Pages arrive in later steps (S41–S47); unknown ones show "Page not found" until then.
 	const links = $derived(
@@ -73,6 +75,18 @@
 				{/each}
 			</ul>
 			<ul class="navbar-nav align-items-lg-center">
+				{#if onsearch && !me.mustChangePassword}
+					<li class="nav-item">
+						<button
+							type="button"
+							class="btn btn-link nav-link d-flex align-items-center gap-1"
+							onclick={onsearch}
+						>
+							<Icon name="search" /> Search
+							<kbd class="d-none d-lg-inline small ms-1" aria-hidden="true">Ctrl K</kbd>
+						</button>
+					</li>
+				{/if}
 				<li class="nav-item"><ThemeToggle /></li>
 				<li class="nav-item dropdown">
 					<button

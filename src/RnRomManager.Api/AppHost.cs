@@ -90,6 +90,7 @@ public static class AppHost
         builder.Services.AddSingleton<IRomRepository, RomRepository>();
         builder.Services.AddSingleton<IImageRepository, ImageRepository>();
         builder.Services.AddSingleton<ILibraryMirror, LibraryMirror>();
+        builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV1>();
         builder.Services.AddSingleton<InfoJsonReader>();
         builder.Services.AddSingleton<DbSync>();
         builder.Services.AddSingleton<LibraryFiles>();

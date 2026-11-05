@@ -32,6 +32,7 @@ public sealed class GameRepository : IGameRepository
         SELECT id AS Id, system_id AS SystemId, title AS Title, display_title AS DisplayTitle, zip_path AS ZipPath,
                bucket AS Bucket, release_year AS ReleaseYear, developers AS Developers, publishers AS Publishers,
                genres AS Genres, description AS Description, has_default_boxart AS HasDefaultBoxArt,
+               rating AS Rating, favourite AS Favourite,
                zip_size_bytes AS ZipSizeBytes, zip_mtime_utc AS ZipMtimeUtc, info_schema_version AS InfoSchemaVersion,
                created_at AS CreatedAt, updated_at AS UpdatedAt
         FROM games
@@ -75,8 +76,11 @@ public sealed class GameRepository : IGameRepository
             where.Add("g.bucket = @letter");
         if (query.Region is not null)
             where.Add("EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND r.region_key LIKE @region)");
-        if (query.Search is not null)
-            where.Add("(g.display_title LIKE @search OR g.title LIKE @search)");
+        var words = query.Words;
+        for (var i = 0; i < words.Count; i++)
+            where.Add($"(g.display_title LIKE @w{i} OR g.title LIKE @w{i})");
+        if (query.Favourite is not null)
+            where.Add("g.favourite = @favourite");
         var filter = where.Count == 0 ? "" : "WHERE " + string.Join(" AND ", where);
 
         // Fixed SQL fragments only; nothing user-supplied is spliced in.
@@ -85,18 +89,27 @@ public sealed class GameRepository : IGameRepository
         {
             GameSort.Year => $"g.release_year IS NULL, g.release_year {dir}, g.id",
             GameSort.Added => $"g.created_at {dir}, g.id",
+            GameSort.Rating => $"g.rating IS NULL, g.rating {dir}, g.title, g.id",
+            GameSort.Relevance when query.Phrase is not null =>
+                "CASE WHEN g.display_title = @phrase OR g.title = @phrase THEN 0 " +
+                "WHEN g.display_title LIKE @prefix OR g.title LIKE @prefix THEN 1 ELSE 2 END, g.title, g.id",
+            GameSort.Relevance => "g.title, g.id",
             _ => $"g.title {dir}, g.id",
         };
 
-        var args = new
+        var args = new DynamicParameters(new
         {
             system = query.System,
             letter = query.Letter,
             region = query.Region is null ? null : SqlLike.Contains("|" + query.Region + "|"),
-            search = query.Search is null ? null : SqlLike.Contains(query.Search),
+            favourite = query.Favourite,
+            phrase = query.Phrase,
+            prefix = query.Phrase is null ? null : SqlLike.Escape(query.Phrase) + "%",
             pageSize = query.PageSize,
             offset = (long)(query.Page - 1) * query.PageSize,
-        };
+        });
+        for (var i = 0; i < words.Count; i++)
+            args.Add($"w{i}", SqlLike.Contains(words[i]));
 
         await using var connection = _connections.Create();
         var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
@@ -105,14 +118,16 @@ public sealed class GameRepository : IGameRepository
             SELECT g.id AS Id, g.system_id AS SystemId, g.display_title AS DisplayTitle, g.release_year AS ReleaseYear,
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount,
                    (SELECT GROUP_CONCAT(r.region_key SEPARATOR '') FROM roms r WHERE r.game_id = g.id) AS RegionKeys,
-                   (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.type = 'BoxArt') AS BoxArtImageId
+                   (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.type = 'BoxArt') AS BoxArtImageId,
+                   g.rating AS Rating, g.favourite AS Favourite
             FROM games g {filter}
             ORDER BY {order}
             LIMIT @pageSize OFFSET @offset
             """, args, cancellationToken: cancellationToken));
 
         var items = rows.Select(r => new GameListItem(
-            r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId)).ToList();
+            r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId,
+            r.Rating, r.Favourite)).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, total);
     }
 
@@ -158,6 +173,8 @@ public sealed class GameRepository : IGameRepository
         public long RomCount { get; init; }
         public string? RegionKeys { get; init; }
         public long? BoxArtImageId { get; init; }
+        public int? Rating { get; init; }
+        public bool Favourite { get; init; }
     }
 }
 
@@ -275,10 +292,10 @@ public sealed class LibraryMirror : ILibraryMirror
         {
             await connection.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO games (id, system_id, title, display_title, zip_path, bucket, release_year, developers, publishers,
-                                   genres, description, has_default_boxart, zip_size_bytes, zip_mtime_utc, info_schema_version,
+                                   genres, description, has_default_boxart, rating, favourite, zip_size_bytes, zip_mtime_utc, info_schema_version,
                                    created_at, updated_at)
                 VALUES (@Id, @SystemId, @Title, @DisplayTitle, @ZipPath, @Bucket, @ReleaseYear, @Developers, @Publishers,
-                        @Genres, @Description, @HasDefaultBoxArt, @ZipSizeBytes, @ZipMtimeUtc, @InfoSchemaVersion,
+                        @Genres, @Description, @HasDefaultBoxArt, @Rating, @Favourite, @ZipSizeBytes, @ZipMtimeUtc, @InfoSchemaVersion,
                         @CreatedAt, @UpdatedAt)
                 """, game, transaction, cancellationToken: cancellationToken));
 

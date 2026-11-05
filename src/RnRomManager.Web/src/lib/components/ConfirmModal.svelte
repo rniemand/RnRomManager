@@ -11,6 +11,8 @@
 		/** `btn-danger` for destructive actions. */
 		confirmClass?: string;
 		busy?: boolean;
+		/** `lg` for a wide form (Edit metadata); default width otherwise. */
+		size?: 'lg';
 		onconfirm: () => void;
 		children?: Snippet;
 	}
@@ -21,6 +23,7 @@
 		confirmLabel = 'Confirm',
 		confirmClass = 'btn-primary',
 		busy = false,
+		size,
 		onconfirm,
 		children
 	}: Props = $props();
@@ -51,7 +54,7 @@
 	aria-labelledby="{id}-title"
 	aria-hidden="true"
 >
-	<div class="modal-dialog modal-dialog-centered">
+	<div class="modal-dialog modal-dialog-centered" class:modal-lg={size === 'lg'}>
 		<div class="modal-content">
 			<div class="modal-header">
 				<h2 class="modal-title fs-5" id="{id}-title">{title}</h2>

@@ -43,6 +43,8 @@ public static class TestLibrary
         Publishers = [],
         Genres = [],
         Description = null,
+        Rating = null,
+        Favourite = false,
         Roms = roms,
         Images = [],
         Metadata = new InfoJsonGameMetadata(When, When, "0.1.0"),

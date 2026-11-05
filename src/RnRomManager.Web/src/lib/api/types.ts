@@ -44,6 +44,11 @@ export interface GameListItem {
 	regions: string[];
 	romCount: number;
 	boxArtUrl: string | null;
+	/** The handler's display name, or the id when it isn't registered. */
+	systemName: string;
+	/** 1–5; null = not rated. Shared per game. */
+	rating: number | null;
+	favourite: boolean;
 }
 
 /** One release of `GET /api/games/{id}` (spec §23, §6.2 Rom fields flattened). */
@@ -93,6 +98,8 @@ export interface GameDetail {
 	genres: string[];
 	description: string | null;
 	hasDefaultBoxArt: boolean;
+	rating: number | null;
+	favourite: boolean;
 	metadata: { createdAt: string; updatedAt: string };
 	roms: RomDetail[];
 	images: ImageInfo[];

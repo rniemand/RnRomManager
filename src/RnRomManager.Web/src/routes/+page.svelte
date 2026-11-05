@@ -9,6 +9,7 @@
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
+	import RatingControl from '#lib/components/RatingControl.svelte';
 	import {
 		defaultDir,
 		gamesApiUrl,
@@ -22,6 +23,7 @@
 		type LibrarySort
 	} from '#lib/libraryQuery.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
+	import { tooltip } from '#lib/tooltip.js';
 
 	type View = 'grid' | 'list';
 	const viewKey = 'libraryView';
@@ -59,7 +61,6 @@
 			? (systems.find((s) => s.id === filters.system)?.regions ?? [])
 			: [...new Set(systems.flatMap((s) => s.regions))].sort()
 	);
-	const systemNames = $derived(new Map(systems.map((s) => [s.id, s.displayName])));
 	const pages = $derived(result ? Math.max(1, Math.ceil(result.total / libraryPageSize)) : 1);
 	const dir = $derived(filters.dir ?? defaultDir(filters.sort));
 
@@ -117,7 +118,7 @@
 <h1 class="h3 mb-3"><Icon name="library" /> Library</h1>
 
 <form class="row g-2 align-items-end mb-3" role="search" onsubmit={(e) => e.preventDefault()}>
-	<div class="col-12 col-md-4 col-lg-3">
+	<div class="col-12 col-md-4 col-lg-2">
 		<label class="form-label" for="q">Search</label>
 		<input
 			id="q"
@@ -186,6 +187,7 @@
 				<option value="title">Title</option>
 				<option value="year">Year</option>
 				<option value="added">Date added</option>
+				<option value="rating">Rating</option>
 			</select>
 			<button
 				type="button"
@@ -199,7 +201,16 @@
 			</button>
 		</div>
 	</div>
-	<div class="col-12 col-md-4 col-lg-1 d-flex justify-content-md-end">
+	<div class="col-12 col-md-4 col-lg-2 d-flex gap-2 justify-content-md-end">
+		<button
+			type="button"
+			class="btn btn-outline-secondary"
+			class:active={filters.favourite}
+			aria-pressed={filters.favourite}
+			aria-label="Favourites"
+			onclick={() => update({ favourite: !filters.favourite })}
+			><Icon name={filters.favourite ? 'favourite-fill' : 'favourite'} /></button
+		>
 		<div class="btn-group" role="group" aria-label="View">
 			<button
 				type="button"
@@ -258,28 +269,46 @@
 		<div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6 g-3">
 			{#each result.items as game (game.id)}
 				<div class="col">
-					<a class="card h-100 text-decoration-none" href={resolve('/games/[id]', { id: game.id })}>
-						{#if game.boxArtUrl}
-							<img
-								class="card-img-top"
-								src={game.boxArtUrl}
-								alt="{game.displayTitle} box art"
-								loading="lazy"
-							/>
-						{:else}
+					<div class="card h-100">
+						<div class="position-relative">
 							<div class="card-img-top ratio ratio-1x1 bg-body-secondary">
-								<div class="d-flex align-items-center justify-content-center">
-									<Icon name="system-{game.system}" class="fs-1" />
-								</div>
+								{#if game.boxArtUrl}
+									<img
+										class="object-fit-contain"
+										src={game.boxArtUrl}
+										alt="{game.displayTitle} box art"
+										loading="lazy"
+									/>
+								{:else}
+									<div class="d-flex align-items-center justify-content-center">
+										<Icon name="system-{game.system}" class="fs-1" />
+									</div>
+								{/if}
 							</div>
-						{/if}
+							<span class="badge text-bg-dark position-absolute top-0 start-0 m-1">
+								<span aria-hidden="true">{game.system.toUpperCase()}</span>
+								<span class="visually-hidden">{game.systemName}</span>
+							</span>
+						</div>
 						<div class="card-body p-2">
-							<div class="small fw-semibold">{game.displayTitle}</div>
-							<div class="small text-body-secondary">
+							<a
+								class="d-block small fw-semibold text-truncate text-decoration-none stretched-link"
+								href={resolve('/games/[id]', { id: game.id })}
+								use:tooltip={game.displayTitle}>{game.displayTitle}</a
+							>
+							<div class="small text-body-secondary text-truncate">
 								{[game.releaseYear, game.regions.join(', ')].filter(Boolean).join(' · ')}
 							</div>
+							<div class="position-relative z-2 mt-1">
+								<RatingControl
+									gameId={game.id}
+									title={game.displayTitle}
+									bind:rating={game.rating}
+									bind:favourite={game.favourite}
+								/>
+							</div>
 						</div>
-					</a>
+					</div>
 				</div>
 			{/each}
 		</div>
@@ -292,6 +321,7 @@
 						<th scope="col">System</th>
 						<th scope="col">Year</th>
 						<th scope="col">Regions</th>
+						<th scope="col">Rating</th>
 						<th scope="col" class="text-end">Releases</th>
 					</tr>
 				</thead>
@@ -299,9 +329,17 @@
 					{#each result.items as game (game.id)}
 						<tr>
 							<td><a href={resolve('/games/[id]', { id: game.id })}>{game.displayTitle}</a></td>
-							<td>{systemNames.get(game.system) ?? game.system}</td>
+							<td><span class="badge text-bg-dark">{game.systemName}</span></td>
 							<td>{game.releaseYear ?? ''}</td>
 							<td>{game.regions.join(', ')}</td>
+							<td>
+								<RatingControl
+									gameId={game.id}
+									title={game.displayTitle}
+									bind:rating={game.rating}
+									bind:favourite={game.favourite}
+								/>
+							</td>
 							<td class="text-end">{game.romCount}</td>
 						</tr>
 					{/each}

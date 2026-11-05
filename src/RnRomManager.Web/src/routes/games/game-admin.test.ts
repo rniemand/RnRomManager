@@ -56,6 +56,8 @@ const game = (romIds: number[]) => ({
 	genres: [],
 	description: null,
 	hasDefaultBoxArt: false,
+	rating: null,
+	favourite: false,
 	metadata: { createdAt: '', updatedAt: '' },
 	roms: romIds.map(rom),
 	images: []
@@ -140,6 +142,38 @@ describe('game detail admin actions', () => {
 
 		expect(modal().getByText('Leave empty or enter a year 1970–2100.')).toBeTruthy();
 		expect(calls.some((c) => c.startsWith('PATCH'))).toBe(false);
+	});
+
+	it('edit metadata is a wide modal with a grid layout; fields still bound and sent', async () => {
+		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
+		answers['PATCH /api/games/g1'] = [{ status: 200, body: { ...game([1]), title: 'Tetris DX' } }];
+		render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: /Edit metadata/ }));
+
+		expect(document.querySelector('.modal-dialog')!.classList.contains('modal-lg')).toBe(true);
+		const title = modal().getByLabelText('Title');
+		expect(title.closest('.col-md-9')).toBeTruthy();
+		expect(modal().getByLabelText('Release year').closest('.col-md-3')).toBeTruthy();
+		for (const label of ['Developers', 'Publishers', 'Genres']) {
+			const field = modal().getByLabelText(label);
+			expect(field.closest('.col-md-4')).toBeTruthy();
+			expect(field.getAttribute('rows')).toBe('3');
+			expect(field.getAttribute('aria-describedby')).toBe('edit-lists-help');
+		}
+		await fireEvent.input(title, { target: { value: 'Tetris DX' } });
+		await fireEvent.click(modal().getByRole('button', { name: 'Edit metadata', hidden: true }));
+
+		await vi.waitFor(() => expect(calls).toContain('PATCH /api/games/g1'));
+	});
+
+	it('other admin modals keep the default width', async () => {
+		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
+		render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: /Delete game/ }));
+
+		expect(document.querySelector('.modal-dialog')!.classList.contains('modal-lg')).toBe(false);
 	});
 
 	it('deleting the game goes back to the Library', async () => {

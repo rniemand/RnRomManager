@@ -213,6 +213,8 @@ public sealed class IngestPipeline(
             Publishers = metadata.Publishers,
             Genres = metadata.Genres,
             Description = null,
+            Rating = null,
+            Favourite = false,
             Roms = PrimaryRelease.Apply([rom]),
             Images = [found.BoxArt.ToInfoJson(now), .. found.Snap is { } snap ? [snap.ToInfoJson(now)] : Array.Empty<InfoJsonImage>()],
             Metadata = new InfoJsonGameMetadata(now, now, AppInfo.Version),

@@ -191,6 +191,7 @@
 	bind:open
 	{title}
 	{busy}
+	size={action?.kind === 'edit' ? 'lg' : undefined}
 	confirmLabel={destructive ? 'Delete' : title.replace('…', '')}
 	confirmClass={destructive ? 'btn-danger' : 'btn-primary'}
 	onconfirm={confirm}
@@ -205,53 +206,57 @@
 				void confirm();
 			}}
 		>
-			<div class="mb-3">
-				<label class="form-label" for="edit-title">Title</label>
-				<input
-					id="edit-title"
-					class="form-control"
-					class:is-invalid={errors.title}
-					maxlength="255"
-					bind:value={form.title}
-				/>
-				{#if errors.title}<div class="invalid-feedback">{errors.title}</div>{/if}
-				<div class="form-text">Renaming also renames the ZIP.</div>
-			</div>
-			<div class="mb-3">
-				<label class="form-label" for="edit-year">Release year</label>
-				<input
-					id="edit-year"
-					class="form-control"
-					class:is-invalid={errors.releaseYear}
-					inputmode="numeric"
-					bind:value={form.releaseYear}
-				/>
-				{#if errors.releaseYear}<div class="invalid-feedback">{errors.releaseYear}</div>{/if}
-			</div>
-			{#each [['developers', 'Developers'], ['publishers', 'Publishers'], ['genres', 'Genres']] as const as [field, label] (field)}
-				<div class="mb-3">
-					<label class="form-label" for="edit-{field}">{label}</label>
-					<textarea
-						id="edit-{field}"
+			<div class="row g-3">
+				<div class="col-12 col-md-9">
+					<label class="form-label" for="edit-title">Title</label>
+					<input
+						id="edit-title"
 						class="form-control"
-						class:is-invalid={errors[field]}
-						rows="2"
-						aria-describedby="edit-{field}-help"
-						bind:value={form[field]}></textarea>
-					{#if errors[field]}<div class="invalid-feedback">{errors[field]}</div>{/if}
-					<div id="edit-{field}-help" class="form-text">One per line.</div>
+						class:is-invalid={errors.title}
+						maxlength="255"
+						bind:value={form.title}
+					/>
+					{#if errors.title}<div class="invalid-feedback">{errors.title}</div>{/if}
+					<div class="form-text">Renaming also renames the ZIP.</div>
 				</div>
-			{/each}
-			<div class="mb-0">
-				<label class="form-label" for="edit-description">Description</label>
-				<textarea
-					id="edit-description"
-					class="form-control"
-					class:is-invalid={errors.description}
-					rows="4"
-					maxlength="4000"
-					bind:value={form.description}></textarea>
-				{#if errors.description}<div class="invalid-feedback">{errors.description}</div>{/if}
+				<div class="col-12 col-md-3">
+					<label class="form-label" for="edit-year">Release year</label>
+					<input
+						id="edit-year"
+						class="form-control"
+						class:is-invalid={errors.releaseYear}
+						inputmode="numeric"
+						bind:value={form.releaseYear}
+					/>
+					{#if errors.releaseYear}<div class="invalid-feedback">{errors.releaseYear}</div>{/if}
+				</div>
+				{#each [['developers', 'Developers'], ['publishers', 'Publishers'], ['genres', 'Genres']] as const as [field, label] (field)}
+					<div class="col-12 col-md-4">
+						<label class="form-label" for="edit-{field}">{label}</label>
+						<textarea
+							id="edit-{field}"
+							class="form-control"
+							class:is-invalid={errors[field]}
+							rows="3"
+							aria-describedby="edit-lists-help"
+							bind:value={form[field]}></textarea>
+						{#if errors[field]}<div class="invalid-feedback">{errors[field]}</div>{/if}
+					</div>
+				{/each}
+				<div id="edit-lists-help" class="col-12 form-text mt-1">
+					Developers, publishers and genres: one per line.
+				</div>
+				<div class="col-12">
+					<label class="form-label" for="edit-description">Description</label>
+					<textarea
+						id="edit-description"
+						class="form-control"
+						class:is-invalid={errors.description}
+						rows="4"
+						maxlength="4000"
+						bind:value={form.description}></textarea>
+					{#if errors.description}<div class="invalid-feedback">{errors.description}</div>{/if}
+				</div>
 			</div>
 		</form>
 	{:else if action?.kind === 'retry'}

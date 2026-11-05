@@ -1,6 +1,6 @@
 /** Library filters (spec §11 Library row) ↔ the page URL query ↔ the `GET /api/games` query (§23). */
 
-export type LibrarySort = 'title' | 'year' | 'added';
+export type LibrarySort = 'title' | 'year' | 'added' | 'rating';
 export type SortDir = 'asc' | 'desc';
 
 export interface LibraryFilters {
@@ -11,8 +11,10 @@ export interface LibraryFilters {
 	/** Trimmed, ≥ 2 chars, or `''`. */
 	q: string;
 	sort: LibrarySort;
-	/** null = the sort's default (§23: asc for title/year, desc for added). */
+	/** null = the sort's default (§23: asc for title/year, desc for added and rating). */
 	dir: SortDir | null;
+	/** Only favourites (`?favourite=true`). */
+	favourite: boolean;
 	page: number;
 }
 
@@ -26,7 +28,7 @@ export function normaliseSearch(value: string): string {
 }
 
 export function defaultDir(sort: LibrarySort): SortDir {
-	return sort === 'added' ? 'desc' : 'asc';
+	return sort === 'added' || sort === 'rating' ? 'desc' : 'asc';
 }
 
 /** Hand-edited or stale URLs fall back to defaults instead of failing. */
@@ -40,8 +42,9 @@ export function parseFilters(params: Pick<URLSearchParams, 'get'>): LibraryFilte
 		letter: letter && letters.includes(letter) ? letter : null,
 		region: params.get('region') || null,
 		q: normaliseSearch(params.get('q') ?? ''),
-		sort: sort === 'year' || sort === 'added' ? sort : 'title',
+		sort: sort === 'year' || sort === 'added' || sort === 'rating' ? sort : 'title',
 		dir: dir === 'asc' || dir === 'desc' ? dir : null,
+		favourite: params.get('favourite') === 'true',
 		page: Number.isInteger(page) && page > 1 ? page : 1
 	};
 }
@@ -55,6 +58,7 @@ export function toSearch(filters: LibraryFilters): string {
 	if (filters.q) params.set('q', filters.q);
 	if (filters.sort !== 'title') params.set('sort', filters.sort);
 	if (filters.dir && filters.dir !== defaultDir(filters.sort)) params.set('dir', filters.dir);
+	if (filters.favourite) params.set('favourite', 'true');
 	if (filters.page > 1) params.set('page', String(filters.page));
 	const search = params.toString();
 	return search ? `?${search}` : '';
@@ -68,5 +72,5 @@ export function gamesApiUrl(filters: LibraryFilters): string {
 }
 
 export function hasFilters(filters: LibraryFilters): boolean {
-	return !!(filters.system || filters.letter || filters.region || filters.q);
+	return !!(filters.system || filters.letter || filters.region || filters.q || filters.favourite);
 }

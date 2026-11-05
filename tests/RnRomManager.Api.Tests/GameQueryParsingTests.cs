@@ -19,8 +19,9 @@ public class GameQueryParsingTests
     }
 
     private static (GameQuery Query, Dictionary<string, string[]> Errors) Parse(string? system = null, string? letter = null,
-        string? region = null, string? q = null, string? sort = null, string? dir = null, int? page = null, int? pageSize = null) =>
-        LibraryEndpoints.ParseQuery(system, letter, region, q, sort, dir, page, pageSize, Systems);
+        string? region = null, string? q = null, string? sort = null, string? dir = null, int? page = null, int? pageSize = null,
+        string? favourite = null) =>
+        LibraryEndpoints.ParseQuery(system, letter, region, q, sort, dir, page, pageSize, Systems, favourite);
 
     [Test]
     public void Defaults_TitleAscending_FirstPageOf48_NoFilters()
@@ -36,6 +37,10 @@ public class GameQueryParsingTests
     [TestCase("added", null, true)]
     [TestCase("added", "asc", false)]
     [TestCase("title", "desc", true)]
+    [TestCase("rating", null, true)]
+    [TestCase("rating", "asc", false)]
+    [TestCase("relevance", null, false)]
+    [TestCase("relevance", "desc", false)]
     public void Direction_DefaultsPerSort(string sort, string? dir, bool descending) =>
         Assert.That(Parse(sort: sort, dir: dir).Query.Descending, Is.EqualTo(descending));
 
@@ -50,6 +55,36 @@ public class GameQueryParsingTests
         Assert.That((blank.Region, blank.Search), Is.EqualTo(((string?)null, (string?)null)));
         Assert.That(Parse(letter: "#").Query.Letter, Is.EqualTo("#"));
     }
+
+    [Test]
+    public void Search_SplitsIntoDistinctWords_AtMostEight()
+    {
+        var (query, errors) = Parse(q: "  zelda	Link  ZELDA awakening ");
+
+        Assert.That(errors, Is.Empty);
+        Assert.That(query.Words, Is.EqualTo(new[] { "zelda", "Link", "awakening" }));
+        Assert.That(query.Phrase, Is.EqualTo("zelda Link ZELDA awakening"));
+        Assert.That(Parse(q: "a b c d e f g h").Errors, Is.Empty);
+        Assert.That(Parse(q: "a b c d e f g h a").Errors, Is.Empty, "duplicates don't count");
+        Assert.That(Parse(q: "a b c d e f g h i").Errors["q"], Is.EqualTo(new[] { "At most 8 words." }));
+    }
+
+    [TestCase("rating", GameSort.Rating)]
+    [TestCase("relevance", GameSort.Relevance)]
+    public void NewSorts_AreAccepted(string sort, GameSort expected) =>
+        Assert.That(Parse(sort: sort).Query.Sort, Is.EqualTo(expected));
+
+    [TestCase("true", true)]
+    [TestCase("false", false)]
+    public void Favourite_TrueOrFalse(string value, bool expected) =>
+        Assert.That(Parse(favourite: value).Query.Favourite, Is.EqualTo(expected));
+
+    [TestCase("True")]
+    [TestCase("1")]
+    [TestCase("yes")]
+    [TestCase("")]
+    public void Favourite_OtherValues_AreValidationFailed(string value) =>
+        Assert.That(Parse(favourite: value).Errors["favourite"], Is.EqualTo(new[] { "Must be true or false." }));
 
     [TestCase("page", 0, null)]
     [TestCase("pageSize", null, 201)]

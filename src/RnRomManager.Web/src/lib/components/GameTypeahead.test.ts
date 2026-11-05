@@ -10,6 +10,9 @@ const item = (id: string, displayTitle: string) => ({
 	releaseYear: null,
 	regions: [],
 	romCount: 1,
+	systemName: 'Game Boy',
+	rating: null,
+	favourite: false,
 	boxArtUrl: null
 });
 

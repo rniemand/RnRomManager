@@ -44,6 +44,8 @@ function game(romIds: number[]): GameDetail {
 		genres: [],
 		description: null,
 		hasDefaultBoxArt: false,
+		rating: null,
+		favourite: false,
 		metadata: { createdAt: '', updatedAt: '' },
 		roms: romIds.map((id, i) => rom(id, `Tetris ${id}.gb`, i === 0)),
 		images: [{ id: 9, type: 'BoxArt', isDefault: false, width: 512, height: 512, url: '/img/9' }]
@@ -99,6 +101,25 @@ describe('game detail page', () => {
 		expect(await screen.findByText('This game changed, please retry.')).toBeTruthy();
 		expect(screen.getByRole('button', { name: 'Download Tetris 2.gb' })).toBeTruthy();
 		expect(assign).not.toHaveBeenCalled();
+	});
+
+	it('any user can rate; after a save the page uses the returned detail (new ROM ids)', async () => {
+		answers.push(
+			{ status: 200, body: game([1]) },
+			{ status: 204 }, // GET /api/auth/antiforgery before the first mutation
+			{ status: 200, body: { ...game([7]), rating: 4 } },
+			{ status: 200, body: { ...game([7]), rating: 4 } }
+		);
+		render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Rate 4 of 5' }));
+
+		expect(await screen.findByRole('button', { name: 'Download Tetris 7.gb' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Rate 4 of 5' }).getAttribute('aria-pressed')).toBe(
+			'true'
+		);
+		await fireEvent.click(screen.getByRole('button', { name: 'Download Tetris 7.gb' }));
+		await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/api/games/g1/roms/7/download'));
 	});
 
 	it('an unknown game shows a not-found state', async () => {

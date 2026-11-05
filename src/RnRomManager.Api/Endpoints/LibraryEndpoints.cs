@@ -29,9 +29,9 @@ public static class LibraryEndpoints
         var games = api.MapGroup("/games");
 
         games.MapGet("", async (string? system, string? letter, string? region, string? q, string? sort, string? dir, int? page,
-            int? pageSize, HttpContext ctx, ISystemRegistry systems, IGameRepository repository) =>
+            int? pageSize, string? favourite, HttpContext ctx, ISystemRegistry systems, IGameRepository repository) =>
         {
-            var (query, errors) = ParseQuery(system, letter, region, q, sort, dir, page, pageSize, systems);
+            var (query, errors) = ParseQuery(system, letter, region, q, sort, dir, page, pageSize, systems, favourite);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             var result = await repository.ListAsync(query, ctx.RequestAborted);
@@ -39,11 +39,14 @@ public static class LibraryEndpoints
             {
                 id = game.Id,
                 system = game.SystemId,
+                systemName = systems.ById(game.SystemId)?.DisplayName ?? game.SystemId,
                 displayTitle = game.DisplayTitle,
                 releaseYear = game.ReleaseYear,
                 regions = game.Regions,
                 romCount = game.RomCount,
                 boxArtUrl = game.BoxArtImageId is { } imageId ? ImageUrl(game.Id, imageId) : null,
+                rating = game.Rating,
+                favourite = game.Favourite,
             }));
         });
 
@@ -96,6 +99,17 @@ public static class LibraryEndpoints
             var result = await editor.PatchAsync(id, patch, ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.AdminOnly);
+
+        // Any signed-in user (shared per game); takes the job lock and rewrites the ZIP like every edit.
+        games.MapPatch("/{id:guid}/rating", async (Guid id, JsonElement body, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
+            IRomRepository roms, IImageRepository images) =>
+        {
+            var (patch, errors) = ParseRating(body);
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+            var result = await editor.PatchAsync(id, patch, ctx.RequestAborted);
+            return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
+        });
 
         games.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, LibraryEditor editor) =>
             ToResult(ctx, await editor.DeleteGameAsync(id, ctx.RequestAborted))).RequireAuthorization(AuthSetup.AdminOnly);
@@ -228,6 +242,45 @@ public static class LibraryEndpoints
         return (patch, errors);
     }
 
+    /// <summary>
+    /// <c>PATCH /api/games/{id}/rating</c> body: <c>{rating?: 1–5 | null, favourite?: bool}</c>, at least one present;
+    /// an absent property is unchanged, <c>rating: null</c> clears it.
+    /// </summary>
+    public static (GamePatch Patch, Dictionary<string, string[]> Errors) ParseRating(JsonElement body)
+    {
+        var errors = new Dictionary<string, string[]>();
+        var patch = new GamePatch();
+        if (body.ValueKind != JsonValueKind.Object)
+        {
+            errors[""] = ["A JSON object is required."];
+            return (patch, errors);
+        }
+
+        var hasRating = body.TryGetProperty("rating", out var rating);
+        var hasFavourite = body.TryGetProperty("favourite", out var favourite);
+        if (!hasRating && !hasFavourite)
+            errors[""] = ["Give rating, favourite or both."];
+
+        if (hasRating)
+        {
+            if (rating.ValueKind == JsonValueKind.Null)
+                patch = patch with { SetRating = true };
+            else if (rating.ValueKind == JsonValueKind.Number && rating.TryGetInt32(out var value) && value is >= 1 and <= 5)
+                patch = patch with { SetRating = true, Rating = value };
+            else
+                errors["rating"] = ["Must be null or a whole number 1–5."];
+        }
+
+        if (hasFavourite)
+        {
+            if (favourite.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                patch = patch with { Favourite = favourite.GetBoolean() };
+            else
+                errors["favourite"] = ["Must be true or false."];
+        }
+        return (patch, errors);
+    }
+
     private static List<string>? ParseList(JsonElement body, string field, Dictionary<string, string[]> errors)
     {
         if (!body.TryGetProperty(field, out var list))
@@ -244,7 +297,7 @@ public static class LibraryEndpoints
     }
 
     public static (GameQuery Query, Dictionary<string, string[]> Errors) ParseQuery(string? system, string? letter, string? region,
-        string? q, string? sort, string? dir, int? page, int? pageSize, ISystemRegistry systems)
+        string? q, string? sort, string? dir, int? page, int? pageSize, ISystemRegistry systems, string? favourite = null)
     {
         var errors = Paging.Validate(page, pageSize);
         if (system is not null && systems.ById(system) is null)
@@ -261,6 +314,8 @@ public static class LibraryEndpoints
         q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
         if (q?.Length > 255)
             errors["q"] = ["Must be at most 255 characters."];
+        else if (new GameQuery { Search = q }.Words.Count > GameQuery.MaxWords)
+            errors["q"] = [$"At most {GameQuery.MaxWords} words."];
 
         GameSort gameSort = GameSort.Title;
         switch (sort)
@@ -268,20 +323,31 @@ public static class LibraryEndpoints
             case null or "title": break;
             case "year": gameSort = GameSort.Year; break;
             case "added": gameSort = GameSort.Added; break;
-            default: errors["sort"] = ["Must be title, year or added."]; break;
+            case "rating": gameSort = GameSort.Rating; break;
+            case "relevance": gameSort = GameSort.Relevance; break;
+            default: errors["sort"] = ["Must be title, year, added, rating or relevance."]; break;
         }
         if (dir is not (null or "asc" or "desc"))
             errors["dir"] = ["Must be asc or desc."];
 
+        bool? onlyFavourite = null;
+        switch (favourite)
+        {
+            case null: break;
+            case "true": onlyFavourite = true; break;
+            case "false": onlyFavourite = false; break;
+            default: errors["favourite"] = ["Must be true or false."]; break;
+        }
         var query = new GameQuery
         {
             System = system,
             Letter = letter,
             Region = region,
             Search = q,
+            Favourite = onlyFavourite,
             Sort = gameSort,
-            // §23: asc for title/year, desc for added.
-            Descending = dir is null ? gameSort == GameSort.Added : dir == "desc",
+            // §23: asc for title/year, desc for added and rating; relevance ignores it.
+            Descending = gameSort != GameSort.Relevance && (dir is null ? gameSort is GameSort.Added or GameSort.Rating : dir == "desc"),
             Page = page ?? 1,
             PageSize = pageSize ?? Page<GameListItem>.DefaultSize,
         };
@@ -302,6 +368,8 @@ public static class LibraryEndpoints
         genres = game.Genres,
         description = game.Description,
         hasDefaultBoxArt = game.HasDefaultBoxArt,
+        rating = game.Rating,
+        favourite = game.Favourite,
         metadata = new { createdAt = game.CreatedAt, updatedAt = game.UpdatedAt },
         roms = roms.OrderByDescending(r => r.IsPrimary).ThenBy(r => r.FileName, StringComparer.Ordinal).Select(r => new
         {
