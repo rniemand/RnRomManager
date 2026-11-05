@@ -103,6 +103,25 @@ describe('game detail page', () => {
 		expect(assign).not.toHaveBeenCalled();
 	});
 
+	it('any user can rate; after a save the page uses the returned detail (new ROM ids)', async () => {
+		answers.push(
+			{ status: 200, body: game([1]) },
+			{ status: 204 }, // GET /api/auth/antiforgery before the first mutation
+			{ status: 200, body: { ...game([7]), rating: 4 } },
+			{ status: 200, body: { ...game([7]), rating: 4 } }
+		);
+		render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Rate 4 of 5' }));
+
+		expect(await screen.findByRole('button', { name: 'Download Tetris 7.gb' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Rate 4 of 5' }).getAttribute('aria-pressed')).toBe(
+			'true'
+		);
+		await fireEvent.click(screen.getByRole('button', { name: 'Download Tetris 7.gb' }));
+		await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/api/games/g1/roms/7/download'));
+	});
+
 	it('an unknown game shows a not-found state', async () => {
 		render(GamePage);
 

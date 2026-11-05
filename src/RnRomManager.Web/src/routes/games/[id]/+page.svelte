@@ -15,6 +15,7 @@
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
+	import RatingControl from '#lib/components/RatingControl.svelte';
 	import { formatKey, formatSize, formatValue } from '#lib/format.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
@@ -152,7 +153,16 @@
 			{/if}
 		</div>
 		<div class="col-12 col-md-8 col-lg-9">
-			<h1 class="h3">{game.displayTitle}</h1>
+			<div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+				<h1 class="h3 mb-0">{game.displayTitle}</h1>
+				<RatingControl
+					gameId={game.id}
+					title={game.displayTitle}
+					bind:rating={game.rating}
+					bind:favourite={game.favourite}
+					onsaved={(detail) => (game = detail)}
+				/>
+			</div>
 			<dl class="row mb-3">
 				<dt class="col-sm-3">Year</dt>
 				<dd class="col-sm-9">{game.releaseYear ?? '—'}</dd>
