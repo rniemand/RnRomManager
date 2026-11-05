@@ -100,7 +100,12 @@ export async function request<T>(
 	const error = new ApiError(response.status, await problemOf(response));
 	if (response.status === 401 && !options.noRedirect) {
 		await navigate(`/login?returnUrl=${encodeURIComponent(currentLocation())}`);
-	} else if (response.status === 403 && error.code === 'PasswordChangeRequired') {
+	} else if (
+		response.status === 403 &&
+		error.code === 'PasswordChangeRequired' &&
+		// Already there: navigating again would re-run the page's loads and loop.
+		window.location.pathname !== '/change-password'
+	) {
 		await navigate('/change-password');
 	}
 	throw error;
