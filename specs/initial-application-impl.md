@@ -95,7 +95,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S35 | Media retry (per game + `MediaRetry` job) | #35 |
 | [x] | S36 | Integrity checker | #36 |
 | [x] | S37 | Scheduler + integrity API | #37 |
-| [ ] | S38 | Admin settings, log download, about | |
+| [x] | S38 | Admin settings, log download, about | #38 |
 | [ ] | S39 | UI foundation: fetch wrapper, auth, layout, theme | |
 | [ ] | S40 | UI: Login + Change password | |
 | [ ] | S41 | UI: Library page | |
