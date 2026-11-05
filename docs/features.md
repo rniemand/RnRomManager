@@ -1,6 +1,6 @@
 # Features
 
-Implementation is in progress; this guide covers the ingestion review behaviour implemented through S30, the library read API from S32, the library edits from S33–S34, media retry from S35 and the integrity checker from S36.
+Implementation is in progress; this guide covers the ingestion review behaviour implemented through S30, the library read API from S32, the library edits from S33–S34, media retry from S35 and the integrity checker and its API from S36–S37.
 
 ## Ingestion review queue
 
@@ -77,7 +77,7 @@ Thumbnails come from libretro-thumbnails, looked up by the primary release's DAT
 
 ## Integrity checker
 
-The `Integrity` job checks the library against its `info.json` files and the database. Starting it from the API and the daily schedule arrive in S37, and the Integrity page in S46. It takes the global job lock and never moves or deletes library files.
+The `Integrity` job checks the library against its `info.json` files and the database. It runs as a quick check every day at `Integrity:QuickCheckTime` (see [configuration](configuration.md)), or on demand; the Integrity page arrives in S46. It takes the global job lock (a scheduled run is skipped when another job is running) and never moves or deletes library files.
 
 1. **Database repair.** Each ZIP's database rows are replaced from its `info.json`; rows whose ZIP is gone are deleted unless the same game id turned up at another path. Every repair is recorded as an `AutoRepaired` issue (`DbRowInserted`, `DbRowUpdated`, `DbRowDeleted`). ZIPs with a duplicate game id, or with a ROM another game already holds, keep their existing rows and are reported as `DuplicateGameId` / `DuplicateSha1`.
 2. **Scan.** Every file directly in `roms/`, everything under a folder that isn't a registered system, and every non-ZIP file (including stale `*.zip.tmp`) under a system folder is an `OrphanFile`; these are never opened. Every `.zip` under a system folder is checked.
@@ -86,3 +86,9 @@ The `Integrity` job checks the library against its `info.json` files and the dat
 An issue found again updates the open issue with the same type, path and entry rather than adding a new one. A completed run resolves an open issue it didn't find again, but only if it actually performed that check: a quick run can't clear entry or `info.json` problems on a ZIP it didn't open, and only a deep run clears `HashMismatch`. Orphans and duplicates are re-checked by every run, and an issue on a ZIP that no longer exists is resolved. A cancelled run records what it found but resolves nothing.
 
 At the end of each completed run, jobs started more than 180 days ago (with their items) and resolved or auto-repaired issues older than 180 days are deleted. The job summary holds `zips`, `opened`, `issues`, `newIssues`, `resolved`, `repaired`, `purgedJobs` and `purgedIssues`.
+
+All integrity endpoints need an Admin session; the POST also needs the antiforgery header.
+
+- `POST /api/jobs/integrity` with `{"mode": "Quick"}` or `{"mode": "Deep"}` starts a run and returns `202 {jobId}` (`409 JobRunning` when busy, `400 ValidationFailed` for another mode). Follow it with `GET /api/jobs/{jobId}`.
+- `GET /api/integrity/status` returns `{lastQuick, lastDeep, nextScheduledAt}`: the latest job of each mode (or `null`) and the next scheduled quick check in UTC (`null` when the schedule is disabled).
+- `GET /api/integrity/issues?status=&type=&page=&pageSize=` returns a page of issues, newest first. `status` is `Open`, `AutoRepaired` or `Resolved`; `type` is any issue type above.

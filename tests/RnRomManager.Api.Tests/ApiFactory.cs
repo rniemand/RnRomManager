@@ -27,6 +27,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["Paths:Ingest"] = Path.Combine(Root, "ingest"),
             ["Paths:Logs"] = Path.Combine(Root, "logs"),
             ["Paths:Cache"] = Path.Combine(Root, "cache"),
+            // No scheduled quick check unless a test turns it on (it would start a real job at 03:00).
+            ["Integrity:QuickCheckTime"] = "",
         };
         Database.PingAsync(Arg.Any<CancellationToken>()).Returns(true);
         Users.CountAsync(Arg.Any<CancellationToken>()).Returns(1);

@@ -24,6 +24,18 @@ public sealed class IntegrityIssueRepository(IDbConnectionFactory connections) :
             """, new { zipPath, entryName, types }, cancellationToken: cancellationToken))).AsList();
     }
 
+    public async Task<Page<IntegrityIssue>> ListAsync(string? status, string? type, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        const string where = "WHERE (@status IS NULL OR status = @status) AND (@type IS NULL OR type = @type)";
+        var args = new { status, type, pageSize, offset = (long)(page - 1) * pageSize };
+        await using var connection = connections.Create();
+        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            $"SELECT COUNT(*) FROM integrity_issues {where}", args, cancellationToken: cancellationToken));
+        var items = await connection.QueryAsync<IntegrityIssue>(new CommandDefinition(
+            $"{Select} {where} ORDER BY detected_at DESC, id DESC LIMIT @pageSize OFFSET @offset", args, cancellationToken: cancellationToken));
+        return new Page<IntegrityIssue>(items.AsList(), page, pageSize, total);
+    }
+
     public async Task<IReadOnlyList<IntegrityIssue>> ListAllOpenAsync(CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();

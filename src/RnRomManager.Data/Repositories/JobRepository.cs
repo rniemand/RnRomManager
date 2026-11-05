@@ -69,6 +69,14 @@ public sealed class JobRepository(IDbConnectionFactory connections) : IJobReposi
         return new Page<Job>(items.AsList(), page, pageSize, total);
     }
 
+    public async Task<Job?> GetLatestAsync(JobType type, JobMode? mode, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return await connection.QueryFirstOrDefaultAsync<Job>(new CommandDefinition(
+            $"{Select} WHERE type = @type AND mode <=> @mode ORDER BY started_at DESC, id LIMIT 1",
+            new { type = type.ToString(), mode = mode?.ToString() }, cancellationToken: cancellationToken));
+    }
+
     public async Task<IReadOnlyList<Guid>> AbortRunningAsync(DateTime finishedAt, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
