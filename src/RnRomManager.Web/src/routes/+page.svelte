@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import type { GameListItem, Page, SystemInfo } from '#lib/api/types.js';
@@ -250,12 +251,11 @@
 		{result.total}
 		{result.total === 1 ? 'game' : 'games'}
 	</p>
-	<!-- eslint-disable svelte/no-navigation-without-resolve -- /games/{id} arrives in S42 -->
 	{#if view === 'grid'}
 		<div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6 g-3">
 			{#each result.items as game (game.id)}
 				<div class="col">
-					<a class="card h-100 text-decoration-none" href="/games/{game.id}">
+					<a class="card h-100 text-decoration-none" href={resolve('/games/[id]', { id: game.id })}>
 						{#if game.boxArtUrl}
 							<img
 								class="card-img-top"
@@ -295,7 +295,7 @@
 				<tbody>
 					{#each result.items as game (game.id)}
 						<tr>
-							<td><a href="/games/{game.id}">{game.displayTitle}</a></td>
+							<td><a href={resolve('/games/[id]', { id: game.id })}>{game.displayTitle}</a></td>
 							<td>{systemNames.get(game.system) ?? game.system}</td>
 							<td>{game.releaseYear ?? ''}</td>
 							<td>{game.regions.join(', ')}</td>
@@ -306,7 +306,6 @@
 			</table>
 		</div>
 	{/if}
-	<!-- eslint-enable svelte/no-navigation-without-resolve -->
 
 	{#if pages > 1}
 		<nav class="d-flex justify-content-center align-items-center gap-3 mt-4" aria-label="Pages">

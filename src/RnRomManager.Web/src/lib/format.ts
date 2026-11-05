@@ -23,3 +23,17 @@ export function formatSize(bytes: number | null | undefined): string {
 	if (bytes < MiB) return `${number.format(bytes / KiB)} KiB`;
 	return `${number.format(bytes / MiB)} MiB`;
 }
+
+/** `logoValid` → `Logo valid` (the generic header table, §11). */
+export function formatKey(key: string): string {
+	const words = key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+	return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** A header value for display: booleans Yes/No, null `—`, arrays/objects as JSON. */
+export function formatValue(value: unknown): string {
+	if (value === null || value === undefined) return '—';
+	if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+	if (typeof value === 'object') return JSON.stringify(value);
+	return String(value);
+}
