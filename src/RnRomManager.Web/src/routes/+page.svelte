@@ -118,7 +118,7 @@
 <h1 class="h3 mb-3"><Icon name="library" /> Library</h1>
 
 <form class="row g-2 align-items-end mb-3" role="search" onsubmit={(e) => e.preventDefault()}>
-	<div class="col-12 col-md-4 col-lg-3">
+	<div class="col-12 col-md-4 col-lg-2">
 		<label class="form-label" for="q">Search</label>
 		<input
 			id="q"
@@ -201,7 +201,7 @@
 			</button>
 		</div>
 	</div>
-	<div class="col-12 col-md-4 col-lg-1 d-flex gap-2 justify-content-md-end">
+	<div class="col-12 col-md-4 col-lg-2 d-flex gap-2 justify-content-md-end">
 		<button
 			type="button"
 			class="btn btn-outline-secondary"

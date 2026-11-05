@@ -4,10 +4,14 @@ RnRomManager keeps a personal backup collection of Game Boy and Game Boy Color R
 
 ## Roles
 
-- **User:** Library and Game detail (browse, search, download).
+- **User:** Library and Game detail (browse, search, download, rate and favourite).
 - **Admin:** everything a User can do, plus Ingestion, Review, Integrity, Admin and the edit actions on Game detail. A User who opens an Admin page sees "Not allowed".
 
-The navbar shows the pages your role can use. The user menu has **Change password** and **Logout**; the theme button switches between Light, Dark and Auto (follows your system), remembered per browser. Times are shown in your browser's time zone.
+The navbar shows the pages your role can use, with the current page highlighted. The user menu has **Change password** and **Logout**; the theme button switches between Light, Dark and Auto (follows your system), remembered per browser. Times are shown in your browser's time zone.
+
+## Global search
+
+**Search** in the navbar, **Ctrl+K** / **Cmd+K** or **Ctrl+Space** (some systems use Ctrl+Space to switch input methods; use Ctrl/Cmd+K there) opens a search box from any page, even while typing in a field. It's off while another dialog is open and until you've changed a forced password. From 2 characters it shows the 5 best title matches: exact titles first, then titles that start with what you typed, then the rest A–Z. Each result shows its box art, system, year, rating and favourite. Up/Down pick a result, Enter (or a click) opens it; Escape closes the search and puts the focus back where it was.
 
 ## Sign in and change password
 
@@ -18,16 +22,17 @@ The navbar shows the pages your role can use. The user menu has **Change passwor
 
 The home page (`/`) shows every game, 48 per page.
 
-- **Grid or list:** the buttons on the right switch between box-art cards and a table (title, system, year, regions, number of releases). Your choice is remembered in this browser.
-- **Filters:** system, region (any release in that region), letter (`All`, `#` for names that don't start with A–Z, or A–Z) and search (title, from 2 characters, applied as you type). Games are filed by their stored title, so *The Legend of Zelda* is under **L** (`Legend of Zelda, The`).
-- **Sort:** title (default), year or date added; the arrow button flips the direction. Games without a year are always last.
+- **Grid or list:** the buttons on the right switch between box-art cards and a table (title, system, year, regions, rating, number of releases). Your choice is remembered in this browser. Cards show the box art in a square frame with a system badge, and the title on one line (hover or focus it for the full title).
+- **Filters:** system, region (any release in that region), letter (`All`, `#` for names that don't start with A–Z, or A–Z) search (title, from 2 characters, applied as you type; every word must appear, in any order) and **Favourites** (the heart button: only favourite games). Games are filed by their stored title, so *The Legend of Zelda* is under **L** (`Legend of Zelda, The`).
+- **Sort:** title (default), year, date added or rating (best first by default); the arrow button flips the direction. Games without a year, or not rated, are always last.
+- **Rating and favourite:** click a star (1–5) to rate a game, the same star again to clear it, and the heart to mark it a favourite. Any signed-in user can do this on the cards, the list and the game page; the values are shared, so everyone sees the same rating. A changed card stays where it is until the list reloads. If a job is running, the rating is tried once more after a second, then undone with "Another job is running".
 - Filters live in the address bar, so a filtered view can be bookmarked or shared, and Back/Forward step through your changes.
 
 An empty library offers Admins a link to Ingestion.
 
 ## Game detail
 
-Opening a game (`/games/{id}`) shows its box art and snap (a placeholder cartridge when none was found), title, year, developers, publishers, genres and description.
+Opening a game (`/games/{id}`) shows its box art and snap (a placeholder cartridge when none was found), title, rating and favourite (editable, as in the Library), year, developers, publishers, genres and description.
 
 - **Download ZIP** downloads the whole game as stored in the library ([format](zip-format.md)).
 - **Releases** lists every ROM: file name (with a **Primary** badge for the main release), region, revision, flags, size, and CRC32/SHA1 with copy buttons. **Header** expands the cartridge header as a table; the download button next to it downloads that single ROM.
@@ -140,17 +145,24 @@ Failures retain a Pending review for retry. An unreadable target ZIP or newer sc
 Every signed-in user (Admin or User) can read the library. Lists and details come from the database mirror; images and ROM bytes are streamed from the game's ZIP.
 
 - `GET /api/systems` lists every registered system with its game count, ROM count and the distinct regions of its ROMs (sorted). Systems without games report zero counts and no regions.
-- `GET /api/games` returns a page of `{id, system, displayTitle, releaseYear, regions[], romCount, boxArtUrl}` (48 per page by default, maximum 200; a page past the end is empty).
+- `GET /api/games` returns a page of `{id, system, systemName, displayTitle, releaseYear, regions[], romCount, boxArtUrl, rating, favourite}` (`systemName` is the system's display name, or its id if it isn't registered) (48 per page by default, maximum 200; a page past the end is empty).
   - `system` must be a registered system id. `letter` is `#` or `A`–`Z` (any case) and matches the ZIP's letter folder; send `#` as `%23`.
-  - `region` matches a game when any of its releases has exactly that region. `q` is a case-insensitive substring of the display title or title; `%`, `_` and `\` match literally.
-  - `sort` is `title` (default), `year` or `added`; `dir` is `asc` or `desc`, defaulting to `asc` for title/year and `desc` for added. Games without a year are listed last in both directions, and equal values are ordered by game id.
+  - `region` matches a game when any of its releases has exactly that region. `q` is split on whitespace into at most 8 distinct words (more is `400`), and a game matches when every word is a case-insensitive substring of the display title or title; `%`, `_` and `\` match literally. `favourite` is exactly `true` (only favourites) or `false` (only the others).
+  - `sort` is `title` (default), `year`, `added`, `rating` or `relevance`; `dir` is `asc` or `desc`, defaulting to `asc` for title/year and `desc` for added/rating. Games without a year (or rating) are listed last in both directions; equal ratings are ordered by title, other equal values by game id.
+  - `relevance` ranks by `q` with its whitespace collapsed: an exact display title or title first, then titles that start with it, then the rest, each by title. It ignores `dir`, and without `q` it sorts by title.
   - Invalid values return `400 ValidationFailed` with a per-field `errors` object.
-- `GET /api/games/{id}` returns the game's `info.json` fields (without `schemaVersion` and `metadata.appVersion`) plus `id` and `hasDefaultBoxArt`. `roms[]` lists the primary release first, then by file name, with identification and hashes flattened (`identificationMethod`, `datName`, `crc32`, `sha1`, `sizeBytes`, …), the parsed `header` and a `downloadUrl`. `images[]` holds `id`, `type`, `isDefault`, `width`, `height` and `url`.
+- `GET /api/games/{id}` returns the game's `info.json` fields (without `schemaVersion` and `metadata.appVersion`) plus `id` and `hasDefaultBoxArt` (`rating` and `favourite` included). `roms[]` lists the primary release first, then by file name, with identification and hashes flattened (`identificationMethod`, `datName`, `crc32`, `sha1`, `sizeBytes`, …), the parsed `header` and a `downloadUrl`. `images[]` holds `id`, `type`, `isDefault`, `width`, `height` and `url`.
 - `GET /api/games/{id}/images/{imageId}` returns the PNG with `ETag` set to its SHA1 and `Cache-Control: private, max-age=86400`; a matching `If-None-Match` returns 304.
 - `GET /api/games/{id}/download` returns the game's ZIP with range support and an RFC 5987 `filename*` in `Content-Disposition`.
 - `GET /api/games/{id}/roms/{romId}/download` streams one ROM from the ZIP under its library file name.
 
 ROM and image ids change whenever a game is rewritten. A stale id, an image or ROM belonging to another game, or a ZIP missing from disk returns `404 NotFound`; an unreadable ZIP returns `500 IoError`. ZIPs are opened so that an ingest or edit can still replace them during a download.
+
+### Rate games through the API
+
+`PATCH /api/games/{id}/rating` is open to every signed-in user and needs the antiforgery header. It takes `{rating?, favourite?}`: `rating` is a whole number 1–5 or `null` (clears it), `favourite` a boolean, and an absent property stays unchanged. Ratings are shared per game and stored in the ZIP's `info.json` ([format](zip-format.md)), so a rating rewrites the ZIP like any edit: it takes the global job lock (`409 JobRunning` while a job or another edit runs) and returns the full game detail, with new ROM and image ids. Errors: not an object, neither property, or a wrong value → `400 ValidationFailed` (field `""`, `rating` or `favourite`); an unknown game → `404`; a newer `info.json` schema → `409 InfoJsonNewerSchema`; a write failure → `500`. The Admin `PATCH /api/games/{id}` ignores `rating` and `favourite`.
+
+Other edits keep a game's rating and favourite. A merge keeps the target's rating (or takes the source's when the target has none) and makes the target a favourite if either game was; a release moved to a new game starts unrated and not a favourite.
 
 ### Edit the library through the API
 

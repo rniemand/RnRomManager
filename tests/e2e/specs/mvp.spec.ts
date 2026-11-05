@@ -4,7 +4,7 @@ import { expectAccessible } from './axe';
 /**
  * Spec §15.1 "E2E": the MVP smoke path against the real image with the seeded `Basic` set (§15.2), in order:
  * login + forced password change → ingest → browse/search/filter → game detail + download → review resolve →
- * Admin edit/move/delete, with axe on every page visited.
+ * global search + ratings → Admin edit/move/delete, with axe on every page visited.
  */
 
 const adminPassword = process.env.E2E_ADMIN_PASSWORD;
@@ -31,9 +31,10 @@ const dialog = () => page.getByRole('dialog');
 
 async function openGame(title: string): Promise<void> {
 	await page.goto('/');
-	await page.getByLabel('Search').fill(title);
+	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill(title);
 	await expect(page).toHaveURL(/[?&]q=/);
-	await page.getByRole('img', { name: `${title} box art`, exact: true }).click();
+	// The title link is stretched over the card (spec B21).
+	await page.getByRole('link', { name: title, exact: true }).click();
 	await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
 }
 
@@ -84,7 +85,7 @@ test('browse, search and filter the library', async () => {
 	await expect(page.getByText('5 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
 
-	await page.getByLabel('Search').fill('orb');
+	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('orb');
 	await expect(page).toHaveURL(/q=orb/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 
@@ -96,7 +97,7 @@ test('browse, search and filter the library', async () => {
 	// "Quest, The" is shown as "The Quest" but filed under Q (§5, §6.1).
 	await page.goto('/');
 	await page.getByLabel('Letter').selectOption('Q');
-	await expect(page.getByRole('link', { name: 'The Quest box art' })).toBeVisible();
+	await expect(page.getByRole('img', { name: 'The Quest box art' })).toBeVisible();
 
 	await page.getByRole('button', { name: 'List view' }).click();
 	await expect(page.getByRole('table')).toContainText('The Quest');
@@ -119,6 +120,53 @@ test('game detail + downloads', async () => {
 	const rom = page.waitForEvent('download');
 	await page.getByRole('button', { name: /^Download Orbit Blocks .*\.gb$/ }).first().click();
 	expect((await rom).suggestedFilename()).toMatch(/^Orbit Blocks .*\.gb$/);
+});
+
+test('global search, ratings and favourites', async () => {
+	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
+	await page.goto('/');
+	await expect(page.getByText('5 games')).toBeVisible();
+	await page.keyboard.press('Control+k');
+	await expect(dialog()).toBeVisible();
+	await expect(dialog().getByRole('combobox')).toBeFocused();
+	await dialog().getByRole('combobox').fill('orbit');
+	await expect(dialog().getByRole('option').first()).toContainText('Orbit Blocks');
+	await expectAccessible(page, 'global search modal');
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('heading', { level: 1, name: 'Orbit Blocks' })).toBeVisible();
+
+	// Rate and favourite it from its library card; both survive a reload.
+	await page.goto('/');
+	const card = page.getByRole('group', { name: 'Rating for Orbit Blocks', exact: true });
+	const star = card.getByRole('button', { name: 'Rate 4 of 5' });
+	const heart = card.getByRole('button', { name: 'Favourite' });
+	await star.click();
+	await expect(star).toHaveAttribute('aria-pressed', 'true');
+	await expect(heart).toBeEnabled();
+	await heart.click();
+	await expect(heart).toHaveAttribute('aria-pressed', 'true');
+	await expect(heart).toBeEnabled();
+	await page.reload();
+	await expect(star).toHaveAttribute('aria-pressed', 'true');
+	await expect(heart).toHaveAttribute('aria-pressed', 'true');
+
+	// The Favourites filter shows only it.
+	await page.getByRole('button', { name: 'Favourites' }).click();
+	await expect(page).toHaveURL(/favourite=true/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Orbit Blocks', exact: true })).toBeVisible();
+
+	// Back to the seed state for the later tests.
+	await page.goto('/');
+	await star.click();
+	await expect(star).toHaveAttribute('aria-pressed', 'false');
+	await expect(heart).toBeEnabled();
+	await heart.click();
+	await expect(heart).toHaveAttribute('aria-pressed', 'false');
+	await expect(heart).toBeEnabled();
+	await page.reload();
+	await expect(star).toHaveAttribute('aria-pressed', 'false');
+	await expect(heart).toHaveAttribute('aria-pressed', 'false');
 });
 
 test('review queue: resolve with a suggestion', async () => {
@@ -165,7 +213,7 @@ test('Admin: edit metadata, move a release, delete a release and a game', async 
 	await page.getByRole('button', { name: 'Delete game' }).click();
 	await dialog().getByRole('button', { name: 'Delete' }).click();
 	await expect(page).toHaveURL(/\/$/);
-	await page.getByLabel('Search').fill('Color Racer');
+	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('Color Racer');
 	await expect(page.getByText('No games match these filters.')).toBeVisible();
 });
 
