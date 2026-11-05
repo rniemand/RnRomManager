@@ -25,3 +25,23 @@ export interface Page<T> {
 	pageSize: number;
 	total: number;
 }
+
+/** `GET /api/systems` (spec §23). */
+export interface SystemInfo {
+	id: string;
+	displayName: string;
+	gameCount: number;
+	romCount: number;
+	regions: string[];
+}
+
+/** One item of `GET /api/games` (spec §23). */
+export interface GameListItem {
+	id: string;
+	system: string;
+	displayTitle: string;
+	releaseYear: number | null;
+	regions: string[];
+	romCount: number;
+	boxArtUrl: string | null;
+}

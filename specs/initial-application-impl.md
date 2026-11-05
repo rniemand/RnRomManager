@@ -98,7 +98,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S38 | Admin settings, log download, about | #38 |
 | [x] | S39 | UI foundation: fetch wrapper, auth, layout, theme | #39 |
 | [x] | S40 | UI: Login + Change password | #40 |
-| [ ] | S41 | UI: Library page | |
+| [x] | S41 | UI: Library page | #41 |
 | [ ] | S42 | UI: Game detail (read + download) | |
 | [ ] | S43 | UI: Game detail admin actions | |
 | [ ] | S44 | UI: Ingestion + Job detail | |
