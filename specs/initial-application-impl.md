@@ -96,7 +96,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S36 | Integrity checker | #36 |
 | [x] | S37 | Scheduler + integrity API | #37 |
 | [x] | S38 | Admin settings, log download, about | #38 |
-| [ ] | S39 | UI foundation: fetch wrapper, auth, layout, theme | |
+| [x] | S39 | UI foundation: fetch wrapper, auth, layout, theme | #39 |
 | [ ] | S40 | UI: Login + Change password | |
 | [ ] | S41 | UI: Library page | |
 | [ ] | S42 | UI: Game detail (read + download) | |
