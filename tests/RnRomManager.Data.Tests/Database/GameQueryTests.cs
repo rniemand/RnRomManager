@@ -52,6 +52,26 @@ public class GameQueryTests
         return game.GameId;
     }
 
+    /// <summary>Replaces <paramref name="id"/>'s images: a real or default box art (or none) and optionally a snap.</summary>
+    private async Task SetImages(Guid id, bool? defaultBoxArt, bool snap)
+    {
+        var row = (await _games.GetAsync(id, default))!;
+        static InfoJsonImage Image(ImageType type, bool isDefault) => new()
+        {
+            FileName = type == ImageType.BoxArt ? "boxart-01.png" : "snap-01.png", Type = type,
+            Source = isDefault ? InfoJsonImage.SourceDefault : InfoJsonImage.SourceLibretro, IsDefault = isDefault,
+            SizeBytes = 10, Sha1 = new string('b', 40), Width = 1, Height = 1, DateAdded = When,
+        };
+        var roms = (await _roms.ListByGameAsync(id, default)).Select((r, i) => Rom(r.FileName, RomBytes(1000 + ++_seed), isPrimary: i == 0)).ToArray();
+        var game = Game(row.Title, roms) with
+        {
+            GameId = id,
+            Images = [.. defaultBoxArt is { } isDefault ? [Image(ImageType.BoxArt, isDefault)] : Array.Empty<InfoJsonImage>(),
+                .. snap ? [Image(ImageType.Snap, false)] : Array.Empty<InfoJsonImage>()],
+        };
+        await _mirror.ReplaceAsync(new MirrorEntry(game, row.ZipPath, 100, When.UtcDateTime), default);
+    }
+
     private async Task<IReadOnlyList<string>> Titles(GameQuery query) =>
         (await _games.ListAsync(query, default)).Items.Select(i => i.DisplayTitle).ToList();
 
@@ -180,5 +200,19 @@ public class GameQueryTests
         Assert.That((await _images.GetAsync(a, image.Id, default))?.FileName, Is.EqualTo("boxart-01.png"));
         Assert.That(await _roms.GetAsync(b, rom.Id, default), Is.Null);
         Assert.That(await _images.GetAsync(b, image.Id, default), Is.Null);
+    }
+
+    [Test]
+    public async Task MediaRetryCandidates_DefaultOrMissingBoxArtOrNoSnap_OrderedByTitle()
+    {
+        await SetImages(await Add("Complete"), defaultBoxArt: false, snap: true);
+        await SetImages(await Add("Default Art"), defaultBoxArt: true, snap: true);
+        await SetImages(await Add("Bare"), defaultBoxArt: null, snap: true);
+        await SetImages(await Add("Real No Snap"), defaultBoxArt: false, snap: false);
+        await Add("Alpha Default");
+
+        var candidates = await _games.ListMediaRetryCandidatesAsync(default);
+
+        Assert.That(candidates.Select(c => c.Title), Is.EqualTo(new[] { "Alpha Default", "Bare", "Default Art", "Real No Snap" }));
     }
 }

@@ -92,7 +92,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S32 | Library read API (systems, list, detail, images, downloads) | #32 |
 | [x] | S33 | Library edits: PATCH, delete release/game | #33 |
 | [x] | S34 | Library edits: move + merge | #34 |
-| [ ] | S35 | Media retry (per game + `MediaRetry` job) | |
+| [x] | S35 | Media retry (per game + `MediaRetry` job) | #35 |
 | [ ] | S36 | Integrity checker | |
 | [ ] | S37 | Scheduler + integrity API | |
 | [ ] | S38 | Admin settings, log download, about | |

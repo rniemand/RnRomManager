@@ -13,6 +13,9 @@ public interface IGameRepository
 
     /// <summary>Counts and regions for every system that has games (spec §23 <c>/api/systems</c>).</summary>
     Task<IReadOnlyList<SystemStats>> ListSystemStatsAsync(CancellationToken cancellationToken);
+
+    /// <summary>Games with the default box art, no <c>BoxArt</c> image or no <c>Snap</c>, ordered by title then id (§10.2).</summary>
+    Task<IReadOnlyList<GameRow>> ListMediaRetryCandidatesAsync(CancellationToken cancellationToken);
 }
 
 public interface IRomRepository

@@ -13,13 +13,14 @@ using static RnRomManager.Core.Library.LibraryEditResult;
 namespace RnRomManager.Core.Library;
 
 /// <summary>
-/// Admin library edits (spec §11, §23, D28, D35): metadata PATCH, delete release/game, move release, merge. Each takes the global job lock
+/// Admin library edits (spec §11, §23, D28, D35): metadata PATCH, delete release/game, move release, merge, retry media
+/// (§10.2). Each takes the global job lock
 /// (§3.1) and follows the sync rule (§14.2): the ZIP is written (or deleted) first, then the DB. Every write starts from
 /// the ZIP's own <c>info.json</c> (§6.1). Removed ROM bytes go to <c>ingest/&lt;system&gt;/_removed/</c>, never deleted.
 /// </summary>
 public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRepository roms, ILibraryMirror mirror,
-    InfoJsonReader reader, DatCache dats, ISystemRegistry systems, MediaService media, IOptions<PathsOptions> paths, TimeProvider time,
-    ILogger<LibraryEditor> logger)
+    InfoJsonReader reader, DatCache dats, ISystemRegistry systems, MediaService media, GameMediaRetry mediaRetry,
+    IOptions<PathsOptions> paths, TimeProvider time, ILogger<LibraryEditor> logger)
 {
     public async Task<LibraryEditResult> PatchAsync(Guid gameId, GamePatch patch, CancellationToken ct)
     {
@@ -114,6 +115,20 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         if (result.Code is null)
             logger.LogInformation("Game {GameId} deleted ({ZipPath})", gameId, row.ZipPath);
         return result;
+    }
+
+    /// <summary>§10.2 "Retry media" for one game, with its own circuit breaker. Nothing new found is still a success.</summary>
+    public async Task<LibraryEditResult> RetryMediaAsync(Guid gameId, CancellationToken ct)
+    {
+        using var held = jobLock.TryAcquire();
+        if (held is null)
+            return new(JobRunning);
+        if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
+            return new(NotFound);
+        var result = await mediaRetry.RetryAsync(row, new CircuitBreaker(), skipManualOnly: false, ct).ConfigureAwait(false);
+        if (result.Outcome == MediaRetryOutcome.Error)
+            logger.LogError("Media retry for {ZipPath} failed: {Code} {Details}", row.ZipPath, result.Code, result.Details);
+        return result.Outcome == MediaRetryOutcome.Error ? new(result.Code, result.Details) : Ok;
     }
 
     /// <summary>
