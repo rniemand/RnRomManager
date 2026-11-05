@@ -15,8 +15,10 @@ using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Ingest;
+using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 using RnRomManager.Core.Users;
 using RnRomManager.Data;
@@ -34,6 +36,8 @@ public static class AppHost
         builder.Services.AddHostedService<StartupRunner>();
         // Registered after StartupRunner, so it stops first (hosted services stop in reverse order).
         builder.Services.AddHostedService<JobShutdownService>();
+        // Startup step 10: after StartupRunner (hosted services start in order); stops first.
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<Scheduler>());
         var app = builder.Build();
         app.UseSecurityHeaders();
 
@@ -53,7 +57,8 @@ public static class AppHost
             .MapDatEndpoints()
             .MapIngestEndpoints()
             .MapReviewEndpoints()
-            .MapLibraryEndpoints();
+            .MapLibraryEndpoints()
+            .MapIntegrityEndpoints();
         app.MapFallbackEndpoints(staticFiles);
         return app;
     }
@@ -89,6 +94,11 @@ public static class AppHost
         builder.Services.AddTransient<LibraryEditor>();
         builder.Services.AddTransient<GameMediaRetry>();
         builder.Services.AddTransient<MediaRetryJob>();
+        builder.Services.AddSingleton<IntegrityJobFactory>(sp => mode => ActivatorUtilities.CreateInstance<IntegrityJob>(sp, mode));
+        builder.Services.AddSingleton<LogRetention>();
+        // The container's local time (TZ) drives Integrity:QuickCheckTime (§4).
+        builder.Services.AddSingleton(TimeZoneInfo.Local);
+        builder.Services.AddSingleton<Scheduler>();
         builder.Services.AddSingleton<DatCache>();
         builder.Services.AddSingleton<IIngestReviewRepository, IngestReviewRepository>();
         builder.Services.AddSingleton<IngestFileScanner>();

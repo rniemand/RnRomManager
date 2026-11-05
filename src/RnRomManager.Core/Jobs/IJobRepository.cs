@@ -13,6 +13,9 @@ public interface IJobRepository
     /// <summary>Newest first.</summary>
     Task<Page<Job>> ListAsync(JobType? type, int page, int pageSize, CancellationToken cancellationToken);
 
+    /// <summary>The most recently started job of this type and mode, or null (§23 <c>/api/integrity/status</c>).</summary>
+    Task<Job?> GetLatestAsync(JobType type, JobMode? mode, CancellationToken cancellationToken);
+
     /// <summary>Marks every <c>Running</c> row <c>Aborted</c> (§7.4).</summary>
     /// <returns>The ids it aborted.</returns>
     Task<IReadOnlyList<Guid>> AbortRunningAsync(DateTime finishedAt, CancellationToken cancellationToken);

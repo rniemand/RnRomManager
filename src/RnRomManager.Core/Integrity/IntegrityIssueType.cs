@@ -21,6 +21,13 @@ public static class IntegrityIssueType
     public const string DbRowUpdated = "DbRowUpdated";
     public const string DbRowDeleted = "DbRowDeleted";
 
+    /// <summary>Every type, in §12.2 table order.</summary>
+    public static IReadOnlyList<string> All { get; } =
+    [
+        ZipUnreadable, InfoJsonMissing, InfoJsonInvalid, InfoJsonNewerSchema, EntryMissing, EntrySizeMismatch, EntryUnlisted, HashMismatch,
+        MissingBoxArt, DefaultBoxArt, WrongLocation, OrphanFile, DuplicateGameId, DuplicateSha1, DbRowInserted, DbRowUpdated, DbRowDeleted,
+    ];
+
     /// <summary>The issues ingesting a byte-identical copy can fix (§7.2 step 3, D30).</summary>
     public static IReadOnlyList<string> SelfRepairable { get; } = [HashMismatch, EntryMissing, EntrySizeMismatch];
 

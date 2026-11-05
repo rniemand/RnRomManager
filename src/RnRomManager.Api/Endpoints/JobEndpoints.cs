@@ -55,7 +55,7 @@ public static class JobEndpoints
         return api;
     }
 
-    private static object ToDto(Job job) => new
+    public static object ToDto(Job job) => new
     {
         id = job.Id,
         type = job.Type,
