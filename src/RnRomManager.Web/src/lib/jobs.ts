@@ -50,3 +50,44 @@ export function formatSummary(summary: Record<string, number> | null): string {
 export function percent(current: number, total: number): number {
 	return total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
 }
+
+/** §12.2 issue types, for the filter. */
+export const issueTypes = [
+	'ZipUnreadable',
+	'InfoJsonMissing',
+	'InfoJsonInvalid',
+	'InfoJsonNewerSchema',
+	'EntryMissing',
+	'EntrySizeMismatch',
+	'EntryUnlisted',
+	'HashMismatch',
+	'MissingBoxArt',
+	'DefaultBoxArt',
+	'WrongLocation',
+	'OrphanFile',
+	'DuplicateGameId',
+	'DuplicateSha1',
+	'DbRowInserted',
+	'DbRowUpdated',
+	'DbRowDeleted'
+];
+
+export const issueStatuses = ['Open', 'AutoRepaired', 'Resolved'];
+
+const severityClasses: Record<string, string> = {
+	Error: 'text-bg-danger',
+	Warn: 'text-bg-warning',
+	Info: 'text-bg-info'
+};
+
+export function severityClass(severity: string): string {
+	return severityClasses[severity] ?? 'text-bg-secondary';
+}
+
+/** Newest first, at most `limit` (merges the Integrity and MediaRetry histories). */
+export function latestJobs<T extends { startedAt: string }>(lists: T[][], limit: number): T[] {
+	return lists
+		.flat()
+		.sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+		.slice(0, limit);
+}
