@@ -2,7 +2,6 @@
 title: UI polish, global search and ratings
 status: completed
 created: 2026-11-05
-branch: dev/ui-search-ratings
 ---
 
 # UI polish, global search and ratings
