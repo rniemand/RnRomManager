@@ -37,3 +37,12 @@ export function formatValue(value: unknown): string {
 	if (typeof value === 'object') return JSON.stringify(value);
 	return String(value);
 }
+
+/** `{ paths: { roms: '/app/roms' } }` → `[['paths.roms', '/app/roms']]`; arrays stay whole. */
+export function flattenSettings(value: Record<string, unknown>, prefix = ''): [string, unknown][] {
+	return Object.entries(value).flatMap(([key, child]): [string, unknown][] =>
+		child !== null && typeof child === 'object' && !Array.isArray(child)
+			? flattenSettings(child as Record<string, unknown>, `${prefix}${key}.`)
+			: [[`${prefix}${key}`, child]]
+	);
+}

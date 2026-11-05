@@ -216,3 +216,18 @@ export interface IntegrityIssue {
 	detectedAt: string;
 	resolvedAt: string | null;
 }
+
+/** `GET /api/users` (spec §23). */
+export interface UserInfo {
+	id: number;
+	username: string;
+	role: 'Admin' | 'User';
+	isDisabled: boolean;
+	lastLoginAt: string | null;
+}
+
+/** `GET /api/about` (spec §23). */
+export interface About {
+	version: string;
+	licenses: { name: string; license: string; url: string }[];
+}
