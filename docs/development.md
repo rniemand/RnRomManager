@@ -10,7 +10,7 @@ pwsh scripts/seed-ingest.ps1 # synthetic ROMs + fixture DATs (below)
 pwsh scripts/start-dev.ps1   # API on :5080 (dotnet watch) + Vite on http://localhost:5173
 ```
 
-- `setup-dev.ps1` (`-SkipDb` to leave the database alone) is safe to re-run. It keeps the dev DB password in the git-ignored `.env` (creating one if missing), starts `docker-compose.dev.yml` (MariaDB 11.4 on 3306), creates `.dev/{roms,ingest,logs,cache}`, and writes a git-ignored `src/RnRomManager.Api/appsettings.Development.json` with the connection string and absolute `.dev` paths. An existing settings file is kept; delete it to regenerate. Playwright browsers are installed once the `tests/e2e` project exists.
+- `setup-dev.ps1` (`-SkipDb` to leave the database alone) is safe to re-run. It keeps the dev DB password in the git-ignored `.env` (creating one if missing), starts `docker-compose.dev.yml` (MariaDB 11.4 on 3306), creates `.dev/{roms,ingest,logs,cache}`, and writes a git-ignored `src/RnRomManager.Api/appsettings.Development.json` with the connection string and absolute `.dev` paths. An existing settings file is kept; delete it to regenerate. It also installs the e2e project's packages and Playwright's Chromium (on Linux, run `npx playwright install-deps` once for the system libraries).
 - `start-dev.ps1` runs both servers in one console; Ctrl+C stops both. `-ApiOnly` / `-WebOnly` run one. Vite proxies `/api` and `/health` to the API.
 - The first API start on an empty database prints the generated `admin` password to the console once; signing in asks you to change it. Then Ingestion → Start ingests the seeded files.
 
@@ -36,6 +36,12 @@ Basic contains Orbit Blocks (World, Japan, World Rev 1), Quest, The (USA, Europe
 For a manual run (§15.4): seed, `start-dev.ps1`, sign in as an Admin, Ingestion → Start, and check the run's summary against the table. Set `Sources__ThumbnailBaseUrl` to an empty string for an offline test using default art. Generated library ZIPs are under `.dev/roms`; the unmatched file shows in the Review queue and stays in ingest, and duplicate/invalid files move to their side folders.
 
 The `SeedIngestTests` API integration tests seed both sets, let startup load the fixture DATs, start ingestion through the authenticated endpoint, and verify counts, grouping, primary revision, article display, GBC classification, review suggestions and default art. Standard checks run with `pwsh scripts/test-all.ps1` (Docker required).
+
+## End-to-end tests
+
+`pwsh scripts/test-e2e.ps1` (`-SkipBuild` reuses `niemandr/rnrommanager:e2e`, `-Headed` shows the browser) builds the image for your machine's architecture, seeds `Basic` into a temp folder, starts `tests/e2e/docker-compose.e2e.yml` (MariaDB on tmpfs + the app on `127.0.0.1:18080`, `E2E_PORT` to change it) with random per-run DB and admin passwords and media fetch disabled, waits for `/health/ready`, runs Playwright, and always tears the stack down. On failure it prints the app log; the HTML report and traces are in `tests/e2e/playwright-report` and `tests/e2e/test-results` (CI uploads both).
+
+`tests/e2e/specs/mvp.spec.ts` walks one session through the MVP in order: sign-in + forced password change, ingesting the seed, library search/filters/views, game detail + ZIP/ROM downloads, resolving the review item, Admin edit/move/delete, and the Integrity/Admin pages. Every page visited is scanned with axe (`specs/axe.ts`) and fails on `serious` or `critical` WCAG A/AA violations.
 
 ## Web app structure
 

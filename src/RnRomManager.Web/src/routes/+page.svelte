@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -50,6 +50,8 @@
 	let reload = $state(0);
 	let search = $state('');
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	// A search typed just before leaving the page must not navigate back to it.
+	onDestroy(() => clearTimeout(searchTimer));
 
 	const filters = $derived(parseFilters(page.url.searchParams));
 	const regions = $derived(
