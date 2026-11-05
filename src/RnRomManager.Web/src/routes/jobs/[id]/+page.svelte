@@ -88,7 +88,11 @@
 <svelte:head><title>Job · RnRomManager</title></svelte:head>
 
 <AdminOnly>
-	<p><a href={resolve('/ingestion')}>← Ingestion</a></p>
+	{#if job?.type === 'Integrity' || job?.type === 'MediaRetry'}
+		<p><a href={resolve('/integrity')}>← Integrity</a></p>
+	{:else}
+		<p><a href={resolve('/ingestion')}>← Ingestion</a></p>
+	{/if}
 
 	{#if error}
 		<ErrorAlert {error} onretry={() => reload++} />

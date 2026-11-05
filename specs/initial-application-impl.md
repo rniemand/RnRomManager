@@ -103,7 +103,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S43 | UI: Game detail admin actions | #43 |
 | [x] | S44 | UI: Ingestion + Job detail | #44 |
 | [x] | S45 | UI: Review queue | #45 |
-| [ ] | S46 | UI: Integrity page | |
+| [x] | S46 | UI: Integrity page | #46 |
 | [ ] | S47 | UI: Admin pages | |
 | [ ] | S48 | Dev scripts complete (`setup-dev`, `start-dev`) | |
 | [ ] | S49 | E2E: Playwright + axe, compose, CI job | |

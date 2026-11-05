@@ -191,3 +191,28 @@ export interface DatSearchResult {
 	sizeBytes: number;
 	crc32: string;
 }
+
+/** `GET /api/integrity/status` (spec §23). */
+export interface IntegrityStatus {
+	lastQuick: Job | null;
+	lastDeep: Job | null;
+	/** UTC; null when the schedule is disabled. */
+	nextScheduledAt: string | null;
+}
+
+/** One item of `GET /api/integrity/issues` (spec §14.1 `integrity_issues`). */
+export interface IntegrityIssue {
+	id: number;
+	type: string;
+	severity: 'Error' | 'Warn' | 'Info';
+	system: string | null;
+	zipPath: string | null;
+	gameId: string | null;
+	entryName: string | null;
+	details: string | null;
+	status: 'Open' | 'AutoRepaired' | 'Resolved';
+	firstSeenJobId: string;
+	lastSeenJobId: string;
+	detectedAt: string;
+	resolvedAt: string | null;
+}
