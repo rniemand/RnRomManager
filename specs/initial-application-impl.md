@@ -77,19 +77,19 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S17 | Naming + tag parsing + primary ranking | #17 |
 | [x] | S18 | DAT parser, DAT store, `FixtureDatWriter` | #18 |
 | [x] | S19 | `info.json` model, validation, upgraders | #19 |
-| [x] | S20 | Library ZIP reader/writer + PNG IHDR | |
-| [x] | S21 | Job runner + jobs API + crash recovery | |
-| [x] | S22 | Game repositories + mirror write + DB auto-repair | |
-| [x] | S23 | HTTP client + `DatRefresh` job + DAT loading at startup | |
-| [x] | S24 | Thumbnails + media service | |
-| [x] | S25 | Ingest job start: pre-pass, snapshot, pending API | |
-| [x] | S26 | Ingest pipeline: loose-file happy path | |
-| [x] | S27 | Ingest: dedupe, self-repair, failures | |
-| [x] | S28 | Ingest: archives (zip + 7z) | |
+| [x] | S20 | Library ZIP reader/writer + PNG IHDR | #20 |
+| [x] | S21 | Job runner + jobs API + crash recovery | #21 |
+| [x] | S22 | Game repositories + mirror write + DB auto-repair | #22 |
+| [x] | S23 | HTTP client + `DatRefresh` job + DAT loading at startup | #23 |
+| [x] | S24 | Thumbnails + media service | #24 |
+| [x] | S25 | Ingest job start: pre-pass, snapshot, pending API | #25 |
+| [x] | S26 | Ingest pipeline: loose-file happy path | #26 |
+| [x] | S27 | Ingest: dedupe, self-repair, failures | #27 |
+| [x] | S28 | Ingest: archives (zip + 7z) | #28 |
 | [x] | S29 | Ingest: review queue + suggestions | #29 |
 | [x] | S30 | Review resolution + DAT search API | #30 |
 | [x] | S31 | TestData CLI, seed sets, `seed-ingest.ps1` | #31 |
-| [ ] | S32 | Library read API (systems, list, detail, images, downloads) | |
+| [x] | S32 | Library read API (systems, list, detail, images, downloads) | #32 |
 | [ ] | S33 | Library edits: PATCH, delete release/game | |
 | [ ] | S34 | Library edits: move + merge | |
 | [ ] | S35 | Media retry (per game + `MediaRetry` job) | |

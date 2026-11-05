@@ -1,6 +1,6 @@
 # Features
 
-Implementation is in progress; this guide covers the ingestion review behaviour implemented through S30.
+Implementation is in progress; this guide covers the ingestion review behaviour implemented through S30 and the library read API from S32.
 
 ## Ingestion review queue
 
@@ -31,3 +31,20 @@ All review endpoints require an Admin session, and POST requests require the ant
 Resolution and dismissal take the global job lock (`409 JobRunning` when busy). A missing source returns `409 SourceMissing` and removes its stale review row. Successful resolution records the game, Admin and UTC time, then deletes a loose source; resolving an archive entry leaves its archive in place. Changed source bytes fail verification.
 
 Failures retain a Pending review for retry. An unreadable target ZIP or newer schema returns 409 with `TargetZipUnreadable` or `InfoJsonNewerSchema`. IO, verification and DB-write failures return 500 with `IoError`, `VerifyFailed` or `DbWriteFailed`. A DB mirror failure can leave a verified ZIP on disk; the next ingest pre-pass repairs the DB from that ZIP before processing sources, as with normal ingestion.
+
+## Browse the library through the API
+
+Every signed-in user (Admin or User) can read the library; the Library and Game detail pages arrive in S41 and S42. Lists and details come from the database mirror; images and ROM bytes are streamed from the game's ZIP.
+
+- `GET /api/systems` lists every registered system with its game count, ROM count and the distinct regions of its ROMs (sorted). Systems without games report zero counts and no regions.
+- `GET /api/games` returns a page of `{id, system, displayTitle, releaseYear, regions[], romCount, boxArtUrl}` (48 per page by default, maximum 200; a page past the end is empty).
+  - `system` must be a registered system id. `letter` is `#` or `A`–`Z` (any case) and matches the ZIP's letter folder; send `#` as `%23`.
+  - `region` matches a game when any of its releases has exactly that region. `q` is a case-insensitive substring of the display title or title; `%`, `_` and `\` match literally.
+  - `sort` is `title` (default), `year` or `added`; `dir` is `asc` or `desc`, defaulting to `asc` for title/year and `desc` for added. Games without a year are listed last in both directions, and equal values are ordered by game id.
+  - Invalid values return `400 ValidationFailed` with a per-field `errors` object.
+- `GET /api/games/{id}` returns the game's `info.json` fields (without `schemaVersion` and `metadata.appVersion`) plus `id` and `hasDefaultBoxArt`. `roms[]` lists the primary release first, then by file name, with identification and hashes flattened (`identificationMethod`, `datName`, `crc32`, `sha1`, `sizeBytes`, …), the parsed `header` and a `downloadUrl`. `images[]` holds `id`, `type`, `isDefault`, `width`, `height` and `url`.
+- `GET /api/games/{id}/images/{imageId}` returns the PNG with `ETag` set to its SHA1 and `Cache-Control: private, max-age=86400`; a matching `If-None-Match` returns 304.
+- `GET /api/games/{id}/download` returns the game's ZIP with range support and an RFC 5987 `filename*` in `Content-Disposition`.
+- `GET /api/games/{id}/roms/{romId}/download` streams one ROM from the ZIP under its library file name.
+
+ROM and image ids change whenever a game is rewritten. A stale id, an image or ROM belonging to another game, or a ZIP missing from disk returns `404 NotFound`; an unreadable ZIP returns `500 IoError`. ZIPs are opened so that an ingest or edit can still replace them during a download.
