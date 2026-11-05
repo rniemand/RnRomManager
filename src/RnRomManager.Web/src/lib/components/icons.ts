@@ -20,6 +20,8 @@ export const icons: Record<string, string> = {
 	retry: 'bi bi-arrow-clockwise',
 	search: 'bi bi-search',
 	grid: 'bi bi-grid-3x3-gap',
+	'sort-asc': 'bi bi-sort-up-alt',
+	'sort-desc': 'bi bi-sort-down',
 	list: 'bi bi-list-ul',
 	info: 'bi bi-info-circle',
 	warning: 'bi bi-exclamation-triangle',
