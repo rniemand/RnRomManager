@@ -11,7 +11,7 @@ Browser (Svelte SPA) ──HTTP/JSON──> ASP.NET Core API ──Dapper──>
                                           └── HTTPS: raw.githubusercontent.com (DATs), thumbnails.libretro.com
 ```
 
-One container: the API serves the built SPA from `wwwroot` and everything under `/api`. The design is in [specs/initial-application.md](../specs/initial-application.md); the build order in [specs/initial-application-impl.md](../specs/initial-application-impl.md).
+One container: the API serves the built SPA from `wwwroot` and everything under `/api`. The design is in [specs/completed/initial-application.md](../specs/completed/initial-application.md); the build order in [specs/completed/initial-application-impl.md](../specs/completed/initial-application-impl.md).
 
 | Project | Contents |
 |---|---|

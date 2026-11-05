@@ -1,19 +1,15 @@
 # Contributing
 
-The design lives in [specs/initial-application.md](specs/initial-application.md) (the spec) and the build order in [specs/initial-application-impl.md](specs/initial-application-impl.md) (the plan).
+The MVP's design is in [specs/completed/initial-application.md](specs/completed/initial-application.md) and its build plan in [specs/completed/initial-application-impl.md](specs/completed/initial-application-impl.md). New work goes through the `spec` skill in [.claude/skills/spec](.claude/skills/spec/SKILL.md) (Claude Code).
 
-## Branches and PRs
-One step = one branch = one PR.
+## Specs, branches and PRs
+Specs live in `specs/pending/` (reviewed, not started), `specs/current/` (in progress) and `specs/completed/`.
 
-1. `git switch main && git pull`.
-2. Pick the first unticked step in the plan's tracker.
-3. `git switch -c step/NN-slug`.
-4. Read the step's spec sections, build exactly its deliverables (nothing from later steps), and write its tests.
-5. Check the step's "Done when" list and the plan's Definition of Done.
-6. Tick the step in the tracker in the same branch.
-7. Commit, push, open a PR titled `SNN: <step title>`, wait for CI, then squash-merge.
+1. **Write a spec:** `/spec <what you want built>`. Claude maps the code, asks you questions until nothing is open, has a second agent review the draft, splits it into steps, and opens a `Spec: <title>` PR from `spec/<slug>` that adds the spec to `specs/pending/`. The maintainer merges it.
+2. **Implement it:** run the kickoff prompt at the bottom of the spec (`/spec implement <file>.md`). Claude creates `dev/<slug>` from `main`, moves the spec to `specs/current/`, and implements one step per commit with its tests, checking in with you after each step. Run the same prompt to resume.
+3. **Finish:** once `scripts/test-all.ps1` and `scripts/test-e2e.ps1` pass, the spec moves to `specs/completed/` and Claude opens a PR to `main`. The maintainer merges it.
 
-If the spec is unclear or wrong, don't guess: add the question to spec §20, ask the owner, and record the answer in the spec section and §21 in the same PR. Never change the spec silently to match the code.
+If a spec turns out unclear or wrong while implementing, don't guess: ask, then fix the spec and its Decisions section in the same commit as the code. Never change a spec silently to match the code.
 
 ## Test rule
 Every non-trivial class gets unit tests (NUnit `Assert.That`, NSubstitute). File tests use real temp dirs; database tests use Testcontainers (Docker must be running). `pwsh scripts/test-all.ps1` (the .NET build with warnings as errors, every test project, and the web app's lint, type check, tests and build) and `pwsh scripts/test-e2e.ps1` must pass before a PR is opened; CI runs the same jobs. See [docs/development.md](docs/development.md) for the setup.

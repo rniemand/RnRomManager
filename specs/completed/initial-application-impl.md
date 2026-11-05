@@ -437,11 +437,11 @@ Paste this into a new Claude Code session at the repo root to start or continue 
 ```text
 We are implementing RnRomManager step by step.
 
-1. Read specs/initial-application-impl.md in full (the plan), then read the
+1. Read specs/completed/initial-application-impl.md in full (the plan), then read the
    tracker in its §3 and find the first unticked step. If a step is ticked but
    its PR isn't merged, or the working tree has uncommitted work on a step/*
    branch, tell me what you found and ask before doing anything.
-2. Read every section of specs/initial-application.md (the spec) that the
+2. Read every section of specs/completed/initial-application.md (the spec) that the
    step's "Spec" line lists, plus the plan's §1 (loop, Definition of Done,
    unclear-spec rule, conventions).
 3. Check the step's owner prerequisites (plan §2). If one isn't done, stop and
