@@ -239,8 +239,9 @@
 	{:else if auth.isAdmin}
 		<EmptyState message="The library is empty.">
 			{#snippet action()}
-				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- route arrives in S44 -->
-				<a class="btn btn-primary" href="/ingestion"><Icon name="ingest" /> Go to Ingestion</a>
+				<a class="btn btn-primary" href={resolve('/ingestion')}
+					><Icon name="ingest" /> Go to Ingestion</a
+				>
 			{/snippet}
 		</EmptyState>
 	{:else}

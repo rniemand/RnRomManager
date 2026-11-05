@@ -97,3 +97,48 @@ export interface GameDetail {
 	roms: RomDetail[];
 	images: ImageInfo[];
 }
+
+/** `GET /api/ingest/pending` (spec §23). */
+export interface PendingSystem {
+	system: string;
+	files: { name: string; sizeBytes: number; modifiedAt: string }[];
+}
+
+export type JobStatus = 'Running' | 'Completed' | 'Cancelled' | 'Failed' | 'Aborted';
+
+/** `GET /api/jobs/{id}` and the items of `GET /api/jobs` (spec §23, §14.1 `jobs`). */
+export interface Job {
+	id: string;
+	type: CurrentJob['type'];
+	mode: 'Quick' | 'Deep' | null;
+	triggerSource: 'Manual' | 'Schedule';
+	status: JobStatus;
+	requestedBy: number | null;
+	startedAt: string;
+	finishedAt: string | null;
+	/** Counts, e.g. `{ Ingested: 3, Review: 1 }`. */
+	summary: Record<string, number> | null;
+	error: string | null;
+}
+
+/** `GET /api/jobs/{id}/items` (spec §14.1 `job_items`). */
+export interface JobItem {
+	id: number;
+	fileId: string;
+	systemId: string | null;
+	sourcePath: string;
+	archiveEntry: string | null;
+	outcome: string;
+	reason: string | null;
+	details: string | null;
+	gameId: string | null;
+	sha1: string | null;
+	createdAt: string;
+}
+
+/** `GET /api/admin/dats` (spec §23). */
+export interface DatVersion {
+	datName: string;
+	version: string;
+	downloadedAt: string;
+}
