@@ -85,6 +85,7 @@ public static class AppHost
         builder.Services.AddSingleton<InfoJsonReader>();
         builder.Services.AddSingleton<DbSync>();
         builder.Services.AddSingleton<LibraryFiles>();
+        builder.Services.AddSingleton<LibraryEditor>();
         builder.Services.AddSingleton<DatCache>();
         builder.Services.AddSingleton<IIngestReviewRepository, IngestReviewRepository>();
         builder.Services.AddSingleton<IngestFileScanner>();

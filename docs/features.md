@@ -1,6 +1,6 @@
 # Features
 
-Implementation is in progress; this guide covers the ingestion review behaviour implemented through S30 and the library read API from S32.
+Implementation is in progress; this guide covers the ingestion review behaviour implemented through S30 , the library read API from S32 and the library edits from S33.
 
 ## Ingestion review queue
 
@@ -48,3 +48,18 @@ Every signed-in user (Admin or User) can read the library; the Library and Game 
 - `GET /api/games/{id}/roms/{romId}/download` streams one ROM from the ZIP under its library file name.
 
 ROM and image ids change whenever a game is rewritten. A stale id, an image or ROM belonging to another game, or a ZIP missing from disk returns `404 NotFound`; an unreadable ZIP returns `500 IoError`. ZIPs are opened so that an ingest or edit can still replace them during a download.
+
+## Edit the library through the API
+
+Admins can edit metadata and delete releases or games; the Game detail admin actions arrive in S43. These requests need the antiforgery header. Each edit takes the global job lock, so it returns `409 JobRunning` while a job or another edit runs. Every edit starts from the game ZIP's own `info.json`, writes the ZIP atomically, then updates the database.
+
+- `PATCH /api/games/{id}` takes any of `title`, `releaseYear`, `developers`, `publishers`, `genres` and `description`, and returns the updated game (same shape as `GET /api/games/{id}`). Omitted fields stay unchanged; `releaseYear` and `description` accept `null` to clear them.
+  - `title`: 1–255 characters after trimming, and it must not sanitize to an empty file name. `displayTitle` is always derived from it.
+  - `releaseYear`: `null` or 1970–2100. Each list: at most 20 items of 1–255 characters, trimmed with duplicates removed. `description`: at most 4000 characters.
+  - A title change renames the ZIP (`roms/<system>/<letter>/<title>.zip`, with ` (2)`, ` (3)`, … if another game already has the name). The new ZIP is written and committed before the old one is deleted. A change that only differs in letter case keeps the existing file, because file names compare case-insensitively.
+- `DELETE /api/games/{id}/roms/{romId}` returns 204. It moves the ROM's bytes to `ingest/<system>/_removed/` (adding ` (2)`, … on a name clash), rebuilds the ZIP without it and recomputes the primary release. Removing the last release deletes the game.
+- `DELETE /api/games/{id}` returns 204. It moves every ROM to `_removed/`, then deletes the ZIP and the game's rows.
+
+Removed ROMs are never hard-deleted, and ingestion ignores `_removed/`; move a file back into `ingest/<system>/` to re-ingest it. A ROM whose ZIP entry no longer matches its recorded SHA1 is still moved as it is; a listed entry that is absent from the ZIP has nothing to move and is skipped.
+
+Errors: an unknown game, a ROM of another game, or a release the ZIP no longer lists return `404 NotFound`. A ZIP that can't be read or has a newer `info.json` schema returns `409 TargetZipUnreadable` or `409 InfoJsonNewerSchema` without changing anything. A corrupt entry returns `500 VerifyFailed`, and an IO failure returns `500 IoError`; in both cases the ZIP is unchanged and any copies already made in `_removed/` are taken back. `500 DbWriteFailed` means the ZIP changed but the database didn't; the next ingest or integrity run repairs the database from the ZIP.
