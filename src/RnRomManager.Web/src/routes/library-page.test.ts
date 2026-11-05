@@ -71,4 +71,18 @@ describe('library page', () => {
 
 		expect(goto).toHaveBeenCalledWith('/?system=gb&letter=T', { reset: false });
 	});
+	it('a search still pending when the page closes does not navigate', async () => {
+		url.current = new URL('http://localhost/');
+		const { unmount } = render(LibraryPage);
+		await screen.findByAltText('4-in-1 Fun Pak box art');
+		vi.useFakeTimers();
+		try {
+			await fireEvent.input(screen.getByLabelText('Search'), { target: { value: 'fun' } });
+			unmount();
+			await vi.advanceTimersByTimeAsync(500);
+			expect(goto).not.toHaveBeenCalled();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
 });

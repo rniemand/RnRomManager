@@ -1,0 +1,36 @@
+# E2E stack (spec §15.3), started by scripts/test-e2e.ps1, which sets every variable below for one run:
+# E2E_DB_PASSWORD / E2E_ADMIN_PASSWORD (random per run), E2E_INGEST / E2E_CACHE (seeded temp dirs), E2E_PORT.
+name: rnrommanager-e2e
+
+services:
+  mariadb:
+    image: mariadb:11.4
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    environment:
+      MARIADB_DATABASE: rnrommanager
+      MARIADB_USER: rnrommanager
+      MARIADB_PASSWORD: ${E2E_DB_PASSWORD:?}
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  app:
+    image: niemandr/rnrommanager:${E2E_TAG:-e2e}
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: "Server=mariadb;Port=3306;Database=rnrommanager;User ID=rnrommanager;Password=${E2E_DB_PASSWORD:?}"
+      Admin__InitialPassword: ${E2E_ADMIN_PASSWORD:?}
+      # Media fetch off: the default-art path runs and nothing hits the network.
+      Sources__ThumbnailBaseUrl: ""
+    ports:
+      - "127.0.0.1:${E2E_PORT:-18080}:8080"
+    volumes:
+      - ${E2E_INGEST:?}:/app/ingest
+      - ${E2E_CACHE:?}:/app/cache

@@ -48,7 +48,7 @@ if (Test-Path -LiteralPath (Join-Path $e2eRoot 'package.json')) {
     Write-Host '==> Playwright browsers'
     Invoke-Checked 'npm ci (e2e)' { npm ci --prefix $e2eRoot }
     Push-Location $e2eRoot
-    try { Invoke-Checked 'playwright install' { npx playwright install --with-deps chromium } } finally { Pop-Location }
+    try { Invoke-Checked 'playwright install' { npx playwright install chromium } } finally { Pop-Location }
 } else {
     Write-Host '==> Playwright browsers: skipped (no tests/e2e project yet)'
 }

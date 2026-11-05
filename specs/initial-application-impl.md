@@ -106,7 +106,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S46 | UI: Integrity page | #46 |
 | [x] | S47 | UI: Admin pages | #47 |
 | [x] | S48 | Dev scripts complete (`setup-dev`, `start-dev`) | #48 |
-| [ ] | S49 | E2E: Playwright + axe, compose, CI job | |
+| [x] | S49 | E2E: Playwright + axe, compose, CI job | #49 |
 | [ ] | S50 | Documentation pass | |
 | [ ] | S51 | Release `v0.1.0` | |
 | [ ] | S52 | Deploy to the owner's host + smoke test | |
