@@ -22,4 +22,11 @@ public sealed record GamePatch
 
     /// <summary>≤ 4000 chars; null clears it.</summary>
     public string? Description { get; init; }
+
+    public bool SetRating { get; init; }
+
+    /// <summary>1–5; null clears it.</summary>
+    public int? Rating { get; init; }
+
+    public bool? Favourite { get; init; }
 }

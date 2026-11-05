@@ -276,6 +276,40 @@ public class LibraryMoveMergeTests
         Assert.That((next.Outcome, next.GameId), Is.EqualTo((IngestOutcome.Ingested, (Guid?)zelda)));
     }
 
+    private async Task Rate(Guid id, int? rating, bool favourite) =>
+        Assert.That((await Service<LibraryEditor>().PatchAsync(id, new GamePatch { SetRating = true, Rating = rating, Favourite = favourite }, default)).Code, Is.Null);
+
+    [TestCase(null, false, 3, true, 3, true, TestName = "Merge rating: unrated target takes the source's; favourite OR")]
+    [TestCase(5, false, 3, false, 5, false, TestName = "Merge rating: target keeps its own")]
+    [TestCase(2, true, null, false, 2, true, TestName = "Merge rating: target favourite kept when source isn't")]
+    public async Task Merge_RatingAndFavourite(int? targetRating, bool targetFav, int? sourceRating, bool sourceFav, int? rating, bool favourite)
+    {
+        var tetris = await Game(("t1.gb", TetrisWorld));
+        var zelda = await Game(("z.gb", Zelda));
+        await Rate(zelda, targetRating, targetFav);
+        await Rate(tetris, sourceRating, sourceFav);
+
+        using var response = await Merge(tetris, zelda);
+
+        Assert.That(await TargetId(response), Is.EqualTo(zelda));
+        var game = await ReadGame(zelda);
+        var row = (await Row(zelda))!;
+        Assert.That((game.Rating, game.Favourite, row.Rating, row.Favourite), Is.EqualTo((rating, favourite, rating, favourite)));
+    }
+
+    [Test]
+    public async Task MoveToNewGame_StartsUnratedNotFavourite_SourceKeepsItsValues()
+    {
+        var tetris = await Game(("t1.gb", TetrisWorld), ("t2.gb", TetrisJapan));
+        await Rate(tetris, 4, true);
+
+        using var response = await Move(tetris, await RomId(tetris, "Tetris (Japan).gb"), new { newGameTitle = "Tetris JP" });
+
+        var moved = await ReadGame(await TargetId(response));
+        var source = await ReadGame(tetris);
+        Assert.That((moved.Rating, moved.Favourite, source.Rating, source.Favourite), Is.EqualTo(((int?)null, false, (int?)4, true)));
+    }
+
     [Test]
     public async Task Merge_TargetKeepsItsOwnRealArtAndSnap()
     {

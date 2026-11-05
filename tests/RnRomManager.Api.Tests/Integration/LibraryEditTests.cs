@@ -142,6 +142,53 @@ public class LibraryEditTests
         Assert.That(game.Roms.Select(r => r.Metadata.Sha1), Is.EquivalentTo(ReadZip(before.ZipPath).Roms.Select(r => r.Metadata.Sha1)));
     }
 
+    private async Task Rate(Guid id, GamePatch patch) =>
+        Assert.That((await Service<LibraryEditor>().PatchAsync(id, patch, default)).Code, Is.Null);
+
+    [Test]
+    public async Task PatchRatingOnly_KeepsTitleMetadataAndZipPath()
+    {
+        var id = await Tetris();
+        var before = (await Row(id))!;
+        var game = ReadZip(before.ZipPath);
+
+        await Rate(id, new GamePatch { SetRating = true, Rating = 4, Favourite = true });
+
+        var after = (await Row(id))!;
+        var rated = ReadZip(after.ZipPath);
+        Assert.That((after.ZipPath, after.Rating, after.Favourite), Is.EqualTo((before.ZipPath, (int?)4, true)));
+        Assert.That((rated.Rating, rated.Favourite, rated.Title, rated.ReleaseYear, rated.Description),
+            Is.EqualTo(((int?)4, true, game.Title, game.ReleaseYear, game.Description)));
+        Assert.That(rated.Genres, Is.EqualTo(game.Genres));
+        Assert.That(rated.Roms.Select(r => r.Metadata.Sha1), Is.EqualTo(game.Roms.Select(r => r.Metadata.Sha1)));
+    }
+
+    [Test]
+    public async Task PatchRating_NullClears_AbsentFavouriteIsUnchanged()
+    {
+        var id = await Tetris();
+        await Rate(id, new GamePatch { SetRating = true, Rating = 2, Favourite = true });
+
+        await Rate(id, new GamePatch { SetRating = true, Rating = null });
+
+        var game = ReadZip((await Row(id))!.ZipPath);
+        Assert.That((game.Rating, game.Favourite), Is.EqualTo(((int?)null, true)));
+    }
+
+    [Test]
+    public async Task TitleEdit_KeepsRatingAndFavourite()
+    {
+        var id = await Tetris();
+        await Rate(id, new GamePatch { SetRating = true, Rating = 5, Favourite = true });
+
+        using var response = await _admin.PatchAsync($"/api/games/{id}", new { title = "Tetris DX" });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var row = (await Row(id))!;
+        var game = ReadZip(row.ZipPath);
+        Assert.That((row.Title, row.Rating, row.Favourite, game.Rating, game.Favourite), Is.EqualTo(("Tetris DX", (int?)5, true, (int?)5, true)));
+    }
+
     [Test]
     public async Task Patch_TitleRename_WritesNewZip_CommitsThenDeletesOld()
     {

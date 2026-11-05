@@ -45,6 +45,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             Publishers = patch.Publishers ?? current.Publishers,
             Genres = patch.Genres ?? current.Genres,
             Description = patch.SetDescription ? patch.Description : current.Description,
+            Rating = patch.SetRating ? patch.Rating : current.Rating,
+            Favourite = patch.Favourite ?? current.Favourite,
             Metadata = Touched(current),
         };
 
@@ -63,6 +65,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             }
         }
 
+        // shortcut: a rating/favourite change rewrites the whole ZIP (fine for small GB/GBC ROMs); add a cheaper
+        // info.json-only update path if larger systems make rating slow.
         var result = await WriteAsync(existing, zipPath, game).ConfigureAwait(false);
         if (result.Code is null && zipPath != row.ZipPath)
             DeleteOldZip(row.ZipPath, gameId);
@@ -294,6 +298,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             Publishers = into.Publishers.Count > 0 ? into.Publishers : from.Publishers,
             Genres = into.Genres.Count > 0 ? into.Genres : from.Genres,
             Description = string.IsNullOrEmpty(into.Description) ? from.Description : into.Description,
+            Rating = into.Rating ?? from.Rating,
+            Favourite = into.Favourite || from.Favourite,
             Roms = PrimaryRelease.Apply(merged),
             Images = images,
             Metadata = Touched(into),
