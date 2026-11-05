@@ -1,8 +1,9 @@
-# Spec §18. main and tags are tested through release.yml (workflow_call), so branch pushes aren't a trigger.
+# Spec §18. Runs only for PRs into main; pushes to main and tags are tested through release.yml (workflow_call).
 name: ci
 
 on:
   pull_request:
+    branches: [main]
   workflow_call:
 
 permissions:
