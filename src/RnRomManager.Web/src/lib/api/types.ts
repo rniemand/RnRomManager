@@ -142,3 +142,52 @@ export interface DatVersion {
 	version: string;
 	downloadedAt: string;
 }
+
+export type ReviewReason = 'NoDatMatch' | 'AmbiguousGroup';
+
+/** One item of `GET /api/review` (spec §23). */
+export interface ReviewListItem {
+	id: number;
+	system: string;
+	reason: ReviewReason;
+	fileName: string;
+	sizeBytes: number;
+	headerTitle: string | null;
+	createdAt: string;
+}
+
+/** `GET /api/review/{id}` (spec §23, §14.1 `ingest_review_items`). */
+export interface ReviewDetail {
+	id: number;
+	system: string;
+	reason: ReviewReason;
+	sourcePath: string;
+	archivePath: string | null;
+	archiveEntry: string | null;
+	originalFileName: string;
+	sizeBytes: number;
+	crc32: string;
+	md5: string;
+	sha1: string;
+	header: Record<string, unknown> | null;
+	suggestions: { datGameName: string; romName: string; score: number }[] | null;
+	/** `AmbiguousGroup`: the DAT entry the file matched. */
+	datIdentification: {
+		datName: string;
+		datVersion: string;
+		datGameName: string;
+		romName: string;
+	} | null;
+	candidateGames: { id: string; displayTitle: string }[];
+	status: 'Pending' | 'Resolved' | 'Dismissed';
+	gameId: string | null;
+	createdAt: string;
+}
+
+/** `GET /api/dat/search` (spec §23). */
+export interface DatSearchResult {
+	gameName: string;
+	romName: string;
+	sizeBytes: number;
+	crc32: string;
+}
