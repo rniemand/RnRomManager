@@ -16,7 +16,7 @@ One step = one branch = one PR.
 If the spec is unclear or wrong, don't guess: add the question to spec §20, ask the owner, and record the answer in the spec section and §21 in the same PR. Never change the spec silently to match the code.
 
 ## Test rule
-Every non-trivial class gets unit tests (NUnit `Assert.That`, NSubstitute). File tests use real temp dirs; database tests use Testcontainers (Docker must be running). `dotnet build -c Release -warnaserror` and `dotnet test` must pass before a PR is opened.
+Every non-trivial class gets unit tests (NUnit `Assert.That`, NSubstitute). File tests use real temp dirs; database tests use Testcontainers (Docker must be running). `pwsh scripts/test-all.ps1` (the .NET build with warnings as errors, every test project, and the web app's lint, type check, tests and build) and `pwsh scripts/test-e2e.ps1` must pass before a PR is opened; CI runs the same jobs. See [docs/development.md](docs/development.md) for the setup.
 
 ## Doc rule
 The PR that implements or changes a behaviour updates the doc(s) it belongs to (spec §19). Spec changes go into the spec and its decisions log (§21).

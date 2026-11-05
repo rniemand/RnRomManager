@@ -1,5 +1,33 @@
 # Development
 
+## Architecture
+
+```
+Browser (Svelte SPA) ──HTTP/JSON──> ASP.NET Core API ──Dapper──> MariaDB
+                                          ├── /app/ingest   input
+                                          ├── /app/roms     library (one ZIP per game)
+                                          ├── /app/logs
+                                          ├── /app/cache    DATs, work folders
+                                          └── HTTPS: raw.githubusercontent.com (DATs), thumbnails.libretro.com
+```
+
+One container: the API serves the built SPA from `wwwroot` and everything under `/api`. The design is in [specs/initial-application.md](../specs/initial-application.md); the build order in [specs/initial-application-impl.md](../specs/initial-application-impl.md).
+
+| Project | Contents |
+|---|---|
+| `src/RnRomManager.Api` | hosting and the startup sequence (`StartupRunner`), minimal-API endpoints per area (`Endpoints/<Area>Endpoints.cs`), auth, security headers, the job runner and scheduler, the `--healthcheck` / `--reset-password` CLI modes |
+| `src/RnRomManager.Core` | domain and services: ingestion, review, library edits, integrity, DAT parsing, naming, `info.json`, ZIP reader/writer, the `ISystemHandler` contract; repository interfaces |
+| `src/RnRomManager.Data` | Dapper repositories (one per table) and the DbUp migrations (embedded `.sql`) |
+| `src/RnRomManager.Systems.GameBoy` | the `gb` and `gbc` handlers: header reader, lookup tables, default box art |
+| `src/RnRomManager.Web` | the SvelteKit SPA (see below) |
+| `tests/RnRomManager.TestData` | synthetic ROM builder, fixture DAT writer and the seed CLI (also a library for the test projects) |
+| `tests/*.Tests` | NUnit + NSubstitute; database tests use Testcontainers (`[Category("Integration")]`) |
+| `tests/e2e` | Playwright + axe against the real image |
+
+- **Library ZIPs are the source of truth**; the database is a mirror rebuilt from them ([ZIP format](zip-format.md)).
+- **One job at a time:** ingestion, integrity, DAT refresh and media retry run in the background under one in-process lock, and library edits and review resolutions take the same lock synchronously (`409 JobRunning` when busy). Progress is kept in memory (`GET /api/jobs/current`); jobs and their items are stored in the database. That's why only one app instance may use a database.
+- **Time** comes from an injected `TimeProvider` everywhere, so tests use `FakeTimeProvider`.
+
 ## Getting started
 
 Needs .NET 10 SDK, Node 24+, Docker (running) and PowerShell 7.
@@ -49,7 +77,9 @@ The SPA in `src/RnRomManager.Web` is SvelteKit (static adapter, Svelte 5 runes) 
 
 - `src/lib/api/client.ts` is the only way to call the API. It fetches `/api/auth/antiforgery` once and sends the `XSRF-TOKEN` cookie as `X-XSRF-TOKEN` on every POST/PATCH/DELETE. A `401` redirects to `/login?returnUrl=…` (pass `noRedirect` to handle it yourself), and `403 PasswordChangeRequired` redirects to `/change-password`. Other failures throw an `ApiError` carrying the ProblemDetails `code`, `title` and field `errors`.
 - `src/lib/stores/`: `auth` (the signed-in user), `jobs` (polls `/api/jobs/current` every 1.5 s while a page watches and a job runs), `toasts` (`toasts.jobRunning(error)` shows the standard `409 JobRunning` toast).
-- `src/lib/components/`: `Icon` (semantic names in `icons.ts`; never use icon classes directly), `Loading`, `EmptyState`, `ErrorAlert`, `ConfirmModal` (Bootstrap modal with focus trapping), `AdminOnly` (shows "Not allowed" to a `User`), `Navbar`, `ThemeToggle`, `ToastHost`.
+- `src/lib/components/`: `Icon` (semantic names in `icons.ts`; never use icon classes directly), `Loading`, `EmptyState`, `ErrorAlert`, `ConfirmModal` (Bootstrap modal with focus trapping), `AdminOnly` (shows "Not allowed" to a `User`), `Navbar`, `ThemeToggle`, `ToastHost`, `CopyButton`, `GameTypeahead` (debounced same-system game picker for move/merge/attach) and `GameAdminModal` (the Game detail admin actions).
+- Pages live in `src/routes/` (`/`, `games/[id]`, `ingestion`, `jobs/[id]`, `review`, `review/[id]`, `integrity`, `admin/*`). Form rules mirrored from the API live next to them in `src/lib` (`passwordPolicy.ts`, `gameEdit.ts`, `reviewForm.ts`, `libraryQuery.ts`).
+- Styling is Bootstrap classes only. `src/app.css` holds the one override: dark-theme outline buttons use Bootstrap's text-emphasis colours, because the defaults fail WCAG AA contrast there (the e2e axe scans check both themes).
 - `src/lib/format.ts` formats times in the browser's local time zone and sizes in KiB/MiB. `src/lib/guard.ts` holds the routing rules the root layout applies on every navigation.
 - Bootstrap's JavaScript (navbar collapse, dropdowns, modals) comes from its bundled build through `src/lib/bootstrap.ts`, so there's no separate Popper dependency.
 
