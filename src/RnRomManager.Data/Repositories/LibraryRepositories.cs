@@ -59,6 +59,88 @@ public sealed class GameRepository : IGameRepository
             "SELECT id, zip_path, zip_size_bytes, zip_mtime_utc FROM games", cancellationToken: cancellationToken));
         return rows.Select(r => new GameSyncState(r.Id, r.ZipPath, r.Size, r.Mtime)).ToList();
     }
+
+    public async Task<Page<GameListItem>> ListAsync(GameQuery query, CancellationToken cancellationToken)
+    {
+        var where = new List<string>();
+        if (query.System is not null)
+            where.Add("g.system_id = @system");
+        if (query.Letter is not null)
+            where.Add("g.bucket = @letter");
+        if (query.Region is not null)
+            where.Add("EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND r.region_key LIKE @region)");
+        if (query.Search is not null)
+            where.Add("(g.display_title LIKE @search OR g.title LIKE @search)");
+        var filter = where.Count == 0 ? "" : "WHERE " + string.Join(" AND ", where);
+
+        // Fixed SQL fragments only; nothing user-supplied is spliced in.
+        var dir = query.Descending ? "DESC" : "ASC";
+        var order = query.Sort switch
+        {
+            GameSort.Year => $"g.release_year IS NULL, g.release_year {dir}, g.id",
+            GameSort.Added => $"g.created_at {dir}, g.id",
+            _ => $"g.title {dir}, g.id",
+        };
+
+        var args = new
+        {
+            system = query.System,
+            letter = query.Letter,
+            region = query.Region is null ? null : SqlLike.Contains("|" + query.Region + "|"),
+            search = query.Search is null ? null : SqlLike.Contains(query.Search),
+            pageSize = query.PageSize,
+            offset = (long)(query.Page - 1) * query.PageSize,
+        };
+
+        await using var connection = _connections.Create();
+        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            $"SELECT COUNT(*) FROM games g {filter}", args, cancellationToken: cancellationToken));
+        var rows = await connection.QueryAsync<ListRow>(new CommandDefinition($"""
+            SELECT g.id AS Id, g.system_id AS SystemId, g.display_title AS DisplayTitle, g.release_year AS ReleaseYear,
+                   (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount,
+                   (SELECT GROUP_CONCAT(r.region_key SEPARATOR '') FROM roms r WHERE r.game_id = g.id) AS RegionKeys,
+                   (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.type = 'BoxArt') AS BoxArtImageId
+            FROM games g {filter}
+            ORDER BY {order}
+            LIMIT @pageSize OFFSET @offset
+            """, args, cancellationToken: cancellationToken));
+
+        var items = rows.Select(r => new GameListItem(
+            r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId)).ToList();
+        return new Page<GameListItem>(items, query.Page, query.PageSize, total);
+    }
+
+    public async Task<IReadOnlyList<SystemStats>> ListSystemStatsAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        var games = (await connection.QueryAsync<(string SystemId, long Count)>(new CommandDefinition(
+            "SELECT system_id, COUNT(*) FROM games GROUP BY system_id", cancellationToken: cancellationToken)))
+            .ToDictionary(r => r.SystemId, r => r.Count);
+        var roms = (await connection.QueryAsync<(string SystemId, long Count)>(new CommandDefinition(
+            "SELECT system_id, COUNT(*) FROM roms GROUP BY system_id", cancellationToken: cancellationToken)))
+            .ToDictionary(r => r.SystemId, r => r.Count);
+        var regionKeys = (await connection.QueryAsync<(string SystemId, string RegionKey)>(new CommandDefinition(
+            "SELECT DISTINCT system_id, region_key FROM roms", cancellationToken: cancellationToken)))
+            .ToLookup(r => r.SystemId, r => r.RegionKey);
+
+        return games.Keys.Order(StringComparer.Ordinal).Select(system => new SystemStats(
+            system, (int)games[system], (int)roms.GetValueOrDefault(system), Regions(string.Concat(regionKeys[system])))).ToList();
+    }
+
+    /// <summary>Concatenated <c>region_key</c>s (<c>|USA||Europe|</c>) → distinct regions, sorted ordinally.</summary>
+    private static List<string> Regions(string? regionKeys) =>
+        (regionKeys ?? "").Split('|', StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+
+    private sealed class ListRow
+    {
+        public Guid Id { get; init; }
+        public string SystemId { get; init; } = "";
+        public string DisplayTitle { get; init; } = "";
+        public int? ReleaseYear { get; init; }
+        public long RomCount { get; init; }
+        public string? RegionKeys { get; init; }
+        public long? BoxArtImageId { get; init; }
+    }
 }
 
 public sealed class RomRepository : IRomRepository
@@ -88,6 +170,13 @@ public sealed class RomRepository : IRomRepository
             $"{Select} WHERE game_id = @gameId ORDER BY id", new { gameId }, cancellationToken: cancellationToken))).AsList();
     }
 
+    public async Task<RomRow?> GetAsync(Guid gameId, long id, CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return await connection.QuerySingleOrDefaultAsync<RomRow>(new CommandDefinition(
+            $"{Select} WHERE id = @id AND game_id = @gameId", new { gameId, id }, cancellationToken: cancellationToken));
+    }
+
     public async Task<RomRow?> GetBySha1Async(string sha1, CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();
@@ -114,15 +203,25 @@ public sealed class RomRepository : IRomRepository
 
 public sealed class ImageRepository(IDbConnectionFactory connections) : IImageRepository
 {
+    private const string Select = """
+        SELECT id AS Id, game_id AS GameId, file_name AS FileName, type AS Type, source AS Source,
+               source_url AS SourceUrl, is_default AS IsDefault, size_bytes AS SizeBytes, sha1 AS Sha1,
+               width AS Width, height AS Height, date_added AS DateAdded
+        FROM images
+        """;
+
     public async Task<IReadOnlyList<ImageRow>> ListByGameAsync(Guid gameId, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
-        return (await connection.QueryAsync<ImageRow>(new CommandDefinition("""
-            SELECT id AS Id, game_id AS GameId, file_name AS FileName, type AS Type, source AS Source,
-                   source_url AS SourceUrl, is_default AS IsDefault, size_bytes AS SizeBytes, sha1 AS Sha1,
-                   width AS Width, height AS Height, date_added AS DateAdded
-            FROM images WHERE game_id = @gameId ORDER BY id
-            """, new { gameId }, cancellationToken: cancellationToken))).AsList();
+        return (await connection.QueryAsync<ImageRow>(new CommandDefinition(
+            $"{Select} WHERE game_id = @gameId ORDER BY id", new { gameId }, cancellationToken: cancellationToken))).AsList();
+    }
+
+    public async Task<ImageRow?> GetAsync(Guid gameId, long id, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return await connection.QuerySingleOrDefaultAsync<ImageRow>(new CommandDefinition(
+            $"{Select} WHERE id = @id AND game_id = @gameId", new { gameId, id }, cancellationToken: cancellationToken));
     }
 }
 

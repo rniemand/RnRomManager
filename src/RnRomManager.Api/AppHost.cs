@@ -52,7 +52,8 @@ public static class AppHost
             .MapJobEndpoints()
             .MapDatEndpoints()
             .MapIngestEndpoints()
-            .MapReviewEndpoints();
+            .MapReviewEndpoints()
+            .MapLibraryEndpoints();
         app.MapFallbackEndpoints(staticFiles);
         return app;
     }
@@ -83,6 +84,7 @@ public static class AppHost
         builder.Services.AddSingleton<ILibraryMirror, LibraryMirror>();
         builder.Services.AddSingleton<InfoJsonReader>();
         builder.Services.AddSingleton<DbSync>();
+        builder.Services.AddSingleton<LibraryFiles>();
         builder.Services.AddSingleton<DatCache>();
         builder.Services.AddSingleton<IIngestReviewRepository, IngestReviewRepository>();
         builder.Services.AddSingleton<IngestFileScanner>();

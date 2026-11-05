@@ -1,3 +1,5 @@
+using RnRomManager.Core.Database;
+
 namespace RnRomManager.Core.Library;
 
 public interface IGameRepository
@@ -5,11 +7,20 @@ public interface IGameRepository
     Task<GameRow?> GetAsync(Guid id, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<GameSyncState>> ListSyncStateAsync(CancellationToken cancellationToken);
+
+    /// <summary>The library list: filters, sort (year nulls last), tie-break <c>id</c>, one page (spec §23, §14.2).</summary>
+    Task<Page<GameListItem>> ListAsync(GameQuery query, CancellationToken cancellationToken);
+
+    /// <summary>Counts and regions for every system that has games (spec §23 <c>/api/systems</c>).</summary>
+    Task<IReadOnlyList<SystemStats>> ListSystemStatsAsync(CancellationToken cancellationToken);
 }
 
 public interface IRomRepository
 {
     Task<IReadOnlyList<RomRow>> ListByGameAsync(Guid gameId, CancellationToken cancellationToken);
+
+    /// <summary>null when the ROM doesn't exist or belongs to another game (ids change on every rewrite, §14.2).</summary>
+    Task<RomRow?> GetAsync(Guid gameId, long id, CancellationToken cancellationToken);
 
     Task<RomRow?> GetBySha1Async(string sha1, CancellationToken cancellationToken);
 
@@ -23,6 +34,9 @@ public interface IRomRepository
 public interface IImageRepository
 {
     Task<IReadOnlyList<ImageRow>> ListByGameAsync(Guid gameId, CancellationToken cancellationToken);
+
+    /// <summary>null when the image doesn't exist or belongs to another game.</summary>
+    Task<ImageRow?> GetAsync(Guid gameId, long id, CancellationToken cancellationToken);
 }
 
 /// <summary>

@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -25,11 +26,13 @@ public sealed class AuthClient(HttpClient http) : IDisposable
 
     public Task<HttpResponseMessage> PatchAsync(string url, object? body = null) => SendAsync(HttpMethod.Patch, url, body, true);
 
-    public async Task<HttpResponseMessage> SendAsync(HttpMethod method, string url, object? body, bool sendXsrf)
+    public async Task<HttpResponseMessage> SendAsync(HttpMethod method, string url, object? body, bool sendXsrf,
+        Action<HttpRequestHeaders>? headers = null)
     {
         using var request = new HttpRequestMessage(method, url) { Content = body is null ? null : JsonContent.Create(body) };
         if (sendXsrf && _xsrf is not null)
             request.Headers.Add("X-XSRF-TOKEN", _xsrf);
+        headers?.Invoke(request.Headers);
         return Capture(await http.SendAsync(request));
     }
 
