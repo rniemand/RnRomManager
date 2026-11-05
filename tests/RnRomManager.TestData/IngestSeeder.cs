@@ -17,6 +17,7 @@ public static class IngestSeeder
         cache = Path.GetFullPath(cache);
         Directory.CreateDirectory(Path.Combine(ingest, "gb"));
         Directory.CreateDirectory(Path.Combine(ingest, "gbc"));
+        Directory.CreateDirectory(Path.Combine(ingest, "gba"));
         var files = new List<string>();
         var gb = new List<FixtureGame>();
         var gbc = new List<FixtureGame>();
@@ -45,6 +46,10 @@ public static class IngestSeeder
         Loose("gb", "03-orbit-revision.gb", revision.Rom);
         Loose("gb", "04-color-garden.gbc", dual.Rom); // dual-mode deliberately dropped in the GB folder
         Loose("gbc", "01-color-racer.gbc", color.Rom);
+        var courier = new FixtureGame("Star Courier (USA)", "Star Courier (USA).gba",
+            new SyntheticGbaRomBuilder { Seed = 3301, Title = "STARCOURIER", GameCode = "ASCE", MakerCode = "01" }.Build())
+        { ReleaseYear = 2002, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Action"] };
+        Loose("gba", "01-star-courier.gba", courier.Rom);
 
         var zipPath = Path.Combine(ingest, "gb", "05-quest.zip");
         using (var file = File.Create(zipPath))
@@ -73,7 +78,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [] });
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier] });
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
     }

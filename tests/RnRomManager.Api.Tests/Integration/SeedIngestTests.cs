@@ -14,8 +14,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 7, 5)]
-    [TestCase(SeedSet.Full, 207, 205)]
+    [TestCase(SeedSet.Basic, 8, 6)]
+    [TestCase(SeedSet.Full, 208, 206)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -60,6 +60,13 @@ public class SeedIngestTests
         Assert.That(orbit.Roms.Single(r => r.IsPrimary).Revision, Is.EqualTo("Rev 1"));
         Assert.That(infos.Single(g => g.Title == "Color Garden").System, Is.EqualTo("gbc"));
         Assert.That(infos.All(g => g.Images.Single().IsDefault), Is.True);
+        var courier = Directory.GetFiles(Path.Combine(factory.Root, "roms", "gba", "S"), "*.zip").Single();
+        using (var zip = LibraryZip.Open(courier, factory.Services.GetRequiredService<InfoJsonReader>()))
+        {
+            var game = zip.InfoJson!.Game!;
+            Assert.That((game.Title, game.System), Is.EqualTo(("Star Courier", "gba")));
+            Assert.That(game.Roms.Single().Header!["gameCode"]!.GetValue<string>(), Is.EqualTo("ASCE"));
+        }
         var review = await factory.Services.GetRequiredService<IIngestReviewRepository>().ListAsync("Pending", 1, 48, default);
         Assert.That(review.Total, Is.EqualTo(1));
         Assert.That(review.Items.Single().Reason, Is.EqualTo("NoDatMatch"));

@@ -268,6 +268,17 @@ public class IngestPipelineTests
     }
 
     [Test]
+    public async Task GbaFile_InTheGbFolder_IsUnsupportedType()
+    {
+        var file = Drop("gb", "courier.gba", new SyntheticGbaRomBuilder { Title = "STARCOURIER" }.Build());
+
+        var result = await IngestAsync(file);
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+        Assert.That(File.ReadAllText(Path.Combine(Ingest("gb"), "_failed", "courier.gba.error.txt")), Does.Contain("gameboy"));
+    }
+
+    [Test]
     public async Task FailedNameClash_GetsASuffix()
     {
         Directory.CreateDirectory(Path.Combine(Ingest("gb"), "_failed"));

@@ -70,7 +70,7 @@ test('ingestion of the seeded Basic set', async () => {
 	await page.getByRole('button', { name: 'Start ingestion' }).click();
 
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
-	await expect(run).toContainText('Ingested 7 · Duplicate 1 · Review 1 · Failed 1', {
+	await expect(run).toContainText('Ingested 8 · Duplicate 1 · Review 1 · Failed 1', {
 		timeout: 60_000
 	});
 
@@ -82,7 +82,7 @@ test('ingestion of the seeded Basic set', async () => {
 
 test('browse, search and filter the library', async () => {
 	await page.goto('/');
-	await expect(page.getByText('5 games')).toBeVisible();
+	await expect(page.getByText('6 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
 
 	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('orb');
@@ -93,6 +93,10 @@ test('browse, search and filter the library', async () => {
 	await page.getByLabel('System').selectOption({ label: 'Game Boy Color' });
 	await expect(page).toHaveURL(/system=gbc/);
 	await expect(page.getByText('2 games')).toBeVisible();
+
+	await page.getByLabel('System').selectOption({ label: 'Game Boy Advance' });
+	await expect(page).toHaveURL(/system=gba/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 
 	// "Quest, The" is shown as "The Quest" but filed under Q (§5, §6.1).
 	await page.goto('/');
@@ -125,7 +129,7 @@ test('game detail + downloads', async () => {
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await page.goto('/');
-	await expect(page.getByText('5 games')).toBeVisible();
+	await expect(page.getByText('6 games')).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await expect(dialog()).toBeVisible();
 	await expect(dialog().getByRole('combobox')).toBeFocused();
