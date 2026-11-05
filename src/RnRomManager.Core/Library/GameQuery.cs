@@ -11,11 +11,25 @@ public sealed record GameQuery
     /// <summary>Matches a game when any of its releases has this region (<c>region_key LIKE '%|USA|%'</c>).</summary>
     public string? Region { get; init; }
 
-    /// <summary>Substring of <c>display_title</c> or <c>title</c>; <c>%</c>/<c>_</c> match literally.</summary>
+    /// <summary>
+    /// Every word of it must appear in <c>display_title</c> or <c>title</c>; <c>%</c>/<c>_</c> match literally.
+    /// </summary>
     public string? Search { get; init; }
+
+    /// <summary>null = all, true = only favourites, false = only non-favourites.</summary>
+    public bool? Favourite { get; init; }
 
     public GameSort Sort { get; init; } = GameSort.Title;
     public bool Descending { get; init; }
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = Database.Page<GameListItem>.DefaultSize;
+
+    public const int MaxWords = 8;
+
+    /// <summary><see cref="Search"/> split on whitespace, distinct case-insensitively.</summary>
+    public IReadOnlyList<string> Words =>
+        Search?.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToList() ?? [];
+
+    /// <summary><see cref="Search"/> trimmed, whitespace runs collapsed to one space: what relevance ranks against.</summary>
+    public string? Phrase => Search is null ? null : string.Join(' ', Search.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 }

@@ -76,8 +76,11 @@ public sealed class GameRepository : IGameRepository
             where.Add("g.bucket = @letter");
         if (query.Region is not null)
             where.Add("EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND r.region_key LIKE @region)");
-        if (query.Search is not null)
-            where.Add("(g.display_title LIKE @search OR g.title LIKE @search)");
+        var words = query.Words;
+        for (var i = 0; i < words.Count; i++)
+            where.Add($"(g.display_title LIKE @w{i} OR g.title LIKE @w{i})");
+        if (query.Favourite is not null)
+            where.Add("g.favourite = @favourite");
         var filter = where.Count == 0 ? "" : "WHERE " + string.Join(" AND ", where);
 
         // Fixed SQL fragments only; nothing user-supplied is spliced in.
@@ -86,18 +89,27 @@ public sealed class GameRepository : IGameRepository
         {
             GameSort.Year => $"g.release_year IS NULL, g.release_year {dir}, g.id",
             GameSort.Added => $"g.created_at {dir}, g.id",
+            GameSort.Rating => $"g.rating IS NULL, g.rating {dir}, g.title, g.id",
+            GameSort.Relevance when query.Phrase is not null =>
+                "CASE WHEN g.display_title = @phrase OR g.title = @phrase THEN 0 " +
+                "WHEN g.display_title LIKE @prefix OR g.title LIKE @prefix THEN 1 ELSE 2 END, g.title, g.id",
+            GameSort.Relevance => "g.title, g.id",
             _ => $"g.title {dir}, g.id",
         };
 
-        var args = new
+        var args = new DynamicParameters(new
         {
             system = query.System,
             letter = query.Letter,
             region = query.Region is null ? null : SqlLike.Contains("|" + query.Region + "|"),
-            search = query.Search is null ? null : SqlLike.Contains(query.Search),
+            favourite = query.Favourite,
+            phrase = query.Phrase,
+            prefix = query.Phrase is null ? null : SqlLike.Escape(query.Phrase) + "%",
             pageSize = query.PageSize,
             offset = (long)(query.Page - 1) * query.PageSize,
-        };
+        });
+        for (var i = 0; i < words.Count; i++)
+            args.Add($"w{i}", SqlLike.Contains(words[i]));
 
         await using var connection = _connections.Create();
         var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(

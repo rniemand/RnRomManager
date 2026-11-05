@@ -6,4 +6,10 @@ public enum GameSort
     Title,
     Year,
     Added,
+
+    /// <summary>Unrated last in both directions; ties by title, then id.</summary>
+    Rating,
+
+    /// <summary>Exact title match, then prefix, then the rest; ties by title, then id. Ignores the direction.</summary>
+    Relevance,
 }

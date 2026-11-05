@@ -29,9 +29,9 @@ public static class LibraryEndpoints
         var games = api.MapGroup("/games");
 
         games.MapGet("", async (string? system, string? letter, string? region, string? q, string? sort, string? dir, int? page,
-            int? pageSize, HttpContext ctx, ISystemRegistry systems, IGameRepository repository) =>
+            int? pageSize, string? favourite, HttpContext ctx, ISystemRegistry systems, IGameRepository repository) =>
         {
-            var (query, errors) = ParseQuery(system, letter, region, q, sort, dir, page, pageSize, systems);
+            var (query, errors) = ParseQuery(system, letter, region, q, sort, dir, page, pageSize, systems, favourite);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             var result = await repository.ListAsync(query, ctx.RequestAborted);
@@ -297,7 +297,7 @@ public static class LibraryEndpoints
     }
 
     public static (GameQuery Query, Dictionary<string, string[]> Errors) ParseQuery(string? system, string? letter, string? region,
-        string? q, string? sort, string? dir, int? page, int? pageSize, ISystemRegistry systems)
+        string? q, string? sort, string? dir, int? page, int? pageSize, ISystemRegistry systems, string? favourite = null)
     {
         var errors = Paging.Validate(page, pageSize);
         if (system is not null && systems.ById(system) is null)
@@ -314,6 +314,8 @@ public static class LibraryEndpoints
         q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
         if (q?.Length > 255)
             errors["q"] = ["Must be at most 255 characters."];
+        else if (new GameQuery { Search = q }.Words.Count > GameQuery.MaxWords)
+            errors["q"] = [$"At most {GameQuery.MaxWords} words."];
 
         GameSort gameSort = GameSort.Title;
         switch (sort)
@@ -321,20 +323,31 @@ public static class LibraryEndpoints
             case null or "title": break;
             case "year": gameSort = GameSort.Year; break;
             case "added": gameSort = GameSort.Added; break;
-            default: errors["sort"] = ["Must be title, year or added."]; break;
+            case "rating": gameSort = GameSort.Rating; break;
+            case "relevance": gameSort = GameSort.Relevance; break;
+            default: errors["sort"] = ["Must be title, year, added, rating or relevance."]; break;
         }
         if (dir is not (null or "asc" or "desc"))
             errors["dir"] = ["Must be asc or desc."];
 
+        bool? onlyFavourite = null;
+        switch (favourite)
+        {
+            case null: break;
+            case "true": onlyFavourite = true; break;
+            case "false": onlyFavourite = false; break;
+            default: errors["favourite"] = ["Must be true or false."]; break;
+        }
         var query = new GameQuery
         {
             System = system,
             Letter = letter,
             Region = region,
             Search = q,
+            Favourite = onlyFavourite,
             Sort = gameSort,
-            // §23: asc for title/year, desc for added.
-            Descending = dir is null ? gameSort == GameSort.Added : dir == "desc",
+            // §23: asc for title/year, desc for added and rating; relevance ignores it.
+            Descending = gameSort != GameSort.Relevance && (dir is null ? gameSort is GameSort.Added or GameSort.Rating : dir == "desc"),
             Page = page ?? 1,
             PageSize = pageSize ?? Page<GameListItem>.DefaultSize,
         };

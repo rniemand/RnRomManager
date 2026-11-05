@@ -31,7 +31,7 @@ public class GameQueryTests
 
     /// <summary>Inserts a game whose releases have the given region lists; <paramref name="addedMinutes"/> orders <c>created_at</c>.</summary>
     private async Task<Guid> Add(string title, int? year = null, int addedMinutes = 0, string system = "gb", bool boxArt = true,
-        string? displayTitle = null, params string[][] releases)
+        string? displayTitle = null, int? rating = null, bool favourite = false, params string[][] releases)
     {
         if (releases.Length == 0)
             releases = [["World"]];
@@ -42,6 +42,8 @@ public class GameQueryTests
             System = system,
             DisplayTitle = displayTitle ?? title,
             ReleaseYear = year,
+            Rating = rating,
+            Favourite = favourite,
             Images = boxArt
                 ? [new InfoJsonImage { FileName = "boxart-01.png", Type = ImageType.BoxArt, Source = InfoJsonImage.SourceDefault, IsDefault = true, SizeBytes = 10, Sha1 = new string('a', 40), Width = 512, Height = 512, DateAdded = When }]
                 : [],
@@ -117,6 +119,65 @@ public class GameQueryTests
         Assert.That(await Titles(new GameQuery { Search = "0%" }), Is.EqualTo(new[] { "100% Pure" }));
         Assert.That(await Titles(new GameQuery { Search = "A_B" }), Is.EqualTo(new[] { "A_B" }));
         Assert.That(await Titles(new GameQuery { Search = @"k\s" }), Is.EqualTo(new[] { @"Back\slash" }));
+    }
+
+    [Test]
+    public async Task Search_EveryWordMustMatch_InAnyOrder_EachWordEscaped()
+    {
+        await Add("Legend of Zelda, The - Link's Awakening", displayTitle: "The Legend of Zelda - Link's Awakening");
+        await Add("Legend of Zelda, The", displayTitle: "The Legend of Zelda");
+        await Add("100% Pure Zelda");
+        await Add("1000 Pure Zelda");
+
+        Assert.That(await Titles(new GameQuery { Search = "awakening zelda" }), Is.EqualTo(new[] { "The Legend of Zelda - Link's Awakening" }));
+        Assert.That(await Titles(new GameQuery { Search = "zelda legend" }),
+            Is.EqualTo(new[] { "The Legend of Zelda", "The Legend of Zelda - Link's Awakening" }));
+        Assert.That(await Titles(new GameQuery { Search = "zelda 0%" }), Is.EqualTo(new[] { "100% Pure Zelda" }));
+        Assert.That(await Titles(new GameQuery { Search = "zelda missing" }), Is.Empty);
+    }
+
+    [Test]
+    public async Task Sort_Relevance_ExactThenPrefixThenRest_OnEitherTitle()
+    {
+        await Add("Quest, The", displayTitle: "The Quest");
+        await Add("Quest for Glory");
+        await Add("Alpha Quest");
+        await Add("The Quest Returns");
+        await Add("Zeta");
+
+        Assert.That(await Titles(new GameQuery { Search = "the quest", Sort = GameSort.Relevance }),
+            Is.EqualTo(new[] { "The Quest", "The Quest Returns" }), "display_title exact, then prefix");
+        Assert.That(await Titles(new GameQuery { Search = "Quest, The", Sort = GameSort.Relevance }), Is.EqualTo(new[] { "The Quest" }), "title exact");
+        Assert.That(await Titles(new GameQuery { Search = "  quest  ", Sort = GameSort.Relevance, Descending = true }),
+            Is.EqualTo(new[] { "Quest for Glory", "The Quest", "Alpha Quest", "The Quest Returns" }),
+            "prefix on title (Quest for Glory / Quest, The: the collation ignores the comma), then the rest by title; dir ignored");
+        Assert.That(await Titles(new GameQuery { Search = "the   quest", Sort = GameSort.Relevance }), Is.EqualTo(new[] { "The Quest", "The Quest Returns" }),
+            "whitespace collapsed");
+        Assert.That(await Titles(new GameQuery { Sort = GameSort.Relevance }),
+            Is.EqualTo(new[] { "Alpha Quest", "Quest for Glory", "The Quest", "The Quest Returns", "Zeta" }), "no q: by title");
+    }
+
+    [Test]
+    public async Task Sort_Rating_UnratedLastInBothDirections_TiesByTitle()
+    {
+        await Add("Unrated");
+        await Add("Bee", rating: 3);
+        await Add("Ant", rating: 3);
+        await Add("Top", rating: 5);
+
+        Assert.That(await Titles(new GameQuery { Sort = GameSort.Rating, Descending = true }), Is.EqualTo(new[] { "Top", "Ant", "Bee", "Unrated" }));
+        Assert.That(await Titles(new GameQuery { Sort = GameSort.Rating }), Is.EqualTo(new[] { "Ant", "Bee", "Top", "Unrated" }));
+    }
+
+    [Test]
+    public async Task Favourite_FiltersTrueOrFalse()
+    {
+        await Add("Loved", favourite: true);
+        await Add("Plain");
+
+        Assert.That(await Titles(new GameQuery { Favourite = true }), Is.EqualTo(new[] { "Loved" }));
+        Assert.That(await Titles(new GameQuery { Favourite = false }), Is.EqualTo(new[] { "Plain" }));
+        Assert.That(await Titles(new GameQuery()), Is.EqualTo(new[] { "Loved", "Plain" }));
     }
 
     [Test]
