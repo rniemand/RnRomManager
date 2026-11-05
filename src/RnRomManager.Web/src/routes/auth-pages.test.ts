@@ -2,6 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
+import { fakePassword } from '#lib/testing/fakePassword.js';
+
+const wrong = fakePassword('wrong');
+const good = fakePassword('good');
+const initial = fakePassword('initial');
+const current = fakePassword('current');
+const next = fakePassword('next');
 
 const goto = vi.fn();
 const url = { current: new URL('http://localhost/login') };
@@ -56,7 +63,7 @@ describe('login page', () => {
 		render(LoginPage);
 
 		await type('Username', 'boss');
-		await type('Password', 'wrong-password');
+		await type('Password', wrong);
 		await fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
 		expect(await screen.findByRole('alert')).toHaveProperty(
@@ -78,13 +85,13 @@ describe('login page', () => {
 		render(LoginPage);
 
 		await type('Username', 'boss');
-		await type('Password', 'correct-horse-battery');
+		await type('Password', good);
 		await fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/games/1', { replaceState: true }));
 		expect(requests.find((r) => r.url === '/api/auth/login')?.body).toEqual({
 			username: 'boss',
-			password: 'correct-horse-battery'
+			password: good
 		});
 		expect(auth.me?.username).toBe('boss');
 	});
@@ -100,7 +107,7 @@ describe('login page', () => {
 		render(LoginPage);
 
 		await type('Username', 'admin');
-		await type('Password', 'initial-password-1');
+		await type('Password', initial);
 		await fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
 
 		await vi.waitFor(() =>
@@ -128,7 +135,7 @@ describe('change password page', () => {
 		const requests = stubApi({});
 		render(ChangePasswordPage);
 
-		await type('Current password', 'old-password-1');
+		await type('Current password', current);
 		await type('New password', 'short');
 		await type('Confirm new password', 'different');
 		await fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
@@ -154,9 +161,9 @@ describe('change password page', () => {
 		});
 		render(ChangePasswordPage);
 
-		await type('Current password', 'not-my-password');
-		await type('New password', 'a-new-password');
-		await type('Confirm new password', 'a-new-password');
+		await type('Current password', wrong);
+		await type('New password', next);
+		await type('Confirm new password', next);
 		await fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
 
 		expect(await screen.findByText('Current password is incorrect.')).toBeTruthy();
@@ -172,15 +179,15 @@ describe('change password page', () => {
 		});
 		render(ChangePasswordPage);
 
-		await type('Current password', 'old-password-1');
-		await type('New password', 'a-new-password');
-		await type('Confirm new password', 'a-new-password');
+		await type('Current password', current);
+		await type('New password', next);
+		await type('Confirm new password', next);
 		await fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
 
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/', { replaceState: true }));
 		expect(requests.find((r) => r.url === '/api/auth/change-password')?.body).toEqual({
-			currentPassword: 'old-password-1',
-			newPassword: 'a-new-password'
+			currentPassword: current,
+			newPassword: next
 		});
 		expect(auth.me?.mustChangePassword).toBe(false);
 	});

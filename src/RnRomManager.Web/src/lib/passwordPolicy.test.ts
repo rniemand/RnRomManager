@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { policyHint, validateChangePassword } from './passwordPolicy';
+import { fakePassword } from './testing/fakePassword';
+
+const next = fakePassword('next');
 
 const valid = {
-	currentPassword: 'old-password-1',
-	newPassword: 'a-new-password',
-	confirmPassword: 'a-new-password'
+	currentPassword: fakePassword('current'),
+	newPassword: next,
+	confirmPassword: next
 };
 
 describe('change-password validation (§9.1)', () => {
@@ -29,17 +32,17 @@ describe('change-password validation (§9.1)', () => {
 	});
 
 	it('rejects the username, case-insensitively', () => {
+		const username = 'administrator';
 		const errors = validateChangePassword(
-			{ ...valid, newPassword: 'Administrator', confirmPassword: 'Administrator' },
-			'administrator'
+			{ ...valid, newPassword: username.toUpperCase(), confirmPassword: username.toUpperCase() },
+			username
 		);
 		expect(errors.newPassword).toMatch(/username/);
 	});
 
 	it('flags a confirmation mismatch', () =>
 		expect(
-			validateChangePassword({ ...valid, confirmPassword: 'a-new-passwork' }, 'boss')
-				.confirmPassword
+			validateChangePassword({ ...valid, confirmPassword: next + '!' }, 'boss').confirmPassword
 		).toMatch(/match/));
 
 	it('the hint states the policy', () =>
