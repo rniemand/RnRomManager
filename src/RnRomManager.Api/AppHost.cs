@@ -33,7 +33,9 @@ public static class AppHost
     public static WebApplication Build(string[] args)
     {
         var builder = CreateBuilder(args);
-        builder.Services.AddHostedService<StartupRunner>();
+        // First of every hosted service, the framework's included: Data Protection's warms its DB-backed key ring on
+        // start, and nothing may touch the DB before §4.1 steps 5–6 (wait + migrate).
+        builder.Services.Insert(0, ServiceDescriptor.Singleton<IHostedService, StartupRunner>());
         // Registered after StartupRunner, so it stops first (hosted services stop in reverse order).
         builder.Services.AddHostedService<JobShutdownService>();
         // Startup step 10: after StartupRunner (hosted services start in order); stops first.
