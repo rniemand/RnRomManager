@@ -213,7 +213,7 @@ public sealed class IngestPipeline(
             Publishers = metadata.Publishers,
             Genres = metadata.Genres,
             Description = null,
-            Roms = WithPrimary([rom]),
+            Roms = PrimaryRelease.Apply([rom]),
             Images = [found.BoxArt.ToInfoJson(now), .. found.Snap is { } snap ? [snap.ToInfoJson(now)] : Array.Empty<InfoJsonImage>()],
             Metadata = new InfoJsonGameMetadata(now, now, AppInfo.Version),
         };
@@ -247,7 +247,7 @@ public sealed class IngestPipeline(
         {
             // §6.1 entry name clash: " (2)"… before the extension.
             rom = rom with { FileName = FileNameRules.FirstFree(rom.FileName, current.Roms.Select(r => r.FileName).ToHashSet(StringComparer.OrdinalIgnoreCase).Contains) };
-            var allRoms = WithPrimary([.. current.Roms, rom]);
+            var allRoms = PrimaryRelease.Apply([.. current.Roms, rom]);
 
             // Step 7: only fields that are still empty.
             var game = current with
@@ -266,7 +266,7 @@ public sealed class IngestPipeline(
             var boxArt = current.Images.FirstOrDefault(i => i.Type == ImageType.BoxArt);
             if (boxArt is null || boxArt.IsDefault)
             {
-                var names = allRoms.OrderBy(Rank, PrimaryReleaseRanker.Instance).Select(r => r.Identification.DatGameName);
+                var names = allRoms.OrderBy(PrimaryRelease.Rank, PrimaryReleaseRanker.Instance).Select(r => r.Identification.DatGameName);
                 var found = await media.FindAsync(system, names, breaker, cancellationToken).ConfigureAwait(false);
                 var newBoxArt = found.BoxArt.IsDefault && boxArt is not null ? null : found.BoxArt;
                 var newSnap = current.Images.Any(i => i.Type == ImageType.Snap) ? null : found.Snap;
@@ -286,27 +286,10 @@ public sealed class IngestPipeline(
     /// <summary>§6.1: every write starts from the ZIP's own <c>info.json</c>.</summary>
     internal (LibraryZip? Zip, InfoJsonGame? Game, IngestItemResult? Error) OpenTarget(string zipPath, string systemId, string? sha1)
     {
-        LibraryZip zip;
-        try
-        {
-            zip = LibraryZip.Open(SafePath.Resolve(paths.Value.Roms, zipPath), reader);
-        }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
-        {
-            return (null, null, IngestItemResult.Error(IngestErrors.TargetZipUnreadable, $"{zipPath}: {ex.Message}", systemId, sha1));
-        }
-
-        IngestItemResult? error = zip.InfoJson switch
-        {
-            { Kind: InfoJsonReadResult.Outcome.Ok } => null,
-            { Kind: InfoJsonReadResult.Outcome.NewerSchema } newer =>
-                IngestItemResult.Error(IngestErrors.InfoJsonNewerSchema, $"{zipPath}: schemaVersion {newer.FileVersion}", systemId, sha1),
-            _ => IngestItemResult.Error(IngestErrors.TargetZipUnreadable, $"{zipPath}: info.json {zip.InfoJson?.Rule ?? "missing"}", systemId, sha1),
-        };
-        if (error is null)
-            return (zip, zip.InfoJson!.Game, null);
-        zip.Dispose();
-        return (null, null, error);
+        var target = LibraryTarget.Open(paths.Value.Roms, zipPath, reader);
+        return target.Code is null
+            ? (target.Zip, target.Game, null)
+            : (null, null, IngestItemResult.Error(target.Code, target.Details, systemId, sha1));
     }
 
     /// <summary>
@@ -503,15 +486,6 @@ public sealed class IngestPipeline(
     {
         foreach (var image in new[] { boxArt, snap }.OfType<MediaImage>())
             entries[LibraryZip.ImageEntry(image.FileName)] = () => new MemoryStream(image.Bytes);
-    }
-
-    private static RankedRelease Rank(InfoJsonRom r) => new(r.FileName, r.Regions, r.Languages, r.Revision, r.Flags);
-
-    /// <summary>§6.1: exactly one primary, recomputed on every write.</summary>
-    private static IReadOnlyList<InfoJsonRom> WithPrimary(IReadOnlyList<InfoJsonRom> releases)
-    {
-        var primary = PrimaryReleaseRanker.Primary(releases, Rank);
-        return releases.Select(r => r with { IsPrimary = ReferenceEquals(r, primary) }).ToList();
     }
 
     private sealed class RomHashes(byte[] bytes)

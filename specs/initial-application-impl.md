@@ -90,7 +90,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S30 | Review resolution + DAT search API | #30 |
 | [x] | S31 | TestData CLI, seed sets, `seed-ingest.ps1` | #31 |
 | [x] | S32 | Library read API (systems, list, detail, images, downloads) | #32 |
-| [ ] | S33 | Library edits: PATCH, delete release/game | |
+| [x] | S33 | Library edits: PATCH, delete release/game | #33 |
 | [ ] | S34 | Library edits: move + merge | |
 | [ ] | S35 | Media retry (per game + `MediaRetry` job) | |
 | [ ] | S36 | Integrity checker | |

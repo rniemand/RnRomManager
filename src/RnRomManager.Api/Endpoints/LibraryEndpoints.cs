@@ -1,13 +1,16 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Net.Http.Headers;
+using RnRomManager.Api.Auth;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Library;
+using RnRomManager.Core.Naming;
 using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api.Endpoints;
 
 /// <summary>
-/// Library reads for every signed-in user (spec §23 <c>/api/systems</c>, <c>/api/games*</c>): lists and details come from
+/// Library reads for every signed-in user and Admin edits (spec §23 <c>/api/systems</c>, <c>/api/games*</c>): lists and details come from
 /// the DB mirror, image and ROM bytes are streamed from the game's ZIP.
 /// </summary>
 public static class LibraryEndpoints
@@ -43,14 +46,8 @@ public static class LibraryEndpoints
             }));
         });
 
-        games.MapGet("/{id:guid}", async (Guid id, HttpContext ctx, IGameRepository repository, IRomRepository roms, IImageRepository images) =>
-        {
-            if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
-                return Problems.NotFound(ctx);
-            var romRows = await roms.ListByGameAsync(id, ctx.RequestAborted);
-            var imageRows = await images.ListByGameAsync(id, ctx.RequestAborted);
-            return Results.Ok(ToDetail(game, romRows, imageRows));
-        });
+        games.MapGet("/{id:guid}", (Guid id, HttpContext ctx, IGameRepository repository, IRomRepository roms, IImageRepository images) =>
+            DetailAsync(id, ctx, repository, roms, images));
 
         games.MapGet("/{id:guid}/images/{imageId:long}", async (Guid id, long imageId, HttpContext ctx, IGameRepository repository,
             IImageRepository images, LibraryFiles files) =>
@@ -88,7 +85,111 @@ public static class LibraryEndpoints
                 : Results.Stream(stream!, "application/octet-stream", rom.FileName);
         });
 
+        // Admin edits (§11, D28): each takes the job lock inside LibraryEditor.
+        games.MapPatch("/{id:guid}", async (Guid id, JsonElement body, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
+            IRomRepository roms, IImageRepository images) =>
+        {
+            var (patch, errors) = ParsePatch(body);
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+            var result = await editor.PatchAsync(id, patch, ctx.RequestAborted);
+            return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
+        games.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, LibraryEditor editor) =>
+            ToResult(ctx, await editor.DeleteGameAsync(id, ctx.RequestAborted))).RequireAuthorization(AuthSetup.AdminOnly);
+
+        games.MapDelete("/{id:guid}/roms/{romId:long}", async (Guid id, long romId, HttpContext ctx, LibraryEditor editor) =>
+            ToResult(ctx, await editor.DeleteReleaseAsync(id, romId, ctx.RequestAborted))).RequireAuthorization(AuthSetup.AdminOnly);
+
         return api;
+    }
+
+    private static async Task<IResult> DetailAsync(Guid id, HttpContext ctx, IGameRepository repository, IRomRepository roms, IImageRepository images)
+    {
+        if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
+            return Problems.NotFound(ctx);
+        var romRows = await roms.ListByGameAsync(id, ctx.RequestAborted);
+        var imageRows = await images.ListByGameAsync(id, ctx.RequestAborted);
+        return Results.Ok(ToDetail(game, romRows, imageRows));
+    }
+
+    private static IResult ToResult(HttpContext ctx, LibraryEditResult result) =>
+        result.Code is null ? Results.NoContent() : ToProblem(ctx, result);
+
+    /// <summary>§23 mutation bullet: 409 for the lock and unwritable ZIPs, 404 for a stale id, 500 for write failures.</summary>
+    private static IResult ToProblem(HttpContext ctx, LibraryEditResult result) => result.Code switch
+    {
+        LibraryEditResult.NotFound => Problems.NotFound(ctx),
+        LibraryEditResult.JobRunning or LibraryTarget.InfoJsonNewerSchema or LibraryTarget.TargetZipUnreadable =>
+            Problems.Create(ctx, StatusCodes.Status409Conflict, result.Code, result.Code),
+        _ => Problems.Create(ctx, StatusCodes.Status500InternalServerError, result.Code!, result.Code!),
+    };
+
+    /// <summary>
+    /// <c>PATCH /api/games/{id}</c> body (§23): an absent property is left unchanged; <c>releaseYear</c> and
+    /// <c>description</c> may be null to clear them. Lists are trimmed and made distinct before the limits are checked.
+    /// </summary>
+    public static (GamePatch Patch, Dictionary<string, string[]> Errors) ParsePatch(JsonElement body)
+    {
+        var errors = new Dictionary<string, string[]>();
+        var patch = new GamePatch();
+        if (body.ValueKind != JsonValueKind.Object)
+        {
+            errors[""] = ["A JSON object is required."];
+            return (patch, errors);
+        }
+
+        if (body.TryGetProperty("title", out var title))
+        {
+            var value = title.ValueKind == JsonValueKind.String ? title.GetString()!.Trim() : null;
+            if (value is not { Length: >= 1 and <= 255 } || FileNameSanitizer.Sanitize(value).Length == 0)
+                errors["title"] = ["Must contain 1–255 characters and produce a nonempty filename."];
+            patch = patch with { Title = value };
+        }
+
+        if (body.TryGetProperty("releaseYear", out var year))
+        {
+            if (year.ValueKind == JsonValueKind.Null)
+                patch = patch with { SetReleaseYear = true };
+            else if (year.ValueKind == JsonValueKind.Number && year.TryGetInt32(out var value) && value is >= 1970 and <= 2100)
+                patch = patch with { SetReleaseYear = true, ReleaseYear = value };
+            else
+                errors["releaseYear"] = ["Must be null or a year 1970–2100."];
+        }
+
+        patch = patch with
+        {
+            Developers = ParseList(body, "developers", errors),
+            Publishers = ParseList(body, "publishers", errors),
+            Genres = ParseList(body, "genres", errors),
+        };
+
+        if (body.TryGetProperty("description", out var description))
+        {
+            if (description.ValueKind == JsonValueKind.Null)
+                patch = patch with { SetDescription = true };
+            else if (description.ValueKind == JsonValueKind.String && description.GetString()!.Length <= 4000)
+                patch = patch with { SetDescription = true, Description = description.GetString() };
+            else
+                errors["description"] = ["Must be null or at most 4000 characters."];
+        }
+        return (patch, errors);
+    }
+
+    private static List<string>? ParseList(JsonElement body, string field, Dictionary<string, string[]> errors)
+    {
+        if (!body.TryGetProperty(field, out var list))
+            return null;
+        if (list.ValueKind != JsonValueKind.Array || list.EnumerateArray().Any(i => i.ValueKind != JsonValueKind.String))
+        {
+            errors[field] = ["Must be an array of strings."];
+            return null;
+        }
+        var items = list.EnumerateArray().Select(i => i.GetString()!.Trim()).Distinct(StringComparer.Ordinal).ToList();
+        if (items.Count > 20 || items.Any(i => i.Length is < 1 or > 255))
+            errors[field] = ["At most 20 items of 1–255 characters each."];
+        return items;
     }
 
     public static (GameQuery Query, Dictionary<string, string[]> Errors) ParseQuery(string? system, string? letter, string? region,
