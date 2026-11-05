@@ -87,6 +87,8 @@ public static class AppHost
         builder.Services.AddSingleton<LibraryFiles>();
         // Transient: MediaService is a typed HttpClient (move to a new game fetches media).
         builder.Services.AddTransient<LibraryEditor>();
+        builder.Services.AddTransient<GameMediaRetry>();
+        builder.Services.AddTransient<MediaRetryJob>();
         builder.Services.AddSingleton<DatCache>();
         builder.Services.AddSingleton<IIngestReviewRepository, IngestReviewRepository>();
         builder.Services.AddSingleton<IngestFileScanner>();

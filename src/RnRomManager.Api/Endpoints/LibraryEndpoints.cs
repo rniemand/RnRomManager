@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Net.Http.Headers;
 using RnRomManager.Api.Auth;
 using RnRomManager.Core.Database;
+using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Naming;
 using RnRomManager.Core.Systems;
@@ -110,6 +111,19 @@ public static class LibraryEndpoints
                 return Problems.Validation(ctx, errors);
             var result = await editor.MoveReleaseAsync(id, romId, request.TargetGameId, request.NewGameTitle?.Trim(), ctx.RequestAborted);
             return result.Code is null ? Results.Ok(new { targetGameId = result.GameId }) : ToProblem(ctx, result);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
+        games.MapPost("/{id:guid}/media/retry", async (Guid id, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
+            IRomRepository roms, IImageRepository images) =>
+        {
+            var result = await editor.RetryMediaAsync(id, ctx.RequestAborted);
+            return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
+        api.MapPost("/jobs/media-retry", async (HttpContext ctx, JobRunner runner, MediaRetryJob job) =>
+        {
+            var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
+            return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         games.MapPost("/{id:guid}/merge", async (Guid id, MergeRequest request, HttpContext ctx, LibraryEditor editor) =>

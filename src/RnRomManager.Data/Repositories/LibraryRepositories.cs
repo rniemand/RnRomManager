@@ -127,6 +127,18 @@ public sealed class GameRepository : IGameRepository
             system, (int)games[system], (int)roms.GetValueOrDefault(system), Regions(string.Concat(regionKeys[system])))).ToList();
     }
 
+    public async Task<IReadOnlyList<GameRow>> ListMediaRetryCandidatesAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<GameRow>(new CommandDefinition($"""
+            {Select} g
+            WHERE g.has_default_boxart
+               OR NOT EXISTS (SELECT 1 FROM images i WHERE i.game_id = g.id AND i.type = 'BoxArt')
+               OR NOT EXISTS (SELECT 1 FROM images i WHERE i.game_id = g.id AND i.type = 'Snap')
+            ORDER BY g.title, g.id
+            """, cancellationToken: cancellationToken))).AsList();
+    }
+
     /// <summary>Concatenated <c>region_key</c>s (<c>|USA||Europe|</c>) → distinct regions, sorted ordinally.</summary>
     private static List<string> Regions(string? regionKeys) =>
         (regionKeys ?? "").Split('|', StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();

@@ -1,6 +1,6 @@
 # Features
 
-Implementation is in progress; this guide covers the ingestion review behaviour implemented through S30, the library read API from S32 and the library edits from S33–S34.
+Implementation is in progress; this guide covers the ingestion review behaviour implemented through S30, the library read API from S32, the library edits from S33–S34 and media retry from S35.
 
 ## Ingestion review queue
 
@@ -66,3 +66,11 @@ Admins can edit metadata, delete, move and merge; the Game detail admin actions 
 Removed ROMs are never hard-deleted, and ingestion ignores `_removed/`; move a file back into `ingest/<system>/` to re-ingest it. A ROM whose ZIP entry no longer matches its recorded SHA1 is still moved as it is; a listed entry that is absent from the ZIP has nothing to move and is skipped.
 
 Errors: an unknown game, a ROM of another game, or a release the ZIP no longer lists return `404 NotFound`. A ZIP that can't be read or has a newer `info.json` schema returns `409 TargetZipUnreadable` or `409 InfoJsonNewerSchema` without changing anything. A corrupt entry returns `500 VerifyFailed`, and an IO failure returns `500 IoError`; in both cases the ZIP is unchanged and any copies already made in `_removed/` are taken back. `500 DbWriteFailed` means the ZIP changed but the database didn't; the next ingest or integrity run repairs the database from the ZIP.
+
+## Retry missing media
+
+Thumbnails come from libretro-thumbnails, looked up by the primary release's DAT game name first, then the other releases in rank order; releases without a DAT game name (Manual) are skipped. Both actions need an Admin session and the antiforgery header, and take the global job lock (`409 JobRunning` when busy).
+
+- `POST /api/games/{id}/media/retry` (Game detail, S43) re-runs the lookup for one game whose box art is the default or missing, or which has no snap, and returns the game. A found box art replaces only a default one, and a missing box art gets at least the default. A found snap is added only when the game has none. The game is rewritten only when something changed; finding nothing still returns 200 with the game unchanged. Errors are the same as for the other library edits.
+- `POST /api/jobs/media-retry` (Integrity page, S46) starts a `MediaRetry` job and returns `202 {jobId}`. It runs the same lookup for every game with the default box art, no box art or no snap, ordered by title. Games where every release is Manual are skipped. Per-game errors are logged and the job continues. The summary is `{updated, notFound, skipped, error}`; there are no job items.
+- After 3 consecutive network failures (timeouts, connection errors, or 5xx/408 after retries; a 404 doesn't count), the job stops and ends `Failed` with the error `thumbnail host unreachable`. Games already updated keep their new media.
