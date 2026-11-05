@@ -1,6 +1,6 @@
 ---
 title: Game Boy Advance support
-status: in-progress # draft | ready | in-progress | completed
+status: completed # draft | ready | in-progress | completed
 created: 2026-11-05
 branch: dev/gba-support
 ---
