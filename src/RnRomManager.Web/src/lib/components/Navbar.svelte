@@ -52,7 +52,7 @@
 			<ul class="navbar-nav me-auto">
 				{#each links as link (link.href)}
 					<li class="nav-item">
-						<!-- Plain paths: most of these routes arrive in S40–S47, and resolve() only accepts existing ones. -->
+						<!-- Plain paths: most of these routes arrive in S41–S47, and resolve() only accepts existing ones. -->
 						<!-- eslint-disable svelte/no-navigation-without-resolve -->
 						<a
 							class="nav-link d-flex align-items-center gap-1"
@@ -86,8 +86,10 @@
 					</button>
 					<ul class="dropdown-menu dropdown-menu-end">
 						<li>
-							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- the route arrives in S40 -->
-							<a class="dropdown-item d-flex align-items-center gap-2" href="/change-password">
+							<a
+								class="dropdown-item d-flex align-items-center gap-2"
+								href={resolve('/change-password')}
+							>
 								<Icon name="password" /> Change password
 							</a>
 						</li>
