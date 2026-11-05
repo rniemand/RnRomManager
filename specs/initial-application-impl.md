@@ -108,7 +108,7 @@ These are manual and can't be done by an agent. Each step that needs one says so
 | [x] | S48 | Dev scripts complete (`setup-dev`, `start-dev`) | #48 |
 | [x] | S49 | E2E: Playwright + axe, compose, CI job | #49 |
 | [x] | S50 | Documentation pass | #51 |
-| [ ] | S51 | Release `v0.1.0` | |
+| [x] | S51 | Release `v0.1.0` | #52 |
 | [ ] | S52 | Deploy to the owner's host + smoke test | |
 
 **Milestones:** M1 walking skeleton ships an `edge` image (S06) · M2 DB + auth (S12) · M3 domain core (S20) · M4 ingestion works end to end via API (S31) · M5 full API (S38) · M6 full UI (S47) · M7 MVP live (S52).
