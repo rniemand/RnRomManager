@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDateTime, formatSize } from './format';
+import { formatDateTime, formatKey, formatSize, formatValue } from './format';
 
 // The number part follows the browser's locale, so expectations are built the same way.
 const oneDecimal = (n: number) =>
@@ -53,5 +53,22 @@ describe('formatDateTime', () => {
 			'',
 			''
 		]);
+	});
+});
+
+describe('header formatting', () => {
+	it('turns camelCase keys into words', () => {
+		expect(formatKey('logoValid')).toBe('Logo valid');
+		expect(formatKey('isMbc1Multicart')).toBe('Is mbc1 multicart');
+		expect(formatKey('title')).toBe('Title');
+	});
+
+	it('formats values', () => {
+		expect(formatValue(true)).toBe('Yes');
+		expect(formatValue(false)).toBe('No');
+		expect(formatValue(null)).toBe('—');
+		expect(formatValue(0)).toBe('0');
+		expect(formatValue('0x80')).toBe('0x80');
+		expect(formatValue({ a: 1 })).toBe('{"a":1}');
 	});
 });
