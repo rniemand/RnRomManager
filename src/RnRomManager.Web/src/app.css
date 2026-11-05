@@ -39,3 +39,8 @@
 [data-bs-theme='dark'] .navbar {
 	--rn-nav-accent: var(--bs-primary-text-emphasis);
 }
+
+/* Global search (spec B13): blur the page behind the modal. */
+.modal.global-search {
+	backdrop-filter: blur(4px);
+}
