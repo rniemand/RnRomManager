@@ -62,6 +62,7 @@ public class IngestPipelineTests
         var cache = _factory.Services.GetRequiredService<DatCache>();
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
+            [IngestSeeder.GbaDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },
@@ -264,6 +265,17 @@ public class IngestPipelineTests
         Assert.That(File.Exists(moved), Is.True);
         var errorTxt = File.ReadAllText(moved + ".error.txt");
         Assert.That(errorTxt, Does.Contain("UnsupportedType").And.Contain(jobId.ToString()).And.Contain("time: "));
+    }
+
+    [Test]
+    public async Task GbaFile_InTheGbFolder_IsUnsupportedType()
+    {
+        var file = Drop("gb", "courier.gba", new SyntheticGbaRomBuilder { Title = "STARCOURIER" }.Build());
+
+        var result = await IngestAsync(file);
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+        Assert.That(File.ReadAllText(Path.Combine(Ingest("gb"), "_failed", "courier.gba.error.txt")), Does.Contain("gameboy"));
     }
 
     [Test]

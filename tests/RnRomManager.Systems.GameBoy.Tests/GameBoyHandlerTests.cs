@@ -7,6 +7,7 @@ namespace RnRomManager.Systems.GameBoy.Tests;
 public class GameBoyHandlerTests
 {
     private static readonly ISystemHandler[] Handlers = [new GameBoyHandler(), new GameBoyColorHandler()];
+    private static readonly ISystemHandler[] AllHandlers = [.. Handlers, new GameBoyAdvanceHandler()];
 
     [Test]
     public void GameBoy_Contract()
@@ -26,13 +27,23 @@ public class GameBoyHandlerTests
         Assert.That(gbc.RomExtensions, Is.EqualTo(new[] { ".gbc" }));
     }
 
+    [Test]
+    public void GameBoyAdvance_Contract()
+    {
+        ISystemHandler gba = new GameBoyAdvanceHandler();
+
+        Assert.That((gba.Id, gba.DisplayName, gba.Family, gba.DatName), Is.EqualTo(("gba", "Game Boy Advance", "gba", "Nintendo - Game Boy Advance")));
+        Assert.That(gba.RomExtensions, Is.EqualTo(new[] { ".gba" }));
+        Assert.That((gba.MinRomSizeBytes, gba.MaxRomSizeBytes), Is.EqualTo((0xC0L, 32L * 1024 * 1024)));
+    }
+
     [TestCaseSource(nameof(Handlers))]
     public void Limits_Are0x150To16MiB(ISystemHandler handler)
     {
         Assert.That((handler.MinRomSizeBytes, handler.MaxRomSizeBytes), Is.EqualTo((0x150L, 16L * 1024 * 1024)));
     }
 
-    [TestCaseSource(nameof(Handlers))]
+    [TestCaseSource(nameof(AllHandlers))]
     public void DefaultBoxArt_IsA512x512Png(ISystemHandler handler)
     {
         var png = handler.DefaultBoxArtPng.Span;
@@ -45,7 +56,7 @@ public class GameBoyHandlerTests
     [Test]
     public void DefaultBoxArt_DiffersPerSystem()
     {
-        Assert.That(Handlers[0].DefaultBoxArtPng.ToArray(), Is.Not.EqualTo(Handlers[1].DefaultBoxArtPng.ToArray()));
+        Assert.That(AllHandlers.Select(h => Convert.ToHexString(h.DefaultBoxArtPng.Span)).Distinct().Count(), Is.EqualTo(AllHandlers.Length));
     }
 
     [TestCaseSource(nameof(Handlers))]
@@ -57,7 +68,16 @@ public class GameBoyHandlerTests
         Assert.That(handler.ReadHeader(new byte[0x14F]), Is.Null);
     }
 
-    [TestCaseSource(nameof(Handlers))]
+    [Test]
+    public void GameBoyAdvance_ReadHeader_ClassifiesAsGba()
+    {
+        ISystemHandler gba = new GameBoyAdvanceHandler();
+
+        Assert.That(gba.ReadHeader(new SyntheticGbaRomBuilder { Title = "STARCOURIER" }.Build())!.ClassifiedSystemId, Is.EqualTo("gba"));
+        Assert.That(gba.ReadHeader(new byte[0xBF]), Is.Null);
+    }
+
+    [TestCaseSource(nameof(AllHandlers))]
     public void NormalizeForHashing_IsTheIdentity(ISystemHandler handler)
     {
         ReadOnlyMemory<byte> rom = new byte[] { 1, 2, 3 };

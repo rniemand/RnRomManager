@@ -82,7 +82,7 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 | Path | Contents |
 |---|---|
 | `/app/roms` | the library: one ZIP per game (see [ZIP format](zip-format.md)) |
-| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/`; `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way |
+| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) or `ingest/gba/` (Game Boy Advance); `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way |
 | `/app/logs` | `rnrommanager-yyyy-MM-dd.log`, kept for `Logging:RetentionDays` |
 | `/app/cache` | downloaded DATs and temporary work folders |
 
@@ -137,6 +137,8 @@ docker compose up -d
 ```
 
 Migrations run automatically on start. `info.json` files in older formats are upgraded in memory and rewritten in the new format the next time each game is written. There is no downgrade path: an older app refuses to touch ZIPs written in a newer format.
+
+After upgrading to a version that adds a system (such as the one that adds Game Boy Advance), ingestion refuses to start with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs.
 
 On `docker compose stop` a running job gets 30 seconds to finish its current item (`stop_grace_period: 35s` allows for that). A job that's cut off is marked `Aborted` at the next start and its leftovers are cleaned up; just start it again.
 

@@ -27,9 +27,7 @@ public static class GameBoyHeaderTables
 
     private static Tables Load()
     {
-        using var stream = typeof(GameBoyHeaderTables).Assembly.GetManifestResourceStream("RnRomManager.Systems.GameBoy.Resources.header-tables.json")
-            ?? throw new InvalidOperationException("Embedded header-tables.json is missing.");
-        var doc = JsonSerializer.Deserialize<Document>(stream, new JsonSerializerOptions(JsonSerializerDefaults.Web))
+        var doc = JsonSerializer.Deserialize<Document>(EmbeddedResources.Load("header-tables.json"), new JsonSerializerOptions(JsonSerializerDefaults.Web))
             ?? throw new InvalidOperationException("Embedded header-tables.json is empty.");
         return new Tables(ByByte(doc.CartridgeTypes), ByByte(doc.OldLicensees), doc.NewLicensees);
     }

@@ -120,6 +120,7 @@ public static class AppHost
         builder.Services.AddAppAuth();
         builder.Services.AddSystemHandler<GameBoyHandler>();
         builder.Services.AddSystemHandler<GameBoyColorHandler>();
+        builder.Services.AddSystemHandler<GameBoyAdvanceHandler>();
 
         // Keys live in the DB so cookies survive restarts (spec §9.2).
         builder.Services.AddSingleton<IXmlRepository, DbXmlRepository>();

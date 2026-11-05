@@ -1,6 +1,6 @@
 # Adding a system
 
-Everything system-specific lives behind one interface, `ISystemHandler` (`src/RnRomManager.Core/Systems/ISystemHandler.cs`). Core, the database, the API and the UI enumerate the registered handlers for folders, DATs, file extensions, size limits and filters; nothing outside a `RnRomManager.Systems.X` project knows about Game Boy. Adding SNES or GBA means a new handler project, one registration line, tests and docs, with no changes to the core.
+Everything system-specific lives behind one interface, `ISystemHandler` (`src/RnRomManager.Core/Systems/ISystemHandler.cs`). Core, the database, the API and the UI enumerate the registered handlers for folders, DATs, file extensions, size limits and filters; nothing outside a `RnRomManager.Systems.X` project knows about Game Boy. Adding SNES means a new handler project, one registration line, tests and docs, with no changes to the core.
 
 ## The contract
 
@@ -31,11 +31,11 @@ What each member drives:
 | Member | Used for |
 |---|---|
 | `Id` | `roms/<Id>/` and `ingest/<Id>/` (created at startup with their letter and `_*` folders), `info.json` `system`, the database `system_id` (a `VARCHAR`, so no migration), `/api/systems`, the UI's system filter and the `system-<Id>` icon (unmapped ids fall back to a controller icon). |
-| `Family` | Which handlers' headers and DATs are tried for a file. GB and GBC share the `gameboy` family, so a file in either ingest folder is checked against both DATs, and the header decides where it's stored. |
+| `Family` | Which handlers' headers and DATs are tried for a file. GB and GBC share the `gameboy` family, so a file in either ingest folder is checked against both DATs, and the header decides where it's stored. GBA is its own `gba` family: a `.gba` file in a GB folder fails as `UnsupportedType`. |
 | `RomExtensions` | Which ingest files are picked up (case-insensitive). An unmatched file whose extension doesn't fit its classified system is renamed to `RomExtensions[0]`. |
 | `MinRomSizeBytes` / `MaxRomSizeBytes` | Validation before hashing. The whole ROM is read into memory for `ReadHeader`, bounded by the maximum. |
 | `DatName` | The five DAT files fetched per system: `no-intro/<DatName>.dat` plus the `releaseyear`, `developer`, `publisher` and `genre` metadat files, all relative to `Sources:DatBaseUrl` and cached in `cache/dats/<kind>/`. Also the libretro-thumbnails folder name. |
-| `DefaultBoxArtPng` | Stored when no box art is found. Make your own (the GB/GBC ones are drawn for this project; their SVG sources are in `src/RnRomManager.Systems.GameBoy/Resources/boxart/`). |
+| `DefaultBoxArtPng` | Stored when no box art is found. Make your own (the GB/GBC/GBA ones are drawn for this project; their SVG sources are in `src/RnRomManager.Systems.GameBoy/Resources/boxart/`). |
 | `ReadHeader` | Classification (`ClassifiedSystemId`), the invalid-header rule (`IsPlausible`), review suggestions (`Title`) and the stored header (`Fields`). Return null for a file with no recognisable header; an unmatched headerless file then belongs to the ingest folder's handler. |
 | `NormalizeForHashing` | The bytes that are hashed **and stored**, e.g. stripping a SNES copier header. Stored bytes, `info.json` hashes and the integrity checker's deep hashes then always agree. |
 
@@ -46,7 +46,7 @@ What each member drives:
 
 ## Step by step
 
-1. Create `src/RnRomManager.Systems.<Name>` (class library, referencing `RnRomManager.Core`) and add it to `RnRomManager.slnx`. Add a matching `tests/RnRomManager.Systems.<Name>.Tests` project.
+1. Create `src/RnRomManager.Systems.<Name>` (class library, referencing `RnRomManager.Core`) and add it to `RnRomManager.slnx`. Add a matching `tests/RnRomManager.Systems.<Name>.Tests` project. A closely related system may instead live in an existing project when that is simpler: Game Boy Advance shares `RnRomManager.Systems.GameBoy` (and its box-art and resource code) but is its own `gba` family.
 2. Implement `ISystemHandler` (one class per `Id`). Embed the default box-art PNG as a resource, together with its source file.
 3. Register it in `src/RnRomManager.Api/AppHost.cs` next to the existing ones:
    ```csharp
