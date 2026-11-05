@@ -4,6 +4,7 @@
 	// Font Awesome is only for gaps in Bootstrap Icons, e.g. brand logos (spec §11).
 	import '@fortawesome/fontawesome-free/css/fontawesome.min.css';
 	import '@fortawesome/fontawesome-free/css/brands.min.css';
+	import '../app.css';
 	import '#lib/bootstrap.js';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
