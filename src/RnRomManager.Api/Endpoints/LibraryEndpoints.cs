@@ -47,6 +47,7 @@ public static class LibraryEndpoints
                 boxArtUrl = game.BoxArtImageId is { } imageId ? ImageUrl(game.Id, imageId) : null,
                 rating = game.Rating,
                 favourite = game.Favourite,
+                matchedOn = game.MatchedOn is { } match ? new { field = match.Field, value = match.Value } : null,
             }));
         });
 

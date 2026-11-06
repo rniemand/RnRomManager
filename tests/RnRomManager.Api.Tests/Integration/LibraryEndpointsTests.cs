@@ -42,7 +42,7 @@ public class LibraryEndpointsTests
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld) { ReleaseYear = 1989, Developers = ["Nintendo"], Genres = ["Puzzle"] },
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJapan),
-                new FixtureGame("Pokémon Pinball (Europe)", "Pokémon Pinball (Europe).gb", Pinball),
+                new FixtureGame("Pokémon Pinball (Europe)", "Pokémon Pinball (Europe).gb", Pinball) { Publishers = ["Nintendo"] },
                 new FixtureGame("3 Choume no Tama (Japan)", "3 Choume no Tama (Japan).gb", Arcade),
             ],
         });
@@ -362,5 +362,24 @@ public class LibraryEndpointsTests
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound), url);
             Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("NotFound"));
         }
+    }
+
+    [Test]
+    public async Task Games_MatchedOn_NullForTitleMatches_SetForMetadataMatches_AbsentWithoutQ()
+    {
+        await Tetris();
+        await Ingest("p.gb", Pinball);
+
+        async Task<Dictionary<string, JsonElement>> MatchedOn(string query) =>
+            (await GetJson("/api/games?" + query)).GetProperty("items").EnumerateArray()
+                .ToDictionary(i => i.GetProperty("displayTitle").GetString()!, i => i.GetProperty("matchedOn"));
+
+        var nintendo = await MatchedOn("q=nintendo");
+        Assert.That(nintendo.Keys, Is.EquivalentTo(new[] { "Tetris", "Pokémon Pinball" }));
+        Assert.That((nintendo["Tetris"].GetProperty("field").GetString(), nintendo["Tetris"].GetProperty("value").GetString()),
+            Is.EqualTo(("developer", "Nintendo")));
+        Assert.That(nintendo["Pokémon Pinball"].GetProperty("field").GetString(), Is.EqualTo("publisher"));
+        Assert.That((await MatchedOn("q=tetris"))["Tetris"].ValueKind, Is.EqualTo(JsonValueKind.Null));
+        Assert.That((await MatchedOn("")).Values.Select(v => v.ValueKind), Has.All.EqualTo(JsonValueKind.Null));
     }
 }

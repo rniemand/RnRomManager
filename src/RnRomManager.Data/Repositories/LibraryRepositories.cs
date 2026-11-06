@@ -77,8 +77,10 @@ public sealed class GameRepository : IGameRepository
         if (query.Region is not null)
             where.Add("EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND r.region_key LIKE @region)");
         var words = query.Words;
+        // shortcut: LIKE '%word%' over five columns is a full scan, and list values are matched in their JSON text
+        // (escaped characters may not match literally); move to FULLTEXT if search gets slow.
         for (var i = 0; i < words.Count; i++)
-            where.Add($"(g.display_title LIKE @w{i} OR g.title LIKE @w{i})");
+            where.Add($"({TitleLike(i)} OR {JsonLike("developers", i)} OR {JsonLike("publishers", i)} OR {JsonLike("genres", i)})");
         if (query.Favourite is not null)
             where.Add("g.favourite = @favourite");
         var filter = where.Count == 0 ? "" : "WHERE " + string.Join(" AND ", where);
@@ -90,9 +92,7 @@ public sealed class GameRepository : IGameRepository
             GameSort.Year => $"g.release_year IS NULL, g.release_year {dir}, g.id",
             GameSort.Added => $"g.created_at {dir}, g.id",
             GameSort.Rating => $"g.rating IS NULL, g.rating {dir}, g.title, g.id",
-            GameSort.Relevance when query.Phrase is not null =>
-                "CASE WHEN g.display_title = @phrase OR g.title = @phrase THEN 0 " +
-                "WHEN g.display_title LIKE @prefix OR g.title LIKE @prefix THEN 1 ELSE 2 END, g.title, g.id",
+            GameSort.Relevance when query.Phrase is not null => $"{RelevanceScore(words.Count)} DESC, g.title, g.id",
             GameSort.Relevance => "g.title, g.id",
             _ => $"g.title {dir}, g.id",
         };
@@ -119,7 +119,8 @@ public sealed class GameRepository : IGameRepository
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount,
                    (SELECT GROUP_CONCAT(r.region_key SEPARATOR '') FROM roms r WHERE r.game_id = g.id) AS RegionKeys,
                    (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.type = 'BoxArt') AS BoxArtImageId,
-                   g.rating AS Rating, g.favourite AS Favourite
+                   g.rating AS Rating, g.favourite AS Favourite, g.title AS Title,
+                   g.developers AS Developers, g.publishers AS Publishers, g.genres AS Genres
             FROM games g {filter}
             ORDER BY {order}
             LIMIT @pageSize OFFSET @offset
@@ -127,8 +128,31 @@ public sealed class GameRepository : IGameRepository
 
         var items = rows.Select(r => new GameListItem(
             r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId,
-            r.Rating, r.Favourite)).ToList();
+            r.Rating, r.Favourite, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres))).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, total);
+    }
+
+    private static string TitleLike(int i) => $"(g.display_title LIKE @w{i} OR g.title LIKE @w{i})";
+
+    // JSON columns are utf8mb4_bin; compare them like the titles (case- and accent-insensitive).
+    private static string JsonLike(string column, int i) => $"CAST(g.{column} AS CHAR) COLLATE utf8mb4_unicode_ci LIKE @w{i}";
+
+    /// <summary>S2: 100 exact title + 60 title prefix + per word 40 title, 20 developers, 20 publishers, 10 genres.</summary>
+    private static string RelevanceScore(int words)
+    {
+        var parts = new List<string>
+        {
+            "(CASE WHEN g.display_title = @phrase OR g.title = @phrase THEN 100 ELSE 0 END)",
+            "(CASE WHEN g.display_title LIKE @prefix OR g.title LIKE @prefix THEN 60 ELSE 0 END)",
+        };
+        for (var i = 0; i < words; i++)
+        {
+            parts.Add($"(CASE WHEN {TitleLike(i)} THEN 40 ELSE 0 END)");
+            parts.Add($"(CASE WHEN {JsonLike("developers", i)} THEN 20 ELSE 0 END)");
+            parts.Add($"(CASE WHEN {JsonLike("publishers", i)} THEN 20 ELSE 0 END)");
+            parts.Add($"(CASE WHEN {JsonLike("genres", i)} THEN 10 ELSE 0 END)");
+        }
+        return "(" + string.Join(" + ", parts) + ")";
     }
 
     public async Task<IReadOnlyList<SystemStats>> ListSystemStatsAsync(CancellationToken cancellationToken)
@@ -175,6 +199,10 @@ public sealed class GameRepository : IGameRepository
         public long? BoxArtImageId { get; init; }
         public int? Rating { get; init; }
         public bool Favourite { get; init; }
+        public string Title { get; init; } = "";
+        public IReadOnlyList<string> Developers { get; init; } = [];
+        public IReadOnlyList<string> Publishers { get; init; } = [];
+        public IReadOnlyList<string> Genres { get; init; } = [];
     }
 }
 
