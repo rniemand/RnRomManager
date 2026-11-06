@@ -14,7 +14,8 @@
 	const colours: Record<string, string> = {
 		gb: 'text-bg-success',
 		gbc: 'text-bg-info',
-		gba: 'text-bg-primary'
+		gba: 'text-bg-primary',
+		n64: 'text-bg-danger'
 	};
 </script>
 

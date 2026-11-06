@@ -63,6 +63,7 @@ public class IngestPipelineTests
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
             [IngestSeeder.GbaDat] = [],
+            [IngestSeeder.N64Dat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },

@@ -8,6 +8,7 @@ public static class IngestSeeder
     public const string GbDat = "Nintendo - Game Boy";
     public const string GbcDat = "Nintendo - Game Boy Color";
     public const string GbaDat = "Nintendo - Game Boy Advance";
+    public const string N64Dat = "Nintendo - Nintendo 64";
 
     public static void Seed(string ingest, string cache, SeedSet set, TimeProvider time)
     {
@@ -80,7 +81,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier] });
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [] });
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
     }

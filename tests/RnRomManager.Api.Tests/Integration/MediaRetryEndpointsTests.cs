@@ -54,6 +54,7 @@ public class MediaRetryEndpointsTests
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
             [IngestSeeder.GbaDat] = [],
+            [IngestSeeder.N64Dat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Tetris), new FixtureGame("Zelda (USA)", "Zelda (USA).gb", Zelda)],
         });
         cache.Load();

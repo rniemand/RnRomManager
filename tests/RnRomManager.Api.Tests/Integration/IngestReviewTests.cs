@@ -43,6 +43,7 @@ public class IngestReviewTests
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
             [IngestSeeder.GbaDat] = [],
+            [IngestSeeder.N64Dat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", bytes)],
             ["Nintendo - Game Boy Color"] = [],
         });
@@ -100,6 +101,7 @@ public class IngestReviewTests
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
             [IngestSeeder.GbaDat] = [],
+            [IngestSeeder.N64Dat] = [],
             [Gb] = [new FixtureGame("Tetris Deluxe (World)", "Tetris Deluxe (World).gb", Known)],
             ["Nintendo - Game Boy Color"] = [],
         });
