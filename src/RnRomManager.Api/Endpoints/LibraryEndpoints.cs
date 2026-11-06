@@ -233,7 +233,8 @@ public static class LibraryEndpoints
             return Problems.NotFound(ctx);
         var romRows = await roms.ListByGameAsync(id, ctx.RequestAborted);
         var imageRows = await images.ListByGameAsync(id, ctx.RequestAborted);
-        return Results.Ok(ToDetail(game, romRows, imageRows));
+        var systemName = ctx.RequestServices.GetRequiredService<ISystemRegistry>().ById(game.SystemId)?.DisplayName ?? game.SystemId;
+        return Results.Ok(ToDetail(game, systemName, romRows, imageRows));
     }
 
     private static IResult ToResult(HttpContext ctx, LibraryEditResult result) =>
@@ -433,10 +434,11 @@ public static class LibraryEndpoints
 
     private static string ImageUrl(Guid gameId, long imageId) => $"/api/games/{gameId}/images/{imageId}";
 
-    private static object ToDetail(GameRow game, IReadOnlyList<RomRow> roms, IReadOnlyList<ImageRow> images) => new
+    private static object ToDetail(GameRow game, string systemName, IReadOnlyList<RomRow> roms, IReadOnlyList<ImageRow> images) => new
     {
         id = game.Id,
         system = game.SystemId,
+        systemName,
         title = game.Title,
         displayTitle = game.DisplayTitle,
         releaseYear = game.ReleaseYear,

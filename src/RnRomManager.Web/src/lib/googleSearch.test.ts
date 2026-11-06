@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { googleSearchUrl, reviewSearchQuery } from './googleSearch';
+import { gameSearchQuery, googleSearchUrl, reviewSearchQuery } from './googleSearch';
 
 const item = (originalFileName: string, title?: unknown) => ({
 	originalFileName,
@@ -33,6 +33,14 @@ describe('reviewSearchQuery', () => {
 	it('builds an encoded Google URL', () => {
 		expect(googleSearchUrl(reviewSearchQuery(item('a & b.gb'), 'Game Boy'))).toBe(
 			'https://www.google.com/search?q=%22a%20%26%20b%22%20Game%20Boy%20rom'
+		);
+	});
+});
+
+describe('gameSearchQuery', () => {
+	it('quotes the display title and adds the system name', () => {
+		expect(gameSearchQuery({ displayTitle: 'Quest, The', systemName: 'Game Boy' })).toBe(
+			'"Quest, The" Game Boy'
 		);
 	});
 });

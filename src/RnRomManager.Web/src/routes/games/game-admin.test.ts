@@ -2,10 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
+import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 
-const goto = vi.fn();
-vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => goto(...args) }));
-vi.mock('$app/state', () => ({ page: { params: { id: 'g1' } } }));
+const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
+vi.mock('$app/navigation', () => ({ goto: (...args: [string, unknown?]) => goto(...args) }));
+vi.mock('$app/state', () => ({
+	page: {
+		params: { id: 'g1' },
+		get url() {
+			return testUrl.current;
+		}
+	}
+}));
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
@@ -48,6 +56,7 @@ const rom = (id: number) => ({
 const game = (romIds: number[]) => ({
 	id: 'g1',
 	system: 'gb',
+	systemName: 'Game Boy',
 	title: 'Tetris',
 	displayTitle: 'Tetris',
 	releaseYear: 1989,
@@ -72,6 +81,7 @@ describe('game detail admin actions', () => {
 	beforeEach(() => {
 		resetClient();
 		goto.mockClear();
+		navigateTo('/games/g1');
 		auth.set({
 			id: 1,
 			username: 'admin',
@@ -189,6 +199,19 @@ describe('game detail admin actions', () => {
 		await fireEvent.click(modal().getByRole('button', { name: 'Edit metadata', hidden: true }));
 
 		await vi.waitFor(() => expect(calls).toContain('PATCH /api/games/g1'));
+	});
+
+	it('the admin modal opens from the Images tab, outside the hidden Releases panel (GP1)', async () => {
+		navigateTo('/games/g1?tab=images');
+		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
+		render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: /Delete game/ }));
+
+		const first = document.querySelector<HTMLElement>('.modal')!;
+		expect(first.querySelector('.modal-title')!.textContent).toMatch(/Delete/);
+		expect(first.closest('[hidden]')).toBeNull();
+		expect(document.getElementById('releases-panel')!.hidden).toBe(true);
 	});
 
 	it('other admin modals keep the default width', async () => {

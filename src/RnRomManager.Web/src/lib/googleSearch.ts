@@ -25,3 +25,8 @@ export function reviewSearchQuery(
 	);
 	return name ? `"${name}" ${systemName} rom` : `${item.crc32} ${systemName} rom`;
 }
+
+/** GP2: `"<display title>" <system>`. */
+export function gameSearchQuery(game: { displayTitle: string; systemName: string }): string {
+	return `"${game.displayTitle}" ${game.systemName}`;
+}

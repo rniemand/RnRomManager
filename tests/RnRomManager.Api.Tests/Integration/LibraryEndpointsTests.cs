@@ -209,6 +209,7 @@ public class LibraryEndpointsTests
         Assert.That(game.GetProperty("id").GetGuid(), Is.EqualTo(id));
         Assert.That((game.GetProperty("system").GetString(), game.GetProperty("title").GetString(), game.GetProperty("displayTitle").GetString()),
             Is.EqualTo(("gb", "Tetris", "Tetris")));
+        Assert.That(game.GetProperty("systemName").GetString(), Is.EqualTo("Game Boy"));
         Assert.That(game.GetProperty("developers").EnumerateArray().Select(d => d.GetString()), Is.EqualTo(new[] { "Nintendo" }));
         Assert.That(game.GetProperty("genres").EnumerateArray().Select(d => d.GetString()), Is.EqualTo(new[] { "Puzzle" }));
         Assert.That(game.GetProperty("hasDefaultBoxArt").GetBoolean(), Is.True);

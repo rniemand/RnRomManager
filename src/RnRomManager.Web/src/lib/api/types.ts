@@ -107,6 +107,8 @@ export interface ImageInfo {
 export interface GameDetail {
 	id: string;
 	system: string;
+	/** The handler's display name (GP2). */
+	systemName: string;
 	title: string;
 	displayTitle: string;
 	releaseYear: number | null;
