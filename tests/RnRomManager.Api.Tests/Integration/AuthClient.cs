@@ -27,12 +27,21 @@ public sealed class AuthClient(HttpClient http) : IDisposable
     public Task<HttpResponseMessage> PatchAsync(string url, object? body = null) => SendAsync(HttpMethod.Patch, url, body, true);
 
     public async Task<HttpResponseMessage> SendAsync(HttpMethod method, string url, object? body, bool sendXsrf,
-        Action<HttpRequestHeaders>? headers = null)
+        Action<HttpRequestHeaders>? headers = null, HttpCompletionOption completion = HttpCompletionOption.ResponseContentRead)
     {
         using var request = new HttpRequestMessage(method, url) { Content = body is null ? null : JsonContent.Create(body) };
         if (sendXsrf && _xsrf is not null)
             request.Headers.Add("X-XSRF-TOKEN", _xsrf);
         headers?.Invoke(request.Headers);
+        return Capture(await http.SendAsync(request, completion));
+    }
+
+    /// <summary>A mutation with a prepared body (e.g. multipart), XSRF header as for JSON calls.</summary>
+    public async Task<HttpResponseMessage> SendContentAsync(HttpMethod method, string url, HttpContent content, bool sendXsrf = true)
+    {
+        using var request = new HttpRequestMessage(method, url) { Content = content };
+        if (sendXsrf && _xsrf is not null)
+            request.Headers.Add("X-XSRF-TOKEN", _xsrf);
         return Capture(await http.SendAsync(request));
     }
 

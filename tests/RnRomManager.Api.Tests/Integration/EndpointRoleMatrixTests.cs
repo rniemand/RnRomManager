@@ -2,14 +2,16 @@ using System.Net;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
 
 /// <summary>
 /// The §15.1 "API" row (S38): one expected role for <b>every</b> mapped <c>/api</c> endpoint. Fails when an endpoint has
-/// no entry (or an entry has no endpoint), then checks each one: anonymous → 401 unless anonymous is allowed, a
-/// <c>User</c> → 403 on Admin endpoints and through on the rest.
+/// no entry (or an entry has no endpoint), then checks each one: anonymous → 401 unless anonymous is allowed; a user
+/// with no roles, an <c>admin</c>-only user and a <c>rom-manager</c>-only user each get through exactly the endpoints
+/// their roles allow (403 otherwise). Roles don't imply each other (R2).
 /// </summary>
 [Category("Integration")]
 public partial class EndpointRoleMatrixTests
@@ -19,6 +21,7 @@ public partial class EndpointRoleMatrixTests
         Anonymous,
         User,
         Admin,
+        RomManager,
     }
 
     private static readonly Dictionary<string, Role> Expected = new(StringComparer.Ordinal)
@@ -40,13 +43,16 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/games/{id:guid}/images/{imageId:long}"] = Role.User,
         ["GET /api/games/{id:guid}/download"] = Role.User,
         ["GET /api/games/{id:guid}/roms/{romId:long}/download"] = Role.User,
-        ["PATCH /api/games/{id:guid}"] = Role.Admin,
+        ["PATCH /api/games/{id:guid}"] = Role.RomManager,
         ["PATCH /api/games/{id:guid}/rating"] = Role.User,
-        ["DELETE /api/games/{id:guid}"] = Role.Admin,
-        ["DELETE /api/games/{id:guid}/roms/{romId:long}"] = Role.Admin,
-        ["POST /api/games/{id:guid}/roms/{romId:long}/move"] = Role.Admin,
-        ["POST /api/games/{id:guid}/merge"] = Role.Admin,
-        ["POST /api/games/{id:guid}/media/retry"] = Role.Admin,
+        ["DELETE /api/games/{id:guid}"] = Role.RomManager,
+        ["DELETE /api/games/{id:guid}/roms/{romId:long}"] = Role.RomManager,
+        ["POST /api/games/{id:guid}/roms/{romId:long}/move"] = Role.RomManager,
+        ["POST /api/games/{id:guid}/merge"] = Role.RomManager,
+        ["POST /api/games/{id:guid}/media/retry"] = Role.RomManager,
+        ["POST /api/games/{id:guid}/images"] = Role.RomManager,
+        ["DELETE /api/games/{id:guid}/images/{imageId:long}"] = Role.RomManager,
+        ["POST /api/games/{id:guid}/images/{imageId:long}/cover"] = Role.RomManager,
 
         ["GET /api/ingest/pending"] = Role.Admin,
         ["POST /api/jobs/ingest"] = Role.Admin,
@@ -63,6 +69,7 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/review/{id:long}"] = Role.Admin,
         ["POST /api/review/{id:long}/resolve"] = Role.Admin,
         ["POST /api/review/{id:long}/dismiss"] = Role.Admin,
+        ["DELETE /api/review/{id:long}"] = Role.Admin,
         ["GET /api/dat/search"] = Role.Admin,
 
         ["GET /api/integrity/status"] = Role.Admin,
@@ -71,6 +78,7 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/admin/dats"] = Role.Admin,
         ["GET /api/admin/settings"] = Role.Admin,
         ["GET /api/admin/logs"] = Role.Admin,
+        ["GET /api/admin/logs/stream"] = Role.Admin,
         ["GET /api/about"] = Role.User,
     };
 
@@ -85,6 +93,12 @@ public partial class EndpointRoleMatrixTests
         using var user = await AuthClient.CreateAsync(factory);
         await TestUsers.CreateAsync(factory, "plain");
         (await user.LoginAsync("plain", TestUsers.Password)).Dispose();
+        using var admin = await AuthClient.CreateAsync(factory);
+        await TestUsers.CreateAsync(factory, "admin-only", Roles.Of(Roles.Admin));
+        (await admin.LoginAsync("admin-only", TestUsers.Password)).Dispose();
+        using var manager = await AuthClient.CreateAsync(factory);
+        await TestUsers.CreateAsync(factory, "manager-only", Roles.Of(Roles.RomManager));
+        (await manager.LoginAsync("manager-only", TestUsers.Password)).Dispose();
 
         var mapped = factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()
             .Where(e => e.RoutePattern.RawText!.StartsWith("/api/", StringComparison.Ordinal) && e.RoutePattern.RawText != "/api/{**rest}")
@@ -95,7 +109,7 @@ public partial class EndpointRoleMatrixTests
         Assert.That(mapped.Except(Expected.Keys), Is.Empty, "mapped endpoints without an expected role");
         Assert.That(Expected.Keys.Except(mapped), Is.Empty, "expected roles for endpoints that aren't mapped");
 
-        // Logout last: it ends the user's session.
+        // Headers only: the log stream never ends on its own. Logout last: it ends the user's session.
         foreach (var (key, role) in Expected.OrderBy(e => e.Key == "POST /api/auth/logout"))
         {
             var method = new HttpMethod(key[..key.IndexOf(' ')]);
@@ -106,17 +120,26 @@ public partial class EndpointRoleMatrixTests
             });
             object? body = method == HttpMethod.Get || method == HttpMethod.Delete ? null : new { };
 
-            using var asAnonymous = await anonymous.SendAsync(method, url, body, sendXsrf: true);
-            using var asUser = await user.SendAsync(method, url, body, sendXsrf: true);
+            using var asAnonymous = await anonymous.SendAsync(method, url, body, sendXsrf: true, completion: HttpCompletionOption.ResponseHeadersRead);
+            using var asUser = await user.SendAsync(method, url, body, sendXsrf: true, completion: HttpCompletionOption.ResponseHeadersRead);
+            using var asAdmin = await admin.SendAsync(method, url, body, sendXsrf: true, completion: HttpCompletionOption.ResponseHeadersRead);
+            using var asManager = await manager.SendAsync(method, url, body, sendXsrf: true, completion: HttpCompletionOption.ResponseHeadersRead);
 
             if (role == Role.Anonymous)
                 Assert.That(asAnonymous.StatusCode, Is.Not.AnyOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden), key);
             else
                 Assert.That(asAnonymous.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized), key);
-            if (role == Role.Admin)
-                Assert.That(asUser.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden), key);
-            else
-                Assert.That(asUser.StatusCode, Is.Not.AnyOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden), key);
+            AssertAllowed(asUser, role is Role.Anonymous or Role.User, $"{key} as a user");
+            AssertAllowed(asAdmin, role is not Role.RomManager, $"{key} as admin-only");
+            AssertAllowed(asManager, role is not Role.Admin, $"{key} as rom-manager-only");
         }
+    }
+
+    private static void AssertAllowed(HttpResponseMessage response, bool allowed, string message)
+    {
+        if (allowed)
+            Assert.That(response.StatusCode, Is.Not.AnyOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden), message);
+        else
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden), message);
     }
 }

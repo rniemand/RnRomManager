@@ -18,7 +18,7 @@ namespace RnRomManager.Core.Library;
 /// (§3.1) and follows the sync rule (§14.2): the ZIP is written (or deleted) first, then the DB. Every write starts from
 /// the ZIP's own <c>info.json</c> (§6.1). Removed ROM bytes go to <c>ingest/&lt;system&gt;/_removed/</c>, never deleted.
 /// </summary>
-public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRepository roms, ILibraryMirror mirror,
+public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRepository roms, IImageRepository images, ILibraryMirror mirror,
     InfoJsonReader reader, DatCache dats, ISystemRegistry systems, MediaService media, GameMediaRetry mediaRetry,
     IOptions<PathsOptions> paths, TimeProvider time, ILogger<LibraryEditor> logger)
 {
@@ -121,6 +121,153 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         return result;
     }
 
+    /// <summary>
+    /// I5: stores an uploaded PNG/JPEG as-is under <c>boxart-NN</c>/<c>snap-NN</c> (I2, extension from the magic bytes).
+    /// A box art replaces the placeholder (and takes its cover status); the first image of an empty game is its cover (I3).
+    /// </summary>
+    public async Task<LibraryEditResult> AddImageAsync(Guid gameId, ImageType type, byte[] bytes, CancellationToken ct)
+    {
+        if (type is not (ImageType.BoxArt or ImageType.Snap))
+            return Invalid("type", "Choose BoxArt or Snap.");
+        if (bytes.Length == 0)
+            return Invalid("file", "Choose an image file.");
+        if (bytes.Length > ImageFormats.MaxBytes)
+            return Invalid("file", "The image must be at most 8 MiB.");
+        if (ImageFormats.Detect(bytes) is null)
+            return Invalid("file", "The image must be a PNG or JPEG.");
+        if (ImageFormats.Read(bytes) is not var (format, width, height))
+            return Invalid("file", "The image's dimensions can't be read.");
+
+        using var held = jobLock.TryAcquire();
+        if (held is null)
+            return new(JobRunning);
+        if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
+            return new(NotFound);
+        var target = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
+        if (target.Code is not null)
+            return new(target.Code, target.Details);
+
+        using var existing = target.Zip!;
+        var current = target.Game!;
+        var sha1 = Convert.ToHexStringLower(SHA1.HashData(bytes));
+        if (current.Images.Any(i => i.Sha1 == sha1))
+            return new(DuplicateImage, "The game already has this image.");
+
+        var list = current.Images.ToList();
+        // I3: a box art replaces the placeholder (taking its cover status), so its name is free again.
+        var placeholder = type == ImageType.BoxArt ? list.FirstOrDefault(i => i.IsDefault) : null;
+        if (placeholder is not null)
+            list.Remove(placeholder);
+        var image = new InfoJsonImage
+        {
+            FileName = GameImages.NextName(list.Select(i => i.FileName), type, ImageFormats.Extension(format)),
+            Type = type,
+            Source = InfoJsonImage.SourceUpload,
+            IsDefault = false,
+            IsCover = placeholder?.IsCover ?? false,
+            SizeBytes = bytes.Length,
+            Sha1 = sha1,
+            Width = width,
+            Height = height,
+            DateAdded = time.GetUtcNow(),
+        };
+        list.Add(image);
+        if (list.Count > GameImages.MaxImages)
+            return new(TooManyImages, $"A game can have at most {GameImages.MaxImages} images.");
+
+        var game = current with { Images = GameImages.EnsureCover(list), Metadata = Touched(current) };
+        var result = await WriteZipAsync(existing, row.ZipPath, game,
+                new() { [LibraryZip.ImageEntry(image.FileName)] = () => new MemoryStream(bytes) }).ConfigureAwait(false)
+            ?? await MirrorAsync(() => mirror.ReplaceAsync(Mirror(row.ZipPath, game), CancellationToken.None), row.ZipPath).ConfigureAwait(false);
+        if (result.Code is null)
+            logger.LogInformation("Image {FileName} ({Type}) uploaded to game {GameId} ({ZipPath})", image.FileName, type, gameId, row.ZipPath);
+        return result;
+    }
+
+    /// <summary>
+    /// I6: removes an image; the placeholder can't be (<c>DefaultImage</c>). A removed cover passes to the first remaining
+    /// <c>BoxArt</c> by file name, else the first remaining image, else the system's placeholder is added back as cover (I3).
+    /// </summary>
+    public async Task<LibraryEditResult> DeleteImageAsync(Guid gameId, long imageId, CancellationToken ct)
+    {
+        using var held = jobLock.TryAcquire();
+        if (held is null)
+            return new(JobRunning);
+        var (error, row, zip, current, image) = await OpenImageAsync(gameId, imageId, ct).ConfigureAwait(false);
+        if (error is not null)
+            return error;
+        using var _ = zip;
+        if (image!.IsDefault)
+            return new(DefaultImage, "The placeholder is managed automatically; upload a box art to replace it.");
+
+        var list = current!.Images.Where(i => !ReferenceEquals(i, image)).ToList();
+        var entries = new Dictionary<string, Func<Stream>>();
+        if (image.IsCover)
+        {
+            if (list.Where(i => i.Type == ImageType.BoxArt).OrderBy(i => i.FileName, StringComparer.OrdinalIgnoreCase).FirstOrDefault() is { } boxArt)
+                list[list.IndexOf(boxArt)] = boxArt with { IsCover = true };
+            else if (list.Count > 0)
+                list[0] = list[0] with { IsCover = true };
+            else if (systems.ById(current.System) is { } handler)
+            {
+                var placeholder = MediaService.Default(handler);
+                list.Add(placeholder.ToInfoJson(time.GetUtcNow(), isCover: true));
+                entries[LibraryZip.ImageEntry(placeholder.FileName)] = () => new MemoryStream(placeholder.Bytes);
+            }
+        }
+
+        var game = current with { Images = list, Metadata = Touched(current) };
+        var result = await WriteZipAsync(zip, row!.ZipPath, game, entries).ConfigureAwait(false)
+            ?? await MirrorAsync(() => mirror.ReplaceAsync(Mirror(row.ZipPath, game), CancellationToken.None), row.ZipPath).ConfigureAwait(false);
+        if (result.Code is null)
+            logger.LogInformation("Image {FileName} deleted from game {GameId} ({ZipPath})", image.FileName, gameId, row.ZipPath);
+        return result;
+    }
+
+    /// <summary>I7: makes one image the cover (any type, the placeholder too).</summary>
+    public async Task<LibraryEditResult> SetCoverAsync(Guid gameId, long imageId, CancellationToken ct)
+    {
+        using var held = jobLock.TryAcquire();
+        if (held is null)
+            return new(JobRunning);
+        var (error, row, zip, current, image) = await OpenImageAsync(gameId, imageId, ct).ConfigureAwait(false);
+        if (error is not null)
+            return error;
+        using var _ = zip;
+        if (image!.IsCover)
+            return Ok;
+
+        var game = current! with
+        {
+            Images = current.Images.Select(i => i with { IsCover = ReferenceEquals(i, image) }).ToList(),
+            Metadata = Touched(current),
+        };
+        var result = await WriteAsync(zip!, row!.ZipPath, game).ConfigureAwait(false);
+        if (result.Code is null)
+            logger.LogInformation("Image {FileName} is now the cover of game {GameId}", image.FileName, gameId);
+        return result;
+    }
+
+    /// <summary>The game row, its open ZIP (the caller disposes it) and info.json, and the info.json image the DB row names.</summary>
+    /// <returns>Error set (and nothing else) when the image or game isn't there or the ZIP can't be used.</returns>
+    private async Task<(LibraryEditResult? Error, GameRow? Row, LibraryZip? Zip, InfoJsonGame? Game, InfoJsonImage? Image)> OpenImageAsync(
+        Guid gameId, long imageId, CancellationToken ct)
+    {
+        if (await images.GetAsync(gameId, imageId, ct).ConfigureAwait(false) is not { } imageRow
+            || await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
+            return (new(NotFound), null, null, null, null);
+        var target = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
+        if (target.Code is not null)
+            return (new(target.Code, target.Details), null, null, null, null);
+        // The DB row only finds the image; the ZIP's info.json decides what's there (§6.1).
+        if (target.Game!.Images.FirstOrDefault(i => string.Equals(i.FileName, imageRow.FileName, StringComparison.OrdinalIgnoreCase)) is not { } image)
+        {
+            target.Zip!.Dispose();
+            return (new(NotFound, $"{row.ZipPath} no longer lists {imageRow.FileName}"), null, null, null, null);
+        }
+        return (null, row, target.Zip, target.Game, image);
+    }
+
     /// <summary>§10.2 "Retry media" for one game, with its own circuit breaker. Nothing new found is still a success.</summary>
     public async Task<LibraryEditResult> RetryMediaAsync(Guid gameId, CancellationToken ct)
     {
@@ -201,7 +348,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
                 Rating = null,
                 Favourite = false,
                 Roms = PrimaryRelease.Apply([moved]),
-                Images = [found.BoxArt.ToInfoJson(now), .. found.Snap is { } snap ? [snap.ToInfoJson(now)] : Array.Empty<InfoJsonImage>()],
+                Images = GameImages.ForNewGame(found, now),
                 Metadata = new InfoJsonGameMetadata(now, now, AppInfo.Version),
             };
             foreach (var image in new[] { found.BoxArt, found.Snap }.OfType<MediaImage>())
@@ -246,9 +393,11 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     }
 
     /// <summary>
-    /// §11 Merge into… (D35): every release of the source moves into the target in one write. The target keeps its title,
-    /// metadata and images; empty fields are filled from the source, a default box art is replaced by a real source one,
-    /// and the source snap is used only when the target has none. Target ZIP + DB commit, then the source ZIP is deleted.
+    /// §11 Merge into… (D35, I4a): every release of the source moves into the target in one write. The target keeps its
+    /// title, metadata and cover; empty fields are filled from the source. The source's non-default images are copied in
+    /// under new names (I2); its placeholder is dropped; a real source box art removes the target's placeholder (and becomes
+    /// the cover if the placeholder was). More than <see cref="GameImages.MaxImages"/> images → <c>TooManyImages</c>.
+    /// Target ZIP + DB commit, then the source ZIP is deleted.
     /// </summary>
     public async Task<LibraryEditResult> MergeAsync(Guid gameId, Guid targetGameId, CancellationToken ct)
     {
@@ -284,12 +433,10 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             entries[LibraryZip.RomEntry(moved.FileName)] = () => sourceZip.OpenEntry(LibraryZip.RomEntry(rom.FileName), rom.Metadata.SizeBytes);
         }
 
-        var images = into.Images.ToList();
-        var intoBoxArt = into.Images.FirstOrDefault(i => i.Type == ImageType.BoxArt);
-        if (from.Images.FirstOrDefault(i => i.Type == ImageType.BoxArt) is { IsDefault: false } boxArt && intoBoxArt is null or { IsDefault: true })
-            TakeImage(boxArt, MediaImage.BoxArtFileName);
-        if (from.Images.FirstOrDefault(i => i.Type == ImageType.Snap) is { } snap && !into.Images.Any(i => i.Type == ImageType.Snap))
-            TakeImage(snap, MediaImage.SnapFileName);
+        if (GameImages.Merge(into.Images, from.Images) is not var (images, copies))
+            return new(TooManyImages, $"The merged game would have more than {GameImages.MaxImages} images.");
+        foreach (var (copy, sourceName) in copies)
+            entries[LibraryZip.ImageEntry(copy.FileName)] = () => sourceZip.OpenEntry(LibraryZip.ImageEntry(sourceName), copy.SizeBytes);
 
         var targetGame = into with
         {
@@ -314,13 +461,6 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         if (result.Code is null)
             logger.LogInformation("Game {GameId} merged into {TargetId} ({ZipPath})", gameId, targetGameId, targetRow.ZipPath);
         return result with { GameId = targetGameId };
-
-        void TakeImage(InfoJsonImage image, string fileName)
-        {
-            images.RemoveAll(i => i.Type == image.Type || string.Equals(i.FileName, fileName, StringComparison.OrdinalIgnoreCase));
-            images.Add(image with { FileName = fileName });
-            entries[LibraryZip.ImageEntry(fileName)] = () => sourceZip.OpenEntry(LibraryZip.ImageEntry(image.FileName), image.SizeBytes);
-        }
     }
 
     /// <summary>A failed source rebuild after the target was written: put the target back, so the ROM isn't in two ZIPs.</summary>

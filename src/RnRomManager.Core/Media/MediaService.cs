@@ -17,13 +17,14 @@ public sealed record MediaImage(ImageType Type, byte[] Bytes, int Width, int Hei
 
     public string FileName => Type == ImageType.BoxArt ? BoxArtFileName : SnapFileName;
 
-    public InfoJsonImage ToInfoJson(DateTimeOffset dateAdded) => new()
+    public InfoJsonImage ToInfoJson(DateTimeOffset dateAdded, bool isCover) => new()
     {
         FileName = FileName,
         Type = Type,
         Source = IsDefault ? InfoJsonImage.SourceDefault : InfoJsonImage.SourceLibretro,
         SourceUrl = SourceUrl,
         IsDefault = IsDefault,
+        IsCover = isCover,
         SizeBytes = Bytes.Length,
         Sha1 = Convert.ToHexStringLower(SHA1.HashData(Bytes)),
         Width = Width,
@@ -42,6 +43,9 @@ public sealed record MediaResult(MediaImage BoxArt, MediaImage? Snap);
 /// </summary>
 public sealed class MediaService(HttpClient http, IOptions<SourcesOptions> sources, ILogger<MediaService> logger)
 {
+    /// <summary>libretro thumbnails keep the original 5 MiB cap (I1a); stored images may be larger.</summary>
+    public const int MaxThumbnailBytes = 5 * 1024 * 1024;
+
     public async Task<MediaResult> FindAsync(
         ISystemHandler handler, IEnumerable<string?> datGameNames, CircuitBreaker breaker, CancellationToken cancellationToken)
     {
@@ -91,14 +95,14 @@ public sealed class MediaService(HttpClient http, IOptions<SourcesOptions> sourc
                 return null;
             breaker.RecordSuccess();
 
-            await using var body = new LimitStream(await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false), PngInfo.MaxBytes);
+            await using var body = new LimitStream(await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false), MaxThumbnailBytes);
             using var buffer = new MemoryStream();
             await body.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
             bytes = buffer.ToArray();
         }
         catch (LimitExceededException)
         {
-            logger.LogWarning("Thumbnail {Url} is larger than {Max} bytes; ignored", url, PngInfo.MaxBytes);
+            logger.LogWarning("Thumbnail {Url} is larger than {Max} bytes; ignored", url, MaxThumbnailBytes);
             return null;
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)

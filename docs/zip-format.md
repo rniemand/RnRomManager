@@ -42,7 +42,7 @@ Tetris.zip
 | `displayTitle` | `title` with a trailing article moved to the front: `Maus, Die` → `Die Maus`, `Legend of Zelda, The - Link's Awakening` → `The Legend of Zelda - Link's Awakening`. Articles: The, A, An, Die, Der, Das, Le, La, Les, El, Il. |
 | ZIP name | `Sanitize(title) + ".zip"`. A different game already at that path (case-insensitive) → ` (2)`, ` (3)`, … |
 | ROM `fileName` | The DAT ROM name for DAT-matched releases; review resolutions build their own (see [features](features.md)). An entry-name clash inside a ZIP appends ` (2)`, … before the extension. |
-| Images | `images/boxart-01.png` and `images/snap-01.png`; at most one of each. |
+| Images | `images/boxart-NN.<ext>` and `images/snap-NN.<ext>`: `NN` is the lowest free number 01–99 for that prefix (compared ignoring case and extension), `<ext>` is `png` or `jpg` from the file's magic bytes. Fetched art is `boxart-01.png` / `snap-01.png` unless taken. At most 20 images per game, each at most 8 MiB (libretro thumbnails are fetched only up to 5 MiB). |
 | Sanitize | Unicode NFC; `\ / : * ? " < > \|` and control characters become `_`; leading/trailing spaces and trailing dots trimmed; at most 180 characters; Windows reserved names (`CON`, `NUL`, …) get a `_` prefix. |
 
 All releases of a game (regions, revisions) **and** its hacks and translations live in the same ZIP. Hacks and translations are flagged (`Hack`, `Translated`) and are never the primary release.
@@ -50,6 +50,8 @@ All releases of a game (regions, revisions) **and** its hacks and translations l
 **Primary release** (exactly one per game, recomputed on every write), ranked by: not Hack/Translated → no status flag (`Beta…`, `Proto…`, `Possible Proto`, `Demo`, `Sample`, `Pirate`, `Unverified`) → region `World` > `USA` > `Europe` > other with English > `Japan` > other → highest revision → `fileName` (ordinal).
 
 **Default box art:** when no box art is found (or media fetch is disabled), each system's own 512×512 placeholder is stored as `boxart-01.png` with `isDefault: true`.
+
+**Cover:** exactly one image of a game that has images is its cover (`isCover: true`): what the library and game page show. Any image can be the cover. A new game's cover is its box art (or placeholder); the first image added to a game with no images becomes the cover; ingestion and media retry only ever replace the placeholder (keeping its cover status) or add a missing snap, never touching other images. A merge keeps the target's cover, copies the source's non-default images in under new names, drops the source's placeholder, removes the target's placeholder when the source brings a real box art (that box art becomes the cover if the placeholder was), and is refused (`409 TooManyImages`) above 20 images.
 
 ## Writes
 
@@ -65,7 +67,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `schemaVersion` | int | ✓ | `2` |
+| `schemaVersion` | int | ✓ | `3` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
 | `system` | string | ✓ | system id (`gb`, `gbc`, `gba`) |
 | `title` | string | ✓ | see Naming |
@@ -78,7 +80,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 | `rating` | int? | ✓ | shared 1–5 star rating; `null` = not rated (the key must be present) |
 | `favourite` | bool | ✓ | shared favourite flag |
 | `roms` | Rom[] | ✓ | at least one |
-| `images` | Image[] | ✓ | exactly one `BoxArt`; at most one `Snap` |
+| `images` | Image[] | ✓ | at most 20; exactly one `isCover` when not empty |
 | `metadata.createdAt` / `updatedAt` | string | ✓ | first / latest write of the ZIP |
 | `metadata.appVersion` | string | ✓ | app version that last wrote the file |
 
@@ -114,17 +116,18 @@ Game Boy Advance `header`: `title` (12 chars at 0xA0), `gameCode` (4 chars at 0x
 |---|---|---|---|
 | `fileName` | string | ✓ | entry name under `images/` |
 | `type` | `BoxArt` \| `Snap` \| `TitleScreen` \| `Other` | ✓ | only BoxArt and Snap are fetched |
-| `source` | `libretro-thumbnails` \| `default` | ✓ | |
+| `source` | `libretro-thumbnails` \| `default` \| `upload` | ✓ | `upload` from v3 |
 | `sourceUrl` | string? | | |
-| `isDefault` | bool | ✓ | |
+| `isDefault` | bool | ✓ | the system placeholder; at most one, and it must be a `BoxArt` |
+| `isCover` | bool | ✓ | v3; exactly one per game with images |
 | `sizeBytes` | long | ✓ | entry size |
 | `sha1` | string | ✓ | |
-| `width` / `height` | int | ✓ | read from the PNG header |
+| `width` / `height` | int | ✓ | read from the PNG header or JPEG frame header |
 | `dateAdded` | string | ✓ | |
 
 ### Validation
 
-Checked on every read (after upgrading an older version): valid UTF-8 JSON of at most 1 MiB; every required field present with the right type; `gameId` a GUID; `system` a registered system; `rating` null or 1–5; at least one ROM and exactly one `isPrimary`; file names unique (case-insensitively) within `roms` and within `images`, and free of `/`, `\` and `..`; hashes lowercase hex of the right length; exactly one `BoxArt` image (none is reported as `MissingBoxArt`) and at most one `Snap`. Unknown properties are ignored on read and dropped on the next write. A failing file is reported by the integrity checker as `InfoJsonInvalid`, naming the first rule it breaks, and is left alone.
+Checked on every read (after upgrading an older version): valid UTF-8 JSON of at most 1 MiB; every required field present with the right type; `gameId` a GUID; `system` a registered system; `rating` null or 1–5; at least one ROM and exactly one `isPrimary`; file names unique (case-insensitively) within `roms` and within `images`, and free of `/`, `\` and `..`; hashes lowercase hex of the right length; `source` one of the three values; at most 20 images, exactly one of them `isCover` (a game with no images is valid and reported as `MissingBoxArt`); at most one `isDefault` image, and it is a `BoxArt`. Unknown properties are ignored on read and dropped on the next write. A failing file is reported by the integrity checker as `InfoJsonInvalid`, naming the first rule it breaks, and is left alone.
 
 ## Versions
 
@@ -136,3 +139,4 @@ A schema change bumps `schemaVersion`, adds an upgrader and adds a row here.
 |---|---|---|
 | 1 | 0.1.0 | Initial format. |
 | 2 | 0.2.0 | Adds `rating` (int?, null) and `favourite` (bool, false); the v1→v2 upgrader adds both with those defaults. App 0.1.0 treats a v2 file as `InfoJsonNewerSchema` (read-only). |
+| 3 | 0.3.0 | Adds `isCover` (bool) to every image and `upload` as an image `source`; image names may end in `.jpg`; drops the one-`BoxArt` / one-`Snap` limits (at most 20 images). The v2→v3 upgrader makes the `BoxArt` image the cover, else the first image, else none. Integrity's `MissingBoxArt` / `DefaultBoxArt` now mean "no cover" / "the cover is the placeholder". Apps before 0.3.0 treat a v3 file as `InfoJsonNewerSchema` (read-only). |

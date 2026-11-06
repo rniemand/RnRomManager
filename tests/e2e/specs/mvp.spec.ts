@@ -1,10 +1,12 @@
+import { crc32, deflateSync } from 'node:zlib';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { expectAccessible } from './axe';
 
 /**
  * Spec §15.1 "E2E": the MVP smoke path against the real image with the seeded `Basic` set (§15.2), in order:
- * login + forced password change → ingest → browse/search/filter → game detail + download → review resolve →
- * global search + ratings → Admin edit/move/delete, with axe on every page visited.
+ * login + forced password change → ingest → browse/search/filter → game detail + downloads → global search +
+ * ratings → review resolve/delete → images → Admin edit/move/delete → users and logs, with axe on every page and
+ * modal visited. The seeded admin has both roles (`admin` + `rom-manager`).
  */
 
 const adminPassword = process.env.E2E_ADMIN_PASSWORD;
@@ -28,6 +30,30 @@ test.afterAll(async () => {
 });
 
 const dialog = () => page.getByRole('dialog');
+
+/** A real square RGB PNG: the API checks magic bytes and dimensions, and the browser must render it. */
+function png(size: number, rgb: [number, number, number]): Buffer {
+	const chunk = (type: string, data: Buffer) => {
+		const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+		const out = Buffer.alloc(data.length + 12);
+		out.writeUInt32BE(data.length, 0);
+		body.copy(out, 4);
+		out.writeUInt32BE(crc32(body), data.length + 8);
+		return out;
+	};
+	const header = Buffer.alloc(13);
+	header.writeUInt32BE(size, 0);
+	header.writeUInt32BE(size, 4);
+	header[8] = 8; // bit depth
+	header[9] = 2; // RGB
+	const row = Buffer.from([0, ...Array.from({ length: size }, () => rgb).flat()]);
+	return Buffer.concat([
+		Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+		chunk('IHDR', header),
+		chunk('IDAT', deflateSync(Buffer.concat(Array.from({ length: size }, () => row)))),
+		chunk('IEND', Buffer.alloc(0))
+	]);
+}
 
 async function openGame(title: string): Promise<void> {
 	await page.goto('/');
@@ -70,7 +96,7 @@ test('ingestion of the seeded Basic set', async () => {
 	await page.getByRole('button', { name: 'Start ingestion' }).click();
 
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
-	await expect(run).toContainText('Ingested 8 · Duplicate 1 · Review 1 · Failed 1', {
+	await expect(run).toContainText('Ingested 8 · Duplicate 1 · Review 2 · Failed 1', {
 		timeout: 60_000
 	});
 
@@ -115,15 +141,24 @@ test('game detail + downloads', async () => {
 	await expectAccessible(page, 'game detail');
 
 	await page.getByRole('button', { name: 'Header' }).first().click();
-	await expect(page.getByText('Logo valid')).toBeVisible();
+	await expect(dialog()).toHaveAccessibleName(/^Header — Orbit Blocks .*\.gb$/);
+	await expect(dialog().getByText('Logo valid')).toBeVisible();
+	await expectAccessible(page, 'header modal');
+	await page.keyboard.press('Escape');
+	await expect(dialog()).toBeHidden();
 
 	const zip = page.waitForEvent('download');
 	await page.getByRole('button', { name: 'Download ZIP' }).click();
 	expect((await zip).suggestedFilename()).toBe('Orbit Blocks.zip');
 
+	// Three releases → a dropdown, the primary (Rev 1) first, each with its size.
+	await page.getByRole('button', { name: 'Download ROM' }).click();
+	const items = page.locator('.dropdown-menu.show .dropdown-item');
+	await expect(items).toHaveCount(3);
+	await expect(items.first()).toHaveText(/^Orbit Blocks \(World\) \(Rev 1\)\.gb — .*KiB$/);
 	const rom = page.waitForEvent('download');
-	await page.getByRole('button', { name: /^Download Orbit Blocks .*\.gb$/ }).first().click();
-	expect((await rom).suggestedFilename()).toMatch(/^Orbit Blocks .*\.gb$/);
+	await items.first().click();
+	expect((await rom).suggestedFilename()).toBe('Orbit Blocks (World) (Rev 1).gb');
 });
 
 test('global search, ratings and favourites', async () => {
@@ -177,15 +212,71 @@ test('review queue: resolve with a suggestion', async () => {
 	await page.goto('/review');
 	await expectAccessible(page, 'review queue');
 	await page.getByRole('link', { name: '91-unmatched.gb' }).click();
-	await expect(page.getByRole('heading', { name: 'Suggestions' })).toBeVisible();
+	// It has suggestions, so that tab is open first (W2).
+	await expect(page.getByRole('tab', { name: 'Suggestions' })).toHaveAttribute('aria-selected', 'true');
 	await expectAccessible(page, 'review detail');
 
 	await page.getByRole('button', { name: 'Use' }).first().click();
 	await expect(page).toHaveURL(/\/games\//);
-	await expect(page.getByText(/\(Unverified\)/)).toBeVisible();
+	await expect(page.getByRole('table').getByText(/\(Unverified\)/)).toBeVisible();
+});
 
+test('review queue: delete a file', async () => {
 	await page.goto('/review');
+	await expect(page.getByRole('link', { name: '91-unmatched.gb' })).toHaveCount(0);
+	await page.getByRole('button', { name: 'Delete 93-mystery.gb' }).click();
+	await expect(dialog()).toHaveAccessibleName('Delete file');
+	await expect(dialog().getByText('93-mystery.gb').first()).toBeVisible();
+	await expectAccessible(page, 'review delete modal');
+	await dialog().getByRole('button', { name: 'Delete file' }).click();
+	await expect(dialog()).toBeHidden();
 	await expect(page.getByText('Nothing to review.')).toBeVisible();
+});
+
+test('images: upload, set cover, delete', async () => {
+	await openGame('Star Courier');
+	const images = page.getByRole('region', { name: 'Images' });
+	const card = (fileName: string) =>
+		images
+			.locator('.card')
+			.filter({ has: page.getByRole('button', { name: `View ${fileName} full size` }) });
+	await expect(images.getByText('Placeholder')).toBeVisible();
+
+	// A box art upload replaces the placeholder and takes over as cover.
+	await images
+		.getByLabel('Upload an image')
+		.setInputFiles({ name: 'art.png', mimeType: 'image/png', buffer: png(64, [200, 40, 40]) });
+	await images.getByRole('button', { name: 'Upload', exact: true }).click();
+	await expect(card('boxart-01.png').getByText('Cover')).toBeVisible();
+	await expect(images.getByText('Placeholder')).toHaveCount(0);
+	await expect(card('boxart-01.png')).toContainText('64×64');
+
+	await images
+		.getByLabel('Upload an image')
+		.setInputFiles({ name: 'shot.png', mimeType: 'image/png', buffer: png(32, [40, 40, 200]) });
+	await images.getByLabel('Type').selectOption({ label: 'Screenshot' });
+	await images.getByRole('button', { name: 'Upload', exact: true }).click();
+	await expect(card('snap-01.png').getByText('Screenshot')).toBeVisible();
+	await expectAccessible(page, 'game images');
+
+	await card('snap-01.png').getByRole('button', { name: 'View snap-01.png full size' }).click();
+	await expect(dialog()).toHaveAccessibleName('snap-01.png');
+	await expectAccessible(page, 'image view modal');
+	await page.keyboard.press('Escape');
+	await expect(dialog()).toBeHidden();
+
+	await card('snap-01.png').getByRole('button', { name: 'Use as cover: snap-01.png' }).click();
+	await expect(card('snap-01.png').getByText('Cover')).toBeVisible();
+	await expect(page.getByRole('img', { name: 'Star Courier cover' })).toHaveAttribute('width', '32');
+
+	// Deleting the cover hands it back to the box art.
+	await card('snap-01.png').getByRole('button', { name: 'Delete snap-01.png' }).click();
+	await expect(dialog()).toHaveAccessibleName('Delete image');
+	await expectAccessible(page, 'delete image modal');
+	await dialog().getByRole('button', { name: 'Delete image' }).click();
+	await expect(dialog()).toBeHidden();
+	await expect(card('snap-01.png')).toHaveCount(0);
+	await expect(card('boxart-01.png').getByText('Cover')).toBeVisible();
 });
 
 test('Admin: edit metadata, move a release, delete a release and a game', async () => {
@@ -219,6 +310,31 @@ test('Admin: edit metadata, move a release, delete a release and a game', async 
 	await expect(page).toHaveURL(/\/$/);
 	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('Color Racer');
 	await expect(page.getByText('No games match these filters.')).toBeVisible();
+});
+
+test('Admin: roles and the create-user modal', async () => {
+	await page.goto('/admin/users');
+	await expect(page.getByLabel('admin role of admin')).toBeChecked();
+	await expect(page.getByLabel('rom-manager role of admin')).toBeChecked();
+
+	await page.getByRole('button', { name: 'Create user' }).click();
+	await expect(dialog()).toHaveAccessibleName('Create user');
+	await expectAccessible(page, 'create user modal');
+	await dialog().getByLabel('Username').fill('editor');
+	await dialog().getByLabel('Initial password').fill(`${newPassword}-editor`);
+	await dialog().getByLabel('rom-manager').check();
+	await dialog().getByRole('button', { name: 'Create' }).click();
+	await expect(dialog()).toBeHidden();
+	await expect(page.getByLabel('rom-manager role of editor')).toBeChecked();
+	await expect(page.getByLabel('admin role of editor')).not.toBeChecked();
+});
+
+test('Admin: live logs', async () => {
+	await page.goto('/admin/logs');
+	await expect(page.getByRole('link', { name: 'Logs', exact: true })).toHaveAttribute('aria-current', 'page');
+	// The buffer already holds startup and request events.
+	await expect(page.getByRole('log', { name: 'Live log' }).locator('.badge').first()).toBeVisible();
+	await expectAccessible(page, 'logs');
 });
 
 test('Admin and Integrity pages are accessible', async () => {

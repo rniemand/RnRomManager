@@ -81,7 +81,9 @@ describe('auth', () => {
 	afterEach(() => vi.unstubAllGlobals());
 
 	it('loads me, and treats 401 as signed out', async () => {
-		stubFetch(() => ok({ id: 1, username: 'boss', role: 'Admin', mustChangePassword: false }));
+		stubFetch(() =>
+			ok({ id: 1, username: 'boss', roles: ['admin', 'rom-manager'], mustChangePassword: false })
+		);
 		await auth.load();
 		expect([auth.me?.username, auth.isAdmin, auth.loaded]).toEqual(['boss', true, true]);
 

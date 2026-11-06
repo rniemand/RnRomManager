@@ -9,10 +9,11 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Core.Library;
 
 /// <summary>
-/// Spec §10.2 "Retry media" for one game: when its box art is the default or missing, or it has no snap, re-run the
-/// thumbnail lookup (primary release's <c>datGameName</c> first, then the others in rank order). A real box art replaces
-/// the default (a missing one gets at least the default), a found snap is added, and the game is rewritten (atomic ZIP +
-/// DB, §6.1/§14.2) only when that changes something. The caller holds the job lock.
+/// Spec §10.2 "Retry media" for one game: when it still has the placeholder, no images, or no snap, re-run the
+/// thumbnail lookup (primary release's <c>datGameName</c> first, then the others in rank order) and apply it per I4
+/// (<see cref="GameImages.ApplyFetched"/>): a real box art replaces the placeholder, a game with no images gets at least
+/// the placeholder, a found snap is added. The game is rewritten (atomic ZIP + DB, §6.1/§14.2) only when that changes
+/// something. The caller holds the job lock.
 /// </summary>
 public sealed class GameMediaRetry(ILibraryMirror mirror, InfoJsonReader reader, ISystemRegistry systems, MediaService media,
     IOptions<PathsOptions> paths, TimeProvider time, ILogger<GameMediaRetry> logger)
@@ -26,9 +27,8 @@ public sealed class GameMediaRetry(ILibraryMirror mirror, InfoJsonReader reader,
 
         using var existing = target.Zip!;
         var current = target.Game!;
-        var boxArt = current.Images.FirstOrDefault(i => i.Type == ImageType.BoxArt);
         var hasSnap = current.Images.Any(i => i.Type == ImageType.Snap);
-        if (boxArt is { IsDefault: false } && hasSnap)
+        if (current.Images.Count > 0 && !current.Images.Any(i => i.IsDefault) && hasSnap)
             return new(MediaRetryOutcome.Skipped);
         if (skipManualOnly && current.Roms.All(r => r.Identification.Method == IdentificationMethod.Manual))
             return new(MediaRetryOutcome.Skipped);
@@ -37,20 +37,16 @@ public sealed class GameMediaRetry(ILibraryMirror mirror, InfoJsonReader reader,
 
         var names = current.Roms.OrderBy(PrimaryRelease.Rank, PrimaryReleaseRanker.Instance).Select(r => r.Identification.DatGameName);
         var found = await media.FindAsync(handler, names, breaker, ct).ConfigureAwait(false);
-        var newBoxArt = boxArt is null || (boxArt.IsDefault && !found.BoxArt.IsDefault) ? found.BoxArt : null;
-        var newSnap = hasSnap ? null : found.Snap;
-        if (newBoxArt is null && newSnap is null)
+        var now = time.GetUtcNow();
+        if (GameImages.ApplyFetched(current.Images, found, now) is not var (images, imageEntries))
             return new(MediaRetryOutcome.NotFound);
 
-        var now = time.GetUtcNow();
         var game = current with
         {
-            Images = [.. current.Images.Where(i => !(newBoxArt is not null && i.Type == ImageType.BoxArt)),
-                .. new[] { newBoxArt, newSnap }.OfType<MediaImage>().Select(i => i.ToInfoJson(now))],
+            Images = images,
             Metadata = current.Metadata with { UpdatedAt = now, AppVersion = AppInfo.Version },
         };
-        var entries = new[] { newBoxArt, newSnap }.OfType<MediaImage>()
-            .ToDictionary(i => LibraryZip.ImageEntry(i.FileName), i => (Func<Stream>)(() => new MemoryStream(i.Bytes)));
+        var entries = imageEntries.ToDictionary(e => LibraryZip.ImageEntry(e.Key), e => (Func<Stream>)(() => new MemoryStream(e.Value)));
 
         // Not cancellable once the write starts: a ZIP is never left half-applied.
         var path = SafePath.Resolve(paths.Value.Roms, row.ZipPath);
@@ -76,8 +72,7 @@ public sealed class GameMediaRetry(ILibraryMirror mirror, InfoJsonReader reader,
         {
             return new(MediaRetryOutcome.Error, LibraryEditResult.DbWriteFailed, ex.Message);
         }
-        logger.LogInformation("Media for game {GameId} updated ({ZipPath}): box art {BoxArt}, snap {Snap}",
-            row.Id, row.ZipPath, newBoxArt is null ? "kept" : newBoxArt.IsDefault ? "default" : "found", newSnap is null ? "kept" : "found");
+        logger.LogInformation("Media for game {GameId} updated ({ZipPath}): {Images} written", row.Id, row.ZipPath, string.Join(", ", imageEntries.Keys));
         return new(MediaRetryOutcome.Updated);
     }
 }

@@ -164,13 +164,13 @@ public class MediaServiceTests
         var when = new DateTimeOffset(2026, 11, 4, 0, 0, 0, TimeSpan.Zero);
 
         var result = await FindAsync("A");
-        var found = result.BoxArt.ToInfoJson(when);
-        var fallback = MediaService.Default(_handler).ToInfoJson(when);
+        var found = result.BoxArt.ToInfoJson(when, isCover: true);
+        var fallback = MediaService.Default(_handler).ToInfoJson(when, isCover: true);
 
         Assert.That(found with { Sha1 = "" }, Is.EqualTo(new InfoJsonImage
         {
             FileName = "boxart-01.png", Type = ImageType.BoxArt, Source = InfoJsonImage.SourceLibretro, SourceUrl = GbBox + "A.png",
-            IsDefault = false, SizeBytes = Found.Length, Sha1 = "", Width = 300, Height = 400, DateAdded = when,
+            IsDefault = false, IsCover = true, SizeBytes = Found.Length, Sha1 = "", Width = 300, Height = 400, DateAdded = when,
         }));
         Assert.That(found.Sha1, Has.Length.EqualTo(40));
         Assert.That((fallback.Source, fallback.IsDefault, fallback.SourceUrl), Is.EqualTo((InfoJsonImage.SourceDefault, true, (string?)null)));

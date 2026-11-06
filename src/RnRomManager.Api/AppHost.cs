@@ -73,6 +73,9 @@ public static class AppHost
         NLogSetup.Configure(builder);
         builder.Services.AddAppOptions(builder.Configuration);
         builder.Services.AddSingleton(TimeProvider.System);
+        // Only the image upload (I5) reads forms; match its request limit.
+        builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(
+            options => options.MultipartBodyLengthLimit = Endpoints.LibraryEndpoints.UploadRequestLimit);
         // Parsed when first resolved (startup step 5), after config validation.
         builder.Services.AddSingleton(sp =>
             new MySqlConnectionFactory(sp.GetRequiredService<IOptions<ConnectionStringsOptions>>().Value.Default));
@@ -91,6 +94,7 @@ public static class AppHost
         builder.Services.AddSingleton<IImageRepository, ImageRepository>();
         builder.Services.AddSingleton<ILibraryMirror, LibraryMirror>();
         builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV1>();
+        builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV2>();
         builder.Services.AddSingleton<InfoJsonReader>();
         builder.Services.AddSingleton<DbSync>();
         builder.Services.AddSingleton<LibraryFiles>();

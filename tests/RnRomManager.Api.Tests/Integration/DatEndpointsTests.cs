@@ -48,7 +48,7 @@ public class DatEndpointsTests
             downloadedAt: new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero));
 
         _admin = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "boss", UserRole.Admin);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         (await _admin.LoginAsync("boss", TestUsers.Password)).Dispose();
     }
 

@@ -9,9 +9,9 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 - **Library:** grid or list, filter by system, region and letter, search, sort by title, year or date added; download a game's ZIP or a single ROM.
 - **Ingestion:** identifies by hash, sorts dual-mode carts into Game Boy Color, files duplicates and broken files aside, and never deletes anything you'd want back.
 - **Review queue:** files the DATs don't know get name suggestions, a DAT search, or manual entry.
-- **Library edits (Admin):** edit metadata, move or merge releases between games, delete to a recoverable `_removed/` folder.
+- **Library edits (`rom-manager`):** edit metadata, move or merge releases between games, upload box art and screenshots and choose the cover, delete to a recoverable `_removed/` folder.
 - **Integrity checks:** daily quick checks and on-demand deep (hash) checks, with automatic database repair.
-- **Accounts:** Admins and read-only Users, light/dark theme, and it works on a phone.
+- **Accounts:** `admin` and `rom-manager` roles (or none, for browse-only users), a live log view, light/dark theme, and it works on a phone.
 
 | Game detail | Ingestion |
 |---|---|

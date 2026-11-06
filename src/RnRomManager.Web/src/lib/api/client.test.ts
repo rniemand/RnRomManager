@@ -64,6 +64,18 @@ describe('api client', () => {
 		expect(headers(calls[2])['Content-Type']).toBe('application/json');
 	});
 
+	it('FormData is sent as-is, without a JSON content type but with the XSRF header', async () => {
+		const form = new FormData();
+		form.append('type', 'BoxArt');
+
+		await api.post('/api/games/1/images', form);
+
+		const call = calls[1];
+		expect(call.init?.body).toBe(form);
+		expect(headers(call)['Content-Type']).toBeUndefined();
+		expect(headers(call)['X-XSRF-TOKEN']).toBe('tok+en');
+	});
+
 	it('re-reads the cookie on each mutation (login re-issues it)', async () => {
 		await api.post('/api/auth/login', { username: 'a', password: 'b' });
 		document.cookie = 'XSRF-TOKEN=second; path=/';

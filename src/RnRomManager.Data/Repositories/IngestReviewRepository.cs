@@ -99,4 +99,13 @@ public sealed class IngestReviewRepository(IDbConnectionFactory connections) : I
         await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM ingest_review_items WHERE id IN @ids", new { ids }, cancellationToken: cancellationToken));
     }
+
+    public async Task<int> DeletePendingBySourceAsync(string sourcePath, string? archivePath, CancellationToken cancellationToken)
+    {
+        var sql = archivePath is null
+            ? "DELETE FROM ingest_review_items WHERE status = 'Pending' AND archive_path IS NULL AND BINARY source_path = @sourcePath"
+            : "DELETE FROM ingest_review_items WHERE status = 'Pending' AND BINARY archive_path = @archivePath";
+        await using var connection = connections.Create();
+        return await connection.ExecuteAsync(new CommandDefinition(sql, new { sourcePath, archivePath }, cancellationToken: cancellationToken));
+    }
 }

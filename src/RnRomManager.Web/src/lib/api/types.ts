@@ -1,8 +1,14 @@
+/** A user role; a user has any subset (sorted in API responses). */
+export type Role = 'admin' | 'rom-manager';
+
+/** Every role, in display order. */
+export const roles: readonly Role[] = ['admin', 'rom-manager'];
+
 /** `GET /api/auth/me` (spec §23). */
 export interface Me {
 	id: number;
 	username: string;
-	role: 'Admin' | 'User';
+	roles: Role[];
 	mustChangePassword: boolean;
 }
 
@@ -49,6 +55,8 @@ export interface GameListItem {
 	/** 1–5; null = not rated. Shared per game. */
 	rating: number | null;
 	favourite: boolean;
+	/** With `q`: the metadata value that matched when no word was in a title (S3); null otherwise. */
+	matchedOn: { field: 'developer' | 'publisher' | 'genre'; value: string } | null;
 }
 
 /** One release of `GET /api/games/{id}` (spec §23, §6.2 Rom fields flattened). */
@@ -78,9 +86,16 @@ export interface RomDetail {
 }
 
 export interface ImageInfo {
+	/** Changes whenever the game's ZIP is rewritten: use the ids from the latest detail. */
 	id: number;
 	type: 'BoxArt' | 'Snap' | 'TitleScreen' | 'Other';
+	fileName: string;
+	source: 'libretro-thumbnails' | 'default' | 'upload';
+	/** The system placeholder box art. */
 	isDefault: boolean;
+	/** The image shown for the game (exactly one when it has images). */
+	isCover: boolean;
+	sizeBytes: number;
 	width: number;
 	height: number;
 	url: string;
@@ -224,11 +239,21 @@ export interface IntegrityIssue {
 	resolvedAt: string | null;
 }
 
+/** One event of `GET /api/admin/logs/stream` (L2); `time` is UTC ISO 8601. */
+export interface LogEntry {
+	id: number;
+	time: string;
+	level: 'Trace' | 'Debug' | 'Info' | 'Warn' | 'Error' | 'Fatal';
+	logger: string;
+	message: string;
+	exception: string | null;
+}
+
 /** `GET /api/users` (spec §23). */
 export interface UserInfo {
 	id: number;
 	username: string;
-	role: 'Admin' | 'User';
+	roles: Role[];
 	isDisabled: boolean;
 	lastLoginAt: string | null;
 }

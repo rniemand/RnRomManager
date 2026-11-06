@@ -31,7 +31,8 @@ public class GameQueryTests
 
     /// <summary>Inserts a game whose releases have the given region lists; <paramref name="addedMinutes"/> orders <c>created_at</c>.</summary>
     private async Task<Guid> Add(string title, int? year = null, int addedMinutes = 0, string system = "gb", bool boxArt = true,
-        string? displayTitle = null, int? rating = null, bool favourite = false, params string[][] releases)
+        string? displayTitle = null, int? rating = null, bool favourite = false, string[]? developers = null,
+        string[]? publishers = null, string[]? genres = null, params string[][] releases)
     {
         if (releases.Length == 0)
             releases = [["World"]];
@@ -44,8 +45,11 @@ public class GameQueryTests
             ReleaseYear = year,
             Rating = rating,
             Favourite = favourite,
+            Developers = developers ?? [],
+            Publishers = publishers ?? [],
+            Genres = genres ?? [],
             Images = boxArt
-                ? [new InfoJsonImage { FileName = "boxart-01.png", Type = ImageType.BoxArt, Source = InfoJsonImage.SourceDefault, IsDefault = true, SizeBytes = 10, Sha1 = new string('a', 40), Width = 512, Height = 512, DateAdded = When }]
+                ? [new InfoJsonImage { FileName = "boxart-01.png", Type = ImageType.BoxArt, Source = InfoJsonImage.SourceDefault, IsDefault = true, IsCover = true, SizeBytes = 10, Sha1 = new string('a', 40), Width = 512, Height = 512, DateAdded = When }]
                 : [],
             Metadata = new InfoJsonGameMetadata(created, created, "0.1.0"),
         };
@@ -61,7 +65,7 @@ public class GameQueryTests
         static InfoJsonImage Image(ImageType type, bool isDefault) => new()
         {
             FileName = type == ImageType.BoxArt ? "boxart-01.png" : "snap-01.png", Type = type,
-            Source = isDefault ? InfoJsonImage.SourceDefault : InfoJsonImage.SourceLibretro, IsDefault = isDefault,
+            Source = isDefault ? InfoJsonImage.SourceDefault : InfoJsonImage.SourceLibretro, IsDefault = isDefault, IsCover = type == ImageType.BoxArt,
             SizeBytes = 10, Sha1 = new string('b', 40), Width = 1, Height = 1, DateAdded = When,
         };
         var roms = (await _roms.ListByGameAsync(id, default)).Select((r, i) => Rom(r.FileName, RomBytes(1000 + ++_seed), isPrimary: i == 0)).ToArray();
@@ -275,5 +279,64 @@ public class GameQueryTests
         var candidates = await _games.ListMediaRetryCandidatesAsync(default);
 
         Assert.That(candidates.Select(c => c.Title), Is.EqualTo(new[] { "Alpha Default", "Bare", "Default Art", "Real No Snap" }));
+    }
+
+    [Test]
+    public async Task Search_MatchesDevelopersPublishersAndGenres_IgnoringCase()
+    {
+        await Add("Alpha", developers: ["Bullet-Proof Software"]);
+        await Add("Beta", publishers: ["Nintendo"]);
+        await Add("Gamma", genres: ["Puzzle"]);
+        await Add("Delta");
+
+        Assert.That(await Titles(new GameQuery { Search = "bullet" }), Is.EqualTo(new[] { "Alpha" }));
+        Assert.That(await Titles(new GameQuery { Search = "nintendo" }), Is.EqualTo(new[] { "Beta" }), "case-insensitive on a JSON column");
+        Assert.That(await Titles(new GameQuery { Search = "PUZZLE" }), Is.EqualTo(new[] { "Gamma" }));
+    }
+
+    [Test]
+    public async Task Search_EveryWordMustMatchSomeField()
+    {
+        await Add("Tetris", publishers: ["Nintendo"]);
+        await Add("Tetris Plus", publishers: ["Jaleco"]);
+
+        Assert.That(await Titles(new GameQuery { Search = "tetris nintendo" }), Is.EqualTo(new[] { "Tetris" }));
+        Assert.That(await Titles(new GameQuery { Search = "tetris sega" }), Is.Empty);
+    }
+
+    [Test]
+    public async Task Sort_Relevance_ScoresTitleExactPrefixWordThenDeveloperPublisherThenGenre()
+    {
+        await Add("Mario", genres: ["Mario"]);                 // exact 100 + prefix 60 + title 40 + genre 10
+        await Add("Mario Land");                               // prefix 60 + title 40
+        await Add("Super Mario");                              // title 40
+        await Add("Kart", developers: ["Mario Team"]);         // developer 20
+        await Add("Bros", publishers: ["Mario Publishing"]);   // publisher 20
+        await Add("Party", genres: ["Mario-like"]);            // genre 10
+
+        Assert.That(await Titles(new GameQuery { Search = "mario", Sort = GameSort.Relevance }),
+            Is.EqualTo(new[] { "Mario", "Mario Land", "Super Mario", "Bros", "Kart", "Party" }), "equal scores by title");
+    }
+
+    [Test]
+    public async Task OtherSorts_AreUnchanged_OverTheWiderMatchSet()
+    {
+        await Add("Zeta", publishers: ["Acme"]);
+        await Add("Acme Racer");
+        await Add("Other");
+
+        Assert.That(await Titles(new GameQuery { Search = "acme" }), Is.EqualTo(new[] { "Acme Racer", "Zeta" }));
+        Assert.That(await Titles(new GameQuery { Search = "acme", Descending = true }), Is.EqualTo(new[] { "Zeta", "Acme Racer" }));
+    }
+
+    [Test]
+    public async Task ListItem_MatchedOn_OnlyWhenNoWordIsInTheTitle()
+    {
+        await Add("Tetris", developers: ["Bullet-Proof"], publishers: ["Nintendo"]);
+
+        Assert.That((await _games.ListAsync(new GameQuery { Search = "nintendo" }, default)).Items.Single().MatchedOn,
+            Is.EqualTo(new SearchMatch("publisher", "Nintendo")));
+        Assert.That((await _games.ListAsync(new GameQuery { Search = "tetris nintendo" }, default)).Items.Single().MatchedOn, Is.Null);
+        Assert.That((await _games.ListAsync(new GameQuery(), default)).Items.Single().MatchedOn, Is.Null);
     }
 }

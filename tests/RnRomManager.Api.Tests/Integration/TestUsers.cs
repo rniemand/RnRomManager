@@ -9,15 +9,18 @@ public static class TestUsers
 {
     public const string Password = "correct-horse-battery";
 
+    /// <summary>What a migrated <c>Admin</c> has (R3): every role.</summary>
+    public static readonly IReadOnlySet<string> AllRoles = Roles.Of(Roles.All);
+
     public static async Task<User> CreateAsync(
-        ApiFactory factory, string username, UserRole role = UserRole.User, bool mustChangePassword = false)
+        ApiFactory factory, string username, IReadOnlySet<string>? roles = null, bool mustChangePassword = false)
     {
         var now = DateTime.UtcNow;
         var user = new User
         {
             Username = username,
             PasswordHash = "",
-            Role = role,
+            Roles = roles ?? Roles.None,
             MustChangePassword = mustChangePassword,
             SecurityStamp = Secrets.NewSecurityStamp(),
             CreatedAt = now,

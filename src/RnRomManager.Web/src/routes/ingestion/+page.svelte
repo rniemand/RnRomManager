@@ -9,14 +9,22 @@
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
+	import Pagination from '#lib/components/Pagination.svelte';
 	import { formatDateTime, formatSize } from '#lib/format.js';
 	import { formatSummary, percent, statusClass } from '#lib/jobs.js';
+	import { pageCount } from '#lib/pageSize.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
 	let pending = $state<PendingSystem[] | null>(null);
-	let runs = $state<Job[]>([]);
+	/** G1/G2: fixed 20 rows per page, no selector. */
+	const pageSize = 20;
+
+	let runs = $state<Page<Job> | null>(null);
+	let runsPage = $state(1);
+	/** Client-side page per system's pending table. */
+	let filePages = $state<Record<string, number>>({});
 	let datsMissing = $state(false);
 	let error = $state<unknown>(null);
 	let busy = $state(false);
@@ -29,15 +37,31 @@
 		try {
 			const [p, r, dats] = await Promise.all([
 				api.get<PendingSystem[]>('/api/ingest/pending'),
-				api.get<Page<Job>>('/api/jobs?type=Ingest&pageSize=10'),
+				fetchRuns(),
 				api.get<DatVersion[]>('/api/admin/dats')
 			]);
 			pending = p;
-			runs = r.items;
+			runs = r;
 			datsMissing = dats.length === 0;
 		} catch (e) {
 			error = e;
 		}
+	}
+
+	const fetchRuns = () =>
+		api.get<Page<Job>>(`/api/jobs?type=Ingest&page=${runsPage}&pageSize=${pageSize}`);
+
+	async function showRuns(page: number): Promise<void> {
+		runsPage = page;
+		try {
+			runs = await fetchRuns();
+		} catch (e) {
+			error = e;
+		}
+	}
+
+	function filePage(system: string, total: number): number {
+		return Math.min(filePages[system] ?? 1, pageCount(total, pageSize));
 	}
 
 	onMount(() => {
@@ -139,65 +163,84 @@
 		<section class="mb-4" aria-labelledby="pending-heading">
 			<h2 class="h5" id="pending-heading">Pending files</h2>
 			{#if withFiles.length === 0}
-				<p class="text-body-secondary">No files waiting in the ingest folders.</p>
+				<div class="card"><EmptyState message="No files waiting in the ingest folders." /></div>
 			{:else}
 				{#each withFiles as system (system.system)}
+					{@const current = filePage(system.system, system.files.length)}
 					<h3 class="h6 mt-3"><Icon name="system-{system.system}" /> {system.system}</h3>
-					<div class="table-responsive">
-						<table class="table table-sm">
-							<thead>
-								<tr>
-									<th scope="col">Name</th>
-									<th scope="col" class="text-end">Size</th>
-									<th scope="col">Modified</th>
-								</tr>
-							</thead>
-							<tbody>
-								{#each system.files as file (file.name)}
-									<tr>
-										<td class="text-break">{file.name}</td>
-										<td class="text-end text-nowrap">{formatSize(file.sizeBytes)}</td>
-										<td class="text-nowrap">{formatDateTime(file.modifiedAt)}</td>
+					<div class="card">
+						<div class="table-responsive">
+							<table class="table table-sm table-hover align-middle mb-0">
+								<thead>
+									<tr class="small text-uppercase text-body-secondary">
+										<th scope="col">Name</th>
+										<th scope="col" class="text-end">Size</th>
+										<th scope="col">Modified</th>
 									</tr>
-								{/each}
-							</tbody>
-						</table>
+								</thead>
+								<tbody>
+									{#each system.files.slice((current - 1) * pageSize, current * pageSize) as file (file.name)}
+										<tr>
+											<td class="text-truncate" style="max-width: 32rem" title={file.name}
+												>{file.name}</td
+											>
+											<td class="text-end text-nowrap">{formatSize(file.sizeBytes)}</td>
+											<td class="text-nowrap">{formatDateTime(file.modifiedAt)}</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
 					</div>
+					<Pagination
+						page={current}
+						pages={pageCount(system.files.length, pageSize)}
+						onpage={(p) => (filePages[system.system] = p)}
+						label="Pages of {system.system} files"
+					/>
 				{/each}
 			{/if}
 		</section>
 
 		<section aria-labelledby="runs-heading">
 			<h2 class="h5" id="runs-heading">Last runs</h2>
-			{#if runs.length === 0}
-				<p class="text-body-secondary">No ingestion has run yet.</p>
+			{#if !runs || runs.items.length === 0}
+				<div class="card"><EmptyState message="No ingestion has run yet." /></div>
 			{:else}
-				<div class="table-responsive">
-					<table class="table table-sm table-hover">
-						<thead>
-							<tr>
-								<th scope="col">Started</th>
-								<th scope="col">Status</th>
-								<th scope="col">Trigger</th>
-								<th scope="col">Summary</th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each runs as run (run.id)}
-								<tr>
-									<td class="text-nowrap">
-										<a href={resolve('/jobs/[id]', { id: run.id })}
-											>{formatDateTime(run.startedAt)}</a
-										>
-									</td>
-									<td><span class="badge {statusClass(run.status)}">{run.status}</span></td>
-									<td>{run.triggerSource}</td>
-									<td class="small">{formatSummary(run.summary)}</td>
+				<div class="card">
+					<div class="table-responsive">
+						<table class="table table-sm table-hover align-middle mb-0">
+							<thead>
+								<tr class="small text-uppercase text-body-secondary">
+									<th scope="col">Started</th>
+									<th scope="col">Status</th>
+									<th scope="col">Trigger</th>
+									<th scope="col">Summary</th>
 								</tr>
-							{/each}
-						</tbody>
-					</table>
+							</thead>
+							<tbody>
+								{#each runs.items as run (run.id)}
+									<tr>
+										<td class="text-nowrap">
+											<a href={resolve('/jobs/[id]', { id: run.id })}
+												>{formatDateTime(run.startedAt)}</a
+											>
+										</td>
+										<td><span class="badge {statusClass(run.status)}">{run.status}</span></td>
+										<td>{run.triggerSource}</td>
+										<td class="small">{formatSummary(run.summary)}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
 				</div>
+				<Pagination
+					page={runsPage}
+					pages={pageCount(runs.total, pageSize)}
+					onpage={showRuns}
+					label="Pages of runs"
+				/>
 			{/if}
 		</section>
 	{/if}

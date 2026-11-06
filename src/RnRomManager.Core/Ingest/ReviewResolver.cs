@@ -24,6 +24,38 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
     public Task<ReviewResolutionResult> DismissAsync(long id, int userId, CancellationToken ct) =>
         ActAsync(id, null, userId, ct);
 
+    /// <summary>
+    /// Hard delete (D2–D4): removes the source file from the ingest folder (the whole archive for an archive entry) and
+    /// every pending review row of that source. A source that's already gone still removes the rows.
+    /// </summary>
+    public async Task<ReviewResolutionResult> DeleteSourceAsync(long id, int userId, CancellationToken ct)
+    {
+        using var held = jobLock.TryAcquire();
+        if (held is null)
+            return new("JobRunning");
+        var item = await reviews.GetAsync(id, ct).ConfigureAwait(false);
+        if (item is not { Status: "Pending" })
+            return new("NotFound");
+        var source = SafePath.Resolve(paths.Value.Ingest, Path.GetRelativePath(paths.Value.Ingest, item.ArchivePath ?? item.SourcePath));
+        try
+        {
+            File.Delete(source); // no error when the file is already gone
+        }
+        catch (DirectoryNotFoundException)
+        {
+            // Gone along with its folder: the goal is reached.
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(ex, "Deleting review source '{Path}' (review item {ReviewId}) failed", source, id);
+            return new("DeleteFailed");
+        }
+        var removed = await reviews.DeletePendingBySourceAsync(item.SourcePath, item.ArchivePath, ct).ConfigureAwait(false);
+        logger.LogInformation("User {UserId} deleted review item {ReviewId}: removed '{Path}' and {Rows} pending review row(s)",
+            userId, id, source, removed);
+        return new();
+    }
+
     private async Task<ReviewResolutionResult> ActAsync(long id, ReviewResolutionRequest? request, int userId, CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();

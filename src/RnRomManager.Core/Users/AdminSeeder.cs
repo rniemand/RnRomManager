@@ -34,7 +34,7 @@ public sealed class AdminSeeder(
         {
             Username = AdminUsername,
             PasswordHash = "",
-            Role = UserRole.Admin,
+            Roles = Roles.Of(Roles.Admin, Roles.RomManager),
             MustChangePassword = true,
             SecurityStamp = Secrets.NewSecurityStamp(),
             CreatedAt = now,

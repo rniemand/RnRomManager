@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
 import { auth } from '../stores/auth.svelte';
+import type { Role } from '../api/types';
 
 const goto = vi.fn();
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => goto(...args) }));
@@ -11,9 +12,12 @@ vi.mock('$app/paths', () => ({
 }));
 
 // jsdom has no layout/transitions for Bootstrap's Modal; record show/hide instead.
-const shown = { count: 0, hidden: 0 };
+const shown = { count: 0, hidden: 0, options: [] as unknown[] };
 vi.mock('../bootstrap', () => ({
 	Modal: class {
+		constructor(_element: Element, config: unknown) {
+			shown.options.push(config);
+		}
 		show() {
 			shown.count++;
 		}
@@ -38,6 +42,7 @@ const item = (id: string, displayTitle: string, extra = {}) => ({
 	boxArtUrl: null as string | null,
 	rating: null as number | null,
 	favourite: false,
+	matchedOn: null as { field: string; value: string } | null,
 	...extra
 });
 
@@ -60,7 +65,7 @@ describe('GlobalSearch', () => {
 			item('g1', 'Tetris', { releaseYear: 1989, boxArtUrl: '/api/games/g1/images/1', rating: 4 }),
 			item('g2', 'Tetris 2', { favourite: true })
 		];
-		auth.set({ id: 1, username: 'plain', role: 'User', mustChangePassword: false });
+		auth.set({ id: 1, username: 'plain', roles: [], mustChangePassword: false });
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
 			requested.push(url);
 			init?.signal?.addEventListener('abort', () => aborted.push(url));
@@ -110,6 +115,25 @@ describe('GlobalSearch', () => {
 		await vi.waitFor(() => expect(document.activeElement).toBe(input()));
 	});
 
+	it('shows a matched-on line only for a non-title match', async () => {
+		items = [
+			item('g1', 'Tetris'),
+			item('g3', 'Pinball', { matchedOn: { field: 'publisher', value: 'Nintendo' } })
+		];
+		render(GlobalSearch, { open: true });
+
+		await typeAndWait('nintendo');
+
+		const options = screen.getAllByRole('option', { hidden: true });
+		expect(options[1].textContent).toContain('Publisher: Nintendo');
+		expect(options[0].textContent).not.toMatch(/Developer:|Publisher:|Genre:/);
+	});
+
+	it('uses a static backdrop with Escape enabled (M1)', () => {
+		render(GlobalSearch);
+		expect(shown.options.at(-1)).toEqual({ backdrop: 'static', keyboard: true });
+	});
+
 	it('a shortcut while open just refocuses the input', async () => {
 		render(GlobalSearch, { open: true });
 		await vi.waitFor(() => expect(shown.count).toBe(1));
@@ -133,7 +157,7 @@ describe('GlobalSearch', () => {
 	});
 
 	it('shortcuts are off and the navbar button is hidden while the password must be changed', () => {
-		const me = { id: 1, username: 'plain', role: 'User' as const, mustChangePassword: true };
+		const me = { id: 1, username: 'plain', roles: [] as Role[], mustChangePassword: true };
 		auth.set(me);
 		render(GlobalSearch, { open: false });
 		render(Navbar, { me, reviewCount: null, onlogout: () => {}, onsearch: () => {} });
@@ -146,7 +170,7 @@ describe('GlobalSearch', () => {
 	it('the navbar Search button asks to open it', async () => {
 		const onsearch = vi.fn();
 		render(Navbar, {
-			me: { id: 1, username: 'plain', role: 'User', mustChangePassword: false },
+			me: { id: 1, username: 'plain', roles: [], mustChangePassword: false },
 			reviewCount: null,
 			onlogout: () => {},
 			onsearch

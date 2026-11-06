@@ -53,7 +53,7 @@ public class AdminSeederTests
 
         Assert.That(_inserted, Is.Not.Null);
         Assert.That(_inserted!.Username, Is.EqualTo("admin"));
-        Assert.That(_inserted.Role, Is.EqualTo(UserRole.Admin));
+        Assert.That(_inserted.Roles, Is.EqualTo(new[] { Roles.Admin, Roles.RomManager }));
         Assert.That(_inserted.MustChangePassword, Is.True);
         Assert.That(_inserted.IsDisabled, Is.False);
         Assert.That(_inserted.FailedLoginCount, Is.Zero);

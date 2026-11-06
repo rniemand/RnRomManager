@@ -24,7 +24,7 @@
 			{ href: '/review', label: 'Review', icon: 'review', admin: true },
 			{ href: '/integrity', label: 'Integrity', icon: 'integrity', admin: true },
 			{ href: '/admin/users', label: 'Admin', icon: 'admin', admin: true }
-		].filter((l) => !l.admin || me.role === 'Admin')
+		].filter((l) => !l.admin || me.roles.includes('admin'))
 	);
 
 	function isActive(href: string): boolean {
@@ -36,8 +36,12 @@
 
 <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom">
 	<div class="container">
-		<a class="navbar-brand d-flex align-items-center gap-2" href={resolve('/')}>
-			<Icon name="system-gb" /> RnRomManager
+		<a
+			class="navbar-brand d-flex align-items-center"
+			href={resolve('/')}
+			aria-label="RnRomManager home"
+		>
+			<Icon name="system-gb" />
 		</a>
 		<button
 			class="navbar-toggler"

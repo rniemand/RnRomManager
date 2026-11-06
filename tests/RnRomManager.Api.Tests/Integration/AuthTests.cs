@@ -38,6 +38,18 @@ public class AuthTests
         TestUsers.CreateAsync(_factory, username, mustChangePassword: mustChangePassword);
 
     [Test]
+    public async Task Me_ListsTheRolesSorted()
+    {
+        await TestUsers.CreateAsync(_factory, "richard", Roles.Of(Roles.RomManager, Roles.Admin));
+        (await _client.LoginAsync("richard", Password)).Dispose();
+
+        using var me = await _client.GetAsync("/api/auth/me");
+        var body = await AuthClient.JsonAsync(me);
+
+        Assert.That(body.GetProperty("roles").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "admin", "rom-manager" }));
+    }
+
+    [Test]
     public async Task Login_SetsTheSessionCookieAndReturnsTheUser()
     {
         var user = await CreateUserAsync();
@@ -52,7 +64,7 @@ public class AuthTests
         Assert.That(me.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(body.GetProperty("id").GetInt32(), Is.EqualTo(user.Id));
         Assert.That(body.GetProperty("username").GetString(), Is.EqualTo("richard"));
-        Assert.That(body.GetProperty("role").GetString(), Is.EqualTo("User"));
+        Assert.That(body.GetProperty("roles").GetArrayLength(), Is.Zero);
         Assert.That(body.GetProperty("mustChangePassword").GetBoolean(), Is.False);
         Assert.That((await Users.GetByIdAsync(user.Id, CancellationToken.None))!.LastLoginAt, Is.Not.Null);
     }

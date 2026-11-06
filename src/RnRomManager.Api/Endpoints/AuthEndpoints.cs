@@ -68,7 +68,7 @@ public static class AuthEndpoints
     {
         id = user.Id,
         username = user.Username,
-        role = user.Role.ToString(),
+        roles = user.Roles.Order(StringComparer.Ordinal).ToArray(),
         mustChangePassword = user.MustChangePassword,
     };
 }

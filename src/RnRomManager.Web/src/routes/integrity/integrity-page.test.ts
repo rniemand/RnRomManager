@@ -31,7 +31,12 @@ describe('integrity page', () => {
 	beforeEach(() => {
 		resetClient();
 		jobs.current = null;
-		auth.set({ id: 1, username: 'admin', role: 'Admin', mustChangePassword: false });
+		auth.set({
+			id: 1,
+			username: 'admin',
+			roles: ['admin', 'rom-manager'],
+			mustChangePassword: false
+		});
 		calls = [];
 		fixed = {
 			'GET /api/integrity/status': {

@@ -22,7 +22,7 @@ public class IntegrityEndpointsTests
         if (quickCheckTime is not null)
             _factory.Settings["Integrity:QuickCheckTime"] = quickCheckTime;
         _admin = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "boss", UserRole.Admin);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         (await _admin.LoginAsync("boss", TestUsers.Password)).Dispose();
     }
 

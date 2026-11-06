@@ -69,7 +69,7 @@ public partial class AdminSeedTests
             var users = factory.Services.GetRequiredService<IUserRepository>();
 
             Assert.That(await users.CountAsync(CancellationToken.None), Is.EqualTo(1));
-            Assert.That(await users.GetByUsernameAsync("admin", CancellationToken.None), Is.EqualTo(first));
+            Assert.That((await users.GetByUsernameAsync("admin", CancellationToken.None))! with { Roles = first!.Roles }, Is.EqualTo(first));
         }
         Assert.That(PrintedPassword().IsMatch(_console.ToString()), Is.False, "nothing printed on the second start");
     }

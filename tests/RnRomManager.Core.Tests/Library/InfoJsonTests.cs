@@ -20,7 +20,7 @@ public class InfoJsonTests
         ISystemHandler[] handlers = [Handler("gb"), Handler("gbc")];
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns(handlers);
-        return new InfoJsonReader([new InfoJsonUpgraderV1(), .. upgraders], registry);
+        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), .. upgraders], registry);
     }
 
     private static ISystemHandler Handler(string id)
@@ -51,7 +51,8 @@ public class InfoJsonTests
         Type = type,
         Source = InfoJsonImage.SourceDefault,
         SourceUrl = null,
-        IsDefault = true,
+        IsDefault = type == ImageType.BoxArt,
+        IsCover = type == ImageType.BoxArt,
         SizeBytes = 7156,
         Sha1 = new string('c', 40),
         Width = 512,
@@ -61,7 +62,7 @@ public class InfoJsonTests
 
     private static InfoJsonGame Game() => new()
     {
-        SchemaVersion = 2,
+        SchemaVersion = 3,
         GameId = Guid.Parse("6f1f6c3e-8a54-4f39-9d2b-0d2a7c1e9b11"),
         System = "gb",
         Title = "Tetris",
@@ -115,7 +116,8 @@ public class InfoJsonTests
         var text = Encoding.UTF8.GetString(bytes);
 
         Assert.That(bytes[0], Is.EqualTo((byte)'{'), "no BOM");
-        Assert.That(text, Does.Contain("\n  \"schemaVersion\": 2"));
+        Assert.That(text, Does.Contain("\n  \"schemaVersion\": 3"));
+        Assert.That(text, Does.Contain("\"isCover\": true"));
         Assert.That(text, Does.Contain("\"description\": null"));
         Assert.That(text, Does.Contain("\"method\": \"Dat\""));
         Assert.That(text, Does.Contain("\"type\": \"BoxArt\""));
@@ -163,9 +165,9 @@ public class InfoJsonTests
     [Test]
     public void NewerSchema_IsDetected_NotParsedFurther()
     {
-        var result = ReadJson("""{ "schemaVersion": 3, "anything": "goes" }""");
+        var result = ReadJson("""{ "schemaVersion": 4, "anything": "goes" }""");
 
-        Assert.That((result.Kind, result.FileVersion), Is.EqualTo((InfoJsonReadResult.Outcome.NewerSchema, (int?)3)));
+        Assert.That((result.Kind, result.FileVersion), Is.EqualTo((InfoJsonReadResult.Outcome.NewerSchema, (int?)4)));
     }
 
     [Test]
@@ -182,24 +184,25 @@ public class InfoJsonTests
         var result = reader.Read(Encoding.UTF8.GetBytes(v0.ToJsonString()));
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
-        Assert.That((result.FileVersion, result.Game!.SchemaVersion), Is.EqualTo(((int?)0, 2)));
+        Assert.That((result.FileVersion, result.Game!.SchemaVersion), Is.EqualTo(((int?)0, 3)));
         Assert.That(result.Game.Genres, Is.EqualTo(new[] { "Puzzle" }));
         upgrader.Received(1).Upgrade(Arg.Any<JsonObject>());
     }
 
     [Test]
-    public void V1File_ReadsAsV2_NotRatedNotFavourite()
+    public void V1File_ReadsAsV3_NotRatedNotFavourite()
     {
         var result = ReadEdited(d =>
         {
             d["schemaVersion"] = 1;
             d.Remove("rating");
             d.Remove("favourite");
+            RemoveIsCover(d);
         });
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
         Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Rating, result.Game.Favourite),
-            Is.EqualTo(((int?)1, 2, (int?)null, false)));
+            Is.EqualTo(((int?)1, 3, (int?)null, false)));
     }
 
     [Test]
@@ -293,8 +296,11 @@ public class InfoJsonTests
         yield return Case("ShortCrc", g => g with { Roms = [Rom("a.gb") with { Metadata = Rom("a.gb").Metadata with { Crc32 = "abc" } }] }, "lowercase hex");
         yield return Case("BadImageSha1", g => g with { Images = [Image("x.png", ImageType.BoxArt) with { Sha1 = "zz" }] }, "sha1 must be lowercase hex");
         yield return Case("UnknownImageSource", g => g with { Images = [Image("x.png", ImageType.BoxArt) with { Source = "web" }] }, "source must be");
-        yield return Case("TwoBoxArts", g => g with { Images = [Image("a.png", ImageType.BoxArt), Image("b.png", ImageType.BoxArt)] }, "at most one BoxArt");
-        yield return Case("TwoSnaps", g => g with { Images = [Image("a.png", ImageType.BoxArt), Image("b.png", ImageType.Snap), Image("c.png", ImageType.Snap)] }, "at most one Snap");
+        yield return Case("NoCover", g => g with { Images = [Image("a.png", ImageType.BoxArt) with { IsCover = false }] }, "exactly one image must be isCover");
+        yield return Case("TwoCovers", g => g with { Images = [Image("a.png", ImageType.BoxArt), Image("b.png", ImageType.Snap) with { IsCover = true }] }, "exactly one image must be isCover");
+        yield return Case("TwoDefaults", g => g with { Images = [Image("a.png", ImageType.BoxArt), Image("b.png", ImageType.BoxArt) with { IsCover = false }] }, "at most one isDefault");
+        yield return Case("DefaultSnap", g => g with { Images = [Image("a.png", ImageType.BoxArt) with { IsDefault = false }, Image("b.png", ImageType.Snap) with { IsDefault = true }] }, "isDefault image must be a BoxArt");
+        yield return Case("TooManyImages", g => g with { Images = [Image("a.png", ImageType.BoxArt), .. Enumerable.Range(1, 20).Select(n => Image($"s{n}.png", ImageType.Snap))] }, "at most 20 images");
     }
 
     [TestCaseSource(nameof(RuleErrors))]
@@ -310,10 +316,78 @@ public class InfoJsonTests
     }
 
     [Test]
-    public void NoBoxArt_IsNotInvalid_ItIsMissingBoxArtForIntegrity()
+    public void NoBoxArt_OrNoImages_IsNotInvalid()
     {
-        var result = _reader.Read(InfoJsonSerializer.Serialize(Game() with { Images = [Image("snap-01.png", ImageType.Snap)] }));
+        var snapCover = _reader.Read(InfoJsonSerializer.Serialize(Game() with { Images = [Image("snap-01.png", ImageType.Snap) with { IsCover = true }] }));
+        var none = _reader.Read(InfoJsonSerializer.Serialize(Game() with { Images = [] }));
+
+        Assert.That(snapCover.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), snapCover.Rule);
+        Assert.That(none.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), none.Rule);
+    }
+
+    [Test]
+    public void V3_AllowsSeveralBoxArtsAndSnaps_JpegNames_AndUploadSource()
+    {
+        var game = Game() with
+        {
+            Images =
+            [
+                Image("boxart-01.png", ImageType.BoxArt),
+                Image("boxart-02.jpg", ImageType.BoxArt) with { IsDefault = false, IsCover = false, Source = InfoJsonImage.SourceUpload },
+                Image("snap-01.png", ImageType.Snap) with { IsDefault = false, Source = InfoJsonImage.SourceLibretro },
+                Image("snap-02.jpg", ImageType.Snap) with { IsDefault = false, Source = InfoJsonImage.SourceUpload },
+            ],
+        };
+
+        var result = _reader.Read(InfoJsonSerializer.Serialize(game));
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+    }
+
+    private static void RemoveIsCover(JsonObject document)
+    {
+        foreach (var image in document["images"]!.AsArray().OfType<JsonObject>())
+            image.Remove("isCover");
+    }
+
+    private InfoJsonReadResult ReadV2(params InfoJsonImage[] images) => ReadEdited(d =>
+    {
+        d["schemaVersion"] = 2;
+        d["images"] = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(images, InfoJsonSerializer.Options));
+        RemoveIsCover(d);
+    });
+
+    [Test]
+    public void V2Upgrade_BoxArtBecomesTheCover()
+    {
+        var result = ReadV2(Image("snap-01.png", ImageType.Snap), Image("boxart-01.png", ImageType.BoxArt));
+
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Game!.Images.Select(i => (i.FileName, i.IsCover)), Is.EqualTo(new[] { ("snap-01.png", false), ("boxart-01.png", true) }));
+        Assert.That(result.FileVersion, Is.EqualTo(2));
+    }
+
+    [Test]
+    public void V2Upgrade_WithoutBoxArt_TheFirstImageIsTheCover()
+    {
+        var result = ReadV2(Image("snap-01.png", ImageType.Snap), Image("title-01.png", ImageType.TitleScreen));
+
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Game!.Images.Select(i => i.IsCover), Is.EqualTo(new[] { true, false }));
+    }
+
+    [Test]
+    public void V2Upgrade_WithNoImages_StaysValid()
+    {
+        var result = ReadV2();
+
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Game!.Images, Is.Empty);
+    }
+
+    [Test]
+    public void V3_WithoutIsCover_IsInvalid()
+    {
+        Assert.That(RuleOf(ReadEdited(RemoveIsCover)), Does.Contain("missing or wrongly typed"));
     }
 }

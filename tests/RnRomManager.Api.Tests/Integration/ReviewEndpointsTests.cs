@@ -41,7 +41,7 @@ public class ReviewEndpointsTests
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
         _admin = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "boss", UserRole.Admin);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         using var login = await _admin.LoginAsync("boss", TestUsers.Password);
         _adminId = (await Service<IUserRepository>().GetByUsernameAsync("boss", default))!.Id;
         var cache = Service<DatCache>();
@@ -239,10 +239,51 @@ public class ReviewEndpointsTests
         Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
     }
 
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task Delete_Is204_RemovesTheSourceAndItsPendingRows(bool archive)
+    {
+        var item = await Queue(archive);
+        using var response = await _admin.SendAsync(HttpMethod.Delete, $"/api/review/{item.Id}", null, true);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(File.Exists(item.ArchivePath ?? item.SourcePath), Is.False);
+        Assert.That(await Reviews.GetAsync(item.Id, default), Is.Null);
+        Assert.That(File.Exists(Path.Combine(_factory.Root, "ingest", "gb", "_failed", Path.GetFileName(item.ArchivePath ?? item.SourcePath))), Is.False);
+    }
+
+    [Test]
+    public async Task Delete_UnknownOrDone_Is404_LockBusy_Is409()
+    {
+        var item = await Queue();
+        using var unknown = await _admin.SendAsync(HttpMethod.Delete, "/api/review/999999", null, true);
+        using (Service<JobLock>().TryAcquire())
+        {
+            using var busy = await _admin.SendAsync(HttpMethod.Delete, $"/api/review/{item.Id}", null, true);
+            Assert.That(busy.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(await AuthClient.CodeAsync(busy), Is.EqualTo("JobRunning"));
+        }
+        (await _admin.PostAsync($"/api/review/{item.Id}/dismiss")).Dispose();
+        using var dismissed = await _admin.SendAsync(HttpMethod.Delete, $"/api/review/{item.Id}", null, true);
+
+        Assert.That(unknown.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        Assert.That(dismissed.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task Delete_RequiresAntiforgery()
+    {
+        var item = await Queue();
+        using var response = await _admin.SendAsync(HttpMethod.Delete, $"/api/review/{item.Id}", null, sendXsrf: false);
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("AntiforgeryInvalid"));
+        Assert.That(File.Exists(item.SourcePath), Is.True);
+    }
+
     [TestCase("GET", "/api/review")]
     [TestCase("GET", "/api/review/1")]
     [TestCase("POST", "/api/review/1/resolve")]
     [TestCase("POST", "/api/review/1/dismiss")]
+    [TestCase("DELETE", "/api/review/1")]
     [TestCase("GET", "/api/dat/search?system=gb&q=tetris")]
     public async Task RoleMatrix_Anonymous401_User403(string method, string url)
     {

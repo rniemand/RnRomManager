@@ -47,6 +47,7 @@ public static class LibraryEndpoints
                 boxArtUrl = game.BoxArtImageId is { } imageId ? ImageUrl(game.Id, imageId) : null,
                 rating = game.Rating,
                 favourite = game.Favourite,
+                matchedOn = game.MatchedOn is { } match ? new { field = match.Field, value = match.Value } : null,
             }));
         });
 
@@ -62,9 +63,9 @@ public static class LibraryEndpoints
 
             ctx.Response.Headers.CacheControl = "private, max-age=86400";
             // A 304 for a matching If-None-Match is answered by the stream result itself.
-            return files.OpenEntry(ctx, game, LibraryZip.ImageEntry(image.FileName), PngInfo.MaxBytes, out var stream) is { } problem
+            return files.OpenEntry(ctx, game, LibraryZip.ImageEntry(image.FileName), ImageFormats.MaxBytes, out var stream) is { } problem
                 ? problem
-                : Results.Stream(stream!, "image/png", entityTag: new EntityTagHeaderValue($"\"{image.Sha1}\""));
+                : Results.Stream(stream!, ImageFormats.ContentType(image.FileName), entityTag: new EntityTagHeaderValue($"\"{image.Sha1}\""));
         });
 
         games.MapGet("/{id:guid}/download", async (Guid id, HttpContext ctx, IGameRepository repository, LibraryFiles files) =>
@@ -98,7 +99,7 @@ public static class LibraryEndpoints
                 return Problems.Validation(ctx, errors);
             var result = await editor.PatchAsync(id, patch, ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.AdminOnly);
+        }).RequireAuthorization(AuthSetup.LibraryEditor);
 
         // Any signed-in user (shared per game); takes the job lock and rewrites the ZIP like every edit.
         games.MapPatch("/{id:guid}/rating", async (Guid id, JsonElement body, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
@@ -112,10 +113,10 @@ public static class LibraryEndpoints
         });
 
         games.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, LibraryEditor editor) =>
-            ToResult(ctx, await editor.DeleteGameAsync(id, ctx.RequestAborted))).RequireAuthorization(AuthSetup.AdminOnly);
+            ToResult(ctx, await editor.DeleteGameAsync(id, ctx.RequestAborted))).RequireAuthorization(AuthSetup.LibraryEditor);
 
         games.MapDelete("/{id:guid}/roms/{romId:long}", async (Guid id, long romId, HttpContext ctx, LibraryEditor editor) =>
-            ToResult(ctx, await editor.DeleteReleaseAsync(id, romId, ctx.RequestAborted))).RequireAuthorization(AuthSetup.AdminOnly);
+            ToResult(ctx, await editor.DeleteReleaseAsync(id, romId, ctx.RequestAborted))).RequireAuthorization(AuthSetup.LibraryEditor);
 
         games.MapPost("/{id:guid}/roms/{romId:long}/move", async (Guid id, long romId, MoveReleaseRequest request, HttpContext ctx,
             LibraryEditor editor) =>
@@ -125,14 +126,54 @@ public static class LibraryEndpoints
                 return Problems.Validation(ctx, errors);
             var result = await editor.MoveReleaseAsync(id, romId, request.TargetGameId, request.NewGameTitle?.Trim(), ctx.RequestAborted);
             return result.Code is null ? Results.Ok(new { targetGameId = result.GameId }) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.AdminOnly);
+        }).RequireAuthorization(AuthSetup.LibraryEditor);
 
         games.MapPost("/{id:guid}/media/retry", async (Guid id, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
             IRomRepository roms, IImageRepository images) =>
         {
             var result = await editor.RetryMediaAsync(id, ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.AdminOnly);
+        }).RequireAuthorization(AuthSetup.LibraryEditor);
+
+        // I5–I7: image management. The upload reads the form itself (no IFormFile binding), so the group's own
+        // X-XSRF-TOKEN filter is the antiforgery check, as for every other mutation.
+        games.MapPost("/{id:guid}/images", async (Guid id, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
+            IRomRepository roms, IImageRepository images) =>
+        {
+            // Kestrel enforces the size-limit metadata below; this also covers hosts that don't (TestServer) and
+            // chunked bodies, which only fail while the form is read.
+            if (ctx.Request.ContentLength > UploadRequestLimit)
+                return TooLarge(ctx);
+            Dictionary<string, string[]> errors;
+            ImageType type;
+            byte[]? bytes;
+            try
+            {
+                (type, bytes, errors) = await ReadUploadAsync(ctx);
+            }
+            catch (Exception ex) when (ex is InvalidDataException or BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge })
+            {
+                return TooLarge(ctx);
+            }
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+            var result = await editor.AddImageAsync(id, type, bytes!, ctx.RequestAborted);
+            return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
+        }).RequireAuthorization(AuthSetup.LibraryEditor).WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(UploadRequestLimit));
+
+        games.MapDelete("/{id:guid}/images/{imageId:long}", async (Guid id, long imageId, HttpContext ctx, LibraryEditor editor,
+            IGameRepository repository, IRomRepository roms, IImageRepository images) =>
+        {
+            var result = await editor.DeleteImageAsync(id, imageId, ctx.RequestAborted);
+            return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
+        }).RequireAuthorization(AuthSetup.LibraryEditor);
+
+        games.MapPost("/{id:guid}/images/{imageId:long}/cover", async (Guid id, long imageId, HttpContext ctx, LibraryEditor editor,
+            IGameRepository repository, IRomRepository roms, IImageRepository images) =>
+        {
+            var result = await editor.SetCoverAsync(id, imageId, ctx.RequestAborted);
+            return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
+        }).RequireAuthorization(AuthSetup.LibraryEditor);
 
         api.MapPost("/jobs/media-retry", async (HttpContext ctx, JobRunner runner, MediaRetryJob job) =>
         {
@@ -146,9 +187,43 @@ public static class LibraryEndpoints
                 return Problems.Validation(ctx, new Dictionary<string, string[]> { ["targetGameId"] = ["A target game is required."] });
             var result = await editor.MergeAsync(id, target, ctx.RequestAborted);
             return result.Code is null ? Results.Ok(new { targetGameId = result.GameId }) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.AdminOnly);
+        }).RequireAuthorization(AuthSetup.LibraryEditor);
 
         return api;
+    }
+
+    /// <summary>The upload's whole request: the 8 MiB image plus room for the multipart framing and the <c>type</c> field.</summary>
+    public const long UploadRequestLimit = ImageFormats.MaxBytes + 64 * 1024;
+
+    private static IResult TooLarge(HttpContext ctx) =>
+        Problems.Create(ctx, StatusCodes.Status413PayloadTooLarge, "PayloadTooLarge", "The upload is larger than 8 MiB.");
+
+    /// <summary>I5 form fields: <c>file</c> (≤ 8 MiB; format and dimensions are checked by the editor) and <c>type</c>.</summary>
+    private static async Task<(ImageType Type, byte[]? Bytes, Dictionary<string, string[]> Errors)> ReadUploadAsync(HttpContext ctx)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (!ctx.Request.HasFormContentType)
+        {
+            errors["file"] = ["Send the image as multipart/form-data."];
+            return (default, null, errors);
+        }
+        var form = await ctx.Request.ReadFormAsync(ctx.RequestAborted);
+        var typeText = form["type"].ToString();
+        // Exact names only: Enum.TryParse would also accept "0" or "boxart".
+        var type = typeText switch { "BoxArt" => ImageType.BoxArt, "Snap" => ImageType.Snap, _ => (ImageType?)null };
+        if (type is null)
+            errors["type"] = ["Choose BoxArt or Snap."];
+        var file = form.Files.GetFile("file");
+        if (file is null || file.Length == 0)
+            errors["file"] = ["Choose an image file."];
+        else if (file.Length > ImageFormats.MaxBytes)
+            errors["file"] = ["The image must be at most 8 MiB."];
+        if (errors.Count > 0)
+            return (default, null, errors);
+
+        using var buffer = new MemoryStream((int)file!.Length);
+        await file.CopyToAsync(buffer, ctx.RequestAborted);
+        return (type!.Value, buffer.ToArray(), errors);
     }
 
     private static async Task<IResult> DetailAsync(Guid id, HttpContext ctx, IGameRepository repository, IRomRepository roms, IImageRepository images)
@@ -168,7 +243,8 @@ public static class LibraryEndpoints
     {
         LibraryEditResult.ValidationFailed => Problems.Validation(ctx, result.Errors!),
         LibraryEditResult.NotFound => Problems.NotFound(ctx),
-        LibraryEditResult.JobRunning or LibraryTarget.InfoJsonNewerSchema or LibraryTarget.TargetZipUnreadable =>
+        LibraryEditResult.JobRunning or LibraryEditResult.TooManyImages or LibraryEditResult.DuplicateImage or LibraryEditResult.DefaultImage
+            or LibraryTarget.InfoJsonNewerSchema or LibraryTarget.TargetZipUnreadable =>
             Problems.Create(ctx, StatusCodes.Status409Conflict, result.Code, result.Code),
         _ => Problems.Create(ctx, StatusCodes.Status500InternalServerError, result.Code!, result.Code!),
     };
@@ -399,7 +475,11 @@ public static class LibraryEndpoints
         {
             id = i.Id,
             type = i.Type,
+            fileName = i.FileName,
+            source = i.Source,
             isDefault = i.IsDefault,
+            isCover = i.IsCover,
+            sizeBytes = i.SizeBytes,
             width = i.Width,
             height = i.Height,
             url = ImageUrl(game.Id, i.Id),

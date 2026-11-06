@@ -76,6 +76,7 @@ public sealed record ImageRow
     public required string Source { get; init; }
     public string? SourceUrl { get; init; }
     public bool IsDefault { get; init; }
+    public bool IsCover { get; init; }
     public required long SizeBytes { get; init; }
     public required string Sha1 { get; init; }
     public required int Width { get; init; }
@@ -106,7 +107,8 @@ public sealed record MirrorEntry(InfoJsonGame Info, string ZipPath, long ZipSize
             Publishers = Info.Publishers,
             Genres = Info.Genres,
             Description = Info.Description,
-            HasDefaultBoxArt = Info.Images.Any(i => i.Type == ImageType.BoxArt && i.IsDefault),
+            // v3: "the cover is the placeholder" (I8).
+            HasDefaultBoxArt = Info.Images.Any(i => i.IsCover && i.IsDefault),
             Rating = Info.Rating,
             Favourite = Info.Favourite,
             ZipSizeBytes = ZipSizeBytes,
@@ -150,6 +152,7 @@ public sealed record MirrorEntry(InfoJsonGame Info, string ZipPath, long ZipSize
             Source = i.Source,
             SourceUrl = i.SourceUrl,
             IsDefault = i.IsDefault,
+            IsCover = i.IsCover,
             SizeBytes = i.SizeBytes,
             Sha1 = i.Sha1,
             Width = i.Width,

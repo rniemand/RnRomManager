@@ -8,7 +8,12 @@ class Auth {
 	loaded = $state(false);
 
 	get isAdmin(): boolean {
-		return this.me?.role === 'Admin';
+		return this.me?.roles.includes('admin') ?? false;
+	}
+
+	/** Library edits and image management (`rom-manager`); independent of `admin`. */
+	get canEditLibrary(): boolean {
+		return this.me?.roles.includes('rom-manager') ?? false;
 	}
 
 	/** Loads `me`; a 401 just means signed out. Other errors propagate. */

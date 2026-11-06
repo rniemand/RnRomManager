@@ -21,7 +21,7 @@ public static class Session
             [
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)),
                 new Claim(ClaimTypes.Name, user.Username),
-                new Claim(ClaimTypes.Role, user.Role.ToString()),
+                .. user.Roles.Select(role => new Claim(ClaimTypes.Role, role)),
                 new Claim(StampClaim, user.SecurityStamp),
             ],
             CookieAuthenticationDefaults.AuthenticationScheme);

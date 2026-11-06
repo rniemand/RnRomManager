@@ -216,7 +216,7 @@ public sealed class IngestPipeline(
             Rating = null,
             Favourite = false,
             Roms = PrimaryRelease.Apply([rom]),
-            Images = [found.BoxArt.ToInfoJson(now), .. found.Snap is { } snap ? [snap.ToInfoJson(now)] : Array.Empty<InfoJsonImage>()],
+            Images = GameImages.ForNewGame(found, now),
             Metadata = new InfoJsonGameMetadata(now, now, AppInfo.Version),
         };
 
@@ -264,21 +264,17 @@ public sealed class IngestPipeline(
 
             var entries = new Dictionary<string, Func<Stream>> { [LibraryZip.RomEntry(rom.FileName)] = () => new MemoryStream(bytes) };
 
-            // Step 8: only when the game still has the default box art.
-            var boxArt = current.Images.FirstOrDefault(i => i.Type == ImageType.BoxArt);
-            if (boxArt is null || boxArt.IsDefault)
+            // Step 8 (I4): only while the game still has the placeholder, or no images at all.
+            if (current.Images.Count == 0 || current.Images.Any(i => i.IsDefault))
             {
                 var names = allRoms.OrderBy(PrimaryRelease.Rank, PrimaryReleaseRanker.Instance).Select(r => r.Identification.DatGameName);
                 var found = await media.FindAsync(system, names, breaker, cancellationToken).ConfigureAwait(false);
-                var newBoxArt = found.BoxArt.IsDefault && boxArt is not null ? null : found.BoxArt;
-                var newSnap = current.Images.Any(i => i.Type == ImageType.Snap) ? null : found.Snap;
-                game = game with
+                if (GameImages.ApplyFetched(current.Images, found, now) is var (images, imageEntries))
                 {
-                    Images = [.. current.Images.Where(i => !(newBoxArt is not null && i.Type == ImageType.BoxArt)),
-                        .. newBoxArt is null ? Array.Empty<InfoJsonImage>() : [newBoxArt.ToInfoJson(now)],
-                        .. newSnap is null ? Array.Empty<InfoJsonImage>() : [newSnap.ToInfoJson(now)]],
-                };
-                AddImages(entries, newBoxArt, newSnap);
+                    game = game with { Images = images };
+                    foreach (var (name, content) in imageEntries)
+                        entries[LibraryZip.ImageEntry(name)] = () => new MemoryStream(content);
+                }
             }
 
             return await PackageAsync(file, existing, row.ZipPath, game, entries, result with { GameId = gameId }, cancellationToken, afterMirror).ConfigureAwait(false);

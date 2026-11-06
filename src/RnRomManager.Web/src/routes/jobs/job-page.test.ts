@@ -41,7 +41,12 @@ describe('job detail page', () => {
 
 	beforeEach(() => {
 		resetClient();
-		auth.set({ id: 1, username: 'admin', role: 'Admin', mustChangePassword: false });
+		auth.set({
+			id: 1,
+			username: 'admin',
+			roles: ['admin', 'rom-manager'],
+			mustChangePassword: false
+		});
 		calls = [];
 		vi.stubGlobal('fetch', (url: string) => {
 			calls.push(url);

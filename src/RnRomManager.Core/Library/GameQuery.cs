@@ -12,7 +12,8 @@ public sealed record GameQuery
     public string? Region { get; init; }
 
     /// <summary>
-    /// Every word of it must appear in <c>display_title</c> or <c>title</c>; <c>%</c>/<c>_</c> match literally.
+    /// Every word of it must appear in <c>display_title</c>, <c>title</c>, a developer, publisher or genre (S1);
+    /// <c>%</c>/<c>_</c> match literally.
     /// </summary>
     public string? Search { get; init; }
 
