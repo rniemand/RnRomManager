@@ -151,8 +151,19 @@ describe('api client', () => {
 			code: 'ValidationFailed',
 			title: 'One or more validation errors occurred.',
 			traceId: '00-abc',
-			errors: { title: ['Required'] }
+			errors: { title: ['Required'] },
+			merged: []
 		});
+	});
+
+	it('keeps the merged ids of a stopped group merge (RP8)', async () => {
+		responses.push(
+			json(404, { status: 404, code: 'NotFound', title: 'Not found', merged: ['g2'] })
+		);
+
+		const error = (await api.post('/api/reports/duplicates/merge', {}).catch((e) => e)) as ApiError;
+
+		expect(error.merged).toEqual(['g2']);
 	});
 
 	it('a non-JSON error body still gives an ApiError', async () => {

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
+import { auth } from '#lib/stores/auth.svelte.js';
+import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 
 const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
@@ -12,6 +14,14 @@ vi.mock('$app/state', () => ({
 		}
 	}
 }));
+// Bootstrap's Modal needs layout/transitions jsdom lacks.
+vi.mock('#lib/bootstrap.js', () => ({
+	Modal: class {
+		show() {}
+		hide() {}
+		dispose() {}
+	}
+}));
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
@@ -19,6 +29,7 @@ vi.mock('$app/paths', () => ({
 const { default: ReportsIndex } = await import('./+page.svelte');
 const { default: MissingImages } = await import('./missing-images/+page.svelte');
 const { default: LibrarySize } = await import('./library-size/+page.svelte');
+const { default: Duplicates } = await import('./duplicates/+page.svelte');
 
 type Answer = { status: number; body?: unknown };
 
@@ -29,6 +40,7 @@ const systems = [
 
 describe('reports pages', () => {
 	let calls: string[];
+	let bodies: Record<string, unknown[]>;
 	let answers: Record<string, Answer>;
 
 	beforeEach(() => {
@@ -36,10 +48,14 @@ describe('reports pages', () => {
 		goto.mockClear();
 		navigateTo('/reports');
 		calls = [];
+		bodies = {};
 		answers = { 'GET /api/systems': { status: 200, body: systems } };
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
 			const key = `${init?.method ?? 'GET'} ${url}`;
+			if (url === '/api/auth/antiforgery')
+				return Promise.resolve(new Response(null, { status: 204 }));
 			calls.push(key);
+			if (typeof init?.body === 'string') (bodies[key] ??= []).push(JSON.parse(init.body));
 			const answer = answers[key] ?? { status: 204 };
 			return Promise.resolve(
 				new Response(answer.body === undefined ? null : JSON.stringify(answer.body), {
@@ -48,7 +64,10 @@ describe('reports pages', () => {
 			);
 		});
 	});
-	afterEach(() => vi.unstubAllGlobals());
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		auth.set(null);
+	});
 
 	it('/reports redirects to Library Size, replacing the history entry (RP1)', () => {
 		render(ReportsIndex);
@@ -163,6 +182,115 @@ describe('reports pages', () => {
 
 			expect(await screen.findByText('The library is empty.')).toBeTruthy();
 			expect(document.querySelector('svg')).toBeNull();
+		});
+	});
+
+	describe('Duplicates (RP9)', () => {
+		const list = 'GET /api/reports/duplicates?page=1&pageSize=25';
+		const game = (id: string, displayTitle: string, romCount: number) => ({
+			id,
+			displayTitle,
+			romCount,
+			zipSizeBytes: 2048,
+			createdAt: '2026-11-01T00:00:00Z',
+			boxArtUrl: null
+		});
+		const group = {
+			system: 'gb',
+			systemName: 'Game Boy',
+			baseTitle: 'Quest',
+			gamesKey: 'k'.repeat(64),
+			games: [game('g1', 'Quest', 2), game('g2', 'Quest DX', 1), game('g3', 'Quest II', 1)]
+		};
+		const page = { items: [group], page: 1, pageSize: 25, total: 1 };
+		const signIn = (roles: ('admin' | 'rom-manager')[]) =>
+			auth.set({ id: 1, username: 'u', roles, mustChangePassword: false });
+		const radio = (title: string) =>
+			screen.getByRole('radio', { name: `Merge into ${title}` }) as HTMLInputElement;
+
+		it('renders a card per group; the first game is pre-selected and labelled', async () => {
+			signIn(['rom-manager']);
+			answers[list] = { status: 200, body: page };
+			render(Duplicates);
+
+			expect(await screen.findByRole('heading', { name: 'Quest' })).toBeTruthy();
+			expect([radio('Quest').checked, radio('Quest DX').checked]).toEqual([true, false]);
+			const first = screen.getByRole('link', { name: 'Quest' }).closest('tr')!;
+			expect(first.textContent).toContain('Suggested target');
+			expect(screen.getAllByText('Suggested target')).toHaveLength(1);
+		});
+
+		it('a user without rom-manager sees the list without radios or buttons', async () => {
+			signIn(['admin']);
+			answers[list] = { status: 200, body: page };
+			render(Duplicates);
+
+			await screen.findByRole('link', { name: 'Quest DX' });
+			expect(screen.queryAllByRole('radio')).toEqual([]);
+			expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+			expect(screen.queryByRole('button', { name: 'Merge into selected' })).toBeNull();
+		});
+
+		it('merge confirms, posts the selected target and the other ids, then reloads', async () => {
+			signIn(['rom-manager']);
+			answers[list] = { status: 200, body: page };
+			answers['POST /api/reports/duplicates/merge'] = { status: 200, body: { targetGameId: 'g2' } };
+			render(Duplicates);
+			await screen.findByRole('link', { name: 'Quest DX' });
+
+			await fireEvent.click(radio('Quest DX'));
+			await fireEvent.click(screen.getByRole('button', { name: 'Merge into selected' }));
+			const modal = document.querySelector('.modal')!;
+			expect(modal.textContent?.replace(/\s+/g, ' ')).toContain('Merge 2 games into Quest DX?');
+			await fireEvent.click(screen.getByRole('button', { name: 'Merge', hidden: true }));
+
+			await vi.waitFor(() => expect(calls.filter((c) => c === list)).toHaveLength(2));
+			expect(bodies['POST /api/reports/duplicates/merge']).toEqual([
+				{ targetGameId: 'g2', sourceGameIds: ['g1', 'g3'] }
+			]);
+		});
+
+		it('dismiss posts the group key and reloads', async () => {
+			signIn(['rom-manager']);
+			answers[list] = { status: 200, body: page };
+			render(Duplicates);
+			await screen.findByRole('link', { name: 'Quest DX' });
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+
+			await vi.waitFor(() => expect(calls.filter((c) => c === list)).toHaveLength(2));
+			expect(bodies['POST /api/reports/duplicates/dismiss']).toEqual([
+				{ system: 'gb', baseTitle: 'Quest', gamesKey: group.gamesKey }
+			]);
+		});
+
+		it('a merge that stops part-way toasts the problem and the merged count', async () => {
+			signIn(['rom-manager']);
+			toasts.items = [];
+			answers[list] = { status: 200, body: page };
+			answers['POST /api/reports/duplicates/merge'] = {
+				status: 404,
+				body: { status: 404, code: 'NotFound', title: 'Not found', merged: ['g2'] }
+			};
+			render(Duplicates);
+			await screen.findByRole('link', { name: 'Quest DX' });
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Merge into selected' }));
+			await fireEvent.click(screen.getByRole('button', { name: 'Merge', hidden: true }));
+
+			await vi.waitFor(() =>
+				expect(toasts.items.at(-1)).toMatchObject({
+					kind: 'danger',
+					text: 'Not found 1 merged before it stopped.'
+				})
+			);
+		});
+
+		it('shows the empty state', async () => {
+			answers[list] = { status: 200, body: { items: [], page: 1, pageSize: 25, total: 0 } };
+			render(Duplicates);
+
+			expect(await screen.findByText('No duplicate games found.')).toBeTruthy();
 		});
 	});
 
