@@ -225,7 +225,7 @@ test('review queue: delete a file', async () => {
 	await page.goto('/review');
 	await expect(page.getByRole('link', { name: '91-unmatched.gb' })).toHaveCount(0);
 	await page.getByRole('button', { name: 'Delete 93-mystery.gb' }).click();
-	await expect(dialog()).toHaveAccessibleName('Delete file');
+	await expect(dialog()).toHaveAccessibleName('Delete File: 93-mystery.gb');
 	await expect(dialog().getByText('93-mystery.gb').first()).toBeVisible();
 	await expectAccessible(page, 'review delete modal');
 	await dialog().getByRole('button', { name: 'Delete file' }).click();
@@ -243,19 +243,25 @@ test('images: upload, set cover, delete', async () => {
 	await expect(images.getByText('Placeholder')).toBeVisible();
 
 	// A box art upload replaces the placeholder and takes over as cover.
-	await images
+	await images.getByRole('button', { name: 'Upload image' }).click();
+	await expect(dialog()).toHaveAccessibleName('Upload image');
+	await expectAccessible(page, 'upload image modal');
+	await dialog()
 		.getByLabel('Upload an image')
 		.setInputFiles({ name: 'art.png', mimeType: 'image/png', buffer: png(64, [200, 40, 40]) });
-	await images.getByRole('button', { name: 'Upload', exact: true }).click();
+	await dialog().getByRole('button', { name: 'Upload', exact: true }).click();
+	await expect(dialog()).toBeHidden();
 	await expect(card('boxart-01.png').getByText('Cover')).toBeVisible();
 	await expect(images.getByText('Placeholder')).toHaveCount(0);
 	await expect(card('boxart-01.png')).toContainText('64×64');
 
-	await images
+	await images.getByRole('button', { name: 'Upload image' }).click();
+	await dialog()
 		.getByLabel('Upload an image')
 		.setInputFiles({ name: 'shot.png', mimeType: 'image/png', buffer: png(32, [40, 40, 200]) });
-	await images.getByLabel('Type').selectOption({ label: 'Screenshot' });
-	await images.getByRole('button', { name: 'Upload', exact: true }).click();
+	await dialog().getByLabel('Type').selectOption({ label: 'Screenshot' });
+	await dialog().getByRole('button', { name: 'Upload', exact: true }).click();
+	await expect(dialog()).toBeHidden();
 	await expect(card('snap-01.png').getByText('Screenshot')).toBeVisible();
 	await expectAccessible(page, 'game images');
 
