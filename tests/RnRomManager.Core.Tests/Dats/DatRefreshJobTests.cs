@@ -167,7 +167,7 @@ public class DatRefreshJobTests
         WriteLiveV1();
         _override = _ => StubHttpHandler.Status(HttpStatusCode.NotFound);
         var jobs = Substitute.For<IJobRepository>();
-        var runner = new JobRunner(jobs, new JobLock(), TimeProvider.System, NullLogger<JobRunner>.Instance);
+        var runner = new JobRunner(jobs, new JobLock(), Substitute.For<RnRomManager.Core.Users.IUserRepository>(), TimeProvider.System, NullLogger<JobRunner>.Instance);
 
         var started = await runner.StartAsync(Job(Server()), JobTrigger.Manual, null, CancellationToken.None);
         await started!.Completion.WaitAsync(TimeSpan.FromSeconds(10));

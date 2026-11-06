@@ -17,11 +17,15 @@ public sealed class NoopTestJob : IJob
     /// <summary>Keeps running after cancel (a job that misses the shutdown timeout).</summary>
     public bool IgnoreCancel { get; init; }
 
+    /// <summary>The context the runner passed in (AU3 actor checks).</summary>
+    public JobContext? Context { get; private set; }
+
     public JobType Type => JobType.Integrity;
     public JobMode? Mode => JobMode.Quick;
 
     public async Task<object?> RunAsync(JobContext context, CancellationToken cancellationToken)
     {
+        Context = context;
         context.Progress.SetTotal(3);
         context.Progress.SetCurrentItem("item-1");
         Started.TrySetResult();

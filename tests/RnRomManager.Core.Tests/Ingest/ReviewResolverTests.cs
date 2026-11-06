@@ -43,7 +43,8 @@ public class ReviewResolverTests
         var reader = new InfoJsonReader([], systems);
         var media = new MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }), NullLogger<MediaService>.Instance);
         var pipeline = new IngestPipeline(dats, systems, Substitute.For<IRomRepository>(), games, Substitute.For<ILibraryMirror>(),
-            Substitute.For<IIntegrityIssueRepository>(), _reviews, reader, media, options, _time, NullLogger<IngestPipeline>.Instance);
+            Substitute.For<IIntegrityIssueRepository>(), _reviews, reader, media, options, Substitute.For<RnRomManager.Core.Audit.IAuditLog>(),
+            new RnRomManager.Core.Audit.AuditPaths(options), _time, NullLogger<IngestPipeline>.Instance);
         _resolver = new ReviewResolver(_lock, _reviews, games, pipeline, dats, systems,
             new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance), options, _time, NullLogger<ReviewResolver>.Instance);
     }

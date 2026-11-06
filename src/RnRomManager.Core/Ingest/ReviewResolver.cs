@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Jobs;
@@ -77,7 +78,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 item.SizeBytes, File.GetLastWriteTimeUtc(source));
             if (request is null)
             {
-                if (item.ArchivePath is null && pipeline.MoveToFailed(file, Guid.NewGuid(), "Dismissed", "dismissed by an Admin") is { } failed)
+                if (item.ArchivePath is null && pipeline.MoveToFailed(file, new AuditActor(userId, null, null), "Dismissed", "dismissed by an Admin") is { } failed)
                     return new(failed.Reason);
                 await reviews.SetResolutionAsync(id, "Dismissed", null, userId, time.GetUtcNow().UtcDateTime, ct).ConfigureAwait(false);
                 return new();
@@ -188,7 +189,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             // Close the source before the pipeline deletes it (Windows FileShare semantics).
             await limited.DisposeAsync().ConfigureAwait(false);
             var result = await pipeline.StoreReleaseAsync(file, system, rom, metadata, bytes, target,
-                gameId => reviews.SetResolutionAsync(id, "Resolved", gameId, userId, time.GetUtcNow().UtcDateTime, ct), ct).ConfigureAwait(false);
+                gameId => reviews.SetResolutionAsync(id, "Resolved", gameId, userId, time.GetUtcNow().UtcDateTime, ct),
+                new AuditActor(userId, null, null), request.Action, ct).ConfigureAwait(false);
             return result.Outcome == IngestOutcome.Ingested ? new(GameId: result.GameId) : new(result.Reason);
         }
         catch (ArchiveRejectedException ex)

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Jobs;
@@ -106,7 +107,7 @@ public sealed class IngestJob(
     {
         var fileId = Guid.NewGuid();
         using var scope = logger.BeginScope(new Dictionary<string, object> { ["FileId"] = fileId });
-        var result = known ?? await ProcessAsync(file, run.Context.JobId, run.Breaker, cancellationToken).ConfigureAwait(false);
+        var result = known ?? await ProcessAsync(file, run.Context.JobId, run.Context.Actor, run.Breaker, cancellationToken).ConfigureAwait(false);
         if (result is null)
             return null;
 
@@ -129,13 +130,13 @@ public sealed class IngestJob(
         }
         catch (ArchiveRejectedException ex)
         {
-            await ItemAsync(run, archive, pipeline.FailFile(archive, run.Context.JobId, ex.Reason, ex.Message)).ConfigureAwait(false);
+            await ItemAsync(run, archive, pipeline.FailFile(archive, run.Context.Actor, ex.Reason, ex.Message)).ConfigureAwait(false);
             return;
         }
         if (entries.Count == 0)
         {
             // shortcut: §7.3 doesn't say; an archive with no ROM entries is treated as unsupported rather than deleted.
-            await ItemAsync(run, archive, pipeline.FailFile(archive, run.Context.JobId, IngestFailures.UnsupportedType, "the archive holds no ROM entries")).ConfigureAwait(false);
+            await ItemAsync(run, archive, pipeline.FailFile(archive, run.Context.Actor, IngestFailures.UnsupportedType, "the archive holds no ROM entries")).ConfigureAwait(false);
             return;
         }
 
@@ -152,7 +153,7 @@ public sealed class IngestJob(
             outcomes.Add((entry.EntryPath, await ItemAsync(run, item, null, CancellationToken.None).ConfigureAwait(false)));
         }
 
-        ApplyFate(archive, run.Context.JobId, outcomes);
+        ApplyFate(archive, run.Context.Actor, outcomes);
     }
 
     /// <summary>
@@ -160,7 +161,7 @@ public sealed class IngestJob(
     /// <c>_failed/</c> with every entry's outcome in the <c>.error.txt</c>; else all <c>Duplicate</c> → <c>_duplicates/</c>;
     /// else deleted (<c>Repaired</c> counts as <c>Ingested</c>).
     /// </summary>
-    private void ApplyFate(IngestFile archive, Guid jobId, IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes)
+    private void ApplyFate(IngestFile archive, AuditActor actor, IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes)
     {
         var kinds = outcomes.Select(o => o.Result is { ResolvedArchiveDuplicate: true } ? IngestOutcome.Ingested : o.Result?.Outcome).ToList();
         if (kinds.Any(k => k is null or IngestOutcome.Review or IngestOutcome.Error))
@@ -171,17 +172,18 @@ public sealed class IngestJob(
         if (kinds.Contains(IngestOutcome.Failed))
         {
             var details = string.Join("\n", outcomes.Select(o => $"  {o.Entry}: {o.Result!.Outcome} {o.Result.Reason}".TrimEnd()));
-            pipeline.MoveToFailed(archive, jobId, "EntriesFailed", "entries:\n" + details);
+            pipeline.MoveToFailed(archive, actor, "EntriesFailed", "entries:\n" + details);
             return;
         }
         if (kinds.All(k => k == IngestOutcome.Duplicate))
         {
-            pipeline.MoveToDuplicates(archive);
+            pipeline.MoveToDuplicates(archive, actor);
             return;
         }
         try
         {
             File.Delete(archive.FullPath);
+            pipeline.RecordArchiveDeleted(archive, actor);
             logger.LogInformation("{Path}: every entry ingested; archive deleted", archive.FullPath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -190,11 +192,12 @@ public sealed class IngestJob(
         }
     }
 
-    private async Task<IngestItemResult?> ProcessAsync(IngestFile file, Guid jobId, CircuitBreaker breaker, CancellationToken cancellationToken)
+    private async Task<IngestItemResult?> ProcessAsync(IngestFile file, Guid jobId, AuditActor actor, CircuitBreaker breaker,
+        CancellationToken cancellationToken)
     {
         try
         {
-            return await pipeline.ProcessAsync(file, jobId, breaker, cancellationToken).ConfigureAwait(false);
+            return await pipeline.ProcessAsync(file, jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
