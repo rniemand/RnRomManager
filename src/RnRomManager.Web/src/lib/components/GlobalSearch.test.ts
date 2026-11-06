@@ -12,9 +12,12 @@ vi.mock('$app/paths', () => ({
 }));
 
 // jsdom has no layout/transitions for Bootstrap's Modal; record show/hide instead.
-const shown = { count: 0, hidden: 0 };
+const shown = { count: 0, hidden: 0, options: [] as unknown[] };
 vi.mock('../bootstrap', () => ({
 	Modal: class {
+		constructor(_element: Element, config: unknown) {
+			shown.options.push(config);
+		}
 		show() {
 			shown.count++;
 		}
@@ -109,6 +112,11 @@ describe('GlobalSearch', () => {
 		expect(event.defaultPrevented).toBe(true);
 		await vi.waitFor(() => expect(shown.count).toBe(1));
 		await vi.waitFor(() => expect(document.activeElement).toBe(input()));
+	});
+
+	it('uses a static backdrop with Escape enabled (M1)', () => {
+		render(GlobalSearch);
+		expect(shown.options.at(-1)).toEqual({ backdrop: 'static', keyboard: true });
 	});
 
 	it('a shortcut while open just refocuses the input', async () => {

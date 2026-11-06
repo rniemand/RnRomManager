@@ -36,8 +36,12 @@
 
 <nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom">
 	<div class="container">
-		<a class="navbar-brand d-flex align-items-center gap-2" href={resolve('/')}>
-			<Icon name="system-gb" /> RnRomManager
+		<a
+			class="navbar-brand d-flex align-items-center"
+			href={resolve('/')}
+			aria-label="RnRomManager home"
+		>
+			<Icon name="system-gb" />
 		</a>
 		<button
 			class="navbar-toggler"

@@ -39,7 +39,7 @@
 	const enabled = $derived(!!auth.me && !auth.me.mustChangePassword);
 
 	onMount(() => {
-		modal = new Modal(element);
+		modal = new Modal(element, { backdrop: 'static', keyboard: true }); // M1
 		element.addEventListener('shown.bs.modal', () => input?.focus());
 		element.addEventListener('hidden.bs.modal', () => (open = false));
 	});

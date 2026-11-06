@@ -21,4 +21,15 @@ describe('Navbar', () => {
 		expect(library.getAttribute('aria-current')).toBeNull();
 		expect(library.classList.contains('active')).toBe(false);
 	});
+
+	it('the brand is the icon only, named for screen readers (N1)', () => {
+		render(Navbar, {
+			me: { id: 1, username: 'u', roles: [], mustChangePassword: false },
+			reviewCount: null,
+			onlogout: () => {}
+		});
+
+		const brand = screen.getByRole('link', { name: 'RnRomManager home' });
+		expect(brand.textContent?.trim()).toBe('');
+	});
 });

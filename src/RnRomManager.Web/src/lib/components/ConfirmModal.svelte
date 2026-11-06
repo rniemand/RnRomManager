@@ -13,7 +13,8 @@
 		busy?: boolean;
 		/** `lg` for a wide form (Edit metadata); default width otherwise. */
 		size?: 'lg';
-		onconfirm: () => void;
+		/** Omitted → info mode: the footer shows only "Close". */
+		onconfirm?: () => void;
 		children?: Snippet;
 	}
 
@@ -33,8 +34,9 @@
 	let modal = $state<InstanceType<typeof Modal> | null>(null);
 
 	onMount(() => {
-		// Bootstrap's Modal traps focus and handles Escape (spec §11 accessibility).
-		modal = new Modal(element, { backdrop: 'static' });
+		// Bootstrap's Modal traps focus and handles Escape (spec §11 accessibility). M1: a background click never
+		// closes a modal; Escape, × and the footer button do.
+		modal = new Modal(element, { backdrop: 'static', keyboard: true });
 		element.addEventListener('hidden.bs.modal', () => (open = false));
 	});
 
@@ -67,12 +69,14 @@
 					type="button"
 					class="btn btn-secondary"
 					onclick={() => (open = false)}
-					disabled={busy}>Cancel</button
+					disabled={busy}>{onconfirm ? 'Cancel' : 'Close'}</button
 				>
-				<button type="button" class="btn {confirmClass}" onclick={onconfirm} disabled={busy}>
-					{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
-					{confirmLabel}
-				</button>
+				{#if onconfirm}
+					<button type="button" class="btn {confirmClass}" onclick={onconfirm} disabled={busy}>
+						{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
+						{confirmLabel}
+					</button>
+				{/if}
 			</div>
 		</div>
 	</div>
