@@ -1,6 +1,6 @@
 # Features
 
-RnRomManager keeps a personal backup collection of Game Boy, Game Boy Color and Game Boy Advance ROMs. You drop files into an ingest folder; ingestion identifies each one against the No-Intro DATs, names it, groups it with the game's other releases, fetches box art and stores it as one ZIP per game. Everyone can browse and download; admins run ingestion, resolve files it couldn't identify and keep the library healthy, and ROM managers edit it.
+RnRomManager keeps a personal backup collection of Game Boy, Game Boy Color, Game Boy Advance and Nintendo 64 ROMs. You drop files into an ingest folder; ingestion identifies each one against the No-Intro DATs, names it, groups it with the game's other releases, fetches box art and stores it as one ZIP per game. Everyone can browse and download; admins run ingestion, resolve files it couldn't identify and keep the library healthy, and ROM managers edit it.
 
 ## Roles
 
@@ -46,7 +46,7 @@ Opening a game (`/games/{id}`) shows its cover image (a placeholder cartridge wh
 
 **Image management** (`rom-manager`):
 
-- **Upload** a PNG or JPEG (at most 8 MiB) as Box art or Screenshot; a game holds at most 20 images, and the same image can't be added twice. Uploading box art replaces the placeholder, and takes over as cover if the placeholder was the cover.
+- **Upload image** opens a dialog for a PNG or JPEG (at most 8 MiB) and its type, Box art or Screenshot. A failed upload keeps the dialog open with the error; a successful one closes it. A game holds at most 20 images, and the same image can't be added twice; a game holds at most 20 images, and the same image can't be added twice. Uploading box art replaces the placeholder, and takes over as cover if the placeholder was the cover.
 - **Use as cover** makes any image the one shown at the top and in the Library.
 - **Delete** removes an image (not the placeholder, which comes and goes on its own). Deleting the cover hands it to the first remaining box art, else the first remaining image, else the placeholder comes back.
 
@@ -64,9 +64,9 @@ Edits and jobs take turns: while a job runs, an edit shows "Another job is runni
 
 ## Ingestion
 
-`/ingestion` (Admin) lists the files waiting in each system's ingest folder (`ingest/gb/`, `ingest/gbc/`, `ingest/gba/`) with size and time.
+`/ingestion` (Admin) lists the files waiting in each system's ingest folder (`ingest/gb/`, `ingest/gbc/`, `ingest/gba/`, `ingest/n64/`) with size and time.
 
-- Drop `.gb`/`.gbc` files, or `.zip`/`.7z` archives of them, into either of those two folders: the cartridge header decides whether a game is stored as Game Boy or Game Boy Color. Drop `.gba` files (or archives of them) into `ingest/gba/`. Game Boy and Game Boy Advance are separate families, so a `.gba` file in a GB folder (or a `.gb`/`.gbc` file in `ingest/gba/`) fails as `UnsupportedType`. Size limits: 336 bytes–16 MiB for GB/GBC, 192 bytes–32 MiB for GBA. Subfolders, hidden files and files changed in the last 10 seconds are left for the next run.
+- Drop `.gb`/`.gbc` files, or `.zip`/`.7z` archives of them, into either of those two folders: the cartridge header decides whether a game is stored as Game Boy or Game Boy Color. Drop `.gba` files (or archives of them) into `ingest/gba/`. Drop Nintendo 64 dumps (`.z64`, `.v64` or `.n64`, or archives of them) into `ingest/n64/`: all three byte orders are accepted, converted to big-endian before hashing (the order comes from the file's first bytes, not its extension) and stored as `.z64`, so the same game dumped in two orders is a `Duplicate`. Game Boy, Game Boy Advance and Nintendo 64 are separate families, so a file with another family's extension in a system's folder (a `.gba` file in a GB folder, a `.n64` file in `ingest/gb/`, …) fails as `UnsupportedType`. Size limits: 336 bytes–16 MiB for GB/GBC, 192 bytes–32 MiB for GBA, 4 KiB–64 MiB for N64. An unmatched file whose header isn't valid for its system fails as `InvalidHeader`; for N64 that only checks the first byte, so a junk file with an N64 extension may land in Review instead. Subfolders, hidden files and files changed in the last 10 seconds are left for the next run.
 - **Start ingestion** runs through every waiting file, showing progress and the current file; **Cancel** stops after the current item (a whole archive is finished first). Ingestion needs the DATs: until they've been downloaded the page shows a link to **Admin → DATs** instead of Start.
 - **Last runs** lists the 10 most recent runs with their outcome counts; open one for the details.
 
@@ -99,7 +99,7 @@ Box art and snaps come from libretro-thumbnails; a game gets the placeholder whe
   - **Manual entry:** title, regions, languages, flags (comma-separated) and revision; the resulting file name is previewed. If several games already have that title, attach it to one of them instead.
 - **Several games share its title** (`AmbiguousGroup`): the file matched a DAT entry, but more than one library game has that title (e.g. after a move). Pick the game to **Attach** it to.
 - **Dismiss:** a loose file moves to `_failed/`; an archive is left as it is.
-- **Delete** (on the item page, and the Delete button on each row of the queue): permanently deletes the file from the ingest folder after showing everything known about it. For a file inside an archive, the whole archive is deleted, including every other file in it (the dialog warns). Every pending item from the same file or archive goes with it.
+- **Delete** (on the item page, and the Delete button on each row of the queue): permanently deletes the file from the ingest folder after showing everything known about it in a dialog titled "Delete File: <file name>". For a file inside an archive, the whole archive is deleted, including every other file in it (the dialog warns). Every pending item from the same file or archive goes with it.
 
 The queue is paged (10–100 rows, your choice remembered per browser). An item's page shows the file details and header on the left and the ways to resolve it as tabs on the right: Suggestions (when there are any), Attach and Manual for `NoDatMatch`, Matched DAT entry for `AmbiguousGroup`.
 
@@ -121,7 +121,7 @@ After resolving, the game opens. If the file was removed from the ingest folder 
 - **Users:** every account with its roles, status and last sign-in. Tick or untick an account's `admin` and `rom-manager` boxes to change its roles (saved at once; the account is signed out), **Disable**/**Enable** it (accounts are never deleted), or **Reset password** (sets a new one the user must change, and clears a lockout). **Create user** opens a dialog for a username (3–64 letters, digits, `.`, `_` or `-`), an initial password the user must change at first sign-in, and its roles (none by default). The last enabled `admin` can't be disabled or lose the `admin` role.
 - **DATs:** the version and download time of each DAT. **Refresh DATs** downloads the current No-Intro and metadata DATs from libretro-database; if any download fails, the previous set stays in use.
 - **Settings:** the effective configuration, read-only, with secrets masked.
-- **Logs:** **Download logs** downloads a ZIP of the log files plus the settings and version. Below it, the live log: the last 500 events the server kept in memory, then each new one as it happens (what goes to the log file, at the same minimum level). Newest at the bottom, following along while you're scrolled to the end; **Pause** holds new lines until **Resume**; the level box hides less important lines. A dropped connection reconnects on its own (a "Reconnecting…" badge shows meanwhile) and picks up where it stopped.
+- **Logs:** **Download logs** downloads a ZIP of the log files plus the settings and version. Below it, the live log: the last 20 events show as soon as the tab opens, then the stream fills in the rest of the last 500 events the server kept in memory (without duplicates), then each new one as it happens (what goes to the log file, at the same minimum level). Newest at the bottom, following along while you're scrolled to the end; **Pause** holds new lines until **Resume**; the level box hides less important lines. A dropped connection reconnects on its own (a "Reconnecting…" badge shows meanwhile) and picks up where it stopped.
 - **About:** the version, a link to the project on GitHub, the attribution for libretro-database and libretro-thumbnails, and the licence of every component.
 
 ## Reference: behaviour and API
@@ -234,6 +234,7 @@ All integrity endpoints need an Admin session; the POST also needs the antiforge
 ### Admin settings, logs and About
 
 - `GET /api/admin/settings` (Admin) returns the effective configuration: the same redacted model that is logged at startup. The connection string has its password removed, and `adminInitialPassword` shows `***` when one is set.
+- `GET /api/admin/logs/recent` (Admin) returns the last 20 log events the server holds in memory as a JSON array, oldest first (`[]` when there are none).
 - `GET /api/admin/logs` (Admin) downloads `rnrommanager-logs-<UTC time>.zip`. It contains every `*.log` file in `Paths:Logs` (including today's file while the app is writing to it), `settings.json` (the redacted configuration) and `version.txt`.
 - `GET /api/admin/logs/stream` (Admin) is a server-sent event stream (`text/event-stream`). It first sends the buffered events newer than the `Last-Event-ID` header (all of them when the header is missing, unreadable or newer than anything buffered), then each new event as `id: <number>` and `data: {time, level, logger, message, exception}`. Ids keep increasing across restarts. A `: keep-alive` comment follows every 15 seconds; at each one the stream ends if the user was disabled, lost `admin` or was signed out.
 - `GET /api/about` (any signed-in user) returns `{version, licenses[]}`. Each licence entry is `{name, license, url}`, covering the app, libretro-database (CC BY-SA 4.0) and every direct NuGet and npm dependency. The list lives in `src/RnRomManager.Api/licenses.json`; a test fails when a dependency is added to `Directory.Packages.props` or `package.json` without an entry there.
