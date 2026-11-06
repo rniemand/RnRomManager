@@ -41,7 +41,7 @@ public class ReviewEndpointsTests
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
         _admin = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "boss", UserRole.Admin);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         using var login = await _admin.LoginAsync("boss", TestUsers.Password);
         _adminId = (await Service<IUserRepository>().GetByUsernameAsync("boss", default))!.Id;
         var cache = Service<DatCache>();

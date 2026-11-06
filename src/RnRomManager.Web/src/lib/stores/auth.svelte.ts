@@ -8,7 +8,7 @@ class Auth {
 	loaded = $state(false);
 
 	get isAdmin(): boolean {
-		return this.me?.role === 'Admin';
+		return this.me?.roles.includes('admin') ?? false;
 	}
 
 	/** Loads `me`; a 401 just means signed out. Other errors propagate. */

@@ -22,7 +22,7 @@ public class SeedIngestTests
         factory.Settings["Sources:ThumbnailBaseUrl"] = "";
         IngestSeeder.Seed(Path.Combine(factory.Root, "ingest"), Path.Combine(factory.Root, "cache"), set, TimeProvider.System);
         using var admin = await AuthClient.CreateAsync(factory);
-        await TestUsers.CreateAsync(factory, "seed-admin", UserRole.Admin);
+        await TestUsers.CreateAsync(factory, "seed-admin", TestUsers.AllRoles);
         (await admin.LoginAsync("seed-admin", TestUsers.Password)).Dispose();
         using var response = await admin.PostAsync("/api/jobs/ingest");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));

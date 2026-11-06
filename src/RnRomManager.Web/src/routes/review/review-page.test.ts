@@ -70,7 +70,12 @@ describe('review detail page', () => {
 	beforeEach(() => {
 		resetClient();
 		goto.mockClear();
-		auth.set({ id: 1, username: 'admin', role: 'Admin', mustChangePassword: false });
+		auth.set({
+			id: 1,
+			username: 'admin',
+			roles: ['admin', 'rom-manager'],
+			mustChangePassword: false
+		});
 		posts = [];
 		answers = {};
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {

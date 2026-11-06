@@ -266,7 +266,7 @@ public class LibraryEndpointsTests
     {
         var id = await Tetris();
         using var admin = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "boss", UserRole.Admin);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
 
         using var response = await admin.PatchAsync($"/api/games/{id}", new { description = "x", rating = 5, favourite = true });

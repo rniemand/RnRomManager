@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
 import { auth } from '../stores/auth.svelte';
+import type { Role } from '../api/types';
 
 const goto = vi.fn();
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => goto(...args) }));
@@ -60,7 +61,7 @@ describe('GlobalSearch', () => {
 			item('g1', 'Tetris', { releaseYear: 1989, boxArtUrl: '/api/games/g1/images/1', rating: 4 }),
 			item('g2', 'Tetris 2', { favourite: true })
 		];
-		auth.set({ id: 1, username: 'plain', role: 'User', mustChangePassword: false });
+		auth.set({ id: 1, username: 'plain', roles: [], mustChangePassword: false });
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
 			requested.push(url);
 			init?.signal?.addEventListener('abort', () => aborted.push(url));
@@ -133,7 +134,7 @@ describe('GlobalSearch', () => {
 	});
 
 	it('shortcuts are off and the navbar button is hidden while the password must be changed', () => {
-		const me = { id: 1, username: 'plain', role: 'User' as const, mustChangePassword: true };
+		const me = { id: 1, username: 'plain', roles: [] as Role[], mustChangePassword: true };
 		auth.set(me);
 		render(GlobalSearch, { open: false });
 		render(Navbar, { me, reviewCount: null, onlogout: () => {}, onsearch: () => {} });
@@ -146,7 +147,7 @@ describe('GlobalSearch', () => {
 	it('the navbar Search button asks to open it', async () => {
 		const onsearch = vi.fn();
 		render(Navbar, {
-			me: { id: 1, username: 'plain', role: 'User', mustChangePassword: false },
+			me: { id: 1, username: 'plain', roles: [], mustChangePassword: false },
 			reviewCount: null,
 			onlogout: () => {},
 			onsearch

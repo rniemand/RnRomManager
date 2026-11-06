@@ -23,7 +23,7 @@ public class AdminEndpointsTests
         _factory = new ApiFactory(connectionString);
         _factory.Settings["Admin:InitialPassword"] = InitialPassword;
         _admin = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "boss", UserRole.Admin);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         (await _admin.LoginAsync("boss", TestUsers.Password)).Dispose();
     }
 

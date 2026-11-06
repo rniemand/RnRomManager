@@ -28,7 +28,6 @@ public class AccountServiceTests
             Id = 7,
             Username = "richard",
             PasswordHash = "",
-            Role = UserRole.User,
             SecurityStamp = new string('a', 32),
             CreatedAt = Now.UtcDateTime,
             UpdatedAt = Now.UtcDateTime,

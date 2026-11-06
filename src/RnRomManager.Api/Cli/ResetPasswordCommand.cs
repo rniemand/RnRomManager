@@ -27,7 +27,7 @@ public static class ResetPasswordCommand
             }
 
             await stdout.WriteLineAsync(
-                $"New password for user '{user.Username}' (shown once, must be changed at next login, role {user.Role}): {password}");
+                $"New password for user '{user.Username}' (shown once, must be changed at next login, roles {(user.Roles.Count > 0 ? string.Join(", ", user.Roles) : "none")}): {password}");
             return 0;
         }
         catch (Exception ex)

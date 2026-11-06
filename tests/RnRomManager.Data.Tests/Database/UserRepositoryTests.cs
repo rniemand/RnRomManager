@@ -23,7 +23,6 @@ public class UserRepositoryTests
     {
         Username = username,
         PasswordHash = "hash",
-        Role = UserRole.User,
         SecurityStamp = new string('a', 32),
         CreatedAt = new DateTime(2026, 11, 4, 10, 0, 0, DateTimeKind.Utc).AddTicks(1234560),
         UpdatedAt = new DateTime(2026, 11, 4, 11, 0, 0, DateTimeKind.Utc),
@@ -34,7 +33,7 @@ public class UserRepositoryTests
     {
         var user = NewUser() with
         {
-            Role = UserRole.Admin,
+            Roles = Roles.Of(Roles.RomManager, Roles.Admin),
             IsDisabled = true,
             MustChangePassword = true,
             FailedLoginCount = 3,
@@ -46,7 +45,8 @@ public class UserRepositoryTests
         var loaded = await _repository.GetByUsernameAsync("richard", CancellationToken.None);
 
         Assert.That(id, Is.GreaterThan(0));
-        Assert.That(loaded, Is.EqualTo(user with { Id = id }));
+        Assert.That(loaded! with { Roles = user.Roles }, Is.EqualTo(user with { Id = id }));
+        Assert.That(loaded.Roles, Is.EqualTo(new[] { Roles.Admin, Roles.RomManager }));
         Assert.That(loaded!.CreatedAt.Kind, Is.EqualTo(DateTimeKind.Utc));
     }
 
@@ -59,7 +59,7 @@ public class UserRepositoryTests
 
         Assert.That(loaded!.LockoutUntil, Is.Null);
         Assert.That(loaded.LastLoginAt, Is.Null);
-        Assert.That(loaded.Role, Is.EqualTo(UserRole.User));
+        Assert.That(loaded.Roles, Is.Empty);
     }
 
     [Test]
@@ -108,7 +108,7 @@ public class UserRepositoryTests
         {
             Id = id,
             PasswordHash = "new-hash",
-            Role = UserRole.Admin,
+            Roles = Roles.Of(Roles.Admin),
             IsDisabled = true,
             MustChangePassword = true,
             FailedLoginCount = 2,
@@ -119,8 +119,12 @@ public class UserRepositoryTests
         };
 
         await _repository.UpdateAsync(changed, CancellationToken.None);
+        var loaded = (await _repository.GetByIdAsync(id, CancellationToken.None))!;
+        await _repository.UpdateAsync(changed with { Roles = Roles.Of(Roles.RomManager) }, CancellationToken.None);
 
-        Assert.That(await _repository.GetByIdAsync(id, CancellationToken.None), Is.EqualTo(changed));
+        Assert.That(loaded with { Roles = changed.Roles }, Is.EqualTo(changed));
+        Assert.That(loaded.Roles, Is.EqualTo(new[] { Roles.Admin }));
+        Assert.That((await _repository.ListAsync(CancellationToken.None)).Single().Roles, Is.EqualTo(new[] { Roles.RomManager }), "roles are replaced");
     }
 
     [Test]
@@ -157,33 +161,33 @@ public class UserRepositoryTests
     [Test]
     public async Task UpdateUnlessLastAdmin_RefusesToRemoveTheLastEnabledAdmin()
     {
-        var one = NewUser("one") with { Role = UserRole.Admin };
+        var one = NewUser("one") with { Roles = Roles.Of(Roles.Admin) };
         one = one with { Id = await _repository.InsertAsync(one, CancellationToken.None) };
-        var two = NewUser("two") with { Role = UserRole.Admin };
+        var two = NewUser("two") with { Roles = Roles.Of(Roles.Admin) };
         two = two with { Id = await _repository.InsertAsync(two, CancellationToken.None) };
 
         Assert.That(await _repository.UpdateUnlessLastAdminAsync(one with { IsDisabled = true }, CancellationToken.None), Is.True);
-        Assert.That(await _repository.UpdateUnlessLastAdminAsync(two with { Role = UserRole.User }, CancellationToken.None), Is.False);
+        Assert.That(await _repository.UpdateUnlessLastAdminAsync(two with { Roles = Roles.Of(Roles.RomManager) }, CancellationToken.None), Is.False);
         Assert.That(await _repository.UpdateUnlessLastAdminAsync(two with { IsDisabled = true }, CancellationToken.None), Is.False);
         Assert.That(await _repository.UpdateUnlessLastAdminAsync(two with { PasswordHash = "changed" }, CancellationToken.None), Is.True);
 
         var stored = await _repository.GetByIdAsync(two.Id, CancellationToken.None);
-        Assert.That((stored!.Role, stored.IsDisabled, stored.PasswordHash), Is.EqualTo((UserRole.Admin, false, "changed")));
+        Assert.That((stored!.Roles.Contains(Roles.Admin), stored.IsDisabled, stored.PasswordHash), Is.EqualTo((true, false, "changed")));
     }
 
     [Test]
     public async Task UpdateUnlessLastAdmin_ParallelDemotions_LeaveOneAdmin()
     {
-        var one = NewUser("one") with { Role = UserRole.Admin };
+        var one = NewUser("one") with { Roles = Roles.Of(Roles.Admin) };
         one = one with { Id = await _repository.InsertAsync(one, CancellationToken.None) };
-        var two = NewUser("two") with { Role = UserRole.Admin };
+        var two = NewUser("two") with { Roles = Roles.Of(Roles.Admin) };
         two = two with { Id = await _repository.InsertAsync(two, CancellationToken.None) };
 
         var results = await Task.WhenAll(
-            _repository.UpdateUnlessLastAdminAsync(one with { Role = UserRole.User }, CancellationToken.None),
-            _repository.UpdateUnlessLastAdminAsync(two with { Role = UserRole.User }, CancellationToken.None));
+            _repository.UpdateUnlessLastAdminAsync(one with { Roles = Roles.Of(Roles.RomManager) }, CancellationToken.None),
+            _repository.UpdateUnlessLastAdminAsync(two with { Roles = Roles.Of(Roles.RomManager) }, CancellationToken.None));
 
         Assert.That(results.Count(r => r), Is.EqualTo(1));
-        Assert.That((await _repository.ListAsync(CancellationToken.None)).Count(u => u.Role == UserRole.Admin), Is.EqualTo(1));
+        Assert.That((await _repository.ListAsync(CancellationToken.None)).Count(u => u.Roles.Contains(Roles.Admin)), Is.EqualTo(1));
     }
 }

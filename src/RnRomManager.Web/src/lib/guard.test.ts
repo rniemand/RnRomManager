@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Me } from './api/types';
 import { guard, safeReturnUrl } from './guard';
 
-const user: Me = { id: 2, username: 'plain', role: 'User', mustChangePassword: false };
+const user: Me = { id: 2, username: 'plain', roles: [], mustChangePassword: false };
 
 describe('guard', () => {
 	it('sends a signed-out visitor to login with a returnUrl', () => {

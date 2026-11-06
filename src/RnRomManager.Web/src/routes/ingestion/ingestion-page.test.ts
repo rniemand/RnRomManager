@@ -31,7 +31,12 @@ describe('ingestion page', () => {
 	beforeEach(() => {
 		resetClient();
 		jobs.current = null;
-		auth.set({ id: 1, username: 'admin', role: 'Admin', mustChangePassword: false });
+		auth.set({
+			id: 1,
+			username: 'admin',
+			roles: ['admin', 'rom-manager'],
+			mustChangePassword: false
+		});
 		calls = [];
 		answers = {};
 		fixed = {
@@ -100,7 +105,7 @@ describe('ingestion page', () => {
 	});
 
 	it('a User sees Not allowed and nothing is fetched', async () => {
-		auth.set({ id: 2, username: 'u', role: 'User', mustChangePassword: false });
+		auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
 		render(IngestionPage);
 
 		expect(await screen.findByText(/Not allowed/i)).toBeTruthy();

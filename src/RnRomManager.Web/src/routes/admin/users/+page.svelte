@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { UserInfo } from '#lib/api/types.js';
+	import { roles, type Role, type UserInfo } from '#lib/api/types.js';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Loading from '#lib/components/Loading.svelte';
@@ -11,13 +11,11 @@
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
-	type Role = UserInfo['role'];
-
 	let users = $state<UserInfo[] | null>(null);
 	let error = $state<unknown>(null);
 
 	let newUsername = $state('');
-	let newRole = $state<Role>('User');
+	let newRoles = $state<Role[]>([]);
 	let newPassword = $state('');
 	let createErrors = $state<{ username?: string; password?: string }>({});
 	let creating = $state(false);
@@ -59,7 +57,7 @@
 		try {
 			const user = await api.post<UserInfo>('/api/users', {
 				username,
-				role: newRole,
+				roles: newRoles,
 				password: newPassword
 			});
 			users = [...(users ?? []), user];
@@ -69,7 +67,7 @@
 			);
 			newUsername = '';
 			newPassword = '';
-			newRole = 'User';
+			newRoles = [];
 		} catch (e) {
 			if (isApiError(e, 'UsernameTaken')) createErrors = { username: 'That username is taken.' };
 			else if (isApiError(e, 'ValidationFailed'))
@@ -82,15 +80,20 @@
 
 	async function update(
 		user: UserInfo,
-		changes: { role?: Role; isDisabled?: boolean }
+		changes: { roles?: Role[]; isDisabled?: boolean }
 	): Promise<void> {
 		try {
 			const updated = await api.patch<UserInfo>(`/api/users/${user.id}`, changes);
 			users = users?.map((u) => (u.id === updated.id ? updated : u)) ?? null;
 		} catch (e) {
 			failed(e);
-			await load(); // put the role select back
+			await load(); // put the role checkboxes back
 		}
+	}
+
+	/** The full sorted role list with `role` added or removed. */
+	function withRole(current: Role[], role: Role, on: boolean): Role[] {
+		return roles.filter((r) => (r === role ? on : current.includes(r)));
 	}
 
 	function openReset(user: UserInfo): void {
@@ -136,7 +139,7 @@
 			<thead>
 				<tr>
 					<th scope="col">Username</th>
-					<th scope="col">Role</th>
+					<th scope="col">Roles</th>
 					<th scope="col">Status</th>
 					<th scope="col">Last sign-in</th>
 					<th scope="col"><span class="visually-hidden">Actions</span></th>
@@ -147,15 +150,22 @@
 					<tr>
 						<td>{user.username}</td>
 						<td>
-							<select
-								class="form-select form-select-sm w-auto"
-								aria-label="Role of {user.username}"
-								value={user.role}
-								onchange={(e) => update(user, { role: e.currentTarget.value as Role })}
-							>
-								<option value="Admin">Admin</option>
-								<option value="User">User</option>
-							</select>
+							{#each roles as role (role)}
+								<div class="form-check form-check-inline">
+									<input
+										id="role-{user.id}-{role}"
+										class="form-check-input"
+										type="checkbox"
+										aria-label="{role} role of {user.username}"
+										checked={user.roles.includes(role)}
+										onchange={(e) =>
+											update(user, { roles: withRole(user.roles, role, e.currentTarget.checked) })}
+									/>
+									<label class="form-check-label" for="role-{user.id}-{role}" aria-hidden="true"
+										>{role}</label
+									>
+								</div>
+							{/each}
 						</td>
 						<td>
 							{#if user.isDisabled}
@@ -206,11 +216,21 @@
 			{#if createErrors.username}<div class="invalid-feedback">{createErrors.username}</div>{/if}
 		</div>
 		<div class="col-12 col-md-2">
-			<label class="form-label" for="new-role">Role</label>
-			<select id="new-role" class="form-select" bind:value={newRole}>
-				<option value="User">User</option>
-				<option value="Admin">Admin</option>
-			</select>
+			<fieldset>
+				<legend class="form-label fs-6">Roles</legend>
+				{#each roles as role (role)}
+					<div class="form-check">
+						<input
+							id="new-role-{role}"
+							class="form-check-input"
+							type="checkbox"
+							checked={newRoles.includes(role)}
+							onchange={(e) => (newRoles = withRole(newRoles, role, e.currentTarget.checked))}
+						/>
+						<label class="form-check-label" for="new-role-{role}">{role}</label>
+					</div>
+				{/each}
+			</fieldset>
 		</div>
 		<div class="col-12 col-md-4">
 			<label class="form-label" for="new-password">Initial password</label>

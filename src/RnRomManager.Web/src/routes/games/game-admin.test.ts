@@ -72,7 +72,12 @@ describe('game detail admin actions', () => {
 	beforeEach(() => {
 		resetClient();
 		goto.mockClear();
-		auth.set({ id: 1, username: 'admin', role: 'Admin', mustChangePassword: false });
+		auth.set({
+			id: 1,
+			username: 'admin',
+			roles: ['admin', 'rom-manager'],
+			mustChangePassword: false
+		});
 		calls = [];
 		answers = {};
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
@@ -94,7 +99,7 @@ describe('game detail admin actions', () => {
 	const modal = () => within(document.querySelector<HTMLElement>('.modal')!);
 
 	it('a User sees no admin actions', async () => {
-		auth.set({ id: 2, username: 'u', role: 'User', mustChangePassword: false });
+		auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
 		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
 		render(GamePage);
 

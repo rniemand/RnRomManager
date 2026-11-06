@@ -24,7 +24,7 @@
 			{ href: '/review', label: 'Review', icon: 'review', admin: true },
 			{ href: '/integrity', label: 'Integrity', icon: 'integrity', admin: true },
 			{ href: '/admin/users', label: 'Admin', icon: 'admin', admin: true }
-		].filter((l) => !l.admin || me.role === 'Admin')
+		].filter((l) => !l.admin || me.roles.includes('admin'))
 	);
 
 	function isActive(href: string): boolean {

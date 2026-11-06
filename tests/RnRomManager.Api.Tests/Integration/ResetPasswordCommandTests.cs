@@ -72,7 +72,7 @@ public partial class ResetPasswordCommandTests
         Assert.That(after.IsDisabled, Is.False);
         Assert.That(after.MustChangePassword, Is.True);
         Assert.That(after.LockoutUntil, Is.Null);
-        Assert.That(after.Role, Is.EqualTo(UserRole.User), "the seeded admin is still enabled, so no promotion");
+        Assert.That(after.Roles, Is.Empty, "the seeded admin is still enabled, so no promotion");
         Assert.That(new PasswordHasher<User>().VerifyHashedPassword(after, after.PasswordHash, match.Groups[1].Value),
             Is.Not.EqualTo(PasswordVerificationResult.Failed));
     }
@@ -86,8 +86,8 @@ public partial class ResetPasswordCommandTests
 
         Assert.That(await RunAsync("plain"), Is.EqualTo(0), _stderr.ToString());
 
-        Assert.That((await Users.GetByIdAsync(plain.Id, CancellationToken.None))!.Role, Is.EqualTo(UserRole.Admin));
-        Assert.That(_stdout.ToString(), Does.Contain("role Admin"));
+        Assert.That((await Users.GetByIdAsync(plain.Id, CancellationToken.None))!.Roles, Is.EquivalentTo(new[] { Roles.Admin, Roles.RomManager }));
+        Assert.That(_stdout.ToString(), Does.Contain("roles admin, rom-manager"));
     }
 
     [Test]
@@ -106,6 +106,6 @@ public partial class ResetPasswordCommandTests
         Assert.That(_stderr.ToString(), Does.Contain("Usage: --reset-password <username>"));
     }
 
-    [GeneratedRegex(@"New password for user 'plain' \(shown once, must be changed at next login, role \w+\): (\S+)")]
+    [GeneratedRegex(@"New password for user 'plain' \(shown once, must be changed at next login, roles [^)]+\): (\S+)")]
     private static partial Regex PrintedPassword();
 }

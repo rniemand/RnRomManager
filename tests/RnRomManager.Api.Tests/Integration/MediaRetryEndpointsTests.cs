@@ -48,7 +48,7 @@ public class MediaRetryEndpointsTests
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "https://thumbs.test";
         _admin = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "boss", UserRole.Admin);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         (await _admin.LoginAsync("boss", TestUsers.Password)).Dispose();
         var cache = Service<DatCache>();
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>

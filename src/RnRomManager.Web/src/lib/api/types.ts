@@ -1,8 +1,14 @@
+/** A user role; a user has any subset (sorted in API responses). */
+export type Role = 'admin' | 'rom-manager';
+
+/** Every role, in display order. */
+export const roles: readonly Role[] = ['admin', 'rom-manager'];
+
 /** `GET /api/auth/me` (spec §23). */
 export interface Me {
 	id: number;
 	username: string;
-	role: 'Admin' | 'User';
+	roles: Role[];
 	mustChangePassword: boolean;
 }
 
@@ -228,7 +234,7 @@ export interface IntegrityIssue {
 export interface UserInfo {
 	id: number;
 	username: string;
-	role: 'Admin' | 'User';
+	roles: Role[];
 	isDisabled: boolean;
 	lastLoginAt: string | null;
 }

@@ -79,7 +79,12 @@ describe('login page', () => {
 		const requests = stubApi({
 			'/api/auth/login': {
 				status: 200,
-				body: { id: 1, username: 'boss', role: 'Admin', mustChangePassword: false }
+				body: {
+					id: 1,
+					username: 'boss',
+					roles: ['admin', 'rom-manager'],
+					mustChangePassword: false
+				}
 			}
 		});
 		render(LoginPage);
@@ -101,7 +106,12 @@ describe('login page', () => {
 		stubApi({
 			'/api/auth/login': {
 				status: 200,
-				body: { id: 1, username: 'admin', role: 'Admin', mustChangePassword: true }
+				body: {
+					id: 1,
+					username: 'admin',
+					roles: ['admin', 'rom-manager'],
+					mustChangePassword: true
+				}
 			}
 		});
 		render(LoginPage);
@@ -120,7 +130,12 @@ describe('change password page', () => {
 	beforeEach(() => {
 		resetClient();
 		goto.mockClear();
-		auth.set({ id: 1, username: 'boss', role: 'Admin', mustChangePassword: true });
+		auth.set({
+			id: 1,
+			username: 'boss',
+			roles: ['admin', 'rom-manager'],
+			mustChangePassword: true
+		});
 	});
 	afterEach(() => vi.unstubAllGlobals());
 
@@ -174,7 +189,12 @@ describe('change password page', () => {
 		const requests = stubApi({
 			'/api/auth/me': {
 				status: 200,
-				body: { id: 1, username: 'boss', role: 'Admin', mustChangePassword: false }
+				body: {
+					id: 1,
+					username: 'boss',
+					roles: ['admin', 'rom-manager'],
+					mustChangePassword: false
+				}
 			}
 		});
 		render(ChangePasswordPage);

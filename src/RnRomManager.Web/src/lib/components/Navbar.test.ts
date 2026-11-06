@@ -9,7 +9,7 @@ const { default: Navbar } = await import('./Navbar.svelte');
 describe('Navbar', () => {
 	it('marks the active link with aria-current and the accent (active) class', () => {
 		render(Navbar, {
-			me: { id: 1, username: 'boss', role: 'Admin', mustChangePassword: false },
+			me: { id: 1, username: 'boss', roles: ['admin', 'rom-manager'], mustChangePassword: false },
 			reviewCount: null,
 			onlogout: () => {}
 		});

@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Dapper;
 using MySqlConnector;
 using RnRomManager.Core.Database;
@@ -8,7 +9,7 @@ namespace RnRomManager.Data.Repositories;
 public sealed class UserRepository(IDbConnectionFactory connections) : IUserRepository
 {
     private const string Select = """
-        SELECT id AS Id, username AS Username, password_hash AS PasswordHash, role AS Role,
+        SELECT id AS Id, username AS Username, password_hash AS PasswordHash,
                is_disabled AS IsDisabled, must_change_password AS MustChangePassword,
                failed_login_count AS FailedLoginCount, lockout_until AS LockoutUntil,
                security_stamp AS SecurityStamp, created_at AS CreatedAt, updated_at AS UpdatedAt,
@@ -25,40 +26,42 @@ public sealed class UserRepository(IDbConnectionFactory connections) : IUserRepo
     public async Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
-        return await connection.QuerySingleOrDefaultAsync<User>(
-            new CommandDefinition($"{Select} WHERE username = @username", new { username }, cancellationToken: cancellationToken));
+        return (await WithRolesAsync(connection, await connection.QueryAsync<User>(
+            new CommandDefinition($"{Select} WHERE username = @username", new { username }, cancellationToken: cancellationToken)), cancellationToken)).SingleOrDefault();
     }
 
     public async Task<User?> GetByIdAsync(int id, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
-        return await connection.QuerySingleOrDefaultAsync<User>(
-            new CommandDefinition($"{Select} WHERE id = @id", new { id }, cancellationToken: cancellationToken));
+        return (await WithRolesAsync(connection, await connection.QueryAsync<User>(
+            new CommandDefinition($"{Select} WHERE id = @id", new { id }, cancellationToken: cancellationToken)), cancellationToken)).SingleOrDefault();
     }
 
     public async Task<IReadOnlyList<User>> ListAsync(CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
-        return (await connection.QueryAsync<User>(new CommandDefinition($"{Select} ORDER BY username", cancellationToken: cancellationToken))).AsList();
+        return await WithRolesAsync(connection,
+            await connection.QueryAsync<User>(new CommandDefinition($"{Select} ORDER BY username", cancellationToken: cancellationToken)), cancellationToken);
     }
 
     public async Task<int> InsertAsync(User user, CancellationToken cancellationToken)
     {
         const string sql = """
-            INSERT INTO users (username, password_hash, role, is_disabled, must_change_password, failed_login_count,
+            INSERT INTO users (username, password_hash, is_disabled, must_change_password, failed_login_count,
                                lockout_until, security_stamp, created_at, updated_at, last_login_at)
-            VALUES (@Username, @PasswordHash, @Role, @IsDisabled, @MustChangePassword, @FailedLoginCount,
+            VALUES (@Username, @PasswordHash, @IsDisabled, @MustChangePassword, @FailedLoginCount,
                     @LockoutUntil, @SecurityStamp, @CreatedAt, @UpdatedAt, @LastLoginAt);
             SELECT LAST_INSERT_ID();
             """;
         await using var connection = connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         try
         {
-            return await connection.ExecuteScalarAsync<int>(new CommandDefinition(sql, new
+            var id = await connection.ExecuteScalarAsync<int>(new CommandDefinition(sql, new
             {
                 user.Username,
                 user.PasswordHash,
-                Role = user.Role.ToString(),
                 user.IsDisabled,
                 user.MustChangePassword,
                 user.FailedLoginCount,
@@ -67,7 +70,10 @@ public sealed class UserRepository(IDbConnectionFactory connections) : IUserRepo
                 user.CreatedAt,
                 user.UpdatedAt,
                 user.LastLoginAt,
-            }, cancellationToken: cancellationToken));
+            }, transaction, cancellationToken: cancellationToken));
+            await WriteRolesAsync(connection, transaction, id, user.Roles, cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            return id;
         }
         catch (MySqlException ex) when (ex.ErrorCode == MySqlErrorCode.DuplicateKeyEntry)
         {
@@ -78,7 +84,10 @@ public sealed class UserRepository(IDbConnectionFactory connections) : IUserRepo
     public async Task UpdateAsync(User user, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
-        await connection.ExecuteAsync(new CommandDefinition(UpdateSql, UpdateParameters(user), cancellationToken: cancellationToken));
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await WriteUpdateAsync(connection, transaction, user, cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task<bool> UpdateUnlessLastAdminAsync(User user, CancellationToken cancellationToken)
@@ -87,21 +96,49 @@ public sealed class UserRepository(IDbConnectionFactory connections) : IUserRepo
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
         var enabledAdmins = await connection.QueryAsync<int>(new CommandDefinition(
-            "SELECT id FROM users WHERE role = 'Admin' AND is_disabled = 0 FOR UPDATE", transaction: transaction, cancellationToken: cancellationToken));
-        var staysAdmin = user is { Role: UserRole.Admin, IsDisabled: false };
+            $"SELECT u.id FROM users u JOIN user_roles r ON r.user_id = u.id AND r.role = '{Roles.Admin}' WHERE u.is_disabled = 0 FOR UPDATE",
+            transaction: transaction, cancellationToken: cancellationToken));
+        var staysAdmin = !user.IsDisabled && user.Roles.Contains(Roles.Admin);
         if (!staysAdmin && !enabledAdmins.Any(id => id != user.Id))
             return false;
 
-        await connection.ExecuteAsync(new CommandDefinition(UpdateSql, UpdateParameters(user), transaction, cancellationToken: cancellationToken));
+        await WriteUpdateAsync(connection, transaction, user, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return true;
+    }
+
+    private static async Task WriteUpdateAsync(DbConnection connection, DbTransaction transaction, User user, CancellationToken cancellationToken)
+    {
+        await connection.ExecuteAsync(new CommandDefinition(UpdateSql, UpdateParameters(user), transaction, cancellationToken: cancellationToken));
+        await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM user_roles WHERE user_id = @Id", new { user.Id }, transaction, cancellationToken: cancellationToken));
+        await WriteRolesAsync(connection, transaction, user.Id, user.Roles, cancellationToken);
+    }
+
+    private static async Task WriteRolesAsync(
+        DbConnection connection, DbTransaction transaction, int userId, IReadOnlySet<string> roles, CancellationToken cancellationToken)
+    {
+        if (roles.Count > 0)
+            await connection.ExecuteAsync(new CommandDefinition(
+                "INSERT INTO user_roles (user_id, role) VALUES (@userId, @role)",
+                roles.Select(role => new { userId, role }), transaction, cancellationToken: cancellationToken));
+    }
+
+    private static async Task<IReadOnlyList<User>> WithRolesAsync(DbConnection connection, IEnumerable<User> rows, CancellationToken cancellationToken)
+    {
+        var users = rows.AsList();
+        if (users.Count == 0)
+            return users;
+        var roles = (await connection.QueryAsync<(int UserId, string Role)>(new CommandDefinition(
+                "SELECT user_id, role FROM user_roles WHERE user_id IN @ids", new { ids = users.Select(u => u.Id) }, cancellationToken: cancellationToken)))
+            .ToLookup(r => r.UserId, r => r.Role);
+        return users.Select(u => u with { Roles = Roles.Of(roles[u.Id]) }).ToList();
     }
 
     private static object UpdateParameters(User user) => new
     {
         user.Id,
         user.PasswordHash,
-        Role = user.Role.ToString(),
         user.IsDisabled,
         user.MustChangePassword,
         user.FailedLoginCount,
@@ -112,7 +149,7 @@ public sealed class UserRepository(IDbConnectionFactory connections) : IUserRepo
     };
 
     private const string UpdateSql = """
-        UPDATE users SET password_hash = @PasswordHash, role = @Role, is_disabled = @IsDisabled,
+        UPDATE users SET password_hash = @PasswordHash, is_disabled = @IsDisabled,
                          must_change_password = @MustChangePassword, failed_login_count = @FailedLoginCount,
                          lockout_until = @LockoutUntil, security_stamp = @SecurityStamp, updated_at = @UpdatedAt,
                          last_login_at = @LastLoginAt

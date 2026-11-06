@@ -6,7 +6,8 @@ public sealed record User
     public int Id { get; init; }
     public required string Username { get; init; }
     public required string PasswordHash { get; init; }
-    public required UserRole Role { get; init; }
+    /// <summary>Stored in <c>user_roles</c>; see <see cref="Users.Roles"/>.</summary>
+    public IReadOnlySet<string> Roles { get; init; } = Users.Roles.None;
     public bool IsDisabled { get; init; }
     public bool MustChangePassword { get; init; }
     public int FailedLoginCount { get; init; }

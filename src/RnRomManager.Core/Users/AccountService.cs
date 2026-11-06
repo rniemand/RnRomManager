@@ -16,7 +16,7 @@ public sealed class AccountService(
     // Unknown usernames still pay for one hash check, so response time doesn't reveal which names exist.
     private static readonly User Dummy = new()
     {
-        Username = "", PasswordHash = "", Role = UserRole.User, SecurityStamp = "", CreatedAt = default, UpdatedAt = default,
+        Username = "", PasswordHash = "", SecurityStamp = "", CreatedAt = default, UpdatedAt = default,
     };
     private readonly Lazy<string> _dummyHash = new(() => hasher.HashPassword(Dummy, Secrets.NewPassword()));
 

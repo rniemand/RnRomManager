@@ -17,7 +17,13 @@ vi.mock('#lib/bootstrap.js', () => ({
 const { default: UsersPage } = await import('./users/+page.svelte');
 const { default: SettingsPage } = await import('./settings/+page.svelte');
 
-const admin = { id: 1, username: 'admin', role: 'Admin', isDisabled: false, lastLoginAt: null };
+const admin = {
+	id: 1,
+	username: 'admin',
+	roles: ['admin', 'rom-manager'],
+	isDisabled: false,
+	lastLoginAt: null
+};
 
 type Answer = { status: number; body?: unknown };
 
@@ -28,7 +34,12 @@ describe('admin pages', () => {
 	beforeEach(() => {
 		resetClient();
 		toasts.items = [];
-		auth.set({ id: 1, username: 'admin', role: 'Admin', mustChangePassword: false });
+		auth.set({
+			id: 1,
+			username: 'admin',
+			roles: ['admin', 'rom-manager'],
+			mustChangePassword: false
+		});
 		calls = [];
 		answers = { 'GET /api/users': { status: 200, body: [admin] } };
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
@@ -71,12 +82,13 @@ describe('admin pages', () => {
 
 		await type('Username', 'bob');
 		await type('Initial password', password);
+		await fireEvent.click(screen.getByRole('checkbox', { name: 'rom-manager' }));
 		await fireEvent.click(screen.getByRole('button', { name: 'Create' }));
 
 		expect(await screen.findByText('That username is taken.')).toBeTruthy();
 		expect(calls).toContainEqual({
 			key: 'POST /api/users',
-			body: { username: 'bob', role: 'User', password }
+			body: { username: 'bob', roles: ['rom-manager'], password }
 		});
 	});
 
@@ -84,9 +96,8 @@ describe('admin pages', () => {
 		answers['PATCH /api/users/1'] = { status: 409, body: { code: 'LastAdmin', title: 'x' } };
 		render(UsersPage);
 
-		await fireEvent.change(await screen.findByLabelText('Role of admin'), {
-			target: { value: 'User' }
-		});
+		await fireEvent.click(await screen.findByLabelText('admin role of admin'));
+		expect(calls).toContainEqual({ key: 'PATCH /api/users/1', body: { roles: ['rom-manager'] } });
 
 		await vi.waitFor(() =>
 			expect(toasts.items.map((t) => t.text)).toContain(
