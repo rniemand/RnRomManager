@@ -23,6 +23,7 @@ public class IngestPipelineTests
     private static readonly byte[] TetrisJ = new SyntheticRomBuilder { Seed = 1, Title = "TETRIS" }.Build();
     private static readonly byte[] TetrisW = new SyntheticRomBuilder { Seed = 2, Title = "TETRIS" }.Build();
     private static readonly byte[] SeaQuest = new SyntheticRomBuilder { Seed = 3, Title = "SEAQUEST" }.Build();
+    private static readonly SyntheticN64RomBuilder Kart = new() { Seed = 64, SizeBytes = 8192, Title = "KART", GameCode = "NKTE" };
     private static readonly byte[] Gold = new SyntheticRomBuilder { Seed = 4, Title = "POKEMON_GLD", CgbFlag = 0xC0 }.Build();
 
     private ApiFactory _factory = null!;
@@ -63,7 +64,7 @@ public class IngestPipelineTests
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
             [IngestSeeder.GbaDat] = [],
-            [IngestSeeder.N64Dat] = [],
+            [IngestSeeder.N64Dat] = [new FixtureGame("Kart 64 (USA)", "Kart 64 (USA).z64", Kart.Build())],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },
@@ -280,6 +281,25 @@ public class IngestPipelineTests
     }
 
     [Test]
+    public async Task N64File_InTheGbFolder_IsUnsupportedType()
+    {
+        var result = await IngestAsync(Drop("gb", "kart.n64", (Kart with { ByteOrder = N64ByteOrder.N64 }).Build()));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+    }
+
+    [Test]
+    public async Task N64_SameRomInTwoByteOrders_IsIngestedAsZ64ThenDuplicate()
+    {
+        var first = await IngestAsync(Drop("n64", "kart.z64", Kart.Build()));
+        var second = await IngestAsync(Drop("n64", "kart.n64", (Kart with { ByteOrder = N64ByteOrder.N64 }).Build()));
+
+        Assert.That((first!.Outcome, second!.Outcome), Is.EqualTo((IngestOutcome.Ingested, IngestOutcome.Duplicate)));
+        Assert.That(second.Sha1, Is.EqualTo(first.Sha1));
+        Assert.That(ReadZip("n64/K/Kart 64.zip").Roms.Single().FileName, Is.EqualTo("Kart 64 (USA).z64"));
+    }
+
+    [Test]
     public async Task FailedNameClash_GetsASuffix()
     {
         Directory.CreateDirectory(Path.Combine(Ingest("gb"), "_failed"));
@@ -313,6 +333,7 @@ public class IngestPipelineTests
         Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.InvalidHeader)));
         Assert.That(result.Sha1, Is.EqualTo(Convert.ToHexStringLower(SHA1.HashData(garbage))));
         Assert.That(File.Exists(Path.Combine(Ingest("gb"), "_failed", "garbage.gb")), Is.True);
+        Assert.That(File.ReadAllText(Path.Combine(Ingest("gb"), "_failed", "garbage.gb.error.txt")), Does.Contain("the header isn't valid for this system"));
     }
 
     [Test]

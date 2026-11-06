@@ -11,8 +11,8 @@ public class IngestSeederTests
     [SetUp] public void SetUp() => _dir = new TempDir();
     [TearDown] public void TearDown() => _dir.Dispose();
 
-    [TestCase(SeedSet.Basic, 12)]
-    [TestCase(SeedSet.Full, 212)]
+    [TestCase(SeedSet.Basic, 13)]
+    [TestCase(SeedSet.Full, 213)]
     public void Sets_HaveExpectedFilesArchivesAndReadyAges(SeedSet set, int count)
     {
         var ingest = _dir.Combine("ingest");
@@ -24,6 +24,7 @@ public class IngestSeederTests
         Assert.That(files.All(f => File.GetLastWriteTimeUtc(f) == _time.GetUtcNow().AddMinutes(-1).UtcDateTime), Is.True);
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "gb", "01-orbit-world.gb")), Is.EqualTo(File.ReadAllBytes(Path.Combine(ingest, "gb", "90-duplicate.gb"))));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "gb", "04-color-garden.gbc"))[SyntheticRomBuilder.CgbFlagOffset], Is.EqualTo(0x80));
+        Assert.That(File.ReadAllBytes(Path.Combine(ingest, "n64", "01-orbit-kart.v64"))[1], Is.EqualTo(0x80), "byte-swapped");
         Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(20));
     }
 

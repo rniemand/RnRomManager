@@ -19,6 +19,7 @@ public static class IngestSeeder
         Directory.CreateDirectory(Path.Combine(ingest, "gb"));
         Directory.CreateDirectory(Path.Combine(ingest, "gbc"));
         Directory.CreateDirectory(Path.Combine(ingest, "gba"));
+        Directory.CreateDirectory(Path.Combine(ingest, "n64"));
         var files = new List<string>();
         var gb = new List<FixtureGame>();
         var gbc = new List<FixtureGame>();
@@ -51,6 +52,11 @@ public static class IngestSeeder
             new SyntheticGbaRomBuilder { Seed = 3301, Title = "STARCOURIER", GameCode = "ASCE", MakerCode = "01" }.Build())
         { ReleaseYear = 2002, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Action"] };
         Loose("gba", "01-star-courier.gba", courier.Rom);
+        var orbitKart = new SyntheticN64RomBuilder { Seed = 6401, Title = "ORBIT KART 64", GameCode = "NOKE" };
+        var kart = new FixtureGame("Orbit Kart 64 (USA)", "Orbit Kart 64 (USA).z64", orbitKart.Build())
+        { ReleaseYear = 1998, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Racing"] };
+        // Byte-swapped on disk, so ingestion must convert it to match the DAT's .z64 entry (N3).
+        Loose("n64", "01-orbit-kart.v64", (orbitKart with { ByteOrder = N64ByteOrder.V64 }).Build());
 
         var zipPath = Path.Combine(ingest, "gb", "05-quest.zip");
         using (var file = File.Create(zipPath))
@@ -81,7 +87,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [] });
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart] });
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
     }
