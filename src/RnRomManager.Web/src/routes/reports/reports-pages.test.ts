@@ -18,6 +18,7 @@ vi.mock('$app/paths', () => ({
 
 const { default: ReportsIndex } = await import('./+page.svelte');
 const { default: MissingImages } = await import('./missing-images/+page.svelte');
+const { default: LibrarySize } = await import('./library-size/+page.svelte');
 
 type Answer = { status: number; body?: unknown };
 
@@ -52,6 +53,117 @@ describe('reports pages', () => {
 	it('/reports redirects to Library Size, replacing the history entry (RP1)', () => {
 		render(ReportsIndex);
 		expect(goto).toHaveBeenCalledWith('/reports/library-size', { replace: true });
+	});
+
+	describe('Library Size (RP3)', () => {
+		const library = {
+			totalBytes: 3000,
+			gameCount: 3,
+			systems: [
+				{ system: 'gbc', systemName: 'Game Boy Color', bytes: 2000, gameCount: 1 },
+				{ system: 'gb', systemName: 'Game Boy', bytes: 1000, gameCount: 2 }
+			]
+		};
+		const tiles = () => [...document.querySelectorAll('svg rect')];
+		const tileLinks = () =>
+			[...document.querySelectorAll('svg a')].map((a) => a.getAttribute('href'));
+
+		it('library level: one rectangle per system in its colour, and the table with shares', async () => {
+			answers['GET /api/reports/library-size'] = { status: 200, body: library };
+			render(LibrarySize);
+
+			await screen.findByRole('link', { name: 'Game Boy Color' });
+			expect(document.querySelector('p')!.textContent).toContain('in 3 games');
+			expect(tiles().map((r) => r.getAttribute('fill'))).toEqual([
+				'var(--bs-info)',
+				'var(--bs-success)'
+			]);
+			expect(tiles()[0].getAttribute('stroke')).toBe('var(--bs-body-bg)');
+			expect(document.querySelector('svg')!.getAttribute('role')).toBe('img');
+			expect(document.querySelector('svg')!.getAttribute('aria-label')).toContain('Game Boy Color');
+			expect(document.querySelector('svg title')!.textContent).toBe('Game Boy Color — 2.0 KiB');
+			expect(document.querySelector('svg text')!.getAttribute('fill')).toBe('#000');
+			const rows = [...document.querySelectorAll('tbody tr')].map((r) =>
+				[...r.querySelectorAll('td')].map((td) => td.textContent?.trim())
+			);
+			expect(rows).toEqual([
+				['Game Boy Color', '1', '2.0 KiB', '66.7%'],
+				['Game Boy', '2', '1000 B', '33.3%']
+			]);
+		});
+
+		it('a system rectangle or row drills in with ?system=', async () => {
+			answers['GET /api/reports/library-size'] = { status: 200, body: library };
+			render(LibrarySize);
+
+			const row = await screen.findByRole('link', { name: 'Game Boy' });
+			expect(row.getAttribute('href')).toBe('/reports/library-size?system=gb');
+			expect(tileLinks()).toEqual([
+				'/reports/library-size?system=gbc',
+				'/reports/library-size?system=gb'
+			]);
+		});
+
+		it('system level: game rectangles and rows open the game; a breadcrumb leads back', async () => {
+			navigateTo('/reports/library-size?system=gb');
+			answers['GET /api/reports/library-size/gb'] = {
+				status: 200,
+				body: {
+					system: 'gb',
+					systemName: 'Game Boy',
+					bytes: 1000,
+					games: [
+						{ id: 'g1', displayTitle: 'Bravo', bytes: 700, romCount: 2 },
+						{ id: 'g2', displayTitle: 'Alpha', bytes: 300, romCount: 1 }
+					]
+				}
+			};
+			render(LibrarySize);
+
+			expect((await screen.findByRole('link', { name: 'Bravo' })).getAttribute('href')).toBe(
+				'/games/g1'
+			);
+			expect(tileLinks()).toEqual(['/games/g1', '/games/g2']);
+			expect(screen.getByRole('link', { name: 'Library' }).getAttribute('href')).toBe(
+				'/reports/library-size'
+			);
+			expect(screen.getByText('Game Boy', { selector: '.breadcrumb-item' })).toBeTruthy();
+			expect(screen.getByRole('columnheader', { name: '% of system' })).toBeTruthy();
+		});
+
+		it('draws the 300 largest games plus one unclickable "others" rectangle', async () => {
+			navigateTo('/reports/library-size?system=gb');
+			const games = Array.from({ length: 305 }, (_, i) => ({
+				id: `g${i}`,
+				displayTitle: `Game ${i}`,
+				bytes: 10_000 - i,
+				romCount: 1
+			}));
+			answers['GET /api/reports/library-size/gb'] = {
+				status: 200,
+				body: { system: 'gb', systemName: 'Game Boy', bytes: 1, games }
+			};
+			render(LibrarySize);
+
+			await screen.findByRole('link', { name: 'Game 304' });
+			expect(tiles()).toHaveLength(301);
+			expect(tileLinks()).toHaveLength(300);
+			const others = [...document.querySelectorAll('svg g title')].map((t) => t.textContent);
+			expect(others).toHaveLength(1);
+			expect(others[0]).toMatch(/^5 others — /);
+			expect(document.querySelectorAll('tbody tr')).toHaveLength(305);
+		});
+
+		it('an empty library shows the empty state', async () => {
+			answers['GET /api/reports/library-size'] = {
+				status: 200,
+				body: { totalBytes: 0, gameCount: 0, systems: [] }
+			};
+			render(LibrarySize);
+
+			expect(await screen.findByText('The library is empty.')).toBeTruthy();
+			expect(document.querySelector('svg')).toBeNull();
+		});
 	});
 
 	describe('Missing Images (RP5)', () => {

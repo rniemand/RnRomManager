@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { systemColour } from '../systemColours';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -10,15 +11,10 @@
 
 	let { system, name }: Props = $props();
 
-	// A fixed colour per system so a list scans at a glance; unknown systems stay neutral.
-	const colours: Record<string, string> = {
-		gb: 'text-bg-success',
-		gbc: 'text-bg-info',
-		gba: 'text-bg-primary',
-		n64: 'text-bg-danger'
-	};
+	// A fixed colour per system so a list scans at a glance (shared with the Library Size treemap).
+	const colour = $derived(systemColour(system).name);
 </script>
 
-<span class="badge {colours[system] ?? 'text-bg-secondary'} d-inline-flex align-items-center gap-1">
+<span class="badge text-bg-{colour} d-inline-flex align-items-center gap-1">
 	<Icon name="system-{system}" />{name ?? system.toUpperCase()}
 </span>
