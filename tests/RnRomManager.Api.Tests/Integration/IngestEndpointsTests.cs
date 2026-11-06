@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Core.Dats;
@@ -109,6 +110,88 @@ public class IngestEndpointsTests
         var item = (await AuthClient.JsonAsync(items)).GetProperty("items")[0];
         Assert.That(item.GetProperty("sourcePath").GetString(), Is.EqualTo(recent));
         Assert.That(item.GetProperty("reason").GetString(), Is.EqualTo(IngestReason.TooRecent));
+    }
+
+    private async Task<List<string>> ItemSourcePaths(Guid jobId)
+    {
+        using var response = await _admin.GetAsync($"/api/jobs/{jobId}/items?pageSize=200");
+        return (await AuthClient.JsonAsync(response)).GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("sourcePath").GetString()!).ToList();
+    }
+
+    private async Task<Guid> StartWith(object body)
+    {
+        using var response = await _admin.PostAsync("/api/jobs/ingest", body);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+        var jobId = (await AuthClient.JsonAsync(response)).GetProperty("jobId").GetGuid();
+        Assert.That((await WaitForEndAsync(jobId)).Status, Is.EqualTo(JobStatus.Completed));
+        return jobId;
+    }
+
+    [Test]
+    public async Task Start_WithFiles_IngestsOnlyThose_IgnoresUnknownAndRepeats_LeavesTheRestAlone()
+    {
+        LoadDats();
+        var chosen = Drop("gb", "chosen.gb", TimeSpan.FromHours(1));
+        var other = Drop("gb", "other.gb", TimeSpan.FromHours(1));
+        var otherBytes = await File.ReadAllBytesAsync(other);
+
+        var jobId = await StartWith(new
+        {
+            files = new object[]
+            {
+                new { system = "gb", name = "chosen.gb" }, new { system = "gb", name = "chosen.gb" },
+                new { system = "gb", name = "missing.gb" }, new { system = "nes", name = "other.gb" },
+            },
+        });
+
+        Assert.That(await ItemSourcePaths(jobId), Is.EqualTo(new[] { chosen }));
+        Assert.That(File.Exists(chosen), Is.False, "processed (too small → _failed)");
+        Assert.That(await File.ReadAllBytesAsync(other), Is.EqualTo(otherBytes), "untouched");
+    }
+
+    [Test]
+    public async Task Start_WithAnArchiveName_IngestsItsEntries()
+    {
+        LoadDats();
+        var archive = Path.Combine(_factory.Root, "ingest", "gb", "pack.zip");
+        using (var zip = ZipFile.Open(archive, ZipArchiveMode.Create))
+        await using (var entry = zip.CreateEntry("inner.gb").Open())
+            entry.Write([1, 2, 3, 4]);
+        File.SetLastWriteTimeUtc(archive, DateTime.UtcNow.AddHours(-1));
+        var loose = Drop("gb", "loose.gb", TimeSpan.FromHours(1));
+
+        var jobId = await StartWith(new { files = new[] { new { system = "gb", name = "pack.zip" } } });
+
+        var items = await ItemSourcePaths(jobId);
+        Assert.That(items, Is.Not.Empty);
+        Assert.That(items, Has.None.EqualTo(loose));
+        Assert.That(File.Exists(loose), Is.True);
+    }
+
+    [TestCase("{\"files\":[]}")]
+    [TestCase("{\"files\":[{\"system\":\"gb\",\"name\":\"\"}]}")]
+    [TestCase("{\"files\":[{\"system\":null,\"name\":\"a.gb\"}]}")]
+    [TestCase("{\"files\":[null]}")]
+    public async Task Start_WithAnEmptyOrIncompleteFileList_Is400(string json)
+    {
+        LoadDats();
+        using var response = await _admin.PostAsync("/api/jobs/ingest", System.Text.Json.JsonDocument.Parse(json).RootElement);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("ValidationFailed"));
+    }
+
+    [Test]
+    public async Task Start_WithFilesNull_IngestsEverything()
+    {
+        LoadDats();
+        var a = Drop("gb", "a.gb", TimeSpan.FromHours(1));
+        var b = Drop("gbc", "b.gbc", TimeSpan.FromHours(1));
+
+        var jobId = await StartWith(new { files = (object?)null });
+
+        Assert.That(await ItemSourcePaths(jobId), Is.EquivalentTo(new[] { a, b }));
     }
 
     [Test]

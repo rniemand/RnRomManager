@@ -34,6 +34,13 @@ public sealed class IngestJob(
     public const string SyncingLibrary = "Syncing library";
     public static readonly TimeSpan MinFileAge = TimeSpan.FromSeconds(10);
 
+    /// <summary>
+    /// IN1: when set (by the endpoint, before <c>StartAsync</c>), only these snapshot files — exact system id + top-level
+    /// file name — are processed; the rest are left alone. Safe because the job is transient (one per request) and the
+    /// scheduler never starts ingest.
+    /// </summary>
+    public IReadOnlySet<(string SystemId, string Name)>? Selection { get; set; }
+
     public JobType Type => JobType.Ingest;
     public JobMode? Mode => null;
 
@@ -71,7 +78,8 @@ public sealed class IngestJob(
         }
 
         // Step 6
-        var snapshot = scanner.Scan().SelectMany(s => s.Files).ToList();
+        var snapshot = scanner.Scan().SelectMany(s => s.Files)
+            .Where(f => Selection is null || Selection.Contains((f.SystemId, f.Name))).ToList();
         context.Progress.SetTotal(snapshot.Count);
         var run = new Run(context, IngestOutcome.All.ToDictionary(o => o, _ => 0), new CircuitBreaker()); // one breaker per job (§10.2)
         var now = time.GetUtcNow().UtcDateTime;

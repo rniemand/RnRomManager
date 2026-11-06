@@ -71,6 +71,25 @@ public class IngestJobTests
         _dats.Load();
     }
 
+    [Test]
+    public async Task Selection_ProcessesOnlyListedFiles_TotalIsTheSelectedCount()
+    {
+        var chosen = Drop("gb", "chosen.gb", TimeSpan.FromMinutes(5));
+        var other = Drop("gb", "other.gb", TimeSpan.FromMinutes(5));
+        var progress = new JobProgress();
+        var job = Job();
+        // Unknown system and file entries are ignored; the set already drops repeats.
+        job.Selection = new HashSet<(string, string)> { ("gb", "chosen.gb"), ("nes", "chosen.gb"), ("gb", "missing.gb"), ("gb", "CHOSEN.GB") };
+
+        await job.RunAsync(new JobContext(Guid.NewGuid(), progress), CancellationToken.None);
+
+        await _items.Received(1).InsertAsync(Arg.Any<JobItem>(), Arg.Any<CancellationToken>());
+        await _items.DidNotReceive().InsertAsync(Arg.Is<JobItem>(i => i.SourcePath == other), Arg.Any<CancellationToken>());
+        Assert.That((progress.Current, progress.Total), Is.EqualTo((1, 1)));
+        Assert.That(File.Exists(other), Is.True, "unselected file untouched");
+        Assert.That(File.Exists(chosen), Is.False, "the selected 3-byte file moved to _failed");
+    }
+
     private IngestJob Job()
     {
         var roms = Substitute.For<IRomRepository>();
