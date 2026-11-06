@@ -55,6 +55,8 @@ export interface GameListItem {
 	/** 1–5; null = not rated. Shared per game. */
 	rating: number | null;
 	favourite: boolean;
+	/** With `q`: the metadata value that matched when no word was in a title (S3); null otherwise. */
+	matchedOn: { field: 'developer' | 'publisher' | 'genre'; value: string } | null;
 }
 
 /** One release of `GET /api/games/{id}` (spec §23, §6.2 Rom fields flattened). */

@@ -42,6 +42,7 @@ const item = (id: string, displayTitle: string, extra = {}) => ({
 	boxArtUrl: null as string | null,
 	rating: null as number | null,
 	favourite: false,
+	matchedOn: null as { field: string; value: string } | null,
 	...extra
 });
 
@@ -112,6 +113,20 @@ describe('GlobalSearch', () => {
 		expect(event.defaultPrevented).toBe(true);
 		await vi.waitFor(() => expect(shown.count).toBe(1));
 		await vi.waitFor(() => expect(document.activeElement).toBe(input()));
+	});
+
+	it('shows a matched-on line only for a non-title match', async () => {
+		items = [
+			item('g1', 'Tetris'),
+			item('g3', 'Pinball', { matchedOn: { field: 'publisher', value: 'Nintendo' } })
+		];
+		render(GlobalSearch, { open: true });
+
+		await typeAndWait('nintendo');
+
+		const options = screen.getAllByRole('option', { hidden: true });
+		expect(options[1].textContent).toContain('Publisher: Nintendo');
+		expect(options[0].textContent).not.toMatch(/Developer:|Publisher:|Genre:/);
 	});
 
 	it('uses a static backdrop with Escape enabled (M1)', () => {

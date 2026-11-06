@@ -36,6 +36,8 @@
 	let previous: HTMLElement | null = null;
 	let navigated = false;
 
+	const matchLabels = { developer: 'Developer', publisher: 'Publisher', genre: 'Genre' } as const;
+
 	const enabled = $derived(!!auth.me && !auth.me.mustChangePassword);
 
 	onMount(() => {
@@ -220,6 +222,11 @@
 							</div>
 							<div class="flex-grow-1 min-w-0" style="min-width: 0">
 								<div class="text-truncate fw-semibold">{game.displayTitle}</div>
+								{#if game.matchedOn}
+									<div class="text-truncate small text-body-secondary">
+										{matchLabels[game.matchedOn.field]}: {game.matchedOn.value}
+									</div>
+								{/if}
 								<div class="d-flex flex-wrap align-items-center gap-2 small">
 									<span class="badge text-bg-secondary">{game.systemName}</span>
 									{#if game.releaseYear}<span>{game.releaseYear}</span>{/if}
