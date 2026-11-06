@@ -40,11 +40,11 @@ public class SeedIngestTests
         using var summary = JsonDocument.Parse(job.Summary!);
         foreach (var outcome in IngestOutcome.All)
         {
-            var expected = outcome switch { IngestOutcome.Ingested => ingested, IngestOutcome.Duplicate or IngestOutcome.Review or IngestOutcome.Failed => 1, _ => 0 };
+            var expected = outcome switch { IngestOutcome.Ingested => ingested, IngestOutcome.Review => 2, IngestOutcome.Duplicate or IngestOutcome.Failed => 1, _ => 0 };
             Assert.That(summary.RootElement.GetProperty(outcome).GetInt32(), Is.EqualTo(expected), outcome);
         }
         var items = await factory.Services.GetRequiredService<IJobItemRepository>().ListAsync(id, null, 1, 200, default);
-        Assert.That(items.Total, Is.EqualTo(ingested + 3));
+        Assert.That(items.Total, Is.EqualTo(ingested + 4));
         var repository = factory.Services.GetRequiredService<IGameRepository>();
         var library = await repository.ListSyncStateAsync(default);
         Assert.That(library, Has.Count.EqualTo(games));
@@ -68,11 +68,11 @@ public class SeedIngestTests
             Assert.That(game.Roms.Single().Header!["gameCode"]!.GetValue<string>(), Is.EqualTo("ASCE"));
         }
         var review = await factory.Services.GetRequiredService<IIngestReviewRepository>().ListAsync("Pending", 1, 48, default);
-        Assert.That(review.Total, Is.EqualTo(1));
-        Assert.That(review.Items.Single().Reason, Is.EqualTo("NoDatMatch"));
-        Assert.That(review.Items.Single().Suggestions, Does.Contain("Orbit Blocks"));
+        Assert.That(review.Total, Is.EqualTo(2));
+        Assert.That(review.Items.Select(i => i.Reason), Is.All.EqualTo("NoDatMatch"));
+        Assert.That(review.Items.Single(i => i.SourcePath.EndsWith("91-unmatched.gb", StringComparison.Ordinal)).Suggestions, Does.Contain("Orbit Blocks"));
         Assert.That(File.Exists(Path.Combine(factory.Root, "ingest", "gb", "_duplicates", "90-duplicate.gb")), Is.True);
         Assert.That(File.ReadAllText(Path.Combine(factory.Root, "ingest", "gb", "_failed", "92-invalid.gb.error.txt")), Does.Contain("InvalidHeader"));
-        Assert.That(Directory.GetFiles(Path.Combine(factory.Root, "ingest", "gb")), Has.Length.EqualTo(1));
+        Assert.That(Directory.GetFiles(Path.Combine(factory.Root, "ingest", "gb")), Has.Length.EqualTo(2));
     }
 }

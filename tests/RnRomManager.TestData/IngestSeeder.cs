@@ -66,6 +66,8 @@ public static class IngestSeeder
         files.Add(sevenZip);
         Loose("gb", "90-duplicate.gb", world.Rom);
         Loose("gb", "91-unmatched.gb", new SyntheticRomBuilder { Seed = 3191, Title = "ORBITBLOCKS" }.Build());
+        // A second review item with nothing like it in the DATs (no suggestions); e2e deletes it.
+        Loose("gb", "93-mystery.gb", new SyntheticRomBuilder { Seed = 3193, Title = "MYSTERYCART" }.Build());
         Loose("gb", "92-invalid.gb", new SyntheticRomBuilder { Seed = 3192, CorruptLogo = true, CorruptHeaderChecksum = true }.Build());
 
         if (set == SeedSet.Full)

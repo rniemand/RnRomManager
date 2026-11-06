@@ -156,10 +156,11 @@
 									<button
 										type="button"
 										class="btn btn-sm btn-outline-primary"
+										aria-label="Use as cover: {image.fileName}"
 										disabled={busy}
 										onclick={() => setCover(image)}
 									>
-										Use as cover<span class="visually-hidden">: {image.fileName}</span>
+										Use as cover
 									</button>
 								{/if}
 								{#if !image.isDefault}
