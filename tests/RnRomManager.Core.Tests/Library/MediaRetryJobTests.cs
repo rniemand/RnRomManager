@@ -67,6 +67,7 @@ public class MediaRetryJobTests
         Type = type,
         Source = isDefault ? InfoJsonImage.SourceDefault : InfoJsonImage.SourceLibretro,
         IsDefault = isDefault,
+        IsCover = type == ImageType.BoxArt,
         SizeBytes = bytes.Length,
         Sha1 = Convert.ToHexStringLower(SHA1.HashData(bytes)),
         Width = 1,

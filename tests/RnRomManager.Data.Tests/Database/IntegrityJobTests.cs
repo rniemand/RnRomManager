@@ -71,7 +71,7 @@ public class IntegrityJobTests
     private static InfoJsonImage BoxArt(bool isDefault) => new()
     {
         FileName = "boxart-01.png", Type = ImageType.BoxArt, Source = isDefault ? InfoJsonImage.SourceDefault : InfoJsonImage.SourceLibretro,
-        IsDefault = isDefault, SizeBytes = Png.Length, Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(Png)),
+        IsDefault = isDefault, IsCover = true, SizeBytes = Png.Length, Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(Png)),
         Width = 2, Height = 2, DateAdded = When,
     };
 
@@ -205,6 +205,35 @@ public class IntegrityJobTests
             (EntryUnlisted, "gb/T/Tetris.zip", "roms/extra.gb"),
             (MissingBoxArt, "gb/N/No Art.zip", null),
         }));
+    }
+
+    [Test]
+    public async Task BoxArtCodes_AreAboutTheCover()
+    {
+        var snap = BoxArt(false) with { FileName = "snap-01.png", Type = ImageType.Snap };
+        await WriteWith("gb/S/Snap Cover.zip", "Snap Cover", [snap]);
+        await WriteWith("gb/P/Placeholder Kept.zip", "Placeholder Kept", [BoxArt(true) with { IsCover = false }, snap]);
+        await WriteWith("gb/D/Default Cover.zip", "Default Cover", [BoxArt(true), snap with { IsCover = false }]);
+
+        await Run();
+
+        Assert.That(await Open(), Is.EquivalentTo(new (string, string?, string?)[] { (DefaultBoxArt, "gb/D/Default Cover.zip", null) }),
+            "a snap cover isn't MissingBoxArt; a placeholder that isn't the cover isn't DefaultBoxArt");
+    }
+
+    /// <summary>A one-ROM game ZIP with these images (each stored with the test PNG).</summary>
+    private async Task WriteWith(string zipPath, string title, InfoJsonImage[] images)
+    {
+        var romSeed = ++_seed;
+        var rom = Rom($"{title} (World).gb", RomBytes(romSeed));
+        var game = Game(title, rom) with { Images = images };
+        var path = Abs(zipPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var entries = new Dictionary<string, Func<Stream>> { [LibraryZip.RomEntry(rom.FileName)] = () => new MemoryStream(RomBytes(romSeed)) };
+        foreach (var image in images)
+            entries[LibraryZip.ImageEntry(image.FileName)] = () => new MemoryStream(Png);
+        await new LibraryZipWriter(_reader).WriteAsync(path, null, new LibraryZipChanges(game, entries));
+        Touch(zipPath);
     }
 
     [Test]

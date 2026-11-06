@@ -49,7 +49,7 @@ public class GameQueryTests
             Publishers = publishers ?? [],
             Genres = genres ?? [],
             Images = boxArt
-                ? [new InfoJsonImage { FileName = "boxart-01.png", Type = ImageType.BoxArt, Source = InfoJsonImage.SourceDefault, IsDefault = true, SizeBytes = 10, Sha1 = new string('a', 40), Width = 512, Height = 512, DateAdded = When }]
+                ? [new InfoJsonImage { FileName = "boxart-01.png", Type = ImageType.BoxArt, Source = InfoJsonImage.SourceDefault, IsDefault = true, IsCover = true, SizeBytes = 10, Sha1 = new string('a', 40), Width = 512, Height = 512, DateAdded = When }]
                 : [],
             Metadata = new InfoJsonGameMetadata(created, created, "0.1.0"),
         };
@@ -65,7 +65,7 @@ public class GameQueryTests
         static InfoJsonImage Image(ImageType type, bool isDefault) => new()
         {
             FileName = type == ImageType.BoxArt ? "boxart-01.png" : "snap-01.png", Type = type,
-            Source = isDefault ? InfoJsonImage.SourceDefault : InfoJsonImage.SourceLibretro, IsDefault = isDefault,
+            Source = isDefault ? InfoJsonImage.SourceDefault : InfoJsonImage.SourceLibretro, IsDefault = isDefault, IsCover = type == ImageType.BoxArt,
             SizeBytes = 10, Sha1 = new string('b', 40), Width = 1, Height = 1, DateAdded = When,
         };
         var roms = (await _roms.ListByGameAsync(id, default)).Select((r, i) => Rom(r.FileName, RomBytes(1000 + ++_seed), isPrimary: i == 0)).ToArray();

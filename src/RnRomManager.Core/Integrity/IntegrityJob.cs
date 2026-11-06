@@ -201,10 +201,11 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
             foreach (var entry in zip.EntryNames.Where(e => e != LibraryZip.InfoJsonEntry && !names.Contains(e)))
                 add(Finding(EntryUnlisted, entry));
 
-            var boxArt = game.Images.FirstOrDefault(i => i.Type == ImageType.BoxArt);
-            if (boxArt is null)
+            // v3: the codes are about the cover (I8), whatever its type.
+            var cover = game.Images.FirstOrDefault(i => i.IsCover);
+            if (cover is null)
                 add(Finding(MissingBoxArt));
-            else if (boxArt.IsDefault)
+            else if (cover.IsDefault)
                 add(Finding(DefaultBoxArt));
         }
     }

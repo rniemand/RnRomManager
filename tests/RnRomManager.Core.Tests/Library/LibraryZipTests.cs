@@ -39,7 +39,7 @@ public class LibraryZipTests
         handler.Id.Returns("gb");
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns([handler]);
-        return new InfoJsonReader([new InfoJsonUpgraderV1(), .. upgraders], registry);
+        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), .. upgraders], registry);
     }
 
     private static byte[] RomBytes(int seed) => new SyntheticRomBuilder { Seed = seed }.Build();
@@ -71,6 +71,7 @@ public class LibraryZipTests
         Source = InfoJsonImage.SourceDefault,
         SourceUrl = null,
         IsDefault = true,
+        IsCover = true,
         SizeBytes = bytes.Length,
         Sha1 = Convert.ToHexStringLower(SHA1.HashData(bytes)),
         Width = 1,

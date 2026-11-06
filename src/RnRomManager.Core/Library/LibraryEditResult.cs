@@ -13,6 +13,7 @@ public sealed record LibraryEditResult(string? Code = null, string? Details = nu
     public const string IoError = "IoError";
     public const string VerifyFailed = "VerifyFailed";
     public const string DbWriteFailed = "DbWriteFailed";
+    public const string TooManyImages = "TooManyImages";
 
     public static LibraryEditResult Ok { get; } = new();
 

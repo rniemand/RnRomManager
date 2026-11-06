@@ -2,8 +2,8 @@ namespace RnRomManager.Core.Library;
 
 /// <summary>
 /// The §6.2 validation rules that the JSON shape can't express, in a fixed order; the first failure is reported.
-/// Required/typed fields are already enforced by deserialization. No <c>BoxArt</c> is not invalid: that's the
-/// integrity issue <c>MissingBoxArt</c>.
+/// Required/typed fields are already enforced by deserialization. No images is not invalid: that's the integrity issue
+/// <c>MissingBoxArt</c>.
 /// </summary>
 public static class InfoJsonValidator
 {
@@ -39,14 +39,19 @@ public static class InfoJsonValidator
         {
             if (!IsHex(image.Sha1, 40))
                 return $"image '{image.FileName}' sha1 must be lowercase hex";
-            if (image.Source is not (InfoJsonImage.SourceLibretro or InfoJsonImage.SourceDefault))
-                return $"image '{image.FileName}' source must be '{InfoJsonImage.SourceLibretro}' or '{InfoJsonImage.SourceDefault}'";
+            if (image.Source is not (InfoJsonImage.SourceLibretro or InfoJsonImage.SourceDefault or InfoJsonImage.SourceUpload))
+                return $"image '{image.FileName}' source must be '{InfoJsonImage.SourceLibretro}', '{InfoJsonImage.SourceDefault}' or '{InfoJsonImage.SourceUpload}'";
         }
 
-        if (game.Images.Count(i => i.Type == ImageType.BoxArt) > 1)
-            return "at most one BoxArt image";
-        if (game.Images.Count(i => i.Type == ImageType.Snap) > 1)
-            return "at most one Snap image";
+        if (game.Images.Count > GameImages.MaxImages)
+            return $"at most {GameImages.MaxImages} images";
+        if (game.Images.Count > 0 && game.Images.Count(i => i.IsCover) != 1)
+            return "exactly one image must be isCover";
+        var defaults = game.Images.Where(i => i.IsDefault).ToList();
+        if (defaults.Count > 1)
+            return "at most one isDefault image";
+        if (defaults.Count == 1 && defaults[0].Type != ImageType.BoxArt)
+            return "the isDefault image must be a BoxArt";
         return null;
     }
 

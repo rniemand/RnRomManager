@@ -2,10 +2,11 @@ using System.Buffers.Binary;
 
 namespace RnRomManager.Core.Library;
 
-/// <summary>PNG validation for box art and snaps (spec §10.2): signature, ≤ 5 MiB, dimensions from IHDR.</summary>
+/// <summary>PNG validation (spec §10.2): signature, ≤ <see cref="MaxBytes"/>, dimensions from IHDR.</summary>
 public sealed record PngInfo(int Width, int Height)
 {
-    public const int MaxBytes = 5 * 1024 * 1024;
+    /// <summary>Stored and served images (I1a); libretro fetches are capped lower in <c>MediaService</c>.</summary>
+    public const int MaxBytes = ImageFormats.MaxBytes;
 
     private static ReadOnlySpan<byte> Signature => [0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A];
     private static ReadOnlySpan<byte> IhdrHeader => [0, 0, 0, 13, (byte)'I', (byte)'H', (byte)'D', (byte)'R'];

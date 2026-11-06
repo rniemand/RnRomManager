@@ -201,7 +201,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
                 Rating = null,
                 Favourite = false,
                 Roms = PrimaryRelease.Apply([moved]),
-                Images = [found.BoxArt.ToInfoJson(now), .. found.Snap is { } snap ? [snap.ToInfoJson(now)] : Array.Empty<InfoJsonImage>()],
+                Images = GameImages.ForNewGame(found, now),
                 Metadata = new InfoJsonGameMetadata(now, now, AppInfo.Version),
             };
             foreach (var image in new[] { found.BoxArt, found.Snap }.OfType<MediaImage>())
@@ -246,9 +246,11 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     }
 
     /// <summary>
-    /// §11 Merge into… (D35): every release of the source moves into the target in one write. The target keeps its title,
-    /// metadata and images; empty fields are filled from the source, a default box art is replaced by a real source one,
-    /// and the source snap is used only when the target has none. Target ZIP + DB commit, then the source ZIP is deleted.
+    /// §11 Merge into… (D35, I4a): every release of the source moves into the target in one write. The target keeps its
+    /// title, metadata and cover; empty fields are filled from the source. The source's non-default images are copied in
+    /// under new names (I2); its placeholder is dropped; a real source box art removes the target's placeholder (and becomes
+    /// the cover if the placeholder was). More than <see cref="GameImages.MaxImages"/> images → <c>TooManyImages</c>.
+    /// Target ZIP + DB commit, then the source ZIP is deleted.
     /// </summary>
     public async Task<LibraryEditResult> MergeAsync(Guid gameId, Guid targetGameId, CancellationToken ct)
     {
@@ -284,12 +286,10 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             entries[LibraryZip.RomEntry(moved.FileName)] = () => sourceZip.OpenEntry(LibraryZip.RomEntry(rom.FileName), rom.Metadata.SizeBytes);
         }
 
-        var images = into.Images.ToList();
-        var intoBoxArt = into.Images.FirstOrDefault(i => i.Type == ImageType.BoxArt);
-        if (from.Images.FirstOrDefault(i => i.Type == ImageType.BoxArt) is { IsDefault: false } boxArt && intoBoxArt is null or { IsDefault: true })
-            TakeImage(boxArt, MediaImage.BoxArtFileName);
-        if (from.Images.FirstOrDefault(i => i.Type == ImageType.Snap) is { } snap && !into.Images.Any(i => i.Type == ImageType.Snap))
-            TakeImage(snap, MediaImage.SnapFileName);
+        if (GameImages.Merge(into.Images, from.Images) is not var (images, copies))
+            return new(TooManyImages, $"The merged game would have more than {GameImages.MaxImages} images.");
+        foreach (var (copy, sourceName) in copies)
+            entries[LibraryZip.ImageEntry(copy.FileName)] = () => sourceZip.OpenEntry(LibraryZip.ImageEntry(sourceName), copy.SizeBytes);
 
         var targetGame = into with
         {
@@ -314,13 +314,6 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         if (result.Code is null)
             logger.LogInformation("Game {GameId} merged into {TargetId} ({ZipPath})", gameId, targetGameId, targetRow.ZipPath);
         return result with { GameId = targetGameId };
-
-        void TakeImage(InfoJsonImage image, string fileName)
-        {
-            images.RemoveAll(i => i.Type == image.Type || string.Equals(i.FileName, fileName, StringComparison.OrdinalIgnoreCase));
-            images.Add(image with { FileName = fileName });
-            entries[LibraryZip.ImageEntry(fileName)] = () => sourceZip.OpenEntry(LibraryZip.ImageEntry(image.FileName), image.SizeBytes);
-        }
     }
 
     /// <summary>A failed source rebuild after the target was written: put the target back, so the ROM isn't in two ZIPs.</summary>

@@ -169,7 +169,7 @@ public static class LibraryEndpoints
     {
         LibraryEditResult.ValidationFailed => Problems.Validation(ctx, result.Errors!),
         LibraryEditResult.NotFound => Problems.NotFound(ctx),
-        LibraryEditResult.JobRunning or LibraryTarget.InfoJsonNewerSchema or LibraryTarget.TargetZipUnreadable =>
+        LibraryEditResult.JobRunning or LibraryEditResult.TooManyImages or LibraryTarget.InfoJsonNewerSchema or LibraryTarget.TargetZipUnreadable =>
             Problems.Create(ctx, StatusCodes.Status409Conflict, result.Code, result.Code),
         _ => Problems.Create(ctx, StatusCodes.Status500InternalServerError, result.Code!, result.Code!),
     };

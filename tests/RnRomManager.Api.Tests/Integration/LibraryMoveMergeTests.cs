@@ -8,6 +8,7 @@ using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
+using RnRomManager.Core.Systems;
 using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
@@ -265,8 +266,9 @@ public class LibraryMoveMergeTests
         Assert.That(game.Genres, Is.EqualTo(new[] { "Action" }), "target value kept");
         Assert.That(game.Roms.Select(r => r.FileName), Is.EquivalentTo(new[] { "Zelda (USA).gb", "Tetris (World).gb", "Tetris (Japan).gb" }));
         Assert.That(game.Roms.Count(r => r.IsPrimary), Is.EqualTo(1));
+        // I4a: the target's placeholder (its cover) gives way to the source's real box art, copied under a new name.
         var boxArt = game.Images.Single(i => i.Type == ImageType.BoxArt);
-        Assert.That((boxArt.IsDefault, boxArt.Width, boxArt.FileName), Is.EqualTo((false, 300, "boxart-01.png")));
+        Assert.That((boxArt.IsDefault, boxArt.Width, boxArt.FileName, boxArt.IsCover), Is.EqualTo((false, 300, "boxart-02.png", true)));
         Assert.That(game.Images.Single(i => i.Type == ImageType.Snap).Width, Is.EqualTo(160));
         var row = (await Row(zelda))!;
         Assert.That((row.HasDefaultBoxArt, row.ReleaseYear), Is.EqualTo((false, (int?)1989)));
@@ -309,10 +311,11 @@ public class LibraryMoveMergeTests
         var moved = await ReadGame(await TargetId(response));
         var source = await ReadGame(tetris);
         Assert.That((moved.Rating, moved.Favourite, source.Rating, source.Favourite), Is.EqualTo(((int?)null, false, (int?)4, true)));
+        Assert.That(moved.Images.Single(i => i.IsCover).Type, Is.EqualTo(ImageType.BoxArt), "the new game's box art (or placeholder) is its cover");
     }
 
     [Test]
-    public async Task Merge_TargetKeepsItsOwnRealArtAndSnap()
+    public async Task Merge_TargetKeepsItsOwnImagesAndCover_AndGainsTheSourceImagesRenamed()
     {
         _boxArt.UnionWith(["Tetris (World)", "Zelda (USA)"]);
         _snaps.UnionWith(["Tetris (World)", "Zelda (USA)"]);
@@ -324,8 +327,37 @@ public class LibraryMoveMergeTests
 
         Assert.That(await TargetId(response), Is.EqualTo(zelda));
         var after = (await ReadGame(zelda)).Images;
-        Assert.That(after.Select(i => (i.Type, i.Sha1, i.SourceUrl)), Is.EquivalentTo(before.Select(i => (i.Type, i.Sha1, i.SourceUrl))));
-        Assert.That(after.All(i => i.SourceUrl!.Contains("Zelda", StringComparison.Ordinal)), Is.True);
+        Assert.That(after.Take(before.Count), Is.EqualTo(before), "the target's images and cover are unchanged");
+        Assert.That(after.Skip(before.Count).Select(i => (i.FileName, i.IsCover, i.SourceUrl!.Contains("Tetris", StringComparison.Ordinal))),
+            Is.EqualTo(new[] { ("boxart-02.png", false, true), ("snap-02.png", false, true) }));
+    }
+
+    [Test]
+    public async Task Merge_OverTwentyImages_Is409TooManyImages_AndChangesNothing()
+    {
+        var tetris = await Game(("t1.gb", TetrisWorld));
+        var zelda = await Game(("z.gb", Zelda));
+        // Hand-build a source with 20 uploaded snaps; with the target's placeholder that is 21 (uploads come in a later step).
+        var source = (await Row(tetris))!;
+        var game = await ReadGame(tetris);
+        var png = (await ReadGame(zelda)).Images[0];
+        var snaps = Enumerable.Range(1, 20).Select(n => png with
+        {
+            FileName = $"snap-{n:00}.png", Type = ImageType.Snap, Source = InfoJsonImage.SourceUpload, IsDefault = false, IsCover = false,
+        }).ToList();
+        var placeholderBytes = Service<ISystemRegistry>().ById("gb")!.DefaultBoxArtPng.ToArray();
+        var reader = Service<InfoJsonReader>();
+        await new LibraryZipWriter(reader).WriteAsync(Abs(source.ZipPath), LibraryZip.Open(Abs(source.ZipPath), reader), new LibraryZipChanges(
+            game with { Images = [snaps[0] with { IsCover = true }, .. snaps.Skip(1)] },
+            snaps.ToDictionary(i => LibraryZip.ImageEntry(i.FileName), _ => (Func<Stream>)(() => new MemoryStream(placeholderBytes)))));
+        var targetBefore = await ReadGame(zelda);
+
+        using var response = await Merge(tetris, zelda);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("TooManyImages"));
+        Assert.That(await Row(tetris), Is.Not.Null);
+        Assert.That((await ReadGame(zelda)).Images, Is.EqualTo(targetBefore.Images));
     }
 
     [Test]

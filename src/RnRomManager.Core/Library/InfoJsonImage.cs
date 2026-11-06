@@ -5,17 +5,21 @@ public sealed record InfoJsonImage
 {
     public const string SourceLibretro = "libretro-thumbnails";
     public const string SourceDefault = "default";
+    public const string SourceUpload = "upload";
 
     /// <summary>Entry name under <c>images/</c>.</summary>
     public required string FileName { get; init; }
 
     public required ImageType Type { get; init; }
 
-    /// <summary><see cref="SourceLibretro"/> or <see cref="SourceDefault"/>.</summary>
+    /// <summary><see cref="SourceLibretro"/>, <see cref="SourceDefault"/> or <see cref="SourceUpload"/> (v3).</summary>
     public required string Source { get; init; }
 
     public string? SourceUrl { get; init; }
     public required bool IsDefault { get; init; }
+
+    /// <summary>The image shown for the game (v3): exactly one when the game has images.</summary>
+    public required bool IsCover { get; init; }
 
     /// <summary>Entry size, checked on read (§9.3, §12.1).</summary>
     public required long SizeBytes { get; init; }
