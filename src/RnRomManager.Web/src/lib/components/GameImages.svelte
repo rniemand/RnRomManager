@@ -2,10 +2,10 @@
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
 	import type { GameDetail, ImageInfo } from '../api/types';
-	import { formatSize } from '../format';
 	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
+	import FileSize from './FileSize.svelte';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -148,7 +148,7 @@
 							{#if image.isDefault}<span class="badge text-bg-light border">Placeholder</span>{/if}
 						</div>
 						<div class="text-body-secondary text-nowrap">
-							{formatSize(image.sizeBytes)} · {image.width}×{image.height}
+							<FileSize bytes={image.sizeBytes} /> · {image.width}×{image.height}
 						</div>
 						{#if auth.canEditLibrary}
 							<div class="d-flex flex-wrap gap-1 mt-2">
@@ -199,7 +199,9 @@
 					aria-describedby="image-file-help"
 				/>
 				{#if uploadError}<div class="invalid-feedback">{uploadError}</div>{/if}
-				<div id="image-file-help" class="form-text">PNG or JPEG, at most 8 MiB.</div>
+				<div id="image-file-help" class="form-text">
+					PNG or JPEG, at most <FileSize bytes={maxUploadBytes} />
+				</div>
 			</div>
 			<div class="col-12 col-md-3">
 				<label class="form-label" for="image-type">Type</label>

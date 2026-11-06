@@ -107,7 +107,7 @@ describe('game images', () => {
 		expect(within(cards[1] as HTMLElement).getByText('Cover').className).toContain(
 			'text-bg-primary'
 		);
-		expect(within(cards[1] as HTMLElement).getByText(/2\.0 KiB · 160×144/)).toBeTruthy();
+		expect(cards[1]!.textContent).toMatch(/2\.0 KiB · 160×144/);
 		expect(screen.queryByLabelText('Upload an image')).toBeNull();
 		expect(screen.queryByRole('button', { name: /Use as cover/ })).toBeNull();
 		expect(screen.queryByRole('button', { name: /^Delete / })).toBeNull();

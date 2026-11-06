@@ -14,6 +14,7 @@
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import GameImages from '#lib/components/GameImages.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import FileSize from '#lib/components/FileSize.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import RatingControl from '#lib/components/RatingControl.svelte';
@@ -286,7 +287,7 @@
 							</td>
 							<td>{rom.revision ?? '—'}</td>
 							<td>{list(rom.flags)}</td>
-							<td class="text-end text-nowrap">{formatSize(rom.sizeBytes)}</td>
+							<td class="text-end"><FileSize bytes={rom.sizeBytes} /></td>
 							<td class="small font-monospace">
 								<div class="text-nowrap">
 									CRC32 {rom.crc32}

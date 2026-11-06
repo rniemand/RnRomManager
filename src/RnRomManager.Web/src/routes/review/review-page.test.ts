@@ -328,6 +328,7 @@ describe('review queue page', () => {
 			'table table-sm table-hover align-middle mb-0'
 		);
 		expect(screen.getByText('GB').classList.contains('badge')).toBe(true);
+		expect(document.querySelector('tbody .file-size')!.textContent).toBe('1.0 KiB');
 	});
 
 	it('the delete modal lists the fields and warns about a whole archive', async () => {

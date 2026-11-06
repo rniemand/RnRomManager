@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { api } from '../api/client';
 	import type { ReviewDetail } from '../api/types';
-	import { formatDateTime, formatKey, formatSize, formatValue } from '../format';
+	import { formatDateTime, formatKey, formatValue } from '../format';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
+	import FileSize from './FileSize.svelte';
 	import Icon from './Icon.svelte';
 	import Loading from './Loading.svelte';
 	import SystemBadge from './SystemBadge.svelte';
@@ -94,7 +95,7 @@
 			<dt class="col-sm-3">Reason</dt>
 			<dd class="col-sm-9">{item.reason}</dd>
 			<dt class="col-sm-3">Size</dt>
-			<dd class="col-sm-9">{formatSize(item.sizeBytes)}</dd>
+			<dd class="col-sm-9"><FileSize bytes={item.sizeBytes} /></dd>
 			{#each hashes as [label, value] (label)}
 				<dt class="col-sm-3">{label}</dt>
 				<dd class="col-sm-9 font-monospace text-break">{value}</dd>
