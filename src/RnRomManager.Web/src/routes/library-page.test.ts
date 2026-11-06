@@ -40,6 +40,7 @@ const games = {
 			releaseYear: 1992,
 			regions: ['USA'],
 			romCount: 1,
+			primarySizeBytes: 131072,
 			boxArtUrl: '/api/games/g1/images/7',
 			systemName: 'Game Boy',
 			rating: null,
@@ -154,5 +155,20 @@ describe('library page', () => {
 		const row = screen.getByRole('row', { name: /4-in-1 Fun Pak/ });
 		expect(row.querySelector('.badge')!.textContent).toBe('Game Boy');
 		expect(row.querySelector('[aria-label="Rate 1 of 5"]')).toBeTruthy();
+	});
+
+	it('shows the primary release size in the grid card and the list Size column (LP1)', async () => {
+		url.current = new URL('http://localhost/');
+		render(LibraryPage);
+		await screen.findByAltText('4-in-1 Fun Pak box art');
+		expect(document.querySelector('.card .file-size')!.getAttribute('title')).toBe(
+			`${(131072).toLocaleString()} bytes`
+		);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+
+		expect(screen.getByRole('columnheader', { name: 'Size' })).toBeTruthy();
+		const row = screen.getByRole('row', { name: /4-in-1 Fun Pak/ });
+		expect(row.querySelector('.file-size')!.textContent).toBe('128.0 KiB');
 	});
 });

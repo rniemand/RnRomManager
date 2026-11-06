@@ -87,7 +87,6 @@
 							onclick={onsearch}
 						>
 							<Icon name="search" /> Search
-							<kbd class="d-none d-lg-inline small ms-1" aria-hidden="true">Ctrl K</kbd>
 						</button>
 					</li>
 				{/if}

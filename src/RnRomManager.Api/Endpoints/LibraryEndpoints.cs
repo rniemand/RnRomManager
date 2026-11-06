@@ -44,6 +44,7 @@ public static class LibraryEndpoints
                 releaseYear = game.ReleaseYear,
                 regions = game.Regions,
                 romCount = game.RomCount,
+                primarySizeBytes = game.PrimarySizeBytes,
                 boxArtUrl = game.BoxArtImageId is { } imageId ? ImageUrl(game.Id, imageId) : null,
                 rating = game.Rating,
                 favourite = game.Favourite,

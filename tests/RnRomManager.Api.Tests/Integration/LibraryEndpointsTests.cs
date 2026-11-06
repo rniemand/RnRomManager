@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Dapper;
 using Microsoft.Extensions.DependencyInjection;
+using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Library;
@@ -143,6 +145,19 @@ public class LibraryEndpointsTests
         Assert.That(item.GetProperty("romCount").GetInt32(), Is.EqualTo(2));
         using var art = await _user.GetAsync(item.GetProperty("boxArtUrl").GetString()!);
         Assert.That(art.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
+
+    [Test]
+    public async Task Games_PrimarySizeBytes_IsThePrimaryReleaseSize()
+    {
+        var id = await Tetris();
+        // Make the two releases differ so the primary one is the only right answer.
+        await using (var connection = Service<IDbConnectionFactory>().Create())
+            await connection.ExecuteAsync("UPDATE roms SET size_bytes = CASE WHEN is_primary = 1 THEN 1234 ELSE 9999 END WHERE game_id = @id", new { id });
+
+        var item = (await GetJson("/api/games")).GetProperty("items")[0];
+
+        Assert.That(item.GetProperty("primarySizeBytes").GetInt64(), Is.EqualTo(1234));
     }
 
     [Test]

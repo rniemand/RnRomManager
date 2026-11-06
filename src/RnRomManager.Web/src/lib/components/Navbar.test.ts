@@ -22,6 +22,17 @@ describe('Navbar', () => {
 		expect(library.classList.contains('active')).toBe(false);
 	});
 
+	it('the Search button has no Ctrl K hint (G2)', () => {
+		render(Navbar, {
+			me: { id: 1, username: 'u', roles: [], mustChangePassword: false },
+			reviewCount: null,
+			onlogout: () => {},
+			onsearch: () => {}
+		});
+		expect(screen.getByRole('button', { name: /Search/ }).textContent?.trim()).toBe('Search');
+		expect(document.querySelector('kbd')).toBeNull();
+	});
+
 	it('the brand is the icon only, named for screen readers (N1)', () => {
 		render(Navbar, {
 			me: { id: 1, username: 'u', roles: [], mustChangePassword: false },

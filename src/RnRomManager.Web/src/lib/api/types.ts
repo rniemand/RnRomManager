@@ -49,6 +49,8 @@ export interface GameListItem {
 	releaseYear: number | null;
 	regions: string[];
 	romCount: number;
+	/** ROM size of the primary release (LP1); null when the game has none. */
+	primarySizeBytes: number | null;
 	boxArtUrl: string | null;
 	/** The handler's display name, or the id when it isn't registered. */
 	systemName: string;
