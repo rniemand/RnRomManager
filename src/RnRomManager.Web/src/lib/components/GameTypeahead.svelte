@@ -57,7 +57,9 @@
 		}
 	}
 
-	function choose(game: GameListItem): void {
+	/** Picks `game` as if it was chosen from the results (GP5: the merge suggestions call this through `bind:this`). */
+	export function select(game: GameListItem): void {
+		cancel();
 		selected = game;
 		query = game.displayTitle;
 		results = [];
@@ -94,7 +96,7 @@
 			<button
 				type="button"
 				class="list-group-item list-group-item-action"
-				onclick={() => choose(game)}
+				onclick={() => select(game)}
 			>
 				{game.displayTitle}
 				{#if game.releaseYear}<span class="text-body-secondary small">({game.releaseYear})</span
