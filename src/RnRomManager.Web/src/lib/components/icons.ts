@@ -4,6 +4,7 @@ export const icons: Record<string, string> = {
 	ingest: 'bi bi-box-arrow-in-down',
 	review: 'bi bi-clipboard-check',
 	integrity: 'bi bi-shield-check',
+	reports: 'bi bi-bar-chart',
 	admin: 'bi bi-gear',
 	user: 'bi bi-person-circle',
 	logout: 'bi bi-box-arrow-right',

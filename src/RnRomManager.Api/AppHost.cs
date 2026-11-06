@@ -62,6 +62,7 @@ public static class AppHost
             .MapReviewEndpoints()
             .MapLibraryEndpoints()
             .MapIntegrityEndpoints()
+            .MapReportEndpoints()
             .MapAdminEndpoints();
         app.MapFallbackEndpoints(staticFiles);
         return app;
@@ -111,6 +112,7 @@ public static class AppHost
         builder.Services.AddSingleton<Scheduler>();
         builder.Services.AddSingleton<DatCache>();
         builder.Services.AddSingleton<IIngestReviewRepository, IngestReviewRepository>();
+        builder.Services.AddSingleton<RnRomManager.Core.Reports.IReportRepository, ReportRepository>();
         builder.Services.AddSingleton<IngestFileScanner>();
         // One per start: a job instance holds per-run state (and, later, the per-job circuit breaker).
         builder.Services.AddTransient<IngestJob>();
