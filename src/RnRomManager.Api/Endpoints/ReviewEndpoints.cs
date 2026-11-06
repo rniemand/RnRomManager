@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using RnRomManager.Api.Auth;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
@@ -14,22 +15,32 @@ public static class ReviewEndpoints
     public static RouteGroupBuilder MapReviewEndpoints(this RouteGroupBuilder api)
     {
         var review = api.MapGroup("/review").RequireAuthorization(AuthSetup.AdminOnly);
-        review.MapGet("", async (string? status, int? page, int? pageSize, HttpContext ctx, IIngestReviewRepository repository) =>
+        review.MapGet("", async (string? status, int? page, int? pageSize, string? system, string? reason, string? q, HttpContext ctx,
+            IIngestReviewRepository repository, ISystemRegistry systems) =>
         {
             var errors = Paging.Validate(page, pageSize);
             if (status is not null and not ("Pending" or "Resolved" or "Dismissed"))
                 errors["status"] = ["Must be Pending, Resolved or Dismissed."];
+            if (system is not null && systems.ById(system) is null)
+                errors["system"] = ["Choose a registered system."];
+            if (reason is not null and not ("NoDatMatch" or "AmbiguousGroup"))
+                errors["reason"] = ["Must be NoDatMatch or AmbiguousGroup."];
+            q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
+            if (q?.Length > 100)
+                errors["q"] = ["Must be at most 100 characters."];
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            var result = await repository.ListAsync(status ?? "Pending", page ?? 1, pageSize ?? Page<ReviewItem>.DefaultSize, ctx.RequestAborted);
+            var result = await repository.ListAsync(status ?? "Pending", page ?? 1, pageSize ?? Page<ReviewItem>.DefaultSize, ctx.RequestAborted,
+                new ReviewFilter(system, reason, q));
             return Results.Ok(Paging.ToDto(result, item => new
             {
                 id = item.Id, system = item.SystemId, reason = item.Reason, fileName = item.OriginalFileName,
                 sizeBytes = item.SizeBytes, headerTitle = item.Header is null ? null : JsonNode.Parse(item.Header)?["title"]?.GetValue<string>(),
-                createdAt = item.CreatedAt,
+                createdAt = item.CreatedAt, isArchive = item.ArchivePath is not null,
             }));
         });
-        review.MapGet("/{id:long}", async (long id, HttpContext ctx, IIngestReviewRepository repository, IGameRepository games) =>
+        review.MapGet("/{id:long}", async (long id, HttpContext ctx, IIngestReviewRepository repository, IGameRepository games,
+            ISystemRegistry systems) =>
         {
             var item = await repository.GetAsync(id, ctx.RequestAborted);
             if (item is null)
@@ -40,7 +51,8 @@ public static class ReviewEndpoints
                     candidates.Add(new { id = game.Id, displayTitle = game.DisplayTitle });
             return Results.Ok(new
             {
-                id = item.Id, system = item.SystemId, reason = item.Reason, sourcePath = item.SourcePath,
+                id = item.Id, system = item.SystemId, systemName = systems.ById(item.SystemId)?.DisplayName ?? item.SystemId,
+                reason = item.Reason, sourcePath = item.SourcePath,
                 archivePath = item.ArchivePath, archiveEntry = item.ArchiveEntry, originalFileName = item.OriginalFileName,
                 sizeBytes = item.SizeBytes, crc32 = item.Crc32, md5 = item.Md5, sha1 = item.Sha1,
                 header = Parse(item.Header), suggestions = Parse(item.Suggestions), datIdentification = Parse(item.DatIdentification),
@@ -53,16 +65,16 @@ public static class ReviewEndpoints
             var errors = Validate(request);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            return ToResult(ctx, await resolver.ResolveAsync(id, request, DatEndpoints.UserId(ctx.User)!.Value, ctx.RequestAborted));
+            return ToResult(ctx, await resolver.ResolveAsync(id, request, AuditActor.From(ctx.User), ctx.RequestAborted));
         });
         review.MapPost("/{id:long}/dismiss", async (long id, HttpContext ctx, ReviewResolver resolver) =>
         {
-            var result = await resolver.DismissAsync(id, DatEndpoints.UserId(ctx.User)!.Value, ctx.RequestAborted);
+            var result = await resolver.DismissAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? Results.NoContent() : ToResult(ctx, result);
         });
         review.MapDelete("/{id:long}", async (long id, HttpContext ctx, ReviewResolver resolver) =>
         {
-            var result = await resolver.DeleteSourceAsync(id, DatEndpoints.UserId(ctx.User)!.Value, ctx.RequestAborted);
+            var result = await resolver.DeleteSourceAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? Results.NoContent() : ToResult(ctx, result);
         });
         api.MapGet("/dat/search", (string? system, string? q, int? limit, HttpContext ctx, ISystemRegistry systems, DatCache dats) =>

@@ -90,10 +90,10 @@ test('login + forced password change', async () => {
 
 test('ingestion of the seeded Basic set', async () => {
 	await page.getByRole('link', { name: 'Go to Ingestion' }).click();
-	await expect(page.getByRole('cell', { name: '91-unmatched.gb' })).toBeVisible();
+	await expect(page.getByRole('cell', { name: '91-unmatched.gb', exact: true })).toBeVisible();
 	await expectAccessible(page, 'ingestion');
 
-	await page.getByRole('button', { name: 'Start ingestion' }).click();
+	await page.getByRole('button', { name: 'Import all' }).click();
 
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
 	await expect(run).toContainText('Ingested 9 · Duplicate 1 · Review 2 · Failed 1', {
@@ -104,6 +104,33 @@ test('ingestion of the seeded Basic set', async () => {
 	await expect(page.getByRole('heading', { name: /Ingest job/ })).toBeVisible();
 	await expect(page.getByRole('cell', { name: /92-invalid\.gb/ })).toBeVisible();
 	await expectAccessible(page, 'job detail');
+});
+
+test('reports and the ingest audit trail', async () => {
+	await page.getByRole('link', { name: 'Reports', exact: true }).click();
+	await expect(page).toHaveURL(/\/reports\/library-size$/);
+	await expect(page.getByRole('table')).toContainText('Game Boy');
+	await expectAccessible(page, 'library size report');
+	await page.getByRole('table').getByRole('link', { name: 'Game Boy', exact: true }).click();
+	await expect(page).toHaveURL(/system=gb/);
+	await expect(page.getByRole('table')).toContainText('Orbit Blocks');
+	await expectAccessible(page, 'library size system detail');
+	await page.getByRole('link', { name: 'Missing Images', exact: true }).click();
+	await expect(page.getByRole('table')).toContainText('Placeholder art');
+	await expectAccessible(page, 'missing images report');
+	await page.getByRole('link', { name: 'Duplicates', exact: true }).click();
+	await expect(page.getByText('No duplicate games found.')).toBeVisible();
+	await expectAccessible(page, 'duplicates report');
+
+	await page.getByRole('link', { name: 'Admin', exact: true }).click();
+	await page.getByRole('link', { name: 'Auditing', exact: true }).click();
+	const ingested = page
+		.getByRole('row')
+		.filter({ has: page.getByRole('cell', { name: 'Ingested', exact: true }) });
+	await expect(ingested).toHaveCount(9);
+	await expect(ingested.first()).toContainText('admin');
+	await expect(ingested.first()).toContainText('ingest/');
+	await expectAccessible(page, 'audit trail');
 });
 
 test('browse, search and filter the library', async () => {
@@ -242,6 +269,14 @@ test('review queue: delete a file', async () => {
 
 test('images: upload, set cover, delete', async () => {
 	await openGame('Star Courier');
+	await page.getByRole('button', { name: 'View info.json' }).click();
+	await expect(dialog()).toHaveAccessibleName('info.json');
+	await expect(dialog().getByRole('button', { name: 'Expand all' })).toBeVisible();
+	await expectAccessible(page, 'info.json modal');
+	await page.keyboard.press('Escape');
+	await expect(dialog()).toBeHidden();
+	await page.getByRole('tab', { name: /^Images \(/ }).click();
+	await expect(page).toHaveURL(/tab=images/);
 	const images = page.getByRole('region', { name: 'Images' });
 	const card = (fileName: string) =>
 		images
@@ -316,6 +351,15 @@ test('Admin: edit metadata, move a release, delete a release and a game', async 
 	await page.getByRole('button', { name: 'Delete Orbit Blocks (Japan).gb', exact: true }).click();
 	await dialog().getByRole('button', { name: 'Delete' }).click();
 	await expect(page).toHaveURL(/\/$/);
+	await expect(page.locator('body')).not.toHaveClass(/modal-open/);
+	await expect(page.locator('.modal-backdrop')).toHaveCount(0);
+	// A shorter viewport guarantees overflow for the small seed library. A wheel must scroll after navigation.
+	const viewport = page.viewportSize()!;
+	await page.setViewportSize({ width: viewport.width, height: 400 });
+	await page.mouse.move(400, 200);
+	await page.mouse.wheel(0, 500);
+	await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+	await page.setViewportSize(viewport);
 
 	await openGame('Color Racer');
 	await page.getByRole('button', { name: 'Delete game' }).click();

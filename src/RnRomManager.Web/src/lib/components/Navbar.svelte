@@ -20,6 +20,7 @@
 	const links = $derived(
 		[
 			{ href: '/', label: 'Library', icon: 'library', admin: false },
+			{ href: '/reports', label: 'Reports', icon: 'reports', admin: false },
 			{ href: '/ingestion', label: 'Ingestion', icon: 'ingest', admin: true },
 			{ href: '/review', label: 'Review', icon: 'review', admin: true },
 			{ href: '/integrity', label: 'Integrity', icon: 'integrity', admin: true },
@@ -87,7 +88,6 @@
 							onclick={onsearch}
 						>
 							<Icon name="search" /> Search
-							<kbd class="d-none d-lg-inline small ms-1" aria-hidden="true">Ctrl K</kbd>
 						</button>
 					</li>
 				{/if}

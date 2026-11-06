@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Storage;
@@ -15,8 +16,8 @@ namespace RnRomManager.Core.Dats;
 /// Cancel is checked between downloads.
 /// </summary>
 public sealed class DatRefreshJob(
-    HttpClient http, SourcesOptions sources, PathsOptions paths, DatCache cache, ISystemRegistry systems, TimeProvider time,
-    ILogger<DatRefreshJob> logger) : IJob
+    HttpClient http, SourcesOptions sources, PathsOptions paths, DatCache cache, ISystemRegistry systems, IAuditLog audit,
+    TimeProvider time, ILogger<DatRefreshJob> logger) : IJob
 {
     /// <summary>The largest DAT is ~1 MiB; anything far bigger is not a DAT.</summary>
     public const long MaxFileBytes = 64L * 1024 * 1024;
@@ -54,6 +55,9 @@ public sealed class DatRefreshJob(
             cancellationToken.ThrowIfCancellationRequested();
             DatManifest.Write(Path.Combine(staged, DatManifest.FileName), manifest);
             Swap(staged, work);
+            // AU4: every successful run replaced cache/dats.
+            audit.Record(new AuditEvent(AuditActions.DatsRefreshed, context.Actor,
+                Details: string.Join(", ", manifest.Select(e => e.DatName).Distinct(StringComparer.Ordinal))));
             cache.Load();
 
             var versions = manifest.Where(e => e.File.StartsWith(DatKind.NoIntro + "/", StringComparison.Ordinal))

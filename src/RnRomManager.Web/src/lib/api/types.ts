@@ -49,6 +49,8 @@ export interface GameListItem {
 	releaseYear: number | null;
 	regions: string[];
 	romCount: number;
+	/** ROM size of the primary release (LP1); null when the game has none. */
+	primarySizeBytes: number | null;
 	boxArtUrl: string | null;
 	/** The handler's display name, or the id when it isn't registered. */
 	systemName: string;
@@ -105,6 +107,8 @@ export interface ImageInfo {
 export interface GameDetail {
 	id: string;
 	system: string;
+	/** The handler's display name (GP2). */
+	systemName: string;
 	title: string;
 	displayTitle: string;
 	releaseYear: number | null;
@@ -176,12 +180,16 @@ export interface ReviewListItem {
 	sizeBytes: number;
 	headerTitle: string | null;
 	createdAt: string;
+	/** The file came from an archive; deleting it deletes the whole archive (RV1). */
+	isArchive: boolean;
 }
 
 /** `GET /api/review/{id}` (spec §23, §14.1 `ingest_review_items`). */
 export interface ReviewDetail {
 	id: number;
 	system: string;
+	/** The handler's display name (RV2). */
+	systemName: string;
 	reason: ReviewReason;
 	sourcePath: string;
 	archivePath: string | null;

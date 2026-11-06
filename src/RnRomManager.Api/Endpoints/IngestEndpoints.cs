@@ -1,3 +1,4 @@
+using System.Text.Json;
 using RnRomManager.Api.Auth;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Jobs;
@@ -11,6 +12,29 @@ public static class IngestEndpoints
     {
         api.MapPost("/jobs/ingest", async (HttpContext ctx, JobRunner runner, IngestJob job) =>
         {
+            // IN1: no body or files null → every pending file; otherwise only the listed ones. Read by hand: a body
+            // parameter would make the route require a JSON content type, and an empty POST must still work.
+            IngestRequest? request = null;
+            if (ctx.Request.ContentLength is not 0 && ctx.Request.HasJsonContentType())
+            {
+                try
+                {
+                    request = await ctx.Request.ReadFromJsonAsync<IngestRequest>(ctx.RequestAborted);
+                }
+                catch (JsonException)
+                {
+                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["files"] = ["The body isn't valid JSON."] });
+                }
+            }
+            if (request?.Files is { } files)
+            {
+                if (files.Count == 0 || files.Any(f => string.IsNullOrEmpty(f?.System) || string.IsNullOrEmpty(f.Name)))
+                    return Problems.Validation(ctx, new Dictionary<string, string[]>
+                    {
+                        ["files"] = ["Give at least one file, each with a system and a name."],
+                    });
+                job.Selection = files.Select(f => (f!.System!, f.Name!)).ToHashSet();
+            }
             try
             {
                 var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
@@ -31,3 +55,8 @@ public static class IngestEndpoints
         return api;
     }
 }
+
+/// <summary><c>POST /api/jobs/ingest</c> body (IN1): the pending files to ingest, by system id and top-level file name.</summary>
+public sealed record IngestRequest(IReadOnlyList<IngestFileRef?>? Files);
+
+public sealed record IngestFileRef(string? System, string? Name);

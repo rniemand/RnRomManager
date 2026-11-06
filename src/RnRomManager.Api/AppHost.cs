@@ -11,6 +11,7 @@ using RnRomManager.Api.Endpoints;
 using RnRomManager.Api.Http;
 using RnRomManager.Api.Logging;
 using RnRomManager.Api.Security;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Database;
@@ -37,6 +38,9 @@ public static class AppHost
         // First of every hosted service, the framework's included: Data Protection's warms its DB-backed key ring on
         // start, and nothing may touch the DB before §4.1 steps 5–6 (wait + migrate).
         builder.Services.Insert(0, ServiceDescriptor.Singleton<IHostedService, StartupRunner>());
+        // AU2: before JobShutdownService, so it stops after it and drains what the cancelled job recorded.
+        builder.Services.AddSingleton<AuditWriter>();
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<AuditWriter>());
         // Registered after StartupRunner, so it stops first (hosted services stop in reverse order).
         builder.Services.AddHostedService<JobShutdownService>();
         // Startup step 10: after StartupRunner (hosted services start in order); stops first.
@@ -62,6 +66,8 @@ public static class AppHost
             .MapReviewEndpoints()
             .MapLibraryEndpoints()
             .MapIntegrityEndpoints()
+            .MapReportEndpoints()
+            .MapAuditEndpoints()
             .MapAdminEndpoints();
         app.MapFallbackEndpoints(staticFiles);
         return app;
@@ -90,6 +96,10 @@ public static class AppHost
         builder.Services.AddSingleton<JobLock>();
         builder.Services.AddSingleton<JobRunner>();
         builder.Services.AddSingleton<CrashRecovery>();
+        builder.Services.AddSingleton<IAuditRepository, AuditRepository>();
+        builder.Services.AddSingleton<AuditLog>();
+        builder.Services.AddSingleton<IAuditLog>(sp => sp.GetRequiredService<AuditLog>());
+        builder.Services.AddSingleton<AuditPaths>();
         builder.Services.AddSingleton<IGameRepository, GameRepository>();
         builder.Services.AddSingleton<IRomRepository, RomRepository>();
         builder.Services.AddSingleton<IImageRepository, ImageRepository>();
@@ -111,6 +121,7 @@ public static class AppHost
         builder.Services.AddSingleton<Scheduler>();
         builder.Services.AddSingleton<DatCache>();
         builder.Services.AddSingleton<IIngestReviewRepository, IngestReviewRepository>();
+        builder.Services.AddSingleton<RnRomManager.Core.Reports.IReportRepository, ReportRepository>();
         builder.Services.AddSingleton<IngestFileScanner>();
         // One per start: a job instance holds per-run state (and, later, the per-job circuit breaker).
         builder.Services.AddTransient<IngestJob>();

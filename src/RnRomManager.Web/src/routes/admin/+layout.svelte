@@ -12,6 +12,7 @@
 		{ href: resolve('/admin/dats'), label: 'DATs' },
 		{ href: resolve('/admin/settings'), label: 'Settings' },
 		{ href: resolve('/admin/logs'), label: 'Logs' },
+		{ href: resolve('/admin/audit'), label: 'Auditing' },
 		{ href: resolve('/admin/about'), label: 'About' }
 	];
 </script>

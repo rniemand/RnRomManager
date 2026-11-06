@@ -1,7 +1,10 @@
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using Dapper;
 using Microsoft.Extensions.DependencyInjection;
+using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Library;
@@ -92,6 +95,7 @@ public class LibraryEndpointsTests
         yield return new TestCaseData($"/api/games/{id}").SetName("RoleMatrix GET game");
         yield return new TestCaseData($"/api/games/{id}/images/1").SetName("RoleMatrix GET image");
         yield return new TestCaseData($"/api/games/{id}/download").SetName("RoleMatrix GET game download");
+        yield return new TestCaseData($"/api/games/{id}/info-json").SetName("RoleMatrix GET info-json");
         yield return new TestCaseData($"/api/games/{id}/roms/1/download").SetName("RoleMatrix GET rom download");
     }
 
@@ -146,6 +150,19 @@ public class LibraryEndpointsTests
     }
 
     [Test]
+    public async Task Games_PrimarySizeBytes_IsThePrimaryReleaseSize()
+    {
+        var id = await Tetris();
+        // Make the two releases differ so the primary one is the only right answer.
+        await using (var connection = Service<IDbConnectionFactory>().Create())
+            await connection.ExecuteAsync("UPDATE roms SET size_bytes = CASE WHEN is_primary = 1 THEN 1234 ELSE 9999 END WHERE game_id = @id", new { id });
+
+        var item = (await GetJson("/api/games")).GetProperty("items")[0];
+
+        Assert.That(item.GetProperty("primarySizeBytes").GetInt64(), Is.EqualTo(1234));
+    }
+
+    [Test]
     public async Task Games_FiltersFromQueryString()
     {
         await Tetris();
@@ -194,6 +211,7 @@ public class LibraryEndpointsTests
         Assert.That(game.GetProperty("id").GetGuid(), Is.EqualTo(id));
         Assert.That((game.GetProperty("system").GetString(), game.GetProperty("title").GetString(), game.GetProperty("displayTitle").GetString()),
             Is.EqualTo(("gb", "Tetris", "Tetris")));
+        Assert.That(game.GetProperty("systemName").GetString(), Is.EqualTo("Game Boy"));
         Assert.That(game.GetProperty("developers").EnumerateArray().Select(d => d.GetString()), Is.EqualTo(new[] { "Nintendo" }));
         Assert.That(game.GetProperty("genres").EnumerateArray().Select(d => d.GetString()), Is.EqualTo(new[] { "Puzzle" }));
         Assert.That(game.GetProperty("hasDefaultBoxArt").GetBoolean(), Is.True);
@@ -364,6 +382,70 @@ public class LibraryEndpointsTests
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound), url);
             Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("NotFound"));
         }
+    }
+
+    [Test]
+    public async Task InfoJson_IsTheStoredEntry_AsApplicationJson()
+    {
+        var id = await Tetris();
+        byte[] stored;
+        using (var zip = ZipFile.OpenRead(await ZipPath(id)))
+        await using (var entry = zip.GetEntry(LibraryZip.InfoJsonEntry)!.Open())
+        using (var copy = new MemoryStream())
+        {
+            await entry.CopyToAsync(copy);
+            stored = copy.ToArray();
+        }
+
+        using var response = await _user.GetAsync($"/api/games/{id}/info-json");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType!.MediaType, Is.EqualTo("application/json"));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(stored));
+    }
+
+    [Test]
+    public async Task InfoJson_UnknownGameMissingZipOrEntry_Is404()
+    {
+        using (var unknown = await _user.GetAsync($"/api/games/{Guid.NewGuid()}/info-json"))
+            Assert.That((unknown.StatusCode, await AuthClient.CodeAsync(unknown)), Is.EqualTo((HttpStatusCode.NotFound, "NotFound")));
+
+        var id = await Tetris();
+        using (var zip = ZipFile.Open(await ZipPath(id), ZipArchiveMode.Update))
+            zip.GetEntry(LibraryZip.InfoJsonEntry)!.Delete();
+        using (var noEntry = await _user.GetAsync($"/api/games/{id}/info-json"))
+            Assert.That((noEntry.StatusCode, await AuthClient.CodeAsync(noEntry)), Is.EqualTo((HttpStatusCode.NotFound, "NotFound")));
+
+        File.Delete(await ZipPath(id));
+        using var noZip = await _user.GetAsync($"/api/games/{id}/info-json");
+        Assert.That((noZip.StatusCode, await AuthClient.CodeAsync(noZip)), Is.EqualTo((HttpStatusCode.NotFound, "NotFound")));
+    }
+
+    [Test]
+    public async Task InfoJson_CorruptZip_Is500IoError()
+    {
+        var id = await Tetris();
+        await File.WriteAllBytesAsync(await ZipPath(id), [1, 2, 3, 4]);
+
+        using var response = await _user.GetAsync($"/api/games/{id}/info-json");
+
+        Assert.That((response.StatusCode, await AuthClient.CodeAsync(response)), Is.EqualTo((HttpStatusCode.InternalServerError, "IoError")));
+    }
+
+    [Test]
+    public async Task InfoJson_OverMaxBytes_Is500IoError_NotATruncated200()
+    {
+        var id = await Tetris();
+        using (var zip = ZipFile.Open(await ZipPath(id), ZipArchiveMode.Update))
+        {
+            zip.GetEntry(LibraryZip.InfoJsonEntry)!.Delete();
+            await using var entry = zip.CreateEntry(LibraryZip.InfoJsonEntry).Open();
+            await entry.WriteAsync(new byte[InfoJsonReader.MaxBytes + 1]);
+        }
+
+        using var response = await _user.GetAsync($"/api/games/{id}/info-json");
+
+        Assert.That((response.StatusCode, await AuthClient.CodeAsync(response)), Is.EqualTo((HttpStatusCode.InternalServerError, "IoError")));
     }
 
     [Test]

@@ -48,6 +48,12 @@ describe('api client', () => {
 		expect(headers(calls[0])['X-XSRF-TOKEN']).toBeUndefined();
 	});
 
+	it('getText returns the body unparsed, even when it is not JSON', async () => {
+		responses.push(new Response('{"a": 1', { status: 200 }));
+
+		expect(await api.getText('/api/games/g1/info-json')).toBe('{"a": 1');
+	});
+
 	it('mutations call antiforgery once, then send the cookie value as X-XSRF-TOKEN', async () => {
 		await api.post('/api/jobs/ingest');
 		await api.patch('/api/games/1', { title: 'x' });
@@ -145,8 +151,19 @@ describe('api client', () => {
 			code: 'ValidationFailed',
 			title: 'One or more validation errors occurred.',
 			traceId: '00-abc',
-			errors: { title: ['Required'] }
+			errors: { title: ['Required'] },
+			merged: []
 		});
+	});
+
+	it('keeps the merged ids of a stopped group merge (RP8)', async () => {
+		responses.push(
+			json(404, { status: 404, code: 'NotFound', title: 'Not found', merged: ['g2'] })
+		);
+
+		const error = (await api.post('/api/reports/duplicates/merge', {}).catch((e) => e)) as ApiError;
+
+		expect(error.merged).toEqual(['g2']);
 	});
 
 	it('a non-JSON error body still gives an ApiError', async () => {

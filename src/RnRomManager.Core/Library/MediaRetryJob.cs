@@ -30,7 +30,7 @@ public sealed class MediaRetryJob(IGameRepository games, GameMediaRetry retry, I
             MediaRetryResult result;
             try
             {
-                result = await retry.RetryAsync(game, breaker, skipManualOnly: true, cancellationToken).ConfigureAwait(false);
+                result = await retry.RetryAsync(game, breaker, skipManualOnly: true, context.Actor, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {

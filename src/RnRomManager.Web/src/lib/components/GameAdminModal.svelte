@@ -20,7 +20,7 @@
 	import { untrack } from 'svelte';
 	import { api } from '../api/client';
 	import { ApiError, isApiError } from '../api/errors';
-	import type { GameListItem } from '../api/types';
+	import type { GameListItem, Page } from '../api/types';
 	import {
 		titleError,
 		toForm,
@@ -54,6 +54,46 @@
 	let moveTo = $state<'existing' | 'new'>('existing');
 	let newTitle = $state('');
 	let newTitleError = $state<string | undefined>();
+	let typeahead = $state<{ select: (game: GameListItem) => void }>();
+	let suggestions = $state<GameListItem[]>([]);
+	let suggestionController: AbortController | undefined;
+
+	/** GP5: the display title without `(…)`/`[…]` tags, cut to `GameQuery.MaxWords` (8) words. */
+	function mergeTerm(title: string): string {
+		return title
+			.replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+			.split(/\s+/)
+			.filter(Boolean)
+			.slice(0, 8)
+			.join(' ');
+	}
+
+	async function fetchSuggestions(q: string, signal: AbortSignal): Promise<GameListItem[]> {
+		const params = new URLSearchParams({
+			system: game.system,
+			q,
+			sort: 'relevance',
+			pageSize: '6'
+		});
+		const page = await api.get<Page<GameListItem>>(`/api/games?${params}`, { signal });
+		return page.items.filter((g) => g.id !== game.id).slice(0, 5);
+	}
+
+	/** Up to 5 same-system games; one retry with the first word of 3+ characters. Failures are silent. */
+	async function loadSuggestions(): Promise<void> {
+		const controller = (suggestionController = new AbortController());
+		const term = mergeTerm(game.displayTitle);
+		if (!term) return;
+		try {
+			let found = await fetchSuggestions(term, controller.signal);
+			const word = term.split(' ').find((w) => w.length >= 3);
+			if (!found.length && word && word !== term)
+				found = await fetchSuggestions(word, controller.signal);
+			if (!controller.signal.aborted) suggestions = found;
+		} catch {
+			// the typeahead still works
+		}
+	}
 
 	$effect(() => {
 		if (!action) {
@@ -70,6 +110,9 @@
 		newTitle = '';
 		newTitleError = undefined;
 		form = untrack(() => toForm(game));
+		suggestionController?.abort();
+		suggestions = [];
+		if (action.kind === 'merge') void untrack(loadSuggestions);
 	});
 
 	$effect(() => {
@@ -266,7 +309,27 @@
 			Every release of {game.displayTitle} moves into the chosen game, and {game.displayTitle} is deleted.
 			The target keeps its title and metadata.
 		</p>
+		{#if suggestions.length}
+			<div class="mb-3">
+				<p class="form-label mb-1" id="merge-suggested">Suggested</p>
+				<div class="list-group" role="group" aria-labelledby="merge-suggested">
+					{#each suggestions as suggestion (suggestion.id)}
+						<button
+							type="button"
+							class="list-group-item list-group-item-action"
+							class:active={target?.id === suggestion.id}
+							aria-pressed={target?.id === suggestion.id}
+							onclick={() => typeahead?.select(suggestion)}
+						>
+							{suggestion.displayTitle}
+							{#if suggestion.releaseYear}<span class="small">({suggestion.releaseYear})</span>{/if}
+						</button>
+					{/each}
+				</div>
+			</div>
+		{/if}
 		<GameTypeahead
+			bind:this={typeahead}
 			id="merge-target"
 			label="Merge into"
 			system={game.system}

@@ -281,7 +281,7 @@ public class LibraryMoveMergeTests
     }
 
     private async Task Rate(Guid id, int? rating, bool favourite) =>
-        Assert.That((await Service<LibraryEditor>().PatchAsync(id, new GamePatch { SetRating = true, Rating = rating, Favourite = favourite }, default)).Code, Is.Null);
+        Assert.That((await Service<LibraryEditor>().PatchAsync(id, new GamePatch { SetRating = true, Rating = rating, Favourite = favourite }, null, default)).Code, Is.Null);
 
     [TestCase(null, false, 3, true, 3, true, TestName = "Merge rating: unrated target takes the source's; favourite OR")]
     [TestCase(5, false, 3, false, 5, false, TestName = "Merge rating: target keeps its own")]

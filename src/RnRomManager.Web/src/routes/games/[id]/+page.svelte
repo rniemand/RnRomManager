@@ -16,9 +16,11 @@
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import InfoJsonModal from '#lib/components/InfoJsonModal.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import RatingControl from '#lib/components/RatingControl.svelte';
 	import { formatKey, formatSize, formatValue } from '#lib/format.js';
+	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
@@ -32,6 +34,7 @@
 	let headerOpen = $state(false);
 	let reload = $state(0);
 	let action = $state<AdminAction | null>(null);
+	let infoJsonOpen = $state(false);
 
 	const id = $derived(page.params.id ?? '');
 	// P3: the cover (any type); screenshots are in the Images gallery.
@@ -114,6 +117,16 @@
 	}
 
 	const list = (items: string[]) => (items.length ? items.join(', ') : '—');
+
+	// GP1: the tab is URL state (`?tab=images`); switching never reloads the game (the load effect keys on the id).
+	type Tab = 'releases' | 'images';
+	const tab = $derived<Tab>(page.url.searchParams.get('tab') === 'images' ? 'images' : 'releases');
+
+	function selectTab(next: Tab): void {
+		const path = resolve('/games/[id]', { id });
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
+		void goto(next === 'images' ? `${path}?tab=images` : path, { replace: true, reset: false });
+	}
 </script>
 
 <svelte:head><title>{game?.displayTitle ?? 'Game'} · RnRomManager</title></svelte:head>
@@ -182,6 +195,22 @@
 					onclick={() => download(`/api/games/${encodeURIComponent(id)}/download`)}
 				>
 					<Icon name="download" /> Download ZIP
+				</button>
+				<!-- External link: resolve() is for app routes. -->
+				<!-- eslint-disable svelte/no-navigation-without-resolve -->
+				<a
+					class="btn btn-outline-secondary"
+					href={googleSearchUrl(gameSearchQuery(game))}
+					target="_blank"
+					rel="noopener noreferrer"><Icon name="search" /> Google</a
+				>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				<button
+					type="button"
+					class="btn btn-outline-secondary btn-sm align-self-center"
+					onclick={() => (infoJsonOpen = true)}
+				>
+					<Icon name="code" /> View info.json
 				</button>
 				{#if downloadRoms.length === 1}
 					<button
@@ -252,102 +281,130 @@
 		</div>
 	</div>
 
-	<h2 class="h5">Releases</h2>
-	<div class="card mb-4">
-		<div class="table-responsive">
-			<table class="table table-sm table-striped table-hover align-middle mb-0">
-				<thead class="table-dark">
-					<tr>
-						<th scope="col">File</th>
-						<th scope="col">Region</th>
-						<th scope="col">Revision</th>
-						<th scope="col">Flags</th>
-						<th scope="col" class="text-end">Size</th>
-						<th scope="col">Hashes</th>
-						<th scope="col"><span class="visually-hidden">Actions</span></th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each game.roms as rom (rom.id)}
+	<ul class="nav nav-tabs mb-3" role="tablist">
+		{#each [['releases', `Releases (${game.roms.length})`], ['images', `Images (${game.images.length})`]] as [value, label] (value)}
+			<li class="nav-item" role="presentation">
+				<button
+					type="button"
+					class="nav-link"
+					class:active={tab === value}
+					id="{value}-tab"
+					role="tab"
+					aria-selected={tab === value}
+					aria-controls="{value}-panel"
+					onclick={() => selectTab(value as Tab)}>{label}</button
+				>
+			</li>
+		{/each}
+	</ul>
+
+	<!-- Both panels stay mounted (hidden, not removed) so nothing unmounts on a tab switch. -->
+	<div
+		id="releases-panel"
+		role="tabpanel"
+		aria-labelledby="releases-tab"
+		hidden={tab !== 'releases'}
+	>
+		<h2 class="h5 visually-hidden">Releases</h2>
+		<div class="card mb-4">
+			<div class="table-responsive">
+				<table class="table table-sm table-striped table-hover align-middle mb-0">
+					<thead class="table-dark">
 						<tr>
-							<td>
-								<span
-									class="d-inline-block text-truncate align-middle"
-									style="max-width: 32rem"
-									title={rom.fileName}>{rom.fileName}</span
-								>
-								{#if rom.isPrimary}<span class="badge text-bg-primary ms-1">Primary</span>{/if}
-							</td>
-							<td>
-								{#each rom.regions as region (region)}
-									<span class="badge text-bg-secondary me-1">{region}</span>
-								{:else}
-									—
-								{/each}
-							</td>
-							<td>{rom.revision ?? '—'}</td>
-							<td>{list(rom.flags)}</td>
-							<td class="text-end"><FileSize bytes={rom.sizeBytes} /></td>
-							<td class="small font-monospace">
-								<div class="text-nowrap">
-									CRC32 {rom.crc32}
-									<CopyButton value={rom.crc32} label="CRC32" />
-								</div>
-								<div class="text-nowrap">
-									SHA1 {rom.sha1}
-									<CopyButton value={rom.sha1} label="SHA1" />
-								</div>
-							</td>
-							<td class="text-nowrap text-end">
-								{#if rom.header}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-secondary"
-										onclick={() => showHeader(rom)}
-									>
-										Header
-									</button>
-								{/if}
-								<button
-									type="button"
-									class="btn btn-sm btn-outline-primary"
-									aria-label="Download {rom.fileName}"
-									onclick={() => download(rom.downloadUrl, rom)}
-								>
-									<Icon name="download" />
-								</button>
-								{#if auth.canEditLibrary}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-secondary"
-										aria-label="Move {rom.fileName}"
-										onclick={() => (action = { kind: 'move', rom })}
-									>
-										<Icon name="move" />
-									</button>
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-danger"
-										aria-label="Delete {rom.fileName}"
-										onclick={() => (action = { kind: 'deleteRom', rom })}
-									>
-										<Icon name="delete" />
-									</button>
-								{/if}
-							</td>
+							<th scope="col">File</th>
+							<th scope="col">Region</th>
+							<th scope="col">Revision</th>
+							<th scope="col">Flags</th>
+							<th scope="col" class="text-end">Size</th>
+							<th scope="col">Hashes</th>
+							<th scope="col"><span class="visually-hidden">Actions</span></th>
 						</tr>
-					{/each}
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						{#each game.roms as rom (rom.id)}
+							<tr>
+								<td>
+									<span
+										class="d-inline-block text-truncate align-middle"
+										style="max-width: 32rem"
+										title={rom.fileName}>{rom.fileName}</span
+									>
+									{#if rom.isPrimary}<span class="badge text-bg-primary ms-1">Primary</span>{/if}
+								</td>
+								<td>
+									{#each rom.regions as region (region)}
+										<span class="badge text-bg-secondary me-1">{region}</span>
+									{:else}
+										—
+									{/each}
+								</td>
+								<td>{rom.revision ?? '—'}</td>
+								<td>{list(rom.flags)}</td>
+								<td class="text-end"><FileSize bytes={rom.sizeBytes} /></td>
+								<td class="small font-monospace">
+									<div class="text-nowrap">
+										CRC32 {rom.crc32}
+										<CopyButton value={rom.crc32} label="CRC32" />
+									</div>
+									<div class="text-nowrap">
+										SHA1 {rom.sha1}
+										<CopyButton value={rom.sha1} label="SHA1" />
+									</div>
+								</td>
+								<td class="text-nowrap text-end">
+									{#if rom.header}
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-secondary"
+											onclick={() => showHeader(rom)}
+										>
+											Header
+										</button>
+									{/if}
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-primary"
+										aria-label="Download {rom.fileName}"
+										onclick={() => download(rom.downloadUrl, rom)}
+									>
+										<Icon name="download" />
+									</button>
+									{#if auth.canEditLibrary}
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-secondary"
+											aria-label="Move {rom.fileName}"
+											onclick={() => (action = { kind: 'move', rom })}
+										>
+											<Icon name="move" />
+										</button>
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-danger"
+											aria-label="Delete {rom.fileName}"
+											onclick={() => (action = { kind: 'deleteRom', rom })}
+										>
+											<Icon name="delete" />
+										</button>
+									{/if}
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
 		</div>
 	</div>
 
+	<!-- Outside both panels (a hidden ancestor would hide it) and before the Images panel: game-admin.test.ts takes
+	     the first .modal. -->
 	{#if auth.canEditLibrary}
 		<GameAdminModal {game} bind:action ondone={onAdminDone} />
 	{/if}
 
-	<!-- These modals stay below the admin modal: game-admin.test.ts takes the first .modal. -->
-	<GameImages {game} onchanged={(detail) => (game = detail)} />
+	<div id="images-panel" role="tabpanel" aria-labelledby="images-tab" hidden={tab !== 'images'}>
+		<GameImages {game} onchanged={(detail) => (game = detail)} />
+	</div>
 
 	<ConfirmModal bind:open={headerOpen} title="Header — {headerRom?.fileName ?? ''}" size="lg">
 		{#if headerRom?.header}
@@ -364,4 +421,6 @@
 			</table>
 		{/if}
 	</ConfirmModal>
+
+	<InfoJsonModal bind:open={infoJsonOpen} gameId={game.id} />
 {/if}

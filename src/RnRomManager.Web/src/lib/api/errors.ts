@@ -5,6 +5,8 @@ export interface ProblemDetails {
 	code?: string;
 	traceId?: string;
 	errors?: Record<string, string[]>;
+	/** RP8 group merge: the source games merged before the failure. */
+	merged?: string[];
 }
 
 /** A failed API call. `code` is the §23.1 code (`ValidationFailed`, `JobRunning`, …) or `HttpError`/`NetworkError`. */
@@ -14,6 +16,8 @@ export class ApiError extends Error {
 	readonly title: string;
 	readonly traceId?: string;
 	readonly errors: Record<string, string[]>;
+	/** RP8: the sources already merged when a group merge stopped; empty otherwise. */
+	readonly merged: string[];
 
 	constructor(status: number, problem: ProblemDetails = {}) {
 		const title = problem.title ?? (status === 0 ? 'Network error' : `Request failed (${status})`);
@@ -24,6 +28,7 @@ export class ApiError extends Error {
 		this.title = title;
 		this.traceId = problem.traceId;
 		this.errors = problem.errors ?? {};
+		this.merged = problem.merged ?? [];
 	}
 }
 

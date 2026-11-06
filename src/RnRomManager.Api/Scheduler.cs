@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.Extensions.Options;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
@@ -9,11 +10,11 @@ namespace RnRomManager.Api;
 
 /// <summary>
 /// Startup step 10 (spec §4.1): the daily quick integrity check at local <c>Integrity:QuickCheckTime</c> (§4, §12) and
-/// the log purge at startup and daily at 00:05 UTC (§13). Driven by <see cref="TimeProvider"/>. Runs missed while the
+/// the log and audit purges at startup and daily at 00:05 UTC (§13, AU5). Driven by <see cref="TimeProvider"/>. Runs missed while the
 /// app was down aren't caught up. A quick check that finds the job lock busy is skipped (<c>Info</c>, D20).
 /// </summary>
-public sealed class Scheduler(JobRunner runner, IntegrityJobFactory integrity, LogRetention logs, IOptions<IntegrityOptions> options,
-    TimeZoneInfo zone, TimeProvider time, ILogger<Scheduler> logger) : BackgroundService
+public sealed class Scheduler(JobRunner runner, IntegrityJobFactory integrity, LogRetention logs, IAuditLog audit,
+    IOptions<IntegrityOptions> options, TimeZoneInfo zone, TimeProvider time, ILogger<Scheduler> logger) : BackgroundService
 {
     /// <summary>The next quick check (UTC), or null when <c>QuickCheckTime</c> is empty (disabled).</summary>
     public DateTimeOffset? NextQuickCheckAt() => QuickCheckTime is { } at ? ScheduleCalculator.NextDaily(time.GetUtcNow(), at, zone) : null;
@@ -25,6 +26,7 @@ public sealed class Scheduler(JobRunner runner, IntegrityJobFactory integrity, L
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         PurgeLogs();
+        await PurgeAuditAsync().ConfigureAwait(false);
         var now = time.GetUtcNow();
         var nextQuick = NextQuickCheckAt();
         var nextPurge = ScheduleCalculator.NextLogPurge(now);
@@ -56,6 +58,7 @@ public sealed class Scheduler(JobRunner runner, IntegrityJobFactory integrity, L
             if (nextPurge <= now)
             {
                 PurgeLogs();
+                await PurgeAuditAsync().ConfigureAwait(false);
                 nextPurge = ScheduleCalculator.NextLogPurge(after);
             }
         }
@@ -72,6 +75,22 @@ public sealed class Scheduler(JobRunner runner, IntegrityJobFactory integrity, L
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex, "Scheduled quick integrity check couldn't start");
+        }
+    }
+
+    /// <summary>AU5: its own catch-all, because an unhandled exception here (e.g. the DB is down) would stop the host.</summary>
+    private async Task PurgeAuditAsync()
+    {
+        try
+        {
+            var deleted = await audit.PurgeAsync(time.GetUtcNow().UtcDateTime - AuditLog.Retention, CancellationToken.None)
+                .ConfigureAwait(false);
+            if (deleted > 0)
+                logger.LogInformation("Audit purge removed {Count} rows", deleted);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Audit purge failed");
         }
     }
 

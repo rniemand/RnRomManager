@@ -1,6 +1,8 @@
 # Contributing
 
-The MVP's design is in [specs/completed/initial-application.md](specs/completed/initial-application.md) and its build plan in [specs/completed/initial-application-impl.md](specs/completed/initial-application-impl.md). New work goes through the `spec` skill in [.claude/skills/spec](.claude/skills/spec/SKILL.md) (Claude Code).
+The MVP's design is in [specs/completed/initial-application.md](specs/completed/initial-application.md) and its build plan in [specs/completed/initial-application-impl.md](specs/completed/initial-application-impl.md). New work goes through the `spec` skill in [.claude/skills/spec](.claude/skills/spec/SKILL.md) (Claude Code) or [.agents/skills/spec](.agents/skills/spec/SKILL.md) (Codex).
+
+In Codex, use `$spec <what you want built>` or `$spec implement <file>.md`. The Codex skill also recognizes existing `/spec` kickoff prompts supplied as chat text. Both skills use the `dev/<slug>` branches and spec folders described below. Codex continues through implementation steps unless you request checkpoints; Claude Code checks in after each step by default.
 
 ## Specs, branches and PRs
 Specs live in `specs/pending/` (reviewed, not started), `specs/current/` (in progress) and `specs/completed/`.

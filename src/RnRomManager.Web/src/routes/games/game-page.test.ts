@@ -2,9 +2,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import type { GameDetail } from '#lib/api/types.js';
+import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 
-vi.mock('$app/state', () => ({ page: { params: { id: 'g1' } } }));
-vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
+const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
+vi.mock('$app/navigation', () => ({ goto: (...args: [string, unknown?]) => goto(...args) }));
+vi.mock('$app/state', () => ({
+	page: {
+		params: { id: 'g1' },
+		get url() {
+			return testUrl.current;
+		}
+	}
+}));
+vi.mock('$app/paths', () => ({
+	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
+}));
 // Bootstrap's Modal needs layout/transitions jsdom lacks.
 vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
@@ -44,6 +56,7 @@ function game(romIds: number[]): GameDetail {
 	return {
 		id: 'g1',
 		system: 'gb',
+		systemName: 'Game Boy',
 		title: 'Tetris',
 		displayTitle: 'Tetris',
 		releaseYear: 1989,
@@ -75,13 +88,18 @@ function game(romIds: number[]): GameDetail {
 
 describe('game detail page', () => {
 	let answers: { status: number; body?: unknown }[];
+	let fetches: number;
 	const assign = vi.fn();
 
 	beforeEach(() => {
 		resetClient();
 		assign.mockClear();
+		goto.mockClear();
+		navigateTo('/games/g1');
 		answers = [];
+		fetches = 0;
 		vi.stubGlobal('fetch', () => {
+			fetches++;
 			const answer = answers.shift() ?? { status: 404, body: { code: 'NotFound' } };
 			return Promise.resolve(
 				new Response(answer.body === undefined ? null : JSON.stringify(answer.body), {
@@ -112,6 +130,64 @@ describe('game detail page', () => {
 		expect(modal.querySelector('.modal-dialog')!.classList).toContain('modal-lg');
 		expect(screen.getByText('Logo valid')).toBeTruthy();
 		expect(screen.getByText('Yes')).toBeTruthy();
+	});
+
+	it('Releases is the default tab; both panels stay in the DOM (GP1)', async () => {
+		answers.push({ status: 200, body: game([1, 2]) });
+		render(GamePage);
+
+		const releases = await screen.findByRole('tab', { name: 'Releases (2)' });
+		const images = screen.getByRole('tab', { name: 'Images (1)' });
+		expect(releases.getAttribute('aria-selected')).toBe('true');
+		expect(images.getAttribute('aria-selected')).toBe('false');
+		expect(releases.getAttribute('aria-controls')).toBe('releases-panel');
+		expect(images.getAttribute('aria-controls')).toBe('images-panel');
+		expect(screen.getByRole('tablist')).toBeTruthy();
+		const releasesPanel = document.getElementById('releases-panel')!;
+		const imagesPanel = document.getElementById('images-panel')!;
+		expect(releasesPanel.getAttribute('role')).toBe('tabpanel');
+		expect(releasesPanel.hidden).toBe(false);
+		expect(imagesPanel.hidden).toBe(true);
+		expect(imagesPanel.querySelector('#images-heading')).toBeTruthy();
+	});
+
+	it('?tab=images opens Images', async () => {
+		navigateTo('/games/g1?tab=images');
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		const images = await screen.findByRole('tab', { name: 'Images (1)' });
+		expect(images.getAttribute('aria-selected')).toBe('true');
+		expect(document.getElementById('images-panel')!.hidden).toBe(false);
+		expect(document.getElementById('releases-panel')!.hidden).toBe(true);
+	});
+
+	it('switching tabs updates the URL without refetching the game (GP1)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+		await screen.findByRole('tab', { name: 'Releases (1)' });
+		expect(fetches).toBe(1);
+
+		await fireEvent.click(screen.getByRole('tab', { name: 'Images (1)' }));
+		expect(goto).toHaveBeenLastCalledWith('/games/g1?tab=images', { replace: true, reset: false });
+		await vi.waitFor(() => expect(document.getElementById('images-panel')!.hidden).toBe(false));
+
+		await fireEvent.click(screen.getByRole('tab', { name: 'Releases (1)' }));
+		expect(goto).toHaveBeenLastCalledWith('/games/g1', { replace: true, reset: false });
+		await vi.waitFor(() => expect(document.getElementById('releases-panel')!.hidden).toBe(false));
+		expect(fetches).toBe(1);
+	});
+
+	it('the Google button searches the title and system in a new tab (GP2)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		const link = await screen.findByRole('link', { name: /Google/ });
+		expect(link.getAttribute('href')).toBe(
+			'https://www.google.com/search?q=%22Tetris%22%20Game%20Boy'
+		);
+		expect(link.getAttribute('target')).toBe('_blank');
+		expect(link.getAttribute('rel')).toBe('noopener noreferrer');
 	});
 
 	it('one ROM gets a Download ROM button', async () => {

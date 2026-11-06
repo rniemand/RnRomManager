@@ -1,7 +1,10 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using Microsoft.Extensions.Logging;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Jobs;
+using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Jobs;
@@ -14,13 +17,18 @@ public class JobRunnerTests
     private IJobRepository _jobs = null!;
     private JobLock _lock = null!;
     private JobRunner _runner = null!;
+    private IUserRepository _users = null!;
+    private ILogger<JobRunner> _logger = null!;
 
     [SetUp]
     public void SetUp()
     {
         _jobs = Substitute.For<IJobRepository>();
         _lock = new JobLock();
-        _runner = new JobRunner(_jobs, _lock, TimeProvider.System, NullLogger<JobRunner>.Instance);
+        _users = Substitute.For<IUserRepository>();
+        _users.GetByIdAsync(7, Arg.Any<CancellationToken>()).Returns(new User { Id = 7, Username = "boss", PasswordHash = "x", SecurityStamp = "s", CreatedAt = default, UpdatedAt = default });
+        _logger = Substitute.For<ILogger<JobRunner>>();
+        _runner = new JobRunner(_jobs, _lock, _users, TimeProvider.System, _logger);
     }
 
     private async Task<(NoopTestJob Job, StartedJob Started)> StartAsync(NoopTestJob? job = null)
@@ -34,6 +42,57 @@ public class JobRunnerTests
 
     private Task FinishedWith(Guid id, JobStatus status, string? summary = null, string? error = null) =>
         _jobs.Received(1).FinishAsync(id, status, Arg.Any<DateTime>(), summary, error, Arg.Any<CancellationToken>());
+
+    private int Warnings() =>
+        _logger.ReceivedCalls().Count(c => c.GetMethodInfo().Name == "Log" && (LogLevel)c.GetArguments()[0]! == LogLevel.Warning);
+
+    [Test]
+    public async Task Actor_HasTheJobIdAndTheRequestersUsername()
+    {
+        var (job, started) = await StartAsync();
+        job.Release.TrySetResult();
+        await started.Completion;
+
+        Assert.That(job.Context!.Actor, Is.EqualTo(new AuditActor(7, "boss", started.Id)));
+    }
+
+    [Test]
+    public async Task Actor_ForAScheduledRun_HasNoUser()
+    {
+        var job = new NoopTestJob();
+        var started = await _runner.StartAsync(job, JobTrigger.Schedule, requestedBy: null, CancellationToken.None);
+        await job.Started.Task.WaitAsync(Timeout);
+        job.Release.TrySetResult();
+        await started!.Completion;
+
+        Assert.That(job.Context!.Actor, Is.EqualTo(new AuditActor(null, null, started.Id)));
+        await _users.DidNotReceiveWithAnyArgs().GetByIdAsync(default, default);
+    }
+
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task Actor_WhenTheUserLookupThrowsOrFindsNobody_KeepsTheId_WarnsAndRuns(bool throws)
+    {
+        if (throws)
+            _users.GetByIdAsync(7, Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("db down"));
+        else
+            _users.GetByIdAsync(7, Arg.Any<CancellationToken>()).Returns((User?)null);
+
+        var (job, started) = await StartAsync();
+        job.Release.TrySetResult();
+        await started.Completion;
+
+        Assert.That(job.Context!.Actor, Is.EqualTo(new AuditActor(7, null, started.Id)));
+        Assert.That(Warnings(), Is.EqualTo(1));
+        await FinishedWith(started.Id, JobStatus.Completed, "{\"done\":1}");
+    }
+
+    [Test]
+    public void JobContext_WithoutAnActor_IsTheJobAsSystem()
+    {
+        var id = Guid.NewGuid();
+        Assert.That(new JobContext(id, new JobProgress()).Actor, Is.EqualTo(new AuditActor(null, null, id)));
+    }
 
     [Test]
     public async Task Start_InsertsRunningRow_ThenCompletesWithSummary()

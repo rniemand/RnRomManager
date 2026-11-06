@@ -26,6 +26,7 @@ public class IngestJobTests
     private ILibraryMirror _mirror = null!;
     private IIngestReviewRepository _reviews = null!;
     private IJobItemRepository _items = null!;
+    private RnRomManager.Core.Audit.IAuditLog _audit = null!;
     private InfoJsonReader _reader = null!;
     private IngestFileScanner _scanner = null!;
 
@@ -46,6 +47,7 @@ public class IngestJobTests
         _reviews = Substitute.For<IIngestReviewRepository>();
         _reviews.ListPendingSourcesAsync(default).ReturnsForAnyArgs([]);
         _items = Substitute.For<IJobItemRepository>();
+        _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
         _reader = new InfoJsonReader([], _systems);
         _scanner = new IngestFileScanner(Options.Create(_paths), _systems);
     }
@@ -71,6 +73,25 @@ public class IngestJobTests
         _dats.Load();
     }
 
+    [Test]
+    public async Task Selection_ProcessesOnlyListedFiles_TotalIsTheSelectedCount()
+    {
+        var chosen = Drop("gb", "chosen.gb", TimeSpan.FromMinutes(5));
+        var other = Drop("gb", "other.gb", TimeSpan.FromMinutes(5));
+        var progress = new JobProgress();
+        var job = Job();
+        // Unknown system and file entries are ignored; the set already drops repeats.
+        job.Selection = new HashSet<(string, string)> { ("gb", "chosen.gb"), ("nes", "chosen.gb"), ("gb", "missing.gb"), ("gb", "CHOSEN.GB") };
+
+        await job.RunAsync(new JobContext(Guid.NewGuid(), progress), CancellationToken.None);
+
+        await _items.Received(1).InsertAsync(Arg.Any<JobItem>(), Arg.Any<CancellationToken>());
+        await _items.DidNotReceive().InsertAsync(Arg.Is<JobItem>(i => i.SourcePath == other), Arg.Any<CancellationToken>());
+        Assert.That((progress.Current, progress.Total), Is.EqualTo((1, 1)));
+        Assert.That(File.Exists(other), Is.True, "unselected file untouched");
+        Assert.That(File.Exists(chosen), Is.False, "the selected 3-byte file moved to _failed");
+    }
+
     private IngestJob Job()
     {
         var roms = Substitute.For<IRomRepository>();
@@ -78,7 +99,7 @@ public class IngestJobTests
         var sync = new DbSync(_games, roms, _mirror, _reader, _systems, Options.Create(_paths), NullLogger<DbSync>.Instance);
         var media = new RnRomManager.Core.Media.MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }),
             NullLogger<RnRomManager.Core.Media.MediaService>.Instance);
-        var pipeline = new IngestPipeline(_dats, _systems, roms, _games, _mirror, Substitute.For<RnRomManager.Core.Integrity.IIntegrityIssueRepository>(), _reviews, _reader, media, Options.Create(_paths), TimeProvider.System,
+        var pipeline = new IngestPipeline(_dats, _systems, roms, _games, _mirror, Substitute.For<RnRomManager.Core.Integrity.IIntegrityIssueRepository>(), _reviews, _reader, media, Options.Create(_paths), _audit, new RnRomManager.Core.Audit.AuditPaths(Options.Create(_paths)), TimeProvider.System,
             NullLogger<IngestPipeline>.Instance);
         return new IngestJob(_dats, _systems, sync, _reviews, _items, _scanner, pipeline, new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance),
             Options.Create(_paths), TimeProvider.System, NullLogger<IngestJob>.Instance);
@@ -185,7 +206,7 @@ public class IngestJobTests
     {
         var jobs = Substitute.For<IJobRepository>();
         var jobLock = new JobLock();
-        var runner = new JobRunner(jobs, jobLock, TimeProvider.System, NullLogger<JobRunner>.Instance);
+        var runner = new JobRunner(jobs, jobLock, Substitute.For<RnRomManager.Core.Users.IUserRepository>(), TimeProvider.System, NullLogger<JobRunner>.Instance);
 
         var ex = await Assert.ThrowsAsync<JobRefusedException>(() => runner.StartAsync(Job(), JobTrigger.Manual, null, CancellationToken.None));
 

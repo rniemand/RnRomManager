@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using RnRomManager.Core.Audit;
+using RnRomManager.Core.Users;
 
 namespace RnRomManager.Core.Jobs;
 
@@ -8,7 +10,7 @@ namespace RnRomManager.Core.Jobs;
 /// the job off the request with its progress in memory, and records the end status. The lock is always released,
 /// even when the final row update fails (the row then stays <c>Running</c> until startup marks it <c>Aborted</c>).
 /// </summary>
-public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, TimeProvider time, ILogger<JobRunner> logger)
+public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, IUserRepository users, TimeProvider time, ILogger<JobRunner> logger)
 {
     private static readonly JsonSerializerOptions SummaryJson = new(JsonSerializerDefaults.Web);
 
@@ -82,6 +84,27 @@ public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, TimeProvider
         }
     }
 
+    /// <summary>
+    /// AU3: the job's actor, built once. A failed or empty user lookup keeps the id, leaves the username null and logs a
+    /// warning; the job still runs. Scheduled runs have no user.
+    /// </summary>
+    private async Task<AuditActor> ActorAsync(Job row)
+    {
+        if (row.RequestedBy is not { } userId)
+            return new AuditActor(null, null, row.Id);
+        try
+        {
+            if (await users.GetByIdAsync(userId, CancellationToken.None).ConfigureAwait(false) is { } user)
+                return new AuditActor(userId, user.Username, row.Id);
+            logger.LogWarning("Job {JobId}: user {UserId} not found; audit rows carry no username", row.Id, userId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Job {JobId}: user {UserId} couldn't be loaded; audit rows carry no username", row.Id, userId);
+        }
+        return new AuditActor(userId, null, row.Id);
+    }
+
     private async Task RunAsync(IJob job, RunningJob running, IDisposable release)
     {
         var row = running.Row;
@@ -92,7 +115,8 @@ public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, TimeProvider
         try
         {
             logger.LogInformation("Job {Type} {Mode} started ({Trigger})", row.Type, row.Mode, row.Trigger);
-            summary = await job.RunAsync(new JobContext(row.Id, running.Progress), running.Cancellation.Token).ConfigureAwait(false);
+            var actor = await ActorAsync(row).ConfigureAwait(false);
+            summary = await job.RunAsync(new JobContext(row.Id, running.Progress, actor), running.Cancellation.Token).ConfigureAwait(false);
             if (running.Cancellation.IsCancellationRequested)
                 status = JobStatus.Cancelled;
         }

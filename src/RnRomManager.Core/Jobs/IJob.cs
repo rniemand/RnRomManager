@@ -1,3 +1,5 @@
+using RnRomManager.Core.Audit;
+
 namespace RnRomManager.Core.Jobs;
 
 /// <summary>
@@ -23,7 +25,11 @@ public sealed class JobRefusedException(string code) : Exception($"Job refused: 
     public string Code { get; } = code;
 }
 
-public sealed record JobContext(Guid JobId, JobProgress Progress);
+/// <param name="Actor">AU3: who the job's file actions are recorded for; null means a scheduled run (<c>new(null, null, JobId)</c>).</param>
+public sealed record JobContext(Guid JobId, JobProgress Progress, AuditActor? Actor = null)
+{
+    public AuditActor Actor { get; } = Actor ?? new AuditActor(null, null, JobId);
+}
 
 /// <summary>Live progress (§3.1), held in memory only and read by <c>GET /api/jobs/current</c>.</summary>
 public sealed class JobProgress

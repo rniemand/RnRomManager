@@ -119,6 +119,7 @@ public sealed class GameRepository : IGameRepository
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount,
                    (SELECT GROUP_CONCAT(r.region_key SEPARATOR '') FROM roms r WHERE r.game_id = g.id) AS RegionKeys,
                    (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.is_cover = 1) AS BoxArtImageId,
+                   (SELECT MAX(r.size_bytes) FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1) AS PrimarySizeBytes,
                    g.rating AS Rating, g.favourite AS Favourite, g.title AS Title,
                    g.developers AS Developers, g.publishers AS Publishers, g.genres AS Genres
             FROM games g {filter}
@@ -128,7 +129,7 @@ public sealed class GameRepository : IGameRepository
 
         var items = rows.Select(r => new GameListItem(
             r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId,
-            r.Rating, r.Favourite, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres))).ToList();
+            r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres))).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, total);
     }
 
@@ -197,6 +198,7 @@ public sealed class GameRepository : IGameRepository
         public long RomCount { get; init; }
         public string? RegionKeys { get; init; }
         public long? BoxArtImageId { get; init; }
+        public long? PrimarySizeBytes { get; init; }
         public int? Rating { get; init; }
         public bool Favourite { get; init; }
         public string Title { get; init; } = "";

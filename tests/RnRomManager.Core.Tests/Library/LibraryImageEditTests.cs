@@ -27,11 +27,20 @@ public class LibraryImageEditTests
     private ILibraryMirror _mirror = null!;
     private JobLock _lock = null!;
     private LibraryEditor _editor = null!;
+    private RnRomManager.Core.Audit.IAuditLog _audit = null!;
     private int _pngSeed;
+
+    private static readonly RnRomManager.Core.Audit.AuditActor Actor = new(5, "boss", null);
+
+    private List<(string Action, string? Details)> Recorded() =>
+        _audit.ReceivedCalls().Where(c => c.GetMethodInfo().Name == "Record")
+            .Select(c => (RnRomManager.Core.Audit.AuditEvent)c.GetArguments()[0]!)
+            .Select(e => { Assert.That((e.Actor, e.GameId), Is.EqualTo((Actor, (Guid?)GameId))); return (e.Action, e.Details); }).ToList();
 
     [SetUp]
     public void SetUp()
     {
+        _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
         _dir = new TempDir();
         var handler = Substitute.For<ISystemHandler>();
         handler.Id.Returns("gb");
@@ -47,9 +56,10 @@ public class LibraryImageEditTests
         _lock = new JobLock();
         var paths = Options.Create(new PathsOptions { Roms = _dir.Path, Cache = _dir.Combine("cache") });
         var media = new MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }), NullLogger<MediaService>.Instance);
-        var retry = new GameMediaRetry(_mirror, _reader, systems, media, paths, TimeProvider.System, NullLogger<GameMediaRetry>.Instance);
+        var retry = new GameMediaRetry(_mirror, _reader, systems, media, paths, _audit, TimeProvider.System, NullLogger<GameMediaRetry>.Instance);
         _editor = new LibraryEditor(_lock, _games, Substitute.For<IRomRepository>(), _images, _mirror, _reader,
-            new DatCache(paths, systems, NullLogger<DatCache>.Instance), systems, media, retry, paths, TimeProvider.System,
+            new DatCache(paths, systems, NullLogger<DatCache>.Instance), systems, media, retry, paths, _audit, new RnRomManager.Core.Audit.AuditPaths(paths),
+            TimeProvider.System,
             NullLogger<LibraryEditor>.Instance);
         _pngSeed = 10;
     }
@@ -108,12 +118,13 @@ public class LibraryImageEditTests
         await SeedPlaceholder();
         var png = PngTests.Png(300, 400);
 
-        var result = await _editor.AddImageAsync(GameId, ImageType.BoxArt, png, default);
+        var result = await _editor.AddImageAsync(GameId, ImageType.BoxArt, png, Actor, default);
 
         Assert.That(result.Code, Is.Null, result.Details);
         Assert.That(Stored().Select(i => (i.FileName, i.IsCover, i.IsDefault, i.Source, i.Width, i.Height)),
             Is.EqualTo(new[] { ("boxart-01.png", true, false, InfoJsonImage.SourceUpload, 300, 400) }), "the freed name is reused");
         await _mirror.Received(1).ReplaceAsync(Arg.Is<MirrorEntry>(e => e.Info.Images.Count == 1), Arg.Any<CancellationToken>());
+        Assert.That(Recorded(), Is.EqualTo(new[] { ("ImageAdded", (string?)"boxart-01.png") }));
     }
 
     [Test]
@@ -121,7 +132,7 @@ public class LibraryImageEditTests
     {
         await SeedPlaceholder();
 
-        var result = await _editor.AddImageAsync(GameId, ImageType.Snap, ImageFormatTests.Jpeg(0xC0, 160, 144), default);
+        var result = await _editor.AddImageAsync(GameId, ImageType.Snap, ImageFormatTests.Jpeg(0xC0, 160, 144), Actor, default);
 
         Assert.That(result.Code, Is.Null, result.Details);
         Assert.That(Stored().Select(i => (i.FileName, i.IsCover, i.Width)), Is.EqualTo(new[] { ("boxart-01.png", true, 1), ("snap-01.jpg", false, 160) }));
@@ -134,7 +145,7 @@ public class LibraryImageEditTests
         var c = NewPng();
         await Seed((Image("boxart-01.png", ImageType.BoxArt, a, cover: true), a), (Image("BOXART-03.PNG", ImageType.BoxArt, c), c));
 
-        Assert.That((await _editor.AddImageAsync(GameId, ImageType.BoxArt, ImageFormatTests.Jpeg(0xC2, 10, 10), default)).Code, Is.Null);
+        Assert.That((await _editor.AddImageAsync(GameId, ImageType.BoxArt, ImageFormatTests.Jpeg(0xC2, 10, 10), Actor, default)).Code, Is.Null);
 
         Assert.That(Stored().Select(i => i.FileName), Is.EqualTo(new[] { "boxart-01.png", "BOXART-03.PNG", "boxart-02.jpg" }));
     }
@@ -144,7 +155,7 @@ public class LibraryImageEditTests
     {
         await Seed();
 
-        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, NewPng(), default)).Code, Is.Null);
+        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, NewPng(), Actor, default)).Code, Is.Null);
 
         Assert.That(Stored().Single().IsCover, Is.True);
     }
@@ -154,17 +165,17 @@ public class LibraryImageEditTests
     {
         await SeedPlaceholder();
 
-        Assert.That((await _editor.AddImageAsync(GameId, ImageType.TitleScreen, NewPng(), default)).Errors!.Keys, Is.EqualTo(new[] { "type" }));
-        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, [], default)).Errors!.Keys, Is.EqualTo(new[] { "file" }));
-        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, "GIF89a...."u8.ToArray(), default)).Errors!["file"][0], Does.Contain("PNG or JPEG"));
-        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, [0xFF, 0xD8, 0xFF, 0xD9], default)).Errors!["file"][0], Does.Contain("dimensions"));
+        Assert.That((await _editor.AddImageAsync(GameId, ImageType.TitleScreen, NewPng(), Actor, default)).Errors!.Keys, Is.EqualTo(new[] { "type" }));
+        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, [], Actor, default)).Errors!.Keys, Is.EqualTo(new[] { "file" }));
+        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, "GIF89a...."u8.ToArray(), Actor, default)).Errors!["file"][0], Does.Contain("PNG or JPEG"));
+        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, [0xFF, 0xD8, 0xFF, 0xD9], Actor, default)).Errors!["file"][0], Does.Contain("dimensions"));
         var huge = new byte[ImageFormats.MaxBytes + 1];
         PngTests.Png(1, 1).CopyTo(huge, 0);
-        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, huge, default)).Errors!["file"][0], Does.Contain("8 MiB"));
-        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, Placeholder, default)).Code, Is.EqualTo(LibraryEditResult.DuplicateImage));
-        Assert.That((await _editor.AddImageAsync(Guid.NewGuid(), ImageType.Snap, NewPng(), default)).Code, Is.EqualTo(LibraryEditResult.NotFound));
+        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, huge, Actor, default)).Errors!["file"][0], Does.Contain("8 MiB"));
+        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, Placeholder, Actor, default)).Code, Is.EqualTo(LibraryEditResult.DuplicateImage));
+        Assert.That((await _editor.AddImageAsync(Guid.NewGuid(), ImageType.Snap, NewPng(), Actor, default)).Code, Is.EqualTo(LibraryEditResult.NotFound));
         using (_lock.TryAcquire())
-            Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, NewPng(), default)).Code, Is.EqualTo(LibraryEditResult.JobRunning));
+            Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, NewPng(), Actor, default)).Code, Is.EqualTo(LibraryEditResult.JobRunning));
         Assert.That(Stored(), Has.Count.EqualTo(1), "nothing was written");
     }
 
@@ -178,7 +189,7 @@ public class LibraryImageEditTests
         }).ToArray();
         await Seed(images);
 
-        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, NewPng(), default)).Code, Is.EqualTo(LibraryEditResult.TooManyImages));
+        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, NewPng(), Actor, default)).Code, Is.EqualTo(LibraryEditResult.TooManyImages));
     }
 
     [Test]
@@ -188,8 +199,9 @@ public class LibraryImageEditTests
         await Seed((Image("snap-01.png", ImageType.Snap, cover, cover: true), cover), (Image("snap-02.png", ImageType.Snap, snap), snap),
             (Image("boxart-03.png", ImageType.BoxArt, b3), b3), (Image("boxart-02.png", ImageType.BoxArt, b2), b2));
 
-        Assert.That((await _editor.DeleteImageAsync(GameId, 1, default)).Code, Is.Null);
+        Assert.That((await _editor.DeleteImageAsync(GameId, 1, Actor, default)).Code, Is.Null);
         Assert.That(Stored().Single(i => i.IsCover).FileName, Is.EqualTo("boxart-02.png"));
+        Assert.That(Recorded(), Is.EqualTo(new[] { ("ImageDeleted", (string?)"snap-01.png") }));
     }
 
     [Test]
@@ -198,7 +210,7 @@ public class LibraryImageEditTests
         var (a, b, c) = (NewPng(), NewPng(), NewPng());
         await Seed((Image("snap-01.png", ImageType.Snap, a), a), (Image("snap-02.png", ImageType.Snap, b, cover: true), b), (Image("snap-03.png", ImageType.Snap, c), c));
 
-        Assert.That((await _editor.DeleteImageAsync(GameId, 2, default)).Code, Is.Null);
+        Assert.That((await _editor.DeleteImageAsync(GameId, 2, Actor, default)).Code, Is.Null);
         Assert.That(Stored().Select(i => (i.FileName, i.IsCover)), Is.EqualTo(new[] { ("snap-01.png", true), ("snap-03.png", false) }));
     }
 
@@ -208,7 +220,7 @@ public class LibraryImageEditTests
         var png = NewPng();
         await Seed((Image("boxart-01.png", ImageType.BoxArt, png, cover: true), png));
 
-        Assert.That((await _editor.DeleteImageAsync(GameId, 1, default)).Code, Is.Null);
+        Assert.That((await _editor.DeleteImageAsync(GameId, 1, Actor, default)).Code, Is.Null);
 
         var stored = Stored().Single();
         Assert.That((stored.FileName, stored.IsDefault, stored.IsCover, stored.Sha1),
@@ -221,7 +233,7 @@ public class LibraryImageEditTests
         var (a, b) = (NewPng(), NewPng());
         await Seed((Image("boxart-01.png", ImageType.BoxArt, a, cover: true), a), (Image("snap-01.png", ImageType.Snap, b), b));
 
-        Assert.That((await _editor.DeleteImageAsync(GameId, 2, default)).Code, Is.Null);
+        Assert.That((await _editor.DeleteImageAsync(GameId, 2, Actor, default)).Code, Is.Null);
         Assert.That(Stored().Select(i => (i.FileName, i.IsCover)), Is.EqualTo(new[] { ("boxart-01.png", true) }));
     }
 
@@ -230,10 +242,10 @@ public class LibraryImageEditTests
     {
         await SeedPlaceholder();
 
-        Assert.That((await _editor.DeleteImageAsync(GameId, 1, default)).Code, Is.EqualTo(LibraryEditResult.DefaultImage));
-        Assert.That((await _editor.DeleteImageAsync(GameId, 99, default)).Code, Is.EqualTo(LibraryEditResult.NotFound));
+        Assert.That((await _editor.DeleteImageAsync(GameId, 1, Actor, default)).Code, Is.EqualTo(LibraryEditResult.DefaultImage));
+        Assert.That((await _editor.DeleteImageAsync(GameId, 99, Actor, default)).Code, Is.EqualTo(LibraryEditResult.NotFound));
         using (_lock.TryAcquire())
-            Assert.That((await _editor.DeleteImageAsync(GameId, 1, default)).Code, Is.EqualTo(LibraryEditResult.JobRunning));
+            Assert.That((await _editor.DeleteImageAsync(GameId, 1, Actor, default)).Code, Is.EqualTo(LibraryEditResult.JobRunning));
         Assert.That(Stored(), Has.Count.EqualTo(1));
     }
 
@@ -243,10 +255,12 @@ public class LibraryImageEditTests
         var (a, b) = (NewPng(), NewPng());
         await Seed((Image("boxart-01.png", ImageType.BoxArt, a, cover: true), a), (Image("snap-01.png", ImageType.Snap, b), b));
 
-        Assert.That((await _editor.SetCoverAsync(GameId, 2, default)).Code, Is.Null);
+        Assert.That((await _editor.SetCoverAsync(GameId, 2, Actor, default)).Code, Is.Null);
         Assert.That(Stored().Select(i => (i.FileName, i.IsCover)), Is.EqualTo(new[] { ("boxart-01.png", false), ("snap-01.png", true) }));
-        Assert.That((await _editor.SetCoverAsync(GameId, 99, default)).Code, Is.EqualTo(LibraryEditResult.NotFound));
+        Assert.That((await _editor.SetCoverAsync(GameId, 2, Actor, default)).Code, Is.Null, "already the cover: a no-op");
+        Assert.That(Recorded(), Is.EqualTo(new[] { ("CoverSet", (string?)"snap-01.png") }), "the no-op wrote nothing");
+        Assert.That((await _editor.SetCoverAsync(GameId, 99, Actor, default)).Code, Is.EqualTo(LibraryEditResult.NotFound));
         using (_lock.TryAcquire())
-            Assert.That((await _editor.SetCoverAsync(GameId, 1, default)).Code, Is.EqualTo(LibraryEditResult.JobRunning));
+            Assert.That((await _editor.SetCoverAsync(GameId, 1, Actor, default)).Code, Is.EqualTo(LibraryEditResult.JobRunning));
     }
 }

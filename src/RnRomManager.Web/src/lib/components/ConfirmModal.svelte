@@ -2,6 +2,7 @@
 	import type { Snippet } from 'svelte';
 	import { onDestroy, onMount } from 'svelte';
 	import { Modal } from '../bootstrap';
+	import { releaseModal } from '../modal';
 
 	interface Props {
 		/** Shown while true; set back to false when closed. */
@@ -40,7 +41,10 @@
 		element.addEventListener('hidden.bs.modal', () => (open = false));
 	});
 
-	onDestroy(() => modal?.dispose());
+	onDestroy(() => {
+		releaseModal(element); // G1: before dispose(), which drops the backdrop reference
+		modal?.dispose();
+	});
 
 	$effect(() => {
 		if (!modal) return;

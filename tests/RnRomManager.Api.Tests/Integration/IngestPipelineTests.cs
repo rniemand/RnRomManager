@@ -1,14 +1,18 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json.Nodes;
+using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using RnRomManager.Core.Audit;
+using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
+using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
@@ -91,6 +95,21 @@ public class IngestPipelineTests
     private Task<IngestItemResult?> IngestAsync(IngestFile file) =>
         _factory.Services.GetRequiredService<IngestPipeline>().ProcessAsync(file, Guid.NewGuid(), new CircuitBreaker(), CancellationToken.None);
 
+    private sealed record AuditRow(string Action, string? SystemId, Guid? GameId, int? UserId, string? Username, Guid? JobId, string? Path,
+        string? TargetPath, string? Details);
+
+    /// <summary>AU4 rows written so far, oldest first (after the writer drained the queue).</summary>
+    private async Task<List<AuditRow>> AuditRowsAsync()
+    {
+        await Service<RnRomManager.Api.AuditWriter>().FlushAsync();
+        await using var db = Service<IDbConnectionFactory>().Create();
+        return (await db.QueryAsync<AuditRow>("""
+            SELECT action AS Action, system_id AS SystemId, game_id AS GameId, user_id AS UserId, username AS Username, job_id AS JobId,
+                   path AS Path, target_path AS TargetPath, details AS Details
+            FROM audit_events ORDER BY id
+            """)).AsList();
+    }
+
     private InfoJsonGame ReadZip(string relative)
     {
         using var zip = LibraryZip.Open(Path.Combine(Roms, relative), _factory.Services.GetRequiredService<InfoJsonReader>());
@@ -129,6 +148,47 @@ public class IngestPipelineTests
         Assert.That((row!.ZipPath, row.Bucket, row.HasDefaultBoxArt), Is.EqualTo(("gb/T/Tetris.zip", "T", true)));
         Assert.That(row.ZipSizeBytes, Is.EqualTo(new FileInfo(Path.Combine(Roms, "gb", "T", "Tetris.zip")).Length));
         Assert.That(await Service<IRomRepository>().GetBySha1Async(result.Sha1!, CancellationToken.None), Is.Not.Null);
+    }
+
+    [Test]
+    public async Task Ingested_IsAudited_WithRelativePathsAndTheRelease()
+    {
+        var jobId = Guid.NewGuid();
+        var result = await Service<IngestPipeline>().ProcessAsync(Drop("gb", "a.gb", TetrisJ), jobId, new CircuitBreaker(), CancellationToken.None);
+
+        var row = (await AuditRowsAsync()).Single();
+        Assert.That(row, Is.EqualTo(new AuditRow(AuditActions.Ingested, "gb", result!.GameId, null, null, jobId, "ingest/gb/a.gb",
+            "roms/gb/T/Tetris.zip", "release Tetris (Japan).gb")));
+    }
+
+    [Test]
+    public async Task AnAdminStartedRun_AuditsEveryFileAction_WithTheJobAndUsername()
+    {
+        var boss = await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
+        foreach (var (name, bytes) in new[] { ("a.gb", TetrisJ), ("b.gb", TetrisJ), ("readme.txt", new byte[] { 1, 2, 3 }) })
+            File.SetLastWriteTimeUtc(Drop("gb", name, bytes).FullPath, DateTime.UtcNow.AddMinutes(-1));
+        var pack = Path.Combine(Ingest("gb"), "pack.zip");
+        using (var zip = ZipFile.Open(pack, ZipArchiveMode.Create))
+        await using (var entry = zip.CreateEntry("nested/sea.gb").Open())
+            await entry.WriteAsync(SeaQuest);
+        File.SetLastWriteTimeUtc(pack, DateTime.UtcNow.AddMinutes(-1));
+
+        var started = await Service<JobRunner>().StartAsync(ActivatorUtilities.CreateInstance<IngestJob>(_factory.Services), JobTrigger.Manual,
+            boss.Id, CancellationToken.None);
+        await started!.Completion;
+
+        var rows = await AuditRowsAsync();
+        Assert.That(rows.All(r => r.JobId == started.Id && r.UserId == boss.Id && r.Username == "boss"), Is.True);
+        Assert.That(rows.Select(r => (r.Action, r.Path, r.TargetPath)), Is.EquivalentTo(new (string, string?, string?)[]
+        {
+            (AuditActions.Ingested, "ingest/gb/a.gb", "roms/gb/T/Tetris.zip"),
+            (AuditActions.MovedToDuplicates, "ingest/gb/b.gb", "ingest/gb/_duplicates/b.gb"),
+            (AuditActions.MovedToFailed, "ingest/gb/readme.txt", "ingest/gb/_failed/readme.txt"),
+            (AuditActions.Ingested, "ingest/gb/pack.zip › nested/sea.gb", "roms/gb/S/seaQuest DSV.zip"),
+            (AuditActions.ArchiveDeleted, "ingest/gb/pack.zip", null),
+        }));
+        Assert.That(rows.Single(r => r.Action == AuditActions.MovedToFailed).Details, Is.EqualTo(IngestFailures.UnsupportedType));
+        Assert.That(File.ReadAllText(Path.Combine(Ingest("gb"), "_failed", "readme.txt.error.txt")), Does.Contain($"job: {started.Id}"));
     }
 
     [Test]
@@ -247,6 +307,8 @@ public class IngestPipelineTests
         await items.Received(1).InsertAsync(Arg.Any<JobItem>(), Arg.Any<CancellationToken>());
         Assert.That(File.Exists(first.FullPath) && File.Exists(later.FullPath), Is.True);
         Assert.That(File.Exists(Path.Combine(Roms, "gb", "T", "Tetris.zip")), Is.True, "the ZIP stays; the next pre-pass repairs the DB");
+        Assert.That((await AuditRowsAsync()).Select(r => (r.Action, r.Path)), Is.EqualTo(new[] { (AuditActions.Ingested, (string?)"ingest/gb/a.gb") }),
+            "the ZIP was written, so the row is written even though the mirror failed");
     }
 
     // --- S27: failures, duplicates, self-repair ---
@@ -266,7 +328,9 @@ public class IngestPipelineTests
         var moved = Path.Combine(Ingest("gb"), "_failed", "readme.txt");
         Assert.That(File.Exists(moved), Is.True);
         var errorTxt = File.ReadAllText(moved + ".error.txt");
-        Assert.That(errorTxt, Does.Contain("UnsupportedType").And.Contain(jobId.ToString()).And.Contain("time: "));
+        Assert.That(errorTxt, Does.Contain("UnsupportedType").And.Contain($"job: {jobId}").And.Contain("time: "));
+        Assert.That((await AuditRowsAsync()).Single(), Is.EqualTo(new AuditRow(AuditActions.MovedToFailed, "gb", null, null, null, jobId,
+            "ingest/gb/readme.txt", "ingest/gb/_failed/readme.txt", IngestFailures.UnsupportedType)));
     }
 
     [Test]
@@ -321,6 +385,11 @@ public class IngestPipelineTests
         Assert.That(small!.Reason, Is.EqualTo(IngestFailures.TooSmall));
         Assert.That(large!.Reason, Is.EqualTo(IngestFailures.TooLarge));
         Assert.That(Directory.GetFiles(Path.Combine(Ingest("gb"), "_failed"), "*.gb"), Has.Length.EqualTo(2));
+        Assert.That((await AuditRowsAsync()).Select(r => (r.Action, r.Path, r.Details)), Is.EqualTo(new[]
+        {
+            (AuditActions.MovedToFailed, (string?)"ingest/gb/tiny.gb", (string?)IngestFailures.TooSmall),
+            (AuditActions.MovedToFailed, "ingest/gb/huge.gb", IngestFailures.TooLarge),
+        }));
     }
 
     [Test]
@@ -347,6 +416,8 @@ public class IngestPipelineTests
         Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "gbc")));
         Assert.That(File.Exists(file.FullPath), Is.False);
         Assert.That(File.Exists(Path.Combine(Ingest("gb"), "mystery.gbc")), Is.True);
+        var renamed = (await AuditRowsAsync()).Single();
+        Assert.That((renamed.Action, renamed.Path, renamed.TargetPath), Is.EqualTo((AuditActions.ExtensionRenamed, "ingest/gb/mystery.gb", "ingest/gb/mystery.gbc")));
     }
 
     [Test]
@@ -362,6 +433,8 @@ public class IngestPipelineTests
         Assert.That(result.Details, Does.Contain("gb/T/Tetris.zip"));
         Assert.That(File.Exists(Path.Combine(Ingest("gb"), "_duplicates", "copy.gb")), Is.True);
         Assert.That(File.Exists(copy.FullPath), Is.False);
+        var moved = (await AuditRowsAsync()).Last();
+        Assert.That((moved.Action, moved.Path, moved.TargetPath), Is.EqualTo((AuditActions.MovedToDuplicates, "ingest/gb/copy.gb", "ingest/gb/_duplicates/copy.gb")));
     }
 
     [Test]
@@ -385,6 +458,9 @@ public class IngestPipelineTests
             Assert.That(buffer.ToArray(), Is.EqualTo(TetrisJ));
         }
         Assert.That(await IssueStatusAsync(issueId), Is.EqualTo("Resolved"));
+        var repairedRow = (await AuditRowsAsync()).Last();
+        Assert.That((repairedRow.Action, repairedRow.Path, repairedRow.TargetPath, repairedRow.Details),
+            Is.EqualTo((AuditActions.ZipRepaired, "ingest/gb/good-copy.gb", "roms/gb/T/Tetris.zip", (string?)null)));
     }
 
     [Test]

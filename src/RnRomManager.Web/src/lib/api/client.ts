@@ -16,6 +16,8 @@ export interface RequestOptions {
 	/** Don't redirect on 401 (the login form and the boot-time `me` check handle it themselves). */
 	noRedirect?: boolean;
 	signal?: AbortSignal;
+	/** Return the response body as text instead of parsing it (GP4: an info.json may not be valid JSON). */
+	raw?: boolean;
 }
 
 const mutations = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -101,6 +103,7 @@ export async function request<T>(
 
 	if (response.ok) {
 		const text = response.status === 204 ? '' : await response.text();
+		if (options.raw) return text as T;
 		return (text ? JSON.parse(text) : undefined) as T;
 	}
 
@@ -120,6 +123,8 @@ export async function request<T>(
 
 export const api = {
 	get: <T>(url: string, options?: RequestOptions) => request<T>('GET', url, options),
+	getText: (url: string, options?: RequestOptions) =>
+		request<string>('GET', url, { ...options, raw: true }),
 	post: <T>(url: string, body?: unknown, options?: RequestOptions) =>
 		request<T>('POST', url, { ...options, body }),
 	patch: <T>(url: string, body?: unknown, options?: RequestOptions) =>

@@ -6,6 +6,7 @@
 	import { isApiError } from '../api/errors';
 	import type { GameListItem, Page } from '../api/types';
 	import { Modal } from '../bootstrap';
+	import { releaseModal } from '../modal';
 	import { auth } from '../stores/auth.svelte';
 	import Icon from './Icon.svelte';
 	import RatingControl from './RatingControl.svelte';
@@ -48,6 +49,7 @@
 
 	onDestroy(() => {
 		cancel();
+		releaseModal(element); // G1: before dispose()
 		modal?.dispose();
 	});
 

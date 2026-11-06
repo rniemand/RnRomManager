@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Integrity;
@@ -60,19 +61,31 @@ public sealed class IngestPipeline(
     InfoJsonReader reader,
     MediaService media,
     IOptions<PathsOptions> paths,
+    IAuditLog audit,
+    AuditPaths auditPaths,
     TimeProvider time,
     ILogger<IngestPipeline> logger)
 {
+    /// <summary>AU1: the source as recorded: <c>ingest/…</c>, or <c>ingest/&lt;archive&gt; › &lt;entry&gt;</c> for an archive entry.</summary>
+    private string AuditSource(IngestFile file) =>
+        file.ArchiveEntry is { } entry ? auditPaths.ArchiveEntry(file.ArchivePath!, entry) : auditPaths.Of(file.FullPath);
+
+    /// <summary>AU4 <c>ArchiveDeleted</c>: called by <see cref="IngestJob"/> after it deleted a fully ingested archive.</summary>
+    public void RecordArchiveDeleted(IngestFile archive, AuditActor actor) =>
+        audit.Record(new AuditEvent(AuditActions.ArchiveDeleted, actor, archive.SystemId, Path: auditPaths.Of(archive.FullPath)));
+
     /// <summary>Processes one source and completes any pending review row for that source.</summary>
-    public async Task<IngestItemResult?> ProcessAsync(IngestFile file, Guid jobId, CircuitBreaker breaker, CancellationToken cancellationToken)
+    public async Task<IngestItemResult?> ProcessAsync(IngestFile file, Guid jobId, AuditActor actor, CircuitBreaker breaker,
+        CancellationToken cancellationToken)
     {
-        var result = await ProcessCoreAsync(file, jobId, breaker, cancellationToken).ConfigureAwait(false);
+        var result = await ProcessCoreAsync(file, jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
         if (result is not null)
             await reviews.CompleteSourceAsync(file.SourcePath, file.ArchiveEntry, result, jobId, time.GetUtcNow().UtcDateTime, cancellationToken).ConfigureAwait(false);
         return result;
     }
 
-    private async Task<IngestItemResult?> ProcessCoreAsync(IngestFile file, Guid jobId, CircuitBreaker breaker, CancellationToken cancellationToken)
+    private async Task<IngestItemResult?> ProcessCoreAsync(IngestFile file, Guid jobId, AuditActor actor, CircuitBreaker breaker,
+        CancellationToken cancellationToken)
     {
         // Step 1: validate.
         var folder = systems.ById(file.SystemId) ?? throw new InvalidOperationException($"No handler for ingest folder '{file.SystemId}'.");
@@ -80,11 +93,11 @@ public sealed class IngestPipeline(
         var extension = Path.GetExtension(file.Name);
         var byExtension = family.FirstOrDefault(h => h.RomExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase));
         if (byExtension is null)
-            return FailFile(file, jobId, IngestFailures.UnsupportedType, $"'{extension}' isn't a ROM extension of the {folder.Family} family");
+            return FailFile(file, actor, IngestFailures.UnsupportedType, $"'{extension}' isn't a ROM extension of the {folder.Family} family");
         if (file.SizeBytes < byExtension.MinRomSizeBytes)
-            return FailFile(file, jobId, IngestFailures.TooSmall, $"{file.SizeBytes} bytes; {byExtension.Id} ROMs are at least {byExtension.MinRomSizeBytes}");
+            return FailFile(file, actor, IngestFailures.TooSmall, $"{file.SizeBytes} bytes; {byExtension.Id} ROMs are at least {byExtension.MinRomSizeBytes}");
         if (file.SizeBytes > byExtension.MaxRomSizeBytes)
-            return FailFile(file, jobId, IngestFailures.TooLarge, $"{file.SizeBytes} bytes; {byExtension.Id} ROMs are at most {byExtension.MaxRomSizeBytes}");
+            return FailFile(file, actor, IngestFailures.TooLarge, $"{file.SizeBytes} bytes; {byExtension.Id} ROMs are at most {byExtension.MaxRomSizeBytes}");
 
         // Step 2: hash the normalised bytes (what gets stored).
         byte[] bytes;
@@ -103,7 +116,7 @@ public sealed class IngestPipeline(
         var review = await reviews.GetBySha1Async(hashes.Sha1, cancellationToken).ConfigureAwait(false);
         if (await roms.GetBySha1Async(hashes.Sha1, cancellationToken).ConfigureAwait(false) is { } known)
         {
-            var duplicate = await DuplicateOrRepairAsync(file, known, bytes, hashes.Sha1, cancellationToken).ConfigureAwait(false);
+            var duplicate = await DuplicateOrRepairAsync(file, known, bytes, hashes.Sha1, actor, cancellationToken).ConfigureAwait(false);
             return duplicate with { ResolvedArchiveDuplicate = duplicate.Outcome == IngestOutcome.Duplicate &&
                 file.ArchivePath is not null && review is { Status: "Resolved" } && review.ArchivePath == file.ArchivePath };
         }
@@ -111,11 +124,11 @@ public sealed class IngestPipeline(
         {
             logger.LogWarning("{Path}: duplicate of pending review source {ReviewPath} (crc32 {Crc32}, md5 {Md5}, sha1 {Sha1})",
                 file.SourcePath, review.SourcePath, hashes.Crc32, hashes.Md5, hashes.Sha1);
-            return (file.ArchiveEntry is null ? MoveToDuplicates(file) : null) ??
+            return (file.ArchiveEntry is null ? MoveToDuplicates(file, actor) : null) ??
                 new IngestItemResult(IngestOutcome.Duplicate, Details: $"same as pending review source {review.SourcePath}", SystemId: review.SystemId, Sha1: hashes.Sha1);
         }
         if (review is { Status: "Dismissed" } && file.ArchivePath is not null && review.ArchivePath == file.ArchivePath)
-            return FailFile(file, jobId, "Dismissed", "this entry was dismissed from this archive", hashes.Sha1);
+            return FailFile(file, actor, "Dismissed", "this entry was dismissed from this archive", hashes.Sha1);
         if (review is { Status: "Dismissed" } && file.ArchivePath is null)
             await reviews.UpsertAsync(review with
             {
@@ -134,11 +147,11 @@ public sealed class IngestPipeline(
             // Step 5. Every ReadHeader null (headerless system) counts as plausible.
             var found = headers.Values.FirstOrDefault(h => h is not null);
             if (found is { IsPlausible: false })
-                return FailFile(file, jobId, IngestFailures.InvalidHeader, "no DAT match, and the header isn't valid for this system", hashes.Sha1);
+                return FailFile(file, actor, IngestFailures.InvalidHeader, "no DAT match, and the header isn't valid for this system", hashes.Sha1);
             var classified = family.FirstOrDefault(h => h.Id == found?.ClassifiedSystemId) ?? folder;
             var originalName = file.Name;
             if (file.ArchiveEntry is null)
-                file = RenameToClassifiedExtension(file, found, family);
+                file = RenameToClassifiedExtension(file, found, family, actor);
             return await QueueReviewAsync(file, originalName, classified.Id, "NoDatMatch", hashes, bytes.Length, found, jobId,
                 SuggestionEngine.Find(dats.For(classified.Id), found?.Title, originalName, bytes.Length), null, null, cancellationToken).ConfigureAwait(false);
         }
@@ -176,13 +189,15 @@ public sealed class IngestPipeline(
         var result = new IngestItemResult(IngestOutcome.Ingested, SystemId: system.Id, Sha1: hashes.Sha1);
 
         return owners.Count == 0
-            ? await NewGameAsync(file, system, rom, metadata, bytes, breaker, result, now, cancellationToken).ConfigureAwait(false)
-            : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes, breaker, result, now, cancellationToken).ConfigureAwait(false);
+            ? await NewGameAsync(file, system, rom, metadata, bytes, breaker, result, now, actor, null, cancellationToken).ConfigureAwait(false)
+            : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes, breaker, result, now, actor, null, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Shared steps 6–11 for synchronous review resolution; Attach supplies a target and skips grouping.</summary>
+    /// <param name="reviewAction">The resolution action (<c>Dat</c>, <c>Attach</c>, <c>Manual</c>), for the audit row's details.</param>
     public async Task<IngestItemResult> StoreReleaseAsync(IngestFile file, ISystemHandler system, InfoJsonRom rom,
-        DatMetadata metadata, byte[] bytes, Guid? targetGameId, Func<Guid, Task> afterMirror, CancellationToken cancellationToken)
+        DatMetadata metadata, byte[] bytes, Guid? targetGameId, Func<Guid, Task> afterMirror, AuditActor actor, string? reviewAction,
+        CancellationToken cancellationToken)
     {
         var owners = targetGameId is { } target ? new[] { target } :
             await roms.ListGameIdsByBaseTitleAsync(system.Id, rom.BaseTitle, cancellationToken).ConfigureAwait(false);
@@ -190,13 +205,14 @@ public sealed class IngestPipeline(
             return IngestItemResult.Error("AmbiguousGroup", "Several games own this base title; use Attach.");
         var result = new IngestItemResult(IngestOutcome.Ingested, SystemId: system.Id, Sha1: rom.Metadata.Sha1);
         return owners.Count == 0
-            ? await NewGameAsync(file, system, rom, metadata, bytes, new CircuitBreaker(), result, time.GetUtcNow(), cancellationToken, afterMirror).ConfigureAwait(false)
-            : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes, new CircuitBreaker(), result, time.GetUtcNow(), cancellationToken, afterMirror).ConfigureAwait(false);
+            ? await NewGameAsync(file, system, rom, metadata, bytes, new CircuitBreaker(), result, time.GetUtcNow(), actor, reviewAction, cancellationToken, afterMirror).ConfigureAwait(false)
+            : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes, new CircuitBreaker(), result, time.GetUtcNow(), actor, reviewAction, cancellationToken, afterMirror).ConfigureAwait(false);
     }
 
     private async Task<IngestItemResult> NewGameAsync(
         IngestFile file, ISystemHandler system, InfoJsonRom rom, DatMetadata metadata, byte[] bytes, CircuitBreaker breaker,
-        IngestItemResult result, DateTimeOffset now, CancellationToken cancellationToken, Func<Guid, Task>? afterMirror = null)
+        IngestItemResult result, DateTimeOffset now, AuditActor actor, string? reviewAction, CancellationToken cancellationToken,
+        Func<Guid, Task>? afterMirror = null)
     {
         // Step 7: a new game takes every metadata field. Step 8: media.
         var found = await media.FindAsync(system, [rom.Identification.DatGameName], breaker, cancellationToken).ConfigureAwait(false);
@@ -229,12 +245,13 @@ public sealed class IngestPipeline(
 
         var entries = new Dictionary<string, Func<Stream>> { [LibraryZip.RomEntry(rom.FileName)] = () => new MemoryStream(bytes) };
         AddImages(entries, found.BoxArt, found.Snap);
-        return await PackageAsync(file, null, zipPath, game, entries, result, cancellationToken, afterMirror).ConfigureAwait(false);
+        return await PackageAsync(file, null, zipPath, game, entries, result, actor, reviewAction, cancellationToken, afterMirror).ConfigureAwait(false);
     }
 
     private async Task<IngestItemResult> AddToGameAsync(
         IngestFile file, ISystemHandler system, Guid gameId, InfoJsonRom rom, DatMetadata metadata, byte[] bytes, CircuitBreaker breaker,
-        IngestItemResult result, DateTimeOffset now, CancellationToken cancellationToken, Func<Guid, Task>? afterMirror = null)
+        IngestItemResult result, DateTimeOffset now, AuditActor actor, string? reviewAction, CancellationToken cancellationToken,
+        Func<Guid, Task>? afterMirror = null)
     {
         var row = await games.GetAsync(gameId, cancellationToken).ConfigureAwait(false);
         if (row is null)
@@ -277,7 +294,8 @@ public sealed class IngestPipeline(
                 }
             }
 
-            return await PackageAsync(file, existing, row.ZipPath, game, entries, result with { GameId = gameId }, cancellationToken, afterMirror).ConfigureAwait(false);
+            return await PackageAsync(file, existing, row.ZipPath, game, entries, result with { GameId = gameId }, actor, reviewAction, cancellationToken,
+                afterMirror).ConfigureAwait(false);
         }
     }
 
@@ -295,7 +313,8 @@ public sealed class IngestPipeline(
     /// <c>EntrySizeMismatch</c> issue → rewrite it from this file and resolve the issue (<c>Repaired</c>, D30);
     /// otherwise <c>Duplicate</c> → <c>_duplicates/</c>.
     /// </summary>
-    private async Task<IngestItemResult> DuplicateOrRepairAsync(IngestFile file, RomRow known, byte[] bytes, string sha1, CancellationToken cancellationToken)
+    private async Task<IngestItemResult> DuplicateOrRepairAsync(IngestFile file, RomRow known, byte[] bytes, string sha1, AuditActor actor,
+        CancellationToken cancellationToken)
     {
         var game = await games.GetAsync(known.GameId, cancellationToken).ConfigureAwait(false);
         var entryName = LibraryZip.RomEntry(known.FileName);
@@ -308,7 +327,7 @@ public sealed class IngestPipeline(
             logger.LogWarning("{Path}: duplicate of {Zip} › {Entry} (sha1 {Sha1}, size {Size})",
                 file.FullPath, game?.ZipPath, entryName, sha1, bytes.Length);
             // An archive entry isn't moved on its own: the archive's fate covers it (§7.3).
-            var moveError = file.ArchiveEntry is null ? MoveToDuplicates(file) : null;
+            var moveError = file.ArchiveEntry is null ? MoveToDuplicates(file, actor) : null;
             return moveError ?? new IngestItemResult(IngestOutcome.Duplicate, Details: $"same as {game?.ZipPath} › {entryName}",
                 SystemId: known.SystemId, GameId: known.GameId, Sha1: sha1);
         }
@@ -327,7 +346,7 @@ public sealed class IngestPipeline(
             var entries = new Dictionary<string, Func<Stream>> { [entryName] = () => new MemoryStream(bytes) };
             var result = new IngestItemResult(IngestOutcome.Repaired, Details: $"rewrote {game.ZipPath} › {entryName} ({string.Join(", ", open.Select(i => i.Type))})",
                 SystemId: known.SystemId, GameId: known.GameId, Sha1: sha1);
-            return await PackageAsync(file, existing, game.ZipPath, repaired, entries, result, cancellationToken,
+            return await PackageAsync(file, existing, game.ZipPath, repaired, entries, result, actor, null, cancellationToken,
                 _ => issues.ResolveAsync(open.Select(i => i.Id).ToList(), now.UtcDateTime, cancellationToken)).ConfigureAwait(false);
         }
     }
@@ -336,24 +355,31 @@ public sealed class IngestPipeline(
     /// A file problem: <c>Failed</c>, and the file moves to <c>_failed/</c> with <c>&lt;name&gt;.error.txt</c> (spec §5).
     /// An archive entry stays put: its archive's fate decides (§7.3).
     /// </summary>
-    public IngestItemResult FailFile(IngestFile file, Guid jobId, string reason, string details, string? sha1 = null)
+    public IngestItemResult FailFile(IngestFile file, AuditActor actor, string reason, string details, string? sha1 = null)
     {
         logger.LogWarning("{Path}: Failed {Reason}: {Details}", file.ArchiveEntry is null ? file.FullPath : $"{file.ArchivePath} › {file.ArchiveEntry}", reason, details);
-        var moveError = file.ArchiveEntry is null ? MoveToFailed(file, jobId, reason, details) : null;
+        var moveError = file.ArchiveEntry is null ? MoveToFailed(file, actor, reason, details) : null;
         return moveError ?? new IngestItemResult(IngestOutcome.Failed, reason, details, file.SystemId, Sha1: sha1);
     }
 
-    /// <summary>Moves the file to <c>_failed/</c> and writes its <c>.error.txt</c> (reason, details, job, UTC time).</summary>
+    /// <summary>
+    /// Moves the file to <c>_failed/</c> and writes its <c>.error.txt</c> (reason, details, job — or <c>review by
+    /// &lt;username&gt;</c> without one — UTC time). Records <c>MovedToFailed</c>.
+    /// </summary>
     /// <returns>An <c>Error IoError</c> result when the move failed, else null.</returns>
-    public IngestItemResult? MoveToFailed(IngestFile file, Guid jobId, string reason, string details)
+    public IngestItemResult? MoveToFailed(IngestFile file, AuditActor actor, string reason, string details)
     {
         var moved = MoveAside(file, StorageFolders.FailedFolder);
         if (moved.Error is not null)
             return moved.Error;
+        var fromReview = actor.JobId is null;
+        audit.Record(new AuditEvent(AuditActions.MovedToFailed, actor, file.SystemId, Path: auditPaths.Of(file.FullPath),
+            TargetPath: auditPaths.Of(moved.Path), Details: fromReview ? "review dismiss" : reason));
+        var by = actor.JobId is { } jobId ? jobId.ToString() : $"review by {actor.Username}";
         try
         {
             File.WriteAllText(moved.Path + ".error.txt",
-                $"reason: {reason}\ndetails: {details}\njob: {jobId}\ntime: {time.GetUtcNow().UtcDateTime:O}\nsource: {file.FullPath}\n");
+                $"reason: {reason}\ndetails: {details}\njob: {by}\ntime: {time.GetUtcNow().UtcDateTime:O}\nsource: {file.FullPath}\n");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -363,7 +389,14 @@ public sealed class IngestPipeline(
     }
 
     /// <returns>An <c>Error IoError</c> result when the move failed, else null.</returns>
-    public IngestItemResult? MoveToDuplicates(IngestFile file) => MoveAside(file, StorageFolders.DuplicatesFolder).Error;
+    public IngestItemResult? MoveToDuplicates(IngestFile file, AuditActor actor)
+    {
+        var moved = MoveAside(file, StorageFolders.DuplicatesFolder);
+        if (moved.Error is null)
+            audit.Record(new AuditEvent(AuditActions.MovedToDuplicates, actor, file.SystemId, Path: auditPaths.Of(file.FullPath),
+                TargetPath: auditPaths.Of(moved.Path)));
+        return moved.Error;
+    }
 
     /// <summary>Moves the source into <c>ingest/&lt;system&gt;/&lt;folder&gt;/</c>, with a ` (N)` suffix on a clash (any case).</summary>
     private (string Path, IngestItemResult? Error) MoveAside(IngestFile file, string folder)
@@ -386,7 +419,7 @@ public sealed class IngestPipeline(
     /// §8.4: an unmatched file whose extension doesn't fit its header classification is renamed in place to the
     /// classified handler's first extension (<c>Warn</c>).
     /// </summary>
-    private IngestFile RenameToClassifiedExtension(IngestFile file, RomHeader? header, IReadOnlyList<ISystemHandler> family)
+    private IngestFile RenameToClassifiedExtension(IngestFile file, RomHeader? header, IReadOnlyList<ISystemHandler> family, AuditActor actor)
     {
         var classified = family.FirstOrDefault(h => h.Id == header?.ClassifiedSystemId);
         if (classified is null || classified.RomExtensions.Contains(Path.GetExtension(file.Name), StringComparer.OrdinalIgnoreCase))
@@ -396,6 +429,8 @@ public sealed class IngestPipeline(
         try
         {
             File.Move(file.FullPath, Path.Combine(directory, renamed));
+            audit.Record(new AuditEvent(AuditActions.ExtensionRenamed, actor, file.SystemId, Path: auditPaths.Of(file.FullPath),
+                TargetPath: auditPaths.Of(Path.Combine(directory, renamed))));
             logger.LogWarning("{Path}: header says {System}; renamed to {Name}", file.FullPath, classified.Id, renamed);
             return file with { FullPath = Path.Combine(directory, renamed), Name = renamed };
         }
@@ -427,9 +462,11 @@ public sealed class IngestPipeline(
 
     /// <summary>Steps 9–11.</summary>
     /// <param name="afterMirror">Runs once the DB is updated, before the source is deleted.</param>
+    /// <param name="reviewAction">Null from ingest; the resolution action from review (the <c>Ingested</c> row's details).</param>
     private async Task<IngestItemResult> PackageAsync(
         IngestFile file, LibraryZip? existing, string zipPath, InfoJsonGame game, Dictionary<string, Func<Stream>> entries,
-        IngestItemResult result, CancellationToken cancellationToken, Func<Guid, Task>? afterMirror = null)
+        IngestItemResult result, AuditActor actor, string? reviewAction, CancellationToken cancellationToken,
+        Func<Guid, Task>? afterMirror = null)
     {
         result = result with { GameId = game.GameId };
         var target = SafePath.Resolve(paths.Value.Roms, zipPath);
@@ -447,6 +484,12 @@ public sealed class IngestPipeline(
             logger.LogError(ex, "{Path}: writing {Zip} failed", file.FullPath, zipPath);
             return result with { Outcome = IngestOutcome.Error, Reason = IngestErrors.IoError, Details = ex.Message };
         }
+        // AU4: the ZIP is written, so the files changed even if the DB mirror fails below.
+        var repaired = result.Outcome == IngestOutcome.Repaired;
+        var release = entries.Keys.First(k => k.StartsWith(LibraryZip.RomsFolder, StringComparison.Ordinal))[LibraryZip.RomsFolder.Length..];
+        audit.Record(new AuditEvent(repaired ? AuditActions.ZipRepaired : AuditActions.Ingested, actor, game.System, game.GameId,
+            AuditSource(file), AuditPaths.Library(zipPath),
+            repaired ? null : reviewAction is null ? $"release {release}" : $"review resolve ({reviewAction})"));
 
         var info = new FileInfo(target);
         try

@@ -2,10 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
+import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 
-const goto = vi.fn();
-vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => goto(...args) }));
-vi.mock('$app/state', () => ({ page: { params: { id: 'g1' } } }));
+const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
+vi.mock('$app/navigation', () => ({ goto: (...args: [string, unknown?]) => goto(...args) }));
+vi.mock('$app/state', () => ({
+	page: {
+		params: { id: 'g1' },
+		get url() {
+			return testUrl.current;
+		}
+	}
+}));
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
@@ -48,6 +56,7 @@ const rom = (id: number) => ({
 const game = (romIds: number[]) => ({
 	id: 'g1',
 	system: 'gb',
+	systemName: 'Game Boy',
 	title: 'Tetris',
 	displayTitle: 'Tetris',
 	releaseYear: 1989,
@@ -72,6 +81,7 @@ describe('game detail admin actions', () => {
 	beforeEach(() => {
 		resetClient();
 		goto.mockClear();
+		navigateTo('/games/g1');
 		auth.set({
 			id: 1,
 			username: 'admin',
@@ -191,6 +201,19 @@ describe('game detail admin actions', () => {
 		await vi.waitFor(() => expect(calls).toContain('PATCH /api/games/g1'));
 	});
 
+	it('the admin modal opens from the Images tab, outside the hidden Releases panel (GP1)', async () => {
+		navigateTo('/games/g1?tab=images');
+		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
+		render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: /Delete game/ }));
+
+		const first = document.querySelector<HTMLElement>('.modal')!;
+		expect(first.querySelector('.modal-title')!.textContent).toMatch(/Delete/);
+		expect(first.closest('[hidden]')).toBeNull();
+		expect(document.getElementById('releases-panel')!.hidden).toBe(true);
+	});
+
 	it('other admin modals keep the default width', async () => {
 		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
 		render(GamePage);
@@ -209,5 +232,120 @@ describe('game detail admin actions', () => {
 
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/'));
 		expect(calls).toContain('DELETE /api/games/g1');
+	});
+
+	describe('merge suggestions (GP5)', () => {
+		const listItem = (id: string, displayTitle: string) => ({
+			id,
+			system: 'gb',
+			systemName: 'Game Boy',
+			displayTitle,
+			releaseYear: null,
+			regions: [],
+			romCount: 1,
+			primarySizeBytes: 1,
+			boxArtUrl: null,
+			rating: null,
+			favourite: false,
+			matchedOn: null
+		});
+		const pageOf = (...items: ReturnType<typeof listItem>[]) => ({
+			status: 200,
+			body: { items, page: 1, pageSize: 6, total: items.length }
+		});
+		const suggest = (q: string) =>
+			`GET /api/games?${new URLSearchParams({ system: 'gb', q, sort: 'relevance', pageSize: '6' })}`;
+
+		async function openMerge(displayTitle: string): Promise<void> {
+			answers['GET /api/games/g1'] = [{ status: 200, body: { ...game([1]), displayTitle } }];
+			render(GamePage);
+			await fireEvent.click(await screen.findByRole('button', { name: /Merge into/ }));
+		}
+
+		const suggestionButtons = () =>
+			[...document.querySelectorAll('[aria-labelledby="merge-suggested"] button')].map((b) =>
+				b.textContent?.trim()
+			);
+		const input = () => document.getElementById('merge-target') as HTMLInputElement;
+
+		it('requests the title without tags by relevance, excludes the current game and shows at most 5', async () => {
+			answers[suggest('Tetris DX')] = [
+				pageOf(
+					listItem('g1', 'Tetris DX'),
+					...['a', 'b', 'c', 'd', 'e'].map((id) => listItem(id, `Tetris ${id}`))
+				)
+			];
+			await openMerge('Tetris DX (USA) [!]');
+
+			await vi.waitFor(() =>
+				expect(suggestionButtons()).toEqual([
+					'Tetris a',
+					'Tetris b',
+					'Tetris c',
+					'Tetris d',
+					'Tetris e'
+				])
+			);
+			expect(calls).toContain(suggest('Tetris DX'));
+		});
+
+		it('cuts a long title to its first 8 words', async () => {
+			await openMerge('one two three four five six seven eight nine ten');
+
+			await vi.waitFor(() =>
+				expect(calls).toContain(suggest('one two three four five six seven eight'))
+			);
+		});
+
+		it('clicking one fills the typeahead and the merge posts it; typing again clears it', async () => {
+			answers[suggest('Tetris')] = [pageOf(listItem('g2', 'Tetris DX'))];
+			answers['POST /api/games/g1/merge'] = [{ status: 200, body: { targetGameId: 'g2' } }];
+			await openMerge('Tetris');
+
+			const button = await modal().findByRole('button', { name: 'Tetris DX', hidden: true });
+			await fireEvent.click(button);
+			expect(input().value).toBe('Tetris DX');
+			expect(button.getAttribute('aria-pressed')).toBe('true');
+			expect(document.getElementById('merge-target-help')!.textContent).toContain(
+				'Selected: Tetris DX'
+			);
+
+			await fireEvent.input(input(), { target: { value: 'Tetris D' } });
+			expect(document.getElementById('merge-target-help')!.textContent).not.toContain('Selected');
+
+			await fireEvent.click(button);
+			await fireEvent.click(modal().getByRole('button', { name: 'Merge into', hidden: true }));
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/games/g2'));
+			expect(calls).toContain('POST /api/games/g1/merge');
+		});
+
+		it('retries once with the first word of 3+ characters', async () => {
+			answers[suggest('Orbit Blocks')] = [pageOf(listItem('g1', 'Orbit Blocks'))];
+			answers[suggest('Orbit')] = [pageOf(listItem('g3', 'Orbit Kart'))];
+			await openMerge('Orbit Blocks');
+
+			await vi.waitFor(() => expect(suggestionButtons()).toEqual(['Orbit Kart']));
+		});
+
+		it('a title that is all tags requests nothing; no matches shows no list', async () => {
+			await openMerge('(Beta) [b]');
+			await new Promise((r) => setTimeout(r, 20));
+
+			expect(calls.filter((c) => c.startsWith('GET /api/games?'))).toEqual([]);
+			expect(document.getElementById('merge-suggested')).toBeNull();
+		});
+
+		it('a failed suggestion fetch shows no list and the typeahead still works', async () => {
+			answers[suggest('Tetris')] = [{ status: 500, body: { code: 'IoError', title: 'x' } }];
+			await openMerge('Tetris');
+			await vi.waitFor(() => expect(calls).toContain(suggest('Tetris')));
+
+			expect(document.getElementById('merge-suggested')).toBeNull();
+			await fireEvent.input(input(), { target: { value: 'Tet' } });
+			await vi.waitFor(
+				() => expect(calls.some((c) => c.startsWith('GET /api/games?q=Tet'))).toBe(true),
+				{ timeout: 1000 }
+			);
+		});
 	});
 });

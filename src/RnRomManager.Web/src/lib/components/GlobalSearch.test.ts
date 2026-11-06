@@ -12,7 +12,7 @@ vi.mock('$app/paths', () => ({
 }));
 
 // jsdom has no layout/transitions for Bootstrap's Modal; record show/hide instead.
-const shown = { count: 0, hidden: 0, options: [] as unknown[] };
+const shown = { count: 0, hidden: 0, options: [] as unknown[], calls: [] as string[] };
 vi.mock('../bootstrap', () => ({
 	Modal: class {
 		constructor(_element: Element, config: unknown) {
@@ -24,9 +24,12 @@ vi.mock('../bootstrap', () => ({
 		hide() {
 			shown.hidden++;
 		}
-		dispose() {}
+		dispose() {
+			shown.calls.push('dispose');
+		}
 	}
 }));
+vi.mock('../modal', () => ({ releaseModal: () => shown.calls.push('releaseModal') }));
 
 const { default: GlobalSearch } = await import('./GlobalSearch.svelte');
 const { default: Navbar } = await import('./Navbar.svelte');
@@ -132,6 +135,13 @@ describe('GlobalSearch', () => {
 	it('uses a static backdrop with Escape enabled (M1)', () => {
 		render(GlobalSearch);
 		expect(shown.options.at(-1)).toEqual({ backdrop: 'static', keyboard: true });
+	});
+
+	it('releases <body> before disposing on unmount (G1)', () => {
+		const { unmount } = render(GlobalSearch, { open: true });
+		shown.calls.length = 0;
+		unmount();
+		expect(shown.calls).toEqual(['releaseModal', 'dispose']);
 	});
 
 	it('a shortcut while open just refocuses the input', async () => {

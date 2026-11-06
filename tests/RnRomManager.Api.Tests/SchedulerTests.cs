@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Storage;
@@ -21,6 +22,7 @@ public class SchedulerTests
     private JobLock _lock = null!;
     private TempDir _logs = null!;
     private ListLogger _log = null!;
+    private IAuditLog _audit = null!;
     private List<NoopTestJob> _created = null!;
     private Scheduler? _scheduler;
 
@@ -33,6 +35,7 @@ public class SchedulerTests
         _lock = new JobLock();
         _logs = new TempDir();
         _log = new ListLogger();
+        _audit = Substitute.For<IAuditLog>();
         _created = [];
     }
 
@@ -51,7 +54,7 @@ public class SchedulerTests
 
     private Scheduler Create(string quickCheckTime = "03:00")
     {
-        var runner = new JobRunner(_jobs, _lock, _time, NullLogger<JobRunner>.Instance);
+        var runner = new JobRunner(_jobs, _lock, Substitute.For<RnRomManager.Core.Users.IUserRepository>(), _time, NullLogger<JobRunner>.Instance);
         var retention = new LogRetention(Options.Create(new PathsOptions { Logs = _logs.Path }), Options.Create(new LoggingOptions { RetentionDays = 14 }),
             _time, NullLogger<LogRetention>.Instance);
         _scheduler = new Scheduler(runner, _ =>
@@ -59,7 +62,7 @@ public class SchedulerTests
             var job = new NoopTestJob();
             _created.Add(job);
             return job;
-        }, retention, Options.Create(new IntegrityOptions { QuickCheckTime = quickCheckTime }), TimeZoneInfo.Utc, _time, _log);
+        }, retention, _audit, Options.Create(new IntegrityOptions { QuickCheckTime = quickCheckTime }), TimeZoneInfo.Utc, _time, _log);
         return _scheduler;
     }
 
@@ -156,6 +159,35 @@ public class SchedulerTests
 
         await AdvanceTo(new DateTimeOffset(2026, 11, 6, 0, 5, 0, TimeSpan.Zero));
         await Eventually(() => !File.Exists(later));
+    }
+
+    private IEnumerable<DateTime> AuditPurges() =>
+        _audit.ReceivedCalls().Where(c => c.GetMethodInfo().Name == nameof(IAuditLog.PurgeAsync)).Select(c => (DateTime)c.GetArguments()[0]!);
+
+    [Test]
+    public async Task AuditPurge_AtStartup_AndDailyAt0005Utc_ThirtyDaysBack()
+    {
+        var scheduler = Create("");
+        await scheduler.StartAsync(CancellationToken.None);
+        await Eventually(() => AuditPurges().Count() == 1);
+        Assert.That(AuditPurges().Single(), Is.EqualTo(new DateTime(2026, 10, 6, 2, 0, 0, DateTimeKind.Utc)));
+
+        await AdvanceTo(new DateTimeOffset(2026, 11, 6, 0, 5, 0, TimeSpan.Zero));
+        await Eventually(() => AuditPurges().Count() == 2);
+        Assert.That(AuditPurges().Last(), Is.EqualTo(new DateTime(2026, 10, 7, 0, 5, 0, DateTimeKind.Utc)));
+    }
+
+    [Test]
+    public async Task AFailingAuditPurge_IsLoggedAsAWarning_AndTheSchedulerKeepsRunning()
+    {
+        _audit.PurgeAsync(default, default).ReturnsForAnyArgs<Task<int>>(_ => throw new InvalidOperationException("db down"));
+        var scheduler = Create("");
+        await scheduler.StartAsync(CancellationToken.None);
+        await Eventually(() => _log.Entries.Any(e => e.Message.Contains("Audit purge failed", StringComparison.Ordinal)));
+        Assert.That(_log.Entries.First(e => e.Message.Contains("Audit purge failed", StringComparison.Ordinal)).Level, Is.EqualTo(LogLevel.Warning));
+
+        await AdvanceTo(new DateTimeOffset(2026, 11, 6, 0, 5, 0, TimeSpan.Zero));
+        await Eventually(() => AuditPurges().Count() == 2);
     }
 
     private sealed class ListLogger : ILogger<Scheduler>

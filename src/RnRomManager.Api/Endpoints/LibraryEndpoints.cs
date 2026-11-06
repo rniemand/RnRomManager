@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Net.Http.Headers;
 using RnRomManager.Api.Auth;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
@@ -44,6 +45,7 @@ public static class LibraryEndpoints
                 releaseYear = game.ReleaseYear,
                 regions = game.Regions,
                 romCount = game.RomCount,
+                primarySizeBytes = game.PrimarySizeBytes,
                 boxArtUrl = game.BoxArtImageId is { } imageId ? ImageUrl(game.Id, imageId) : null,
                 rating = game.Rating,
                 favourite = game.Favourite,
@@ -79,6 +81,16 @@ public static class LibraryEndpoints
             return Results.Stream(stream!, "application/zip", name, File.GetLastWriteTimeUtc(stream!.Name), enableRangeProcessing: true);
         });
 
+        games.MapGet("/{id:guid}/info-json", async (Guid id, HttpContext ctx, IGameRepository repository, LibraryFiles files) =>
+        {
+            if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
+                return Problems.NotFound(ctx);
+            // Returned as stored, even when it isn't valid JSON (GP4 shows the raw text then).
+            return files.ReadEntry(ctx, game, LibraryZip.InfoJsonEntry, InfoJsonReader.MaxBytes, out var bytes) is { } problem
+                ? problem
+                : Results.Bytes(bytes!, "application/json");
+        });
+
         games.MapGet("/{id:guid}/roms/{romId:long}/download", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,
             IRomRepository roms, LibraryFiles files) =>
         {
@@ -97,7 +109,7 @@ public static class LibraryEndpoints
             var (patch, errors) = ParsePatch(body);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            var result = await editor.PatchAsync(id, patch, ctx.RequestAborted);
+            var result = await editor.PatchAsync(id, patch, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.LibraryEditor);
 
@@ -108,15 +120,15 @@ public static class LibraryEndpoints
             var (patch, errors) = ParseRating(body);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            var result = await editor.PatchAsync(id, patch, ctx.RequestAborted);
+            var result = await editor.PatchAsync(id, patch, null, ctx.RequestAborted); // rating/favourite: not audited
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         });
 
         games.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, LibraryEditor editor) =>
-            ToResult(ctx, await editor.DeleteGameAsync(id, ctx.RequestAborted))).RequireAuthorization(AuthSetup.LibraryEditor);
+            ToResult(ctx, await editor.DeleteGameAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted))).RequireAuthorization(AuthSetup.LibraryEditor);
 
         games.MapDelete("/{id:guid}/roms/{romId:long}", async (Guid id, long romId, HttpContext ctx, LibraryEditor editor) =>
-            ToResult(ctx, await editor.DeleteReleaseAsync(id, romId, ctx.RequestAborted))).RequireAuthorization(AuthSetup.LibraryEditor);
+            ToResult(ctx, await editor.DeleteReleaseAsync(id, romId, AuditActor.From(ctx.User), ctx.RequestAborted))).RequireAuthorization(AuthSetup.LibraryEditor);
 
         games.MapPost("/{id:guid}/roms/{romId:long}/move", async (Guid id, long romId, MoveReleaseRequest request, HttpContext ctx,
             LibraryEditor editor) =>
@@ -124,14 +136,15 @@ public static class LibraryEndpoints
             var errors = Validate(request);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            var result = await editor.MoveReleaseAsync(id, romId, request.TargetGameId, request.NewGameTitle?.Trim(), ctx.RequestAborted);
+            var result = await editor.MoveReleaseAsync(id, romId, request.TargetGameId, request.NewGameTitle?.Trim(), AuditActor.From(ctx.User),
+                ctx.RequestAborted);
             return result.Code is null ? Results.Ok(new { targetGameId = result.GameId }) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.LibraryEditor);
 
         games.MapPost("/{id:guid}/media/retry", async (Guid id, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
             IRomRepository roms, IImageRepository images) =>
         {
-            var result = await editor.RetryMediaAsync(id, ctx.RequestAborted);
+            var result = await editor.RetryMediaAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.LibraryEditor);
 
@@ -157,21 +170,21 @@ public static class LibraryEndpoints
             }
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            var result = await editor.AddImageAsync(id, type, bytes!, ctx.RequestAborted);
+            var result = await editor.AddImageAsync(id, type, bytes!, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.LibraryEditor).WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(UploadRequestLimit));
 
         games.MapDelete("/{id:guid}/images/{imageId:long}", async (Guid id, long imageId, HttpContext ctx, LibraryEditor editor,
             IGameRepository repository, IRomRepository roms, IImageRepository images) =>
         {
-            var result = await editor.DeleteImageAsync(id, imageId, ctx.RequestAborted);
+            var result = await editor.DeleteImageAsync(id, imageId, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.LibraryEditor);
 
         games.MapPost("/{id:guid}/images/{imageId:long}/cover", async (Guid id, long imageId, HttpContext ctx, LibraryEditor editor,
             IGameRepository repository, IRomRepository roms, IImageRepository images) =>
         {
-            var result = await editor.SetCoverAsync(id, imageId, ctx.RequestAborted);
+            var result = await editor.SetCoverAsync(id, imageId, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.LibraryEditor);
 
@@ -185,7 +198,7 @@ public static class LibraryEndpoints
         {
             if (request.TargetGameId is not { } target || target == Guid.Empty)
                 return Problems.Validation(ctx, new Dictionary<string, string[]> { ["targetGameId"] = ["A target game is required."] });
-            var result = await editor.MergeAsync(id, target, ctx.RequestAborted);
+            var result = await editor.MergeAsync(id, target, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? Results.Ok(new { targetGameId = result.GameId }) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.LibraryEditor);
 
@@ -232,22 +245,24 @@ public static class LibraryEndpoints
             return Problems.NotFound(ctx);
         var romRows = await roms.ListByGameAsync(id, ctx.RequestAborted);
         var imageRows = await images.ListByGameAsync(id, ctx.RequestAborted);
-        return Results.Ok(ToDetail(game, romRows, imageRows));
+        var systemName = ctx.RequestServices.GetRequiredService<ISystemRegistry>().ById(game.SystemId)?.DisplayName ?? game.SystemId;
+        return Results.Ok(ToDetail(game, systemName, romRows, imageRows));
     }
 
     private static IResult ToResult(HttpContext ctx, LibraryEditResult result) =>
         result.Code is null ? Results.NoContent() : ToProblem(ctx, result);
 
     /// <summary>§23 mutation bullet: 409 for the lock and unwritable ZIPs, 404 for a stale id, 500 for write failures.</summary>
-    private static IResult ToProblem(HttpContext ctx, LibraryEditResult result) => result.Code switch
-    {
-        LibraryEditResult.ValidationFailed => Problems.Validation(ctx, result.Errors!),
-        LibraryEditResult.NotFound => Problems.NotFound(ctx),
-        LibraryEditResult.JobRunning or LibraryEditResult.TooManyImages or LibraryEditResult.DuplicateImage or LibraryEditResult.DefaultImage
-            or LibraryTarget.InfoJsonNewerSchema or LibraryTarget.TargetZipUnreadable =>
-            Problems.Create(ctx, StatusCodes.Status409Conflict, result.Code, result.Code),
-        _ => Problems.Create(ctx, StatusCodes.Status500InternalServerError, result.Code!, result.Code!),
-    };
+    internal static IResult ToProblem(HttpContext ctx, LibraryEditResult result, IReadOnlyDictionary<string, object?>? extensions = null) =>
+        result.Code switch
+        {
+            LibraryEditResult.ValidationFailed => Problems.Validation(ctx, result.Errors!, extensions),
+            LibraryEditResult.NotFound => Problems.NotFound(ctx, extensions),
+            LibraryEditResult.JobRunning or LibraryEditResult.TooManyImages or LibraryEditResult.DuplicateImage or LibraryEditResult.DefaultImage
+                or LibraryTarget.InfoJsonNewerSchema or LibraryTarget.TargetZipUnreadable =>
+                Problems.Create(ctx, StatusCodes.Status409Conflict, result.Code, result.Code, extensions),
+            _ => Problems.Create(ctx, StatusCodes.Status500InternalServerError, result.Code!, result.Code!, extensions),
+        };
 
     private const string TitleRule = "Must contain 1–255 characters and produce a nonempty filename.";
 
@@ -430,12 +445,13 @@ public static class LibraryEndpoints
         return (query, errors);
     }
 
-    private static string ImageUrl(Guid gameId, long imageId) => $"/api/games/{gameId}/images/{imageId}";
+    internal static string ImageUrl(Guid gameId, long imageId) => $"/api/games/{gameId}/images/{imageId}";
 
-    private static object ToDetail(GameRow game, IReadOnlyList<RomRow> roms, IReadOnlyList<ImageRow> images) => new
+    private static object ToDetail(GameRow game, string systemName, IReadOnlyList<RomRow> roms, IReadOnlyList<ImageRow> images) => new
     {
         id = game.Id,
         system = game.SystemId,
+        systemName,
         title = game.Title,
         displayTitle = game.DisplayTitle,
         releaseYear = game.ReleaseYear,

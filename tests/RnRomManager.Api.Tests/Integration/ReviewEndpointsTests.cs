@@ -3,9 +3,11 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Jobs;
@@ -329,6 +331,46 @@ public class ReviewEndpointsTests
         Assert.That((await AuthClient.JsonAsync(dismissed)).GetProperty("total").GetInt32(), Is.EqualTo(1));
     }
 
+    [Test]
+    public async Task Audit_ResolveDismissDelete_RecordTheSignedInUser_WithoutAJob()
+    {
+        var resolved = await Queue();
+        var dismissed = await Queue(name: "second.gb", bytes: new SyntheticRomBuilder { Seed = 931, Title = "SECOND" }.Build());
+        var deleted = await Queue(name: "third.gb", bytes: new SyntheticRomBuilder { Seed = 934, Title = "THIRD" }.Build());
+
+        (await _admin.PostAsync($"/api/review/{resolved.Id}/resolve", Manual())).Dispose();
+        (await _admin.PostAsync($"/api/review/{dismissed.Id}/dismiss")).Dispose();
+        (await _admin.SendAsync(HttpMethod.Delete, $"/api/review/{deleted.Id}", null, sendXsrf: true)).Dispose();
+
+        await Service<RnRomManager.Api.AuditWriter>().FlushAsync();
+        await using var db = Service<IDbConnectionFactory>().Create();
+        var rows = (await db.QueryAsync<(string Action, int? UserId, string? Username, Guid? JobId, string? Path, string? Details)>(
+            "SELECT action, user_id, username, job_id, path, details FROM audit_events ORDER BY id")).ToList();
+        Assert.That(rows, Is.EqualTo(new (string, int?, string?, Guid?, string?, string?)[]
+        {
+            ("Ingested", _adminId, "boss", null, "ingest/gb/mystery.gb", "review resolve (Manual)"),
+            ("MovedToFailed", _adminId, "boss", null, "ingest/gb/second.gb", "review dismiss"),
+            ("ReviewDeleted", _adminId, "boss", null, "ingest/gb/third.gb", null),
+        }));
+        Assert.That(File.ReadAllText(Path.Combine(_factory.Root, "ingest", "gb", "_failed", "second.gb.error.txt")),
+            Does.Contain("job: review by boss"));
+    }
+
+    [Test]
+    public async Task List_IsArchive_AndDetail_SystemName()
+    {
+        var loose = await Queue();
+        var packed = await Queue(archive: true, name: "packed.gb", bytes: new SyntheticRomBuilder { Seed = 933, Title = "PACKED" }.Build());
+
+        using var list = await _admin.GetAsync("/api/review");
+        var items = (await AuthClient.JsonAsync(list)).GetProperty("items").EnumerateArray()
+            .ToDictionary(i => i.GetProperty("id").GetInt64(), i => i.GetProperty("isArchive").GetBoolean());
+        Assert.That((items[loose.Id], items[packed.Id]), Is.EqualTo((false, true)));
+
+        using var detail = await _admin.GetAsync($"/api/review/{loose.Id}");
+        Assert.That((await AuthClient.JsonAsync(detail)).GetProperty("systemName").GetString(), Is.EqualTo("Game Boy"));
+    }
+
     [TestCase("/api/review?status=Bad")]
     [TestCase("/api/review?page=0")]
     [TestCase("/api/review?pageSize=201")]
@@ -342,6 +384,54 @@ public class ReviewEndpointsTests
         var problem = await AuthClient.JsonAsync(response);
         Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo("ValidationFailed"));
         Assert.That(problem.GetProperty("errors").EnumerateObject(), Is.Not.Empty);
+    }
+
+    [TestCase("system=nes", "system")]
+    [TestCase("reason=Failed", "reason")]
+    public async Task ListFilter_InvalidValue_Is400WithFieldError(string query, string field)
+    {
+        using var response = await _admin.GetAsync("/api/review?" + query);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await AuthClient.JsonAsync(response);
+        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo("ValidationFailed"));
+        Assert.That(problem.GetProperty("errors").TryGetProperty(field, out _), Is.True);
+    }
+
+    [Test]
+    public async Task ListFilter_QOver100Chars_Is400()
+    {
+        using var response = await _admin.GetAsync("/api/review?q=" + new string('a', 101));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").TryGetProperty("q", out _), Is.True);
+    }
+
+    [Test]
+    public async Task ListFilter_BySystemReasonAndQ_TotalReflectsFilter()
+    {
+        var target = await KnownGame();
+        var mystery = await Queue();
+        var second = await Ambiguous(await Queue(name: "second.gb", bytes: new SyntheticRomBuilder { Seed = 931, Title = "SECOND" }.Build()), target);
+        var odd = await Queue(name: "c%_1.gb", bytes: new SyntheticRomBuilder { Seed = 934, Title = "THIRD" }.Build());
+        await using (var db = Service<IDbConnectionFactory>().Create())
+            await db.ExecuteAsync("UPDATE ingest_review_items SET system_id = 'gbc' WHERE id = @id", new { id = odd.Id });
+
+        async Task<(long Total, long[] Ids)> List(string query)
+        {
+            using var response = await _admin.GetAsync("/api/review?" + query);
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), query);
+            var page = await AuthClient.JsonAsync(response);
+            return (page.GetProperty("total").GetInt64(),
+                page.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetInt64()).Order().ToArray());
+        }
+
+        Assert.That(await List("system=gbc"), Is.EqualTo((1L, new[] { odd.Id })));
+        Assert.That(await List("reason=AmbiguousGroup"), Is.EqualTo((1L, new[] { second.Id })));
+        Assert.That(await List("q=MYST"), Is.EqualTo((1L, new[] { mystery.Id })), "file name, case-insensitive");
+        Assert.That(await List("q=tHiRd"), Is.EqualTo((1L, new[] { odd.Id })), "header title, case-insensitive");
+        Assert.That(await List("q=%25_"), Is.EqualTo((1L, new[] { odd.Id })), "% and _ match literally");
+        Assert.That(await List("system=gb&reason=NoDatMatch"), Is.EqualTo((1L, new[] { mystery.Id })));
+        Assert.That(await List("system=gb&reason=NoDatMatch&q=second"), Is.EqualTo((0L, Array.Empty<long>())));
+        Assert.That((await List("q=%20%20&pageSize=1")).Total, Is.EqualTo(3), "blank q is ignored; total ignores paging");
     }
 
     [Test]

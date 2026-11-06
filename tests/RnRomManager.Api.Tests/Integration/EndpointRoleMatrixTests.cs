@@ -42,6 +42,7 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/games/{id:guid}"] = Role.User,
         ["GET /api/games/{id:guid}/images/{imageId:long}"] = Role.User,
         ["GET /api/games/{id:guid}/download"] = Role.User,
+        ["GET /api/games/{id:guid}/info-json"] = Role.User,
         ["GET /api/games/{id:guid}/roms/{romId:long}/download"] = Role.User,
         ["PATCH /api/games/{id:guid}"] = Role.RomManager,
         ["PATCH /api/games/{id:guid}/rating"] = Role.User,
@@ -80,7 +81,16 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/admin/logs"] = Role.Admin,
         ["GET /api/admin/logs/recent"] = Role.Admin,
         ["GET /api/admin/logs/stream"] = Role.Admin,
+        ["GET /api/admin/audit"] = Role.Admin,
+        ["GET /api/admin/audit/actions"] = Role.Admin,
         ["GET /api/about"] = Role.User,
+
+        ["GET /api/reports/missing-images"] = Role.User,
+        ["GET /api/reports/library-size"] = Role.User,
+        ["GET /api/reports/library-size/{system}"] = Role.User,
+        ["GET /api/reports/duplicates"] = Role.User,
+        ["POST /api/reports/duplicates/dismiss"] = Role.RomManager,
+        ["POST /api/reports/duplicates/merge"] = Role.RomManager,
     };
 
     [GeneratedRegex(@"\{(\w+):(\w+)\}")]

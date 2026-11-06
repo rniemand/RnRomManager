@@ -5,7 +5,10 @@ import type { GameDetail, ImageInfo } from '#lib/api/types.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 
-vi.mock('$app/state', () => ({ page: { params: { id: 'g1' } } }));
+// The page reads `?tab=` from the URL (GP1).
+vi.mock('$app/state', () => ({
+	page: { params: { id: 'g1' }, url: new URL('http://localhost/games/g1?tab=images') }
+}));
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 // Bootstrap's Modal needs layout/transitions jsdom lacks.
@@ -42,6 +45,7 @@ const image = (id: number, type: ImageInfo['type'], extra: Partial<ImageInfo> = 
 const game = (images: ImageInfo[]): GameDetail => ({
 	id: 'g1',
 	system: 'gb',
+	systemName: 'Game Boy',
 	title: 'Tetris',
 	displayTitle: 'Tetris',
 	releaseYear: null,

@@ -40,6 +40,7 @@ const games = {
 			releaseYear: 1992,
 			regions: ['USA'],
 			romCount: 1,
+			primarySizeBytes: 131072,
 			boxArtUrl: '/api/games/g1/images/7',
 			systemName: 'Game Boy',
 			rating: null,
@@ -53,12 +54,20 @@ const games = {
 
 describe('library page', () => {
 	let requested: string[];
+	let store: Map<string, string>;
 
 	beforeEach(() => {
 		resetClient();
 		goto.mockClear();
+		url.current = new URL('http://localhost/?system=gb&letter=%23');
 		tooltips.length = 0;
 		requested = [];
+		// Isolate saved views between tests, independent of Node's localStorage implementation.
+		store = new Map();
+		vi.stubGlobal('localStorage', {
+			getItem: (key: string) => store.get(key) ?? null,
+			setItem: (key: string, value: string) => void store.set(key, value)
+		});
 		vi.stubGlobal('fetch', (input: string) => {
 			requested.push(input);
 			const body = input === '/api/systems' ? systems : games;
@@ -150,9 +159,33 @@ describe('library page', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'List view' }));
 
+		expect(store.get('libraryView')).toBe('list');
 		expect(screen.getByRole('columnheader', { name: 'Rating' })).toBeTruthy();
 		const row = screen.getByRole('row', { name: /4-in-1 Fun Pak/ });
 		expect(row.querySelector('.badge')!.textContent).toBe('Game Boy');
 		expect(row.querySelector('[aria-label="Rate 1 of 5"]')).toBeTruthy();
+	});
+
+	it('restores a saved list view on mount', async () => {
+		store.set('libraryView', 'list');
+		render(LibraryPage);
+
+		expect(await screen.findByRole('columnheader', { name: 'Size' })).toBeTruthy();
+		expect(screen.queryByAltText('4-in-1 Fun Pak box art')).toBeNull();
+	});
+
+	it('shows the primary release size in the grid card and the list Size column (LP1)', async () => {
+		url.current = new URL('http://localhost/');
+		render(LibraryPage);
+		await screen.findByAltText('4-in-1 Fun Pak box art');
+		expect(document.querySelector('.card .file-size')!.getAttribute('title')).toBe(
+			`${(131072).toLocaleString()} bytes`
+		);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'List view' }));
+
+		expect(screen.getByRole('columnheader', { name: 'Size' })).toBeTruthy();
+		const row = screen.getByRole('row', { name: /4-in-1 Fun Pak/ });
+		expect(row.querySelector('.file-size')!.textContent).toBe('128.0 KiB');
 	});
 });

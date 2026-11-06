@@ -7,6 +7,7 @@
 	import type { GameListItem, Page, SystemInfo } from '#lib/api/types.js';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import FileSize from '#lib/components/FileSize.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import RatingControl from '#lib/components/RatingControl.svelte';
@@ -298,6 +299,7 @@
 							>
 							<div class="small text-body-secondary text-truncate">
 								{[game.releaseYear, game.regions.join(', ')].filter(Boolean).join(' · ')}
+								{#if game.primarySizeBytes != null}· <FileSize bytes={game.primarySizeBytes} />{/if}
 							</div>
 							<div class="position-relative z-2 mt-1">
 								<RatingControl
@@ -323,6 +325,7 @@
 						<th scope="col">Regions</th>
 						<th scope="col">Rating</th>
 						<th scope="col" class="text-end">Releases</th>
+						<th scope="col" class="text-end">Size</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -341,6 +344,7 @@
 								/>
 							</td>
 							<td class="text-end">{game.romCount}</td>
+							<td class="text-end text-nowrap"><FileSize bytes={game.primarySizeBytes} /></td>
 						</tr>
 					{/each}
 				</tbody>
