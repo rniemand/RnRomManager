@@ -59,8 +59,8 @@
 	<h2 class="h5 mt-4">Licences</h2>
 	<div class="card">
 		<div class="table-responsive">
-			<table class="table table-sm table-hover align-middle mb-0">
-				<thead>
+			<table class="table table-sm table-striped table-hover align-middle mb-0">
+				<thead class="table-dark">
 					<tr class="small text-uppercase text-body-secondary">
 						<th scope="col">Component</th>
 						<th scope="col">Licence</th>

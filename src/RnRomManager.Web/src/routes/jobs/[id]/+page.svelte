@@ -161,8 +161,8 @@
 				<p class="text-body-secondary">No items.</p>
 			{:else}
 				<div class="table-responsive">
-					<table class="table table-sm">
-						<thead>
+					<table class="table table-sm table-striped table-hover">
+						<thead class="table-dark">
 							<tr>
 								<th scope="col">File</th>
 								<th scope="col">System</th>

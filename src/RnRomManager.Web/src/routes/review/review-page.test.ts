@@ -171,7 +171,7 @@ describe('review detail page', () => {
 		expect(tabNames()).toEqual(['Suggestions', 'Attach', 'Manual']);
 		expect(selected()).toBe('Suggestions');
 		expect(document.querySelector('[role="tabpanel"] table')?.className).toBe(
-			'table table-sm table-hover align-middle mb-0'
+			'table table-sm table-striped table-hover align-middle mb-0'
 		);
 
 		await fireEvent.click(screen.getByRole('tab', { name: 'Attach' }));
@@ -205,7 +205,7 @@ describe('review detail page', () => {
 		expect(screen.getByText('GB').classList.contains('badge')).toBe(true);
 		expect(screen.getByText('NoDatMatch').classList.contains('badge')).toBe(true);
 		expect(screen.getByText('TETRIS').closest('table')?.className).toBe(
-			'table table-sm table-hover align-middle mb-0'
+			'table table-sm table-striped table-hover align-middle mb-0'
 		);
 	});
 
@@ -325,7 +325,7 @@ describe('review queue page', () => {
 
 		await screen.findByText('file1.gb');
 		expect(document.querySelector('table')!.className).toBe(
-			'table table-sm table-hover align-middle mb-0'
+			'table table-sm table-striped table-hover align-middle mb-0'
 		);
 		expect(screen.getByText('GB').classList.contains('badge')).toBe(true);
 		expect(document.querySelector('tbody .file-size')!.textContent).toBe('1.0 KiB');

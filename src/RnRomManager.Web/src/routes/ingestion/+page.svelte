@@ -171,8 +171,8 @@
 					<h3 class="h6 mt-3"><Icon name="system-{system.system}" /> {system.system}</h3>
 					<div class="card">
 						<div class="table-responsive">
-							<table class="table table-sm table-hover align-middle mb-0">
-								<thead>
+							<table class="table table-sm table-striped table-hover align-middle mb-0">
+								<thead class="table-dark">
 									<tr class="small text-uppercase text-body-secondary">
 										<th scope="col">Name</th>
 										<th scope="col" class="text-end">Size</th>
@@ -210,8 +210,8 @@
 			{:else}
 				<div class="card">
 					<div class="table-responsive">
-						<table class="table table-sm table-hover align-middle mb-0">
-							<thead>
+						<table class="table table-sm table-striped table-hover align-middle mb-0">
+							<thead class="table-dark">
 								<tr class="small text-uppercase text-body-secondary">
 									<th scope="col">Started</th>
 									<th scope="col">Status</th>

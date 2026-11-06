@@ -158,8 +158,8 @@
 			{#if users.length === 0}
 				<EmptyState message="No users." />
 			{:else}
-				<table class="table table-sm table-hover align-middle mb-0">
-					<thead>
+				<table class="table table-sm table-striped table-hover align-middle mb-0">
+					<thead class="table-dark">
 						<tr class="small text-uppercase text-body-secondary">
 							<th scope="col">Username</th>
 							<th scope="col">Roles</th>

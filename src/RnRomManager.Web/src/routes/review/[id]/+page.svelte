@@ -283,8 +283,8 @@
 					<div class="card-header"><h2 class="h6 mb-0">Header</h2></div>
 					{#if item.header}
 						<div class="table-responsive">
-							<table class="table table-sm table-hover align-middle mb-0">
-								<thead>
+							<table class="table table-sm table-striped table-hover align-middle mb-0">
+								<thead class="table-dark">
 									<tr class="small text-uppercase text-body-secondary">
 										<th scope="col">Field</th>
 										<th scope="col">Value</th>
@@ -368,8 +368,8 @@
 						{#if item.suggestions?.length}
 							<div class="card mb-3">
 								<div class="table-responsive">
-									<table class="table table-sm table-hover align-middle mb-0">
-										<thead>
+									<table class="table table-sm table-striped table-hover align-middle mb-0">
+										<thead class="table-dark">
 											<tr class="small text-uppercase text-body-secondary">
 												<th scope="col">DAT entry</th>
 												<th scope="col" class="text-end">Score</th>

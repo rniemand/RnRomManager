@@ -255,8 +255,8 @@
 	<h2 class="h5">Releases</h2>
 	<div class="card mb-4">
 		<div class="table-responsive">
-			<table class="table table-sm table-hover align-middle mb-0">
-				<thead class="small text-uppercase text-body-secondary">
+			<table class="table table-sm table-striped table-hover align-middle mb-0">
+				<thead class="table-dark">
 					<tr>
 						<th scope="col">File</th>
 						<th scope="col">Region</th>
@@ -351,7 +351,7 @@
 
 	<ConfirmModal bind:open={headerOpen} title="Header — {headerRom?.fileName ?? ''}" size="lg">
 		{#if headerRom?.header}
-			<table class="table table-sm mb-0">
+			<table class="table table-sm table-striped table-hover mb-0">
 				<caption class="visually-hidden">Header of {headerRom.fileName}</caption>
 				<tbody>
 					{#each Object.entries(headerRom.header) as [key, value] (key)}

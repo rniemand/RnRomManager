@@ -75,7 +75,7 @@ describe('admin pages', () => {
 		await screen.findByRole('cell', { name: 'admin' });
 
 		const table = document.querySelector('table')!;
-		expect(table.className).toBe('table table-sm table-hover align-middle mb-0');
+		expect(table.className).toBe('table table-sm table-striped table-hover align-middle mb-0');
 		expect(table.closest('.table-responsive')?.parentElement?.classList.contains('card')).toBe(
 			true
 		);
@@ -204,7 +204,7 @@ describe('admin pages', () => {
 
 	const expectT1 = () => {
 		const table = document.querySelector('table')!;
-		expect(table.className).toBe('table table-sm table-hover align-middle mb-0');
+		expect(table.className).toBe('table table-sm table-striped table-hover align-middle mb-0');
 		expect(table.closest('.table-responsive')?.parentElement?.classList.contains('card')).toBe(
 			true
 		);
