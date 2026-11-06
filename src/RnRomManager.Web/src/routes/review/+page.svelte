@@ -14,7 +14,9 @@
 	import { formatDateTime } from '#lib/format.js';
 	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
+	import { deleteReviewItem, toastDeleteFailed } from '#lib/review.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
+	import { tooltip } from '#lib/tooltip.js';
 
 	let pageSize = $state(readPageSize('review'));
 	let result = $state<Page<ReviewListItem> | null>(null);
@@ -49,13 +51,28 @@
 		pageNumber = 1;
 	}
 
-	function askDelete(item: ReviewListItem): void {
-		deleteId = item.id;
-		deleteOpen = true;
+	async function askDelete(event: MouseEvent, item: ReviewListItem): Promise<void> {
+		// RV1: Shift+click skips the modal, except for an archive (deleting it deletes every file in it).
+		if (!event.shiftKey || item.isArchive) {
+			deleteId = item.id;
+			deleteOpen = true;
+			return;
+		}
+		try {
+			await deleteReviewItem(item.id);
+		} catch (e) {
+			toastDeleteFailed(e);
+			return;
+		}
+		removed(item.fileName);
 	}
 
 	function deleted(item: ReviewDetail): void {
-		toasts.show(`Deleted ${item.originalFileName}.`, 'success');
+		removed(item.originalFileName);
+	}
+
+	function removed(fileName: string): void {
+		toasts.show(`Deleted ${fileName}.`, 'success');
 		// D5: the page may now be empty; step back instead of showing an empty page.
 		if (result?.items.length === 1 && pageNumber > 1) pageNumber--;
 		else reload++;
@@ -105,7 +122,8 @@
 											type="button"
 											class="btn btn-sm btn-outline-danger"
 											aria-label="Delete {item.fileName}"
-											onclick={() => askDelete(item)}
+											use:tooltip={'Delete (Shift+click to skip confirmation)'}
+											onclick={(e) => askDelete(e, item)}
 										>
 											<Icon name="delete" />
 										</button>

@@ -329,6 +329,21 @@ public class ReviewEndpointsTests
         Assert.That((await AuthClient.JsonAsync(dismissed)).GetProperty("total").GetInt32(), Is.EqualTo(1));
     }
 
+    [Test]
+    public async Task List_IsArchive_AndDetail_SystemName()
+    {
+        var loose = await Queue();
+        var packed = await Queue(archive: true, name: "packed.gb", bytes: new SyntheticRomBuilder { Seed = 933, Title = "PACKED" }.Build());
+
+        using var list = await _admin.GetAsync("/api/review");
+        var items = (await AuthClient.JsonAsync(list)).GetProperty("items").EnumerateArray()
+            .ToDictionary(i => i.GetProperty("id").GetInt64(), i => i.GetProperty("isArchive").GetBoolean());
+        Assert.That((items[loose.Id], items[packed.Id]), Is.EqualTo((false, true)));
+
+        using var detail = await _admin.GetAsync($"/api/review/{loose.Id}");
+        Assert.That((await AuthClient.JsonAsync(detail)).GetProperty("systemName").GetString(), Is.EqualTo("Game Boy"));
+    }
+
     [TestCase("/api/review?status=Bad")]
     [TestCase("/api/review?page=0")]
     [TestCase("/api/review?pageSize=201")]

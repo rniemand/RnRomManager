@@ -26,10 +26,11 @@ public static class ReviewEndpoints
             {
                 id = item.Id, system = item.SystemId, reason = item.Reason, fileName = item.OriginalFileName,
                 sizeBytes = item.SizeBytes, headerTitle = item.Header is null ? null : JsonNode.Parse(item.Header)?["title"]?.GetValue<string>(),
-                createdAt = item.CreatedAt,
+                createdAt = item.CreatedAt, isArchive = item.ArchivePath is not null,
             }));
         });
-        review.MapGet("/{id:long}", async (long id, HttpContext ctx, IIngestReviewRepository repository, IGameRepository games) =>
+        review.MapGet("/{id:long}", async (long id, HttpContext ctx, IIngestReviewRepository repository, IGameRepository games,
+            ISystemRegistry systems) =>
         {
             var item = await repository.GetAsync(id, ctx.RequestAborted);
             if (item is null)
@@ -40,7 +41,8 @@ public static class ReviewEndpoints
                     candidates.Add(new { id = game.Id, displayTitle = game.DisplayTitle });
             return Results.Ok(new
             {
-                id = item.Id, system = item.SystemId, reason = item.Reason, sourcePath = item.SourcePath,
+                id = item.Id, system = item.SystemId, systemName = systems.ById(item.SystemId)?.DisplayName ?? item.SystemId,
+                reason = item.Reason, sourcePath = item.SourcePath,
                 archivePath = item.ArchivePath, archiveEntry = item.ArchiveEntry, originalFileName = item.OriginalFileName,
                 sizeBytes = item.SizeBytes, crc32 = item.Crc32, md5 = item.Md5, sha1 = item.Sha1,
                 header = Parse(item.Header), suggestions = Parse(item.Suggestions), datIdentification = Parse(item.DatIdentification),

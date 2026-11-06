@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { api } from '../api/client';
+	import { deleteReviewItem } from '../review';
 	import type { ReviewDetail } from '../api/types';
 	import { formatDateTime, formatKey, formatValue } from '../format';
 	import { toasts } from '../stores/toasts.svelte';
@@ -42,7 +43,7 @@
 		if (!item) return;
 		busy = true;
 		try {
-			await api.delete(`/api/review/${item.id}`);
+			await deleteReviewItem(item.id);
 			open = false;
 			ondeleted(item);
 		} catch (e) {

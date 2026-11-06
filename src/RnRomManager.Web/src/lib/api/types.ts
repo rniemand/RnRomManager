@@ -178,12 +178,16 @@ export interface ReviewListItem {
 	sizeBytes: number;
 	headerTitle: string | null;
 	createdAt: string;
+	/** The file came from an archive; deleting it deletes the whole archive (RV1). */
+	isArchive: boolean;
 }
 
 /** `GET /api/review/{id}` (spec §23, §14.1 `ingest_review_items`). */
 export interface ReviewDetail {
 	id: number;
 	system: string;
+	/** The handler's display name (RV2). */
+	systemName: string;
 	reason: ReviewReason;
 	sourcePath: string;
 	archivePath: string | null;

@@ -26,7 +26,10 @@
 		type ManualForm
 	} from '#lib/reviewForm.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
+	import { googleSearchUrl, reviewSearchQuery } from '#lib/googleSearch.js';
+	import { deleteReviewItem, toastDeleteFailed } from '#lib/review.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
+	import { tooltip } from '#lib/tooltip.js';
 
 	let item = $state<ReviewDetail | null>(null);
 	let notFound = $state(false);
@@ -197,6 +200,24 @@
 
 	const percent = (score: number) => `${Math.round(score * 100)}%`;
 
+	async function askDelete(event: MouseEvent): Promise<void> {
+		// RV1: Shift+click skips the modal, except for an archive (deleting it deletes every file in it).
+		if (!event.shiftKey || !item || item.archivePath) {
+			confirmDelete = true;
+			return;
+		}
+		busy = true;
+		try {
+			await deleteReviewItem(item.id);
+		} catch (e) {
+			toastDeleteFailed(e);
+			return;
+		} finally {
+			busy = false;
+		}
+		await deleted();
+	}
+
 	async function deleted(): Promise<void> {
 		toasts.show(`Deleted ${item?.originalFileName ?? 'the file'}.`, 'success');
 		await goto(resolve('/review'));
@@ -228,6 +249,15 @@
 			{#if item.status !== 'Pending'}<span class="badge text-bg-light border">{item.status}</span
 				>{/if}
 			<div class="ms-auto d-flex gap-2">
+				<!-- External link: resolve() is for app routes. -->
+				<!-- eslint-disable svelte/no-navigation-without-resolve -->
+				<a
+					class="btn btn-outline-secondary btn-sm align-self-center"
+					href={googleSearchUrl(reviewSearchQuery(item, item.systemName))}
+					target="_blank"
+					rel="noopener noreferrer"><Icon name="search" /> Google it</a
+				>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 				<button
 					type="button"
 					class="btn btn-outline-secondary"
@@ -238,7 +268,8 @@
 					type="button"
 					class="btn btn-outline-danger"
 					disabled={busy}
-					onclick={() => (confirmDelete = true)}><Icon name="delete" /> Delete</button
+					use:tooltip={'Delete (Shift+click to skip confirmation)'}
+					onclick={askDelete}><Icon name="delete" /> Delete</button
 				>
 			</div>
 		</div>

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
+import { toasts } from '#lib/stores/toasts.svelte.js';
 
 const goto = vi.fn();
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => goto(...args) }));
@@ -17,6 +18,14 @@ vi.mock('#lib/bootstrap.js', () => ({
 		dispose() {}
 	}
 }));
+// use:tooltip builds a Bootstrap Tooltip the Modal-only mock above lacks; record the text instead.
+const tooltips: { node: Element; text: string }[] = [];
+vi.mock('#lib/tooltip.js', () => ({
+	tooltip: (node: Element, text: string) => {
+		tooltips.push({ node, text });
+	}
+}));
+const shiftTip = 'Delete (Shift+click to skip confirmation)';
 
 const { default: ReviewPage } = await import('./[id]/+page.svelte');
 const { default: QueuePage } = await import('./+page.svelte');
@@ -24,6 +33,7 @@ const { default: QueuePage } = await import('./+page.svelte');
 const base = {
 	id: 7,
 	system: 'gb',
+	systemName: 'Game Boy',
 	sourcePath: 'ingest/gb/tetris hack.gb',
 	archivePath: null,
 	archiveEntry: null,
@@ -242,6 +252,71 @@ describe('review detail page', () => {
 		expect(deleted).toBe(true);
 	});
 
+	it('Shift+click on Delete deletes a loose file without the modal and goes back (RV1)', async () => {
+		toasts.items = [];
+		let deletes = 0;
+		answers['GET /api/review/7'] = { status: 200, body: noMatch };
+		const fetchStub = globalThis.fetch;
+		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+			if (init?.method === 'DELETE' && url === '/api/review/7') deletes++;
+			return fetchStub(url, init);
+		});
+		render(ReviewPage);
+
+		const button = await screen.findByRole('button', { name: /^Delete$/ });
+		expect(tooltips.some((t) => t.node === button && t.text === shiftTip)).toBe(true);
+		await fireEvent.click(button, { shiftKey: true });
+
+		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/review'));
+		expect(deletes).toBe(1);
+		expect(toasts.items.at(-1)?.text).toBe('Deleted tetris hack.gb.');
+		expect(screen.queryByRole('heading', { name: /^Delete File:/, hidden: true })).toBeNull();
+	});
+
+	it('Shift+click on an archive item still opens the modal (RV1)', async () => {
+		const archived = { ...noMatch, archivePath: 'ingest/gb/pack.zip', archiveEntry: 'a.gb' };
+		answers['GET /api/review/7'] = { status: 200, body: archived };
+		render(ReviewPage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: /^Delete$/ }), {
+			shiftKey: true
+		});
+
+		expect(
+			await screen.findByRole('heading', { name: 'Delete File: tetris hack.gb', hidden: true })
+		).toBeTruthy();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('a failed Shift+click delete toasts and stays (RV1)', async () => {
+		toasts.items = [];
+		answers['GET /api/review/7'] = { status: 200, body: noMatch };
+		answers['DELETE /api/review/7'] = { status: 500, body: { code: 'IoError', title: 'IoError' } };
+		render(ReviewPage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: /^Delete$/ }), {
+			shiftKey: true
+		});
+
+		await vi.waitFor(() => expect(toasts.items.at(-1)).toMatchObject({ kind: 'danger' }));
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		['NoDatMatch', noMatch],
+		['AmbiguousGroup', ambiguous]
+	])('the header has a Google it link for a %s item (RV2)', async (_reason, body) => {
+		answers['GET /api/review/7'] = { status: 200, body };
+		render(ReviewPage);
+
+		const link = await screen.findByRole('link', { name: /Google it/ });
+		expect(link.getAttribute('href')).toBe(
+			'https://www.google.com/search?q=%22TETRIS%22%20Game%20Boy%20rom'
+		);
+		expect(link.getAttribute('target')).toBe('_blank');
+		expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+	});
+
 	it('SourceMissing goes back to the queue', async () => {
 		answers['GET /api/review/7'] = { status: 200, body: noMatch };
 		answers['POST /api/review/7/resolve'] = {
@@ -268,7 +343,8 @@ describe('review queue page', () => {
 		fileName: `file${id}.gb`,
 		sizeBytes: 1024,
 		headerTitle: null,
-		createdAt: ''
+		createdAt: '',
+		isArchive: id >= 100
 	});
 	const page = (ids: number[], total: number) => ({
 		items: ids.map(row),
@@ -376,6 +452,48 @@ describe('review queue page', () => {
 		expect(screen.getByRole('alert', { hidden: true }).textContent?.replace(/\s+/g, ' ')).toContain(
 			'This deletes the whole archive ingest/gb/pack.zip, including every other file in it.'
 		);
+	});
+
+	it('Shift+click deletes a loose item without the modal and reloads (RV1)', async () => {
+		toasts.items = [];
+		answers[list(1, 20)] = { status: 200, body: page([1, 2], 2) };
+		render(QueuePage);
+
+		const button = await screen.findByRole('button', { name: 'Delete file1.gb' });
+		expect(tooltips.some((t) => t.node === button && t.text === shiftTip)).toBe(true);
+		await fireEvent.click(button, { shiftKey: true });
+
+		await vi.waitFor(() => expect(calls.filter((c) => c === list(1, 20))).toHaveLength(2));
+		expect(calls).toContain('DELETE /api/review/1');
+		expect(calls).not.toContain('GET /api/review/1');
+		expect(toasts.items.at(-1)?.text).toBe('Deleted file1.gb.');
+	});
+
+	it('Shift+click on an archive item opens the modal instead (RV1)', async () => {
+		answers[list(1, 20)] = { status: 200, body: page([100], 1) };
+		answers['GET /api/review/100'] = { status: 200, body: { ...noMatch, id: 100 } };
+		render(QueuePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Delete file100.gb' }), {
+			shiftKey: true
+		});
+
+		await vi.waitFor(() => expect(calls).toContain('GET /api/review/100'));
+		expect(calls).not.toContain('DELETE /api/review/100');
+	});
+
+	it('a failed Shift+click delete toasts and keeps the list (RV1)', async () => {
+		toasts.items = [];
+		answers[list(1, 20)] = { status: 200, body: page([1], 1) };
+		answers['DELETE /api/review/1'] = { status: 409, body: { code: 'JobRunning', title: 'x' } };
+		render(QueuePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Delete file1.gb' }), {
+			shiftKey: true
+		});
+
+		await vi.waitFor(() => expect(toasts.items.at(-1)?.kind).toBe('warning'));
+		expect(calls.filter((c) => c === list(1, 20))).toHaveLength(1);
 	});
 
 	it('confirming calls DELETE and steps back when the page is now empty', async () => {
