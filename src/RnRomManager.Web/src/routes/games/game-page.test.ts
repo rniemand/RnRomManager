@@ -48,7 +48,20 @@ function game(romIds: number[]): GameDetail {
 		favourite: false,
 		metadata: { createdAt: '', updatedAt: '' },
 		roms: romIds.map((id, i) => rom(id, `Tetris ${id}.gb`, i === 0)),
-		images: [{ id: 9, type: 'BoxArt', isDefault: false, width: 512, height: 512, url: '/img/9' }]
+		images: [
+			{
+				id: 9,
+				type: 'BoxArt',
+				fileName: 'boxart-01.png',
+				source: 'libretro-thumbnails',
+				isDefault: false,
+				isCover: true,
+				sizeBytes: 1024,
+				width: 512,
+				height: 512,
+				url: '/img/9'
+			}
+		]
 	};
 }
 
@@ -76,7 +89,7 @@ describe('game detail page', () => {
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);
 
-		expect(await screen.findByAltText('Tetris box art')).toBeTruthy();
+		expect(await screen.findByAltText('Tetris cover')).toBeTruthy();
 		expect(screen.getByText('Primary')).toBeTruthy();
 		await fireEvent.click(screen.getByRole('button', { name: 'Header' }));
 		expect(screen.getByText('Logo valid')).toBeTruthy();

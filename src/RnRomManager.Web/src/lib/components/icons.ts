@@ -15,6 +15,7 @@ export const icons: Record<string, string> = {
 	'theme-dark': 'bi bi-moon-stars',
 	'theme-auto': 'bi bi-circle-half',
 	download: 'bi bi-download',
+	upload: 'bi bi-upload',
 	copy: 'bi bi-clipboard',
 	edit: 'bi bi-pencil',
 	delete: 'bi bi-trash',

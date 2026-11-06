@@ -12,6 +12,7 @@
 		type AdminOutcome
 	} from '#lib/components/GameAdminModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
+	import GameImages from '#lib/components/GameImages.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
@@ -31,8 +32,8 @@
 	let action = $state<AdminAction | null>(null);
 
 	const id = $derived(page.params.id ?? '');
-	const boxArt = $derived(game?.images.find((i) => i.type === 'BoxArt'));
-	const snap = $derived(game?.images.find((i) => i.type === 'Snap'));
+	// P3: the cover (any type); screenshots are in the Images gallery.
+	const cover = $derived(game?.images.find((i) => i.isCover));
 
 	async function fetchGame(gameId: string, signal?: AbortSignal): Promise<GameDetail | null> {
 		try {
@@ -133,22 +134,13 @@
 
 	<div class="row g-4 mb-4">
 		<div class="col-12 col-md-4 col-lg-3">
-			{#if boxArt}
+			{#if cover}
 				<img
 					class="img-fluid rounded border"
-					src={boxArt.url}
-					width={boxArt.width}
-					height={boxArt.height}
-					alt="{game.displayTitle} box art"
-				/>
-			{/if}
-			{#if snap}
-				<img
-					class="img-fluid rounded border mt-3"
-					src={snap.url}
-					width={snap.width}
-					height={snap.height}
-					alt="{game.displayTitle} screenshot"
+					src={cover.url}
+					width={cover.width}
+					height={cover.height}
+					alt="{game.displayTitle} cover"
 				/>
 			{/if}
 		</div>
@@ -318,4 +310,7 @@
 	{#if auth.canEditLibrary}
 		<GameAdminModal {game} bind:action ondone={onAdminDone} />
 	{/if}
+
+	<!-- Below the admin modal so game-admin.test.ts, which takes the first .modal, still finds it. -->
+	<GameImages {game} onchanged={(detail) => (game = detail)} />
 {/if}
