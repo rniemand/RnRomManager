@@ -270,7 +270,7 @@ Migrations 0013 and 0014 only add tables, so existing data is untouched. There a
   - Role matrix: user 403, admin 200.
 
   Done when: Api tests pass.
-- [ ] **23. Audit UI**: AU7. Files: `routes/admin/+layout.svelte`, new `routes/admin/audit/+page.svelte`, a new `routes/admin/audit-page.test.ts` (like `logs-page.test.ts`), and a layout render test (`admin-pages.test.ts` never renders the layout today). Tests (vitest):
+- [x] **23. Audit UI**: AU7. Files: `routes/admin/+layout.svelte`, new `routes/admin/audit/+page.svelte`, a new `routes/admin/audit-page.test.ts` (like `logs-page.test.ts`), and a layout render test (`admin-pages.test.ts` never renders the layout today). Tests (vitest):
   - The Auditing tab is present, between Logs and About (the layout reads `page.url.pathname`, so this test's `$app/state` mock has a `url`).
   - The default request has no filters and a page size of 100.
   - Each control maps to its query param and to the URL.
