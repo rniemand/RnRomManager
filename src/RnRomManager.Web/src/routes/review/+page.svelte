@@ -1,7 +1,10 @@
 <script lang="ts">
+	import { onDestroy, untrack } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { Page, ReviewDetail, ReviewListItem } from '#lib/api/types.js';
+	import type { Page, ReviewDetail, ReviewListItem, SystemInfo } from '#lib/api/types.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
@@ -15,13 +18,82 @@
 	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { deleteReviewItem, toastDeleteFailed } from '#lib/review.js';
+	import {
+		parseReviewFilter,
+		readSavedReviewFilter,
+		reviewApiUrl,
+		reviewFilterParams,
+		reviewFilterSearch,
+		saveReviewFilter,
+		type ReviewFilter
+	} from '#lib/reviewFilter.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import { tooltip } from '#lib/tooltip.js';
+
+	function go(search: string): void {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
+		void goto(`/review${search}`, { replace: true, reset: false });
+	}
+
+	const filter = $derived(parseReviewFilter(page.url.searchParams));
+	const filtered = $derived(!!(filter.q || filter.system || filter.reason));
+
+	/** Any filter change goes back to page 1. */
+	function update(changes: Partial<ReviewFilter>): void {
+		go(reviewFilterSearch({ ...filter, page: 1, ...changes }));
+	}
+
+	// First run: a URL without these params restores the saved filter; after that every URL state is saved.
+	let restoring =
+		!reviewFilterParams.some((p) => page.url.searchParams.has(p)) && !!readSavedReviewFilter();
+	$effect(() => {
+		const search = reviewFilterSearch(filter);
+		untrack(() => {
+			if (restoring) {
+				restoring = false;
+				go(readSavedReviewFilter());
+			} else saveReviewFilter(search);
+		});
+	});
+
+	let search = $state('');
+	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	onDestroy(() => clearTimeout(searchTimer));
+
+	function onSearchInput(): void {
+		clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => {
+			const q = search.trim();
+			if (q !== filter.q) update({ q });
+		}, 300);
+	}
+
+	// URL → search box (restore, Clear).
+	$effect(() => {
+		const q = filter.q;
+		untrack(() => {
+			if (search.trim() !== q) search = q;
+		});
+	});
+
+	function clear(): void {
+		clearTimeout(searchTimer);
+		search = '';
+		go('');
+	}
+
+	let systems = $state<SystemInfo[]>([]);
+	$effect(() => {
+		if (!auth.isAdmin) return;
+		api.get<SystemInfo[]>('/api/systems').then(
+			(list) => (systems = list),
+			() => {} // only feeds the System select; the list call shows errors
+		);
+	});
 
 	let pageSize = $state(readPageSize('review'));
 	let result = $state<Page<ReviewListItem> | null>(null);
 	let error = $state<unknown>(null);
-	let pageNumber = $state(1);
 	let reload = $state(0);
 
 	let deleteId = $state<number | null>(null);
@@ -31,7 +103,7 @@
 
 	$effect(() => {
 		if (!auth.isAdmin) return;
-		const url = `/api/review?status=Pending&page=${pageNumber}&pageSize=${pageSize}`;
+		const url = reviewApiUrl(filter, pageSize);
 		void reload;
 		const controller = new AbortController();
 		error = null;
@@ -48,7 +120,7 @@
 	function setPageSize(size: number): void {
 		writePageSize('review', size);
 		pageSize = size;
-		pageNumber = 1;
+		update({});
 	}
 
 	async function askDelete(event: MouseEvent, item: ReviewListItem): Promise<void> {
@@ -74,7 +146,8 @@
 	function removed(fileName: string): void {
 		toasts.show(`Deleted ${fileName}.`, 'success');
 		// D5: the page may now be empty; step back instead of showing an empty page.
-		if (result?.items.length === 1 && pageNumber > 1) pageNumber--;
+		if (result?.items.length === 1 && filter.page > 1)
+			go(reviewFilterSearch({ ...filter, page: filter.page - 1 }));
 		else reload++;
 	}
 </script>
@@ -84,6 +157,56 @@
 <AdminOnly>
 	<h1 class="h3 mb-3"><Icon name="review" /> Review queue</h1>
 
+	<form class="row g-2 align-items-end mb-3" role="search" onsubmit={(e) => e.preventDefault()}>
+		<div class="col-12 col-md-5">
+			<label class="form-label" for="review-q">Search</label>
+			<input
+				id="review-q"
+				type="search"
+				class="form-control"
+				placeholder="Search file name or title"
+				maxlength="100"
+				bind:value={search}
+				oninput={onSearchInput}
+			/>
+		</div>
+		<div class="col-6 col-md-3">
+			<label class="form-label" for="review-system">System</label>
+			<select
+				id="review-system"
+				class="form-select"
+				value={filter.system}
+				onchange={(e) => update({ system: e.currentTarget.value })}
+			>
+				<option value="">All systems</option>
+				{#each systems as s (s.id)}
+					<option value={s.id}>{s.displayName}</option>
+				{/each}
+			</select>
+		</div>
+		<div class="col-6 col-md-2">
+			<label class="form-label" for="review-reason">Reason</label>
+			<select
+				id="review-reason"
+				class="form-select"
+				value={filter.reason}
+				onchange={(e) => update({ reason: e.currentTarget.value })}
+			>
+				<option value="">All reasons</option>
+				<option value="NoDatMatch">No DAT match</option>
+				<option value="AmbiguousGroup">Ambiguous group</option>
+			</select>
+		</div>
+		<div class="col-12 col-md-2">
+			<button
+				type="button"
+				class="btn btn-outline-secondary w-100"
+				disabled={!filtered}
+				onclick={clear}>Clear</button
+			>
+		</div>
+	</form>
+
 	{#if error}
 		<ErrorAlert {error} onretry={() => reload++} />
 	{:else if !result}
@@ -92,7 +215,9 @@
 		<div class="card">
 			<div class="table-responsive">
 				{#if result.items.length === 0}
-					<EmptyState message="Nothing to review." />
+					<EmptyState
+						message={filtered ? 'No review items match this filter.' : 'Nothing to review.'}
+					/>
 				{:else}
 					<table class="table table-sm table-striped table-hover align-middle mb-0">
 						<thead class="table-dark">
@@ -136,9 +261,9 @@
 			</div>
 		</div>
 		<Pagination
-			page={pageNumber}
+			page={filter.page}
 			{pages}
-			onpage={(p) => (pageNumber = p)}
+			onpage={(p) => go(reviewFilterSearch({ ...filter, page: p }))}
 			{pageSize}
 			onpagesize={setPageSize}
 		/>

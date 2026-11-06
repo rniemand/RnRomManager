@@ -3,10 +3,18 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
+import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 
 const goto = vi.fn();
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => goto(...args) }));
-vi.mock('$app/state', () => ({ page: { params: { id: '7' } } }));
+vi.mock('$app/state', () => ({
+	page: {
+		params: { id: '7' },
+		get url() {
+			return testUrl.current;
+		}
+	}
+}));
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
@@ -357,12 +365,24 @@ describe('review queue page', () => {
 		resetClient();
 		auth.set({ id: 1, username: 'admin', roles: ['admin'], mustChangePassword: false });
 		calls = [];
-		answers = {};
+		answers = {
+			'GET /api/systems': {
+				status: 200,
+				body: [
+					{ id: 'gb', displayName: 'Game Boy', gameCount: 0, romCount: 0, regions: [] },
+					{ id: 'gbc', displayName: 'Game Boy Color', gameCount: 0, romCount: 0, regions: [] }
+				]
+			}
+		};
 		store = new Map();
+		navigateTo('/review');
+		goto.mockReset();
+		goto.mockImplementation((path: string) => navigateTo(path));
 		// Node 25's localStorage global shadows jsdom's; stub it (as in pageSize.test.ts).
 		vi.stubGlobal('localStorage', {
 			getItem: (k: string) => store.get(k) ?? null,
-			setItem: (k: string, v: string) => void store.set(k, v)
+			setItem: (k: string, v: string) => void store.set(k, v),
+			removeItem: (k: string) => void store.delete(k)
 		});
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
 			const key = `${init?.method ?? 'GET'} ${url}`;
@@ -378,10 +398,113 @@ describe('review queue page', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		auth.set(null);
+		goto.mockReset();
 	});
 
 	const list = (p: number, size: number) =>
 		`GET /api/review?status=Pending&page=${p}&pageSize=${size}`;
+	const urlOptions = { replace: true, reset: false };
+	const filterKey = 'rnrm.review.filter';
+
+	it('the search, System and Reason controls write the URL and send the query (RV4)', async () => {
+		answers[list(1, 20)] = { status: 200, body: page([1], 1) };
+		render(QueuePage);
+		await screen.findByText('file1.gb');
+		await screen.findByRole('option', { name: 'Game Boy Color' });
+
+		await fireEvent.input(screen.getByPlaceholderText('Search file name or title'), {
+			target: { value: ' tetris ' }
+		});
+		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/review?q=tetris', urlOptions));
+		await fireEvent.change(screen.getByLabelText('System'), { target: { value: 'gbc' } });
+		await fireEvent.change(screen.getByLabelText('Reason'), {
+			target: { value: 'AmbiguousGroup' }
+		});
+
+		expect(goto).toHaveBeenLastCalledWith(
+			'/review?q=tetris&system=gbc&reason=AmbiguousGroup',
+			urlOptions
+		);
+		await vi.waitFor(() =>
+			expect(calls).toContain(`${list(1, 20)}&q=tetris&system=gbc&reason=AmbiguousGroup`)
+		);
+		expect(store.get(filterKey)).toBe('?q=tetris&system=gbc&reason=AmbiguousGroup');
+	});
+
+	it('paging writes page to the URL and storage; a filter change resets to page 1 (RV4)', async () => {
+		answers[list(1, 20)] = { status: 200, body: page([1], 40) };
+		answers[list(2, 20)] = { status: 200, body: page([21], 40) };
+		render(QueuePage);
+		await screen.findByText('file1.gb');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+		expect(goto).toHaveBeenLastCalledWith('/review?page=2', urlOptions);
+		await screen.findByText('file21.gb');
+		expect(store.get(filterKey)).toBe('?page=2');
+
+		await fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'NoDatMatch' } });
+		expect(goto).toHaveBeenLastCalledWith('/review?reason=NoDatMatch', urlOptions);
+	});
+
+	it('URL params win over storage and are saved (RV4)', async () => {
+		store.set(filterKey, '?system=gbc');
+		navigateTo('/review?reason=AmbiguousGroup');
+		answers[`${list(1, 20)}&reason=AmbiguousGroup`] = { status: 200, body: page([1], 1) };
+		render(QueuePage);
+
+		await screen.findByText('file1.gb');
+		expect(goto).not.toHaveBeenCalled();
+		expect(calls.some((c) => c.includes('system=gbc'))).toBe(false);
+		expect(store.get(filterKey)).toBe('?reason=AmbiguousGroup');
+	});
+
+	it('an empty URL restores the saved filter with replaceState (RV4)', async () => {
+		store.set(filterKey, '?q=abc&page=2');
+		answers[`${list(2, 20)}&q=abc`] = { status: 200, body: page([21], 21) };
+		render(QueuePage);
+
+		await screen.findByText('file21.gb');
+		expect(goto).toHaveBeenCalledWith('/review?q=abc&page=2', urlOptions);
+		expect((screen.getByLabelText('Search') as HTMLInputElement).value).toBe('abc');
+	});
+
+	it('Clear empties the URL and storage (RV4)', async () => {
+		navigateTo('/review?q=abc&system=gb&page=2');
+		render(QueuePage);
+		const clear = await screen.findByRole('button', { name: 'Clear' });
+
+		await fireEvent.click(clear);
+
+		expect(goto).toHaveBeenLastCalledWith('/review', urlOptions);
+		await vi.waitFor(() => expect(store.has(filterKey)).toBe(false));
+		expect((clear as HTMLButtonElement).disabled).toBe(true);
+		expect((screen.getByLabelText('Search') as HTMLInputElement).value).toBe('');
+	});
+
+	it('shows the filtered empty state only when a filter is set (RV4)', async () => {
+		answers[list(1, 20)] = { status: 200, body: page([], 0) };
+		answers[`${list(1, 20)}&system=gb`] = { status: 200, body: page([], 0) };
+		render(QueuePage);
+		expect(await screen.findByText('Nothing to review.')).toBeTruthy();
+
+		await fireEvent.change(screen.getByLabelText('System'), { target: { value: 'gb' } });
+
+		expect(await screen.findByText('No review items match this filter.')).toBeTruthy();
+	});
+
+	it('a throwing localStorage does not break the page (RV4)', async () => {
+		const boom = () => {
+			throw new Error('denied');
+		};
+		vi.stubGlobal('localStorage', { getItem: boom, setItem: boom, removeItem: boom });
+		answers[list(1, 20)] = { status: 200, body: page([1], 1) };
+		render(QueuePage);
+
+		expect(await screen.findByText('file1.gb')).toBeTruthy();
+		await fireEvent.change(screen.getByLabelText('System'), { target: { value: 'gb' } });
+		expect(goto).toHaveBeenLastCalledWith('/review?system=gb', urlOptions);
+	});
 
 	it('uses the stored page size and remembers a new one', async () => {
 		store.set('rnrm.pageSize.review', '50');
