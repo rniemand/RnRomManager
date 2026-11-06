@@ -115,6 +115,7 @@ describe('review detail page', () => {
 		answers['GET /api/review/7'] = { status: 200, body: noMatch };
 		render(ReviewPage);
 
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Manual' }));
 		await fireEvent.click(await screen.findByRole('button', { name: 'Add manually' }));
 
 		expect(screen.getByText('Use 1–255 characters.')).toBeTruthy();
@@ -129,6 +130,7 @@ describe('review detail page', () => {
 		};
 		render(ReviewPage);
 
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Manual' }));
 		await fireEvent.input(await screen.findByLabelText('Title'), { target: { value: 'Tetris' } });
 		await fireEvent.input(screen.getByLabelText('Regions'), { target: { value: 'USA, Europe' } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Add manually' }));
@@ -152,6 +154,90 @@ describe('review detail page', () => {
 		await vi.waitFor(() =>
 			expect(posts[0].body).toEqual({ action: 'Attach', targetGameId: 'g2', flag: 'None' })
 		);
+	});
+
+	const tabNames = () => screen.getAllByRole('tab').map((t) => t.textContent?.trim());
+	const selected = () =>
+		screen
+			.getAllByRole('tab')
+			.find((t) => t.getAttribute('aria-selected') === 'true')
+			?.textContent?.trim();
+
+	it('opens on Suggestions when there are some, and the tabs switch', async () => {
+		answers['GET /api/review/7'] = { status: 200, body: noMatch };
+		render(ReviewPage);
+
+		await screen.findByRole('button', { name: 'Use' });
+		expect(tabNames()).toEqual(['Suggestions', 'Attach', 'Manual']);
+		expect(selected()).toBe('Suggestions');
+		expect(document.querySelector('[role="tabpanel"] table')?.className).toBe(
+			'table table-sm table-hover align-middle mb-0'
+		);
+
+		await fireEvent.click(screen.getByRole('tab', { name: 'Attach' }));
+		expect(selected()).toBe('Attach');
+		expect(screen.getByText('Attach to a game as a hack or translation.')).toBeTruthy();
+		expect(screen.queryByRole('button', { name: 'Use' })).toBeNull();
+	});
+
+	it('opens on Manual when there are no suggestions', async () => {
+		answers['GET /api/review/7'] = { status: 200, body: { ...noMatch, suggestions: [] } };
+		render(ReviewPage);
+
+		expect(await screen.findByRole('button', { name: 'Add manually' })).toBeTruthy();
+		expect(selected()).toBe('Manual');
+	});
+
+	it('an ambiguous item has only the Matched DAT entry tab', async () => {
+		answers['GET /api/review/7'] = { status: 200, body: ambiguous };
+		render(ReviewPage);
+
+		await screen.findAllByRole('button', { name: 'Attach' });
+		expect(tabNames()).toEqual(['Matched DAT entry']);
+	});
+
+	it('the header row has the system and reason badges and the header uses the standard table', async () => {
+		answers['GET /api/review/7'] = { status: 200, body: noMatch };
+		render(ReviewPage);
+
+		const heading = await screen.findByRole('heading', { level: 1 });
+		expect(heading.getAttribute('title')).toBe('tetris hack.gb');
+		expect(screen.getByText('GB').classList.contains('badge')).toBe(true);
+		expect(screen.getByText('NoDatMatch').classList.contains('badge')).toBe(true);
+		expect(screen.getByText('TETRIS').closest('table')?.className).toBe(
+			'table table-sm table-hover align-middle mb-0'
+		);
+	});
+
+	it('dismiss posts as before and goes back to the queue', async () => {
+		answers['GET /api/review/7'] = { status: 200, body: noMatch };
+		render(ReviewPage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Dismiss' }));
+		const confirms = screen.getAllByRole('button', { name: 'Dismiss', hidden: true });
+		await fireEvent.click(confirms[confirms.length - 1]);
+
+		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/review'));
+		expect(posts).toEqual([{ url: '/api/review/7/dismiss', body: undefined }]);
+	});
+
+	it('Delete opens the delete modal and goes back to the queue after deleting', async () => {
+		let deleted = false;
+		answers['GET /api/review/7'] = { status: 200, body: noMatch };
+		const fetchStub = globalThis.fetch;
+		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+			if (init?.method === 'DELETE' && url === '/api/review/7') deleted = true;
+			return fetchStub(url, init);
+		});
+		render(ReviewPage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: /^Delete$/ }));
+		const confirm = await screen.findByRole('button', { name: 'Delete file', hidden: true });
+		await vi.waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
+		await fireEvent.click(confirm);
+
+		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/review'));
+		expect(deleted).toBe(true);
 	});
 
 	it('SourceMissing goes back to the queue', async () => {

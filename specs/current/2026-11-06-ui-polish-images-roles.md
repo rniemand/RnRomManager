@@ -53,7 +53,7 @@ A batch of UI and feature work requested together: compact, consistently styled 
 
 ### Review item page (`/review/{id}`)
 - **W1** Layout: one header row with the file name (h1 h4, `text-truncate` + title), system badge, reason badge and actions on the right: Dismiss (existing) and Delete (D1, `btn-outline-danger`).
-- **W2** Below, two columns at `lg`: left (col-lg-5) a card "File" (size, hashes with copy buttons, source/archive path, created) and a card "Header" (T1-styled two-column key/value table); right (col-lg-7) the resolution options as `nav-tabs`: Suggestions (default when present), Matched DAT entry (only when ambiguous), Attach, Manual. Each tab is the existing form unchanged in behaviour. Below `lg` the columns stack.
+- **W2** Below, two columns at `lg`: left (col-lg-5) a card "File" (size, hashes with copy buttons, source/archive path, created) and a card "Header" (T1-styled two-column key/value table); right (col-lg-7) the resolution options as `nav-tabs`: for NoDatMatch Suggestions, Attach, Manual (Suggestions is the default when there are suggestions, else Manual); for AmbiguousGroup only Matched DAT entry. Each tab is the existing form unchanged in behaviour. Below `lg` the columns stack.
 - **W3** Suggestions use a T1 table.
 
 ### Admin
@@ -139,7 +139,7 @@ A batch of UI and feature work requested together: compact, consistently styled 
 - [x] **7. Logs tab (SPA)**: `/admin/logs` route + tab in `admin/+layout.svelte`; download button moved here from Settings (A2, A3); live view per L3. Tests: vitest with a fake `EventSource` — lines appended, level filter, pause buffers then appends, 2,000-line cap, "Reconnecting…" on error with OPEN/CONNECTING state, ErrorAlert only when CLOSED; Settings has no Download logs button. Done when: tests pass.
 - [x] **8. Review delete (API)**: `ReviewResolver.DeleteSourceAsync` + repository support + `DELETE /api/review/{id}` (D2–D4); role-matrix row (Admin). Tests: Core — loose file deleted + row removed; archive deleted + all pending rows of that archive removed, resolved rows kept; missing source → rows removed, success; delete failure (read-only/locked temp file) → DeleteFailed and rows kept; non-pending → NotFound; lock held → JobRunning; Api integration — 204/404/409. Done when: tests and role matrix pass.
 - [x] **9. Review queue page**: T1 table, SystemBadge, persisted page size (default 20), `ReviewDeleteModal` (D1) and delete per row (V1–V3, D5). Tests: vitest `review-page.test.ts` — page size read/written to storage and sent as `pageSize`; delete modal lists the fields and archive warning; confirm calls DELETE and reloads. Done when: V1–V3, D1, D5 met.
-- [ ] **10. Review item page rework**: layout W1–W3 with Delete next to Dismiss. Tests: vitest — tabs switch; Suggestions is the default tab when suggestions exist; resolve (Dat/Attach/Manual) and dismiss post the same bodies as before; Delete opens the modal and navigates to `/review` after success. Done when: those tests pass.
+- [x] **10. Review item page rework**: layout W1–W3 with Delete next to Dismiss. Tests: vitest — tabs switch; Suggestions is the default tab when suggestions exist; resolve (Dat/Attach/Manual) and dismiss post the same bodies as before; Delete opens the modal and navigates to `/review` after success. Done when: those tests pass.
 - [ ] **11. Ingestion page**: G1–G3. Tests: vitest `ingestion-page.test.ts` — 45 pending files show 20/20/5 across pages; Last runs requests `page=2&pageSize=20`. Done when: G1–G3 met.
 - [ ] **12. Search (data + API)**: S1–S2 in `GameRepository.ListAsync`; `matchedOn` (S3) in the list DTO. Tests: Data integration — word matching each field, case-insensitive publisher match (`nintendo` finds `Nintendo`), every-word-must-match, score order (title exact > prefix > title word > developer/publisher > genre), non-relevance sorts unchanged; Api — `matchedOn` null on title match, set for publisher match, absent without `q`. Done when: S1–S3 (API) met.
 - [ ] **13. Global search hint**: S3 line in `GlobalSearch`. Tests: vitest — hint shown for a non-title match, not for a title match. Done when: S3 met.
@@ -178,6 +178,7 @@ A batch of UI and feature work requested together: compact, consistently styled 
 - 2026-11-06 e2e: Basic seed gets a second review file (reviewer R9)
 - 2026-11-06 Game page top image = the cover; type badge "Box art" vs "Cover" badge (reviewer R10)
 - 2026-11-06 Delete failure → 500 DeleteFailed, rows kept (reviewer R11)
+- 2026-11-06 Review item tabs: a NoDatMatch item without suggestions opens on Manual; AmbiguousGroup items keep only the Matched DAT entry tab (user, step 10)
 
 ## Kickoff prompt
 ```text
