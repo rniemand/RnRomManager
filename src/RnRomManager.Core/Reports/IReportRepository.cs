@@ -7,7 +7,17 @@ public interface IReportRepository
 {
     /// <summary>RP4: games with no cover image, or whose cover is the placeholder, sorted by system then title.</summary>
     Task<Page<MissingImageItem>> ListMissingImagesAsync(string? systemId, int page, int pageSize, CancellationToken cancellationToken);
+
+    /// <summary>RP2: per system with at least one game, <c>SUM(games.zip_size_bytes)</c> and the game count, largest first.</summary>
+    Task<IReadOnlyList<SystemSize>> ListSystemSizesAsync(CancellationToken cancellationToken);
+
+    /// <summary>RP2: every game of one system with its ZIP size and release count, largest first (ties by title).</summary>
+    Task<IReadOnlyList<GameSize>> ListGameSizesAsync(string systemId, CancellationToken cancellationToken);
 }
+
+public sealed record SystemSize(string SystemId, long Bytes, int GameCount);
+
+public sealed record GameSize(Guid Id, string DisplayTitle, long Bytes, int RomCount);
 
 /// <param name="Reason">A <see cref="MissingImageReasons"/> value.</param>
 public sealed record MissingImageItem(Guid Id, string DisplayTitle, string SystemId, string Reason);

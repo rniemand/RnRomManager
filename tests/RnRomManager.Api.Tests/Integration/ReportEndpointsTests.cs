@@ -130,6 +130,61 @@ public class ReportEndpointsTests
         Assert.That((second.GetProperty("total").GetInt64(), Rows(second)), Is.EqualTo((3L, new List<(Guid, string)> { (bravo, "NoCover") })));
     }
 
+    private async Task<(Guid Alpha, Guid Bravo, Guid Charlie, Guid Echo)> SeedSizes()
+    {
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        var charlie = await Ingest("gb", "c.gb", Charlie);
+        var echo = await Ingest("gbc", "e.gbc", Echo);
+        // Fixed sizes so the order is known: Alpha and Charlie tie (title breaks it).
+        await Sql("""
+            UPDATE games SET zip_size_bytes = CASE id WHEN @alpha THEN 100 WHEN @bravo THEN 300 WHEN @charlie THEN 100 ELSE 1000 END
+            """, new { alpha, bravo, charlie });
+        return (alpha, bravo, charlie, echo);
+    }
+
+    [Test]
+    public async Task LibrarySize_TotalsAndPerSystem_LargestFirst_EmptySystemsAbsent()
+    {
+        await SeedSizes();
+
+        var size = await GetJson("/api/reports/library-size");
+
+        Assert.That((size.GetProperty("totalBytes").GetInt64(), size.GetProperty("gameCount").GetInt32()), Is.EqualTo((1500L, 4)));
+        var systems = size.GetProperty("systems").EnumerateArray()
+            .Select(s => (s.GetProperty("system").GetString(), s.GetProperty("systemName").GetString(), s.GetProperty("bytes").GetInt64(),
+                s.GetProperty("gameCount").GetInt32())).ToList();
+        Assert.That(systems, Is.EqualTo(new[] { ("gbc", "Game Boy Color", 1000L, 1), ("gb", "Game Boy", 500L, 3) }));
+    }
+
+    [Test]
+    public async Task LibrarySize_System_ListsGamesLargestFirst_TiesByTitle()
+    {
+        var (alpha, bravo, charlie, _) = await SeedSizes();
+
+        var gb = await GetJson("/api/reports/library-size/gb");
+
+        Assert.That((gb.GetProperty("system").GetString(), gb.GetProperty("systemName").GetString(), gb.GetProperty("bytes").GetInt64()),
+            Is.EqualTo(("gb", "Game Boy", 500L)));
+        var games = gb.GetProperty("games").EnumerateArray()
+            .Select(g => (g.GetProperty("id").GetGuid(), g.GetProperty("displayTitle").GetString(), g.GetProperty("bytes").GetInt64(),
+                g.GetProperty("romCount").GetInt32())).ToList();
+        Assert.That(games, Is.EqualTo(new[] { (bravo, "Bravo", 300L, 1), (alpha, "Alpha", 100L, 1), (charlie, "Charlie", 100L, 1) }));
+    }
+
+    [Test]
+    public async Task LibrarySize_RegisteredSystemWithoutGames_Is200Empty_UnknownIs404()
+    {
+        var gba = await GetJson("/api/reports/library-size/gba");
+        Assert.That((gba.GetProperty("bytes").GetInt64(), gba.GetProperty("games").GetArrayLength()), Is.EqualTo((0L, 0)));
+
+        var empty = await GetJson("/api/reports/library-size");
+        Assert.That((empty.GetProperty("totalBytes").GetInt64(), empty.GetProperty("systems").GetArrayLength()), Is.EqualTo((0L, 0)));
+
+        using var unknown = await _user.GetAsync("/api/reports/library-size/nes");
+        Assert.That((unknown.StatusCode, await AuthClient.CodeAsync(unknown)), Is.EqualTo((HttpStatusCode.NotFound, "NotFound")));
+    }
+
     [TestCase("system=nes", "system")]
     [TestCase("pageSize=201", "pageSize")]
     [TestCase("page=0", "page")]

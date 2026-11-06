@@ -26,4 +26,42 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
             """, args, cancellationToken: cancellationToken));
         return new Page<MissingImageItem>(rows.AsList(), page, pageSize, total);
     }
+
+    public async Task<IReadOnlyList<SystemSize>> ListSystemSizesAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        var rows = await connection.QueryAsync<SystemSizeRow>(new CommandDefinition("""
+            SELECT system_id AS SystemId, SUM(zip_size_bytes) AS Bytes, COUNT(*) AS GameCount
+            FROM games GROUP BY system_id ORDER BY Bytes DESC, system_id
+            """, cancellationToken: cancellationToken));
+        return rows.Select(r => new SystemSize(r.SystemId, (long)r.Bytes, (int)r.GameCount)).ToList();
+    }
+
+    public async Task<IReadOnlyList<GameSize>> ListGameSizesAsync(string systemId, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        var rows = await connection.QueryAsync<GameSizeRow>(new CommandDefinition("""
+            SELECT g.id AS Id, g.display_title AS DisplayTitle, g.zip_size_bytes AS Bytes,
+                   (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount
+            FROM games g WHERE g.system_id = @systemId
+            ORDER BY g.zip_size_bytes DESC, g.display_title, g.id
+            """, new { systemId }, cancellationToken: cancellationToken));
+        return rows.Select(r => new GameSize(r.Id, r.DisplayTitle, r.Bytes, (int)r.RomCount)).ToList();
+    }
+
+    // SUM() is DECIMAL and COUNT() BIGINT on MariaDB: map loosely, then narrow.
+    private sealed class SystemSizeRow
+    {
+        public string SystemId { get; init; } = "";
+        public decimal Bytes { get; init; }
+        public long GameCount { get; init; }
+    }
+
+    private sealed class GameSizeRow
+    {
+        public Guid Id { get; init; }
+        public string DisplayTitle { get; init; } = "";
+        public long Bytes { get; init; }
+        public long RomCount { get; init; }
+    }
 }

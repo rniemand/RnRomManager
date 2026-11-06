@@ -84,6 +84,8 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/about"] = Role.User,
 
         ["GET /api/reports/missing-images"] = Role.User,
+        ["GET /api/reports/library-size"] = Role.User,
+        ["GET /api/reports/library-size/{system}"] = Role.User,
     };
 
     [GeneratedRegex(@"\{(\w+):(\w+)\}")]

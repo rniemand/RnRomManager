@@ -24,6 +24,33 @@ public static class ReportEndpoints
             }));
         });
 
+        reports.MapGet("/library-size", async (IReportRepository repository, ISystemRegistry systems, CancellationToken cancellationToken) =>
+        {
+            var sizes = await repository.ListSystemSizesAsync(cancellationToken);
+            return Results.Ok(new
+            {
+                totalBytes = sizes.Sum(s => s.Bytes),
+                gameCount = sizes.Sum(s => s.GameCount),
+                systems = sizes.Select(s => new
+                {
+                    system = s.SystemId, systemName = SystemName(systems, s.SystemId), bytes = s.Bytes, gameCount = s.GameCount,
+                }),
+            });
+        });
+
+        reports.MapGet("/library-size/{system}", async (string system, HttpContext ctx, IReportRepository repository,
+            ISystemRegistry systems) =>
+        {
+            if (systems.ById(system) is null)
+                return Problems.NotFound(ctx);
+            var games = await repository.ListGameSizesAsync(system, ctx.RequestAborted);
+            return Results.Ok(new
+            {
+                system, systemName = SystemName(systems, system), bytes = games.Sum(g => g.Bytes),
+                games = games.Select(g => new { id = g.Id, displayTitle = g.DisplayTitle, bytes = g.Bytes, romCount = g.RomCount }),
+            });
+        });
+
         return api;
     }
 
