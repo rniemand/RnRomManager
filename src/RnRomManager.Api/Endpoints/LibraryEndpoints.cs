@@ -80,6 +80,16 @@ public static class LibraryEndpoints
             return Results.Stream(stream!, "application/zip", name, File.GetLastWriteTimeUtc(stream!.Name), enableRangeProcessing: true);
         });
 
+        games.MapGet("/{id:guid}/info-json", async (Guid id, HttpContext ctx, IGameRepository repository, LibraryFiles files) =>
+        {
+            if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
+                return Problems.NotFound(ctx);
+            // Returned as stored, even when it isn't valid JSON (GP4 shows the raw text then).
+            return files.ReadEntry(ctx, game, LibraryZip.InfoJsonEntry, InfoJsonReader.MaxBytes, out var bytes) is { } problem
+                ? problem
+                : Results.Bytes(bytes!, "application/json");
+        });
+
         games.MapGet("/{id:guid}/roms/{romId:long}/download", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,
             IRomRepository roms, LibraryFiles files) =>
         {

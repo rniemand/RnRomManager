@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -94,6 +95,7 @@ public class LibraryEndpointsTests
         yield return new TestCaseData($"/api/games/{id}").SetName("RoleMatrix GET game");
         yield return new TestCaseData($"/api/games/{id}/images/1").SetName("RoleMatrix GET image");
         yield return new TestCaseData($"/api/games/{id}/download").SetName("RoleMatrix GET game download");
+        yield return new TestCaseData($"/api/games/{id}/info-json").SetName("RoleMatrix GET info-json");
         yield return new TestCaseData($"/api/games/{id}/roms/1/download").SetName("RoleMatrix GET rom download");
     }
 
@@ -380,6 +382,70 @@ public class LibraryEndpointsTests
             Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound), url);
             Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("NotFound"));
         }
+    }
+
+    [Test]
+    public async Task InfoJson_IsTheStoredEntry_AsApplicationJson()
+    {
+        var id = await Tetris();
+        byte[] stored;
+        using (var zip = ZipFile.OpenRead(await ZipPath(id)))
+        await using (var entry = zip.GetEntry(LibraryZip.InfoJsonEntry)!.Open())
+        using (var copy = new MemoryStream())
+        {
+            await entry.CopyToAsync(copy);
+            stored = copy.ToArray();
+        }
+
+        using var response = await _user.GetAsync($"/api/games/{id}/info-json");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType!.MediaType, Is.EqualTo("application/json"));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(stored));
+    }
+
+    [Test]
+    public async Task InfoJson_UnknownGameMissingZipOrEntry_Is404()
+    {
+        using (var unknown = await _user.GetAsync($"/api/games/{Guid.NewGuid()}/info-json"))
+            Assert.That((unknown.StatusCode, await AuthClient.CodeAsync(unknown)), Is.EqualTo((HttpStatusCode.NotFound, "NotFound")));
+
+        var id = await Tetris();
+        using (var zip = ZipFile.Open(await ZipPath(id), ZipArchiveMode.Update))
+            zip.GetEntry(LibraryZip.InfoJsonEntry)!.Delete();
+        using (var noEntry = await _user.GetAsync($"/api/games/{id}/info-json"))
+            Assert.That((noEntry.StatusCode, await AuthClient.CodeAsync(noEntry)), Is.EqualTo((HttpStatusCode.NotFound, "NotFound")));
+
+        File.Delete(await ZipPath(id));
+        using var noZip = await _user.GetAsync($"/api/games/{id}/info-json");
+        Assert.That((noZip.StatusCode, await AuthClient.CodeAsync(noZip)), Is.EqualTo((HttpStatusCode.NotFound, "NotFound")));
+    }
+
+    [Test]
+    public async Task InfoJson_CorruptZip_Is500IoError()
+    {
+        var id = await Tetris();
+        await File.WriteAllBytesAsync(await ZipPath(id), [1, 2, 3, 4]);
+
+        using var response = await _user.GetAsync($"/api/games/{id}/info-json");
+
+        Assert.That((response.StatusCode, await AuthClient.CodeAsync(response)), Is.EqualTo((HttpStatusCode.InternalServerError, "IoError")));
+    }
+
+    [Test]
+    public async Task InfoJson_OverMaxBytes_Is500IoError_NotATruncated200()
+    {
+        var id = await Tetris();
+        using (var zip = ZipFile.Open(await ZipPath(id), ZipArchiveMode.Update))
+        {
+            zip.GetEntry(LibraryZip.InfoJsonEntry)!.Delete();
+            await using var entry = zip.CreateEntry(LibraryZip.InfoJsonEntry).Open();
+            await entry.WriteAsync(new byte[InfoJsonReader.MaxBytes + 1]);
+        }
+
+        using var response = await _user.GetAsync($"/api/games/{id}/info-json");
+
+        Assert.That((response.StatusCode, await AuthClient.CodeAsync(response)), Is.EqualTo((HttpStatusCode.InternalServerError, "IoError")));
     }
 
     [Test]

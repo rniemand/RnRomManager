@@ -45,6 +45,28 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
         }
     }
 
+    /// <summary>
+    /// GP3: the whole entry, buffered up to <paramref name="maxBytes"/> before responding, so a failure is never a
+    /// <c>200</c> cut off mid-body (the central directory's length isn't trusted).
+    /// </summary>
+    public IResult? ReadEntry(HttpContext ctx, GameRow game, string entry, long maxBytes, out byte[]? bytes)
+    {
+        bytes = null;
+        try
+        {
+            using var zip = LibraryZip.Open(SafePath.Resolve(paths.Value.Roms, game.ZipPath), reader);
+            using var stream = zip.OpenEntry(entry, maxBytes);
+            using var buffer = new MemoryStream();
+            stream.CopyTo(buffer);
+            bytes = buffer.ToArray();
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return Fail(ctx, game, ex); // LimitExceededException and InvalidDataException → 500 IoError
+        }
+    }
+
     private IResult Fail(HttpContext ctx, GameRow game, Exception ex)
     {
         if (ex is FileNotFoundException or DirectoryNotFoundException)
