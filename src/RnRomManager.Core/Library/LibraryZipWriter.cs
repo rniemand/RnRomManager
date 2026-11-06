@@ -7,9 +7,14 @@ namespace RnRomManager.Core.Library;
 /// <summary>
 /// What a write puts in the ZIP: the complete new <c>info.json</c>, plus content for the entries that are new or
 /// replaced (full entry names, e.g. <c>roms/Tetris (World).gb</c>). Every other entry the new <c>info.json</c> lists
-/// is copied from the existing ZIP; entries it no longer lists are dropped.
+/// is copied from the existing ZIP; entries it no longer lists are dropped. The note of every listed ROM
+/// (<see cref="LibraryZip.NoteEntry"/>) is copied too unless it's in <paramref name="NewEntries"/> or
+/// <paramref name="RemovedEntries"/>; notes of ROMs no longer listed are dropped.
 /// </summary>
-public sealed record LibraryZipChanges(InfoJsonGame Info, IReadOnlyDictionary<string, Func<Stream>> NewEntries);
+public sealed record LibraryZipChanges(
+    InfoJsonGame Info,
+    IReadOnlyDictionary<string, Func<Stream>> NewEntries,
+    IReadOnlySet<string>? RemovedEntries = null);
 
 /// <summary>A written entry didn't match <c>info.json</c> (<c>VerifyFailed</c>, spec §6.1, §7.2 step 9).</summary>
 public sealed class LibraryZipVerifyException(string entryName, string problem, Exception? inner = null)
@@ -41,13 +46,14 @@ public sealed class LibraryZipWriter(InfoJsonReader reader)
             throw new InvalidOperationException($"Existing ZIP '{existing.Path}' has no valid current info.json; it can't be written from.");
 
         var entries = ListedEntries(changes.Info);
-        if (changes.NewEntries.Keys.FirstOrDefault(k => !entries.ContainsKey(k)) is { } stray)
+        var notes = changes.Info.Roms.Select(r => LibraryZip.NoteEntry(r.FileName)).ToList();
+        if (changes.NewEntries.Keys.FirstOrDefault(k => !entries.ContainsKey(k) && !notes.Contains(k)) is { } stray)
             throw new ArgumentException($"New entry '{stray}' isn't listed in info.json.", nameof(changes));
 
         var tmp = target + ".tmp";
         try
         {
-            await WriteTmpAsync(tmp, existing, changes, entries, ct).ConfigureAwait(false);
+            await WriteTmpAsync(tmp, existing, changes, entries, notes, ct).ConfigureAwait(false);
             await VerifyAsync(tmp, changes.Info, ct).ConfigureAwait(false);
             existing?.Dispose();
             await MoveAsync(tmp, target, ct).ConfigureAwait(false);
@@ -71,7 +77,8 @@ public sealed class LibraryZipWriter(InfoJsonReader reader)
     }
 
     private static async Task WriteTmpAsync(
-        string tmp, LibraryZip? existing, LibraryZipChanges changes, Dictionary<string, long> entries, CancellationToken ct)
+        string tmp, LibraryZip? existing, LibraryZipChanges changes, Dictionary<string, long> entries, List<string> notes,
+        CancellationToken ct)
     {
         await using var file = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None);
         await using var archive = new ZipArchive(file, ZipArchiveMode.Create);
@@ -88,19 +95,32 @@ public sealed class LibraryZipWriter(InfoJsonReader reader)
                 source = existing.OpenEntry(name, size);
             else
                 throw new ArgumentException($"No content for entry '{name}': not new and not in the existing ZIP.", nameof(changes));
+            await CopyEntryAsync(archive, name, source, ct).ConfigureAwait(false);
+        }
 
-            await using (source)
-            await using (var destination = archive.CreateEntry(name, CompressionLevel.Optimal).Open())
+        // Notes are optional: a missing one is simply not written (B8).
+        foreach (var name in notes)
+        {
+            if (changes.NewEntries.TryGetValue(name, out var open))
+                await CopyEntryAsync(archive, name, new LimitStream(open(), LibraryZip.MaxNoteBytes), ct).ConfigureAwait(false);
+            else if (changes.RemovedEntries?.Contains(name) != true && existing is not null && existing.HasEntry(name))
+                await CopyEntryAsync(archive, name, existing.OpenEntry(name, LibraryZip.MaxNoteBytes), ct).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task CopyEntryAsync(ZipArchive archive, string name, Stream source, CancellationToken ct)
+    {
+        await using (source)
+        await using (var destination = archive.CreateEntry(name, CompressionLevel.Optimal).Open())
+        {
+            try
             {
-                try
-                {
-                    await source.CopyToAsync(destination, ct).ConfigureAwait(false);
-                }
-                catch (Exception ex) when (ex is LimitExceededException or InvalidDataException)
-                {
-                    // A corrupt copied entry blocks the write and names the entry (D34).
-                    throw new LibraryZipVerifyException(name, ex.Message, ex);
-                }
+                await source.CopyToAsync(destination, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is LimitExceededException or InvalidDataException)
+            {
+                // A corrupt or oversized entry blocks the write and names the entry (D34).
+                throw new LibraryZipVerifyException(name, ex.Message, ex);
             }
         }
     }

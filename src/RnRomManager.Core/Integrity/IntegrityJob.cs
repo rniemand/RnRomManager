@@ -198,6 +198,8 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
             }
 
             var names = listed.Select(l => l.Entry).ToHashSet(StringComparer.Ordinal);
+            // Notes of listed ROMs are expected (B10); orphan notes are still reported.
+            names.UnionWith(game.Roms.Select(r => LibraryZip.NoteEntry(r.FileName)));
             foreach (var entry in zip.EntryNames.Where(e => e != LibraryZip.InfoJsonEntry && !names.Contains(e)))
                 add(Finding(EntryUnlisted, entry));
 
