@@ -65,7 +65,7 @@
 
 <ConfirmModal
 	bind:open
-	title="Delete file"
+	title={item ? `Delete File: ${item.originalFileName}` : 'Delete File'}
 	confirmLabel="Delete file"
 	confirmClass="btn-danger"
 	size="lg"
@@ -87,35 +87,32 @@
 				>
 			</div>
 		{/if}
-		<dl class="row small mb-0">
-			<dt class="col-sm-3">File name</dt>
-			<dd class="col-sm-9 text-break">{item.originalFileName}</dd>
-			<dt class="col-sm-3">System</dt>
-			<dd class="col-sm-9"><SystemBadge system={item.system} /></dd>
-			<dt class="col-sm-3">Reason</dt>
-			<dd class="col-sm-9">{item.reason}</dd>
-			<dt class="col-sm-3">Size</dt>
-			<dd class="col-sm-9"><FileSize bytes={item.sizeBytes} /></dd>
-			{#each hashes as [label, value] (label)}
-				<dt class="col-sm-3">{label}</dt>
-				<dd class="col-sm-9 font-monospace text-break">{value}</dd>
-			{/each}
-			<dt class="col-sm-3">Source path</dt>
-			<dd class="col-sm-9 text-break">{item.sourcePath}</dd>
-			{#if item.archivePath}
-				<dt class="col-sm-3">Archive</dt>
-				<dd class="col-sm-9 text-break">{item.archivePath}</dd>
-				<dt class="col-sm-3">Archive entry</dt>
-				<dd class="col-sm-9 text-break">{item.archiveEntry}</dd>
-			{/if}
-			{#if item.header}
-				{#each Object.entries(item.header) as [key, value] (key)}
-					<dt class="col-sm-3">{formatKey(key)}</dt>
-					<dd class="col-sm-9">{formatValue(value)}</dd>
+		<table class="table table-sm table-striped table-hover small mb-0">
+			<caption class="visually-hidden">Details of {item.originalFileName}</caption>
+			<tbody>
+				<tr
+					><th scope="row" class="w-25">File name</th><td class="text-break"
+						>{item.originalFileName}</td
+					></tr
+				>
+				<tr><th scope="row">System</th><td><SystemBadge system={item.system} /></td></tr>
+				<tr><th scope="row">Reason</th><td>{item.reason}</td></tr>
+				<tr><th scope="row">Size</th><td><FileSize bytes={item.sizeBytes} /></td></tr>
+				{#each hashes as [label, value] (label)}
+					<tr><th scope="row">{label}</th><td class="font-monospace text-break">{value}</td></tr>
 				{/each}
-			{/if}
-			<dt class="col-sm-3">Added</dt>
-			<dd class="col-sm-9">{formatDateTime(item.createdAt)}</dd>
-		</dl>
+				<tr><th scope="row">Source path</th><td class="text-break">{item.sourcePath}</td></tr>
+				{#if item.archivePath}
+					<tr><th scope="row">Archive</th><td class="text-break">{item.archivePath}</td></tr>
+					<tr><th scope="row">Archive entry</th><td class="text-break">{item.archiveEntry}</td></tr>
+				{/if}
+				{#if item.header}
+					{#each Object.entries(item.header) as [key, value] (key)}
+						<tr><th scope="row">{formatKey(key)}</th><td>{formatValue(value)}</td></tr>
+					{/each}
+				{/if}
+				<tr><th scope="row">Added</th><td>{formatDateTime(item.createdAt)}</td></tr>
+			</tbody>
+		</table>
 	{/if}
 </ConfirmModal>
