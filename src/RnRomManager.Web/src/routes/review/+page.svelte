@@ -1,23 +1,30 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
-	import type { Page, ReviewListItem } from '#lib/api/types.js';
+	import type { Page, ReviewDetail, ReviewListItem } from '#lib/api/types.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
+	import Pagination from '#lib/components/Pagination.svelte';
+	import ReviewDeleteModal from '#lib/components/ReviewDeleteModal.svelte';
+	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { formatDateTime, formatSize } from '#lib/format.js';
+	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
+	import { toasts } from '#lib/stores/toasts.svelte.js';
 
-	const pageSize = 50;
-
+	let pageSize = $state(readPageSize('review'));
 	let result = $state<Page<ReviewListItem> | null>(null);
 	let error = $state<unknown>(null);
 	let pageNumber = $state(1);
 	let reload = $state(0);
 
-	const pages = $derived(result ? Math.max(1, Math.ceil(result.total / pageSize)) : 1);
+	let deleteId = $state<number | null>(null);
+	let deleteOpen = $state(false);
+
+	const pages = $derived(result ? pageCount(result.total, pageSize) : 1);
 
 	$effect(() => {
 		if (!auth.isAdmin) return;
@@ -34,6 +41,24 @@
 		);
 		return () => controller.abort();
 	});
+
+	function setPageSize(size: number): void {
+		writePageSize('review', size);
+		pageSize = size;
+		pageNumber = 1;
+	}
+
+	function askDelete(item: ReviewListItem): void {
+		deleteId = item.id;
+		deleteOpen = true;
+	}
+
+	function deleted(item: ReviewDetail): void {
+		toasts.show(`Deleted ${item.originalFileName}.`, 'success');
+		// D5: the page may now be empty; step back instead of showing an empty page.
+		if (result?.items.length === 1 && pageNumber > 1) pageNumber--;
+		else reload++;
+	}
 </script>
 
 <svelte:head><title>Review queue · RnRomManager</title></svelte:head>
@@ -45,53 +70,60 @@
 		<ErrorAlert {error} onretry={() => reload++} />
 	{:else if !result}
 		<Loading />
-	{:else if result.items.length === 0}
-		<EmptyState message="Nothing to review." />
 	{:else}
-		<div class="table-responsive">
-			<table class="table table-hover align-middle">
-				<thead>
-					<tr>
-						<th scope="col">File</th>
-						<th scope="col">System</th>
-						<th scope="col" class="text-end">Size</th>
-						<th scope="col">Header title</th>
-						<th scope="col">Reason</th>
-						<th scope="col">Added</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each result.items as item (item.id)}
-						<tr>
-							<td class="text-break">
-								<a href={resolve('/review/[id]', { id: String(item.id) })}>{item.fileName}</a>
-							</td>
-							<td>{item.system}</td>
-							<td class="text-end text-nowrap">{formatSize(item.sizeBytes)}</td>
-							<td>{item.headerTitle ?? '—'}</td>
-							<td>{item.reason}</td>
-							<td class="text-nowrap">{formatDateTime(item.createdAt)}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
+		<div class="card">
+			<div class="table-responsive">
+				{#if result.items.length === 0}
+					<EmptyState message="Nothing to review." />
+				{:else}
+					<table class="table table-sm table-hover align-middle mb-0">
+						<thead>
+							<tr class="small text-uppercase text-body-secondary">
+								<th scope="col">File</th>
+								<th scope="col">System</th>
+								<th scope="col" class="text-end">Size</th>
+								<th scope="col">Header title</th>
+								<th scope="col">Reason</th>
+								<th scope="col">Added</th>
+								<th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each result.items as item (item.id)}
+								<tr>
+									<td class="text-truncate" style="max-width: 32rem" title={item.fileName}>
+										<a href={resolve('/review/[id]', { id: String(item.id) })}>{item.fileName}</a>
+									</td>
+									<td><SystemBadge system={item.system} /></td>
+									<td class="text-end text-nowrap">{formatSize(item.sizeBytes)}</td>
+									<td>{item.headerTitle ?? '—'}</td>
+									<td>{item.reason}</td>
+									<td class="text-nowrap">{formatDateTime(item.createdAt)}</td>
+									<td class="text-end">
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-danger"
+											aria-label="Delete {item.fileName}"
+											onclick={() => askDelete(item)}
+										>
+											<Icon name="delete" />
+										</button>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				{/if}
+			</div>
 		</div>
-		{#if pages > 1}
-			<nav class="d-flex justify-content-center align-items-center gap-3" aria-label="Pages">
-				<button
-					type="button"
-					class="btn btn-outline-secondary"
-					disabled={pageNumber <= 1}
-					onclick={() => pageNumber--}>Previous</button
-				>
-				<span>Page {pageNumber} of {pages}</span>
-				<button
-					type="button"
-					class="btn btn-outline-secondary"
-					disabled={pageNumber >= pages}
-					onclick={() => pageNumber++}>Next</button
-				>
-			</nav>
-		{/if}
+		<Pagination
+			page={pageNumber}
+			{pages}
+			onpage={(p) => (pageNumber = p)}
+			{pageSize}
+			onpagesize={setPageSize}
+		/>
 	{/if}
+
+	<ReviewDeleteModal bind:open={deleteOpen} id={deleteId} ondeleted={deleted} />
 </AdminOnly>

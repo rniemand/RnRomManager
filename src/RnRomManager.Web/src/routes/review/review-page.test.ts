@@ -19,6 +19,7 @@ vi.mock('#lib/bootstrap.js', () => ({
 }));
 
 const { default: ReviewPage } = await import('./[id]/+page.svelte');
+const { default: QueuePage } = await import('./+page.svelte');
 
 const base = {
 	id: 7,
@@ -164,5 +165,124 @@ describe('review detail page', () => {
 		await fireEvent.click(await screen.findByRole('button', { name: 'Use' }));
 
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/review'));
+	});
+});
+
+describe('review queue page', () => {
+	let calls: string[];
+	let answers: Record<string, Answer>;
+	let store: Map<string, string>;
+
+	const row = (id: number) => ({
+		id,
+		system: 'gb',
+		reason: 'NoDatMatch',
+		fileName: `file${id}.gb`,
+		sizeBytes: 1024,
+		headerTitle: null,
+		createdAt: ''
+	});
+	const page = (ids: number[], total: number) => ({
+		items: ids.map(row),
+		page: 1,
+		pageSize: 20,
+		total
+	});
+
+	beforeEach(() => {
+		resetClient();
+		auth.set({ id: 1, username: 'admin', roles: ['admin'], mustChangePassword: false });
+		calls = [];
+		answers = {};
+		store = new Map();
+		// Node 25's localStorage global shadows jsdom's; stub it (as in pageSize.test.ts).
+		vi.stubGlobal('localStorage', {
+			getItem: (k: string) => store.get(k) ?? null,
+			setItem: (k: string, v: string) => void store.set(k, v)
+		});
+		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+			const key = `${init?.method ?? 'GET'} ${url}`;
+			if (url !== '/api/auth/antiforgery') calls.push(key);
+			const answer = answers[key] ?? { status: 204 };
+			return Promise.resolve(
+				new Response(answer.body === undefined ? null : JSON.stringify(answer.body), {
+					status: answer.status
+				})
+			);
+		});
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		auth.set(null);
+	});
+
+	const list = (p: number, size: number) =>
+		`GET /api/review?status=Pending&page=${p}&pageSize=${size}`;
+
+	it('uses the stored page size and remembers a new one', async () => {
+		store.set('rnrm.pageSize.review', '50');
+		answers[list(1, 50)] = { status: 200, body: page([1], 1) };
+		answers[list(1, 10)] = { status: 200, body: page([1], 1) };
+		render(QueuePage);
+
+		await screen.findByText('file1.gb');
+		expect(calls).toContain(list(1, 50));
+		await fireEvent.change(screen.getByLabelText('Rows per page'), { target: { value: '10' } });
+
+		await vi.waitFor(() => expect(calls).toContain(list(1, 10)));
+		expect(store.get('rnrm.pageSize.review')).toBe('10');
+	});
+
+	it('shows rows in the standard table with a system badge', async () => {
+		answers[list(1, 20)] = { status: 200, body: page([1], 1) };
+		render(QueuePage);
+
+		await screen.findByText('file1.gb');
+		expect(document.querySelector('table')!.className).toBe(
+			'table table-sm table-hover align-middle mb-0'
+		);
+		expect(screen.getByText('GB').classList.contains('badge')).toBe(true);
+	});
+
+	it('the delete modal lists the fields and warns about a whole archive', async () => {
+		answers[list(1, 20)] = { status: 200, body: page([1], 1) };
+		answers['GET /api/review/1'] = {
+			status: 200,
+			body: {
+				...noMatch,
+				id: 1,
+				archivePath: 'ingest/gb/pack.zip',
+				archiveEntry: 'nested/file1.gb',
+				crc32: 'abcd1234'
+			}
+		};
+		render(QueuePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Delete file1.gb' }));
+
+		expect(await screen.findByText('abcd1234')).toBeTruthy();
+		expect(screen.getByText('nested/file1.gb')).toBeTruthy();
+		expect(screen.getByText('TETRIS')).toBeTruthy();
+		expect(screen.getByRole('alert', { hidden: true }).textContent?.replace(/\s+/g, ' ')).toContain(
+			'This deletes the whole archive ingest/gb/pack.zip, including every other file in it.'
+		);
+	});
+
+	it('confirming calls DELETE and steps back when the page is now empty', async () => {
+		store.set('rnrm.pageSize.review', '10');
+		answers[list(1, 10)] = { status: 200, body: page([1], 11) };
+		answers[list(2, 10)] = { status: 200, body: page([11], 11) };
+		answers['GET /api/review/11'] = { status: 200, body: { ...noMatch, id: 11 } };
+		render(QueuePage);
+
+		await screen.findByText('file1.gb');
+		await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+		await fireEvent.click(await screen.findByRole('button', { name: 'Delete file11.gb' }));
+		const confirm = await screen.findByRole('button', { name: 'Delete file', hidden: true });
+		await vi.waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
+		await fireEvent.click(confirm);
+
+		await vi.waitFor(() => expect(calls).toContain('DELETE /api/review/11'));
+		await vi.waitFor(() => expect(calls.filter((c) => c === list(1, 10))).toHaveLength(2));
 	});
 });
