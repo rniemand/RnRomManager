@@ -3,9 +3,11 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Jobs;
@@ -357,6 +359,54 @@ public class ReviewEndpointsTests
         var problem = await AuthClient.JsonAsync(response);
         Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo("ValidationFailed"));
         Assert.That(problem.GetProperty("errors").EnumerateObject(), Is.Not.Empty);
+    }
+
+    [TestCase("system=nes", "system")]
+    [TestCase("reason=Failed", "reason")]
+    public async Task ListFilter_InvalidValue_Is400WithFieldError(string query, string field)
+    {
+        using var response = await _admin.GetAsync("/api/review?" + query);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await AuthClient.JsonAsync(response);
+        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo("ValidationFailed"));
+        Assert.That(problem.GetProperty("errors").TryGetProperty(field, out _), Is.True);
+    }
+
+    [Test]
+    public async Task ListFilter_QOver100Chars_Is400()
+    {
+        using var response = await _admin.GetAsync("/api/review?q=" + new string('a', 101));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").TryGetProperty("q", out _), Is.True);
+    }
+
+    [Test]
+    public async Task ListFilter_BySystemReasonAndQ_TotalReflectsFilter()
+    {
+        var target = await KnownGame();
+        var mystery = await Queue();
+        var second = await Ambiguous(await Queue(name: "second.gb", bytes: new SyntheticRomBuilder { Seed = 931, Title = "SECOND" }.Build()), target);
+        var odd = await Queue(name: "c%_1.gb", bytes: new SyntheticRomBuilder { Seed = 934, Title = "THIRD" }.Build());
+        await using (var db = Service<IDbConnectionFactory>().Create())
+            await db.ExecuteAsync("UPDATE ingest_review_items SET system_id = 'gbc' WHERE id = @id", new { id = odd.Id });
+
+        async Task<(long Total, long[] Ids)> List(string query)
+        {
+            using var response = await _admin.GetAsync("/api/review?" + query);
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), query);
+            var page = await AuthClient.JsonAsync(response);
+            return (page.GetProperty("total").GetInt64(),
+                page.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetInt64()).Order().ToArray());
+        }
+
+        Assert.That(await List("system=gbc"), Is.EqualTo((1L, new[] { odd.Id })));
+        Assert.That(await List("reason=AmbiguousGroup"), Is.EqualTo((1L, new[] { second.Id })));
+        Assert.That(await List("q=MYST"), Is.EqualTo((1L, new[] { mystery.Id })), "file name, case-insensitive");
+        Assert.That(await List("q=tHiRd"), Is.EqualTo((1L, new[] { odd.Id })), "header title, case-insensitive");
+        Assert.That(await List("q=%25_"), Is.EqualTo((1L, new[] { odd.Id })), "% and _ match literally");
+        Assert.That(await List("system=gb&reason=NoDatMatch"), Is.EqualTo((1L, new[] { mystery.Id })));
+        Assert.That(await List("system=gb&reason=NoDatMatch&q=second"), Is.EqualTo((0L, Array.Empty<long>())));
+        Assert.That((await List("q=%20%20&pageSize=1")).Total, Is.EqualTo(3), "blank q is ignored; total ignores paging");
     }
 
     [Test]

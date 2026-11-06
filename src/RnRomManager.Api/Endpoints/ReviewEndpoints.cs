@@ -14,14 +14,23 @@ public static class ReviewEndpoints
     public static RouteGroupBuilder MapReviewEndpoints(this RouteGroupBuilder api)
     {
         var review = api.MapGroup("/review").RequireAuthorization(AuthSetup.AdminOnly);
-        review.MapGet("", async (string? status, int? page, int? pageSize, HttpContext ctx, IIngestReviewRepository repository) =>
+        review.MapGet("", async (string? status, int? page, int? pageSize, string? system, string? reason, string? q, HttpContext ctx,
+            IIngestReviewRepository repository, ISystemRegistry systems) =>
         {
             var errors = Paging.Validate(page, pageSize);
             if (status is not null and not ("Pending" or "Resolved" or "Dismissed"))
                 errors["status"] = ["Must be Pending, Resolved or Dismissed."];
+            if (system is not null && systems.ById(system) is null)
+                errors["system"] = ["Choose a registered system."];
+            if (reason is not null and not ("NoDatMatch" or "AmbiguousGroup"))
+                errors["reason"] = ["Must be NoDatMatch or AmbiguousGroup."];
+            q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
+            if (q?.Length > 100)
+                errors["q"] = ["Must be at most 100 characters."];
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            var result = await repository.ListAsync(status ?? "Pending", page ?? 1, pageSize ?? Page<ReviewItem>.DefaultSize, ctx.RequestAborted);
+            var result = await repository.ListAsync(status ?? "Pending", page ?? 1, pageSize ?? Page<ReviewItem>.DefaultSize, ctx.RequestAborted,
+                new ReviewFilter(system, reason, q));
             return Results.Ok(Paging.ToDto(result, item => new
             {
                 id = item.Id, system = item.SystemId, reason = item.Reason, fileName = item.OriginalFileName,

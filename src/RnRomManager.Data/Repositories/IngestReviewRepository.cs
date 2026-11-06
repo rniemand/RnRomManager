@@ -30,14 +30,26 @@ public sealed class IngestReviewRepository(IDbConnectionFactory connections) : I
             Select + " WHERE id = @id", new { id }, cancellationToken: cancellationToken));
     }
 
-    public async Task<Page<ReviewItem>> ListAsync(string status, int page, int pageSize, CancellationToken cancellationToken)
+    public async Task<Page<ReviewItem>> ListAsync(string status, int page, int pageSize, CancellationToken cancellationToken,
+        ReviewFilter? filter = null)
     {
         await using var connection = connections.Create();
-        var args = new { status, pageSize, offset = (long)(page - 1) * pageSize };
+        var where = "status = @status";
+        if (filter?.SystemId is not null) where += " AND system_id = @system";
+        if (filter?.Reason is not null) where += " AND reason = @reason";
+        // header is a JSON (binary-collated) column; compare its title like the file name.
+        if (filter?.Query is not null)
+            where += " AND (original_file_name LIKE @q OR JSON_VALUE(header, '$.title') COLLATE utf8mb4_unicode_ci LIKE @q)";
+        var args = new
+        {
+            status, system = filter?.SystemId, reason = filter?.Reason,
+            q = filter?.Query is { } q ? SqlLike.Contains(q) : null,
+            pageSize, offset = (long)(page - 1) * pageSize,
+        };
         var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            "SELECT COUNT(*) FROM ingest_review_items WHERE status = @status", args, cancellationToken: cancellationToken));
+            $"SELECT COUNT(*) FROM ingest_review_items WHERE {where}", args, cancellationToken: cancellationToken));
         var rows = await connection.QueryAsync<ReviewItem>(new CommandDefinition(
-            Select + " WHERE status = @status ORDER BY created_at, id LIMIT @pageSize OFFSET @offset", args, cancellationToken: cancellationToken));
+            Select + $" WHERE {where} ORDER BY created_at, id LIMIT @pageSize OFFSET @offset", args, cancellationToken: cancellationToken));
         return new Page<ReviewItem>(rows.AsList(), page, pageSize, total);
     }
 

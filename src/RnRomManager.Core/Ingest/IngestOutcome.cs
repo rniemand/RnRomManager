@@ -28,7 +28,8 @@ public interface IIngestReviewRepository
 {
     Task<ReviewItem?> GetAsync(long id, CancellationToken cancellationToken);
 
-    Task<RnRomManager.Core.Database.Page<ReviewItem>> ListAsync(string status, int page, int pageSize, CancellationToken cancellationToken);
+    Task<RnRomManager.Core.Database.Page<ReviewItem>> ListAsync(string status, int page, int pageSize, CancellationToken cancellationToken,
+        ReviewFilter? filter = null);
 
     Task SetResolutionAsync(long id, string status, Guid? gameId, int userId, DateTime now, CancellationToken cancellationToken);
 
@@ -49,3 +50,6 @@ public interface IIngestReviewRepository
     /// <returns>The number of rows deleted.</returns>
     Task<int> DeletePendingBySourceAsync(string sourcePath, string? archivePath, CancellationToken cancellationToken);
 }
+
+/// <summary>RV3: optional review-list filters; null fields are not applied. <paramref name="Query"/> is a trimmed substring of the file name or header title.</summary>
+public sealed record ReviewFilter(string? SystemId = null, string? Reason = null, string? Query = null);
