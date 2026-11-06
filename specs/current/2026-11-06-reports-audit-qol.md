@@ -235,7 +235,7 @@ Migrations 0013 and 0014 only add tables, so existing data is untouched. There a
     - `.error.txt` still records the job id.
 
   Done when: Core and Api tests pass.
-- [ ] **19. Audit review and DAT refresh**: AU3 for review (`ReviewResolver` methods take an `AuditActor` instead of `int userId`), AU4 rows from review (`Ingested` via `StoreReleaseAsync`, `MovedToFailed` on dismiss, `ReviewDeleted`) and `DatsRefreshed`. Files: `ReviewResolver.cs`, `ReviewEndpoints.cs`, `DatRefreshJob.cs`, `DatEndpoints.cs` (builds `DatRefreshJob` by hand), `ReviewResolverTests` (Core), `IngestReviewTests`, `ReviewEndpointsTests`, `DatEndpointsTests`, `DatRefreshJobTests`. Tests (integration, after `FlushAsync`):
+- [x] **19. Audit review and DAT refresh**: AU3 for review (`ReviewResolver` methods take an `AuditActor` instead of `int userId`), AU4 rows from review (`Ingested` via `StoreReleaseAsync`, `MovedToFailed` on dismiss, `ReviewDeleted`) and `DatsRefreshed`. Files: `ReviewResolver.cs`, `ReviewEndpoints.cs`, `DatRefreshJob.cs`, `DatEndpoints.cs` (builds `DatRefreshJob` by hand), `ReviewResolverTests` (Core), `IngestReviewTests`, `ReviewEndpointsTests`, `DatEndpointsTests`, `DatRefreshJobTests`. Tests (integration, after `FlushAsync`):
   - Review resolve writes one `Ingested` row with the user, no job id and `review resolve (<action>)`.
   - Dismissing a loose file writes one `MovedToFailed` row, and its `.error.txt` reads `review by <username>`. Dismissing an archive entry writes no row.
   - Review delete writes `ReviewDeleted`; deleting an item whose file is already gone writes none.

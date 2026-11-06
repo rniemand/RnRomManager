@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using RnRomManager.Api.Auth;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
@@ -64,16 +65,16 @@ public static class ReviewEndpoints
             var errors = Validate(request);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            return ToResult(ctx, await resolver.ResolveAsync(id, request, DatEndpoints.UserId(ctx.User)!.Value, ctx.RequestAborted));
+            return ToResult(ctx, await resolver.ResolveAsync(id, request, AuditActor.From(ctx.User), ctx.RequestAborted));
         });
         review.MapPost("/{id:long}/dismiss", async (long id, HttpContext ctx, ReviewResolver resolver) =>
         {
-            var result = await resolver.DismissAsync(id, DatEndpoints.UserId(ctx.User)!.Value, ctx.RequestAborted);
+            var result = await resolver.DismissAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? Results.NoContent() : ToResult(ctx, result);
         });
         review.MapDelete("/{id:long}", async (long id, HttpContext ctx, ReviewResolver resolver) =>
         {
-            var result = await resolver.DeleteSourceAsync(id, DatEndpoints.UserId(ctx.User)!.Value, ctx.RequestAborted);
+            var result = await resolver.DeleteSourceAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? Results.NoContent() : ToResult(ctx, result);
         });
         api.MapGet("/dat/search", (string? system, string? q, int? limit, HttpContext ctx, ISystemRegistry systems, DatCache dats) =>

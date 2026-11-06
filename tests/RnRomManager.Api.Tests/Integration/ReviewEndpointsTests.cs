@@ -332,6 +332,31 @@ public class ReviewEndpointsTests
     }
 
     [Test]
+    public async Task Audit_ResolveDismissDelete_RecordTheSignedInUser_WithoutAJob()
+    {
+        var resolved = await Queue();
+        var dismissed = await Queue(name: "second.gb", bytes: new SyntheticRomBuilder { Seed = 931, Title = "SECOND" }.Build());
+        var deleted = await Queue(name: "third.gb", bytes: new SyntheticRomBuilder { Seed = 934, Title = "THIRD" }.Build());
+
+        (await _admin.PostAsync($"/api/review/{resolved.Id}/resolve", Manual())).Dispose();
+        (await _admin.PostAsync($"/api/review/{dismissed.Id}/dismiss")).Dispose();
+        (await _admin.SendAsync(HttpMethod.Delete, $"/api/review/{deleted.Id}", null, sendXsrf: true)).Dispose();
+
+        await Service<RnRomManager.Api.AuditWriter>().FlushAsync();
+        await using var db = Service<IDbConnectionFactory>().Create();
+        var rows = (await db.QueryAsync<(string Action, int? UserId, string? Username, Guid? JobId, string? Path, string? Details)>(
+            "SELECT action, user_id, username, job_id, path, details FROM audit_events ORDER BY id")).ToList();
+        Assert.That(rows, Is.EqualTo(new (string, int?, string?, Guid?, string?, string?)[]
+        {
+            ("Ingested", _adminId, "boss", null, "ingest/gb/mystery.gb", "review resolve (Manual)"),
+            ("MovedToFailed", _adminId, "boss", null, "ingest/gb/second.gb", "review dismiss"),
+            ("ReviewDeleted", _adminId, "boss", null, "ingest/gb/third.gb", null),
+        }));
+        Assert.That(File.ReadAllText(Path.Combine(_factory.Root, "ingest", "gb", "_failed", "second.gb.error.txt")),
+            Does.Contain("job: review by boss"));
+    }
+
+    [Test]
     public async Task List_IsArchive_AndDetail_SystemName()
     {
         var loose = await Queue();

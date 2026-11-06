@@ -23,6 +23,7 @@ public static class DatEndpoints
                 services.GetRequiredService<IOptions<PathsOptions>>().Value,
                 services.GetRequiredService<DatCache>(),
                 services.GetRequiredService<ISystemRegistry>(),
+                services.GetRequiredService<RnRomManager.Core.Audit.IAuditLog>(),
                 services.GetRequiredService<TimeProvider>(),
                 services.GetRequiredService<ILogger<DatRefreshJob>>());
             var started = await runner.StartAsync(job, JobTrigger.Manual, UserId(ctx.User), ctx.RequestAborted);

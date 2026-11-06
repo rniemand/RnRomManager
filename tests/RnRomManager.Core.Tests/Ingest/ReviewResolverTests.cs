@@ -23,9 +23,17 @@ public class ReviewResolverTests
     private ReviewItem _item = null!;
     private FakeTimeProvider _time = null!;
 
+    private static readonly RnRomManager.Core.Audit.AuditActor Actor = new(42, "boss", null);
+    private RnRomManager.Core.Audit.IAuditLog _audit = null!;
+
+    private List<RnRomManager.Core.Audit.AuditEvent> Recorded() =>
+        _audit.ReceivedCalls().Where(c => c.GetMethodInfo().Name == "Record")
+            .Select(c => (RnRomManager.Core.Audit.AuditEvent)c.GetArguments()[0]!).ToList();
+
     [SetUp]
     public void SetUp()
     {
+        _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
         _dir = new TempDir();
         var paths = new PathsOptions { Ingest = _dir.Combine("ingest"), Roms = _dir.Combine("roms"), Cache = _dir.Combine("cache") };
         Directory.CreateDirectory(paths.Ingest);
@@ -43,10 +51,11 @@ public class ReviewResolverTests
         var reader = new InfoJsonReader([], systems);
         var media = new MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }), NullLogger<MediaService>.Instance);
         var pipeline = new IngestPipeline(dats, systems, Substitute.For<IRomRepository>(), games, Substitute.For<ILibraryMirror>(),
-            Substitute.For<IIntegrityIssueRepository>(), _reviews, reader, media, options, Substitute.For<RnRomManager.Core.Audit.IAuditLog>(),
+            Substitute.For<IIntegrityIssueRepository>(), _reviews, reader, media, options, _audit,
             new RnRomManager.Core.Audit.AuditPaths(options), _time, NullLogger<IngestPipeline>.Instance);
         _resolver = new ReviewResolver(_lock, _reviews, games, pipeline, dats, systems,
-            new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance), options, _time, NullLogger<ReviewResolver>.Instance);
+            new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance), options, _audit, new RnRomManager.Core.Audit.AuditPaths(options), _time,
+            NullLogger<ReviewResolver>.Instance);
     }
 
     [TearDown]
@@ -56,7 +65,7 @@ public class ReviewResolverTests
     public async Task BusyLock_RefusesWithoutReadingOrChangingReview()
     {
         using var held = _lock.TryAcquire();
-        Assert.That((await _resolver.DismissAsync(1, 42, default)).Code, Is.EqualTo("JobRunning"));
+        Assert.That((await _resolver.DismissAsync(1, Actor, default)).Code, Is.EqualTo("JobRunning"));
         await _reviews.DidNotReceiveWithAnyArgs().GetAsync(default, default);
         Assert.That(File.Exists(_item.SourcePath), Is.True);
     }
@@ -66,7 +75,7 @@ public class ReviewResolverTests
     public async Task CompletedItems_CannotBeActedOnAgain(string status)
     {
         _item = _item with { Status = status };
-        Assert.That((await _resolver.DismissAsync(1, 42, default)).Code, Is.EqualTo("NotFound"));
+        Assert.That((await _resolver.DismissAsync(1, Actor, default)).Code, Is.EqualTo("NotFound"));
         using var released = _lock.TryAcquire();
         Assert.That(released, Is.Not.Null);
         Assert.That(File.Exists(_item.SourcePath), Is.True);
@@ -76,7 +85,7 @@ public class ReviewResolverTests
     public async Task MissingSource_DeletesStaleRowAndReleasesLock()
     {
         File.Delete(_item.SourcePath);
-        Assert.That((await _resolver.DismissAsync(1, 42, default)).Code, Is.EqualTo("SourceMissing"));
+        Assert.That((await _resolver.DismissAsync(1, Actor, default)).Code, Is.EqualTo("SourceMissing"));
         await _reviews.Received().DeleteAsync(Arg.Is<IReadOnlyCollection<long>>(ids => ids.Single() == 1), default);
         using var released = _lock.TryAcquire();
         Assert.That(released, Is.Not.Null);
@@ -85,27 +94,32 @@ public class ReviewResolverTests
     [Test]
     public async Task DismissLooseFile_MovesIt_UsesInjectedTimeAndAdmin()
     {
-        Assert.That((await _resolver.DismissAsync(1, 42, default)).Code, Is.Null);
+        Assert.That((await _resolver.DismissAsync(1, Actor, default)).Code, Is.Null);
         var moved = _dir.Combine("ingest", "_failed", "test.gb");
         Assert.That(File.Exists(_item.SourcePath), Is.False);
-        Assert.That(File.ReadAllText(moved + ".error.txt"), Does.Contain("Dismissed").And.Contain("2026-11-04T12:00:00"));
+        Assert.That(File.ReadAllText(moved + ".error.txt"), Does.Contain("Dismissed").And.Contain("2026-11-04T12:00:00")
+            .And.Contain("job: review by boss"));
         await _reviews.Received().SetResolutionAsync(1, "Dismissed", null, 42, _time.GetUtcNow().UtcDateTime, default);
+        var row = Recorded().Single();
+        Assert.That((row.Action, row.Actor, row.Details, row.TargetPath),
+            Is.EqualTo(("MovedToFailed", Actor, "review dismiss", "ingest/_failed/test.gb")));
     }
 
     [Test]
     public async Task DismissArchive_DoesNotMoveOrExtractArchive()
     {
         _item = _item with { ArchivePath = _item.SourcePath, ArchiveEntry = "test.gb" };
-        Assert.That((await _resolver.DismissAsync(1, 42, default)).Code, Is.Null);
+        Assert.That((await _resolver.DismissAsync(1, Actor, default)).Code, Is.Null);
         Assert.That(File.Exists(_item.SourcePath), Is.True);
         Assert.That(Directory.Exists(_dir.Combine("cache", "work")), Is.False);
         await _reviews.Received().SetResolutionAsync(1, "Dismissed", null, 42, _time.GetUtcNow().UtcDateTime, default);
+        Assert.That(Recorded(), Is.Empty, "dismissing an archive entry moves nothing");
     }
 
     [Test]
     public async Task ChangedBytes_ReturnVerifyFailed_WithoutCompletingReview()
     {
-        var result = await _resolver.ResolveAsync(1, new ReviewResolutionRequest { Action = "Manual", Title = "My Game", Regions = [], Languages = [], Flags = [] }, 42, default);
+        var result = await _resolver.ResolveAsync(1, new ReviewResolutionRequest { Action = "Manual", Title = "My Game", Regions = [], Languages = [], Flags = [] }, Actor, default);
         Assert.That(result.Code, Is.EqualTo("VerifyFailed"));
         await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default, default!, default, default, default, default);
         Assert.That(File.Exists(_item.SourcePath), Is.True);
@@ -131,11 +145,13 @@ public class ReviewResolverTests
     {
         _reviews.DeletePendingBySourceAsync(_item.SourcePath, null, Arg.Any<CancellationToken>()).Returns(1);
 
-        Assert.That((await _resolver.DeleteSourceAsync(1, 42, default)).Code, Is.Null);
+        Assert.That((await _resolver.DeleteSourceAsync(1, Actor, default)).Code, Is.Null);
 
         Assert.That(File.Exists(_item.SourcePath), Is.False);
         Assert.That(Directory.Exists(_dir.Combine("ingest", "_failed")), Is.False, "a hard delete, not a move");
         await _reviews.Received(1).DeletePendingBySourceAsync(_item.SourcePath, null, default);
+        var row = Recorded().Single();
+        Assert.That((row.Action, row.Actor, row.Path, row.TargetPath), Is.EqualTo(("ReviewDeleted", Actor, "ingest/test.gb", (string?)null)));
         await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default, default!, default, default, default, default);
     }
 
@@ -146,7 +162,7 @@ public class ReviewResolverTests
         File.WriteAllBytes(archive, [9]);
         _item = _item with { SourcePath = archive, ArchivePath = archive, ArchiveEntry = "test.gb" };
 
-        Assert.That((await _resolver.DeleteSourceAsync(1, 42, default)).Code, Is.Null);
+        Assert.That((await _resolver.DeleteSourceAsync(1, Actor, default)).Code, Is.Null);
 
         Assert.That(File.Exists(archive), Is.False);
         Assert.That(File.Exists(_dir.Combine("ingest", "test.gb")), Is.True, "other files are untouched");
@@ -159,8 +175,9 @@ public class ReviewResolverTests
         File.Delete(_item.SourcePath);
         _item = _item with { SourcePath = _dir.Combine("ingest", "gone", "test.gb") };
 
-        Assert.That((await _resolver.DeleteSourceAsync(1, 42, default)).Code, Is.Null);
+        Assert.That((await _resolver.DeleteSourceAsync(1, Actor, default)).Code, Is.Null);
         await _reviews.Received(1).DeletePendingBySourceAsync(_item.SourcePath, null, default);
+        Assert.That(Recorded(), Is.Empty, "nothing was deleted, so no ReviewDeleted row");
     }
 
     [Test]
@@ -170,7 +187,7 @@ public class ReviewResolverTests
         File.Delete(_item.SourcePath);
         Directory.CreateDirectory(_item.SourcePath);
 
-        Assert.That((await _resolver.DeleteSourceAsync(1, 42, default)).Code, Is.EqualTo("DeleteFailed"));
+        Assert.That((await _resolver.DeleteSourceAsync(1, Actor, default)).Code, Is.EqualTo("DeleteFailed"));
         await _reviews.DidNotReceiveWithAnyArgs().DeletePendingBySourceAsync(default!, default, default);
         using var released = _lock.TryAcquire();
         Assert.That(released, Is.Not.Null);
@@ -180,10 +197,10 @@ public class ReviewResolverTests
     public async Task Delete_NonPendingOrBusy()
     {
         _item = _item with { Status = "Resolved" };
-        Assert.That((await _resolver.DeleteSourceAsync(1, 42, default)).Code, Is.EqualTo("NotFound"));
+        Assert.That((await _resolver.DeleteSourceAsync(1, Actor, default)).Code, Is.EqualTo("NotFound"));
         _item = _item with { Status = "Pending" };
         using (_lock.TryAcquire())
-            Assert.That((await _resolver.DeleteSourceAsync(1, 42, default)).Code, Is.EqualTo("JobRunning"));
+            Assert.That((await _resolver.DeleteSourceAsync(1, Actor, default)).Code, Is.EqualTo("JobRunning"));
         Assert.That(File.Exists(_item.SourcePath), Is.True);
         await _reviews.DidNotReceiveWithAnyArgs().DeletePendingBySourceAsync(default!, default, default);
     }

@@ -23,12 +23,14 @@ public class DatRefreshJobTests
     private DatCache _cache = null!;
     private string _remote = null!;
     private Func<HttpRequestMessage, HttpResponseMessage?> _override = _ => null;
+    private RnRomManager.Core.Audit.IAuditLog _audit = null!;
 
     [SetUp]
     public void SetUp()
     {
         _dir = new TempDir();
         _paths = new PathsOptions { Cache = _dir.Combine("cache") };
+        _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
         ISystemHandler[] handlers = [Handler("gb", Gb), Handler("gbc", Gbc)];
         _systems = Substitute.For<ISystemRegistry>();
         _systems.All.Returns(handlers);
@@ -69,7 +71,7 @@ public class DatRefreshJobTests
     });
 
     private DatRefreshJob Job(StubHttpHandler server) => new(
-        new HttpClient(server), new SourcesOptions { DatBaseUrl = BaseUrl + "/" }, _paths, _cache, _systems, TimeProvider.System,
+        new HttpClient(server), new SourcesOptions { DatBaseUrl = BaseUrl + "/" }, _paths, _cache, _systems, _audit, TimeProvider.System,
         NullLogger<DatRefreshJob>.Instance);
 
     private Task<object?> RunAsync(StubHttpHandler server, JobProgress? progress = null, CancellationToken ct = default) =>
@@ -105,6 +107,30 @@ public class DatRefreshJobTests
         Assert.That(manifest.Single(e => e.File == $"no-intro/{Gb}.dat").Version, Is.EqualTo("v2"));
         Assert.That(manifest.Single(e => e.File == $"genre/{Gb}.dat").Version, Is.Null);
         Assert.That(Directory.EnumerateFileSystemEntries(Path.Combine(_paths.Cache, CrashRecovery.WorkFolder)), Is.Empty);
+    }
+
+    [Test]
+    public async Task Success_RecordsOneDatsRefreshedRow_WithTheJobActorAndDatNames()
+    {
+        WriteLiveV1();
+        var id = Guid.NewGuid();
+        var actor = new RnRomManager.Core.Audit.AuditActor(3, "boss", id);
+
+        await Job(Server()).RunAsync(new JobContext(id, new JobProgress(), actor), CancellationToken.None);
+
+        _audit.Received(1).Record(Arg.Is<RnRomManager.Core.Audit.AuditEvent>(e =>
+            e.Action == "DatsRefreshed" && e.Actor == actor && e.Path == null && e.Details!.Contains(Gb) && e.Details.Contains(Gbc)));
+    }
+
+    [Test]
+    public async Task AFailedRun_RecordsNothing()
+    {
+        WriteLiveV1();
+        _override = _ => StubHttpHandler.Status(HttpStatusCode.NotFound);
+
+        Assert.That(async () => await RunAsync(Server()), Throws.Exception);
+
+        _audit.DidNotReceiveWithAnyArgs().Record(default!);
     }
 
     [Test]

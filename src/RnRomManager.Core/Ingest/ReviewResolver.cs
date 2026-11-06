@@ -17,19 +17,20 @@ namespace RnRomManager.Core.Ingest;
 /// <summary>Synchronous review actions (§7.5); shares the ingest writer and the global job lock.</summary>
 public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository reviews, IGameRepository games,
     IngestPipeline pipeline, DatCache dats, ISystemRegistry systems, ArchiveExtractor extractor,
-    IOptions<PathsOptions> paths, TimeProvider time, ILogger<ReviewResolver> logger)
+    IOptions<PathsOptions> paths, IAuditLog audit, AuditPaths auditPaths, TimeProvider time, ILogger<ReviewResolver> logger)
 {
-    public Task<ReviewResolutionResult> ResolveAsync(long id, ReviewResolutionRequest request, int userId, CancellationToken ct) =>
-        ActAsync(id, request, userId, ct);
+    /// <param name="actor">AU3: the signed-in user (no job); <see cref="AuditActor.UserId"/> is required.</param>
+    public Task<ReviewResolutionResult> ResolveAsync(long id, ReviewResolutionRequest request, AuditActor actor, CancellationToken ct) =>
+        ActAsync(id, request, actor, ct);
 
-    public Task<ReviewResolutionResult> DismissAsync(long id, int userId, CancellationToken ct) =>
-        ActAsync(id, null, userId, ct);
+    public Task<ReviewResolutionResult> DismissAsync(long id, AuditActor actor, CancellationToken ct) =>
+        ActAsync(id, null, actor, ct);
 
     /// <summary>
     /// Hard delete (D2–D4): removes the source file from the ingest folder (the whole archive for an archive entry) and
     /// every pending review row of that source. A source that's already gone still removes the rows.
     /// </summary>
-    public async Task<ReviewResolutionResult> DeleteSourceAsync(long id, int userId, CancellationToken ct)
+    public async Task<ReviewResolutionResult> DeleteSourceAsync(long id, AuditActor actor, CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();
         if (held is null)
@@ -38,6 +39,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         if (item is not { Status: "Pending" })
             return new("NotFound");
         var source = SafePath.Resolve(paths.Value.Ingest, Path.GetRelativePath(paths.Value.Ingest, item.ArchivePath ?? item.SourcePath));
+        // AU4: File.Delete succeeds on a missing file, so only a file that existed gets a ReviewDeleted row.
+        var existed = File.Exists(source);
         try
         {
             File.Delete(source); // no error when the file is already gone
@@ -51,14 +54,17 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             logger.LogWarning(ex, "Deleting review source '{Path}' (review item {ReviewId}) failed", source, id);
             return new("DeleteFailed");
         }
+        if (existed)
+            audit.Record(new AuditEvent(AuditActions.ReviewDeleted, actor, item.SystemId, Path: auditPaths.Of(source)));
         var removed = await reviews.DeletePendingBySourceAsync(item.SourcePath, item.ArchivePath, ct).ConfigureAwait(false);
         logger.LogInformation("User {UserId} deleted review item {ReviewId}: removed '{Path}' and {Rows} pending review row(s)",
-            userId, id, source, removed);
+            actor.UserId, id, source, removed);
         return new();
     }
 
-    private async Task<ReviewResolutionResult> ActAsync(long id, ReviewResolutionRequest? request, int userId, CancellationToken ct)
+    private async Task<ReviewResolutionResult> ActAsync(long id, ReviewResolutionRequest? request, AuditActor actor, CancellationToken ct)
     {
+        var userId = actor.UserId!.Value; // review endpoints always have a signed-in user
         using var held = jobLock.TryAcquire();
         if (held is null)
             return new("JobRunning");
@@ -78,7 +84,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 item.SizeBytes, File.GetLastWriteTimeUtc(source));
             if (request is null)
             {
-                if (item.ArchivePath is null && pipeline.MoveToFailed(file, new AuditActor(userId, null, null), "Dismissed", "dismissed by an Admin") is { } failed)
+                if (item.ArchivePath is null && pipeline.MoveToFailed(file, actor, "Dismissed", "dismissed by an Admin") is { } failed)
                     return new(failed.Reason);
                 await reviews.SetResolutionAsync(id, "Dismissed", null, userId, time.GetUtcNow().UtcDateTime, ct).ConfigureAwait(false);
                 return new();
@@ -190,7 +196,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             await limited.DisposeAsync().ConfigureAwait(false);
             var result = await pipeline.StoreReleaseAsync(file, system, rom, metadata, bytes, target,
                 gameId => reviews.SetResolutionAsync(id, "Resolved", gameId, userId, time.GetUtcNow().UtcDateTime, ct),
-                new AuditActor(userId, null, null), request.Action, ct).ConfigureAwait(false);
+                actor, request.Action, ct).ConfigureAwait(false);
             return result.Outcome == IngestOutcome.Ingested ? new(GameId: result.GameId) : new(result.Reason);
         }
         catch (ArchiveRejectedException ex)
