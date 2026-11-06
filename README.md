@@ -71,7 +71,7 @@ docker compose up -d
 
 1. Open `http://<host>:8080`, sign in as `admin` with `ADMIN_PASSWORD`, and choose a new password.
 2. **Admin → DATs → Refresh DATs** downloads the game databases (once, and whenever you want newer ones).
-3. Copy your `.gb` / `.gbc` files into `data/ingest/gb/`, your `.gba` files into `data/ingest/gba/` and your `.z64` / `.v64` / `.n64` files into `data/ingest/n64/`, then press **Ingestion → Start ingestion**.
+3. Copy your `.gb` / `.gbc` files into `data/ingest/gb/`, your `.gba` files into `data/ingest/gba/` and your `.z64` / `.v64` / `.n64` files into `data/ingest/n64/`, then press **Ingestion → Import all**.
 
 Upgrading from a version without Game Boy Advance or Nintendo 64? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`).
 

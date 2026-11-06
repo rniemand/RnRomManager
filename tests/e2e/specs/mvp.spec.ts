@@ -93,7 +93,7 @@ test('ingestion of the seeded Basic set', async () => {
 	await expect(page.getByRole('cell', { name: '91-unmatched.gb' })).toBeVisible();
 	await expectAccessible(page, 'ingestion');
 
-	await page.getByRole('button', { name: 'Start ingestion' }).click();
+	await page.getByRole('button', { name: 'Import all' }).click();
 
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
 	await expect(run).toContainText('Ingested 9 · Duplicate 1 · Review 2 · Failed 1', {

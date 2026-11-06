@@ -41,7 +41,7 @@ pwsh scripts/start-dev.ps1   # API on :5080 (dotnet watch) + Vite on http://loca
 
 - `setup-dev.ps1` (`-SkipDb` to leave the database alone) is safe to re-run. It keeps the dev DB password in the git-ignored `.env` (creating one if missing), starts `docker-compose.dev.yml` (MariaDB 11.4 on 3306), creates `.dev/{roms,ingest,logs,cache}`, and writes a git-ignored `src/RnRomManager.Api/appsettings.Development.json` with the connection string and absolute `.dev` paths. An existing settings file is kept; delete it to regenerate. It also installs the e2e project's packages and Playwright's Chromium (on Linux, run `npx playwright install-deps` once for the system libraries).
 - `start-dev.ps1` runs both servers in one console; Ctrl+C stops both. `-ApiOnly` / `-WebOnly` run one. Vite proxies `/api` and `/health` to the API.
-- The first API start on an empty database prints the generated `admin` password to the console once; signing in asks you to change it. Then Ingestion → Start ingests the seeded files.
+- The first API start on an empty database prints the generated `admin` password to the console once; signing in asks you to change it. Then Ingestion → Import all ingests the seeded files.
 
 ## Synthetic ingestion data
 
@@ -62,7 +62,7 @@ Both sets use deterministic builder seeds and fixture DAT version `fixture-1`. Z
 
 Basic contains Orbit Blocks (World, Japan, World Rev 1), Quest, The (USA, Europe), Seven Zip Demo (World), Color Garden (World, dual-mode) and Color Racer (USA, GBC-only) Star Courier (USA, GBA, loose in `ingest/gba/`) and Orbit Kart 64 (USA, N64, loose in `ingest/n64/` as a byte-swapped `.v64`, so its DAT match proves the byte-order conversion). Quest is in a ZIP and Seven Zip Demo in the 7z. Color Garden is deliberately dropped in `ingest/gb/`. A byte-identical Orbit Blocks copy tests deduplication; a plausible unmatched file tests review suggestions and a second unmatched file (`93-mystery.gb`, no suggestions) is there to delete from the queue; another file has both invalid logo and header checksum. Full adds 200 generated games, split evenly between GB and GBC.
 
-For a manual run (§15.4): seed, `start-dev.ps1`, sign in as an Admin, Ingestion → Start, and check the run's summary against the table. Set `Sources__ThumbnailBaseUrl` to an empty string for an offline test using default art. Generated library ZIPs are under `.dev/roms`; the two unmatched files show in the Review queue and stay in ingest, and duplicate/invalid files move to their side folders.
+For a manual run (§15.4): seed, `start-dev.ps1`, sign in as an Admin, Ingestion → Import all, and check the run's summary against the table. Set `Sources__ThumbnailBaseUrl` to an empty string for an offline test using default art. Generated library ZIPs are under `.dev/roms`; the two unmatched files show in the Review queue and stay in ingest, and duplicate/invalid files move to their side folders.
 
 The `SeedIngestTests` API integration tests seed both sets, let startup load the fixture DATs, start ingestion through the authenticated endpoint, and verify counts, grouping, primary revision, article display, GBC classification, the GBA game and its header, the N64 game stored as `.z64` with its big-endian SHA1, review suggestions and default art. Standard checks run with `pwsh scripts/test-all.ps1` (Docker required).
 

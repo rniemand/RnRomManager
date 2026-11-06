@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
@@ -33,6 +34,34 @@
 	const job = $derived(jobs.current);
 	const withFiles = $derived(pending?.filter((s) => s.files.length) ?? []);
 
+	// IN2: the files to import, keyed `system/name`; everything is selected again after each reload.
+	const key = (system: string, name: string) => `${system}/${name}`;
+	const selected = new SvelteSet<string>();
+	const allKeys = $derived(withFiles.flatMap((s) => s.files.map((f) => key(s.system, f.name))));
+	const selectedCount = $derived(allKeys.filter((k) => selected.has(k)).length);
+
+	function selectAll(next: boolean): void {
+		selected.clear();
+		if (next) allKeys.forEach((k) => selected.add(k));
+	}
+
+	function toggle(k: string): void {
+		if (!selected.delete(k)) selected.add(k);
+	}
+
+	function systemState(system: PendingSystem): 'all' | 'none' | 'some' {
+		const count = system.files.filter((f) => selected.has(key(system.system, f.name))).length;
+		return count === 0 ? 'none' : count === system.files.length ? 'all' : 'some';
+	}
+
+	function toggleSystem(system: PendingSystem): void {
+		const next = systemState(system) !== 'all';
+		for (const f of system.files) {
+			if (next) selected.add(key(system.system, f.name));
+			else selected.delete(key(system.system, f.name));
+		}
+	}
+
 	async function load(): Promise<void> {
 		error = null;
 		try {
@@ -42,6 +71,8 @@
 				api.get<DatVersion[]>('/api/admin/dats')
 			]);
 			pending = p;
+			selected.clear();
+			for (const s of p) for (const f of s.files) selected.add(key(s.system, f.name));
 			runs = r;
 			datsMissing = dats.length === 0;
 		} catch (e) {
@@ -77,10 +108,11 @@
 		};
 	});
 
-	async function start(): Promise<void> {
+	/** Without `files`, every pending file (IN1). */
+	async function start(files?: { system: string; name: string }[]): Promise<void> {
 		busy = true;
 		try {
-			await api.post('/api/jobs/ingest');
+			await api.post('/api/jobs/ingest', files ? { files } : undefined);
 			await jobs.refresh();
 		} catch (e) {
 			if (isApiError(e, 'DatsMissing')) datsMissing = true;
@@ -89,6 +121,15 @@
 		} finally {
 			busy = false;
 		}
+	}
+
+	function importSelected(): void {
+		const files = withFiles.flatMap((s) =>
+			s.files
+				.filter((f) => selected.has(key(s.system, f.name)))
+				.map((f) => ({ system: s.system, name: f.name }))
+		);
+		void start(files);
 	}
 
 	async function cancel(id: string): Promise<void> {
@@ -153,10 +194,22 @@
 						{/snippet}
 					</EmptyState>
 				{:else}
-					<button type="button" class="btn btn-primary" disabled={busy} onclick={start}>
-						{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
-						<Icon name="ingest" /> Start ingestion
-					</button>
+					<div class="d-flex flex-wrap gap-2">
+						<button type="button" class="btn btn-primary" disabled={busy} onclick={() => start()}>
+							{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"
+								></span>{/if}
+							<Icon name="ingest" /> Import all
+						</button>
+						<!-- Disabled at none (nothing to do) and at all (Import all does the same). -->
+						<button
+							type="button"
+							class="btn btn-outline-primary"
+							disabled={busy || selectedCount === 0 || selectedCount === allKeys.length}
+							onclick={importSelected}
+						>
+							Import selected ({selectedCount})
+						</button>
+					</div>
 				{/if}
 			</div>
 		</section>
@@ -166,14 +219,37 @@
 			{#if withFiles.length === 0}
 				<div class="card"><EmptyState message="No files waiting in the ingest folders." /></div>
 			{:else}
+				<div class="d-flex gap-2 mb-2">
+					<button
+						type="button"
+						class="btn btn-sm btn-outline-secondary"
+						onclick={() => selectAll(true)}>Select all</button
+					>
+					<button
+						type="button"
+						class="btn btn-sm btn-outline-secondary"
+						onclick={() => selectAll(false)}>Clear selection</button
+					>
+				</div>
 				{#each withFiles as system (system.system)}
 					{@const current = filePage(system.system, system.files.length)}
+					{@const state = systemState(system)}
 					<h3 class="h6 mt-3"><Icon name="system-{system.system}" /> {system.system}</h3>
 					<div class="card">
 						<div class="table-responsive">
 							<table class="table table-sm table-striped table-hover align-middle mb-0">
 								<thead class="table-dark">
 									<tr class="small text-uppercase text-body-secondary">
+										<th scope="col">
+											<input
+												class="form-check-input"
+												type="checkbox"
+												aria-label="Select all {system.system} files"
+												checked={state === 'all'}
+												indeterminate={state === 'some'}
+												onchange={() => toggleSystem(system)}
+											/>
+										</th>
 										<th scope="col">Name</th>
 										<th scope="col" class="text-end">Size</th>
 										<th scope="col">Modified</th>
@@ -182,6 +258,15 @@
 								<tbody>
 									{#each system.files.slice((current - 1) * pageSize, current * pageSize) as file (file.name)}
 										<tr>
+											<td>
+												<input
+													class="form-check-input"
+													type="checkbox"
+													aria-label="Select {file.name}"
+													checked={selected.has(key(system.system, file.name))}
+													onchange={() => toggle(key(system.system, file.name))}
+												/>
+											</td>
 											<td class="text-truncate" style="max-width: 32rem" title={file.name}
 												>{file.name}</td
 											>
