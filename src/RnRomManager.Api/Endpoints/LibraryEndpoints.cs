@@ -251,15 +251,16 @@ public static class LibraryEndpoints
         result.Code is null ? Results.NoContent() : ToProblem(ctx, result);
 
     /// <summary>§23 mutation bullet: 409 for the lock and unwritable ZIPs, 404 for a stale id, 500 for write failures.</summary>
-    private static IResult ToProblem(HttpContext ctx, LibraryEditResult result) => result.Code switch
-    {
-        LibraryEditResult.ValidationFailed => Problems.Validation(ctx, result.Errors!),
-        LibraryEditResult.NotFound => Problems.NotFound(ctx),
-        LibraryEditResult.JobRunning or LibraryEditResult.TooManyImages or LibraryEditResult.DuplicateImage or LibraryEditResult.DefaultImage
-            or LibraryTarget.InfoJsonNewerSchema or LibraryTarget.TargetZipUnreadable =>
-            Problems.Create(ctx, StatusCodes.Status409Conflict, result.Code, result.Code),
-        _ => Problems.Create(ctx, StatusCodes.Status500InternalServerError, result.Code!, result.Code!),
-    };
+    internal static IResult ToProblem(HttpContext ctx, LibraryEditResult result, IReadOnlyDictionary<string, object?>? extensions = null) =>
+        result.Code switch
+        {
+            LibraryEditResult.ValidationFailed => Problems.Validation(ctx, result.Errors!, extensions),
+            LibraryEditResult.NotFound => Problems.NotFound(ctx, extensions),
+            LibraryEditResult.JobRunning or LibraryEditResult.TooManyImages or LibraryEditResult.DuplicateImage or LibraryEditResult.DefaultImage
+                or LibraryTarget.InfoJsonNewerSchema or LibraryTarget.TargetZipUnreadable =>
+                Problems.Create(ctx, StatusCodes.Status409Conflict, result.Code, result.Code, extensions),
+            _ => Problems.Create(ctx, StatusCodes.Status500InternalServerError, result.Code!, result.Code!, extensions),
+        };
 
     private const string TitleRule = "Must contain 1–255 characters and produce a nonempty filename.";
 
@@ -442,7 +443,7 @@ public static class LibraryEndpoints
         return (query, errors);
     }
 
-    private static string ImageUrl(Guid gameId, long imageId) => $"/api/games/{gameId}/images/{imageId}";
+    internal static string ImageUrl(Guid gameId, long imageId) => $"/api/games/{gameId}/images/{imageId}";
 
     private static object ToDetail(GameRow game, string systemName, IReadOnlyList<RomRow> roms, IReadOnlyList<ImageRow> images) => new
     {

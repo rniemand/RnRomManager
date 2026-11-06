@@ -10,7 +10,7 @@ public class SchemaMigrationTests
 {
     private static readonly string[] Tables =
     [
-        "data_protection_keys", "games", "images", "ingest_review_items", "integrity_issues",
+        "data_protection_keys", "duplicate_dismissals", "games", "images", "ingest_review_items", "integrity_issues",
         "job_items", "jobs", "roms", "user_roles", "users",
     ];
 
@@ -27,7 +27,7 @@ public class SchemaMigrationTests
         new(new MySqlConnectionFactory(cs), NullLogger<MySqlDatabaseLifecycle>.Instance, TimeProvider.System);
 
     [Test]
-    public async Task FromScratch_CreatesEveryTableAndJournalsTwelveScripts()
+    public async Task FromScratch_CreatesEveryTableAndJournalsThirteenScripts()
     {
         var tables = await ColumnAsync<string>(_cs,
             "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME");
@@ -38,7 +38,7 @@ public class SchemaMigrationTests
         {
             "0001_users", "0002_games", "0003_roms", "0004_images", "0005_jobs", "0006_job_items",
             "0007_ingest_review_items", "0008_integrity_issues", "0009_data_protection_keys",
-            "0010_game_rating", "0011_user_roles", "0012_image_cover",
+            "0010_game_rating", "0011_user_roles", "0012_image_cover", "0013_duplicate_dismissals",
         }));
     }
 
@@ -47,7 +47,7 @@ public class SchemaMigrationTests
     {
         Lifecycle(_cs).Migrate();
 
-        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 12L }));
+        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 13L }));
     }
 
     [Test]
@@ -72,6 +72,7 @@ public class SchemaMigrationTests
     [TestCase("ingest_review_items", "id bigint(20), system_id varchar(16), reason varchar(16), source_path varchar(1024), archive_path varchar(1024) NULL, archive_entry varchar(512) NULL, original_file_name varchar(255), size_bytes bigint(20), crc32 char(8), md5 char(32), sha1 char(40), header longtext NULL, suggestions longtext, dat_identification longtext NULL, candidate_game_ids longtext NULL, status varchar(16), game_id char(36) NULL, created_at datetime(6), last_seen_job_id char(36), resolved_at datetime(6) NULL, resolved_by int(11) NULL")]
     [TestCase("integrity_issues", "id bigint(20), type varchar(32), severity varchar(8), system_id varchar(16) NULL, zip_path varchar(512) NULL, game_id char(36) NULL, entry_name varchar(512) NULL, details text NULL, status varchar(16), first_seen_job_id char(36), last_seen_job_id char(36), detected_at datetime(6), resolved_at datetime(6) NULL")]
     [TestCase("data_protection_keys", "id int(11), friendly_name varchar(255), xml text, created_at datetime(6)")]
+    [TestCase("duplicate_dismissals", "system_id varchar(16), base_title varchar(255), games_key char(64), dismissed_by int(11) NULL, dismissed_at datetime(6)")]
     public async Task Columns_MatchSpec(string table, string expected)
     {
         var columns = await ColumnAsync<string>(_cs,
@@ -89,6 +90,7 @@ public class SchemaMigrationTests
         var expected = new[]
         {
             "data_protection_keys PRIMARY U id",
+            "duplicate_dismissals PRIMARY U system_id,base_title,games_key",
             "games ix_games_created_at - created_at",
             "games ix_games_system_bucket_title - system_id,bucket,title",
             "games ix_games_title - title",

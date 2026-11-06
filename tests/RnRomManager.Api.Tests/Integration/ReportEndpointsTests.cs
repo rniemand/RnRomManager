@@ -185,6 +185,203 @@ public class ReportEndpointsTests
         Assert.That((unknown.StatusCode, await AuthClient.CodeAsync(unknown)), Is.EqualTo((HttpStatusCode.NotFound, "NotFound")));
     }
 
+    private async Task<AuthClient> Editor()
+    {
+        var editor = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
+        (await editor.LoginAsync("boss", TestUsers.Password)).Dispose();
+        return editor;
+    }
+
+    private async Task<List<JsonElement>> Groups(string query = "")
+    {
+        var page = await GetJson("/api/reports/duplicates" + query);
+        return page.GetProperty("items").EnumerateArray().ToList();
+    }
+
+    private Task SetBaseTitle(string title, params Guid[] games) =>
+        Sql("UPDATE roms SET base_title = @title WHERE game_id IN @games", new { title, games });
+
+    private static List<Guid> GameIds(JsonElement group) =>
+        group.GetProperty("games").EnumerateArray().Select(g => g.GetProperty("id").GetGuid()).ToList();
+
+    private static object Dismissal(JsonElement group) => new
+    {
+        system = group.GetProperty("system").GetString(),
+        baseTitle = group.GetProperty("baseTitle").GetString(),
+        gamesKey = group.GetProperty("gamesKey").GetString(),
+    };
+
+    [Test]
+    public async Task Duplicates_GroupsSameSystemAndBaseTitle_SuggestedTargetFirst_OtherSystemsApart()
+    {
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        var echo = await Ingest("gbc", "e.gbc", Echo);
+        await SetBaseTitle("Shared", alpha, bravo, echo);
+        // Same release count: the older game is the suggested target.
+        await Sql("UPDATE games SET created_at = '2020-01-01' WHERE id = @bravo", new { bravo });
+
+        var page = await GetJson("/api/reports/duplicates");
+
+        Assert.That((page.GetProperty("pageSize").GetInt32(), page.GetProperty("total").GetInt64()), Is.EqualTo((25, 1L)));
+        var group = page.GetProperty("items")[0];
+        Assert.That((group.GetProperty("system").GetString(), group.GetProperty("systemName").GetString(), group.GetProperty("baseTitle").GetString()),
+            Is.EqualTo(("gb", "Game Boy", "Shared")));
+        Assert.That(group.GetProperty("gamesKey").GetString(), Is.EqualTo(RnRomManager.Core.Reports.DuplicateGroups.GamesKey([alpha, bravo])));
+        Assert.That(GameIds(group), Is.EqualTo(new[] { bravo, alpha }));
+        var first = group.GetProperty("games")[0];
+        Assert.That((first.GetProperty("displayTitle").GetString(), first.GetProperty("romCount").GetInt32()), Is.EqualTo(("Bravo", 1)));
+        Assert.That(first.GetProperty("zipSizeBytes").GetInt64(), Is.GreaterThan(0));
+        Assert.That(first.GetProperty("boxArtUrl").GetString(), Does.StartWith($"/api/games/{bravo}/images/"));
+        Assert.That(first.TryGetProperty("createdAt", out _), Is.True);
+    }
+
+    [Test]
+    public async Task Dismiss_HidesTheGroup_UntilItsMembershipChanges_AndRepeatsAre204()
+    {
+        using var editor = await Editor();
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        var charlie = await Ingest("gb", "c.gb", Charlie);
+        await SetBaseTitle("Shared", alpha, bravo);
+        var group = (await Groups()).Single();
+
+        for (var i = 0; i < 2; i++)
+        {
+            using var dismissed = await editor.PostAsync("/api/reports/duplicates/dismiss", Dismissal(group));
+            Assert.That(dismissed.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        }
+        Assert.That(await Groups(), Is.Empty);
+        Assert.That((await GetJson("/api/reports/duplicates")).GetProperty("total").GetInt64(), Is.Zero);
+
+        await SetBaseTitle("Shared", charlie);
+        Assert.That(GameIds((await Groups()).Single()), Is.EquivalentTo(new[] { alpha, bravo, charlie }));
+    }
+
+    [Test]
+    public async Task Duplicates_BaseTitleCaseVariants_GroupTogether_AndEitherSpellingDismisses()
+    {
+        using var editor = await Editor();
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        await SetBaseTitle("Quest", alpha);
+        await SetBaseTitle("QUEST", bravo);
+        var group = (await Groups()).Single();
+        Assert.That(GameIds(group), Is.EquivalentTo(new[] { alpha, bravo }));
+
+        var other = group.GetProperty("baseTitle").GetString() == "Quest" ? "QUEST" : "Quest";
+        using var dismissed = await editor.PostAsync("/api/reports/duplicates/dismiss",
+            new { system = "gb", baseTitle = other, gamesKey = group.GetProperty("gamesKey").GetString() });
+
+        Assert.That(dismissed.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(await Groups(), Is.Empty);
+    }
+
+    [TestCase("{\"baseTitle\":\"Quest\",\"gamesKey\":\"" + Key + "\"}", "system")]
+    [TestCase("{\"system\":\"nes\",\"baseTitle\":\"Quest\",\"gamesKey\":\"" + Key + "\"}", "system")]
+    [TestCase("{\"system\":\"gb\",\"baseTitle\":\"\",\"gamesKey\":\"" + Key + "\"}", "baseTitle")]
+    [TestCase("{\"system\":\"gb\",\"baseTitle\":\"Quest\",\"gamesKey\":\"ABC\"}", "gamesKey")]
+    [TestCase("{\"system\":\"gb\",\"baseTitle\":\"Quest\",\"gamesKey\":\"" + UpperKey + "\"}", "gamesKey")]
+    public async Task Dismiss_InvalidBody_Is400(string json, string field)
+    {
+        using var editor = await Editor();
+
+        using var response = await editor.PostAsync("/api/reports/duplicates/dismiss", JsonDocument.Parse(json).RootElement);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").TryGetProperty(field, out _), Is.True);
+    }
+
+    private const string Key = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    private const string UpperKey = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+
+    [Test]
+    public async Task Dismiss_StaleKey_IsStoredAnyway_204()
+    {
+        using var editor = await Editor();
+
+        using var response = await editor.PostAsync("/api/reports/duplicates/dismiss", new { system = "gb", baseTitle = "Nothing", gamesKey = Key });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+    }
+
+    [Test]
+    public async Task Merge_MergesEverySourceIntoTheTarget()
+    {
+        using var editor = await Editor();
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        var charlie = await Ingest("gb", "c.gb", Charlie);
+
+        using var response = await editor.PostAsync("/api/reports/duplicates/merge", new { targetGameId = alpha, sourceGameIds = new[] { bravo, charlie } });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("targetGameId").GetGuid(), Is.EqualTo(alpha));
+        Assert.That((await GetJson($"/api/games/{alpha}")).GetProperty("roms").GetArrayLength(), Is.EqualTo(3));
+        foreach (var gone in new[] { bravo, charlie })
+        {
+            using var detail = await _user.GetAsync($"/api/games/{gone}");
+            Assert.That(detail.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        }
+    }
+
+    [TestCase(false, "[\"B\"]", "targetGameId")]
+    [TestCase(true, "[]", "sourceGameIds")]
+    [TestCase(true, "[\"A\"]", "sourceGameIds")]
+    [TestCase(true, "[\"B\",\"B\"]", "sourceGameIds")]
+    [TestCase(true, "many", "sourceGameIds")]
+    public async Task Merge_InvalidBody_Is400(bool withTarget, string sources, string field)
+    {
+        using var editor = await Editor();
+        Guid a = Guid.NewGuid(), b = Guid.NewGuid();
+        var ids = sources == "many"
+            ? Enumerable.Range(0, 21).Select(_ => Guid.NewGuid()).ToArray()
+            : JsonSerializer.Deserialize<string[]>(sources)!.Select(s => s == "A" ? a : b).ToArray();
+
+        using var response = await editor.PostAsync("/api/reports/duplicates/merge",
+            new { targetGameId = withTarget ? a : (Guid?)null, sourceGameIds = ids });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").TryGetProperty(field, out _), Is.True);
+    }
+
+    [Test]
+    public async Task Merge_StopsAtTheFirstFailure_AndListsWhatMerged()
+    {
+        using var editor = await Editor();
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        var charlie = await Ingest("gb", "c.gb", Charlie);
+        var echo = await Ingest("gbc", "e.gbc", Echo);
+
+        using (var missing = await editor.PostAsync("/api/reports/duplicates/merge",
+            new { targetGameId = alpha, sourceGameIds = new[] { bravo, Guid.NewGuid(), charlie } }))
+        {
+            var problem = await AuthClient.JsonAsync(missing);
+            Assert.That((missing.StatusCode, problem.GetProperty("code").GetString()), Is.EqualTo((HttpStatusCode.NotFound, "NotFound")));
+            var merged = problem.GetProperty("merged").EnumerateArray().Select(m => m.GetGuid());
+            Assert.That(merged, Is.EqualTo(new[] { bravo }));
+        }
+        Assert.That((await GetJson($"/api/games/{charlie}")).GetProperty("id").GetGuid(), Is.EqualTo(charlie), "untouched after the stop");
+
+        using var otherSystem = await editor.PostAsync("/api/reports/duplicates/merge",
+            new { targetGameId = alpha, sourceGameIds = new[] { charlie, echo } });
+        var invalid = await AuthClient.JsonAsync(otherSystem);
+        Assert.That((otherSystem.StatusCode, invalid.GetProperty("code").GetString()), Is.EqualTo((HttpStatusCode.BadRequest, "ValidationFailed")));
+        Assert.That(invalid.GetProperty("merged").EnumerateArray().Select(m => m.GetGuid()), Is.EqualTo(new[] { charlie }));
+    }
+
+    [TestCase("system=nes", "system")]
+    [TestCase("pageSize=201", "pageSize")]
+    public async Task Duplicates_InvalidQuery_Is400(string query, string field)
+    {
+        using var response = await _user.GetAsync("/api/reports/duplicates?" + query);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").TryGetProperty(field, out _), Is.True);
+    }
+
     [TestCase("system=nes", "system")]
     [TestCase("pageSize=201", "pageSize")]
     [TestCase("page=0", "page")]

@@ -13,6 +13,13 @@ public interface IReportRepository
 
     /// <summary>RP2: every game of one system with its ZIP size and release count, largest first (ties by title).</summary>
     Task<IReadOnlyList<GameSize>> ListGameSizesAsync(string systemId, CancellationToken cancellationToken);
+
+    /// <summary>RP6–RP8: undismissed duplicate groups, sorted by system then base title; paging and total exclude dismissed ones.</summary>
+    Task<Page<DuplicateGroup>> ListDuplicatesAsync(string? systemId, int page, int pageSize, CancellationToken cancellationToken);
+
+    /// <summary>RP7: stores the dismissal; repeating it is a no-op.</summary>
+    Task DismissDuplicateAsync(string systemId, string baseTitle, string gamesKey, int? userId, DateTime now,
+        CancellationToken cancellationToken);
 }
 
 public sealed record SystemSize(string SystemId, long Bytes, int GameCount);
@@ -30,3 +37,8 @@ public static class MissingImageReasons
     /// <summary><c>has_default_boxart = 1</c>: the cover is the placeholder art.</summary>
     public const string Placeholder = "Placeholder";
 }
+
+/// <summary>RP6: games in one system that own releases with the same base title. <c>Games</c> are in suggested-target order.</summary>
+public sealed record DuplicateGroup(string SystemId, string BaseTitle, string GamesKey, IReadOnlyList<DuplicateGame> Games);
+
+public sealed record DuplicateGame(Guid Id, string DisplayTitle, int RomCount, long ZipSizeBytes, DateTime CreatedAt, long? BoxArtImageId);
