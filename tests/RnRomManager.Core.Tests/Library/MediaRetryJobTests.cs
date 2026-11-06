@@ -30,11 +30,19 @@ public class MediaRetryJobTests
     private Dictionary<string, Func<HttpResponseMessage>> _routes = null!;
     private StubHttpHandler _server = null!;
     private int _seed;
+    private RnRomManager.Core.Audit.IAuditLog _audit = null!;
+    private Guid _jobId;
+
+    private List<RnRomManager.Core.Audit.AuditEvent> Recorded() =>
+        _audit.ReceivedCalls().Where(c => c.GetMethodInfo().Name == "Record")
+            .Select(c => (RnRomManager.Core.Audit.AuditEvent)c.GetArguments()[0]!).ToList();
 
     [SetUp]
     public void SetUp()
     {
         _dir = new TempDir();
+        _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
+        _jobId = Guid.NewGuid();
         var handler = Substitute.For<ISystemHandler>();
         handler.Id.Returns("gb");
         handler.DatName.Returns("Nintendo - Game Boy");
@@ -57,7 +65,7 @@ public class MediaRetryJobTests
 
     private GameMediaRetry Retry() => new(_mirror, _reader, _systems,
         new MediaService(new HttpClient(_server), Options.Create(new SourcesOptions { ThumbnailBaseUrl = BaseUrl }), NullLogger<MediaService>.Instance),
-        Options.Create(new PathsOptions { Roms = _dir.Path }), TimeProvider.System, NullLogger<GameMediaRetry>.Instance);
+        Options.Create(new PathsOptions { Roms = _dir.Path }), _audit, TimeProvider.System, NullLogger<GameMediaRetry>.Instance);
 
     private MediaRetryJob Job() => new(_games, Retry(), NullLogger<MediaRetryJob>.Instance);
 
@@ -113,7 +121,7 @@ public class MediaRetryJobTests
     private async Task<string> RunJob(params GameRow[] candidates)
     {
         _games.ListMediaRetryCandidatesAsync(Arg.Any<CancellationToken>()).Returns(candidates);
-        return JsonSerializer.Serialize(await Job().RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None));
+        return JsonSerializer.Serialize(await Job().RunAsync(new JobContext(_jobId, new JobProgress()), CancellationToken.None));
     }
 
     /// <summary>The job's <c>summary</c> as stored (§10.2: <c>{updated, notFound, skipped, error}</c>).</summary>
@@ -135,6 +143,10 @@ public class MediaRetryJobTests
         Assert.That((boxArt.IsDefault, boxArt.Width, boxArt.SourceUrl), Is.EqualTo((false, 300, GbBox + "Tetris%20%28World%29.png")));
         Assert.That(game.Images.Single(i => i.Type == ImageType.Snap).Width, Is.EqualTo(160));
         await _mirror.Received(1).ReplaceAsync(Arg.Is<MirrorEntry>(e => e.Info.GameId == row.Id && e.ZipPath == row.ZipPath), Arg.Any<CancellationToken>());
+        var fetched = Recorded().Single();
+        Assert.That((fetched.Action, fetched.Actor, fetched.GameId, fetched.Path, fetched.Details), Is.EqualTo(
+            ("MediaFetched", new RnRomManager.Core.Audit.AuditActor(null, null, _jobId), (Guid?)row.Id, "roms/" + row.ZipPath,
+                "boxart-01.png, snap-01.png")));
     }
 
     [Test]
@@ -148,6 +160,7 @@ public class MediaRetryJobTests
         Assert.That(summary, Is.EqualTo(Summary(notFound: 1)));
         Assert.That(await File.ReadAllBytesAsync(_dir.Combine(row.ZipPath.Split('/'))), Is.EqualTo(before));
         await _mirror.DidNotReceiveWithAnyArgs().ReplaceAsync(default!, default);
+        Assert.That(Recorded(), Is.Empty, "nothing changed, nothing recorded");
     }
 
     [Test]
@@ -251,8 +264,23 @@ public class MediaRetryJobTests
     {
         var row = await Add("Homebrew", null, boxArt: false);
 
-        var result = await Retry().RetryAsync(row, new CircuitBreaker(), skipManualOnly: false, CancellationToken.None);
+        var actor = new RnRomManager.Core.Audit.AuditActor(5, "boss", null);
+        var result = await Retry().RetryAsync(row, new CircuitBreaker(), skipManualOnly: false, actor, CancellationToken.None);
 
         Assert.That(result.Outcome, Is.EqualTo(MediaRetryOutcome.Updated), "missing box art gets the default");
+        Assert.That(Recorded().Select(e => (e.Action, e.Actor)), Is.EqualTo(new[] { ("MediaFetched", actor) }));
+    }
+
+    [Test]
+    public async Task ADbFailureAfterTheZipWrite_StillRecordsMediaFetched()
+    {
+        var row = await Add("Homebrew", null, boxArt: false);
+        _mirror.ReplaceAsync(default!, default).ReturnsForAnyArgs<Task>(_ => throw new TimeoutException("DB down"));
+
+        var result = await Retry().RetryAsync(row, new CircuitBreaker(), skipManualOnly: false, new RnRomManager.Core.Audit.AuditActor(5, "boss", null),
+            CancellationToken.None);
+
+        Assert.That(result.Code, Is.EqualTo(LibraryEditResult.DbWriteFailed));
+        Assert.That(Recorded().Select(e => e.Action), Is.EqualTo(new[] { "MediaFetched" }));
     }
 }

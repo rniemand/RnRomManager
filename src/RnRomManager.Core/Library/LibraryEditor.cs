@@ -136,7 +136,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     /// I5: stores an uploaded PNG/JPEG as-is under <c>boxart-NN</c>/<c>snap-NN</c> (I2, extension from the magic bytes).
     /// A box art replaces the placeholder (and takes its cover status); the first image of an empty game is its cover (I3).
     /// </summary>
-    public async Task<LibraryEditResult> AddImageAsync(Guid gameId, ImageType type, byte[] bytes, CancellationToken ct)
+    public async Task<LibraryEditResult> AddImageAsync(Guid gameId, ImageType type, byte[] bytes, AuditActor actor, CancellationToken ct)
     {
         if (type is not (ImageType.BoxArt or ImageType.Snap))
             return Invalid("type", "Choose BoxArt or Snap.");
@@ -190,6 +190,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         var result = await WriteZipAsync(existing, row.ZipPath, game,
                 new() { [LibraryZip.ImageEntry(image.FileName)] = () => new MemoryStream(bytes) }).ConfigureAwait(false)
             ?? await MirrorAsync(() => mirror.ReplaceAsync(Mirror(row.ZipPath, game), CancellationToken.None), row.ZipPath).ConfigureAwait(false);
+        if (FilesChanged(result))
+            audit.Record(new AuditEvent(AuditActions.ImageAdded, actor, row.SystemId, gameId, AuditPaths.Library(row.ZipPath), Details: image.FileName));
         if (result.Code is null)
             logger.LogInformation("Image {FileName} ({Type}) uploaded to game {GameId} ({ZipPath})", image.FileName, type, gameId, row.ZipPath);
         return result;
@@ -199,7 +201,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     /// I6: removes an image; the placeholder can't be (<c>DefaultImage</c>). A removed cover passes to the first remaining
     /// <c>BoxArt</c> by file name, else the first remaining image, else the system's placeholder is added back as cover (I3).
     /// </summary>
-    public async Task<LibraryEditResult> DeleteImageAsync(Guid gameId, long imageId, CancellationToken ct)
+    public async Task<LibraryEditResult> DeleteImageAsync(Guid gameId, long imageId, AuditActor actor, CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();
         if (held is null)
@@ -230,13 +232,15 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         var game = current with { Images = list, Metadata = Touched(current) };
         var result = await WriteZipAsync(zip, row!.ZipPath, game, entries).ConfigureAwait(false)
             ?? await MirrorAsync(() => mirror.ReplaceAsync(Mirror(row.ZipPath, game), CancellationToken.None), row.ZipPath).ConfigureAwait(false);
+        if (FilesChanged(result))
+            audit.Record(new AuditEvent(AuditActions.ImageDeleted, actor, row.SystemId, gameId, AuditPaths.Library(row.ZipPath), Details: image.FileName));
         if (result.Code is null)
             logger.LogInformation("Image {FileName} deleted from game {GameId} ({ZipPath})", image.FileName, gameId, row.ZipPath);
         return result;
     }
 
     /// <summary>I7: makes one image the cover (any type, the placeholder too).</summary>
-    public async Task<LibraryEditResult> SetCoverAsync(Guid gameId, long imageId, CancellationToken ct)
+    public async Task<LibraryEditResult> SetCoverAsync(Guid gameId, long imageId, AuditActor actor, CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();
         if (held is null)
@@ -254,6 +258,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             Metadata = Touched(current),
         };
         var result = await WriteAsync(zip!, row!.ZipPath, game).ConfigureAwait(false);
+        if (FilesChanged(result))
+            audit.Record(new AuditEvent(AuditActions.CoverSet, actor, row.SystemId, gameId, AuditPaths.Library(row.ZipPath), Details: image.FileName));
         if (result.Code is null)
             logger.LogInformation("Image {FileName} is now the cover of game {GameId}", image.FileName, gameId);
         return result;
@@ -280,14 +286,14 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     }
 
     /// <summary>§10.2 "Retry media" for one game, with its own circuit breaker. Nothing new found is still a success.</summary>
-    public async Task<LibraryEditResult> RetryMediaAsync(Guid gameId, CancellationToken ct)
+    public async Task<LibraryEditResult> RetryMediaAsync(Guid gameId, AuditActor actor, CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();
         if (held is null)
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return new(NotFound);
-        var result = await mediaRetry.RetryAsync(row, new CircuitBreaker(), skipManualOnly: false, ct).ConfigureAwait(false);
+        var result = await mediaRetry.RetryAsync(row, new CircuitBreaker(), skipManualOnly: false, actor, ct).ConfigureAwait(false);
         if (result.Outcome == MediaRetryOutcome.Error)
             logger.LogError("Media retry for {ZipPath} failed: {Code} {Details}", row.ZipPath, result.Code, result.Details);
         return result.Outcome == MediaRetryOutcome.Error ? new(result.Code, result.Details) : Ok;

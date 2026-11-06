@@ -252,7 +252,7 @@ Migrations 0013 and 0014 only add tables, so existing data is untouched. There a
   - Existing tests compile and pass with the new parameter.
 
   Done when: Core and Api tests pass.
-- [ ] **21. Audit images and media**: AU4 rows `ImageAdded`, `ImageDeleted`, `CoverSet` and `MediaFetched`. `AddImageAsync`, `DeleteImageAsync`, `SetCoverAsync`, `RetryMediaAsync` and `GameMediaRetry.RetryAsync` take an `AuditActor`, and `MediaRetryJob` passes `context.Actor`. Files: `LibraryEditor.cs`, `GameMediaRetry.cs`, `Core/Library/MediaRetryJob.cs`, `LibraryEndpoints.cs`, `LibraryImageEditTests`, `MediaRetryJobTests`, `ImageEndpointsTests`, `MediaRetryEndpointsTests`. Tests (integration):
+- [x] **21. Audit images and media**: AU4 rows `ImageAdded`, `ImageDeleted`, `CoverSet` and `MediaFetched`. `AddImageAsync`, `DeleteImageAsync`, `SetCoverAsync`, `RetryMediaAsync` and `GameMediaRetry.RetryAsync` take an `AuditActor`, and `MediaRetryJob` passes `context.Actor`. Files: `LibraryEditor.cs`, `GameMediaRetry.cs`, `Core/Library/MediaRetryJob.cs`, `LibraryEndpoints.cs`, `LibraryImageEditTests`, `MediaRetryJobTests`, `ImageEndpointsTests`, `MediaRetryEndpointsTests`. Tests (integration):
   - Adding, deleting and setting the cover each write their row, with the image file name; setting the current cover again writes none.
   - A single-game media retry that wrote the ZIP writes exactly one `MediaFetched`; one that changed nothing writes none.
   - A `MediaRetryJob` run writes rows with its job id.
@@ -351,6 +351,7 @@ Migrations 0013 and 0014 only add tables, so existing data is untouched. There a
 - 2026-11-06 RP3 clickable tiles → SVG `<a>` links with `tabindex="-1"` and `aria-hidden`; the table is the keyboard and screen-reader route, so the `role="img"` treemap exposes no duplicate links (code, step 14)
 - 2026-11-06 AU2/AU3 shape → `IAuditRepository` sits in Core next to `IAuditLog`; `AuditLog` exposes the channel reader and a pending count for `AuditWriter.FlushAsync`; `AuditPaths` is a DI singleton over `PathsOptions` (`AuditPaths.Library` is static for `zip_path`); `AuditActor.From` is a C# 14 static extension in Api (code, step 17)
 - 2026-11-06 Step 18 wiring → `IngestPipeline` takes `AuditPaths` with `IAuditLog`, and exposes `RecordArchiveDeleted` so `IngestJob` writes `ArchiveDeleted` without its own audit dependency; tests that seed through `ProcessAsync` use a TestData extension overload that records as a job with no user (code)
+- 2026-11-06 Steps 19 and 21 audit checks for DAT refresh, images and media retry → Core unit tests against a substituted `IAuditLog` (exact rows, actors and no-ops); the end-to-end path (writer, table, paths) is covered by the ingest, review and library-edit integration tests (code)
 - 2026-11-06 RV2 "drop the extension" → only from the file name; a header title such as `DR.MARIO` keeps its last word (`"DR MARIO"`) (code, step 3)
 
 ## Kickoff prompt

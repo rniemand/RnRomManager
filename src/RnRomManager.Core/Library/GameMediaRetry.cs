@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Media;
 using RnRomManager.Core.Naming;
@@ -16,10 +17,11 @@ namespace RnRomManager.Core.Library;
 /// something. The caller holds the job lock.
 /// </summary>
 public sealed class GameMediaRetry(ILibraryMirror mirror, InfoJsonReader reader, ISystemRegistry systems, MediaService media,
-    IOptions<PathsOptions> paths, TimeProvider time, ILogger<GameMediaRetry> logger)
+    IOptions<PathsOptions> paths, IAuditLog audit, TimeProvider time, ILogger<GameMediaRetry> logger)
 {
     /// <param name="skipManualOnly">The <c>MediaRetry</c> job skips games where every release is <c>Manual</c> (D38).</param>
-    public async Task<MediaRetryResult> RetryAsync(GameRow row, CircuitBreaker breaker, bool skipManualOnly, CancellationToken ct)
+    /// <param name="actor">AU4: <c>MediaFetched</c> is recorded once the ZIP is written (also when the DB update then fails).</param>
+    public async Task<MediaRetryResult> RetryAsync(GameRow row, CircuitBreaker breaker, bool skipManualOnly, AuditActor actor, CancellationToken ct)
     {
         var target = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
         if (target.Code is not null)
@@ -62,6 +64,8 @@ public sealed class GameMediaRetry(ILibraryMirror mirror, InfoJsonReader reader,
         {
             return new(MediaRetryOutcome.Error, LibraryEditResult.IoError, ex.Message);
         }
+        audit.Record(new AuditEvent(AuditActions.MediaFetched, actor, current.System, row.Id, AuditPaths.Library(row.ZipPath),
+            Details: string.Join(", ", imageEntries.Keys)));
 
         var info = new FileInfo(path);
         try
