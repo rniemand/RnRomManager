@@ -191,7 +191,7 @@ describe('admin pages', () => {
 		);
 	});
 
-	it('settings are shown flattened, with a log download link', async () => {
+	it('settings are shown flattened, without the log download (moved to Logs)', async () => {
 		answers['GET /api/admin/settings'] = {
 			status: 200,
 			body: { connectionString: 'Server=db', paths: { roms: '/app/roms' } }
@@ -199,9 +199,7 @@ describe('admin pages', () => {
 		render(SettingsPage);
 
 		expect(await screen.findByText('paths.roms')).toBeTruthy();
-		expect(screen.getByRole('link', { name: /Download logs/ }).getAttribute('href')).toBe(
-			'/api/admin/logs'
-		);
+		expect(screen.queryByRole('link', { name: /Download logs/ })).toBeNull();
 	});
 
 	const expectT1 = () => {

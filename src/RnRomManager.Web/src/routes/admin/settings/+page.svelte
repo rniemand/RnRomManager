@@ -2,7 +2,6 @@
 	import { onMount } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import { flattenSettings, formatValue } from '#lib/format.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -30,12 +29,6 @@
 	The effective configuration, read-only, with secrets masked. Change settings in
 	<code>appsettings.json</code> or environment variables and restart.
 </p>
-
-<!-- The API sends the ZIP as an attachment, so a plain link downloads it. -->
-<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- API endpoint, not an app route -->
-<a class="btn btn-outline-primary mb-3" href="/api/admin/logs" download>
-	<Icon name="download" /> Download logs
-</a>
 
 {#if error}
 	<ErrorAlert {error} onretry={load} />
