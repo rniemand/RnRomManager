@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 
 const options: unknown[] = [];
+const calls: string[] = [];
 vi.mock('../bootstrap', () => ({
 	Modal: class {
 		constructor(_element: Element, config: unknown) {
@@ -9,9 +10,12 @@ vi.mock('../bootstrap', () => ({
 		}
 		show() {}
 		hide() {}
-		dispose() {}
+		dispose() {
+			calls.push('dispose');
+		}
 	}
 }));
+vi.mock('../modal', () => ({ releaseModal: () => calls.push('releaseModal') }));
 
 const { default: ConfirmModal } = await import('./ConfirmModal.svelte');
 
@@ -33,5 +37,12 @@ describe('ConfirmModal', () => {
 		expect([...footer.querySelectorAll('button')].map((b) => b.textContent?.trim())).toEqual([
 			'Close'
 		]);
+	});
+
+	it('releases <body> before disposing on unmount (G1)', () => {
+		const { unmount } = render(ConfirmModal, { open: true, title: 'T' });
+		calls.length = 0;
+		unmount();
+		expect(calls).toEqual(['releaseModal', 'dispose']);
 	});
 });
