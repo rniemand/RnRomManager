@@ -11,6 +11,11 @@ class Auth {
 		return this.me?.roles.includes('admin') ?? false;
 	}
 
+	/** Library edits and image management (`rom-manager`); independent of `admin`. */
+	get canEditLibrary(): boolean {
+		return this.me?.roles.includes('rom-manager') ?? false;
+	}
+
 	/** Loads `me`; a 401 just means signed out. Other errors propagate. */
 	async load(): Promise<Me | null> {
 		try {

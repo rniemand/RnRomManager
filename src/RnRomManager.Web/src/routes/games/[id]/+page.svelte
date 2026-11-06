@@ -183,7 +183,7 @@
 			>
 				<Icon name="download" /> Download ZIP
 			</button>
-			{#if auth.isAdmin}
+			{#if auth.canEditLibrary}
 				<div class="d-flex flex-wrap gap-2 mt-3" role="group" aria-label="Admin actions">
 					<button
 						type="button"
@@ -273,7 +273,7 @@
 							>
 								<Icon name="download" />
 							</button>
-							{#if auth.isAdmin}
+							{#if auth.canEditLibrary}
 								<button
 									type="button"
 									class="btn btn-sm btn-outline-secondary"
@@ -315,7 +315,7 @@
 		</table>
 	</div>
 
-	{#if auth.isAdmin}
+	{#if auth.canEditLibrary}
 		<GameAdminModal {game} bind:action ondone={onAdminDone} />
 	{/if}
 {/if}

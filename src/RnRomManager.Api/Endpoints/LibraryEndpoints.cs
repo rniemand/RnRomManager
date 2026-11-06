@@ -98,7 +98,7 @@ public static class LibraryEndpoints
                 return Problems.Validation(ctx, errors);
             var result = await editor.PatchAsync(id, patch, ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.AdminOnly);
+        }).RequireAuthorization(AuthSetup.LibraryEditor);
 
         // Any signed-in user (shared per game); takes the job lock and rewrites the ZIP like every edit.
         games.MapPatch("/{id:guid}/rating", async (Guid id, JsonElement body, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
@@ -112,10 +112,10 @@ public static class LibraryEndpoints
         });
 
         games.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, LibraryEditor editor) =>
-            ToResult(ctx, await editor.DeleteGameAsync(id, ctx.RequestAborted))).RequireAuthorization(AuthSetup.AdminOnly);
+            ToResult(ctx, await editor.DeleteGameAsync(id, ctx.RequestAborted))).RequireAuthorization(AuthSetup.LibraryEditor);
 
         games.MapDelete("/{id:guid}/roms/{romId:long}", async (Guid id, long romId, HttpContext ctx, LibraryEditor editor) =>
-            ToResult(ctx, await editor.DeleteReleaseAsync(id, romId, ctx.RequestAborted))).RequireAuthorization(AuthSetup.AdminOnly);
+            ToResult(ctx, await editor.DeleteReleaseAsync(id, romId, ctx.RequestAborted))).RequireAuthorization(AuthSetup.LibraryEditor);
 
         games.MapPost("/{id:guid}/roms/{romId:long}/move", async (Guid id, long romId, MoveReleaseRequest request, HttpContext ctx,
             LibraryEditor editor) =>
@@ -125,14 +125,14 @@ public static class LibraryEndpoints
                 return Problems.Validation(ctx, errors);
             var result = await editor.MoveReleaseAsync(id, romId, request.TargetGameId, request.NewGameTitle?.Trim(), ctx.RequestAborted);
             return result.Code is null ? Results.Ok(new { targetGameId = result.GameId }) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.AdminOnly);
+        }).RequireAuthorization(AuthSetup.LibraryEditor);
 
         games.MapPost("/{id:guid}/media/retry", async (Guid id, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
             IRomRepository roms, IImageRepository images) =>
         {
             var result = await editor.RetryMediaAsync(id, ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.AdminOnly);
+        }).RequireAuthorization(AuthSetup.LibraryEditor);
 
         api.MapPost("/jobs/media-retry", async (HttpContext ctx, JobRunner runner, MediaRetryJob job) =>
         {
@@ -146,7 +146,7 @@ public static class LibraryEndpoints
                 return Problems.Validation(ctx, new Dictionary<string, string[]> { ["targetGameId"] = ["A target game is required."] });
             var result = await editor.MergeAsync(id, target, ctx.RequestAborted);
             return result.Code is null ? Results.Ok(new { targetGameId = result.GameId }) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.AdminOnly);
+        }).RequireAuthorization(AuthSetup.LibraryEditor);
 
         return api;
     }

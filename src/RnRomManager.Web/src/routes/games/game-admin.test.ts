@@ -98,6 +98,25 @@ describe('game detail admin actions', () => {
 
 	const modal = () => within(document.querySelector<HTMLElement>('.modal')!);
 
+	it('a rom-manager sees the actions', async () => {
+		auth.set({ id: 3, username: 'm', roles: ['rom-manager'], mustChangePassword: false });
+		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
+		render(GamePage);
+
+		expect(await screen.findByRole('button', { name: /Edit metadata/ })).toBeTruthy();
+		expect(screen.getByRole('button', { name: 'Delete Tetris 1.gb' })).toBeTruthy();
+	});
+
+	it('an admin without rom-manager sees no actions', async () => {
+		auth.set({ id: 4, username: 'a', roles: ['admin'], mustChangePassword: false });
+		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
+		render(GamePage);
+
+		await screen.findByText('Releases');
+		expect(screen.queryByRole('button', { name: /Edit metadata/ })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Delete Tetris 1.gb' })).toBeNull();
+	});
+
 	it('a User sees no admin actions', async () => {
 		auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
 		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
