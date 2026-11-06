@@ -27,11 +27,13 @@ public class LibraryImageEditTests
     private ILibraryMirror _mirror = null!;
     private JobLock _lock = null!;
     private LibraryEditor _editor = null!;
+    private RnRomManager.Core.Audit.IAuditLog _audit = null!;
     private int _pngSeed;
 
     [SetUp]
     public void SetUp()
     {
+        _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
         _dir = new TempDir();
         var handler = Substitute.For<ISystemHandler>();
         handler.Id.Returns("gb");
@@ -49,7 +51,8 @@ public class LibraryImageEditTests
         var media = new MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }), NullLogger<MediaService>.Instance);
         var retry = new GameMediaRetry(_mirror, _reader, systems, media, paths, TimeProvider.System, NullLogger<GameMediaRetry>.Instance);
         _editor = new LibraryEditor(_lock, _games, Substitute.For<IRomRepository>(), _images, _mirror, _reader,
-            new DatCache(paths, systems, NullLogger<DatCache>.Instance), systems, media, retry, paths, TimeProvider.System,
+            new DatCache(paths, systems, NullLogger<DatCache>.Instance), systems, media, retry, paths, _audit, new RnRomManager.Core.Audit.AuditPaths(paths),
+            TimeProvider.System,
             NullLogger<LibraryEditor>.Instance);
         _pngSeed = 10;
     }

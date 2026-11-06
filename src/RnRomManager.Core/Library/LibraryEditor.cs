@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Jobs;
@@ -20,9 +21,13 @@ namespace RnRomManager.Core.Library;
 /// </summary>
 public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRepository roms, IImageRepository images, ILibraryMirror mirror,
     InfoJsonReader reader, DatCache dats, ISystemRegistry systems, MediaService media, GameMediaRetry mediaRetry,
-    IOptions<PathsOptions> paths, TimeProvider time, ILogger<LibraryEditor> logger)
+    IOptions<PathsOptions> paths, IAuditLog audit, AuditPaths auditPaths, TimeProvider time, ILogger<LibraryEditor> logger)
 {
-    public async Task<LibraryEditResult> PatchAsync(Guid gameId, GamePatch patch, CancellationToken ct)
+    /// <summary>The ZIP was written (or deleted), so an audit row is due even when the DB mirror then failed (AU4).</summary>
+    private static bool FilesChanged(LibraryEditResult result) => result.Code is null or DbWriteFailed;
+
+    /// <param name="actor">The editing user; null (the rating/favourite endpoint) records nothing.</param>
+    public async Task<LibraryEditResult> PatchAsync(Guid gameId, GamePatch patch, AuditActor? actor, CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();
         if (held is null)
@@ -68,6 +73,9 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         // shortcut: a rating/favourite change rewrites the whole ZIP (fine for small GB/GBC ROMs); add a cheaper
         // info.json-only update path if larger systems make rating slow.
         var result = await WriteAsync(existing, zipPath, game).ConfigureAwait(false);
+        if (actor is not null && FilesChanged(result) && ChangedFields(current, game) is { Count: > 0 } changed)
+            audit.Record(new AuditEvent(AuditActions.GameUpdated, actor, game.System, gameId, AuditPaths.Library(row.ZipPath),
+                AuditPaths.Library(zipPath), string.Join(", ", changed)));
         if (result.Code is null && zipPath != row.ZipPath)
             DeleteOldZip(row.ZipPath, gameId);
         if (result.Code is null)
@@ -75,7 +83,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         return result;
     }
 
-    public async Task<LibraryEditResult> DeleteReleaseAsync(Guid gameId, long romId, CancellationToken ct)
+    public async Task<LibraryEditResult> DeleteReleaseAsync(Guid gameId, long romId, AuditActor actor, CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();
         if (held is null)
@@ -94,16 +102,19 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             return new(NotFound, $"{row.ZipPath} no longer lists SHA1 {romRow.Sha1}");
 
         var remaining = current.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
-        var result = remaining.Count == 0
-            ? await RemoveGameAsync(existing, row, current).ConfigureAwait(false)
-            : await RemoveRomsAsync(existing, current, [rom], () => WriteAsync(existing, row.ZipPath,
-                current with { Roms = PrimaryRelease.Apply(remaining), Metadata = Touched(current) })).ConfigureAwait(false);
+        if (remaining.Count == 0)
+            return await RemoveGameAsync(existing, row, current, actor).ConfigureAwait(false); // the last release removes the game
+        var (result, copies) = await RemoveRomsAsync(existing, current, [rom], () => WriteAsync(existing, row.ZipPath,
+            current with { Roms = PrimaryRelease.Apply(remaining), Metadata = Touched(current) })).ConfigureAwait(false);
+        if (FilesChanged(result))
+            audit.Record(new AuditEvent(AuditActions.ReleaseDeleted, actor, row.SystemId, gameId, AuditPaths.Library(row.ZipPath),
+                copies.Count > 0 ? auditPaths.Of(copies[0]) : null, rom.FileName));
         if (result.Code is null)
             logger.LogInformation("Release {FileName} removed from game {GameId} ({ZipPath})", rom.FileName, gameId, row.ZipPath);
         return result;
     }
 
-    public async Task<LibraryEditResult> DeleteGameAsync(Guid gameId, CancellationToken ct)
+    public async Task<LibraryEditResult> DeleteGameAsync(Guid gameId, AuditActor actor, CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();
         if (held is null)
@@ -115,7 +126,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             return new(target.Code, target.Details);
 
         using var existing = target.Zip!;
-        var result = await RemoveGameAsync(existing, row, target.Game!).ConfigureAwait(false);
+        var result = await RemoveGameAsync(existing, row, target.Game!, actor).ConfigureAwait(false);
         if (result.Code is null)
             logger.LogInformation("Game {GameId} deleted ({ZipPath})", gameId, row.ZipPath);
         return result;
@@ -287,7 +298,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     /// which runs §7.2 steps 7–8 for it). The release keeps its <c>baseTitle</c> (D23). Order: target ZIP (now holding the
     /// ROM), source ZIP rebuilt, one DB transaction, then an emptied source ZIP is deleted.
     /// </summary>
-    public async Task<LibraryEditResult> MoveReleaseAsync(Guid gameId, long romId, Guid? targetGameId, string? newGameTitle, CancellationToken ct)
+    public async Task<LibraryEditResult> MoveReleaseAsync(Guid gameId, long romId, Guid? targetGameId, string? newGameTitle, AuditActor actor,
+        CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();
         if (held is null)
@@ -378,6 +390,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             await UndoTargetWriteAsync(targetPath, target?.Game).ConfigureAwait(false);
             return sourceFailed;
         }
+        audit.Record(new AuditEvent(AuditActions.ReleaseMoved, actor, row.SystemId, gameId, AuditPaths.Library(row.ZipPath),
+            AuditPaths.Library(targetPath), rom.FileName));
 
         var result = await MirrorAsync(() => mirror.ApplyAsync(
             [Mirror(targetPath, targetGame), .. sourceGame is null ? Array.Empty<MirrorEntry>() : [Mirror(row.ZipPath, sourceGame)]],
@@ -399,7 +413,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     /// the cover if the placeholder was). More than <see cref="GameImages.MaxImages"/> images → <c>TooManyImages</c>.
     /// Target ZIP + DB commit, then the source ZIP is deleted.
     /// </summary>
-    public async Task<LibraryEditResult> MergeAsync(Guid gameId, Guid targetGameId, CancellationToken ct)
+    public async Task<LibraryEditResult> MergeAsync(Guid gameId, Guid targetGameId, AuditActor actor, CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();
         if (held is null)
@@ -454,6 +468,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
 
         if (await WriteZipAsync(targetZip, targetRow.ZipPath, targetGame, entries).ConfigureAwait(false) is { } failed)
             return failed;
+        audit.Record(new AuditEvent(AuditActions.GamesMerged, actor, row.SystemId, gameId, AuditPaths.Library(row.ZipPath),
+            AuditPaths.Library(targetRow.ZipPath), $"{from.Roms.Count} releases, {copies.Count} images"));
         var result = await MirrorAsync(() => mirror.ApplyAsync([Mirror(targetRow.ZipPath, targetGame)], [gameId], CancellationToken.None),
             targetRow.ZipPath).ConfigureAwait(false);
         sourceZip.Dispose();
@@ -499,8 +515,10 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     private static string FreeName(string fileName, IEnumerable<string> taken) =>
         FileNameRules.FirstFree(fileName, taken.ToHashSet(StringComparer.OrdinalIgnoreCase).Contains);
 
-    private Task<LibraryEditResult> RemoveGameAsync(LibraryZip existing, GameRow row, InfoJsonGame current) =>
-        RemoveRomsAsync(existing, current, current.Roms, async () =>
+    /// <summary>Deletes the game's ZIP (its ROMs copied to <c>_removed/</c> first) and records <c>GameDeleted</c>.</summary>
+    private async Task<LibraryEditResult> RemoveGameAsync(LibraryZip existing, GameRow row, InfoJsonGame current, AuditActor actor)
+    {
+        var (result, _) = await RemoveRomsAsync(existing, current, current.Roms, async () =>
         {
             existing.Dispose(); // Windows can't delete an open file.
             try
@@ -513,14 +531,21 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
                 return new(IoError, ex.Message);
             }
             return await MirrorAsync(() => mirror.DeleteAsync(row.Id, CancellationToken.None), row.ZipPath).ConfigureAwait(false);
-        });
+        }).ConfigureAwait(false);
+        // Only the ROM entries went to _removed/; images and info.json were discarded.
+        if (FilesChanged(result))
+            audit.Record(new AuditEvent(AuditActions.GameDeleted, actor, row.SystemId, row.Id, AuditPaths.Library(row.ZipPath),
+                $"ingest/{row.SystemId}/{StorageFolders.RemovedFolder}/"));
+        return result;
+    }
 
     /// <summary>
     /// Copies <paramref name="removed"/> out of the ZIP into <c>_removed/</c>, then runs <paramref name="change"/> (the ZIP
     /// rewrite or delete + DB). The copies are taken back only when the ZIP itself didn't change.
     /// </summary>
-    private async Task<LibraryEditResult> RemoveRomsAsync(LibraryZip existing, InfoJsonGame current, IReadOnlyList<InfoJsonRom> removed,
-        Func<Task<LibraryEditResult>> change)
+    /// <returns>The result, and the <c>_removed/</c> copies (after clash renaming; a missing entry has none).</returns>
+    private async Task<(LibraryEditResult Result, IReadOnlyList<string> Copies)> RemoveRomsAsync(LibraryZip existing, InfoJsonGame current,
+        IReadOnlyList<InfoJsonRom> removed, Func<Task<LibraryEditResult>> change)
     {
         var copies = new List<string>();
         var result = CopyToRemoved(existing, current.System, removed, copies) ?? await change().ConfigureAwait(false);
@@ -535,7 +560,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
                 }
             }
         }
-        return result;
+        return (result, copies);
     }
 
     /// <returns>null when every listed entry was copied (an absent entry has nothing to keep and is skipped).</returns>
@@ -658,6 +683,19 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         {
             logger.LogError(ex, "The DB no longer points game {GameId} at {ZipPath}, but that ZIP couldn't be deleted", gameId, zipPath);
         }
+    }
+
+    /// <summary>AU4 <c>GameUpdated</c> details: the metadata fields a PATCH changed (rating/favourite aren't metadata).</summary>
+    private static List<string> ChangedFields(InfoJsonGame before, InfoJsonGame after)
+    {
+        var changed = new List<string>();
+        if (before.Title != after.Title) changed.Add("title");
+        if (before.ReleaseYear != after.ReleaseYear) changed.Add("releaseYear");
+        if (!before.Developers.SequenceEqual(after.Developers)) changed.Add("developers");
+        if (!before.Publishers.SequenceEqual(after.Publishers)) changed.Add("publishers");
+        if (!before.Genres.SequenceEqual(after.Genres)) changed.Add("genres");
+        if (before.Description != after.Description) changed.Add("description");
+        return changed;
     }
 
     private InfoJsonGameMetadata Touched(InfoJsonGame current) =>

@@ -145,7 +145,7 @@ public class LibraryEditTests
     }
 
     private async Task Rate(Guid id, GamePatch patch) =>
-        Assert.That((await Service<LibraryEditor>().PatchAsync(id, patch, default)).Code, Is.Null);
+        Assert.That((await Service<LibraryEditor>().PatchAsync(id, patch, null, default)).Code, Is.Null);
 
     [Test]
     public async Task PatchRatingOnly_KeepsTitleMetadataAndZipPath()

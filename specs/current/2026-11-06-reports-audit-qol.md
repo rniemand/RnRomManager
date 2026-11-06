@@ -242,7 +242,7 @@ Migrations 0013 and 0014 only add tables, so existing data is untouched. There a
   - A successful DAT refresh writes one `DatsRefreshed` row, and a failed one writes none.
 
   Done when: Core and Api tests pass.
-- [ ] **20. Audit library edits**: AU3 for users, and AU4 rows `GameUpdated`, `ReleaseDeleted`, `GameDeleted`, `ReleaseMoved` and `GamesMerged`. `PatchAsync` takes an `AuditActor?` (null from the rating endpoint). `DeleteReleaseAsync`, `DeleteGameAsync`, `MoveReleaseAsync` and `MergeAsync` take an `AuditActor`. Every endpoint, including the RP8 group merge, passes the request actor. Files: `LibraryEditor.cs`, `LibraryEndpoints.cs`, `ReportEndpoints.cs`, and the edit, move, merge and delete tests. Tests (integration):
+- [x] **20. Audit library edits**: AU3 for users, and AU4 rows `GameUpdated`, `ReleaseDeleted`, `GameDeleted`, `ReleaseMoved` and `GamesMerged`. `PatchAsync` takes an `AuditActor?` (null from the rating endpoint). `DeleteReleaseAsync`, `DeleteGameAsync`, `MoveReleaseAsync` and `MergeAsync` take an `AuditActor`. Every endpoint, including the RP8 group merge, passes the request actor. Files: `LibraryEditor.cs`, `LibraryEndpoints.cs`, `ReportEndpoints.cs`, and the edit, move, merge and delete tests. Tests (integration):
   - Each edit writes exactly its row, with the user, game and paths.
   - Deleting the last release writes `GameDeleted`, not `ReleaseDeleted`, and its target is the `_removed` folder.
   - `PATCH …/rating` writes no row.

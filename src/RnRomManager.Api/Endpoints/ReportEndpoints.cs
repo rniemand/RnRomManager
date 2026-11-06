@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using RnRomManager.Api.Auth;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Reports;
@@ -105,9 +106,10 @@ public static partial class ReportEndpoints
 
             // One merge per source, each under the job lock like Merge into…; the first failure stops the loop.
             var merged = new List<Guid>();
+            var actor = AuditActor.From(ctx.User);
             foreach (var source in sources)
             {
-                var result = await editor.MergeAsync(source, request.TargetGameId!.Value, ctx.RequestAborted);
+                var result = await editor.MergeAsync(source, request.TargetGameId!.Value, actor, ctx.RequestAborted);
                 if (result.Code is null)
                 {
                     merged.Add(source);

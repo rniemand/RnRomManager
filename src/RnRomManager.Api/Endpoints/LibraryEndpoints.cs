@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Net.Http.Headers;
 using RnRomManager.Api.Auth;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
@@ -108,7 +109,7 @@ public static class LibraryEndpoints
             var (patch, errors) = ParsePatch(body);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            var result = await editor.PatchAsync(id, patch, ctx.RequestAborted);
+            var result = await editor.PatchAsync(id, patch, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.LibraryEditor);
 
@@ -119,15 +120,15 @@ public static class LibraryEndpoints
             var (patch, errors) = ParseRating(body);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            var result = await editor.PatchAsync(id, patch, ctx.RequestAborted);
+            var result = await editor.PatchAsync(id, patch, null, ctx.RequestAborted); // rating/favourite: not audited
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         });
 
         games.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, LibraryEditor editor) =>
-            ToResult(ctx, await editor.DeleteGameAsync(id, ctx.RequestAborted))).RequireAuthorization(AuthSetup.LibraryEditor);
+            ToResult(ctx, await editor.DeleteGameAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted))).RequireAuthorization(AuthSetup.LibraryEditor);
 
         games.MapDelete("/{id:guid}/roms/{romId:long}", async (Guid id, long romId, HttpContext ctx, LibraryEditor editor) =>
-            ToResult(ctx, await editor.DeleteReleaseAsync(id, romId, ctx.RequestAborted))).RequireAuthorization(AuthSetup.LibraryEditor);
+            ToResult(ctx, await editor.DeleteReleaseAsync(id, romId, AuditActor.From(ctx.User), ctx.RequestAborted))).RequireAuthorization(AuthSetup.LibraryEditor);
 
         games.MapPost("/{id:guid}/roms/{romId:long}/move", async (Guid id, long romId, MoveReleaseRequest request, HttpContext ctx,
             LibraryEditor editor) =>
@@ -135,7 +136,8 @@ public static class LibraryEndpoints
             var errors = Validate(request);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            var result = await editor.MoveReleaseAsync(id, romId, request.TargetGameId, request.NewGameTitle?.Trim(), ctx.RequestAborted);
+            var result = await editor.MoveReleaseAsync(id, romId, request.TargetGameId, request.NewGameTitle?.Trim(), AuditActor.From(ctx.User),
+                ctx.RequestAborted);
             return result.Code is null ? Results.Ok(new { targetGameId = result.GameId }) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.LibraryEditor);
 
@@ -196,7 +198,7 @@ public static class LibraryEndpoints
         {
             if (request.TargetGameId is not { } target || target == Guid.Empty)
                 return Problems.Validation(ctx, new Dictionary<string, string[]> { ["targetGameId"] = ["A target game is required."] });
-            var result = await editor.MergeAsync(id, target, ctx.RequestAborted);
+            var result = await editor.MergeAsync(id, target, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? Results.Ok(new { targetGameId = result.GameId }) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.LibraryEditor);
 
