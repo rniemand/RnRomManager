@@ -5,6 +5,14 @@ import type { GameDetail } from '#lib/api/types.js';
 
 vi.mock('$app/state', () => ({ page: { params: { id: 'g1' } } }));
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
+// Bootstrap's Modal needs layout/transitions jsdom lacks.
+vi.mock('#lib/bootstrap.js', () => ({
+	Modal: class {
+		show() {}
+		hide() {}
+		dispose() {}
+	}
+}));
 
 const { default: GamePage } = await import('./[id]/+page.svelte');
 
@@ -85,15 +93,58 @@ describe('game detail page', () => {
 	});
 	afterEach(() => vi.unstubAllGlobals());
 
-	it('shows box art, releases and the generic header table', async () => {
-		answers.push({ status: 200, body: game([1]) });
+	it('shows box art, releases with region badges, and the header in a modal', async () => {
+		const detail = game([1]);
+		detail.roms[0].regions = ['USA', 'Europe'];
+		answers.push({ status: 200, body: detail });
 		render(GamePage);
 
 		expect(await screen.findByAltText('Tetris cover')).toBeTruthy();
 		expect(screen.getByText('Primary')).toBeTruthy();
+		const row = screen.getByText('Primary').closest('tr')!;
+		expect([...row.querySelectorAll('.badge.text-bg-secondary')].map((b) => b.textContent)).toEqual(
+			['USA', 'Europe']
+		);
 		await fireEvent.click(screen.getByRole('button', { name: 'Header' }));
+		const caption = screen.getByText('Header of Tetris 1.gb');
+		const modal = caption.closest('.modal')!;
+		expect(modal.querySelector('.modal-title')?.textContent).toBe('Header — Tetris 1.gb');
+		expect(modal.querySelector('.modal-dialog')!.classList).toContain('modal-lg');
 		expect(screen.getByText('Logo valid')).toBeTruthy();
 		expect(screen.getByText('Yes')).toBeTruthy();
+	});
+
+	it('one ROM gets a Download ROM button', async () => {
+		answers.push({ status: 200, body: game([1]) }, { status: 200, body: game([1]) });
+		render(GamePage);
+
+		const button = await screen.findByRole('button', { name: 'Download ROM' });
+		expect(button.classList).not.toContain('dropdown-toggle');
+		await fireEvent.click(button);
+
+		await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/api/games/g1/roms/1/download'));
+	});
+
+	it('several ROMs get a dropdown with sizes, primary first', async () => {
+		const detail = game([1, 2, 3]);
+		// The primary isn't first in the Releases order here.
+		detail.roms[0].isPrimary = false;
+		detail.roms[2].isPrimary = true;
+		detail.roms[1].sizeBytes = 1024;
+		answers.push({ status: 200, body: detail }, { status: 200, body: detail });
+		render(GamePage);
+
+		const toggle = await screen.findByRole('button', { name: 'Download ROM' });
+		expect(toggle.classList).toContain('dropdown-toggle');
+		const items = [...toggle.parentElement!.querySelectorAll('.dropdown-item')];
+		expect(items.map((i) => i.textContent?.trim())).toEqual([
+			'Tetris 3.gb — 32.0 KiB',
+			'Tetris 1.gb — 32.0 KiB',
+			'Tetris 2.gb — 1.0 KiB'
+		]);
+		await fireEvent.click(items[2]);
+
+		await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/api/games/g1/roms/2/download'));
 	});
 
 	it('downloads a ROM that still exists', async () => {
