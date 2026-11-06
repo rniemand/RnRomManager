@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { jobs } from '#lib/stores/jobs.svelte.js';
@@ -50,9 +50,9 @@ describe('ingestion page', () => {
 					{ system: 'gbc', files: [] }
 				]
 			},
-			'GET /api/jobs?type=Ingest&pageSize=10': {
+			'GET /api/jobs?type=Ingest&page=1&pageSize=20': {
 				status: 200,
-				body: { items: [], page: 1, pageSize: 10, total: 0 }
+				body: { items: [], page: 1, pageSize: 20, total: 0 }
 			},
 			'GET /api/admin/dats': {
 				status: 200,
@@ -85,6 +85,66 @@ describe('ingestion page', () => {
 		expect(await screen.findByText('1 / 4 · Tetris.gb')).toBeTruthy();
 		expect(calls).toContain('POST /api/jobs/ingest');
 		expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('25');
+	});
+
+	it('pages 45 pending files as 20/20/5 in a standard table', async () => {
+		fixed['GET /api/ingest/pending'] = {
+			status: 200,
+			body: [
+				{
+					system: 'gb',
+					files: Array.from({ length: 45 }, (_, i) => ({
+						name: `f${String(i).padStart(2, '0')}.gb`,
+						sizeBytes: 1,
+						modifiedAt: ''
+					}))
+				}
+			]
+		};
+		render(IngestionPage);
+
+		await screen.findByText('f00.gb');
+		const rows = () =>
+			document.querySelectorAll('section[aria-labelledby="pending-heading"] tbody tr');
+		expect(document.querySelector('table')!.className).toBe(
+			'table table-sm table-hover align-middle mb-0'
+		);
+		expect(rows()).toHaveLength(20);
+		expect(screen.getByText('Page 1 of 3')).toBeTruthy();
+		const nav = screen.getByRole('navigation', { name: 'Pages of gb files' });
+		await fireEvent.click(within(nav).getByRole('button', { name: 'Next' }));
+		expect(rows()).toHaveLength(20);
+		expect(screen.getByText('f20.gb')).toBeTruthy();
+		await fireEvent.click(within(nav).getByRole('button', { name: 'Next' }));
+		expect(rows()).toHaveLength(5);
+		expect(screen.getByText('f44.gb')).toBeTruthy();
+	});
+
+	it('Last runs are paged by the server, 20 per page', async () => {
+		const run = (id: string) => ({
+			id,
+			type: 'Ingest',
+			mode: null,
+			triggerSource: 'Manual',
+			status: 'Completed',
+			startedAt: '2026-11-05T10:00:00Z',
+			summary: null
+		});
+		fixed['GET /api/jobs?type=Ingest&page=1&pageSize=20'] = {
+			status: 200,
+			body: { items: [run('r1')], page: 1, pageSize: 20, total: 25 }
+		};
+		fixed['GET /api/jobs?type=Ingest&page=2&pageSize=20'] = {
+			status: 200,
+			body: { items: [run('r21')], page: 2, pageSize: 20, total: 25 }
+		};
+		render(IngestionPage);
+
+		const nav = await screen.findByRole('navigation', { name: 'Pages of runs' });
+		await fireEvent.click(within(nav).getByRole('button', { name: 'Next' }));
+
+		await vi.waitFor(() => expect(calls).toContain('GET /api/jobs?type=Ingest&page=2&pageSize=20'));
+		expect(await screen.findByText('Page 2 of 2')).toBeTruthy();
 	});
 
 	it('no DATs → empty state with a link to Admin → DATs instead of Start', async () => {
