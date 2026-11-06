@@ -6,10 +6,13 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 
 ![Library](https://raw.githubusercontent.com/rniemand/RnRomManager/main/docs/images/library.png)
 
-- **Library:** grid or list, filter by system, region and letter, search, sort by title, year or date added; download a game's ZIP or a single ROM.
-- **Ingestion:** identifies by hash, sorts dual-mode carts into Game Boy Color, files duplicates and broken files aside, and never deletes anything you'd want back.
-- **Review queue:** files the DATs don't know get name suggestions, a DAT search, or manual entry.
+- **Library:** grid or list, filter by system, region and letter, search, sort by title, year or date added; primary ROM sizes; download a game's ZIP or a single ROM.
+- **Ingestion:** identifies by hash, sorts dual-mode carts into Game Boy Color, files duplicates and broken files aside, and lets you import all pending files or a checked selection.
+- **Review queue:** files the DATs don't know get name suggestions, a DAT search, or manual entry; filter the queue, search Google and Shift+click Delete for loose files.
 - **Library edits (`rom-manager`):** edit metadata, move or merge releases between games, upload box art and screenshots and choose the cover, delete to a recoverable `_removed/` folder.
+- **Reports:** library size treemap and system drill-down, missing cover images, and duplicate groups with merge/dismiss for ROM managers.
+- **Game detail:** Releases/Images tabs, a read-only info.json tree with copying, Google search and merge suggestions.
+- **Auditing (Admin):** filterable file-action history, retained for 30 days, with user/job and relative source/target paths.
 - **Integrity checks:** daily quick checks and on-demand deep (hash) checks, with automatic database repair.
 - **Accounts:** `admin` and `rom-manager` roles (or none, for browse-only users), a live log view, light/dark theme, and it works on a phone.
 

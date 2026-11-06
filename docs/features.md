@@ -6,13 +6,13 @@ RnRomManager keeps a personal backup collection of Game Boy, Game Boy Color, Gam
 
 An account has any of two roles, or none:
 
-- **No role:** Library and Game detail (browse, search, download, rate and favourite).
+- **No role:** Library, Reports and Game detail (browse, search, download, rate and favourite).
 - **`admin`:** Ingestion, Review, Integrity, Admin and job pages. Anyone else who opens one of them sees "Not allowed".
-- **`rom-manager`:** the edit actions on Game detail (edit metadata, retry media, merge, move, delete) and image management.
+- **`rom-manager`:** the edit actions on Game detail (edit metadata, retry media, merge, move, delete), image management, and merging or dismissing duplicate groups in Reports.
 
 The roles don't include each other: an `admin` without `rom-manager` can't edit games. The first account, and an account the `--reset-password` command promotes because no enabled admin is left, gets both. Upgrading from a version with the single Admin/User role gives every Admin both roles and every User none, and signs everyone out once.
 
-The navbar shows the pages your roles can use, with the current page highlighted. The user menu has **Change password** and **Logout**; the theme button switches between Light, Dark and Auto (follows your system), remembered per browser. Times are shown in your browser's time zone.
+The navbar shows the pages your roles can use, with the current page highlighted. The user menu has **Change password** and **Logout**; the theme button switches between Light, Dark and Auto (follows your system), remembered per browser. Times are shown in your browser's time zone. Search has no keyboard hint in the navbar; its shortcuts still work. Closing a dialog or navigating away from one restores page scrolling.
 
 ## Global search
 
@@ -27,7 +27,7 @@ The navbar shows the pages your roles can use, with the current page highlighted
 
 The home page (`/`) shows every game, 48 per page.
 
-- **Grid or list:** the buttons on the right switch between box-art cards and a table (title, system, year, regions, rating, number of releases). Your choice is remembered in this browser. Cards show the box art in a square frame with a system badge, and the title on one line (hover or focus it for the full title).
+- **Grid or list:** the buttons on the right switch between box-art cards and a table (title, system, year, regions, rating, number of releases, primary ROM size). Your choice is remembered in this browser. Cards show the box art in a square frame with a system badge, and the title on one line (hover or focus it for the full title). Both views show the primary ROM size, omitted when no primary exists.
 - **Filters:** system, region (any release in that region), letter (`All`, `#` for names that don't start with A–Z, or A–Z) search (from 2 characters, applied as you type; every word must appear, in any order, in the title, developers, publishers or genres) and **Favourites** (the heart button: only favourite games). Games are filed by their stored title, so *The Legend of Zelda* is under **L** (`Legend of Zelda, The`).
 - **Sort:** title (default), year, date added or rating (best first by default); the arrow button flips the direction. Games without a year, or not rated, are always last.
 - **Rating and favourite:** click a star (1–5) to rate a game, the same star again to clear it, and the heart to mark it a favourite. Any signed-in user can do this on the cards, the list and the game page; the values are shared, so everyone sees the same rating. A changed card stays where it is until the list reloads. If a job is running, the rating is tried once more after a second, then undone with "Another job is running".
@@ -40,13 +40,16 @@ An empty library offers Admins a link to Ingestion.
 Opening a game (`/games/{id}`) shows its cover image (a placeholder cartridge when no box art was found), title, rating and favourite (editable, as in the Library), year, developers, publishers, genres and description.
 
 - **Download ZIP** downloads the whole game as stored in the library ([format](zip-format.md)). **Download ROM** next to it downloads the single ROM; with several releases it's a menu of every ROM with its size, primary first.
+- **Releases** and **Images** are tabs with counts. Releases opens by default; `?tab=images` opens Images. Switching tabs updates the URL without reloading the game. Edit buttons work from either tab.
+- **Google** opens a new tab searching for the quoted display title and system name.
+- **View info.json** opens the JSON exactly as stored in the ZIP, read-only, with a copy button. Objects and arrays expand as a tree: the first two levels start open, with **Expand all** / **Collapse all** controls. Invalid JSON is shown as raw text with a warning; fetch failures offer Retry.
 - **Releases** lists every ROM: file name (with a **Primary** badge for the main release), one badge per region, revision, flags, size, and CRC32/SHA1 with copy buttons. **Header** opens the cartridge header as a table in a dialog; the download button next to it downloads that ROM.
 - **Images** shows every image of the game as a thumbnail with its type (Box art, Screenshot, …), a **Cover** badge on the one shown at the top and a **Placeholder** badge on the default cartridge art, with its size and dimensions. Click one to see it full size.
 - If the game changed since you opened it (someone edited it, or an ingest added a release), an action on a release reloads the page and says "This game changed, please retry".
 
 **Image management** (`rom-manager`):
 
-- **Upload image** opens a dialog for a PNG or JPEG (at most 8 MiB) and its type, Box art or Screenshot. A failed upload keeps the dialog open with the error; a successful one closes it. A game holds at most 20 images, and the same image can't be added twice; a game holds at most 20 images, and the same image can't be added twice. Uploading box art replaces the placeholder, and takes over as cover if the placeholder was the cover.
+- **Upload image** opens a dialog for a PNG or JPEG (at most 8 MiB) and its type, Box art or Screenshot. A failed upload keeps the dialog open with the error; a successful one closes it. A game holds at most 20 images, and the same image can't be added twice. Uploading box art replaces the placeholder, and takes over as cover if the placeholder was the cover.
 - **Use as cover** makes any image the one shown at the top and in the Library.
 - **Delete** removes an image (not the placeholder, which comes and goes on its own). Deleting the cover hands it to the first remaining box art, else the first remaining image, else the placeholder comes back.
 
@@ -56,7 +59,7 @@ Ingestion and **Retry media** only ever replace the placeholder; they never remo
 
 - **Edit metadata:** title, year, developers, publishers and genres (one per line), description. Renaming a game also renames its ZIP. The displayed title is always derived from the title (a trailing ", The" moves to the front).
 - **Retry media:** look up box art and a snap again for this game (replacing only the placeholder).
-- **Merge into…:** move every release into another game of the same system (pick it by typing at least 2 characters of its name) and delete this one. The target keeps its own title, metadata and cover; only its empty fields are filled from this game. This game's images (not its placeholder) are copied over, and its box art replaces a placeholder on the target. A merge that would leave more than 20 images is refused.
+- **Merge into…:** move every release into another game of the same system (pick it by typing at least 2 characters of its name) and delete this one. The target keeps its own title, metadata and cover; only its empty fields are filled from this game. This game's images (not its placeholder) are copied over, and its box art replaces a placeholder on the target. A merge that would leave more than 20 images is refused. Up to five same-system suggestions appear above the picker. They search the cleaned title (up to eight words), falling back to the first word of at least three characters when nothing matches. Clicking a suggestion fills and selects the target; typing again clears it. Failed suggestion requests leave the picker usable.
 - **Move** (per release): move one release to another game, or to a new game with a title you choose. A game left with no releases is deleted.
 - **Delete** (per release) and **Delete game:** the ROM files are moved to `ingest/<system>/_removed/`, never deleted; move one back into `ingest/<system>/` to ingest it again. Deleting a game's last release deletes the game.
 
@@ -90,7 +93,9 @@ Box art and snaps come from libretro-thumbnails; a game gets the placeholder whe
 
 ## Review queue
 
-`/review` (Admin; the navbar badge shows how many are waiting) lists files ingestion couldn't place: file, system, size, the title from the cartridge header, the reason and when it was added. Open one to see its hashes and header, then:
+`/review` (Admin; the navbar badge shows how many are waiting) lists files ingestion couldn't place: file, system, size, the title from the cartridge header, the reason and when it was added. Open one to see its hashes and header and choose a resolution:
+
+Filter the list by file name or header title (case-insensitive substring), system and reason. Text applies after 300 ms; filters and page are kept in the URL and saved in this browser. An explicit URL wins; opening `/review` without filter parameters restores the saved view. **Clear** removes both URL and saved state. A filtered empty list says "No review items match this filter."
 
 - **Not in the DATs** (`NoDatMatch`):
   - **Suggestions:** up to five DAT entries with similar names, with a match score. **Use** adds the file as an *unverified* release of that entry (its hashes differ from the DAT's, so it gets an `(Unverified)` file name and flag).
@@ -99,11 +104,23 @@ Box art and snaps come from libretro-thumbnails; a game gets the placeholder whe
   - **Manual entry:** title, regions, languages, flags (comma-separated) and revision; the resulting file name is previewed. If several games already have that title, attach it to one of them instead.
 - **Several games share its title** (`AmbiguousGroup`): the file matched a DAT entry, but more than one library game has that title (e.g. after a move). Pick the game to **Attach** it to.
 - **Dismiss:** a loose file moves to `_failed/`; an archive is left as it is.
-- **Delete** (on the item page, and the Delete button on each row of the queue): permanently deletes the file from the ingest folder after showing everything known about it in a dialog titled "Delete File: <file name>". For a file inside an archive, the whole archive is deleted, including every other file in it (the dialog warns). Every pending item from the same file or archive goes with it.
+- **Delete** (on the item page, and the Delete button on each row of the queue): permanently deletes the file from the ingest folder after showing everything known about it in a dialog titled "Delete File: <file name>". For a file inside an archive, the whole archive is deleted, including every other file in it (the dialog warns). Every pending item from the same file or archive goes with it. Hold **Shift** while clicking Delete on either page to skip confirmation for a loose file; an archive always requires confirmation. Success names the deleted file, the queue reloads (moving back a page if necessary), and item-page deletion returns to the queue with its saved filter.
 
 The queue is paged (10–100 rows, your choice remembered per browser). An item's page shows the file details and header on the left and the ways to resolve it as tabs on the right: Suggestions (when there are any), Attach and Manual for `NoDatMatch`, Matched DAT entry for `AmbiguousGroup`.
 
+**Google it** in every item header opens a new tab with a quoted name, system name and `rom`. A header title with at least three letters or digits is preferred, otherwise the filename without its extension; parenthesized/bracketed tags are removed, underscores and dots become spaces. An empty cleaned name falls back to CRC32. These links only contact Google when clicked.
+
 After resolving, the game opens. If the file was removed from the ingest folder in the meantime, the item disappears with a message.
+
+## Reports
+
+`/reports` opens **Library Size**. Every signed-in user can use all three report tabs:
+
+- **Library Size:** total on-disk ZIP bytes and game count, a treemap, and an equivalent table with sizes and percentages. Click a system tile or table link to drill into `?system=<id>`; Back returns to the library view. Game tiles and links open the game. Systems use the same colours as their badges. The system treemap draws the 300 largest games and one unclickable "n others" tile; the table lists every game. Empty libraries or systems show an empty state.
+- **Missing Images:** filter by system and page through games with **No cover** or **Placeholder art**. A game matching both appears once as No cover. A placeholder that is not the cover does not count. Game links open the Images tab. An empty report says "Every game has a cover image."
+- **Duplicates:** groups of games in the same system that share a release base title, compared without case or accents. This does not compare hashes, DAT names or games across systems. Filter by system and page through the groups. A game may appear in several groups. Each row shows title, releases, ZIP size and added date. ROM managers can choose a merge target (most releases, then oldest, suggested first), confirm **Merge into selected**, or **Dismiss**. Other users see the list. Dismissal hides that membership until a game joins or leaves the group. Merge can stop part way through; the error reports how many sources already merged. Empty: "No duplicate games found."
+
+Missing Images and Duplicates keep their system and page controls in page state.
 
 ## Integrity
 
@@ -116,12 +133,13 @@ After resolving, the game opens. If the file was removed from the ingest folder 
 
 ## Admin
 
-`/admin` (Admin) has five tabs:
+`/admin` (Admin) has six tabs:
 
 - **Users:** every account with its roles, status and last sign-in. Tick or untick an account's `admin` and `rom-manager` boxes to change its roles (saved at once; the account is signed out), **Disable**/**Enable** it (accounts are never deleted), or **Reset password** (sets a new one the user must change, and clears a lockout). **Create user** opens a dialog for a username (3–64 letters, digits, `.`, `_` or `-`), an initial password the user must change at first sign-in, and its roles (none by default). The last enabled `admin` can't be disabled or lose the `admin` role.
 - **DATs:** the version and download time of each DAT. **Refresh DATs** downloads the current No-Intro and metadata DATs from libretro-database; if any download fails, the previous set stays in use.
 - **Settings:** the effective configuration, read-only, with secrets masked.
 - **Logs:** **Download logs** downloads a ZIP of the log files plus the settings and version. Below it, the live log: the last 20 events show as soon as the tab opens, then the stream fills in the rest of the last 500 events the server kept in memory (without duplicates), then each new one as it happens (what goes to the log file, at the same minimum level). Newest at the bottom, following along while you're scrolled to the end; **Pause** holds new lines until **Resume**; the level box hides less important lines. A dropped connection reconnects on its own (a "Reconnecting…" badge shows meanwhile) and picks up where it stopped.
+- **Auditing:** the last 100 file actions, newest first, with local time, action, system, user (or *System* for a scheduled action), game link, source path, target and details. Filter by action, system, exact username, path/target/details search and local From/To dates; **Scheduled only** disables User. Text applies after 300 ms; the other controls apply immediately. Filters and page stay in the URL, and **Clear** resets them. To includes the whole selected local day. Events are retained for 30 days.
 - **About:** the version, a link to the project on GitHub, the attribution for libretro-database and libretro-thumbnails, and the licence of every component.
 
 ## Reference: behaviour and API
@@ -142,8 +160,8 @@ Re-dropping a dismissed loose file resets it to pending and processes it again. 
 
 All review endpoints require an `admin` session, and POST and DELETE requests require the antiforgery header.
 
-- `GET /api/review?status=Pending&page=1&pageSize=48` lists pending items (maximum page size 200). `Resolved` and `Dismissed` history can also be listed.
-- `GET /api/review/{id}` returns the header, hashes, suggestions, queued DAT identity and candidate games.
+- `GET /api/review?status=Pending&page=1&pageSize=48` lists pending items (maximum page size 200), including `isArchive`. Optional `system`, `reason` (`NoDatMatch` / `AmbiguousGroup`) and `q` filter both rows and total. `q` matches the original file name or header title, is trimmed, at most 100 characters, and matches `%`, `_` and backslash literally. Blank `q` is absent; unknown system/reason or an overlong search gives `400 ValidationFailed`. `Resolved` and `Dismissed` history can also be listed.
+- `GET /api/review/{id}` returns `systemName`, the header, hashes, suggestions, queued DAT identity and candidate games.
 - `GET /api/dat/search?system=gb&q=Tetris&limit=20` searches loaded DAT game names using a case-insensitive substring (up to 20 results).
 - `POST /api/review/{id}/resolve` accepts `Dat`, `Attach` or `Manual` actions and returns `{gameId}`.
 - `POST /api/review/{id}/dismiss` returns 204. Loose files move to `_failed/` with a `Dismissed` sidecar; archives stay in place until the next ingest run.
@@ -164,15 +182,16 @@ Failures retain a Pending review for retry. An unreadable target ZIP or newer sc
 Every signed-in user, whatever their roles, can read the library. Lists and details come from the database mirror; images and ROM bytes are streamed from the game's ZIP.
 
 - `GET /api/systems` lists every registered system with its game count, ROM count and the distinct regions of its ROMs (sorted). Systems without games report zero counts and no regions.
-- `GET /api/games` returns a page of `{id, system, systemName, displayTitle, releaseYear, regions[], romCount, boxArtUrl, rating, favourite, matchedOn}` (`systemName` is the system's display name, or its id if it isn't registered; `boxArtUrl` is the cover image) (48 per page by default, maximum 200; a page past the end is empty).
+- `GET /api/games` returns a page of `{id, system, systemName, displayTitle, releaseYear, regions[], romCount, boxArtUrl, primarySizeBytes, rating, favourite, matchedOn}` (`systemName` is the system's display name, or its id if it isn't registered; `boxArtUrl` is the cover image) (48 per page by default, maximum 200; a page past the end is empty).
   - `system` must be a registered system id. `letter` is `#` or `A`–`Z` (any case) and matches the ZIP's letter folder; send `#` as `%23`.
   - `region` matches a game when any of its releases has exactly that region. `q` is split on whitespace into at most 8 distinct words (more is `400`), and a game matches when every word is a case-insensitive substring of the display title, title, developers, publishers or genres; `%`, `_` and `\` match literally. With `q`, `matchedOn` is `{field, value}` (`developer`, `publisher` or `genre`, and the first matching value in that order) when no word matched a title, else `null`. `favourite` is exactly `true` (only favourites) or `false` (only the others).
   - `sort` is `title` (default), `year`, `added`, `rating` or `relevance`; `dir` is `asc` or `desc`, defaulting to `asc` for title/year and `desc` for added/rating. Games without a year (or rating) are listed last in both directions; equal ratings are ordered by title, other equal values by game id.
   - `relevance` scores each game: 100 when a title equals `q` (whitespace collapsed), 60 when a title starts with it, and per word 40 if it's in a title, 20 in the developers, 20 in the publishers and 10 in the genres; highest first, then by title. It ignores `dir`, and without `q` it sorts by title.
   - Invalid values return `400 ValidationFailed` with a per-field `errors` object.
-- `GET /api/games/{id}` returns the game's `info.json` fields (without `schemaVersion` and `metadata.appVersion`) plus `id` and `hasDefaultBoxArt` (`rating` and `favourite` included). `roms[]` lists the primary release first, then by file name, with identification and hashes flattened (`identificationMethod`, `datName`, `crc32`, `sha1`, `sizeBytes`, …), the parsed `header` and a `downloadUrl`. `images[]` holds `id`, `type`, `fileName`, `source`, `isDefault`, `isCover`, `sizeBytes`, `width`, `height` and `url`.
+- `GET /api/games/{id}` returns the game's `info.json` fields (without `schemaVersion` and `metadata.appVersion`) plus `id`, `systemName` and `hasDefaultBoxArt` (`rating` and `favourite` included). `roms[]` lists the primary release first, then by file name, with identification and hashes flattened (`identificationMethod`, `datName`, `crc32`, `sha1`, `sizeBytes`, …), the parsed `header` and a `downloadUrl`. `images[]` holds `id`, `type`, `fileName`, `source`, `isDefault`, `isCover`, `sizeBytes`, `width`, `height` and `url`.
 - `GET /api/games/{id}/images/{imageId}` returns the PNG or JPEG (by file extension) with `ETag` set to its SHA1 and `Cache-Control: private, max-age=86400`; a matching `If-None-Match` returns 304.
 - `GET /api/games/{id}/download` returns the game's ZIP with range support and an RFC 5987 `filename*` in `Content-Disposition`.
+- `GET /api/games/{id}/info-json` returns the stored `info.json` bytes as `application/json`, even if invalid JSON. A missing game, ZIP or entry returns `404 NotFound`; an unreadable ZIP or an entry over 1 MiB returns `500 IoError` before sending the response.
 - `GET /api/games/{id}/roms/{romId}/download` streams one ROM from the ZIP under its library file name.
 
 ROM and image ids change whenever a game is rewritten. A stale id, an image or ROM belonging to another game, or a ZIP missing from disk returns `404 NotFound`; an unreadable ZIP returns `500 IoError`. ZIPs are opened so that an ingest or edit can still replace them during a download.
@@ -182,6 +201,31 @@ ROM and image ids change whenever a game is rewritten. A stale id, an image or R
 `PATCH /api/games/{id}/rating` is open to every signed-in user and needs the antiforgery header. It takes `{rating?, favourite?}`: `rating` is a whole number 1–5 or `null` (clears it), `favourite` a boolean, and an absent property stays unchanged. Ratings are shared per game and stored in the ZIP's `info.json` ([format](zip-format.md)), so a rating rewrites the ZIP like any edit: it takes the global job lock (`409 JobRunning` while a job or another edit runs) and returns the full game detail, with new ROM and image ids. Errors: not an object, neither property, or a wrong value → `400 ValidationFailed` (field `""`, `rating` or `favourite`); an unknown game → `404`; a newer `info.json` schema → `409 InfoJsonNewerSchema`; a write failure → `500`. The `rom-manager` `PATCH /api/games/{id}` ignores `rating` and `favourite`.
 
 Other edits keep a game's rating and favourite. A merge keeps the target's rating (or takes the source's when the target has none) and makes the target a favourite if either game was; a release moved to a new game starts unrated and not a favourite.
+
+### Select ingestion files through the API
+
+`POST /api/jobs/ingest` (Admin) accepts no body, or `{ "files": null }`, to import every pending file. `{ "files": [{ "system": "gb", "name": "x.zip" }] }` imports only those exact system/top-level filename pairs from the job's snapshot. Unknown systems/files, disappeared files and repeated entries are ignored. Unselected files stay untouched and produce no job items; progress counts the selected snapshot. Select an archive by its own filename. An empty list or missing/empty system/name gives `400 ValidationFailed`; malformed JSON is also `400`. Selection is rebuilt with everything checked whenever the UI reloads, and is not saved across page loads.
+
+### Report APIs
+
+Report GETs need any signed-in user. Paged responses are `{items, page, pageSize, total}`; page starts at 1, pageSize is 1-200, and an unknown system filter gives `400 ValidationFailed`.
+
+- `GET /api/reports/library-size` returns `{totalBytes, gameCount, systems: [{system, systemName, bytes, gameCount}]}`, using `games.zip_size_bytes`. Systems with games are sorted by bytes descending.
+- `GET /api/reports/library-size/{system}` returns `{system, systemName, bytes, games: [{id, displayTitle, bytes, romCount}]}`, sorted by bytes descending, then title. A registered empty system returns an empty list; an unknown system gives `404 NotFound`.
+- `GET /api/reports/missing-images?system=&page=&pageSize=` defaults to 50 rows, sorted by system/title, each `{id, displayTitle, system, systemName, reason}` (`NoCover` or `Placeholder`). NoCover wins if both apply.
+- `GET /api/reports/duplicates?system=&page=&pageSize=` defaults to 25 groups, sorted by system/base title. Each is `{system, systemName, baseTitle, gamesKey, games}`. Games contain `{id, displayTitle, romCount, zipSizeBytes, createdAt, boxArtUrl}`, ordered by releases descending, then oldest, then id.
+- `POST /api/reports/duplicates/dismiss` (`rom-manager`) takes `{system, baseTitle, gamesKey}` and returns 204. `gamesKey` is the SHA-256 of sorted, comma-joined game ids. Repeated and stale dismissals are harmless. Unknown system, missing fields, baseTitle over 255 characters or a key other than 64 lowercase hex digits gives `400 ValidationFailed`.
+- `POST /api/reports/duplicates/merge` (`rom-manager`) takes `{targetGameId, sourceGameIds}` (1-20 distinct sources, none the target) and returns `{targetGameId}`. It uses ordinary library merges, with the job lock taken per source. The first failure stops the loop and returns the ordinary problem plus `merged`, the source ids already moved. A `DbWriteFailed` source is included because its files changed. A job starting between sources can cause `409 JobRunning` after partial success.
+
+### File action auditing
+
+`GET /api/admin/audit` and `/api/admin/audit/actions` require Admin. The first returns `{items, page, pageSize, total}`, default pageSize 100 (maximum 200), newest time then highest id first. Each item has `{id, occurredAt, action, system, gameId, user, jobId, path, targetPath, details}`. Actions returns the available action names.
+
+Filters: `action`, registered `system`, exact `user` (case/accent-insensitive username), `scheduled=true` (null user id), `q` (trimmed substring of path, target or details, at most 200 characters, LIKE characters literal), `from` inclusive and `to` exclusive (ISO 8601 instants with an offset). Blank user/q are absent. Scheduled plus user, unknown action/system, invalid dates, from >= to, or invalid paging gives `400 ValidationFailed`. The UI converts local From to midnight and local To to the next day's midnight, preserving local-day boundaries across daylight saving changes.
+
+Rows record successful ingestion, ZIP repair, extension rename, failed/duplicate moves, archive/review deletion, metadata edits, release/game deletion, image add/delete/cover, media fetch, release move, merge and DAT refresh. Review resolve/dismiss writes one file-action row with the requesting user; job actions include their job id and the requester's username, while scheduled jobs have no user. Deleting the last release writes GameDeleted. No-op metadata/cover changes, media retries that write nothing, and already-missing review files write no row. Rating/favourite, reads, authentication, account/settings changes, integrity and temporary cleanup/rollback are excluded.
+
+Paths use `roms/` or `ingest/` prefixes; archive entries appear as `ingest/<archive> › <entry>`. Paths outside both roots use only the filename. Events keep their username snapshot after account changes, and have no game/user foreign keys. Rows older than 30 days are purged at startup and daily at 00:05 UTC. Recording is best effort: a bounded queue and background writer keep file actions independent of log failures; failed/full writes are warned and dropped, and a crash can lose queued events. A ZIP changed before a DB mirror failure still gets a row. The log has no undo action.
 
 ### Edit the library through the API
 

@@ -290,7 +290,7 @@ Migrations 0013 and 0014 only add tables, so existing data is untouched. There a
   - After closing a modal that navigates (delete a release), assert with a retrying `expect(page.locator('body')).not.toHaveClass(/modal-open/)` that `<body>` is released, and that the page scrolls. Transitions are live here (`openGame()` reloads, dropping `axe.ts`'s style tag), so this exercises the real fade race, though not deterministically.
 
   Done when: `pwsh scripts/test-e2e.ps1` passes.
-- [ ] **25. Docs**:
+- [x] **25. Docs**:
   - `docs/features.md`: every behaviour above.
   - `docs/development.md`:
     - the `modal.ts` rule: modals must release `<body>` on destroy;
