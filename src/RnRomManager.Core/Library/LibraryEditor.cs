@@ -83,6 +83,47 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         return result;
     }
 
+    /// <summary>
+    /// B5/B7: writes the release's note (already normalised, ≤ <see cref="LibraryZip.MaxNoteBytes"/>), or deletes it when
+    /// <paramref name="text"/> is empty (no error when there was none). Any signed-in user; not audited; the game's fields,
+    /// including <c>updatedAt</c>, stay as they are.
+    /// </summary>
+    public Task<LibraryEditResult> SaveNoteAsync(Guid gameId, long romId, string text, int? userId, CancellationToken ct) =>
+        WriteNoteAsync(gameId, romId, text.Length == 0 ? null : System.Text.Encoding.UTF8.GetBytes(text), missingIsNotFound: false, userId, ct);
+
+    /// <summary>B6: deletes the release's note; <c>NotFound</c> when there is none.</summary>
+    public Task<LibraryEditResult> DeleteNoteAsync(Guid gameId, long romId, int? userId, CancellationToken ct) =>
+        WriteNoteAsync(gameId, romId, null, missingIsNotFound: true, userId, ct);
+
+    private async Task<LibraryEditResult> WriteNoteAsync(Guid gameId, long romId, byte[]? bytes, bool missingIsNotFound, int? userId,
+        CancellationToken ct)
+    {
+        using var held = jobLock.TryAcquire();
+        if (held is null)
+            return new(JobRunning);
+        if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
+            || await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
+            return new(NotFound);
+        var target = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
+        if (target.Code is not null)
+            return new(target.Code, target.Details);
+
+        using var existing = target.Zip!;
+        var current = target.Game!;
+        if (current.Roms.FirstOrDefault(r => r.Metadata.Sha1 == romRow.Sha1) is not { } rom)
+            return new(NotFound, $"{row.ZipPath} no longer lists SHA1 {romRow.Sha1}");
+        var entry = LibraryZip.NoteEntry(rom.FileName);
+        if (bytes is null && !existing.HasEntry(entry))
+            return missingIsNotFound ? new(NotFound) : new();
+
+        var entries = bytes is null ? [] : new Dictionary<string, Func<Stream>> { [entry] = () => new MemoryStream(bytes) };
+        var removed = bytes is null ? new HashSet<string>(StringComparer.Ordinal) { entry } : null;
+        var result = await WriteAsync(existing, row.ZipPath, current, entries, removed).ConfigureAwait(false);
+        if (result.Code is null)
+            logger.LogInformation("User {UserId} {Action} note {Entry} of game {GameId}", userId, bytes is null ? "deleted" : "saved", entry, gameId);
+        return result;
+    }
+
     public async Task<LibraryEditResult> DeleteReleaseAsync(Guid gameId, long romId, AuditActor actor, CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();
@@ -634,8 +675,9 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     }
 
     /// <summary>Atomic ZIP write (§6.1) then the DB mirror. Not cancellable once started, so a ZIP is never left half-applied.</summary>
-    private async Task<LibraryEditResult> WriteAsync(LibraryZip existing, string zipPath, InfoJsonGame game) =>
-        await WriteZipAsync(existing, zipPath, game, []).ConfigureAwait(false)
+    private async Task<LibraryEditResult> WriteAsync(LibraryZip existing, string zipPath, InfoJsonGame game,
+        Dictionary<string, Func<Stream>>? newEntries = null, IReadOnlySet<string>? removedEntries = null) =>
+        await WriteZipAsync(existing, zipPath, game, newEntries ?? [], removedEntries).ConfigureAwait(false)
         ?? await MirrorAsync(() => mirror.ReplaceAsync(Mirror(zipPath, game), CancellationToken.None), zipPath).ConfigureAwait(false);
 
     /// <param name="existing">The game's current ZIP (disposed by the writer), or null for a new game.</param>
