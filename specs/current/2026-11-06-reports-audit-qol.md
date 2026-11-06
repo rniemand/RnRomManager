@@ -258,7 +258,7 @@ Migrations 0013 and 0014 only add tables, so existing data is untouched. There a
   - A `MediaRetryJob` run writes rows with its job id.
 
   Done when: Core and Api tests pass.
-- [ ] **22. Audit API**: AU6. Files: `AdminEndpoints.cs` or a new `AuditEndpoints.cs`, `AuditRepository.cs` (the query), `AuditEndpointsTests.cs`, `EndpointRoleMatrixTests.cs`. Tests (integration):
+- [x] **22. Audit API**: AU6. Files: `AdminEndpoints.cs` or a new `AuditEndpoints.cs`, `AuditRepository.cs` (the query), `AuditEndpointsTests.cs`, `EndpointRoleMatrixTests.cs`. Tests (integration):
   - Newest first, with a default page size of 100.
   - Each filter alone and combined.
   - `scheduled=true` matches null users, and together with `user` → 400.

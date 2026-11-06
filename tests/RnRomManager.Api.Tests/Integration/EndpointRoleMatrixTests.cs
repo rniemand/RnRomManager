@@ -81,6 +81,8 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/admin/logs"] = Role.Admin,
         ["GET /api/admin/logs/recent"] = Role.Admin,
         ["GET /api/admin/logs/stream"] = Role.Admin,
+        ["GET /api/admin/audit"] = Role.Admin,
+        ["GET /api/admin/audit/actions"] = Role.Admin,
         ["GET /api/about"] = Role.User,
 
         ["GET /api/reports/missing-images"] = Role.User,

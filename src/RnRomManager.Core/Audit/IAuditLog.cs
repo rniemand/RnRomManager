@@ -16,6 +16,8 @@ public interface IAuditLog
 /// <summary>The <c>audit_events</c> table (AU1).</summary>
 public interface IAuditRepository
 {
+    Task<Database.Page<AuditItem>> ListAsync(AuditQuery query, int page, int pageSize, CancellationToken cancellationToken);
+
     /// <summary>Inserts one event; text over a column's length is truncated.</summary>
     Task InsertAsync(AuditEvent auditEvent, CancellationToken cancellationToken);
 

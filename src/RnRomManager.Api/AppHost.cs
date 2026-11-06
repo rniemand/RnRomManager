@@ -67,6 +67,7 @@ public static class AppHost
             .MapLibraryEndpoints()
             .MapIntegrityEndpoints()
             .MapReportEndpoints()
+            .MapAuditEndpoints()
             .MapAdminEndpoints();
         app.MapFallbackEndpoints(staticFiles);
         return app;
