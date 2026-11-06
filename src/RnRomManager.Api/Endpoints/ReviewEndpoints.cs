@@ -60,6 +60,11 @@ public static class ReviewEndpoints
             var result = await resolver.DismissAsync(id, DatEndpoints.UserId(ctx.User)!.Value, ctx.RequestAborted);
             return result.Code is null ? Results.NoContent() : ToResult(ctx, result);
         });
+        review.MapDelete("/{id:long}", async (long id, HttpContext ctx, ReviewResolver resolver) =>
+        {
+            var result = await resolver.DeleteSourceAsync(id, DatEndpoints.UserId(ctx.User)!.Value, ctx.RequestAborted);
+            return result.Code is null ? Results.NoContent() : ToResult(ctx, result);
+        });
         api.MapGet("/dat/search", (string? system, string? q, int? limit, HttpContext ctx, ISystemRegistry systems, DatCache dats) =>
         {
             var errors = new Dictionary<string, string[]>();

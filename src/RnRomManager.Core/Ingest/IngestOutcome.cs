@@ -41,4 +41,11 @@ public interface IIngestReviewRepository
     Task<IReadOnlyList<PendingReviewSource>> ListPendingSourcesAsync(CancellationToken cancellationToken);
 
     Task DeleteAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Deletes every <c>Pending</c> row of one source: all entries of <paramref name="archivePath"/> when set, else the
+    /// loose file at <paramref name="sourcePath"/>. Resolved and dismissed rows stay as history (D2).
+    /// </summary>
+    /// <returns>The number of rows deleted.</returns>
+    Task<int> DeletePendingBySourceAsync(string sourcePath, string? archivePath, CancellationToken cancellationToken);
 }

@@ -70,4 +70,30 @@ public class IngestReviewRepositoryTests
         await _reviews.CompleteSourceAsync(item.SourcePath, item.ArchiveEntry, new IngestItemResult(outcome), Guid.NewGuid(), Now, default);
         Assert.That((await _reviews.GetBySha1Async(item.Sha1, default))!.Status, Is.EqualTo("Pending"));
     }
+
+    [Test]
+    public async Task DeletePendingBySource_RemovesPendingRowsOfThatSourceOnly()
+    {
+        var entryA = Item('a', "a.gb");
+        var entryB = Item('b', "b.gb");
+        var resolved = Item('c', "c.gb");
+        var otherArchive = Item('d', "a.gb") with { SourcePath = "/ingest/gb/other.zip", ArchivePath = "/ingest/gb/other.zip" };
+        var loose = Item('e', "x.gb") with { SourcePath = "/ingest/gb/x.gb", ArchivePath = null, ArchiveEntry = null };
+        foreach (var item in new[] { entryA, entryB, resolved, otherArchive, loose })
+            await _reviews.UpsertAsync(item, default);
+        var resolvedId = (await _reviews.GetBySha1Async(resolved.Sha1, default))!.Id;
+        await _reviews.CompleteSourceAsync(resolved.SourcePath, resolved.ArchiveEntry, new IngestItemResult("Ingested", GameId: Guid.NewGuid()), Guid.NewGuid(), Now, default);
+        var upper = Item('f', "a.gb") with { SourcePath = "/ingest/gb/PACK.zip", ArchivePath = "/ingest/gb/PACK.zip" };
+        await _reviews.UpsertAsync(upper, default);
+
+        Assert.That(await _reviews.DeletePendingBySourceAsync(entryA.SourcePath, entryA.ArchivePath, default), Is.EqualTo(2));
+        Assert.That(await _reviews.DeletePendingBySourceAsync(loose.SourcePath, null, default), Is.EqualTo(1));
+
+        Assert.That(await _reviews.GetBySha1Async(entryA.Sha1, default), Is.Null);
+        Assert.That(await _reviews.GetBySha1Async(entryB.Sha1, default), Is.Null);
+        Assert.That(await _reviews.GetBySha1Async(loose.Sha1, default), Is.Null);
+        Assert.That((await _reviews.GetAsync(resolvedId, default))!.Status, Is.EqualTo("Resolved"), "history is kept");
+        Assert.That(await _reviews.GetBySha1Async(upper.Sha1, default), Is.Not.Null, "paths match exactly, as in CompleteSourceAsync");
+        Assert.That(await _reviews.GetBySha1Async(otherArchive.Sha1, default), Is.Not.Null);
+    }
 }

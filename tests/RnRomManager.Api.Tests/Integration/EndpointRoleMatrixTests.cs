@@ -66,6 +66,7 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/review/{id:long}"] = Role.Admin,
         ["POST /api/review/{id:long}/resolve"] = Role.Admin,
         ["POST /api/review/{id:long}/dismiss"] = Role.Admin,
+        ["DELETE /api/review/{id:long}"] = Role.Admin,
         ["GET /api/dat/search"] = Role.Admin,
 
         ["GET /api/integrity/status"] = Role.Admin,

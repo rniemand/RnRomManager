@@ -124,4 +124,66 @@ public class ReviewResolverTests
         public ReadOnlyMemory<byte> DefaultBoxArtPng => ReadOnlyMemory<byte>.Empty;
         public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
     }
+
+    [Test]
+    public async Task Delete_LooseFile_DeletesItAndItsPendingRows()
+    {
+        _reviews.DeletePendingBySourceAsync(_item.SourcePath, null, Arg.Any<CancellationToken>()).Returns(1);
+
+        Assert.That((await _resolver.DeleteSourceAsync(1, 42, default)).Code, Is.Null);
+
+        Assert.That(File.Exists(_item.SourcePath), Is.False);
+        Assert.That(Directory.Exists(_dir.Combine("ingest", "_failed")), Is.False, "a hard delete, not a move");
+        await _reviews.Received(1).DeletePendingBySourceAsync(_item.SourcePath, null, default);
+        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default, default!, default, default, default, default);
+    }
+
+    [Test]
+    public async Task Delete_ArchiveEntry_DeletesTheWholeArchiveAndItsPendingRows()
+    {
+        var archive = _dir.Combine("ingest", "pack.zip");
+        File.WriteAllBytes(archive, [9]);
+        _item = _item with { SourcePath = archive, ArchivePath = archive, ArchiveEntry = "test.gb" };
+
+        Assert.That((await _resolver.DeleteSourceAsync(1, 42, default)).Code, Is.Null);
+
+        Assert.That(File.Exists(archive), Is.False);
+        Assert.That(File.Exists(_dir.Combine("ingest", "test.gb")), Is.True, "other files are untouched");
+        await _reviews.Received(1).DeletePendingBySourceAsync(archive, archive, default);
+    }
+
+    [Test]
+    public async Task Delete_MissingSource_StillRemovesTheRows()
+    {
+        File.Delete(_item.SourcePath);
+        _item = _item with { SourcePath = _dir.Combine("ingest", "gone", "test.gb") };
+
+        Assert.That((await _resolver.DeleteSourceAsync(1, 42, default)).Code, Is.Null);
+        await _reviews.Received(1).DeletePendingBySourceAsync(_item.SourcePath, null, default);
+    }
+
+    [Test]
+    public async Task Delete_Failure_IsDeleteFailed_AndKeepsTheRows()
+    {
+        // A directory where the file should be: File.Delete refuses on every OS (a locked file only blocks on Windows).
+        File.Delete(_item.SourcePath);
+        Directory.CreateDirectory(_item.SourcePath);
+
+        Assert.That((await _resolver.DeleteSourceAsync(1, 42, default)).Code, Is.EqualTo("DeleteFailed"));
+        await _reviews.DidNotReceiveWithAnyArgs().DeletePendingBySourceAsync(default!, default, default);
+        using var released = _lock.TryAcquire();
+        Assert.That(released, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task Delete_NonPendingOrBusy()
+    {
+        _item = _item with { Status = "Resolved" };
+        Assert.That((await _resolver.DeleteSourceAsync(1, 42, default)).Code, Is.EqualTo("NotFound"));
+        _item = _item with { Status = "Pending" };
+        using (_lock.TryAcquire())
+            Assert.That((await _resolver.DeleteSourceAsync(1, 42, default)).Code, Is.EqualTo("JobRunning"));
+        Assert.That(File.Exists(_item.SourcePath), Is.True);
+        await _reviews.DidNotReceiveWithAnyArgs().DeletePendingBySourceAsync(default!, default, default);
+    }
 }
