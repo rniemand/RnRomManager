@@ -42,16 +42,24 @@
 {:else if !settings}
 	<Loading />
 {:else}
-	<div class="table-responsive">
-		<table class="table table-sm">
-			<tbody>
-				{#each settings as [key, value] (key)}
-					<tr>
-						<th scope="row" class="fw-normal text-body-secondary text-nowrap">{key}</th>
-						<td class="text-break font-monospace small">{formatValue(value)}</td>
+	<div class="card">
+		<div class="table-responsive">
+			<table class="table table-sm table-hover align-middle mb-0">
+				<thead>
+					<tr class="small text-uppercase text-body-secondary">
+						<th scope="col">Setting</th>
+						<th scope="col">Value</th>
 					</tr>
-				{/each}
-			</tbody>
-		</table>
+				</thead>
+				<tbody>
+					{#each settings as [key, value] (key)}
+						<tr>
+							<th scope="row" class="fw-normal text-body-secondary text-nowrap">{key}</th>
+							<td class="text-break font-monospace small">{formatValue(value)}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 	</div>
 {/if}

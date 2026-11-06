@@ -57,25 +57,27 @@
 	</p>
 
 	<h2 class="h5 mt-4">Licences</h2>
-	<div class="table-responsive">
-		<table class="table table-sm">
-			<thead>
-				<tr>
-					<th scope="col">Component</th>
-					<th scope="col">Licence</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each about.licenses as license (license.name)}
-					<tr>
-						<td>
-							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external licence URL -->
-							<a href={license.url} rel="noopener noreferrer" target="_blank">{license.name}</a>
-						</td>
-						<td>{license.license}</td>
+	<div class="card">
+		<div class="table-responsive">
+			<table class="table table-sm table-hover align-middle mb-0">
+				<thead>
+					<tr class="small text-uppercase text-body-secondary">
+						<th scope="col">Component</th>
+						<th scope="col">Licence</th>
 					</tr>
-				{/each}
-			</tbody>
-		</table>
+				</thead>
+				<tbody>
+					{#each about.licenses as license (license.name)}
+						<tr>
+							<td>
+								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external licence URL -->
+								<a href={license.url} rel="noopener noreferrer" target="_blank">{license.name}</a>
+							</td>
+							<td>{license.license}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 	</div>
 {/if}

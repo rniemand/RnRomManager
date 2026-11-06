@@ -3,6 +3,7 @@
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { DatVersion } from '#lib/api/types.js';
+	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
@@ -85,26 +86,28 @@
 {:else if !dats}
 	<Loading />
 {:else if dats.length === 0}
-	<p class="text-body-secondary">No DATs downloaded yet. Refresh to download them.</p>
+	<EmptyState message="No DATs downloaded yet. Refresh to download them." />
 {:else}
-	<div class="table-responsive">
-		<table class="table table-sm">
-			<thead>
-				<tr>
-					<th scope="col">DAT</th>
-					<th scope="col">Version</th>
-					<th scope="col">Downloaded</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each dats as dat (dat.datName)}
-					<tr>
-						<td>{dat.datName}</td>
-						<td>{dat.version}</td>
-						<td class="text-nowrap">{formatDateTime(dat.downloadedAt)}</td>
+	<div class="card">
+		<div class="table-responsive">
+			<table class="table table-sm table-hover align-middle mb-0">
+				<thead>
+					<tr class="small text-uppercase text-body-secondary">
+						<th scope="col">DAT</th>
+						<th scope="col">Version</th>
+						<th scope="col">Downloaded</th>
 					</tr>
-				{/each}
-			</tbody>
-		</table>
+				</thead>
+				<tbody>
+					{#each dats as dat (dat.datName)}
+						<tr>
+							<td>{dat.datName}</td>
+							<td>{dat.version}</td>
+							<td class="text-nowrap">{formatDateTime(dat.downloadedAt)}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 	</div>
 {/if}

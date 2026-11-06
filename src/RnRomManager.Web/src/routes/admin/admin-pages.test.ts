@@ -16,6 +16,8 @@ vi.mock('#lib/bootstrap.js', () => ({
 
 const { default: UsersPage } = await import('./users/+page.svelte');
 const { default: SettingsPage } = await import('./settings/+page.svelte');
+const { default: DatsPage } = await import('./dats/+page.svelte');
+const { default: AboutPage } = await import('./about/+page.svelte');
 
 const admin = {
 	id: 1,
@@ -200,5 +202,43 @@ describe('admin pages', () => {
 		expect(screen.getByRole('link', { name: /Download logs/ }).getAttribute('href')).toBe(
 			'/api/admin/logs'
 		);
+	});
+
+	const expectT1 = () => {
+		const table = document.querySelector('table')!;
+		expect(table.className).toBe('table table-sm table-hover align-middle mb-0');
+		expect(table.closest('.table-responsive')?.parentElement?.classList.contains('card')).toBe(
+			true
+		);
+		expect(table.querySelector('thead tr')?.className).toBe(
+			'small text-uppercase text-body-secondary'
+		);
+	};
+
+	it('the settings table uses the standard style', async () => {
+		answers['GET /api/admin/settings'] = { status: 200, body: { a: 1 } };
+		render(SettingsPage);
+		await screen.findByText('a');
+		expectT1();
+	});
+
+	it('the DATs table uses the standard style', async () => {
+		answers['GET /api/admin/dats'] = {
+			status: 200,
+			body: [{ datName: 'gb.dat', version: '1', downloadedAt: '2026-11-06T10:00:00Z' }]
+		};
+		render(DatsPage);
+		await screen.findByText('gb.dat');
+		expectT1();
+	});
+
+	it('the licences table uses the standard style', async () => {
+		answers['GET /api/about'] = {
+			status: 200,
+			body: { version: '1.0', licenses: [{ name: 'Svelte', license: 'MIT', url: 'https://x' }] }
+		};
+		render(AboutPage);
+		await screen.findByText('Svelte');
+		expectT1();
 	});
 });
