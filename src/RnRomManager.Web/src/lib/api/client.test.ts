@@ -48,6 +48,12 @@ describe('api client', () => {
 		expect(headers(calls[0])['X-XSRF-TOKEN']).toBeUndefined();
 	});
 
+	it('getText returns the body unparsed, even when it is not JSON', async () => {
+		responses.push(new Response('{"a": 1', { status: 200 }));
+
+		expect(await api.getText('/api/games/g1/info-json')).toBe('{"a": 1');
+	});
+
 	it('mutations call antiforgery once, then send the cookie value as X-XSRF-TOKEN', async () => {
 		await api.post('/api/jobs/ingest');
 		await api.patch('/api/games/1', { title: 'x' });

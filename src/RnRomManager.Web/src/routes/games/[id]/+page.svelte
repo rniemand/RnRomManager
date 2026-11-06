@@ -16,6 +16,7 @@
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import InfoJsonModal from '#lib/components/InfoJsonModal.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import RatingControl from '#lib/components/RatingControl.svelte';
 	import { formatKey, formatSize, formatValue } from '#lib/format.js';
@@ -33,6 +34,7 @@
 	let headerOpen = $state(false);
 	let reload = $state(0);
 	let action = $state<AdminAction | null>(null);
+	let infoJsonOpen = $state(false);
 
 	const id = $derived(page.params.id ?? '');
 	// P3: the cover (any type); screenshots are in the Images gallery.
@@ -203,6 +205,13 @@
 					rel="noopener noreferrer"><Icon name="search" /> Google</a
 				>
 				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				<button
+					type="button"
+					class="btn btn-outline-secondary btn-sm align-self-center"
+					onclick={() => (infoJsonOpen = true)}
+				>
+					<Icon name="code" /> View info.json
+				</button>
 				{#if downloadRoms.length === 1}
 					<button
 						type="button"
@@ -412,4 +421,6 @@
 			</table>
 		{/if}
 	</ConfirmModal>
+
+	<InfoJsonModal bind:open={infoJsonOpen} gameId={game.id} />
 {/if}

@@ -23,6 +23,7 @@ export const icons: Record<string, string> = {
 	merge: 'bi bi-union',
 	retry: 'bi bi-arrow-clockwise',
 	search: 'bi bi-search',
+	code: 'bi bi-code-slash',
 	star: 'bi bi-star',
 	'star-fill': 'bi bi-star-fill',
 	favourite: 'bi bi-heart',
