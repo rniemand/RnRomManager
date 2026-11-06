@@ -314,8 +314,8 @@
 		</div>
 	{:else}
 		<div class="table-responsive">
-			<table class="table table-hover align-middle">
-				<thead>
+			<table class="table table-sm table-striped table-hover align-middle">
+				<thead class="table-dark">
 					<tr>
 						<th scope="col">Title</th>
 						<th scope="col">System</th>

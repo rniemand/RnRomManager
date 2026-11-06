@@ -10,12 +10,13 @@
 	import CopyButton from '#lib/components/CopyButton.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import FileSize from '#lib/components/FileSize.svelte';
 	import GameTypeahead from '#lib/components/GameTypeahead.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import ReviewDeleteModal from '#lib/components/ReviewDeleteModal.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
-	import { formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
+	import { formatDateTime, formatKey, formatValue } from '#lib/format.js';
 	import {
 		emptyManualForm,
 		manualFileStem,
@@ -261,7 +262,7 @@
 					<div class="card-body">
 						<dl class="row small mb-0">
 							<dt class="col-4">Size</dt>
-							<dd class="col-8">{formatSize(item.sizeBytes)}</dd>
+							<dd class="col-8"><FileSize bytes={item.sizeBytes} /></dd>
 							{#each [['CRC32', item.crc32], ['MD5', item.md5], ['SHA1', item.sha1]] as [label, value] (label)}
 								<dt class="col-4">{label}</dt>
 								<dd class="col-8 font-monospace text-break">
@@ -282,8 +283,8 @@
 					<div class="card-header"><h2 class="h6 mb-0">Header</h2></div>
 					{#if item.header}
 						<div class="table-responsive">
-							<table class="table table-sm table-hover align-middle mb-0">
-								<thead>
+							<table class="table table-sm table-striped table-hover align-middle mb-0">
+								<thead class="table-dark">
 									<tr class="small text-uppercase text-body-secondary">
 										<th scope="col">Field</th>
 										<th scope="col">Value</th>
@@ -367,8 +368,8 @@
 						{#if item.suggestions?.length}
 							<div class="card mb-3">
 								<div class="table-responsive">
-									<table class="table table-sm table-hover align-middle mb-0">
-										<thead>
+									<table class="table table-sm table-striped table-hover align-middle mb-0">
+										<thead class="table-dark">
 											<tr class="small text-uppercase text-body-secondary">
 												<th scope="col">DAT entry</th>
 												<th scope="col" class="text-end">Score</th>
@@ -418,7 +419,7 @@
 										<li class="list-group-item d-flex align-items-center gap-2">
 											<span class="me-auto text-break">{result.romName}</span>
 											<span class="small text-body-secondary text-nowrap"
-												>{formatSize(result.sizeBytes)}</span
+												><FileSize bytes={result.sizeBytes} /></span
 											>
 											<button
 												type="button"

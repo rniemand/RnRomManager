@@ -37,8 +37,8 @@
 {:else}
 	<div class="card">
 		<div class="table-responsive">
-			<table class="table table-sm table-hover align-middle mb-0">
-				<thead>
+			<table class="table table-sm table-striped table-hover align-middle mb-0">
+				<thead class="table-dark">
 					<tr class="small text-uppercase text-body-secondary">
 						<th scope="col">Setting</th>
 						<th scope="col">Value</th>

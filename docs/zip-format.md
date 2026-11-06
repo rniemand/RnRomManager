@@ -13,6 +13,7 @@ roms/
       Legend of Zelda, The - Link's Awakening.zip     (in L/)
   gbc/                  GBC-only and dual-mode carts
   gba/                  Game Boy Advance
+  n64/                  Nintendo 64 (always stored big-endian, as .z64)
 ```
 
 Inside a game's ZIP:
@@ -69,7 +70,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 |---|---|---|---|
 | `schemaVersion` | int | ✓ | `3` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
 | `releaseYear` | int? | | from the DAT metadata |
@@ -109,6 +110,8 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 Game Boy / Game Boy Color `header`: `title`, `manufacturerCode`, `cgbFlag` and `sgbFlag` (hex strings), `cartridgeType`, `romSizeBytes` (null if the header can't express it), `ramSizeBytes`, `destination` (`Japan` or `Overseas`), `licensee`, `version`, `logoValid`, `headerChecksumValid`, `globalChecksumValid`, `sizeMatchesHeader`, `isMbc1Multicart`.
 
 Game Boy Advance `header`: `title` (12 chars at 0xA0), `gameCode` (4 chars at 0xAC, null unless A–Z/0–9), `destination` (from the game code's 4th char: `Japan`, `USA`, `Europe`, `Germany`, `France`, `Italy`, `Spain`, `Netherlands`, `Korea` or `Unknown (X)`), `makerCode` (2 chars at 0xB0, null unless A–Z/0–9), `maker` (the GB new-licensee name, or `Unknown (0xHHHH)`), `unitCode` and `deviceType` (hex strings), `version`, `fixedValueValid` (0xB2 is 0x96), `logoValid`, `headerChecksumValid` (the 0xBD complement check), `romSizeBytes` (the file length; GBA headers store no size).
+
+Nintendo 64 `header`, read after the ROM is converted to big-endian (so it can't tell which byte order the dump came in): `title` (20 chars at 0x20), `gameCode` (4 chars at 0x3B, null unless A–Z/0–9), `mediaType` (from the game code's 1st char: `Cartridge`, `Cartridge (expandable)`, `64DD disk`, `64DD expansion`, `Aleck64` or `Unknown (X)`), `destination` (from its 4th char: `Asia`, `Brazil`, `China`, `Germany`, `USA`, `France`, `Netherlands`, `Italy`, `Japan`, `Korea`, `Canada`, `Europe`, `Spain`, `Australia`, `Scandinavia` or `Unknown (X)`), `version` (0x3F), `crc1` and `crc2` (0x10 and 0x14) and `bootAddress` (0x08) as `0xHHHHHHHH`, `headerValid` (byte 0 is 0x80), `romSizeBytes` (the file length).
 
 ### Image
 

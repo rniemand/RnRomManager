@@ -5,12 +5,13 @@
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import FileSize from '#lib/components/FileSize.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import Pagination from '#lib/components/Pagination.svelte';
 	import ReviewDeleteModal from '#lib/components/ReviewDeleteModal.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
-	import { formatDateTime, formatSize } from '#lib/format.js';
+	import { formatDateTime } from '#lib/format.js';
 	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
@@ -76,8 +77,8 @@
 				{#if result.items.length === 0}
 					<EmptyState message="Nothing to review." />
 				{:else}
-					<table class="table table-sm table-hover align-middle mb-0">
-						<thead>
+					<table class="table table-sm table-striped table-hover align-middle mb-0">
+						<thead class="table-dark">
 							<tr class="small text-uppercase text-body-secondary">
 								<th scope="col">File</th>
 								<th scope="col">System</th>
@@ -95,7 +96,7 @@
 										<a href={resolve('/review/[id]', { id: String(item.id) })}>{item.fileName}</a>
 									</td>
 									<td><SystemBadge system={item.system} /></td>
-									<td class="text-end text-nowrap">{formatSize(item.sizeBytes)}</td>
+									<td class="text-end"><FileSize bytes={item.sizeBytes} /></td>
 									<td>{item.headerTitle ?? '—'}</td>
 									<td>{item.reason}</td>
 									<td class="text-nowrap">{formatDateTime(item.createdAt)}</td>

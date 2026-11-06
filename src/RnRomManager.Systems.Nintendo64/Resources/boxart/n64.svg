@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Nintendo 64). Made for this project; MIT licensed like the rest of the repo.
+       Exported to n64.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#f2dede"/>
+  <!-- wide cartridge shell with a rounded top and shoulders stepping in at the bottom -->
+  <path d="M112 96 H400 Q432 96 432 128 V352 L416 368 V400 Q416 416 400 416 H112 Q96 416 96 400 V368 L80 352 V128
+           Q80 96 112 96 Z"
+        fill="#5a5a62" stroke="#2c2c33" stroke-width="4"/>
+  <!-- top grip ridges -->
+  <g stroke="#2c2c33" stroke-width="4" stroke-linecap="round" opacity="0.55">
+    <line x1="140" y1="114" x2="372" y2="114"/>
+    <line x1="140" y1="126" x2="372" y2="126"/>
+  </g>
+  <!-- label recess and label -->
+  <rect x="116" y="146" width="280" height="184" rx="10" fill="#2c2c33" opacity="0.35"/>
+  <rect x="126" y="156" width="260" height="164" rx="6" fill="#fff8f8"/>
+  <text x="256" y="230" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="30" font-weight="700" fill="#9b1c1c">NINTENDO</text>
+  <text x="256" y="282" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="44" font-weight="800" fill="#9b1c1c">64</text>
+  <!-- contacts -->
+  <rect x="140" y="380" width="232" height="18" rx="3" fill="#2c2c33" opacity="0.45"/>
+</svg>

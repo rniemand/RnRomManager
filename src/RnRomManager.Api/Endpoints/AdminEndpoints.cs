@@ -4,7 +4,7 @@ using RnRomManager.Api.Logging;
 
 namespace RnRomManager.Api.Endpoints;
 
-/// <summary><c>GET /api/admin/settings</c>, <c>GET /api/admin/logs</c>, <c>GET /api/admin/logs/stream</c> (Admin) and <c>GET /api/about</c> (any user) — spec §23, §13, §10.4.</summary>
+/// <summary><c>GET /api/admin/settings</c>, <c>GET /api/admin/logs</c>, <c>GET /api/admin/logs/recent</c>, <c>GET /api/admin/logs/stream</c> (Admin) and <c>GET /api/about</c> (any user) — spec §23, §13, §10.4.</summary>
 public static class AdminEndpoints
 {
     public static RouteGroupBuilder MapAdminEndpoints(this RouteGroupBuilder api)
@@ -19,6 +19,8 @@ public static class AdminEndpoints
             var zip = await archive.BuildAsync(ctx.RequestAborted);
             return Results.Stream(zip, "application/zip", $"rnrommanager-logs-{time.GetUtcNow():yyyyMMdd-HHmmss}.zip");
         });
+
+        admin.MapGet("/logs/recent", (LogBuffer buffer) => Results.Ok(buffer.Recent(20)));
 
         admin.MapGet("/logs/stream", LogStream.RunAsync);
 

@@ -2,10 +2,10 @@
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
 	import type { GameDetail, ImageInfo } from '../api/types';
-	import { formatSize } from '../format';
 	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
+	import FileSize from './FileSize.svelte';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -32,6 +32,7 @@
 	let deleteOpen = $state(false);
 	let busy = $state(false);
 
+	let uploadOpen = $state(false);
 	let fileInput = $state<HTMLInputElement>();
 	let uploadType = $state<'BoxArt' | 'Snap'>('BoxArt');
 	let uploadError = $state<string | undefined>();
@@ -72,8 +73,12 @@
 		}
 	}
 
-	async function upload(event: SubmitEvent): Promise<void> {
-		event.preventDefault();
+	function openUpload(): void {
+		uploadError = typeError = undefined;
+		uploadOpen = true;
+	}
+
+	async function upload(): Promise<void> {
 		uploadError = typeError = undefined;
 		const file = fileInput?.files?.[0];
 		if (!file) {
@@ -92,6 +97,8 @@
 			onchanged(await api.post<GameDetail>(base, form));
 			toasts.show(`${file.name} uploaded.`, 'success');
 			if (fileInput) fileInput.value = '';
+			uploadType = 'BoxArt';
+			uploadOpen = false;
 		} catch (e) {
 			if (isApiError(e, 'ValidationFailed')) {
 				uploadError = e.errors.file?.[0];
@@ -148,7 +155,7 @@
 							{#if image.isDefault}<span class="badge text-bg-light border">Placeholder</span>{/if}
 						</div>
 						<div class="text-body-secondary text-nowrap">
-							{formatSize(image.sizeBytes)} · {image.width}×{image.height}
+							<FileSize bytes={image.sizeBytes} /> · {image.width}×{image.height}
 						</div>
 						{#if auth.canEditLibrary}
 							<div class="d-flex flex-wrap gap-1 mt-2">
@@ -186,42 +193,51 @@
 	</div>
 
 	{#if auth.canEditLibrary}
-		<form class="row g-2 align-items-start" onsubmit={upload} novalidate>
-			<div class="col-12 col-md-6">
-				<label class="form-label" for="image-file">Upload an image</label>
-				<input
-					bind:this={fileInput}
-					id="image-file"
-					class="form-control"
-					class:is-invalid={uploadError}
-					type="file"
-					accept="image/png,image/jpeg"
-					aria-describedby="image-file-help"
-				/>
-				{#if uploadError}<div class="invalid-feedback">{uploadError}</div>{/if}
-				<div id="image-file-help" class="form-text">PNG or JPEG, at most 8 MiB.</div>
-			</div>
-			<div class="col-12 col-md-3">
-				<label class="form-label" for="image-type">Type</label>
-				<select
-					id="image-type"
-					class="form-select"
-					class:is-invalid={typeError}
-					bind:value={uploadType}
-				>
-					<option value="BoxArt">Box art</option>
-					<option value="Snap">Screenshot</option>
-				</select>
-				{#if typeError}<div class="invalid-feedback">{typeError}</div>{/if}
-			</div>
-			<div class="col-12 col-md-3 pt-md-4 mt-md-2">
-				<button type="submit" class="btn btn-primary w-100" disabled={busy}>
-					<Icon name="upload" /> Upload
-				</button>
-			</div>
-		</form>
+		<button type="button" class="btn btn-outline-primary btn-sm" onclick={openUpload}>
+			<Icon name="upload" /> Upload image
+		</button>
 	{/if}
 </section>
+
+{#if auth.canEditLibrary}
+	<ConfirmModal
+		bind:open={uploadOpen}
+		title="Upload image"
+		confirmLabel="Upload"
+		{busy}
+		onconfirm={upload}
+	>
+		<div class="mb-3">
+			<label class="form-label" for="image-file">Upload an image</label>
+			<input
+				bind:this={fileInput}
+				id="image-file"
+				class="form-control"
+				class:is-invalid={uploadError}
+				type="file"
+				accept="image/png,image/jpeg"
+				aria-describedby="image-file-help"
+			/>
+			{#if uploadError}<div class="invalid-feedback">{uploadError}</div>{/if}
+			<div id="image-file-help" class="form-text">
+				PNG or JPEG, at most <FileSize bytes={maxUploadBytes} />
+			</div>
+		</div>
+		<div>
+			<label class="form-label" for="image-type">Type</label>
+			<select
+				id="image-type"
+				class="form-select"
+				class:is-invalid={typeError}
+				bind:value={uploadType}
+			>
+				<option value="BoxArt">Box art</option>
+				<option value="Snap">Screenshot</option>
+			</select>
+			{#if typeError}<div class="invalid-feedback">{typeError}</div>{/if}
+		</div>
+	</ConfirmModal>
+{/if}
 
 <ConfirmModal bind:open={viewOpen} title={viewing?.fileName ?? 'Image'} size="lg">
 	{#if viewing}

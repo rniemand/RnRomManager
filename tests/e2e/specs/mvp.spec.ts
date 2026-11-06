@@ -96,7 +96,7 @@ test('ingestion of the seeded Basic set', async () => {
 	await page.getByRole('button', { name: 'Start ingestion' }).click();
 
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
-	await expect(run).toContainText('Ingested 8 · Duplicate 1 · Review 2 · Failed 1', {
+	await expect(run).toContainText('Ingested 9 · Duplicate 1 · Review 2 · Failed 1', {
 		timeout: 60_000
 	});
 
@@ -108,12 +108,13 @@ test('ingestion of the seeded Basic set', async () => {
 
 test('browse, search and filter the library', async () => {
 	await page.goto('/');
-	await expect(page.getByText('6 games')).toBeVisible();
+	await expect(page.getByText('7 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
 
 	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('orb');
 	await expect(page).toHaveURL(/q=orb/);
-	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	// Orbit Blocks and Orbit Kart 64.
+	await expect(page.getByText('2 games', { exact: true })).toBeVisible();
 
 	await page.goto('/');
 	await page.getByLabel('System').selectOption({ label: 'Game Boy Color' });
@@ -123,6 +124,12 @@ test('browse, search and filter the library', async () => {
 	await page.getByLabel('System').selectOption({ label: 'Game Boy Advance' });
 	await expect(page).toHaveURL(/system=gba/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+
+	// Seeded byte-swapped (.v64): it only shows up if ingestion matched it to the DAT after conversion.
+	await page.getByLabel('System').selectOption({ label: 'Nintendo 64' });
+	await expect(page).toHaveURL(/system=n64/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Orbit Kart 64', exact: true })).toBeVisible();
 
 	// "Quest, The" is shown as "The Quest" but filed under Q (§5, §6.1).
 	await page.goto('/');
@@ -164,7 +171,7 @@ test('game detail + downloads', async () => {
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await page.goto('/');
-	await expect(page.getByText('6 games')).toBeVisible();
+	await expect(page.getByText('7 games')).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await expect(dialog()).toBeVisible();
 	await expect(dialog().getByRole('combobox')).toBeFocused();
@@ -225,7 +232,7 @@ test('review queue: delete a file', async () => {
 	await page.goto('/review');
 	await expect(page.getByRole('link', { name: '91-unmatched.gb' })).toHaveCount(0);
 	await page.getByRole('button', { name: 'Delete 93-mystery.gb' }).click();
-	await expect(dialog()).toHaveAccessibleName('Delete file');
+	await expect(dialog()).toHaveAccessibleName('Delete File: 93-mystery.gb');
 	await expect(dialog().getByText('93-mystery.gb').first()).toBeVisible();
 	await expectAccessible(page, 'review delete modal');
 	await dialog().getByRole('button', { name: 'Delete file' }).click();
@@ -243,19 +250,25 @@ test('images: upload, set cover, delete', async () => {
 	await expect(images.getByText('Placeholder')).toBeVisible();
 
 	// A box art upload replaces the placeholder and takes over as cover.
-	await images
+	await images.getByRole('button', { name: 'Upload image' }).click();
+	await expect(dialog()).toHaveAccessibleName('Upload image');
+	await expectAccessible(page, 'upload image modal');
+	await dialog()
 		.getByLabel('Upload an image')
 		.setInputFiles({ name: 'art.png', mimeType: 'image/png', buffer: png(64, [200, 40, 40]) });
-	await images.getByRole('button', { name: 'Upload', exact: true }).click();
+	await dialog().getByRole('button', { name: 'Upload', exact: true }).click();
+	await expect(dialog()).toBeHidden();
 	await expect(card('boxart-01.png').getByText('Cover')).toBeVisible();
 	await expect(images.getByText('Placeholder')).toHaveCount(0);
 	await expect(card('boxart-01.png')).toContainText('64×64');
 
-	await images
+	await images.getByRole('button', { name: 'Upload image' }).click();
+	await dialog()
 		.getByLabel('Upload an image')
 		.setInputFiles({ name: 'shot.png', mimeType: 'image/png', buffer: png(32, [40, 40, 200]) });
-	await images.getByLabel('Type').selectOption({ label: 'Screenshot' });
-	await images.getByRole('button', { name: 'Upload', exact: true }).click();
+	await dialog().getByLabel('Type').selectOption({ label: 'Screenshot' });
+	await dialog().getByRole('button', { name: 'Upload', exact: true }).click();
+	await expect(dialog()).toBeHidden();
 	await expect(card('snap-01.png').getByText('Screenshot')).toBeVisible();
 	await expectAccessible(page, 'game images');
 

@@ -11,8 +11,13 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 // Bootstrap's Modal needs layout/transitions jsdom lacks.
 vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
-		show() {}
-		hide() {}
+		constructor(private el: HTMLElement) {}
+		show() {
+			this.el.classList.add('show');
+		}
+		hide() {
+			this.el.classList.remove('show');
+		}
 		dispose() {}
 	}
 }));
@@ -107,8 +112,9 @@ describe('game images', () => {
 		expect(within(cards[1] as HTMLElement).getByText('Cover').className).toContain(
 			'text-bg-primary'
 		);
-		expect(within(cards[1] as HTMLElement).getByText(/2\.0 KiB · 160×144/)).toBeTruthy();
+		expect(cards[1]!.textContent).toMatch(/2\.0 KiB · 160×144/);
 		expect(screen.queryByLabelText('Upload an image')).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Upload image' })).toBeNull();
 		expect(screen.queryByRole('button', { name: /Use as cover/ })).toBeNull();
 		expect(screen.queryByRole('button', { name: /^Delete / })).toBeNull();
 	});
@@ -136,22 +142,58 @@ describe('game images', () => {
 		]);
 	});
 
-	it('upload posts FormData with the file and type, then hands back the fresh detail', async () => {
+	const uploadModal = () => screen.getByLabelText('Upload an image').closest('.modal')!;
+	const confirmUpload = () =>
+		fireEvent.click(screen.getByRole('button', { name: 'Upload', hidden: true }));
+	const choose = (file: File) =>
+		fireEvent.change(screen.getByLabelText('Upload an image'), { target: { files: [file] } });
+	const png = () => new File([new Uint8Array([1, 2, 3])], 'art.png', { type: 'image/png' });
+
+	it('the upload form lives in a modal opened by the Upload image button', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+		expect(uploadModal().classList.contains('show')).toBe(false);
+		expect(uploadModal().querySelector('.modal-title')!.textContent).toBe('Upload image');
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		expect(uploadModal().classList.contains('show')).toBe(true);
+	});
+
+	it('upload posts FormData, closes the modal, resets the fields and hands back the fresh detail', async () => {
 		const fresh = game([image(5, 'BoxArt', { isCover: true })]);
 		answers['POST /api/games/g1/images'] = { status: 200, body: fresh };
 		const onchanged = vi.fn();
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged });
-		const file = new File([new Uint8Array([1, 2, 3])], 'art.png', { type: 'image/png' });
 
-		await fireEvent.change(screen.getByLabelText('Upload an image'), { target: { files: [file] } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await choose(png());
 		await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'Snap' } });
-		await fireEvent.click(screen.getByRole('button', { name: /Upload$/ }));
+		await confirmUpload();
 
 		await vi.waitFor(() => expect(onchanged).toHaveBeenCalledWith(fresh));
 		const body = calls.find((c) => c.key === 'POST /api/games/g1/images')!.body as FormData;
 		expect(body).toBeInstanceOf(FormData);
 		expect((body.get('file') as File).name).toBe('art.png');
 		expect(body.get('type')).toBe('Snap');
+		await vi.waitFor(() => expect(uploadModal().classList.contains('show')).toBe(false));
+		expect((screen.getByLabelText('Type') as HTMLSelectElement).value).toBe('BoxArt');
+		expect((screen.getByLabelText('Upload an image') as HTMLInputElement).value).toBe('');
+	});
+
+	it('an empty submit shows the file error, keeps the modal open, and reopening clears it', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await confirmUpload();
+
+		expect(screen.getByText('Choose an image file.')).toBeTruthy();
+		expect(uploadModal().classList.contains('show')).toBe(true);
+		expect(calls.some((c) => c.key.startsWith('POST'))).toBe(false);
+
+		await fireEvent.click(
+			within(uploadModal() as HTMLElement).getByRole('button', { name: 'Cancel', hidden: true })
+		);
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		expect(screen.queryByText('Choose an image file.')).toBeNull();
 	});
 
 	it('a file over 8 MiB is refused before sending', async () => {
@@ -159,11 +201,31 @@ describe('game images', () => {
 		const big = new File(['x'], 'big.png', { type: 'image/png' });
 		Object.defineProperty(big, 'size', { value: 8 * 1024 * 1024 + 1 });
 
-		await fireEvent.change(screen.getByLabelText('Upload an image'), { target: { files: [big] } });
-		await fireEvent.click(screen.getByRole('button', { name: /Upload$/ }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await choose(big);
+		await confirmUpload();
 
 		expect(screen.getByText('The image must be at most 8 MiB.')).toBeTruthy();
 		expect(calls.some((c) => c.key.startsWith('POST'))).toBe(false);
+	});
+
+	it('a DuplicateImage failure toasts and leaves the modal open', async () => {
+		answers['POST /api/games/g1/images'] = {
+			status: 409,
+			body: { title: 'Duplicate', status: 409, code: 'DuplicateImage' }
+		};
+		const onchanged = vi.fn();
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged });
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await choose(png());
+		await confirmUpload();
+
+		await vi.waitFor(() =>
+			expect(toasts.items.map((t) => t.text)).toContain('The game already has this image.')
+		);
+		expect(uploadModal().classList.contains('show')).toBe(true);
+		expect(onchanged).not.toHaveBeenCalled();
 	});
 
 	it('Use as cover and Delete call the API and refresh from the returned detail', async () => {

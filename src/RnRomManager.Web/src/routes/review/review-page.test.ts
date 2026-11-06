@@ -171,7 +171,7 @@ describe('review detail page', () => {
 		expect(tabNames()).toEqual(['Suggestions', 'Attach', 'Manual']);
 		expect(selected()).toBe('Suggestions');
 		expect(document.querySelector('[role="tabpanel"] table')?.className).toBe(
-			'table table-sm table-hover align-middle mb-0'
+			'table table-sm table-striped table-hover align-middle mb-0'
 		);
 
 		await fireEvent.click(screen.getByRole('tab', { name: 'Attach' }));
@@ -205,7 +205,7 @@ describe('review detail page', () => {
 		expect(screen.getByText('GB').classList.contains('badge')).toBe(true);
 		expect(screen.getByText('NoDatMatch').classList.contains('badge')).toBe(true);
 		expect(screen.getByText('TETRIS').closest('table')?.className).toBe(
-			'table table-sm table-hover align-middle mb-0'
+			'table table-sm table-striped table-hover align-middle mb-0'
 		);
 	});
 
@@ -234,6 +234,8 @@ describe('review detail page', () => {
 		await fireEvent.click(await screen.findByRole('button', { name: /^Delete$/ }));
 		const confirm = await screen.findByRole('button', { name: 'Delete file', hidden: true });
 		await vi.waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
+		const details = screen.getByRole('table', { name: /^Details of/, hidden: true });
+		expect(details.textContent).not.toContain('Archive');
 		await fireEvent.click(confirm);
 
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/review'));
@@ -325,9 +327,10 @@ describe('review queue page', () => {
 
 		await screen.findByText('file1.gb');
 		expect(document.querySelector('table')!.className).toBe(
-			'table table-sm table-hover align-middle mb-0'
+			'table table-sm table-striped table-hover align-middle mb-0'
 		);
 		expect(screen.getByText('GB').classList.contains('badge')).toBe(true);
+		expect(document.querySelector('tbody .file-size')!.textContent).toBe('1.0 KiB');
 	});
 
 	it('the delete modal lists the fields and warns about a whole archive', async () => {
@@ -344,9 +347,30 @@ describe('review queue page', () => {
 		};
 		render(QueuePage);
 
-		await fireEvent.click(await screen.findByRole('button', { name: 'Delete file1.gb' }));
+		const button = await screen.findByRole('button', { name: 'Delete file1.gb' });
+		expect(screen.getByRole('heading', { name: 'Delete File', hidden: true })).toBeTruthy();
+		await fireEvent.click(button);
 
 		expect(await screen.findByText('abcd1234')).toBeTruthy();
+		expect(
+			screen.getByRole('heading', { name: 'Delete File: tetris hack.gb', hidden: true })
+		).toBeTruthy();
+		const table = screen.getByRole('table', { name: 'Details of tetris hack.gb', hidden: true });
+		const rows = [...table.querySelectorAll('tbody tr')].map(
+			(r) => r.querySelector('th')!.textContent
+		);
+		expect(rows.slice(0, 9)).toEqual([
+			'File name',
+			'System',
+			'Reason',
+			'Size',
+			'CRC32',
+			'MD5',
+			'SHA1',
+			'Source path',
+			'Archive'
+		]);
+		expect(rows.at(-1)).toBe('Added');
 		expect(screen.getByText('nested/file1.gb')).toBeTruthy();
 		expect(screen.getByText('TETRIS')).toBeTruthy();
 		expect(screen.getByRole('alert', { hidden: true }).textContent?.replace(/\s+/g, ' ')).toContain(
@@ -366,6 +390,8 @@ describe('review queue page', () => {
 		await fireEvent.click(await screen.findByRole('button', { name: 'Delete file11.gb' }));
 		const confirm = await screen.findByRole('button', { name: 'Delete file', hidden: true });
 		await vi.waitFor(() => expect((confirm as HTMLButtonElement).disabled).toBe(false));
+		const details = screen.getByRole('table', { name: /^Details of/, hidden: true });
+		expect(details.textContent).not.toContain('Archive');
 		await fireEvent.click(confirm);
 
 		await vi.waitFor(() => expect(calls).toContain('DELETE /api/review/11'));

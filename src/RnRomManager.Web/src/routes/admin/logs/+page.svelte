@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount, tick } from 'svelte';
+	import { api } from '#lib/api/client.js';
 	import type { LogEntry } from '#lib/api/types.js';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
@@ -25,6 +26,7 @@
 	let pending: LogEntry[] = [];
 	let paused = $state(false);
 	let minLevel = $state<Level>('Info');
+	let fetchError = $state<unknown>(null);
 	let status = $state<'connecting' | 'open' | 'reconnecting' | 'closed'>('connecting');
 	let source: EventSource | null = null;
 	let view = $state<HTMLDivElement>();
@@ -34,8 +36,28 @@
 		lines.filter((l) => levels.indexOf(l.level) >= levels.indexOf(minLevel))
 	);
 
-	function append(entries: LogEntry[]): void {
-		lines = [...lines, ...entries].slice(-maxLines);
+	/** Adds entries by id (L5): duplicates are skipped and the list stays sorted, so fetch, backlog and retry overlap safely. */
+	function merge(entries: LogEntry[]): void {
+		const next = [...lines];
+		for (const entry of entries) {
+			const last = next.at(-1);
+			if (!last || entry.id > last.id) {
+				next.push(entry);
+				continue;
+			}
+			const at = next.findIndex((l) => l.id >= entry.id);
+			if (next[at].id !== entry.id) next.splice(at, 0, entry);
+		}
+		lines = next.slice(-maxLines);
+	}
+
+	async function loadRecent(): Promise<void> {
+		fetchError = null;
+		try {
+			merge(await api.get<LogEntry[]>('/api/admin/logs/recent'));
+		} catch (e) {
+			fetchError = e;
+		}
 	}
 
 	function connect(): void {
@@ -46,7 +68,7 @@
 		es.onmessage = (event: MessageEvent<string>) => {
 			const entry = JSON.parse(event.data) as LogEntry;
 			if (paused) pending = [...pending, entry].slice(-maxLines);
-			else append([entry]);
+			else merge([entry]);
 		};
 		es.onerror = () => (status = es.readyState === closed ? 'closed' : 'reconnecting');
 		source = es;
@@ -55,7 +77,7 @@
 	function togglePause(): void {
 		paused = !paused;
 		if (!paused) {
-			append(pending);
+			merge(pending);
 			pending = [];
 		}
 	}
@@ -73,7 +95,7 @@
 	});
 
 	onMount(() => {
-		if (auth.isAdmin) connect();
+		if (auth.isAdmin) void loadRecent().then(connect);
 	});
 
 	onDestroy(() => source?.close());
@@ -103,6 +125,9 @@
 	{/if}
 </div>
 
+{#if fetchError}
+	<ErrorAlert error={fetchError} onretry={loadRecent} />
+{/if}
 {#if status === 'closed'}
 	<ErrorAlert error={null} onretry={connect} />
 {/if}
@@ -127,6 +152,8 @@
 			{#if line.exception}<pre class="mb-0 ms-4 small">{line.exception}</pre>{/if}
 		</div>
 	{:else}
-		<p class="text-body-secondary mb-0">No log events yet.</p>
+		<p class="text-body-secondary mb-0">
+			{lines.length ? `No log events at ${minLevel} or above.` : 'No log events yet.'}
+		</p>
 	{/each}
 </div>

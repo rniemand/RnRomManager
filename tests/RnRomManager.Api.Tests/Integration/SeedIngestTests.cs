@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Core.Ingest;
@@ -14,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 8, 6)]
-    [TestCase(SeedSet.Full, 208, 206)]
+    [TestCase(SeedSet.Basic, 9, 7)]
+    [TestCase(SeedSet.Full, 209, 207)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -66,6 +67,16 @@ public class SeedIngestTests
             var game = zip.InfoJson!.Game!;
             Assert.That((game.Title, game.System), Is.EqualTo(("Star Courier", "gba")));
             Assert.That(game.Roms.Single().Header!["gameCode"]!.GetValue<string>(), Is.EqualTo("ASCE"));
+        }
+        var kart = Directory.GetFiles(Path.Combine(factory.Root, "roms", "n64", "O"), "*.zip").Single();
+        using (var zip = LibraryZip.Open(kart, factory.Services.GetRequiredService<InfoJsonReader>()))
+        {
+            var game = zip.InfoJson!.Game!;
+            var rom = game.Roms.Single();
+            var z64 = new SyntheticN64RomBuilder { Seed = 6401, Title = "ORBIT KART 64", GameCode = "NOKE" }.Build();
+            Assert.That((game.Title, game.System, rom.FileName), Is.EqualTo(("Orbit Kart 64", "n64", "Orbit Kart 64 (USA).z64")));
+            Assert.That(rom.Header!["gameCode"]!.GetValue<string>(), Is.EqualTo("NOKE"));
+            Assert.That(rom.Metadata.Sha1, Is.EqualTo(Convert.ToHexStringLower(SHA1.HashData(z64))));
         }
         var review = await factory.Services.GetRequiredService<IIngestReviewRepository>().ListAsync("Pending", 1, 48, default);
         Assert.That(review.Total, Is.EqualTo(2));

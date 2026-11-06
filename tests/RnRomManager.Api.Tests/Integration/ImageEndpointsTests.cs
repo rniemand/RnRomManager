@@ -36,6 +36,7 @@ public class ImageEndpointsTests
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
             [IngestSeeder.GbaDat] = [],
+            [IngestSeeder.N64Dat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Tetris)],
         });
         cache.Load();

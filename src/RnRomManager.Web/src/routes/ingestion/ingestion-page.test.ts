@@ -107,7 +107,7 @@ describe('ingestion page', () => {
 		const rows = () =>
 			document.querySelectorAll('section[aria-labelledby="pending-heading"] tbody tr');
 		expect(document.querySelector('table')!.className).toBe(
-			'table table-sm table-hover align-middle mb-0'
+			'table table-sm table-striped table-hover align-middle mb-0'
 		);
 		expect(rows()).toHaveLength(20);
 		expect(screen.getByText('Page 1 of 3')).toBeTruthy();

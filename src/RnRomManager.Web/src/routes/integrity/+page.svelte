@@ -231,8 +231,8 @@
 			<p class="text-body-secondary">No issues.</p>
 		{:else}
 			<div class="table-responsive">
-				<table class="table table-sm">
-					<thead>
+				<table class="table table-sm table-striped table-hover">
+					<thead class="table-dark">
 						<tr>
 							<th scope="col">Severity</th>
 							<th scope="col">Type</th>
@@ -296,8 +296,8 @@
 			<p class="text-body-secondary">No checks have run yet.</p>
 		{:else}
 			<div class="table-responsive">
-				<table class="table table-sm table-hover">
-					<thead>
+				<table class="table table-sm table-striped table-hover">
+					<thead class="table-dark">
 						<tr>
 							<th scope="col">Started</th>
 							<th scope="col">Job</th>

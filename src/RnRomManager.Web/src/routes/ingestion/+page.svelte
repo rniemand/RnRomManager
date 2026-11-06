@@ -7,10 +7,11 @@
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import FileSize from '#lib/components/FileSize.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import Pagination from '#lib/components/Pagination.svelte';
-	import { formatDateTime, formatSize } from '#lib/format.js';
+	import { formatDateTime } from '#lib/format.js';
 	import { formatSummary, percent, statusClass } from '#lib/jobs.js';
 	import { pageCount } from '#lib/pageSize.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -170,8 +171,8 @@
 					<h3 class="h6 mt-3"><Icon name="system-{system.system}" /> {system.system}</h3>
 					<div class="card">
 						<div class="table-responsive">
-							<table class="table table-sm table-hover align-middle mb-0">
-								<thead>
+							<table class="table table-sm table-striped table-hover align-middle mb-0">
+								<thead class="table-dark">
 									<tr class="small text-uppercase text-body-secondary">
 										<th scope="col">Name</th>
 										<th scope="col" class="text-end">Size</th>
@@ -184,7 +185,7 @@
 											<td class="text-truncate" style="max-width: 32rem" title={file.name}
 												>{file.name}</td
 											>
-											<td class="text-end text-nowrap">{formatSize(file.sizeBytes)}</td>
+											<td class="text-end"><FileSize bytes={file.sizeBytes} /></td>
 											<td class="text-nowrap">{formatDateTime(file.modifiedAt)}</td>
 										</tr>
 									{/each}
@@ -209,8 +210,8 @@
 			{:else}
 				<div class="card">
 					<div class="table-responsive">
-						<table class="table table-sm table-hover align-middle mb-0">
-							<thead>
+						<table class="table table-sm table-striped table-hover align-middle mb-0">
+							<thead class="table-dark">
 								<tr class="small text-uppercase text-body-secondary">
 									<th scope="col">Started</th>
 									<th scope="col">Status</th>

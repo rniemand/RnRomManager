@@ -134,7 +134,7 @@ public sealed class IngestPipeline(
             // Step 5. Every ReadHeader null (headerless system) counts as plausible.
             var found = headers.Values.FirstOrDefault(h => h is not null);
             if (found is { IsPlausible: false })
-                return FailFile(file, jobId, IngestFailures.InvalidHeader, "no DAT match, and the header's logo and checksum are both invalid", hashes.Sha1);
+                return FailFile(file, jobId, IngestFailures.InvalidHeader, "no DAT match, and the header isn't valid for this system", hashes.Sha1);
             var classified = family.FirstOrDefault(h => h.Id == found?.ClassifiedSystemId) ?? folder;
             var originalName = file.Name;
             if (file.ArchiveEntry is null)

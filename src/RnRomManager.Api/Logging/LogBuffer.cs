@@ -52,6 +52,13 @@ public sealed class LogBuffer(TimeProvider time, int capacity = LogBuffer.Defaul
         }
     }
 
+    /// <summary>The last <paramref name="count"/> buffered events, oldest first (L4).</summary>
+    public IReadOnlyList<LogEntry> Recent(int count)
+    {
+        lock (_lock)
+            return [.. _events.Skip(Math.Max(0, _events.Count - count))];
+    }
+
     /// <summary>
     /// The buffered events since <paramref name="lastId"/> (as <see cref="Since"/>) plus a reader of every later event,
     /// taken under one lock so nothing is missed or sent twice. Dispose to stop receiving.

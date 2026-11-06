@@ -25,6 +25,21 @@ public class LogBufferTests
         Assert.That(buffer.Since(null).Select(e => e.Id), Is.EqualTo(new[] { FirstId, FirstId + 1, FirstId + 2 }));
     }
 
+    [TestCase(30, 20, "m10", "m29")]
+    [TestCase(5, 5, "m0", "m4")]
+    public void Recent_IsTheLastCountOldestFirst(int added, int expected, string first, string last)
+    {
+        var buffer = NewBuffer();
+        AddMany(buffer, added);
+
+        var recent = buffer.Recent(20);
+        Assert.That(recent, Has.Count.EqualTo(expected));
+        Assert.That((recent[0].Message, recent[^1].Message), Is.EqualTo((first, last)));
+    }
+
+    [Test]
+    public void Recent_IsEmptyForAnEmptyBuffer() => Assert.That(NewBuffer().Recent(20), Is.Empty);
+
     [Test]
     public void KeepsTheLast500InOrder()
     {

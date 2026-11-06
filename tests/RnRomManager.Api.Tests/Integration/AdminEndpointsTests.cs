@@ -2,6 +2,8 @@ using System.IO.Compression;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
@@ -50,6 +52,23 @@ public class AdminEndpointsTests
         Assert.That(settings.GetProperty("paths").GetProperty("logs").GetString(), Is.EqualTo(Path.Combine(_factory.Root, "logs")));
         Assert.That(settings.GetProperty("integrity").GetProperty("quickCheckTime").GetString(), Is.Empty);
         Assert.That(settings.GetProperty("logging").GetProperty("retentionDays").GetInt32(), Is.EqualTo(14));
+    }
+
+    [Test]
+    public async Task RecentLogs_AreTheLast20BufferedEntries_OldestFirst()
+    {
+        var logger = _factory.Services.GetRequiredService<ILoggerFactory>().CreateLogger("RnRomManager.Tests.Recent");
+        for (var i = 0; i < 25; i++)
+            logger.LogInformation("recent-marker-{Index}", i);
+
+        using var response = await _admin.GetAsync("/api/admin/logs/recent");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var entries = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement.EnumerateArray().ToList();
+        Assert.That(entries, Has.Count.EqualTo(20));
+        Assert.That(entries.Select(e => e.GetProperty("id").GetInt64()), Is.Ordered.Ascending);
+        // The GET itself may log after the markers, so the last marker is near the end rather than last.
+        Assert.That(entries.Select(e => e.GetProperty("message").GetString()), Does.Contain("recent-marker-24"));
     }
 
     [Test]
