@@ -36,6 +36,15 @@ public sealed class AuthClient(HttpClient http) : IDisposable
         return Capture(await http.SendAsync(request, completion));
     }
 
+    /// <summary>A mutation with a prepared body (e.g. multipart), XSRF header as for JSON calls.</summary>
+    public async Task<HttpResponseMessage> SendContentAsync(HttpMethod method, string url, HttpContent content, bool sendXsrf = true)
+    {
+        using var request = new HttpRequestMessage(method, url) { Content = content };
+        if (sendXsrf && _xsrf is not null)
+            request.Headers.Add("X-XSRF-TOKEN", _xsrf);
+        return Capture(await http.SendAsync(request));
+    }
+
     public Task<HttpResponseMessage> LoginAsync(string username, string password, bool sendXsrf = true) =>
         PostAsync("/api/auth/login", new { username, password }, sendXsrf);
 

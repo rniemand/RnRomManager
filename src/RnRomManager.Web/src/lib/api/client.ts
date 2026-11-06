@@ -71,7 +71,9 @@ export async function request<T>(
 	options: RequestOptions = {}
 ): Promise<T> {
 	const headers: Record<string, string> = { Accept: 'application/json' };
-	if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+	// FormData (image upload) is sent as-is: the browser sets the multipart Content-Type with its boundary.
+	const isForm = options.body instanceof FormData;
+	if (options.body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
 	if (mutations.has(method)) {
 		await ensureAntiforgery();
 		const token = xsrfToken();
@@ -84,7 +86,12 @@ export async function request<T>(
 			method,
 			headers,
 			credentials: 'same-origin',
-			body: options.body === undefined ? undefined : JSON.stringify(options.body),
+			body:
+				options.body === undefined
+					? undefined
+					: isForm
+						? (options.body as FormData)
+						: JSON.stringify(options.body),
 			signal: options.signal
 		});
 	} catch (error) {
