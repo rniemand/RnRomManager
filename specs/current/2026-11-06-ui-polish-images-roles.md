@@ -1,6 +1,6 @@
 ---
 title: UI polish, image management and roles
-status: ready
+status: in-progress
 created: 2026-11-06
 ---
 
