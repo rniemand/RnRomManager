@@ -112,7 +112,7 @@ public class LibraryMirrorTests
         var imageRow = (await _images.ListByGameAsync(game.GameId, CancellationToken.None)).Single();
         Assert.That(imageRow with { Id = 0 }, Is.EqualTo(new ImageRow
         {
-            GameId = game.GameId, FileName = "boxart-01.png", Type = ImageType.BoxArt, Source = "default", SourceUrl = null, IsDefault = true,
+            GameId = game.GameId, FileName = "boxart-01.png", Type = ImageType.BoxArt, Source = "default", SourceUrl = null, IsDefault = true, IsCover = true,
             SizeBytes = 99, Sha1 = new string('c', 40), Width = 512, Height = 512, DateAdded = When.UtcDateTime,
         }));
     }

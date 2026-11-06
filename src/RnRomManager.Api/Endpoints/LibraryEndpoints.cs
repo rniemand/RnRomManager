@@ -63,9 +63,9 @@ public static class LibraryEndpoints
 
             ctx.Response.Headers.CacheControl = "private, max-age=86400";
             // A 304 for a matching If-None-Match is answered by the stream result itself.
-            return files.OpenEntry(ctx, game, LibraryZip.ImageEntry(image.FileName), PngInfo.MaxBytes, out var stream) is { } problem
+            return files.OpenEntry(ctx, game, LibraryZip.ImageEntry(image.FileName), ImageFormats.MaxBytes, out var stream) is { } problem
                 ? problem
-                : Results.Stream(stream!, "image/png", entityTag: new EntityTagHeaderValue($"\"{image.Sha1}\""));
+                : Results.Stream(stream!, ImageFormats.ContentType(image.FileName), entityTag: new EntityTagHeaderValue($"\"{image.Sha1}\""));
         });
 
         games.MapGet("/{id:guid}/download", async (Guid id, HttpContext ctx, IGameRepository repository, LibraryFiles files) =>
@@ -400,7 +400,11 @@ public static class LibraryEndpoints
         {
             id = i.Id,
             type = i.Type,
+            fileName = i.FileName,
+            source = i.Source,
             isDefault = i.IsDefault,
+            isCover = i.IsCover,
+            sizeBytes = i.SizeBytes,
             width = i.Width,
             height = i.Height,
             url = ImageUrl(game.Id, i.Id),

@@ -27,7 +27,7 @@ public class SchemaMigrationTests
         new(new MySqlConnectionFactory(cs), NullLogger<MySqlDatabaseLifecycle>.Instance, TimeProvider.System);
 
     [Test]
-    public async Task FromScratch_CreatesEveryTableAndJournalsElevenScripts()
+    public async Task FromScratch_CreatesEveryTableAndJournalsTwelveScripts()
     {
         var tables = await ColumnAsync<string>(_cs,
             "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME");
@@ -38,7 +38,7 @@ public class SchemaMigrationTests
         {
             "0001_users", "0002_games", "0003_roms", "0004_images", "0005_jobs", "0006_job_items",
             "0007_ingest_review_items", "0008_integrity_issues", "0009_data_protection_keys",
-            "0010_game_rating", "0011_user_roles",
+            "0010_game_rating", "0011_user_roles", "0012_image_cover",
         }));
     }
 
@@ -47,7 +47,7 @@ public class SchemaMigrationTests
     {
         Lifecycle(_cs).Migrate();
 
-        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 11L }));
+        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 12L }));
     }
 
     [Test]
@@ -66,7 +66,7 @@ public class SchemaMigrationTests
     [TestCase("user_roles", "user_id int(11), role varchar(32)")]
     [TestCase("games", "id char(36), system_id varchar(16), title varchar(255), display_title varchar(255), zip_path varchar(512), bucket char(1), release_year smallint(6) NULL, developers longtext, publishers longtext, genres longtext, description text NULL, has_default_boxart tinyint(1) =0, zip_size_bytes bigint(20), zip_mtime_utc datetime, info_schema_version int(11), created_at datetime(6), updated_at datetime(6), rating tinyint(4) NULL, favourite tinyint(1) =0")]
     [TestCase("roms", "id bigint(20), game_id char(36), system_id varchar(16), file_name varchar(255), original_file_name varchar(255), base_title varchar(255), regions longtext, languages longtext, flags longtext, region_key varchar(255), revision varchar(32) NULL, is_primary tinyint(1) =0, id_method varchar(16), dat_name varchar(255) NULL, dat_version varchar(255) NULL, dat_game_name varchar(255) NULL, size_bytes bigint(20), crc32 char(8), md5 char(32), sha1 char(40), header longtext NULL, date_added datetime(6), date_modified datetime(6)")]
-    [TestCase("images", "id bigint(20), game_id char(36), file_name varchar(255), type varchar(16), source varchar(32), source_url varchar(1024) NULL, is_default tinyint(1) =0, size_bytes bigint(20), sha1 char(40), width int(11), height int(11), date_added datetime(6)")]
+    [TestCase("images", "id bigint(20), game_id char(36), file_name varchar(255), type varchar(16), source varchar(32), source_url varchar(1024) NULL, is_default tinyint(1) =0, size_bytes bigint(20), sha1 char(40), width int(11), height int(11), date_added datetime(6), is_cover tinyint(1) =0")]
     [TestCase("jobs", "id char(36), type varchar(16), mode varchar(16) NULL, trigger_source varchar(16), status varchar(16), requested_by int(11) NULL, started_at datetime(6), finished_at datetime(6) NULL, summary longtext NULL, error text NULL")]
     [TestCase("job_items", "id bigint(20), job_id char(36), file_id char(36), system_id varchar(16) NULL, source_path varchar(1024), archive_entry varchar(512) NULL, outcome varchar(16), reason varchar(64) NULL, details text NULL, game_id char(36) NULL, sha1 char(40) NULL, created_at datetime(6)")]
     [TestCase("ingest_review_items", "id bigint(20), system_id varchar(16), reason varchar(16), source_path varchar(1024), archive_path varchar(1024) NULL, archive_entry varchar(512) NULL, original_file_name varchar(255), size_bytes bigint(20), crc32 char(8), md5 char(32), sha1 char(40), header longtext NULL, suggestions longtext, dat_identification longtext NULL, candidate_game_ids longtext NULL, status varchar(16), game_id char(36) NULL, created_at datetime(6), last_seen_job_id char(36), resolved_at datetime(6) NULL, resolved_by int(11) NULL")]
@@ -297,5 +297,30 @@ public class SchemaMigrationTests
         while (await reader.ReadAsync())
             values.Add(reader.GetFieldValue<T>(0));
         return values;
+    }
+
+    [Test]
+    public async Task ImageCover_Backfill_BoxArtElseFirstImage()
+    {
+        var cs = await MariaDbServer.CreateDatabaseAsync();
+        foreach (var script in MigrationScripts().TakeWhile(s => !s.Name.Contains("0012_", StringComparison.Ordinal)))
+            await ExecuteAsync(cs, script.Sql);
+        var withBoxArt = await InsertGameAsync(cs, "gb/A/A.zip");
+        var snapsOnly = await InsertGameAsync(cs, "gb/B/B.zip");
+        await InsertGameAsync(cs, "gb/C/C.zip"); // no images
+        foreach (var (game, name, type) in new[]
+        {
+            (withBoxArt, "snap-01.png", "Snap"), (withBoxArt, "boxart-01.png", "BoxArt"),
+            (snapsOnly, "snap-01.png", "Snap"), (snapsOnly, "snap-02.png", "Snap"),
+        })
+            await ExecuteAsync(cs,
+                "INSERT INTO images (game_id, file_name, type, source, size_bytes, sha1, width, height, date_added) VALUES " +
+                "(@g, @n, @t, 'libretro-thumbnails', 1, REPEAT('0', 40), 1, 1, UTC_TIMESTAMP(6))", ("@g", game), ("@n", name), ("@t", type));
+
+        await ExecuteAsync(cs, MigrationScripts().Single(s => s.Name.Contains("0012_", StringComparison.Ordinal)).Sql);
+
+        Assert.That(await ColumnAsync<string>(cs,
+                "SELECT CONCAT(g.zip_path, ' ', i.file_name) FROM images i JOIN games g ON g.id = i.game_id WHERE i.is_cover = 1 ORDER BY g.zip_path"),
+            Is.EqualTo(new[] { "gb/A/A.zip boxart-01.png", "gb/B/B.zip snap-01.png" }));
     }
 }

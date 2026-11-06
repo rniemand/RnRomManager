@@ -118,7 +118,7 @@ public sealed class GameRepository : IGameRepository
             SELECT g.id AS Id, g.system_id AS SystemId, g.display_title AS DisplayTitle, g.release_year AS ReleaseYear,
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount,
                    (SELECT GROUP_CONCAT(r.region_key SEPARATOR '') FROM roms r WHERE r.game_id = g.id) AS RegionKeys,
-                   (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.type = 'BoxArt') AS BoxArtImageId,
+                   (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.is_cover = 1) AS BoxArtImageId,
                    g.rating AS Rating, g.favourite AS Favourite, g.title AS Title,
                    g.developers AS Developers, g.publishers AS Publishers, g.genres AS Genres
             FROM games g {filter}
@@ -268,7 +268,7 @@ public sealed class ImageRepository(IDbConnectionFactory connections) : IImageRe
 {
     private const string Select = """
         SELECT id AS Id, game_id AS GameId, file_name AS FileName, type AS Type, source AS Source,
-               source_url AS SourceUrl, is_default AS IsDefault, size_bytes AS SizeBytes, sha1 AS Sha1,
+               source_url AS SourceUrl, is_default AS IsDefault, is_cover AS IsCover, size_bytes AS SizeBytes, sha1 AS Sha1,
                width AS Width, height AS Height, date_added AS DateAdded
         FROM images
         """;
@@ -344,11 +344,11 @@ public sealed class LibraryMirror : ILibraryMirror
 
             if (images.Count > 0)
                 await connection.ExecuteAsync(new CommandDefinition("""
-                    INSERT INTO images (game_id, file_name, type, source, source_url, is_default, size_bytes, sha1, width, height, date_added)
-                    VALUES (@GameId, @FileName, @Type, @Source, @SourceUrl, @IsDefault, @SizeBytes, @Sha1, @Width, @Height, @DateAdded)
+                    INSERT INTO images (game_id, file_name, type, source, source_url, is_default, is_cover, size_bytes, sha1, width, height, date_added)
+                    VALUES (@GameId, @FileName, @Type, @Source, @SourceUrl, @IsDefault, @IsCover, @SizeBytes, @Sha1, @Width, @Height, @DateAdded)
                     """, images.Select(i => new
                     {
-                        i.GameId, i.FileName, Type = i.Type.ToString(), i.Source, i.SourceUrl, i.IsDefault, i.SizeBytes, i.Sha1,
+                        i.GameId, i.FileName, Type = i.Type.ToString(), i.Source, i.SourceUrl, i.IsDefault, i.IsCover, i.SizeBytes, i.Sha1,
                         i.Width, i.Height, i.DateAdded,
                     }), transaction, cancellationToken: cancellationToken));
         }

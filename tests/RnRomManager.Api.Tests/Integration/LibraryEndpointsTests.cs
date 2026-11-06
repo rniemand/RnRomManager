@@ -382,4 +382,42 @@ public class LibraryEndpointsTests
         Assert.That((await MatchedOn("q=tetris"))["Tetris"].ValueKind, Is.EqualTo(JsonValueKind.Null));
         Assert.That((await MatchedOn("")).Values.Select(v => v.ValueKind), Has.All.EqualTo(JsonValueKind.Null));
     }
+
+    [Test]
+    public async Task Images_CoverDrivesBoxArtUrl_AndJpegIsServedAsJpeg()
+    {
+        var id = await Tetris();
+        var reader = Service<InfoJsonReader>();
+        var path = await ZipPath(id);
+        var game = LibraryZip.Open(path, reader);
+        var info = game.InfoJson!.Game!;
+        // A minimal baseline JPEG (SOI, SOF0 64x32, SOS); content isn't decoded, only served.
+        byte[] jpeg = [0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x11, 8, 0, 32, 0, 64, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1, 0xFF, 0xDA, 0x00, 0x02, 0xFF, 0xD9];
+        var snap = info.Images[0] with
+        {
+            FileName = "snap-01.jpg", Type = ImageType.Snap, Source = InfoJsonImage.SourceUpload, IsDefault = false, IsCover = true,
+            SizeBytes = jpeg.Length, Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(jpeg)), Width = 64, Height = 32,
+        };
+        var updated = info with { Images = [.. info.Images.Select(i => i with { IsCover = false }), snap] };
+        await new LibraryZipWriter(reader).WriteAsync(path, game, new LibraryZipChanges(updated,
+            new Dictionary<string, Func<Stream>> { [LibraryZip.ImageEntry(snap.FileName)] = () => new MemoryStream(jpeg) }));
+        var file = new FileInfo(path);
+        var row = (await Service<IGameRepository>().GetAsync(id, default))!;
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(updated, row.ZipPath, file.Length, file.LastWriteTimeUtc), default);
+
+        var detail = await GetJson($"/api/games/{id}");
+        var cover = detail.GetProperty("images").EnumerateArray().Single(i => i.GetProperty("isCover").GetBoolean());
+        Assert.That((cover.GetProperty("fileName").GetString(), cover.GetProperty("source").GetString(), cover.GetProperty("type").GetString()),
+            Is.EqualTo(("snap-01.jpg", "upload", "Snap")));
+        Assert.That(detail.GetProperty("hasDefaultBoxArt").GetBoolean(), Is.False, "the cover isn't the placeholder");
+        var item = (await GetJson("/api/games")).GetProperty("items").EnumerateArray().Single();
+        Assert.That(item.GetProperty("boxArtUrl").GetString(), Is.EqualTo(cover.GetProperty("url").GetString()));
+
+        using var image = await _user.GetAsync(cover.GetProperty("url").GetString()!);
+        Assert.That(image.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(image.Content.Headers.ContentType?.MediaType, Is.EqualTo("image/jpeg"));
+        Assert.That(await image.Content.ReadAsByteArrayAsync(), Is.EqualTo(jpeg));
+        using var png = await _user.GetAsync(detail.GetProperty("images")[0].GetProperty("url").GetString()!);
+        Assert.That(png.Content.Headers.ContentType?.MediaType, Is.EqualTo("image/png"));
+    }
 }
