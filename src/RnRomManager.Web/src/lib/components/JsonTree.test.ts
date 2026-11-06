@@ -19,6 +19,7 @@ describe('JsonTree', () => {
 
 		const root = document.querySelector('details')!;
 		expect(root.open).toBe(true);
+		expect(root.querySelector('summary')!.getAttribute('aria-label')).toBe('JSON object');
 		const roms = summary('roms').closest('details')!;
 		expect(roms.open).toBe(true);
 		const first = summary('0').closest('details')!;

@@ -80,7 +80,7 @@ A batch for people curating a large library, especially during the first import.
 - **RP3 Library Size UI.** The page has:
   - A total line: `<FileSize> in n games`.
   - A breadcrumb: `Library` › `<System>`.
-  - A treemap: inline SVG, `role="img"` with an `aria-label` summary. Rectangles are laid out by a squarified algorithm (`src/lib/treemap.ts`, pure function `squarify(items, width, height)`) and sized by bytes. At the library level each system is one rectangle; at the system level each game is one. Colours come from a new exported map in `src/lib/systemColours.ts`, which `SystemBadge` also uses: per system, the Bootstrap colour name and label foreground, unchanged from today's badges: `gb` success/`#fff`, `gbc` info/`#000`, `gba` primary/`#fff`, `n64` danger/`#fff`, and a fallback secondary/`#fff` for an unknown id. A rectangle's `fill` is `var(--bs-<name>)`. Its label's `fill` is the foreground Bootstrap's `text-bg-<name>` uses for that colour (`#fff` or `#000`), stored next to the name in the map, so labels meet AA contrast like the badges. Rectangles get a 1 px `var(--bs-body-bg)` stroke so neighbours of the same system stay distinct. Each rectangle has a `<title>` tooltip `name — size` and a text label when it is at least 60×20 px. At the system level only the 300 largest games are drawn, plus one `n others` rectangle (not clickable).
+  - A treemap: inline SVG, `role="group"` with an `aria-label` summary. Rectangles are laid out by a squarified algorithm (`src/lib/treemap.ts`, pure function `squarify(items, width, height)`) and sized by bytes. At the library level each system is one rectangle; at the system level each game is one. Colours come from a new exported map in `src/lib/systemColours.ts`, which `SystemBadge` also uses: per system, the Bootstrap colour name and label foreground, unchanged from today's badges: `gb` success/`#fff`, `gbc` info/`#000`, `gba` primary/`#fff`, `n64` danger/`#fff`, and a fallback secondary/`#fff` for an unknown id. A rectangle's `fill` is `var(--bs-<name>)`. Its label's `fill` is the foreground Bootstrap's `text-bg-<name>` uses for that colour (`#fff` or `#000`), stored next to the name in the map, so labels meet AA contrast like the badges. Rectangles get a 1 px `var(--bs-body-bg)` stroke so neighbours of the same system stay distinct. Each rectangle has a `<title>` tooltip `name — size` and a text label when it is at least 60×20 px. At the system level only the 300 largest games are drawn, plus one `n others` rectangle (not clickable).
   - A table under it, the accessible equivalent. At the library level: System, Games, Size, % of library. At the system level: Game (link), Releases, Size, % of system. Sorted by size desc.
   - Clicking a system rectangle or row drills into it (`?system=<id>`, so Back works). Clicking a game rectangle or row opens `/games/{id}`.
   - Empty library → `EmptyState`.
@@ -282,7 +282,7 @@ Migrations 0013 and 0014 only add tables, so existing data is untouched. There a
   - The empty state.
 
   Done when: SPA tests pass.
-- [ ] **24. End-to-end**: in `tests/e2e/specs/mvp.spec.ts`:
+- [x] **24. End-to-end**: in `tests/e2e/specs/mvp.spec.ts`:
   - Open Reports (each tab, axe-scanned) and drill into a system on Library Size.
   - Open a game's info.json modal, and switch to the Images tab (the existing images flow then runs inside it).
   - Keep the existing modal-based review delete as it is. Shift+click is covered by vitest, because the seed has only two review items and both are already used.
@@ -301,6 +301,7 @@ Migrations 0013 and 0014 only add tables, so existing data is untouched. There a
   Done when: the doc rule holds and `pwsh scripts/test-all.ps1` passes.
 
 ## Decisions
+- 2026-11-06 Step 24 accessibility scan: treemap SVG uses `role="group"` with its summary label; `role="img"` with clickable child links fails axe nested-interactive even when those links have `aria-hidden` and negative tabindex (user). This supersedes the step 14 role decision.
 - 2026-11-06 One spec or several? → one spec, one PR (user)
 - 2026-11-06 Where does Duplicates live? → a tab on the new Reporting page (user)
 - 2026-11-06 Library Size in Admin and Reporting? → Reporting only (user)

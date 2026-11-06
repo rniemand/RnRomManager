@@ -147,7 +147,7 @@
 	<svg
 		class="d-block w-100 h-auto mb-3 border rounded"
 		viewBox="0 0 {width} {height}"
-		role="img"
+		role="group"
 		aria-label={summary}
 	>
 		{#each rects as r (r.item.key)}

@@ -98,7 +98,7 @@ describe('reports pages', () => {
 				'var(--bs-success)'
 			]);
 			expect(tiles()[0].getAttribute('stroke')).toBe('var(--bs-body-bg)');
-			expect(document.querySelector('svg')!.getAttribute('role')).toBe('img');
+			expect(document.querySelector('svg')!.getAttribute('role')).toBe('group');
 			expect(document.querySelector('svg')!.getAttribute('aria-label')).toContain('Game Boy Color');
 			expect(document.querySelector('svg title')!.textContent).toBe('Game Boy Color — 2.0 KiB');
 			expect(document.querySelector('svg text')!.getAttribute('fill')).toBe('#000');

@@ -62,6 +62,8 @@
 	{#if isObject}
 		<details bind:open>
 			<summary
+				class="py-1"
+				aria-label={name === undefined ? (isArray ? 'JSON array' : 'JSON object') : undefined}
 				>{@render key()}{#if !open}<span class="text-body-secondary">{count}</span>{/if}</summary
 			>
 			<ul class="list-unstyled ms-3 mb-0">
