@@ -101,11 +101,12 @@ describe('Logs tab', () => {
 		expect(lines().map((l) => l.textContent?.includes('during'))).toEqual([false, true, true]);
 	});
 
-	it('keeps at most 2,000 lines', async () => {
+	// Rendering 2,000 rows in jsdom takes several seconds on a slow CI runner.
+	it('keeps at most 2,000 lines', { timeout: 30_000 }, async () => {
 		render(LogsPage);
 		source().send(...Array.from({ length: 2005 }, (_, i) => entry(`m${i}`)));
 
-		await vi.waitFor(() => expect(lines()).toHaveLength(2000));
+		await vi.waitFor(() => expect(lines()).toHaveLength(2000), { timeout: 25_000 });
 		expect(lines()[0].textContent).toContain('m5 ');
 	});
 
