@@ -14,6 +14,7 @@ public static class NLogSetup
 
         var config = LogManager.Setup()
             .RegisterNLogWeb()
+            .SetupExtensions(extensions => extensions.RegisterTarget<MemoryLogTarget>("LiveLog"))
             .LoadConfigurationFromFile(Path.Combine(AppContext.BaseDirectory, "nlog.config"))
             .LogFactory.Configuration!;
 
@@ -28,6 +29,11 @@ public static class NLogSetup
             config.Variables["minLevel"] = logging.MinLevel;
 
         config.Variables["retentionDays"] = logging.RetentionDays.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        // One buffer per host; NLog's configuration is process-wide, so the newest host's buffer receives events.
+        var buffer = new LogBuffer(TimeProvider.System);
+        config.FindTargetByName<MemoryLogTarget>("live")!.Buffer = buffer;
+        builder.Services.AddSingleton(buffer);
+        builder.Services.AddSingleton(new LogStreamOptions());
         LogManager.ReconfigExistingLoggers();
 
         // MEL would otherwise drop Debug before NLog sees it; NLog rules do all filtering.

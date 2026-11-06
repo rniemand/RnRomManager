@@ -74,6 +74,7 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/admin/dats"] = Role.Admin,
         ["GET /api/admin/settings"] = Role.Admin,
         ["GET /api/admin/logs"] = Role.Admin,
+        ["GET /api/admin/logs/stream"] = Role.Admin,
         ["GET /api/about"] = Role.User,
     };
 
@@ -104,7 +105,7 @@ public partial class EndpointRoleMatrixTests
         Assert.That(mapped.Except(Expected.Keys), Is.Empty, "mapped endpoints without an expected role");
         Assert.That(Expected.Keys.Except(mapped), Is.Empty, "expected roles for endpoints that aren't mapped");
 
-        // Logout last: it ends the user's session.
+        // Headers only: the log stream never ends on its own. Logout last: it ends the user's session.
         foreach (var (key, role) in Expected.OrderBy(e => e.Key == "POST /api/auth/logout"))
         {
             var method = new HttpMethod(key[..key.IndexOf(' ')]);
@@ -115,10 +116,10 @@ public partial class EndpointRoleMatrixTests
             });
             object? body = method == HttpMethod.Get || method == HttpMethod.Delete ? null : new { };
 
-            using var asAnonymous = await anonymous.SendAsync(method, url, body, sendXsrf: true);
-            using var asUser = await user.SendAsync(method, url, body, sendXsrf: true);
-            using var asAdmin = await admin.SendAsync(method, url, body, sendXsrf: true);
-            using var asManager = await manager.SendAsync(method, url, body, sendXsrf: true);
+            using var asAnonymous = await anonymous.SendAsync(method, url, body, sendXsrf: true, completion: HttpCompletionOption.ResponseHeadersRead);
+            using var asUser = await user.SendAsync(method, url, body, sendXsrf: true, completion: HttpCompletionOption.ResponseHeadersRead);
+            using var asAdmin = await admin.SendAsync(method, url, body, sendXsrf: true, completion: HttpCompletionOption.ResponseHeadersRead);
+            using var asManager = await manager.SendAsync(method, url, body, sendXsrf: true, completion: HttpCompletionOption.ResponseHeadersRead);
 
             if (role == Role.Anonymous)
                 Assert.That(asAnonymous.StatusCode, Is.Not.AnyOf(HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden), key);
