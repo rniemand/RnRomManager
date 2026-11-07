@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using MySqlConnector;
+using RnRomManager.Core.Backups;
 using RnRomManager.Core.Configuration;
 
 namespace RnRomManager.Api.Configuration;
@@ -11,7 +12,8 @@ public sealed record EffectiveSettings(
     string AdminInitialPassword,
     IntegrityOptions Integrity,
     LoggingOptions Logging,
-    SourcesOptions Sources)
+    SourcesOptions Sources,
+    BackupOptions Backup)
 {
     public const string Masked = "***";
 
@@ -21,7 +23,8 @@ public sealed record EffectiveSettings(
         services.GetRequiredService<IOptions<AdminOptions>>().Value.InitialPassword.Length == 0 ? "" : Masked,
         services.GetRequiredService<IOptions<IntegrityOptions>>().Value,
         services.GetRequiredService<IOptions<LoggingOptions>>().Value,
-        services.GetRequiredService<IOptions<SourcesOptions>>().Value);
+        services.GetRequiredService<IOptions<SourcesOptions>>().Value,
+        services.GetRequiredService<IOptions<BackupOptions>>().Value);
 
     /// <summary>Only via <see cref="MySqlConnectionStringBuilder"/> with <c>Password</c> removed (spec §13).</summary>
     public static string RedactConnectionString(string connectionString)

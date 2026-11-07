@@ -99,6 +99,7 @@ public static class AppHost
         builder.Services.AddSingleton<CrashRecovery>();
         builder.Services.AddSingleton<IBackupStore, MySqlBackupStore>();
         builder.Services.AddSingleton<BackupService>();
+        builder.Services.AddSingleton<BackupRestorer>();
         builder.Services.AddSingleton<IAuditRepository, AuditRepository>();
         builder.Services.AddSingleton<AuditLog>();
         builder.Services.AddSingleton<IAuditLog>(sp => sp.GetRequiredService<AuditLog>());

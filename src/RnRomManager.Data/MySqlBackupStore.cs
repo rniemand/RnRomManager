@@ -1,5 +1,6 @@
 using System.Data;
 using System.Globalization;
+using System.Reflection;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
@@ -18,7 +19,17 @@ public sealed class MySqlBackupStore(MySqlConnectionFactory connections) : IBack
     /// <summary>Wraps a binary column's value: <c>{ "$b64": "…" }</c>.</summary>
     public const string Base64Key = "$b64";
 
+    /// <summary>Rows per multi-row <c>INSERT</c> on restore (B19).</summary>
+    public const int InsertBatchSize = 500;
+
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
+
+    /// <summary>Where the migration scripts are embedded (the same scripts <see cref="MySqlDatabaseLifecycle"/> runs).</summary>
+    public Assembly ScriptAssembly { get; init; } = typeof(MySqlDatabaseLifecycle).Assembly;
+
+    public IReadOnlySet<string> KnownMigrations => ScriptAssembly.GetManifestResourceNames()
+        .Where(name => name.Contains(".Migrations.", StringComparison.Ordinal))
+        .ToHashSet(StringComparer.Ordinal);
 
     public async Task<BackupManifest> DumpAsync(
         Stream destination, Guid backupId, DateTimeOffset createdAt, CancellationToken cancellationToken)
@@ -187,6 +198,155 @@ public sealed class MySqlBackupStore(MySqlConnectionFactory connections) : IBack
 
         json.WriteEndArray();
         json.WriteEndObject();
+    }
+
+    public async Task RestoreAsync(ZipArchive backup, BackupManifest manifest, CancellationToken cancellationToken)
+    {
+        var schemaEntry = backup.GetEntry(BackupManifest.SchemaFileName)
+            ?? throw new BackupRestoreException($"The backup has no {BackupManifest.SchemaFileName}.");
+        foreach (var table in manifest.Tables)
+        {
+            if (backup.GetEntry(BackupManifest.DataEntry(table.Name)) is null)
+                throw new BackupRestoreException($"The backup has no {BackupManifest.DataEntry(table.Name)}.");
+        }
+
+        string schema;
+        await using (var stream = await schemaEntry.OpenAsync(cancellationToken))
+        using (var reader = new StreamReader(stream, Utf8))
+            schema = await reader.ReadToEndAsync(cancellationToken);
+
+        await using var connection = (MySqlConnection)connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await ExecuteAsync(connection, "SET FOREIGN_KEY_CHECKS = 0", cancellationToken);
+        try
+        {
+            // Drop everything first, so a failed restore can simply be retried.
+            var existing = await TablesAsync(connection, cancellationToken);
+            if (existing.Count > 0)
+                await ExecuteAsync(connection, "DROP TABLE " + string.Join(", ", existing.Select(Quote)), cancellationToken);
+
+            // SHOW CREATE TABLE output, one statement per table; MySqlConnector runs them as one batch.
+            if (!string.IsNullOrWhiteSpace(schema))
+                await ExecuteAsync(connection, schema, cancellationToken);
+
+            foreach (var table in manifest.Tables)
+            {
+                var entry = backup.GetEntry(BackupManifest.DataEntry(table.Name))!;
+                var rows = await InsertRowsAsync(connection, entry, table.Name, cancellationToken);
+                if (rows != table.Rows)
+                    throw new BackupRestoreException(
+                        $"Table {table.Name}: restored {rows} rows but the manifest lists {table.Rows}.");
+            }
+        }
+        finally
+        {
+            await ExecuteAsync(connection, "SET FOREIGN_KEY_CHECKS = 1", CancellationToken.None);
+        }
+    }
+
+    private static async Task<long> InsertRowsAsync(
+        MySqlConnection connection, ZipArchiveEntry entry, string table, CancellationToken cancellationToken)
+    {
+        var types = await ColumnTypesAsync(connection, table, cancellationToken);
+        var batch = new List<JsonElement>(InsertBatchSize);
+        long rows = 0;
+        await using var stream = await entry.OpenAsync(cancellationToken);
+        using var reader = new StreamReader(stream, Utf8);
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            if (line.Length == 0) continue;
+            batch.Add(JsonSerializer.Deserialize<JsonElement>(line));
+            if (batch.Count == InsertBatchSize)
+            {
+                rows += await InsertBatchAsync(connection, table, types, batch, cancellationToken);
+                batch.Clear();
+            }
+        }
+
+        if (batch.Count > 0)
+            rows += await InsertBatchAsync(connection, table, types, batch, cancellationToken);
+        return rows;
+    }
+
+    /// <summary>Column name → <c>DATA_TYPE</c> (lower case) of the restored table.</summary>
+    private static async Task<Dictionary<string, string>> ColumnTypesAsync(
+        MySqlConnection connection, string table, CancellationToken cancellationToken)
+    {
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT column_name, data_type FROM information_schema.columns
+            WHERE table_schema = DATABASE() AND table_name = @table
+            """;
+        command.Parameters.AddWithValue("@table", table);
+        var types = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+                types[reader.GetString(0)] = reader.GetString(1).ToLowerInvariant();
+        }
+
+        if (types.Count == 0)
+            throw new BackupRestoreException($"Table {table} is in the manifest but not in {BackupManifest.SchemaFileName}.");
+        return types;
+    }
+
+    private static async Task<int> InsertBatchAsync(MySqlConnection connection, string table,
+        Dictionary<string, string> types, List<JsonElement> rows, CancellationToken cancellationToken)
+    {
+        // Columns of the first row; every row of a dump has the same keys.
+        var columns = rows[0].EnumerateObject().Select(p => p.Name).ToList();
+        var unknown = columns.FirstOrDefault(c => !types.ContainsKey(c));
+        if (unknown is not null)
+            throw new BackupRestoreException($"Table {table} has no column {unknown}.");
+
+        await using var command = connection.CreateCommand();
+        var sql = new StringBuilder("INSERT INTO ").Append(Quote(table)).Append(" (")
+            .AppendJoin(", ", columns.Select(Quote)).Append(") VALUES ");
+        for (var r = 0; r < rows.Count; r++)
+        {
+            sql.Append(r == 0 ? "(" : ", (");
+            for (var c = 0; c < columns.Count; c++)
+            {
+                var parameter = $"@p{r}_{c}";
+                sql.Append(c == 0 ? parameter : ", " + parameter);
+                var value = rows[r].TryGetProperty(columns[c], out var element) ? element : default;
+                command.Parameters.AddWithValue(parameter, ReadValue(value, types[columns[c]]));
+            }
+
+            sql.Append(')');
+        }
+
+        command.CommandText = sql.ToString();
+        return await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    /// <summary>B13's JSON value back to a parameter value for a column of <paramref name="dataType"/>.</summary>
+    internal static object ReadValue(JsonElement value, string dataType)
+    {
+        switch (value.ValueKind)
+        {
+            case JsonValueKind.Undefined or JsonValueKind.Null:
+                return DBNull.Value;
+            case JsonValueKind.True:
+                return true;
+            case JsonValueKind.False:
+                return false;
+            case JsonValueKind.Object when value.TryGetProperty(Base64Key, out var b64):
+                return b64.GetBytesFromBase64();
+            case JsonValueKind.Number:
+                if (dataType is "decimal" or "numeric") return value.GetDecimal();
+                if (dataType is "float" or "double" or "real") return value.GetDouble();
+                if (value.TryGetInt64(out var signed)) return signed;
+                if (value.TryGetUInt64(out var unsigned)) return unsigned;
+                return value.GetDecimal();
+            case JsonValueKind.String:
+                var text = value.GetString()!;
+                return dataType is "datetime" or "timestamp" or "date"
+                    ? DateTime.Parse(text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal)
+                    : text;
+            default:
+                throw new BackupRestoreException($"Unexpected JSON value {value.GetRawText()} for a {dataType} column.");
+        }
     }
 
     internal static string Quote(string identifier) => "`" + identifier.Replace("`", "``", StringComparison.Ordinal) + "`";
