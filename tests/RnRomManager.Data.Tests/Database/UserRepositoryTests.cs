@@ -190,4 +190,25 @@ public class UserRepositoryTests
         Assert.That(results.Count(r => r), Is.EqualTo(1));
         Assert.That((await _repository.ListAsync(CancellationToken.None)).Count(u => u.Roles.Contains(Roles.Admin)), Is.EqualTo(1));
     }
+
+    [Test]
+    public async Task Hotkeys_AreNullForANewUser_ThenSetAndCleared()
+    {
+        var id = await _repository.InsertAsync(NewUser(), CancellationToken.None);
+        var before = await _repository.GetByIdAsync(id, CancellationToken.None);
+
+        Assert.That(await _repository.GetHotkeysAsync(id, CancellationToken.None), Is.Null);
+
+        await _repository.SetHotkeysAsync(id, """{"nav.library":"Alt+Q"}""", CancellationToken.None);
+        Assert.That(await _repository.GetHotkeysAsync(id, CancellationToken.None), Is.EqualTo("""{"nav.library":"Alt+Q"}"""));
+        Assert.That((await _repository.GetByIdAsync(id, CancellationToken.None))!.SecurityStamp, Is.EqualTo(before!.SecurityStamp),
+            "not a profile edit");
+
+        await _repository.SetHotkeysAsync(id, null, CancellationToken.None);
+        Assert.That(await _repository.GetHotkeysAsync(id, CancellationToken.None), Is.Null);
+    }
+
+    [Test]
+    public async Task Hotkeys_OfAnUnknownUser_AreNull() =>
+        Assert.That(await _repository.GetHotkeysAsync(999_999, CancellationToken.None), Is.Null);
 }

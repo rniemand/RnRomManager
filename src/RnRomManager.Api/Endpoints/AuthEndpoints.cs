@@ -1,9 +1,10 @@
+using System.Text.Json;
 using RnRomManager.Api.Auth;
 using RnRomManager.Core.Users;
 
 namespace RnRomManager.Api.Endpoints;
 
-/// <summary><c>/api/auth/*</c> (spec §23, §9.1, §9.2).</summary>
+/// <summary><c>/api/auth/*</c> (spec §23, §9.1, §9.2) and the user's hotkeys (B23).</summary>
 public static class AuthEndpoints
 {
     public sealed record LoginRequest(string? Username, string? Password);
@@ -61,7 +62,56 @@ public static class AuthEndpoints
             return Results.NoContent();
         });
 
+        // B23: the signed-in user's hotkey bindings (defaults merged in for every editable action).
+        auth.MapGet("/me/hotkeys", async (HttpContext ctx, IUserRepository users) =>
+        {
+            var stored = Hotkeys.ParseStored(await users.GetHotkeysAsync(Session.CurrentUser(ctx)!.Id, ctx.RequestAborted));
+            return Results.Ok(new { bindings = Hotkeys.Merge(stored) });
+        });
+
+        auth.MapPut("/me/hotkeys", async (JsonElement body, HttpContext ctx, IUserRepository users, ILoggerFactory loggers) =>
+        {
+            var (requested, errors) = ParseHotkeys(body);
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+
+            var user = Session.CurrentUser(ctx)!;
+            var stored = Hotkeys.ParseStored(await users.GetHotkeysAsync(user.Id, ctx.RequestAborted));
+            var (overrides, ruleErrors) = Hotkeys.Apply(stored, requested!, user.Roles);
+            if (overrides is null)
+                return Problems.Validation(ctx, ruleErrors);
+
+            await users.SetHotkeysAsync(user.Id, Hotkeys.Serialize(overrides), ctx.RequestAborted);
+            loggers.CreateLogger(typeof(AuthEndpoints)).LogInformation("User {UserId} saved {Count} hotkey override(s)", user.Id, overrides.Count);
+            return Results.Ok(new { bindings = Hotkeys.Merge(overrides) });
+        });
+
         return api;
+    }
+
+    /// <summary><c>{ bindings: { &lt;id&gt;: string | null } }</c> (B23); rule checks happen in <see cref="Hotkeys.Apply"/>.</summary>
+    public static (Dictionary<string, string?>? Bindings, Dictionary<string, string[]> Errors) ParseHotkeys(JsonElement body)
+    {
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        if (body.ValueKind != JsonValueKind.Object || !body.TryGetProperty("bindings", out var bindings)
+            || bindings.ValueKind != JsonValueKind.Object)
+        {
+            errors["bindings"] = ["A bindings object is required."];
+            return (null, errors);
+        }
+
+        var result = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (var property in bindings.EnumerateObject())
+        {
+            if (property.Value.ValueKind == JsonValueKind.String)
+                result[property.Name] = property.Value.GetString();
+            else if (property.Value.ValueKind == JsonValueKind.Null)
+                result[property.Name] = null;
+            else
+                errors[$"bindings.{property.Name}"] = [Hotkeys.FormatError];
+        }
+
+        return errors.Count > 0 ? (null, errors) : (result, errors);
     }
 
     private static object ToDto(User user) => new

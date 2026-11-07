@@ -34,4 +34,10 @@ public interface IUserRepository
 
     /// <summary>Resets the failure count and lockout, sets <c>last_login_at</c>.</summary>
     Task RecordSuccessfulLoginAsync(int id, DateTime now, CancellationToken cancellationToken);
+
+    /// <summary>B23: the stored hotkey overrides (JSON), or null for all defaults.</summary>
+    Task<string?> GetHotkeysAsync(int id, CancellationToken cancellationToken);
+
+    /// <summary>B23: replaces the hotkey overrides; null resets to the defaults. Not a profile edit: no stamp change.</summary>
+    Task SetHotkeysAsync(int id, string? hotkeys, CancellationToken cancellationToken);
 }

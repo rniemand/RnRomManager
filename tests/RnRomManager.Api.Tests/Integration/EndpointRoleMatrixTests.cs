@@ -30,6 +30,8 @@ public partial class EndpointRoleMatrixTests
         ["POST /api/auth/login"] = Role.Anonymous,
         ["POST /api/auth/logout"] = Role.User,
         ["GET /api/auth/me"] = Role.User,
+        ["GET /api/auth/me/hotkeys"] = Role.User,
+        ["PUT /api/auth/me/hotkeys"] = Role.User,
         ["POST /api/auth/change-password"] = Role.User,
 
         ["GET /api/users"] = Role.Admin,
