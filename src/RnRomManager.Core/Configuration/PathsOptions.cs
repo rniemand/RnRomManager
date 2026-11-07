@@ -10,6 +10,9 @@ public sealed class PathsOptions
     public string Logs { get; set; } = "/app/logs";
     public string Cache { get; set; } = "/app/cache";
 
+    /// <summary>Database backups (B13). Holds password hashes and keys: keep it private.</summary>
+    public string Backups { get; set; } = "/app/backups";
+
     public IReadOnlyList<(string Key, string Path)> All() =>
-        [("Paths:Roms", Roms), ("Paths:Ingest", Ingest), ("Paths:Logs", Logs), ("Paths:Cache", Cache)];
+        [("Paths:Roms", Roms), ("Paths:Ingest", Ingest), ("Paths:Logs", Logs), ("Paths:Cache", Cache), ("Paths:Backups", Backups)];
 }

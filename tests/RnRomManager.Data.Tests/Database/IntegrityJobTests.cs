@@ -208,6 +208,24 @@ public class IntegrityJobTests
     }
 
     [Test]
+    public async Task Notes_OfListedRoms_AreNotReported_OrphanNotesAre()
+    {
+        await Write("gb/T/Tetris.zip", "Tetris");
+        Damage("gb/T/Tetris.zip", zip =>
+        {
+            Replace(zip, "notes/Tetris (World).gb.md", [1]);
+            Replace(zip, "notes/Gone.gb.md", [1]);
+        });
+
+        await Run();
+
+        Assert.That(await Open(), Is.EquivalentTo(new (string, string?, string?)[]
+        {
+            (EntryUnlisted, "gb/T/Tetris.zip", "notes/Gone.gb.md"),
+        }));
+    }
+
+    [Test]
     public async Task BoxArtCodes_AreAboutTheCover()
     {
         var snap = BoxArt(false) with { FileName = "snap-01.png", Type = ImageType.Snap };

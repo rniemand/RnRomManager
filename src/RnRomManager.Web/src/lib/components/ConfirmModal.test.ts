@@ -31,6 +31,29 @@ describe('ConfirmModal', () => {
 		expect(screen.getByRole('button', { name: 'Delete', hidden: true })).toBeTruthy();
 	});
 
+	it('confirmDisabled disables only the confirm button', () => {
+		render(ConfirmModal, {
+			open: false,
+			title: 'T',
+			confirmLabel: 'Save',
+			confirmDisabled: true,
+			onconfirm: () => {}
+		});
+		const save = screen.getByRole('button', { name: 'Save', hidden: true }) as HTMLButtonElement;
+		const cancel = screen.getByRole('button', {
+			name: 'Cancel',
+			hidden: true
+		}) as HTMLButtonElement;
+		expect(save.disabled).toBe(true);
+		expect(cancel.disabled).toBe(false);
+	});
+
+	it('the confirm button is enabled by default', () => {
+		render(ConfirmModal, { open: false, title: 'T', confirmLabel: 'Go', onconfirm: () => {} });
+		const go = screen.getByRole('button', { name: 'Go', hidden: true }) as HTMLButtonElement;
+		expect(go.disabled).toBe(false);
+	});
+
 	it('info mode (no onconfirm) shows only Close', () => {
 		render(ConfirmModal, { open: false, title: 'T' });
 		const footer = document.querySelector('.modal-footer')!;

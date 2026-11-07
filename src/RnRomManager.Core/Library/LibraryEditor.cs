@@ -83,6 +83,47 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         return result;
     }
 
+    /// <summary>
+    /// B5/B7: writes the release's note (already normalised, ≤ <see cref="LibraryZip.MaxNoteBytes"/>), or deletes it when
+    /// <paramref name="text"/> is empty (no error when there was none). Any signed-in user; not audited; the game's fields,
+    /// including <c>updatedAt</c>, stay as they are.
+    /// </summary>
+    public Task<LibraryEditResult> SaveNoteAsync(Guid gameId, long romId, string text, int? userId, CancellationToken ct) =>
+        WriteNoteAsync(gameId, romId, text.Length == 0 ? null : System.Text.Encoding.UTF8.GetBytes(text), missingIsNotFound: false, userId, ct);
+
+    /// <summary>B6: deletes the release's note; <c>NotFound</c> when there is none.</summary>
+    public Task<LibraryEditResult> DeleteNoteAsync(Guid gameId, long romId, int? userId, CancellationToken ct) =>
+        WriteNoteAsync(gameId, romId, null, missingIsNotFound: true, userId, ct);
+
+    private async Task<LibraryEditResult> WriteNoteAsync(Guid gameId, long romId, byte[]? bytes, bool missingIsNotFound, int? userId,
+        CancellationToken ct)
+    {
+        using var held = jobLock.TryAcquire();
+        if (held is null)
+            return new(JobRunning);
+        if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
+            || await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
+            return new(NotFound);
+        var target = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
+        if (target.Code is not null)
+            return new(target.Code, target.Details);
+
+        using var existing = target.Zip!;
+        var current = target.Game!;
+        if (current.Roms.FirstOrDefault(r => r.Metadata.Sha1 == romRow.Sha1) is not { } rom)
+            return new(NotFound, $"{row.ZipPath} no longer lists SHA1 {romRow.Sha1}");
+        var entry = LibraryZip.NoteEntry(rom.FileName);
+        if (bytes is null && !existing.HasEntry(entry))
+            return missingIsNotFound ? new(NotFound) : new();
+
+        var entries = bytes is null ? [] : new Dictionary<string, Func<Stream>> { [entry] = () => new MemoryStream(bytes) };
+        var removed = bytes is null ? new HashSet<string>(StringComparer.Ordinal) { entry } : null;
+        var result = await WriteAsync(existing, row.ZipPath, current, entries, removed).ConfigureAwait(false);
+        if (result.Code is null)
+            logger.LogInformation("User {UserId} {Action} note {Entry} of game {GameId}", userId, bytes is null ? "deleted" : "saved", entry, gameId);
+        return result;
+    }
+
     public async Task<LibraryEditResult> DeleteReleaseAsync(Guid gameId, long romId, AuditActor actor, CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();
@@ -342,6 +383,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         {
             [LibraryZip.RomEntry(moved.FileName)] = () => sourceZip.OpenEntry(LibraryZip.RomEntry(rom.FileName), rom.Metadata.SizeBytes),
         };
+        var removed = new HashSet<string>(StringComparer.Ordinal);
+        CarryNote(sourceZip, rom.FileName, moved.FileName, entries, removed);
 
         InfoJsonGame targetGame;
         string targetPath;
@@ -389,7 +432,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         var remaining = source.Game.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
         var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining), Metadata = Touched(source.Game) };
 
-        if (await WriteZipAsync(targetZip, targetPath, targetGame, entries).ConfigureAwait(false) is { } failed)
+        if (await WriteZipAsync(targetZip, targetPath, targetGame, entries, removed).ConfigureAwait(false) is { } failed)
             return failed;
         if (sourceGame is not null && await WriteZipAsync(sourceZip, row.ZipPath, sourceGame, []).ConfigureAwait(false) is { } sourceFailed)
         {
@@ -443,6 +486,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         var (from, into) = (source.Game!, target.Game!);
 
         var entries = new Dictionary<string, Func<Stream>>();
+        var removed = new HashSet<string>(StringComparer.Ordinal);
         var names = into.Roms.Select(r => r.FileName).ToList();
         var merged = new List<InfoJsonRom>(into.Roms);
         foreach (var rom in from.Roms)
@@ -451,6 +495,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             names.Add(moved.FileName);
             merged.Add(moved);
             entries[LibraryZip.RomEntry(moved.FileName)] = () => sourceZip.OpenEntry(LibraryZip.RomEntry(rom.FileName), rom.Metadata.SizeBytes);
+            CarryNote(sourceZip, rom.FileName, moved.FileName, entries, removed);
         }
 
         if (GameImages.Merge(into.Images, from.Images) is not var (images, copies))
@@ -472,7 +517,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             Metadata = Touched(into),
         };
 
-        if (await WriteZipAsync(targetZip, targetRow.ZipPath, targetGame, entries).ConfigureAwait(false) is { } failed)
+        if (await WriteZipAsync(targetZip, targetRow.ZipPath, targetGame, entries, removed).ConfigureAwait(false) is { } failed)
             return failed;
         audit.Record(new AuditEvent(AuditActions.GamesMerged, actor, row.SystemId, gameId, AuditPaths.Library(row.ZipPath),
             AuditPaths.Library(targetRow.ZipPath), $"{from.Roms.Count} releases, {copies.Count} images"));
@@ -483,6 +528,19 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         if (result.Code is null)
             logger.LogInformation("Game {GameId} merged into {TargetId} ({ZipPath})", gameId, targetGameId, targetRow.ZipPath);
         return result with { GameId = targetGameId };
+    }
+
+    /// <summary>
+    /// B9: a release arriving under <paramref name="toName"/> brings its note from <paramref name="from"/>; without one it must
+    /// not adopt an orphan note of that name already in the target.
+    /// </summary>
+    private static void CarryNote(LibraryZip from, string fromName, string toName, Dictionary<string, Func<Stream>> entries, HashSet<string> removed)
+    {
+        var (note, target) = (LibraryZip.NoteEntry(fromName), LibraryZip.NoteEntry(toName));
+        if (from.HasEntry(note))
+            entries[target] = () => from.OpenEntry(note, LibraryZip.MaxNoteBytes);
+        else
+            removed.Add(target);
     }
 
     /// <summary>A failed source rebuild after the target was written: put the target back, so the ROM isn't in two ZIPs.</summary>
@@ -617,19 +675,20 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     }
 
     /// <summary>Atomic ZIP write (§6.1) then the DB mirror. Not cancellable once started, so a ZIP is never left half-applied.</summary>
-    private async Task<LibraryEditResult> WriteAsync(LibraryZip existing, string zipPath, InfoJsonGame game) =>
-        await WriteZipAsync(existing, zipPath, game, []).ConfigureAwait(false)
+    private async Task<LibraryEditResult> WriteAsync(LibraryZip existing, string zipPath, InfoJsonGame game,
+        Dictionary<string, Func<Stream>>? newEntries = null, IReadOnlySet<string>? removedEntries = null) =>
+        await WriteZipAsync(existing, zipPath, game, newEntries ?? [], removedEntries).ConfigureAwait(false)
         ?? await MirrorAsync(() => mirror.ReplaceAsync(Mirror(zipPath, game), CancellationToken.None), zipPath).ConfigureAwait(false);
 
     /// <param name="existing">The game's current ZIP (disposed by the writer), or null for a new game.</param>
     /// <returns>null when written and verified.</returns>
     private async Task<LibraryEditResult?> WriteZipAsync(LibraryZip? existing, string zipPath, InfoJsonGame game,
-        Dictionary<string, Func<Stream>> newEntries)
+        Dictionary<string, Func<Stream>> newEntries, IReadOnlySet<string>? removedEntries = null)
     {
         try
         {
             await new LibraryZipWriter(reader).WriteAsync(SafePath.Resolve(paths.Value.Roms, zipPath), existing,
-                new LibraryZipChanges(game, newEntries)).ConfigureAwait(false);
+                new LibraryZipChanges(game, newEntries, removedEntries)).ConfigureAwait(false);
             return null;
         }
         catch (LibraryZipVerifyException ex)

@@ -9,6 +9,9 @@ export async function expectAccessible(page: Page, what: string): Promise<void> 
 	// A hover transition caught half-way reads as a contrast failure: park the mouse and freeze transitions first.
 	await page.mouse.move(0, 0);
 	await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });
+	// The navbar is sticky (B26): scrolled content passes under it, which axe's target-size rule reports as
+	// "obscured". Scan from the top, where nothing sits under the navbar (modals are fixed, so unaffected).
+	await page.evaluate(() => window.scrollTo(0, 0));
 
 	const blocking: string[] = [];
 	for (const colorScheme of ['light', 'dark'] as const) {

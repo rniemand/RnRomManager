@@ -339,13 +339,16 @@
 		/>
 	{:else if action?.kind === 'deleteGame'}
 		<p class="mb-0">
-			Delete {game.displayTitle}? Its {game.roms.length === 1 ? 'ROM moves' : 'ROMs move'} to the system's
+			Delete {game.displayTitle}{game.roms.some((r) => r.hasNote) ? ' and its notes' : ''}? Its {game
+				.roms.length === 1
+				? 'ROM moves'
+				: 'ROMs move'} to the system's
 			<code>_removed</code> ingest folder.
 		</p>
 	{:else if action?.kind === 'deleteRom'}
 		<p class="mb-0">
-			Delete {action.rom.fileName}? The ROM moves to the system's <code>_removed</code> ingest
-			folder.{#if lastRom}
+			Delete {action.rom.fileName}{action.rom.hasNote ? ' and its note' : ''}? The ROM moves to the
+			system's <code>_removed</code> ingest folder.{#if lastRom}
 				It's the only release, so the game is deleted too.{/if}
 		</p>
 	{:else if action?.kind === 'move'}

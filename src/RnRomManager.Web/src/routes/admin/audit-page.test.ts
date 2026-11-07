@@ -76,6 +76,7 @@ describe('Auditing', () => {
 			'Users',
 			'DATs',
 			'Settings',
+			'Backups',
 			'Logs',
 			'Auditing',
 			'About'

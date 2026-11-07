@@ -10,7 +10,7 @@ public class SchemaMigrationTests
 {
     private static readonly string[] Tables =
     [
-        "audit_events", "data_protection_keys", "duplicate_dismissals", "games", "images", "ingest_review_items", "integrity_issues",
+        "app_settings", "audit_events", "data_protection_keys", "duplicate_dismissals", "games", "images", "ingest_review_items", "integrity_issues",
         "job_items", "jobs", "roms", "user_roles", "users",
     ];
 
@@ -27,7 +27,7 @@ public class SchemaMigrationTests
         new(new MySqlConnectionFactory(cs), NullLogger<MySqlDatabaseLifecycle>.Instance, TimeProvider.System);
 
     [Test]
-    public async Task FromScratch_CreatesEveryTableAndJournalsFourteenScripts()
+    public async Task FromScratch_CreatesEveryTableAndJournalsEveryScript()
     {
         var tables = await ColumnAsync<string>(_cs,
             "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME");
@@ -39,6 +39,7 @@ public class SchemaMigrationTests
             "0001_users", "0002_games", "0003_roms", "0004_images", "0005_jobs", "0006_job_items",
             "0007_ingest_review_items", "0008_integrity_issues", "0009_data_protection_keys",
             "0010_game_rating", "0011_user_roles", "0012_image_cover", "0013_duplicate_dismissals", "0014_audit_events",
+            "0015_app_settings", "0016_user_hotkeys",
         }));
     }
 
@@ -47,7 +48,7 @@ public class SchemaMigrationTests
     {
         Lifecycle(_cs).Migrate();
 
-        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 14L }));
+        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 16L }));
     }
 
     [Test]
@@ -62,7 +63,7 @@ public class SchemaMigrationTests
 
     // One line per table: column type [NULL] [=default], in declaration order. Reviewed against spec §14.1.
     // MariaDB reports JSON as longtext (with a json_valid check, tested below).
-    [TestCase("users", "id int(11), username varchar(64), password_hash varchar(255), is_disabled tinyint(1) =0, must_change_password tinyint(1) =0, failed_login_count int(11), lockout_until datetime(6) NULL, security_stamp char(32), created_at datetime(6), updated_at datetime(6), last_login_at datetime(6) NULL")]
+    [TestCase("users", "id int(11), username varchar(64), password_hash varchar(255), is_disabled tinyint(1) =0, must_change_password tinyint(1) =0, failed_login_count int(11), lockout_until datetime(6) NULL, security_stamp char(32), created_at datetime(6), updated_at datetime(6), last_login_at datetime(6) NULL, hotkeys text NULL")]
     [TestCase("user_roles", "user_id int(11), role varchar(32)")]
     [TestCase("games", "id char(36), system_id varchar(16), title varchar(255), display_title varchar(255), zip_path varchar(512), bucket char(1), release_year smallint(6) NULL, developers longtext, publishers longtext, genres longtext, description text NULL, has_default_boxart tinyint(1) =0, zip_size_bytes bigint(20), zip_mtime_utc datetime, info_schema_version int(11), created_at datetime(6), updated_at datetime(6), rating tinyint(4) NULL, favourite tinyint(1) =0")]
     [TestCase("roms", "id bigint(20), game_id char(36), system_id varchar(16), file_name varchar(255), original_file_name varchar(255), base_title varchar(255), regions longtext, languages longtext, flags longtext, region_key varchar(255), revision varchar(32) NULL, is_primary tinyint(1) =0, id_method varchar(16), dat_name varchar(255) NULL, dat_version varchar(255) NULL, dat_game_name varchar(255) NULL, size_bytes bigint(20), crc32 char(8), md5 char(32), sha1 char(40), header longtext NULL, date_added datetime(6), date_modified datetime(6)")]
@@ -73,6 +74,7 @@ public class SchemaMigrationTests
     [TestCase("integrity_issues", "id bigint(20), type varchar(32), severity varchar(8), system_id varchar(16) NULL, zip_path varchar(512) NULL, game_id char(36) NULL, entry_name varchar(512) NULL, details text NULL, status varchar(16), first_seen_job_id char(36), last_seen_job_id char(36), detected_at datetime(6), resolved_at datetime(6) NULL")]
     [TestCase("audit_events", "id bigint(20), occurred_at datetime(6), action varchar(32), system_id varchar(16) NULL, game_id char(36) NULL, user_id int(11) NULL, username varchar(64) NULL, job_id char(36) NULL, path varchar(1024) NULL, target_path varchar(1024) NULL, details varchar(1024) NULL")]
     [TestCase("data_protection_keys", "id int(11), friendly_name varchar(255), xml text, created_at datetime(6)")]
+    [TestCase("app_settings", "name varchar(64), value varchar(255)")]
     [TestCase("duplicate_dismissals", "system_id varchar(16), base_title varchar(255), games_key char(64), dismissed_by int(11) NULL, dismissed_at datetime(6)")]
     public async Task Columns_MatchSpec(string table, string expected)
     {
@@ -90,6 +92,7 @@ public class SchemaMigrationTests
         // "table index unique? columns"; fk_* indexes are the ones InnoDB adds for FKs with no covering index.
         var expected = new[]
         {
+            "app_settings PRIMARY U name",
             "audit_events ix_audit_events_action_occurred_at - action,occurred_at",
             "audit_events ix_audit_events_occurred_at - occurred_at",
             "audit_events ix_audit_events_system_occurred_at - system_id,occurred_at",

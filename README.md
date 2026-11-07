@@ -11,10 +11,11 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 - **Review queue:** files the DATs don't know get name suggestions, a DAT search, or manual entry; filter the queue, search Google and Shift+click Delete for loose files.
 - **Library edits (`rom-manager`):** edit metadata, move or merge releases between games, upload box art and screenshots and choose the cover, delete to a recoverable `_removed/` folder.
 - **Reports:** library size treemap and system drill-down, missing cover images, and duplicate groups with merge/dismiss for ROM managers.
-- **Game detail:** Releases/Images tabs, a read-only info.json tree with copying, Google search and merge suggestions.
+- **Game detail:** Releases/Images tabs, each release's original ingest name and a Markdown note per release (kept in the game's ZIP), a read-only info.json tree with copying, Google search and merge suggestions.
 - **Auditing (Admin):** filterable file-action history, retained for 30 days, with user/job and relative source/target paths.
 - **Integrity checks:** daily quick checks and on-demand deep (hash) checks, with automatic database repair.
-- **Accounts:** `admin` and `rom-manager` roles (or none, for browse-only users), a live log view, light/dark theme, and it works on a phone.
+- **Database backups (Admin):** daily backups to a volume with configurable time and retention, Back up now, and a restore at startup.
+- **Accounts:** `admin` and `rom-manager` roles (or none, for browse-only users), a live log view, light/dark theme, rebindable keyboard shortcuts, and it works on a phone.
 
 | Game detail | Ingestion |
 |---|---|
@@ -46,6 +47,7 @@ services:
       - ./data/ingest:/app/ingest
       - ./data/logs:/app/logs
       - ./data/cache:/app/cache
+      - ./data/backups:/app/backups
     user: "1000:1000"   # owner of ./data
     stop_grace_period: 35s   # lets a running job stop cleanly
     depends_on:
@@ -68,7 +70,7 @@ services:
 Then:
 
 ```bash
-mkdir -p data/{roms,ingest,logs,cache,db}
+mkdir -p data/{roms,ingest,logs,cache,backups,db}
 docker compose up -d
 ```
 

@@ -12,12 +12,14 @@
 	import type { Page } from '#lib/api/types.js';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import GlobalSearch from '#lib/components/GlobalSearch.svelte';
+	import HotkeysModal from '#lib/components/HotkeysModal.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import Navbar from '#lib/components/Navbar.svelte';
 	import ToastHost from '#lib/components/ToastHost.svelte';
 	import { guard } from '#lib/guard.js';
 	import { navigate } from '#lib/navigation.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
+	import { hotkeys } from '#lib/stores/hotkeys.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import { theme } from '#lib/theme.svelte.js';
@@ -28,6 +30,7 @@
 	let bootError = $state<unknown>(null);
 	let reviewCount = $state<number | null>(null);
 	let searchOpen = $state(false);
+	let hotkeysOpen = $state(false);
 
 	configureClient({ navigate });
 
@@ -59,6 +62,9 @@
 		if (redirect) void navigate(redirect);
 	});
 
+	// B24: bindings load once signed in with the password changed, and again after a password change.
+	$effect(() => hotkeys.follow(auth.me));
+
 	async function loadReviewCount(): Promise<void> {
 		// Every /api call but me/change-password/logout is 403 until the password is changed (§9.1).
 		if (!auth.isAdmin || auth.me?.mustChangePassword) return;
@@ -87,6 +93,8 @@
 	}
 </script>
 
+<svelte:window onkeydown={(e) => hotkeys.handle(e)} />
+
 {#if bootError}
 	<main class="container py-4">
 		<ErrorAlert error={bootError} onretry={boot} />
@@ -95,8 +103,15 @@
 	<Loading />
 {:else}
 	{#if auth.me}
-		<Navbar me={auth.me} {reviewCount} onlogout={logout} onsearch={() => (searchOpen = true)} />
+		<Navbar
+			me={auth.me}
+			{reviewCount}
+			onlogout={logout}
+			onsearch={() => (searchOpen = true)}
+			onhotkeys={() => (hotkeysOpen = true)}
+		/>
 		<GlobalSearch bind:open={searchOpen} />
+		<HotkeysModal bind:open={hotkeysOpen} me={auth.me} />
 	{/if}
 	<main class="container py-4">
 		{@render children()}

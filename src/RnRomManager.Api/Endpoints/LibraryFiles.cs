@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using Microsoft.Extensions.Options;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Library;
@@ -64,6 +65,72 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
         catch (Exception ex)
         {
             return Fail(ctx, game, ex); // LimitExceededException and InvalidDataException → 500 IoError
+        }
+    }
+
+    /// <summary>
+    /// B4: the release's note. Missing → <c>404</c>; over 64 KiB → <c>409 NoteTooLarge</c>; an unreadable ZIP →
+    /// <c>409 TargetZipUnreadable</c>. Only the entry is read, so a newer-schema ZIP still works.
+    /// </summary>
+    public IResult? ReadNote(HttpContext ctx, GameRow game, string romFileName, out byte[]? bytes)
+    {
+        bytes = null;
+        try
+        {
+            using var archive = OpenArchive(game);
+            if (archive.GetEntry(LibraryZip.NoteEntry(romFileName)) is not { } entry)
+                return Problems.NotFound(ctx);
+            using var stream = new LimitStream(entry.Open(), LibraryZip.MaxNoteBytes);
+            using var buffer = new MemoryStream();
+            stream.CopyTo(buffer);
+            bytes = buffer.ToArray();
+            return null;
+        }
+        catch (LimitExceededException)
+        {
+            return Problems.Create(ctx, StatusCodes.Status409Conflict, NoteTooLarge, "The note is larger than 64 KiB.");
+        }
+        catch (InvalidDataException ex)
+        {
+            logger.LogWarning("Note read for game {GameId} at {ZipPath}: {Message}", game.Id, game.ZipPath, ex.Message);
+            return Problems.Create(ctx, StatusCodes.Status409Conflict, LibraryTarget.TargetZipUnreadable, LibraryTarget.TargetZipUnreadable);
+        }
+        catch (Exception ex)
+        {
+            return Fail(ctx, game, ex);
+        }
+    }
+
+    public const string NoteTooLarge = "NoteTooLarge";
+
+    /// <summary>B3: the ZIP's <c>notes/</c> entry names; empty (logged) when the ZIP can't be opened.</summary>
+    public IReadOnlySet<string> NoteEntries(GameRow game)
+    {
+        try
+        {
+            using var archive = OpenArchive(game);
+            return archive.Entries.Select(e => e.FullName).Where(n => n.StartsWith(LibraryZip.NotesFolder, StringComparison.Ordinal))
+                .ToHashSet(StringComparer.Ordinal);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            logger.LogWarning("Notes of game {GameId} at {ZipPath} can't be listed: {Message}", game.Id, game.ZipPath, ex.Message);
+            return new HashSet<string>();
+        }
+    }
+
+    /// <summary>The raw archive, without parsing <c>info.json</c> (notes don't depend on its schema).</summary>
+    private ZipArchive OpenArchive(GameRow game)
+    {
+        var file = new FileStream(SafePath.Resolve(paths.Value.Roms, game.ZipPath), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+        try
+        {
+            return new ZipArchive(file, ZipArchiveMode.Read);
+        }
+        catch
+        {
+            file.Dispose();
+            throw;
         }
     }
 

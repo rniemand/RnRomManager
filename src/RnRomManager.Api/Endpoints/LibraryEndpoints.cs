@@ -102,6 +102,29 @@ public static class LibraryEndpoints
                 : Results.Stream(stream!, "application/octet-stream", rom.FileName);
         });
 
+        // B4–B7 release notes: any signed-in user, like ratings; not audited.
+        games.MapGet("/{id:guid}/roms/{romId:long}/note", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,
+            IRomRepository roms, LibraryFiles files) =>
+        {
+            if (await roms.GetAsync(id, romId, ctx.RequestAborted) is not { } rom
+                || await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
+                return Problems.NotFound(ctx);
+            return files.ReadNote(ctx, game, rom.FileName, out var bytes) is { } problem
+                ? problem
+                : Results.Bytes(bytes!, "text/markdown; charset=utf-8");
+        });
+
+        games.MapPut("/{id:guid}/roms/{romId:long}/note", async (Guid id, long romId, JsonElement body, HttpContext ctx, LibraryEditor editor) =>
+        {
+            var (text, errors) = ParseNote(body);
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+            return ToResult(ctx, await editor.SaveNoteAsync(id, romId, text!, AuditActor.From(ctx.User).UserId, ctx.RequestAborted));
+        });
+
+        games.MapDelete("/{id:guid}/roms/{romId:long}/note", async (Guid id, long romId, HttpContext ctx, LibraryEditor editor) =>
+            ToResult(ctx, await editor.DeleteNoteAsync(id, romId, AuditActor.From(ctx.User).UserId, ctx.RequestAborted)));
+
         // Admin edits (§11, D28, D35): each takes the job lock inside LibraryEditor.
         games.MapPatch("/{id:guid}", async (Guid id, JsonElement body, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
             IRomRepository roms, IImageRepository images) =>
@@ -246,7 +269,8 @@ public static class LibraryEndpoints
         var romRows = await roms.ListByGameAsync(id, ctx.RequestAborted);
         var imageRows = await images.ListByGameAsync(id, ctx.RequestAborted);
         var systemName = ctx.RequestServices.GetRequiredService<ISystemRegistry>().ById(game.SystemId)?.DisplayName ?? game.SystemId;
-        return Results.Ok(ToDetail(game, systemName, romRows, imageRows));
+        var notes = ctx.RequestServices.GetRequiredService<LibraryFiles>().NoteEntries(game);
+        return Results.Ok(ToDetail(game, systemName, romRows, imageRows, notes));
     }
 
     private static IResult ToResult(HttpContext ctx, LibraryEditResult result) =>
@@ -258,7 +282,7 @@ public static class LibraryEndpoints
         {
             LibraryEditResult.ValidationFailed => Problems.Validation(ctx, result.Errors!, extensions),
             LibraryEditResult.NotFound => Problems.NotFound(ctx, extensions),
-            LibraryEditResult.JobRunning or LibraryEditResult.TooManyImages or LibraryEditResult.DuplicateImage or LibraryEditResult.DefaultImage
+            LibraryEditResult.JobRunning or LibraryEditResult.TooManyImages or LibraryFiles.NoteTooLarge or LibraryEditResult.DuplicateImage or LibraryEditResult.DefaultImage
                 or LibraryTarget.InfoJsonNewerSchema or LibraryTarget.TargetZipUnreadable =>
                 Problems.Create(ctx, StatusCodes.Status409Conflict, result.Code, result.Code, extensions),
             _ => Problems.Create(ctx, StatusCodes.Status500InternalServerError, result.Code!, result.Code!, extensions),
@@ -280,6 +304,26 @@ public static class LibraryEndpoints
         else if (request.NewGameTitle is not null && !IsValidTitle(request.NewGameTitle.Trim()))
             errors["newGameTitle"] = [TitleRule];
         return errors;
+    }
+
+    /// <summary>
+    /// B5: <c>{text: string}</c>, line endings normalised to <c>\n</c>; whitespace-only becomes <c>""</c> (delete);
+    /// more than <see cref="LibraryZip.MaxNoteBytes"/> UTF-8 bytes after normalisation is an error.
+    /// </summary>
+    public static (string? Text, Dictionary<string, string[]> Errors) ParseNote(JsonElement body)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (body.ValueKind != JsonValueKind.Object || !body.TryGetProperty("text", out var value) || value.ValueKind != JsonValueKind.String)
+        {
+            errors["text"] = ["A text string is required."];
+            return (null, errors);
+        }
+        var text = value.GetString()!.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+        if (string.IsNullOrWhiteSpace(text))
+            return ("", errors);
+        if (System.Text.Encoding.UTF8.GetByteCount(text) > LibraryZip.MaxNoteBytes)
+            errors["text"] = [$"The note must be at most {LibraryZip.MaxNoteBytes:N0} bytes (UTF-8)."];
+        return (text, errors);
     }
 
     /// <summary>
@@ -447,7 +491,8 @@ public static class LibraryEndpoints
 
     internal static string ImageUrl(Guid gameId, long imageId) => $"/api/games/{gameId}/images/{imageId}";
 
-    private static object ToDetail(GameRow game, string systemName, IReadOnlyList<RomRow> roms, IReadOnlyList<ImageRow> images) => new
+    private static object ToDetail(GameRow game, string systemName, IReadOnlyList<RomRow> roms, IReadOnlyList<ImageRow> images,
+        IReadOnlySet<string> notes) => new
     {
         id = game.Id,
         system = game.SystemId,
@@ -486,6 +531,7 @@ public static class LibraryEndpoints
             dateAdded = r.DateAdded,
             dateModified = r.DateModified,
             downloadUrl = $"/api/games/{game.Id}/roms/{r.Id}/download",
+            hasNote = notes.Contains(LibraryZip.NoteEntry(r.FileName)),
         }),
         images = images.Select(i => new
         {

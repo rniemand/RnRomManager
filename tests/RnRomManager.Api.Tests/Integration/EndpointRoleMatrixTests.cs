@@ -30,6 +30,8 @@ public partial class EndpointRoleMatrixTests
         ["POST /api/auth/login"] = Role.Anonymous,
         ["POST /api/auth/logout"] = Role.User,
         ["GET /api/auth/me"] = Role.User,
+        ["GET /api/auth/me/hotkeys"] = Role.User,
+        ["PUT /api/auth/me/hotkeys"] = Role.User,
         ["POST /api/auth/change-password"] = Role.User,
 
         ["GET /api/users"] = Role.Admin,
@@ -44,6 +46,9 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/games/{id:guid}/download"] = Role.User,
         ["GET /api/games/{id:guid}/info-json"] = Role.User,
         ["GET /api/games/{id:guid}/roms/{romId:long}/download"] = Role.User,
+        ["GET /api/games/{id:guid}/roms/{romId:long}/note"] = Role.User,
+        ["PUT /api/games/{id:guid}/roms/{romId:long}/note"] = Role.User,
+        ["DELETE /api/games/{id:guid}/roms/{romId:long}/note"] = Role.User,
         ["PATCH /api/games/{id:guid}"] = Role.RomManager,
         ["PATCH /api/games/{id:guid}/rating"] = Role.User,
         ["DELETE /api/games/{id:guid}"] = Role.RomManager,
@@ -78,6 +83,9 @@ public partial class EndpointRoleMatrixTests
 
         ["GET /api/admin/dats"] = Role.Admin,
         ["GET /api/admin/settings"] = Role.Admin,
+        ["GET /api/admin/backups"] = Role.Admin,
+        ["PUT /api/admin/backups/settings"] = Role.Admin,
+        ["POST /api/admin/backups"] = Role.Admin,
         ["GET /api/admin/logs"] = Role.Admin,
         ["GET /api/admin/logs/recent"] = Role.Admin,
         ["GET /api/admin/logs/stream"] = Role.Admin,

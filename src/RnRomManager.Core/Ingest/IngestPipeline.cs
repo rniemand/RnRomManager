@@ -294,8 +294,9 @@ public sealed class IngestPipeline(
                 }
             }
 
+            // B9: the new release never adopts an orphan note of its name.
             return await PackageAsync(file, existing, row.ZipPath, game, entries, result with { GameId = gameId }, actor, reviewAction, cancellationToken,
-                afterMirror).ConfigureAwait(false);
+                afterMirror, new HashSet<string>(StringComparer.Ordinal) { LibraryZip.NoteEntry(rom.FileName) }).ConfigureAwait(false);
         }
     }
 
@@ -466,13 +467,13 @@ public sealed class IngestPipeline(
     private async Task<IngestItemResult> PackageAsync(
         IngestFile file, LibraryZip? existing, string zipPath, InfoJsonGame game, Dictionary<string, Func<Stream>> entries,
         IngestItemResult result, AuditActor actor, string? reviewAction, CancellationToken cancellationToken,
-        Func<Guid, Task>? afterMirror = null)
+        Func<Guid, Task>? afterMirror = null, IReadOnlySet<string>? removedEntries = null)
     {
         result = result with { GameId = game.GameId };
         var target = SafePath.Resolve(paths.Value.Roms, zipPath);
         try
         {
-            await new LibraryZipWriter(reader).WriteAsync(target, existing, new LibraryZipChanges(game, entries), cancellationToken).ConfigureAwait(false);
+            await new LibraryZipWriter(reader).WriteAsync(target, existing, new LibraryZipChanges(game, entries, removedEntries), cancellationToken).ConfigureAwait(false);
         }
         catch (LibraryZipVerifyException ex)
         {

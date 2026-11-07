@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
 using RnRomManager.Api.Configuration;
+using RnRomManager.Core.Backups;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Database;
@@ -25,7 +26,8 @@ public sealed class StartupRunner(
     ISystemRegistry systems,
     CrashRecovery crashRecovery,
     AdminSeeder adminSeeder,
-    DatCache datCache) : IHostedService
+    DatCache datCache,
+    BackupRestorer backupRestorer) : IHostedService
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
@@ -45,6 +47,8 @@ public sealed class StartupRunner(
 
         // Steps 5–6
         await database.WaitUntilAvailableAsync(cancellationToken);
+        // B19: between 5 and 6, so migrations then apply anything newer than the backup.
+        await backupRestorer.RestoreIfConfiguredAsync(cancellationToken);
         database.Migrate();
 
         // Step 7

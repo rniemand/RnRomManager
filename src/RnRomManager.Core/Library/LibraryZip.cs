@@ -14,6 +14,10 @@ public sealed class LibraryZip : IDisposable
     public const string RomsFolder = "roms/";
     public const string ImagesFolder = "images/";
 
+    /// <summary>Release notes: <c>notes/&lt;rom fileName&gt;.md</c>, UTF-8 Markdown, not listed in <c>info.json</c>.</summary>
+    public const string NotesFolder = "notes/";
+    public const int MaxNoteBytes = 65536;
+
     private readonly ZipArchive _archive;
 
     private LibraryZip(string path, ZipArchive archive, InfoJsonReadResult? infoJson)
@@ -34,6 +38,7 @@ public sealed class LibraryZip : IDisposable
 
     public static string RomEntry(string fileName) => RomsFolder + fileName;
     public static string ImageEntry(string fileName) => ImagesFolder + fileName;
+    public static string NoteEntry(string romFileName) => NotesFolder + romFileName + ".md";
 
     /// <summary>Opens and reads <c>info.json</c> (≤ 1 MiB, actual bytes).</summary>
     /// <exception cref="InvalidDataException">Not a readable ZIP (<c>ZipUnreadable</c>).</exception>

@@ -426,4 +426,93 @@ public class LibraryZipTests
         Assert.That(await File.ReadAllBytesAsync(_target), Is.EqualTo(before));
         Assert.That(File.Exists(_target + ".tmp"), Is.False);
     }
+
+    private const string Note = "notes/Tetris (World).gb.md";
+    private static readonly Dictionary<string, Func<Stream>> NoChanges = new();
+
+    private async Task<InfoJsonGame> WriteWithNoteAsync(byte[] note)
+    {
+        var (game, _) = await WriteNewGameAsync();
+        using var existing = LibraryZip.Open(_target, _reader);
+        await _writer.WriteAsync(_target, existing, new LibraryZipChanges(game, new Dictionary<string, Func<Stream>> { [Note] = Content(note) }));
+        return game;
+    }
+
+    [Test]
+    public async Task Notes_KeptOnUnrelatedWrite()
+    {
+        var game = await WriteWithNoteAsync("# Hi"u8.ToArray());
+        using (var existing = LibraryZip.Open(_target, _reader))
+            await _writer.WriteAsync(_target, existing, new LibraryZipChanges(game with { Title = "Tetris!" }, NoChanges));
+
+        using var zip = LibraryZip.Open(_target, _reader);
+        Assert.That(ReadEntry(zip, Note), Is.EqualTo("# Hi"u8.ToArray()));
+    }
+
+    [Test]
+    public async Task Notes_DroppedWhenTheirRomIsNoLongerListed_AndOtherNotesKept()
+    {
+        var (game, rom) = await WriteNewGameAsync();
+        var rom2 = RomBytes(2);
+        var both = game with { Roms = [.. game.Roms, Rom("Tetris (Japan).gb", rom2, isPrimary: false)] };
+        using (var existing = LibraryZip.Open(_target, _reader))
+            await _writer.WriteAsync(_target, existing, new LibraryZipChanges(both, new Dictionary<string, Func<Stream>>
+            {
+                ["roms/Tetris (Japan).gb"] = Content(rom2),
+                [Note] = Content("a"u8.ToArray()),
+                ["notes/Tetris (Japan).gb.md"] = Content("b"u8.ToArray()),
+            }));
+
+        using (var existing = LibraryZip.Open(_target, _reader))
+            await _writer.WriteAsync(_target, existing, new LibraryZipChanges(both with { Roms = [both.Roms[1] with { IsPrimary = true }] }, NoChanges));
+
+        using var zip = LibraryZip.Open(_target, _reader);
+        Assert.That(zip.EntryNames, Is.EquivalentTo(new[] { "info.json", "roms/Tetris (Japan).gb", "images/boxart-01.png", "notes/Tetris (Japan).gb.md" }));
+    }
+
+    [Test]
+    public async Task Notes_ReplacedViaNewEntries_RemovedViaRemovedEntries()
+    {
+        var game = await WriteWithNoteAsync("old"u8.ToArray());
+        using (var existing = LibraryZip.Open(_target, _reader))
+            await _writer.WriteAsync(_target, existing, new LibraryZipChanges(game, new Dictionary<string, Func<Stream>> { [Note] = Content("new"u8.ToArray()) }));
+        using (var zip = LibraryZip.Open(_target, _reader))
+            Assert.That(ReadEntry(zip, Note), Is.EqualTo("new"u8.ToArray()));
+
+        using (var existing = LibraryZip.Open(_target, _reader))
+            await _writer.WriteAsync(_target, existing, new LibraryZipChanges(game, NoChanges, new HashSet<string> { Note }));
+        using (var zip = LibraryZip.Open(_target, _reader))
+            Assert.That(zip.HasEntry(Note), Is.False);
+    }
+
+    [Test]
+    public async Task Notes_NewEntryForAnUnlistedRom_IsRejected()
+    {
+        var (game, _) = await WriteNewGameAsync();
+        using var existing = LibraryZip.Open(_target, _reader);
+        await Assert.ThrowsAsync<ArgumentException>(() => _writer.WriteAsync(_target, existing,
+            new LibraryZipChanges(game, new Dictionary<string, Func<Stream>> { ["notes/Other.gb.md"] = Content([1]) })));
+    }
+
+    [Test]
+    public async Task Notes_OversizedCopiedNote_FailsTheWrite()
+    {
+        var (game, rom) = await WriteNewGameAsync();
+        File.Delete(_target);
+        WriteRawZip(_target,
+            ("info.json", InfoJsonSerializer.Serialize(game)),
+            ("roms/Tetris (World).gb", rom),
+            ("images/boxart-01.png", Png),
+            (Note, new byte[LibraryZip.MaxNoteBytes + 1]));
+        var before = await File.ReadAllBytesAsync(_target);
+
+        using (var existing = LibraryZip.Open(_target, _reader))
+        {
+            var ex = await Assert.ThrowsAsync<LibraryZipVerifyException>(() =>
+                _writer.WriteAsync(_target, existing, new LibraryZipChanges(game with { Title = "X" }, NoChanges)));
+            Assert.That(ex!.EntryName, Is.EqualTo(Note));
+        }
+        Assert.That(await File.ReadAllBytesAsync(_target), Is.EqualTo(before));
+        Assert.That(File.Exists(_target + ".tmp"), Is.False);
+    }
 }

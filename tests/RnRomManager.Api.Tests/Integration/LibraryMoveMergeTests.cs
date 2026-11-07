@@ -417,4 +417,117 @@ public class LibraryMoveMergeTests
         Assert.That((move.StatusCode, await AuthClient.CodeAsync(move)), Is.EqualTo((HttpStatusCode.Conflict, "JobRunning")));
         Assert.That((merge.StatusCode, await AuthClient.CodeAsync(merge)), Is.EqualTo((HttpStatusCode.Conflict, "JobRunning")));
     }
+
+    // --- B9: release notes follow their release ---
+
+    private async Task PlantNote(Guid gameId, string romFileName, string text)
+    {
+        using var zip = ZipFile.Open(Abs((await Row(gameId))!.ZipPath), ZipArchiveMode.Update);
+        zip.GetEntry(LibraryZip.NoteEntry(romFileName))?.Delete();
+        using var writer = new StreamWriter(zip.CreateEntry(LibraryZip.NoteEntry(romFileName)).Open());
+        writer.Write(text);
+    }
+
+    /// <summary>Every note in the game's ZIP: rom file name → text.</summary>
+    private async Task<Dictionary<string, string>> Notes(Guid gameId)
+    {
+        using var zip = ZipFile.OpenRead(Abs((await Row(gameId))!.ZipPath));
+        return zip.Entries.Where(e => e.FullName.StartsWith(LibraryZip.NotesFolder, StringComparison.Ordinal)).ToDictionary(
+            e => e.FullName[LibraryZip.NotesFolder.Length..^".md".Length],
+            e => new StreamReader(e.Open()).ReadToEnd());
+    }
+
+    [Test]
+    public async Task Move_WithNameClash_CarriesTheNoteUnderTheNewName_AndTheSourceLosesIt()
+    {
+        var tetris = await Game(("t1.gb", TetrisWorld), ("t2.gb", TetrisJapan));
+        var zelda = await Game(("z.gb", Zelda));
+        // The target's own ROM is renamed to the moved release's name, so the move gets " (2)".
+        var row = (await Row(zelda))!;
+        var game = await ReadGame(zelda);
+        var reader = Service<InfoJsonReader>();
+        await new LibraryZipWriter(reader).WriteAsync(Abs(row.ZipPath), LibraryZip.Open(Abs(row.ZipPath), reader), new LibraryZipChanges(
+            game with { Roms = [game.Roms[0] with { FileName = "Tetris (Japan).gb" }] },
+            new Dictionary<string, Func<Stream>> { ["roms/Tetris (Japan).gb"] = () => new MemoryStream(Zelda) }));
+        await PlantNote(tetris, "Tetris (Japan).gb", "# Japan");
+        await PlantNote(tetris, "Tetris (World).gb", "# World");
+        await PlantNote(zelda, "Tetris (Japan).gb", "# Zelda's own");
+
+        using var response = await Move(tetris, await RomId(tetris, "Tetris (Japan).gb"), new { targetGameId = zelda });
+
+        Assert.That(await TargetId(response), Is.EqualTo(zelda));
+        Assert.That(await Notes(zelda), Is.EquivalentTo(new Dictionary<string, string>
+        {
+            ["Tetris (Japan).gb"] = "# Zelda's own",
+            ["Tetris (Japan) (2).gb"] = "# Japan",
+        }));
+        Assert.That(await Notes(tetris), Is.EquivalentTo(new Dictionary<string, string> { ["Tetris (World).gb"] = "# World" }));
+    }
+
+    [Test]
+    public async Task MoveToNewGame_CarriesTheNote()
+    {
+        var tetris = await Game(("t1.gb", TetrisWorld), ("t2.gb", TetrisJapan));
+        await PlantNote(tetris, "Tetris (Japan).gb", "# Japan");
+
+        using var response = await Move(tetris, await RomId(tetris, "Tetris (Japan).gb"), new { newGameTitle = "Tetris JP" });
+
+        var id = await TargetId(response);
+        Assert.That(await Notes(id), Is.EquivalentTo(new Dictionary<string, string> { ["Tetris (Japan).gb"] = "# Japan" }));
+        Assert.That(await Notes(tetris), Is.Empty);
+    }
+
+    [Test]
+    public async Task Merge_CarriesTheNotesOfEverySourceRelease()
+    {
+        var tetris = await Game(("t1.gb", TetrisWorld), ("t2.gb", TetrisJapan));
+        var zelda = await Game(("z.gb", Zelda));
+        await PlantNote(tetris, "Tetris (World).gb", "w");
+        await PlantNote(tetris, "Tetris (Japan).gb", "j");
+        await PlantNote(zelda, "Zelda (USA).gb", "z");
+
+        using var response = await Merge(tetris, zelda);
+
+        Assert.That(await TargetId(response), Is.EqualTo(zelda));
+        Assert.That(await Notes(zelda), Is.EquivalentTo(new Dictionary<string, string>
+        {
+            ["Tetris (World).gb"] = "w", ["Tetris (Japan).gb"] = "j", ["Zelda (USA).gb"] = "z",
+        }));
+    }
+
+    [Test]
+    public async Task DeleteRelease_DropsItsNote()
+    {
+        var tetris = await Game(("t1.gb", TetrisWorld), ("t2.gb", TetrisJapan));
+        await PlantNote(tetris, "Tetris (World).gb", "w");
+        await PlantNote(tetris, "Tetris (Japan).gb", "j");
+
+        using var response = await _admin.SendAsync(HttpMethod.Delete, $"/api/games/{tetris}/roms/{await RomId(tetris, "Tetris (Japan).gb")}", null, true);
+
+        Assert.That(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        Assert.That(await Notes(tetris), Is.EquivalentTo(new Dictionary<string, string> { ["Tetris (World).gb"] = "w" }));
+    }
+
+    [Test]
+    public async Task NotelessArrivals_DontAdoptOrphanNotes_MoveMergeAndIngest()
+    {
+        var tetris = await Game(("t1.gb", TetrisWorld), ("t2.gb", TetrisJapan));
+        var zelda = await Game(("z.gb", Zelda));
+        await PlantNote(zelda, "Tetris (Japan).gb", "orphan");
+        await PlantNote(zelda, "Tetris (World).gb", "orphan");
+        await PlantNote(zelda, "Tetris (USA).gb", "orphan");
+        await PlantNote(zelda, "Zelda (USA).gb", "z");
+
+        using (var move = await Move(tetris, await RomId(tetris, "Tetris (Japan).gb"), new { targetGameId = zelda }))
+            await TargetId(move);
+        Assert.That(await Notes(zelda), Does.Not.ContainKey("Tetris (Japan).gb"), "move");
+
+        using (var merge = await Merge(tetris, zelda))
+            await TargetId(merge);
+        Assert.That(await Notes(zelda), Does.Not.ContainKey("Tetris (World).gb"), "merge");
+
+        var ingested = await Ingest("t3.gb", TetrisUsa);
+        Assert.That((ingested.Outcome, ingested.GameId), Is.EqualTo((IngestOutcome.Ingested, (Guid?)zelda)));
+        Assert.That(await Notes(zelda), Is.EquivalentTo(new Dictionary<string, string> { ["Zelda (USA).gb"] = "z" }), "ingest");
+    }
 }

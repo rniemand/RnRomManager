@@ -19,6 +19,7 @@
 	import InfoJsonModal from '#lib/components/InfoJsonModal.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import RatingControl from '#lib/components/RatingControl.svelte';
+	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
 	import { formatKey, formatSize, formatValue } from '#lib/format.js';
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -35,6 +36,8 @@
 	let reload = $state(0);
 	let action = $state<AdminAction | null>(null);
 	let infoJsonOpen = $state(false);
+	let noteRom = $state<RomDetail | null>(null);
+	let noteOpen = $state(false);
 
 	const id = $derived(page.params.id ?? '');
 	// P3: the cover (any type); screenshots are in the Images gallery.
@@ -100,6 +103,26 @@
 	function showHeader(rom: RomDetail): void {
 		headerRom = rom;
 		headerOpen = true;
+	}
+
+	function showNote(rom: RomDetail): void {
+		noteRom = rom;
+		noteOpen = true;
+	}
+
+	/**
+	 * A note write rewrites the ZIP, and the mirror gives every ROM a new id (§11): flip the icon now, then quietly
+	 * refetch so the next note/download/edit uses current ids.
+	 */
+	async function onNoteSaved(romId: number, hasNote: boolean): Promise<void> {
+		const rom = game?.roms.find((r) => r.id === romId);
+		if (rom) rom.hasNote = hasNote;
+		try {
+			const fresh = await fetchGame(id);
+			if (fresh) game = fresh;
+		} catch {
+			// The flipped icon stands; a stale id later reloads and asks for a retry as usual.
+		}
 	}
 
 	async function onAdminDone(outcome: AdminOutcome): Promise<void> {
@@ -330,6 +353,15 @@
 										title={rom.fileName}>{rom.fileName}</span
 									>
 									{#if rom.isPrimary}<span class="badge text-bg-primary ms-1">Primary</span>{/if}
+									{#if rom.originalFileName !== rom.fileName}
+										<div
+											class="small text-body-secondary text-truncate"
+											style="max-width: 32rem"
+											title={rom.originalFileName}
+										>
+											Original: {rom.originalFileName}
+										</div>
+									{/if}
 								</td>
 								<td>
 									{#each rom.regions as region (region)}
@@ -361,6 +393,14 @@
 											Header
 										</button>
 									{/if}
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-secondary"
+										aria-label="{rom.hasNote ? 'Note for' : 'Add note for'} {rom.fileName}"
+										onclick={() => showNote(rom)}
+									>
+										<Icon name={rom.hasNote ? 'note-filled' : 'note'} />
+									</button>
 									<button
 										type="button"
 										class="btn btn-sm btn-outline-primary"
@@ -423,4 +463,6 @@
 	</ConfirmModal>
 
 	<InfoJsonModal bind:open={infoJsonOpen} gameId={game.id} />
+
+	<ReleaseNoteModal bind:open={noteOpen} gameId={game.id} rom={noteRom} onsaved={onNoteSaved} />
 {/if}

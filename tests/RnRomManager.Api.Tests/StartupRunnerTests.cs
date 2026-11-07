@@ -1,4 +1,5 @@
 using NLog;
+using NSubstitute;
 
 namespace RnRomManager.Api.Tests;
 
@@ -17,7 +18,7 @@ public class StartupRunnerTests
     {
         using var client = _factory.CreateClient();
 
-        foreach (var key in new[] { "Paths:Roms", "Paths:Ingest", "Paths:Logs", "Paths:Cache" })
+        foreach (var key in new[] { "Paths:Roms", "Paths:Ingest", "Paths:Logs", "Paths:Cache", "Paths:Backups" })
             Assert.That(Directory.Exists(_factory.Settings[key]), Is.True, key);
     }
 
@@ -44,5 +45,26 @@ public class StartupRunnerTests
         // NLog keeps the file open (keepFileOpen).
         using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         return new StreamReader(stream).ReadToEnd();
+    }
+
+    [Test]
+    public void BadRestoreFrom_StopsStartupBeforeMigrations()
+    {
+        _factory.Settings["Backup:RestoreFrom"] = "../rnrommanager-20261106-033000.zip";
+
+        Assert.Catch(() => _factory.CreateClient());
+        LogManager.Flush();
+
+        Assert.That(ReadLogs(), Does.Contain("|FATAL|RnRomManager.Api.Program|")
+            .And.Contain("Startup failed: Backup:RestoreFrom must be a file name in Paths:Backups"));
+        _factory.Database.DidNotReceive().Migrate();
+    }
+
+    [Test]
+    public void NoRestoreFrom_StartsAndMigrates()
+    {
+        using (_factory.CreateClient()) { }
+
+        _factory.Database.Received(1).Migrate();
     }
 }

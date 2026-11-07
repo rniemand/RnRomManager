@@ -181,4 +181,18 @@ public sealed class UserRepository(IDbConnectionFactory connections) : IUserRepo
             "UPDATE users SET failed_login_count = 0, lockout_until = NULL, last_login_at = @now WHERE id = @id",
             new { id, now }, cancellationToken: cancellationToken));
     }
+
+    public async Task<string?> GetHotkeysAsync(int id, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return await connection.ExecuteScalarAsync<string?>(new CommandDefinition(
+            "SELECT hotkeys FROM users WHERE id = @id", new { id }, cancellationToken: cancellationToken));
+    }
+
+    public async Task SetHotkeysAsync(int id, string? hotkeys, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE users SET hotkeys = @hotkeys WHERE id = @id", new { id, hotkeys }, cancellationToken: cancellationToken));
+    }
 }

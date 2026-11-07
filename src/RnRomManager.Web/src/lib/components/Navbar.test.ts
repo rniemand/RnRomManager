@@ -54,4 +54,43 @@ describe('Navbar', () => {
 		const brand = screen.getByRole('link', { name: 'RnRomManager home' });
 		expect(brand.textContent?.trim()).toBe('');
 	});
+
+	it('is sticky at the top (B26)', () => {
+		render(Navbar, {
+			me: { id: 1, username: 'u', roles: [], mustChangePassword: false },
+			reviewCount: null,
+			onlogout: () => {}
+		});
+		expect(document.querySelector('nav')!.classList.contains('sticky-top')).toBe(true);
+	});
+
+	it('the (?) button opens the shortcuts, before the theme toggle (B25)', async () => {
+		const onhotkeys = vi.fn();
+		render(Navbar, {
+			me: { id: 1, username: 'u', roles: [], mustChangePassword: false },
+			reviewCount: null,
+			onlogout: () => {},
+			onhotkeys
+		});
+
+		const help = screen.getByRole('button', { name: 'Keyboard shortcuts' });
+		expect(help.querySelector('i')!.className).toContain('bi-question-circle');
+		const items = [...document.querySelectorAll('ul.navbar-nav.align-items-lg-center > li')];
+		const helpIndex = items.findIndex((li) => li.contains(help));
+		expect(items[helpIndex + 1].querySelector('button')!.getAttribute('aria-label')).toMatch(
+			/theme/i
+		);
+		help.click();
+		expect(onhotkeys).toHaveBeenCalledOnce();
+	});
+
+	it('the (?) button is hidden while the password must be changed', () => {
+		render(Navbar, {
+			me: { id: 1, username: 'u', roles: [], mustChangePassword: true },
+			reviewCount: null,
+			onlogout: () => {},
+			onhotkeys: () => {}
+		});
+		expect(screen.queryByRole('button', { name: 'Keyboard shortcuts' })).toBeNull();
+	});
 });

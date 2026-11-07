@@ -12,6 +12,7 @@ using RnRomManager.Api.Http;
 using RnRomManager.Api.Logging;
 using RnRomManager.Api.Security;
 using RnRomManager.Core.Audit;
+using RnRomManager.Core.Backups;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Database;
@@ -45,6 +46,8 @@ public static class AppHost
         builder.Services.AddHostedService<JobShutdownService>();
         // Startup step 10: after StartupRunner (hosted services start in order); stops first.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<Scheduler>());
+        // B16: after StartupRunner (the restore and migrations run first).
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<BackupScheduler>());
         var app = builder.Build();
         app.UseSecurityHeaders();
 
@@ -96,6 +99,11 @@ public static class AppHost
         builder.Services.AddSingleton<JobLock>();
         builder.Services.AddSingleton<JobRunner>();
         builder.Services.AddSingleton<CrashRecovery>();
+        builder.Services.AddSingleton<IBackupStore, MySqlBackupStore>();
+        builder.Services.AddSingleton<BackupService>();
+        builder.Services.AddSingleton<BackupRestorer>();
+        builder.Services.AddSingleton<ISettingsRepository, SettingsRepository>();
+        builder.Services.AddSingleton<BackupScheduler>();
         builder.Services.AddSingleton<IAuditRepository, AuditRepository>();
         builder.Services.AddSingleton<AuditLog>();
         builder.Services.AddSingleton<IAuditLog>(sp => sp.GetRequiredService<AuditLog>());

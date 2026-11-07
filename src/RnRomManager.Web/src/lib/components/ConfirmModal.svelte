@@ -12,6 +12,8 @@
 		/** `btn-danger` for destructive actions. */
 		confirmClass?: string;
 		busy?: boolean;
+		/** Disables only the confirm button (e.g. nothing changed yet); `busy` disables both. */
+		confirmDisabled?: boolean;
 		/** `lg` for a wide form (Edit metadata); default width otherwise. */
 		size?: 'lg';
 		/** Omitted → info mode: the footer shows only "Close". */
@@ -25,6 +27,7 @@
 		confirmLabel = 'Confirm',
 		confirmClass = 'btn-primary',
 		busy = false,
+		confirmDisabled = false,
 		size,
 		onconfirm,
 		children
@@ -76,7 +79,12 @@
 					disabled={busy}>{onconfirm ? 'Cancel' : 'Close'}</button
 				>
 				{#if onconfirm}
-					<button type="button" class="btn {confirmClass}" onclick={onconfirm} disabled={busy}>
+					<button
+						type="button"
+						class="btn {confirmClass}"
+						onclick={onconfirm}
+						disabled={busy || confirmDisabled}
+					>
 						{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
 						{confirmLabel}
 					</button>

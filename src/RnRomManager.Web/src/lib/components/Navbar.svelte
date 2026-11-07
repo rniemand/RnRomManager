@@ -12,9 +12,11 @@
 		onlogout: () => void;
 		/** Opens the global search; the button is hidden while the password must be changed. */
 		onsearch?: () => void;
+		/** Opens the keyboard shortcuts (B25); hidden while the password must be changed. */
+		onhotkeys?: () => void;
 	}
 
-	let { me, reviewCount, onlogout, onsearch }: Props = $props();
+	let { me, reviewCount, onlogout, onsearch, onhotkeys }: Props = $props();
 
 	// Pages arrive in later steps (S41–S47); unknown ones show "Page not found" until then.
 	const links = $derived(
@@ -35,7 +37,8 @@
 	}
 </script>
 
-<nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom">
+<!-- B26: sticky; modals (1055) and dropdowns still render above it (sticky-top is 1020). -->
+<nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom sticky-top">
 	<div class="container">
 		<a
 			class="navbar-brand d-flex align-items-center"
@@ -88,6 +91,19 @@
 							onclick={onsearch}
 						>
 							<Icon name="search" /> Search
+						</button>
+					</li>
+				{/if}
+				{#if onhotkeys && !me.mustChangePassword}
+					<li class="nav-item">
+						<button
+							type="button"
+							class="btn btn-link nav-link d-flex align-items-center"
+							aria-label="Keyboard shortcuts"
+							title="Keyboard shortcuts"
+							onclick={onhotkeys}
+						>
+							<Icon name="help" />
 						</button>
 					</li>
 				{/if}

@@ -30,6 +30,7 @@ public class StorageFoldersTests
         Ingest = Path.Combine(_root, "ingest"),
         Logs = Path.Combine(_root, "nested", "logs"),
         Cache = Path.Combine(_root, "cache"),
+        Backups = Path.Combine(_root, "backups"),
     };
 
     [Test]

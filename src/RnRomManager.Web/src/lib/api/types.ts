@@ -85,6 +85,8 @@ export interface RomDetail {
 	dateAdded: string;
 	dateModified: string;
 	downloadUrl: string;
+	/** B3: the ZIP holds `notes/<fileName>.md`. */
+	hasNote: boolean;
 }
 
 export interface ImageInfo {
@@ -270,4 +272,26 @@ export interface UserInfo {
 export interface About {
 	version: string;
 	licenses: { name: string; license: string; url: string }[];
+}
+
+/** A backup ZIP in `Paths:Backups` (B17). */
+export interface BackupFile {
+	fileName: string;
+	sizeBytes: number;
+	createdAt: string;
+}
+
+/** `GET /api/admin/backups` and `PUT /api/admin/backups/settings` (B17). */
+export interface BackupStatus {
+	enabled: boolean;
+	/** `HH:mm` in the server's time zone. */
+	time: string;
+	retention: number;
+	/** The container's `TZ` id. */
+	timeZone: string;
+	nextRunAt: string | null;
+	running: boolean;
+	lastResult: { at: string; ok: boolean; fileName: string | null; error: string | null } | null;
+	/** Newest first. */
+	backups: BackupFile[];
 }
