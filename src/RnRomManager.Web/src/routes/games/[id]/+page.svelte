@@ -19,6 +19,7 @@
 	import InfoJsonModal from '#lib/components/InfoJsonModal.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import RatingControl from '#lib/components/RatingControl.svelte';
+	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
 	import { formatKey, formatSize, formatValue } from '#lib/format.js';
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -35,6 +36,8 @@
 	let reload = $state(0);
 	let action = $state<AdminAction | null>(null);
 	let infoJsonOpen = $state(false);
+	let noteRom = $state<RomDetail | null>(null);
+	let noteOpen = $state(false);
 
 	const id = $derived(page.params.id ?? '');
 	// P3: the cover (any type); screenshots are in the Images gallery.
@@ -100,6 +103,16 @@
 	function showHeader(rom: RomDetail): void {
 		headerRom = rom;
 		headerOpen = true;
+	}
+
+	function showNote(rom: RomDetail): void {
+		noteRom = rom;
+		noteOpen = true;
+	}
+
+	function onNoteSaved(romId: number, hasNote: boolean): void {
+		const rom = game?.roms.find((r) => r.id === romId);
+		if (rom) rom.hasNote = hasNote;
 	}
 
 	async function onAdminDone(outcome: AdminOutcome): Promise<void> {
@@ -372,6 +385,14 @@
 									{/if}
 									<button
 										type="button"
+										class="btn btn-sm btn-outline-secondary"
+										aria-label="{rom.hasNote ? 'Note for' : 'Add note for'} {rom.fileName}"
+										onclick={() => showNote(rom)}
+									>
+										<Icon name={rom.hasNote ? 'note-filled' : 'note'} />
+									</button>
+									<button
+										type="button"
 										class="btn btn-sm btn-outline-primary"
 										aria-label="Download {rom.fileName}"
 										onclick={() => download(rom.downloadUrl, rom)}
@@ -432,4 +453,6 @@
 	</ConfirmModal>
 
 	<InfoJsonModal bind:open={infoJsonOpen} gameId={game.id} />
+
+	<ReleaseNoteModal bind:open={noteOpen} gameId={game.id} rom={noteRom} onsaved={onNoteSaved} />
 {/if}

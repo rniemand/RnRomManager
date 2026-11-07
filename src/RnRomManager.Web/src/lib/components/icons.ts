@@ -25,6 +25,8 @@ export const icons: Record<string, string> = {
 	retry: 'bi bi-arrow-clockwise',
 	search: 'bi bi-search',
 	code: 'bi bi-code-slash',
+	note: 'bi bi-sticky',
+	'note-filled': 'bi bi-sticky-fill',
 	star: 'bi bi-star',
 	'star-fill': 'bi bi-star-fill',
 	favourite: 'bi bi-heart',
