@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RnRomManager.Core.Configuration;
+using RnRomManager.Core.Jobs;
 
 namespace RnRomManager.Core.Backups;
 
@@ -16,8 +17,10 @@ public sealed record BackupResult(DateTimeOffset At, bool Ok, string? FileName, 
 /// </summary>
 public sealed class BackupService(
     IBackupStore store,
+    ISettingsRepository settings,
     IOptions<PathsOptions> paths,
     IOptions<BackupOptions> options,
+    TimeZoneInfo zone,
     TimeProvider time,
     ILogger<BackupService> logger)
 {
@@ -28,7 +31,31 @@ public sealed class BackupService(
 
     public BackupResult? LastResult => _lastResult;
 
+    /// <summary>The container's time zone (<c>TZ</c>) the daily time is in (B15, B18).</summary>
+    public string TimeZoneId => zone.Id;
+
+    /// <summary>Raised after <see cref="SaveSettingsAsync"/>, so the scheduler reschedules at once (B16).</summary>
+    public event Action? SettingsChanged;
+
     private string Folder => paths.Value.Backups;
+
+    public async Task<BackupSettings> GetSettingsAsync(CancellationToken cancellationToken) =>
+        BackupSettings.FromStored(await settings.GetAsync(BackupSettings.Keys.ToList(), cancellationToken));
+
+    /// <exception cref="ArgumentException"><paramref name="value"/> isn't valid (callers validate first).</exception>
+    public async Task SaveSettingsAsync(BackupSettings value, CancellationToken cancellationToken)
+    {
+        if (value.Validate().Count > 0)
+            throw new ArgumentException("Invalid backup settings.", nameof(value));
+        await settings.SetAsync(value.ToStored(), cancellationToken);
+        logger.LogInformation("Backup settings saved: enabled {Enabled}, daily at {Time} ({Zone}), keep {Retention}",
+            value.Enabled, value.Time, zone.Id, value.Retention);
+        SettingsChanged?.Invoke();
+    }
+
+    /// <summary>The next scheduled run (UTC) for <paramref name="value"/>, or null when disabled (B16).</summary>
+    public DateTimeOffset? NextRunAt(BackupSettings value) =>
+        value.Enabled ? ScheduleCalculator.NextDaily(time.GetUtcNow(), value.TimeOfDay, zone) : null;
 
     /// <summary>Runs a backup now, then keeps the newest <paramref name="retention"/> backups.</summary>
     /// <exception cref="BackupRunningException">Another backup is running.</exception>

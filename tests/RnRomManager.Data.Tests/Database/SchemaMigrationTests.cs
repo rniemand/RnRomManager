@@ -10,7 +10,7 @@ public class SchemaMigrationTests
 {
     private static readonly string[] Tables =
     [
-        "audit_events", "data_protection_keys", "duplicate_dismissals", "games", "images", "ingest_review_items", "integrity_issues",
+        "app_settings", "audit_events", "data_protection_keys", "duplicate_dismissals", "games", "images", "ingest_review_items", "integrity_issues",
         "job_items", "jobs", "roms", "user_roles", "users",
     ];
 
@@ -27,7 +27,7 @@ public class SchemaMigrationTests
         new(new MySqlConnectionFactory(cs), NullLogger<MySqlDatabaseLifecycle>.Instance, TimeProvider.System);
 
     [Test]
-    public async Task FromScratch_CreatesEveryTableAndJournalsFourteenScripts()
+    public async Task FromScratch_CreatesEveryTableAndJournalsEveryScript()
     {
         var tables = await ColumnAsync<string>(_cs,
             "SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() ORDER BY TABLE_NAME");
@@ -39,6 +39,7 @@ public class SchemaMigrationTests
             "0001_users", "0002_games", "0003_roms", "0004_images", "0005_jobs", "0006_job_items",
             "0007_ingest_review_items", "0008_integrity_issues", "0009_data_protection_keys",
             "0010_game_rating", "0011_user_roles", "0012_image_cover", "0013_duplicate_dismissals", "0014_audit_events",
+            "0015_app_settings",
         }));
     }
 
@@ -47,7 +48,7 @@ public class SchemaMigrationTests
     {
         Lifecycle(_cs).Migrate();
 
-        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 14L }));
+        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 15L }));
     }
 
     [Test]
@@ -73,6 +74,7 @@ public class SchemaMigrationTests
     [TestCase("integrity_issues", "id bigint(20), type varchar(32), severity varchar(8), system_id varchar(16) NULL, zip_path varchar(512) NULL, game_id char(36) NULL, entry_name varchar(512) NULL, details text NULL, status varchar(16), first_seen_job_id char(36), last_seen_job_id char(36), detected_at datetime(6), resolved_at datetime(6) NULL")]
     [TestCase("audit_events", "id bigint(20), occurred_at datetime(6), action varchar(32), system_id varchar(16) NULL, game_id char(36) NULL, user_id int(11) NULL, username varchar(64) NULL, job_id char(36) NULL, path varchar(1024) NULL, target_path varchar(1024) NULL, details varchar(1024) NULL")]
     [TestCase("data_protection_keys", "id int(11), friendly_name varchar(255), xml text, created_at datetime(6)")]
+    [TestCase("app_settings", "name varchar(64), value varchar(255)")]
     [TestCase("duplicate_dismissals", "system_id varchar(16), base_title varchar(255), games_key char(64), dismissed_by int(11) NULL, dismissed_at datetime(6)")]
     public async Task Columns_MatchSpec(string table, string expected)
     {
@@ -90,6 +92,7 @@ public class SchemaMigrationTests
         // "table index unique? columns"; fk_* indexes are the ones InnoDB adds for FKs with no covering index.
         var expected = new[]
         {
+            "app_settings PRIMARY U name",
             "audit_events ix_audit_events_action_occurred_at - action,occurred_at",
             "audit_events ix_audit_events_occurred_at - occurred_at",
             "audit_events ix_audit_events_system_occurred_at - system_id,occurred_at",

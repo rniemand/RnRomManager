@@ -17,6 +17,7 @@ public class BackupServiceTests
     private IBackupStore _store = null!;
     private FakeTimeProvider _time = null!;
     private BackupOptions _options = null!;
+    private InMemorySettings _settings = null!;
     private BackupService _service = null!;
 
     private string Folder => _dir.Combine("backups");
@@ -34,8 +35,9 @@ public class BackupServiceTests
             });
         _time = new FakeTimeProvider(T0);
         _options = new BackupOptions();
-        _service = new BackupService(_store, Options.Create(new PathsOptions { Backups = Folder }), Options.Create(_options),
-            _time, NullLogger<BackupService>.Instance);
+        _settings = new InMemorySettings();
+        _service = new BackupService(_store, _settings, Options.Create(new PathsOptions { Backups = Folder }), Options.Create(_options),
+            TimeZoneInfo.Utc, _time, NullLogger<BackupService>.Instance);
     }
 
     [TearDown]
@@ -225,5 +227,58 @@ public class BackupServiceTests
             new BackupFile(BackupNames.For(T0.AddDays(-1)), 3, T0.AddDays(-1)),
             new BackupFile(BackupNames.For(T0.AddDays(-2)), 3, T0.AddDays(-2)),
         }));
+    }
+
+    [Test]
+    public async Task Settings_DefaultWhenNothingIsStored()
+    {
+        Assert.That(await _service.GetSettingsAsync(default), Is.EqualTo(new BackupSettings(true, "03:30", 30)));
+    }
+
+    [Test]
+    public async Task SaveSettings_StoresThem_AndRaisesTheChangeSignal()
+    {
+        var raised = 0;
+        _service.SettingsChanged += () => raised++;
+
+        await _service.SaveSettingsAsync(new BackupSettings(false, "22:15", 7), default);
+
+        Assert.That(_settings.Values, Is.EqualTo(new Dictionary<string, string>
+        {
+            ["backup.enabled"] = "false", ["backup.time"] = "22:15", ["backup.retention"] = "7",
+        }));
+        Assert.That(await _service.GetSettingsAsync(default), Is.EqualTo(new BackupSettings(false, "22:15", 7)));
+        Assert.That(raised, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task SaveSettings_Invalid_Throws()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.SaveSettingsAsync(new BackupSettings(true, "24:00", 30), default));
+        Assert.That(_settings.Values, Is.Empty);
+    }
+
+    [Test]
+    public void NextRunAt_IsTheNextDailyTime_OrNullWhenDisabled()
+    {
+        Assert.That(_service.NextRunAt(new BackupSettings(true, "03:30", 30)), Is.EqualTo(T0.AddDays(1)));
+        Assert.That(_service.NextRunAt(new BackupSettings(true, "04:00", 30)), Is.EqualTo(T0.AddMinutes(30)));
+        Assert.That(_service.NextRunAt(new BackupSettings(false, "04:00", 30)), Is.Null);
+        Assert.That(_service.TimeZoneId, Is.EqualTo(TimeZoneInfo.Utc.Id));
+    }
+
+    private sealed class InMemorySettings : ISettingsRepository
+    {
+        public Dictionary<string, string> Values { get; } = new(StringComparer.Ordinal);
+
+        public Task<IReadOnlyDictionary<string, string>> GetAsync(IReadOnlyCollection<string> names, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<string, string>>(Values.Where(v => names.Contains(v.Key)).ToDictionary());
+
+        public Task SetAsync(IReadOnlyDictionary<string, string> values, CancellationToken cancellationToken)
+        {
+            foreach (var (name, value) in values)
+                Values[name] = value;
+            return Task.CompletedTask;
+        }
     }
 }

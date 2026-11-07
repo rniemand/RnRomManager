@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using NLog;
 using NSubstitute;
+using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Users;
@@ -33,6 +34,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         };
         Database.PingAsync(Arg.Any<CancellationToken>()).Returns(true);
         Users.CountAsync(Arg.Any<CancellationToken>()).Returns(1);
+        AppSettings.GetAsync(Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<string, string> { ["backup.enabled"] = "false" });
         Jobs.AbortRunningAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>());
     }
 
@@ -53,6 +56,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     /// <summary>Stub users table (stub mode only): reports one user, so startup doesn't seed.</summary>
     public IUserRepository Users { get; } = Substitute.For<IUserRepository>();
+
+    /// <summary>Stub <c>app_settings</c> (stub mode only): scheduled backups are off, so nothing touches a database.</summary>
+    public ISettingsRepository AppSettings { get; } = Substitute.For<ISettingsRepository>();
 
     /// <summary>Stub jobs table (stub mode only): nothing to abort at startup.</summary>
     public IJobRepository Jobs { get; } = Substitute.For<IJobRepository>();
@@ -76,6 +82,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 services.AddSingleton(Database);
                 services.AddSingleton(Users);
                 services.AddSingleton(Jobs);
+                services.AddSingleton(AppSettings);
             });
         }
     }
