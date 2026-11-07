@@ -70,7 +70,7 @@
 		{#each stars as n (n)}
 			<button
 				type="button"
-				class="btn btn-link btn-sm p-0 px-1 text-warning"
+				class="btn btn-link btn-sm p-0 px-1 text-warning target"
 				aria-label="Rate {n} of 5"
 				aria-pressed={rating === n}
 				disabled={busy}
@@ -81,7 +81,7 @@
 		{/each}
 		<button
 			type="button"
-			class="btn btn-link btn-sm p-0 ms-1 text-danger"
+			class="btn btn-link btn-sm p-0 ms-1 text-danger target"
 			aria-label="Favourite"
 			aria-pressed={favourite}
 			disabled={busy}
@@ -91,3 +91,15 @@
 		</button>
 	</div>
 {/if}
+
+<style>
+	/* WCAG 2.2 target size: a real 24×24 px minimum, not spacing that a sub-pixel layout shift (e.g. Bootstrap's
+	   scrollbar compensation on the sticky navbar while a modal is open) can push under the threshold. */
+	.target {
+		min-width: 24px;
+		min-height: 24px;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+</style>

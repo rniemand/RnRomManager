@@ -110,9 +110,19 @@
 		noteOpen = true;
 	}
 
-	function onNoteSaved(romId: number, hasNote: boolean): void {
+	/**
+	 * A note write rewrites the ZIP, and the mirror gives every ROM a new id (§11): flip the icon now, then quietly
+	 * refetch so the next note/download/edit uses current ids.
+	 */
+	async function onNoteSaved(romId: number, hasNote: boolean): Promise<void> {
 		const rom = game?.roms.find((r) => r.id === romId);
 		if (rom) rom.hasNote = hasNote;
+		try {
+			const fresh = await fetchGame(id);
+			if (fresh) game = fresh;
+		} catch {
+			// The flipped icon stands; a stale id later reloads and asks for a retry as usual.
+		}
 	}
 
 	async function onAdminDone(outcome: AdminOutcome): Promise<void> {

@@ -166,6 +166,32 @@ describe('release notes (B11)', () => {
 		expect(button('Save').disabled).toBe(false);
 	});
 
+	it('after a save the game is refetched, so the next note uses the new ROM ids', async () => {
+		const rewritten = game();
+		rewritten.roms = [
+			{ ...rom(11, true), fileName: 'Tetris 1.gb' },
+			{ ...rom(12, true), fileName: 'Tetris 2.gb' }
+		];
+		answers['GET /api/games/g1'].push({ status: 200, body: rewritten });
+		answers['GET /api/games/g1/roms/12/note'] = [{ status: 200, text: '# Fresh' }];
+		render(GamePage);
+		await open('Add note for Tetris 2.gb');
+
+		await fireEvent.input(textarea(), { target: { value: '# Fresh' } });
+		await fireEvent.click(button('Save'));
+		await vi.waitFor(() =>
+			expect(calls.filter((c) => c.key === 'GET /api/games/g1')).toHaveLength(2)
+		);
+		await new Promise((resolve) => setTimeout(resolve, 20)); // let the refetched game render
+
+		await open('Note for Tetris 2.gb');
+		await vi.waitFor(() =>
+			expect(noteModal().getByRole('heading', { name: 'Fresh', hidden: true })).toBeTruthy()
+		);
+		expect(calls.map((c) => c.key)).toContain('GET /api/games/g1/roms/12/note');
+		expect(calls.map((c) => c.key)).not.toContain('GET /api/games/g1/roms/2/note');
+	});
+
 	it('Save sends PUT with normalised text and flips hasNote', async () => {
 		render(GamePage);
 		await open('Add note for Tetris 2.gb');

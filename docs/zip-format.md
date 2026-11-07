@@ -27,6 +27,8 @@ Tetris.zip
   images/
     boxart-01.png
     snap-01.png
+  notes/
+    Tetris (World) (Rev 1).gb.md
 ```
 
 - The system folder comes from the ROM's header, not the ingest folder: a GBC cart dropped into `ingest/gb/` is stored under `roms/gbc/`.
@@ -54,10 +56,20 @@ All releases of a game (regions, revisions) **and** its hacks and translations l
 
 **Cover:** exactly one image of a game that has images is its cover (`isCover: true`): what the library and game page show. Any image can be the cover. A new game's cover is its box art (or placeholder); the first image added to a game with no images becomes the cover; ingestion and media retry only ever replace the placeholder (keeping its cover status) or add a missing snap, never touching other images. A merge keeps the target's cover, copies the source's non-default images in under new names, drops the source's placeholder, removes the target's placeholder when the source brings a real box art (that box art becomes the cover if the placeholder was), and is refused (`409 TooManyImages`) above 20 images.
 
+## Release notes
+
+A release can have one Markdown note, the entry `notes/<rom fileName>.md` (e.g. `notes/Tetris (World) (Rev 1).gb.md`): UTF-8 without a BOM, `\n` line endings, at most 64 KiB (65,536 bytes). A release has a note exactly when that entry exists (same ordinal name match as every entry lookup); notes aren't listed in `info.json`, so adding one needs no schema change.
+
+- **Every write keeps notes:** for each ROM listed in the new `info.json`, its note is copied from the old ZIP unless the write replaces or removes it. A note whose ROM is no longer listed is dropped, so deleting a release (or the game) deletes its note. A copied note over 64 KiB fails the write's verification.
+- **Notes follow their release:** moving a release to another or a new game, or merging a game, carries each note into the target under the release's final file name (after a ` (2)` clash rename) and drops it from the source. A release that arrives in a ZIP without a note (move, merge, ingest, review resolution) never adopts an orphan `notes/<its name>.md` already there: the orphan is removed.
+- **Integrity:** the `EntryUnlisted` check ignores `notes/<f>.md` for every listed ROM `f`. Any other `notes/` entry is an orphan, reported as `EntryUnlisted` (Warn) and left alone.
+- **Downgrades drop notes:** an app version older than this one copies only the entries it lists, so its next write of a ZIP silently drops `notes/`. Back up before downgrading.
+
 ## Writes
 
 - Every write starts from the ZIP's own `info.json` and entries, never from database rows.
 - Writes are atomic: the new ZIP is streamed to `<name>.zip.tmp` next to the target, re-opened, every ROM entry's SHA1 checked against `info.json`, then moved over the old file. A ZIP is never edited in place. When the path changes (a title edit), the new ZIP is written and the database committed before the old ZIP is deleted.
+- Release notes of listed ROMs are carried into the new ZIP (see [Release notes](#release-notes)).
 - Compression: Deflate, optimal level. `info.json` is UTF-8 without a BOM, indented, camelCase, with nulls written.
 
 ## `info.json` (schema version 2)

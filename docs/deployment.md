@@ -30,6 +30,7 @@ services:
       - ./data/ingest:/app/ingest
       - ./data/logs:/app/logs
       - ./data/cache:/app/cache
+      - ./data/backups:/app/backups
     user: "1000:1000"   # owner of ./data
     stop_grace_period: 35s   # lets a running job stop cleanly
     depends_on:
@@ -52,7 +53,7 @@ services:
 Then:
 
 ```bash
-mkdir -p data/{roms,ingest,logs,cache,db}
+mkdir -p data/{roms,ingest,logs,cache,backups,db}
 docker compose up -d
 docker compose logs -f rnrommanager
 ```
@@ -85,17 +86,18 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 | `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance) or `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`); `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way |
 | `/app/logs` | `rnrommanager-yyyy-MM-dd.log`, kept for `Logging:RetentionDays` |
 | `/app/cache` | downloaded DATs and temporary work folders |
+| `/app/backups` | the daily database backups (see [Backup and restore](#backup-and-restore)); keep it private |
 
 The container runs as UID 1654 unless you set `user:`.
 
 - **Named volumes** work as they are: the image's folders are already owned by 1654.
-- **Bind mounts** (as above) must be writable by the container's user. Either set `user: "<uid>:<gid>"` to the owner of `./data` (find it with `id -u` / `id -g`), or `chown -R 1654:1654 ./data/{roms,ingest,logs,cache}`.
+- **Bind mounts** (as above) must be writable by the container's user. Either set `user: "<uid>:<gid>"` to the owner of `./data` (find it with `id -u` / `id -g`), or `chown -R 1654:1654 ./data/{roms,ingest,logs,cache,backups}`.
 
-At startup the app writes and deletes a `.rnrm-probe` file in each of the four folders. If that fails, it stops with a `FATAL` line naming the path and the UID/GID it runs as.
+At startup the app writes and deletes a `.rnrm-probe` file in each of the five folders. If that fails, it stops with a `FATAL` line naming the path and the UID/GID it runs as.
 
 ## Time zone
 
-`TZ` sets the time zone for the daily quick integrity check (`Integrity:QuickCheckTime`, default `03:00`). The image includes the time zone database. Times in the UI are always shown in the browser's own time zone.
+`TZ` sets the time zone for the daily quick integrity check (`Integrity:QuickCheckTime`, default `03:00`) and the daily database backup (**Admin → Backups**, default `03:30`). The image includes the time zone database. Times in the UI are always shown in the browser's own time zone.
 
 ## Reverse proxy
 
@@ -114,24 +116,57 @@ Use `ASPNETCORE_HTTP_PORTS` to change the listen port, not `ASPNETCORE_URLS`: th
 ## Health checks
 
 - `GET /health/live`: the process is up (used by the image's `HEALTHCHECK`).
-- `GET /health/ready`: the database answers within 2 seconds and the four folders exist; 503 otherwise.
+- `GET /health/ready`: the database answers within 2 seconds and the five folders exist; 503 otherwise.
 
 Both are anonymous and return no details.
 
-## Backups
+## Backup and restore
 
-Back up both:
+### What to back up
 
-- the database (e.g. `mariadb-dump rnrommanager`), which holds users, the Data Protection keys that keep sign-ins valid across restarts, job history, the review queue and integrity issues;
-- `/app/roms`, the library itself.
+- **The database**, which holds users, the Data Protection keys that keep sign-ins valid across restarts, job history, the review queue, integrity issues, the audit trail and settings. The app backs it up itself (below).
+- **`/app/roms`**, the library itself, including release notes. Stop the app (or make sure no job is running) for a consistent copy.
+- **`/app/backups`**, so the database backups survive the loss of the host. Copy it somewhere else.
 
 The library ZIPs are the source of truth for games: if the database is lost but the ZIPs are not, a new database is rebuilt from them by the next ingestion or **Integrity → Run quick** (accounts and history are not). `/app/ingest` holds anything not yet ingested plus `_removed/`; back it up too if you keep files there. `/app/cache` can be re-downloaded with **Refresh DATs**.
 
-Stop the app (or make sure no job is running) for a consistent copy of `roms/`.
+### Database backups
+
+Every day at **03:30** (container time, `TZ`) the app writes `rnrommanager-<yyyyMMdd-HHmmss>.zip` (UTC start time) to `Paths:Backups` and keeps the newest **30**. Change the time, the number kept, or turn it off on **Admin → Backups**; **Back up now** runs one at once. Missed runs (the app was down) aren't caught up.
+
+- A backup is a ZIP with `manifest.json` (format version, backup id, time, app version, the migrations applied and each table's row count), `schema.sql` (`SHOW CREATE TABLE` for every table) and `data/<table>.jsonl` (one JSON object per row). It's read inside one consistent snapshot, so jobs and edits keep running.
+- It's written to `<name>.zip.tmp` and renamed only when complete; leftover `.tmp` files from a crash are deleted before the next run. Two backups in the same second get ` (2)`, ` (3)`… before `.zip`.
+- Only files named `rnrommanager-*.zip` are ever deleted. A backup that was restored (it has a `.restored` file next to it) or is named by `Backup__RestoreFrom` is never deleted and doesn't count toward the number kept.
+- **Backups contain password hashes and the Data Protection keys.** Keep the folder private; the app never serves backup files over HTTP.
+
+`mariadb-dump rnrommanager` still works as an extra backup; it isn't needed for a restore.
+
+### Restoring a backup
+
+A restore replaces **every table** in the database with the backup's contents. It can't be undone.
+
+1. If the database is still readable, take a fresh backup first (**Back up now**), so you can go back.
+2. Stop the app: `docker compose stop rnrommanager`.
+3. Make sure the backup is in `Paths:Backups` (`./data/backups/` in the compose file above). The database must exist, even if empty: with the compose file's `mariadb` service, `MARIADB_DATABASE` creates it; on your own server, create it as in [Using an existing MariaDB server](#using-an-existing-mariadb-server).
+4. Add the file name (not a path) to the app's environment and start it:
+
+   ```yaml
+       environment:
+         Backup__RestoreFrom: "rnrommanager-20261106-033000.zip"
+   ```
+
+   ```bash
+   docker compose up -d rnrommanager
+   docker compose logs -f rnrommanager
+   ```
+
+   At startup, after the database is reachable and before migrations, the app checks the backup (format version 1, and every migration it lists must be known to this app version: a backup from a newer version is refused), drops every table, recreates them from `schema.sql`, inserts the rows and checks the row counts. Then it writes `<file>.restored` (the time) next to the backup, logs a Warning with the backup id and row counts, and starts normally; migrations bring an older backup up to date. Any problem stops startup with a `FATAL` line. The checks run before anything is dropped, and a restore that fails half-way can simply be run again.
+5. Run **Integrity → Run quick**: the library ZIPs may be newer than the backup, and the check brings the database back in line with them (a Warning at startup reminds you).
+6. Remove `Backup__RestoreFrom` from the environment. Until you do, every start logs a Warning and skips the restore, because the `.restored` file is there.
 
 ## Upgrades
 
-Back up the database and `roms/`, then pull the new tag and restart:
+Back up the database (**Admin → Backups → Back up now**) and `roms/`, then pull the new tag and restart:
 
 ```bash
 docker compose pull

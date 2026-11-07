@@ -6,17 +6,33 @@ RnRomManager keeps a personal backup collection of Game Boy, Game Boy Color, Gam
 
 An account has any of two roles, or none:
 
-- **No role:** Library, Reports and Game detail (browse, search, download, rate and favourite).
+- **No role:** Library, Reports and Game detail (browse, search, download, rate and favourite, release notes), and their own keyboard shortcuts.
 - **`admin`:** Ingestion, Review, Integrity, Admin and job pages. Anyone else who opens one of them sees "Not allowed".
 - **`rom-manager`:** the edit actions on Game detail (edit metadata, retry media, merge, move, delete), image management, and merging or dismissing duplicate groups in Reports.
 
 The roles don't include each other: an `admin` without `rom-manager` can't edit games. The first account, and an account the `--reset-password` command promotes because no enabled admin is left, gets both. Upgrading from a version with the single Admin/User role gives every Admin both roles and every User none, and signs everyone out once.
 
-The navbar shows the pages your roles can use, with the current page highlighted. The user menu has **Change password** and **Logout**; the theme button switches between Light, Dark and Auto (follows your system), remembered per browser. Times are shown in your browser's time zone. Search has no keyboard hint in the navbar; its shortcuts still work. Closing a dialog or navigating away from one restores page scrolling.
+The navbar stays at the top of the window while you scroll, and shows the pages your roles can use, with the current page highlighted. Its **(?)** button opens your [keyboard shortcuts](#keyboard-shortcuts). The user menu has **Change password** and **Logout**; the theme button switches between Light, Dark and Auto (follows your system), remembered per browser. Times are shown in your browser's time zone. Search has no keyboard hint in the navbar; its shortcuts still work. Closing a dialog or navigating away from one restores page scrolling.
 
 ## Global search
 
 **Search** in the navbar, **Ctrl+K** / **Cmd+K** or **Ctrl+Space** (some systems use Ctrl+Space to switch input methods; use Ctrl/Cmd+K there) opens a search box from any page, even while typing in a field. It's off while another dialog is open and until you've changed a forced password. From 2 characters it shows the 5 best matches. Every word you type must appear in the title, developers, publishers or genres; an exact title ranks first, then titles that start with what you typed, then by how many words hit the title (weighted most), developers, publishers and genres, then A–Z. Each result shows its box art, system, year, rating and favourite, and, when no word matched the title, why it was found (e.g. "Publisher: Nintendo"). Up/Down pick a result, Enter (or a click) opens it; Escape closes the search and puts the focus back where it was.
+
+## Keyboard shortcuts
+
+These work from any page, even while typing in a field, but not while a dialog is open or before a forced password change:
+
+| Action | Default | Who |
+|---|---|---|
+| Open global search | **Ctrl+K**, **Ctrl+Space**, **Cmd+K** (fixed) | everyone |
+| Go to Library | **Alt+Shift+L** | everyone |
+| Go to Ingestion | **Alt+Shift+I** | `admin` |
+| Go to Review | **Alt+Shift+F** | `admin` |
+| Open the first review item (the Review page when the queue is empty) | **Alt+Shift+G** | `admin` |
+
+(On a Mac, Alt is Option and Meta is Cmd.) The navigation shortcuts use Alt+Shift because Ctrl+I/F/G/L are the browser's own (italic, find, find next, address bar). On some Windows setups Alt+Shift switches the input language; rebind them if so.
+
+The **(?)** button in the navbar lists the shortcuts your roles allow. **Edit** a row, then press the new keys: the first key with a modifier becomes the shortcut; **Backspace** or **Delete** clears it ("Not assigned"); **Escape** stops editing without closing the dialog. A shortcut must include Ctrl, Alt or Meta, can't be Ctrl+Alt without Shift or Meta (that's AltGr on many keyboards), can't be a search shortcut, and can't be used by another action you can use; a key that breaks a rule shows why on its row and isn't taken. Keys are A–Z, 0–9 and F1–F12, read from the physical key, so the keyboard layout and Option don't change the letter. **Reset to defaults** puts every row back; nothing is saved until **Save**, which applies the changes at once. Shortcuts are saved per account, so they follow you to other browsers. An `admin`'s shortcuts for admin pages are kept if the role is removed; if two actions you can use end up on the same key (the role was given back), only the first in the table fires and the dialog asks you to change the other.
 
 ## Sign in and change password
 
@@ -43,7 +59,8 @@ Opening a game (`/games/{id}`) shows its cover image (a placeholder cartridge wh
 - **Releases** and **Images** are tabs with counts. Releases opens by default; `?tab=images` opens Images. Switching tabs updates the URL without reloading the game. Edit buttons work from either tab.
 - **Google** opens a new tab searching for the quoted display title and system name.
 - **View info.json** opens the JSON exactly as stored in the ZIP, read-only, with a copy button. Objects and arrays expand as a tree: the first two levels start open, with **Expand all** / **Collapse all** controls. Invalid JSON is shown as raw text with a warning; fetch failures offer Retry.
-- **Releases** lists every ROM: file name (with a **Primary** badge for the main release), one badge per region, revision, flags, size, and CRC32/SHA1 with copy buttons. **Header** opens the cartridge header as a table in a dialog; the download button next to it downloads that ROM.
+- **Releases** lists every ROM: file name (with a **Primary** badge for the main release, and an "Original: …" line with the name the file had when it was ingested, when that differs), one badge per region, revision, flags, size, and CRC32/SHA1 with copy buttons. **Header** opens the cartridge header as a table in a dialog; the download button next to it downloads that ROM.
+- **Release notes:** every release has a note button (filled when it has a note) that opens its Markdown note. Any signed-in user can read and edit notes. A note opens in **View** (rendered Markdown; links open in a new tab); a release without one opens in **Edit**. **Edit** is a plain text box with a byte counter (at most 65,536 bytes); **Preview** renders what you typed. **Save** stores it (saving an empty note deletes it); **Delete note** asks "Delete this note?" in place. Closing the dialog discards unsaved changes. Notes live in the game's ZIP ([format](zip-format.md#release-notes)), so they travel with the library and move with their release; they aren't searchable. While a job runs, saving shows "Another job is running".
 - **Images** shows every image of the game as a thumbnail with its type (Box art, Screenshot, …), a **Cover** badge on the one shown at the top and a **Placeholder** badge on the default cartridge art, with its size and dimensions. Click one to see it full size.
 - If the game changed since you opened it (someone edited it, or an ingest added a release), an action on a release reloads the page and says "This game changed, please retry".
 
@@ -61,7 +78,7 @@ Ingestion and **Retry media** only ever replace the placeholder; they never remo
 - **Retry media:** look up box art and a snap again for this game (replacing only the placeholder).
 - **Merge into…:** move every release into another game of the same system (pick it by typing at least 2 characters of its name) and delete this one. The target keeps its own title, metadata and cover; only its empty fields are filled from this game. This game's images (not its placeholder) are copied over, and its box art replaces a placeholder on the target. A merge that would leave more than 20 images is refused. Up to five same-system suggestions appear above the picker. They search the cleaned title (up to eight words), falling back to the first word of at least three characters when nothing matches. Clicking a suggestion fills and selects the target; typing again clears it. Failed suggestion requests leave the picker usable.
 - **Move** (per release): move one release to another game, or to a new game with a title you choose. A game left with no releases is deleted.
-- **Delete** (per release) and **Delete game:** the ROM files are moved to `ingest/<system>/_removed/`, never deleted; move one back into `ingest/<system>/` to ingest it again. Deleting a game's last release deletes the game.
+- **Delete** (per release) and **Delete game:** the confirmation says when the release's note (or the game's notes) go too. The ROM files are moved to `ingest/<system>/_removed/`, never deleted; move one back into `ingest/<system>/` to ingest it again. Deleting a game's last release deletes the game.
 
 Edits and jobs take turns: while a job runs, an edit shows "Another job is running".
 
@@ -133,11 +150,12 @@ Missing Images and Duplicates keep their system and page controls in page state.
 
 ## Admin
 
-`/admin` (Admin) has six tabs:
+`/admin` (Admin) has seven tabs:
 
 - **Users:** every account with its roles, status and last sign-in. Tick or untick an account's `admin` and `rom-manager` boxes to change its roles (saved at once; the account is signed out), **Disable**/**Enable** it (accounts are never deleted), or **Reset password** (sets a new one the user must change, and clears a lockout). **Create user** opens a dialog for a username (3–64 letters, digits, `.`, `_` or `-`), an initial password the user must change at first sign-in, and its roles (none by default). The last enabled `admin` can't be disabled or lose the `admin` role.
 - **DATs:** the version and download time of each DAT. **Refresh DATs** downloads the current No-Intro and metadata DATs from libretro-database; if any download fails, the previous set stays in use.
 - **Settings:** the effective configuration, read-only, with secrets masked.
+- **Backups:** the daily database backup. **Schedule:** on/off, the time (server time; the server's time zone is named next to it) and how many backups to keep (1–365), saved with **Save**. **Status:** the next run (in your time zone) and the last result, since the app started. **Back up now** runs one and waits for it. Below, every backup with its time and size, newest first. Restoring is done at startup; see [deployment](deployment.md#restoring-a-backup).
 - **Logs:** **Download logs** downloads a ZIP of the log files plus the settings and version. Below it, the live log: the last 20 events show as soon as the tab opens, then the stream fills in the rest of the last 500 events the server kept in memory (without duplicates), then each new one as it happens (what goes to the log file, at the same minimum level). Newest at the bottom, following along while you're scrolled to the end; **Pause** holds new lines until **Resume**; the level box hides less important lines. A dropped connection reconnects on its own (a "Reconnecting…" badge shows meanwhile) and picks up where it stopped.
 - **Auditing:** the last 100 file actions, newest first, with local time, action, system, user (or *System* for a scheduled action), game link, source path, target and details. Filter by action, system, exact username, path/target/details search and local From/To dates; **Scheduled only** disables User. Text applies after 300 ms; the other controls apply immediately. Filters and page stay in the URL, and **Clear** resets them. To includes the whole selected local day. Events are retained for 30 days.
 - **About:** the version, a link to the project on GitHub, the attribution for libretro-database and libretro-thumbnails, and the licence of every component.
@@ -275,9 +293,35 @@ All integrity endpoints need an Admin session; the POST also needs the antiforge
 - `GET /api/integrity/status` returns `{lastQuick, lastDeep, nextScheduledAt}`: the latest job of each mode (or `null`) and the next scheduled quick check in UTC (`null` when the schedule is disabled).
 - `GET /api/integrity/issues?status=&type=&page=&pageSize=` returns a page of issues, newest first. `status` is `Open`, `AutoRepaired` or `Resolved`; `type` is any issue type above.
 
+### Release notes through the API
+
+- `GET /api/games/{id}` gives each release `hasNote` (read from the ZIP's entry names; `false` for every release when the ZIP can't be opened) and `originalFileName`.
+- `GET /api/games/{id}/roms/{romId}/note` (any signed-in user) returns the note as `text/markdown; charset=utf-8`; `404 NotFound` when the game, release or note doesn't exist; `409 NoteTooLarge` above 64 KiB.
+- `PUT /api/games/{id}/roms/{romId}/note` with `{text}` saves it (`204`). Line endings become `\n`; empty or whitespace-only text deletes the note; more than 65,536 UTF-8 bytes, or a missing `text`, is `400` with a `text` field error.
+- `DELETE /api/games/{id}/roms/{romId}/note` deletes it (`204`; `404` when there's none).
+
+PUT and DELETE rewrite the ZIP under the job lock like any edit (`409 JobRunning`, `409 InfoJsonNewerSchema`); the game's fields, including `updatedAt`, don't change, and notes aren't audited (they're logged at Info).
+
+### Keyboard shortcuts through the API
+
+- `GET /api/auth/me/hotkeys` returns `{bindings: {<id>: string | null}}` for every editable action (`nav.library`, `nav.ingestion`, `nav.review`, `review.next`), defaults filled in.
+- `PUT /api/auth/me/hotkeys` with `{bindings}` replaces your shortcuts (an action left out goes back to its default; `{}` resets all) and returns the result. Shortcuts are written `Ctrl+Alt+Shift+Meta+<Key>` (modifiers in that order); other orders and letter case are accepted and normalised. Unknown actions, `search`, bad formats and the rules above are `400` with field errors keyed `bindings.<id>`. Only shortcuts that differ from the default are stored (`users.hotkeys`). Bindings sent for actions your roles don't allow are ignored, and stored ones are kept.
+
+Both are blocked until a forced password change is done.
+
+### Database backups through the API
+
+All three need `admin`.
+
+- `GET /api/admin/backups` returns `{enabled, time, retention, timeZone, nextRunAt, running, lastResult: {at, ok, fileName, error} | null, backups: [{fileName, sizeBytes, createdAt}]}`, backups newest first. `nextRunAt` is UTC, `null` when disabled.
+- `PUT /api/admin/backups/settings` with `{enabled, time: "HH:mm", retention: 1–365}` (all required) saves the schedule and reschedules at once; returns the GET body. Errors are `400` with field errors `enabled`, `time` or `retention`.
+- `POST /api/admin/backups` runs a backup and waits for it: `201` with `{fileName, sizeBytes, createdAt}`; `409 BackupRunning` when one is already running; `500 BackupFailed` when it fails (the cause is in the log and in `lastResult`).
+
+A scheduled run that finds a manual one running is skipped (logged at Info). The settings live in the `app_settings` table (`backup.enabled`, `backup.time`, `backup.retention`); missing rows mean the defaults.
+
 ### Admin settings, logs and About
 
-- `GET /api/admin/settings` (Admin) returns the effective configuration: the same redacted model that is logged at startup. The connection string has its password removed, and `adminInitialPassword` shows `***` when one is set.
+- `GET /api/admin/settings` (Admin) returns the effective configuration: the same redacted model that is logged at startup (including `backup.restoreFrom`). The connection string has its password removed, and `adminInitialPassword` shows `***` when one is set.
 - `GET /api/admin/logs/recent` (Admin) returns the last 20 log events the server holds in memory as a JSON array, oldest first (`[]` when there are none).
 - `GET /api/admin/logs` (Admin) downloads `rnrommanager-logs-<UTC time>.zip`. It contains every `*.log` file in `Paths:Logs` (including today's file while the app is writing to it), `settings.json` (the redacted configuration) and `version.txt`.
 - `GET /api/admin/logs/stream` (Admin) is a server-sent event stream (`text/event-stream`). It first sends the buffered events newer than the `Last-Event-ID` header (all of them when the header is missing, unreadable or newer than anything buffered), then each new event as `id: <number>` and `data: {time, level, logger, message, exception}`. Ids keep increasing across restarts. A `: keep-alive` comment follows every 15 seconds; at each one the stream ends if the user was disabled, lost `admin` or was signed out.

@@ -327,6 +327,43 @@ test('images: upload, set cover, delete', async () => {
 	await expect(card('boxart-01.png').getByText('Cover')).toBeVisible();
 });
 
+test('release notes: add, edit and delete', async () => {
+	await openGame('Star Courier');
+	const add = page.getByRole('button', { name: /^Add note for / }).first();
+	const fileName = (await add.getAttribute('aria-label'))!.replace('Add note for ', '');
+
+	// No note yet: the modal opens in Edit, View is disabled.
+	await add.click();
+	await expect(dialog()).toHaveAccessibleName(`Note — ${fileName}`);
+	await expect(dialog().getByRole('radio', { name: 'View', exact: true })).toBeDisabled();
+	const text = dialog().getByLabel('Note (Markdown)');
+	await text.fill('# Courier tips\n\nPress **Start** twice.');
+	await expect(dialog().getByText(/^\d+ \/ 65,536 bytes$/)).toBeVisible();
+	await dialog().locator('label').filter({ hasText: /^Preview$/ }).click();
+	await expect(dialog().getByRole('heading', { name: 'Courier tips' })).toBeVisible();
+	await expectAccessible(page, 'release note modal');
+	await dialog().getByRole('button', { name: 'Save' }).click();
+	await expect(dialog()).toBeHidden();
+
+	// Now it has one: View shows it rendered; edit it.
+	await page.getByRole('button', { name: `Note for ${fileName}`, exact: true }).click();
+	await expect(dialog().getByRole('heading', { name: 'Courier tips' })).toBeVisible();
+	await dialog().locator('label').filter({ hasText: /^Edit$/ }).click();
+	await text.fill('## Updated tips');
+	await dialog().getByRole('button', { name: 'Save' }).click();
+	await expect(dialog()).toBeHidden();
+	await page.reload();
+	await page.getByRole('button', { name: `Note for ${fileName}`, exact: true }).click();
+	await expect(dialog().getByRole('heading', { name: 'Updated tips' })).toBeVisible();
+
+	// Delete it with the inline confirmation.
+	await dialog().getByRole('button', { name: 'Delete note' }).click();
+	await expect(dialog().getByText('Delete this note?')).toBeVisible();
+	await dialog().getByRole('button', { name: 'Yes' }).click();
+	await expect(dialog()).toBeHidden();
+	await expect(page.getByRole('button', { name: `Add note for ${fileName}`, exact: true })).toBeVisible();
+});
+
 test('Admin: edit metadata, move a release, delete a release and a game', async () => {
 	await openGame('Orbit Blocks');
 
@@ -392,6 +429,62 @@ test('Admin: live logs', async () => {
 	// The buffer already holds startup and request events.
 	await expect(page.getByRole('log', { name: 'Live log' }).locator('.badge').first()).toBeVisible();
 	await expectAccessible(page, 'logs');
+});
+
+test('keyboard shortcuts: use, rebind and use again', async () => {
+	await page.goto('/');
+	await expect(page.locator('nav.navbar')).toHaveClass(/sticky-top/);
+	await expect(page.getByRole('button', { name: 'Keyboard shortcuts' })).toBeVisible();
+
+	// The default Alt+Shift+I goes to Ingestion (bindings load after sign-in, so retry until they have).
+	await expect(async () => {
+		await page.keyboard.press('Alt+Shift+KeyI');
+		await expect(page).toHaveURL(/\/ingestion$/, { timeout: 1_000 });
+	}).toPass();
+
+	await page.getByRole('button', { name: 'Keyboard shortcuts' }).click();
+	await expect(dialog()).toHaveAccessibleName('Keyboard shortcuts');
+	await expect(dialog().getByRole('row', { name: /Go to Library/ })).toContainText('Alt+Shift+L');
+	await expectAccessible(page, 'keyboard shortcuts modal');
+
+	await dialog().getByRole('button', { name: 'Edit Go to Library' }).click();
+	await expect(dialog().getByText('Press keys…')).toBeVisible();
+	// Escape only stops capturing; the dialog stays open.
+	await page.keyboard.press('Escape');
+	await expect(dialog()).toBeVisible();
+	await dialog().getByRole('button', { name: 'Edit Go to Library' }).click();
+	await page.keyboard.press('Alt+Shift+KeyK');
+	await expect(dialog().getByRole('row', { name: /Go to Library/ })).toContainText('Alt+Shift+K');
+	await dialog().getByRole('button', { name: 'Save' }).click();
+	await expect(dialog()).toBeHidden();
+
+	// A full load fetches the saved bindings again: retry until they're in.
+	await page.goto('/reports/library-size');
+	await expect(async () => {
+		await page.keyboard.press('Alt+Shift+KeyK');
+		await expect(page).toHaveURL(/\/$/, { timeout: 1_000 });
+	}).toPass();
+
+	// Back to the defaults for anything after this.
+	await page.getByRole('button', { name: 'Keyboard shortcuts' }).click();
+	await dialog().getByRole('button', { name: 'Reset to defaults' }).click();
+	await dialog().getByRole('button', { name: 'Save' }).click();
+	await expect(dialog()).toBeHidden();
+});
+
+test('Admin: database backups', async () => {
+	await page.goto('/admin/backups');
+	await expect(page.getByRole('link', { name: 'Backups', exact: true })).toHaveAttribute('aria-current', 'page');
+	await expect(page.getByLabel(/^Daily at \(server time, /)).toHaveValue('03:30');
+	await expect(page.getByText('No backups yet.')).toBeVisible();
+	await expectAccessible(page, 'backups');
+
+	await page.getByRole('button', { name: /Back up now/ }).click();
+	await expect(page.getByRole('cell', { name: /^rnrommanager-\d{8}-\d{6}\.zip$/ })).toBeVisible({
+		timeout: 30_000
+	});
+	await expect(page.getByTestId('last-result')).toContainText('rnrommanager-');
+	await expectAccessible(page, 'backups with a backup');
 });
 
 test('Admin and Integrity pages are accessible', async () => {
