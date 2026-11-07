@@ -18,6 +18,7 @@
 	import { guard } from '#lib/guard.js';
 	import { navigate } from '#lib/navigation.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
+	import { hotkeys } from '#lib/stores/hotkeys.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import { theme } from '#lib/theme.svelte.js';
@@ -59,6 +60,9 @@
 		if (redirect) void navigate(redirect);
 	});
 
+	// B24: bindings load once signed in with the password changed, and again after a password change.
+	$effect(() => hotkeys.follow(auth.me));
+
 	async function loadReviewCount(): Promise<void> {
 		// Every /api call but me/change-password/logout is 403 until the password is changed (§9.1).
 		if (!auth.isAdmin || auth.me?.mustChangePassword) return;
@@ -86,6 +90,8 @@
 		await navigate('/login');
 	}
 </script>
+
+<svelte:window onkeydown={(e) => hotkeys.handle(e)} />
 
 {#if bootError}
 	<main class="container py-4">
