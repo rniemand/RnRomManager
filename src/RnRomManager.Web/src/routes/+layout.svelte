@@ -12,6 +12,7 @@
 	import type { Page } from '#lib/api/types.js';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import GlobalSearch from '#lib/components/GlobalSearch.svelte';
+	import HotkeysModal from '#lib/components/HotkeysModal.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import Navbar from '#lib/components/Navbar.svelte';
 	import ToastHost from '#lib/components/ToastHost.svelte';
@@ -29,6 +30,7 @@
 	let bootError = $state<unknown>(null);
 	let reviewCount = $state<number | null>(null);
 	let searchOpen = $state(false);
+	let hotkeysOpen = $state(false);
 
 	configureClient({ navigate });
 
@@ -101,8 +103,15 @@
 	<Loading />
 {:else}
 	{#if auth.me}
-		<Navbar me={auth.me} {reviewCount} onlogout={logout} onsearch={() => (searchOpen = true)} />
+		<Navbar
+			me={auth.me}
+			{reviewCount}
+			onlogout={logout}
+			onsearch={() => (searchOpen = true)}
+			onhotkeys={() => (hotkeysOpen = true)}
+		/>
 		<GlobalSearch bind:open={searchOpen} />
+		<HotkeysModal bind:open={hotkeysOpen} me={auth.me} />
 	{/if}
 	<main class="container py-4">
 		{@render children()}

@@ -36,6 +36,7 @@ export const icons: Record<string, string> = {
 	'sort-desc': 'bi bi-sort-down',
 	list: 'bi bi-list-ul',
 	info: 'bi bi-info-circle',
+	help: 'bi bi-question-circle',
 	warning: 'bi bi-exclamation-triangle',
 	error: 'bi bi-x-octagon',
 	success: 'bi bi-check-circle',
