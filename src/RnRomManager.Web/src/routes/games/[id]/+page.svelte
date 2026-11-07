@@ -330,6 +330,15 @@
 										title={rom.fileName}>{rom.fileName}</span
 									>
 									{#if rom.isPrimary}<span class="badge text-bg-primary ms-1">Primary</span>{/if}
+									{#if rom.originalFileName !== rom.fileName}
+										<div
+											class="small text-body-secondary text-truncate"
+											style="max-width: 32rem"
+											title={rom.originalFileName}
+										>
+											Original: {rom.originalFileName}
+										</div>
+									{/if}
 								</td>
 								<td>
 									{#each rom.regions as region (region)}

@@ -85,6 +85,8 @@ export interface RomDetail {
 	dateAdded: string;
 	dateModified: string;
 	downloadUrl: string;
+	/** B3: the ZIP holds `notes/<fileName>.md`. */
+	hasNote: boolean;
 }
 
 export interface ImageInfo {

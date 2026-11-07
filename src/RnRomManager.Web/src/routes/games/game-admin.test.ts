@@ -32,7 +32,7 @@ const { default: GamePage } = await import('./[id]/+page.svelte');
 const rom = (id: number) => ({
 	id,
 	fileName: `Tetris ${id}.gb`,
-	originalFileName: '',
+	originalFileName: `Tetris ${id}.gb`,
 	baseTitle: 'Tetris',
 	regions: [],
 	languages: [],
@@ -50,7 +50,8 @@ const rom = (id: number) => ({
 	sha1: '0',
 	dateAdded: '',
 	dateModified: '',
-	downloadUrl: ''
+	downloadUrl: '',
+	hasNote: false
 });
 
 const game = (romIds: number[]) => ({
@@ -149,6 +150,38 @@ describe('game detail admin actions', () => {
 
 		await vi.waitFor(() => expect(calls).toContain('DELETE /api/games/g1/roms/2'));
 		await vi.waitFor(() => expect(calls.filter((c) => c === 'GET /api/games/g1')).toHaveLength(2));
+	});
+
+	it('the release delete confirmation mentions the note only when the release has one (B12)', async () => {
+		const detail = game([1, 2]);
+		detail.roms[1].hasNote = true;
+		answers['GET /api/games/g1'] = [{ status: 200, body: detail }];
+		render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Delete Tetris 2.gb' }));
+		expect(modal().getByText(/Delete Tetris 2\.gb and its note\?/)).toBeTruthy();
+
+		await fireEvent.click(modal().getByRole('button', { name: 'Cancel', hidden: true }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Delete Tetris 1.gb' }));
+		await vi.waitFor(() => expect(modal().getByText(/Delete Tetris 1\.gb\?/)).toBeTruthy());
+		expect(modal().queryByText(/and its note/)).toBeNull();
+	});
+
+	it('the game delete confirmation mentions notes when any release has one (B12)', async () => {
+		const withNote = game([1, 2]);
+		withNote.roms[1].hasNote = true;
+		answers['GET /api/games/g1'] = [{ status: 200, body: withNote }];
+		const { unmount } = render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: /Delete game/ }));
+		expect(modal().getByText(/Delete Tetris and its notes\?/)).toBeTruthy();
+		unmount();
+
+		answers['GET /api/games/g1'] = [{ status: 200, body: game([1, 2]) }];
+		render(GamePage);
+		await fireEvent.click(await screen.findByRole('button', { name: /Delete game/ }));
+		expect(modal().getByText(/Delete Tetris\?/)).toBeTruthy();
+		expect(modal().queryByText(/and its notes/)).toBeNull();
 	});
 
 	it('a stale id (404) reloads and asks for a retry', async () => {

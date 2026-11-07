@@ -49,7 +49,8 @@ const rom = (id: number, fileName: string, isPrimary: boolean) => ({
 	sha1: 'abc123',
 	dateAdded: '2026-11-01T00:00:00Z',
 	dateModified: '2026-11-01T00:00:00Z',
-	downloadUrl: `/api/games/g1/roms/${id}/download`
+	downloadUrl: `/api/games/g1/roms/${id}/download`,
+	hasNote: false
 });
 
 function game(romIds: number[]): GameDetail {
@@ -110,6 +111,19 @@ describe('game detail page', () => {
 		vi.stubGlobal('location', { ...window.location, assign });
 	});
 	afterEach(() => vi.unstubAllGlobals());
+
+	it('shows the original file name under the file name only when it differs (B1)', async () => {
+		const detail = game([1, 2]);
+		detail.roms[1].originalFileName = 'tetris_rev1_final.gb';
+		answers.push({ status: 200, body: detail });
+		render(GamePage);
+
+		const original = await screen.findByText('Original: tetris_rev1_final.gb');
+		expect(original.getAttribute('title')).toBe('tetris_rev1_final.gb');
+		expect(original.classList.contains('text-truncate')).toBe(true);
+		expect(original.classList.contains('text-body-secondary')).toBe(true);
+		expect(screen.getAllByText(/^Original:/)).toHaveLength(1);
+	});
 
 	it('shows box art, releases with region badges, and the header in a modal', async () => {
 		const detail = game([1]);
