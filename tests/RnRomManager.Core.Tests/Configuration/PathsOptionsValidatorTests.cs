@@ -12,6 +12,7 @@ public class PathsOptionsValidatorTests
         Ingest = Path.Combine(Root, "ingest"),
         Logs = Path.Combine(Root, "logs"),
         Cache = Path.Combine(Root, "cache"),
+        Backups = Path.Combine(Root, "backups"),
     };
 
     private static IEnumerable<string> Failures(PathsOptions options) =>
@@ -95,5 +96,36 @@ public class PathsOptionsValidatorTests
         var options = Valid();
         options.Cache = Path.Combine(options.Logs, "x", "..", "cache");
         Assert.That(Failures(options), Has.Some.EqualTo("Paths:Cache must not be inside Paths:Logs."));
+    }
+
+    [Test]
+    public void Backups_DefaultsToAppBackups()
+    {
+        Assert.That(new PathsOptions().Backups, Is.EqualTo("/app/backups"));
+        Assert.That(new PathsOptions().All().Select(p => p.Key), Has.Member("Paths:Backups"));
+    }
+
+    [Test]
+    public void Backups_IsRequired()
+    {
+        var options = Valid();
+        options.Backups = "";
+        Assert.That(Failures(options), Has.Some.EqualTo("Paths:Backups is required."));
+    }
+
+    [Test]
+    public void Backups_MustBeAbsolute()
+    {
+        var options = Valid();
+        options.Backups = "backups";
+        Assert.That(Failures(options), Has.Some.StartsWith("Paths:Backups must be an absolute path"));
+    }
+
+    [Test]
+    public void Backups_InsideTheLibrary_Fails()
+    {
+        var options = Valid();
+        options.Backups = Path.Combine(options.Roms, "backups");
+        Assert.That(Failures(options), Has.Some.EqualTo("Paths:Backups must not be inside Paths:Roms."));
     }
 }

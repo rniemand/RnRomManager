@@ -17,7 +17,7 @@ public class StartupRunnerTests
     {
         using var client = _factory.CreateClient();
 
-        foreach (var key in new[] { "Paths:Roms", "Paths:Ingest", "Paths:Logs", "Paths:Cache" })
+        foreach (var key in new[] { "Paths:Roms", "Paths:Ingest", "Paths:Logs", "Paths:Cache", "Paths:Backups" })
             Assert.That(Directory.Exists(_factory.Settings[key]), Is.True, key);
     }
 

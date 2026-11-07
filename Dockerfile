@@ -25,7 +25,7 @@ RUN case "$TARGETARCH" in amd64) echo x64 ;; arm64) echo arm64 ;; *) echo "unsup
  && dotnet restore src/RnRomManager.Api -a "$(cat /tmp/arch)"
 COPY src/ src/
 RUN dotnet publish src/RnRomManager.Api -c Release -a "$(cat /tmp/arch)" --no-restore -p:Version="$VERSION" -o /app \
- && mkdir -p /volumes/roms /volumes/ingest /volumes/logs /volumes/cache
+ && mkdir -p /volumes/roms /volumes/ingest /volumes/logs /volumes/cache /volumes/backups
 
 # --- Runtime ------------------------------------------------------------------------------------
 # -extra: ICU (NFC normalisation, §6.1) + tzdata (TZ for the schedule, §17.2). Chiseled: no shell.
@@ -37,6 +37,6 @@ COPY --from=web /src/web/build ./wwwroot
 COPY --from=publish --chown=1654:1654 /volumes/ ./
 USER 1654
 EXPOSE 8080
-VOLUME ["/app/roms", "/app/ingest", "/app/logs", "/app/cache"]
+VOLUME ["/app/roms", "/app/ingest", "/app/logs", "/app/cache", "/app/backups"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s CMD ["/app/RnRomManager.Api", "--healthcheck"]
 ENTRYPOINT ["/app/RnRomManager.Api"]

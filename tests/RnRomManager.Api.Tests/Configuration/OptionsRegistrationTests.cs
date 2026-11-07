@@ -18,6 +18,7 @@ public class OptionsRegistrationTests
         ["Paths:Ingest"] = Path.Combine(Root, "ingest"),
         ["Paths:Logs"] = Path.Combine(Root, "logs"),
         ["Paths:Cache"] = Path.Combine(Root, "cache"),
+        ["Paths:Backups"] = Path.Combine(Root, "backups"),
     };
 
     private static ServiceProvider Build(Dictionary<string, string?> settings)

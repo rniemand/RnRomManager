@@ -75,15 +75,24 @@ if (-not $SkipDb) {
 
 Write-Host '==> Creating ./.dev folders'
 $paths = [ordered]@{}
-foreach ($name in 'roms', 'ingest', 'logs', 'cache') {
+foreach ($name in 'roms', 'ingest', 'logs', 'cache', 'backups') {
     $path = Join-Path $repoRoot ".dev/$name"
     New-Item -ItemType Directory -Force -Path $path | Out-Null
     $paths[(Get-Culture).TextInfo.ToTitleCase($name)] = [IO.Path]::GetFullPath($path)
 }
 
 if (Test-Path -LiteralPath $settingsFile) {
-    # Re-runs keep local edits; delete the file to regenerate it.
+    # Re-runs keep local edits; delete the file to regenerate it. Paths added since (e.g. Backups) are filled in,
+    # otherwise the app would fall back to a Linux default that isn't absolute on Windows.
     Write-Host "==> Keeping the existing $settingsFile"
+    $existing = Get-Content -LiteralPath $settingsFile -Raw | ConvertFrom-Json -AsHashtable
+    if (-not $existing.ContainsKey('Paths')) { $existing['Paths'] = [ordered]@{} }
+    $added = @($paths.Keys | Where-Object { -not $existing['Paths'].ContainsKey($_) })
+    if ($added.Count) {
+        foreach ($key in $added) { $existing['Paths'][$key] = $paths[$key] }
+        $existing | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $settingsFile -Encoding utf8NoBOM
+        Write-Host "==> Added Paths:$($added -join ', Paths:') to $settingsFile"
+    }
 } else {
     Write-Host "==> Writing $settingsFile"
     $settings = [ordered]@{

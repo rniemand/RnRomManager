@@ -12,6 +12,7 @@ using RnRomManager.Api.Http;
 using RnRomManager.Api.Logging;
 using RnRomManager.Api.Security;
 using RnRomManager.Core.Audit;
+using RnRomManager.Core.Backups;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Database;
@@ -96,6 +97,8 @@ public static class AppHost
         builder.Services.AddSingleton<JobLock>();
         builder.Services.AddSingleton<JobRunner>();
         builder.Services.AddSingleton<CrashRecovery>();
+        builder.Services.AddSingleton<IBackupStore, MySqlBackupStore>();
+        builder.Services.AddSingleton<BackupService>();
         builder.Services.AddSingleton<IAuditRepository, AuditRepository>();
         builder.Services.AddSingleton<AuditLog>();
         builder.Services.AddSingleton<IAuditLog>(sp => sp.GetRequiredService<AuditLog>());
