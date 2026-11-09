@@ -19,6 +19,25 @@
 }
 
 /*
+ * R2: release headers are bg-body-tertiary, where the light theme's default outline colours fall under 4.5:1. Use the
+ * text-emphasis colours there in both themes (the dark theme already does this everywhere, above).
+ */
+.release-header {
+	.btn-outline-primary {
+		--bs-btn-color: var(--bs-primary-text-emphasis);
+		--bs-btn-border-color: var(--bs-primary-text-emphasis);
+	}
+	.btn-outline-secondary {
+		--bs-btn-color: var(--bs-secondary-text-emphasis);
+		--bs-btn-border-color: var(--bs-secondary-text-emphasis);
+	}
+	.btn-outline-danger {
+		--bs-btn-color: var(--bs-danger-text-emphasis);
+		--bs-btn-border-color: var(--bs-danger-text-emphasis);
+	}
+}
+
+/*
  * Active navbar link (spec B17): primary-shade text, semibold, a 3px primary underline from lg up and a left bar in the
  * collapsed menu. The dark theme uses the text-emphasis colour, which keeps AA contrast on the dark navbar.
  */
