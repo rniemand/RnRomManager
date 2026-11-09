@@ -1,6 +1,6 @@
 # RnRomManager
 
-A self-hosted web app for managing a personal backup collection of **Game Boy**, **Game Boy Color**, **Game Boy Advance** and **Nintendo 64** ROMs.
+A self-hosted web app for managing a personal backup collection of **Game Boy**, **Game Boy Color**, **Game Boy Advance**, **Nintendo 64** and **Nintendo Entertainment System** ROMs.
 
 Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder. RnRomManager identifies each one against the [No-Intro](https://no-intro.org/) DATs, names it consistently, groups every region and revision of a game together, fetches box art and screenshots, and stores each game as one self-describing ZIP in a tidy `roms/<system>/<letter>/` layout. A MariaDB database mirrors the library for fast browsing, and a scheduled integrity checker keeps the two in sync.
 
@@ -76,9 +76,9 @@ docker compose up -d
 
 1. Open `http://<host>:8080`, sign in as `admin` with `ADMIN_PASSWORD`, and choose a new password.
 2. **Admin → DATs → Refresh DATs** downloads the game databases (once, and whenever you want newer ones).
-3. Copy your `.gb` / `.gbc` files into `data/ingest/gb/`, your `.gba` files into `data/ingest/gba/` and your `.z64` / `.v64` / `.n64` files into `data/ingest/n64/`, then press **Ingestion → Import all**.
+3. Copy your `.gb` / `.gbc` files into `data/ingest/gb/`, your `.gba` files into `data/ingest/gba/` your `.z64` / `.v64` / `.n64` files into `data/ingest/n64/` and your headered `.nes` files into `data/ingest/nes/`, then press **Ingestion → Import all**.
 
-Upgrading from a version without Game Boy Advance or Nintendo 64? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`).
+Upgrading from a version without Game Boy Advance, Nintendo 64 or NES? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`).
 
 Set `user:` to the owner of `./data` (`id -u`:`id -g`). An existing MariaDB server, reverse proxies, backups, upgrades and password recovery are covered in the [deployment guide](https://github.com/rniemand/RnRomManager/blob/main/docs/deployment.md).
 

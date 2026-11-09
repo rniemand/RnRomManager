@@ -14,6 +14,7 @@ roms/
   gbc/                  GBC-only and dual-mode carts
   gba/                  Game Boy Advance
   n64/                  Nintendo 64 (always stored big-endian, as .z64)
+  nes/                  Nintendo Entertainment System (headered .nes, header included)
 ```
 
 Inside a game's ZIP:
@@ -82,7 +83,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 |---|---|---|---|
 | `schemaVersion` | int | ✓ | `3` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
 | `releaseYear` | int? | | from the DAT metadata |
@@ -125,6 +126,8 @@ Game Boy Advance `header`: `title` (12 chars at 0xA0), `gameCode` (4 chars at 0x
 
 Nintendo 64 `header`, read after the ROM is converted to big-endian (so it can't tell which byte order the dump came in): `title` (20 chars at 0x20), `gameCode` (4 chars at 0x3B, null unless A–Z/0–9), `mediaType` (from the game code's 1st char: `Cartridge`, `Cartridge (expandable)`, `64DD disk`, `64DD expansion`, `Aleck64` or `Unknown (X)`), `destination` (from its 4th char: `Asia`, `Brazil`, `China`, `Germany`, `USA`, `France`, `Netherlands`, `Italy`, `Japan`, `Korea`, `Canada`, `Europe`, `Spain`, `Australia`, `Scandinavia` or `Unknown (X)`), `version` (0x3F), `crc1` and `crc2` (0x10 and 0x14) and `bootAddress` (0x08) as `0xHHHHHHHH`, `headerValid` (byte 0 is 0x80), `romSizeBytes` (the file length).
 
+Nintendo Entertainment System `header`, from the 16-byte iNES / NES 2.0 header (the ROM is stored and hashed with it): `headerValid` (bytes 0–3 are `NES` + 0x1A), `format` (`NES 2.0` when byte 7 bits 2–3 are `10`, else `iNES`), `mapper` (byte 6 high nibble, byte 7 high nibble, and for NES 2.0 byte 8's low nibble as bits 8–11), `prgRomSizeBytes` (byte 4 × 16 KiB; NES 2.0 adds byte 9's low nibble as the high byte, null in the exponent form), `chrRomSizeBytes` (byte 5 × 8 KiB; NES 2.0 adds byte 9's high nibble, null in the exponent form), `mirroring` (`Four-screen`, `Vertical` or `Horizontal`), `battery`, `trainer`, `tvSystem` (iNES: `NTSC` or `PAL` from byte 9; NES 2.0: `NTSC`, `PAL`, `Multi-region` or `Dendy` from byte 12), `romSizeBytes` (the file length). Without the magic only `headerValid` (false) and `romSizeBytes` are set; the rest are null. iNES has no title.
+
 ### Image
 
 | Field | Type | Required | Notes |
@@ -132,7 +135,7 @@ Nintendo 64 `header`, read after the ROM is converted to big-endian (so it can't
 | `fileName` | string | ✓ | entry name under `images/` |
 | `type` | `BoxArt` \| `Snap` \| `TitleScreen` \| `Other` | ✓ | only BoxArt and Snap are fetched |
 | `source` | `libretro-thumbnails` \| `default` \| `upload` | ✓ | `upload` from v3 |
-| `sourceUrl` | string? | | |
+| `sourceUrl` | string? | | the URL a `libretro-thumbnails` image came from, or the URL an `upload` was downloaded from (Upload image → URL); null for a file upload and the placeholder |
 | `isDefault` | bool | ✓ | the system placeholder; at most one, and it must be a `BoxArt` |
 | `isCover` | bool | ✓ | v3; exactly one per game with images |
 | `sizeBytes` | long | ✓ | entry size |
