@@ -24,6 +24,34 @@ public class DatStoreTests
         Assert.That((store.DatName, store.Version), Is.EqualTo(("Nintendo - Game Boy", "v1")));
     }
 
+    private static readonly NoIntroDat Nes = new("Nintendo - Nintendo Entertainment System", "v1",
+    [
+        new DatRom("Pixel Pioneer (USA)", "Pixel Pioneer (USA).nes", 40976, "11111111", new string('a', 32), new string('4', 40)),
+        new DatRom("Pixel Pioneer (USA)", "Pixel Pioneer (USA).unh", 40960, "22222222", new string('b', 32), new string('5', 40)),
+        new DatRom("Headerless Only (Japan)", "Headerless Only (Japan).unh", 40960, "33333333", new string('c', 32), new string('6', 40)),
+        new DatRom("Shouty (Europe)", "Shouty (Europe).NES", 40976, "44444444", new string('d', 32), new string('7', 40)),
+    ]);
+
+    [Test]
+    public void RomExtensions_LeaveOtherExtensionsOutOfEveryIndex()
+    {
+        var store = new DatStore(Nes, [Metadat(DatKind.Genre, ("11111111", "Platform"), ("22222222", "Ignored"))], [".nes"]);
+
+        Assert.That(store.BySha1(new string('4', 40))?.RomName, Is.EqualTo("Pixel Pioneer (USA).nes"));
+        Assert.That(store.BySha1(new string('5', 40)), Is.Null);
+        Assert.That(store.BySha1(new string('7', 40))?.RomName, Is.EqualTo("Shouty (Europe).NES"), "case-insensitive");
+        Assert.That(store.Roms.Select(r => r.RomName), Is.EqualTo(new[] { "Pixel Pioneer (USA).nes", "Shouty (Europe).NES" }));
+        Assert.That(store.BaseTitles, Is.EqualTo(new[] { "Pixel Pioneer", "Shouty" }));
+        Assert.That(store.MetadataFor("11111111").Genres, Is.EqualTo(new[] { "Platform" }));
+        Assert.That(store.MetadataFor("22222222"), Is.SameAs(DatMetadata.Empty));
+    }
+
+    [Test]
+    public void NoRomExtensions_KeepEveryRom()
+    {
+        Assert.That(new DatStore(Nes, []).Roms, Has.Count.EqualTo(4));
+    }
+
     [Test]
     public void BaseTitles_AreDistinctInDatOrder()
     {
