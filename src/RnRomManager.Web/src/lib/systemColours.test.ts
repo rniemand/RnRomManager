@@ -6,7 +6,11 @@ describe('systemColour', () => {
 		expect(systemColour('nes')).toEqual({ name: 'warning', foreground: '#000' });
 	});
 
+	it('gives SNES its own purple with white text (S6)', () => {
+		expect(systemColour('snes')).toEqual({ name: 'snes', foreground: '#fff' });
+	});
+
 	it('keeps an unknown system neutral', () => {
-		expect(systemColour('snes')).toBe(fallbackColour);
+		expect(systemColour('md')).toBe(fallbackColour);
 	});
 });

@@ -27,6 +27,7 @@ using RnRomManager.Data;
 using RnRomManager.Data.Repositories;
 using RnRomManager.Systems.GameBoy;
 using RnRomManager.Systems.Nes;
+using RnRomManager.Systems.Snes;
 using RnRomManager.Systems.Nintendo64;
 
 namespace RnRomManager.Api;
@@ -148,6 +149,7 @@ public static class AppHost
         builder.Services.AddSystemHandler<GameBoyAdvanceHandler>();
         builder.Services.AddSystemHandler<Nintendo64Handler>();
         builder.Services.AddSystemHandler<NesHandler>();
+        builder.Services.AddSystemHandler<SnesHandler>();
 
         // Keys live in the DB so cookies survive restarts (spec §9.2).
         builder.Services.AddSingleton<IXmlRepository, DbXmlRepository>();

@@ -1,6 +1,6 @@
 # Adding a system
 
-Everything system-specific lives behind one interface, `ISystemHandler` (`src/RnRomManager.Core/Systems/ISystemHandler.cs`). Core, the database, the API and the UI enumerate the registered handlers for folders, DATs, file extensions, size limits and filters; nothing outside a `RnRomManager.Systems.X` project knows about Game Boy. Adding SNES means a new handler project, one registration line, tests and docs, with no changes to the core.
+Everything system-specific lives behind one interface, `ISystemHandler` (`src/RnRomManager.Core/Systems/ISystemHandler.cs`). Core, the database, the API and the UI enumerate the registered handlers for folders, DATs, file extensions, size limits and filters; nothing outside a `RnRomManager.Systems.X` project knows about Game Boy. Adding Mega Drive means a new handler project, one registration line, tests and docs, with no changes to the core.
 
 ## The contract
 
@@ -35,9 +35,9 @@ What each member drives:
 | `RomExtensions` | Which ingest files are picked up (case-insensitive). An unmatched file whose extension doesn't fit its classified system is renamed to `RomExtensions[0]`. It also filters the system's No-Intro DAT: entries whose file extension isn't in the list (case-insensitive) are left out of hash matching, review DAT search, suggestions and base titles, since no accepted file could match them. NES lists only `.nes`, so the DAT's headerless `.unh` copies are ignored; N64 drops its few `.bin`/`.cmd`/`.sm` entries. |
 | `MinRomSizeBytes` / `MaxRomSizeBytes` | Validation before hashing. The whole ROM is read into memory for `ReadHeader`, bounded by the maximum. |
 | `DatName` | The five DAT files fetched per system: `no-intro/<DatName>.dat` plus the `releaseyear`, `developer`, `publisher` and `genre` metadat files, all relative to `Sources:DatBaseUrl` and cached in `cache/dats/<kind>/`. Also the libretro-thumbnails folder name. |
-| `DefaultBoxArtPng` | Stored when no box art is found. Make your own (the GB/GBC/GBA/N64/NES ones are drawn for this project; their SVG sources are in each project's `Resources/boxart/`). |
+| `DefaultBoxArtPng` | Stored when no box art is found. Make your own (the GB/GBC/GBA/N64/NES/SNES ones are drawn for this project; their SVG sources are in each project's `Resources/boxart/`). |
 | `ReadHeader` | Classification (`ClassifiedSystemId`), the invalid-header rule (`IsPlausible`), review suggestions (`Title`) and the stored header (`Fields`). Return null for a file with no recognisable header; an unmatched headerless file then belongs to the ingest folder's handler. |
-| `NormalizeForHashing` | The bytes that are hashed **and stored**, and the bytes `ReadHeader` sees. Stored bytes, `info.json` hashes and the integrity checker's deep hashes then always agree. Nintendo 64 is the example: `.v64` (byte-swapped) and `.n64` (little-endian) dumps are converted to big-endian here, so they match the DAT's `.z64` entries and are stored as `.z64` (`RomExtensions[0]`). A SNES handler would strip a copier header the same way. |
+| `NormalizeForHashing` | The bytes that are hashed **and stored**, and the bytes `ReadHeader` sees. Stored bytes, `info.json` hashes and the integrity checker's deep hashes then always agree. Nintendo 64 is the example: `.v64` (byte-swapped) and `.n64` (little-endian) dumps are converted to big-endian here, so they match the DAT's `.z64` entries and are stored as `.z64` (`RomExtensions[0]`). SNES strips a 512-byte copier header here (by file size), so headered `.smc` dumps match the DAT's `.sfc` entries and are stored as `.sfc`. |
 
 **Limits of the contract:**
 
@@ -46,15 +46,15 @@ What each member drives:
 
 ## Step by step
 
-1. Create `src/RnRomManager.Systems.<Name>` (class library, referencing `RnRomManager.Core`) and add it to `RnRomManager.slnx`. Add a matching `tests/RnRomManager.Systems.<Name>.Tests` project. A closely related system may instead live in an existing project when that is simpler: Game Boy Advance shares `RnRomManager.Systems.GameBoy` (and its box-art and resource code) but is its own `gba` family. Nintendo 64 has its own project, `RnRomManager.Systems.Nintendo64`, with a small private loader for its embedded box art; NES follows the same pattern in `RnRomManager.Systems.Nes` (a short name rather than the full system name). Also add the new project's `.csproj` to the restore layer in the `Dockerfile`.
+1. Create `src/RnRomManager.Systems.<Name>` (class library, referencing `RnRomManager.Core`) and add it to `RnRomManager.slnx`. Add a matching `tests/RnRomManager.Systems.<Name>.Tests` project. A closely related system may instead live in an existing project when that is simpler: Game Boy Advance shares `RnRomManager.Systems.GameBoy` (and its box-art and resource code) but is its own `gba` family. Nintendo 64 has its own project, `RnRomManager.Systems.Nintendo64`, with a small private loader for its embedded box art; NES and SNES follow the same pattern in `RnRomManager.Systems.Nes` and `RnRomManager.Systems.Snes` (short names rather than the full system names). Also add the new project's `.csproj` to the restore layer in the `Dockerfile`.
 2. Implement `ISystemHandler` (one class per `Id`). Embed the default box-art PNG as a resource, together with its source file.
 3. Register it in `src/RnRomManager.Api/AppHost.cs` next to the existing ones:
    ```csharp
-   builder.Services.AddSystemHandler<SuperNintendoHandler>();
+   builder.Services.AddSystemHandler<MegaDriveHandler>();
    ```
    and add a project reference from `RnRomManager.Api`.
 4. Add the system to the test data builders in `tests/RnRomManager.TestData` if you want seeded ROMs and fixture DATs for it (`FixtureDatWriter` writes the five files per system).
-5. Optionally map its icon in `src/RnRomManager.Web/src/lib/components/icons.ts` (`'system-snes': 'bi bi-…'`); without it the UI uses the controller fallback.
+5. Optionally map its icon in `src/RnRomManager.Web/src/lib/components/icons.ts` (`'system-md': 'bi bi-…'`); without it the UI uses the controller fallback.
 6. Test the header reader with synthetic ROMs (never commit real ROMs), plus the registry lookups and the box-art PNG (valid, 512×512). See `tests/RnRomManager.Systems.GameBoy.Tests` for the pattern.
 7. Update the docs: this repository's README (supported systems), [features](features.md) if behaviour differs, and [ZIP format](zip-format.md) for the new `header` fields.
 

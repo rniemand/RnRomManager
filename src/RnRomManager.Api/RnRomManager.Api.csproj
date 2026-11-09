@@ -6,6 +6,7 @@
     <ProjectReference Include="../RnRomManager.Systems.GameBoy/RnRomManager.Systems.GameBoy.csproj" />
     <ProjectReference Include="../RnRomManager.Systems.Nintendo64/RnRomManager.Systems.Nintendo64.csproj" />
     <ProjectReference Include="../RnRomManager.Systems.Nes/RnRomManager.Systems.Nes.csproj" />
+    <ProjectReference Include="../RnRomManager.Systems.Snes/RnRomManager.Systems.Snes.csproj" />
   </ItemGroup>
 
   <ItemGroup>

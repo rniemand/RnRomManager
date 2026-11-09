@@ -32,6 +32,7 @@ public class IngestPipelineTests
     private static readonly byte[] Pioneer = new SyntheticNesRomBuilder { Seed = 70, Mapper = 1 }.Build();
     /// <summary>The same dump without its 16-byte header: what the DAT's <c>.unh</c> entry hashes.</summary>
     private static readonly byte[] PioneerHeaderless = Pioneer[16..];
+    private static readonly SyntheticSnesRomBuilder Rally = new() { Seed = 80, SizeKiB = 64, Title = "MODE SEVEN RALLY" };
 
     private ApiFactory _factory = null!;
     private ILibraryMirror? _mirrorOverride;
@@ -78,6 +79,7 @@ public class IngestPipelineTests
                 new FixtureGame("Pioneer (USA)", "Pioneer (USA).nes", Pioneer),
                 new FixtureGame("Pioneer (USA)", "Pioneer (USA).unh", PioneerHeaderless),
             ],
+            [IngestSeeder.SnesDat] = [new FixtureGame("Mode Seven Rally (USA)", "Mode Seven Rally (USA).sfc", Rally.Build())],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },
@@ -424,6 +426,118 @@ public class IngestPipelineTests
         Assert.That((first!.Outcome, second!.Outcome), Is.EqualTo((IngestOutcome.Ingested, IngestOutcome.Duplicate)));
         Assert.That(second.Sha1, Is.EqualTo(first.Sha1));
         Assert.That(ReadZip("n64/K/Kart 64.zip").Roms.Single().FileName, Is.EqualTo("Kart 64 (USA).z64"));
+    }
+
+    [Test]
+    public async Task SfcFile_InTheNesFolder_IsUnsupportedType()
+    {
+        var result = await IngestAsync(Drop("nes", "rally.sfc", Rally.Build()));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+    }
+
+    [Test]
+    public async Task NesFile_InTheSnesFolder_IsUnsupportedType()
+    {
+        var result = await IngestAsync(Drop("snes", "pioneer.nes", Pioneer));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+    }
+
+    [Test]
+    public async Task Snes_HeaderlessThenCopierHeadered_IsOneGameThenDuplicate()
+    {
+        var first = await IngestAsync(Drop("snes", "rally.sfc", Rally.Build()));
+        var second = await IngestAsync(Drop("snes", "rally.smc", (Rally with { CopierHeader = true }).Build()));
+
+        Assert.That((first!.Outcome, second!.Outcome), Is.EqualTo((IngestOutcome.Ingested, IngestOutcome.Duplicate)));
+        Assert.That(second.Sha1, Is.EqualTo(first.Sha1));
+        var rom = ReadZip("snes/M/Mode Seven Rally.zip").Roms.Single();
+        Assert.That((rom.FileName, rom.Header!["mapping"]!.GetValue<string>()), Is.EqualTo(("Mode Seven Rally (USA).sfc", "LoROM")));
+    }
+
+    [Test]
+    public async Task Snes_TooSmall_And_TooLarge_Fail()
+    {
+        var small = await IngestAsync(Drop("snes", "tiny.sfc", new byte[8191]));
+        var large = await IngestAsync(Drop("snes", "huge.smc", [1]) with { SizeBytes = 8L * 1024 * 1024 + 513 });
+
+        Assert.That((small!.Reason, large!.Reason), Is.EqualTo((IngestFailures.TooSmall, IngestFailures.TooLarge)));
+    }
+
+    [Test]
+    public async Task Snes_Unmatched_NoValidChecksumAndANonPrintableTitle_IsInvalidHeader()
+    {
+        var rom = new SyntheticSnesRomBuilder { Seed = 81, SizeKiB = 64, ValidChecksum = false, Title = "BAD\u0001TITLE" }.Build();
+
+        var result = await IngestAsync(Drop("snes", "bad.sfc", rom));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.InvalidHeader)));
+    }
+
+    [Test]
+    public async Task Snes_Unmatched_NoValidChecksumAndAPrintableTitle_WaitsInReview_SuggestedFromTheTitle()
+    {
+        var rom = new SyntheticSnesRomBuilder { Seed = 82, SizeKiB = 64, ValidChecksum = false, Title = "MODE SEVEN RALLY" }.Build();
+
+        var result = await IngestAsync(Drop("snes", "unknown.sfc", rom));
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "snes")));
+        var item = (await Service<IIngestReviewRepository>().GetBySha1Async(result.Sha1!, default))!;
+        Assert.That(item.Suggestions, Does.Contain("Mode Seven Rally"));
+    }
+
+    [Test]
+    public async Task Snes_Unmatched_TooShortForAnyHeader_WaitsInReview()
+    {
+        var rom = new byte[16 * 1024];
+        new Random(83).NextBytes(rom);
+
+        var result = await IngestAsync(Drop("snes", "short.sfc", rom));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Review, "NoDatMatch")));
+    }
+
+    [Test]
+    public async Task Snes_UnmatchedCopierHeaderedSmc_ResolvedInReview_IsStoredAsSfcWithTheStrippedBytes()
+    {
+        var hack = new SyntheticSnesRomBuilder { Seed = 84, Title = "RALLY HACK" };
+        var stripped = Convert.ToHexStringLower(SHA1.HashData(hack.Build()));
+        var result = await IngestAsync(Drop("snes", "hack.smc", (hack with { CopierHeader = true }).Build()));
+        Assert.That((result!.Outcome, result.Sha1), Is.EqualTo((IngestOutcome.Review, stripped)));
+        var user = await TestUsers.CreateAsync(_factory, "snes-resolver", TestUsers.AllRoles);
+        var item = (await Service<IIngestReviewRepository>().GetBySha1Async(stripped, default))!;
+
+        var resolved = await Service<ReviewResolver>().ResolveAsync(item.Id,
+            new ReviewResolutionRequest { Action = "Manual", Title = "Rally Hack", Regions = ["USA"], Languages = ["En"], Flags = [] },
+            new AuditActor(user.Id, user.Username, null), default);
+
+        Assert.That(resolved.Code, Is.Null, string.Join("; ", resolved.Errors?.SelectMany(e => e.Value) ?? []));
+        var row = (await Service<IGameRepository>().GetAsync(resolved.GameId!.Value, default))!;
+        var rom = ReadZip(row.ZipPath).Roms.Single();
+        Assert.That((Path.GetExtension(rom.FileName), rom.Metadata.Sha1, rom.OriginalFileName), Is.EqualTo((".sfc", stripped, "hack.smc")));
+    }
+
+    [Test]
+    public async Task Snes_ZipHoldingACopierHeaderedSmc_IsIngestedAsTheStrippedSfc()
+    {
+        var path = Path.Combine(Ingest("snes"), "rally.zip");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        using (var entry = zip.CreateEntry("Mode Seven Rally (USA).smc").Open())
+            entry.Write((Rally with { CopierHeader = true }).Build());
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+
+        await ActivatorUtilities.CreateInstance<IngestJob>(_factory.Services, Substitute.For<IJobItemRepository>())
+            .RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), default);
+
+        var sfc = Rally.Build();
+        Assert.That(File.Exists(path), Is.False, "fully ingested archive is deleted");
+        using var library = LibraryZip.Open(Path.Combine(Roms, "snes", "M", "Mode Seven Rally.zip"), Service<InfoJsonReader>());
+        Assert.That(library.InfoJson!.Game!.Roms.Single().FileName, Is.EqualTo("Mode Seven Rally (USA).sfc"));
+        using var stored = library.OpenEntry(LibraryZip.RomEntry("Mode Seven Rally (USA).sfc"), sfc.Length);
+        using var bytes = new MemoryStream();
+        stored.CopyTo(bytes);
+        Assert.That(bytes.ToArray(), Is.EqualTo(sfc));
     }
 
     [Test]

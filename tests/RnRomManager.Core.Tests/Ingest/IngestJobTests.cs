@@ -191,7 +191,7 @@ public class IngestJobTests
         Drop("gb", "Desktop.ini", old);
         Drop("gb", Path.Combine("_failed", "bad.gb"), old);
         Drop("gb", Path.Combine("sub", "nested.gb"), old);
-        Drop("snes", "unregistered.sfc", old);
+        Drop("md", "unregistered.md", old);
 
         var scan = _scanner.Scan();
 

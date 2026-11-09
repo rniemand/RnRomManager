@@ -83,7 +83,7 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 | Path | Contents |
 |---|---|
 | `/app/roms` | the library: one ZIP per game (see [ZIP format](zip-format.md)) |
-| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`) or `ingest/nes/` (NES: headered `.nes` only); `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way |
+| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`) `ingest/nes/` (NES: headered `.nes` only) or `ingest/snes/` (SNES: `.sfc` or `.smc`, copier header stripped); `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way |
 | `/app/logs` | `rnrommanager-yyyy-MM-dd.log`, kept for `Logging:RetentionDays` |
 | `/app/cache` | downloaded DATs and temporary work folders |
 | `/app/backups` | the daily database backups (see [Backup and restore](#backup-and-restore)); keep it private |
@@ -184,7 +184,7 @@ Upgrading to 0.3.0:
 - **Everyone is signed out once.** Roles change from a single Admin/User to the `admin` and `rom-manager` roles; every Admin gets both and every User none, and every session ends so the new roles take effect. Sign in again.
 - **ZIPs move to `info.json` version 3** as each game is next written (cover flag, uploaded and JPEG images). An app older than 0.3.0 can still read those ZIPs but refuses to change them (`InfoJsonNewerSchema`), and the database can't be downgraded either: restore the backup to go back.
 
-After upgrading to a version that adds a system (such as the ones that add Game Boy Advance, Nintendo 64 and NES), ingestion refuses to start with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs.
+After upgrading to a version that adds a system (such as the ones that add Game Boy Advance, Nintendo 64, NES and SNES), ingestion refuses to start with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs.
 
 On `docker compose stop` a running job gets 30 seconds to finish its current item (`stop_grace_period: 35s` allows for that). A job that's cut off is marked `Aborted` at the next start and its leftovers are cleaned up; just start it again.
 

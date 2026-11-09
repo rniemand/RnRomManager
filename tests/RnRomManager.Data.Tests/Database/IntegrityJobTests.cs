@@ -301,10 +301,10 @@ public class IntegrityJobTests
     [Test]
     public async Task Scope_RootFiles_UnregisteredFolders_StaleTmp_AreOrphans_NeverOpened()
     {
-        Directory.CreateDirectory(_dir.Combine("snes", "S"));
+        Directory.CreateDirectory(_dir.Combine("md", "S"));
         Directory.CreateDirectory(_dir.Combine("gb", "T"));
         await File.WriteAllTextAsync(_dir.Combine("readme.txt"), "x");
-        await File.WriteAllBytesAsync(_dir.Combine("snes", "S", "Game.zip"), [1, 2, 3]);
+        await File.WriteAllBytesAsync(_dir.Combine("md", "S", "Game.zip"), [1, 2, 3]);
         await File.WriteAllBytesAsync(_dir.Combine("gb", "T", "Tetris.zip.tmp"), [1]);
         await File.WriteAllTextAsync(_dir.Combine("gb", "T", "notes.txt"), "x");
 
@@ -312,7 +312,7 @@ public class IntegrityJobTests
 
         Assert.That(await Open(), Is.EquivalentTo(new (string, string?, string?)[]
         {
-            (OrphanFile, "readme.txt", null), (OrphanFile, "snes/S/Game.zip", null),
+            (OrphanFile, "readme.txt", null), (OrphanFile, "md/S/Game.zip", null),
             (OrphanFile, "gb/T/Tetris.zip.tmp", null), (OrphanFile, "gb/T/notes.txt", null),
         }));
         Assert.That((await All()).All(i => i.Severity == IssueSeverity.Warn), Is.True);

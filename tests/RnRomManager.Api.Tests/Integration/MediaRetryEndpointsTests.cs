@@ -56,6 +56,7 @@ public class MediaRetryEndpointsTests
             [IngestSeeder.GbaDat] = [],
             [IngestSeeder.N64Dat] = [],
             [IngestSeeder.NesDat] = [],
+            [IngestSeeder.SnesDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Tetris), new FixtureGame("Zelda (USA)", "Zelda (USA).gb", Zelda)],
         });
         cache.Load();

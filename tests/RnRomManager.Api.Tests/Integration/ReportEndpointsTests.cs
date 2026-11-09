@@ -41,6 +41,7 @@ public class ReportEndpointsTests
             [IngestSeeder.GbaDat] = [],
             [IngestSeeder.N64Dat] = [],
             [IngestSeeder.NesDat] = [],
+            [IngestSeeder.SnesDat] = [],
             [Gb] =
             [
                 new FixtureGame("Alpha (World)", "Alpha (World).gb", Alpha),
@@ -182,7 +183,7 @@ public class ReportEndpointsTests
         var empty = await GetJson("/api/reports/library-size");
         Assert.That((empty.GetProperty("totalBytes").GetInt64(), empty.GetProperty("systems").GetArrayLength()), Is.EqualTo((0L, 0)));
 
-        using var unknown = await _user.GetAsync("/api/reports/library-size/snes");
+        using var unknown = await _user.GetAsync("/api/reports/library-size/md");
         Assert.That((unknown.StatusCode, await AuthClient.CodeAsync(unknown)), Is.EqualTo((HttpStatusCode.NotFound, "NotFound")));
     }
 
@@ -280,7 +281,7 @@ public class ReportEndpointsTests
     }
 
     [TestCase("{\"baseTitle\":\"Quest\",\"gamesKey\":\"" + Key + "\"}", "system")]
-    [TestCase("{\"system\":\"snes\",\"baseTitle\":\"Quest\",\"gamesKey\":\"" + Key + "\"}", "system")]
+    [TestCase("{\"system\":\"md\",\"baseTitle\":\"Quest\",\"gamesKey\":\"" + Key + "\"}", "system")]
     [TestCase("{\"system\":\"gb\",\"baseTitle\":\"\",\"gamesKey\":\"" + Key + "\"}", "baseTitle")]
     [TestCase("{\"system\":\"gb\",\"baseTitle\":\"Quest\",\"gamesKey\":\"ABC\"}", "gamesKey")]
     [TestCase("{\"system\":\"gb\",\"baseTitle\":\"Quest\",\"gamesKey\":\"" + UpperKey + "\"}", "gamesKey")]
@@ -373,7 +374,7 @@ public class ReportEndpointsTests
         Assert.That(invalid.GetProperty("merged").EnumerateArray().Select(m => m.GetGuid()), Is.EqualTo(new[] { charlie }));
     }
 
-    [TestCase("system=snes", "system")]
+    [TestCase("system=md", "system")]
     [TestCase("pageSize=201", "pageSize")]
     public async Task Duplicates_InvalidQuery_Is400(string query, string field)
     {
@@ -383,7 +384,7 @@ public class ReportEndpointsTests
         Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").TryGetProperty(field, out _), Is.True);
     }
 
-    [TestCase("system=snes", "system")]
+    [TestCase("system=md", "system")]
     [TestCase("pageSize=201", "pageSize")]
     [TestCase("page=0", "page")]
     public async Task MissingImages_InvalidQuery_Is400(string query, string field)

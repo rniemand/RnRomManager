@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 10, 8)]
-    [TestCase(SeedSet.Full, 210, 208)]
+    [TestCase(SeedSet.Basic, 11, 9)]
+    [TestCase(SeedSet.Full, 211, 209)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -88,6 +88,24 @@ public class SeedIngestTests
             Assert.That(zip.HasEntry(LibraryZip.RomEntry("Pixel Pioneer (USA).nes")), Is.True);
             Assert.That((rom.Header!["mapper"]!.GetValue<int>(), rom.Header["battery"]!.GetValue<bool>()), Is.EqualTo((1, true)));
             Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1987, new[] { "Platform" })));
+        }
+        var rally = Directory.GetFiles(Path.Combine(factory.Root, "roms", "snes", "M"), "*.zip").Single();
+        using (var zip = LibraryZip.Open(rally, factory.Services.GetRequiredService<InfoJsonReader>()))
+        {
+            var game = zip.InfoJson!.Game!;
+            var rom = game.Roms.Single();
+            var sfc = new SyntheticSnesRomBuilder { Seed = 1101, Mapping = SnesMapping.LoROM, Title = "MODE SEVEN RALLY", SramSizeByte = 3 }.Build();
+            Assert.That((game.Title, game.System, rom.FileName, rom.OriginalFileName),
+                Is.EqualTo(("Mode Seven Rally", "snes", "Mode Seven Rally (USA).sfc", "01-mode-seven-rally.smc")));
+            using (var entry = zip.OpenEntry(LibraryZip.RomEntry("Mode Seven Rally (USA).sfc"), sfc.Length))
+            using (var bytes = new MemoryStream())
+            {
+                entry.CopyTo(bytes);
+                Assert.That(bytes.ToArray(), Is.EqualTo(sfc), "stored without the copier header");
+            }
+            Assert.That((rom.Header!["mapping"]!.GetValue<string>(), rom.Header["title"]!.GetValue<string>(), rom.Header["sramSizeKiB"]!.GetValue<int>()),
+                Is.EqualTo(("LoROM", "MODE SEVEN RALLY", 8)));
+            Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1992, new[] { "Racing" })));
         }
         var review = await factory.Services.GetRequiredService<IIngestReviewRepository>().ListAsync("Pending", 1, 48, default);
         Assert.That(review.Total, Is.EqualTo(2));
