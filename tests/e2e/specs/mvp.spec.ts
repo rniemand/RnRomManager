@@ -311,6 +311,16 @@ test('images: upload, set cover, delete', async () => {
 	await images.getByRole('button', { name: 'Upload image' }).click();
 	await expect(dialog()).toHaveAccessibleName('Upload image');
 	await expectAccessible(page, 'upload image modal');
+	// U6: a loopback URL is refused by the server; the fallback switches back to the file input.
+	await dialog().getByText('URL', { exact: true }).click();
+	await dialog().getByLabel('Image URL').fill('http://127.0.0.1/x.png');
+	await dialog().getByRole('button', { name: 'Upload', exact: true }).click();
+	await expect(
+		dialog().getByText('The URL points to a private or local network address.')
+	).toBeVisible();
+	await expectAccessible(page, 'upload image modal, URL error');
+	await dialog().getByRole('button', { name: 'Upload a file instead' }).click();
+	await expect(dialog().getByLabel('Image URL')).toHaveCount(0);
 	await dialog()
 		.getByLabel('Upload an image')
 		.setInputFiles({ name: 'art.png', mimeType: 'image/png', buffer: png(64, [200, 40, 40]) });

@@ -211,6 +211,150 @@ describe('game images', () => {
 		expect(screen.queryByText('Choose an image file.')).toBeNull();
 	});
 
+	const urlRadio = () => screen.getByLabelText('URL') as HTMLInputElement;
+	const fileRadio = () => screen.getByLabelText('File') as HTMLInputElement;
+	const urlInput = () => screen.getByLabelText('Image URL') as HTMLInputElement;
+	const fileGroup = () => screen.getByLabelText('Upload an image').closest('div')!;
+	const fallback = 'Download the image and upload the file instead.';
+
+	async function openUrlMode(url: string): Promise<void> {
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await fireEvent.click(urlRadio());
+		await fireEvent.input(urlInput(), { target: { value: url } });
+	}
+
+	it('opens on File; URL mode shows the URL field and hides the file input (U6)', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+
+		expect(fileRadio().checked).toBe(true);
+		expect(fileRadio().className).toBe('btn-check');
+		expect(screen.getByText('File').className).toBe('btn btn-outline-secondary btn-sm');
+		expect(screen.queryByLabelText('Image URL')).toBeNull();
+		expect(fileGroup().hidden).toBe(false);
+
+		await fireEvent.click(urlRadio());
+
+		expect(urlInput().type).toBe('url');
+		expect(
+			screen.getByText('The server downloads the image. PNG or JPEG, at most 8 MiB.')
+		).toBeTruthy();
+		expect(fileGroup().hidden).toBe(true);
+		expect(screen.getByLabelText('Type')).toBeTruthy();
+	});
+
+	it('an empty URL shows the error without a request (U6)', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await openUrlMode('');
+		await confirmUpload();
+
+		expect(screen.getByText('Enter an http or https image URL.')).toBeTruthy();
+		expect(screen.queryByText(fallback, { exact: false })).toBeNull();
+		expect(calls.some((c) => c.key.startsWith('POST'))).toBe(false);
+	});
+
+	it('a URL posts {url, type} to from-url, toasts the host name and closes (U6)', async () => {
+		const fresh = game([image(5, 'Snap', { isCover: true })]);
+		answers['POST /api/games/g1/images/from-url'] = { status: 200, body: fresh };
+		const onchanged = vi.fn();
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged });
+
+		await openUrlMode('https://example.com:8443/a.png');
+		await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'Snap' } });
+		await confirmUpload();
+
+		await vi.waitFor(() => expect(onchanged).toHaveBeenCalledWith(fresh));
+		const body = calls.find((c) => c.key === 'POST /api/games/g1/images/from-url')!.body as string;
+		expect(JSON.parse(body)).toEqual({ url: 'https://example.com:8443/a.png', type: 'Snap' });
+		expect(toasts.items.map((t) => t.text)).toContain('Image added from example.com.');
+		await vi.waitFor(() => expect(uploadModal().classList.contains('show')).toBe(false));
+	});
+
+	it.each([
+		[
+			'ImageDownloadFailed',
+			{ status: 502, code: 'ImageDownloadFailed', title: "Couldn't download the image: HTTP 404." },
+			"Couldn't download the image: HTTP 404."
+		],
+		[
+			'ImageUrlBlocked',
+			{
+				status: 400,
+				code: 'ImageUrlBlocked',
+				title: 'The URL points to a private or local network address.'
+			},
+			'The URL points to a private or local network address.'
+		],
+		[
+			'ValidationFailed',
+			{
+				status: 400,
+				code: 'ValidationFailed',
+				title: 'One or more validation errors occurred.',
+				errors: { url: ["The URL didn't return a PNG or JPEG image."] }
+			},
+			"The URL didn't return a PNG or JPEG image."
+		]
+	])(
+		'%s shows its message and the file fallback under the URL field (U6)',
+		async (_code, body, message) => {
+			answers['POST /api/games/g1/images/from-url'] = { status: body.status, body };
+			render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+			await openUrlMode('https://example.com/a.png');
+			await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'Snap' } });
+			await confirmUpload();
+
+			await vi.waitFor(() => expect(urlInput().classList).toContain('is-invalid'));
+			const feedback = urlInput().parentElement!.querySelector('.invalid-feedback')!;
+			expect(feedback.textContent).toContain(message);
+			expect(feedback.textContent).toContain(fallback);
+			expect(uploadModal().classList.contains('show')).toBe(true);
+			expect(toasts.items).toEqual([]);
+
+			await fireEvent.click(
+				screen.getByRole('button', { name: 'Upload a file instead', hidden: true })
+			);
+			expect(fileRadio().checked).toBe(true);
+			expect(fileGroup().hidden).toBe(false);
+			expect((screen.getByLabelText('Type') as HTMLSelectElement).value).toBe('Snap');
+		}
+	);
+
+	it('a DuplicateImage from a URL toasts (U6)', async () => {
+		answers['POST /api/games/g1/images/from-url'] = {
+			status: 409,
+			body: { title: 'DuplicateImage', status: 409, code: 'DuplicateImage' }
+		};
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+		await openUrlMode('https://example.com/a.png');
+		await confirmUpload();
+
+		await vi.waitFor(() =>
+			expect(toasts.items.map((t) => t.text)).toContain('The game already has this image.')
+		);
+	});
+
+	it('reopening after a cancel resets mode, URL, Type and errors (U6)', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await openUrlMode('');
+		await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'Snap' } });
+		await confirmUpload();
+		await fireEvent.input(urlInput(), { target: { value: 'https://x.test/a.png' } });
+
+		await fireEvent.click(
+			within(uploadModal() as HTMLElement).getByRole('button', { name: 'Cancel', hidden: true })
+		);
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+
+		expect(fileRadio().checked).toBe(true);
+		expect((screen.getByLabelText('Type') as HTMLSelectElement).value).toBe('BoxArt');
+		await fireEvent.click(urlRadio());
+		expect(urlInput().value).toBe('');
+		expect(screen.queryByText('Enter an http or https image URL.')).toBeNull();
+	});
+
 	it('a file over 8 MiB is refused before sending', async () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 		const big = new File(['x'], 'big.png', { type: 'image/png' });

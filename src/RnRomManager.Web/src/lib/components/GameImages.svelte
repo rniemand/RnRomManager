@@ -37,6 +37,12 @@
 	let uploadType = $state<'BoxArt' | 'Snap'>('BoxArt');
 	let uploadError = $state<string | undefined>();
 	let typeError = $state<string | undefined>();
+	/** U6: upload a file, or have the server download a URL. */
+	let uploadMode = $state<'file' | 'url'>('file');
+	let imageUrl = $state('');
+	let urlError = $state<string | undefined>();
+	/** The server couldn't use the URL: offer the file upload instead. */
+	let urlFallback = $state(false);
 
 	const base = $derived(`/api/games/${encodeURIComponent(game.id)}/images`);
 
@@ -74,12 +80,25 @@
 	}
 
 	function openUpload(): void {
-		uploadError = typeError = undefined;
+		uploadError = typeError = urlError = undefined;
+		urlFallback = false;
+		uploadMode = 'file';
+		imageUrl = '';
+		uploadType = 'BoxArt';
+		if (fileInput) fileInput.value = '';
 		uploadOpen = true;
 	}
 
+	function useFileInstead(): void {
+		uploadMode = 'file';
+		urlError = undefined;
+		urlFallback = false;
+	}
+
 	async function upload(): Promise<void> {
-		uploadError = typeError = undefined;
+		uploadError = typeError = urlError = undefined;
+		urlFallback = false;
+		if (uploadMode === 'url') return uploadFromUrl();
 		const file = fileInput?.files?.[0];
 		if (!file) {
 			uploadError = 'Choose an image file.';
@@ -106,6 +125,31 @@
 			} else if (isApiError(e) && e.status === 413)
 				uploadError = 'The image must be at most 8 MiB.';
 			else failed(e);
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function uploadFromUrl(): Promise<void> {
+		const url = imageUrl;
+		if (!url.trim()) {
+			urlError = 'Enter an http or https image URL.';
+			return;
+		}
+		busy = true;
+		try {
+			onchanged(await api.post<GameDetail>(`${base}/from-url`, { url, type: uploadType }));
+			toasts.show(`Image added from ${new URL(url).hostname}.`, 'success');
+			uploadOpen = false;
+		} catch (e) {
+			if (isApiError(e, 'ImageDownloadFailed') || isApiError(e, 'ImageUrlBlocked')) {
+				urlError = e.title;
+				urlFallback = true;
+			} else if (isApiError(e, 'ValidationFailed')) {
+				urlError = e.errors.url?.[0];
+				typeError = e.errors.type?.[0];
+				urlFallback = urlError !== undefined;
+			} else failed(e);
 		} finally {
 			busy = false;
 		}
@@ -208,7 +252,58 @@
 		{busy}
 		onconfirm={upload}
 	>
-		<div class="mb-3">
+		<div class="btn-group mb-3" role="group" aria-label="Image source">
+			<input
+				type="radio"
+				class="btn-check"
+				name="image-source"
+				id="image-source-file"
+				value="file"
+				autocomplete="off"
+				bind:group={uploadMode}
+			/>
+			<label class="btn btn-outline-secondary btn-sm" for="image-source-file">File</label>
+			<input
+				type="radio"
+				class="btn-check"
+				name="image-source"
+				id="image-source-url"
+				value="url"
+				autocomplete="off"
+				bind:group={uploadMode}
+			/>
+			<label class="btn btn-outline-secondary btn-sm" for="image-source-url">URL</label>
+		</div>
+		{#if uploadMode === 'url'}
+			<div class="mb-3">
+				<label class="form-label" for="image-url">Image URL</label>
+				<input
+					id="image-url"
+					class="form-control"
+					class:is-invalid={urlError}
+					type="url"
+					bind:value={imageUrl}
+					aria-describedby="image-url-help"
+				/>
+				{#if urlError}
+					<div class="invalid-feedback">
+						{urlError}
+						{#if urlFallback}
+							Download the image and upload the file instead.
+							<button
+								type="button"
+								class="btn btn-link btn-sm p-0 align-baseline"
+								onclick={useFileInstead}>Upload a file instead</button
+							>
+						{/if}
+					</div>
+				{/if}
+				<div id="image-url-help" class="form-text">
+					The server downloads the image. PNG or JPEG, at most 8 MiB.
+				</div>
+			</div>
+		{/if}
+		<div class="mb-3" hidden={uploadMode !== 'file'}>
 			<label class="form-label" for="image-file">Upload an image</label>
 			<input
 				bind:this={fileInput}
