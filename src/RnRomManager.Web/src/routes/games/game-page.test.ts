@@ -250,7 +250,10 @@ describe('game detail page', () => {
 
 		const table = await screen.findByRole('table', { name: 'Game information' });
 		expect(table.querySelector('caption')!.className).toBe('visually-hidden');
-		expect(table.closest('.table-responsive')!.parentElement!.classList).toContain('card');
+		expect(table.parentElement!.classList).toContain('card');
+		expect(table.closest('.table-responsive')).toBeNull();
+		for (const td of table.querySelectorAll('td')) expect(td.classList).toContain('text-break');
+		expect(table.querySelector('td .badge')!.classList).toContain('text-wrap');
 		const rows = [...table.querySelectorAll('tr')].map((tr) => [
 			tr.querySelector('th[scope="row"]')!.textContent!.trim(),
 			tr.querySelector('td')!.textContent!.trim()

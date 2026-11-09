@@ -7,14 +7,16 @@
 		system: string;
 		/** Display name; the upper-cased id when missing. */
 		name?: string;
+		/** Extra classes appended to the badge. */
+		class?: string;
 	}
 
-	let { system, name }: Props = $props();
+	let { system, name, class: extra = '' }: Props = $props();
 
 	// A fixed colour per system so a list scans at a glance (shared with the Library Size treemap).
 	const colour = $derived(systemColour(system).name);
 </script>
 
-<span class="badge text-bg-{colour} d-inline-flex align-items-center gap-1">
+<span class="badge text-bg-{colour} d-inline-flex align-items-center gap-1 {extra}">
 	<Icon name="system-{system}" />{name ?? system.toUpperCase()}
 </span>

@@ -233,33 +233,33 @@
 			{/if}
 			<!-- G1: key/value table (T3). -->
 			<div class="card mb-3">
-				<div class="table-responsive">
-					<table class="table table-sm table-striped table-hover mb-0">
-						<caption class="visually-hidden">Game information</caption>
-						<tbody>
-							<tr>
-								<th scope="row" class="fw-normal text-body-secondary">System</th>
-								<td><SystemBadge system={game.system} name={game.systemName} /></td>
-							</tr>
-							<tr>
-								<th scope="row" class="fw-normal text-body-secondary">Year</th>
-								<td>{game.releaseYear ?? '—'}</td>
-							</tr>
-							<tr>
-								<th scope="row" class="fw-normal text-body-secondary">Developers</th>
-								<td>{list(game.developers)}</td>
-							</tr>
-							<tr>
-								<th scope="row" class="fw-normal text-body-secondary">Publishers</th>
-								<td>{list(game.publishers)}</td>
-							</tr>
-							<tr>
-								<th scope="row" class="fw-normal text-body-secondary">Genres</th>
-								<td>{list(game.genres)}</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
+				<table class="table table-sm table-striped table-hover mb-0">
+					<caption class="visually-hidden">Game information</caption>
+					<tbody>
+						<tr>
+							<th scope="row" class="fw-normal text-body-secondary">System</th>
+							<td class="text-break"
+								><SystemBadge system={game.system} name={game.systemName} class="text-wrap" /></td
+							>
+						</tr>
+						<tr>
+							<th scope="row" class="fw-normal text-body-secondary">Year</th>
+							<td class="text-break">{game.releaseYear ?? '—'}</td>
+						</tr>
+						<tr>
+							<th scope="row" class="fw-normal text-body-secondary">Developers</th>
+							<td class="text-break">{list(game.developers)}</td>
+						</tr>
+						<tr>
+							<th scope="row" class="fw-normal text-body-secondary">Publishers</th>
+							<td class="text-break">{list(game.publishers)}</td>
+						</tr>
+						<tr>
+							<th scope="row" class="fw-normal text-body-secondary">Genres</th>
+							<td class="text-break">{list(game.genres)}</td>
+						</tr>
+					</tbody>
+				</table>
 			</div>
 			{#if game.description}
 				<p style="white-space: pre-line">{game.description}</p>
