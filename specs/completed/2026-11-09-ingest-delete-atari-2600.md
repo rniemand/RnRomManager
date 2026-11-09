@@ -1,6 +1,6 @@
 ---
 title: Ingest file delete, release header colour and Atari 2600
-status: in-progress
+status: completed
 created: 2026-11-09
 ---
 
