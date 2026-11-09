@@ -50,6 +50,7 @@ public class IngestEndpointsTests
             [IngestSeeder.NesDat] = [],
             [IngestSeeder.SnesDat] = [],
             [IngestSeeder.Atari2600Dat] = [],
+            [IngestSeeder.ColecoVisionDat] = [],
             ["Nintendo - Game Boy"] = [],
             ["Nintendo - Game Boy Color"] = [],
         });
@@ -207,7 +208,7 @@ public class IngestEndpointsTests
         using var response = await _admin.GetAsync("/api/ingest/pending");
         var systems = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
-        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EquivalentTo(new[] { "gb", "gbc", "gba", "n64", "nes", "snes", "a2600" }));
+        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EquivalentTo(new[] { "gb", "gbc", "gba", "n64", "nes", "snes", "a2600", "coleco" }));
         var gb = systems.Single(s => s.GetProperty("system").GetString() == "gb").GetProperty("files");
         Assert.That(gb.GetArrayLength(), Is.EqualTo(1));
         Assert.That(gb[0].GetProperty("name").GetString(), Is.EqualTo("Tetris.gb"));

@@ -82,6 +82,7 @@ public class IngestPipelineTests
             ],
             [IngestSeeder.SnesDat] = [new FixtureGame("Mode Seven Rally (USA)", "Mode Seven Rally (USA).sfc", Rally.Build())],
             [IngestSeeder.Atari2600Dat] = [new FixtureGame("Laser Lanes (USA)", "Laser Lanes (USA).a26", Lanes)],
+            [IngestSeeder.ColecoVisionDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },

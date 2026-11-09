@@ -12,6 +12,7 @@ public static class IngestSeeder
     public const string NesDat = "Nintendo - Nintendo Entertainment System";
     public const string SnesDat = "Nintendo - Super Nintendo Entertainment System";
     public const string Atari2600Dat = "Atari - 2600";
+    public const string ColecoVisionDat = "Coleco - ColecoVision";
 
     public static void Seed(string ingest, string cache, SeedSet set, TimeProvider time)
     {
@@ -26,6 +27,7 @@ public static class IngestSeeder
         Directory.CreateDirectory(Path.Combine(ingest, "nes"));
         Directory.CreateDirectory(Path.Combine(ingest, "snes"));
         Directory.CreateDirectory(Path.Combine(ingest, "a2600"));
+        Directory.CreateDirectory(Path.Combine(ingest, "coleco"));
         var files = new List<string>();
         var gb = new List<FixtureGame>();
         var gbc = new List<FixtureGame>();
@@ -107,7 +109,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes] });
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [] });
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
     }

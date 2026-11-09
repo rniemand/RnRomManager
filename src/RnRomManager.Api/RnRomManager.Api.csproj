@@ -8,6 +8,7 @@
     <ProjectReference Include="../RnRomManager.Systems.Nes/RnRomManager.Systems.Nes.csproj" />
     <ProjectReference Include="../RnRomManager.Systems.Snes/RnRomManager.Systems.Snes.csproj" />
     <ProjectReference Include="../RnRomManager.Systems.Atari/RnRomManager.Systems.Atari.csproj" />
+    <ProjectReference Include="../RnRomManager.Systems.Coleco/RnRomManager.Systems.Coleco.csproj" />
   </ItemGroup>
 
   <ItemGroup>
