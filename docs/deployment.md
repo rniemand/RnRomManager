@@ -31,6 +31,7 @@ services:
       - ./data/logs:/app/logs
       - ./data/cache:/app/cache
       - ./data/backups:/app/backups
+      - ./data/collections:/app/collections
     user: "1000:1000"   # owner of ./data
     stop_grace_period: 35s   # lets a running job stop cleanly
     depends_on:
@@ -87,11 +88,14 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 | `/app/logs` | `rnrommanager-yyyy-MM-dd.log`, kept for `Logging:RetentionDays` |
 | `/app/cache` | downloaded DATs and temporary work folders |
 | `/app/backups` | the daily database backups (see [Backup and restore](#backup-and-restore)); keep it private |
+| `/app/collections` | collection cover images (`<collection id>.png` or `.jpg`) |
+
+An existing deployment that doesn't map `/app/collections` still starts (the folder is created), but covers then live in an anonymous Docker volume and are lost when the container is recreated: add the mapping when you upgrade.
 
 The container runs as UID 1654 unless you set `user:`.
 
 - **Named volumes** work as they are: the image's folders are already owned by 1654.
-- **Bind mounts** (as above) must be writable by the container's user. Either set `user: "<uid>:<gid>"` to the owner of `./data` (find it with `id -u` / `id -g`), or `chown -R 1654:1654 ./data/{roms,ingest,logs,cache,backups}`.
+- **Bind mounts** (as above) must be writable by the container's user. Either set `user: "<uid>:<gid>"` to the owner of `./data` (find it with `id -u` / `id -g`), or `chown -R 1654:1654 ./data/{roms,ingest,logs,cache,backups,collections}`.
 
 At startup the app writes and deletes a `.rnrm-probe` file in each of the five folders. If that fails, it stops with a `FATAL` line naming the path and the UID/GID it runs as.
 
@@ -131,6 +135,7 @@ Both are anonymous and return no details.
 - **The database**, which holds users, the Data Protection keys that keep sign-ins valid across restarts, job history, the review queue, integrity issues, the audit trail and settings. The app backs it up itself (below).
 - **`/app/roms`**, the library itself, including release notes. Stop the app (or make sure no job is running) for a consistent copy.
 - **`/app/backups`**, so the database backups survive the loss of the host. Copy it somewhere else.
+- **`/app/collections`**, the collection cover images. Collections themselves are in the database (and its backups), but their cover files are not: copy this folder with the backups. After a restore without it, collections show a placeholder until a cover is set again.
 
 The library ZIPs are the source of truth for games: if the database is lost but the ZIPs are not, a new database is rebuilt from them by the next ingestion or **Integrity → Run quick** (accounts and history are not). `/app/ingest` holds anything not yet ingested plus `_removed/`; back it up too if you keep files there. `/app/cache` can be re-downloaded with **Refresh DATs**.
 

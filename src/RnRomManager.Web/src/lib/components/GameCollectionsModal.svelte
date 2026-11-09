@@ -22,8 +22,13 @@
 	const sorted = (list: CollectionRef[]) =>
 		[...list].sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 
-	async function toggle(collection: CollectionListItem, member: boolean): Promise<void> {
-		if (pending[collection.id]) return;
+	async function toggle(box: HTMLInputElement, collection: CollectionListItem): Promise<void> {
+		const member = box.checked;
+		// Busy rows stay enabled (disabling would drop keyboard focus out of the dialog); a click waits its turn.
+		if (pending[collection.id]) {
+			box.checked = !member;
+			return;
+		}
 		const before = memberOf;
 		memberOf = member
 			? sorted([...before, { id: collection.id, name: collection.name }])
@@ -53,8 +58,8 @@
 					type="checkbox"
 					class="form-check-input m-0"
 					checked={memberOf.some((c) => c.id === collection.id)}
-					disabled={pending[collection.id]}
-					onchange={(e) => toggle(collection, e.currentTarget.checked)}
+					aria-busy={pending[collection.id] ?? false}
+					onchange={(e) => toggle(e.currentTarget, collection)}
 				/>
 				<span class="text-truncate">{collection.name}</span>
 				<span class="ms-auto small text-body-secondary text-nowrap">{collection.gameCount}</span>

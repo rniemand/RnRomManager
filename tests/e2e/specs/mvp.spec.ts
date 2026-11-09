@@ -5,7 +5,7 @@ import { expectAccessible } from './axe';
 /**
  * Spec §15.1 "E2E": the MVP smoke path against the real image with the seeded `Basic` set (§15.2), in order:
  * login + forced password change → ingest → browse/search/filter → game detail + downloads → global search +
- * ratings → review resolve/delete → images → Admin edit/move/delete → users and logs, with axe on every page and
+ * ratings → collections → review resolve/delete → images → Admin edit/move/delete → users and logs, with axe on every page and
  * modal visited. The seeded admin has both roles (`admin` + `rom-manager`).
  */
 
@@ -290,6 +290,79 @@ test('global search, ratings and favourites', async () => {
 	await page.reload();
 	await expect(star).toHaveAttribute('aria-pressed', 'false');
 	await expect(heart).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('collections: create, add from game page and bulk select, search, remove, delete', async () => {
+	await page.goto('/collections');
+	await expect(page.getByText('You have no collections yet.')).toBeVisible();
+	await expectAccessible(page, 'collections page (empty)');
+
+	// B23: create with Markdown notes and an uploaded cover, then land on the new collection.
+	await page.getByRole('button', { name: 'New collection' }).first().click();
+	await expect(dialog()).toHaveAccessibleName('New collection');
+	await dialog().getByLabel('Name').fill('Puzzle picks');
+	await dialog().getByLabel('Notes (Markdown)').fill('The **best** puzzles');
+	await dialog()
+		.getByLabel('Cover image file')
+		.setInputFiles({ name: 'cover.png', mimeType: 'image/png', buffer: png(32, [40, 120, 200]) });
+	await expectAccessible(page, 'collection modal');
+	await dialog().getByRole('button', { name: 'Create' }).click();
+	await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
+	await expect(page.getByRole('heading', { level: 1, name: 'Puzzle picks' })).toBeVisible();
+	await expect(page.getByTestId('collection-notes').locator('strong')).toHaveText('best');
+	await expect(page.getByRole('img', { name: 'Puzzle picks cover' })).toBeVisible();
+
+	// B25: add Orbit Blocks from its game page; a badge links back.
+	await openGame('Orbit Blocks');
+	await page.getByRole('button', { name: 'Collections', exact: true }).click();
+	await dialog().getByRole('checkbox', { name: /^Puzzle picks/ }).check();
+	await expect(page.getByRole('list', { name: 'In collections' }).getByRole('link')).toHaveText(
+		'Puzzle picks'
+	);
+	await expectAccessible(page, 'game collections modal');
+	await page.keyboard.press('Escape');
+	await expect(dialog()).toBeHidden();
+
+	// B26: add a game from another system with the Library's bulk select.
+	await page.goto('/');
+	await page.getByLabel('System').selectOption({ label: 'Nintendo 64' });
+	await expect(page).toHaveURL(/system=n64/);
+	await page.getByRole('button', { name: 'Select', exact: true }).click();
+	await page.getByRole('checkbox', { name: 'Select Orbit Kart 64' }).check();
+	await page.getByRole('button', { name: /Add to collection/ }).click();
+	await dialog().getByRole('radio', { name: /^Puzzle picks/ }).check();
+	await dialog().getByRole('button', { name: 'Add', exact: true }).click();
+	await expect(page.getByText('Added 1 game to Puzzle picks')).toBeVisible();
+
+	// B27: global search finds the collection; Enter opens it.
+	await page.keyboard.press('Control+k');
+	await dialog().getByRole('combobox').fill('puzzle');
+	await expect(dialog().getByRole('option').first()).toContainText('Puzzle picks');
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('heading', { level: 1, name: 'Puzzle picks' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Orbit Blocks', exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Orbit Kart 64', exact: true })).toBeVisible();
+	await expectAccessible(page, 'collection page');
+
+	// B24: remove one game.
+	await page.getByRole('button', { name: 'Remove Orbit Blocks from collection' }).click();
+	await expect(page.getByRole('link', { name: 'Orbit Blocks', exact: true })).toBeHidden();
+	await expect(page.getByRole('link', { name: 'Orbit Kart 64', exact: true })).toBeVisible();
+
+	await page.goto('/collections');
+	await expect(page.getByRole('link', { name: 'Puzzle picks' })).toBeVisible();
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await expectAccessible(page, 'collections page');
+
+	// B5: delete it; the games stay in the Library.
+	await page.getByRole('link', { name: 'Puzzle picks' }).click();
+	await page.getByRole('button', { name: 'Delete', exact: true }).click();
+	await expect(dialog()).toHaveAccessibleName('Delete Puzzle picks?');
+	await dialog().getByRole('button', { name: 'Delete', exact: true }).click();
+	await expect(page).toHaveURL(/\/collections$/);
+	await expect(page.getByText('You have no collections yet.')).toBeVisible();
+	await page.goto('/');
+	await expect(page.getByText('10 games')).toBeVisible();
 });
 
 test('review queue: resolve with a suggestion', async () => {

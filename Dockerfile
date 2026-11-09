@@ -28,7 +28,7 @@ RUN case "$TARGETARCH" in amd64) echo x64 ;; arm64) echo arm64 ;; *) echo "unsup
  && dotnet restore src/RnRomManager.Api -a "$(cat /tmp/arch)"
 COPY src/ src/
 RUN dotnet publish src/RnRomManager.Api -c Release -a "$(cat /tmp/arch)" --no-restore -p:Version="$VERSION" -o /app \
- && mkdir -p /volumes/roms /volumes/ingest /volumes/logs /volumes/cache /volumes/backups
+ && mkdir -p /volumes/roms /volumes/ingest /volumes/logs /volumes/cache /volumes/backups /volumes/collections
 
 # --- Runtime ------------------------------------------------------------------------------------
 # -extra: ICU (NFC normalisation, §6.1) + tzdata (TZ for the schedule, §17.2). Chiseled: no shell.

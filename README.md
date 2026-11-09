@@ -7,6 +7,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 ![Library](https://raw.githubusercontent.com/rniemand/RnRomManager/main/docs/images/library.png)
 
 - **Library:** grid or list, filter by system, region and letter, search, sort by title, year or date added; primary ROM sizes; download a game's ZIP or a single ROM.
+- **Collections:** private groups of games from any system with a cover and Markdown notes, filled from a game's page, the collection's page or a bulk selection in the Library, and found by the global search.
 - **Ingestion:** identifies by hash, sorts dual-mode carts into Game Boy Color, files duplicates and broken files aside, and lets you import all pending files or a checked selection.
 - **Review queue:** files the DATs don't know get name suggestions, a DAT search, or manual entry; filter the queue, search Google and Shift+click Delete for loose files.
 - **Library edits (`rom-manager`):** edit metadata, move or merge releases between games, upload box art and screenshots and choose the cover, delete to a recoverable `_removed/` folder.
@@ -48,6 +49,7 @@ services:
       - ./data/logs:/app/logs
       - ./data/cache:/app/cache
       - ./data/backups:/app/backups
+      - ./data/collections:/app/collections
     user: "1000:1000"   # owner of ./data
     stop_grace_period: 35s   # lets a running job stop cleanly
     depends_on:
