@@ -79,6 +79,8 @@ describe('game images', () => {
 		calls = [];
 		answers = {};
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+			// B16: the game's collections (the badges); answered here so the queued answers stay as they were.
+			if (url.endsWith('/collections')) return Promise.resolve(new Response('[]', { status: 200 }));
 			const key = `${init?.method ?? 'GET'} ${url}`;
 			if (url !== '/api/auth/antiforgery') calls.push({ key, body: init?.body });
 			const answer = answers[key] ?? { status: 204 };

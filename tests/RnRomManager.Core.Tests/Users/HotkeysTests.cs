@@ -18,6 +18,7 @@ public class HotkeysTests
         {
             ("search", "Ctrl+K, Ctrl+Space, Meta+K", false, (string?)null),
             ("nav.library", "Alt+Shift+L", true, null),
+            ("nav.collections", "Alt+Shift+C", true, null),
             ("nav.ingestion", "Alt+Shift+I", true, Roles.Admin),
             ("nav.review", "Alt+Shift+F", true, Roles.Admin),
             ("review.next", "Alt+Shift+G", true, Roles.Admin),
@@ -141,7 +142,8 @@ public class HotkeysTests
         var merged = Hotkeys.Merge(Hotkeys.ParseStored("""{"nav.review":"Alt+Shift+L"}"""));
 
         Assert.That(merged, Is.EqualTo(Map(
-            ("nav.library", "Alt+Shift+L"), ("nav.ingestion", "Alt+Shift+I"), ("nav.review", "Alt+Shift+L"), ("review.next", "Alt+Shift+G"))));
+            ("nav.library", "Alt+Shift+L"), ("nav.collections", "Alt+Shift+C"), ("nav.ingestion", "Alt+Shift+I"), ("nav.review", "Alt+Shift+L"),
+            ("review.next", "Alt+Shift+G"))));
     }
 
     [TestCase(null)]

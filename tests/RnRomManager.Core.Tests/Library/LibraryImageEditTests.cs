@@ -59,7 +59,7 @@ public class LibraryImageEditTests
         var retry = new GameMediaRetry(_mirror, _reader, systems, media, paths, _audit, TimeProvider.System, NullLogger<GameMediaRetry>.Instance);
         _editor = new LibraryEditor(_lock, _games, Substitute.For<IRomRepository>(), _images, _mirror, _reader,
             new DatCache(paths, systems, NullLogger<DatCache>.Instance), systems, media, retry, paths, _audit, new RnRomManager.Core.Audit.AuditPaths(paths),
-            TimeProvider.System,
+            Substitute.For<RnRomManager.Core.Collections.ICollectionRepository>(), TimeProvider.System,
             NullLogger<LibraryEditor>.Instance);
         _pngSeed = 10;
     }

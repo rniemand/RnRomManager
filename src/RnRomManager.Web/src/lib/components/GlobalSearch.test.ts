@@ -53,7 +53,9 @@ describe('GlobalSearch', () => {
 	let requested: string[];
 	let aborted: string[];
 	let items: unknown[];
+	let collections: unknown[];
 	let fail: boolean;
+	let failCollections: boolean;
 
 	beforeEach(() => {
 		vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -64,6 +66,8 @@ describe('GlobalSearch', () => {
 		requested = [];
 		aborted = [];
 		fail = false;
+		failCollections = false;
+		collections = [];
 		items = [
 			item('g1', 'Tetris', { releaseYear: 1989, boxArtUrl: '/api/games/g1/images/1', rating: 4 }),
 			item('g2', 'Tetris 2', { favourite: true })
@@ -72,10 +76,13 @@ describe('GlobalSearch', () => {
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
 			requested.push(url);
 			init?.signal?.addEventListener('abort', () => aborted.push(url));
-			const body = fail
-				? { code: 'HttpError', title: 'Search is down' }
-				: { items, page: 1, pageSize: 5, total: items.length };
-			return Promise.resolve(new Response(JSON.stringify(body), { status: fail ? 500 : 200 }));
+			const isCollections = url.startsWith('/api/collections');
+			const failed = isCollections ? failCollections : fail;
+			const list = isCollections ? collections : items;
+			const body = failed
+				? { code: 'HttpError', title: isCollections ? 'Collections are down' : 'Search is down' }
+				: { items: list, page: 1, pageSize: 10, total: list.length };
+			return Promise.resolve(new Response(JSON.stringify(body), { status: failed ? 500 : 200 }));
 		});
 	});
 	afterEach(() => {
@@ -201,7 +208,7 @@ describe('GlobalSearch', () => {
 		expect(requested).toEqual([]);
 	});
 
-	it('debounces 250 ms, asks for the top 5 by relevance and aborts the older request', async () => {
+	it('debounces 250 ms, asks for 5 collections and the top 10 games by relevance, aborts the older requests (B27)', async () => {
 		render(GlobalSearch, { open: true });
 
 		await type('tet');
@@ -212,10 +219,13 @@ describe('GlobalSearch', () => {
 		await vi.advanceTimersByTimeAsync(250);
 
 		expect(requested).toEqual([
-			'/api/games?q=tet&sort=relevance&pageSize=5',
-			'/api/games?q=tetris&sort=relevance&pageSize=5'
+			'/api/games?q=tet&sort=relevance&pageSize=10',
+			'/api/collections?q=tet&pageSize=5',
+			'/api/games?q=tetris&sort=relevance&pageSize=10',
+			'/api/collections?q=tetris&pageSize=5'
 		]);
-		expect(aborted).toContain('/api/games?q=tet&sort=relevance&pageSize=5');
+		expect(aborted).toContain('/api/games?q=tet&sort=relevance&pageSize=10');
+		expect(aborted).toContain('/api/collections?q=tet&pageSize=5');
 	});
 
 	it('results show title, system badge, year, box art or placeholder and the read-only rating', async () => {
@@ -291,5 +301,108 @@ describe('GlobalSearch', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Close', hidden: true }));
 
 		expect(document.activeElement).toBe(trigger);
+	});
+
+	describe('collections group (B27)', () => {
+		const collection = (id: string, name: string, extra = {}) => ({
+			id,
+			name,
+			gameCount: 3,
+			coverUrl: null as string | null,
+			updatedAt: '',
+			...extra
+		});
+
+		beforeEach(() => {
+			collections = [
+				collection('c1', 'Tetris family', { coverUrl: '/api/collections/c1/cover?v=1' }),
+				collection('c2', 'Puzzles', { gameCount: 1 })
+			];
+		});
+
+		const options = () => screen.getAllByRole('option', { hidden: true });
+
+		it('shows Collections first, then Games, with cover, name and game count', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			const listbox = screen.getByRole('listbox', { hidden: true });
+			const headings = [...listbox.querySelectorAll('[role="presentation"]')].map((h) =>
+				h.textContent?.trim()
+			);
+			expect(headings).toEqual(['Collections', 'Games']);
+			expect(options().map((o) => o.querySelector('.fw-semibold')?.textContent)).toEqual([
+				'Tetris family',
+				'Puzzles',
+				'Tetris',
+				'Tetris 2'
+			]);
+			expect(options()[0].querySelector('img')!.getAttribute('src')).toBe(
+				'/api/collections/c1/cover?v=1'
+			);
+			expect(options()[0].textContent).toContain('3 games');
+			expect(options()[1].textContent).toContain('1 game');
+			expect(options()[1].querySelector('.bi-bookmarks')).toBeTruthy();
+		});
+
+		it('arrow keys cross from collections into games and wrap around', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			await fireEvent.keyDown(input(), { key: 'ArrowDown' });
+			await fireEvent.keyDown(input(), { key: 'ArrowDown' });
+			expect(input().getAttribute('aria-activedescendant')).toBe('global-search-results-2');
+			expect(options()[2].textContent).toContain('Tetris');
+			await fireEvent.keyDown(input(), { key: 'ArrowUp' });
+			await fireEvent.keyDown(input(), { key: 'ArrowUp' });
+			await fireEvent.keyDown(input(), { key: 'ArrowUp' });
+			expect(input().getAttribute('aria-activedescendant')).toBe('global-search-results-3');
+
+			await fireEvent.keyDown(input(), { key: 'Enter' });
+			expect(goto).toHaveBeenLastCalledWith('/games/g2');
+		});
+
+		it('Enter on a collection opens it', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			await fireEvent.keyDown(input(), { key: 'Enter' });
+
+			expect(goto).toHaveBeenLastCalledWith('/collections/c1');
+			expect(shown.hidden).toBeGreaterThan(0);
+		});
+
+		it('a failing collections request shows its error and keeps the games', async () => {
+			failCollections = true;
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			expect(screen.getByText('Collections are down')).toBeTruthy();
+			expect(options().map((o) => o.querySelector('.fw-semibold')?.textContent)).toEqual([
+				'Tetris',
+				'Tetris 2'
+			]);
+		});
+
+		it('a failing games request shows its error and keeps the collections', async () => {
+			fail = true;
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			expect(screen.getByText('Search is down')).toBeTruthy();
+			expect(options().map((o) => o.querySelector('.fw-semibold')?.textContent)).toEqual([
+				'Tetris family',
+				'Puzzles'
+			]);
+		});
+
+		it('only collections match: no Games heading, no "no results" text', async () => {
+			items = [];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			expect(screen.getByRole('listbox', { hidden: true }).textContent).not.toContain('Games');
+			expect(screen.queryByText('No games match')).toBeNull();
+		});
 	});
 });

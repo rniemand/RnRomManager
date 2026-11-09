@@ -2,15 +2,17 @@
 	import { onDestroy } from 'svelte';
 	import { api } from '../api/client';
 	import type { GameListItem, Page } from '../api/types';
+	import SystemBadge from './SystemBadge.svelte';
 
 	/**
 	 * Game picker for move / merge / attach (spec §11): `GET /api/games?q=…&system=…&pageSize=10`, debounced 300 ms,
-	 * from 2 characters; the source game is left out client-side.
+	 * from 2 characters; the source game is left out client-side. Without `system` it searches every system and
+	 * shows each result's system (B24).
 	 */
 	interface Props {
 		id: string;
 		label: string;
-		system: string;
+		system?: string;
 		excludeId?: string;
 		selected: GameListItem | null;
 		invalid?: string;
@@ -46,7 +48,7 @@
 		controller = new AbortController();
 		const signal = controller.signal;
 		searching = true;
-		const params = new URLSearchParams({ q, system, pageSize: '10' });
+		const params = new URLSearchParams({ q, ...(system ? { system } : {}), pageSize: '10' });
 		try {
 			const page = await api.get<Page<GameListItem>>(`/api/games?${params}`, { signal });
 			results = page.items.filter((game) => game.id !== excludeId);
@@ -98,6 +100,7 @@
 				class="list-group-item list-group-item-action"
 				onclick={() => select(game)}
 			>
+				{#if !system}<SystemBadge system={game.system} name={game.systemName} />{/if}
 				{game.displayTitle}
 				{#if game.releaseYear}<span class="text-body-secondary small">({game.releaseYear})</span
 					>{/if}

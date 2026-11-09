@@ -1,12 +1,17 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
 
-vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/review') } }));
+const page = vi.hoisted(() => ({ url: new URL('http://localhost/review') }));
+vi.mock('$app/state', () => ({ page }));
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
 
 const { default: Navbar } = await import('./Navbar.svelte');
 
 describe('Navbar', () => {
+	beforeEach(() => {
+		page.url = new URL('http://localhost/review');
+	});
+
 	it('marks the active link with aria-current and the accent (active) class', () => {
 		render(Navbar, {
 			me: { id: 1, username: 'boss', roles: ['admin', 'rom-manager'], mustChangePassword: false },
@@ -29,7 +34,15 @@ describe('Navbar', () => {
 			onlogout: () => {}
 		});
 		const links = [...document.querySelectorAll('a.nav-link')].map((a) => a.textContent?.trim());
-		expect(links).toEqual(['Library', 'Ingestion', 'Review', 'Reports', 'Integrity', 'Admin']);
+		expect(links).toEqual([
+			'Library',
+			'Collections',
+			'Ingestion',
+			'Review',
+			'Reports',
+			'Integrity',
+			'Admin'
+		]);
 	});
 
 	it('a non-admin sees Library and Reports, in that order (RP1)', () => {
@@ -39,8 +52,24 @@ describe('Navbar', () => {
 			onlogout: () => {}
 		});
 		const links = [...document.querySelectorAll('a.nav-link')].map((a) => a.textContent?.trim());
-		expect(links).toEqual(['Library', 'Reports']);
+		expect(links).toEqual(['Library', 'Collections', 'Reports']);
 		expect(screen.getByRole('link', { name: /Reports/ }).getAttribute('href')).toBe('/reports');
+		expect(screen.getByRole('link', { name: /Collections/ }).getAttribute('href')).toBe(
+			'/collections'
+		);
+	});
+
+	it.each(['/collections', '/collections/abc'])('Collections is active on %s (B20)', (path) => {
+		page.url = new URL(`http://localhost${path}`);
+		render(Navbar, {
+			me: { id: 1, username: 'u', roles: [], mustChangePassword: false },
+			reviewCount: null,
+			onlogout: () => {}
+		});
+		const link = screen.getByRole('link', { name: /Collections/ });
+		expect(link.getAttribute('aria-current')).toBe('page');
+		expect(link.querySelector('i')?.className).toContain('bi-bookmarks');
+		expect(screen.getByRole('link', { name: /Library/ }).getAttribute('aria-current')).toBeNull();
 	});
 
 	it('the Search button has no Ctrl K hint (G2)', () => {

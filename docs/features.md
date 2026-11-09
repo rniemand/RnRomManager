@@ -16,7 +16,7 @@ The navbar stays at the top of the window while you scroll, and shows the pages 
 
 ## Global search
 
-**Search** in the navbar, **Ctrl+K** / **Cmd+K** or **Ctrl+Space** (some systems use Ctrl+Space to switch input methods; use Ctrl/Cmd+K there) opens a search box from any page, even while typing in a field. It's off while another dialog is open and until you've changed a forced password. From 2 characters it shows the 5 best matches. Every word you type must appear in the title, developers, publishers or genres; an exact title ranks first, then titles that start with what you typed, then by how many words hit the title (weighted most), developers, publishers and genres, then A–Z. Each result shows its box art, system, year, rating and favourite, and, when no word matched the title, why it was found (e.g. "Publisher: Nintendo"). Up/Down pick a result, Enter (or a click) opens it; Escape closes the search and puts the focus back where it was.
+**Search** in the navbar, **Ctrl+K** / **Cmd+K** or **Ctrl+Space** (some systems use Ctrl+Space to switch input methods; use Ctrl/Cmd+K there) opens a search box from any page, even while typing in a field. It's off while another dialog is open and until you've changed a forced password. From 2 characters it shows two groups: up to 5 of your [collections](#collections) whose name contains every word you typed (sorted by name, each with its cover, name and game count), then the 10 best games. Every word you type must appear in the title, developers, publishers or genres; an exact title ranks first, then titles that start with what you typed, then by how many words hit the title (weighted most), developers, publishers and genres, then A–Z. Each result shows its box art, system, year, rating and favourite, and, when no word matched the title, why it was found (e.g. "Publisher: Nintendo"). Up/Down move through both groups, Enter (or a click) opens the collection or game; if one of the two searches fails, its error shows and the other group's results stay. Escape closes the search and puts the focus back where it was.
 
 ## Keyboard shortcuts
 
@@ -26,6 +26,7 @@ These work from any page, even while typing in a field, but not while a dialog i
 |---|---|---|
 | Open global search | **Ctrl+K**, **Ctrl+Space**, **Cmd+K** (fixed) | everyone |
 | Go to Library | **Alt+Shift+L** | everyone |
+| Go to Collections | **Alt+Shift+C** | everyone |
 | Go to Ingestion | **Alt+Shift+I** | `admin` |
 | Go to Review | **Alt+Shift+F** | `admin` |
 | Open the first review item (the Review page when the queue is empty) | **Alt+Shift+G** | `admin` |
@@ -49,7 +50,20 @@ The home page (`/`) shows every game, 48 per page.
 - **Rating and favourite:** click a star (1–5) to rate a game, the same star again to clear it, and the heart to mark it a favourite. Any signed-in user can do this on the cards, the list and the game page; the values are shared, so everyone sees the same rating. A changed card stays where it is until the list reloads. If a job is running, the rating is tried once more after a second, then undone with "Another job is running".
 - Filters live in the address bar, so a filtered view can be bookmarked or shared, and Back/Forward step through your changes.
 
+- **Add to collection:** **Select** shows a checkbox on each card or row, with **Select all on this page**; **Add to collection…** adds the ticked games to one of your [collections](#collections) and says how many were new. The selection clears when you change page, a filter or the sort, or turn Select off.
+
 An empty library offers Admins a link to Ingestion.
+
+## Collections
+
+Every signed-in user can group library games from any system into **collections** ("Pokemon", "My favourites"). Collections are private: nobody else, Admins included, can see or change yours.
+
+- **Collections** in the navbar (or **Alt+Shift+C**) lists yours as cards (cover, name, game count) sorted by name, with a name filter and paging (both kept in the address bar; rows per page are remembered in this browser). **New collection** asks for a name, optional Markdown notes (View/Edit/Preview, at most 64 KiB, like release notes) and an optional cover (a PNG or JPEG file or URL, at most 8 MiB), then opens the new collection. If the cover can't be saved, the collection is still created and an error says so.
+- Names are 1–100 characters and unique per user, ignoring case but not accents: "pokemon" clashes with "Pokemon", "Pokémon" doesn't.
+- A collection's page shows its cover, name, game count and notes, with **Edit** (name and notes are saved with Save; a cover change or removal applies at once) and **Delete** (removes the collection, never its games). Below are its games with the Library's grid/list, search, system filter, Favourites and paging, sorted by when they were added to the collection (newest first) or by title, year or rating; the view is kept in the address bar. **Add games** searches every system; each game has a **Remove from collection** button.
+- On a game's page, **Collections** lists yours with a checkbox each (the first 200 by name; filter to find more): ticking or unticking applies at once. Badges under the title link to the collections that hold the game.
+- A game stays in its collections when it's edited, and moves with it when it's merged into another game or its last release is moved away (keeping the earlier added date where both were in a collection). A game that disappears from the library (e.g. a library folder not mounted) stops showing in its collections and comes back with it.
+- Collections live in the database; covers are files in `Paths:Collections` ([configuration](configuration.md)), not in the library ZIPs and not in database backups ([deployment](deployment.md#backup-and-restore)). Changes to collections aren't audited and never wait for a running job.
 
 ## Game detail
 
@@ -205,6 +219,7 @@ Every signed-in user, whatever their roles, can read the library. Lists and deta
 - `GET /api/games` returns a page of `{id, system, systemName, displayTitle, releaseYear, regions[], romCount, boxArtUrl, primarySizeBytes, rating, favourite, matchedOn}` (`systemName` is the system's display name, or its id if it isn't registered; `boxArtUrl` is the cover image) (48 per page by default, maximum 200; a page past the end is empty).
   - `system` must be a registered system id. `letter` is `#` or `A`–`Z` (any case) and matches the ZIP's letter folder; send `#` as `%23`.
   - `region` matches a game when any of its releases has exactly that region. `q` is split on whitespace into at most 8 distinct words (more is `400`), and a game matches when every word is a case-insensitive substring of the display title, title, developers, publishers or genres; `%`, `_` and `\` match literally. With `q`, `matchedOn` is `{field, value}` (`developer`, `publisher` or `genre`, and the first matching value in that order) when no word matched a title, else `null`. `favourite` is exactly `true` (only favourites) or `false` (only the others).
+  - `collection` (a collection id of yours) lists only that collection's games, with every other filter still applied; not a GUID → `400` (field `collection`), someone else's or unknown → `404`. With it, `added` sorts by when each game was added to the collection.
   - `sort` is `title` (default), `year`, `added`, `rating` or `relevance`; `dir` is `asc` or `desc`, defaulting to `asc` for title/year and `desc` for added/rating. Games without a year (or rating) are listed last in both directions; equal ratings are ordered by title, other equal values by game id.
   - `relevance` scores each game: 100 when a title equals `q` (whitespace collapsed), 60 when a title starts with it, and per word 40 if it's in a title, 20 in the developers, 20 in the publishers and 10 in the genres; highest first, then by title. It ignores `dir`, and without `q` it sorts by title.
   - Invalid values return `400 ValidationFailed` with a per-field `errors` object.
@@ -215,6 +230,19 @@ Every signed-in user, whatever their roles, can read the library. Lists and deta
 - `GET /api/games/{id}/roms/{romId}/download` streams one ROM from the ZIP under its library file name.
 
 ROM and image ids change whenever a game is rewritten. A stale id, an image or ROM belonging to another game, or a ZIP missing from disk returns `404 NotFound`; an unreadable ZIP returns `500 IoError`. ZIPs are opened so that an ingest or edit can still replace them during a download.
+
+### Collections through the API
+
+Every route needs only a signed-in user and acts on your own collections: another user's collection id answers `404` exactly like a missing one. Mutations need the antiforgery header.
+
+- `GET /api/collections?q=&page=&pageSize=` returns a page of `{id, name, gameCount, coverUrl, updatedAt}` sorted by name. `q` (at most 255 characters, 8 words) matches names containing every word, ignoring case and accents; `%` and `_` match literally. `gameCount` counts only games still in the library.
+- `POST /api/collections` with `{name, notes?}` → `201` with `{id, name, notes, coverUrl, gameCount, createdAt, updatedAt}`; `PATCH /api/collections/{id}` with `{name?, notes?}` → `200` with the same (an absent field is unchanged; `notes: null` or `""` clears it); `GET /api/collections/{id}` returns it; `DELETE /api/collections/{id}` → `204` (memberships and cover files go with it). Names are trimmed, 1–100 characters; notes have `
+` line endings, at most 65,536 UTF-8 bytes, whitespace-only meaning none. Errors: `400 ValidationFailed` (`name`, `notes`), `409 CollectionNameTaken`.
+- `POST /api/collections/{id}/cover` (multipart `file`, PNG or JPEG, at most 8 MiB; `413 PayloadTooLarge` above) and `POST /api/collections/{id}/cover/from-url` with `{url}` (downloaded like a [game image from a URL](#edit-the-library-through-the-api), same errors) replace the cover and return the detail; `DELETE /api/collections/{id}/cover` removes it. `GET /api/collections/{id}/cover` (the `coverUrl`, `?v=` changing with each cover) streams it with `Cache-Control: private, max-age=86400`; `404` when there's none or its file is missing.
+- `POST /api/collections/{id}/games` with `{gameIds: [...]}` (1–500 ids, else `400 gameIds`) → `200 {added}`: ids already in it, or not library games, are skipped. `DELETE /api/collections/{id}/games/{gameId}` → `204`, also when it wasn't there.
+- `GET /api/games/{id}/collections` returns `[{id, name}]`: your collections holding the game, by name (`404` for an unknown game).
+
+`updatedAt` changes only when a request changes something (an add with `added: 0` doesn't).
 
 ### Rate games through the API
 
@@ -313,7 +341,7 @@ PUT and DELETE rewrite the ZIP under the job lock like any edit (`409 JobRunning
 
 ### Keyboard shortcuts through the API
 
-- `GET /api/auth/me/hotkeys` returns `{bindings: {<id>: string | null}}` for every editable action (`nav.library`, `nav.ingestion`, `nav.review`, `review.next`), defaults filled in.
+- `GET /api/auth/me/hotkeys` returns `{bindings: {<id>: string | null}}` for every editable action (`nav.library`, `nav.collections`, `nav.ingestion`, `nav.review`, `review.next`), defaults filled in.
 - `PUT /api/auth/me/hotkeys` with `{bindings}` replaces your shortcuts (an action left out goes back to its default; `{}` resets all) and returns the result. Shortcuts are written `Ctrl+Alt+Shift+Meta+<Key>` (modifiers in that order); other orders and letter case are accepted and normalised. Unknown actions, `search`, bad formats and the rules above are `400` with field errors keyed `bindings.<id>`. Only shortcuts that differ from the default are stored (`users.hotkeys`). Bindings sent for actions your roles don't allow are ignored, and stored ones are kept.
 
 Both are blocked until a forced password change is done.

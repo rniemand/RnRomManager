@@ -84,12 +84,17 @@ public sealed class GameRepository : IGameRepository
         if (query.Favourite is not null)
             where.Add("g.favourite = @favourite");
         var filter = where.Count == 0 ? "" : "WHERE " + string.Join(" AND ", where);
+        // B15/B17: inner join, so memberships of games no longer in the library don't show.
+        var from = query.CollectionId is null
+            ? "games g"
+            : "games g JOIN collection_games cg ON cg.game_id = g.id AND cg.collection_id = @collection";
 
         // Fixed SQL fragments only; nothing user-supplied is spliced in.
         var dir = query.Descending ? "DESC" : "ASC";
         var order = query.Sort switch
         {
             GameSort.Year => $"g.release_year IS NULL, g.release_year {dir}, g.id",
+            GameSort.Added when query.CollectionId is not null => $"cg.added_at {dir}, g.id",
             GameSort.Added => $"g.created_at {dir}, g.id",
             GameSort.Rating => $"g.rating IS NULL, g.rating {dir}, g.title, g.id",
             GameSort.Relevance when query.Phrase is not null => $"{RelevanceScore(words.Count)} DESC, g.title, g.id",
@@ -100,6 +105,7 @@ public sealed class GameRepository : IGameRepository
         var args = new DynamicParameters(new
         {
             system = query.System,
+            collection = query.CollectionId,
             letter = query.Letter,
             region = query.Region is null ? null : SqlLike.Contains("|" + query.Region + "|"),
             favourite = query.Favourite,
@@ -113,7 +119,7 @@ public sealed class GameRepository : IGameRepository
 
         await using var connection = _connections.Create();
         var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM games g {filter}", args, cancellationToken: cancellationToken));
+            $"SELECT COUNT(*) FROM {from} {filter}", args, cancellationToken: cancellationToken));
         var rows = await connection.QueryAsync<ListRow>(new CommandDefinition($"""
             SELECT g.id AS Id, g.system_id AS SystemId, g.display_title AS DisplayTitle, g.release_year AS ReleaseYear,
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount,
@@ -122,7 +128,7 @@ public sealed class GameRepository : IGameRepository
                    (SELECT MAX(r.size_bytes) FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1) AS PrimarySizeBytes,
                    g.rating AS Rating, g.favourite AS Favourite, g.title AS Title,
                    g.developers AS Developers, g.publishers AS Publishers, g.genres AS Genres
-            FROM games g {filter}
+            FROM {from} {filter}
             ORDER BY {order}
             LIMIT @pageSize OFFSET @offset
             """, args, cancellationToken: cancellationToken));

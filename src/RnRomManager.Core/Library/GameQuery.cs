@@ -20,6 +20,9 @@ public sealed record GameQuery
     /// <summary>null = all, true = only favourites, false = only non-favourites.</summary>
     public bool? Favourite { get; init; }
 
+    /// <summary>Only games in this collection (B15); <see cref="GameSort.Added"/> then sorts by when each was added to it.</summary>
+    public Guid? CollectionId { get; init; }
+
     public GameSort Sort { get; init; } = GameSort.Title;
     public bool Descending { get; init; }
     public int Page { get; init; } = 1;

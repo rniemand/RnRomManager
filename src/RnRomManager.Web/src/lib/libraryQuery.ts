@@ -18,7 +18,20 @@ export interface LibraryFilters {
 	page: number;
 }
 
+/**
+ * B24: a collection's page uses the same filters without letter and region, defaulting to added-to-collection
+ * newest first; its API calls carry `collection`.
+ */
+export interface QueryScope {
+	collection: string;
+}
+
 export const libraryPageSize = 48;
+
+/** The sort the URL leaves out: title for the Library, added-to-collection for a collection (B24). */
+export function defaultSort(scope?: QueryScope): LibrarySort {
+	return scope ? 'added' : 'title';
+}
 export const letters = ['#', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'];
 
 /** The search box only filters from 2 characters (§11). */
@@ -32,17 +45,23 @@ export function defaultDir(sort: LibrarySort): SortDir {
 }
 
 /** Hand-edited or stale URLs fall back to defaults instead of failing. */
-export function parseFilters(params: Pick<URLSearchParams, 'get'>): LibraryFilters {
+export function parseFilters(
+	params: Pick<URLSearchParams, 'get'>,
+	scope?: QueryScope
+): LibraryFilters {
 	const letter = params.get('letter')?.toUpperCase() ?? null;
 	const sort = params.get('sort');
 	const dir = params.get('dir');
 	const page = Number(params.get('page'));
 	return {
 		system: params.get('system') || null,
-		letter: letter && letters.includes(letter) ? letter : null,
-		region: params.get('region') || null,
+		letter: !scope && letter && letters.includes(letter) ? letter : null,
+		region: (!scope && params.get('region')) || null,
 		q: normaliseSearch(params.get('q') ?? ''),
-		sort: sort === 'year' || sort === 'added' || sort === 'rating' ? sort : 'title',
+		sort:
+			sort === 'title' || sort === 'year' || sort === 'added' || sort === 'rating'
+				? sort
+				: defaultSort(scope),
 		dir: dir === 'asc' || dir === 'desc' ? dir : null,
 		favourite: params.get('favourite') === 'true',
 		page: Number.isInteger(page) && page > 1 ? page : 1
@@ -50,13 +69,13 @@ export function parseFilters(params: Pick<URLSearchParams, 'get'>): LibraryFilte
 }
 
 /** The page's query string (defaults left out), `''` when nothing is set. */
-export function toSearch(filters: LibraryFilters): string {
+export function toSearch(filters: LibraryFilters, scope?: QueryScope): string {
 	const params = new URLSearchParams();
 	if (filters.system) params.set('system', filters.system);
-	if (filters.letter) params.set('letter', filters.letter);
-	if (filters.region) params.set('region', filters.region);
+	if (filters.letter && !scope) params.set('letter', filters.letter);
+	if (filters.region && !scope) params.set('region', filters.region);
 	if (filters.q) params.set('q', filters.q);
-	if (filters.sort !== 'title') params.set('sort', filters.sort);
+	if (filters.sort !== defaultSort(scope)) params.set('sort', filters.sort);
 	if (filters.dir && filters.dir !== defaultDir(filters.sort)) params.set('dir', filters.dir);
 	if (filters.favourite) params.set('favourite', 'true');
 	if (filters.page > 1) params.set('page', String(filters.page));
@@ -65,8 +84,13 @@ export function toSearch(filters: LibraryFilters): string {
 }
 
 /** `GET /api/games` for these filters; `URLSearchParams` sends `letter=#` as `%23` (§23). */
-export function gamesApiUrl(filters: LibraryFilters): string {
-	const params = new URLSearchParams(toSearch(filters));
+export function gamesApiUrl(filters: LibraryFilters, scope?: QueryScope): string {
+	const params = new URLSearchParams(toSearch(filters, scope));
+	if (scope) {
+		params.set('collection', scope.collection);
+		// The API's own default is title.
+		params.set('sort', filters.sort);
+	}
 	params.set('pageSize', String(libraryPageSize));
 	return `/api/games?${params}`;
 }

@@ -99,7 +99,9 @@ describe('game detail page', () => {
 		navigateTo('/games/g1');
 		answers = [];
 		fetches = 0;
-		vi.stubGlobal('fetch', () => {
+		vi.stubGlobal('fetch', (url: string) => {
+			// B16: the game's collections (the badges); answered here so the queued answers stay as they were.
+			if (url.endsWith('/collections')) return Promise.resolve(new Response('[]', { status: 200 }));
 			fetches++;
 			const answer = answers.shift() ?? { status: 404, body: { code: 'NotFound' } };
 			return Promise.resolve(
@@ -264,7 +266,7 @@ describe('game detail page', () => {
 		expect(document.querySelector('dl')).toBeNull();
 	});
 
-	it('the action row: ZIP, ROM, Google, info.json, all default size (B1)', async () => {
+	it('the action row: ZIP, ROM, Google, info.json, Collections, all default size (B1, B25)', async () => {
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);
 
@@ -274,7 +276,8 @@ describe('game detail page', () => {
 			'Download ZIP',
 			'Download ROM',
 			'Google',
-			'View info.json'
+			'View info.json',
+			'Collections'
 		]);
 		for (const e of row) {
 			expect(e.classList).not.toContain('btn-sm');

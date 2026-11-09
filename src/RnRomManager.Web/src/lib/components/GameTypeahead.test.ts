@@ -75,4 +75,26 @@ describe('GameTypeahead', () => {
 		await fireEvent.click(await screen.findByRole('button', { name: 'Tetris 2' }));
 		expect(screen.getByText('Selected: Tetris 2')).toBeTruthy();
 	});
+
+	it('without a system searches every system and shows each result system (B24)', async () => {
+		render(GameTypeahead, { id: 't', label: 'Target game', selected: null });
+
+		await type('tetris');
+		await vi.advanceTimersByTimeAsync(300);
+
+		expect(requested).toEqual(['/api/games?q=tetris&pageSize=10']);
+		const result = await screen.findByRole('button', { name: /Tetris 2/ });
+		expect(result.querySelector('.badge')?.textContent).toContain('Game Boy');
+	});
+
+	it('with a system shows no badge', async () => {
+		render(GameTypeahead, props);
+
+		await type('tetris');
+		await vi.advanceTimersByTimeAsync(300);
+
+		expect(
+			(await screen.findByRole('button', { name: 'Tetris 2' })).querySelector('.badge')
+		).toBeNull();
+	});
 });

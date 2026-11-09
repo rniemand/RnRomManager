@@ -81,4 +81,33 @@ describe('library filters ↔ URL', () => {
 			'/api/games?system=gb&letter=%23&page=2&pageSize=48'
 		);
 	});
+
+	describe('a collection scope (B24)', () => {
+		const scope = { collection: 'c1' };
+		const parseIn = (search: string) => parseFilters(new URLSearchParams(search), scope);
+
+		it('defaults to added-to-collection, newest first, and leaves that out of the URL', () => {
+			const filters = parseIn('');
+			expect(filters.sort).toBe('added');
+			expect(toSearch(filters, scope)).toBe('');
+			expect(toSearch({ ...filters, sort: 'title' }, scope)).toBe('?sort=title');
+		});
+
+		it('ignores letter and region, keeps favourite, system, q and page', () => {
+			const filters = parseIn('letter=T&region=USA&favourite=true&system=gb&q=zelda&page=2');
+			expect([filters.letter, filters.region]).toEqual([null, null]);
+			expect(toSearch({ ...filters, letter: 'T', region: 'USA' }, scope)).toBe(
+				'?system=gb&q=zelda&favourite=true&page=2'
+			);
+		});
+
+		it('API URL carries the collection and the sort explicitly', () => {
+			expect(gamesApiUrl(parseIn(''), scope)).toBe(
+				'/api/games?collection=c1&sort=added&pageSize=48'
+			);
+			expect(gamesApiUrl(parseIn('sort=title&dir=desc'), scope)).toBe(
+				'/api/games?sort=title&dir=desc&collection=c1&pageSize=48'
+			);
+		});
+	});
 });

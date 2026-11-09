@@ -22,6 +22,7 @@
 	const links = $derived(
 		[
 			{ href: '/', label: 'Library', icon: 'library', admin: false },
+			{ href: '/collections', label: 'Collections', icon: 'collections', admin: false },
 			{ href: '/ingestion', label: 'Ingestion', icon: 'ingest', admin: true },
 			{ href: '/review', label: 'Review', icon: 'review', admin: true },
 			{ href: '/reports', label: 'Reports', icon: 'reports', admin: false },

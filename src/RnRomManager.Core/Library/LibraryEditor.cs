@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RnRomManager.Core.Audit;
+using RnRomManager.Core.Collections;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Jobs;
@@ -21,7 +22,8 @@ namespace RnRomManager.Core.Library;
 /// </summary>
 public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRepository roms, IImageRepository images, ILibraryMirror mirror,
     InfoJsonReader reader, DatCache dats, ISystemRegistry systems, MediaService media, GameMediaRetry mediaRetry,
-    IOptions<PathsOptions> paths, IAuditLog audit, AuditPaths auditPaths, TimeProvider time, ILogger<LibraryEditor> logger)
+    IOptions<PathsOptions> paths, IAuditLog audit, AuditPaths auditPaths, ICollectionRepository collections, TimeProvider time,
+    ILogger<LibraryEditor> logger)
 {
     /// <summary>The ZIP was written (or deleted), so an audit row is due even when the DB mirror then failed (AU4).</summary>
     private static bool FilesChanged(LibraryEditResult result) => result.Code is null or DbWriteFailed;
@@ -455,7 +457,11 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             DeleteOldZip(row.ZipPath, gameId);
         }
         if (result.Code is null)
+        {
             logger.LogInformation("Release {FileName} moved from game {GameId} to {TargetId} ({ZipPath})", rom.FileName, gameId, targetGame.GameId, targetPath);
+            if (sourceGame is null)
+                await MoveCollectionMembershipsAsync(gameId, targetGame.GameId).ConfigureAwait(false);
+        }
         return result with { GameId = targetGame.GameId };
     }
 
@@ -530,8 +536,27 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         sourceZip.Dispose();
         DeleteOldZip(row.ZipPath, gameId);
         if (result.Code is null)
+        {
             logger.LogInformation("Game {GameId} merged into {TargetId} ({ZipPath})", gameId, targetGameId, targetRow.ZipPath);
+            await MoveCollectionMembershipsAsync(gameId, targetGameId).ConfigureAwait(false);
+        }
         return result with { GameId = targetGameId };
+    }
+
+    /// <summary>
+    /// B18: the deleted source game's collection memberships follow it to the target. The library change has already
+    /// committed, so a failure is only logged.
+    /// </summary>
+    private async Task MoveCollectionMembershipsAsync(Guid fromGameId, Guid toGameId)
+    {
+        try
+        {
+            await collections.MoveGameAsync(fromGameId, toGameId, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Couldn't move the collection memberships of game {GameId} to {TargetId}", fromGameId, toGameId);
+        }
     }
 
     /// <summary>
