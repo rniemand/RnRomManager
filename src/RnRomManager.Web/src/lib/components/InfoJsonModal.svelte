@@ -40,6 +40,10 @@
 			return { ok: false };
 		}
 	});
+
+	// J2: the pane scrolls, so the dialog doesn't.
+	const paneClass = 'border rounded bg-body-tertiary p-2 overflow-auto';
+	const paneStyle = 'max-height: 60vh';
 </script>
 
 <ConfirmModal bind:open title="info.json" size="lg">
@@ -47,18 +51,20 @@
 		<ErrorAlert {error} onretry={load} />
 	{:else if text === null}
 		<Loading />
+	{:else if parsed.ok}
+		<JsonTree value={parsed.value} {paneClass} {paneStyle}>
+			{#snippet actions()}
+				<CopyButton value={text!} label="info.json" variant="button" />
+			{/snippet}
+		</JsonTree>
 	{:else}
-		<div class="d-flex justify-content-end mb-2">
-			<CopyButton value={text} label="info.json" />
+		<div class="alert alert-warning d-flex gap-2" role="alert">
+			<Icon name="warning" />
+			<span>This info.json isn't valid JSON, so it's shown as stored.</span>
 		</div>
-		{#if parsed.ok}
-			<JsonTree value={parsed.value} />
-		{:else}
-			<div class="alert alert-warning d-flex gap-2" role="alert">
-				<Icon name="warning" />
-				<span>This info.json isn't valid JSON, so it's shown as stored.</span>
-			</div>
-			<pre class="small mb-0">{text}</pre>
-		{/if}
+		<div class="d-flex justify-content-end mb-2">
+			<CopyButton value={text} label="info.json" variant="button" />
+		</div>
+		<div class={paneClass} style={paneStyle}><pre class="small mb-0">{text}</pre></div>
 	{/if}
 </ConfirmModal>

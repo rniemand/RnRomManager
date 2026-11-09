@@ -49,4 +49,12 @@ describe('JsonTree', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
 		expect(all().some(Boolean)).toBe(false);
 	});
+
+	it('without actions or pane props the tree wrapper has no classes and the toolbar has two buttons (J3)', () => {
+		render(JsonTree, { value });
+		const wrapper = document.querySelector('details')!.parentElement!;
+		expect(wrapper.getAttribute('class')).toBeNull();
+		expect(wrapper.getAttribute('style')).toBeNull();
+		expect(screen.getAllByRole('button')).toHaveLength(2);
+	});
 });
