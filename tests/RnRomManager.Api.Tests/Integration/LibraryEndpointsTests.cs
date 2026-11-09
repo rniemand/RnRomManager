@@ -42,6 +42,7 @@ public class LibraryEndpointsTests
         {
             [IngestSeeder.GbaDat] = [],
             [IngestSeeder.N64Dat] = [],
+            [IngestSeeder.NesDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld) { ReleaseYear = 1989, Developers = ["Nintendo"], Genres = ["Puzzle"] },
@@ -118,7 +119,7 @@ public class LibraryEndpointsTests
 
         var systems = await GetJson("/api/systems");
 
-        Assert.That(systems.GetArrayLength(), Is.EqualTo(4));
+        Assert.That(systems.GetArrayLength(), Is.EqualTo(5));
         var gb = systems[0];
         Assert.That((gb.GetProperty("id").GetString(), gb.GetProperty("displayName").GetString()), Is.EqualTo(("gb", "Game Boy")));
         Assert.That((gb.GetProperty("gameCount").GetInt32(), gb.GetProperty("romCount").GetInt32()), Is.EqualTo((1, 2)));
@@ -128,6 +129,8 @@ public class LibraryEndpointsTests
             Is.EqualTo(("gbc", 0, 0)));
         Assert.That(systems[2].GetProperty("id").GetString(), Is.EqualTo("gba"));
         Assert.That((systems[3].GetProperty("id").GetString(), systems[3].GetProperty("displayName").GetString()), Is.EqualTo(("n64", "Nintendo 64")));
+        Assert.That((systems[4].GetProperty("id").GetString(), systems[4].GetProperty("displayName").GetString()),
+            Is.EqualTo(("nes", "Nintendo Entertainment System")));
     }
 
     [Test]
@@ -190,7 +193,7 @@ public class LibraryEndpointsTests
     [TestCase("dir=up", "dir")]
     [TestCase("letter=AB", "letter")]
     [TestCase("letter=1", "letter")]
-    [TestCase("system=nes", "system")]
+    [TestCase("system=snes", "system")]
     public async Task Games_InvalidQuery_Is400WithFieldError(string query, string field)
     {
         using var response = await _user.GetAsync("/api/games?" + query);

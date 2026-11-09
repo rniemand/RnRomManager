@@ -7,15 +7,15 @@ namespace RnRomManager.Api.Tests;
 public class SystemStartupTests
 {
     [Test]
-    public void Startup_RegistersGbGbcGbaAndN64_AndCreatesTheirFolders()
+    public void Startup_RegistersGbGbcGbaN64AndNes_AndCreatesTheirFolders()
     {
         using var factory = new ApiFactory();
         using var _ = factory.CreateClient();
 
         var registry = factory.Services.GetRequiredService<ISystemRegistry>();
 
-        Assert.That(registry.All.Select(h => h.Id), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64" }));
-        foreach (var id in new[] { "gb", "gbc", "gba", "n64" })
+        Assert.That(registry.All.Select(h => h.Id), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64", "nes" }));
+        foreach (var id in new[] { "gb", "gbc", "gba", "n64", "nes" })
         {
             Assert.That(Directory.Exists(Path.Combine(factory.Settings["Paths:Roms"]!, id, "#")), Is.True);
             Assert.That(Directory.Exists(Path.Combine(factory.Settings["Paths:Roms"]!, id, "Z")), Is.True);

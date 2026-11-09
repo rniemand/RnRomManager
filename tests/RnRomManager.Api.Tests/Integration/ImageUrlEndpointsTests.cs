@@ -49,6 +49,7 @@ public class ImageUrlEndpointsTests
         {
             [IngestSeeder.GbaDat] = [],
             [IngestSeeder.N64Dat] = [],
+            [IngestSeeder.NesDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Tetris)],
         });
         cache.Load();

@@ -69,6 +69,7 @@ public class IngestPipelineTests
         {
             [IngestSeeder.GbaDat] = [],
             [IngestSeeder.N64Dat] = [new FixtureGame("Kart 64 (USA)", "Kart 64 (USA).z64", Kart.Build())],
+            [IngestSeeder.NesDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },
