@@ -177,24 +177,18 @@ public static class LibraryEndpoints
         games.MapPost("/{id:guid}/images", async (Guid id, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
             IRomRepository roms, IImageRepository images) =>
         {
-            // Kestrel enforces the size-limit metadata below; this also covers hosts that don't (TestServer) and
-            // chunked bodies, which only fail while the form is read.
-            if (ctx.Request.ContentLength > UploadRequestLimit)
-                return TooLarge(ctx);
-            Dictionary<string, string[]> errors;
-            ImageType type;
-            byte[]? bytes;
-            try
-            {
-                (type, bytes, errors) = await ReadUploadAsync(ctx);
-            }
-            catch (Exception ex) when (ex is InvalidDataException or BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge })
-            {
-                return TooLarge(ctx);
-            }
+            var (form, problem) = await ReadImageFormAsync(ctx);
+            if (problem is not null)
+                return problem;
+            var errors = new Dictionary<string, string[]>();
+            // Exact names only: Enum.TryParse would also accept "0" or "boxart".
+            var type = form!["type"].ToString() switch { "BoxArt" => ImageType.BoxArt, "Snap" => ImageType.Snap, _ => (ImageType?)null };
+            if (type is null)
+                errors["type"] = ["Choose BoxArt or Snap."];
+            var bytes = await ReadImageFileAsync(form, errors, ctx.RequestAborted);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            var result = await editor.AddImageAsync(id, type, bytes!, AuditActor.From(ctx.User), ctx.RequestAborted);
+            var result = await editor.AddImageAsync(id, type!.Value, bytes!, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.LibraryEditor).WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(UploadRequestLimit));
 
@@ -210,10 +204,7 @@ public static class LibraryEndpoints
             var download = await downloader.DownloadAsync(url!, ctx.RequestAborted);
             if (download.Bytes is not { } bytes)
                 return Problems.Create(ctx, download.Status, download.Code!, download.Title!);
-            var bytesError = bytes.Length > ImageFormats.MaxBytes ? "The image must be at most 8 MiB."
-                : bytes.Length == 0 || ImageFormats.Detect(bytes) is null || ImageFormats.Read(bytes) is null ? "The URL didn't return a PNG or JPEG image."
-                : null;
-            if (bytesError is not null)
+            if (DownloadedImageError(bytes) is { } bytesError)
                 return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = [bytesError] });
             var result = await editor.AddImageAsync(id, type, bytes, AuditActor.From(ctx.User), ctx.RequestAborted, request.Url);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
@@ -256,33 +247,56 @@ public static class LibraryEndpoints
     private static IResult TooLarge(HttpContext ctx) =>
         Problems.Create(ctx, StatusCodes.Status413PayloadTooLarge, "PayloadTooLarge", "The upload is larger than 8 MiB.");
 
-    /// <summary>I5 form fields: <c>file</c> (≤ 8 MiB; format and dimensions are checked by the editor) and <c>type</c>.</summary>
-    private static async Task<(ImageType Type, byte[]? Bytes, Dictionary<string, string[]> Errors)> ReadUploadAsync(HttpContext ctx)
+    /// <summary>
+    /// The multipart form of an image upload (I5, B8), or the problem to answer: 413 when it's too large, 400 <c>file</c>
+    /// when it isn't a form. Endpoints using it also carry <c>RequestSizeLimit(UploadRequestLimit)</c>.
+    /// </summary>
+    internal static async Task<(IFormCollection? Form, IResult? Problem)> ReadImageFormAsync(HttpContext ctx)
     {
-        var errors = new Dictionary<string, string[]>();
+        // Kestrel enforces the size-limit metadata; this also covers hosts that don't (TestServer) and
+        // chunked bodies, which only fail while the form is read.
+        if (ctx.Request.ContentLength > UploadRequestLimit)
+            return (null, TooLarge(ctx));
         if (!ctx.Request.HasFormContentType)
+            return (null, Problems.Validation(ctx, new Dictionary<string, string[]> { ["file"] = ["Send the image as multipart/form-data."] }));
+        try
         {
-            errors["file"] = ["Send the image as multipart/form-data."];
-            return (default, null, errors);
+            return (await ctx.Request.ReadFormAsync(ctx.RequestAborted), null);
         }
-        var form = await ctx.Request.ReadFormAsync(ctx.RequestAborted);
-        var typeText = form["type"].ToString();
-        // Exact names only: Enum.TryParse would also accept "0" or "boxart".
-        var type = typeText switch { "BoxArt" => ImageType.BoxArt, "Snap" => ImageType.Snap, _ => (ImageType?)null };
-        if (type is null)
-            errors["type"] = ["Choose BoxArt or Snap."];
+        catch (Exception ex) when (ex is InvalidDataException or BadHttpRequestException { StatusCode: StatusCodes.Status413PayloadTooLarge })
+        {
+            return (null, TooLarge(ctx));
+        }
+    }
+
+    /// <summary>The form's <c>file</c> (≤ 8 MiB; format and dimensions are checked later), or null with an error added.</summary>
+    internal static async Task<byte[]?> ReadImageFileAsync(IFormCollection form, Dictionary<string, string[]> errors, CancellationToken cancellationToken)
+    {
         var file = form.Files.GetFile("file");
         if (file is null || file.Length == 0)
             errors["file"] = ["Choose an image file."];
         else if (file.Length > ImageFormats.MaxBytes)
             errors["file"] = ["The image must be at most 8 MiB."];
-        if (errors.Count > 0)
-            return (default, null, errors);
+        if (errors.ContainsKey("file"))
+            return null;
 
         using var buffer = new MemoryStream((int)file!.Length);
-        await file.CopyToAsync(buffer, ctx.RequestAborted);
-        return (type!.Value, buffer.ToArray(), errors);
+        await file.CopyToAsync(buffer, cancellationToken);
+        return buffer.ToArray();
     }
+
+    /// <summary>U2/B9: at most 1024 characters (<c>images.source_url</c>), absolute http(s), no user info; else null.</summary>
+    public static Uri? ParseImageUrl(string? text) =>
+        text is { Length: > 0 and <= 1024 } && Uri.TryCreate(text, UriKind.Absolute, out var parsed)
+            && parsed.Scheme is "http" or "https" && parsed.UserInfo.Length == 0
+                ? parsed
+                : null;
+
+    /// <summary>U3/B9: the <c>url</c> error for downloaded bytes, or null when they're a storable PNG/JPEG.</summary>
+    public static string? DownloadedImageError(byte[] bytes) =>
+        bytes.Length > ImageFormats.MaxBytes ? "The image must be at most 8 MiB."
+        : bytes.Length == 0 || ImageFormats.Detect(bytes) is null || ImageFormats.Read(bytes) is null ? "The URL didn't return a PNG or JPEG image."
+        : null;
 
     private static async Task<IResult> DetailAsync(Guid id, HttpContext ctx, IGameRepository repository, IRomRepository roms, IImageRepository images)
     {
@@ -323,10 +337,7 @@ public static class LibraryEndpoints
     public static Dictionary<string, string[]> Validate(ImageUrlRequest request, out Uri? url, out ImageType type)
     {
         var errors = new Dictionary<string, string[]>();
-        url = request.Url is { Length: > 0 and <= 1024 } text && Uri.TryCreate(text, UriKind.Absolute, out var parsed)
-            && parsed.Scheme is "http" or "https" && parsed.UserInfo.Length == 0
-                ? parsed
-                : null;
+        url = ParseImageUrl(request.Url);
         if (url is null)
             errors["url"] = ["Enter an http or https image URL."];
         ImageType? parsedType = request.Type switch { "BoxArt" => ImageType.BoxArt, "Snap" => ImageType.Snap, _ => null };

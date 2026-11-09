@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Mvc;
 using RnRomManager.Api.Auth;
+using RnRomManager.Api.Http;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Collections;
 using RnRomManager.Core.Database;
@@ -16,6 +18,8 @@ public static class CollectionEndpoints
     public sealed record CreateCollectionRequest(string? Name, string? Notes);
 
     public sealed record AddGamesRequest(IReadOnlyList<Guid>? GameIds);
+
+    public sealed record CoverUrlRequest(string? Url);
 
     public static RouteGroupBuilder MapCollectionEndpoints(this RouteGroupBuilder api)
     {
@@ -63,6 +67,48 @@ public static class CollectionEndpoints
 
         collections.MapDelete("/{id:guid}/games/{gameId:guid}", async (Guid id, Guid gameId, HttpContext ctx, CollectionService service) =>
             ToResult(ctx, await service.RemoveGameAsync(id, UserId(ctx), gameId, ctx.RequestAborted), _ => Results.NoContent()));
+
+        // B8: same form handling and limits as the game image upload.
+        collections.MapPost("/{id:guid}/cover", async (Guid id, HttpContext ctx, CollectionService service) =>
+        {
+            var (form, problem) = await LibraryEndpoints.ReadImageFormAsync(ctx);
+            if (problem is not null)
+                return problem;
+            var errors = new Dictionary<string, string[]>();
+            var bytes = await LibraryEndpoints.ReadImageFileAsync(form!, errors, ctx.RequestAborted);
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+            return await DetailResultAsync(ctx, await service.SetCoverAsync(id, UserId(ctx), bytes!, ctx.RequestAborted), service, id);
+        }).WithMetadata(new RequestSizeLimitAttribute(LibraryEndpoints.UploadRequestLimit));
+
+        // B9: open to plain users on purpose; the downloader only reaches public addresses.
+        collections.MapPost("/{id:guid}/cover/from-url", async (Guid id, CoverUrlRequest? request, HttpContext ctx,
+            ImageUrlDownloader downloader, CollectionService service) =>
+        {
+            if (LibraryEndpoints.ParseImageUrl(request?.Url) is not { } url)
+                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = ["Enter an http or https image URL."] });
+            if (await service.GetAsync(id, UserId(ctx), ctx.RequestAborted) is null)
+                return Problems.NotFound(ctx);
+            var download = await downloader.DownloadAsync(url, ctx.RequestAborted);
+            if (download.Bytes is not { } bytes)
+                return Problems.Create(ctx, download.Status, download.Code!, download.Title!);
+            if (LibraryEndpoints.DownloadedImageError(bytes) is { } bytesError)
+                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = [bytesError] });
+            return await DetailResultAsync(ctx, await service.SetCoverAsync(id, UserId(ctx), bytes, ctx.RequestAborted), service, id);
+        });
+
+        // B11: the row's format decides which file is served; a missing file (e.g. after a restore) is 404.
+        collections.MapGet("/{id:guid}/cover", async (Guid id, HttpContext ctx, CollectionService service, CollectionCovers covers) =>
+        {
+            if (await service.GetAsync(id, UserId(ctx), ctx.RequestAborted) is not { CoverFormat: { } format }
+                || covers.Open(id, format) is not { } stream)
+                return Problems.NotFound(ctx);
+            ctx.Response.Headers.CacheControl = "private, max-age=86400";
+            return Results.Stream(stream, ImageFormats.ContentType($"cover.{format}"));
+        });
+
+        collections.MapDelete("/{id:guid}/cover", async (Guid id, HttpContext ctx, CollectionService service) =>
+            await DetailResultAsync(ctx, await service.RemoveCoverAsync(id, UserId(ctx), ctx.RequestAborted), service, id));
 
         return api;
     }
