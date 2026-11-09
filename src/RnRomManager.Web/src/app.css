@@ -76,3 +76,12 @@
 	color: #fff !important;
 	background-color: var(--bs-snes) !important;
 }
+
+/* Atari 2600 system colour (A4): woodgrain brown, same in both themes; white on it is AA. */
+:root {
+	--bs-a2600: #7a4b2a;
+}
+.text-bg-a2600 {
+	color: #fff !important;
+	background-color: var(--bs-a2600) !important;
+}

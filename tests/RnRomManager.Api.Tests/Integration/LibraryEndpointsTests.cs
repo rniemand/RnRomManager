@@ -44,6 +44,7 @@ public class LibraryEndpointsTests
             [IngestSeeder.N64Dat] = [],
             [IngestSeeder.NesDat] = [],
             [IngestSeeder.SnesDat] = [],
+            [IngestSeeder.Atari2600Dat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld) { ReleaseYear = 1989, Developers = ["Nintendo"], Genres = ["Puzzle"] },
@@ -120,7 +121,7 @@ public class LibraryEndpointsTests
 
         var systems = await GetJson("/api/systems");
 
-        Assert.That(systems.GetArrayLength(), Is.EqualTo(6));
+        Assert.That(systems.GetArrayLength(), Is.EqualTo(7));
         var gb = systems[0];
         Assert.That((gb.GetProperty("id").GetString(), gb.GetProperty("displayName").GetString()), Is.EqualTo(("gb", "Game Boy")));
         Assert.That((gb.GetProperty("gameCount").GetInt32(), gb.GetProperty("romCount").GetInt32()), Is.EqualTo((1, 2)));
@@ -134,6 +135,7 @@ public class LibraryEndpointsTests
             Is.EqualTo(("nes", "Nintendo Entertainment System")));
         Assert.That((systems[5].GetProperty("id").GetString(), systems[5].GetProperty("displayName").GetString()),
             Is.EqualTo(("snes", "Super Nintendo Entertainment System")));
+        Assert.That((systems[6].GetProperty("id").GetString(), systems[6].GetProperty("displayName").GetString()), Is.EqualTo(("a2600", "Atari 2600")));
     }
 
     [Test]

@@ -3,7 +3,7 @@
  * `text-bg-<name>` uses on it, so labels drawn on `var(--bs-<name>)` meet AA contrast like the badges.
  */
 export interface SystemColour {
-	name: 'success' | 'info' | 'primary' | 'danger' | 'warning' | 'secondary' | 'snes';
+	name: 'success' | 'info' | 'primary' | 'danger' | 'warning' | 'secondary' | 'snes' | 'a2600';
 	foreground: '#fff' | '#000';
 }
 
@@ -13,7 +13,8 @@ export const systemColours: Record<string, SystemColour> = {
 	gba: { name: 'primary', foreground: '#fff' },
 	n64: { name: 'danger', foreground: '#fff' },
 	nes: { name: 'warning', foreground: '#000' },
-	snes: { name: 'snes', foreground: '#fff' }
+	snes: { name: 'snes', foreground: '#fff' },
+	a2600: { name: 'a2600', foreground: '#fff' }
 };
 
 /** Unknown systems stay neutral. */
