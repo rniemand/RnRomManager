@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Atari 2600). Made for this project; MIT licensed like the rest of the repo.
+       Exported to a2600.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#f3ebe2"/>
+  <!-- tall cartridge shell, narrower at the bottom where it plugs in -->
+  <path d="M116 88 Q116 72 132 72 L380 72 Q396 72 396 88 L396 360 L372 360 L372 440 L140 440 L140 360 L116 360 Z"
+        fill="#2b2622" stroke="#15120f" stroke-width="4"/>
+  <!-- grip ridges on the top edge -->
+  <g stroke="#4a423b" stroke-width="5" stroke-linecap="round">
+    <line x1="150" y1="92" x2="362" y2="92"/>
+    <line x1="150" y1="106" x2="362" y2="106"/>
+  </g>
+  <!-- woodgrain label -->
+  <rect x="140" y="128" width="232" height="208" rx="6" fill="#7a4b2a"/>
+  <g stroke="#5e3920" stroke-width="3" fill="none" opacity="0.7">
+    <path d="M140 150 Q200 142 256 152 T372 148"/>
+    <path d="M140 196 Q210 188 270 198 T372 192"/>
+    <path d="M140 300 Q196 292 250 302 T372 296"/>
+  </g>
+  <rect x="152" y="214" width="208" height="68" rx="4" fill="#fffaf0"/>
+  <text x="256" y="262" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="44" font-weight="800" fill="#7a4b2a">2600</text>
+  <text x="256" y="182" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="18" font-weight="700" fill="#fffaf0" letter-spacing="2">GAME CARTRIDGE</text>
+  <!-- contacts -->
+  <g fill="#c9a24a">
+    <rect x="164" y="404" width="12" height="28" rx="2"/>
+    <rect x="192" y="404" width="12" height="28" rx="2"/>
+    <rect x="220" y="404" width="12" height="28" rx="2"/>
+    <rect x="248" y="404" width="12" height="28" rx="2"/>
+    <rect x="276" y="404" width="12" height="28" rx="2"/>
+    <rect x="304" y="404" width="12" height="28" rx="2"/>
+    <rect x="332" y="404" width="12" height="28" rx="2"/>
+  </g>
+</svg>
