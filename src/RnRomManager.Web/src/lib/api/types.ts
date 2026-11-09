@@ -132,6 +132,25 @@ export interface PendingSystem {
 	files: { name: string; sizeBytes: number; modifiedAt: string }[];
 }
 
+/** `GET /api/ingest/failed` (D1): the files in each system's `_failed/` folder; `reason` from its `.error.txt`. */
+export interface FailedSystem {
+	system: string;
+	files: { name: string; sizeBytes: number; modifiedAt: string; reason: string | null }[];
+}
+
+/** One entry of `POST /api/ingest/delete` (D2). */
+export interface IngestDeleteEntry {
+	system: string;
+	folder: 'pending' | 'failed';
+	name: string;
+}
+
+/** `POST /api/ingest/delete` response (D2). */
+export interface IngestDeleteResponse {
+	deleted: number;
+	failed: IngestDeleteEntry[];
+}
+
 export type JobStatus = 'Running' | 'Completed' | 'Cancelled' | 'Failed' | 'Aborted';
 
 /** `GET /api/jobs/{id}` and the items of `GET /api/jobs` (spec §23, §14.1 `jobs`). */
