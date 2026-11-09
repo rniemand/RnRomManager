@@ -202,6 +202,25 @@ describe('game detail page', () => {
 		);
 		expect(link.getAttribute('target')).toBe('_blank');
 		expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+		expect(link.querySelector('.bi-google')).not.toBeNull();
+	});
+
+	it('the action row: ZIP, ROM, Google, info.json, all default size (B1)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		const zip = await screen.findByRole('button', { name: 'Download ZIP' });
+		const row = [...zip.parentElement!.children].filter((e) => e.matches('a, button'));
+		expect(row.map((e) => e.textContent?.trim())).toEqual([
+			'Download ZIP',
+			'Download ROM',
+			'Google',
+			'View info.json'
+		]);
+		for (const e of row) {
+			expect(e.classList).not.toContain('btn-sm');
+			expect(e.classList).not.toContain('align-self-center');
+		}
 	});
 
 	it('one ROM gets a Download ROM button', async () => {

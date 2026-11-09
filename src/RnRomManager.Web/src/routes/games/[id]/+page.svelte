@@ -219,22 +219,6 @@
 				>
 					<Icon name="download" /> Download ZIP
 				</button>
-				<!-- External link: resolve() is for app routes. -->
-				<!-- eslint-disable svelte/no-navigation-without-resolve -->
-				<a
-					class="btn btn-outline-secondary"
-					href={googleSearchUrl(gameSearchQuery(game))}
-					target="_blank"
-					rel="noopener noreferrer"><Icon name="search" /> Google</a
-				>
-				<!-- eslint-enable svelte/no-navigation-without-resolve -->
-				<button
-					type="button"
-					class="btn btn-outline-secondary btn-sm align-self-center"
-					onclick={() => (infoJsonOpen = true)}
-				>
-					<Icon name="code" /> View info.json
-				</button>
 				{#if downloadRoms.length === 1}
 					<button
 						type="button"
@@ -268,6 +252,22 @@
 						</ul>
 					</div>
 				{/if}
+				<!-- External link: resolve() is for app routes. -->
+				<!-- eslint-disable svelte/no-navigation-without-resolve -->
+				<a
+					class="btn btn-outline-secondary"
+					href={googleSearchUrl(gameSearchQuery(game))}
+					target="_blank"
+					rel="noopener noreferrer"><Icon name="google" /> Google</a
+				>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				<button
+					type="button"
+					class="btn btn-outline-secondary"
+					onclick={() => (infoJsonOpen = true)}
+				>
+					<Icon name="code" /> View info.json
+				</button>
 			</div>
 			{#if auth.canEditLibrary}
 				<div class="d-flex flex-wrap gap-2 mt-3" role="group" aria-label="Admin actions">

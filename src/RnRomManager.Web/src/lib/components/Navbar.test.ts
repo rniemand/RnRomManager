@@ -22,6 +22,16 @@ describe('Navbar', () => {
 		expect(library.classList.contains('active')).toBe(false);
 	});
 
+	it('an admin sees Library, Ingestion, Review, Reports, Integrity, Admin, in that order (B4)', () => {
+		render(Navbar, {
+			me: { id: 1, username: 'boss', roles: ['admin', 'rom-manager'], mustChangePassword: false },
+			reviewCount: null,
+			onlogout: () => {}
+		});
+		const links = [...document.querySelectorAll('a.nav-link')].map((a) => a.textContent?.trim());
+		expect(links).toEqual(['Library', 'Ingestion', 'Review', 'Reports', 'Integrity', 'Admin']);
+	});
+
 	it('a non-admin sees Library and Reports, in that order (RP1)', () => {
 		render(Navbar, {
 			me: { id: 1, username: 'u', roles: [], mustChangePassword: false },
