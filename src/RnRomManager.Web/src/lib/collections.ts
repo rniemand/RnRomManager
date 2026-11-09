@@ -25,6 +25,15 @@ export function notesError(notes: string): string | null {
 		: null;
 }
 
+/** B22: the Collections page's URL query (`?q=&page=`), page 1 and an empty filter omitted. */
+export function collectionsSearch(state: { q: string; page: number }): string {
+	const params = new URLSearchParams();
+	if (state.q) params.set('q', state.q);
+	if (state.page > 1) params.set('page', String(state.page));
+	const search = params.toString();
+	return search ? `?${search}` : '';
+}
+
 const base = '/api/collections';
 const one = (id: string) => `${base}/${encodeURIComponent(id)}`;
 
@@ -32,7 +41,7 @@ export const collectionsApi = {
 	list: (params: { q?: string; page?: number; pageSize?: number } = {}) => {
 		const search = new URLSearchParams();
 		if (params.q?.trim()) search.set('q', params.q.trim());
-		if (params.page) search.set('page', String(params.page));
+		if (params.page && params.page > 1) search.set('page', String(params.page));
 		if (params.pageSize) search.set('pageSize', String(params.pageSize));
 		const query = search.toString();
 		return api.get<Page<CollectionListItem>>(query ? `${base}?${query}` : base);
