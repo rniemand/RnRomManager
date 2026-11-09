@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Net.Http.Headers;
 using RnRomManager.Api.Auth;
+using RnRomManager.Api.Http;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Jobs;
@@ -197,6 +198,27 @@ public static class LibraryEndpoints
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.LibraryEditor).WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(UploadRequestLimit));
 
+        // U1–U5: the server downloads the image (public addresses only), then stores it exactly like an upload.
+        games.MapPost("/{id:guid}/images/from-url", async (Guid id, ImageUrlRequest request, HttpContext ctx, ImageUrlDownloader downloader,
+            LibraryEditor editor, IGameRepository repository, IRomRepository roms, IImageRepository images) =>
+        {
+            var errors = Validate(request, out var url, out var type);
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+            if (await repository.GetAsync(id, ctx.RequestAborted) is null)
+                return Problems.NotFound(ctx);
+            var download = await downloader.DownloadAsync(url!, ctx.RequestAborted);
+            if (download.Bytes is not { } bytes)
+                return Problems.Create(ctx, download.Status, download.Code!, download.Title!);
+            var bytesError = bytes.Length > ImageFormats.MaxBytes ? "The image must be at most 8 MiB."
+                : bytes.Length == 0 || ImageFormats.Detect(bytes) is null || ImageFormats.Read(bytes) is null ? "The URL didn't return a PNG or JPEG image."
+                : null;
+            if (bytesError is not null)
+                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = [bytesError] });
+            var result = await editor.AddImageAsync(id, type, bytes, AuditActor.From(ctx.User), ctx.RequestAborted, request.Url);
+            return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
+        }).RequireAuthorization(AuthSetup.LibraryEditor);
+
         games.MapDelete("/{id:guid}/images/{imageId:long}", async (Guid id, long imageId, HttpContext ctx, LibraryEditor editor,
             IGameRepository repository, IRomRepository roms, IImageRepository images) =>
         {
@@ -293,6 +315,26 @@ public static class LibraryEndpoints
     /// <summary>§6.1 game title: 1–255 chars after trim, must not sanitize to empty.</summary>
     private static bool IsValidTitle(string? trimmed) =>
         trimmed is { Length: >= 1 and <= 255 } && FileNameSanitizer.Sanitize(trimmed).Length > 0;
+
+    /// <summary>
+    /// U2: <c>url</c> required, at most 1024 characters (<c>images.source_url</c>), absolute http(s) without user info;
+    /// <c>type</c> exactly <c>BoxArt</c> or <c>Snap</c>, as for the upload. Nothing is downloaded when this fails.
+    /// </summary>
+    public static Dictionary<string, string[]> Validate(ImageUrlRequest request, out Uri? url, out ImageType type)
+    {
+        var errors = new Dictionary<string, string[]>();
+        url = request.Url is { Length: > 0 and <= 1024 } text && Uri.TryCreate(text, UriKind.Absolute, out var parsed)
+            && parsed.Scheme is "http" or "https" && parsed.UserInfo.Length == 0
+                ? parsed
+                : null;
+        if (url is null)
+            errors["url"] = ["Enter an http or https image URL."];
+        ImageType? parsedType = request.Type switch { "BoxArt" => ImageType.BoxArt, "Snap" => ImageType.Snap, _ => null };
+        if (parsedType is null)
+            errors["type"] = ["Choose BoxArt or Snap."];
+        type = parsedType ?? default;
+        return errors;
+    }
 
     /// <summary><c>move</c> body (§23): <c>{targetGameId}</c> or <c>{newGameTitle}</c>, not both.</summary>
     public static Dictionary<string, string[]> Validate(MoveReleaseRequest request)
@@ -548,3 +590,6 @@ public static class LibraryEndpoints
         }),
     };
 }
+
+/// <summary>U1 body: <c>{ "url": "…", "type": "BoxArt" | "Snap" }</c>.</summary>
+public sealed record ImageUrlRequest(string? Url, string? Type);
