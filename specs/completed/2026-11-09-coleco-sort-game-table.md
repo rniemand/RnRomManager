@@ -1,6 +1,6 @@
 ---
 title: System sort, game info table and ColecoVision
-status: in-progress
+status: completed
 created: 2026-11-09
 ---
 
