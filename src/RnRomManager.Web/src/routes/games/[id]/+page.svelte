@@ -25,6 +25,7 @@
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
+	import { systemColour } from '#lib/systemColours.js';
 
 	const changedMessage = 'This game changed, please retry.';
 
@@ -353,8 +354,13 @@
 		<!-- G2: one card per release, so nothing scrolls sideways on a phone. -->
 		<div class="d-flex flex-column gap-3 mb-4">
 			{#each game.roms as rom (rom.id)}
-				<article class="card" aria-labelledby="release-{rom.id}-name">
-					<div class="card-header bg-body">
+				<!-- R1: a stripe in the system's colour and a tinted header mark where each release starts. -->
+				<article
+					class="card"
+					style="border-left: 6px solid var(--bs-{systemColour(game.system).name})"
+					aria-labelledby="release-{rom.id}-name"
+				>
+					<div class="card-header bg-body-tertiary release-header">
 						<div class="d-flex flex-wrap align-items-center gap-2">
 							<h3 class="h6 mb-0 text-break" id="release-{rom.id}-name">{rom.fileName}</h3>
 							{#if rom.isPrimary}<span class="badge text-bg-primary">Primary</span>{/if}

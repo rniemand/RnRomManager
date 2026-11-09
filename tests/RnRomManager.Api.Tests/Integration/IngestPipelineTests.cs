@@ -34,6 +34,7 @@ public class IngestPipelineTests
     private static readonly byte[] PioneerHeaderless = Pioneer[16..];
     private static readonly SyntheticSnesRomBuilder Rally = new() { Seed = 80, SizeKiB = 64, Title = "MODE SEVEN RALLY" };
 
+    private static readonly byte[] Lanes = Atari(4096, 120);
     private ApiFactory _factory = null!;
     private ILibraryMirror? _mirrorOverride;
     private Action<IServiceCollection>? _extraServices;
@@ -80,6 +81,7 @@ public class IngestPipelineTests
                 new FixtureGame("Pioneer (USA)", "Pioneer (USA).unh", PioneerHeaderless),
             ],
             [IngestSeeder.SnesDat] = [new FixtureGame("Mode Seven Rally (USA)", "Mode Seven Rally (USA).sfc", Rally.Build())],
+            [IngestSeeder.Atari2600Dat] = [new FixtureGame("Laser Lanes (USA)", "Laser Lanes (USA).a26", Lanes)],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },
@@ -128,6 +130,13 @@ public class IngestPipelineTests
     }
 
     private T Service<T>() where T : notnull => _factory.Services.GetRequiredService<T>();
+
+    private static byte[] Atari(int size, int seed)
+    {
+        var rom = new byte[size];
+        new Random(seed).NextBytes(rom);
+        return rom;
+    }
 
     [Test]
     public async Task DatMatchedGbRom_BecomesANewGameZip_WithInfoJsonAndDbRows()
@@ -516,6 +525,64 @@ public class IngestPipelineTests
         var row = (await Service<IGameRepository>().GetAsync(resolved.GameId!.Value, default))!;
         var rom = ReadZip(row.ZipPath).Roms.Single();
         Assert.That((Path.GetExtension(rom.FileName), rom.Metadata.Sha1, rom.OriginalFileName), Is.EqualTo((".sfc", stripped, "hack.smc")));
+    }
+
+    [TestCase("nes", "lanes.a26")]
+    [TestCase("a2600", "pioneer.nes")]
+    public async Task Atari_FileInAnotherFamilysFolder_IsUnsupportedType(string folder, string name)
+    {
+        var result = await IngestAsync(Drop(folder, name, name.EndsWith(".nes") ? Pioneer : Lanes));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+    }
+
+    [TestCase(2047, "TooSmall")]
+    [TestCase(65537, "TooLarge")]
+    public async Task Atari_OutsideTheSizeLimits_Fails(int size, string reason)
+    {
+        var result = await IngestAsync(Drop("a2600", "odd.bin", Atari(size, 121)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, reason)));
+    }
+
+    [Test]
+    public async Task Atari_UnmatchedBin_GoesToReview_AndResolvedIsStoredAsA26()
+    {
+        var bytes = Atari(4096, 122);
+        var sha1 = Convert.ToHexStringLower(SHA1.HashData(bytes));
+        var result = await IngestAsync(Drop("a2600", "Laser Lanes Hack.bin", bytes));
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Review, "NoDatMatch")));
+        var item = (await Service<IIngestReviewRepository>().GetBySha1Async(sha1, default))!;
+        Assert.That(item.Header, Is.Null);
+        Assert.That(item.Suggestions, Does.Contain("Laser Lanes"));
+        var user = await TestUsers.CreateAsync(_factory, "atari-resolver", TestUsers.AllRoles);
+
+        var resolved = await Service<ReviewResolver>().ResolveAsync(item.Id,
+            new ReviewResolutionRequest { Action = "Manual", Title = "Laser Lanes Hack", Regions = ["USA"], Languages = ["En"], Flags = [] },
+            new AuditActor(user.Id, user.Username, null), default);
+
+        Assert.That(resolved.Code, Is.Null, string.Join("; ", resolved.Errors?.SelectMany(e => e.Value) ?? []));
+        var row = (await Service<IGameRepository>().GetAsync(resolved.GameId!.Value, default))!;
+        var rom = ReadZip(row.ZipPath).Roms.Single();
+        Assert.That((Path.GetExtension(rom.FileName), rom.Metadata.Sha1, rom.OriginalFileName, rom.Header),
+            Is.EqualTo((".a26", sha1, "Laser Lanes Hack.bin", (System.Text.Json.Nodes.JsonObject?)null)));
+    }
+
+    [Test]
+    public async Task Atari_ZipHoldingADatGame_IsIngested()
+    {
+        var path = Path.Combine(Ingest("a2600"), "lanes.zip");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        using (var entry = zip.CreateEntry("Laser Lanes (USA).a26").Open())
+            entry.Write(Lanes);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+
+        await ActivatorUtilities.CreateInstance<IngestJob>(_factory.Services, Substitute.For<IJobItemRepository>())
+            .RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), default);
+
+        Assert.That(File.Exists(path), Is.False, "fully ingested archive is deleted");
+        var game = ReadZip(Path.Combine("a2600", "L", "Laser Lanes.zip"));
+        Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("a2600", "Laser Lanes (USA).a26")));
     }
 
     [Test]

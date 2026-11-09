@@ -40,6 +40,7 @@ public class LibraryEditTests
             [IngestSeeder.N64Dat] = [],
             [IngestSeeder.NesDat] = [],
             [IngestSeeder.SnesDat] = [],
+            [IngestSeeder.Atari2600Dat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld) { ReleaseYear = 1989, Developers = ["Nintendo"] },

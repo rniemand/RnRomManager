@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 11, 9)]
-    [TestCase(SeedSet.Full, 211, 209)]
+    [TestCase(SeedSet.Basic, 12, 10)]
+    [TestCase(SeedSet.Full, 212, 210)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -106,6 +106,24 @@ public class SeedIngestTests
             Assert.That((rom.Header!["mapping"]!.GetValue<string>(), rom.Header["title"]!.GetValue<string>(), rom.Header["sramSizeKiB"]!.GetValue<int>()),
                 Is.EqualTo(("LoROM", "MODE SEVEN RALLY", 8)));
             Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1992, new[] { "Racing" })));
+        }
+        var lanes = Directory.GetFiles(Path.Combine(factory.Root, "roms", "a2600", "L"), "*.zip").Single();
+        using (var zip = LibraryZip.Open(lanes, factory.Services.GetRequiredService<InfoJsonReader>()))
+        {
+            var game = zip.InfoJson!.Game!;
+            var rom = game.Roms.Single();
+            var seeded = new byte[4096];
+            new Random(1201).NextBytes(seeded);
+            Assert.That((game.Title, game.System, rom.FileName, rom.OriginalFileName),
+                Is.EqualTo(("Laser Lanes", "a2600", "Laser Lanes (USA).a26", "01-laser-lanes.bin")));
+            using (var entry = zip.OpenEntry(LibraryZip.RomEntry("Laser Lanes (USA).a26"), seeded.Length))
+            using (var bytes = new MemoryStream())
+            {
+                entry.CopyTo(bytes);
+                Assert.That(bytes.ToArray(), Is.EqualTo(seeded));
+            }
+            Assert.That(rom.Header, Is.Null);
+            Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1982, new[] { "Shooter" })));
         }
         var review = await factory.Services.GetRequiredService<IIngestReviewRepository>().ListAsync("Pending", 1, 48, default);
         Assert.That(review.Total, Is.EqualTo(2));

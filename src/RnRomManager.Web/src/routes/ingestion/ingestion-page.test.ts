@@ -3,9 +3,26 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { jobs } from '#lib/stores/jobs.svelte.js';
+import { toasts } from '#lib/stores/toasts.svelte.js';
 
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
+}));
+
+// Bootstrap's Modal needs layout/transitions jsdom lacks.
+vi.mock('#lib/bootstrap.js', () => ({
+	Modal: class {
+		show() {}
+		hide() {}
+		dispose() {}
+	}
+}));
+// use:tooltip builds a Bootstrap Tooltip the Modal-only mock above lacks; record the text instead.
+const tooltips: { node: Element; text: string }[] = [];
+vi.mock('#lib/tooltip.js', () => ({
+	tooltip: (node: Element, text: string) => {
+		tooltips.push({ node, text });
+	}
 }));
 
 const { default: IngestionPage } = await import('./+page.svelte');
@@ -41,7 +58,9 @@ describe('ingestion page', () => {
 		calls = [];
 		bodies = {};
 		answers = {};
+		toasts.items = [];
 		fixed = {
+			'GET /api/ingest/failed': { status: 200, body: [{ system: 'gb', files: [] }] },
 			'GET /api/ingest/pending': {
 				status: 200,
 				body: [
@@ -271,6 +290,181 @@ describe('ingestion page', () => {
 			ended.forEach((fn) => fn(running as never));
 			await vi.waitFor(() => expect(box('Select f00.gb').checked).toBe(true));
 			onEnded.mockRestore();
+		});
+	});
+
+	describe('delete (D3–D6)', () => {
+		const files = (names: string[]) =>
+			names.map((name) => ({ name, sizeBytes: 1, modifiedAt: '' }));
+		const section = (id: string) =>
+			document.querySelector(`section[aria-labelledby="${id}-heading"]`) as HTMLElement;
+		const deleteBodies = () => bodies['POST /api/ingest/delete'] ?? [];
+		const confirmButton = () => screen.getByRole('button', { name: 'Delete', hidden: true });
+		const modalTitle = () => document.querySelector('.modal-title')!.textContent;
+
+		beforeEach(() => {
+			fixed['GET /api/ingest/pending'] = {
+				status: 200,
+				body: [
+					{ system: 'gb', files: files(['a.gb', 'pack.zip']) },
+					{ system: 'gbc', files: files(['c.gbc']) }
+				]
+			};
+			fixed['GET /api/ingest/failed'] = {
+				status: 200,
+				body: [
+					{
+						system: 'gb',
+						files: [
+							{ name: 'bad.gb', sizeBytes: 1, modifiedAt: '', reason: 'InvalidHeader' },
+							{ name: 'odd.gb', sizeBytes: 1, modifiedAt: '', reason: null }
+						]
+					},
+					{ system: 'gbc', files: [] }
+				]
+			};
+			fixed['POST /api/ingest/delete'] = { status: 200, body: { deleted: 1, failed: [] } };
+		});
+
+		it('a row delete opens the modal and posts one entry with its folder on confirm', async () => {
+			render(IngestionPage);
+			const button = await screen.findByRole('button', { name: 'Delete a.gb' });
+			expect(tooltips.find((t) => t.node === button)?.text).toBe(
+				'Delete (Shift+click to skip confirmation)'
+			);
+
+			await fireEvent.click(button);
+			expect(modalTitle()).toBe('Delete a.gb');
+			expect(deleteBodies()).toEqual([]);
+			await fireEvent.click(confirmButton());
+
+			await vi.waitFor(() =>
+				expect(deleteBodies()).toEqual([
+					{ files: [{ system: 'gb', folder: 'pending', name: 'a.gb' }] }
+				])
+			);
+			await vi.waitFor(() =>
+				expect(calls.filter((c) => c === 'GET /api/ingest/failed')).toHaveLength(2)
+			);
+			expect(toasts.items.map((t) => t.text)).toContain('Deleted a.gb.');
+		});
+
+		it('Shift+click on a row posts without the modal; a failed row uses folder failed', async () => {
+			render(IngestionPage);
+			await fireEvent.click(await screen.findByRole('button', { name: 'Delete bad.gb' }), {
+				shiftKey: true
+			});
+			await vi.waitFor(() =>
+				expect(deleteBodies()).toEqual([
+					{ files: [{ system: 'gb', folder: 'failed', name: 'bad.gb' }] }
+				])
+			);
+		});
+
+		it('Shift+click on an archive row still opens the modal', async () => {
+			render(IngestionPage);
+			await fireEvent.click(await screen.findByRole('button', { name: 'Delete pack.zip' }), {
+				shiftKey: true
+			});
+			expect(modalTitle()).toBe('Delete pack.zip');
+			expect(deleteBodies()).toEqual([]);
+		});
+
+		it('Delete selected with Shift still opens the modal, listing system/name entries', async () => {
+			render(IngestionPage);
+			await screen.findByText('a.gb');
+			const button = within(section('pending')).getByRole('button', {
+				name: 'Delete selected (3)'
+			});
+
+			await fireEvent.click(button, { shiftKey: true });
+
+			expect(modalTitle()).toBe('Delete 3 files');
+			const items = [...document.querySelectorAll('.modal-body li')].map((li) => li.textContent);
+			expect(items).toEqual(['gb/a.gb', 'gb/pack.zip', 'gbc/c.gbc']);
+			expect(document.querySelector('.modal-body')!.textContent).toContain(
+				'pending Review items are deleted too'
+			);
+			expect(deleteBodies()).toEqual([]);
+		});
+
+		it('the modal lists at most 10 entries and "and n more"', async () => {
+			fixed['GET /api/ingest/pending'] = {
+				status: 200,
+				body: [{ system: 'gb', files: files(Array.from({ length: 13 }, (_, i) => `f${i}.gb`)) }]
+			};
+			render(IngestionPage);
+			await screen.findByText('f0.gb');
+			await fireEvent.click(
+				within(section('pending')).getByRole('button', { name: 'Delete selected (13)' })
+			);
+
+			const items = [...document.querySelectorAll('.modal-body li')].map((li) => li.textContent);
+			expect(items).toHaveLength(11);
+			expect(items[10]).toBe('and 3 more');
+		});
+
+		it('the failed section lists reasons, starts unselected and deletes its selection', async () => {
+			render(IngestionPage);
+			await screen.findByText('bad.gb');
+			const failed = section('failed');
+
+			expect(within(failed).getByText('InvalidHeader').tagName).toBe('CODE');
+			expect(within(failed).getByText('—')).toBeTruthy();
+			const deleteSelected = within(failed).getByRole('button', {
+				name: 'Delete selected (0)'
+			}) as HTMLButtonElement;
+			expect(deleteSelected.disabled).toBe(true);
+			expect(
+				(within(failed).getByRole('checkbox', { name: 'Select bad.gb' }) as HTMLInputElement)
+					.checked
+			).toBe(false);
+
+			await fireEvent.click(within(failed).getByRole('button', { name: 'Select all' }));
+			await fireEvent.click(within(failed).getByRole('button', { name: 'Delete selected (2)' }));
+			expect(document.querySelector('.modal-body')!.textContent).not.toContain('Review');
+			await fireEvent.click(confirmButton());
+
+			await vi.waitFor(() =>
+				expect(deleteBodies()).toEqual([
+					{
+						files: [
+							{ system: 'gb', folder: 'failed', name: 'bad.gb' },
+							{ system: 'gb', folder: 'failed', name: 'odd.gb' }
+						]
+					}
+				])
+			);
+		});
+
+		it('no failed files shows the empty state', async () => {
+			fixed['GET /api/ingest/failed'] = { status: 200, body: [{ system: 'gb', files: [] }] };
+			render(IngestionPage);
+			expect(await screen.findByText('No failed imports.')).toBeTruthy();
+		});
+
+		it('every delete button is disabled while a job runs', async () => {
+			fixed['GET /api/jobs/current'] = { status: 200, body: running };
+			jobs.current = running as never;
+			render(IngestionPage);
+			await screen.findByText('a.gb');
+
+			const deletes = screen
+				.getAllByRole('button')
+				.filter((b) => /^Delete/.test(b.getAttribute('aria-label') ?? b.textContent!.trim()));
+			expect(deletes.length).toBeGreaterThan(4);
+			expect(deletes.every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
+		});
+
+		it('JobRunning from a delete shows the job-running toast', async () => {
+			answers['POST /api/ingest/delete'] = [
+				{ status: 409, body: { code: 'JobRunning', title: 'x' } }
+			];
+			render(IngestionPage);
+			await fireEvent.click(await screen.findByRole('button', { name: 'Delete a.gb' }), {
+				shiftKey: true
+			});
+			await vi.waitFor(() => expect(toasts.items.map((t) => t.kind)).toEqual(['warning']));
 		});
 	});
 

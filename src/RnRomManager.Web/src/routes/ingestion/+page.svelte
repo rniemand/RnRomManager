@@ -4,15 +4,30 @@
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { DatVersion, Job, Page, PendingSystem } from '#lib/api/types.js';
+	import type {
+		DatVersion,
+		FailedSystem,
+		IngestDeleteEntry,
+		Job,
+		Page,
+		PendingSystem
+	} from '#lib/api/types.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
-	import FileSize from '#lib/components/FileSize.svelte';
+	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import IngestFileTable from '#lib/components/IngestFileTable.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import Pagination from '#lib/components/Pagination.svelte';
 	import { formatDateTime } from '#lib/format.js';
+	import {
+		deleteIngestFiles,
+		deleteTitle,
+		fileKey as key,
+		isArchive,
+		modalListSize
+	} from '#lib/ingestDelete.js';
 	import { formatSummary, percent, statusClass } from '#lib/jobs.js';
 	import { pageCount } from '#lib/pageSize.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -20,59 +35,91 @@
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
 	let pending = $state<PendingSystem[] | null>(null);
+	let failed = $state<FailedSystem[]>([]);
 	/** G1/G2: fixed 20 rows per page, no selector. */
 	const pageSize = 20;
 
 	let runs = $state<Page<Job> | null>(null);
 	let runsPage = $state(1);
-	/** Client-side page per system's pending table. */
-	let filePages = $state<Record<string, number>>({});
 	let datsMissing = $state(false);
 	let error = $state<unknown>(null);
 	let busy = $state(false);
 
 	const job = $derived(jobs.current);
 	const withFiles = $derived(pending?.filter((s) => s.files.length) ?? []);
+	const failedWithFiles = $derived(failed.filter((s) => s.files.length));
 
 	// IN2: the files to import, keyed `system/name`; everything is selected again after each reload.
-	const key = (system: string, name: string) => `${system}/${name}`;
 	const selected = new SvelteSet<string>();
 	const allKeys = $derived(withFiles.flatMap((s) => s.files.map((f) => key(s.system, f.name))));
 	const selectedCount = $derived(allKeys.filter((k) => selected.has(k)).length);
+	// D4: the Failed section's own selection, empty after each reload.
+	const failedSelected = new SvelteSet<string>();
+	const failedKeys = $derived(
+		failedWithFiles.flatMap((s) => s.files.map((f) => key(s.system, f.name)))
+	);
+	const failedCount = $derived(failedKeys.filter((k) => failedSelected.has(k)).length);
 
-	function selectAll(next: boolean): void {
-		selected.clear();
-		if (next) allKeys.forEach((k) => selected.add(k));
+	function selectAll(set: SvelteSet<string>, keys: string[], next: boolean): void {
+		set.clear();
+		if (next) keys.forEach((k) => set.add(k));
 	}
 
-	function toggle(k: string): void {
-		if (!selected.delete(k)) selected.add(k);
+	// D5/D6: the entries awaiting confirmation, and whether a delete is in flight.
+	let deleteEntries = $state<IngestDeleteEntry[]>([]);
+	let deleteOpen = $state(false);
+	let deleting = $state(false);
+	const deleteDisabled = $derived(!!job || deleting);
+
+	function selectedEntries(
+		systems: { system: string; files: { name: string }[] }[],
+		set: SvelteSet<string>,
+		folder: IngestDeleteEntry['folder']
+	): IngestDeleteEntry[] {
+		return systems.flatMap((s) =>
+			s.files
+				.filter((f) => set.has(key(s.system, f.name)))
+				.map((f) => ({ system: s.system, folder, name: f.name }))
+		);
 	}
 
-	function systemState(system: PendingSystem): 'all' | 'none' | 'some' {
-		const count = system.files.filter((f) => selected.has(key(system.system, f.name))).length;
-		return count === 0 ? 'none' : count === system.files.length ? 'all' : 'some';
+	function askDelete(entries: IngestDeleteEntry[]): void {
+		if (entries.length === 0) return;
+		deleteEntries = entries;
+		deleteOpen = true;
 	}
 
-	function toggleSystem(system: PendingSystem): void {
-		const next = systemState(system) !== 'all';
-		for (const f of system.files) {
-			if (next) selected.add(key(system.system, f.name));
-			else selected.delete(key(system.system, f.name));
+	/** D5: Shift+click on a row skips the modal, except for an archive. */
+	function rowDelete(event: MouseEvent, entry: IngestDeleteEntry): void {
+		if (event.shiftKey && !isArchive(entry.name)) void runDelete([entry]);
+		else askDelete([entry]);
+	}
+
+	async function runDelete(entries: IngestDeleteEntry[]): Promise<void> {
+		deleting = true;
+		try {
+			await deleteIngestFiles(entries);
+		} finally {
+			deleting = false;
+			deleteOpen = false;
 		}
+		await load();
 	}
 
 	async function load(): Promise<void> {
 		error = null;
 		try {
-			const [p, r, dats] = await Promise.all([
+			const [p, f, r, dats] = await Promise.all([
 				api.get<PendingSystem[]>('/api/ingest/pending'),
+				api.get<FailedSystem[]>('/api/ingest/failed'),
 				fetchRuns(),
 				api.get<DatVersion[]>('/api/admin/dats')
 			]);
 			pending = p;
 			selected.clear();
-			for (const s of p) for (const f of s.files) selected.add(key(s.system, f.name));
+			for (const s of p) for (const file of s.files) selected.add(key(s.system, file.name));
+			failed = f;
+			failedSelected.clear();
 			runs = r;
 			datsMissing = dats.length === 0;
 		} catch (e) {
@@ -90,10 +137,6 @@
 		} catch (e) {
 			error = e;
 		}
-	}
-
-	function filePage(system: string, total: number): number {
-		return Math.min(filePages[system] ?? 1, pageCount(total, pageSize));
 	}
 
 	onMount(() => {
@@ -219,70 +262,72 @@
 			{#if withFiles.length === 0}
 				<div class="card"><EmptyState message="No files waiting in the ingest folders." /></div>
 			{:else}
-				<div class="d-flex gap-2 mb-2">
+				<div class="d-flex flex-wrap gap-2 mb-2">
 					<button
 						type="button"
 						class="btn btn-sm btn-outline-secondary"
-						onclick={() => selectAll(true)}>Select all</button
+						onclick={() => selectAll(selected, allKeys, true)}>Select all</button
 					>
 					<button
 						type="button"
 						class="btn btn-sm btn-outline-secondary"
-						onclick={() => selectAll(false)}>Clear selection</button
+						onclick={() => selectAll(selected, allKeys, false)}>Clear selection</button
+					>
+					<button
+						type="button"
+						class="btn btn-sm btn-outline-danger"
+						disabled={deleteDisabled || selectedCount === 0}
+						onclick={() => askDelete(selectedEntries(withFiles, selected, 'pending'))}
+						>Delete selected ({selectedCount})</button
 					>
 				</div>
 				{#each withFiles as system (system.system)}
-					{@const current = filePage(system.system, system.files.length)}
-					{@const state = systemState(system)}
 					<h3 class="h6 mt-3"><Icon name="system-{system.system}" /> {system.system}</h3>
-					<div class="card">
-						<div class="table-responsive">
-							<table class="table table-sm table-striped table-hover align-middle mb-0">
-								<thead class="table-dark">
-									<tr class="small text-uppercase text-body-secondary">
-										<th scope="col">
-											<input
-												class="form-check-input"
-												type="checkbox"
-												aria-label="Select all {system.system} files"
-												checked={state === 'all'}
-												indeterminate={state === 'some'}
-												onchange={() => toggleSystem(system)}
-											/>
-										</th>
-										<th scope="col">Name</th>
-										<th scope="col" class="text-end">Size</th>
-										<th scope="col">Modified</th>
-									</tr>
-								</thead>
-								<tbody>
-									{#each system.files.slice((current - 1) * pageSize, current * pageSize) as file (file.name)}
-										<tr>
-											<td>
-												<input
-													class="form-check-input"
-													type="checkbox"
-													aria-label="Select {file.name}"
-													checked={selected.has(key(system.system, file.name))}
-													onchange={() => toggle(key(system.system, file.name))}
-												/>
-											</td>
-											<td class="text-truncate" style="max-width: 32rem" title={file.name}
-												>{file.name}</td
-											>
-											<td class="text-end"><FileSize bytes={file.sizeBytes} /></td>
-											<td class="text-nowrap">{formatDateTime(file.modifiedAt)}</td>
-										</tr>
-									{/each}
-								</tbody>
-							</table>
-						</div>
-					</div>
-					<Pagination
-						page={current}
-						pages={pageCount(system.files.length, pageSize)}
-						onpage={(p) => (filePages[system.system] = p)}
-						label="Pages of {system.system} files"
+					<IngestFileTable
+						system={system.system}
+						files={system.files}
+						{selected}
+						disabled={deleteDisabled}
+						ondelete={(e, name) => rowDelete(e, { system: system.system, folder: 'pending', name })}
+					/>
+				{/each}
+			{/if}
+		</section>
+
+		<section class="mb-4" aria-labelledby="failed-heading">
+			<h2 class="h5" id="failed-heading">Failed files</h2>
+			{#if failedWithFiles.length === 0}
+				<div class="card"><EmptyState message="No failed imports." /></div>
+			{:else}
+				<div class="d-flex flex-wrap gap-2 mb-2">
+					<button
+						type="button"
+						class="btn btn-sm btn-outline-secondary"
+						onclick={() => selectAll(failedSelected, failedKeys, true)}>Select all</button
+					>
+					<button
+						type="button"
+						class="btn btn-sm btn-outline-secondary"
+						onclick={() => selectAll(failedSelected, failedKeys, false)}>Clear selection</button
+					>
+					<button
+						type="button"
+						class="btn btn-sm btn-outline-danger"
+						disabled={deleteDisabled || failedCount === 0}
+						onclick={() => askDelete(selectedEntries(failedWithFiles, failedSelected, 'failed'))}
+						>Delete selected ({failedCount})</button
+					>
+				</div>
+				{#each failedWithFiles as system (system.system)}
+					<h3 class="h6 mt-3"><Icon name="system-{system.system}" /> {system.system}</h3>
+					<IngestFileTable
+						system={system.system}
+						files={system.files}
+						selected={failedSelected}
+						label="failed {system.system} files"
+						showReason
+						disabled={deleteDisabled}
+						ondelete={(e, name) => rowDelete(e, { system: system.system, folder: 'failed', name })}
 					/>
 				{/each}
 			{/if}
@@ -330,4 +375,29 @@
 			{/if}
 		</section>
 	{/if}
+
+	<ConfirmModal
+		bind:open={deleteOpen}
+		title={deleteTitle(deleteEntries)}
+		confirmLabel="Delete"
+		confirmClass="btn-danger"
+		busy={deleting}
+		onconfirm={() => runDelete(deleteEntries)}
+	>
+		<p>
+			{deleteEntries.length === 1 ? 'This file is' : 'These files are'} permanently deleted from the ingest
+			folder. This can't be undone.
+			{#if deleteEntries.some((e) => e.folder === 'pending')}
+				Their pending Review items are deleted too.
+			{/if}
+		</p>
+		<ul class="mb-0 text-break">
+			{#each deleteEntries.slice(0, modalListSize) as entry (`${entry.folder}/${entry.system}/${entry.name}`)}
+				<li><code>{entry.system}/{entry.name}</code></li>
+			{/each}
+			{#if deleteEntries.length > modalListSize}
+				<li>and {deleteEntries.length - modalListSize} more</li>
+			{/if}
+		</ul>
+	</ConfirmModal>
 </AdminOnly>

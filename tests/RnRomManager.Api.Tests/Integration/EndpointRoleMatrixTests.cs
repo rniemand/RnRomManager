@@ -62,6 +62,8 @@ public partial class EndpointRoleMatrixTests
         ["POST /api/games/{id:guid}/images/{imageId:long}/cover"] = Role.RomManager,
 
         ["GET /api/ingest/pending"] = Role.Admin,
+        ["GET /api/ingest/failed"] = Role.Admin,
+        ["POST /api/ingest/delete"] = Role.Admin,
         ["POST /api/jobs/ingest"] = Role.Admin,
         ["POST /api/jobs/integrity"] = Role.Admin,
         ["POST /api/jobs/dat-refresh"] = Role.Admin,

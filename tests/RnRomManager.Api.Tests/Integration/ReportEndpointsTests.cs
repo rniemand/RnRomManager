@@ -42,6 +42,7 @@ public class ReportEndpointsTests
             [IngestSeeder.N64Dat] = [],
             [IngestSeeder.NesDat] = [],
             [IngestSeeder.SnesDat] = [],
+            [IngestSeeder.Atari2600Dat] = [],
             [Gb] =
             [
                 new FixtureGame("Alpha (World)", "Alpha (World).gb", Alpha),
