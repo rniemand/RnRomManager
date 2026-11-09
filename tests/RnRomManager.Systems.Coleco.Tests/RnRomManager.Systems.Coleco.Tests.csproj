@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="NUnit.Framework" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/RnRomManager.Systems.Coleco/RnRomManager.Systems.Coleco.csproj" />
+    <!-- Only to check the ColecoVision box art differs from the Atari 2600 one. -->
+    <ProjectReference Include="../../src/RnRomManager.Systems.Atari/RnRomManager.Systems.Atari.csproj" />
+    <ProjectReference Include="../RnRomManager.TestData/RnRomManager.TestData.csproj" />
+  </ItemGroup>
+
+</Project>

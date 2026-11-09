@@ -8,6 +8,7 @@
     <Project Path="src/RnRomManager.Systems.Nintendo64/RnRomManager.Systems.Nintendo64.csproj" />
     <Project Path="src/RnRomManager.Systems.Snes/RnRomManager.Systems.Snes.csproj" />
     <Project Path="src/RnRomManager.Systems.Atari/RnRomManager.Systems.Atari.csproj" />
+    <Project Path="src/RnRomManager.Systems.Coleco/RnRomManager.Systems.Coleco.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/RnRomManager.Api.Tests/RnRomManager.Api.Tests.csproj" />
@@ -18,6 +19,7 @@
     <Project Path="tests/RnRomManager.Systems.Nintendo64.Tests/RnRomManager.Systems.Nintendo64.Tests.csproj" />
     <Project Path="tests/RnRomManager.Systems.Snes.Tests/RnRomManager.Systems.Snes.Tests.csproj" />
     <Project Path="tests/RnRomManager.Systems.Atari.Tests/RnRomManager.Systems.Atari.Tests.csproj" />
+    <Project Path="tests/RnRomManager.Systems.Coleco.Tests/RnRomManager.Systems.Coleco.Tests.csproj" />
     <Project Path="tests/RnRomManager.TestData/RnRomManager.TestData.csproj" />
   </Folder>
 </Solution>
