@@ -72,6 +72,7 @@ public static class AppHost
             .MapIngestEndpoints()
             .MapReviewEndpoints()
             .MapLibraryEndpoints()
+            .MapCollectionEndpoints()
             .MapIntegrityEndpoints()
             .MapReportEndpoints()
             .MapAuditEndpoints()

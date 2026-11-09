@@ -61,6 +61,14 @@ public partial class EndpointRoleMatrixTests
         ["DELETE /api/games/{id:guid}/images/{imageId:long}"] = Role.RomManager,
         ["POST /api/games/{id:guid}/images/{imageId:long}/cover"] = Role.RomManager,
 
+        ["GET /api/collections"] = Role.User,
+        ["POST /api/collections"] = Role.User,
+        ["GET /api/collections/{id:guid}"] = Role.User,
+        ["PATCH /api/collections/{id:guid}"] = Role.User,
+        ["DELETE /api/collections/{id:guid}"] = Role.User,
+        ["POST /api/collections/{id:guid}/games"] = Role.User,
+        ["DELETE /api/collections/{id:guid}/games/{gameId:guid}"] = Role.User,
+
         ["GET /api/ingest/pending"] = Role.Admin,
         ["GET /api/ingest/failed"] = Role.Admin,
         ["POST /api/ingest/delete"] = Role.Admin,
