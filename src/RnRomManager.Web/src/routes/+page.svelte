@@ -1,10 +1,12 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import type { GameListItem, Page, SystemInfo } from '#lib/api/types.js';
+	import CollectionPickerModal from '#lib/components/CollectionPickerModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import GameResults from '#lib/components/GameResults.svelte';
@@ -53,6 +55,21 @@
 	let searchTimer: ReturnType<typeof setTimeout> | undefined;
 	// A search typed just before leaving the page must not navigate back to it.
 	onDestroy(() => clearTimeout(searchTimer));
+
+	// B26: bulk "Add to collection…"; the selection is per page and filter state.
+	let selecting = $state(false);
+	const selected = new SvelteSet<string>();
+	let picking = $state(false);
+
+	$effect(() => {
+		void page.url.search;
+		untrack(() => selected.clear());
+	});
+
+	function toggleSelecting(): void {
+		selecting = !selecting;
+		selected.clear();
+	}
 
 	const filters = $derived(parseFilters(page.url.searchParams));
 	const regions = $derived(
@@ -231,6 +248,32 @@
 	</div>
 </form>
 
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+	<button
+		type="button"
+		class="btn btn-sm btn-outline-secondary"
+		class:active={selecting}
+		aria-pressed={selecting}
+		onclick={toggleSelecting}><Icon name="select" /> Select</button
+	>
+	{#if selecting}
+		<button
+			type="button"
+			class="btn btn-sm btn-outline-secondary"
+			disabled={!result?.items.length}
+			onclick={() => result?.items.forEach((g) => selected.add(g.id))}
+			>Select all on this page</button
+		>
+		<button
+			type="button"
+			class="btn btn-sm btn-primary"
+			disabled={selected.size === 0}
+			onclick={() => (picking = true)}><Icon name="collections" /> Add to collection…</button
+		>
+		<span class="small text-body-secondary" aria-live="polite">{selected.size} selected</span>
+	{/if}
+</div>
+
 {#if error}
 	<ErrorAlert {error} onretry={() => reload++} />
 {:else if !result}
@@ -264,7 +307,7 @@
 		{result.total}
 		{result.total === 1 ? 'game' : 'games'}
 	</p>
-	<GameResults bind:games={result.items} {view} />
+	<GameResults bind:games={result.items} {view} selected={selecting ? selected : undefined} />
 
 	{#if pages > 1}
 		<nav class="d-flex justify-content-center align-items-center gap-3 mt-4" aria-label="Pages">
@@ -284,3 +327,9 @@
 		</nav>
 	{/if}
 {/if}
+
+<CollectionPickerModal
+	bind:open={picking}
+	gameIds={[...selected]}
+	onadded={() => selected.clear()}
+/>

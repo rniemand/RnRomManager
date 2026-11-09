@@ -92,6 +92,8 @@ describe('game detail admin actions', () => {
 		calls = [];
 		answers = {};
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+			// B16: the game's collections (the badges); answered here so the queued answers stay as they were.
+			if (url.endsWith('/collections')) return Promise.resolve(new Response('[]', { status: 200 }));
 			const key = `${init?.method ?? 'GET'} ${url}`;
 			calls.push(key);
 			const answer = answers[key]?.shift() ?? { status: 204 };

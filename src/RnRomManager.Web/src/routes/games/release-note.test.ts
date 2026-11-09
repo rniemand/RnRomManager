@@ -86,6 +86,8 @@ describe('release notes (B11)', () => {
 		answers = { 'GET /api/games/g1': [{ status: 200, body: game() }] };
 		answers[`GET ${note}`] = [{ status: 200, text: '# Saved tips\r\n\r\nUse the **B** button.' }];
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+			// B16: the game's collections (the badges); answered here so the queued answers stay as they were.
+			if (url.endsWith('/collections')) return Promise.resolve(new Response('[]', { status: 200 }));
 			const key = `${init?.method ?? 'GET'} ${url}`;
 			calls.push({ key, body: init?.body as string | undefined });
 			const answer = answers[key]?.shift() ?? { status: 204 };

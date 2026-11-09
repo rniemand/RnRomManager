@@ -11,6 +11,7 @@ export const icons: Record<string, string> = {
 	logout: 'bi bi-box-arrow-right',
 	password: 'bi bi-key',
 	add: 'bi bi-plus-lg',
+	select: 'bi bi-check2-square',
 	'add-user': 'bi bi-person-plus',
 	enable: 'bi bi-person-check',
 	disable: 'bi bi-person-slash',

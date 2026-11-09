@@ -4,7 +4,8 @@
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { GameDetail, RomDetail } from '#lib/api/types.js';
+	import type { CollectionRef, GameDetail, RomDetail } from '#lib/api/types.js';
+	import { collectionsApi } from '#lib/collections.js';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import CopyButton from '#lib/components/CopyButton.svelte';
 	import GameAdminModal, {
@@ -15,6 +16,7 @@
 	import GameImages from '#lib/components/GameImages.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
+	import GameCollectionsModal from '#lib/components/GameCollectionsModal.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import InfoJsonModal from '#lib/components/InfoJsonModal.svelte';
 	import Loading from '#lib/components/Loading.svelte';
@@ -40,6 +42,9 @@
 	let infoJsonOpen = $state(false);
 	let noteRom = $state<RomDetail | null>(null);
 	let noteOpen = $state(false);
+	/** B16/B25: the caller's collections holding this game. */
+	let memberOf = $state<CollectionRef[]>([]);
+	let collectionsOpen = $state(false);
 
 	const id = $derived(page.params.id ?? '');
 	// P3: the cover (any type); screenshots are in the Images gallery.
@@ -76,6 +81,19 @@
 			}
 		);
 		return () => controller.abort();
+	});
+
+	$effect(() => {
+		const gameId = id;
+		let stale = false;
+		memberOf = [];
+		collectionsApi.forGame(gameId).then(
+			(list) => {
+				if (!stale) memberOf = list;
+			},
+			() => {} // the badges are extra; the game itself shows any error
+		);
+		return () => (stale = true);
 	});
 
 	/**
@@ -200,6 +218,19 @@
 					onsaved={(detail) => (game = detail)}
 				/>
 			</div>
+			{#if memberOf.length}
+				<ul class="list-inline mb-2" aria-label="In collections">
+					{#each memberOf as collection (collection.id)}
+						<li class="list-inline-item">
+							<a
+								class="badge text-bg-secondary text-decoration-none"
+								href={resolve('/collections/[id]', { id: collection.id })}
+								><Icon name="collections" /> {collection.name}</a
+							>
+						</li>
+					{/each}
+				</ul>
+			{/if}
 			<!-- G1: key/value table (T3). -->
 			<div class="card mb-3">
 				<div class="table-responsive">
@@ -289,6 +320,13 @@
 					onclick={() => (infoJsonOpen = true)}
 				>
 					<Icon name="code" /> View info.json
+				</button>
+				<button
+					type="button"
+					class="btn btn-outline-secondary"
+					onclick={() => (collectionsOpen = true)}
+				>
+					<Icon name="collections" /> Collections
 				</button>
 			</div>
 			{#if auth.canEditLibrary}
@@ -485,4 +523,10 @@
 	<InfoJsonModal bind:open={infoJsonOpen} gameId={game.id} />
 
 	<ReleaseNoteModal bind:open={noteOpen} gameId={game.id} rom={noteRom} onsaved={onNoteSaved} />
+	<GameCollectionsModal
+		bind:open={collectionsOpen}
+		gameId={game.id}
+		title={game.displayTitle}
+		bind:memberOf
+	/>
 {/if}
