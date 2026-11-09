@@ -193,6 +193,15 @@ test('game detail + downloads', async () => {
 	const rom = page.waitForEvent('download');
 	await items.first().click();
 	expect((await rom).suggestedFilename()).toBe('Orbit Blocks (World) (Rev 1).gb');
+
+	// G2: release cards, no sideways page scroll on a phone (Orbit Blocks has the longest seeded file name).
+	await expect(page.getByRole('article', { name: 'Orbit Blocks (World) (Rev 1).gb' })).toBeVisible();
+	const viewport = page.viewportSize()!;
+	await page.setViewportSize({ width: 375, height: 812 });
+	expect(
+		await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+	).toBe(true);
+	await page.setViewportSize(viewport);
 });
 
 test('global search, ratings and favourites', async () => {
@@ -252,7 +261,7 @@ test('review queue: resolve with a suggestion', async () => {
 
 	await page.getByRole('button', { name: 'Use' }).first().click();
 	await expect(page).toHaveURL(/\/games\//);
-	await expect(page.getByRole('table').getByText(/\(Unverified\)/)).toBeVisible();
+	await expect(page.getByRole('article').getByText(/\(Unverified\)/)).toBeVisible();
 });
 
 test('review queue: delete a file', async () => {
