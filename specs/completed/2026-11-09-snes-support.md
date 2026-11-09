@@ -1,6 +1,6 @@
 ---
 title: Super Nintendo (SNES) support
-status: in-progress
+status: completed
 created: 2026-11-09
 ---
 
