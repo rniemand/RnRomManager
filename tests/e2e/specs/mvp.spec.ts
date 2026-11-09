@@ -96,7 +96,7 @@ test('ingestion of the seeded Basic set', async () => {
 	await page.getByRole('button', { name: 'Import all' }).click();
 
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
-	await expect(run).toContainText('Ingested 11 · Duplicate 1 · Review 2 · Failed 1', {
+	await expect(run).toContainText('Ingested 12 · Duplicate 1 · Review 2 · Failed 1', {
 		timeout: 60_000
 	});
 
@@ -104,6 +104,20 @@ test('ingestion of the seeded Basic set', async () => {
 	await expect(page.getByRole('heading', { name: /Ingest job/ })).toBeVisible();
 	await expect(page.getByRole('cell', { name: /92-invalid\.gb/ })).toBeVisible();
 	await expectAccessible(page, 'job detail');
+
+	// D4/D5: the invalid file is listed under Failed files with its reason, and deleting it goes through the modal.
+	await page.goto('/ingestion');
+	const failed = page.locator('section[aria-labelledby="failed-heading"]');
+	const invalid = failed.getByRole('row').filter({ hasText: '92-invalid.gb' });
+	await expect(invalid).toContainText('InvalidHeader');
+	await expectAccessible(page, 'ingestion with failed files');
+	await invalid.getByRole('button', { name: 'Delete 92-invalid.gb' }).click();
+	await expect(dialog()).toHaveAccessibleName('Delete 92-invalid.gb');
+	await expect(dialog()).toContainText('gb/92-invalid.gb');
+	await expectAccessible(page, 'ingest delete modal');
+	await dialog().getByRole('button', { name: 'Delete', exact: true }).click();
+	await expect(dialog()).toBeHidden();
+	await expect(failed.getByText('No failed imports.')).toBeVisible();
 });
 
 test('reports and the ingest audit trail', async () => {
@@ -127,7 +141,12 @@ test('reports and the ingest audit trail', async () => {
 	const ingested = page
 		.getByRole('row')
 		.filter({ has: page.getByRole('cell', { name: 'Ingested', exact: true }) });
-	await expect(ingested).toHaveCount(11);
+	await expect(ingested).toHaveCount(12);
+	await expect(
+		page
+			.getByRole('row')
+			.filter({ has: page.getByRole('cell', { name: 'IngestFileDeleted', exact: true }) })
+	).toContainText('ingest/gb/_failed/92-invalid.gb');
 	await expect(ingested.first()).toContainText('admin');
 	await expect(ingested.first()).toContainText('ingest/');
 	await expectAccessible(page, 'audit trail');
@@ -135,7 +154,7 @@ test('reports and the ingest audit trail', async () => {
 
 test('browse, search and filter the library', async () => {
 	await page.goto('/');
-	await expect(page.getByText('9 games')).toBeVisible();
+	await expect(page.getByText('10 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
 
 	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('orb');
@@ -168,6 +187,12 @@ test('browse, search and filter the library', async () => {
 	await expect(page).toHaveURL(/system=snes/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Mode Seven Rally', exact: true })).toBeVisible();
+
+	// Seeded as a loose .bin: it only shows up if ingestion accepted it and matched it to the Atari DAT (A3).
+	await page.getByLabel('System').selectOption({ label: 'Atari 2600' });
+	await expect(page).toHaveURL(/system=a2600/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Laser Lanes', exact: true })).toBeVisible();
 
 	// "Quest, The" is shown as "The Quest" but filed under Q (§5, §6.1).
 	await page.goto('/');
@@ -223,7 +248,7 @@ test('game detail + downloads', async () => {
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await page.goto('/');
-	await expect(page.getByText('9 games')).toBeVisible();
+	await expect(page.getByText('10 games')).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await expect(dialog()).toBeVisible();
 	await expect(dialog().getByRole('combobox')).toBeFocused();

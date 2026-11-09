@@ -11,8 +11,8 @@ public class IngestSeederTests
     [SetUp] public void SetUp() => _dir = new TempDir();
     [TearDown] public void TearDown() => _dir.Dispose();
 
-    [TestCase(SeedSet.Basic, 15)]
-    [TestCase(SeedSet.Full, 215)]
+    [TestCase(SeedSet.Basic, 16)]
+    [TestCase(SeedSet.Full, 216)]
     public void Sets_HaveExpectedFilesArchivesAndReadyAges(SeedSet set, int count)
     {
         var ingest = _dir.Combine("ingest");
@@ -27,6 +27,7 @@ public class IngestSeederTests
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "n64", "01-orbit-kart.v64"))[1], Is.EqualTo(0x80), "byte-swapped");
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "nes", "01-pixel-pioneer.nes"))[..4], Is.EqualTo("NES"u8.ToArray()));
         Assert.That(new FileInfo(Path.Combine(ingest, "snes", "01-mode-seven-rally.smc")).Length % 1024, Is.EqualTo(512), "copier-headered");
+        Assert.That(new FileInfo(Path.Combine(ingest, "a2600", "01-laser-lanes.bin")).Length, Is.EqualTo(4096));
         Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(35));
     }
 
