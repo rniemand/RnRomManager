@@ -20,8 +20,8 @@ public class GameQueryParsingTests
 
     private static (GameQuery Query, Dictionary<string, string[]> Errors) Parse(string? system = null, string? letter = null,
         string? region = null, string? q = null, string? sort = null, string? dir = null, int? page = null, int? pageSize = null,
-        string? favourite = null) =>
-        LibraryEndpoints.ParseQuery(system, letter, region, q, sort, dir, page, pageSize, Systems, favourite);
+        string? favourite = null, string? collection = null) =>
+        LibraryEndpoints.ParseQuery(system, letter, region, q, sort, dir, page, pageSize, Systems, favourite, collection);
 
     [Test]
     public void Defaults_TitleAscending_FirstPageOf48_NoFilters()
@@ -43,6 +43,22 @@ public class GameQueryParsingTests
     [TestCase("relevance", "desc", false)]
     public void Direction_DefaultsPerSort(string sort, string? dir, bool descending) =>
         Assert.That(Parse(sort: sort, dir: dir).Query.Descending, Is.EqualTo(descending));
+
+    [Test]
+    public void Collection_IsAGuid_AndAddedStillDefaultsToDescending()
+    {
+        var id = Guid.NewGuid();
+        var (query, errors) = Parse(collection: id.ToString(), sort: "added");
+
+        Assert.That(errors, Is.Empty);
+        Assert.That((query.CollectionId, query.Descending), Is.EqualTo(((Guid?)id, true)));
+        Assert.That(Parse().Query.CollectionId, Is.Null);
+    }
+
+    [TestCase("not-a-guid")]
+    [TestCase("")]
+    public void Collection_Malformed_IsAFieldError(string collection) =>
+        Assert.That(Parse(collection: collection).Errors.Keys, Is.EquivalentTo(new[] { "collection" }));
 
     [Test]
     public void Normalises_LetterCase_TrimsSearchAndRegion_BlankMeansNoFilter()

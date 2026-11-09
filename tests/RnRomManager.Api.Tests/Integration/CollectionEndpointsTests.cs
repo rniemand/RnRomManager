@@ -215,4 +215,63 @@ public class CollectionEndpointsTests
         using var still = await _alice.GetAsync($"/api/collections/{id}");
         Assert.That((await AuthClient.JsonAsync(still)).GetProperty("name").GetString(), Is.EqualTo("Mine"));
     }
+
+    private async Task<string[]> TitlesAsync(AuthClient client, string query)
+    {
+        using var response = await client.GetAsync($"/api/games?{query}");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), query);
+        return (await AuthClient.JsonAsync(response)).GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("displayTitle").GetString()!).ToArray();
+    }
+
+    [Test]
+    public async Task GamesList_CollectionFilter_KeepsOtherFilters_AndSortsByAddedToCollection_B15()
+    {
+        var id = await CreateAsync(_alice, "Mine");
+        var alpha = await AddGameAsync("Alpha", 1);
+        var bravo = await AddGameAsync("Bravo", 2);
+        await AddGameAsync("Charlie", 3);
+        foreach (var game in new[] { bravo, alpha }) // bravo first: added order differs from title order
+            (await _alice.PostAsync($"/api/collections/{id}/games", new { gameIds = new[] { game } })).Dispose();
+
+        Assert.That(await TitlesAsync(_alice, $"collection={id}"), Is.EqualTo(new[] { "Alpha", "Bravo" }));
+        Assert.That(await TitlesAsync(_alice, $"collection={id}&sort=added"), Is.EqualTo(new[] { "Alpha", "Bravo" }), "default desc");
+        Assert.That(await TitlesAsync(_alice, $"collection={id}&sort=added&dir=asc"), Is.EqualTo(new[] { "Bravo", "Alpha" }));
+        Assert.That(await TitlesAsync(_alice, $"collection={id}&q=brav"), Is.EqualTo(new[] { "Bravo" }));
+    }
+
+    [Test]
+    public async Task GamesList_ForeignOrUnknownCollection_Is404_AndMalformedIs400()
+    {
+        var id = await CreateAsync(_alice, "Mine");
+
+        using (var foreign = await _bob.GetAsync($"/api/games?collection={id}"))
+            Assert.That(foreign.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        using (var unknown = await _alice.GetAsync($"/api/games?collection={Guid.NewGuid()}"))
+            Assert.That(unknown.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        using var malformed = await _alice.GetAsync("/api/games?collection=nope");
+        Assert.That(malformed.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(malformed)).GetProperty("errors").TryGetProperty("collection", out _), Is.True);
+    }
+
+    [Test]
+    public async Task GameCollections_AreTheCallersOnly_SortedByName_B16()
+    {
+        var game = await AddGameAsync("Tetris", 1);
+        var b = await CreateAsync(_alice, "b");
+        var a = await CreateAsync(_alice, "A");
+        await CreateAsync(_alice, "without");
+        var bobs = await CreateAsync(_bob, "bobs");
+        foreach (var (client, id) in new[] { (_alice, b), (_alice, a), (_bob, bobs) })
+            (await client.PostAsync($"/api/collections/{id}/games", new { gameIds = new[] { game } })).Dispose();
+
+        using var response = await _alice.GetAsync($"/api/games/{game}/collections");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var list = (await AuthClient.JsonAsync(response)).EnumerateArray()
+            .Select(c => (c.GetProperty("id").GetString(), c.GetProperty("name").GetString())).ToArray();
+        Assert.That(list, Is.EqualTo(new[] { (a, "A"), (b, "b") }));
+        using var unknown = await _alice.GetAsync($"/api/games/{Guid.NewGuid()}/collections");
+        Assert.That(unknown.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
 }

@@ -4,6 +4,7 @@ using Microsoft.Net.Http.Headers;
 using RnRomManager.Api.Auth;
 using RnRomManager.Api.Http;
 using RnRomManager.Core.Audit;
+using RnRomManager.Core.Collections;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
@@ -31,11 +32,16 @@ public static class LibraryEndpoints
         var games = api.MapGroup("/games");
 
         games.MapGet("", async (string? system, string? letter, string? region, string? q, string? sort, string? dir, int? page,
-            int? pageSize, string? favourite, HttpContext ctx, ISystemRegistry systems, IGameRepository repository) =>
+            int? pageSize, string? favourite, string? collection, HttpContext ctx, ISystemRegistry systems, IGameRepository repository,
+            ICollectionRepository collections) =>
         {
-            var (query, errors) = ParseQuery(system, letter, region, q, sort, dir, page, pageSize, systems, favourite);
+            var (query, errors) = ParseQuery(system, letter, region, q, sort, dir, page, pageSize, systems, favourite, collection);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
+            // B15: another user's collection answers 404 like a missing one.
+            if (query.CollectionId is { } collectionId
+                && await collections.GetAsync(collectionId, CollectionEndpoints.UserId(ctx), ctx.RequestAborted) is null)
+                return Problems.NotFound(ctx);
             var result = await repository.ListAsync(query, ctx.RequestAborted);
             return Results.Ok(Paging.ToDto(result, game => new
             {
@@ -80,6 +86,15 @@ public static class LibraryEndpoints
             var name = game.ZipPath[(game.ZipPath.LastIndexOf('/') + 1)..];
             // fileDownloadName sets Content-Disposition with both filename and RFC 5987 filename*.
             return Results.Stream(stream!, "application/zip", name, File.GetLastWriteTimeUtc(stream!.Name), enableRangeProcessing: true);
+        });
+
+        // B16: the caller's collections holding this game.
+        games.MapGet("/{id:guid}/collections", async (Guid id, HttpContext ctx, IGameRepository repository, ICollectionRepository collections) =>
+        {
+            if (await repository.GetAsync(id, ctx.RequestAborted) is null)
+                return Problems.NotFound(ctx);
+            var list = await collections.ListForGameAsync(id, CollectionEndpoints.UserId(ctx), ctx.RequestAborted);
+            return Results.Ok(list.Select(c => new { id = c.Id, name = c.Name }));
         });
 
         games.MapGet("/{id:guid}/info-json", async (Guid id, HttpContext ctx, IGameRepository repository, LibraryFiles files) =>
@@ -485,7 +500,8 @@ public static class LibraryEndpoints
     }
 
     public static (GameQuery Query, Dictionary<string, string[]> Errors) ParseQuery(string? system, string? letter, string? region,
-        string? q, string? sort, string? dir, int? page, int? pageSize, ISystemRegistry systems, string? favourite = null)
+        string? q, string? sort, string? dir, int? page, int? pageSize, ISystemRegistry systems, string? favourite = null,
+        string? collection = null)
     {
         var errors = Paging.Validate(page, pageSize);
         if (system is not null && systems.ById(system) is null)
@@ -526,6 +542,14 @@ public static class LibraryEndpoints
             case "false": onlyFavourite = false; break;
             default: errors["favourite"] = ["Must be true or false."]; break;
         }
+        Guid? collectionId = null;
+        if (collection is not null)
+        {
+            if (Guid.TryParse(collection, out var parsedCollection))
+                collectionId = parsedCollection;
+            else
+                errors["collection"] = ["Must be a collection id."];
+        }
         var query = new GameQuery
         {
             System = system,
@@ -533,8 +557,9 @@ public static class LibraryEndpoints
             Region = region,
             Search = q,
             Favourite = onlyFavourite,
+            CollectionId = collectionId,
             Sort = gameSort,
-            // §23: asc for title/year, desc for added and rating; relevance ignores it.
+            // §23: asc for title/year, desc for added (to the library, or to the collection: B15) and rating; relevance ignores it.
             Descending = gameSort != GameSort.Relevance && (dir is null ? gameSort is GameSort.Added or GameSort.Rating : dir == "desc"),
             Page = page ?? 1,
             PageSize = pageSize ?? Page<GameListItem>.DefaultSize,
