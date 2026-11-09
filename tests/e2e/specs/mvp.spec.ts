@@ -96,7 +96,7 @@ test('ingestion of the seeded Basic set', async () => {
 	await page.getByRole('button', { name: 'Import all' }).click();
 
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
-	await expect(run).toContainText('Ingested 9 · Duplicate 1 · Review 2 · Failed 1', {
+	await expect(run).toContainText('Ingested 10 · Duplicate 1 · Review 2 · Failed 1', {
 		timeout: 60_000
 	});
 
@@ -127,7 +127,7 @@ test('reports and the ingest audit trail', async () => {
 	const ingested = page
 		.getByRole('row')
 		.filter({ has: page.getByRole('cell', { name: 'Ingested', exact: true }) });
-	await expect(ingested).toHaveCount(9);
+	await expect(ingested).toHaveCount(10);
 	await expect(ingested.first()).toContainText('admin');
 	await expect(ingested.first()).toContainText('ingest/');
 	await expectAccessible(page, 'audit trail');
@@ -135,7 +135,7 @@ test('reports and the ingest audit trail', async () => {
 
 test('browse, search and filter the library', async () => {
 	await page.goto('/');
-	await expect(page.getByText('7 games')).toBeVisible();
+	await expect(page.getByText('8 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
 
 	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('orb');
@@ -157,6 +157,11 @@ test('browse, search and filter the library', async () => {
 	await expect(page).toHaveURL(/system=n64/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Orbit Kart 64', exact: true })).toBeVisible();
+
+	await page.getByLabel('System').selectOption({ label: 'Nintendo Entertainment System' });
+	await expect(page).toHaveURL(/system=nes/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Pixel Pioneer', exact: true })).toBeVisible();
 
 	// "Quest, The" is shown as "The Quest" but filed under Q (§5, §6.1).
 	await page.goto('/');
@@ -193,12 +198,21 @@ test('game detail + downloads', async () => {
 	const rom = page.waitForEvent('download');
 	await items.first().click();
 	expect((await rom).suggestedFilename()).toBe('Orbit Blocks (World) (Rev 1).gb');
+
+	// G2: release cards, no sideways page scroll on a phone (Orbit Blocks has the longest seeded file name).
+	await expect(page.getByRole('article', { name: 'Orbit Blocks (World) (Rev 1).gb' })).toBeVisible();
+	const viewport = page.viewportSize()!;
+	await page.setViewportSize({ width: 375, height: 812 });
+	expect(
+		await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+	).toBe(true);
+	await page.setViewportSize(viewport);
 });
 
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await page.goto('/');
-	await expect(page.getByText('7 games')).toBeVisible();
+	await expect(page.getByText('8 games')).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await expect(dialog()).toBeVisible();
 	await expect(dialog().getByRole('combobox')).toBeFocused();
@@ -252,7 +266,7 @@ test('review queue: resolve with a suggestion', async () => {
 
 	await page.getByRole('button', { name: 'Use' }).first().click();
 	await expect(page).toHaveURL(/\/games\//);
-	await expect(page.getByRole('table').getByText(/\(Unverified\)/)).toBeVisible();
+	await expect(page.getByRole('article').getByText(/\(Unverified\)/)).toBeVisible();
 });
 
 test('review queue: delete a file', async () => {
@@ -269,10 +283,24 @@ test('review queue: delete a file', async () => {
 
 test('images: upload, set cover, delete', async () => {
 	await openGame('Star Courier');
+	const viewport = page.viewportSize()!;
+	await page.setViewportSize({ width: 1280, height: 800 });
 	await page.getByRole('button', { name: 'View info.json' }).click();
 	await expect(dialog()).toHaveAccessibleName('info.json');
 	await expect(dialog().getByRole('button', { name: 'Expand all' })).toBeVisible();
+	await dialog().getByRole('button', { name: 'Expand all' }).click();
+	// J2: the JSON pane scrolls, the dialog doesn't.
+	const fit = await page.evaluate(() => {
+		const modal = document.querySelector('.modal.show')!;
+		const pane = modal.querySelector('.border.rounded.overflow-auto')!;
+		return {
+			modal: modal.scrollHeight <= modal.clientHeight,
+			overflow: getComputedStyle(pane).overflow
+		};
+	});
+	expect(fit).toEqual({ modal: true, overflow: 'auto' });
 	await expectAccessible(page, 'info.json modal');
+	await page.setViewportSize(viewport);
 	await page.keyboard.press('Escape');
 	await expect(dialog()).toBeHidden();
 	await page.getByRole('tab', { name: /^Images \(/ }).click();
@@ -288,6 +316,16 @@ test('images: upload, set cover, delete', async () => {
 	await images.getByRole('button', { name: 'Upload image' }).click();
 	await expect(dialog()).toHaveAccessibleName('Upload image');
 	await expectAccessible(page, 'upload image modal');
+	// U6: a loopback URL is refused by the server; the fallback switches back to the file input.
+	await dialog().getByText('URL', { exact: true }).click();
+	await dialog().getByLabel('Image URL').fill('http://127.0.0.1/x.png');
+	await dialog().getByRole('button', { name: 'Upload', exact: true }).click();
+	await expect(
+		dialog().getByText('The URL points to a private or local network address.')
+	).toBeVisible();
+	await expectAccessible(page, 'upload image modal, URL error');
+	await dialog().getByRole('button', { name: 'Upload a file instead' }).click();
+	await expect(dialog().getByLabel('Image URL')).toHaveCount(0);
 	await dialog()
 		.getByLabel('Upload an image')
 		.setInputFiles({ name: 'art.png', mimeType: 'image/png', buffer: png(64, [200, 40, 40]) });

@@ -41,8 +41,10 @@ describe('SystemBadge', () => {
 	it('uses the system colour and name, neutral for an unknown system', () => {
 		render(SystemBadge, { system: 'gba', name: 'Game Boy Advance' });
 		render(SystemBadge, { system: 'nes' });
+		render(SystemBadge, { system: 'snes' });
 
 		expect(screen.getByText('Game Boy Advance').classList.contains('text-bg-primary')).toBe(true);
-		expect(screen.getByText('NES').classList.contains('text-bg-secondary')).toBe(true);
+		expect(screen.getByText('NES').classList.contains('text-bg-warning')).toBe(true);
+		expect(screen.getByText('SNES').classList.contains('text-bg-secondary')).toBe(true);
 	});
 });

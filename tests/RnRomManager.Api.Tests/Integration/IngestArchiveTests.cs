@@ -34,6 +34,7 @@ public class IngestArchiveTests
         {
             [IngestSeeder.GbaDat] = [],
             [IngestSeeder.N64Dat] = [],
+            [IngestSeeder.NesDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ),

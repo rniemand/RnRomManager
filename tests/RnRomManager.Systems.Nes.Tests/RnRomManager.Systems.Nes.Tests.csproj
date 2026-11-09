@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="NUnit.Framework" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/RnRomManager.Systems.Nes/RnRomManager.Systems.Nes.csproj" />
+    <!-- Only to check the NES box art differs from the other systems' ones. -->
+    <ProjectReference Include="../../src/RnRomManager.Systems.GameBoy/RnRomManager.Systems.GameBoy.csproj" />
+    <ProjectReference Include="../../src/RnRomManager.Systems.Nintendo64/RnRomManager.Systems.Nintendo64.csproj" />
+    <ProjectReference Include="../RnRomManager.TestData/RnRomManager.TestData.csproj" />
+  </ItemGroup>
+
+</Project>

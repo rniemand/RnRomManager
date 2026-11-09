@@ -24,6 +24,7 @@ export const icons: Record<string, string> = {
 	merge: 'bi bi-union',
 	retry: 'bi bi-arrow-clockwise',
 	search: 'bi bi-search',
+	google: 'bi bi-google',
 	code: 'bi bi-code-slash',
 	note: 'bi bi-sticky',
 	'note-filled': 'bi bi-sticky-fill',

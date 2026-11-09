@@ -323,6 +323,9 @@ describe('review detail page', () => {
 		);
 		expect(link.getAttribute('target')).toBe('_blank');
 		expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+		expect(link.querySelector('.bi-google')).not.toBeNull();
+		// B3: same size as Dismiss and Delete.
+		expect(link.className).toBe('btn btn-outline-secondary');
 	});
 
 	it('SourceMissing goes back to the queue', async () => {

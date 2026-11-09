@@ -74,6 +74,6 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
         if (noIntro.DatName != handler.DatName)
             throw new InvalidDataException($"{DatKind.RelativePath(DatKind.NoIntro, handler.DatName)} is for '{noIntro.DatName}'.");
         var metadat = DatKind.All.Where(k => k != DatKind.NoIntro).Select(k => DatFiles.ParseMetadat(ReadVerified(k), k)).ToList();
-        return new DatStore(noIntro, metadat);
+        return new DatStore(noIntro, metadat, handler.RomExtensions);
     }
 }

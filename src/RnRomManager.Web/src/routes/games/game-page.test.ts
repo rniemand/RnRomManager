@@ -119,9 +119,10 @@ describe('game detail page', () => {
 		render(GamePage);
 
 		const original = await screen.findByText('Original: tetris_rev1_final.gb');
-		expect(original.getAttribute('title')).toBe('tetris_rev1_final.gb');
-		expect(original.classList.contains('text-truncate')).toBe(true);
+		// G2: wraps, never truncated.
+		expect(original.classList.contains('text-break')).toBe(true);
 		expect(original.classList.contains('text-body-secondary')).toBe(true);
+		expect(original.closest('article')!.getAttribute('aria-labelledby')).toBe('release-2-name');
 		expect(screen.getAllByText(/^Original:/)).toHaveLength(1);
 	});
 
@@ -133,7 +134,7 @@ describe('game detail page', () => {
 
 		expect(await screen.findByAltText('Tetris cover')).toBeTruthy();
 		expect(screen.getByText('Primary')).toBeTruthy();
-		const row = screen.getByText('Primary').closest('tr')!;
+		const row = screen.getByText('Primary').closest('article')!;
 		expect([...row.querySelectorAll('.badge.text-bg-secondary')].map((b) => b.textContent)).toEqual(
 			['USA', 'Europe']
 		);
@@ -144,6 +145,42 @@ describe('game detail page', () => {
 		expect(modal.querySelector('.modal-dialog')!.classList).toContain('modal-lg');
 		expect(screen.getByText('Logo valid')).toBeTruthy();
 		expect(screen.getByText('Yes')).toBeTruthy();
+	});
+
+	it('one card per release with name, badges, details, copy buttons and actions; no table (G2)', async () => {
+		const detail = game([1, 2]);
+		detail.roms[0].revision = 'Rev 1';
+		detail.roms[0].flags = ['Beta', 'Proto'];
+		answers.push({ status: 200, body: detail });
+		render(GamePage);
+
+		const card = await screen.findByRole('article', { name: 'Tetris 1.gb' });
+		expect(screen.getAllByRole('article')).toHaveLength(2);
+		expect(card.className).toBe('card');
+		const heading = card.querySelector('h3')!;
+		expect(heading.className).toBe('h6 mb-0 text-break');
+		expect(card.querySelector('.card-header .badge.text-bg-primary')!.textContent).toBe('Primary');
+		expect(
+			[...card.querySelectorAll('.card-header .badge.text-bg-secondary')].map((b) => b.textContent)
+		).toEqual(['World']);
+		const body = card.querySelector('.card-body')!;
+		expect(body.textContent).toMatch(/Revision\s*Rev 1/);
+		expect(body.textContent).toMatch(/Flags\s*Beta, Proto/);
+		expect(body.querySelector('.file-size')!.textContent).toBe('32.0 KiB');
+		expect(body.querySelectorAll('.font-monospace.text-break')).toHaveLength(2);
+		expect(body.querySelector('[aria-label="Copy CRC32"]')).not.toBeNull();
+		expect(body.querySelector('[aria-label="Copy SHA1"]')).not.toBeNull();
+		expect(body.textContent).toContain('46df91ad');
+		expect(body.textContent).toContain('abc123');
+		const second = screen.getByRole('article', { name: 'Tetris 2.gb' });
+		expect(second.querySelector('.badge.text-bg-primary')).toBeNull();
+		expect(second.querySelector('.card-body')!.textContent).toMatch(/Revision\s*—/);
+
+		const labels = [...card.querySelectorAll('.card-header button')].map(
+			(b) => b.getAttribute('aria-label') ?? b.textContent?.trim()
+		);
+		expect(labels).toEqual(['Header', 'Add note for Tetris 1.gb', 'Download Tetris 1.gb']);
+		expect(document.getElementById('releases-panel')!.querySelector('table')).toBeNull();
 	});
 
 	it('Releases is the default tab; both panels stay in the DOM (GP1)', async () => {
@@ -202,6 +239,47 @@ describe('game detail page', () => {
 		);
 		expect(link.getAttribute('target')).toBe('_blank');
 		expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+		expect(link.querySelector('.bi-google')).not.toBeNull();
+	});
+
+	it('the information table has a hidden caption and System, Year, Developers, Publishers, Genres rows (G1)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		const table = await screen.findByRole('table', { name: 'Game information' });
+		expect(table.querySelector('caption')!.className).toBe('visually-hidden');
+		expect(table.closest('.table-responsive')!.parentElement!.classList).toContain('card');
+		const rows = [...table.querySelectorAll('tr')].map((tr) => [
+			tr.querySelector('th[scope="row"]')!.textContent!.trim(),
+			tr.querySelector('td')!.textContent!.trim()
+		]);
+		expect(rows).toEqual([
+			['System', 'Game Boy'],
+			['Year', '1989'],
+			['Developers', 'Nintendo'],
+			['Publishers', '—'],
+			['Genres', '—']
+		]);
+		expect(table.querySelector('td .badge')).not.toBeNull();
+		expect(document.querySelector('dl')).toBeNull();
+	});
+
+	it('the action row: ZIP, ROM, Google, info.json, all default size (B1)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		const zip = await screen.findByRole('button', { name: 'Download ZIP' });
+		const row = [...zip.parentElement!.children].filter((e) => e.matches('a, button'));
+		expect(row.map((e) => e.textContent?.trim())).toEqual([
+			'Download ZIP',
+			'Download ROM',
+			'Google',
+			'View info.json'
+		]);
+		for (const e of row) {
+			expect(e.classList).not.toContain('btn-sm');
+			expect(e.classList).not.toContain('align-self-center');
+		}
 	});
 
 	it('one ROM gets a Download ROM button', async () => {

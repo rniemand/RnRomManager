@@ -176,8 +176,10 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     /// <summary>
     /// I5: stores an uploaded PNG/JPEG as-is under <c>boxart-NN</c>/<c>snap-NN</c> (I2, extension from the magic bytes).
     /// A box art replaces the placeholder (and takes its cover status); the first image of an empty game is its cover (I3).
+    /// U5: an image downloaded from a URL passes <paramref name="sourceUrl"/>; it is stored on the image and in the audit details.
     /// </summary>
-    public async Task<LibraryEditResult> AddImageAsync(Guid gameId, ImageType type, byte[] bytes, AuditActor actor, CancellationToken ct)
+    public async Task<LibraryEditResult> AddImageAsync(Guid gameId, ImageType type, byte[] bytes, AuditActor actor, CancellationToken ct,
+        string? sourceUrl = null)
     {
         if (type is not (ImageType.BoxArt or ImageType.Snap))
             return Invalid("type", "Choose BoxArt or Snap.");
@@ -215,6 +217,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             FileName = GameImages.NextName(list.Select(i => i.FileName), type, ImageFormats.Extension(format)),
             Type = type,
             Source = InfoJsonImage.SourceUpload,
+            SourceUrl = sourceUrl,
             IsDefault = false,
             IsCover = placeholder?.IsCover ?? false,
             SizeBytes = bytes.Length,
@@ -232,7 +235,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
                 new() { [LibraryZip.ImageEntry(image.FileName)] = () => new MemoryStream(bytes) }).ConfigureAwait(false)
             ?? await MirrorAsync(() => mirror.ReplaceAsync(Mirror(row.ZipPath, game), CancellationToken.None), row.ZipPath).ConfigureAwait(false);
         if (FilesChanged(result))
-            audit.Record(new AuditEvent(AuditActions.ImageAdded, actor, row.SystemId, gameId, AuditPaths.Library(row.ZipPath), Details: image.FileName));
+            audit.Record(new AuditEvent(AuditActions.ImageAdded, actor, row.SystemId, gameId, AuditPaths.Library(row.ZipPath),
+                Details: sourceUrl is null ? image.FileName : $"{image.FileName} from {sourceUrl}"));
         if (result.Code is null)
             logger.LogInformation("Image {FileName} ({Type}) uploaded to game {GameId} ({ZipPath})", image.FileName, type, gameId, row.ZipPath);
         return result;

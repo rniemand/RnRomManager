@@ -23,7 +23,7 @@ public class DatCacheTests
     public void SetUp()
     {
         _dir = new TempDir();
-        ISystemHandler[] handlers = [Handler("gb", Gb), Handler("gbc", Gbc)];
+        ISystemHandler[] handlers = [Handler("gb", Gb, ".gb"), Handler("gbc", Gbc, ".gbc", ".cgb")];
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns(handlers);
         _cache = new DatCache(Options.Create(new PathsOptions { Cache = _dir.Path }), registry, NullLogger<DatCache>.Instance);
@@ -33,11 +33,12 @@ public class DatCacheTests
     [TearDown]
     public void TearDown() => _dir.Dispose();
 
-    private static ISystemHandler Handler(string id, string datName)
+    private static ISystemHandler Handler(string id, string datName, params string[] extensions)
     {
         var handler = Substitute.For<ISystemHandler>();
         handler.Id.Returns(id);
         handler.DatName.Returns(datName);
+        handler.RomExtensions.Returns(extensions);
         return handler;
     }
 
@@ -72,6 +73,29 @@ public class DatCacheTests
         Assert.That(meta.ReleaseYear, Is.EqualTo(1989));
         Assert.That(meta.Developers, Is.EqualTo(new[] { "Nintendo", "Bullet-Proof Software" }));
         Assert.That(_cache.For("gbc")!.Roms, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void DatRomsWithAnExtensionTheSystemDoesNotAccept_AreLeftOut()
+    {
+        // N3: like N64's .bin entries next to its .z64 dumps.
+        var bin = new SyntheticRomBuilder { Seed = 3 }.Build();
+        FixtureDatWriter.Write(_cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
+        {
+            [Gb] = [new FixtureGame("Tetris (World) (Rev 1)", "Tetris (World) (Rev 1).gb", _tetris)],
+            [Gbc] =
+            [
+                new FixtureGame("Colour Game (USA)", "Colour Game (USA).gbc", new SyntheticRomBuilder { Seed = 2, CgbFlag = 0xC0 }.Build()),
+                new FixtureGame("Colour Tool (USA)", "Colour Tool (USA).bin", bin),
+            ],
+        });
+
+        _cache.Load();
+
+        var gbc = _cache.For("gbc")!;
+        Assert.That(gbc.Roms.Select(r => r.RomName), Is.EqualTo(new[] { "Colour Game (USA).gbc" }));
+        Assert.That(gbc.BySha1(Convert.ToHexStringLower(SHA1.HashData(bin))), Is.Null);
+        Assert.That(gbc.BaseTitles, Is.EqualTo(new[] { "Colour Game" }));
     }
 
     [Test]

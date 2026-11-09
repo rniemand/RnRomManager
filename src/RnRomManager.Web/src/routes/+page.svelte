@@ -290,6 +290,11 @@
 								<span aria-hidden="true">{game.system.toUpperCase()}</span>
 								<span class="visually-hidden">{game.systemName}</span>
 							</span>
+							{#if game.primarySizeBytes != null}
+								<span class="badge text-bg-light border position-absolute top-0 end-0 m-1">
+									<FileSize bytes={game.primarySizeBytes} />
+								</span>
+							{/if}
 						</div>
 						<div class="card-body p-2">
 							<a
@@ -299,7 +304,6 @@
 							>
 							<div class="small text-body-secondary text-truncate">
 								{[game.releaseYear, game.regions.join(', ')].filter(Boolean).join(' · ')}
-								{#if game.primarySizeBytes != null}· <FileSize bytes={game.primarySizeBytes} />{/if}
 							</div>
 							<div class="position-relative z-2 mt-1">
 								<RatingControl

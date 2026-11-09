@@ -7,14 +7,16 @@ using RnRomManager.Core.Media;
 namespace RnRomManager.Api.Http;
 
 /// <summary>
-/// Outbound HTTP (spec §10.4): one named client per host, 20 s per attempt, 3 retries with exponential backoff from
-/// 1 s on 5xx/408/timeouts/connection errors (never on 404), <c>User-Agent: RnRomManager/&lt;version&gt;</c>, and a
-/// <c>Debug</c> line per request.
+/// Outbound HTTP (spec §10.4): one named client per host, <c>User-Agent: RnRomManager/&lt;version&gt;</c> and a
+/// <c>Debug</c> line per request. The DAT and thumbnail clients also get 20 s per attempt and 3 retries with
+/// exponential backoff from 1 s on 5xx/408/timeouts/connection errors (never on 404). The image-URL client (U3c) gets
+/// neither: <see cref="ImageUrlDownloader"/> has its own single timeout and never retries.
 /// </summary>
 public static class HttpClients
 {
     public const string Dats = "dats";
     public const string Thumbnails = "thumbnails";
+    public const string ImageUrls = "imageUrls";
 
     public static IServiceCollection AddExternalHttpClients(this IServiceCollection services)
     {
@@ -22,6 +24,15 @@ public static class HttpClients
         Configure(services.AddHttpClient(Dats, client => client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent)));
         // Typed client: a fresh HttpClient per resolve, so pooled handlers still rotate.
         Configure(services.AddHttpClient<MediaService>(Thumbnails, client => client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent)));
+        services.AddSingleton(ImageUrlPolicy.Default);
+        services.AddHttpClient<ImageUrlDownloader>(ImageUrls, client =>
+            {
+                client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent);
+                // The downloader's own token is the only timeout (headers and body).
+                client.Timeout = Timeout.InfiniteTimeSpan;
+            })
+            .ConfigurePrimaryHttpMessageHandler(sp => ImageUrlDownloader.CreateHandler(sp.GetRequiredService<ImageUrlPolicy>().IsAllowed))
+            .AddHttpMessageHandler<RequestLoggingHandler>();
         return services;
     }
 

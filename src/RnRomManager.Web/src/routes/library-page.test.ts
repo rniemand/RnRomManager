@@ -178,14 +178,29 @@ describe('library page', () => {
 		url.current = new URL('http://localhost/');
 		render(LibraryPage);
 		await screen.findByAltText('4-in-1 Fun Pak box art');
-		expect(document.querySelector('.card .file-size')!.getAttribute('title')).toBe(
+		const badge = document.querySelector('.card .badge.position-absolute.top-0.end-0')!;
+		expect(badge.querySelector('.file-size')!.getAttribute('title')).toBe(
 			`${(131072).toLocaleString()} bytes`
 		);
+		// B5: the size is a badge only; the body line has year and regions.
+		expect(document.querySelector('.card .card-body .file-size')).toBeNull();
 
 		await fireEvent.click(screen.getByRole('button', { name: 'List view' }));
 
 		expect(screen.getByRole('columnheader', { name: 'Size' })).toBeTruthy();
 		const row = screen.getByRole('row', { name: /4-in-1 Fun Pak/ });
 		expect(row.querySelector('.file-size')!.textContent).toBe('128.0 KiB');
+	});
+
+	it('a game without a primary size has no size badge (B5)', async () => {
+		games.items[0].primarySizeBytes = null as unknown as number;
+		try {
+			url.current = new URL('http://localhost/');
+			render(LibraryPage);
+			await screen.findByAltText('4-in-1 Fun Pak box art');
+			expect(document.querySelector('.card .badge.end-0')).toBeNull();
+		} finally {
+			games.items[0].primarySizeBytes = 131072;
+		}
 	});
 });

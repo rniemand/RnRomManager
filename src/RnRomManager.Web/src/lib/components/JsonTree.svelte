@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import JsonTree from './JsonTree.svelte';
 
 	/**
@@ -10,9 +11,14 @@
 		/** The key (object) or index (array) this value sits under; none for the root. */
 		name?: string;
 		depth?: number;
+		/** J3 (root only): extra buttons at the right end of the Expand/Collapse row. */
+		actions?: Snippet;
+		/** J3 (root only): classes and style for the wrapper around the tree (not the toolbar). */
+		paneClass?: string;
+		paneStyle?: string;
 	}
 
-	let { value, name, depth = 0 }: Props = $props();
+	let { value, name, depth = 0, actions, paneClass, paneStyle }: Props = $props();
 
 	let container = $state<HTMLElement>();
 	// svelte-ignore state_referenced_locally
@@ -51,8 +57,9 @@
 			<button type="button" class="btn btn-sm btn-outline-secondary" onclick={() => setAll(false)}
 				>Collapse all</button
 			>
+			{#if actions}<div class="ms-auto">{@render actions()}</div>{/if}
 		</div>
-		{@render node()}
+		<div class={paneClass} style={paneStyle}>{@render node()}</div>
 	</div>
 {:else}
 	{@render node()}

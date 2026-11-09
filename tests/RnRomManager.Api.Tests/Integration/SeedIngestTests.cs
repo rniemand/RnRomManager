@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 9, 7)]
-    [TestCase(SeedSet.Full, 209, 207)]
+    [TestCase(SeedSet.Basic, 10, 8)]
+    [TestCase(SeedSet.Full, 210, 208)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -77,6 +77,17 @@ public class SeedIngestTests
             Assert.That((game.Title, game.System, rom.FileName), Is.EqualTo(("Orbit Kart 64", "n64", "Orbit Kart 64 (USA).z64")));
             Assert.That(rom.Header!["gameCode"]!.GetValue<string>(), Is.EqualTo("NOKE"));
             Assert.That(rom.Metadata.Sha1, Is.EqualTo(Convert.ToHexStringLower(SHA1.HashData(z64))));
+        }
+        var pioneer = Directory.GetFiles(Path.Combine(factory.Root, "roms", "nes", "P"), "*.zip").Single();
+        Assert.That(Path.GetFileName(pioneer), Is.EqualTo("Pixel Pioneer.zip"));
+        using (var zip = LibraryZip.Open(pioneer, factory.Services.GetRequiredService<InfoJsonReader>()))
+        {
+            var game = zip.InfoJson!.Game!;
+            var rom = game.Roms.Single();
+            Assert.That((game.Title, game.System, rom.FileName), Is.EqualTo(("Pixel Pioneer", "nes", "Pixel Pioneer (USA).nes")));
+            Assert.That(zip.HasEntry(LibraryZip.RomEntry("Pixel Pioneer (USA).nes")), Is.True);
+            Assert.That((rom.Header!["mapper"]!.GetValue<int>(), rom.Header["battery"]!.GetValue<bool>()), Is.EqualTo((1, true)));
+            Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1987, new[] { "Platform" })));
         }
         var review = await factory.Services.GetRequiredService<IIngestReviewRepository>().ListAsync("Pending", 1, 48, default);
         Assert.That(review.Total, Is.EqualTo(2));

@@ -83,7 +83,7 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 | Path | Contents |
 |---|---|
 | `/app/roms` | the library: one ZIP per game (see [ZIP format](zip-format.md)) |
-| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance) or `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`); `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way |
+| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`) or `ingest/nes/` (NES: headered `.nes` only); `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way |
 | `/app/logs` | `rnrommanager-yyyy-MM-dd.log`, kept for `Logging:RetentionDays` |
 | `/app/cache` | downloaded DATs and temporary work folders |
 | `/app/backups` | the daily database backups (see [Backup and restore](#backup-and-restore)); keep it private |
@@ -112,6 +112,10 @@ so the app sees the original scheme (for `Secure` cookies) and client address. *
 The live log (**Admin → Logs**) is a long-lived server-sent event stream at `/api/admin/logs/stream`. The app turns off response buffering and sends a keep-alive every 15 seconds, but the proxy must not buffer it either and must allow an idle read of more than 15 seconds. nginx needs `proxy_buffering off;` and a `proxy_read_timeout` above 15 s on that location; Caddy and Traefik stream it as it is.
 
 Use `ASPNETCORE_HTTP_PORTS` to change the listen port, not `ASPNETCORE_URLS`: the container health check reads the first port from `ASPNETCORE_HTTP_PORTS`.
+
+## Outbound HTTP
+
+Besides the DAT and thumbnail downloads, **Upload image → URL** makes the server fetch an image from an address a ROM manager types. That download connects directly (it ignores `HTTP_PROXY`/`HTTPS_PROXY`), only to public internet addresses (private, loopback, link-local and similar ranges are refused on every redirect hop), with a 15-second limit and at most 8 MiB. On a host that can only reach the internet through a mandatory egress proxy, the URL option fails with "couldn't connect"; uploading a file still works.
 
 ## Health checks
 
@@ -180,7 +184,7 @@ Upgrading to 0.3.0:
 - **Everyone is signed out once.** Roles change from a single Admin/User to the `admin` and `rom-manager` roles; every Admin gets both and every User none, and every session ends so the new roles take effect. Sign in again.
 - **ZIPs move to `info.json` version 3** as each game is next written (cover flag, uploaded and JPEG images). An app older than 0.3.0 can still read those ZIPs but refuses to change them (`InfoJsonNewerSchema`), and the database can't be downgraded either: restore the backup to go back.
 
-After upgrading to a version that adds a system (such as the ones that add Game Boy Advance and Nintendo 64), ingestion refuses to start with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs.
+After upgrading to a version that adds a system (such as the ones that add Game Boy Advance, Nintendo 64 and NES), ingestion refuses to start with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs.
 
 On `docker compose stop` a running job gets 30 seconds to finish its current item (`stop_grace_period: 35s` allows for that). A job that's cut off is marked `Aborted` at the next start and its leftovers are cleaned up; just start it again.
 

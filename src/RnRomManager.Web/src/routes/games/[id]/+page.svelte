@@ -20,6 +20,7 @@
 	import Loading from '#lib/components/Loading.svelte';
 	import RatingControl from '#lib/components/RatingControl.svelte';
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
+	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { formatKey, formatSize, formatValue } from '#lib/format.js';
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -198,16 +199,36 @@
 					onsaved={(detail) => (game = detail)}
 				/>
 			</div>
-			<dl class="row mb-3">
-				<dt class="col-sm-3">Year</dt>
-				<dd class="col-sm-9">{game.releaseYear ?? '—'}</dd>
-				<dt class="col-sm-3">Developers</dt>
-				<dd class="col-sm-9">{list(game.developers)}</dd>
-				<dt class="col-sm-3">Publishers</dt>
-				<dd class="col-sm-9">{list(game.publishers)}</dd>
-				<dt class="col-sm-3">Genres</dt>
-				<dd class="col-sm-9">{list(game.genres)}</dd>
-			</dl>
+			<!-- G1: key/value table (T3). -->
+			<div class="card mb-3">
+				<div class="table-responsive">
+					<table class="table table-sm table-striped table-hover mb-0">
+						<caption class="visually-hidden">Game information</caption>
+						<tbody>
+							<tr>
+								<th scope="row" class="fw-normal text-body-secondary">System</th>
+								<td><SystemBadge system={game.system} name={game.systemName} /></td>
+							</tr>
+							<tr>
+								<th scope="row" class="fw-normal text-body-secondary">Year</th>
+								<td>{game.releaseYear ?? '—'}</td>
+							</tr>
+							<tr>
+								<th scope="row" class="fw-normal text-body-secondary">Developers</th>
+								<td>{list(game.developers)}</td>
+							</tr>
+							<tr>
+								<th scope="row" class="fw-normal text-body-secondary">Publishers</th>
+								<td>{list(game.publishers)}</td>
+							</tr>
+							<tr>
+								<th scope="row" class="fw-normal text-body-secondary">Genres</th>
+								<td>{list(game.genres)}</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
 			{#if game.description}
 				<p style="white-space: pre-line">{game.description}</p>
 			{/if}
@@ -218,22 +239,6 @@
 					onclick={() => download(`/api/games/${encodeURIComponent(id)}/download`)}
 				>
 					<Icon name="download" /> Download ZIP
-				</button>
-				<!-- External link: resolve() is for app routes. -->
-				<!-- eslint-disable svelte/no-navigation-without-resolve -->
-				<a
-					class="btn btn-outline-secondary"
-					href={googleSearchUrl(gameSearchQuery(game))}
-					target="_blank"
-					rel="noopener noreferrer"><Icon name="search" /> Google</a
-				>
-				<!-- eslint-enable svelte/no-navigation-without-resolve -->
-				<button
-					type="button"
-					class="btn btn-outline-secondary btn-sm align-self-center"
-					onclick={() => (infoJsonOpen = true)}
-				>
-					<Icon name="code" /> View info.json
 				</button>
 				{#if downloadRoms.length === 1}
 					<button
@@ -268,6 +273,22 @@
 						</ul>
 					</div>
 				{/if}
+				<!-- External link: resolve() is for app routes. -->
+				<!-- eslint-disable svelte/no-navigation-without-resolve -->
+				<a
+					class="btn btn-outline-secondary"
+					href={googleSearchUrl(gameSearchQuery(game))}
+					target="_blank"
+					rel="noopener noreferrer"><Icon name="google" /> Google</a
+				>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+				<button
+					type="button"
+					class="btn btn-outline-secondary"
+					onclick={() => (infoJsonOpen = true)}
+				>
+					<Icon name="code" /> View info.json
+				</button>
 			</div>
 			{#if auth.canEditLibrary}
 				<div class="d-flex flex-wrap gap-2 mt-3" role="group" aria-label="Admin actions">
@@ -329,110 +350,103 @@
 		hidden={tab !== 'releases'}
 	>
 		<h2 class="h5 visually-hidden">Releases</h2>
-		<div class="card mb-4">
-			<div class="table-responsive">
-				<table class="table table-sm table-striped table-hover align-middle mb-0">
-					<thead class="table-dark">
-						<tr>
-							<th scope="col">File</th>
-							<th scope="col">Region</th>
-							<th scope="col">Revision</th>
-							<th scope="col">Flags</th>
-							<th scope="col" class="text-end">Size</th>
-							<th scope="col">Hashes</th>
-							<th scope="col"><span class="visually-hidden">Actions</span></th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each game.roms as rom (rom.id)}
-							<tr>
-								<td>
-									<span
-										class="d-inline-block text-truncate align-middle"
-										style="max-width: 32rem"
-										title={rom.fileName}>{rom.fileName}</span
-									>
-									{#if rom.isPrimary}<span class="badge text-bg-primary ms-1">Primary</span>{/if}
-									{#if rom.originalFileName !== rom.fileName}
-										<div
-											class="small text-body-secondary text-truncate"
-											style="max-width: 32rem"
-											title={rom.originalFileName}
-										>
-											Original: {rom.originalFileName}
-										</div>
-									{/if}
-								</td>
-								<td>
-									{#each rom.regions as region (region)}
-										<span class="badge text-bg-secondary me-1">{region}</span>
-									{:else}
-										—
-									{/each}
-								</td>
-								<td>{rom.revision ?? '—'}</td>
-								<td>{list(rom.flags)}</td>
-								<td class="text-end"><FileSize bytes={rom.sizeBytes} /></td>
-								<td class="small font-monospace">
-									<div class="text-nowrap">
-										CRC32 {rom.crc32}
-										<CopyButton value={rom.crc32} label="CRC32" />
-									</div>
-									<div class="text-nowrap">
-										SHA1 {rom.sha1}
-										<CopyButton value={rom.sha1} label="SHA1" />
-									</div>
-								</td>
-								<td class="text-nowrap text-end">
-									{#if rom.header}
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-secondary"
-											onclick={() => showHeader(rom)}
-										>
-											Header
-										</button>
-									{/if}
+		<!-- G2: one card per release, so nothing scrolls sideways on a phone. -->
+		<div class="d-flex flex-column gap-3 mb-4">
+			{#each game.roms as rom (rom.id)}
+				<article class="card" aria-labelledby="release-{rom.id}-name">
+					<div class="card-header bg-body">
+						<div class="d-flex flex-wrap align-items-center gap-2">
+							<h3 class="h6 mb-0 text-break" id="release-{rom.id}-name">{rom.fileName}</h3>
+							{#if rom.isPrimary}<span class="badge text-bg-primary">Primary</span>{/if}
+							{#each rom.regions as region (region)}
+								<span class="badge text-bg-secondary">{region}</span>
+							{/each}
+							<div class="ms-auto d-flex flex-wrap gap-1">
+								{#if rom.header}
 									<button
 										type="button"
 										class="btn btn-sm btn-outline-secondary"
-										aria-label="{rom.hasNote ? 'Note for' : 'Add note for'} {rom.fileName}"
-										onclick={() => showNote(rom)}
+										onclick={() => showHeader(rom)}
 									>
-										<Icon name={rom.hasNote ? 'note-filled' : 'note'} />
+										Header
+									</button>
+								{/if}
+								<button
+									type="button"
+									class="btn btn-sm btn-outline-secondary"
+									aria-label="{rom.hasNote ? 'Note for' : 'Add note for'} {rom.fileName}"
+									onclick={() => showNote(rom)}
+								>
+									<Icon name={rom.hasNote ? 'note-filled' : 'note'} />
+								</button>
+								<button
+									type="button"
+									class="btn btn-sm btn-outline-primary"
+									aria-label="Download {rom.fileName}"
+									onclick={() => download(rom.downloadUrl, rom)}
+								>
+									<Icon name="download" />
+								</button>
+								{#if auth.canEditLibrary}
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-secondary"
+										aria-label="Move {rom.fileName}"
+										onclick={() => (action = { kind: 'move', rom })}
+									>
+										<Icon name="move" />
 									</button>
 									<button
 										type="button"
-										class="btn btn-sm btn-outline-primary"
-										aria-label="Download {rom.fileName}"
-										onclick={() => download(rom.downloadUrl, rom)}
+										class="btn btn-sm btn-outline-danger"
+										aria-label="Delete {rom.fileName}"
+										onclick={() => (action = { kind: 'deleteRom', rom })}
 									>
-										<Icon name="download" />
+										<Icon name="delete" />
 									</button>
-									{#if auth.canEditLibrary}
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-secondary"
-											aria-label="Move {rom.fileName}"
-											onclick={() => (action = { kind: 'move', rom })}
-										>
-											<Icon name="move" />
-										</button>
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-danger"
-											aria-label="Delete {rom.fileName}"
-											onclick={() => (action = { kind: 'deleteRom', rom })}
-										>
-											<Icon name="delete" />
-										</button>
-									{/if}
-								</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
+								{/if}
+							</div>
+						</div>
+						{#if rom.originalFileName !== rom.fileName}
+							<div class="small text-body-secondary text-break">
+								Original: {rom.originalFileName}
+							</div>
+						{/if}
+					</div>
+					<div class="card-body small">
+						<div class="row row-cols-1 row-cols-sm-3 g-2 mb-2">
+							<div class="col">
+								<div class="text-body-secondary">Revision</div>
+								<div>{rom.revision ?? '—'}</div>
+							</div>
+							<div class="col">
+								<div class="text-body-secondary">Flags</div>
+								<div>{list(rom.flags)}</div>
+							</div>
+							<div class="col">
+								<div class="text-body-secondary">Size</div>
+								<div><FileSize bytes={rom.sizeBytes} /></div>
+							</div>
+						</div>
+						<div class="row row-cols-1 row-cols-lg-2 g-2">
+							<div class="col">
+								<div class="text-body-secondary">CRC32</div>
+								<div>
+									<span class="font-monospace text-break">{rom.crc32}</span>
+									<CopyButton value={rom.crc32} label="CRC32" />
+								</div>
+							</div>
+							<div class="col">
+								<div class="text-body-secondary">SHA1</div>
+								<div>
+									<span class="font-monospace text-break">{rom.sha1}</span>
+									<CopyButton value={rom.sha1} label="SHA1" />
+								</div>
+							</div>
+						</div>
+					</div>
+				</article>
+			{/each}
 		</div>
 	</div>
 

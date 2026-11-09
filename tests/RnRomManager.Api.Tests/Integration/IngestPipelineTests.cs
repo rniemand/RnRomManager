@@ -29,6 +29,9 @@ public class IngestPipelineTests
     private static readonly byte[] SeaQuest = new SyntheticRomBuilder { Seed = 3, Title = "SEAQUEST" }.Build();
     private static readonly SyntheticN64RomBuilder Kart = new() { Seed = 64, SizeBytes = 8192, Title = "KART", GameCode = "NKTE" };
     private static readonly byte[] Gold = new SyntheticRomBuilder { Seed = 4, Title = "POKEMON_GLD", CgbFlag = 0xC0 }.Build();
+    private static readonly byte[] Pioneer = new SyntheticNesRomBuilder { Seed = 70, Mapper = 1 }.Build();
+    /// <summary>The same dump without its 16-byte header: what the DAT's <c>.unh</c> entry hashes.</summary>
+    private static readonly byte[] PioneerHeaderless = Pioneer[16..];
 
     private ApiFactory _factory = null!;
     private ILibraryMirror? _mirrorOverride;
@@ -69,6 +72,12 @@ public class IngestPipelineTests
         {
             [IngestSeeder.GbaDat] = [],
             [IngestSeeder.N64Dat] = [new FixtureGame("Kart 64 (USA)", "Kart 64 (USA).z64", Kart.Build())],
+            // N3: the .unh entry is left out of the index, so its bytes never match.
+            [IngestSeeder.NesDat] =
+            [
+                new FixtureGame("Pioneer (USA)", "Pioneer (USA).nes", Pioneer),
+                new FixtureGame("Pioneer (USA)", "Pioneer (USA).unh", PioneerHeaderless),
+            ],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },
@@ -350,6 +359,60 @@ public class IngestPipelineTests
         var result = await IngestAsync(Drop("gb", "kart.n64", (Kart with { ByteOrder = N64ByteOrder.N64 }).Build()));
 
         Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+    }
+
+    [Test]
+    public async Task NesFile_InTheGbFolder_IsUnsupportedType()
+    {
+        var result = await IngestAsync(Drop("gb", "pioneer.nes", Pioneer));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+    }
+
+    [Test]
+    public async Task GbFile_InTheNesFolder_IsUnsupportedType()
+    {
+        var result = await IngestAsync(Drop("nes", "tetris.gb", TetrisJ));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+    }
+
+    [Test]
+    public async Task Nes_DatMatch_IsIngestedWithItsHeader()
+    {
+        var result = await IngestAsync(Drop("nes", "pioneer.nes", Pioneer));
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Ingested));
+        var rom = ReadZip("nes/P/Pioneer.zip").Roms.Single();
+        Assert.That((rom.FileName, rom.Header!["format"]!.GetValue<string>(), rom.Header["mapper"]!.GetValue<int>()),
+            Is.EqualTo(("Pioneer (USA).nes", "iNES", 1)));
+    }
+
+    [Test]
+    public async Task Nes_UnderTheSmallestDatEntry_IsTooSmall()
+    {
+        var tiny = new byte[4111];
+        "NES"u8.CopyTo(tiny);
+
+        var result = await IngestAsync(Drop("nes", "tiny.nes", tiny));
+
+        Assert.That(result!.Reason, Is.EqualTo(IngestFailures.TooSmall));
+    }
+
+    [Test]
+    public async Task Nes_WithoutMagic_AndNoDatMatch_IsInvalidHeader()
+    {
+        var result = await IngestAsync(Drop("nes", "broken.nes", new SyntheticNesRomBuilder { Seed = 71, CorruptMagic = true }.Build()));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.InvalidHeader)));
+    }
+
+    [Test]
+    public async Task Nes_HeaderlessBytesRenamedNes_AreNotMatchedToTheUnhEntry_InvalidHeader()
+    {
+        var result = await IngestAsync(Drop("nes", "headerless.nes", PioneerHeaderless));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.InvalidHeader)));
     }
 
     [Test]

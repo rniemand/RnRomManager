@@ -22,9 +22,9 @@
 	const links = $derived(
 		[
 			{ href: '/', label: 'Library', icon: 'library', admin: false },
-			{ href: '/reports', label: 'Reports', icon: 'reports', admin: false },
 			{ href: '/ingestion', label: 'Ingestion', icon: 'ingest', admin: true },
 			{ href: '/review', label: 'Review', icon: 'review', admin: true },
+			{ href: '/reports', label: 'Reports', icon: 'reports', admin: false },
 			{ href: '/integrity', label: 'Integrity', icon: 'integrity', admin: true },
 			{ href: '/admin/users', label: 'Admin', icon: 'admin', admin: true }
 		].filter((l) => !l.admin || me.roles.includes('admin'))

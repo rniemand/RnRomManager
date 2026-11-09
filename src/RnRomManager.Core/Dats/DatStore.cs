@@ -12,15 +12,21 @@ public sealed class DatStore
     private readonly Dictionary<string, DatRom> _bySha1 = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DatMetadata> _metadata;
 
-    public DatStore(NoIntroDat noIntro, IEnumerable<MetadatFile> metadat)
+    /// <param name="romExtensions">
+    /// N3: the system's ROM extensions (e.g. <c>.nes</c>); DAT ROMs with any other extension (case-insensitive) are left
+    /// out of every index, since no file the system accepts could match them. Null keeps every ROM.
+    /// </param>
+    public DatStore(NoIntroDat noIntro, IEnumerable<MetadatFile> metadat, IReadOnlyCollection<string>? romExtensions = null)
     {
         DatName = noIntro.DatName;
         Version = noIntro.Version;
-        Roms = noIntro.Roms;
-        foreach (var rom in noIntro.Roms)
+        Roms = romExtensions is null
+            ? noIntro.Roms
+            : noIntro.Roms.Where(r => romExtensions.Contains(Path.GetExtension(r.RomName), StringComparer.OrdinalIgnoreCase)).ToList();
+        foreach (var rom in Roms)
             _bySha1.TryAdd(rom.Sha1, rom); // the DATs have no duplicate SHA1s; first wins if one appears
-        BaseTitles = noIntro.Roms.Select(r => NoIntroName.Parse(r.GameName).BaseTitle).Distinct(StringComparer.Ordinal).ToList();
-        _metadata = MergeMetadata(noIntro.Roms.Select(r => r.Crc32).ToHashSet(StringComparer.Ordinal), metadat);
+        BaseTitles = Roms.Select(r => NoIntroName.Parse(r.GameName).BaseTitle).Distinct(StringComparer.Ordinal).ToList();
+        _metadata = MergeMetadata(Roms.Select(r => r.Crc32).ToHashSet(StringComparer.Ordinal), metadat);
     }
 
     /// <summary>no-intro header <c>name</c>, e.g. <c>Nintendo - Game Boy</c>.</summary>

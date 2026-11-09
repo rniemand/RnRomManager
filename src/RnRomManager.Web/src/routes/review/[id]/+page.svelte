@@ -252,10 +252,10 @@
 				<!-- External link: resolve() is for app routes. -->
 				<!-- eslint-disable svelte/no-navigation-without-resolve -->
 				<a
-					class="btn btn-outline-secondary btn-sm align-self-center"
+					class="btn btn-outline-secondary"
 					href={googleSearchUrl(reviewSearchQuery(item, item.systemName))}
 					target="_blank"
-					rel="noopener noreferrer"><Icon name="search" /> Google it</a
+					rel="noopener noreferrer"><Icon name="google" /> Google it</a
 				>
 				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 				<button
