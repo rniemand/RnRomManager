@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import type { GameListItem } from '../api/types';
 	import { tooltip } from '../tooltip';
@@ -11,9 +12,11 @@
 		/** Bindable: the rating control updates each game in place. */
 		games: GameListItem[];
 		view: 'grid' | 'list';
+		/** A per-game control (B24: Remove from collection), in the card's corner and a last table column. */
+		action?: Snippet<[GameListItem]>;
 	}
 
-	let { games = $bindable(), view }: Props = $props();
+	let { games = $bindable(), view, action }: Props = $props();
 </script>
 
 {#if view === 'grid'}
@@ -55,13 +58,19 @@
 						<div class="small text-body-secondary text-truncate">
 							{[game.releaseYear, game.regions.join(', ')].filter(Boolean).join(' · ')}
 						</div>
-						<div class="position-relative z-2 mt-1">
+						<div
+							class="position-relative z-2 mt-1"
+							class:d-flex={action}
+							class:align-items-center={action}
+							class:justify-content-between={action}
+						>
 							<RatingControl
 								gameId={game.id}
 								title={game.displayTitle}
 								bind:rating={game.rating}
 								bind:favourite={game.favourite}
 							/>
+							{#if action}{@render action(game)}{/if}
 						</div>
 					</div>
 				</div>
@@ -80,6 +89,7 @@
 					<th scope="col">Rating</th>
 					<th scope="col" class="text-end">Releases</th>
 					<th scope="col" class="text-end">Size</th>
+					{#if action}<th scope="col"><span class="visually-hidden">Actions</span></th>{/if}
 				</tr>
 			</thead>
 			<tbody>
@@ -99,6 +109,7 @@
 						</td>
 						<td class="text-end">{game.romCount}</td>
 						<td class="text-end text-nowrap"><FileSize bytes={game.primarySizeBytes} /></td>
+						{#if action}<td class="text-end">{@render action(game)}</td>{/if}
 					</tr>
 				{/each}
 			</tbody>

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { CollectionListItem, Page } from '#lib/api/types.js';
 	import { collectionsApi, collectionsSearch } from '#lib/collections.js';
@@ -136,14 +137,11 @@
 						{/if}
 					</div>
 					<div class="card-body p-2">
-						<!-- The [id] route arrives in a later step; resolve() only accepts existing ones. -->
-						<!-- eslint-disable svelte/no-navigation-without-resolve -->
 						<a
 							class="d-block small fw-semibold text-truncate text-decoration-none stretched-link"
-							href="/collections/{encodeURIComponent(collection.id)}"
+							href={resolve('/collections/[id]', { id: collection.id })}
 							title={collection.name}>{collection.name}</a
 						>
-						<!-- eslint-enable svelte/no-navigation-without-resolve -->
 						<div class="small text-body-secondary">
 							{collection.gameCount}
 							{collection.gameCount === 1 ? 'game' : 'games'}

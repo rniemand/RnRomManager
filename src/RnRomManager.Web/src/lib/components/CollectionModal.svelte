@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { isApiError } from '../api/errors';
 	import type { CollectionDetail } from '../api/types';
 	import {
@@ -140,8 +141,7 @@
 				}
 			}
 			open = false;
-			// eslint-disable-next-line svelte/no-navigation-without-resolve -- the [id] route arrives in a later step
-			await goto(`/collections/${encodeURIComponent(created.id)}`);
+			await goto(resolve('/collections/[id]', { id: created.id }));
 		} catch (e) {
 			showSaveError(e);
 		} finally {
