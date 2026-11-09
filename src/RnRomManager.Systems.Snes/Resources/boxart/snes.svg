@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Super Nintendo Entertainment System). Made for this project; MIT licensed like
+       the rest of the repo. Exported to snes.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#ece8f6"/>
+  <!-- wide cartridge shell with rounded shoulders -->
+  <path d="M72 120 Q72 96 96 96 L416 96 Q440 96 440 120 L440 392 Q440 416 416 416 L96 416 Q72 416 72 392 Z"
+        fill="#a9a8b0" stroke="#3a3a46" stroke-width="4"/>
+  <!-- grip ridges on both sides -->
+  <g stroke="#3a3a46" stroke-width="4" stroke-linecap="round" opacity="0.45">
+    <line x1="92" y1="170" x2="92" y2="350"/>
+    <line x1="106" y1="170" x2="106" y2="350"/>
+    <line x1="406" y1="170" x2="406" y2="350"/>
+    <line x1="420" y1="170" x2="420" y2="350"/>
+  </g>
+  <!-- label recess and label -->
+  <rect x="126" y="126" width="260" height="230" rx="8" fill="#3a3a46" opacity="0.3"/>
+  <rect x="136" y="136" width="240" height="210" rx="6" fill="#fffaf0"/>
+  <rect x="136" y="136" width="240" height="44" rx="6" fill="#5b4b9a"/>
+  <g transform="translate(256 158)">
+    <circle cx="-48" r="9" fill="#d9363e"/>
+    <circle cx="-16" r="9" fill="#e9b81a"/>
+    <circle cx="16" r="9" fill="#2f8f4e"/>
+    <circle cx="48" r="9" fill="#3266b8"/>
+  </g>
+  <text x="256" y="262" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="64" font-weight="800" fill="#5b4b9a">SNES</text>
+  <text x="256" y="310" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="20" font-weight="600" fill="#3a3a46">16-BIT CARTRIDGE</text>
+  <!-- bottom edge -->
+  <rect x="150" y="380" width="212" height="14" rx="3" fill="#3a3a46" opacity="0.45"/>
+</svg>

@@ -4,4 +4,8 @@
     <ProjectReference Include="../RnRomManager.Core/RnRomManager.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Resources/boxart/*.png" />
+  </ItemGroup>
+
 </Project>

@@ -19,6 +19,8 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/RnRomManager.Systems.Snes/RnRomManager.Systems.Snes.csproj" />
+    <!-- Only to check the SNES box art differs from the NES one. -->
+    <ProjectReference Include="../../src/RnRomManager.Systems.Nes/RnRomManager.Systems.Nes.csproj" />
     <ProjectReference Include="../RnRomManager.TestData/RnRomManager.TestData.csproj" />
   </ItemGroup>
 
