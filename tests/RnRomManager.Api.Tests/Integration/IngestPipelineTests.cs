@@ -35,6 +35,7 @@ public class IngestPipelineTests
     private static readonly SyntheticSnesRomBuilder Rally = new() { Seed = 80, SizeKiB = 64, Title = "MODE SEVEN RALLY" };
 
     private static readonly byte[] Lanes = Atari(4096, 120);
+    private static readonly byte[] Pursuit = Coleco(8192, 130, 0xAA, 0x55);
     private ApiFactory _factory = null!;
     private ILibraryMirror? _mirrorOverride;
     private Action<IServiceCollection>? _extraServices;
@@ -82,7 +83,7 @@ public class IngestPipelineTests
             ],
             [IngestSeeder.SnesDat] = [new FixtureGame("Mode Seven Rally (USA)", "Mode Seven Rally (USA).sfc", Rally.Build())],
             [IngestSeeder.Atari2600Dat] = [new FixtureGame("Laser Lanes (USA)", "Laser Lanes (USA).a26", Lanes)],
-            [IngestSeeder.ColecoVisionDat] = [],
+            [IngestSeeder.ColecoVisionDat] = [new FixtureGame("Pixel Pursuit (USA)", "Pixel Pursuit (USA).col", Pursuit)],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },
@@ -136,6 +137,13 @@ public class IngestPipelineTests
     {
         var rom = new byte[size];
         new Random(seed).NextBytes(rom);
+        return rom;
+    }
+
+    private static byte[] Coleco(int size, int seed, byte first, byte second)
+    {
+        var rom = Atari(size, seed);
+        (rom[0], rom[1]) = (first, second);
         return rom;
     }
 
@@ -584,6 +592,72 @@ public class IngestPipelineTests
         Assert.That(File.Exists(path), Is.False, "fully ingested archive is deleted");
         var game = ReadZip(Path.Combine("a2600", "L", "Laser Lanes.zip"));
         Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("a2600", "Laser Lanes (USA).a26")));
+    }
+
+    [TestCase("nes", "pursuit.col")]
+    [TestCase("coleco", "pioneer.nes")]
+    public async Task Coleco_FileInAnotherFamilysFolder_IsUnsupportedType(string folder, string name)
+    {
+        var result = await IngestAsync(Drop(folder, name, name.EndsWith(".nes") ? Pioneer : Pursuit));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+    }
+
+    [TestCase(8191, "TooSmall")]
+    [TestCase(32769, "TooLarge")]
+    public async Task Coleco_OutsideTheSizeLimits_Fails(int size, string reason)
+    {
+        var result = await IngestAsync(Drop("coleco", "odd.col", Coleco(size, 131, 0xAA, 0x55)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, reason)));
+    }
+
+    [Test]
+    public async Task Coleco_UnmatchedBinWithMagic_GoesToReview_AndResolvedIsStoredAsCol()
+    {
+        var bytes = Coleco(8192, 132, 0x55, 0xAA);
+        var sha1 = Convert.ToHexStringLower(SHA1.HashData(bytes));
+        var result = await IngestAsync(Drop("coleco", "Pixel Pursuit Hack.bin", bytes));
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Review, "NoDatMatch")));
+        var item = (await Service<IIngestReviewRepository>().GetBySha1Async(sha1, default))!;
+        Assert.That(JsonNode.Parse(item.Header!)!["magic"]!.GetValue<string>(), Is.EqualTo("55AA"));
+        Assert.That(item.Suggestions, Does.Contain("Pixel Pursuit"));
+        var user = await TestUsers.CreateAsync(_factory, "coleco-resolver", TestUsers.AllRoles);
+
+        var resolved = await Service<ReviewResolver>().ResolveAsync(item.Id,
+            new ReviewResolutionRequest { Action = "Manual", Title = "Pixel Pursuit Hack", Regions = ["USA"], Languages = ["En"], Flags = [] },
+            new AuditActor(user.Id, user.Username, null), default);
+
+        Assert.That(resolved.Code, Is.Null, string.Join("; ", resolved.Errors?.SelectMany(e => e.Value) ?? []));
+        var row = (await Service<IGameRepository>().GetAsync(resolved.GameId!.Value, default))!;
+        var rom = ReadZip(row.ZipPath).Roms.Single();
+        Assert.That((rom.FileName, rom.Metadata.Sha1, rom.OriginalFileName), Is.EqualTo(("Pixel Pursuit Hack (USA).col", sha1, "Pixel Pursuit Hack.bin")));
+    }
+
+    [Test]
+    public async Task Coleco_UnmatchedBinWithoutMagic_IsInvalidHeader()
+    {
+        var result = await IngestAsync(Drop("coleco", "junk.bin", Coleco(8192, 133, 0x00, 0x00)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.InvalidHeader)));
+        Assert.That(File.Exists(Path.Combine(Ingest("coleco"), "_failed", "junk.bin")), Is.True);
+    }
+
+    [Test]
+    public async Task Coleco_ZipHoldingADatGame_IsIngested()
+    {
+        var path = Path.Combine(Ingest("coleco"), "pursuit.zip");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        using (var entry = zip.CreateEntry("Pixel Pursuit (USA).col").Open())
+            entry.Write(Pursuit);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+
+        await ActivatorUtilities.CreateInstance<IngestJob>(_factory.Services, Substitute.For<IJobItemRepository>())
+            .RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), default);
+
+        Assert.That(File.Exists(path), Is.False, "fully ingested archive is deleted");
+        var game = ReadZip(Path.Combine("coleco", "P", "Pixel Pursuit.zip"));
+        Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("coleco", "Pixel Pursuit (USA).col")));
     }
 
     [Test]
