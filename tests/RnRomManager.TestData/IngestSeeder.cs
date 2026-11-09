@@ -64,6 +64,11 @@ public static class IngestSeeder
         var pioneer = new FixtureGame("Pixel Pioneer (USA)", "Pixel Pioneer (USA).nes", new SyntheticNesRomBuilder { Seed = 1001, Mapper = 1, Battery = true }.Build())
         { ReleaseYear = 1987, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Platform"] };
         Loose("nes", "01-pixel-pioneer.nes", pioneer.Rom);
+        var modeSeven = new SyntheticSnesRomBuilder { Seed = 1101, Mapping = SnesMapping.LoROM, Title = "MODE SEVEN RALLY", SramSizeByte = 3 };
+        var rally = new FixtureGame("Mode Seven Rally (USA)", "Mode Seven Rally (USA).sfc", modeSeven.Build())
+        { ReleaseYear = 1992, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Racing"] };
+        // Copier-headered on disk, so ingestion must strip it to match the DAT's .sfc entry (S3).
+        Loose("snes", "01-mode-seven-rally.smc", (modeSeven with { CopierHeader = true }).Build());
 
         var zipPath = Path.Combine(ingest, "gb", "05-quest.zip");
         using (var file = File.Create(zipPath))
@@ -94,7 +99,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [] });
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally] });
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
     }

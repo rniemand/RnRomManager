@@ -96,7 +96,7 @@ test('ingestion of the seeded Basic set', async () => {
 	await page.getByRole('button', { name: 'Import all' }).click();
 
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
-	await expect(run).toContainText('Ingested 10 · Duplicate 1 · Review 2 · Failed 1', {
+	await expect(run).toContainText('Ingested 11 · Duplicate 1 · Review 2 · Failed 1', {
 		timeout: 60_000
 	});
 
@@ -127,7 +127,7 @@ test('reports and the ingest audit trail', async () => {
 	const ingested = page
 		.getByRole('row')
 		.filter({ has: page.getByRole('cell', { name: 'Ingested', exact: true }) });
-	await expect(ingested).toHaveCount(10);
+	await expect(ingested).toHaveCount(11);
 	await expect(ingested.first()).toContainText('admin');
 	await expect(ingested.first()).toContainText('ingest/');
 	await expectAccessible(page, 'audit trail');
@@ -135,7 +135,7 @@ test('reports and the ingest audit trail', async () => {
 
 test('browse, search and filter the library', async () => {
 	await page.goto('/');
-	await expect(page.getByText('8 games')).toBeVisible();
+	await expect(page.getByText('9 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
 
 	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('orb');
@@ -162,6 +162,12 @@ test('browse, search and filter the library', async () => {
 	await expect(page).toHaveURL(/system=nes/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Pixel Pioneer', exact: true })).toBeVisible();
+
+	// Seeded copier-headered (.smc): it only shows up if ingestion matched it to the DAT after stripping the header.
+	await page.getByLabel('System').selectOption({ label: 'Super Nintendo Entertainment System' });
+	await expect(page).toHaveURL(/system=snes/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Mode Seven Rally', exact: true })).toBeVisible();
 
 	// "Quest, The" is shown as "The Quest" but filed under Q (§5, §6.1).
 	await page.goto('/');
@@ -212,7 +218,7 @@ test('game detail + downloads', async () => {
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await page.goto('/');
-	await expect(page.getByText('8 games')).toBeVisible();
+	await expect(page.getByText('9 games')).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await expect(dialog()).toBeVisible();
 	await expect(dialog().getByRole('combobox')).toBeFocused();
