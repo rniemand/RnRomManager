@@ -85,3 +85,12 @@
 	color: #fff !important;
 	background-color: var(--bs-a2600) !important;
 }
+
+/* ColecoVision system colour (C5): Coleco blue, same in both themes; white on it is AA. */
+:root {
+	--bs-coleco: #1d3f8f;
+}
+.text-bg-coleco {
+	color: #fff !important;
+	background-color: var(--bs-coleco) !important;
+}

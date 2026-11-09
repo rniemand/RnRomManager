@@ -45,6 +45,7 @@ public class LibraryEndpointsTests
             [IngestSeeder.NesDat] = [],
             [IngestSeeder.SnesDat] = [],
             [IngestSeeder.Atari2600Dat] = [],
+            [IngestSeeder.ColecoVisionDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld) { ReleaseYear = 1989, Developers = ["Nintendo"], Genres = ["Puzzle"] },
@@ -121,21 +122,21 @@ public class LibraryEndpointsTests
 
         var systems = await GetJson("/api/systems");
 
-        Assert.That(systems.GetArrayLength(), Is.EqualTo(7));
-        var gb = systems[0];
-        Assert.That((gb.GetProperty("id").GetString(), gb.GetProperty("displayName").GetString()), Is.EqualTo(("gb", "Game Boy")));
+        // S1: ordered by display name.
+        Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("id").GetString()),
+            Is.EqualTo(new[] { "a2600", "coleco", "gb", "gba", "gbc", "n64", "nes", "snes" }));
+        JsonElement Find(string id) => systems.EnumerateArray().Single(s => s.GetProperty("id").GetString() == id);
+        var gb = Find("gb");
+        Assert.That(gb.GetProperty("displayName").GetString(), Is.EqualTo("Game Boy"));
         Assert.That((gb.GetProperty("gameCount").GetInt32(), gb.GetProperty("romCount").GetInt32()), Is.EqualTo((1, 2)));
         Assert.That(gb.GetProperty("regions").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "Japan", "World" }));
-        var gbc = systems[1];
-        Assert.That((gbc.GetProperty("id").GetString(), gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()),
-            Is.EqualTo(("gbc", 0, 0)));
-        Assert.That(systems[2].GetProperty("id").GetString(), Is.EqualTo("gba"));
-        Assert.That((systems[3].GetProperty("id").GetString(), systems[3].GetProperty("displayName").GetString()), Is.EqualTo(("n64", "Nintendo 64")));
-        Assert.That((systems[4].GetProperty("id").GetString(), systems[4].GetProperty("displayName").GetString()),
-            Is.EqualTo(("nes", "Nintendo Entertainment System")));
-        Assert.That((systems[5].GetProperty("id").GetString(), systems[5].GetProperty("displayName").GetString()),
-            Is.EqualTo(("snes", "Super Nintendo Entertainment System")));
-        Assert.That((systems[6].GetProperty("id").GetString(), systems[6].GetProperty("displayName").GetString()), Is.EqualTo(("a2600", "Atari 2600")));
+        var gbc = Find("gbc");
+        Assert.That((gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()), Is.EqualTo((0, 0)));
+        Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
+        {
+            "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Nintendo 64", "Nintendo Entertainment System",
+            "Super Nintendo Entertainment System"
+        }));
     }
 
     [Test]

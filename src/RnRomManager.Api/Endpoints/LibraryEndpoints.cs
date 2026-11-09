@@ -24,7 +24,7 @@ public static class LibraryEndpoints
         api.MapGet("/systems", async (HttpContext ctx, ISystemRegistry systems, IGameRepository games) =>
         {
             var stats = (await games.ListSystemStatsAsync(ctx.RequestAborted)).ToDictionary(s => s.SystemId);
-            return Results.Ok(systems.All.Select(handler => stats.TryGetValue(handler.Id, out var s)
+            return Results.Ok(systems.All.OrderBy(h => h.DisplayName, StringComparer.OrdinalIgnoreCase).Select(handler => stats.TryGetValue(handler.Id, out var s)
                 ? new { id = handler.Id, displayName = handler.DisplayName, gameCount = s.GameCount, romCount = s.RomCount, regions = s.Regions }
                 : new { id = handler.Id, displayName = handler.DisplayName, gameCount = 0, romCount = 0, regions = (IReadOnlyList<string>)[] }));
         });

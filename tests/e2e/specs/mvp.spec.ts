@@ -96,7 +96,7 @@ test('ingestion of the seeded Basic set', async () => {
 	await page.getByRole('button', { name: 'Import all' }).click();
 
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
-	await expect(run).toContainText('Ingested 12 · Duplicate 1 · Review 2 · Failed 1', {
+	await expect(run).toContainText('Ingested 13 · Duplicate 1 · Review 2 · Failed 1', {
 		timeout: 60_000
 	});
 
@@ -141,7 +141,7 @@ test('reports and the ingest audit trail', async () => {
 	const ingested = page
 		.getByRole('row')
 		.filter({ has: page.getByRole('cell', { name: 'Ingested', exact: true }) });
-	await expect(ingested).toHaveCount(12);
+	await expect(ingested).toHaveCount(13);
 	await expect(
 		page
 			.getByRole('row')
@@ -154,8 +154,20 @@ test('reports and the ingest audit trail', async () => {
 
 test('browse, search and filter the library', async () => {
 	await page.goto('/');
-	await expect(page.getByText('10 games')).toBeVisible();
+	await expect(page.getByText('11 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
+	// S1: systems in display-name order, "All systems" first.
+	await expect(page.getByLabel('System').locator('option')).toHaveText([
+		'All systems',
+		'Atari 2600',
+		'ColecoVision',
+		'Game Boy',
+		'Game Boy Advance',
+		'Game Boy Color',
+		'Nintendo 64',
+		'Nintendo Entertainment System',
+		'Super Nintendo Entertainment System'
+	]);
 
 	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('orb');
 	await expect(page).toHaveURL(/q=orb/);
@@ -193,6 +205,12 @@ test('browse, search and filter the library', async () => {
 	await expect(page).toHaveURL(/system=a2600/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Laser Lanes', exact: true })).toBeVisible();
+
+	// Seeded as a loose .rom: it only shows up if ingestion accepted it and matched it to the ColecoVision DAT (C4).
+	await page.getByLabel('System').selectOption({ label: 'ColecoVision' });
+	await expect(page).toHaveURL(/system=coleco/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Pixel Pursuit', exact: true })).toBeVisible();
 
 	// "Quest, The" is shown as "The Quest" but filed under Q (§5, §6.1).
 	await page.goto('/');
@@ -243,12 +261,22 @@ test('game detail + downloads', async () => {
 		await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
 	).toBe(true);
 	await page.setViewportSize(viewport);
+
+	// G1: the information card wraps the longest system name instead of scrolling on a phone.
+	await openGame('Mode Seven Rally');
+	await page.setViewportSize({ width: 375, height: 812 });
+	const info = page.locator('.card', {
+		has: page.getByRole('table', { name: 'Game information' })
+	});
+	await expect(info).toContainText('Super Nintendo Entertainment System');
+	expect(await info.evaluate((card) => card.scrollWidth <= card.clientWidth)).toBe(true);
+	await page.setViewportSize(viewport);
 });
 
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await page.goto('/');
-	await expect(page.getByText('10 games')).toBeVisible();
+	await expect(page.getByText('11 games')).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await expect(dialog()).toBeVisible();
 	await expect(dialog().getByRole('combobox')).toBeFocused();
@@ -362,7 +390,7 @@ test('collections: create, add from game page and bulk select, search, remove, d
 	await expect(page).toHaveURL(/\/collections$/);
 	await expect(page.getByText('You have no collections yet.')).toBeVisible();
 	await page.goto('/');
-	await expect(page.getByText('10 games')).toBeVisible();
+	await expect(page.getByText('11 games')).toBeVisible();
 });
 
 test('review queue: resolve with a suggestion', async () => {

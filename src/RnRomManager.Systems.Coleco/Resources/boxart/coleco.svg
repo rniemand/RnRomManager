@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (ColecoVision). Made for this project; MIT licensed like the rest of the repo.
+       Exported to coleco.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#e6ebf5"/>
+  <!-- wide black cartridge shell -->
+  <rect x="96" y="96" width="320" height="300" rx="14" fill="#1b1d22" stroke="#0c0d10" stroke-width="4"/>
+  <!-- edge connector -->
+  <rect x="136" y="396" width="240" height="40" fill="#1b1d22" stroke="#0c0d10" stroke-width="4"/>
+  <g fill="#c9a24a">
+    <rect x="152" y="406" width="10" height="24" rx="2"/>
+    <rect x="176" y="406" width="10" height="24" rx="2"/>
+    <rect x="200" y="406" width="10" height="24" rx="2"/>
+    <rect x="224" y="406" width="10" height="24" rx="2"/>
+    <rect x="248" y="406" width="10" height="24" rx="2"/>
+    <rect x="272" y="406" width="10" height="24" rx="2"/>
+    <rect x="296" y="406" width="10" height="24" rx="2"/>
+    <rect x="320" y="406" width="10" height="24" rx="2"/>
+    <rect x="344" y="406" width="10" height="24" rx="2"/>
+  </g>
+  <!-- blue label with stripes -->
+  <rect x="124" y="124" width="264" height="232" rx="6" fill="#1d3f8f"/>
+  <g fill="#fffaf0">
+    <rect x="124" y="148" width="264" height="6"/>
+    <rect x="124" y="162" width="264" height="6"/>
+    <rect x="124" y="314" width="264" height="6"/>
+    <rect x="124" y="328" width="264" height="6"/>
+  </g>
+  <rect x="148" y="204" width="216" height="76" rx="4" fill="#fffaf0"/>
+  <text x="256" y="256" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="36" font-weight="800" fill="#1d3f8f">CARTRIDGE</text>
+</svg>

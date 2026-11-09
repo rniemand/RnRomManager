@@ -12,6 +12,7 @@ public static class IngestSeeder
     public const string NesDat = "Nintendo - Nintendo Entertainment System";
     public const string SnesDat = "Nintendo - Super Nintendo Entertainment System";
     public const string Atari2600Dat = "Atari - 2600";
+    public const string ColecoVisionDat = "Coleco - ColecoVision";
 
     public static void Seed(string ingest, string cache, SeedSet set, TimeProvider time)
     {
@@ -26,6 +27,7 @@ public static class IngestSeeder
         Directory.CreateDirectory(Path.Combine(ingest, "nes"));
         Directory.CreateDirectory(Path.Combine(ingest, "snes"));
         Directory.CreateDirectory(Path.Combine(ingest, "a2600"));
+        Directory.CreateDirectory(Path.Combine(ingest, "coleco"));
         var files = new List<string>();
         var gb = new List<FixtureGame>();
         var gbc = new List<FixtureGame>();
@@ -77,6 +79,13 @@ public static class IngestSeeder
         { ReleaseYear = 1982, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Shooter"] };
         // A loose .bin: ingestion must accept it and store the DAT's .a26 name (A3).
         Loose("a2600", "01-laser-lanes.bin", laserRom);
+        var pursuitRom = new byte[8192];
+        new Random(1301).NextBytes(pursuitRom);
+        (pursuitRom[0], pursuitRom[1]) = (0xAA, 0x55);
+        var pursuit = new FixtureGame("Pixel Pursuit (USA)", "Pixel Pursuit (USA).col", pursuitRom)
+        { ReleaseYear = 1983, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Action"] };
+        // A loose .rom: ingestion must accept it and store the DAT's .col name (C4).
+        Loose("coleco", "01-pixel-pursuit.rom", pursuitRom);
 
         var zipPath = Path.Combine(ingest, "gb", "05-quest.zip");
         using (var file = File.Create(zipPath))
@@ -107,7 +116,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes] });
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [pursuit] });
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
     }

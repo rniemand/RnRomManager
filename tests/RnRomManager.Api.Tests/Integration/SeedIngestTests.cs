@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 12, 10)]
-    [TestCase(SeedSet.Full, 212, 210)]
+    [TestCase(SeedSet.Basic, 13, 11)]
+    [TestCase(SeedSet.Full, 213, 211)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -124,6 +124,25 @@ public class SeedIngestTests
             }
             Assert.That(rom.Header, Is.Null);
             Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1982, new[] { "Shooter" })));
+        }
+        var pursuit = Directory.GetFiles(Path.Combine(factory.Root, "roms", "coleco", "P"), "*.zip").Single();
+        using (var zip = LibraryZip.Open(pursuit, factory.Services.GetRequiredService<InfoJsonReader>()))
+        {
+            var game = zip.InfoJson!.Game!;
+            var rom = game.Roms.Single();
+            var seeded = new byte[8192];
+            new Random(1301).NextBytes(seeded);
+            (seeded[0], seeded[1]) = (0xAA, 0x55);
+            Assert.That((game.Title, game.System, rom.FileName, rom.OriginalFileName),
+                Is.EqualTo(("Pixel Pursuit", "coleco", "Pixel Pursuit (USA).col", "01-pixel-pursuit.rom")));
+            using (var entry = zip.OpenEntry(LibraryZip.RomEntry("Pixel Pursuit (USA).col"), seeded.Length))
+            using (var bytes = new MemoryStream())
+            {
+                entry.CopyTo(bytes);
+                Assert.That(bytes.ToArray(), Is.EqualTo(seeded));
+            }
+            Assert.That(rom.Header!["magic"]!.GetValue<string>(), Is.EqualTo("AA55"));
+            Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1983, new[] { "Action" })));
         }
         var review = await factory.Services.GetRequiredService<IIngestReviewRepository>().ListAsync("Pending", 1, 48, default);
         Assert.That(review.Total, Is.EqualTo(2));

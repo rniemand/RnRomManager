@@ -29,6 +29,7 @@ using RnRomManager.Data.Repositories;
 using RnRomManager.Systems.GameBoy;
 using RnRomManager.Systems.Nes;
 using RnRomManager.Systems.Atari;
+using RnRomManager.Systems.Coleco;
 using RnRomManager.Systems.Snes;
 using RnRomManager.Systems.Nintendo64;
 
@@ -158,6 +159,7 @@ public static class AppHost
         builder.Services.AddSystemHandler<NesHandler>();
         builder.Services.AddSystemHandler<SnesHandler>();
         builder.Services.AddSystemHandler<Atari2600Handler>();
+        builder.Services.AddSystemHandler<ColecoVisionHandler>();
 
         // Keys live in the DB so cookies survive restarts (spec §9.2).
         builder.Services.AddSingleton<IXmlRepository, DbXmlRepository>();
