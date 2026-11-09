@@ -330,7 +330,7 @@ public class LibraryMirrorTests
     [Test]
     public async Task Sync_IgnoresUnregisteredFoldersAndNonZips()
     {
-        await ZipAsync("snes/S/Super.zip", "Super", 1);
+        await ZipAsync("md/S/Super.zip", "Super", 1);
         await ZipAsync("gb/T/Tetris.zip", "Tetris", 2);
         File.Copy(Abs("gb/T/Tetris.zip"), Abs("gb/T/Tetris.zip.tmp"));
         File.Copy(Abs("gb/T/Tetris.zip"), _dir.Combine("Loose.zip"));

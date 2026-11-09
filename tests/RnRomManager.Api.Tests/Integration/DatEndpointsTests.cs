@@ -27,6 +27,7 @@ public class DatEndpointsTests
         [IngestSeeder.GbaDat] = [],
         [IngestSeeder.N64Dat] = [],
         [IngestSeeder.NesDat] = [],
+        [IngestSeeder.SnesDat] = [],
     };
 
     [SetUp]
@@ -85,7 +86,7 @@ public class DatEndpointsTests
         using var response = await _admin.GetAsync("/api/admin/dats");
         var rows = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
-        Assert.That(rows.Select(r => r.GetProperty("datName").GetString()), Is.EqualTo(new[] { Gb, IngestSeeder.GbaDat, Gbc, IngestSeeder.N64Dat, IngestSeeder.NesDat }));
+        Assert.That(rows.Select(r => r.GetProperty("datName").GetString()), Is.EqualTo(new[] { Gb, IngestSeeder.GbaDat, Gbc, IngestSeeder.N64Dat, IngestSeeder.NesDat, IngestSeeder.SnesDat }));
         Assert.That(rows.Select(r => r.GetProperty("version").GetString()), Is.All.EqualTo("2026.01.01"));
         Assert.That(rows[0].GetProperty("downloadedAt").GetDateTimeOffset(), Is.EqualTo(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero)));
     }
@@ -110,7 +111,7 @@ public class DatEndpointsTests
         var job = await WaitForEndAsync(jobId);
 
         Assert.That(job.Status, Is.EqualTo(JobStatus.Completed));
-        Assert.That(_server.Requests, Has.Count.EqualTo(25));
+        Assert.That(_server.Requests, Has.Count.EqualTo(30));
         Assert.That(_server.Requests.First().Headers.UserAgent.ToString(), Does.StartWith("RnRomManager/"));
         using var dats = await _admin.GetAsync("/api/admin/dats");
         Assert.That((await AuthClient.JsonAsync(dats))[0].GetProperty("version").GetString(), Is.EqualTo("2026.11.01"));

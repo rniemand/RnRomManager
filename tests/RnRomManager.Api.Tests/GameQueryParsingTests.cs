@@ -97,7 +97,7 @@ public class GameQueryParsingTests
     [Test]
     public void RejectsUnknownValues()
     {
-        Assert.That(Parse(system: "snes").Errors, Does.ContainKey("system"));
+        Assert.That(Parse(system: "md").Errors, Does.ContainKey("system"));
         Assert.That(Parse(letter: "AA").Errors, Does.ContainKey("letter"));
         Assert.That(Parse(letter: "É").Errors, Does.ContainKey("letter"));
         Assert.That(Parse(q: new string('x', 256)).Errors, Does.ContainKey("q"));

@@ -38,6 +38,7 @@ public class NoteEndpointsTests
             [IngestSeeder.GbaDat] = [],
             [IngestSeeder.N64Dat] = [],
             [IngestSeeder.NesDat] = [],
+            [IngestSeeder.SnesDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld),

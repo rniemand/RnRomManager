@@ -36,7 +36,7 @@ public class SystemRegistryTests
     public void ByFamily_ReturnsEveryMember()
     {
         Assert.That(Registry().ByFamily("gameboy"), Is.EqualTo(new[] { _gb, _gbc }));
-        Assert.That(Registry().ByFamily("snes"), Is.Empty);
+        Assert.That(Registry().ByFamily("md"), Is.Empty);
     }
 
     [TestCase(".gb", "gb")]

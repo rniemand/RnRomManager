@@ -10,6 +10,7 @@ public static class IngestSeeder
     public const string GbaDat = "Nintendo - Game Boy Advance";
     public const string N64Dat = "Nintendo - Nintendo 64";
     public const string NesDat = "Nintendo - Nintendo Entertainment System";
+    public const string SnesDat = "Nintendo - Super Nintendo Entertainment System";
 
     public static void Seed(string ingest, string cache, SeedSet set, TimeProvider time)
     {
@@ -22,6 +23,7 @@ public static class IngestSeeder
         Directory.CreateDirectory(Path.Combine(ingest, "gba"));
         Directory.CreateDirectory(Path.Combine(ingest, "n64"));
         Directory.CreateDirectory(Path.Combine(ingest, "nes"));
+        Directory.CreateDirectory(Path.Combine(ingest, "snes"));
         var files = new List<string>();
         var gb = new List<FixtureGame>();
         var gbc = new List<FixtureGame>();
@@ -92,7 +94,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer] });
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [] });
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
     }

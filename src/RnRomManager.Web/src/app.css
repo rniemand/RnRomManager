@@ -45,3 +45,15 @@
 .modal.global-search {
 	backdrop-filter: blur(4px);
 }
+
+/*
+ * SNES system colour (SNES spec S6): a fixed purple in both themes, mirroring Bootstrap's text-bg-* so SystemBadge
+ * (text-bg-snes) and the Library Size treemap (var(--bs-snes)) work unchanged. White on it is AA.
+ */
+:root {
+	--bs-snes: #5b4b9a;
+}
+.text-bg-snes {
+	color: #fff !important;
+	background-color: var(--bs-snes) !important;
+}

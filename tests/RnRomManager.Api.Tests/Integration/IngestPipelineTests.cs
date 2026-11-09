@@ -78,6 +78,7 @@ public class IngestPipelineTests
                 new FixtureGame("Pioneer (USA)", "Pioneer (USA).nes", Pioneer),
                 new FixtureGame("Pioneer (USA)", "Pioneer (USA).unh", PioneerHeaderless),
             ],
+            [IngestSeeder.SnesDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },
