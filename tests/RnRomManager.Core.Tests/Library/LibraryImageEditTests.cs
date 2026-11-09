@@ -128,6 +128,33 @@ public class LibraryImageEditTests
     }
 
     [Test]
+    public async Task Upload_FromUrl_StoresTheUrl_AsAnUpload_AndAuditsIt()
+    {
+        await SeedPlaceholder();
+        const string url = "https://example.com/art/tetris.png";
+
+        var result = await _editor.AddImageAsync(GameId, ImageType.Snap, NewPng(), Actor, default, url);
+
+        Assert.That(result.Code, Is.Null, result.Details);
+        Assert.That(Stored().Select(i => (i.FileName, i.Source, i.SourceUrl)), Is.EqualTo(new[]
+        {
+            ("boxart-01.png", InfoJsonImage.SourceDefault, (string?)null),
+            ("snap-01.png", InfoJsonImage.SourceUpload, url),
+        }));
+        Assert.That(Recorded(), Is.EqualTo(new[] { ("ImageAdded", (string?)$"snap-01.png from {url}") }));
+    }
+
+    [Test]
+    public async Task Upload_WithoutUrl_LeavesSourceUrlNull()
+    {
+        await SeedPlaceholder();
+
+        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, NewPng(), Actor, default)).Code, Is.Null);
+
+        Assert.That(Stored().Single(i => i.FileName == "snap-01.png").SourceUrl, Is.Null);
+    }
+
+    [Test]
     public async Task Upload_Snap_NeverChangesTheCover_JpegGetsJpg()
     {
         await SeedPlaceholder();
