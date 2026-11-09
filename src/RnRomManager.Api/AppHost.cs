@@ -114,6 +114,7 @@ public static class AppHost
         builder.Services.AddSingleton<AuditPaths>();
         builder.Services.AddSingleton<ICollectionRepository, CollectionRepository>();
         builder.Services.AddSingleton<CollectionCovers>();
+        builder.Services.AddSingleton<CollectionService>();
         builder.Services.AddSingleton<IGameRepository, GameRepository>();
         builder.Services.AddSingleton<IRomRepository, RomRepository>();
         builder.Services.AddSingleton<IImageRepository, ImageRepository>();
