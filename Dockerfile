@@ -40,6 +40,6 @@ COPY --from=web /src/web/build ./wwwroot
 COPY --from=publish --chown=1654:1654 /volumes/ ./
 USER 1654
 EXPOSE 8080
-VOLUME ["/app/roms", "/app/ingest", "/app/logs", "/app/cache", "/app/backups"]
+VOLUME ["/app/roms", "/app/ingest", "/app/logs", "/app/cache", "/app/backups", "/app/collections"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s CMD ["/app/RnRomManager.Api", "--healthcheck"]
 ENTRYPOINT ["/app/RnRomManager.Api"]

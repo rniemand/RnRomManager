@@ -19,6 +19,7 @@ public class OptionsRegistrationTests
         ["Paths:Logs"] = Path.Combine(Root, "logs"),
         ["Paths:Cache"] = Path.Combine(Root, "cache"),
         ["Paths:Backups"] = Path.Combine(Root, "backups"),
+        ["Paths:Collections"] = Path.Combine(Root, "collections"),
     };
 
     private static ServiceProvider Build(Dictionary<string, string?> settings)

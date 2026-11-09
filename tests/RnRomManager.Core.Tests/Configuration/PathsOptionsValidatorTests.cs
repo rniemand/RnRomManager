@@ -13,6 +13,7 @@ public class PathsOptionsValidatorTests
         Logs = Path.Combine(Root, "logs"),
         Cache = Path.Combine(Root, "cache"),
         Backups = Path.Combine(Root, "backups"),
+        Collections = Path.Combine(Root, "collections"),
     };
 
     private static IEnumerable<string> Failures(PathsOptions options) =>
@@ -127,5 +128,20 @@ public class PathsOptionsValidatorTests
         var options = Valid();
         options.Backups = Path.Combine(options.Roms, "backups");
         Assert.That(Failures(options), Has.Some.EqualTo("Paths:Backups must not be inside Paths:Roms."));
+    }
+
+    [Test]
+    public void Collections_DefaultsToAppCollections()
+    {
+        Assert.That(new PathsOptions().Collections, Is.EqualTo("/app/collections"));
+        Assert.That(new PathsOptions().All().Select(p => p.Key), Has.Member("Paths:Collections"));
+    }
+
+    [Test]
+    public void Collections_InsideTheLibrary_Fails()
+    {
+        var options = Valid();
+        options.Collections = Path.Combine(options.Roms, "collections");
+        Assert.That(Failures(options), Has.Some.EqualTo("Paths:Collections must not be inside Paths:Roms."));
     }
 }

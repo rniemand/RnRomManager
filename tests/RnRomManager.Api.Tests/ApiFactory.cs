@@ -29,6 +29,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["Paths:Logs"] = Path.Combine(Root, "logs"),
             ["Paths:Cache"] = Path.Combine(Root, "cache"),
             ["Paths:Backups"] = Path.Combine(Root, "backups"),
+            ["Paths:Collections"] = Path.Combine(Root, "collections"),
             // No scheduled quick check unless a test turns it on (it would start a real job at 03:00).
             ["Integrity:QuickCheckTime"] = "",
         };

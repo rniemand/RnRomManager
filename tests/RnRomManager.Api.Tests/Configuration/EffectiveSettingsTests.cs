@@ -36,6 +36,7 @@ public class EffectiveSettingsTests
             ["Paths:Logs"] = Path.Combine(root, "logs"),
             ["Paths:Cache"] = Path.Combine(root, "cache"),
             ["Paths:Backups"] = Path.Combine(root, "backups"),
+            ["Paths:Collections"] = Path.Combine(root, "collections"),
             ["Backup:RestoreFrom"] = "rnrommanager-20261106-033000.zip",
         }).Build();
         using var services = new ServiceCollection().AddAppOptions(config).BuildServiceProvider();
