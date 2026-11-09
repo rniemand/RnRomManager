@@ -1,6 +1,6 @@
 ---
 title: Game page polish, image URLs and NES support
-status: ready # draft | ready | in-progress | completed
+status: in-progress # draft | ready | in-progress | completed
 created: 2026-11-06
 ---
 
