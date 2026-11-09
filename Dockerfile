@@ -21,6 +21,7 @@ COPY src/RnRomManager.Data/RnRomManager.Data.csproj src/RnRomManager.Data/
 COPY src/RnRomManager.Systems.GameBoy/RnRomManager.Systems.GameBoy.csproj src/RnRomManager.Systems.GameBoy/
 COPY src/RnRomManager.Systems.Nes/RnRomManager.Systems.Nes.csproj src/RnRomManager.Systems.Nes/
 COPY src/RnRomManager.Systems.Nintendo64/RnRomManager.Systems.Nintendo64.csproj src/RnRomManager.Systems.Nintendo64/
+COPY src/RnRomManager.Systems.Snes/RnRomManager.Systems.Snes.csproj src/RnRomManager.Systems.Snes/
 # Docker's TARGETARCH names -> .NET's (.NET rejects amd64).
 RUN case "$TARGETARCH" in amd64) echo x64 ;; arm64) echo arm64 ;; *) echo "unsupported TARGETARCH '$TARGETARCH'" >&2; exit 1 ;; esac > /tmp/arch \
  && dotnet restore src/RnRomManager.Api -a "$(cat /tmp/arch)"

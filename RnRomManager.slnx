@@ -6,6 +6,7 @@
     <Project Path="src/RnRomManager.Systems.GameBoy/RnRomManager.Systems.GameBoy.csproj" />
     <Project Path="src/RnRomManager.Systems.Nes/RnRomManager.Systems.Nes.csproj" />
     <Project Path="src/RnRomManager.Systems.Nintendo64/RnRomManager.Systems.Nintendo64.csproj" />
+    <Project Path="src/RnRomManager.Systems.Snes/RnRomManager.Systems.Snes.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/RnRomManager.Api.Tests/RnRomManager.Api.Tests.csproj" />
@@ -14,6 +15,7 @@
     <Project Path="tests/RnRomManager.Systems.GameBoy.Tests/RnRomManager.Systems.GameBoy.Tests.csproj" />
     <Project Path="tests/RnRomManager.Systems.Nes.Tests/RnRomManager.Systems.Nes.Tests.csproj" />
     <Project Path="tests/RnRomManager.Systems.Nintendo64.Tests/RnRomManager.Systems.Nintendo64.Tests.csproj" />
+    <Project Path="tests/RnRomManager.Systems.Snes.Tests/RnRomManager.Systems.Snes.Tests.csproj" />
     <Project Path="tests/RnRomManager.TestData/RnRomManager.TestData.csproj" />
   </Folder>
 </Solution>
