@@ -205,6 +205,28 @@ describe('game detail page', () => {
 		expect(link.querySelector('.bi-google')).not.toBeNull();
 	});
 
+	it('the information table has a hidden caption and System, Year, Developers, Publishers, Genres rows (G1)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		const table = await screen.findByRole('table', { name: 'Game information' });
+		expect(table.querySelector('caption')!.className).toBe('visually-hidden');
+		expect(table.closest('.table-responsive')!.parentElement!.classList).toContain('card');
+		const rows = [...table.querySelectorAll('tr')].map((tr) => [
+			tr.querySelector('th[scope="row"]')!.textContent!.trim(),
+			tr.querySelector('td')!.textContent!.trim()
+		]);
+		expect(rows).toEqual([
+			['System', 'Game Boy'],
+			['Year', '1989'],
+			['Developers', 'Nintendo'],
+			['Publishers', '—'],
+			['Genres', '—']
+		]);
+		expect(table.querySelector('td .badge')).not.toBeNull();
+		expect(document.querySelector('dl')).toBeNull();
+	});
+
 	it('the action row: ZIP, ROM, Google, info.json, all default size (B1)', async () => {
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);

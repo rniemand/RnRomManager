@@ -123,6 +123,17 @@ describe('game images', () => {
 		expect(screen.queryByRole('button', { name: /^Delete / })).toBeNull();
 	});
 
+	it('Upload image sits in the heading row, before the grid (G3)', () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+		const upload = screen.getByRole('button', { name: 'Upload image' });
+		const heading = screen.getByRole('heading', { name: 'Images' });
+		expect(upload.parentElement).toBe(heading.parentElement);
+		const grid = screen.getAllByRole('button', { name: /full size/ })[0].closest('.row')!;
+		expect(upload.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(grid.nextElementSibling).toBeNull();
+	});
+
 	it('editors get Use as cover on non-covers and Delete on everything but the placeholder', () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 

@@ -20,6 +20,7 @@
 	import Loading from '#lib/components/Loading.svelte';
 	import RatingControl from '#lib/components/RatingControl.svelte';
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
+	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { formatKey, formatSize, formatValue } from '#lib/format.js';
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -198,16 +199,36 @@
 					onsaved={(detail) => (game = detail)}
 				/>
 			</div>
-			<dl class="row mb-3">
-				<dt class="col-sm-3">Year</dt>
-				<dd class="col-sm-9">{game.releaseYear ?? '—'}</dd>
-				<dt class="col-sm-3">Developers</dt>
-				<dd class="col-sm-9">{list(game.developers)}</dd>
-				<dt class="col-sm-3">Publishers</dt>
-				<dd class="col-sm-9">{list(game.publishers)}</dd>
-				<dt class="col-sm-3">Genres</dt>
-				<dd class="col-sm-9">{list(game.genres)}</dd>
-			</dl>
+			<!-- G1: key/value table (T3). -->
+			<div class="card mb-3">
+				<div class="table-responsive">
+					<table class="table table-sm table-striped table-hover mb-0">
+						<caption class="visually-hidden">Game information</caption>
+						<tbody>
+							<tr>
+								<th scope="row" class="fw-normal text-body-secondary">System</th>
+								<td><SystemBadge system={game.system} name={game.systemName} /></td>
+							</tr>
+							<tr>
+								<th scope="row" class="fw-normal text-body-secondary">Year</th>
+								<td>{game.releaseYear ?? '—'}</td>
+							</tr>
+							<tr>
+								<th scope="row" class="fw-normal text-body-secondary">Developers</th>
+								<td>{list(game.developers)}</td>
+							</tr>
+							<tr>
+								<th scope="row" class="fw-normal text-body-secondary">Publishers</th>
+								<td>{list(game.publishers)}</td>
+							</tr>
+							<tr>
+								<th scope="row" class="fw-normal text-body-secondary">Genres</th>
+								<td>{list(game.genres)}</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
 			{#if game.description}
 				<p style="white-space: pre-line">{game.description}</p>
 			{/if}

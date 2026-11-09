@@ -129,7 +129,14 @@
 </script>
 
 <section class="mb-4" aria-labelledby="images-heading">
-	<h2 class="h5" id="images-heading">Images</h2>
+	<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+		<h2 class="h5 mb-0" id="images-heading">Images</h2>
+		{#if auth.canEditLibrary}
+			<button type="button" class="btn btn-outline-primary btn-sm ms-auto" onclick={openUpload}>
+				<Icon name="upload" /> Upload image
+			</button>
+		{/if}
+	</div>
 	<div class="row row-cols-2 row-cols-sm-3 row-cols-lg-5 g-3 mb-3">
 		{#each game.images as image (image.id)}
 			<div class="col">
@@ -191,12 +198,6 @@
 			</div>
 		{/each}
 	</div>
-
-	{#if auth.canEditLibrary}
-		<button type="button" class="btn btn-outline-primary btn-sm" onclick={openUpload}>
-			<Icon name="upload" /> Upload image
-		</button>
-	{/if}
 </section>
 
 {#if auth.canEditLibrary}
