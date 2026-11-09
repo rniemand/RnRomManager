@@ -84,4 +84,50 @@ public sealed class CollectionRepository(IDbConnectionFactory connections) : ICo
         return await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM collections WHERE id = @id AND user_id = @userId", new { id, userId }, cancellationToken: cancellationToken)) > 0;
     }
+
+    public async Task<int> AddGamesAsync(Guid collectionId, IReadOnlyCollection<Guid> gameIds, DateTime addedAt, CancellationToken cancellationToken)
+    {
+        if (gameIds.Count == 0) return 0;
+        await using var connection = connections.Create();
+        // Joining games skips ids that aren't library games; IGNORE skips existing members (affected rows = new ones).
+        return await connection.ExecuteAsync(new CommandDefinition("""
+            INSERT IGNORE INTO collection_games (collection_id, game_id, added_at)
+            SELECT @collectionId, id, @addedAt FROM games WHERE id IN @gameIds
+            """, new { collectionId, gameIds, addedAt }, cancellationToken: cancellationToken));
+    }
+
+    public async Task<bool> RemoveGameAsync(Guid collectionId, Guid gameId, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM collection_games WHERE collection_id = @collectionId AND game_id = @gameId",
+            new { collectionId, gameId }, cancellationToken: cancellationToken)) > 0;
+    }
+
+    public async Task<IReadOnlyList<CollectionRef>> ListForGameAsync(Guid gameId, int userId, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return (await connection.QueryAsync<CollectionRef>(new CommandDefinition("""
+            SELECT c.id AS Id, c.name AS Name FROM collections c
+            JOIN collection_games cg ON cg.collection_id = c.id
+            WHERE cg.game_id = @gameId AND c.user_id = @userId
+            ORDER BY c.name, c.id
+            """, new { gameId, userId }, cancellationToken: cancellationToken))).AsList();
+    }
+
+    public async Task MoveGameAsync(Guid fromGameId, Guid toGameId, CancellationToken cancellationToken)
+    {
+        if (fromGameId == toGameId) return;
+        await using var connection = connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        await connection.ExecuteAsync(new CommandDefinition("""
+            INSERT INTO collection_games (collection_id, game_id, added_at)
+            SELECT s.collection_id, @toGameId, s.added_at FROM collection_games s WHERE s.game_id = @fromGameId
+            ON DUPLICATE KEY UPDATE added_at = LEAST(collection_games.added_at, VALUES(added_at))
+            """, new { fromGameId, toGameId }, transaction, cancellationToken: cancellationToken));
+        await connection.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM collection_games WHERE game_id = @fromGameId", new { fromGameId }, transaction, cancellationToken: cancellationToken));
+        await transaction.CommitAsync(cancellationToken);
+    }
 }
