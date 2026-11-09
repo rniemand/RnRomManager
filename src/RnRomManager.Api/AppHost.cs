@@ -13,6 +13,7 @@ using RnRomManager.Api.Logging;
 using RnRomManager.Api.Security;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Backups;
+using RnRomManager.Core.Collections;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Database;
@@ -111,6 +112,7 @@ public static class AppHost
         builder.Services.AddSingleton<AuditLog>();
         builder.Services.AddSingleton<IAuditLog>(sp => sp.GetRequiredService<AuditLog>());
         builder.Services.AddSingleton<AuditPaths>();
+        builder.Services.AddSingleton<ICollectionRepository, CollectionRepository>();
         builder.Services.AddSingleton<IGameRepository, GameRepository>();
         builder.Services.AddSingleton<IRomRepository, RomRepository>();
         builder.Services.AddSingleton<IImageRepository, ImageRepository>();
