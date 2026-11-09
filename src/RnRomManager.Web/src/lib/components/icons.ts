@@ -1,6 +1,7 @@
 /** Semantic icon name → icon classes (spec §11). Bootstrap Icons everywhere; Font Awesome only where BI has no match. */
 export const icons: Record<string, string> = {
 	library: 'bi bi-collection',
+	collections: 'bi bi-bookmarks',
 	ingest: 'bi bi-box-arrow-in-down',
 	review: 'bi bi-clipboard-check',
 	integrity: 'bi bi-shield-check',

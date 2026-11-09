@@ -34,6 +34,7 @@ describe('hotkey actions (B21)', () => {
 		expect(actions.map((a) => [a.id, a.defaults.join(', '), a.editable, a.role])).toEqual([
 			['search', 'Ctrl+K, Ctrl+Space, Meta+K', false, null],
 			['nav.library', 'Alt+Shift+L', true, null],
+			['nav.collections', 'Alt+Shift+C', true, null],
 			['nav.ingestion', 'Alt+Shift+I', true, 'admin'],
 			['nav.review', 'Alt+Shift+F', true, 'admin'],
 			['review.next', 'Alt+Shift+G', true, 'admin']

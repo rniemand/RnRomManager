@@ -314,3 +314,25 @@ export interface BackupStatus {
 	/** Newest first. */
 	backups: BackupFile[];
 }
+
+/** `GET /api/collections` item (B6). */
+export interface CollectionListItem {
+	id: string;
+	name: string;
+	gameCount: number;
+	/** `/api/collections/{id}/cover?v=…`, or null without a cover. */
+	coverUrl: string | null;
+	updatedAt: string;
+}
+
+/** `GET /api/collections/{id}` and every collection edit's response (B7). */
+export interface CollectionDetail extends CollectionListItem {
+	notes: string | null;
+	createdAt: string;
+}
+
+/** `GET /api/games/{id}/collections` item (B16). */
+export interface CollectionRef {
+	id: string;
+	name: string;
+}

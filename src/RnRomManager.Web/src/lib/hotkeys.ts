@@ -6,7 +6,8 @@ import type { Role } from './api/types';
  * `Ctrl+Alt+Shift+Meta+<Key>` (modifiers in that order), `<Key>` being `A`–`Z`, `0`–`9` or `F1`–`F12`.
  */
 
-export type HotkeyId = 'search' | 'nav.library' | 'nav.ingestion' | 'nav.review' | 'review.next';
+export type HotkeyId =
+	'search' | 'nav.library' | 'nav.collections' | 'nav.ingestion' | 'nav.review' | 'review.next';
 export type EditableHotkeyId = Exclude<HotkeyId, 'search'>;
 export type Bindings = Record<EditableHotkeyId, string | null>;
 
@@ -32,6 +33,13 @@ export const actions: readonly HotkeyAction[] = [
 		id: 'nav.library',
 		name: 'Go to Library',
 		defaults: ['Alt+Shift+L'],
+		editable: true,
+		role: null
+	},
+	{
+		id: 'nav.collections',
+		name: 'Go to Collections',
+		defaults: ['Alt+Shift+C'],
 		editable: true,
 		role: null
 	},

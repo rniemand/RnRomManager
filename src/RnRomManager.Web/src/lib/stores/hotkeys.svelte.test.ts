@@ -121,6 +121,13 @@ describe('hotkeys store (B24)', () => {
 			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/ingestion'));
 		});
 
+		it('Alt+Shift+C goes to Collections for a plain user (B21)', async () => {
+			await signIn(user);
+
+			expect(hotkeys.handle(altShift('KeyC'))).toBe(true);
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/collections'));
+		});
+
 		it('fires even when focus is in a text field', async () => {
 			await signIn(user);
 			const input = document.body.appendChild(document.createElement('input'));

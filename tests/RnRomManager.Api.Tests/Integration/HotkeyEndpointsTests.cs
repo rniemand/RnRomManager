@@ -50,7 +50,7 @@ public class HotkeyEndpointsTests
 
     private static readonly Dictionary<string, string?> Defaults = new()
     {
-        ["nav.library"] = "Alt+Shift+L", ["nav.ingestion"] = "Alt+Shift+I", ["nav.review"] = "Alt+Shift+F", ["review.next"] = "Alt+Shift+G",
+        ["nav.library"] = "Alt+Shift+L", ["nav.collections"] = "Alt+Shift+C", ["nav.ingestion"] = "Alt+Shift+I", ["nav.review"] = "Alt+Shift+F", ["review.next"] = "Alt+Shift+G",
     };
 
     [Test]

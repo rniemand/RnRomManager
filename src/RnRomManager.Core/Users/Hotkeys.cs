@@ -18,6 +18,7 @@ public static class Hotkeys
 {
     public const string Search = "search";
     public const string NavLibrary = "nav.library";
+    public const string NavCollections = "nav.collections";
     public const string NavIngestion = "nav.ingestion";
     public const string NavReview = "nav.review";
     public const string ReviewNext = "review.next";
@@ -39,6 +40,7 @@ public static class Hotkeys
     [
         new(Search, "Open global search", ["Ctrl+K", "Ctrl+Space", "Meta+K"], false, null),
         new(NavLibrary, "Go to Library", ["Alt+Shift+L"], true, null),
+        new(NavCollections, "Go to Collections", ["Alt+Shift+C"], true, null),
         new(NavIngestion, "Go to Ingestion", ["Alt+Shift+I"], true, Roles.Admin),
         new(NavReview, "Go to Review", ["Alt+Shift+F"], true, Roles.Admin),
         new(ReviewNext, "Open the first review item", ["Alt+Shift+G"], true, Roles.Admin),

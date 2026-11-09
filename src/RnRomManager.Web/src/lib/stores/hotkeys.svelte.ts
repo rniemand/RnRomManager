@@ -57,6 +57,8 @@ class HotkeyStore {
 		switch (action) {
 			case 'nav.library':
 				return goto(resolve('/'));
+			case 'nav.collections':
+				return goto(resolve('/collections'));
 			case 'nav.ingestion':
 				return goto(resolve('/ingestion'));
 			case 'nav.review':
