@@ -260,6 +260,7 @@ public class LibraryEndpointsTests
         var item = (await GetJson("/api/games")).GetProperty("items")[0];
         Assert.That((item.GetProperty("rating").GetInt32(), item.GetProperty("favourite").GetBoolean(), item.GetProperty("systemName").GetString()),
             Is.EqualTo((4, true, Service<ISystemRegistry>().ById("gb")!.DisplayName)));
+        Assert.That(item.GetProperty("systemShortName").GetString(), Is.EqualTo("GB"));
         using (var zip = LibraryZip.Open(await ZipPath(id), Service<InfoJsonReader>()))
             Assert.That((zip.InfoJson!.Game!.Rating, zip.InfoJson.Game.Favourite), Is.EqualTo(((int?)4, true)));
 

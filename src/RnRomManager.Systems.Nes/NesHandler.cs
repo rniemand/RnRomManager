@@ -12,6 +12,7 @@ public sealed class NesHandler : ISystemHandler
 
     public string Id => NesHeaderReader.NesId;
     public string DisplayName => "Nintendo Entertainment System";
+    public string ShortName => "NES";
     public string Family => NesHeaderReader.NesId;
     public IReadOnlyList<string> RomExtensions { get; } = [".nes"];
 

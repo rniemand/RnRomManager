@@ -5,6 +5,7 @@ public sealed class GameBoyColorHandler : GameBoyHandlerBase
 {
     public override string Id => GameBoyHeaderReader.GameBoyColorId;
     public override string DisplayName => "Game Boy Color";
+    public override string ShortName => "GBC";
     public override IReadOnlyList<string> RomExtensions { get; } = [".gbc"];
     public override string DatName => "Nintendo - Game Boy Color";
 }

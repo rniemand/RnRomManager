@@ -9,6 +9,7 @@ public sealed class GameBoyAdvanceHandler : ISystemHandler
 
     public string Id => GameBoyAdvanceHeaderReader.GameBoyAdvanceId;
     public string DisplayName => "Game Boy Advance";
+    public string ShortName => "GBA";
     public string Family => GameBoyAdvanceHeaderReader.GameBoyAdvanceId;
     public IReadOnlyList<string> RomExtensions { get; } = [".gba"];
 

@@ -48,6 +48,7 @@ public static class LibraryEndpoints
                 id = game.Id,
                 system = game.SystemId,
                 systemName = systems.ById(game.SystemId)?.DisplayName ?? game.SystemId,
+                systemShortName = systems.ById(game.SystemId)?.ShortName ?? game.SystemId,
                 displayTitle = game.DisplayTitle,
                 releaseYear = game.ReleaseYear,
                 regions = game.Regions,

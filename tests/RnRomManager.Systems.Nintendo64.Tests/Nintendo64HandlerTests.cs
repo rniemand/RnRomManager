@@ -13,6 +13,7 @@ public class Nintendo64HandlerTests
     [Test]
     public void Nintendo64_Contract()
     {
+        Assert.That(Handler.ShortName, Is.EqualTo("N64"));
         Assert.That((Handler.Id, Handler.DisplayName, Handler.Family, Handler.DatName), Is.EqualTo(("n64", "Nintendo 64", "n64", "Nintendo - Nintendo 64")));
         Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".z64", ".v64", ".n64" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((4096L, 64L * 1024 * 1024)));
