@@ -30,12 +30,17 @@ public class ReviewResolverTests
         _audit.ReceivedCalls().Where(c => c.GetMethodInfo().Name == "Record")
             .Select(c => (RnRomManager.Core.Audit.AuditEvent)c.GetArguments()[0]!).ToList();
 
+    private PathsOptions _paths = null!;
+    private DatCache _dats = null!;
+
     [SetUp]
-    public void SetUp()
+    public void SetUp() => Build(new Headerless());
+
+    private void Build(ISystemHandler handler)
     {
         _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
         _dir = new TempDir();
-        var paths = new PathsOptions { Ingest = _dir.Combine("ingest"), Roms = _dir.Combine("roms"), Cache = _dir.Combine("cache") };
+        var paths = _paths = new PathsOptions { Ingest = _dir.Combine("ingest"), Roms = _dir.Combine("roms"), Cache = _dir.Combine("cache") };
         Directory.CreateDirectory(paths.Ingest);
         _time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 4, 12, 0, 0, TimeSpan.Zero));
         _lock = new JobLock();
@@ -44,9 +49,9 @@ public class ReviewResolverTests
             OriginalFileName = "test.gb", Sha1 = new string('0', 40), SizeBytes = 3 };
         File.WriteAllBytes(_item.SourcePath, [1, 2, 3]);
         _reviews.GetAsync(1, Arg.Any<CancellationToken>()).Returns(_ => _item);
-        var systems = new SystemRegistry([new Headerless()]);
+        var systems = new SystemRegistry([handler]);
         var options = Options.Create(paths);
-        var dats = new DatCache(options, systems, NullLogger<DatCache>.Instance);
+        var dats = _dats = new DatCache(options, systems, NullLogger<DatCache>.Instance);
         var games = Substitute.For<IGameRepository>();
         var reader = new InfoJsonReader([], systems);
         var media = new MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }), NullLogger<MediaService>.Instance);
@@ -127,16 +132,21 @@ public class ReviewResolverTests
         Assert.That(released, Is.Not.Null);
     }
 
-    private sealed class Headerless : ISystemHandler
+    private sealed class Headerless(params string[] extensions) : ISystemHandler
     {
         public string Id => "gb";
         public string DisplayName => "Test";
         public string Family => "gameboy";
-        public IReadOnlyList<string> RomExtensions => [".gb"];
+        public IReadOnlyList<string> RomExtensions => extensions.Length == 0 ? [".gb"] : extensions;
         public long MinRomSizeBytes => 1;
         public long MaxRomSizeBytes => 1024;
         public string DatName => "GB";
-        public ReadOnlyMemory<byte> DefaultBoxArtPng => ReadOnlyMemory<byte>.Empty;
+        // A 512×512 PNG header: enough for MediaService's default-art check when a resolve stores a new game.
+        public ReadOnlyMemory<byte> DefaultBoxArtPng { get; } = new byte[]
+        {
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 2, 0, 0, 0, 2, 0,
+            8, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        };
         public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
     }
 
@@ -203,5 +213,32 @@ public class ReviewResolverTests
             Assert.That((await _resolver.DeleteSourceAsync(1, Actor, default)).Code, Is.EqualTo("JobRunning"));
         Assert.That(File.Exists(_item.SourcePath), Is.True);
         await _reviews.DidNotReceiveWithAnyArgs().DeletePendingBySourceAsync(default!, default, default);
+    }
+
+    /// <summary>G4: a DAT-entry resolve keeps the DAT ROM name's extension, not <c>RomExtensions[0]</c>.</summary>
+    [Test]
+    public async Task Dat_UsesTheDatRomNamesExtension()
+    {
+        _dir.Dispose();
+        Build(new Headerless(".gb", ".sms"));
+        var bytes = new byte[] { 1, 2, 3 };
+        _item = _item with
+        {
+            Reason = "NoDatMatch", Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(bytes)),
+            Crc32 = RnRomManager.Core.Storage.Crc32.ToHex(bytes), Md5 = Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(bytes)),
+        };
+        FixtureDatWriter.Write(_dats.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
+        {
+            ["GB"] = [new FixtureGame("Tide Runner (World)", "Tide Runner (World).sms", [9, 9, 9, 9])],
+        });
+        _dats.Load();
+
+        var result = await _resolver.ResolveAsync(1,
+            new ReviewResolutionRequest { Action = "Dat", DatSystem = "gb", DatGameName = "Tide Runner (World)" }, Actor, default);
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        var zip = Directory.GetFiles(_paths.Roms, "*.zip", SearchOption.AllDirectories).Single();
+        using var archive = System.IO.Compression.ZipFile.OpenRead(zip);
+        Assert.That(archive.Entries.Select(e => e.Name), Does.Contain("Tide Runner (World) (Unverified).sms"));
     }
 }
