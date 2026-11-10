@@ -162,6 +162,8 @@ public static class AppHost
         builder.Services.AddSystemHandler<Atari2600Handler>();
         builder.Services.AddSystemHandler<ColecoVisionHandler>();
         builder.Services.AddSystemHandler<GameGearHandler>();
+        builder.Services.AddSystemHandler<MasterSystemHandler>();
+        builder.Services.AddSystemHandler<MegaDriveHandler>();
 
         // Keys live in the DB so cookies survive restarts (spec §9.2).
         builder.Services.AddSingleton<IXmlRepository, DbXmlRepository>();

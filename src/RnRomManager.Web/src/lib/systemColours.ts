@@ -13,7 +13,9 @@ export interface SystemColour {
 		| 'snes'
 		| 'a2600'
 		| 'coleco'
-		| 'gg';
+		| 'gg'
+		| 'sms'
+		| 'md';
 	foreground: '#fff' | '#000';
 }
 
@@ -26,7 +28,9 @@ export const systemColours: Record<string, SystemColour> = {
 	snes: { name: 'snes', foreground: '#fff' },
 	a2600: { name: 'a2600', foreground: '#fff' },
 	coleco: { name: 'coleco', foreground: '#fff' },
-	gg: { name: 'gg', foreground: '#fff' }
+	gg: { name: 'gg', foreground: '#fff' },
+	sms: { name: 'sms', foreground: '#fff' },
+	md: { name: 'md', foreground: '#fff' }
 };
 
 /** Unknown systems stay neutral. */

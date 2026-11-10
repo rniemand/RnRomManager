@@ -45,7 +45,9 @@ describe('SystemBadge', () => {
 		render(SystemBadge, { system: 'a2600' });
 		render(SystemBadge, { system: 'coleco' });
 		render(SystemBadge, { system: 'gg' });
+		render(SystemBadge, { system: 'sms' });
 		render(SystemBadge, { system: 'md' });
+		render(SystemBadge, { system: 'sg1000' });
 
 		expect(screen.getByText('Game Boy Advance').classList.contains('text-bg-primary')).toBe(true);
 		expect(screen.getByText('NES').classList.contains('text-bg-warning')).toBe(true);
@@ -53,6 +55,8 @@ describe('SystemBadge', () => {
 		expect(screen.getByText('A2600').classList.contains('text-bg-a2600')).toBe(true);
 		expect(screen.getByText('COLECO').classList.contains('text-bg-coleco')).toBe(true);
 		expect(screen.getByText('GG').classList.contains('text-bg-gg')).toBe(true);
-		expect(screen.getByText('MD').classList.contains('text-bg-secondary')).toBe(true);
+		expect(screen.getByText('SMS').classList.contains('text-bg-sms')).toBe(true);
+		expect(screen.getByText('MD').classList.contains('text-bg-md')).toBe(true);
+		expect(screen.getByText('SG1000').classList.contains('text-bg-secondary')).toBe(true);
 	});
 });

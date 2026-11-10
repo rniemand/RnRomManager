@@ -14,8 +14,8 @@ public class SystemStartupTests
 
         var registry = factory.Services.GetRequiredService<ISystemRegistry>();
 
-        Assert.That(registry.All.Select(h => h.Id), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64", "nes", "snes", "a2600", "coleco", "gg" }));
-        foreach (var id in new[] { "gb", "gbc", "gba", "n64", "nes", "snes", "a2600", "coleco", "gg" })
+        Assert.That(registry.All.Select(h => h.Id), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64", "nes", "snes", "a2600", "coleco", "gg", "sms", "md" }));
+        foreach (var id in new[] { "gb", "gbc", "gba", "n64", "nes", "snes", "a2600", "coleco", "gg", "sms", "md" })
         {
             Assert.That(Directory.Exists(Path.Combine(factory.Settings["Paths:Roms"]!, id, "#")), Is.True);
             Assert.That(Directory.Exists(Path.Combine(factory.Settings["Paths:Roms"]!, id, "Z")), Is.True);

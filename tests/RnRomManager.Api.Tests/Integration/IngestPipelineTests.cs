@@ -93,6 +93,8 @@ public class IngestPipelineTests
                 new FixtureGame("Pocket Drift (World)", "Pocket Drift (World).gg", Drift),
                 new FixtureGame("Tide Runner (World)", "Tide Runner (World).sms", Tide),
             ],
+            [IngestSeeder.MasterSystemDat] = [],
+            [IngestSeeder.MegaDriveDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },

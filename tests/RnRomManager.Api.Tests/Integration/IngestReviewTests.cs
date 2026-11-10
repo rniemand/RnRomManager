@@ -49,6 +49,8 @@ public class IngestReviewTests
             [IngestSeeder.Atari2600Dat] = [],
             [IngestSeeder.ColecoVisionDat] = [],
             [IngestSeeder.GameGearDat] = [],
+            [IngestSeeder.MasterSystemDat] = [],
+            [IngestSeeder.MegaDriveDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", bytes)],
             ["Nintendo - Game Boy Color"] = [],
         });
@@ -112,6 +114,8 @@ public class IngestReviewTests
             [IngestSeeder.Atari2600Dat] = [],
             [IngestSeeder.ColecoVisionDat] = [],
             [IngestSeeder.GameGearDat] = [],
+            [IngestSeeder.MasterSystemDat] = [],
+            [IngestSeeder.MegaDriveDat] = [],
             [Gb] = [new FixtureGame("Tetris Deluxe (World)", "Tetris Deluxe (World).gb", Known)],
             ["Nintendo - Game Boy Color"] = [],
         });

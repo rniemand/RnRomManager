@@ -47,6 +47,8 @@ public class LibraryEndpointsTests
             [IngestSeeder.Atari2600Dat] = [],
             [IngestSeeder.ColecoVisionDat] = [],
             [IngestSeeder.GameGearDat] = [],
+            [IngestSeeder.MasterSystemDat] = [],
+            [IngestSeeder.MegaDriveDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld) { ReleaseYear = 1989, Developers = ["Nintendo"], Genres = ["Puzzle"] },
@@ -125,7 +127,7 @@ public class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "a2600", "coleco", "gb", "gba", "gbc", "gg", "n64", "nes", "snes" }));
+            Is.EqualTo(new[] { "a2600", "coleco", "gb", "gba", "gbc", "gg", "sms", "md", "n64", "nes", "snes" }));
         JsonElement Find(string id) => systems.EnumerateArray().Single(s => s.GetProperty("id").GetString() == id);
         var gb = Find("gb");
         Assert.That(gb.GetProperty("displayName").GetString(), Is.EqualTo("Game Boy"));
@@ -135,7 +137,7 @@ public class LibraryEndpointsTests
         Assert.That((gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()), Is.EqualTo((0, 0)));
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
-            "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "Nintendo 64", "Nintendo Entertainment System",
+            "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo Entertainment System",
             "Super Nintendo Entertainment System"
         }));
     }
@@ -200,7 +202,7 @@ public class LibraryEndpointsTests
     [TestCase("dir=up", "dir")]
     [TestCase("letter=AB", "letter")]
     [TestCase("letter=1", "letter")]
-    [TestCase("system=md", "system")]
+    [TestCase("system=sg1000", "system")]
     public async Task Games_InvalidQuery_Is400WithFieldError(string query, string field)
     {
         using var response = await _user.GetAsync("/api/games?" + query);

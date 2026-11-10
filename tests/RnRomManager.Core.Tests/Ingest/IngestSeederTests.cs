@@ -30,7 +30,7 @@ public class IngestSeederTests
         Assert.That(new FileInfo(Path.Combine(ingest, "a2600", "01-laser-lanes.bin")).Length, Is.EqualTo(4096));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "coleco", "01-pixel-pursuit.rom"))[..2], Is.EqualTo(new byte[] { 0xAA, 0x55 }));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "gg", "01-pocket-drift.gg"))[0x7FF0..0x7FF8], Is.EqualTo("TMR SEGA"u8.ToArray()));
-        Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(45));
+        Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(55));
     }
 
     [Test]
