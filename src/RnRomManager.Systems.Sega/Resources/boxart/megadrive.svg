@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Mega Drive / Genesis). Made for this project; MIT licensed like the rest of the repo.
+       Exported to megadrive.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#ebe4f2"/>
+  <!-- low black console body -->
+  <rect x="48" y="196" width="416" height="168" rx="36" fill="#1b1b20" stroke="#0d0d10" stroke-width="4"/>
+  <!-- round disc on top -->
+  <circle cx="256" cy="268" r="92" fill="#26262c" stroke="#3a3a42" stroke-width="6"/>
+  <circle cx="256" cy="268" r="64" fill="#2e2e35"/>
+  <!-- cartridge -->
+  <rect x="186" y="150" width="140" height="96" rx="6" fill="#5b2a86"/>
+  <text x="256" y="214" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="44" font-weight="800" fill="#ffffff">MD</text>
+  <!-- power and reset, volume -->
+  <rect x="84" y="320" width="48" height="16" rx="3" fill="#3a3a42"/>
+  <rect x="380" y="320" width="48" height="16" rx="3" fill="#3a3a42"/>
+  <circle cx="112" cy="232" r="7" fill="#c8102e"/>
+</svg>
