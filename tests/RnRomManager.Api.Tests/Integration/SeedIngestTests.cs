@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 16, 14)]
-    [TestCase(SeedSet.Full, 216, 214)]
+    [TestCase(SeedSet.Basic, 17, 15)]
+    [TestCase(SeedSet.Full, 217, 215)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -200,6 +200,23 @@ public class SeedIngestTests
             }
             Assert.That(rom.Header!["serial"]!.GetValue<string>(), Is.EqualTo("GM 00001234-00"));
             Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1991, new[] { "Racing" })));
+        }
+        var relay = Directory.GetFiles(Path.Combine(factory.Root, "roms", "s32x", "S"), "*.zip").Single();
+        using (var zip = LibraryZip.Open(relay, factory.Services.GetRequiredService<InfoJsonReader>()))
+        {
+            var game = zip.InfoJson!.Game!;
+            var rom = game.Roms.Single();
+            var seeded = new SyntheticMegaDriveRomBuilder { Seed = 1701, Size = 524288, SystemType = "SEGA 32X" }.Build();
+            Assert.That((game.Title, game.System, rom.FileName, rom.OriginalFileName),
+                Is.EqualTo(("Star Relay", "s32x", "Star Relay (USA).32x", "01-star-relay.32x")));
+            using (var entry = zip.OpenEntry(LibraryZip.RomEntry("Star Relay (USA).32x"), seeded.Length))
+            using (var bytes = new MemoryStream())
+            {
+                entry.CopyTo(bytes);
+                Assert.That(bytes.ToArray(), Is.EqualTo(seeded));
+            }
+            Assert.That(rom.Header!["systemType"]!.GetValue<string>(), Is.EqualTo("SEGA 32X"));
+            Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1995, new[] { "Shooter" })));
         }
         var review = await factory.Services.GetRequiredService<IIngestReviewRepository>().ListAsync("Pending", 1, 48, default);
         Assert.That(review.Total, Is.EqualTo(2));

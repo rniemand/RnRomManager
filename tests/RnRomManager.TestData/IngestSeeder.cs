@@ -114,6 +114,10 @@ public static class IngestSeeder
         { ReleaseYear = 1991, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Racing"] };
         // A loose .gen: ingestion must accept it and store the DAT's .md name (D3).
         Loose("md", "01-turbo-comet.gen", cometRom);
+        var relayRom = new SyntheticMegaDriveRomBuilder { Seed = 1701, Size = 524288, SystemType = "SEGA 32X" }.Build();
+        var relay = new FixtureGame("Star Relay (USA)", "Star Relay (USA).32x", relayRom)
+        { ReleaseYear = 1995, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Shooter"] };
+        Loose("s32x", "01-star-relay.32x", relayRom);
 
         var zipPath = Path.Combine(ingest, "gb", "05-quest.zip");
         using (var file = File.Create(zipPath))
@@ -144,7 +148,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [] });
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay] });
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
     }
