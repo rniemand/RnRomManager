@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import type { GameDetail } from '#lib/api/types.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
@@ -56,6 +56,16 @@ const rom = (id: number, fileName: string, isPrimary: boolean) => ({
 	hasNote: false
 });
 
+const listing = (paths = ['info.json', 'roms/Tetris 1.gb', 'images/boxart-01.png']) => ({
+	zipName: 'Tetris.zip',
+	entries: paths.map((path) => ({
+		path,
+		sizeBytes: 2048,
+		compressedSizeBytes: 1024,
+		modifiedUtc: '2026-11-01T10:00:00Z'
+	}))
+});
+
 function game(romIds: number[]): GameDetail {
 	return {
 		id: 'g1',
@@ -93,6 +103,8 @@ function game(romIds: number[]): GameDetail {
 describe('game detail page', () => {
 	let answers: { status: number; body?: unknown }[];
 	let fetches: number;
+	let zipAnswers: { status: number; body?: unknown }[];
+	let zipFetches: number;
 	const assign = vi.fn();
 
 	beforeEach(() => {
@@ -102,9 +114,16 @@ describe('game detail page', () => {
 		navigateTo('/games/g1');
 		answers = [];
 		fetches = 0;
+		zipAnswers = [];
+		zipFetches = 0;
 		vi.stubGlobal('fetch', (url: string) => {
 			// B16: the game's collections (the badges); answered here so the queued answers stay as they were.
 			if (url.endsWith('/collections')) return Promise.resolve(new Response('[]', { status: 200 }));
+			if (url.includes('/zip-entries')) {
+				zipFetches++;
+				const zip = zipAnswers.shift() ?? { status: 200, body: listing() };
+				return Promise.resolve(new Response(JSON.stringify(zip.body), { status: zip.status }));
+			}
 			fetches++;
 			const answer = answers.shift() ?? { status: 404, body: { code: 'NotFound' } };
 			return Promise.resolve(
@@ -298,6 +317,177 @@ describe('game detail page', () => {
 		await vi.waitFor(() => expect(fetches).toBe(3));
 		await screen.findByRole('article', { name: 'Tetris 1.gb' });
 		expect(details('Tetris 1.gb').hidden).toBe(true);
+	});
+
+	const tree = () => within(screen.getByRole('list', { name: 'Folders' }));
+	const folders = async () => within(await screen.findByRole('list', { name: 'Folders' }));
+	const selectedFolder = () =>
+		screen
+			.getByRole('list', { name: 'Folders' })
+			.querySelector('[aria-current="true"]')!
+			.textContent!.trim();
+	/** A rating save returns the game (a reload); only the first mutation fetches the antiforgery token. */
+	const rate = async (detail: GameDetail, first = false) => {
+		if (first) answers.push({ status: 204 });
+		answers.push({ status: 200, body: { ...detail, rating: 4 } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Rate 4 of 5' }));
+	};
+
+	it('?tab=zip opens Zip Contents and loads the listing; the root is the ZIP name (Z1, Z4)', async () => {
+		navigateTo('/games/g1?tab=zip');
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		const tab = await screen.findByRole('tab', { name: 'Zip Contents' });
+		expect(tab.getAttribute('aria-selected')).toBe('true');
+		expect(document.getElementById('zip-panel')!.hidden).toBe(false);
+		expect(await (await folders()).findByRole('button', { name: 'Tetris.zip' })).toBeTruthy();
+		expect(selectedFolder()).toBe('Tetris.zip');
+		expect(zipFetches).toBe(1);
+	});
+
+	it('loads the listing only when the tab is first shown, without refetching the game (Z1)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+		await screen.findByRole('tab', { name: 'Zip Contents' });
+		expect(zipFetches).toBe(0);
+
+		await fireEvent.click(screen.getByRole('tab', { name: 'Zip Contents' }));
+		expect(goto).toHaveBeenLastCalledWith('/games/g1?tab=zip', { replace: true, reset: false });
+		await (await folders()).findByRole('button', { name: 'Tetris.zip' });
+		await fireEvent.click(screen.getByRole('tab', { name: 'Releases (1)' }));
+		await fireEvent.click(screen.getByRole('tab', { name: 'Zip Contents' }));
+		await (await folders()).findByRole('button', { name: 'Tetris.zip' });
+		expect([zipFetches, fetches]).toEqual([1, 1]);
+	});
+
+	it('a game reload refetches at once while showing, and on the next show while hidden (Z1)', async () => {
+		navigateTo('/games/g1?tab=zip');
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+		await (await folders()).findByRole('button', { name: 'Tetris.zip' });
+
+		await rate(game([2]), true);
+		await vi.waitFor(() => expect(zipFetches).toBe(2));
+
+		await fireEvent.click(screen.getByRole('tab', { name: 'Releases (1)' }));
+		await rate(game([3]));
+		await screen.findByRole('button', { name: 'Download Tetris 3.gb' });
+		expect(zipFetches).toBe(2);
+		await fireEvent.click(screen.getByRole('tab', { name: 'Zip Contents' }));
+		await vi.waitFor(() => expect(zipFetches).toBe(3));
+	});
+
+	it('after a refetch the selected folder stays if it still exists, else the root (Z1)', async () => {
+		navigateTo('/games/g1?tab=zip');
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+		await fireEvent.click(await (await folders()).findByRole('button', { name: 'roms' }));
+		expect(selectedFolder()).toBe('roms');
+
+		await rate(game([2]), true);
+		await vi.waitFor(() => expect(zipFetches).toBe(2));
+		await (await folders()).findByRole('button', { name: 'roms' });
+		expect(selectedFolder()).toBe('roms');
+
+		zipAnswers.push({ status: 200, body: listing(['info.json']) });
+		await rate(game([3]));
+		await vi.waitFor(() => expect(zipFetches).toBe(3));
+		await (await folders()).findByRole('button', { name: 'Tetris.zip' });
+		expect(tree().queryByRole('button', { name: 'roms' })).toBeNull();
+		expect(selectedFolder()).toBe('Tetris.zip');
+	});
+
+	it('the chevron toggles without selecting; the name selects and expands but never collapses (Z4)', async () => {
+		navigateTo('/games/g1?tab=zip');
+		zipAnswers.push({ status: 200, body: listing(['roms/a/deep.gb', 'roms/b.gb']) });
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+		await (await folders()).findByRole('button', { name: 'roms' });
+		expect(tree().queryByRole('button', { name: 'a' })).toBeNull();
+
+		const chevron = tree().getByRole('button', { name: 'Expand roms' });
+		await fireEvent.click(chevron);
+		expect(chevron.getAttribute('aria-expanded')).toBe('true');
+		expect(tree().getByRole('button', { name: 'a' })).toBeTruthy();
+		expect(selectedFolder()).toBe('Tetris.zip');
+		await fireEvent.click(tree().getByRole('button', { name: 'Collapse roms' }));
+		expect(tree().queryByRole('button', { name: 'a' })).toBeNull();
+
+		await fireEvent.click(tree().getByRole('button', { name: 'roms' }));
+		expect(selectedFolder()).toBe('roms');
+		expect(tree().getByRole('button', { name: 'a' })).toBeTruthy();
+		await fireEvent.click(tree().getByRole('button', { name: 'roms' }));
+		expect(tree().getByRole('button', { name: 'a' })).toBeTruthy();
+	});
+
+	it('the table lists sub-folders then files with sizes and download links; breadcrumb and footer (Z4)', async () => {
+		navigateTo('/games/g1?tab=zip');
+		zipAnswers.push({
+			status: 200,
+			body: listing(['roms/a b/x.gb', 'roms/Tetris (World).gb', 'info.json'])
+		});
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+		await fireEvent.click(await (await folders()).findByRole('button', { name: 'roms' }));
+
+		const table = screen.getByRole('table', { name: 'Contents of roms' });
+		const rows = within(table).getAllByRole('row').slice(1);
+		expect(rows.map((r) => r.querySelector('td')!.textContent!.trim())).toEqual([
+			'a b',
+			'Tetris (World).gb'
+		]);
+		expect([...rows[1].querySelectorAll('.file-size')].map((s) => s.textContent)).toEqual([
+			'2.0 KiB',
+			'1.0 KiB'
+		]);
+		const link = within(table).getByRole('link', { name: 'Download Tetris (World).gb' });
+		expect(link.getAttribute('href')).toBe(
+			'/api/games/g1/zip-entries/download?path=roms%2FTetris%20(World).gb'
+		);
+		expect(link.hasAttribute('download')).toBe(true);
+		expect(screen.getByText(/^3 files · 6\.0 KiB \(3\.0 KiB compressed\)$/)).toBeTruthy();
+
+		await fireEvent.click(within(rows[0]).getByRole('button', { name: 'a b' }));
+		expect(selectedFolder()).toBe('a b');
+		const crumbs = within(screen.getByRole('navigation', { name: 'Folder path' }));
+		expect(crumbs.getAllByRole('button').map((b) => b.textContent)).toEqual([
+			'Tetris.zip',
+			'roms',
+			'a b'
+		]);
+		await fireEvent.click(crumbs.getByRole('button', { name: 'Tetris.zip' }));
+		expect(selectedFolder()).toBe('Tetris.zip');
+	});
+
+	it('an empty folder says so; a single file is "1 file" (Z4)', async () => {
+		navigateTo('/games/g1?tab=zip');
+		zipAnswers.push({ status: 200, body: listing([]) });
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		expect(await screen.findByText('This folder is empty.')).toBeTruthy();
+		expect(screen.getByText(/^0 files/)).toBeTruthy();
+	});
+
+	it('one file in the ZIP is counted as "1 file" (Z4)', async () => {
+		navigateTo('/games/g1?tab=zip');
+		zipAnswers.push({ status: 200, body: listing(['info.json']) });
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		expect(await screen.findByText(/^1 file · /)).toBeTruthy();
+	});
+
+	it('a failed listing shows an error with retry (Z4)', async () => {
+		navigateTo('/games/g1?tab=zip');
+		zipAnswers.push({ status: 500, body: { code: 'IoError', title: 'Unreadable' } });
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: /Retry/ }));
+		expect(await (await folders()).findByRole('button', { name: 'Tetris.zip' })).toBeTruthy();
+		expect(zipFetches).toBe(2);
 	});
 
 	it('Releases is the default tab; both panels stay in the DOM (GP1)', async () => {

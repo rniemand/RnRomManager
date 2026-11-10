@@ -41,6 +41,20 @@ export interface SystemInfo {
 	regions: string[];
 }
 
+/** One file entry of a library ZIP (Z2); sizes from the central directory. */
+export interface ZipEntry {
+	path: string;
+	sizeBytes: number;
+	compressedSizeBytes: number;
+	modifiedUtc: string;
+}
+
+/** `GET /api/games/{id}/zip-entries` (Z2): the ZIP's file name and its file entries, ordered by path. */
+export interface ZipEntries {
+	zipName: string;
+	entries: ZipEntry[];
+}
+
 /** `GET /api/games/facets` (F1): per option, the games matching every other active filter. */
 export interface GameFacets {
 	systems: { id: string; count: number }[];

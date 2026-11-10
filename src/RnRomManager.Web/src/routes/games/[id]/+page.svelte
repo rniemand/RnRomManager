@@ -25,6 +25,7 @@
 	import RatingControl from '#lib/components/RatingControl.svelte';
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
 	import { formatKey, formatSize, formatValue } from '#lib/format.js';
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -166,9 +167,17 @@
 	// R1–R4: release cards start collapsed. Open ones are kept by file name (unique within a game; ROM ids change on
 	// every ZIP rewrite), so a reload of the same game keeps them; a new game id starts collapsed again.
 	const openReleases = new SvelteSet<string>();
+	// Z1: the Zip Contents tree's selection and expansion; kept across reloads, reset (root selected) for a new game id.
+	let zipSelected = $state('');
+	const zipExpanded = new SvelteSet<string>(['']);
 	$effect(() => {
 		void id;
-		untrack(() => openReleases.clear());
+		untrack(() => {
+			openReleases.clear();
+			zipSelected = '';
+			zipExpanded.clear();
+			zipExpanded.add('');
+		});
 	});
 	const allReleasesOpen = $derived(game?.roms.every((r) => openReleases.has(r.fileName)) ?? false);
 
@@ -190,13 +199,15 @@
 	}
 
 	// GP1: the tab is URL state (`?tab=images`); switching never reloads the game (the load effect keys on the id).
-	type Tab = 'releases' | 'images';
-	const tab = $derived<Tab>(page.url.searchParams.get('tab') === 'images' ? 'images' : 'releases');
+	type Tab = 'releases' | 'images' | 'zip';
+	const tab = $derived<Tab>(
+		(['images', 'zip'] as const).find((t) => t === page.url.searchParams.get('tab')) ?? 'releases'
+	);
 
 	function selectTab(next: Tab): void {
 		const path = resolve('/games/[id]', { id });
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
-		void goto(next === 'images' ? `${path}?tab=images` : path, { replace: true, reset: false });
+		void goto(next === 'releases' ? path : `${path}?tab=${next}`, { replace: true, reset: false });
 	}
 </script>
 
@@ -393,7 +404,7 @@
 	</div>
 
 	<ul class="nav nav-tabs mb-3" role="tablist">
-		{#each [['releases', `Releases (${game.roms.length})`], ['images', `Images (${game.images.length})`]] as [value, label] (value)}
+		{#each [['releases', `Releases (${game.roms.length})`], ['images', `Images (${game.images.length})`], ['zip', 'Zip Contents']] as [value, label] (value)}
 			<li class="nav-item" role="presentation">
 				<button
 					type="button"
@@ -551,6 +562,11 @@
 
 	<div id="images-panel" role="tabpanel" aria-labelledby="images-tab" hidden={tab !== 'images'}>
 		<GameImages {game} onchanged={(detail) => (game = detail)} />
+	</div>
+
+	<div id="zip-panel" role="tabpanel" aria-labelledby="zip-tab" hidden={tab !== 'zip'}>
+		<h2 class="h5 visually-hidden">Zip Contents</h2>
+		<ZipBrowser {game} active={tab === 'zip'} bind:selected={zipSelected} expanded={zipExpanded} />
 	</div>
 
 	<ConfirmModal bind:open={headerOpen} title="Header — {headerRom?.fileName ?? ''}" size="lg">
