@@ -96,7 +96,7 @@ test('ingestion of the seeded Basic set', async () => {
 	await page.getByRole('button', { name: 'Import all' }).click();
 
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
-	await expect(run).toContainText('Ingested 14 · Duplicate 1 · Review 2 · Failed 1', {
+	await expect(run).toContainText('Ingested 16 · Duplicate 1 · Review 2 · Failed 1', {
 		timeout: 60_000
 	});
 
@@ -141,7 +141,7 @@ test('reports and the ingest audit trail', async () => {
 	const ingested = page
 		.getByRole('row')
 		.filter({ has: page.getByRole('cell', { name: 'Ingested', exact: true }) });
-	await expect(ingested).toHaveCount(14);
+	await expect(ingested).toHaveCount(16);
 	await expect(
 		page
 			.getByRole('row')
@@ -154,7 +154,7 @@ test('reports and the ingest audit trail', async () => {
 
 test('browse, search and filter the library', async () => {
 	await page.goto('/');
-	await expect(page.getByText('12 games')).toBeVisible();
+	await expect(page.getByText('14 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
 	// S1: systems in display-name order, "All systems" first.
 	await expect(page.getByLabel('System').locator('option')).toHaveText([
@@ -165,6 +165,8 @@ test('browse, search and filter the library', async () => {
 		'Game Boy Advance',
 		'Game Boy Color',
 		'Game Gear',
+		'Master System',
+		'Mega Drive / Genesis',
 		'Nintendo 64',
 		'Nintendo Entertainment System',
 		'Super Nintendo Entertainment System'
@@ -218,6 +220,18 @@ test('browse, search and filter the library', async () => {
 	await expect(page).toHaveURL(/system=gg/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Pocket Drift', exact: true })).toBeVisible();
+
+	// M3: the seeded .sms with a TMR SEGA header, matched to the Master System DAT.
+	await page.getByLabel('System').selectOption({ label: 'Master System' });
+	await expect(page).toHaveURL(/system=sms/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Harbor Patrol', exact: true })).toBeVisible();
+
+	// D3: seeded as a loose .gen, matched to the Mega Drive DAT and stored as .md.
+	await page.getByLabel('System').selectOption({ label: 'Mega Drive / Genesis' });
+	await expect(page).toHaveURL(/system=md/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Turbo Comet', exact: true })).toBeVisible();
 
 	// "Quest, The" is shown as "The Quest" but filed under Q (§5, §6.1).
 	await page.goto('/');
@@ -283,7 +297,7 @@ test('game detail + downloads', async () => {
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await page.goto('/');
-	await expect(page.getByText('12 games')).toBeVisible();
+	await expect(page.getByText('14 games')).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await expect(dialog()).toBeVisible();
 	await expect(dialog().getByRole('combobox')).toBeFocused();
@@ -412,7 +426,7 @@ test('collections: create, add from game page and bulk select, search, remove, d
 	await expect(page).toHaveURL(/\/collections$/);
 	await expect(page.getByText('You have no collections yet.')).toBeVisible();
 	await page.goto('/');
-	await expect(page.getByText('12 games')).toBeVisible();
+	await expect(page.getByText('14 games')).toBeVisible();
 });
 
 test('review queue: resolve with a suggestion', async () => {

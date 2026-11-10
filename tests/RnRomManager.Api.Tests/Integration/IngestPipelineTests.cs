@@ -40,6 +40,8 @@ public class IngestPipelineTests
     private static readonly byte[] Drift = GameGear(32768, 140, header: true);
     /// <summary>An SMS-mode Game Gear game: the DAT names it <c>.sms</c> (G4).</summary>
     private static readonly byte[] Tide = GameGear(32768, 141, header: false);
+    private static readonly byte[] Harbor = GameGear(32768, 150, header: true);
+    private static readonly byte[] Comet = new SyntheticMegaDriveRomBuilder { Seed = 160, Size = 65536 }.Build();
     private ApiFactory _factory = null!;
     private ILibraryMirror? _mirrorOverride;
     private Action<IServiceCollection>? _extraServices;
@@ -93,6 +95,8 @@ public class IngestPipelineTests
                 new FixtureGame("Pocket Drift (World)", "Pocket Drift (World).gg", Drift),
                 new FixtureGame("Tide Runner (World)", "Tide Runner (World).sms", Tide),
             ],
+            [IngestSeeder.MasterSystemDat] = [new FixtureGame("Harbor Patrol (World)", "Harbor Patrol (World).sms", Harbor)],
+            [IngestSeeder.MegaDriveDat] = [new FixtureGame("Turbo Comet (USA, Europe)", "Turbo Comet (USA, Europe).md", Comet)],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },
@@ -270,6 +274,128 @@ public class IngestPipelineTests
         var game = ReadZip(Path.Combine("gg", "P", "Pocket Drift.zip"));
         Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("gg", "Pocket Drift (World).gg")));
         Assert.That(game.Roms.Single().Header!["offset"]!.GetValue<string>(), Is.EqualTo("7FF0"));
+    }
+
+    private async Task<ReviewItem> ReviewAsync(string system, string name, byte[] bytes)
+    {
+        var result = await IngestAsync(Drop(system, name, bytes));
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Review, "NoDatMatch")));
+        return (await Service<IIngestReviewRepository>().GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(bytes)), default))!;
+    }
+
+    private async Task RunIngestJobAsync() =>
+        await ActivatorUtilities.CreateInstance<IngestJob>(_factory.Services, Substitute.For<IJobItemRepository>())
+            .RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), default);
+
+    private string Zip(string system, string name, params (string Entry, byte[] Bytes)[] entries)
+    {
+        var path = Path.Combine(Ingest(system), name);
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+            foreach (var (entry, bytes) in entries)
+                using (var stream = zip.CreateEntry(entry).Open())
+                    stream.Write(bytes);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+        return path;
+    }
+
+    [TestCase("nes", "harbor.sms")]
+    [TestCase("sms", "comet.md")]
+    [TestCase("md", "comet.smd")]
+    public async Task SegaFile_InTheWrongFolderOrUnsupported_IsUnsupportedType(string folder, string name)
+    {
+        var result = await IngestAsync(Drop(folder, name, name.EndsWith(".sms") ? Harbor : Comet));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+    }
+
+    [Test]
+    public async Task GameGear_SmsMatchingOnlyTheGgDat_IsStillGg()
+    {
+        var result = await IngestAsync(Drop("gg", "tide.sms", Tide));
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Ingested));
+        var game = ReadZip(Path.Combine("gg", "T", "Tide Runner.zip"));
+        Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("gg", "Tide Runner (World).sms")));
+    }
+
+    [TestCase("sms", "odd.sms", 2047, "TooSmall")]
+    [TestCase("sms", "odd.sms", 4194305, "TooLarge")]
+    [TestCase("md", "odd.md", 8191, "TooSmall")]
+    [TestCase("md", "odd.md", 16777217, "TooLarge")]
+    public async Task Sega_OutsideTheSizeLimits_Fails(string system, string name, int size, string reason)
+    {
+        var result = await IngestAsync(Drop(system, name, GameGear(size, 151, header: false)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, reason)));
+    }
+
+    [Test]
+    public async Task MasterSystem_DatMatch_IsIngestedWithItsHeader()
+    {
+        var result = await IngestAsync(Drop("sms", "harbor.sms", Harbor));
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Ingested));
+        var game = ReadZip(Path.Combine("sms", "H", "Harbor Patrol.zip"));
+        Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("sms", "Harbor Patrol (World).sms")));
+        Assert.That(game.Roms.Single().Header!["offset"]!.GetValue<string>(), Is.EqualTo("7FF0"));
+    }
+
+    [Test]
+    public async Task MasterSystem_UnmatchedWithoutHeader_GoesToReview_AndManualIsStoredAsSms()
+    {
+        var item = await ReviewAsync("sms", "Harbor Patrol Hack.sms", GameGear(32768, 152, header: false));
+        Assert.That(item.Header, Is.Null);
+
+        var rom = await ResolveGameGearAsync(item, GameGearManual("Harbor Patrol Hack"));
+
+        Assert.That((rom.FileName, rom.OriginalFileName), Is.EqualTo(("Harbor Patrol Hack (World).sms", "Harbor Patrol Hack.sms")));
+    }
+
+    [Test]
+    public async Task MegaDrive_UnmatchedHeaderedBin_GoesToReview_WithTheHeaderTitle_AndManualIsStoredAsMd()
+    {
+        var item = await ReviewAsync("md", "mystery.bin", new SyntheticMegaDriveRomBuilder { Seed = 161, Size = 65536 }.Build());
+        Assert.That(item.Suggestions, Does.Contain("Turbo Comet"));
+
+        var rom = await ResolveGameGearAsync(item, GameGearManual("Turbo Comet Proto"));
+
+        Assert.That((rom.FileName, rom.OriginalFileName), Is.EqualTo(("Turbo Comet Proto (World).md", "mystery.bin")));
+    }
+
+    [Test]
+    public async Task MegaDrive_DatMatchedBin_IsStoredAsMd_WithItsHeader()
+    {
+        var result = await IngestAsync(Drop("md", "comet.bin", Comet));
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Ingested));
+        var game = ReadZip(Path.Combine("md", "T", "Turbo Comet.zip"));
+        Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("md", "Turbo Comet (USA, Europe).md")));
+        Assert.That(game.Roms.Single().Header!["serial"]!.GetValue<string>(), Is.EqualTo("GM 00001234-00"));
+    }
+
+    [Test]
+    public async Task MegaDrive_ZipHoldingADatGame_IsIngested()
+    {
+        var path = Zip("md", "comet.zip", ("Turbo Comet (USA, Europe).md", Comet));
+
+        await RunIngestJobAsync();
+
+        Assert.That(File.Exists(path), Is.False, "fully ingested archive is deleted");
+        Assert.That(ReadZip(Path.Combine("md", "T", "Turbo Comet.zip")).System, Is.EqualTo("md"));
+    }
+
+    [Test]
+    public async Task MegaDrive_ZipWithAReadmeMd_IngestsTheGame_AndFailsTheReadmeAsTooSmall()
+    {
+        var path = Zip("md", "comet.zip", ("Turbo Comet (USA, Europe).md", Comet), ("README.md", new byte[100]));
+
+        await RunIngestJobAsync();
+
+        Assert.That(ReadZip(Path.Combine("md", "T", "Turbo Comet.zip")).System, Is.EqualTo("md"));
+        var failed = Path.Combine(Ingest("md"), "_failed", "comet.zip");
+        Assert.That((File.Exists(path), File.Exists(failed)), Is.EqualTo((false, true)));
+        Assert.That(File.ReadAllText(failed + ".error.txt"),
+            Does.Contain("Turbo Comet (USA, Europe).md: Ingested").And.Contain("README.md: Failed TooSmall"));
     }
 
     private static byte[] Coleco(int size, int seed, byte first, byte second)

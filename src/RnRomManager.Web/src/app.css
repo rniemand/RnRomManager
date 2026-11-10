@@ -103,3 +103,17 @@
 	color: #fff !important;
 	background-color: var(--bs-gg) !important;
 }
+
+/* Master System and Mega Drive system colours (U1): same in both themes; white on them is AA (5.9:1 and 9.9:1). */
+:root {
+	--bs-sms: #c8102e;
+	--bs-md: #5b2a86;
+}
+.text-bg-sms {
+	color: #fff !important;
+	background-color: var(--bs-sms) !important;
+}
+.text-bg-md {
+	color: #fff !important;
+	background-color: var(--bs-md) !important;
+}

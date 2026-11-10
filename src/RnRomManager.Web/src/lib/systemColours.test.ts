@@ -11,9 +11,11 @@ describe('systemColour', () => {
 		expect(systemColour('a2600')).toEqual({ name: 'a2600', foreground: '#fff' });
 		expect(systemColour('coleco')).toEqual({ name: 'coleco', foreground: '#fff' });
 		expect(systemColour('gg')).toEqual({ name: 'gg', foreground: '#fff' });
+		expect(systemColour('sms')).toEqual({ name: 'sms', foreground: '#fff' });
+		expect(systemColour('md')).toEqual({ name: 'md', foreground: '#fff' });
 	});
 
 	it('keeps an unknown system neutral', () => {
-		expect(systemColour('md')).toBe(fallbackColour);
+		expect(systemColour('sg1000')).toBe(fallbackColour);
 	});
 });

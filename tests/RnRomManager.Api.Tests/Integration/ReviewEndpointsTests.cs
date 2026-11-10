@@ -56,6 +56,8 @@ public class ReviewEndpointsTests
             [IngestSeeder.Atari2600Dat] = [],
             [IngestSeeder.ColecoVisionDat] = [],
             [IngestSeeder.GameGearDat] = [],
+            [IngestSeeder.MasterSystemDat] = [],
+            [IngestSeeder.MegaDriveDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)
             { ReleaseYear = 1989, Developers = ["Nintendo"], Publishers = ["Nintendo"], Genres = ["Puzzle"] }],
             ["Nintendo - Game Boy Color"] = [new FixtureGame("Color Game (World)", "Color Game (World).gbc", Color)],
@@ -391,7 +393,7 @@ public class ReviewEndpointsTests
         Assert.That(problem.GetProperty("errors").EnumerateObject(), Is.Not.Empty);
     }
 
-    [TestCase("system=md", "system")]
+    [TestCase("system=sg1000", "system")]
     [TestCase("reason=Failed", "reason")]
     public async Task ListFilter_InvalidValue_Is400WithFieldError(string query, string field)
     {
@@ -647,6 +649,8 @@ public class ReviewEndpointsTests
             [IngestSeeder.Atari2600Dat] = [],
             [IngestSeeder.ColecoVisionDat] = [],
             [IngestSeeder.GameGearDat] = [],
+            [IngestSeeder.MasterSystemDat] = [],
+            [IngestSeeder.MegaDriveDat] = [],
             [Gb] = Enumerable.Range(1, 25).Select(i => new FixtureGame($"Demo {i} (World)", $"Demo {i} (World).gb", new SyntheticRomBuilder { Seed = 1000 + i }.Build())).ToArray(),
             ["Nintendo - Game Boy Color"] = [],
         });

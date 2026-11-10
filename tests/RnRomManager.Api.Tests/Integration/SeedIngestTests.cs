@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 14, 12)]
-    [TestCase(SeedSet.Full, 214, 212)]
+    [TestCase(SeedSet.Basic, 16, 14)]
+    [TestCase(SeedSet.Full, 216, 214)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -163,6 +163,43 @@ public class SeedIngestTests
             }
             Assert.That(rom.Header!["region"]!.GetValue<string>(), Is.EqualTo("GG Export"));
             Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1992, new[] { "Racing" })));
+        }
+        var harbor = Directory.GetFiles(Path.Combine(factory.Root, "roms", "sms", "H"), "*.zip").Single();
+        using (var zip = LibraryZip.Open(harbor, factory.Services.GetRequiredService<InfoJsonReader>()))
+        {
+            var game = zip.InfoJson!.Game!;
+            var rom = game.Roms.Single();
+            var seeded = new byte[32768];
+            new Random(1501).NextBytes(seeded);
+            "TMR SEGA"u8.CopyTo(seeded.AsSpan(0x7FF0));
+            seeded[0x7FFF] = 0x4C;
+            Assert.That((game.Title, game.System, rom.FileName, rom.OriginalFileName),
+                Is.EqualTo(("Harbor Patrol", "sms", "Harbor Patrol (World).sms", "01-harbor-patrol.sms")));
+            using (var entry = zip.OpenEntry(LibraryZip.RomEntry("Harbor Patrol (World).sms"), seeded.Length))
+            using (var bytes = new MemoryStream())
+            {
+                entry.CopyTo(bytes);
+                Assert.That(bytes.ToArray(), Is.EqualTo(seeded));
+            }
+            Assert.That(rom.Header!["region"]!.GetValue<string>(), Is.EqualTo("SMS Export"));
+            Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1988, new[] { "Action" })));
+        }
+        var comet = Directory.GetFiles(Path.Combine(factory.Root, "roms", "md", "T"), "*.zip").Single();
+        using (var zip = LibraryZip.Open(comet, factory.Services.GetRequiredService<InfoJsonReader>()))
+        {
+            var game = zip.InfoJson!.Game!;
+            var rom = game.Roms.Single();
+            var seeded = new SyntheticMegaDriveRomBuilder { Seed = 1601, Size = 524288 }.Build();
+            Assert.That((game.Title, game.System, rom.FileName, rom.OriginalFileName),
+                Is.EqualTo(("Turbo Comet", "md", "Turbo Comet (USA, Europe).md", "01-turbo-comet.gen")));
+            using (var entry = zip.OpenEntry(LibraryZip.RomEntry("Turbo Comet (USA, Europe).md"), seeded.Length))
+            using (var bytes = new MemoryStream())
+            {
+                entry.CopyTo(bytes);
+                Assert.That(bytes.ToArray(), Is.EqualTo(seeded));
+            }
+            Assert.That(rom.Header!["serial"]!.GetValue<string>(), Is.EqualTo("GM 00001234-00"));
+            Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1991, new[] { "Racing" })));
         }
         var review = await factory.Services.GetRequiredService<IIngestReviewRepository>().ListAsync("Pending", 1, 48, default);
         Assert.That(review.Total, Is.EqualTo(2));

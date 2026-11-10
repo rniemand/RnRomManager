@@ -1,6 +1,6 @@
 # RnRomManager
 
-A self-hosted web app for managing a personal backup collection of **Game Boy**, **Game Boy Color**, **Game Boy Advance**, **Nintendo 64**, **Nintendo Entertainment System**, **Super Nintendo Entertainment System**, **Atari 2600**, **ColecoVision** and **Game Gear** ROMs.
+A self-hosted web app for managing a personal backup collection of **Game Boy**, **Game Boy Color**, **Game Boy Advance**, **Nintendo 64**, **Nintendo Entertainment System**, **Super Nintendo Entertainment System**, **Atari 2600**, **ColecoVision**, **Game Gear**, **Master System** and **Mega Drive / Genesis** ROMs.
 
 Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder. RnRomManager identifies each one against the [No-Intro](https://no-intro.org/) DATs, names it consistently, groups every region and revision of a game together, fetches box art and screenshots, and stores each game as one self-describing ZIP in a tidy `roms/<system>/<letter>/` layout. A MariaDB database mirrors the library for fast browsing, and a scheduled integrity checker keeps the two in sync.
 
@@ -78,9 +78,9 @@ docker compose up -d
 
 1. Open `http://<host>:8080`, sign in as `admin` with `ADMIN_PASSWORD`, and choose a new password.
 2. **Admin → DATs → Refresh DATs** downloads the game databases (once, and whenever you want newer ones).
-3. Copy your `.gb` / `.gbc` files into `data/ingest/gb/`, your `.gba` files into `data/ingest/gba/` your `.z64` / `.v64` / `.n64` files into `data/ingest/n64/` your headered `.nes` files into `data/ingest/nes/` your `.sfc` / `.smc` files into `data/ingest/snes/` your `.a26` / `.bin` files into `data/ingest/a2600/` your `.col` / `.rom` / `.bin` files into `data/ingest/coleco/` and your `.gg` / `.sms` files into `data/ingest/gg/`, then press **Ingestion → Import all**.
+3. Copy your `.gb` / `.gbc` files into `data/ingest/gb/`, your `.gba` files into `data/ingest/gba/` your `.z64` / `.v64` / `.n64` files into `data/ingest/n64/` your headered `.nes` files into `data/ingest/nes/` your `.sfc` / `.smc` files into `data/ingest/snes/` your `.a26` / `.bin` files into `data/ingest/a2600/` your `.col` / `.rom` / `.bin` files into `data/ingest/coleco/` your `.gg` / `.sms` files into `data/ingest/gg/` your Master System `.sms` files into `data/ingest/sms/` and your Mega Drive / Genesis `.md` / `.bin` / `.gen` files into `data/ingest/md/`, then press **Ingestion → Import all**.
 
-Upgrading from a version without Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, ColecoVision or Game Gear? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`).
+Upgrading from a version without Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, ColecoVision, Game Gear, Master System or Mega Drive / Genesis? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`).
 
 Set `user:` to the owner of `./data` (`id -u`:`id -g`). An existing MariaDB server, reverse proxies, backups, upgrades and password recovery are covered in the [deployment guide](https://github.com/rniemand/RnRomManager/blob/main/docs/deployment.md).
 
