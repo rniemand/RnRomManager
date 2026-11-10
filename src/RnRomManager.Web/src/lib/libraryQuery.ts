@@ -95,6 +95,19 @@ export function gamesApiUrl(filters: LibraryFilters, scope?: QueryScope): string
 	return `/api/games?${params}`;
 }
 
+/** F3: `GET /api/games/facets` for the filters only, so paging and sorting never change it (no refetch). */
+export function facetsApiUrl(filters: LibraryFilters): string {
+	return `/api/games/facets${toSearch({ ...filters, sort: 'title', dir: null, page: 1 })}`;
+}
+
+/** Facet counts by option key; null while loading or after a failed call. */
+export type FacetCounts = Record<string, number> | null;
+
+/** F3: `Game Boy (12)`; an option missing from the counts is `(0)`; no counts yet → the plain name. */
+export function optionLabel(name: string, counts: FacetCounts, key: string): string {
+	return counts ? `${name} (${counts[key] ?? 0})` : name;
+}
+
 export function hasFilters(filters: LibraryFilters): boolean {
 	return !!(filters.system || filters.letter || filters.region || filters.q || filters.favourite);
 }

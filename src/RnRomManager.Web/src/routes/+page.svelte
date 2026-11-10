@@ -5,7 +5,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { GameListItem, Page, SystemInfo } from '#lib/api/types.js';
+	import type { GameFacets, GameListItem, Page, SystemInfo } from '#lib/api/types.js';
 	import CollectionPickerModal from '#lib/components/CollectionPickerModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
@@ -14,11 +14,14 @@
 	import Loading from '#lib/components/Loading.svelte';
 	import {
 		defaultDir,
+		facetsApiUrl,
 		gamesApiUrl,
 		hasFilters,
 		letters,
 		libraryPageSize,
 		normaliseSearch,
+		optionLabel,
+		type FacetCounts,
 		parseFilters,
 		toSearch,
 		type LibraryFilters,
@@ -113,6 +116,30 @@
 		);
 	});
 
+	// F3: a string, so a page or sort change (same URL) doesn't rerun the facets effect.
+	const facetsUrl = $derived(facetsApiUrl(filters));
+	let facets = $state<{ systems: FacetCounts; regions: FacetCounts; letters: FacetCounts }>({
+		systems: null,
+		regions: null,
+		letters: null
+	});
+
+	$effect(() => {
+		const url = facetsUrl;
+		const controller = new AbortController();
+		facets = { systems: null, regions: null, letters: null };
+		api.get<GameFacets>(url, { signal: controller.signal }).then(
+			(f) =>
+				(facets = {
+					systems: Object.fromEntries(f.systems.map((s) => [s.id, s.count])),
+					regions: Object.fromEntries(f.regions.map((r) => [r.region, r.count])),
+					letters: Object.fromEntries(f.letters.map((l) => [l.letter, l.count]))
+				}),
+			() => {} // counts are a convenience: options just show none; the games call reports errors
+		);
+		return () => controller.abort();
+	});
+
 	$effect(() => {
 		const url = gamesApiUrl(filters);
 		void reload;
@@ -156,7 +183,9 @@
 		>
 			<option value="">All systems</option>
 			{#each systems as system (system.id)}
-				<option value={system.id}>{system.displayName}</option>
+				<option value={system.id}
+					>{optionLabel(system.displayName, facets.systems, system.id)}</option
+				>
 			{/each}
 		</select>
 	</div>
@@ -170,10 +199,12 @@
 		>
 			<option value="">Any region</option>
 			{#each regions as region (region)}
-				<option value={region}>{region}</option>
+				<option value={region}>{optionLabel(region, facets.regions, region)}</option>
 			{/each}
 			{#if filters.region && !regions.includes(filters.region)}
-				<option value={filters.region}>{filters.region}</option>
+				<option value={filters.region}
+					>{optionLabel(filters.region, facets.regions, filters.region)}</option
+				>
 			{/if}
 		</select>
 	</div>
@@ -187,7 +218,7 @@
 		>
 			<option value="">All</option>
 			{#each letters as letter (letter)}
-				<option value={letter}>{letter}</option>
+				<option value={letter}>{optionLabel(letter, facets.letters, letter)}</option>
 			{/each}
 		</select>
 	</div>

@@ -126,3 +126,27 @@
 	color: #000 !important;
 	background-color: var(--bs-s32x) !important;
 }
+
+/* Library cards (L1, L2): a step lighter than the body in dark mode; a small lift and shadow on hover or keyboard focus. */
+[data-bs-theme='dark'] .game-card {
+	--bs-card-bg: var(--bs-tertiary-bg);
+}
+.game-card {
+	transition:
+		transform 150ms ease,
+		box-shadow 150ms ease;
+}
+.game-card:hover,
+.game-card:focus-within {
+	transform: translateY(-2px);
+	box-shadow: var(--bs-box-shadow-sm);
+}
+@media (prefers-reduced-motion: reduce) {
+	.game-card {
+		transition: none;
+	}
+	.game-card:hover,
+	.game-card:focus-within {
+		transform: none;
+	}
+}

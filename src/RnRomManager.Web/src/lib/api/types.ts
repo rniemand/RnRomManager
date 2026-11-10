@@ -41,6 +41,13 @@ export interface SystemInfo {
 	regions: string[];
 }
 
+/** `GET /api/games/facets` (F1): per option, the games matching every other active filter. */
+export interface GameFacets {
+	systems: { id: string; count: number }[];
+	regions: { region: string; count: number }[];
+	letters: { letter: string; count: number }[];
+}
+
 /** One item of `GET /api/games` (spec §23). */
 export interface GameListItem {
 	id: string;

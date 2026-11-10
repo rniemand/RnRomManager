@@ -54,6 +54,8 @@ describe('Library bulk add to a collection (B26)', () => {
 			if (url !== '/api/auth/antiforgery') calls.push({ key, body: init?.body as string });
 			let body: unknown = null;
 			if (url === '/api/systems') body = [];
+			else if (url.startsWith('/api/games/facets'))
+				body = { systems: [], regions: [], letters: [] };
 			else if (url.startsWith('/api/games?'))
 				body = {
 					items: [game('g1', 'Alpha'), game('g2', 'Bravo'), game('g3', 'Charlie')],
@@ -77,6 +79,26 @@ describe('Library bulk add to a collection (B26)', () => {
 		});
 	});
 	afterEach(() => vi.unstubAllGlobals());
+
+	const facetCalls = () =>
+		calls.filter((c) => c.key.startsWith('GET /api/games/facets')).map((c) => c.key);
+
+	it('refetches the filter counts on a filter change only, not on a page or sort change (F3)', async () => {
+		render(LibraryPage);
+		await screen.findByText('Alpha');
+		expect(facetCalls()).toEqual(['GET /api/games/facets']);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+		await screen.findByText('Page 2 of 3');
+		await fireEvent.change(screen.getByLabelText('Sort by'), { target: { value: 'year' } });
+		await screen.findByText('Alpha');
+		expect(facetCalls()).toEqual(['GET /api/games/facets']);
+
+		await fireEvent.change(screen.getByLabelText('Letter'), { target: { value: 'B' } });
+		await vi.waitFor(() =>
+			expect(facetCalls()).toEqual(['GET /api/games/facets', 'GET /api/games/facets?letter=B'])
+		);
+	});
 
 	const box = (title: string) =>
 		screen.getByRole('checkbox', { name: `Select ${title}` }) as HTMLInputElement;
