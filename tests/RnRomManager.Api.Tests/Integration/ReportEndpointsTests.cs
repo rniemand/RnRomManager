@@ -48,6 +48,7 @@ public class ReportEndpointsTests
             [IngestSeeder.MasterSystemDat] = [],
             [IngestSeeder.MegaDriveDat] = [],
             [IngestSeeder.Sega32xDat] = [],
+            [IngestSeeder.TurboGrafx16Dat] = [],
             [Gb] =
             [
                 new FixtureGame("Alpha (World)", "Alpha (World).gb", Alpha),

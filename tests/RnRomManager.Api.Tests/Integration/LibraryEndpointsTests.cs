@@ -50,6 +50,7 @@ public class LibraryEndpointsTests
             [IngestSeeder.MasterSystemDat] = [],
             [IngestSeeder.MegaDriveDat] = [],
             [IngestSeeder.Sega32xDat] = [],
+            [IngestSeeder.TurboGrafx16Dat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld) { ReleaseYear = 1989, Developers = ["Nintendo"], Genres = ["Puzzle"] },
@@ -129,7 +130,7 @@ public class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "s32x", "a2600", "coleco", "gb", "gba", "gbc", "gg", "sms", "md", "n64", "nes", "snes" }));
+            Is.EqualTo(new[] { "s32x", "a2600", "coleco", "gb", "gba", "gbc", "gg", "sms", "md", "n64", "nes", "snes", "tg16" }));
         JsonElement Find(string id) => systems.EnumerateArray().Single(s => s.GetProperty("id").GetString() == id);
         var gb = Find("gb");
         Assert.That(gb.GetProperty("displayName").GetString(), Is.EqualTo("Game Boy"));
@@ -140,7 +141,7 @@ public class LibraryEndpointsTests
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
             "32X", "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo Entertainment System",
-            "Super Nintendo Entertainment System"
+            "Super Nintendo Entertainment System", "TurboGrafx-16"
         }));
     }
 

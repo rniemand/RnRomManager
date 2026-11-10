@@ -102,7 +102,7 @@ test('ingestion of the seeded Basic set', async () => {
 	await expect(page).toHaveURL(/\/ingestion\?tab=runs$/);
 	await expect(page.getByRole('button', { name: 'Import all' })).toBeVisible();
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
-	await expect(run).toContainText('Ingested 17 · Duplicate 1 · Review 2 · Failed 1', {
+	await expect(run).toContainText('Ingested 18 · Duplicate 1 · Review 2 · Failed 1', {
 		timeout: 60_000
 	});
 
@@ -155,7 +155,7 @@ test('reports and the ingest audit trail', async () => {
 	const ingested = page
 		.getByRole('row')
 		.filter({ has: page.getByRole('cell', { name: 'Ingested', exact: true }) });
-	await expect(ingested).toHaveCount(17);
+	await expect(ingested).toHaveCount(18);
 	await expect(
 		page
 			.getByRole('row')
@@ -168,7 +168,7 @@ test('reports and the ingest audit trail', async () => {
 
 test('browse, search and filter the library', async () => {
 	await page.goto('/');
-	await expect(page.getByText('15 games')).toBeVisible();
+	await expect(page.getByText('16 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
 	// S1: systems in display-name order, "All systems" first; F3: each with its game count.
 	await expect(page.getByLabel('System').locator('option')).toHaveText([
@@ -184,7 +184,8 @@ test('browse, search and filter the library', async () => {
 		'Mega Drive / Genesis (1)',
 		'Nintendo 64 (1)',
 		'Nintendo Entertainment System (1)',
-		'Super Nintendo Entertainment System (1)'
+		'Super Nintendo Entertainment System (1)',
+		'TurboGrafx-16 (1)'
 	]);
 	await expect(page.getByLabel('Letter').locator('option').nth(1)).toHaveText(/^# \(\d+\)$/);
 
@@ -254,6 +255,12 @@ test('browse, search and filter the library', async () => {
 	await expect(page).toHaveURL(/system=s32x/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Star Relay', exact: true })).toBeVisible();
+
+	// T2: seeded as a copier-headered .pce, stripped and matched to the TurboGrafx-16 DAT.
+	await page.getByLabel('System').selectOption('tg16');
+	await expect(page).toHaveURL(/system=tg16/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Neon Circuit', exact: true })).toBeVisible();
 
 	// "Quest, The" is shown as "The Quest" but filed under Q (§5, §6.1).
 	await page.goto('/');
@@ -352,7 +359,7 @@ test('game detail + downloads', async () => {
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await page.goto('/');
-	await expect(page.getByText('15 games')).toBeVisible();
+	await expect(page.getByText('16 games')).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await expect(dialog()).toBeVisible();
 	await expect(dialog().getByRole('combobox')).toBeFocused();
@@ -481,7 +488,7 @@ test('collections: create, add from game page and bulk select, search, remove, d
 	await expect(page).toHaveURL(/\/collections$/);
 	await expect(page.getByText('You have no collections yet.')).toBeVisible();
 	await page.goto('/');
-	await expect(page.getByText('15 games')).toBeVisible();
+	await expect(page.getByText('16 games')).toBeVisible();
 });
 
 test('review queue: resolve with a suggestion', async () => {

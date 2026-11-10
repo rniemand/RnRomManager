@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (TurboGrafx-16). Made for this project; MIT licensed like the rest of the repo.
+       Exported to tg16.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#e3f1f0"/>
+  <!-- flat, card-sized HuCard -->
+  <rect x="96" y="112" width="320" height="300" rx="18" fill="#1d2528" stroke="#0e1314" stroke-width="4"/>
+  <!-- label -->
+  <rect x="120" y="136" width="272" height="200" rx="8" fill="#0b7a75"/>
+  <rect x="140" y="214" width="232" height="72" rx="4" fill="#fafdfc"/>
+  <text x="256" y="266" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="46" font-weight="800" fill="#0b7a75">TG16</text>
+  <text x="256" y="188" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="20" font-weight="700" fill="#fafdfc" letter-spacing="3">HUCARD</text>
+  <!-- contacts along the bottom edge -->
+  <g fill="#c9a24a">
+    <rect x="138" y="360" width="10" height="40" rx="2"/>
+    <rect x="160" y="360" width="10" height="40" rx="2"/>
+    <rect x="182" y="360" width="10" height="40" rx="2"/>
+    <rect x="204" y="360" width="10" height="40" rx="2"/>
+    <rect x="226" y="360" width="10" height="40" rx="2"/>
+    <rect x="248" y="360" width="10" height="40" rx="2"/>
+    <rect x="270" y="360" width="10" height="40" rx="2"/>
+    <rect x="292" y="360" width="10" height="40" rx="2"/>
+    <rect x="314" y="360" width="10" height="40" rx="2"/>
+    <rect x="336" y="360" width="10" height="40" rx="2"/>
+    <rect x="358" y="360" width="10" height="40" rx="2"/>
+  </g>
+</svg>

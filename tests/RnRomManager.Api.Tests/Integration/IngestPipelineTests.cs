@@ -43,6 +43,7 @@ public class IngestPipelineTests
     private static readonly byte[] Harbor = GameGear(32768, 150, header: true);
     private static readonly byte[] Comet = new SyntheticMegaDriveRomBuilder { Seed = 160, Size = 65536 }.Build();
     private static readonly byte[] Relay = new SyntheticMegaDriveRomBuilder { Seed = 170, Size = 65536, SystemType = "SEGA 32X", OverseasTitle = "STAR RELAY" }.Build();
+    private static readonly byte[] Circuit = Atari(262144, 180);
     private ApiFactory _factory = null!;
     private ILibraryMirror? _mirrorOverride;
     private Action<IServiceCollection>? _extraServices;
@@ -99,6 +100,7 @@ public class IngestPipelineTests
             [IngestSeeder.MasterSystemDat] = [new FixtureGame("Harbor Patrol (World)", "Harbor Patrol (World).sms", Harbor)],
             [IngestSeeder.MegaDriveDat] = [new FixtureGame("Turbo Comet (USA, Europe)", "Turbo Comet (USA, Europe).md", Comet)],
             [IngestSeeder.Sega32xDat] = [new FixtureGame("Star Relay (USA)", "Star Relay (USA).32x", Relay)],
+            [IngestSeeder.TurboGrafx16Dat] = [new FixtureGame("Neon Circuit (USA)", "Neon Circuit (USA).pce", Circuit)],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },
@@ -823,6 +825,65 @@ public class IngestPipelineTests
         var row = (await Service<IGameRepository>().GetAsync(resolved.GameId!.Value, default))!;
         var rom = ReadZip(row.ZipPath).Roms.Single();
         Assert.That((Path.GetExtension(rom.FileName), rom.Metadata.Sha1, rom.OriginalFileName), Is.EqualTo((".sfc", stripped, "hack.smc")));
+    }
+
+    private static byte[] CopierHeadered(byte[] rom) => [.. new byte[512], .. rom];
+
+    [TestCase("md", "circuit.pce")]
+    [TestCase("tg16", "comet.md")]
+    public async Task TurboGrafx16_FileInAnotherFamilysFolder_IsUnsupportedType(string folder, string name)
+    {
+        var result = await IngestAsync(Drop(folder, name, name.EndsWith(".pce") ? Circuit : Comet));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+    }
+
+    [TestCase(73727, "TooSmall")]
+    [TestCase(2621953, "TooLarge")]
+    public async Task TurboGrafx16_OutsideTheSizeLimits_Fails(int size, string reason)
+    {
+        var result = await IngestAsync(Drop("tg16", "odd.pce", Atari(size, 181)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, reason)));
+    }
+
+    [Test]
+    public async Task TurboGrafx16_Unmatched_GoesToReview_WithoutHeader_AndManualIsStoredAsPce()
+    {
+        var item = await ReviewAsync("tg16", "Neon Circuit Hack.pce", Atari(262144, 182));
+        Assert.That(item.Header, Is.Null);
+
+        var rom = await ResolveGameGearAsync(item, GameGearManual("Neon Circuit Hack"));
+
+        Assert.That((rom.FileName, rom.OriginalFileName), Is.EqualTo(("Neon Circuit Hack (World).pce", "Neon Circuit Hack.pce")));
+    }
+
+    [Test]
+    public async Task TurboGrafx16_HeaderlessThenCopierHeadered_IsOneGameThenDuplicate()
+    {
+        var first = await IngestAsync(Drop("tg16", "circuit.pce", Circuit));
+        var second = await IngestAsync(Drop("tg16", "circuit-headered.pce", CopierHeadered(Circuit)));
+
+        Assert.That((first!.Outcome, second!.Outcome), Is.EqualTo((IngestOutcome.Ingested, IngestOutcome.Duplicate)));
+        Assert.That(second.Sha1, Is.EqualTo(first.Sha1));
+        var game = ReadZip(Path.Combine("tg16", "N", "Neon Circuit.zip"));
+        Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("tg16", "Neon Circuit (USA).pce")));
+        Assert.That(game.Roms.Single().Header, Is.Null);
+    }
+
+    [Test]
+    public async Task TurboGrafx16_UnmatchedCopierHeadered_ResolvedInReview_IsStoredAsPceWithTheStrippedBytes()
+    {
+        var hack = Atari(262144, 183);
+        var stripped = Convert.ToHexStringLower(SHA1.HashData(hack));
+        var result = await IngestAsync(Drop("tg16", "hack.pce", CopierHeadered(hack)));
+        Assert.That((result!.Outcome, result.Reason, result.Sha1), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", stripped)));
+        var item = (await Service<IIngestReviewRepository>().GetBySha1Async(stripped, default))!;
+        Assert.That(item.SizeBytes, Is.EqualTo(262144));
+
+        var rom = await ResolveGameGearAsync(item, GameGearManual("Neon Circuit Hack"));
+
+        Assert.That((rom.FileName, rom.Metadata.Sha1, rom.OriginalFileName), Is.EqualTo(("Neon Circuit Hack (World).pce", stripped, "hack.pce")));
     }
 
     [TestCase("nes", "lanes.a26")]

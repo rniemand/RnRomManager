@@ -10,6 +10,7 @@
     <Project Path="src/RnRomManager.Systems.Atari/RnRomManager.Systems.Atari.csproj" />
     <Project Path="src/RnRomManager.Systems.Coleco/RnRomManager.Systems.Coleco.csproj" />
     <Project Path="src/RnRomManager.Systems.Sega/RnRomManager.Systems.Sega.csproj" />
+    <Project Path="src/RnRomManager.Systems.Nec/RnRomManager.Systems.Nec.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/RnRomManager.Api.Tests/RnRomManager.Api.Tests.csproj" />
@@ -22,6 +23,7 @@
     <Project Path="tests/RnRomManager.Systems.Atari.Tests/RnRomManager.Systems.Atari.Tests.csproj" />
     <Project Path="tests/RnRomManager.Systems.Coleco.Tests/RnRomManager.Systems.Coleco.Tests.csproj" />
     <Project Path="tests/RnRomManager.Systems.Sega.Tests/RnRomManager.Systems.Sega.Tests.csproj" />
+    <Project Path="tests/RnRomManager.Systems.Nec.Tests/RnRomManager.Systems.Nec.Tests.csproj" />
     <Project Path="tests/RnRomManager.TestData/RnRomManager.TestData.csproj" />
   </Folder>
 </Solution>

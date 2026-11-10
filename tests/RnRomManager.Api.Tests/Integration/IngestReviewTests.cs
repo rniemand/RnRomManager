@@ -52,6 +52,7 @@ public class IngestReviewTests
             [IngestSeeder.MasterSystemDat] = [],
             [IngestSeeder.MegaDriveDat] = [],
             [IngestSeeder.Sega32xDat] = [],
+            [IngestSeeder.TurboGrafx16Dat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", bytes)],
             ["Nintendo - Game Boy Color"] = [],
         });
@@ -118,6 +119,7 @@ public class IngestReviewTests
             [IngestSeeder.MasterSystemDat] = [],
             [IngestSeeder.MegaDriveDat] = [],
             [IngestSeeder.Sega32xDat] = [],
+            [IngestSeeder.TurboGrafx16Dat] = [],
             [Gb] = [new FixtureGame("Tetris Deluxe (World)", "Tetris Deluxe (World).gb", Known)],
             ["Nintendo - Game Boy Color"] = [],
         });
