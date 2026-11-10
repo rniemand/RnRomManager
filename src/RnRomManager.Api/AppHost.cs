@@ -31,6 +31,7 @@ using RnRomManager.Systems.Nes;
 using RnRomManager.Systems.Atari;
 using RnRomManager.Systems.Coleco;
 using RnRomManager.Systems.Sega;
+using RnRomManager.Systems.Nec;
 using RnRomManager.Systems.Snes;
 using RnRomManager.Systems.Nintendo64;
 
@@ -165,6 +166,7 @@ public static class AppHost
         builder.Services.AddSystemHandler<MasterSystemHandler>();
         builder.Services.AddSystemHandler<MegaDriveHandler>();
         builder.Services.AddSystemHandler<Sega32xHandler>();
+        builder.Services.AddSystemHandler<TurboGrafx16Handler>();
 
         // Keys live in the DB so cookies survive restarts (spec §9.2).
         builder.Services.AddSingleton<IXmlRepository, DbXmlRepository>();

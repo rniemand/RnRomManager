@@ -16,7 +16,8 @@ export interface SystemColour {
 		| 'gg'
 		| 'sms'
 		| 'md'
-		| 's32x';
+		| 's32x'
+		| 'tg16';
 	foreground: '#fff' | '#000';
 }
 
@@ -32,7 +33,8 @@ export const systemColours: Record<string, SystemColour> = {
 	gg: { name: 'gg', foreground: '#fff' },
 	sms: { name: 'sms', foreground: '#fff' },
 	md: { name: 'md', foreground: '#fff' },
-	s32x: { name: 's32x', foreground: '#000' }
+	s32x: { name: 's32x', foreground: '#000' },
+	tg16: { name: 'tg16', foreground: '#fff' }
 };
 
 /** Unknown systems stay neutral. */

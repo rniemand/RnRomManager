@@ -46,6 +46,7 @@ public class LibraryEditTests
             [IngestSeeder.MasterSystemDat] = [],
             [IngestSeeder.MegaDriveDat] = [],
             [IngestSeeder.Sega32xDat] = [],
+            [IngestSeeder.TurboGrafx16Dat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld) { ReleaseYear = 1989, Developers = ["Nintendo"] },

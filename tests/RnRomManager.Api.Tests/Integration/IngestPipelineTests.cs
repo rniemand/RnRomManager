@@ -99,6 +99,7 @@ public class IngestPipelineTests
             [IngestSeeder.MasterSystemDat] = [new FixtureGame("Harbor Patrol (World)", "Harbor Patrol (World).sms", Harbor)],
             [IngestSeeder.MegaDriveDat] = [new FixtureGame("Turbo Comet (USA, Europe)", "Turbo Comet (USA, Europe).md", Comet)],
             [IngestSeeder.Sega32xDat] = [new FixtureGame("Star Relay (USA)", "Star Relay (USA).32x", Relay)],
+            [IngestSeeder.TurboGrafx16Dat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },

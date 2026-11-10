@@ -33,7 +33,7 @@ public class IngestSeederTests
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "sms", "01-harbor-patrol.sms"))[0x7FF0..0x7FF8], Is.EqualTo("TMR SEGA"u8.ToArray()));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "md", "01-turbo-comet.gen"))[0x100..0x104], Is.EqualTo("SEGA"u8.ToArray()));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "s32x", "01-star-relay.32x"))[0x100..0x108], Is.EqualTo("SEGA 32X"u8.ToArray()));
-        Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(60));
+        Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(65));
     }
 
     [Test]
