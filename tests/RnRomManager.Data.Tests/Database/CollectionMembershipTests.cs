@@ -179,4 +179,27 @@ public class CollectionMembershipTests
         Assert.That((await _games.ListAsync(new GameQuery { CollectionId = id, PageSize = 2 }, default)).Total, Is.EqualTo(3));
         Assert.That(await TitlesAsync(new GameQuery { CollectionId = Guid.NewGuid() }), Is.Empty);
     }
+
+    [Test]
+    public async Task NotInCollection_ExcludesMembers_KeepsOtherFilters_AndIgnoresOrphans_P1()
+    {
+        var alpha = await AddGameAsync("Alpha");
+        await AddGameAsync("Bravo");
+        await AddGameAsync("Brick");
+        var gone = await AddGameAsync("Gone");
+        var id = await NewCollectionAsync();
+        var other = await NewCollectionAsync("Other");
+        await _collections.AddGamesAsync(id, [alpha.GameId, gone.GameId], T0, default);
+        await _collections.AddGamesAsync(other, [alpha.GameId], T0, default);
+        await _mirror.DeleteAsync(gone.GameId, default); // its membership row stays as an orphan
+
+        Assert.That(await TitlesAsync(new GameQuery { NotInCollectionId = id }), Is.EqualTo(new[] { "Bravo", "Brick" }));
+        Assert.That(await TitlesAsync(new GameQuery { NotInCollectionId = id, Search = "bri" }), Is.EqualTo(new[] { "Brick" }));
+        Assert.That(await TitlesAsync(new GameQuery { NotInCollectionId = id, System = "gb" }), Is.EqualTo(new[] { "Bravo", "Brick" }));
+        Assert.That(await TitlesAsync(new GameQuery { NotInCollectionId = id, System = "gbc" }), Is.Empty);
+        Assert.That((await _games.ListAsync(new GameQuery { NotInCollectionId = id, PageSize = 1 }, default)).Total, Is.EqualTo(2));
+        Assert.That(await TitlesAsync(new GameQuery { CollectionId = id, NotInCollectionId = id }), Is.Empty);
+        Assert.That(await TitlesAsync(new GameQuery { CollectionId = other, NotInCollectionId = id }), Is.Empty, "alpha is in both");
+        Assert.That(await TitlesAsync(new GameQuery { NotInCollectionId = Guid.NewGuid() }), Is.EqualTo(new[] { "Alpha", "Bravo", "Brick" }));
+    }
 }

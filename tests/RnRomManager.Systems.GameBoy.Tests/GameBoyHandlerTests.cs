@@ -14,6 +14,7 @@ public class GameBoyHandlerTests
     {
         ISystemHandler gb = new GameBoyHandler();
 
+        Assert.That(gb.ShortName, Is.EqualTo("GB"));
         Assert.That((gb.Id, gb.DisplayName, gb.Family, gb.DatName), Is.EqualTo(("gb", "Game Boy", "gameboy", "Nintendo - Game Boy")));
         Assert.That(gb.RomExtensions, Is.EqualTo(new[] { ".gb" }));
     }
@@ -23,6 +24,7 @@ public class GameBoyHandlerTests
     {
         ISystemHandler gbc = new GameBoyColorHandler();
 
+        Assert.That(gbc.ShortName, Is.EqualTo("GBC"));
         Assert.That((gbc.Id, gbc.DisplayName, gbc.Family, gbc.DatName), Is.EqualTo(("gbc", "Game Boy Color", "gameboy", "Nintendo - Game Boy Color")));
         Assert.That(gbc.RomExtensions, Is.EqualTo(new[] { ".gbc" }));
     }
@@ -32,6 +34,7 @@ public class GameBoyHandlerTests
     {
         ISystemHandler gba = new GameBoyAdvanceHandler();
 
+        Assert.That(gba.ShortName, Is.EqualTo("GBA"));
         Assert.That((gba.Id, gba.DisplayName, gba.Family, gba.DatName), Is.EqualTo(("gba", "Game Boy Advance", "gba", "Nintendo - Game Boy Advance")));
         Assert.That(gba.RomExtensions, Is.EqualTo(new[] { ".gba" }));
         Assert.That((gba.MinRomSizeBytes, gba.MaxRomSizeBytes), Is.EqualTo((0xC0L, 32L * 1024 * 1024)));

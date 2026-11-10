@@ -49,6 +49,7 @@ const game = (id: string, displayTitle: string, system = 'gb') => ({
 	regions: [],
 	romCount: 1,
 	systemName: system === 'gb' ? 'Game Boy' : 'Nintendo 64',
+	systemShortName: system === 'gb' ? 'GB' : 'N64',
 	rating: null,
 	favourite: false,
 	boxArtUrl: null,
@@ -133,7 +134,7 @@ describe('collection page (B24)', () => {
 		[1, 'Added Mario 64'],
 		[0, 'Already in this collection']
 	])('the typeahead adds the picked game (added %i → %s)', async (added, toast) => {
-		answers['GET /api/games?q=mario&pageSize=10'] = [
+		answers['GET /api/games?q=mario&notInCollection=c1&pageSize=10'] = [
 			{ status: 200, body: pageOf([game('g2', 'Mario 64', 'n64')]) }
 		];
 		answers['POST /api/collections/c1/games'] = [{ status: 200, body: { added } }];

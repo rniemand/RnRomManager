@@ -12,6 +12,7 @@ public sealed class SnesHandler : ISystemHandler
 
     public string Id => SnesHeaderReader.SnesId;
     public string DisplayName => "Super Nintendo Entertainment System";
+    public string ShortName => "SNES";
     public string Family => SnesHeaderReader.SnesId;
 
     /// <summary><c>.sfc</c> first: renamed and resolved files are stored with it.</summary>

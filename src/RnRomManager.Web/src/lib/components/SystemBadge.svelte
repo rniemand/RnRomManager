@@ -9,14 +9,16 @@
 		name?: string;
 		/** Extra classes appended to the badge. */
 		class?: string;
+		/** Tooltip text, e.g. the full name when `name` is the short one. */
+		title?: string;
 	}
 
-	let { system, name, class: extra = '' }: Props = $props();
+	let { system, name, class: extra = '', title }: Props = $props();
 
 	// A fixed colour per system so a list scans at a glance (shared with the Library Size treemap).
 	const colour = $derived(systemColour(system).name);
 </script>
 
-<span class="badge text-bg-{colour} d-inline-flex align-items-center gap-1 {extra}">
+<span class="badge text-bg-{colour} d-inline-flex align-items-center gap-1 {extra}" {title}>
 	<Icon name="system-{system}" />{name ?? system.toUpperCase()}
 </span>

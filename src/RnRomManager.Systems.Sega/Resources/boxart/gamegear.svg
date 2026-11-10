@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Game Gear). Made for this project; MIT licensed like the rest of the repo.
+       Exported to gamegear.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#e3ecf6"/>
+  <!-- wide handheld body -->
+  <rect x="40" y="136" width="432" height="240" rx="96" fill="#26282e" stroke="#111216" stroke-width="4"/>
+  <!-- screen bezel and screen -->
+  <rect x="156" y="164" width="200" height="184" rx="10" fill="#3a3d45"/>
+  <rect x="180" y="190" width="152" height="124" rx="4" fill="#0060a8"/>
+  <text x="256" y="262" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="40" font-weight="800" fill="#ffffff">GG</text>
+  <!-- d-pad -->
+  <g fill="#14151a">
+    <rect x="84" y="240" width="56" height="18" rx="3"/>
+    <rect x="103" y="221" width="18" height="56" rx="3"/>
+  </g>
+  <!-- buttons -->
+  <circle cx="392" cy="270" r="15" fill="#14151a"/>
+  <circle cx="428" cy="244" r="15" fill="#14151a"/>
+  <rect x="380" y="196" width="22" height="10" rx="5" fill="#0060a8"/>
+  <!-- speaker grille -->
+  <g fill="#14151a">
+    <circle cx="396" cy="320" r="3"/><circle cx="408" cy="320" r="3"/><circle cx="420" cy="320" r="3"/>
+    <circle cx="396" cy="332" r="3"/><circle cx="408" cy="332" r="3"/><circle cx="420" cy="332" r="3"/>
+  </g>
+</svg>

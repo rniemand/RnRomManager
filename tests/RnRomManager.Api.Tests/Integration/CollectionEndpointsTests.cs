@@ -255,6 +255,25 @@ public class CollectionEndpointsTests
     }
 
     [Test]
+    public async Task GamesList_NotInCollection_HidesMembers_AndForeignOrUnknownIs404_P1()
+    {
+        var id = await CreateAsync(_alice, "Mine");
+        var alpha = await AddGameAsync("Alpha", 1);
+        await AddGameAsync("Bravo", 2);
+        (await _alice.PostAsync($"/api/collections/{id}/games", new { gameIds = new[] { alpha } })).Dispose();
+
+        Assert.That(await TitlesAsync(_alice, $"notInCollection={id}"), Is.EqualTo(new[] { "Bravo" }));
+        Assert.That(await TitlesAsync(_alice, $"notInCollection={id}&q=alp"), Is.Empty);
+        using (var foreign = await _bob.GetAsync($"/api/games?notInCollection={id}"))
+            Assert.That(foreign.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        using (var unknown = await _alice.GetAsync($"/api/games?notInCollection={Guid.NewGuid()}"))
+            Assert.That(unknown.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        using var malformed = await _alice.GetAsync("/api/games?notInCollection=abc");
+        Assert.That(malformed.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(malformed)).GetProperty("errors").TryGetProperty("notInCollection", out _), Is.True);
+    }
+
+    [Test]
     public async Task GameCollections_AreTheCallersOnly_SortedByName_B16()
     {
         var game = await AddGameAsync("Tetris", 1);

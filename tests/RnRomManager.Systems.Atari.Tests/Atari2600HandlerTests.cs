@@ -12,6 +12,7 @@ public class Atari2600HandlerTests
     [Test]
     public void Atari2600_Contract()
     {
+        Assert.That(Handler.ShortName, Is.EqualTo("2600"));
         Assert.That((Handler.Id, Handler.DisplayName, Handler.Family, Handler.DatName),
             Is.EqualTo(("a2600", "Atari 2600", "a2600", "Atari - 2600")));
         Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".a26", ".bin" }));

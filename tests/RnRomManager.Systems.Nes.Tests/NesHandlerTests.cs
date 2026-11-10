@@ -14,6 +14,7 @@ public class NesHandlerTests
     [Test]
     public void Nes_Contract()
     {
+        Assert.That(Handler.ShortName, Is.EqualTo("NES"));
         Assert.That((Handler.Id, Handler.DisplayName, Handler.Family, Handler.DatName),
             Is.EqualTo(("nes", "Nintendo Entertainment System", "nes", "Nintendo - Nintendo Entertainment System")));
         Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".nes" }));

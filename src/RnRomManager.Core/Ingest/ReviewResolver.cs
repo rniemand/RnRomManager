@@ -113,7 +113,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 var parsed = NoIntroName.Parse(Path.GetFileNameWithoutExtension(datRom.RomName));
                 title = parsed.BaseTitle; regions = parsed.Regions; languages = parsed.Languages; revision = parsed.Revision;
                 flags = [.. parsed.Flags, "Unverified"];
-                filename = Path.GetFileNameWithoutExtension(datRom.RomName) + " (Unverified)" + system.RomExtensions[0];
+                // G4: the DAT name's own extension (DAT entries are filtered to RomExtensions), e.g. an SMS-mode Game Gear .sms.
+                filename = Path.GetFileNameWithoutExtension(datRom.RomName) + " (Unverified)" + Path.GetExtension(datRom.RomName);
                 identification = new(IdentificationMethod.Manual, store.DatName, store.Version, datRom.GameName);
                 metadata = store.MetadataFor(datRom.Crc32);
             }
@@ -125,7 +126,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 var dat = JsonNode.Parse(item.DatIdentification!)!;
                 // Keep the queued identity even when the loaded DATs have changed.
                 identification = new(IdentificationMethod.Dat, dat["datName"]!.GetValue<string>(), dat["datVersion"]?.GetValue<string>(), dat["datGameName"]!.GetValue<string>());
-                filename = Path.GetFileNameWithoutExtension(dat["romName"]!.GetValue<string>()) + system.RomExtensions[0];
+                filename = Path.GetFileName(dat["romName"]!.GetValue<string>());
                 var tags = NoIntroName.Parse(Path.GetFileNameWithoutExtension(filename));
                 title = NoIntroName.Parse(dat["datGameName"]!.GetValue<string>()).BaseTitle;
                 regions = tags.Regions; languages = tags.Languages; revision = tags.Revision; flags = tags.Flags;

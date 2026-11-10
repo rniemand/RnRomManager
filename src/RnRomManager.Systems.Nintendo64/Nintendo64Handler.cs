@@ -12,6 +12,7 @@ public sealed class Nintendo64Handler : ISystemHandler
 
     public string Id => Nintendo64HeaderReader.Nintendo64Id;
     public string DisplayName => "Nintendo 64";
+    public string ShortName => "N64";
     public string Family => Nintendo64HeaderReader.Nintendo64Id;
 
     /// <summary><c>.z64</c> first: renamed and resolved files are stored with it.</summary>

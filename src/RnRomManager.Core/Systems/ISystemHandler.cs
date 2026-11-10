@@ -12,6 +12,9 @@ public interface ISystemHandler
     /// <summary>"Game Boy".</summary>
     string DisplayName { get; }
 
+    /// <summary>"GB": compact label for game pickers; defaults to <see cref="DisplayName"/>.</summary>
+    string ShortName => DisplayName;
+
     /// <summary>"gameboy": handlers sharing classification and DATs (§7.2 step 4).</summary>
     string Family { get; }
 

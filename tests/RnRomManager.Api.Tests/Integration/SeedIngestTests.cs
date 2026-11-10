@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 13, 11)]
-    [TestCase(SeedSet.Full, 213, 211)]
+    [TestCase(SeedSet.Basic, 14, 12)]
+    [TestCase(SeedSet.Full, 214, 212)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -143,6 +143,26 @@ public class SeedIngestTests
             }
             Assert.That(rom.Header!["magic"]!.GetValue<string>(), Is.EqualTo("AA55"));
             Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1983, new[] { "Action" })));
+        }
+        var drift = Directory.GetFiles(Path.Combine(factory.Root, "roms", "gg", "P"), "*.zip").Single();
+        using (var zip = LibraryZip.Open(drift, factory.Services.GetRequiredService<InfoJsonReader>()))
+        {
+            var game = zip.InfoJson!.Game!;
+            var rom = game.Roms.Single();
+            var seeded = new byte[32768];
+            new Random(1401).NextBytes(seeded);
+            "TMR SEGA"u8.CopyTo(seeded.AsSpan(0x7FF0));
+            seeded[0x7FFF] = 0x6C;
+            Assert.That((game.Title, game.System, rom.FileName, rom.OriginalFileName),
+                Is.EqualTo(("Pocket Drift", "gg", "Pocket Drift (World).gg", "01-pocket-drift.gg")));
+            using (var entry = zip.OpenEntry(LibraryZip.RomEntry("Pocket Drift (World).gg"), seeded.Length))
+            using (var bytes = new MemoryStream())
+            {
+                entry.CopyTo(bytes);
+                Assert.That(bytes.ToArray(), Is.EqualTo(seeded));
+            }
+            Assert.That(rom.Header!["region"]!.GetValue<string>(), Is.EqualTo("GG Export"));
+            Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1992, new[] { "Racing" })));
         }
         var review = await factory.Services.GetRequiredService<IIngestReviewRepository>().ListAsync("Pending", 1, 48, default);
         Assert.That(review.Total, Is.EqualTo(2));

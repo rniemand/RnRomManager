@@ -12,6 +12,7 @@ public sealed class Atari2600Handler : ISystemHandler
 
     public string Id => "a2600";
     public string DisplayName => "Atari 2600";
+    public string ShortName => "2600";
     public string Family => "a2600";
 
     /// <summary><c>[0]</c> (<c>.a26</c>) is what a file resolved through Review is stored as.</summary>

@@ -13,6 +13,7 @@ public sealed class ColecoVisionHandler : ISystemHandler
 
     public string Id => "coleco";
     public string DisplayName => "ColecoVision";
+    public string ShortName => "CV";
     public string Family => "coleco";
 
     /// <summary><c>[0]</c> (<c>.col</c>) is what a file resolved through Review is stored as.</summary>

@@ -12,6 +12,7 @@ public class ColecoVisionHandlerTests
     [Test]
     public void ColecoVision_Contract()
     {
+        Assert.That(Handler.ShortName, Is.EqualTo("CV"));
         Assert.That((Handler.Id, Handler.DisplayName, Handler.Family, Handler.DatName),
             Is.EqualTo(("coleco", "ColecoVision", "coleco", "Coleco - ColecoVision")));
         Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".col", ".rom", ".bin" }));

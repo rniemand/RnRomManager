@@ -13,6 +13,7 @@ public class SnesHandlerTests
     [Test]
     public void Snes_Contract()
     {
+        Assert.That(Handler.ShortName, Is.EqualTo("SNES"));
         Assert.That((Handler.Id, Handler.DisplayName, Handler.Family, Handler.DatName),
             Is.EqualTo(("snes", "Super Nintendo Entertainment System", "snes", "Nintendo - Super Nintendo Entertainment System")));
         Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".sfc", ".smc" }));

@@ -13,6 +13,7 @@ public abstract class GameBoyHandlerBase : ISystemHandler
 
     public abstract string Id { get; }
     public abstract string DisplayName { get; }
+    public abstract string ShortName { get; }
     public string Family => FamilyId;
     public abstract IReadOnlyList<string> RomExtensions { get; }
 

@@ -10,6 +10,7 @@ describe('systemColour', () => {
 		expect(systemColour('snes')).toEqual({ name: 'snes', foreground: '#fff' });
 		expect(systemColour('a2600')).toEqual({ name: 'a2600', foreground: '#fff' });
 		expect(systemColour('coleco')).toEqual({ name: 'coleco', foreground: '#fff' });
+		expect(systemColour('gg')).toEqual({ name: 'gg', foreground: '#fff' });
 	});
 
 	it('keeps an unknown system neutral', () => {

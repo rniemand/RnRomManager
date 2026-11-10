@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
@@ -36,6 +37,9 @@ public class IngestPipelineTests
 
     private static readonly byte[] Lanes = Atari(4096, 120);
     private static readonly byte[] Pursuit = Coleco(8192, 130, 0xAA, 0x55);
+    private static readonly byte[] Drift = GameGear(32768, 140, header: true);
+    /// <summary>An SMS-mode Game Gear game: the DAT names it <c>.sms</c> (G4).</summary>
+    private static readonly byte[] Tide = GameGear(32768, 141, header: false);
     private ApiFactory _factory = null!;
     private ILibraryMirror? _mirrorOverride;
     private Action<IServiceCollection>? _extraServices;
@@ -84,6 +88,11 @@ public class IngestPipelineTests
             [IngestSeeder.SnesDat] = [new FixtureGame("Mode Seven Rally (USA)", "Mode Seven Rally (USA).sfc", Rally.Build())],
             [IngestSeeder.Atari2600Dat] = [new FixtureGame("Laser Lanes (USA)", "Laser Lanes (USA).a26", Lanes)],
             [IngestSeeder.ColecoVisionDat] = [new FixtureGame("Pixel Pursuit (USA)", "Pixel Pursuit (USA).col", Pursuit)],
+            [IngestSeeder.GameGearDat] =
+            [
+                new FixtureGame("Pocket Drift (World)", "Pocket Drift (World).gg", Drift),
+                new FixtureGame("Tide Runner (World)", "Tide Runner (World).sms", Tide),
+            ],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },
@@ -138,6 +147,129 @@ public class IngestPipelineTests
         var rom = new byte[size];
         new Random(seed).NextBytes(rom);
         return rom;
+    }
+
+    private static byte[] GameGear(int size, int seed, bool header)
+    {
+        var rom = Atari(size, seed);
+        if (header)
+            "TMR SEGA"u8.CopyTo(rom.AsSpan(0x7FF0));
+        else if (size >= 0x7FF8)
+            rom.AsSpan(0x7FF0, 8).Clear(); // no "TMR SEGA" by chance
+        return rom;
+    }
+
+    private async Task<ReviewItem> GameGearReviewAsync(string name, int seed)
+    {
+        var bytes = GameGear(32768, seed, header: false);
+        var result = await IngestAsync(Drop("gg", name, bytes));
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Review, "NoDatMatch")));
+        return (await Service<IIngestReviewRepository>().GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(bytes)), default))!;
+    }
+
+    private async Task<InfoJsonRom> ResolveGameGearAsync(ReviewItem item, ReviewResolutionRequest request)
+    {
+        var user = await TestUsers.CreateAsync(_factory, $"gg-{Guid.NewGuid():N}"[..20], TestUsers.AllRoles);
+        var resolved = await Service<ReviewResolver>().ResolveAsync(item.Id, request, new AuditActor(user.Id, user.Username, null), default);
+        Assert.That(resolved.Code, Is.Null, string.Join("; ", resolved.Errors?.SelectMany(e => e.Value) ?? []));
+        var row = (await Service<IGameRepository>().GetAsync(resolved.GameId!.Value, default))!;
+        return ReadZip(row.ZipPath).Roms.Single(r => r.Metadata.Sha1 == item.Sha1);
+    }
+
+    private static ReviewResolutionRequest GameGearManual(string title) =>
+        new() { Action = "Manual", Title = title, Regions = ["World"], Languages = [], Flags = [] };
+
+    [TestCase("nes", "drift.gg")]
+    [TestCase("gg", "pioneer.nes")]
+    public async Task GameGear_FileInAnotherFamilysFolder_IsUnsupportedType(string folder, string name)
+    {
+        var result = await IngestAsync(Drop(folder, name, name.EndsWith(".nes") ? Pioneer : Drift));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+    }
+
+    [TestCase(8191, "TooSmall")]
+    [TestCase(1048577, "TooLarge")]
+    public async Task GameGear_OutsideTheSizeLimits_Fails(int size, string reason)
+    {
+        var result = await IngestAsync(Drop("gg", "odd.gg", GameGear(size, 142, header: false)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, reason)));
+    }
+
+    [Test]
+    public async Task GameGear_UnmatchedWithoutHeader_GoesToReview_AndManualIsStoredAsGg()
+    {
+        var item = await GameGearReviewAsync("Pocket Drift Hack.gg", 143);
+        Assert.That(item.Header, Is.Null);
+        Assert.That(item.Suggestions, Does.Contain("Pocket Drift"));
+
+        var rom = await ResolveGameGearAsync(item, GameGearManual("Pocket Drift Hack"));
+
+        Assert.That((rom.FileName, rom.OriginalFileName), Is.EqualTo(("Pocket Drift Hack (World).gg", "Pocket Drift Hack.gg")));
+    }
+
+    [Test]
+    public async Task GameGear_UnmatchedSms_ManualIsStoredAsGg()
+    {
+        var item = await GameGearReviewAsync("Harbour Hop.sms", 144);
+
+        var rom = await ResolveGameGearAsync(item, GameGearManual("Harbour Hop"));
+
+        Assert.That(rom.FileName, Is.EqualTo("Harbour Hop (World).gg"));
+    }
+
+    [Test]
+    public async Task GameGear_DatAction_KeepsTheDatRomNamesSmsExtension()
+    {
+        var item = await GameGearReviewAsync("tide-runner-alt.gg", 145);
+
+        var rom = await ResolveGameGearAsync(item,
+            new ReviewResolutionRequest { Action = "Dat", DatSystem = "gg", DatGameName = "Tide Runner (World)" });
+
+        Assert.That(rom.FileName, Is.EqualTo("Tide Runner (World) (Unverified).sms"));
+    }
+
+    [Test]
+    public async Task GameGear_AttachAmbiguousGroup_KeepsTheDatRomNamesSmsExtension()
+    {
+        var target = await GameGearReviewAsync("Tide Runner.gg", 146);
+        var targetRom = await ResolveGameGearAsync(target, GameGearManual("Tide Runner"));
+        var targetId = (await Service<IIngestReviewRepository>().GetAsync(target.Id, default))!.GameId!.Value;
+        var item = await GameGearReviewAsync("tide-runner-world.sms", 147);
+        await Service<IIngestReviewRepository>().UpsertAsync(item with
+        {
+            Reason = "AmbiguousGroup", Suggestions = "[]", CandidateGameIds = JsonSerializer.Serialize(new[] { targetId, Guid.NewGuid() }),
+            DatIdentification = JsonSerializer.Serialize(new
+            {
+                datName = IngestSeeder.GameGearDat, datVersion = FixtureDatWriter.Version, datGameName = "Tide Runner (World)",
+                romName = "Tide Runner (World).sms",
+            }),
+        }, default);
+
+        var rom = await ResolveGameGearAsync(item,
+            new ReviewResolutionRequest { Action = "Attach", TargetGameId = targetId, Flag = "None" });
+
+        Assert.That(targetRom.FileName, Is.EqualTo("Tide Runner (World).gg"));
+        Assert.That(rom.FileName, Is.EqualTo("Tide Runner (World).sms"));
+    }
+
+    [Test]
+    public async Task GameGear_ZipHoldingADatGame_IsIngested_WithItsHeader()
+    {
+        var path = Path.Combine(Ingest("gg"), "drift.zip");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        using (var entry = zip.CreateEntry("Pocket Drift (World).gg").Open())
+            entry.Write(Drift);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+
+        await ActivatorUtilities.CreateInstance<IngestJob>(_factory.Services, Substitute.For<IJobItemRepository>())
+            .RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), default);
+
+        Assert.That(File.Exists(path), Is.False, "fully ingested archive is deleted");
+        var game = ReadZip(Path.Combine("gg", "P", "Pocket Drift.zip"));
+        Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("gg", "Pocket Drift (World).gg")));
+        Assert.That(game.Roms.Single().Header!["offset"]!.GetValue<string>(), Is.EqualTo("7FF0"));
     }
 
     private static byte[] Coleco(int size, int seed, byte first, byte second)

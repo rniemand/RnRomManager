@@ -83,6 +83,8 @@ public sealed class GameRepository : IGameRepository
             where.Add($"({TitleLike(i)} OR {JsonLike("developers", i)} OR {JsonLike("publishers", i)} OR {JsonLike("genres", i)})");
         if (query.Favourite is not null)
             where.Add("g.favourite = @favourite");
+        if (query.NotInCollectionId is not null)
+            where.Add("NOT EXISTS (SELECT 1 FROM collection_games x WHERE x.game_id = g.id AND x.collection_id = @notInCollection)");
         var filter = where.Count == 0 ? "" : "WHERE " + string.Join(" AND ", where);
         // B15/B17: inner join, so memberships of games no longer in the library don't show.
         var from = query.CollectionId is null
@@ -106,6 +108,7 @@ public sealed class GameRepository : IGameRepository
         {
             system = query.System,
             collection = query.CollectionId,
+            notInCollection = query.NotInCollectionId,
             letter = query.Letter,
             region = query.Region is null ? null : SqlLike.Contains("|" + query.Region + "|"),
             favourite = query.Favourite,

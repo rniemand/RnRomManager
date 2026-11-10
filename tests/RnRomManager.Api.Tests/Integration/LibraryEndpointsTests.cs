@@ -46,6 +46,7 @@ public class LibraryEndpointsTests
             [IngestSeeder.SnesDat] = [],
             [IngestSeeder.Atari2600Dat] = [],
             [IngestSeeder.ColecoVisionDat] = [],
+            [IngestSeeder.GameGearDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld) { ReleaseYear = 1989, Developers = ["Nintendo"], Genres = ["Puzzle"] },
@@ -124,7 +125,7 @@ public class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "a2600", "coleco", "gb", "gba", "gbc", "n64", "nes", "snes" }));
+            Is.EqualTo(new[] { "a2600", "coleco", "gb", "gba", "gbc", "gg", "n64", "nes", "snes" }));
         JsonElement Find(string id) => systems.EnumerateArray().Single(s => s.GetProperty("id").GetString() == id);
         var gb = Find("gb");
         Assert.That(gb.GetProperty("displayName").GetString(), Is.EqualTo("Game Boy"));
@@ -134,7 +135,7 @@ public class LibraryEndpointsTests
         Assert.That((gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()), Is.EqualTo((0, 0)));
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
-            "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Nintendo 64", "Nintendo Entertainment System",
+            "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "Nintendo 64", "Nintendo Entertainment System",
             "Super Nintendo Entertainment System"
         }));
     }
@@ -260,6 +261,7 @@ public class LibraryEndpointsTests
         var item = (await GetJson("/api/games")).GetProperty("items")[0];
         Assert.That((item.GetProperty("rating").GetInt32(), item.GetProperty("favourite").GetBoolean(), item.GetProperty("systemName").GetString()),
             Is.EqualTo((4, true, Service<ISystemRegistry>().ById("gb")!.DisplayName)));
+        Assert.That(item.GetProperty("systemShortName").GetString(), Is.EqualTo("GB"));
         using (var zip = LibraryZip.Open(await ZipPath(id), Service<InfoJsonReader>()))
             Assert.That((zip.InfoJson!.Game!.Rating, zip.InfoJson.Game.Favourite), Is.EqualTo(((int?)4, true)));
 
