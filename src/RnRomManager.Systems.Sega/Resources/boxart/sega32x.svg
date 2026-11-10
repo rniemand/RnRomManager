@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (32X). Made for this project; MIT licensed like the rest of the repo.
+       Exported to sega32x.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#fde7d9"/>
+  <!-- mushroom-shaped add-on: dome on a black base -->
+  <rect x="96" y="300" width="320" height="96" rx="24" fill="#1b1b20" stroke="#0d0d10" stroke-width="4"/>
+  <path d="M136 304 Q136 140 256 140 Q376 140 376 304 Z" fill="#26262c" stroke="#3a3a42" stroke-width="6"/>
+  <!-- cartridge slot on the dome, with an orange cartridge -->
+  <rect x="196" y="112" width="120" height="84" rx="6" fill="#e8590c"/>
+  <text x="256" y="168" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="40" font-weight="800" fill="#000000">32X</text>
+  <!-- vents and light -->
+  <rect x="176" y="240" width="160" height="10" rx="5" fill="#3a3a42"/>
+  <rect x="176" y="264" width="160" height="10" rx="5" fill="#3a3a42"/>
+  <circle cx="140" cy="348" r="8" fill="#e8590c"/>
+</svg>
