@@ -40,6 +40,7 @@ public class IngestDeleteEndpointsTests
             [IngestSeeder.SnesDat] = [],
             [IngestSeeder.Atari2600Dat] = [],
             [IngestSeeder.ColecoVisionDat] = [],
+            [IngestSeeder.GameGearDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)],
             ["Nintendo - Game Boy Color"] = [],
         });

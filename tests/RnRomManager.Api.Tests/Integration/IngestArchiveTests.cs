@@ -38,6 +38,7 @@ public class IngestArchiveTests
             [IngestSeeder.SnesDat] = [],
             [IngestSeeder.Atari2600Dat] = [],
             [IngestSeeder.ColecoVisionDat] = [],
+            [IngestSeeder.GameGearDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ),

@@ -94,3 +94,12 @@
 	color: #fff !important;
 	background-color: var(--bs-coleco) !important;
 }
+
+/* Game Gear system colour (G5): Sega blue, same in both themes; white on it is AA (6.3:1). */
+:root {
+	--bs-gg: #0060a8;
+}
+.text-bg-gg {
+	color: #fff !important;
+	background-color: var(--bs-gg) !important;
+}

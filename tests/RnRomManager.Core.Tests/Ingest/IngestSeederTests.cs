@@ -29,7 +29,7 @@ public class IngestSeederTests
         Assert.That(new FileInfo(Path.Combine(ingest, "snes", "01-mode-seven-rally.smc")).Length % 1024, Is.EqualTo(512), "copier-headered");
         Assert.That(new FileInfo(Path.Combine(ingest, "a2600", "01-laser-lanes.bin")).Length, Is.EqualTo(4096));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "coleco", "01-pixel-pursuit.rom"))[..2], Is.EqualTo(new byte[] { 0xAA, 0x55 }));
-        Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(40));
+        Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(45));
     }
 
     [Test]
