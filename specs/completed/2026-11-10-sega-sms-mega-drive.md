@@ -1,6 +1,6 @@
 ---
 title: Master System and Mega Drive / Genesis
-status: in-progress # draft | ready | in-progress | completed
+status: completed # draft | ready | in-progress | completed
 created: 2026-11-10
 ---
 
