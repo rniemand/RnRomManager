@@ -1,6 +1,6 @@
 ---
 title: TurboGrafx-16
-status: in-progress # draft | ready | in-progress | completed
+status: completed # draft | ready | in-progress | completed
 created: 2026-11-10
 ---
 
