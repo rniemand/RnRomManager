@@ -117,3 +117,53 @@
 	color: #fff !important;
 	background-color: var(--bs-md) !important;
 }
+
+/* 32X system colour (X5): orange, same in both themes; black on it is AA (~5.9:1). */
+:root {
+	--bs-s32x: #e8590c;
+}
+.text-bg-s32x {
+	color: #000 !important;
+	background-color: var(--bs-s32x) !important;
+}
+
+/* Library cards (L1, L2): a step lighter than the body in dark mode; a small lift and shadow on hover or keyboard focus. */
+[data-bs-theme='dark'] .game-card {
+	--bs-card-bg: var(--bs-tertiary-bg);
+}
+.game-card {
+	transition:
+		transform 150ms ease,
+		box-shadow 150ms ease;
+}
+.game-card:hover,
+.game-card:focus-within {
+	transform: translateY(-2px);
+	box-shadow: var(--bs-box-shadow-sm);
+}
+@media (prefers-reduced-motion: reduce) {
+	.game-card {
+		transition: none;
+	}
+	.game-card:hover,
+	.game-card:focus-within {
+		transform: none;
+	}
+}
+
+/* Release cards and the Zip tree (R2, Z4): the chevron points down when expanded; the release header is clickable. */
+.chevron-toggle .bi {
+	display: inline-block;
+	transition: transform 150ms ease;
+}
+.chevron-toggle[aria-expanded='true'] .bi {
+	transform: rotate(90deg);
+}
+.release-header {
+	cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) {
+	.chevron-toggle .bi {
+		transition: none;
+	}
+}

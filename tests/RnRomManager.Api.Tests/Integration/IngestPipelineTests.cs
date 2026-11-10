@@ -42,6 +42,7 @@ public class IngestPipelineTests
     private static readonly byte[] Tide = GameGear(32768, 141, header: false);
     private static readonly byte[] Harbor = GameGear(32768, 150, header: true);
     private static readonly byte[] Comet = new SyntheticMegaDriveRomBuilder { Seed = 160, Size = 65536 }.Build();
+    private static readonly byte[] Relay = new SyntheticMegaDriveRomBuilder { Seed = 170, Size = 65536, SystemType = "SEGA 32X", OverseasTitle = "STAR RELAY" }.Build();
     private ApiFactory _factory = null!;
     private ILibraryMirror? _mirrorOverride;
     private Action<IServiceCollection>? _extraServices;
@@ -97,6 +98,7 @@ public class IngestPipelineTests
             ],
             [IngestSeeder.MasterSystemDat] = [new FixtureGame("Harbor Patrol (World)", "Harbor Patrol (World).sms", Harbor)],
             [IngestSeeder.MegaDriveDat] = [new FixtureGame("Turbo Comet (USA, Europe)", "Turbo Comet (USA, Europe).md", Comet)],
+            [IngestSeeder.Sega32xDat] = [new FixtureGame("Star Relay (USA)", "Star Relay (USA).32x", Relay)],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },
@@ -301,6 +303,10 @@ public class IngestPipelineTests
     [TestCase("nes", "harbor.sms")]
     [TestCase("sms", "comet.md")]
     [TestCase("md", "comet.smd")]
+    [TestCase("md", "relay.32x")]
+    [TestCase("s32x", "comet.md")]
+    [TestCase("s32x", "comet.bin")]
+    [TestCase("s32x", "comet.gen")]
     public async Task SegaFile_InTheWrongFolderOrUnsupported_IsUnsupportedType(string folder, string name)
     {
         var result = await IngestAsync(Drop(folder, name, name.EndsWith(".sms") ? Harbor : Comet));
@@ -322,6 +328,8 @@ public class IngestPipelineTests
     [TestCase("sms", "odd.sms", 4194305, "TooLarge")]
     [TestCase("md", "odd.md", 8191, "TooSmall")]
     [TestCase("md", "odd.md", 16777217, "TooLarge")]
+    [TestCase("s32x", "odd.32x", 16383, "TooSmall")]
+    [TestCase("s32x", "odd.32x", 4194305, "TooLarge")]
     public async Task Sega_OutsideTheSizeLimits_Fails(string system, string name, int size, string reason)
     {
         var result = await IngestAsync(Drop(system, name, GameGear(size, 151, header: false)));
@@ -360,6 +368,29 @@ public class IngestPipelineTests
         var rom = await ResolveGameGearAsync(item, GameGearManual("Turbo Comet Proto"));
 
         Assert.That((rom.FileName, rom.OriginalFileName), Is.EqualTo(("Turbo Comet Proto (World).md", "mystery.bin")));
+    }
+
+    [Test]
+    public async Task Sega32x_UnmatchedHeadered_GoesToReview_WithTheHeaderTitle_AndManualIsStoredAs32x()
+    {
+        var item = await ReviewAsync("s32x", "mystery.32x",
+            new SyntheticMegaDriveRomBuilder { Seed = 171, Size = 65536, SystemType = "SEGA 32X", OverseasTitle = "STAR RELAY" }.Build());
+        Assert.That(item.Suggestions, Does.Contain("Star Relay"));
+
+        var rom = await ResolveGameGearAsync(item, GameGearManual("Star Relay Proto"));
+
+        Assert.That((rom.FileName, rom.OriginalFileName), Is.EqualTo(("Star Relay Proto (World).32x", "mystery.32x")));
+    }
+
+    [Test]
+    public async Task Sega32x_DatMatch_IsStoredUnderS32x_WithItsHeader()
+    {
+        var result = await IngestAsync(Drop("s32x", "relay.32x", Relay));
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Ingested));
+        var game = ReadZip(Path.Combine("s32x", "S", "Star Relay.zip"));
+        Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("s32x", "Star Relay (USA).32x")));
+        Assert.That(game.Roms.Single().Header!["systemType"]!.GetValue<string>(), Is.EqualTo("SEGA 32X"));
     }
 
     [Test]

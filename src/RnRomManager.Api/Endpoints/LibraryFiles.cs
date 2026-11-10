@@ -103,6 +103,54 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
 
     public const string NoteTooLarge = "NoteTooLarge";
 
+    /// <summary>
+    /// Z2: the ZIP's file entries (folder entries left out), ordered by path ordinally, with the central directory's sizes.
+    /// Read raw, without parsing <c>info.json</c>.
+    /// </summary>
+    public IResult? ListEntries(HttpContext ctx, GameRow game, out IReadOnlyList<ZipEntryInfo>? entries)
+    {
+        entries = null;
+        try
+        {
+            using var archive = OpenArchive(game);
+            entries = archive.Entries.Where(e => !e.FullName.EndsWith('/'))
+                .Select(e => new ZipEntryInfo(e.FullName, e.Length, e.CompressedLength, e.LastWriteTime.UtcDateTime))
+                .OrderBy(e => e.Path, StringComparer.Ordinal).ToList();
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return Fail(ctx, game, ex);
+        }
+    }
+
+    /// <summary>
+    /// Z3: the file entry named exactly <paramref name="path"/>, capped at its central-directory length; the ZIP is
+    /// disposed with the response. The name is only looked up in the archive, never used as a file system path.
+    /// </summary>
+    public IResult? OpenRawEntry(HttpContext ctx, GameRow game, string path, out Stream? stream)
+    {
+        stream = null;
+        ZipArchive? archive = null;
+        try
+        {
+            archive = OpenArchive(game);
+            if (path.EndsWith('/') || archive.GetEntry(path) is not { } entry)
+            {
+                archive.Dispose();
+                return Problems.NotFound(ctx);
+            }
+            stream = new LimitStream(entry.Open(), entry.Length);
+            ctx.Response.RegisterForDispose(archive);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            archive?.Dispose();
+            return Fail(ctx, game, ex);
+        }
+    }
+
     /// <summary>B3: the ZIP's <c>notes/</c> entry names; empty (logged) when the ZIP can't be opened.</summary>
     public IReadOnlySet<string> NoteEntries(GameRow game)
     {
@@ -145,3 +193,6 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
         return Problems.Create(ctx, StatusCodes.Status500InternalServerError, "IoError", "The game's ZIP can't be read");
     }
 }
+
+/// <summary>One file entry of a library ZIP (Z2): sizes from the central directory, the DOS time read as UTC.</summary>
+public sealed record ZipEntryInfo(string Path, long SizeBytes, long CompressedSizeBytes, DateTime ModifiedUtc);

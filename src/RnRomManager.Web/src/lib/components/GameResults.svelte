@@ -6,6 +6,8 @@
 	import FileSize from './FileSize.svelte';
 	import Icon from './Icon.svelte';
 	import RatingControl from './RatingControl.svelte';
+	import SystemBadge from './SystemBadge.svelte';
+	import { systemColour } from '../systemColours';
 
 	/** The Library's game grid / list (spec §11), shared by the Library and a collection's page (B24). */
 	interface Props {
@@ -30,12 +32,12 @@
 	<div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6 g-3">
 		{#each games as game (game.id)}
 			<div class="col">
-				<div class="card h-100">
+				<div class="card h-100 game-card">
 					<div class="position-relative">
-						<div class="card-img-top ratio ratio-1x1 bg-body-secondary">
+						<div class="card-img-top ratio ratio-1x1 bg-body-secondary overflow-hidden">
 							{#if game.boxArtUrl}
 								<img
-									class="object-fit-contain"
+									class="object-fit-cover w-100 h-100"
 									src={game.boxArtUrl}
 									alt="{game.displayTitle} box art"
 									loading="lazy"
@@ -46,7 +48,10 @@
 								</div>
 							{/if}
 						</div>
-						<span class="badge text-bg-dark position-absolute top-0 start-0 m-1">
+						<span
+							class="badge text-bg-{systemColour(game.system)
+								.name} position-absolute top-0 start-0 m-1"
+						>
 							<span aria-hidden="true">{game.system.toUpperCase()}</span>
 							<span class="visually-hidden">{game.systemName}</span>
 						</span>
@@ -126,7 +131,7 @@
 							</td>
 						{/if}
 						<td><a href={resolve('/games/[id]', { id: game.id })}>{game.displayTitle}</a></td>
-						<td><span class="badge text-bg-dark">{game.systemName}</span></td>
+						<td><SystemBadge system={game.system} name={game.systemName} /></td>
 						<td>{game.releaseYear ?? ''}</td>
 						<td>{game.regions.join(', ')}</td>
 						<td>

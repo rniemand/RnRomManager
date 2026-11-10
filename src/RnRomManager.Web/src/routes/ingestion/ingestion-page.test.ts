@@ -4,6 +4,17 @@ import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { jobs } from '#lib/stores/jobs.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
+import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
+
+const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
+vi.mock('$app/navigation', () => ({ goto: (...args: [string, unknown?]) => goto(...args) }));
+vi.mock('$app/state', () => ({
+	page: {
+		get url() {
+			return testUrl.current;
+		}
+	}
+}));
 
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
@@ -48,6 +59,8 @@ describe('ingestion page', () => {
 
 	beforeEach(() => {
 		resetClient();
+		navigateTo('/ingestion');
+		goto.mockClear();
 		jobs.current = null;
 		auth.set({
 			id: 1,
@@ -111,6 +124,74 @@ describe('ingestion page', () => {
 		expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('25');
 	});
 
+	const tabs = () =>
+		screen.getAllByRole('tab').map((t) => [t.textContent!.trim(), t.getAttribute('aria-selected')]);
+	const panels = () =>
+		['pending', 'failed', 'runs'].map((id) => document.getElementById(`${id}-panel`)!.hidden);
+
+	it('Pending files is the default tab; labels count files across systems; Run stays outside the tabs (I1)', async () => {
+		fixed['GET /api/ingest/failed'] = {
+			status: 200,
+			body: [
+				{ system: 'gb', files: [{ name: 'bad.gb', sizeBytes: 1, modifiedAt: '', reason: null }] },
+				{ system: 'gbc', files: [{ name: 'x.gbc', sizeBytes: 1, modifiedAt: '', reason: null }] }
+			]
+		};
+		render(IngestionPage);
+		await screen.findByText('Tetris.gb');
+
+		expect(tabs()).toEqual([
+			['Pending files (1)', 'true'],
+			['Failed files (2)', 'false'],
+			['Last runs', 'false']
+		]);
+		expect(panels()).toEqual([false, true, true]);
+		const run = document.querySelector('section[aria-labelledby="run-heading"]')!;
+		expect(run.closest('[role="tabpanel"]')).toBeNull();
+		expect(screen.getByRole('heading', { name: 'Run' })).toBeTruthy();
+		expect(document.querySelector('#pending-panel h2')!.className).toContain('visually-hidden');
+	});
+
+	for (const [query, selected] of [
+		['?tab=failed', 1],
+		['?tab=runs', 2],
+		['?tab=bogus', 0]
+	] as const) {
+		it(`${query} opens tab ${selected}, Run still visible (I2)`, async () => {
+			navigateTo(`/ingestion${query}`);
+			render(IngestionPage);
+			await screen.findByRole('tab', { name: 'Last runs' });
+
+			expect(tabs().map(([, s]) => s)).toEqual([0, 1, 2].map((i) => String(i === selected)));
+			expect(panels()).toEqual([0, 1, 2].map((i) => i !== selected));
+			expect(screen.getByRole('button', { name: /Import all/ })).toBeTruthy();
+		});
+	}
+
+	it('switching tabs updates the URL without reloading, and keeps selections (I2, I3)', async () => {
+		render(IngestionPage);
+		const checkbox = (await screen.findByRole('checkbox', {
+			name: 'Select Tetris.gb'
+		})) as HTMLInputElement;
+		await fireEvent.click(checkbox);
+		expect(checkbox.checked).toBe(false);
+		const before = calls.length;
+
+		await fireEvent.click(screen.getByRole('tab', { name: 'Failed files (0)' }));
+		expect(goto).toHaveBeenLastCalledWith('/ingestion?tab=failed', { replace: true, reset: false });
+		await vi.waitFor(() => expect(panels()).toEqual([true, false, true]));
+		await fireEvent.click(screen.getByRole('tab', { name: 'Last runs' }));
+		expect(goto).toHaveBeenLastCalledWith('/ingestion?tab=runs', { replace: true, reset: false });
+		await fireEvent.click(screen.getByRole('tab', { name: 'Pending files (1)' }));
+		expect(goto).toHaveBeenLastCalledWith('/ingestion', { replace: true, reset: false });
+		await vi.waitFor(() => expect(panels()).toEqual([false, true, true]));
+
+		expect(calls.slice(before)).toEqual([]);
+		expect(
+			(screen.getByRole('checkbox', { name: 'Select Tetris.gb' }) as HTMLInputElement).checked
+		).toBe(false);
+	});
+
 	it('pages 45 pending files as 20/20/5 in a standard table', async () => {
 		fixed['GET /api/ingest/pending'] = {
 			status: 200,
@@ -128,8 +209,7 @@ describe('ingestion page', () => {
 		render(IngestionPage);
 
 		await screen.findByText('f00.gb');
-		const rows = () =>
-			document.querySelectorAll('section[aria-labelledby="pending-heading"] tbody tr');
+		const rows = () => document.querySelectorAll('#pending-panel tbody tr');
 		expect(document.querySelector('table')!.className).toBe(
 			'table table-sm table-striped table-hover align-middle mb-0'
 		);
@@ -162,6 +242,7 @@ describe('ingestion page', () => {
 			status: 200,
 			body: { items: [run('r21')], page: 2, pageSize: 20, total: 25 }
 		};
+		navigateTo('/ingestion?tab=runs');
 		render(IngestionPage);
 
 		const nav = await screen.findByRole('navigation', { name: 'Pages of runs' });
@@ -296,8 +377,7 @@ describe('ingestion page', () => {
 	describe('delete (D3–D6)', () => {
 		const files = (names: string[]) =>
 			names.map((name) => ({ name, sizeBytes: 1, modifiedAt: '' }));
-		const section = (id: string) =>
-			document.querySelector(`section[aria-labelledby="${id}-heading"]`) as HTMLElement;
+		const section = (id: string) => document.getElementById(`${id}-panel`) as HTMLElement;
 		const deleteBodies = () => bodies['POST /api/ingest/delete'] ?? [];
 		const confirmButton = () => screen.getByRole('button', { name: 'Delete', hidden: true });
 		const modalTitle = () => document.querySelector('.modal-title')!.textContent;
@@ -350,6 +430,7 @@ describe('ingestion page', () => {
 		});
 
 		it('Shift+click on a row posts without the modal; a failed row uses folder failed', async () => {
+			navigateTo('/ingestion?tab=failed');
 			render(IngestionPage);
 			await fireEvent.click(await screen.findByRole('button', { name: 'Delete bad.gb' }), {
 				shiftKey: true
@@ -405,6 +486,7 @@ describe('ingestion page', () => {
 		});
 
 		it('the failed section lists reasons, starts unselected and deletes its selection', async () => {
+			navigateTo('/ingestion?tab=failed');
 			render(IngestionPage);
 			await screen.findByText('bad.gb');
 			const failed = section('failed');
@@ -449,9 +531,10 @@ describe('ingestion page', () => {
 			render(IngestionPage);
 			await screen.findByText('a.gb');
 
-			const deletes = screen
-				.getAllByRole('button')
-				.filter((b) => /^Delete/.test(b.getAttribute('aria-label') ?? b.textContent!.trim()));
+			// Both panels, the hidden Failed one included.
+			const deletes = [
+				...document.querySelectorAll('#pending-panel button, #failed-panel button')
+			].filter((b) => /^Delete/.test(b.getAttribute('aria-label') ?? b.textContent!.trim()));
 			expect(deletes.length).toBeGreaterThan(4);
 			expect(deletes.every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
 		});

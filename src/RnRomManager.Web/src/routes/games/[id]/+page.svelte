@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -23,6 +25,7 @@
 	import RatingControl from '#lib/components/RatingControl.svelte';
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
 	import { formatKey, formatSize, formatValue } from '#lib/format.js';
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
@@ -161,14 +164,50 @@
 
 	const list = (items: string[]) => (items.length ? items.join(', ') : '—');
 
+	// R1–R4: release cards start collapsed. Open ones are kept by file name (unique within a game; ROM ids change on
+	// every ZIP rewrite), so a reload of the same game keeps them; a new game id starts collapsed again.
+	const openReleases = new SvelteSet<string>();
+	// Z1: the Zip Contents tree's selection and expansion; kept across reloads, reset (root selected) for a new game id.
+	let zipSelected = $state('');
+	const zipExpanded = new SvelteSet<string>(['']);
+	$effect(() => {
+		void id;
+		untrack(() => {
+			openReleases.clear();
+			zipSelected = '';
+			zipExpanded.clear();
+			zipExpanded.add('');
+		});
+	});
+	const allReleasesOpen = $derived(game?.roms.every((r) => openReleases.has(r.fileName)) ?? false);
+
+	function toggleRelease(fileName: string): void {
+		if (openReleases.has(fileName)) openReleases.delete(fileName);
+		else openReleases.add(fileName);
+	}
+
+	/** R2: empty header space toggles; its buttons and links don't, nor does ending a text selection (copying the name). */
+	function onReleaseHeaderClick(event: MouseEvent, fileName: string): void {
+		if ((event.target as Element).closest('button, a')) return;
+		if (getSelection()?.toString()) return;
+		toggleRelease(fileName);
+	}
+
+	function toggleAllReleases(): void {
+		if (allReleasesOpen) openReleases.clear();
+		else game?.roms.forEach((r) => openReleases.add(r.fileName));
+	}
+
 	// GP1: the tab is URL state (`?tab=images`); switching never reloads the game (the load effect keys on the id).
-	type Tab = 'releases' | 'images';
-	const tab = $derived<Tab>(page.url.searchParams.get('tab') === 'images' ? 'images' : 'releases');
+	type Tab = 'releases' | 'images' | 'zip';
+	const tab = $derived<Tab>(
+		(['images', 'zip'] as const).find((t) => t === page.url.searchParams.get('tab')) ?? 'releases'
+	);
 
 	function selectTab(next: Tab): void {
 		const path = resolve('/games/[id]', { id });
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
-		void goto(next === 'images' ? `${path}?tab=images` : path, { replace: true, reset: false });
+		void goto(next === 'releases' ? path : `${path}?tab=${next}`, { replace: true, reset: false });
 	}
 </script>
 
@@ -365,7 +404,7 @@
 	</div>
 
 	<ul class="nav nav-tabs mb-3" role="tablist">
-		{#each [['releases', `Releases (${game.roms.length})`], ['images', `Images (${game.images.length})`]] as [value, label] (value)}
+		{#each [['releases', `Releases (${game.roms.length})`], ['images', `Images (${game.images.length})`], ['zip', 'Zip Contents']] as [value, label] (value)}
 			<li class="nav-item" role="presentation">
 				<button
 					type="button"
@@ -389,17 +428,38 @@
 		hidden={tab !== 'releases'}
 	>
 		<h2 class="h5 visually-hidden">Releases</h2>
+		{#if game.roms.length >= 2}
+			<button
+				type="button"
+				class="btn btn-sm btn-outline-secondary mb-2"
+				onclick={toggleAllReleases}>{allReleasesOpen ? 'Collapse all' : 'Expand all'}</button
+			>
+		{/if}
 		<!-- G2: one card per release, so nothing scrolls sideways on a phone. -->
 		<div class="d-flex flex-column gap-3 mb-4">
 			{#each game.roms as rom (rom.id)}
+				{@const open = openReleases.has(rom.fileName)}
 				<!-- R1: a stripe in the system's colour and a tinted header mark where each release starts. -->
 				<article
 					class="card"
 					style="border-left: 6px solid var(--bs-{systemColour(game.system).name})"
 					aria-labelledby="release-{rom.id}-name"
 				>
-					<div class="card-header bg-body-tertiary release-header">
+					<!-- The chevron button is the keyboard path; a click on empty header space is a mouse shortcut. -->
+					<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+					<div
+						class="card-header bg-body-tertiary release-header"
+						onclick={(e) => onReleaseHeaderClick(e, rom.fileName)}
+					>
 						<div class="d-flex flex-wrap align-items-center gap-2">
+							<button
+								type="button"
+								class="btn btn-sm btn-link p-0 text-body chevron-toggle"
+								aria-expanded={open}
+								aria-controls="release-{rom.id}-details"
+								aria-label="{open ? 'Hide' : 'Show'} details for {rom.fileName}"
+								onclick={() => toggleRelease(rom.fileName)}><Icon name="chevron" /></button
+							>
 							<h3 class="h6 mb-0 text-break" id="release-{rom.id}-name">{rom.fileName}</h3>
 							{#if rom.isPrimary}<span class="badge text-bg-primary">Primary</span>{/if}
 							{#each rom.regions as region (region)}
@@ -457,7 +517,7 @@
 							</div>
 						{/if}
 					</div>
-					<div class="card-body small">
+					<div class="card-body small" id="release-{rom.id}-details" hidden={!open}>
 						<div class="row row-cols-1 row-cols-sm-3 g-2 mb-2">
 							<div class="col">
 								<div class="text-body-secondary">Revision</div>
@@ -502,6 +562,11 @@
 
 	<div id="images-panel" role="tabpanel" aria-labelledby="images-tab" hidden={tab !== 'images'}>
 		<GameImages {game} onchanged={(detail) => (game = detail)} />
+	</div>
+
+	<div id="zip-panel" role="tabpanel" aria-labelledby="zip-tab" hidden={tab !== 'zip'}>
+		<h2 class="h5 visually-hidden">Zip Contents</h2>
+		<ZipBrowser {game} active={tab === 'zip'} bind:selected={zipSelected} expanded={zipExpanded} />
 	</div>
 
 	<ConfirmModal bind:open={headerOpen} title="Header — {headerRom?.fileName ?? ''}" size="lg">

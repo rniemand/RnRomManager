@@ -69,23 +69,8 @@ public sealed class GameRepository : IGameRepository
 
     public async Task<Page<GameListItem>> ListAsync(GameQuery query, CancellationToken cancellationToken)
     {
-        var where = new List<string>();
-        if (query.System is not null)
-            where.Add("g.system_id = @system");
-        if (query.Letter is not null)
-            where.Add("g.bucket = @letter");
-        if (query.Region is not null)
-            where.Add("EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND r.region_key LIKE @region)");
+        var (filter, args) = Where(query);
         var words = query.Words;
-        // shortcut: LIKE '%word%' over five columns is a full scan, and list values are matched in their JSON text
-        // (escaped characters may not match literally); move to FULLTEXT if search gets slow.
-        for (var i = 0; i < words.Count; i++)
-            where.Add($"({TitleLike(i)} OR {JsonLike("developers", i)} OR {JsonLike("publishers", i)} OR {JsonLike("genres", i)})");
-        if (query.Favourite is not null)
-            where.Add("g.favourite = @favourite");
-        if (query.NotInCollectionId is not null)
-            where.Add("NOT EXISTS (SELECT 1 FROM collection_games x WHERE x.game_id = g.id AND x.collection_id = @notInCollection)");
-        var filter = where.Count == 0 ? "" : "WHERE " + string.Join(" AND ", where);
         // B15/B17: inner join, so memberships of games no longer in the library don't show.
         var from = query.CollectionId is null
             ? "games g"
@@ -104,21 +89,14 @@ public sealed class GameRepository : IGameRepository
             _ => $"g.title {dir}, g.id",
         };
 
-        var args = new DynamicParameters(new
+        args.AddDynamicParams(new
         {
-            system = query.System,
             collection = query.CollectionId,
-            notInCollection = query.NotInCollectionId,
-            letter = query.Letter,
-            region = query.Region is null ? null : SqlLike.Contains("|" + query.Region + "|"),
-            favourite = query.Favourite,
             phrase = query.Phrase,
             prefix = query.Phrase is null ? null : SqlLike.Escape(query.Phrase) + "%",
             pageSize = query.PageSize,
             offset = (long)(query.Page - 1) * query.PageSize,
         });
-        for (var i = 0; i < words.Count; i++)
-            args.Add($"w{i}", SqlLike.Contains(words[i]));
 
         await using var connection = _connections.Create();
         var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
@@ -140,6 +118,67 @@ public sealed class GameRepository : IGameRepository
             r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId,
             r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres))).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, total);
+    }
+
+    public async Task<GameFacets> ListFacetsAsync(GameQuery query, CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+
+        async Task<Dictionary<string, int>> Grouped(string column, GameQuery without)
+        {
+            var (filter, args) = Where(without);
+            return (await connection.QueryAsync<(string Key, long Count)>(new CommandDefinition(
+                    $"SELECT {column}, COUNT(*) FROM games g {filter} GROUP BY {column}", args, cancellationToken: cancellationToken)))
+                .ToDictionary(r => r.Key, r => (int)r.Count, StringComparer.Ordinal);
+        }
+
+        var systems = await Grouped("g.system_id", query with { System = null });
+        var letters = await Grouped("g.bucket", query with { Letter = null });
+        var (regionFilter, regionArgs) = Where(query with { Region = null });
+        // shortcut: regions are counted in memory from each matching game's region keys; fine for tens of thousands of
+        // games, move to a rom_regions table if it gets slow.
+        var keys = await connection.QueryAsync<string?>(new CommandDefinition(
+            $"SELECT (SELECT GROUP_CONCAT(r.region_key SEPARATOR '') FROM roms r WHERE r.game_id = g.id) FROM games g {regionFilter}",
+            regionArgs, cancellationToken: cancellationToken));
+        var regions = keys.SelectMany(Regions).CountBy(r => r, StringComparer.Ordinal)
+            .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        return new GameFacets(systems, regions, letters);
+    }
+
+    /// <summary>
+    /// The library filters shared by the list and the facets (F2): the <c>WHERE</c> clause (empty when nothing applies) and
+    /// its parameters. Null filters are left out, so a facet passes the query with its own filter cleared.
+    /// </summary>
+    private static (string Filter, DynamicParameters Args) Where(GameQuery query)
+    {
+        var where = new List<string>();
+        if (query.System is not null)
+            where.Add("g.system_id = @system");
+        if (query.Letter is not null)
+            where.Add("g.bucket = @letter");
+        if (query.Region is not null)
+            where.Add("EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND r.region_key LIKE @region)");
+        var words = query.Words;
+        // shortcut: LIKE '%word%' over five columns is a full scan, and list values are matched in their JSON text
+        // (escaped characters may not match literally); move to FULLTEXT if search gets slow.
+        for (var i = 0; i < words.Count; i++)
+            where.Add($"({TitleLike(i)} OR {JsonLike("developers", i)} OR {JsonLike("publishers", i)} OR {JsonLike("genres", i)})");
+        if (query.Favourite is not null)
+            where.Add("g.favourite = @favourite");
+        if (query.NotInCollectionId is not null)
+            where.Add("NOT EXISTS (SELECT 1 FROM collection_games x WHERE x.game_id = g.id AND x.collection_id = @notInCollection)");
+        var filter = where.Count == 0 ? "" : "WHERE " + string.Join(" AND ", where);
+        var args = new DynamicParameters(new
+        {
+            system = query.System,
+            notInCollection = query.NotInCollectionId,
+            letter = query.Letter,
+            region = query.Region is null ? null : SqlLike.Contains("|" + query.Region + "|"),
+            favourite = query.Favourite,
+        });
+        for (var i = 0; i < words.Count; i++)
+            args.Add($"w{i}", SqlLike.Contains(words[i]));
+        return (filter, args);
     }
 
     private static string TitleLike(int i) => $"(g.display_title LIKE @w{i} OR g.title LIKE @w{i})";

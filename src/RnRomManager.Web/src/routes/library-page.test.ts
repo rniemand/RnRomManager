@@ -31,6 +31,11 @@ const { default: LibraryPage } = await import('./+page.svelte');
 const systems = [
 	{ id: 'gb', displayName: 'Game Boy', gameCount: 1, romCount: 1, regions: ['USA'] }
 ];
+let facets: unknown = {
+	systems: [{ id: 'gb', count: 12 }],
+	regions: [{ region: 'USA', count: 9 }],
+	letters: [{ letter: 'A', count: 3 }]
+};
 const games = {
 	items: [
 		{
@@ -70,6 +75,12 @@ describe('library page', () => {
 		});
 		vi.stubGlobal('fetch', (input: string) => {
 			requested.push(input);
+			if (input.startsWith('/api/games/facets'))
+				return facets === 'pending'
+					? new Promise(() => {})
+					: Promise.resolve(
+							new Response(JSON.stringify(facets ?? {}), { status: facets ? 200 : 500 })
+						);
 			const body = input === '/api/systems' ? systems : games;
 			return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
 		});
@@ -112,10 +123,12 @@ describe('library page', () => {
 		render(LibraryPage);
 
 		const art = await screen.findByAltText('4-in-1 Fun Pak box art');
-		expect(art.classList.contains('object-fit-contain')).toBe(true);
+		expect(art.classList.contains('object-fit-cover')).toBe(true);
+		expect(art.closest('.card')!.classList.contains('game-card')).toBe(true);
 		expect(art.closest('.ratio-1x1')).toBeTruthy();
 		const badge = document.querySelector('.card .badge')!;
 		expect(badge.querySelector('[aria-hidden="true"]')!.textContent).toBe('GB');
+		expect(badge.classList.contains('text-bg-success')).toBe(true);
 		expect(badge.querySelector('.visually-hidden')!.textContent).toBe('Game Boy');
 		const link = screen.getByRole('link', { name: '4-in-1 Fun Pak' });
 		expect(link.getAttribute('href')).toBe('/games/g1');
@@ -162,7 +175,8 @@ describe('library page', () => {
 		expect(store.get('libraryView')).toBe('list');
 		expect(screen.getByRole('columnheader', { name: 'Rating' })).toBeTruthy();
 		const row = screen.getByRole('row', { name: /4-in-1 Fun Pak/ });
-		expect(row.querySelector('.badge')!.textContent).toBe('Game Boy');
+		expect(row.querySelector('.badge')!.textContent!.trim()).toBe('Game Boy');
+		expect(row.querySelector('.badge')!.classList.contains('text-bg-success')).toBe(true);
 		expect(row.querySelector('[aria-label="Rate 1 of 5"]')).toBeTruthy();
 	});
 
@@ -190,6 +204,52 @@ describe('library page', () => {
 		expect(screen.getByRole('columnheader', { name: 'Size' })).toBeTruthy();
 		const row = screen.getByRole('row', { name: /4-in-1 Fun Pak/ });
 		expect(row.querySelector('.file-size')!.textContent).toBe('128.0 KiB');
+	});
+
+	const optionTexts = (label: string) =>
+		[...(screen.getByLabelText(label) as HTMLSelectElement).options].map((o) =>
+			o.textContent!.trim()
+		);
+
+	it('filter options show their counts once the facets load (F3)', async () => {
+		render(LibraryPage);
+
+		await vi.waitFor(() => expect(optionTexts('System')).toEqual(['All systems', 'Game Boy (12)']));
+		expect(optionTexts('Region')).toEqual(['Any region', 'USA (9)']);
+		expect(optionTexts('Letter').slice(0, 4)).toEqual(['All', '# (0)', 'A (3)', 'B (0)']);
+		expect(requested).toContain('/api/games/facets?system=gb&letter=%23');
+	});
+
+	for (const [state, value] of [
+		['pending', 'pending'],
+		['failed', null]
+	] as const) {
+		it(`filter options have no counts while the facets are ${state} (F3)`, async () => {
+			const loaded = facets;
+			facets = value;
+			try {
+				render(LibraryPage);
+				await screen.findByAltText('4-in-1 Fun Pak box art');
+				await vi.waitFor(() => expect(optionTexts('System')).toEqual(['All systems', 'Game Boy']));
+				expect(optionTexts('Letter').slice(0, 3)).toEqual(['All', '#', 'A']);
+			} finally {
+				facets = loaded;
+			}
+		});
+	}
+
+	it('an unknown system gets the neutral callout colour (L4)', async () => {
+		games.items[0].system = 'sg1000';
+		try {
+			url.current = new URL('http://localhost/');
+			render(LibraryPage);
+			await screen.findByAltText('4-in-1 Fun Pak box art');
+			expect(document.querySelector('.card .badge')!.classList.contains('text-bg-secondary')).toBe(
+				true
+			);
+		} finally {
+			games.items[0].system = 'gb';
+		}
 	});
 
 	it('a game without a primary size has no size badge (B5)', async () => {

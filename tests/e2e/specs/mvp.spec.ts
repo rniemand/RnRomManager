@@ -1,3 +1,4 @@
+import { stat } from 'node:fs/promises';
 import { crc32, deflateSync } from 'node:zlib';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { expectAccessible } from './axe';
@@ -93,10 +94,15 @@ test('ingestion of the seeded Basic set', async () => {
 	await expect(page.getByRole('cell', { name: '91-unmatched.gb', exact: true })).toBeVisible();
 	await expectAccessible(page, 'ingestion');
 
+	// I1: Pending / Failed / Last runs are tabs under the always-visible Run section.
+	await expect(page.getByRole('tab', { name: /^Pending files \(\d+\)$/ })).toHaveAttribute('aria-selected', 'true');
 	await page.getByRole('button', { name: 'Import all' }).click();
 
+	await page.getByRole('tab', { name: 'Last runs' }).click();
+	await expect(page).toHaveURL(/\/ingestion\?tab=runs$/);
+	await expect(page.getByRole('button', { name: 'Import all' })).toBeVisible();
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
-	await expect(run).toContainText('Ingested 16 · Duplicate 1 · Review 2 · Failed 1', {
+	await expect(run).toContainText('Ingested 17 · Duplicate 1 · Review 2 · Failed 1', {
 		timeout: 60_000
 	});
 
@@ -105,9 +111,17 @@ test('ingestion of the seeded Basic set', async () => {
 	await expect(page.getByRole('cell', { name: /92-invalid\.gb/ })).toBeVisible();
 	await expectAccessible(page, 'job detail');
 
+	await page.goto('/ingestion?tab=runs');
+	await expect(page.getByRole('tab', { name: 'Last runs' })).toHaveAttribute('aria-selected', 'true');
+	await expect(page.getByRole('row').filter({ hasText: 'Completed' })).toBeVisible();
+	await expectAccessible(page, 'ingestion last runs tab');
+
 	// D4/D5: the invalid file is listed under Failed files with its reason, and deleting it goes through the modal.
 	await page.goto('/ingestion');
-	const failed = page.locator('section[aria-labelledby="failed-heading"]');
+	await page.getByRole('tab', { name: 'Failed files (1)' }).click();
+	await expect(page).toHaveURL(/\/ingestion\?tab=failed$/);
+	await expect(page.getByRole('button', { name: 'Import all' })).toBeVisible();
+	const failed = page.locator('#failed-panel');
 	const invalid = failed.getByRole('row').filter({ hasText: '92-invalid.gb' });
 	await expect(invalid).toContainText('InvalidHeader');
 	await expectAccessible(page, 'ingestion with failed files');
@@ -141,7 +155,7 @@ test('reports and the ingest audit trail', async () => {
 	const ingested = page
 		.getByRole('row')
 		.filter({ has: page.getByRole('cell', { name: 'Ingested', exact: true }) });
-	await expect(ingested).toHaveCount(16);
+	await expect(ingested).toHaveCount(17);
 	await expect(
 		page
 			.getByRole('row')
@@ -154,23 +168,25 @@ test('reports and the ingest audit trail', async () => {
 
 test('browse, search and filter the library', async () => {
 	await page.goto('/');
-	await expect(page.getByText('14 games')).toBeVisible();
+	await expect(page.getByText('15 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
-	// S1: systems in display-name order, "All systems" first.
+	// S1: systems in display-name order, "All systems" first; F3: each with its game count.
 	await expect(page.getByLabel('System').locator('option')).toHaveText([
 		'All systems',
-		'Atari 2600',
-		'ColecoVision',
-		'Game Boy',
-		'Game Boy Advance',
-		'Game Boy Color',
-		'Game Gear',
-		'Master System',
-		'Mega Drive / Genesis',
-		'Nintendo 64',
-		'Nintendo Entertainment System',
-		'Super Nintendo Entertainment System'
+		'32X (1)',
+		'Atari 2600 (1)',
+		'ColecoVision (1)',
+		'Game Boy (3)',
+		'Game Boy Advance (1)',
+		'Game Boy Color (2)',
+		'Game Gear (1)',
+		'Master System (1)',
+		'Mega Drive / Genesis (1)',
+		'Nintendo 64 (1)',
+		'Nintendo Entertainment System (1)',
+		'Super Nintendo Entertainment System (1)'
 	]);
+	await expect(page.getByLabel('Letter').locator('option').nth(1)).toHaveText(/^# \(\d+\)$/);
 
 	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('orb');
 	await expect(page).toHaveURL(/q=orb/);
@@ -178,60 +194,66 @@ test('browse, search and filter the library', async () => {
 	await expect(page.getByText('2 games', { exact: true })).toBeVisible();
 
 	await page.goto('/');
-	await page.getByLabel('System').selectOption({ label: 'Game Boy Color' });
+	await page.getByLabel('System').selectOption('gbc');
 	await expect(page).toHaveURL(/system=gbc/);
 	await expect(page.getByText('2 games')).toBeVisible();
 
-	await page.getByLabel('System').selectOption({ label: 'Game Boy Advance' });
+	await page.getByLabel('System').selectOption('gba');
 	await expect(page).toHaveURL(/system=gba/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 
 	// Seeded byte-swapped (.v64): it only shows up if ingestion matched it to the DAT after conversion.
-	await page.getByLabel('System').selectOption({ label: 'Nintendo 64' });
+	await page.getByLabel('System').selectOption('n64');
 	await expect(page).toHaveURL(/system=n64/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Orbit Kart 64', exact: true })).toBeVisible();
 
-	await page.getByLabel('System').selectOption({ label: 'Nintendo Entertainment System' });
+	await page.getByLabel('System').selectOption('nes');
 	await expect(page).toHaveURL(/system=nes/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Pixel Pioneer', exact: true })).toBeVisible();
 
 	// Seeded copier-headered (.smc): it only shows up if ingestion matched it to the DAT after stripping the header.
-	await page.getByLabel('System').selectOption({ label: 'Super Nintendo Entertainment System' });
+	await page.getByLabel('System').selectOption('snes');
 	await expect(page).toHaveURL(/system=snes/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Mode Seven Rally', exact: true })).toBeVisible();
 
 	// Seeded as a loose .bin: it only shows up if ingestion accepted it and matched it to the Atari DAT (A3).
-	await page.getByLabel('System').selectOption({ label: 'Atari 2600' });
+	await page.getByLabel('System').selectOption('a2600');
 	await expect(page).toHaveURL(/system=a2600/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Laser Lanes', exact: true })).toBeVisible();
 
 	// Seeded as a loose .rom: it only shows up if ingestion accepted it and matched it to the ColecoVision DAT (C4).
-	await page.getByLabel('System').selectOption({ label: 'ColecoVision' });
+	await page.getByLabel('System').selectOption('coleco');
 	await expect(page).toHaveURL(/system=coleco/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Pixel Pursuit', exact: true })).toBeVisible();
 
 	// G4: the seeded .gg with a TMR SEGA header, matched to the Game Gear DAT.
-	await page.getByLabel('System').selectOption({ label: 'Game Gear' });
+	await page.getByLabel('System').selectOption('gg');
 	await expect(page).toHaveURL(/system=gg/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Pocket Drift', exact: true })).toBeVisible();
 
 	// M3: the seeded .sms with a TMR SEGA header, matched to the Master System DAT.
-	await page.getByLabel('System').selectOption({ label: 'Master System' });
+	await page.getByLabel('System').selectOption('sms');
 	await expect(page).toHaveURL(/system=sms/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Harbor Patrol', exact: true })).toBeVisible();
 
 	// D3: seeded as a loose .gen, matched to the Mega Drive DAT and stored as .md.
-	await page.getByLabel('System').selectOption({ label: 'Mega Drive / Genesis' });
+	await page.getByLabel('System').selectOption('md');
 	await expect(page).toHaveURL(/system=md/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Turbo Comet', exact: true })).toBeVisible();
+
+	// X4: the seeded .32x with a Mega Drive-style header, matched to the 32X DAT.
+	await page.getByLabel('System').selectOption('s32x');
+	await expect(page).toHaveURL(/system=s32x/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Star Relay', exact: true })).toBeVisible();
 
 	// "Quest, The" is shown as "The Quest" but filed under Q (§5, §6.1).
 	await page.goto('/');
@@ -269,6 +291,39 @@ test('game detail + downloads', async () => {
 	await items.first().click();
 	expect((await rom).suggestedFilename()).toBe('Orbit Blocks (World) (Rev 1).gb');
 
+	// R1/R2: release cards start collapsed; the chevron shows the details (CRC32, SHA1 and their copy buttons).
+	const release = page.getByRole('article', { name: 'Orbit Blocks (World) (Rev 1).gb' });
+	await expect(release.getByRole('button', { name: 'Copy CRC32' })).toBeHidden();
+	await release.getByRole('button', { name: 'Show details for Orbit Blocks (World) (Rev 1).gb' }).click();
+	await expect(release.getByText('CRC32')).toBeVisible();
+	await expect(release.getByRole('button', { name: 'Copy CRC32' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Expand all' })).toBeVisible();
+	await page.getByRole('button', { name: 'Expand all' }).click();
+	await expect(page.getByRole('button', { name: 'Collapse all' })).toBeVisible();
+	await expectAccessible(page, 'game detail with releases expanded');
+
+	// Z1–Z4: the Zip Contents tab lists the ZIP and downloads one entry.
+	await page.getByRole('tab', { name: 'Zip Contents' }).click();
+	await expect(page).toHaveURL(/tab=zip/);
+	const folders = page.getByRole('list', { name: 'Folders' });
+	await expect(folders.getByRole('button', { name: 'Orbit Blocks.zip', exact: true })).toHaveAttribute('aria-current', 'true');
+	await expect(page.getByRole('table', { name: 'Contents of Orbit Blocks.zip' })).toContainText('info.json');
+	await expectAccessible(page, 'zip contents');
+	await folders.getByRole('button', { name: 'roms', exact: true }).click();
+	const contents = page.getByRole('table', { name: 'Contents of roms' });
+	const romName = 'Orbit Blocks (World) (Rev 1).gb';
+	await expect(contents).toContainText(romName);
+	const gameId = new URL(page.url()).pathname.split('/')[2];
+	const listing = await (await page.request.get(`/api/games/${gameId}/zip-entries`)).json();
+	const entry = listing.entries.find((e: { path: string }) => e.path === `roms/${romName}`);
+	const entryDownload = page.waitForEvent('download');
+	await contents.getByRole('link', { name: `Download ${romName}` }).click();
+	const downloaded = await entryDownload;
+	expect(downloaded.suggestedFilename()).toBe(romName);
+	const { size } = await stat(await downloaded.path());
+	expect(size).toBe(entry.sizeBytes);
+	await page.getByRole('tab', { name: /^Releases/ }).click();
+
 	// G2: release cards, no sideways page scroll on a phone (Orbit Blocks has the longest seeded file name).
 	await expect(page.getByRole('article', { name: 'Orbit Blocks (World) (Rev 1).gb' })).toBeVisible();
 	// R1: each release card has a 6px stripe in the system colour.
@@ -297,7 +352,7 @@ test('game detail + downloads', async () => {
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await page.goto('/');
-	await expect(page.getByText('14 games')).toBeVisible();
+	await expect(page.getByText('15 games')).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await expect(dialog()).toBeVisible();
 	await expect(dialog().getByRole('combobox')).toBeFocused();
@@ -374,7 +429,7 @@ test('collections: create, add from game page and bulk select, search, remove, d
 
 	// B26: add a game from another system with the Library's bulk select.
 	await page.goto('/');
-	await page.getByLabel('System').selectOption({ label: 'Nintendo 64' });
+	await page.getByLabel('System').selectOption('n64');
 	await expect(page).toHaveURL(/system=n64/);
 	await page.getByRole('button', { name: 'Select', exact: true }).click();
 	await page.getByRole('checkbox', { name: 'Select Orbit Kart 64' }).check();
@@ -426,7 +481,7 @@ test('collections: create, add from game page and bulk select, search, remove, d
 	await expect(page).toHaveURL(/\/collections$/);
 	await expect(page.getByText('You have no collections yet.')).toBeVisible();
 	await page.goto('/');
-	await expect(page.getByText('14 games')).toBeVisible();
+	await expect(page.getByText('15 games')).toBeVisible();
 });
 
 test('review queue: resolve with a suggestion', async () => {

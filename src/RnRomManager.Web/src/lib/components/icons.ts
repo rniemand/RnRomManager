@@ -39,6 +39,9 @@ export const icons: Record<string, string> = {
 	'sort-asc': 'bi bi-sort-up-alt',
 	'sort-desc': 'bi bi-sort-down',
 	list: 'bi bi-list-ul',
+	/** Points right; rotated 90° (down) when its toggle is expanded (`.chevron-toggle`). */
+	chevron: 'bi bi-chevron-right',
+	folder: 'bi bi-folder',
 	info: 'bi bi-info-circle',
 	help: 'bi bi-question-circle',
 	warning: 'bi bi-exclamation-triangle',

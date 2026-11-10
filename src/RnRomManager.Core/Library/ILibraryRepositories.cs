@@ -14,6 +14,12 @@ public interface IGameRepository
     /// <summary>The library list: filters, sort (year nulls last), tie-break <c>id</c>, one page (spec §23, §14.2).</summary>
     Task<Page<GameListItem>> ListAsync(GameQuery query, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Filter counts (F1, F2): per system, region and letter, the games matching every filter of <paramref name="query"/>
+    /// except that facet's own. Only values with at least one game; sort, paging and collections are ignored.
+    /// </summary>
+    Task<GameFacets> ListFacetsAsync(GameQuery query, CancellationToken cancellationToken);
+
     /// <summary>Counts and regions for every system that has games (spec §23 <c>/api/systems</c>).</summary>
     Task<IReadOnlyList<SystemStats>> ListSystemStatsAsync(CancellationToken cancellationToken);
 
@@ -59,3 +65,7 @@ public interface ILibraryMirror
 
     Task DeleteAsync(Guid gameId, CancellationToken cancellationToken) => ApplyAsync([], [gameId], cancellationToken);
 }
+
+/// <summary>Game counts per system id, region and letter bucket (F2); a multi-region game counts once per region.</summary>
+public sealed record GameFacets(
+    IReadOnlyDictionary<string, int> Systems, IReadOnlyDictionary<string, int> Regions, IReadOnlyDictionary<string, int> Letters);

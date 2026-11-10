@@ -67,6 +67,7 @@ public class LibraryMoveMergeTests
             [IngestSeeder.GameGearDat] = [],
             [IngestSeeder.MasterSystemDat] = [],
             [IngestSeeder.MegaDriveDat] = [],
+            [IngestSeeder.Sega32xDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld) { ReleaseYear = 1989, Developers = ["Nintendo"] },

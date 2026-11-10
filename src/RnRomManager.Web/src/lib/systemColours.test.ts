@@ -15,6 +15,10 @@ describe('systemColour', () => {
 		expect(systemColour('md')).toEqual({ name: 'md', foreground: '#fff' });
 	});
 
+	it('gives 32X its own orange with black text (X5)', () => {
+		expect(systemColour('s32x')).toEqual({ name: 's32x', foreground: '#000' });
+	});
+
 	it('keeps an unknown system neutral', () => {
 		expect(systemColour('sg1000')).toBe(fallbackColour);
 	});

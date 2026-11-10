@@ -41,6 +41,7 @@ public class IngestArchiveTests
             [IngestSeeder.GameGearDat] = [],
             [IngestSeeder.MasterSystemDat] = [],
             [IngestSeeder.MegaDriveDat] = [],
+            [IngestSeeder.Sega32xDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ),
