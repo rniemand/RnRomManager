@@ -19,6 +19,8 @@ roms/
   a2600/                Atari 2600 (.a26 or .bin, as the DAT names it)
   coleco/               ColecoVision (.col)
   gg/                   Game Gear (.gg, or .sms for SMS-mode games, as the DAT names it)
+  sms/                  Master System (.sms)
+  md/                   Mega Drive / Genesis (.md, or .bin for the one lock-on entry, as the DAT names it)
 ```
 
 Inside a game's ZIP:
@@ -87,7 +89,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 |---|---|---|---|
 | `schemaVersion` | int | ✓ | `3` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `a2600`, `coleco`, `gg`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `a2600`, `coleco`, `gg`, `sms`, `md`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
 | `releaseYear` | int? | | from the DAT metadata |
@@ -138,7 +140,9 @@ Atari 2600 cartridges have no header: `header` is always null.
 
 ColecoVision `header`: `magic`, the first two bytes as upper-case hex (`AA55` shows the title screen, `55AA` skips it; anything else is not a valid header, empty for an empty file).
 
-Game Gear `header`, from the optional `TMR SEGA` header (looked for at 0x7FF0, 0x3FF0, then 0x1FF0; without it `header` is null): `offset` (`7FF0`, `3FF0` or `1FF0`), `checksum` (bytes +10–11, little-endian, 4 upper-case hex digits), `productCode` (the BCD product code as hex digits, leading zeros trimmed), `version` (low nibble of +14), `region` (`SMS Japan`, `SMS Export`, `GG Japan`, `GG Export`, `GG International`, or the nibble in hex) and `sizeCode` (low nibble of +15).
+Game Gear `header`, from the optional `TMR SEGA` header (looked for at 0x7FF0, 0x3FF0, then 0x1FF0; without it `header` is null): `offset` (`7FF0`, `3FF0` or `1FF0`), `checksum` (bytes +10–11, little-endian, 4 upper-case hex digits), `productCode` (the BCD product code as hex digits, leading zeros trimmed), `version` (low nibble of +14), `region` (`SMS Japan`, `SMS Export`, `GG Japan`, `GG Export`, `GG International`, or the nibble in hex) and `sizeCode` (low nibble of +15). Master System `header` has the same fields, read the same way.
+
+Mega Drive / Genesis `header`, present only when the 16-byte field at 0x100 starts with `SEGA` (without it `header` is null). Text fields are ASCII with every byte outside 0x20–0x7E turned into a space, runs of spaces collapsed and trimmed (empty → null): `systemType` (0x100, 16 bytes), `copyright` (0x110, 16), `domesticTitle` (0x120, 48), `overseasTitle` (0x150, 48), `serial` (0x180, 14), `region` (0x1F0, 3); `checksum` is bytes 0x18E–0x18F, big-endian, 4 upper-case hex digits (stored, not verified).
 
 ### Image
 
