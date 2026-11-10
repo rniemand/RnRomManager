@@ -42,6 +42,7 @@ const base = {
 	id: 7,
 	system: 'gb',
 	systemName: 'Game Boy',
+	systemShortName: 'GB',
 	sourcePath: 'ingest/gb/tetris hack.gb',
 	archivePath: null,
 	archiveEntry: null,

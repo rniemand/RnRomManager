@@ -2,23 +2,33 @@
 	import { onDestroy } from 'svelte';
 	import { api } from '../api/client';
 	import type { GameListItem, Page } from '../api/types';
+	import Icon from './Icon.svelte';
 	import SystemBadge from './SystemBadge.svelte';
 
 	/**
 	 * Game picker for move / merge / attach (spec §11): `GET /api/games?q=…&system=…&pageSize=10`, debounced 300 ms,
 	 * from 2 characters; the source game is left out client-side. Without `system` it searches every system and
-	 * shows each result's system (B24).
+	 * shows each result's short system name (B24, P4). `excludeCollection` leaves out that collection's games (P2).
 	 */
 	interface Props {
 		id: string;
 		label: string;
 		system?: string;
 		excludeId?: string;
+		excludeCollection?: string;
 		selected: GameListItem | null;
 		invalid?: string;
 	}
 
-	let { id, label, system, excludeId, selected = $bindable(), invalid }: Props = $props();
+	let {
+		id,
+		label,
+		system,
+		excludeId,
+		excludeCollection,
+		selected = $bindable(),
+		invalid
+	}: Props = $props();
 
 	let query = $state('');
 	let results = $state<GameListItem[]>([]);
@@ -48,7 +58,12 @@
 		controller = new AbortController();
 		const signal = controller.signal;
 		searching = true;
-		const params = new URLSearchParams({ q, ...(system ? { system } : {}), pageSize: '10' });
+		const params = new URLSearchParams({
+			q,
+			...(system ? { system } : {}),
+			...(excludeCollection ? { notInCollection: excludeCollection } : {}),
+			pageSize: '10'
+		});
 		try {
 			const page = await api.get<Page<GameListItem>>(`/api/games?${params}`, { signal });
 			results = page.items.filter((game) => game.id !== excludeId);
@@ -97,10 +112,29 @@
 		{#each results as game (game.id)}
 			<button
 				type="button"
-				class="list-group-item list-group-item-action"
+				class="list-group-item list-group-item-action d-flex align-items-center gap-2"
 				onclick={() => select(game)}
 			>
-				{#if !system}<SystemBadge system={game.system} name={game.systemName} />{/if}
+				<span
+					class="flex-shrink-0 bg-body-secondary rounded d-flex align-items-center justify-content-center overflow-hidden"
+					style="width: 32px; height: 40px"
+				>
+					{#if game.boxArtUrl}
+						<img
+							class="w-100 h-100 object-fit-contain"
+							src={game.boxArtUrl}
+							alt=""
+							loading="lazy"
+						/>
+					{:else}
+						<Icon name="system-{game.system}" />
+					{/if}
+				</span>
+				{#if !system}<SystemBadge
+						system={game.system}
+						name={game.systemShortName}
+						title={game.systemName}
+					/>{/if}
 				{game.displayTitle}
 				{#if game.releaseYear}<span class="text-body-secondary small">({game.releaseYear})</span
 					>{/if}

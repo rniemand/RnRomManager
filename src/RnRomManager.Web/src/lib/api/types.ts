@@ -54,6 +54,8 @@ export interface GameListItem {
 	boxArtUrl: string | null;
 	/** The handler's display name, or the id when it isn't registered. */
 	systemName: string;
+	/** The handler's short name (`SNES`) for game pickers, or the id when it isn't registered. */
+	systemShortName: string;
 	/** 1–5; null = not rated. Shared per game. */
 	rating: number | null;
 	favourite: boolean;

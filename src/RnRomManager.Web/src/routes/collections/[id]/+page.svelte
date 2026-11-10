@@ -252,7 +252,12 @@
 	<div class="row mb-3">
 		<div class="col-12 col-md-6 col-lg-4">
 			{#key pickerKey}
-				<GameTypeahead id="add-game" label="Add games" bind:selected={picked} />
+				<GameTypeahead
+					id="add-game"
+					label="Add games"
+					excludeCollection={id}
+					bind:selected={picked}
+				/>
 			{/key}
 		</div>
 	</div>
