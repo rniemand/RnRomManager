@@ -291,7 +291,7 @@
 		</ul>
 
 		<!-- Panels stay mounted (hidden, not removed), so selections survive a tab switch. -->
-		<section
+		<div
 			class="mb-4"
 			id="pending-panel"
 			role="tabpanel"
@@ -332,9 +332,9 @@
 					/>
 				{/each}
 			{/if}
-		</section>
+		</div>
 
-		<section
+		<div
 			class="mb-4"
 			id="failed-panel"
 			role="tabpanel"
@@ -377,9 +377,9 @@
 					/>
 				{/each}
 			{/if}
-		</section>
+		</div>
 
-		<section id="runs-panel" role="tabpanel" aria-labelledby="runs-tab" hidden={tab !== 'runs'}>
+		<div id="runs-panel" role="tabpanel" aria-labelledby="runs-tab" hidden={tab !== 'runs'}>
 			<h2 class="h5 visually-hidden">Last runs</h2>
 			{#if !runs || runs.items.length === 0}
 				<div class="card"><EmptyState message="No ingestion has run yet." /></div>
@@ -419,7 +419,7 @@
 					label="Pages of runs"
 				/>
 			{/if}
-		</section>
+		</div>
 	{/if}
 
 	<ConfirmModal

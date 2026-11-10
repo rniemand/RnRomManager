@@ -86,14 +86,14 @@
 		<div class="d-flex align-items-center gap-1">
 			<button
 				type="button"
-				class="btn btn-sm btn-link p-0 text-body chevron-toggle"
+				class="btn btn-sm btn-link text-body chevron-toggle"
 				aria-expanded={open}
 				aria-label="{open ? 'Collapse' : 'Expand'} {label(f)}"
 				onclick={() => toggle(f.path)}><Icon name="chevron" /></button
 			>
 			<button
 				type="button"
-				class="btn btn-sm btn-link p-0 text-start text-break text-decoration-none"
+				class="btn btn-sm btn-link text-start text-break text-decoration-none"
 				class:fw-semibold={selected === f.path}
 				aria-current={selected === f.path ? 'true' : undefined}
 				onclick={() => select(f.path)}><Icon name="folder" /> {label(f)}</button
