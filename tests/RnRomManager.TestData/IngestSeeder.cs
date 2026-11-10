@@ -100,6 +100,18 @@ public static class IngestSeeder
         { ReleaseYear = 1992, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Racing"] };
         // Its TMR SEGA header (G3) shows on the release; the match proves .gg ingestion.
         Loose("gg", "01-pocket-drift.gg", driftRom);
+        var harborRom = new byte[32768];
+        new Random(1501).NextBytes(harborRom);
+        System.Text.Encoding.ASCII.GetBytes("TMR SEGA").CopyTo(harborRom, 0x7FF0);
+        harborRom[0x7FFF] = 0x4C; // SMS Export, size code 12
+        var harbor = new FixtureGame("Harbor Patrol (World)", "Harbor Patrol (World).sms", harborRom)
+        { ReleaseYear = 1988, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Action"] };
+        Loose("sms", "01-harbor-patrol.sms", harborRom);
+        var cometRom = new SyntheticMegaDriveRomBuilder { Seed = 1601, Size = 524288 }.Build();
+        var comet = new FixtureGame("Turbo Comet (USA, Europe)", "Turbo Comet (USA, Europe).md", cometRom)
+        { ReleaseYear = 1991, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Racing"] };
+        // A loose .gen: ingestion must accept it and store the DAT's .md name (D3).
+        Loose("md", "01-turbo-comet.gen", cometRom);
 
         var zipPath = Path.Combine(ingest, "gb", "05-quest.zip");
         using (var file = File.Create(zipPath))
@@ -130,7 +142,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [], [MegaDriveDat] = [] });
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet] });
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
     }
