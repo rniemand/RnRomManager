@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -160,6 +162,32 @@
 	}
 
 	const list = (items: string[]) => (items.length ? items.join(', ') : '—');
+
+	// R1–R4: release cards start collapsed. Open ones are kept by file name (unique within a game; ROM ids change on
+	// every ZIP rewrite), so a reload of the same game keeps them; a new game id starts collapsed again.
+	const openReleases = new SvelteSet<string>();
+	$effect(() => {
+		void id;
+		untrack(() => openReleases.clear());
+	});
+	const allReleasesOpen = $derived(game?.roms.every((r) => openReleases.has(r.fileName)) ?? false);
+
+	function toggleRelease(fileName: string): void {
+		if (openReleases.has(fileName)) openReleases.delete(fileName);
+		else openReleases.add(fileName);
+	}
+
+	/** R2: empty header space toggles; its buttons and links don't, nor does ending a text selection (copying the name). */
+	function onReleaseHeaderClick(event: MouseEvent, fileName: string): void {
+		if ((event.target as Element).closest('button, a')) return;
+		if (getSelection()?.toString()) return;
+		toggleRelease(fileName);
+	}
+
+	function toggleAllReleases(): void {
+		if (allReleasesOpen) openReleases.clear();
+		else game?.roms.forEach((r) => openReleases.add(r.fileName));
+	}
 
 	// GP1: the tab is URL state (`?tab=images`); switching never reloads the game (the load effect keys on the id).
 	type Tab = 'releases' | 'images';
@@ -389,17 +417,38 @@
 		hidden={tab !== 'releases'}
 	>
 		<h2 class="h5 visually-hidden">Releases</h2>
+		{#if game.roms.length >= 2}
+			<button
+				type="button"
+				class="btn btn-sm btn-outline-secondary mb-2"
+				onclick={toggleAllReleases}>{allReleasesOpen ? 'Collapse all' : 'Expand all'}</button
+			>
+		{/if}
 		<!-- G2: one card per release, so nothing scrolls sideways on a phone. -->
 		<div class="d-flex flex-column gap-3 mb-4">
 			{#each game.roms as rom (rom.id)}
+				{@const open = openReleases.has(rom.fileName)}
 				<!-- R1: a stripe in the system's colour and a tinted header mark where each release starts. -->
 				<article
 					class="card"
 					style="border-left: 6px solid var(--bs-{systemColour(game.system).name})"
 					aria-labelledby="release-{rom.id}-name"
 				>
-					<div class="card-header bg-body-tertiary release-header">
+					<!-- The chevron button is the keyboard path; a click on empty header space is a mouse shortcut. -->
+					<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+					<div
+						class="card-header bg-body-tertiary release-header"
+						onclick={(e) => onReleaseHeaderClick(e, rom.fileName)}
+					>
 						<div class="d-flex flex-wrap align-items-center gap-2">
+							<button
+								type="button"
+								class="btn btn-sm btn-link p-0 text-body chevron-toggle"
+								aria-expanded={open}
+								aria-controls="release-{rom.id}-details"
+								aria-label="{open ? 'Hide' : 'Show'} details for {rom.fileName}"
+								onclick={() => toggleRelease(rom.fileName)}><Icon name="chevron" /></button
+							>
 							<h3 class="h6 mb-0 text-break" id="release-{rom.id}-name">{rom.fileName}</h3>
 							{#if rom.isPrimary}<span class="badge text-bg-primary">Primary</span>{/if}
 							{#each rom.regions as region (region)}
@@ -457,7 +506,7 @@
 							</div>
 						{/if}
 					</div>
-					<div class="card-body small">
+					<div class="card-body small" id="release-{rom.id}-details" hidden={!open}>
 						<div class="row row-cols-1 row-cols-sm-3 g-2 mb-2">
 							<div class="col">
 								<div class="text-body-secondary">Revision</div>

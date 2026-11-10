@@ -150,3 +150,20 @@
 		transform: none;
 	}
 }
+
+/* Release cards and the Zip tree (R2, Z4): the chevron points down when expanded; the release header is clickable. */
+.chevron-toggle .bi {
+	display: inline-block;
+	transition: transform 150ms ease;
+}
+.chevron-toggle[aria-expanded='true'] .bi {
+	transform: rotate(90deg);
+}
+.release-header {
+	cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) {
+	.chevron-toggle .bi {
+		transition: none;
+	}
+}

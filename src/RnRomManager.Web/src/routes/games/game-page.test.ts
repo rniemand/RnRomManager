@@ -8,7 +8,10 @@ const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
 vi.mock('$app/navigation', () => ({ goto: (...args: [string, unknown?]) => goto(...args) }));
 vi.mock('$app/state', () => ({
 	page: {
-		params: { id: 'g1' },
+		// The id follows the test URL (`/games/<id>`), so a navigation to another game changes it like in the app.
+		get params() {
+			return { id: testUrl.current.pathname.split('/')[2] };
+		},
 		get url() {
 			return testUrl.current;
 		}
@@ -157,6 +160,7 @@ describe('game detail page', () => {
 		render(GamePage);
 
 		const card = await screen.findByRole('article', { name: 'Tetris 1.gb' });
+		await fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
 		expect(screen.getAllByRole('article')).toHaveLength(2);
 		expect(card.className).toBe('card');
 		const heading = card.querySelector('h3')!;
@@ -181,8 +185,119 @@ describe('game detail page', () => {
 		const labels = [...card.querySelectorAll('.card-header button')].map(
 			(b) => b.getAttribute('aria-label') ?? b.textContent?.trim()
 		);
-		expect(labels).toEqual(['Header', 'Add note for Tetris 1.gb', 'Download Tetris 1.gb']);
+		expect(labels).toEqual([
+			'Hide details for Tetris 1.gb',
+			'Header',
+			'Add note for Tetris 1.gb',
+			'Download Tetris 1.gb'
+		]);
 		expect(document.getElementById('releases-panel')!.querySelector('table')).toBeNull();
+	});
+
+	const details = (name: string) =>
+		screen.getByRole('article', { name }).querySelector<HTMLElement>('.card-body')!;
+	const chevron = (name: string) =>
+		screen.getByRole('button', { name: new RegExp(`^(Show|Hide) details for ${name}$`) });
+
+	it('release cards start collapsed; the chevron toggles the details and its label (R1, R2)', async () => {
+		answers.push({ status: 200, body: game([1, 2]) });
+		render(GamePage);
+		await screen.findByRole('article', { name: 'Tetris 1.gb' });
+
+		const toggle = chevron('Tetris 1.gb');
+		expect(details('Tetris 1.gb').hidden).toBe(true);
+		expect(details('Tetris 1.gb').id).toBe('release-1-details');
+		expect(toggle.getAttribute('aria-expanded')).toBe('false');
+		expect(toggle.getAttribute('aria-controls')).toBe('release-1-details');
+		expect(toggle.getAttribute('aria-label')).toBe('Show details for Tetris 1.gb');
+		expect(details('Tetris 1.gb').querySelector('[aria-label="Copy CRC32"]')).not.toBeNull();
+
+		await fireEvent.click(toggle);
+		expect(details('Tetris 1.gb').hidden).toBe(false);
+		expect(toggle.getAttribute('aria-expanded')).toBe('true');
+		expect(toggle.getAttribute('aria-label')).toBe('Hide details for Tetris 1.gb');
+		expect(details('Tetris 2.gb').hidden).toBe(true);
+
+		await fireEvent.click(toggle);
+		expect(details('Tetris 1.gb').hidden).toBe(true);
+	});
+
+	it('a click on empty header space toggles; header buttons and a text selection do not (R2)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+		const card = await screen.findByRole('article', { name: 'Tetris 1.gb' });
+		const header = card.querySelector<HTMLElement>('.card-header')!;
+
+		await fireEvent.click(header);
+		expect(details('Tetris 1.gb').hidden).toBe(false);
+		await fireEvent.click(card.querySelector('h3')!);
+		expect(details('Tetris 1.gb').hidden).toBe(true);
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Header' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Add note for Tetris 1.gb' }));
+		expect(details('Tetris 1.gb').hidden).toBe(true);
+
+		vi.stubGlobal('getSelection', () => ({ toString: () => 'Tetris 1' }));
+		await fireEvent.click(header);
+		expect(details('Tetris 1.gb').hidden).toBe(true);
+	});
+
+	it('Download in the header does not toggle (R2)', async () => {
+		answers.push({ status: 200, body: game([1]) }, { status: 200, body: game([1]) });
+		render(GamePage);
+		await screen.findByRole('article', { name: 'Tetris 1.gb' });
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Download Tetris 1.gb' }));
+		await vi.waitFor(() => expect(assign).toHaveBeenCalled());
+		expect(details('Tetris 1.gb').hidden).toBe(true);
+	});
+
+	it('Expand all / Collapse all, shown only with two or more releases (R3)', async () => {
+		answers.push({ status: 200, body: game([1, 2]) });
+		render(GamePage);
+		await screen.findByRole('article', { name: 'Tetris 1.gb' });
+
+		await fireEvent.click(chevron('Tetris 1.gb'));
+		await fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
+		expect([details('Tetris 1.gb').hidden, details('Tetris 2.gb').hidden]).toEqual([false, false]);
+		await fireEvent.click(chevron('Tetris 2.gb'));
+		expect(screen.getByRole('button', { name: 'Expand all' })).toBeTruthy();
+		await fireEvent.click(chevron('Tetris 2.gb'));
+		await fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
+		expect([details('Tetris 1.gb').hidden, details('Tetris 2.gb').hidden]).toEqual([true, true]);
+	});
+
+	it('one release has no Expand all button (R3)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+		await screen.findByRole('article', { name: 'Tetris 1.gb' });
+
+		expect(screen.queryByRole('button', { name: /^(Expand|Collapse) all$/ })).toBeNull();
+	});
+
+	it('open state survives a same-game reload with new ROM ids, and resets on another game (R4)', async () => {
+		const reloaded = { ...game([7, 8]), rating: 4 };
+		reloaded.roms.forEach((r, i) => (r.fileName = `Tetris ${i + 1}.gb`));
+		answers.push(
+			{ status: 200, body: game([1, 2]) },
+			{ status: 204 }, // GET /api/auth/antiforgery before the first mutation
+			{ status: 200, body: reloaded }
+		);
+		render(GamePage);
+		await screen.findByRole('article', { name: 'Tetris 1.gb' });
+		await fireEvent.click(chevron('Tetris 1.gb'));
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Rate 4 of 5' }));
+		await vi.waitFor(() => expect(details('Tetris 1.gb').id).toBe('release-7-details'));
+		expect(details('Tetris 1.gb').hidden).toBe(false);
+		expect(details('Tetris 2.gb').hidden).toBe(true);
+
+		const other = { ...game([1, 2]), id: 'g2' };
+		answers.push({ status: 200, body: other });
+		navigateTo('/games/g2');
+		await vi.waitFor(() => expect(fetches).toBe(3));
+		await screen.findByRole('article', { name: 'Tetris 1.gb' });
+		expect(details('Tetris 1.gb').hidden).toBe(true);
 	});
 
 	it('Releases is the default tab; both panels stay in the DOM (GP1)', async () => {
