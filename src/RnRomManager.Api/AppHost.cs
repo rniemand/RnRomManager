@@ -164,6 +164,7 @@ public static class AppHost
         builder.Services.AddSystemHandler<GameGearHandler>();
         builder.Services.AddSystemHandler<MasterSystemHandler>();
         builder.Services.AddSystemHandler<MegaDriveHandler>();
+        builder.Services.AddSystemHandler<Sega32xHandler>();
 
         // Keys live in the DB so cookies survive restarts (spec §9.2).
         builder.Services.AddSingleton<IXmlRepository, DbXmlRepository>();

@@ -15,7 +15,8 @@ export interface SystemColour {
 		| 'coleco'
 		| 'gg'
 		| 'sms'
-		| 'md';
+		| 'md'
+		| 's32x';
 	foreground: '#fff' | '#000';
 }
 
@@ -30,7 +31,8 @@ export const systemColours: Record<string, SystemColour> = {
 	coleco: { name: 'coleco', foreground: '#fff' },
 	gg: { name: 'gg', foreground: '#fff' },
 	sms: { name: 'sms', foreground: '#fff' },
-	md: { name: 'md', foreground: '#fff' }
+	md: { name: 'md', foreground: '#fff' },
+	s32x: { name: 's32x', foreground: '#000' }
 };
 
 /** Unknown systems stay neutral. */

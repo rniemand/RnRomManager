@@ -16,6 +16,7 @@ public static class IngestSeeder
     public const string GameGearDat = "Sega - Game Gear";
     public const string MasterSystemDat = "Sega - Master System - Mark III";
     public const string MegaDriveDat = "Sega - Mega Drive - Genesis";
+    public const string Sega32xDat = "Sega - 32X";
 
     public static void Seed(string ingest, string cache, SeedSet set, TimeProvider time)
     {
@@ -34,6 +35,7 @@ public static class IngestSeeder
         Directory.CreateDirectory(Path.Combine(ingest, "gg"));
         Directory.CreateDirectory(Path.Combine(ingest, "sms"));
         Directory.CreateDirectory(Path.Combine(ingest, "md"));
+        Directory.CreateDirectory(Path.Combine(ingest, "s32x"));
         var files = new List<string>();
         var gb = new List<FixtureGame>();
         var gbc = new List<FixtureGame>();
@@ -142,7 +144,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet] });
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [] });
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
     }

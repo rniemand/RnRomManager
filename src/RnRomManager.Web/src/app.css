@@ -117,3 +117,12 @@
 	color: #fff !important;
 	background-color: var(--bs-md) !important;
 }
+
+/* 32X system colour (X5): orange, same in both themes; black on it is AA (~5.9:1). */
+:root {
+	--bs-s32x: #e8590c;
+}
+.text-bg-s32x {
+	color: #000 !important;
+	background-color: var(--bs-s32x) !important;
+}
