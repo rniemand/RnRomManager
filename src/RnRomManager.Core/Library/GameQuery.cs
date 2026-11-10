@@ -23,6 +23,9 @@ public sealed record GameQuery
     /// <summary>Only games in this collection (B15); <see cref="GameSort.Added"/> then sorts by when each was added to it.</summary>
     public Guid? CollectionId { get; init; }
 
+    /// <summary>Only games not in this collection (P1), e.g. the Add games picker.</summary>
+    public Guid? NotInCollectionId { get; init; }
+
     public GameSort Sort { get; init; } = GameSort.Title;
     public bool Descending { get; init; }
     public int Page { get; init; } = 1;

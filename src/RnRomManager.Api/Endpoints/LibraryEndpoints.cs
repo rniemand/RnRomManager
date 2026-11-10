@@ -32,16 +32,16 @@ public static class LibraryEndpoints
         var games = api.MapGroup("/games");
 
         games.MapGet("", async (string? system, string? letter, string? region, string? q, string? sort, string? dir, int? page,
-            int? pageSize, string? favourite, string? collection, HttpContext ctx, ISystemRegistry systems, IGameRepository repository,
+            int? pageSize, string? favourite, string? collection, string? notInCollection, HttpContext ctx, ISystemRegistry systems, IGameRepository repository,
             ICollectionRepository collections) =>
         {
-            var (query, errors) = ParseQuery(system, letter, region, q, sort, dir, page, pageSize, systems, favourite, collection);
+            var (query, errors) = ParseQuery(system, letter, region, q, sort, dir, page, pageSize, systems, favourite, collection, notInCollection);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            // B15: another user's collection answers 404 like a missing one.
-            if (query.CollectionId is { } collectionId
-                && await collections.GetAsync(collectionId, CollectionEndpoints.UserId(ctx), ctx.RequestAborted) is null)
-                return Problems.NotFound(ctx);
+            // B15/P1: another user's collection answers 404 like a missing one, before any membership is queried.
+            foreach (var collectionId in new[] { query.CollectionId, query.NotInCollectionId })
+                if (collectionId is { } id && await collections.GetAsync(id, CollectionEndpoints.UserId(ctx), ctx.RequestAborted) is null)
+                    return Problems.NotFound(ctx);
             var result = await repository.ListAsync(query, ctx.RequestAborted);
             return Results.Ok(Paging.ToDto(result, game => new
             {
@@ -502,7 +502,7 @@ public static class LibraryEndpoints
 
     public static (GameQuery Query, Dictionary<string, string[]> Errors) ParseQuery(string? system, string? letter, string? region,
         string? q, string? sort, string? dir, int? page, int? pageSize, ISystemRegistry systems, string? favourite = null,
-        string? collection = null)
+        string? collection = null, string? notInCollection = null)
     {
         var errors = Paging.Validate(page, pageSize);
         if (system is not null && systems.ById(system) is null)
@@ -543,14 +543,8 @@ public static class LibraryEndpoints
             case "false": onlyFavourite = false; break;
             default: errors["favourite"] = ["Must be true or false."]; break;
         }
-        Guid? collectionId = null;
-        if (collection is not null)
-        {
-            if (Guid.TryParse(collection, out var parsedCollection))
-                collectionId = parsedCollection;
-            else
-                errors["collection"] = ["Must be a collection id."];
-        }
+        var collectionId = ParseCollection(collection, "collection", errors);
+        var notInCollectionId = ParseCollection(notInCollection, "notInCollection", errors);
         var query = new GameQuery
         {
             System = system,
@@ -559,6 +553,7 @@ public static class LibraryEndpoints
             Search = q,
             Favourite = onlyFavourite,
             CollectionId = collectionId,
+            NotInCollectionId = notInCollectionId,
             Sort = gameSort,
             // §23: asc for title/year, desc for added (to the library, or to the collection: B15) and rating; relevance ignores it.
             Descending = gameSort != GameSort.Relevance && (dir is null ? gameSort is GameSort.Added or GameSort.Rating : dir == "desc"),
@@ -566,6 +561,16 @@ public static class LibraryEndpoints
             PageSize = pageSize ?? Page<GameListItem>.DefaultSize,
         };
         return (query, errors);
+    }
+
+    private static Guid? ParseCollection(string? value, string field, Dictionary<string, string[]> errors)
+    {
+        if (value is null)
+            return null;
+        if (Guid.TryParse(value, out var id))
+            return id;
+        errors[field] = ["Must be a collection id."];
+        return null;
     }
 
     internal static string ImageUrl(Guid gameId, long imageId) => $"/api/games/{gameId}/images/{imageId}";

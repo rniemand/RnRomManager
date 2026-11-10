@@ -20,8 +20,8 @@ public class GameQueryParsingTests
 
     private static (GameQuery Query, Dictionary<string, string[]> Errors) Parse(string? system = null, string? letter = null,
         string? region = null, string? q = null, string? sort = null, string? dir = null, int? page = null, int? pageSize = null,
-        string? favourite = null, string? collection = null) =>
-        LibraryEndpoints.ParseQuery(system, letter, region, q, sort, dir, page, pageSize, Systems, favourite, collection);
+        string? favourite = null, string? collection = null, string? notInCollection = null) =>
+        LibraryEndpoints.ParseQuery(system, letter, region, q, sort, dir, page, pageSize, Systems, favourite, collection, notInCollection);
 
     [Test]
     public void Defaults_TitleAscending_FirstPageOf48_NoFilters()
@@ -59,6 +59,26 @@ public class GameQueryParsingTests
     [TestCase("")]
     public void Collection_Malformed_IsAFieldError(string collection) =>
         Assert.That(Parse(collection: collection).Errors.Keys, Is.EquivalentTo(new[] { "collection" }));
+
+    [Test]
+    public void NotInCollection_IsAGuid_P1()
+    {
+        var id = Guid.NewGuid();
+        var (query, errors) = Parse(notInCollection: id.ToString());
+
+        Assert.That(errors, Is.Empty);
+        Assert.That((query.NotInCollectionId, query.CollectionId), Is.EqualTo(((Guid?)id, (Guid?)null)));
+        Assert.That(Parse().Query.NotInCollectionId, Is.Null);
+    }
+
+    [TestCase("abc")]
+    [TestCase("")]
+    public void NotInCollection_Malformed_IsAFieldError(string value)
+    {
+        var errors = Parse(notInCollection: value).Errors;
+        Assert.That(errors.Keys, Is.EquivalentTo(new[] { "notInCollection" }));
+        Assert.That(errors["notInCollection"], Is.EqualTo(new[] { "Must be a collection id." }));
+    }
 
     [Test]
     public void Normalises_LetterCase_TrimsSearchAndRegion_BlankMeansNoFilter()
