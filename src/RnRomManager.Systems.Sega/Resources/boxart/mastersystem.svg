@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Master System). Made for this project; MIT licensed like the rest of the repo.
+       Exported to mastersystem.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#f3e6e8"/>
+  <!-- console body: angular black box with a red stripe -->
+  <polygon points="56,212 456,212 476,332 36,332" fill="#1d1e22" stroke="#0e0f12" stroke-width="4"/>
+  <rect x="36" y="332" width="440" height="40" fill="#141519"/>
+  <rect x="56" y="244" width="400" height="10" fill="#c8102e"/>
+  <!-- cartridge slot with a cart -->
+  <rect x="176" y="150" width="160" height="70" rx="4" fill="#2c2e34"/>
+  <rect x="190" y="132" width="132" height="84" rx="4" fill="#c8102e"/>
+  <text x="256" y="190" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="40" font-weight="800" fill="#ffffff">SMS</text>
+  <!-- buttons -->
+  <rect x="96" y="286" width="44" height="16" rx="3" fill="#3a3d45"/>
+  <rect x="152" y="286" width="44" height="16" rx="3" fill="#3a3d45"/>
+  <circle cx="412" cy="294" r="9" fill="#c8102e"/>
+</svg>
