@@ -11,8 +11,8 @@ public class IngestSeederTests
     [SetUp] public void SetUp() => _dir = new TempDir();
     [TearDown] public void TearDown() => _dir.Dispose();
 
-    [TestCase(SeedSet.Basic, 21)]
-    [TestCase(SeedSet.Full, 221)]
+    [TestCase(SeedSet.Basic, 22)]
+    [TestCase(SeedSet.Full, 222)]
     public void Sets_HaveExpectedFilesArchivesAndReadyAges(SeedSet set, int count)
     {
         var ingest = _dir.Combine("ingest");
@@ -33,6 +33,7 @@ public class IngestSeederTests
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "sms", "01-harbor-patrol.sms"))[0x7FF0..0x7FF8], Is.EqualTo("TMR SEGA"u8.ToArray()));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "md", "01-turbo-comet.gen"))[0x100..0x104], Is.EqualTo("SEGA"u8.ToArray()));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "s32x", "01-star-relay.32x"))[0x100..0x108], Is.EqualTo("SEGA 32X"u8.ToArray()));
+        Assert.That(new FileInfo(Path.Combine(ingest, "tg16", "01-neon-circuit.pce")).Length, Is.EqualTo(262656), "copier-headered");
         Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(65));
     }
 

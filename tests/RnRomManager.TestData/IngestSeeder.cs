@@ -120,6 +120,12 @@ public static class IngestSeeder
         var relay = new FixtureGame("Star Relay (USA)", "Star Relay (USA).32x", relayRom)
         { ReleaseYear = 1995, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Shooter"] };
         Loose("s32x", "01-star-relay.32x", relayRom);
+        var circuitRom = new byte[262144];
+        new Random(1801).NextBytes(circuitRom);
+        var circuit = new FixtureGame("Neon Circuit (USA)", "Neon Circuit (USA).pce", circuitRom)
+        { ReleaseYear = 1990, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Racing"] };
+        // Seeded with a 512-byte copier header: ingestion must strip it to match the DAT (T2).
+        Loose("tg16", "01-neon-circuit.pce", [.. new byte[512], .. circuitRom]);
 
         var zipPath = Path.Combine(ingest, "gb", "05-quest.zip");
         using (var file = File.Create(zipPath))
@@ -150,7 +156,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [] });
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit] });
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
     }
