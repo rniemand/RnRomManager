@@ -105,6 +105,36 @@ public static class LibraryEndpoints
             return Results.Stream(stream!, "application/zip", name, File.GetLastWriteTimeUtc(stream!.Name), enableRangeProcessing: true);
         });
 
+        // Z2: the ZIP's file entries for the Zip Contents tab.
+        games.MapGet("/{id:guid}/zip-entries", async (Guid id, HttpContext ctx, IGameRepository repository, LibraryFiles files) =>
+        {
+            if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
+                return Problems.NotFound(ctx);
+            if (files.ListEntries(ctx, game, out var entries) is { } problem)
+                return problem;
+            return Results.Ok(new
+            {
+                zipName = game.ZipPath[(game.ZipPath.LastIndexOf('/') + 1)..],
+                entries = entries!.Select(e => new
+                {
+                    path = e.Path, sizeBytes = e.SizeBytes, compressedSizeBytes = e.CompressedSizeBytes, modifiedUtc = e.ModifiedUtc,
+                }),
+            });
+        });
+
+        // Z3: one file entry as a download; not audited (downloads never are).
+        games.MapGet("/{id:guid}/zip-entries/download", async (Guid id, string? path, HttpContext ctx, IGameRepository repository,
+            LibraryFiles files) =>
+        {
+            if (string.IsNullOrEmpty(path))
+                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["path"] = ["Required."] });
+            if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
+                return Problems.NotFound(ctx);
+            return files.OpenRawEntry(ctx, game, path, out var stream) is { } problem
+                ? problem
+                : Results.Stream(stream!, "application/octet-stream", path[(path.LastIndexOf('/') + 1)..]);
+        });
+
         // B16: the caller's collections holding this game.
         games.MapGet("/{id:guid}/collections", async (Guid id, HttpContext ctx, IGameRepository repository, ICollectionRepository collections) =>
         {
