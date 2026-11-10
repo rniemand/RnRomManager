@@ -135,7 +135,7 @@ public class LibraryEndpointsTests
         Assert.That((gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()), Is.EqualTo((0, 0)));
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
-            "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Nintendo 64", "Nintendo Entertainment System",
+            "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "Nintendo 64", "Nintendo Entertainment System",
             "Super Nintendo Entertainment System"
         }));
     }
