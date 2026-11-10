@@ -100,6 +100,7 @@ public class LibraryEndpointsTests
         var id = Guid.NewGuid();
         yield return new TestCaseData("/api/systems").SetName("RoleMatrix GET systems");
         yield return new TestCaseData("/api/games").SetName("RoleMatrix GET games");
+        yield return new TestCaseData("/api/games/facets").SetName("RoleMatrix GET facets");
         yield return new TestCaseData($"/api/games/{id}").SetName("RoleMatrix GET game");
         yield return new TestCaseData($"/api/games/{id}/images/1").SetName("RoleMatrix GET image");
         yield return new TestCaseData($"/api/games/{id}/download").SetName("RoleMatrix GET game download");
@@ -206,13 +207,40 @@ public class LibraryEndpointsTests
     [TestCase("system=sg1000", "system")]
     public async Task Games_InvalidQuery_Is400WithFieldError(string query, string field)
     {
-        using var response = await _user.GetAsync("/api/games?" + query);
+        foreach (var url in new[] { "/api/games?", "/api/games/facets?" })
+        {
+            if (url.Contains("facets") && field is "page" or "pageSize" or "sort" or "dir")
+                continue; // F1: not accepted by facets, so ignored like any unknown key
+            using var response = await _user.GetAsync(url + query);
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        var body = await AuthClient.JsonAsync(response);
-        Assert.That(body.GetProperty("code").GetString(), Is.EqualTo("ValidationFailed"));
-        Assert.That(body.GetProperty("errors").TryGetProperty(field, out _), Is.True);
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest), url);
+            var body = await AuthClient.JsonAsync(response);
+            Assert.That(body.GetProperty("code").GetString(), Is.EqualTo("ValidationFailed"));
+            Assert.That(body.GetProperty("errors").TryGetProperty(field, out _), Is.True);
+        }
     }
+
+    [Test]
+    public async Task Facets_CountsEachFacetWithoutItsOwnFilter_AndIgnoresPagingKeys()
+    {
+        await Tetris();
+        await Ingest("p.gb", Pinball);
+        await Ingest("a.gb", Arcade);
+
+        var all = await GetJson("/api/games/facets?page=0&sort=bogus");
+        Assert.That(all.GetProperty("systems").EnumerateArray().Select(e => (e.GetProperty("id").GetString(), e.GetProperty("count").GetInt32())),
+            Is.EqualTo(new[] { ("gb", 3) }));
+        Assert.That(all.GetProperty("letters").EnumerateArray().Select(e => (e.GetProperty("letter").GetString(), e.GetProperty("count").GetInt32())),
+            Is.EqualTo(new[] { ("#", 1), ("P", 1), ("T", 1) }));
+        Assert.That(all.GetProperty("regions").EnumerateArray().Select(e => (e.GetProperty("region").GetString(), e.GetProperty("count").GetInt32())),
+            Is.EqualTo(new[] { ("Europe", 1), ("Japan", 2), ("World", 1) }));
+
+        var japan = await GetJson("/api/games/facets?region=Japan&letter=T");
+        Assert.That(japan.GetProperty("letters").EnumerateArray().Select(e => e.GetProperty("letter").GetString()), Is.EqualTo(new[] { "#", "T" }));
+        Assert.That(japan.GetProperty("regions").EnumerateArray().Select(e => e.GetProperty("region").GetString()), Is.EqualTo(new[] { "Japan", "World" }));
+        Assert.That(japan.GetProperty("systems")[0].GetProperty("count").GetInt32(), Is.EqualTo(1));
+    }
+
 
     [Test]
     public async Task GameDetail_HasGameFields_RomsPrimaryFirst_AndImageUrls()

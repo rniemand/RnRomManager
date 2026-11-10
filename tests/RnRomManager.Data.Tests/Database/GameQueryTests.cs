@@ -173,6 +173,43 @@ public class GameQueryTests
         Assert.That(await Titles(new GameQuery { Sort = GameSort.Rating }), Is.EqualTo(new[] { "Ant", "Bee", "Top", "Unrated" }));
     }
 
+    private async Task<GameFacets> Facets(GameQuery query) => await _games.ListFacetsAsync(query, default);
+
+    [Test]
+    public async Task Facets_EachIgnoresItsOwnFilter_AndNarrowsTheOthers()
+    {
+        await Add("Tetris", releases: [["USA", "Europe"], ["Japan"]]);
+        await Add("Tennis", releases: [["USA"]]);
+        await Add("Alleyway", favourite: true, developers: ["Nintendo"], releases: [["Japan"]]);
+        await Add("Toki", system: "gbc", releases: [["Europe"]]);
+
+        var all = await Facets(new GameQuery());
+        Assert.That(all.Systems, Is.EqualTo(new Dictionary<string, int> { ["gb"] = 3, ["gbc"] = 1 }));
+        Assert.That(all.Letters, Is.EqualTo(new Dictionary<string, int> { ["A"] = 1, ["T"] = 3 }));
+        Assert.That(all.Regions, Is.EqualTo(new Dictionary<string, int> { ["Europe"] = 2, ["Japan"] = 2, ["USA"] = 2 }), "a multi-region game counts once per region");
+
+        var gb = await Facets(new GameQuery { System = "gb" });
+        Assert.That(gb.Systems, Is.EqualTo(all.Systems));
+        Assert.That(gb.Letters, Is.EqualTo(new Dictionary<string, int> { ["A"] = 1, ["T"] = 2 }));
+        Assert.That(gb.Regions, Is.EqualTo(new Dictionary<string, int> { ["Europe"] = 1, ["Japan"] = 2, ["USA"] = 2 }));
+
+        var usa = await Facets(new GameQuery { Region = "USA" });
+        Assert.That(usa.Regions, Is.EqualTo(all.Regions));
+        Assert.That(usa.Systems, Is.EqualTo(new Dictionary<string, int> { ["gb"] = 2 }), "zero counts are absent");
+        Assert.That(usa.Letters, Is.EqualTo(new Dictionary<string, int> { ["T"] = 2 }));
+
+        var a = await Facets(new GameQuery { Letter = "A" });
+        Assert.That(a.Letters, Is.EqualTo(all.Letters));
+        Assert.That((a.Systems, a.Regions), Is.EqualTo((new Dictionary<string, int> { ["gb"] = 1 }, new Dictionary<string, int> { ["Japan"] = 1 })));
+
+        var search = await Facets(new GameQuery { Search = "nintendo" });
+        Assert.That((search.Systems, search.Letters), Is.EqualTo((new Dictionary<string, int> { ["gb"] = 1 }, new Dictionary<string, int> { ["A"] = 1 })));
+
+        var favourite = await Facets(new GameQuery { Favourite = true, System = "gbc" });
+        Assert.That(favourite.Systems, Is.EqualTo(new Dictionary<string, int> { ["gb"] = 1 }));
+        Assert.That((favourite.Letters, favourite.Regions), Is.EqualTo((new Dictionary<string, int>(), new Dictionary<string, int>())));
+    }
+
     [Test]
     public async Task Favourite_FiltersTrueOrFalse()
     {
