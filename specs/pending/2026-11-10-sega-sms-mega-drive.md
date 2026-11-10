@@ -1,0 +1,92 @@
+---
+title: Master System and Mega Drive / Genesis
+status: ready # draft | ready | in-progress | completed
+created: 2026-11-10
+---
+
+# Master System and Mega Drive / Genesis
+
+## Summary
+Two Sega systems join the library: Master System (`sms`) and Mega Drive / Genesis (`md`), both in the existing `RnRomManager.Systems.Sega` project. "Sega Genesis" and "Sega Mega Drive" are one console with one libretro DAT (`Sega - Mega Drive - Genesis`), so they are **one** system. The Game Gear `TMR SEGA` header reader moves into a shared helper so Master System reuses it; Game Gear behaviour doesn't change.
+
+## Out of scope
+- SG-1000, Mega-CD/Sega CD, 32X, Pico (separate DATs; CD systems need a contract change).
+- Interleaved `.smd` dumps (no deinterleave): `.smd` fails as `UnsupportedType`.
+- Sharing a family between Master System and Game Gear: `.sms` in `ingest/gg/` keeps going to Game Gear, `.sms` in `ingest/sms/` to Master System.
+- Verifying the Mega Drive header checksum, and decoding Shift-JIS domestic titles.
+- Dedicated `sms`/`md` icons (the controller fallback is used) and an automatic DAT refresh after upgrading (documented manual step, as before).
+
+## Behaviour
+
+### Shared
+- **S1 Registration.** `MasterSystemHandler` and `MegaDriveHandler` are registered after `GameGearHandler`. Registry order: `gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `a2600`, `coleco`, `gg`, `sms`, `md`. `/api/systems` (display-name order): `a2600, coleco, gb, gba, gbc, gg, sms, md, n64, nes, snes`. `/api/admin/dats` (DAT-name order) lists `Sega - Master System - Mark III` and `Sega - Mega Drive - Genesis` after `Sega - Game Gear`. A DAT refresh fetches 55 files (11 systems × 5).
+- **S2 Upgrade.** Ingestion refuses with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** (documented, as for Game Gear).
+- **S3 Families.** `sms` and `md` are their own families (`mastersystem`, `megadrive`). Another family's extension in `ingest/sms/` or `ingest/md/` → `UnsupportedType`, and `.sms`/`.md`/`.gen` in another system's folder → `UnsupportedType`, except `.sms` in `ingest/gg/` (Game Gear accepts it, unchanged) and `.bin` in `ingest/a2600/`/`ingest/coleco/` (unchanged: the folder decides).
+- **S4 Shared TMR SEGA reader.** The body of `GameGearHandler.ReadHeader` and its `Region` map move, unchanged, into `internal static class TmrSegaHeader { RomHeader? Read(ReadOnlySpan<byte> rom, string systemId); }` in the Sega project. `GameGearHandler.ReadHeader` becomes `TmrSegaHeader.Read(rom, Id)`. The existing `GameGearHandlerTests` pass untouched (regression proof). The resource loader also moves to one `internal static` helper used by all three handlers.
+
+### Master System
+- **M1 Contract values.** `Id` = `sms`, `DisplayName` = `Master System`, `ShortName` = `SMS`, `Family` = `mastersystem`, `RomExtensions` = `[".sms"]`, `MinRomSizeBytes` = `2048`, `MaxRomSizeBytes` = `4194304` (4 MiB), `DatName` = `Sega - Master System - Mark III`; `NormalizeForHashing` is the default. Facts (libretro DAT 2026.10.07, checked 2026-11-10): all five DAT files and the thumbnails folder exist; 1,057 entries, all `.sms`, 3,479–4,194,304 bytes.
+- **M2 Header.** `TmrSegaHeader.Read(rom, "sms")`: same offsets, fields and region names as Game Gear (G3 of the Game Gear spec). Classified as `sms` whatever the region nibble (a GG region in `ingest/sms/` is still a Master System file: the folder's family decides, S3). Not found → `null`, never throws.
+- **M3 Ingestion.** A DAT-matched dump is stored as `roms/sms/<bucket>/<title>.zip` with the DAT's ROM name. An unmatched file (with or without a header) → Review (`NoDatMatch`, suggestions from the file name); never `InvalidHeader`. Manual/Flag resolves store `….sms`. Under 2048 bytes → `TooSmall`, over 4 MiB → `TooLarge`. Releases with a header show the Header button.
+
+### Mega Drive / Genesis
+- **D1 Contract values.** `Id` = `md`, `DisplayName` = `Mega Drive / Genesis`, `ShortName` = `MD`, `Family` = `megadrive`, `RomExtensions` = `[".md", ".bin", ".gen"]`, `MinRomSizeBytes` = `8192`, `MaxRomSizeBytes` = `16777216` (16 MiB), `DatName` = `Sega - Mega Drive - Genesis`; `NormalizeForHashing` is the default (raw dumps are already big-endian). Facts (libretro DAT 2026.10.07, checked 2026-11-10): all five DAT files and the thumbnails folder exist; 2,656 entries, 2,655 `.md` + 1 `.bin` (Sonic & Knuckles lock-on), 8,192–15,466,496 bytes.
+- **D2 Header.** The header is optional. `ReadHeader` reads the 16-byte system-type field at `0x100`: when the file is at least `0x200` bytes and the **decoded** `systemType` (decoding below, so a leading `\0` or space is dropped) starts with `SEGA`, it returns `RomHeader("md", title, true, Fields)`; otherwise `null`. Never throws. Text fields are decoded as ASCII: every byte outside `0x20–0x7E` becomes a space, runs of spaces collapse to one, the result is trimmed, and an empty result is `null`. Fields:
+  - `systemType` (`0x100`, 16 bytes), `copyright` (`0x110`, 16), `domesticTitle` (`0x120`, 48), `overseasTitle` (`0x150`, 48), `serial` (`0x180`, 14), `region` (`0x1F0`, 3) — strings as above;
+  - `checksum` — bytes `0x18E..0x18F`, big-endian, 4 upper-case hex digits (stored as-is, not verified).
+  - `Title` (review suggestions) = `overseasTitle`, or `domesticTitle` when that is null.
+- **D3 Ingestion.** A DAT-matched dump is stored under the DAT's ROM name (`.md`, or `.bin` for the one lock-on entry), so a matched `.bin`/`.gen` becomes `….md`. An unmatched file (with or without a header) → Review (`NoDatMatch`, suggestions from the header title and file name); never `InvalidHeader`. Manual/Flag resolves store `….md`. Under 8 KiB → `TooSmall`, over 16 MiB → `TooLarge`. `.smd` → `UnsupportedType`. Releases with a header show the Header button.
+
+### UI
+- **U1 Badge colours.** Same in both themes, next to the `gg` rules in `app.css`: `--bs-sms: #c8102e` with `.text-bg-sms { color: #fff !important; background-color: var(--bs-sms) !important; }`, and `--bs-md: #5b2a86` with `.text-bg-md` the same way (white on both is WCAG AA: 5.9:1 and 9.6:1). `systemColours` gets `sms: { name: 'sms', foreground: '#fff' }` and `md: { name: 'md', foreground: '#fff' }` (the `name` union gains both).
+- **U2 Default box art.** `mastersystem.svg` and `megadrive.svg` (drawn for this project, MIT) and their 512×512 PNG renders (headless Edge, as the boxart README shows), embedded like `gamegear.png`; the boxart `README.md` lists all three.
+
+## Changes
+| Area | File(s) | Change |
+|---|---|---|
+| Systems | `src/RnRomManager.Systems.Sega/TmrSegaHeader.cs` (new), `EmbeddedResources.cs` (new), `GameGearHandler.cs` | S4 |
+| Systems | `src/RnRomManager.Systems.Sega/MasterSystemHandler.cs`, `MegaDriveHandler.cs` (new), `Resources/boxart/{mastersystem,megadrive}.{svg,png}`, `README.md` (the csproj already embeds `Resources/boxart/*.png`: no change) | M1, M2, D1, D2, U2 |
+| Test data | `tests/RnRomManager.TestData/SyntheticMegaDriveRomBuilder.cs` (new) | builds a Mega Drive ROM with the D2 header (fields as properties, `Seed`, `Size`), like `SyntheticSnesRomBuilder`; used by `MegaDriveHandlerTests`, the seeder and `IngestPipelineTests` |
+| Api | `src/RnRomManager.Api/AppHost.cs` | S1 (project reference already exists) |
+| Web | `src/RnRomManager.Web/src/app.css`, `lib/systemColours.ts`, `systemColours.test.ts` (line 17 uses `md` as the unknown id → switch to `sg1000`, add an `md` case), `lib/components/Pagination.test.ts` (lines 48–56: `SystemBadge { system: 'md' }` expects `text-bg-secondary` → `sg1000` for the fallback case, plus `md` → `text-bg-md`) | U1 |
+| Tests | `tests/RnRomManager.Api.Tests/Integration/IngestEndpointsTests.cs:149` | the unregistered-system case sends `md` → switch to `sg1000` |
+| Test data | `tests/RnRomManager.TestData/IngestSeeder.cs` | `MasterSystemDat`, `MegaDriveDat` consts, fixture DAT entries, `ingest/sms/` and `ingest/md/`, two seed games |
+| Tests (new) | `tests/RnRomManager.Systems.Sega.Tests/MasterSystemHandlerTests.cs`, `MegaDriveHandlerTests.cs` | |
+| Tests (existing, broken by systems 10–11) | the 16 test files referencing `IngestSeeder.GameGearDat` (`AuditLibraryEditTests`, `DatEndpointsTests`, `ImageEndpointsTests`, `ImageUrlEndpointsTests`, `IngestArchiveTests`, `IngestDeleteEndpointsTests`, `IngestEndpointsTests`, `IngestPipelineTests`, `IngestReviewTests`, `LibraryEditTests`, `LibraryEndpointsTests`, `LibraryMoveMergeTests`, `MediaRetryEndpointsTests`, `NoteEndpointsTests`, `ReportEndpointsTests`, `ReviewEndpointsTests`) | add `[IngestSeeder.MasterSystemDat] = []` and `[IngestSeeder.MegaDriveDat] = []` |
+| Tests (existing, counts/order) | `DatEndpointsTests` (DAT names + `sms`/`md`, requests 45 → 55), `LibraryEndpointsTests` `/api/systems` id list, `IngestEndpointsTests` system list, `SystemStartupTests`, `IngestSeederTests` (DAT files 45 → 55; Basic counts), `SeedIngestTests`, `tests/e2e/specs/mvp.spec.ts` | |
+| Docs | `README.md`, `docs/features.md`, `docs/zip-format.md`, `docs/deployment.md`, `docs/development.md`, `docs/adding-a-system.md` | step 6 |
+
+No migrations, config keys or new projects (`system_id` is a `VARCHAR`; the Sega project, its test project, the `.slnx` entries, the Dockerfile restore line and the Api reference already exist). API: `GET /api/systems` and `GET /api/admin/dats` gain `sms` and `md` (additive). Existing data is untouched.
+
+## Risks
+- **Upgrade blocks ingestion** until DATs are refreshed (S2): same as every earlier system; documented in `deployment.md` and the README.
+- **GG refactor (S4)** could change Game Gear headers: guarded by the existing `GameGearHandlerTests` and the Pocket Drift seed assertion, both unchanged.
+- **No header required for either system:** junk files of a valid size in `ingest/sms/` or `ingest/md/` go to Review rather than `_failed/`. Same trade-off as Game Gear and Atari 2600.
+- **16 MiB Mega Drive files** are read into memory for `ReadHeader`; N64 already allows 64 MiB, so no new memory ceiling.
+- **`.bin` now in three families** (`a2600`, `coleco`, `md`): classification is by folder, so no ambiguity; documented.
+
+## Steps
+- [ ] **1. Shared TMR SEGA reader and Master System handler**: S4, M1, M2, U2 (Master System art). Files: `TmrSegaHeader.cs`, `EmbeddedResources.cs`, `GameGearHandler.cs`, `MasterSystemHandler.cs`, `Resources/boxart/mastersystem.{svg,png}`, boxart `README.md`, `MasterSystemHandlerTests.cs`. Tests: contract (every M1 value); `ReadHeader` with synthetic ROMs: 32 KiB with `TMR SEGA` at `0x7FF0`, region/size byte `4C` → plausible, classified `sms`, `offset` `7FF0`, `region` "SMS Export", `sizeCode` 12; a GG region byte `6C` → still classified `sms`, `region` "GG Export"; signature only at `0x3FF0` → `3FF0`; no signature → null; empty span → null, no exception; `NormalizeForHashing` unchanged; box art valid 512×512 PNG differing from Game Gear's; `GameGearHandlerTests` pass unchanged. Done when: `dotnet test tests/RnRomManager.Systems.Sega.Tests` passes and `dotnet build` passes with warnings as errors.
+- [ ] **2. Mega Drive handler**: D1, D2, U2 (Mega Drive art). Files: `MegaDriveHandler.cs`, `Resources/boxart/megadrive.{svg,png}`, boxart `README.md`, `tests/RnRomManager.TestData/SyntheticMegaDriveRomBuilder.cs`, `MegaDriveHandlerTests.cs`. Tests: contract (every D1 value); `ReadHeader` (ROMs from `SyntheticMegaDriveRomBuilder`): 512 KiB ROM with `SEGA GENESIS    ` at `0x100`, `(C)SEGA 1991.JAN` at `0x110`, domestic title `TURBO KOMETTO` and overseas `TURBO COMET` (space-padded), serial `GM 00001234-00`, checksum bytes `AB CD` at `0x18E`, region `JUE` → plausible, classified `md`, `Title` "TURBO COMET" (overseas preferred), every field as D2, `checksum` `ABCD`; `SEGA MEGA DRIVE ` → plausible; leading-space ` SEGA GENESIS` and leading `\0SEGA GENESIS` → plausible; blank overseas title → `Title` = domestic; control bytes and `0xFF` in a title → replaced and collapsed; all-blank title field → `null`; no `SEGA` → null; file shorter than `0x200` → null, no exception; `NormalizeForHashing` unchanged; box art valid 512×512 PNG differing from Game Gear's and Master System's. Done when: `dotnet test tests/RnRomManager.Systems.Sega.Tests` passes and `dotnet build` passes with warnings as errors.
+- [ ] **3. Registration and existing tests**: S1, U1. `AppHost` two lines; `IngestSeeder.MasterSystemDat` / `MegaDriveDat` consts, `[MasterSystemDat] = [], [MegaDriveDat] = []` in the `FixtureDatWriter.Write` dictionary, `ingest/sms/` and `ingest/md/` created; the two empty entries in each of the 16 test files in § Changes; counts and orders (DATs 45 → 55, systems 9 → 11, startup ids/folders, `IngestSeederTests` DAT file count, `/api/systems` id list as S1, `IngestEndpointsTests` list in registry order); the three `md`-as-unknown spots in § Changes switch to `sg1000`; U1 (`app.css`, `systemColours.ts` + tests). Tests: `systemColour('sms')` and `systemColour('md')` as U1; `SystemBadge` for each has `text-bg-<id>`; `SystemStartupTests` sees `sms`, `md` and their folders; DAT refresh fetches 55 files; `/api/admin/dats` order as S1. Done when: `dotnet test` passes for the Sega, Core, Data and Api test projects (Docker running), SPA `npm run lint`, `npm run check`, `npm test` pass, `docker build .` succeeds.
+- [ ] **4. Seeds and integration tests**: M3, D3, S3. Add to the Basic set and the fixture DATs: `new FixtureGame("Harbor Patrol (World)", "Harbor Patrol (World).sms", rom) { ReleaseYear = 1988, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Action"] }`, `rom` = 32768 bytes from `new Random(1501).NextBytes` with `TMR SEGA` at `0x7FF0` and byte `0x7FFF` = `0x4C`, written loose as `ingest/sms/01-harbor-patrol.sms`; and `new FixtureGame("Turbo Comet (USA, Europe)", "Turbo Comet (USA, Europe).md", rom) { ReleaseYear = 1991, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Racing"] }`, `rom` = `new SyntheticMegaDriveRomBuilder { Seed = 1601, Size = 524288 }.Build()` (the builder's defaults are the step-2 header values), written loose as `ingest/md/01-turbo-comet.gen` (proves `.gen` → stored `.md`). Update every count this changes (`IngestSeederTests`, `SeedIngestTests`). `IngestPipelineTests`: `.sms` in `ingest/nes/` → `UnsupportedType`; `.md` in `ingest/sms/` → `UnsupportedType`; `.smd` in `ingest/md/` → `UnsupportedType`; `.sms` in `ingest/gg/` matching only the GG DAT still ingests as `gg` (regression); SMS 2047 bytes → `TooSmall`, 4194305 → `TooLarge`; MD 8191 → `TooSmall`, 16777217 → `TooLarge`; an unmatched headerless 32 KiB `.sms` → Review `NoDatMatch`, resolved (Manual) stored as `….sms`; an unmatched headered `.bin` in `ingest/md/` → Review `NoDatMatch` with a suggestion from the header title, resolved (Manual) stored as `….md`; a DAT-matched `.bin` in `ingest/md/` → stored as `….md`; a `.zip` in `ingest/md/` holding a DAT game's `.md` → ingested. Files: `IngestSeeder.cs`, `IngestSeederTests.cs`, `SeedIngestTests.cs`, `IngestPipelineTests.cs`. Tests: `SeedIngestTests` asserts `roms/sms/H/` with entry `Harbor Patrol (World).sms` equal to the seeded bytes, header `region` "SMS Export"; `roms/md/T/` with entry `Turbo Comet (USA, Europe).md`, header `serial` "GM 00001234-00"; `system`, year and genre metadata for both. Done when: `dotnet test` passes for Core and Api test projects (Docker running).
+- [ ] **5. e2e**: `mvp.spec.ts`: update seed counts (ingested, audit row count and the `N games` texts each +2); the exact System filter option list (lines 160–171) gains `Master System` and `Mega Drive / Genesis` after `Game Gear` (S1 order); System filter → `Master System`, URL `system=sms`, `1 game`; System filter → `Mega Drive / Genesis`, URL `system=md`, `1 game`. Files: `tests/e2e/specs/mvp.spec.ts`. Done when: `pwsh scripts/test-e2e.ps1` passes.
+- [ ] **6. Docs**: README (Master System and Mega Drive / Genesis in supported systems, Refresh DATs note, quick-start `data/ingest/sms/` and `data/ingest/md/`); `features.md` (supported systems in the intro; Ingestion: `ingest/sms/` with `.sms`, 2 KiB–4 MiB, optional `TMR SEGA` header; `ingest/md/` with `.md`/`.bin`/`.gen`, 8 KiB–16 MiB, optional `SEGA` header at 0x100, matched stored as `.md`, `.smd` unsupported; drop "Master System … aren't supported" from the Game Gear text, keep SG-1000; `.bin` in three folders; families list; size limits; Review first-extension list adds `.sms`, `.md`); `zip-format.md` (`sms/` and `md/` in the folder tree, both ids in the `system` list, Master System `header` fields = Game Gear's, Mega Drive `header` fields); `deployment.md` (`ingest/sms/`, `ingest/md/`, upgrade step); `development.md` (Sega project row lists all three handlers; seed table with Harbor Patrol and Turbo Comet; Basic counts); `adding-a-system.md` (box-art list; Master System as the shared-reader example; Mega Drive now exists, so the intro's "Adding Mega Drive means…", the `MegaDriveHandler` registration example and the `'system-md'` icon example all switch to one hypothetical system, SG-1000 / `sg1000`). Tests: none. Done when: every item above is in its doc and `pwsh scripts/test-all.ps1` passes.
+
+## Decisions
+- 2026-11-10 "Sega Genesis" and "Sega Mega Drive" → one system, id `md`, "Mega Drive / Genesis", short `MD` (user)
+- 2026-11-10 Mega Drive extensions → `.md`, `.bin`, `.gen`; no `.smd` deinterleave (user)
+- 2026-11-10 Master System vs Game Gear → separate families; Game Gear unchanged (user)
+- 2026-11-10 Mega Drive header → optional; headerless unmatched files go to Review (user)
+- 2026-11-10 Master System header → optional `TMR SEGA`, as Game Gear (code: same hardware header)
+- 2026-11-10 Both handlers in the existing `RnRomManager.Systems.Sega` project; GG's header reader shared, not copied (code)
+- 2026-11-10 Display name `Master System` (no "Sega", as `Game Gear`), short `SMS`; sizes from the DATs: SMS 2 KiB–4 MiB, MD 8–16 MiB (code)
+- 2026-11-10 Mega Drive header bytes come from a shared `SyntheticMegaDriveRomBuilder` in TestData (reviewer R6)
+- 2026-11-10 Tests using `md` as the unknown system switch to `sg1000` (reviewer R1)
+- 2026-11-10 The `SEGA` check runs on the decoded `systemType` (reviewer R5)
+
+## Kickoff prompt
+```text
+/spec implement 2026-11-10-sega-sms-mega-drive.md
+```
+Starts the spec, or resumes it at the first unticked step.
