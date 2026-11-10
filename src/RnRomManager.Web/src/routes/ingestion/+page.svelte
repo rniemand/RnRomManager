@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type {
@@ -59,6 +61,20 @@
 		failedWithFiles.flatMap((s) => s.files.map((f) => key(s.system, f.name)))
 	);
 	const failedCount = $derived(failedKeys.filter((k) => failedSelected.has(k)).length);
+
+	// I1/I2: Pending / Failed / Last runs are tabs under the Run section; the tab is URL state (`?tab=failed|runs`).
+	type Tab = 'pending' | 'failed' | 'runs';
+	const tab = $derived<Tab>(
+		(['failed', 'runs'] as const).find((t) => t === page.url.searchParams.get('tab')) ?? 'pending'
+	);
+	const pendingFileCount = $derived(withFiles.reduce((n, s) => n + s.files.length, 0));
+	const failedFileCount = $derived(failedWithFiles.reduce((n, s) => n + s.files.length, 0));
+
+	function selectTab(next: Tab): void {
+		const path = resolve('/ingestion');
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
+		void goto(next === 'pending' ? path : `${path}?tab=${next}`, { replace: true, reset: false });
+	}
 
 	function selectAll(set: SvelteSet<string>, keys: string[], next: boolean): void {
 		set.clear();
@@ -257,8 +273,32 @@
 			</div>
 		</section>
 
-		<section class="mb-4" aria-labelledby="pending-heading">
-			<h2 class="h5" id="pending-heading">Pending files</h2>
+		<ul class="nav nav-tabs mb-3" role="tablist">
+			{#each [['pending', `Pending files (${pendingFileCount})`], ['failed', `Failed files (${failedFileCount})`], ['runs', 'Last runs']] as [value, label] (value)}
+				<li class="nav-item" role="presentation">
+					<button
+						type="button"
+						class="nav-link"
+						class:active={tab === value}
+						id="{value}-tab"
+						role="tab"
+						aria-selected={tab === value}
+						aria-controls="{value}-panel"
+						onclick={() => selectTab(value as Tab)}>{label}</button
+					>
+				</li>
+			{/each}
+		</ul>
+
+		<!-- Panels stay mounted (hidden, not removed), so selections survive a tab switch. -->
+		<section
+			class="mb-4"
+			id="pending-panel"
+			role="tabpanel"
+			aria-labelledby="pending-tab"
+			hidden={tab !== 'pending'}
+		>
+			<h2 class="h5 visually-hidden">Pending files</h2>
 			{#if withFiles.length === 0}
 				<div class="card"><EmptyState message="No files waiting in the ingest folders." /></div>
 			{:else}
@@ -294,8 +334,14 @@
 			{/if}
 		</section>
 
-		<section class="mb-4" aria-labelledby="failed-heading">
-			<h2 class="h5" id="failed-heading">Failed files</h2>
+		<section
+			class="mb-4"
+			id="failed-panel"
+			role="tabpanel"
+			aria-labelledby="failed-tab"
+			hidden={tab !== 'failed'}
+		>
+			<h2 class="h5 visually-hidden">Failed files</h2>
 			{#if failedWithFiles.length === 0}
 				<div class="card"><EmptyState message="No failed imports." /></div>
 			{:else}
@@ -333,8 +379,8 @@
 			{/if}
 		</section>
 
-		<section aria-labelledby="runs-heading">
-			<h2 class="h5" id="runs-heading">Last runs</h2>
+		<section id="runs-panel" role="tabpanel" aria-labelledby="runs-tab" hidden={tab !== 'runs'}>
+			<h2 class="h5 visually-hidden">Last runs</h2>
 			{#if !runs || runs.items.length === 0}
 				<div class="card"><EmptyState message="No ingestion has run yet." /></div>
 			{:else}
