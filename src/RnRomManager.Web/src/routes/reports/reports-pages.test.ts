@@ -220,6 +220,18 @@ describe('reports pages', () => {
 			expect(screen.getAllByText('Suggested target')).toHaveLength(1);
 		});
 
+		it('labels the size column ZIP size and shows each game zipSizeBytes (G6)', async () => {
+			signIn(['admin']);
+			answers[list] = { status: 200, body: page };
+			render(Duplicates);
+
+			await screen.findByRole('link', { name: 'Quest DX' });
+			expect(screen.getByRole('columnheader', { name: 'ZIP size' })).toBeTruthy();
+			expect(screen.queryByRole('columnheader', { name: 'Size' })).toBeNull();
+			const row = screen.getByRole('link', { name: 'Quest DX' }).closest('tr')!;
+			expect(row.textContent).toMatch(/2(\.0)? KiB|2 KB/);
+		});
+
 		it('a user without rom-manager sees the list without radios or buttons', async () => {
 			signIn(['admin']);
 			answers[list] = { status: 200, body: page };

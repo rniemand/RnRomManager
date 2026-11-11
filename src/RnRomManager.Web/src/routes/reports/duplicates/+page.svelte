@@ -160,7 +160,8 @@
 								>{/if}
 							<th scope="col">Game</th>
 							<th scope="col" class="text-end">Releases</th>
-							<th scope="col" class="text-end">Size</th>
+							<!-- G6: the ZIP alone; an external game's ROMs sit next to it. -->
+							<th scope="col" class="text-end">ZIP size</th>
 							<th scope="col">Added</th>
 						</tr>
 					</thead>
