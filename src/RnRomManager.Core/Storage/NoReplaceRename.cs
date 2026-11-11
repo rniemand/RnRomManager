@@ -78,15 +78,27 @@ public static class NoReplaceRename
     /// a hard link claims the final name atomically. The staging alias is then removed on a best-effort basis.
     /// </summary>
     internal static NoReplaceRenameResult PublishStaged(string staging, string destination, ExternalFileSnapshot expected,
-        Func<string, string, NoReplaceRenameResult>? rename = null)
+        Func<string, string, NoReplaceRenameResult>? rename = null) =>
+        MoveVerified(staging, destination, expected, rename, requireSourceRemoval: false);
+
+    /// <summary>
+    /// Moves a verified file under a free name. The hard-link fallback reports success only when the original
+    /// name is free. If removing it fails, the verified destination is kept for recovery.
+    /// </summary>
+    internal static NoReplaceRenameResult MoveVerified(string source, string destination, ExternalFileSnapshot expected,
+        Func<string, string, NoReplaceRenameResult>? rename = null) =>
+        MoveVerified(source, destination, expected, rename, requireSourceRemoval: true);
+
+    private static NoReplaceRenameResult MoveVerified(string source, string destination, ExternalFileSnapshot expected,
+        Func<string, string, NoReplaceRenameResult>? rename, bool requireSourceRemoval)
     {
-        var result = (rename ?? Move)(staging, destination);
+        var result = (rename ?? Move)(source, destination);
         if (result.Status != NoReplaceRenameStatus.Unsupported)
             return result;
-        if (NativeFileStat.Read(staging).Snapshot != expected)
-            return new(NoReplaceRenameStatus.Failed, Details: $"{staging} is no longer the verified staging file");
+        if (NativeFileStat.Read(source).Snapshot != expected)
+            return new(NoReplaceRenameStatus.Failed, Details: $"{source} is no longer the verified file");
 
-        var linked = Link(staging, destination);
+        var linked = Link(source, destination);
         if (!linked.Renamed)
             return linked with { Details = $"{UnsupportedDetails(destination)}; {linked.Details}" };
         if (NativeFileStat.Read(destination).Snapshot != expected)
@@ -94,13 +106,17 @@ public static class NoReplaceRename
 
         try
         {
-            if (NativeFileStat.Read(staging).Snapshot == expected)
-                File.Delete(staging);
+            if (NativeFileStat.Read(source).Snapshot == expected)
+                File.Delete(source);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // The final name already holds the verified file. A leftover alias can be found by integrity.
+            if (requireSourceRemoval)
+                return new(NoReplaceRenameStatus.Failed, Details: $"{source} couldn't be removed after linking it: {ex.Message}");
+            // The final name already holds the verified file. A leftover staging alias can be found by integrity.
         }
+        if (requireSourceRemoval && NativeFileStat.Read(source).Outcome != NativeStatOutcome.NotFound)
+            return new(NoReplaceRenameStatus.Failed, Details: $"{source} is still occupied after linking it");
         return linked;
     }
 

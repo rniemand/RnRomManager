@@ -2,6 +2,8 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Ingest;
@@ -128,20 +130,30 @@ public partial class ExternalLibraryTests
         Assert.That((await AuditAsync()).Last(), Is.EqualTo((AuditActions.ZipRepaired, (string?)null)));
     }
 
-    [TestCase(false, TestName = "WrongLengthFile_IsReplaced")]
-    [TestCase(true, TestName = "WrongLengthFile_ForcedZipFailure_RestoresBothFiles")]
-    public async Task WrongLengthFile(bool failWrite)
+    [TestCase(false, false, TestName = "WrongLengthFile_IsReplaced")]
+    [TestCase(true, false, TestName = "WrongLengthFile_ForcedZipFailure_RestoresBothFiles")]
+    [TestCase(false, true, TestName = "WrongLengthFile_HardLinkFallback_IsReplaced")]
+    [TestCase(true, true, TestName = "WrongLengthFile_HardLinkFallback_ForcedZipFailure_RestoresBothFiles")]
+    public async Task WrongLengthFile(bool failWrite, bool useHardLinks)
     {
-        await DamagedAsync(Short);
+        var (_, issue) = await DamagedAsync(Short);
         var file = Drop("again.xci");
+        var original = ExternalRomPath.ClassifyFile(_factory.Root, Sidecar).Snapshot;
+        var hooks = new ExternalIngestHooks
+        {
+            RepairRename = useHardLinks ? UnsupportedRepairRename : null,
+            Writer = failWrite ? FailVerify(() =>
+                Assert.That(ExternalRomPath.ClassifyFile(_factory.Root, Backup).Snapshot, Is.EqualTo(original))) : null,
+        };
 
-        var result = await IngestAsync(Pipeline(failWrite ? new ExternalIngestHooks { Writer = FailVerify() } : null), file);
+        var result = await IngestAsync(Pipeline(hooks), file);
 
         if (failWrite)
         {
             Assert.That(Code(result), Is.EqualTo((IngestOutcome.Error, IngestErrors.VerifyFailed)));
             Assert.That(File.ReadAllBytes(file.FullPath), Is.EqualTo(Rom), "the incoming file is back in ingest");
             Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Short), "the prior library bytes are back");
+            Assert.That(ExternalRomPath.ClassifyFile(_factory.Root, Sidecar).Snapshot, Is.EqualTo(original));
         }
         else
         {
@@ -149,6 +161,72 @@ public partial class ExternalLibraryTests
             Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Rom));
         }
         Assert.That(File.Exists(Backup), Is.False);
+        Assert.That(await IssueStatusAsync(issue), Is.EqualTo(failWrite ? "Open" : "Resolved"));
+    }
+
+    private static NoReplaceRenameResult UnsupportedRepairRename(string from, string to) => NoReplaceRename.FromErrno(95, from, to);
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task RepairHardLinkCollision_PreservesTheOccupantAndTheOriginal(bool duringRollback)
+    {
+        await DamagedAsync(Short);
+        var file = Drop("again.xci");
+        var occupied = duringRollback ? Sidecar : Backup;
+        var hooks = new ExternalIngestHooks
+        {
+            RepairRename = (from, to) =>
+            {
+                if (to == occupied)
+                    File.WriteAllText(to, "late occupant");
+                return UnsupportedRepairRename(from, to);
+            },
+            Writer = duringRollback ? FailVerify() : null,
+        };
+
+        var result = await IngestAsync(Pipeline(hooks), file);
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Error, duringRollback ? IngestErrors.VerifyFailed : IngestErrors.IoError)));
+        var survivor = duringRollback ? Backup : Sidecar;
+        Assert.That(result!.Details, Does.Contain($"the original file was kept at {survivor}"));
+        Assert.That(File.ReadAllText(occupied), Is.EqualTo("late occupant"));
+        Assert.That(File.ReadAllBytes(survivor), Is.EqualTo(Short));
+        Assert.That(File.ReadAllBytes(file.FullPath), Is.EqualTo(Rom));
+    }
+
+    [Test]
+    public async Task RepairHardLinkFallback_MirrorFailure_KeepsTheOriginalBackup()
+    {
+        var (_, issue) = await DamagedAsync(Short);
+        var mirror = Substitute.For<ILibraryMirror>();
+        mirror.ReplaceAsync(default!, default).ThrowsAsyncForAnyArgs(new InvalidOperationException("db down"));
+        var hooks = new ExternalIngestHooks { RepairRename = UnsupportedRepairRename };
+
+        var result = await IngestAsync(Pipeline(hooks, mirror), Drop("again.xci"));
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Error, IngestErrors.DbWriteFailed)));
+        Assert.That(result!.Details, Does.Contain($"the original file was kept at {Backup}"));
+        Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Rom));
+        Assert.That(File.ReadAllBytes(Backup), Is.EqualTo(Short));
+        Assert.That(await IssueStatusAsync(issue), Is.EqualTo("Open"));
+    }
+
+    [Test]
+    public async Task RepairHardLinkFallback_IfTheOriginalNameCannotBeRemoved_KeepsBothLinks()
+    {
+        if (!OperatingSystem.IsWindows())
+            Assert.Ignore("Windows sharing modes can prevent the unlink while permitting a hard link.");
+        await DamagedAsync(Short);
+        var file = Drop("again.xci");
+        using var read = File.Open(Sidecar, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+
+        var result = await IngestAsync(Pipeline(new ExternalIngestHooks { RepairRename = UnsupportedRepairRename }), file);
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Error, IngestErrors.IoError)));
+        Assert.That(result!.Details, Does.Contain("couldn't be removed after linking it").And.Contain(Backup));
+        Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Short));
+        Assert.That(File.ReadAllBytes(Backup), Is.EqualTo(Short));
+        Assert.That(File.ReadAllBytes(file.FullPath), Is.EqualTo(Rom));
     }
 
     [TestCase(false, TestName = "MisCasedFile_IsRepaired")]

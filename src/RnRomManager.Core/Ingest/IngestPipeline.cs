@@ -61,6 +61,9 @@ public sealed class ExternalIngestHooks
     /// <summary>Passed to the move that sets a self-repair's incoming copy aside when its archive changed (I5).</summary>
     public ExternalMoveHooks? Recovery { get; init; }
 
+    /// <summary>Replaces the native rename when a repair sets aside or restores the original ROM.</summary>
+    public Func<string, string, NoReplaceRenameResult>? RepairRename { get; init; }
+
     /// <summary>Passed to the ZIP write that follows the move.</summary>
     public LibraryZipWriterHooks? Writer { get; init; }
 }
@@ -614,7 +617,7 @@ public sealed class IngestPipeline(
     /// <summary>
     /// I6 for an external ROM: the incoming file is moved over the release's <c>externalFileName</c> and the ZIP
     /// rewritten. A file still at that name is set aside under a reserved <c>.repair.tmp</c> name first and only
-    /// removed once the ZIP is written; every failure puts both files back.
+    /// removed once the ZIP and database updates succeed. A failed ZIP write attempts to put both files back.
     /// </summary>
     private async Task<IngestItemResult> RepairExternalAsync(IngestFile file, RomRow known, GameRow game, IReadOnlyList<OpenIssue> open,
         ExternalSource source, string sha1, AuditActor actor, CancellationToken cancellationToken)
@@ -881,9 +884,6 @@ public sealed class IngestPipeline(
                 throw;
             return result with { Outcome = IngestOutcome.Error, Reason = reason, Details = survivor is null ? ex.Message : $"{ex.Message}; {survivor}" };
         }
-        if (repair is not null)
-            DeleteBackup(repair);
-
         // AU4: the ZIP is written, so the files changed even if the DB mirror fails below.
         var repaired = result.Outcome == IngestOutcome.Repaired;
         audit.Record(new AuditEvent(repaired ? AuditActions.ZipRepaired : AuditActions.Ingested, actor, game.System, game.GameId,
@@ -910,7 +910,7 @@ public sealed class IngestPipeline(
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogError(ex, "{Path}: {Zip} was written but the DB update failed", file.FullPath, zipPath);
-            return result with { Outcome = IngestOutcome.Error, Reason = IngestErrors.DbWriteFailed, Details = ex.Message };
+            return result with { Outcome = IngestOutcome.Error, Reason = IngestErrors.DbWriteFailed, Details = Join(ex.Message, RepairOriginalNote(repair)) };
         }
         if (afterMirror is not null)
         {
@@ -918,9 +918,11 @@ public sealed class IngestPipeline(
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 logger.LogError(ex, "{Path}: post-mirror DB update failed", file.FullPath);
-                return result with { Outcome = IngestOutcome.Error, Reason = IngestErrors.DbWriteFailed, Details = ex.Message };
+                return result with { Outcome = IngestOutcome.Error, Reason = IngestErrors.DbWriteFailed, Details = Join(ex.Message, RepairOriginalNote(repair)) };
             }
         }
+        if (repair is not null)
+            DeleteBackup(repair);
 
         if (placement is not null)
         {
@@ -1030,8 +1032,9 @@ public sealed class IngestPipeline(
             return (note, restoredAs);
         if (!pointerFree)
         {
-            logger.LogError("{Original}: kept at {Backup}, since the incoming copy still holds its name", repair.ExistingPath, repair.BackupPath);
-            return (Join(note, $"the original file was kept at {repair.BackupPath}"), restoredAs);
+            var original = RepairOriginalNote(repair);
+            logger.LogError("{Original}: the pointer is still occupied after rollback; {OriginalStatus}", repair.ExistingPath, original);
+            return (Join(note, original), restoredAs);
         }
         return (Join(note, RestoreOriginal(repair)), restoredAs);
     }
@@ -1107,19 +1110,22 @@ public sealed class IngestPipeline(
     }
 
     /// <summary>I6: sets the file at the pointer aside under its reserved backup name.</summary>
-    /// <returns>Why it wasn't, with nothing changed; null when it was.</returns>
+    /// <returns>Why it wasn't and where the verified original remains; null when it was.</returns>
     private string? StepAside(RepairPlan repair)
     {
         var library = paths.Value.Roms;
         var current = ExternalRomPath.ClassifyFile(library, repair.ExistingPath!);
         if (current.Status != ExternalPathStatus.Found || current.Snapshot != repair.Snapshot)
             return $"{repair.ExistingPath} changed before it could be repaired: {current.Details ?? "it was replaced"}";
-        var renamed = NoReplaceRename.Move(current.Path, repair.BackupPath);
+        var backup = ExternalRomPath.ClassifyFile(library, repair.BackupPath);
+        if (backup.Status != ExternalPathStatus.Missing)
+            return Join($"{repair.BackupPath} can't hold the repair backup: {backup.Details ?? "the name is occupied"}", RepairOriginalNote(repair));
+        var renamed = NoReplaceRename.MoveVerified(current.Path, repair.BackupPath, current.Snapshot!, ExternalHooks?.RepairRename);
         if (!renamed.Renamed)
-            return $"{repair.ExistingPath} couldn't be set aside as {repair.BackupPath}: {renamed.Details}";
+            return Join($"{repair.ExistingPath} couldn't be set aside as {repair.BackupPath}: {renamed.Details}", RepairOriginalNote(repair));
         return ExternalRomPath.ClassifyFile(library, repair.BackupPath).Snapshot == repair.Snapshot
             ? null
-            : $"the file set aside at {repair.BackupPath} is not the one that was at {repair.ExistingPath}; nothing was repaired";
+            : Join($"{repair.BackupPath} no longer holds the file set aside for repair", RepairOriginalNote(repair));
     }
 
     /// <summary>I6: puts the set-aside original back under its own spelling; nothing when there was none.</summary>
@@ -1128,22 +1134,48 @@ public sealed class IngestPipeline(
     {
         if (repair?.ExistingPath is null)
             return null;
-        var backup = ExternalRomPath.ClassifyFile(paths.Value.Roms, repair.BackupPath);
-        if (backup.Status == ExternalPathStatus.Missing && ExternalRomPath.ClassifyFile(paths.Value.Roms, repair.ExistingPath).Snapshot == repair.Snapshot)
+        var library = paths.Value.Roms;
+        var backup = ExternalRomPath.ClassifyFile(library, repair.BackupPath);
+        var original = ExternalRomPath.ClassifyFile(library, repair.ExistingPath);
+        if (backup.Status == ExternalPathStatus.Missing && original.Snapshot == repair.Snapshot)
             return null; // it was never set aside
         if (backup.Status != ExternalPathStatus.Found || backup.Snapshot != repair.Snapshot)
         {
             logger.LogError("{Backup}: no longer the original file of {Original}; it was left as it is", repair.BackupPath, repair.ExistingPath);
             return $"{repair.BackupPath} is no longer the original file; it was left as it is";
         }
-        var back = NoReplaceRename.Move(backup.Path, repair.ExistingPath);
-        if (back.Renamed)
-            return null;
-        logger.LogError("{Original}: couldn't be put back ({Details}); it is at {Backup}", repair.ExistingPath, back.Details, repair.BackupPath);
-        return $"putting the original file back failed ({back.Details}); it is at {repair.BackupPath}";
+        string failure;
+        if (original.Status == ExternalPathStatus.Missing)
+        {
+            var back = NoReplaceRename.MoveVerified(backup.Path, repair.ExistingPath, backup.Snapshot!, ExternalHooks?.RepairRename);
+            if (back.Renamed && ExternalRomPath.ClassifyFile(library, repair.ExistingPath).Snapshot == repair.Snapshot)
+                return null;
+            failure = back.Details ?? $"{repair.ExistingPath} no longer holds the restored file";
+        }
+        else
+        {
+            failure = original.Details ?? $"{repair.ExistingPath} is occupied";
+        }
+        var note = Join($"putting the original file back failed ({failure})", RepairOriginalNote(repair));
+        logger.LogError("{Original}: {Details}", repair.ExistingPath, note);
+        return note;
     }
 
-    /// <summary>I6 after the ZIP is written: the set-aside original is removed, unless something else took its name.</summary>
+    private string? RepairOriginalNote(RepairPlan? repair)
+    {
+        if (repair?.ExistingPath is null)
+            return null;
+        var library = paths.Value.Roms;
+        var backup = ExternalRomPath.ClassifyFile(library, repair.BackupPath);
+        if (backup.Snapshot == repair.Snapshot)
+            return $"the original file was kept at {backup.Path}";
+        var original = ExternalRomPath.ClassifyFile(library, repair.ExistingPath);
+        if (original.Snapshot == repair.Snapshot)
+            return $"the original file was kept at {original.Path}";
+        return "the original file could not be verified at either repair path";
+    }
+
+    /// <summary>I6 after the ZIP and database updates succeed: remove the verified backup.</summary>
     private void DeleteBackup(RepairPlan repair)
     {
         if (repair.ExistingPath is null)
