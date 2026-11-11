@@ -1,4 +1,5 @@
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { expectAccessible } from './axe';
@@ -31,6 +32,9 @@ test.afterAll(async () => {
 });
 
 const dialog = () => page.getByRole('dialog');
+
+/** The seeded Switch base game's bytes, read before ingestion moves the file next to its ZIP (step 28a). */
+let switchBase: Buffer;
 
 /** A real square RGB PNG: the API checks magic bytes and dimensions, and the browser must render it. */
 function png(size: number, rgb: [number, number, number]): Buffer {
@@ -96,6 +100,9 @@ test('ingestion of the seeded Basic set', async () => {
 
 	// I1: Pending / Failed / Last runs are tabs under the always-visible Run section.
 	await expect(page.getByRole('tab', { name: /^Pending files \(\d+\)$/ })).toHaveAttribute('aria-selected', 'true');
+	const ingest = process.env.E2E_INGEST;
+	if (!ingest) throw new Error('E2E_INGEST is not set (run scripts/test-e2e.ps1).');
+	switchBase = await readFile(join(ingest, 'switch', '01-orbit-expedition.nsp'));
 	await page.getByRole('button', { name: 'Import all' }).click();
 
 	await page.getByRole('tab', { name: 'Last runs' }).click();
@@ -356,6 +363,30 @@ test('game detail + downloads', async () => {
 	await expect(info).toContainText('Super Nintendo Entertainment System');
 	expect(await info.evaluate((card) => card.scrollWidth <= card.clientWidth)).toBe(true);
 	await page.setViewportSize(viewport);
+});
+
+test('Switch: external releases and a per-release download', async () => {
+	await page.goto('/');
+	await page.getByLabel('System').selectOption('switch');
+	await expect(page).toHaveURL(/system=switch/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await page.getByRole('link', { name: 'Orbit Expedition', exact: true }).click();
+	await expect(page.getByRole('heading', { level: 1, name: 'Orbit Expedition' })).toBeVisible();
+
+	// G7: base, update and DLC are each stored next to the ZIP.
+	await expect(page.getByRole('tab', { name: 'Releases (3)' })).toHaveAttribute('aria-selected', 'true');
+	await expect(page.getByText('External', { exact: true })).toHaveCount(3);
+	await expectAccessible(page, 'Switch game detail');
+
+	// G4: the primary (base) release first; the download is the original file, byte for byte.
+	await page.getByRole('button', { name: 'Download ROM' }).click();
+	const items = page.locator('.dropdown-menu.show .dropdown-item');
+	await expect(items).toHaveCount(3);
+	const download = page.waitForEvent('download');
+	await items.first().click();
+	const file = await download;
+	expect(file.suggestedFilename()).toBe('Orbit Expedition [0100000000010000][v0].nsp');
+	expect((await readFile((await file.path())!)).equals(switchBase)).toBe(true);
 });
 
 test('global search, ratings and favourites', async () => {
