@@ -43,6 +43,7 @@ public static class IngestSeeder
         Directory.CreateDirectory(Path.Combine(ingest, "md"));
         Directory.CreateDirectory(Path.Combine(ingest, "s32x"));
         Directory.CreateDirectory(Path.Combine(ingest, "tg16"));
+        Directory.CreateDirectory(Path.Combine(ingest, "switch"));
         var files = new List<string>();
         var gb = new List<FixtureGame>();
         var gbc = new List<FixtureGame>();
@@ -131,6 +132,22 @@ public static class IngestSeeder
         { ReleaseYear = 1990, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Racing"] };
         // Seeded with a 512-byte copier header: ingestion must strip it to match the DAT (T2).
         Loose("tg16", "01-neon-circuit.pce", [.. new byte[512], .. circuitRom]);
+        // Switch (external, titledb): a base game, its update and a DLC, identified by their tickets' title ids (N2, T4).
+        const string orbitBase = "0100000000010000", orbitUpdate = "0100000000010800", orbitBonus = "0100000000011001";
+        byte[] Nsp(string titleId, int seed) => new SyntheticNspBuilder
+        {
+            Entries = [($"{titleId.ToLowerInvariant()}.nca", 2048), (SyntheticNspBuilder.TicketName(titleId), 704)],
+            Seed = seed,
+        }.Build();
+        Loose("switch", "01-orbit-expedition.nsp", Nsp(orbitBase, 1901));
+        Loose("switch", "02-orbit-expedition [v65536].nsp", Nsp(orbitUpdate, 1902));
+        Loose("switch", "03-orbit-expedition-bonus.nsp", Nsp(orbitBonus, 1903));
+        IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow> titleDb =
+        [
+            new(orbitBase, "Orbit Expedition", "Fixture Works", "Seed Studio", 2018, ["Adventure"], ["en"], null, null),
+            new(orbitUpdate, "Orbit Expedition", "Fixture Works", "Seed Studio", 2018, ["Adventure"], ["en"], null, null),
+            new(orbitBonus, "Orbit Expedition: Bonus Tracks", "Fixture Works", "Seed Studio", 2019, ["Adventure"], ["en"], null, null),
+        ];
 
         var zipPath = Path.Combine(ingest, "gb", "05-quest.zip");
         using (var file = File.Create(zipPath))
@@ -161,7 +178,8 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit] }, titleDb: EmptySwitch);
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit] },
+            titleDb: new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = titleDb });
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
     }

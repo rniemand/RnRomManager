@@ -102,7 +102,7 @@ test('ingestion of the seeded Basic set', async () => {
 	await expect(page).toHaveURL(/\/ingestion\?tab=runs$/);
 	await expect(page.getByRole('button', { name: 'Import all' })).toBeVisible();
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
-	await expect(run).toContainText('Ingested 18 · Duplicate 1 · Review 2 · Failed 1', {
+	await expect(run).toContainText('Ingested 21 · Duplicate 1 · Review 2 · Failed 1', {
 		timeout: 60_000
 	});
 
@@ -155,7 +155,7 @@ test('reports and the ingest audit trail', async () => {
 	const ingested = page
 		.getByRole('row')
 		.filter({ has: page.getByRole('cell', { name: 'Ingested', exact: true }) });
-	await expect(ingested).toHaveCount(18);
+	await expect(ingested).toHaveCount(21);
 	await expect(
 		page
 			.getByRole('row')
@@ -168,7 +168,7 @@ test('reports and the ingest audit trail', async () => {
 
 test('browse, search and filter the library', async () => {
 	await page.goto('/');
-	await expect(page.getByText('16 games')).toBeVisible();
+	await expect(page.getByText('17 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
 	// S1: systems in display-name order, "All systems" first; F3: each with its game count.
 	await expect(page.getByLabel('System').locator('option')).toHaveText([
@@ -184,7 +184,7 @@ test('browse, search and filter the library', async () => {
 		'Mega Drive / Genesis (1)',
 		'Nintendo 64 (1)',
 		'Nintendo Entertainment System (1)',
-		'Nintendo Switch (0)',
+		'Nintendo Switch (1)',
 		'Super Nintendo Entertainment System (1)',
 		'TurboGrafx-16 (1)'
 	]);
@@ -192,8 +192,9 @@ test('browse, search and filter the library', async () => {
 
 	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('orb');
 	await expect(page).toHaveURL(/q=orb/);
-	// Orbit Blocks and Orbit Kart 64.
-	await expect(page.getByText('2 games', { exact: true })).toBeVisible();
+	// Orbit Blocks, Orbit Kart 64 and Orbit Expedition (Switch).
+	await expect(page.getByText('3 games', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: /Orbit Expedition/ }).first()).toBeVisible();
 
 	await page.goto('/');
 	await page.getByLabel('System').selectOption('gbc');
@@ -360,7 +361,7 @@ test('game detail + downloads', async () => {
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await page.goto('/');
-	await expect(page.getByText('16 games')).toBeVisible();
+	await expect(page.getByText('17 games')).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await expect(dialog()).toBeVisible();
 	await expect(dialog().getByRole('combobox')).toBeFocused();
@@ -459,10 +460,13 @@ test('collections: create, add from game page and bulk select, search, remove, d
 	// P1–P4: Add games leaves out members; results show a cover and a short system name.
 	const addGames = page.getByLabel('Add games');
 	await addGames.fill('orbit');
-	await expect(page.getByText('No matching games.')).toBeVisible();
 	const results = page.locator('.list-group').getByRole('button');
+	// Orbit Expedition is suggested; both members stay excluded.
+	await expect(results.filter({ hasText: 'Orbit Expedition' })).toBeVisible();
 	await expect(results.filter({ hasText: 'Orbit Blocks' })).toHaveCount(0);
 	await expect(results.filter({ hasText: 'Orbit Kart 64' })).toHaveCount(0);
+	await addGames.fill('zzz no such game');
+	await expect(page.getByText('No matching games.')).toBeVisible();
 	await addGames.fill('pocket');
 	const drift = results.filter({ hasText: 'Pocket Drift' });
 	await expect(drift).toBeVisible();
@@ -489,7 +493,7 @@ test('collections: create, add from game page and bulk select, search, remove, d
 	await expect(page).toHaveURL(/\/collections$/);
 	await expect(page.getByText('You have no collections yet.')).toBeVisible();
 	await page.goto('/');
-	await expect(page.getByText('16 games')).toBeVisible();
+	await expect(page.getByText('17 games')).toBeVisible();
 });
 
 test('review queue: resolve with a suggestion', async () => {
