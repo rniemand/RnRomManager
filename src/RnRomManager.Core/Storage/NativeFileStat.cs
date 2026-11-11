@@ -24,7 +24,7 @@ internal enum NativeStatOutcome
     Failed,
 }
 
-/// <summary>What one path names, read without following a link at its last component and without opening file content.</summary>
+/// <summary>What one path or open handle names, read without following a link and without reading file content.</summary>
 internal readonly record struct NativeFileStat(
     NativeStatOutcome Outcome, bool IsLink, bool IsDirectory, bool IsRegularFile, ExternalFileSnapshot? Snapshot, string? Error)
 {
@@ -35,7 +35,30 @@ internal readonly record struct NativeFileStat(
         if (OperatingSystem.IsWindows())
             return ReadWindows(fullPath);
         if (OperatingSystem.IsLinux())
-            return ReadLinux(fullPath);
+            return ReadLinux(AtFdCwd, fullPath, AtSymlinkNoFollow);
+        throw new PlatformNotSupportedException("External ROM storage needs Windows or Linux file identity calls.");
+    }
+
+    /// <summary>The object an open handle refers to, whatever its path names now.</summary>
+    /// <exception cref="PlatformNotSupportedException">Neither Windows nor Linux.</exception>
+    public static NativeFileStat Read(SafeFileHandle handle)
+    {
+        if (OperatingSystem.IsWindows())
+            return ReadWindows(handle);
+        if (OperatingSystem.IsLinux())
+        {
+            var added = false;
+            try
+            {
+                handle.DangerousAddRef(ref added);
+                return ReadLinux((int)handle.DangerousGetHandle(), "", AtEmptyPath | AtSymlinkNoFollow);
+            }
+            finally
+            {
+                if (added)
+                    handle.DangerousRelease();
+            }
+        }
         throw new PlatformNotSupportedException("External ROM storage needs Windows or Linux file identity calls.");
     }
 
@@ -47,6 +70,7 @@ internal readonly record struct NativeFileStat(
 
     private const int AtFdCwd = -100;
     private const int AtSymlinkNoFollow = 0x100;
+    private const int AtEmptyPath = 0x1000;
     private const uint StatxBasicStats = 0x7FF;
     private const int StatxSize = 256;
     private const int ENOENT = 2;
@@ -56,10 +80,10 @@ internal readonly record struct NativeFileStat(
     private const ushort ModeDirectory = 0x4000;
     private const ushort ModeLink = 0xA000;
 
-    private static NativeFileStat ReadLinux(string fullPath)
+    private static NativeFileStat ReadLinux(int directory, string path, int flags)
     {
         var buffer = new byte[StatxSize];
-        if (statx(AtFdCwd, fullPath, AtSymlinkNoFollow, StatxBasicStats, buffer) != 0)
+        if (statx(directory, path, flags, StatxBasicStats, buffer) != 0)
         {
             var errno = Marshal.GetLastPInvokeError();
             return errno is ENOENT or ENOTDIR ? Missing() : Failure($"statx failed with errno {errno}");
@@ -103,7 +127,11 @@ internal readonly record struct NativeFileStat(
             var error = Marshal.GetLastPInvokeError();
             return error is ErrorFileNotFound or ErrorPathNotFound ? Missing() : Failure($"CreateFile failed with error {error}");
         }
+        return ReadWindows(handle);
+    }
 
+    private static NativeFileStat ReadWindows(SafeFileHandle handle)
+    {
         if (!GetFileInformationByHandle(handle, out var info))
             return Failure($"GetFileInformationByHandle failed with error {Marshal.GetLastPInvokeError()}");
 

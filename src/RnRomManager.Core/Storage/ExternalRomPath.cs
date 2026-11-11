@@ -18,8 +18,14 @@ public enum ExternalPathStatus
     /// </summary>
     Unsafe,
 
-    /// <summary>An IO or permission failure: whether it exists is unknown.</summary>
+    /// <summary>An IO or permission failure (a sharing violation included): whether it exists is unknown.</summary>
     Unreadable,
+
+    /// <summary>
+    /// Only from a checked open that was given the snapshot to expect: a regular file is there, but it is not that
+    /// same, unchanged file (another file identity, length or last write time).
+    /// </summary>
+    Changed,
 }
 
 /// <summary>The result of classifying one path.</summary>
@@ -30,6 +36,23 @@ public enum ExternalPathStatus
 /// <param name="Snapshot">Set for a <see cref="ExternalPathStatus.Found"/> file.</param>
 /// <param name="Details">Why, for every status but <see cref="ExternalPathStatus.Found"/>.</param>
 public sealed record ExternalPathCheck(ExternalPathStatus Status, string Path, ExternalFileSnapshot? Snapshot = null, string? Details = null);
+
+/// <summary>The result of a checked open. <paramref name="Stream"/> and <paramref name="Snapshot"/> are set only for <see cref="ExternalPathStatus.Found"/>.</summary>
+/// <param name="Path">As <see cref="ExternalPathCheck.Path"/>.</param>
+/// <param name="Stream">The validated read stream itself; the caller disposes it and never reopens the path.</param>
+/// <param name="Snapshot">Read from the open handle, so it describes exactly the file <paramref name="Stream"/> reads.</param>
+public sealed record ExternalOpenResult(
+    ExternalPathStatus Status, string Path, FileStream? Stream = null, ExternalFileSnapshot? Snapshot = null, string? Details = null);
+
+/// <summary>Test seams of <see cref="ExternalRomPath.OpenRead"/>: points where a test swaps an entry mid-open.</summary>
+public sealed class ExternalOpenHooks
+{
+    /// <summary>Runs after the path was classified and before anything is opened.</summary>
+    public Action? AfterClassify { get; init; }
+
+    /// <summary>Runs with each directory's full path right before that directory is opened.</summary>
+    public Action<string>? BeforeDirectoryOpen { get; init; }
+}
 
 /// <summary>
 /// The one place that decides whether a path under a storage root may be used for an external ROM, its metadata ZIP,
@@ -54,6 +77,64 @@ public static class ExternalRomPath
     /// directory, and <see cref="ExternalPathCheck.Path"/> is where to create it.
     /// </summary>
     public static ExternalPathCheck ClassifyDirectory(string root, string fullPath) => Classify(root, fullPath, expectFile: false);
+
+    /// <summary>
+    /// Opens a regular file under <paramref name="root"/> for reading, safe against an entry being swapped between
+    /// the check and the open: after <see cref="ClassifyFile"/>, every directory below the root is opened without
+    /// following links and the file is validated on the handle that was opened (Linux: no-follow directory-relative
+    /// opens, then the pinned file through <c>/proc/self/fd</c>, so procfs must be mounted; Windows: directory
+    /// handles held without delete sharing, the file opened without following a reparse point).
+    /// </summary>
+    /// <param name="share">The Windows sharing mode of the returned handle; Linux has none.</param>
+    /// <param name="expected">When set, the opened file must be this same, unchanged file, else <see cref="ExternalPathStatus.Changed"/>.</param>
+    /// <param name="hooks">Test seams.</param>
+    public static ExternalOpenResult OpenRead(string root, string fullPath, FileShare share = FileShare.Read,
+        ExternalFileSnapshot? expected = null, ExternalOpenHooks? hooks = null)
+    {
+        var check = ClassifyFile(root, fullPath);
+        if (check.Status != ExternalPathStatus.Found)
+            return new ExternalOpenResult(check.Status, check.Path, Details: check.Details);
+        hooks?.AfterClassify?.Invoke();
+
+        // check.Path is the root plus each name as spelled on disk.
+        var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        var components = check.Path[(fullRoot.Length + 1)..].Split(Path.DirectorySeparatorChar);
+        var opened = NativeCheckedOpen.OpenRead(fullRoot, components, share, hooks?.BeforeDirectoryOpen);
+        if (opened.Outcome != NativeCheckedOpen.Outcome.Opened)
+        {
+            var status = opened.Outcome switch
+            {
+                NativeCheckedOpen.Outcome.Missing => ExternalPathStatus.Missing,
+                NativeCheckedOpen.Outcome.Unsafe => ExternalPathStatus.Unsafe,
+                _ => ExternalPathStatus.Unreadable,
+            };
+            return new ExternalOpenResult(status, check.Path, Details: opened.Details);
+        }
+
+        var handle = opened.Handle!;
+        if (expected is not null && opened.Snapshot != expected)
+        {
+            handle.Dispose();
+            return new ExternalOpenResult(ExternalPathStatus.Changed, check.Path, Details: $"{check.Path} changed since it was checked");
+        }
+
+        try
+        {
+            // Unbuffered: every consumer (hashing, copying, downloads) reads in large blocks of its own.
+            return new ExternalOpenResult(ExternalPathStatus.Found, check.Path, new FileStream(handle, FileAccess.Read, bufferSize: 0), opened.Snapshot);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            handle.Dispose();
+            return new ExternalOpenResult(ExternalPathStatus.Unreadable, check.Path, Details: $"{check.Path}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// What an open stream is reading right now, whatever its path names by now; null when it isn't a regular file
+    /// or can't be inspected. Compare it with the snapshot taken at open to see whether the file changed meanwhile.
+    /// </summary>
+    public static ExternalFileSnapshot? SnapshotOf(FileStream stream) => NativeFileStat.Read(stream.SafeFileHandle).Snapshot;
 
     private static ExternalPathCheck Classify(string root, string fullPath, bool expectFile)
     {
