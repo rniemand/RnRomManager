@@ -20,6 +20,9 @@ public static partial class TitleDb
     /// <summary><c>images.source_url</c>.</summary>
     public const int MaxUrlLength = 1024;
 
+    /// <summary>T3: the most a compact file may hold.</summary>
+    public const long MaxCompactBytes = 256L * 1024 * 1024;
+
     /// <summary><c>roms.dat_game_name</c>, in Unicode scalar values.</summary>
     public const int MaxGameNameLength = 255;
 

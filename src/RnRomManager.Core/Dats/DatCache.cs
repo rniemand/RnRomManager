@@ -20,6 +20,15 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
 
     private volatile IReadOnlyDictionary<string, DatStore> _stores = new Dictionary<string, DatStore>();
 
+    /// <summary>T3's cap on <c>dats.json</c>; settable so tests needn't write a megabyte.</summary>
+    public long MaxManifestBytes { get; set; } = DatManifest.MaxBytes;
+
+    /// <summary>T3's cap on a compact titledb file; settable so tests needn't write 256 MiB.</summary>
+    public long MaxCompactBytes { get; set; } = TitleDb.MaxCompactBytes;
+
+    /// <summary>Test seam: runs with a compact file's path after its bytes are read, before they are re-checked.</summary>
+    public Action<string>? AfterCompactRead { get; set; }
+
     /// <summary><c>cache/dats/</c>.</summary>
     public string Directory => Path.Combine(paths.Value.Cache, FolderName);
 
@@ -33,7 +42,7 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
         IReadOnlyList<DatManifestEntry>? manifest = null;
         try
         {
-            manifest = DatManifest.Read(manifestPath);
+            manifest = DatManifest.ReadChecked(paths.Value.Cache, manifestPath, MaxManifestBytes);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -99,8 +108,8 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
         if (!IsDateVersion(entry.Version) || entry.DownloadedAt == default)
             throw new InvalidDataException($"{file} has version '{entry.Version}' and download time {entry.DownloadedAt:O}; a yyyy.MM.dd version and a time are required.");
 
-        // shortcut: read whole and unchecked; step 18a opens it through the checked, bounded stream.
-        var bytes = File.ReadAllBytes(SafePath.Resolve(Directory, file));
+        // One checked, bounded read serves both the SHA1 and the parse.
+        var bytes = DatManifest.ReadCheckedBytes(paths.Value.Cache, SafePath.Resolve(Directory, file), MaxCompactBytes, AfterCompactRead);
         if (!Convert.ToHexStringLower(SHA1.HashData(bytes)).Equals(entry.Sha1, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException($"{file} does not match its SHA1 in {DatManifest.FileName}.");
         using var stream = new MemoryStream(bytes, writable: false);

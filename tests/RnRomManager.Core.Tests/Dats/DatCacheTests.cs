@@ -208,4 +208,51 @@ public class DatCacheTests
         var sha1 = Convert.ToHexStringLower(SHA1.HashData(File.ReadAllBytes(path)));
         DatManifest.Write(manifestPath, DatManifest.Read(manifestPath).Select(e => e.File == file ? e with { Sha1 = sha1 } : e));
     }
+
+    [TestCase("link", TestName = "UnsafeManifest_LoadsNoStores linked")]
+    [TestCase("fifo", TestName = "UnsafeManifest_LoadsNoStores fifo")]
+    [TestCase("directory", TestName = "UnsafeManifest_LoadsNoStores directory")]
+    [TestCase("oversized", TestName = "UnsafeManifest_LoadsNoStores oversized")]
+    public void UnsafeManifest_LoadsNoStores(string problem)
+    {
+        WriteFixtures();
+        var manifest = Path.Combine(_cache.Directory, DatManifest.FileName);
+        var outside = Path.Combine(_dir.Path, "outside.json");
+        switch (problem)
+        {
+            case "link":
+                File.Move(manifest, outside);
+                if (!TestLinks.TryLinkFile(manifest, outside))
+                    Assert.Ignore("this account can't create a file link");
+                break;
+            case "fifo":
+                File.Delete(manifest);
+                if (!TestLinks.TryCreateFifo(manifest))
+                    Assert.Ignore("FIFOs are a Linux test");
+                break;
+            case "directory":
+                File.Delete(manifest);
+                Directory.CreateDirectory(manifest);
+                break;
+            default:
+                _cache.MaxManifestBytes = new FileInfo(manifest).Length - 1;
+                break;
+        }
+
+        Assert.DoesNotThrow(_cache.Load);
+
+        Assert.That(_cache.For("gb"), Is.Null);
+        Assert.That(_cache.For("gbc"), Is.Null);
+    }
+
+    [Test]
+    public void ManifestAtTheCap_Loads()
+    {
+        WriteFixtures();
+        _cache.MaxManifestBytes = new FileInfo(Path.Combine(_cache.Directory, DatManifest.FileName)).Length;
+
+        _cache.Load();
+
+        Assert.That(_cache.For("gb"), Is.Not.Null);
+    }
 }

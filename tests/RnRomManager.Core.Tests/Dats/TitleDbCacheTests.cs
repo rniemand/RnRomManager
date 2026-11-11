@@ -176,4 +176,76 @@ public class TitleDbCacheTests
 
         AssertOnlyTitleDbDisabled();
     }
+
+    private string CompactPath => Path.Combine(_cache.Directory, Compact);
+
+    [Test]
+    public void LinkedTitleDbDirectory_DisablesTitleDb()
+    {
+        Write();
+        var folder = Path.GetDirectoryName(CompactPath)!;
+        var outside = Path.Combine(_dir.Path, "outside");
+        Directory.Move(folder, outside);
+        if (!TestLinks.TryLinkDirectory(folder, outside))
+            Assert.Ignore("this account can't create a directory link");
+        try
+        {
+            AssertOnlyTitleDbDisabled();
+        }
+        finally
+        {
+            TestLinks.RemoveDirectoryLink(folder);
+        }
+    }
+
+    [TestCase("link", TestName = "UnsafeCompactLeaf_DisablesTitleDb linked")]
+    [TestCase("fifo", TestName = "UnsafeCompactLeaf_DisablesTitleDb fifo")]
+    [TestCase("directory", TestName = "UnsafeCompactLeaf_DisablesTitleDb directory")]
+    public void UnsafeCompactLeaf_DisablesTitleDb(string problem)
+    {
+        Write();
+        var outside = Path.Combine(_dir.Path, "outside.json");
+        File.Move(CompactPath, outside);
+        var made = problem switch
+        {
+            "link" => TestLinks.TryLinkFile(CompactPath, outside),
+            "fifo" => TestLinks.TryCreateFifo(CompactPath),
+            _ => Directory.CreateDirectory(CompactPath).Exists,
+        };
+        if (!made)
+            Assert.Ignore($"this OS or account can't make a {problem}");
+
+        AssertOnlyTitleDbDisabled();
+    }
+
+    [Test]
+    public void CompactReplacedWhileRead_DisablesTitleDb()
+    {
+        Write();
+        var bytes = File.ReadAllBytes(CompactPath);
+        var replaced = false;
+        _cache.AfterCompactRead = path =>
+        {
+            File.WriteAllBytes(path + ".new", bytes); // the same bytes: only the file's identity tells it apart
+            File.Move(path, path + ".old"); // allowed on the open file: it was opened with delete sharing
+            File.Move(path + ".new", path);
+            replaced = true;
+        };
+
+        AssertOnlyTitleDbDisabled();
+        Assert.That(replaced, Is.True, "the swap itself went through");
+    }
+
+    [Test]
+    public void OversizedCompact_DisablesTitleDb()
+    {
+        Write();
+        _cache.MaxCompactBytes = new FileInfo(CompactPath).Length - 1;
+
+        AssertOnlyTitleDbDisabled();
+
+        _cache.MaxCompactBytes = new FileInfo(CompactPath).Length;
+        _cache.Load();
+        Assert.That(_cache.For(ExternalTitleDbTestHandler.SystemId), Is.Not.Null, "at the cap it loads");
+    }
 }
