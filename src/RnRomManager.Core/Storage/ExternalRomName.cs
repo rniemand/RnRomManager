@@ -187,6 +187,25 @@ public static class ExternalRomName
     }
 
     /// <summary>
+    /// W3: a free sibling name for a source ZIP's backup, <c>&lt;zip name&gt;.move-backup.tmp</c>, with the name cut
+    /// (and <c> (N)</c> added on a clash) so it and its <see cref="PartialSuffix"/> staging name both fit
+    /// <see cref="MaxComponentBytes"/>. Neither ends in <c>.zip.tmp</c>, so crash recovery leaves them alone. Both
+    /// names are reserved.
+    /// </summary>
+    public static string AllocateMoveBackup(string zipName, ExternalNameReservations reservations) =>
+        FirstFree(n =>
+        {
+            var tail = Suffix(n) + MoveBackupSuffix;
+            return Cut(zipName, MaxComponentBytes - Bytes(PartialSuffix) - Bytes(tail)) + tail;
+        }, reservations, PartialSuffix);
+
+    /// <summary>W3: a source ZIP's verified backup during a move: <c>&lt;zip name&gt;.move-backup.tmp</c>.</summary>
+    public const string MoveBackupSuffix = ".move-backup.tmp";
+
+    /// <summary>W3: the name a backup is written under until it is verified; an interrupted copy keeps it.</summary>
+    public const string PartialSuffix = ".partial";
+
+    /// <summary>
     /// A free sibling name for the file a self-repair replaces: <c>&lt;pointer&gt;.repair.tmp</c>, with the pointer
     /// cut (and <c> (N)</c> added on a clash) so the whole name fits <see cref="MaxComponentBytes"/> even for a
     /// pointer that is itself that long. The name is reserved.
