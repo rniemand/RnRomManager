@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Systems;
 
@@ -38,27 +39,62 @@ public static class StorageFolders
 
     /// <summary>
     /// <c>roms/&lt;id&gt;/{#,A..Z}</c> and <c>ingest/&lt;id&gt;/{_duplicates,_failed,_removed}</c> for every handler.
-    /// Idempotent: existing folders and their contents are left alone.
+    /// Idempotent: existing folders and their contents are left alone. An external system's folders are classified
+    /// first (G4): a linked or otherwise unsafe system folder, bucket or side folder is skipped with a warning and
+    /// nothing is created through it.
     /// </summary>
-    /// <exception cref="StorageNotWritableException">A folder can't be created.</exception>
-    public static void EnsureSystemFolders(PathsOptions paths, IEnumerable<ISystemHandler> handlers)
+    /// <exception cref="StorageNotWritableException">A folder can't be created, or an external one can't be checked.</exception>
+    public static void EnsureSystemFolders(PathsOptions paths, IEnumerable<ISystemHandler> handlers, ILogger logger)
     {
         foreach (var handler in handlers)
         {
-            var folders = Buckets.Select(b => SafePath.Resolve(paths.Roms, Path.Combine(handler.Id, b)))
-                .Concat(IngestSubfolders.Select(f => SafePath.Resolve(paths.Ingest, Path.Combine(handler.Id, f))));
-            foreach (var folder in folders)
+            var trees = new[]
             {
-                try
+                (Root: paths.Roms, Children: Buckets),
+                (Root: paths.Ingest, Children: IngestSubfolders),
+            };
+            foreach (var (root, children) in trees)
+            {
+                var system = SafePath.Resolve(root, handler.Id);
+                var folders = children.Select(c => SafePath.Resolve(root, Path.Combine(handler.Id, c)));
+                if (!handler.EmbedRomsInZip)
                 {
-                    Directory.CreateDirectory(folder);
+                    if (!SafeToCreate(root, system, logger))
+                        continue;
+                    folders = folders.Where(f => SafeToCreate(root, f, logger)).ToList();
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    throw new StorageNotWritableException(
-                        $"Folder '{folder}' can't be created by {ProcessIdentity.Describe()}: {ex.Message}", ex);
-                }
+                foreach (var folder in folders)
+                    Create(folder);
             }
+        }
+    }
+
+    /// <returns>False (and a warning) for an unsafe external folder; true when it is there or can be created.</returns>
+    private static bool SafeToCreate(string root, string folder, ILogger logger)
+    {
+        var check = ExternalRomPath.ClassifyDirectory(root, folder);
+        switch (check.Status)
+        {
+            case ExternalPathStatus.Found or ExternalPathStatus.Missing:
+                return true;
+            case ExternalPathStatus.Unreadable:
+                throw new StorageNotWritableException($"Folder '{folder}' can't be checked by {ProcessIdentity.Describe()}: {check.Details}", new IOException(check.Details));
+            default:
+                logger.LogWarning("External folder {Folder} is unsafe ({Details}); nothing is created in it", folder, check.Details);
+                return false;
+        }
+    }
+
+    private static void Create(string folder)
+    {
+        try
+        {
+            Directory.CreateDirectory(folder);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new StorageNotWritableException(
+                $"Folder '{folder}' can't be created by {ProcessIdentity.Describe()}: {ex.Message}", ex);
         }
     }
 }

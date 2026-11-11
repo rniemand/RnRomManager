@@ -43,7 +43,7 @@ public sealed class StartupRunner(
 
         // Step 4
         StorageFolders.EnsureRoots(paths.Value);
-        StorageFolders.EnsureSystemFolders(paths.Value, systems.All);
+        StorageFolders.EnsureSystemFolders(paths.Value, systems.All, logger);
 
         // Steps 5–6
         await database.WaitUntilAvailableAsync(cancellationToken);
