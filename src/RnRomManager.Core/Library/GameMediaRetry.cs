@@ -23,7 +23,7 @@ public sealed class GameMediaRetry(ILibraryMirror mirror, InfoJsonReader reader,
     /// <param name="actor">AU4: <c>MediaFetched</c> is recorded once the ZIP is written (also when the DB update then fails).</param>
     public async Task<MediaRetryResult> RetryAsync(GameRow row, CircuitBreaker breaker, bool skipManualOnly, AuditActor actor, CancellationToken ct)
     {
-        var target = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
+        var target = LibraryTarget.OpenForWrite(paths.Value.Roms, row.ZipPath, reader, systems, row.Id, row.SystemId);
         if (target.Code is not null)
             return new(MediaRetryOutcome.Error, target.Code, target.Details);
 
@@ -54,7 +54,12 @@ public sealed class GameMediaRetry(ILibraryMirror mirror, InfoJsonReader reader,
         var path = SafePath.Resolve(paths.Value.Roms, row.ZipPath);
         try
         {
-            await new LibraryZipWriter(reader).WriteAsync(path, existing, new LibraryZipChanges(game, entries)).ConfigureAwait(false);
+            var changes = new LibraryZipChanges(game, entries);
+            // G4: a checked ZIP is replaced only through the checked write.
+            if (LibraryTarget.NeedsCheck(systems, row.ZipPath, game.System))
+                await new LibraryZipWriter(reader).WriteCheckedAsync(paths.Value.Roms, path, existing, changes).ConfigureAwait(false);
+            else
+                await new LibraryZipWriter(reader).WriteAsync(path, existing, changes).ConfigureAwait(false);
         }
         catch (LibraryZipVerifyException ex)
         {

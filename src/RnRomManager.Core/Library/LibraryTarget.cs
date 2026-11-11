@@ -1,4 +1,5 @@
 using RnRomManager.Core.Storage;
+using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Library;
 
@@ -47,11 +48,37 @@ public sealed record LibraryTarget(LibraryZip? Zip, InfoJsonGame? Game, string? 
         }
 
         var target = Check(zip, zipPath);
-        if (target.Game is null || (target.Game.GameId == gameId && target.Game.System == systemId))
-            return target;
-        zip.Dispose();
+        return target.Game is null || (target.Game.GameId == gameId && target.Game.System == systemId) ? target : Mismatch(target, zipPath, gameId, systemId);
+    }
+
+    /// <summary>
+    /// The open for any write to a mirrored game (G4, I4): checked, and held to the mirror row's identity, when the
+    /// row's system or the ZIP's top folder is external, so an embedded game mirrored under an external folder is
+    /// checked too. A plainly opened ZIP whose <c>info.json</c> names an external system other than the row's is
+    /// refused the same way.
+    /// </summary>
+    public static LibraryTarget OpenForWrite(string romsRoot, string zipPath, InfoJsonReader reader, ISystemRegistry systems, Guid gameId, string systemId)
+    {
+        if (NeedsCheck(systems, zipPath, systemId))
+            return OpenChecked(romsRoot, zipPath, reader, gameId, systemId);
+        var target = Open(romsRoot, zipPath, reader);
+        return target.Game is { } game && game.System != systemId && IsExternal(systems, game.System)
+            ? Mismatch(target, zipPath, gameId, systemId)
+            : target;
+    }
+
+    /// <summary>G4: the ZIP's path is checked when the game's system or the ZIP's top folder is external.</summary>
+    public static bool NeedsCheck(ISystemRegistry systems, string zipPath, string systemId) =>
+        IsExternal(systems, systemId) || (zipPath.IndexOf('/') is var slash and > 0 && IsExternal(systems, zipPath[..slash]));
+
+    private static bool IsExternal(ISystemRegistry systems, string systemId) =>
+        systems.All.Any(h => !h.EmbedRomsInZip && string.Equals(h.Id, systemId, StringComparison.OrdinalIgnoreCase));
+
+    private static LibraryTarget Mismatch(LibraryTarget target, string zipPath, Guid gameId, string systemId)
+    {
+        target.Zip!.Dispose();
         return new(null, null, TargetZipUnreadable,
-            $"{zipPath}: info.json is game {target.Game.GameId} of {target.Game.System}, not the mirrored game {gameId} of {systemId}; the mirror is stale");
+            $"{zipPath}: info.json is game {target.Game!.GameId} of {target.Game.System}, not the mirrored game {gameId} of {systemId}; the mirror is stale");
     }
 
     private static LibraryTarget Check(LibraryZip zip, string zipPath)

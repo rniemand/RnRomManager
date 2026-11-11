@@ -57,7 +57,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             return new(NotFound);
         if (systems.ById(row.SystemId) is { EmbedRomsInZip: false })
             return await PatchExternalAsync(row, patch, actor).ConfigureAwait(false);
-        var target = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
+        var target = OpenForEdit(row);
         if (target.Code is not null)
             return new(target.Code, target.Details);
 
@@ -276,7 +276,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
             || await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return new(NotFound);
-        var target = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
+        var target = OpenForEdit(row);
         if (target.Code is not null)
             return new(target.Code, target.Details);
 
@@ -376,7 +376,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return new(NotFound);
-        var target = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
+        var target = OpenForEdit(row);
         if (target.Code is not null)
             return new(target.Code, target.Details);
 
@@ -497,7 +497,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         if (await images.GetAsync(gameId, imageId, ct).ConfigureAwait(false) is not { } imageRow
             || await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return (new(NotFound), null, null, null, null);
-        var target = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
+        var target = OpenForEdit(row);
         if (target.Code is not null)
             return (new(target.Code, target.Details), null, null, null, null);
         // The DB row only finds the image; the ZIP's info.json decides what's there (§6.1).
@@ -551,13 +551,13 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         if (systems.ById(row.SystemId) is { EmbedRomsInZip: false })
             return await MoveReleaseExternalAsync(row, romRow, targetRow, newGameTitle, actor).ConfigureAwait(false);
 
-        var source = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
+        var source = OpenForEdit(row);
         if (source.Code is not null)
             return new(source.Code, source.Details);
         using var sourceZip = source.Zip!;
         if (source.Game!.Roms.FirstOrDefault(r => r.Metadata.Sha1 == romRow.Sha1) is not { } rom)
             return new(NotFound, $"{row.ZipPath} no longer lists SHA1 {romRow.Sha1}");
-        var target = targetRow is null ? null : LibraryTarget.Open(paths.Value.Roms, targetRow.ZipPath, reader);
+        var target = targetRow is null ? null : OpenForEdit(targetRow);
         if (target?.Code is not null)
             return new(target.Code, target.Details);
         using var targetZip = target?.Zip;
@@ -970,11 +970,11 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         if (systems.ById(row.SystemId) is { EmbedRomsInZip: false })
             return await MergeExternalAsync(row, targetRow, actor).ConfigureAwait(false);
 
-        var source = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
+        var source = OpenForEdit(row);
         if (source.Code is not null)
             return new(source.Code, source.Details);
         using var sourceZip = source.Zip!;
-        var target = LibraryTarget.Open(paths.Value.Roms, targetRow.ZipPath, reader);
+        var target = OpenForEdit(targetRow);
         if (target.Code is not null)
             return new(target.Code, target.Details);
         using var targetZip = target.Zip!;
@@ -1354,9 +1354,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     private bool IsExternal(GameRow row) => systems.ById(row.SystemId) is { EmbedRomsInZip: false };
 
     /// <summary>The game's ZIP; an external game's through a checked handle that must be the mirrored game (G4, I4).</summary>
-    private LibraryTarget OpenForEdit(GameRow row) => IsExternal(row)
-        ? LibraryTarget.OpenChecked(paths.Value.Roms, row.ZipPath, reader, row.Id, row.SystemId)
-        : LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
+    private LibraryTarget OpenForEdit(GameRow row) =>
+        LibraryTarget.OpenForWrite(paths.Value.Roms, row.ZipPath, reader, systems, row.Id, row.SystemId);
 
     /// <summary>
     /// Copies <paramref name="removed"/> out of the ZIP into <c>_removed/</c>, then runs <paramref name="change"/> (the ZIP
@@ -1442,8 +1441,13 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     {
         try
         {
-            await new LibraryZipWriter(reader).WriteAsync(SafePath.Resolve(paths.Value.Roms, zipPath), existing,
-                new LibraryZipChanges(game, newEntries, removedEntries)).ConfigureAwait(false);
+            var path = SafePath.Resolve(paths.Value.Roms, zipPath);
+            var changes = new LibraryZipChanges(game, newEntries, removedEntries);
+            // G4: a ZIP opened through a checked handle is replaced only through the checked write.
+            if (LibraryTarget.NeedsCheck(systems, zipPath, game.System))
+                await new LibraryZipWriter(reader).WriteCheckedAsync(paths.Value.Roms, path, existing, changes).ConfigureAwait(false);
+            else
+                await new LibraryZipWriter(reader).WriteAsync(path, existing, changes).ConfigureAwait(false);
             return null;
         }
         catch (LibraryZipVerifyException ex)
