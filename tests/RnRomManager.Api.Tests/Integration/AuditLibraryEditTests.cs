@@ -70,7 +70,7 @@ public class AuditLibraryEditTests
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJapan),
                 new FixtureGame("Zelda (USA)", "Zelda (USA).gb", Zelda),
             ],
-        });
+        }, titleDb: IngestSeeder.EmptySwitch);
         cache.Load();
     }
 

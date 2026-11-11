@@ -55,7 +55,7 @@ public class IngestReviewTests
             [IngestSeeder.TurboGrafx16Dat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", bytes)],
             ["Nintendo - Game Boy Color"] = [],
-        });
+        }, titleDb: IngestSeeder.EmptySwitch);
         cache.Load();
     }
 
@@ -122,7 +122,7 @@ public class IngestReviewTests
             [IngestSeeder.TurboGrafx16Dat] = [],
             [Gb] = [new FixtureGame("Tetris Deluxe (World)", "Tetris Deluxe (World).gb", Known)],
             ["Nintendo - Game Boy Color"] = [],
-        });
+        }, titleDb: IngestSeeder.EmptySwitch);
         cache.Load();
         var job = Guid.NewGuid();
         await Process(file, job);

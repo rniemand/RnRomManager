@@ -111,7 +111,7 @@ public class IngestPipelineTests
                 new FixtureGame("seaQuest DSV (USA, Europe)", "seaQuest DSV (USA, Europe).gb", SeaQuest),
             ],
             [Gbc] = [new FixtureGame("Pokemon - Gold Version (USA, Europe)", "Pokemon - Gold Version (USA, Europe).gbc", Gold) { ReleaseYear = 2000 }],
-        });
+        }, titleDb: IngestSeeder.EmptySwitch);
         cache.Load();
     }
 

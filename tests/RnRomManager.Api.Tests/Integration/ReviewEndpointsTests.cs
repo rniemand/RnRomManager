@@ -63,7 +63,7 @@ public class ReviewEndpointsTests
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)
             { ReleaseYear = 1989, Developers = ["Nintendo"], Publishers = ["Nintendo"], Genres = ["Puzzle"] }],
             ["Nintendo - Game Boy Color"] = [new FixtureGame("Color Game (World)", "Color Game (World).gbc", Color)],
-        });
+        }, titleDb: IngestSeeder.EmptySwitch);
         cache.Load();
     }
 
@@ -657,7 +657,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.TurboGrafx16Dat] = [],
             [Gb] = Enumerable.Range(1, 25).Select(i => new FixtureGame($"Demo {i} (World)", $"Demo {i} (World).gb", new SyntheticRomBuilder { Seed = 1000 + i }.Build())).ToArray(),
             ["Nintendo - Game Boy Color"] = [],
-        });
+        }, titleDb: IngestSeeder.EmptySwitch);
         cache.Load();
         using var defaults = await _admin.GetAsync("/api/dat/search?system=gb&q=demo");
         Assert.That((await AuthClient.JsonAsync(defaults)).GetArrayLength(), Is.EqualTo(20));

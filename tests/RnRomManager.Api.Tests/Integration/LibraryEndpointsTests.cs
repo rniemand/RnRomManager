@@ -58,7 +58,7 @@ public class LibraryEndpointsTests
                 new FixtureGame("Pokémon Pinball (Europe)", "Pokémon Pinball (Europe).gb", Pinball) { Publishers = ["Nintendo"] },
                 new FixtureGame("3 Choume no Tama (Japan)", "3 Choume no Tama (Japan).gb", Arcade),
             ],
-        });
+        }, titleDb: IngestSeeder.EmptySwitch);
         cache.Load();
     }
 
@@ -130,8 +130,9 @@ public class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "s32x", "a2600", "coleco", "gb", "gba", "gbc", "gg", "sms", "md", "n64", "nes", "snes", "tg16" }));
+            Is.EqualTo(new[] { "s32x", "a2600", "coleco", "gb", "gba", "gbc", "gg", "sms", "md", "n64", "nes", "switch", "snes", "tg16" }));
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(13).True);
+        Assert.That(Find("switch").GetProperty("embedRoms").GetBoolean(), Is.False, "Switch stores its ROMs outside the ZIP");
         JsonElement Find(string id) => systems.EnumerateArray().Single(s => s.GetProperty("id").GetString() == id);
         var gb = Find("gb");
         Assert.That(gb.GetProperty("displayName").GetString(), Is.EqualTo("Game Boy"));
@@ -141,7 +142,7 @@ public class LibraryEndpointsTests
         Assert.That((gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()), Is.EqualTo((0, 0)));
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
-            "32X", "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo Entertainment System",
+            "32X", "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo Entertainment System", "Nintendo Switch",
             "Super Nintendo Entertainment System", "TurboGrafx-16"
         }));
     }

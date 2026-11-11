@@ -51,7 +51,7 @@ public class IngestArchiveTests
                 new FixtureGame("Seven Zip Demo (World)", TestFixtures.Basic7zEntry, TestFixtures.Basic7zRom()),
             ],
             ["Nintendo - Game Boy Color"] = [],
-        });
+        }, titleDb: IngestSeeder.EmptySwitch);
         cache.Load();
         _items = [];
         _itemRepository = Substitute.For<IJobItemRepository>();

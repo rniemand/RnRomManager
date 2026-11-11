@@ -184,6 +184,7 @@ test('browse, search and filter the library', async () => {
 		'Mega Drive / Genesis (1)',
 		'Nintendo 64 (1)',
 		'Nintendo Entertainment System (1)',
+		'Nintendo Switch (0)',
 		'Super Nintendo Entertainment System (1)',
 		'TurboGrafx-16 (1)'
 	]);

@@ -47,7 +47,7 @@ public class IngestDeleteEndpointsTests
             [IngestSeeder.TurboGrafx16Dat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)],
             ["Nintendo - Game Boy Color"] = [],
-        });
+        }, titleDb: IngestSeeder.EmptySwitch);
         cache.Load();
     }
 
