@@ -93,6 +93,20 @@ public class IngestJobTests
         Assert.That(File.Exists(chosen), Is.False, "the selected 3-byte file moved to _failed");
     }
 
+    [Test]
+    public void ArchiveFate_ASkippedEntryKeepsTheArchive_EvenWhenOthersCommitted()
+    {
+        static IngestItemResult R(string outcome) => new(outcome, null);
+        var ingested = R(IngestOutcome.Ingested);
+
+        Assert.That(IngestJob.FateOf([ingested, new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent)]), Is.EqualTo(IngestJob.ArchiveFate.Keep));
+        Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Review)]), Is.EqualTo(IngestJob.ArchiveFate.Keep));
+        Assert.That(IngestJob.FateOf([ingested, null]), Is.EqualTo(IngestJob.ArchiveFate.Keep));
+        Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Failed), R(IngestOutcome.Duplicate)]), Is.EqualTo(IngestJob.ArchiveFate.Failed));
+        Assert.That(IngestJob.FateOf([R(IngestOutcome.Duplicate), R(IngestOutcome.Duplicate)]), Is.EqualTo(IngestJob.ArchiveFate.Duplicates));
+        Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Duplicate), R(IngestOutcome.Repaired)]), Is.EqualTo(IngestJob.ArchiveFate.Delete));
+    }
+
     private IngestJob Job()
     {
         var roms = Substitute.For<IRomRepository>();

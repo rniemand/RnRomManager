@@ -58,8 +58,19 @@ public sealed class IngestJob(
         }
         finally
         {
-            if (Directory.Exists(work))
-                Directory.Delete(work, recursive: true);
+            // Best effort, like Review's work cleanup: a leftover never changes the job's outcome.
+            try
+            {
+                var owned = ExternalRomPath.ClassifyDirectory(paths.Value.Cache, work);
+                if (owned.Status == ExternalPathStatus.Found)
+                    Directory.Delete(owned.Path, recursive: true);
+                else if (owned.Status != ExternalPathStatus.Missing)
+                    logger.LogWarning("Work folder {Work} was not cleaned up: {Details}", work, owned.Details); // never walk into a replacement
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning("Work folder {Work} could not be removed: {Error}", work, ex.Message);
+            }
         }
     }
 
@@ -192,9 +203,9 @@ public sealed class IngestJob(
 
         IReadOnlyList<ExtractedEntry> entries = [];
         ArchiveRejectedException? rejected = null;
+        var snapshot = opened.Snapshot!;
         using (var stream = opened.Stream!)
         {
-            var snapshot = opened.Snapshot!;
             if (snapshot.Length != archive.SizeBytes || snapshot.LastWriteTimeUtc != archive.ModifiedAtUtc
                 || time.GetUtcNow().UtcDateTime - snapshot.LastWriteTimeUtc < MinFileAge)
             {
@@ -237,13 +248,59 @@ public sealed class IngestJob(
             }
         }
 
-        // shortcut: the archive stays in ingest whatever its outcomes; step 9c of the external ROM spec applies its fate.
-        if (rejected is not null)
-            await One(new IngestItemResult(IngestOutcome.Failed, rejected.Reason, rejected.Message, archive.SystemId)).ConfigureAwait(false);
-        else if (entries.Count == 0)
-            await One(new IngestItemResult(IngestOutcome.Failed, IngestFailures.UnsupportedType, "the archive holds no ROM entries", archive.SystemId)).ConfigureAwait(false);
+        // The archive is only moved or deleted while its path still names the file that was extracted. Otherwise
+        // it stays, with one more item for the archive itself; the entries keep the outcomes they already have.
+        async Task<bool> StillTheArchiveAsync()
+        {
+            var current = ExternalRomPath.ClassifyFile(paths.Value.Ingest, archive.FullPath);
+            if (current.Status == ExternalPathStatus.Found && current.Snapshot == snapshot)
+                return true;
+            await One(current.Status == ExternalPathStatus.Found ? tooRecent : Io(current.Details)).ConfigureAwait(false);
+            return false;
+        }
+
+        var actor = run.Context.Actor;
+        if (rejected is not null || entries.Count == 0)
+        {
+            if (await StillTheArchiveAsync().ConfigureAwait(false))
+            {
+                await One(rejected is not null
+                    ? pipeline.FailFile(archive, actor, rejected.Reason, rejected.Message)
+                    : pipeline.FailFile(archive, actor, IngestFailures.UnsupportedType, "the archive holds no ROM entries")).ConfigureAwait(false);
+            }
+            return;
+        }
+
+        var outcomes = await EntriesAsync(run, archive, entries).ConfigureAwait(false);
+        var fate = FateOf([.. outcomes.Select(o => o.Result)]);
+        if (fate == ArchiveFate.Keep)
+        {
+            logger.LogInformation("{Path}: kept in ingest (an entry needs review, was skipped or hit an error)", archive.FullPath);
+            return;
+        }
+        if (!await StillTheArchiveAsync().ConfigureAwait(false))
+            return;
+
+        IngestItemResult? error = null;
+        if (fate == ArchiveFate.Failed)
+            error = pipeline.MoveToFailed(archive, actor, "EntriesFailed", EntryDetails(outcomes));
+        else if (fate == ArchiveFate.Duplicates)
+            error = pipeline.MoveToDuplicates(archive, actor);
         else
-            await EntriesAsync(run, archive, entries).ConfigureAwait(false);
+        {
+            try
+            {
+                File.Delete(archive.FullPath);
+                pipeline.RecordArchiveDeleted(archive, actor);
+                logger.LogInformation("{Path}: every entry ingested; archive deleted", archive.FullPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                error = Io($"couldn't delete the archive: {ex.Message}");
+            }
+        }
+        if (error is not null)
+            await One(error).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -253,19 +310,18 @@ public sealed class IngestJob(
     /// </summary>
     private void ApplyFate(IngestFile archive, AuditActor actor, IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes)
     {
-        var kinds = outcomes.Select(o => o.Result is { ResolvedArchiveDuplicate: true } ? IngestOutcome.Ingested : o.Result?.Outcome).ToList();
-        if (kinds.Any(k => k is null or IngestOutcome.Review or IngestOutcome.Error))
+        var fate = FateOf([.. outcomes.Select(o => o.Result)]);
+        if (fate == ArchiveFate.Keep)
         {
             logger.LogInformation("{Path}: kept in ingest (an entry needs review or hit an error)", archive.FullPath);
             return;
         }
-        if (kinds.Contains(IngestOutcome.Failed))
+        if (fate == ArchiveFate.Failed)
         {
-            var details = string.Join("\n", outcomes.Select(o => $"  {o.Entry}: {o.Result!.Outcome} {o.Result.Reason}".TrimEnd()));
-            pipeline.MoveToFailed(archive, actor, "EntriesFailed", "entries:\n" + details);
+            pipeline.MoveToFailed(archive, actor, "EntriesFailed", EntryDetails(outcomes));
             return;
         }
-        if (kinds.All(k => k == IngestOutcome.Duplicate))
+        if (fate == ArchiveFate.Duplicates)
         {
             pipeline.MoveToDuplicates(archive, actor);
             return;
@@ -281,6 +337,31 @@ public sealed class IngestJob(
             logger.LogWarning("{Path}: couldn't delete the archive ({Error}); the next run sees duplicates", archive.FullPath, ex.Message);
         }
     }
+
+    public enum ArchiveFate
+    {
+        Keep,
+        Failed,
+        Duplicates,
+        Delete,
+    }
+
+    /// <summary>
+    /// §7.3 as a decision. An entry that was <c>Skipped</c> (an external entry that was <c>TooRecent</c>, I1) keeps
+    /// the archive like <c>Review</c> or <c>Error</c> does, even when other entries committed.
+    /// </summary>
+    public static ArchiveFate FateOf(IReadOnlyList<IngestItemResult?> results)
+    {
+        var kinds = results.Select(r => r is { ResolvedArchiveDuplicate: true } ? IngestOutcome.Ingested : r?.Outcome).ToList();
+        if (kinds.Any(k => k is null or IngestOutcome.Review or IngestOutcome.Error or IngestOutcome.Skipped))
+            return ArchiveFate.Keep;
+        if (kinds.Contains(IngestOutcome.Failed))
+            return ArchiveFate.Failed;
+        return kinds.All(k => k == IngestOutcome.Duplicate) ? ArchiveFate.Duplicates : ArchiveFate.Delete;
+    }
+
+    private static string EntryDetails(IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes) =>
+        "entries:\n" + string.Join("\n", outcomes.Select(o => $"  {o.Entry}: {o.Result!.Outcome} {o.Result.Reason}".TrimEnd()));
 
     private async Task<IngestItemResult?> ProcessAsync(IngestFile file, Guid jobId, AuditActor actor, CircuitBreaker breaker,
         CancellationToken cancellationToken)

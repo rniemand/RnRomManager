@@ -231,6 +231,7 @@ public class IngestExternalArchiveTests
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
         _ = _factory.Services; // start the host: it creates the system folders
+        _progress = new JobProgress();
         _items = [];
         _itemRepository = Substitute.For<IJobItemRepository>();
         _itemRepository.InsertAsync(Arg.Do<JobItem>(_items.Add), Arg.Any<CancellationToken>()).Returns(1L);
@@ -241,21 +242,26 @@ public class IngestExternalArchiveTests
 
     private string Ingest => Path.Combine(_factory.Root, "ingest", ExternalTestHandler.SystemId);
 
-    private string Zip(string name, TimeSpan? age = null)
+    private string Zip(string name, TimeSpan? age = null, byte[]? rom = null)
     {
         var path = Path.Combine(Ingest, name);
         using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
         {
             using var stream = zip.CreateEntry("game.nsp").Open();
-            stream.Write([1, 2, 3, 4]);
+            stream.Write(rom ?? [1, 2, 3, 4]);
         }
         File.SetLastWriteTimeUtc(path, DateTime.UtcNow - (age ?? TimeSpan.FromMinutes(5)));
         return path;
     }
 
-    private Task<object?> RunAsync(ArchiveExtractor extractor) =>
-        ActivatorUtilities.CreateInstance<IngestJob>(_factory.Services, _itemRepository, extractor)
-            .RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), default);
+    private JobProgress _progress = null!;
+
+    private Task<object?> RunAsync(ArchiveExtractor? extractor = null) =>
+        ActivatorUtilities.CreateInstance<IngestJob>(_factory.Services, _itemRepository,
+                extractor ?? new ArchiveExtractor(Microsoft.Extensions.Logging.Abstractions.NullLogger<ArchiveExtractor>.Instance))
+            .RunAsync(new JobContext(Guid.NewGuid(), _progress), default);
+
+    private string Failed(string name = "") => Path.Combine(Ingest, "_failed", name);
 
     private ArchiveExtractor Extractor(Func<string, Stream> createOutput) =>
         new(Microsoft.Extensions.Logging.Abstractions.NullLogger<ArchiveExtractor>.Instance) { CreateOutput = createOutput };
@@ -332,6 +338,98 @@ public class IngestExternalArchiveTests
         await RunAsync(Extractor(_ => throw new InvalidOperationException("must not extract")));
 
         Assert.That(Items(), Is.EqualTo(new[] { (archive, (string?)null, IngestOutcome.Failed, (string?)ArchiveFailures.ArchiveCorrupt) }));
-        Assert.That(File.Exists(archive), Is.True, "left in ingest until the disposition step lands");
+        Assert.That(File.Exists(archive), Is.False);
+        Assert.That(File.ReadAllText(Failed("junk.zip.error.txt")), Does.StartWith("reason: ArchiveCorrupt\n"));
+    }
+
+    // --- disposition (an empty entry is Failed TooSmall before anything is hashed) ---
+
+    [Test]
+    public async Task EveryEntryFailed_MovesTheArchiveToFailed()
+    {
+        var archive = Zip("a.zip", rom: []);
+
+        await RunAsync();
+
+        Assert.That(Items(), Is.EqualTo(new[] { (archive, (string?)"game.nsp", IngestOutcome.Failed, (string?)IngestFailures.TooSmall) }));
+        Assert.That(File.Exists(archive), Is.False);
+        Assert.That(File.ReadAllText(Failed("a.zip.error.txt")), Does.Contain("game.nsp: Failed TooSmall"));
+    }
+
+    [Test]
+    public async Task ArchiveReplacedWhileItsEntriesWereProcessed_IsPreserved_WithOneMoreItem()
+    {
+        var archive = Zip("a.zip", rom: []);
+        var bytes = File.ReadAllBytes(archive);
+        var replaced = false;
+        _itemRepository.When(r => r.InsertAsync(Arg.Any<JobItem>(), Arg.Any<CancellationToken>())).Do(_ =>
+        {
+            if (replaced)
+                return;
+            replaced = true;
+            File.Move(archive, archive + ".old");
+            File.WriteAllBytes(archive, bytes);
+        });
+
+        await RunAsync();
+
+        Assert.That(Items(), Is.EqualTo(new[]
+        {
+            (archive, (string?)"game.nsp", IngestOutcome.Failed, (string?)IngestFailures.TooSmall),
+            (archive, null, IngestOutcome.Skipped, IngestReason.TooRecent),
+        }));
+        Assert.That(File.Exists(archive), Is.True);
+        Assert.That(Directory.GetFileSystemEntries(Failed()), Is.Empty, "nothing was moved, so nothing was audited");
+    }
+
+    [Test]
+    public async Task FailedDisposition_IsOneArchiveLevelIoError_EntryOutcomesAndProgressUnchanged()
+    {
+        var archive = Zip("a.zip", rom: []);
+        var outside = Directory.CreateDirectory(Path.Combine(_factory.Root, "outside")).FullName;
+        Directory.Delete(Failed());
+        Assert.That(TestLinks.TryLinkDirectory(Failed(), outside), Is.True, "this account can't create a directory link");
+        try
+        {
+            await RunAsync();
+        }
+        finally
+        {
+            TestLinks.RemoveDirectoryLink(Failed()); // or the factory's cleanup would follow it
+        }
+
+        Assert.That(Items(), Is.EqualTo(new[]
+        {
+            (archive, (string?)"game.nsp", IngestOutcome.Failed, (string?)IngestFailures.TooSmall),
+            (archive, null, IngestOutcome.Error, IngestErrors.IoError),
+        }));
+        Assert.That(Directory.GetFileSystemEntries(outside), Is.Empty);
+        Assert.That(File.Exists(archive), Is.True);
+        Assert.That((_progress.Current, _progress.Total), Is.EqualTo((1, 1)), "the archive is still one file");
+    }
+
+    [Test]
+    public async Task WorkCleanupFailure_KeepsTheOutcome()
+    {
+        var archive = Zip("a.zip", rom: []);
+        FileStream? held = null;
+        var extractor = Extractor(path =>
+        {
+            // A file in the work folder that can't be deleted while it is held (Windows; elsewhere cleanup just works).
+            held = new FileStream(Path.Combine(Path.GetDirectoryName(path)!, "held.bin"), FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            return new FileStream(path, FileMode.CreateNew);
+        });
+
+        try
+        {
+            var counts = (Dictionary<string, int>)(await RunAsync(extractor))!;
+
+            Assert.That(counts[IngestOutcome.Failed], Is.EqualTo(1));
+            Assert.That(File.Exists(Failed("a.zip")), Is.True);
+        }
+        finally
+        {
+            held?.Dispose();
+        }
     }
 }
