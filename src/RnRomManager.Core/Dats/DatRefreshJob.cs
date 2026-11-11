@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Logging;
@@ -14,7 +15,9 @@ namespace RnRomManager.Core.Dats;
 /// parses each, writes <c>dats.json</c> there and builds every store from that staged set exactly as startup would.
 /// Only then is the folder swapped in for <c>cache/dats/</c> and the already-built stores published. Any failure
 /// (HTTP, parse, wrong DAT, staged validation) or a cancel before the first rename keeps the old files and stores.
-/// Cancel is checked between downloads and once more right before the swap.
+/// Cancel is checked between downloads and once more right before the swap. A <c>TitleDb</c> system (T2) instead
+/// shares one download of <c>Sources:TitleDbUrl</c>, streamed to <c>cache/work/&lt;jobId&gt;/titledb.json</c> and
+/// parsed from there once, and gets its own compact file.
 /// </summary>
 public sealed class DatRefreshJob(
     HttpClient http, SourcesOptions sources, PathsOptions paths, DatCache cache, ISystemRegistry systems, IAuditLog audit,
@@ -22,6 +25,15 @@ public sealed class DatRefreshJob(
 {
     /// <summary>The largest DAT is ~1 MiB; anything far bigger is not a DAT.</summary>
     public const long MaxFileBytes = 64L * 1024 * 1024;
+
+    /// <summary>T2: the titledb source was 90,699,593 bytes on 2026-11-10.</summary>
+    public const long MaxTitleDbBytes = 256L * 1024 * 1024;
+
+    /// <summary>The downloaded titledb source, inside the job's work folder.</summary>
+    public const string TitleDbSourceFile = "titledb.json";
+
+    /// <summary>The titledb cap; settable so tests needn't send 256 MiB.</summary>
+    public long TitleDbByteLimit { get; set; } = MaxTitleDbBytes;
 
     /// <summary>Test seams: the directory renames and deletes of publication.</summary>
     public DatPublicationHooks? PublicationHooks { get; set; }
@@ -31,8 +43,12 @@ public sealed class DatRefreshJob(
 
     public async Task<object?> RunAsync(JobContext context, CancellationToken cancellationToken)
     {
-        var files = systems.All.SelectMany(h => DatKind.All.Select(kind => (Handler: h, Kind: kind))).ToList();
-        context.Progress.SetTotal(files.Count);
+        CheckPlan(systems.All);
+        var titleDb = systems.All.Where(h => h.DatSource == DatSource.TitleDb).ToList();
+        var files = systems.All.Where(h => h.DatSource == DatSource.Libretro)
+            .SelectMany(h => DatKind.All.Select(kind => (Handler: h, Kind: kind))).ToList();
+        // One download per libretro file, plus one shared titledb download.
+        context.Progress.SetTotal(files.Count + (titleDb.Count > 0 ? 1 : 0));
 
         var work = CreateWork(context.JobId);
         var staged = Path.Combine(work, DatCache.FolderName);
@@ -56,10 +72,15 @@ public sealed class DatRefreshJob(
                 context.Progress.ItemDone();
             }
 
+            if (titleDb.Count > 0)
+                manifest.AddRange(await StageTitleDbAsync(titleDb, work, staged, context, cancellationToken).ConfigureAwait(false));
+
             cancellationToken.ThrowIfCancellationRequested();
             DatManifest.Write(Path.Combine(staged, DatManifest.FileName), manifest);
             var stores = cache.Prepare(staged);
-            var versions = manifest.Where(e => e.File.StartsWith(DatKind.NoIntro + "/", StringComparison.Ordinal))
+            // T3: the result lists each no-intro DAT and each titledb file by DatName.
+            var versions = manifest.Where(e => e.File.StartsWith(DatKind.NoIntro + "/", StringComparison.Ordinal)
+                    || e.File.StartsWith(TitleDb.Folder + "/", StringComparison.Ordinal))
                 .ToDictionary(e => e.DatName, e => e.Version);
 
             // The last point a cancel keeps the old set: from the first rename on, publication runs to the end.
@@ -91,6 +112,62 @@ public sealed class DatRefreshJob(
                 logger.LogWarning("Work folder {Work} could not be removed: {Error}", work, ex.Message);
             }
         }
+    }
+
+    /// <summary>
+    /// T1: the result and the manifest are keyed by <c>DatName</c>, so two systems may not share one (ignoring case),
+    /// whatever their source. Fails before any download, folder or audit.
+    /// </summary>
+    private static void CheckPlan(IEnumerable<ISystemHandler> handlers)
+    {
+        if (handlers.GroupBy(h => h.DatName, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1) is { } clash)
+            throw new InvalidOperationException(
+                $"Systems {string.Join(" and ", clash.Select(h => $"'{h.Id}'"))} share the DAT name '{clash.Key}'; nothing was refreshed.");
+    }
+
+    /// <summary>
+    /// T2: one request for every TitleDb system. The body is read under the cap and the job token only (the client's
+    /// per-attempt timeout ends with the headers), streamed to the work folder and parsed from there once. One UTC
+    /// timestamp, taken when the download ends, gives every compact file its version and download time.
+    /// </summary>
+    private async Task<IEnumerable<DatManifestEntry>> StageTitleDbAsync(IReadOnlyList<ISystemHandler> handlers, string work, string staged,
+        JobContext context, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        context.Progress.SetCurrentItem(TitleDbSourceFile);
+        var source = Path.Combine(work, TitleDbSourceFile);
+        using (var response = await http.GetAsync(sources.TitleDbUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false))
+        {
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException($"GET {sources.TitleDbUrl} returned {(int)response.StatusCode}.", null, response.StatusCode);
+            if (response.Content.Headers.ContentLength > TitleDbByteLimit)
+                throw new LimitExceededException(TitleDbByteLimit);
+            await using var body = new LimitStream(await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false), TitleDbByteLimit);
+            await using var file = new FileStream(source, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            await body.CopyToAsync(file, cancellationToken).ConfigureAwait(false);
+        }
+        var downloadedAt = time.GetUtcNow();
+        var version = downloadedAt.UtcDateTime.ToString("yyyy.MM.dd", CultureInfo.InvariantCulture);
+
+        IReadOnlyList<TitleDbRow> rows;
+        await using (var read = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, FileOptions.SequentialScan))
+            rows = await TitleDb.ParseUpstreamAsync(read, cancellationToken).ConfigureAwait(false);
+
+        using var compact = new MemoryStream();
+        await TitleDb.WriteCompactAsync(compact, rows, cancellationToken).ConfigureAwait(false);
+        var bytes = compact.ToArray();
+        var entries = new List<DatManifestEntry>();
+        foreach (var handler in handlers)
+        {
+            var relative = TitleDb.RelativePath(handler.DatName);
+            var target = SafePath.Resolve(staged, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            await File.WriteAllBytesAsync(target, bytes, cancellationToken).ConfigureAwait(false);
+            entries.Add(new DatManifestEntry(relative, handler.DatName, version, downloadedAt, Convert.ToHexStringLower(SHA1.HashData(bytes))));
+        }
+        logger.LogInformation("titledb {Version}: {Count} entries for {Systems}", version, rows.Count, string.Join(", ", handlers.Select(h => h.Id)));
+        context.Progress.ItemDone();
+        return entries;
     }
 
     private async Task<byte[]> DownloadAsync(string url, CancellationToken cancellationToken)

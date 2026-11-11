@@ -86,4 +86,53 @@ public class HttpClientsTests
         Assert.That(server.Requests, Has.Count.EqualTo(2), "404s aren't retried");
         Assert.That(server.Requests.First().Headers.UserAgent.ToString(), Does.StartWith("RnRomManager/"));
     }
+
+    /// <summary>
+    /// Spec T2: the titledb body is read after the headers, so the 20 s per-attempt timeout must not reach it. The body
+    /// stalls past that timeout on a fake clock and fails if the request's token is ever cancelled.
+    /// </summary>
+    [Test]
+    public async Task DatsClient_BodySlowerThanTheAttemptTimeout_StillCompletes()
+    {
+        var clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
+        var gate = new TaskCompletionSource();
+        var body = new byte[] { 1, 2, 3 };
+        var services = new ServiceCollection()
+            .AddSingleton<TimeProvider>(clock)
+            .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
+            .AddLogging()
+            .AddExternalHttpClients();
+        services.AddHttpClient(HttpClients.Dats).ConfigurePrimaryHttpMessageHandler(() => new SlowBodyHandler(gate.Task, body));
+        var client = services.BuildServiceProvider().GetRequiredService<IHttpClientFactory>().CreateClient(HttpClients.Dats);
+
+        using var response = await client.GetAsync("https://titledb.test/US.en.json", HttpCompletionOption.ResponseHeadersRead);
+        var read = response.Content.ReadAsByteArrayAsync();
+        clock.Advance(TimeSpan.FromSeconds(25));
+        gate.SetResult();
+
+        Assert.That(await read.WaitAsync(TimeSpan.FromSeconds(10)), Is.EqualTo(body));
+    }
+
+    /// <summary>Headers at once; the body waits for <paramref name="gate"/> and fails if the request was cancelled meanwhile.</summary>
+    private sealed class SlowBodyHandler(Task gate, byte[] body) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new SlowContent(gate, body, cancellationToken) });
+    }
+
+    private sealed class SlowContent(Task gate, byte[] body, CancellationToken request) : HttpContent
+    {
+        protected override async Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context)
+        {
+            await gate;
+            request.ThrowIfCancellationRequested();
+            await stream.WriteAsync(body);
+        }
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+    }
 }

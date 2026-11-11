@@ -64,7 +64,10 @@ public static partial class TitleDb
     public static string GameName(string name, string titleId) => $"{BaseTitle(name)} [{titleId}]";
 
     /// <summary>The compact file's path below <c>cache/dats/</c> (T2).</summary>
-    public static string RelativePath(string datName) => $"titledb/{datName}.json";
+    public static string RelativePath(string datName) => $"{Folder}/{datName}.json";
+
+    /// <summary>The compact files' folder below <c>cache/dats/</c>.</summary>
+    public const string Folder = "titledb";
 
     /// <summary>
     /// T5's rom <c>fileName</c>: the cleaned name (dot runs → <c>…</c>, since <c>..</c> isn't allowed), sanitized, then
