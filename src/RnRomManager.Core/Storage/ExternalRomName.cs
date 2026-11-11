@@ -122,6 +122,52 @@ public static class ExternalRomName
         FirstFree(n => ZipName(title, n), reservations, StagingSuffix);
 
     /// <summary>
+    /// Allocates the ZIP path of an external game (spec E2): the first <see cref="ZipName"/> candidate, in its
+    /// bucket folder, that is free by name (<see cref="ExternalNameReservations"/>, with its temp name) and whose
+    /// full relative path the database doesn't treat as equal to another game's stored path or to another ZIP on
+    /// disk in that folder. That last check is made by the database with the collation of <c>games.zip_path</c>,
+    /// so it can pick a suffix even when no two names match ignoring case, e.g. a composed against a decomposed
+    /// accent. Call it before any file is moved.
+    /// </summary>
+    /// <param name="romsRoot"><c>Paths:Roms</c>.</param>
+    /// <param name="claims">Mirrored external ROMs (<c>IRomRepository.ListExternalAsync</c>).</param>
+    /// <param name="ownGameId">The game being renamed, whose own row is not a clash; null for a new game.</param>
+    /// <param name="ownZipPath">That game's current ZIP path, whose file on disk is not a clash.</param>
+    /// <returns>The path relative to <paramref name="romsRoot"/>, <c>/</c> separators: <c>&lt;system&gt;/&lt;bucket&gt;/&lt;name&gt;</c>.</returns>
+    public static async Task<string> AllocateZipPathAsync(string romsRoot, string systemId, string title, IReadOnlyList<ExternalRomRow> claims,
+        IGameRepository games, CancellationToken cancellationToken, Guid? ownGameId = null, string? ownZipPath = null)
+    {
+        var folders = new Dictionary<string, (ExternalNameReservations Names, List<string> ZipPaths)>(StringComparer.Ordinal);
+        for (var n = 1; ; n++)
+        {
+            var name = ZipName(title, n);
+            var folderPath = $"{systemId}/{Bucket.For(name)}";
+            if (!folders.TryGetValue(folderPath, out var folder))
+            {
+                var directory = Path.Combine(romsRoot, systemId, Bucket.For(name));
+                var onDisk = Directory.Exists(directory)
+                    ? Directory.EnumerateFiles(directory).Select(f => Path.GetFileName(f)!).Where(f => f.EndsWith(ZipExtension, StringComparison.OrdinalIgnoreCase))
+                    : [];
+                folder = (ExternalNameReservations.ForFolder(directory, folderPath, claims),
+                    onDisk.Select(f => $"{folderPath}/{f}").Where(p => !string.Equals(p, ownZipPath, StringComparison.Ordinal)).ToList());
+                folders[folderPath] = folder;
+            }
+
+            if (folder.Names.IsTaken(name) || folder.Names.IsTaken(name + StagingSuffix))
+                continue;
+            var path = $"{folderPath}/{name}";
+            var groups = await games.ListZipPathEquivalenceAsync([path, .. folder.ZipPaths], cancellationToken).ConfigureAwait(false);
+            var own = groups.First(g => g.Paths[0] == path); // the candidate is the first input, so it leads its group
+            if (own.Paths.Count > 1 || own.Existing.Any(e => e.GameId != ownGameId))
+                continue;
+
+            folder.Names.Reserve(name);
+            folder.Names.Reserve(name + StagingSuffix);
+            return path;
+        }
+    }
+
+    /// <summary>
     /// True when <paramref name="zipName"/> is a name this builder gives <paramref name="title"/>: candidate 1, or
     /// the whole candidate recomputed for a canonical <c> (N)</c> suffix (N ≥ 2, plain decimal, no leading zero).
     /// </summary>

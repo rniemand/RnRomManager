@@ -67,6 +67,80 @@ public sealed class GameRepository : IGameRepository
         return rows.Select(r => new GameSyncState(r.Id, r.ZipPath, r.Size, r.Mtime)).ToList();
     }
 
+    /// <summary>Rows per INSERT into the staging table.</summary>
+    internal const int ZipPathBatchSize = 500;
+
+    /// <summary><c>games.zip_path</c> is VARCHAR(512): a longer path can't equal a stored one and can't be staged.</summary>
+    private const int MaxZipPathLength = 512;
+
+    public async Task<IReadOnlyList<ZipPathEquivalenceGroup>> ListZipPathEquivalenceAsync(IReadOnlyList<string> zipPaths, CancellationToken cancellationToken)
+    {
+        if (zipPaths.Count == 0)
+            return [];
+
+        // The temporary table is local to the session, so everything runs on this one open connection.
+        await using var connection = _connections.Create();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var groupOf = new Dictionary<int, int>(); // input ordinal -> the first ordinal of its group
+        var owners = new List<(int Grp, Guid Id, string ZipPath)>();
+        try
+        {
+            // Copying the column from games gives the staging column its exact type and collation. The key is the
+            // input's ordinal, not the path, so spellings the collation treats as equal are all kept.
+            await connection.ExecuteAsync(new CommandDefinition("""
+                DROP TEMPORARY TABLE IF EXISTS tmp_zip_path_inputs;
+                CREATE TEMPORARY TABLE tmp_zip_path_inputs (ord INT NOT NULL PRIMARY KEY, KEY ix_zip_path (zip_path))
+                    AS SELECT 0 AS ord, zip_path FROM games WHERE 1 = 0;
+                """, cancellationToken: cancellationToken)).ConfigureAwait(false);
+
+            var staged = Enumerable.Range(0, zipPaths.Count).Where(i => zipPaths[i].EnumerateRunes().Count() <= MaxZipPathLength).ToList();
+            foreach (var batch in staged.Chunk(ZipPathBatchSize))
+            {
+                var parameters = new DynamicParameters();
+                var values = new List<string>(batch.Length);
+                foreach (var ordinal in batch)
+                {
+                    parameters.Add($"o{ordinal}", ordinal);
+                    parameters.Add($"p{ordinal}", zipPaths[ordinal]);
+                    values.Add($"(@o{ordinal}, @p{ordinal})");
+                }
+                await connection.ExecuteAsync(new CommandDefinition(
+                    $"INSERT INTO tmp_zip_path_inputs (ord, zip_path) VALUES {string.Join(", ", values)}", parameters,
+                    cancellationToken: cancellationToken)).ConfigureAwait(false);
+            }
+
+            // Both joins compare with "=" under the column's own collation, in the database. Don't group or
+            // partition by the path instead: a window partition over this column put an unequal path between two
+            // equal ones (most likely the sort keys are cut at max_sort_length), splitting their group.
+            foreach (var (ord, grp) in await connection.QueryAsync<(int Ord, int Grp)>(new CommandDefinition("""
+                         SELECT a.ord, MIN(b.ord)
+                         FROM tmp_zip_path_inputs a
+                         JOIN tmp_zip_path_inputs b ON b.zip_path = a.zip_path
+                         GROUP BY a.ord
+                         """, cancellationToken: cancellationToken)).ConfigureAwait(false))
+                groupOf[ord] = grp;
+            var matches = await connection.QueryAsync<(int Ord, Guid Id, string ZipPath)>(new CommandDefinition("""
+                SELECT t.ord, g.id, g.zip_path
+                FROM tmp_zip_path_inputs t
+                JOIN games g ON g.zip_path = t.zip_path
+                ORDER BY g.zip_path, g.id
+                """, cancellationToken: cancellationToken)).ConfigureAwait(false);
+            owners.AddRange(matches.Select(m => (groupOf[m.Ord], m.Id, m.ZipPath)).Distinct());
+        }
+        finally
+        {
+            // Without the caller's token: a pooled connection must not carry the table into its next use.
+            await connection.ExecuteAsync("DROP TEMPORARY TABLE IF EXISTS tmp_zip_path_inputs").ConfigureAwait(false);
+        }
+
+        var ownersByGroup = owners.ToLookup(o => o.Grp, o => new ZipPathOwner(o.Id, o.ZipPath));
+        return Enumerable.Range(0, zipPaths.Count)
+            .GroupBy(i => groupOf.GetValueOrDefault(i, i)) // an unstaged (overlong) path is its own group
+            .OrderBy(g => g.Key)
+            .Select(g => new ZipPathEquivalenceGroup(g.Select(i => zipPaths[i]).ToList(), ownersByGroup[g.Key].ToList()))
+            .ToList();
+    }
+
     public async Task<Page<GameListItem>> ListAsync(GameQuery query, CancellationToken cancellationToken)
     {
         var (filter, args) = Where(query);

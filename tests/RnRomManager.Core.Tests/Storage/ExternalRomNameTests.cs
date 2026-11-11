@@ -1,4 +1,5 @@
 using System.Text;
+using NSubstitute;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Naming;
 using RnRomManager.Core.Storage;
@@ -401,5 +402,93 @@ public class ExternalRomNameTests
         Assert.That(first, Is.EqualTo("_NUL." + new string('a', 246) + ".nsp"));
         Assert.That(second, Is.EqualTo("_NUL." + new string('a', 242) + " (2).nsp"));
         Assert.That((Scalars(first), Scalars(second)), Is.EqualTo((255, 255)));
+    }
+
+    // --- ZIP path allocation (E2 + E4) ---
+
+    /// <summary>A repository where only the listed paths are equal to something: an existing game, or another input.</summary>
+    private static IGameRepository Games(Guid? owner = null, params string[] equivalentToAnother)
+    {
+        var games = Substitute.For<IGameRepository>();
+        games.ListZipPathEquivalenceAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            var paths = call.Arg<IReadOnlyList<string>>();
+            var clashing = paths.Where(equivalentToAnother.Contains).ToList();
+            IReadOnlyList<ZipPathEquivalenceGroup> groups =
+            [
+                .. paths.Where(p => !clashing.Contains(p)).Select(p => new ZipPathEquivalenceGroup([p], [])),
+                .. clashing.Count == 0 ? [] : new[]
+                {
+                    new ZipPathEquivalenceGroup(clashing, owner is { } id ? [new ZipPathOwner(id, "stored spelling")] : []),
+                },
+            ];
+            return groups.OrderBy(g => paths.ToList().IndexOf(g.Paths[0])).ToList();
+        });
+        return games;
+    }
+
+    [Test]
+    public async Task AllocateZipPath_FreeName_IsSystemBucketName()
+    {
+        using var dir = new TempDir();
+
+        var path = await ExternalRomName.AllocateZipPathAsync(dir.Path, "ext", "Legend of Zelda, The", [], Games(), default);
+
+        Assert.That(path, Is.EqualTo("ext/L/Legend of Zelda, The.zip"));
+        Assert.That(await ExternalRomName.AllocateZipPathAsync(dir.Path, "ext", "3D Game", [], Games(), default), Is.EqualTo("ext/#/3D Game.zip"));
+    }
+
+    [Test]
+    public async Task AllocateZipPath_NameOrTempNameOnDisk_TakesTheNextSuffix_WithoutAskingTheDatabase()
+    {
+        using var dir = new TempDir();
+        Directory.CreateDirectory(dir.Combine("ext", "O"));
+        File.WriteAllText(dir.Combine("ext", "O", "ORBIT.ZIP"), "taken ignoring case");
+        File.WriteAllText(dir.Combine("ext", "O", "Orbit (2).zip.tmp"), "a temp file occupies the staging name");
+        var games = Games();
+
+        var path = await ExternalRomName.AllocateZipPathAsync(dir.Path, "ext", "Orbit", [], games, default);
+
+        Assert.That(path, Is.EqualTo("ext/O/Orbit (3).zip"));
+        await games.Received(1).ListZipPathEquivalenceAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AllocateZipPath_PathEqualToAnotherGamesRow_TakesTheNextSuffix_ButNotForItsOwnRow()
+    {
+        using var dir = new TempDir();
+        var owner = Guid.NewGuid();
+
+        var other = await ExternalRomName.AllocateZipPathAsync(dir.Path, "ext", "Orbit", [], Games(owner, "ext/O/Orbit.zip"), default);
+        var own = await ExternalRomName.AllocateZipPathAsync(dir.Path, "ext", "Orbit", [], Games(owner, "ext/O/Orbit.zip"), default, ownGameId: owner);
+
+        Assert.That((other, own), Is.EqualTo(("ext/O/Orbit (2).zip", "ext/O/Orbit.zip")));
+    }
+
+    [Test]
+    public async Task AllocateZipPath_PathEqualToAnotherZipOnDisk_TakesTheNextSuffix_AndItsOwnZipIsNotAsked()
+    {
+        using var dir = new TempDir();
+        Directory.CreateDirectory(dir.Combine("ext", "O"));
+        File.WriteAllText(dir.Combine("ext", "O", "Other spelling.zip"), "equal to Orbit.zip for the database");
+        File.WriteAllText(dir.Combine("ext", "O", "notes.txt"), "not a ZIP");
+        var games = Games(null, "ext/O/Orbit.zip", "ext/O/Other spelling.zip");
+
+        var path = await ExternalRomName.AllocateZipPathAsync(dir.Path, "ext", "Orbit", [], games, default);
+        var renamed = await ExternalRomName.AllocateZipPathAsync(dir.Path, "ext", "Orbit", [], games, default, ownZipPath: "ext/O/Other spelling.zip");
+
+        Assert.That((path, renamed), Is.EqualTo(("ext/O/Orbit (2).zip", "ext/O/Orbit.zip")));
+        await games.Received().ListZipPathEquivalenceAsync(
+            Arg.Is<IReadOnlyList<string>>(p => p.SequenceEqual(new[] { "ext/O/Orbit.zip", "ext/O/Other spelling.zip" })), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AllocateZipPath_NameAnotherGamesExternalFileClaims_TakesTheNextSuffix()
+    {
+        using var dir = new TempDir();
+        // Unlikely but possible: a hand-edited pointer named like a ZIP candidate would be overwritten by it.
+        var claim = new ExternalRomRow(Guid.NewGuid(), "ext/O/Other.zip", "Orbit.zip", 1, new string('a', 40));
+
+        Assert.That(await ExternalRomName.AllocateZipPathAsync(dir.Path, "ext", "Orbit", [claim], Games(), default), Is.EqualTo("ext/O/Orbit (2).zip"));
     }
 }
