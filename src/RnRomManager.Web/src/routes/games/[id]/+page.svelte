@@ -31,6 +31,7 @@
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import { systemColour } from '#lib/systemColours.js';
+	import { tooltip } from '#lib/tooltip.js';
 
 	const changedMessage = 'This game changed, please retry.';
 
@@ -53,6 +54,8 @@
 	// P3: the cover (any type); screenshots are in the Images gallery.
 	const cover = $derived(game?.images.find((i) => i.isCover));
 	// P1: primary first, then the Releases order.
+	// G5: a release pointer means the game's ROMs are stored next to its ZIP.
+	const external = $derived(game?.roms.some((r) => r.externalFileName !== null) ?? false);
 	const downloadRoms = $derived(
 		game ? [...game.roms.filter((r) => r.isPrimary), ...game.roms.filter((r) => !r.isPrimary)] : []
 	);
@@ -304,13 +307,25 @@
 				<p style="white-space: pre-line">{game.description}</p>
 			{/if}
 			<div class="d-flex flex-wrap gap-2">
-				<button
-					type="button"
-					class="btn btn-primary"
-					onclick={() => download(`/api/games/${encodeURIComponent(id)}/download`)}
-				>
-					<Icon name="download" /> Download ZIP
-				</button>
+				{#if external}
+					<!-- G5: an external system's ZIP holds no ROMs; they download per release. -->
+					<button
+						type="button"
+						class="btn btn-primary"
+						use:tooltip={'ROM files are downloaded per release'}
+						onclick={() => download(`/api/games/${encodeURIComponent(id)}/download`)}
+					>
+						<Icon name="download" /> Download ZIP
+					</button>
+				{:else}
+					<button
+						type="button"
+						class="btn btn-primary"
+						onclick={() => download(`/api/games/${encodeURIComponent(id)}/download`)}
+					>
+						<Icon name="download" /> Download ZIP
+					</button>
+				{/if}
 				{#if downloadRoms.length === 1}
 					<button
 						type="button"
@@ -462,6 +477,13 @@
 							>
 							<h3 class="h6 mb-0 text-break" id="release-{rom.id}-name">{rom.fileName}</h3>
 							{#if rom.isPrimary}<span class="badge text-bg-primary">Primary</span>{/if}
+							{#if rom.externalFileName}
+								<!-- G7: stored next to the ZIP under this name. -->
+								<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+								<span class="badge text-bg-dark" tabindex="0" use:tooltip={rom.externalFileName}
+									>External</span
+								>
+							{/if}
 							{#each rom.regions as region (region)}
 								<span class="badge text-bg-secondary">{region}</span>
 							{/each}

@@ -95,7 +95,7 @@ export interface RomDetail {
 	revision: string | null;
 	flags: string[];
 	isPrimary: boolean;
-	identificationMethod: 'Dat' | 'Manual';
+	identificationMethod: 'Dat' | 'Manual' | 'TitleDb';
 	datName: string | null;
 	datVersion: string | null;
 	datGameName: string | null;
@@ -110,6 +110,8 @@ export interface RomDetail {
 	downloadUrl: string;
 	/** B3: the ZIP holds `notes/<fileName>.md`. */
 	hasNote: boolean;
+	/** G7: the file next to the ZIP for an external system's release; null when the ROM is in the ZIP. */
+	externalFileName: string | null;
 }
 
 export interface ImageInfo {
@@ -251,6 +253,13 @@ export interface ReviewDetail {
 		datVersion: string;
 		datGameName: string;
 		romName: string;
+		/** T4: a titledb AmbiguousGroup item also queues the whole identity. */
+		titleId?: string;
+		baseTitle?: string;
+		regions?: string[];
+		languages?: string[];
+		revision?: string | null;
+		flags?: string[];
 	} | null;
 	candidateGames: { id: string; displayTitle: string }[];
 	status: 'Pending' | 'Resolved' | 'Dismissed';

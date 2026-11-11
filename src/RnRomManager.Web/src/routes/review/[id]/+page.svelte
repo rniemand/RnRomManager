@@ -142,10 +142,15 @@
 		}
 	}
 
+	// G8: Switch is identified by title id through titledb, so a pick is as verified as an automatic match.
+	const titleDb = $derived(item?.system === 'switch');
+
 	function useDat(datGameName: string): Promise<void> {
 		return resolveWith(
 			{ action: 'Dat', datSystem: item!.system, datGameName },
-			`Added as an unverified release of ${datGameName}.`
+			titleDb
+				? `Added release of ${datGameName}.`
+				: `Added as an unverified release of ${datGameName}.`
 		);
 	}
 
@@ -394,7 +399,12 @@
 						</ul>
 					{:else if tab === 'suggestions'}
 						<p class="small text-body-secondary">
-							Picking a DAT entry adds the file as an unverified release, because its hashes differ.
+							{#if titleDb}
+								Choose a titledb result to identify this release by title ID.
+							{:else}
+								Picking a DAT entry adds the file as an unverified release, because its hashes
+								differ.
+							{/if}
 						</p>
 						{#if item.suggestions?.length}
 							<div class="card mb-3">
@@ -449,9 +459,12 @@
 									{#each searchResults as result (result.romName)}
 										<li class="list-group-item d-flex align-items-center gap-2">
 											<span class="me-auto text-break">{result.romName}</span>
-											<span class="small text-body-secondary text-nowrap"
-												><FileSize bytes={result.sizeBytes} /></span
-											>
+											{#if !(titleDb && result.sizeBytes === 0)}
+												<!-- G8: titledb results carry no size (T3). -->
+												<span class="small text-body-secondary text-nowrap"
+													><FileSize bytes={result.sizeBytes} /></span
+												>
+											{/if}
 											<button
 												type="button"
 												class="btn btn-sm btn-primary"
