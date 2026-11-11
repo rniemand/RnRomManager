@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using NSubstitute;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Systems;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Library;
 
@@ -17,10 +18,10 @@ public class InfoJsonTests
 
     private static InfoJsonReader Reader(params IInfoJsonUpgrader[] upgraders)
     {
-        ISystemHandler[] handlers = [Handler("gb"), Handler("gbc")];
+        ISystemHandler[] handlers = [Handler("gb"), Handler("gbc"), new ExternalTestHandler()];
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns(handlers);
-        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), .. upgraders], registry);
+        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), .. upgraders], registry);
     }
 
     private static ISystemHandler Handler(string id)
@@ -63,7 +64,7 @@ public class InfoJsonTests
 
     private static InfoJsonGame Game() => new()
     {
-        SchemaVersion = 3,
+        SchemaVersion = 4,
         GameId = Guid.Parse("6f1f6c3e-8a54-4f39-9d2b-0d2a7c1e9b11"),
         System = "gb",
         Title = "Tetris",
@@ -117,7 +118,8 @@ public class InfoJsonTests
         var text = Encoding.UTF8.GetString(bytes);
 
         Assert.That(bytes[0], Is.EqualTo((byte)'{'), "no BOM");
-        Assert.That(text, Does.Contain("\n  \"schemaVersion\": 3"));
+        Assert.That(text, Does.Contain("\n  \"schemaVersion\": 4"));
+        Assert.That(text, Does.Contain("\"externalFileName\": null"));
         Assert.That(text, Does.Contain("\"isCover\": true"));
         Assert.That(text, Does.Contain("\"description\": null"));
         Assert.That(text, Does.Contain("\"method\": \"Dat\""));
@@ -166,9 +168,9 @@ public class InfoJsonTests
     [Test]
     public void NewerSchema_IsDetected_NotParsedFurther()
     {
-        var result = ReadJson("""{ "schemaVersion": 4, "anything": "goes" }""");
+        var result = ReadJson("""{ "schemaVersion": 5, "anything": "goes" }""");
 
-        Assert.That((result.Kind, result.FileVersion), Is.EqualTo((InfoJsonReadResult.Outcome.NewerSchema, (int?)4)));
+        Assert.That((result.Kind, result.FileVersion), Is.EqualTo((InfoJsonReadResult.Outcome.NewerSchema, (int?)5)));
     }
 
     [Test]
@@ -185,13 +187,13 @@ public class InfoJsonTests
         var result = reader.Read(Encoding.UTF8.GetBytes(v0.ToJsonString()));
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
-        Assert.That((result.FileVersion, result.Game!.SchemaVersion), Is.EqualTo(((int?)0, 3)));
+        Assert.That((result.FileVersion, result.Game!.SchemaVersion), Is.EqualTo(((int?)0, 4)));
         Assert.That(result.Game.Genres, Is.EqualTo(new[] { "Puzzle" }));
         upgrader.Received(1).Upgrade(Arg.Any<JsonObject>());
     }
 
     [Test]
-    public void V1File_ReadsAsV3_NotRatedNotFavourite()
+    public void V1File_ReadsAsV4_NotRatedNotFavourite()
     {
         var result = ReadEdited(d =>
         {
@@ -199,11 +201,13 @@ public class InfoJsonTests
             d.Remove("rating");
             d.Remove("favourite");
             RemoveIsCover(d);
+            RemoveExternalFileName(d);
         });
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
         Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Rating, result.Game.Favourite),
-            Is.EqualTo(((int?)1, 3, (int?)null, false)));
+            Is.EqualTo(((int?)1, 4, (int?)null, false)));
+        Assert.That(result.Game.Roms[0].ExternalFileName, Is.Null);
     }
 
     [Test]
@@ -356,6 +360,7 @@ public class InfoJsonTests
         d["schemaVersion"] = 2;
         d["images"] = JsonNode.Parse(System.Text.Json.JsonSerializer.Serialize(images, InfoJsonSerializer.Options));
         RemoveIsCover(d);
+        RemoveExternalFileName(d);
     });
 
     [Test]
@@ -365,7 +370,7 @@ public class InfoJsonTests
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
         Assert.That(result.Game!.Images.Select(i => (i.FileName, i.IsCover)), Is.EqualTo(new[] { ("snap-01.png", false), ("boxart-01.png", true) }));
-        Assert.That(result.FileVersion, Is.EqualTo(2));
+        Assert.That((result.FileVersion, result.Game.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)2, 4, (string?)null)));
     }
 
     [Test]
@@ -390,5 +395,194 @@ public class InfoJsonTests
     public void V3_WithoutIsCover_IsInvalid()
     {
         Assert.That(RuleOf(ReadEdited(RemoveIsCover)), Does.Contain("missing or wrongly typed"));
+    }
+
+    private static void RemoveExternalFileName(JsonObject document)
+    {
+        foreach (var rom in document["roms"]!.AsArray().OfType<JsonObject>())
+            rom.Remove("externalFileName");
+    }
+
+    [Test]
+    public void V3File_ReadsAsV4_WithNullExternalFileName()
+    {
+        var result = ReadEdited(d =>
+        {
+            d["schemaVersion"] = 3;
+            RemoveExternalFileName(d);
+        });
+
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)3, 4, (string?)null)));
+    }
+
+    [Test]
+    public void V3Upgrade_LeavesShapesItCannotUpgradeForTheTypedRead()
+    {
+        var notAList = ReadEdited(d =>
+        {
+            d["schemaVersion"] = 3;
+            d["roms"] = "none";
+        });
+        var missing = ReadEdited(d =>
+        {
+            d["schemaVersion"] = 3;
+            d.Remove("roms");
+        });
+
+        Assert.That(RuleOf(notAList), Does.StartWith("missing or wrongly typed field"));
+        Assert.That(RuleOf(missing), Does.StartWith("missing or wrongly typed field"));
+    }
+
+    [TestCase(3, "roms")]
+    [TestCase(4, "roms")]
+    [TestCase(3, "images")]
+    [TestCase(4, "images")]
+    public void NullListElement_IsInvalid_NotAnException(int version, string list)
+    {
+        InfoJsonReadResult? result = null;
+
+        Assert.DoesNotThrow(() => result = ReadEdited(d =>
+        {
+            d["schemaVersion"] = version;
+            if (version == 3)
+                RemoveExternalFileName(d);
+            d[list]!.AsArray().Add(null);
+        }));
+
+        Assert.That(result!.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Invalid));
+    }
+
+    private const string ExtRomName = "Orbit Test [0100000000010000][v0].nsp";
+
+    private static InfoJsonRom ExtRom(string? pointer, string fileName = ExtRomName, bool isPrimary = true, char hash = 'b') =>
+        Rom(fileName, isPrimary) with
+        {
+            ExternalFileName = pointer,
+            Metadata = Rom(fileName).Metadata with { Sha1 = new string(hash, 40) },
+        };
+
+    private static InfoJsonGame ExtGame(params InfoJsonRom[] roms) => Game() with { System = ExternalTestHandler.SystemId, Roms = roms };
+
+    private InfoJsonReadResult ReadGame(InfoJsonGame game) => _reader.Read(InfoJsonSerializer.Serialize(game));
+
+    [Test]
+    public void ExternalRom_RoundTripsItsPointer()
+    {
+        var result = ReadGame(ExtGame(ExtRom("Orbit Test." + ExtRomName)));
+
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Game!.Roms[0].ExternalFileName, Is.EqualTo("Orbit Test." + ExtRomName));
+        Assert.That(Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(result.Game)), Does.Contain("\"externalFileName\": \"Orbit Test.Orbit Test [0100000000010000][v0].nsp\""));
+    }
+
+    private static IEnumerable<TestCaseData> ValidPointers()
+    {
+        yield return new TestCaseData("Oh...Sir!!.Oh\u2026Sir!! [0100000000010000][v0].nsp").SetName("ValidPointer dots inside the name");
+        yield return new TestCaseData(new string('a', 251) + ".nsp").SetName("ValidPointer 255 ASCII bytes");
+        yield return new TestCaseData(new string('\u00E9', 125) + "a.nsp").SetName("ValidPointer 255 multibyte bytes");
+        yield return new TestCaseData("Game.DUMP.XCI").SetName("ValidPointer extension in any case");
+        yield return new TestCaseData("COM0.nsp").SetName("ValidPointer COM0 is not a device");
+        yield return new TestCaseData("CONSOLE.nsp").SetName("ValidPointer CONSOLE is not a device");
+    }
+
+    [TestCaseSource(nameof(ValidPointers))]
+    public void ExternalFileName_PortableRomFileName_IsValid(string pointer)
+    {
+        var result = ReadGame(ExtGame(ExtRom(pointer)));
+
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+    }
+
+    private static IEnumerable<TestCaseData> InvalidPointers()
+    {
+        static TestCaseData Case(string name, string pointer, string rule) => new TestCaseData(pointer, rule).SetName("InvalidPointer " + name);
+
+        yield return Case("parent path", "../x", "plain, portable file name");
+        yield return Case("dot dot", "..", "plain, portable file name");
+        yield return Case("dot", ".", "plain, portable file name");
+        yield return Case("empty", "", "plain, portable file name");
+        yield return Case("backslash", "sub\\x.nsp", "plain, portable file name");
+        yield return Case("control character", "x\u0001.nsp", "plain, portable file name");
+        yield return Case("stream", "file:stream.nsp", "plain, portable file name");
+        yield return Case("NUL", "NUL.nsp", "plain, portable file name");
+        yield return Case("NUL with space", "NUL .nsp", "plain, portable file name");
+        yield return Case("COM1 with space", "COM1 .nsp", "plain, portable file name");
+        yield return Case("CONIN$", "CONIN$.nsp", "plain, portable file name");
+        yield return Case("CONOUT$", "conout$.nsp", "plain, portable file name");
+        yield return Case("superscript COM", "COM\u00B9.nsp", "plain, portable file name");
+        yield return Case("a ZIP", "Other.zip", "must end with a ROM extension");
+        yield return Case("a temp file", "x.nsp.tmp", "must end with a ROM extension");
+        yield return Case("256 ASCII bytes", new string('a', 252) + ".nsp", "at most 255 UTF-8 bytes");
+        yield return Case("256 multibyte bytes", new string('\u00E9', 126) + ".nsp", "at most 255 UTF-8 bytes");
+    }
+
+    [TestCaseSource(nameof(InvalidPointers))]
+    public void ExternalFileName_ThatCouldLeaveTheFolderOrIsNotARom_IsInvalid(string pointer, string rule) =>
+        Assert.That(RuleOf(ReadGame(ExtGame(ExtRom(pointer)))), Does.Contain("externalFileName").And.Contain(rule));
+
+    [Test]
+    public void ExternalSystem_WithoutAPointer_IsInvalid() =>
+        Assert.That(RuleOf(ReadGame(ExtGame(ExtRom(null)))), Does.Contain("externalFileName is required"));
+
+    [Test]
+    public void EmbeddedSystem_WithAPointer_IsInvalid() =>
+        Assert.That(RuleOf(ReadGame(Game() with { Roms = [Rom("Tetris.gb") with { ExternalFileName = "Tetris.Tetris.gb" }] })),
+            Does.Contain("externalFileName must be null"));
+
+    [Test]
+    public void ExternalFileName_DuplicateInAnyCase_IsInvalid()
+    {
+        var game = ExtGame(ExtRom("Game.A.nsp"), ExtRom("game.a.NSP", "Orbit Test [0100000000010800][v1].nsp", isPrimary: false, hash: 'c'));
+
+        Assert.That(RuleOf(ReadGame(game)), Does.Contain("externalFileName is not unique"));
+    }
+
+    [TestCase("bad:stream.nsp", "must not contain")]
+    [TestCase("NUL.nsp", "Windows device name")]
+    [TestCase("game.bin", "must end with a ROM extension")]
+    public void ExternalRom_LogicalFileNameMustBePortableWithARomExtension(string fileName, string rule) =>
+        Assert.That(RuleOf(ReadGame(ExtGame(ExtRom("Game.x.nsp", fileName)))), Does.Contain("rom fileName").And.Contain(rule));
+
+    [Test]
+    public void ExternalRom_LogicalFileNameOver255Scalars_IsInvalid()
+    {
+        // Astral characters: 252 scalars are 504 UTF-16 units, so the limit counts scalars, not chars.
+        var fits = string.Concat(Enumerable.Repeat("\U0001F600", 251)) + ".nsp";
+        var tooLong = string.Concat(Enumerable.Repeat("\U0001F600", 252)) + ".nsp";
+
+        Assert.That(ReadGame(ExtGame(ExtRom("Game.x.nsp", fits))).Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+        Assert.That(RuleOf(ReadGame(ExtGame(ExtRom("Game.x.nsp", tooLong)))), Does.Contain("at most 255 characters"));
+    }
+
+    [TestCase("bad:stream.gb")]
+    [TestCase("NUL.gb")]
+    [TestCase("game.bin")]
+    public void EmbeddedRom_LogicalFileNameRules_AreUnchanged(string fileName) =>
+        Assert.That(ReadGame(Game() with { Roms = [Rom(fileName)] }).Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+
+    [Test]
+    public void ExternalRom_SizeOverTheHandlerLimit_IsInvalid_EvenWithAValidPointer()
+    {
+        var max = new ExternalTestHandler().MaxRomSizeBytes;
+        InfoJsonGame Sized(long size) => ExtGame(ExtRom("Game.x.nsp") with { Metadata = ExtRom("Game.x.nsp").Metadata with { SizeBytes = size } });
+
+        Assert.That(ReadGame(Sized(max)).Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+        Assert.That(RuleOf(ReadGame(Sized(max + 1))), Does.Contain("sizeBytes is over the system's limit"));
+    }
+
+    [Test]
+    public void TitleDbMethod_AndTitleDbImageSource_AreAccepted()
+    {
+        var game = ExtGame(ExtRom("Game.x.nsp") with { Identification = new InfoJsonIdentification(IdentificationMethod.TitleDb, "titledb", "2026.11.10", "Orbit Test [0100000000010000]") }) with
+        {
+            Images = [Image("boxart-01.jpg", ImageType.BoxArt) with { IsDefault = false, Source = InfoJsonImage.SourceTitleDb, SourceUrl = "https://img-eshop.cdn.nintendo.net/i/x.jpg" }],
+        };
+
+        var result = ReadGame(game);
+
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That((result.Game!.Roms[0].Identification.Method, result.Game.Images[0].Source), Is.EqualTo((IdentificationMethod.TitleDb, "titledb")));
+        Assert.That(Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(result.Game)), Does.Contain("\"method\": \"TitleDb\""));
     }
 }

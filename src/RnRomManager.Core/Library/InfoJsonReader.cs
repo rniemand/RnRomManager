@@ -10,7 +10,7 @@ namespace RnRomManager.Core.Library;
 /// </summary>
 public sealed class InfoJsonReader(IEnumerable<IInfoJsonUpgrader> upgraders, ISystemRegistry systems)
 {
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
     public const int MaxBytes = 1024 * 1024;
 
     private readonly Dictionary<int, IInfoJsonUpgrader> _upgraders = upgraders.ToDictionary(u => u.FromVersion);
@@ -58,7 +58,7 @@ public sealed class InfoJsonReader(IEnumerable<IInfoJsonUpgrader> upgraders, ISy
             return InfoJsonReadResult.Invalid($"missing or wrongly typed field: {ex.Message}", fileVersion);
         }
 
-        var rule = InfoJsonValidator.Validate(game, systems.All.Select(h => h.Id).ToHashSet(StringComparer.Ordinal));
+        var rule = InfoJsonValidator.Validate(game, systems.All.ToDictionary(h => h.Id, StringComparer.Ordinal));
         return rule is null ? InfoJsonReadResult.Ok(game, fileVersion) : InfoJsonReadResult.Invalid(rule, fileVersion);
     }
 }
