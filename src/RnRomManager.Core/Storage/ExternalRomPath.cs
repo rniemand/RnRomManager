@@ -251,7 +251,8 @@ public static class ExternalRomPath
     /// What an open stream is reading right now, whatever its path names by now; null when it isn't a regular file
     /// or can't be inspected. Compare it with the snapshot taken at open to see whether the file changed meanwhile.
     /// </summary>
-    public static ExternalFileSnapshot? SnapshotOf(FileStream stream) => NativeFileStat.Read(stream.SafeFileHandle).Snapshot;
+    public static ExternalFileSnapshot? SnapshotOf(FileStream stream) =>
+        OperatingSystem.IsWindows() || OperatingSystem.IsLinux() ? NativeFileStat.Read(stream.SafeFileHandle).Snapshot : null;
 
     private static ExternalPathCheck Classify(string root, string fullPath, bool expectFile)
     {

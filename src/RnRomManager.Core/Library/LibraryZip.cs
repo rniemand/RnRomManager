@@ -20,15 +20,22 @@ public sealed class LibraryZip : IDisposable
 
     private readonly ZipArchive _archive;
 
-    private LibraryZip(string path, ZipArchive archive, InfoJsonReadResult? infoJson)
+    private LibraryZip(string path, ZipArchive archive, InfoJsonReadResult? infoJson, ExternalFileSnapshot? snapshot)
     {
         Path = path;
+        Snapshot = snapshot;
         _archive = archive;
         InfoJson = infoJson;
         EntryNames = archive.Entries.Where(e => !e.FullName.EndsWith('/')).Select(e => e.FullName).ToList();
     }
 
     public string Path { get; }
+
+    /// <summary>
+    /// The file this ZIP was opened from (identity, length, mtime), read from the open handle; null when it was
+    /// opened from a stream without one. A writer replaces the ZIP only while the path still names this file.
+    /// </summary>
+    public ExternalFileSnapshot? Snapshot { get; }
 
     /// <summary>null when the ZIP has no <c>info.json</c> (<c>InfoJsonMissing</c>).</summary>
     public InfoJsonReadResult? InfoJson { get; }
@@ -43,16 +50,20 @@ public sealed class LibraryZip : IDisposable
     /// <summary>Opens and reads <c>info.json</c> (≤ 1 MiB, actual bytes).</summary>
     /// <exception cref="InvalidDataException">Not a readable ZIP (<c>ZipUnreadable</c>).</exception>
     /// <exception cref="IOException">The file can't be opened.</exception>
-    public static LibraryZip Open(string path, InfoJsonReader reader) =>
-        Open(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete), path, reader);
+    public static LibraryZip Open(string path, InfoJsonReader reader)
+    {
+        var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+        return Open(file, path, reader, ExternalRomPath.SnapshotOf(file));
+    }
 
     /// <summary>
     /// Reads the ZIP from a stream the caller already opened and checked (a seekable read stream), taking ownership:
     /// the stream is disposed with the result, and also when the ZIP or its <c>info.json</c> can't be read.
     /// </summary>
     /// <param name="path">Where the stream was opened; kept as <see cref="Path"/>, never opened again.</param>
+    /// <param name="snapshot">The checked open's snapshot of the file, when the caller has one.</param>
     /// <exception cref="InvalidDataException">Not a readable ZIP (<c>ZipUnreadable</c>).</exception>
-    public static LibraryZip Open(Stream file, string path, InfoJsonReader reader)
+    public static LibraryZip Open(Stream file, string path, InfoJsonReader reader, ExternalFileSnapshot? snapshot = null)
     {
         ZipArchive archive;
         try
@@ -67,7 +78,7 @@ public sealed class LibraryZip : IDisposable
 
         try
         {
-            return new LibraryZip(path, archive, ReadInfoJson(archive, reader));
+            return new LibraryZip(path, archive, ReadInfoJson(archive, reader), snapshot);
         }
         catch
         {
