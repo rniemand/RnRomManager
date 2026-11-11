@@ -6,6 +6,7 @@ using RnRomManager.Core.Dats;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Ingest;
@@ -88,7 +89,17 @@ public sealed class IngestJob(
         {
             cancellationToken.ThrowIfCancellationRequested();
             context.Progress.SetCurrentItem(file.Name);
-            if (now - file.ModifiedAtUtc < MinFileAge)
+            var external = systems.ById(file.SystemId) is { EmbedRomsInZip: false };
+            if (external && ExternalRomName.Scalars(file.FullPath) > ExternalRomName.MaxSourcePathScalars)
+            {
+                // I1: the source_path columns can't hold it, so nothing may refer to this file; it is left untouched.
+                logger.LogError("{Path}: longer than the {Limit}-character source path limit; left in place", file.FullPath, ExternalRomName.MaxSourcePathScalars);
+                await ItemAsync(run, file with { FullPath = ExternalRomName.CutScalars(file.FullPath, ExternalRomName.MaxSourcePathScalars) },
+                    IngestItemResult.Error(IngestErrors.IoError, $"the path is longer than {ExternalRomName.MaxSourcePathScalars} characters", file.SystemId)).ConfigureAwait(false);
+            }
+            else if (external && ArchiveExtractor.IsArchive(file.Name))
+                await ExternalArchiveAsync(run, file, Path.Combine(work, Guid.NewGuid().ToString())).ConfigureAwait(false); // its own fresh age check
+            else if (now - file.ModifiedAtUtc < MinFileAge)
                 await ItemAsync(run, file, new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent, SystemId: file.SystemId)).ConfigureAwait(false);
             else if (ArchiveExtractor.IsArchive(file.Name))
                 await ArchiveAsync(run, file, Path.Combine(work, Guid.NewGuid().ToString())).ConfigureAwait(false);
@@ -140,7 +151,12 @@ public sealed class IngestJob(
             return;
         }
 
-        // §3.1: an archive counts as one file, so every entry finishes even after a cancel.
+        ApplyFate(archive, run.Context.Actor, await EntriesAsync(run, archive, entries).ConfigureAwait(false));
+    }
+
+    /// <summary>§3.1: an archive counts as one file, so every entry finishes even after a cancel.</summary>
+    private async Task<List<(string Entry, IngestItemResult? Result)>> EntriesAsync(Run run, IngestFile archive, IReadOnlyList<ExtractedEntry> entries)
+    {
         var outcomes = new List<(string Entry, IngestItemResult? Result)>();
         foreach (var entry in entries)
         {
@@ -152,8 +168,82 @@ public sealed class IngestJob(
             };
             outcomes.Add((entry.EntryPath, await ItemAsync(run, item, null, CancellationToken.None).ConfigureAwait(false)));
         }
+        return outcomes;
+    }
 
-        ApplyFate(archive, run.Context.Actor, outcomes);
+    /// <summary>
+    /// I1 for an external system's archive: it is read through one checked handle, and its entries are only
+    /// processed when that handle and the path still show the file that was listed. Anything else is one item for
+    /// the archive, which stays where it is.
+    /// </summary>
+    private async Task ExternalArchiveAsync(Run run, IngestFile archive, string workDir)
+    {
+        Task One(IngestItemResult result) => ItemAsync(run, archive, result);
+        IngestItemResult Io(string? details) => IngestItemResult.Error(IngestErrors.IoError, details, archive.SystemId);
+        var tooRecent = new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent, SystemId: archive.SystemId);
+        var family = systems.ByFamily(systems.ById(archive.SystemId)!.Family);
+
+        var opened = ExternalRomPath.OpenRead(paths.Value.Ingest, archive.FullPath, FileShare.Read | FileShare.Delete);
+        if (opened.Status != ExternalPathStatus.Found)
+        {
+            await One(Io(opened.Details)).ConfigureAwait(false);
+            return;
+        }
+
+        IReadOnlyList<ExtractedEntry> entries = [];
+        ArchiveRejectedException? rejected = null;
+        using (var stream = opened.Stream!)
+        {
+            var snapshot = opened.Snapshot!;
+            if (snapshot.Length != archive.SizeBytes || snapshot.LastWriteTimeUtc != archive.ModifiedAtUtc
+                || time.GetUtcNow().UtcDateTime - snapshot.LastWriteTimeUtc < MinFileAge)
+            {
+                await One(tooRecent).ConfigureAwait(false);
+                return;
+            }
+
+            var workCheck = ExternalRomPath.CreateDirectory(paths.Value.Cache, workDir);
+            if (workCheck.Status != ExternalPathStatus.Found)
+            {
+                await One(Io(workCheck.Details)).ConfigureAwait(false);
+                return;
+            }
+            try
+            {
+                entries = extractor.Extract(stream, archive.Name, workCheck.Path, ext =>
+                    family.FirstOrDefault(h => h.RomExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))?.MaxRomSizeBytes);
+            }
+            catch (ArchiveRejectedException ex)
+            {
+                rejected = ex;
+            }
+            catch (ArchiveOutputException ex)
+            {
+                await One(Io(ex.Message)).ConfigureAwait(false);
+                return;
+            }
+
+            // Whatever was extracted came from the handle; the entries only count if the path still names that file.
+            var current = ExternalRomPath.ClassifyFile(paths.Value.Ingest, archive.FullPath);
+            if (current.Status != ExternalPathStatus.Found)
+            {
+                await One(Io(current.Details)).ConfigureAwait(false);
+                return;
+            }
+            if (current.Snapshot != snapshot || ExternalRomPath.SnapshotOf(stream) != snapshot)
+            {
+                await One(tooRecent).ConfigureAwait(false);
+                return;
+            }
+        }
+
+        // shortcut: the archive stays in ingest whatever its outcomes; step 9c of the external ROM spec applies its fate.
+        if (rejected is not null)
+            await One(new IngestItemResult(IngestOutcome.Failed, rejected.Reason, rejected.Message, archive.SystemId)).ConfigureAwait(false);
+        else if (entries.Count == 0)
+            await One(new IngestItemResult(IngestOutcome.Failed, IngestFailures.UnsupportedType, "the archive holds no ROM entries", archive.SystemId)).ConfigureAwait(false);
+        else
+            await EntriesAsync(run, archive, entries).ConfigureAwait(false);
     }
 
     /// <summary>

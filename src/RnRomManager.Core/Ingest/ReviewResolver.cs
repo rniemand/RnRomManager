@@ -91,6 +91,9 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             }
 
             var system = systems.ById(item.SystemId)!;
+            // shortcut: resolving reads the whole file into memory; step 11b of the external ROM spec streams it instead.
+            if (!system.EmbedRomsInZip)
+                return new("IoError");
             Guid? target = null;
             var metadata = DatMetadata.Empty;
             var identification = new InfoJsonIdentification(IdentificationMethod.Manual, null, null, null);

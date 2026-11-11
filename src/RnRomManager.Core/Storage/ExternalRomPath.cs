@@ -94,6 +94,40 @@ public static class ExternalRomPath
     public static ExternalPathCheck ClassifyDirectory(string root, string fullPath) => Classify(root, fullPath, expectFile: false);
 
     /// <summary>
+    /// Creates a new directory for this caller's own work files (an archive's extraction folder, a DAT refresh's
+    /// staging folder). Every ancestor below <paramref name="root"/> must be a real directory (missing ones are
+    /// created), and nothing may already be at <paramref name="fullPath"/>: an occupant is never adopted or changed.
+    /// </summary>
+    /// <returns><see cref="ExternalPathStatus.Found"/> with the created path; otherwise why not (an occupant is <see cref="ExternalPathStatus.Unsafe"/>).</returns>
+    public static ExternalPathCheck CreateDirectory(string root, string fullPath)
+    {
+        try
+        {
+            var parent = Path.GetDirectoryName(Path.GetFullPath(fullPath))!;
+            var above = ClassifyDirectory(root, parent);
+            if (above.Status == ExternalPathStatus.Missing)
+            {
+                Directory.CreateDirectory(above.Path);
+                above = ClassifyDirectory(root, parent);
+            }
+            if (above.Status != ExternalPathStatus.Found)
+                return above;
+
+            var target = ClassifyDirectory(root, fullPath);
+            if (target.Status == ExternalPathStatus.Found)
+                return new ExternalPathCheck(ExternalPathStatus.Unsafe, target.Path, Details: $"{target.Path} already exists");
+            if (target.Status != ExternalPathStatus.Missing)
+                return target;
+            Directory.CreateDirectory(target.Path);
+            return ClassifyDirectory(root, fullPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return new ExternalPathCheck(ExternalPathStatus.Unreadable, fullPath, Details: $"{fullPath} can't be created: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Opens a regular file under <paramref name="root"/> for reading, safe against an entry being swapped between
     /// the check and the open: after <see cref="ClassifyFile"/>, every directory below the root is opened without
     /// following links and the file is validated on the handle that was opened (Linux: no-follow directory-relative

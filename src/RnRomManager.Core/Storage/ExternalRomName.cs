@@ -286,10 +286,10 @@ public static class ExternalRomName
         }
     }
 
-    private static int Scalars(string value) => value.EnumerateRunes().Count();
+    internal static int Scalars(string value) => value.EnumerateRunes().Count();
 
     /// <summary>The longest prefix of at most <paramref name="maxScalars"/> whole characters.</summary>
-    private static string CutScalars(string value, int maxScalars)
+    internal static string CutScalars(string value, int maxScalars)
     {
         var length = 0;
         foreach (var rune in value.EnumerateRunes())
