@@ -66,6 +66,9 @@ public sealed class IngestPipeline(
     TimeProvider time,
     ILogger<IngestPipeline> logger)
 {
+    /// <summary>Test seam: runs once an external source is open and checked, right before it is hashed.</summary>
+    public Action<IngestFile>? BeforeExternalHash { get; init; }
+
     /// <summary>AU1: the source as recorded: <c>ingest/…</c>, or <c>ingest/&lt;archive&gt; › &lt;entry&gt;</c> for an archive entry.</summary>
     private string AuditSource(IngestFile file) =>
         file.ArchiveEntry is { } entry ? auditPaths.ArchiveEntry(file.ArchivePath!, entry) : auditPaths.Of(file.FullPath);
@@ -79,7 +82,8 @@ public sealed class IngestPipeline(
         CancellationToken cancellationToken)
     {
         var result = await ProcessCoreAsync(file, jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
-        if (result is not null)
+        // I4: an external source's Error keeps its Pending row (CompleteSourceAsync would delete it); stale cleanup handles absence.
+        if (result is not null && !(IsExternal(file) && result.Outcome == IngestOutcome.Error))
             await reviews.CompleteSourceAsync(file.SourcePath, file.ArchiveEntry, result, jobId, time.GetUtcNow().UtcDateTime, cancellationToken).ConfigureAwait(false);
         return result;
     }
@@ -94,6 +98,8 @@ public sealed class IngestPipeline(
         var byExtension = family.FirstOrDefault(h => h.RomExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase));
         if (byExtension is null)
             return FailFile(file, actor, IngestFailures.UnsupportedType, $"'{extension}' isn't a ROM extension of the {folder.Family} family");
+        if (!folder.EmbedRomsInZip)
+            return await ProcessExternalAsync(file, folder, family, byExtension, jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
         if (file.SizeBytes < byExtension.MinRomSizeBytes)
             return FailFile(file, actor, IngestFailures.TooSmall, $"{file.SizeBytes} bytes; {byExtension.Id} ROMs are at least {byExtension.MinRomSizeBytes}");
         if (file.SizeBytes > byExtension.MaxRomSizeBytes)
@@ -109,14 +115,83 @@ public sealed class IngestPipeline(
         {
             return IngestItemResult.Error(IngestErrors.IoError, ex.Message, file.SystemId);
         }
-        var hashes = new RomHashes(bytes);
+        var hashes = RomHashes.Of(bytes);
         logger.LogDebug("{Path}: {Size} bytes, crc32 {Crc32}, sha1 {Sha1}", file.FullPath, bytes.Length, hashes.Crc32, hashes.Sha1);
+        return await IdentifyAsync(file, folder, family, hashes, bytes.Length, bytes, bytes, jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
+    }
 
+    /// <summary>
+    /// I1–I3 for an external system: the file is opened through a checked handle and hashed in one streamed read,
+    /// never held in memory. A loose file that differs from the ingest listing, is under 10 s old or changes while
+    /// it is hashed is <c>Skipped</c> <c>TooRecent</c> and left where it is.
+    /// </summary>
+    private async Task<IngestItemResult?> ProcessExternalAsync(IngestFile file, ISystemHandler folder, IReadOnlyList<ISystemHandler> family,
+        ISystemHandler byExtension, Guid jobId, AuditActor actor, CircuitBreaker breaker, CancellationToken cancellationToken)
+    {
+        var tooRecent = new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent, SystemId: file.SystemId);
+        var loose = file.ArchiveEntry is null;
+        // An archive entry was extracted into the job's work folder under the cache root.
+        var root = loose ? paths.Value.Ingest : paths.Value.Cache;
+        var fresh = ExternalRomPath.ClassifyFile(root, file.FullPath);
+        if (fresh.Status != ExternalPathStatus.Found)
+            return IngestItemResult.Error(IngestErrors.IoError, fresh.Details, file.SystemId);
+        var snapshot = fresh.Snapshot!;
+        if (loose && (snapshot.Length != file.SizeBytes || snapshot.LastWriteTimeUtc != file.ModifiedAtUtc
+            || time.GetUtcNow().UtcDateTime - snapshot.LastWriteTimeUtc < IngestJob.MinFileAge))
+            return tooRecent;
+
+        var size = snapshot.Length;
+        if (size < byExtension.MinRomSizeBytes)
+            return FailFile(file, actor, IngestFailures.TooSmall, $"{size} bytes; {byExtension.Id} ROMs are at least {byExtension.MinRomSizeBytes}");
+        if (size > byExtension.MaxRomSizeBytes)
+            return FailFile(file, actor, IngestFailures.TooLarge, $"{size} bytes; {byExtension.Id} ROMs are at most {byExtension.MaxRomSizeBytes}");
+
+        var opened = ExternalRomPath.OpenRead(root, fresh.Path, FileShare.ReadWrite | FileShare.Delete, snapshot);
+        if (opened.Status == ExternalPathStatus.Changed)
+            return tooRecent;
+        if (opened.Status != ExternalPathStatus.Found)
+            return IngestItemResult.Error(IngestErrors.IoError, opened.Details, file.SystemId);
+        RomFileHashes? hashed;
+        using (var stream = opened.Stream!)
+        {
+            BeforeExternalHash?.Invoke(file);
+            try
+            {
+                hashed = await RomFileHasher.HashAsync(stream, byExtension.MaxRomSizeBytes, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return IngestItemResult.Error(IngestErrors.IoError, ex.Message, file.SystemId);
+            }
+            // Grew past the cap, or changed on its handle or at its path while it was read: still being copied in.
+            if (hashed is null || hashed.SizeBytes != size || ExternalRomPath.SnapshotOf(stream) != snapshot
+                || (loose && ExternalRomPath.ClassifyFile(root, fresh.Path).Snapshot != snapshot))
+                return tooRecent;
+        }
+        logger.LogDebug("{Path}: {Size} bytes streamed, crc32 {Crc32}, sha1 {Sha1}", file.FullPath, size, hashed.Crc32, hashed.Sha1);
+
+        // I3: only handlers that can store this extension and size identify it.
+        var extension = Path.GetExtension(file.Name);
+        var eligible = family.Where(h => h.RomExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase)
+            && size >= h.MinRomSizeBytes && size <= h.MaxRomSizeBytes).ToList();
+        return await IdentifyAsync(file, folder, eligible, new RomHashes(hashed.Crc32, hashed.Md5, hashed.Sha1), size, hashed.Header, null,
+            jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Steps 3–6 on hashed input.</summary>
+    /// <param name="candidates">The handlers that may claim it: the whole family, or the eligible members for an external system.</param>
+    /// <param name="headerBytes">What <c>ReadHeader</c> gets: the whole ROM, or its first MiB for an external one.</param>
+    /// <param name="bytes">The ROM to store; null for an external ROM, which is never held in memory.</param>
+    private async Task<IngestItemResult?> IdentifyAsync(IngestFile file, ISystemHandler folder, IReadOnlyList<ISystemHandler> candidates,
+        RomHashes hashes, long size, byte[] headerBytes, byte[]? bytes, Guid jobId, AuditActor actor, CircuitBreaker breaker,
+        CancellationToken cancellationToken)
+    {
+        var external = bytes is null;
         // Step 3: global dedupe, self-repair, and review-item lifecycle.
         var review = await reviews.GetBySha1Async(hashes.Sha1, cancellationToken).ConfigureAwait(false);
         if (await roms.GetBySha1Async(hashes.Sha1, cancellationToken).ConfigureAwait(false) is { } known)
         {
-            var duplicate = await DuplicateOrRepairAsync(file, known, bytes, hashes.Sha1, actor, cancellationToken).ConfigureAwait(false);
+            var duplicate = await DuplicateOrRepairAsync(file, known, bytes, size, hashes.Sha1, actor, cancellationToken).ConfigureAwait(false);
             return duplicate with { ResolvedArchiveDuplicate = duplicate.Outcome == IngestOutcome.Duplicate &&
                 file.ArchivePath is not null && review is { Status: "Resolved" } && review.ArchivePath == file.ArchivePath };
         }
@@ -137,8 +212,8 @@ public sealed class IngestPipeline(
             }, cancellationToken).ConfigureAwait(false);
 
         // Step 4: header from every handler of the family; the DAT match decides the system (D23).
-        var headers = family.ToDictionary(h => h.Id, h => h.ReadHeader(bytes));
-        var match = family
+        var headers = candidates.ToDictionary(h => h.Id, h => h.ReadHeader(headerBytes));
+        var match = candidates
             .Select(h => (Handler: h, Store: dats.For(h.Id)))
             .Select(x => (x.Handler, x.Store, Rom: x.Store?.BySha1(hashes.Sha1)))
             .FirstOrDefault(x => x.Rom is not null);
@@ -148,32 +223,46 @@ public sealed class IngestPipeline(
             var found = headers.Values.FirstOrDefault(h => h is not null);
             if (found is { IsPlausible: false })
                 return FailFile(file, actor, IngestFailures.InvalidHeader, "no DAT match, and the header isn't valid for this system", hashes.Sha1);
-            var classified = family.FirstOrDefault(h => h.Id == found?.ClassifiedSystemId) ?? folder;
+            // I3: an external header naming an ineligible handler falls back to the folder's handler, or the first eligible one.
+            var classified = candidates.FirstOrDefault(h => h.Id == found?.ClassifiedSystemId)
+                ?? (external ? candidates.FirstOrDefault(h => h.Id == folder.Id) ?? candidates[0] : folder);
             var originalName = file.Name;
-            if (file.ArchiveEntry is null)
-                file = RenameToClassifiedExtension(file, found, family, actor);
-            return await QueueReviewAsync(file, originalName, classified.Id, "NoDatMatch", hashes, bytes.Length, found, jobId,
-                SuggestionEngine.Find(dats.For(classified.Id), found?.Title, originalName, bytes.Length), null, null, cancellationToken).ConfigureAwait(false);
+            if (file.ArchiveEntry is null && !external)
+                file = RenameToClassifiedExtension(file, found, candidates, actor);
+            return await QueueReviewAsync(file, originalName, classified.Id, "NoDatMatch", hashes, size, found, jobId,
+                SuggestionEngine.Find(dats.For(classified.Id), found?.Title, originalName, size), null, null, cancellationToken).ConfigureAwait(false);
         }
         var (system, store, datRom) = (match.Handler, match.Store!, match.Rom);
         if (system.Id != file.SystemId)
             logger.LogInformation("{Path}: dropped in ingest/{Folder} but it's a {System} ROM; stored under roms/{System}", file.FullPath, file.SystemId, system.Id, system.Id);
+
+        // I3: an external release keeps its source's extension (lower-cased) on the DAT stem, as a portable logical name.
+        var romName = external
+            ? ExternalRomName.AllocateLogicalName(Path.GetFileNameWithoutExtension(datRom.RomName) + Path.GetExtension(file.Name).ToLowerInvariant(),
+                new ExternalNameReservations([]))
+            : datRom.RomName;
 
         // Step 6: group by system + base title.
         var baseTitle = NoIntroName.Parse(datRom.GameName).BaseTitle;
         var owners = await roms.ListGameIdsByBaseTitleAsync(system.Id, baseTitle, cancellationToken).ConfigureAwait(false);
         if (owners.Count > 1)
         {
-            return await QueueReviewAsync(file, file.Name, system.Id, "AmbiguousGroup", hashes, bytes.Length, headers[system.Id], jobId,
-                [], new { datName = store.DatName, datVersion = store.Version, datGameName = datRom.GameName, romName = datRom.RomName },
+            return await QueueReviewAsync(file, file.Name, system.Id, "AmbiguousGroup", hashes, size, headers[system.Id], jobId,
+                [], new { datName = store.DatName, datVersion = store.Version, datGameName = datRom.GameName, romName },
                 owners, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (bytes is null)
+        {
+            // shortcut: external placement (I4) lands in step 9f; until then nothing is written and the source stays.
+            return IngestItemResult.Error(IngestErrors.IoError, "storing external ROMs is not available yet", system.Id, hashes.Sha1);
         }
 
         var now = time.GetUtcNow();
         var tags = NoIntroName.Parse(Path.GetFileNameWithoutExtension(datRom.RomName));
         var rom = new InfoJsonRom
         {
-            FileName = datRom.RomName,
+            FileName = romName,
             OriginalFileName = file.Name,
             BaseTitle = baseTitle,
             Regions = tags.Regions,
@@ -183,7 +272,7 @@ public sealed class IngestPipeline(
             IsPrimary = false,
             Identification = new InfoJsonIdentification(IdentificationMethod.Dat, store.DatName, store.Version, datRom.GameName),
             Header = headers[system.Id] is { } header ? JsonSerializer.SerializeToNode(header.Fields) as JsonObject : null,
-            Metadata = new InfoJsonRomMetadata(bytes.Length, hashes.Crc32, hashes.Md5, hashes.Sha1, now, now, file.SourcePath),
+            Metadata = new InfoJsonRomMetadata(size, hashes.Crc32, hashes.Md5, hashes.Sha1, now, now, file.SourcePath),
         };
         var metadata = store.MetadataFor(datRom.Crc32);
         var result = new IngestItemResult(IngestOutcome.Ingested, SystemId: system.Id, Sha1: hashes.Sha1);
@@ -314,19 +403,21 @@ public sealed class IngestPipeline(
     /// <c>EntrySizeMismatch</c> issue → rewrite it from this file and resolve the issue (<c>Repaired</c>, D30);
     /// otherwise <c>Duplicate</c> → <c>_duplicates/</c>.
     /// </summary>
-    private async Task<IngestItemResult> DuplicateOrRepairAsync(IngestFile file, RomRow known, byte[] bytes, string sha1, AuditActor actor,
+    /// <param name="bytes">Null for an external input: only an embedded input can rebuild an embedded entry (I6).</param>
+    private async Task<IngestItemResult> DuplicateOrRepairAsync(IngestFile file, RomRow known, byte[]? bytes, long size, string sha1, AuditActor actor,
         CancellationToken cancellationToken)
     {
         var game = await games.GetAsync(known.GameId, cancellationToken).ConfigureAwait(false);
-        var entryName = LibraryZip.RomEntry(known.FileName);
-        var open = game is null
+        var entryName = known.ExternalFileName ?? LibraryZip.RomEntry(known.FileName);
+        // shortcut: external self-repair (I6) is step 10; until then an external input or owner is always a Duplicate.
+        var open = game is null || bytes is null || known.ExternalFileName is not null
             ? []
             : await issues.ListOpenAsync(game.ZipPath, entryName, IntegrityIssueType.SelfRepairable, cancellationToken).ConfigureAwait(false);
 
         if (open.Count == 0)
         {
             logger.LogWarning("{Path}: duplicate of {Zip} › {Entry} (sha1 {Sha1}, size {Size})",
-                file.FullPath, game?.ZipPath, entryName, sha1, bytes.Length);
+                file.FullPath, game?.ZipPath, entryName, sha1, size);
             // An archive entry isn't moved on its own: the archive's fate covers it (§7.3).
             var moveError = file.ArchiveEntry is null ? MoveToDuplicates(file, actor) : null;
             return moveError ?? new IngestItemResult(IngestOutcome.Duplicate, Details: $"same as {game?.ZipPath} › {entryName}",
@@ -344,7 +435,7 @@ public sealed class IngestPipeline(
                 Roms = current.Roms.Select(r => r.Metadata.Sha1 == sha1 ? r with { Metadata = r.Metadata with { DateModified = now } } : r).ToList(),
                 Metadata = current.Metadata with { UpdatedAt = now, AppVersion = AppInfo.Version },
             };
-            var entries = new Dictionary<string, Func<Stream>> { [entryName] = () => new MemoryStream(bytes) };
+            var entries = new Dictionary<string, Func<Stream>> { [entryName] = () => new MemoryStream(bytes!) };
             var result = new IngestItemResult(IngestOutcome.Repaired, Details: $"rewrote {game.ZipPath} › {entryName} ({string.Join(", ", open.Select(i => i.Type))})",
                 SystemId: known.SystemId, GameId: known.GameId, Sha1: sha1);
             return await PackageAsync(file, existing, game.ZipPath, repaired, entries, result, actor, null, cancellationToken,
@@ -572,10 +663,9 @@ public sealed class IngestPipeline(
             entries[LibraryZip.ImageEntry(image.FileName)] = () => new MemoryStream(image.Bytes);
     }
 
-    private sealed class RomHashes(byte[] bytes)
+    private sealed record RomHashes(string Crc32, string Md5, string Sha1)
     {
-        public string Crc32 { get; } = Storage.Crc32.ToHex(bytes);
-        public string Md5 { get; } = Convert.ToHexStringLower(MD5.HashData(bytes));
-        public string Sha1 { get; } = Convert.ToHexStringLower(SHA1.HashData(bytes));
+        public static RomHashes Of(byte[] bytes) =>
+            new(Storage.Crc32.ToHex(bytes), Convert.ToHexStringLower(MD5.HashData(bytes)), Convert.ToHexStringLower(SHA1.HashData(bytes)));
     }
 }

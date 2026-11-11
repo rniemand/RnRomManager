@@ -110,6 +110,8 @@ public sealed class IngestJob(
             }
             else if (external && ArchiveExtractor.IsArchive(file.Name))
                 await ExternalArchiveAsync(run, file, Path.Combine(work, Guid.NewGuid().ToString())).ConfigureAwait(false); // its own fresh age check
+            else if (external)
+                await ItemAsync(run, file, null, CancellationToken.None).ConfigureAwait(false); // I2: its own fresh age check; a started item finishes
             else if (now - file.ModifiedAtUtc < MinFileAge)
                 await ItemAsync(run, file, new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent, SystemId: file.SystemId)).ConfigureAwait(false);
             else if (ArchiveExtractor.IsArchive(file.Name))
@@ -374,6 +376,8 @@ public sealed class IngestJob(
         {
             logger.LogError(ex, "{Path}: unexpected failure", file.FullPath);
             var result = IngestItemResult.Error(IngestErrors.Unexpected, ex.Message, file.SystemId);
+            if (systems.ById(file.SystemId) is { EmbedRomsInZip: false })
+                return result; // I4: an external source's Pending row stays
             await reviews.CompleteSourceAsync(file.SourcePath, file.ArchiveEntry, result, jobId, time.GetUtcNow().UtcDateTime, cancellationToken).ConfigureAwait(false);
             return result;
         }

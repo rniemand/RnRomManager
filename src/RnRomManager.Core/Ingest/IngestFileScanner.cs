@@ -27,14 +27,15 @@ public sealed record FailedFile(string Name, long SizeBytes, DateTime ModifiedAt
 /// including <c>_duplicates</c>/<c>_failed</c>/<c>_removed</c>, are ignored), no dot-files, no OS junk. Shared by the
 /// ingest snapshot and <c>GET /api/ingest/pending</c>.
 /// </summary>
-public sealed class IngestFileScanner(IOptions<PathsOptions> paths, ISystemRegistry systems, ILogger<IngestFileScanner> logger)
+public class IngestFileScanner(IOptions<PathsOptions> paths, ISystemRegistry systems, ILogger<IngestFileScanner> logger)
 {
     private static readonly HashSet<string> Junk = new(["Thumbs.db", "desktop.ini"], StringComparer.OrdinalIgnoreCase);
 
     public static bool IsIgnored(string fileName) => fileName.StartsWith('.') || Junk.Contains(fileName);
 
     /// <returns>Per registered system (in registry order), its files ordered by name.</returns>
-    public IReadOnlyList<(string SystemId, IReadOnlyList<IngestFile> Files)> Scan() =>
+    /// <remarks>Virtual so a test can hand the job source paths no filesystem here could hold.</remarks>
+    public virtual IReadOnlyList<(string SystemId, IReadOnlyList<IngestFile> Files)> Scan() =>
         systems.All.Select(h => (h.Id, ScanSystem(h.Id))).ToList();
 
     /// <summary>D1: per registered system (in registry order), the top-level files of its <c>_failed/</c> folder, ordered by name, without <c>.error.txt</c> sidecars.</summary>
