@@ -10,18 +10,23 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Core.Media;
 
 /// <summary>A box art or snap ready to store as <c>images/&lt;fileName&gt;</c>.</summary>
-public sealed record MediaImage(ImageType Type, byte[] Bytes, int Width, int Height, string? SourceUrl, bool IsDefault)
+/// <param name="Source">The <c>info.json</c> source of a fetched image; null means libretro-thumbnails.</param>
+public sealed record MediaImage(ImageType Type, byte[] Bytes, int Width, int Height, string? SourceUrl, bool IsDefault, string? Source = null)
 {
     public const string BoxArtFileName = "boxart-01.png";
     public const string SnapFileName = "snap-01.png";
 
-    public string FileName => Type == ImageType.BoxArt ? BoxArtFileName : SnapFileName;
+    /// <summary>T8: <c>png</c> or <c>jpg</c>, from the magic bytes.</summary>
+    public string Extension => ImageFormats.Extension(ImageFormats.Detect(Bytes) ?? ImageFormat.Png);
+
+    /// <summary>The name of a new game's first image of this type, by format (<c>boxart-01.jpg</c>).</summary>
+    public string FileName => $"{GameImages.Prefix(Type)}-01.{Extension}";
 
     public InfoJsonImage ToInfoJson(DateTimeOffset dateAdded, bool isCover) => new()
     {
         FileName = FileName,
         Type = Type,
-        Source = IsDefault ? InfoJsonImage.SourceDefault : InfoJsonImage.SourceLibretro,
+        Source = IsDefault ? InfoJsonImage.SourceDefault : Source ?? InfoJsonImage.SourceLibretro,
         SourceUrl = SourceUrl,
         IsDefault = IsDefault,
         IsCover = isCover,
