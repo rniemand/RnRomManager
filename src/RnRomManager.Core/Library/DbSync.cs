@@ -114,6 +114,8 @@ public sealed class DbSync(
             }
         }
 
+        await GuardEquivalentPathsAsync(state, zips, found, kept, skipped, dbSha1s, cancellationToken).ConfigureAwait(false);
+
         foreach (var group in found.GroupBy(f => f.Id).Where(g => g.Count() > 1))
         {
             var where = string.Join(", ", group.Select(f => f.ZipPath + (f.Entry is null ? "" : $" (updatedAt {f.Entry.Info.Metadata.UpdatedAt:O})")));
@@ -160,6 +162,63 @@ public sealed class DbSync(
         foreach (var skip in skipped)
             logger.LogDebug("DB sync: skipped {ZipPath}: {Reason} {Details}", skip.ZipPath, skip.Reason, skip.Details);
         return new DbSyncResult(changes, skipped);
+    }
+
+    /// <summary>
+    /// Spec E4: keeps ZIP paths the database treats as one <c>zip_path</c> away from the mirror, whose replace
+    /// deletes whatever row holds an equal path. The database's collation can equate spellings no file system and no
+    /// ordinal comparison does (a composed and a decomposed accent), so it is asked. Only groups that involve an
+    /// external system (by folder, by the ZIP's metadata or by its row) are guarded, and the query runs only when
+    /// the library has such a ZIP at all: an embedded-only library syncs exactly as before.
+    /// <list type="bullet">
+    /// <item>Two or more ZIPs on disk in one group: none is read into the mirror, each is a <c>ZipUnreadable</c>
+    /// skip naming every spelling, and rows in the group stay as they are.</item>
+    /// <item>One ZIP on disk, but a different game's row holds an equal path that couldn't be checked (it is behind
+    /// an unsafe or unreadable folder): the row stays and the ZIP is skipped. A row whose own spelling is
+    /// confirmed absent is relocated or replaced as usual.</item>
+    /// </list>
+    /// </summary>
+    private async Task GuardEquivalentPathsAsync(IReadOnlyList<GameSyncState> state, List<CheckedFile> zips, List<Found> found, HashSet<Guid> kept,
+        List<DbSyncSkipItem> skipped, ILookup<Guid, string> dbSha1s, CancellationToken cancellationToken)
+    {
+        var external = systems.All.Where(h => !h.EmbedRomsInZip).Select(h => h.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        bool InExternalFolder(string path) => path.IndexOf('/') is var slash and > 0 && external.Contains(path[..slash]);
+        if (external.Count == 0
+            || !(zips.Any(z => InExternalFolder(z.RelativePath)) || state.Any(s => external.Contains(s.SystemId))
+                 || found.Any(f => f.Entry is not null && external.Contains(f.Entry.Info.System))))
+            return;
+
+        var observed = zips.Select(z => z.RelativePath).ToHashSet(StringComparer.Ordinal);
+        var inputs = observed.Concat(state.Select(s => s.ZipPath)).Distinct(StringComparer.Ordinal).ToList();
+        foreach (var group in await games.ListZipPathEquivalenceAsync(inputs, cancellationToken).ConfigureAwait(false))
+        {
+            var physical = group.Paths.Where(observed.Contains).ToList();
+            var rows = state.Where(s => group.Paths.Contains(s.ZipPath, StringComparer.Ordinal)).ToList();
+            var candidates = found.Where(f => f.Entry is not null && physical.Contains(f.ZipPath, StringComparer.Ordinal)).ToList();
+            if (!(physical.Any(InExternalFolder) || rows.Any(r => external.Contains(r.SystemId)) || candidates.Any(c => external.Contains(c.Entry!.Info.System))))
+                continue;
+
+            if (physical.Count > 1)
+            {
+                var details = $"paths the database treats as equal: {string.Join(", ", physical.Order(StringComparer.Ordinal))}";
+                found.RemoveAll(f => physical.Contains(f.ZipPath, StringComparer.Ordinal));
+                foreach (var path in physical)
+                    skipped.Add(new DbSyncSkipItem(DbSyncSkip.ZipUnreadable, path, details));
+                foreach (var row in rows)
+                {
+                    kept.Add(row.Id);
+                    if (!found.Any(f => f.Id == row.Id && f.Entry is null))
+                        found.Add(new Found(row.ZipPath, row.Id, null, dbSha1s[row.Id].ToList()));
+                }
+            }
+            else if (candidates is [var candidate]
+                     && rows.FirstOrDefault(r => r.Id != candidate.Id && kept.Contains(r.Id) && !string.Equals(r.ZipPath, candidate.ZipPath, StringComparison.Ordinal)) is { } owner)
+            {
+                found.Remove(candidate);
+                skipped.Add(new DbSyncSkipItem(DbSyncSkip.ZipUnreadable, candidate.ZipPath,
+                    $"the database treats it as equal to {owner.ZipPath}, which could not be checked"));
+            }
+        }
     }
 
     private static bool IsZip(string path) => path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);

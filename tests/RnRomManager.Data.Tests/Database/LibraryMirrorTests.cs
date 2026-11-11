@@ -604,4 +604,131 @@ public class LibraryMirrorTests
     }
 
     private string Abs(string relative, InfoJsonGame _) => Abs(relative);
+
+    // --- paths the database treats as equal (E4) ---
+
+    // "é" as one code point, and as "e" + a combining acute: two file names, one zip_path for the database.
+    private const string ComposedZip = "ext/C/Caf\u00E9.zip";
+    private const string DecomposedZip = "ext/C/Cafe\u0301.zip";
+
+    /// <summary>An external game's ZIP: info.json only, as its ROM is a file next to it.</summary>
+    private InfoJsonGame ExternalZip(string relative, string title, int seed)
+    {
+        var game = ExternalGame(($"{title} [v0].nsp", $"{title}.{title} [v0].nsp", seed)) with { Title = title, DisplayTitle = title };
+        Directory.CreateDirectory(Path.GetDirectoryName(Abs(relative))!);
+        using var archive = System.IO.Compression.ZipFile.Open(Abs(relative), System.IO.Compression.ZipArchiveMode.Create);
+        using var entry = archive.CreateEntry(LibraryZip.InfoJsonEntry).Open();
+        entry.Write(InfoJsonSerializer.Serialize(game));
+        return game;
+    }
+
+    private void RequireBothSpellings()
+    {
+        if (Directory.GetFiles(Abs("ext/C")).Length != 2)
+            Assert.Ignore("This volume normalizes names: it can't hold both spellings.");
+    }
+
+    [Test]
+    public async Task Sync_TwoZipsTheDatabaseTreatsAsEqual_KeepTheExistingRow_AndAnUnrelatedZipIsStillRepaired()
+    {
+        var cafe = ExternalZip(ComposedZip, "Cafe One", 1);
+        await _sync.SyncAllAsync(CancellationToken.None);
+        var second = ExternalZip(DecomposedZip, "Cafe Two", 2);
+        RequireBothSpellings();
+        var orbit = ExternalZip("ext/O/Orbit.zip", "Orbit", 3);
+
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Changes, Is.EqualTo(new[] { new DbSyncChangeItem(DbSyncChange.Inserted, orbit.GameId, "ext/O/Orbit.zip") }));
+        Assert.That(result.Skipped.Select(s => (s.Reason, s.ZipPath)), Is.EquivalentTo(new[]
+        {
+            (DbSyncSkip.ZipUnreadable, ComposedZip), (DbSyncSkip.ZipUnreadable, DecomposedZip),
+        }));
+        Assert.That(result.Skipped.Select(s => s.Details), Is.All.Contains(ComposedZip).And.All.Contains(DecomposedZip), "each spelling is named");
+        var row = (await _games.GetAsync(cafe.GameId, CancellationToken.None))!;
+        Assert.That((row.Title, row.ZipPath), Is.EqualTo(("Cafe One", ComposedZip)));
+        Assert.That(await _games.GetAsync(second.GameId, CancellationToken.None), Is.Null);
+        Assert.That((File.Exists(Abs(ComposedZip)), File.Exists(Abs(DecomposedZip))), Is.EqualTo((true, true)));
+
+        // Still reported, and still nothing changed, on the next run.
+        var again = await _sync.SyncAllAsync(CancellationToken.None);
+        Assert.That((again.Changes.Count, again.Skipped.Count), Is.EqualTo((0, 2)));
+    }
+
+    [Test]
+    public async Task Sync_TwoEqualZips_WithNoExistingRow_MirrorNeither_AndAnUnrelatedZipIsStillRepaired()
+    {
+        var first = ExternalZip(ComposedZip, "Cafe One", 1);
+        var second = ExternalZip(DecomposedZip, "Cafe Two", 2);
+        RequireBothSpellings();
+        var orbit = ExternalZip("ext/O/Orbit.zip", "Orbit", 3);
+
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Changes, Is.EqualTo(new[] { new DbSyncChangeItem(DbSyncChange.Inserted, orbit.GameId, "ext/O/Orbit.zip") }));
+        Assert.That(result.Skipped.Select(s => (s.Reason, s.ZipPath)), Is.EquivalentTo(new[]
+        {
+            (DbSyncSkip.ZipUnreadable, ComposedZip), (DbSyncSkip.ZipUnreadable, DecomposedZip),
+        }));
+        Assert.That(await _games.GetAsync(first.GameId, CancellationToken.None), Is.Null);
+        Assert.That(await _games.GetAsync(second.GameId, CancellationToken.None), Is.Null);
+        Assert.That((File.Exists(Abs(ComposedZip)), File.Exists(Abs(DecomposedZip))), Is.EqualTo((true, true)));
+    }
+
+    [Test]
+    public async Task Sync_OldSpellingConfirmedAbsent_IsRelocatedToTheEqualNewSpelling()
+    {
+        var cafe = ExternalZip(ComposedZip, "Cafe One", 1);
+        await _sync.SyncAllAsync(CancellationToken.None);
+        File.Move(Abs(ComposedZip), Abs(DecomposedZip));
+
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Changes, Is.EqualTo(new[] { new DbSyncChangeItem(DbSyncChange.Updated, cafe.GameId, DecomposedZip) }));
+        Assert.That(result.Skipped, Is.Empty);
+        Assert.That((await _games.GetAsync(cafe.GameId, CancellationToken.None))!.ZipPath, Is.EqualTo(DecomposedZip));
+    }
+
+    [Test]
+    public async Task Sync_OldSpellingConfirmedAbsent_IsReplacedByADifferentGameAtTheEqualSpelling()
+    {
+        var old = ExternalZip(ComposedZip, "Cafe One", 1);
+        await _sync.SyncAllAsync(CancellationToken.None);
+        File.Delete(Abs(ComposedZip));
+        var replacement = ExternalZip(DecomposedZip, "Cafe Two", 2);
+
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Skipped, Is.Empty);
+        Assert.That(await _games.GetAsync(old.GameId, CancellationToken.None), Is.Null);
+        Assert.That((await _games.GetAsync(replacement.GameId, CancellationToken.None))!.ZipPath, Is.EqualTo(DecomposedZip));
+    }
+
+    [Test]
+    public async Task Sync_OwnerOfAnEqualPathThatCouldNotBeChecked_IsPreserved_AndTheCandidateSkipped()
+    {
+        const string ownerPath = "ext/C/Sub\u00E9/Cafe.zip";
+        const string candidatePath = "ext/C/Sube\u0301/Cafe.zip";
+        var owner = ExternalZip(ownerPath, "Cafe One", 1);
+        await _sync.SyncAllAsync(CancellationToken.None);
+        // The owner's folder becomes a link: nobody can say whether its ZIP is still there.
+        var (outside, _) = await OutsideAsync();
+        Directory.Move(Abs("ext/C/Sub\u00E9"), Path.Combine(outside, "moved-away"));
+        LinkDirectory("ext/C/Sub\u00E9", outside);
+        // A real folder whose name the database can't tell from the linked one.
+        var candidate = ExternalZip(candidatePath, "Cafe Two", 2);
+        if (Directory.GetFileSystemEntries(Abs("ext/C")).Length != 2)
+            Assert.Ignore("This volume normalizes names: it can't hold both spellings.");
+
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Changes, Is.Empty);
+        Assert.That(result.Skipped.Select(s => (s.Reason, s.ZipPath)), Is.EquivalentTo(new[]
+        {
+            (DbSyncSkip.ZipUnreadable, ownerPath), (DbSyncSkip.ZipUnreadable, candidatePath),
+        }));
+        Assert.That(result.Skipped.Single(s => s.ZipPath == candidatePath).Details, Does.Contain(ownerPath).And.Contain("could not be checked"));
+        Assert.That((await _games.GetAsync(owner.GameId, CancellationToken.None))!.ZipPath, Is.EqualTo(ownerPath));
+        Assert.That(await _games.GetAsync(candidate.GameId, CancellationToken.None), Is.Null);
+    }
 }

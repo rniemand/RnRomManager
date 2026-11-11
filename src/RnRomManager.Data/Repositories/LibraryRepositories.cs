@@ -62,9 +62,9 @@ public sealed class GameRepository : IGameRepository
     public async Task<IReadOnlyList<GameSyncState>> ListSyncStateAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();
-        var rows = await connection.QueryAsync<(Guid Id, string ZipPath, long Size, DateTime Mtime)>(new CommandDefinition(
-            "SELECT id, zip_path, zip_size_bytes, zip_mtime_utc FROM games", cancellationToken: cancellationToken));
-        return rows.Select(r => new GameSyncState(r.Id, r.ZipPath, r.Size, r.Mtime)).ToList();
+        var rows = await connection.QueryAsync<(Guid Id, string ZipPath, long Size, DateTime Mtime, string SystemId)>(new CommandDefinition(
+            "SELECT id, zip_path, zip_size_bytes, zip_mtime_utc, system_id FROM games", cancellationToken: cancellationToken));
+        return rows.Select(r => new GameSyncState(r.Id, r.ZipPath, r.Size, r.Mtime, r.SystemId)).ToList();
     }
 
     /// <summary>Rows per INSERT into the staging table.</summary>
