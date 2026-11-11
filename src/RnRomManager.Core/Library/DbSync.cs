@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RnRomManager.Core.Configuration;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Library;
@@ -38,6 +39,13 @@ public sealed record DbSyncResult(IReadOnlyList<DbSyncChangeItem> Changes, IRead
 /// re-read and written, rows whose ZIP is gone are deleted unless their <c>gameId</c> turned up at another path.
 /// Unreadable ZIPs and duplicate <c>gameId</c>s keep their rows; a ZIP whose ROM SHA1 another game already holds is
 /// skipped (<c>roms.sha1</c> is unique). All writes go in one transaction. File-side problems are reported, never fixed.
+/// <para>
+/// ZIPs are found and opened through <see cref="ExternalRomPath"/> in every system folder, because a ZIP's storage
+/// mode isn't known until it is read (spec G4): a linked folder is not entered, a linked or special file is not
+/// opened, and names differing only in case are not chosen between. Each such path is a <c>ZipUnreadable</c> skip
+/// that keeps the mirror rows at or below it, since "can't be checked" is not "gone"; only a ZIP that is really
+/// absent is pruned.
+/// </para>
 /// </summary>
 public sealed class DbSync(
     IGameRepository games,
@@ -61,16 +69,37 @@ public sealed class DbSync(
         var kept = new HashSet<Guid>(); // rows left exactly as they are
         var found = new List<Found>();
 
-        foreach (var (path, size, mtime) in ScanZips())
+        var (zips, problems) = ScanZips();
+        foreach (var problem in problems)
         {
+            // Rows at the path or anywhere below it couldn't be checked: keep them, as an unreadable ZIP's row is kept.
+            var behind = state.Where(s => IsAtOrBelow(s.ZipPath, problem.RelativePath)).ToList();
+            foreach (var row in behind)
+            {
+                skipped.Add(new DbSyncSkipItem(DbSyncSkip.ZipUnreadable, row.ZipPath, problem.Details));
+                kept.Add(row.Id);
+                found.Add(new Found(row.ZipPath, row.Id, null, dbSha1s[row.Id].ToList()));
+            }
+            if (behind.Count == 0)
+                skipped.Add(new DbSyncSkipItem(DbSyncSkip.ZipUnreadable, problem.RelativePath, problem.Details));
+            logger.LogWarning("DB sync: {Path} was not read: {Details}", problem.RelativePath, problem.Details);
+        }
+
+        foreach (var zip in zips)
+        {
+            var path = zip.RelativePath;
+            var size = zip.Snapshot.Length;
+            var mtime = MirrorEntry.WholeSeconds(zip.Snapshot.LastWriteTimeUtc);
             rowByPath.TryGetValue(path, out var row);
+            if (row is not null && kept.Contains(row.Id))
+                continue; // its row is already kept for a path that couldn't be checked
             if (row is not null && row.ZipSizeBytes == size && row.ZipMtimeUtc == mtime)
             {
                 found.Add(new Found(path, row.Id, null, dbSha1s[row.Id].ToList()));
                 continue;
             }
 
-            var (entry, skip) = Read(path, size, mtime);
+            var (entry, skip) = Read(zip, mtime);
             if (entry is not null)
             {
                 found.Add(new Found(path, entry.Info.GameId, entry, entry.Info.Roms.Select(r => r.Metadata.Sha1).ToList()));
@@ -133,28 +162,41 @@ public sealed class DbSync(
         return new DbSyncResult(changes, skipped);
     }
 
-    /// <summary>Every <c>.zip</c> at any depth under each registered <c>roms/&lt;Id&gt;/</c> (§12.1 scope).</summary>
-    private IEnumerable<(string Path, long Size, DateTime Mtime)> ScanZips()
+    private static bool IsZip(string path) => path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAtOrBelow(string zipPath, string path) =>
+        zipPath.Equals(path, StringComparison.OrdinalIgnoreCase)
+        || (zipPath.Length > path.Length && zipPath[path.Length] == '/' && zipPath.StartsWith(path, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Every safe <c>.zip</c> at any depth under each registered <c>roms/&lt;Id&gt;/</c> (§12.1 scope), and every
+    /// path that was not opened or entered and could be, or hide, a ZIP: a folder, or a file named <c>.zip</c>.
+    /// </summary>
+    private (List<CheckedFile> Zips, List<CheckedScanProblem> Problems) ScanZips()
     {
-        var root = paths.Value.Roms;
+        var zips = new List<CheckedFile>();
+        var problems = new List<CheckedScanProblem>();
         foreach (var handler in systems.All)
         {
-            var folder = new DirectoryInfo(Path.Combine(root, handler.Id));
-            if (!folder.Exists)
-                continue;
-            foreach (var file in folder.EnumerateFiles("*", SearchOption.AllDirectories))
-            {
-                if (file.Extension.Equals(".zip", StringComparison.OrdinalIgnoreCase))
-                    yield return (Path.GetRelativePath(root, file.FullName).Replace('\\', '/'), file.Length, MirrorEntry.WholeSeconds(file.LastWriteTimeUtc));
-            }
+            var scan = ExternalRomPath.ScanFolder(paths.Value.Roms, handler.Id);
+            zips.AddRange(scan.Files.Where(f => IsZip(f.RelativePath)));
+            // A special file that isn't named like a ZIP hides nothing; a folder (or a link, which may be one) can.
+            problems.AddRange(scan.Problems.Where(p => IsZip(p.RelativePath) || !p.IsSpecialFile));
         }
+        return (zips, problems);
     }
 
-    private (MirrorEntry? Entry, DbSyncSkipItem? Skip) Read(string path, long size, DateTime mtime)
+    private (MirrorEntry? Entry, DbSyncSkipItem? Skip) Read(CheckedFile file, DateTime mtime)
     {
+        var path = file.RelativePath;
+        var size = file.Snapshot.Length;
         try
         {
-            using var zip = LibraryZip.Open(Path.Combine(paths.Value.Roms, path), reader);
+            // The handle must be the file the scan saw: a ZIP swapped or still being written is read on a later run.
+            var opened = ExternalRomPath.OpenScanned(paths.Value.Roms, path, FileShare.Read | FileShare.Delete, file.Snapshot);
+            if (opened.Status != ExternalPathStatus.Found)
+                return (null, new DbSyncSkipItem(DbSyncSkip.ZipUnreadable, path, opened.Details));
+            using var zip = LibraryZip.Open(new BufferedStream(opened.Stream!), opened.Path, reader);
             return zip.InfoJson switch
             {
                 null => (null, new DbSyncSkipItem(DbSyncSkip.InfoJsonMissing, path, null)),

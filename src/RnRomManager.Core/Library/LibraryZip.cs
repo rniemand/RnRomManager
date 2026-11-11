@@ -43,9 +43,17 @@ public sealed class LibraryZip : IDisposable
     /// <summary>Opens and reads <c>info.json</c> (≤ 1 MiB, actual bytes).</summary>
     /// <exception cref="InvalidDataException">Not a readable ZIP (<c>ZipUnreadable</c>).</exception>
     /// <exception cref="IOException">The file can't be opened.</exception>
-    public static LibraryZip Open(string path, InfoJsonReader reader)
+    public static LibraryZip Open(string path, InfoJsonReader reader) =>
+        Open(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete), path, reader);
+
+    /// <summary>
+    /// Reads the ZIP from a stream the caller already opened and checked (a seekable read stream), taking ownership:
+    /// the stream is disposed with the result, and also when the ZIP or its <c>info.json</c> can't be read.
+    /// </summary>
+    /// <param name="path">Where the stream was opened; kept as <see cref="Path"/>, never opened again.</param>
+    /// <exception cref="InvalidDataException">Not a readable ZIP (<c>ZipUnreadable</c>).</exception>
+    public static LibraryZip Open(Stream file, string path, InfoJsonReader reader)
     {
-        var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
         ZipArchive archive;
         try
         {

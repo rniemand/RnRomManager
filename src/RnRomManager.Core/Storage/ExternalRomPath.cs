@@ -54,6 +54,21 @@ public sealed class ExternalOpenHooks
     public Action<string>? BeforeDirectoryOpen { get; init; }
 }
 
+/// <summary>A regular file found by <see cref="ExternalRomPath.ScanFolder"/>.</summary>
+/// <param name="RelativePath">Relative to the root, <c>/</c> separators, each name as spelled on disk.</param>
+public sealed record CheckedFile(string RelativePath, string FullPath, ExternalFileSnapshot Snapshot);
+
+/// <summary>Something <see cref="ExternalRomPath.ScanFolder"/> refused to open or walk into.</summary>
+/// <param name="RelativePath">
+/// Relative to the root, <c>/</c> separators. For names that differ only in case it is the first spelling in
+/// ordinal order; everything at or below any of those spellings was skipped.
+/// </param>
+/// <param name="Status"><see cref="ExternalPathStatus.Unsafe"/> or <see cref="ExternalPathStatus.Unreadable"/>.</param>
+/// <param name="IsSpecialFile">True for a FIFO, socket or device: a single entry that can't be a folder. A link, an unreadable entry and case variants may each be or hide one.</param>
+public sealed record CheckedScanProblem(string RelativePath, ExternalPathStatus Status, string Details, bool IsSpecialFile = false);
+
+public sealed record CheckedScan(IReadOnlyList<CheckedFile> Files, IReadOnlyList<CheckedScanProblem> Problems);
+
 /// <summary>
 /// The one place that decides whether a path under a storage root may be used for an external ROM, its metadata ZIP,
 /// an ingest source or a destination folder (spec G4). Below the root every existing component must be a real
@@ -99,7 +114,11 @@ public static class ExternalRomPath
         // check.Path is the root plus each name as spelled on disk.
         var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
         var components = check.Path[(fullRoot.Length + 1)..].Split(Path.DirectorySeparatorChar);
-        var opened = NativeCheckedOpen.OpenRead(fullRoot, components, share, hooks?.BeforeDirectoryOpen);
+        return Finish(check.Path, NativeCheckedOpen.OpenRead(fullRoot, components, share, hooks?.BeforeDirectoryOpen), expected);
+    }
+
+    private static ExternalOpenResult Finish(string path, NativeCheckedOpen.Result opened, ExternalFileSnapshot? expected)
+    {
         if (opened.Outcome != NativeCheckedOpen.Outcome.Opened)
         {
             var status = opened.Outcome switch
@@ -108,25 +127,123 @@ public static class ExternalRomPath
                 NativeCheckedOpen.Outcome.Unsafe => ExternalPathStatus.Unsafe,
                 _ => ExternalPathStatus.Unreadable,
             };
-            return new ExternalOpenResult(status, check.Path, Details: opened.Details);
+            return new ExternalOpenResult(status, path, Details: opened.Details);
         }
 
         var handle = opened.Handle!;
         if (expected is not null && opened.Snapshot != expected)
         {
             handle.Dispose();
-            return new ExternalOpenResult(ExternalPathStatus.Changed, check.Path, Details: $"{check.Path} changed since it was checked");
+            return new ExternalOpenResult(ExternalPathStatus.Changed, path, Details: $"{path} changed since it was checked");
         }
 
         try
         {
             // Unbuffered: every consumer (hashing, copying, downloads) reads in large blocks of its own.
-            return new ExternalOpenResult(ExternalPathStatus.Found, check.Path, new FileStream(handle, FileAccess.Read, bufferSize: 0), opened.Snapshot);
+            return new ExternalOpenResult(ExternalPathStatus.Found, path, new FileStream(handle, FileAccess.Read, bufferSize: 0), opened.Snapshot);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
             handle.Dispose();
-            return new ExternalOpenResult(ExternalPathStatus.Unreadable, check.Path, Details: $"{check.Path}: {ex.Message}");
+            return new ExternalOpenResult(ExternalPathStatus.Unreadable, path, Details: $"{path}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// <see cref="OpenRead"/> for a path whose spelling came from <see cref="ScanFolder"/>: the scan already ruled
+    /// out case variants, so the folders aren't listed again (which would make opening every file of a large folder
+    /// quadratic). Every other check is the same, and made on the handles opened here.
+    /// </summary>
+    /// <param name="relativePath">A <see cref="CheckedFile.RelativePath"/>.</param>
+    public static ExternalOpenResult OpenScanned(string root, string relativePath, FileShare share = FileShare.Read,
+        ExternalFileSnapshot? expected = null, ExternalOpenHooks? hooks = null)
+    {
+        var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        var components = relativePath.Split('/');
+        var path = Path.Combine([fullRoot, .. components]);
+        if (components.Any(c => c.Length == 0 || c is "." or ".." || c.Contains('\\') || c.Contains(Path.DirectorySeparatorChar)))
+            return new ExternalOpenResult(ExternalPathStatus.Unsafe, path, Details: $"'{relativePath}' is not a scanned relative path");
+        hooks?.AfterClassify?.Invoke();
+        return Finish(path, NativeCheckedOpen.OpenRead(fullRoot, components, share, hooks?.BeforeDirectoryOpen), expected);
+    }
+
+    /// <summary>
+    /// Lists every regular file at any depth under <paramref name="relativeFolder"/> without following a link:
+    /// a linked folder is reported and not entered, a linked or special file is reported and not opened. Names in
+    /// one folder that differ only in case are reported once and all skipped, since no rule could pick one. On
+    /// Linux a name containing a backslash is reported: it is one name there, never a path. A missing folder is an
+    /// empty scan.
+    /// </summary>
+    /// <param name="relativeFolder">Relative to <paramref name="root"/>, <c>/</c> separators, e.g. a system id.</param>
+    public static CheckedScan ScanFolder(string root, string relativeFolder)
+    {
+        var files = new List<CheckedFile>();
+        var problems = new List<CheckedScanProblem>();
+        var fullRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
+        var start = ClassifyDirectory(fullRoot, Path.Combine([fullRoot, .. relativeFolder.Split('/')]));
+        switch (start.Status)
+        {
+            case ExternalPathStatus.Found:
+                Scan(start.Path, string.Join('/', start.Path[(fullRoot.Length + 1)..].Split(Path.DirectorySeparatorChar)), files, problems);
+                break;
+            case ExternalPathStatus.Missing:
+                break;
+            default:
+                problems.Add(new CheckedScanProblem(relativeFolder, start.Status, start.Details!));
+                break;
+        }
+        return new CheckedScan(files, problems);
+    }
+
+    private static void Scan(string directory, string relative, List<CheckedFile> files, List<CheckedScanProblem> problems)
+    {
+        List<string> names;
+        try
+        {
+            names = Directory.EnumerateFileSystemEntries(directory).Select(e => Path.GetFileName(e)!).ToList();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return; // removed since it was listed
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            problems.Add(new CheckedScanProblem(relative, ExternalPathStatus.Unreadable, $"{directory} can't be listed: {ex.Message}"));
+            return;
+        }
+
+        // In a fixed order (by each name's first spelling), so a scan reports the same thing whatever the listing order.
+        foreach (var spellings in names.GroupBy(n => n, StringComparer.OrdinalIgnoreCase)
+                     .Select(g => g.Order(StringComparer.Ordinal).ToList()).OrderBy(s => s[0], StringComparer.Ordinal))
+        {
+            var name = spellings[0];
+            var childRelative = relative + "/" + name;
+            if (spellings.Count > 1)
+            {
+                problems.Add(new CheckedScanProblem(childRelative, ExternalPathStatus.Unsafe,
+                    $"names differing only in case in {directory}: {string.Join(", ", spellings)}"));
+                continue;
+            }
+            if (name.Contains('\\'))
+            {
+                problems.Add(new CheckedScanProblem(childRelative, ExternalPathStatus.Unsafe, $"'{name}' in {directory} contains a backslash"));
+                continue;
+            }
+
+            var full = Path.Combine(directory, name);
+            var stat = NativeFileStat.Read(full);
+            if (stat.Outcome == NativeStatOutcome.NotFound)
+                continue; // removed since it was listed
+            if (stat.Outcome == NativeStatOutcome.Failed)
+                problems.Add(new CheckedScanProblem(childRelative, ExternalPathStatus.Unreadable, $"{full}: {stat.Error}"));
+            else if (stat.IsLink)
+                problems.Add(new CheckedScanProblem(childRelative, ExternalPathStatus.Unsafe, $"{full} is a link or reparse point"));
+            else if (stat.IsDirectory)
+                Scan(full, childRelative, files, problems);
+            else if (stat.IsRegularFile)
+                files.Add(new CheckedFile(childRelative, full, stat.Snapshot!));
+            else
+                problems.Add(new CheckedScanProblem(childRelative, ExternalPathStatus.Unsafe, $"{full} is not a regular file", IsSpecialFile: true));
         }
     }
 

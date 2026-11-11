@@ -414,4 +414,194 @@ public class LibraryMirrorTests
 
         Assert.That(await _roms.ListExternalAsync(CancellationToken.None), Is.Empty);
     }
+
+    // --- checked traversal (G4) ---
+
+    /// <summary>A folder outside <c>roms/</c> holding one valid ZIP that no sync may ever read.</summary>
+    private async Task<(string Folder, InfoJsonGame Game)> OutsideAsync()
+    {
+        var folder = Path.Combine(Path.GetDirectoryName(_dir.Path)!, "rnrm-outside-" + Guid.NewGuid().ToString("N"));
+        var game = Game("Outside", Rom("Outside.gb", RomBytes(90)));
+        await WriteZipAsync(_reader, Path.Combine(folder, "Outside.zip"), game, 90);
+        _cleanup.Add(folder);
+        return (folder, game);
+    }
+
+    private readonly List<string> _cleanup = [];
+    private readonly List<string> _links = [];
+
+    [TearDown]
+    public void RemoveLinksAndOutsideFolders()
+    {
+        foreach (var link in _links.Where(Directory.Exists))
+            TestLinks.RemoveDirectoryLink(link);
+        foreach (var folder in _cleanup.Where(Directory.Exists))
+            Directory.Delete(folder, recursive: true);
+        _links.Clear();
+        _cleanup.Clear();
+    }
+
+    private void LinkDirectory(string relative, string target)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Abs(relative))!);
+        if (!TestLinks.TryLinkDirectory(Abs(relative), target))
+            Assert.Ignore("can't create a directory link here");
+        _links.Add(Abs(relative));
+    }
+
+    [Test]
+    public async Task Sync_LinkedSubtree_IsNeverTraversed_AndReported()
+    {
+        var tetris = await ZipAsync("gb/T/Tetris.zip", "Tetris", 1);
+        var (outside, hidden) = await OutsideAsync();
+        LinkDirectory("gb/L", outside);
+
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Changes, Is.EqualTo(new[] { new DbSyncChangeItem(DbSyncChange.Inserted, tetris.GameId, "gb/T/Tetris.zip") }));
+        Assert.That(result.Skipped.Select(s => (s.Reason, s.ZipPath)), Is.EqualTo(new[] { (DbSyncSkip.ZipUnreadable, "gb/L") }));
+        Assert.That(await _games.GetAsync(hidden.GameId, CancellationToken.None), Is.Null);
+    }
+
+    [Test]
+    public async Task Sync_LinkedSystemFolder_IsNeverTraversed()
+    {
+        var (outside, hidden) = await OutsideAsync();
+        LinkDirectory("gbc", outside);
+
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Changes, Is.Empty);
+        Assert.That(result.Skipped.Select(s => (s.Reason, s.ZipPath)), Is.EqualTo(new[] { (DbSyncSkip.ZipUnreadable, "gbc") }));
+        Assert.That(await _games.GetAsync(hidden.GameId, CancellationToken.None), Is.Null);
+    }
+
+    [Test]
+    public async Task Sync_LinkedZip_InAnEmbeddedFolder_IsNeverOpened()
+    {
+        var (outside, hidden) = await OutsideAsync();
+        Directory.CreateDirectory(Abs("gb/O"));
+        if (!TestLinks.TryLinkFile(Abs("gb/O/Outside.zip"), Path.Combine(outside, "Outside.zip")))
+            Assert.Ignore("can't create a file link here");
+
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Changes, Is.Empty);
+        Assert.That(result.Skipped.Select(s => (s.Reason, s.ZipPath)), Is.EqualTo(new[] { (DbSyncSkip.ZipUnreadable, "gb/O/Outside.zip") }));
+        Assert.That(await _games.GetAsync(hidden.GameId, CancellationToken.None), Is.Null);
+    }
+
+    [Test]
+    [Platform("Linux")]
+    public async Task Sync_SpecialFileNamedZip_IsNeverOpened_AndOtherSpecialFilesAreIgnored()
+    {
+        var tetris = await ZipAsync("gb/T/Tetris.zip", "Tetris", 1);
+        Assert.That(TestLinks.TryCreateFifo(Abs("gb/T/Pipe.zip")) && TestLinks.TryCreateFifo(Abs("gb/T/pipe.txt")), Is.True);
+
+        // Opening the FIFO would block the sync forever.
+        var result = await _sync.SyncAllAsync(new CancellationTokenSource(TimeSpan.FromSeconds(30)).Token);
+
+        Assert.That(result.Changes.Select(c => c.GameId), Is.EqualTo(new[] { tetris.GameId }));
+        Assert.That(result.Skipped.Select(s => (s.Reason, s.ZipPath)), Is.EqualTo(new[] { (DbSyncSkip.ZipUnreadable, "gb/T/Pipe.zip") }));
+    }
+
+    [Test]
+    public async Task Sync_SafeExternalZip_InAnotherRegisteredFolder_IsMirrored()
+    {
+        var game = ExternalGame(("Orbit Test [v0].nsp", "Orbit Test.Orbit Test [v0].nsp", 1));
+        Directory.CreateDirectory(Abs("gb/O"));
+        using (var archive = System.IO.Compression.ZipFile.Open(Abs("gb/O/Orbit Test.zip"), System.IO.Compression.ZipArchiveMode.Create))
+        {
+            using var entry = archive.CreateEntry(LibraryZip.InfoJsonEntry).Open();
+            entry.Write(InfoJsonSerializer.Serialize(game));
+        }
+
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Changes, Is.EqualTo(new[] { new DbSyncChangeItem(DbSyncChange.Inserted, game.GameId, "gb/O/Orbit Test.zip") }));
+        var row = (await _games.GetAsync(game.GameId, CancellationToken.None))!;
+        Assert.That((row.SystemId, row.ZipPath), Is.EqualTo(("ext", "gb/O/Orbit Test.zip")));
+        Assert.That((await _roms.ListByGameAsync(game.GameId, CancellationToken.None)).Single().ExternalFileName, Is.EqualTo("Orbit Test.Orbit Test [v0].nsp"));
+    }
+
+    [Test]
+    public async Task Sync_KnownZipsBehindAFolderThatBecameALink_KeepTheirRows_WhileAnAbsentZipIsStillPruned()
+    {
+        var legend = await ZipAsync("gb/L/Legend.zip", "Legend", 1);
+        var lemmings = await ZipAsync("gb/L/deeper/Lemmings.zip", "Lemmings", 2);
+        var tetris = await ZipAsync("gb/T/Tetris.zip", "Tetris", 3);
+        await _sync.SyncAllAsync(CancellationToken.None);
+        var (outside, _) = await OutsideAsync();
+        Directory.Move(Abs("gb/L"), Path.Combine(outside, "moved-away"));
+        LinkDirectory("gb/L", outside);
+        File.Delete(Abs("gb/T/Tetris.zip"));
+
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Changes, Is.EqualTo(new[] { new DbSyncChangeItem(DbSyncChange.Deleted, tetris.GameId, "gb/T/Tetris.zip") }));
+        Assert.That(result.Skipped.Select(s => (s.Reason, s.ZipPath)), Is.EquivalentTo(new[]
+        {
+            (DbSyncSkip.ZipUnreadable, "gb/L/Legend.zip"), (DbSyncSkip.ZipUnreadable, "gb/L/deeper/Lemmings.zip"),
+        }));
+        Assert.That(await _games.GetAsync(legend.GameId, CancellationToken.None), Is.Not.Null);
+        Assert.That(await _games.GetAsync(lemmings.GameId, CancellationToken.None), Is.Not.Null);
+        Assert.That(await _games.GetAsync(tetris.GameId, CancellationToken.None), Is.Null);
+    }
+
+    [Test]
+    public async Task Sync_KnownZipReplacedByALink_KeepsItsRow()
+    {
+        var tetris = await ZipAsync("gb/T/Tetris.zip", "Tetris", 1);
+        await _sync.SyncAllAsync(CancellationToken.None);
+        var (outside, _) = await OutsideAsync();
+        File.Delete(Abs("gb/T/Tetris.zip"));
+        if (!TestLinks.TryLinkFile(Abs("gb/T/Tetris.zip"), Path.Combine(outside, "Outside.zip")))
+            Assert.Ignore("can't create a file link here");
+
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Changes, Is.Empty);
+        Assert.That(result.Skipped.Select(s => (s.Reason, s.ZipPath)), Is.EqualTo(new[] { (DbSyncSkip.ZipUnreadable, "gb/T/Tetris.zip") }));
+        Assert.That((await _games.GetAsync(tetris.GameId, CancellationToken.None))!.Title, Is.EqualTo("Tetris"));
+    }
+
+    [Test]
+    public async Task Sync_CaseVariantsOfAKnownZip_KeepItsRow_AndNeitherIsRead()
+    {
+        var tetris = await ZipAsync("gb/T/Tetris.zip", "Tetris", 1);
+        await _sync.SyncAllAsync(CancellationToken.None);
+        var other = await ZipAsync("gb/T/tetris.zip", "Other", 2);
+        if (Directory.GetFiles(Abs("gb/T")).Length != 2)
+            Assert.Ignore("This volume is case-insensitive: it can't hold both names.");
+        // Changed since the last sync, so only the ambiguity keeps it from being re-read.
+        await WriteZipAsync(_reader, Abs("gb/T/Tetris.zip"), tetris with { Title = "Changed" }, 1);
+
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Changes, Is.Empty);
+        var skip = result.Skipped.Single();
+        Assert.That((skip.Reason, skip.ZipPath), Is.EqualTo((DbSyncSkip.ZipUnreadable, "gb/T/Tetris.zip")));
+        Assert.That(skip.Details, Does.Contain("Tetris.zip, tetris.zip"));
+        Assert.That((await _games.GetAsync(tetris.GameId, CancellationToken.None))!.Title, Is.EqualTo("Tetris"));
+        Assert.That(await _games.GetAsync(other.GameId, CancellationToken.None), Is.Null);
+    }
+
+    [Test]
+    [Platform("Linux")]
+    public async Task Sync_BackslashInAZipName_IsNeverResolvedAsASeparator()
+    {
+        var known = await ZipAsync("gb/T/sub/Tetris.zip", "Tetris", 1);
+        await _sync.SyncAllAsync(CancellationToken.None);
+        File.Delete(Abs("gb/T/sub/Tetris.zip"));
+        // One file named "sub\Tetris.zip" in gb/T: not the known ZIP's path.
+        File.Copy(Abs("gb/T/sub/Other.zip", await ZipAsync("gb/T/sub/Other.zip", "Other", 2)), Path.Combine(Abs("gb/T"), "sub\\Tetris.zip"));
+        File.Delete(Abs("gb/T/sub/Other.zip"));
+
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Changes, Is.EqualTo(new[] { new DbSyncChangeItem(DbSyncChange.Deleted, known.GameId, "gb/T/sub/Tetris.zip") }));
+        Assert.That(result.Skipped.Select(s => (s.Reason, s.ZipPath)), Is.EqualTo(new[] { (DbSyncSkip.ZipUnreadable, "gb/T/sub\\Tetris.zip") }));
+    }
+
+    private string Abs(string relative, InfoJsonGame _) => Abs(relative);
 }
