@@ -78,9 +78,10 @@ public partial class IngestExternalPlacementTests
         return new IngestFile(ExternalTestHandler.SystemId, path, name, info.Length, info.LastWriteTimeUtc);
     }
 
-    private IngestPipeline Pipeline(ExternalIngestHooks? hooks = null, ILibraryMirror? mirror = null, IAuditLog? audit = null)
+    private IngestPipeline Pipeline(ExternalIngestHooks? hooks = null, ILibraryMirror? mirror = null, IAuditLog? audit = null,
+        IIngestReviewRepository? reviews = null)
     {
-        object[] overrides = [.. new object?[] { mirror, audit }.OfType<object>()];
+        object[] overrides = [.. new object?[] { mirror, audit, reviews }.OfType<object>()];
         var pipeline = overrides.Length == 0 ? Service<IngestPipeline>() : ActivatorUtilities.CreateInstance<IngestPipeline>(_factory.Services, overrides);
         pipeline.ExternalHooks = hooks;
         return pipeline;

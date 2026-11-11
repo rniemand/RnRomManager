@@ -15,22 +15,24 @@ namespace RnRomManager.Api.Tests.Integration;
 /// <summary>Spec T9: a retry of an archived Review item whose release is already in the library.</summary>
 public partial class IngestExternalPlacementTests
 {
-    /// <summary>A review repository whose first <c>SetResolutionAsync</c> fails, as a DB outage after the ZIP write would.</summary>
+    /// <summary>A review repository whose first call of one method fails, as a DB outage at that moment would.</summary>
     public class FailFirstResolution : DispatchProxy
     {
         public IIngestReviewRepository Inner { get; set; } = null!;
+        public string Method { get; set; } = nameof(IIngestReviewRepository.SetResolutionAsync);
         private bool _failed;
 
-        public static IIngestReviewRepository Wrap(IIngestReviewRepository inner)
+        public static IIngestReviewRepository Wrap(IIngestReviewRepository inner, string method = nameof(IIngestReviewRepository.SetResolutionAsync))
         {
             var proxy = Create<IIngestReviewRepository, FailFirstResolution>();
             ((FailFirstResolution)(object)proxy).Inner = inner;
+            ((FailFirstResolution)(object)proxy).Method = method;
             return proxy;
         }
 
         protected override object? Invoke(MethodInfo? method, object?[]? args)
         {
-            if (method!.Name == nameof(IIngestReviewRepository.SetResolutionAsync) && !_failed)
+            if (method!.Name == Method && !_failed)
             {
                 _failed = true;
                 return Task.FromException(new InvalidOperationException("db down"));
@@ -83,6 +85,59 @@ public partial class IngestExternalPlacementTests
             new { rows[1].Id, rows[0].Path, rows[0].Size, rows[0].Time });
         await db.ExecuteAsync("UPDATE games SET zip_path = @Path, zip_size_bytes = @Size, zip_mtime_utc = @Time WHERE id = @Id",
             new { rows[0].Id, rows[1].Path, rows[1].Size, rows[1].Time });
+    }
+
+    /// <summary>
+    /// Resolves a loose item whose ZIP write fails after a replacement took its ingest name: the verified bytes go
+    /// back as <c>mystery (2).xci</c> (I4).
+    /// </summary>
+    private async Task<(long Id, string Original, string Restored, ReviewResolutionResult Result)> RestoredToASuffixAsync(IIngestReviewRepository? reviews = null)
+    {
+        var (id, file) = await QueueAsync("mystery.xci");
+        var hooks = new ExternalIngestHooks { Writer = FailVerify(() => File.WriteAllText(file.FullPath, "replacement"), MysteryZip) };
+        var result = await ResolverWith(Pipeline(hooks, reviews: reviews)).ResolveAsync(id, ManualMystery, await AdminAsync(), default);
+        var restored = Path.Combine(Ingest, "mystery (2).xci");
+        Assert.That(File.ReadAllText(file.FullPath), Is.EqualTo("replacement"), "the replacement is preserved");
+        Assert.That(File.ReadAllBytes(restored), Is.EqualTo(Mystery), "the verified bytes are back under a suffix");
+        return (id, file.FullPath, restored, result);
+    }
+
+    [Test]
+    public async Task RestoredToASuffix_ThePendingRowFollows_AndResolvesTheRecoveredBytes()
+    {
+        var (id, _, restored, result) = await RestoredToASuffixAsync();
+
+        Assert.That(result.Code, Is.EqualTo(IngestErrors.VerifyFailed));
+        var item = (await Reviews.GetAsync(id, default))!;
+        Assert.That((item.Status, item.SourcePath, item.OriginalFileName), Is.EqualTo(("Pending", restored, "mystery.xci")));
+
+        var retry = await Resolver().ResolveAsync(id, ManualMystery, await AdminAsync(), default);
+
+        Assert.That(retry.Code, Is.Null);
+        Assert.That(File.ReadAllBytes(MysterySidecar(".xci")), Is.EqualTo(Mystery));
+        Assert.That(File.Exists(restored), Is.False);
+    }
+
+    [Test]
+    public async Task RestoredToASuffix_AutomaticIngestDoesNotCallItAPendingDuplicate()
+    {
+        var (_, _, restored, _) = await RestoredToASuffixAsync();
+        var info = new FileInfo(restored);
+
+        var result = await IngestAsync(Pipeline(), new IngestFile(ExternalTestHandler.SystemId, restored, info.Name, info.Length, info.LastWriteTimeUtc));
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Review, (string?)"NoDatMatch")));
+        Assert.That(File.Exists(restored), Is.True, "not moved to _duplicates/");
+    }
+
+    [Test]
+    public async Task RestoredToASuffix_RetargetFailure_ReportsBothPaths_AndLeavesBothFiles()
+    {
+        var (id, original, restored, result) = await RestoredToASuffixAsync(
+            FailFirstResolution.Wrap(Reviews, nameof(IIngestReviewRepository.RetargetPendingAsync)));
+
+        Assert.That(result.Code, Is.EqualTo(IngestErrors.DbWriteFailed));
+        Assert.That((await Reviews.GetAsync(id, default))!.SourcePath, Is.EqualTo(original), "the row still names the original path");
     }
 
     private async Task<HashSet<string>> RowIdsAsync()

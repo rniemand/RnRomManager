@@ -49,6 +49,12 @@ public interface IIngestReviewRepository
     /// loose file at <paramref name="sourcePath"/>. Resolved and dismissed rows stay as history (D2).
     /// </summary>
     /// <returns>The number of rows deleted.</returns>
+    /// <summary>
+    /// I4: the Pending loose-file row of <paramref name="originalPath"/> with this SHA1 now names
+    /// <paramref name="restoredPath"/>, where a failed placement put its verified bytes back.
+    /// </summary>
+    Task RetargetPendingAsync(string originalPath, string sha1, string restoredPath, CancellationToken cancellationToken);
+
     Task<int> DeletePendingBySourceAsync(string sourcePath, string? archivePath, CancellationToken cancellationToken);
 }
 

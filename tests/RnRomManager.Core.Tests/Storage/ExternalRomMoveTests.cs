@@ -414,6 +414,31 @@ public class ExternalRomMoveTests
     }
 
     [Test]
+    public void RollbackPath_AtTheColumnLimit_WithItsNameTaken_GetsAShorterClashName()
+    {
+        // Real folders (each name within the component limit) so the original can be occupied.
+        var folder = _root;
+        while (folder.Length < 900)
+            folder = Path.Combine(folder, new string('d', Math.Min(200, 900 - folder.Length)));
+        var original = Path.Combine(folder, new string('n', 1024 - folder.Length - 1 - 4) + ".nsp"); // exactly 1,024 scalars
+        try
+        {
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(original, "a replacement took the name");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Assert.Ignore($"this filesystem can't hold a 1,024-character path: {ex.Message}");
+        }
+
+        var path = ExternalRomName.AllocateRollbackPath(original, fitSourcePathColumn: true)!;
+
+        Assert.That(Path.GetFileName(path), Does.EndWith(" (2).nsp"));
+        Assert.That(Path.GetDirectoryName(path), Is.EqualTo(folder));
+        Assert.That(path.EnumerateRunes().Count(), Is.LessThanOrEqualTo(ExternalRomName.MaxSourcePathScalars));
+    }
+
+    [Test]
     public void RollbackPath_FitsThe1024ScalarSourcePath_OrIsNullWhenNothingFits()
     {
         var folder = Path.Combine(_root, new string('d', 1000 - _root.Length - 1)); // 1,000 scalars

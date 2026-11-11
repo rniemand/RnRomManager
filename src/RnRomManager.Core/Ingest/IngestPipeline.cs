@@ -842,7 +842,7 @@ public sealed class IngestPipeline(
         catch (Exception ex) when (placement is not null || ex is LibraryZipVerifyException or IOException or UnauthorizedAccessException)
         {
             // I4: any failure of the write puts an external ROM's file back before it is reported.
-            var survivor = placement is null ? null : RollBack(file, placement, moved!, repair);
+            var (survivor, restoredAs) = placement is null ? (null, null) : RollBack(file, placement, moved!, repair);
             var reason = ex switch
             {
                 LibraryZipVerifyException => IngestErrors.VerifyFailed,
@@ -850,6 +850,8 @@ public sealed class IngestPipeline(
                 _ => null,
             };
             logger.LogError(ex, "{Path}: writing {Zip} failed", file.FullPath, zipPath);
+            if (restoredAs is not null && await RetargetPendingAsync(placement!.Source.Path, restoredAs, result, ex.Message).ConfigureAwait(false) is { } retargetFailed)
+                return retargetFailed;
             if (reason is null)
                 throw;
             return result with { Outcome = IngestOutcome.Error, Reason = reason, Details = survivor is null ? ex.Message : $"{ex.Message}; {survivor}" };
@@ -914,6 +916,31 @@ public sealed class IngestPipeline(
     }
 
     /// <summary>
+    /// I4: verified loose bytes went back under another ingest name, so a Pending row of the original path and SHA1
+    /// follows them; its original file name and queued identification are kept. This runs to the end whatever the
+    /// caller's token says, under the lock the caller already holds.
+    /// </summary>
+    /// <returns>A <c>DbWriteFailed</c> result when the row couldn't be moved; null when it was (or there was none).</returns>
+    private async Task<IngestItemResult?> RetargetPendingAsync(string original, string restoredAs, IngestItemResult result, string writeFailure)
+    {
+        try
+        {
+            await reviews.RetargetPendingAsync(original, result.Sha1!, restoredAs, CancellationToken.None).ConfigureAwait(false);
+            return null;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "{Original}: the ZIP write failed ({WriteFailure}) and the file went back as {Restored}, but its Pending row still names " +
+                "the original path. Once that path is free, move {Restored} back to {Original}.", original, writeFailure, restoredAs, restoredAs, original);
+            return result with
+            {
+                Outcome = IngestOutcome.Error, Reason = IngestErrors.DbWriteFailed,
+                Details = $"{writeFailure}; moved back as {restoredAs}, but the Pending row still names {original}: {ex.Message}",
+            };
+        }
+    }
+
+    /// <summary>
     /// I4: moves an external ROM's file to its name next to <paramref name="target"/>. The source must still be the
     /// file that was hashed; one that changed since is <c>Skipped</c> <c>TooRecent</c> and stays where it is.
     /// </summary>
@@ -967,21 +994,25 @@ public sealed class IngestPipeline(
     /// pointer, for a repair). A repair's original file then goes back to its own name, once the pointer is free.
     /// </summary>
     /// <returns>Where the bytes are, for the item's details; null when everything is back exactly where it was.</returns>
-    private string? RollBack(IngestFile file, ExternalPlacement placement, ExternalMoveResult moved, RepairPlan? repair)
+    /// <returns>
+    /// Where the bytes are, for the item's details (null when everything is back exactly where it was), and the
+    /// ingest path a loose source was fully restored under when its own name was taken.
+    /// </returns>
+    private (string? Note, string? RestoredAs) RollBack(IngestFile file, ExternalPlacement placement, ExternalMoveResult moved, RepairPlan? repair)
     {
-        var (note, pointerFree) = RemoveIncoming(file, placement, moved, repair);
+        var (note, pointerFree, restoredAs) = RemoveIncoming(file, placement, moved, repair);
         if (repair?.ExistingPath is null)
-            return note;
+            return (note, restoredAs);
         if (!pointerFree)
         {
             logger.LogError("{Original}: kept at {Backup}, since the incoming copy still holds its name", repair.ExistingPath, repair.BackupPath);
-            return Join(note, $"the original file was kept at {repair.BackupPath}");
+            return (Join(note, $"the original file was kept at {repair.BackupPath}"), restoredAs);
         }
-        return Join(note, RestoreOriginal(repair));
+        return (Join(note, RestoreOriginal(repair)), restoredAs);
     }
 
     /// <returns>A note for the details, and whether the placed copy is gone from its library name.</returns>
-    private (string? Note, bool PointerFree) RemoveIncoming(IngestFile file, ExternalPlacement placement, ExternalMoveResult moved, RepairPlan? repair)
+    private (string? Note, bool PointerFree, string? RestoredAs) RemoveIncoming(IngestFile file, ExternalPlacement placement, ExternalMoveResult moved, RepairPlan? repair)
     {
         var library = paths.Value.Roms;
         var placed = moved.Path!;
@@ -993,7 +1024,7 @@ public sealed class IngestPipeline(
                 if (repair is null)
                 {
                     logger.LogError("{Archive} › {Entry}: the archive changed, so the verified copy is kept at {Orphan}", file.ArchivePath, file.ArchiveEntry, placed);
-                    return ($"the archive changed, so the verified copy was kept at {placed}", false);
+                    return ($"the archive changed, so the verified copy was kept at {placed}", false, null);
                 }
                 // I5: the pointer belongs to the original file, so the verified copy steps aside to an unlisted name.
                 var aside = ExternalRomMove.Move(library, placed, library, repair.OrphanPath, moved.Snapshot!, logger, hooks: ExternalHooks?.Recovery);
@@ -1002,25 +1033,25 @@ public sealed class IngestPipeline(
                     var at = aside.SurvivingPath ?? placed;
                     logger.LogError("{Archive} › {Entry}: the archive changed and the verified copy couldn't be set aside ({Details}); it is at {At}",
                         file.ArchivePath, file.ArchiveEntry, aside.Details, at);
-                    return ($"the archive changed and setting the verified copy aside failed ({aside.Details}); it is at {at}", false);
+                    return ($"the archive changed and setting the verified copy aside failed ({aside.Details}); it is at {at}", false, null);
                 }
                 logger.LogError("{Archive} › {Entry}: the archive changed, so the verified copy is kept at {Orphan}", file.ArchivePath, file.ArchiveEntry, repair.OrphanPath);
-                return ($"the archive changed, so the verified copy was kept at {repair.OrphanPath}", true);
+                return ($"the archive changed, so the verified copy was kept at {repair.OrphanPath}", true, null);
             }
             if (ExternalRomPath.ClassifyFile(library, placed).Snapshot != moved.Snapshot)
             {
                 logger.LogError("{Orphan} is no longer the copy that was placed; it was left as it is", placed);
-                return ($"{placed} is no longer the copy that was placed; it was left as it is", false);
+                return ($"{placed} is no longer the copy that was placed; it was left as it is", false, null);
             }
             try
             {
                 File.Delete(placed);
-                return (null, true);
+                return (null, true, null);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 logger.LogError("{Orphan}: the copy couldn't be removed: {Error}", placed, ex.Message);
-                return ($"the copy at {placed} couldn't be removed", false);
+                return ($"the copy at {placed} couldn't be removed", false, null);
             }
         }
 
@@ -1029,24 +1060,24 @@ public sealed class IngestPipeline(
         if (back is null)
         {
             logger.LogError("{Path}: no free name to move it back to; the complete copy is at {Placed}", original, placed);
-            return ($"no free name to move it back to; the complete copy is at {placed}", false);
+            return ($"no free name to move it back to; the complete copy is at {placed}", false, null);
         }
         var restored = ExternalRomMove.Move(library, placed, placement.Source.Root, back, moved.Snapshot!, logger);
         switch (restored.Status)
         {
             case ExternalMoveStatus.Moved when back == original:
-                return (null, true);
+                return (null, true, null);
             case ExternalMoveStatus.Moved:
                 logger.LogWarning("{Path}: its name was taken, so it was moved back as {Restored}", original, back);
-                return ($"moved back as {back}", true);
+                return ($"moved back as {back}", true, back);
             case ExternalMoveStatus.SourceChanged:
                 logger.LogError("{Placed} was replaced before it could be moved back; it was left as it is", placed);
-                return ($"{placed} was replaced before it could be moved back; it was left as it is", false);
+                return ($"{placed} was replaced before it could be moved back; it was left as it is", false, null);
             default:
                 // Never name a path as the copy unless the move vouches for it.
                 var where = restored.SurvivingPath is { } survivor ? $"the complete copy is at {survivor}" : "the owned copy could not be found";
                 logger.LogError("{Path}: moving it back failed ({Details}); {Where}", original, restored.Details, where);
-                return ($"moving it back failed ({restored.Details}); {where}", false);
+                return ($"moving it back failed ({restored.Details}); {where}", false, null);
         }
     }
 

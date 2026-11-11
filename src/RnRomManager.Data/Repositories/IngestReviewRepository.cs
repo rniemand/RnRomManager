@@ -103,6 +103,15 @@ public sealed class IngestReviewRepository(IDbConnectionFactory connections) : I
             cancellationToken: cancellationToken))).AsList();
     }
 
+    public async Task RetargetPendingAsync(string originalPath, string sha1, string restoredPath, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE ingest_review_items SET source_path = @restoredPath
+            WHERE status = 'Pending' AND archive_path IS NULL AND source_path = @originalPath AND sha1 = @sha1
+            """, new { originalPath, sha1, restoredPath }, cancellationToken: cancellationToken));
+    }
+
     public async Task DeleteAsync(IReadOnlyCollection<long> ids, CancellationToken cancellationToken)
     {
         if (ids.Count == 0)

@@ -28,6 +28,21 @@ public class IngestReviewRepositoryTests
     };
 
     [Test]
+    public async Task RetargetPending_MovesOnlyTheLooseRowOfThatPathAndSha1()
+    {
+        var loose = Item('a', "game.nsp") with { SourcePath = "/ingest/ext/game.nsp", ArchivePath = null, ArchiveEntry = null };
+        var other = Item('b', "other.nsp") with { SourcePath = "/ingest/ext/game.nsp", ArchivePath = null, ArchiveEntry = null };
+        await _reviews.UpsertAsync(loose, default);
+        await _reviews.UpsertAsync(other, default);
+
+        await _reviews.RetargetPendingAsync("/ingest/ext/game.nsp", loose.Sha1, "/ingest/ext/game (2).nsp", default);
+
+        var moved = (await _reviews.GetBySha1Async(loose.Sha1, default))!;
+        Assert.That((moved.SourcePath, moved.OriginalFileName, moved.DatIdentification), Is.EqualTo(("/ingest/ext/game (2).nsp", "game.nsp", loose.DatIdentification)));
+        Assert.That((await _reviews.GetBySha1Async(other.Sha1, default))!.SourcePath, Is.EqualTo("/ingest/ext/game.nsp"), "another SHA1 stays");
+    }
+
+    [Test]
     public async Task RequeueReplacesIdentityAndPaths_PreservesCreatedAtAndId()
     {
         var item = Item('a', "old.gb");
