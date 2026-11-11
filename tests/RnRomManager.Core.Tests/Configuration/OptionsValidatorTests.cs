@@ -69,6 +69,18 @@ public class OptionsValidatorTests
     public void DatBaseUrl_IsAbsoluteHttpUrl(string value, bool valid) =>
         Assert.That(new SourcesOptionsValidator().Validate(null, new() { DatBaseUrl = value }).Succeeded, Is.EqualTo(valid));
 
+    [TestCase("https://raw.githubusercontent.com/blawar/titledb/master/US.en.json", true)]
+    [TestCase("http://localhost:9000/US.en.json", true)]
+    [TestCase("", false)]
+    [TestCase("ftp://example.com/US.en.json", false)]
+    [TestCase("/relative/US.en.json", false)]
+    public void TitleDbUrl_IsAbsoluteHttpUrl(string value, bool valid) =>
+        Assert.That(new SourcesOptionsValidator().Validate(null, new() { TitleDbUrl = value }).Succeeded, Is.EqualTo(valid));
+
+    [Test]
+    public void TitleDbUrl_DefaultsToRawUsEnglish() =>
+        Assert.That(new SourcesOptions().TitleDbUrl, Is.EqualTo("https://raw.githubusercontent.com/blawar/titledb/master/US.en.json"));
+
     [TestCase("https://thumbnails.libretro.com", true)]
     [TestCase("", true)]
     [TestCase("file:///c:/x", false)]

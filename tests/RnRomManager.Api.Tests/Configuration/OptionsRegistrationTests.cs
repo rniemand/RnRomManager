@@ -49,6 +49,8 @@ public class OptionsRegistrationTests
     [TestCase("Logging:MinLevel", "Verbose")]
     [TestCase("Logging:RetentionDays", "0")]
     [TestCase("Sources:DatBaseUrl", "ftp://x")]
+    [TestCase("Sources:TitleDbUrl", "")]
+    [TestCase("Sources:TitleDbUrl", "ftp://x")]
     [TestCase("Sources:ThumbnailBaseUrl", "nope")]
     public void InvalidSetting_FailsStartupValidationNamingTheKey(string key, string value)
     {
