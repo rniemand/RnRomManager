@@ -1200,6 +1200,10 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     {
         if (rom.Identification.DatGameName is not { } name || dats.For(systemId) is not { } store)
             return DatMetadata.Empty;
+        // T7: a titledb release finds its base entry by the id its datGameName ends with.
+        if (systems.ById(systemId) is { DatSource: DatSource.TitleDb })
+            return TitleDb.TitleIdOfGameName(name) is { } titleId && store.ByTitleId(titleId) is { } baseEntry
+                ? TitleDb.MetadataOf(baseEntry) : DatMetadata.Empty;
         var entry = rom.Identification.Method == IdentificationMethod.Dat
             ? store.BySha1(rom.Metadata.Sha1)
             : store.Roms.FirstOrDefault(r => r.GameName == name);

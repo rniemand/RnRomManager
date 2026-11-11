@@ -258,11 +258,15 @@ public sealed class IngestPipeline(
 
         // Step 4: header from every handler of the family; the DAT match decides the system (D23).
         var headers = candidates.ToDictionary(h => h.Id, h => h.ReadHeader(headerBytes));
+        // T4: a TitleDb system matches by title id (header, else file name); the others by SHA1.
         var match = candidates
             .Select(h => (Handler: h, Store: dats.For(h.Id)))
-            .Select(x => (x.Handler, x.Store, Rom: x.Store?.BySha1(hashes.Sha1)))
-            .FirstOrDefault(x => x.Rom is not null);
-        if (match.Rom is null)
+            .Select(x => (x.Handler, x.Store, Rom: x.Store?.BySha1(hashes.Sha1),
+                Title: x.Handler.DatSource == DatSource.TitleDb && x.Store is { } titles
+                    && TitleDb.TitleIdFrom(headers[x.Handler.Id]?.Fields, file.Name) is { } titleId
+                    ? TitleDb.Match(titleId, file.Name, titles.ByTitleId) : null))
+            .FirstOrDefault(x => x.Rom is not null || x.Title is not null);
+        if (match.Rom is null && match.Title is null)
         {
             // Step 5. Every ReadHeader null (headerless system) counts as plausible.
             var found = headers.Values.FirstOrDefault(h => h is not null);
@@ -277,48 +281,69 @@ public sealed class IngestPipeline(
             return await QueueReviewAsync(file, originalName, classified.Id, "NoDatMatch", hashes, size, found, jobId,
                 SuggestionEngine.Find(dats.For(classified.Id), found?.Title, originalName, size), null, null, cancellationToken).ConfigureAwait(false);
         }
-        var (system, store, datRom) = (match.Handler, match.Store!, match.Rom);
+        var (system, store) = (match.Handler, match.Store!);
         if (system.Id != file.SystemId)
             logger.LogInformation("{Path}: dropped in ingest/{Folder} but it's a {System} ROM; stored under roms/{System}", file.FullPath, file.SystemId, system.Id, system.Id);
 
-        // I3: an external release keeps its source's extension (lower-cased) on the DAT stem, as a portable logical name.
-        var romName = external
-            ? ExternalRomName.AllocateLogicalName(Path.GetFileNameWithoutExtension(datRom.RomName) + Path.GetExtension(file.Name).ToLowerInvariant(),
-                new ExternalNameReservations([]))
-            : datRom.RomName;
+        var release = match.Title is { } title
+            ? new Release(title.RomFileName, title.BaseTitle, title.GameName, [], title.Languages, title.Revision, title.Flags,
+                IdentificationMethod.TitleDb, TitleDb.MetadataOf(title.Base), title.TitleId)
+            : LibretroRelease(match.Rom!, store, file, external);
+        // I3/E3: an external release's name is a portable logical name within budget.
+        var romName = external ? ExternalRomName.AllocateLogicalName(release.FileName, new ExternalNameReservations([])) : release.FileName;
 
         // Step 6: group by system + base title.
-        var baseTitle = NoIntroName.Parse(datRom.GameName).BaseTitle;
+        var baseTitle = release.BaseTitle;
         var owners = await roms.ListGameIdsByBaseTitleAsync(system.Id, baseTitle, cancellationToken).ConfigureAwait(false);
         if (owners.Count > 1)
         {
+            // T4: a TitleDb row also keeps the whole identity, so Attach doesn't depend on the DAT loaded later.
+            object queued = release.TitleId is null
+                ? new { datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName }
+                : new
+                {
+                    datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName, titleId = release.TitleId,
+                    baseTitle, regions = release.Regions, languages = release.Languages, revision = release.Revision, flags = release.Flags,
+                };
             return await QueueReviewAsync(file, file.Name, system.Id, "AmbiguousGroup", hashes, size, headers[system.Id], jobId,
-                [], new { datName = store.DatName, datVersion = store.Version, datGameName = datRom.GameName, romName },
-                owners, cancellationToken).ConfigureAwait(false);
+                [], queued, owners, cancellationToken).ConfigureAwait(false);
         }
 
         var now = time.GetUtcNow();
-        var tags = NoIntroName.Parse(Path.GetFileNameWithoutExtension(datRom.RomName));
         var rom = new InfoJsonRom
         {
             FileName = romName,
             OriginalFileName = file.Name,
             BaseTitle = baseTitle,
-            Regions = tags.Regions,
-            Languages = tags.Languages,
-            Revision = tags.Revision,
-            Flags = tags.Flags,
+            Regions = release.Regions,
+            Languages = release.Languages,
+            Revision = release.Revision,
+            Flags = release.Flags,
             IsPrimary = false,
-            Identification = new InfoJsonIdentification(IdentificationMethod.Dat, store.DatName, store.Version, datRom.GameName),
+            Identification = new InfoJsonIdentification(release.Method, store.DatName, store.Version, release.GameName),
             Header = headers[system.Id] is { } header ? JsonSerializer.SerializeToNode(header.Fields) as JsonObject : null,
             Metadata = new InfoJsonRomMetadata(size, hashes.Crc32, hashes.Md5, hashes.Sha1, now, now, file.SourcePath),
         };
-        var metadata = store.MetadataFor(datRom.Crc32);
+        var metadata = release.Metadata;
         var result = new IngestItemResult(IngestOutcome.Ingested, SystemId: system.Id, Sha1: hashes.Sha1);
 
         return owners.Count == 0
             ? await NewGameAsync(file, system, rom, metadata, bytes, breaker, result, now, actor, null, cancellationToken, source: source).ConfigureAwait(false)
             : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes, breaker, result, now, actor, null, cancellationToken, source: source).ConfigureAwait(false);
+    }
+
+    /// <summary>What a DAT match names a release: from a libretro DAT entry (by SHA1) or a titledb entry (T4/T5, by title id).</summary>
+    /// <param name="FileName">Before E3 budgeting for an external system.</param>
+    private sealed record Release(string FileName, string BaseTitle, string GameName, IReadOnlyList<string> Regions, IReadOnlyList<string> Languages,
+        string? Revision, IReadOnlyList<string> Flags, IdentificationMethod Method, DatMetadata Metadata, string? TitleId);
+
+    /// <summary>I3: an external release keeps its source's extension (lower-cased) on the DAT stem.</summary>
+    private static Release LibretroRelease(DatRom datRom, DatStore store, IngestFile file, bool external)
+    {
+        var tags = NoIntroName.Parse(Path.GetFileNameWithoutExtension(datRom.RomName));
+        var fileName = external ? Path.GetFileNameWithoutExtension(datRom.RomName) + Path.GetExtension(file.Name).ToLowerInvariant() : datRom.RomName;
+        return new Release(fileName, NoIntroName.Parse(datRom.GameName).BaseTitle, datRom.GameName, tags.Regions, tags.Languages, tags.Revision,
+            tags.Flags, IdentificationMethod.Dat, store.MetadataFor(datRom.Crc32), null);
     }
 
     /// <summary>Shared steps 6–11 for synchronous review resolution; Attach supplies a target and skips grouping.</summary>

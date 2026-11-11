@@ -156,6 +156,14 @@ public static partial class TitleDb
         (TitleKind, TitleDbRow?, string) Dlc(TitleDbRow? own) => (TitleKind.Dlc, own, own?.Name ?? baseEntry.Name + " (DLC)");
     }
 
+    /// <summary>T7: a new game's metadata from the base entry (developers only when titledb has one).</summary>
+    public static DatMetadata MetadataOf(TitleDbRow entry) => new(entry.ReleaseYear,
+        entry.Developer is null ? [] : [entry.Developer], entry.Publisher is null ? [] : [entry.Publisher], entry.Genres);
+
+    /// <summary>The title id a T3 <c>GameName</c> ends with (<c>… [0100…]</c>); null when it has none.</summary>
+    public static string? TitleIdOfGameName(string gameName) =>
+        GameNameTitleId().Match(gameName) is { Success: true } match ? match.Groups[1].Value : null;
+
     private static string Hex(ulong id) => id.ToString("X16", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>T2: a name the library can use: its title sanitizes to something and its <see cref="GameName"/> fits.</summary>
@@ -252,6 +260,9 @@ public static partial class TitleDb
 
     [GeneratedRegex(@"\A0100[0-9A-F]{12}\z")]
     private static partial Regex CanonicalId();
+
+    [GeneratedRegex(@" \[(0100[0-9A-F]{12})\]\z")]
+    private static partial Regex GameNameTitleId();
 
     [GeneratedRegex(@"\[(0100[0-9A-Fa-f]{12})\]")]
     private static partial Regex FileNameTitleId();

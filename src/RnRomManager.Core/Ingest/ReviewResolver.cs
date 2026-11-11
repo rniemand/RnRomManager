@@ -327,6 +327,9 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 if (external && (!chosen.RomExtensions.Contains(originalExtension, StringComparer.OrdinalIgnoreCase)
                     || item.SizeBytes < chosen.MinRomSizeBytes || item.SizeBytes > chosen.MaxRomSizeBytes))
                     return ReviewResolutionResult.Invalid("datSystem", "That system can't store this file's extension or size.");
+                // shortcut: TitleDb DAT picks are refused until step 24 resolves them (T9); never sent down the libretro path.
+                if (chosen.DatSource == DatSource.TitleDb)
+                    return ReviewResolutionResult.Invalid("datGameName", "Choosing a titledb entry isn't supported yet; use Manual.");
                 system = chosen;
                 var store = dats.For(system.Id);
                 var datRom = store?.Roms.FirstOrDefault(r => r.GameName == request.DatGameName);
@@ -342,6 +345,9 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             }
             else if (request.Action == "Attach" && request.Flag == "None")
             {
+                // shortcut: a queued TitleDb identity is attached by step 24 (T4); never through the libretro path.
+                if (item.Reason == "AmbiguousGroup" && system.DatSource == DatSource.TitleDb)
+                    return ReviewResolutionResult.Invalid("action", "Attaching a titledb match isn't supported yet; use Attach with a flag or Manual.");
                 if (item.Reason != "AmbiguousGroup" ||
                     !(JsonSerializer.Deserialize<Guid[]>(item.CandidateGameIds ?? "[]") ?? []).Contains(request.TargetGameId!.Value))
                     return ReviewResolutionResult.Invalid("targetGameId", "Choose one of the ambiguous item's candidates.");
