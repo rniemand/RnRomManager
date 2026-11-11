@@ -48,6 +48,16 @@ public class ExternalZipBackupTests
 
     private string[] Names() => [.. Directory.GetFiles(_folder).Select(Path.GetFileName).Order()!];
 
+    private void ReplaceWithOccupant(string path)
+    {
+        // Windows can keep a deleted name reserved while the backup holds its handle.
+        if (OperatingSystem.IsWindows())
+            File.Move(path, Path.Combine(_roms, "displaced-backup"));
+        else
+            File.Delete(path);
+        File.WriteAllText(path, "an occupant");
+    }
+
     private Task RecoverAsync()
     {
         var jobs = Substitute.For<IJobRepository>();
@@ -109,12 +119,9 @@ public class ExternalZipBackupTests
     {
         var (zip, snapshot) = Source();
         var original = File.ReadAllBytes(zip);
-        void Replace(string partial)
-        {
-            File.Delete(partial);
-            File.WriteAllText(partial, "an occupant");
-        }
-        var hooks = when == "before reopen" ? new ExternalZipBackupHooks { AfterCopy = Replace } : new ExternalZipBackupHooks { BeforePromotion = Replace };
+        var hooks = when == "before reopen"
+            ? new ExternalZipBackupHooks { AfterCopy = ReplaceWithOccupant }
+            : new ExternalZipBackupHooks { BeforePromotion = ReplaceWithOccupant };
 
         Assert.That(() => ExternalZipBackup.CreateAsync(_roms, zip, snapshot, hooks), Throws.InstanceOf<IOException>());
 
@@ -132,7 +139,7 @@ public class ExternalZipBackupTests
         var backup = Path.Combine(_folder, "Space Game.zip" + ExternalRomName.MoveBackupSuffix);
         var hooks = how == "occupied"
             ? new ExternalZipBackupHooks { BeforePromotion = _ => File.WriteAllText(backup, "an occupant") }
-            : new ExternalZipBackupHooks { AfterPromotion = path => { File.Delete(path); File.WriteAllText(path, "an occupant"); } };
+            : new ExternalZipBackupHooks { AfterPromotion = ReplaceWithOccupant };
 
         Assert.That(() => ExternalZipBackup.CreateAsync(_roms, zip, snapshot, hooks), Throws.InstanceOf<IOException>());
 

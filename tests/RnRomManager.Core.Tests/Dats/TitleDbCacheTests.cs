@@ -126,12 +126,12 @@ public class TitleDbCacheTests
     public void ManifestRow_DisablesTitleDb(string problem)
     {
         Write();
+        var alias = Compact[..(Compact.LastIndexOf('/') + 1)] + Path.GetFileName(Compact).ToUpperInvariant();
         if (problem == "alias")
         {
             // Both the file and its row use another case.
-            var upper = Compact.ToUpperInvariant();
-            File.Move(Path.Combine(_cache.Directory, Compact), Path.Combine(_cache.Directory, upper + ".tmp"));
-            File.Move(Path.Combine(_cache.Directory, upper + ".tmp"), Path.Combine(_cache.Directory, upper));
+            File.Move(Path.Combine(_cache.Directory, Compact), Path.Combine(_cache.Directory, alias + ".tmp"));
+            File.Move(Path.Combine(_cache.Directory, alias + ".tmp"), Path.Combine(_cache.Directory, alias));
         }
         EditManifest(entries =>
         {
@@ -139,7 +139,7 @@ public class TitleDbCacheTests
             entries.Remove(row);
             entries.AddRange(problem switch
             {
-                "alias" => [row with { File = Compact.ToUpperInvariant() }],
+                "alias" => [row with { File = alias }],
                 "noVersion" => [row with { Version = null }],
                 "badVersion" => [row with { Version = "2026-01-01" }],
                 "noTime" => [row with { DownloadedAt = default }],

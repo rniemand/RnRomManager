@@ -9,7 +9,7 @@ public sealed record ZipBackup(string Path, ExternalFileSnapshot Snapshot, strin
 /// <summary>Test seams of <see cref="ExternalZipBackup.CreateAsync"/>: points where a test swaps a file mid-backup.</summary>
 public sealed class ExternalZipBackupHooks
 {
-    /// <summary>Runs once the copy is written and closed, before it is reopened to be verified.</summary>
+    /// <summary>Runs once the copy is flushed, before it is reopened to be verified.</summary>
     public Action<string>? AfterCopy { get; init; }
 
     /// <summary>Runs with the staging path once the copy is verified, right before the checks that precede promotion.</summary>
@@ -48,18 +48,17 @@ public static class ExternalZipBackup
             throw new IOException($"{zipPath} can't be backed up: {opened.Details ?? opened.Status.ToString()}");
 
         FileIdentity? owned = null;
+        FileStream? output = null;
         try
         {
-            string sha256;
             using (var input = opened.Stream!)
             {
                 // Exclusive: an occupant of the staging name is never written to or adopted.
-                using (var output = new FileStream(partial, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 0))
-                {
-                    owned = ExternalRomPath.SnapshotOf(output)?.Identity ?? throw new IOException($"{partial} was created but can't be identified");
-                    sha256 = await CopyAsync(input, output, cancellationToken).ConfigureAwait(false);
-                    output.Flush(flushToDisk: true);
-                }
+                // Keep the handle through promotion and cleanup so an unlinked file's inode can't be reused.
+                output = new FileStream(partial, FileMode.CreateNew, FileAccess.Write, FileShare.Read | FileShare.Delete, bufferSize: 0);
+                owned = ExternalRomPath.SnapshotOf(output)?.Identity ?? throw new IOException($"{partial} was created but can't be identified");
+                var sha256 = await CopyAsync(input, output, cancellationToken).ConfigureAwait(false);
+                output.Flush(flushToDisk: true);
                 hooks?.AfterCopy?.Invoke(partial);
 
                 var verified = await VerifyAsync(libraryRoot, partial, owned.Value, source.Length, sha256, cancellationToken).ConfigureAwait(false);
@@ -88,6 +87,10 @@ public static class ExternalZipBackup
             DeleteIfOwned(libraryRoot, partial, owned);
             throw ex as IOException ?? new IOException(ex.Message, ex);
         }
+        finally
+        {
+            output?.Dispose();
+        }
     }
 
     private static async Task<string> CopyAsync(Stream input, Stream output, CancellationToken cancellationToken)
@@ -107,7 +110,7 @@ public static class ExternalZipBackup
     private static async Task<ExternalFileSnapshot> VerifyAsync(string libraryRoot, string partial, FileIdentity owned, long length, string sha256,
         CancellationToken cancellationToken)
     {
-        var reopened = ExternalRomPath.OpenRead(libraryRoot, partial, FileShare.Read);
+        var reopened = ExternalRomPath.OpenRead(libraryRoot, partial, FileShare.ReadWrite | FileShare.Delete);
         if (reopened.Status != ExternalPathStatus.Found || reopened.Snapshot!.Identity != owned)
         {
             reopened.Stream?.Dispose();

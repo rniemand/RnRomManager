@@ -87,6 +87,8 @@ public partial class ExternalLibraryTests
         using (var library = LibraryZip.Open(zip, Service<InfoJsonReader>()))
             Assert.That(library.HasEntry(LibraryZip.NoteEntry("Shared (World).gb")), Is.True);
 
+        // The successful write rebuilt the mirror and assigned a new ROM row ID.
+        romId = await RomIdAsync(gameId);
         if (!LinkOutside(zip, out var outside))
             Assert.Ignore("this account can't create a file link");
         var before = File.ReadAllBytes(outside);
