@@ -30,12 +30,14 @@ public class IngestFileDeleterTests
         var gb = Substitute.For<ISystemHandler>();
         gb.EmbedRomsInZip.Returns(true);
         gb.Id.Returns("gb");
-        _systems = new SystemRegistry([gb]);
+        gb.Family.Returns("gameboy");
+        _systems = new SystemRegistry([gb, new ExternalTestHandler()]);
+        Directory.CreateDirectory(Path.Combine(_paths.Ingest, "ext", "_failed"));
         _lock = new JobLock();
         _reviews = Substitute.For<IIngestReviewRepository>();
         _audit = Substitute.For<IAuditLog>();
         var options = Options.Create(_paths);
-        _deleter = new IngestFileDeleter(_lock, _reviews, options, _audit, new AuditPaths(options), NullLogger<IngestFileDeleter>.Instance);
+        _deleter = new IngestFileDeleter(_lock, _reviews, _systems, options, _audit, new AuditPaths(options), NullLogger<IngestFileDeleter>.Instance);
     }
 
     [TearDown]
@@ -189,5 +191,60 @@ public class IngestFileDeleterTests
             (AuditActions.IngestFileDeleted, Actor, (string?)"gb", (string?)"ingest/gb/a.gb", (string?)"pending"),
             (AuditActions.IngestFileDeleted, Actor, "gb", "ingest/gb/_failed/b.gb", "failed"),
         }));
+    }
+
+    // --- external systems (spec G4) ---
+
+    [Test]
+    public async Task External_LinkedAncestor_IsAPerFileFailure_TargetPendingAndAuditUntouched()
+    {
+        var outside = Directory.CreateDirectory(_dir.Combine("outside")).FullName;
+        File.WriteAllText(Path.Combine(outside, "a.nsp"), "theirs");
+        var link = Path.Combine(_paths.Ingest, "ext", "_failed");
+        Directory.Delete(link);
+        Assert.That(TestLinks.TryLinkDirectory(link, outside), Is.True, "this account can't create a directory link");
+        try
+        {
+            var file = new IngestDeleteRef("ext", "failed", "a.nsp");
+
+            var result = await _deleter.DeleteAsync([file], Actor, default);
+
+            Assert.That((result.Deleted, result.Failed), Is.EqualTo((0, new[] { file })));
+            Assert.That(File.ReadAllText(Path.Combine(outside, "a.nsp")), Is.EqualTo("theirs"));
+            Assert.That(Recorded(), Is.Empty);
+            await _reviews.DidNotReceiveWithAnyArgs().DeletePendingBySourceAsync(default!, default, default);
+        }
+        finally
+        {
+            TestLinks.RemoveDirectoryLink(link);
+        }
+    }
+
+    [Test]
+    public async Task External_PendingDelete_FinishesItsPendingCleanup_EvenWhenTheRequestWasAbandoned()
+    {
+        var path = Write("ext", "a.nsp");
+        using var abandoned = new CancellationTokenSource();
+        abandoned.Cancel();
+
+        var result = await _deleter.DeleteAsync([new IngestDeleteRef("ext", "pending", "a.nsp")], Actor, abandoned.Token);
+
+        Assert.That(result.Deleted, Is.EqualTo(1));
+        Assert.That(File.Exists(path), Is.False);
+        await _reviews.Received(1).DeletePendingBySourceAsync(path, null, CancellationToken.None);
+    }
+
+    [Test]
+    public async Task External_FailedDelete_RemovesTheFileAndItsDiagnostic_AndAConfirmedAbsentFileStillSucceeds()
+    {
+        var path = Write("ext", "_failed", "a.nsp");
+        Write("ext", "_failed", "a.nsp.error.txt");
+
+        var result = await _deleter.DeleteAsync(
+            [new IngestDeleteRef("ext", "failed", "a.nsp"), new IngestDeleteRef("ext", "failed", "gone.nsp")], Actor, default);
+
+        Assert.That((result.Deleted, result.Failed.Count), Is.EqualTo((2, 0)));
+        Assert.That(Directory.GetFileSystemEntries(Path.GetDirectoryName(path)!), Is.Empty);
+        Assert.That(Recorded().Count, Is.EqualTo(1), "only the file that existed is audited");
     }
 }

@@ -49,7 +49,7 @@ public class IngestJobTests
         _items = Substitute.For<IJobItemRepository>();
         _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
         _reader = new InfoJsonReader([], _systems);
-        _scanner = new IngestFileScanner(Options.Create(_paths), _systems);
+        _scanner = new IngestFileScanner(Options.Create(_paths), _systems, NullLogger<IngestFileScanner>.Instance);
     }
 
     [TearDown]
