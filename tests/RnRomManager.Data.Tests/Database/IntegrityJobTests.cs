@@ -116,11 +116,11 @@ public class IntegrityJobTests
         stream.Write(bytes);
     }
 
-    private async Task<(Guid JobId, string Summary)> Run(JobMode mode = JobMode.Quick, CancellationToken ct = default)
+    private async Task<(Guid JobId, string Summary)> Run(JobMode mode = JobMode.Quick, CancellationToken ct = default, IntegrityHooks? hooks = null)
     {
         var jobId = Guid.NewGuid();
         var job = new IntegrityJob(mode, _games, new RomRepository(_factory), _sync, _issues, _jobs, _reader, _systems, Options.Create(new PathsOptions { Roms = _dir.Path }),
-            TimeProvider.System, NullLogger<IntegrityJob>.Instance);
+            TimeProvider.System, NullLogger<IntegrityJob>.Instance) { Hooks = hooks };
         var summary = await job.RunAsync(new JobContext(jobId, new JobProgress()), ct);
         return (jobId, System.Text.Json.JsonSerializer.Serialize(summary));
     }
@@ -478,10 +478,10 @@ public class IntegrityJobTests
     public void Severity_FollowsTheSpecTable(string type, string severity) => Assert.That(SeverityOf(type), Is.EqualTo(severity));
 
     /// <summary>An external game: its ZIP lists one ROM by pointer and the file sits beside it (E1).</summary>
-    private async Task<string> WriteExternal(string zipPath, string title)
+    private async Task<string> WriteExternal(string zipPath, string title, string? pointer = null)
     {
         var bytes = RomBytes(++_seed);
-        var pointer = $"{title}.{title}.nsp";
+        pointer ??= $"{title}.{title}.nsp";
         var game = Game(title, Rom($"{title}.nsp", bytes) with { ExternalFileName = pointer }) with { System = ExternalTestHandler.SystemId };
         var path = Abs(zipPath);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -542,6 +542,103 @@ public class IntegrityJobTests
         {
             (OrphanFile, (string?)"ext/A/stray.nsp"),
             (OrphanFile, (string?)"ext/A/Alpha.Alpha.nsp.tmp"),
+        }));
+    }
+
+    /// <summary>Another file at <paramref name="path"/> with the same length and different bytes.</summary>
+    private static void ReplaceSameSize(string path)
+    {
+        var bytes = File.ReadAllBytes(path);
+        bytes[0] ^= 0xFF;
+        File.Delete(path);
+        File.WriteAllBytes(path, bytes);
+    }
+
+    [Test]
+    public async Task External_ConflictingClaims_AreMissingForBothOwners_AndAreNotHashed()
+    {
+        await WriteExternal("ext/A/Alpha.zip", "Alpha", pointer: "Shared.nsp");
+        await WriteExternal("ext/A/Ace.zip", "Ace", pointer: "shared.NSP");
+        var hashed = new List<string>();
+
+        await Run(JobMode.Deep, hooks: new IntegrityHooks { BeforeExternalHash = hashed.Add });
+
+        var missing = (await OpenExternal()).Where(i => i.Type == EntryMissing).Select(i => i.ZipPath).ToList();
+        Assert.That(missing, Is.EquivalentTo(new[] { "ext/A/Ace.zip", "ext/A/Alpha.zip" }));
+        Assert.That(hashed, Is.Empty);
+        Assert.That((await OpenExternal()).Select(i => i.Type), Does.Not.Contain(HashMismatch));
+    }
+
+    [Test]
+    public async Task External_Deep_HashesAWrongLengthFile()
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        File.AppendAllText(alpha, "x");
+
+        await Run(JobMode.Deep);
+
+        Assert.That((await OpenExternal()).Select(i => (i.Type, i.Entry)), Is.EquivalentTo(new[]
+        {
+            (EntrySizeMismatch, (string?)"Alpha.Alpha.nsp"),
+            (HashMismatch, (string?)"Alpha.Alpha.nsp"),
+        }));
+    }
+
+    [Test]
+    public async Task External_FileGoneAfterItsStat_IsMissing()
+    {
+        await WriteExternal("ext/A/Alpha.zip", "Alpha");
+
+        await Run(JobMode.Deep, hooks: new IntegrityHooks { BeforeExternalHash = File.Delete });
+
+        Assert.That(await OpenExternal(), Is.EqualTo(new[] { (EntryMissing, (string?)"ext/A/Alpha.zip", (string?)"Alpha.Alpha.nsp") }));
+    }
+
+    [TestCase(true, TestName = "External_FileReplacedWhileChecked_IsDropped_AndTheNextIsChecked before the open")]
+    [TestCase(false, TestName = "External_FileReplacedWhileChecked_IsDropped_AndTheNextIsChecked after hashing")]
+    public async Task External_FileReplacedWhileChecked_IsDropped_AndTheNextIsChecked(bool beforeOpen)
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        File.AppendAllText(alpha, "x"); // a size and a hash finding, both to be dropped
+        var beta = await WriteExternal("ext/B/Beta.zip", "Beta");
+        ReplaceSameSize(beta);
+        void Swap(string path)
+        {
+            if (path == alpha)
+                ReplaceSameSize(path);
+        }
+        var hooks = beforeOpen ? new IntegrityHooks { BeforeExternalHash = Swap } : new IntegrityHooks { AfterExternalHash = Swap };
+
+        await Run(JobMode.Deep, hooks: hooks);
+
+        Assert.That(await OpenExternal(), Is.EqualTo(new[] { (HashMismatch, (string?)"ext/B/Beta.zip", (string?)"Beta.Beta.nsp") }));
+    }
+
+    [Test]
+    public async Task External_CancelledDuringAHash_RecordsEarlierFindings_AndResolvesNothing()
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        var beta = await WriteExternal("ext/B/Beta.zip", "Beta");
+        await File.WriteAllTextAsync(_dir.Combine("old.txt"), "x");
+        await Run();
+        File.Delete(_dir.Combine("old.txt"));
+        File.Delete(alpha);
+        using var cancel = new CancellationTokenSource();
+
+        var (_, summary) = await Run(JobMode.Deep, cancel.Token, new IntegrityHooks
+        {
+            BeforeExternalHash = path =>
+            {
+                if (path == beta)
+                    cancel.Cancel();
+            },
+        });
+
+        Assert.That(summary, Does.Contain("\"resolved\":0"));
+        Assert.That(await OpenExternal(), Is.EquivalentTo(new[]
+        {
+            (OrphanFile, (string?)"old.txt", (string?)null),
+            (EntryMissing, (string?)"ext/A/Alpha.zip", (string?)"Alpha.Alpha.nsp"),
         }));
     }
 }
