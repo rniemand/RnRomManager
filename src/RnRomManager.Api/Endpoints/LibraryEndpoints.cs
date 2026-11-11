@@ -642,6 +642,7 @@ public static class LibraryEndpoints
         {
             id = r.Id,
             fileName = r.FileName,
+            externalFileName = r.ExternalFileName,
             originalFileName = r.OriginalFileName,
             baseTitle = r.BaseTitle,
             regions = r.Regions,

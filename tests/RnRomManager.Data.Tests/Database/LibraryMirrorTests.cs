@@ -42,7 +42,7 @@ public class LibraryMirrorTests
             handler.EmbedRomsInZip.Returns(true);
             handler.Id.Returns(id);
             return handler;
-        }).ToArray();
+        }).Append(new ExternalTestHandler()).ToArray();
         var systems = Substitute.For<ISystemRegistry>();
         systems.All.Returns(handlers);
         _reader = new InfoJsonReader([], systems);
@@ -339,5 +339,50 @@ public class LibraryMirrorTests
         var result = await _sync.SyncAllAsync(CancellationToken.None);
 
         Assert.That(result.Changes.Select(c => c.ZipPath), Is.EqualTo(new[] { "gb/T/Tetris.zip" }));
+    }
+
+    // --- external ROMs (E4) ---
+
+    private static InfoJsonGame ExternalGame(params (string FileName, string Pointer, int Seed)[] roms) =>
+        Game("Orbit Test", [.. roms.Select((r, i) => Rom(r.FileName, RomBytes(r.Seed), isPrimary: i == 0) with { ExternalFileName = r.Pointer })])
+            with { System = ExternalTestHandler.SystemId };
+
+    [Test]
+    public async Task Replace_WritesTheExternalPointer_NullForAnEmbeddedRom()
+    {
+        var external = ExternalGame(("Orbit Test [v0].nsp", "Orbit Test.Orbit Test [v0].nsp", 1), ("Orbit Test [v1].xci", "Orbit Test.Orbit Test [v1].xci", 2));
+        var embedded = Game("Tetris", Rom("Tetris.gb", RomBytes(3)));
+
+        await _mirror.ReplaceAsync(Entry(external, "ext/O/Orbit Test.zip"), CancellationToken.None);
+        await _mirror.ReplaceAsync(Entry(embedded), CancellationToken.None);
+
+        Assert.That((await _roms.ListByGameAsync(external.GameId, CancellationToken.None)).Select(r => (r.FileName, r.ExternalFileName)), Is.EqualTo(new[]
+        {
+            ("Orbit Test [v0].nsp", (string?)"Orbit Test.Orbit Test [v0].nsp"),
+            ("Orbit Test [v1].xci", (string?)"Orbit Test.Orbit Test [v1].xci"),
+        }));
+        Assert.That((await _roms.ListByGameAsync(embedded.GameId, CancellationToken.None)).Single().ExternalFileName, Is.Null);
+        Assert.That((await _roms.GetBySha1Async(external.Roms[1].Metadata.Sha1, CancellationToken.None))!.ExternalFileName, Is.EqualTo("Orbit Test.Orbit Test [v1].xci"));
+    }
+
+    [Test]
+    public async Task Sync_RebuildsTheExternalPointer_FromAZipWithoutARomEntry()
+    {
+        var game = ExternalGame(("Orbit Test [v0].nsp", "Orbit Test.Orbit Test [v0].nsp", 1));
+        // Hand-made: only info.json, as an external game's ZIP holds no roms/ entry.
+        var path = Abs("ext/O/Orbit Test.zip");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        using (var archive = System.IO.Compression.ZipFile.Open(path, System.IO.Compression.ZipArchiveMode.Create))
+        {
+            using var entry = archive.CreateEntry(LibraryZip.InfoJsonEntry).Open();
+            entry.Write(InfoJsonSerializer.Serialize(game));
+        }
+
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Skipped, Is.Empty);
+        Assert.That((await _games.GetAsync(game.GameId, CancellationToken.None))!.ZipPath, Is.EqualTo("ext/O/Orbit Test.zip"));
+        var rom = (await _roms.ListByGameAsync(game.GameId, CancellationToken.None)).Single();
+        Assert.That((rom.SystemId, rom.ExternalFileName, rom.SizeBytes), Is.EqualTo(("ext", "Orbit Test.Orbit Test [v0].nsp", (long)RomBytes(1).Length)));
     }
 }

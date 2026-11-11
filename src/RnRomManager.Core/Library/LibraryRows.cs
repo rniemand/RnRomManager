@@ -148,6 +148,7 @@ public sealed record MirrorEntry(InfoJsonGame Info, string ZipPath, long ZipSize
             Header = r.Header?.ToJsonString(),
             DateAdded = r.Metadata.DateAdded.UtcDateTime,
             DateModified = r.Metadata.DateModified.UtcDateTime,
+            ExternalFileName = r.ExternalFileName,
         }).ToList();
 
         var images = Info.Images.Select(i => new ImageRow

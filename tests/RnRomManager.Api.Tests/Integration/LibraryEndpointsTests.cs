@@ -548,4 +548,20 @@ public class LibraryEndpointsTests
         using var png = await _user.GetAsync(detail.GetProperty("images")[0].GetProperty("url").GetString()!);
         Assert.That(png.Content.Headers.ContentType?.MediaType, Is.EqualTo("image/png"));
     }
+
+    [Test]
+    public async Task GameDetail_ExposesTheExternalPointer_FromTheMirroredRow_NullWhenEmbedded()
+    {
+        var embeddedId = await Ingest("t1.gb", TetrisWorld);
+        var rom = TestLibrary.Rom("Orbit Test [v0].nsp", [1, 2, 3, 4]) with { ExternalFileName = "Orbit Test.Orbit Test [v0].nsp" };
+        var external = TestLibrary.Game("Orbit Test", rom) with { System = ExternalTestHandler.SystemId };
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(external, "ext/O/Orbit Test.zip", 100, DateTime.UtcNow), default);
+
+        var externalRom = (await GetJson($"/api/games/{external.GameId}")).GetProperty("roms")[0];
+        var embeddedRom = (await GetJson($"/api/games/{embeddedId}")).GetProperty("roms")[0];
+
+        Assert.That(externalRom.GetProperty("externalFileName").GetString(), Is.EqualTo("Orbit Test.Orbit Test [v0].nsp"));
+        Assert.That(externalRom.GetProperty("fileName").GetString(), Is.EqualTo("Orbit Test [v0].nsp"));
+        Assert.That(embeddedRom.GetProperty("externalFileName").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
 }
