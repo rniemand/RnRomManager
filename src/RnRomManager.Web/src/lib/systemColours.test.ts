@@ -20,6 +20,10 @@ describe('systemColour', () => {
 		expect(systemColour('tg16')).toEqual({ name: 'tg16', foreground: '#fff' });
 	});
 
+	it('gives Switch its own near-black with white text (N3)', () => {
+		expect(systemColour('switch')).toEqual({ name: 'switch', foreground: '#fff' });
+	});
+
 	it('keeps an unknown system neutral', () => {
 		expect(systemColour('sg1000')).toBe(fallbackColour);
 	});
