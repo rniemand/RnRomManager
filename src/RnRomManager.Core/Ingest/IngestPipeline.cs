@@ -515,6 +515,10 @@ public sealed class IngestPipeline(
         return Target(LibraryTarget.Open(paths.Value.Roms, zipPath, reader), systemId, sha1);
     }
 
+    /// <summary>An external game's ZIP opened for checking (spec W1): it must be the game and system the mirror names.</summary>
+    internal LibraryTarget OpenTargetChecked(string zipPath, Guid gameId, string systemId) =>
+        LibraryTarget.OpenChecked(paths.Value.Roms, zipPath, reader, gameId, systemId);
+
     private static (LibraryZip? Zip, InfoJsonGame? Game, IngestItemResult? Error) Target(LibraryTarget target, string systemId, string? sha1) =>
         target.Code is null
             ? (target.Zip, target.Game, null)

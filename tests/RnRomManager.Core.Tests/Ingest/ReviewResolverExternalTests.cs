@@ -55,7 +55,10 @@ public class ReviewResolverExternalTests
         var pipeline = new IngestPipeline(dats, systems, Substitute.For<IRomRepository>(), games, Substitute.For<ILibraryMirror>(),
             Substitute.For<IIntegrityIssueRepository>(), _reviews, new InfoJsonReader([], systems), media, options, _audit,
             new AuditPaths(options), TimeProvider.System, NullLogger<IngestPipeline>.Instance);
-        _resolver = new ReviewResolver(new JobLock(), _reviews, games, pipeline, dats, systems,
+        var romRepository = Substitute.For<IRomRepository>();
+        var reader = new InfoJsonReader([], systems);
+        _resolver = new ReviewResolver(new JobLock(), _reviews, games, romRepository,
+            new DbSync(games, romRepository, Substitute.For<ILibraryMirror>(), reader, systems, options, NullLogger<DbSync>.Instance), pipeline, dats, systems,
             new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance), options, _audit, new AuditPaths(options), TimeProvider.System,
             NullLogger<ReviewResolver>.Instance);
     }

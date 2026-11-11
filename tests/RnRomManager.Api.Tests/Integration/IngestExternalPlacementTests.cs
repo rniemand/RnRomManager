@@ -50,7 +50,7 @@ public partial class IngestExternalPlacementTests
                 new FixtureGame(GameName, GameName + ".nsp", Rom),
                 new FixtureGame(EuropeName, EuropeName + ".nsp", Europe),
             ],
-            [GbDat] = [new FixtureGame("Shared (World)", "Shared (World).gb", SharedGb)],
+            [GbDat] = [new FixtureGame("Shared (World)", "Shared (World).gb", SharedGb), new FixtureGame("Mystery GB (World)", "Mystery GB (World).gb", Mystery)],
         });
         cache.Load();
         _items = [];

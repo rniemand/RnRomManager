@@ -15,7 +15,7 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Core.Ingest;
 
 /// <summary>Synchronous review actions (§7.5); shares the ingest writer and the global job lock.</summary>
-public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository reviews, IGameRepository games,
+public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository reviews, IGameRepository games, IRomRepository roms, DbSync dbSync,
     IngestPipeline pipeline, DatCache dats, ISystemRegistry systems, ArchiveExtractor extractor,
     IOptions<PathsOptions> paths, IAuditLog audit, AuditPaths auditPaths, TimeProvider time, ILogger<ReviewResolver> logger)
 {
@@ -65,57 +65,139 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
     }
 
     /// <summary>
-    /// T9 for an external system: an archived item is re-extracted through one checked handle on its archive, then
-    /// the file is re-hashed streamed (its SHA1 must still be the item's) and moved next to its ZIP (I4). Nothing
-    /// is read into memory, and every failure keeps the Pending row.
+    /// T9 for an external system, before any action-specific check: a loose source is used as it was classified; an
+    /// archived item is re-extracted through one checked handle on its archive, whose snapshot is kept for I5.
     /// </summary>
-    private async Task<ReviewResolutionResult> ResolveExternalAsync(long id, ReviewItem item, IngestFile file, string source,
-        ExternalFileSnapshot snapshot, string work, ISystemHandler system, string action, string filename, string title,
-        IReadOnlyList<string> regions, IReadOnlyList<string> languages, string? revision, IReadOnlyList<string> flags,
-        InfoJsonIdentification identification, DatMetadata metadata, Guid? target, AuditActor actor, int userId)
+    /// <returns>The file to resolve and its snapshot, or the failure code (the Pending row is kept).</returns>
+    private (IngestFile? File, ExternalFileSnapshot? Snapshot, string? Code) PrepareExternal(long id, ReviewItem item, IngestFile file,
+        string source, ExternalFileSnapshot snapshot, string work, ISystemHandler system)
     {
         file = file with { FullPath = source };
-        if (item.ArchivePath is not null)
+        if (item.ArchivePath is null)
+            return (file, snapshot, null);
+
+        var opened = ExternalRomPath.OpenRead(paths.Value.Ingest, source, FileShare.Read | FileShare.Delete, snapshot);
+        if (opened.Status == ExternalPathStatus.Changed)
+            return (null, null, "VerifyFailed");
+        if (opened.Status != ExternalPathStatus.Found)
+            return (null, null, "IoError");
+        var workDir = ExternalRomPath.CreateDirectory(paths.Value.Cache, work);
+        IReadOnlyList<ExtractedEntry> entries;
+        using (var stream = opened.Stream!)
         {
-            var opened = ExternalRomPath.OpenRead(paths.Value.Ingest, source, FileShare.Read | FileShare.Delete, snapshot);
-            if (opened.Status == ExternalPathStatus.Changed)
-                return new("VerifyFailed");
-            if (opened.Status != ExternalPathStatus.Found)
-                return new("IoError");
-            var workDir = ExternalRomPath.CreateDirectory(paths.Value.Cache, work);
-            IReadOnlyList<ExtractedEntry> entries;
-            using (var stream = opened.Stream!)
+            if (workDir.Status != ExternalPathStatus.Found)
+                return (null, null, "IoError");
+            var family = systems.ByFamily(system.Family);
+            try
             {
-                if (workDir.Status != ExternalPathStatus.Found)
-                    return new("IoError");
-                var family = systems.ByFamily(system.Family);
-                try
-                {
-                    entries = extractor.Extract(stream, Path.GetFileName(source), workDir.Path,
-                        ext => family.FirstOrDefault(h => h.RomExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))?.MaxRomSizeBytes);
-                }
-                catch (ArchiveOutputException ex)
-                {
-                    logger.LogError(ex, "Review {Id}: extracting {Archive} failed", id, source);
-                    return new("IoError");
-                }
-                // The entries only count if the handle and the path still show the archive that was checked.
-                var current = ExternalRomPath.ClassifyFile(paths.Value.Ingest, source);
-                if (current.Status is not (ExternalPathStatus.Found or ExternalPathStatus.Missing))
-                    return new("IoError");
-                if (current.Snapshot != snapshot || ExternalRomPath.SnapshotOf(stream) != snapshot)
-                    return new("VerifyFailed");
+                entries = extractor.Extract(stream, Path.GetFileName(source), workDir.Path,
+                    ext => family.FirstOrDefault(h => h.RomExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))?.MaxRomSizeBytes);
             }
-            var entry = entries.FirstOrDefault(e => e.EntryPath == item.ArchiveEntry);
-            if (entry is null)
+            catch (ArchiveOutputException ex)
+            {
+                logger.LogError(ex, "Review {Id}: extracting {Archive} failed", id, source);
+                return (null, null, "IoError");
+            }
+            // The entries only count if the handle and the path still show the archive that was checked.
+            var current = ExternalRomPath.ClassifyFile(paths.Value.Ingest, source);
+            if (current.Status is not (ExternalPathStatus.Found or ExternalPathStatus.Missing))
+                return (null, null, "IoError");
+            if (current.Snapshot != snapshot || ExternalRomPath.SnapshotOf(stream) != snapshot)
+                return (null, null, "VerifyFailed");
+        }
+        var entry = entries.FirstOrDefault(e => e.EntryPath == item.ArchiveEntry);
+        if (entry is null)
+            return (null, null, "VerifyFailed");
+        var copy = ExternalRomPath.ClassifyFile(paths.Value.Cache, entry.ExtractedPath);
+        if (copy.Status != ExternalPathStatus.Found)
+            return (null, null, "IoError");
+        return (file with { FullPath = copy.Path, ArchivePath = source, ArchiveEntry = item.ArchiveEntry, ArchiveSnapshot = snapshot }, copy.Snapshot, null);
+    }
+
+    /// <summary>
+    /// T9 retry of an archived external item whose release may already be in the library (a mirror or resolution
+    /// update failed after the ZIP was written, and the archive is still there). The library is synced first, then
+    /// the SHA1's owner decides: the same archive with a verified file → <c>Resolved</c> with that game, writing
+    /// nothing; another source or an embedded owner → <c>Duplicate</c>; an owner that can't be verified →
+    /// <c>VerifyFailed</c>. Every refusal keeps the Pending row.
+    /// </summary>
+    /// <returns>null when the SHA1 has no owner: resolve as usual.</returns>
+    private async Task<ReviewResolutionResult?> RecoverCommittedAsync(long id, ReviewItem item, IngestFile copy, ExternalFileSnapshot snapshot, int userId)
+    {
+        if (await Sha1Async(paths.Value.Cache, copy.FullPath, snapshot).ConfigureAwait(false) != item.Sha1)
+            return new("VerifyFailed");
+        RomRow? owner;
+        try
+        {
+            await dbSync.SyncAllAsync(CancellationToken.None).ConfigureAwait(false);
+            owner = await roms.GetBySha1Async(item.Sha1, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (System.Data.Common.DbException ex)
+        {
+            logger.LogError(ex, "Review {Id}: the library sync before the retry failed", id);
+            return new("DbWriteFailed");
+        }
+        if (owner is null)
+            return null;
+        if (systems.ById(owner.SystemId) is not { EmbedRomsInZip: false })
+            return new("Duplicate");
+
+        var game = await games.GetAsync(owner.GameId, CancellationToken.None).ConfigureAwait(false);
+        if (game is null)
+            return new("VerifyFailed");
+        var target = pipeline.OpenTargetChecked(game.ZipPath, owner.GameId, owner.SystemId);
+        if (target.Code is not null)
+        {
+            logger.LogWarning("Review {Id}: the owner {Zip} of sha1 {Sha1} can't be verified: {Details}", id, game.ZipPath, item.Sha1, target.Details);
+            return new("VerifyFailed");
+        }
+        using (target.Zip)
+        {
+            var rom = target.Game!.Roms.FirstOrDefault(r => r.Metadata.Sha1 == item.Sha1);
+            if (rom?.ExternalFileName is null)
                 return new("VerifyFailed");
-            var copy = ExternalRomPath.ClassifyFile(paths.Value.Cache, entry.ExtractedPath);
-            if (copy.Status != ExternalPathStatus.Found)
-                return new("IoError");
-            file = file with { FullPath = copy.Path, ArchivePath = source, ArchiveEntry = item.ArchiveEntry, ArchiveSnapshot = snapshot };
-            snapshot = copy.Snapshot!;
+            if (!string.Equals(rom.Metadata.SourcePath, copy.SourcePath, StringComparison.Ordinal))
+                return new("Duplicate");
+            var folder = Path.GetDirectoryName(SafePath.Resolve(paths.Value.Roms, game.ZipPath))!;
+            var sidecar = ExternalRomPath.ClassifyFile(paths.Value.Roms, Path.Combine(folder, rom.ExternalFileName));
+            if (sidecar.Status != ExternalPathStatus.Found || sidecar.Snapshot!.Length != rom.Metadata.SizeBytes
+                || await Sha1Async(paths.Value.Roms, sidecar.Path, sidecar.Snapshot).ConfigureAwait(false) != item.Sha1)
+                return new("VerifyFailed");
         }
 
+        try
+        {
+            await reviews.SetResolutionAsync(id, "Resolved", owner.GameId, userId, time.GetUtcNow().UtcDateTime, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "Review {Id}: marking it Resolved failed", id);
+            return new("DbWriteFailed");
+        }
+        logger.LogInformation("Review {Id}: its release was already in {Zip}; resolved without writing", id, game.ZipPath);
+        return new(GameId: owner.GameId);
+    }
+
+    /// <returns>The SHA1 of the file <paramref name="snapshot"/> describes; null when it can't be read as that file.</returns>
+    private static async Task<string?> Sha1Async(string root, string path, ExternalFileSnapshot snapshot)
+    {
+        var opened = ExternalRomPath.OpenRead(root, path, FileShare.Read | FileShare.Delete, snapshot);
+        if (opened.Status != ExternalPathStatus.Found)
+            return null;
+        using var stream = opened.Stream!;
+        var hashed = await RomFileHasher.HashAsync(stream, long.MaxValue, CancellationToken.None).ConfigureAwait(false);
+        return ExternalRomPath.SnapshotOf(stream) == snapshot ? hashed?.Sha1 : null;
+    }
+
+    /// <summary>
+    /// T9: the prepared file is re-hashed streamed (its SHA1 must still be the item's) and moved next to its ZIP
+    /// (I4). Nothing is read into memory, and every failure keeps the Pending row.
+    /// </summary>
+    private async Task<ReviewResolutionResult> ResolveExternalAsync(long id, ReviewItem item, IngestFile file, ExternalFileSnapshot snapshot,
+        ISystemHandler system, string action, string filename, string title, IReadOnlyList<string> regions, IReadOnlyList<string> languages,
+        string? revision, IReadOnlyList<string> flags, InfoJsonIdentification identification, DatMetadata metadata, Guid? target,
+        AuditActor actor, int userId)
+    {
         var now = time.GetUtcNow();
         var rom = new InfoJsonRom
         {
@@ -218,6 +300,16 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             var system = systems.ById(item.SystemId)!;
             // T9: an external release keeps its original extension; an embedded one takes the handler's first (its bytes may be normalised).
             var originalExtension = Path.GetExtension(item.OriginalFileName).ToLowerInvariant();
+            ExternalFileSnapshot? preparedSnapshot = null;
+            if (external)
+            {
+                (var prepared, preparedSnapshot, var refused) = PrepareExternal(id, item, file, source, sourceSnapshot!, work, system);
+                if (refused is not null)
+                    return new(refused);
+                file = prepared!;
+                if (item.ArchivePath is not null && await RecoverCommittedAsync(id, item, file, preparedSnapshot!, userId).ConfigureAwait(false) is { } recovered)
+                    return recovered;
+            }
             Guid? target = null;
             var metadata = DatMetadata.Empty;
             var identification = new InfoJsonIdentification(IdentificationMethod.Manual, null, null, null);
@@ -303,7 +395,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                     return ReviewResolutionResult.Invalid("targetGameId", "Target must belong to the same system.");
             }
             if (external)
-                return await ResolveExternalAsync(id, item, file, source, sourceSnapshot!, work, system, request.Action!, filename, title, regions,
+                return await ResolveExternalAsync(id, item, file, preparedSnapshot!, system, request.Action!, filename, title, regions,
                     languages, revision, flags, identification, metadata, target, actor, userId).ConfigureAwait(false);
             if (item.ArchivePath is not null)
             {

@@ -34,10 +34,12 @@ public partial class IngestExternalPlacementTests
         return (await ItemIdAsync(), file);
     }
 
+    /// <summary>A new Admin each call, so a test can act twice.</summary>
     private async Task<AuditActor> AdminAsync()
     {
-        var user = await TestUsers.CreateAsync(_factory, "boss", Roles.Of(Roles.Admin));
-        return new AuditActor(user.Id, "boss", null);
+        var name = "boss" + Guid.NewGuid().ToString("N")[..8];
+        var user = await TestUsers.CreateAsync(_factory, name, Roles.Of(Roles.Admin));
+        return new AuditActor(user.Id, name, null);
     }
 
     private ReviewResolver Resolver(ExternalIngestHooks? hooks = null) =>

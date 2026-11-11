@@ -58,7 +58,9 @@ public class ReviewResolverTests
         var pipeline = new IngestPipeline(dats, systems, Substitute.For<IRomRepository>(), games, Substitute.For<ILibraryMirror>(),
             Substitute.For<IIntegrityIssueRepository>(), _reviews, reader, media, options, _audit,
             new RnRomManager.Core.Audit.AuditPaths(options), _time, NullLogger<IngestPipeline>.Instance);
-        _resolver = new ReviewResolver(_lock, _reviews, games, pipeline, dats, systems,
+        var romRepository = Substitute.For<IRomRepository>();
+        _resolver = new ReviewResolver(_lock, _reviews, games, romRepository,
+            new DbSync(games, romRepository, Substitute.For<ILibraryMirror>(), reader, systems, options, NullLogger<DbSync>.Instance), pipeline, dats, systems,
             new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance), options, _audit, new RnRomManager.Core.Audit.AuditPaths(options), _time,
             NullLogger<ReviewResolver>.Instance);
     }

@@ -133,7 +133,7 @@ public static class ReviewEndpoints
         null => Results.Ok(new { gameId = result.GameId }),
         "ValidationFailed" => Problems.Validation(ctx, result.Errors!),
         "NotFound" => Problems.NotFound(ctx),
-        "JobRunning" or "SourceMissing" or "AmbiguousGroup" or "TargetZipUnreadable" or "InfoJsonNewerSchema" =>
+        "JobRunning" or "SourceMissing" or "AmbiguousGroup" or "TargetZipUnreadable" or "InfoJsonNewerSchema" or "Duplicate" =>
             Problems.Create(ctx, 409, result.Code, result.Code),
         _ => Problems.Create(ctx, 500, result.Code, result.Code),
     };
