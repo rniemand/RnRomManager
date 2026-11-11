@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Nintendo Switch). Made for this project; MIT licensed like the rest of the repo.
+       A generic, unbranded game card. Exported to switch.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#ececec"/>
+  <!-- the small game card, upright, with its notched top corner -->
+  <path d="M160 96 H330 L352 118 V416 Q352 428 340 428 H172 Q160 428 160 416 Z" fill="#2d2d2d" stroke="#141414" stroke-width="4"/>
+  <!-- label -->
+  <rect x="184" y="140" width="144" height="168" rx="8" fill="#e4002b"/>
+  <rect x="198" y="196" width="116" height="56" rx="4" fill="#fafafa"/>
+  <text x="256" y="236" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="30" font-weight="800" fill="#2d2d2d">CARD</text>
+  <text x="256" y="176" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="18" font-weight="700" fill="#fafafa" letter-spacing="3">GAME</text>
+  <!-- contacts along the bottom edge -->
+  <g fill="#c9a24a">
+    <rect x="186" y="370" width="10" height="36" rx="2"/>
+    <rect x="206" y="370" width="10" height="36" rx="2"/>
+    <rect x="226" y="370" width="10" height="36" rx="2"/>
+    <rect x="246" y="370" width="10" height="36" rx="2"/>
+    <rect x="266" y="370" width="10" height="36" rx="2"/>
+    <rect x="286" y="370" width="10" height="36" rx="2"/>
+    <rect x="306" y="370" width="10" height="36" rx="2"/>
+    <rect x="326" y="370" width="10" height="36" rx="2"/>
+  </g>
+</svg>
