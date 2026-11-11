@@ -53,6 +53,9 @@ public static class ExternalRomName
     public const int MaxComponentBytes = 255;
     public const string StagingSuffix = ".tmp";
     public const string RepairBackupSuffix = ".repair.tmp";
+
+    /// <summary>Longest logical rom <c>fileName</c>, in Unicode scalar values: the <c>roms.file_name</c> column.</summary>
+    public const int MaxLogicalNameScalars = InfoJsonValidator.MaxExternalRomFileNameScalars;
     private const string ZipExtension = ".zip";
 
     /// <summary>
@@ -148,6 +151,55 @@ public static class ExternalRomName
             var tail = Suffix(n) + RepairBackupSuffix;
             return Cut(externalFileName, MaxComponentBytes - Bytes(tail)) + tail;
         }, reservations, stagingSuffix: null);
+
+    /// <summary>
+    /// The logical <c>fileName</c> of an external ROM (spec E3): the name stored in <c>info.json</c> and
+    /// <c>roms.file_name</c>, used for downloads and notes. A free name that already fits and isn't a Windows
+    /// device name is kept exactly as given. Otherwise the stem is cut at a character boundary so that the
+    /// <c>_</c> device prefix, <paramref name="keepTail"/>, the <c> (N)</c> clash suffix and the extension all fit
+    /// <see cref="MaxLogicalNameScalars"/>; each candidate is cut with its own suffix and then checked, so two names
+    /// that only collide once cut still get different suffixes. The result is reserved.
+    /// </summary>
+    /// <param name="taken">The destination game's current and newly allocated logical names, compared ignoring case.</param>
+    /// <param name="keepTail">
+    /// The end of the stem that must survive a cut, e.g. the generated <c> [TitleId][vN]</c> tags; ignored unless
+    /// the stem ends with it.
+    /// </param>
+    public static string AllocateLogicalName(string fileName, ExternalNameReservations taken, string keepTail = "")
+    {
+        var extension = Path.GetExtension(fileName);
+        var stem = fileName[..^extension.Length];
+        if (keepTail.Length > 0 && stem.EndsWith(keepTail, StringComparison.Ordinal))
+            stem = stem[..^keepTail.Length];
+        else
+            keepTail = "";
+        var prefix = FileNameSanitizer.IsReservedDeviceName(fileName) ? "_" : "";
+
+        for (var n = 1; ; n++)
+        {
+            var tail = keepTail + Suffix(n) + extension;
+            var name = prefix + CutScalars(stem, Math.Max(0, MaxLogicalNameScalars - Scalars(prefix) - Scalars(tail))) + tail;
+            if (taken.IsTaken(name))
+                continue;
+            taken.Reserve(name);
+            return name;
+        }
+    }
+
+    private static int Scalars(string value) => value.EnumerateRunes().Count();
+
+    /// <summary>The longest prefix of at most <paramref name="maxScalars"/> whole characters.</summary>
+    private static string CutScalars(string value, int maxScalars)
+    {
+        var length = 0;
+        foreach (var rune in value.EnumerateRunes())
+        {
+            if (maxScalars-- <= 0)
+                break;
+            length += rune.Utf16SequenceLength;
+        }
+        return value[..length];
+    }
 
     private static string FirstFree(Func<int, string> candidate, ExternalNameReservations reservations, string? stagingSuffix)
     {

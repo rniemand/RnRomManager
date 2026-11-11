@@ -289,4 +289,117 @@ public class ExternalRomNameTests
             AssertWholeCharacters(name);
         }
     }
+
+    // --- logical rom names (E3) ---
+
+    private static int Scalars(string value) => value.EnumerateRunes().Count();
+
+    [Test]
+    public void LogicalName_ValidAndFree_IsKeptVerbatim_AndReserved()
+    {
+        var taken = None();
+        var atLimit = new string('a', 251) + ".nsp";
+
+        Assert.That(ExternalRomName.AllocateLogicalName("Orbit Test [0100000000010000][v0].nsp", taken), Is.EqualTo("Orbit Test [0100000000010000][v0].nsp"));
+        Assert.That(ExternalRomName.AllocateLogicalName(atLimit, taken), Is.EqualTo(atLimit));
+        Assert.That(taken.IsTaken("orbit test [0100000000010000][V0].NSP"), Is.True);
+    }
+
+    [Test]
+    public void LogicalName_Collision_AddsASuffixBeforeTheExtension()
+    {
+        var taken = new ExternalNameReservations(["orbit.NSP"]);
+
+        Assert.That(ExternalRomName.AllocateLogicalName("Orbit.nsp", taken), Is.EqualTo("Orbit (2).nsp"));
+        Assert.That(ExternalRomName.AllocateLogicalName("Orbit.nsp", taken), Is.EqualTo("Orbit (3).nsp"));
+    }
+
+    [Test]
+    public void LogicalName_255Scalars_Colliding_IsShortenedKeepingItsExtension()
+    {
+        var name = new string('a', 251) + ".nsp";
+        var taken = new ExternalNameReservations([name]);
+
+        var allocated = ExternalRomName.AllocateLogicalName(name, taken);
+
+        Assert.That(allocated, Is.EqualTo(new string('a', 247) + " (2).nsp"));
+        Assert.That(Scalars(allocated), Is.EqualTo(255));
+    }
+
+    [Test]
+    public void LogicalName_CollisionAfterTruncation_UsesTheNextSuffix()
+    {
+        // Two different names over the limit that are identical once cut.
+        var taken = None();
+        var first = ExternalRomName.AllocateLogicalName(new string('a', 300) + "-one.nsp", taken);
+        var second = ExternalRomName.AllocateLogicalName(new string('a', 300) + "-two.nsp", taken);
+        var third = ExternalRomName.AllocateLogicalName(new string('a', 300) + "-three.nsp", taken);
+
+        Assert.That(first, Is.EqualTo(new string('a', 251) + ".nsp"));
+        Assert.That(second, Is.EqualTo(new string('a', 247) + " (2).nsp"));
+        Assert.That(third, Is.EqualTo(new string('a', 247) + " (3).nsp"));
+        Assert.That(new[] { first, second, third }.Select(Scalars), Is.All.EqualTo(255));
+    }
+
+    [Test]
+    public void LogicalName_SupplementaryCharacters_CountOnceAndStayWhole()
+    {
+        // 252 scalars but 503 UTF-16 units: within the limit, so kept; one more scalar is cut as a whole pair.
+        var fits = "x" + string.Concat(Enumerable.Repeat(Astral, 250)) + ".nsp";
+        var tooLong = "x" + string.Concat(Enumerable.Repeat(Astral, 260)) + ".nsp";
+        var taken = new ExternalNameReservations([fits]);
+
+        var suffixed = ExternalRomName.AllocateLogicalName(fits, taken);
+        var cut = ExternalRomName.AllocateLogicalName(tooLong, None());
+
+        Assert.That(suffixed, Is.EqualTo("x" + string.Concat(Enumerable.Repeat(Astral, 246)) + " (2).nsp"));
+        Assert.That(cut, Is.EqualTo("x" + string.Concat(Enumerable.Repeat(Astral, 250)) + ".nsp"));
+        Assert.That((Scalars(suffixed), Scalars(cut)), Is.EqualTo((255, 255)));
+        AssertWholeCharacters(suffixed);
+        AssertWholeCharacters(cut);
+    }
+
+    [Test]
+    public void LogicalName_GeneratedTitleIdAndVersionTags_SurviveTruncationAndSuffixes()
+    {
+        const string tags = " [0100F2C0115B6000][v65536]";
+        var name = new string('n', 300) + tags + ".xci";
+        var taken = None();
+
+        var first = ExternalRomName.AllocateLogicalName(name, taken, tags);
+        var second = ExternalRomName.AllocateLogicalName(name, taken, tags);
+
+        Assert.That(first, Is.EqualTo(new string('n', 255 - tags.Length - 4) + tags + ".xci"));
+        Assert.That(second, Is.EqualTo(new string('n', 255 - tags.Length - 8) + tags + " (2).xci"));
+        Assert.That((Scalars(first), Scalars(second)), Is.EqualTo((255, 255)));
+    }
+
+    [Test]
+    public void LogicalName_KeepTailThatIsNotTheEndOfTheStem_IsIgnored()
+    {
+        var name = new string('n', 300) + ".nsp";
+
+        Assert.That(ExternalRomName.AllocateLogicalName(name, None(), " [v0]"), Is.EqualTo(new string('n', 251) + ".nsp"));
+    }
+
+    [TestCase("NUL.nsp", "_NUL.nsp")]
+    [TestCase("COM1 .nsp", "_COM1 .nsp")]
+    [TestCase("CONOUT$.xci", "_CONOUT$.xci")]
+    [TestCase("Console.nsp", "Console.nsp")]
+    public void LogicalName_DeviceName_IsPrefixed(string name, string expected) =>
+        Assert.That(ExternalRomName.AllocateLogicalName(name, None()), Is.EqualTo(expected));
+
+    [Test]
+    public void LogicalName_DeviceNameAtTheLimit_ReservesThePrefixInTheBudget()
+    {
+        var name = "NUL." + new string('a', 247) + ".nsp"; // 255 scalars, a device name by its first part
+        var taken = None();
+
+        var first = ExternalRomName.AllocateLogicalName(name, taken);
+        var second = ExternalRomName.AllocateLogicalName(name, taken);
+
+        Assert.That(first, Is.EqualTo("_NUL." + new string('a', 246) + ".nsp"));
+        Assert.That(second, Is.EqualTo("_NUL." + new string('a', 242) + " (2).nsp"));
+        Assert.That((Scalars(first), Scalars(second)), Is.EqualTo((255, 255)));
+    }
 }
