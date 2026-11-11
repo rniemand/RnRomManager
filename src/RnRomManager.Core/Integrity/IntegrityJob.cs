@@ -17,12 +17,13 @@ namespace RnRomManager.Core.Integrity;
 /// files in the root and under unregistered folders are <c>OrphanFile</c> (never opened); under a registered system
 /// folder every non-ZIP is an orphan and every <c>.zip</c> is checked. Quick opens a ZIP only when its DB row (as it was
 /// before the repair) differs in size or whole-second mtime, else it checks just the location; Deep opens every ZIP and
-/// also hashes every ROM and image entry. The checker never moves or deletes library files.
+/// also hashes every ROM and image entry. An external game's files are checked by stat after its ZIP, whether or not
+/// the ZIP was opened (G1), and are not orphans (G3). The checker never moves or deletes library files.
 /// Findings update open issues with the same (type, zip_path, entry_name) or open new ones. A completed run resolves
 /// open issues it didn't see, but only where it performed that check (D48); a cancelled run resolves nothing. Retention
 /// (180 days) runs at the end of a completed run.
 /// </summary>
-public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbSync, IIntegrityIssueRepository issues,
+public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomRepository roms, DbSync dbSync, IIntegrityIssueRepository issues,
     IJobRepository jobs, InfoJsonReader reader, ISystemRegistry systems, IOptions<PathsOptions> paths, TimeProvider time,
     ILogger<IntegrityJob> logger) : IJob
 {
@@ -58,7 +59,14 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
         foreach (var skip in sync.Skipped.Where(s => s.Reason is DbSyncSkip.DuplicateGameId or DbSyncSkip.DuplicateSha1))
             Add(new IntegrityFinding(skip.Reason.ToString(), skip.ZipPath, SystemId: SystemOf(skip.ZipPath), Details: skip.Details));
 
-        var (zips, orphans) = Scan();
+        // G1/G3: the external files as the DB lists them after the repair (one read; a cancel stops the scan below instead,
+        // so the run still records what it found).
+        var external = await roms.ListExternalAsync(CancellationToken.None).ConfigureAwait(false);
+        var externalByZip = external.ToLookup(r => r.ZipPath, StringComparer.OrdinalIgnoreCase);
+        var listedFiles = external.Select(r => r.ZipPath[..(r.ZipPath.LastIndexOf('/') + 1)] + r.ExternalFileName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var (zips, orphans) = Scan(listedFiles);
         foreach (var orphan in orphans)
             Add(new IntegrityFinding(OrphanFile, orphan, SystemId: SystemOf(orphan)));
 
@@ -88,6 +96,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
                 checkedZips[zip] = Checked.Opened;
                 opened++;
             }
+            StatExternal(zip, externalByZip[zip], Add);
             context.Progress.ItemDone();
         }
 
@@ -112,7 +121,8 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
     }
 
     /// <summary>Library ZIPs under registered system folders, and every other file under <c>roms/</c> (relative, <c>/</c>).</summary>
-    private (List<string> Zips, List<string> Orphans) Scan()
+    /// <param name="listedFiles">External files the DB lists (<c>&lt;ZIP folder&gt;/&lt;name&gt;</c>, ignoring case): not orphans.</param>
+    private (List<string> Zips, List<string> Orphans) Scan(HashSet<string> listedFiles)
     {
         var root = paths.Value.Roms;
         var zips = new List<string>();
@@ -133,7 +143,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
             var registered = systems.ById(relative[..slash]) is not null;
             if (registered && relative.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 zips.Add(relative);
-            else
+            else if (!registered || !listedFiles.Contains(relative))
                 orphans.Add(relative);
         }
         zips.Sort(StringComparer.Ordinal);
@@ -180,7 +190,8 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
             IntegrityFinding Finding(string type, string? entry = null, string? details = null) =>
                 new(type, zipPath, entry, game.System, game.GameId, details);
 
-            var listed = game.Roms.Select(r => (Entry: LibraryZip.RomEntry(r.FileName), r.Metadata.SizeBytes, r.Metadata.Sha1))
+            // G1: an external ROM has no roms/ entry; its file is checked by StatExternal.
+            var listed = game.Roms.Where(r => r.ExternalFileName is null).Select(r => (Entry: LibraryZip.RomEntry(r.FileName), r.Metadata.SizeBytes, r.Metadata.Sha1))
                 .Concat(game.Images.Select(i => (Entry: LibraryZip.ImageEntry(i.FileName), i.SizeBytes, i.Sha1)))
                 .ToList();
             foreach (var (entry, size, sha1) in listed)
@@ -209,6 +220,27 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
                 add(Finding(MissingBoxArt));
             else if (cover.IsDefault)
                 add(Finding(DefaultBoxArt));
+        }
+    }
+
+    /// <summary>
+    /// G1: each external file the DB lists under <paramref name="zipPath"/> is checked by stat beside the ZIP; the
+    /// entry name is the file name. A path that isn't a plain file (a link, a folder) can't be used, so it is missing.
+    /// </summary>
+    private void StatExternal(string zipPath, IEnumerable<ExternalRomRow> rows, Action<IntegrityFinding> add)
+    {
+        var root = paths.Value.Roms;
+        var folder = Path.GetDirectoryName(Path.Combine(root, zipPath))!;
+        foreach (var rom in rows)
+        {
+            var file = ExternalRomPath.ClassifyFile(root, Path.Combine(folder, rom.ExternalFileName));
+            IntegrityFinding Finding(string type, string? details = null) => new(type, zipPath, rom.ExternalFileName, SystemOf(zipPath), rom.GameId, details);
+            if (file.Status == ExternalPathStatus.Missing)
+                add(Finding(EntryMissing));
+            else if (file.Status != ExternalPathStatus.Found)
+                add(Finding(EntryMissing, file.Details));
+            else if (file.Snapshot!.Length != rom.SizeBytes)
+                add(Finding(EntrySizeMismatch, $"file {file.Snapshot.Length} bytes, info.json {rom.SizeBytes}"));
         }
     }
 
@@ -291,6 +323,9 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
     {
         if (GlobalTypes.Contains(issue.Type) || issue.ZipPath is null)
             return true;
+        // shortcut: external pointer issues (no '/' in the entry name) stay open until their resolution rules (G2a, step 16b1).
+        if (issue.Type is EntryMissing or EntrySizeMismatch or HashMismatch && issue.EntryName is { } entry && !entry.Contains('/'))
+            return false;
         if (!onDisk.Contains(issue.ZipPath))
             return true; // the ZIP is gone (its DB rows were repaired)
         return checkedZips.GetValueOrDefault(issue.ZipPath) switch

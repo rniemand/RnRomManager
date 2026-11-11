@@ -48,7 +48,7 @@ public class IntegrityJobTests
             handler.EmbedRomsInZip.Returns(true);
             handler.Id.Returns(id);
             return handler;
-        }).ToArray();
+        }).Append(new ExternalTestHandler()).ToArray();
         _systems = Substitute.For<ISystemRegistry>();
         _systems.All.Returns(handlers);
         _systems.ById(Arg.Any<string>()).Returns(call =>
@@ -119,7 +119,7 @@ public class IntegrityJobTests
     private async Task<(Guid JobId, string Summary)> Run(JobMode mode = JobMode.Quick, CancellationToken ct = default)
     {
         var jobId = Guid.NewGuid();
-        var job = new IntegrityJob(mode, _games, _sync, _issues, _jobs, _reader, _systems, Options.Create(new PathsOptions { Roms = _dir.Path }),
+        var job = new IntegrityJob(mode, _games, new RomRepository(_factory), _sync, _issues, _jobs, _reader, _systems, Options.Create(new PathsOptions { Roms = _dir.Path }),
             TimeProvider.System, NullLogger<IntegrityJob>.Instance);
         var summary = await job.RunAsync(new JobContext(jobId, new JobProgress()), ct);
         return (jobId, System.Text.Json.JsonSerializer.Serialize(summary));
@@ -476,5 +476,72 @@ public class IntegrityJobTests
     [TestCase(DuplicateSha1, IssueSeverity.Warn)]
     [TestCase(DbRowDeleted, IssueSeverity.Info)]
     public void Severity_FollowsTheSpecTable(string type, string severity) => Assert.That(SeverityOf(type), Is.EqualTo(severity));
-}
 
+    /// <summary>An external game: its ZIP lists one ROM by pointer and the file sits beside it (E1).</summary>
+    private async Task<string> WriteExternal(string zipPath, string title)
+    {
+        var bytes = RomBytes(++_seed);
+        var pointer = $"{title}.{title}.nsp";
+        var game = Game(title, Rom($"{title}.nsp", bytes) with { ExternalFileName = pointer }) with { System = ExternalTestHandler.SystemId };
+        var path = Abs(zipPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(Path.Combine(Path.GetDirectoryName(path)!, pointer), bytes);
+        await new LibraryZipWriter(_reader).WriteAsync(path, null, new LibraryZipChanges(game, new Dictionary<string, Func<Stream>>()));
+        Touch(zipPath);
+        return Path.Combine(Path.GetDirectoryName(path)!, pointer);
+    }
+
+    /// <summary>Open issues other than the cover codes these image-less games always get.</summary>
+    private async Task<List<(string Type, string? ZipPath, string? Entry)>> OpenExternal() =>
+        [.. (await Open()).Where(i => i.Type != MissingBoxArt)];
+
+    [Test]
+    public async Task External_QuickReportsMissingAndWrongLengthFiles_OfUnopenedAndUnreadableZips()
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        var beta = await WriteExternal("ext/B/Beta.zip", "Beta");
+        var gamma = await WriteExternal("ext/G/Gamma.zip", "Gamma");
+        await Run();
+        Assert.That(await OpenExternal(), Is.Empty, "a healthy external library has no findings");
+
+        File.Delete(alpha);
+        File.AppendAllText(beta, "x");
+        File.Delete(gamma);
+        File.WriteAllText(Abs("ext/G/Gamma.zip"), "not a ZIP");
+        Touch("ext/G/Gamma.zip");
+        await Run();
+
+        var open = await OpenExternal();
+        Assert.That(open, Does.Contain((EntryMissing, (string?)"ext/A/Alpha.zip", (string?)"Alpha.Alpha.nsp")), "unopened ZIP");
+        Assert.That(open, Does.Contain((EntrySizeMismatch, (string?)"ext/B/Beta.zip", (string?)"Beta.Beta.nsp")));
+        Assert.That(open, Does.Contain((ZipUnreadable, (string?)"ext/G/Gamma.zip", (string?)null)));
+        Assert.That(open, Does.Contain((EntryMissing, (string?)"ext/G/Gamma.zip", (string?)"Gamma.Gamma.nsp")), "unreadable ZIP");
+    }
+
+    [Test]
+    public async Task External_StrayRomsEntry_IsUnlisted()
+    {
+        await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        Damage("ext/A/Alpha.zip", zip => Replace(zip, LibraryZip.RomEntry("Alpha.nsp"), [1, 2, 3]));
+
+        await Run(JobMode.Deep);
+
+        Assert.That(await OpenExternal(), Is.EqualTo(new[] { (EntryUnlisted, (string?)"ext/A/Alpha.zip", (string?)"roms/Alpha.nsp") }));
+    }
+
+    [Test]
+    public async Task External_ListedFilesAreNotOrphans_UnlistedFilesAndTempsAre()
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(alpha)!, "stray.nsp"), "?");
+        File.WriteAllText(alpha + ".tmp", "?");
+
+        await Run();
+
+        Assert.That((await OpenExternal()).Select(i => (i.Type, i.ZipPath)), Is.EquivalentTo(new[]
+        {
+            (OrphanFile, (string?)"ext/A/stray.nsp"),
+            (OrphanFile, (string?)"ext/A/Alpha.Alpha.nsp.tmp"),
+        }));
+    }
+}
