@@ -894,4 +894,82 @@ public class IntegrityJobTests
 
         Assert.That((await OpenExternal()).Select(i => i.Type), shortened ? Does.Contain(WrongLocation) : Does.Not.Contain(WrongLocation));
     }
+
+    [Test]
+    public async Task External_UnsafeKnownZip_IsOneZipUnreadable_AndKeepsItsIssues()
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        File.Delete(alpha);
+        await Run();
+        var missing = (EntryMissing, (string?)"ext/A/Alpha.zip", (string?)"Alpha.Alpha.nsp");
+        Assert.That(await OpenExternal(), Is.EqualTo(new[] { missing }));
+
+        // The bucket becomes a link to the same files elsewhere: nothing behind it may be opened.
+        var outside = _dir.Combine("outside");
+        Directory.Move(Abs("ext/A"), outside);
+        if (!TestLinks.TryLinkDirectory(Abs("ext/A"), outside))
+            Assert.Ignore("this account can't create a directory link");
+        try
+        {
+            await Run(JobMode.Deep);
+
+            var open = await OpenExternal();
+            Assert.That(open.Count(i => i.Type == ZipUnreadable), Is.EqualTo(1));
+            Assert.That(open, Does.Contain((ZipUnreadable, (string?)"ext/A/Alpha.zip", (string?)null)));
+            Assert.That(open, Does.Contain(missing), "a check that couldn't run resolves nothing");
+            Assert.That(await _games.ListAllAsync(default), Has.Count.EqualTo(1), "its mirror row is kept");
+        }
+        finally
+        {
+            TestLinks.RemoveDirectoryLink(Abs("ext/A"));
+        }
+    }
+
+    [Test]
+    public async Task External_AmbiguousZipName_IsOneZipUnreadable_AndNeitherIsOpened()
+    {
+        Assume.That(OperatingSystem.IsLinux(), "only a case-sensitive volume can hold both spellings");
+        await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        await Run();
+        File.Copy(Abs("ext/A/Alpha.zip"), Abs("ext/A/ALPHA.zip"));
+        if (Directory.GetFiles(Abs("ext/A"), "*.zip").Length != 2)
+            Assert.Ignore("this volume ignores case: it can't hold both spellings");
+
+        await Run(JobMode.Deep);
+
+        Assert.That((await OpenExternal()).Where(i => i.Type == ZipUnreadable).Select(i => i.ZipPath), Is.EqualTo(new[] { "ext/A/Alpha.zip" }));
+        Assert.That(await _games.ListAllAsync(default), Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task External_SafeMisplacedZip_IsWrongLocation_AndItsFileIsCheckedBesideIt()
+    {
+        await WriteExternal("gb/A/Alpha.zip", "Alpha");
+
+        await Run(JobMode.Deep);
+
+        var open = await OpenExternal();
+        Assert.That(open.Select(i => i.Type), Does.Contain(WrongLocation));
+        Assert.That(open.Select(i => i.Type), Has.None.AnyOf(EntryMissing, EntrySizeMismatch, HashMismatch, OrphanFile));
+    }
+
+    [Test]
+    public async Task External_ZipsTheDatabaseTreatsAsEqual_AreZipUnreadable_AndResolveNothing()
+    {
+        const string composed = "ext/C/Café.zip", decomposed = "ext/C/Café.zip";
+        var first = await WriteExternal(composed, "Cafe One", pointer: "c1.nsp");
+        File.Delete(first);
+        await Run();
+        var missing = (EntryMissing, (string?)composed, (string?)"c1.nsp");
+        Assert.That(await OpenExternal(), Does.Contain(missing));
+        await WriteExternal(decomposed, "Cafe Two", pointer: "c2.nsp");
+        if (Directory.GetFiles(Abs("ext/C"), "*.zip").Length != 2)
+            Assert.Ignore("this volume normalizes names: it can't hold both spellings");
+
+        await Run(JobMode.Deep);
+
+        var open = await OpenExternal();
+        Assert.That(open.Where(i => i.Type == ZipUnreadable).Select(i => i.ZipPath), Is.EquivalentTo(new[] { composed, decomposed }));
+        Assert.That(open, Does.Contain(missing), "a ZIP that wasn't checked keeps its issues");
+    }
 }

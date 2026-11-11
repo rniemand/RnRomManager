@@ -61,6 +61,12 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
         }, c.ZipPath, SystemId: SystemOf(c.ZipPath), GameId: c.GameId)).ToList();
         foreach (var skip in sync.Skipped.Where(s => s.Reason is DbSyncSkip.DuplicateGameId or DbSyncSkip.DuplicateSha1))
             Add(new IntegrityFinding(skip.Reason.ToString(), skip.ZipPath, SystemId: SystemOf(skip.ZipPath), Details: skip.Details));
+        // G4/E4: a path nothing could be opened at (unsafe, ambiguous, or equal to another ZIP for the database) is
+        // reported once, never opened, and keeps its issues.
+        var notChecked = sync.Skipped.Where(s => s.NotChecked).ToList();
+        foreach (var skip in notChecked)
+            Add(new IntegrityFinding(ZipUnreadable, skip.ZipPath, SystemId: SystemOf(skip.ZipPath),
+                GameId: before.TryGetValue(skip.ZipPath, out var behind) ? behind.Id : null, Details: skip.Details));
 
         // G1/G3: the external files as the DB lists them after the repair (one read; a cancel stops the scan below instead,
         // so the run still records what it found).
@@ -73,7 +79,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
             external.GroupBy(FileKey, StringComparer.OrdinalIgnoreCase)
                 .Where(g => g.Select(r => r.GameId).Distinct().Count() > 1)
                 .ToDictionary(g => g.Key, g => g.Select(r => r.GameId).Distinct().ToList(), StringComparer.OrdinalIgnoreCase),
-            sync.Skipped.Select(k => k.ZipPath).ToHashSet(StringComparer.OrdinalIgnoreCase));
+            sync.Skipped.Select(k => k.ZipPath).ToHashSet(StringComparer.OrdinalIgnoreCase), [.. notChecked.Select(k => k.ZipPath)]);
 
         var (zips, orphans) = Scan(listedFiles);
         foreach (var orphan in orphans)
@@ -91,6 +97,11 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
                 break;
             }
             context.Progress.SetCurrentItem(zip);
+            if (checks.IsUnchecked(zip))
+            {
+                context.Progress.ItemDone();
+                continue;
+            }
             before.TryGetValue(zip, out var row);
             var file = new FileInfo(Path.Combine(paths.Value.Roms, zip));
             var unchanged = row is not null && row.ZipSizeBytes == file.Length && row.ZipMtimeUtc == MirrorEntry.WholeSeconds(file.LastWriteTimeUtc);
@@ -148,22 +159,29 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
         var orphans = new List<string>();
         if (!Directory.Exists(root))
             return (zips, orphans);
-        foreach (var full in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        foreach (var entry in Directory.EnumerateFileSystemEntries(root))
         {
-            var relative = Path.GetRelativePath(root, full).Replace('\\', '/');
-            var slash = relative.IndexOf('/');
-            if (slash < 0)
+            var name = Path.GetFileName(entry);
+            if (!Directory.Exists(entry))
             {
                 // The startup write probe lives in the root for a moment (§4.1 step 4).
-                if (relative != StorageFolders.ProbeFileName)
-                    orphans.Add(relative);
+                if (name != StorageFolders.ProbeFileName)
+                    orphans.Add(name);
                 continue;
             }
-            var registered = systems.ById(relative[..slash]) is not null;
-            if (registered && relative.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                zips.Add(relative);
-            else if (!registered || !listedFiles.Contains(relative))
-                orphans.Add(relative);
+            // G4: links are never followed; DB sync reports what a system folder hides (ZipUnreadable).
+            var registered = systems.ById(name) is not null;
+            var scan = ExternalRomPath.ScanFolder(root, name);
+            foreach (var file in scan.Files.Select(f => f.RelativePath))
+            {
+                if (registered && file.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                    zips.Add(file);
+                else if (!registered || !listedFiles.Contains(file))
+                    orphans.Add(file);
+            }
+            // A special file in a system folder hides no ZIP, so DB sync leaves it to this report.
+            orphans.AddRange(scan.Problems.Where(p => !registered || (p.IsSpecialFile && !p.RelativePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)))
+                .Select(p => p.RelativePath));
         }
         zips.Sort(StringComparer.Ordinal);
         orphans.Sort(StringComparer.Ordinal);
@@ -176,7 +194,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
         LibraryZip zip;
         try
         {
-            zip = LibraryZip.Open(Path.Combine(paths.Value.Roms, zipPath), reader);
+            zip = OpenChecked(zipPath);
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
         {
@@ -429,6 +447,8 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
     /// <summary>D48: did this run perform the check that would have found <paramref name="issue"/> again?</summary>
     private bool WasChecked(IntegrityIssue issue, HashSet<string> onDisk, IReadOnlyDictionary<string, Checked> checkedZips, ExternalChecks checks)
     {
+        if (issue.ZipPath is { } path && checks.IsUnchecked(path) && issue.Type is not (DuplicateGameId or DuplicateSha1))
+            return false; // G4: nothing at or below this path could be checked
         if (GlobalTypes.Contains(issue.Type) || issue.ZipPath is null)
             return true;
         // G2a: an external file's issue (the game row may be gone, so the issue's own system decides).
@@ -466,12 +486,22 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
             && listed.SetEquals(mirrored);
     }
 
+    /// <summary>G4: a scanned ZIP, opened without following a link swapped in since the scan.</summary>
+    /// <exception cref="IOException">It is no longer a safe regular file.</exception>
+    private LibraryZip OpenChecked(string zipPath)
+    {
+        var opened = ExternalRomPath.OpenScanned(paths.Value.Roms, zipPath, FileShare.Read | FileShare.Delete);
+        if (opened.Status != ExternalPathStatus.Found)
+            throw new IOException(opened.Details);
+        return LibraryZip.Open(new BufferedStream(opened.Stream!), opened.Path, reader);
+    }
+
     /// <summary>The pointers a ZIP's <c>info.json</c> lists, or null when it can't be read.</summary>
     private HashSet<string>? ReadPointers(string zipPath)
     {
         try
         {
-            using var zip = LibraryZip.Open(Path.Combine(paths.Value.Roms, zipPath), reader);
+            using var zip = OpenChecked(zipPath);
             return zip.InfoJson is { Kind: InfoJsonReadResult.Outcome.Ok, Game: { } game }
                 ? game.Roms.Select(r => r.ExternalFileName).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase)
                 : null;
@@ -484,8 +514,12 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
 
     /// <summary>The external file rows, claims and per-pointer outcomes of one run (G1, G2a, G4).</summary>
     private sealed class ExternalChecks(ILookup<string, ExternalRomRow> byZip, IReadOnlyDictionary<string, List<Guid>> claimants,
-        HashSet<string> skippedBySync)
+        HashSet<string> skippedBySync, IReadOnlyList<string> notChecked)
     {
+        /// <summary>At or below a path DB sync could not open or enter (G4).</summary>
+        public bool IsUnchecked(string path) => notChecked.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase)
+            || (path.Length > p.Length && path[p.Length] == '/' && path.StartsWith(p, StringComparison.OrdinalIgnoreCase)));
+
         private readonly Dictionary<(string, string), bool> _outcomes = [];
         private readonly Dictionary<string, HashSet<string>?> _zipPointers = new(StringComparer.OrdinalIgnoreCase);
 

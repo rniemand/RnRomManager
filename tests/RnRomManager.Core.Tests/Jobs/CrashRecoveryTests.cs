@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Jobs;
+using RnRomManager.Core.Systems;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Jobs;
@@ -24,11 +25,46 @@ public class CrashRecoveryTests
         _jobs.AbortRunningAsync(default, default).ReturnsForAnyArgs([Guid.NewGuid()]);
     }
 
-    [TearDown]
-    public void TearDown() => _dir.Dispose();
+    private readonly List<string> _links = [];
 
-    private Task RunAsync() =>
-        new CrashRecovery(_jobs, Options.Create(_paths), TimeProvider.System, NullLogger<CrashRecovery>.Instance).RunAsync(CancellationToken.None);
+    [TearDown]
+    public void TearDown()
+    {
+        foreach (var link in _links)
+            TestLinks.RemoveDirectoryLink(link);
+        _links.Clear();
+        _dir.Dispose();
+    }
+
+    private bool Link(string link, string target)
+    {
+        if (!TestLinks.TryLinkDirectory(link, target))
+            return false;
+        _links.Add(link);
+        return true;
+    }
+
+    private Task RunAsync()
+    {
+        var handlers = new[] { "gb", "gbc", "ext" }.Select(id =>
+        {
+            var handler = Substitute.For<ISystemHandler>();
+            handler.Id.Returns(id);
+            handler.EmbedRomsInZip.Returns(id != "ext");
+            return handler;
+        }).ToArray();
+        var systems = Substitute.For<ISystemRegistry>();
+        systems.All.Returns(handlers);
+        return new CrashRecovery(_jobs, systems, Options.Create(_paths), TimeProvider.System, NullLogger<CrashRecovery>.Instance)
+            .RunAsync(CancellationToken.None);
+    }
+
+    private string Outside(string name)
+    {
+        var target = Directory.CreateDirectory(_dir.Combine("outside", name)).FullName;
+        Touch(Path.Combine(target, "keep.zip.tmp"));
+        return target;
+    }
 
     private static string Touch(string path)
     {
@@ -76,4 +112,46 @@ public class CrashRecoveryTests
 
     [Test]
     public Task NoWorkFolder_IsFine() => RunAsync();
+
+    [Test]
+    public async Task LinkedWorkFolder_IsSkipped_AndItsTargetIsUntouched()
+    {
+        var target = Outside("work");
+        Directory.CreateDirectory(_paths.Cache);
+        if (!Link(Path.Combine(_paths.Cache, CrashRecovery.WorkFolder), target))
+            Assert.Ignore("this account can't create a directory link");
+
+        await RunAsync();
+
+        Assert.That(File.Exists(Path.Combine(target, "keep.zip.tmp")), Is.True);
+    }
+
+    [Test]
+    public async Task LinkedEntryInTheWorkFolder_IsSkipped_AndItsTargetIsUntouched()
+    {
+        var target = Outside("job");
+        var work = Directory.CreateDirectory(Path.Combine(_paths.Cache, CrashRecovery.WorkFolder)).FullName;
+        var plain = Touch(Path.Combine(work, "stray.bin"));
+        if (!Link(Path.Combine(work, "linked"), target))
+            Assert.Ignore("this account can't create a directory link");
+
+        await RunAsync();
+
+        Assert.That(File.Exists(plain), Is.False, "regular entries are still removed");
+        Assert.That(File.Exists(Path.Combine(target, "keep.zip.tmp")), Is.True);
+    }
+
+    [Test]
+    public async Task ZipTempBehindALinkedBucket_IsKept_WhileRegularTempsGo()
+    {
+        var target = Outside("bucket");
+        var regular = Touch(Path.Combine(_paths.Roms, "ext", "A", "Alpha.zip.tmp"));
+        if (!Link(Path.Combine(_paths.Roms, "ext", "Z"), target))
+            Assert.Ignore("this account can't create a directory link");
+
+        await RunAsync();
+
+        Assert.That(File.Exists(regular), Is.False);
+        Assert.That(File.Exists(Path.Combine(target, "keep.zip.tmp")), Is.True);
+    }
 }

@@ -29,7 +29,11 @@ public enum DbSyncSkip
 
 public sealed record DbSyncChangeItem(DbSyncChange Kind, Guid GameId, string ZipPath);
 
-public sealed record DbSyncSkipItem(DbSyncSkip Reason, string ZipPath, string? Details);
+/// <param name="NotChecked">
+/// Nothing at this path was opened or entered (an unsafe or unreadable path, or a ZIP path the database equates with
+/// another, spec G4/E4); integrity reports it and keeps the path's issues, as no check of it ran.
+/// </param>
+public sealed record DbSyncSkipItem(DbSyncSkip Reason, string ZipPath, string? Details, bool NotChecked = false);
 
 public sealed record DbSyncResult(IReadOnlyList<DbSyncChangeItem> Changes, IReadOnlyList<DbSyncSkipItem> Skipped);
 
@@ -76,12 +80,12 @@ public sealed class DbSync(
             var behind = state.Where(s => IsAtOrBelow(s.ZipPath, problem.RelativePath)).ToList();
             foreach (var row in behind)
             {
-                skipped.Add(new DbSyncSkipItem(DbSyncSkip.ZipUnreadable, row.ZipPath, problem.Details));
+                skipped.Add(new DbSyncSkipItem(DbSyncSkip.ZipUnreadable, row.ZipPath, problem.Details, NotChecked: true));
                 kept.Add(row.Id);
                 found.Add(new Found(row.ZipPath, row.Id, null, dbSha1s[row.Id].ToList()));
             }
             if (behind.Count == 0)
-                skipped.Add(new DbSyncSkipItem(DbSyncSkip.ZipUnreadable, problem.RelativePath, problem.Details));
+                skipped.Add(new DbSyncSkipItem(DbSyncSkip.ZipUnreadable, problem.RelativePath, problem.Details, NotChecked: true));
             logger.LogWarning("DB sync: {Path} was not read: {Details}", problem.RelativePath, problem.Details);
         }
 
@@ -203,7 +207,7 @@ public sealed class DbSync(
                 var details = $"paths the database treats as equal: {string.Join(", ", physical.Order(StringComparer.Ordinal))}";
                 found.RemoveAll(f => physical.Contains(f.ZipPath, StringComparer.Ordinal));
                 foreach (var path in physical)
-                    skipped.Add(new DbSyncSkipItem(DbSyncSkip.ZipUnreadable, path, details));
+                    skipped.Add(new DbSyncSkipItem(DbSyncSkip.ZipUnreadable, path, details, NotChecked: true));
                 foreach (var row in rows)
                 {
                     kept.Add(row.Id);
@@ -216,7 +220,7 @@ public sealed class DbSync(
             {
                 found.Remove(candidate);
                 skipped.Add(new DbSyncSkipItem(DbSyncSkip.ZipUnreadable, candidate.ZipPath,
-                    $"the database treats it as equal to {owner.ZipPath}, which could not be checked"));
+                    $"the database treats it as equal to {owner.ZipPath}, which could not be checked", NotChecked: true));
             }
         }
     }

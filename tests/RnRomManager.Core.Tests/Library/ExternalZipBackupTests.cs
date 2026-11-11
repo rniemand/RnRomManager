@@ -7,6 +7,7 @@ using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Storage;
+using RnRomManager.Core.Systems;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Library;
@@ -52,7 +53,7 @@ public class ExternalZipBackupTests
         var jobs = Substitute.For<IJobRepository>();
         jobs.AbortRunningAsync(default, default).ReturnsForAnyArgs([]);
         var paths = Options.Create(new PathsOptions { Roms = _roms, Cache = _dir.Combine("cache") });
-        return new CrashRecovery(jobs, paths, TimeProvider.System, NullLogger<CrashRecovery>.Instance).RunAsync(default);
+        return new CrashRecovery(jobs, new SystemRegistry([new ExternalTestHandler()]), paths, TimeProvider.System, NullLogger<CrashRecovery>.Instance).RunAsync(default);
     }
 
     [Test]
