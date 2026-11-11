@@ -24,6 +24,10 @@ public sealed class ColecoVisionHandler : ISystemHandler
     public long MaxRomSizeBytes => 32768;
 
     public string DatName => "Coleco - ColecoVision";
+
+    /// <inheritdoc />
+    public bool EmbedRomsInZip => true;
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom)

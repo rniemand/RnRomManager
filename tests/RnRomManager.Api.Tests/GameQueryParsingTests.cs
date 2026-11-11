@@ -14,7 +14,9 @@ public class GameQueryParsingTests
     {
         var systems = Substitute.For<ISystemRegistry>();
         systems.ById(Arg.Any<string>()).Returns((ISystemHandler?)null);
-        systems.ById("gb").Returns(Substitute.For<ISystemHandler>());
+        var gb = Substitute.For<ISystemHandler>();
+        gb.EmbedRomsInZip.Returns(true);
+        systems.ById("gb").Returns(gb);
         return systems;
     }
 

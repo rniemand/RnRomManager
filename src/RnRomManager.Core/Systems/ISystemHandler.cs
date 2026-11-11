@@ -1,3 +1,5 @@
+using RnRomManager.Core.Dats;
+
 namespace RnRomManager.Core.Systems;
 
 /// <summary>
@@ -27,6 +29,16 @@ public interface ISystemHandler
 
     /// <summary>"Nintendo - Game Boy": DAT file names and the thumbnail folder.</summary>
     string DatName { get; }
+
+    /// <summary>
+    /// true: ROMs are entries of the game ZIP. false: each ROM is a file next to the ZIP, named by its
+    /// <c>externalFileName</c> in info.json. No default, so every handler states it; handlers sharing a
+    /// <see cref="Family"/> must agree.
+    /// </summary>
+    bool EmbedRomsInZip { get; }
+
+    /// <summary>Spec T1: libretro's five DAT files, or blawar/titledb.</summary>
+    DatSource DatSource => DatSource.Libretro;
 
     /// <summary>512×512 PNG stored as <c>boxart-01.png</c> with <c>isDefault: true</c> (§6.1).</summary>
     ReadOnlyMemory<byte> DefaultBoxArtPng { get; }

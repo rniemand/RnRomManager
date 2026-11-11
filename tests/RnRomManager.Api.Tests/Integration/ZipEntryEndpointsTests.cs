@@ -49,7 +49,7 @@ public class ZipEntryEndpointsTests
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld),
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJapan),
             ],
-        });
+        }, titleDb: IngestSeeder.EmptySwitch);
         cache.Load();
         _game = await Ingest("t1.gb", TetrisWorld);
         await Ingest("t2.gb", TetrisJapan);

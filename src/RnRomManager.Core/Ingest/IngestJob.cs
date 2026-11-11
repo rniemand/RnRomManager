@@ -6,6 +6,7 @@ using RnRomManager.Core.Dats;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Ingest;
@@ -57,8 +58,19 @@ public sealed class IngestJob(
         }
         finally
         {
-            if (Directory.Exists(work))
-                Directory.Delete(work, recursive: true);
+            // Best effort, like Review's work cleanup: a leftover never changes the job's outcome.
+            try
+            {
+                var owned = ExternalRomPath.ClassifyDirectory(paths.Value.Cache, work);
+                if (owned.Status == ExternalPathStatus.Found)
+                    Directory.Delete(owned.Path, recursive: true);
+                else if (owned.Status != ExternalPathStatus.Missing)
+                    logger.LogWarning("Work folder {Work} was not cleaned up: {Details}", work, owned.Details); // never walk into a replacement
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning("Work folder {Work} could not be removed: {Error}", work, ex.Message);
+            }
         }
     }
 
@@ -70,7 +82,7 @@ public sealed class IngestJob(
 
         // Step 5
         var stale = (await reviews.ListPendingSourcesAsync(cancellationToken).ConfigureAwait(false))
-            .Where(r => !File.Exists(r.ArchivePath ?? r.SourcePath)).ToList();
+            .Where(IsGone).ToList();
         if (stale.Count > 0)
         {
             await reviews.DeleteAsync(stale.Select(r => r.Id).ToList(), cancellationToken).ConfigureAwait(false);
@@ -88,7 +100,19 @@ public sealed class IngestJob(
         {
             cancellationToken.ThrowIfCancellationRequested();
             context.Progress.SetCurrentItem(file.Name);
-            if (now - file.ModifiedAtUtc < MinFileAge)
+            var external = systems.ById(file.SystemId) is { EmbedRomsInZip: false };
+            if (external && ExternalRomName.Scalars(file.FullPath) > ExternalRomName.MaxSourcePathScalars)
+            {
+                // I1: the source_path columns can't hold it, so nothing may refer to this file; it is left untouched.
+                logger.LogError("{Path}: longer than the {Limit}-character source path limit; left in place", file.FullPath, ExternalRomName.MaxSourcePathScalars);
+                await ItemAsync(run, file with { FullPath = ExternalRomName.CutScalars(file.FullPath, ExternalRomName.MaxSourcePathScalars) },
+                    IngestItemResult.Error(IngestErrors.IoError, $"the path is longer than {ExternalRomName.MaxSourcePathScalars} characters", file.SystemId)).ConfigureAwait(false);
+            }
+            else if (external && ArchiveExtractor.IsArchive(file.Name))
+                await ExternalArchiveAsync(run, file, Path.Combine(work, Guid.NewGuid().ToString())).ConfigureAwait(false); // its own fresh age check
+            else if (external)
+                await ItemAsync(run, file, null, CancellationToken.None).ConfigureAwait(false); // I2: its own fresh age check; a started item finishes
+            else if (now - file.ModifiedAtUtc < MinFileAge)
                 await ItemAsync(run, file, new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent, SystemId: file.SystemId)).ConfigureAwait(false);
             else if (ArchiveExtractor.IsArchive(file.Name))
                 await ArchiveAsync(run, file, Path.Combine(work, Guid.NewGuid().ToString())).ConfigureAwait(false);
@@ -98,6 +122,21 @@ public sealed class IngestJob(
         }
 
         return run.Counts;
+    }
+
+    /// <summary>
+    /// Step 5. An external source (the container for an archive entry) is pruned only when it is confirmed absent:
+    /// an unsafe path or an IO or permission failure keeps its row (spec I4).
+    /// </summary>
+    private bool IsGone(PendingReviewSource row)
+    {
+        var path = row.ArchivePath ?? row.SourcePath;
+        if (systems.ById(row.SystemId) is not { EmbedRomsInZip: false })
+            return !File.Exists(path);
+        var check = ExternalRomPath.ClassifyFile(paths.Value.Ingest, path);
+        if (check.Status is ExternalPathStatus.Unsafe or ExternalPathStatus.Unreadable)
+            logger.LogWarning("Review item {Id} kept: its source {Path} can't be checked safely: {Details}", row.Id, path, check.Details);
+        return check.Status == ExternalPathStatus.Missing;
     }
 
     private sealed record Run(JobContext Context, Dictionary<string, int> Counts, CircuitBreaker Breaker);
@@ -140,7 +179,13 @@ public sealed class IngestJob(
             return;
         }
 
-        // §3.1: an archive counts as one file, so every entry finishes even after a cancel.
+        ApplyFate(archive, run.Context.Actor, await EntriesAsync(run, archive, entries).ConfigureAwait(false));
+    }
+
+    /// <summary>§3.1: an archive counts as one file, so every entry finishes even after a cancel.</summary>
+    private async Task<List<(string Entry, IngestItemResult? Result)>> EntriesAsync(Run run, IngestFile archive, IReadOnlyList<ExtractedEntry> entries,
+        ExternalFileSnapshot? archiveSnapshot = null)
+    {
         var outcomes = new List<(string Entry, IngestItemResult? Result)>();
         foreach (var entry in entries)
         {
@@ -149,11 +194,132 @@ public sealed class IngestJob(
             {
                 ArchivePath = archive.FullPath,
                 ArchiveEntry = entry.EntryPath,
+                ArchiveSnapshot = archiveSnapshot,
             };
             outcomes.Add((entry.EntryPath, await ItemAsync(run, item, null, CancellationToken.None).ConfigureAwait(false)));
         }
+        return outcomes;
+    }
 
-        ApplyFate(archive, run.Context.Actor, outcomes);
+    /// <summary>
+    /// I1 for an external system's archive: it is read through one checked handle, and its entries are only
+    /// processed when that handle and the path still show the file that was listed. Anything else is one item for
+    /// the archive, which stays where it is.
+    /// </summary>
+    private async Task ExternalArchiveAsync(Run run, IngestFile archive, string workDir)
+    {
+        Task One(IngestItemResult result) => ItemAsync(run, archive, result);
+        IngestItemResult Io(string? details) => IngestItemResult.Error(IngestErrors.IoError, details, archive.SystemId);
+        var tooRecent = new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent, SystemId: archive.SystemId);
+        var family = systems.ByFamily(systems.ById(archive.SystemId)!.Family);
+
+        var opened = ExternalRomPath.OpenRead(paths.Value.Ingest, archive.FullPath, FileShare.Read | FileShare.Delete);
+        if (opened.Status != ExternalPathStatus.Found)
+        {
+            await One(Io(opened.Details)).ConfigureAwait(false);
+            return;
+        }
+
+        IReadOnlyList<ExtractedEntry> entries = [];
+        ArchiveRejectedException? rejected = null;
+        var snapshot = opened.Snapshot!;
+        using (var stream = opened.Stream!)
+        {
+            if (snapshot.Length != archive.SizeBytes || snapshot.LastWriteTimeUtc != archive.ModifiedAtUtc
+                || time.GetUtcNow().UtcDateTime - snapshot.LastWriteTimeUtc < MinFileAge)
+            {
+                await One(tooRecent).ConfigureAwait(false);
+                return;
+            }
+
+            var workCheck = ExternalRomPath.CreateDirectory(paths.Value.Cache, workDir);
+            if (workCheck.Status != ExternalPathStatus.Found)
+            {
+                await One(Io(workCheck.Details)).ConfigureAwait(false);
+                return;
+            }
+            try
+            {
+                entries = extractor.Extract(stream, archive.Name, workCheck.Path, ext =>
+                    family.FirstOrDefault(h => h.RomExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))?.MaxRomSizeBytes);
+            }
+            catch (ArchiveRejectedException ex)
+            {
+                rejected = ex;
+            }
+            catch (ArchiveOutputException ex)
+            {
+                await One(Io(ex.Message)).ConfigureAwait(false);
+                return;
+            }
+
+            // Whatever was extracted came from the handle; the entries only count if the path still names that file.
+            var current = ExternalRomPath.ClassifyFile(paths.Value.Ingest, archive.FullPath);
+            if (current.Status != ExternalPathStatus.Found)
+            {
+                await One(Io(current.Details)).ConfigureAwait(false);
+                return;
+            }
+            if (current.Snapshot != snapshot || ExternalRomPath.SnapshotOf(stream) != snapshot)
+            {
+                await One(tooRecent).ConfigureAwait(false);
+                return;
+            }
+        }
+
+        // The archive is only moved or deleted while its path still names the file that was extracted. Otherwise
+        // it stays, with one more item for the archive itself; the entries keep the outcomes they already have.
+        async Task<bool> StillTheArchiveAsync()
+        {
+            var current = ExternalRomPath.ClassifyFile(paths.Value.Ingest, archive.FullPath);
+            if (current.Status == ExternalPathStatus.Found && current.Snapshot == snapshot)
+                return true;
+            await One(current.Status == ExternalPathStatus.Found ? tooRecent : Io(current.Details)).ConfigureAwait(false);
+            return false;
+        }
+
+        var actor = run.Context.Actor;
+        if (rejected is not null || entries.Count == 0)
+        {
+            if (await StillTheArchiveAsync().ConfigureAwait(false))
+            {
+                await One(rejected is not null
+                    ? pipeline.FailFile(archive, actor, rejected.Reason, rejected.Message)
+                    : pipeline.FailFile(archive, actor, IngestFailures.UnsupportedType, "the archive holds no ROM entries")).ConfigureAwait(false);
+            }
+            return;
+        }
+
+        var outcomes = await EntriesAsync(run, archive, entries, snapshot).ConfigureAwait(false);
+        var fate = FateOf([.. outcomes.Select(o => o.Result)]);
+        if (fate == ArchiveFate.Keep)
+        {
+            logger.LogInformation("{Path}: kept in ingest (an entry needs review, was skipped or hit an error)", archive.FullPath);
+            return;
+        }
+        if (!await StillTheArchiveAsync().ConfigureAwait(false))
+            return;
+
+        IngestItemResult? error = null;
+        if (fate == ArchiveFate.Failed)
+            error = pipeline.MoveToFailed(archive, actor, "EntriesFailed", EntryDetails(outcomes));
+        else if (fate == ArchiveFate.Duplicates)
+            error = pipeline.MoveToDuplicates(archive, actor);
+        else
+        {
+            try
+            {
+                File.Delete(archive.FullPath);
+                pipeline.RecordArchiveDeleted(archive, actor);
+                logger.LogInformation("{Path}: every entry ingested; archive deleted", archive.FullPath);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                error = Io($"couldn't delete the archive: {ex.Message}");
+            }
+        }
+        if (error is not null)
+            await One(error).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -163,19 +329,18 @@ public sealed class IngestJob(
     /// </summary>
     private void ApplyFate(IngestFile archive, AuditActor actor, IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes)
     {
-        var kinds = outcomes.Select(o => o.Result is { ResolvedArchiveDuplicate: true } ? IngestOutcome.Ingested : o.Result?.Outcome).ToList();
-        if (kinds.Any(k => k is null or IngestOutcome.Review or IngestOutcome.Error))
+        var fate = FateOf([.. outcomes.Select(o => o.Result)]);
+        if (fate == ArchiveFate.Keep)
         {
             logger.LogInformation("{Path}: kept in ingest (an entry needs review or hit an error)", archive.FullPath);
             return;
         }
-        if (kinds.Contains(IngestOutcome.Failed))
+        if (fate == ArchiveFate.Failed)
         {
-            var details = string.Join("\n", outcomes.Select(o => $"  {o.Entry}: {o.Result!.Outcome} {o.Result.Reason}".TrimEnd()));
-            pipeline.MoveToFailed(archive, actor, "EntriesFailed", "entries:\n" + details);
+            pipeline.MoveToFailed(archive, actor, "EntriesFailed", EntryDetails(outcomes));
             return;
         }
-        if (kinds.All(k => k == IngestOutcome.Duplicate))
+        if (fate == ArchiveFate.Duplicates)
         {
             pipeline.MoveToDuplicates(archive, actor);
             return;
@@ -192,6 +357,31 @@ public sealed class IngestJob(
         }
     }
 
+    public enum ArchiveFate
+    {
+        Keep,
+        Failed,
+        Duplicates,
+        Delete,
+    }
+
+    /// <summary>
+    /// §7.3 as a decision. An entry that was <c>Skipped</c> (an external entry that was <c>TooRecent</c>, I1) keeps
+    /// the archive like <c>Review</c> or <c>Error</c> does, even when other entries committed.
+    /// </summary>
+    public static ArchiveFate FateOf(IReadOnlyList<IngestItemResult?> results)
+    {
+        var kinds = results.Select(r => r is { ResolvedArchiveDuplicate: true } ? IngestOutcome.Ingested : r?.Outcome).ToList();
+        if (kinds.Any(k => k is null or IngestOutcome.Review or IngestOutcome.Error or IngestOutcome.Skipped))
+            return ArchiveFate.Keep;
+        if (kinds.Contains(IngestOutcome.Failed))
+            return ArchiveFate.Failed;
+        return kinds.All(k => k == IngestOutcome.Duplicate) ? ArchiveFate.Duplicates : ArchiveFate.Delete;
+    }
+
+    private static string EntryDetails(IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes) =>
+        "entries:\n" + string.Join("\n", outcomes.Select(o => $"  {o.Entry}: {o.Result!.Outcome} {o.Result.Reason}".TrimEnd()));
+
     private async Task<IngestItemResult?> ProcessAsync(IngestFile file, Guid jobId, AuditActor actor, CircuitBreaker breaker,
         CancellationToken cancellationToken)
     {
@@ -203,6 +393,8 @@ public sealed class IngestJob(
         {
             logger.LogError(ex, "{Path}: unexpected failure", file.FullPath);
             var result = IngestItemResult.Error(IngestErrors.Unexpected, ex.Message, file.SystemId);
+            if (systems.ById(file.SystemId) is { EmbedRomsInZip: false })
+                return result; // I4: an external source's Pending row stays
             await reviews.CompleteSourceAsync(file.SourcePath, file.ArchiveEntry, result, jobId, time.GetUtcNow().UtcDateTime, cancellationToken).ConfigureAwait(false);
             return result;
         }

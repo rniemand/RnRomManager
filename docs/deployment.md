@@ -83,8 +83,8 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 
 | Path | Contents |
 |---|---|
-| `/app/roms` | the library: one ZIP per game (see [ZIP format](zip-format.md)) |
-| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`) `ingest/nes/` (NES: headered `.nes` only) `ingest/snes/` (SNES: `.sfc` or `.smc`, copier header stripped) `ingest/a2600/` (Atari 2600: `.a26` or `.bin`) `ingest/coleco/` (ColecoVision: `.col`, `.rom` or `.bin`) `ingest/gg/` (Game Gear: `.gg` or `.sms`) `ingest/sms/` (Master System: `.sms`) `ingest/md/` (Mega Drive / Genesis: `.md`, `.bin` or `.gen`) `ingest/s32x/` (32X: `.32x`) or `ingest/tg16/` (TurboGrafx-16 / PC Engine: `.pce`, copier header stripped); `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way |
+| `/app/roms` | the library: one ZIP per game (see [ZIP format](zip-format.md)), plus the Nintendo Switch ROM files stored next to their ZIPs |
+| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`) `ingest/nes/` (NES: headered `.nes` only) `ingest/snes/` (SNES: `.sfc` or `.smc`, copier header stripped) `ingest/a2600/` (Atari 2600: `.a26` or `.bin`) `ingest/coleco/` (ColecoVision: `.col`, `.rom` or `.bin`) `ingest/gg/` (Game Gear: `.gg` or `.sms`) `ingest/sms/` (Master System: `.sms`) `ingest/md/` (Mega Drive / Genesis: `.md`, `.bin` or `.gen`) `ingest/s32x/` (32X: `.32x`) `ingest/tg16/` (TurboGrafx-16 / PC Engine: `.pce`, copier header stripped) or `ingest/switch/` (Nintendo Switch: `.nsp`, `.xci`, `.nsz` or `.xcz`, stored as files next to the ZIP; see [External ROM storage](#external-rom-storage-nintendo-switch)); `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way |
 | `/app/logs` | `rnrommanager-yyyy-MM-dd.log`, kept for `Logging:RetentionDays` |
 | `/app/cache` | downloaded DATs and temporary work folders |
 | `/app/backups` | the daily database backups (see [Backup and restore](#backup-and-restore)); keep it private |
@@ -115,11 +115,13 @@ so the app sees the original scheme (for `Secure` cookies) and client address. *
 
 The live log (**Admin → Logs**) is a long-lived server-sent event stream at `/api/admin/logs/stream`. The app turns off response buffering and sends a keep-alive every 15 seconds, but the proxy must not buffer it either and must allow an idle read of more than 15 seconds. nginx needs `proxy_buffering off;` and a `proxy_read_timeout` above 15 s on that location; Caddy and Traefik stream it as it is.
 
+Resolving a Switch Review item, or moving or deleting a Switch release, can copy a multi-GB file when `/app/ingest` and `/app/roms` are on different volumes. The request stays open until that finishes, so raise the proxy's read timeout for `/api/` (nginx `proxy_read_timeout`, e.g. `600s`); otherwise the browser gets a gateway error while the action still completes in the background. Reload the page before trying again.
+
 Use `ASPNETCORE_HTTP_PORTS` to change the listen port, not `ASPNETCORE_URLS`: the container health check reads the first port from `ASPNETCORE_HTTP_PORTS`.
 
 ## Outbound HTTP
 
-Besides the DAT and thumbnail downloads, **Upload image → URL** makes the server fetch an image from an address a ROM manager types. That download connects directly (it ignores `HTTP_PROXY`/`HTTPS_PROXY`), only to public internet addresses (private, loopback, link-local and similar ranges are refused on every redirect hop), with a 15-second limit and at most 8 MiB. On a host that can only reach the internet through a mandatory egress proxy, the URL option fails with "couldn't connect"; uploading a file still works.
+Besides the DAT downloads (libretro-database and the [titledb](https://github.com/blawar/titledb) file for Switch, `Sources:TitleDbUrl`, about 90 MB and capped at 256 MiB) and the thumbnail downloads (libretro-thumbnails, and for Switch images from `img-eshop.cdn.nintendo.net` only, with redirects refused), **Upload image → URL** makes the server fetch an image from an address a ROM manager types. That download connects directly (it ignores `HTTP_PROXY`/`HTTPS_PROXY`), only to public internet addresses (private, loopback, link-local and similar ranges are refused on every redirect hop), with a 15-second limit and at most 8 MiB. On a host that can only reach the internet through a mandatory egress proxy, the URL option fails with "couldn't connect"; uploading a file still works.
 
 ## Health checks
 
@@ -133,11 +135,11 @@ Both are anonymous and return no details.
 ### What to back up
 
 - **The database**, which holds users, the Data Protection keys that keep sign-ins valid across restarts, job history, the review queue, integrity issues, the audit trail and settings. The app backs it up itself (below).
-- **`/app/roms`**, the library itself, including release notes. Stop the app (or make sure no job is running) for a consistent copy.
+- **`/app/roms`**, the library itself, including release notes and the Switch ROM files next to their ZIPs. Stop the app (or make sure no job is running) for a consistent copy.
 - **`/app/backups`**, so the database backups survive the loss of the host. Copy it somewhere else.
 - **`/app/collections`**, the collection cover images. Collections themselves are in the database (and its backups), but their cover files are not: copy this folder with the backups. After a restore without it, collections show a placeholder until a cover is set again.
 
-The library ZIPs are the source of truth for games: if the database is lost but the ZIPs are not, a new database is rebuilt from them by the next ingestion or **Integrity → Run quick** (accounts and history are not). `/app/ingest` holds anything not yet ingested plus `_removed/`; back it up too if you keep files there. `/app/cache` can be re-downloaded with **Refresh DATs**.
+The library ZIPs, together with the external ROM files next to them in `/app/roms`, are the source of truth for games: if the database is lost but they are not, a new database is rebuilt from them by the next ingestion or **Integrity → Run quick** (accounts and history are not). `/app/ingest` holds anything not yet ingested plus `_removed/`; back it up too if you keep files there. `/app/cache` can be re-downloaded with **Refresh DATs**.
 
 ### Database backups
 
@@ -189,9 +191,36 @@ Upgrading to 0.3.0:
 - **Everyone is signed out once.** Roles change from a single Admin/User to the `admin` and `rom-manager` roles; every Admin gets both and every User none, and every session ends so the new roles take effect. Sign in again.
 - **ZIPs move to `info.json` version 3** as each game is next written (cover flag, uploaded and JPEG images). An app older than 0.3.0 can still read those ZIPs but refuses to change them (`InfoJsonNewerSchema`), and the database can't be downgraded either: restore the backup to go back.
 
-After upgrading to a version that adds a system (such as the ones that add Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X and TurboGrafx-16), ingestion refuses to start with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs.
+Upgrading to 0.4.0:
+
+- **Refresh DATs after upgrading.** Nintendo Switch is added and identified through titledb; ingestion refuses to start with `DatsMissing` until **Admin → DATs → Refresh DATs** has downloaded its titledb file. `ingest/switch/` is created at startup.
+- **ZIPs move to `info.json` version 4** as each game is next written (`externalFileName`, `TitleDb`, `titledb` images). Apps before 0.4.0 can read them but refuse to change them.
+- **Plan disk space** for Switch dumps (often several GB each). Keep `/app/ingest` and `/app/roms` on the same volume where you can: placement is then an instant rename; across volumes each file is copied and needs free space for a second copy while it moves.
+- **To be able to downgrade,** take a database backup (**Back up now**) and a filesystem snapshot of `/app/roms` (and `/app/ingest`) at the same moment before upgrading, and restore **both** to go back: the database alone doesn't know where external files were.
+
+After upgrading to a version that adds a system (such as the ones that add Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16 and Nintendo Switch), ingestion refuses to start with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs.
 
 On `docker compose stop` a running job gets 30 seconds to finish its current item (`stop_grace_period: 35s` allows for that). A job that's cut off is marked `Aborted` at the next start and its leftovers are cleaned up; just start it again.
+
+## External ROM storage (Nintendo Switch)
+
+Switch ROMs are files next to their game's ZIP in `/app/roms/switch/<letter>/` (see [ZIP format](zip-format.md#external-rom-files)). The app never overwrites a file it didn't create and never follows a link: every path is checked below its configured root, and a linked or special file or folder is reported and left alone.
+
+**Requirements**
+
+- **No-replace rename.** `/app/roms` and `/app/ingest` must be on filesystems that support a rename that refuses to replace an existing name (`RENAME_NOREPLACE` on Linux: ext4, XFS, Btrfs and tmpfs do; many NFS and FUSE mounts don't; on Windows any NTFS volume). Without it every Switch placement, edit move and delete fails with `IoError` ("no-replace rename is not supported for <path>") and leaves the file where it was. Check your mounts before you rely on Switch.
+- **procfs on Linux.** Checked reads open each file through `/proc/self/fd`, so `/proc` must be mounted (it is in every normal container). Without it external reads fail with an IO error instead of falling back to an unchecked open.
+- **Database.** The ZIP-path conflict check uses a session temporary table; the `GRANT ALL` in [Using an existing MariaDB server](#using-an-existing-mariadb-server) already covers it.
+
+**What the app leaves behind, and what to do**
+
+- **Staging files.** Every move into place goes through an exclusively created staging name: a same-volume rename, or across volumes a `<name>.tmp` copy that is verified (length, and SHA1 when known) before the source is removed. A crash can leave such a `.tmp`; integrity reports it as `OrphanFile` and never deletes it, because it may be the only complete copy. Move it back to `ingest/switch/` (renamed to its original name) and run ingestion.
+- **Failed rollbacks.** When a ZIP write fails, the file is moved back to its ingest path, or to a ` (2)`-style sibling when that path is taken; the item's details name the actual surviving path. A rollback copy left directly in `ingest/<system>/` is picked up by the next ingestion, which moves it to `_failed/` with an `.error.txt` (bytes kept); rename it back and ingest it again. If the Review item couldn't be pointed at the new name, the response is `DbWriteFailed` naming both paths: move the copy back to its original path once that is free.
+- **Archived members.** A Switch file from an archive is extracted to `cache/work/` and moved from there. If the ZIP write then fails and the archive has changed or vanished meanwhile, the verified copy is kept in the library folder as an unlisted file (`OrphanFile`) instead of being deleted. Move it to `ingest/switch/` to ingest it again.
+- **Pointer and path conflicts.** If two games list the same file in one folder, or two ZIP paths count as equal in the database (case or accent differences), integrity reports `EntryMissing` / `ZipUnreadable` with the conflict in the details, skips those games and changes nothing. Fix the ZIPs' `externalFileName` pointers (or rename one ZIP) by hand, then run **Integrity → Run quick**.
+- **Interrupted edits.** If a title edit, move or merge is cut off, both the old and new ZIP can survive: integrity reports `DuplicateGameId` or `DuplicateSha1` and keeps the existing rows, and a file named by the losing ZIP can show as `OrphanFile`. Stop writes, back up both ZIPs and their files, keep the ZIP whose pointers match the files on disk (for a completed move or merge: the target, after checking it lists the moved releases), move the obsolete ZIP outside `roms/`, and run integrity. Keep orphan bytes until both ZIPs have been checked.
+- **Multi-release moves.** Before moving one release out of a game with several, the app writes a verified copy of the source ZIP as `<name>.move-backup.tmp` plus a recovery record `<name>.move-backup.tmp.json` (format version 1: backup SHA256, both game IDs and ZIP paths, the moved SHA1 and both pointers), and removes them when the move finishes. If they survive a crash, use the pair to restore whichever releases are missing from the source or target ZIP, after checking the record matches the backup; a backup's presence alone doesn't mean the move failed. A `.partial` file is an interrupted copy: never use it, and delete it once nothing is running.
+- **DAT publication.** A DAT refresh builds and checks the whole new set in `cache/work/<job>/` before swapping it in through a fixed backup, `cache/dats.previous/`. If the app stops mid-swap, startup puts the previous set back (or keeps the new one if the swap had finished) and removes the backup. A linked or non-folder `cache/dats` or `cache/dats.previous` is never moved or deleted; fix it by hand. The DAT manifest is read only up to 1 MiB and the titledb file up to 256 MiB, through the same checked reads.
 
 ## Admin password recovery
 

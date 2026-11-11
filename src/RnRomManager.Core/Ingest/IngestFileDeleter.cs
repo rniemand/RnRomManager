@@ -15,7 +15,7 @@ public sealed record IngestDeleteRef(string? System, string? Folder, string? Nam
 public sealed record IngestDeleteResult(int Deleted, IReadOnlyList<IngestDeleteRef> Failed, string? Code = null);
 
 /// <summary>D2: hard-deletes pending files and failed files (with their <c>.error.txt</c>) under the global job lock.</summary>
-public sealed class IngestFileDeleter(JobLock jobLock, IIngestReviewRepository reviews, IOptions<PathsOptions> paths,
+public sealed class IngestFileDeleter(JobLock jobLock, IIngestReviewRepository reviews, ISystemRegistry systems, IOptions<PathsOptions> paths,
     IAuditLog audit, AuditPaths auditPaths, ILogger<IngestFileDeleter> logger)
 {
     public const string Pending = "pending";
@@ -93,6 +93,18 @@ public sealed class IngestFileDeleter(JobLock jobLock, IIngestReviewRepository r
     private async Task<bool> DeleteOneAsync(IngestDeleteRef file, AuditActor actor, CancellationToken ct)
     {
         var path = PathOf(paths.Value.Ingest, file);
+        var external = systems.ById(file.System!) is { EmbedRomsInZip: false };
+        if (external)
+        {
+            // G4: only a regular file reached without a link is deleted; a confirmed-absent one is handled as gone.
+            var check = ExternalRomPath.ClassifyFile(paths.Value.Ingest, path);
+            if (check.Status is not (ExternalPathStatus.Found or ExternalPathStatus.Missing))
+            {
+                logger.LogWarning("Ingest file '{Path}' was not deleted: {Details}", path, check.Details);
+                return false;
+            }
+            path = check.Path;
+        }
         // File.Delete succeeds on a missing file, so only a file that existed gets an audit row.
         var existed = File.Exists(path);
         try
@@ -114,7 +126,10 @@ public sealed class IngestFileDeleter(JobLock jobLock, IIngestReviewRepository r
         {
             try
             {
-                File.Delete(path + IngestFileScanner.ErrorSuffix);
+                var diagnostic = path + IngestFileScanner.ErrorSuffix;
+                // An unsafe diagnostic of an external system stays where it is.
+                if (!external || ExternalRomPath.ClassifyFile(paths.Value.Ingest, diagnostic).Status == ExternalPathStatus.Found)
+                    File.Delete(diagnostic);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -123,7 +138,9 @@ public sealed class IngestFileDeleter(JobLock jobLock, IIngestReviewRepository r
         }
         else
         {
-            await reviews.DeletePendingBySourceAsync(path, ArchiveExtractor.IsArchive(file.Name!) ? path : null, ct).ConfigureAwait(false);
+            // External: the file is gone, so its rows are removed even when the request was abandoned meanwhile.
+            await reviews.DeletePendingBySourceAsync(path, ArchiveExtractor.IsArchive(file.Name!) ? path : null,
+                external ? CancellationToken.None : ct).ConfigureAwait(false);
         }
         return true;
     }

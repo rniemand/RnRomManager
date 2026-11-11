@@ -62,9 +62,83 @@ public sealed class GameRepository : IGameRepository
     public async Task<IReadOnlyList<GameSyncState>> ListSyncStateAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();
-        var rows = await connection.QueryAsync<(Guid Id, string ZipPath, long Size, DateTime Mtime)>(new CommandDefinition(
-            "SELECT id, zip_path, zip_size_bytes, zip_mtime_utc FROM games", cancellationToken: cancellationToken));
-        return rows.Select(r => new GameSyncState(r.Id, r.ZipPath, r.Size, r.Mtime)).ToList();
+        var rows = await connection.QueryAsync<(Guid Id, string ZipPath, long Size, DateTime Mtime, string SystemId)>(new CommandDefinition(
+            "SELECT id, zip_path, zip_size_bytes, zip_mtime_utc, system_id FROM games", cancellationToken: cancellationToken));
+        return rows.Select(r => new GameSyncState(r.Id, r.ZipPath, r.Size, r.Mtime, r.SystemId)).ToList();
+    }
+
+    /// <summary>Rows per INSERT into the staging table.</summary>
+    internal const int ZipPathBatchSize = 500;
+
+    /// <summary><c>games.zip_path</c> is VARCHAR(512): a longer path can't equal a stored one and can't be staged.</summary>
+    private const int MaxZipPathLength = 512;
+
+    public async Task<IReadOnlyList<ZipPathEquivalenceGroup>> ListZipPathEquivalenceAsync(IReadOnlyList<string> zipPaths, CancellationToken cancellationToken)
+    {
+        if (zipPaths.Count == 0)
+            return [];
+
+        // The temporary table is local to the session, so everything runs on this one open connection.
+        await using var connection = _connections.Create();
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        var groupOf = new Dictionary<int, int>(); // input ordinal -> the first ordinal of its group
+        var owners = new List<(int Grp, Guid Id, string ZipPath)>();
+        try
+        {
+            // Copying the column from games gives the staging column its exact type and collation. The key is the
+            // input's ordinal, not the path, so spellings the collation treats as equal are all kept.
+            await connection.ExecuteAsync(new CommandDefinition("""
+                DROP TEMPORARY TABLE IF EXISTS tmp_zip_path_inputs;
+                CREATE TEMPORARY TABLE tmp_zip_path_inputs (ord INT NOT NULL PRIMARY KEY, KEY ix_zip_path (zip_path))
+                    AS SELECT 0 AS ord, zip_path FROM games WHERE 1 = 0;
+                """, cancellationToken: cancellationToken)).ConfigureAwait(false);
+
+            var staged = Enumerable.Range(0, zipPaths.Count).Where(i => zipPaths[i].EnumerateRunes().Count() <= MaxZipPathLength).ToList();
+            foreach (var batch in staged.Chunk(ZipPathBatchSize))
+            {
+                var parameters = new DynamicParameters();
+                var values = new List<string>(batch.Length);
+                foreach (var ordinal in batch)
+                {
+                    parameters.Add($"o{ordinal}", ordinal);
+                    parameters.Add($"p{ordinal}", zipPaths[ordinal]);
+                    values.Add($"(@o{ordinal}, @p{ordinal})");
+                }
+                await connection.ExecuteAsync(new CommandDefinition(
+                    $"INSERT INTO tmp_zip_path_inputs (ord, zip_path) VALUES {string.Join(", ", values)}", parameters,
+                    cancellationToken: cancellationToken)).ConfigureAwait(false);
+            }
+
+            // Both joins compare with "=" under the column's own collation, in the database. Don't group or
+            // partition by the path instead: a window partition over this column put an unequal path between two
+            // equal ones (most likely the sort keys are cut at max_sort_length), splitting their group.
+            foreach (var (ord, grp) in await connection.QueryAsync<(int Ord, int Grp)>(new CommandDefinition("""
+                         SELECT a.ord, MIN(b.ord)
+                         FROM tmp_zip_path_inputs a
+                         JOIN tmp_zip_path_inputs b ON b.zip_path = a.zip_path
+                         GROUP BY a.ord
+                         """, cancellationToken: cancellationToken)).ConfigureAwait(false))
+                groupOf[ord] = grp;
+            var matches = await connection.QueryAsync<(int Ord, Guid Id, string ZipPath)>(new CommandDefinition("""
+                SELECT t.ord, g.id, g.zip_path
+                FROM tmp_zip_path_inputs t
+                JOIN games g ON g.zip_path = t.zip_path
+                ORDER BY g.zip_path, g.id
+                """, cancellationToken: cancellationToken)).ConfigureAwait(false);
+            owners.AddRange(matches.Select(m => (groupOf[m.Ord], m.Id, m.ZipPath)).Distinct());
+        }
+        finally
+        {
+            // Without the caller's token: a pooled connection must not carry the table into its next use.
+            await connection.ExecuteAsync("DROP TEMPORARY TABLE IF EXISTS tmp_zip_path_inputs").ConfigureAwait(false);
+        }
+
+        var ownersByGroup = owners.ToLookup(o => o.Grp, o => new ZipPathOwner(o.Id, o.ZipPath));
+        return Enumerable.Range(0, zipPaths.Count)
+            .GroupBy(i => groupOf.GetValueOrDefault(i, i)) // an unstaged (overlong) path is its own group
+            .OrderBy(g => g.Key)
+            .Select(g => new ZipPathEquivalenceGroup(g.Select(i => zipPaths[i]).ToList(), ownersByGroup[g.Key].ToList()))
+            .ToList();
     }
 
     public async Task<Page<GameListItem>> ListAsync(GameQuery query, CancellationToken cancellationToken)
@@ -264,7 +338,8 @@ public sealed class RomRepository : IRomRepository
                languages AS Languages, flags AS Flags, region_key AS RegionKey, revision AS Revision,
                is_primary AS IsPrimary, id_method AS IdMethod, dat_name AS DatName, dat_version AS DatVersion,
                dat_game_name AS DatGameName, size_bytes AS SizeBytes, crc32 AS Crc32, md5 AS Md5, sha1 AS Sha1,
-               header AS Header, date_added AS DateAdded, date_modified AS DateModified
+               header AS Header, date_added AS DateAdded, date_modified AS DateModified,
+               external_file_name AS ExternalFileName
         FROM roms
         """;
 
@@ -311,6 +386,19 @@ public sealed class RomRepository : IRomRepository
         await using var connection = _connections.Create();
         return (await connection.QueryAsync<(Guid, string)>(
             new CommandDefinition("SELECT game_id, sha1 FROM roms", cancellationToken: cancellationToken))).AsList();
+    }
+
+    public async Task<IReadOnlyList<ExternalRomRow>> ListExternalAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<ExternalRomRow>(new CommandDefinition("""
+            SELECT r.game_id AS GameId, g.zip_path AS ZipPath, r.external_file_name AS ExternalFileName,
+                   r.size_bytes AS SizeBytes, r.sha1 AS Sha1
+            FROM roms r
+            JOIN games g ON g.id = r.game_id
+            WHERE r.external_file_name IS NOT NULL
+            ORDER BY g.zip_path, r.id
+            """, cancellationToken: cancellationToken))).AsList();
     }
 }
 
@@ -381,15 +469,15 @@ public sealed class LibraryMirror : ILibraryMirror
                 await connection.ExecuteAsync(new CommandDefinition("""
                     INSERT INTO roms (game_id, system_id, file_name, original_file_name, base_title, regions, languages, flags,
                                       region_key, revision, is_primary, id_method, dat_name, dat_version, dat_game_name,
-                                      size_bytes, crc32, md5, sha1, header, date_added, date_modified)
+                                      size_bytes, crc32, md5, sha1, header, date_added, date_modified, external_file_name)
                     VALUES (@GameId, @SystemId, @FileName, @OriginalFileName, @BaseTitle, @Regions, @Languages, @Flags,
                             @RegionKey, @Revision, @IsPrimary, @IdMethod, @DatName, @DatVersion, @DatGameName,
-                            @SizeBytes, @Crc32, @Md5, @Sha1, @Header, @DateAdded, @DateModified)
+                            @SizeBytes, @Crc32, @Md5, @Sha1, @Header, @DateAdded, @DateModified, @ExternalFileName)
                     """, roms.Select(r => new
                     {
                         r.GameId, r.SystemId, r.FileName, r.OriginalFileName, r.BaseTitle, r.Regions, r.Languages, r.Flags,
                         r.RegionKey, r.Revision, r.IsPrimary, IdMethod = r.IdMethod.ToString(), r.DatName, r.DatVersion,
-                        r.DatGameName, r.SizeBytes, r.Crc32, r.Md5, r.Sha1, r.Header, r.DateAdded, r.DateModified,
+                        r.DatGameName, r.SizeBytes, r.Crc32, r.Md5, r.Sha1, r.Header, r.DateAdded, r.DateModified, r.ExternalFileName,
                     }), transaction, cancellationToken: cancellationToken));
 
             if (images.Count > 0)

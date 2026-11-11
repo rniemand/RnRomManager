@@ -22,6 +22,12 @@ public sealed class ArchiveRejectedException(string reason, string details) : Ex
     public string Reason { get; } = reason;
 }
 
+/// <summary>
+/// An extracted copy couldn't be created, written or closed in the work dir: an <c>IoError</c> of this app's own
+/// storage, not a fault of the archive.
+/// </summary>
+public sealed class ArchiveOutputException(string message, Exception inner) : Exception(message, inner);
+
 /// <summary>§7.3 archive reason codes (spec §23.1).</summary>
 public static class ArchiveFailures
 {
@@ -48,23 +54,60 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
     public int MaxEntries { get; init; } = DefaultMaxEntries;
     public long MaxTotalBytes { get; init; } = DefaultMaxTotalBytes;
 
+    /// <summary>External systems: the longest ROM entry path and file name, in Unicode scalar values (the columns that store them).</summary>
+    public const int MaxEntryPathScalars = 512;
+    public const int MaxEntryNameScalars = 255;
+
+    /// <summary>Creates one extracted copy for an external system; the file must not exist. A test seam.</summary>
+    public Func<string, Stream> CreateOutput { get; init; } = path => new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+
     public static bool IsArchive(string fileName) => Extensions.Contains(Path.GetExtension(fileName), StringComparer.OrdinalIgnoreCase);
 
     /// <param name="maxRomBytes">For an entry's extension: the ROM size limit, or null when it isn't a ROM extension.</param>
     /// <exception cref="ArchiveRejectedException">The whole archive is refused; the work dir may hold partial output.</exception>
-    public IReadOnlyList<ExtractedEntry> Extract(string archivePath, string workDir, Func<string, long?> maxRomBytes)
-    {
-        try
+    public IReadOnlyList<ExtractedEntry> Extract(string archivePath, string workDir, Func<string, long?> maxRomBytes) =>
+        Guarded(() =>
         {
             if (Path.GetExtension(archivePath).Equals(".7z", StringComparison.OrdinalIgnoreCase))
             {
                 using var archive = SevenZipArchive.OpenArchive(archivePath, new ReaderOptions());
-                return ExtractAll(SevenZipEntries(archive), archivePath, workDir, maxRomBytes);
+                return ExtractAll(SevenZipEntries(archive), archivePath, workDir, maxRomBytes, external: false);
             }
             using var zip = ZipFile.OpenRead(archivePath);
-            return ExtractAll(ZipEntries(zip), archivePath, workDir, maxRomBytes);
+            return ExtractAll(ZipEntries(zip), archivePath, workDir, maxRomBytes, external: false);
+        });
+
+    /// <summary>
+    /// For an external system (spec I1): reads the archive from the stream the caller opened and checked, and
+    /// never uses an entry's name as a file name. Each ROM entry is written to
+    /// <c>&lt;index&gt;/entry&lt;extension&gt;</c> under <paramref name="workDir"/>, which the caller created and
+    /// checked; <see cref="ExtractedEntry.EntryPath"/> keeps the entry's own path. Entry paths are checked as text,
+    /// the same on every OS. Two ROM entries with the same path, or one too long to store, reject the archive
+    /// before anything is written.
+    /// </summary>
+    /// <param name="archive">Seekable; left open.</param>
+    /// <param name="archiveName">The archive's file name: its extension picks the reader, and it names the archive in logs.</param>
+    /// <exception cref="ArchiveRejectedException">The whole archive is refused; the work dir may hold partial output.</exception>
+    /// <exception cref="ArchiveOutputException">An extracted copy couldn't be written.</exception>
+    public IReadOnlyList<ExtractedEntry> Extract(Stream archive, string archiveName, string workDir, Func<string, long?> maxRomBytes) =>
+        Guarded(() =>
+        {
+            if (Path.GetExtension(archiveName).Equals(".7z", StringComparison.OrdinalIgnoreCase))
+            {
+                using var sevenZip = SevenZipArchive.OpenArchive(archive, new ReaderOptions { LeaveStreamOpen = true });
+                return ExtractAll(SevenZipEntries(sevenZip), archiveName, workDir, maxRomBytes, external: true);
+            }
+            using var zip = new ZipArchive(archive, ZipArchiveMode.Read, leaveOpen: true);
+            return ExtractAll(ZipEntries(zip), archiveName, workDir, maxRomBytes, external: true);
+        });
+
+    private static IReadOnlyList<ExtractedEntry> Guarded(Func<IReadOnlyList<ExtractedEntry>> extract)
+    {
+        try
+        {
+            return extract();
         }
-        catch (ArchiveRejectedException)
+        catch (Exception ex) when (ex is ArchiveRejectedException or ArchiveOutputException)
         {
             throw;
         }
@@ -82,7 +125,8 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
 
     private sealed record Entry(string Name, bool IsDirectory, bool IsEncrypted, bool IsLink, Func<Stream> Open);
 
-    private IReadOnlyList<ExtractedEntry> ExtractAll(IEnumerable<Entry> entries, string archivePath, string workDir, Func<string, long?> maxRomBytes)
+    private IReadOnlyList<ExtractedEntry> ExtractAll(IEnumerable<Entry> entries, string archivePath, string workDir, Func<string, long?> maxRomBytes,
+        bool external)
     {
         var files = entries.Where(e => !e.IsDirectory).ToList();
         if (files.Count > MaxEntries)
@@ -92,11 +136,16 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
         foreach (var entry in files)
         {
             var name = entry.Name.Replace('\\', '/');
-            if (name.StartsWith('/') || Path.IsPathRooted(entry.Name) || name.Split('/').Contains(".."))
+            // External: the name is only text (never a path on disk), so it is judged the same way on every OS.
+            var leaves = external
+                ? name.StartsWith('/') || (name.Length > 1 && char.IsAsciiLetter(name[0]) && name[1] == ':') || name.Contains('\0')
+                : name.StartsWith('/') || Path.IsPathRooted(entry.Name);
+            if (leaves || name.Split('/').Contains(".."))
                 throw new ArchiveRejectedException(ArchiveFailures.ArchiveUnsafe, $"entry '{entry.Name}' leaves the archive");
             try
             {
-                SafePath.Resolve(workDir, name);
+                if (!external)
+                    SafePath.Resolve(workDir, name);
             }
             catch (UnsafePathException)
             {
@@ -106,6 +155,24 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
                 throw new ArchiveRejectedException(ArchiveFailures.ArchiveUnsafe, $"entry '{entry.Name}' is a symbolic link");
             if (entry.IsEncrypted)
                 throw new ArchiveRejectedException(ArchiveFailures.ArchiveEncrypted, $"entry '{entry.Name}' is encrypted");
+        }
+
+        if (external)
+        {
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var path in files.Select(f => f.Name.Replace('\\', '/')))
+            {
+                var fileName = path[(path.LastIndexOf('/') + 1)..];
+                if (IsArchive(fileName) || maxRomBytes(Path.GetExtension(fileName)) is null)
+                    continue;
+                if (ExternalRomName.Scalars(path) > MaxEntryPathScalars || ExternalRomName.Scalars(fileName) > MaxEntryNameScalars)
+                {
+                    throw new ArchiveRejectedException(ArchiveFailures.ArchiveUnsafe,
+                        $"entry '{path}' is longer than {MaxEntryPathScalars} characters, or its name than {MaxEntryNameScalars}");
+                }
+                if (!seen.Add(path))
+                    throw new ArchiveRejectedException(ArchiveFailures.ArchiveUnsafe, $"two entries are named '{path}'");
+            }
         }
 
         var extracted = new List<ExtractedEntry>();
@@ -121,15 +188,25 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
             }
 
             // Each entry gets its own folder, so two entries with the same file name can't collide.
-            var target = SafePath.Resolve(workDir, Path.Combine(i.ToString(System.Globalization.CultureInfo.InvariantCulture), fileName));
-            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            var index = i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var target = external
+                ? Path.Combine(workDir, index, "entry" + Path.GetExtension(fileName).ToLowerInvariant())
+                : SafePath.Resolve(workDir, Path.Combine(index, fileName));
             var limit = Math.Min(maxRom, MaxTotalBytes - total);
             long written;
             try
             {
                 using var source = new LimitStream(files[i].Open(), limit);
-                using var output = File.Create(target);
-                source.CopyTo(output);
+                if (external)
+                {
+                    CopyToNewFile(source, target);
+                }
+                else
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    using var output = File.Create(target);
+                    source.CopyTo(output);
+                }
                 written = source.BytesRead;
             }
             catch (LimitExceededException)
@@ -143,6 +220,42 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
         }
         return extracted;
     }
+
+    /// <summary>Reads the archive and writes the copy separately, so a failure of the copy isn't taken for a bad archive.</summary>
+    private void CopyToNewFile(Stream source, string target)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            using var output = CreateOutput(target);
+            var buffer = new byte[81920];
+            while (true)
+            {
+                int read;
+                try
+                {
+                    read = source.Read(buffer, 0, buffer.Length);
+                }
+                catch (Exception ex)
+                {
+                    throw new SourceReadException(ex);
+                }
+                if (read == 0)
+                    break;
+                output.Write(buffer, 0, read);
+            }
+        }
+        catch (SourceReadException ex)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(ex.InnerException!);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new ArchiveOutputException($"{target} can't be written: {ex.Message}", ex);
+        }
+    }
+
+    private sealed class SourceReadException(Exception inner) : Exception(inner.Message, inner);
 
     private static IEnumerable<Entry> ZipEntries(ZipArchive zip)
     {

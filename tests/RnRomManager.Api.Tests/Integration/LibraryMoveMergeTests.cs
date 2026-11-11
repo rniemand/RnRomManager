@@ -77,7 +77,7 @@ public class LibraryMoveMergeTests
                 new FixtureGame("Zelda (USA)", "Zelda (USA).gb", Zelda) { Genres = ["Action"] },
             ],
             ["Nintendo - Game Boy Color"] = [new FixtureGame("Color Game (World)", "Color Game (World).gbc", Color)],
-        });
+        }, titleDb: IngestSeeder.EmptySwitch);
         cache.Load();
     }
 

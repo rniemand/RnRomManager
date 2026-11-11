@@ -8,6 +8,15 @@ public interface IGameRepository
 
     Task<IReadOnlyList<GameSyncState>> ListSyncStateAsync(CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Groups <paramref name="zipPaths"/> by equality under the collation of <c>games.zip_path</c>, as the database
+    /// itself compares them (never a .NET approximation: two spellings can be equal there without matching
+    /// ordinal-ignore-case, e.g. a composed and a decomposed accent), and lists the games whose stored path equals
+    /// each group. Every input is in exactly one group, in input order; a path that fits no row is its own group.
+    /// </summary>
+    /// <param name="zipPaths">Relative to <c>Paths:Roms</c>, <c>/</c> separators; the spellings are returned unchanged.</param>
+    Task<IReadOnlyList<ZipPathEquivalenceGroup>> ListZipPathEquivalenceAsync(IReadOnlyList<string> zipPaths, CancellationToken cancellationToken);
+
     /// <summary>Every <c>games</c> row (integrity: the state before its DB repair, §12.1).</summary>
     Task<IReadOnlyList<GameRow>> ListAllAsync(CancellationToken cancellationToken);
 
@@ -27,6 +36,14 @@ public interface IGameRepository
     Task<IReadOnlyList<GameRow>> ListMediaRetryCandidatesAsync(CancellationToken cancellationToken);
 }
 
+/// <summary>Input paths the database treats as one <c>zip_path</c>, and the games already stored under it.</summary>
+/// <param name="Paths">The input spellings, in input order; at least one.</param>
+/// <param name="Existing">Rows whose <c>zip_path</c> equals them in the database (at most one today: the column is unique).</param>
+public sealed record ZipPathEquivalenceGroup(IReadOnlyList<string> Paths, IReadOnlyList<ZipPathOwner> Existing);
+
+/// <summary>A game and its stored <c>zip_path</c> spelling.</summary>
+public sealed record ZipPathOwner(Guid GameId, string ZipPath);
+
 public interface IRomRepository
 {
     Task<IReadOnlyList<RomRow>> ListByGameAsync(Guid gameId, CancellationToken cancellationToken);
@@ -41,7 +58,19 @@ public interface IRomRepository
 
     /// <summary>Every ROM's (game, SHA1): the sync's <c>DuplicateSha1</c> check.</summary>
     Task<IReadOnlyList<(Guid GameId, string Sha1)>> ListSha1sAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Every ROM stored outside its game's ZIP (<c>external_file_name</c> set), ordered by ZIP path then ROM id.
+    /// It lists what the mirror claims, whether or not the file is on disk: name allocation, integrity and orphan
+    /// checks all start from these claims.
+    /// </summary>
+    Task<IReadOnlyList<ExternalRomRow>> ListExternalAsync(CancellationToken cancellationToken);
 }
+
+/// <summary>One mirrored claim on an external ROM file: <paramref name="ExternalFileName"/> in the folder of <paramref name="ZipPath"/>.</summary>
+/// <param name="ZipPath">The owning game's ZIP, relative to <c>Paths:Roms</c>, <c>/</c> separators.</param>
+/// <param name="SizeBytes">The recorded size, not the size on disk.</param>
+public sealed record ExternalRomRow(Guid GameId, string ZipPath, string ExternalFileName, long SizeBytes, string Sha1);
 
 public interface IImageRepository
 {

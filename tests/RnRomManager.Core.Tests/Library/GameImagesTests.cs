@@ -136,4 +136,77 @@ public class GameImagesTests
         Assert.That(GameImages.Merge(into, from), Is.Null);
         Assert.That(GameImages.Merge(into, from[..5]), Is.Not.Null, "exactly 20 is fine");
     }
+
+    // T8: fetched images are named by their format; titledb media is the only JPEG source, built here directly.
+    private static readonly byte[] JpegBytes = [0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x11, 8, 0, 32, 0, 64, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1, 0xFF, 0xDA, 0x00, 0x02, 0xFF, 0xD9];
+
+    private static MediaImage Jpeg(ImageType type) =>
+        new(type, JpegBytes, 64, 32, "https://img-eshop.cdn.nintendo.net/i/" + type, IsDefault: false, InfoJsonImage.SourceTitleDb);
+
+    private static MediaResult JpegFound(bool snap = true) => new(Jpeg(ImageType.BoxArt), snap ? Jpeg(ImageType.Snap) : null);
+
+    [Test]
+    public void ForNewGame_JpegMedia_IsNamedJpg_WithItsSource()
+    {
+        var images = GameImages.ForNewGame(JpegFound(), When);
+
+        Assert.That(images.Select(i => (i.FileName, i.Source, i.SourceUrl, i.IsCover)), Is.EqualTo(new[]
+        {
+            ("boxart-01.jpg", InfoJsonImage.SourceTitleDb, (string?)"https://img-eshop.cdn.nintendo.net/i/BoxArt", true),
+            ("snap-01.jpg", InfoJsonImage.SourceTitleDb, "https://img-eshop.cdn.nintendo.net/i/Snap", false),
+        }));
+    }
+
+    [Test]
+    public void ForNewGame_PngMedia_KeepsPng() =>
+        Assert.That(GameImages.ForNewGame(Found(realBoxArt: true, snap: true), When).Select(i => i.FileName), Is.EqualTo(new[] { "boxart-01.png", "snap-01.png" }));
+
+    [Test]
+    public void ApplyFetched_JpegReplacingThePlaceholder_KeepsItsNumberAndCover()
+    {
+        var current = new[] { Image("boxart-01.png", ImageType.BoxArt), Image("boxart-02.png", ImageType.BoxArt, InfoJsonImage.SourceDefault, cover: true) };
+
+        var (images, entries) = GameImages.ApplyFetched(current, JpegFound(snap: false), When)!.Value;
+
+        Assert.That(images.Select(i => (i.FileName, i.IsCover, i.IsDefault)), Is.EqualTo(new[] { ("boxart-01.png", false, false), ("boxart-02.jpg", true, false) }));
+        Assert.That(entries.Keys, Is.EqualTo(new[] { "boxart-02.jpg" }));
+    }
+
+    [Test]
+    public void ApplyFetched_RenamedPlaceholderColliding_TakesTheNextName_AndKeepsTheOtherImage()
+    {
+        var uploaded = Image("BOXART-01.JPG", ImageType.BoxArt, InfoJsonImage.SourceUpload);
+        var current = new[] { Placeholder(cover: true), uploaded };
+
+        var (images, entries) = GameImages.ApplyFetched(current, JpegFound(snap: false), When)!.Value;
+
+        Assert.That(images.Select(i => i.FileName), Is.EqualTo(new[] { "boxart-02.jpg", "BOXART-01.JPG" }));
+        Assert.That(images[0].IsCover, Is.True, "the placeholder's cover status");
+        Assert.That(images[1], Is.EqualTo(uploaded));
+        Assert.That(entries.Keys, Is.EqualTo(new[] { "boxart-02.jpg" }));
+    }
+
+    [Test]
+    public void ApplyFetched_JpegSnap_ReservesItsNumberAcrossFormats()
+    {
+        var current = new[] { Image("boxart-01.png", ImageType.BoxArt, cover: true), Image("snap-01.png", ImageType.BoxArt) }; // a box art named like a snap
+
+        var (images, entries) = GameImages.ApplyFetched(current, JpegFound(), When)!.Value;
+
+        Assert.That(images.Last().FileName, Is.EqualTo("snap-02.jpg"));
+        Assert.That(entries.Keys, Is.EqualTo(new[] { "snap-02.jpg" }));
+    }
+
+    [Test]
+    public void ApplyFetched_AnExistingSnap_SuppressesASecond() =>
+        Assert.That(GameImages.ApplyFetched([Image("boxart-01.png", ImageType.BoxArt, cover: true), Image("snap-01.png", ImageType.Snap)], JpegFound(), When), Is.Null);
+
+    [Test]
+    public void ApplyFetched_NoImages_TakesTheJpegAsCover()
+    {
+        var (images, _) = GameImages.ApplyFetched([], JpegFound(snap: false), When)!.Value;
+
+        Assert.That(images.Single().FileName, Is.EqualTo("boxart-01.jpg"));
+        Assert.That(images.Single().IsCover, Is.True);
+    }
 }

@@ -7,12 +7,15 @@ public sealed record InfoJsonImage
     public const string SourceDefault = "default";
     public const string SourceUpload = "upload";
 
+    /// <summary>v4: fetched from a titledb image URL.</summary>
+    public const string SourceTitleDb = "titledb";
+
     /// <summary>Entry name under <c>images/</c>.</summary>
     public required string FileName { get; init; }
 
     public required ImageType Type { get; init; }
 
-    /// <summary><see cref="SourceLibretro"/>, <see cref="SourceDefault"/> or <see cref="SourceUpload"/> (v3).</summary>
+    /// <summary><see cref="SourceLibretro"/>, <see cref="SourceDefault"/>, <see cref="SourceUpload"/> (v3) or <see cref="SourceTitleDb"/> (v4).</summary>
     public required string Source { get; init; }
 
     public string? SourceUrl { get; init; }

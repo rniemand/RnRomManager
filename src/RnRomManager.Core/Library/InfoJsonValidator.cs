@@ -1,3 +1,7 @@
+using System.Text;
+using RnRomManager.Core.Naming;
+using RnRomManager.Core.Systems;
+
 namespace RnRomManager.Core.Library;
 
 /// <summary>
@@ -7,13 +11,24 @@ namespace RnRomManager.Core.Library;
 /// </summary>
 public static class InfoJsonValidator
 {
-    /// <param name="systemIds">Registered handler ids.</param>
+    /// <summary>Longest <c>externalFileName</c>, in UTF-8 bytes: one path component on ext4.</summary>
+    public const int MaxExternalFileNameBytes = 255;
+
+    /// <summary>Longest external rom <c>fileName</c>, in Unicode scalar values: the <c>roms.file_name</c> column.</summary>
+    public const int MaxExternalRomFileNameScalars = 255;
+
+    /// <param name="systems">Registered handlers by id: the game's handler gives the storage mode, ROM extensions and size limit.</param>
     /// <returns>null when valid, else the first failing rule.</returns>
-    public static string? Validate(InfoJsonGame game, IReadOnlySet<string> systemIds)
+    public static string? Validate(InfoJsonGame game, IReadOnlyDictionary<string, ISystemHandler> systems)
     {
+        // A JSON null inside either list deserializes to a null element; report it before anything dereferences one.
+        if (game.Roms.Any(r => r is null))
+            return "roms must not contain null";
+        if (game.Images.Any(i => i is null))
+            return "images must not contain null";
         if (game.GameId == Guid.Empty)
             return "gameId must be a non-empty GUID";
-        if (!systemIds.Contains(game.System))
+        if (!systems.TryGetValue(game.System, out var handler))
             return $"system '{game.System}' is not a registered system";
         if (game.Rating is < 1 or > 5)
             return "rating must be null or 1-5";
@@ -25,6 +40,8 @@ public static class InfoJsonValidator
             return romNames;
         if (FileNameProblem(game.Images.Select(i => i.FileName), "images") is { } imageNames)
             return imageNames;
+        if (ExternalProblem(game, handler) is { } external)
+            return external;
 
         foreach (var rom in game.Roms)
         {
@@ -39,8 +56,8 @@ public static class InfoJsonValidator
         {
             if (!IsHex(image.Sha1, 40))
                 return $"image '{image.FileName}' sha1 must be lowercase hex";
-            if (image.Source is not (InfoJsonImage.SourceLibretro or InfoJsonImage.SourceDefault or InfoJsonImage.SourceUpload))
-                return $"image '{image.FileName}' source must be '{InfoJsonImage.SourceLibretro}', '{InfoJsonImage.SourceDefault}' or '{InfoJsonImage.SourceUpload}'";
+            if (image.Source is not (InfoJsonImage.SourceLibretro or InfoJsonImage.SourceDefault or InfoJsonImage.SourceUpload or InfoJsonImage.SourceTitleDb))
+                return $"image '{image.FileName}' source must be '{InfoJsonImage.SourceLibretro}', '{InfoJsonImage.SourceDefault}', '{InfoJsonImage.SourceUpload}' or '{InfoJsonImage.SourceTitleDb}'";
         }
 
         if (game.Images.Count > GameImages.MaxImages)
@@ -54,6 +71,64 @@ public static class InfoJsonValidator
             return "the isDefault image must be a BoxArt";
         return null;
     }
+
+    /// <summary>
+    /// The storage rules (v4). An embedded system's roms have no <c>externalFileName</c>. An external system's roms
+    /// each have one, and both it and the logical <c>fileName</c> must be usable as a file name on every OS, since
+    /// downloads, moves and deletes act on them.
+    /// </summary>
+    private static string? ExternalProblem(InfoJsonGame game, ISystemHandler handler)
+    {
+        if (handler.EmbedRomsInZip)
+        {
+            return game.Roms.FirstOrDefault(r => r.ExternalFileName is not null) is { } stray
+                ? $"rom '{stray.FileName}' externalFileName must be null: system '{game.System}' stores ROMs in the ZIP"
+                : null;
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var rom in game.Roms)
+        {
+            if (rom.ExternalFileName is not { } pointer)
+                return $"rom '{rom.FileName}' externalFileName is required: system '{game.System}' stores ROMs outside the ZIP";
+
+            // Unlike a rom fileName, ".." inside the name is fine: the ZIP base it starts with may hold "...".
+            if (pointer is "." or ".." || PortableNameProblem(pointer) is not null)
+                return $"rom '{rom.FileName}' externalFileName must be a plain, portable file name";
+            if (Encoding.UTF8.GetByteCount(pointer) > MaxExternalFileNameBytes)
+                return $"rom '{rom.FileName}' externalFileName must be at most {MaxExternalFileNameBytes} UTF-8 bytes";
+            if (!HasRomExtension(pointer, handler))
+                return $"rom '{rom.FileName}' externalFileName must end with a ROM extension of system '{game.System}'";
+            if (!seen.Add(pointer))
+                return $"rom '{rom.FileName}' externalFileName is not unique (case-insensitive)";
+
+            if (PortableNameProblem(rom.FileName) is { } problem)
+                return $"rom fileName '{rom.FileName}' {problem}";
+            if (rom.FileName.EnumerateRunes().Count() > MaxExternalRomFileNameScalars)
+                return $"rom fileName '{rom.FileName}' must be at most {MaxExternalRomFileNameScalars} characters";
+            if (!HasRomExtension(rom.FileName, handler))
+                return $"rom fileName '{rom.FileName}' must end with a ROM extension of system '{game.System}'";
+            if (rom.Metadata.SizeBytes > handler.MaxRomSizeBytes)
+                return $"rom '{rom.FileName}' sizeBytes is over the system's limit of {handler.MaxRomSizeBytes}";
+        }
+        return null;
+    }
+
+    /// <returns>null when the name can be a file name on every OS; else what is wrong with it.</returns>
+    internal static string? PortableNameProblem(string name)
+    {
+        if (name.Length == 0)
+            return "must not be empty";
+        foreach (var c in name)
+        {
+            if (c is '/' or '\\' or '<' or '>' or ':' or '"' or '|' or '?' or '*' || char.IsControl(c))
+                return "must not contain / \\ < > : \" | ? * or a control character";
+        }
+        return FileNameSanitizer.IsReservedDeviceName(name) ? "must not be a Windows device name" : null;
+    }
+
+    private static bool HasRomExtension(string name, ISystemHandler handler) =>
+        handler.RomExtensions.Any(e => name.EndsWith(e, StringComparison.OrdinalIgnoreCase));
 
     private static string? FileNameProblem(IEnumerable<string> names, string list)
     {

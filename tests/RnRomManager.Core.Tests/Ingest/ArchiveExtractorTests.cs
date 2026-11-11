@@ -174,6 +174,164 @@ public class ArchiveExtractorTests
         Assert.That(Rejected(path).Reason, Is.EqualTo(ArchiveFailures.ArchiveCorrupt));
     }
 
+    // --- external systems (spec I1): read from the caller's stream, numbered work paths, entry names as text only ---
+
+    private static long? NspLimit(string ext) => ext.Equals(".nsp", StringComparison.OrdinalIgnoreCase) ? MaxRom : null;
+
+    private IReadOnlyList<ExtractedEntry> ExtractExternal(string archive, ArchiveExtractor? extractor = null)
+    {
+        using var stream = File.OpenRead(archive);
+        return (extractor ?? _extractor).Extract(stream, Path.GetFileName(archive), Work, NspLimit);
+    }
+
+    private string[] WorkFiles() => Directory.Exists(Work) ? Directory.GetFiles(Work, "*", SearchOption.AllDirectories) : [];
+
+    [Test]
+    public void External_WritesNumberedFiles_AndKeepsTheEntryNameAsText()
+    {
+        // A name Windows can't store, upper-case extension, next to a skipped file.
+        var archive = Zip(("readme.txt", [9]), ("dir/Bad<Name>:What?.NSP", [1, 2, 3]), ("b.nsp", [4]));
+
+        var entries = ExtractExternal(archive);
+
+        Assert.That(entries.Select(e => (e.EntryPath, e.FileName, e.SizeBytes)),
+            Is.EqualTo(new[] { ("dir/Bad<Name>:What?.NSP", "Bad<Name>:What?.NSP", 3L), ("b.nsp", "b.nsp", 1L) }));
+        Assert.That(entries.Select(e => e.ExtractedPath),
+            Is.EqualTo(new[] { Path.Combine(Work, "1", "entry.nsp"), Path.Combine(Work, "2", "entry.nsp") }));
+        Assert.That(File.ReadAllBytes(entries[0].ExtractedPath), Is.EqualTo(new byte[] { 1, 2, 3 }));
+    }
+
+    [Test]
+    public void External_EntryPathOf512Scalars_IsAccepted_513IsRejectedBeforeAnythingIsWritten()
+    {
+        var folders = string.Concat(Enumerable.Repeat(new string('d', 99) + "/", 5)); // 500
+        var ok = folders + new string('n', 8) + ".nsp"; // 512
+        Assert.That(ok.Length, Is.EqualTo(ArchiveExtractor.MaxEntryPathScalars));
+
+        Assert.That(ExtractExternal(Zip((ok, [1]))).Single().EntryPath, Is.EqualTo(ok));
+        Directory.Delete(Work, recursive: true);
+
+        var rejected = Assert.Throws<ArchiveRejectedException>(() => ExtractExternal(Zip(("first.nsp", [1]), ("n" + ok, [2]))))!;
+        Assert.That(rejected.Reason, Is.EqualTo(ArchiveFailures.ArchiveUnsafe));
+        Assert.That(WorkFiles(), Is.Empty);
+    }
+
+    [Test]
+    public void External_OverlongBaseName_IsRejected_ButOnlyForRomEntries()
+    {
+        var name = new string('n', 252); // + ".nsp" = 256
+        var rejected = Assert.Throws<ArchiveRejectedException>(() => ExtractExternal(Zip((name + ".nsp", [1]))))!;
+        Assert.That(rejected.Reason, Is.EqualTo(ArchiveFailures.ArchiveUnsafe));
+
+        Assert.That(ExtractExternal(Zip((name + ".txt", [1]), ("a.nsp", [2]))).Single().EntryPath, Is.EqualTo("a.nsp"));
+    }
+
+    [Test]
+    public void External_SamePathUnderBothSeparators_IsRejectedBeforeExtraction_CaseVariantsAreDistinct()
+    {
+        var rejected = Assert.Throws<ArchiveRejectedException>(() => ExtractExternal(Zip(("nested/a.nsp", [1]), ("nested\\a.nsp", [2]))))!;
+        Assert.That(rejected.Reason, Is.EqualTo(ArchiveFailures.ArchiveUnsafe));
+        Assert.That(WorkFiles(), Is.Empty);
+
+        var entries = ExtractExternal(Zip(("nested/a.nsp", [1]), ("nested/A.nsp", [2]), ("other/a.nsp", [3])));
+        Assert.That(entries.Select(e => e.EntryPath), Is.EqualTo(new[] { "nested/a.nsp", "nested/A.nsp", "other/a.nsp" }));
+        Assert.That(entries.Select(e => File.ReadAllBytes(e.ExtractedPath)[0]), Is.EqualTo(new byte[] { 1, 2, 3 }));
+    }
+
+    [TestCase("/abs.nsp")]
+    [TestCase("C:/abs.nsp")]
+    [TestCase("c:abs.nsp")]
+    [TestCase("a/../b.nsp")]
+    public void External_RootedOrTraversingEntry_IsUnsafeOnEveryOs(string entry)
+    {
+        var rejected = Assert.Throws<ArchiveRejectedException>(() => ExtractExternal(Zip((entry, [1]))))!;
+
+        Assert.That(rejected.Reason, Is.EqualTo(ArchiveFailures.ArchiveUnsafe));
+        Assert.That(WorkFiles(), Is.Empty);
+    }
+
+    [Test]
+    public void External_FailedOutputWrite_IsAnOutputError_NotACorruptArchive()
+    {
+        var failing = new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance) { CreateOutput = _ => throw new IOException("disk full") };
+
+        var ex = Assert.Throws<ArchiveOutputException>(() => ExtractExternal(Zip(("a.nsp", [1])), failing))!;
+
+        Assert.That(ex.Message, Does.Contain("disk full"));
+    }
+
+    [Test]
+    public void External_NeverOverwritesAnExtractedCopy()
+    {
+        Directory.CreateDirectory(Path.Combine(Work, "0"));
+        File.WriteAllText(Path.Combine(Work, "0", "entry.nsp"), "occupant");
+
+        Assert.Throws<ArchiveOutputException>(() => ExtractExternal(Zip(("a.nsp", [1]))));
+
+        Assert.That(File.ReadAllText(Path.Combine(Work, "0", "entry.nsp")), Is.EqualTo("occupant"));
+    }
+
+    [Test]
+    public void External_CorruptBytes_AreStillArchiveCorrupt_AndOversizeStillUnsafe()
+    {
+        var junk = _dir.Combine("junk.zip");
+        File.WriteAllBytes(junk, [1, 2, 3, 4, 5, 6, 7, 8]);
+        Assert.That(Assert.Throws<ArchiveRejectedException>(() => ExtractExternal(junk))!.Reason, Is.EqualTo(ArchiveFailures.ArchiveCorrupt));
+
+        var big = Zip(("big.nsp", new byte[MaxRom + 1]));
+        Assert.That(Assert.Throws<ArchiveRejectedException>(() => ExtractExternal(big))!.Reason, Is.EqualTo(ArchiveFailures.ArchiveUnsafe));
+    }
+
+    [Test]
+    public void External_SevenZip_IsReadFromTheStream()
+    {
+        using var stream = File.OpenRead(TestFixtures.Basic7zPath);
+
+        var entries = _extractor.Extract(stream, "pack.7z", Work, ext => ext == Path.GetExtension(TestFixtures.Basic7zEntry) ? MaxRom : null);
+
+        Assert.That(entries.Single().EntryPath, Is.EqualTo(TestFixtures.Basic7zEntry));
+        Assert.That(File.ReadAllBytes(entries[0].ExtractedPath), Is.EqualTo(TestFixtures.Basic7zRom()));
+        Assert.That(stream.CanRead, Is.True, "the caller's stream stays open");
+    }
+
+    // --- the checked work directory the extraction goes into ---
+
+    [Test]
+    public void WorkDirectory_IsCreatedWithItsParents_AndAnOccupantIsNeverAdopted()
+    {
+        var root = _dir.Combine("cache");
+        var work = Path.Combine(root, "work", "job", "archive");
+
+        var created = RnRomManager.Core.Storage.ExternalRomPath.CreateDirectory(root, work);
+        Assert.That((created.Status, created.Path), Is.EqualTo((RnRomManager.Core.Storage.ExternalPathStatus.Found, work)));
+
+        File.WriteAllText(Path.Combine(work, "theirs.bin"), "occupant");
+        var again = RnRomManager.Core.Storage.ExternalRomPath.CreateDirectory(root, work);
+        Assert.That(again.Status, Is.EqualTo(RnRomManager.Core.Storage.ExternalPathStatus.Unsafe));
+        Assert.That(File.ReadAllText(Path.Combine(work, "theirs.bin")), Is.EqualTo("occupant"));
+    }
+
+    [Test]
+    public void WorkDirectory_BehindALinkedBase_IsRefused()
+    {
+        var root = _dir.Combine("cache");
+        var outside = Directory.CreateDirectory(_dir.Combine("outside")).FullName;
+        Directory.CreateDirectory(root);
+        var link = Path.Combine(root, "work");
+        Assert.That(TestLinks.TryLinkDirectory(link, outside), Is.True, "this account can't create a directory link");
+        try
+        {
+            var created = RnRomManager.Core.Storage.ExternalRomPath.CreateDirectory(root, Path.Combine(link, "job", "archive"));
+
+            Assert.That(created.Status, Is.EqualTo(RnRomManager.Core.Storage.ExternalPathStatus.Unsafe));
+            Assert.That(Directory.GetFileSystemEntries(outside), Is.Empty);
+        }
+        finally
+        {
+            TestLinks.RemoveDirectoryLink(link);
+        }
+    }
+
     /// <summary>Sets general-purpose flag bit 0 (encrypted) in every local and central header; .NET can't write encrypted ZIPs.</summary>
     private static void SetEncryptedFlag(string path)
     {

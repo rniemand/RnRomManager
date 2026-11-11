@@ -70,4 +70,26 @@ public class NamingRulesTests
     [TestCase("", "#")]
     public void Bucket_IsTheUppercasedFirstAsciiLetterElseHash(string zipName, string expected) =>
         Assert.That(Bucket.For(zipName), Is.EqualTo(expected));
+
+    [TestCase("NUL", true)]
+    [TestCase("nul.txt", true)]
+    [TestCase("NUL .nsp", true)]
+    [TestCase("COM1 .nsp", true)]
+    [TestCase("com\u00B9.nsp", true)]
+    [TestCase("LPT\u00B3", true)]
+    [TestCase("CONIN$", true)]
+    [TestCase("conout$.nsp", true)]
+    [TestCase("COM0", false)]
+    [TestCase("COM\u2074", false)]
+    [TestCase("CONSOLE", false)]
+    [TestCase("x.NUL", false)]
+    [TestCase("", false)]
+    public void IsReservedDeviceName_TestsTheStemBeforeTheFirstDot(string name, bool expected) =>
+        Assert.That(FileNameSanitizer.IsReservedDeviceName(name), Is.EqualTo(expected));
+
+    [TestCase("COM\u00B9")]
+    [TestCase("CONIN$")]
+    [TestCase("LPT\u00B2.txt")]
+    public void Sanitize_KeepsItsOwnReservedSet(string name) =>
+        Assert.That(FileNameSanitizer.Sanitize(name), Is.EqualTo(name));
 }

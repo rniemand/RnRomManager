@@ -43,6 +43,7 @@ public class LibraryImageEditTests
         _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
         _dir = new TempDir();
         var handler = Substitute.For<ISystemHandler>();
+        handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns("gb");
         handler.DatName.Returns("Nintendo - Game Boy");
         handler.DefaultBoxArtPng.Returns(Placeholder);
@@ -55,7 +56,7 @@ public class LibraryImageEditTests
         _mirror = Substitute.For<ILibraryMirror>();
         _lock = new JobLock();
         var paths = Options.Create(new PathsOptions { Roms = _dir.Path, Cache = _dir.Combine("cache") });
-        var media = new MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }), NullLogger<MediaService>.Instance);
+        var media = TestMedia.Offline();
         var retry = new GameMediaRetry(_mirror, _reader, systems, media, paths, _audit, TimeProvider.System, NullLogger<GameMediaRetry>.Instance);
         _editor = new LibraryEditor(_lock, _games, Substitute.For<IRomRepository>(), _images, _mirror, _reader,
             new DatCache(paths, systems, NullLogger<DatCache>.Instance), systems, media, retry, paths, _audit, new RnRomManager.Core.Audit.AuditPaths(paths),

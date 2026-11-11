@@ -49,7 +49,7 @@ public class IngestJobTests
         _items = Substitute.For<IJobItemRepository>();
         _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
         _reader = new InfoJsonReader([], _systems);
-        _scanner = new IngestFileScanner(Options.Create(_paths), _systems);
+        _scanner = new IngestFileScanner(Options.Create(_paths), _systems, NullLogger<IngestFileScanner>.Instance);
     }
 
     [TearDown]
@@ -58,6 +58,7 @@ public class IngestJobTests
     private static ISystemHandler Handler(string id, string datName)
     {
         var handler = Substitute.For<ISystemHandler>();
+        handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns(id);
         handler.DatName.Returns(datName);
         handler.Family.Returns("gameboy");
@@ -92,13 +93,26 @@ public class IngestJobTests
         Assert.That(File.Exists(chosen), Is.False, "the selected 3-byte file moved to _failed");
     }
 
+    [Test]
+    public void ArchiveFate_ASkippedEntryKeepsTheArchive_EvenWhenOthersCommitted()
+    {
+        static IngestItemResult R(string outcome) => new(outcome, null);
+        var ingested = R(IngestOutcome.Ingested);
+
+        Assert.That(IngestJob.FateOf([ingested, new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent)]), Is.EqualTo(IngestJob.ArchiveFate.Keep));
+        Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Review)]), Is.EqualTo(IngestJob.ArchiveFate.Keep));
+        Assert.That(IngestJob.FateOf([ingested, null]), Is.EqualTo(IngestJob.ArchiveFate.Keep));
+        Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Failed), R(IngestOutcome.Duplicate)]), Is.EqualTo(IngestJob.ArchiveFate.Failed));
+        Assert.That(IngestJob.FateOf([R(IngestOutcome.Duplicate), R(IngestOutcome.Duplicate)]), Is.EqualTo(IngestJob.ArchiveFate.Duplicates));
+        Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Duplicate), R(IngestOutcome.Repaired)]), Is.EqualTo(IngestJob.ArchiveFate.Delete));
+    }
+
     private IngestJob Job()
     {
         var roms = Substitute.For<IRomRepository>();
         roms.ListSha1sAsync(default).ReturnsForAnyArgs([]);
         var sync = new DbSync(_games, roms, _mirror, _reader, _systems, Options.Create(_paths), NullLogger<DbSync>.Instance);
-        var media = new RnRomManager.Core.Media.MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }),
-            NullLogger<RnRomManager.Core.Media.MediaService>.Instance);
+        var media = TestMedia.Offline();
         var pipeline = new IngestPipeline(_dats, _systems, roms, _games, _mirror, Substitute.For<RnRomManager.Core.Integrity.IIntegrityIssueRepository>(), _reviews, _reader, media, Options.Create(_paths), _audit, new RnRomManager.Core.Audit.AuditPaths(Options.Create(_paths)), TimeProvider.System,
             NullLogger<IngestPipeline>.Instance);
         return new IngestJob(_dats, _systems, sync, _reviews, _items, _scanner, pipeline, new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance),
@@ -148,10 +162,10 @@ public class IngestJobTests
         var kept = Drop("gb", "kept.gb", TimeSpan.FromHours(1));
         var archive = Drop("gb", "pack.zip", TimeSpan.FromHours(1));
         _reviews.ListPendingSourcesAsync(default).ReturnsForAnyArgs([
-            new PendingReviewSource(1, kept, null),
-            new PendingReviewSource(2, _dir.Combine("ingest", "gb", "gone.gb"), null),
-            new PendingReviewSource(3, _dir.Combine("cache", "work", "x", "entry.gb"), archive), // archive still there
-            new PendingReviewSource(4, _dir.Combine("cache", "work", "y", "entry.gb"), _dir.Combine("ingest", "gb", "gone.zip")),
+            new PendingReviewSource(1, "gb", kept, null),
+            new PendingReviewSource(2, "gb", _dir.Combine("ingest", "gb", "gone.gb"), null),
+            new PendingReviewSource(3, "gb", _dir.Combine("cache", "work", "x", "entry.gb"), archive), // archive still there
+            new PendingReviewSource(4, "gb", _dir.Combine("cache", "work", "y", "entry.gb"), _dir.Combine("ingest", "gb", "gone.zip")),
         ]);
 
         await RunAsync();

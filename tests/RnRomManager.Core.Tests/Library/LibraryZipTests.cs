@@ -36,10 +36,11 @@ public class LibraryZipTests
     private static InfoJsonReader Reader(params IInfoJsonUpgrader[] upgraders)
     {
         var handler = Substitute.For<ISystemHandler>();
+        handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns("gb");
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns([handler]);
-        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), .. upgraders], registry);
+        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), .. upgraders], registry);
     }
 
     private static byte[] RomBytes(int seed) => new SyntheticRomBuilder { Seed = seed }.Build();

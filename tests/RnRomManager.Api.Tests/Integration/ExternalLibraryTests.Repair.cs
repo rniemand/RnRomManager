@@ -1,0 +1,272 @@
+using System.IO.Compression;
+using System.Security.Cryptography;
+using Dapper;
+using Microsoft.Extensions.DependencyInjection;
+using RnRomManager.Core.Audit;
+using RnRomManager.Core.Database;
+using RnRomManager.Core.Ingest;
+using RnRomManager.Core.Integrity;
+using RnRomManager.Core.Jobs;
+using RnRomManager.Core.Library;
+using RnRomManager.Core.Storage;
+using RnRomManager.TestData;
+
+namespace RnRomManager.Api.Tests.Integration;
+
+/// <summary>Spec I3 dedupe and I6 self-repair for external ROMs.</summary>
+public partial class ExternalLibraryTests
+{
+    private const string GbDat = "Nintendo - Game Boy";
+    private static readonly byte[] SharedGb = TestLibrary.RomBytes(9);
+
+    private string Pointer => Path.GetFileName(Sidecar);
+    private string Backup => Sidecar + ExternalRomName.RepairBackupSuffix;
+    private string Duplicates(string name) => Path.Combine(Ingest, "_duplicates", name);
+
+    private async Task<long> InsertIssueAsync(string type, string zipPath, string entryName, Guid? gameId)
+    {
+        await using var db = Service<IDbConnectionFactory>().Create();
+        return await db.ExecuteScalarAsync<long>("""
+            INSERT INTO integrity_issues (type, severity, system_id, zip_path, game_id, entry_name, status, first_seen_job_id, last_seen_job_id, detected_at)
+            VALUES (@type, 'Error', 'ext', @zipPath, @gameId, @entryName, 'Open', @job, @job, UTC_TIMESTAMP(6));
+            SELECT LAST_INSERT_ID();
+            """, new { type, zipPath, entryName, gameId = gameId?.ToString(), job = Guid.NewGuid().ToString() });
+    }
+
+    private async Task<string> IssueStatusAsync(long id)
+    {
+        await using var db = Service<IDbConnectionFactory>().Create();
+        return await db.QuerySingleAsync<string>("SELECT status FROM integrity_issues WHERE id = @id", new { id });
+    }
+
+    /// <summary>The first release with a damaged file at its pointer, and an open issue on it.</summary>
+    /// <param name="wrongLength">Bytes left at the pointer (wrong length); null deletes the file.</param>
+    private async Task<(Guid GameId, long IssueId)> DamagedAsync(byte[]? wrongLength, string? spelling = null)
+    {
+        var gameId = await FirstReleaseAsync();
+        File.Delete(Sidecar);
+        if (wrongLength is not null)
+            File.WriteAllBytes(Path.Combine(Bucket, spelling ?? Pointer), wrongLength);
+        var issue = await InsertIssueAsync(wrongLength is null ? IntegrityIssueType.EntryMissing : IntegrityIssueType.EntrySizeMismatch,
+            ZipRelative, Pointer, gameId);
+        return (gameId, issue);
+    }
+
+    private static readonly byte[] Short = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+
+    [TestCase("pointer", TestName = "IssueOnAnotherFile_IsIgnored_AndTheDuplicateNamesTheExternalFile accent-distinct pointer")]
+    [TestCase("zip", TestName = "IssueOnAnotherFile_IsIgnored_AndTheDuplicateNamesTheExternalFile accent-distinct ZIP path")]
+    [TestCase("game", TestName = "IssueOnAnotherFile_IsIgnored_AndTheDuplicateNamesTheExternalFile another game id")]
+    [TestCase("none", TestName = "IssueOnAnotherFile_IsIgnored_AndTheDuplicateNamesTheExternalFile no issue")]
+    public async Task IssueOnAnotherFile_IsIgnored_AndTheDuplicateNamesTheExternalFile(string other)
+    {
+        var gameId = await FirstReleaseAsync();
+        long? issue = other switch
+        {
+            "pointer" => await InsertIssueAsync(IntegrityIssueType.EntryMissing, ZipRelative, Pointer.Replace("Game (USA)", "Gamé (USA)"), gameId),
+            "zip" => await InsertIssueAsync(IntegrityIssueType.EntryMissing, ZipRelative.Replace("Game.zip", "Gamé.zip"), Pointer, gameId),
+            "game" => await InsertIssueAsync(IntegrityIssueType.EntryMissing, ZipRelative, Pointer, Guid.NewGuid()),
+            _ => null,
+        };
+        var file = Drop("again.xci");
+
+        var result = await IngestAsync(Pipeline(), file);
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Duplicate, (string?)null)));
+        Assert.That(result!.Details, Is.EqualTo($"same as {ZipRelative} › {Pointer}"));
+        Assert.That(File.ReadAllBytes(Duplicates("again.xci")), Is.EqualTo(Rom), "moved to _duplicates/ only");
+        Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Rom), "the library file is untouched");
+        if (issue is { } id)
+            Assert.That(await IssueStatusAsync(id), Is.EqualTo("Open"));
+    }
+
+    [Test]
+    public async Task ArchiveDuplicate_FollowsTheArchiveDisposition()
+    {
+        await FirstReleaseAsync();
+        var archive = Archive("pack.zip", Rom);
+
+        await Job(Pipeline()).RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None);
+
+        Assert.That(_items.Single(i => i.ArchiveEntry == "dump.nsp").Outcome, Is.EqualTo(IngestOutcome.Duplicate));
+        Assert.That(File.Exists(archive), Is.False);
+        Assert.That(File.Exists(Duplicates("pack.zip")), Is.True);
+    }
+
+    [Test]
+    public async Task SameSha1AcrossStorageModes_WithAnOpenRepairIssue_StaysADuplicate()
+    {
+        var gb = Path.Combine(_factory.Root, "ingest", "gb", "shared.gb");
+        File.WriteAllBytes(gb, SharedGb);
+        var embedded = await IngestAsync(Pipeline(), new IngestFile("gb", gb, "shared.gb", SharedGb.Length, DateTime.UtcNow.AddMinutes(-1)));
+        Assert.That(Code(embedded), Is.EqualTo((IngestOutcome.Ingested, (string?)null)));
+        var zip = Path.Combine(_factory.Root, "roms", "gb", "S", "Shared.zip");
+        var before = File.ReadAllBytes(zip);
+        var issue = await InsertIssueAsync(IntegrityIssueType.HashMismatch, "gb/S/Shared.zip", LibraryZip.RomEntry("Shared (World).gb"), embedded!.GameId);
+
+        var result = await IngestAsync(Pipeline(), Drop("shared.nsp", SharedGb));
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Duplicate, (string?)null)));
+        Assert.That(File.ReadAllBytes(zip), Is.EqualTo(before));
+        Assert.That(await IssueStatusAsync(issue), Is.EqualTo("Open"));
+    }
+
+    [Test]
+    public async Task DeletedFile_IsRepaired_WithoutARomsEntry()
+    {
+        var (_, issue) = await DamagedAsync(wrongLength: null);
+        var file = Drop("again.xci");
+
+        var result = await IngestAsync(Pipeline(), file);
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Repaired, (string?)null)));
+        Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Rom));
+        Assert.That(File.Exists(file.FullPath), Is.False);
+        using (var zip = ZipFile.OpenRead(ZipPath))
+            Assert.That(zip.Entries.Select(e => e.FullName), Has.None.StartsWith(LibraryZip.RomsFolder));
+        Assert.That(await IssueStatusAsync(issue), Is.EqualTo("Resolved"));
+        Assert.That((await AuditAsync()).Last(), Is.EqualTo((AuditActions.ZipRepaired, (string?)null)));
+    }
+
+    [TestCase(false, TestName = "WrongLengthFile_IsReplaced")]
+    [TestCase(true, TestName = "WrongLengthFile_ForcedZipFailure_RestoresBothFiles")]
+    public async Task WrongLengthFile(bool failWrite)
+    {
+        await DamagedAsync(Short);
+        var file = Drop("again.xci");
+
+        var result = await IngestAsync(Pipeline(failWrite ? new ExternalIngestHooks { Writer = FailVerify() } : null), file);
+
+        if (failWrite)
+        {
+            Assert.That(Code(result), Is.EqualTo((IngestOutcome.Error, IngestErrors.VerifyFailed)));
+            Assert.That(File.ReadAllBytes(file.FullPath), Is.EqualTo(Rom), "the incoming file is back in ingest");
+            Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Short), "the prior library bytes are back");
+        }
+        else
+        {
+            Assert.That(Code(result), Is.EqualTo((IngestOutcome.Repaired, (string?)null)));
+            Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Rom));
+        }
+        Assert.That(File.Exists(Backup), Is.False);
+    }
+
+    [TestCase(false, TestName = "MisCasedFile_IsRepaired")]
+    [TestCase(true, TestName = "MisCasedFile_RollbackRestoresItsActualSpelling")]
+    public async Task MisCasedFile(bool failWrite)
+    {
+        var spelling = Pointer.ToLowerInvariant();
+        await DamagedAsync(Short, spelling);
+        var file = Drop("again.xci");
+
+        var result = await IngestAsync(Pipeline(failWrite ? new ExternalIngestHooks { Writer = FailVerify() } : null), file);
+
+        var names = LibraryFiles().Where(n => !n.EndsWith(".zip", StringComparison.Ordinal)).ToList();
+        if (failWrite)
+        {
+            Assert.That(Code(result), Is.EqualTo((IngestOutcome.Error, IngestErrors.VerifyFailed)));
+            Assert.That(names, Is.EqualTo(new[] { spelling }));
+            Assert.That(File.ReadAllBytes(Path.Combine(Bucket, spelling)), Is.EqualTo(Short));
+        }
+        else
+        {
+            Assert.That(Code(result), Is.EqualTo((IngestOutcome.Repaired, (string?)null)));
+            Assert.That(names, Is.EqualTo(new[] { Pointer }));
+            Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Rom));
+        }
+    }
+
+    [Test]
+    public async Task TwoCaseVariants_PreventTheRepair()
+    {
+        if (OperatingSystem.IsWindows())
+            Assert.Ignore("NTFS folders hold one spelling of a name.");
+        await DamagedAsync(Short);
+        File.WriteAllBytes(Path.Combine(Bucket, Pointer.ToUpperInvariant()), Short);
+        var file = Drop("again.xci");
+
+        var result = await IngestAsync(Pipeline(), file);
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Error, IngestErrors.IoError)));
+        Assert.That(File.ReadAllBytes(file.FullPath), Is.EqualTo(Rom));
+        Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Short));
+    }
+
+    [Test]
+    public async Task PointerThatDisagreesWithTheMirror_LeavesBothFilesUntouched()
+    {
+        var gameId = await FirstReleaseAsync();
+        const string stale = "Space Game.Other.xci";
+        await using (var db = Service<IDbConnectionFactory>().Create())
+            await db.ExecuteAsync("UPDATE roms SET external_file_name = @stale", new { stale });
+        await InsertIssueAsync(IntegrityIssueType.EntryMissing, ZipRelative, stale, gameId);
+        var file = Drop("again.xci");
+
+        var result = await IngestAsync(Pipeline(), file);
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Error, IngestErrors.TargetZipUnreadable)));
+        Assert.That(result!.Details, Does.Contain("stale"));
+        Assert.That(File.ReadAllBytes(file.FullPath), Is.EqualTo(Rom));
+        Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Rom));
+    }
+
+    [Test]
+    public async Task ReplacementAtTheBackupPath_SurvivesCleanup()
+    {
+        await DamagedAsync(Short);
+        var hooks = new ExternalIngestHooks
+        {
+            Writer = new LibraryZipWriterHooks
+            {
+                AfterTempClosed = () =>
+                {
+                    File.Delete(Backup);
+                    File.WriteAllText(Backup, "someone else's");
+                },
+            },
+        };
+
+        var result = await IngestAsync(Pipeline(hooks), Drop("again.xci"));
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Repaired, (string?)null)));
+        Assert.That(File.ReadAllText(Backup), Is.EqualTo("someone else's"));
+    }
+
+    [TestCase(false, TestName = "ArchiveReplacedBeforeAFailedRepair_KeepsTheIncomingCopyAside_AndRestoresTheOriginal")]
+    [TestCase(true, TestName = "ArchiveReplacedBeforeAFailedRepair_FailedRecoveryRename_KeepsBothSurvivors")]
+    public async Task ArchiveReplacedBeforeAFailedRepair(bool failRecovery)
+    {
+        await DamagedAsync(Short);
+        var archive = Archive("pack.zip", Rom);
+        var hooks = new ExternalIngestHooks
+        {
+            Writer = FailVerify(() =>
+            {
+                File.Delete(archive);
+                Archive("pack.zip", RandomNumberGenerator.GetBytes(16));
+            }),
+            Recovery = failRecovery
+                ? new ExternalMoveHooks { Rename = (_, _) => new NoReplaceRenameResult(NoReplaceRenameStatus.Failed, Details: "refused") }
+                : null,
+        };
+
+        await Job(Pipeline(hooks)).RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None);
+
+        var item = _items.Single(i => i.ArchiveEntry == "dump.nsp");
+        Assert.That((item.Outcome, item.Reason), Is.EqualTo((IngestOutcome.Error, IngestErrors.VerifyFailed)));
+        var orphan = Path.Combine(Bucket, "Space Game.Space Game (USA) (2).xci");
+        if (failRecovery)
+        {
+            Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Rom), "the verified incoming copy stays where it is");
+            Assert.That(File.ReadAllBytes(Backup), Is.EqualTo(Short), "and so does the original");
+            Assert.That(item.Details, Does.Contain(Sidecar).And.Contain(Backup));
+        }
+        else
+        {
+            Assert.That(File.ReadAllBytes(orphan), Is.EqualTo(Rom));
+            Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Short));
+            Assert.That(File.Exists(Backup), Is.False);
+            Assert.That(item.Details, Does.Contain(orphan));
+        }
+    }
+}

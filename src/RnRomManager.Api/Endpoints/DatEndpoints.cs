@@ -6,6 +6,7 @@ using RnRomManager.Api.Http;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Jobs;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api.Endpoints;
@@ -30,20 +31,23 @@ public static class DatEndpoints
             return started is null ? JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
-        api.MapGet("/admin/dats", (DatCache cache) =>
+        api.MapGet("/admin/dats", (DatCache cache, IOptions<PathsOptions> paths) =>
         {
-            IReadOnlyList<DatManifestEntry> manifest;
+            // T3: only the live set, and only while it is a real directory below the cache root; the manifest is read
+            // through the same checked, capped reader as startup. Never cache/dats.previous/, even mid-swap.
+            IReadOnlyList<DatManifestEntry> manifest = [];
             try
             {
-                manifest = DatManifest.Read(Path.Combine(cache.Directory, DatManifest.FileName));
+                if (ExternalRomPath.ClassifyDirectory(paths.Value.Cache, cache.Directory).Status == ExternalPathStatus.Found)
+                    manifest = DatManifest.ReadChecked(paths.Value.Cache, Path.Combine(cache.Directory, DatManifest.FileName));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
-                manifest = []; // no DATs yet; the page offers Refresh
+                manifest = []; // no usable DATs; the page offers Refresh
             }
-            // One row per system: metadat files share the DAT name and have no version.
+            // One row per system: a no-intro DAT (its metadat files share the name and have no version) or a titledb file.
             return Results.Ok(manifest
-                .Where(e => e.File.StartsWith(DatKind.NoIntro + "/", StringComparison.Ordinal))
+                .Where(e => e.File.StartsWith(DatKind.NoIntro + "/", StringComparison.Ordinal) || e.File.StartsWith(TitleDb.Folder + "/", StringComparison.Ordinal))
                 .OrderBy(e => e.DatName, StringComparer.Ordinal)
                 .Select(e => new { datName = e.DatName, version = e.Version, downloadedAt = e.DownloadedAt }));
         }).RequireAuthorization(AuthSetup.AdminOnly);

@@ -114,6 +114,95 @@ describe('review detail page', () => {
 		auth.set(null);
 	});
 
+	// G8: Switch is identified through titledb by title id.
+	const switchItem = {
+		...noMatch,
+		system: 'switch',
+		systemName: 'Nintendo Switch',
+		systemShortName: 'Switch',
+		originalFileName: 'orbit.nsp',
+		suggestions: [
+			{
+				datGameName: 'Orbit Expedition [0100000000002000]',
+				romName: 'Orbit Expedition [0100000000002000][v0].nsp',
+				score: 0.9
+			}
+		]
+	};
+
+	async function searchFor(item: unknown, results: unknown[]): Promise<void> {
+		answers['GET /api/review/7'] = { status: 200, body: item };
+		const system = (item as { system: string }).system;
+		answers[`GET /api/dat/search?system=${system}&q=orbit&limit=20`] = {
+			status: 200,
+			body: results
+		};
+		render(ReviewPage);
+		await fireEvent.input(await screen.findByLabelText(/Search the .* DAT/), {
+			target: { value: 'orbit' }
+		});
+		await fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+	}
+
+	it('a Switch DAT search shows no size for a zero-size titledb result, and a size when there is one (G8)', async () => {
+		await searchFor(switchItem, [
+			{
+				gameName: 'Orbit Expedition [0100000000002000]',
+				romName: 'Orbit A.nsp',
+				sizeBytes: 0,
+				crc32: ''
+			},
+			{
+				gameName: 'Orbit Sized [0100000000004000]',
+				romName: 'Orbit B.nsp',
+				sizeBytes: 2048,
+				crc32: ''
+			}
+		]);
+
+		const zero = (await screen.findByText('Orbit A.nsp')).closest('li')!;
+		const sized = screen.getByText('Orbit B.nsp').closest('li')!;
+		expect(zero.textContent).not.toMatch(/\bB\b/);
+		expect(sized.textContent).toMatch(/2(\.0)? KiB|2 KB|2,048/);
+	});
+
+	it('a libretro zero-size result keeps its size display (G8)', async () => {
+		await searchFor(noMatch, [
+			{ gameName: 'Orbit (World)', romName: 'Orbit (World).gb', sizeBytes: 0, crc32: 'abcd' }
+		]);
+
+		expect((await screen.findByText('Orbit (World).gb')).closest('li')!.textContent).toMatch(/0 B/);
+	});
+
+	it('a Switch item explains title-ID selection and toasts a plain added release (G8)', async () => {
+		toasts.items = [];
+		answers['GET /api/review/7'] = { status: 200, body: switchItem };
+		answers['POST /api/review/7/resolve'] = { status: 200, body: { gameId: 'g9' } };
+		render(ReviewPage);
+
+		expect(
+			await screen.findByText('Choose a titledb result to identify this release by title ID.')
+		).toBeTruthy();
+		expect(screen.queryByText(/unverified release, because its hashes differ/)).toBeNull();
+		await fireEvent.click(screen.getByRole('button', { name: 'Use' }));
+
+		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/games/g9'));
+		expect(toasts.items.at(-1)?.text).toBe('Added release of Orbit Expedition [0100000000002000].');
+	});
+
+	it('a libretro item keeps the unverified explanation and toast (G8)', async () => {
+		toasts.items = [];
+		answers['GET /api/review/7'] = { status: 200, body: noMatch };
+		answers['POST /api/review/7/resolve'] = { status: 200, body: { gameId: 'g9' } };
+		render(ReviewPage);
+
+		expect(await screen.findByText(/unverified release, because its hashes differ/)).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Use' }));
+
+		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/games/g9'));
+		expect(toasts.items.at(-1)?.text).toBe('Added as an unverified release of Tetris (World).');
+	});
+
 	it('picking a suggestion resolves as Dat and opens the game', async () => {
 		answers['GET /api/review/7'] = { status: 200, body: noMatch };
 		answers['POST /api/review/7/resolve'] = { status: 200, body: { gameId: 'g9' } };

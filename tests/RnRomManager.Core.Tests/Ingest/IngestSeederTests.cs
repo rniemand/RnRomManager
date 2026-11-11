@@ -11,8 +11,8 @@ public class IngestSeederTests
     [SetUp] public void SetUp() => _dir = new TempDir();
     [TearDown] public void TearDown() => _dir.Dispose();
 
-    [TestCase(SeedSet.Basic, 22)]
-    [TestCase(SeedSet.Full, 222)]
+    [TestCase(SeedSet.Basic, 25)]
+    [TestCase(SeedSet.Full, 225)]
     public void Sets_HaveExpectedFilesArchivesAndReadyAges(SeedSet set, int count)
     {
         var ingest = _dir.Combine("ingest");
@@ -21,6 +21,16 @@ public class IngestSeederTests
         Assert.That(files, Has.Length.EqualTo(count));
         Assert.That(files.Count(f => Path.GetExtension(f) == ".zip"), Is.EqualTo(1));
         Assert.That(files.Count(f => Path.GetExtension(f) == ".7z"), Is.EqualTo(1));
+        // Switch: a base, its update and a DLC, each a PFS0 of at least 1 KiB naming its ticket.
+        var switchFiles = Directory.GetFiles(Path.Combine(ingest, "switch")).Select(Path.GetFileName).Order(StringComparer.Ordinal);
+        Assert.That(switchFiles, Is.EqualTo(new[] { "01-orbit-expedition.nsp", "02-orbit-expedition [v65536].nsp", "03-orbit-expedition-bonus.nsp" }));
+        foreach (var (name, id) in new[] { ("01-orbit-expedition.nsp", "0100000000010000"), ("02-orbit-expedition [v65536].nsp", "0100000000010800"), ("03-orbit-expedition-bonus.nsp", "0100000000011001") })
+        {
+            var bytes = File.ReadAllBytes(Path.Combine(ingest, "switch", name));
+            Assert.That(bytes.Length, Is.GreaterThanOrEqualTo(1024), name);
+            Assert.That(bytes[..4], Is.EqualTo("PFS0"u8.ToArray()), name);
+            Assert.That(System.Text.Encoding.ASCII.GetString(bytes), Does.Contain(id + "0000000000000000.tik"), name);
+        }
         Assert.That(files.All(f => File.GetLastWriteTimeUtc(f) == _time.GetUtcNow().AddMinutes(-1).UtcDateTime), Is.True);
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "gb", "01-orbit-world.gb")), Is.EqualTo(File.ReadAllBytes(Path.Combine(ingest, "gb", "90-duplicate.gb"))));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "gb", "04-color-garden.gbc"))[SyntheticRomBuilder.CgbFlagOffset], Is.EqualTo(0x80));
@@ -35,6 +45,7 @@ public class IngestSeederTests
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "s32x", "01-star-relay.32x"))[0x100..0x108], Is.EqualTo("SEGA 32X"u8.ToArray()));
         Assert.That(new FileInfo(Path.Combine(ingest, "tg16", "01-neon-circuit.pce")).Length, Is.EqualTo(262656), "copier-headered");
         Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(65));
+        Assert.That(File.Exists(_dir.Combine("cache", "dats", "titledb", "Nintendo - Nintendo Switch.json")), Is.True);
     }
 
     [Test]

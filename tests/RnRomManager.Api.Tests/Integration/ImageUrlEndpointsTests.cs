@@ -59,7 +59,7 @@ public class ImageUrlEndpointsTests
             [IngestSeeder.Sega32xDat] = [],
             [IngestSeeder.TurboGrafx16Dat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Tetris)],
-        });
+        }, titleDb: IngestSeeder.EmptySwitch);
         cache.Load();
         var path = Path.Combine(_factory.Root, "ingest", "gb", "t.gb");
         await File.WriteAllBytesAsync(path, Tetris);

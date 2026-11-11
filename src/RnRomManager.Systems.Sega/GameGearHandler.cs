@@ -24,6 +24,10 @@ public sealed class GameGearHandler : ISystemHandler
     public long MaxRomSizeBytes => 1024 * 1024;
 
     public string DatName => "Sega - Game Gear";
+
+    /// <inheritdoc />
+    public bool EmbedRomsInZip => true;
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => TmrSegaHeader.Read(rom, Id);

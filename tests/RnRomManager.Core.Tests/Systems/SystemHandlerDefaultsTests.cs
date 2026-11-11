@@ -21,6 +21,7 @@ public class SystemHandlerDefaultsTests
         public long MinRomSizeBytes => 1;
         public long MaxRomSizeBytes => 1024;
         public string DatName => "Plain";
+        public bool EmbedRomsInZip => true;
         public ReadOnlyMemory<byte> DefaultBoxArtPng => ReadOnlyMemory<byte>.Empty;
         public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
     }

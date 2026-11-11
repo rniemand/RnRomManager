@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Storage;
+using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api.Endpoints;
 
@@ -10,20 +11,61 @@ namespace RnRomManager.Api.Endpoints;
 /// Opens library ZIPs for streaming (spec §3.1): <c>FileShare.Read | FileShare.Delete</c>, so an atomic replace or a
 /// delete still works mid-download. A missing ZIP or entry is a <c>404</c> (the UI reloads the game, §11).
 /// </summary>
-public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader reader, ILogger<LibraryFiles> logger)
+public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader reader, ISystemRegistry systems, ILogger<LibraryFiles> logger)
 {
     public IResult? OpenZip(HttpContext ctx, GameRow game, out FileStream? stream)
     {
         stream = null;
         try
         {
-            stream = new FileStream(SafePath.Resolve(paths.Value.Roms, game.ZipPath), FileMode.Open, FileAccess.Read,
-                FileShare.Read | FileShare.Delete);
+            stream = OpenFile(game, out _);
             return null;
         }
         catch (Exception ex)
         {
             return Fail(ctx, game, ex);
+        }
+    }
+
+    /// <summary>
+    /// G4: an external ROM, the file <paramref name="externalFileName"/> in the ZIP's folder, opened through the
+    /// checked resolver (no links, regular file only). A missing or unsafe file, a pointer that isn't a plain name,
+    /// and a name another game also claims in that folder (<paramref name="claims"/>) are a <c>404</c>.
+    /// </summary>
+    public IResult? OpenExternal(HttpContext ctx, GameRow game, string externalFileName, IEnumerable<ExternalRomRow> claims, out FileStream? stream)
+    {
+        stream = null;
+        var folder = game.ZipPath[..(game.ZipPath.LastIndexOf('/') + 1)];
+        var conflict = claims.Any(c => c.GameId != game.Id
+            && string.Equals(c.ExternalFileName, externalFileName, StringComparison.OrdinalIgnoreCase)
+            && c.ZipPath.StartsWith(folder, StringComparison.OrdinalIgnoreCase) && c.ZipPath.IndexOf('/', folder.Length) < 0);
+        if (conflict || externalFileName.AsSpan().IndexOfAny('/', '\\') >= 0 || externalFileName is "." or "..")
+        {
+            logger.LogWarning("External ROM {ExternalFileName} of game {GameId} at {ZipPath} is {Reason}", externalFileName, game.Id,
+                game.ZipPath, conflict ? "also claimed by another game" : "not a plain file name");
+            return Problems.NotFound(ctx);
+        }
+
+        try
+        {
+            var opened = ExternalRomPath.OpenRead(paths.Value.Roms, SafePath.Resolve(paths.Value.Roms, folder + externalFileName),
+                FileShare.Read | FileShare.Delete);
+            if (opened.Status == ExternalPathStatus.Found)
+            {
+                stream = opened.Stream;
+                return null;
+            }
+            if (opened.Status != ExternalPathStatus.Unreadable)
+            {
+                logger.LogWarning("External ROM of game {GameId} at {ZipPath}: {Details}", game.Id, game.ZipPath, opened.Details);
+                return Problems.NotFound(ctx);
+            }
+            return Fail(ctx, game, new IOException(opened.Details));
+        }
+        catch (UnsafePathException ex)
+        {
+            logger.LogWarning("External ROM of game {GameId} at {ZipPath}: {Message}", game.Id, game.ZipPath, ex.Message);
+            return Problems.NotFound(ctx);
         }
     }
 
@@ -34,7 +76,7 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
         LibraryZip? zip = null;
         try
         {
-            zip = LibraryZip.Open(SafePath.Resolve(paths.Value.Roms, game.ZipPath), reader);
+            zip = OpenLibraryZip(game);
             stream = zip.OpenEntry(entry, maxBytes);
             ctx.Response.RegisterForDispose(zip);
             return null;
@@ -55,7 +97,7 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
         bytes = null;
         try
         {
-            using var zip = LibraryZip.Open(SafePath.Resolve(paths.Value.Roms, game.ZipPath), reader);
+            using var zip = OpenLibraryZip(game);
             using var stream = zip.OpenEntry(entry, maxBytes);
             using var buffer = new MemoryStream();
             stream.CopyTo(buffer);
@@ -170,7 +212,7 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
     /// <summary>The raw archive, without parsing <c>info.json</c> (notes don't depend on its schema).</summary>
     private ZipArchive OpenArchive(GameRow game)
     {
-        var file = new FileStream(SafePath.Resolve(paths.Value.Roms, game.ZipPath), FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+        var file = OpenFile(game, out _);
         try
         {
             return new ZipArchive(file, ZipArchiveMode.Read);
@@ -180,6 +222,35 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
             file.Dispose();
             throw;
         }
+    }
+
+    private LibraryZip OpenLibraryZip(GameRow game)
+    {
+        var file = OpenFile(game, out var path);
+        return LibraryZip.Open(file, path, reader, ExternalRomPath.SnapshotOf(file));
+    }
+
+    /// <summary>
+    /// The one way a metadata ZIP is opened for reading. G4: when the game's system or the system folder the ZIP
+    /// sits in stores ROMs externally, the ZIP goes through the checked open (no links, regular file only); an
+    /// unsafe path reads as missing (<c>404</c>).
+    /// </summary>
+    private FileStream OpenFile(GameRow game, out string path)
+    {
+        path = SafePath.Resolve(paths.Value.Roms, game.ZipPath);
+        var folder = game.ZipPath.Split('/')[0];
+        var isExternal = systems.ById(game.SystemId) is { EmbedRomsInZip: false }
+            || systems.All.Any(h => !h.EmbedRomsInZip && string.Equals(h.Id, folder, StringComparison.OrdinalIgnoreCase));
+        if (!isExternal)
+            return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+
+        var opened = ExternalRomPath.OpenRead(paths.Value.Roms, path, FileShare.Read | FileShare.Delete);
+        return opened.Status switch
+        {
+            ExternalPathStatus.Found => opened.Stream!,
+            ExternalPathStatus.Unreadable => throw new IOException(opened.Details),
+            _ => throw new FileNotFoundException(opened.Details, path),
+        };
     }
 
     private IResult Fail(HttpContext ctx, GameRow game, Exception ex)

@@ -32,6 +32,7 @@ using RnRomManager.Systems.Atari;
 using RnRomManager.Systems.Coleco;
 using RnRomManager.Systems.Sega;
 using RnRomManager.Systems.Nec;
+using RnRomManager.Systems.Switch;
 using RnRomManager.Systems.Snes;
 using RnRomManager.Systems.Nintendo64;
 
@@ -125,6 +126,7 @@ public static class AppHost
         builder.Services.AddSingleton<ILibraryMirror, LibraryMirror>();
         builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV1>();
         builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV2>();
+        builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV3>();
         builder.Services.AddSingleton<InfoJsonReader>();
         builder.Services.AddSingleton<DbSync>();
         builder.Services.AddSingleton<LibraryFiles>();
@@ -167,6 +169,7 @@ public static class AppHost
         builder.Services.AddSystemHandler<MegaDriveHandler>();
         builder.Services.AddSystemHandler<Sega32xHandler>();
         builder.Services.AddSystemHandler<TurboGrafx16Handler>();
+        builder.Services.AddSystemHandler<SwitchHandler>();
 
         // Keys live in the DB so cookies survive restarts (spec §9.2).
         builder.Services.AddSingleton<IXmlRepository, DbXmlRepository>();

@@ -43,7 +43,7 @@ public sealed class StartupRunner(
 
         // Step 4
         StorageFolders.EnsureRoots(paths.Value);
-        StorageFolders.EnsureSystemFolders(paths.Value, systems.All);
+        StorageFolders.EnsureSystemFolders(paths.Value, systems.All, logger);
 
         // Steps 5–6
         await database.WaitUntilAvailableAsync(cancellationToken);
@@ -57,8 +57,10 @@ public sealed class StartupRunner(
         // Step 8
         await adminSeeder.SeedAsync(cancellationToken);
 
-        // Step 9: missing/corrupt DATs are logged at Error; that system just has none.
-        datCache.Load();
+        // Step 9: missing/corrupt DATs are logged at Error; that system just has none. An interrupted refresh's
+        // backup is reconciled first (T2); an unsafe live set loads nothing.
+        if (DatPublication.RecoverAtStartup(paths.Value.Cache, logger))
+            datCache.Load();
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

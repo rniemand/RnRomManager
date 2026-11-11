@@ -25,6 +25,10 @@ public sealed class Nintendo64Handler : ISystemHandler
     public long MaxRomSizeBytes => 64L * 1024 * 1024;
 
     public string DatName => "Nintendo - Nintendo 64";
+
+    /// <inheritdoc />
+    public bool EmbedRomsInZip => true;
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     /// <summary>Called after <see cref="NormalizeForHashing"/>, so the bytes are big-endian.</summary>

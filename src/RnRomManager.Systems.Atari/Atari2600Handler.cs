@@ -23,6 +23,10 @@ public sealed class Atari2600Handler : ISystemHandler
     public long MaxRomSizeBytes => 65536;
 
     public string DatName => "Atari - 2600";
+
+    /// <inheritdoc />
+    public bool EmbedRomsInZip => true;
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;

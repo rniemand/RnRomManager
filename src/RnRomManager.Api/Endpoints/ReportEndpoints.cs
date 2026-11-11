@@ -115,8 +115,9 @@ public static partial class ReportEndpoints
                     merged.Add(source);
                     continue;
                 }
-                // DbWriteFailed: the target ZIP was written and the source ZIP deleted, so its files did move.
-                if (result.Code == LibraryEditResult.DbWriteFailed)
+                // DbWriteFailed: the target ZIP was written and the source ZIP deleted, so its files did move,
+                // unless the target was lost and the source kept (W4).
+                if (result.Code == LibraryEditResult.DbWriteFailed && !result.TargetPublicationLost)
                     merged.Add(source);
                 return LibraryEndpoints.ToProblem(ctx, result, new Dictionary<string, object?> { ["merged"] = merged });
             }

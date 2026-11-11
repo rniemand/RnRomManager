@@ -24,6 +24,10 @@ public abstract class GameBoyHandlerBase : ISystemHandler
     public long MaxRomSizeBytes => 16L * 1024 * 1024;
 
     public abstract string DatName { get; }
+
+    /// <inheritdoc />
+    public bool EmbedRomsInZip => true;
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => GameBoyHeaderReader.Read(rom);

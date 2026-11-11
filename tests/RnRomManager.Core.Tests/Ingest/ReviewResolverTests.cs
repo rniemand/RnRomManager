@@ -54,11 +54,13 @@ public class ReviewResolverTests
         var dats = _dats = new DatCache(options, systems, NullLogger<DatCache>.Instance);
         var games = Substitute.For<IGameRepository>();
         var reader = new InfoJsonReader([], systems);
-        var media = new MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }), NullLogger<MediaService>.Instance);
+        var media = TestMedia.Offline();
         var pipeline = new IngestPipeline(dats, systems, Substitute.For<IRomRepository>(), games, Substitute.For<ILibraryMirror>(),
             Substitute.For<IIntegrityIssueRepository>(), _reviews, reader, media, options, _audit,
             new RnRomManager.Core.Audit.AuditPaths(options), _time, NullLogger<IngestPipeline>.Instance);
-        _resolver = new ReviewResolver(_lock, _reviews, games, pipeline, dats, systems,
+        var romRepository = Substitute.For<IRomRepository>();
+        _resolver = new ReviewResolver(_lock, _reviews, games, romRepository,
+            new DbSync(games, romRepository, Substitute.For<ILibraryMirror>(), reader, systems, options, NullLogger<DbSync>.Instance), pipeline, dats, systems,
             new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance), options, _audit, new RnRomManager.Core.Audit.AuditPaths(options), _time,
             NullLogger<ReviewResolver>.Instance);
     }
@@ -141,6 +143,7 @@ public class ReviewResolverTests
         public long MinRomSizeBytes => 1;
         public long MaxRomSizeBytes => 1024;
         public string DatName => "GB";
+        public bool EmbedRomsInZip => true;
         // A 512×512 PNG header: enough for MediaService's default-art check when a resolve stores a new game.
         public ReadOnlyMemory<byte> DefaultBoxArtPng { get; } = new byte[]
         {

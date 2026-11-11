@@ -58,7 +58,7 @@ public class LibraryEndpointsTests
                 new FixtureGame("Pokémon Pinball (Europe)", "Pokémon Pinball (Europe).gb", Pinball) { Publishers = ["Nintendo"] },
                 new FixtureGame("3 Choume no Tama (Japan)", "3 Choume no Tama (Japan).gb", Arcade),
             ],
-        });
+        }, titleDb: IngestSeeder.EmptySwitch);
         cache.Load();
     }
 
@@ -130,7 +130,9 @@ public class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "s32x", "a2600", "coleco", "gb", "gba", "gbc", "gg", "sms", "md", "n64", "nes", "snes", "tg16" }));
+            Is.EqualTo(new[] { "s32x", "a2600", "coleco", "gb", "gba", "gbc", "gg", "sms", "md", "n64", "nes", "switch", "snes", "tg16" }));
+        Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(13).True);
+        Assert.That(Find("switch").GetProperty("embedRoms").GetBoolean(), Is.False, "Switch stores its ROMs outside the ZIP");
         JsonElement Find(string id) => systems.EnumerateArray().Single(s => s.GetProperty("id").GetString() == id);
         var gb = Find("gb");
         Assert.That(gb.GetProperty("displayName").GetString(), Is.EqualTo("Game Boy"));
@@ -140,7 +142,7 @@ public class LibraryEndpointsTests
         Assert.That((gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()), Is.EqualTo((0, 0)));
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
-            "32X", "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo Entertainment System",
+            "32X", "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo Entertainment System", "Nintendo Switch",
             "Super Nintendo Entertainment System", "TurboGrafx-16"
         }));
     }
@@ -546,5 +548,130 @@ public class LibraryEndpointsTests
         Assert.That(await image.Content.ReadAsByteArrayAsync(), Is.EqualTo(jpeg));
         using var png = await _user.GetAsync(detail.GetProperty("images")[0].GetProperty("url").GetString()!);
         Assert.That(png.Content.Headers.ContentType?.MediaType, Is.EqualTo("image/png"));
+    }
+
+    [Test]
+    public async Task GameDetail_ExposesTheExternalPointer_FromTheMirroredRow_NullWhenEmbedded()
+    {
+        var embeddedId = await Ingest("t1.gb", TetrisWorld);
+        var rom = TestLibrary.Rom("Orbit Test [v0].nsp", [1, 2, 3, 4]) with { ExternalFileName = "Orbit Test.Orbit Test [v0].nsp" };
+        var external = TestLibrary.Game("Orbit Test", rom) with { System = ExternalTestHandler.SystemId };
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(external, "ext/O/Orbit Test.zip", 100, DateTime.UtcNow), default);
+
+        var externalRom = (await GetJson($"/api/games/{external.GameId}")).GetProperty("roms")[0];
+        var embeddedRom = (await GetJson($"/api/games/{embeddedId}")).GetProperty("roms")[0];
+
+        Assert.That(externalRom.GetProperty("externalFileName").GetString(), Is.EqualTo("Orbit Test.Orbit Test [v0].nsp"));
+        Assert.That(externalRom.GetProperty("fileName").GetString(), Is.EqualTo("Orbit Test [v0].nsp"));
+        Assert.That(embeddedRom.GetProperty("externalFileName").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    /// <summary>Mirrors an external game at <c>ext/&lt;bucket&gt;/&lt;title&gt;.zip</c>; returns its id and its ROM's download URL.</summary>
+    private async Task<(Guid Id, string RomUrl)> External(string bucket, string title, string pointer, byte[] bytes)
+    {
+        var rom = TestLibrary.Rom($"{title} [v0].nsp", bytes) with { ExternalFileName = pointer };
+        var game = TestLibrary.Game(title, rom) with { System = ExternalTestHandler.SystemId };
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, $"ext/{bucket}/{title}.zip", 100, DateTime.UtcNow), default);
+        return (game.GameId, (await GetJson($"/api/games/{game.GameId}")).GetProperty("roms")[0].GetProperty("downloadUrl").GetString()!);
+    }
+
+    private string RomsFolder(params string[] parts) =>
+        Directory.CreateDirectory(Path.Combine([_factory.Root, "roms", .. parts])).FullName;
+
+    [Test]
+    public async Task ExternalRomDownload_StreamsTheFile_WithRanges_SameForUserAndAdmin_AnonymousIs401()
+    {
+        var bytes = Enumerable.Range(0, 200).Select(i => (byte)i).ToArray();
+        var (_, url) = await External("O", "Orbit Test", "Orbit Test.Orbit Test [v0].nsp", bytes);
+        await File.WriteAllBytesAsync(Path.Combine(RomsFolder("ext", "O"), "Orbit Test.Orbit Test [v0].nsp"), bytes);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
+        using var admin = await AuthClient.CreateAsync(_factory);
+        (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
+        using var anonymous = await AuthClient.CreateAsync(_factory);
+
+        using var response = await _user.GetAsync(url);
+        using var adminResponse = await admin.GetAsync(url);
+        using var anonymousResponse = await anonymous.GetAsync(url);
+        using var partial = await _user.SendAsync(HttpMethod.Get, url, null, sendXsrf: false,
+            headers => headers.Range = new RangeHeaderValue(10, 19));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"));
+        Assert.That(response.Content.Headers.ContentDisposition?.FileNameStar, Is.EqualTo("Orbit Test [v0].nsp"), "the rom fileName, not the pointer");
+        Assert.That(response.Headers.AcceptRanges, Does.Contain("bytes"));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(bytes));
+        Assert.That(await adminResponse.Content.ReadAsByteArrayAsync(), Is.EqualTo(bytes));
+        Assert.That(anonymousResponse.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+        Assert.That(partial.StatusCode, Is.EqualTo(HttpStatusCode.PartialContent));
+        Assert.That(await partial.Content.ReadAsByteArrayAsync(), Is.EqualTo(bytes[10..20]));
+    }
+
+    [Test]
+    public async Task ExternalGameDownload_IsTheStoredZip_WithoutRomEntries()
+    {
+        var (id, _) = await External("O", "Orbit Test", "Orbit Test.Orbit Test [v0].nsp", [1, 2, 3, 4]);
+        var zipPath = Path.Combine(RomsFolder("ext", "O"), "Orbit Test.zip");
+        using (var zip = ZipFile.Open(zipPath, ZipArchiveMode.Create))
+        {
+            using var entry = zip.CreateEntry("info.json").Open();
+            entry.Write("{}"u8);
+        }
+
+        using var response = await _user.GetAsync($"/api/games/{id}/download");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var body = await response.Content.ReadAsByteArrayAsync();
+        Assert.That(body, Is.EqualTo(await File.ReadAllBytesAsync(zipPath)));
+        using var served = new ZipArchive(new MemoryStream(body));
+        Assert.That(served.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "info.json" }));
+    }
+
+    [Test]
+    public async Task ExternalRomDownload_MissingFile_LinkedFolder_AndAnotherGamesRomId_Are404()
+    {
+        var (orbit, orbitUrl) = await External("O", "Orbit Test", "Orbit Test.Orbit Test [v0].nsp", [1, 2, 3, 4]);
+        var (_, missingUrl) = await External("M", "Missing", "Missing.Missing [v0].nsp", [5, 6, 7, 8]);
+        await File.WriteAllBytesAsync(Path.Combine(RomsFolder("ext", "O"), "Orbit Test.Orbit Test [v0].nsp"), [1, 2, 3, 4]);
+        var urls = new List<string> { missingUrl, orbitUrl.Replace(orbit.ToString(), Guid.NewGuid().ToString()) };
+
+        var (linked, linkedUrl) = await External("L", "Linked", "Linked.Linked [v0].nsp", [9, 9, 9, 9]);
+        urls.Add(orbitUrl.Replace(orbit.ToString(), linked.ToString())); // Orbit's ROM id under another game
+        var outside = Directory.CreateDirectory(Path.Combine(_factory.Root, "outside")).FullName;
+        await File.WriteAllBytesAsync(Path.Combine(outside, "Linked.Linked [v0].nsp"), [9, 9, 9, 9]);
+        var link = Path.Combine(RomsFolder("ext"), "L");
+        var isLinked = TestLinks.TryLinkDirectory(link, outside);
+        if (isLinked)
+            urls.Add(linkedUrl);
+
+        try
+        {
+            foreach (var url in urls)
+            {
+                using var response = await _user.GetAsync(url);
+                Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound), url);
+                Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("NotFound"));
+            }
+        }
+        finally
+        {
+            if (isLinked)
+                TestLinks.RemoveDirectoryLink(link); // or the factory's cleanup would follow it
+        }
+        Assert.That(isLinked, Is.True, "this account can't create a directory link, so the linked path wasn't tested");
+    }
+
+    [Test]
+    public async Task ExternalRomDownload_NameClaimedByTwoGames_Is404ForBoth()
+    {
+        // A dotted ZIP base can produce another game's sidecar name (E2): "Mr. Driller" + "Encore.nsp" = "Mr" + " Driller.Encore.nsp".
+        var (_, first) = await External("M", "Mr. Driller", "Mr. Driller.Encore.nsp", [1, 2, 3, 4]);
+        var (_, second) = await External("M", "Mr", "mr. driller.encore.nsp", [5, 6, 7, 8]);
+        await File.WriteAllBytesAsync(Path.Combine(RomsFolder("ext", "M"), "Mr. Driller.Encore.nsp"), [1, 2, 3, 4]);
+
+        foreach (var url in new[] { first, second })
+        {
+            using var response = await _user.GetAsync(url);
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound), url);
+        }
     }
 }

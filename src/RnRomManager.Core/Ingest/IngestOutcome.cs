@@ -22,7 +22,8 @@ public static class IngestReason
 }
 
 /// <summary>A review row still <c>Pending</c>: just what step 5 needs to check its source still exists.</summary>
-public sealed record PendingReviewSource(long Id, string SourcePath, string? ArchivePath);
+/// <param name="SystemId">Picks the storage mode, so external sources get the checked cleanup (spec I4).</param>
+public sealed record PendingReviewSource(long Id, string SystemId, string SourcePath, string? ArchivePath);
 
 public interface IIngestReviewRepository
 {
@@ -48,6 +49,12 @@ public interface IIngestReviewRepository
     /// loose file at <paramref name="sourcePath"/>. Resolved and dismissed rows stay as history (D2).
     /// </summary>
     /// <returns>The number of rows deleted.</returns>
+    /// <summary>
+    /// I4: the Pending loose-file row of <paramref name="originalPath"/> with this SHA1 now names
+    /// <paramref name="restoredPath"/>, where a failed placement put its verified bytes back.
+    /// </summary>
+    Task RetargetPendingAsync(string originalPath, string sha1, string restoredPath, CancellationToken cancellationToken);
+
     Task<int> DeletePendingBySourceAsync(string sourcePath, string? archivePath, CancellationToken cancellationToken);
 }
 

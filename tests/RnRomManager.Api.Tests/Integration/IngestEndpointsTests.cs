@@ -40,7 +40,8 @@ public class IngestEndpointsTests
         return path;
     }
 
-    private void LoadDats()
+    /// <param name="withSwitch">False leaves out the Switch titledb file, so one registered system has no DATs (N4).</param>
+    private void LoadDats(bool withSwitch = true)
     {
         var cache = _factory.Services.GetRequiredService<DatCache>();
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
@@ -58,7 +59,7 @@ public class IngestEndpointsTests
             [IngestSeeder.TurboGrafx16Dat] = [],
             ["Nintendo - Game Boy"] = [],
             ["Nintendo - Game Boy Color"] = [],
-        });
+        }, titleDb: withSwitch ? IngestSeeder.EmptySwitch : null);
         cache.Load();
     }
 
@@ -89,6 +90,48 @@ public class IngestEndpointsTests
         Assert.That(jobs.Total, Is.Zero);
         using var free = _factory.Services.GetRequiredService<JobLock>().TryAcquire();
         Assert.That(free, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task Start_WithAnEmptySwitchDat_PassesThePreflight()
+    {
+        LoadDats();
+
+        using var response = await _admin.PostAsync("/api/jobs/ingest");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+        await WaitForEndAsync((await AuthClient.JsonAsync(response)).GetProperty("jobId").GetGuid());
+    }
+
+    [Test]
+    public void Startup_CreatesTheSwitchIngestFolder() =>
+        Assert.That(Directory.Exists(Path.Combine(_factory.Root, "ingest", "switch", "_failed")), Is.True);
+
+    /// <summary>N4: a valid selection without any Switch file is still refused while Switch has no DAT.</summary>
+    [Test]
+    public async Task Selection_WithoutTheSwitchDat_Is409DatsMissing()
+    {
+        LoadDats(withSwitch: false);
+        var name = Path.GetFileName(Drop("gb", "tetris.gb", TimeSpan.FromMinutes(1)));
+
+        using var response = await _admin.PostAsync("/api/jobs/ingest", new { files = new[] { new { system = "gb", name } } });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("DatsMissing"));
+        var jobs = await _factory.Services.GetRequiredService<IJobRepository>().ListAsync(null, 1, 10, CancellationToken.None);
+        Assert.That(jobs.Total, Is.Zero);
+    }
+
+    [Test]
+    public async Task WithoutTheSwitchDat_ABadRequestIsStill400_AndABusyLockStillJobRunning()
+    {
+        LoadDats(withSwitch: false);
+
+        using (var bad = await _admin.PostAsync("/api/jobs/ingest", new { files = Array.Empty<object>() }))
+            Assert.That(bad.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        using var held = _factory.Services.GetRequiredService<JobLock>().TryAcquire();
+        using var busy = await _admin.PostAsync("/api/jobs/ingest", new { files = new[] { new { system = "gb", name = "x.gb" } } });
+        Assert.That(await AuthClient.CodeAsync(busy), Is.EqualTo("JobRunning"));
     }
 
     [Test]
@@ -213,7 +256,7 @@ public class IngestEndpointsTests
         using var response = await _admin.GetAsync("/api/ingest/pending");
         var systems = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
-        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64", "nes", "snes", "a2600", "coleco", "gg", "sms", "md", "s32x", "tg16" }));
+        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64", "nes", "snes", "a2600", "coleco", "gg", "sms", "md", "s32x", "tg16", "switch" }));
         var gb = systems.Single(s => s.GetProperty("system").GetString() == "gb").GetProperty("files");
         Assert.That(gb.GetArrayLength(), Is.EqualTo(1));
         Assert.That(gb[0].GetProperty("name").GetString(), Is.EqualTo("Tetris.gb"));

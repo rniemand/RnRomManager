@@ -68,8 +68,10 @@ public static class GameImages
 
     /// <summary>
     /// I4 for ingest into an existing game and media retry: fetched box art only replaces the default placeholder (keeping
-    /// its name and cover status) or fills a game with no images at all; a fetched snap is added only when the game has no
-    /// <c>Snap</c>. Uploaded and fetched non-default images are never touched.
+    /// its number and cover status) or fills a game with no images at all; a fetched snap is added only when the game has
+    /// no <c>Snap</c>. Uploaded and fetched non-default images are never touched. T8: every name takes the fetched image's
+    /// own extension (<c>boxart-01.png</c> → <c>boxart-01.jpg</c>); a renamed placeholder that would collide, ignoring
+    /// case, with another image gets the next free name instead.
     /// </summary>
     /// <returns>The new image list and the entries to write (name under <c>images/</c> → bytes); null when nothing changes.</returns>
     public static (IReadOnlyList<InfoJsonImage> Images, IReadOnlyDictionary<string, byte[]> Entries)? ApplyFetched(
@@ -80,8 +82,12 @@ public static class GameImages
         var placeholder = images.FirstOrDefault(i => i.IsDefault);
         if (placeholder is not null && !found.BoxArt.IsDefault)
         {
-            images[images.IndexOf(placeholder)] = found.BoxArt.ToInfoJson(now, placeholder.IsCover) with { FileName = placeholder.FileName };
-            entries[placeholder.FileName] = found.BoxArt.Bytes;
+            var others = images.Where(i => !ReferenceEquals(i, placeholder)).Select(i => i.FileName).ToList();
+            var name = Path.ChangeExtension(placeholder.FileName, found.BoxArt.Extension);
+            if (others.Contains(name, StringComparer.OrdinalIgnoreCase))
+                name = NextName(others, ImageType.BoxArt, found.BoxArt.Extension);
+            images[images.IndexOf(placeholder)] = found.BoxArt.ToInfoJson(now, placeholder.IsCover) with { FileName = name };
+            entries[name] = found.BoxArt.Bytes;
         }
         else if (images.Count == 0)
         {
@@ -90,7 +96,7 @@ public static class GameImages
         }
         if (found.Snap is { } snap && !images.Any(i => i.Type == ImageType.Snap) && images.Count < MaxImages)
         {
-            var name = NextName(images.Select(i => i.FileName), ImageType.Snap, "png");
+            var name = NextName(images.Select(i => i.FileName), ImageType.Snap, snap.Extension);
             images.Add(snap.ToInfoJson(now, isCover: false) with { FileName = name });
             entries[name] = snap.Bytes;
         }

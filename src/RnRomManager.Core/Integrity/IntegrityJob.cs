@@ -17,12 +17,13 @@ namespace RnRomManager.Core.Integrity;
 /// files in the root and under unregistered folders are <c>OrphanFile</c> (never opened); under a registered system
 /// folder every non-ZIP is an orphan and every <c>.zip</c> is checked. Quick opens a ZIP only when its DB row (as it was
 /// before the repair) differs in size or whole-second mtime, else it checks just the location; Deep opens every ZIP and
-/// also hashes every ROM and image entry. The checker never moves or deletes library files.
+/// also hashes every ROM and image entry. An external game's files are checked by stat after its ZIP, whether or not
+/// the ZIP was opened (G1), and are not orphans (G3). The checker never moves or deletes library files.
 /// Findings update open issues with the same (type, zip_path, entry_name) or open new ones. A completed run resolves
 /// open issues it didn't see, but only where it performed that check (D48); a cancelled run resolves nothing. Retention
 /// (180 days) runs at the end of a completed run.
 /// </summary>
-public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbSync, IIntegrityIssueRepository issues,
+public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomRepository roms, DbSync dbSync, IIntegrityIssueRepository issues,
     IJobRepository jobs, InfoJsonReader reader, ISystemRegistry systems, IOptions<PathsOptions> paths, TimeProvider time,
     ILogger<IntegrityJob> logger) : IJob
 {
@@ -36,6 +37,9 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
         LocationOnly,
         Opened,
     }
+
+    /// <summary>Test seams of the external file checks.</summary>
+    public IntegrityHooks? Hooks { get; init; }
 
     public JobType Type => JobType.Integrity;
     public JobMode? Mode => mode;
@@ -57,8 +61,27 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
         }, c.ZipPath, SystemId: SystemOf(c.ZipPath), GameId: c.GameId)).ToList();
         foreach (var skip in sync.Skipped.Where(s => s.Reason is DbSyncSkip.DuplicateGameId or DbSyncSkip.DuplicateSha1))
             Add(new IntegrityFinding(skip.Reason.ToString(), skip.ZipPath, SystemId: SystemOf(skip.ZipPath), Details: skip.Details));
+        // G4/E4: a path nothing could be opened at (unsafe, ambiguous, or equal to another ZIP for the database) is
+        // reported once, never opened, and keeps its issues.
+        var notChecked = sync.Skipped.Where(s => s.NotChecked).ToList();
+        foreach (var skip in notChecked)
+            Add(new IntegrityFinding(ZipUnreadable, skip.ZipPath, SystemId: SystemOf(skip.ZipPath),
+                GameId: before.TryGetValue(skip.ZipPath, out var behind) ? behind.Id : null, Details: skip.Details));
 
-        var (zips, orphans) = Scan();
+        // G1/G3: the external files as the DB lists them after the repair (one read; a cancel stops the scan below instead,
+        // so the run still records what it found).
+        var external = await roms.ListExternalAsync(CancellationToken.None).ConfigureAwait(false);
+        var externalByZip = external.ToLookup(r => r.ZipPath, StringComparer.OrdinalIgnoreCase);
+        static string FileKey(ExternalRomRow r) => r.ZipPath[..(r.ZipPath.LastIndexOf('/') + 1)] + r.ExternalFileName;
+        var listedFiles = external.Select(FileKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // G4: a file two games claim (same folder and name, ignoring case) belongs to neither.
+        var checks = new ExternalChecks(externalByZip,
+            external.GroupBy(FileKey, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Select(r => r.GameId).Distinct().Count() > 1)
+                .ToDictionary(g => g.Key, g => g.Select(r => r.GameId).Distinct().ToList(), StringComparer.OrdinalIgnoreCase),
+            sync.Skipped.Select(k => k.ZipPath).ToHashSet(StringComparer.OrdinalIgnoreCase), [.. notChecked.Select(k => k.ZipPath)]);
+
+        var (zips, orphans) = Scan(listedFiles);
         foreach (var orphan in orphans)
             Add(new IntegrityFinding(OrphanFile, orphan, SystemId: SystemOf(orphan)));
 
@@ -74,6 +97,11 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
                 break;
             }
             context.Progress.SetCurrentItem(zip);
+            if (checks.IsUnchecked(zip))
+            {
+                context.Progress.ItemDone();
+                continue;
+            }
             before.TryGetValue(zip, out var row);
             var file = new FileInfo(Path.Combine(paths.Value.Roms, zip));
             var unchanged = row is not null && row.ZipSizeBytes == file.Length && row.ZipMtimeUtc == MirrorEntry.WholeSeconds(file.LastWriteTimeUtc);
@@ -88,11 +116,22 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
                 checkedZips[zip] = Checked.Opened;
                 opened++;
             }
+            try
+            {
+                await CheckExternalAsync(zip, externalByZip[zip], checks, Add, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // G2: what was found so far is recorded; nothing is resolved.
+                cancelled = true;
+                break;
+            }
             context.Progress.ItemDone();
         }
+        cancelled |= cancellationToken.IsCancellationRequested;
 
         var now = time.GetUtcNow().UtcDateTime;
-        var (added, resolved) = await ApplyAsync(context.JobId, findings.Values, repairs, zips, checkedZips, resolve: !cancelled, now)
+        var (added, resolved) = await ApplyAsync(context.JobId, findings.Values, repairs, zips, checkedZips, checks, resolve: !cancelled, now)
             .ConfigureAwait(false);
 
         int purgedJobs = 0, purgedIssues = 0;
@@ -112,29 +151,37 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
     }
 
     /// <summary>Library ZIPs under registered system folders, and every other file under <c>roms/</c> (relative, <c>/</c>).</summary>
-    private (List<string> Zips, List<string> Orphans) Scan()
+    /// <param name="listedFiles">External files the DB lists (<c>&lt;ZIP folder&gt;/&lt;name&gt;</c>, ignoring case): not orphans.</param>
+    private (List<string> Zips, List<string> Orphans) Scan(HashSet<string> listedFiles)
     {
         var root = paths.Value.Roms;
         var zips = new List<string>();
         var orphans = new List<string>();
         if (!Directory.Exists(root))
             return (zips, orphans);
-        foreach (var full in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories))
+        foreach (var entry in Directory.EnumerateFileSystemEntries(root))
         {
-            var relative = Path.GetRelativePath(root, full).Replace('\\', '/');
-            var slash = relative.IndexOf('/');
-            if (slash < 0)
+            var name = Path.GetFileName(entry);
+            if (!Directory.Exists(entry))
             {
                 // The startup write probe lives in the root for a moment (§4.1 step 4).
-                if (relative != StorageFolders.ProbeFileName)
-                    orphans.Add(relative);
+                if (name != StorageFolders.ProbeFileName)
+                    orphans.Add(name);
                 continue;
             }
-            var registered = systems.ById(relative[..slash]) is not null;
-            if (registered && relative.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
-                zips.Add(relative);
-            else
-                orphans.Add(relative);
+            // G4: links are never followed; DB sync reports what a system folder hides (ZipUnreadable).
+            var registered = systems.ById(name) is not null;
+            var scan = ExternalRomPath.ScanFolder(root, name);
+            foreach (var file in scan.Files.Select(f => f.RelativePath))
+            {
+                if (registered && file.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                    zips.Add(file);
+                else if (!registered || !listedFiles.Contains(file))
+                    orphans.Add(file);
+            }
+            // A special file in a system folder hides no ZIP, so DB sync leaves it to this report.
+            orphans.AddRange(scan.Problems.Where(p => !registered || (p.IsSpecialFile && !p.RelativePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)))
+                .Select(p => p.RelativePath));
         }
         zips.Sort(StringComparer.Ordinal);
         orphans.Sort(StringComparer.Ordinal);
@@ -147,7 +194,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
         LibraryZip zip;
         try
         {
-            zip = LibraryZip.Open(Path.Combine(paths.Value.Roms, zipPath), reader);
+            zip = OpenChecked(zipPath);
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
         {
@@ -180,7 +227,8 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
             IntegrityFinding Finding(string type, string? entry = null, string? details = null) =>
                 new(type, zipPath, entry, game.System, game.GameId, details);
 
-            var listed = game.Roms.Select(r => (Entry: LibraryZip.RomEntry(r.FileName), r.Metadata.SizeBytes, r.Metadata.Sha1))
+            // G1: an external ROM has no roms/ entry; its file is checked by StatExternal.
+            var listed = game.Roms.Where(r => r.ExternalFileName is null).Select(r => (Entry: LibraryZip.RomEntry(r.FileName), r.Metadata.SizeBytes, r.Metadata.Sha1))
                 .Concat(game.Images.Select(i => (Entry: LibraryZip.ImageEntry(i.FileName), i.SizeBytes, i.Sha1)))
                 .ToList();
             foreach (var (entry, size, sha1) in listed)
@@ -212,6 +260,110 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
         }
     }
 
+    /// <summary>
+    /// G1/G2/G4: each external file the DB lists under <paramref name="zipPath"/> is checked beside the ZIP; the entry
+    /// name is the file name. A file another game also claims is <c>EntryMissing</c> for each owner and isn't read. A
+    /// path that isn't a plain file (a link, a folder) can't be used, so it is missing; one whose stat fails is only
+    /// logged. Deep also hashes the file through a checked handle that must be the file that was statted, before and
+    /// after hashing; a file replaced or changed meanwhile is logged and its size and hash results are dropped.
+    /// </summary>
+    private async Task CheckExternalAsync(string zipPath, IEnumerable<ExternalRomRow> rows, ExternalChecks checks,
+        Action<IntegrityFinding> add, CancellationToken ct)
+    {
+        var root = paths.Value.Roms;
+        var folder = Path.GetDirectoryName(Path.Combine(root, zipPath))!;
+        var folderKey = zipPath[..(zipPath.LastIndexOf('/') + 1)];
+        foreach (var rom in rows)
+        {
+            IntegrityFinding Finding(string type, string? details = null) => new(type, zipPath, rom.ExternalFileName, SystemOf(zipPath), rom.GameId, details);
+            // G2a: what this run checked for the pointer; a pointer it couldn't check keeps its issues.
+            void Checked(bool hashed = false) => checks.Mark(zipPath, rom.ExternalFileName, hashed);
+            if (checks.Claimants.TryGetValue(folderKey + rom.ExternalFileName, out var owners))
+            {
+                add(Finding(EntryMissing, $"also claimed by game {string.Join(", ", owners.Where(o => o != rom.GameId))}"));
+                Checked();
+                continue;
+            }
+            var path = Path.Combine(folder, rom.ExternalFileName);
+            var file = ExternalRomPath.ClassifyFile(root, path);
+            switch (file.Status)
+            {
+                case ExternalPathStatus.Missing:
+                    add(Finding(EntryMissing));
+                    Checked();
+                    continue;
+                case ExternalPathStatus.Unreadable:
+                    logger.LogWarning("Integrity: {Path} can't be checked: {Details}", file.Path, file.Details);
+                    continue;
+                case not ExternalPathStatus.Found:
+                    add(Finding(EntryMissing, file.Details));
+                    Checked();
+                    continue;
+            }
+            var snapshot = file.Snapshot!;
+            var size = snapshot.Length == rom.SizeBytes ? null : Finding(EntrySizeMismatch, $"file {snapshot.Length} bytes, info.json {rom.SizeBytes}");
+            if (mode != JobMode.Deep)
+            {
+                if (size is not null)
+                    add(size);
+                Checked();
+                continue;
+            }
+
+            Hooks?.BeforeExternalHash?.Invoke(file.Path);
+            var opened = ExternalRomPath.OpenRead(root, file.Path, expected: snapshot);
+            string? sha1 = null, error = null;
+            switch (opened.Status)
+            {
+                case ExternalPathStatus.Missing:
+                    add(Finding(EntryMissing));
+                    Checked();
+                    continue;
+                case ExternalPathStatus.Unreadable:
+                    error = $"unreadable: {opened.Details}";
+                    break;
+                case ExternalPathStatus.Found:
+                    await using (var stream = opened.Stream!)
+                    {
+                        try
+                        {
+                            sha1 = Convert.ToHexStringLower(await SHA1.HashDataAsync(stream, ct).ConfigureAwait(false));
+                        }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                        {
+                            error = $"unreadable: {ex.Message}";
+                        }
+                        if (ExternalRomPath.SnapshotOf(stream) != snapshot)
+                            sha1 = error = null; // changed in place while it was read
+                    }
+                    Hooks?.AfterExternalHash?.Invoke(file.Path);
+                    if (sha1 is not null || error is not null)
+                    {
+                        var now = ExternalRomPath.ClassifyFile(root, file.Path);
+                        if (now.Status == ExternalPathStatus.Missing)
+                        {
+                            add(Finding(EntryMissing));
+                            Checked();
+                            continue;
+                        }
+                        if (now.Snapshot != snapshot)
+                            sha1 = error = null; // the path names another file by now
+                    }
+                    break;
+            }
+            if (sha1 is null && error is null)
+            {
+                logger.LogWarning("Integrity: {Path} changed while it was checked; it is checked again next run", file.Path);
+                continue;
+            }
+            if (size is not null)
+                add(size);
+            if (sha1 != rom.Sha1)
+                add(Finding(HashMismatch, error ?? $"SHA1 {sha1}, info.json {rom.Sha1}"));
+            Checked(hashed: true);
+        }
+    }
+
     /// <returns>The entry's SHA1, or null plus why it couldn't be read.</returns>
     private static async Task<(string? Sha1, string? Error)> HashAsync(LibraryZip zip, string entry, long length, CancellationToken ct)
     {
@@ -226,13 +378,19 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
         }
     }
 
-    /// <summary>§12.2 <c>WrongLocation</c>: system/bucket/name ≠ §6.1 (case-insensitive, §5); a clash suffix ` (N)` is accepted.</summary>
-    private static void CheckLocation(string zipPath, string systemId, string title, Guid gameId, Action<IntegrityFinding> add)
+    /// <summary>
+    /// §12.2 <c>WrongLocation</c>: system/bucket/name ≠ §6.1 (case-insensitive, §5); a clash suffix ` (N)` is accepted.
+    /// An external game's name is the budgeted one its builder gives the title (E2), suffixed or not.
+    /// </summary>
+    private void CheckLocation(string zipPath, string systemId, string title, Guid gameId, Action<IntegrityFinding> add)
     {
         var parts = zipPath.Split('/');
         var name = parts[^1];
-        var stem = FileNameSanitizer.Sanitize(title);
-        var nameOk = name.Equals(stem + ".zip", StringComparison.OrdinalIgnoreCase) || IsClashSuffixed(name, stem);
+        var external = systems.ById(systemId) is { EmbedRomsInZip: false };
+        var stem = external ? Path.GetFileNameWithoutExtension(ExternalRomName.ZipName(title)) : FileNameSanitizer.Sanitize(title);
+        var nameOk = external
+            ? ExternalRomName.IsZipNameFor(title, name)
+            : name.Equals(stem + ".zip", StringComparison.OrdinalIgnoreCase) || IsClashSuffixed(name, stem);
         var ok = parts.Length == 3 && nameOk
             && parts[0].Equals(systemId, StringComparison.OrdinalIgnoreCase)
             && parts[1].Equals(Bucket.For(name), StringComparison.OrdinalIgnoreCase);
@@ -253,7 +411,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
     }
 
     private async Task<(int Added, int Resolved)> ApplyAsync(Guid jobId, IEnumerable<IntegrityFinding> findings, IReadOnlyList<IntegrityFinding> repairs,
-        IReadOnlyList<string> zips, IReadOnlyDictionary<string, Checked> checkedZips, bool resolve, DateTime now)
+        IReadOnlyList<string> zips, IReadOnlyDictionary<string, Checked> checkedZips, ExternalChecks checks, bool resolve, DateTime now)
     {
         // Not cancellable: what this run found is recorded even when it was cancelled part-way.
         var ct = CancellationToken.None;
@@ -281,16 +439,22 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
         if (!resolve)
             return (added, 0);
         var onDisk = zips.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var resolved = open.Where(i => !seen.Contains(i.Id) && WasChecked(i, onDisk, checkedZips)).Select(i => i.Id).ToList();
+        var resolved = open.Where(i => !seen.Contains(i.Id) && WasChecked(i, onDisk, checkedZips, checks)).Select(i => i.Id).ToList();
         await issues.ResolveAsync(resolved, now, ct).ConfigureAwait(false);
         return (added, resolved.Count);
     }
 
     /// <summary>D48: did this run perform the check that would have found <paramref name="issue"/> again?</summary>
-    private bool WasChecked(IntegrityIssue issue, HashSet<string> onDisk, IReadOnlyDictionary<string, Checked> checkedZips)
+    private bool WasChecked(IntegrityIssue issue, HashSet<string> onDisk, IReadOnlyDictionary<string, Checked> checkedZips, ExternalChecks checks)
     {
+        if (issue.ZipPath is { } path && checks.IsUnchecked(path) && issue.Type is not (DuplicateGameId or DuplicateSha1))
+            return false; // G4: nothing at or below this path could be checked
         if (GlobalTypes.Contains(issue.Type) || issue.ZipPath is null)
             return true;
+        // G2a: an external file's issue (the game row may be gone, so the issue's own system decides).
+        if (IntegrityFinding.IsPointerIssue(issue.Type, issue.EntryName)
+            && issue.SystemId is { } systemId && systems.ById(systemId) is { EmbedRomsInZip: false })
+            return PointerWasChecked(issue, onDisk, checks);
         if (!onDisk.Contains(issue.ZipPath))
             return true; // the ZIP is gone (its DB rows were repaired)
         return checkedZips.GetValueOrDefault(issue.ZipPath) switch
@@ -299,6 +463,86 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
             Checked.LocationOnly => issue.Type == WrongLocation,
             _ => false,
         };
+    }
+
+    /// <summary>
+    /// G2a for one external file's issue: resolvable when this run checked that pointer (a hash only in Deep), when its
+    /// ZIP is gone, or when its ZIP and the mirror agree that the pointer is no longer listed.
+    /// </summary>
+    private bool PointerWasChecked(IntegrityIssue issue, HashSet<string> onDisk, ExternalChecks checks)
+    {
+        var needsHash = issue.Type == HashMismatch;
+        if (needsHash && mode != JobMode.Deep)
+            return false;
+        if (checks.Outcome(issue.ZipPath!, issue.EntryName!) is { } hashed)
+            return hashed || !needsHash;
+        if (!onDisk.Contains(issue.ZipPath!))
+            return true; // the ZIP is gone or moved (DB repair pruned or relocated its rows)
+        var mirrored = checks.ByZip[issue.ZipPath!].Select(r => r.ExternalFileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (mirrored.Contains(issue.EntryName!))
+            return false; // still listed, but this run couldn't check it
+        // No longer mirrored: the ZIP must be readable, synced and list exactly the mirrored pointers.
+        return !checks.SkippedBySync.Contains(issue.ZipPath!) && checks.ZipPointers(issue.ZipPath!, ReadPointers) is { } listed
+            && listed.SetEquals(mirrored);
+    }
+
+    /// <summary>G4: a scanned ZIP, opened without following a link swapped in since the scan.</summary>
+    /// <exception cref="IOException">It is no longer a safe regular file.</exception>
+    private LibraryZip OpenChecked(string zipPath)
+    {
+        var opened = ExternalRomPath.OpenScanned(paths.Value.Roms, zipPath, FileShare.Read | FileShare.Delete);
+        if (opened.Status != ExternalPathStatus.Found)
+            throw new IOException(opened.Details);
+        return LibraryZip.Open(new BufferedStream(opened.Stream!), opened.Path, reader);
+    }
+
+    /// <summary>The pointers a ZIP's <c>info.json</c> lists, or null when it can't be read.</summary>
+    private HashSet<string>? ReadPointers(string zipPath)
+    {
+        try
+        {
+            using var zip = OpenChecked(zipPath);
+            return zip.InfoJson is { Kind: InfoJsonReadResult.Outcome.Ok, Game: { } game }
+                ? game.Roms.Select(r => r.ExternalFileName).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : null;
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The external file rows, claims and per-pointer outcomes of one run (G1, G2a, G4).</summary>
+    private sealed class ExternalChecks(ILookup<string, ExternalRomRow> byZip, IReadOnlyDictionary<string, List<Guid>> claimants,
+        HashSet<string> skippedBySync, IReadOnlyList<string> notChecked)
+    {
+        /// <summary>At or below a path DB sync could not open or enter (G4).</summary>
+        public bool IsUnchecked(string path) => notChecked.Any(p => path.Equals(p, StringComparison.OrdinalIgnoreCase)
+            || (path.Length > p.Length && path[p.Length] == '/' && path.StartsWith(p, StringComparison.OrdinalIgnoreCase)));
+
+        private readonly Dictionary<(string, string), bool> _outcomes = [];
+        private readonly Dictionary<string, HashSet<string>?> _zipPointers = new(StringComparer.OrdinalIgnoreCase);
+
+        public ILookup<string, ExternalRomRow> ByZip => byZip;
+        public IReadOnlyDictionary<string, List<Guid>> Claimants => claimants;
+        public HashSet<string> SkippedBySync => skippedBySync;
+
+        private static (string, string) Key(string zipPath, string pointer) => (zipPath.ToUpperInvariant(), pointer.ToUpperInvariant());
+
+        /// <summary>Records that the pointer's stat (and, with <paramref name="hashed"/>, its hash) was checked.</summary>
+        public void Mark(string zipPath, string pointer, bool hashed) =>
+            _outcomes[Key(zipPath, pointer)] = hashed || _outcomes.GetValueOrDefault(Key(zipPath, pointer));
+
+        /// <returns>Null when not checked; else whether it was hashed too.</returns>
+        public bool? Outcome(string zipPath, string pointer) =>
+            _outcomes.TryGetValue(Key(zipPath, pointer), out var hashed) ? hashed : null;
+
+        public HashSet<string>? ZipPointers(string zipPath, Func<string, HashSet<string>?> read)
+        {
+            if (!_zipPointers.TryGetValue(zipPath, out var pointers))
+                _zipPointers[zipPath] = pointers = read(zipPath);
+            return pointers;
+        }
     }
 
     private static IntegrityIssue ToIssue(IntegrityFinding f, string status, Guid jobId, DateTime now, DateTime? resolvedAt) => new()
@@ -329,4 +573,14 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, DbSync dbS
         var slash = zipPath.IndexOf('/');
         return slash > 0 && systems.ById(zipPath[..slash]) is { } handler ? handler.Id : null;
     }
+}
+
+/// <summary>Test seams of <see cref="IntegrityJob"/>'s external file checks.</summary>
+public sealed class IntegrityHooks
+{
+    /// <summary>Runs with the file's path after its stat, right before a Deep check opens it.</summary>
+    public Action<string>? BeforeExternalHash { get; init; }
+
+    /// <summary>Runs with the file's path after it was hashed and its handle closed, before the path is checked again.</summary>
+    public Action<string>? AfterExternalHash { get; init; }
 }

@@ -8,6 +8,13 @@ public interface IIntegrityIssueRepository
     /// <summary>Open issues of these types on one ZIP entry.</summary>
     Task<IReadOnlyList<OpenIssue>> ListOpenAsync(string zipPath, string entryName, IReadOnlyCollection<string> types, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// I6: candidate open issues of these types on one external ROM file, keyed by its <c>externalFileName</c>. The
+    /// database compares with its collation, so a candidate may belong to an accent-distinct file; match it exactly.
+    /// </summary>
+    Task<IReadOnlyList<ExternalOpenIssue>> ListOpenExternalAsync(string zipPath, string externalFileName, IReadOnlyCollection<string> types,
+        CancellationToken cancellationToken);
+
     /// <summary>A page of issues, newest first; null filters aren't applied (§23 <c>/api/integrity/issues</c>).</summary>
     Task<Page<IntegrityIssue>> ListAsync(string? status, string? type, int page, int pageSize, CancellationToken cancellationToken);
 

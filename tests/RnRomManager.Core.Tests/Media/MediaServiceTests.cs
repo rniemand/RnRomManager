@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using RnRomManager.Core.Configuration;
+using RnRomManager.Core.Dats;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
 using RnRomManager.Core.Systems;
@@ -12,7 +13,7 @@ using RnRomManager.TestData;
 namespace RnRomManager.Core.Tests.Media;
 
 /// <summary>Spec §10.2 thumbnail key, lookup order, validation, empty base URL, circuit breaker (§15.1 row, minus MediaRetry).</summary>
-public class MediaServiceTests
+public partial class MediaServiceTests
 {
     private const string BaseUrl = "https://thumbs.test";
     private const string GbBox = BaseUrl + "/Nintendo%20-%20Game%20Boy/Named_Boxarts/";
@@ -25,11 +26,14 @@ public class MediaServiceTests
     private Dictionary<string, Func<HttpResponseMessage>> _routes = null!;
     private StubHttpHandler _server = null!;
     private CircuitBreaker _breaker = null!;
+    private DatCache _dats = null!;
+    private Microsoft.Extensions.Time.Testing.FakeTimeProvider _clock = null!;
 
     [SetUp]
     public void SetUp()
     {
         _handler = Substitute.For<ISystemHandler>();
+        _handler.EmbedRomsInZip.Returns(true);
         _handler.Id.Returns("gb");
         _handler.DatName.Returns("Nintendo - Game Boy");
         _handler.DefaultBoxArtPng.Returns(DefaultArt);
@@ -38,10 +42,12 @@ public class MediaServiceTests
             ? answer()
             : StubHttpHandler.Status(HttpStatusCode.NotFound));
         _breaker = new CircuitBreaker();
+        _clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
+        _dats = new DatCache(Options.Create(new PathsOptions()), new SystemRegistry([]), NullLogger<DatCache>.Instance);
     }
 
     private MediaService Service(string baseUrl = BaseUrl) =>
-        new(new HttpClient(_server), Options.Create(new SourcesOptions { ThumbnailBaseUrl = baseUrl }), NullLogger<MediaService>.Instance);
+        TestMedia.Create(new HttpClient(_server), baseUrl, new HttpClient(_server), _dats, _clock);
 
     private Task<MediaResult> FindAsync(params string?[] names) => Service().FindAsync(_handler, names, _breaker, CancellationToken.None);
 

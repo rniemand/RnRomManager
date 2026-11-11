@@ -1,4 +1,5 @@
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
+import { join } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import { expectAccessible } from './axe';
@@ -31,6 +32,9 @@ test.afterAll(async () => {
 });
 
 const dialog = () => page.getByRole('dialog');
+
+/** The seeded Switch base game's bytes, read before ingestion moves the file next to its ZIP (step 28a). */
+let switchBase: Buffer;
 
 /** A real square RGB PNG: the API checks magic bytes and dimensions, and the browser must render it. */
 function png(size: number, rgb: [number, number, number]): Buffer {
@@ -96,13 +100,16 @@ test('ingestion of the seeded Basic set', async () => {
 
 	// I1: Pending / Failed / Last runs are tabs under the always-visible Run section.
 	await expect(page.getByRole('tab', { name: /^Pending files \(\d+\)$/ })).toHaveAttribute('aria-selected', 'true');
+	const ingest = process.env.E2E_INGEST;
+	if (!ingest) throw new Error('E2E_INGEST is not set (run scripts/test-e2e.ps1).');
+	switchBase = await readFile(join(ingest, 'switch', '01-orbit-expedition.nsp'));
 	await page.getByRole('button', { name: 'Import all' }).click();
 
 	await page.getByRole('tab', { name: 'Last runs' }).click();
 	await expect(page).toHaveURL(/\/ingestion\?tab=runs$/);
 	await expect(page.getByRole('button', { name: 'Import all' })).toBeVisible();
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
-	await expect(run).toContainText('Ingested 18 · Duplicate 1 · Review 2 · Failed 1', {
+	await expect(run).toContainText('Ingested 21 · Duplicate 1 · Review 2 · Failed 1', {
 		timeout: 60_000
 	});
 
@@ -155,7 +162,7 @@ test('reports and the ingest audit trail', async () => {
 	const ingested = page
 		.getByRole('row')
 		.filter({ has: page.getByRole('cell', { name: 'Ingested', exact: true }) });
-	await expect(ingested).toHaveCount(18);
+	await expect(ingested).toHaveCount(21);
 	await expect(
 		page
 			.getByRole('row')
@@ -168,7 +175,7 @@ test('reports and the ingest audit trail', async () => {
 
 test('browse, search and filter the library', async () => {
 	await page.goto('/');
-	await expect(page.getByText('16 games')).toBeVisible();
+	await expect(page.getByText('17 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
 	// S1: systems in display-name order, "All systems" first; F3: each with its game count.
 	await expect(page.getByLabel('System').locator('option')).toHaveText([
@@ -184,6 +191,7 @@ test('browse, search and filter the library', async () => {
 		'Mega Drive / Genesis (1)',
 		'Nintendo 64 (1)',
 		'Nintendo Entertainment System (1)',
+		'Nintendo Switch (1)',
 		'Super Nintendo Entertainment System (1)',
 		'TurboGrafx-16 (1)'
 	]);
@@ -191,8 +199,9 @@ test('browse, search and filter the library', async () => {
 
 	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('orb');
 	await expect(page).toHaveURL(/q=orb/);
-	// Orbit Blocks and Orbit Kart 64.
-	await expect(page.getByText('2 games', { exact: true })).toBeVisible();
+	// Orbit Blocks, Orbit Kart 64 and Orbit Expedition (Switch).
+	await expect(page.getByText('3 games', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: /Orbit Expedition/ }).first()).toBeVisible();
 
 	await page.goto('/');
 	await page.getByLabel('System').selectOption('gbc');
@@ -356,10 +365,34 @@ test('game detail + downloads', async () => {
 	await page.setViewportSize(viewport);
 });
 
+test('Switch: external releases and a per-release download', async () => {
+	await page.goto('/');
+	await page.getByLabel('System').selectOption('switch');
+	await expect(page).toHaveURL(/system=switch/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await page.getByRole('link', { name: 'Orbit Expedition', exact: true }).click();
+	await expect(page.getByRole('heading', { level: 1, name: 'Orbit Expedition' })).toBeVisible();
+
+	// G7: base, update and DLC are each stored next to the ZIP.
+	await expect(page.getByRole('tab', { name: 'Releases (3)' })).toHaveAttribute('aria-selected', 'true');
+	await expect(page.getByText('External', { exact: true })).toHaveCount(3);
+	await expectAccessible(page, 'Switch game detail');
+
+	// G4: the primary (base) release first; the download is the original file, byte for byte.
+	await page.getByRole('button', { name: 'Download ROM' }).click();
+	const items = page.locator('.dropdown-menu.show .dropdown-item');
+	await expect(items).toHaveCount(3);
+	const download = page.waitForEvent('download');
+	await items.first().click();
+	const file = await download;
+	expect(file.suggestedFilename()).toBe('Orbit Expedition [0100000000010000][v0].nsp');
+	expect((await readFile((await file.path())!)).equals(switchBase)).toBe(true);
+});
+
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await page.goto('/');
-	await expect(page.getByText('16 games')).toBeVisible();
+	await expect(page.getByText('17 games')).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await expect(dialog()).toBeVisible();
 	await expect(dialog().getByRole('combobox')).toBeFocused();
@@ -458,10 +491,13 @@ test('collections: create, add from game page and bulk select, search, remove, d
 	// P1–P4: Add games leaves out members; results show a cover and a short system name.
 	const addGames = page.getByLabel('Add games');
 	await addGames.fill('orbit');
-	await expect(page.getByText('No matching games.')).toBeVisible();
 	const results = page.locator('.list-group').getByRole('button');
+	// Orbit Expedition is suggested; both members stay excluded.
+	await expect(results.filter({ hasText: 'Orbit Expedition' })).toBeVisible();
 	await expect(results.filter({ hasText: 'Orbit Blocks' })).toHaveCount(0);
 	await expect(results.filter({ hasText: 'Orbit Kart 64' })).toHaveCount(0);
+	await addGames.fill('zzz no such game');
+	await expect(page.getByText('No matching games.')).toBeVisible();
 	await addGames.fill('pocket');
 	const drift = results.filter({ hasText: 'Pocket Drift' });
 	await expect(drift).toBeVisible();
@@ -488,7 +524,7 @@ test('collections: create, add from game page and bulk select, search, remove, d
 	await expect(page).toHaveURL(/\/collections$/);
 	await expect(page.getByText('You have no collections yet.')).toBeVisible();
 	await page.goto('/');
-	await expect(page.getByText('16 games')).toBeVisible();
+	await expect(page.getByText('17 games')).toBeVisible();
 });
 
 test('review queue: resolve with a suggestion', async () => {

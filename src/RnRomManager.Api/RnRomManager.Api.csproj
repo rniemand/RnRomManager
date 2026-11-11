@@ -11,6 +11,7 @@
     <ProjectReference Include="../RnRomManager.Systems.Coleco/RnRomManager.Systems.Coleco.csproj" />
     <ProjectReference Include="../RnRomManager.Systems.Sega/RnRomManager.Systems.Sega.csproj" />
     <ProjectReference Include="../RnRomManager.Systems.Nec/RnRomManager.Systems.Nec.csproj" />
+    <ProjectReference Include="../RnRomManager.Systems.Switch/RnRomManager.Systems.Switch.csproj" />
   </ItemGroup>
 
   <ItemGroup>

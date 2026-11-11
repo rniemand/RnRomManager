@@ -5,8 +5,14 @@ namespace RnRomManager.Core.Library;
 /// <summary>One release in <c>info.json</c> (spec §6.2 Rom).</summary>
 public sealed record InfoJsonRom
 {
-    /// <summary>Entry name under <c>roms/</c>.</summary>
+    /// <summary>Entry name under <c>roms/</c>; for an external ROM, its logical name (download name, note name).</summary>
     public required string FileName { get; init; }
+
+    /// <summary>
+    /// v4: for a system that stores ROMs outside the ZIP, the ROM's file in the ZIP's own folder (a plain file
+    /// name); null for a ROM that is an entry of the ZIP.
+    /// </summary>
+    public string? ExternalFileName { get; init; }
 
     /// <summary>As found in ingest (the archive entry name when it came from an archive).</summary>
     public required string OriginalFileName { get; init; }

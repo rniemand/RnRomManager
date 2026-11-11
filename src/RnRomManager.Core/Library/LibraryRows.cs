@@ -64,6 +64,12 @@ public sealed record RomRow
 
     public required DateTime DateAdded { get; init; }
     public required DateTime DateModified { get; init; }
+
+    /// <summary>
+    /// The ROM's file next to the ZIP (name only, in the ZIP's folder) for a system that stores ROMs outside
+    /// the ZIP; null when the ROM is an entry of the ZIP.
+    /// </summary>
+    public string? ExternalFileName { get; init; }
 }
 
 /// <summary>A row of <c>images</c> (spec §14.1).</summary>
@@ -85,7 +91,8 @@ public sealed record ImageRow
 }
 
 /// <summary>What the sync compares to decide whether a ZIP must be opened (§12.1 quick mode).</summary>
-public sealed record GameSyncState(Guid Id, string ZipPath, long ZipSizeBytes, DateTime ZipMtimeUtc);
+/// <param name="SystemId">The mirrored system, which decides the storage mode whatever folder the ZIP is in.</param>
+public sealed record GameSyncState(Guid Id, string ZipPath, long ZipSizeBytes, DateTime ZipMtimeUtc, string SystemId = "");
 
 /// <summary>One game to (re)write in the DB: its ZIP's <c>info.json</c> plus the file facts.</summary>
 /// <param name="ZipPath">Relative to <c>Paths:Roms</c>, <c>/</c> separators.</param>
@@ -142,6 +149,7 @@ public sealed record MirrorEntry(InfoJsonGame Info, string ZipPath, long ZipSize
             Header = r.Header?.ToJsonString(),
             DateAdded = r.Metadata.DateAdded.UtcDateTime,
             DateModified = r.Metadata.DateModified.UtcDateTime,
+            ExternalFileName = r.ExternalFileName,
         }).ToList();
 
         var images = Info.Images.Select(i => new ImageRow

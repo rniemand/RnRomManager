@@ -11,7 +11,7 @@ using RnRomManager.TestData;
 namespace RnRomManager.Core.Tests.Dats;
 
 /// <summary>Spec §10.1 "Refresh DATs": all-or-nothing swap, failures and cancel keep the old set.</summary>
-public class DatRefreshJobTests
+public partial class DatRefreshJobTests
 {
     private const string Gb = "Nintendo - Game Boy";
     private const string Gbc = "Nintendo - Game Boy Color";
@@ -48,6 +48,7 @@ public class DatRefreshJobTests
     private static ISystemHandler Handler(string id, string datName)
     {
         var handler = Substitute.For<ISystemHandler>();
+        handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns(id);
         handler.DatName.Returns(datName);
         return handler;
@@ -165,6 +166,62 @@ public class DatRefreshJobTests
 
         Assert.That(ex!.Message, Does.StartWith($"{kind}/{Gb}.dat"));
         AssertStillV1();
+    }
+
+    /// <summary>T2: the in-memory stores and the live files both stay v1, without any reload.</summary>
+    private void AssertLiveStoresAndFilesKept(DatStore gb)
+    {
+        Assert.That(_cache.For("gb"), Is.SameAs(gb), "in-memory stores untouched");
+        Assert.That(DatManifest.Read(Path.Combine(_cache.Directory, DatManifest.FileName)).Select(e => e.Version).OfType<string>(), Is.All.EqualTo("v1"));
+        AssertStillV1();
+    }
+
+    [Test]
+    public async Task StagedValidationFailure_KeepsLiveStoresAndFiles()
+    {
+        WriteLiveV1();
+        _cache.Load();
+        var gb = _cache.For("gb")!;
+        _cache.MaxManifestBytes = 16; // the staged manifest can't pass the startup read
+
+        await Assert.ThrowsAsync<InvalidDataException>(() => RunAsync(Server()));
+
+        _cache.MaxManifestBytes = DatManifest.MaxBytes;
+        AssertLiveStoresAndFilesKept(gb);
+    }
+
+    [Test]
+    public async Task CancelAfterTheLastDownload_KeepsLiveStoresAndFiles()
+    {
+        WriteLiveV1();
+        _cache.Load();
+        var gb = _cache.For("gb")!;
+        using var cts = new CancellationTokenSource();
+        var count = 0;
+        _override = _ =>
+        {
+            if (++count == 10)
+                cts.Cancel();
+            return null;
+        };
+
+        await Assert.ThrowsAsync(Is.InstanceOf<OperationCanceledException>(), () => RunAsync(Server(), ct: cts.Token));
+
+        AssertLiveStoresAndFilesKept(gb);
+    }
+
+    [Test]
+    public async Task Success_PublishesTheStoresBuiltFromStaging_WithoutReloading()
+    {
+        var logger = Substitute.For<Microsoft.Extensions.Logging.ILogger<DatCache>>();
+        _cache = new DatCache(Options.Create(_paths), _systems, logger);
+
+        await RunAsync(Server());
+
+        Assert.That(_cache.For("gb")!.Version, Is.EqualTo("v2"));
+        // One build per system, from the staged set; a reload after the swap would build each again.
+        Assert.That(logger.ReceivedCalls().Count(c => c.GetMethodInfo().Name == "Log"
+            && c.GetArguments()[0] is Microsoft.Extensions.Logging.LogLevel.Information), Is.EqualTo(2));
     }
 
     [Test]

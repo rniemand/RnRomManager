@@ -11,6 +11,10 @@ public sealed class DatStore
 {
     private readonly Dictionary<string, DatRom> _bySha1 = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DatMetadata> _metadata;
+    private readonly Dictionary<string, TitleDbRow> _byTitleId = new(StringComparer.Ordinal);
+
+    /// <summary>The <see cref="DatName"/> of every titledb store (T3).</summary>
+    public const string TitleDbName = "titledb";
 
     /// <param name="romExtensions">
     /// N3: the system's ROM extensions (e.g. <c>.nes</c>); DAT ROMs with any other extension (case-insensitive) are left
@@ -29,6 +33,23 @@ public sealed class DatStore
         _metadata = MergeMetadata(Roms.Select(r => r.Crc32).ToHashSet(StringComparer.Ordinal), metadat);
     }
 
+    /// <summary>
+    /// T3: a titledb store. One ROM per entry: <c>GameName</c> <c>&lt;base title&gt; [&lt;TitleId&gt;]</c> (unique, as
+    /// the ids are), the T5 file name with <c>v0</c> and <c>.nsp</c>, size 0 and empty hashes, so nothing is in the
+    /// SHA1 index; entries are found by <see cref="ByTitleId"/>.
+    /// </summary>
+    /// <param name="version">The manifest's <c>yyyy.MM.dd</c>.</param>
+    public DatStore(IReadOnlyList<TitleDbRow> rows, string version)
+    {
+        DatName = TitleDbName;
+        Version = version;
+        Roms = rows.Select(r => new DatRom(TitleDb.GameName(r.Name, r.TitleId), TitleDb.RomFileName(r.Name, r.TitleId, 0, ".nsp"), 0, "", "", "")).ToList();
+        foreach (var row in rows)
+            _byTitleId.Add(row.TitleId, row); // the compact reader already refused repeats
+        BaseTitles = Roms.Select(r => NoIntroName.Parse(r.GameName).BaseTitle).Distinct(StringComparer.Ordinal).ToList();
+        _metadata = [];
+    }
+
     /// <summary>no-intro header <c>name</c>, e.g. <c>Nintendo - Game Boy</c>.</summary>
     public string DatName { get; }
 
@@ -39,6 +60,9 @@ public sealed class DatStore
 
     /// <summary>Distinct base titles (§6.1) in DAT order.</summary>
     public IReadOnlyList<string> BaseTitles { get; }
+
+    /// <summary>A titledb store's entry for an upper-case title id; null for a libretro store.</summary>
+    public TitleDbRow? ByTitleId(string titleId) => _byTitleId.GetValueOrDefault(titleId);
 
     /// <param name="sha1">Lowercase hex.</param>
     public DatRom? BySha1(string sha1) => _bySha1.GetValueOrDefault(sha1);

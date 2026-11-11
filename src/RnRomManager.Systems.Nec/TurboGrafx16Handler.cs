@@ -25,6 +25,10 @@ public sealed class TurboGrafx16Handler : ISystemHandler
     public long MaxRomSizeBytes => 2621440 + CopierHeaderBytes;
 
     public string DatName => "NEC - PC Engine - TurboGrafx 16";
+
+    /// <inheritdoc />
+    public bool EmbedRomsInZip => true;
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;

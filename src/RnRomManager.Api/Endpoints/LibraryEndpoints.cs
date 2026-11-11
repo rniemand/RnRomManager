@@ -25,8 +25,8 @@ public static class LibraryEndpoints
         {
             var stats = (await games.ListSystemStatsAsync(ctx.RequestAborted)).ToDictionary(s => s.SystemId);
             return Results.Ok(systems.All.OrderBy(h => h.DisplayName, StringComparer.OrdinalIgnoreCase).Select(handler => stats.TryGetValue(handler.Id, out var s)
-                ? new { id = handler.Id, displayName = handler.DisplayName, gameCount = s.GameCount, romCount = s.RomCount, regions = s.Regions }
-                : new { id = handler.Id, displayName = handler.DisplayName, gameCount = 0, romCount = 0, regions = (IReadOnlyList<string>)[] }));
+                ? new { id = handler.Id, displayName = handler.DisplayName, embedRoms = handler.EmbedRomsInZip, gameCount = s.GameCount, romCount = s.RomCount, regions = s.Regions }
+                : new { id = handler.Id, displayName = handler.DisplayName, embedRoms = handler.EmbedRomsInZip, gameCount = 0, romCount = 0, regions = (IReadOnlyList<string>)[] }));
         });
 
         var games = api.MapGroup("/games");
@@ -102,7 +102,7 @@ public static class LibraryEndpoints
                 return problem;
             var name = game.ZipPath[(game.ZipPath.LastIndexOf('/') + 1)..];
             // fileDownloadName sets Content-Disposition with both filename and RFC 5987 filename*.
-            return Results.Stream(stream!, "application/zip", name, File.GetLastWriteTimeUtc(stream!.Name), enableRangeProcessing: true);
+            return Results.Stream(stream!, "application/zip", name, File.GetLastWriteTimeUtc(stream!.SafeFileHandle), enableRangeProcessing: true);
         });
 
         // Z2: the ZIP's file entries for the Zip Contents tab.
@@ -160,6 +160,14 @@ public static class LibraryEndpoints
             if (await roms.GetAsync(id, romId, ctx.RequestAborted) is not { } rom
                 || await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
                 return Problems.NotFound(ctx);
+            if (rom.ExternalFileName is { } externalFileName)
+            {
+                // shortcut: reads every external claim per download; add a per-folder query if this shows up in profiles.
+                var claims = await roms.ListExternalAsync(ctx.RequestAborted);
+                return files.OpenExternal(ctx, game, externalFileName, claims, out var file) is { } externalProblem
+                    ? externalProblem
+                    : Results.Stream(file!, "application/octet-stream", rom.FileName, enableRangeProcessing: true);
+            }
             return files.OpenEntry(ctx, game, LibraryZip.RomEntry(rom.FileName), rom.SizeBytes, out var stream) is { } problem
                 ? problem
                 : Results.Stream(stream!, "application/octet-stream", rom.FileName);
@@ -642,6 +650,7 @@ public static class LibraryEndpoints
         {
             id = r.Id,
             fileName = r.FileName,
+            externalFileName = r.ExternalFileName,
             originalFileName = r.OriginalFileName,
             baseTitle = r.BaseTitle,
             regions = r.Regions,

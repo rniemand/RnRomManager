@@ -15,7 +15,7 @@ using static RnRomManager.TestData.TestLibrary;
 namespace RnRomManager.Core.Tests.Library;
 
 /// <summary>Spec §10.2 "Retry media" + <c>MediaRetry</c> job (D38): §15.1 "Thumbnail key + lookup" MediaRetry items (S35).</summary>
-public class MediaRetryJobTests
+public partial class MediaRetryJobTests
 {
     private const string BaseUrl = "https://thumbs.test";
     private const string GbBox = BaseUrl + "/Nintendo%20-%20Game%20Boy/Named_Boxarts/";
@@ -44,6 +44,7 @@ public class MediaRetryJobTests
         _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
         _jobId = Guid.NewGuid();
         var handler = Substitute.For<ISystemHandler>();
+        handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns("gb");
         handler.DatName.Returns("Nintendo - Game Boy");
         handler.DefaultBoxArtPng.Returns(DefaultArt);
@@ -64,7 +65,7 @@ public class MediaRetryJobTests
     public void TearDown() => _dir.Dispose();
 
     private GameMediaRetry Retry() => new(_mirror, _reader, _systems,
-        new MediaService(new HttpClient(_server), Options.Create(new SourcesOptions { ThumbnailBaseUrl = BaseUrl }), NullLogger<MediaService>.Instance),
+        TestMedia.Create(new HttpClient(_server), BaseUrl),
         Options.Create(new PathsOptions { Roms = _dir.Path }), _audit, TimeProvider.System, NullLogger<GameMediaRetry>.Instance);
 
     private MediaRetryJob Job() => new(_games, Retry(), NullLogger<MediaRetryJob>.Instance);

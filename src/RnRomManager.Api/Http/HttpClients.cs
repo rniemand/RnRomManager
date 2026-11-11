@@ -17,6 +17,7 @@ public static class HttpClients
     public const string Dats = "dats";
     public const string Thumbnails = "thumbnails";
     public const string ImageUrls = "imageUrls";
+    public const string TitleDbImages = "titledbImages";
 
     public static IServiceCollection AddExternalHttpClients(this IServiceCollection services)
     {
@@ -24,6 +25,9 @@ public static class HttpClients
         Configure(services.AddHttpClient(Dats, client => client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent)));
         // Typed client: a fresh HttpClient per resolve, so pooled handlers still rotate.
         Configure(services.AddHttpClient<MediaService>(Thumbnails, client => client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent)));
+        // T8: titledb's CDN, with the thumbnail retry policy and no redirects, so every request stays on the allowlisted host.
+        Configure(services.AddHttpClient<TitleDbImageClient>(TitleDbImages, client => client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false }));
         services.AddSingleton(ImageUrlPolicy.Default);
         services.AddHttpClient<ImageUrlDownloader>(ImageUrls, client =>
             {

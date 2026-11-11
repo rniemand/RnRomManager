@@ -29,6 +29,14 @@ vi.mock('#lib/bootstrap.js', () => ({
 	}
 }));
 
+// use:tooltip builds a Bootstrap Tooltip the Modal-only mock above lacks; record the text instead.
+const tooltips: { node: Element; text: string }[] = [];
+vi.mock('#lib/tooltip.js', () => ({
+	tooltip: (node: Element, text: string) => {
+		tooltips.push({ node, text });
+	}
+}));
+
 const { default: GamePage } = await import('./[id]/+page.svelte');
 
 const rom = (id: number, fileName: string, isPrimary: boolean) => ({
@@ -53,7 +61,8 @@ const rom = (id: number, fileName: string, isPrimary: boolean) => ({
 	dateAdded: '2026-11-01T00:00:00Z',
 	dateModified: '2026-11-01T00:00:00Z',
 	downloadUrl: `/api/games/g1/roms/${id}/download`,
-	hasNote: false
+	hasNote: false,
+	externalFileName: null as string | null
 });
 
 const listing = (paths = ['info.json', 'roms/Tetris 1.gb', 'images/boxart-01.png']) => ({
@@ -135,6 +144,40 @@ describe('game detail page', () => {
 		vi.stubGlobal('location', { ...window.location, assign });
 	});
 	afterEach(() => vi.unstubAllGlobals());
+
+	it('an external release has an External badge whose tooltip is its file name; an embedded one has none (G7)', async () => {
+		tooltips.length = 0;
+		const detail = game([1, 2]);
+		detail.roms[0].externalFileName = 'Tetris.Tetris 1.nsp';
+		answers.push({ status: 200, body: detail });
+		render(GamePage);
+
+		const badge = await screen.findByText('External');
+		expect(badge.closest('article')!.getAttribute('aria-labelledby')).toBe('release-1-name');
+		expect(tooltips.find((t) => t.node === badge)?.text).toBe('Tetris.Tetris 1.nsp');
+		expect(screen.getAllByText('External')).toHaveLength(1);
+	});
+
+	it('the ZIP button explains per-release downloads only when a release is external (G5)', async () => {
+		tooltips.length = 0;
+		const detail = game([1]);
+		detail.roms[0].externalFileName = 'Tetris.Tetris 1.nsp';
+		answers.push({ status: 200, body: detail });
+		render(GamePage);
+
+		const zip = await screen.findByRole('button', { name: 'Download ZIP' });
+		expect(tooltips.find((t) => t.node === zip)?.text).toBe('ROM files are downloaded per release');
+	});
+
+	it('an embedded game ZIP button has no tooltip (G5)', async () => {
+		tooltips.length = 0;
+		answers.push({ status: 200, body: game([1, 2]) });
+		render(GamePage);
+
+		const zip = await screen.findByRole('button', { name: 'Download ZIP' });
+		expect(tooltips.some((t) => t.node === zip)).toBe(false);
+		expect(screen.queryByText('External')).toBeNull();
+	});
 
 	it('shows the original file name under the file name only when it differs (B1)', async () => {
 		const detail = game([1, 2]);

@@ -51,7 +51,8 @@ const rom = (id: number) => ({
 	dateAdded: '',
 	dateModified: '',
 	downloadUrl: '',
-	hasNote: false
+	hasNote: false,
+	externalFileName: null as string | null
 });
 
 const game = (romIds: number[]) => ({
