@@ -96,20 +96,35 @@ public partial class ExternalLibraryTests
         Directory.Exists(Bucket) ? [.. Directory.GetFiles(Bucket).Select(Path.GetFileName).Order()!] : [];
 
     /// <summary>Makes the ZIP write fail verification: its temp is rewritten in place with an unreadable <c>info.json</c>.</summary>
-    private LibraryZipWriterHooks FailVerify(Action? alsoAfterTemp = null, string? zipPath = null) => new()
+    /// <summary>
+    /// Makes the write of <paramref name="zipPath"/> (default <see cref="ZipPath"/>) fail verification; writes of other
+    /// ZIPs in the same operation go through untouched.
+    /// </summary>
+    private LibraryZipWriterHooks FailVerify(Action? alsoAfterTemp = null, string? zipPath = null)
     {
-        AfterTempClosed = () =>
+        var zip = zipPath ?? ZipPath;
+        return new LibraryZipWriterHooks
         {
-            using (var temp = new FileStream((zipPath ?? ZipPath) + ".tmp", FileMode.Open, FileAccess.ReadWrite))
+            AfterTempClosed = () =>
             {
-                temp.SetLength(0);
-                using var zip = new ZipArchive(temp, ZipArchiveMode.Create, leaveOpen: true);
-                using var info = new StreamWriter(zip.CreateEntry(LibraryZip.InfoJsonEntry).Open());
-                info.Write("not json");
-            }
-            alsoAfterTemp?.Invoke();
-        },
-    };
+                if (Corrupt(zip))
+                    alsoAfterTemp?.Invoke();
+            },
+        };
+    }
+
+    /// <summary>Rewrites the temp of a ZIP being written with an unreadable <c>info.json</c>; false when that ZIP isn't being written.</summary>
+    private static bool Corrupt(string zipPath)
+    {
+        if (!File.Exists(zipPath + ".tmp"))
+            return false;
+        using var temp = new FileStream(zipPath + ".tmp", FileMode.Open, FileAccess.ReadWrite);
+        temp.SetLength(0);
+        using var zip = new ZipArchive(temp, ZipArchiveMode.Create, leaveOpen: true);
+        using var info = new StreamWriter(zip.CreateEntry(LibraryZip.InfoJsonEntry).Open());
+        info.Write("not json");
+        return true;
+    }
 
     private async Task<List<(string Action, string? Details)>> AuditAsync()
     {
