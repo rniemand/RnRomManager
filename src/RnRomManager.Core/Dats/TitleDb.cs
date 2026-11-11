@@ -60,6 +60,22 @@ public static partial class TitleDb
     /// <summary>T3's unique store name: <c>&lt;base title&gt; [&lt;TitleId&gt;]</c>.</summary>
     public static string GameName(string name, string titleId) => $"{BaseTitle(name)} [{titleId}]";
 
+    /// <summary>The compact file's path below <c>cache/dats/</c> (T2).</summary>
+    public static string RelativePath(string datName) => $"titledb/{datName}.json";
+
+    /// <summary>
+    /// T5's rom <c>fileName</c>: the cleaned name (dot runs → <c>…</c>, since <c>..</c> isn't allowed), sanitized, then
+    /// <c>[&lt;TitleId&gt;][v&lt;N&gt;]</c> and the lower-case extension.
+    /// </summary>
+    public static string RomFileName(string name, string titleId, uint version, string extension) =>
+        $"{FileNameSanitizer.Sanitize(DotRun().Replace(Normalize(name), "…"))} [{titleId}][v{version}]{extension.ToLowerInvariant()}";
+
+    /// <summary>T5's <c>N</c>: the first case-sensitive <c>[v&lt;digits&gt;]</c> in the file name; none or overflow → 0.</summary>
+    public static uint VersionFrom(string fileName) =>
+        VersionTag().Match(fileName) is { Success: true } tag
+        && uint.TryParse(tag.Groups[1].Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n)
+            ? n : 0;
+
     /// <summary>T2: a name the library can use: its title sanitizes to something and its <see cref="GameName"/> fits.</summary>
     public static bool IsUsableName(string? name, string titleId) =>
         !string.IsNullOrWhiteSpace(name)
@@ -97,9 +113,9 @@ public static partial class TitleDb
 
     /// <summary>Reads and checks a compact file (T2): any row that T2 wouldn't have written fails the whole file.</summary>
     /// <exception cref="JsonException">Malformed, or a row breaks a rule.</exception>
-    public static async Task<IReadOnlyList<TitleDbRow>> ReadCompactAsync(Stream source, CancellationToken ct)
+    public static IReadOnlyList<TitleDbRow> ReadCompact(Stream source)
     {
-        var rows = await JsonSerializer.DeserializeAsync<List<TitleDbRow?>>(source, Compact, ct).ConfigureAwait(false)
+        var rows = JsonSerializer.Deserialize<List<TitleDbRow?>>(source, Compact)
             ?? throw new JsonException("The compact titledb file is JSON null, not an array.");
         var seen = new HashSet<string>(StringComparer.Ordinal);
         for (var i = 0; i < rows.Count; i++)
@@ -154,6 +170,12 @@ public static partial class TitleDb
 
     [GeneratedRegex(@"\A0100[0-9A-F]{12}\z")]
     private static partial Regex CanonicalId();
+
+    [GeneratedRegex(@"\.{2,}")]
+    private static partial Regex DotRun();
+
+    [GeneratedRegex(@"\[v([0-9]+)\]")]
+    private static partial Regex VersionTag();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();

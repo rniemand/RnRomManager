@@ -118,7 +118,7 @@ public class TitleDbTests
         using var stream = new MemoryStream();
         await TitleDb.WriteCompactAsync(stream, rows, default);
         stream.Position = 0;
-        return await TitleDb.ReadCompactAsync(stream, default);
+        return TitleDb.ReadCompact(stream);
     }
 
     [Test]
@@ -175,13 +175,26 @@ public class TitleDbTests
         if (shape.Contains(':') && !shape.StartsWith('['))
             json = $"[{json}]";
 
-        Assert.ThrowsAsync<JsonException>(() => TitleDb.ReadCompactAsync(Utf8(json), default));
+        Assert.Throws<JsonException>(() => TitleDb.ReadCompact(Utf8(json)));
     }
 
     [Test]
-    public async Task Compact_AcceptsAnEmptyArray_AndAValidRow()
+    public void Compact_AcceptsAnEmptyArray_AndAValidRow()
     {
-        Assert.That(await TitleDb.ReadCompactAsync(Utf8("[]"), default), Is.Empty);
-        Assert.That(await TitleDb.ReadCompactAsync(Utf8($"[{ValidJson}]"), default), Has.Count.EqualTo(1));
+        Assert.That(TitleDb.ReadCompact(Utf8("[]")), Is.Empty);
+        Assert.That(TitleDb.ReadCompact(Utf8($"[{ValidJson}]")), Has.Count.EqualTo(1));
     }
+
+    [TestCase("Oh...Sir! The Insult Simulator", 0u, ".NSP", "Oh…Sir! The Insult Simulator [0100000000001000][v0].nsp")]
+    [TestCase("Zelda™: Tears\nof the Kingdom",65536u, ".xci", "Zelda - Tears of the Kingdom [0100000000001000][v65536].xci")]
+    [TestCase("What? A/B", 0u, ".nsp", "What_ A_B [0100000000001000][v0].nsp")]
+    public void RomFileName(string name, uint version, string extension, string expected) =>
+        Assert.That(TitleDb.RomFileName(name, "0100000000001000", version, extension), Is.EqualTo(expected));
+
+    [TestCase("Game [0100000000001800][v65536].nsp", 65536u)]
+    [TestCase("Game [V5][v7].nsp", 7u)]
+    [TestCase("Game [v4294967296].nsp", 0u)]
+    [TestCase("Game [v007].nsp", 7u)]
+    [TestCase("Game.nsp", 0u)]
+    public void VersionFrom(string fileName, uint expected) => Assert.That(TitleDb.VersionFrom(fileName), Is.EqualTo(expected));
 }

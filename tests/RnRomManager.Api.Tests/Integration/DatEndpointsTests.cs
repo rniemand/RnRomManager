@@ -69,6 +69,33 @@ public class DatEndpointsTests
         _factory.Dispose();
     }
 
+    /// <summary>Spec T3 on its own host: the test titledb handler is registered and its compact file is cached before startup.</summary>
+    [Test]
+    public async Task TitleDbEntries_AppearInSearch_WithoutSizeOrCrc()
+    {
+        using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
+        {
+            TestServices = services => RnRomManager.Core.Systems.SystemHandlerRegistration.AddSystemHandler<ExternalTitleDbTestHandler>(services),
+        };
+        FixtureDatWriter.Write(Path.Combine(factory.Root, "cache", DatCache.FolderName), Games(),
+            titleDb: new Dictionary<string, IReadOnlyList<TitleDbRow>>
+            {
+                [ExternalTitleDbTestHandler.DatNameValue] = [new("0100000000001000", "The Orbit Expedition", null, null, 2020, [], ["en"], null, null)],
+            });
+        using var admin = await AuthClient.CreateAsync(factory);
+        await TestUsers.CreateAsync(factory, "boss", TestUsers.AllRoles);
+        (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
+
+        using var response = await admin.GetAsync($"/api/dat/search?system={ExternalTitleDbTestHandler.SystemId}&q=orbit");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var hit = (await AuthClient.JsonAsync(response)).EnumerateArray().Single();
+        Assert.That(hit.GetProperty("gameName").GetString(), Is.EqualTo("Orbit Expedition, The [0100000000001000]"));
+        Assert.That(hit.GetProperty("romName").GetString(), Is.EqualTo("The Orbit Expedition [0100000000001000][v0].nsp"));
+        Assert.That(hit.GetProperty("sizeBytes").GetInt64(), Is.Zero);
+        Assert.That(hit.GetProperty("crc32").GetString(), Is.Empty);
+    }
+
     [TestCase("POST", "/api/jobs/dat-refresh")]
     [TestCase("GET", "/api/admin/dats")]
     public async Task RoleMatrix_AnonymousIs401_UserIs403(string method, string url)

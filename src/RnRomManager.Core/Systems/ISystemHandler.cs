@@ -1,3 +1,5 @@
+using RnRomManager.Core.Dats;
+
 namespace RnRomManager.Core.Systems;
 
 /// <summary>
@@ -34,6 +36,9 @@ public interface ISystemHandler
     /// <see cref="Family"/> must agree.
     /// </summary>
     bool EmbedRomsInZip { get; }
+
+    /// <summary>Spec T1: libretro's five DAT files, or blawar/titledb.</summary>
+    DatSource DatSource => DatSource.Libretro;
 
     /// <summary>512×512 PNG stored as <c>boxart-01.png</c> with <c>isDefault: true</c> (§6.1).</summary>
     ReadOnlyMemory<byte> DefaultBoxArtPng { get; }

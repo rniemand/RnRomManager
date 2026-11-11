@@ -14,13 +14,18 @@ public static class FixtureDatWriter
 {
     public const string Version = "fixture-1";
 
+    /// <summary>A titledb manifest version: T3 requires <c>yyyy.MM.dd</c>.</summary>
+    public const string TitleDbVersion = "2026.01.01";
+
     /// <param name="datsDirectory">The <c>cache/dats/</c> folder (created if missing).</param>
     /// <param name="gamesByDatName">Keyed by handler <c>DatName</c>, e.g. <c>Nintendo - Game Boy</c>.</param>
     public static void Write(
         string datsDirectory,
         IReadOnlyDictionary<string, IReadOnlyList<FixtureGame>> gamesByDatName,
         string version = Version,
-        DateTimeOffset? downloadedAt = null)
+        DateTimeOffset? downloadedAt = null,
+        IReadOnlyDictionary<string, IReadOnlyList<TitleDbRow>>? titleDb = null,
+        string titleDbVersion = TitleDbVersion)
     {
         var when = downloadedAt ?? new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var manifest = new List<DatManifestEntry>();
@@ -33,15 +38,23 @@ public static class FixtureDatWriter
             manifest.Add(WriteFile(datsDirectory, DatKind.Publisher, datName, null, when, Metadat(datName, DatKind.Publisher, games, g => g.Publishers)));
             manifest.Add(WriteFile(datsDirectory, DatKind.Genre, datName, null, when, Metadat(datName, DatKind.Genre, games, g => g.Genres)));
         }
+        // titledb systems (T2): one compact file each, written by the app's own serializer.
+        foreach (var (datName, rows) in titleDb ?? new Dictionary<string, IReadOnlyList<TitleDbRow>>())
+        {
+            using var compact = new MemoryStream();
+            TitleDb.WriteCompactAsync(compact, rows, default).GetAwaiter().GetResult();
+            manifest.Add(WriteBytes(datsDirectory, TitleDb.RelativePath(datName), datName, titleDbVersion, when, compact.ToArray()));
+        }
         DatManifest.Write(Path.Combine(datsDirectory, DatManifest.FileName), manifest);
     }
 
-    private static DatManifestEntry WriteFile(string root, string kind, string datName, string? version, DateTimeOffset when, string text)
+    private static DatManifestEntry WriteFile(string root, string kind, string datName, string? version, DateTimeOffset when, string text) =>
+        WriteBytes(root, DatKind.RelativePath(kind, datName), datName, version, when, Encoding.UTF8.GetBytes(text));
+
+    private static DatManifestEntry WriteBytes(string root, string relative, string datName, string? version, DateTimeOffset when, byte[] bytes)
     {
-        var relative = DatKind.RelativePath(kind, datName);
         var path = Path.Combine(root, relative);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var bytes = Encoding.UTF8.GetBytes(text);
         File.WriteAllBytes(path, bytes);
         return new DatManifestEntry(relative, datName, version, when, Convert.ToHexStringLower(SHA1.HashData(bytes)));
     }

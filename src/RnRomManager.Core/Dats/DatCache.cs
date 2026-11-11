@@ -48,7 +48,8 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
                 stores[handler.Id] = store;
                 logger.LogInformation("Loaded DATs for {System}: {DatName} {Version}, {Count} ROMs", handler.Id, store.DatName, store.Version, store.Roms.Count);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DatParseException or InvalidDataException or UnsafePathException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DatParseException or InvalidDataException or UnsafePathException
+                or JsonException)
             {
                 logger.LogError("DATs for {System} are missing or corrupt; the system has no DATs: {Error}", handler.Id, ex.Message);
             }
@@ -59,6 +60,9 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
 
     private DatStore LoadSystem(ISystemHandler handler, IReadOnlyList<DatManifestEntry> manifest)
     {
+        if (handler.DatSource == DatSource.TitleDb)
+            return LoadTitleDb(handler, manifest);
+
         string ReadVerified(string kind)
         {
             var file = DatKind.RelativePath(kind, handler.DatName);
@@ -76,4 +80,34 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
         var metadat = DatKind.All.Where(k => k != DatKind.NoIntro).Select(k => DatFiles.ParseMetadat(ReadVerified(k), k)).ToList();
         return new DatStore(noIntro, metadat, handler.RomExtensions);
     }
+
+    /// <summary>
+    /// T3: exactly one manifest row for the compact path (case-only aliases count), spelled canonically, for this
+    /// handler's <c>DatName</c>, with a <c>yyyy.MM.dd</c> version and a download time; then the SHA1 and every row.
+    /// </summary>
+    private DatStore LoadTitleDb(ISystemHandler handler, IReadOnlyList<DatManifestEntry> manifest)
+    {
+        var file = TitleDb.RelativePath(handler.DatName);
+        var rows = manifest.Where(e => string.Equals(e.File, file, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (rows.Count != 1)
+            throw new InvalidDataException($"{file} is listed {rows.Count} times in {DatManifest.FileName}.");
+        var entry = rows[0];
+        if (entry.File != file)
+            throw new InvalidDataException($"{DatManifest.FileName} lists {entry.File}, not {file}.");
+        if (entry.DatName != handler.DatName)
+            throw new InvalidDataException($"{file} is listed for '{entry.DatName}'.");
+        if (!IsDateVersion(entry.Version) || entry.DownloadedAt == default)
+            throw new InvalidDataException($"{file} has version '{entry.Version}' and download time {entry.DownloadedAt:O}; a yyyy.MM.dd version and a time are required.");
+
+        // shortcut: read whole and unchecked; step 18a opens it through the checked, bounded stream.
+        var bytes = File.ReadAllBytes(SafePath.Resolve(Directory, file));
+        if (!Convert.ToHexStringLower(SHA1.HashData(bytes)).Equals(entry.Sha1, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"{file} does not match its SHA1 in {DatManifest.FileName}.");
+        using var stream = new MemoryStream(bytes, writable: false);
+        return new DatStore(TitleDb.ReadCompact(stream), entry.Version!);
+    }
+
+    private static bool IsDateVersion(string? version) =>
+        DateTime.TryParseExact(version, "yyyy.MM.dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var date)
+        && date.ToString("yyyy.MM.dd", System.Globalization.CultureInfo.InvariantCulture) == version;
 }
