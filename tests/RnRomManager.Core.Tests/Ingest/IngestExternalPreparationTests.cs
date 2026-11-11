@@ -74,7 +74,7 @@ public class IngestExternalPreparationTests
         var dats = new DatCache(options, systems, NullLogger<DatCache>.Instance);
         var pipeline = new IngestPipeline(dats, systems, _roms, Substitute.For<IGameRepository>(), Substitute.For<ILibraryMirror>(),
             Substitute.For<IIntegrityIssueRepository>(), _reviews, new InfoJsonReader([], systems),
-            new MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }), NullLogger<MediaService>.Instance),
+            TestMedia.Offline(),
             options, Substitute.For<IAuditLog>(), new AuditPaths(options), TimeProvider.System, NullLogger<IngestPipeline>.Instance)
         {
             ExternalHooks = new ExternalIngestHooks { BeforeHash = beforeHash },

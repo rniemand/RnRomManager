@@ -65,7 +65,7 @@ public class MediaRetryJobTests
     public void TearDown() => _dir.Dispose();
 
     private GameMediaRetry Retry() => new(_mirror, _reader, _systems,
-        new MediaService(new HttpClient(_server), Options.Create(new SourcesOptions { ThumbnailBaseUrl = BaseUrl }), NullLogger<MediaService>.Instance),
+        TestMedia.Create(new HttpClient(_server), BaseUrl),
         Options.Create(new PathsOptions { Roms = _dir.Path }), _audit, TimeProvider.System, NullLogger<GameMediaRetry>.Instance);
 
     private MediaRetryJob Job() => new(_games, Retry(), NullLogger<MediaRetryJob>.Instance);

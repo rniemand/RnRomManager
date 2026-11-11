@@ -50,7 +50,7 @@ public class LibraryEditorCollectionTests
         _collections = Substitute.For<ICollectionRepository>();
         var audit = Substitute.For<IAuditLog>();
         var paths = Options.Create(new PathsOptions { Roms = _dir.Path, Ingest = _dir.Combine("ingest"), Cache = _dir.Combine("cache") });
-        var media = new MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }), NullLogger<MediaService>.Instance);
+        var media = TestMedia.Offline();
         var retry = new GameMediaRetry(_mirror, _reader, systems, media, paths, audit, TimeProvider.System, NullLogger<GameMediaRetry>.Instance);
         _editor = new LibraryEditor(new JobLock(), _games, _roms, Substitute.For<IImageRepository>(), _mirror, _reader,
             new DatCache(paths, systems, NullLogger<DatCache>.Instance), systems, media, retry, paths, audit, new AuditPaths(paths),

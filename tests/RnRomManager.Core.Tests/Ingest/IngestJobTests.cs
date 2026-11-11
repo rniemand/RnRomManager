@@ -112,8 +112,7 @@ public class IngestJobTests
         var roms = Substitute.For<IRomRepository>();
         roms.ListSha1sAsync(default).ReturnsForAnyArgs([]);
         var sync = new DbSync(_games, roms, _mirror, _reader, _systems, Options.Create(_paths), NullLogger<DbSync>.Instance);
-        var media = new RnRomManager.Core.Media.MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }),
-            NullLogger<RnRomManager.Core.Media.MediaService>.Instance);
+        var media = TestMedia.Offline();
         var pipeline = new IngestPipeline(_dats, _systems, roms, _games, _mirror, Substitute.For<RnRomManager.Core.Integrity.IIntegrityIssueRepository>(), _reviews, _reader, media, Options.Create(_paths), _audit, new RnRomManager.Core.Audit.AuditPaths(Options.Create(_paths)), TimeProvider.System,
             NullLogger<IngestPipeline>.Instance);
         return new IngestJob(_dats, _systems, sync, _reviews, _items, _scanner, pipeline, new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance),

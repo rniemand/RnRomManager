@@ -75,6 +75,8 @@ public class HttpClientsTests
             .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
             .AddLogging()
             .AddSingleton(Microsoft.Extensions.Options.Options.Create(new RnRomManager.Core.Configuration.SourcesOptions { ThumbnailBaseUrl = "https://thumbs.test" }))
+            .AddSingleton(new RnRomManager.Core.Dats.DatCache(Microsoft.Extensions.Options.Options.Create(new RnRomManager.Core.Configuration.PathsOptions()),
+                new RnRomManager.Core.Systems.SystemRegistry([]), NullLogger<RnRomManager.Core.Dats.DatCache>.Instance))
             .AddExternalHttpClients();
         services.AddHttpClient(HttpClients.Thumbnails).ConfigurePrimaryHttpMessageHandler(() => server);
         var media = services.BuildServiceProvider().GetRequiredService<RnRomManager.Core.Media.MediaService>();
@@ -134,5 +136,74 @@ public class HttpClientsTests
             length = 0;
             return false;
         }
+    }
+
+    /// <summary>Spec T8: a TitleDb system's media goes through the titledb CDN client, never the libretro one.</summary>
+    [Test]
+    public async Task MediaService_TitleDbFetch_UsesItsNamedClient()
+    {
+        var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
+        var cdn = new StubHttpHandler(_ => StubHttpHandler.Bytes(png));
+        var thumbnails = new StubHttpHandler(_ => StubHttpHandler.Status(HttpStatusCode.NotFound));
+        var paths = Microsoft.Extensions.Options.Options.Create(new RnRomManager.Core.Configuration.PathsOptions());
+        var handler = new ExternalTitleDbTestHandler();
+        var dats = new RnRomManager.Core.Dats.DatCache(paths, new RnRomManager.Core.Systems.SystemRegistry([handler]),
+            NullLogger<RnRomManager.Core.Dats.DatCache>.Instance);
+        dats.Publish(new Dictionary<string, RnRomManager.Core.Dats.DatStore>
+        {
+            [handler.Id] = new([new("0100000000002000", "Orbit", null, null, null, [], [], "https://img-eshop.cdn.nintendo.net/i/box.png", null)], "2026.11.10"),
+        });
+        var services = new ServiceCollection()
+            .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
+            .AddLogging()
+            .AddSingleton(dats)
+            .AddSingleton(Microsoft.Extensions.Options.Options.Create(new RnRomManager.Core.Configuration.SourcesOptions { ThumbnailBaseUrl = "https://thumbs.test" }))
+            .AddExternalHttpClients();
+        services.AddHttpClient(HttpClients.Thumbnails).ConfigurePrimaryHttpMessageHandler(() => thumbnails);
+        services.AddHttpClient(HttpClients.TitleDbImages).ConfigurePrimaryHttpMessageHandler(() => cdn);
+        var media = services.BuildServiceProvider().GetRequiredService<RnRomManager.Core.Media.MediaService>();
+
+        var result = await media.FindAsync(handler, ["Orbit [0100000000002000]"], new RnRomManager.Core.Media.CircuitBreaker(), CancellationToken.None);
+
+        Assert.That(result.BoxArt.SourceUrl, Is.EqualTo("https://img-eshop.cdn.nintendo.net/i/box.png"));
+        Assert.That(cdn.Requests, Has.Count.EqualTo(1));
+        Assert.That(cdn.Requests.Single().Headers.UserAgent.ToString(), Does.StartWith("RnRomManager/"));
+        Assert.That(thumbnails.Requests, Is.Empty);
+    }
+
+    /// <summary>Spec T8: the CDN client's own primary handler doesn't follow redirects; a loopback 302 comes back as it is.</summary>
+    [Test]
+    public async Task TitleDbImagesClient_ReturnsA302_WithoutASecondRequest()
+    {
+        using var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        var requests = 0;
+        var serving = Task.Run(async () =>
+        {
+            while (true)
+            {
+                using var socket = await listener.AcceptTcpClientAsync();
+                Interlocked.Increment(ref requests);
+                var stream = socket.GetStream();
+                var reader = new StreamReader(stream);
+                while (!string.IsNullOrEmpty(await reader.ReadLineAsync())) { } // the request head
+                var reply = $"HTTP/1.1 302 Found\r\nLocation: http://127.0.0.1:{port}/next\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(reply));
+            }
+        });
+        var services = new ServiceCollection()
+            .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
+            .AddLogging()
+            .AddExternalHttpClients();
+        var client = services.BuildServiceProvider().GetRequiredService<IHttpClientFactory>().CreateClient(HttpClients.TitleDbImages);
+
+        using var response = await client.GetAsync($"http://127.0.0.1:{port}/first");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Found));
+        await Task.Delay(200); // any follow-up request would have arrived by now
+        Assert.That(Volatile.Read(ref requests), Is.EqualTo(1));
+        listener.Stop();
+        Assert.That(serving.IsFaulted || !serving.IsCompleted, Is.True);
     }
 }

@@ -54,7 +54,7 @@ public class ReviewResolverTests
         var dats = _dats = new DatCache(options, systems, NullLogger<DatCache>.Instance);
         var games = Substitute.For<IGameRepository>();
         var reader = new InfoJsonReader([], systems);
-        var media = new MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }), NullLogger<MediaService>.Instance);
+        var media = TestMedia.Offline();
         var pipeline = new IngestPipeline(dats, systems, Substitute.For<IRomRepository>(), games, Substitute.For<ILibraryMirror>(),
             Substitute.For<IIntegrityIssueRepository>(), _reviews, reader, media, options, _audit,
             new RnRomManager.Core.Audit.AuditPaths(options), _time, NullLogger<IngestPipeline>.Instance);

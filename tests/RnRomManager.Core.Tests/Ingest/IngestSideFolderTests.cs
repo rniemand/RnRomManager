@@ -35,7 +35,7 @@ public class IngestSideFolderTests
         _pipeline = new IngestPipeline(new DatCache(options, systems, NullLogger<DatCache>.Instance), systems, Substitute.For<IRomRepository>(),
             Substitute.For<IGameRepository>(), Substitute.For<ILibraryMirror>(), Substitute.For<IIntegrityIssueRepository>(),
             Substitute.For<IIngestReviewRepository>(), new InfoJsonReader([], systems),
-            new MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }), NullLogger<MediaService>.Instance),
+            TestMedia.Offline(),
             options, Substitute.For<IAuditLog>(), new AuditPaths(options), TimeProvider.System, NullLogger<IngestPipeline>.Instance);
         _ingest = Directory.CreateDirectory(Path.Combine(_paths.Ingest, ExternalTestHandler.SystemId)).FullName;
     }

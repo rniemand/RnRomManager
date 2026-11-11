@@ -51,7 +51,7 @@ public class ReviewResolverExternalTests
         var options = Options.Create(_paths);
         var dats = new DatCache(options, systems, NullLogger<DatCache>.Instance);
         var games = Substitute.For<IGameRepository>();
-        var media = new MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }), NullLogger<MediaService>.Instance);
+        var media = TestMedia.Offline();
         var pipeline = new IngestPipeline(dats, systems, Substitute.For<IRomRepository>(), games, Substitute.For<ILibraryMirror>(),
             Substitute.For<IIntegrityIssueRepository>(), _reviews, new InfoJsonReader([], systems), media, options, _audit,
             new AuditPaths(options), TimeProvider.System, NullLogger<IngestPipeline>.Instance);
