@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
+using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
 using RnRomManager.Core.Users;
 using RnRomManager.TestData;
@@ -179,6 +180,47 @@ public class ReportEndpointsTests
             .Select(g => (g.GetProperty("id").GetGuid(), g.GetProperty("displayTitle").GetString(), g.GetProperty("bytes").GetInt64(),
                 g.GetProperty("romCount").GetInt32())).ToList();
         Assert.That(games, Is.EqualTo(new[] { (bravo, "Bravo", 300L, 1), (alpha, "Alpha", 100L, 1), (charlie, "Charlie", 100L, 1) }));
+    }
+
+    /// <summary>Mirrors a game whose ROMs carry external pointers; no file is written, so every sidecar is missing.</summary>
+    private async Task<Guid> MirrorExternal(string system, string title, long zipBytes, params int[] romSizes)
+    {
+        var roms = romSizes.Select((size, i) => TestLibrary.Rom($"{title} [v{i}].nsp", [.. Enumerable.Repeat((byte)(title.Length + i), size)], isPrimary: i == 0)
+            with { ExternalFileName = $"{title}.{title} [v{i}].nsp" }).ToArray();
+        var game = TestLibrary.Game(title, roms) with { System = system };
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, $"{system}/{title[..1]}/{title}.zip", zipBytes, DateTime.UtcNow), default);
+        return game.GameId;
+    }
+
+    [Test]
+    public async Task LibrarySize_AddsRecordedExternalRomSizes_OncePerGame_EvenWhenTheFileIsMissing()
+    {
+        var embedded = await Ingest("gb", "a.gb", Alpha);
+        await Sql("UPDATE games SET zip_size_bytes = 500 WHERE id = @embedded", new { embedded });
+        await MirrorExternal(ExternalTestHandler.SystemId, "Orbit", 100, 300, 200);
+
+        var size = await GetJson("/api/reports/library-size");
+
+        Assert.That((size.GetProperty("totalBytes").GetInt64(), size.GetProperty("gameCount").GetInt32()), Is.EqualTo((1100L, 2)));
+        var systems = size.GetProperty("systems").EnumerateArray()
+            .Select(s => (s.GetProperty("system").GetString(), s.GetProperty("bytes").GetInt64(), s.GetProperty("gameCount").GetInt32())).ToList();
+        Assert.That(systems, Is.EqualTo(new[] { ("ext", 600L, 1), ("gb", 500L, 1) }), "the ZIP's 100 counts once, not per release");
+    }
+
+    [Test]
+    public async Task LibrarySize_System_OrdersByCombinedSize()
+    {
+        // The report sums by stored pointer, so pointer rows under a registered system exercise the drill-down.
+        var embedded = await Ingest("gb", "a.gb", Alpha);
+        await Sql("UPDATE games SET zip_size_bytes = 500 WHERE id = @embedded", new { embedded });
+        var external = await MirrorExternal("gb", "Orbit", 100, 300, 200);
+
+        var gb = await GetJson("/api/reports/library-size/gb");
+
+        Assert.That(gb.GetProperty("bytes").GetInt64(), Is.EqualTo(1100L));
+        var games = gb.GetProperty("games").EnumerateArray()
+            .Select(g => (g.GetProperty("id").GetGuid(), g.GetProperty("bytes").GetInt64(), g.GetProperty("romCount").GetInt32())).ToList();
+        Assert.That(games, Is.EqualTo(new[] { (external, 600L, 2), (embedded, 500L, 1) }), "the smaller ZIP sorts first by combined size");
     }
 
     [Test]

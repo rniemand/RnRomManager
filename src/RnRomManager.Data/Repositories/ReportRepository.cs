@@ -27,12 +27,23 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         return new Page<MissingImageItem>(rows.AsList(), page, pageSize, total);
     }
 
+    /// <summary>
+    /// G6: one row per game, its ZIP plus the recorded sizes of its external ROMs (catalogued, not what is on disk,
+    /// so a missing file still counts).
+    /// </summary>
+    private const string GameBytes = """
+        SELECT g.id, g.system_id, g.display_title,
+               CAST(g.zip_size_bytes + COALESCE((SELECT SUM(r.size_bytes) FROM roms r
+                   WHERE r.game_id = g.id AND r.external_file_name IS NOT NULL), 0) AS SIGNED) AS Bytes
+        FROM games g
+        """;
+
     public async Task<IReadOnlyList<SystemSize>> ListSystemSizesAsync(CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
-        var rows = await connection.QueryAsync<SystemSizeRow>(new CommandDefinition("""
-            SELECT system_id AS SystemId, SUM(zip_size_bytes) AS Bytes, COUNT(*) AS GameCount
-            FROM games GROUP BY system_id ORDER BY Bytes DESC, system_id
+        var rows = await connection.QueryAsync<SystemSizeRow>(new CommandDefinition($"""
+            SELECT s.system_id AS SystemId, SUM(s.Bytes) AS Bytes, COUNT(*) AS GameCount
+            FROM ({GameBytes}) s GROUP BY s.system_id ORDER BY Bytes DESC, s.system_id
             """, cancellationToken: cancellationToken));
         return rows.Select(r => new SystemSize(r.SystemId, (long)r.Bytes, (int)r.GameCount)).ToList();
     }
@@ -40,11 +51,11 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
     public async Task<IReadOnlyList<GameSize>> ListGameSizesAsync(string systemId, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
-        var rows = await connection.QueryAsync<GameSizeRow>(new CommandDefinition("""
-            SELECT g.id AS Id, g.display_title AS DisplayTitle, g.zip_size_bytes AS Bytes,
+        var rows = await connection.QueryAsync<GameSizeRow>(new CommandDefinition($"""
+            SELECT g.id AS Id, g.display_title AS DisplayTitle, g.Bytes,
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount
-            FROM games g WHERE g.system_id = @systemId
-            ORDER BY g.zip_size_bytes DESC, g.display_title, g.id
+            FROM ({GameBytes}) g WHERE g.system_id = @systemId
+            ORDER BY g.Bytes DESC, g.display_title, g.id
             """, new { systemId }, cancellationToken: cancellationToken));
         return rows.Select(r => new GameSize(r.Id, r.DisplayTitle, r.Bytes, (int)r.RomCount)).ToList();
     }
