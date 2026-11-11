@@ -44,6 +44,9 @@ public sealed class LibraryZipWriterHooks
 
     /// <summary>Returns true to make that attempt's rename fail as a sharing violation would.</summary>
     public Func<int, bool>? FailPublicationAttempt { get; init; }
+
+    /// <summary>Replaces the native no-replace rename for a new ZIP.</summary>
+    public Func<string, string, NoReplaceRenameResult>? Rename { get; init; }
 }
 
 /// <summary>
@@ -287,7 +290,7 @@ public sealed class LibraryZipWriter(InfoJsonReader reader)
                     return;
                 }
 
-                var renamed = NoReplaceRename.Move(tmp, target);
+                var renamed = NoReplaceRename.PublishStaged(tmp, target, staged, hooks?.Rename);
                 if (renamed.Renamed)
                     return;
                 failure = renamed.Details!;

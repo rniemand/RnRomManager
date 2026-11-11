@@ -36,38 +36,32 @@ public sealed class ExternalMoveHooks
     /// <summary>Runs with the staging path once the file was renamed or copied to it, before it is checked.</summary>
     public Action<string>? AfterStaging { get; init; }
 
-    /// <summary>Wraps the source stream of a cross-volume copy, e.g. to fail part-way.</summary>
+    /// <summary>Wraps the source stream of a staged copy, e.g. to fail part-way.</summary>
     public Func<Stream, Stream>? WrapSource { get; init; }
 
-    /// <summary>Replaces <see cref="File.Delete"/> for the source of a cross-volume copy.</summary>
+    /// <summary>Replaces <see cref="File.Delete"/> for the source of a staged copy.</summary>
     public Action<string>? DeleteSource { get; init; }
 
-    /// <summary>Runs with the staging path right after the source of a cross-volume copy was deleted.</summary>
-    public Action<string>? AfterUnlink { get; init; }
 }
 
 /// <summary>
 /// Moves one external ROM file (spec W6), for ingest placement, edits and their undo alike: the file is renamed to
 /// the destination's staging name, checked there against the snapshot the caller verified, then renamed to the
 /// destination. Neither rename replaces anything, so an occupied name is never overwritten and a file that isn't
-/// the expected one is never promoted. Only when the OS says the two are on different volumes is the file copied
-/// to the staging name instead; the source is deleted once the copy is complete and the source path still names
-/// the checked file. To undo a move, call it again from the promoted path with the returned snapshot.
+/// the expected one is never promoted. If the first rename crosses volumes or is unsupported, the file is copied
+/// to the staging name instead. Publication can use a hard link if the final rename is unsupported.
+/// The source of a staged copy is deleted once the verified copy is published and the source path
+/// still names the checked file. To undo a move, call it again from the promoted path with the returned snapshot.
 /// </summary>
 public static class ExternalRomMove
 {
     /// <param name="sourceRoot">The storage root <paramref name="source"/> is under (a copy reads it through the checked open).</param>
     /// <param name="source">Fully qualified.</param>
-    /// <param name="destinationRoot">The storage root <paramref name="destination"/> is under.</param>
     /// <param name="destination">Fully qualified; its folder exists and was checked by the caller.</param>
     /// <param name="expected">What <paramref name="source"/> must still be: the hash-time snapshot, or a promoted file's snapshot for an undo.</param>
     /// <param name="expectedSha1">The verified SHA1 of the incoming bytes, when the caller has one: a copy must reproduce it.</param>
-    public static ExternalMoveResult Move(string sourceRoot, string source, string destinationRoot, string destination,
-        ExternalFileSnapshot expected, ILogger logger, string? expectedSha1 = null, ExternalMoveHooks? hooks = null) =>
-        Move(sourceRoot, source, destinationRoot, destination, expected, logger, expectedSha1, hooks, allowRestore: true);
-
-    private static ExternalMoveResult Move(string sourceRoot, string source, string destinationRoot, string destination,
-        ExternalFileSnapshot expected, ILogger logger, string? expectedSha1, ExternalMoveHooks? hooks, bool allowRestore)
+    public static ExternalMoveResult Move(string sourceRoot, string source, string destination,
+        ExternalFileSnapshot expected, ILogger logger, string? expectedSha1 = null, ExternalMoveHooks? hooks = null)
     {
         var rename = hooks?.Rename ?? NoReplaceRename.Move;
         if (NativeFileStat.Read(source).Snapshot != expected)
@@ -75,8 +69,8 @@ public static class ExternalRomMove
 
         var staging = Path.Combine(Path.GetDirectoryName(destination)!, ExternalRomName.StagingName(Path.GetFileName(destination)));
         var staged = rename(source, staging);
-        if (staged.Status == NoReplaceRenameStatus.CrossDevice)
-            return CopyAcross(sourceRoot, source, destinationRoot, destination, staging, expected, logger, expectedSha1, hooks, allowRestore);
+        if (staged.Status is NoReplaceRenameStatus.CrossDevice or NoReplaceRenameStatus.Unsupported)
+            return CopyAndPublish(sourceRoot, source, destination, staging, expected, logger, expectedSha1, hooks);
         if (!staged.Renamed)
             return Failed(staged, source, destination, logger);
         hooks?.AfterStaging?.Invoke(staging);
@@ -91,7 +85,7 @@ public static class ExternalRomMove
         if (atStaging.Snapshot != expected)
             return PutBack(staging, source, ExternalMoveStatus.SourceChanged, $"{source} changed while it was being moved", rename);
 
-        var promoted = rename(staging, destination);
+        var promoted = NoReplaceRename.PublishStaged(staging, destination, expected, rename);
         if (!promoted.Renamed)
         {
             var failure = Failed(promoted, staging, destination, logger);
@@ -102,8 +96,8 @@ public static class ExternalRomMove
             : new ExternalMoveResult(ExternalMoveStatus.Failed, Details: $"{destination} is not the file that was moved there");
     }
 
-    private static ExternalMoveResult CopyAcross(string sourceRoot, string source, string destinationRoot, string destination, string staging,
-        ExternalFileSnapshot expected, ILogger logger, string? expectedSha1, ExternalMoveHooks? hooks, bool allowRestore)
+    private static ExternalMoveResult CopyAndPublish(string sourceRoot, string source, string destination, string staging,
+        ExternalFileSnapshot expected, ILogger logger, string? expectedSha1, ExternalMoveHooks? hooks)
     {
         ExternalMoveResult Fail(string details, string? survivor) => new(ExternalMoveStatus.Failed, Details: details, SurvivingPath: survivor);
         ExternalMoveResult Changed() => new(ExternalMoveStatus.SourceChanged, Details: $"{source} is not the file that was checked", SurvivingPath: source);
@@ -143,7 +137,7 @@ public static class ExternalRomMove
                             hash.AppendData(buffer, 0, read);
                         output.Write(buffer, 0, read);
                     }
-                    output.Flush(flushToDisk: true); // the source is deleted next: the copy must be on disk
+                    output.Flush(flushToDisk: true); // the copy must be on disk before publication and source deletion
                     sha1 = Convert.ToHexStringLower(hash.GetHashAndReset());
                 }
             }
@@ -166,47 +160,55 @@ public static class ExternalRomMove
             return Changed();
         }
 
+        if (NativeFileStat.Read(staging).Snapshot != owned)
+            return Fail($"the copy of {source} staged at {staging} can't be found there", source);
+
+        var promoted = NoReplaceRename.PublishStaged(staging, destination, owned, hooks?.Rename);
+        if (!promoted.Renamed)
+        {
+            var details = Failed(promoted, staging, destination, logger).Details!;
+            DeleteOwned(staging, identity, logger);
+            return Fail(details, source);
+        }
+
+        if (NativeFileStat.Read(destination).Snapshot != owned)
+            return Fail($"{destination} is not the file that was moved there", source);
+        if (NativeFileStat.Read(source).Snapshot != expected)
+            return Fail($"{source} changed after the copy was published", destination);
+
         try
         {
             (hooks?.DeleteSource ?? File.Delete)(source);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            DeleteOwned(staging, identity, logger);
-            return Fail($"{source} can't be removed after copying it: {ex.Message}", source);
+            // If the source is gone or changed, the published copy may be the only verified copy.
+            var details = $"{source} can't be removed after copying it: {ex.Message}";
+            if (NativeFileStat.Read(source).Snapshot != expected)
+                return Fail(details, NativeFileStat.Read(destination).Snapshot == owned ? destination : null);
+            if (NativeFileStat.Read(destination).Snapshot == owned)
+                DeleteOwned(destination, identity, logger);
+            if (NativeFileStat.Read(destination).Snapshot == owned)
+                details += $"; the published copy also remains at {destination}";
+            return Fail(details, source);
         }
 
-        hooks?.AfterUnlink?.Invoke(staging);
-        if (NativeFileStat.Read(staging).Snapshot != owned)
-            return Fail($"the copy of {source} staged at {staging} can't be found there", survivor: null);
-
-        var promoted = (hooks?.Rename ?? NoReplaceRename.Move)(staging, destination);
-        if (!promoted.Renamed)
-        {
-            var details = Failed(promoted, staging, destination, logger).Details!;
-            if (!allowRestore)
-                return Fail(details, staging);
-            var back = Move(destinationRoot, staging, sourceRoot, source, owned, logger, expectedSha1: null, hooks, allowRestore: false);
-            return back.Status == ExternalMoveStatus.Moved
-                ? Fail(details, source)
-                : Fail($"{details}; putting it back failed ({back.Details})", back.SurvivingPath);
-        }
         return NativeFileStat.Read(destination).Snapshot == owned
             ? new ExternalMoveResult(ExternalMoveStatus.Moved, destination, owned)
             : Fail($"{destination} is not the file that was moved there", survivor: null);
     }
 
-    /// <summary>Deletes the staging file only while it is still the one this move created; best effort.</summary>
-    private static void DeleteOwned(string staging, FileIdentity? identity, ILogger logger)
+    /// <summary>Deletes a copy only while it is still the one this move created; best effort.</summary>
+    private static void DeleteOwned(string path, FileIdentity? identity, ILogger logger)
     {
         try
         {
-            if (identity is not null && NativeFileStat.Read(staging).Snapshot?.Identity == identity)
-                File.Delete(staging);
+            if (identity is not null && NativeFileStat.Read(path).Snapshot?.Identity == identity)
+                File.Delete(path);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogWarning("Staging file {Staging} could not be removed: {Message}", staging, ex.Message);
+            logger.LogWarning("Copy at {Path} could not be removed: {Message}", path, ex.Message);
         }
     }
 
@@ -222,11 +224,7 @@ public static class ExternalRomMove
 
     private static ExternalMoveResult Failed(NoReplaceRenameResult result, string from, string destination, ILogger logger)
     {
-        var details = result.Status switch
-        {
-            NoReplaceRenameStatus.Unsupported => NoReplaceRename.UnsupportedDetails(destination),
-            _ => result.Details ?? $"moving {from} to {destination} failed",
-        };
+        var details = result.Details ?? $"moving {from} to {destination} failed";
         if (result.Status == NoReplaceRenameStatus.Unsupported)
             logger.LogError("External ROM move of {Source}: {Details}", from, details);
         return new ExternalMoveResult(ExternalMoveStatus.Failed, Details: details, SurvivingPath: from);

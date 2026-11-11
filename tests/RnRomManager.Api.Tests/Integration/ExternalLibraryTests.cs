@@ -140,12 +140,18 @@ public partial class ExternalLibraryTests
         return [.. await db.QueryAsync<(string, string?)>("SELECT action, details FROM audit_events ORDER BY id")];
     }
 
-    [Test]
-    public async Task NewGame_TheFileLandsBesideItsZip_UnderTheSourceExtension()
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task NewGame_TheFileLandsBesideItsZip_UnderTheSourceExtension(bool useHardLinks)
     {
         var file = Drop("dump.XCI");
+        var hooks = useHardLinks ? new ExternalIngestHooks
+        {
+            Move = new ExternalMoveHooks { Rename = UnsupportedRename },
+            Writer = new LibraryZipWriterHooks { Rename = UnsupportedRename },
+        } : null;
 
-        var result = await IngestAsync(Pipeline(), file);
+        var result = await IngestAsync(Pipeline(hooks), file);
 
         Assert.That(Code(result), Is.EqualTo((IngestOutcome.Ingested, (string?)null)));
         Assert.That(File.Exists(file.FullPath), Is.False, "the source was moved, not copied");
@@ -160,6 +166,8 @@ public partial class ExternalLibraryTests
         await using var db = Service<IDbConnectionFactory>().Create();
         Assert.That(await db.QuerySingleAsync<string>("SELECT external_file_name FROM roms"), Is.EqualTo(Path.GetFileName(Sidecar)));
         Assert.That(await db.QuerySingleAsync<string>("SELECT zip_path FROM games"), Is.EqualTo(ZipRelative));
+
+        static NoReplaceRenameResult UnsupportedRename(string from, string to) => NoReplaceRename.FromErrno(95, from, to);
     }
 
     [Test]

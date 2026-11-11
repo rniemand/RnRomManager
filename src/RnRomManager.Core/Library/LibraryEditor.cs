@@ -186,7 +186,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         var placed = new List<(string From, string To, ExternalFileSnapshot Snapshot)>();
         foreach (var move in moves)
         {
-            var moved = ExternalRomMove.Move(library, move.From, library, move.To, move.Snapshot, logger, hooks: ExternalHooks?.Move);
+            var moved = ExternalRomMove.Move(library, move.From, move.To, move.Snapshot, logger, hooks: ExternalHooks?.Move);
             if (moved.Status != ExternalMoveStatus.Moved)
             {
                 UndoMoves(placed);
@@ -237,7 +237,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         for (var i = placed.Count - 1; i >= 0; i--)
         {
             var (from, to, snapshot) = placed[i];
-            var back = ExternalRomMove.Move(movedRoot ?? paths.Value.Roms, to, paths.Value.Roms, from, snapshot, logger, hooks: ExternalHooks?.Move);
+            var back = ExternalRomMove.Move(movedRoot ?? paths.Value.Roms, to, from, snapshot, logger, hooks: ExternalHooks?.Move);
             if (back.Status != ExternalMoveStatus.Moved)
                 logger.LogError("Moving {To} back to {From} failed ({Details}); integrity will report it", to, from, back.Details);
         }
@@ -769,7 +769,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         (string From, string To, ExternalFileSnapshot Snapshot)? placed = null;
         if (file.Status == ExternalPathStatus.Found)
         {
-            var move = ExternalRomMove.Move(library, file.Path, library, Path.Combine(folder.Path, pointer), file.Snapshot!, logger, hooks: ExternalHooks?.Move);
+            var move = ExternalRomMove.Move(library, file.Path, Path.Combine(folder.Path, pointer), file.Snapshot!, logger, hooks: ExternalHooks?.Move);
             if (move.Status != ExternalMoveStatus.Moved)
             {
                 RemoveBackup(backup, recordSnapshot);
@@ -1076,7 +1076,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         var touched = new Dictionary<string, ExternalFileSnapshot>(StringComparer.OrdinalIgnoreCase);
         foreach (var (fromPath, toPath, snapshot) in moves)
         {
-            var move = ExternalRomMove.Move(library, fromPath, library, toPath, snapshot, logger, hooks: ExternalHooks?.Move);
+            var move = ExternalRomMove.Move(library, fromPath, toPath, snapshot, logger, hooks: ExternalHooks?.Move);
             if (move.Status != ExternalMoveStatus.Moved)
             {
                 UndoMoves(placed);
@@ -1289,7 +1289,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
                 var destination = ExternalRomName.AllocateSidePath(folder.Path, rom.FileName);
                 var move = destination is null
                     ? new ExternalMoveResult(ExternalMoveStatus.Failed, Details: $"no name for {rom.FileName} fits in {folder.Path}")
-                    : ExternalRomMove.Move(library, file.Path, ingest, destination, file.Snapshot!, logger, hooks: ExternalHooks?.Move);
+                    : ExternalRomMove.Move(library, file.Path, destination, file.Snapshot!, logger, hooks: ExternalHooks?.Move);
                 if (move.Status != ExternalMoveStatus.Moved)
                 {
                     UndoMoves(placed, ingest);

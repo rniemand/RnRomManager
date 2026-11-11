@@ -760,7 +760,7 @@ public sealed class IngestPipeline(
             if (ExternalRomName.AllocateSidePath(target.Path, file.Name, folder == StorageFolders.FailedFolder ? DiagnosticSuffix : null) is not { } destination)
                 return Fail($"no name for {file.Name} fits in {target.Path}");
 
-            var moved = ExternalRomMove.Move(root, source.Path, root, destination, source.Snapshot!, logger);
+            var moved = ExternalRomMove.Move(root, source.Path, destination, source.Snapshot!, logger);
             return moved.Status == ExternalMoveStatus.Moved ? (moved.Path!, null) : Fail(moved.Details);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -993,7 +993,7 @@ public sealed class IngestPipeline(
         ExternalMoveResult moved;
         try
         {
-            moved = ExternalRomMove.Move(source.Root, current.Path, library, Path.Combine(folder.Path, placement.ExternalFileName), source.Snapshot,
+            moved = ExternalRomMove.Move(source.Root, current.Path, Path.Combine(folder.Path, placement.ExternalFileName), source.Snapshot,
                 logger, result.Sha1, ExternalHooks?.Move);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -1052,7 +1052,7 @@ public sealed class IngestPipeline(
                     return ($"the archive changed, so the verified copy was kept at {placed}", false, null);
                 }
                 // I5: the pointer belongs to the original file, so the verified copy steps aside to an unlisted name.
-                var aside = ExternalRomMove.Move(library, placed, library, repair.OrphanPath, moved.Snapshot!, logger, hooks: ExternalHooks?.Recovery);
+                var aside = ExternalRomMove.Move(library, placed, repair.OrphanPath, moved.Snapshot!, logger, hooks: ExternalHooks?.Recovery);
                 if (aside.Status != ExternalMoveStatus.Moved)
                 {
                     var at = aside.SurvivingPath ?? placed;
@@ -1087,7 +1087,7 @@ public sealed class IngestPipeline(
             logger.LogError("{Path}: no free name to move it back to; the complete copy is at {Placed}", original, placed);
             return ($"no free name to move it back to; the complete copy is at {placed}", false, null);
         }
-        var restored = ExternalRomMove.Move(library, placed, placement.Source.Root, back, moved.Snapshot!, logger);
+        var restored = ExternalRomMove.Move(library, placed, back, moved.Snapshot!, logger);
         switch (restored.Status)
         {
             case ExternalMoveStatus.Moved when back == original:

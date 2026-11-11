@@ -1,7 +1,5 @@
 using System.Text;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using NSubstitute;
 using RnRomManager.Core.Storage;
 
 namespace RnRomManager.Core.Tests.Storage;
@@ -30,8 +28,8 @@ public class ExternalRomMoveTests
     private ExternalFileSnapshot Snapshot(string path) => ExternalRomPath.ClassifyFile(_root, path).Snapshot!;
 
     private ExternalMoveResult Move(string source, string destination, ExternalFileSnapshot expected, ExternalMoveHooks? hooks = null,
-        ILogger? logger = null, string? sha1 = null) =>
-        ExternalRomMove.Move(_root, source, _root, destination, expected, logger ?? NullLogger.Instance, sha1, hooks);
+        string? sha1 = null) =>
+        ExternalRomMove.Move(_root, source, destination, expected, NullLogger.Instance, sha1, hooks);
 
     [Test]
     public void Moves_AndReturnsTheSnapshotOfThePromotedFile()
@@ -99,18 +97,52 @@ public class ExternalRomMoveTests
         Assert.That(result.Details, Does.Contain(_destination + ".tmp"));
     }
 
-    [Test]
-    public void UnsupportedRename_IsFailedWithTheRequiredDetails_LoggedAsError_SourceKept()
+    [TestCase(18)] // EXDEV
+    [TestCase(95)] // EOPNOTSUPP
+    public void UnsupportedPromotion_PublishesBeforeDeletingTheOriginal(int stagingErrno)
     {
-        var logger = Substitute.For<ILogger>();
-        var hooks = new ExternalMoveHooks { Rename = (_, to) => new NoReplaceRenameResult(NoReplaceRenameStatus.Unsupported, 22, "x " + to) };
+        var expected = Snapshot(_source);
+        var hooks = new ExternalMoveHooks
+        {
+            Rename = (from, to) => NoReplaceRename.FromErrno(from == _source ? stagingErrno : 95, from, to),
+            DeleteSource = source =>
+            {
+                Assert.That(Snapshot(source), Is.EqualTo(expected));
+                Assert.That(File.ReadAllText(_destination), Is.EqualTo("rom bytes"));
+                File.Delete(source);
+            },
+        };
 
-        var result = Move(_source, _destination, Snapshot(_source), hooks, logger);
+        var result = Move(_source, _destination, expected, hooks, sha1: Sha1("rom bytes"));
 
-        Assert.That((result.Status, result.Details, result.SurvivingPath),
-            Is.EqualTo((ExternalMoveStatus.Failed, $"no-replace rename is not supported for {_destination}", _source)));
-        Assert.That(File.Exists(_source), Is.True);
-        logger.Received(1).Log(LogLevel.Error, Arg.Any<EventId>(), Arg.Any<object>(), null, Arg.Any<Func<object, Exception?, string>>());
+        Assert.That((result.Status, result.Path, result.Snapshot), Is.EqualTo((ExternalMoveStatus.Moved, _destination, Snapshot(_destination))));
+        Assert.That(File.Exists(_source), Is.False);
+        Assert.That(Directory.GetFiles(Path.Combine(_root, "roms")), Is.EqualTo(new[] { _destination }));
+    }
+
+    [Test]
+    public void UnsupportedPromotion_LeavesALateOccupantAndTheOriginalInPlace()
+    {
+        var expected = Snapshot(_source);
+        var hooks = new ExternalMoveHooks
+        {
+            Rename = (from, to) =>
+            {
+                if (from == _source)
+                    return NoReplaceRename.FromErrno(18, from, to);
+                File.WriteAllText(to, "another file");
+                return NoReplaceRename.FromErrno(95, from, to);
+            },
+            DeleteSource = _ => Assert.Fail("a collision must keep the source"),
+        };
+
+        var result = Move(_source, _destination, expected, hooks);
+
+        Assert.That((result.Status, result.SurvivingPath), Is.EqualTo((ExternalMoveStatus.Failed, _source)));
+        Assert.That(result.Details, Does.Contain("already exists"));
+        Assert.That(Snapshot(_source), Is.EqualTo(expected));
+        Assert.That(File.ReadAllText(_destination), Is.EqualTo("another file"));
+        Assert.That(Directory.GetFiles(Path.Combine(_root, "roms")), Is.EqualTo(new[] { _destination }));
     }
 
     [Test]
@@ -139,10 +171,9 @@ public class ExternalRomMoveTests
 
     private static string Sha1(string text) => Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(Encoding.UTF8.GetBytes(text)));
 
-    /// <summary>Different device from <paramref name="crossFrom"/>; a real rename otherwise, unless <paramref name="fail"/> says no.</summary>
-    private static Func<string, string, NoReplaceRenameResult> Rename(string crossFrom, Func<string, string, bool>? fail = null) =>
+    /// <summary>Different device from <paramref name="crossFrom"/>; a real rename otherwise.</summary>
+    private static Func<string, string, NoReplaceRenameResult> Rename(string crossFrom) =>
         (from, to) => from == crossFrom ? NoReplaceRename.FromWindowsError(17, from, to)
-            : fail?.Invoke(from, to) == true ? new NoReplaceRenameResult(NoReplaceRenameStatus.Failed, 5, "denied")
             : NoReplaceRename.Move(from, to);
 
     [Test]
@@ -150,7 +181,18 @@ public class ExternalRomMoveTests
     {
         using var download = ExternalRomPath.OpenRead(_root, _source, FileShare.Read | FileShare.Delete).Stream!;
 
-        var result = Move(_source, _destination, Snapshot(_source), new ExternalMoveHooks { Rename = Rename(_source) }, sha1: Sha1("rom bytes"));
+        var expected = Snapshot(_source);
+        var hooks = new ExternalMoveHooks
+        {
+            Rename = Rename(_source),
+            DeleteSource = source =>
+            {
+                Assert.That(Snapshot(source), Is.EqualTo(expected));
+                Assert.That(File.ReadAllText(_destination), Is.EqualTo("rom bytes"));
+                File.Delete(source);
+            },
+        };
+        var result = Move(_source, _destination, expected, hooks, sha1: Sha1("rom bytes"));
 
         Assert.That((result.Status, result.Path), Is.EqualTo((ExternalMoveStatus.Moved, _destination)));
         Assert.That(result.Snapshot, Is.EqualTo(Snapshot(_destination)), "the snapshot is the copy's, a new file");
@@ -251,24 +293,27 @@ public class ExternalRomMoveTests
     }
 
     [Test]
-    public void AcrossVolumes_TempReplacedAfterUnlink_IsNeverPromoted_NorReportedAsASurvivor()
+    public void AcrossVolumes_DestinationReplacedDuringPromotion_LeavesTheSourceAndOccupant()
     {
         var hooks = new ExternalMoveHooks
         {
-            Rename = Rename(_source),
-            AfterUnlink = staging =>
+            Rename = (from, to) =>
             {
-                File.Move(staging, staging + ".gone");
-                File.WriteAllText(staging, "rom bytes");
+                if (from == _source)
+                    return NoReplaceRename.FromWindowsError(17, from, to);
+                var result = NoReplaceRename.Move(from, to);
+                Assert.That(result.Renamed, Is.True);
+                File.Move(to, to + ".gone");
+                File.WriteAllText(to, "new occupant");
+                return result;
             },
         };
 
         var result = Move(_source, _destination, Snapshot(_source), hooks);
 
-        Assert.That((result.Status, result.SurvivingPath), Is.EqualTo((ExternalMoveStatus.Failed, (string?)null)));
-        Assert.That(result.Details, Does.Contain(_destination + ".tmp"));
-        Assert.That(File.Exists(_destination), Is.False);
-        Assert.That(File.Exists(_destination + ".tmp"), Is.True);
+        Assert.That((result.Status, result.SurvivingPath), Is.EqualTo((ExternalMoveStatus.Failed, _source)));
+        Assert.That(File.ReadAllText(_source), Is.EqualTo("rom bytes"));
+        Assert.That(File.ReadAllText(_destination), Is.EqualTo("new occupant"));
     }
 
     [Test]
@@ -284,43 +329,46 @@ public class ExternalRomMoveTests
     }
 
     [Test]
-    public void AcrossVolumes_PromotionFails_RestoresTheSourceFromTheCompleteTemp()
+    public void AcrossVolumes_PromotionFails_LeavesTheOriginalInPlace()
     {
-        var hooks = new ExternalMoveHooks { Rename = Rename(_source, (_, to) => to == _destination) };
+        var expected = Snapshot(_source);
+        var hooks = new ExternalMoveHooks
+        {
+            Rename = (from, to) => from == _source
+                ? NoReplaceRename.FromErrno(18, from, to)
+                : NoReplaceRename.FromErrno(5, from, to),
+            DeleteSource = _ => Assert.Fail("publication failed before the source could be deleted"),
+        };
 
-        var result = Move(_source, _destination, Snapshot(_source), hooks);
+        var result = Move(_source, _destination, expected, hooks);
 
         Assert.That((result.Status, result.SurvivingPath), Is.EqualTo((ExternalMoveStatus.Failed, _source)));
-        Assert.That(File.ReadAllText(_source), Is.EqualTo("rom bytes"));
+        Assert.That(result.Details, Does.Contain("errno 5"));
+        Assert.That(Snapshot(_source), Is.EqualTo(expected));
         Assert.That(Directory.GetFiles(Path.Combine(_root, "roms")), Is.Empty);
     }
 
     [Test]
-    public void AcrossVolumes_PromotionAndRestoreFail_PreservesTheTemp_AndReportsItsPath()
+    public void AcrossVolumes_SourceReplacedDuringPublication_PreservesBothFiles()
     {
-        // Every rename out of the staging file fails: to the destination, and back towards the source.
-        var hooks = new ExternalMoveHooks { Rename = Rename(_source, (from, _) => from == _destination + ".tmp") };
+        var hooks = new ExternalMoveHooks
+        {
+            Rename = (from, to) =>
+            {
+                if (from == _source)
+                    return NoReplaceRename.FromErrno(18, from, to);
+                var result = NoReplaceRename.Move(from, to);
+                File.Move(_source, _source + ".old");
+                File.WriteAllText(_source, "new source");
+                return result;
+            },
+        };
 
         var result = Move(_source, _destination, Snapshot(_source), hooks);
 
-        Assert.That((result.Status, result.SurvivingPath), Is.EqualTo((ExternalMoveStatus.Failed, _destination + ".tmp")));
-        Assert.That(File.ReadAllText(_destination + ".tmp"), Is.EqualTo("rom bytes"));
-    }
-
-    [Test]
-    public void AcrossVolumes_RestoreStrandedInIngest_ReportsTheTempUnderIngest()
-    {
-        // The way back is a copy too (different device from the library temp); its own promotion then fails.
-        var stagedInLibrary = _destination + ".tmp";
-        Func<string, string, NoReplaceRenameResult> rename = (from, to) =>
-            from == _source || (from == stagedInLibrary && to == _source + ".tmp") ? NoReplaceRename.FromWindowsError(17, from, to)
-            : new NoReplaceRenameResult(NoReplaceRenameStatus.Failed, 5, "denied");
-
-        var result = Move(_source, _destination, Snapshot(_source), new ExternalMoveHooks { Rename = rename });
-
-        Assert.That((result.Status, result.SurvivingPath), Is.EqualTo((ExternalMoveStatus.Failed, _source + ".tmp")));
-        Assert.That(File.ReadAllText(_source + ".tmp"), Is.EqualTo("rom bytes"));
-        Assert.That(File.Exists(stagedInLibrary), Is.False);
+        Assert.That((result.Status, result.SurvivingPath), Is.EqualTo((ExternalMoveStatus.Failed, _destination)));
+        Assert.That(File.ReadAllText(_source), Is.EqualTo("new source"));
+        Assert.That(File.ReadAllText(_destination), Is.EqualTo("rom bytes"));
     }
 
     [Test]

@@ -113,12 +113,16 @@ public class LibraryZipCheckedWriteTests
 
     // --- content ---
 
-    [Test]
-    public async Task ExternalGame_HasNoRomsEntry_AndTheTouchedFileIsVerified()
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task ExternalGame_HasNoRomsEntry_AndTheTouchedFileIsVerified(bool useHardLink)
     {
         var placed = Place(Pointer, RomBytes);
+        var hooks = useHardLink
+            ? new LibraryZipWriterHooks { Rename = (from, to) => NoReplaceRename.FromErrno(95, from, to) }
+            : null;
 
-        var published = await WriteAsync(null, Changes(External(), Touched(Pointer, placed)));
+        var published = await WriteAsync(null, Changes(External(), Touched(Pointer, placed)), hooks);
 
         using var zip = LibraryZip.Open(_target, _reader);
         Assert.That(zip.EntryNames, Is.EqualTo(new[] { "info.json" }));

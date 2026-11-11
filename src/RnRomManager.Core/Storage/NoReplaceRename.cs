@@ -73,6 +73,58 @@ public static class NoReplaceRename
     /// <summary>The <see cref="NoReplaceRenameStatus.Unsupported"/> text callers put in their <c>IoError</c> details.</summary>
     public static string UnsupportedDetails(string destination) => $"no-replace rename is not supported for {destination}";
 
+    /// <summary>
+    /// Publishes a verified staging file under a free name. If the native no-replace rename is unavailable,
+    /// a hard link claims the final name atomically. The staging alias is then removed on a best-effort basis.
+    /// </summary>
+    internal static NoReplaceRenameResult PublishStaged(string staging, string destination, ExternalFileSnapshot expected,
+        Func<string, string, NoReplaceRenameResult>? rename = null)
+    {
+        var result = (rename ?? Move)(staging, destination);
+        if (result.Status != NoReplaceRenameStatus.Unsupported)
+            return result;
+        if (NativeFileStat.Read(staging).Snapshot != expected)
+            return new(NoReplaceRenameStatus.Failed, Details: $"{staging} is no longer the verified staging file");
+
+        var linked = Link(staging, destination);
+        if (!linked.Renamed)
+            return linked with { Details = $"{UnsupportedDetails(destination)}; {linked.Details}" };
+        if (NativeFileStat.Read(destination).Snapshot != expected)
+            return new(NoReplaceRenameStatus.Failed, Details: $"{destination} is no longer the verified published file");
+
+        try
+        {
+            if (NativeFileStat.Read(staging).Snapshot == expected)
+                File.Delete(staging);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The final name already holds the verified file. A leftover alias can be found by integrity.
+        }
+        return linked;
+    }
+
+    private static NoReplaceRenameResult Link(string source, string destination)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            if (CreateHardLinkW(NativePath.ToExtendedLength(destination), NativePath.ToExtendedLength(source), IntPtr.Zero))
+                return new(NoReplaceRenameStatus.Renamed);
+            var error = Marshal.GetLastPInvokeError();
+            return error is ErrorAlreadyExists or ErrorFileExists
+                ? FromWindowsError(error, source, destination)
+                : new(NoReplaceRenameStatus.Failed, error, $"creating a hard link at {destination} failed with error {error}");
+        }
+
+        if (link(source, destination) == 0)
+            return new(NoReplaceRenameStatus.Renamed);
+        var errno = Marshal.GetLastPInvokeError();
+        var result = FromErrno(errno, source, destination);
+        return result.Status == NoReplaceRenameStatus.DestinationExists
+            ? result
+            : result with { Details = $"creating a hard link at {destination} failed with errno {errno}" };
+    }
+
     // --- Windows ---
 
     private const int ErrorFileNotFound = 2;
@@ -92,6 +144,10 @@ public static class NoReplaceRename
     [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool MoveFileExW(string existingFileName, string newFileName, uint flags);
+
+    [DllImport("kernel32", SetLastError = true, CharSet = CharSet.Unicode, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CreateHardLinkW(string newFileName, string existingFileName, IntPtr securityAttributes);
 
     // --- Linux ---
 
@@ -118,4 +174,8 @@ public static class NoReplaceRename
     [DllImport("libc", SetLastError = true)]
     private static extern int renameat2(int oldDirFd, [MarshalAs(UnmanagedType.LPUTF8Str)] string oldPath, int newDirFd,
         [MarshalAs(UnmanagedType.LPUTF8Str)] string newPath, uint flags);
+
+    [DllImport("libc", SetLastError = true)]
+    private static extern int link([MarshalAs(UnmanagedType.LPUTF8Str)] string oldPath,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string newPath);
 }
