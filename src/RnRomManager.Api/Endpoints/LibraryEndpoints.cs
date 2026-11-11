@@ -102,7 +102,7 @@ public static class LibraryEndpoints
                 return problem;
             var name = game.ZipPath[(game.ZipPath.LastIndexOf('/') + 1)..];
             // fileDownloadName sets Content-Disposition with both filename and RFC 5987 filename*.
-            return Results.Stream(stream!, "application/zip", name, File.GetLastWriteTimeUtc(stream!.Name), enableRangeProcessing: true);
+            return Results.Stream(stream!, "application/zip", name, File.GetLastWriteTimeUtc(stream!.SafeFileHandle), enableRangeProcessing: true);
         });
 
         // Z2: the ZIP's file entries for the Zip Contents tab.
