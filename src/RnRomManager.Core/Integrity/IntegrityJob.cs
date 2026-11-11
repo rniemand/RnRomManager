@@ -360,13 +360,19 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
         }
     }
 
-    /// <summary>§12.2 <c>WrongLocation</c>: system/bucket/name ≠ §6.1 (case-insensitive, §5); a clash suffix ` (N)` is accepted.</summary>
-    private static void CheckLocation(string zipPath, string systemId, string title, Guid gameId, Action<IntegrityFinding> add)
+    /// <summary>
+    /// §12.2 <c>WrongLocation</c>: system/bucket/name ≠ §6.1 (case-insensitive, §5); a clash suffix ` (N)` is accepted.
+    /// An external game's name is the budgeted one its builder gives the title (E2), suffixed or not.
+    /// </summary>
+    private void CheckLocation(string zipPath, string systemId, string title, Guid gameId, Action<IntegrityFinding> add)
     {
         var parts = zipPath.Split('/');
         var name = parts[^1];
-        var stem = FileNameSanitizer.Sanitize(title);
-        var nameOk = name.Equals(stem + ".zip", StringComparison.OrdinalIgnoreCase) || IsClashSuffixed(name, stem);
+        var external = systems.ById(systemId) is { EmbedRomsInZip: false };
+        var stem = external ? Path.GetFileNameWithoutExtension(ExternalRomName.ZipName(title)) : FileNameSanitizer.Sanitize(title);
+        var nameOk = external
+            ? ExternalRomName.IsZipNameFor(title, name)
+            : name.Equals(stem + ".zip", StringComparison.OrdinalIgnoreCase) || IsClashSuffixed(name, stem);
         var ok = parts.Length == 3 && nameOk
             && parts[0].Equals(systemId, StringComparison.OrdinalIgnoreCase)
             && parts[1].Equals(Bucket.For(name), StringComparison.OrdinalIgnoreCase);

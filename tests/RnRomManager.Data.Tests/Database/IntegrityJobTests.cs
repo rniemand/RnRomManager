@@ -7,6 +7,7 @@ using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 using RnRomManager.Data.Repositories;
 using RnRomManager.TestData;
@@ -478,9 +479,9 @@ public class IntegrityJobTests
     public void Severity_FollowsTheSpecTable(string type, string severity) => Assert.That(SeverityOf(type), Is.EqualTo(severity));
 
     /// <summary>An external game: its ZIP lists one ROM by pointer and the file sits beside it (E1).</summary>
-    private async Task<string> WriteExternal(string zipPath, string title, string? pointer = null)
+    private async Task<string> WriteExternal(string zipPath, string title, string? pointer = null, int? seed = null)
     {
-        var bytes = RomBytes(++_seed);
+        var bytes = RomBytes(seed ?? ++_seed);
         pointer ??= $"{title}.{title}.nsp";
         var game = Game(title, Rom($"{title}.nsp", bytes) with { ExternalFileName = pointer }) with { System = ExternalTestHandler.SystemId };
         var path = Abs(zipPath);
@@ -815,5 +816,82 @@ public class IntegrityJobTests
 
         var open = (await OpenExternal()).Where(i => i.Type == EntryMissing);
         Assert.That(open, zip == "readable" ? Is.Empty : Does.Contain(stale));
+    }
+
+    [Test]
+    public async Task External_RelocatedZip_WithItsFilesLeftBehind_ReportsMissingAndOrphanFiles()
+    {
+        await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        await Run();
+        Directory.CreateDirectory(Abs("ext/B"));
+        File.Move(Abs("ext/A/Alpha.zip"), Abs("ext/B/Alpha.zip"));
+
+        await Run();
+
+        var open = await OpenExternal();
+        Assert.That(open, Does.Contain((EntryMissing, (string?)"ext/B/Alpha.zip", (string?)"Alpha.Alpha.nsp")));
+        Assert.That(open, Does.Contain((OrphanFile, (string?)"ext/A/Alpha.Alpha.nsp", (string?)null)));
+        Assert.That(File.Exists(Abs("ext/A/Alpha.Alpha.nsp")), Is.True, "the checker never moves files");
+    }
+
+    [Test]
+    public async Task External_BothTitleEditZipsSurviving_IsADuplicateGameId_AndKeepsTheFiles()
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        await Run();
+        // W7: a crash after the new ZIP was written beside its renamed file, before the old ZIP was deleted.
+        Directory.CreateDirectory(Abs("ext/S"));
+        File.Copy(Abs("ext/A/Alpha.zip"), Abs("ext/S/Star.zip"));
+        File.Copy(alpha, Abs("ext/S/Star.Alpha.nsp"));
+
+        await Run();
+
+        Assert.That((await OpenExternal()).Select(i => i.Type), Does.Contain(DuplicateGameId));
+        Assert.That(File.Exists(alpha) && File.Exists(Abs("ext/S/Star.Alpha.nsp")), Is.True);
+    }
+
+    [Test]
+    public async Task External_ZipsListingTheSameRelease_IsADuplicateSha1_AndKeepsTheFiles()
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha", seed: 500);
+        await Run();
+        // W7: an interrupted move or a merge whose source cleanup failed leaves the release listed by both ZIPs.
+        var beta = await WriteExternal("ext/B/Beta.zip", "Beta", pointer: "Beta.Alpha.nsp", seed: 500);
+
+        await Run();
+
+        Assert.That((await OpenExternal()).Select(i => i.Type), Does.Contain(DuplicateSha1));
+        Assert.That(File.Exists(alpha) && File.Exists(beta), Is.True);
+    }
+
+    [Test]
+    public async Task External_RemovedZip_LeavesItsFilesAsOrphans()
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        await Run();
+        File.Delete(Abs("ext/A/Alpha.zip"));
+
+        await Run();
+
+        Assert.That(await _games.ListAllAsync(default), Is.Empty, "the DB repair pruned its rows");
+        Assert.That(await OpenExternal(), Is.EqualTo(new[] { (OrphanFile, (string?)"ext/A/Alpha.Alpha.nsp", (string?)null) }));
+        Assert.That(File.Exists(alpha), Is.True);
+    }
+
+    [TestCase(1, false, TestName = "External_LongCjkTitle_UsesTheBudgetedZipName first candidate")]
+    [TestCase(2, false, TestName = "External_LongCjkTitle_UsesTheBudgetedZipName clash suffix")]
+    [TestCase(1, true, TestName = "External_LongCjkTitle_UsesTheBudgetedZipName a name the builder would not give")]
+    public async Task External_LongCjkTitle_UsesTheBudgetedZipName(int candidate, bool shortened)
+    {
+        var title = string.Concat(Enumerable.Repeat("ゲーム", 60)); // 180 characters, 540 UTF-8 bytes
+        var name = ExternalRomName.ZipName(title, candidate);
+        if (shortened)
+            name = name[..^(10 + ".zip".Length)] + ".zip";
+        var zipPath = $"ext/{Core.Naming.Bucket.For(name)}/{name}";
+        await WriteExternal(zipPath, title, pointer: "x.nsp");
+
+        await Run();
+
+        Assert.That((await OpenExternal()).Select(i => i.Type), shortened ? Does.Contain(WrongLocation) : Does.Not.Contain(WrongLocation));
     }
 }
