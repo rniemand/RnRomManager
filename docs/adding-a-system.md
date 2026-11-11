@@ -15,6 +15,8 @@ public interface ISystemHandler
     long MinRomSizeBytes { get; }                 // smaller files fail as TooSmall
     long MaxRomSizeBytes { get; }                 // larger files fail as TooLarge
     string DatName { get; }                       // "Nintendo - Game Boy": DAT file names + thumbnail folder
+    bool EmbedRomsInZip { get; }                  // true: ROMs inside the game ZIP; false: files next to it (no default)
+    DatSource DatSource => DatSource.Libretro;    // Libretro (five DATs, SHA1) or TitleDb (titledb, title id)
     ReadOnlyMemory<byte> DefaultBoxArtPng { get; }  // 512×512 placeholder box art
     RomHeader? ReadHeader(ReadOnlySpan<byte> rom);  // null = no readable header
     ReadOnlyMemory<byte> NormalizeForHashing(ReadOnlyMemory<byte> rom) => rom;
@@ -35,15 +37,38 @@ What each member drives:
 | `ShortName` | The compact system badge in game pickers (`GameTypeahead`) and `systemShortName` in `GET /api/games`. Defaults to `DisplayName`; every shipped handler overrides it (`GB`, `SNES`, `2600`, `GG`, …). |
 | `Family` | Which handlers' headers and DATs are tried for a file. GB and GBC share the `gameboy` family, so a file in either ingest folder is checked against both DATs, and the header decides where it's stored. GBA and N64 are their own `gba` and `n64` families: a `.gba` file in a GB folder fails as `UnsupportedType`. |
 | `RomExtensions` | Which ingest files are picked up (case-insensitive). An unmatched file whose extension doesn't fit its classified system is renamed to `RomExtensions[0]`. It also filters the system's No-Intro DAT: entries whose file extension isn't in the list (case-insensitive) are left out of hash matching, review DAT search, suggestions and base titles, since no accepted file could match them. NES lists only `.nes`, so the DAT's headerless `.unh` copies are ignored; N64 drops its few `.bin`/`.cmd`/`.sm` entries. |
-| `MinRomSizeBytes` / `MaxRomSizeBytes` | Validation before hashing. The whole ROM is read into memory for `ReadHeader`, bounded by the maximum. |
-| `DatName` | The five DAT files fetched per system: `no-intro/<DatName>.dat` plus the `releaseyear`, `developer`, `publisher` and `genre` metadat files, all relative to `Sources:DatBaseUrl` and cached in `cache/dats/<kind>/`. Also the libretro-thumbnails folder name. |
-| `DefaultBoxArtPng` | Stored when no box art is found. Make your own (the GB/GBC/GBA/N64/NES/SNES/Atari 2600/ColecoVision/Game Gear/Master System/Mega Drive/32X/TurboGrafx-16 ones are drawn for this project; their SVG sources are in each project's `Resources/boxart/`). |
+| `MinRomSizeBytes` / `MaxRomSizeBytes` | Validation before hashing. For an embedded system the whole ROM is read into memory for `ReadHeader`, bounded by the maximum; for an external one the file is hashed in one streamed read and `ReadHeader` gets only its first MiB, so the maximum can be large (64 GiB for Switch). For an external family, only the members whose `RomExtensions` and size range fit the file take part in identifying it. |
+| `EmbedRomsInZip` | Where the ROMs live (see [ZIP format](zip-format.md#external-rom-files)). Required, with no default, so every handler says it. Every handler of one `Family` must agree: the registry refuses a mixed family at startup, naming it. An external system never normalises bytes (`NormalizeForHashing` isn't called), keeps the source file's extension, and its ROMs download, move and get checked as files. |
+| `DatSource` | `Libretro` (the default) fetches the five libretro files below and matches by SHA1. `TitleDb` fetches the shared [titledb](https://github.com/blawar/titledb) file (`Sources:TitleDbUrl`) once per refresh, stores a compact copy per handler (`cache/dats/titledb/<DatName>.json`), matches by the title id from the header's `titleId` field or the file name, and takes media from the URLs titledb lists. Two systems may never share a `DatName`, whatever their source. |
+| `DatName` | For a libretro system, the five DAT files fetched per system: `no-intro/<DatName>.dat` plus the `releaseyear`, `developer`, `publisher` and `genre` metadat files, all relative to `Sources:DatBaseUrl` and cached in `cache/dats/<kind>/`. Also the libretro-thumbnails folder name. For a titledb system, the name of its compact file and its row on **Admin → DATs**. |
+| `DefaultBoxArtPng` | Stored when no box art is found. Make your own (the GB/GBC/GBA/N64/NES/SNES/Atari 2600/ColecoVision/Game Gear/Master System/Mega Drive/32X/TurboGrafx-16/Switch ones are drawn for this project; their SVG sources are in each project's `Resources/boxart/`). |
 | `ReadHeader` | Classification (`ClassifiedSystemId`), the invalid-header rule (`IsPlausible`), review suggestions (`Title`) and the stored header (`Fields`). Return null for a file with no recognisable header; an unmatched headerless file then belongs to the ingest folder's handler. A system whose cartridges have no header returns null always, as `Atari2600Handler` does: its unmatched files always go to Review (never `InvalidHeader`), its releases have no Header button, and `info.json` `header` is null. A system with an optional header returns it when found and null otherwise, as `GameGearHandler` and `MasterSystemHandler` do with `TMR SEGA` (one shared `TmrSegaHeader` reader, classified as the calling handler's id) and `MegaDriveHandler` with the `SEGA` header at 0x100: headerless files still go to Review, and only releases with a header show the Header button. A system with only a magic-bytes check returns a header every time, plausible or not, as `ColecoVisionHandler` does with its `magic` field (`AA55`/`55AA`). |
 | `NormalizeForHashing` | The bytes that are hashed **and stored**, and the bytes `ReadHeader` sees. Stored bytes, `info.json` hashes and the integrity checker's deep hashes then always agree. Nintendo 64 is the example: `.v64` (byte-swapped) and `.n64` (little-endian) dumps are converted to big-endian here, so they match the DAT's `.z64` entries and are stored as `.z64` (`RomExtensions[0]`). SNES strips a 512-byte copier header here (by file size), so headered `.smc` dumps match the DAT's `.sfc` entries and are stored as `.sfc`. TurboGrafx-16 combines both patterns: no header (`ReadHeader` always null, like Atari 2600) plus a size-only 512-byte copier strip (size 512 bytes past a multiple of 8 KiB), with `MaxRomSizeBytes` set to the DAT's largest entry plus 512 because the size limit is checked before the strip. |
 
+Storage of every shipped system:
+
+| System | `Id` | `EmbedRomsInZip` | `DatSource` |
+|---|---|---|---|
+| Game Boy | `gb` | true | Libretro |
+| Game Boy Color | `gbc` | true | Libretro |
+| Game Boy Advance | `gba` | true | Libretro |
+| Nintendo 64 | `n64` | true | Libretro |
+| Nintendo Entertainment System | `nes` | true | Libretro |
+| Super Nintendo Entertainment System | `snes` | true | Libretro |
+| Atari 2600 | `a2600` | true | Libretro |
+| ColecoVision | `coleco` | true | Libretro |
+| Game Gear | `gg` | true | Libretro |
+| Master System | `sms` | true | Libretro |
+| Mega Drive / Genesis | `md` | true | Libretro |
+| 32X | `s32x` | true | Libretro |
+| TurboGrafx-16 | `tg16` | true | Libretro |
+| Nintendo Switch | `switch` | false | TitleDb |
+
+**Switch, the external + titledb example** (`RnRomManager.Systems.Switch`): `EmbedRomsInZip` is false and `DatSource` is `TitleDb`. `ReadHeader` reads only the first MiB it's given: a PFS0 (`.nsp`, `.nsz`) yields its file count and, from its ticket names, a `titleId`; an XCI (`HEAD` at 0x100 or 0x1100) yields no id, so the file name's `[0100…]` is used. Every offset is checked with widened arithmetic before it's sliced, and anything damaged gives a null id rather than an error. It needs no `NormalizeForHashing`.
+
 **Limits of the contract:**
 
-- One file per release (cartridge systems). Multi-file or CD-based systems need a contract change.
+- One file per release. Large single-file images can use external storage (as Switch does); multi-file or CD-based systems (cue/bin, multi-disc) need a contract change.
 - `Fields` values must be JSON primitives (string, number, bool or null), because the UI renders them generically.
 
 ## Step by step
@@ -55,7 +80,7 @@ What each member drives:
    builder.Services.AddSystemHandler<Sg1000Handler>();
    ```
    and add a project reference from `RnRomManager.Api`.
-4. Add the system to the test data builders in `tests/RnRomManager.TestData` if you want seeded ROMs and fixture DATs for it (`FixtureDatWriter` writes the five files per system).
+4. Add the system to the test data builders in `tests/RnRomManager.TestData` if you want seeded ROMs and fixture DATs for it (`FixtureDatWriter` writes the five files per libretro system, or a titledb compact file through its `titleDb` map). Every test fixture that loads DATs for all systems must include the new one, or ingestion's `DatsMissing` preflight fails.
 5. Optionally map its icon in `src/RnRomManager.Web/src/lib/components/icons.ts` (`'system-sg1000': 'bi bi-…'`); without it the UI uses the controller fallback.
 6. Test the header reader with synthetic ROMs (never commit real ROMs), plus the registry lookups and the box-art PNG (valid, 512×512). See `tests/RnRomManager.Systems.GameBoy.Tests` for the pattern.
 7. Update the docs: this repository's README (supported systems), [features](features.md) if behaviour differs, and [ZIP format](zip-format.md) for the new `header` fields.

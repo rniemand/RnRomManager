@@ -17,7 +17,7 @@ All settings come from `appsettings.json` and can be overridden with environment
 | `Logging:RetentionDays` | `Logging__RetentionDays` | `14` | 1–365. `rnrommanager-*.log` files for UTC days more than this many days before today are deleted at startup and daily at 00:05 UTC. |
 | `Sources:DatBaseUrl` | `Sources__DatBaseUrl` | `https://raw.githubusercontent.com/libretro/libretro-database/master/metadat` | absolute http(s) URL |
 | `Sources:TitleDbUrl` | `Sources__TitleDbUrl` | `https://raw.githubusercontent.com/blawar/titledb/master/US.en.json` | absolute http(s) URL; the [blawar/titledb](https://github.com/blawar/titledb) file a DAT refresh downloads for systems identified by title ID (Nintendo Switch) |
-| `Sources:ThumbnailBaseUrl` | `Sources__ThumbnailBaseUrl` | `https://thumbnails.libretro.com` | absolute http(s) URL, or empty to disable media downloads (default box art only) |
+| `Sources:ThumbnailBaseUrl` | `Sources__ThumbnailBaseUrl` | `https://thumbnails.libretro.com` | absolute http(s) URL, or empty to disable all media downloads, Switch's titledb images included (default box art only) |
 | `Backup:RestoreFrom` | `Backup__RestoreFrom` | *(empty)* | empty, or the bare file name of a backup in `Paths:Backups` to restore at startup (no `/`, `\` or `..`). See [restoring a backup](deployment.md#restoring-a-backup). Remove it once the restore is done. |
 
 ## Paths

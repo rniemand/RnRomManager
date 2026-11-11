@@ -1,6 +1,6 @@
 # RnRomManager
 
-A self-hosted web app for managing a personal backup collection of **Game Boy**, **Game Boy Color**, **Game Boy Advance**, **Nintendo 64**, **Nintendo Entertainment System**, **Super Nintendo Entertainment System**, **Atari 2600**, **ColecoVision**, **Game Gear**, **Master System**, **Mega Drive / Genesis**, **32X** and **TurboGrafx-16** ROMs.
+A self-hosted web app for managing a personal backup collection of **Game Boy**, **Game Boy Color**, **Game Boy Advance**, **Nintendo 64**, **Nintendo Entertainment System**, **Super Nintendo Entertainment System**, **Atari 2600**, **ColecoVision**, **Game Gear**, **Master System**, **Mega Drive / Genesis**, **32X**, **TurboGrafx-16** and **Nintendo Switch** ROMs. Switch dumps are stored as files next to each game's ZIP, since they're too large to pack.
 
 Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder. RnRomManager identifies each one against the [No-Intro](https://no-intro.org/) DATs, names it consistently, groups every region and revision of a game together, fetches box art and screenshots, and stores each game as one self-describing ZIP in a tidy `roms/<system>/<letter>/` layout. A MariaDB database mirrors the library for fast browsing, and a scheduled integrity checker keeps the two in sync.
 
@@ -78,9 +78,9 @@ docker compose up -d
 
 1. Open `http://<host>:8080`, sign in as `admin` with `ADMIN_PASSWORD`, and choose a new password.
 2. **Admin → DATs → Refresh DATs** downloads the game databases (once, and whenever you want newer ones).
-3. Copy your `.gb` / `.gbc` files into `data/ingest/gb/`, your `.gba` files into `data/ingest/gba/` your `.z64` / `.v64` / `.n64` files into `data/ingest/n64/` your headered `.nes` files into `data/ingest/nes/` your `.sfc` / `.smc` files into `data/ingest/snes/` your `.a26` / `.bin` files into `data/ingest/a2600/` your `.col` / `.rom` / `.bin` files into `data/ingest/coleco/` your `.gg` / `.sms` files into `data/ingest/gg/` your Master System `.sms` files into `data/ingest/sms/` and your Mega Drive / Genesis `.md` / `.bin` / `.gen` files into `data/ingest/md/` your 32X `.32x` files into `data/ingest/s32x/` and your TurboGrafx-16 / PC Engine `.pce` files into `data/ingest/tg16/`, then press **Ingestion → Import all**.
+3. Copy your `.gb` / `.gbc` files into `data/ingest/gb/`, your `.gba` files into `data/ingest/gba/` your `.z64` / `.v64` / `.n64` files into `data/ingest/n64/` your headered `.nes` files into `data/ingest/nes/` your `.sfc` / `.smc` files into `data/ingest/snes/` your `.a26` / `.bin` files into `data/ingest/a2600/` your `.col` / `.rom` / `.bin` files into `data/ingest/coleco/` your `.gg` / `.sms` files into `data/ingest/gg/` your Master System `.sms` files into `data/ingest/sms/` and your Mega Drive / Genesis `.md` / `.bin` / `.gen` files into `data/ingest/md/` your 32X `.32x` files into `data/ingest/s32x/` your TurboGrafx-16 / PC Engine `.pce` files into `data/ingest/tg16/` and your Nintendo Switch `.nsp` / `.xci` / `.nsz` / `.xcz` files into `data/ingest/switch/`, then press **Ingestion → Import all**.
 
-Upgrading from a version without Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X or TurboGrafx-16? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`).
+Upgrading from a version without Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16 or Nintendo Switch? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`): it downloads the new system's DATs (for Switch, the titledb file).
 
 Set `user:` to the owner of `./data` (`id -u`:`id -g`). An existing MariaDB server, reverse proxies, backups, upgrades and password recovery are covered in the [deployment guide](https://github.com/rniemand/RnRomManager/blob/main/docs/deployment.md).
 
@@ -101,6 +101,7 @@ RnRomManager manages ROM files **you already own**, for personal backup. It does
 
 - Game identification and metadata come from [libretro-database](https://github.com/libretro/libretro-database), licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 - Box art and screenshots are downloaded from [libretro-thumbnails](https://github.com/libretro-thumbnails/libretro-thumbnails). They remain the copyright of their respective owners and are stored for personal use only.
+- Nintendo Switch titles are identified with [blawar/titledb](https://github.com/blawar/titledb), and their box art and screenshots are downloaded from the image URLs it lists on Nintendo's eShop image server (`img-eshop.cdn.nintendo.net`). Those images remain the copyright of their owners and are stored for personal use only.
 - The placeholder cartridge box art is made for this project. Admin → About lists the licence of every dependency.
 
 ## License
