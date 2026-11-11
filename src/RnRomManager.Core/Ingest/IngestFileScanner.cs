@@ -15,6 +15,12 @@ public sealed record IngestFile(string SystemId, string FullPath, string Name, l
     /// <summary>Set for an archive entry: its full path inside the archive.</summary>
     public string? ArchiveEntry { get; init; }
 
+    /// <summary>
+    /// Set for an external archive's entry: the archive as it was extracted. A failed placement deletes the entry's
+    /// moved copy only while the archive still matches it (spec I5).
+    /// </summary>
+    public ExternalFileSnapshot? ArchiveSnapshot { get; init; }
+
     /// <summary>The ingest path recorded as the source (§6.2 <c>sourcePath</c>): the archive for an entry.</summary>
     public string SourcePath => ArchivePath ?? FullPath;
 }

@@ -77,7 +77,7 @@ public class IngestExternalPreparationTests
             new MediaService(new HttpClient(), Options.Create(new SourcesOptions { ThumbnailBaseUrl = "" }), NullLogger<MediaService>.Instance),
             options, Substitute.For<IAuditLog>(), new AuditPaths(options), TimeProvider.System, NullLogger<IngestPipeline>.Instance)
         {
-            BeforeExternalHash = beforeHash,
+            ExternalHooks = new ExternalIngestHooks { BeforeHash = beforeHash },
         };
         return (pipeline, systems, dats);
     }
@@ -176,12 +176,14 @@ public class IngestExternalPreparationTests
     }
 
     [Test]
-    public async Task EligibleDatHit_IsNotStoredYet_AndKeepsItsPendingRow()
+    public async Task DatHitForAnExistingGame_IsNotStoredYet_AndKeepsItsPendingRow()
     {
+        // shortcut: step 9g adds the release to the existing game; until then the source stays.
         var bytes = RomBytes(64);
         var ext = new Handler("ext", [".nsp", ".xci"]);
         var (pipeline, _, dats) = Build([ext]);
         LoadDat(dats, ext, new FixtureGame("Game (USA)", "Game (USA).nsp", bytes));
+        _roms.ListGameIdsByBaseTitleAsync(default!, default!, default).ReturnsForAnyArgs([Guid.NewGuid()]);
         var file = Drop("game.xci", bytes);
 
         var result = await ProcessAsync(pipeline, file);

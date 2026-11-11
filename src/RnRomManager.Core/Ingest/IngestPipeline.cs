@@ -46,6 +46,22 @@ public static class IngestFailures
     public const string InvalidHeader = "InvalidHeader";
 }
 
+/// <summary>Test seams of <see cref="IngestPipeline"/>'s external path: points where a test changes a file mid-ingest.</summary>
+public sealed class ExternalIngestHooks
+{
+    /// <summary>Runs once an external source is open and checked, right before it is hashed.</summary>
+    public Action<IngestFile>? BeforeHash { get; init; }
+
+    /// <summary>Runs after media and naming, right before the source is checked again and moved.</summary>
+    public Action<IngestFile>? BeforePlacement { get; init; }
+
+    /// <summary>Passed to the move that places the ROM file next to its ZIP (not to a rollback).</summary>
+    public ExternalMoveHooks? Move { get; init; }
+
+    /// <summary>Passed to the ZIP write that follows the move.</summary>
+    public LibraryZipWriterHooks? Writer { get; init; }
+}
+
 /// <summary>
 /// One loose file through spec §7.2: validate → hash → identify by DAT → group → metadata → media → package (atomic
 /// ZIP) → mirror (DB) → delete the source. Every write starts from the game's ZIP, never from DB rows.
@@ -66,8 +82,8 @@ public sealed class IngestPipeline(
     TimeProvider time,
     ILogger<IngestPipeline> logger)
 {
-    /// <summary>Test seam: runs once an external source is open and checked, right before it is hashed.</summary>
-    public Action<IngestFile>? BeforeExternalHash { get; init; }
+    /// <summary>Test seams of the external ingest path.</summary>
+    public ExternalIngestHooks? ExternalHooks { get; set; }
 
     /// <summary>AU1: the source as recorded: <c>ingest/…</c>, or <c>ingest/&lt;archive&gt; › &lt;entry&gt;</c> for an archive entry.</summary>
     private string AuditSource(IngestFile file) =>
@@ -117,7 +133,7 @@ public sealed class IngestPipeline(
         }
         var hashes = RomHashes.Of(bytes);
         logger.LogDebug("{Path}: {Size} bytes, crc32 {Crc32}, sha1 {Sha1}", file.FullPath, bytes.Length, hashes.Crc32, hashes.Sha1);
-        return await IdentifyAsync(file, folder, family, hashes, bytes.Length, bytes, bytes, jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
+        return await IdentifyAsync(file, folder, family, hashes, bytes.Length, bytes, bytes, null, jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -154,7 +170,7 @@ public sealed class IngestPipeline(
         RomFileHashes? hashed;
         using (var stream = opened.Stream!)
         {
-            BeforeExternalHash?.Invoke(file);
+            ExternalHooks?.BeforeHash?.Invoke(file);
             try
             {
                 hashed = await RomFileHasher.HashAsync(stream, byExtension.MaxRomSizeBytes, cancellationToken).ConfigureAwait(false);
@@ -175,18 +191,19 @@ public sealed class IngestPipeline(
         var eligible = family.Where(h => h.RomExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase)
             && size >= h.MinRomSizeBytes && size <= h.MaxRomSizeBytes).ToList();
         return await IdentifyAsync(file, folder, eligible, new RomHashes(hashed.Crc32, hashed.Md5, hashed.Sha1), size, hashed.Header, null,
-            jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
+            new ExternalSource(root, fresh.Path, snapshot), jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Steps 3–6 on hashed input.</summary>
     /// <param name="candidates">The handlers that may claim it: the whole family, or the eligible members for an external system.</param>
     /// <param name="headerBytes">What <c>ReadHeader</c> gets: the whole ROM, or its first MiB for an external one.</param>
     /// <param name="bytes">The ROM to store; null for an external ROM, which is never held in memory.</param>
+    /// <param name="source">The checked file an external ROM is moved from; null for an embedded ROM.</param>
     private async Task<IngestItemResult?> IdentifyAsync(IngestFile file, ISystemHandler folder, IReadOnlyList<ISystemHandler> candidates,
-        RomHashes hashes, long size, byte[] headerBytes, byte[]? bytes, Guid jobId, AuditActor actor, CircuitBreaker breaker,
-        CancellationToken cancellationToken)
+        RomHashes hashes, long size, byte[] headerBytes, byte[]? bytes, ExternalSource? source, Guid jobId, AuditActor actor,
+        CircuitBreaker breaker, CancellationToken cancellationToken)
     {
-        var external = bytes is null;
+        var external = source is not null;
         // Step 3: global dedupe, self-repair, and review-item lifecycle.
         var review = await reviews.GetBySha1Async(hashes.Sha1, cancellationToken).ConfigureAwait(false);
         if (await roms.GetBySha1Async(hashes.Sha1, cancellationToken).ConfigureAwait(false) is { } known)
@@ -252,10 +269,10 @@ public sealed class IngestPipeline(
                 owners, cancellationToken).ConfigureAwait(false);
         }
 
-        if (bytes is null)
+        if (external && owners.Count > 0)
         {
-            // shortcut: external placement (I4) lands in step 9f; until then nothing is written and the source stays.
-            return IngestItemResult.Error(IngestErrors.IoError, "storing external ROMs is not available yet", system.Id, hashes.Sha1);
+            // shortcut: adding a release to an external game lands in step 9g; until then nothing is written and the source stays.
+            return IngestItemResult.Error(IngestErrors.IoError, "adding a release to an external game is not available yet", system.Id, hashes.Sha1);
         }
 
         var now = time.GetUtcNow();
@@ -278,8 +295,8 @@ public sealed class IngestPipeline(
         var result = new IngestItemResult(IngestOutcome.Ingested, SystemId: system.Id, Sha1: hashes.Sha1);
 
         return owners.Count == 0
-            ? await NewGameAsync(file, system, rom, metadata, bytes, breaker, result, now, actor, null, cancellationToken).ConfigureAwait(false)
-            : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes, breaker, result, now, actor, null, cancellationToken).ConfigureAwait(false);
+            ? await NewGameAsync(file, system, rom, metadata, bytes, breaker, result, now, actor, null, cancellationToken, source: source).ConfigureAwait(false)
+            : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes!, breaker, result, now, actor, null, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Shared steps 6–11 for synchronous review resolution; Attach supplies a target and skips grouping.</summary>
@@ -298,10 +315,11 @@ public sealed class IngestPipeline(
             : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes, new CircuitBreaker(), result, time.GetUtcNow(), actor, reviewAction, cancellationToken, afterMirror).ConfigureAwait(false);
     }
 
+    /// <param name="bytes">The ROM for the ZIP; null when <paramref name="source"/> is an external ROM's file.</param>
     private async Task<IngestItemResult> NewGameAsync(
-        IngestFile file, ISystemHandler system, InfoJsonRom rom, DatMetadata metadata, byte[] bytes, CircuitBreaker breaker,
+        IngestFile file, ISystemHandler system, InfoJsonRom rom, DatMetadata metadata, byte[]? bytes, CircuitBreaker breaker,
         IngestItemResult result, DateTimeOffset now, AuditActor actor, string? reviewAction, CancellationToken cancellationToken,
-        Func<Guid, Task>? afterMirror = null)
+        Func<Guid, Task>? afterMirror = null, ExternalSource? source = null)
     {
         // Step 7: a new game takes every metadata field. Step 8: media.
         var found = await media.FindAsync(system, [rom.Identification.DatGameName], breaker, cancellationToken).ConfigureAwait(false);
@@ -325,6 +343,38 @@ public sealed class IngestPipeline(
             Metadata = new InfoJsonGameMetadata(now, now, AppInfo.Version),
         };
 
+        if (source is not null)
+        {
+            // E2: the ZIP and its ROM file get budgeted names, free on disk and against every mirrored claim.
+            var library = paths.Value.Roms;
+            var bucket = ExternalRomPath.ClassifyDirectory(library, Path.Combine(library, system.Id, Bucket.For(ExternalRomName.ZipName(title))));
+            try
+            {
+                if (bucket.Status == ExternalPathStatus.Missing)
+                {
+                    Directory.CreateDirectory(bucket.Path);
+                    bucket = ExternalRomPath.ClassifyDirectory(library, bucket.Path);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return IngestItemResult.Error(IngestErrors.IoError, $"{bucket.Path} can't be created: {ex.Message}", system.Id, result.Sha1);
+            }
+            if (bucket.Status != ExternalPathStatus.Found)
+                return IngestItemResult.Error(IngestErrors.IoError, bucket.Details, system.Id, result.Sha1);
+
+            var claims = await roms.ListExternalAsync(cancellationToken).ConfigureAwait(false);
+            var externalZipPath = await ExternalRomName.AllocateZipPathAsync(library, system.Id, title, claims, games, cancellationToken).ConfigureAwait(false);
+            var folderPath = externalZipPath[..externalZipPath.LastIndexOf('/')];
+            var name = ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(externalZipPath), rom.FileName,
+                ExternalNameReservations.ForFolder(bucket.Path, folderPath, claims));
+            game = game with { Roms = PrimaryRelease.Apply([rom with { ExternalFileName = name }]) };
+            var images = new Dictionary<string, Func<Stream>>();
+            AddImages(images, found.BoxArt, found.Snap);
+            return await PackageAsync(file, null, externalZipPath, game, images, result, actor, reviewAction, rom.FileName, cancellationToken,
+                afterMirror, placement: new ExternalPlacement(source, name)).ConfigureAwait(false);
+        }
+
         // §6.1: Sanitize(title).zip in roms/<system>/<bucket>/; a clash (any case) with another game gets " (2)"….
         var zipName = FileNameSanitizer.Sanitize(title) + ".zip";
         var folder = Path.Combine(paths.Value.Roms, system.Id, Bucket.For(zipName));
@@ -332,9 +382,9 @@ public sealed class IngestPipeline(
         zipName = FileNameRules.FirstFreeIn(folder, zipName);
         var zipPath = $"{system.Id}/{Bucket.For(zipName)}/{zipName}";
 
-        var entries = new Dictionary<string, Func<Stream>> { [LibraryZip.RomEntry(rom.FileName)] = () => new MemoryStream(bytes) };
+        var entries = new Dictionary<string, Func<Stream>> { [LibraryZip.RomEntry(rom.FileName)] = () => new MemoryStream(bytes!) };
         AddImages(entries, found.BoxArt, found.Snap);
-        return await PackageAsync(file, null, zipPath, game, entries, result, actor, reviewAction, cancellationToken, afterMirror).ConfigureAwait(false);
+        return await PackageAsync(file, null, zipPath, game, entries, result, actor, reviewAction, rom.FileName, cancellationToken, afterMirror).ConfigureAwait(false);
     }
 
     private async Task<IngestItemResult> AddToGameAsync(
@@ -384,7 +434,7 @@ public sealed class IngestPipeline(
             }
 
             // B9: the new release never adopts an orphan note of its name.
-            return await PackageAsync(file, existing, row.ZipPath, game, entries, result with { GameId = gameId }, actor, reviewAction, cancellationToken,
+            return await PackageAsync(file, existing, row.ZipPath, game, entries, result with { GameId = gameId }, actor, reviewAction, rom.FileName, cancellationToken,
                 afterMirror, new HashSet<string>(StringComparer.Ordinal) { LibraryZip.NoteEntry(rom.FileName) }).ConfigureAwait(false);
         }
     }
@@ -438,7 +488,7 @@ public sealed class IngestPipeline(
             var entries = new Dictionary<string, Func<Stream>> { [entryName] = () => new MemoryStream(bytes!) };
             var result = new IngestItemResult(IngestOutcome.Repaired, Details: $"rewrote {game.ZipPath} › {entryName} ({string.Join(", ", open.Select(i => i.Type))})",
                 SystemId: known.SystemId, GameId: known.GameId, Sha1: sha1);
-            return await PackageAsync(file, existing, game.ZipPath, repaired, entries, result, actor, null, cancellationToken,
+            return await PackageAsync(file, existing, game.ZipPath, repaired, entries, result, actor, null, known.FileName, cancellationToken,
                 _ => issues.ResolveAsync(open.Select(i => i.Id).ToList(), now.UtcDateTime, cancellationToken)).ConfigureAwait(false);
         }
     }
@@ -594,41 +644,84 @@ public sealed class IngestPipeline(
         return new IngestItemResult(IngestOutcome.Review, reason, SystemId: systemId, Sha1: hashes.Sha1);
     }
 
+    /// <summary>The checked file an external ROM is hashed from and moved from (I2, I4).</summary>
+    /// <param name="Root">The storage root it was checked under: ingest, or the cache for an extracted archive entry.</param>
+    private sealed record ExternalSource(string Root, string Path, ExternalFileSnapshot Snapshot);
+
+    /// <summary>An external ROM's file and the name it takes next to its ZIP (E1).</summary>
+    private sealed record ExternalPlacement(ExternalSource Source, string ExternalFileName);
+
     /// <summary>Steps 9–11.</summary>
     /// <param name="afterMirror">Runs once the DB is updated, before the source is deleted.</param>
     /// <param name="reviewAction">Null from ingest; the resolution action from review (the <c>Ingested</c> row's details).</param>
+    /// <param name="release">The new release's <c>fileName</c>: the <c>Ingested</c> row's details (I7).</param>
+    /// <param name="placement">An external ROM's file, moved next to the ZIP right before the ZIP is written (I4).</param>
     private async Task<IngestItemResult> PackageAsync(
         IngestFile file, LibraryZip? existing, string zipPath, InfoJsonGame game, Dictionary<string, Func<Stream>> entries,
-        IngestItemResult result, AuditActor actor, string? reviewAction, CancellationToken cancellationToken,
-        Func<Guid, Task>? afterMirror = null, IReadOnlySet<string>? removedEntries = null)
+        IngestItemResult result, AuditActor actor, string? reviewAction, string release, CancellationToken cancellationToken,
+        Func<Guid, Task>? afterMirror = null, IReadOnlySet<string>? removedEntries = null, ExternalPlacement? placement = null)
     {
         result = result with { GameId = game.GameId };
-        var target = SafePath.Resolve(paths.Value.Roms, zipPath);
+        var library = paths.Value.Roms;
+        var target = SafePath.Resolve(library, zipPath);
+        ExternalMoveResult? moved = null;
+        ExternalFileSnapshot? published = null;
+        if (placement is not null)
+        {
+            (moved, var stop) = Place(file, placement, target, result);
+            if (stop is not null)
+                return stop;
+            // From the move on nothing may strand the file: the write, the mirror and afterMirror run to the end (I4).
+            cancellationToken = CancellationToken.None;
+        }
+
         try
         {
-            await new LibraryZipWriter(reader).WriteAsync(target, existing, new LibraryZipChanges(game, entries, removedEntries), cancellationToken).ConfigureAwait(false);
+            var placed = moved is null ? null
+                : new Dictionary<string, ExternalFileSnapshot>(StringComparer.OrdinalIgnoreCase) { [placement!.ExternalFileName] = moved.Snapshot! };
+            var changes = new LibraryZipChanges(game, entries, removedEntries, placed);
+            if (placement is null)
+                await new LibraryZipWriter(reader).WriteAsync(target, existing, changes, cancellationToken).ConfigureAwait(false);
+            else
+                published = await new LibraryZipWriter(reader).WriteCheckedAsync(library, target, existing, changes, cancellationToken, ExternalHooks?.Writer).ConfigureAwait(false);
         }
-        catch (LibraryZipVerifyException ex)
+        catch (Exception ex) when (placement is not null || ex is LibraryZipVerifyException or IOException or UnauthorizedAccessException)
         {
-            logger.LogError(ex, "{Path}: verify failed writing {Zip}", file.FullPath, zipPath);
-            return result with { Outcome = IngestOutcome.Error, Reason = IngestErrors.VerifyFailed, Details = ex.Message };
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
+            // I4: any failure of the write puts an external ROM's file back before it is reported.
+            var survivor = placement is null ? null : RollBack(file, placement, moved!);
+            var reason = ex switch
+            {
+                LibraryZipVerifyException => IngestErrors.VerifyFailed,
+                IOException or UnauthorizedAccessException => IngestErrors.IoError,
+                _ => null,
+            };
             logger.LogError(ex, "{Path}: writing {Zip} failed", file.FullPath, zipPath);
-            return result with { Outcome = IngestOutcome.Error, Reason = IngestErrors.IoError, Details = ex.Message };
+            if (reason is null)
+                throw;
+            return result with { Outcome = IngestOutcome.Error, Reason = reason, Details = survivor is null ? ex.Message : $"{ex.Message}; {survivor}" };
         }
         // AU4: the ZIP is written, so the files changed even if the DB mirror fails below.
         var repaired = result.Outcome == IngestOutcome.Repaired;
-        var release = entries.Keys.First(k => k.StartsWith(LibraryZip.RomsFolder, StringComparison.Ordinal))[LibraryZip.RomsFolder.Length..];
         audit.Record(new AuditEvent(repaired ? AuditActions.ZipRepaired : AuditActions.Ingested, actor, game.System, game.GameId,
             AuditSource(file), AuditPaths.Library(zipPath),
             repaired ? null : reviewAction is null ? $"release {release}" : $"review resolve ({reviewAction})"));
 
-        var info = new FileInfo(target);
         try
         {
-            await mirror.ReplaceAsync(new MirrorEntry(game, zipPath, info.Length, info.LastWriteTimeUtc), cancellationToken).ConfigureAwait(false);
+            MirrorEntry entry;
+            if (published is not null)
+            {
+                // W1: stamped from the ZIP this write published, and only while the path still names it.
+                if (ExternalRomPath.ClassifyFile(library, target).Snapshot != published)
+                    throw new IOException($"{zipPath} is no longer the ZIP this write published");
+                entry = new MirrorEntry(game, zipPath, published.Length, published.LastWriteTimeUtc);
+            }
+            else
+            {
+                var info = new FileInfo(target);
+                entry = new MirrorEntry(game, zipPath, info.Length, info.LastWriteTimeUtc);
+            }
+            await mirror.ReplaceAsync(entry, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -645,6 +738,12 @@ public sealed class IngestPipeline(
             }
         }
 
+        if (placement is not null)
+        {
+            // I5: the source was moved, so there is nothing left to delete.
+            logger.LogInformation("{Path}: {Outcome} into {Zip} as {File}", file.FullPath, result.Outcome, zipPath, placement.ExternalFileName);
+            return result;
+        }
         try
         {
             File.Delete(file.FullPath);
@@ -655,6 +754,114 @@ public sealed class IngestPipeline(
         }
         logger.LogInformation("{Path}: {Outcome} into {Zip}", file.FullPath, result.Outcome, zipPath);
         return result;
+    }
+
+    /// <summary>
+    /// I4: moves an external ROM's file to its name next to <paramref name="target"/>. The source must still be the
+    /// file that was hashed; one that changed since is <c>Skipped</c> <c>TooRecent</c> and stays where it is.
+    /// </summary>
+    /// <returns>The move, or the item's result when nothing was moved.</returns>
+    private (ExternalMoveResult? Moved, IngestItemResult? Stop) Place(IngestFile file, ExternalPlacement placement, string target, IngestItemResult result)
+    {
+        var source = placement.Source;
+        IngestItemResult Io(string? details) => IngestItemResult.Error(IngestErrors.IoError, details, result.SystemId, result.Sha1);
+        var tooRecent = new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent, SystemId: file.SystemId, Sha1: result.Sha1);
+
+        ExternalHooks?.BeforePlacement?.Invoke(file);
+        var current = ExternalRomPath.ClassifyFile(source.Root, source.Path);
+        if (current.Status == ExternalPathStatus.Found && current.Snapshot != source.Snapshot)
+        {
+            logger.LogInformation("{Path}: changed since it was hashed; left for a later run", file.FullPath);
+            return (null, tooRecent);
+        }
+        if (current.Status != ExternalPathStatus.Found)
+            return (null, Io(current.Details));
+        var library = paths.Value.Roms;
+        var folder = ExternalRomPath.ClassifyDirectory(library, Path.GetDirectoryName(target)!);
+        if (folder.Status != ExternalPathStatus.Found)
+            return (null, Io(folder.Details));
+
+        ExternalMoveResult moved;
+        try
+        {
+            moved = ExternalRomMove.Move(source.Root, current.Path, library, Path.Combine(folder.Path, placement.ExternalFileName), source.Snapshot,
+                logger, result.Sha1, ExternalHooks?.Move);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (null, Io(ex.Message));
+        }
+        switch (moved.Status)
+        {
+            case ExternalMoveStatus.Moved:
+                return (moved, null);
+            case ExternalMoveStatus.SourceChanged:
+                logger.LogInformation("{Path}: changed while it was moved ({Details}); left for a later run", file.FullPath, moved.Details);
+                return (null, tooRecent);
+            default:
+                var elsewhere = moved.SurvivingPath is { } survivor && survivor != current.Path;
+                return (null, Io(elsewhere ? $"{moved.Details}; the complete copy is at {moved.SurvivingPath}" : moved.Details));
+        }
+    }
+
+    /// <summary>
+    /// I4/I5 after a failed ZIP write: a loose file goes back to its ingest path (or a free sibling name); an archive
+    /// entry's copy is deleted only while the archive still holds those bytes, else it is kept as an orphan.
+    /// </summary>
+    /// <returns>Where the bytes are, for the item's details; null when the source is back exactly where it was.</returns>
+    private string? RollBack(IngestFile file, ExternalPlacement placement, ExternalMoveResult moved)
+    {
+        var library = paths.Value.Roms;
+        var placed = moved.Path!;
+        if (file.ArchiveEntry is not null)
+        {
+            var archive = file.ArchiveSnapshot is null ? null : ExternalRomPath.ClassifyFile(paths.Value.Ingest, file.ArchivePath!);
+            if (archive is not { Status: ExternalPathStatus.Found } || archive.Snapshot != file.ArchiveSnapshot)
+            {
+                logger.LogError("{Archive} › {Entry}: the archive changed, so the verified copy is kept at {Orphan}", file.ArchivePath, file.ArchiveEntry, placed);
+                return $"the archive changed, so the verified copy was kept at {placed}";
+            }
+            if (ExternalRomPath.ClassifyFile(library, placed).Snapshot != moved.Snapshot)
+            {
+                logger.LogError("{Orphan} is no longer the copy that was placed; it was left as it is", placed);
+                return $"{placed} is no longer the copy that was placed; it was left as it is";
+            }
+            try
+            {
+                File.Delete(placed);
+                return null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogError("{Orphan}: the copy couldn't be removed: {Error}", placed, ex.Message);
+                return $"the copy at {placed} couldn't be removed";
+            }
+        }
+
+        var original = placement.Source.Path;
+        var back = ExternalRomName.AllocateRollbackPath(original, fitSourcePathColumn: true);
+        if (back is null)
+        {
+            logger.LogError("{Path}: no free name to move it back to; the complete copy is at {Placed}", original, placed);
+            return $"no free name to move it back to; the complete copy is at {placed}";
+        }
+        var restored = ExternalRomMove.Move(library, placed, placement.Source.Root, back, moved.Snapshot!, logger);
+        switch (restored.Status)
+        {
+            case ExternalMoveStatus.Moved when back == original:
+                return null;
+            case ExternalMoveStatus.Moved:
+                logger.LogWarning("{Path}: its name was taken, so it was moved back as {Restored}", original, back);
+                return $"moved back as {back}";
+            case ExternalMoveStatus.SourceChanged:
+                logger.LogError("{Placed} was replaced before it could be moved back; it was left as it is", placed);
+                return $"{placed} was replaced before it could be moved back; it was left as it is";
+            default:
+                // Never name a path as the copy unless the move vouches for it.
+                var where = restored.SurvivingPath is { } survivor ? $"the complete copy is at {survivor}" : "the owned copy could not be found";
+                logger.LogError("{Path}: moving it back failed ({Details}); {Where}", original, restored.Details, where);
+                return $"moving it back failed ({restored.Details}); {where}";
+        }
     }
 
     private static void AddImages(Dictionary<string, Func<Stream>> entries, MediaImage? boxArt, MediaImage? snap)

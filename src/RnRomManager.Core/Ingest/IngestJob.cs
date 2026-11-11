@@ -168,7 +168,8 @@ public sealed class IngestJob(
     }
 
     /// <summary>§3.1: an archive counts as one file, so every entry finishes even after a cancel.</summary>
-    private async Task<List<(string Entry, IngestItemResult? Result)>> EntriesAsync(Run run, IngestFile archive, IReadOnlyList<ExtractedEntry> entries)
+    private async Task<List<(string Entry, IngestItemResult? Result)>> EntriesAsync(Run run, IngestFile archive, IReadOnlyList<ExtractedEntry> entries,
+        ExternalFileSnapshot? archiveSnapshot = null)
     {
         var outcomes = new List<(string Entry, IngestItemResult? Result)>();
         foreach (var entry in entries)
@@ -178,6 +179,7 @@ public sealed class IngestJob(
             {
                 ArchivePath = archive.FullPath,
                 ArchiveEntry = entry.EntryPath,
+                ArchiveSnapshot = archiveSnapshot,
             };
             outcomes.Add((entry.EntryPath, await ItemAsync(run, item, null, CancellationToken.None).ConfigureAwait(false)));
         }
@@ -273,7 +275,7 @@ public sealed class IngestJob(
             return;
         }
 
-        var outcomes = await EntriesAsync(run, archive, entries).ConfigureAwait(false);
+        var outcomes = await EntriesAsync(run, archive, entries, snapshot).ConfigureAwait(false);
         var fate = FateOf([.. outcomes.Select(o => o.Result)]);
         if (fate == ArchiveFate.Keep)
         {
