@@ -1,3 +1,4 @@
+using RnRomManager.Data.Repositories;
 using RnRomManager.TestData;
 using Microsoft.Extensions.Logging.Abstractions;
 using MySqlConnector;
@@ -39,7 +40,7 @@ public class SchemaMigrationTests
             "0001_users", "0002_games", "0003_roms", "0004_images", "0005_jobs", "0006_job_items",
             "0007_ingest_review_items", "0008_integrity_issues", "0009_data_protection_keys",
             "0010_game_rating", "0011_user_roles", "0012_image_cover", "0013_duplicate_dismissals", "0014_audit_events",
-            "0015_app_settings", "0016_user_hotkeys", "0017_collections",
+            "0015_app_settings", "0016_user_hotkeys", "0017_collections", "0018_external_roms",
         }));
     }
 
@@ -48,7 +49,7 @@ public class SchemaMigrationTests
     {
         Lifecycle(_cs).Migrate();
 
-        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 17L }));
+        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 18L }));
     }
 
     [Test]
@@ -66,7 +67,7 @@ public class SchemaMigrationTests
     [TestCase("users", "id int(11), username varchar(64), password_hash varchar(255), is_disabled tinyint(1) =0, must_change_password tinyint(1) =0, failed_login_count int(11), lockout_until datetime(6) NULL, security_stamp char(32), created_at datetime(6), updated_at datetime(6), last_login_at datetime(6) NULL, hotkeys text NULL")]
     [TestCase("user_roles", "user_id int(11), role varchar(32)")]
     [TestCase("games", "id char(36), system_id varchar(16), title varchar(255), display_title varchar(255), zip_path varchar(512), bucket char(1), release_year smallint(6) NULL, developers longtext, publishers longtext, genres longtext, description text NULL, has_default_boxart tinyint(1) =0, zip_size_bytes bigint(20), zip_mtime_utc datetime, info_schema_version int(11), created_at datetime(6), updated_at datetime(6), rating tinyint(4) NULL, favourite tinyint(1) =0")]
-    [TestCase("roms", "id bigint(20), game_id char(36), system_id varchar(16), file_name varchar(255), original_file_name varchar(255), base_title varchar(255), regions longtext, languages longtext, flags longtext, region_key varchar(255), revision varchar(32) NULL, is_primary tinyint(1) =0, id_method varchar(16), dat_name varchar(255) NULL, dat_version varchar(255) NULL, dat_game_name varchar(255) NULL, size_bytes bigint(20), crc32 char(8), md5 char(32), sha1 char(40), header longtext NULL, date_added datetime(6), date_modified datetime(6)")]
+    [TestCase("roms", "id bigint(20), game_id char(36), system_id varchar(16), file_name varchar(255), original_file_name varchar(255), base_title varchar(255), regions longtext, languages longtext, flags longtext, region_key varchar(255), revision varchar(32) NULL, is_primary tinyint(1) =0, id_method varchar(16), dat_name varchar(255) NULL, dat_version varchar(255) NULL, dat_game_name varchar(255) NULL, size_bytes bigint(20), crc32 char(8), md5 char(32), sha1 char(40), header longtext NULL, date_added datetime(6), date_modified datetime(6), external_file_name varchar(255) NULL")]
     [TestCase("images", "id bigint(20), game_id char(36), file_name varchar(255), type varchar(16), source varchar(32), source_url varchar(1024) NULL, is_default tinyint(1) =0, size_bytes bigint(20), sha1 char(40), width int(11), height int(11), date_added datetime(6), is_cover tinyint(1) =0")]
     [TestCase("jobs", "id char(36), type varchar(16), mode varchar(16) NULL, trigger_source varchar(16), status varchar(16), requested_by int(11) NULL, started_at datetime(6), finished_at datetime(6) NULL, summary longtext NULL, error text NULL")]
     [TestCase("job_items", "id bigint(20), job_id char(36), file_id char(36), system_id varchar(16) NULL, source_path varchar(1024), archive_entry varchar(512) NULL, outcome varchar(16), reason varchar(64) NULL, details text NULL, game_id char(36) NULL, sha1 char(40) NULL, created_at datetime(6)")]
@@ -213,6 +214,35 @@ public class SchemaMigrationTests
 
         Assert.That(await ColumnAsync<long>(cs, "SELECT (SELECT COUNT(*) FROM roms) + (SELECT COUNT(*) FROM images)"), Is.EqualTo(new[] { 0L }));
     }
+
+    [Test]
+    public async Task ExternalRoms_ExistingRowsStayNull_AndAPointerReadsBackThroughTheRepository()
+    {
+        var cs = await MariaDbServer.CreateDatabaseAsync();
+        foreach (var script in MigrationScripts().TakeWhile(s => !s.Name.Contains("0018_", StringComparison.Ordinal)))
+            await ExecuteAsync(cs, script.Sql);
+        var gameId = await InsertGameAsync(cs, "gb/T/Tetris.zip");
+        await InsertRomAsync(cs, gameId, "Tetris.gb", '0');
+
+        await ExecuteAsync(cs, MigrationScripts().Single(s => s.Name.Contains("0018_", StringComparison.Ordinal)).Sql);
+
+        var roms = new RomRepository(new MySqlConnectionFactory(cs));
+        Assert.That((await roms.ListByGameAsync(Guid.Parse(gameId), default)).Select(r => r.ExternalFileName), Is.EqualTo(new string?[] { null }));
+
+        await InsertRomAsync(cs, gameId, "Tetris (Rev 1).gb", '1');
+        await ExecuteAsync(cs, "UPDATE roms SET external_file_name = 'Tetris.Tetris (Rev 1).gb' WHERE file_name = 'Tetris (Rev 1).gb'");
+
+        var rows = await roms.ListByGameAsync(Guid.Parse(gameId), default);
+        Assert.That(rows.Select(r => r.ExternalFileName), Is.EqualTo(new[] { null, "Tetris.Tetris (Rev 1).gb" }));
+        Assert.That((await roms.GetBySha1Async(new string('1', 40), default))!.ExternalFileName, Is.EqualTo("Tetris.Tetris (Rev 1).gb"));
+        Assert.That((await roms.GetAsync(Guid.Parse(gameId), rows[1].Id, default))!.ExternalFileName, Is.EqualTo("Tetris.Tetris (Rev 1).gb"));
+    }
+
+    private static Task InsertRomAsync(string cs, string gameId, string fileName, char hashDigit) => ExecuteAsync(cs,
+        "INSERT INTO roms (game_id, system_id, file_name, original_file_name, base_title, regions, languages, flags, " +
+        "region_key, id_method, size_bytes, crc32, md5, sha1, date_added, date_modified) VALUES " +
+        "(@g, 'gb', @f, @f, 'Tetris', '[]', '[]', '[]', '|World|', 'Dat', 32768, " +
+        "'00000000', REPEAT('0', 32), REPEAT(@h, 40), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))", ("@g", gameId), ("@f", fileName), ("@h", hashDigit.ToString()));
 
     [Test]
     public async Task JsonColumns_RejectInvalidJson()

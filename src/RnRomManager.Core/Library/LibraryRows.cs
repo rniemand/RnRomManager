@@ -64,6 +64,12 @@ public sealed record RomRow
 
     public required DateTime DateAdded { get; init; }
     public required DateTime DateModified { get; init; }
+
+    /// <summary>
+    /// The ROM's file next to the ZIP (name only, in the ZIP's folder) for a system that stores ROMs outside
+    /// the ZIP; null when the ROM is an entry of the ZIP.
+    /// </summary>
+    public string? ExternalFileName { get; init; }
 }
 
 /// <summary>A row of <c>images</c> (spec §14.1).</summary>
