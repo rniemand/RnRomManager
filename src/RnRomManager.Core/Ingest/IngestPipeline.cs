@@ -58,6 +58,9 @@ public sealed class ExternalIngestHooks
     /// <summary>Passed to the move that places the ROM file next to its ZIP (not to a rollback).</summary>
     public ExternalMoveHooks? Move { get; init; }
 
+    /// <summary>Passed to the move that sets a self-repair's incoming copy aside when its archive changed (I5).</summary>
+    public ExternalMoveHooks? Recovery { get; init; }
+
     /// <summary>Passed to the ZIP write that follows the move.</summary>
     public LibraryZipWriterHooks? Writer { get; init; }
 }
@@ -208,7 +211,7 @@ public sealed class IngestPipeline(
         var review = await reviews.GetBySha1Async(hashes.Sha1, cancellationToken).ConfigureAwait(false);
         if (await roms.GetBySha1Async(hashes.Sha1, cancellationToken).ConfigureAwait(false) is { } known)
         {
-            var duplicate = await DuplicateOrRepairAsync(file, known, bytes, size, hashes.Sha1, actor, cancellationToken).ConfigureAwait(false);
+            var duplicate = await DuplicateOrRepairAsync(file, known, bytes, source, size, hashes.Sha1, actor, cancellationToken).ConfigureAwait(false);
             return duplicate with { ResolvedArchiveDuplicate = duplicate.Outcome == IngestOutcome.Duplicate &&
                 file.ArchivePath is not null && review is { Status: "Resolved" } && review.ArchivePath == file.ArchivePath };
         }
@@ -474,16 +477,31 @@ public sealed class IngestPipeline(
     /// <c>EntrySizeMismatch</c> issue → rewrite it from this file and resolve the issue (<c>Repaired</c>, D30);
     /// otherwise <c>Duplicate</c> → <c>_duplicates/</c>.
     /// </summary>
-    /// <param name="bytes">Null for an external input: only an embedded input can rebuild an embedded entry (I6).</param>
-    private async Task<IngestItemResult> DuplicateOrRepairAsync(IngestFile file, RomRow known, byte[]? bytes, long size, string sha1, AuditActor actor,
-        CancellationToken cancellationToken)
+    /// <param name="bytes">The incoming embedded ROM; null for an external input.</param>
+    /// <param name="source">The incoming external ROM's checked file; null for an embedded input.</param>
+    private async Task<IngestItemResult> DuplicateOrRepairAsync(IngestFile file, RomRow known, byte[]? bytes, ExternalSource? source, long size,
+        string sha1, AuditActor actor, CancellationToken cancellationToken)
     {
         var game = await games.GetAsync(known.GameId, cancellationToken).ConfigureAwait(false);
         var entryName = known.ExternalFileName ?? LibraryZip.RomEntry(known.FileName);
-        // shortcut: external self-repair (I6) is step 10; until then an external input or owner is always a Duplicate.
-        var open = game is null || bytes is null || known.ExternalFileName is not null
-            ? []
-            : await issues.ListOpenAsync(game.ZipPath, entryName, IntegrityIssueType.SelfRepairable, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<OpenIssue> open = [];
+        // I6: only an input of the owner's storage mode repairs it; across modes the bytes on disk may differ.
+        if (game is not null && (systems.ById(known.SystemId) is { EmbedRomsInZip: false }) == (source is not null))
+        {
+            if (source is null)
+            {
+                open = await issues.ListOpenAsync(game.ZipPath, entryName, IntegrityIssueType.SelfRepairable, cancellationToken).ConfigureAwait(false);
+            }
+            else if (known.ExternalFileName is { } pointer)
+            {
+                // The table's collation matches accent-distinct names too: only this exact file of this game counts.
+                open = [.. (await issues.ListOpenExternalAsync(game.ZipPath, pointer, IntegrityIssueType.SelfRepairable, cancellationToken).ConfigureAwait(false))
+                    .Where(i => string.Equals(i.ZipPath, game.ZipPath, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(i.EntryName, pointer, StringComparison.OrdinalIgnoreCase)
+                        && (i.GameId is null || i.GameId == known.GameId))
+                    .Select(i => new OpenIssue(i.Id, i.Type))];
+            }
+        }
 
         if (open.Count == 0)
         {
@@ -494,6 +512,8 @@ public sealed class IngestPipeline(
             return moveError ?? new IngestItemResult(IngestOutcome.Duplicate, Details: $"same as {game?.ZipPath} › {entryName}",
                 SystemId: known.SystemId, GameId: known.GameId, Sha1: sha1);
         }
+        if (source is not null)
+            return await RepairExternalAsync(file, known, game!, open, source, sha1, actor, cancellationToken).ConfigureAwait(false);
 
         var (existing, current, error) = OpenTarget(game!.ZipPath, known.SystemId, sha1);
         if (error is not null)
@@ -511,6 +531,58 @@ public sealed class IngestPipeline(
                 SystemId: known.SystemId, GameId: known.GameId, Sha1: sha1);
             return await PackageAsync(file, existing, game.ZipPath, repaired, entries, result, actor, null, known.FileName, cancellationToken,
                 _ => issues.ResolveAsync(open.Select(i => i.Id).ToList(), now.UtcDateTime, cancellationToken)).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// I6 for an external ROM: the incoming file is moved over the release's <c>externalFileName</c> and the ZIP
+    /// rewritten. A file still at that name is set aside under a reserved <c>.repair.tmp</c> name first and only
+    /// removed once the ZIP is written; every failure puts both files back.
+    /// </summary>
+    private async Task<IngestItemResult> RepairExternalAsync(IngestFile file, RomRow known, GameRow game, IReadOnlyList<OpenIssue> open,
+        ExternalSource source, string sha1, AuditActor actor, CancellationToken cancellationToken)
+    {
+        var library = paths.Value.Roms;
+        var (existing, current, error) = Target(LibraryTarget.OpenChecked(library, game.ZipPath, reader, known.GameId, known.SystemId), known.SystemId, sha1);
+        if (error is not null)
+            return error;
+        using (existing)
+        {
+            IngestItemResult Fail(string code, string? details) => IngestItemResult.Error(code, details, known.SystemId, sha1);
+            var rom = current!.Roms.FirstOrDefault(r => r.Metadata.Sha1 == sha1);
+            if (rom?.ExternalFileName is not { } pointer || !string.Equals(pointer, known.ExternalFileName, StringComparison.Ordinal))
+            {
+                return Fail(IngestErrors.TargetZipUnreadable, $"{game.ZipPath}: the mirror says {known.ExternalFileName} holds sha1 {sha1}, " +
+                    $"but info.json says {rom?.ExternalFileName ?? "no release has it"}; the mirror is stale");
+            }
+
+            var folder = ExternalRomPath.ClassifyDirectory(library, Path.GetDirectoryName(SafePath.Resolve(library, game.ZipPath))!);
+            if (folder.Status != ExternalPathStatus.Found)
+                return Fail(IngestErrors.IoError, folder.Details);
+            // Found in any letter case, or missing; several spellings or anything unsafe is never repaired.
+            var there = ExternalRomPath.ClassifyFile(library, Path.Combine(folder.Path, pointer));
+            if (there.Status is not (ExternalPathStatus.Found or ExternalPathStatus.Missing))
+                return Fail(IngestErrors.IoError, $"{pointer} can't be repaired: {there.Details}");
+
+            var claims = await roms.ListExternalAsync(cancellationToken).ConfigureAwait(false);
+            var names = ExternalNameReservations.ForFolder(folder.Path, game.ZipPath[..game.ZipPath.LastIndexOf('/')], claims,
+                current.Roms.Select(r => r.ExternalFileName).OfType<string>());
+            var plan = new RepairPlan(
+                there.Status == ExternalPathStatus.Found ? there.Path : null, there.Snapshot,
+                Path.Combine(folder.Path, ExternalRomName.AllocateRepairBackup(pointer, names)),
+                Path.Combine(folder.Path, ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(game.ZipPath), rom.FileName, names)));
+
+            var now = time.GetUtcNow();
+            var repaired = current with
+            {
+                Roms = current.Roms.Select(r => r.Metadata.Sha1 == sha1 ? r with { Metadata = r.Metadata with { DateModified = now } } : r).ToList(),
+                Metadata = current.Metadata with { UpdatedAt = now, AppVersion = AppInfo.Version },
+            };
+            var result = new IngestItemResult(IngestOutcome.Repaired, Details: $"rewrote {game.ZipPath} › {pointer} ({string.Join(", ", open.Select(i => i.Type))})",
+                SystemId: known.SystemId, GameId: known.GameId, Sha1: sha1);
+            return await PackageAsync(file, existing, game.ZipPath, repaired, [], result, actor, null, rom.FileName, cancellationToken,
+                _ => issues.ResolveAsync(open.Select(i => i.Id).ToList(), now.UtcDateTime, CancellationToken.None),
+                placement: new ExternalPlacement(source, pointer), repair: plan).ConfigureAwait(false);
         }
     }
 
@@ -672,6 +744,12 @@ public sealed class IngestPipeline(
     /// <summary>An external ROM's file and the name it takes next to its ZIP (E1).</summary>
     private sealed record ExternalPlacement(ExternalSource Source, string ExternalFileName);
 
+    /// <summary>I6: the file at a repaired ROM's pointer, and the reserved names a repair sets files aside under.</summary>
+    /// <param name="ExistingPath">The file at the pointer as spelled on disk; null when it is missing.</param>
+    /// <param name="BackupPath">Where that file waits until the ZIP is written (<c>.repair.tmp</c>).</param>
+    /// <param name="OrphanPath">An unlisted sibling for the incoming copy when its archive changed (I5).</param>
+    private sealed record RepairPlan(string? ExistingPath, ExternalFileSnapshot? Snapshot, string BackupPath, string OrphanPath);
+
     /// <summary>Steps 9–11.</summary>
     /// <param name="afterMirror">Runs once the DB is updated, before the source is deleted.</param>
     /// <param name="reviewAction">Null from ingest; the resolution action from review (the <c>Ingested</c> row's details).</param>
@@ -680,7 +758,8 @@ public sealed class IngestPipeline(
     private async Task<IngestItemResult> PackageAsync(
         IngestFile file, LibraryZip? existing, string zipPath, InfoJsonGame game, Dictionary<string, Func<Stream>> entries,
         IngestItemResult result, AuditActor actor, string? reviewAction, string release, CancellationToken cancellationToken,
-        Func<Guid, Task>? afterMirror = null, IReadOnlySet<string>? removedEntries = null, ExternalPlacement? placement = null)
+        Func<Guid, Task>? afterMirror = null, IReadOnlySet<string>? removedEntries = null, ExternalPlacement? placement = null,
+        RepairPlan? repair = null)
     {
         result = result with { GameId = game.GameId };
         var library = paths.Value.Roms;
@@ -689,9 +768,11 @@ public sealed class IngestPipeline(
         ExternalFileSnapshot? published = null;
         if (placement is not null)
         {
+            if (repair?.ExistingPath is not null && StepAside(repair) is { } refused)
+                return IngestItemResult.Error(IngestErrors.IoError, refused, result.SystemId, result.Sha1);
             (moved, var stop) = Place(file, placement, target, result);
             if (stop is not null)
-                return stop;
+                return stop with { Details = Join(stop.Details, RestoreOriginal(repair)) };
             // From the move on nothing may strand the file: the write, the mirror and afterMirror run to the end (I4).
             cancellationToken = CancellationToken.None;
         }
@@ -709,7 +790,7 @@ public sealed class IngestPipeline(
         catch (Exception ex) when (placement is not null || ex is LibraryZipVerifyException or IOException or UnauthorizedAccessException)
         {
             // I4: any failure of the write puts an external ROM's file back before it is reported.
-            var survivor = placement is null ? null : RollBack(file, placement, moved!);
+            var survivor = placement is null ? null : RollBack(file, placement, moved!, repair);
             var reason = ex switch
             {
                 LibraryZipVerifyException => IngestErrors.VerifyFailed,
@@ -721,6 +802,9 @@ public sealed class IngestPipeline(
                 throw;
             return result with { Outcome = IngestOutcome.Error, Reason = reason, Details = survivor is null ? ex.Message : $"{ex.Message}; {survivor}" };
         }
+        if (repair is not null)
+            DeleteBackup(repair);
+
         // AU4: the ZIP is written, so the files changed even if the DB mirror fails below.
         var repaired = result.Outcome == IngestOutcome.Repaired;
         audit.Record(new AuditEvent(repaired ? AuditActions.ZipRepaired : AuditActions.Ingested, actor, game.System, game.GameId,
@@ -827,10 +911,25 @@ public sealed class IngestPipeline(
 
     /// <summary>
     /// I4/I5 after a failed ZIP write: a loose file goes back to its ingest path (or a free sibling name); an archive
-    /// entry's copy is deleted only while the archive still holds those bytes, else it is kept as an orphan.
+    /// entry's copy is deleted only while the archive still holds those bytes, else it is kept as an orphan (beside the
+    /// pointer, for a repair). A repair's original file then goes back to its own name, once the pointer is free.
     /// </summary>
-    /// <returns>Where the bytes are, for the item's details; null when the source is back exactly where it was.</returns>
-    private string? RollBack(IngestFile file, ExternalPlacement placement, ExternalMoveResult moved)
+    /// <returns>Where the bytes are, for the item's details; null when everything is back exactly where it was.</returns>
+    private string? RollBack(IngestFile file, ExternalPlacement placement, ExternalMoveResult moved, RepairPlan? repair)
+    {
+        var (note, pointerFree) = RemoveIncoming(file, placement, moved, repair);
+        if (repair?.ExistingPath is null)
+            return note;
+        if (!pointerFree)
+        {
+            logger.LogError("{Original}: kept at {Backup}, since the incoming copy still holds its name", repair.ExistingPath, repair.BackupPath);
+            return Join(note, $"the original file was kept at {repair.BackupPath}");
+        }
+        return Join(note, RestoreOriginal(repair));
+    }
+
+    /// <returns>A note for the details, and whether the placed copy is gone from its library name.</returns>
+    private (string? Note, bool PointerFree) RemoveIncoming(IngestFile file, ExternalPlacement placement, ExternalMoveResult moved, RepairPlan? repair)
     {
         var library = paths.Value.Roms;
         var placed = moved.Path!;
@@ -839,23 +938,37 @@ public sealed class IngestPipeline(
             var archive = file.ArchiveSnapshot is null ? null : ExternalRomPath.ClassifyFile(paths.Value.Ingest, file.ArchivePath!);
             if (archive is not { Status: ExternalPathStatus.Found } || archive.Snapshot != file.ArchiveSnapshot)
             {
-                logger.LogError("{Archive} › {Entry}: the archive changed, so the verified copy is kept at {Orphan}", file.ArchivePath, file.ArchiveEntry, placed);
-                return $"the archive changed, so the verified copy was kept at {placed}";
+                if (repair is null)
+                {
+                    logger.LogError("{Archive} › {Entry}: the archive changed, so the verified copy is kept at {Orphan}", file.ArchivePath, file.ArchiveEntry, placed);
+                    return ($"the archive changed, so the verified copy was kept at {placed}", false);
+                }
+                // I5: the pointer belongs to the original file, so the verified copy steps aside to an unlisted name.
+                var aside = ExternalRomMove.Move(library, placed, library, repair.OrphanPath, moved.Snapshot!, logger, hooks: ExternalHooks?.Recovery);
+                if (aside.Status != ExternalMoveStatus.Moved)
+                {
+                    var at = aside.SurvivingPath ?? placed;
+                    logger.LogError("{Archive} › {Entry}: the archive changed and the verified copy couldn't be set aside ({Details}); it is at {At}",
+                        file.ArchivePath, file.ArchiveEntry, aside.Details, at);
+                    return ($"the archive changed and setting the verified copy aside failed ({aside.Details}); it is at {at}", false);
+                }
+                logger.LogError("{Archive} › {Entry}: the archive changed, so the verified copy is kept at {Orphan}", file.ArchivePath, file.ArchiveEntry, repair.OrphanPath);
+                return ($"the archive changed, so the verified copy was kept at {repair.OrphanPath}", true);
             }
             if (ExternalRomPath.ClassifyFile(library, placed).Snapshot != moved.Snapshot)
             {
                 logger.LogError("{Orphan} is no longer the copy that was placed; it was left as it is", placed);
-                return $"{placed} is no longer the copy that was placed; it was left as it is";
+                return ($"{placed} is no longer the copy that was placed; it was left as it is", false);
             }
             try
             {
                 File.Delete(placed);
-                return null;
+                return (null, true);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 logger.LogError("{Orphan}: the copy couldn't be removed: {Error}", placed, ex.Message);
-                return $"the copy at {placed} couldn't be removed";
+                return ($"the copy at {placed} couldn't be removed", false);
             }
         }
 
@@ -864,26 +977,84 @@ public sealed class IngestPipeline(
         if (back is null)
         {
             logger.LogError("{Path}: no free name to move it back to; the complete copy is at {Placed}", original, placed);
-            return $"no free name to move it back to; the complete copy is at {placed}";
+            return ($"no free name to move it back to; the complete copy is at {placed}", false);
         }
         var restored = ExternalRomMove.Move(library, placed, placement.Source.Root, back, moved.Snapshot!, logger);
         switch (restored.Status)
         {
             case ExternalMoveStatus.Moved when back == original:
-                return null;
+                return (null, true);
             case ExternalMoveStatus.Moved:
                 logger.LogWarning("{Path}: its name was taken, so it was moved back as {Restored}", original, back);
-                return $"moved back as {back}";
+                return ($"moved back as {back}", true);
             case ExternalMoveStatus.SourceChanged:
                 logger.LogError("{Placed} was replaced before it could be moved back; it was left as it is", placed);
-                return $"{placed} was replaced before it could be moved back; it was left as it is";
+                return ($"{placed} was replaced before it could be moved back; it was left as it is", false);
             default:
                 // Never name a path as the copy unless the move vouches for it.
                 var where = restored.SurvivingPath is { } survivor ? $"the complete copy is at {survivor}" : "the owned copy could not be found";
                 logger.LogError("{Path}: moving it back failed ({Details}); {Where}", original, restored.Details, where);
-                return $"moving it back failed ({restored.Details}); {where}";
+                return ($"moving it back failed ({restored.Details}); {where}", false);
         }
     }
+
+    /// <summary>I6: sets the file at the pointer aside under its reserved backup name.</summary>
+    /// <returns>Why it wasn't, with nothing changed; null when it was.</returns>
+    private string? StepAside(RepairPlan repair)
+    {
+        var library = paths.Value.Roms;
+        var current = ExternalRomPath.ClassifyFile(library, repair.ExistingPath!);
+        if (current.Status != ExternalPathStatus.Found || current.Snapshot != repair.Snapshot)
+            return $"{repair.ExistingPath} changed before it could be repaired: {current.Details ?? "it was replaced"}";
+        var renamed = NoReplaceRename.Move(current.Path, repair.BackupPath);
+        if (!renamed.Renamed)
+            return $"{repair.ExistingPath} couldn't be set aside as {repair.BackupPath}: {renamed.Details}";
+        return ExternalRomPath.ClassifyFile(library, repair.BackupPath).Snapshot == repair.Snapshot
+            ? null
+            : $"the file set aside at {repair.BackupPath} is not the one that was at {repair.ExistingPath}; nothing was repaired";
+    }
+
+    /// <summary>I6: puts the set-aside original back under its own spelling; nothing when there was none.</summary>
+    /// <returns>A note when it couldn't be put back; null otherwise.</returns>
+    private string? RestoreOriginal(RepairPlan? repair)
+    {
+        if (repair?.ExistingPath is null)
+            return null;
+        var backup = ExternalRomPath.ClassifyFile(paths.Value.Roms, repair.BackupPath);
+        if (backup.Status == ExternalPathStatus.Missing && ExternalRomPath.ClassifyFile(paths.Value.Roms, repair.ExistingPath).Snapshot == repair.Snapshot)
+            return null; // it was never set aside
+        if (backup.Status != ExternalPathStatus.Found || backup.Snapshot != repair.Snapshot)
+        {
+            logger.LogError("{Backup}: no longer the original file of {Original}; it was left as it is", repair.BackupPath, repair.ExistingPath);
+            return $"{repair.BackupPath} is no longer the original file; it was left as it is";
+        }
+        var back = NoReplaceRename.Move(backup.Path, repair.ExistingPath);
+        if (back.Renamed)
+            return null;
+        logger.LogError("{Original}: couldn't be put back ({Details}); it is at {Backup}", repair.ExistingPath, back.Details, repair.BackupPath);
+        return $"putting the original file back failed ({back.Details}); it is at {repair.BackupPath}";
+    }
+
+    /// <summary>I6 after the ZIP is written: the set-aside original is removed, unless something else took its name.</summary>
+    private void DeleteBackup(RepairPlan repair)
+    {
+        if (repair.ExistingPath is null)
+            return;
+        try
+        {
+            if (ExternalRomPath.ClassifyFile(paths.Value.Roms, repair.BackupPath) is { Status: ExternalPathStatus.Found } backup && backup.Snapshot == repair.Snapshot)
+                File.Delete(backup.Path);
+            else
+                logger.LogWarning("{Backup}: not the file the repair set aside; left as it is", repair.BackupPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning("{Backup}: couldn't be removed after the repair ({Error}); integrity reports it", repair.BackupPath, ex.Message);
+        }
+    }
+
+    private static string? Join(params string?[] parts) =>
+        parts.OfType<string>().ToList() is { Count: > 0 } notes ? string.Join("; ", notes) : null;
 
     private static void AddImages(Dictionary<string, Func<Stream>> entries, MediaImage? boxArt, MediaImage? snap)
     {

@@ -21,7 +21,7 @@ namespace RnRomManager.Api.Tests.Integration;
 /// after the move puts it back (or keeps it, when its origin can't be trusted any more).
 /// </summary>
 [Category("Integration")]
-public class IngestExternalPlacementTests
+public partial class IngestExternalPlacementTests
 {
     private const string GameName = "Space Game (USA)";
     private const string ZipRelative = "ext/S/Space Game.zip";
@@ -50,6 +50,7 @@ public class IngestExternalPlacementTests
                 new FixtureGame(GameName, GameName + ".nsp", Rom),
                 new FixtureGame(EuropeName, EuropeName + ".nsp", Europe),
             ],
+            [GbDat] = [new FixtureGame("Shared (World)", "Shared (World).gb", SharedGb)],
         });
         cache.Load();
         _items = [];

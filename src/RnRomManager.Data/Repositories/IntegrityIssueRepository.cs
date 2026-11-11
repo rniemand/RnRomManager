@@ -24,6 +24,17 @@ public sealed class IntegrityIssueRepository(IDbConnectionFactory connections) :
             """, new { zipPath, entryName, types }, cancellationToken: cancellationToken))).AsList();
     }
 
+    public async Task<IReadOnlyList<ExternalOpenIssue>> ListOpenExternalAsync(
+        string zipPath, string externalFileName, IReadOnlyCollection<string> types, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return (await connection.QueryAsync<ExternalOpenIssue>(new CommandDefinition("""
+            SELECT id AS Id, type AS Type, zip_path AS ZipPath, entry_name AS EntryName, game_id AS GameId FROM integrity_issues
+            WHERE status = 'Open' AND zip_path = @zipPath AND entry_name = @externalFileName AND type IN @types
+            ORDER BY id
+            """, new { zipPath, externalFileName, types }, cancellationToken: cancellationToken))).AsList();
+    }
+
     public async Task<Page<IntegrityIssue>> ListAsync(string? status, string? type, int page, int pageSize, CancellationToken cancellationToken)
     {
         const string where = "WHERE (@status IS NULL OR status = @status) AND (@type IS NULL OR type = @type)";
