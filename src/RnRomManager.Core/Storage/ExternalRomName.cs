@@ -232,6 +232,44 @@ public static class ExternalRomName
         }
     }
 
+    /// <summary>Longest absolute source path, in Unicode scalar values: the <c>source_path</c> columns (spec I1).</summary>
+    public const int MaxSourcePathScalars = 1024;
+
+    /// <summary>
+    /// The name a move stages under before it takes <paramref name="name"/>: <c>&lt;name&gt;.tmp</c>, with the name
+    /// cut when that would pass <see cref="MaxComponentBytes"/> (a pointer longer than <see cref="MaxNameBytes"/>
+    /// that has to be restored exactly).
+    /// </summary>
+    public static string StagingName(string name) => Cut(name, MaxComponentBytes - Bytes(StagingSuffix)) + StagingSuffix;
+
+    /// <summary>
+    /// Where a loose ingest file is put back after a failed placement (spec W6): its original path when that name
+    /// and its staging name are free and fit, else a sibling with the original stem (cut to fit) and extension and
+    /// the usual <c> (N)</c> clash suffix. Null when no legal name fits; the caller then keeps the copy where it is.
+    /// </summary>
+    /// <param name="originalPath">The absolute path the file was taken from.</param>
+    /// <param name="fitSourcePathColumn">Also keep the whole path within <see cref="MaxSourcePathScalars"/>, for a path a Pending row may be retargeted to.</param>
+    public static string? AllocateRollbackPath(string originalPath, bool fitSourcePathColumn)
+    {
+        var folder = Path.GetDirectoryName(originalPath)!;
+        var name = Path.GetFileName(originalPath);
+        var extension = Path.GetExtension(name);
+        var stem = name[..^extension.Length];
+        var taken = new ExternalNameReservations(
+            Directory.Exists(folder) ? Directory.EnumerateFileSystemEntries(folder).Select(e => Path.GetFileName(e)!) : []);
+        var pathBudget = fitSourcePathColumn ? MaxSourcePathScalars - Scalars(folder) - 1 : int.MaxValue;
+        for (var n = 1; ; n++)
+        {
+            var tail = Suffix(n) + extension;
+            var cut = CutScalars(Cut(stem, Math.Max(0, MaxNameBytes - Bytes(tail))), Math.Max(0, pathBudget - Scalars(tail)));
+            var candidate = cut + tail;
+            if ((cut.Length == 0 && stem.Length > 0) || Bytes(candidate) > MaxNameBytes || Scalars(candidate) > pathBudget)
+                return null;
+            if (!taken.IsTaken(candidate) && !taken.IsTaken(StagingName(candidate)))
+                return Path.Combine(folder, candidate);
+        }
+    }
+
     private static int Scalars(string value) => value.EnumerateRunes().Count();
 
     /// <summary>The longest prefix of at most <paramref name="maxScalars"/> whole characters.</summary>
