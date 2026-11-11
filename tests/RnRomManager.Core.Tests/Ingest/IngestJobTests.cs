@@ -163,10 +163,10 @@ public class IngestJobTests
         var kept = Drop("gb", "kept.gb", TimeSpan.FromHours(1));
         var archive = Drop("gb", "pack.zip", TimeSpan.FromHours(1));
         _reviews.ListPendingSourcesAsync(default).ReturnsForAnyArgs([
-            new PendingReviewSource(1, kept, null),
-            new PendingReviewSource(2, _dir.Combine("ingest", "gb", "gone.gb"), null),
-            new PendingReviewSource(3, _dir.Combine("cache", "work", "x", "entry.gb"), archive), // archive still there
-            new PendingReviewSource(4, _dir.Combine("cache", "work", "y", "entry.gb"), _dir.Combine("ingest", "gb", "gone.zip")),
+            new PendingReviewSource(1, "gb", kept, null),
+            new PendingReviewSource(2, "gb", _dir.Combine("ingest", "gb", "gone.gb"), null),
+            new PendingReviewSource(3, "gb", _dir.Combine("cache", "work", "x", "entry.gb"), archive), // archive still there
+            new PendingReviewSource(4, "gb", _dir.Combine("cache", "work", "y", "entry.gb"), _dir.Combine("ingest", "gb", "gone.zip")),
         ]);
 
         await RunAsync();

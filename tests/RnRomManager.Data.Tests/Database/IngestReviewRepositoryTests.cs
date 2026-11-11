@@ -41,7 +41,7 @@ public class IngestReviewRepositoryTests
         await _reviews.UpsertAsync(replacement, default);
         var after = (await _reviews.GetBySha1Async(item.Sha1, default))!;
         Assert.That(after, Is.EqualTo(replacement with { Id = before.Id, CreatedAt = before.CreatedAt }));
-        Assert.That(await _reviews.ListPendingSourcesAsync(default), Is.EqualTo(new[] { new PendingReviewSource(before.Id, replacement.SourcePath, null) }));
+        Assert.That(await _reviews.ListPendingSourcesAsync(default), Is.EqualTo(new[] { new PendingReviewSource(before.Id, "gbc", replacement.SourcePath, null) }));
     }
 
     [Test]

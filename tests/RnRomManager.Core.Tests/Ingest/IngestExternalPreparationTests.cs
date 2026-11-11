@@ -252,6 +252,26 @@ public class IngestExternalPreparationTests
     }
 
     [Test]
+    public async Task StaleCleanup_PrunesOnlyConfirmedAbsence()
+    {
+        var (pipeline, systems, dats) = Build([new Handler("ext", [".nsp"])]);
+        var present = Drop("present.nsp", RomBytes(64));
+        var folderAtSource = Directory.CreateDirectory(Path.Combine(_ingest, "folder.nsp")).FullName;
+        var folderAtContainer = Directory.CreateDirectory(Path.Combine(_ingest, "pack.zip")).FullName;
+        _reviews.ListPendingSourcesAsync(default).ReturnsForAnyArgs([
+            new PendingReviewSource(1, "ext", Path.Combine(_ingest, "gone.nsp"), null),
+            new PendingReviewSource(2, "ext", folderAtSource, null),
+            new PendingReviewSource(3, "ext", Path.Combine(_paths.Cache, "work", "x", "entry.nsp"), folderAtContainer),
+            new PendingReviewSource(4, "ext", present.FullPath, null),
+            new PendingReviewSource(5, "ext", Path.Combine(_paths.Cache, "work", "y", "entry.nsp"), Path.Combine(_ingest, "gone.zip")),
+        ]);
+
+        await Job(pipeline, systems, dats).RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None);
+
+        await _reviews.Received(1).DeleteAsync(Arg.Is<IReadOnlyCollection<long>>(ids => ids.SequenceEqual(new long[] { 1, 5 })), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
     public async Task UnexpectedError_KeepsThePendingRow()
     {
         var (pipeline, systems, dats) = Build([new Handler("ext", [".nsp"])]);

@@ -99,7 +99,7 @@ public sealed class IngestReviewRepository(IDbConnectionFactory connections) : I
     {
         await using var connection = connections.Create();
         return (await connection.QueryAsync<PendingReviewSource>(new CommandDefinition(
-            "SELECT id AS Id, source_path AS SourcePath, archive_path AS ArchivePath FROM ingest_review_items WHERE status = 'Pending'",
+            "SELECT id AS Id, system_id AS SystemId, source_path AS SourcePath, archive_path AS ArchivePath FROM ingest_review_items WHERE status = 'Pending'",
             cancellationToken: cancellationToken))).AsList();
     }
 

@@ -38,6 +38,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         var item = await reviews.GetAsync(id, ct).ConfigureAwait(false);
         if (item is not { Status: "Pending" })
             return new("NotFound");
+        if (IsExternal(item))
+            return await DeleteExternalSourceAsync(id, item, actor).ConfigureAwait(false);
         var source = SafePath.Resolve(paths.Value.Ingest, Path.GetRelativePath(paths.Value.Ingest, item.ArchivePath ?? item.SourcePath));
         // AU4: File.Delete succeeds on a missing file, so only a file that existed gets a ReviewDeleted row.
         var existed = File.Exists(source);
@@ -62,6 +64,40 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         return new();
     }
 
+    private bool IsExternal(ReviewItem item) => systems.ById(item.SystemId) is { EmbedRomsInZip: false };
+
+    /// <summary>
+    /// I4 for an external system's source (the container for an archive entry): only a confirmed absence counts as
+    /// gone. An unsafe path (a link on the way, a directory or special file) or an IO failure is <c>DeleteFailed</c>,
+    /// with the file and its Pending rows kept. Once the file is deleted the rows are cleared even if the request ends.
+    /// </summary>
+    private async Task<ReviewResolutionResult> DeleteExternalSourceAsync(long id, ReviewItem item, AuditActor actor)
+    {
+        var check = ExternalRomPath.ClassifyFile(paths.Value.Ingest, item.ArchivePath ?? item.SourcePath);
+        if (check.Status is not (ExternalPathStatus.Found or ExternalPathStatus.Missing))
+        {
+            logger.LogWarning("Review item {ReviewId}: its source {Path} can't be deleted safely: {Details}", id, check.Path, check.Details);
+            return new("DeleteFailed");
+        }
+        if (check.Status == ExternalPathStatus.Found)
+        {
+            try
+            {
+                File.Delete(check.Path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning(ex, "Deleting review source '{Path}' (review item {ReviewId}) failed", check.Path, id);
+                return new("DeleteFailed");
+            }
+            audit.Record(new AuditEvent(AuditActions.ReviewDeleted, actor, item.SystemId, Path: auditPaths.Of(check.Path)));
+        }
+        var removed = await reviews.DeletePendingBySourceAsync(item.SourcePath, item.ArchivePath, CancellationToken.None).ConfigureAwait(false);
+        logger.LogInformation("User {UserId} deleted review item {ReviewId}: removed '{Path}' ({Status}) and {Rows} pending review row(s)",
+            actor.UserId, id, check.Path, check.Status, removed);
+        return new();
+    }
+
     private async Task<ReviewResolutionResult> ActAsync(long id, ReviewResolutionRequest? request, AuditActor actor, CancellationToken ct)
     {
         var userId = actor.UserId!.Value; // review endpoints always have a signed-in user
@@ -71,7 +107,23 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         var item = await reviews.GetAsync(id, ct).ConfigureAwait(false);
         if (item is not { Status: "Pending" })
             return new("NotFound");
-        var source = SafePath.Resolve(paths.Value.Ingest, Path.GetRelativePath(paths.Value.Ingest, item.ArchivePath ?? item.SourcePath));
+        var external = IsExternal(item);
+        string source;
+        if (external)
+        {
+            // I4: the source is classified before it is opened; only a confirmed absence is SourceMissing.
+            var check = ExternalRomPath.ClassifyFile(paths.Value.Ingest, item.ArchivePath ?? item.SourcePath);
+            if (check.Status is not (ExternalPathStatus.Found or ExternalPathStatus.Missing))
+            {
+                logger.LogWarning("Review item {ReviewId}: its source {Path} can't be used safely: {Details}", id, check.Path, check.Details);
+                return new("IoError");
+            }
+            source = check.Path;
+        }
+        else
+        {
+            source = SafePath.Resolve(paths.Value.Ingest, Path.GetRelativePath(paths.Value.Ingest, item.ArchivePath ?? item.SourcePath));
+        }
         if (!File.Exists(source))
         {
             await reviews.DeleteAsync([id], ct).ConfigureAwait(false);
@@ -86,13 +138,14 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             {
                 if (item.ArchivePath is null && pipeline.MoveToFailed(file, actor, "Dismissed", "dismissed by an Admin") is { } failed)
                     return new(failed.Reason);
-                await reviews.SetResolutionAsync(id, "Dismissed", null, userId, time.GetUtcNow().UtcDateTime, ct).ConfigureAwait(false);
+                // I4: an external source has moved, so its row is updated even if the request ends now.
+                await reviews.SetResolutionAsync(id, "Dismissed", null, userId, time.GetUtcNow().UtcDateTime, external ? CancellationToken.None : ct).ConfigureAwait(false);
                 return new();
             }
 
             var system = systems.ById(item.SystemId)!;
             // shortcut: resolving reads the whole file into memory; step 11b of the external ROM spec streams it instead.
-            if (!system.EmbedRomsInZip)
+            if (external)
                 return new("IoError");
             Guid? target = null;
             var metadata = DatMetadata.Empty;

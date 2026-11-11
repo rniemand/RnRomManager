@@ -82,7 +82,7 @@ public sealed class IngestJob(
 
         // Step 5
         var stale = (await reviews.ListPendingSourcesAsync(cancellationToken).ConfigureAwait(false))
-            .Where(r => !File.Exists(r.ArchivePath ?? r.SourcePath)).ToList();
+            .Where(IsGone).ToList();
         if (stale.Count > 0)
         {
             await reviews.DeleteAsync(stale.Select(r => r.Id).ToList(), cancellationToken).ConfigureAwait(false);
@@ -122,6 +122,21 @@ public sealed class IngestJob(
         }
 
         return run.Counts;
+    }
+
+    /// <summary>
+    /// Step 5. An external source (the container for an archive entry) is pruned only when it is confirmed absent:
+    /// an unsafe path or an IO or permission failure keeps its row (spec I4).
+    /// </summary>
+    private bool IsGone(PendingReviewSource row)
+    {
+        var path = row.ArchivePath ?? row.SourcePath;
+        if (systems.ById(row.SystemId) is not { EmbedRomsInZip: false })
+            return !File.Exists(path);
+        var check = ExternalRomPath.ClassifyFile(paths.Value.Ingest, path);
+        if (check.Status is ExternalPathStatus.Unsafe or ExternalPathStatus.Unreadable)
+            logger.LogWarning("Review item {Id} kept: its source {Path} can't be checked safely: {Details}", row.Id, path, check.Details);
+        return check.Status == ExternalPathStatus.Missing;
     }
 
     private sealed record Run(JobContext Context, Dictionary<string, int> Counts, CircuitBreaker Breaker);
