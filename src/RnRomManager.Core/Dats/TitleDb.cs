@@ -5,6 +5,27 @@ using RnRomManager.Core.Naming;
 
 namespace RnRomManager.Core.Dats;
 
+/// <summary>T4: what a Switch title id is. An application delta is classified as DLC.</summary>
+public enum TitleKind
+{
+    Base,
+    Update,
+    Dlc,
+}
+
+/// <summary>
+/// T4/T5: a ROM matched through titledb. <see cref="Base"/> is the base game's entry (its <see cref="GameName"/> is the
+/// release's <c>datGameName</c>); the release name, languages and file name come from <paramref name="NameEntry"/>
+/// when it has one, else from the base.
+/// </summary>
+/// <param name="TitleId">The id the file carries, kept in its file name.</param>
+/// <param name="NameEntry">The entry whose name the release uses; null when it falls back to the base name.</param>
+/// <param name="BaseTitle">T5 grouping key and game title.</param>
+/// <param name="RomFileName">T5 rom <c>fileName</c>.</param>
+/// <param name="Revision"><c>v&lt;N&gt;</c> when N &gt; 0.</param>
+public sealed record TitleDbMatch(string TitleId, TitleKind Kind, TitleDbRow Base, TitleDbRow? NameEntry, string BaseTitle, string GameName,
+    string RomFileName, string? Revision, IReadOnlyList<string> Flags, IReadOnlyList<string> Languages);
+
 /// <summary>One kept titledb entry, as the compact file stores it (spec T2). <see cref="Name"/> is titledb's own name.</summary>
 public sealed record TitleDbRow(string TitleId, string Name, string? Publisher, string? Developer, int? ReleaseYear,
     IReadOnlyList<string> Genres, IReadOnlyList<string> Languages, string? BoxArtUrl, string? SnapUrl);
@@ -81,6 +102,61 @@ public static partial class TitleDb
         VersionTag().Match(fileName) is { Success: true } tag
         && uint.TryParse(tag.Groups[1].Value, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n)
             ? n : 0;
+
+    /// <summary>
+    /// T4: the header's <c>titleId</c> when it has one (a non-Switch id there means no match, whatever the file name
+    /// says), else the first <c>[0100…]</c> in the file name; upper-cased. Null: no title id.
+    /// </summary>
+    public static string? TitleIdFrom(IReadOnlyDictionary<string, object?>? headerFields, string fileName)
+    {
+        if (headerFields is not null && headerFields.TryGetValue("titleId", out var header) && header?.ToString() is { } fromHeader)
+            return IsSwitchTitleId(fromHeader) ? fromHeader.ToUpperInvariant() : null;
+        return FileNameTitleId().Match(fileName) is { Success: true } match ? match.Groups[1].Value.ToUpperInvariant() : null;
+    }
+
+    /// <summary>
+    /// T4/T5: classifies <paramref name="titleId"/> by its low 13 bits and names the release. Base game: its own entry
+    /// must exist. Update (<c>base | 0x800</c>): the base must exist. DLC (<c>base + 0x1001</c> … <c>+ 0x17D0</c>), its
+    /// data patch (that + 0x800, named from the DLC it patches) and an application delta (<c>base + 0xC00</c>): the
+    /// base must exist. Anything else, or a missing base, is no match.
+    /// </summary>
+    /// <param name="fileName">The ingest file name: its <c>[vN]</c> and extension.</param>
+    /// <param name="byTitleId">The store's lookup by upper-case id.</param>
+    public static TitleDbMatch? Match(string titleId, string fileName, Func<string, TitleDbRow?> byTitleId)
+    {
+        if (!IsSwitchTitleId(titleId))
+            return null;
+        titleId = titleId.ToUpperInvariant();
+        var id = ulong.Parse(titleId, System.Globalization.NumberStyles.AllowHexSpecifier, System.Globalization.CultureInfo.InvariantCulture);
+        var baseId = id & ~0x1FFFUL;
+        if (byTitleId(Hex(baseId)) is not { } baseEntry)
+            return null;
+
+        var low = id - baseId;
+        (TitleKind Kind, TitleDbRow? Named, string Name)? classified = low switch
+        {
+            0 => (TitleKind.Base, baseEntry, baseEntry.Name),
+            0x800 => byTitleId(titleId) is { } update ? (TitleKind.Update, update, update.Name) : (TitleKind.Update, null, baseEntry.Name),
+            0xC00 => (TitleKind.Dlc, null, baseEntry.Name + " (DLC)"),
+            >= 0x1001 and <= 0x17D0 => Dlc(byTitleId(titleId)),
+            >= 0x1801 and <= 0x1FD0 => Dlc(byTitleId(Hex(id - 0x800))), // a data patch: named from the DLC it patches
+            _ => null,
+        };
+        if (classified is not var (kind, named, name))
+            return null;
+
+        var version = VersionFrom(fileName);
+        var languages = (named ?? baseEntry).Languages
+            .Select(code => code.Length == 0 ? code : char.ToUpperInvariant(code[0]) + code[1..])
+            .Distinct(StringComparer.Ordinal).ToList();
+        return new TitleDbMatch(titleId, kind, baseEntry, named, BaseTitle(baseEntry.Name), GameName(baseEntry.Name, baseEntry.TitleId),
+            RomFileName(name, titleId, version, Path.GetExtension(fileName)), version > 0 ? $"v{version}" : null,
+            kind switch { TitleKind.Update => ["Update"], TitleKind.Dlc => ["DLC"], _ => [] }, languages);
+
+        (TitleKind, TitleDbRow?, string) Dlc(TitleDbRow? own) => (TitleKind.Dlc, own, own?.Name ?? baseEntry.Name + " (DLC)");
+    }
+
+    private static string Hex(ulong id) => id.ToString("X16", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>T2: a name the library can use: its title sanitizes to something and its <see cref="GameName"/> fits.</summary>
     public static bool IsUsableName(string? name, string titleId) =>
@@ -176,6 +252,9 @@ public static partial class TitleDb
 
     [GeneratedRegex(@"\A0100[0-9A-F]{12}\z")]
     private static partial Regex CanonicalId();
+
+    [GeneratedRegex(@"\[(0100[0-9A-Fa-f]{12})\]")]
+    private static partial Regex FileNameTitleId();
 
     [GeneratedRegex(@"\.{2,}")]
     private static partial Regex DotRun();
