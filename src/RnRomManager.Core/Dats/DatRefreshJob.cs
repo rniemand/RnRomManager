@@ -10,10 +10,11 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Core.Dats;
 
 /// <summary>
-/// "Refresh DATs" (spec §10.1, D43): downloads every system's 5 files into <c>cache/work/&lt;jobId&gt;/dats/</c>, parses
-/// each, writes <c>dats.json</c> there, then swaps that folder in for <c>cache/dats/</c> and reloads the
-/// <see cref="DatCache"/>. Any failure (HTTP, parse, wrong DAT) or a cancel before the swap keeps the old set.
-/// Cancel is checked between downloads.
+/// "Refresh DATs" (spec §10.1, D43, T2): downloads every system's 5 files into <c>cache/work/&lt;jobId&gt;/dats/</c>,
+/// parses each, writes <c>dats.json</c> there and builds every store from that staged set exactly as startup would.
+/// Only then is the folder swapped in for <c>cache/dats/</c> and the already-built stores published. Any failure
+/// (HTTP, parse, wrong DAT, staged validation) or a cancel before the first rename keeps the old files and stores.
+/// Cancel is checked between downloads and once more right before the swap.
 /// </summary>
 public sealed class DatRefreshJob(
     HttpClient http, SourcesOptions sources, PathsOptions paths, DatCache cache, ISystemRegistry systems, IAuditLog audit,
@@ -54,14 +55,17 @@ public sealed class DatRefreshJob(
 
             cancellationToken.ThrowIfCancellationRequested();
             DatManifest.Write(Path.Combine(staged, DatManifest.FileName), manifest);
+            var stores = cache.Prepare(staged);
+            var versions = manifest.Where(e => e.File.StartsWith(DatKind.NoIntro + "/", StringComparison.Ordinal))
+                .ToDictionary(e => e.DatName, e => e.Version);
+
+            // The last point a cancel keeps the old set: from the first rename on, publication runs to the end.
+            cancellationToken.ThrowIfCancellationRequested();
             Swap(staged, work);
+            cache.Publish(stores);
             // AU4: every successful run replaced cache/dats.
             audit.Record(new AuditEvent(AuditActions.DatsRefreshed, context.Actor,
                 Details: string.Join(", ", manifest.Select(e => e.DatName).Distinct(StringComparer.Ordinal))));
-            cache.Load();
-
-            var versions = manifest.Where(e => e.File.StartsWith(DatKind.NoIntro + "/", StringComparison.Ordinal))
-                .ToDictionary(e => e.DatName, e => e.Version);
             logger.LogInformation("DATs refreshed: {Versions}", versions);
             return new { files = manifest.Count, versions };
         }

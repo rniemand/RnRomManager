@@ -35,10 +35,24 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
     /// <returns>null when the system has no (valid) DATs.</returns>
     public DatStore? For(string systemId) => _stores.GetValueOrDefault(systemId);
 
-    public void Load()
+    /// <summary>Startup: loads the live set; a system whose DATs can't be used is logged and left without.</summary>
+    public void Load() => _stores = Read(Directory, strict: false);
+
+    /// <summary>
+    /// Refresh, before the swap (T2): builds every system's store from a staged set, read exactly as startup reads
+    /// the live one. Nothing is published.
+    /// </summary>
+    /// <param name="directory">The staged <c>dats/</c> folder, below <c>Paths:Cache</c>.</param>
+    /// <exception cref="InvalidDataException">The manifest or any system's DATs can't be used.</exception>
+    public IReadOnlyDictionary<string, DatStore> Prepare(string directory) => Read(directory, strict: true);
+
+    /// <summary>Refresh, once the staged set is live: swaps in the stores <see cref="Prepare"/> built from it.</summary>
+    public void Publish(IReadOnlyDictionary<string, DatStore> stores) => _stores = stores;
+
+    private Dictionary<string, DatStore> Read(string directory, bool strict)
     {
         var stores = new Dictionary<string, DatStore>();
-        var manifestPath = Path.Combine(Directory, DatManifest.FileName);
+        var manifestPath = Path.Combine(directory, DatManifest.FileName);
         IReadOnlyList<DatManifestEntry>? manifest = null;
         try
         {
@@ -46,6 +60,8 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
+            if (strict)
+                throw new InvalidDataException($"{manifestPath} can't be used: {ex.Message}", ex);
             logger.LogError("DAT cache {Path} is missing or corrupt; no system has DATs until an Admin refreshes them: {Error}", manifestPath, ex.Message);
         }
 
@@ -53,31 +69,32 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
         {
             try
             {
-                var store = LoadSystem(handler, manifest!);
+                var store = LoadSystem(directory, handler, manifest!);
                 stores[handler.Id] = store;
                 logger.LogInformation("Loaded DATs for {System}: {DatName} {Version}, {Count} ROMs", handler.Id, store.DatName, store.Version, store.Roms.Count);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DatParseException or InvalidDataException or UnsafePathException
                 or JsonException)
             {
+                if (strict)
+                    throw new InvalidDataException($"DATs for {handler.Id} can't be used: {ex.Message}", ex);
                 logger.LogError("DATs for {System} are missing or corrupt; the system has no DATs: {Error}", handler.Id, ex.Message);
             }
         }
-
-        _stores = stores;
+        return stores;
     }
 
-    private DatStore LoadSystem(ISystemHandler handler, IReadOnlyList<DatManifestEntry> manifest)
+    private DatStore LoadSystem(string directory, ISystemHandler handler, IReadOnlyList<DatManifestEntry> manifest)
     {
         if (handler.DatSource == DatSource.TitleDb)
-            return LoadTitleDb(handler, manifest);
+            return LoadTitleDb(directory, handler, manifest);
 
         string ReadVerified(string kind)
         {
             var file = DatKind.RelativePath(kind, handler.DatName);
             var entry = manifest.FirstOrDefault(e => e.File == file)
                 ?? throw new InvalidDataException($"{file} is not listed in {DatManifest.FileName}.");
-            var bytes = File.ReadAllBytes(SafePath.Resolve(Directory, file));
+            var bytes = File.ReadAllBytes(SafePath.Resolve(directory, file));
             if (!Convert.ToHexStringLower(SHA1.HashData(bytes)).Equals(entry.Sha1, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException($"{file} does not match its SHA1 in {DatManifest.FileName}.");
             return Encoding.UTF8.GetString(bytes);
@@ -94,7 +111,7 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
     /// T3: exactly one manifest row for the compact path (case-only aliases count), spelled canonically, for this
     /// handler's <c>DatName</c>, with a <c>yyyy.MM.dd</c> version and a download time; then the SHA1 and every row.
     /// </summary>
-    private DatStore LoadTitleDb(ISystemHandler handler, IReadOnlyList<DatManifestEntry> manifest)
+    private DatStore LoadTitleDb(string directory, ISystemHandler handler, IReadOnlyList<DatManifestEntry> manifest)
     {
         var file = TitleDb.RelativePath(handler.DatName);
         var rows = manifest.Where(e => string.Equals(e.File, file, StringComparison.OrdinalIgnoreCase)).ToList();
@@ -109,7 +126,7 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
             throw new InvalidDataException($"{file} has version '{entry.Version}' and download time {entry.DownloadedAt:O}; a yyyy.MM.dd version and a time are required.");
 
         // One checked, bounded read serves both the SHA1 and the parse.
-        var bytes = DatManifest.ReadCheckedBytes(paths.Value.Cache, SafePath.Resolve(Directory, file), MaxCompactBytes, AfterCompactRead);
+        var bytes = DatManifest.ReadCheckedBytes(paths.Value.Cache, SafePath.Resolve(directory, file), MaxCompactBytes, AfterCompactRead);
         if (!Convert.ToHexStringLower(SHA1.HashData(bytes)).Equals(entry.Sha1, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException($"{file} does not match its SHA1 in {DatManifest.FileName}.");
         using var stream = new MemoryStream(bytes, writable: false);
