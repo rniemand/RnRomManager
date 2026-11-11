@@ -86,7 +86,7 @@ public class ExternalZipBackupTests
         var backupName = Path.GetFileName(backup.Path);
         Assert.That(backupName, Is.Not.EqualTo(taken).IgnoreCase);
         Assert.That(backupName, Does.EndWith(" (2)" + ExternalRomName.MoveBackupSuffix));
-        Assert.That(Encoding.UTF8.GetByteCount(backupName + ExternalRomName.PartialSuffix), Is.LessThanOrEqualTo(ExternalRomName.MaxComponentBytes));
+        Assert.That(Encoding.UTF8.GetByteCount(backupName + ExternalRomName.RecordSuffix + ExternalRomName.PartialSuffix), Is.LessThanOrEqualTo(ExternalRomName.MaxComponentBytes), "the longest of the four names fits");
         Assert.That(File.ReadAllText(Path.Combine(_folder, taken)), Is.EqualTo("someone else's"));
     }
 

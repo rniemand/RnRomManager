@@ -188,16 +188,28 @@ public static class ExternalRomName
 
     /// <summary>
     /// W3: a free sibling name for a source ZIP's backup, <c>&lt;zip name&gt;.move-backup.tmp</c>, with the name cut
-    /// (and <c> (N)</c> added on a clash) so it and its <see cref="PartialSuffix"/> staging name both fit
-    /// <see cref="MaxComponentBytes"/>. Neither ends in <c>.zip.tmp</c>, so crash recovery leaves them alone. Both
-    /// names are reserved.
+    /// (and <c> (N)</c> added on a clash) so it, its companion record (<see cref="RecordSuffix"/>) and both of their
+    /// <see cref="PartialSuffix"/> staging names fit <see cref="MaxComponentBytes"/>. None ends in <c>.zip.tmp</c>, so
+    /// crash recovery leaves them alone. All four names are reserved.
     /// </summary>
-    public static string AllocateMoveBackup(string zipName, ExternalNameReservations reservations) =>
-        FirstFree(n =>
+    public static string AllocateMoveBackup(string zipName, ExternalNameReservations reservations)
+    {
+        var longest = Bytes(RecordSuffix + PartialSuffix);
+        for (var n = 1; ; n++)
         {
             var tail = Suffix(n) + MoveBackupSuffix;
-            return Cut(zipName, MaxComponentBytes - Bytes(PartialSuffix) - Bytes(tail)) + tail;
-        }, reservations, PartialSuffix);
+            var name = Cut(zipName, MaxComponentBytes - longest - Bytes(tail)) + tail;
+            string[] pair = [name, name + PartialSuffix, name + RecordSuffix, name + RecordSuffix + PartialSuffix];
+            if (pair.Any(reservations.IsTaken))
+                continue;
+            foreach (var taken in pair)
+                reservations.Reserve(taken);
+            return name;
+        }
+    }
+
+    /// <summary>W3: the companion record of a move backup: <c>&lt;backup&gt;.json</c>.</summary>
+    public const string RecordSuffix = ".json";
 
     /// <summary>W3: a source ZIP's verified backup during a move: <c>&lt;zip name&gt;.move-backup.tmp</c>.</summary>
     public const string MoveBackupSuffix = ".move-backup.tmp";

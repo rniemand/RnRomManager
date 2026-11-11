@@ -115,7 +115,7 @@ public static class InfoJsonValidator
     }
 
     /// <returns>null when the name can be a file name on every OS; else what is wrong with it.</returns>
-    private static string? PortableNameProblem(string name)
+    internal static string? PortableNameProblem(string name)
     {
         if (name.Length == 0)
             return "must not be empty";
