@@ -31,8 +31,14 @@ public class TitleDbIngestTests
 
     private ApiFactory Factory => _factory ?? throw new InvalidOperationException("Start() first");
 
-    /// <summary>A host with the extdb handler, its header carrying <paramref name="headerTitleId"/> when set.</summary>
-    private async Task StartAsync(string? headerTitleId = null)
+    private const string Cdn = "https://img-eshop.cdn.nintendo.net/i/";
+
+    /// <summary>
+    /// A host with the extdb handler, its header carrying <paramref name="headerTitleId"/> when set. With
+    /// <paramref name="cdn"/>, media is on and the titledb image client is served by it (the base entry has a box art
+    /// and a snap URL); otherwise media is off.
+    /// </summary>
+    private async Task StartAsync(string? headerTitleId = null, HttpMessageHandler? cdn = null)
     {
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
         {
@@ -40,15 +46,18 @@ public class TitleDbIngestTests
             {
                 services.AddSingleton<ISystemHandler>(new ExternalTitleDbTestHandler(headerTitleId));
                 services.AddSingleton<ISystemRegistry, SystemRegistry>();
+                if (cdn is not null)
+                    services.AddHttpClient(RnRomManager.Api.Http.HttpClients.TitleDbImages).ConfigurePrimaryHttpMessageHandler(() => cdn);
             },
         };
-        _factory.Settings["Sources:ThumbnailBaseUrl"] = ""; // default art, no network
+        _factory.Settings["Sources:ThumbnailBaseUrl"] = cdn is null ? "" : "https://thumbs.test"; // empty: default art, no network
         FixtureDatWriter.Write(Path.Combine(_factory.Root, "cache", DatCache.FolderName), new Dictionary<string, IReadOnlyList<FixtureGame>>(),
             titleDb: new Dictionary<string, IReadOnlyList<TitleDbRow>>
             {
                 [ExternalTitleDbTestHandler.DatNameValue] =
                 [
-                    new(BaseId, "Orbit Expedition", "Orbit Co", null, 2020, ["Action"], ["en"], null, null),
+                    new(BaseId, "Orbit Expedition", "Orbit Co", null, 2020, ["Action"], ["en"], cdn is null ? null : Cdn + "box.jpg",
+                        cdn is null ? null : Cdn + "snap.jpg"),
                 ],
             });
         _ = _factory.Services; // start: folders and the DAT load
@@ -338,5 +347,54 @@ public class TitleDbIngestTests
         Assert.That(source.Select(r => r.Flags.Single()), Is.EquivalentTo(new[] { "Update", "DLC" }));
         Assert.That(source.Count(r => r.IsPrimary), Is.EqualTo(1));
         Assert.That(ReadGame(Path.Combine(Bucket, "Orbit Base.zip")).Roms.Single().IsPrimary, Is.True);
+    }
+
+    // --- T8 / step 23d: fetched JPEG storage through a titledb caller ---
+
+    private static readonly byte[] BoxJpeg = [0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x11, 8, 0, 32, 0, 64, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1, 0xFF, 0xDA, 0x00, 0x02, 0xFF, 0xD9];
+    private static readonly byte[] SnapJpeg = [0xFF, 0xD8, 0xFF, 0xC0, 0x00, 0x11, 8, 0, 72, 1, 0, 3, 1, 0x22, 0, 2, 0x11, 1, 3, 0x11, 1, 0xFF, 0xDA, 0x00, 0x02, 0xFF, 0xD9];
+
+    [Test]
+    public async Task NewGame_StoresTheFetchedJpegs_AsJpgEntriesMatchingTheirMetadata()
+    {
+        var cdn = new StubHttpHandler(request => request.RequestUri!.AbsoluteUri switch
+        {
+            Cdn + "box.jpg" => StubHttpHandler.Bytes(BoxJpeg),
+            Cdn + "snap.jpg" => StubHttpHandler.Bytes(SnapJpeg),
+            _ => StubHttpHandler.Status(System.Net.HttpStatusCode.NotFound),
+        });
+        await StartAsync(cdn: cdn);
+
+        var gameId = await IngestBaseAsync();
+
+        Assert.That(cdn.Requests.Select(r => r.RequestUri!.AbsoluteUri), Is.EquivalentTo(new[] { Cdn + "box.jpg", Cdn + "snap.jpg" }));
+        var game = ReadGame();
+        Assert.That(game.Images.Select(i => (i.FileName, i.Type, i.Source, i.SourceUrl, i.IsCover, i.IsDefault, i.Width, i.Height)), Is.EqualTo(new[]
+        {
+            ("boxart-01.jpg", ImageType.BoxArt, InfoJsonImage.SourceTitleDb, (string?)(Cdn + "box.jpg"), true, false, 64, 32),
+            ("snap-01.jpg", ImageType.Snap, InfoJsonImage.SourceTitleDb, (string?)(Cdn + "snap.jpg"), false, false, 256, 72),
+        }));
+        // The ZIP's actual bytes, against what info.json records for them.
+        using (var zip = System.IO.Compression.ZipFile.OpenRead(ZipPath))
+        {
+            foreach (var (image, bytes) in game.Images.Zip([BoxJpeg, SnapJpeg]))
+            {
+                using var entry = zip.GetEntry(LibraryZip.ImageEntry(image.FileName))!.Open();
+                using var copy = new MemoryStream();
+                entry.CopyTo(copy);
+                Assert.That(copy.ToArray(), Is.EqualTo(bytes), image.FileName);
+                Assert.That((image.SizeBytes, image.Sha1), Is.EqualTo(((long)bytes.Length, Convert.ToHexStringLower(SHA1.HashData(bytes)))));
+            }
+            Assert.That(zip.Entries.Any(e => e.FullName.EndsWith(".png")), Is.False);
+        }
+        // And the mirror.
+        await using var db = Service<IDbConnectionFactory>().Create();
+        var rows = (await db.QueryAsync<(string File, string Source, string? Url)>(
+            "SELECT file_name, source, source_url FROM images WHERE game_id = @id ORDER BY file_name", new { id = gameId.ToString() })).ToList();
+        Assert.That(rows, Is.EqualTo(new[]
+        {
+            ("boxart-01.jpg", InfoJsonImage.SourceTitleDb, (string?)(Cdn + "box.jpg")),
+            ("snap-01.jpg", InfoJsonImage.SourceTitleDb, (string?)(Cdn + "snap.jpg")),
+        }));
     }
 }

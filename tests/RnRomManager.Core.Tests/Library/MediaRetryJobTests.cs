@@ -15,7 +15,7 @@ using static RnRomManager.TestData.TestLibrary;
 namespace RnRomManager.Core.Tests.Library;
 
 /// <summary>Spec §10.2 "Retry media" + <c>MediaRetry</c> job (D38): §15.1 "Thumbnail key + lookup" MediaRetry items (S35).</summary>
-public class MediaRetryJobTests
+public partial class MediaRetryJobTests
 {
     private const string BaseUrl = "https://thumbs.test";
     private const string GbBox = BaseUrl + "/Nintendo%20-%20Game%20Boy/Named_Boxarts/";
