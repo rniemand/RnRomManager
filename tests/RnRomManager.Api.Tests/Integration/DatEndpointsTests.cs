@@ -73,18 +73,9 @@ public class DatEndpointsTests
     [Test]
     public async Task TitleDbEntries_AppearInSearch_WithoutSizeOrCrc()
     {
-        using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
-        {
-            TestServices = services => RnRomManager.Core.Systems.SystemHandlerRegistration.AddSystemHandler<ExternalTitleDbTestHandler>(services),
-        };
-        FixtureDatWriter.Write(Path.Combine(factory.Root, "cache", DatCache.FolderName), Games(),
-            titleDb: new Dictionary<string, IReadOnlyList<TitleDbRow>>
-            {
-                [ExternalTitleDbTestHandler.DatNameValue] = [new("0100000000001000", "The Orbit Expedition", null, null, 2020, [], ["en"], null, null)],
-            });
-        using var admin = await AuthClient.CreateAsync(factory);
-        await TestUsers.CreateAsync(factory, "boss", TestUsers.AllRoles);
-        (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
+        var (host, admin) = await TitleDbHostAsync();
+        using var factory = host;
+        using var client = admin;
 
         using var response = await admin.GetAsync($"/api/dat/search?system={ExternalTitleDbTestHandler.SystemId}&q=orbit");
 
@@ -94,6 +85,79 @@ public class DatEndpointsTests
         Assert.That(hit.GetProperty("romName").GetString(), Is.EqualTo("The Orbit Expedition [0100000000001000][v0].nsp"));
         Assert.That(hit.GetProperty("sizeBytes").GetInt64(), Is.Zero);
         Assert.That(hit.GetProperty("crc32").GetString(), Is.Empty);
+    }
+
+    /// <summary>A host of its own with the test titledb handler registered and its compact file cached before startup (step 18).</summary>
+    private static async Task<(ApiFactory Factory, AuthClient Admin)> TitleDbHostAsync()
+    {
+        var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
+        {
+            TestServices = services => RnRomManager.Core.Systems.SystemHandlerRegistration.AddSystemHandler<ExternalTitleDbTestHandler>(services),
+        };
+        FixtureDatWriter.Write(Path.Combine(factory.Root, "cache", DatCache.FolderName), Games(),
+            titleDb: new Dictionary<string, IReadOnlyList<TitleDbRow>>
+            {
+                [ExternalTitleDbTestHandler.DatNameValue] = [new("0100000000001000", "The Orbit Expedition", null, null, 2020, [], ["en"], null, null)],
+            });
+        var admin = await AuthClient.CreateAsync(factory);
+        await TestUsers.CreateAsync(factory, "boss", TestUsers.AllRoles);
+        (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
+        return (factory, admin);
+    }
+
+    [Test]
+    public async Task AdminDats_ListsTheTitleDbFile_InDatNameOrder()
+    {
+        var (host, admin) = await TitleDbHostAsync();
+        using var factory = host;
+        using var client = admin;
+
+        using var response = await admin.GetAsync("/api/admin/dats");
+        var rows = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
+
+        var names = rows.Select(r => r.GetProperty("datName").GetString()!).ToList();
+        Assert.That(names, Has.Count.EqualTo(14));
+        Assert.That(names, Is.EqualTo(names.Order(StringComparer.Ordinal)));
+        var titleDb = rows.Single(r => r.GetProperty("datName").GetString() == ExternalTitleDbTestHandler.DatNameValue);
+        Assert.That(titleDb.GetProperty("version").GetString(), Is.EqualTo(FixtureDatWriter.TitleDbVersion));
+        Assert.That(titleDb.GetProperty("downloadedAt").GetDateTimeOffset(), Is.EqualTo(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)));
+    }
+
+    [TestCase("malformed", TestName = "AdminDats_UnusableLiveCache_IsEmpty malformed manifest")]
+    [TestCase("linked", TestName = "AdminDats_UnusableLiveCache_IsEmpty linked live folder")]
+    [TestCase("backupOnly", TestName = "AdminDats_UnusableLiveCache_IsEmpty only a backup")]
+    public async Task AdminDats_UnusableLiveCache_IsEmpty(string problem)
+    {
+        var live = _factory.Services.GetRequiredService<DatCache>().Directory;
+        var elsewhere = problem == "backupOnly"
+            ? DatPublication.PreviousPath(Path.Combine(_factory.Root, "cache"))
+            : Path.Combine(_factory.Root, "outside");
+        switch (problem)
+        {
+            case "malformed":
+                File.WriteAllText(Path.Combine(live, DatManifest.FileName), "not json");
+                break;
+            case "linked":
+                Directory.Move(live, elsewhere);
+                if (!TestLinks.TryLinkDirectory(live, elsewhere))
+                    Assert.Ignore("this account can't create a directory link");
+                break;
+            default:
+                Directory.Move(live, elsewhere); // as mid-swap: the old set is in the backup and live is absent
+                break;
+        }
+        try
+        {
+            using var response = await _admin.GetAsync("/api/admin/dats");
+
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That((await AuthClient.JsonAsync(response)).GetArrayLength(), Is.Zero);
+        }
+        finally
+        {
+            if (problem == "linked")
+                TestLinks.RemoveDirectoryLink(live);
+        }
     }
 
     [TestCase("POST", "/api/jobs/dat-refresh")]
