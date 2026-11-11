@@ -5,13 +5,21 @@ public static class Crc32
 {
     private static readonly uint[] Table = BuildTable();
 
-    public static uint Compute(ReadOnlySpan<byte> data)
+    /// <summary>The running state to start <see cref="Update"/> from.</summary>
+    public const uint Initial = 0xFFFFFFFFu;
+
+    public static uint Compute(ReadOnlySpan<byte> data) => Finish(Update(Initial, data));
+
+    /// <summary>Feeds <paramref name="data"/> into a running state (start at <see cref="Initial"/>, end with <see cref="Finish"/>).</summary>
+    public static uint Update(uint state, ReadOnlySpan<byte> data)
     {
-        var crc = 0xFFFFFFFFu;
         foreach (var b in data)
-            crc = Table[(crc ^ b) & 0xFF] ^ (crc >> 8);
-        return ~crc;
+            state = Table[(state ^ b) & 0xFF] ^ (state >> 8);
+        return state;
     }
+
+    /// <summary>The CRC of everything fed into <paramref name="state"/>.</summary>
+    public static uint Finish(uint state) => ~state;
 
     /// <summary>8 lowercase hex chars.</summary>
     public static string ToHex(ReadOnlySpan<byte> data) => Compute(data).ToString("x8", System.Globalization.CultureInfo.InvariantCulture);
