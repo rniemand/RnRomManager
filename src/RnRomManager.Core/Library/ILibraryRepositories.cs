@@ -41,7 +41,19 @@ public interface IRomRepository
 
     /// <summary>Every ROM's (game, SHA1): the sync's <c>DuplicateSha1</c> check.</summary>
     Task<IReadOnlyList<(Guid GameId, string Sha1)>> ListSha1sAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Every ROM stored outside its game's ZIP (<c>external_file_name</c> set), ordered by ZIP path then ROM id.
+    /// It lists what the mirror claims, whether or not the file is on disk: name allocation, integrity and orphan
+    /// checks all start from these claims.
+    /// </summary>
+    Task<IReadOnlyList<ExternalRomRow>> ListExternalAsync(CancellationToken cancellationToken);
 }
+
+/// <summary>One mirrored claim on an external ROM file: <paramref name="ExternalFileName"/> in the folder of <paramref name="ZipPath"/>.</summary>
+/// <param name="ZipPath">The owning game's ZIP, relative to <c>Paths:Roms</c>, <c>/</c> separators.</param>
+/// <param name="SizeBytes">The recorded size, not the size on disk.</param>
+public sealed record ExternalRomRow(Guid GameId, string ZipPath, string ExternalFileName, long SizeBytes, string Sha1);
 
 public interface IImageRepository
 {

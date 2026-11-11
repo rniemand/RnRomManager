@@ -385,4 +385,33 @@ public class LibraryMirrorTests
         var rom = (await _roms.ListByGameAsync(game.GameId, CancellationToken.None)).Single();
         Assert.That((rom.SystemId, rom.ExternalFileName, rom.SizeBytes), Is.EqualTo(("ext", "Orbit Test.Orbit Test [v0].nsp", (long)RomBytes(1).Length)));
     }
+
+    [Test]
+    public async Task ListExternal_ReturnsOnlyExternalPointers_WithTheirOwner_EvenWhenTheFileIsAbsent()
+    {
+        // Nothing is on disk: the list is what the mirror claims, not what exists.
+        var orbit = ExternalGame(("Orbit Test [v0].nsp", "Orbit Test.Orbit Test [v0].nsp", 1), ("Orbit Test [v1].xci", "Orbit Test.Orbit Test [v1].xci", 2));
+        var comet = ExternalGame(("Comet [v0].nsp", "Comet.Comet [v0].nsp", 3)) with { Title = "Comet" };
+        var embedded = Game("Tetris", Rom("Tetris.gb", RomBytes(4)));
+        await _mirror.ReplaceAsync(Entry(orbit, "ext/O/Orbit Test.zip"), CancellationToken.None);
+        await _mirror.ReplaceAsync(Entry(comet, "ext/C/Comet.zip"), CancellationToken.None);
+        await _mirror.ReplaceAsync(Entry(embedded), CancellationToken.None);
+
+        var rows = await _roms.ListExternalAsync(CancellationToken.None);
+
+        Assert.That(rows, Is.EqualTo(new[]
+        {
+            new ExternalRomRow(comet.GameId, "ext/C/Comet.zip", "Comet.Comet [v0].nsp", RomBytes(3).Length, comet.Roms[0].Metadata.Sha1),
+            new ExternalRomRow(orbit.GameId, "ext/O/Orbit Test.zip", "Orbit Test.Orbit Test [v0].nsp", RomBytes(1).Length, orbit.Roms[0].Metadata.Sha1),
+            new ExternalRomRow(orbit.GameId, "ext/O/Orbit Test.zip", "Orbit Test.Orbit Test [v1].xci", RomBytes(2).Length, orbit.Roms[1].Metadata.Sha1),
+        }));
+    }
+
+    [Test]
+    public async Task ListExternal_WithOnlyEmbeddedRoms_IsEmpty()
+    {
+        await _mirror.ReplaceAsync(Entry(Game("Tetris", Rom("Tetris.gb", RomBytes(1)))), CancellationToken.None);
+
+        Assert.That(await _roms.ListExternalAsync(CancellationToken.None), Is.Empty);
+    }
 }

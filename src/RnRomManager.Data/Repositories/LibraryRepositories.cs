@@ -313,6 +313,19 @@ public sealed class RomRepository : IRomRepository
         return (await connection.QueryAsync<(Guid, string)>(
             new CommandDefinition("SELECT game_id, sha1 FROM roms", cancellationToken: cancellationToken))).AsList();
     }
+
+    public async Task<IReadOnlyList<ExternalRomRow>> ListExternalAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<ExternalRomRow>(new CommandDefinition("""
+            SELECT r.game_id AS GameId, g.zip_path AS ZipPath, r.external_file_name AS ExternalFileName,
+                   r.size_bytes AS SizeBytes, r.sha1 AS Sha1
+            FROM roms r
+            JOIN games g ON g.id = r.game_id
+            WHERE r.external_file_name IS NOT NULL
+            ORDER BY g.zip_path, r.id
+            """, cancellationToken: cancellationToken))).AsList();
+    }
 }
 
 public sealed class ImageRepository(IDbConnectionFactory connections) : IImageRepository
