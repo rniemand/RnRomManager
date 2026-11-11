@@ -64,6 +64,72 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         return new();
     }
 
+    /// <summary>
+    /// T9 for an external system: an archived item is re-extracted through one checked handle on its archive, then
+    /// the file is re-hashed streamed (its SHA1 must still be the item's) and moved next to its ZIP (I4). Nothing
+    /// is read into memory, and every failure keeps the Pending row.
+    /// </summary>
+    private async Task<ReviewResolutionResult> ResolveExternalAsync(long id, ReviewItem item, IngestFile file, string source,
+        ExternalFileSnapshot snapshot, string work, ISystemHandler system, string action, string filename, string title,
+        IReadOnlyList<string> regions, IReadOnlyList<string> languages, string? revision, IReadOnlyList<string> flags,
+        InfoJsonIdentification identification, DatMetadata metadata, Guid? target, AuditActor actor, int userId)
+    {
+        file = file with { FullPath = source };
+        if (item.ArchivePath is not null)
+        {
+            var opened = ExternalRomPath.OpenRead(paths.Value.Ingest, source, FileShare.Read | FileShare.Delete, snapshot);
+            if (opened.Status == ExternalPathStatus.Changed)
+                return new("VerifyFailed");
+            if (opened.Status != ExternalPathStatus.Found)
+                return new("IoError");
+            var workDir = ExternalRomPath.CreateDirectory(paths.Value.Cache, work);
+            IReadOnlyList<ExtractedEntry> entries;
+            using (var stream = opened.Stream!)
+            {
+                if (workDir.Status != ExternalPathStatus.Found)
+                    return new("IoError");
+                var family = systems.ByFamily(system.Family);
+                try
+                {
+                    entries = extractor.Extract(stream, Path.GetFileName(source), workDir.Path,
+                        ext => family.FirstOrDefault(h => h.RomExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))?.MaxRomSizeBytes);
+                }
+                catch (ArchiveOutputException ex)
+                {
+                    logger.LogError(ex, "Review {Id}: extracting {Archive} failed", id, source);
+                    return new("IoError");
+                }
+                // The entries only count if the handle and the path still show the archive that was checked.
+                var current = ExternalRomPath.ClassifyFile(paths.Value.Ingest, source);
+                if (current.Status is not (ExternalPathStatus.Found or ExternalPathStatus.Missing))
+                    return new("IoError");
+                if (current.Snapshot != snapshot || ExternalRomPath.SnapshotOf(stream) != snapshot)
+                    return new("VerifyFailed");
+            }
+            var entry = entries.FirstOrDefault(e => e.EntryPath == item.ArchiveEntry);
+            if (entry is null)
+                return new("VerifyFailed");
+            var copy = ExternalRomPath.ClassifyFile(paths.Value.Cache, entry.ExtractedPath);
+            if (copy.Status != ExternalPathStatus.Found)
+                return new("IoError");
+            file = file with { FullPath = copy.Path, ArchivePath = source, ArchiveEntry = item.ArchiveEntry, ArchiveSnapshot = snapshot };
+            snapshot = copy.Snapshot!;
+        }
+
+        var now = time.GetUtcNow();
+        var rom = new InfoJsonRom
+        {
+            FileName = filename, OriginalFileName = item.OriginalFileName, BaseTitle = title,
+            Regions = regions, Languages = languages, Revision = revision, Flags = flags, IsPrimary = false,
+            Identification = identification, Header = item.Header is null ? null : JsonNode.Parse(item.Header) as JsonObject,
+            Metadata = new InfoJsonRomMetadata(item.SizeBytes, item.Crc32, item.Md5, item.Sha1, now, now, file.SourcePath),
+        };
+        var result = await pipeline.StoreReleaseAsync(file, system, rom, metadata, null, target,
+            gameId => reviews.SetResolutionAsync(id, "Resolved", gameId, userId, time.GetUtcNow().UtcDateTime, CancellationToken.None),
+            actor, action, CancellationToken.None, snapshot).ConfigureAwait(false);
+        return result.Outcome == IngestOutcome.Ingested ? new(GameId: result.GameId) : new(result.Reason);
+    }
+
     private bool IsExternal(ReviewItem item) => systems.ById(item.SystemId) is { EmbedRomsInZip: false };
 
     /// <summary>
@@ -109,6 +175,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             return new("NotFound");
         var external = IsExternal(item);
         string source;
+        ExternalFileSnapshot? sourceSnapshot = null;
         if (external)
         {
             // I4: the source is classified before it is opened; only a confirmed absence is SourceMissing.
@@ -119,6 +186,11 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 return new("IoError");
             }
             source = check.Path;
+            sourceSnapshot = check.Snapshot;
+            // T9: once started, an external resolution runs to the end even if the request goes away (a multi-GB
+            // hash and move can outlast a reverse proxy's read timeout).
+            if (check.Status == ExternalPathStatus.Found)
+                ct = CancellationToken.None;
         }
         else
         {
@@ -144,9 +216,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             }
 
             var system = systems.ById(item.SystemId)!;
-            // shortcut: resolving reads the whole file into memory; step 11b of the external ROM spec streams it instead.
-            if (external)
-                return new("IoError");
+            // T9: an external release keeps its original extension; an embedded one takes the handler's first (its bytes may be normalised).
+            var originalExtension = Path.GetExtension(item.OriginalFileName).ToLowerInvariant();
             Guid? target = null;
             var metadata = DatMetadata.Empty;
             var identification = new InfoJsonIdentification(IdentificationMethod.Manual, null, null, null);
@@ -161,6 +232,9 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 var chosen = systems.ById(request.DatSystem!);
                 if (chosen is null || chosen.Family != system.Family)
                     return ReviewResolutionResult.Invalid("datSystem", "Choose a system in the source's family.");
+                if (external && (!chosen.RomExtensions.Contains(originalExtension, StringComparer.OrdinalIgnoreCase)
+                    || item.SizeBytes < chosen.MinRomSizeBytes || item.SizeBytes > chosen.MaxRomSizeBytes))
+                    return ReviewResolutionResult.Invalid("datSystem", "That system can't store this file's extension or size.");
                 system = chosen;
                 var store = dats.For(system.Id);
                 var datRom = store?.Roms.FirstOrDefault(r => r.GameName == request.DatGameName);
@@ -170,7 +244,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 title = parsed.BaseTitle; regions = parsed.Regions; languages = parsed.Languages; revision = parsed.Revision;
                 flags = [.. parsed.Flags, "Unverified"];
                 // G4: the DAT name's own extension (DAT entries are filtered to RomExtensions), e.g. an SMS-mode Game Gear .sms.
-                filename = Path.GetFileNameWithoutExtension(datRom.RomName) + " (Unverified)" + Path.GetExtension(datRom.RomName);
+                filename = Path.GetFileNameWithoutExtension(datRom.RomName) + " (Unverified)" + (external ? originalExtension : Path.GetExtension(datRom.RomName));
                 identification = new(IdentificationMethod.Manual, store.DatName, store.Version, datRom.GameName);
                 metadata = store.MetadataFor(datRom.Crc32);
             }
@@ -205,7 +279,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                     title = current!.Title;
                 }
                 flags = [request.Flag!];
-                filename = FileNameSanitizer.Sanitize(Path.GetFileNameWithoutExtension(item.OriginalFileName)) + $" ({request.Flag})" + system.RomExtensions[0];
+                filename = FileNameSanitizer.Sanitize(Path.GetFileNameWithoutExtension(item.OriginalFileName)) + $" ({request.Flag})" + (external ? originalExtension : system.RomExtensions[0]);
             }
             else
             {
@@ -213,11 +287,13 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 regions = request.Regions!; languages = request.Languages!; flags = request.Flags!; revision = request.Revision;
                 var stem = title + (regions.Count == 0 ? "" : $" ({string.Join(", ", regions)})") +
                     (string.IsNullOrEmpty(revision) ? "" : $" ({revision})") + string.Concat(flags.Select(f => $" ({f})"));
-                filename = FileNameSanitizer.Sanitize(stem) + system.RomExtensions[0];
+                filename = FileNameSanitizer.Sanitize(stem) + (external ? originalExtension : system.RomExtensions[0]);
             }
 
             if (filename.Contains("..", StringComparison.Ordinal))
                 return ReviewResolutionResult.Invalid("title", "The generated ROM filename must not contain '..'; use Manual with another title.");
+            if (external)
+                filename = ExternalRomName.AllocateLogicalName(filename, new ExternalNameReservations([])); // E3: portable and within budget
             if (target is { } targetId)
             {
                 var game = await games.GetAsync(targetId, ct).ConfigureAwait(false);
@@ -226,6 +302,9 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 if (game.SystemId != system.Id)
                     return ReviewResolutionResult.Invalid("targetGameId", "Target must belong to the same system.");
             }
+            if (external)
+                return await ResolveExternalAsync(id, item, file, source, sourceSnapshot!, work, system, request.Action!, filename, title, regions,
+                    languages, revision, flags, identification, metadata, target, actor, userId).ConfigureAwait(false);
             if (item.ArchivePath is not null)
             {
                 var family = systems.ByFamily(systems.ById(item.SystemId)!.Family);
@@ -274,7 +353,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         }
         finally
         {
-            if (Directory.Exists(work))
+            // Never walk into a replacement of the work folder.
+            if (ExternalRomPath.ClassifyDirectory(paths.Value.Cache, work).Status == ExternalPathStatus.Found)
             {
                 try { Directory.Delete(work, recursive: true); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

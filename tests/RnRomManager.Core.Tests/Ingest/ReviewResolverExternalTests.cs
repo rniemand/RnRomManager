@@ -34,15 +34,20 @@ public class ReviewResolverExternalTests
         _dir = new TempDir();
         _paths = new PathsOptions { Ingest = _dir.Combine("ingest"), Roms = _dir.Combine("roms"), Cache = _dir.Combine("cache") };
         _ingest = Directory.CreateDirectory(Path.Combine(_paths.Ingest, ExternalTestHandler.SystemId)).FullName;
-        _reviews = Substitute.For<IIngestReviewRepository>();
-        _audit = Substitute.For<IAuditLog>();
         _item = new ReviewItem
         {
             Id = 1, SystemId = ExternalTestHandler.SystemId, Status = "Pending", Reason = "NoDatMatch",
             SourcePath = Path.Combine(_ingest, "game.nsp"), OriginalFileName = "game.nsp", Sha1 = new string('0', 40), SizeBytes = 3,
         };
+        Build();
+    }
+
+    private void Build(ISystemHandler? sibling = null)
+    {
+        _reviews = Substitute.For<IIngestReviewRepository>();
+        _audit = Substitute.For<IAuditLog>();
         _reviews.GetAsync(1, Arg.Any<CancellationToken>()).Returns(_ => _item);
-        var systems = new SystemRegistry([new ExternalTestHandler()]);
+        var systems = new SystemRegistry([new ExternalTestHandler(), .. sibling is null ? [] : new[] { sibling }]);
         var options = Options.Create(_paths);
         var dats = new DatCache(options, systems, NullLogger<DatCache>.Instance);
         var games = Substitute.For<IGameRepository>();
@@ -103,13 +108,44 @@ public class ReviewResolverExternalTests
     }
 
     [Test]
-    public async Task PresentSource_ResolveStillStopsAtTheInterimGuard()
+    public async Task PresentSource_WithOtherBytesThanTheItem_IsVerifyFailed_AndKeepsPending()
     {
-        File.WriteAllBytes(_item.SourcePath, [1, 2, 3]);
+        File.WriteAllBytes(_item.SourcePath, [1, 2, 3]); // the item's SHA1 is all zeros
 
         var result = await _resolver.ResolveAsync(1, Manual, Actor, default);
 
-        Assert.That(result.Code, Is.EqualTo("IoError"));
+        Assert.That(result.Code, Is.EqualTo("VerifyFailed"));
+        Assert.That(File.Exists(_item.SourcePath), Is.True);
+        await AssertPendingKeptAsync();
+    }
+
+    /// <summary>A same-family sibling of <see cref="ExternalTestHandler"/> with its own extensions and size cap.</summary>
+    private sealed class Sibling(IReadOnlyList<string> extensions, long maxBytes) : ISystemHandler
+    {
+        public string Id => "ext2";
+        public string DisplayName => "External Sibling";
+        public string Family => ExternalTestHandler.SystemId;
+        public IReadOnlyList<string> RomExtensions => extensions;
+        public long MinRomSizeBytes => 1;
+        public long MaxRomSizeBytes => maxBytes;
+        public string DatName => "Test - External Sibling";
+        public bool EmbedRomsInZip => false;
+        public ReadOnlyMemory<byte> DefaultBoxArtPng => ExternalTestHandler.FixtureBoxArtPng;
+        public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
+    }
+
+    [TestCase(false, 64L, TestName = "DatPick_OfASiblingThatCantStoreTheFile_IsAValidationError extension")]
+    [TestCase(true, 2L, TestName = "DatPick_OfASiblingThatCantStoreTheFile_IsAValidationError size")]
+    public async Task DatPick_OfASiblingThatCantStoreTheFile_IsAValidationError(bool takesXci, long maxBytes)
+    {
+        Build(new Sibling(takesXci ? [".nsp", ".xci"] : [".nsp"], maxBytes));
+        _item = _item with { SourcePath = Path.Combine(_ingest, "game.xci"), OriginalFileName = "game.xci" };
+        File.WriteAllBytes(_item.SourcePath, [1, 2, 3]);
+
+        var result = await _resolver.ResolveAsync(1, new ReviewResolutionRequest { Action = "Dat", DatSystem = "ext2", DatGameName = "Any" }, Actor, default);
+
+        Assert.That(result.Code, Is.EqualTo("ValidationFailed"));
+        Assert.That(result.Errors!.Keys, Is.EqualTo(new[] { "datSystem" }));
         Assert.That(File.Exists(_item.SourcePath), Is.True);
         await AssertPendingKeptAsync();
     }

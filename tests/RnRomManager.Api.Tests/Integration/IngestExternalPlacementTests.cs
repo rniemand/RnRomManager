@@ -95,11 +95,11 @@ public partial class IngestExternalPlacementTests
         Directory.Exists(Bucket) ? [.. Directory.GetFiles(Bucket).Select(Path.GetFileName).Order()!] : [];
 
     /// <summary>Makes the ZIP write fail verification: its temp is rewritten in place with an unreadable <c>info.json</c>.</summary>
-    private LibraryZipWriterHooks FailVerify(Action? alsoAfterTemp = null) => new()
+    private LibraryZipWriterHooks FailVerify(Action? alsoAfterTemp = null, string? zipPath = null) => new()
     {
         AfterTempClosed = () =>
         {
-            using (var temp = new FileStream(ZipPath + ".tmp", FileMode.Open, FileAccess.ReadWrite))
+            using (var temp = new FileStream((zipPath ?? ZipPath) + ".tmp", FileMode.Open, FileAccess.ReadWrite))
             {
                 temp.SetLength(0);
                 using var zip = new ZipArchive(temp, ZipArchiveMode.Create, leaveOpen: true);

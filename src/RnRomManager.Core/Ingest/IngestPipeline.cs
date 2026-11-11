@@ -165,29 +165,13 @@ public sealed class IngestPipeline(
         if (size > byExtension.MaxRomSizeBytes)
             return FailFile(file, actor, IngestFailures.TooLarge, $"{size} bytes; {byExtension.Id} ROMs are at most {byExtension.MaxRomSizeBytes}");
 
-        var opened = ExternalRomPath.OpenRead(root, fresh.Path, FileShare.ReadWrite | FileShare.Delete, snapshot);
-        if (opened.Status == ExternalPathStatus.Changed)
-            return tooRecent;
-        if (opened.Status != ExternalPathStatus.Found)
-            return IngestItemResult.Error(IngestErrors.IoError, opened.Details, file.SystemId);
-        RomFileHashes? hashed;
-        using (var stream = opened.Stream!)
-        {
-            ExternalHooks?.BeforeHash?.Invoke(file);
-            try
-            {
-                hashed = await RomFileHasher.HashAsync(stream, byExtension.MaxRomSizeBytes, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                return IngestItemResult.Error(IngestErrors.IoError, ex.Message, file.SystemId);
-            }
-            // Grew past the cap, or changed on its handle or at its path while it was read: still being copied in.
-            if (hashed is null || hashed.SizeBytes != size || ExternalRomPath.SnapshotOf(stream) != snapshot
-                || (loose && ExternalRomPath.ClassifyFile(root, fresh.Path).Snapshot != snapshot))
-                return tooRecent;
-        }
-        logger.LogDebug("{Path}: {Size} bytes streamed, crc32 {Crc32}, sha1 {Sha1}", file.FullPath, size, hashed.Crc32, hashed.Sha1);
+        var (outcome, hashed, failure) = await HashCheckedAsync(file, root, fresh.Path, snapshot, byExtension.MaxRomSizeBytes, loose, cancellationToken)
+            .ConfigureAwait(false);
+        if (outcome == HashOutcome.Failed)
+            return IngestItemResult.Error(IngestErrors.IoError, failure, file.SystemId);
+        if (outcome == HashOutcome.Changed)
+            return tooRecent; // still being copied in
+        logger.LogDebug("{Path}: {Size} bytes streamed, crc32 {Crc32}, sha1 {Sha1}", file.FullPath, size, hashed!.Crc32, hashed.Sha1);
 
         // I3: only handlers that can store this extension and size identify it.
         var extension = Path.GetExtension(file.Name);
@@ -195,6 +179,47 @@ public sealed class IngestPipeline(
             && size >= h.MinRomSizeBytes && size <= h.MaxRomSizeBytes).ToList();
         return await IdentifyAsync(file, folder, eligible, new RomHashes(hashed.Crc32, hashed.Md5, hashed.Sha1), size, hashed.Header, null,
             new ExternalSource(root, fresh.Path, snapshot), jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
+    }
+
+    private enum HashOutcome
+    {
+        Hashed,
+
+        /// <summary>The file changed: on its handle, at its path, or past the size cap while it was read.</summary>
+        Changed,
+
+        /// <summary>An IO failure, or the path is no longer a safe regular file.</summary>
+        Failed,
+    }
+
+    /// <summary>
+    /// I2/T9: one streamed read (CRC32, MD5, SHA1 and the header bytes) through a handle that must open
+    /// <paramref name="snapshot"/>'s file, which must still be unchanged once it is read.
+    /// </summary>
+    /// <param name="recheckPath">Also require <paramref name="path"/> to still name that file afterwards.</param>
+    private async Task<(HashOutcome Outcome, RomFileHashes? Hashes, string? Details)> HashCheckedAsync(IngestFile file, string root, string path,
+        ExternalFileSnapshot snapshot, long maxBytes, bool recheckPath, CancellationToken cancellationToken)
+    {
+        var opened = ExternalRomPath.OpenRead(root, path, FileShare.ReadWrite | FileShare.Delete, snapshot);
+        if (opened.Status == ExternalPathStatus.Changed)
+            return (HashOutcome.Changed, null, opened.Details);
+        if (opened.Status != ExternalPathStatus.Found)
+            return (HashOutcome.Failed, null, opened.Details);
+        using var stream = opened.Stream!;
+        ExternalHooks?.BeforeHash?.Invoke(file);
+        RomFileHashes? hashed;
+        try
+        {
+            hashed = await RomFileHasher.HashAsync(stream, maxBytes, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return (HashOutcome.Failed, null, ex.Message);
+        }
+        if (hashed is null || hashed.SizeBytes != snapshot.Length || ExternalRomPath.SnapshotOf(stream) != snapshot
+            || (recheckPath && ExternalRomPath.ClassifyFile(root, path).Snapshot != snapshot))
+            return (HashOutcome.Changed, null, $"{path} changed while it was read");
+        return (HashOutcome.Hashed, hashed, null);
     }
 
     /// <summary>Steps 3–6 on hashed input.</summary>
@@ -298,18 +323,41 @@ public sealed class IngestPipeline(
 
     /// <summary>Shared steps 6–11 for synchronous review resolution; Attach supplies a target and skips grouping.</summary>
     /// <param name="reviewAction">The resolution action (<c>Dat</c>, <c>Attach</c>, <c>Manual</c>), for the audit row's details.</param>
+    /// <param name="bytes">The ROM of an embedded handler; null for an external one, whose file is re-hashed streamed and moved (T9).</param>
+    /// <param name="snapshot">The external file as it was checked; required when <paramref name="bytes"/> is null.</param>
     public async Task<IngestItemResult> StoreReleaseAsync(IngestFile file, ISystemHandler system, InfoJsonRom rom,
-        DatMetadata metadata, byte[] bytes, Guid? targetGameId, Func<Guid, Task> afterMirror, AuditActor actor, string? reviewAction,
-        CancellationToken cancellationToken)
+        DatMetadata metadata, byte[]? bytes, Guid? targetGameId, Func<Guid, Task> afterMirror, AuditActor actor, string? reviewAction,
+        CancellationToken cancellationToken, ExternalFileSnapshot? snapshot = null)
     {
+        ExternalSource? source = null;
+        if (bytes is null)
+        {
+            var root = file.ArchiveEntry is null ? paths.Value.Ingest : paths.Value.Cache;
+            var (outcome, hashed, details) = await HashCheckedAsync(file, root, file.FullPath, snapshot!, system.MaxRomSizeBytes, recheckPath: true,
+                cancellationToken).ConfigureAwait(false);
+            if (outcome == HashOutcome.Failed)
+                return IngestItemResult.Error(IngestErrors.IoError, details, system.Id, rom.Metadata.Sha1);
+            if (outcome == HashOutcome.Changed || hashed!.Sha1 != rom.Metadata.Sha1)
+            {
+                return IngestItemResult.Error(IngestErrors.VerifyFailed, details ?? $"{file.FullPath}: sha1 {hashed!.Sha1}, not {rom.Metadata.Sha1}",
+                    system.Id, rom.Metadata.Sha1);
+            }
+            rom = rom with { Metadata = rom.Metadata with { SizeBytes = hashed.SizeBytes } };
+            source = new ExternalSource(root, file.FullPath, snapshot!);
+        }
+
         var owners = targetGameId is { } target ? new[] { target } :
             await roms.ListGameIdsByBaseTitleAsync(system.Id, rom.BaseTitle, cancellationToken).ConfigureAwait(false);
         if (owners.Count > 1)
             return IngestItemResult.Error("AmbiguousGroup", "Several games own this base title; use Attach.");
         var result = new IngestItemResult(IngestOutcome.Ingested, SystemId: system.Id, Sha1: rom.Metadata.Sha1);
-        return owners.Count == 0
-            ? await NewGameAsync(file, system, rom, metadata, bytes, new CircuitBreaker(), result, time.GetUtcNow(), actor, reviewAction, cancellationToken, afterMirror).ConfigureAwait(false)
-            : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes, new CircuitBreaker(), result, time.GetUtcNow(), actor, reviewAction, cancellationToken, afterMirror).ConfigureAwait(false);
+        var stored = owners.Count == 0
+            ? await NewGameAsync(file, system, rom, metadata, bytes, new CircuitBreaker(), result, time.GetUtcNow(), actor, reviewAction, cancellationToken, afterMirror, source).ConfigureAwait(false)
+            : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes, new CircuitBreaker(), result, time.GetUtcNow(), actor, reviewAction, cancellationToken, afterMirror, source).ConfigureAwait(false);
+        // T9: a source that changed before it could be moved is a verification failure for Review, not a skip.
+        return stored.Outcome == IngestOutcome.Skipped
+            ? IngestItemResult.Error(IngestErrors.VerifyFailed, $"{file.FullPath} changed before it could be moved", system.Id, rom.Metadata.Sha1)
+            : stored;
     }
 
     /// <param name="bytes">The ROM for the ZIP; null when <paramref name="source"/> is an external ROM's file.</param>
