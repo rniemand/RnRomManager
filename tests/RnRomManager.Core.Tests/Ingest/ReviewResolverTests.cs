@@ -141,6 +141,7 @@ public class ReviewResolverTests
         public long MinRomSizeBytes => 1;
         public long MaxRomSizeBytes => 1024;
         public string DatName => "GB";
+        public bool EmbedRomsInZip => true;
         // A 512×512 PNG header: enough for MediaService's default-art check when a resolve stores a new game.
         public ReadOnlyMemory<byte> DefaultBoxArtPng { get; } = new byte[]
         {

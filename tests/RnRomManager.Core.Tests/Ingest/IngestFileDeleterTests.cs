@@ -28,6 +28,7 @@ public class IngestFileDeleterTests
         _paths = new PathsOptions { Ingest = _dir.Combine("ingest") };
         Directory.CreateDirectory(Path.Combine(_paths.Ingest, "gb", "_failed"));
         var gb = Substitute.For<ISystemHandler>();
+        gb.EmbedRomsInZip.Returns(true);
         gb.Id.Returns("gb");
         _systems = new SystemRegistry([gb]);
         _lock = new JobLock();

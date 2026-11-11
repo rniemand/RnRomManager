@@ -4,13 +4,18 @@ public sealed class SystemRegistry : ISystemRegistry
 {
     private readonly Dictionary<string, ISystemHandler> _byId;
 
-    /// <exception cref="InvalidOperationException">Two handlers share an <c>Id</c>.</exception>
+    /// <exception cref="InvalidOperationException">
+    /// Two handlers share an <c>Id</c>, or a family mixes embedded and external ROM storage.
+    /// </exception>
     public SystemRegistry(IEnumerable<ISystemHandler> handlers)
     {
         All = handlers.ToList();
         var duplicate = All.GroupBy(h => h.Id).FirstOrDefault(g => g.Count() > 1);
         if (duplicate is not null)
             throw new InvalidOperationException($"System handler id '{duplicate.Key}' is registered more than once.");
+        var mixed = All.GroupBy(h => h.Family).FirstOrDefault(g => g.Select(h => h.EmbedRomsInZip).Distinct().Count() > 1);
+        if (mixed is not null)
+            throw new InvalidOperationException($"System family '{mixed.Key}' mixes handlers with embedded and external ROM storage.");
         _byId = All.ToDictionary(h => h.Id);
     }
 

@@ -36,6 +36,7 @@ public class DatCacheTests
     private static ISystemHandler Handler(string id, string datName, params string[] extensions)
     {
         var handler = Substitute.For<ISystemHandler>();
+        handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns(id);
         handler.DatName.Returns(datName);
         handler.RomExtensions.Returns(extensions);

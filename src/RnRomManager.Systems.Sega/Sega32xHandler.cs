@@ -18,6 +18,10 @@ public sealed class Sega32xHandler : ISystemHandler
     public long MinRomSizeBytes => 16384;
     public long MaxRomSizeBytes => 4 * 1024 * 1024;
     public string DatName => "Sega - 32X";
+
+    /// <inheritdoc />
+    public bool EmbedRomsInZip => true;
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => MegaDriveHeader.Read(rom, Id);

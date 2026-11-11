@@ -90,6 +90,7 @@ public class StorageFoldersTests
     private static ISystemHandler Handler(string id)
     {
         var handler = Substitute.For<ISystemHandler>();
+        handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns(id);
         return handler;
     }

@@ -8,6 +8,7 @@ public class SystemRegistryTests
     private static ISystemHandler Handler(string id, string family, params string[] extensions)
     {
         var handler = Substitute.For<ISystemHandler>();
+        handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns(id);
         handler.Family.Returns(family);
         handler.RomExtensions.Returns(extensions);
@@ -48,6 +49,28 @@ public class SystemRegistryTests
     [Test]
     public void ByExtension_Unknown_IsEmpty() =>
         Assert.That(Registry().ByExtension(".zip"), Is.Empty);
+
+    [Test]
+    public void MixedStorageFamily_Throws_NamingTheFamily()
+    {
+        var external = Handler("gbx", "gameboy", ".gbx");
+        external.EmbedRomsInZip.Returns(false);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => new SystemRegistry([_gb, _gba, external]));
+
+        Assert.That(ex!.Message, Does.Contain("'gameboy'"));
+    }
+
+    [Test]
+    public void ExternalFamily_ThatAgrees_IsAccepted()
+    {
+        var a = Handler("xa", "ext", ".xa");
+        var b = Handler("xb", "ext", ".xb");
+        a.EmbedRomsInZip.Returns(false);
+        b.EmbedRomsInZip.Returns(false);
+
+        Assert.That(new SystemRegistry([_gb, a, b]).ByFamily("ext"), Is.EqualTo(new[] { a, b }));
+    }
 
     [Test]
     public void DuplicateId_Throws()

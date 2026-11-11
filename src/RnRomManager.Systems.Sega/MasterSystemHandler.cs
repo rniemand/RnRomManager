@@ -18,6 +18,10 @@ public sealed class MasterSystemHandler : ISystemHandler
     public long MinRomSizeBytes => 2048;
     public long MaxRomSizeBytes => 4 * 1024 * 1024;
     public string DatName => "Sega - Master System - Mark III";
+
+    /// <inheritdoc />
+    public bool EmbedRomsInZip => true;
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => TmrSegaHeader.Read(rom, Id);

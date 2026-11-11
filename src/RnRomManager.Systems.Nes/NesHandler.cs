@@ -23,6 +23,10 @@ public sealed class NesHandler : ISystemHandler
     public long MaxRomSizeBytes => NesHeaderReader.HeaderSize + 512 + 64L * 1024 * 1024;
 
     public string DatName => "Nintendo - Nintendo Entertainment System";
+
+    /// <inheritdoc />
+    public bool EmbedRomsInZip => true;
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => NesHeaderReader.Read(rom);

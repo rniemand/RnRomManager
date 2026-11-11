@@ -25,6 +25,10 @@ public sealed class SnesHandler : ISystemHandler
     public long MaxRomSizeBytes => 8L * 1024 * 1024 + SnesCopierHeader.Size;
 
     public string DatName => "Nintendo - Super Nintendo Entertainment System";
+
+    /// <inheritdoc />
+    public bool EmbedRomsInZip => true;
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     /// <summary>Called after <see cref="NormalizeForHashing"/>, so the bytes are headerless.</summary>

@@ -43,6 +43,7 @@ public class LibraryImageEditTests
         _audit = Substitute.For<RnRomManager.Core.Audit.IAuditLog>();
         _dir = new TempDir();
         var handler = Substitute.For<ISystemHandler>();
+        handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns("gb");
         handler.DatName.Returns("Nintendo - Game Boy");
         handler.DefaultBoxArtPng.Returns(Placeholder);

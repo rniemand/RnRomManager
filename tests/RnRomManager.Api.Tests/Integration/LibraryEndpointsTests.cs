@@ -131,6 +131,7 @@ public class LibraryEndpointsTests
         // S1: ordered by display name.
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("id").GetString()),
             Is.EqualTo(new[] { "s32x", "a2600", "coleco", "gb", "gba", "gbc", "gg", "sms", "md", "n64", "nes", "snes", "tg16" }));
+        Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(13).True);
         JsonElement Find(string id) => systems.EnumerateArray().Single(s => s.GetProperty("id").GetString() == id);
         var gb = Find("gb");
         Assert.That(gb.GetProperty("displayName").GetString(), Is.EqualTo("Game Boy"));

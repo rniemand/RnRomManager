@@ -258,6 +258,7 @@ public class IngestReviewTests
         public long MinRomSizeBytes => 0x150;
         public long MaxRomSizeBytes => 16 * 1024 * 1024;
         public string DatName => id == "gb" ? Gb : "Nintendo - Game Boy Color";
+        public bool EmbedRomsInZip => true;
         public ReadOnlyMemory<byte> DefaultBoxArtPng => ReadOnlyMemory<byte>.Empty;
         public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
     }

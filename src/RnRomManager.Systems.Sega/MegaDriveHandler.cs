@@ -22,6 +22,10 @@ public sealed class MegaDriveHandler : ISystemHandler
     public long MinRomSizeBytes => 8192;
     public long MaxRomSizeBytes => 16 * 1024 * 1024;
     public string DatName => "Sega - Mega Drive - Genesis";
+
+    /// <inheritdoc />
+    public bool EmbedRomsInZip => true;
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => MegaDriveHeader.Read(rom, Id);

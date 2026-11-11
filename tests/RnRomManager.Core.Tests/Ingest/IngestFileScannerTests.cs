@@ -19,6 +19,7 @@ public class IngestFileScannerTests
         var handlers = new[] { "gb", "nes" }.Select(id =>
         {
             var h = Substitute.For<ISystemHandler>();
+            h.EmbedRomsInZip.Returns(true);
             h.Id.Returns(id);
             return h;
         });

@@ -45,6 +45,7 @@ public class IntegrityJobTests
         var handlers = new[] { "gb", "gbc" }.Select(id =>
         {
             var handler = Substitute.For<ISystemHandler>();
+            handler.EmbedRomsInZip.Returns(true);
             handler.Id.Returns(id);
             return handler;
         }).ToArray();

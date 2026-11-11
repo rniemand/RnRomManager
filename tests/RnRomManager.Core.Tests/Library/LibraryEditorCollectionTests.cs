@@ -36,6 +36,7 @@ public class LibraryEditorCollectionTests
     {
         _dir = new TempDir();
         var handler = Substitute.For<ISystemHandler>();
+        handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns("gb");
         handler.DatName.Returns("Nintendo - Game Boy");
         handler.DefaultBoxArtPng.Returns(PngTests.Png(512, 512));

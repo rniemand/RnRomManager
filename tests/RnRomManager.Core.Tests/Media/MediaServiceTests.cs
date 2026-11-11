@@ -30,6 +30,7 @@ public class MediaServiceTests
     public void SetUp()
     {
         _handler = Substitute.For<ISystemHandler>();
+        _handler.EmbedRomsInZip.Returns(true);
         _handler.Id.Returns("gb");
         _handler.DatName.Returns("Nintendo - Game Boy");
         _handler.DefaultBoxArtPng.Returns(DefaultArt);

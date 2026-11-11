@@ -20,6 +20,10 @@ public sealed class GameBoyAdvanceHandler : ISystemHandler
     public long MaxRomSizeBytes => 32L * 1024 * 1024;
 
     public string DatName => "Nintendo - Game Boy Advance";
+
+    /// <inheritdoc />
+    public bool EmbedRomsInZip => true;
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => GameBoyAdvanceHeaderReader.Read(rom);

@@ -58,6 +58,7 @@ public class IngestJobTests
     private static ISystemHandler Handler(string id, string datName)
     {
         var handler = Substitute.For<ISystemHandler>();
+        handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns(id);
         handler.DatName.Returns(datName);
         handler.Family.Returns("gameboy");
