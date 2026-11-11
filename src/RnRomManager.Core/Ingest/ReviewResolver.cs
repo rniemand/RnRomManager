@@ -327,39 +327,66 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 if (external && (!chosen.RomExtensions.Contains(originalExtension, StringComparer.OrdinalIgnoreCase)
                     || item.SizeBytes < chosen.MinRomSizeBytes || item.SizeBytes > chosen.MaxRomSizeBytes))
                     return ReviewResolutionResult.Invalid("datSystem", "That system can't store this file's extension or size.");
-                // shortcut: TitleDb DAT picks are refused until step 24 resolves them (T9); never sent down the libretro path.
-                if (chosen.DatSource == DatSource.TitleDb)
-                    return ReviewResolutionResult.Invalid("datGameName", "Choosing a titledb entry isn't supported yet; use Manual.");
                 system = chosen;
                 var store = dats.For(system.Id);
-                var datRom = store?.Roms.FirstOrDefault(r => r.GameName == request.DatGameName);
-                if (datRom is null || store is null)
-                    return ReviewResolutionResult.Invalid("datGameName", "Choose a game in the loaded DAT.");
-                var parsed = NoIntroName.Parse(Path.GetFileNameWithoutExtension(datRom.RomName));
-                title = parsed.BaseTitle; regions = parsed.Regions; languages = parsed.Languages; revision = parsed.Revision;
-                flags = [.. parsed.Flags, "Unverified"];
-                // G4: the DAT name's own extension (DAT entries are filtered to RomExtensions), e.g. an SMS-mode Game Gear .sms.
-                filename = Path.GetFileNameWithoutExtension(datRom.RomName) + " (Unverified)" + (external ? originalExtension : Path.GetExtension(datRom.RomName));
-                identification = new(IdentificationMethod.Manual, store.DatName, store.Version, datRom.GameName);
-                metadata = store.MetadataFor(datRom.Crc32);
+                if (chosen.DatSource == DatSource.TitleDb)
+                {
+                    // T9: the picked title is named and grouped as T4 would have for its id, with N from the original
+                    // file name; titledb never checks hashes, so it is as verified as an automatic match.
+                    var match = store is null || TitleDb.TitleIdOfGameName(request.DatGameName!) is not { } pickedId
+                        || !store.Roms.Any(r => r.GameName == request.DatGameName)
+                        ? null
+                        : TitleDb.Match(pickedId, item.OriginalFileName, store.ByTitleId);
+                    if (match is null)
+                        return ReviewResolutionResult.Invalid("datGameName", "Choose a titledb game whose base game is in the loaded DAT.");
+                    title = match.BaseTitle; languages = match.Languages; revision = match.Revision; flags = match.Flags;
+                    filename = match.RomFileName;
+                    identification = new(IdentificationMethod.TitleDb, store!.DatName, store.Version, match.GameName);
+                    metadata = TitleDb.MetadataOf(match.Base);
+                }
+                else
+                {
+                    var datRom = store?.Roms.FirstOrDefault(r => r.GameName == request.DatGameName);
+                    if (datRom is null || store is null)
+                        return ReviewResolutionResult.Invalid("datGameName", "Choose a game in the loaded DAT.");
+                    var parsed = NoIntroName.Parse(Path.GetFileNameWithoutExtension(datRom.RomName));
+                    title = parsed.BaseTitle; regions = parsed.Regions; languages = parsed.Languages; revision = parsed.Revision;
+                    flags = [.. parsed.Flags, "Unverified"];
+                    // G4: the DAT name's own extension (DAT entries are filtered to RomExtensions), e.g. an SMS-mode Game Gear .sms.
+                    filename = Path.GetFileNameWithoutExtension(datRom.RomName) + " (Unverified)" + (external ? originalExtension : Path.GetExtension(datRom.RomName));
+                    identification = new(IdentificationMethod.Manual, store.DatName, store.Version, datRom.GameName);
+                    metadata = store.MetadataFor(datRom.Crc32);
+                }
             }
             else if (request.Action == "Attach" && request.Flag == "None")
             {
-                // shortcut: a queued TitleDb identity is attached by step 24 (T4); never through the libretro path.
-                if (item.Reason == "AmbiguousGroup" && system.DatSource == DatSource.TitleDb)
-                    return ReviewResolutionResult.Invalid("action", "Attaching a titledb match isn't supported yet; use Attach with a flag or Manual.");
                 if (item.Reason != "AmbiguousGroup" ||
                     !(JsonSerializer.Deserialize<Guid[]>(item.CandidateGameIds ?? "[]") ?? []).Contains(request.TargetGameId!.Value))
                     return ReviewResolutionResult.Invalid("targetGameId", "Choose one of the ambiguous item's candidates.");
                 var dat = JsonNode.Parse(item.DatIdentification!)!;
-                // Keep the queued identity even when the loaded DATs have changed.
-                identification = new(IdentificationMethod.Dat, dat["datName"]!.GetValue<string>(), dat["datVersion"]?.GetValue<string>(), dat["datGameName"]!.GetValue<string>());
+                var datGameName = dat["datGameName"]!.GetValue<string>();
                 filename = Path.GetFileName(dat["romName"]!.GetValue<string>());
-                var tags = NoIntroName.Parse(Path.GetFileNameWithoutExtension(filename));
-                title = NoIntroName.Parse(dat["datGameName"]!.GetValue<string>()).BaseTitle;
-                regions = tags.Regions; languages = tags.Languages; revision = tags.Revision; flags = tags.Flags;
                 target = request.TargetGameId;
-                metadata = dats.For(system.Id)?.MetadataFor(item.Crc32) ?? DatMetadata.Empty;
+                if (dat["titleId"] is not null)
+                {
+                    // T4: the queued titledb identity, whole, so a refresh that drops the entry changes nothing.
+                    identification = new(IdentificationMethod.TitleDb, dat["datName"]!.GetValue<string>(), dat["datVersion"]?.GetValue<string>(), datGameName);
+                    title = dat["baseTitle"]!.GetValue<string>();
+                    regions = Strings(dat["regions"]); languages = Strings(dat["languages"]); flags = Strings(dat["flags"]);
+                    revision = dat["revision"]?.GetValue<string>();
+                    // T7 from the base entry while the current DAT still has it.
+                    metadata = TitleDb.TitleIdOfGameName(datGameName) is { } baseId && dats.For(system.Id)?.ByTitleId(baseId) is { } baseEntry
+                        ? TitleDb.MetadataOf(baseEntry) : DatMetadata.Empty;
+                }
+                else
+                {
+                    // Keep the queued identity even when the loaded DATs have changed.
+                    identification = new(IdentificationMethod.Dat, dat["datName"]!.GetValue<string>(), dat["datVersion"]?.GetValue<string>(), datGameName);
+                    var tags = NoIntroName.Parse(Path.GetFileNameWithoutExtension(filename));
+                    title = NoIntroName.Parse(datGameName).BaseTitle;
+                    regions = tags.Regions; languages = tags.Languages; revision = tags.Revision; flags = tags.Flags;
+                    metadata = dats.For(system.Id)?.MetadataFor(item.Crc32) ?? DatMetadata.Empty;
+                }
             }
             else if (request.Action == "Attach")
             {
@@ -462,4 +489,6 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             }
         }
     }
+
+    private static IReadOnlyList<string> Strings(JsonNode? array) => array?.AsArray().Select(n => n!.GetValue<string>()).ToList() ?? [];
 }

@@ -26,6 +26,9 @@ public class TitleDbIngestTests
     private const string BaseId = "0100000000002000";
     private const string UpdateId = "0100000000002800";
     private const string DlcId = "0100000000003001";
+    private const string NamedDlcId = "0100000000003002";
+    private const string OddKindId = "0100000000002400";
+    private const string OrphanDlcId = "0100000000009001";
 
     private ApiFactory? _factory;
 
@@ -58,6 +61,9 @@ public class TitleDbIngestTests
                 [
                     new(BaseId, "Orbit Expedition", "Orbit Co", null, 2020, ["Action"], ["en"], cdn is null ? null : Cdn + "box.jpg",
                         cdn is null ? null : Cdn + "snap.jpg"),
+                    new(NamedDlcId, "Orbit Expedition: Star Pack", "Orbit Co", null, 2021, [], ["ja"], null, null),
+                    new(OddKindId, "Orbit Oddity", null, null, null, [], [], null, null),
+                    new(OrphanDlcId, "Lost Pack", null, null, null, [], [], null, null),
                 ],
             });
         _ = _factory.Services; // start: folders and the DAT load
@@ -270,38 +276,164 @@ public class TitleDbIngestTests
         Assert.That(queued.GetProperty("flags").EnumerateArray().Select(e => e.GetString()), Is.EqualTo(new[] { "Update" }));
     }
 
+    // --- T9 / T4: Review resolution of a titledb identity ---
+
+    /// <summary>A refresh that drops every titledb entry, with a newer version.</summary>
+    private void RefreshWithoutEntries()
+    {
+        FixtureDatWriter.Write(Path.Combine(Factory.Root, "cache", DatCache.FolderName), new Dictionary<string, IReadOnlyList<FixtureGame>>(),
+            titleDb: new Dictionary<string, IReadOnlyList<TitleDbRow>> { [ExternalTitleDbTestHandler.DatNameValue] = [] }, titleDbVersion: "2026.02.02");
+        Service<DatCache>().Load();
+        Assert.That(Service<DatCache>().For(ExternalTitleDbTestHandler.SystemId)!.Roms, Is.Empty);
+    }
+
+    /// <summary>An unmatched loose file waiting in Review as NoDatMatch.</summary>
+    private async Task<(ReviewItem Item, IngestFile File)> QueueAsync(string name, byte seed = 9)
+    {
+        var bytes = Bytes(seed);
+        var file = Drop(name, bytes);
+        Assert.That(Code(await IngestAsync(file)), Is.EqualTo((IngestOutcome.Review, (string?)"NoDatMatch")));
+        return (await ReviewOfAsync(bytes), file);
+    }
+
+    private static ReviewResolutionRequest Dat(string datGameName) =>
+        new() { Action = "Dat", DatSystem = ExternalTitleDbTestHandler.SystemId, DatGameName = datGameName };
+
     [Test]
-    public async Task AttachOfAQueuedTitleDbIdentity_IsRefusedUntilStep24()
+    public async Task DatPick_StoresTheRelease_AsTitleDb_AndMovesTheFile()
+    {
+        await StartAsync();
+        var (item, file) = await QueueAsync("mystery [v2].XCI");
+
+        var result = await Resolver().ResolveAsync(item.Id, Dat($"Orbit Expedition [{BaseId}]"), await AdminAsync(), default);
+
+        Assert.That(result.Code, Is.Null);
+        var rom = ReadGame().Roms.Single();
+        Assert.That((rom.FileName, rom.Revision, rom.Flags.Count), Is.EqualTo(($"Orbit Expedition [{BaseId}][v2].xci", (string?)"v2", 0)),
+            "no Unverified flag or name part; N from the original name; its extension kept");
+        Assert.That(rom.Identification, Is.EqualTo(
+            new InfoJsonIdentification(IdentificationMethod.TitleDb, DatStore.TitleDbName, FixtureDatWriter.TitleDbVersion, $"Orbit Expedition [{BaseId}]")));
+        Assert.That(ReadGame().ReleaseYear, Is.EqualTo(2020));
+        Assert.That(File.Exists(file.FullPath), Is.False);
+        Assert.That(File.Exists(Path.Combine(Bucket, rom.ExternalFileName!)), Is.True);
+        Assert.That((await ReviewOfAsync(Bytes(9))).Status, Is.EqualTo("Resolved"));
+    }
+
+    [Test]
+    public async Task DatPickOfADlc_GroupsWithItsBase_WithTheDlcFlag()
+    {
+        await StartAsync();
+        var gameId = await IngestBaseAsync();
+        var (item, _) = await QueueAsync("pack.nsp");
+
+        var result = await Resolver().ResolveAsync(item.Id, Dat($"Orbit Expedition - Star Pack [{NamedDlcId}]"), await AdminAsync(), default);
+
+        Assert.That((result.Code, result.GameId), Is.EqualTo(((string?)null, (Guid?)gameId)));
+        var dlc = ReadGame().Roms.Single(r => r.Flags.Contains("DLC"));
+        Assert.That((dlc.FileName, dlc.IsPrimary), Is.EqualTo(($"Orbit Expedition - Star Pack [{NamedDlcId}][v0].nsp", false)));
+        Assert.That(dlc.Languages, Is.EqualTo(new[] { "Ja" }));
+        Assert.That(dlc.Identification.DatGameName, Is.EqualTo($"Orbit Expedition [{BaseId}]"), "the base's datGameName");
+    }
+
+    [TestCase("kind", TestName = "BadDatPick_IsFieldValidation unsupported kind")]
+    [TestCase("base", TestName = "BadDatPick_IsFieldValidation missing base")]
+    [TestCase("name", TestName = "BadDatPick_IsFieldValidation not a loaded name")]
+    [TestCase("store", TestName = "BadDatPick_IsFieldValidation no store")]
+    public async Task BadDatPick_IsFieldValidation(string problem)
+    {
+        await StartAsync();
+        var (item, file) = await QueueAsync("mystery.nsp");
+        var pick = problem switch
+        {
+            "kind" => $"Orbit Oddity [{OddKindId}]",
+            "base" => $"Lost Pack [{OrphanDlcId}]",
+            _ => $"Orbit Expedition [{BaseId}]",
+        };
+        if (problem == "name")
+            pick = $"Orbit [{BaseId}]";
+        if (problem == "store")
+        {
+            File.Delete(Path.Combine(Factory.Root, "cache", DatCache.FolderName, DatManifest.FileName));
+            Service<DatCache>().Load();
+        }
+
+        var result = await Resolver().ResolveAsync(item.Id, Dat(pick), await AdminAsync(), default);
+
+        Assert.That((result.Code, result.Errors?.Keys.Single()), Is.EqualTo(("ValidationFailed", (string?)"datGameName")));
+        Assert.That((await ReviewOfAsync(Bytes(9))).Status, Is.EqualTo("Pending"));
+        Assert.That(File.ReadAllBytes(file.FullPath), Is.EqualTo(Bytes(9)));
+    }
+
+    [Test]
+    public async Task Manual_KeepsTheXciExtension()
+    {
+        await StartAsync();
+        var (item, _) = await QueueAsync("mystery.XCI");
+        var manual = new ReviewResolutionRequest { Action = "Manual", Title = "Mystery Game", Regions = [], Languages = [], Flags = [] };
+
+        Assert.That((await Resolver().ResolveAsync(item.Id, manual, await AdminAsync(), default)).Code, Is.Null);
+
+        var rom = ReadGame(Path.Combine(Factory.Root, "roms", ExternalTitleDbTestHandler.SystemId, "M", "Mystery Game.zip")).Roms.Single();
+        Assert.That((rom.FileName, rom.Identification.Method), Is.EqualTo(("Mystery Game.xci", IdentificationMethod.Manual)));
+    }
+
+    [Test]
+    public async Task FlaggedAttach_KeepsTheXciExtension()
+    {
+        await StartAsync();
+        var gameId = await IngestBaseAsync();
+        var (item, _) = await QueueAsync("mystery.xci");
+        var attach = new ReviewResolutionRequest { Action = "Attach", TargetGameId = gameId, Flag = "Hack" };
+
+        Assert.That((await Resolver().ResolveAsync(item.Id, attach, await AdminAsync(), default)).Code, Is.Null);
+
+        Assert.That(ReadGame().Roms.Select(r => r.FileName), Does.Contain("mystery (Hack).xci"));
+    }
+
+    [Test]
+    public async Task QueuedAttach_KeepsTheWholeIdentity_AfterARefreshDropsTheEntry()
     {
         await StartAsync();
         var (item, file, first) = await AmbiguousAsync();
+        RefreshWithoutEntries();
 
         var result = await Resolver().ResolveAsync(item.Id, new ReviewResolutionRequest { Action = "Attach", TargetGameId = first, Flag = "None" },
             await AdminAsync(), default);
 
-        Assert.That((result.Code, result.Errors?.Keys.Single()), Is.EqualTo(("ValidationFailed", (string?)"action")));
-        Assert.That((await ReviewOfAsync(UpdateRom)).Status, Is.EqualTo("Pending"));
-        Assert.That(File.ReadAllBytes(file.FullPath), Is.EqualTo(UpdateRom));
+        Assert.That(result.Code, Is.Null);
+        var rom = ReadGame().Roms.Single(r => r.Flags.Contains("Update"));
+        Assert.That((rom.FileName, rom.BaseTitle, rom.Revision), Is.EqualTo(($"Orbit Expedition [{UpdateId}][v3].nsp", "Orbit Expedition", (string?)"v3")));
+        Assert.That(rom.Languages, Is.EqualTo(new[] { "En" }));
+        Assert.That(rom.Identification, Is.EqualTo(
+            new InfoJsonIdentification(IdentificationMethod.TitleDb, DatStore.TitleDbName, FixtureDatWriter.TitleDbVersion, $"Orbit Expedition [{BaseId}]")),
+            "the queued DAT version, not the refreshed one");
+        Assert.That(File.Exists(file.FullPath), Is.False);
     }
 
     [Test]
-    public async Task DatPickOfATitleDbEntry_IsRefusedUntilStep24()
+    public async Task ArchivedDatRetry_ResolvesTheCommittedRelease_AfterARefreshDropsTheEntry()
     {
         await StartAsync();
         var bytes = Bytes(9);
-        var file = Drop("mystery.nsp", bytes);
-        Assert.That(Code(await IngestAsync(file)), Is.EqualTo((IngestOutcome.Review, (string?)"NoDatMatch")));
-        var request = new ReviewResolutionRequest
-        {
-            Action = "Dat", DatSystem = ExternalTitleDbTestHandler.SystemId, DatGameName = $"Orbit Expedition [{BaseId}]",
-        };
+        var archive = Path.Combine(Ingest, "pack.zip");
+        using (var zip = System.IO.Compression.ZipFile.Open(archive, System.IO.Compression.ZipArchiveMode.Create))
+        using (var entry = zip.CreateEntry("dump.nsp").Open())
+            entry.Write(bytes);
+        File.SetLastWriteTimeUtc(archive, DateTime.UtcNow.AddMinutes(-1));
+        await ActivatorUtilities.CreateInstance<IngestJob>(Factory.Services, NSubstitute.Substitute.For<IJobItemRepository>()).RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None);
+        var item = await ReviewOfAsync(bytes);
+        Assert.That((item.Status, item.ArchiveEntry), Is.EqualTo(("Pending", (string?)"dump.nsp")));
+        var failing = ActivatorUtilities.CreateInstance<ReviewResolver>(Factory.Services,
+            ExternalLibraryTests.FailFirstResolution.Wrap(Service<IIngestReviewRepository>()));
+        var first = await failing.ResolveAsync(item.Id, Dat($"Orbit Expedition [{BaseId}]"), await AdminAsync(), default);
+        Assert.That(first.Code, Is.EqualTo(IngestErrors.DbWriteFailed), "committed, but the item stayed Pending");
+        RefreshWithoutEntries();
 
-        var result = await Resolver().ResolveAsync((await ReviewOfAsync(bytes)).Id, request, await AdminAsync(), default);
+        var retry = await Resolver().ResolveAsync(item.Id, Dat($"Orbit Expedition [{BaseId}]"), await AdminAsync(), default);
 
-        Assert.That((result.Code, result.Errors?.Keys.Single()), Is.EqualTo(("ValidationFailed", (string?)"datGameName")));
-        Assert.That((await ReviewOfAsync(bytes)).Status, Is.EqualTo("Pending"));
-        Assert.That(File.ReadAllBytes(file.FullPath), Is.EqualTo(bytes));
-        Assert.That(File.Exists(ZipPath), Is.False);
+        Assert.That(retry.Code, Is.Null, "the committed release is recognised before the now-missing entry is looked up");
+        Assert.That((await ReviewOfAsync(bytes)).Status, Is.EqualTo("Resolved"));
+        Assert.That(ReadGame().Roms.Single().Identification.Method, Is.EqualTo(IdentificationMethod.TitleDb));
     }
 
     private async Task<long> RomIdAsync(byte[] bytes)
