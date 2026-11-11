@@ -23,6 +23,9 @@ public sealed class DatRefreshJob(
     /// <summary>The largest DAT is ~1 MiB; anything far bigger is not a DAT.</summary>
     public const long MaxFileBytes = 64L * 1024 * 1024;
 
+    /// <summary>Test seams: the directory renames and deletes of publication.</summary>
+    public DatPublicationHooks? PublicationHooks { get; set; }
+
     public JobType Type => JobType.DatRefresh;
     public JobMode? Mode => null;
 
@@ -31,7 +34,7 @@ public sealed class DatRefreshJob(
         var files = systems.All.SelectMany(h => DatKind.All.Select(kind => (Handler: h, Kind: kind))).ToList();
         context.Progress.SetTotal(files.Count);
 
-        var work = Path.Combine(paths.Cache, CrashRecovery.WorkFolder, context.JobId.ToString());
+        var work = CreateWork(context.JobId);
         var staged = Path.Combine(work, DatCache.FolderName);
         try
         {
@@ -61,18 +64,32 @@ public sealed class DatRefreshJob(
 
             // The last point a cancel keeps the old set: from the first rename on, publication runs to the end.
             cancellationToken.ThrowIfCancellationRequested();
-            Swap(staged, work);
+            DatPublication.Swap(paths.Cache, staged, logger, PublicationHooks);
+
+            // Committed: no token from here on. A cancel now still ends the job Cancelled, with the new set active.
             cache.Publish(stores);
             // AU4: every successful run replaced cache/dats.
             audit.Record(new AuditEvent(AuditActions.DatsRefreshed, context.Actor,
                 Details: string.Join(", ", manifest.Select(e => e.DatName).Distinct(StringComparer.Ordinal))));
+            DatPublication.RemoveBackup(paths.Cache, logger, PublicationHooks);
             logger.LogInformation("DATs refreshed: {Versions}", versions);
             return new { files = manifest.Count, versions };
         }
         finally
         {
-            if (Directory.Exists(work))
-                Directory.Delete(work, recursive: true);
+            // Best effort: only the folder this run created, while it is still a real directory.
+            try
+            {
+                var owned = ExternalRomPath.ClassifyDirectory(paths.Cache, work);
+                if (owned.Status == ExternalPathStatus.Found)
+                    (PublicationHooks ?? new()).Delete(owned.Path);
+                else if (owned.Status != ExternalPathStatus.Missing)
+                    logger.LogWarning("Work folder {Work} was not cleaned up: {Details}", work, owned.Details);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                logger.LogWarning("Work folder {Work} could not be removed: {Error}", work, ex.Message);
+            }
         }
     }
 
@@ -106,22 +123,27 @@ public sealed class DatRefreshJob(
         }
     }
 
-    /// <summary>Two directory renames on one volume (both under <c>cache/</c>); the old set is deleted last.</summary>
-    private void Swap(string staged, string work)
+    /// <summary>
+    /// T2/G4: <c>cache/work/</c> is checked (and created when missing) before this job's folder is made; an unsafe
+    /// base or an existing occupant of the job's name fails the run before anything is written, leaving it alone.
+    /// </summary>
+    /// <exception cref="IOException">The work folder can't be made safely.</exception>
+    private string CreateWork(Guid jobId)
     {
-        var live = cache.Directory;
-        var old = Path.Combine(work, "old");
-        if (Directory.Exists(live))
-            Directory.Move(live, old);
-        try
+        var baseFolder = ExternalRomPath.ClassifyDirectory(paths.Cache, Path.Combine(paths.Cache, CrashRecovery.WorkFolder));
+        if (baseFolder.Status == ExternalPathStatus.Missing)
         {
-            Directory.Move(staged, live);
+            Directory.CreateDirectory(baseFolder.Path);
+            baseFolder = ExternalRomPath.ClassifyDirectory(paths.Cache, baseFolder.Path);
         }
-        catch
-        {
-            if (Directory.Exists(old))
-                Directory.Move(old, live); // keep the old set
-            throw;
-        }
+        if (baseFolder.Status != ExternalPathStatus.Found)
+            throw new IOException($"The work folder can't be used: {baseFolder.Details}");
+
+        var work = Path.Combine(baseFolder.Path, jobId.ToString());
+        var occupant = ExternalRomPath.ClassifyDirectory(paths.Cache, work);
+        if (occupant.Status != ExternalPathStatus.Missing)
+            throw new IOException($"{work} already exists; it was left as it is.");
+        Directory.CreateDirectory(work);
+        return work;
     }
 }

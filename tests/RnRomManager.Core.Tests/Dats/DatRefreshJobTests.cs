@@ -11,7 +11,7 @@ using RnRomManager.TestData;
 namespace RnRomManager.Core.Tests.Dats;
 
 /// <summary>Spec §10.1 "Refresh DATs": all-or-nothing swap, failures and cancel keep the old set.</summary>
-public class DatRefreshJobTests
+public partial class DatRefreshJobTests
 {
     private const string Gb = "Nintendo - Game Boy";
     private const string Gbc = "Nintendo - Game Boy Color";
