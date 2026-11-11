@@ -294,4 +294,49 @@ public class TitleDbIngestTests
         Assert.That(File.ReadAllBytes(file.FullPath), Is.EqualTo(bytes));
         Assert.That(File.Exists(ZipPath), Is.False);
     }
+
+    private async Task<long> RomIdAsync(byte[] bytes)
+    {
+        await using var db = Service<IDbConnectionFactory>().Create();
+        return await db.QuerySingleAsync<long>("SELECT id FROM roms WHERE sha1 = @sha1", new { sha1 = Convert.ToHexStringLower(SHA1.HashData(bytes)) });
+    }
+
+    /// <summary>Base, update and DLC in one game.</summary>
+    private async Task<Guid> ThreeReleasesAsync()
+    {
+        var gameId = await IngestBaseAsync();
+        Assert.That(Code(await IngestAsync(Drop($"orbit [{UpdateId}][v65536].nsp", UpdateRom))), Is.EqualTo((IngestOutcome.Ingested, (string?)null)));
+        Assert.That(Code(await IngestAsync(Drop($"orbit [{DlcId}].nsp", DlcRom))), Is.EqualTo((IngestOutcome.Ingested, (string?)null)));
+        Assert.That(ReadGame().Roms.Single(r => r.IsPrimary).Flags, Is.Empty, "T6: the base is primary");
+        return gameId;
+    }
+
+    [Test]
+    public async Task RemovingTheBase_PromotesExactlyOneRemainingRelease()
+    {
+        await StartAsync();
+        var gameId = await ThreeReleasesAsync();
+
+        var result = await Service<LibraryEditor>().DeleteReleaseAsync(gameId, await RomIdAsync(BaseRom), await AdminAsync(), default);
+
+        Assert.That(result.Code, Is.Null);
+        var roms = ReadGame().Roms;
+        Assert.That(roms, Has.Count.EqualTo(2));
+        Assert.That(roms.Count(r => r.IsPrimary), Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task MovingTheBaseToAnotherGame_PromotesOneReleaseInTheSource()
+    {
+        await StartAsync();
+        var gameId = await ThreeReleasesAsync();
+
+        var result = await Service<LibraryEditor>().MoveReleaseAsync(gameId, await RomIdAsync(BaseRom), null, "Orbit Base", await AdminAsync(), default);
+
+        Assert.That(result.Code, Is.Null);
+        var source = ReadGame().Roms;
+        Assert.That(source.Select(r => r.Flags.Single()), Is.EquivalentTo(new[] { "Update", "DLC" }));
+        Assert.That(source.Count(r => r.IsPrimary), Is.EqualTo(1));
+        Assert.That(ReadGame(Path.Combine(Bucket, "Orbit Base.zip")).Roms.Single().IsPrimary, Is.True);
+    }
 }

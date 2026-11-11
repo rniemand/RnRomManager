@@ -37,7 +37,7 @@ public sealed class GameMediaRetry(ILibraryMirror mirror, InfoJsonReader reader,
         if (systems.ById(current.System) is not { } handler)
             return new(MediaRetryOutcome.Error, LibraryTarget.TargetZipUnreadable, $"{row.ZipPath}: system '{current.System}' isn't registered");
 
-        var names = current.Roms.OrderBy(PrimaryRelease.Rank, PrimaryReleaseRanker.Instance).Select(r => r.Identification.DatGameName);
+        var names = PrimaryRelease.Order(current.Roms, handler.DatSource).Select(r => r.Identification.DatGameName);
         var found = await media.FindAsync(handler, names, breaker, ct).ConfigureAwait(false);
         var now = time.GetUtcNow();
         if (GameImages.ApplyFetched(current.Images, found, now) is not var (images, imageEntries))

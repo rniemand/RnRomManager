@@ -408,7 +408,7 @@ public sealed class IngestPipeline(
             Description = null,
             Rating = null,
             Favourite = false,
-            Roms = PrimaryRelease.Apply([rom]),
+            Roms = PrimaryRelease.Apply([rom], system.DatSource),
             Images = GameImages.ForNewGame(found, now),
             Metadata = new InfoJsonGameMetadata(now, now, AppInfo.Version),
         };
@@ -438,7 +438,7 @@ public sealed class IngestPipeline(
             var folderPath = externalZipPath[..externalZipPath.LastIndexOf('/')];
             var name = ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(externalZipPath), rom.FileName,
                 ExternalNameReservations.ForFolder(bucket.Path, folderPath, claims));
-            game = game with { Roms = PrimaryRelease.Apply([rom with { ExternalFileName = name }]) };
+            game = game with { Roms = PrimaryRelease.Apply([rom with { ExternalFileName = name }], system.DatSource) };
             var images = new Dictionary<string, Func<Stream>>();
             AddImages(images, found.BoxArt, found.Snap);
             return await PackageAsync(file, null, externalZipPath, game, images, result, actor, reviewAction, rom.FileName, cancellationToken,
@@ -498,7 +498,7 @@ public sealed class IngestPipeline(
                 rom = rom with { ExternalFileName = name };
                 placement = new ExternalPlacement(source, name);
             }
-            var allRoms = PrimaryRelease.Apply([.. current.Roms, rom]);
+            var allRoms = PrimaryRelease.Apply([.. current.Roms, rom], system.DatSource);
 
             // Step 7: only fields that are still empty.
             var game = current with
@@ -518,7 +518,7 @@ public sealed class IngestPipeline(
             // Step 8 (I4): only while the game still has the placeholder, or no images at all.
             if (current.Images.Count == 0 || current.Images.Any(i => i.IsDefault))
             {
-                var names = allRoms.OrderBy(PrimaryRelease.Rank, PrimaryReleaseRanker.Instance).Select(r => r.Identification.DatGameName);
+                var names = PrimaryRelease.Order(allRoms, system.DatSource).Select(r => r.Identification.DatGameName);
                 var found = await media.FindAsync(system, names, breaker, cancellationToken).ConfigureAwait(false);
                 if (GameImages.ApplyFetched(current.Images, found, now) is var (images, imageEntries))
                 {

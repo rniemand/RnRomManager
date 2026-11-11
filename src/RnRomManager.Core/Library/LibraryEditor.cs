@@ -317,7 +317,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         var remaining = current.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
         if (remaining.Count == 0)
             return await RemoveGameAsync(existing, row, current, actor).ConfigureAwait(false); // the last release removes the game
-        var rebuilt = current with { Roms = PrimaryRelease.Apply(remaining), Metadata = Touched(current) };
+        var rebuilt = current with { Roms = PrimaryRelease.Apply(remaining, DatSourceOf(row.SystemId)), Metadata = Touched(current) };
         if (IsExternal(row))
         {
             var external = await RemoveExternalAsync(existing, row, [rom], rebuilt, actor).ConfigureAwait(false);
@@ -593,7 +593,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
                 Description = null,
                 Rating = null,
                 Favourite = false,
-                Roms = PrimaryRelease.Apply([moved]),
+                Roms = PrimaryRelease.Apply([moved], DatSourceOf(row.SystemId)),
                 Images = GameImages.ForNewGame(found, now),
                 Metadata = new InfoJsonGameMetadata(now, now, AppInfo.Version),
             };
@@ -610,12 +610,12 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         }
         else
         {
-            targetGame = target.Game! with { Roms = PrimaryRelease.Apply([.. target.Game.Roms, moved]), Metadata = Touched(target.Game) };
+            targetGame = target.Game! with { Roms = PrimaryRelease.Apply([.. target.Game.Roms, moved], DatSourceOf(row.SystemId)), Metadata = Touched(target.Game) };
             targetPath = targetRow!.ZipPath;
         }
 
         var remaining = source.Game.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
-        var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining), Metadata = Touched(source.Game) };
+        var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining, DatSourceOf(row.SystemId)), Metadata = Touched(source.Game) };
 
         if (await WriteZipAsync(targetZip, targetPath, targetGame, entries, removed).ConfigureAwait(false) is { } failed)
             return failed;
@@ -736,9 +736,9 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             ExternalNameReservations.ForFolder(folder.Path, targetPath[..targetPath.LastIndexOf('/')], claims,
                 target?.Game!.Roms.Select(r => r.ExternalFileName).OfType<string>()));
         moved = moved with { ExternalFileName = pointer };
-        targetGame = targetGame with { Roms = PrimaryRelease.Apply([.. targetGame.Roms, moved]), Metadata = target is null ? targetGame.Metadata : Touched(targetGame) };
+        targetGame = targetGame with { Roms = PrimaryRelease.Apply([.. targetGame.Roms, moved], DatSourceOf(row.SystemId)), Metadata = target is null ? targetGame.Metadata : Touched(targetGame) };
         var remaining = source.Game.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
-        var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining), Metadata = Touched(source.Game) };
+        var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining, DatSourceOf(row.SystemId)), Metadata = Touched(source.Game) };
 
         var sourceFull = SafePath.Resolve(library, row.ZipPath);
         var file = ExternalRomPath.ClassifyFile(library, Path.Combine(Path.GetDirectoryName(sourceZip.Path)!, sourcePointer));
@@ -1140,7 +1140,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         Description = string.IsNullOrEmpty(into.Description) ? from.Description : into.Description,
         Rating = into.Rating ?? from.Rating,
         Favourite = into.Favourite || from.Favourite,
-        Roms = PrimaryRelease.Apply(roms),
+        Roms = PrimaryRelease.Apply(roms, DatSourceOf(into.System)),
         Images = images,
         Metadata = Touched(into),
     };
@@ -1354,6 +1354,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         }
         return result;
     }
+
+    private DatSource DatSourceOf(string systemId) => systems.ById(systemId)?.DatSource ?? DatSource.Libretro;
 
     private bool IsExternal(GameRow row) => systems.ById(row.SystemId) is { EmbedRomsInZip: false };
 
