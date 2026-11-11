@@ -160,6 +160,14 @@ public static class LibraryEndpoints
             if (await roms.GetAsync(id, romId, ctx.RequestAborted) is not { } rom
                 || await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
                 return Problems.NotFound(ctx);
+            if (rom.ExternalFileName is { } externalFileName)
+            {
+                // shortcut: reads every external claim per download; add a per-folder query if this shows up in profiles.
+                var claims = await roms.ListExternalAsync(ctx.RequestAborted);
+                return files.OpenExternal(ctx, game, externalFileName, claims, out var file) is { } externalProblem
+                    ? externalProblem
+                    : Results.Stream(file!, "application/octet-stream", rom.FileName, enableRangeProcessing: true);
+            }
             return files.OpenEntry(ctx, game, LibraryZip.RomEntry(rom.FileName), rom.SizeBytes, out var stream) is { } problem
                 ? problem
                 : Results.Stream(stream!, "application/octet-stream", rom.FileName);

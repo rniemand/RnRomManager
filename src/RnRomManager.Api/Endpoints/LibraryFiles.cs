@@ -27,6 +27,48 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
         }
     }
 
+    /// <summary>
+    /// G4: an external ROM, the file <paramref name="externalFileName"/> in the ZIP's folder, opened through the
+    /// checked resolver (no links, regular file only). A missing or unsafe file, a pointer that isn't a plain name,
+    /// and a name another game also claims in that folder (<paramref name="claims"/>) are a <c>404</c>.
+    /// </summary>
+    public IResult? OpenExternal(HttpContext ctx, GameRow game, string externalFileName, IEnumerable<ExternalRomRow> claims, out FileStream? stream)
+    {
+        stream = null;
+        var folder = game.ZipPath[..(game.ZipPath.LastIndexOf('/') + 1)];
+        var conflict = claims.Any(c => c.GameId != game.Id
+            && string.Equals(c.ExternalFileName, externalFileName, StringComparison.OrdinalIgnoreCase)
+            && c.ZipPath.StartsWith(folder, StringComparison.OrdinalIgnoreCase) && c.ZipPath.IndexOf('/', folder.Length) < 0);
+        if (conflict || externalFileName.AsSpan().IndexOfAny('/', '\\') >= 0 || externalFileName is "." or "..")
+        {
+            logger.LogWarning("External ROM {ExternalFileName} of game {GameId} at {ZipPath} is {Reason}", externalFileName, game.Id,
+                game.ZipPath, conflict ? "also claimed by another game" : "not a plain file name");
+            return Problems.NotFound(ctx);
+        }
+
+        try
+        {
+            var opened = ExternalRomPath.OpenRead(paths.Value.Roms, SafePath.Resolve(paths.Value.Roms, folder + externalFileName),
+                FileShare.Read | FileShare.Delete);
+            if (opened.Status == ExternalPathStatus.Found)
+            {
+                stream = opened.Stream;
+                return null;
+            }
+            if (opened.Status != ExternalPathStatus.Unreadable)
+            {
+                logger.LogWarning("External ROM of game {GameId} at {ZipPath}: {Details}", game.Id, game.ZipPath, opened.Details);
+                return Problems.NotFound(ctx);
+            }
+            return Fail(ctx, game, new IOException(opened.Details));
+        }
+        catch (UnsafePathException ex)
+        {
+            logger.LogWarning("External ROM of game {GameId} at {ZipPath}: {Message}", game.Id, game.ZipPath, ex.Message);
+            return Problems.NotFound(ctx);
+        }
+    }
+
     /// <summary>The entry stream, capped at <paramref name="maxBytes"/>; the ZIP is disposed with the response.</summary>
     public IResult? OpenEntry(HttpContext ctx, GameRow game, string entry, long maxBytes, out Stream? stream)
     {
