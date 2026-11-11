@@ -959,6 +959,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             return new(NotFound);
         if (targetRow.SystemId != row.SystemId)
             return Invalid("targetGameId", "The target game must be in the same system.");
+        if (systems.ById(row.SystemId) is { EmbedRomsInZip: false })
+            return await MergeExternalAsync(row, targetRow, actor).ConfigureAwait(false);
 
         var source = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
         if (source.Code is not null)
@@ -988,19 +990,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         foreach (var (copy, sourceName) in copies)
             entries[LibraryZip.ImageEntry(copy.FileName)] = () => sourceZip.OpenEntry(LibraryZip.ImageEntry(sourceName), copy.SizeBytes);
 
-        var targetGame = into with
-        {
-            ReleaseYear = into.ReleaseYear ?? from.ReleaseYear,
-            Developers = into.Developers.Count > 0 ? into.Developers : from.Developers,
-            Publishers = into.Publishers.Count > 0 ? into.Publishers : from.Publishers,
-            Genres = into.Genres.Count > 0 ? into.Genres : from.Genres,
-            Description = string.IsNullOrEmpty(into.Description) ? from.Description : into.Description,
-            Rating = into.Rating ?? from.Rating,
-            Favourite = into.Favourite || from.Favourite,
-            Roms = PrimaryRelease.Apply(merged),
-            Images = images,
-            Metadata = Touched(into),
-        };
+        var targetGame = MergedInto(into, from, merged, images);
 
         if (await WriteZipAsync(targetZip, targetRow.ZipPath, targetGame, entries, removed).ConfigureAwait(false) is { } failed)
             return failed;
@@ -1017,6 +1007,135 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         }
         return result with { GameId = targetGameId };
     }
+
+    /// <summary>
+    /// W4 for an external game: both ZIPs are opened through checked handles (I4). Each release keeps an E3 logical
+    /// name in the target (its note follows it) and its file is renamed to its E1 name beside the target ZIP before
+    /// the target is written; a failed move or target write moves every file back. The source ZIP is deleted after
+    /// the DB update only while the target is still the ZIP this merge published; otherwise it is kept and the result
+    /// says <see cref="LibraryEditResult.TargetPublicationLost"/>.
+    /// </summary>
+    private async Task<LibraryEditResult> MergeExternalAsync(GameRow row, GameRow targetRow, AuditActor actor)
+    {
+        var ct = CancellationToken.None; // edits write without the request's token (existing rule)
+        var library = paths.Value.Roms;
+        var source = LibraryTarget.OpenChecked(library, row.ZipPath, reader, row.Id, row.SystemId);
+        if (source.Code is not null)
+            return new(source.Code, source.Details);
+        using var sourceZip = source.Zip!;
+        var target = LibraryTarget.OpenChecked(library, targetRow.ZipPath, reader, targetRow.Id, targetRow.SystemId);
+        if (target.Code is not null)
+            return new(target.Code, target.Details);
+        using var targetZip = target.Zip!;
+        var (from, into) = (source.Game!, target.Game!);
+
+        var entries = new Dictionary<string, Func<Stream>>();
+        var removed = new HashSet<string>(StringComparer.Ordinal);
+        if (GameImages.Merge(into.Images, from.Images) is not var (images, copies))
+            return new(TooManyImages, $"The merged game would have more than {GameImages.MaxImages} images.");
+        foreach (var (copy, sourceName) in copies)
+            entries[LibraryZip.ImageEntry(copy.FileName)] = () => sourceZip.OpenEntry(LibraryZip.ImageEntry(sourceName), copy.SizeBytes);
+
+        var targetFull = SafePath.Resolve(library, targetRow.ZipPath);
+        var folder = ExternalRomPath.ClassifyDirectory(library, Path.GetDirectoryName(targetFull)!);
+        if (folder.Status != ExternalPathStatus.Found)
+            return new(IoError, folder.Details);
+        var claims = await roms.ListExternalAsync(ct).ConfigureAwait(false);
+        var logical = new ExternalNameReservations(into.Roms.Select(r => r.FileName));
+        var pointers = ExternalNameReservations.ForFolder(folder.Path, targetRow.ZipPath[..targetRow.ZipPath.LastIndexOf('/')], claims,
+            into.Roms.Select(r => r.ExternalFileName).OfType<string>());
+        var zipBase = Path.GetFileNameWithoutExtension(targetRow.ZipPath);
+        var sourceFolder = Path.GetDirectoryName(sourceZip.Path)!;
+        var merged = new List<InfoJsonRom>(into.Roms);
+        var moves = new List<(string From, string To, ExternalFileSnapshot Snapshot)>();
+        foreach (var rom in from.Roms)
+        {
+            var name = ExternalRomName.AllocateLogicalName(rom.FileName, logical);
+            var pointer = ExternalRomName.Allocate(zipBase, name, pointers);
+            merged.Add(rom with { FileName = name, ExternalFileName = pointer });
+            CarryNote(sourceZip, rom.FileName, name, entries, removed);
+            var file = ExternalRomPath.ClassifyFile(library, Path.Combine(sourceFolder, rom.ExternalFileName!));
+            if (file.Status == ExternalPathStatus.Missing)
+                logger.LogWarning("Game {GameId}: {File} is missing, so only its pointer moves, to {Pointer}", row.Id, file.Path, pointer);
+            else if (file.Status != ExternalPathStatus.Found)
+                return new(IoError, file.Details);
+            else
+                moves.Add((file.Path, Path.Combine(folder.Path, pointer), file.Snapshot!));
+        }
+        var targetGame = MergedInto(into, from, merged, images);
+
+        var placed = new List<(string From, string To, ExternalFileSnapshot Snapshot)>();
+        var touched = new Dictionary<string, ExternalFileSnapshot>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (fromPath, toPath, snapshot) in moves)
+        {
+            var move = ExternalRomMove.Move(library, fromPath, library, toPath, snapshot, logger, hooks: ExternalHooks?.Move);
+            if (move.Status != ExternalMoveStatus.Moved)
+            {
+                UndoMoves(placed);
+                return new(IoError, move.Details);
+            }
+            placed.Add((fromPath, move.Path!, move.Snapshot!));
+            touched[Path.GetFileName(move.Path!)] = move.Snapshot!;
+        }
+
+        ExternalFileSnapshot published;
+        try
+        {
+            published = await new LibraryZipWriter(reader).WriteCheckedAsync(library, targetFull, targetZip,
+                new LibraryZipChanges(targetGame, entries, removed, touched), ct, ExternalHooks?.Writer).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Writing {ZipPath} failed", targetRow.ZipPath);
+            UndoMoves(placed);
+            if (ex is LibraryZipVerifyException)
+                return new(VerifyFailed, ex.Message);
+            if (ex is IOException or UnauthorizedAccessException)
+                return new(IoError, ex.Message);
+            throw;
+        }
+
+        audit.Record(new AuditEvent(AuditActions.GamesMerged, actor, row.SystemId, row.Id, AuditPaths.Library(row.ZipPath),
+            AuditPaths.Library(targetRow.ZipPath), $"{from.Roms.Count} releases, {copies.Count} images"));
+        ExternalHooks?.BeforeMirror?.Invoke();
+        var result = StillPublished(targetFull, published)
+            ? await MirrorAsync(() => mirror.ApplyAsync([new MirrorEntry(targetGame, targetRow.ZipPath, published.Length, published.LastWriteTimeUtc)],
+                [row.Id], ct), targetRow.ZipPath).ConfigureAwait(false)
+            : new(DbWriteFailed, $"{targetRow.ZipPath} was replaced after it was written");
+
+        // W1/W4: the source goes only while the target is still the ZIP this merge published.
+        sourceZip.Dispose(); // Windows can't delete an open file.
+        if (StillPublished(targetFull, published))
+        {
+            DeleteOldZipIfUnchanged(row.ZipPath, sourceZip.Snapshot!, row.Id);
+        }
+        else
+        {
+            logger.LogError("Kept {Source}: the merge target {Target} was replaced after it was written", row.ZipPath, targetRow.ZipPath);
+            result = result with { TargetPublicationLost = true };
+        }
+        if (result.Code is null)
+        {
+            logger.LogInformation("Game {GameId} merged into {TargetId} ({ZipPath})", row.Id, targetRow.Id, targetRow.ZipPath);
+            await MoveCollectionMembershipsAsync(row.Id, targetRow.Id).ConfigureAwait(false);
+        }
+        return result with { GameId = targetRow.Id };
+    }
+
+    /// <summary>I4a: the target keeps its title, metadata and cover; empty fields are filled from the source.</summary>
+    private InfoJsonGame MergedInto(InfoJsonGame into, InfoJsonGame from, List<InfoJsonRom> roms, IReadOnlyList<InfoJsonImage> images) => into with
+    {
+        ReleaseYear = into.ReleaseYear ?? from.ReleaseYear,
+        Developers = into.Developers.Count > 0 ? into.Developers : from.Developers,
+        Publishers = into.Publishers.Count > 0 ? into.Publishers : from.Publishers,
+        Genres = into.Genres.Count > 0 ? into.Genres : from.Genres,
+        Description = string.IsNullOrEmpty(into.Description) ? from.Description : into.Description,
+        Rating = into.Rating ?? from.Rating,
+        Favourite = into.Favourite || from.Favourite,
+        Roms = PrimaryRelease.Apply(roms),
+        Images = images,
+        Metadata = Touched(into),
+    };
 
     /// <summary>
     /// B18: the deleted source game's collection memberships follow it to the target. The library change has already

@@ -24,6 +24,12 @@ public sealed record LibraryEditResult(string? Code = null, string? Details = nu
 
     public Dictionary<string, string[]>? Errors { get; init; }
 
+    /// <summary>
+    /// W4: an external merge's target ZIP was replaced after it was written, so the source ZIP was kept and its
+    /// releases didn't move, even when the code is <see cref="DbWriteFailed"/>.
+    /// </summary>
+    public bool TargetPublicationLost { get; init; }
+
     public static LibraryEditResult Invalid(string field, string error) =>
         new(ValidationFailed) { Errors = new() { [field] = [error] } };
 }

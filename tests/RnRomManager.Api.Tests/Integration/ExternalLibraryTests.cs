@@ -32,13 +32,20 @@ public partial class ExternalLibraryTests
     private ApiFactory _factory = null!;
     private List<JobItem> _items = null!;
     private IJobItemRepository _itemRepository = null!;
+    private Action? _mirrorHook;
 
     [SetUp]
     public async Task SetUp()
     {
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
         {
-            TestServices = services => RnRomManager.Core.Systems.SystemHandlerRegistration.AddSystemHandler<ExternalTestHandler>(services),
+            TestServices = services =>
+            {
+                RnRomManager.Core.Systems.SystemHandlerRegistration.AddSystemHandler<ExternalTestHandler>(services);
+                // The app's own mirror, with a hook for the edits endpoints run (their editor is resolved per request).
+                services.AddSingleton<ILibraryMirror>(sp => new HookedMirror(
+                    ActivatorUtilities.CreateInstance<RnRomManager.Data.Repositories.LibraryMirror>(sp), before: () => _mirrorHook?.Invoke()));
+            },
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = ""; // default art, no network
         _ = _factory.Services; // start the host: it creates the system folders
