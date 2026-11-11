@@ -641,4 +641,179 @@ public class IntegrityJobTests
             (EntryMissing, (string?)"ext/A/Alpha.zip", (string?)"Alpha.Alpha.nsp"),
         }));
     }
+
+    /// <summary>An external game with <paramref name="count"/> releases, each file beside the ZIP; returns the file paths.</summary>
+    private async Task<string[]> WriteExternalMany(string zipPath, string title, int count)
+    {
+        var folder = Path.GetDirectoryName(Abs(zipPath))!;
+        Directory.CreateDirectory(folder);
+        var roms = Enumerable.Range(0, count).Select(i =>
+        {
+            var bytes = RomBytes(++_seed);
+            File.WriteAllBytes(Path.Combine(folder, $"{title}.{title} {i}.nsp"), bytes);
+            return Rom($"{title} {i}.nsp", bytes) with { ExternalFileName = $"{title}.{title} {i}.nsp", IsPrimary = i == 0 };
+        }).ToArray();
+        var game = Game(title, roms) with { System = ExternalTestHandler.SystemId };
+        await new LibraryZipWriter(_reader).WriteAsync(Abs(zipPath), null, new LibraryZipChanges(game, new Dictionary<string, Func<Stream>>()));
+        Touch(zipPath);
+        return [.. roms.Select(r => Path.Combine(folder, r.ExternalFileName!))];
+    }
+
+    /// <summary>Rewrites the ZIP's info.json roms (the test plays a hand edit or a crashed write).</summary>
+    private void EditRoms(string zipPath, Action<JsonArray> change) => Damage(zipPath, zip =>
+    {
+        JsonNode info;
+        using (var reader = new StreamReader(zip.GetEntry("info.json")!.Open()))
+            info = JsonNode.Parse(reader.ReadToEnd())!;
+        change(info["roms"]!.AsArray());
+        Replace(zip, "info.json", System.Text.Encoding.UTF8.GetBytes(info.ToJsonString()));
+    });
+
+    [Test]
+    public async Task External_CaseOnlyPointerEdit_KeepsTheOpenIssue_AndARepairResolvesIt()
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        var bytes = File.ReadAllBytes(alpha);
+        File.Delete(alpha);
+        await Run();
+        var first = (await All()).Single(i => i.Type == EntryMissing);
+
+        EditRoms("ext/A/Alpha.zip", roms => roms[0]!["externalFileName"] = "ALPHA.ALPHA.NSP");
+        await Run();
+        var open = (await All()).Where(i => i.Type == EntryMissing && i.Status == IntegrityIssue.Open).ToList();
+        Assert.That(open.Select(i => (i.Id, i.FirstSeenJobId)), Is.EqualTo(new[] { (first.Id, first.FirstSeenJobId) }));
+
+        File.WriteAllBytes(Path.Combine(Path.GetDirectoryName(alpha)!, "ALPHA.ALPHA.NSP"), bytes);
+        await Run();
+        Assert.That(await OpenExternal(), Is.Empty);
+    }
+
+    [Test]
+    public async Task External_QuickResolvesAFixedFile_OfALocationOnlyZip_ButNotItsZipEntryIssues()
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        var bytes = File.ReadAllBytes(alpha);
+        File.Delete(alpha);
+        var (job, _) = await Run();
+        IntegrityIssue Entry(string type, string entry) => new()
+        {
+            Type = type, Severity = IssueSeverity.Error, SystemId = ExternalTestHandler.SystemId, ZipPath = "ext/A/Alpha.zip", EntryName = entry,
+            Status = IntegrityIssue.Open, FirstSeenJobId = job, LastSeenJobId = job, DetectedAt = DateTime.UtcNow,
+        };
+        await _issues.InsertAsync(Entry(EntryMissing, "roms/Alpha.nsp"), default);
+        await _issues.InsertAsync(Entry(EntryUnlisted, "stray.txt"), default);
+
+        File.WriteAllBytes(alpha, bytes);
+        var (_, summary) = await Run();
+
+        Assert.That(summary, Does.Contain("\"opened\":0"), "the ZIP was only location-checked");
+        Assert.That(await OpenExternal(), Is.EquivalentTo(new[]
+        {
+            (EntryMissing, (string?)"ext/A/Alpha.zip", (string?)"roms/Alpha.nsp"),
+            (EntryUnlisted, (string?)"ext/A/Alpha.zip", (string?)"stray.txt"),
+        }));
+    }
+
+    [Test]
+    public async Task External_OnlyDeepResolvesAHashMismatch_AlsoForAGoneZip()
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        var beta = await WriteExternal("ext/B/Beta.zip", "Beta");
+        var good = File.ReadAllBytes(alpha);
+        ReplaceSameSize(alpha);
+        ReplaceSameSize(beta);
+        await Run(JobMode.Deep);
+        Assert.That((await OpenExternal()).Count(i => i.Type == HashMismatch), Is.EqualTo(2));
+
+        File.Delete(alpha);
+        File.WriteAllBytes(alpha, good);
+        File.Delete(Abs("ext/B/Beta.zip"));
+        File.Delete(beta);
+        await Run();
+        Assert.That((await OpenExternal()).Count(i => i.Type == HashMismatch), Is.EqualTo(2), "Quick resolves no hash issue");
+
+        await Run(JobMode.Deep);
+        Assert.That(await OpenExternal(), Is.Empty);
+    }
+
+    [Test]
+    public async Task External_SkippedOrInvalidatedHash_KeepsTheHashIssue()
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        var good = File.ReadAllBytes(alpha);
+        ReplaceSameSize(alpha);
+        await Run(JobMode.Deep);
+        File.Delete(alpha);
+        File.WriteAllBytes(alpha, good);
+
+        await Run();
+        await Run(JobMode.Deep, hooks: new IntegrityHooks
+        {
+            AfterExternalHash = path =>
+            {
+                File.Delete(path);
+                File.WriteAllBytes(path, good);
+            },
+        });
+        Assert.That((await OpenExternal()).Select(i => i.Type), Is.EqualTo(new[] { HashMismatch }));
+
+        await Run(JobMode.Deep);
+        Assert.That(await OpenExternal(), Is.Empty);
+    }
+
+    [Test]
+    public async Task External_AnUncheckedPointer_KeepsItsIssue_WhileACheckedSiblingResolves()
+    {
+        var files = await WriteExternalMany("ext/A/Alpha.zip", "Alpha", 2);
+        var bytes = files.Select(File.ReadAllBytes).ToArray();
+        foreach (var file in files)
+            File.Delete(file);
+        await Run();
+        Assert.That((await OpenExternal()).Count(i => i.Type == EntryMissing), Is.EqualTo(2));
+
+        for (var i = 0; i < 2; i++)
+            File.WriteAllBytes(files[i], bytes[i]);
+        // The second file is swapped while it is hashed, so this run can't vouch for it.
+        await Run(JobMode.Deep, hooks: new IntegrityHooks
+        {
+            AfterExternalHash = path =>
+            {
+                if (path != files[1])
+                    return;
+                File.Delete(path);
+                File.WriteAllBytes(path, bytes[1]);
+            },
+        });
+
+        Assert.That(await OpenExternal(), Is.EqualTo(new[] { (EntryMissing, (string?)"ext/A/Alpha.zip", (string?)Path.GetFileName(files[1])) }));
+    }
+
+    [TestCase("readable", TestName = "External_DeletedRelease_RetiresItsPointerIssue_OnlyWhenZipAndMirrorAgree readable")]
+    [TestCase("unreadable", TestName = "External_DeletedRelease_RetiresItsPointerIssue_OnlyWhenZipAndMirrorAgree unreadable")]
+    [TestCase("rejected", TestName = "External_DeletedRelease_RetiresItsPointerIssue_OnlyWhenZipAndMirrorAgree rejected")]
+    public async Task External_DeletedRelease_RetiresItsPointerIssue_OnlyWhenZipAndMirrorAgree(string zip)
+    {
+        var files = await WriteExternalMany("ext/A/Alpha.zip", "Alpha", 2);
+        var beta = await WriteExternal("ext/B/Beta.zip", "Beta");
+        File.Delete(files[1]);
+        await Run();
+        var stale = (EntryMissing, (string?)"ext/A/Alpha.zip", (string?)Path.GetFileName(files[1]));
+        Assert.That(await OpenExternal(), Is.EqualTo(new[] { stale }));
+
+        EditRoms("ext/A/Alpha.zip", roms =>
+        {
+            roms.RemoveAt(1);
+            if (zip == "rejected") // the remaining release now claims Beta's SHA1, so DB sync rejects the ZIP
+                roms[0]!["metadata"]!["sha1"] = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(File.ReadAllBytes(beta)));
+        });
+        if (zip == "unreadable")
+        {
+            File.WriteAllText(Abs("ext/A/Alpha.zip"), "not a ZIP");
+            Touch("ext/A/Alpha.zip");
+        }
+        await Run();
+
+        var open = (await OpenExternal()).Where(i => i.Type == EntryMissing);
+        Assert.That(open, zip == "readable" ? Is.Empty : Does.Contain(stale));
+    }
 }
