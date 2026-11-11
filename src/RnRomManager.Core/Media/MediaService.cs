@@ -50,8 +50,11 @@ public sealed record MediaResult(MediaImage BoxArt, MediaImage? Snap);
 /// JPEG, through <see cref="TitleDbImageClient"/>; an empty <c>Sources:ThumbnailBaseUrl</c> disables both.
 /// </summary>
 public sealed class MediaService(HttpClient http, TitleDbImageClient titleDbImages, DatCache dats, IOptions<SourcesOptions> sources,
-    ILogger<MediaService> logger)
+    TimeProvider time, ILogger<MediaService> logger)
 {
+    /// <summary>T8: an external system's image body, opening its stream included, must arrive within this.</summary>
+    public static readonly TimeSpan BodyTimeout = TimeSpan.FromSeconds(20);
+
     /// <summary>libretro thumbnails keep the original 5 MiB cap (I1a); stored images may be larger.</summary>
     public const int MaxThumbnailBytes = 5 * 1024 * 1024;
 
@@ -78,7 +81,8 @@ public sealed class MediaService(HttpClient http, TitleDbImageClient titleDbImag
                 // T8: the CDN rule is checked again right before every request.
                 if (url is null || (titleDb && !TitleDb.IsCdnUrl(url)))
                     continue;
-                if (await GetImageAsync(titleDb ? titleDbImages.Http : http, url, allowJpeg: titleDb, breaker, cancellationToken).ConfigureAwait(false) is { } image)
+                if (await GetImageAsync(titleDb ? titleDbImages.Http : http, url, allowJpeg: titleDb, external: !handler.EmbedRomsInZip, breaker,
+                    cancellationToken).ConfigureAwait(false) is { } image)
                     return new MediaImage(type, image.Bytes, image.Width, image.Height, url, IsDefault: false,
                         titleDb ? InfoJsonImage.SourceTitleDb : null);
             }
@@ -101,8 +105,12 @@ public sealed class MediaService(HttpClient http, TitleDbImageClient titleDbImag
 
     /// <param name="client">libretro's or the titledb CDN's; a 3xx (redirects are off for the CDN) is a neutral miss like a 404.</param>
     /// <param name="allowJpeg">titledb images may be JPEG; libretro thumbnails stay PNG-only.</param>
-    private async Task<(byte[] Bytes, int Width, int Height)?> GetImageAsync(HttpClient client, string url, bool allowJpeg, CircuitBreaker breaker,
-        CancellationToken cancellationToken)
+    /// <param name="external">
+    /// T8: the body gets its own <see cref="BodyTimeout"/> (linked to the caller's token), whose expiry counts once like any
+    /// failure; only a body read to its end resets the breaker, not the 200 header, even when its format is then refused.
+    /// </param>
+    private async Task<(byte[] Bytes, int Width, int Height)?> GetImageAsync(HttpClient client, string url, bool allowJpeg, bool external,
+        CircuitBreaker breaker, CancellationToken cancellationToken)
     {
         byte[] bytes;
         try
@@ -113,15 +121,21 @@ public sealed class MediaService(HttpClient http, TitleDbImageClient titleDbImag
                 Failed(url, $"HTTP {(int)response.StatusCode}", breaker);
                 return null;
             }
-            // §10.2: a 404 neither counts nor resets; a 200 resets.
+            // §10.2: a 404 neither counts nor resets; a 200 resets (an external system's once its body is in).
             if (response.StatusCode != HttpStatusCode.OK)
                 return null;
-            breaker.RecordSuccess();
+            if (!external)
+                breaker.RecordSuccess();
 
-            await using var body = new LimitStream(await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false), MaxThumbnailBytes);
+            using var deadline = external ? new CancellationTokenSource(BodyTimeout, time) : null;
+            using var linked = deadline is null ? null : CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+            var bodyToken = linked?.Token ?? cancellationToken;
+            await using var body = new LimitStream(await response.Content.ReadAsStreamAsync(bodyToken).ConfigureAwait(false), MaxThumbnailBytes);
             using var buffer = new MemoryStream();
-            await body.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+            await body.CopyToAsync(buffer, bodyToken).ConfigureAwait(false);
             bytes = buffer.ToArray();
+            if (external)
+                breaker.RecordSuccess();
         }
         catch (LimitExceededException)
         {
@@ -130,7 +144,7 @@ public sealed class MediaService(HttpClient http, TitleDbImageClient titleDbImag
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
-            // Connection error or timeout, after the client's retries.
+            // Connection error or timeout, after the client's retries; or an external body past its deadline (never retried).
             Failed(url, ex.Message, breaker);
             return null;
         }

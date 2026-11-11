@@ -27,6 +27,7 @@ public partial class MediaServiceTests
     private StubHttpHandler _server = null!;
     private CircuitBreaker _breaker = null!;
     private DatCache _dats = null!;
+    private Microsoft.Extensions.Time.Testing.FakeTimeProvider _clock = null!;
 
     [SetUp]
     public void SetUp()
@@ -41,11 +42,12 @@ public partial class MediaServiceTests
             ? answer()
             : StubHttpHandler.Status(HttpStatusCode.NotFound));
         _breaker = new CircuitBreaker();
+        _clock = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
         _dats = new DatCache(Options.Create(new PathsOptions()), new SystemRegistry([]), NullLogger<DatCache>.Instance);
     }
 
     private MediaService Service(string baseUrl = BaseUrl) =>
-        TestMedia.Create(new HttpClient(_server), baseUrl, new HttpClient(_server), _dats);
+        TestMedia.Create(new HttpClient(_server), baseUrl, new HttpClient(_server), _dats, _clock);
 
     private Task<MediaResult> FindAsync(params string?[] names) => Service().FindAsync(_handler, names, _breaker, CancellationToken.None);
 

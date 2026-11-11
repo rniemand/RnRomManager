@@ -74,6 +74,7 @@ public class HttpClientsTests
         var services = new ServiceCollection()
             .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
             .AddLogging()
+            .AddSingleton(TimeProvider.System)
             .AddSingleton(Microsoft.Extensions.Options.Options.Create(new RnRomManager.Core.Configuration.SourcesOptions { ThumbnailBaseUrl = "https://thumbs.test" }))
             .AddSingleton(new RnRomManager.Core.Dats.DatCache(Microsoft.Extensions.Options.Options.Create(new RnRomManager.Core.Configuration.PathsOptions()),
                 new RnRomManager.Core.Systems.SystemRegistry([]), NullLogger<RnRomManager.Core.Dats.DatCache>.Instance))
@@ -157,6 +158,7 @@ public class HttpClientsTests
             .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
             .AddLogging()
             .AddSingleton(dats)
+            .AddSingleton(TimeProvider.System)
             .AddSingleton(Microsoft.Extensions.Options.Options.Create(new RnRomManager.Core.Configuration.SourcesOptions { ThumbnailBaseUrl = "https://thumbs.test" }))
             .AddExternalHttpClients();
         services.AddHttpClient(HttpClients.Thumbnails).ConfigurePrimaryHttpMessageHandler(() => thumbnails);

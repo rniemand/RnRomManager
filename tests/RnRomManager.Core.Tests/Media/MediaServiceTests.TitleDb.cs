@@ -21,6 +21,7 @@ public partial class MediaServiceTests
     private void UseTitleDb(params TitleDbRow[] rows)
     {
         _handler.DatSource.Returns(DatSource.TitleDb);
+        _handler.EmbedRomsInZip.Returns(false); // titledb systems store their ROMs outside the ZIP
         _dats.Publish(new Dictionary<string, DatStore> { ["gb"] = new DatStore(rows, "2026.11.10") });
     }
 
