@@ -25,7 +25,9 @@ public class IngestExternalPlacementTests
 {
     private const string GameName = "Space Game (USA)";
     private const string ZipRelative = "ext/S/Space Game.zip";
+    private const string EuropeName = "Space Game (Europe)";
     private static readonly byte[] Rom = RandomNumberGenerator.GetBytes(4096);
+    private static readonly byte[] Europe = RandomNumberGenerator.GetBytes(2048);
 
     private ApiFactory _factory = null!;
     private List<JobItem> _items = null!;
@@ -43,7 +45,11 @@ public class IngestExternalPlacementTests
         var cache = Service<DatCache>();
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
-            [ExternalTestHandler.DatNameValue] = [new FixtureGame(GameName, GameName + ".nsp", Rom)],
+            [ExternalTestHandler.DatNameValue] =
+            [
+                new FixtureGame(GameName, GameName + ".nsp", Rom),
+                new FixtureGame(EuropeName, EuropeName + ".nsp", Europe),
+            ],
         });
         cache.Load();
         _items = [];
@@ -71,9 +77,10 @@ public class IngestExternalPlacementTests
         return new IngestFile(ExternalTestHandler.SystemId, path, name, info.Length, info.LastWriteTimeUtc);
     }
 
-    private IngestPipeline Pipeline(ExternalIngestHooks? hooks = null, ILibraryMirror? mirror = null)
+    private IngestPipeline Pipeline(ExternalIngestHooks? hooks = null, ILibraryMirror? mirror = null, IAuditLog? audit = null)
     {
-        var pipeline = mirror is null ? Service<IngestPipeline>() : ActivatorUtilities.CreateInstance<IngestPipeline>(_factory.Services, mirror);
+        object[] overrides = [.. new object?[] { mirror, audit }.OfType<object>()];
+        var pipeline = overrides.Length == 0 ? Service<IngestPipeline>() : ActivatorUtilities.CreateInstance<IngestPipeline>(_factory.Services, overrides);
         pipeline.ExternalHooks = hooks;
         return pipeline;
     }
@@ -334,5 +341,136 @@ public class IngestExternalPlacementTests
         Assert.That(File.Exists(second.FullPath), Is.True, "not started");
         await using var db = Service<IDbConnectionFactory>().Create();
         Assert.That(await db.QuerySingleAsync<int>("SELECT COUNT(*) FROM roms"), Is.EqualTo(1));
+    }
+
+    private string EuropeSidecar => Path.Combine(Bucket, $"Space Game.{EuropeName}.nsp");
+
+    /// <summary>The first release, ingested normally: the game the second release joins.</summary>
+    private async Task<Guid> FirstReleaseAsync()
+    {
+        var first = await IngestAsync(Pipeline(), Drop("dump.xci"));
+        Assert.That(Code(first), Is.EqualTo((IngestOutcome.Ingested, (string?)null)));
+        return first!.GameId!.Value;
+    }
+
+    private InfoJsonGame ReadGame()
+    {
+        using var zip = LibraryZip.Open(ZipPath, Service<InfoJsonReader>());
+        return zip.InfoJson!.Game!;
+    }
+
+    private async Task<int> RomRowsAsync()
+    {
+        await using var db = Service<IDbConnectionFactory>().Create();
+        return await db.QuerySingleAsync<int>("SELECT COUNT(*) FROM roms");
+    }
+
+    [Test]
+    public async Task SecondRelease_LandsBesideTheOriginalZip()
+    {
+        var gameId = await FirstReleaseAsync();
+        var file = Drop("eu.nsp", Europe);
+
+        var result = await IngestAsync(Pipeline(), file);
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Ingested, (string?)null)));
+        Assert.That(result!.GameId, Is.EqualTo(gameId));
+        Assert.That(File.Exists(file.FullPath), Is.False);
+        Assert.That(File.ReadAllBytes(EuropeSidecar), Is.EqualTo(Europe));
+        Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Rom), "the first release is untouched");
+        Assert.That(ReadGame().Roms.Select(r => r.ExternalFileName), Is.EquivalentTo(new[] { Path.GetFileName(Sidecar), Path.GetFileName(EuropeSidecar) }));
+        Assert.That(await RomRowsAsync(), Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task SecondRelease_WithAnOccupiedTemp_GetsASuffix()
+    {
+        await FirstReleaseAsync();
+        var occupant = EuropeSidecar + ".tmp";
+        File.WriteAllText(occupant, "someone else's");
+
+        var result = await IngestAsync(Pipeline(), Drop("eu.nsp", Europe));
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Ingested, (string?)null)));
+        Assert.That(File.ReadAllBytes(Path.Combine(Bucket, $"Space Game.{EuropeName} (2).nsp")), Is.EqualTo(Europe));
+        Assert.That(File.ReadAllText(occupant), Is.EqualTo("someone else's"));
+    }
+
+    [TestCase("game", TestName = "SecondRelease_StaleOrUnreadableTarget_LeavesTheSource stale game id")]
+    [TestCase("system", TestName = "SecondRelease_StaleOrUnreadableTarget_LeavesTheSource stale system")]
+    [TestCase("unreadable", TestName = "SecondRelease_StaleOrUnreadableTarget_LeavesTheSource unreadable info.json")]
+    public async Task SecondRelease_StaleOrUnreadableTarget_LeavesTheSource(string damage)
+    {
+        await FirstReleaseAsync();
+        var game = ReadGame();
+        var info = damage switch
+        {
+            "game" => InfoJsonSerializer.Serialize(game with { GameId = Guid.NewGuid() }),
+            // The only other registered systems are embedded, where the pointer is invalid: as unusable as a stale system.
+            "system" => InfoJsonSerializer.Serialize(game with { System = "gb" }),
+            _ => "not json"u8.ToArray(),
+        };
+        using (var zip = ZipFile.Open(ZipPath, ZipArchiveMode.Update))
+        {
+            zip.GetEntry(LibraryZip.InfoJsonEntry)!.Delete();
+            using var stream = zip.CreateEntry(LibraryZip.InfoJsonEntry).Open();
+            stream.Write(info);
+        }
+        var file = Drop("eu.nsp", Europe);
+
+        var result = await IngestAsync(Pipeline(), file);
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Error, IngestErrors.TargetZipUnreadable)));
+        Assert.That(File.ReadAllBytes(file.FullPath), Is.EqualTo(Europe));
+        Assert.That(File.Exists(EuropeSidecar), Is.False);
+    }
+
+    [Test]
+    public async Task SecondRelease_MirrorFailure_KeepsTheReleaseAndItsPendingRow_AndTheNextSyncPicksItUp()
+    {
+        await FirstReleaseAsync();
+        var file = Drop("eu.nsp", Europe);
+        var reviews = Service<IIngestReviewRepository>();
+        var sha1 = Convert.ToHexStringLower(SHA1.HashData(Europe));
+        await reviews.UpsertAsync(new ReviewItem
+        {
+            SystemId = ExternalTestHandler.SystemId, Reason = "NoDatMatch", SourcePath = file.FullPath, OriginalFileName = file.Name,
+            Sha1 = sha1, Md5 = new string('0', 32), Crc32 = "00000000", SizeBytes = Europe.Length, CreatedAt = DateTime.UtcNow,
+            LastSeenJobId = Guid.NewGuid(),
+        }, default);
+        var mirror = Substitute.For<ILibraryMirror>();
+        mirror.ReplaceAsync(default!, default).ThrowsAsyncForAnyArgs(new InvalidOperationException("db down"));
+
+        var result = await IngestAsync(Pipeline(mirror: mirror), file);
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Error, IngestErrors.DbWriteFailed)));
+        Assert.That(File.ReadAllBytes(EuropeSidecar), Is.EqualTo(Europe));
+        Assert.That(ReadGame().Roms, Has.Count.EqualTo(2), "the release is committed in the ZIP");
+        Assert.That((await reviews.GetBySha1Async(sha1, default))?.Status, Is.EqualTo("Pending"), "kept for a retry");
+        Assert.That(await RomRowsAsync(), Is.EqualTo(1));
+
+        await Service<DbSync>().SyncAllAsync(default);
+
+        Assert.That(await RomRowsAsync(), Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task SecondRelease_ZipReplacedRightAfterPublication_IsNotMirrored()
+    {
+        await FirstReleaseAsync();
+        var audit = Substitute.For<IAuditLog>();
+        audit.When(a => a.Record(Arg.Is<AuditEvent>(e => e.Action == AuditActions.Ingested))).Do(_ =>
+        {
+            // A regular file with the same content, but not the one the write published.
+            File.Copy(ZipPath, ZipPath + ".copy");
+            File.Delete(ZipPath);
+            File.Move(ZipPath + ".copy", ZipPath);
+        });
+
+        var result = await IngestAsync(Pipeline(audit: audit), Drop("eu.nsp", Europe));
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Error, IngestErrors.DbWriteFailed)));
+        Assert.That(await RomRowsAsync(), Is.EqualTo(1), "the mirror was not updated");
+        Assert.That(File.Exists(EuropeSidecar), Is.True);
     }
 }

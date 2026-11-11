@@ -23,6 +23,39 @@ public sealed record LibraryTarget(LibraryZip? Zip, InfoJsonGame? Game, string? 
             return new(null, null, TargetZipUnreadable, $"{zipPath}: {ex.Message}");
         }
 
+        return Check(zip, zipPath);
+    }
+
+    /// <summary>
+    /// The open for an external game's write (spec W1, I4): the path is checked below <paramref name="romsRoot"/> and
+    /// read through one checked handle, and the ZIP must be the game its mirror row names. A ZIP of another game or
+    /// system is <c>TargetZipUnreadable</c> before any file next to it is touched.
+    /// </summary>
+    public static LibraryTarget OpenChecked(string romsRoot, string zipPath, InfoJsonReader reader, Guid gameId, string systemId)
+    {
+        LibraryZip zip;
+        try
+        {
+            var opened = ExternalRomPath.OpenRead(romsRoot, SafePath.Resolve(romsRoot, zipPath), FileShare.Read | FileShare.Delete);
+            if (opened.Status != ExternalPathStatus.Found)
+                return new(null, null, TargetZipUnreadable, $"{zipPath}: {opened.Details}");
+            zip = LibraryZip.Open(new BufferedStream(opened.Stream!), opened.Path, reader, opened.Snapshot);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+        {
+            return new(null, null, TargetZipUnreadable, $"{zipPath}: {ex.Message}");
+        }
+
+        var target = Check(zip, zipPath);
+        if (target.Game is null || (target.Game.GameId == gameId && target.Game.System == systemId))
+            return target;
+        zip.Dispose();
+        return new(null, null, TargetZipUnreadable,
+            $"{zipPath}: info.json is game {target.Game.GameId} of {target.Game.System}, not the mirrored game {gameId} of {systemId}; the mirror is stale");
+    }
+
+    private static LibraryTarget Check(LibraryZip zip, string zipPath)
+    {
         var failure = zip.InfoJson switch
         {
             { Kind: InfoJsonReadResult.Outcome.Ok } => null,

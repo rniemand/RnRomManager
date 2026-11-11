@@ -269,12 +269,6 @@ public sealed class IngestPipeline(
                 owners, cancellationToken).ConfigureAwait(false);
         }
 
-        if (external && owners.Count > 0)
-        {
-            // shortcut: adding a release to an external game lands in step 9g; until then nothing is written and the source stays.
-            return IngestItemResult.Error(IngestErrors.IoError, "adding a release to an external game is not available yet", system.Id, hashes.Sha1);
-        }
-
         var now = time.GetUtcNow();
         var tags = NoIntroName.Parse(Path.GetFileNameWithoutExtension(datRom.RomName));
         var rom = new InfoJsonRom
@@ -296,7 +290,7 @@ public sealed class IngestPipeline(
 
         return owners.Count == 0
             ? await NewGameAsync(file, system, rom, metadata, bytes, breaker, result, now, actor, null, cancellationToken, source: source).ConfigureAwait(false)
-            : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes!, breaker, result, now, actor, null, cancellationToken).ConfigureAwait(false);
+            : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes, breaker, result, now, actor, null, cancellationToken, source: source).ConfigureAwait(false);
     }
 
     /// <summary>Shared steps 6–11 for synchronous review resolution; Attach supplies a target and skips grouping.</summary>
@@ -387,24 +381,47 @@ public sealed class IngestPipeline(
         return await PackageAsync(file, null, zipPath, game, entries, result, actor, reviewAction, rom.FileName, cancellationToken, afterMirror).ConfigureAwait(false);
     }
 
+    /// <param name="bytes">The ROM for the ZIP; null when <paramref name="source"/> is an external ROM's file.</param>
     private async Task<IngestItemResult> AddToGameAsync(
-        IngestFile file, ISystemHandler system, Guid gameId, InfoJsonRom rom, DatMetadata metadata, byte[] bytes, CircuitBreaker breaker,
+        IngestFile file, ISystemHandler system, Guid gameId, InfoJsonRom rom, DatMetadata metadata, byte[]? bytes, CircuitBreaker breaker,
         IngestItemResult result, DateTimeOffset now, AuditActor actor, string? reviewAction, CancellationToken cancellationToken,
-        Func<Guid, Task>? afterMirror = null)
+        Func<Guid, Task>? afterMirror = null, ExternalSource? source = null)
     {
         var row = await games.GetAsync(gameId, cancellationToken).ConfigureAwait(false);
         if (row is null)
             return IngestItemResult.Error(IngestErrors.TargetZipUnreadable, $"game {gameId} has ROM rows but no games row", system.Id, result.Sha1);
 
-        var (existing, opened, error) = OpenTarget(row.ZipPath, system.Id, result.Sha1);
+        // I4: an external game's ZIP is opened through a checked handle and must be the game its mirror row names.
+        var (existing, opened, error) = source is null
+            ? OpenTarget(row.ZipPath, system.Id, result.Sha1)
+            : Target(LibraryTarget.OpenChecked(paths.Value.Roms, row.ZipPath, reader, gameId, system.Id), system.Id, result.Sha1);
         if (error is not null)
             return error;
         var current = opened!;
 
         using (existing)
         {
-            // §6.1 entry name clash: " (2)"… before the extension.
-            rom = rom with { FileName = FileNameRules.FirstFree(rom.FileName, current.Roms.Select(r => r.FileName).ToHashSet(StringComparer.OrdinalIgnoreCase).Contains) };
+            ExternalPlacement? placement = null;
+            if (source is null)
+            {
+                // §6.1 entry name clash: " (2)"… before the extension.
+                rom = rom with { FileName = FileNameRules.FirstFree(rom.FileName, current.Roms.Select(r => r.FileName).ToHashSet(StringComparer.OrdinalIgnoreCase).Contains) };
+            }
+            else
+            {
+                // E3 logical name against the game's releases; E2 file name against the folder, every claim on it and this ZIP's own pointers.
+                rom = rom with { FileName = ExternalRomName.AllocateLogicalName(rom.FileName, new ExternalNameReservations(current.Roms.Select(r => r.FileName))) };
+                var library = paths.Value.Roms;
+                var folder = ExternalRomPath.ClassifyDirectory(library, Path.GetDirectoryName(SafePath.Resolve(library, row.ZipPath))!);
+                if (folder.Status != ExternalPathStatus.Found)
+                    return IngestItemResult.Error(IngestErrors.IoError, folder.Details, system.Id, result.Sha1);
+                var claims = await roms.ListExternalAsync(cancellationToken).ConfigureAwait(false);
+                var name = ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(row.ZipPath), rom.FileName,
+                    ExternalNameReservations.ForFolder(folder.Path, row.ZipPath[..row.ZipPath.LastIndexOf('/')], claims,
+                        current.Roms.Select(r => r.ExternalFileName).OfType<string>()));
+                rom = rom with { ExternalFileName = name };
+                placement = new ExternalPlacement(source, name);
+            }
             var allRoms = PrimaryRelease.Apply([.. current.Roms, rom]);
 
             // Step 7: only fields that are still empty.
@@ -418,7 +435,9 @@ public sealed class IngestPipeline(
                 Metadata = current.Metadata with { UpdatedAt = now, AppVersion = AppInfo.Version },
             };
 
-            var entries = new Dictionary<string, Func<Stream>> { [LibraryZip.RomEntry(rom.FileName)] = () => new MemoryStream(bytes) };
+            var entries = new Dictionary<string, Func<Stream>>();
+            if (source is null)
+                entries[LibraryZip.RomEntry(rom.FileName)] = () => new MemoryStream(bytes!);
 
             // Step 8 (I4): only while the game still has the placeholder, or no images at all.
             if (current.Images.Count == 0 || current.Images.Any(i => i.IsDefault))
@@ -435,18 +454,20 @@ public sealed class IngestPipeline(
 
             // B9: the new release never adopts an orphan note of its name.
             return await PackageAsync(file, existing, row.ZipPath, game, entries, result with { GameId = gameId }, actor, reviewAction, rom.FileName, cancellationToken,
-                afterMirror, new HashSet<string>(StringComparer.Ordinal) { LibraryZip.NoteEntry(rom.FileName) }).ConfigureAwait(false);
+                afterMirror, new HashSet<string>(StringComparer.Ordinal) { LibraryZip.NoteEntry(rom.FileName) }, placement).ConfigureAwait(false);
         }
     }
 
     /// <summary>§6.1: every write starts from the ZIP's own <c>info.json</c>.</summary>
     internal (LibraryZip? Zip, InfoJsonGame? Game, IngestItemResult? Error) OpenTarget(string zipPath, string systemId, string? sha1)
     {
-        var target = LibraryTarget.Open(paths.Value.Roms, zipPath, reader);
-        return target.Code is null
+        return Target(LibraryTarget.Open(paths.Value.Roms, zipPath, reader), systemId, sha1);
+    }
+
+    private static (LibraryZip? Zip, InfoJsonGame? Game, IngestItemResult? Error) Target(LibraryTarget target, string systemId, string? sha1) =>
+        target.Code is null
             ? (target.Zip, target.Game, null)
             : (null, null, IngestItemResult.Error(target.Code, target.Details, systemId, sha1));
-    }
 
     /// <summary>
     /// Step 3: the SHA1 is already in the library. Its entry has an open <c>HashMismatch</c>/<c>EntryMissing</c>/

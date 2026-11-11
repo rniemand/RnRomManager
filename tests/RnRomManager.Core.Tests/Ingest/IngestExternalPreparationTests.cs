@@ -176,9 +176,8 @@ public class IngestExternalPreparationTests
     }
 
     [Test]
-    public async Task DatHitForAnExistingGame_IsNotStoredYet_AndKeepsItsPendingRow()
+    public async Task DatHitForAGameWithoutAGamesRow_IsTargetZipUnreadable_AndKeepsItsPendingRow()
     {
-        // shortcut: step 9g adds the release to the existing game; until then the source stays.
         var bytes = RomBytes(64);
         var ext = new Handler("ext", [".nsp", ".xci"]);
         var (pipeline, _, dats) = Build([ext]);
@@ -188,7 +187,7 @@ public class IngestExternalPreparationTests
 
         var result = await ProcessAsync(pipeline, file);
 
-        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Error, IngestErrors.IoError)));
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Error, IngestErrors.TargetZipUnreadable)));
         Assert.That(File.Exists(file.FullPath), Is.True);
         Assert.That(Directory.Exists(_paths.Roms), Is.False, "nothing written");
         await _reviews.DidNotReceiveWithAnyArgs().CompleteSourceAsync(default!, default, default!, default, default, default);
