@@ -13,7 +13,7 @@ using RnRomManager.TestData;
 namespace RnRomManager.Api.Tests.Integration;
 
 /// <summary>Spec T9: a retry of an archived Review item whose release is already in the library.</summary>
-public partial class IngestExternalPlacementTests
+public partial class ExternalLibraryTests
 {
     /// <summary>A review repository whose first call of one method fails, as a DB outage at that moment would.</summary>
     public class FailFirstResolution : DispatchProxy

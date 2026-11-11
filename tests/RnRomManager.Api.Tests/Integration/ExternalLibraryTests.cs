@@ -21,7 +21,7 @@ namespace RnRomManager.Api.Tests.Integration;
 /// after the move puts it back (or keeps it, when its origin can't be trusted any more).
 /// </summary>
 [Category("Integration")]
-public partial class IngestExternalPlacementTests
+public partial class ExternalLibraryTests
 {
     private const string GameName = "Space Game (USA)";
     private const string ZipRelative = "ext/S/Space Game.zip";

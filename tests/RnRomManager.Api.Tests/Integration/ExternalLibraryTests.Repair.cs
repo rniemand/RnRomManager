@@ -14,7 +14,7 @@ using RnRomManager.TestData;
 namespace RnRomManager.Api.Tests.Integration;
 
 /// <summary>Spec I3 dedupe and I6 self-repair for external ROMs.</summary>
-public partial class IngestExternalPlacementTests
+public partial class ExternalLibraryTests
 {
     private const string GbDat = "Nintendo - Game Boy";
     private static readonly byte[] SharedGb = TestLibrary.RomBytes(9);

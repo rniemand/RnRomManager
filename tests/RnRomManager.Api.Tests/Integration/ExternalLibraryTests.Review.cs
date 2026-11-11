@@ -12,7 +12,7 @@ using RnRomManager.TestData;
 namespace RnRomManager.Api.Tests.Integration;
 
 /// <summary>Spec T9 and I4–I5 for Review: an external item is re-hashed streamed and moved, never read into memory.</summary>
-public partial class IngestExternalPlacementTests
+public partial class ExternalLibraryTests
 {
     private static readonly byte[] Mystery = RandomNumberGenerator.GetBytes(3000);
     private static readonly ReviewResolutionRequest ManualMystery = new() { Action = "Manual", Title = "Mystery Game", Regions = [], Languages = [], Flags = [] };

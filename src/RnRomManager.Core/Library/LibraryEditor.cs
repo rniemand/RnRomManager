@@ -20,6 +20,16 @@ namespace RnRomManager.Core.Library;
 /// (§3.1) and follows the sync rule (§14.2): the ZIP is written (or deleted) first, then the DB. Every write starts from
 /// the ZIP's own <c>info.json</c> (§6.1). Removed ROM bytes go to <c>ingest/&lt;system&gt;/_removed/</c>, never deleted.
 /// </summary>
+/// <summary>Test seams of <see cref="LibraryEditor"/>'s external edits.</summary>
+public sealed class ExternalEditHooks
+{
+    /// <summary>Passed to every move of an edit, including the moves that undo it.</summary>
+    public ExternalMoveHooks? Move { get; init; }
+
+    /// <summary>Passed to the checked ZIP write.</summary>
+    public LibraryZipWriterHooks? Writer { get; init; }
+}
+
 public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRepository roms, IImageRepository images, ILibraryMirror mirror,
     InfoJsonReader reader, DatCache dats, ISystemRegistry systems, MediaService media, GameMediaRetry mediaRetry,
     IOptions<PathsOptions> paths, IAuditLog audit, AuditPaths auditPaths, ICollectionRepository collections, TimeProvider time,
@@ -36,6 +46,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return new(NotFound);
+        if (systems.ById(row.SystemId) is { EmbedRomsInZip: false })
+            return await PatchExternalAsync(row, patch, actor).ConfigureAwait(false);
         var target = LibraryTarget.Open(paths.Value.Roms, row.ZipPath, reader);
         if (target.Code is not null)
             return new(target.Code, target.Details);
@@ -43,19 +55,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         using var existing = target.Zip!;
         var current = target.Game!;
         var title = patch.Title ?? current.Title;
-        var game = current with
-        {
-            Title = title,
-            DisplayTitle = DisplayTitle.From(title),
-            ReleaseYear = patch.SetReleaseYear ? patch.ReleaseYear : current.ReleaseYear,
-            Developers = patch.Developers ?? current.Developers,
-            Publishers = patch.Publishers ?? current.Publishers,
-            Genres = patch.Genres ?? current.Genres,
-            Description = patch.SetDescription ? patch.Description : current.Description,
-            Rating = patch.SetRating ? patch.Rating : current.Rating,
-            Favourite = patch.Favourite ?? current.Favourite,
-            Metadata = Touched(current),
-        };
+        var game = Patched(current, patch);
 
         // §6.1: the ZIP name follows the title. Names compare case-insensitively (§5), so a case-only change keeps the
         // file where it is (and keeps any clash suffix it already has).
@@ -83,6 +83,166 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         if (result.Code is null)
             logger.LogInformation("Game {GameId} edited ({ZipPath})", gameId, zipPath);
         return result;
+    }
+
+    private InfoJsonGame Patched(InfoJsonGame current, GamePatch patch)
+    {
+        var title = patch.Title ?? current.Title;
+        return current with
+        {
+            Title = title,
+            DisplayTitle = DisplayTitle.From(title),
+            ReleaseYear = patch.SetReleaseYear ? patch.ReleaseYear : current.ReleaseYear,
+            Developers = patch.Developers ?? current.Developers,
+            Publishers = patch.Publishers ?? current.Publishers,
+            Genres = patch.Genres ?? current.Genres,
+            Description = patch.SetDescription ? patch.Description : current.Description,
+            Rating = patch.SetRating ? patch.Rating : current.Rating,
+            Favourite = patch.Favourite ?? current.Favourite,
+            Metadata = Touched(current),
+        };
+    }
+
+    /// <summary>Test seams of the external edit path: points where a test makes a move or the ZIP write fail.</summary>
+    public ExternalEditHooks? ExternalHooks { get; set; }
+
+    /// <summary>
+    /// W2 for an external game. The ZIP is opened through a checked handle and must be the mirrored game (I4). When
+    /// the budgeted ZIP base changes (E2: a case-only change, or one past the byte cut, keeps it), the ZIP gets a new
+    /// allocated path and every external file is moved to its E1 name beside it before the ZIP is written; a file that
+    /// is already missing only gets its new name. Any failure moves the files back; after the DB update the old ZIP
+    /// is removed, unless something else has taken its place.
+    /// </summary>
+    private async Task<LibraryEditResult> PatchExternalAsync(GameRow row, GamePatch patch, AuditActor? actor)
+    {
+        var ct = CancellationToken.None; // edits write without the request's token (existing rule)
+        var library = paths.Value.Roms;
+        var target = LibraryTarget.OpenChecked(library, row.ZipPath, reader, row.Id, row.SystemId);
+        if (target.Code is not null)
+            return new(target.Code, target.Details);
+        using var existing = target.Zip!;
+        var current = target.Game!;
+        var game = Patched(current, patch);
+        var oldFolder = Path.GetDirectoryName(existing.Path)!;
+
+        var claims = await roms.ListExternalAsync(ct).ConfigureAwait(false);
+        var oldFolderPath = row.ZipPath[..row.ZipPath.LastIndexOf('/')];
+        // Moving a file another game also claims would take it from that game.
+        if (current.Roms.Select(r => r.ExternalFileName).OfType<string>().FirstOrDefault(name => claims.Any(c => c.GameId != row.Id
+                && string.Equals(c.ExternalFileName, name, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(c.ZipPath[..c.ZipPath.LastIndexOf('/')], oldFolderPath, StringComparison.OrdinalIgnoreCase))) is { } conflict)
+            return new(LibraryTarget.TargetZipUnreadable, $"{row.ZipPath}: {conflict} is also claimed by another game");
+
+        var zipPath = row.ZipPath;
+        var moves = new List<(string From, string To, ExternalFileSnapshot Snapshot)>();
+        if (!ExternalRomName.SameZipBase(current.Title, game.Title))
+        {
+            zipPath = await ExternalRomName.AllocateZipPathAsync(library, game.System, game.Title, claims, games, ct, row.Id, row.ZipPath).ConfigureAwait(false);
+            var newFolderPath = zipPath[..zipPath.LastIndexOf('/')];
+            var newFolder = ExternalRomPath.ClassifyDirectory(library, Path.GetDirectoryName(SafePath.Resolve(library, zipPath))!);
+            try
+            {
+                if (newFolder.Status == ExternalPathStatus.Missing)
+                {
+                    Directory.CreateDirectory(newFolder.Path);
+                    newFolder = ExternalRomPath.ClassifyDirectory(library, newFolder.Path);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return new(IoError, $"{newFolder.Path} can't be created: {ex.Message}");
+            }
+            if (newFolder.Status != ExternalPathStatus.Found)
+                return new(IoError, newFolder.Details);
+
+            var names = ExternalNameReservations.ForFolder(newFolder.Path, newFolderPath, claims.Where(c => c.GameId != row.Id));
+            var zipBase = Path.GetFileNameWithoutExtension(zipPath);
+            var renamed = new List<InfoJsonRom>();
+            foreach (var rom in current.Roms)
+            {
+                var name = ExternalRomName.Allocate(zipBase, rom.FileName, names);
+                var file = ExternalRomPath.ClassifyFile(library, Path.Combine(oldFolder, rom.ExternalFileName!));
+                if (file.Status == ExternalPathStatus.Found)
+                    moves.Add((file.Path, Path.Combine(newFolder.Path, name), file.Snapshot!));
+                else if (file.Status == ExternalPathStatus.Missing)
+                    logger.LogWarning("Game {GameId}: {File} is missing, so only its name changes, to {Name}", row.Id, file.Path, name);
+                else
+                    return new(IoError, file.Details);
+                renamed.Add(rom with { ExternalFileName = name });
+            }
+            game = game with { Roms = renamed };
+        }
+
+        // W6: the moves come after every lookup and right before the first ZIP write.
+        var placed = new List<(string From, string To, ExternalFileSnapshot Snapshot)>();
+        foreach (var move in moves)
+        {
+            var moved = ExternalRomMove.Move(library, move.From, library, move.To, move.Snapshot, logger, hooks: ExternalHooks?.Move);
+            if (moved.Status != ExternalMoveStatus.Moved)
+            {
+                UndoMoves(placed);
+                return new(IoError, moved.Details);
+            }
+            placed.Add((move.From, moved.Path!, moved.Snapshot!));
+        }
+
+        ExternalFileSnapshot published;
+        try
+        {
+            var touched = placed.ToDictionary(m => Path.GetFileName(m.To), m => m.Snapshot, StringComparer.OrdinalIgnoreCase);
+            published = await new LibraryZipWriter(reader).WriteCheckedAsync(library, SafePath.Resolve(library, zipPath), existing,
+                new LibraryZipChanges(game, new Dictionary<string, Func<Stream>>(), ExternalFiles: touched), ct, ExternalHooks?.Writer).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Writing {ZipPath} failed", zipPath);
+            UndoMoves(placed);
+            if (ex is LibraryZipVerifyException)
+                return new(VerifyFailed, ex.Message);
+            if (ex is IOException or UnauthorizedAccessException)
+                return new(IoError, ex.Message);
+            throw;
+        }
+
+        if (actor is not null && ChangedFields(current, game) is { Count: > 0 } changed)
+            audit.Record(new AuditEvent(AuditActions.GameUpdated, actor, game.System, row.Id, AuditPaths.Library(row.ZipPath),
+                AuditPaths.Library(zipPath), string.Join(", ", changed)));
+        var result = await MirrorAsync(() =>
+        {
+            // W1: stamped from the published ZIP, and only while the path still names it.
+            if (ExternalRomPath.ClassifyFile(library, SafePath.Resolve(library, zipPath)).Snapshot != published)
+                throw new IOException($"{zipPath} is no longer the ZIP this edit published");
+            return mirror.ReplaceAsync(new MirrorEntry(game, zipPath, published.Length, published.LastWriteTimeUtc), ct);
+        }, zipPath).ConfigureAwait(false);
+        if (result.Code is null && zipPath != row.ZipPath)
+            DeleteOldZipIfUnchanged(row.ZipPath, existing.Snapshot!, row.Id);
+        if (result.Code is null)
+            logger.LogInformation("Game {GameId} edited ({ZipPath})", row.Id, zipPath);
+        return result;
+    }
+
+    /// <summary>W6: moves the files of a failed edit back, newest first; a move that fails is logged and left.</summary>
+    private void UndoMoves(List<(string From, string To, ExternalFileSnapshot Snapshot)> placed)
+    {
+        for (var i = placed.Count - 1; i >= 0; i--)
+        {
+            var (from, to, snapshot) = placed[i];
+            var back = ExternalRomMove.Move(paths.Value.Roms, to, paths.Value.Roms, from, snapshot, logger, hooks: ExternalHooks?.Move);
+            if (back.Status != ExternalMoveStatus.Moved)
+                logger.LogError("Moving {To} back to {From} failed ({Details}); integrity will report it", to, from, back.Details);
+        }
+    }
+
+    /// <summary>W1: the renamed game's old ZIP goes only while it is still the file the edit opened.</summary>
+    private void DeleteOldZipIfUnchanged(string zipPath, ExternalFileSnapshot opened, Guid gameId)
+    {
+        var path = SafePath.Resolve(paths.Value.Roms, zipPath);
+        if (ExternalRomPath.ClassifyFile(paths.Value.Roms, path) is not { Status: ExternalPathStatus.Found } current || current.Snapshot != opened)
+        {
+            logger.LogError("Game {GameId} moved away from {ZipPath}, but what is there now isn't the ZIP it left; it was kept", gameId, zipPath);
+            return;
+        }
+        DeleteOldZip(zipPath, gameId);
     }
 
     /// <summary>
