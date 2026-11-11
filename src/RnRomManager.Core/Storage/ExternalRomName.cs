@@ -252,20 +252,36 @@ public static class ExternalRomName
     public static string? AllocateRollbackPath(string originalPath, bool fitSourcePathColumn)
     {
         var folder = Path.GetDirectoryName(originalPath)!;
-        var name = Path.GetFileName(originalPath);
+        return AllocateSibling(folder, Path.GetFileName(originalPath), companionSuffix: null,
+            fitSourcePathColumn ? MaxSourcePathScalars - Scalars(folder) - 1 : int.MaxValue);
+    }
+
+    /// <summary>
+    /// Where an external system's ingest file goes in a side folder (<c>_failed/</c>, <c>_duplicates/</c>; spec
+    /// W6): its own name when free, else with the stem cut and the usual <c> (N)</c> suffix. The name, its staging
+    /// name and <c>&lt;name&gt;&lt;companionSuffix&gt;</c> must all be free (ignoring case) and fit a path component.
+    /// Null when no legal name fits.
+    /// </summary>
+    /// <param name="companionSuffix"><c>.error.txt</c> for <c>_failed/</c>: the diagnostic written next to the file.</param>
+    public static string? AllocateSidePath(string folder, string fileName, string? companionSuffix = null) =>
+        AllocateSibling(folder, fileName, companionSuffix, int.MaxValue);
+
+    private static string? AllocateSibling(string folder, string name, string? companionSuffix, int maxScalars)
+    {
         var extension = Path.GetExtension(name);
         var stem = name[..^extension.Length];
         var taken = new ExternalNameReservations(
             Directory.Exists(folder) ? Directory.EnumerateFileSystemEntries(folder).Select(e => Path.GetFileName(e)!) : []);
-        var pathBudget = fitSourcePathColumn ? MaxSourcePathScalars - Scalars(folder) - 1 : int.MaxValue;
+        var maxBytes = Math.Min(MaxNameBytes, MaxComponentBytes - Bytes(companionSuffix ?? ""));
         for (var n = 1; ; n++)
         {
             var tail = Suffix(n) + extension;
-            var cut = CutScalars(Cut(stem, Math.Max(0, MaxNameBytes - Bytes(tail))), Math.Max(0, pathBudget - Scalars(tail)));
+            var cut = CutScalars(Cut(stem, Math.Max(0, maxBytes - Bytes(tail))), Math.Max(0, maxScalars - Scalars(tail)));
             var candidate = cut + tail;
-            if ((cut.Length == 0 && stem.Length > 0) || Bytes(candidate) > MaxNameBytes || Scalars(candidate) > pathBudget)
+            if ((cut.Length == 0 && stem.Length > 0) || Bytes(candidate) > maxBytes || Scalars(candidate) > maxScalars)
                 return null;
-            if (!taken.IsTaken(candidate) && !taken.IsTaken(StagingName(candidate)))
+            if (!taken.IsTaken(candidate) && !taken.IsTaken(StagingName(candidate))
+                && (companionSuffix is null || !taken.IsTaken(candidate + companionSuffix)))
                 return Path.Combine(folder, candidate);
         }
     }

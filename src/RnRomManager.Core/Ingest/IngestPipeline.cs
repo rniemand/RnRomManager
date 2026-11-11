@@ -379,8 +379,9 @@ public sealed class IngestPipeline(
         var by = actor.JobId is { } jobId ? jobId.ToString() : $"review by {actor.Username}";
         try
         {
-            File.WriteAllText(moved.Path + ".error.txt",
-                $"reason: {reason}\ndetails: {details}\njob: {by}\ntime: {time.GetUtcNow().UtcDateTime:O}\nsource: {file.FullPath}\n");
+            // External systems never overwrite: the name was reserved, so an occupant is someone else's file.
+            using var diagnostic = new StreamWriter(new FileStream(moved.Path + DiagnosticSuffix, IsExternal(file) ? FileMode.CreateNew : FileMode.Create));
+            diagnostic.Write($"reason: {reason}\ndetails: {details}\njob: {by}\ntime: {time.GetUtcNow().UtcDateTime:O}\nsource: {file.FullPath}\n");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -399,10 +400,16 @@ public sealed class IngestPipeline(
         return moved.Error;
     }
 
+    private const string DiagnosticSuffix = ".error.txt";
+
+    private bool IsExternal(IngestFile file) => systems.ById(file.SystemId) is { EmbedRomsInZip: false };
+
     /// <summary>Moves the source into <c>ingest/&lt;system&gt;/&lt;folder&gt;/</c>, with a ` (N)` suffix on a clash (any case).</summary>
     private (string Path, IngestItemResult? Error) MoveAside(IngestFile file, string folder)
     {
         var directory = Path.Combine(Path.GetDirectoryName(file.FullPath)!, folder);
+        if (IsExternal(file))
+            return MoveAsideChecked(file, folder, directory);
         try
         {
             Directory.CreateDirectory(directory);
@@ -413,6 +420,41 @@ public sealed class IngestPipeline(
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return ("", IngestItemResult.Error(IngestErrors.IoError, $"couldn't move to {folder}/: {ex.Message}", file.SystemId));
+        }
+    }
+
+    /// <summary>
+    /// W6 for an external system: the side folder and the source are checked (no links, a regular file), the name
+    /// is budgeted with its staging and diagnostic names, and the move never replaces anything.
+    /// </summary>
+    private (string Path, IngestItemResult? Error) MoveAsideChecked(IngestFile file, string folder, string directory)
+    {
+        (string, IngestItemResult?) Fail(string? details) =>
+            ("", IngestItemResult.Error(IngestErrors.IoError, $"couldn't move to {folder}/: {details}", file.SystemId));
+
+        var root = paths.Value.Ingest;
+        try
+        {
+            var target = ExternalRomPath.ClassifyDirectory(root, directory);
+            if (target.Status == ExternalPathStatus.Missing)
+            {
+                Directory.CreateDirectory(target.Path);
+                target = ExternalRomPath.ClassifyDirectory(root, directory);
+            }
+            if (target.Status != ExternalPathStatus.Found)
+                return Fail(target.Details);
+            var source = ExternalRomPath.ClassifyFile(root, file.FullPath);
+            if (source.Status != ExternalPathStatus.Found)
+                return Fail(source.Details);
+            if (ExternalRomName.AllocateSidePath(target.Path, file.Name, folder == StorageFolders.FailedFolder ? DiagnosticSuffix : null) is not { } destination)
+                return Fail($"no name for {file.Name} fits in {target.Path}");
+
+            var moved = ExternalRomMove.Move(root, source.Path, root, destination, source.Snapshot!, logger);
+            return moved.Status == ExternalMoveStatus.Moved ? (moved.Path!, null) : Fail(moved.Details);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return Fail(ex.Message);
         }
     }
 
