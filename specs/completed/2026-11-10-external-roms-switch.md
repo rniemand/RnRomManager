@@ -1,6 +1,6 @@
 ---
 title: External ROM storage and Nintendo Switch
-status: in-progress # draft | ready | in-progress | completed
+status: completed # draft | ready | in-progress | completed
 created: 2026-11-10
 ---
 
