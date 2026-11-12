@@ -125,7 +125,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - The ZIP name follows E2 as today.
 - **B11 Single files.** A matched `.iso`/`.bin` that no cue names becomes a single-file release (no `files`), as Switch files do today but with B10 naming. An unmatched `.iso` or `.nrg` goes to Review, where it can be resolved.
 - **B12 Release files.** In info.json schema **v6**, every rom has a `files` array. It is null when the release is one file. Otherwise each entry is `{ fileName, externalFileName, originalFileName, sizeBytes, crc32, md5, sha1 }`: the cue first, then the cue's `FILE` names in order, leaving out the data track (it is the main file).
-  - The validator allows a non-null `files` only for `FileSets` systems. Every name must have one of the handler's extensions. Names must be unique across the game (main files and files together, ignoring case). Each file must be within the size limits.
+  - The validator allows a non-null `files` only for `FileSets` systems. Every `files` name follows today's `externalFileName` rules (`PortableNameProblem`, at most 250 UTF-8 bytes) and has one of the handler's extensions. Names must be unique across the game (main files and files together, ignoring case). Each file's `sizeBytes` is at most the handler's `MaxRomSizeBytes`, as for a main file (the validator has no minimum today). On a `FileSets` system, `fileName` must equal `externalFileName`, for main files and `files` entries alike (B10).
   - For `files` names, and for main `fileName`s on `FileSets` systems, the validator's `..` rule rejects only a name equal to `.` or `..`, or one containing a path separator, as B8 does.
   - The `InfoJsonUpgraderV5` adds `files: null` to every rom.
   - **Size:** `files` makes a large info.json possible (about 40 KB per 99-track release). `LibraryZipWriter` refuses to publish an info.json over `InfoJsonReader.MaxBytes` (1 MiB) with `VerifyFailed`, because the reader would refuse it and leave the game unreadable. Today the writer never checks this. The ingest or edit then rolls back as for any `VerifyFailed`.
@@ -183,7 +183,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - `totalSizeBytes`: the main size plus the files.
 
   `GET /api/games/{id}/roms/{romId}/files/{fileId}/download` streams one set file, named by its `fileName`. It works like today's external ROM download (`LibraryFiles.OpenExternal`, file found by `GetFileAsync`, B13): range support, the same auth, `404` when the file belongs to another release, and `404` when another game claims the name in that folder, as today.
-  - On the Game page, a release with files shows a "N files" toggle under the row, listing each file with its `FileSize`, SHA1 (copy button) and a download icon button with an `aria-label`. The list follows the T1–T4 table rules.
+  - On the Game page, a release with files shows a "N files" toggle under the row, where N counts every file of the release (the main file plus `files`, so 3 for a cue and two tracks). It lists the main file first and then each `files` entry, each with its file name, `FileSize`, SHA1 (copy button) and a download icon button with an `aria-label`. The list follows the T1–T4 table rules.
   - The release's size column shows `totalSizeBytes`.
 - **B21 Sizes.** In the library list, `PrimarySizeBytes` includes the primary release's files. The Library Size report sums `rom_files.size_bytes` along with the external main files. `romCount` stays a count of releases.
 
@@ -246,7 +246,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - Done when: the classes above pass.
 - [ ] **3. Release files in info.json**: B12 (info.json part). Add `InfoJsonRomFile`, `files` and schema v6, `InfoJsonUpgraderV5` (registered in `AppHost`), the validator rules, and `LibraryZipWriter`'s length check for set files.
   - Tests:
-    - `InfoJsonTests` (it also holds the validator cases): a v6 round-trip with files; `files` on a non-`FileSets` system, a duplicate name across the game, a bad extension and an oversize file are each rejected; a `...Iru!` name is accepted on a `FileSets` system.
+    - `InfoJsonTests` (it also holds the validator cases): a v6 round-trip with files; `files` on a non-`FileSets` system, a duplicate name across the game, a bad extension, an oversize file, a `files` name over 250 UTF-8 bytes and a `fileName` that differs from its `externalFileName` on a `FileSets` system are each rejected; a `...Iru!` name is accepted on a `FileSets` system.
     - `InfoJsonTests` also holds the upgrader cases, as for V2–V4: `V5Upgrade_` v5 → v6 adds `files: null`. Add `InfoJsonUpgraderV5` to the upgrader lists built in `InfoJsonTests` and `LibraryZipTests`.
     - `LibraryZipTests`: a write whose set file has the wrong length fails verification; a write whose info.json would be over 1 MiB fails with `VerifyFailed` and leaves the old ZIP.
   - Done when: the classes above pass.
@@ -341,7 +341,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - `ReportEndpointsTests`: the size includes the files.
   - Done when: those classes pass (Docker running).
 - [ ] **17. Game page file list**: B20 (UI part). `lib/api/types.ts` and the Game page toggle and table.
-  - Tests: `game-page.test.ts`: the toggle lists the files with download buttons that have an `aria-label`, and the size shows the total; `table-style.test.ts` passes.
+  - Tests: `game-page.test.ts`: a release with 2 `files` shows "3 files", and the toggle lists the main file then the 2 files, with download buttons that have an `aria-label`, and the size shows the total; `table-style.test.ts` passes.
   - Done when: `npm test`, `npm run lint` and `npm run check` pass.
 - [ ] **18. The four headerless handlers**: B4. Add `RnRomManager.Systems.Sony` (`psx`, `psp`) and `.Microsoft` (`x360`) with their test projects, the Saturn handler in `.Sega`, their box art, `RnRomManager.slnx` and the `Dockerfile` restore layer. They are not registered yet.
   - Tests:
@@ -383,10 +383,10 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - e2e: the PlayStation game's "3 files" toggle downloads Track 2 byte-exact.
   - Done when: the Core and Api test projects pass (Docker running), and `pwsh scripts/test-e2e.ps1` passes.
 - [ ] **22. Docs**:
-  - `README.md`: the systems list, the Refresh DATs note and the ingest folders.
+  - `README.md`: the systems list, the Refresh DATs note, the ingest folders, and identification against Redump as well as No-Intro DATs (its intro names only No-Intro).
   - `features.md`: the systems, disc sets (cue rule, `IncompleteSet`, archives, Review limits), sizes, and the Game page file list.
   - `zip-format.md`: v6 `files`, exact names for `FileSets` systems, the layout's six system folders, the GC/Wii header fields, the Naming table's Tags row (tags from the DAT game name for `FileSets` systems), the `system` id list, and the Validation `..` rule for `FileSets` names.
-  - `features.md` also: the Review queue's "Ambiguous set" reason and the broken-cue rule.
+  - `features.md` also: the Review queue's "Ambiguous set" reason and the broken-cue rule; Admin → DATs' Refresh DATs fetching the Redump DATs; the External storage section's title-edit rule (set files keep their names, B16); and the API reference: `files`, `totalSizeBytes` and the file download route on `GET /api/games/{id}`, `resolvable` on the review item, the Dat action's naming for `FileSets` systems, and the new 409 codes.
   - `adding-a-system.md`: the new members, with the "one file per release" limit replaced by `FileSets`, and the size rule corrected (ingest checks size against the first family member that lists the extension).
   - `deployment.md`: the new ingest folders and the upgrade step (Refresh DATs).
   - `development.md`: project rows, `ExternalSetTestHandler`, and the seed table (Basic 23 games and 28 releases; the current table's 21 releases is stale, the code has 22).
@@ -465,6 +465,9 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - 2026-11-12 For `FileSets` systems, Review's Dat action takes its base title and tags from `DatGameName`, and Attach (`AmbiguousGroup`, flag `None`) its tags, as ingest does (code: `ReviewResolver` parses the rom name today).
 - 2026-11-12 DAT search dedupe applies to every system; the "No-Intro has no repeated names" claim was dropped (reviewer).
 - 2026-11-12 Step 8 split into storing a set (8) and its guards, job rules and lone files (9) to stay near 300 lines; later steps renumbered (reviewer).
+- 2026-11-12 `files` names follow the `externalFileName` rules (portable, 250 bytes); the size check is the maximum only, as for main files; `fileName` must equal `externalFileName` on `FileSets` systems (code: `InfoJsonValidator.ExternalProblem`; B10).
+- 2026-11-12 The Game page's "N files" counts the main file too and lists it first, matching the e2e "3 files" (reviewer).
+- 2026-11-12 Docs step also covers README's No-Intro-only intro, Refresh DATs in features.md, the External storage title-edit rule and the API reference additions (doc rule).
 
 ## Kickoff prompt
 ```text
