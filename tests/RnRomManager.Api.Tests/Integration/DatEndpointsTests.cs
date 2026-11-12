@@ -35,6 +35,12 @@ public class DatEndpointsTests
         [IngestSeeder.MegaDriveDat] = [],
         [IngestSeeder.Sega32xDat] = [],
         [IngestSeeder.TurboGrafx16Dat] = [],
+        [IngestSeeder.PsxDat] = [],
+        [IngestSeeder.PspDat] = [],
+        [IngestSeeder.GameCubeDat] = [],
+        [IngestSeeder.WiiDat] = [],
+        [IngestSeeder.Xbox360Dat] = [],
+        [IngestSeeder.SaturnDat] = [],
     };
 
     [SetUp]
@@ -53,12 +59,12 @@ public class DatEndpointsTests
         _factory.Settings["Sources:DatBaseUrl"] = "https://dats.test/metadat";
         _factory.Settings["Sources:TitleDbUrl"] = "https://dats.test/metadat/US.en.json";
         _remote = Path.Combine(_factory.Root, "remote");
-        FixtureDatWriter.Write(_remote, Games(), version: "2026.11.01");
+        FixtureDatWriter.Write(_remote, Games(), version: "2026.11.01", layouts: IngestSeeder.RedumpLayouts);
         // The upstream titledb source is an object keyed by nsuId; refresh turns it into Switch's compact file.
         File.WriteAllText(Path.Combine(_remote, "US.en.json"), "{}", new System.Text.UTF8Encoding(false));
         // What a previous refresh left behind; loaded at startup (step 9).
         FixtureDatWriter.Write(Path.Combine(_factory.Root, "cache", DatCache.FolderName), Games(), version: "2026.01.01",
-            downloadedAt: new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero), titleDb: IngestSeeder.EmptySwitch);
+            downloadedAt: new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero), titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
 
         _admin = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
@@ -102,7 +108,7 @@ public class DatEndpointsTests
             {
                 [ExternalTitleDbTestHandler.DatNameValue] = [new("0100000000001000", "The Orbit Expedition", null, null, 2020, [], ["en"], null, null)],
                 [IngestSeeder.SwitchDat] = [],
-            });
+            }, layouts: IngestSeeder.RedumpLayouts);
         var admin = await AuthClient.CreateAsync(factory);
         await TestUsers.CreateAsync(factory, "boss", TestUsers.AllRoles);
         (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
@@ -120,7 +126,7 @@ public class DatEndpointsTests
         var rows = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
         var names = rows.Select(r => r.GetProperty("datName").GetString()!).ToList();
-        Assert.That(names, Has.Count.EqualTo(15), "13 libretro systems, Switch and the test titledb system");
+        Assert.That(names, Has.Count.EqualTo(21), "13 libretro systems, the 6 disc systems, Switch and the test titledb system");
         Assert.That(names, Is.EqualTo(names.Order(StringComparer.Ordinal)));
         var titleDb = rows.Single(r => r.GetProperty("datName").GetString() == ExternalTitleDbTestHandler.DatNameValue);
         Assert.That(titleDb.GetProperty("version").GetString(), Is.EqualTo(FixtureDatWriter.TitleDbVersion));
@@ -188,7 +194,7 @@ public class DatEndpointsTests
         using var response = await _admin.GetAsync("/api/admin/dats");
         var rows = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
-        Assert.That(rows.Select(r => r.GetProperty("datName").GetString()), Is.EqualTo(new[] { IngestSeeder.Atari2600Dat, IngestSeeder.ColecoVisionDat, IngestSeeder.TurboGrafx16Dat, Gb, IngestSeeder.GbaDat, Gbc, IngestSeeder.N64Dat, IngestSeeder.NesDat, IngestSeeder.SwitchDat, IngestSeeder.SnesDat, IngestSeeder.Sega32xDat, IngestSeeder.GameGearDat, IngestSeeder.MasterSystemDat, IngestSeeder.MegaDriveDat }));
+        Assert.That(rows.Select(r => r.GetProperty("datName").GetString()), Is.EqualTo(new[] { IngestSeeder.Atari2600Dat, IngestSeeder.ColecoVisionDat, IngestSeeder.Xbox360Dat, IngestSeeder.TurboGrafx16Dat, Gb, IngestSeeder.GbaDat, Gbc, IngestSeeder.GameCubeDat, IngestSeeder.N64Dat, IngestSeeder.NesDat, IngestSeeder.SwitchDat, IngestSeeder.SnesDat, IngestSeeder.WiiDat, IngestSeeder.Sega32xDat, IngestSeeder.GameGearDat, IngestSeeder.MasterSystemDat, IngestSeeder.MegaDriveDat, IngestSeeder.SaturnDat, IngestSeeder.PsxDat, IngestSeeder.PspDat }));
         Assert.That(rows.Select(r => r.GetProperty("version").GetString()), Is.All.EqualTo("2026.01.01"));
         Assert.That(rows[0].GetProperty("downloadedAt").GetDateTimeOffset(), Is.EqualTo(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero)));
     }
@@ -197,11 +203,8 @@ public class DatEndpointsTests
     public async Task AdminDats_ListsARedumpDat()
     {
         // B1: a redump/ main DAT is a row like a no-intro/ one; the listing reads the manifest as it is.
-        const string psx = "Sony - PlayStation";
-        var games = Games();
-        games[psx] = [];
-        FixtureDatWriter.Write(_factory.Services.GetRequiredService<DatCache>().Directory, games, version: "2026.01.01",
-            layouts: new Dictionary<string, FixtureDatLayout> { [psx] = FixtureDatLayout.Redump });
+        const string psx = IngestSeeder.PsxDat;
+        Assert.That(File.Exists(Path.Combine(_factory.Services.GetRequiredService<DatCache>().Directory, DatKind.Redump, psx + ".dat")), Is.True);
 
         using var response = await _admin.GetAsync("/api/admin/dats");
         var rows = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
@@ -233,7 +236,7 @@ public class DatEndpointsTests
         var after = clock.GetUtcNow().UtcDateTime.ToString("yyyy.MM.dd", System.Globalization.CultureInfo.InvariantCulture);
 
         Assert.That(job.Status, Is.EqualTo(JobStatus.Completed), job.Error);
-        Assert.That(_server.Requests, Has.Count.EqualTo(66), "5 per libretro system and one titledb source");
+        Assert.That(_server.Requests, Has.Count.EqualTo(72), "5 per No-Intro libretro system, 1 per disc system (no metadat) and one titledb source");
         Assert.That(_server.Requests.Count(r => r.RequestUri!.AbsoluteUri == "https://dats.test/metadat/US.en.json"), Is.EqualTo(1));
         // titledb is versioned by the UTC date of its download, apart from the libretro fixture version.
         Assert.That(_factory.Services.GetRequiredService<DatCache>().For("switch")!.Version, Is.AnyOf(before, after));

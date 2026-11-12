@@ -19,6 +19,16 @@ public static class IngestSeeder
     public const string Sega32xDat = "Sega - 32X";
     public const string TurboGrafx16Dat = "NEC - PC Engine - TurboGrafx 16";
     public const string SwitchDat = "Nintendo - Nintendo Switch";
+    public const string PsxDat = "Sony - PlayStation";
+    public const string PspDat = "Sony - PlayStation Portable";
+    public const string GameCubeDat = "Nintendo - GameCube";
+    public const string WiiDat = "Nintendo - Wii";
+    public const string Xbox360Dat = "Microsoft - Xbox 360";
+    public const string SaturnDat = "Sega - Saturn";
+
+    /// <summary>The six disc systems' DATs (disc systems B1/B2): each in <c>redump/</c>, with no metadat.</summary>
+    public static IReadOnlyDictionary<string, FixtureDatLayout> RedumpLayouts { get; } =
+        new[] { PsxDat, PspDat, GameCubeDat, WiiDat, Xbox360Dat, SaturnDat }.ToDictionary(n => n, _ => FixtureDatLayout.Redump);
 
     /// <summary>An empty titledb compact file for Switch: enough for the DAT preflight of a fixture cache.</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> EmptySwitch =>
@@ -180,8 +190,8 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit] },
-            titleDb: new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = titleDb });
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [], [PspDat] = [], [GameCubeDat] = [], [WiiDat] = [], [Xbox360Dat] = [], [SaturnDat] = [] },
+            titleDb: new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = titleDb }, layouts: RedumpLayouts);
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
     }

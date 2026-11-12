@@ -43,6 +43,12 @@ public class IngestArchiveTests
             [IngestSeeder.MegaDriveDat] = [],
             [IngestSeeder.Sega32xDat] = [],
             [IngestSeeder.TurboGrafx16Dat] = [],
+            [IngestSeeder.PsxDat] = [],
+            [IngestSeeder.PspDat] = [],
+            [IngestSeeder.GameCubeDat] = [],
+            [IngestSeeder.WiiDat] = [],
+            [IngestSeeder.Xbox360Dat] = [],
+            [IngestSeeder.SaturnDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ),
@@ -51,7 +57,7 @@ public class IngestArchiveTests
                 new FixtureGame("Seven Zip Demo (World)", TestFixtures.Basic7zEntry, TestFixtures.Basic7zRom()),
             ],
             ["Nintendo - Game Boy Color"] = [],
-        }, titleDb: IngestSeeder.EmptySwitch);
+        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
         _items = [];
         _itemRepository = Substitute.For<IJobItemRepository>();

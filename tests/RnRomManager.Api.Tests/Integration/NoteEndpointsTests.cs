@@ -46,12 +46,18 @@ public class NoteEndpointsTests
             [IngestSeeder.MegaDriveDat] = [],
             [IngestSeeder.Sega32xDat] = [],
             [IngestSeeder.TurboGrafx16Dat] = [],
+            [IngestSeeder.PsxDat] = [],
+            [IngestSeeder.PspDat] = [],
+            [IngestSeeder.GameCubeDat] = [],
+            [IngestSeeder.WiiDat] = [],
+            [IngestSeeder.Xbox360Dat] = [],
+            [IngestSeeder.SaturnDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld),
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJapan),
             ],
-        }, titleDb: IngestSeeder.EmptySwitch);
+        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
         _game = await Ingest("t1.gb", TetrisWorld);
         await Ingest("t2.gb", TetrisJapan);

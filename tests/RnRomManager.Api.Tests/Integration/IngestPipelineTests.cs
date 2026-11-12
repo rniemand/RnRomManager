@@ -101,6 +101,12 @@ public class IngestPipelineTests
             [IngestSeeder.MegaDriveDat] = [new FixtureGame("Turbo Comet (USA, Europe)", "Turbo Comet (USA, Europe).md", Comet)],
             [IngestSeeder.Sega32xDat] = [new FixtureGame("Star Relay (USA)", "Star Relay (USA).32x", Relay)],
             [IngestSeeder.TurboGrafx16Dat] = [new FixtureGame("Neon Circuit (USA)", "Neon Circuit (USA).pce", Circuit)],
+            [IngestSeeder.PsxDat] = [],
+            [IngestSeeder.PspDat] = [],
+            [IngestSeeder.GameCubeDat] = [],
+            [IngestSeeder.WiiDat] = [],
+            [IngestSeeder.Xbox360Dat] = [],
+            [IngestSeeder.SaturnDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },
@@ -111,7 +117,7 @@ public class IngestPipelineTests
                 new FixtureGame("seaQuest DSV (USA, Europe)", "seaQuest DSV (USA, Europe).gb", SeaQuest),
             ],
             [Gbc] = [new FixtureGame("Pokemon - Gold Version (USA, Europe)", "Pokemon - Gold Version (USA, Europe).gbc", Gold) { ReleaseYear = 2000 }],
-        }, titleDb: IngestSeeder.EmptySwitch);
+        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 
@@ -772,6 +778,26 @@ public class IngestPipelineTests
         var large = await IngestAsync(Drop("snes", "huge.smc", [1]) with { SizeBytes = 8L * 1024 * 1024 + 513 });
 
         Assert.That((small!.Reason, large!.Reason), Is.EqualTo((IngestFailures.TooSmall, IngestFailures.TooLarge)));
+    }
+
+    [TestCase("wii")]
+    [TestCase("gc")]
+    public async Task WiiIsoOver2GiB_IsNotTooLarge_AndWaitsInReviewAsWii(string folder)
+    {
+        // Disc systems B4/B6: the Wii magic at 0x18, the rest zeros; the six Redump DATs are empty, so nothing matches.
+        var path = Path.Combine(_factory.Root, "ingest", folder, "disc.iso");
+        using (var stream = File.Create(path))
+        {
+            stream.Position = 0x18;
+            stream.Write([0x5D, 0x1C, 0x9E, 0xA3]);
+            stream.SetLength(2L * 1024 * 1024 * 1024 + 4096);
+        }
+        var file = new IngestFile(folder, path, "disc.iso", new FileInfo(path).Length, DateTime.UtcNow.AddMinutes(-1));
+        File.SetLastWriteTimeUtc(path, file.ModifiedAtUtc);
+
+        var result = await IngestAsync(file);
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "wii")));
     }
 
     [Test]

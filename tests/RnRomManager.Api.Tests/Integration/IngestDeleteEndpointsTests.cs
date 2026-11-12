@@ -45,9 +45,15 @@ public class IngestDeleteEndpointsTests
             [IngestSeeder.MegaDriveDat] = [],
             [IngestSeeder.Sega32xDat] = [],
             [IngestSeeder.TurboGrafx16Dat] = [],
+            [IngestSeeder.PsxDat] = [],
+            [IngestSeeder.PspDat] = [],
+            [IngestSeeder.GameCubeDat] = [],
+            [IngestSeeder.WiiDat] = [],
+            [IngestSeeder.Xbox360Dat] = [],
+            [IngestSeeder.SaturnDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)],
             ["Nintendo - Game Boy Color"] = [],
-        }, titleDb: IngestSeeder.EmptySwitch);
+        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 
@@ -108,7 +114,7 @@ public class IngestDeleteEndpointsTests
     }
 
     [TestCase("[]")]
-    [TestCase("""[{"system":"psx","folder":"pending","name":"a.gb"}]""")]
+    [TestCase("""[{"system":"nope","folder":"pending","name":"a.gb"}]""")]
     [TestCase("""[{"system":"gb","folder":"pending","name":"../x.gb"}]""")]
     [TestCase("""[{"system":"gb","folder":"removed","name":"a.gb"}]""")]
     public async Task InvalidRequest_Is400_AndDeletesNothing(string files)

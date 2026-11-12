@@ -50,6 +50,12 @@ public class ReportEndpointsTests
             [IngestSeeder.MegaDriveDat] = [],
             [IngestSeeder.Sega32xDat] = [],
             [IngestSeeder.TurboGrafx16Dat] = [],
+            [IngestSeeder.PsxDat] = [],
+            [IngestSeeder.PspDat] = [],
+            [IngestSeeder.GameCubeDat] = [],
+            [IngestSeeder.WiiDat] = [],
+            [IngestSeeder.Xbox360Dat] = [],
+            [IngestSeeder.SaturnDat] = [],
             [Gb] =
             [
                 new FixtureGame("Alpha (World)", "Alpha (World).gb", Alpha),
@@ -58,7 +64,7 @@ public class ReportEndpointsTests
                 new FixtureGame("Delta (World)", "Delta (World).gb", Delta),
             ],
             [Gbc] = [new FixtureGame("Echo (World)", "Echo (World).gbc", Echo)],
-        }, titleDb: IngestSeeder.EmptySwitch);
+        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 

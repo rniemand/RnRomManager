@@ -12,6 +12,9 @@
     <ProjectReference Include="../RnRomManager.Systems.Sega/RnRomManager.Systems.Sega.csproj" />
     <ProjectReference Include="../RnRomManager.Systems.Nec/RnRomManager.Systems.Nec.csproj" />
     <ProjectReference Include="../RnRomManager.Systems.Switch/RnRomManager.Systems.Switch.csproj" />
+    <ProjectReference Include="../RnRomManager.Systems.Sony/RnRomManager.Systems.Sony.csproj" />
+    <ProjectReference Include="../RnRomManager.Systems.NintendoDisc/RnRomManager.Systems.NintendoDisc.csproj" />
+    <ProjectReference Include="../RnRomManager.Systems.Microsoft/RnRomManager.Systems.Microsoft.csproj" />
   </ItemGroup>
 
   <ItemGroup>

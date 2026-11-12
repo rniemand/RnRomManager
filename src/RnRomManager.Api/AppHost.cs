@@ -28,6 +28,9 @@ using RnRomManager.Data;
 using RnRomManager.Data.Repositories;
 using RnRomManager.Systems.GameBoy;
 using RnRomManager.Systems.Nes;
+using RnRomManager.Systems.Sony;
+using RnRomManager.Systems.NintendoDisc;
+using RnRomManager.Systems.Microsoft;
 using RnRomManager.Systems.Atari;
 using RnRomManager.Systems.Coleco;
 using RnRomManager.Systems.Sega;
@@ -178,6 +181,12 @@ public static class AppHost
         builder.Services.AddSystemHandler<Sega32xHandler>();
         builder.Services.AddSystemHandler<TurboGrafx16Handler>();
         builder.Services.AddSystemHandler<SwitchHandler>();
+        builder.Services.AddSystemHandler<PlayStationHandler>();
+        builder.Services.AddSystemHandler<PlayStationPortableHandler>();
+        builder.Services.AddSystemHandler<GameCubeHandler>();
+        builder.Services.AddSystemHandler<WiiHandler>();
+        builder.Services.AddSystemHandler<Xbox360Handler>();
+        builder.Services.AddSystemHandler<SaturnHandler>();
 
         // Keys live in the DB so cookies survive restarts (spec §9.2).
         builder.Services.AddSingleton<IXmlRepository, DbXmlRepository>();
