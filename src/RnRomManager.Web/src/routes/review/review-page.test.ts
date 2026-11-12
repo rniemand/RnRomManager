@@ -53,6 +53,7 @@ const base = {
 	sha1: '3',
 	header: { title: 'TETRIS' },
 	status: 'Pending',
+	resolvable: true,
 	gameId: null,
 	createdAt: ''
 };
@@ -375,6 +376,43 @@ describe('review detail page', () => {
 		expect(tabNames()).toEqual(['Matched DAT entry']);
 	});
 
+	it('a disc track file that is not resolvable offers only Delete, with the hint (B15)', async () => {
+		answers['GET /api/review/7'] = {
+			status: 200,
+			body: {
+				...noMatch,
+				system: 'psx',
+				systemName: 'PlayStation',
+				systemShortName: 'PSX',
+				reason: 'AmbiguousSet',
+				originalFileName: 'Disc (USA) (Track 2).bin',
+				suggestions: [],
+				resolvable: false
+			}
+		};
+		render(ReviewPage);
+
+		expect(
+			await screen.findByText('Disc track files must match the Redump DAT to be imported.')
+		).toBeTruthy();
+		expect(screen.queryAllByRole('tab')).toEqual([]);
+		expect(screen.queryByRole('tablist')).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+		expect(screen.getByRole('button', { name: /^Delete$/ })).toBeTruthy();
+		expect(screen.getByRole('link', { name: /Google it/ })).toBeTruthy();
+		expect(screen.getByRole('heading', { name: 'File' })).toBeTruthy();
+	});
+
+	it('a resolvable item keeps the tabs and Dismiss, without the hint (B15)', async () => {
+		answers['GET /api/review/7'] = { status: 200, body: noMatch };
+		render(ReviewPage);
+
+		await screen.findByRole('button', { name: 'Use' });
+		expect(tabNames()).toEqual(['Suggestions', 'Attach', 'Manual']);
+		expect(screen.getByRole('button', { name: 'Dismiss' })).toBeTruthy();
+		expect(screen.queryByText(/Disc track files/)).toBeNull();
+	});
+
 	it('the header row has the system and reason badges and the header uses the standard table', async () => {
 		answers['GET /api/review/7'] = { status: 200, body: noMatch };
 		render(ReviewPage);
@@ -609,6 +647,18 @@ describe('review queue page', () => {
 
 		await fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'NoDatMatch' } });
 		expect(goto).toHaveBeenLastCalledWith('/review?reason=NoDatMatch', urlOptions);
+	});
+
+	it('the Reason filter offers Ambiguous set and writes reason=AmbiguousSet (B15)', async () => {
+		answers[list(1, 20)] = { status: 200, body: page([1], 1) };
+		render(QueuePage);
+		await screen.findByText('file1.gb');
+
+		expect(screen.getByRole('option', { name: 'Ambiguous set' })).toBeTruthy();
+		await fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'AmbiguousSet' } });
+
+		expect(goto).toHaveBeenLastCalledWith('/review?reason=AmbiguousSet', urlOptions);
+		await vi.waitFor(() => expect(calls).toContain(`${list(1, 20)}&reason=AmbiguousSet`));
 	});
 
 	it('URL params win over storage and are saved (RV4)', async () => {

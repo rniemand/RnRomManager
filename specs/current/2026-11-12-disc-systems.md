@@ -402,7 +402,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - Tests:
     - `IngestPipelineTests`: a Wii ISO over 2 GiB (the Wii magic at 0x18, the rest zeros, extended with `SetLength`) dropped in `ingest/wii/`, and again in `ingest/gc/`, is not `TooLarge`: each goes to Review (`NoDatMatch`, the six Redump DATs are empty) with system `wii`.
   - Done when: the Core and Api test projects pass (Docker running).
-- [ ] **20. Review page**: B15 (SPA part). The `AmbiguousSet` reason in the SPA's `ReviewReason` type and the queue's reason filter ("Ambiguous set"), `resolvable` in the item type, and the item page's Delete-only state with the hint, driven by `resolvable`.
+- [x] **20. Review page**: B15 (SPA part). The `AmbiguousSet` reason in the SPA's `ReviewReason` type and the queue's reason filter ("Ambiguous set"), `resolvable` in the item type, and the item page's Delete-only state with the hint, driven by `resolvable`.
   - Files: `lib/api/types.ts`, `routes/review/+page.svelte`, `routes/review/[id]/+page.svelte`, `routes/review/review-page.test.ts`.
   - Tests: `review-page.test.ts` (it tests `review/[id]` and the queue): an item with `resolvable` false shows the hint and Delete, with no action tabs and no Dismiss button; one with `resolvable` true shows today's actions; the queue's reason filter offers "Ambiguous set" and puts `reason=AmbiguousSet` in the URL.
   - Done when: `npm run lint`, `npm run check` and `npx vitest run src/routes/review/review-page.test.ts` pass.

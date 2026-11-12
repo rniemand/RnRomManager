@@ -228,7 +228,7 @@ export interface DatVersion {
 	downloadedAt: string;
 }
 
-export type ReviewReason = 'NoDatMatch' | 'AmbiguousGroup';
+export type ReviewReason = 'NoDatMatch' | 'AmbiguousGroup' | 'AmbiguousSet';
 
 /** One item of `GET /api/review` (spec §23). */
 export interface ReviewListItem {
@@ -276,6 +276,8 @@ export interface ReviewDetail {
 	} | null;
 	candidateGames: { id: string; displayTitle: string }[];
 	status: 'Pending' | 'Resolved' | 'Dismissed';
+	/** B15: false for a disc track file (`.cue`/`.bin` on a disc system), which can only be deleted. */
+	resolvable: boolean;
 	gameId: string | null;
 	createdAt: string;
 }
