@@ -125,6 +125,23 @@ public class JobRunnerTests
     }
 
     [Test]
+    public async Task Current_ShowsTheStep_WithSpeedFromTheRunnersClock()
+    {
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider(new DateTimeOffset(2026, 11, 11, 12, 0, 0, TimeSpan.Zero));
+        _runner = new JobRunner(_jobs, _lock, _users, time, _logger);
+        var (job, started) = await StartAsync();
+        Assert.That(_runner.Current!.Step, Is.Null);
+
+        job.Context!.Progress.BeginStep(JobStepPhases.Hashing, 4000, time.GetUtcNow().UtcDateTime);
+        job.Context.Progress.StepAdvanced(1000);
+        time.Advance(TimeSpan.FromSeconds(2));
+
+        Assert.That(_runner.Current!.Step, Is.EqualTo(new JobStepSnapshot(JobStepPhases.Hashing, 1000, 4000, 500)));
+        job.Release.SetResult();
+        await started.Completion.WaitAsync(Timeout);
+    }
+
+    [Test]
     public async Task LockBusy_ReturnsNull_NoRow()
     {
         var (job, started) = await StartAsync();

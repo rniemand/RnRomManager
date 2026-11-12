@@ -103,6 +103,29 @@ public class JobEndpointsTests
     }
 
     [Test]
+    public async Task Current_ShowsTheStep_OnlyWhileOneRuns()
+    {
+        var (job, started) = await StartNoopAsync();
+
+        using (var idle = await _admin.GetAsync("/api/jobs/current"))
+            Assert.That((await AuthClient.JsonAsync(idle)).GetProperty("step").ValueKind, Is.EqualTo(JsonValueKind.Null));
+
+        job.Context!.Progress.BeginStep(JobStepPhases.CopyingToLibrary, 8000, DateTime.UtcNow);
+        job.Context.Progress.StepAdvanced(2000);
+        using (var current = await _admin.GetAsync("/api/jobs/current"))
+        {
+            var step = (await AuthClient.JsonAsync(current)).GetProperty("step");
+            Assert.That(step.GetProperty("phase").GetString(), Is.EqualTo("CopyingToLibrary"));
+            Assert.That(step.GetProperty("bytesDone").GetInt64(), Is.EqualTo(2000));
+            Assert.That(step.GetProperty("bytesTotal").GetInt64(), Is.EqualTo(8000));
+            Assert.That(step.TryGetProperty("bytesPerSecond", out _), Is.True);
+        }
+
+        job.Release.SetResult();
+        await started.Completion.WaitAsync(Timeout);
+    }
+
+    [Test]
     public async Task Cancel_WhenNotRunning_Is404()
     {
         using var response = await _admin.PostAsync($"/api/jobs/{Guid.NewGuid()}/cancel");
