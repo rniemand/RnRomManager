@@ -18,10 +18,10 @@ public class InfoJsonTests
 
     private static InfoJsonReader Reader(params IInfoJsonUpgrader[] upgraders)
     {
-        ISystemHandler[] handlers = [Handler("gb"), Handler("gbc"), new ExternalTestHandler()];
+        ISystemHandler[] handlers = [Handler("gb"), Handler("gbc"), new ExternalTestHandler(), new ExternalSetTestHandler()];
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns(handlers);
-        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), new InfoJsonUpgraderV4(), .. upgraders], registry);
+        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), new InfoJsonUpgraderV4(), new InfoJsonUpgraderV5(), .. upgraders], registry);
     }
 
     private static ISystemHandler Handler(string id)
@@ -64,7 +64,7 @@ public class InfoJsonTests
 
     private static InfoJsonGame Game() => new()
     {
-        SchemaVersion = 5,
+        SchemaVersion = 6,
         GameId = Guid.Parse("6f1f6c3e-8a54-4f39-9d2b-0d2a7c1e9b11"),
         System = "gb",
         Title = "Tetris",
@@ -118,7 +118,7 @@ public class InfoJsonTests
         var text = Encoding.UTF8.GetString(bytes);
 
         Assert.That(bytes[0], Is.EqualTo((byte)'{'), "no BOM");
-        Assert.That(text, Does.Contain("\n  \"schemaVersion\": 5"));
+        Assert.That(text, Does.Contain("\n  \"schemaVersion\": 6"));
         Assert.That(text, Does.Contain("\"version\": null"));
         Assert.That(text, Does.Contain("\"externalFileName\": null"));
         Assert.That(text, Does.Contain("\"isCover\": true"));
@@ -169,9 +169,9 @@ public class InfoJsonTests
     [Test]
     public void NewerSchema_IsDetected_NotParsedFurther()
     {
-        var result = ReadJson("""{ "schemaVersion": 6, "anything": "goes" }""");
+        var result = ReadJson("""{ "schemaVersion": 7, "anything": "goes" }""");
 
-        Assert.That((result.Kind, result.FileVersion), Is.EqualTo((InfoJsonReadResult.Outcome.NewerSchema, (int?)6)));
+        Assert.That((result.Kind, result.FileVersion), Is.EqualTo((InfoJsonReadResult.Outcome.NewerSchema, (int?)7)));
     }
 
     [Test]
@@ -188,7 +188,7 @@ public class InfoJsonTests
         var result = reader.Read(Encoding.UTF8.GetBytes(v0.ToJsonString()));
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
-        Assert.That((result.FileVersion, result.Game!.SchemaVersion), Is.EqualTo(((int?)0, 5)));
+        Assert.That((result.FileVersion, result.Game!.SchemaVersion), Is.EqualTo(((int?)0, 6)));
         Assert.That(result.Game.Genres, Is.EqualTo(new[] { "Puzzle" }));
         upgrader.Received(1).Upgrade(Arg.Any<JsonObject>());
     }
@@ -207,7 +207,7 @@ public class InfoJsonTests
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
         Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Rating, result.Game.Favourite),
-            Is.EqualTo(((int?)1, 5, (int?)null, false)));
+            Is.EqualTo(((int?)1, 6, (int?)null, false)));
         Assert.That(result.Game.Roms[0].ExternalFileName, Is.Null);
     }
 
@@ -371,7 +371,7 @@ public class InfoJsonTests
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
         Assert.That(result.Game!.Images.Select(i => (i.FileName, i.IsCover)), Is.EqualTo(new[] { ("snap-01.png", false), ("boxart-01.png", true) }));
-        Assert.That((result.FileVersion, result.Game.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)2, 5, (string?)null)));
+        Assert.That((result.FileVersion, result.Game.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)2, 6, (string?)null)));
     }
 
     [Test]
@@ -414,7 +414,7 @@ public class InfoJsonTests
         });
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
-        Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)3, 5, (string?)null)));
+        Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)3, 6, (string?)null)));
     }
 
     [Test]
@@ -608,7 +608,7 @@ public class InfoJsonTests
         });
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
-        Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Roms[0].Version), Is.EqualTo(((int?)4, 5, expected)));
+        Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Roms[0].Version), Is.EqualTo(((int?)4, 6, expected)));
     }
 
     [Test]
@@ -670,5 +670,87 @@ public class InfoJsonTests
         var text = Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(Game() with { Roms = [Rom("Tetris (World) (Rev 1).gb") with { Version = "1.0.1" }] }));
 
         Assert.That(text, Does.Contain("\"version\": \"1.0.1\""));
+    }
+
+
+    // --- v6 files (B12) ---
+
+    private const string SetTrack = "Disc (USA) (Track 1).bin";
+
+    private static InfoJsonRomFile SetFile(string name, long size = 1024, char hash = 'd') =>
+        new(name, name, name, size, new string(hash, 8), new string(hash, 32), new string(hash, 40));
+
+    private static InfoJsonRom SetRom(string name = SetTrack, params InfoJsonRomFile[] files) =>
+        ExtRom(name, name) with { Files = files.Length == 0 ? [SetFile("Disc (USA).cue"), SetFile("Disc (USA) (Track 2).bin", hash: 'e')] : files };
+
+    private static InfoJsonGame SetGame(params InfoJsonRom[] roms) => Game() with { System = ExternalSetTestHandler.SystemId, Roms = roms };
+
+    [Test]
+    public void V6_RoundTripsFiles()
+    {
+        var game = SetGame(SetRom());
+
+        var result = ReadGame(game);
+
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Game!.Roms[0].Files, Is.EqualTo(game.Roms[0].Files));
+        Assert.That(Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(game)), Does.Contain("\"originalFileName\": \"Disc (USA).cue\""));
+        Assert.That(Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(Game())), Does.Contain("\"files\": null"));
+    }
+
+    private static IEnumerable<TestCaseData> FilesErrors()
+    {
+        var big = new ExternalSetTestHandler().MaxRomSizeBytes + 1;
+        var longName = new string('a', 252) + ".bin"; // 256 UTF-8 bytes
+        yield return new TestCaseData(ExtGame(ExtRom(ExtRomName.Replace(".nsp", ".x.nsp"), ExtRomName) with { Files = [SetFile("Orbit.nsp")] }),
+            $"rom '{ExtRomName}' files must be null: system 'ext' has no file sets").SetName("Files on a system without file sets");
+        yield return new TestCaseData(SetGame(SetRom() with { Files = [] }), $"rom '{SetTrack}' files must be null or non-empty").SetName("Empty files");
+        yield return new TestCaseData(SetGame(SetRom(SetTrack, SetFile("Disc (USA).cue") with { Sha1 = new string('D', 40) })),
+            $"rom '{SetTrack}' file 'Disc (USA).cue' hashes must be lowercase hex of the right length").SetName("Uppercase file sha1");
+        yield return new TestCaseData(SetGame(SetRom(SetTrack, SetFile("disc (usa) (TRACK 1).bin"))),
+            $"rom '{SetTrack}' file 'disc (usa) (TRACK 1).bin' is not unique in the game (case-insensitive)").SetName("File name repeats a main name");
+        yield return new TestCaseData(SetGame(SetRom(SetTrack, SetFile("Disc (USA) (Track 2).wav"))),
+            $"rom '{SetTrack}' file 'Disc (USA) (Track 2).wav' must end with a ROM extension of system 'extset'").SetName("File with a bad extension");
+        yield return new TestCaseData(SetGame(SetRom(SetTrack, SetFile("Disc (USA).cue", big))),
+            $"rom '{SetTrack}' file 'Disc (USA).cue' sizeBytes is over the system's limit of {big - 1}").SetName("Oversize file");
+        yield return new TestCaseData(SetGame(SetRom(SetTrack, SetFile(longName))),
+            $"rom '{SetTrack}' file '{longName}' must be at most 255 UTF-8 bytes").SetName("File name over 255 bytes");
+        yield return new TestCaseData(SetGame(SetRom(SetTrack, SetFile("Disc (USA).cue") with { FileName = "Other.cue" })),
+            $"rom '{SetTrack}' file fileName 'Other.cue' must equal its externalFileName").SetName("File fileName differs from externalFileName");
+        yield return new TestCaseData(SetGame(ExtRom("Disc.bin", SetTrack)),
+            $"rom fileName '{SetTrack}' must equal its externalFileName on system 'extset'").SetName("Main fileName differs on a FileSets system");
+    }
+
+    [TestCaseSource(nameof(FilesErrors))]
+    public void FilesRules_ReportTheFailingRule(InfoJsonGame game, string rule) =>
+        Assert.That(RuleOf(ReadGame(game)), Is.EqualTo(rule));
+
+    [Test]
+    public void DotsInsideNames_AreValid_OnAFileSetsSystem()
+    {
+        const string main = "...Iru! (Japan) (Track 1).bin";
+        var result = ReadGame(SetGame(SetRom(main, SetFile("...Iru! (Japan).cue"))));
+
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(RuleOf(ReadGame(SetGame(SetRom(main, SetFile(".."))))), Does.Contain("must be a plain, portable file name"));
+    }
+
+    [Test]
+    public void V5Upgrade_AddsNullFiles()
+    {
+        var upgrader = new InfoJsonUpgraderV5();
+        var document = new JsonObject { ["roms"] = new JsonArray(new JsonObject { ["fileName"] = "a.gb" }, "not an object") };
+
+        upgrader.Upgrade(document);
+
+        Assert.That(document["roms"]![0]!.AsObject().ContainsKey("files"), Is.True);
+        Assert.That(document["roms"]![0]!["files"], Is.Null);
+
+        var read = ReadEdited(d =>
+        {
+            d["schemaVersion"] = 5;
+            d["roms"]![0]!.AsObject().Remove("files");
+        });
+        Assert.That((read.Kind, read.FileVersion, read.Game!.SchemaVersion, read.Game.Roms[0].Files), Is.EqualTo((InfoJsonReadResult.Outcome.Ok, (int?)5, 6, (IReadOnlyList<InfoJsonRomFile>?)null)));
     }
 }

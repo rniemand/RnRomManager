@@ -184,6 +184,10 @@ public sealed class LibraryZipWriter(InfoJsonReader reader)
         if (existing is not null && existing.InfoJson?.Kind is not InfoJsonReadResult.Outcome.Ok)
             throw new InvalidOperationException($"Existing ZIP '{existing.Path}' has no valid current info.json; it can't be written from.");
 
+        // B12: the reader refuses a bigger info.json, which would leave the game unreadable.
+        var infoBytes = InfoJsonSerializer.Serialize(changes.Info).Length;
+        if (infoBytes > InfoJsonReader.MaxBytes)
+            throw new LibraryZipVerifyException(LibraryZip.InfoJsonEntry, $"info.json would be {infoBytes} bytes, over the {InfoJsonReader.MaxBytes}-byte limit");
         var entries = ListedEntries(changes.Info);
         var notes = changes.Info.Roms.Select(r => LibraryZip.NoteEntry(r.FileName)).ToList();
         if (changes.NewEntries.Keys.FirstOrDefault(k => !entries.ContainsKey(k) && !notes.Contains(k)) is { } stray)
@@ -208,9 +212,11 @@ public sealed class LibraryZipWriter(InfoJsonReader reader)
         var files = new List<(string, ExternalFileSnapshot, long)>();
         foreach (var (name, snapshot) in changes.ExternalFiles ?? new Dictionary<string, ExternalFileSnapshot>())
         {
-            var rom = changes.Info.Roms.FirstOrDefault(r => string.Equals(r.ExternalFileName, name, StringComparison.OrdinalIgnoreCase))
+            // A main file or, on a FileSets system, a set file (B12).
+            var size = changes.Info.Roms.FirstOrDefault(r => string.Equals(r.ExternalFileName, name, StringComparison.OrdinalIgnoreCase))?.Metadata.SizeBytes
+                ?? changes.Info.Roms.SelectMany(r => r.Files ?? []).FirstOrDefault(f => string.Equals(f.ExternalFileName, name, StringComparison.OrdinalIgnoreCase))?.SizeBytes
                 ?? throw new ArgumentException($"External file '{name}' isn't listed in info.json.", nameof(changes));
-            files.Add((name, snapshot, rom.Metadata.SizeBytes));
+            files.Add((name, snapshot, size));
         }
         return files;
     }

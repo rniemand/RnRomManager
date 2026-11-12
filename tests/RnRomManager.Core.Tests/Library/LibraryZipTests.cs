@@ -40,7 +40,7 @@ public class LibraryZipTests
         handler.Id.Returns("gb");
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns([handler]);
-        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), new InfoJsonUpgraderV4(), .. upgraders], registry);
+        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), new InfoJsonUpgraderV4(), new InfoJsonUpgraderV5(), .. upgraders], registry);
     }
 
     private static byte[] RomBytes(int seed) => new SyntheticRomBuilder { Seed = seed }.Build();
@@ -283,6 +283,26 @@ public class LibraryZipTests
         Assert.That(ex!.EntryName, Is.EqualTo("info.json"));
         Assert.That(ex.Message, Does.Contain("isPrimary"));
         Assert.That(Directory.GetFiles(_dir.Path), Is.Empty);
+    }
+
+    [Test]
+    public async Task InfoJsonOver1MiB_VerifyFailed_OldZipKept()
+    {
+        // B12: the reader refuses anything bigger, so the writer must never publish it.
+        var (game, _) = await WriteNewGameAsync();
+        var before = await File.ReadAllBytesAsync(_target);
+        var huge = game with { Description = new string('x', InfoJsonReader.MaxBytes) };
+
+        using (var existing = LibraryZip.Open(_target, _reader))
+        {
+            var ex = await Assert.ThrowsAsync<LibraryZipVerifyException>(() =>
+                _writer.WriteAsync(_target, existing, new LibraryZipChanges(huge, new Dictionary<string, Func<Stream>>())));
+            Assert.That(ex!.EntryName, Is.EqualTo("info.json"));
+            Assert.That(ex.Message, Does.Contain("1048576"));
+        }
+
+        Assert.That(await File.ReadAllBytesAsync(_target), Is.EqualTo(before));
+        Assert.That(File.Exists(_target + ".tmp"), Is.False);
     }
 
     [Test]
