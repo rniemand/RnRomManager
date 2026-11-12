@@ -384,7 +384,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - each handler's contract test (every B4 value, `ReadHeader` null);
     - box art is a valid 512×512 PNG and differs from the others in its project.
   - Done when: `Systems.Sony.Tests`, `Systems.Microsoft.Tests` and `Systems.Sega.Tests` pass, and `docker build .` succeeds.
-- [ ] **18. The GameCube and Wii handlers**: B4, B6. Add `RnRomManager.Systems.NintendoDisc` (`gc`, `wii`, `NintendoDiscHeader`) with its test project, box art, `RnRomManager.slnx` and the `Dockerfile` restore layer. Not registered yet.
+- [x] **18. The GameCube and Wii handlers**: B4, B6. Add `RnRomManager.Systems.NintendoDisc` (`gc`, `wii`, `NintendoDiscHeader`) with its test project, box art, `RnRomManager.slnx` and the `Dockerfile` restore layer. Not registered yet.
   - Files: `src/RnRomManager.Systems.NintendoDisc/` (new: csproj, `GameCubeHandler.cs`, `WiiHandler.cs`, `NintendoDiscHeader.cs`, `EmbeddedResources.cs`, `Resources/boxart/`), `tests/RnRomManager.Systems.NintendoDisc.Tests/`, `RnRomManager.slnx`, `Dockerfile`.
   - Tests:
     - each handler's contract test (every B4 value);
@@ -481,6 +481,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - 2026-11-12 Delete audit keeps today's shape: one `ReleaseDeleted` (details: main name then the set files) and an unchanged `GameDeleted` (code).
 - 2026-11-12 The move record is written by move-release only; merge writes none, as today (code).
 - 2026-11-12 Integrity's location check only checks the ZIP name, so exact set names need no change there (code).
+- 2026-11-12 B6: a title the span ends inside (no NUL before the span's end, under 0x3E0 bytes) is null, like any other cut field; an empty title is null too (code).
 - 2026-11-12 B19 needed no `IntegrityJob` change: since step 4, `ListExternalAsync` returns each `rom_files` row as an external claim, so set files already get the missing, size, hash, claimant and orphan checks keyed by their name. Step 15 adds only the tests (code).
 - 2026-11-12 Unreadable or unparsable cue → it and every `.bin` starting with its stem are `Skipped` `IncompleteSet`; other files plan as usual (user).
 - 2026-11-12 Cue members must be `.bin`; anything else is `UnsupportedSetMember`, because the Redump data tracks are `.bin` and an `.iso` member could never match (fact).
