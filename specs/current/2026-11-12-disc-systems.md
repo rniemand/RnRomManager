@@ -358,10 +358,10 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - release delete leaves 3 files in `_removed/` and writes one `ReleaseDeleted` event whose details list them;
     - game delete moves every file and writes one `GameDeleted` event.
   - Done when: `ExternalLibraryTests` passes (Docker running).
-- [ ] **14. Move and merge of sets**: B18. Whole-set move/merge and `ExternalMoveRecord` v2 with v1 still read.
-  - Files: `Core/Library/LibraryEditor.cs`, `Core/Library/ExternalMoveRecord.cs`, `ExternalLibraryTests.Sets.cs`, `ExternalMoveRecordTests.cs`.
+- [x] **14. Move and merge of sets**: B18. Whole-set move/merge and `ExternalMoveRecord` v2 with v1 still read.
+  - Files: `Core/Library/LibraryEditor.cs`, `Core/Library/ExternalMoveRecord.cs`, `ExternalLibraryTests.SetMoves.cs` (new partial), `ExternalMoveRecordTests.cs`.
   - Tests:
-    - `ExternalLibraryTests.Sets.cs`: move into a folder with a taken name gives `409 NameTaken` and nothing moves; a same-folder merge moves no set files and succeeds; a logical-name clash on merge gives `NameTaken`; a move writes a v2 record; a move whose second set file fails to move (file system hook) undoes the first and gives `IoError`; moving a single-file `.iso` release to a game in another folder keeps its exact name (no `<ZipBase>.` prefix, no ` (N)`).
+    - `ExternalLibraryTests.SetMoves.cs`: move into a folder with a taken name gives `409 NameTaken` and nothing moves; a same-folder merge moves no set files and succeeds; a logical-name clash on merge gives `NameTaken`; a move writes a v2 record; a move whose second set file fails to move (file system hook) undoes the first and gives `IoError`; moving a single-file `.iso` release to a game in another folder keeps its exact name (no `<ZipBase>.` prefix, no ` (N)`).
     - `ExternalMoveRecordTests`: v2 round-trip with 99 pairs of 250-byte names made of `'` (each escaped to 6 bytes) under the 320 KiB cap, a v2 record whose `files` names differ from the backed-up release's `files` is refused (`InvalidDataException`), and a v1 record still read and validated.
   - Done when: those classes pass (Docker running).
 - [ ] **15. Integrity for set files**: B19.

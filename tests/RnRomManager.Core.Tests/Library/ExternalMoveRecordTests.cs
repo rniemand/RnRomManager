@@ -43,7 +43,7 @@ public class ExternalMoveRecordTests
     [TearDown]
     public void TearDown() => _dir.Dispose();
 
-    private MoveRecord Record() => new(MoveRecord.CurrentVersion, _backup.Sha256, _game.GameId, SourceZip, Guid.NewGuid(), "ext/T/Target.zip",
+    private MoveRecord Record() => new(MoveRecord.SingleFileVersion, _backup.Sha256, _game.GameId, SourceZip, Guid.NewGuid(), "ext/T/Target.zip",
         Sha1(Usa), UsaPointer, "Target.Space Game (USA).nsp");
 
     [Test]
@@ -91,5 +91,81 @@ public class ExternalMoveRecordTests
 
         Assert.That(File.ReadAllText(final), Is.EqualTo("an occupant"));
         Assert.That(File.Exists(final + ExternalRomName.PartialSuffix), Is.False);
+    }
+
+    // --- B18: v2 records for releases with set files ---
+
+    /// <summary>A FileSets game whose one release has <paramref name="files"/>, written and backed up; with its reader.</summary>
+    private async Task<(ZipBackup Backup, InfoJsonGame Game, InfoJsonReader Reader)> SetBackupAsync(IReadOnlyList<string> files)
+    {
+        var reader = new InfoJsonReader([], new SystemRegistry([new ExternalTestHandler(), new ExternalSetTestHandler()]));
+        const string main = "Disc (USA) (Track 1).bin";
+        var rom = TestLibrary.Rom(main, Usa) with
+        {
+            ExternalFileName = main,
+            Files = [.. files.Select((name, i) => new InfoJsonRomFile(name, name, name, 1, "00000000", new string('0', 32), new string((char)('a' + i % 6), 40)))],
+        };
+        var game = TestLibrary.Game("Disc", rom) with { System = ExternalSetTestHandler.SystemId };
+        var zip = Path.Combine(_roms, "extset", "D", "Disc.zip");
+        Directory.CreateDirectory(Path.GetDirectoryName(zip)!);
+        await new LibraryZipWriter(reader).WriteAsync(zip, null, new LibraryZipChanges(game, new Dictionary<string, Func<Stream>>()));
+        return (await ExternalZipBackup.CreateAsync(_roms, zip, ExternalRomPath.ClassifyFile(_roms, zip).Snapshot!), game, reader);
+    }
+
+    private static MoveRecord SetRecord(ZipBackup backup, InfoJsonGame game, IReadOnlyList<MoveRecordFile> files) =>
+        new(MoveRecord.CurrentVersion, backup.Sha256, game.GameId, "extset/D/Disc.zip", Guid.NewGuid(), "extset/T/Target.zip",
+            game.Roms[0].Metadata.Sha1, "Disc (USA) (Track 1).bin", "Disc (USA) (Track 1).bin", files);
+
+    [Test]
+    public async Task V2_With99PairsOfEscapedNames_FitsTheCap_AndRoundTrips()
+    {
+        // Each ' is written as a 6-byte ' escape: 99 × 2 × ~1,500 bytes, far over v1's 16 KiB.
+        var names = Enumerable.Range(0, 99).Select(i => new string('\'', 244) + $"{i:00}.bin").ToList();
+        Assert.That(System.Text.Encoding.UTF8.GetByteCount(names[0]), Is.EqualTo(250));
+        var (backup, game, reader) = await SetBackupAsync(names);
+        var record = SetRecord(backup, game, [.. names.Select(n => new MoveRecordFile(n, n))]);
+
+        await ExternalMoveRecord.WriteAsync(_roms, backup, record, reader);
+        var read = await ExternalMoveRecord.ReadAsync(_roms, backup.Path, reader);
+
+        Assert.That(new FileInfo(ExternalMoveRecord.PathOf(backup)).Length, Is.GreaterThan(16 * 1024).And.LessThanOrEqualTo(ExternalMoveRecord.MaxBytes));
+        Assert.That(read with { Files = null }, Is.EqualTo(record with { Files = null }));
+        Assert.That(read.Files, Is.EqualTo(record.Files));
+    }
+
+    [Test]
+    public async Task V2_WhoseFilesAreNotTheBackedUpReleasesFiles_IsRefused()
+    {
+        var (backup, game, reader) = await SetBackupAsync(["Disc (USA).cue", "Disc (USA) (Track 2).bin"]);
+        var record = SetRecord(backup, game, [new("Disc (USA).cue", "Disc (USA).cue"), new("Other (Track 2).bin", "Other (Track 2).bin")]);
+        File.WriteAllBytes(ExternalMoveRecord.PathOf(backup),
+            JsonSerializer.SerializeToUtf8Bytes(record, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+
+        Assert.That(async () => await ExternalMoveRecord.ReadAsync(_roms, backup.Path, reader), Throws.InstanceOf<InvalidDataException>());
+        Assert.That(async () => await ExternalMoveRecord.WriteAsync(_roms, backup, record with { Files = [new("Disc (USA).cue", "x.cue")] }, reader),
+            Throws.InstanceOf<IOException>(), "one pair for two files");
+    }
+
+    [TestCase(MoveRecord.SingleFileVersion, true)]
+    [TestCase(MoveRecord.CurrentVersion, false)]
+    public async Task VersionAndFiles_MustAgree(int version, bool withFiles)
+    {
+        var (backup, game, reader) = await SetBackupAsync(["Disc (USA).cue"]);
+        var record = SetRecord(backup, game, [new("Disc (USA).cue", "Disc (USA).cue")]) with
+        {
+            Version = version, Files = withFiles ? [new("Disc (USA).cue", "Disc (USA).cue")] : null,
+        };
+
+        Assert.That(async () => await ExternalMoveRecord.WriteAsync(_roms, backup, record, reader), Throws.InstanceOf<IOException>());
+    }
+
+    [Test]
+    public void V1_IsWrittenWithoutAFilesProperty()
+    {
+        var json = System.Text.Encoding.UTF8.GetString(JsonSerializer.SerializeToUtf8Bytes(Record(),
+            new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+
+        Assert.That(json, Does.Not.Contain("files"));
+        Assert.That(MoveRecord.VersionFor(null), Is.EqualTo(1));
     }
 }
