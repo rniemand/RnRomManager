@@ -194,7 +194,8 @@ Upgrading to 0.3.0:
 Upgrading to 0.4.0:
 
 - **Refresh DATs after upgrading.** Nintendo Switch is added and identified through titledb; ingestion refuses to start with `DatsMissing` until **Admin → DATs → Refresh DATs** has downloaded its titledb file. `ingest/switch/` is created at startup.
-- **ZIPs move to `info.json` version 4** as each game is next written (`externalFileName`, `TitleDb`, `titledb` images). Apps before 0.4.0 can read them but refuse to change them.
+- **ZIPs move to `info.json` version 5** as each game is next written (`externalFileName`, `TitleDb`, `titledb` images, and an update's `version`). Apps before 0.4.0 can read them but refuse to change them.
+- **Migration 0019** adds `roms.version` and fills it for Switch updates already in the library from the `[x.y.z]` tag in their original file name, so the Game page's Updates tab orders them at once. Existing Switch files keep their names; only files written from now on drop the repeated title (`Orbit Expedition.[0100…][v0].nsp`, see [ZIP format](zip-format.md#external-rom-files)).
 - **Plan disk space** for Switch dumps (often several GB each). Keep `/app/ingest` and `/app/roms` on the same volume where you can: placement is then an instant rename; across volumes each file is copied and needs free space for a second copy while it moves.
 - **To be able to downgrade,** take a database backup (**Back up now**) and a filesystem snapshot of `/app/roms` (and `/app/ingest`) at the same moment before upgrading, and restore **both** to go back: the database alone doesn't know where external files were.
 

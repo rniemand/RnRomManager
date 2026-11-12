@@ -66,6 +66,8 @@ Storage of every shipped system:
 
 **Switch, the external + titledb example** (`RnRomManager.Systems.Switch`): `EmbedRomsInZip` is false and `DatSource` is `TitleDb`. `ReadHeader` reads only the first MiB it's given: a PFS0 (`.nsp`, `.nsz`) yields its file count and, from its ticket names, a `titleId`; an XCI (`HEAD` at 0x100 or 0x1100) yields no id, so the file name's `[0100…]` is used. Every offset is checked with widened arithmetic before it's sliced, and anything damaged gives a null id rather than an error. It needs no `NormalizeForHashing`.
 
+**Updates tab.** There is no handler property for it: any system whose identification flags a release `Update` (titledb does, for title IDs ending in `800` and for `[UPD]` files) gets the Game page's **Updates** tab for those releases, ordered by the `version` read from a `[x.y.z]` tag in the file name. A libretro system's DAT flags never include `Update`, so its games show only Releases.
+
 **Limits of the contract:**
 
 - One file per release. Large single-file images can use external storage (as Switch does); multi-file or CD-based systems (cue/bin, multi-disc) need a contract change.

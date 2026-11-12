@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 21, 17)]
-    [TestCase(SeedSet.Full, 221, 217)]
+    [TestCase(SeedSet.Basic, 22, 17)]
+    [TestCase(SeedSet.Full, 222, 217)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -73,6 +73,7 @@ public class SeedIngestTests
             ("Orbit Expedition [0100000000010000][v0].nsp", "Orbit Expedition.[0100000000010000][v0].nsp", "01-orbit-expedition.nsp", (string?)null),
             ("Orbit Expedition [0100000000010800][v65536].nsp", "Orbit Expedition.[0100000000010800][v65536].nsp", "02-orbit-expedition [v65536].nsp", "Update"),
             ("Orbit Expedition - Bonus Tracks [0100000000011001][v0].nsp", "Orbit Expedition.- Bonus Tracks [0100000000011001][v0].nsp", "03-orbit-expedition-bonus.nsp", "DLC"),
+            ("Orbit Expedition [0100000000010800][v0][1.1.0].nsp", "Orbit Expedition.[0100000000010800][v0][1.1.0].nsp", "04-orbit-expedition [0100000000010000][UPD][1.1.0].nsp", "Update"),
         })
         {
             var rom = expedition.Roms.Single(r => r.FileName == fileName);
@@ -83,7 +84,8 @@ public class SeedIngestTests
             Assert.That(rom.IsPrimary, Is.EqualTo(flag is null), fileName);
             Assert.That(rom.Identification.Method, Is.EqualTo(IdentificationMethod.TitleDb), fileName);
         }
-        Assert.That(expedition.Roms, Has.Count.EqualTo(3));
+        Assert.That(expedition.Roms, Has.Count.EqualTo(4));
+        Assert.That(expedition.Roms.Select(r => r.Version), Is.EquivalentTo(new[] { null, null, null, "1.1.0" }), "B7: the ticketless [UPD] file is the 1.1.0 update");
         Assert.That(infos.Single(g => g.Title == "Color Garden").System, Is.EqualTo("gbc"));
         Assert.That(infos.All(g => g.Images.Single().IsDefault), Is.True);
         var courier = Directory.GetFiles(Path.Combine(factory.Root, "roms", "gba", "S"), "*.zip").Single();

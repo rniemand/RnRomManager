@@ -11,8 +11,8 @@ public class IngestSeederTests
     [SetUp] public void SetUp() => _dir = new TempDir();
     [TearDown] public void TearDown() => _dir.Dispose();
 
-    [TestCase(SeedSet.Basic, 25)]
-    [TestCase(SeedSet.Full, 225)]
+    [TestCase(SeedSet.Basic, 26)]
+    [TestCase(SeedSet.Full, 226)]
     public void Sets_HaveExpectedFilesArchivesAndReadyAges(SeedSet set, int count)
     {
         var ingest = _dir.Combine("ingest");
@@ -21,9 +21,14 @@ public class IngestSeederTests
         Assert.That(files, Has.Length.EqualTo(count));
         Assert.That(files.Count(f => Path.GetExtension(f) == ".zip"), Is.EqualTo(1));
         Assert.That(files.Count(f => Path.GetExtension(f) == ".7z"), Is.EqualTo(1));
-        // Switch: a base, its update and a DLC, each a PFS0 of at least 1 KiB naming its ticket.
+        // Switch: a base, its update and a DLC, each a PFS0 of at least 1 KiB naming its ticket, and a ticketless [UPD] update.
         var switchFiles = Directory.GetFiles(Path.Combine(ingest, "switch")).Select(Path.GetFileName).Order(StringComparer.Ordinal);
-        Assert.That(switchFiles, Is.EqualTo(new[] { "01-orbit-expedition.nsp", "02-orbit-expedition [v65536].nsp", "03-orbit-expedition-bonus.nsp" }));
+        Assert.That(switchFiles, Is.EqualTo(new[]
+        {
+            "01-orbit-expedition.nsp", "02-orbit-expedition [v65536].nsp", "03-orbit-expedition-bonus.nsp", "04-orbit-expedition [0100000000010000][UPD][1.1.0].nsp",
+        }));
+        var ticketless = File.ReadAllBytes(Path.Combine(ingest, "switch", "04-orbit-expedition [0100000000010000][UPD][1.1.0].nsp"));
+        Assert.That((ticketless[..4], System.Text.Encoding.ASCII.GetString(ticketless).Contains(".tik")), Is.EqualTo(("PFS0"u8.ToArray(), false)));
         foreach (var (name, id) in new[] { ("01-orbit-expedition.nsp", "0100000000010000"), ("02-orbit-expedition [v65536].nsp", "0100000000010800"), ("03-orbit-expedition-bonus.nsp", "0100000000011001") })
         {
             var bytes = File.ReadAllBytes(Path.Combine(ingest, "switch", name));

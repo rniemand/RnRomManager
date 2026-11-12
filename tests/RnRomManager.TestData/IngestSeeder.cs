@@ -142,6 +142,8 @@ public static class IngestSeeder
         Loose("switch", "01-orbit-expedition.nsp", Nsp(orbitBase, 1901));
         Loose("switch", "02-orbit-expedition [v65536].nsp", Nsp(orbitUpdate, 1902));
         Loose("switch", "03-orbit-expedition-bonus.nsp", Nsp(orbitBonus, 1903));
+        // Game updates B7: no ticket, so no header title id; the base id in the name plus [UPD] makes it the update.
+        Loose("switch", "04-orbit-expedition [0100000000010000][UPD][1.1.0].nsp", new SyntheticNspBuilder { Entries = [($"{orbitUpdate.ToLowerInvariant()}.nca", 2048)], Seed = 1904 }.Build());
         IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow> titleDb =
         [
             new(orbitBase, "Orbit Expedition", "Fixture Works", "Seed Studio", 2018, ["Adventure"], ["en"], null, null),
