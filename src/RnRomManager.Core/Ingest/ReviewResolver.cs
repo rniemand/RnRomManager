@@ -318,6 +318,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             string filename;
             IReadOnlyList<string> regions = [], languages = [], flags = [];
             string? revision = null;
+            if (request.Update == true && request.Action != "Dat")
+                return ReviewResolutionResult.Invalid("update", ReviewResolutionRequest.UpdateNeedsDat);
             if (request.Action == "Dat")
             {
                 if (item.Reason != "NoDatMatch")
@@ -328,13 +330,23 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 if (external && (!chosen.RomExtensions.Contains(originalExtension, StringComparer.OrdinalIgnoreCase)
                     || item.SizeBytes < chosen.MinRomSizeBytes || item.SizeBytes > chosen.MaxRomSizeBytes))
                     return ReviewResolutionResult.Invalid("datSystem", "That system can't store this file's extension or size.");
+                if (request.Update == true && chosen.DatSource != DatSource.TitleDb)
+                    return ReviewResolutionResult.Invalid("update", "Only a titledb game can be stored as an update.");
                 system = chosen;
                 var store = dats.For(system.Id);
                 if (chosen.DatSource == DatSource.TitleDb)
                 {
                     // T9: the picked title is named and grouped as T4 would have for its id, with N from the original
                     // file name; titledb never checks hashes, so it is as verified as an automatic match.
-                    var match = store is null || TitleDb.TitleIdOfGameName(request.DatGameName!) is not { } pickedId
+                    var pickedId = TitleDb.TitleIdOfGameName(request.DatGameName!);
+                    if (request.Update == true && pickedId is not null)
+                    {
+                        // B8: a base pick becomes its update id; an update pick stays; anything else can't be an update.
+                        pickedId = TitleDb.UpdateIdOf(pickedId);
+                        if (pickedId is null)
+                            return ReviewResolutionResult.Invalid("update", "Pick the base game or one of its updates to store this file as an update.");
+                    }
+                    var match = store is null || pickedId is null
                         || !store.Roms.Any(r => r.GameName == request.DatGameName)
                         ? null
                         : TitleDb.Match(pickedId, item.OriginalFileName, store.ByTitleId);

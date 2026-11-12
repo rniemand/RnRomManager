@@ -45,6 +45,13 @@ public class TitleDbMatchTests
     public void TitleIdFrom(string? header, string fileName, string? expected) =>
         Assert.That(TitleDb.TitleIdFrom(header is null ? new Dictionary<string, object?>() : Header(header), fileName), Is.EqualTo(expected));
 
+    [TestCase(Base, Update)]
+    [TestCase(Update, Update)]
+    [TestCase(Dlc1, null)]
+    [TestCase(Delta, null)]
+    [TestCase(Dlc2000Patch, null)]
+    public void UpdateIdOf_BaseOrUpdate_B8(string id, string? expected) => Assert.That(TitleDb.UpdateIdOf(id), Is.EqualTo(expected));
+
     [Test]
     public void TitleIdFrom_NoHeaderAtAll_UsesTheFileName() =>
         Assert.That(TitleDb.TitleIdFrom(null, $"x [{Base}].xci"), Is.EqualTo(Base));

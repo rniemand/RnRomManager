@@ -203,6 +203,77 @@ describe('review detail page', () => {
 		expect(toasts.items.at(-1)?.text).toBe('Added as an unverified release of Tetris (World).');
 	});
 
+	it('a Switch item has one update checkbox, unticked, and sends update: false (B8)', async () => {
+		answers['GET /api/review/7'] = { status: 200, body: switchItem };
+		answers['POST /api/review/7/resolve'] = { status: 200, body: { gameId: 'g9' } };
+		render(ReviewPage);
+
+		const box = (await screen.findByLabelText('This file is an update')) as HTMLInputElement;
+		expect(box.checked).toBe(false);
+		expect(screen.getAllByLabelText('This file is an update')).toHaveLength(1);
+		await fireEvent.click(screen.getByRole('button', { name: 'Use' }));
+
+		await vi.waitFor(() => expect(posts).toHaveLength(1));
+		expect(posts[0].body).toEqual({
+			action: 'Dat',
+			datSystem: 'switch',
+			datGameName: 'Orbit Expedition [0100000000002000]',
+			update: false
+		});
+	});
+
+	it('an [UPD] file pre-ticks the checkbox; Use sends update: true and toasts an update (B8)', async () => {
+		toasts.items = [];
+		answers['GET /api/review/7'] = {
+			status: 200,
+			body: { ...switchItem, originalFileName: 'DREDGE[upd][1.0.1].nsp' }
+		};
+		answers['POST /api/review/7/resolve'] = { status: 200, body: { gameId: 'g9' } };
+		render(ReviewPage);
+
+		const box = (await screen.findByLabelText('This file is an update')) as HTMLInputElement;
+		expect(box.checked).toBe(true);
+		await fireEvent.click(screen.getByRole('button', { name: 'Use' }));
+
+		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/games/g9'));
+		expect(posts[0].body).toMatchObject({ update: true });
+		expect(toasts.items.at(-1)?.text).toBe('Added update of Orbit Expedition [0100000000002000].');
+	});
+
+	it('ticking the checkbox applies to the DAT search results too (B8)', async () => {
+		answers['POST /api/review/7/resolve'] = { status: 200, body: { gameId: 'g9' } };
+		await searchFor(switchItem, [
+			{
+				gameName: 'Orbit Expedition [0100000000002000]',
+				romName: 'Orbit A.nsp',
+				sizeBytes: 0,
+				crc32: ''
+			}
+		]);
+		await fireEvent.click(screen.getByLabelText('This file is an update'));
+		await screen.findByText('Orbit A.nsp');
+
+		const uses = screen.getAllByRole('button', { name: 'Use' });
+		await fireEvent.click(uses.at(-1)!);
+
+		await vi.waitFor(() => expect(posts).toHaveLength(1));
+		expect(posts[0].body).toMatchObject({
+			datGameName: 'Orbit Expedition [0100000000002000]',
+			update: true
+		});
+	});
+
+	it('a libretro item has no update checkbox and sends no update field (B8)', async () => {
+		answers['GET /api/review/7'] = {
+			status: 200,
+			body: { ...noMatch, originalFileName: 'x [UPD].gb' }
+		};
+		render(ReviewPage);
+
+		await screen.findByRole('button', { name: 'Use' });
+		expect(screen.queryByLabelText('This file is an update')).toBeNull();
+	});
+
 	it('picking a suggestion resolves as Dat and opens the game', async () => {
 		answers['GET /api/review/7'] = { status: 200, body: noMatch };
 		answers['POST /api/review/7/resolve'] = { status: 200, body: { gameId: 'g9' } };

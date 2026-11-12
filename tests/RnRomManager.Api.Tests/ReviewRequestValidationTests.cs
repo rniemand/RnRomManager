@@ -23,6 +23,8 @@ public class ReviewRequestValidationTests
         yield return new(Manual with { Languages = [null!] }, "languages");
         yield return new(Manual with { Flags = null }, "flags");
         yield return new(Manual with { Revision = new string('x', 33) }, "revision");
+        yield return new(Manual with { Update = true }, "update");
+        yield return new(new ReviewResolutionRequest { Action = "Attach", TargetGameId = Guid.NewGuid(), Flag = "None", Update = true }, "update");
     }
 
     [TestCaseSource(nameof(InvalidCases))]
@@ -36,6 +38,8 @@ public class ReviewRequestValidationTests
         {
             Manual, Manual with { Title = "Sanitize: this", Revision = "Rev 2", Regions = ["USA"], Languages = ["En"], Flags = ["Homebrew"] },
             new ReviewResolutionRequest { Action = "Dat", DatSystem = "gb", DatGameName = "Tetris (World)" },
+            new ReviewResolutionRequest { Action = "Dat", DatSystem = "switch", DatGameName = "X [0100000000010000]", Update = true },
+            Manual with { Update = false },
             new ReviewResolutionRequest { Action = "Attach", TargetGameId = Guid.NewGuid(), Flag = "None" },
             new ReviewResolutionRequest { Action = "Attach", TargetGameId = Guid.NewGuid(), Flag = "Hack" },
             new ReviewResolutionRequest { Action = "Attach", TargetGameId = Guid.NewGuid(), Flag = "Translated" },

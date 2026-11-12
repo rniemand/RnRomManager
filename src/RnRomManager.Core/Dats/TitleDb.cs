@@ -168,6 +168,13 @@ public static partial class TitleDb
     public static string? TitleIdOfGameName(string gameName) =>
         GameNameTitleId().Match(gameName) is { Success: true } match ? match.Groups[1].Value : null;
 
+    /// <summary>B8: a base id's update id (<c>| 0x800</c>), an update id as is; null for any other kind.</summary>
+    public static string? UpdateIdOf(string titleId)
+    {
+        var id = ulong.Parse(titleId, System.Globalization.NumberStyles.AllowHexSpecifier, System.Globalization.CultureInfo.InvariantCulture);
+        return (id & 0x1FFFUL) is 0 or 0x800 ? Hex(id | 0x800) : null;
+    }
+
     private static string Hex(ulong id) => id.ToString("X16", System.Globalization.CultureInfo.InvariantCulture);
 
     /// <summary>T2: a name the library can use: its title sanitizes to something and its <see cref="GameName"/> fits.</summary>

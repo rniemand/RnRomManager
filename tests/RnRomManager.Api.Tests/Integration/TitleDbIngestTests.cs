@@ -29,6 +29,8 @@ public class TitleDbIngestTests
     private const string NamedDlcId = "0100000000003002";
     private const string OddKindId = "0100000000002400";
     private const string OrphanDlcId = "0100000000009001";
+    private const string CometBaseId = "0100000000006000";
+    private const string CometUpdateId = "0100000000006800";
 
     private ApiFactory? _factory;
 
@@ -64,6 +66,8 @@ public class TitleDbIngestTests
                     new(NamedDlcId, "Orbit Expedition: Star Pack", "Orbit Co", null, 2021, [], ["ja"], null, null),
                     new(OddKindId, "Orbit Oddity", null, null, null, [], [], null, null),
                     new(OrphanDlcId, "Lost Pack", null, null, null, [], [], null, null),
+                    new(CometBaseId, "Comet Run", null, null, null, [], ["en"], null, null),
+                    new(CometUpdateId, "Comet Run Update", null, null, null, [], ["en"], null, null),
                 ],
             });
         _ = _factory.Services; // start: folders and the DAT load
@@ -380,6 +384,57 @@ public class TitleDbIngestTests
         Assert.That((dlc.FileName, dlc.IsPrimary), Is.EqualTo(($"Orbit Expedition - Star Pack [{NamedDlcId}][v0].nsp", false)));
         Assert.That(dlc.Languages, Is.EqualTo(new[] { "Ja" }));
         Assert.That(dlc.Identification.DatGameName, Is.EqualTo($"Orbit Expedition [{BaseId}]"), "the base's datGameName");
+    }
+
+    private static ReviewResolutionRequest UpdatePick(string datGameName) => Dat(datGameName) with { Update = true };
+
+    [Test]
+    public async Task UpdatePick_OfABase_StoresItsUpdate_WithVersionAndName_B8()
+    {
+        await StartAsync();
+        var gameId = await IngestBaseAsync();
+        var (item, _) = await QueueAsync("DREDGE[UPD][1.0.1].nsp");
+
+        var result = await Resolver().ResolveAsync(item.Id, UpdatePick($"Orbit Expedition [{BaseId}]"), await AdminAsync(), default);
+
+        Assert.That((result.Code, result.GameId), Is.EqualTo(((string?)null, (Guid?)gameId)));
+        var update = ReadGame().Roms.Single(r => r.Flags.Contains("Update"));
+        Assert.That((update.FileName, update.Version, update.IsPrimary),
+            Is.EqualTo(($"Orbit Expedition [{UpdateId}][v0][1.0.1].nsp", (string?)"1.0.1", false)));
+        Assert.That(update.Identification.DatGameName, Is.EqualTo($"Orbit Expedition [{BaseId}]"));
+    }
+
+    [Test]
+    public async Task UpdatePick_OfAnUpdateEntry_StoresThatUpdate_B8()
+    {
+        await StartAsync();
+        var (item, _) = await QueueAsync("comet [2.0].nsp");
+
+        var result = await Resolver().ResolveAsync(item.Id, UpdatePick($"Comet Run Update [{CometUpdateId}]"), await AdminAsync(), default);
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.Select(e => e.Key + ": " + string.Join(",", e.Value)) ?? []));
+        var rom = ReadGame(Path.Combine(Factory.Root, "roms", ExternalTitleDbTestHandler.SystemId, "C", "Comet Run.zip")).Roms.Single();
+        Assert.That((rom.FileName, rom.Version, string.Join(",", rom.Flags)),
+            Is.EqualTo(($"Comet Run Update [{CometUpdateId}][v0][2.0].nsp", (string?)"2.0", "Update")));
+        Assert.That(rom.Identification.DatGameName, Is.EqualTo($"Comet Run [{CometBaseId}]"));
+    }
+
+    [TestCase("dlc", TestName = "BadUpdatePick_IsAnUpdateError_AndKeepsPending DLC pick")]
+    [TestCase("action", TestName = "BadUpdatePick_IsAnUpdateError_AndKeepsPending non-Dat action")]
+    public async Task BadUpdatePick_IsAnUpdateError_AndKeepsPending(string problem)
+    {
+        await StartAsync();
+        var gameId = await IngestBaseAsync();
+        var (item, file) = await QueueAsync("mystery [UPD].nsp");
+        var request = problem == "dlc"
+            ? UpdatePick($"Orbit Expedition - Star Pack [{NamedDlcId}]")
+            : new ReviewResolutionRequest { Action = "Attach", TargetGameId = gameId, Flag = "Hack", Update = true };
+
+        var result = await Resolver().ResolveAsync(item.Id, request, await AdminAsync(), default);
+
+        Assert.That((result.Code, result.Errors?.Keys.Single()), Is.EqualTo(("ValidationFailed", (string?)"update")));
+        Assert.That((await ReviewOfAsync(Bytes(9))).Status, Is.EqualTo("Pending"));
+        Assert.That(File.ReadAllBytes(file.FullPath), Is.EqualTo(Bytes(9)));
     }
 
     [TestCase("kind", TestName = "BadDatPick_IsFieldValidation unsupported kind")]

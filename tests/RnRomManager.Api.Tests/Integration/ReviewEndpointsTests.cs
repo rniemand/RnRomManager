@@ -395,6 +395,18 @@ public class ReviewEndpointsTests
         Assert.That(problem.GetProperty("errors").EnumerateObject(), Is.Not.Empty);
     }
 
+    [Test]
+    public async Task Resolve_UpdateOnANonDatAction_Is400WithAnUpdateFieldError()
+    {
+        using var response = await _admin.PostAsync("/api/review/1/resolve",
+            new { action = "Attach", targetGameId = Guid.NewGuid(), flag = "None", update = true });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await AuthClient.JsonAsync(response);
+        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo("ValidationFailed"));
+        Assert.That(problem.GetProperty("errors").EnumerateObject().Select(p => p.Name), Is.EqualTo(new[] { "update" }));
+    }
+
     [TestCase("system=sg1000", "system")]
     [TestCase("reason=Failed", "reason")]
     public async Task ListFilter_InvalidValue_Is400WithFieldError(string query, string field)
