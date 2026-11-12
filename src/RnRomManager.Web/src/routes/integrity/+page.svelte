@@ -7,6 +7,7 @@
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import { formatDateTime } from '#lib/format.js';
 	import {
@@ -146,7 +147,7 @@
 				</dd>
 			</dl>
 
-			<div aria-live="polite">
+			<div>
 				{#if job}
 					<div class="card card-body">
 						<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
@@ -167,9 +168,10 @@
 						>
 							<div class="progress-bar" style="width: {percent(job.current, job.total)}%"></div>
 						</div>
-						<div class="small text-body-secondary text-break">
+						<div class="small text-body-secondary text-break" aria-live="polite">
 							{job.current} / {job.total}{job.currentItem ? ` · ${job.currentItem}` : ''}
 						</div>
+						<JobStepProgress step={job.step} />
 					</div>
 				{:else}
 					<div class="d-flex flex-wrap gap-2">

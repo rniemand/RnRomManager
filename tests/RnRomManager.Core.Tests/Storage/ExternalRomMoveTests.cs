@@ -201,6 +201,30 @@ public class ExternalRomMoveTests
         Assert.That(Directory.GetFiles(Path.Combine(_root, "roms")), Is.EqualTo(new[] { _destination }));
     }
 
+    [Test]
+    public void AcrossVolumes_ReportsZeroThenCumulativeBytes()
+    {
+        var expected = Snapshot(_source);
+        var seen = new List<long>();
+
+        var result = ExternalRomMove.Move(_root, _source, _destination, expected, NullLogger.Instance, Sha1("rom bytes"),
+            new ExternalMoveHooks { Rename = Rename(_source) }, seen.Add);
+
+        Assert.That(result.Status, Is.EqualTo(ExternalMoveStatus.Moved));
+        Assert.That(seen, Is.EqualTo(new long[] { 0, "rom bytes".Length }));
+    }
+
+    [Test]
+    public void Rename_NeverReportsCopyProgress()
+    {
+        var seen = new List<long>();
+
+        var result = ExternalRomMove.Move(_root, _source, _destination, Snapshot(_source), NullLogger.Instance, onCopied: seen.Add);
+
+        Assert.That(result.Status, Is.EqualTo(ExternalMoveStatus.Moved));
+        Assert.That(seen, Is.Empty);
+    }
+
     private sealed class FailingStream(Stream inner) : MemoryStream
     {
         private bool _served;

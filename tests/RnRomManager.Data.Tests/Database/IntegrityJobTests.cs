@@ -117,12 +117,13 @@ public class IntegrityJobTests
         stream.Write(bytes);
     }
 
-    private async Task<(Guid JobId, string Summary)> Run(JobMode mode = JobMode.Quick, CancellationToken ct = default, IntegrityHooks? hooks = null)
+    private async Task<(Guid JobId, string Summary)> Run(JobMode mode = JobMode.Quick, CancellationToken ct = default, IntegrityHooks? hooks = null,
+        JobProgress? progress = null)
     {
         var jobId = Guid.NewGuid();
         var job = new IntegrityJob(mode, _games, new RomRepository(_factory), _sync, _issues, _jobs, _reader, _systems, Options.Create(new PathsOptions { Roms = _dir.Path }),
             TimeProvider.System, NullLogger<IntegrityJob>.Instance) { Hooks = hooks };
-        var summary = await job.RunAsync(new JobContext(jobId, new JobProgress()), ct);
+        var summary = await job.RunAsync(new JobContext(jobId, progress ?? new JobProgress()), ct);
         return (jobId, System.Text.Json.JsonSerializer.Serialize(summary));
     }
 
@@ -641,6 +642,80 @@ public class IntegrityJobTests
             (OrphanFile, (string?)"old.txt", (string?)null),
             (EntryMissing, (string?)"ext/A/Alpha.zip", (string?)"Alpha.Alpha.nsp"),
         }));
+    }
+
+    /// <summary>Runs <paramref name="onRead"/> before every read, honouring the token (large ROM import progress tests).</summary>
+    private sealed class ObservedStream(Stream inner, Action onRead) : Stream
+    {
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            onRead();
+            return inner.Read(buffer, offset, count);
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            onRead();
+            cancellationToken.ThrowIfCancellationRequested();
+            return inner.ReadAsync(buffer, cancellationToken);
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => inner.Length;
+        public override long Position { get => inner.Position; set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    [Test]
+    public async Task External_DeepHash_ReportsAHashingStep_ThenClearsIt()
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        var length = new FileInfo(alpha).Length;
+        var progress = new JobProgress();
+        var seen = new List<JobStepSnapshot?>();
+
+        await Run(JobMode.Deep, hooks: new IntegrityHooks
+        {
+            WrapHashStream = stream => new ObservedStream(stream, () => seen.Add(progress.StepAt(DateTime.UtcNow))),
+        }, progress: progress);
+
+        Assert.That(seen, Is.Not.Empty);
+        Assert.That(seen, Has.All.Matches<JobStepSnapshot?>(s => s!.Phase == JobStepPhases.Hashing && s.BytesTotal == length));
+        Assert.That(seen[^1]!.BytesDone, Is.EqualTo(length), "the last read sees the bytes so far");
+        Assert.That(progress.StepAt(DateTime.UtcNow), Is.Null);
+        Assert.That(await OpenExternal(), Is.Empty, "the hash still matches");
+    }
+
+    [Test]
+    public async Task External_DeepHash_StillFindsAMismatch()
+    {
+        var alpha = await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        ReplaceSameSize(alpha);
+
+        await Run(JobMode.Deep, hooks: new IntegrityHooks { WrapHashStream = stream => new ObservedStream(stream, () => { }) });
+
+        Assert.That(await OpenExternal(), Is.EqualTo(new[] { (HashMismatch, (string?)"ext/A/Alpha.zip", (string?)"Alpha.Alpha.nsp") }));
+    }
+
+    [Test]
+    public async Task External_CancelledMidHash_ClearsTheStep()
+    {
+        await WriteExternal("ext/A/Alpha.zip", "Alpha");
+        var progress = new JobProgress();
+        using var cancel = new CancellationTokenSource();
+
+        await Run(JobMode.Deep, cancel.Token, new IntegrityHooks
+        {
+            WrapHashStream = stream => new ObservedStream(stream, cancel.Cancel),
+        }, progress);
+
+        Assert.That(cancel.IsCancellationRequested, Is.True);
+        Assert.That(progress.StepAt(DateTime.UtcNow), Is.Null);
     }
 
     /// <summary>An external game with <paramref name="count"/> releases, each file beside the ZIP; returns the file paths.</summary>

@@ -16,7 +16,7 @@ public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, IUserReposit
 
     private RunningJob? _current;
 
-    public JobSnapshot? Current => Volatile.Read(ref _current)?.Snapshot();
+    public JobSnapshot? Current => Volatile.Read(ref _current)?.Snapshot(time.GetUtcNow().UtcDateTime);
 
     /// <returns>The started job, or null when the lock is busy (<c>409 JobRunning</c>).</returns>
     /// <exception cref="JobRefusedException"><see cref="IJob.Preflight"/> refused; the lock is released.</exception>
@@ -158,8 +158,9 @@ public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, IUserReposit
 
         public Task? Completion { get; set; }
 
-        public JobSnapshot Snapshot() => new(
-            Row.Id, Row.Type, Row.Mode, JobStatus.Running, Progress.Current, Progress.Total, Progress.CurrentItem, Row.StartedAt);
+        public JobSnapshot Snapshot(DateTime nowUtc) => new(
+            Row.Id, Row.Type, Row.Mode, JobStatus.Running, Progress.Current, Progress.Total, Progress.CurrentItem, Row.StartedAt,
+            Progress.StepAt(nowUtc));
     }
 }
 

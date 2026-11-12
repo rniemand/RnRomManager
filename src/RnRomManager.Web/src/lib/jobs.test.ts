@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+	formatStep,
 	formatSummary,
 	latestJobs,
 	outcomeClass,
 	percent,
 	severityClass,
-	statusClass
+	statusClass,
+	stepPercent
 } from './jobs';
 
 describe('job display helpers', () => {
@@ -41,5 +43,55 @@ describe('integrity helpers', () => {
 	it('severity badges', () => {
 		expect(severityClass('Warn')).toBe('text-bg-warning');
 		expect(severityClass('x')).toBe('text-bg-secondary');
+	});
+});
+
+describe('current file step (large ROM import progress B7)', () => {
+	const one = (n: number) =>
+		new Intl.NumberFormat(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(
+			n
+		);
+	const GiB = 1024 ** 3;
+	const MiB = 1024 ** 2;
+	const step = (over: Partial<Parameters<typeof formatStep>[0]> = {}) => ({
+		phase: 'Hashing',
+		bytesDone: 2 * GiB,
+		bytesTotal: 8 * GiB,
+		bytesPerSecond: 100 * MiB,
+		...over
+	});
+
+	it.each([
+		['Hashing', 'Hashing'],
+		['CopyingToLibrary', 'Copying to library'],
+		['Copying', 'Copying'],
+		['Verifying', 'Verifying']
+	])('labels %s as %s', (phase, label) =>
+		expect(formatStep(step({ phase, bytesPerSecond: null }))).toBe(
+			`${label} · ${one(2)} GiB / ${one(8)} GiB`
+		)
+	);
+
+	it('adds speed and minutes left (rounded up)', () => {
+		expect(formatStep(step())).toBe(
+			`Hashing · ${one(2)} GiB / ${one(8)} GiB · ${one(100)} MiB/s · about 2 min left`
+		);
+	});
+
+	it('shows seconds under a minute', () => {
+		expect(formatStep(step({ bytesDone: 8 * GiB - 50 * 100 * MiB }))).toContain('about 50 s left');
+	});
+
+	it('leaves time out when nothing is left or the total is 0', () => {
+		expect(formatStep(step({ bytesDone: 8 * GiB }))).not.toContain('left');
+		expect(formatStep(step({ bytesDone: 0, bytesTotal: 0 }))).toBe(
+			`Hashing · 0 B / 0 B · ${one(100)} MiB/s`
+		);
+	});
+
+	it('percent is 0 without a total and capped at 100', () => {
+		expect(stepPercent(step())).toBe(25);
+		expect(stepPercent(step({ bytesTotal: 0 }))).toBe(0);
+		expect(stepPercent(step({ bytesDone: 9 * GiB }))).toBe(100);
 	});
 });

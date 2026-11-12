@@ -124,6 +124,32 @@ describe('ingestion page', () => {
 		expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('25');
 	});
 
+	it('shows the current file step outside any live region', async () => {
+		render(IngestionPage);
+		expect(await screen.findByText('32.0 KiB')).toBeTruthy();
+
+		answers['GET /api/jobs/current'] = [
+			{
+				status: 200,
+				body: {
+					...running,
+					step: { phase: 'Hashing', bytesDone: 512, bytesTotal: 1024, bytesPerSecond: null }
+				}
+			}
+		];
+		await fireEvent.click(screen.getByRole('button', { name: /Import all/ }));
+
+		const oneKiB = `${(1).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} KiB`;
+		const line = await screen.findByText(`Hashing · 512 B / ${oneKiB}`);
+		expect(line.closest('[aria-live]')).toBeNull();
+		expect(
+			screen
+				.getByRole('progressbar', { name: 'Current file progress' })
+				.getAttribute('aria-valuenow')
+		).toBe('50');
+		expect(screen.getByText('1 / 4 · Tetris.gb').closest('[aria-live]')).not.toBeNull();
+	});
+
 	const tabs = () =>
 		screen.getAllByRole('tab').map((t) => [t.textContent!.trim(), t.getAttribute('aria-selected')]);
 	const panels = () =>

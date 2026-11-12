@@ -5,6 +5,7 @@
 	import { isApiError } from '#lib/api/errors.js';
 	import type { Job, JobItem, Page } from '#lib/api/types.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
+	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Loading from '#lib/components/Loading.svelte';
@@ -118,6 +119,10 @@
 				<dd class="col-sm-9" aria-live="polite">
 					{live.current} / {live.total}{live.currentItem ? ` · ${live.currentItem}` : ''}
 				</dd>
+				{#if live.step}
+					<dt class="col-sm-3">Current file</dt>
+					<dd class="col-sm-9"><JobStepProgress step={live.step} /></dd>
+				{/if}
 			{/if}
 		</dl>
 

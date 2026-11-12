@@ -20,7 +20,10 @@ describe('formatSize', () => {
 		[1024 * 1024 - 1, 1024, 'KiB'],
 		[1024 * 1024, 1, 'MiB'],
 		[1.25 * 1024 * 1024, 1.25, 'MiB'],
-		[16 * 1024 * 1024, 16, 'MiB']
+		[16 * 1024 * 1024, 16, 'MiB'],
+		[1024 * 1024 * 1024 - 1, 1024, 'MiB'],
+		[1024 * 1024 * 1024, 1, 'GiB'],
+		[8.25 * 1024 * 1024 * 1024, 8.25, 'GiB']
 	])('%d bytes -> %d %s', (bytes, value, unit) =>
 		expect(formatSize(bytes)).toBe(`${oneDecimal(value)} ${unit}`)
 	);
