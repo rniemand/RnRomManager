@@ -97,6 +97,22 @@ public static class ExternalRomName
         FirstFree(n => Build(zipBase, romFileName, n), reservations, StagingSuffix);
 
     /// <summary>
+    /// B10: a <c>FileSets</c> system's file keeps <paramref name="name"/> exactly, with no <c>&lt;ZipBase&gt;.</c>
+    /// prefix, <c> (N)</c> suffix or cut, because a cue refers to it byte for byte. When it and its staging name are
+    /// free (ignoring case) both are reserved; otherwise nothing is.
+    /// </summary>
+    public static ExactNameStatus AllocateExact(string name, ExternalNameReservations reservations)
+    {
+        if (Bytes(name) > MaxNameBytes)
+            return ExactNameStatus.TooLong;
+        if (reservations.IsTaken(name) || reservations.IsTaken(name + StagingSuffix))
+            return ExactNameStatus.Taken;
+        reservations.Reserve(name);
+        reservations.Reserve(name + StagingSuffix);
+        return ExactNameStatus.Allocated;
+    }
+
+    /// <summary>
     /// The ZIP name without <c>.zip</c> for an external game's title, without a clash suffix: the sanitized title,
     /// cut so that <c>&lt;base&gt;.zip</c> fits the budget. Two titles with the same base (ignoring case) share a
     /// ZIP path, however they differ beyond the cut: see <see cref="SameZipBase"/>.
@@ -369,4 +385,14 @@ public static class ExternalRomName
         }
         return value[..length];
     }
+}
+
+/// <summary>B10: the outcome of <see cref="ExternalRomName.AllocateExact"/>.</summary>
+public enum ExactNameStatus
+{
+    Allocated,
+    /// <summary>The name or its staging name is already used in the folder (on disk, by a claim or by the destination ZIP).</summary>
+    Taken,
+    /// <summary>Over <see cref="ExternalRomName.MaxNameBytes"/> UTF-8 bytes; it is never cut.</summary>
+    TooLong,
 }

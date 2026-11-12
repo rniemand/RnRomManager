@@ -73,6 +73,31 @@ public class SystemRegistryTests
     }
 
     [Test]
+    public void FileSets_WithEmbeddedStorage_Throws_NamingTheSystem()
+    {
+        var disc = Handler("disc", "disc", ".bin");
+        disc.FileSets.Returns(true);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => new SystemRegistry([_gb, disc]));
+
+        Assert.That(ex!.Message, Does.Contain("'disc'").And.Contain("FileSets"));
+    }
+
+    [Test]
+    public void FamilyMixingFileSets_Throws_NamingTheFamily()
+    {
+        var a = Handler("xa", "disc", ".xa");
+        var b = Handler("xb", "disc", ".xb");
+        a.EmbedRomsInZip.Returns(false);
+        b.EmbedRomsInZip.Returns(false);
+        a.FileSets.Returns(true);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => new SystemRegistry([a, b]));
+
+        Assert.That(ex!.Message, Does.Contain("'disc'").And.Contain("FileSets"));
+    }
+
+    [Test]
     public void DuplicateId_Throws()
     {
         var ex = Assert.Throws<InvalidOperationException>(() => new SystemRegistry([_gb, Handler("gb", "other", ".x")]));

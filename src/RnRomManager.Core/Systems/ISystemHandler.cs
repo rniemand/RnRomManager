@@ -37,6 +37,13 @@ public interface ISystemHandler
     /// </summary>
     bool EmbedRomsInZip { get; }
 
+    /// <summary>
+    /// B5: true for disc systems whose release can be a file set (a data track, its <c>.cue</c> and the other tracks).
+    /// External files then keep their exact names (B10), ingest groups bin/cue sets (B7) and Review restricts set
+    /// files (B15). Requires <see cref="EmbedRomsInZip"/> false; handlers sharing a <see cref="Family"/> must agree.
+    /// </summary>
+    bool FileSets => false;
+
     /// <summary>Spec T1: libretro's DAT files, or blawar/titledb.</summary>
     DatSource DatSource => DatSource.Libretro;
 

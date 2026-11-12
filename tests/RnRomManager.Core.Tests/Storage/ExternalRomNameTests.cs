@@ -21,6 +21,41 @@ public class ExternalRomNameTests
     private static void AssertWholeCharacters(string name) =>
         Assert.That(Encoding.UTF8.GetString(Encoding.UTF8.GetBytes(name)), Is.EqualTo(name).And.Not.Contain('�'));
 
+    // --- B10 exact names ---
+
+    [Test]
+    public void AllocateExact_FreeName_IsKeptUnchangedAndReserved()
+    {
+        var reservations = None();
+
+        Assert.That(ExternalRomName.AllocateExact("Disc Runner (USA) (Track 1).bin", reservations), Is.EqualTo(ExactNameStatus.Allocated));
+        Assert.That(reservations.IsTaken("disc runner (usa) (track 1).BIN"), Is.True);
+        Assert.That(reservations.IsTaken("Disc Runner (USA) (Track 1).bin" + ExternalRomName.StagingSuffix), Is.True);
+    }
+
+    [TestCase("TRACK 02.BIN")]
+    [TestCase("track 02.bin.tmp")]
+    public void AllocateExact_TakenIgnoringCase_IsReported(string taken)
+    {
+        var reservations = new ExternalNameReservations([taken]);
+
+        Assert.That(ExternalRomName.AllocateExact("Track 02.bin", reservations), Is.EqualTo(ExactNameStatus.Taken));
+        Assert.That(reservations.IsTaken("Track 02.bin (2)"), Is.False);
+    }
+
+    [Test]
+    public void AllocateExact_Over250Bytes_IsTooLong_AndNotCut()
+    {
+        var fits = new string('a', 246) + ".bin";
+        var over = new string('a', 247) + ".bin";
+        var reservations = None();
+
+        Assert.That((Bytes(fits), Bytes(over)), Is.EqualTo((250, 251)));
+        Assert.That(ExternalRomName.AllocateExact(over, reservations), Is.EqualTo(ExactNameStatus.TooLong));
+        Assert.That(reservations.IsTaken(over), Is.False);
+        Assert.That(ExternalRomName.AllocateExact(fits, reservations), Is.EqualTo(ExactNameStatus.Allocated));
+    }
+
     // --- E1 / E2 names ---
 
     [Test]
