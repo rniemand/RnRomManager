@@ -341,12 +341,13 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - a matching name with a different SHA1 is not used for a repair;
     - a lone track whose name and SHA1 match open-issue files of two games isn't repaired and goes to Review.
   - Done when: `ExternalLibraryTests` passes (Docker running).
-- [ ] **12. Review rules (API)**: B15 except the SPA (step 20). Add `SetFileNotResolvable` (409, in `ReviewEndpoints.ToResult`), the Dat-resolve naming and `..` rule for `FileSets` systems, the DAT search's one row per `gameName`, the `AmbiguousSet` reason filter in `GET /api/review`, and `resolvable` on the item detail.
+- [x] **12. Review rules (API)**: B15 except the SPA (step 20). Add `SetFileNotResolvable` (409, in `ReviewEndpoints.ToResult`), the Dat-resolve naming and `..` rule for `FileSets` systems, the DAT search's one row per `gameName`, the `AmbiguousSet` reason filter in `GET /api/review`, and `resolvable` on the item detail.
   - Files: `ReviewResolver.cs`, `ReviewEndpoints.cs`, the tests below.
   - Tests:
-    - `ReviewResolverExternalTests` (its `SystemRegistry` gains `ExternalSetTestHandler`; the set cases queue their item under `ingest/extset/`): resolving or dismissing a `.bin` item gives `SetFileNotResolvable`; an `.nrg` resolved to a Dat game whose rom is `… (Track 1).bin` is stored as `<Game> (Unverified).nrg` with no `Track 1` flag; one whose game name starts with `...` resolves; an `AmbiguousGroup` `.iso` attached with flag `None` takes its tags from `datGameName`, not the queued `romName`.
+    - `ReviewResolverExternalTests` (its `SystemRegistry` gains `ExternalSetTestHandler`; the set cases queue their item under `ingest/extset/`): resolving or dismissing a `.bin` or `.cue` item gives `SetFileNotResolvable`, and `IsResolvable` refuses only those on a `FileSets` system.
+    - `ExternalLibraryTests.SetReview.cs` (new partial; the naming cases need a real store, which `ReviewResolverExternalTests`' substitute repositories can't do): an `.nrg` resolved to a Dat game whose rom is `… (Track 1).bin` is stored as `<Game> (Unverified).nrg` with no `Track 1` flag; one whose game name starts with `...` resolves; an `AmbiguousGroup` `.iso` attached with flag `None` takes its tags from `datGameName`, not the queued `romName`.
     - `ReviewEndpointsTests`: a DAT search over a repeated game name returns it once; `reason=AmbiguousSet` is accepted.
-    - `ExternalLibraryTests.Sets.cs` (its host has `ExternalSetTestHandler`; `ReviewEndpointsTests`' host doesn't): resolving or dismissing a `.bin` item gives `409` with code `SetFileNotResolvable`; its detail has `resolvable` false and an `.iso` item's true; resolving an `.iso` item whose exact name is taken in its folder gives `409 NameTaken`, and the item stays `Pending`.
+    - `ExternalLibraryTests.SetReview.cs` (its host has `ExternalSetTestHandler`; `ReviewEndpointsTests`' host doesn't): resolving or dismissing a `.bin` item gives `409` with code `SetFileNotResolvable`; its detail has `resolvable` false and an `.iso` item's true; resolving an `.iso` item whose exact name is taken in its folder gives `409 NameTaken`, and the item stays `Pending`.
   - Done when: `ReviewResolverExternalTests`, `ReviewEndpointsTests` and `ExternalLibraryTests` pass (Docker running).
 - [ ] **13. Title edit and delete on sets**: B16, B17. `NameTaken` in `LibraryEndpoints.ToProblem`.
   - Files: `Core/Library/LibraryEditor.cs`, `Core/Library/LibraryEditResult.cs` (`NameTaken`), `Api/Endpoints/LibraryEndpoints.cs`, `ExternalLibraryTests.Sets.cs`.
@@ -561,6 +562,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - 2026-11-12 Step 8's set path already returns `TooRecent` for a member that changed or is too young, `IoError` for one that can't be read (whole set), and `Skipped` `AmbiguousGroup` when two games own the base title, so it never runs undefined; steps 9 and 10 refine these to B7's per-member rules and add their tests (code).
 - 2026-11-12 Step 9's `discx` handler is a small test class, not an NSubstitute substitute: Castle proxies throw `InvalidProgramException` on `ReadHeader(ReadOnlySpan<byte>)`, which the external path calls; `ExternalSetTestHandler` and `discx` are added to `IngestJobTests`' registry only by the disc tests, so its scanner and preflight tests keep their two systems (code).
 - 2026-11-12 Step 6's lone `… (Track 1).bin` test became step 9's "waits as `IncompleteSet`" test, plus a lone untagged `.bin` stored as a single file (fixture `Single Game (USA).bin`); the "no `Track 1` flag" check moved to the set test (spec B7, B11).
+- 2026-11-12 Step 12's Dat-naming, `...` and Attach-tag cases run in `ExternalLibraryTests.SetReview.cs`, not `ReviewResolverExternalTests`: a successful resolve needs real game and ROM repositories, which that Core class substitutes; it keeps the `SetFileNotResolvable` cases (code).
 
 ## Kickoff prompt
 ```text

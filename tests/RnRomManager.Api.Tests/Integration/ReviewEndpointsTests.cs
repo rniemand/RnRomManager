@@ -678,6 +678,49 @@ public class ReviewEndpointsTests
     }
 
     [Test]
+    public async Task Search_ListsARepeatedGameNameOnce_BeforeTheLimit()
+    {
+        // B15: Redump repeats a game once per serial, with the same name.
+        var cache = Service<DatCache>();
+        FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
+        {
+            [IngestSeeder.GbaDat] = [],
+            [IngestSeeder.N64Dat] = [],
+            [IngestSeeder.NesDat] = [],
+            [IngestSeeder.SnesDat] = [],
+            [IngestSeeder.Atari2600Dat] = [],
+            [IngestSeeder.ColecoVisionDat] = [],
+            [IngestSeeder.GameGearDat] = [],
+            [IngestSeeder.MasterSystemDat] = [],
+            [IngestSeeder.MegaDriveDat] = [],
+            [IngestSeeder.Sega32xDat] = [],
+            [IngestSeeder.TurboGrafx16Dat] = [],
+            [Gb] =
+            [
+                new FixtureGame("Repeat (World)", "Repeat (World).gb", new SyntheticRomBuilder { Seed = 2001 }.Build()),
+                new FixtureGame("Repeat (World)", "Repeat (World) (Alt).gb", new SyntheticRomBuilder { Seed = 2002 }.Build()),
+                new FixtureGame("Repeat Two (World)", "Repeat Two (World).gb", new SyntheticRomBuilder { Seed = 2003 }.Build()),
+            ],
+            ["Nintendo - Game Boy Color"] = [],
+        }, titleDb: IngestSeeder.EmptySwitch);
+        cache.Load();
+
+        using var response = await _admin.GetAsync("/api/dat/search?system=gb&q=repeat&limit=2");
+
+        var hits = (await AuthClient.JsonAsync(response)).EnumerateArray().Select(h => (h.GetProperty("gameName").GetString(), h.GetProperty("romName").GetString())).ToList();
+        Assert.That(hits, Is.EqualTo(new[] { ("Repeat (World)", "Repeat (World).gb"), ("Repeat Two (World)", "Repeat Two (World).gb") }));
+    }
+
+    [Test]
+    public async Task ListFilter_AmbiguousSet_IsAccepted()
+    {
+        using var response = await _admin.GetAsync("/api/review?reason=AmbiguousSet");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("total").GetInt64(), Is.Zero);
+    }
+
+    [Test]
     public async Task AlreadyResolvedItem_CannotBeResolvedOrDismissedAgain()
     {
         var item = await Queue();

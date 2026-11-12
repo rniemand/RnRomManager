@@ -26,6 +26,17 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
     public Task<ReviewResolutionResult> DismissAsync(long id, AuditActor actor, CancellationToken ct) =>
         ActAsync(id, null, actor, ct);
 
+    /// <summary>B15: a review item can't be resolved or dismissed: an unmatched <c>.cue</c>/<c>.bin</c> on a <c>FileSets</c> system.</summary>
+    public const string SetFileNotResolvable = "SetFileNotResolvable";
+
+    /// <summary>
+    /// B15: false for a <c>.cue</c> or <c>.bin</c> item (by its <c>originalFileName</c>, ignoring case) on a <c>FileSets</c>
+    /// system, which can only be deleted; true for every other item.
+    /// </summary>
+    public static bool IsResolvable(ReviewItem item, ISystemRegistry systems) =>
+        !(systems.ById(item.SystemId) is { FileSets: true }
+            && Path.GetExtension(item.OriginalFileName).ToLowerInvariant() is ".cue" or ".bin");
+
     /// <summary>
     /// Hard delete (D2–D4): removes the source file from the ingest folder (the whole archive for an archive entry) and
     /// every pending review row of that source. A source that's already gone still removes the rows.
@@ -256,6 +267,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         var item = await reviews.GetAsync(id, ct).ConfigureAwait(false);
         if (item is not { Status: "Pending" })
             return new("NotFound");
+        if (!IsResolvable(item, systems))
+            return new(SetFileNotResolvable); // B15: resolve and dismiss alike, so a set is never half dismissed
         var external = IsExternal(item);
         string source;
         ExternalFileSnapshot? sourceSnapshot = null;
@@ -362,11 +375,14 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                     var datRom = store?.Roms.FirstOrDefault(r => r.GameName == request.DatGameName);
                     if (datRom is null || store is null)
                         return ReviewResolutionResult.Invalid("datGameName", "Choose a game in the loaded DAT.");
-                    var parsed = NoIntroName.Parse(Path.GetFileNameWithoutExtension(datRom.RomName));
+                    // B15: a FileSets game's DAT rom may be a "(Track 1).bin" data track, so its name and tags come from the game name.
+                    var parsed = NoIntroName.Parse(chosen.FileSets ? datRom.GameName : Path.GetFileNameWithoutExtension(datRom.RomName));
                     title = parsed.BaseTitle; regions = parsed.Regions; languages = parsed.Languages; revision = parsed.Revision;
                     flags = [.. parsed.Flags, "Unverified"];
                     // G4: the DAT name's own extension (DAT entries are filtered to RomExtensions), e.g. an SMS-mode Game Gear .sms.
-                    filename = Path.GetFileNameWithoutExtension(datRom.RomName) + " (Unverified)" + (external ? originalExtension : Path.GetExtension(datRom.RomName));
+                    filename = chosen.FileSets
+                        ? datRom.GameName + " (Unverified)" + originalExtension
+                        : Path.GetFileNameWithoutExtension(datRom.RomName) + " (Unverified)" + (external ? originalExtension : Path.GetExtension(datRom.RomName));
                     identification = new(IdentificationMethod.Manual, store.DatName, store.Version, datRom.GameName);
                     metadata = store.MetadataFor(datRom.Crc32);
                 }
@@ -395,7 +411,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 {
                     // Keep the queued identity even when the loaded DATs have changed.
                     identification = new(IdentificationMethod.Dat, dat["datName"]!.GetValue<string>(), dat["datVersion"]?.GetValue<string>(), datGameName);
-                    var tags = NoIntroName.Parse(Path.GetFileNameWithoutExtension(filename));
+                    // B10: a FileSets release takes its tags from the DAT game name, as ingest does.
+                    var tags = NoIntroName.Parse(system.FileSets ? datGameName : Path.GetFileNameWithoutExtension(filename));
                     title = NoIntroName.Parse(datGameName).BaseTitle;
                     regions = tags.Regions; languages = tags.Languages; revision = tags.Revision; flags = tags.Flags;
                     metadata = dats.For(system.Id)?.MetadataFor(item.Crc32) ?? DatMetadata.Empty;
@@ -428,9 +445,10 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 filename = FileNameSanitizer.Sanitize(stem) + (external ? originalExtension : system.RomExtensions[0]);
             }
 
-            if (filename.Contains("..", StringComparison.Ordinal))
+            // B12: a FileSets name may hold "..", as Redump names do ("...Iru!"); only "." or ".." or a separator is refused.
+            if (system.FileSets ? filename is "." or ".." || filename.IndexOfAny(['/', '\\']) >= 0 : filename.Contains("..", StringComparison.Ordinal))
                 return ReviewResolutionResult.Invalid("title", "The generated ROM filename must not contain '..'; use Manual with another title.");
-            if (external)
+            if (external && !system.FileSets)
                 filename = ExternalRomName.AllocateLogicalName(filename, new ExternalNameReservations([])); // E3: portable and within budget
             if (target is { } targetId)
             {
