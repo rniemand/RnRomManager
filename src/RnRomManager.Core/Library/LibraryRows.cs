@@ -70,6 +70,9 @@ public sealed record RomRow
     /// the ZIP; null when the ROM is an entry of the ZIP.
     /// </summary>
     public string? ExternalFileName { get; init; }
+
+    /// <summary>An update's dotted version (info.json <c>version</c>); null otherwise.</summary>
+    public string? Version { get; init; }
 }
 
 /// <summary>A row of <c>images</c> (spec §14.1).</summary>
@@ -150,6 +153,7 @@ public sealed record MirrorEntry(InfoJsonGame Info, string ZipPath, long ZipSize
             DateAdded = r.Metadata.DateAdded.UtcDateTime,
             DateModified = r.Metadata.DateModified.UtcDateTime,
             ExternalFileName = r.ExternalFileName,
+            Version = r.Version,
         }).ToList();
 
         var images = Info.Images.Select(i => new ImageRow

@@ -339,7 +339,7 @@ public sealed class RomRepository : IRomRepository
                is_primary AS IsPrimary, id_method AS IdMethod, dat_name AS DatName, dat_version AS DatVersion,
                dat_game_name AS DatGameName, size_bytes AS SizeBytes, crc32 AS Crc32, md5 AS Md5, sha1 AS Sha1,
                header AS Header, date_added AS DateAdded, date_modified AS DateModified,
-               external_file_name AS ExternalFileName
+               external_file_name AS ExternalFileName, version AS Version
         FROM roms
         """;
 
@@ -469,15 +469,15 @@ public sealed class LibraryMirror : ILibraryMirror
                 await connection.ExecuteAsync(new CommandDefinition("""
                     INSERT INTO roms (game_id, system_id, file_name, original_file_name, base_title, regions, languages, flags,
                                       region_key, revision, is_primary, id_method, dat_name, dat_version, dat_game_name,
-                                      size_bytes, crc32, md5, sha1, header, date_added, date_modified, external_file_name)
+                                      size_bytes, crc32, md5, sha1, header, date_added, date_modified, external_file_name, version)
                     VALUES (@GameId, @SystemId, @FileName, @OriginalFileName, @BaseTitle, @Regions, @Languages, @Flags,
                             @RegionKey, @Revision, @IsPrimary, @IdMethod, @DatName, @DatVersion, @DatGameName,
-                            @SizeBytes, @Crc32, @Md5, @Sha1, @Header, @DateAdded, @DateModified, @ExternalFileName)
+                            @SizeBytes, @Crc32, @Md5, @Sha1, @Header, @DateAdded, @DateModified, @ExternalFileName, @Version)
                     """, roms.Select(r => new
                     {
                         r.GameId, r.SystemId, r.FileName, r.OriginalFileName, r.BaseTitle, r.Regions, r.Languages, r.Flags,
                         r.RegionKey, r.Revision, r.IsPrimary, IdMethod = r.IdMethod.ToString(), r.DatName, r.DatVersion,
-                        r.DatGameName, r.SizeBytes, r.Crc32, r.Md5, r.Sha1, r.Header, r.DateAdded, r.DateModified, r.ExternalFileName,
+                        r.DatGameName, r.SizeBytes, r.Crc32, r.Md5, r.Sha1, r.Header, r.DateAdded, r.DateModified, r.ExternalFileName, r.Version,
                     }), transaction, cancellationToken: cancellationToken));
 
             if (images.Count > 0)

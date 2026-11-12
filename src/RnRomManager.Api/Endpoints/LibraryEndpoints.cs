@@ -656,6 +656,7 @@ public static class LibraryEndpoints
             regions = r.Regions,
             languages = r.Languages,
             revision = r.Revision,
+            version = r.Version,
             flags = r.Flags,
             isPrimary = r.IsPrimary,
             identificationMethod = r.IdMethod,

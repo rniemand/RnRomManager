@@ -104,6 +104,8 @@ export interface RomDetail {
 	regions: string[];
 	languages: string[];
 	revision: string | null;
+	/** An update's dotted version (`1.0.1`); null otherwise. */
+	version: string | null;
 	flags: string[];
 	isPrimary: boolean;
 	identificationMethod: 'Dat' | 'Manual' | 'TitleDb';

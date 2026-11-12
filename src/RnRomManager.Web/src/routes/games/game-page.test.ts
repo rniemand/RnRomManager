@@ -62,7 +62,8 @@ const rom = (id: number, fileName: string, isPrimary: boolean) => ({
 	dateModified: '2026-11-01T00:00:00Z',
 	downloadUrl: `/api/games/g1/roms/${id}/download`,
 	hasNote: false,
-	externalFileName: null as string | null
+	externalFileName: null as string | null,
+	version: null as string | null
 });
 
 const listing = (paths = ['info.json', 'roms/Tetris 1.gb', 'images/boxart-01.png']) => ({

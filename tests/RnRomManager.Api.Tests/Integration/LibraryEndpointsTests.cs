@@ -566,6 +566,24 @@ public class LibraryEndpointsTests
         Assert.That(embeddedRom.GetProperty("externalFileName").ValueKind, Is.EqualTo(JsonValueKind.Null));
     }
 
+    [Test]
+    public async Task GameDetail_ExposesTheVersion_NullWhenUnset()
+    {
+        var embeddedId = await Ingest("t1.gb", TetrisWorld);
+        var rom = TestLibrary.Rom("Orbit Test [v0][1.0.1].nsp", [1, 2, 3, 4]) with
+        {
+            ExternalFileName = "Orbit Test.[v0][1.0.1].nsp", Flags = ["Update"], Version = "1.0.1",
+        };
+        var external = TestLibrary.Game("Orbit Test", rom) with { System = ExternalTestHandler.SystemId };
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(external, "ext/O/Orbit Test.zip", 100, DateTime.UtcNow), default);
+
+        var update = (await GetJson($"/api/games/{external.GameId}")).GetProperty("roms")[0];
+        var embedded = (await GetJson($"/api/games/{embeddedId}")).GetProperty("roms")[0];
+
+        Assert.That(update.GetProperty("version").GetString(), Is.EqualTo("1.0.1"));
+        Assert.That(embedded.GetProperty("version").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
     /// <summary>Mirrors an external game at <c>ext/&lt;bucket&gt;/&lt;title&gt;.zip</c>; returns its id and its ROM's download URL.</summary>
     private async Task<(Guid Id, string RomUrl)> External(string bucket, string title, string pointer, byte[] bytes)
     {
