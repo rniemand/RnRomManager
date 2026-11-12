@@ -28,6 +28,8 @@ public class TitleDbCacheTests
         gb.EmbedRomsInZip.Returns(true);
         gb.Id.Returns("gb");
         gb.DatName.Returns(Gb);
+        gb.DatFolder.Returns(DatKind.NoIntro);
+        gb.MetadatKinds.Returns(DatKind.Metadat);
         gb.RomExtensions.Returns([".gb"]);
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns([gb, new ExternalTitleDbTestHandler()]);

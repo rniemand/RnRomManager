@@ -51,6 +51,8 @@ public partial class DatRefreshJobTests
         handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns(id);
         handler.DatName.Returns(datName);
+        handler.DatFolder.Returns(DatKind.NoIntro);
+        handler.MetadatKinds.Returns(DatKind.Metadat);
         return handler;
     }
 

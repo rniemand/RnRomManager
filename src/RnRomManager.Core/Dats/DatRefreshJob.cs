@@ -11,7 +11,7 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Core.Dats;
 
 /// <summary>
-/// "Refresh DATs" (spec §10.1, D43, T2): downloads every system's 5 files into <c>cache/work/&lt;jobId&gt;/dats/</c>,
+/// "Refresh DATs" (spec §10.1, D43, T2): downloads every system's main DAT and listed metadat files into <c>cache/work/&lt;jobId&gt;/dats/</c>,
 /// parses each, writes <c>dats.json</c> there and builds every store from that staged set exactly as startup would.
 /// Only then is the folder swapped in for <c>cache/dats/</c> and the already-built stores published. Any failure
 /// (HTTP, parse, wrong DAT, staged validation) or a cancel before the first rename keeps the old files and stores.
@@ -46,7 +46,7 @@ public sealed class DatRefreshJob(
         CheckPlan(systems.All);
         var titleDb = systems.All.Where(h => h.DatSource == DatSource.TitleDb).ToList();
         var files = systems.All.Where(h => h.DatSource == DatSource.Libretro)
-            .SelectMany(h => DatKind.All.Select(kind => (Handler: h, Kind: kind))).ToList();
+            .SelectMany(h => new[] { h.DatFolder }.Concat(h.MetadatKinds).Select(kind => (Handler: h, Kind: kind))).ToList();
         // One download per libretro file, plus one shared titledb download.
         context.Progress.SetTotal(files.Count + (titleDb.Count > 0 ? 1 : 0));
 
@@ -78,9 +78,8 @@ public sealed class DatRefreshJob(
             cancellationToken.ThrowIfCancellationRequested();
             DatManifest.Write(Path.Combine(staged, DatManifest.FileName), manifest);
             var stores = cache.Prepare(staged);
-            // T3: the result lists each no-intro DAT and each titledb file by DatName.
-            var versions = manifest.Where(e => e.File.StartsWith(DatKind.NoIntro + "/", StringComparison.Ordinal)
-                    || e.File.StartsWith(TitleDb.Folder + "/", StringComparison.Ordinal))
+            // T3: the result lists each main (no-intro or redump) DAT and each titledb file by DatName.
+            var versions = manifest.Where(e => DatKind.IsMainDat(e.File) || e.File.StartsWith(TitleDb.Folder + "/", StringComparison.Ordinal))
                 .ToDictionary(e => e.DatName, e => e.Version);
 
             // The last point a cancel keeps the old set: from the first rename on, publication runs to the end.
@@ -186,7 +185,7 @@ public sealed class DatRefreshJob(
     {
         try
         {
-            if (kind != DatKind.NoIntro)
+            if (kind != handler.DatFolder)
                 return (DatFiles.ParseMetadat(text, kind).DatName, null);
 
             var noIntro = DatFiles.ParseNoIntro(text);

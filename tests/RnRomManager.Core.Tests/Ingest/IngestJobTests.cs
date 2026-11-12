@@ -61,6 +61,8 @@ public class IngestJobTests
         handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns(id);
         handler.DatName.Returns(datName);
+        handler.DatFolder.Returns(DatKind.NoIntro);
+        handler.MetadatKinds.Returns(DatKind.Metadat);
         handler.Family.Returns("gameboy");
         handler.RomExtensions.Returns(["." + id]);
         handler.MinRomSizeBytes.Returns(0x150);

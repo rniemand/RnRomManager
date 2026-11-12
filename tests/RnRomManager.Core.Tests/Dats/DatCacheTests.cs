@@ -39,6 +39,8 @@ public class DatCacheTests
         handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns(id);
         handler.DatName.Returns(datName);
+        handler.DatFolder.Returns(DatKind.NoIntro);
+        handler.MetadatKinds.Returns(DatKind.Metadat);
         handler.RomExtensions.Returns(extensions);
         return handler;
     }
@@ -74,6 +76,35 @@ public class DatCacheTests
         Assert.That(meta.ReleaseYear, Is.EqualTo(1989));
         Assert.That(meta.Developers, Is.EqualTo(new[] { "Nintendo", "Bullet-Proof Software" }));
         Assert.That(_cache.For("gbc")!.Roms, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void RedumpSystemWithoutMetadat_LoadsWithEmptyMetadata()
+    {
+        // B1/B2: the main DAT under redump/, no metadat files at all.
+        const string psx = "Sony - PlayStation";
+        var handler = Handler("psx", psx, ".bin", ".cue", ".iso");
+        handler.DatFolder.Returns(DatKind.Redump);
+        handler.MetadatKinds.Returns([]);
+        var registry = Substitute.For<ISystemRegistry>();
+        registry.All.Returns([handler]);
+        var cache = new DatCache(Options.Create(new PathsOptions { Cache = _dir.Path }), registry, NullLogger<DatCache>.Instance);
+        var track = new SyntheticRomBuilder { Seed = 5 }.Build();
+        FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
+        {
+            [psx] = [new FixtureGame("Disc Runner (USA)", "Disc Runner (USA) (Track 1).bin", track) { ReleaseYear = 1999, Genres = ["Racing"] }],
+        }, layouts: new Dictionary<string, FixtureDatLayout> { [psx] = FixtureDatLayout.Redump });
+
+        cache.Load();
+
+        Assert.That(Directory.GetDirectories(cache.Directory).Select(Path.GetFileName), Is.EqualTo(new[] { "redump" }));
+        var store = cache.For("psx")!;
+        var rom = store.BySha1(Convert.ToHexStringLower(SHA1.HashData(track)))!;
+        var meta = store.MetadataFor(rom.Crc32);
+        Assert.That(meta.ReleaseYear, Is.Null);
+        Assert.That(meta.Developers, Is.Empty);
+        Assert.That(meta.Publishers, Is.Empty);
+        Assert.That(meta.Genres, Is.Empty);
     }
 
     [Test]

@@ -36,6 +36,8 @@ public partial class MediaServiceTests
         _handler.EmbedRomsInZip.Returns(true);
         _handler.Id.Returns("gb");
         _handler.DatName.Returns("Nintendo - Game Boy");
+        _handler.DatFolder.Returns(DatKind.NoIntro);
+        _handler.MetadatKinds.Returns(DatKind.Metadat);
         _handler.DefaultBoxArtPng.Returns(DefaultArt);
         _routes = new Dictionary<string, Func<HttpResponseMessage>>(StringComparer.Ordinal);
         _server = new StubHttpHandler(r => _routes.TryGetValue(r.RequestUri!.AbsoluteUri, out var answer)

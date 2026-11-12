@@ -194,6 +194,23 @@ public class DatEndpointsTests
     }
 
     [Test]
+    public async Task AdminDats_ListsARedumpDat()
+    {
+        // B1: a redump/ main DAT is a row like a no-intro/ one; the listing reads the manifest as it is.
+        const string psx = "Sony - PlayStation";
+        var games = Games();
+        games[psx] = [];
+        FixtureDatWriter.Write(_factory.Services.GetRequiredService<DatCache>().Directory, games, version: "2026.01.01",
+            layouts: new Dictionary<string, FixtureDatLayout> { [psx] = FixtureDatLayout.Redump });
+
+        using var response = await _admin.GetAsync("/api/admin/dats");
+        var rows = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
+
+        var row = rows.Single(r => r.GetProperty("datName").GetString() == psx);
+        Assert.That(row.GetProperty("version").GetString(), Is.EqualTo("2026.01.01"));
+    }
+
+    [Test]
     public async Task AdminDats_WithNoCache_IsEmpty()
     {
         Directory.Delete(_factory.Services.GetRequiredService<DatCache>().Directory, recursive: true);

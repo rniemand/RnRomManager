@@ -100,10 +100,11 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
             return Encoding.UTF8.GetString(bytes);
         }
 
-        var noIntro = DatFiles.ParseNoIntro(ReadVerified(DatKind.NoIntro));
+        var noIntro = DatFiles.ParseNoIntro(ReadVerified(handler.DatFolder));
         if (noIntro.DatName != handler.DatName)
-            throw new InvalidDataException($"{DatKind.RelativePath(DatKind.NoIntro, handler.DatName)} is for '{noIntro.DatName}'.");
-        var metadat = DatKind.All.Where(k => k != DatKind.NoIntro).Select(k => DatFiles.ParseMetadat(ReadVerified(k), k)).ToList();
+            throw new InvalidDataException($"{DatKind.RelativePath(handler.DatFolder, handler.DatName)} is for '{noIntro.DatName}'.");
+        // B2: only the listed kinds exist; a missing kind gives empty metadata.
+        var metadat = handler.MetadatKinds.Select(k => DatFiles.ParseMetadat(ReadVerified(k), k)).ToList();
         return new DatStore(noIntro, metadat, handler.RomExtensions);
     }
 

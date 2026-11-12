@@ -6,7 +6,8 @@ using RnRomManager.Core.Storage;
 namespace RnRomManager.TestData;
 
 /// <summary>
-/// Writes clrmamepro DATs for generated ROMs (spec §15.2): per system the no-intro DAT plus the 4 metadat files,
+/// Writes clrmamepro DATs for generated ROMs (spec §15.2): per system the main DAT plus its metadat files (by default
+/// <c>no-intro</c> and all four; <see cref="FixtureDatLayout"/> overrides it per DatName, B1/B2),
 /// laid out like a refresh leaves <c>cache/dats/</c>, and a matching <c>dats.json</c>. The app then loads them
 /// exactly as it would real DATs.
 /// </summary>
@@ -25,18 +26,27 @@ public static class FixtureDatWriter
         string version = Version,
         DateTimeOffset? downloadedAt = null,
         IReadOnlyDictionary<string, IReadOnlyList<TitleDbRow>>? titleDb = null,
-        string titleDbVersion = TitleDbVersion)
+        string titleDbVersion = TitleDbVersion,
+        IReadOnlyDictionary<string, FixtureDatLayout>? layouts = null)
     {
         var when = downloadedAt ?? new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var manifest = new List<DatManifestEntry>();
         foreach (var (datName, games) in gamesByDatName)
         {
-            manifest.Add(WriteFile(datsDirectory, DatKind.NoIntro, datName, version, when, NoIntro(datName, version, games)));
-            manifest.Add(WriteFile(datsDirectory, DatKind.ReleaseYear, datName, null, when,
-                Metadat(datName, DatKind.ReleaseYear, games, g => g.ReleaseYear is { } y ? [y.ToString(System.Globalization.CultureInfo.InvariantCulture)] : [])));
-            manifest.Add(WriteFile(datsDirectory, DatKind.Developer, datName, null, when, Metadat(datName, DatKind.Developer, games, g => g.Developers)));
-            manifest.Add(WriteFile(datsDirectory, DatKind.Publisher, datName, null, when, Metadat(datName, DatKind.Publisher, games, g => g.Publishers)));
-            manifest.Add(WriteFile(datsDirectory, DatKind.Genre, datName, null, when, Metadat(datName, DatKind.Genre, games, g => g.Genres)));
+            var layout = layouts?.GetValueOrDefault(datName) ?? FixtureDatLayout.NoIntro;
+            manifest.Add(WriteFile(datsDirectory, layout.DatFolder, datName, version, when, NoIntro(datName, version, games)));
+            foreach (var kind in layout.MetadatKinds)
+            {
+                manifest.Add(WriteFile(datsDirectory, kind, datName, null, when, kind switch
+                {
+                    DatKind.ReleaseYear => Metadat(datName, kind, games,
+                        g => g.ReleaseYear is { } y ? [y.ToString(System.Globalization.CultureInfo.InvariantCulture)] : []),
+                    DatKind.Developer => Metadat(datName, kind, games, g => g.Developers),
+                    DatKind.Publisher => Metadat(datName, kind, games, g => g.Publishers),
+                    DatKind.Genre => Metadat(datName, kind, games, g => g.Genres),
+                    _ => throw new ArgumentException($"Unknown metadat kind '{kind}'.", nameof(layouts)),
+                }));
+            }
         }
         // titledb systems (T2): one compact file each, written by the app's own serializer.
         foreach (var (datName, rows) in titleDb ?? new Dictionary<string, IReadOnlyList<TitleDbRow>>())
@@ -86,4 +96,13 @@ public static class FixtureDatWriter
         }
         return text.ToString();
     }
+}
+
+/// <summary>B1/B2: where a fixture system's main DAT goes and which metadat files it gets.</summary>
+public sealed record FixtureDatLayout(string DatFolder, IReadOnlyList<string> MetadatKinds)
+{
+    public static FixtureDatLayout NoIntro { get; } = new(DatKind.NoIntro, DatKind.Metadat);
+
+    /// <summary>The six disc systems' layout: <c>redump</c>, no metadat.</summary>
+    public static FixtureDatLayout Redump { get; } = new(DatKind.Redump, []);
 }
