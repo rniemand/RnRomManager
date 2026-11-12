@@ -129,6 +129,44 @@ public class LibraryImageEditTests
     }
 
     [Test]
+    public async Task ReplacedDefaultCover_OnlyForABoxArtReplacingThePlaceholderCover_B14()
+    {
+        await SeedPlaceholder();
+        Assert.That((await _editor.AddImageAsync(GameId, ImageType.Snap, NewPng(), Actor, default)).ReplacedDefaultCover, Is.False, "a snap");
+
+        await SeedPlaceholder();
+        var first = await _editor.AddImageAsync(GameId, ImageType.BoxArt, NewPng(), Actor, default);
+        Assert.That((first.Code, first.ReplacedDefaultCover), Is.EqualTo(((string?)null, true)), "the first real box art");
+
+        await Seed((Image("boxart-01.png", ImageType.BoxArt, NewPng(), cover: true), NewPng()));
+        Assert.That((await _editor.AddImageAsync(GameId, ImageType.BoxArt, NewPng(), Actor, default)).ReplacedDefaultCover, Is.False,
+            "a second box art: no placeholder");
+    }
+
+    [Test]
+    public async Task ReplacedDefaultCover_IsFalse_WhenThePlaceholderWasNotTheCover_B14()
+    {
+        var snap = NewPng();
+        await Seed((Image("boxart-01.png", ImageType.BoxArt, Placeholder, isDefault: true), Placeholder),
+            (Image("snap-01.png", ImageType.Snap, snap, cover: true), snap));
+
+        var result = await _editor.AddImageAsync(GameId, ImageType.BoxArt, NewPng(), Actor, default);
+
+        Assert.That((result.Code, result.ReplacedDefaultCover), Is.EqualTo(((string?)null, false)));
+    }
+
+    [Test]
+    public async Task ReplacedDefaultCover_IsFalse_WhenTheEditFails_B14()
+    {
+        await SeedPlaceholder();
+        _mirror.ReplaceAsync(Arg.Any<MirrorEntry>(), Arg.Any<CancellationToken>()).Returns(Task.FromException(new InvalidOperationException("db down")));
+
+        var result = await _editor.AddImageAsync(GameId, ImageType.BoxArt, NewPng(), Actor, default);
+
+        Assert.That((result.Code, result.ReplacedDefaultCover), Is.EqualTo(((string?)LibraryEditResult.DbWriteFailed, false)));
+    }
+
+    [Test]
     public async Task Upload_FromUrl_StoresTheUrl_AsAnUpload_AndAuditsIt()
     {
         await SeedPlaceholder();

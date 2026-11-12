@@ -135,6 +135,24 @@ public class ImageUrlEndpointsTests
     }
 
     [Test]
+    public async Task FirstRealBoxArtFromAUrl_StartsAGameCheck_B14()
+    {
+        _stub.Routes["/art.png"] = StubImageServer.Bytes(Png(300, 400));
+
+        using var response = await FromUrl(_stub.Url("/art.png").ToString());
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        Core.Jobs.Job? check;
+        while ((check = await Service<IJobRepository>().GetLatestAsync(JobType.Integrity, JobMode.Game, default)) is not { Status: not JobStatus.Running })
+        {
+            Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "no finished game check");
+            await Task.Delay(50);
+        }
+        Assert.That(check.Status, Is.EqualTo(JobStatus.Completed));
+    }
+
+    [Test]
     public async Task Jpeg_IsAddedAsASnap()
     {
         _stub.Routes["/s.jpg"] = StubImageServer.Bytes(Jpeg);

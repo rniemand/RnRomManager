@@ -3,8 +3,12 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Dapper;
+using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
+using RnRomManager.Core.Integrity;
+using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
 using RnRomManager.Core.Users;
@@ -22,12 +26,26 @@ public class ImageEndpointsTests
     private ApiFactory _factory = null!;
     private AuthClient _manager = null!;
     private Guid _game;
+    private bool _lockBeforeGameCheck;
+    private IDisposable? _held;
     private T Service<T>() where T : notnull => _factory.Services.GetRequiredService<T>();
 
     [SetUp]
     public async Task SetUp()
     {
-        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
+        _lockBeforeGameCheck = false;
+        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
+        {
+            // B14: the factory runs after the editor released the lock; grabbing it here plays another job starting first.
+            TestServices = s => s.AddSingleton<IntegrityJobFactory>(sp => (mode, zipPath) =>
+            {
+                if (_lockBeforeGameCheck && mode == JobMode.Game)
+                    _held = sp.GetRequiredService<JobLock>().TryAcquire();
+                var job = ActivatorUtilities.CreateInstance<IntegrityJob>(sp, mode);
+                job.ZipPath = zipPath;
+                return job;
+            }),
+        };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
         _manager = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "manager", Roles.Of(Roles.RomManager));
@@ -58,6 +76,7 @@ public class ImageEndpointsTests
     [TearDown]
     public void TearDown()
     {
+        _held?.Dispose();
         _manager.Dispose();
         _factory.Dispose();
     }
@@ -102,6 +121,82 @@ public class ImageEndpointsTests
         var image = (await Images(response)).Single();
         Assert.That((image.GetProperty("fileName").GetString(), image.GetProperty("source").GetString(), image.GetProperty("isCover").GetBoolean(),
             image.GetProperty("isDefault").GetBoolean(), image.GetProperty("width").GetInt32()), Is.EqualTo(("boxart-01.png", "upload", true, false, 300)));
+    }
+
+    /// <summary>A Deep run (Quick doesn't open an unchanged ZIP), so the placeholder game has its open <c>DefaultBoxArt</c> issue.</summary>
+    private async Task<Guid> DeepCheckAsync()
+    {
+        var started = await Service<JobRunner>().StartAsync(Service<IntegrityJobFactory>()(JobMode.Deep), JobTrigger.Manual, null, default);
+        await started!.Completion.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.That(await OpenTypesAsync(), Is.EqualTo(new[] { IntegrityIssueType.DefaultBoxArt }));
+        return started.Id;
+    }
+
+    private async Task<string[]> OpenTypesAsync() =>
+        [.. (await Service<IIntegrityIssueRepository>().ListAllOpenAsync(default)).Select(i => i.Type)];
+
+    private async Task<List<(string Status, int? RequestedBy)>> GameChecksAsync()
+    {
+        await using var db = Service<IDbConnectionFactory>().Create();
+        return [.. (await db.QueryAsync<(string, int?)>("SELECT status, requested_by FROM jobs WHERE type = 'Integrity' AND mode = 'Game'"))];
+    }
+
+    /// <summary>Waits for the background game check the upload started.</summary>
+    private async Task<(string Status, int? RequestedBy)> GameCheckDoneAsync()
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (true)
+        {
+            var checks = await GameChecksAsync();
+            if (checks.Count == 1 && checks[0].Status != "Running")
+                return checks[0];
+            Assert.That(DateTime.UtcNow, Is.LessThan(deadline), "the game check didn't finish");
+            await Task.Delay(50);
+        }
+    }
+
+    [Test]
+    public async Task FirstRealBoxArt_StartsOneGameCheck_WhichResolvesDefaultBoxArt_B14()
+    {
+        var deepId = await DeepCheckAsync();
+
+        using var response = await Upload(_manager, Png(300, 400), "BoxArt");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var (status, requestedBy) = await GameCheckDoneAsync();
+        var manager = (await Service<RnRomManager.Core.Users.IUserRepository>().GetByUsernameAsync("manager", default))!;
+        Assert.That((status, requestedBy), Is.EqualTo(("Completed", (int?)manager.Id)));
+        Assert.That(await OpenTypesAsync(), Is.Empty);
+        var deep = await Service<IJobRepository>().GetLatestAsync(JobType.Integrity, JobMode.Deep, default);
+        Assert.That(deep!.Id, Is.EqualTo(deepId), "a game check never counts as the last deep check");
+    }
+
+    [Test]
+    public async Task SnapOrSecondBoxArt_StartsNoGameCheck_B14()
+    {
+        (await Upload(_manager, Png(300, 400), "BoxArt")).Dispose(); // the first real box art: one check
+        await GameCheckDoneAsync();
+
+        using var snap = await Upload(_manager, Jpeg, "Snap");
+        using var second = await Upload(_manager, Png(301, 400), "BoxArt");
+
+        Assert.That((snap.StatusCode, second.StatusCode), Is.EqualTo((HttpStatusCode.OK, HttpStatusCode.OK)));
+        Assert.That(await GameChecksAsync(), Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task BusyLock_SkipsTheGameCheck_AndStillReturnsTheDetail_B14()
+    {
+        await DeepCheckAsync();
+        _lockBeforeGameCheck = true;
+
+        using var response = await Upload(_manager, Png(300, 400), "BoxArt");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That((await Images(response)).Single().GetProperty("source").GetString(), Is.EqualTo("upload"));
+        Assert.That(_held, Is.Not.Null, "the lock was free, and taken just before the check");
+        Assert.That(await GameChecksAsync(), Is.Empty);
+        Assert.That(await OpenTypesAsync(), Is.EqualTo(new[] { IntegrityIssueType.DefaultBoxArt }), "cleared by the next Quick or Deep run");
     }
 
     [Test]

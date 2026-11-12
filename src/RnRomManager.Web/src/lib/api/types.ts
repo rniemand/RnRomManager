@@ -16,7 +16,7 @@ export interface Me {
 export interface CurrentJob {
 	id: string;
 	type: 'Ingest' | 'Integrity' | 'DatRefresh' | 'MediaRetry';
-	mode: 'Quick' | 'Deep' | null;
+	mode: 'Quick' | 'Deep' | 'Game' | null;
 	status: string;
 	current: number;
 	total: number;
@@ -195,7 +195,7 @@ export type JobStatus = 'Running' | 'Completed' | 'Cancelled' | 'Failed' | 'Abor
 export interface Job {
 	id: string;
 	type: CurrentJob['type'];
-	mode: 'Quick' | 'Deep' | null;
+	mode: 'Quick' | 'Deep' | 'Game' | null;
 	triggerSource: 'Manual' | 'Schedule';
 	status: JobStatus;
 	requestedBy: number | null;

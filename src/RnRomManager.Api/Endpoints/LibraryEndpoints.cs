@@ -6,6 +6,7 @@ using RnRomManager.Api.Http;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Collections;
 using RnRomManager.Core.Database;
+using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Naming;
@@ -245,7 +246,7 @@ public static class LibraryEndpoints
         // I5–I7: image management. The upload reads the form itself (no IFormFile binding), so the group's own
         // X-XSRF-TOKEN filter is the antiforgery check, as for every other mutation.
         games.MapPost("/{id:guid}/images", async (Guid id, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
-            IRomRepository roms, IImageRepository images) =>
+            IRomRepository roms, IImageRepository images, JobRunner runner, IntegrityJobFactory integrity, ILoggerFactory loggers) =>
         {
             var (form, problem) = await ReadImageFormAsync(ctx);
             if (problem is not null)
@@ -259,12 +260,14 @@ public static class LibraryEndpoints
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             var result = await editor.AddImageAsync(id, type!.Value, bytes!, AuditActor.From(ctx.User), ctx.RequestAborted);
+            await StartGameCheckAsync(result, id, ctx, repository, runner, integrity, loggers);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.LibraryEditor).WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(UploadRequestLimit));
 
         // U1–U5: the server downloads the image (public addresses only), then stores it exactly like an upload.
         games.MapPost("/{id:guid}/images/from-url", async (Guid id, ImageUrlRequest request, HttpContext ctx, ImageUrlDownloader downloader,
-            LibraryEditor editor, IGameRepository repository, IRomRepository roms, IImageRepository images) =>
+            LibraryEditor editor, IGameRepository repository, IRomRepository roms, IImageRepository images, JobRunner runner,
+            IntegrityJobFactory integrity, ILoggerFactory loggers) =>
         {
             var errors = Validate(request, out var url, out var type);
             if (errors.Count > 0)
@@ -277,6 +280,7 @@ public static class LibraryEndpoints
             if (DownloadedImageError(bytes) is { } bytesError)
                 return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = [bytesError] });
             var result = await editor.AddImageAsync(id, type, bytes, AuditActor.From(ctx.User), ctx.RequestAborted, request.Url);
+            await StartGameCheckAsync(result, id, ctx, repository, runner, integrity, loggers);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.LibraryEditor);
 
@@ -313,6 +317,32 @@ public static class LibraryEndpoints
 
     /// <summary>The upload's whole request: the 8 MiB image plus room for the multipart framing and the <c>type</c> field.</summary>
     public const long UploadRequestLimit = ImageFormats.MaxBytes + 64 * 1024;
+
+    /// <summary>
+    /// B14: once the first real box art replaced the placeholder cover (and the editor released the job lock), a deep
+    /// check of that game clears its <c>DefaultBoxArt</c> issue. Skipped, never queued, when another job holds the lock;
+    /// the response is the game detail whatever happens here.
+    /// </summary>
+    private static async Task StartGameCheckAsync(LibraryEditResult result, Guid id, HttpContext ctx, IGameRepository repository,
+        JobRunner runner, IntegrityJobFactory integrity, ILoggerFactory loggers)
+    {
+        if (result.Code is not null || !result.ReplacedDefaultCover)
+            return;
+        var logger = loggers.CreateLogger("RnRomManager.Api.Endpoints.GameCheck");
+        try
+        {
+            if (await repository.GetAsync(id, CancellationToken.None) is not { } row)
+                return;
+            var started = await runner.StartAsync(integrity(JobMode.Game, row.ZipPath), JobTrigger.Manual, DatEndpoints.UserId(ctx.User),
+                CancellationToken.None);
+            if (started is null)
+                logger.LogInformation("Game check of {ZipPath} skipped: another job is running", row.ZipPath);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Game check of game {GameId} could not start", id);
+        }
+    }
 
     private static IResult TooLarge(HttpContext ctx) =>
         Problems.Create(ctx, StatusCodes.Status413PayloadTooLarge, "PayloadTooLarge", "The upload is larger than 8 MiB.");

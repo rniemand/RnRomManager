@@ -30,6 +30,9 @@ public sealed record LibraryEditResult(string? Code = null, string? Details = nu
     /// </summary>
     public bool TargetPublicationLost { get; init; }
 
+    /// <summary>B14: the added box art replaced the placeholder that was the game's cover.</summary>
+    public bool ReplacedDefaultCover { get; init; }
+
     public static LibraryEditResult Invalid(string field, string error) =>
         new(ValidationFailed) { Errors = new() { [field] = [error] } };
 }

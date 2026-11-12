@@ -416,9 +416,10 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         if (FilesChanged(result))
             audit.Record(new AuditEvent(AuditActions.ImageAdded, actor, row.SystemId, gameId, AuditPaths.Library(row.ZipPath),
                 Details: sourceUrl is null ? image.FileName : $"{image.FileName} from {sourceUrl}"));
-        if (result.Code is null)
-            logger.LogInformation("Image {FileName} ({Type}) uploaded to game {GameId} ({ZipPath})", image.FileName, type, gameId, row.ZipPath);
-        return result;
+        if (result.Code is not null)
+            return result;
+        logger.LogInformation("Image {FileName} ({Type}) uploaded to game {GameId} ({ZipPath})", image.FileName, type, gameId, row.ZipPath);
+        return placeholder is { IsCover: true } ? result with { ReplacedDefaultCover = true } : result;
     }
 
     /// <summary>

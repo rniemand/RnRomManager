@@ -468,6 +468,105 @@ public class IntegrityJobTests
         Assert.That(summary, Does.Contain("\"purgedJobs\":1").And.Contain("\"purgedIssues\":2"));
     }
 
+    // --- B15: the Game check of one ZIP ---
+
+    private async Task<string> RunGame(string zipPath, CancellationToken ct = default)
+    {
+        var job = new IntegrityJob(JobMode.Game, _games, new RomRepository(_factory), _sync, _issues, _jobs, _reader, _systems,
+            Options.Create(new PathsOptions { Roms = _dir.Path }), TimeProvider.System, NullLogger<IntegrityJob>.Instance) { ZipPath = zipPath };
+        return System.Text.Json.JsonSerializer.Serialize(await job.RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), ct));
+    }
+
+    [Test]
+    public async Task Game_ResolvesDefaultBoxArt_OnceTheCoverIsReal()
+    {
+        var game = await Write("gb/T/Tetris.zip", "Tetris", defaultBoxArt: true);
+        await Run();
+        Assert.That(await Open(), Is.EqualTo(new (string, string?, string?)[] { (DefaultBoxArt, "gb/T/Tetris.zip", null) }));
+        await Write("gb/T/Tetris.zip", "Tetris", defaultBoxArt: false, gameId: game.GameId, seed: 1);
+
+        var summary = await RunGame("gb/T/Tetris.zip");
+
+        Assert.That(await Open(), Is.Empty);
+        Assert.That(summary, Is.EqualTo("{\"issues\":0,\"newIssues\":0,\"resolved\":1}"));
+    }
+
+    [Test]
+    public async Task Game_HashesEntriesAndExternalFiles_LikeDeep()
+    {
+        await Write("gb/T/Tetris.zip", "Tetris");
+        var orbit = await WriteExternal("ext/O/Orbit.zip", "Orbit");
+        await Run();
+        var rom = RomBytes(1);
+        rom[0x200] ^= 0xFF;
+        Damage("gb/T/Tetris.zip", zip => Replace(zip, "roms/Tetris (World).gb", rom));
+        ReplaceSameSize(orbit);
+
+        await RunGame("gb/T/Tetris.zip");
+        await RunGame("ext/O/Orbit.zip");
+
+        Assert.That((await OpenExternal()).Select(i => (i.Type, i.ZipPath, i.Entry)), Is.EquivalentTo(new (string, string?, string?)[]
+        {
+            (HashMismatch, "gb/T/Tetris.zip", "roms/Tetris (World).gb"),
+            (HashMismatch, "ext/O/Orbit.zip", "Orbit.Orbit.nsp"),
+        }));
+    }
+
+    [Test]
+    public async Task Game_TouchesOnlyItsZip_NoSyncNoPurge_NoOrphanOrDuplicateChecks()
+    {
+        var tetris = await Write("gb/T/Tetris.zip", "Tetris", defaultBoxArt: true);
+        var other = await Write("gb/O/Other.zip", "Other", defaultBoxArt: true);
+        await File.WriteAllTextAsync(_dir.Combine("old.txt"), "x");
+        await Run();
+        File.Delete(_dir.Combine("old.txt"));
+        await Write("gb/T/Tetris.zip", "Tetris", defaultBoxArt: false, gameId: tetris.GameId, seed: 1);
+        await Write("gb/O/Other.zip", "Other", defaultBoxArt: false, gameId: other.GameId, seed: 2);
+        await Write("gb/N/New.zip", "New");
+        var stale = new IntegrityIssue
+        {
+            Type = OrphanFile, Severity = IssueSeverity.Warn, ZipPath = "z.txt", Status = IntegrityIssue.Resolved, FirstSeenJobId = Guid.NewGuid(),
+            LastSeenJobId = Guid.NewGuid(), DetectedAt = DateTime.UtcNow.AddDays(-300), ResolvedAt = DateTime.UtcNow.AddDays(-200),
+        };
+        await _issues.InsertAsync(stale, default);
+
+        await RunGame("gb/T/Tetris.zip");
+
+        Assert.That(await Open(), Is.EquivalentTo(new (string, string?, string?)[]
+        {
+            (DefaultBoxArt, "gb/O/Other.zip", null), (OrphanFile, "old.txt", null),
+        }), "only Tetris's issue resolved");
+        Assert.That((await All()).Any(i => i.ZipPath == "z.txt"), Is.True, "no retention purge");
+        Assert.That(await _games.ListAllAsync(default), Has.Count.EqualTo(2), "no DB sync: New.zip isn't mirrored");
+    }
+
+    [Test]
+    public async Task Game_Cancelled_ResolvesNothing()
+    {
+        var game = await Write("gb/T/Tetris.zip", "Tetris", defaultBoxArt: true);
+        await Run();
+        await Write("gb/T/Tetris.zip", "Tetris", defaultBoxArt: false, gameId: game.GameId, seed: 1);
+
+        var summary = await RunGame("gb/T/Tetris.zip", new CancellationToken(canceled: true));
+
+        Assert.That(summary, Does.Contain("\"resolved\":0"));
+        Assert.That((await Open()).Select(i => i.Type), Is.EqualTo(new[] { DefaultBoxArt }));
+    }
+
+    [Test]
+    public async Task Game_MissingZip_RecordsAndResolvesNothing()
+    {
+        var game = await Write("gb/T/Tetris.zip", "Tetris", defaultBoxArt: true);
+        await Run();
+        File.Delete(Abs("gb/T/Tetris.zip"));
+
+        var summary = await RunGame("gb/T/Tetris.zip");
+
+        Assert.That(summary, Is.EqualTo("{\"issues\":0,\"newIssues\":0,\"resolved\":0}"));
+        Assert.That(await Open(), Is.EqualTo(new (string, string?, string?)[] { (DefaultBoxArt, "gb/T/Tetris.zip", null) }));
+        Assert.That(await _games.GetAsync(game.GameId, default), Is.Not.Null);
+    }
+
     [TestCase(ZipUnreadable, IssueSeverity.Error)]
     [TestCase(InfoJsonNewerSchema, IssueSeverity.Warn)]
     [TestCase(EntryUnlisted, IssueSeverity.Warn)]

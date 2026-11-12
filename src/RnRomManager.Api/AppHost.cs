@@ -135,7 +135,13 @@ public static class AppHost
         builder.Services.AddTransient<LibraryEditor>();
         builder.Services.AddTransient<GameMediaRetry>();
         builder.Services.AddTransient<MediaRetryJob>();
-        builder.Services.AddSingleton<IntegrityJobFactory>(sp => mode => ActivatorUtilities.CreateInstance<IntegrityJob>(sp, mode));
+        // The ZIP path is set afterwards: ActivatorUtilities can't match a null string? argument.
+        builder.Services.AddSingleton<IntegrityJobFactory>(sp => (mode, zipPath) =>
+        {
+            var job = ActivatorUtilities.CreateInstance<IntegrityJob>(sp, mode);
+            job.ZipPath = zipPath;
+            return job;
+        });
         builder.Services.AddSingleton<LogRetention>();
         builder.Services.AddSingleton<LogArchive>();
         // The container's local time (TZ) drives Integrity:QuickCheckTime (§4).
