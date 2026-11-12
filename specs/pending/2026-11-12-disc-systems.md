@@ -87,7 +87,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - **Large cue:** a `.cue` over 64 KiB isn't parsed. It is handled as a lone file that is not a cue.
   - **Lone files:** a `.bin`, `.iso` or `.nrg` that no cue names, or a `.cue` over 64 KiB, is processed on its own as a single file (B11). A lone file that doesn't match goes to Review under B15. A lone `.bin` that matches but whose base title two or more games own is `Skipped` `AmbiguousGroup` and stays, as a set's data track does (B7a), because a `.bin` item can't be resolved in Review (B15).
   - **Other files:** a file that no cue names and that isn't one of the above is handled as today: another extension fails as `UnsupportedType`, and an archive follows B9.
-  - **Progress:** the job's item total (`SetTotal`) is the number of planned files, counted after a selected set pulls in its unselected members.
+  - **Progress:** the job's item total (`SetTotal`) is the number of planned files, counted after a selected set pulls in its unselected members. `ItemDone` is called once per member, after its job item is recorded, so the count reaches the total.
   - **Order:** each unit (a set, a lone file or a skipped member) runs at the position of its first member in the scanner's name order (ordinal), so `Game (Track 1).bin` brings its set forward before `Game.cue`. Within a set, the cue comes first, then its `FILE` names in order. "An earlier member in this run" (B7a) follows this order.
   - The set is processed as one unit:
     - If any member is `TooRecent`, the whole set is `Skipped` with `TooRecent`.
@@ -147,7 +147,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - **B14 Track self-repair.** The data track already repairs itself through today's single-file path. Ingesting a set whose data track is a duplicate also checks each other member:
   - **Repaired:** a member whose name matches a file of that release (ignoring case), and whose SHA1 equals that file's recorded SHA1, while the file has an open `EntryMissing`, `EntrySizeMismatch` or `HashMismatch` issue. It is put back with today's `RepairPlan` and step-aside, one file at a time. Its item is `Repaired` and its issue resolves, as single-file repair does now.
   - **Duplicate:** every other member.
-  - A lone member file (no cue in the folder) is repaired the same way when exactly one set file has its name (ignoring case) and SHA1 (`ListFilesBySha1Async`) and an open issue of those types. With none, or two or more, it goes to Review as usual. This is the only time a `.bin`/`.cue` that matches no DAT is not sent to Review.
+  - A lone member file (no cue in the folder) is repaired the same way when exactly one set file has its name (ignoring case) and SHA1 (`ListFilesBySha1Async`) and an open issue of those types. With none, or two or more, it goes to Review as usual. The check runs right after the `roms.sha1` lookup and before the review-row checks, the same place in step 3 as the main-file repair. This is the only time a `.bin`/`.cue` that matches no DAT is not sent to Review.
 
 ### Review
 - **B15 Review for `FileSets` systems.**
@@ -167,7 +167,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - **B18 Move / merge.** Move-release and merge move every file of a set with its exact name. A taken name in the target folder refuses the whole operation with `409` `NameTaken` before any file moves.
   - **Same folder:** when the source and target ZIPs are in the same folder, the set files don't move, and the source game's own claims don't count as taken.
   - **Logical names:** a logical-name clash in the target game (`AllocateLogicalName`) also refuses with `NameTaken`. It never adds ` (N)`, so `fileName` always equals `externalFileName`.
-  - **Move record:** `ExternalMoveRecord` gets a format **v2** with a list of `{ sourceExternalFileName, targetExternalFileName }` pairs and the release's main SHA1. Like v1 it is written only by move-release (merge writes no record, as today) and validated for **manual recovery** only (W3/W7); there's no automatic replay. A release with no `files` still writes v1.
+  - **Move record:** `ExternalMoveRecord` gets a format **v2**: every v1 field, unchanged (`romSha1` and the two single names still describe the main file), plus `files`, a list of `{ sourceExternalFileName, targetExternalFileName }` pairs for the release's `files` entries in order. Like v1 it is written only by move-release (merge writes no record, as today) and validated for **manual recovery** only (W3/W7); there's no automatic replay. A release with no `files` still writes v1.
     - Its size cap rises from 16 KiB to 320 KiB. That fits 99 pairs (B8) of 250-byte names even when the default JSON encoder writes every byte as a 6-byte `\uXXXX` escape (99 × 2 × 1,500 bytes, plus keys).
     - A v1 record (one pair) is still read and validated as today.
   - **Notes** stay keyed by the main file's `fileName`.
@@ -183,13 +183,24 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - `totalSizeBytes`: the main size plus the files.
 
   `GET /api/games/{id}/roms/{romId}/files/{fileId}/download` streams one set file, named by its `fileName`. It works like today's external ROM download (`LibraryFiles.OpenExternal`, file found by `GetFileAsync`, B13): range support, the same auth, `404` when the file belongs to another release, and `404` when another game claims the name in that folder, as today.
-  - On the Game page, a release with files shows a "N files" toggle under the row, where N counts every file of the release (the main file plus `files`, so 3 for a cue and two tracks). It lists the main file first and then each `files` entry, each with its file name, `FileSize`, SHA1 (copy button) and a download icon button with an `aria-label`. The list follows the T1–T4 table rules.
-  - The release's size column shows `totalSizeBytes`.
+  - On the Game page each release is a card (`<article>`) with a collapsible details body. In that body, after the CRC32/SHA1 row, a release with files shows a "N files" toggle button (`aria-expanded`, `aria-controls`), where N counts every file of the release (the main file plus `files`, so 3 for a cue and two tracks). It opens a table listing the main file first and then each `files` entry, each with its file name, `FileSize`, SHA1 (copy button) and a download icon button with an `aria-label`. The table follows the T1–T4 table rules.
+  - The details body's Size field shows `totalSizeBytes`. The card header's download button and the page's **Download ROM** button/dropdown still download the main file and show its own size, as today.
 - **B21 Sizes.** In the library list, `PrimarySizeBytes` includes the primary release's files. The Library Size report sums `rom_files.size_bytes` along with the external main files. `romCount` stays a count of releases.
 
 ### UI and colours
 - **B22 Badges and icons.**
-  - `app.css` and `systemColours.ts` get the colours `psx`, `psp`, `gc`, `wii`, `x360` and `saturn`. Each has a foreground that meets AA (validated by the existing tests).
+  - `app.css` (a `--bs-<id>` variable and a `.text-bg-<id>` rule, the same in both themes, like `tg16`) and `systemColours.ts` get these colours. Every pair meets AA:
+
+    | Id | Background | Foreground | Contrast |
+    |---|---|---|---|
+    | `psx` | `#5c6670` | `#fff` | 5.9:1 |
+    | `psp` | `#8a1c7c` | `#fff` | 8.3:1 |
+    | `gc` | `#b8860b` | `#000` | 6.5:1 |
+    | `wii` | `#7fb3d5` | `#000` | 9.3:1 |
+    | `x360` | `#5dc21e` | `#000` | 9.2:1 |
+    | `saturn` | `#34495e` | `#fff` | 9.3:1 |
+
+    `systemColours.test.ts` only checks the mapping; contrast is checked by the e2e axe scans, which see every seeded system's badge.
   - Icons in `icons.ts`:
     - `system-psx` and `system-psp`: `bi bi-playstation`;
     - `system-x360`: `bi bi-xbox`;
@@ -252,7 +263,8 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - Done when: the classes above pass.
 - [ ] **4. `rom_files` table, mirror and claims**: B12 (database part), B13. Add migration `0020_rom_files.sql`, the mirror insert/delete in `LibraryMirror.ApplyAsync`, `ListExternalAsync` (union, `FileId`), `ExternalRomRow.FileId`, `RomFileRow` and the three `IRomRepository` file methods, and `InfoJsonGame.ExternalFileNames()` with every call site B13 lists switched to it.
   - Tests (`LibraryMirrorTests`, Data integration): rows are written and cascade-deleted; `ListExternalAsync` includes the files; two releases sharing a track SHA1 are allowed; `SyncAllAsync` restores `rom_files` from the ZIPs; `ListFilesByGameAsync`, `GetFileAsync` (null for another release's file) and `ListFilesBySha1Async` return the rows. `InfoJsonTests`: `ExternalFileNames()` lists main names, then `files` names.
-  - Done when: `LibraryMirrorTests` (Docker running) and `InfoJsonTests` pass, and the existing `IntegrityJobTests`, `ExternalLibraryTests` and `IngestPipelineTests` still pass.
+  - `SchemaMigrationTests`: `rom_files` added to its table list, `0020_rom_files` to the journalled scripts, the re-run count 19 → 20, and a column `[TestCase]` for `rom_files`.
+  - Done when: `LibraryMirrorTests` and `SchemaMigrationTests` (Docker running) and `InfoJsonTests` pass, and the existing `IntegrityJobTests`, `ExternalLibraryTests` and `IngestPipelineTests` still pass.
 - [ ] **5. Cue parser**: B8. Add `Core/Ingest/CueSheet.cs`.
   - Tests: `CueSheetTests` covers quoted and unquoted names, mixed case, BOM, Latin-1 fallback, duplicates collapsed (also ones differing only by case), an error on no `FILE` line, an error on 100 distinct names (99 parse), an error on a name of `.` or `..` or with `/`, `\` or `:`, `...Iru! (Japan).bin` accepted, and other commands ignored.
   - Done when: `CueSheetTests` passes.
@@ -337,7 +349,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - Done when: `IntegrityJobTests` passes (Docker running).
 - [ ] **16. API for release files**: B20 (API part), B21. Add `files` and `totalSizeBytes` to the detail, the file download route, and the sizes in the list and report.
   - Tests:
-    - `LibraryEndpointsTests` (integration): detail lists files; the download streams bytes with range support; another release's file id gives 404.
+    - `LibraryEndpointsTests` (integration, mirroring an `ExternalSetTestHandler` game directly, as its external tests do): detail lists files and `totalSizeBytes`; `GET /api/games` gives `primarySizeBytes` including the primary release's files; the download streams bytes with range support; another release's file id gives 404.
     - `ReportEndpointsTests`: the size includes the files.
   - Done when: those classes pass (Docker running).
 - [ ] **17. Game page file list**: B20 (UI part). `lib/api/types.ts` and the Game page toggle and table.
@@ -359,7 +371,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - Update every count and list this breaks:
     - `IngestSeederTests`: DAT files 65 → 71 (plus the titledb file);
     - `DatEndpointsTests`: refresh requests 66 → 72; `/api/admin/dats` rows 15 → 21, and their order;
-    - `SystemStartupTests` and `IngestEndpointsTests`: the registry-order list of 20 ids;
+    - `SystemStartupTests` and `IngestEndpointsTests`: the registry-order list of 20 ids. `AppHost` registers the six after `SwitchHandler` in B4's table order (`psx`, `psp`, `gc`, `wii`, `x360`, `saturn`);
     - `LibraryEndpointsTests`: the `/api/systems` order and display names (20 systems; still exactly 13 with `embedRoms` true).
   - Tests:
     - `IngestPipelineTests`: a Wii ISO over 2 GiB (sparse file) is size-accepted in both `ingest/wii/` and `ingest/gc/`;
@@ -372,6 +384,8 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - `ingest/gc/`: `Cube Kart (USA).iso`, 64 KiB with the GC magic and title.
   - `ingest/wii/`: `Wave Bowling (USA).iso`, 64 KiB with the Wii magic.
   - `ingest/x360/`: `Arc Strike (USA).iso`.
+
+  Every `.bin` and `.iso` is 64 KiB of deterministic bytes from its own builder seed, so no two files share a SHA1 (above every minimum in B4). Each `.cue` names its two tracks with `FILE "…" BINARY` lines.
 
   None of the six fixture games has metadat (B2). Basic goes from 17 games, 22 releases and 22 Ingested to 23 games, 28 releases and 32 Ingested items, because each set member is an item; Duplicate 1, Review 2 and Failed 1 don't change. Full goes from 217 games, 222 releases and 222 Ingested to 223, 228 and 232.
   - Update every count:
@@ -468,6 +482,11 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - 2026-11-12 `files` names follow the `externalFileName` rules (portable, 250 bytes); the size check is the maximum only, as for main files; `fileName` must equal `externalFileName` on `FileSets` systems (code: `InfoJsonValidator.ExternalProblem`; B10).
 - 2026-11-12 The Game page's "N files" counts the main file too and lists it first, matching the e2e "3 files" (reviewer).
 - 2026-11-12 Docs step also covers README's No-Intro-only intro, Refresh DATs in features.md, the External storage title-edit rule and the API reference additions (doc rule).
+- 2026-11-12 Game page file list → in the release card's details body; the Size field shows `totalSizeBytes`; the header and Download ROM buttons keep downloading the main file (code: releases are cards, not table rows, and have no size column).
+- 2026-11-12 System colours → exact hex values in B22; AA is checked by the e2e axe scans, because `systemColours.test.ts` has no contrast check (code).
+- 2026-11-12 Step 4 updates `SchemaMigrationTests`, which lists every table and migration and counts 19 scripts (code).
+- 2026-11-12 B21's `primarySizeBytes` gets a `LibraryEndpointsTests` case; it had none (reviewer).
+- 2026-11-12 v2 move record = every v1 field plus `files` pairs; registry order appends the six after Switch; seed files are 64 KiB each; `ItemDone` once per member; lone-track repair runs where step 3's main-file repair does (reviewer).
 
 ## Kickoff prompt
 ```text
