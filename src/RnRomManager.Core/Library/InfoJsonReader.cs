@@ -10,7 +10,7 @@ namespace RnRomManager.Core.Library;
 /// </summary>
 public sealed class InfoJsonReader(IEnumerable<IInfoJsonUpgrader> upgraders, ISystemRegistry systems)
 {
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 5;
     public const int MaxBytes = 1024 * 1024;
 
     private readonly Dictionary<int, IInfoJsonUpgrader> _upgraders = upgraders.ToDictionary(u => u.FromVersion);

@@ -366,6 +366,32 @@ public class LibraryMirrorTests
     }
 
     [Test]
+    public async Task Replace_WritesTheVersion_NullWhenUnset()
+    {
+        var game = ExternalGame(("Orbit Test [v0].nsp", "Orbit Test.Orbit Test [v0].nsp", 1), ("Orbit Test [v0][1.0.1].nsp", "Orbit Test.[v0][1.0.1].nsp", 2));
+        game = game with { Roms = [game.Roms[0], game.Roms[1] with { Flags = ["Update"], Version = "1.0.1" }] };
+
+        await _mirror.ReplaceAsync(Entry(game, "ext/O/Orbit Test.zip"), CancellationToken.None);
+
+        var rows = await _roms.ListByGameAsync(game.GameId, CancellationToken.None);
+        Assert.That(rows.Select(r => (r.FileName, r.Version)), Is.EqualTo(new[] { ("Orbit Test [v0].nsp", (string?)null), ("Orbit Test [v0][1.0.1].nsp", "1.0.1") }));
+        Assert.That((await _roms.GetBySha1Async(game.Roms[1].Metadata.Sha1, CancellationToken.None))!.Version, Is.EqualTo("1.0.1"));
+        Assert.That((await _roms.GetAsync(game.GameId, rows[1].Id, CancellationToken.None))!.Version, Is.EqualTo("1.0.1"));
+    }
+
+    [Test]
+    public async Task Sync_ChangedZip_UpdatesTheVersion()
+    {
+        var game = await ZipAsync("gb/T/Tetris.zip", "Tetris", 1);
+        await _sync.SyncAllAsync(CancellationToken.None);
+        await WriteZipAsync(_reader, Abs("gb/T/Tetris.zip"), game with { Roms = [game.Roms[0] with { Version = "1.2" }] }, 1);
+
+        await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That((await _roms.ListByGameAsync(game.GameId, CancellationToken.None)).Single().Version, Is.EqualTo("1.2"));
+    }
+
+    [Test]
     public async Task Sync_RebuildsTheExternalPointer_FromAZipWithoutARomEntry()
     {
         var game = ExternalGame(("Orbit Test [v0].nsp", "Orbit Test.Orbit Test [v0].nsp", 1));

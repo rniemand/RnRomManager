@@ -57,7 +57,7 @@ public class SchedulerTests
         var runner = new JobRunner(_jobs, _lock, Substitute.For<RnRomManager.Core.Users.IUserRepository>(), _time, NullLogger<JobRunner>.Instance);
         var retention = new LogRetention(Options.Create(new PathsOptions { Logs = _logs.Path }), Options.Create(new LoggingOptions { RetentionDays = 14 }),
             _time, NullLogger<LogRetention>.Instance);
-        _scheduler = new Scheduler(runner, _ =>
+        _scheduler = new Scheduler(runner, (_, _) =>
         {
             var job = new NoopTestJob();
             _created.Add(job);

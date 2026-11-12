@@ -30,6 +30,7 @@
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
+	import { compareUpdates, isUpdate } from '#lib/releases.js';
 	import { systemColour } from '#lib/systemColours.js';
 	import { tooltip } from '#lib/tooltip.js';
 
@@ -56,9 +57,15 @@
 	// P1: primary first, then the Releases order.
 	// G5: a release pointer means the game's ROMs are stored next to its ZIP.
 	const external = $derived(game?.roms.some((r) => r.externalFileName !== null) ?? false);
-	const downloadRoms = $derived(
-		game ? [...game.roms.filter((r) => r.isPrimary), ...game.roms.filter((r) => !r.isPrimary)] : []
-	);
+	// B9/B11: updates have their own tab, newest first; the rest are the releases.
+	const releases = $derived(game?.roms.filter((r) => !isUpdate(r)) ?? []);
+	const updates = $derived(game ? game.roms.filter(isUpdate).sort(compareUpdates) : []);
+	// B10: the header download lists releases only; a game with only updates offers those.
+	const downloadable = $derived(releases.length ? releases : updates);
+	const downloadRoms = $derived([
+		...downloadable.filter((r) => r.isPrimary),
+		...downloadable.filter((r) => !r.isPrimary)
+	]);
 
 	async function fetchGame(gameId: string, signal?: AbortSignal): Promise<GameDetail | null> {
 		try {
@@ -182,7 +189,7 @@
 			zipExpanded.add('');
 		});
 	});
-	const allReleasesOpen = $derived(game?.roms.every((r) => openReleases.has(r.fileName)) ?? false);
+	const allReleasesOpen = $derived.by(() => shownRoms.every((r) => openReleases.has(r.fileName)));
 
 	function toggleRelease(fileName: string): void {
 		if (openReleases.has(fileName)) openReleases.delete(fileName);
@@ -198,14 +205,25 @@
 
 	function toggleAllReleases(): void {
 		if (allReleasesOpen) openReleases.clear();
-		else game?.roms.forEach((r) => openReleases.add(r.fileName));
+		else shownRoms.forEach((r) => openReleases.add(r.fileName));
 	}
 
 	// GP1: the tab is URL state (`?tab=images`); switching never reloads the game (the load effect keys on the id).
-	type Tab = 'releases' | 'images' | 'zip';
+	type Tab = 'releases' | 'updates' | 'images' | 'zip';
+	// B9: ?tab=updates on a game without updates shows Releases, as an unknown tab does.
 	const tab = $derived<Tab>(
-		(['images', 'zip'] as const).find((t) => t === page.url.searchParams.get('tab')) ?? 'releases'
+		(['images', 'zip', ...(updates.length ? ['updates' as const] : [])] as const).find(
+			(t) => t === page.url.searchParams.get('tab')
+		) ?? 'releases'
 	);
+	// B10: one panel lists either tab's cards.
+	const shownRoms = $derived(tab === 'updates' ? updates : releases);
+	const tabs = $derived<[Tab, string][]>([
+		['releases', `Releases (${releases.length})`],
+		...(updates.length ? [['updates', `Updates (${updates.length})`] as [Tab, string]] : []),
+		['images', `Images (${game?.images.length ?? 0})`],
+		['zip', 'Zip Contents']
+	]);
 
 	function selectTab(next: Tab): void {
 		const path = resolve('/games/[id]', { id });
@@ -419,7 +437,7 @@
 	</div>
 
 	<ul class="nav nav-tabs mb-3" role="tablist">
-		{#each [['releases', `Releases (${game.roms.length})`], ['images', `Images (${game.images.length})`], ['zip', 'Zip Contents']] as [value, label] (value)}
+		{#each tabs as [value, label] (value)}
 			<li class="nav-item" role="presentation">
 				<button
 					type="button"
@@ -428,8 +446,8 @@
 					id="{value}-tab"
 					role="tab"
 					aria-selected={tab === value}
-					aria-controls="{value}-panel"
-					onclick={() => selectTab(value as Tab)}>{label}</button
+					aria-controls={value === 'updates' ? 'releases-panel' : `${value}-panel`}
+					onclick={() => selectTab(value)}>{label}</button
 				>
 			</li>
 		{/each}
@@ -439,11 +457,14 @@
 	<div
 		id="releases-panel"
 		role="tabpanel"
-		aria-labelledby="releases-tab"
-		hidden={tab !== 'releases'}
+		aria-labelledby="{tab === 'updates' ? 'updates' : 'releases'}-tab"
+		hidden={tab !== 'releases' && tab !== 'updates'}
 	>
-		<h2 class="h5 visually-hidden">Releases</h2>
-		{#if game.roms.length >= 2}
+		<h2 class="h5 visually-hidden">{tab === 'updates' ? 'Updates' : 'Releases'}</h2>
+		{#if tab === 'releases' && !releases.length}
+			<p class="text-body-secondary">No releases other than updates.</p>
+		{/if}
+		{#if shownRoms.length >= 2}
 			<button
 				type="button"
 				class="btn btn-sm btn-outline-secondary mb-2"
@@ -452,7 +473,7 @@
 		{/if}
 		<!-- G2: one card per release, so nothing scrolls sideways on a phone. -->
 		<div class="d-flex flex-column gap-3 mb-4">
-			{#each game.roms as rom (rom.id)}
+			{#each shownRoms as rom (rom.id)}
 				{@const open = openReleases.has(rom.fileName)}
 				<!-- R1: a stripe in the system's colour and a tinted header mark where each release starts. -->
 				<article
@@ -477,6 +498,7 @@
 							>
 							<h3 class="h6 mb-0 text-break" id="release-{rom.id}-name">{rom.fileName}</h3>
 							{#if rom.isPrimary}<span class="badge text-bg-primary">Primary</span>{/if}
+							{#if rom.version}<span class="badge text-bg-info">Version {rom.version}</span>{/if}
 							{#if rom.externalFileName}
 								<!-- G7: stored next to the ZIP under this name. -->
 								<!-- svelte-ignore a11y_no_noninteractive_tabindex -->

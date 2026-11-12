@@ -127,6 +127,7 @@ public static class AppHost
         builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV1>();
         builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV2>();
         builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV3>();
+        builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV4>();
         builder.Services.AddSingleton<InfoJsonReader>();
         builder.Services.AddSingleton<DbSync>();
         builder.Services.AddSingleton<LibraryFiles>();
@@ -134,7 +135,13 @@ public static class AppHost
         builder.Services.AddTransient<LibraryEditor>();
         builder.Services.AddTransient<GameMediaRetry>();
         builder.Services.AddTransient<MediaRetryJob>();
-        builder.Services.AddSingleton<IntegrityJobFactory>(sp => mode => ActivatorUtilities.CreateInstance<IntegrityJob>(sp, mode));
+        // The ZIP path is set afterwards: ActivatorUtilities can't match a null string? argument.
+        builder.Services.AddSingleton<IntegrityJobFactory>(sp => (mode, zipPath) =>
+        {
+            var job = ActivatorUtilities.CreateInstance<IntegrityJob>(sp, mode);
+            job.ZipPath = zipPath;
+            return job;
+        });
         builder.Services.AddSingleton<LogRetention>();
         builder.Services.AddSingleton<LogArchive>();
         // The container's local time (TZ) drives Integrity:QuickCheckTime (§4).

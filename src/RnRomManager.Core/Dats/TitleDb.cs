@@ -92,10 +92,10 @@ public static partial class TitleDb
 
     /// <summary>
     /// T5's rom <c>fileName</c>: the cleaned name (dot runs → <c>…</c>, since <c>..</c> isn't allowed), sanitized, then
-    /// <c>[&lt;TitleId&gt;][v&lt;N&gt;]</c> and the lower-case extension.
+    /// <c>[&lt;TitleId&gt;][v&lt;N&gt;]</c>, B6's <c>[&lt;releaseVersion&gt;]</c> when given, and the lower-case extension.
     /// </summary>
-    public static string RomFileName(string name, string titleId, uint version, string extension) =>
-        $"{FileNameSanitizer.Sanitize(DotRun().Replace(Normalize(name), "…"))} [{titleId}][v{version}]{extension.ToLowerInvariant()}";
+    public static string RomFileName(string name, string titleId, uint version, string extension, string? releaseVersion = null) =>
+        $"{FileNameSanitizer.Sanitize(DotRun().Replace(Normalize(name), "…"))} [{titleId}][v{version}]{(releaseVersion is null ? "" : $"[{releaseVersion}]")}{extension.ToLowerInvariant()}";
 
     /// <summary>T5's <c>N</c>: the first case-sensitive <c>[v&lt;digits&gt;]</c> in the file name; none or overflow → 0.</summary>
     public static uint VersionFrom(string fileName) =>
@@ -105,13 +105,17 @@ public static partial class TitleDb
 
     /// <summary>
     /// T4: the header's <c>titleId</c> when it has one (a non-Switch id there means no match, whatever the file name
-    /// says), else the first <c>[0100…]</c> in the file name; upper-cased. Null: no title id.
+    /// says), else the first <c>[0100…]</c> in the file name; upper-cased. Null: no title id. B7: a base id from the
+    /// file name of a file marked <c>[UPD]</c> (ignoring case) becomes its update id (<c>base | 0x800</c>).
     /// </summary>
     public static string? TitleIdFrom(IReadOnlyDictionary<string, object?>? headerFields, string fileName)
     {
         if (headerFields is not null && headerFields.TryGetValue("titleId", out var header) && header?.ToString() is { } fromHeader)
             return IsSwitchTitleId(fromHeader) ? fromHeader.ToUpperInvariant() : null;
-        return FileNameTitleId().Match(fileName) is { Success: true } match ? match.Groups[1].Value.ToUpperInvariant() : null;
+        if (FileNameTitleId().Match(fileName) is not { Success: true } match)
+            return null;
+        var id = ulong.Parse(match.Groups[1].Value, System.Globalization.NumberStyles.AllowHexSpecifier, System.Globalization.CultureInfo.InvariantCulture);
+        return (id & 0x1FFFUL) == 0 && fileName.Contains("[UPD]", StringComparison.OrdinalIgnoreCase) ? Hex(id | 0x800) : Hex(id);
     }
 
     /// <summary>
@@ -150,7 +154,7 @@ public static partial class TitleDb
             .Select(code => code.Length == 0 ? code : char.ToUpperInvariant(code[0]) + code[1..])
             .Distinct(StringComparer.Ordinal).ToList();
         return new TitleDbMatch(titleId, kind, baseEntry, named, BaseTitle(baseEntry.Name), GameName(baseEntry.Name, baseEntry.TitleId),
-            RomFileName(name, titleId, version, Path.GetExtension(fileName)), version > 0 ? $"v{version}" : null,
+            RomFileName(name, titleId, version, Path.GetExtension(fileName), kind == TitleKind.Update ? ReleaseVersion.From(fileName) : null), version > 0 ? $"v{version}" : null,
             kind switch { TitleKind.Update => ["Update"], TitleKind.Dlc => ["DLC"], _ => [] }, languages);
 
         (TitleKind, TitleDbRow?, string) Dlc(TitleDbRow? own) => (TitleKind.Dlc, own, own?.Name ?? baseEntry.Name + " (DLC)");
@@ -163,6 +167,13 @@ public static partial class TitleDb
     /// <summary>The title id a T3 <c>GameName</c> ends with (<c>… [0100…]</c>); null when it has none.</summary>
     public static string? TitleIdOfGameName(string gameName) =>
         GameNameTitleId().Match(gameName) is { Success: true } match ? match.Groups[1].Value : null;
+
+    /// <summary>B8: a base id's update id (<c>| 0x800</c>), an update id as is; null for any other kind.</summary>
+    public static string? UpdateIdOf(string titleId)
+    {
+        var id = ulong.Parse(titleId, System.Globalization.NumberStyles.AllowHexSpecifier, System.Globalization.CultureInfo.InvariantCulture);
+        return (id & 0x1FFFUL) is 0 or 0x800 ? Hex(id | 0x800) : null;
+    }
 
     private static string Hex(ulong id) => id.ToString("X16", System.Globalization.CultureInfo.InvariantCulture);
 

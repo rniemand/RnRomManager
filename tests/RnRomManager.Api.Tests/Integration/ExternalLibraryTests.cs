@@ -73,7 +73,7 @@ public partial class ExternalLibraryTests
     private string Ingest => Path.Combine(_factory.Root, "ingest", ExternalTestHandler.SystemId);
     private string Bucket => Path.Combine(_factory.Root, "roms", "ext", "S");
     private string ZipPath => Path.Combine(Bucket, "Space Game.zip");
-    private string Sidecar => Path.Combine(Bucket, $"Space Game.{GameName}.xci");
+    private string Sidecar => Path.Combine(Bucket, $"Space Game.(USA).xci");
 
     /// <summary>A loose file a minute old; the listing carries the mtime the filesystem actually stored.</summary>
     private IngestFile Drop(string name, byte[]? bytes = null)
@@ -257,7 +257,7 @@ public partial class ExternalLibraryTests
         var result = await IngestAsync(Pipeline(), Drop("dump.xci"));
 
         Assert.That(Code(result), Is.EqualTo((IngestOutcome.Ingested, (string?)null)));
-        Assert.That(File.ReadAllBytes(Path.Combine(Bucket, $"Space Game.{GameName} (2).xci")), Is.EqualTo(Rom));
+        Assert.That(File.ReadAllBytes(Path.Combine(Bucket, $"Space Game.(USA) (2).xci")), Is.EqualTo(Rom));
         Assert.That(File.ReadAllText(occupant), Is.EqualTo("someone else's"));
     }
 
@@ -339,7 +339,7 @@ public partial class ExternalLibraryTests
             File.Delete(archive);
             Archive("pack.zip", RandomNumberGenerator.GetBytes(16));
         });
-        var orphan = Path.Combine(Bucket, $"Space Game.{GameName}.nsp");
+        var orphan = Path.Combine(Bucket, $"Space Game.(USA).nsp");
 
         await Job(Pipeline(new ExternalIngestHooks { Writer = writer })).RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None);
 
@@ -375,7 +375,7 @@ public partial class ExternalLibraryTests
         Assert.That(await db.QuerySingleAsync<int>("SELECT COUNT(*) FROM roms"), Is.EqualTo(1));
     }
 
-    private string EuropeSidecar => Path.Combine(Bucket, $"Space Game.{EuropeName}.nsp");
+    private string EuropeSidecar => Path.Combine(Bucket, $"Space Game.(Europe).nsp");
 
     /// <summary>The first release, ingested normally: the game the second release joins.</summary>
     private async Task<Guid> FirstReleaseAsync()
@@ -424,7 +424,7 @@ public partial class ExternalLibraryTests
         var result = await IngestAsync(Pipeline(), Drop("eu.nsp", Europe));
 
         Assert.That(Code(result), Is.EqualTo((IngestOutcome.Ingested, (string?)null)));
-        Assert.That(File.ReadAllBytes(Path.Combine(Bucket, $"Space Game.{EuropeName} (2).nsp")), Is.EqualTo(Europe));
+        Assert.That(File.ReadAllBytes(Path.Combine(Bucket, $"Space Game.(Europe) (2).nsp")), Is.EqualTo(Europe));
         Assert.That(File.ReadAllText(occupant), Is.EqualTo("someone else's"));
     }
 

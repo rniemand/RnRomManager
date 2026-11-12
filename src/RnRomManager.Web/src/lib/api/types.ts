@@ -16,7 +16,7 @@ export interface Me {
 export interface CurrentJob {
 	id: string;
 	type: 'Ingest' | 'Integrity' | 'DatRefresh' | 'MediaRetry';
-	mode: 'Quick' | 'Deep' | null;
+	mode: 'Quick' | 'Deep' | 'Game' | null;
 	status: string;
 	current: number;
 	total: number;
@@ -104,6 +104,8 @@ export interface RomDetail {
 	regions: string[];
 	languages: string[];
 	revision: string | null;
+	/** An update's dotted version (`1.0.1`); null otherwise. */
+	version: string | null;
 	flags: string[];
 	isPrimary: boolean;
 	identificationMethod: 'Dat' | 'Manual' | 'TitleDb';
@@ -193,7 +195,7 @@ export type JobStatus = 'Running' | 'Completed' | 'Cancelled' | 'Failed' | 'Abor
 export interface Job {
 	id: string;
 	type: CurrentJob['type'];
-	mode: 'Quick' | 'Deep' | null;
+	mode: 'Quick' | 'Deep' | 'Game' | null;
 	triggerSource: 'Manual' | 'Schedule';
 	status: JobStatus;
 	requestedBy: number | null;

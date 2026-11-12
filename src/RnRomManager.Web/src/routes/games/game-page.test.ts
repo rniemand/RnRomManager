@@ -62,7 +62,8 @@ const rom = (id: number, fileName: string, isPrimary: boolean) => ({
 	dateModified: '2026-11-01T00:00:00Z',
 	downloadUrl: `/api/games/g1/roms/${id}/download`,
 	hasNote: false,
-	externalFileName: null as string | null
+	externalFileName: null as string | null,
+	version: null as string | null
 });
 
 const listing = (paths = ['info.json', 'roms/Tetris 1.gb', 'images/boxart-01.png']) => ({
@@ -550,6 +551,97 @@ describe('game detail page', () => {
 		expect(releasesPanel.hidden).toBe(false);
 		expect(imagesPanel.hidden).toBe(true);
 		expect(imagesPanel.querySelector('#images-heading')).toBeTruthy();
+	});
+
+	/** Game 1 with base rom 1 and updates 2 (1.0.1), 3 (1.10.0) and 4 (no version). */
+	function withUpdates(): GameDetail {
+		const detail = game([1, 2, 3, 4]);
+		for (const [i, version] of [
+			[1, '1.0.1'],
+			[2, '1.10.0'],
+			[3, null]
+		] as const) {
+			detail.roms[i].flags = ['Update'];
+			detail.roms[i].version = version;
+		}
+		return detail;
+	}
+	const cardNames = () =>
+		[...document.getElementById('releases-panel')!.querySelectorAll('article h3')].map(
+			(h) => h.textContent
+		);
+
+	it('no updates: no Updates tab, and ?tab=updates shows Releases (B9)', async () => {
+		navigateTo('/games/g1?tab=updates');
+		answers.push({ status: 200, body: game([1, 2]) });
+		render(GamePage);
+
+		const releases = await screen.findByRole('tab', { name: 'Releases (2)' });
+		expect(screen.queryByRole('tab', { name: /Updates/ })).toBeNull();
+		expect(releases.getAttribute('aria-selected')).toBe('true');
+		expect(cardNames()).toEqual(['Tetris 1.gb', 'Tetris 2.gb']);
+	});
+
+	it('updates get their own tab; Releases counts and lists only the rest (B9, B10)', async () => {
+		answers.push({ status: 200, body: withUpdates() });
+		render(GamePage);
+
+		await screen.findByRole('tab', { name: 'Releases (1)' });
+		const updates = screen.getByRole('tab', { name: 'Updates (3)' });
+		expect(updates.getAttribute('aria-controls')).toBe('releases-panel');
+		expect(cardNames()).toEqual(['Tetris 1.gb']);
+		expect(screen.queryByRole('button', { name: /Expand all/ })).toBeNull();
+		const panel = document.getElementById('releases-panel')!;
+		expect(panel.getAttribute('aria-labelledby')).toBe('releases-tab');
+
+		await fireEvent.click(updates);
+		expect(goto).toHaveBeenLastCalledWith('/games/g1?tab=updates', { replace: true, reset: false });
+		await vi.waitFor(() => expect(panel.getAttribute('aria-labelledby')).toBe('updates-tab'));
+		expect(within(panel).getByRole('heading', { level: 2 }).textContent).toBe('Updates');
+	});
+
+	it('?tab=updates lists updates newest first with a Version badge and a download button (B10, B11)', async () => {
+		navigateTo('/games/g1?tab=updates');
+		answers.push({ status: 200, body: withUpdates() });
+		render(GamePage);
+
+		await screen.findByRole('tab', { name: 'Updates (3)' });
+		expect(cardNames()).toEqual(['Tetris 3.gb', 'Tetris 2.gb', 'Tetris 4.gb']);
+		const newest = screen.getByText('Tetris 3.gb').closest('article')!;
+		expect(within(newest).getByText('Version 1.10.0')).toBeTruthy();
+		expect(within(newest).getByRole('button', { name: 'Download Tetris 3.gb' })).toBeTruthy();
+		expect(
+			within(screen.getByText('Tetris 4.gb').closest('article')!).queryByText(/^Version /)
+		).toBeNull();
+		await fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
+		expect(
+			screen
+				.getAllByRole('button', { name: /^Hide details for/ })
+				.map((b) => b.getAttribute('aria-label'))
+		).toHaveLength(3);
+	});
+
+	it('the header Download ROM lists no updates (B10)', async () => {
+		answers.push({ status: 200, body: withUpdates() }, { status: 200, body: withUpdates() });
+		render(GamePage);
+
+		const button = await screen.findByRole('button', { name: 'Download ROM' });
+		expect(button.classList).not.toContain('dropdown-toggle');
+		await fireEvent.click(button);
+		await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/api/games/g1/roms/1/download'));
+	});
+
+	it('a game with only updates says so on Releases and downloads its updates from the header (B10)', async () => {
+		const detail = game([1, 2]);
+		for (const rom of detail.roms) rom.flags = ['Update'];
+		answers.push({ status: 200, body: detail });
+		render(GamePage);
+
+		await screen.findByRole('tab', { name: 'Releases (0)' });
+		expect(screen.getByText('No releases other than updates.')).toBeTruthy();
+		expect(cardNames()).toEqual([]);
+		const toggle = screen.getByRole('button', { name: 'Download ROM' });
+		expect(toggle.classList).toContain('dropdown-toggle');
 	});
 
 	it('?tab=images opens Images', async () => {

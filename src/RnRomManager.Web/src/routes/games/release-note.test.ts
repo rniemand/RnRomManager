@@ -50,7 +50,8 @@ const rom = (id: number, hasNote: boolean) => ({
 	dateModified: '',
 	downloadUrl: '',
 	hasNote,
-	externalFileName: null as string | null
+	externalFileName: null as string | null,
+	version: null as string | null
 });
 
 const game = (): GameDetail => ({

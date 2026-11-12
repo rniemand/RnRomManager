@@ -29,6 +29,8 @@ public class TitleDbIngestTests
     private const string NamedDlcId = "0100000000003002";
     private const string OddKindId = "0100000000002400";
     private const string OrphanDlcId = "0100000000009001";
+    private const string CometBaseId = "0100000000006000";
+    private const string CometUpdateId = "0100000000006800";
 
     private ApiFactory? _factory;
 
@@ -64,6 +66,8 @@ public class TitleDbIngestTests
                     new(NamedDlcId, "Orbit Expedition: Star Pack", "Orbit Co", null, 2021, [], ["ja"], null, null),
                     new(OddKindId, "Orbit Oddity", null, null, null, [], [], null, null),
                     new(OrphanDlcId, "Lost Pack", null, null, null, [], [], null, null),
+                    new(CometBaseId, "Comet Run", null, null, null, [], ["en"], null, null),
+                    new(CometUpdateId, "Comet Run Update", null, null, null, [], ["en"], null, null),
                 ],
             });
         _ = _factory.Services; // start: folders and the DAT load
@@ -162,6 +166,53 @@ public class TitleDbIngestTests
         Assert.That(await db.QuerySingleAsync<int>("SELECT COUNT(*) FROM roms WHERE game_id = @id", new { id = gameId.ToString() }), Is.EqualTo(3));
     }
 
+    [Test]
+    public async Task Updates_IngestWithTheirVersion_DistinctNames_AndPointersWithoutTheRepeatedTitle()
+    {
+        await StartAsync();
+        var gameId = await IngestBaseAsync();
+
+        Assert.That(Code(await IngestAsync(Drop($"orbit [{UpdateId}][v0][1.0.1].nsp", UpdateRom))), Is.EqualTo((IngestOutcome.Ingested, (string?)null)));
+        Assert.That(Code(await IngestAsync(Drop($"orbit [{UpdateId}][v0][1.1.0].nsp", DlcRom))), Is.EqualTo((IngestOutcome.Ingested, (string?)null)));
+
+        var game = ReadGame();
+        Assert.That(game.Roms.Select(r => (r.FileName, r.ExternalFileName, r.Version)), Is.EquivalentTo(new[]
+        {
+            ($"Orbit Expedition [{BaseId}][v0].nsp", (string?)$"Orbit Expedition.[{BaseId}][v0].nsp", (string?)null),
+            ($"Orbit Expedition [{UpdateId}][v0][1.0.1].nsp", $"Orbit Expedition.[{UpdateId}][v0][1.0.1].nsp", "1.0.1"),
+            ($"Orbit Expedition [{UpdateId}][v0][1.1.0].nsp", $"Orbit Expedition.[{UpdateId}][v0][1.1.0].nsp", "1.1.0"),
+        }));
+        foreach (var rom in game.Roms)
+            Assert.That(File.Exists(Path.Combine(Bucket, rom.ExternalFileName!)), Is.True, rom.ExternalFileName);
+        await using var db = Service<IDbConnectionFactory>().Create();
+        Assert.That(await db.QueryAsync<string?>("SELECT version FROM roms WHERE game_id = @id ORDER BY version", new { id = gameId.ToString() }),
+            Is.EqualTo(new[] { null, "1.0.1", "1.1.0" }));
+    }
+
+    [Test]
+    public async Task UpdMarker_OnABaseIdFromTheFileName_IngestsAsItsUpdate_B7()
+    {
+        await StartAsync();
+        await IngestBaseAsync();
+
+        Assert.That(Code(await IngestAsync(Drop($"orbit [{BaseId}][upd][1.2.0].nsp", UpdateRom))), Is.EqualTo((IngestOutcome.Ingested, (string?)null)));
+
+        var update = ReadGame().Roms.Single(r => r.Flags.Contains("Update"));
+        Assert.That((update.FileName, update.Version, update.OriginalFileName),
+            Is.EqualTo(($"Orbit Expedition [{UpdateId}][v0][1.2.0].nsp", (string?)"1.2.0", $"orbit [{BaseId}][upd][1.2.0].nsp")));
+    }
+
+    [Test]
+    public async Task UpdMarker_IsIgnored_WhenTheHeaderHasTheTitleId_B7()
+    {
+        await StartAsync(headerTitleId: BaseId);
+
+        Assert.That(Code(await IngestAsync(Drop("orbit [UPD][1.2.0].nsp", BaseRom))), Is.EqualTo((IngestOutcome.Ingested, (string?)null)));
+
+        var rom = ReadGame().Roms.Single();
+        Assert.That((rom.FileName, rom.Flags.Count, rom.Version), Is.EqualTo(($"Orbit Expedition [{BaseId}][v0].nsp", 0, (string?)null)));
+    }
+
     [TestCase("0100000000002400", TestName = "NoMatch_GoesToReviewWithSuggestions unsupported kind")]
     [TestCase("0100000000004000", TestName = "NoMatch_GoesToReviewWithSuggestions missing base")]
     public async Task NoMatch_GoesToReviewWithSuggestions(string titleId)
@@ -242,7 +293,7 @@ public class TitleDbIngestTests
     }
 
     /// <summary>Two games own the base title "Orbit Expedition", so a matching update waits as AmbiguousGroup.</summary>
-    private async Task<(ReviewItem Item, IngestFile File, Guid First)> AmbiguousAsync()
+    private async Task<(ReviewItem Item, IngestFile File, Guid First)> AmbiguousAsync(string updateName = $"orbit [{UpdateId}][v3].nsp")
     {
         var first = await IngestBaseAsync();
         var other = Bytes(9);
@@ -252,7 +303,7 @@ public class TitleDbIngestTests
         await using (var db = Service<IDbConnectionFactory>().Create())
             await db.ExecuteAsync("UPDATE roms SET base_title = 'Orbit Expedition' WHERE game_id = @id", new { id = second.ToString() });
 
-        var file = Drop($"orbit [{UpdateId}][v3].nsp", UpdateRom);
+        var file = Drop(updateName, UpdateRom);
         Assert.That(Code(await IngestAsync(file)), Is.EqualTo((IngestOutcome.Review, (string?)"AmbiguousGroup")));
         return (await ReviewOfAsync(UpdateRom), file, first);
     }
@@ -335,6 +386,57 @@ public class TitleDbIngestTests
         Assert.That(dlc.Identification.DatGameName, Is.EqualTo($"Orbit Expedition [{BaseId}]"), "the base's datGameName");
     }
 
+    private static ReviewResolutionRequest UpdatePick(string datGameName) => Dat(datGameName) with { Update = true };
+
+    [Test]
+    public async Task UpdatePick_OfABase_StoresItsUpdate_WithVersionAndName_B8()
+    {
+        await StartAsync();
+        var gameId = await IngestBaseAsync();
+        var (item, _) = await QueueAsync("DREDGE[UPD][1.0.1].nsp");
+
+        var result = await Resolver().ResolveAsync(item.Id, UpdatePick($"Orbit Expedition [{BaseId}]"), await AdminAsync(), default);
+
+        Assert.That((result.Code, result.GameId), Is.EqualTo(((string?)null, (Guid?)gameId)));
+        var update = ReadGame().Roms.Single(r => r.Flags.Contains("Update"));
+        Assert.That((update.FileName, update.Version, update.IsPrimary),
+            Is.EqualTo(($"Orbit Expedition [{UpdateId}][v0][1.0.1].nsp", (string?)"1.0.1", false)));
+        Assert.That(update.Identification.DatGameName, Is.EqualTo($"Orbit Expedition [{BaseId}]"));
+    }
+
+    [Test]
+    public async Task UpdatePick_OfAnUpdateEntry_StoresThatUpdate_B8()
+    {
+        await StartAsync();
+        var (item, _) = await QueueAsync("comet [2.0].nsp");
+
+        var result = await Resolver().ResolveAsync(item.Id, UpdatePick($"Comet Run Update [{CometUpdateId}]"), await AdminAsync(), default);
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.Select(e => e.Key + ": " + string.Join(",", e.Value)) ?? []));
+        var rom = ReadGame(Path.Combine(Factory.Root, "roms", ExternalTitleDbTestHandler.SystemId, "C", "Comet Run.zip")).Roms.Single();
+        Assert.That((rom.FileName, rom.Version, string.Join(",", rom.Flags)),
+            Is.EqualTo(($"Comet Run Update [{CometUpdateId}][v0][2.0].nsp", (string?)"2.0", "Update")));
+        Assert.That(rom.Identification.DatGameName, Is.EqualTo($"Comet Run [{CometBaseId}]"));
+    }
+
+    [TestCase("dlc", TestName = "BadUpdatePick_IsAnUpdateError_AndKeepsPending DLC pick")]
+    [TestCase("action", TestName = "BadUpdatePick_IsAnUpdateError_AndKeepsPending non-Dat action")]
+    public async Task BadUpdatePick_IsAnUpdateError_AndKeepsPending(string problem)
+    {
+        await StartAsync();
+        var gameId = await IngestBaseAsync();
+        var (item, file) = await QueueAsync("mystery [UPD].nsp");
+        var request = problem == "dlc"
+            ? UpdatePick($"Orbit Expedition - Star Pack [{NamedDlcId}]")
+            : new ReviewResolutionRequest { Action = "Attach", TargetGameId = gameId, Flag = "Hack", Update = true };
+
+        var result = await Resolver().ResolveAsync(item.Id, request, await AdminAsync(), default);
+
+        Assert.That((result.Code, result.Errors?.Keys.Single()), Is.EqualTo(("ValidationFailed", (string?)"update")));
+        Assert.That((await ReviewOfAsync(Bytes(9))).Status, Is.EqualTo("Pending"));
+        Assert.That(File.ReadAllBytes(file.FullPath), Is.EqualTo(Bytes(9)));
+    }
+
     [TestCase("kind", TestName = "BadDatPick_IsFieldValidation unsupported kind")]
     [TestCase("base", TestName = "BadDatPick_IsFieldValidation missing base")]
     [TestCase("name", TestName = "BadDatPick_IsFieldValidation not a loaded name")]
@@ -408,6 +510,21 @@ public class TitleDbIngestTests
             new InfoJsonIdentification(IdentificationMethod.TitleDb, DatStore.TitleDbName, FixtureDatWriter.TitleDbVersion, $"Orbit Expedition [{BaseId}]")),
             "the queued DAT version, not the refreshed one");
         Assert.That(File.Exists(file.FullPath), Is.False);
+    }
+
+    [Test]
+    public async Task QueuedAttach_OfAnUpdate_SetsItsVersion()
+    {
+        await StartAsync();
+        var (item, _, first) = await AmbiguousAsync($"orbit [{UpdateId}][v3][2.0.1].nsp");
+
+        var result = await Resolver().ResolveAsync(item.Id, new ReviewResolutionRequest { Action = "Attach", TargetGameId = first, Flag = "None" },
+            await AdminAsync(), default);
+
+        Assert.That(result.Code, Is.Null);
+        var rom = ReadGame().Roms.Single(r => r.Flags.Contains("Update"));
+        Assert.That((rom.FileName, rom.Version, rom.ExternalFileName),
+            Is.EqualTo(($"Orbit Expedition [{UpdateId}][v3][2.0.1].nsp", (string?)"2.0.1", (string?)$"Orbit Expedition.[{UpdateId}][v3][2.0.1].nsp")));
     }
 
     [Test]

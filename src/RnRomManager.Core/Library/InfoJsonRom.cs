@@ -21,6 +21,10 @@ public sealed record InfoJsonRom
     public required IReadOnlyList<string> Regions { get; init; }
     public required IReadOnlyList<string> Languages { get; init; }
     public string? Revision { get; init; }
+
+    /// <summary>v5: an update's dotted version (<c>1.0.1</c>) from its file name; null otherwise.</summary>
+    public string? Version { get; init; }
+
     public required IReadOnlyList<string> Flags { get; init; }
     public required bool IsPrimary { get; init; }
     public required InfoJsonIdentification Identification { get; init; }

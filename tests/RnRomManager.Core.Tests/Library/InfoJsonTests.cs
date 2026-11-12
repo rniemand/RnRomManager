@@ -21,7 +21,7 @@ public class InfoJsonTests
         ISystemHandler[] handlers = [Handler("gb"), Handler("gbc"), new ExternalTestHandler()];
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns(handlers);
-        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), .. upgraders], registry);
+        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), new InfoJsonUpgraderV4(), .. upgraders], registry);
     }
 
     private static ISystemHandler Handler(string id)
@@ -64,7 +64,7 @@ public class InfoJsonTests
 
     private static InfoJsonGame Game() => new()
     {
-        SchemaVersion = 4,
+        SchemaVersion = 5,
         GameId = Guid.Parse("6f1f6c3e-8a54-4f39-9d2b-0d2a7c1e9b11"),
         System = "gb",
         Title = "Tetris",
@@ -118,7 +118,8 @@ public class InfoJsonTests
         var text = Encoding.UTF8.GetString(bytes);
 
         Assert.That(bytes[0], Is.EqualTo((byte)'{'), "no BOM");
-        Assert.That(text, Does.Contain("\n  \"schemaVersion\": 4"));
+        Assert.That(text, Does.Contain("\n  \"schemaVersion\": 5"));
+        Assert.That(text, Does.Contain("\"version\": null"));
         Assert.That(text, Does.Contain("\"externalFileName\": null"));
         Assert.That(text, Does.Contain("\"isCover\": true"));
         Assert.That(text, Does.Contain("\"description\": null"));
@@ -168,9 +169,9 @@ public class InfoJsonTests
     [Test]
     public void NewerSchema_IsDetected_NotParsedFurther()
     {
-        var result = ReadJson("""{ "schemaVersion": 5, "anything": "goes" }""");
+        var result = ReadJson("""{ "schemaVersion": 6, "anything": "goes" }""");
 
-        Assert.That((result.Kind, result.FileVersion), Is.EqualTo((InfoJsonReadResult.Outcome.NewerSchema, (int?)5)));
+        Assert.That((result.Kind, result.FileVersion), Is.EqualTo((InfoJsonReadResult.Outcome.NewerSchema, (int?)6)));
     }
 
     [Test]
@@ -187,13 +188,13 @@ public class InfoJsonTests
         var result = reader.Read(Encoding.UTF8.GetBytes(v0.ToJsonString()));
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
-        Assert.That((result.FileVersion, result.Game!.SchemaVersion), Is.EqualTo(((int?)0, 4)));
+        Assert.That((result.FileVersion, result.Game!.SchemaVersion), Is.EqualTo(((int?)0, 5)));
         Assert.That(result.Game.Genres, Is.EqualTo(new[] { "Puzzle" }));
         upgrader.Received(1).Upgrade(Arg.Any<JsonObject>());
     }
 
     [Test]
-    public void V1File_ReadsAsV4_NotRatedNotFavourite()
+    public void V1File_ReadsAsV5_NotRatedNotFavourite()
     {
         var result = ReadEdited(d =>
         {
@@ -206,7 +207,7 @@ public class InfoJsonTests
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
         Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Rating, result.Game.Favourite),
-            Is.EqualTo(((int?)1, 4, (int?)null, false)));
+            Is.EqualTo(((int?)1, 5, (int?)null, false)));
         Assert.That(result.Game.Roms[0].ExternalFileName, Is.Null);
     }
 
@@ -370,7 +371,7 @@ public class InfoJsonTests
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
         Assert.That(result.Game!.Images.Select(i => (i.FileName, i.IsCover)), Is.EqualTo(new[] { ("snap-01.png", false), ("boxart-01.png", true) }));
-        Assert.That((result.FileVersion, result.Game.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)2, 4, (string?)null)));
+        Assert.That((result.FileVersion, result.Game.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)2, 5, (string?)null)));
     }
 
     [Test]
@@ -404,7 +405,7 @@ public class InfoJsonTests
     }
 
     [Test]
-    public void V3File_ReadsAsV4_WithNullExternalFileName()
+    public void V3File_ReadsAsV5_WithNullExternalFileName()
     {
         var result = ReadEdited(d =>
         {
@@ -413,7 +414,7 @@ public class InfoJsonTests
         });
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
-        Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)3, 4, (string?)null)));
+        Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)3, 5, (string?)null)));
     }
 
     [Test]
@@ -584,5 +585,90 @@ public class InfoJsonTests
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
         Assert.That((result.Game!.Roms[0].Identification.Method, result.Game.Images[0].Source), Is.EqualTo((IdentificationMethod.TitleDb, "titledb")));
         Assert.That(Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(result.Game)), Does.Contain("\"method\": \"TitleDb\""));
+    }
+
+    private InfoJsonReadResult ReadV4(Action<JsonObject> editRom) => ReadEdited(d =>
+    {
+        d["schemaVersion"] = 4;
+        var rom = d["roms"]![0]!.AsObject();
+        rom.Remove("version");
+        editRom(rom);
+    });
+
+    [TestCase("DREDGE[UPD][1.0.1].nsp", new[] { "Update" }, "1.0.1")]
+    [TestCase("DREDGE[UPD].nsp", new[] { "Update" }, null)]
+    [TestCase("DREDGE[1.0.1].nsp", new string[0], null)]
+    [TestCase("DREDGE[1.0.1].nsp", new[] { "DLC" }, null)]
+    public void V4Upgrade_SetsTheVersionOfUpdatesOnly(string originalFileName, string[] flags, string? expected)
+    {
+        var result = ReadV4(rom =>
+        {
+            rom["originalFileName"] = originalFileName;
+            rom["flags"] = new JsonArray(flags.Select(f => (JsonNode?)f).ToArray());
+        });
+
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Roms[0].Version), Is.EqualTo(((int?)4, 5, expected)));
+    }
+
+    [Test]
+    public void V4Upgrade_LeavesShapesItCannotUpgradeForTheTypedRead()
+    {
+        var nonStringName = ReadV4(rom =>
+        {
+            rom["originalFileName"] = 42;
+            rom["flags"] = new JsonArray("Update");
+        });
+        var flagsNotAList = ReadV4(rom => rom["flags"] = "Update");
+        var romsNotAList = ReadEdited(d =>
+        {
+            d["schemaVersion"] = 4;
+            d["roms"] = "none";
+        });
+
+        Assert.That(RuleOf(nonStringName), Does.StartWith("missing or wrongly typed field"));
+        Assert.That(RuleOf(flagsNotAList), Does.StartWith("missing or wrongly typed field"));
+        Assert.That(RuleOf(romsNotAList), Does.StartWith("missing or wrongly typed field"));
+    }
+
+    [Test]
+    public void V4Upgrade_NonUpdateWithAnUnreadableName_GetsNullVersion()
+    {
+        var upgrader = new InfoJsonUpgraderV4();
+        var document = new JsonObject { ["roms"] = new JsonArray(new JsonObject { ["originalFileName"] = 42, ["flags"] = "x" }, "not an object") };
+
+        upgrader.Upgrade(document);
+
+        Assert.That(document["roms"]![0]!.AsObject().ContainsKey("version"), Is.True);
+        Assert.That(document["roms"]![0]!["version"], Is.Null);
+    }
+
+    [TestCase(null)]
+    [TestCase("1.0")]
+    [TestCase("1.0.1")]
+    [TestCase("123456789.0.0.1")]
+    public void Version_NullOrDotted_IsValid(string? version)
+    {
+        var result = _reader.Read(InfoJsonSerializer.Serialize(Game() with { Roms = [Rom("Tetris (World) (Rev 1).gb") with { Version = version }] }));
+
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Game!.Roms[0].Version, Is.EqualTo(version));
+    }
+
+    [TestCase("1")]
+    [TestCase("1.a")]
+    [TestCase("1.2.3.4.5")]
+    [TestCase("v1.0")]
+    [TestCase("1.0 ")]
+    public void Version_NotDotted_IsInvalid(string version) =>
+        Assert.That(RuleOf(ReadGame(Game() with { Roms = [Rom("Tetris (World) (Rev 1).gb") with { Version = version }] })),
+            Is.EqualTo($"rom 'Tetris (World) (Rev 1).gb' version '{version}' is not a dotted version"));
+
+    [Test]
+    public void Serialize_WritesTheVersion()
+    {
+        var text = Encoding.UTF8.GetString(InfoJsonSerializer.Serialize(Game() with { Roms = [Rom("Tetris (World) (Rev 1).gb") with { Version = "1.0.1" }] }));
+
+        Assert.That(text, Does.Contain("\"version\": \"1.0.1\""));
     }
 }

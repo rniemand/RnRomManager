@@ -137,6 +137,19 @@ public class ReviewResolverExternalTests
         public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
     }
 
+    [Test]
+    public async Task UpdatePick_OnANonTitleDbSystem_IsAnUpdateError_AndKeepsPending_B8()
+    {
+        File.WriteAllBytes(_item.SourcePath, [1, 2, 3]);
+        var request = new ReviewResolutionRequest { Action = "Dat", DatSystem = ExternalTestHandler.SystemId, DatGameName = "Any", Update = true };
+
+        var result = await _resolver.ResolveAsync(1, request, Actor, default);
+
+        Assert.That((result.Code, result.Errors?.Keys.Single()), Is.EqualTo(("ValidationFailed", (string?)"update")));
+        Assert.That(File.Exists(_item.SourcePath), Is.True);
+        await AssertPendingKeptAsync();
+    }
+
     [TestCase(false, 64L, TestName = "DatPick_OfASiblingThatCantStoreTheFile_IsAValidationError extension")]
     [TestCase(true, 2L, TestName = "DatPick_OfASiblingThatCantStoreTheFile_IsAValidationError size")]
     public async Task DatPick_OfASiblingThatCantStoreTheFile_IsAValidationError(bool takesXci, long maxBytes)

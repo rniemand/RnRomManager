@@ -50,6 +50,8 @@ public static class InfoJsonValidator
                 return $"rom '{rom.FileName}' hashes must be lowercase hex of the right length";
             if (m.SizeBytes < 0)
                 return $"rom '{rom.FileName}' sizeBytes must not be negative";
+            if (rom.Version is { } version && !ReleaseVersion.Valid().IsMatch(version))
+                return $"rom '{rom.FileName}' version '{version}' is not a dotted version";
         }
 
         foreach (var image in game.Images)

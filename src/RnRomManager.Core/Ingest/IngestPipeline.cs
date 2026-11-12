@@ -338,6 +338,7 @@ public sealed class IngestPipeline(
             Languages = release.Languages,
             Revision = release.Revision,
             Flags = release.Flags,
+            Version = ReleaseVersion.For(release.Flags, file.Name),
             IsPrimary = false,
             Identification = new InfoJsonIdentification(release.Method, store.DatName, store.Version, release.GameName),
             Header = headers[system.Id] is { } header ? JsonSerializer.SerializeToNode(header.Fields) as JsonObject : null,

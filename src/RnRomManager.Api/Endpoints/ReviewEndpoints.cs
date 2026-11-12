@@ -119,6 +119,8 @@ public static class ReviewEndpoints
                 break;
             default: errors["action"] = ["Must be Dat, Attach or Manual."]; break;
         }
+        if (request.Update == true && request.Action != "Dat")
+            errors["update"] = [ReviewResolutionRequest.UpdateNeedsDat];
         return errors;
     }
 

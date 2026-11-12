@@ -145,12 +145,21 @@
 	// G8: Switch is identified by title id through titledb, so a pick is as verified as an automatic match.
 	const titleDb = $derived(item?.system === 'switch');
 
+	// B8: one "update" checkbox for every titledb Use button; pre-ticked by an [UPD] marker in the file name.
+	let updateChoice = $state<boolean | null>(null);
+	const asUpdate = $derived(updateChoice ?? /\[upd\]/i.test(item?.originalFileName ?? ''));
+
 	function useDat(datGameName: string): Promise<void> {
+		const update = titleDb && asUpdate;
 		return resolveWith(
-			{ action: 'Dat', datSystem: item!.system, datGameName },
 			titleDb
-				? `Added release of ${datGameName}.`
-				: `Added as an unverified release of ${datGameName}.`
+				? { action: 'Dat', datSystem: item!.system, datGameName, update }
+				: { action: 'Dat', datSystem: item!.system, datGameName },
+			update
+				? `Added update of ${datGameName}.`
+				: titleDb
+					? `Added release of ${datGameName}.`
+					: `Added as an unverified release of ${datGameName}.`
 		);
 	}
 
@@ -406,6 +415,18 @@
 								differ.
 							{/if}
 						</p>
+						{#if titleDb}
+							<div class="form-check mb-3">
+								<input
+									id="as-update"
+									class="form-check-input"
+									type="checkbox"
+									checked={asUpdate}
+									onchange={(e) => (updateChoice = e.currentTarget.checked)}
+								/>
+								<label class="form-check-label" for="as-update">This file is an update</label>
+							</div>
+						{/if}
 						{#if item.suggestions?.length}
 							<div class="card mb-3">
 								<div class="table-responsive">
