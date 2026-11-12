@@ -139,4 +139,88 @@ public partial class ExternalLibraryTests
         Assert.That(SetItems(), Is.EqualTo(disc2.Select(n => (n, IngestOutcome.Error, (string?)IngestErrors.TargetZipUnreadable))));
         Assert.That(IngestLeft(), Is.EqualTo(disc2.Order(StringComparer.Ordinal)));
     }
+
+    // --- step 9: guards, job rules and lone files ---
+
+    [Test]
+    public async Task Set_OneMemberTooRecent_SkipsTheWholeSet()
+    {
+        var dropped = DropSetGame();
+        File.SetLastWriteTimeUtc(Path.Combine(SetIngest, SetTrack2), DateTime.UtcNow);
+
+        await RunJobAsync(Pipeline());
+
+        Assert.That(SetItems(), Is.EqualTo(dropped.Select(n => (n, IngestOutcome.Skipped, (string?)IngestReason.TooRecent))));
+        Assert.That(IngestLeft(), Is.EqualTo(dropped.Order(StringComparer.Ordinal)));
+    }
+
+    [Test]
+    public async Task Set_MemberChangedAfterItWasHashed_SkipsTheSet_AndNothingMoves()
+    {
+        var dropped = DropSetGame();
+        var track1 = Path.Combine(SetIngest, SetTrack1);
+        var hooks = new ExternalIngestHooks
+        {
+            BeforeHash = file =>
+            {
+                if (file.Name == SetTrack2)
+                {
+                    File.WriteAllBytes(track1, RandomNumberGenerator.GetBytes(SetData.Length)); // Track 1 was hashed already
+                    File.SetLastWriteTimeUtc(track1, DateTime.UtcNow.AddMinutes(-2));
+                }
+            },
+            Move = new ExternalMoveHooks { Rename = (_, _) => throw new AssertionException("nothing may move") },
+        };
+
+        await RunJobAsync(Pipeline(hooks));
+
+        Assert.That(SetItems(), Is.EqualTo(dropped.Select(n => (n, IngestOutcome.Skipped, (string?)IngestReason.TooRecent))));
+        Assert.That(IngestLeft(), Is.EqualTo(dropped.Order(StringComparer.Ordinal)));
+        Assert.That(Directory.GetFiles(SetFolder('S')), Is.Empty);
+    }
+
+    [Test]
+    public async Task Set_MemberOverTheSizeLimit_FailsAlone_AndTheRestWait_AlsoOnTheNextRun()
+    {
+        var dropped = DropSetGame();
+        var big = Path.Combine(SetIngest, SetTrack2);
+        using (var stream = new FileStream(big, FileMode.Open))
+            stream.SetLength(new ExternalSetTestHandler().MaxRomSizeBytes + 1);
+        File.SetLastWriteTimeUtc(big, DateTime.UtcNow.AddMinutes(-1));
+
+        await RunJobAsync(Pipeline());
+
+        Assert.That(SetItems(), Is.EqualTo(new[]
+        {
+            (SetCue, IngestOutcome.Skipped, (string?)IngestReason.IncompleteSet),
+            (SetTrack1, IngestOutcome.Skipped, IngestReason.IncompleteSet),
+            (SetTrack2, IngestOutcome.Failed, IngestFailures.TooLarge),
+        }));
+        Assert.That(IngestLeft(), Is.EqualTo(new[] { SetTrack1, SetCue }));
+        Assert.That(File.Exists(Path.Combine(SetIngest, "_failed", SetTrack2)), Is.True);
+
+        _items.Clear();
+        await RunJobAsync(Pipeline());
+
+        Assert.That(SetItems(), Is.EqualTo(new[]
+        {
+            (SetCue, IngestOutcome.Skipped, (string?)IngestReason.IncompleteSet),
+            (SetTrack1, IngestOutcome.Skipped, IngestReason.IncompleteSet),
+        }), "the cue now names a missing file");
+    }
+
+    [Test]
+    public async Task LoneNrg_GoesToReview_AndALoneTxt_IsUnsupportedType()
+    {
+        DropSet("Sky Rally (Japan).nrg", RandomNumberGenerator.GetBytes(4096));
+        DropSet("readme.txt", [1, 2, 3]);
+
+        await RunJobAsync(Pipeline());
+
+        Assert.That(SetItems(), Is.EqualTo(new[]
+        {
+            ("Sky Rally (Japan).nrg", IngestOutcome.Review, (string?)"NoDatMatch"),
+            ("readme.txt", IngestOutcome.Failed, IngestFailures.UnsupportedType),
+        }));
+    }
 }

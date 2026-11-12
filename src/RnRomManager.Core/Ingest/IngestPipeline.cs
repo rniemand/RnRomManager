@@ -307,6 +307,10 @@ public sealed class IngestPipeline(
                 SuggestionEngine.Find(dats.For(classified.Id), found?.Title, originalName, size), null, null, cancellationToken).ConfigureAwait(false);
         }
         var (system, store) = (match.Handler, match.Store!);
+        // B7: a lone .bin matching a multi-track disc's data track waits for its cue and other tracks.
+        if (system.FileSets && match.Rom is { } track && file.Name.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) && TrackTag.IsMatch(track.RomName))
+            return new IngestItemResult(IngestOutcome.Skipped, IngestReason.IncompleteSet,
+                $"the data track of '{track.GameName}'; waiting for its cue and other tracks", system.Id, Sha1: hashes.Sha1);
         if (system.Id != file.SystemId)
             logger.LogInformation("{Path}: dropped in ingest/{Folder} but it's a {System} ROM; stored under roms/{System}", file.FullPath, file.SystemId, system.Id, system.Id);
 
@@ -389,26 +393,50 @@ public sealed class IngestPipeline(
         IReadOnlyList<IngestItemResult> All(IngestItemResult result) => members.Select(_ => result).ToList();
         var tooRecent = new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent, SystemId: system.Id);
 
-        // Step 2 for each member: checked, unchanged since the listing, hashed in one streamed read.
-        var hashed = new List<(IngestFile File, ExternalSource Source, RomFileHashes Hashes)>();
+        // I1/I2 for each member: checked and unchanged since the listing; one TooRecent member skips the whole set.
+        var checkedFiles = new List<ExternalPathCheck>();
         foreach (var file in members)
         {
-            progress?.SetCurrentItem(file.Name);
             var fresh = ExternalRomPath.ClassifyFile(root, file.FullPath);
             if (fresh.Status != ExternalPathStatus.Found)
                 return All(IngestItemResult.Error(IngestErrors.IoError, $"{file.Name}: {fresh.Details}", system.Id));
-            var snapshot = fresh.Snapshot!;
-            if (snapshot.Length != file.SizeBytes || snapshot.LastWriteTimeUtc != file.ModifiedAtUtc
-                || time.GetUtcNow().UtcDateTime - snapshot.LastWriteTimeUtc < IngestJob.MinFileAge)
+            if (fresh.Snapshot!.Length != file.SizeBytes || fresh.Snapshot.LastWriteTimeUtc != file.ModifiedAtUtc
+                || time.GetUtcNow().UtcDateTime - fresh.Snapshot.LastWriteTimeUtc < IngestJob.MinFileAge)
                 return All(tooRecent);
-            var (outcome, hashes, failure) = await HashCheckedAsync(file, root, fresh.Path, snapshot, system.MaxRomSizeBytes, recheckPath: true,
+            checkedFiles.Add(fresh);
+        }
+
+        // Step 1 per file: a file outside the size limits fails as today; the rest of the set waits for it.
+        string? SizeProblem(long size) => size < system.MinRomSizeBytes ? IngestFailures.TooSmall : size > system.MaxRomSizeBytes ? IngestFailures.TooLarge : null;
+        if (checkedFiles.Any(c => SizeProblem(c.Snapshot!.Length) is not null))
+        {
+            return Enumerable.Range(0, members.Count).Select(i =>
+            {
+                var size = checkedFiles[i].Snapshot!.Length;
+                return SizeProblem(size) is { } problem
+                    ? FailFile(members[i], actor, problem, $"{size} bytes; {system.Id} files are {system.MinRomSizeBytes}–{system.MaxRomSizeBytes} bytes", progress: progress)
+                    : new IngestItemResult(IngestOutcome.Skipped, IngestReason.IncompleteSet, "another file of the set is outside the size limits", system.Id);
+            }).ToList();
+        }
+
+        // Step 2 for each member: hashed once, in one streamed read.
+        var hashed = new List<(IngestFile File, ExternalSource Source, RomFileHashes Hashes)>();
+        for (var i = 0; i < members.Count; i++)
+        {
+            var (file, fresh) = (members[i], checkedFiles[i]);
+            progress?.SetCurrentItem(file.Name);
+            var (outcome, hashes, failure) = await HashCheckedAsync(file, root, fresh.Path, fresh.Snapshot!, system.MaxRomSizeBytes, recheckPath: true,
                 cancellationToken, progress).ConfigureAwait(false);
             if (outcome == HashOutcome.Failed)
                 return All(IngestItemResult.Error(IngestErrors.IoError, $"{file.Name}: {failure}", system.Id));
             if (outcome == HashOutcome.Changed)
                 return All(tooRecent);
-            hashed.Add((file, new ExternalSource(root, fresh.Path, snapshot, progress), hashes!));
+            hashed.Add((file, new ExternalSource(root, fresh.Path, fresh.Snapshot!, progress), hashes!));
         }
+
+        // A member that changed after it was hashed skips the whole set before anything moves.
+        if (hashed.Any(m => ExternalRomPath.ClassifyFile(root, m.Source.Path).Snapshot != m.Source.Snapshot))
+            return All(tooRecent);
 
         RomHashes Hashes(int i) => new(hashed[i].Hashes.Crc32, hashed[i].Hashes.Md5, hashed[i].Hashes.Sha1);
         IReadOnlyList<IngestItemResult> Each(Func<int, IngestItemResult> result) => Enumerable.Range(0, members.Count).Select(result).ToList();
@@ -469,6 +497,9 @@ public sealed class IngestPipeline(
         // One outcome for the whole set; each member's item carries its own SHA1.
         return Each(i => stored with { Sha1 = hashed[i].Hashes.Sha1 });
     }
+
+    /// <summary>B3: a Redump rom name's track tag, e.g. <c> (Track 1)</c> or <c> (Track 02)</c>.</summary>
+    private static readonly System.Text.RegularExpressions.Regex TrackTag = new(@" \(Track \d+\)", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>What a DAT match names a release: from a libretro DAT entry (by SHA1) or a titledb entry (T4/T5, by title id).</summary>
     /// <param name="FileName">Before E3 budgeting for an external system.</param>

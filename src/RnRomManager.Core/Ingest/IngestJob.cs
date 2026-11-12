@@ -210,6 +210,21 @@ public sealed class IngestJob(
     private async Task SetAsync(Run run, IReadOnlyList<IngestFile> members)
     {
         IReadOnlyList<IngestItemResult> results;
+        if (members.Any(m => ExternalRomName.Scalars(m.FullPath) > ExternalRomName.MaxSourcePathScalars))
+        {
+            // I1: an over-long path can't be recorded, so that member is an IoError and the rest of the set waits; all stay.
+            foreach (var member in members)
+            {
+                var tooLong = ExternalRomName.Scalars(member.FullPath) > ExternalRomName.MaxSourcePathScalars;
+                await ItemAsync(run, tooLong ? member with { FullPath = ExternalRomName.CutScalars(member.FullPath, ExternalRomName.MaxSourcePathScalars) } : member,
+                    tooLong
+                        ? IngestItemResult.Error(IngestErrors.IoError, $"the path is longer than {ExternalRomName.MaxSourcePathScalars} characters", member.SystemId)
+                        : new IngestItemResult(IngestOutcome.Skipped, IngestReason.IncompleteSet, "another file of the set has an over-long path", member.SystemId))
+                    .ConfigureAwait(false);
+                run.Context.Progress.ItemDone();
+            }
+            return;
+        }
         try
         {
             results = await pipeline.ProcessSetAsync(members, run.Context.JobId, run.Context.Actor, run.Breaker, run.Context.Progress).ConfigureAwait(false);

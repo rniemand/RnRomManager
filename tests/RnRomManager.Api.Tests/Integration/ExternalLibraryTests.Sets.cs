@@ -19,6 +19,7 @@ public partial class ExternalLibraryTests
     private static readonly byte[] SetData2 = RandomNumberGenerator.GetBytes(2352 * 3 + 16);
     private static readonly byte[] Audio = RandomNumberGenerator.GetBytes(2352);
     private static readonly byte[] Audio2 = RandomNumberGenerator.GetBytes(2352 + 8);
+    private static readonly byte[] SingleBin = RandomNumberGenerator.GetBytes(2352 * 4);
 
     /// <summary>The <see cref="ExternalSetTestHandler"/> fixture Redump DAT: one rom per game, as in Redump.</summary>
     private static IReadOnlyList<FixtureGame> SetDatGames =>
@@ -28,6 +29,7 @@ public partial class ExternalLibraryTests
         new FixtureGame("Disc Game (USA) (Rev 1)", "Disc Game (USA).iso", DiscRev1),
         new FixtureGame("Dark Game (USA)", "Disc Game (USA).iso", DarkIso),
         new FixtureGame("Track Game (USA)", "Track Game (USA) (Track 1).bin", TrackData),
+        new FixtureGame("Single Game (USA)", "Single Game (USA).bin", SingleBin),
         new FixtureGame("Set Game (USA)", "Set Game (USA) (Track 1).bin", SetData),
         new FixtureGame("Set Game (USA) (Disc 2)", "Set Game (USA) (Disc 2) (Track 1).bin", SetData2),
     ];
@@ -67,15 +69,26 @@ public partial class ExternalLibraryTests
     }
 
     [Test]
-    public async Task FileSets_MatchedDataTrack_TakesItsTagsFromTheGameName()
+    public async Task FileSets_LoneMatchedTrack1Bin_WaitsAsIncompleteSet()
     {
-        var result = await IngestAsync(Pipeline(), DropSet("track.bin", TrackData));
+        // B7: a multi-track disc's data track with no cue beside it waits for the rest.
+        var file = DropSet("track.bin", TrackData);
+
+        var result = await IngestAsync(Pipeline(), file);
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Skipped, (string?)IngestReason.IncompleteSet)));
+        Assert.That(File.ReadAllBytes(file.FullPath), Is.EqualTo(TrackData));
+    }
+
+    [Test]
+    public async Task FileSets_LoneMatchedUntaggedBin_IsStoredAsASingleFile()
+    {
+        var result = await IngestAsync(Pipeline(), DropSet("single.bin", SingleBin));
 
         Assert.That(Code(result), Is.EqualTo((IngestOutcome.Ingested, (string?)null)));
-        var rom = ReadSetGame(Path.Combine(SetFolder('T'), "Track Game.zip")).Roms.Single();
-        Assert.That((rom.ExternalFileName, rom.BaseTitle), Is.EqualTo(("Track Game (USA) (Track 1).bin", "Track Game")));
+        var rom = ReadSetGame(Path.Combine(SetFolder('S'), "Single Game.zip")).Roms.Single();
+        Assert.That((rom.ExternalFileName, rom.Files), Is.EqualTo(("Single Game (USA).bin", (IReadOnlyList<InfoJsonRomFile>?)null)));
         Assert.That(rom.Regions, Is.EqualTo(new[] { "USA" }));
-        Assert.That(rom.Flags, Is.Empty, "no Track 1 flag");
     }
 
     [Test]
