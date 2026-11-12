@@ -349,9 +349,9 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - `ReviewEndpointsTests`: a DAT search over a repeated game name returns it once; `reason=AmbiguousSet` is accepted.
     - `ExternalLibraryTests.SetReview.cs` (its host has `ExternalSetTestHandler`; `ReviewEndpointsTests`' host doesn't): resolving or dismissing a `.bin` item gives `409` with code `SetFileNotResolvable`; its detail has `resolvable` false and an `.iso` item's true; resolving an `.iso` item whose exact name is taken in its folder gives `409 NameTaken`, and the item stays `Pending`.
   - Done when: `ReviewResolverExternalTests`, `ReviewEndpointsTests` and `ExternalLibraryTests` pass (Docker running).
-- [ ] **13. Title edit and delete on sets**: B16, B17. `NameTaken` in `LibraryEndpoints.ToProblem`.
-  - Files: `Core/Library/LibraryEditor.cs`, `Core/Library/LibraryEditResult.cs` (`NameTaken`), `Api/Endpoints/LibraryEndpoints.cs`, `ExternalLibraryTests.Sets.cs`.
-  - Tests (`ExternalLibraryTests.Sets.cs`, from step 6):
+- [x] **13. Title edit and delete on sets**: B16, B17. `NameTaken` in `LibraryEndpoints.ToProblem`.
+  - Files: `Core/Library/LibraryEditor.cs`, `Core/Library/LibraryEditResult.cs` (`NameTaken`), `Api/Endpoints/LibraryEndpoints.cs`, `ExternalLibraryTests.SetEdits.cs` (new partial).
+  - Tests (`ExternalLibraryTests.SetEdits.cs`):
     - a title edit in the same bucket renames only the ZIP;
     - a title edit is refused with `TargetZipUnreadable` when another game also claims one of the set's files in the old folder;
     - a bucket change moves every file, and a taken name there gives `409 NameTaken` with nothing moved;

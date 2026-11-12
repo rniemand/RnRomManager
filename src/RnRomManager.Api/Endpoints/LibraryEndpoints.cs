@@ -419,7 +419,7 @@ public static class LibraryEndpoints
             LibraryEditResult.ValidationFailed => Problems.Validation(ctx, result.Errors!, extensions),
             LibraryEditResult.NotFound => Problems.NotFound(ctx, extensions),
             LibraryEditResult.JobRunning or LibraryEditResult.TooManyImages or LibraryFiles.NoteTooLarge or LibraryEditResult.DuplicateImage or LibraryEditResult.DefaultImage
-                or LibraryTarget.InfoJsonNewerSchema or LibraryTarget.TargetZipUnreadable =>
+                or LibraryTarget.InfoJsonNewerSchema or LibraryTarget.TargetZipUnreadable or LibraryEditResult.NameTaken =>
                 Problems.Create(ctx, StatusCodes.Status409Conflict, result.Code, result.Code, extensions),
             _ => Problems.Create(ctx, StatusCodes.Status500InternalServerError, result.Code!, result.Code!, extensions),
         };

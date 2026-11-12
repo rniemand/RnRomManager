@@ -18,6 +18,9 @@ public sealed record LibraryEditResult(string? Code = null, string? Details = nu
     public const string DuplicateImage = "DuplicateImage";
     public const string DefaultImage = "DefaultImage";
 
+    /// <summary>B16/B18: a FileSets file keeps its exact name, and that name is already used where it has to go (409).</summary>
+    public const string NameTaken = "NameTaken";
+
     public static LibraryEditResult Ok { get; } = new();
 
     public Guid? GameId { get; init; }

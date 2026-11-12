@@ -167,7 +167,27 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             var names = ExternalNameReservations.ForFolder(newFolder.Path, newFolderPath, claims.Where(c => c.GameId != row.Id));
             var zipBase = Path.GetFileNameWithoutExtension(zipPath);
             var renamed = new List<InfoJsonRom>();
-            foreach (var rom in current.Roms)
+            if (systems.ById(row.SystemId) is { FileSets: true })
+            {
+                // B16: names don't hold the ZIP base, so they never change; only a new letter folder moves every file.
+                if (!string.Equals(newFolderPath, oldFolderPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    foreach (var name in current.ExternalFileNames())
+                    {
+                        if (ExternalRomName.AllocateExact(name, names) != ExactNameStatus.Allocated)
+                            return new(NameTaken, $"{newFolderPath}/{name} is already used");
+                        var file = ExternalRomPath.ClassifyFile(library, Path.Combine(oldFolder, name));
+                        if (file.Status == ExternalPathStatus.Found)
+                            moves.Add((file.Path, Path.Combine(newFolder.Path, name), file.Snapshot!));
+                        else if (file.Status == ExternalPathStatus.Missing)
+                            logger.LogWarning("Game {GameId}: {File} is missing, so it only keeps its name", row.Id, file.Path);
+                        else
+                            return new(IoError, file.Details);
+                    }
+                }
+                renamed.AddRange(current.Roms);
+            }
+            else foreach (var rom in current.Roms)
             {
                 var name = ExternalRomName.Allocate(zipBase, rom.FileName, names);
                 var file = ExternalRomPath.ClassifyFile(library, Path.Combine(oldFolder, rom.ExternalFileName!));
@@ -1254,16 +1274,18 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         var ct = CancellationToken.None; // edits write without the request's token (existing rule)
         var (library, ingest) = (paths.Value.Roms, paths.Value.Ingest);
         var zipFull = SafePath.Resolve(library, row.ZipPath);
-        var files = new List<(InfoJsonRom Rom, ExternalPathCheck File)>();
-        foreach (var rom in removed)
+        // B17: every file of each release goes, the main file first, then its set files (by their own names).
+        var files = new List<(InfoJsonRom Rom, string Name, bool IsMain, ExternalPathCheck File)>();
+        foreach (var (rom, pointer, name, isMain) in removed.SelectMany(r => new[] { (r, r.ExternalFileName!, r.FileName, true) }
+            .Concat((r.Files ?? []).Select(f => (r, f.ExternalFileName, f.FileName, false)))))
         {
-            var file = ExternalRomPath.ClassifyFile(library, Path.Combine(Path.GetDirectoryName(existing.Path)!, rom.ExternalFileName!));
+            var file = ExternalRomPath.ClassifyFile(library, Path.Combine(Path.GetDirectoryName(existing.Path)!, pointer));
             if (file.Status == ExternalPathStatus.Missing)
                 logger.LogWarning("Game {GameId}: {File} is missing; nothing to move to {Folder}/", row.Id, file.Path, StorageFolders.RemovedFolder);
             else if (file.Status != ExternalPathStatus.Found)
                 return new(IoError, file.Details);
             else
-                files.Add((rom, file));
+                files.Add((rom, name, isMain, file));
         }
 
         var placed = new List<(string From, string To, ExternalFileSnapshot Snapshot)>();
@@ -1285,11 +1307,11 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             }
             if (folder.Status != ExternalPathStatus.Found)
                 return new(IoError, folder.Details);
-            foreach (var (rom, file) in files)
+            foreach (var (rom, name, isMain, file) in files)
             {
-                var destination = ExternalRomName.AllocateSidePath(folder.Path, rom.FileName);
+                var destination = ExternalRomName.AllocateSidePath(folder.Path, name);
                 var move = destination is null
-                    ? new ExternalMoveResult(ExternalMoveStatus.Failed, Details: $"no name for {rom.FileName} fits in {folder.Path}")
+                    ? new ExternalMoveResult(ExternalMoveStatus.Failed, Details: $"no name for {name} fits in {folder.Path}")
                     : ExternalRomMove.Move(library, file.Path, destination, file.Snapshot!, logger, hooks: ExternalHooks?.Move);
                 if (move.Status != ExternalMoveStatus.Moved)
                 {
@@ -1297,7 +1319,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
                     return new(IoError, move.Details);
                 }
                 placed.Add((file.Path, move.Path!, move.Snapshot!));
-                copies[rom] = move.Path!;
+                if (isMain)
+                    copies[rom] = move.Path!;
                 logger.LogInformation("{File} moved to {Path}", file.Path, move.Path);
             }
         }
@@ -1322,8 +1345,10 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
                 throw;
             }
             var rom = removed[0];
+            // B17: details name the main file, then each set file.
             audit.Record(new AuditEvent(AuditActions.ReleaseDeleted, actor, row.SystemId, row.Id, AuditPaths.Library(row.ZipPath),
-                copies.TryGetValue(rom, out var copy) ? auditPaths.Of(copy) : null, rom.FileName));
+                copies.TryGetValue(rom, out var copy) ? auditPaths.Of(copy) : null,
+                string.Join("; ", new[] { rom.FileName }.Concat((rom.Files ?? []).Select(f => f.FileName)))));
             ExternalHooks?.BeforeMirror?.Invoke();
             result = await MirrorAsync(() =>
             {
