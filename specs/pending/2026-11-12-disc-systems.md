@@ -81,16 +81,17 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - **Selected-files runs:** a set is processed when any of its members is selected, and then all of its members are processed. Unselected files that belong to no selected set are left alone.
   - **Parsing:** `IngestJob` reads every `.cue` of at most 64 KiB through the same checked open as other ingest reads and passes its bytes to the planner, which parses them with `CueSheet.Parse` (B8). Its set is the cue plus every file its `FILE` lines name. Names resolve in the same folder, ignoring case; if two files in the folder differ only by case and a cue names one of them, that set is `SetConflict`.
   - **Incomplete set:** if a named file is missing, nothing in that set is processed. Every present member is `Skipped` with reason `IncompleteSet` and stays in ingest, so it is retried on the next run. A lone `.cue` whose files aren't there is the same case.
-  - **Broken cue:** a `.cue` that can't be read or doesn't parse has no member list. It and every `.bin` whose name starts with the cue's stem (ignoring case; Redump names tracks `<stem> (Track N).bin`) are `Skipped` `IncompleteSet` and stay in ingest. Other files are planned as usual.
+  - **Broken cue:** a `.cue` that can't be read or doesn't parse has no member list. It and every `.bin` whose name starts with the cue's stem (ignoring case; Redump names tracks `<stem> (Track N).bin`) are `Skipped` `IncompleteSet` and stay in ingest. A `.bin` that a parsed cue names belongs to that cue's set instead, even when it starts with a broken cue's stem (`Game 2 (Track 1).bin` and a broken `Game.cue`). Other files are planned as usual.
   - **Unsupported member:** a `FILE` name that doesn't end in `.bin` (ignoring case: `.wav`, `.ape`, `.img`, `.iso`, `.cue`, …), or the cue naming itself, skips the whole set. Every present member is `Skipped` with reason `UnsupportedSetMember` and stays in ingest.
   - **Shared member:** if one file is named by two or more cues, all of those sets are `Skipped` with reason `SetConflict`.
   - **Large cue:** a `.cue` over 64 KiB isn't parsed. It is handled as a lone file that is not a cue.
   - **Lone files:** a `.bin`, `.iso` or `.nrg` that no cue names, or a `.cue` over 64 KiB, is processed on its own as a single file (B11). A lone file that doesn't match goes to Review under B15. A lone `.bin` that matches but whose base title two or more games own is `Skipped` `AmbiguousGroup` and stays, as a set's data track does (B7a), because a `.bin` item can't be resolved in Review (B15).
   - **Other files:** a file that no cue names and that isn't one of the above is handled as today: another extension fails as `UnsupportedType`, and an archive follows B9.
   - **Progress:** the job's item total (`SetTotal`) is the number of planned files, counted after a selected set pulls in its unselected members.
+  - **Order:** each unit (a set, a lone file or a skipped member) runs at the position of its first member in the scanner's name order (ordinal), so `Game (Track 1).bin` brings its set forward before `Game.cue`. Within a set, the cue comes first, then its `FILE` names in order. "An earlier member in this run" (B7a) follows this order.
   - The set is processed as one unit:
     - If any member is `TooRecent`, the whole set is `Skipped` with `TooRecent`.
-    - Size limits apply to each file. A file that is too small or too large fails the whole set. That file gets `TooSmall` or `TooLarge`; the other members get `Skipped` with reason `IncompleteSet`.
+    - Size limits apply to each file. A file that is too small or too large fails the whole set. That file gets `TooSmall` or `TooLarge` and moves to `_failed/` as today; the other members get `Skipped` with reason `IncompleteSet` and stay. On later runs the cue names a missing file, so they stay `IncompleteSet` until the Admin deletes them or puts a fitting file back.
     - Every member is streamed and hashed once. The set's **data track** is the one member whose SHA1 matches the system's DAT.
     - A member that changes after it was hashed (today's post-hash re-check) makes the whole set `Skipped` `TooRecent`; nothing moves.
     - A member whose path is over the 1,024-character source path limit (I1) is `Error` `IoError` as today; the other members are `Skipped` `IncompleteSet`. All stay in ingest.
@@ -106,9 +107,10 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - **Data track dismissed:** the data track's SHA1 has a `Dismissed` row. The row moves to the new path, as it does for a loose file today, and the set is processed under "Exactly one match".
   - **`AmbiguousGroup`:** two or more games own the data track's base title. Every member is `Skipped` with reason `AmbiguousGroup` and stays in ingest. The Admin merges or moves the games, and the next run ingests the set. It doesn't go to Review, because Attach there would split the set.
   - **Repeated SHA1 among unmatched members:** `ingest_review_items.sha1` is unique, and silent audio tracks repeat. If a member's SHA1 already has a **`Pending`** row whose source is a different file, or matches an earlier member in this run, that member isn't queued. It stays in ingest, `Skipped` with reason `AlreadyInReview`, and is never moved to `_duplicates/`, because that would break its set. A member's own `Pending` row from an earlier run is re-queued as today (upsert, still `Review`). `Resolved` and `Dismissed` rows don't block a member.
+  - **Members' own review rows:** each member's result completes its own `Pending` review row, as `IngestPipeline.ProcessAsync` does for a single file (`CompleteSourceAsync`): `Ingested` resolves it, `Duplicate` and `Failed` delete it, `Review` and `Skipped` keep it, and an `Error` keeps it (I4). So a set queued for Review on one run and matched on a later one (after a DAT refresh) leaves no `Pending` rows.
   - **Audit:** a stored set writes one `Ingested` event, as a single file does today (path: the data track's source, target: the ZIP, details `release <main fileName>`). Each member moved to `_duplicates/` writes its own `MovedToDuplicates` event, and each repaired member its own `ZipRepaired` event (B14), as for single files.
 - **B8 Cue parsing.** `Core/Ingest/CueSheet.Parse(ReadOnlySpan<byte> bytes)` reads `FILE "<name>" <type>` lines, and also unquoted `FILE <name> <type>`, ignoring case and leading whitespace. It returns the names in order without duplicates (compared ignoring case; the first spelling is kept).
-  - It is an error when there is no `FILE` line, or a name is empty, equals `.` or `..`, contains `/`, `\` or `:`, or is not a valid portable file name.
+  - It is an error when there is no `FILE` line, there are more than 99 distinct names (a disc has at most 99 tracks, and each `FILE` holds at least one), or a name is empty, equals `.` or `..`, contains `/`, `\` or `:`, or fails `InfoJsonValidator.PortableNameProblem`.
   - A name that merely contains `..` is valid. Real Redump names do this, for example `...Iru!`.
   - The bytes are decoded as UTF-8 (a leading BOM is dropped), falling back to Latin-1 on invalid bytes.
   - Other cue commands are ignored.
@@ -116,7 +118,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - **B10 Exact names.** For a `FileSets` system, `ExternalRomName` stores a file under its exact name in the ZIP's folder, with no `<ZipBase>.` prefix (E1) and no ` (N)` suffix (E2):
   - A set member keeps its **source file name**, because the cue refers to it byte for byte. Its logical `fileName` equals `externalFileName`.
   - A single file (B11) is named the way today's libretro logic names it: the DAT rom stem plus the source extension. Review resolutions keep their names (B15).
-  - **Release tags:** for `FileSets` systems, `IngestPipeline.LibretroRelease` (a private method) parses regions, languages, revision and flags from `DatGameName`, not from the rom stem. Otherwise a data track would get a `Track 1` or `Track 01` flag.
+  - **Release tags:** for `FileSets` systems, `IngestPipeline.LibretroRelease` (a private method) parses regions, languages, revision and flags from `DatGameName`, not from the rom stem. Otherwise a data track would get a `Track 1` or `Track 01` flag. Review does the same wherever it takes tags from a DAT entry: the Dat action (B15) and Attach of an `AmbiguousGroup` item with flag `None` (today parsed from the queued `romName`).
   - **Logical names:** for `FileSets` systems, `fileName` always equals `externalFileName`. Ingest and Review don't call `ExternalRomName.AllocateLogicalName` (it would add ` (N)` or cut); a name that another release of the destination game already uses is taken, as below.
   - If a name is already taken in the folder (on disk, by a claim, or by the destination ZIP; checks ignore case), nothing in the item or set is moved. The item, or every member, ends as `Error` with code `NameTaken` and stays in ingest.
   - A name over 250 UTF-8 bytes ends as `Error` `NameTooLong`. It is not cut, because cutting would break the cue.
@@ -126,6 +128,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - The validator allows a non-null `files` only for `FileSets` systems. Every name must have one of the handler's extensions. Names must be unique across the game (main files and files together, ignoring case). Each file must be within the size limits.
   - For `files` names, and for main `fileName`s on `FileSets` systems, the validator's `..` rule rejects only a name equal to `.` or `..`, or one containing a path separator, as B8 does.
   - The `InfoJsonUpgraderV5` adds `files: null` to every rom.
+  - **Size:** `files` makes a large info.json possible (about 40 KB per 99-track release). `LibraryZipWriter` refuses to publish an info.json over `InfoJsonReader.MaxBytes` (1 MiB) with `VerifyFailed`, because the reader would refuse it and leave the game unreadable. Today the writer never checks this. The ingest or edit then rolls back as for any `VerifyFailed`.
   - In the database, migration `0020_rom_files.sql` adds `rom_files`, with every column `NOT NULL` and `utf8mb4_unicode_ci`, like `roms`:
     - `id`: `BIGINT` auto-increment PK;
     - `rom_id`: `BIGINT`, FK → `roms.id` ON DELETE CASCADE;
@@ -150,10 +153,10 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - **B15 Review for `FileSets` systems.**
   - **Unmatched `.cue`/`.bin`:** on a `FileSets` system, a review item whose file extension is `.cue` or `.bin` (ignoring case) can't be resolved. Every set member is a `.cue` or `.bin` (B7), so this covers every `AmbiguousSet` item too. `POST /api/review/{id}/resolve` returns `409` `SetFileNotResolvable` (added to the 409 list in `ReviewEndpoints.ToResult`; any code not listed there is a 500), and the Review UI shows only Delete, with the text "Disc track files must match the Redump DAT to be imported." Delete works as today. `GET /api/review/{id}` gains `resolvable` (bool): false for such an item, true for every other item. The item page uses it to decide; it never works out the rule itself.
   - **Name errors:** a resolve whose exact name is taken or too long (B10) returns `409` with code `NameTaken` or `NameTooLong`; both are added to `ReviewEndpoints.ToResult`'s 409 list. Today the resolver passes the pipeline's code through, so without this they would be 500s. The item stays `Pending`.
-  - **Unmatched `.iso`/`.nrg`:** resolves as today. The Dat action names the file `<DatGameName> (Unverified)<source ext>`, not the first DAT rom's stem, because a Saturn `.nrg` maps to a game whose DAT rom is `… (Track 1).bin`. It takes metadata from the game's DAT rom. Its tags (regions, languages, revision and flags) come from `DatGameName`, as in B10, not from `datRom.RomName`.
+  - **Unmatched `.iso`/`.nrg`:** resolves as today. The Dat action names the file `<DatGameName> (Unverified)<source ext>`, not the first DAT rom's stem, because a Saturn `.nrg` maps to a game whose DAT rom is `… (Track 1).bin`. It takes metadata from the game's DAT rom. Its base title and tags (regions, languages, revision and flags) come from `DatGameName`, as in B10 and as ingest groups it, not from `datRom.RomName`.
   - **`..` in names:** for a `FileSets` system, `ReviewResolver`'s check that refuses a generated file name containing `..` applies B12's rule instead (only a name equal to `.` or `..`, or one with a path separator, is refused), so `...Iru! (Japan) (Unverified).nrg` resolves.
   - **Dismiss:** `POST /api/review/{id}/dismiss` on a `.cue`/`.bin` item also returns `409` `SetFileNotResolvable`, so a set's members can't end up half dismissed.
-  - **DAT search:** `GET /api/dat/search` (in `ReviewEndpoints`) returns each `gameName` once (its first entry), removing repeats before `limit` is applied, because the Redump DATs repeat a game per serial (B3). A No-Intro DAT has no repeated names, so its results don't change.
+  - **DAT search:** `GET /api/dat/search` (in `ReviewEndpoints`) returns each `gameName` once (its first entry), removing repeats before `limit` is applied, because the Redump DATs repeat a game per serial (B3). This applies to every system: a game with several ROMs also shows once, which matches the Dat action, since it already uses the game's first ROM (`ReviewResolver`).
   - **Reason filter:** `AmbiguousSet` is accepted by `GET /api/review`'s `reason` filter (today only `NoDatMatch` or `AmbiguousGroup`, else 400), added to the SPA's `ReviewReason` type, and offered in the Review queue's reason filter as "Ambiguous set".
 
 ### Library edits
@@ -165,7 +168,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - **Same folder:** when the source and target ZIPs are in the same folder, the set files don't move, and the source game's own claims don't count as taken.
   - **Logical names:** a logical-name clash in the target game (`AllocateLogicalName`) also refuses with `NameTaken`. It never adds ` (N)`, so `fileName` always equals `externalFileName`.
   - **Move record:** `ExternalMoveRecord` gets a format **v2** with a list of `{ sourceExternalFileName, targetExternalFileName }` pairs and the release's main SHA1. Like v1 it is written only by move-release (merge writes no record, as today) and validated for **manual recovery** only (W3/W7); there's no automatic replay. A release with no `files` still writes v1.
-    - Its size cap rises from 16 KiB to 64 KiB, which fits 99 tracks × 2 names × 250 bytes.
+    - Its size cap rises from 16 KiB to 320 KiB. That fits 99 pairs (B8) of 250-byte names even when the default JSON encoder writes every byte as a 6-byte `\uXXXX` escape (99 × 2 × 1,500 bytes, plus keys).
     - A v1 record (one pair) is still read and validated as today.
   - **Notes** stay keyed by the main file's `fileName`.
 
@@ -206,7 +209,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 | Core | `Core/Dats/DatKind.cs`, `DatRefreshJob.cs`, `DatCache.cs`, `DatManifest` | B1, B2: folder and kinds per handler; versions keyed for `redump/` too |
 | Api | `Endpoints/DatEndpoints.cs` | Admin → DATs lists `redump/` files (B1) |
 | Core | `Core/Storage/ExternalRomName.cs` | Exact-name allocation for `FileSets` (B10) |
-| Core | `Core/Library/InfoJsonRom.cs`, `InfoJsonRomFile.cs` (new), `InfoJsonReader.cs` (v6), `InfoJsonUpgraderV5.cs` (new), `InfoJsonValidator.cs`, `LibraryRows.cs`, `ILibraryRepositories.cs`, `LibraryZipWriter.cs` (verify set files by length) | B12, B13 |
+| Core | `Core/Library/InfoJsonRom.cs`, `InfoJsonRomFile.cs` (new), `InfoJsonReader.cs` (v6), `InfoJsonUpgraderV5.cs` (new), `InfoJsonValidator.cs`, `LibraryRows.cs`, `ILibraryRepositories.cs`, `LibraryZipWriter.cs` (verify set files by length; refuse an info.json over 1 MiB) | B12, B13 |
 | Core | `Core/Ingest/CueSheet.cs` (new), `IngestSetPlanner.cs` (new), `IngestJob.cs`, `IngestPipeline.cs`, `IngestOutcome.cs` (reasons) | B7–B11, B14, B23 |
 | Core | `Core/Ingest/ReviewResolver.cs`, `Core/Dats/DatStore.cs` (comment: DATs may repeat a SHA1) | B3, B15 |
 | Core | `Core/Library/LibraryEditor.cs`, `ExternalMoveRecord.cs` | B16–B18 |
@@ -236,7 +239,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - `DatCacheTests`: that system loads without metadat files, and returns empty metadata.
     - `DatEndpointsTests`: the redump row is listed.
   - Done when: the classes above pass, and existing DAT tests pass unchanged.
-- [ ] **2. `FileSets` flag and exact external names**: B5, B10 (allocation only). Add `FileSets` to the contract and registry checks. Add exact-name allocation to `ExternalRomName`, returning taken or too-long rather than suffixing or cutting. Add the `ExternalSetTestHandler` to TestData. Like `ExternalTestHandler`, it is registered only by the test hosts that use it (an Api host through `ApiFactory.TestServices`, as `ExternalLibraryTests` does; `IntegrityJobTests` appends it to its handler array), each writing its fixture DAT, so no global system count changes.
+- [ ] **2. `FileSets` flag and exact external names**: B5, B10 (allocation only). Add `FileSets` to the contract and registry checks. Add exact-name allocation to `ExternalRomName`, returning taken or too-long rather than suffixing or cutting. Add the `ExternalSetTestHandler` to TestData: Id and family `extset`, `DatName` `Test - External Set`, `RomExtensions` `.bin`, `.cue`, `.iso`, `.nrg` (the `.nrg` tests in steps 9 and 12 need it), sizes and box art as `ExternalTestHandler`, no header, `FileSets` true, and `DatFolder` `redump` with no `MetadatKinds`, like the six real handlers. Like `ExternalTestHandler`, it is registered only by the test hosts that use it (an Api host through `ApiFactory.TestServices`, as `ExternalLibraryTests` does; `IntegrityJobTests` appends it to its handler array), each writing its fixture DAT, so no global system count changes.
   - Tests:
     - `SystemRegistryTests`: `FileSets` with embedded storage is refused; a family with mixed `FileSets` values is refused.
     - `ExternalRomNameTests`: an exact name comes back unchanged; a taken name (ignoring case) is reported; 251 bytes is reported too long.
@@ -245,13 +248,13 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - Tests:
     - `InfoJsonTests` (it also holds the validator cases): a v6 round-trip with files; `files` on a non-`FileSets` system, a duplicate name across the game, a bad extension and an oversize file are each rejected; a `...Iru!` name is accepted on a `FileSets` system.
     - `InfoJsonTests` also holds the upgrader cases, as for V2–V4: `V5Upgrade_` v5 → v6 adds `files: null`. Add `InfoJsonUpgraderV5` to the upgrader lists built in `InfoJsonTests` and `LibraryZipTests`.
-    - `LibraryZipTests`: a write whose set file has the wrong length fails verification.
+    - `LibraryZipTests`: a write whose set file has the wrong length fails verification; a write whose info.json would be over 1 MiB fails with `VerifyFailed` and leaves the old ZIP.
   - Done when: the classes above pass.
 - [ ] **4. `rom_files` table, mirror and claims**: B12 (database part), B13. Add migration `0020_rom_files.sql`, the mirror insert/delete in `LibraryMirror.ApplyAsync`, `ListExternalAsync` (union, `FileId`), `ExternalRomRow.FileId`, `RomFileRow` and the three `IRomRepository` file methods, and `InfoJsonGame.ExternalFileNames()` with every call site B13 lists switched to it.
   - Tests (`LibraryMirrorTests`, Data integration): rows are written and cascade-deleted; `ListExternalAsync` includes the files; two releases sharing a track SHA1 are allowed; `SyncAllAsync` restores `rom_files` from the ZIPs; `ListFilesByGameAsync`, `GetFileAsync` (null for another release's file) and `ListFilesBySha1Async` return the rows. `InfoJsonTests`: `ExternalFileNames()` lists main names, then `files` names.
   - Done when: `LibraryMirrorTests` (Docker running) and `InfoJsonTests` pass, and the existing `IntegrityJobTests`, `ExternalLibraryTests` and `IngestPipelineTests` still pass.
 - [ ] **5. Cue parser**: B8. Add `Core/Ingest/CueSheet.cs`.
-  - Tests: `CueSheetTests` covers quoted and unquoted names, mixed case, BOM, Latin-1 fallback, duplicates collapsed (also ones differing only by case), an error on no `FILE` line, an error on a name of `.` or `..` or with `/`, `\` or `:`, `...Iru! (Japan).bin` accepted, and other commands ignored.
+  - Tests: `CueSheetTests` covers quoted and unquoted names, mixed case, BOM, Latin-1 fallback, duplicates collapsed (also ones differing only by case), an error on no `FILE` line, an error on 100 distinct names (99 parse), an error on a name of `.` or `..` or with `/`, `\` or `:`, `...Iru! (Japan).bin` accepted, and other commands ignored.
   - Done when: `CueSheetTests` passes.
 - [ ] **6. Single-file ingest for `FileSets` systems and archive skip**: B9, B10, B11, B23 (`ArchiveNotSupported`, `NameTaken`, `NameTooLong`). A matched `.iso` is stored under its exact name with no `files`; an unmatched one goes to Review.
   - Tests (`ExternalLibraryTests.Sets.cs`, a new partial of the Api integration class `ExternalLibraryTests`, whose host in `ExternalLibraryTests.cs` now also registers `ExternalSetTestHandler` and writes its fixture DAT; `IngestPipelineTests`' host registers no external handler):
@@ -267,50 +270,52 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - cue + two `.bin`s gives one set in cue order, cue first;
     - a missing member gives `IncompleteSet` for every present member, and a lone `.cue` whose files are missing is the same;
     - a cue naming a `.wav`, an `.iso`, or itself, gives `UnsupportedSetMember`;
-    - a cue that doesn't parse, or couldn't be read, gives `IncompleteSet` for itself and each `.bin` starting with its stem, and another `.bin` is a lone file;
+    - a cue that doesn't parse, or couldn't be read, gives `IncompleteSet` for itself and each `.bin` starting with its stem, and another `.bin` is a lone file; a `.bin` that starts with a broken cue's stem but is named by a parsed cue stays in that cue's set;
+    - units come in the scanner's name order, by their first member (`Game (Track 1).bin` before `Game.cue`);
     - two cues naming one `.bin` give `SetConflict` for both sets, and so do two files differing only by case;
     - a `.cue` over 64 KiB is a lone file;
     - names resolve ignoring case;
     - a selection holding only the `.bin` selects the whole set; an unselected lone file is left out.
   - Done when: `IngestSetPlannerTests` passes.
-- [ ] **8. Set ingest: store, Review and rollback**: B7 (processing), B7a (one match, no match, `AmbiguousSet`, audit), B23 (`AmbiguousSet`). Call the planner from `IngestJob`, hash every member once, pick the data track, and place every file with rollback of all of them if any move or the ZIP write fails. Job items are per file.
-  - Tests (`ExternalLibraryTests.Sets.cs`, plus `IngestJobTests` for the job-level cases: cancellation and the progress total):
+- [ ] **8. Set ingest: store, Review and rollback**: B7 (processing a planned set), B7a (one match, no match, `AmbiguousSet`, audit), B23 (`AmbiguousSet`). Call the planner from `IngestJob` in its unit order, hash every member once, pick the data track, and place every file with rollback of all of them if any move or the ZIP write fails. Job items are per file.
+  - Tests (`ExternalLibraryTests.Sets.cs`):
     - cue + data + audio track gives one release with 2 `files` in cue order, every item `Ingested`, and one `Ingested` audit event;
     - no match gives three Review items;
     - two matches give `AmbiguousSet`;
     - a failure on the third move rolls back the first two (file system hook), and ingest is left unchanged;
-    - a ZIP write that fails with `TargetZipUnreadable` gives all three items that `Error`, and the files stay in ingest;
-    - one member `TooRecent`, or changed after hashing, skips the set;
-    - a cancelled job finishes the set it started;
-    - a selection holding one `.bin` of a 3-file set gives a progress total of 3;
-    - on a `FileSets` handler without `.cue` in its extensions, a `.cue` and its `.bin` are processed one by one, with no planning (`IngestJobTests`);
-    - a lone `.nrg` goes to Review, and a lone `.txt` fails as `UnsupportedType`.
-  - Done when: those classes pass (Docker running).
-- [ ] **9. Set ingest against existing state**: B7a (duplicate, data track in Review, dismissed, `AmbiguousGroup`, repeated SHA1s), B7 (lone `.bin` `AmbiguousGroup`), B23 (`AmbiguousGroup`, `AlreadyInReview`).
+    - a ZIP write that fails with `TargetZipUnreadable` gives all three items that `Error`, and the files stay in ingest.
+  - Done when: `ExternalLibraryTests` passes (Docker running).
+- [ ] **9. Set ingest: guards, job rules and lone files**: B7 (`TooRecent`, changed after hashing, size limits, path limit, cancellation, progress, systems without `.cue`, lone files). The set checks that stop a set before anything moves, and the job-level rules.
+  - Tests:
+    - `ExternalLibraryTests.Sets.cs`: one member `TooRecent`, or changed after hashing, skips the set; a member over the size limit moves to `_failed/` as `TooLarge` and the others are `Skipped` `IncompleteSet` and stay, also on the next run; a lone `.nrg` goes to Review, and a lone `.txt` fails as `UnsupportedType`;
+    - `IngestJobTests`: a cancelled job finishes the set it started; a selection holding one `.bin` of a 3-file set gives a progress total of 3; on a `FileSets` handler without `.cue` in its extensions, a `.cue` and its `.bin` are processed one by one, with no planning.
+  - Done when: `ExternalLibraryTests` (Docker running) and `IngestJobTests` pass.
+- [ ] **10. Set ingest against existing state**: B7a (duplicate, data track in Review, dismissed, `AmbiguousGroup`, repeated SHA1s, members' own review rows), B7 (lone `.bin` `AmbiguousGroup`), B23 (`AmbiguousGroup`, `AlreadyInReview`).
   - Tests (`ExternalLibraryTests.Sets.cs`):
     - a duplicate data track sends all members to `_duplicates/`, one `MovedToDuplicates` event each;
     - an `AmbiguousGroup` data track skips every member, and a lone matched `.bin` with an ambiguous group is `Skipped` `AmbiguousGroup` and stays;
     - a data track with a `Pending` review row from another source sends every member to `_duplicates/`;
     - two unmatched sets sharing an identical audio track queue it once, and the second copy is `Skipped` `AlreadyInReview` and stays;
     - re-running an unmatched set keeps all three items as `Review` (own rows upserted);
+    - an unmatched set whose data track is added to the DAT before the next run is ingested, and its three `Pending` rows become `Resolved`;
     - a dismissed data track's set is ingested.
   - Done when: those classes pass (Docker running).
-- [ ] **10. Track self-repair**: B14.
+- [ ] **11. Track self-repair**: B14.
   - Tests (`ExternalLibraryTests.Repair.cs`):
     - a deleted audio track with an open `EntryMissing` is put back by re-ingesting the set: its item is `Repaired`, the issue resolves, and the other members are `Duplicate`;
     - a lone track file repairs too;
     - a matching name with a different SHA1 is not used for a repair;
     - a lone track whose name and SHA1 match open-issue files of two games isn't repaired and goes to Review.
   - Done when: `ExternalLibraryTests` passes (Docker running).
-- [ ] **11. Review rules**: B15. Add `SetFileNotResolvable` (409, in `ReviewEndpoints.ToResult`), the Dat-resolve naming and `..` rule for `FileSets` systems, the DAT search's one row per `gameName`, the `AmbiguousSet` reason filter (API, `types.ts`, the queue's filter), `resolvable` on the item detail, and the UI's Delete-only state driven by it.
+- [ ] **12. Review rules**: B15. Add `SetFileNotResolvable` (409, in `ReviewEndpoints.ToResult`), the Dat-resolve naming and `..` rule for `FileSets` systems, the DAT search's one row per `gameName`, the `AmbiguousSet` reason filter (API, `types.ts`, the queue's filter), `resolvable` on the item detail, and the UI's Delete-only state driven by it.
   - Files: `ReviewResolver.cs`, `ReviewEndpoints.cs`, `lib/api/types.ts`, `routes/review/+page.svelte`, `routes/review/[id]/+page.svelte`, the tests below.
   - Tests:
-    - `ReviewResolverExternalTests`: resolving or dismissing a `.bin` item gives `SetFileNotResolvable`; an `.nrg` resolved to a Dat game whose rom is `… (Track 1).bin` is stored as `<Game> (Unverified).nrg` with no `Track 1` flag; one whose game name starts with `...` resolves.
+    - `ReviewResolverExternalTests`: resolving or dismissing a `.bin` item gives `SetFileNotResolvable`; an `.nrg` resolved to a Dat game whose rom is `… (Track 1).bin` is stored as `<Game> (Unverified).nrg` with no `Track 1` flag; one whose game name starts with `...` resolves; an `AmbiguousGroup` `.iso` attached with flag `None` takes its tags from `datGameName`, not the queued `romName`.
     - `ReviewEndpointsTests`: a DAT search over a repeated game name returns it once; `reason=AmbiguousSet` is accepted.
     - `ExternalLibraryTests.Sets.cs` (its host has `ExternalSetTestHandler`; `ReviewEndpointsTests`' host doesn't): resolving or dismissing a `.bin` item gives `409` with code `SetFileNotResolvable`; its detail has `resolvable` false and an `.iso` item's true; resolving an `.iso` item whose exact name is taken in its folder gives `409 NameTaken`, and the item stays `Pending`.
     - `review-page.test.ts` (it tests `review/[id]` and the queue): an item with `resolvable` false shows only Delete and the hint; the queue's reason filter offers "Ambiguous set".
   - Done when: the tests pass, plus `npm run lint` and `npm run check`.
-- [ ] **12. Title edit and delete on sets**: B16, B17. `NameTaken` in `LibraryEndpoints.ToProblem`.
+- [ ] **13. Title edit and delete on sets**: B16, B17. `NameTaken` in `LibraryEndpoints.ToProblem`.
   - Tests (`ExternalLibraryTests.Sets.cs`, from step 6):
     - a title edit in the same bucket renames only the ZIP;
     - a title edit is refused with `TargetZipUnreadable` when another game also claims one of the set's files in the old folder;
@@ -318,38 +323,38 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - release delete leaves 3 files in `_removed/` and writes one `ReleaseDeleted` event whose details list them;
     - game delete moves every file and writes one `GameDeleted` event.
   - Done when: `ExternalLibraryTests` passes (Docker running).
-- [ ] **13. Move and merge of sets**: B18. Whole-set move/merge and `ExternalMoveRecord` v2 with v1 still read.
+- [ ] **14. Move and merge of sets**: B18. Whole-set move/merge and `ExternalMoveRecord` v2 with v1 still read.
   - Tests:
     - `ExternalLibraryTests.Sets.cs`: move into a folder with a taken name gives `409 NameTaken` and nothing moves; a same-folder merge moves no set files and succeeds; a logical-name clash on merge gives `NameTaken`; a move writes a v2 record.
-    - `ExternalMoveRecordTests`: v2 round-trip with 99 pairs under the 64 KiB cap, and a v1 record still read and validated.
+    - `ExternalMoveRecordTests`: v2 round-trip with 99 pairs of 250-byte names made of `'` (each escaped to 6 bytes) under the 320 KiB cap, and a v1 record still read and validated.
   - Done when: those classes pass (Docker running).
-- [ ] **14. Integrity for set files**: B19.
+- [ ] **15. Integrity for set files**: B19.
   - Tests (`IntegrityJobTests`, Data integration, with `ExternalSetTestHandler` appended to its handlers):
     - a missing track gives `EntryMissing` keyed by its name, and the issue resolves on the next run once the track is back;
     - a truncated track gives `EntrySizeMismatch`;
     - a deep run on a changed track gives `HashMismatch`;
     - set files are not `OrphanFile`.
   - Done when: `IntegrityJobTests` passes (Docker running).
-- [ ] **15. API for release files**: B20 (API part), B21. Add `files` and `totalSizeBytes` to the detail, the file download route, and the sizes in the list and report.
+- [ ] **16. API for release files**: B20 (API part), B21. Add `files` and `totalSizeBytes` to the detail, the file download route, and the sizes in the list and report.
   - Tests:
     - `LibraryEndpointsTests` (integration): detail lists files; the download streams bytes with range support; another release's file id gives 404.
     - `ReportEndpointsTests`: the size includes the files.
   - Done when: those classes pass (Docker running).
-- [ ] **16. Game page file list**: B20 (UI part). `lib/api/types.ts` and the Game page toggle and table.
+- [ ] **17. Game page file list**: B20 (UI part). `lib/api/types.ts` and the Game page toggle and table.
   - Tests: `game-page.test.ts`: the toggle lists the files with download buttons that have an `aria-label`, and the size shows the total; `table-style.test.ts` passes.
   - Done when: `npm test`, `npm run lint` and `npm run check` pass.
-- [ ] **17. The four headerless handlers**: B4. Add `RnRomManager.Systems.Sony` (`psx`, `psp`) and `.Microsoft` (`x360`) with their test projects, the Saturn handler in `.Sega`, their box art, `RnRomManager.slnx` and the `Dockerfile` restore layer. They are not registered yet.
+- [ ] **18. The four headerless handlers**: B4. Add `RnRomManager.Systems.Sony` (`psx`, `psp`) and `.Microsoft` (`x360`) with their test projects, the Saturn handler in `.Sega`, their box art, `RnRomManager.slnx` and the `Dockerfile` restore layer. They are not registered yet.
   - Tests:
     - each handler's contract test (every B4 value, `ReadHeader` null);
     - box art is a valid 512×512 PNG and differs from the others in its project.
   - Done when: `Systems.Sony.Tests`, `Systems.Microsoft.Tests` and `Systems.Sega.Tests` pass, and `docker build .` succeeds.
-- [ ] **18. The GameCube and Wii handlers**: B4, B6. Add `RnRomManager.Systems.NintendoDisc` (`gc`, `wii`, `NintendoDiscHeader`) with its test project, box art, `RnRomManager.slnx` and the `Dockerfile` restore layer. Not registered yet.
+- [ ] **19. The GameCube and Wii handlers**: B4, B6. Add `RnRomManager.Systems.NintendoDisc` (`gc`, `wii`, `NintendoDiscHeader`) with its test project, box art, `RnRomManager.slnx` and the `Dockerfile` restore layer. Not registered yet.
   - Tests:
     - each handler's contract test (every B4 value);
     - box art is a valid 512×512 PNG, and the two differ;
     - `NintendoDiscHeaderTests`: GC magic, Wii magic, no magic, a truncated span, a non-printable game id, and the title cut at the NUL.
   - Done when: `Systems.NintendoDisc.Tests` passes, and `docker build .` succeeds.
-- [ ] **19. Register the six systems**: B4, B22. `AppHost` registration and `RnRomManager.Api.csproj` project references, the SPA colours and icons, the startup `ingest/<id>/` and `roms/<id>/` folders, and the six (empty) fixture Redump DATs in the seeder's `FixtureDatWriter.Write`.
+- [ ] **20. Register the six systems**: B4, B22. `AppHost` registration and `RnRomManager.Api.csproj` project references, the SPA colours and icons, the startup `ingest/<id>/` and `roms/<id>/` folders, and the six (empty) fixture Redump DATs in the seeder's `FixtureDatWriter.Write`.
   - `IngestSeeder` gets the six DatName constants and `EmptyRedump`, a map from each to an empty game list with its layout (`redump`, no metadat kinds). Every Api test host that lists each libretro DAT by hand (today `AuditLibraryEditTests`, `DatEndpointsTests`, `ImageEndpointsTests`, `ImageUrlEndpointsTests`, `IngestArchiveTests`, `IngestDeleteEndpointsTests`, `IngestEndpointsTests`, `IngestPipelineTests`, `IngestReviewTests`, `LibraryEditTests`, `LibraryEndpointsTests`, `LibraryMoveMergeTests`, `MediaRetryEndpointsTests`, `NoteEndpointsTests`, `ReportEndpointsTests`, `ReviewEndpointsTests`, `ZipEntryEndpointsTests`) adds them; otherwise ingestion fails `DatsMissing`.
   - Update every count and list this breaks:
     - `IngestSeederTests`: DAT files 65 → 71 (plus the titledb file);
@@ -360,7 +365,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - `IngestPipelineTests`: a Wii ISO over 2 GiB (sparse file) is size-accepted in both `ingest/wii/` and `ingest/gc/`;
     - `systemColours.test.ts` for the six colours.
   - Done when: the Core and Api test projects pass (Docker running); `npm run lint`, `npm run check` and `npx vitest run src/lib/systemColours.test.ts` pass.
-- [ ] **20. Seed, integration and e2e**: one synthetic game per system in Basic, written loose:
+- [ ] **21. Seed, integration and e2e**: one synthetic game per system in Basic, written loose:
   - `ingest/psx/`: `Disc Runner (USA).cue`, `Disc Runner (USA) (Track 1).bin` (data, in the fixture Redump DAT) and `Disc Runner (USA) (Track 2).bin`.
   - `ingest/saturn/`: `Sky Rally (Japan).cue`, `Sky Rally (Japan) (Track 1).bin` (data) and `Sky Rally (Japan) (Track 2).bin`.
   - `ingest/psp/`: `Pocket Ninja (USA).iso`.
@@ -377,7 +382,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - `SeedIngestTests`: the PSX and Saturn releases have 2 `files` each, beside the ZIP under their exact names with their original bytes; their releases have no `Track 1` flag; the GC/Wii headers have `gameId` and `title`.
     - e2e: the PlayStation game's "3 files" toggle downloads Track 2 byte-exact.
   - Done when: the Core and Api test projects pass (Docker running), and `pwsh scripts/test-e2e.ps1` passes.
-- [ ] **21. Docs**:
+- [ ] **22. Docs**:
   - `README.md`: the systems list, the Refresh DATs note and the ingest folders.
   - `features.md`: the systems, disc sets (cue rule, `IncompleteSet`, archives, Review limits), sizes, and the Game page file list.
   - `zip-format.md`: v6 `files`, exact names for `FileSets` systems, the layout's six system folders, the GC/Wii header fields, the Naming table's Tags row (tags from the DAT game name for `FileSets` systems), the `system` id list, and the Validation `..` rule for `FileSets` names.
@@ -408,7 +413,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - 2026-11-12 Selected-files runs plan sets from the whole folder and process a set if any member is selected (reviewer).
 - 2026-11-12 Names containing `..` are allowed; only `.`/`..` and path separators are rejected (reviewer: real Redump names such as `...Iru!`).
 - 2026-11-12 A repaired track's item is `Repaired`, matching today's single-file self-repair (reviewer).
-- 2026-11-12 The v2 move record is for manual recovery only, like v1, capped at 64 KiB (reviewer: no replay exists).
+- 2026-11-12 The v2 move record is for manual recovery only, like v1, capped at 64 KiB (reviewer: no replay exists). Cap superseded below (320 KiB).
 - 2026-11-12 Same-folder move/merge leaves set files in place; a logical-name clash gives `NameTaken`, never ` (N)` (reviewer).
 - 2026-11-12 Dismiss is blocked for `.cue`/`.bin` review items, like resolve (reviewer).
 - 2026-11-12 PSP extensions → `.iso` only: the PSP Redump DAT has no `.bin`/`.cue`, so those files could only ever be deleted from Review (fact).
@@ -447,9 +452,19 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - 2026-11-12 A store `Error` on a set gives every member the same `Error` after the rollback; `DbWriteFailed` marks every member and stops the job, as for a single file (code: `IngestJob.ItemAsync`).
 - 2026-11-12 A PSX `.iso` always goes to Review: the PSX DAT has only `.bin` data tracks (fact).
 - 2026-11-12 The SPA learns an item is Delete-only from `resolvable` on `GET /api/review/{id}`: no endpoint exposes `FileSets` (code).
-- 2026-11-12 Step 19 adds the six Redump DATs to the 17 Api test hosts that list every libretro DAT by hand, or they fail `DatsMissing` (code).
+- 2026-11-12 Step 20 adds the six Redump DATs to the 17 Api test hosts that list every libretro DAT by hand, or they fail `DatsMissing` (code).
 - 2026-11-12 e2e Auditing `Ingested` rows 22 → 28: one event per stored set, and the page loads 100 rows (code).
 - 2026-11-12 Set-handler 409 tests go in `ExternalLibraryTests.Sets.cs`: `ReviewEndpointsTests`' host doesn't register `ExternalSetTestHandler` (code).
+- 2026-11-12 v2 move record cap → 320 KiB: the record uses System.Text.Json's default encoder, which escapes non-ASCII and `'`/`&`/`+` to 6 bytes, so 64 KiB couldn't hold 99 pairs (user).
+- 2026-11-12 A cue with more than 99 distinct `FILE` names doesn't parse: a disc has at most 99 tracks, which also bounds the move record (fact).
+- 2026-11-12 `ExternalSetTestHandler` lists `.nrg` (the lone-`.nrg` and Review `.nrg` tests need it) and uses the `redump` layout with no metadat, like the real handlers (code).
+- 2026-11-12 A set member's own `Pending` review row is completed by its result through `CompleteSourceAsync`, as for a single file (code: `IngestPipeline.ProcessAsync`).
+- 2026-11-12 Planned units run in the scanner's ordinal name order by first member; a `.bin` named by a parsed cue never falls under a broken cue's stem rule (code: `IngestFileScanner` orders by name).
+- 2026-11-12 A set member over a size limit moves to `_failed/` as today (`FailFile`); the rest stay `IncompleteSet` until the Admin acts (code).
+- 2026-11-12 `LibraryZipWriter` refuses an info.json over 1 MiB (`VerifyFailed`): sets can make it that large, and the reader refuses anything bigger (code: `InfoJsonReader.MaxBytes`, the writer doesn't check).
+- 2026-11-12 For `FileSets` systems, Review's Dat action takes its base title and tags from `DatGameName`, and Attach (`AmbiguousGroup`, flag `None`) its tags, as ingest does (code: `ReviewResolver` parses the rom name today).
+- 2026-11-12 DAT search dedupe applies to every system; the "No-Intro has no repeated names" claim was dropped (reviewer).
+- 2026-11-12 Step 8 split into storing a set (8) and its guards, job rules and lone files (9) to stay near 300 lines; later steps renumbered (reviewer).
 
 ## Kickoff prompt
 ```text
