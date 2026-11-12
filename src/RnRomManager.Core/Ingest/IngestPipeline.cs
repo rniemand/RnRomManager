@@ -324,6 +324,12 @@ public sealed class IngestPipeline(
         // Step 6: group by system + base title.
         var baseTitle = release.BaseTitle;
         var owners = await roms.ListGameIdsByBaseTitleAsync(system.Id, baseTitle, cancellationToken).ConfigureAwait(false);
+        if (owners.Count > 1 && system.FileSets && file.Name.EndsWith(".bin", StringComparison.OrdinalIgnoreCase))
+        {
+            // B7: a .bin review item can't be resolved (B15), so a lone .bin waits like a set's data track.
+            return new IngestItemResult(IngestOutcome.Skipped, IngestReason.AmbiguousGroup, $"games {string.Join(", ", owners)} own '{baseTitle}'",
+                system.Id, Sha1: hashes.Sha1);
+        }
         if (owners.Count > 1)
         {
             // T4: a TitleDb row also keeps the whole identity, so Attach doesn't depend on the DAT loaded later.
@@ -451,6 +457,14 @@ public sealed class IngestPipeline(
             for (var i = 0; i < hashed.Count; i++)
             {
                 var (file, _, hashes) = hashed[i];
+                // ingest_review_items.sha1 is unique: another source's Pending row (an earlier member included) keeps this one out.
+                if (await reviews.GetBySha1Async(hashes.Sha1, cancellationToken).ConfigureAwait(false) is { Status: "Pending" } pending
+                    && pending.SourcePath != file.SourcePath)
+                {
+                    queued.Add(new IngestItemResult(IngestOutcome.Skipped, IngestReason.AlreadyInReview, $"same as pending review source {pending.SourcePath}",
+                        system.Id, Sha1: hashes.Sha1));
+                    continue;
+                }
                 // An AmbiguousSet item can't be resolved, so it gets no suggestions.
                 IReadOnlyList<Suggestion> suggestions = matches.Count == 0 ? SuggestionEngine.Find(store, null, file.Name, hashes.SizeBytes) : [];
                 queued.Add(await QueueReviewAsync(file, file.Name, system.Id, reason, Hashes(i), hashes.SizeBytes, system.ReadHeader(hashes.Header), jobId,
@@ -461,6 +475,22 @@ public sealed class IngestPipeline(
 
         var data = matches[0];
         var (dataFile, dataSource, dataHashes) = hashed[data];
+
+        // Step 3 for the data track only: a library duplicate or another source's Pending row sends every member to
+        // _duplicates/; a Dismissed row follows the file, which is then ingested.
+        IReadOnlyList<IngestItemResult> AllDuplicates(string details) => Each(i =>
+            MoveToDuplicates(members[i], actor, progress)
+            ?? new IngestItemResult(IngestOutcome.Duplicate, Details: details, SystemId: system.Id, Sha1: hashed[i].Hashes.Sha1));
+        if (await roms.GetBySha1Async(dataHashes.Sha1, cancellationToken).ConfigureAwait(false) is { } known)
+            return AllDuplicates($"the data track is already release {known.FileName} of game {known.GameId}");
+        var review = await reviews.GetBySha1Async(dataHashes.Sha1, cancellationToken).ConfigureAwait(false);
+        if (review is { Status: "Pending" } && review.SourcePath != dataFile.SourcePath)
+            return AllDuplicates($"the data track is the same as pending review source {review.SourcePath}");
+        if (review is { Status: "Dismissed" })
+            await reviews.UpsertAsync(review with
+            {
+                SourcePath = dataFile.SourcePath, ArchivePath = null, ArchiveEntry = null, OriginalFileName = dataFile.Name, LastSeenJobId = jobId,
+            }, cancellationToken).ConfigureAwait(false);
         var release = LibretroRelease(store!.BySha1(dataHashes.Sha1)!, store, dataFile, external: true, tagsFromGameName: true);
         var owners = await roms.ListGameIdsByBaseTitleAsync(system.Id, release.BaseTitle, cancellationToken).ConfigureAwait(false);
         if (owners.Count > 1)

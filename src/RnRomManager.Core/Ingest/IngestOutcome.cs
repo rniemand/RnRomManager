@@ -34,6 +34,12 @@ public static class IngestReason
 
     /// <summary>B7a: two or more games own the data track's base title; the set stays until the Admin merges or moves them.</summary>
     public const string AmbiguousGroup = "AmbiguousGroup";
+
+    /// <summary>
+    /// B7a: an unmatched set member whose SHA1 another source's Pending review row already holds (silent audio tracks
+    /// repeat); it stays, since moving it to <c>_duplicates/</c> would break its set.
+    /// </summary>
+    public const string AlreadyInReview = "AlreadyInReview";
 }
 
 /// <summary><c>ingest_review_items.reason</c> values added for disc sets (the older ones are literals at their call sites).</summary>

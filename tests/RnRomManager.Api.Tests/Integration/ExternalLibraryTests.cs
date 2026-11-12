@@ -50,6 +50,15 @@ public partial class ExternalLibraryTests
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = ""; // default art, no network
         _ = _factory.Services; // start the host: it creates the system folders
+        WriteDats();
+        _items = [];
+        _itemRepository = Substitute.For<IJobItemRepository>();
+        _itemRepository.InsertAsync(Arg.Do<JobItem>(_items.Add), Arg.Any<CancellationToken>()).Returns(1L);
+    }
+
+    /// <summary>Writes and loads the fixture DATs; <paramref name="moreSetGames"/> joins the external-set DAT (a refresh).</summary>
+    private void WriteDats(params FixtureGame[] moreSetGames)
+    {
         var cache = Service<DatCache>();
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
@@ -59,12 +68,9 @@ public partial class ExternalLibraryTests
                 new FixtureGame(EuropeName, EuropeName + ".nsp", Europe),
             ],
             [GbDat] = [new FixtureGame("Shared (World)", "Shared (World).gb", SharedGb), new FixtureGame("Mystery GB (World)", "Mystery GB (World).gb", Mystery)],
-            [ExternalSetTestHandler.DatNameValue] = SetDatGames,
+            [ExternalSetTestHandler.DatNameValue] = [.. SetDatGames, .. moreSetGames],
         }, layouts: new Dictionary<string, FixtureDatLayout> { [ExternalSetTestHandler.DatNameValue] = FixtureDatLayout.Redump });
         cache.Load();
-        _items = [];
-        _itemRepository = Substitute.For<IJobItemRepository>();
-        _itemRepository.InsertAsync(Arg.Do<JobItem>(_items.Add), Arg.Any<CancellationToken>()).Returns(1L);
     }
 
     [TearDown]

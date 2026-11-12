@@ -322,9 +322,9 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - `ExternalLibraryTests.Sets.cs`: one member `TooRecent`, or changed after hashing, skips the set; a member over the size limit moves to `_failed/` as `TooLarge` and the others are `Skipped` `IncompleteSet` and stay, also on the next run; a lone `.nrg` goes to Review, and a lone `.txt` fails as `UnsupportedType`; a lone matched `… (Track 1).bin` with no cue is `Skipped` `IncompleteSet` and stays, while a lone matched untagged `.bin` is stored as a single file;
     - `IngestJobTests` (its handler array and `ByFamily` substitute gain `ExternalSetTestHandler`, with its fixture DAT written by `FixtureDatWriter`): a cancelled job finishes the set it started (the token is cancelled from `ExternalHooks.BeforeHash` on the set's second member); a selection holding one `.bin` of a 3-file set gives a progress total of 3; on a `FileSets` handler without `.cue` in its extensions (a small `DiscXHandler` class in the test: id and family `discx`, `EmbedRomsInZip` false, `FileSets` true, `RomExtensions` `.bin` only, `DatFolder` `redump`, no `MetadatKinds`, an empty fixture DAT), `x.cue` fails `UnsupportedType` and `x.bin` goes to Review, with no planning.
   - Done when: `ExternalLibraryTests` (Docker running) and `IngestJobTests` pass.
-- [ ] **10. Set ingest against existing state**: B7a (duplicate, data track in Review, dismissed, `AmbiguousGroup`, repeated SHA1s, members' own review rows), B7 (lone `.bin` `AmbiguousGroup`), B23 (`AmbiguousGroup`, `AlreadyInReview`).
-  - Files: `Core/Ingest/IngestPipeline.cs`, `Core/Ingest/IngestOutcome.cs`, `ExternalLibraryTests.Sets.cs`.
-  - Tests (`ExternalLibraryTests.Sets.cs`):
+- [x] **10. Set ingest against existing state**: B7a (duplicate, data track in Review, dismissed, `AmbiguousGroup`, repeated SHA1s, members' own review rows), B7 (lone `.bin` `AmbiguousGroup`), B23 (`AmbiguousGroup`, `AlreadyInReview`).
+  - Files: `Core/Ingest/IngestPipeline.cs`, `Core/Ingest/IngestOutcome.cs`, `ExternalLibraryTests.cs` (re-writable fixture DATs), `ExternalLibraryTests.SetState.cs` (new partial).
+  - Tests (`ExternalLibraryTests.SetState.cs`):
     - a duplicate data track sends all members to `_duplicates/`, one `MovedToDuplicates` event each;
     - an `AmbiguousGroup` data track skips every member, and a lone matched `.bin` with an ambiguous group is `Skipped` `AmbiguousGroup` and stays;
     - a data track with a `Pending` review row from another source sends every member to `_duplicates/`;
