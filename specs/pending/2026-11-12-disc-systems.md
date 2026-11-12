@@ -21,7 +21,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 
 ### DATs
 - **B1 DAT folder.** A new handler property, `DatFolder` (default `no-intro`), names the folder of the main DAT under `Sources:DatBaseUrl`. The six new handlers use `redump`, so the URL is `{DatBaseUrl}/redump/<DatName>.dat` and the cache path is `cache/dats/redump/<DatName>.dat`. The manifest, the T3 versions result and **Admin → DATs** treat a `redump/` file the same way they treat a `no-intro/` file today. Existing handlers are unchanged.
-- **B2 Optional metadat.** A new handler property, `MetadatKinds` (default: all four), lists which metadat files exist. DAT refresh downloads only those files, and `DatCache` requires only those. A kind the handler doesn't list gives empty metadata (null year, empty developers, publishers and genres). All six new handlers list **no** kinds.
+- **B2 Optional metadat.** A new handler property, `MetadatKinds` (default `DatKind.Metadat`, a new list of the four metadat kinds in `DatKind.All` order), lists which metadat files exist. DAT refresh downloads only those files, and `DatCache` requires only those. A kind the handler doesn't list gives empty metadata (null year, empty developers, publishers and genres). All six new handlers list **no** kinds.
   Facts (libretro-database master, checked 2026-11-12):
   - PSP has `releaseyear`, `publisher` and `genre`, but those files are keyed by `serial`/`image`, with no `crc`. `DatStore` joins metadat on CRC32, so they can't be used without a parser change. That change is out of scope.
   - The other five systems have no metadat.
@@ -249,7 +249,8 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 
 ## Steps
 - [ ] **1. Per-handler DAT folder and metadat kinds**: B1, B2. Add `DatFolder` and `MetadatKinds` to `ISystemHandler` (defaults keep today's behaviour). Update `DatRefreshJob` (URLs, the `versions` prefix filter, and `Parse`, which today treats only `kind == DatKind.NoIntro` as the main DAT and must treat the handler's `DatFolder` file as the main DAT), `DatCache`, the manifest lookup, the Admin DATs listing's prefix filter (`DatEndpoints`) and `FixtureDatWriter`. `FixtureDatWriter.Write` takes an optional layout per DatName (`DatFolder`, `MetadatKinds`), defaulting to `no-intro` and all four kinds, and writes only those files.
-  - Files: `ISystemHandler.cs`, `DatKind.cs`, `DatRefreshJob.cs`, `DatCache.cs`, `DatEndpoints.cs`, `FixtureDatWriter.cs`, the matching tests.
+  - NSubstitute substitutes don't run default interface members (checked with NSubstitute 6.2.0: a substitute returns `""`, an empty list and `false`), so a substituted handler would get `DatFolder` `""` and no metadat. Every test that builds a substitute `ISystemHandler` and loads or refreshes DATs sets `DatFolder.Returns(DatKind.NoIntro)` and `MetadatKinds.Returns(DatKind.Metadat)` in its handler factory: `DatCacheTests`, `DatRefreshJobTests`, `TitleDbCacheTests` (its `gb` handler), `IngestJobTests`, `LibraryEditorCollectionTests`, `LibraryImageEditTests` and `MediaServiceTests`. Production code reads the members directly; it never treats `""` as `no-intro`.
+  - Files: `ISystemHandler.cs`, `DatKind.cs`, `DatRefreshJob.cs`, `DatCache.cs`, `DatEndpoints.cs`, `FixtureDatWriter.cs`, the matching tests, and the seven test files above.
   - Tests:
     - `DatRefreshJobTests`: a handler with `DatFolder = "redump"` and `MetadatKinds = []` fetches exactly one URL, `/redump/<DatName>.dat`, and the result lists its version; a redump DAT whose header names another system fails the refresh; a listed kind that returns 404 still fails the refresh.
     - `DatCacheTests`: that system loads without metadat files, and returns empty metadata.
@@ -529,6 +530,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - 2026-11-12 A cue whose own file name isn't portable (`:`, `?`, a device name…)? → the set is `UnsupportedSetMember`: it would be stored under that exact name and the validator refuses it; B8 only checks the names inside the cue (reviewer).
 - 2026-11-12 Move/merge of a set with a missing or unmovable file? → each set file follows today's main-file rules: missing is logged and only its entry moves, a failed move undoes earlier moves with `IoError` (code: `LibraryEditor` merge and move-release).
 - 2026-11-12 `LibraryZipWriter.ExternalFiles` throws for a touched name that isn't a main `externalFileName`, so step 3 extends it to `files` entries (code).
+- 2026-11-12 Do test substitutes of `ISystemHandler` get the new defaults? → no: NSubstitute 6.2.0 ignores default interface members (`""`, empty, `false`), so step 1 sets `DatFolder`/`MetadatKinds` in the seven DAT-loading test factories; `FileSets` `false` is already right (fact: checked with a scratch project).
 
 ## Kickoff prompt
 ```text
