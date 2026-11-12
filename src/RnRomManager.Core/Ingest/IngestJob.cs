@@ -146,7 +146,7 @@ public sealed class IngestJob(
     {
         var fileId = Guid.NewGuid();
         using var scope = logger.BeginScope(new Dictionary<string, object> { ["FileId"] = fileId });
-        var result = known ?? await ProcessAsync(file, run.Context.JobId, run.Context.Actor, run.Breaker, cancellationToken).ConfigureAwait(false);
+        var result = known ?? await ProcessAsync(file, run.Context.JobId, run.Context.Actor, run.Breaker, cancellationToken, run.Context.Progress).ConfigureAwait(false);
         if (result is null)
             return null;
 
@@ -284,8 +284,8 @@ public sealed class IngestJob(
             if (await StillTheArchiveAsync().ConfigureAwait(false))
             {
                 await One(rejected is not null
-                    ? pipeline.FailFile(archive, actor, rejected.Reason, rejected.Message)
-                    : pipeline.FailFile(archive, actor, IngestFailures.UnsupportedType, "the archive holds no ROM entries")).ConfigureAwait(false);
+                    ? pipeline.FailFile(archive, actor, rejected.Reason, rejected.Message, progress: run.Context.Progress)
+                    : pipeline.FailFile(archive, actor, IngestFailures.UnsupportedType, "the archive holds no ROM entries", progress: run.Context.Progress)).ConfigureAwait(false);
             }
             return;
         }
@@ -302,9 +302,9 @@ public sealed class IngestJob(
 
         IngestItemResult? error = null;
         if (fate == ArchiveFate.Failed)
-            error = pipeline.MoveToFailed(archive, actor, "EntriesFailed", EntryDetails(outcomes));
+            error = pipeline.MoveToFailed(archive, actor, "EntriesFailed", EntryDetails(outcomes), run.Context.Progress);
         else if (fate == ArchiveFate.Duplicates)
-            error = pipeline.MoveToDuplicates(archive, actor);
+            error = pipeline.MoveToDuplicates(archive, actor, run.Context.Progress);
         else
         {
             try
@@ -383,11 +383,11 @@ public sealed class IngestJob(
         "entries:\n" + string.Join("\n", outcomes.Select(o => $"  {o.Entry}: {o.Result!.Outcome} {o.Result.Reason}".TrimEnd()));
 
     private async Task<IngestItemResult?> ProcessAsync(IngestFile file, Guid jobId, AuditActor actor, CircuitBreaker breaker,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, JobProgress progress)
     {
         try
         {
-            return await pipeline.ProcessAsync(file, jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
+            return await pipeline.ProcessAsync(file, jobId, actor, breaker, cancellationToken, progress).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {

@@ -13,6 +13,8 @@ using RnRomManager.Core.Naming;
 using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 
+using RnRomManager.Core.Jobs;
+
 namespace RnRomManager.Core.Ingest;
 
 /// <summary>What happened to one ingest item: becomes its <c>job_items</c> row.</summary>
@@ -51,6 +53,12 @@ public sealed class ExternalIngestHooks
 {
     /// <summary>Runs once an external source is open and checked, right before it is hashed.</summary>
     public Action<IngestFile>? BeforeHash { get; init; }
+
+    /// <summary>Wraps the stream an external source is hashed from, e.g. to pause mid-read.</summary>
+    public Func<Stream, Stream>? WrapHashStream { get; init; }
+
+    /// <summary>Passed to the move that sets an external source aside into <c>_failed/</c> or <c>_duplicates/</c>.</summary>
+    public ExternalMoveHooks? Aside { get; init; }
 
     /// <summary>Runs after media and naming, right before the source is checked again and moved.</summary>
     public Action<IngestFile>? BeforePlacement { get; init; }
@@ -100,10 +108,11 @@ public sealed class IngestPipeline(
         audit.Record(new AuditEvent(AuditActions.ArchiveDeleted, actor, archive.SystemId, Path: auditPaths.Of(archive.FullPath)));
 
     /// <summary>Processes one source and completes any pending review row for that source.</summary>
+    /// <param name="progress">The job's progress, for an external ROM's streamed hash and copies (job step progress); null from Review.</param>
     public async Task<IngestItemResult?> ProcessAsync(IngestFile file, Guid jobId, AuditActor actor, CircuitBreaker breaker,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, JobProgress? progress = null)
     {
-        var result = await ProcessCoreAsync(file, jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
+        var result = await ProcessCoreAsync(file, jobId, actor, breaker, cancellationToken, progress).ConfigureAwait(false);
         // I4: an external source's Error keeps its Pending row (CompleteSourceAsync would delete it); stale cleanup handles absence.
         if (result is not null && !(IsExternal(file) && result.Outcome == IngestOutcome.Error))
             await reviews.CompleteSourceAsync(file.SourcePath, file.ArchiveEntry, result, jobId, time.GetUtcNow().UtcDateTime, cancellationToken).ConfigureAwait(false);
@@ -111,7 +120,7 @@ public sealed class IngestPipeline(
     }
 
     private async Task<IngestItemResult?> ProcessCoreAsync(IngestFile file, Guid jobId, AuditActor actor, CircuitBreaker breaker,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, JobProgress? progress)
     {
         // Step 1: validate.
         var folder = systems.ById(file.SystemId) ?? throw new InvalidOperationException($"No handler for ingest folder '{file.SystemId}'.");
@@ -121,7 +130,7 @@ public sealed class IngestPipeline(
         if (byExtension is null)
             return FailFile(file, actor, IngestFailures.UnsupportedType, $"'{extension}' isn't a ROM extension of the {folder.Family} family");
         if (!folder.EmbedRomsInZip)
-            return await ProcessExternalAsync(file, folder, family, byExtension, jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
+            return await ProcessExternalAsync(file, folder, family, byExtension, jobId, actor, breaker, cancellationToken, progress).ConfigureAwait(false);
         if (file.SizeBytes < byExtension.MinRomSizeBytes)
             return FailFile(file, actor, IngestFailures.TooSmall, $"{file.SizeBytes} bytes; {byExtension.Id} ROMs are at least {byExtension.MinRomSizeBytes}");
         if (file.SizeBytes > byExtension.MaxRomSizeBytes)
@@ -148,7 +157,7 @@ public sealed class IngestPipeline(
     /// it is hashed is <c>Skipped</c> <c>TooRecent</c> and left where it is.
     /// </summary>
     private async Task<IngestItemResult?> ProcessExternalAsync(IngestFile file, ISystemHandler folder, IReadOnlyList<ISystemHandler> family,
-        ISystemHandler byExtension, Guid jobId, AuditActor actor, CircuitBreaker breaker, CancellationToken cancellationToken)
+        ISystemHandler byExtension, Guid jobId, AuditActor actor, CircuitBreaker breaker, CancellationToken cancellationToken, JobProgress? progress)
     {
         var tooRecent = new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent, SystemId: file.SystemId);
         var loose = file.ArchiveEntry is null;
@@ -164,12 +173,12 @@ public sealed class IngestPipeline(
 
         var size = snapshot.Length;
         if (size < byExtension.MinRomSizeBytes)
-            return FailFile(file, actor, IngestFailures.TooSmall, $"{size} bytes; {byExtension.Id} ROMs are at least {byExtension.MinRomSizeBytes}");
+            return FailFile(file, actor, IngestFailures.TooSmall, $"{size} bytes; {byExtension.Id} ROMs are at least {byExtension.MinRomSizeBytes}", progress: progress);
         if (size > byExtension.MaxRomSizeBytes)
-            return FailFile(file, actor, IngestFailures.TooLarge, $"{size} bytes; {byExtension.Id} ROMs are at most {byExtension.MaxRomSizeBytes}");
+            return FailFile(file, actor, IngestFailures.TooLarge, $"{size} bytes; {byExtension.Id} ROMs are at most {byExtension.MaxRomSizeBytes}", progress: progress);
 
-        var (outcome, hashed, failure) = await HashCheckedAsync(file, root, fresh.Path, snapshot, byExtension.MaxRomSizeBytes, loose, cancellationToken)
-            .ConfigureAwait(false);
+        var (outcome, hashed, failure) = await HashCheckedAsync(file, root, fresh.Path, snapshot, byExtension.MaxRomSizeBytes, loose, cancellationToken,
+            progress).ConfigureAwait(false);
         if (outcome == HashOutcome.Failed)
             return IngestItemResult.Error(IngestErrors.IoError, failure, file.SystemId);
         if (outcome == HashOutcome.Changed)
@@ -181,7 +190,7 @@ public sealed class IngestPipeline(
         var eligible = family.Where(h => h.RomExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase)
             && size >= h.MinRomSizeBytes && size <= h.MaxRomSizeBytes).ToList();
         return await IdentifyAsync(file, folder, eligible, new RomHashes(hashed.Crc32, hashed.Md5, hashed.Sha1), size, hashed.Header, null,
-            new ExternalSource(root, fresh.Path, snapshot), jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
+            new ExternalSource(root, fresh.Path, snapshot, progress), jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
     }
 
     private enum HashOutcome
@@ -200,8 +209,9 @@ public sealed class IngestPipeline(
     /// <paramref name="snapshot"/>'s file, which must still be unchanged once it is read.
     /// </summary>
     /// <param name="recheckPath">Also require <paramref name="path"/> to still name that file afterwards.</param>
+    /// <param name="progress">Gets a <c>Hashing</c> step for the read (spec B2/B3).</param>
     private async Task<(HashOutcome Outcome, RomFileHashes? Hashes, string? Details)> HashCheckedAsync(IngestFile file, string root, string path,
-        ExternalFileSnapshot snapshot, long maxBytes, bool recheckPath, CancellationToken cancellationToken)
+        ExternalFileSnapshot snapshot, long maxBytes, bool recheckPath, CancellationToken cancellationToken, JobProgress? progress = null)
     {
         var opened = ExternalRomPath.OpenRead(root, path, FileShare.ReadWrite | FileShare.Delete, snapshot);
         if (opened.Status == ExternalPathStatus.Changed)
@@ -209,15 +219,21 @@ public sealed class IngestPipeline(
         if (opened.Status != ExternalPathStatus.Found)
             return (HashOutcome.Failed, null, opened.Details);
         using var stream = opened.Stream!;
-        ExternalHooks?.BeforeHash?.Invoke(file);
+        progress?.BeginStep(JobStepPhases.Hashing, snapshot.Length, time.GetUtcNow().UtcDateTime);
         RomFileHashes? hashed;
         try
         {
-            hashed = await RomFileHasher.HashAsync(stream, maxBytes, cancellationToken).ConfigureAwait(false);
+            ExternalHooks?.BeforeHash?.Invoke(file);
+            var input = ExternalHooks?.WrapHashStream?.Invoke(stream) ?? stream;
+            hashed = await RomFileHasher.HashAsync(input, maxBytes, cancellationToken, progress is null ? null : progress.StepAdvanced).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return (HashOutcome.Failed, null, ex.Message);
+        }
+        finally
+        {
+            progress?.EndStep();
         }
         if (hashed is null || hashed.SizeBytes != snapshot.Length || ExternalRomPath.SnapshotOf(stream) != snapshot
             || (recheckPath && ExternalRomPath.ClassifyFile(root, path).Snapshot != snapshot))
@@ -247,11 +263,11 @@ public sealed class IngestPipeline(
         {
             logger.LogWarning("{Path}: duplicate of pending review source {ReviewPath} (crc32 {Crc32}, md5 {Md5}, sha1 {Sha1})",
                 file.SourcePath, review.SourcePath, hashes.Crc32, hashes.Md5, hashes.Sha1);
-            return (file.ArchiveEntry is null ? MoveToDuplicates(file, actor) : null) ??
+            return (file.ArchiveEntry is null ? MoveToDuplicates(file, actor, source?.Progress) : null) ??
                 new IngestItemResult(IngestOutcome.Duplicate, Details: $"same as pending review source {review.SourcePath}", SystemId: review.SystemId, Sha1: hashes.Sha1);
         }
         if (review is { Status: "Dismissed" } && file.ArchivePath is not null && review.ArchivePath == file.ArchivePath)
-            return FailFile(file, actor, "Dismissed", "this entry was dismissed from this archive", hashes.Sha1);
+            return FailFile(file, actor, "Dismissed", "this entry was dismissed from this archive", hashes.Sha1, source?.Progress);
         if (review is { Status: "Dismissed" } && file.ArchivePath is null)
             await reviews.UpsertAsync(review with
             {
@@ -274,7 +290,7 @@ public sealed class IngestPipeline(
             // Step 5. Every ReadHeader null (headerless system) counts as plausible.
             var found = headers.Values.FirstOrDefault(h => h is not null);
             if (found is { IsPlausible: false })
-                return FailFile(file, actor, IngestFailures.InvalidHeader, "no DAT match, and the header isn't valid for this system", hashes.Sha1);
+                return FailFile(file, actor, IngestFailures.InvalidHeader, "no DAT match, and the header isn't valid for this system", hashes.Sha1, source?.Progress);
             // I3: an external header naming an ineligible handler falls back to the folder's handler, or the first eligible one.
             var classified = candidates.FirstOrDefault(h => h.Id == found?.ClassifiedSystemId)
                 ?? (external ? candidates.FirstOrDefault(h => h.Id == folder.Id) ?? candidates[0] : folder);
@@ -588,7 +604,7 @@ public sealed class IngestPipeline(
             logger.LogWarning("{Path}: duplicate of {Zip} › {Entry} (sha1 {Sha1}, size {Size})",
                 file.FullPath, game?.ZipPath, entryName, sha1, size);
             // An archive entry isn't moved on its own: the archive's fate covers it (§7.3).
-            var moveError = file.ArchiveEntry is null ? MoveToDuplicates(file, actor) : null;
+            var moveError = file.ArchiveEntry is null ? MoveToDuplicates(file, actor, source?.Progress) : null;
             return moveError ?? new IngestItemResult(IngestOutcome.Duplicate, Details: $"same as {game?.ZipPath} › {entryName}",
                 SystemId: known.SystemId, GameId: known.GameId, Sha1: sha1);
         }
@@ -670,10 +686,11 @@ public sealed class IngestPipeline(
     /// A file problem: <c>Failed</c>, and the file moves to <c>_failed/</c> with <c>&lt;name&gt;.error.txt</c> (spec §5).
     /// An archive entry stays put: its archive's fate decides (§7.3).
     /// </summary>
-    public IngestItemResult FailFile(IngestFile file, AuditActor actor, string reason, string details, string? sha1 = null)
+    /// <param name="progress">Gets a <c>Copying</c> step when an external file's move falls back to a copy.</param>
+    public IngestItemResult FailFile(IngestFile file, AuditActor actor, string reason, string details, string? sha1 = null, JobProgress? progress = null)
     {
         logger.LogWarning("{Path}: Failed {Reason}: {Details}", file.ArchiveEntry is null ? file.FullPath : $"{file.ArchivePath} › {file.ArchiveEntry}", reason, details);
-        var moveError = file.ArchiveEntry is null ? MoveToFailed(file, actor, reason, details) : null;
+        var moveError = file.ArchiveEntry is null ? MoveToFailed(file, actor, reason, details, progress) : null;
         return moveError ?? new IngestItemResult(IngestOutcome.Failed, reason, details, file.SystemId, Sha1: sha1);
     }
 
@@ -682,9 +699,9 @@ public sealed class IngestPipeline(
     /// &lt;username&gt;</c> without one — UTC time). Records <c>MovedToFailed</c>.
     /// </summary>
     /// <returns>An <c>Error IoError</c> result when the move failed, else null.</returns>
-    public IngestItemResult? MoveToFailed(IngestFile file, AuditActor actor, string reason, string details)
+    public IngestItemResult? MoveToFailed(IngestFile file, AuditActor actor, string reason, string details, JobProgress? progress = null)
     {
-        var moved = MoveAside(file, StorageFolders.FailedFolder);
+        var moved = MoveAside(file, StorageFolders.FailedFolder, progress);
         if (moved.Error is not null)
             return moved.Error;
         var fromReview = actor.JobId is null;
@@ -705,9 +722,9 @@ public sealed class IngestPipeline(
     }
 
     /// <returns>An <c>Error IoError</c> result when the move failed, else null.</returns>
-    public IngestItemResult? MoveToDuplicates(IngestFile file, AuditActor actor)
+    public IngestItemResult? MoveToDuplicates(IngestFile file, AuditActor actor, JobProgress? progress = null)
     {
-        var moved = MoveAside(file, StorageFolders.DuplicatesFolder);
+        var moved = MoveAside(file, StorageFolders.DuplicatesFolder, progress);
         if (moved.Error is null)
             audit.Record(new AuditEvent(AuditActions.MovedToDuplicates, actor, file.SystemId, Path: auditPaths.Of(file.FullPath),
                 TargetPath: auditPaths.Of(moved.Path)));
@@ -719,11 +736,11 @@ public sealed class IngestPipeline(
     private bool IsExternal(IngestFile file) => systems.ById(file.SystemId) is { EmbedRomsInZip: false };
 
     /// <summary>Moves the source into <c>ingest/&lt;system&gt;/&lt;folder&gt;/</c>, with a ` (N)` suffix on a clash (any case).</summary>
-    private (string Path, IngestItemResult? Error) MoveAside(IngestFile file, string folder)
+    private (string Path, IngestItemResult? Error) MoveAside(IngestFile file, string folder, JobProgress? progress)
     {
         var directory = Path.Combine(Path.GetDirectoryName(file.FullPath)!, folder);
         if (IsExternal(file))
-            return MoveAsideChecked(file, folder, directory);
+            return MoveAsideChecked(file, folder, directory, progress);
         try
         {
             Directory.CreateDirectory(directory);
@@ -741,7 +758,7 @@ public sealed class IngestPipeline(
     /// W6 for an external system: the side folder and the source are checked (no links, a regular file), the name
     /// is budgeted with its staging and diagnostic names, and the move never replaces anything.
     /// </summary>
-    private (string Path, IngestItemResult? Error) MoveAsideChecked(IngestFile file, string folder, string directory)
+    private (string Path, IngestItemResult? Error) MoveAsideChecked(IngestFile file, string folder, string directory, JobProgress? progress)
     {
         (string, IngestItemResult?) Fail(string? details) =>
             ("", IngestItemResult.Error(IngestErrors.IoError, $"couldn't move to {folder}/: {details}", file.SystemId));
@@ -763,7 +780,8 @@ public sealed class IngestPipeline(
             if (ExternalRomName.AllocateSidePath(target.Path, file.Name, folder == StorageFolders.FailedFolder ? DiagnosticSuffix : null) is not { } destination)
                 return Fail($"no name for {file.Name} fits in {target.Path}");
 
-            var moved = ExternalRomMove.Move(root, source.Path, destination, source.Snapshot!, logger);
+            var moved = Tracked(progress, JobStepPhases.Copying, source.Snapshot!.Length, onCopied =>
+                ExternalRomMove.Move(root, source.Path, destination, source.Snapshot!, logger, hooks: ExternalHooks?.Aside, onCopied: onCopied));
             return moved.Status == ExternalMoveStatus.Moved ? (moved.Path!, null) : Fail(moved.Details);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -819,7 +837,36 @@ public sealed class IngestPipeline(
 
     /// <summary>The checked file an external ROM is hashed from and moved from (I2, I4).</summary>
     /// <param name="Root">The storage root it was checked under: ingest, or the cache for an extracted archive entry.</param>
-    private sealed record ExternalSource(string Root, string Path, ExternalFileSnapshot Snapshot);
+    /// <param name="Progress">The job's progress: the moves of this file report <c>Copying</c> steps to it; null from Review.</param>
+    private sealed record ExternalSource(string Root, string Path, ExternalFileSnapshot Snapshot, JobProgress? Progress = null);
+
+    /// <summary>
+    /// Runs <paramref name="move"/> with a copy callback that begins a <paramref name="phase"/> step on its first call
+    /// (the copy fallback only; a rename reports nothing) and ends it afterwards (spec B2/B3).
+    /// </summary>
+    private ExternalMoveResult Tracked(JobProgress? progress, string phase, long bytesTotal, Func<Action<long>?, ExternalMoveResult> move)
+    {
+        if (progress is null)
+            return move(null);
+        var started = false;
+        try
+        {
+            return move(done =>
+            {
+                if (!started)
+                {
+                    started = true;
+                    progress.BeginStep(phase, bytesTotal, time.GetUtcNow().UtcDateTime);
+                }
+                progress.StepAdvanced(done);
+            });
+        }
+        finally
+        {
+            if (started)
+                progress.EndStep();
+        }
+    }
 
     /// <summary>An external ROM's file and the name it takes next to its ZIP (E1).</summary>
     private sealed record ExternalPlacement(ExternalSource Source, string ExternalFileName);
@@ -995,8 +1042,9 @@ public sealed class IngestPipeline(
         ExternalMoveResult moved;
         try
         {
-            moved = ExternalRomMove.Move(source.Root, current.Path, Path.Combine(folder.Path, placement.ExternalFileName), source.Snapshot,
-                logger, result.Sha1, ExternalHooks?.Move);
+            moved = Tracked(source.Progress, JobStepPhases.CopyingToLibrary, source.Snapshot.Length, onCopied =>
+                ExternalRomMove.Move(source.Root, current.Path, Path.Combine(folder.Path, placement.ExternalFileName), source.Snapshot,
+                    logger, result.Sha1, ExternalHooks?.Move, onCopied));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -1055,7 +1103,8 @@ public sealed class IngestPipeline(
                     return ($"the archive changed, so the verified copy was kept at {placed}", false, null);
                 }
                 // I5: the pointer belongs to the original file, so the verified copy steps aside to an unlisted name.
-                var aside = ExternalRomMove.Move(library, placed, repair.OrphanPath, moved.Snapshot!, logger, hooks: ExternalHooks?.Recovery);
+                var aside = Tracked(placement.Source.Progress, JobStepPhases.Copying, moved.Snapshot!.Length, onCopied =>
+                    ExternalRomMove.Move(library, placed, repair.OrphanPath, moved.Snapshot!, logger, hooks: ExternalHooks?.Recovery, onCopied: onCopied));
                 if (aside.Status != ExternalMoveStatus.Moved)
                 {
                     var at = aside.SurvivingPath ?? placed;
@@ -1090,7 +1139,8 @@ public sealed class IngestPipeline(
             logger.LogError("{Path}: no free name to move it back to; the complete copy is at {Placed}", original, placed);
             return ($"no free name to move it back to; the complete copy is at {placed}", false, null);
         }
-        var restored = ExternalRomMove.Move(library, placed, back, moved.Snapshot!, logger);
+        var restored = Tracked(placement.Source.Progress, JobStepPhases.Copying, moved.Snapshot!.Length, onCopied =>
+            ExternalRomMove.Move(library, placed, back, moved.Snapshot!, logger, onCopied: onCopied));
         switch (restored.Status)
         {
             case ExternalMoveStatus.Moved when back == original:

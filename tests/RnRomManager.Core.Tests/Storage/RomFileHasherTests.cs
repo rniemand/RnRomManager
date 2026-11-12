@@ -36,6 +36,19 @@ public class RomFileHasherTests
     private static byte[] Bytes(int length) => [.. Enumerable.Range(0, length).Select(i => GeneratedStream.At(i))];
 
     [Test]
+    public async Task OnProgress_ReportsCumulativeBytes_AndHashesAreUnchanged()
+    {
+        const int length = (3 * 1024 * 1024) + 17;
+        var seen = new List<long>();
+
+        var withProgress = await RomFileHasher.HashAsync(new GeneratedStream(length, 1024 * 1024), long.MaxValue, CancellationToken.None, seen.Add);
+        var without = await RomFileHasher.HashAsync(new GeneratedStream(length, 1024 * 1024), long.MaxValue, CancellationToken.None);
+
+        Assert.That(seen, Is.EqualTo(new long[] { 1024 * 1024, 2 * 1024 * 1024, 3 * 1024 * 1024, length }));
+        Assert.That((withProgress!.Crc32, withProgress.Md5, withProgress.Sha1), Is.EqualTo((without!.Crc32, without.Md5, without.Sha1)));
+    }
+
+    [Test]
     public async Task KnownVector_123456789()
     {
         var bytes = Encoding.ASCII.GetBytes("123456789");

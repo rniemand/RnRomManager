@@ -60,8 +60,13 @@ public static class ExternalRomMove
     /// <param name="destination">Fully qualified; its folder exists and was checked by the caller.</param>
     /// <param name="expected">What <paramref name="source"/> must still be: the hash-time snapshot, or a promoted file's snapshot for an undo.</param>
     /// <param name="expectedSha1">The verified SHA1 of the incoming bytes, when the caller has one: a copy must reproduce it.</param>
+    /// <param name="onCopied">
+    /// Only for the copy fallback: called with 0 once the staging file exists, then after each buffer with the bytes
+    /// written so far. Never called when the file is renamed.
+    /// </param>
     public static ExternalMoveResult Move(string sourceRoot, string source, string destination,
-        ExternalFileSnapshot expected, ILogger logger, string? expectedSha1 = null, ExternalMoveHooks? hooks = null)
+        ExternalFileSnapshot expected, ILogger logger, string? expectedSha1 = null, ExternalMoveHooks? hooks = null,
+        Action<long>? onCopied = null)
     {
         var rename = hooks?.Rename ?? NoReplaceRename.Move;
         if (NativeFileStat.Read(source).Snapshot != expected)
@@ -70,7 +75,7 @@ public static class ExternalRomMove
         var staging = Path.Combine(Path.GetDirectoryName(destination)!, ExternalRomName.StagingName(Path.GetFileName(destination)));
         var staged = rename(source, staging);
         if (staged.Status is NoReplaceRenameStatus.CrossDevice or NoReplaceRenameStatus.Unsupported)
-            return CopyAndPublish(sourceRoot, source, destination, staging, expected, logger, expectedSha1, hooks);
+            return CopyAndPublish(sourceRoot, source, destination, staging, expected, logger, expectedSha1, hooks, onCopied);
         if (!staged.Renamed)
             return Failed(staged, source, destination, logger);
         hooks?.AfterStaging?.Invoke(staging);
@@ -97,7 +102,7 @@ public static class ExternalRomMove
     }
 
     private static ExternalMoveResult CopyAndPublish(string sourceRoot, string source, string destination, string staging,
-        ExternalFileSnapshot expected, ILogger logger, string? expectedSha1, ExternalMoveHooks? hooks)
+        ExternalFileSnapshot expected, ILogger logger, string? expectedSha1, ExternalMoveHooks? hooks, Action<long>? onCopied)
     {
         ExternalMoveResult Fail(string details, string? survivor) => new(ExternalMoveStatus.Failed, Details: details, SurvivingPath: survivor);
         ExternalMoveResult Changed() => new(ExternalMoveStatus.SourceChanged, Details: $"{source} is not the file that was checked", SurvivingPath: source);
@@ -131,11 +136,15 @@ public static class ExternalRomMove
                     var input = hooks?.WrapSource?.Invoke(raw) ?? raw;
                     var buffer = new byte[1024 * 1024];
                     int read;
+                    long written = 0;
+                    onCopied?.Invoke(0);
                     while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
                     {
                         if (expectedSha1 is not null)
                             hash.AppendData(buffer, 0, read);
                         output.Write(buffer, 0, read);
+                        written += read;
+                        onCopied?.Invoke(written);
                     }
                     output.Flush(flushToDisk: true); // the copy must be on disk before publication and source deletion
                     sha1 = Convert.ToHexStringLower(hash.GetHashAndReset());
