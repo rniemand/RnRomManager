@@ -280,7 +280,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - Tests (`LibraryMirrorTests`, Data integration): rows are written and cascade-deleted; `ListExternalAsync` includes the files; two releases sharing a track SHA1 are allowed; `SyncAllAsync` restores `rom_files` from the ZIPs; `ListFilesByGameAsync`, `GetFileAsync` (null for another release's file) and `ListFilesBySha1Async` return the rows. `InfoJsonTests`: `ExternalFileNames()` lists main names, then `files` names.
   - `SchemaMigrationTests`: `rom_files` added to its table list, `0020_rom_files` to the journalled scripts, the re-run count 19 → 20, and a column `[TestCase]` for `rom_files`.
   - Done when: `LibraryMirrorTests` and `SchemaMigrationTests` (Docker running) and `InfoJsonTests` pass, and the existing `IntegrityJobTests`, `ExternalLibraryTests` and `IngestPipelineTests` still pass.
-- [ ] **5. Cue parser**: B8. Add `Core/Ingest/CueSheet.cs`.
+- [x] **5. Cue parser**: B8. Add `Core/Ingest/CueSheet.cs`.
   - Files: `Core/Ingest/CueSheet.cs` (new), `tests/RnRomManager.Core.Tests/Ingest/CueSheetTests.cs` (new).
   - Tests: `CueSheetTests` covers quoted and unquoted names, mixed case, BOM, Latin-1 fallback, duplicates collapsed (also ones differing only by case), an error on no `FILE` line, an error on 100 distinct names (99 parse), an error on a name of `.` or `..` or with `/`, `\` or `:`, `...Iru! (Japan).bin` accepted, and other commands ignored.
   - Done when: `CueSheetTests` passes.
