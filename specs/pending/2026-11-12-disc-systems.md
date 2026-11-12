@@ -125,7 +125,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - The ZIP name follows E2 as today.
 - **B11 Single files.** A matched `.iso`/`.bin` that no cue names becomes a single-file release (no `files`), as Switch files do today but with B10 naming. An unmatched `.iso` or `.nrg` goes to Review, where it can be resolved.
 - **B12 Release files.** In info.json schema **v6**, every rom has a `files` array. It is null when the release is one file. Otherwise each entry is `{ fileName, externalFileName, originalFileName, sizeBytes, crc32, md5, sha1 }`: the cue first, then the cue's `FILE` names in order, leaving out the data track (it is the main file).
-  - The validator allows a non-null `files` only for `FileSets` systems. Every `files` name follows today's `externalFileName` rules (`PortableNameProblem`, at most 250 UTF-8 bytes) and has one of the handler's extensions. Names must be unique across the game (main files and files together, ignoring case). Each file's `sizeBytes` is at most the handler's `MaxRomSizeBytes`, as for a main file (the validator has no minimum today). On a `FileSets` system, `fileName` must equal `externalFileName`, for main files and `files` entries alike (B10).
+  - The validator allows a non-null `files` only for `FileSets` systems. Every `files` name follows today's `externalFileName` rules (`PortableNameProblem`, at most 250 UTF-8 bytes) and has one of the handler's extensions. Names must be unique across the game (main files and files together, ignoring case). Each file's `sizeBytes` is at most the handler's `MaxRomSizeBytes`, as for a main file (the validator has no minimum today). On a `FileSets` system, `fileName` must equal `externalFileName`, for main files and `files` entries alike (B10). A non-null `files` must have at least one entry (an empty array is rejected; a single file is `null`). Each entry's `crc32`, `md5` and `sha1` must be lowercase hex of the right length, as for `metadata`, and `originalFileName` follows the main rom's rule.
   - For `files` names, and for main `fileName`s on `FileSets` systems, the validator's `..` rule rejects only a name equal to `.` or `..`, or one containing a path separator, as B8 does.
   - The `InfoJsonUpgraderV5` adds `files: null` to every rom.
   - **Size:** `files` makes a large info.json possible (about 40 KB per 99-track release). `LibraryZipWriter` refuses to publish an info.json over `InfoJsonReader.MaxBytes` (1 MiB) with `VerifyFailed`, because the reader would refuse it and leave the game unreadable. Today the writer never checks this. The ingest or edit then rolls back as for any `VerifyFailed`.
@@ -139,7 +139,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - `crc32`: `CHAR(8)`; `md5`: `CHAR(32)`; `sha1`: `CHAR(40)`.
 
     Indexes: a **non-unique** index on `sha1`, because audio tracks repeat across discs, plus indexes on `rom_id` and `game_id`.
-  - Existing rows need no backfill. The mirror (`LibraryMirror.ApplyAsync`, used by ingest, edits and the DbSync rebuild) writes `rom_files` from info.json in the same transaction as `roms`.
+  - Existing rows need no backfill. The mirror (`LibraryMirror.ApplyAsync`, used by ingest, edits and the DbSync rebuild) writes `rom_files` from info.json in the same transaction as `roms`. Today `roms` is inserted in one batch without reading back ids, so each `rom_files` row finds its `rom_id` through `roms.sha1` (unique, `ux_roms_sha1`): `INSERT INTO rom_files (rom_id, game_id, …) SELECT r.id, r.game_id, … FROM roms r WHERE r.sha1 = @RomSha1`. `MirrorEntry.ToRows()` also returns the file rows, each carrying its release's main `sha1`.
   - Backups need no change: `MySqlBackupStore` dumps and restores every base table.
 - **B13 Claims.** `IRomRepository.ListExternalAsync` returns the main files and the `rom_files` rows together, ordered by ZIP path, then ROM id, then the main file before its files in `ordinal` order. `ExternalRomRow` gets a nullable `FileId` (null for a main file). Name reservations, the integrity orphan scan and `LibraryFiles.OpenExternal`'s claim check therefore all see every file of a set.
   - **A game's own names:** code that lists a game's external names from its info.json (today `Roms.Select(r => r.ExternalFileName)`) uses a new `InfoJsonGame.ExternalFileNames()`, which returns each main `externalFileName` and then each `files` entry's. It replaces every such list: the pipeline's `AddToGameAsync` and `DuplicateOrRepairAsync` reservations, `LibraryEditor`'s title-edit claim check (the "also claimed by another game" refusal), move-release and merge reservations, and `IntegrityJob`'s `ReadPointers` and `PointerWasChecked` (issue resolution compares the ZIP's names with the mirrored ones, so a set file's issue could never resolve without it).
@@ -223,7 +223,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 | Core | `Core/Library/InfoJsonRom.cs`, `InfoJsonRomFile.cs` (new), `InfoJsonReader.cs` (v6), `InfoJsonUpgraderV5.cs` (new), `InfoJsonValidator.cs`, `LibraryRows.cs`, `ILibraryRepositories.cs`, `LibraryZipWriter.cs` (verify set files by length; refuse an info.json over 1 MiB) | B12, B13 |
 | Core | `Core/Ingest/CueSheet.cs` (new), `IngestSetPlanner.cs` (new), `IngestJob.cs`, `IngestPipeline.cs`, `IngestOutcome.cs` (reasons) | B7–B11, B14, B23 |
 | Core | `Core/Ingest/ReviewResolver.cs`, `Core/Dats/DatStore.cs` (comment: DATs may repeat a SHA1) | B3, B15 |
-| Core | `Core/Library/LibraryEditor.cs`, `ExternalMoveRecord.cs` | B16–B18 |
+| Core | `Core/Library/LibraryEditor.cs`, `LibraryEditResult.cs` (`NameTaken`), `ExternalMoveRecord.cs` | B16–B18 |
 | Core | `Core/Integrity/IntegrityJob.cs` | B19 |
 | Core | `Core/Library/InfoJsonGame.cs` (`ExternalFileNames()`), `IngestPipeline.cs`, `LibraryEditor.cs`, `IntegrityJob.cs` (call sites) | B13 |
 | Data | `Migrations/0020_rom_files.sql`, `Repositories/LibraryRepositories.cs` (`RomFileRow`, file methods), `ReportRepository.cs` | Table, mirror, claims, sizes (B12, B13, B21). Existing data: no backfill; every existing rom gets `files: null` on its next read (upgrader) |
@@ -251,24 +251,29 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - `DatEndpointsTests`: the redump row is listed.
   - Done when: the classes above pass, and existing DAT tests pass unchanged.
 - [ ] **2. `FileSets` flag and exact external names**: B5, B10 (allocation only). Add `FileSets` to the contract and registry checks. Add exact-name allocation to `ExternalRomName`, returning taken or too-long rather than suffixing or cutting. Add the `ExternalSetTestHandler` to TestData: Id and family `extset`, `DatName` `Test - External Set`, `RomExtensions` `.bin`, `.cue`, `.iso`, `.nrg` (the `.nrg` tests in steps 9 and 12 need it), sizes and box art as `ExternalTestHandler`, no header, `FileSets` true, and `DatFolder` `redump` with no `MetadatKinds`, like the six real handlers. Like `ExternalTestHandler`, it is registered only by the test hosts that use it (an Api host through `ApiFactory.TestServices`, as `ExternalLibraryTests` does; `IntegrityJobTests` appends it to its handler array), each writing its fixture DAT, so no global system count changes.
+  - Files: `Core/Systems/ISystemHandler.cs`, `Core/Systems/SystemRegistry.cs`, `Core/Storage/ExternalRomName.cs`, `tests/RnRomManager.TestData/ExternalSetTestHandler.cs` (new, with its box art as `ExternalTestHandler` has), `SystemRegistryTests.cs`, `ExternalRomNameTests.cs`.
   - Tests:
     - `SystemRegistryTests`: `FileSets` with embedded storage is refused; a family with mixed `FileSets` values is refused.
     - `ExternalRomNameTests`: an exact name comes back unchanged; a taken name (ignoring case) is reported; 251 bytes is reported too long.
   - Done when: the classes above pass.
 - [ ] **3. Release files in info.json**: B12 (info.json part). Add `InfoJsonRomFile`, `files` and schema v6, `InfoJsonUpgraderV5` (registered in `AppHost`), the validator rules, and `LibraryZipWriter`'s length check for set files.
+  - Files: `Core/Library/InfoJsonRom.cs`, `InfoJsonRomFile.cs` (new), `InfoJsonReader.cs` (`CurrentVersion` 5 → 6), `InfoJsonUpgraderV5.cs` (new), `InfoJsonValidator.cs`, `LibraryZipWriter.cs`, `Api/AppHost.cs` (upgrader registration), `InfoJsonTests.cs`, `LibraryZipTests.cs`.
   - Tests:
-    - `InfoJsonTests` (it also holds the validator cases): a v6 round-trip with files; `files` on a non-`FileSets` system, a duplicate name across the game, a bad extension, an oversize file, a `files` name over 250 UTF-8 bytes and a `fileName` that differs from its `externalFileName` on a `FileSets` system are each rejected; a `...Iru!` name is accepted on a `FileSets` system.
+    - `InfoJsonTests` (it also holds the validator cases): its serialized `"schemaVersion": 5` assertion becomes 6; a v6 round-trip with files; `files` on a non-`FileSets` system, an empty `files` array, an uppercase `sha1` in a `files` entry, a duplicate name across the game, a bad extension, an oversize file, a `files` name over 250 UTF-8 bytes and a `fileName` that differs from its `externalFileName` on a `FileSets` system are each rejected; a `...Iru!` name is accepted on a `FileSets` system.
     - `InfoJsonTests` also holds the upgrader cases, as for V2–V4: `V5Upgrade_` v5 → v6 adds `files: null`. Add `InfoJsonUpgraderV5` to the upgrader lists built in `InfoJsonTests` and `LibraryZipTests`.
     - `LibraryZipTests`: a write whose set file has the wrong length fails verification; a write whose info.json would be over 1 MiB fails with `VerifyFailed` and leaves the old ZIP.
   - Done when: the classes above pass.
 - [ ] **4. `rom_files` table, mirror and claims**: B12 (database part), B13. Add migration `0020_rom_files.sql`, the mirror insert/delete in `LibraryMirror.ApplyAsync`, `ListExternalAsync` (union, `FileId`), `ExternalRomRow.FileId`, `RomFileRow` and the three `IRomRepository` file methods, and `InfoJsonGame.ExternalFileNames()` with every call site B13 lists switched to it.
+  - Files: `Data/Migrations/0020_rom_files.sql` (new), `Data/Repositories/LibraryRepositories.cs` (`LibraryMirror`, `RomRepository`), `Core/Library/LibraryRows.cs` (`MirrorEntry.ToRows`, `RomFileRow`), `Core/Library/ILibraryRepositories.cs`, `Core/Library/InfoJsonGame.cs`, the call sites in `IngestPipeline.cs`, `LibraryEditor.cs` and `IntegrityJob.cs`, `LibraryMirrorTests.cs`, `SchemaMigrationTests.cs`, `InfoJsonTests.cs`.
   - Tests (`LibraryMirrorTests`, Data integration): rows are written and cascade-deleted; `ListExternalAsync` includes the files; two releases sharing a track SHA1 are allowed; `SyncAllAsync` restores `rom_files` from the ZIPs; `ListFilesByGameAsync`, `GetFileAsync` (null for another release's file) and `ListFilesBySha1Async` return the rows. `InfoJsonTests`: `ExternalFileNames()` lists main names, then `files` names.
   - `SchemaMigrationTests`: `rom_files` added to its table list, `0020_rom_files` to the journalled scripts, the re-run count 19 → 20, and a column `[TestCase]` for `rom_files`.
   - Done when: `LibraryMirrorTests` and `SchemaMigrationTests` (Docker running) and `InfoJsonTests` pass, and the existing `IntegrityJobTests`, `ExternalLibraryTests` and `IngestPipelineTests` still pass.
 - [ ] **5. Cue parser**: B8. Add `Core/Ingest/CueSheet.cs`.
+  - Files: `Core/Ingest/CueSheet.cs` (new), `tests/RnRomManager.Core.Tests/Ingest/CueSheetTests.cs` (new).
   - Tests: `CueSheetTests` covers quoted and unquoted names, mixed case, BOM, Latin-1 fallback, duplicates collapsed (also ones differing only by case), an error on no `FILE` line, an error on 100 distinct names (99 parse), an error on a name of `.` or `..` or with `/`, `\` or `:`, `...Iru! (Japan).bin` accepted, and other commands ignored.
   - Done when: `CueSheetTests` passes.
 - [ ] **6. Single-file ingest for `FileSets` systems and archive skip**: B9, B10, B11, B23 (`ArchiveNotSupported`, `NameTaken`, `NameTooLong`). A matched `.iso` is stored under its exact name with no `files`; an unmatched one goes to Review.
+  - Files: `Core/Ingest/IngestPipeline.cs` (`IngestErrors`, `LibretroRelease`, external naming), `Core/Ingest/IngestOutcome.cs` (`IngestReason`), `Core/Ingest/IngestJob.cs` (archive skip), `ExternalLibraryTests.cs` (host), `ExternalLibraryTests.Sets.cs` (new).
   - Tests (`ExternalLibraryTests.Sets.cs`, a new partial of the Api integration class `ExternalLibraryTests`, whose host in `ExternalLibraryTests.cs` now also registers `ExternalSetTestHandler` and writes its fixture DAT; `IngestPipelineTests`' host registers no external handler):
     - a matched `.iso` is stored beside the ZIP with no prefix;
     - a matched data `.bin` named `… (Track 1).bin` gets no `Track 1` flag;
@@ -278,6 +283,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - a matched `.iso` whose name an existing release of the same game uses gives `NameTaken`, with no ` (2)`.
   - Done when: `ExternalLibraryTests` passes (Docker running).
 - [ ] **7. Set planning**: B7 (planning only), B23 (`IncompleteSet`, `UnsupportedSetMember`, `SetConflict`). Add `Core/Ingest/IngestSetPlanner.cs`: a pure function from one folder's loose files (name, size, and for a `.cue` of at most 64 KiB its bytes, or null when it couldn't be read) and the selection to an ordered list of sets, lone files and skipped members with their reasons. It parses cues through `CueSheet`. Not yet called by `IngestJob`.
+  - Files: `Core/Ingest/IngestSetPlanner.cs` (new), `Core/Ingest/IngestOutcome.cs` (`IngestReason`), `tests/RnRomManager.Core.Tests/Ingest/IngestSetPlannerTests.cs` (new).
   - Tests (`IngestSetPlannerTests`):
     - cue + two `.bin`s gives one set in cue order, cue first;
     - a missing member gives `IncompleteSet` for every present member, and a lone `.cue` whose files are missing is the same;
@@ -290,6 +296,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - a selection holding only the `.bin` selects the whole set; an unselected lone file is left out.
   - Done when: `IngestSetPlannerTests` passes.
 - [ ] **8. Set ingest: store, Review and rollback**: B7 (processing a planned set), B7a (one match, no match, `AmbiguousSet`, audit), B23 (`AmbiguousSet`). Call the planner from `IngestJob` in its unit order, hash every member once, pick the data track, and place every file with rollback of all of them if any move or the ZIP write fails. Job items are per file.
+  - Files: `Core/Ingest/IngestJob.cs`, `Core/Ingest/IngestPipeline.cs`, `Core/Ingest/IngestOutcome.cs`, `ExternalLibraryTests.Sets.cs`.
   - Tests (`ExternalLibraryTests.Sets.cs`):
     - cue + data + audio track gives one release with 2 `files` in cue order, every item `Ingested`, and one `Ingested` audit event;
     - no match gives three Review items;
@@ -298,11 +305,13 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - a ZIP write that fails with `TargetZipUnreadable` gives all three items that `Error`, and the files stay in ingest.
   - Done when: `ExternalLibraryTests` passes (Docker running).
 - [ ] **9. Set ingest: guards, job rules and lone files**: B7 (`TooRecent`, changed after hashing, size limits, path limit, cancellation, progress, systems without `.cue`, lone files). The set checks that stop a set before anything moves, and the job-level rules.
+  - Files: `Core/Ingest/IngestJob.cs`, `Core/Ingest/IngestPipeline.cs`, `ExternalLibraryTests.Sets.cs`, `IngestJobTests.cs`.
   - Tests:
     - `ExternalLibraryTests.Sets.cs`: one member `TooRecent`, or changed after hashing, skips the set; a member over the size limit moves to `_failed/` as `TooLarge` and the others are `Skipped` `IncompleteSet` and stay, also on the next run; a lone `.nrg` goes to Review, and a lone `.txt` fails as `UnsupportedType`;
     - `IngestJobTests`: a cancelled job finishes the set it started; a selection holding one `.bin` of a 3-file set gives a progress total of 3; on a `FileSets` handler without `.cue` in its extensions, a `.cue` and its `.bin` are processed one by one, with no planning.
   - Done when: `ExternalLibraryTests` (Docker running) and `IngestJobTests` pass.
 - [ ] **10. Set ingest against existing state**: B7a (duplicate, data track in Review, dismissed, `AmbiguousGroup`, repeated SHA1s, members' own review rows), B7 (lone `.bin` `AmbiguousGroup`), B23 (`AmbiguousGroup`, `AlreadyInReview`).
+  - Files: `Core/Ingest/IngestPipeline.cs`, `Core/Ingest/IngestOutcome.cs`, `ExternalLibraryTests.Sets.cs`.
   - Tests (`ExternalLibraryTests.Sets.cs`):
     - a duplicate data track sends all members to `_duplicates/`, one `MovedToDuplicates` event each;
     - an `AmbiguousGroup` data track skips every member, and a lone matched `.bin` with an ambiguous group is `Skipped` `AmbiguousGroup` and stays;
@@ -313,6 +322,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - a dismissed data track's set is ingested.
   - Done when: those classes pass (Docker running).
 - [ ] **11. Track self-repair**: B14.
+  - Files: `Core/Ingest/IngestPipeline.cs`, `ExternalLibraryTests.Repair.cs` (existing partial).
   - Tests (`ExternalLibraryTests.Repair.cs`):
     - a deleted audio track with an open `EntryMissing` is put back by re-ingesting the set: its item is `Repaired`, the issue resolves, and the other members are `Duplicate`;
     - a lone track file repairs too;
@@ -328,6 +338,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - `review-page.test.ts` (it tests `review/[id]` and the queue): an item with `resolvable` false shows only Delete and the hint; the queue's reason filter offers "Ambiguous set".
   - Done when: the tests pass, plus `npm run lint` and `npm run check`.
 - [ ] **13. Title edit and delete on sets**: B16, B17. `NameTaken` in `LibraryEndpoints.ToProblem`.
+  - Files: `Core/Library/LibraryEditor.cs`, `Core/Library/LibraryEditResult.cs` (`NameTaken`), `Api/Endpoints/LibraryEndpoints.cs`, `ExternalLibraryTests.Sets.cs`.
   - Tests (`ExternalLibraryTests.Sets.cs`, from step 6):
     - a title edit in the same bucket renames only the ZIP;
     - a title edit is refused with `TargetZipUnreadable` when another game also claims one of the set's files in the old folder;
@@ -336,11 +347,13 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - game delete moves every file and writes one `GameDeleted` event.
   - Done when: `ExternalLibraryTests` passes (Docker running).
 - [ ] **14. Move and merge of sets**: B18. Whole-set move/merge and `ExternalMoveRecord` v2 with v1 still read.
+  - Files: `Core/Library/LibraryEditor.cs`, `Core/Library/ExternalMoveRecord.cs`, `ExternalLibraryTests.Sets.cs`, `ExternalMoveRecordTests.cs`.
   - Tests:
     - `ExternalLibraryTests.Sets.cs`: move into a folder with a taken name gives `409 NameTaken` and nothing moves; a same-folder merge moves no set files and succeeds; a logical-name clash on merge gives `NameTaken`; a move writes a v2 record.
     - `ExternalMoveRecordTests`: v2 round-trip with 99 pairs of 250-byte names made of `'` (each escaped to 6 bytes) under the 320 KiB cap, and a v1 record still read and validated.
   - Done when: those classes pass (Docker running).
 - [ ] **15. Integrity for set files**: B19.
+  - Files: `Core/Integrity/IntegrityJob.cs`, `IntegrityJobTests.cs`.
   - Tests (`IntegrityJobTests`, Data integration, with `ExternalSetTestHandler` appended to its handlers):
     - a missing track gives `EntryMissing` keyed by its name, and the issue resolves on the next run once the track is back;
     - a truncated track gives `EntrySizeMismatch`;
@@ -348,25 +361,30 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - set files are not `OrphanFile`.
   - Done when: `IntegrityJobTests` passes (Docker running).
 - [ ] **16. API for release files**: B20 (API part), B21. Add `files` and `totalSizeBytes` to the detail, the file download route, and the sizes in the list and report.
+  - Files: `Api/Endpoints/LibraryEndpoints.cs`, `Api/Endpoints/LibraryFiles.cs`, `Data/Repositories/LibraryRepositories.cs` (`PrimarySizeBytes`), `Data/Repositories/ReportRepository.cs` (`GameBytes`, which both the summary and the system drill-down use), `LibraryEndpointsTests.cs`, `ReportEndpointsTests.cs`.
   - Tests:
     - `LibraryEndpointsTests` (integration, mirroring an `ExternalSetTestHandler` game directly, as its external tests do): detail lists files and `totalSizeBytes`; `GET /api/games` gives `primarySizeBytes` including the primary release's files; the download streams bytes with range support; another release's file id gives 404.
     - `ReportEndpointsTests`: the size includes the files.
   - Done when: those classes pass (Docker running).
 - [ ] **17. Game page file list**: B20 (UI part). `lib/api/types.ts` and the Game page toggle and table.
+  - Files: `lib/api/types.ts`, `routes/games/[id]/+page.svelte`, `routes/games/game-page.test.ts`.
   - Tests: `game-page.test.ts`: a release with 2 `files` shows "3 files", and the toggle lists the main file then the 2 files, with download buttons that have an `aria-label`, and the size shows the total; `table-style.test.ts` passes.
   - Done when: `npm test`, `npm run lint` and `npm run check` pass.
 - [ ] **18. The four headerless handlers**: B4. Add `RnRomManager.Systems.Sony` (`psx`, `psp`) and `.Microsoft` (`x360`) with their test projects, the Saturn handler in `.Sega`, their box art, `RnRomManager.slnx` and the `Dockerfile` restore layer. They are not registered yet.
+  - Files: `src/RnRomManager.Systems.Sony/` (new: csproj, `PlayStationHandler.cs`, `PlayStationPortableHandler.cs`, `EmbeddedResources.cs`, `Resources/boxart/`), `src/RnRomManager.Systems.Microsoft/` (new: csproj, `Xbox360Handler.cs`, `EmbeddedResources.cs`, `Resources/boxart/`), `src/RnRomManager.Systems.Sega/SaturnHandler.cs` and its box art, `tests/RnRomManager.Systems.Sony.Tests/`, `tests/RnRomManager.Systems.Microsoft.Tests/`, `tests/RnRomManager.Systems.Sega.Tests/SaturnHandlerTests.cs`, `RnRomManager.slnx`, `Dockerfile`.
   - Tests:
     - each handler's contract test (every B4 value, `ReadHeader` null);
     - box art is a valid 512×512 PNG and differs from the others in its project.
   - Done when: `Systems.Sony.Tests`, `Systems.Microsoft.Tests` and `Systems.Sega.Tests` pass, and `docker build .` succeeds.
 - [ ] **19. The GameCube and Wii handlers**: B4, B6. Add `RnRomManager.Systems.NintendoDisc` (`gc`, `wii`, `NintendoDiscHeader`) with its test project, box art, `RnRomManager.slnx` and the `Dockerfile` restore layer. Not registered yet.
+  - Files: `src/RnRomManager.Systems.NintendoDisc/` (new: csproj, `GameCubeHandler.cs`, `WiiHandler.cs`, `NintendoDiscHeader.cs`, `EmbeddedResources.cs`, `Resources/boxart/`), `tests/RnRomManager.Systems.NintendoDisc.Tests/`, `RnRomManager.slnx`, `Dockerfile`.
   - Tests:
     - each handler's contract test (every B4 value);
     - box art is a valid 512×512 PNG, and the two differ;
     - `NintendoDiscHeaderTests`: GC magic, Wii magic, no magic, a truncated span, a non-printable game id, and the title cut at the NUL.
   - Done when: `Systems.NintendoDisc.Tests` passes, and `docker build .` succeeds.
 - [ ] **20. Register the six systems**: B4, B22. `AppHost` registration and `RnRomManager.Api.csproj` project references, the SPA colours and icons, the startup `ingest/<id>/` and `roms/<id>/` folders, and the six (empty) fixture Redump DATs in the seeder's `FixtureDatWriter.Write`.
+  - Files: `Api/AppHost.cs`, `Api/RnRomManager.Api.csproj`, `lib/systemColours.ts`, `lib/systemColours.test.ts`, `app.css`, `lib/components/icons.ts`, `tests/RnRomManager.TestData/IngestSeeder.cs`, the 17 test hosts below, `IngestSeederTests.cs`, `DatEndpointsTests.cs`, `SystemStartupTests.cs`, `IngestEndpointsTests.cs`, `LibraryEndpointsTests.cs`, `IngestPipelineTests.cs`.
   - `IngestSeeder` gets the six DatName constants and `EmptyRedump`, a map from each to an empty game list with its layout (`redump`, no metadat kinds). Every Api test host that lists each libretro DAT by hand (today `AuditLibraryEditTests`, `DatEndpointsTests`, `ImageEndpointsTests`, `ImageUrlEndpointsTests`, `IngestArchiveTests`, `IngestDeleteEndpointsTests`, `IngestEndpointsTests`, `IngestPipelineTests`, `IngestReviewTests`, `LibraryEditTests`, `LibraryEndpointsTests`, `LibraryMoveMergeTests`, `MediaRetryEndpointsTests`, `NoteEndpointsTests`, `ReportEndpointsTests`, `ReviewEndpointsTests`, `ZipEntryEndpointsTests`) adds them; otherwise ingestion fails `DatsMissing`.
   - Update every count and list this breaks:
     - `IngestSeederTests`: DAT files 65 → 71 (plus the titledb file);
@@ -386,6 +404,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - `ingest/x360/`: `Arc Strike (USA).iso`.
 
   Every `.bin` and `.iso` is 64 KiB of deterministic bytes from its own builder seed, so no two files share a SHA1 (above every minimum in B4). Each `.cue` names its two tracks with `FILE "…" BINARY` lines.
+  - Files: `tests/RnRomManager.TestData/IngestSeeder.cs`, a synthetic disc builder in `tests/RnRomManager.TestData/` (new), `IngestSeederTests.cs`, `SeedIngestTests.cs`, `tests/e2e/specs/mvp.spec.ts`.
 
   None of the six fixture games has metadat (B2). Basic goes from 17 games, 22 releases and 22 Ingested to 23 games, 28 releases and 32 Ingested items, because each set member is an item; Duplicate 1, Review 2 and Failed 1 don't change. Full goes from 217 games, 222 releases and 222 Ingested to 223, 228 and 232.
   - Update every count:
@@ -487,6 +506,10 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - 2026-11-12 Step 4 updates `SchemaMigrationTests`, which lists every table and migration and counts 19 scripts (code).
 - 2026-11-12 B21's `primarySizeBytes` gets a `LibraryEndpointsTests` case; it had none (reviewer).
 - 2026-11-12 v2 move record = every v1 field plus `files` pairs; registry order appends the six after Switch; seed files are 64 KiB each; `ItemDone` once per member; lone-track repair runs where step 3's main-file repair does (reviewer).
+- 2026-11-12 How does the mirror get `rom_files.rom_id`? → by joining `roms.sha1` (unique) in an `INSERT … SELECT`, because `LibraryMirror.ApplyAsync` batch-inserts `roms` without reading ids back (code).
+- 2026-11-12 Validator rules for `files` entries' hashes and an empty array? → lowercase hex as for `metadata`; `[]` is rejected, a single file is `null` (code: `InfoJsonValidator` hash rule).
+- 2026-11-12 Step 3 updates `InfoJsonTests`' `"schemaVersion": 5` assertion; `InfoJsonReader.CurrentVersion` holds the version (code).
+- 2026-11-12 Every step names its files; new handler classes follow the `<System>Handler` pattern (`PlayStationHandler`, `PlayStationPortableHandler`, `GameCubeHandler`, `WiiHandler`, `Xbox360Handler`, `SaturnHandler`) with a per-project `EmbeddedResources` like `Systems.Sega` (reviewer).
 
 ## Kickoff prompt
 ```text
