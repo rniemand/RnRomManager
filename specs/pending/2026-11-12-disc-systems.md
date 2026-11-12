@@ -169,7 +169,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - **B17 Delete.** Deleting a release or a game moves every file of each release (main and `files`) to `ingest/<id>/_removed/`, using today's side-path allocation (`AllocateSidePath`) for each file. A missing file is logged and skipped, as a missing main file is today. A failed move undoes the moves already made (`UndoMoves`), as today. The audit events keep today's shape:
   - deleting a release writes one `ReleaseDeleted` event: `target_path` is the main file's `_removed/` path and `details` is the main `fileName`, as today, followed by `; ` and each `files` name in order (truncated to the column, as all audit text is);
   - deleting a game writes one `GameDeleted` event, unchanged (`target_path` `ingest/<id>/_removed/`).
-- **B18 Move / merge.** Move-release and merge move every file of a set with its exact name. A taken name in the target folder refuses the whole operation with `409` `NameTaken` before any file moves.
+- **B18 Move / merge.** On a `FileSets` system, move-release and merge move every file of each moved release with its exact name: the main file and each `files` entry, so a single-file `.iso` release (no `files`) follows the same rules, and "set files" below means all of them. A taken name in the target folder refuses the whole operation with `409` `NameTaken` before any file moves.
   - **Each file as a main file today:** a missing set file is logged and only its entry moves; a file that is neither found nor missing refuses with `IoError`; a failed move undoes the moves already made (`UndoMoves`) and returns `IoError`; a failed ZIP write undoes every move.
   - **Same folder:** when the source and target ZIPs are in the same folder, the set files don't move, and the source game's own claims don't count as taken.
   - **Logical names:** a logical-name clash in the target game (`AllocateLogicalName`) also refuses with `NameTaken`. It never adds ` (N)`, so `fileName` always equals `externalFileName`.
@@ -359,7 +359,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - [ ] **14. Move and merge of sets**: B18. Whole-set move/merge and `ExternalMoveRecord` v2 with v1 still read.
   - Files: `Core/Library/LibraryEditor.cs`, `Core/Library/ExternalMoveRecord.cs`, `ExternalLibraryTests.Sets.cs`, `ExternalMoveRecordTests.cs`.
   - Tests:
-    - `ExternalLibraryTests.Sets.cs`: move into a folder with a taken name gives `409 NameTaken` and nothing moves; a same-folder merge moves no set files and succeeds; a logical-name clash on merge gives `NameTaken`; a move writes a v2 record; a move whose second set file fails to move (file system hook) undoes the first and gives `IoError`.
+    - `ExternalLibraryTests.Sets.cs`: move into a folder with a taken name gives `409 NameTaken` and nothing moves; a same-folder merge moves no set files and succeeds; a logical-name clash on merge gives `NameTaken`; a move writes a v2 record; a move whose second set file fails to move (file system hook) undoes the first and gives `IoError`; moving a single-file `.iso` release to a game in another folder keeps its exact name (no `<ZipBase>.` prefix, no ` (N)`).
     - `ExternalMoveRecordTests`: v2 round-trip with 99 pairs of 250-byte names made of `'` (each escaped to 6 bytes) under the 320 KiB cap, and a v1 record still read and validated.
   - Done when: those classes pass (Docker running).
 - [ ] **15. Integrity for set files**: B19.
@@ -553,6 +553,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - 2026-11-12 `UK` count and DATs? → 180 rom names in all six DATs, including lists like `(UK, Australia)`; the earlier "296 in four DATs" was wrong (fact).
 - 2026-11-12 `(United Arab Emirates)` in five Redump game names is also unknown to `NoIntroRegions` → added with `UK`, same reason as B3a; no other unknown region group in the six DATs (fact).
 - 2026-11-12 Step 9's "`FileSets` handler without `.cue`" named no handler → a `discx` substitute from `IngestJobTests`' `Handler` helper, with the `.cue` `UnsupportedType` and the `.bin` in Review (reviewer).
+- 2026-11-12 B18 named only sets, so moving or merging a single-file `.iso` release on a `FileSets` system had no naming rule (today's code prefixes `<ZipBase>.` and may add ` (N)`) → B18 covers every file of every moved release, as B16 and B17 already do; step 14 tests a single `.iso` move (code: `LibraryEditor.MoveReleaseExternalAsync` calls `ExternalRomName.Allocate`; B10).
 
 ## Kickoff prompt
 ```text
