@@ -307,9 +307,9 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - names resolve ignoring case;
     - a selection holding only the `.bin` selects the whole set; an unselected lone file is left out.
   - Done when: `IngestSetPlannerTests` passes.
-- [ ] **8. Set ingest: store, Review and rollback**: B7 (processing a planned set), B7a (one match, no match, `AmbiguousSet`, audit), B23 (`AmbiguousSet`). Call the planner from `IngestJob` in its unit order, hash every member once, pick the data track, and place every file with rollback of all of them if any move or the ZIP write fails. Job items are per file.
-  - Files: `Core/Ingest/IngestJob.cs`, `Core/Ingest/IngestPipeline.cs`, `Core/Ingest/IngestOutcome.cs`, `ExternalLibraryTests.Sets.cs`.
-  - Tests (`ExternalLibraryTests.Sets.cs`):
+- [x] **8. Set ingest: store, Review and rollback**: B7 (processing a planned set), B7a (one match, no match, `AmbiguousSet`, audit), B23 (`AmbiguousSet`). Call the planner from `IngestJob` in its unit order, hash every member once, pick the data track, and place every file with rollback of all of them if any move or the ZIP write fails. Job items are per file.
+  - Files: `Core/Ingest/IngestJob.cs`, `Core/Ingest/IngestPipeline.cs`, `Core/Ingest/IngestOutcome.cs`, `ExternalLibraryTests.Sets.cs` (fixture DAT games), `ExternalLibraryTests.SetIngest.cs` (new partial).
+  - Tests (`ExternalLibraryTests.SetIngest.cs`):
     - cue + data + audio track gives one release with 2 `files` in cue order, every item `Ingested`, and one `Ingested` audit event;
     - no match gives three Review items;
     - two matches give `AmbiguousSet`;
@@ -558,6 +558,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - 2026-11-12 What does v2 move-record validation check for `files`? → versions 1 and 2 accepted; each `files` name passes `Problem`'s pointer check, and the backed-up release's `files` names must equal the recorded source names in order (ignoring case), as v1 checks the main pointer (code: `ExternalMoveRecord.ValidateAsync` rejects any version but `CurrentVersion` and checks only the main pointer).
 - 2026-11-12 What does the Delete-only Review item page keep, and which name decides `.cue`/`.bin`? → the action tabs and Dismiss are hidden and the hint takes the tabs' place; the File and Header cards, Google it and Delete stay; the extension is `originalFileName`'s (code: `review/[id]/+page.svelte` tabs, `ReviewItem.OriginalFileName`).
 - 2026-11-12 Step 3's set-file length tests go in `LibraryZipCheckedWriteTests`, not `LibraryZipTests`: only the checked write verifies external files, and its tests already host an external system (code).
+- 2026-11-12 Step 8's set path already returns `TooRecent` for a member that changed or is too young, `IoError` for one that can't be read (whole set), and `Skipped` `AmbiguousGroup` when two games own the base title, so it never runs undefined; steps 9 and 10 refine these to B7's per-member rules and add their tests (code).
 
 ## Kickoff prompt
 ```text

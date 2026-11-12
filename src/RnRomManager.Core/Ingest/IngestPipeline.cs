@@ -358,6 +358,118 @@ public sealed class IngestPipeline(
             : await AddToGameAsync(file, system, owners[0], rom, metadata, bytes, breaker, result, now, actor, null, cancellationToken, source: source).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// B7/B7a: one planned bin/cue set (the cue first, then its <c>FILE</c> names), processed as one unit to the end:
+    /// every member is hashed once, the member whose SHA1 the DAT lists is the data track, and the set is stored as one
+    /// release (the other members in its <c>files</c>), queued for Review member by member, or left alone. Each member's
+    /// own Pending review row is completed by its result, as <see cref="ProcessAsync"/> does for one file.
+    /// </summary>
+    /// <returns>One result per member, in <paramref name="members"/> order.</returns>
+    public async Task<IReadOnlyList<IngestItemResult>> ProcessSetAsync(IReadOnlyList<IngestFile> members, Guid jobId, AuditActor actor,
+        CircuitBreaker breaker, JobProgress? progress = null)
+    {
+        var results = await ProcessSetCoreAsync(members, jobId, actor, breaker, progress).ConfigureAwait(false);
+        var now = time.GetUtcNow().UtcDateTime;
+        for (var i = 0; i < members.Count; i++)
+        {
+            // I4: an Error keeps the member's Pending row.
+            if (results[i].Outcome != IngestOutcome.Error)
+                await reviews.CompleteSourceAsync(members[i].SourcePath, null, results[i], jobId, now, CancellationToken.None).ConfigureAwait(false);
+        }
+        return results;
+    }
+
+    private async Task<IReadOnlyList<IngestItemResult>> ProcessSetCoreAsync(IReadOnlyList<IngestFile> members, Guid jobId, AuditActor actor,
+        CircuitBreaker breaker, JobProgress? progress)
+    {
+        // I2: a started set runs to the end.
+        var cancellationToken = CancellationToken.None;
+        var system = systems.ById(members[0].SystemId) ?? throw new InvalidOperationException($"No handler for ingest folder '{members[0].SystemId}'.");
+        var root = paths.Value.Ingest;
+        IReadOnlyList<IngestItemResult> All(IngestItemResult result) => members.Select(_ => result).ToList();
+        var tooRecent = new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent, SystemId: system.Id);
+
+        // Step 2 for each member: checked, unchanged since the listing, hashed in one streamed read.
+        var hashed = new List<(IngestFile File, ExternalSource Source, RomFileHashes Hashes)>();
+        foreach (var file in members)
+        {
+            progress?.SetCurrentItem(file.Name);
+            var fresh = ExternalRomPath.ClassifyFile(root, file.FullPath);
+            if (fresh.Status != ExternalPathStatus.Found)
+                return All(IngestItemResult.Error(IngestErrors.IoError, $"{file.Name}: {fresh.Details}", system.Id));
+            var snapshot = fresh.Snapshot!;
+            if (snapshot.Length != file.SizeBytes || snapshot.LastWriteTimeUtc != file.ModifiedAtUtc
+                || time.GetUtcNow().UtcDateTime - snapshot.LastWriteTimeUtc < IngestJob.MinFileAge)
+                return All(tooRecent);
+            var (outcome, hashes, failure) = await HashCheckedAsync(file, root, fresh.Path, snapshot, system.MaxRomSizeBytes, recheckPath: true,
+                cancellationToken, progress).ConfigureAwait(false);
+            if (outcome == HashOutcome.Failed)
+                return All(IngestItemResult.Error(IngestErrors.IoError, $"{file.Name}: {failure}", system.Id));
+            if (outcome == HashOutcome.Changed)
+                return All(tooRecent);
+            hashed.Add((file, new ExternalSource(root, fresh.Path, snapshot, progress), hashes!));
+        }
+
+        RomHashes Hashes(int i) => new(hashed[i].Hashes.Crc32, hashed[i].Hashes.Md5, hashed[i].Hashes.Sha1);
+        IReadOnlyList<IngestItemResult> Each(Func<int, IngestItemResult> result) => Enumerable.Range(0, members.Count).Select(result).ToList();
+
+        // B7a: the data track is the one member the DAT lists.
+        var store = dats.For(system.Id);
+        var matches = Enumerable.Range(0, hashed.Count).Where(i => store?.BySha1(hashed[i].Hashes.Sha1) is not null).ToList();
+        if (matches.Count != 1)
+        {
+            var reason = matches.Count == 0 ? "NoDatMatch" : ReviewReasons.AmbiguousSet;
+            var queued = new List<IngestItemResult>();
+            for (var i = 0; i < hashed.Count; i++)
+            {
+                var (file, _, hashes) = hashed[i];
+                // An AmbiguousSet item can't be resolved, so it gets no suggestions.
+                IReadOnlyList<Suggestion> suggestions = matches.Count == 0 ? SuggestionEngine.Find(store, null, file.Name, hashes.SizeBytes) : [];
+                queued.Add(await QueueReviewAsync(file, file.Name, system.Id, reason, Hashes(i), hashes.SizeBytes, system.ReadHeader(hashes.Header), jobId,
+                    suggestions, null, null, cancellationToken).ConfigureAwait(false));
+            }
+            return queued;
+        }
+
+        var data = matches[0];
+        var (dataFile, dataSource, dataHashes) = hashed[data];
+        var release = LibretroRelease(store!.BySha1(dataHashes.Sha1)!, store, dataFile, external: true, tagsFromGameName: true);
+        var owners = await roms.ListGameIdsByBaseTitleAsync(system.Id, release.BaseTitle, cancellationToken).ConfigureAwait(false);
+        if (owners.Count > 1)
+            return Each(i => new IngestItemResult(IngestOutcome.Skipped, IngestReason.AmbiguousGroup, $"games {string.Join(", ", owners)} own '{release.BaseTitle}'",
+                system.Id, Sha1: hashed[i].Hashes.Sha1));
+
+        // B10: every member keeps its source name; the data track is the release's main file.
+        var now = time.GetUtcNow();
+        var rom = new InfoJsonRom
+        {
+            FileName = dataFile.Name,
+            OriginalFileName = dataFile.Name,
+            BaseTitle = release.BaseTitle,
+            Regions = release.Regions,
+            Languages = release.Languages,
+            Revision = release.Revision,
+            Flags = release.Flags,
+            Version = ReleaseVersion.For(release.Flags, dataFile.Name),
+            IsPrimary = false,
+            Identification = new InfoJsonIdentification(release.Method, store.DatName, store.Version, release.GameName),
+            Header = system.ReadHeader(dataHashes.Header) is { } header ? JsonSerializer.SerializeToNode(header.Fields) as JsonObject : null,
+            Metadata = new InfoJsonRomMetadata(dataHashes.SizeBytes, dataHashes.Crc32, dataHashes.Md5, dataHashes.Sha1, now, now, dataFile.SourcePath),
+            Files = hashed.Where((_, i) => i != data)
+                .Select(m => new InfoJsonRomFile(m.File.Name, m.File.Name, m.File.Name, m.Hashes.SizeBytes, m.Hashes.Crc32, m.Hashes.Md5, m.Hashes.Sha1))
+                .ToList(),
+        };
+        var set = hashed.Select(m => new SetPlacement(m.File, new ExternalPlacement(m.Source, m.File.Name), m.Hashes.Sha1)).ToList();
+        var result = new IngestItemResult(IngestOutcome.Ingested, SystemId: system.Id, Sha1: dataHashes.Sha1);
+        var stored = owners.Count == 0
+            ? await NewGameAsync(dataFile, system, rom, release.Metadata, null, breaker, result, now, actor, null, cancellationToken, source: dataSource, set: set)
+                .ConfigureAwait(false)
+            : await AddToGameAsync(dataFile, system, owners[0], rom, release.Metadata, null, breaker, result, now, actor, null, cancellationToken,
+                source: dataSource, set: set).ConfigureAwait(false);
+        // One outcome for the whole set; each member's item carries its own SHA1.
+        return Each(i => stored with { Sha1 = hashed[i].Hashes.Sha1 });
+    }
+
     /// <summary>What a DAT match names a release: from a libretro DAT entry (by SHA1) or a titledb entry (T4/T5, by title id).</summary>
     /// <param name="FileName">Before E3 budgeting for an external system.</param>
     private sealed record Release(string FileName, string BaseTitle, string GameName, IReadOnlyList<string> Regions, IReadOnlyList<string> Languages,
@@ -415,10 +527,11 @@ public sealed class IngestPipeline(
     }
 
     /// <param name="bytes">The ROM for the ZIP; null when <paramref name="source"/> is an external ROM's file.</param>
+    /// <param name="set">B7: every file of a bin/cue set in placement order (cue first); null for a single file.</param>
     private async Task<IngestItemResult> NewGameAsync(
         IngestFile file, ISystemHandler system, InfoJsonRom rom, DatMetadata metadata, byte[]? bytes, CircuitBreaker breaker,
         IngestItemResult result, DateTimeOffset now, AuditActor actor, string? reviewAction, CancellationToken cancellationToken,
-        Func<Guid, Task>? afterMirror = null, ExternalSource? source = null)
+        Func<Guid, Task>? afterMirror = null, ExternalSource? source = null, IReadOnlyList<SetPlacement>? set = null)
     {
         // Step 7: a new game takes every metadata field. Step 8: media.
         var found = await media.FindAsync(system, [rom.Identification.DatGameName], breaker, cancellationToken).ConfigureAwait(false);
@@ -469,7 +582,7 @@ public sealed class IngestPipeline(
             string name;
             if (system.FileSets)
             {
-                if (ExactNameError(rom.FileName, reservations, system.Id, result.Sha1) is { } refused)
+                if (ExactNamesError(rom, reservations, system.Id, result.Sha1) is { } refused)
                     return refused;
                 name = rom.FileName;
             }
@@ -481,7 +594,7 @@ public sealed class IngestPipeline(
             var images = new Dictionary<string, Func<Stream>>();
             AddImages(images, found.BoxArt, found.Snap);
             return await PackageAsync(file, null, externalZipPath, game, images, result, actor, reviewAction, rom.FileName, cancellationToken,
-                afterMirror, placement: new ExternalPlacement(source, name)).ConfigureAwait(false);
+                afterMirror, placement: new ExternalPlacement(source, name), set: set).ConfigureAwait(false);
         }
 
         // §6.1: Sanitize(title).zip in roms/<system>/<bucket>/; a clash (any case) with another game gets " (2)"….
@@ -497,10 +610,11 @@ public sealed class IngestPipeline(
     }
 
     /// <param name="bytes">The ROM for the ZIP; null when <paramref name="source"/> is an external ROM's file.</param>
+    /// <param name="set">B7: every file of a bin/cue set in placement order (cue first); null for a single file.</param>
     private async Task<IngestItemResult> AddToGameAsync(
         IngestFile file, ISystemHandler system, Guid gameId, InfoJsonRom rom, DatMetadata metadata, byte[]? bytes, CircuitBreaker breaker,
         IngestItemResult result, DateTimeOffset now, AuditActor actor, string? reviewAction, CancellationToken cancellationToken,
-        Func<Guid, Task>? afterMirror = null, ExternalSource? source = null)
+        Func<Guid, Task>? afterMirror = null, ExternalSource? source = null, IReadOnlyList<SetPlacement>? set = null)
     {
         var row = await games.GetAsync(gameId, cancellationToken).ConfigureAwait(false);
         if (row is null)
@@ -538,7 +652,7 @@ public sealed class IngestPipeline(
                 var claims = await roms.ListExternalAsync(cancellationToken).ConfigureAwait(false);
                 var reservations = ExternalNameReservations.ForFolder(folder.Path, row.ZipPath[..row.ZipPath.LastIndexOf('/')], claims,
                     current.ExternalFileNames());
-                if (system.FileSets && ExactNameError(rom.FileName, reservations, system.Id, result.Sha1) is { } refused)
+                if (system.FileSets && ExactNamesError(rom, reservations, system.Id, result.Sha1) is { } refused)
                     return refused;
                 var name = system.FileSets ? rom.FileName : ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(row.ZipPath), rom.FileName, reservations);
                 rom = rom with { ExternalFileName = name };
@@ -576,9 +690,14 @@ public sealed class IngestPipeline(
 
             // B9: the new release never adopts an orphan note of its name.
             return await PackageAsync(file, existing, row.ZipPath, game, entries, result with { GameId = gameId }, actor, reviewAction, rom.FileName, cancellationToken,
-                afterMirror, new HashSet<string>(StringComparer.Ordinal) { LibraryZip.NoteEntry(rom.FileName) }, placement).ConfigureAwait(false);
+                afterMirror, new HashSet<string>(StringComparer.Ordinal) { LibraryZip.NoteEntry(rom.FileName) }, placement, set: set).ConfigureAwait(false);
         }
     }
+
+    /// <summary>B10: reserves the exact names of a release's main file and its set files, or the first error; nothing has moved yet.</summary>
+    private static IngestItemResult? ExactNamesError(InfoJsonRom rom, ExternalNameReservations reservations, string systemId, string? sha1) =>
+        new[] { rom.FileName }.Concat(rom.Files?.Select(f => f.ExternalFileName) ?? [])
+            .Select(name => ExactNameError(name, reservations, systemId, sha1)).FirstOrDefault(e => e is not null);
 
     /// <summary>B10: reserves a <c>FileSets</c> file's exact name, or the <c>NameTaken</c>/<c>NameTooLong</c> error; nothing has moved yet.</summary>
     private static IngestItemResult? ExactNameError(string name, ExternalNameReservations reservations, string systemId, string? sha1) =>
@@ -908,6 +1027,9 @@ public sealed class IngestPipeline(
     /// <summary>An external ROM's file and the name it takes next to its ZIP (E1).</summary>
     private sealed record ExternalPlacement(ExternalSource Source, string ExternalFileName);
 
+    /// <summary>B7: one member of a bin/cue set on its way beside the ZIP, with its own SHA1.</summary>
+    private sealed record SetPlacement(IngestFile File, ExternalPlacement Placement, string Sha1);
+
     /// <summary>I6: the file at a repaired ROM's pointer, and the reserved names a repair sets files aside under.</summary>
     /// <param name="ExistingPath">The file at the pointer as spelled on disk; null when it is missing.</param>
     /// <param name="BackupPath">Where that file waits until the ZIP is written (<c>.repair.tmp</c>).</param>
@@ -923,14 +1045,30 @@ public sealed class IngestPipeline(
         IngestFile file, LibraryZip? existing, string zipPath, InfoJsonGame game, Dictionary<string, Func<Stream>> entries,
         IngestItemResult result, AuditActor actor, string? reviewAction, string release, CancellationToken cancellationToken,
         Func<Guid, Task>? afterMirror = null, IReadOnlySet<string>? removedEntries = null, ExternalPlacement? placement = null,
-        RepairPlan? repair = null)
+        RepairPlan? repair = null, IReadOnlyList<SetPlacement>? set = null)
     {
         result = result with { GameId = game.GameId };
         var library = paths.Value.Roms;
         var target = SafePath.Resolve(library, zipPath);
         ExternalMoveResult? moved = null;
         ExternalFileSnapshot? published = null;
-        if (placement is not null)
+        var setMoves = new List<(SetPlacement Member, ExternalMoveResult Moved)>();
+        if (set is not null)
+        {
+            // B7: the set's files move one by one in set order (cue first); a failed move puts back the ones already moved.
+            foreach (var member in set)
+            {
+                var (memberMoved, memberStop) = Place(member.File, member.Placement, target, result with { Sha1 = member.Sha1 });
+                if (memberStop is not null)
+                {
+                    var notes = await RollBackSetAsync(setMoves, memberStop.Details ?? memberStop.Reason ?? "").ConfigureAwait(false);
+                    return memberStop with { Details = Join(memberStop.Details, notes) };
+                }
+                setMoves.Add((member, memberMoved!));
+            }
+            cancellationToken = CancellationToken.None;
+        }
+        else if (placement is not null)
         {
             if (repair?.ExistingPath is not null && StepAside(repair) is { } refused)
                 return IngestItemResult.Error(IngestErrors.IoError, refused, result.SystemId, result.Sha1);
@@ -943,7 +1081,9 @@ public sealed class IngestPipeline(
 
         try
         {
-            var placed = moved is null ? null
+            var placed = set is not null
+                ? setMoves.ToDictionary(m => m.Member.Placement.ExternalFileName, m => m.Moved.Snapshot!, StringComparer.OrdinalIgnoreCase)
+                : moved is null ? null
                 : new Dictionary<string, ExternalFileSnapshot>(StringComparer.OrdinalIgnoreCase) { [placement!.ExternalFileName] = moved.Snapshot! };
             var changes = new LibraryZipChanges(game, entries, removedEntries, placed);
             if (placement is null)
@@ -954,6 +1094,20 @@ public sealed class IngestPipeline(
         catch (Exception ex) when (placement is not null || ex is LibraryZipVerifyException or IOException or UnauthorizedAccessException)
         {
             // I4: any failure of the write puts an external ROM's file back before it is reported.
+            if (set is not null)
+            {
+                var notes = await RollBackSetAsync(setMoves, ex.Message).ConfigureAwait(false);
+                logger.LogError(ex, "{Path}: writing {Zip} failed", file.FullPath, zipPath);
+                var setReason = ex switch
+                {
+                    LibraryZipVerifyException => IngestErrors.VerifyFailed,
+                    IOException or UnauthorizedAccessException => IngestErrors.IoError,
+                    _ => null,
+                };
+                if (setReason is null)
+                    throw;
+                return result with { Outcome = IngestOutcome.Error, Reason = setReason, Details = Join(ex.Message, notes) };
+            }
             var (survivor, restoredAs) = placement is null ? (null, null) : RollBack(file, placement, moved!, repair);
             var reason = ex switch
             {
@@ -1024,6 +1178,27 @@ public sealed class IngestPipeline(
         }
         logger.LogInformation("{Path}: {Outcome} into {Zip}", file.FullPath, result.Outcome, zipPath);
         return result;
+    }
+
+    /// <summary>
+    /// B7: puts every moved set file back to its ingest path (or a <c> (2)</c>-style sibling, noted), last moved first,
+    /// and makes a Pending row follow a file that came back under another name.
+    /// </summary>
+    /// <returns>The notes of every file that didn't go back exactly where it was; null when all did.</returns>
+    private async Task<string?> RollBackSetAsync(List<(SetPlacement Member, ExternalMoveResult Moved)> moves, string failure)
+    {
+        string? notes = null;
+        foreach (var (member, movedMember) in Enumerable.Reverse(moves))
+        {
+            var (note, restoredAs) = RollBack(member.File, member.Placement, movedMember, repair: null);
+            if (note is not null)
+                notes = Join(notes, $"{member.File.Name}: {note}");
+            if (restoredAs is not null && await RetargetPendingAsync(member.Placement.Source.Path, restoredAs,
+                    new IngestItemResult(IngestOutcome.Error, Sha1: member.Sha1), failure).ConfigureAwait(false) is { } retargetFailed)
+                notes = Join(notes, retargetFailed.Details);
+        }
+        moves.Clear();
+        return notes;
     }
 
     /// <summary>

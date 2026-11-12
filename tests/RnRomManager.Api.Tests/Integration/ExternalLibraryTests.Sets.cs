@@ -15,6 +15,10 @@ public partial class ExternalLibraryTests
     private static readonly byte[] DiscRev1 = RandomNumberGenerator.GetBytes(3000);
     private static readonly byte[] DarkIso = RandomNumberGenerator.GetBytes(2500);
     private static readonly byte[] TrackData = RandomNumberGenerator.GetBytes(2352 * 2);
+    private static readonly byte[] SetData = RandomNumberGenerator.GetBytes(2352 * 3);
+    private static readonly byte[] SetData2 = RandomNumberGenerator.GetBytes(2352 * 3 + 16);
+    private static readonly byte[] Audio = RandomNumberGenerator.GetBytes(2352);
+    private static readonly byte[] Audio2 = RandomNumberGenerator.GetBytes(2352 + 8);
 
     /// <summary>The <see cref="ExternalSetTestHandler"/> fixture Redump DAT: one rom per game, as in Redump.</summary>
     private static IReadOnlyList<FixtureGame> SetDatGames =>
@@ -24,6 +28,8 @@ public partial class ExternalLibraryTests
         new FixtureGame("Disc Game (USA) (Rev 1)", "Disc Game (USA).iso", DiscRev1),
         new FixtureGame("Dark Game (USA)", "Disc Game (USA).iso", DarkIso),
         new FixtureGame("Track Game (USA)", "Track Game (USA) (Track 1).bin", TrackData),
+        new FixtureGame("Set Game (USA)", "Set Game (USA) (Track 1).bin", SetData),
+        new FixtureGame("Set Game (USA) (Disc 2)", "Set Game (USA) (Disc 2) (Track 1).bin", SetData2),
     ];
 
     private string SetIngest => Path.Combine(_factory.Root, "ingest", ExternalSetTestHandler.SystemId);
