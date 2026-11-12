@@ -118,7 +118,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
             }
             try
             {
-                await CheckExternalAsync(zip, externalByZip[zip], checks, Add, cancellationToken).ConfigureAwait(false);
+                await CheckExternalAsync(zip, externalByZip[zip], checks, Add, context.Progress, cancellationToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -268,7 +268,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
     /// after hashing; a file replaced or changed meanwhile is logged and its size and hash results are dropped.
     /// </summary>
     private async Task CheckExternalAsync(string zipPath, IEnumerable<ExternalRomRow> rows, ExternalChecks checks,
-        Action<IntegrityFinding> add, CancellationToken ct)
+        Action<IntegrityFinding> add, JobProgress progress, CancellationToken ct)
     {
         var root = paths.Value.Roms;
         var folder = Path.GetDirectoryName(Path.Combine(root, zipPath))!;
@@ -325,13 +325,18 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
                 case ExternalPathStatus.Found:
                     await using (var stream = opened.Stream!)
                     {
+                        progress.BeginStep(JobStepPhases.Hashing, snapshot.Length, time.GetUtcNow().UtcDateTime);
                         try
                         {
-                            sha1 = Convert.ToHexStringLower(await SHA1.HashDataAsync(stream, ct).ConfigureAwait(false));
+                            sha1 = await Sha1Async(Hooks?.WrapHashStream?.Invoke(stream) ?? stream, progress, ct).ConfigureAwait(false);
                         }
                         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                         {
                             error = $"unreadable: {ex.Message}";
+                        }
+                        finally
+                        {
+                            progress.EndStep();
                         }
                         if (ExternalRomPath.SnapshotOf(stream) != snapshot)
                             sha1 = error = null; // changed in place while it was read
@@ -573,6 +578,22 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
         var slash = zipPath.IndexOf('/');
         return slash > 0 && systems.ById(zipPath[..slash]) is { } handler ? handler.Id : null;
     }
+
+    /// <summary>The SHA1 of <paramref name="stream"/>, read in 1 MiB chunks that report the job's <c>Hashing</c> step (spec B2).</summary>
+    private static async Task<string> Sha1Async(Stream stream, JobProgress progress, CancellationToken ct)
+    {
+        using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+        var buffer = new byte[1024 * 1024];
+        long done = 0;
+        int read;
+        while ((read = await stream.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+        {
+            sha1.AppendData(buffer, 0, read);
+            done += read;
+            progress.StepAdvanced(done);
+        }
+        return Convert.ToHexStringLower(sha1.GetHashAndReset());
+    }
 }
 
 /// <summary>Test seams of <see cref="IntegrityJob"/>'s external file checks.</summary>
@@ -583,4 +604,7 @@ public sealed class IntegrityHooks
 
     /// <summary>Runs with the file's path after it was hashed and its handle closed, before the path is checked again.</summary>
     public Action<string>? AfterExternalHash { get; init; }
+
+    /// <summary>Wraps the stream a Deep check hashes an external ROM from, e.g. to pause mid-read.</summary>
+    public Func<Stream, Stream>? WrapHashStream { get; init; }
 }
