@@ -22,6 +22,15 @@ public static class IngestReason
 
     /// <summary>B9: a <c>.zip</c>/<c>.7z</c> for a <c>FileSets</c> system stays in ingest; nothing is extracted.</summary>
     public const string ArchiveNotSupported = "ArchiveNotSupported";
+
+    /// <summary>B7: a set member waits in ingest: a file its cue names is missing, its cue is broken, or a lone data track of a multi-track disc.</summary>
+    public const string IncompleteSet = "IncompleteSet";
+
+    /// <summary>B7: the cue names a file that isn't a <c>.bin</c>, names itself, or has a name that can't be stored.</summary>
+    public const string UnsupportedSetMember = "UnsupportedSetMember";
+
+    /// <summary>B7: a file is named by two cues, or a cue's name matches two files that differ only by case.</summary>
+    public const string SetConflict = "SetConflict";
 }
 
 /// <summary>A review row still <c>Pending</c>: just what step 5 needs to check its source still exists.</summary>

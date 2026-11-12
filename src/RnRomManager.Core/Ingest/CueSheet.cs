@@ -60,7 +60,7 @@ public sealed record CueSheet(IReadOnlyList<string> Files, string? Error)
     }
 
     /// <summary>B8: only a name equal to <c>.</c> or <c>..</c>, or one with a separator, is refused for dots; <c>...Iru!</c> is fine.</summary>
-    private static string? NameProblem(string name)
+    internal static string? NameProblem(string name)
     {
         if (name.Length == 0)
             return "is empty";

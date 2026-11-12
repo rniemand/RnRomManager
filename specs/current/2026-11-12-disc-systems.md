@@ -294,7 +294,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - an unmatched `.iso` goes to Review;
     - a matched `.iso` whose name an existing release of the same game uses gives `NameTaken`, with no ` (2)`.
   - Done when: `ExternalLibraryTests` passes (Docker running).
-- [ ] **7. Set planning**: B7 (planning only), B23 (`IncompleteSet`, `UnsupportedSetMember`, `SetConflict`). Add `Core/Ingest/IngestSetPlanner.cs`: a pure function from one folder's loose files (name, size, and for a `.cue` of at most 64 KiB its bytes, or null when it couldn't be read) and the selection to an ordered list of sets, lone files and skipped members with their reasons. It parses cues through `CueSheet`. Not yet called by `IngestJob`.
+- [x] **7. Set planning**: B7 (planning only), B23 (`IncompleteSet`, `UnsupportedSetMember`, `SetConflict`). Add `Core/Ingest/IngestSetPlanner.cs`: a pure function from one folder's loose files (name, size, and for a `.cue` of at most 64 KiB its bytes, or null when it couldn't be read) and the selection to an ordered list of sets, lone files and skipped members with their reasons. It parses cues through `CueSheet`. Not yet called by `IngestJob`.
   - Files: `Core/Ingest/IngestSetPlanner.cs` (new), `Core/Ingest/IngestOutcome.cs` (`IngestReason`), `tests/RnRomManager.Core.Tests/Ingest/IngestSetPlannerTests.cs` (new).
   - Tests (`IngestSetPlannerTests`):
     - cue + two `.bin`s gives one set in cue order, cue first;
