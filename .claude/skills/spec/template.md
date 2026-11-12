@@ -26,7 +26,7 @@ Migrations, config keys and API contract changes are listed here explicitly, inc
 - <Breaking change, data risk, performance, security — and how the spec handles it.>
 
 ## Steps
-- [ ] **1. <title>**: <deliverables>. Files: `<paths>`. Tests: <what proves it>. Done when: <checkable list>.
+- [ ] **1. <title>**: <deliverables>. Files: `<paths>`. Tests: <test classes / *.test.ts files that prove it>. Done when: <checkable list>.
 - [ ] **2. <title>**: …
 
 ## Decisions
