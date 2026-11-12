@@ -364,8 +364,8 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - `ExternalLibraryTests.SetMoves.cs`: move into a folder with a taken name gives `409 NameTaken` and nothing moves; a same-folder merge moves no set files and succeeds; a logical-name clash on merge gives `NameTaken`; a move writes a v2 record; a move whose second set file fails to move (file system hook) undoes the first and gives `IoError`; moving a single-file `.iso` release to a game in another folder keeps its exact name (no `<ZipBase>.` prefix, no ` (N)`).
     - `ExternalMoveRecordTests`: v2 round-trip with 99 pairs of 250-byte names made of `'` (each escaped to 6 bytes) under the 320 KiB cap, a v2 record whose `files` names differ from the backed-up release's `files` is refused (`InvalidDataException`), and a v1 record still read and validated.
   - Done when: those classes pass (Docker running).
-- [ ] **15. Integrity for set files**: B19.
-  - Files: `Core/Integrity/IntegrityJob.cs`, `IntegrityJobTests.cs`.
+- [x] **15. Integrity for set files**: B19.
+  - Files: `IntegrityJobTests.cs`, `IntegrityJobTests.Sets.cs` (new). `IntegrityJob.cs` needed no change (see § Decisions).
   - Tests (`IntegrityJobTests`, Data integration, with `ExternalSetTestHandler` appended to its handlers):
     - a missing track gives `EntryMissing` keyed by its name, and the issue resolves on the next run once the track is back;
     - a truncated track gives `EntrySizeMismatch`;
@@ -481,6 +481,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - 2026-11-12 Delete audit keeps today's shape: one `ReleaseDeleted` (details: main name then the set files) and an unchanged `GameDeleted` (code).
 - 2026-11-12 The move record is written by move-release only; merge writes none, as today (code).
 - 2026-11-12 Integrity's location check only checks the ZIP name, so exact set names need no change there (code).
+- 2026-11-12 B19 needed no `IntegrityJob` change: since step 4, `ListExternalAsync` returns each `rom_files` row as an external claim, so set files already get the missing, size, hash, claimant and orphan checks keyed by their name. Step 15 adds only the tests (code).
 - 2026-11-12 Unreadable or unparsable cue → it and every `.bin` starting with its stem are `Skipped` `IncompleteSet`; other files plan as usual (user).
 - 2026-11-12 Cue members must be `.bin`; anything else is `UnsupportedSetMember`, because the Redump data tracks are `.bin` and an `.iso` member could never match (fact).
 - 2026-11-12 A lone matched `.bin` with an ambiguous group → `Skipped` `AmbiguousGroup`, like a set, because `.bin` review items can't be resolved (reviewer).
