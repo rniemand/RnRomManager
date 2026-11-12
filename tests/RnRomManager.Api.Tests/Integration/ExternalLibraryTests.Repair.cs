@@ -347,4 +347,100 @@ public partial class ExternalLibraryTests
             Assert.That(item.Details, Does.Contain(orphan));
         }
     }
+
+    // --- B14: set files repair themselves ---
+
+    private const string SetZipRelative = "extset/S/Set Game.zip";
+
+    private async Task<long> InsertSetIssueAsync(string zipPath, string entryName, Guid gameId)
+    {
+        await using var db = Service<IDbConnectionFactory>().Create();
+        return await db.ExecuteScalarAsync<long>("""
+            INSERT INTO integrity_issues (type, severity, system_id, zip_path, game_id, entry_name, status, first_seen_job_id, last_seen_job_id, detected_at)
+            VALUES ('EntryMissing', 'Error', 'extset', @zipPath, @gameId, @entryName, 'Open', @job, @job, UTC_TIMESTAMP(6));
+            SELECT LAST_INSERT_ID();
+            """, new { zipPath, entryName, gameId = gameId.ToString(), job = Guid.NewGuid().ToString() });
+    }
+
+    /// <summary>The set stored, then its Track 2 deleted from the library with an open <c>EntryMissing</c>.</summary>
+    private async Task<long> SetWithMissingTrack2Async()
+    {
+        DropSetGame();
+        await RunJobAsync(Pipeline());
+        var gameId = _items.First(i => i.GameId is not null).GameId!.Value;
+        File.Delete(Path.Combine(SetFolder('S'), SetTrack2));
+        _items.Clear();
+        return await InsertSetIssueAsync(SetZipRelative, SetTrack2, gameId);
+    }
+
+    [Test]
+    public async Task SetFile_MissingAudioTrack_IsPutBackByReingestingTheSet()
+    {
+        var issue = await SetWithMissingTrack2Async();
+        DropSetGame();
+
+        await RunJobAsync(Pipeline());
+
+        Assert.That(SetItems(), Is.EqualTo(new[]
+        {
+            (SetCue, IngestOutcome.Duplicate, (string?)null),
+            (SetTrack1, IngestOutcome.Duplicate, null),
+            (SetTrack2, IngestOutcome.Repaired, null),
+        }));
+        Assert.That(File.ReadAllBytes(Path.Combine(SetFolder('S'), SetTrack2)), Is.EqualTo(Audio));
+        Assert.That(await IssueStatusAsync(issue), Is.EqualTo("Resolved"));
+        Assert.That((await AuditAsync()).Count(a => a.Action == AuditActions.ZipRepaired), Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task SetFile_LoneTrack_RepairsToo()
+    {
+        var issue = await SetWithMissingTrack2Async();
+
+        var result = await IngestAsync(Pipeline(), DropSet(SetTrack2, Audio));
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Repaired, (string?)null)));
+        Assert.That(File.ReadAllBytes(Path.Combine(SetFolder('S'), SetTrack2)), Is.EqualTo(Audio));
+        Assert.That(await IssueStatusAsync(issue), Is.EqualTo("Resolved"));
+    }
+
+    [Test]
+    public async Task SetFile_MatchingNameWithAnotherSha1_IsNotUsedForARepair()
+    {
+        var issue = await SetWithMissingTrack2Async();
+        DropDisc(SetCue, (SetTrack1, SetData), (SetTrack2, Audio2));
+
+        await RunJobAsync(Pipeline());
+
+        Assert.That(SetItems().Single(i => i.Name == SetTrack2), Is.EqualTo((SetTrack2, IngestOutcome.Duplicate, (string?)null)));
+        Assert.That(File.Exists(Path.Combine(SetFolder('S'), SetTrack2)), Is.False);
+        Assert.That(await IssueStatusAsync(issue), Is.EqualTo("Open"));
+    }
+
+    [Test]
+    public async Task SetFile_LoneTrackMatchingOpenIssuesOfTwoGames_GoesToReview()
+    {
+        var alpha = RandomNumberGenerator.GetBytes(2352 * 2);
+        var bravo = RandomNumberGenerator.GetBytes(2352 * 2 + 4);
+        WriteDats(new FixtureGame("Alpha Game (USA)", "Alpha (Track 1).bin", alpha), new FixtureGame("Bravo Game (USA)", "Bravo (Track 1).bin", bravo));
+        const string common = "Common (Track 2).bin";
+        var owners = new List<(string Zip, Guid Game)>();
+        foreach (var (cue, track, bytes, zip) in new[] { ("Alpha.cue", "Alpha (Track 1).bin", alpha, "extset/A/Alpha Game.zip"), ("Bravo.cue", "Bravo (Track 1).bin", bravo, "extset/B/Bravo Game.zip") })
+        {
+            DropDisc(cue, (track, bytes), (common, SharedAudio));
+            _items.Clear();
+            await RunJobAsync(Pipeline());
+            Assert.That(SetItems().Select(i => i.Outcome), Is.All.EqualTo(IngestOutcome.Ingested));
+            owners.Add((zip, _items.First(i => i.GameId is not null).GameId!.Value));
+        }
+        foreach (var (zip, game) in owners)
+        {
+            File.Delete(Path.Combine(_factory.Root, "roms", zip[..zip.LastIndexOf('/')], common));
+            await InsertSetIssueAsync(zip, common, game);
+        }
+
+        var result = await IngestAsync(Pipeline(), DropSet(common, SharedAudio));
+
+        Assert.That(Code(result), Is.EqualTo((IngestOutcome.Review, (string?)"NoDatMatch")));
+    }
 }

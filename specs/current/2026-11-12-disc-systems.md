@@ -333,7 +333,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - an unmatched set whose data track is added to the DAT before the next run is ingested, and its three `Pending` rows become `Resolved`;
     - a dismissed data track's set is ingested.
   - Done when: those classes pass (Docker running).
-- [ ] **11. Track self-repair**: B14.
+- [x] **11. Track self-repair**: B14.
   - Files: `Core/Ingest/IngestPipeline.cs`, `ExternalLibraryTests.Repair.cs` (existing partial).
   - Tests (`ExternalLibraryTests.Repair.cs`):
     - a deleted audio track with an open `EntryMissing` is put back by re-ingesting the set: its item is `Repaired`, the issue resolves, and the other members are `Duplicate`;

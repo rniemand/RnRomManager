@@ -265,6 +265,9 @@ public sealed class IngestPipeline(
             return duplicate with { ResolvedArchiveDuplicate = duplicate.Outcome == IngestOutcome.Duplicate &&
                 file.ArchivePath is not null && review is { Status: "Resolved" } && review.ArchivePath == file.ArchivePath };
         }
+        if (source is not null && folder.FileSets && file.ArchiveEntry is null && file.Name.EndsWith(".bin", StringComparison.OrdinalIgnoreCase)
+            && await RepairLoneTrackAsync(file, source, hashes.Sha1, actor, cancellationToken).ConfigureAwait(false) is { } trackRepaired)
+            return trackRepaired;
         if (review is { Status: "Pending" } && review.SourcePath != file.SourcePath)
         {
             logger.LogWarning("{Path}: duplicate of pending review source {ReviewPath} (crc32 {Crc32}, md5 {Md5}, sha1 {Sha1})",
@@ -482,7 +485,7 @@ public sealed class IngestPipeline(
             MoveToDuplicates(members[i], actor, progress)
             ?? new IngestItemResult(IngestOutcome.Duplicate, Details: details, SystemId: system.Id, Sha1: hashed[i].Hashes.Sha1));
         if (await roms.GetBySha1Async(dataHashes.Sha1, cancellationToken).ConfigureAwait(false) is { } known)
-            return AllDuplicates($"the data track is already release {known.FileName} of game {known.GameId}");
+            return await DuplicateSetAsync(hashed, data, known, actor, progress, cancellationToken).ConfigureAwait(false);
         var review = await reviews.GetBySha1Async(dataHashes.Sha1, cancellationToken).ConfigureAwait(false);
         if (review is { Status: "Pending" } && review.SourcePath != dataFile.SourcePath)
             return AllDuplicates($"the data track is the same as pending review source {review.SourcePath}");
@@ -526,6 +529,70 @@ public sealed class IngestPipeline(
                 source: dataSource, set: set).ConfigureAwait(false);
         // One outcome for the whole set; each member's item carries its own SHA1.
         return Each(i => stored with { Sha1 = hashed[i].Hashes.Sha1 });
+    }
+
+    /// <summary>
+    /// B14: the set's data track is already release <paramref name="known"/>. The data track repairs itself as a single
+    /// file does; each other member whose name and SHA1 are a file of that release with an open self-repairable issue is
+    /// put back the same way (<c>Repaired</c>), one at a time; every other member is a <c>Duplicate</c> in <c>_duplicates/</c>.
+    /// </summary>
+    private async Task<IReadOnlyList<IngestItemResult>> DuplicateSetAsync(List<(IngestFile File, ExternalSource Source, RomFileHashes Hashes)> hashed,
+        int data, RomRow known, AuditActor actor, JobProgress? progress, CancellationToken cancellationToken)
+    {
+        var results = new IngestItemResult[hashed.Count];
+        var (dataFile, dataSource, dataHashes) = hashed[data];
+        results[data] = await DuplicateOrRepairAsync(dataFile, known, null, dataSource, dataHashes.SizeBytes, dataHashes.Sha1, actor, cancellationToken)
+            .ConfigureAwait(false);
+        var game = await games.GetAsync(known.GameId, cancellationToken).ConfigureAwait(false);
+        for (var i = 0; i < hashed.Count; i++)
+        {
+            if (i == data)
+                continue;
+            var (file, source, hashes) = hashed[i];
+            var own = (await roms.ListFilesBySha1Async(hashes.Sha1, cancellationToken).ConfigureAwait(false))
+                .FirstOrDefault(f => f.RomId == known.Id && string.Equals(f.ExternalFileName, file.Name, StringComparison.OrdinalIgnoreCase));
+            if (game is not null && own is not null && await OpenSetFileIssuesAsync(game, own, cancellationToken).ConfigureAwait(false) is { Count: > 0 } open)
+            {
+                results[i] = await RepairExternalAsync(file, known, game, open, source, hashes.Sha1, actor, cancellationToken, setFile: own.ExternalFileName)
+                    .ConfigureAwait(false);
+                continue;
+            }
+            results[i] = MoveToDuplicates(file, actor, progress) ?? new IngestItemResult(IngestOutcome.Duplicate,
+                Details: $"a file of the set of {game?.ZipPath} › {known.ExternalFileName}", SystemId: known.SystemId, GameId: known.GameId, Sha1: hashes.Sha1);
+        }
+        return results;
+    }
+
+    /// <summary>B14: the open self-repairable issues of exactly this set file of this game (keyed like a main file's, B19).</summary>
+    private async Task<IReadOnlyList<OpenIssue>> OpenSetFileIssuesAsync(GameRow game, RomFileRow file, CancellationToken cancellationToken) =>
+        [.. (await issues.ListOpenExternalAsync(game.ZipPath, file.ExternalFileName, IntegrityIssueType.SelfRepairable, cancellationToken).ConfigureAwait(false))
+            .Where(i => string.Equals(i.ZipPath, game.ZipPath, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(i.EntryName, file.ExternalFileName, StringComparison.OrdinalIgnoreCase)
+                && (i.GameId is null || i.GameId == file.GameId))
+            .Select(i => new OpenIssue(i.Id, i.Type))];
+
+    /// <summary>
+    /// B14 for a lone <c>.bin</c> (one no cue names): repaired when exactly one set file has its name and SHA1 and an open
+    /// self-repairable issue; null otherwise, and step 3 goes on as today.
+    /// </summary>
+    private async Task<IngestItemResult?> RepairLoneTrackAsync(IngestFile file, ExternalSource source, string sha1, AuditActor actor,
+        CancellationToken cancellationToken)
+    {
+        var repairable = new List<(RomFileRow File, GameRow Game, IReadOnlyList<OpenIssue> Open)>();
+        foreach (var candidate in (await roms.ListFilesBySha1Async(sha1, cancellationToken).ConfigureAwait(false))
+            .Where(f => string.Equals(f.ExternalFileName, file.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            if (await games.GetAsync(candidate.GameId, cancellationToken).ConfigureAwait(false) is { } game
+                && await OpenSetFileIssuesAsync(game, candidate, cancellationToken).ConfigureAwait(false) is { Count: > 0 } open)
+                repairable.Add((candidate, game, open));
+        }
+        if (repairable.Count != 1)
+            return null;
+        var (setFile, owner, issuesOpen) = repairable[0];
+        if (await roms.GetAsync(setFile.GameId, setFile.RomId, cancellationToken).ConfigureAwait(false) is not { } release)
+            return null;
+        return await RepairExternalAsync(file, release, owner, issuesOpen, source, sha1, actor, cancellationToken, setFile: setFile.ExternalFileName)
+            .ConfigureAwait(false);
     }
 
     /// <summary>B3: a Redump rom name's track tag, e.g. <c> (Track 1)</c> or <c> (Track 02)</c>.</summary>
@@ -852,8 +919,9 @@ public sealed class IngestPipeline(
     /// rewritten. A file still at that name is set aside under a reserved <c>.repair.tmp</c> name first and only
     /// removed once the ZIP and database updates succeed. A failed ZIP write attempts to put both files back.
     /// </summary>
+    /// <param name="setFile">B14: the <c>files</c> entry of release <paramref name="known"/> to repair; null for its main file.</param>
     private async Task<IngestItemResult> RepairExternalAsync(IngestFile file, RomRow known, GameRow game, IReadOnlyList<OpenIssue> open,
-        ExternalSource source, string sha1, AuditActor actor, CancellationToken cancellationToken)
+        ExternalSource source, string sha1, AuditActor actor, CancellationToken cancellationToken, string? setFile = null)
     {
         var library = paths.Value.Roms;
         var (existing, current, error) = Target(LibraryTarget.OpenChecked(library, game.ZipPath, reader, known.GameId, known.SystemId), known.SystemId, sha1);
@@ -862,11 +930,14 @@ public sealed class IngestPipeline(
         using (existing)
         {
             IngestItemResult Fail(string code, string? details) => IngestItemResult.Error(code, details, known.SystemId, sha1);
-            var rom = current!.Roms.FirstOrDefault(r => r.Metadata.Sha1 == sha1);
-            if (rom?.ExternalFileName is not { } pointer || !string.Equals(pointer, known.ExternalFileName, StringComparison.Ordinal))
+            var rom = current!.Roms.FirstOrDefault(r => r.Metadata.Sha1 == known.Sha1);
+            var expected = setFile ?? known.ExternalFileName;
+            var pointer = setFile is null ? rom?.ExternalFileName
+                : rom?.Files?.FirstOrDefault(f => f.ExternalFileName == setFile && f.Sha1 == sha1)?.ExternalFileName;
+            if (rom is null || pointer is null || !string.Equals(pointer, expected, StringComparison.Ordinal))
             {
-                return Fail(IngestErrors.TargetZipUnreadable, $"{game.ZipPath}: the mirror says {known.ExternalFileName} holds sha1 {sha1}, " +
-                    $"but info.json says {rom?.ExternalFileName ?? "no release has it"}; the mirror is stale");
+                return Fail(IngestErrors.TargetZipUnreadable, $"{game.ZipPath}: the mirror says {expected} holds sha1 {sha1}, " +
+                    $"but info.json says {pointer ?? "no release has it"}; the mirror is stale");
             }
 
             var folder = ExternalRomPath.ClassifyDirectory(library, Path.GetDirectoryName(SafePath.Resolve(library, game.ZipPath))!);
@@ -883,12 +954,13 @@ public sealed class IngestPipeline(
             var plan = new RepairPlan(
                 there.Status == ExternalPathStatus.Found ? there.Path : null, there.Snapshot,
                 Path.Combine(folder.Path, ExternalRomName.AllocateRepairBackup(pointer, names)),
-                Path.Combine(folder.Path, ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(game.ZipPath), rom.FileName, names)));
+                Path.Combine(folder.Path, ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(game.ZipPath), setFile is null ? rom.FileName : pointer, names)));
 
             var now = time.GetUtcNow();
             var repaired = current with
             {
-                Roms = current.Roms.Select(r => r.Metadata.Sha1 == sha1 ? r with { Metadata = r.Metadata with { DateModified = now } } : r).ToList(),
+                // A set file has no date of its own; a main file's dateModified records the rewrite.
+                Roms = current.Roms.Select(r => setFile is null && r.Metadata.Sha1 == sha1 ? r with { Metadata = r.Metadata with { DateModified = now } } : r).ToList(),
                 Metadata = current.Metadata with { UpdatedAt = now, AppVersion = AppInfo.Version },
             };
             var result = new IngestItemResult(IngestOutcome.Repaired, Details: $"rewrote {game.ZipPath} › {pointer} ({string.Join(", ", open.Select(i => i.Type))})",
