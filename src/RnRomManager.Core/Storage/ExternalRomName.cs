@@ -59,7 +59,9 @@ public static class ExternalRomName
     private const string ZipExtension = ".zip";
 
     /// <summary>
-    /// E1: <c>&lt;zipBase&gt;.&lt;romFileName&gt;</c>, the external ROM's file next to its ZIP. Over the budget, the
+    /// E1: <c>&lt;zipBase&gt;.&lt;romFileName&gt;</c>, the external ROM's file next to its ZIP; when the rom name's stem
+    /// starts with <paramref name="zipBase"/> and a space (ignoring case), that repeated title is dropped (B13:
+    /// <c>Orbit.[0100…][v0].nsp</c>, not <c>Orbit.Orbit [0100…][v0].nsp</c>). Over the budget, the
     /// rom name's stem is cut from its end (its extension is kept); when that isn't enough, <paramref name="zipBase"/>
     /// is cut the same way. A name Windows would treat as a device gets a <c>_</c> prefix.
     /// </summary>
@@ -69,6 +71,9 @@ public static class ExternalRomName
     {
         var extension = Path.GetExtension(romFileName);
         var stem = romFileName[..^extension.Length];
+        if (stem.Length > zipBase.Length && stem.StartsWith(zipBase + " ", StringComparison.OrdinalIgnoreCase)
+            && stem[(zipBase.Length + 1)..].TrimStart(' ') is { Length: > 0 } rest)
+            stem = rest;
         var tail = Suffix(candidate) + extension;
         var name = Fit(zipBase, stem, tail);
         // The device check reads up to the first dot, which the prefix moves; fit again with it in the budget.

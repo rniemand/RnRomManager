@@ -36,6 +36,12 @@ public class TitleDbMatchTests
     [TestCase(null, "Game [0400000000001000].nsp", null, TestName = "TitleId a 0400 name is ignored")]
     [TestCase(null, "Game [0400000000001000][0100F2C0115B6000].nsp", Base, TestName = "TitleId the first Switch id in the name")]
     [TestCase(null, "Game.nsp", null, TestName = "TitleId none")]
+    [TestCase(null, "Game [0100F2C0115B6000][UPD][1.0.1].nsp", Update, TestName = "TitleId B7 a base id in the name with [UPD] is the update")]
+    [TestCase(null, "Game [0100f2c0115b6000][upd].nsp", Update, TestName = "TitleId B7 [upd] matches ignoring case")]
+    [TestCase(null, "Game [0100F2C0115B6800][UPD].nsp", Update, TestName = "TitleId B7 an update id stays")]
+    [TestCase(null, "Game [0100F2C0115B7001][UPD].nsp", Dlc1, TestName = "TitleId B7 a DLC id is not changed")]
+    [TestCase(null, "Game [0100F2C0115B6000] UPD.nsp", Base, TestName = "TitleId B7 needs the brackets")]
+    [TestCase("0100F2C0115B6000", "Game [UPD].nsp", Base, TestName = "TitleId B7 a header id ignores [UPD]")]
     public void TitleIdFrom(string? header, string fileName, string? expected) =>
         Assert.That(TitleDb.TitleIdFrom(header is null ? new Dictionary<string, object?>() : Header(header), fileName), Is.EqualTo(expected));
 
@@ -82,6 +88,22 @@ public class TitleDbMatchTests
         Assert.That((match.Revision, match.Flags), Is.EqualTo(("v65536", (IReadOnlyList<string>)["Update"])));
         Assert.That(match.GameName, Is.EqualTo(Match(Base)!.GameName), "the base's datGameName");
         Assert.That(match.Languages, Is.EqualTo(new[] { "En", "Fr", "EN" }));
+    }
+
+    [Test]
+    public void Update_WithAVersionTag_NamesTheVersion_B6()
+    {
+        var match = Match(Update, "DREDGE[UPD][1.0.1].nsp")!;
+
+        Assert.That(match.RomFileName, Is.EqualTo($"The Legend of Zelda - Tears of the Kingdom [{Update}][v0][1.0.1].nsp"));
+        Assert.That(Match(Update, "zelda.nsp")!.RomFileName, Is.EqualTo($"The Legend of Zelda - Tears of the Kingdom [{Update}][v0].nsp"), "no tag, T5 as is");
+    }
+
+    [Test]
+    public void BaseAndDlc_WithAVersionTag_KeepTheT5Name_B6()
+    {
+        Assert.That(Match(Base, "zelda [1.0.1].nsp")!.RomFileName, Is.EqualTo($"The Legend of Zelda - Tears of the Kingdom [{Base}][v0].nsp"));
+        Assert.That(Match(Dlc1, "zelda [1.0.1].nsp")!.RomFileName, Is.EqualTo($"Zelda - Expansion Pass [{Dlc1}][v0].nsp"));
     }
 
     [Test]

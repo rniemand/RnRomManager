@@ -68,15 +68,15 @@ public class SeedIngestTests
         Assert.That(expedition.Title, Is.EqualTo("Orbit Expedition"));
         var reseeded = Path.Combine(factory.Root, "ingest-copy");
         IngestSeeder.Seed(reseeded, Path.Combine(factory.Root, "cache-copy"), set, TimeProvider.System); // deterministic: the same bytes again
-        foreach (var (fileName, original, flag) in new[]
+        foreach (var (fileName, pointer, original, flag) in new[]
         {
-            ("Orbit Expedition [0100000000010000][v0].nsp", "01-orbit-expedition.nsp", (string?)null),
-            ("Orbit Expedition [0100000000010800][v65536].nsp", "02-orbit-expedition [v65536].nsp", "Update"),
-            ("Orbit Expedition - Bonus Tracks [0100000000011001][v0].nsp", "03-orbit-expedition-bonus.nsp", "DLC"),
+            ("Orbit Expedition [0100000000010000][v0].nsp", "Orbit Expedition.[0100000000010000][v0].nsp", "01-orbit-expedition.nsp", (string?)null),
+            ("Orbit Expedition [0100000000010800][v65536].nsp", "Orbit Expedition.[0100000000010800][v65536].nsp", "02-orbit-expedition [v65536].nsp", "Update"),
+            ("Orbit Expedition - Bonus Tracks [0100000000011001][v0].nsp", "Orbit Expedition.- Bonus Tracks [0100000000011001][v0].nsp", "03-orbit-expedition-bonus.nsp", "DLC"),
         })
         {
             var rom = expedition.Roms.Single(r => r.FileName == fileName);
-            Assert.That(rom.ExternalFileName, Is.EqualTo("Orbit Expedition." + fileName));
+            Assert.That(rom.ExternalFileName, Is.EqualTo(pointer), "B13: the repeated title is dropped");
             Assert.That(File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(switchZip)!, rom.ExternalFileName!)),
                 Is.EqualTo(File.ReadAllBytes(Path.Combine(reseeded, "switch", original))), fileName);
             Assert.That(rom.Flags, Is.EqualTo(flag is null ? Array.Empty<string>() : new[] { flag }), fileName);

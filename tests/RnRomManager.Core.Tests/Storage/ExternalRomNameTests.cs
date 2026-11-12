@@ -31,7 +31,30 @@ public class ExternalRomNameTests
 
         Assert.That(ExternalRomName.Build(zipBase, rom),
             Is.EqualTo("Legend of Zelda, The - Tears of the Kingdom.The Legend of Zelda - Tears of the Kingdom [0100F2C0115B6000][v0].nsp"));
-        Assert.That(ExternalRomName.Build("Orbit", "Orbit [v0].nsp", 3), Is.EqualTo("Orbit.Orbit [v0] (3).nsp"));
+        Assert.That(ExternalRomName.Build("Orbit", "Orbit [v0].nsp", 3), Is.EqualTo("Orbit.[v0] (3).nsp"));
+    }
+
+    [TestCase("Death's Door", "Death's Door [0100B31015AF8000][v0].nsp", "Death's Door.[0100B31015AF8000][v0].nsp")]
+    [TestCase("Death's Door", "Death's Door [0100B31015AF8800][v0][1.0.1].nsp", "Death's Door.[0100B31015AF8800][v0][1.0.1].nsp")]
+    [TestCase("DEATH'S door", "Death's Door [0100B31015AF8000][v0].nsp", "DEATH'S door.[0100B31015AF8000][v0].nsp")]
+    [TestCase("Orbit", "Orbit   [v0].nsp", "Orbit.[v0].nsp")]
+    [TestCase("Orbit", "Orbit.nsp", "Orbit.Orbit.nsp")]
+    [TestCase("Orbit", "Orbit .nsp", "Orbit.Orbit .nsp")]
+    [TestCase("Orbit", "Orbitals [v0].nsp", "Orbit.Orbitals [v0].nsp")]
+    [TestCase("Orbit (2)", "Orbit [v0].nsp", "Orbit (2).Orbit [v0].nsp")]
+    [TestCase("Wait…", "Wait... [v0].nsp", "Wait….Wait... [v0].nsp")]
+    public void Build_DropsTheTitleTheRomNameRepeats(string zipBase, string rom, string expected) =>
+        Assert.That(ExternalRomName.Build(zipBase, rom), Is.EqualTo(expected));
+
+    [Test]
+    public void Build_StrippedName_StillTakesTheSuffixAndTheBudgetCut()
+    {
+        var rest = "[" + new string('r', 300) + "]";
+
+        var name = ExternalRomName.Build("Orbit", $"Orbit {rest}.nsp", 2);
+
+        Assert.That(name, Does.StartWith("Orbit.[rrr").And.EndWith("r (2).nsp"));
+        Assert.That(System.Text.Encoding.UTF8.GetByteCount(name), Is.EqualTo(ExternalRomName.MaxNameBytes));
     }
 
     [Test]
@@ -98,13 +121,13 @@ public class ExternalRomNameTests
     [Test]
     public void Allocate_Clash_TakesTheNextSuffix_AndReservesFinalAndStagingNames()
     {
-        var reservations = new ExternalNameReservations(["orbit.ORBIT [v0].nsp", "Orbit.Orbit [v0] (2).nsp.tmp"]);
+        var reservations = new ExternalNameReservations(["orbit.[V0].nsp", "Orbit.[v0] (2).nsp.tmp"]);
 
         var name = ExternalRomName.Allocate("Orbit", "Orbit [v0].nsp", reservations);
 
-        Assert.That(name, Is.EqualTo("Orbit.Orbit [v0] (3).nsp"), "(1) is taken ignoring case, (2)'s staging name is occupied");
-        Assert.That(reservations.IsTaken("Orbit.Orbit [v0] (3).nsp") && reservations.IsTaken("Orbit.Orbit [v0] (3).nsp.tmp"), Is.True);
-        Assert.That(ExternalRomName.Allocate("Orbit", "Orbit [v0].nsp", reservations), Is.EqualTo("Orbit.Orbit [v0] (4).nsp"), "this write's own allocations count");
+        Assert.That(name, Is.EqualTo("Orbit.[v0] (3).nsp"), "(1) is taken ignoring case, (2)'s staging name is occupied");
+        Assert.That(reservations.IsTaken("Orbit.[v0] (3).nsp") && reservations.IsTaken("Orbit.[v0] (3).nsp.tmp"), Is.True);
+        Assert.That(ExternalRomName.Allocate("Orbit", "Orbit [v0].nsp", reservations), Is.EqualTo("Orbit.[v0] (4).nsp"), "this write's own allocations count");
     }
 
     [Test]
@@ -173,11 +196,11 @@ public class ExternalRomNameTests
     [Test]
     public void Release_FreesANameTheWriteVacates()
     {
-        var reservations = new ExternalNameReservations(["Orbit.Orbit [v0].nsp"]);
+        var reservations = new ExternalNameReservations(["Orbit.[v0].nsp"]);
 
-        reservations.Release("ORBIT.orbit [v0].nsp");
+        reservations.Release("ORBIT.[V0].nsp");
 
-        Assert.That(ExternalRomName.Allocate("Orbit", "Orbit [v0].nsp", reservations), Is.EqualTo("Orbit.Orbit [v0].nsp"));
+        Assert.That(ExternalRomName.Allocate("Orbit", "Orbit [v0].nsp", reservations), Is.EqualTo("Orbit.[v0].nsp"));
     }
 
     [Test]

@@ -65,7 +65,7 @@ public partial class ExternalLibraryTests
         var gameId = await FirstReleaseAsync();
         long? issue = other switch
         {
-            "pointer" => await InsertIssueAsync(IntegrityIssueType.EntryMissing, ZipRelative, Pointer.Replace("Game (USA)", "Gamé (USA)"), gameId),
+            "pointer" => await InsertIssueAsync(IntegrityIssueType.EntryMissing, ZipRelative, Pointer.Replace("(USA)", "(USÁ)"), gameId),
             "zip" => await InsertIssueAsync(IntegrityIssueType.EntryMissing, ZipRelative.Replace("Game.zip", "Gamé.zip"), Pointer, gameId),
             "game" => await InsertIssueAsync(IntegrityIssueType.EntryMissing, ZipRelative, Pointer, Guid.NewGuid()),
             _ => null,
@@ -332,7 +332,7 @@ public partial class ExternalLibraryTests
 
         var item = _items.Single(i => i.ArchiveEntry == "dump.nsp");
         Assert.That((item.Outcome, item.Reason), Is.EqualTo((IngestOutcome.Error, IngestErrors.VerifyFailed)));
-        var orphan = Path.Combine(Bucket, "Space Game.Space Game (USA) (2).xci");
+        var orphan = Path.Combine(Bucket, "Space Game.(USA) (2).xci");
         if (failRecovery)
         {
             Assert.That(File.ReadAllBytes(Sidecar), Is.EqualTo(Rom), "the verified incoming copy stays where it is");
