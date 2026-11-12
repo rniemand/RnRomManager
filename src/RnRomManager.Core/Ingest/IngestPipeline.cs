@@ -37,6 +37,12 @@ public static class IngestErrors
     public const string TargetZipUnreadable = "TargetZipUnreadable";
     public const string InfoJsonNewerSchema = "InfoJsonNewerSchema";
     public const string Unexpected = "Unexpected";
+
+    /// <summary>B10: a <c>FileSets</c> file's exact name is already used in its folder or by the game; nothing moved.</summary>
+    public const string NameTaken = "NameTaken";
+
+    /// <summary>B10: a <c>FileSets</c> file's exact name is over 250 UTF-8 bytes; it is never cut.</summary>
+    public const string NameTooLong = "NameTooLong";
 }
 
 /// <summary>§7.2 reason codes for <c>Failed</c> items (spec §23.1): the file moves to <c>_failed/</c>.</summary>
@@ -307,9 +313,9 @@ public sealed class IngestPipeline(
         var release = match.Title is { } title
             ? new Release(title.RomFileName, title.BaseTitle, title.GameName, [], title.Languages, title.Revision, title.Flags,
                 IdentificationMethod.TitleDb, TitleDb.MetadataOf(title.Base), title.TitleId)
-            : LibretroRelease(match.Rom!, store, file, external);
-        // I3/E3: an external release's name is a portable logical name within budget.
-        var romName = external ? ExternalRomName.AllocateLogicalName(release.FileName, new ExternalNameReservations([])) : release.FileName;
+            : LibretroRelease(match.Rom!, store, file, external, match.Handler.FileSets);
+        // I3/E3: an external release's name is a portable logical name within budget. B10: a FileSets name is kept exactly.
+        var romName = external && !system.FileSets ? ExternalRomName.AllocateLogicalName(release.FileName, new ExternalNameReservations([])) : release.FileName;
 
         // Step 6: group by system + base title.
         var baseTitle = release.BaseTitle;
@@ -357,10 +363,13 @@ public sealed class IngestPipeline(
     private sealed record Release(string FileName, string BaseTitle, string GameName, IReadOnlyList<string> Regions, IReadOnlyList<string> Languages,
         string? Revision, IReadOnlyList<string> Flags, IdentificationMethod Method, DatMetadata Metadata, string? TitleId);
 
-    /// <summary>I3: an external release keeps its source's extension (lower-cased) on the DAT stem.</summary>
-    private static Release LibretroRelease(DatRom datRom, DatStore store, IngestFile file, bool external)
+    /// <summary>
+    /// I3: an external release keeps its source's extension (lower-cased) on the DAT stem. B10: a <c>FileSets</c>
+    /// release takes its tags from the DAT game name, so a data track gets no <c>Track 1</c> flag.
+    /// </summary>
+    private static Release LibretroRelease(DatRom datRom, DatStore store, IngestFile file, bool external, bool tagsFromGameName)
     {
-        var tags = NoIntroName.Parse(Path.GetFileNameWithoutExtension(datRom.RomName));
+        var tags = NoIntroName.Parse(tagsFromGameName ? datRom.GameName : Path.GetFileNameWithoutExtension(datRom.RomName));
         var fileName = external ? Path.GetFileNameWithoutExtension(datRom.RomName) + Path.GetExtension(file.Name).ToLowerInvariant() : datRom.RomName;
         return new Release(fileName, NoIntroName.Parse(datRom.GameName).BaseTitle, datRom.GameName, tags.Regions, tags.Languages, tags.Revision,
             tags.Flags, IdentificationMethod.Dat, store.MetadataFor(datRom.Crc32), null);
@@ -456,8 +465,18 @@ public sealed class IngestPipeline(
             var claims = await roms.ListExternalAsync(cancellationToken).ConfigureAwait(false);
             var externalZipPath = await ExternalRomName.AllocateZipPathAsync(library, system.Id, title, claims, games, cancellationToken).ConfigureAwait(false);
             var folderPath = externalZipPath[..externalZipPath.LastIndexOf('/')];
-            var name = ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(externalZipPath), rom.FileName,
-                ExternalNameReservations.ForFolder(bucket.Path, folderPath, claims));
+            var reservations = ExternalNameReservations.ForFolder(bucket.Path, folderPath, claims);
+            string name;
+            if (system.FileSets)
+            {
+                if (ExactNameError(rom.FileName, reservations, system.Id, result.Sha1) is { } refused)
+                    return refused;
+                name = rom.FileName;
+            }
+            else
+            {
+                name = ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(externalZipPath), rom.FileName, reservations);
+            }
             game = game with { Roms = PrimaryRelease.Apply([rom with { ExternalFileName = name }], system.DatSource) };
             var images = new Dictionary<string, Func<Stream>>();
             AddImages(images, found.BoxArt, found.Snap);
@@ -506,15 +525,22 @@ public sealed class IngestPipeline(
             else
             {
                 // E3 logical name against the game's releases; E2 file name against the folder, every claim on it and this ZIP's own pointers.
-                rom = rom with { FileName = ExternalRomName.AllocateLogicalName(rom.FileName, new ExternalNameReservations(current.Roms.Select(r => r.FileName))) };
+                // B10: a FileSets name is never suffixed; a clash with the game's own releases is NameTaken.
+                var logicalNames = new ExternalNameReservations(current.Roms.Select(r => r.FileName));
+                if (system.FileSets && logicalNames.IsTaken(rom.FileName))
+                    return IngestItemResult.Error(IngestErrors.NameTaken, $"'{rom.FileName}' is already a release of this game", system.Id, result.Sha1);
+                if (!system.FileSets)
+                    rom = rom with { FileName = ExternalRomName.AllocateLogicalName(rom.FileName, logicalNames) };
                 var library = paths.Value.Roms;
                 var folder = ExternalRomPath.ClassifyDirectory(library, Path.GetDirectoryName(SafePath.Resolve(library, row.ZipPath))!);
                 if (folder.Status != ExternalPathStatus.Found)
                     return IngestItemResult.Error(IngestErrors.IoError, folder.Details, system.Id, result.Sha1);
                 var claims = await roms.ListExternalAsync(cancellationToken).ConfigureAwait(false);
-                var name = ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(row.ZipPath), rom.FileName,
-                    ExternalNameReservations.ForFolder(folder.Path, row.ZipPath[..row.ZipPath.LastIndexOf('/')], claims,
-                        current.ExternalFileNames()));
+                var reservations = ExternalNameReservations.ForFolder(folder.Path, row.ZipPath[..row.ZipPath.LastIndexOf('/')], claims,
+                    current.ExternalFileNames());
+                if (system.FileSets && ExactNameError(rom.FileName, reservations, system.Id, result.Sha1) is { } refused)
+                    return refused;
+                var name = system.FileSets ? rom.FileName : ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(row.ZipPath), rom.FileName, reservations);
                 rom = rom with { ExternalFileName = name };
                 placement = new ExternalPlacement(source, name);
             }
@@ -553,6 +579,16 @@ public sealed class IngestPipeline(
                 afterMirror, new HashSet<string>(StringComparer.Ordinal) { LibraryZip.NoteEntry(rom.FileName) }, placement).ConfigureAwait(false);
         }
     }
+
+    /// <summary>B10: reserves a <c>FileSets</c> file's exact name, or the <c>NameTaken</c>/<c>NameTooLong</c> error; nothing has moved yet.</summary>
+    private static IngestItemResult? ExactNameError(string name, ExternalNameReservations reservations, string systemId, string? sha1) =>
+        ExternalRomName.AllocateExact(name, reservations) switch
+        {
+            ExactNameStatus.Taken => IngestItemResult.Error(IngestErrors.NameTaken, $"'{name}' is already used in the game's folder", systemId, sha1),
+            ExactNameStatus.TooLong => IngestItemResult.Error(IngestErrors.NameTooLong,
+                $"'{name}' is longer than {ExternalRomName.MaxNameBytes} UTF-8 bytes", systemId, sha1),
+            _ => null,
+        };
 
     /// <summary>§6.1: every write starts from the ZIP's own <c>info.json</c>.</summary>
     internal (LibraryZip? Zip, InfoJsonGame? Game, IngestItemResult? Error) OpenTarget(string zipPath, string systemId, string? sha1)

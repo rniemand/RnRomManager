@@ -108,6 +108,12 @@ public sealed class IngestJob(
                 await ItemAsync(run, file with { FullPath = ExternalRomName.CutScalars(file.FullPath, ExternalRomName.MaxSourcePathScalars) },
                     IngestItemResult.Error(IngestErrors.IoError, $"the path is longer than {ExternalRomName.MaxSourcePathScalars} characters", file.SystemId)).ConfigureAwait(false);
             }
+            else if (systems.ById(file.SystemId) is { FileSets: true } && ArchiveExtractor.IsArchive(file.Name))
+            {
+                // B9: disc systems take loose files only; the archive stays where it is.
+                await ItemAsync(run, file, new IngestItemResult(IngestOutcome.Skipped, IngestReason.ArchiveNotSupported, SystemId: file.SystemId))
+                    .ConfigureAwait(false);
+            }
             else if (external && ArchiveExtractor.IsArchive(file.Name))
                 await ExternalArchiveAsync(run, file, Path.Combine(work, Guid.NewGuid().ToString())).ConfigureAwait(false); // its own fresh age check
             else if (external)

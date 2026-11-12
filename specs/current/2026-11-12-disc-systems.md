@@ -284,7 +284,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - Files: `Core/Ingest/CueSheet.cs` (new), `tests/RnRomManager.Core.Tests/Ingest/CueSheetTests.cs` (new).
   - Tests: `CueSheetTests` covers quoted and unquoted names, mixed case, BOM, Latin-1 fallback, duplicates collapsed (also ones differing only by case), an error on no `FILE` line, an error on 100 distinct names (99 parse), an error on a name of `.` or `..` or with `/`, `\` or `:`, `...Iru! (Japan).bin` accepted, and other commands ignored.
   - Done when: `CueSheetTests` passes.
-- [ ] **6. Single-file ingest for `FileSets` systems and archive skip**: B9, B10, B11, B23 (`ArchiveNotSupported`, `NameTaken`, `NameTooLong`). A matched `.iso` is stored under its exact name with no `files`; an unmatched one goes to Review.
+- [x] **6. Single-file ingest for `FileSets` systems and archive skip**: B9, B10, B11, B23 (`ArchiveNotSupported`, `NameTaken`, `NameTooLong`). A matched `.iso` is stored under its exact name with no `files`; an unmatched one goes to Review.
   - Files: `Core/Ingest/IngestPipeline.cs` (`IngestErrors`, `LibretroRelease`, external naming), `Core/Ingest/IngestOutcome.cs` (`IngestReason`), `Core/Ingest/IngestJob.cs` (archive skip), `ExternalLibraryTests.cs` (host), `ExternalLibraryTests.Sets.cs` (new).
   - Tests (`ExternalLibraryTests.Sets.cs`, a new partial of the Api integration class `ExternalLibraryTests`, whose host in `ExternalLibraryTests.cs` now also registers `ExternalSetTestHandler` and writes its fixture DAT; `IngestPipelineTests`' host registers no external handler):
     - a matched `.iso` is stored beside the ZIP with no prefix;

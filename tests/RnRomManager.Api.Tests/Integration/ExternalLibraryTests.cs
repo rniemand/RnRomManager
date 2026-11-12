@@ -42,6 +42,7 @@ public partial class ExternalLibraryTests
             TestServices = services =>
             {
                 RnRomManager.Core.Systems.SystemHandlerRegistration.AddSystemHandler<ExternalTestHandler>(services);
+                RnRomManager.Core.Systems.SystemHandlerRegistration.AddSystemHandler<ExternalSetTestHandler>(services);
                 // The app's own mirror, with a hook for the edits endpoints run (their editor is resolved per request).
                 services.AddSingleton<ILibraryMirror>(sp => new HookedMirror(
                     ActivatorUtilities.CreateInstance<RnRomManager.Data.Repositories.LibraryMirror>(sp), before: () => _mirrorHook?.Invoke()));
@@ -58,7 +59,8 @@ public partial class ExternalLibraryTests
                 new FixtureGame(EuropeName, EuropeName + ".nsp", Europe),
             ],
             [GbDat] = [new FixtureGame("Shared (World)", "Shared (World).gb", SharedGb), new FixtureGame("Mystery GB (World)", "Mystery GB (World).gb", Mystery)],
-        });
+            [ExternalSetTestHandler.DatNameValue] = SetDatGames,
+        }, layouts: new Dictionary<string, FixtureDatLayout> { [ExternalSetTestHandler.DatNameValue] = FixtureDatLayout.Redump });
         cache.Load();
         _items = [];
         _itemRepository = Substitute.For<IJobItemRepository>();

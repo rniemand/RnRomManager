@@ -19,6 +19,9 @@ public static class IngestOutcome
 public static class IngestReason
 {
     public const string TooRecent = "TooRecent";
+
+    /// <summary>B9: a <c>.zip</c>/<c>.7z</c> for a <c>FileSets</c> system stays in ingest; nothing is extracted.</summary>
+    public const string ArchiveNotSupported = "ArchiveNotSupported";
 }
 
 /// <summary>A review row still <c>Pending</c>: just what step 5 needs to check its source still exists.</summary>
