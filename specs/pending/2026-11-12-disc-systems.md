@@ -176,6 +176,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - **Move record:** `ExternalMoveRecord` gets a format **v2**: every v1 field, unchanged (`romSha1` and the two single names still describe the main file), plus `files`, a list of `{ sourceExternalFileName, targetExternalFileName }` pairs for the release's `files` entries in order. Like v1 it is written only by move-release (merge writes no record, as today) and validated for **manual recovery** only (W3/W7); there's no automatic replay. A release with no `files` still writes v1.
     - Its size cap rises from 16 KiB to 320 KiB. That fits 99 pairs (B8) of 250-byte names even when the default JSON encoder writes every byte as a 6-byte `\uXXXX` escape (99 × 2 × 1,500 bytes, plus keys).
     - A v1 record (one pair) is still read and validated as today.
+    - Validation (`ExternalMoveRecord.ValidateAsync`) accepts version 1 or 2. A v1 record has no `files`; a v2 record has a non-empty `files` list. Every `files` name passes the same plain-pointer check as the two single names (`Problem`). The backed-up release (the one with `romSha1`) must have a `files` list of the same length whose `externalFileName`s equal the recorded `sourceExternalFileName`s in order, ignoring case, as v1 compares the main pointer. Anything else is `InvalidDataException`, as today.
   - **Notes** stay keyed by the main file's `fileName`.
 
 ### Integrity
@@ -360,7 +361,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - Files: `Core/Library/LibraryEditor.cs`, `Core/Library/ExternalMoveRecord.cs`, `ExternalLibraryTests.Sets.cs`, `ExternalMoveRecordTests.cs`.
   - Tests:
     - `ExternalLibraryTests.Sets.cs`: move into a folder with a taken name gives `409 NameTaken` and nothing moves; a same-folder merge moves no set files and succeeds; a logical-name clash on merge gives `NameTaken`; a move writes a v2 record; a move whose second set file fails to move (file system hook) undoes the first and gives `IoError`; moving a single-file `.iso` release to a game in another folder keeps its exact name (no `<ZipBase>.` prefix, no ` (N)`).
-    - `ExternalMoveRecordTests`: v2 round-trip with 99 pairs of 250-byte names made of `'` (each escaped to 6 bytes) under the 320 KiB cap, and a v1 record still read and validated.
+    - `ExternalMoveRecordTests`: v2 round-trip with 99 pairs of 250-byte names made of `'` (each escaped to 6 bytes) under the 320 KiB cap, a v2 record whose `files` names differ from the backed-up release's `files` is refused (`InvalidDataException`), and a v1 record still read and validated.
   - Done when: those classes pass (Docker running).
 - [ ] **15. Integrity for set files**: B19.
   - Files: `Core/Integrity/IntegrityJob.cs`, `IntegrityJobTests.cs`.
@@ -554,6 +555,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - 2026-11-12 `(United Arab Emirates)` in five Redump game names is also unknown to `NoIntroRegions` → added with `UK`, same reason as B3a; no other unknown region group in the six DATs (fact).
 - 2026-11-12 Step 9's "`FileSets` handler without `.cue`" named no handler → a `discx` substitute from `IngestJobTests`' `Handler` helper, with the `.cue` `UnsupportedType` and the `.bin` in Review (reviewer).
 - 2026-11-12 B18 named only sets, so moving or merging a single-file `.iso` release on a `FileSets` system had no naming rule (today's code prefixes `<ZipBase>.` and may add ` (N)`) → B18 covers every file of every moved release, as B16 and B17 already do; step 14 tests a single `.iso` move (code: `LibraryEditor.MoveReleaseExternalAsync` calls `ExternalRomName.Allocate`; B10).
+- 2026-11-12 What does v2 move-record validation check for `files`? → versions 1 and 2 accepted; each `files` name passes `Problem`'s pointer check, and the backed-up release's `files` names must equal the recorded source names in order (ignoring case), as v1 checks the main pointer (code: `ExternalMoveRecord.ValidateAsync` rejects any version but `CurrentVersion` and checks only the main pointer).
 
 ## Kickoff prompt
 ```text
