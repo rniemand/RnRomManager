@@ -82,7 +82,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - **Parsing:** a file is a cue when its extension is `.cue`, ignoring case (the same for `.bin`, `.iso` and `.nrg` below). `IngestJob` reads every `.cue` of at most 64 KiB through the same checked open as other ingest reads and passes its bytes to the planner, which parses them with `CueSheet.Parse` (B8). Its set is the cue plus every file its `FILE` lines name. Names resolve in the same folder, ignoring case; if two files in the folder differ only by case and a cue names one of them, that set is `SetConflict`.
   - **Incomplete set:** if a named file is missing, nothing in that set is processed. Every present member is `Skipped` with reason `IncompleteSet` and stays in ingest, so it is retried on the next run. A lone `.cue` whose files aren't there is the same case.
   - **Broken cue:** a `.cue` that can't be read or doesn't parse has no member list. It and every `.bin` whose name starts with the cue's stem (ignoring case; Redump names tracks `<stem> (Track N).bin`) are `Skipped` `IncompleteSet` and stay in ingest. A `.bin` that a parsed cue names belongs to that cue's set instead, even when it starts with a broken cue's stem (`Game 2 (Track 1).bin` and a broken `Game.cue`). Other files are planned as usual.
-  - **Unsupported member:** a `FILE` name that doesn't end in `.bin` (ignoring case: `.wav`, `.ape`, `.img`, `.iso`, `.cue`, …), or the cue naming itself, skips the whole set. Every present member is `Skipped` with reason `UnsupportedSetMember` and stays in ingest.
+  - **Unsupported member:** a `FILE` name that doesn't end in `.bin` (ignoring case: `.wav`, `.ape`, `.img`, `.iso`, `.cue`, …), the cue naming itself, or a cue whose own file name fails B8's name rules (it is stored under that exact name, and the validator would refuse it, B12), skips the whole set. Every present member is `Skipped` with reason `UnsupportedSetMember` and stays in ingest.
   - **Shared member:** if one file is named by two or more cues, all of those sets are `Skipped` with reason `SetConflict`.
   - **Large cue:** a `.cue` over 64 KiB isn't parsed. It is handled as a lone file that is not a cue.
   - **Lone files:** a `.bin`, `.iso` or `.nrg` that no cue names, or a `.cue` over 64 KiB, is processed on its own as a single file (B11). A lone file that doesn't match goes to Review under B15. A lone `.bin` that matches a DAT rom whose name has a ` (Track <digits>)` tag (a data track of a multi-track disc, B3) is `Skipped` with reason `IncompleteSet` and stays, so its cue and other tracks can join it later; this check runs right after the DAT match, before grouping. A lone `.bin` that matches an untagged (single-track) DAT rom but whose base title two or more games own is `Skipped` `AmbiguousGroup` and stays, as a set's data track does (B7a), because a `.bin` item can't be resolved in Review (B15).
@@ -168,6 +168,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - deleting a release writes one `ReleaseDeleted` event: `target_path` is the main file's `_removed/` path and `details` is the main `fileName`, as today, followed by `; ` and each `files` name in order (truncated to the column, as all audit text is);
   - deleting a game writes one `GameDeleted` event, unchanged (`target_path` `ingest/<id>/_removed/`).
 - **B18 Move / merge.** Move-release and merge move every file of a set with its exact name. A taken name in the target folder refuses the whole operation with `409` `NameTaken` before any file moves.
+  - **Each file as a main file today:** a missing set file is logged and only its entry moves; a file that is neither found nor missing refuses with `IoError`; a failed move undoes the moves already made (`UndoMoves`) and returns `IoError`; a failed ZIP write undoes every move.
   - **Same folder:** when the source and target ZIPs are in the same folder, the set files don't move, and the source game's own claims don't count as taken.
   - **Logical names:** a logical-name clash in the target game (`AllocateLogicalName`) also refuses with `NameTaken`. It never adds ` (N)`, so `fileName` always equals `externalFileName`.
   - **Move record:** `ExternalMoveRecord` gets a format **v2**: every v1 field, unchanged (`romSha1` and the two single names still describe the main file), plus `files`, a list of `{ sourceExternalFileName, targetExternalFileName }` pairs for the release's `files` entries in order. Like v1 it is written only by move-release (merge writes no record, as today) and validated for **manual recovery** only (W3/W7); there's no automatic replay. A release with no `files` still writes v1.
@@ -260,12 +261,12 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - `SystemRegistryTests`: `FileSets` with embedded storage is refused; a family with mixed `FileSets` values is refused.
     - `ExternalRomNameTests`: an exact name comes back unchanged; a taken name (ignoring case) is reported; 251 bytes is reported too long.
   - Done when: the classes above pass.
-- [ ] **3. Release files in info.json**: B12 (info.json part). Add `InfoJsonRomFile`, `files` and schema v6, `InfoJsonUpgraderV5` (registered in `AppHost`), the validator rules, and `LibraryZipWriter`'s length check for set files.
+- [ ] **3. Release files in info.json**: B12 (info.json part). Add `InfoJsonRomFile`, `files` and schema v6, `InfoJsonUpgraderV5` (registered in `AppHost`), the validator rules, and `LibraryZipWriter`'s length check for set files (its `ExternalFiles` lookup, which today throws `ArgumentException` for a touched name that isn't a main `externalFileName`, also finds `files` entries and checks against their `sizeBytes`).
   - Files: `Core/Library/InfoJsonRom.cs`, `InfoJsonRomFile.cs` (new), `InfoJsonReader.cs` (`CurrentVersion` 5 → 6), `InfoJsonUpgraderV5.cs` (new), `InfoJsonValidator.cs`, `LibraryZipWriter.cs`, `Api/AppHost.cs` (upgrader registration), `InfoJsonTests.cs`, `LibraryZipTests.cs`.
   - Tests:
     - `InfoJsonTests` (it also holds the validator cases): its serialized `"schemaVersion": 5` assertion becomes 6; a v6 round-trip with files; `files` on a non-`FileSets` system, an empty `files` array, an uppercase `sha1` in a `files` entry, a duplicate name across the game, a bad extension, an oversize file, a `files` name over 255 UTF-8 bytes and a `fileName` that differs from its `externalFileName` on a `FileSets` system are each rejected; a `...Iru!` name is accepted on a `FileSets` system.
     - `InfoJsonTests` also holds the upgrader cases, as for V2–V4: `V5Upgrade_` v5 → v6 adds `files: null`. Add `InfoJsonUpgraderV5` to the upgrader lists built in `InfoJsonTests` and `LibraryZipTests`.
-    - `LibraryZipTests`: a write whose set file has the wrong length fails verification; a write whose info.json would be over 1 MiB fails with `VerifyFailed` and leaves the old ZIP.
+    - `LibraryZipTests`: a write touching a set file with the right length succeeds, and one whose set file has the wrong length fails verification; a write whose info.json would be over 1 MiB fails with `VerifyFailed` and leaves the old ZIP.
   - Done when: the classes above pass.
 - [ ] **4. `rom_files` table, mirror and claims**: B12 (database part), B13. Add migration `0020_rom_files.sql`, the mirror insert/delete in `LibraryMirror.ApplyAsync`, `ListExternalAsync` (union, `FileId`), `ExternalRomRow.FileId`, `RomFileRow` and the three `IRomRepository` file methods, and `InfoJsonGame.ExternalFileNames()` with every call site B13 lists switched to it.
   - Files: `Data/Migrations/0020_rom_files.sql` (new), `Data/Repositories/LibraryRepositories.cs` (`LibraryMirror`, `RomRepository`), `Core/Library/LibraryRows.cs` (`MirrorEntry.ToRows`, `RomFileRow`), `Core/Library/ILibraryRepositories.cs`, `Core/Library/InfoJsonGame.cs`, the call sites in `IngestPipeline.cs`, `LibraryEditor.cs` and `IntegrityJob.cs`, `LibraryMirrorTests.cs`, `SchemaMigrationTests.cs`, `InfoJsonTests.cs`.
@@ -291,7 +292,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - Tests (`IngestSetPlannerTests`):
     - cue + two `.bin`s gives one set in cue order, cue first;
     - a missing member gives `IncompleteSet` for every present member, and a lone `.cue` whose files are missing is the same;
-    - a cue naming a `.wav`, an `.iso`, or itself, gives `UnsupportedSetMember`;
+    - a cue naming a `.wav`, an `.iso`, or itself, gives `UnsupportedSetMember`, and so does a cue whose own name contains `:`;
     - a cue that doesn't parse, or couldn't be read, gives `IncompleteSet` for itself and each `.bin` starting with its stem, and another `.bin` is a lone file; a `.bin` that starts with a broken cue's stem but is named by a parsed cue stays in that cue's set;
     - units come in the scanner's name order, by their first member (`Game (Track 1).bin` before `Game.cue`);
     - two cues naming one `.bin` give `SetConflict` for both sets, and so do two files differing only by case;
@@ -353,7 +354,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - [ ] **14. Move and merge of sets**: B18. Whole-set move/merge and `ExternalMoveRecord` v2 with v1 still read.
   - Files: `Core/Library/LibraryEditor.cs`, `Core/Library/ExternalMoveRecord.cs`, `ExternalLibraryTests.Sets.cs`, `ExternalMoveRecordTests.cs`.
   - Tests:
-    - `ExternalLibraryTests.Sets.cs`: move into a folder with a taken name gives `409 NameTaken` and nothing moves; a same-folder merge moves no set files and succeeds; a logical-name clash on merge gives `NameTaken`; a move writes a v2 record.
+    - `ExternalLibraryTests.Sets.cs`: move into a folder with a taken name gives `409 NameTaken` and nothing moves; a same-folder merge moves no set files and succeeds; a logical-name clash on merge gives `NameTaken`; a move writes a v2 record; a move whose second set file fails to move (file system hook) undoes the first and gives `IoError`.
     - `ExternalMoveRecordTests`: v2 round-trip with 99 pairs of 250-byte names made of `'` (each escaped to 6 bytes) under the 320 KiB cap, and a v1 record still read and validated.
   - Done when: those classes pass (Docker running).
 - [ ] **15. Integrity for set files**: B19.
@@ -525,6 +526,9 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - 2026-11-12 B14's "only time a track isn't sent to Review" was wrong: today's step 3 still sends a lone track with another source's `Pending` SHA1 to `_duplicates/` (code).
 - 2026-11-12 Exact `/api/systems` and e2e System option order → `OrdinalIgnoreCase` by display name (code: `LibraryEndpoints` `/systems`); icon mappings get `stores.svelte.test.ts` cases; seed DAT contents, `IngestJobTests`/`ReviewResolverExternalTests` hosts and the development.md seed numbers made exact (reviewer).
 - 2026-11-12 Every step names its files; new handler classes follow the `<System>Handler` pattern (`PlayStationHandler`, `PlayStationPortableHandler`, `GameCubeHandler`, `WiiHandler`, `Xbox360Handler`, `SaturnHandler`) with a per-project `EmbeddedResources` like `Systems.Sega` (reviewer).
+- 2026-11-12 A cue whose own file name isn't portable (`:`, `?`, a device name…)? → the set is `UnsupportedSetMember`: it would be stored under that exact name and the validator refuses it; B8 only checks the names inside the cue (reviewer).
+- 2026-11-12 Move/merge of a set with a missing or unmovable file? → each set file follows today's main-file rules: missing is logged and only its entry moves, a failed move undoes earlier moves with `IoError` (code: `LibraryEditor` merge and move-release).
+- 2026-11-12 `LibraryZipWriter.ExternalFiles` throws for a touched name that isn't a main `externalFileName`, so step 3 extends it to `files` entries (code).
 
 ## Kickoff prompt
 ```text
