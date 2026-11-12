@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Saturn). Made for this project; MIT licensed like the rest of the repo.
+       Exported to saturn.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#e2e6f2"/>
+  <!-- dark console body -->
+  <rect x="52" y="148" width="408" height="236" rx="22" fill="#2a2c33" stroke="#121317" stroke-width="4"/>
+  <!-- round lid -->
+  <circle cx="190" cy="262" r="86" fill="#3a3d46" stroke="#121317" stroke-width="4"/>
+  <circle cx="190" cy="262" r="20" fill="#2a2c33"/>
+  <!-- ringed planet badge -->
+  <ellipse cx="360" cy="236" rx="64" ry="18" fill="none" stroke="#3e6fd8" stroke-width="8"/>
+  <circle cx="360" cy="236" r="30" fill="#3e6fd8"/>
+  <text x="360" y="336" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="34" font-weight="800" fill="#ffffff">Saturn</text>
+</svg>

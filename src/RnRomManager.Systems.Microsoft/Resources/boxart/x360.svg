@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Xbox 360). Made for this project; MIT licensed like the rest of the repo.
+       Exported to x360.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#e4eee2"/>
+  <!-- white console with a concave front -->
+  <rect x="80" y="112" width="352" height="288" rx="26" fill="#f6f6f6" stroke="#9a9a9a" stroke-width="4"/>
+  <rect x="104" y="140" width="304" height="40" rx="10" fill="#d4d4d4"/>
+  <!-- green ring of light -->
+  <circle cx="256" cy="262" r="62" fill="none" stroke="#5dc21e" stroke-width="16"/>
+  <circle cx="256" cy="262" r="38" fill="#d4d4d4"/>
+  <text x="256" y="382" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="30" font-weight="800" fill="#107c10">X360</text>
+</svg>

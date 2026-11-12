@@ -12,6 +12,8 @@
     <Project Path="src/RnRomManager.Systems.Sega/RnRomManager.Systems.Sega.csproj" />
     <Project Path="src/RnRomManager.Systems.Nec/RnRomManager.Systems.Nec.csproj" />
     <Project Path="src/RnRomManager.Systems.Switch/RnRomManager.Systems.Switch.csproj" />
+    <Project Path="src/RnRomManager.Systems.Sony/RnRomManager.Systems.Sony.csproj" />
+    <Project Path="src/RnRomManager.Systems.Microsoft/RnRomManager.Systems.Microsoft.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/RnRomManager.Api.Tests/RnRomManager.Api.Tests.csproj" />
@@ -26,6 +28,8 @@
     <Project Path="tests/RnRomManager.Systems.Sega.Tests/RnRomManager.Systems.Sega.Tests.csproj" />
     <Project Path="tests/RnRomManager.Systems.Nec.Tests/RnRomManager.Systems.Nec.Tests.csproj" />
     <Project Path="tests/RnRomManager.Systems.Switch.Tests/RnRomManager.Systems.Switch.Tests.csproj" />
+    <Project Path="tests/RnRomManager.Systems.Sony.Tests/RnRomManager.Systems.Sony.Tests.csproj" />
+    <Project Path="tests/RnRomManager.Systems.Microsoft.Tests/RnRomManager.Systems.Microsoft.Tests.csproj" />
     <Project Path="tests/RnRomManager.TestData/RnRomManager.TestData.csproj" />
   </Folder>
 </Solution>

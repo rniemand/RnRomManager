@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NSubstitute" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="NUnit.Framework" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/RnRomManager.Systems.Microsoft/RnRomManager.Systems.Microsoft.csproj" />
+    <!-- Only to check the Xbox 360 box art differs from the Switch one. -->
+    <ProjectReference Include="../../src/RnRomManager.Systems.Switch/RnRomManager.Systems.Switch.csproj" />
+  </ItemGroup>
+
+</Project>
