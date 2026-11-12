@@ -95,7 +95,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - Every member is streamed and hashed once. The set's **data track** is the one member whose SHA1 matches the system's DAT.
     - A member that changes after it was hashed (today's post-hash re-check) makes the whole set `Skipped` `TooRecent`; nothing moves.
     - A member whose path is over the 1,024-character source path limit (I1) is `Error` `IoError` as today; the other members are `Skipped` `IncompleteSet`. All stay in ingest.
-    - An `Error` while storing the set (`IoError`, `VerifyFailed`, `TargetZipUnreadable`, `InfoJsonNewerSchema`, `Unexpected`) undoes every move, and every member gets that `Error` with the same code and details. All stay in ingest.
+    - An `Error` while storing the set (`IoError`, `VerifyFailed`, `TargetZipUnreadable`, `InfoJsonNewerSchema`, `Unexpected`) undoes every move, and every member gets that `Error` with the same code and details. All stay in ingest. Each member is moved back as a single file is today (`IngestPipeline.RollBack`): to its ingest path, or to a ` (2)`-style sibling when that name was taken meanwhile (`AllocateRollbackPath`, noted in that member's details). A member moved back under another name is no longer named by its cue, so on the next run it is a lone file and its set is `IncompleteSet` or takes the newcomer.
     - `DbWriteFailed` (the files and the ZIP are in place, the mirror failed) gives every member `Error` `DbWriteFailed`. The job stops after recording all of them, as it does for a single file.
   - **Cancellation:** like a single external file (I2), a set that has started is processed to the end with `CancellationToken.None`; cancellation is checked only between sets and lone files.
 - **B7a Set outcomes.**
@@ -392,15 +392,15 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - `SystemStartupTests` and `IngestEndpointsTests`: the registry-order list of 20 ids. `AppHost` registers the six after `SwitchHandler` in B4's table order (`psx`, `psp`, `gc`, `wii`, `x360`, `saturn`);
     - `LibraryEndpointsTests`: the `/api/systems` order and display names (20 systems; still exactly 13 with `embedRoms` true).
   - Tests:
-    - `IngestPipelineTests`: a Wii ISO over 2 GiB (sparse file) is size-accepted in both `ingest/wii/` and `ingest/gc/`;
+    - `IngestPipelineTests`: a Wii ISO over 2 GiB (the Wii magic at 0x18, the rest zeros, extended with `SetLength`) dropped in `ingest/wii/`, and again in `ingest/gc/`, is not `TooLarge`: each goes to Review (`NoDatMatch`, the six Redump DATs are empty) with system `wii`;
     - `systemColours.test.ts` for the six colours.
   - Done when: the Core and Api test projects pass (Docker running); `npm run lint`, `npm run check` and `npx vitest run src/lib/systemColours.test.ts` pass.
 - [ ] **21. Seed, integration and e2e**: one synthetic game per system in Basic, written loose:
   - `ingest/psx/`: `Disc Runner (USA).cue`, `Disc Runner (USA) (Track 1).bin` (data, in the fixture Redump DAT) and `Disc Runner (USA) (Track 2).bin`.
   - `ingest/saturn/`: `Sky Rally (Japan).cue`, `Sky Rally (Japan) (Track 1).bin` (data) and `Sky Rally (Japan) (Track 2).bin`.
   - `ingest/psp/`: `Pocket Ninja (USA).iso`.
-  - `ingest/gc/`: `Cube Kart (USA).iso`, 64 KiB with the GC magic and title.
-  - `ingest/wii/`: `Wave Bowling (USA).iso`, 64 KiB with the Wii magic.
+  - `ingest/gc/`: `Cube Kart (USA).iso`, 64 KiB with the GC magic, game id `GCKE01` and title `CUBE KART`.
+  - `ingest/wii/`: `Wave Bowling (USA).iso`, 64 KiB with the Wii magic, game id `RWBE01` and title `WAVE BOWLING`.
   - `ingest/x360/`: `Arc Strike (USA).iso`.
 
   Every `.bin` and `.iso` is 64 KiB of deterministic bytes from its own builder seed, so no two files share a SHA1 (above every minimum in B4). Each `.cue` names its two tracks with `FILE "…" BINARY` lines.
@@ -412,7 +412,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - `SeedIngestTests`: the `[TestCase]` values (Ingested 32 / 232, games 23 / 223); its assertion that the release count equals the Ingested count changes to releases = Ingested − 4 (the set members beyond each data track); job items stay Ingested + 4;
     - `mvp.spec.ts`: `Ingested 32 · Duplicate 1 · Review 2 · Failed 1`, every `17 games` → `23 games`, the System option list, and the Auditing page's `Ingested` rows 22 → 28 (one event per set, B7a; the page loads 100 rows).
   - Tests:
-    - `SeedIngestTests`: the PSX and Saturn releases have 2 `files` each, beside the ZIP under their exact names with their original bytes; their releases have no `Track 1` flag; the GC/Wii headers have `gameId` and `title`.
+    - `SeedIngestTests`: the PSX and Saturn releases have 2 `files` each, beside the ZIP under their exact names with their original bytes; their releases have no `Track 1` flag; the GC header has `gameId` `GCKE01` and `title` `CUBE KART`, and the Wii header `RWBE01` and `WAVE BOWLING`.
     - e2e: the PlayStation game's "3 files" toggle downloads Track 2 byte-exact.
   - Done when: the Core and Api test projects pass (Docker running), and `pwsh scripts/test-e2e.ps1` passes.
 - [ ] **22. Docs**:
@@ -509,6 +509,9 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
 - 2026-11-12 How does the mirror get `rom_files.rom_id`? → by joining `roms.sha1` (unique) in an `INSERT … SELECT`, because `LibraryMirror.ApplyAsync` batch-inserts `roms` without reading ids back (code).
 - 2026-11-12 Validator rules for `files` entries' hashes and an empty array? → lowercase hex as for `metadata`; `[]` is rejected, a single file is `null` (code: `InfoJsonValidator` hash rule).
 - 2026-11-12 Step 3 updates `InfoJsonTests`' `"schemaVersion": 5` assertion; `InfoJsonReader.CurrentVersion` holds the version (code).
+- 2026-11-12 Set member rolled back to a taken ingest name? → moved back as a ` (2)` sibling, as a single file is today (`RollBack`, `AllocateRollbackPath`); it is a lone file on the next run (code).
+- 2026-11-12 Seeded Wii disc lacked the game id and title the seed test asserts? → GC `GCKE01`/`CUBE KART`, Wii `RWBE01`/`WAVE BOWLING` (reviewer).
+- 2026-11-12 Outcome of the >2 GiB Wii size test? → Review (`NoDatMatch`) as `wii` from both folders, never `TooLarge` (code: empty fixture DATs, the header classifies).
 - 2026-11-12 Every step names its files; new handler classes follow the `<System>Handler` pattern (`PlayStationHandler`, `PlayStationPortableHandler`, `GameCubeHandler`, `WiiHandler`, `Xbox360Handler`, `SaturnHandler`) with a per-project `EmbeddedResources` like `Systems.Sega` (reviewer).
 
 ## Kickoff prompt
