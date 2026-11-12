@@ -15,6 +15,12 @@ describe('FileSize', () => {
 		expect(render(FileSize, { bytes: 16 * 1024 * 1024 }).container.textContent).toBe('16.0 MiB');
 	});
 
+	it('renders GiB from 1 GiB up', () => {
+		expect(render(FileSize, { bytes: 8 * 1024 ** 3 }).container.textContent).toBe(
+			`${(8).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} GiB`
+		);
+	});
+
 	it('renders nothing for null', () => {
 		expect(render(FileSize, { bytes: null }).container.querySelector('span')).toBeNull();
 	});

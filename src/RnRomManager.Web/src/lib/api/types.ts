@@ -22,6 +22,17 @@ export interface CurrentJob {
 	total: number;
 	currentItem: string | null;
 	startedAt: string;
+	/** The current file's streamed phase; null (or absent from an older server) when none runs. */
+	step?: JobStep | null;
+}
+
+/** Large ROM import progress B1: one streamed phase of the current file. */
+export interface JobStep {
+	/** `Hashing`, `CopyingToLibrary` or `Copying`; another value shows as is. */
+	phase: string;
+	bytesDone: number;
+	bytesTotal: number;
+	bytesPerSecond: number | null;
 }
 
 /** `{ items, page, pageSize, total }` (spec §23). */
