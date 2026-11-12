@@ -1,6 +1,6 @@
 ---
 title: Game updates
-status: ready # draft | ready | in-progress | completed
+status: in-progress # draft | ready | in-progress | completed
 created: 2026-11-12
 ---
 
