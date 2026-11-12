@@ -753,4 +753,21 @@ public class InfoJsonTests
         });
         Assert.That((read.Kind, read.FileVersion, read.Game!.SchemaVersion, read.Game.Roms[0].Files), Is.EqualTo((InfoJsonReadResult.Outcome.Ok, (int?)5, 6, (IReadOnlyList<InfoJsonRomFile>?)null)));
     }
+
+    [Test]
+    public void ExternalFileNames_ListsMainNamesThenFilesNames()
+    {
+        var disc2 = SetRom("Disc (USA) (Disc 2) (Track 1).bin", SetFile("Disc (USA) (Disc 2).cue")) with
+        {
+            IsPrimary = false,
+            Metadata = SetRom().Metadata with { Sha1 = new string('f', 40) },
+        };
+        var game = SetGame(SetRom(), disc2);
+
+        Assert.That(game.ExternalFileNames(), Is.EqualTo(new[]
+        {
+            SetTrack, "Disc (USA) (Disc 2) (Track 1).bin", "Disc (USA).cue", "Disc (USA) (Track 2).bin", "Disc (USA) (Disc 2).cue",
+        }));
+        Assert.That(Game().ExternalFileNames(), Is.Empty, "embedded roms have no external names");
+    }
 }

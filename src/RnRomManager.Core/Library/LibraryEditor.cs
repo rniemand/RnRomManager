@@ -137,7 +137,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         var claims = await roms.ListExternalAsync(ct).ConfigureAwait(false);
         var oldFolderPath = row.ZipPath[..row.ZipPath.LastIndexOf('/')];
         // Moving a file another game also claims would take it from that game.
-        if (current.Roms.Select(r => r.ExternalFileName).OfType<string>().FirstOrDefault(name => claims.Any(c => c.GameId != row.Id
+        if (current.ExternalFileNames().FirstOrDefault(name => claims.Any(c => c.GameId != row.Id
                 && string.Equals(c.ExternalFileName, name, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(c.ZipPath[..c.ZipPath.LastIndexOf('/')], oldFolderPath, StringComparison.OrdinalIgnoreCase))) is { } conflict)
             return new(LibraryTarget.TargetZipUnreadable, $"{row.ZipPath}: {conflict} is also claimed by another game");
@@ -735,7 +735,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
 
         var pointer = ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(targetPath), moved.FileName,
             ExternalNameReservations.ForFolder(folder.Path, targetPath[..targetPath.LastIndexOf('/')], claims,
-                target?.Game!.Roms.Select(r => r.ExternalFileName).OfType<string>()));
+                target?.Game!.ExternalFileNames()));
         moved = moved with { ExternalFileName = pointer };
         targetGame = targetGame with { Roms = PrimaryRelease.Apply([.. targetGame.Roms, moved], DatSourceOf(row.SystemId)), Metadata = target is null ? targetGame.Metadata : Touched(targetGame) };
         var remaining = source.Game.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
@@ -1052,7 +1052,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         var claims = await roms.ListExternalAsync(ct).ConfigureAwait(false);
         var logical = new ExternalNameReservations(into.Roms.Select(r => r.FileName));
         var pointers = ExternalNameReservations.ForFolder(folder.Path, targetRow.ZipPath[..targetRow.ZipPath.LastIndexOf('/')], claims,
-            into.Roms.Select(r => r.ExternalFileName).OfType<string>());
+            into.ExternalFileNames());
         var zipBase = Path.GetFileNameWithoutExtension(targetRow.ZipPath);
         var sourceFolder = Path.GetDirectoryName(sourceZip.Path)!;
         var merged = new List<InfoJsonRom>(into.Roms);

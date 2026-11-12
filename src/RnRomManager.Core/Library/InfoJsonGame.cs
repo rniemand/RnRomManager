@@ -28,4 +28,8 @@ public sealed record InfoJsonGame
     public required IReadOnlyList<InfoJsonRom> Roms { get; init; }
     public required IReadOnlyList<InfoJsonImage> Images { get; init; }
     public required InfoJsonGameMetadata Metadata { get; init; }
+
+    /// <summary>B13: the game's external file names: each main <c>externalFileName</c>, then each <c>files</c> entry's.</summary>
+    public IEnumerable<string> ExternalFileNames() =>
+        Roms.Select(r => r.ExternalFileName).OfType<string>().Concat(Roms.SelectMany(r => r.Files ?? []).Select(f => f.ExternalFileName));
 }

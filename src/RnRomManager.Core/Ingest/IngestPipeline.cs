@@ -514,7 +514,7 @@ public sealed class IngestPipeline(
                 var claims = await roms.ListExternalAsync(cancellationToken).ConfigureAwait(false);
                 var name = ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(row.ZipPath), rom.FileName,
                     ExternalNameReservations.ForFolder(folder.Path, row.ZipPath[..row.ZipPath.LastIndexOf('/')], claims,
-                        current.Roms.Select(r => r.ExternalFileName).OfType<string>()));
+                        current.ExternalFileNames()));
                 rom = rom with { ExternalFileName = name };
                 placement = new ExternalPlacement(source, name);
             }
@@ -663,7 +663,7 @@ public sealed class IngestPipeline(
 
             var claims = await roms.ListExternalAsync(cancellationToken).ConfigureAwait(false);
             var names = ExternalNameReservations.ForFolder(folder.Path, game.ZipPath[..game.ZipPath.LastIndexOf('/')], claims,
-                current.Roms.Select(r => r.ExternalFileName).OfType<string>());
+                current.ExternalFileNames());
             var plan = new RepairPlan(
                 there.Status == ExternalPathStatus.Found ? there.Path : null, there.Snapshot,
                 Path.Combine(folder.Path, ExternalRomName.AllocateRepairBackup(pointer, names)),
