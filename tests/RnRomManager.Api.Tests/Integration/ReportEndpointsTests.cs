@@ -208,6 +208,27 @@ public class ReportEndpointsTests
     }
 
     [Test]
+    public async Task LibrarySize_IncludesSetFiles_AndRomCountStaysReleases()
+    {
+        // B21: a release's set files count toward the size; the drill-down's romCount is still one release.
+        var rom = TestLibrary.Rom("Disc (Track 1).bin", [.. Enumerable.Repeat((byte)1, 300)]) with
+        {
+            ExternalFileName = "Disc (Track 1).bin",
+            Files = [new InfoJsonRomFile("Disc.cue", "Disc.cue", "Disc.cue", 40, "00000000", new string('0', 32), new string('a', 40)),
+                new InfoJsonRomFile("Disc (Track 2).bin", "Disc (Track 2).bin", "Disc (Track 2).bin", 700, "00000000", new string('0', 32), new string('b', 40))],
+        };
+        var game = TestLibrary.Game("Disc", rom) with { System = "gb" };
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, "gb/D/Disc.zip", 100, DateTime.UtcNow), default);
+
+        var size = await GetJson("/api/reports/library-size");
+        var gb = await GetJson("/api/reports/library-size/gb");
+
+        Assert.That(size.GetProperty("totalBytes").GetInt64(), Is.EqualTo(1140L));
+        Assert.That(gb.GetProperty("games").EnumerateArray().Select(g => (g.GetProperty("bytes").GetInt64(), g.GetProperty("romCount").GetInt32())),
+            Is.EqualTo(new[] { (1140L, 1) }));
+    }
+
+    [Test]
     public async Task LibrarySize_System_OrdersByCombinedSize()
     {
         // The report sums by stored pointer, so pointer rows under a registered system exercise the drill-down.

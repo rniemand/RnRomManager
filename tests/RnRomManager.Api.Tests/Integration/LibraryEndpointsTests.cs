@@ -17,7 +17,7 @@ namespace RnRomManager.Api.Tests.Integration;
 
 /// <summary>Spec §23 <c>/api/systems</c>, <c>/api/games*</c> reads, images and downloads (S32), against MariaDB + real ZIPs.</summary>
 [Category("Integration")]
-public class LibraryEndpointsTests
+public partial class LibraryEndpointsTests
 {
     private const string Gb = "Nintendo - Game Boy";
     private static readonly byte[] TetrisWorld = new SyntheticRomBuilder { Seed = 1, Title = "TETRIS" }.Build();

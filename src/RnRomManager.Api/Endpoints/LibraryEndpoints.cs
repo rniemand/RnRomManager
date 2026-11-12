@@ -174,6 +174,19 @@ public static class LibraryEndpoints
                 : Results.Stream(stream!, "application/octet-stream", rom.FileName);
         });
 
+        // B20: one file of a set, found by the release it belongs to (another release's file id is a 404).
+        games.MapGet("/{id:guid}/roms/{romId:long}/files/{fileId:long}/download", async (Guid id, long romId, long fileId, HttpContext ctx,
+            IGameRepository repository, IRomRepository roms, LibraryFiles files) =>
+        {
+            if (await roms.GetFileAsync(id, romId, fileId, ctx.RequestAborted) is not { } setFile
+                || await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
+                return Problems.NotFound(ctx);
+            var claims = await roms.ListExternalAsync(ctx.RequestAborted);
+            return files.OpenExternal(ctx, game, setFile.ExternalFileName, claims, out var file) is { } problem
+                ? problem
+                : Results.Stream(file!, "application/octet-stream", setFile.FileName, enableRangeProcessing: true);
+        });
+
         // B4–B7 release notes: any signed-in user, like ratings; not audited.
         games.MapGet("/{id:guid}/roms/{romId:long}/note", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,
             IRomRepository roms, LibraryFiles files) =>
@@ -406,7 +419,8 @@ public static class LibraryEndpoints
         var imageRows = await images.ListByGameAsync(id, ctx.RequestAborted);
         var systemName = ctx.RequestServices.GetRequiredService<ISystemRegistry>().ById(game.SystemId)?.DisplayName ?? game.SystemId;
         var notes = ctx.RequestServices.GetRequiredService<LibraryFiles>().NoteEntries(game);
-        return Results.Ok(ToDetail(game, systemName, romRows, imageRows, notes));
+        var fileRows = (await roms.ListFilesByGameAsync(id, ctx.RequestAborted)).ToLookup(f => f.RomId);
+        return Results.Ok(ToDetail(game, systemName, romRows, fileRows, imageRows, notes));
     }
 
     private static IResult ToResult(HttpContext ctx, LibraryEditResult result) =>
@@ -659,8 +673,8 @@ public static class LibraryEndpoints
 
     internal static string ImageUrl(Guid gameId, long imageId) => $"/api/games/{gameId}/images/{imageId}";
 
-    private static object ToDetail(GameRow game, string systemName, IReadOnlyList<RomRow> roms, IReadOnlyList<ImageRow> images,
-        IReadOnlySet<string> notes) => new
+    private static object ToDetail(GameRow game, string systemName, IReadOnlyList<RomRow> roms, ILookup<long, RomFileRow> files,
+        IReadOnlyList<ImageRow> images, IReadOnlySet<string> notes) => new
     {
         id = game.Id,
         system = game.SystemId,
@@ -701,6 +715,20 @@ public static class LibraryEndpoints
             dateAdded = r.DateAdded,
             dateModified = r.DateModified,
             downloadUrl = $"/api/games/{game.Id}/roms/{r.Id}/download",
+            // B20: a set's other files in order (null without), and the release's size with them.
+            files = files.Contains(r.Id)
+                ? files[r.Id].OrderBy(f => f.Ordinal).Select(f => new
+                {
+                    id = f.Id,
+                    fileName = f.FileName,
+                    sizeBytes = f.SizeBytes,
+                    crc32 = f.Crc32,
+                    md5 = f.Md5,
+                    sha1 = f.Sha1,
+                    downloadUrl = $"/api/games/{game.Id}/roms/{r.Id}/files/{f.Id}/download",
+                }).ToList()
+                : null,
+            totalSizeBytes = r.SizeBytes + files[r.Id].Sum(f => f.SizeBytes),
             hasNote = notes.Contains(LibraryZip.NoteEntry(r.FileName)),
         }),
         images = images.Select(i => new

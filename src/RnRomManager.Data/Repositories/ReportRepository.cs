@@ -28,13 +28,14 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
     }
 
     /// <summary>
-    /// G6: one row per game, its ZIP plus the recorded sizes of its external ROMs (catalogued, not what is on disk,
+    /// G6/B21: one row per game, its ZIP plus the recorded sizes of its external ROMs and their set files (catalogued, not what is on disk,
     /// so a missing file still counts).
     /// </summary>
     private const string GameBytes = """
         SELECT g.id, g.system_id, g.display_title,
                CAST(g.zip_size_bytes + COALESCE((SELECT SUM(r.size_bytes) FROM roms r
-                   WHERE r.game_id = g.id AND r.external_file_name IS NOT NULL), 0) AS SIGNED) AS Bytes
+                   WHERE r.game_id = g.id AND r.external_file_name IS NOT NULL), 0)
+                   + COALESCE((SELECT SUM(f.size_bytes) FROM rom_files f WHERE f.game_id = g.id), 0) AS SIGNED) AS Bytes
         FROM games g
         """;
 

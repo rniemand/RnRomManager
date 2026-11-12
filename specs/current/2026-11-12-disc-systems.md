@@ -372,8 +372,8 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - a deep run on a changed track gives `HashMismatch`;
     - set files are not `OrphanFile`.
   - Done when: `IntegrityJobTests` passes (Docker running).
-- [ ] **16. API for release files**: B20 (API part), B21. Add `files` and `totalSizeBytes` to the detail, the file download route, and the sizes in the list and report.
-  - Files: `Api/Endpoints/LibraryEndpoints.cs`, `Api/Endpoints/LibraryFiles.cs`, `Data/Repositories/LibraryRepositories.cs` (`PrimarySizeBytes`), `Data/Repositories/ReportRepository.cs` (`GameBytes`, which both the summary and the system drill-down use), `LibraryEndpointsTests.cs`, `ReportEndpointsTests.cs`.
+- [x] **16. API for release files**: B20 (API part), B21. Add `files` and `totalSizeBytes` to the detail, the file download route, and the sizes in the list and report.
+  - Files: `Api/Endpoints/LibraryEndpoints.cs` (the route reuses `LibraryFiles.OpenExternal` unchanged), `Data/Repositories/LibraryRepositories.cs` (`PrimarySizeBytes`), `Data/Repositories/ReportRepository.cs` (`GameBytes`, which both the summary and the system drill-down use), `LibraryEndpointsTests.cs`, `LibraryEndpointsTests.Sets.cs` (new), `ReportEndpointsTests.cs`, `GameListItem.cs` (doc comment).
   - Tests:
     - `LibraryEndpointsTests` (integration, mirroring an `ExternalSetTestHandler` game directly, as its external tests do): detail lists files and `totalSizeBytes`; `GET /api/games` gives `primarySizeBytes` including the primary release's files; the download streams bytes with range support; another release's file id gives 404.
     - `ReportEndpointsTests`: the size includes the files.
