@@ -98,6 +98,8 @@ describe('ZipBrowser (Z1, Z2)', () => {
 		const current = tree().getByRole('button', { name: 'images' });
 		expect(current.getAttribute('aria-current')).toBe('true');
 		expect(current.classList.contains('fw-semibold')).toBe(true);
+		// Contrast on the subtle highlight (axe color-contrast).
+		expect(current.classList.contains('text-primary-emphasis')).toBe(true);
 		const row = current.parentElement!;
 		expect(row.classList.contains('bg-primary-subtle')).toBe(true);
 		expect(row.classList.contains('rounded')).toBe(true);

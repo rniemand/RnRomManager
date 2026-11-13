@@ -636,7 +636,7 @@
 									<button
 										type="button"
 										class="btn btn-sm btn-outline-secondary"
-										aria-label="Move {rom.fileName}"
+										aria-label="Move release {rom.fileName}"
 										onclick={() => (action = { kind: 'move', rom })}
 									>
 										<Icon name="move" /> Move release

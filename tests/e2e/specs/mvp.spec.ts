@@ -307,7 +307,7 @@ test('browse, search and filter the library', async () => {
 	await openLibrary();
 	await chooseFilter('System', 'gb');
 	await expect(page).toHaveURL(/system=gb/);
-	await expect(page.getByText(/^System: Game Boy \(3\)$/)).toBeVisible();
+	await expect(page.getByTestId('active-filters')).toContainText('System: Game Boy (3)');
 	await expect(page.getByRole('button', { name: 'System: Game Boy' })).toBeVisible();
 	await page.getByRole('link', { name: 'Orbit Blocks', exact: true }).click();
 	await expect(page.getByRole('heading', { level: 1, name: 'Orbit Blocks' })).toBeVisible();
@@ -802,12 +802,12 @@ test('Admin: edit metadata, move a release, delete a release and a game', async 
 
 	// Split the Japanese release off into its own game (§11 Move release → new game); Move is in the release body.
 	await page.getByRole('button', { name: 'Show details for Orbit Blocks (Japan).gb' }).click();
-	await page.getByRole('button', { name: 'Move Orbit Blocks (Japan).gb', exact: true }).click();
+	await page.getByRole('button', { name: 'Move release Orbit Blocks (Japan).gb', exact: true }).click();
 	await dialog().getByLabel('A new game').check();
 	await dialog().getByLabel('New game title').fill('Orbit Blocks Japan');
 	await dialog().getByRole('button', { name: 'Move release' }).click();
 	await expect(dialog()).toBeHidden();
-	await expect(page.getByRole('button', { name: 'Move Orbit Blocks (Japan).gb', exact: true })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: 'Move release Orbit Blocks (Japan).gb', exact: true })).toHaveCount(0);
 
 	// Its only release goes to _removed/, so the game goes too and we land on the Library.
 	await openGame('Orbit Blocks Japan');

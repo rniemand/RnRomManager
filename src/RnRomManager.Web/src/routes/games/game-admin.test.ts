@@ -144,11 +144,11 @@ describe('game detail admin actions', () => {
 		expect(
 			screen
 				.getByRole('article', { name: 'Tetris 1.gb' })
-				.querySelector('.card-header [aria-label="Move Tetris 1.gb"]')
+				.querySelector('.card-header [aria-label="Move release Tetris 1.gb"]')
 		).toBeNull();
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Show details for Tetris 1.gb' }));
-		const move = screen.getByRole('button', { name: 'Move Tetris 1.gb' });
+		const move = screen.getByRole('button', { name: 'Move release Tetris 1.gb' });
 		expect(move.closest('.card-body')).toBeTruthy();
 		expect(move.textContent!.trim()).toBe('Move release');
 		await fireEvent.click(move);

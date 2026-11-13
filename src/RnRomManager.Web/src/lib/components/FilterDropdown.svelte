@@ -129,7 +129,9 @@
 				>
 					<span>{all.label}</span>
 					{#if allCount !== null}
-						<span class="ms-auto text-body-secondary font-monospace">{formatCount(allCount)}</span>
+						<span class="ms-auto font-monospace" class:text-body-secondary={value !== null}
+							>{formatCount(allCount)}</span
+						>
 					{/if}
 				</button>
 			</li>
@@ -153,7 +155,10 @@
 							/>{/if}{option.label}
 					</span>
 					{#if count !== null}
-						<span class="ms-auto text-body-secondary font-monospace">{formatCount(count)}</span>
+						<!-- The active row is blue: its count takes the row's own colour, muted grey wouldn't contrast. -->
+						<span class="ms-auto font-monospace" class:text-body-secondary={value !== option.value}
+							>{formatCount(count)}</span
+						>
 					{/if}
 				</button>
 			</li>

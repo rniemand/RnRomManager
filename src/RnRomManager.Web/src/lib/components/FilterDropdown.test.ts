@@ -78,7 +78,7 @@ describe('FilterDropdown (L1–L5)', () => {
 			'GBCGame Boy Color | 0'
 		]);
 		const count = rows()[1].button.lastElementChild!;
-		expect(count.className).toBe('ms-auto text-body-secondary font-monospace');
+		expect(count.className).toBe('ms-auto font-monospace text-body-secondary');
 		expect(rows()[1].button.querySelector('.badge')?.textContent).toBe('32X');
 	});
 
@@ -116,6 +116,11 @@ describe('FilterDropdown (L1–L5)', () => {
 		const active = rows().filter((r) => r.button.classList.contains('active'));
 		expect(active.map((r) => r.text)).toEqual(['GBGame Boy | 12']);
 		expect(active[0].button.getAttribute('aria-current')).toBe('true');
+		// Contrast on the blue active row: its count isn't muted (axe color-contrast).
+		expect(active[0].button.lastElementChild!.classList.contains('text-body-secondary')).toBe(
+			false
+		);
+		expect(rows()[0].button.lastElementChild!.classList.contains('text-body-secondary')).toBe(true);
 		expect(rows()[0].button.hasAttribute('aria-current')).toBe(false);
 	});
 

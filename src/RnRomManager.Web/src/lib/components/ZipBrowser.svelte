@@ -100,6 +100,7 @@
 				type="button"
 				class="btn btn-sm btn-link text-start text-break text-decoration-none"
 				class:fw-semibold={selected === f.path}
+				class:text-primary-emphasis={selected === f.path}
 				aria-current={selected === f.path ? 'true' : undefined}
 				onclick={() => select(f.path)}><Icon name="folder" /> {label(f)}</button
 			>
