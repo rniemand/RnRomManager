@@ -64,8 +64,23 @@ function png(size: number, rgb: [number, number, number]): Buffer {
 	]);
 }
 
+/**
+ * L7: a bare `/` restores the last Library filter. A Library URL with a filter parameter wins and is saved, and
+ * `page=1` is the default, so this opens the unfiltered Library and forgets the saved filter.
+ */
+async function openLibrary(): Promise<void> {
+	await page.goto('/?page=1');
+	await expect(page.getByRole('button', { name: 'System: All' })).toBeVisible();
+}
+
+/** L1: picks `value` (an option's id) from a Library filter menu. */
+async function chooseFilter(field: 'System' | 'Region' | 'Letter' | 'Sort', value: string): Promise<void> {
+	await page.getByRole('button', { name: new RegExp(`^${field}: `) }).click();
+	await page.locator(`.dropdown-menu.show [data-value="${value}"]`).click();
+}
+
 async function openGame(title: string): Promise<void> {
-	await page.goto('/');
+	await openLibrary();
 	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill(title);
 	await expect(page).toHaveURL(/[?&]q=/);
 	// The title link is stretched over the card (spec B21).
@@ -183,34 +198,26 @@ test('reports and the ingest audit trail', async () => {
 });
 
 test('browse, search and filter the library', async () => {
-	await page.goto('/');
+	await openLibrary();
 	await expect(page.getByText('23 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
-	// S1: systems in display-name order, "All systems" first; F3: each with its game count.
-	await expect(page.getByLabel('System').locator('option')).toHaveText([
-		'All systems',
-		'32X (1)',
-		'Atari 2600 (1)',
-		'ColecoVision (1)',
-		'Game Boy (3)',
-		'Game Boy Advance (1)',
-		'Game Boy Color (2)',
-		'Game Gear (1)',
-		'GameCube (1)',
-		'Master System (1)',
-		'Mega Drive / Genesis (1)',
-		'Nintendo 64 (1)',
-		'Nintendo Entertainment System (1)',
-		'Nintendo Switch (1)',
-		'PlayStation (1)',
-		'PlayStation Portable (1)',
-		'Saturn (1)',
-		'Super Nintendo Entertainment System (1)',
-		'TurboGrafx-16 (1)',
-		'Wii (1)',
-		'Xbox 360 (1)'
+	// S1/L3: systems in display-name order after "All systems"; F3/L2: each with its game count, right-aligned.
+	await page.getByRole('button', { name: 'System: All' }).click();
+	const systemMenu = page.locator('.dropdown-menu.show');
+	await expect(systemMenu.getByPlaceholder('Filter systems…')).toBeFocused();
+	await expect(systemMenu.locator('.dropdown-item').first()).toContainText('All systems');
+	await expect(systemMenu.locator('.dropdown-item').first().locator('.font-monospace')).toHaveText('23');
+	expect(await systemMenu.locator('[data-value]').evaluateAll((rows) => rows.map((r) => (r as HTMLElement).dataset.value))).toEqual([
+		's32x', 'a2600', 'coleco', 'gb', 'gba', 'gbc', 'gg', 'gc', 'sms', 'md', 'n64', 'nes', 'switch', 'psx', 'psp', 'saturn',
+		'snes', 'tg16', 'wii', 'x360'
 	]);
-	await expect(page.getByLabel('Letter').locator('option').nth(1)).toHaveText(/^# \(\d+\)$/);
+	await expect(systemMenu.locator('[data-value="gb"] .font-monospace')).toHaveText('3');
+	await expect(systemMenu.locator('[data-value="gbc"] .font-monospace')).toHaveText('2');
+	await expectAccessible(page, 'library with the System menu open');
+	await page.keyboard.press('Escape');
+	await page.getByRole('button', { name: 'Letter: All' }).click();
+	await expect(page.locator('.dropdown-menu.show [data-value="#"] .font-monospace')).toHaveText(/^\d+$/);
+	await page.keyboard.press('Escape');
 
 	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('orb');
 	await expect(page).toHaveURL(/q=orb/);
@@ -218,83 +225,98 @@ test('browse, search and filter the library', async () => {
 	await expect(page.getByText('3 games', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: /Orbit Expedition/ }).first()).toBeVisible();
 
-	await page.goto('/');
-	await page.getByLabel('System').selectOption('gbc');
+	await openLibrary();
+	await chooseFilter('System', 'gbc');
 	await expect(page).toHaveURL(/system=gbc/);
 	await expect(page.getByText('2 games')).toBeVisible();
 
-	await page.getByLabel('System').selectOption('gba');
+	await chooseFilter('System', 'gba');
 	await expect(page).toHaveURL(/system=gba/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 
 	// Seeded byte-swapped (.v64): it only shows up if ingestion matched it to the DAT after conversion.
-	await page.getByLabel('System').selectOption('n64');
+	await chooseFilter('System', 'n64');
 	await expect(page).toHaveURL(/system=n64/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Orbit Kart 64', exact: true })).toBeVisible();
 
-	await page.getByLabel('System').selectOption('nes');
+	await chooseFilter('System', 'nes');
 	await expect(page).toHaveURL(/system=nes/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Pixel Pioneer', exact: true })).toBeVisible();
 
 	// Seeded copier-headered (.smc): it only shows up if ingestion matched it to the DAT after stripping the header.
-	await page.getByLabel('System').selectOption('snes');
+	await chooseFilter('System', 'snes');
 	await expect(page).toHaveURL(/system=snes/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Mode Seven Rally', exact: true })).toBeVisible();
 
 	// Seeded as a loose .bin: it only shows up if ingestion accepted it and matched it to the Atari DAT (A3).
-	await page.getByLabel('System').selectOption('a2600');
+	await chooseFilter('System', 'a2600');
 	await expect(page).toHaveURL(/system=a2600/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Laser Lanes', exact: true })).toBeVisible();
 
 	// Seeded as a loose .rom: it only shows up if ingestion accepted it and matched it to the ColecoVision DAT (C4).
-	await page.getByLabel('System').selectOption('coleco');
+	await chooseFilter('System', 'coleco');
 	await expect(page).toHaveURL(/system=coleco/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Pixel Pursuit', exact: true })).toBeVisible();
 
 	// G4: the seeded .gg with a TMR SEGA header, matched to the Game Gear DAT.
-	await page.getByLabel('System').selectOption('gg');
+	await chooseFilter('System', 'gg');
 	await expect(page).toHaveURL(/system=gg/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Pocket Drift', exact: true })).toBeVisible();
 
 	// M3: the seeded .sms with a TMR SEGA header, matched to the Master System DAT.
-	await page.getByLabel('System').selectOption('sms');
+	await chooseFilter('System', 'sms');
 	await expect(page).toHaveURL(/system=sms/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Harbor Patrol', exact: true })).toBeVisible();
 
 	// D3: seeded as a loose .gen, matched to the Mega Drive DAT and stored as .md.
-	await page.getByLabel('System').selectOption('md');
+	await chooseFilter('System', 'md');
 	await expect(page).toHaveURL(/system=md/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Turbo Comet', exact: true })).toBeVisible();
 
 	// X4: the seeded .32x with a Mega Drive-style header, matched to the 32X DAT.
-	await page.getByLabel('System').selectOption('s32x');
+	await chooseFilter('System', 's32x');
 	await expect(page).toHaveURL(/system=s32x/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Star Relay', exact: true })).toBeVisible();
 
 	// T2: seeded as a copier-headered .pce, stripped and matched to the TurboGrafx-16 DAT.
-	await page.getByLabel('System').selectOption('tg16');
+	await chooseFilter('System', 'tg16');
 	await expect(page).toHaveURL(/system=tg16/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Neon Circuit', exact: true })).toBeVisible();
 
 	// "Quest, The" is shown as "The Quest" but filed under Q (§5, §6.1).
-	await page.goto('/');
-	await page.getByLabel('Letter').selectOption('Q');
+	await openLibrary();
+	await chooseFilter('Letter', 'Q');
 	await expect(page.getByRole('img', { name: 'The Quest box art' })).toBeVisible();
 
 	await page.getByRole('button', { name: 'List view' }).click();
 	await expect(page.getByRole('table')).toContainText('The Quest');
 	await expectAccessible(page, 'library list');
 	await page.getByRole('button', { name: 'Grid view' }).click();
+
+	// L6/L7: a chip per filter; the filter survives a trip to a game and back; Reset clears it.
+	await openLibrary();
+	await chooseFilter('System', 'gb');
+	await expect(page).toHaveURL(/system=gb/);
+	await expect(page.getByText(/^System: Game Boy \(3\)$/)).toBeVisible();
+	await expect(page.getByRole('button', { name: 'System: Game Boy' })).toBeVisible();
+	await page.getByRole('link', { name: 'Orbit Blocks', exact: true }).click();
+	await expect(page.getByRole('heading', { level: 1, name: 'Orbit Blocks' })).toBeVisible();
+	await page.getByRole('link', { name: '← Library' }).click();
+	await expect(page).toHaveURL(/system=gb/);
+	await expect(page.getByText('3 games', { exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Reset filters' }).click();
+	await expect(page.getByText('23 games')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Reset filters' })).toHaveCount(0);
 });
 
 test('game detail + downloads', async () => {
@@ -302,7 +324,14 @@ test('game detail + downloads', async () => {
 	await expect(page.getByText('Primary')).toBeVisible();
 	await expectAccessible(page, 'game detail');
 
-	await page.getByRole('button', { name: 'Header' }).first().click();
+	// R1/R2: release cards start collapsed; Header details is in the body.
+	const release = page.getByRole('article', { name: 'Orbit Blocks (World) (Rev 1).gb' });
+	await expect(release.getByRole('button', { name: 'Copy CRC32' })).toBeHidden();
+	await release.getByRole('button', { name: 'Show details for Orbit Blocks (World) (Rev 1).gb' }).click();
+	await expect(release.getByText('CRC32')).toBeVisible();
+	await expect(release.getByRole('button', { name: 'Copy CRC32' })).toBeVisible();
+	await expect(release.getByText('Identified by')).toBeVisible();
+	await release.getByRole('button', { name: 'Header details' }).click();
 	await expect(dialog()).toHaveAccessibleName(/^Header — Orbit Blocks .*\.gb$/);
 	await expect(dialog().getByText('Logo valid')).toBeVisible();
 	await expectAccessible(page, 'header modal');
@@ -322,12 +351,6 @@ test('game detail + downloads', async () => {
 	await items.first().click();
 	expect((await rom).suggestedFilename()).toBe('Orbit Blocks (World) (Rev 1).gb');
 
-	// R1/R2: release cards start collapsed; the chevron shows the details (CRC32, SHA1 and their copy buttons).
-	const release = page.getByRole('article', { name: 'Orbit Blocks (World) (Rev 1).gb' });
-	await expect(release.getByRole('button', { name: 'Copy CRC32' })).toBeHidden();
-	await release.getByRole('button', { name: 'Show details for Orbit Blocks (World) (Rev 1).gb' }).click();
-	await expect(release.getByText('CRC32')).toBeVisible();
-	await expect(release.getByRole('button', { name: 'Copy CRC32' })).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Expand all' })).toBeVisible();
 	await page.getByRole('button', { name: 'Expand all' }).click();
 	await expect(page.getByRole('button', { name: 'Collapse all' })).toBeVisible();
@@ -404,8 +427,8 @@ test('game detail + downloads', async () => {
 });
 
 test('Switch: external releases and a per-release download', async () => {
-	await page.goto('/');
-	await page.getByLabel('System').selectOption('switch');
+	await openLibrary();
+	await chooseFilter('System', 'switch');
 	await expect(page).toHaveURL(/system=switch/);
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await page.getByRole('link', { name: 'Orbit Expedition', exact: true }).click();
@@ -469,7 +492,7 @@ test('PlayStation: a disc set lists its files and downloads a track byte-exact',
 
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
-	await page.goto('/');
+	await openLibrary();
 	await expect(page.getByText('23 games')).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await expect(dialog()).toBeVisible();
@@ -481,7 +504,7 @@ test('global search, ratings and favourites', async () => {
 	await expect(page.getByRole('heading', { level: 1, name: 'Orbit Blocks' })).toBeVisible();
 
 	// Rate and favourite it from its library card; both survive a reload.
-	await page.goto('/');
+	await openLibrary();
 	const card = page.getByRole('group', { name: 'Rating for Orbit Blocks', exact: true });
 	const star = card.getByRole('button', { name: 'Rate 4 of 5' });
 	const heart = card.getByRole('button', { name: 'Favourite' });
@@ -502,7 +525,7 @@ test('global search, ratings and favourites', async () => {
 	await expect(page.getByRole('link', { name: 'Orbit Blocks', exact: true })).toBeVisible();
 
 	// Back to the seed state for the later tests.
-	await page.goto('/');
+	await openLibrary();
 	await star.click();
 	await expect(star).toHaveAttribute('aria-pressed', 'false');
 	await expect(heart).toBeEnabled();
@@ -546,8 +569,8 @@ test('collections: create, add from game page and bulk select, search, remove, d
 	await expect(dialog()).toBeHidden();
 
 	// B26: add a game from another system with the Library's bulk select.
-	await page.goto('/');
-	await page.getByLabel('System').selectOption('n64');
+	await openLibrary();
+	await chooseFilter('System', 'n64');
 	await expect(page).toHaveURL(/system=n64/);
 	await page.getByRole('button', { name: 'Select', exact: true }).click();
 	await page.getByRole('checkbox', { name: 'Select Orbit Kart 64' }).check();
@@ -601,7 +624,7 @@ test('collections: create, add from game page and bulk select, search, remove, d
 	await dialog().getByRole('button', { name: 'Delete', exact: true }).click();
 	await expect(page).toHaveURL(/\/collections$/);
 	await expect(page.getByText('You have no collections yet.')).toBeVisible();
-	await page.goto('/');
+	await openLibrary();
 	await expect(page.getByText('23 games')).toBeVisible();
 });
 
@@ -628,8 +651,19 @@ test('review queue: delete a file', async () => {
 	await expect(dialog()).toHaveAccessibleName('Delete File: 93-mystery.gb');
 	await expect(dialog().getByText('93-mystery.gb').first()).toBeVisible();
 	await expectAccessible(page, 'review delete modal');
-	await dialog().getByRole('button', { name: 'Delete file' }).click();
+	await dialog().getByRole('button', { name: 'Cancel' }).click();
 	await expect(dialog()).toBeHidden();
+
+	// Q2–Q4: the same file through the bulk delete.
+	await page.getByRole('checkbox', { name: 'Select 93-mystery.gb' }).check();
+	await expect(page.getByText('1 selected')).toBeVisible();
+	await page.getByRole('button', { name: 'Delete selected (1)' }).click();
+	await expect(dialog()).toHaveAccessibleName('Delete 1 review file?');
+	await expect(dialog()).toContainText('93-mystery.gb');
+	await expectAccessible(page, 'review bulk delete modal');
+	await dialog().getByRole('button', { name: 'Delete', exact: true }).click();
+	await expect(dialog()).toBeHidden();
+	await expect(page.getByText('Deleted 1 file.')).toBeVisible();
 	await expect(page.getByText('Nothing to review.')).toBeVisible();
 });
 
@@ -668,8 +702,8 @@ test('images: upload, set cover, delete', async () => {
 	await images.getByRole('button', { name: 'Upload image' }).click();
 	await expect(dialog()).toHaveAccessibleName('Upload image');
 	await expectAccessible(page, 'upload image modal');
-	// U6: a loopback URL is refused by the server; the fallback switches back to the file input.
-	await dialog().getByText('URL', { exact: true }).click();
+	// U6/I2: URL is the default source; a loopback URL is refused by the server; the fallback switches to the file input.
+	await expect(dialog().getByLabel('URL')).toBeChecked();
 	await dialog().getByLabel('Image URL').fill('http://127.0.0.1/x.png');
 	await dialog().getByRole('button', { name: 'Upload', exact: true }).click();
 	await expect(
@@ -688,10 +722,11 @@ test('images: upload, set cover, delete', async () => {
 	await expect(card('boxart-01.png')).toContainText('64×64');
 
 	await images.getByRole('button', { name: 'Upload image' }).click();
+	await dialog().getByText('File', { exact: true }).click();
 	await dialog()
 		.getByLabel('Upload an image')
 		.setInputFiles({ name: 'shot.png', mimeType: 'image/png', buffer: png(32, [40, 40, 200]) });
-	await dialog().getByLabel('Type').selectOption({ label: 'Screenshot' });
+	await dialog().getByText('Screenshot', { exact: true }).click();
 	await dialog().getByRole('button', { name: 'Upload', exact: true }).click();
 	await expect(dialog()).toBeHidden();
 	await expect(card('snap-01.png').getByText('Screenshot')).toBeVisible();
@@ -765,7 +800,8 @@ test('Admin: edit metadata, move a release, delete a release and a game', async 
 	await expect(dialog()).toBeHidden();
 	await expect(page.getByText('1995')).toBeVisible();
 
-	// Split the Japanese release off into its own game (§11 Move release → new game).
+	// Split the Japanese release off into its own game (§11 Move release → new game); Move is in the release body.
+	await page.getByRole('button', { name: 'Show details for Orbit Blocks (Japan).gb' }).click();
 	await page.getByRole('button', { name: 'Move Orbit Blocks (Japan).gb', exact: true }).click();
 	await dialog().getByLabel('A new game').check();
 	await dialog().getByLabel('New game title').fill('Orbit Blocks Japan');
@@ -777,7 +813,7 @@ test('Admin: edit metadata, move a release, delete a release and a game', async 
 	await openGame('Orbit Blocks Japan');
 	await page.getByRole('button', { name: 'Delete Orbit Blocks (Japan).gb', exact: true }).click();
 	await dialog().getByRole('button', { name: 'Delete' }).click();
-	await expect(page).toHaveURL(/\/$/);
+	await expect(page).toHaveURL(/\/(\?[^/]*)?$/);
 	await expect(page.locator('body')).not.toHaveClass(/modal-open/);
 	await expect(page.locator('.modal-backdrop')).toHaveCount(0);
 	// A shorter viewport guarantees overflow for the small seed library. A wheel must scroll after navigation.
@@ -791,9 +827,34 @@ test('Admin: edit metadata, move a release, delete a release and a game', async 
 	await openGame('Color Racer');
 	await page.getByRole('button', { name: 'Delete game' }).click();
 	await dialog().getByRole('button', { name: 'Delete' }).click();
-	await expect(page).toHaveURL(/\/$/);
+	await expect(page).toHaveURL(/\/(\?[^/]*)?$/);
 	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('Color Racer');
 	await expect(page.getByText('No games match these filters.')).toBeVisible();
+});
+
+test('Deleted ROMs: restore one release, delete the rest for good', async () => {
+	await page.goto('/deleted');
+	await expect(page.getByRole('heading', { level: 1, name: 'Deleted ROMs' })).toBeVisible();
+	await expect(page.getByRole('link', { name: /Deleted ROMs/ }).locator('.badge')).toBeVisible();
+	await expect(page.getByText('Orbit Blocks (Japan).gb', { exact: true })).toBeVisible();
+	await expectAccessible(page, 'deleted ROMs');
+
+	// D5: back to Ingestion and imported by a job (a just-deleted file may wait there as too recent).
+	await page.getByRole('button', { name: 'Restore Orbit Blocks (Japan).gb' }).click();
+	await expect(page.getByText(/^Restored 1 file; importing\./)).toBeVisible();
+	await page.getByRole('link', { name: 'View job' }).click();
+	await expect(page).toHaveURL(/\/jobs\//);
+	await page.goto('/deleted');
+	await expect(page.getByRole('heading', { level: 1, name: 'Deleted ROMs' })).toBeVisible();
+	await expect(page.getByText('Orbit Blocks (Japan).gb', { exact: true })).toHaveCount(0);
+
+	// D4: the rest (Color Racer's ROMs) go permanently.
+	await page.getByRole('button', { name: 'Select all' }).click();
+	await page.getByRole('button', { name: /^Delete selected/ }).click();
+	await expect(dialog()).toHaveAccessibleName(/^Permanently delete \d+ files?\?$/);
+	await expectAccessible(page, 'permanent delete modal');
+	await dialog().getByRole('button', { name: 'Delete', exact: true }).click();
+	await expect(page.getByText('No deleted ROMs')).toBeVisible();
 });
 
 test('Admin: roles and the create-user modal', async () => {
@@ -822,7 +883,7 @@ test('Admin: live logs', async () => {
 });
 
 test('keyboard shortcuts: use, rebind and use again', async () => {
-	await page.goto('/');
+	await openLibrary();
 	await expect(page.locator('nav.navbar')).toHaveClass(/sticky-top/);
 	await expect(page.getByRole('button', { name: 'Keyboard shortcuts' })).toBeVisible();
 

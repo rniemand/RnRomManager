@@ -143,6 +143,7 @@
 					class:active={value === option.value}
 					class:text-body-secondary={count === 0 && value !== option.value}
 					aria-current={value === option.value ? 'true' : undefined}
+					data-value={option.value}
 					onclick={() => choose(option.value)}
 				>
 					<span class="d-inline-flex align-items-center gap-2">
