@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import type { GameDetail, ReleaseFile } from '#lib/api/types.js';
-import { formatSize } from '#lib/format.js';
+import { formatDateTime, formatSize } from '#lib/format.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 
 const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
@@ -204,18 +204,21 @@ describe('game detail page', () => {
 		expect(screen.queryByText('External')).toBeNull();
 	});
 
-	it('shows the original file name under the file name only when it differs (B1)', async () => {
+	it('shows the original file name in the body only when it differs (B1, R1, R2)', async () => {
 		const detail = game([1, 2]);
 		detail.roms[1].originalFileName = 'tetris_rev1_final.gb';
 		answers.push({ status: 200, body: detail });
 		render(GamePage);
 
-		const original = await screen.findByText('Original: tetris_rev1_final.gb');
+		const original = await screen.findByText('tetris_rev1_final.gb');
 		// G2: wraps, never truncated.
 		expect(original.classList.contains('text-break')).toBe(true);
-		expect(original.classList.contains('text-body-secondary')).toBe(true);
+		expect(original.closest('.card-body')).toBeTruthy();
 		expect(original.closest('article')!.getAttribute('aria-labelledby')).toBe('release-2-name');
-		expect(screen.getAllByText(/^Original:/)).toHaveLength(1);
+		expect(
+			original.closest('dd')!.querySelector('[aria-label="Copy original file name"]')
+		).not.toBeNull();
+		expect(screen.getAllByText('Original file name')).toHaveLength(1);
 	});
 
 	it('shows box art, releases with region badges, and the header in a modal', async () => {
@@ -230,7 +233,8 @@ describe('game detail page', () => {
 		expect([...row.querySelectorAll('.badge.text-bg-secondary')].map((b) => b.textContent)).toEqual(
 			['USA', 'Europe']
 		);
-		await fireEvent.click(screen.getByRole('button', { name: 'Header' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Show details for Tetris 1.gb' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Header details' }));
 		const caption = screen.getByText('Header of Tetris 1.gb');
 		const modal = caption.closest('.modal')!;
 		expect(modal.querySelector('.modal-title')?.textContent).toBe('Header — Tetris 1.gb');
@@ -260,21 +264,21 @@ describe('game detail page', () => {
 		expect(body.textContent).toMatch(/Revision\s*Rev 1/);
 		expect(body.textContent).toMatch(/Flags\s*Beta, Proto/);
 		expect(body.querySelector('.file-size')!.textContent).toBe('32.0 KiB');
-		expect(body.querySelectorAll('.font-monospace.text-break')).toHaveLength(2);
-		expect(body.querySelector('[aria-label="Copy CRC32"]')).not.toBeNull();
-		expect(body.querySelector('[aria-label="Copy SHA1"]')).not.toBeNull();
+		expect(body.querySelectorAll('.font-monospace.text-break')).toHaveLength(3);
+		for (const name of ['SHA1', 'CRC32', 'MD5'])
+			expect(body.querySelector(`[aria-label="Copy ${name}"]`)).not.toBeNull();
 		expect(body.textContent).toContain('46df91ad');
 		expect(body.textContent).toContain('abc123');
 		const second = screen.getByRole('article', { name: 'Tetris 2.gb' });
 		expect(second.querySelector('.badge.text-bg-primary')).toBeNull();
-		expect(second.querySelector('.card-body')!.textContent).toMatch(/Revision\s*—/);
+		expect(second.querySelector('.card-body')!.textContent).not.toContain('Revision');
 
+		// R1: the header keeps only the chevron, Note, Play, Download and Delete.
 		const labels = [...card.querySelectorAll('.card-header button')].map(
 			(b) => b.getAttribute('aria-label') ?? b.textContent?.trim()
 		);
 		expect(labels).toEqual([
 			'Hide details for Tetris 1.gb',
-			'Header',
 			'Add note for Tetris 1.gb',
 			'Download Tetris 1.gb'
 		]);
@@ -366,13 +370,162 @@ describe('game detail page', () => {
 		await fireEvent.click(card.querySelector('h3')!);
 		expect(details('Tetris 1.gb').hidden).toBe(true);
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Header' }));
 		await fireEvent.click(screen.getByRole('button', { name: 'Add note for Tetris 1.gb' }));
 		expect(details('Tetris 1.gb').hidden).toBe(true);
 
 		vi.stubGlobal('getSelection', () => ({ toString: () => 'Tetris 1' }));
 		await fireEvent.click(header);
 		expect(details('Tetris 1.gb').hidden).toBe(true);
+	});
+
+	describe('release body (R2–R4)', () => {
+		const rows = (name: string) =>
+			[...details(name).querySelectorAll('dl > dt')].map((dt) => [
+				dt.textContent!.trim(),
+				(dt.nextElementSibling as HTMLElement).textContent!.replace(/\s+/g, ' ').trim()
+			]);
+
+		it('lists every value in order, two pairs per row from lg; empty ones are left out', async () => {
+			const detail = game([1]);
+			Object.assign(detail.roms[0], {
+				originalFileName: 'tetris.gb',
+				revision: 'Rev 1',
+				languages: ['En', 'Ja'],
+				flags: ['Beta'],
+				identificationMethod: 'TitleDb',
+				datName: 'Nintendo - Game Boy',
+				datVersion: '20260101',
+				datGameName: 'Tetris (World) (Rev 1)'
+			});
+			answers.push({ status: 200, body: detail });
+			render(GamePage);
+			await screen.findByRole('article', { name: 'Tetris 1.gb' });
+
+			expect(rows('Tetris 1.gb').map(([label]) => label)).toEqual([
+				'Original file name',
+				'Size',
+				'SHA1',
+				'CRC32',
+				'MD5',
+				'Revision',
+				'Languages',
+				'Flags',
+				'Identified by',
+				'DAT',
+				'DAT entry',
+				'Date added'
+			]);
+			const values = Object.fromEntries(rows('Tetris 1.gb'));
+			expect(values['Languages']).toBe('En, Ja');
+			expect(values['Identified by']).toBe('Title DB');
+			expect(values['DAT']).toBe('Nintendo - Game Boy 20260101');
+			expect(values['DAT entry']).toBe('Tetris (World) (Rev 1)');
+			expect(values['Date added']).toBe(formatDateTime('2026-11-01T00:00:00Z'));
+			const dl = details('Tetris 1.gb').querySelector('dl')!;
+			expect(dl.className).toBe('row mb-0');
+			expect(dl.querySelector('dt')!.className).toBe('col-sm-3 col-lg-2 text-body-secondary');
+			expect(dl.querySelector('dd')!.className).toBe('col-sm-9 col-lg-4');
+		});
+
+		it.each([
+			['Dat', 'DAT'],
+			['Manual', 'Manual'],
+			['TitleDb', 'Title DB']
+		] as const)('Identified by %s reads %s; no DAT rows without a DAT', async (method, text) => {
+			const detail = game([1]);
+			detail.roms[0].identificationMethod = method as 'Dat';
+			answers.push({ status: 200, body: detail });
+			render(GamePage);
+			await screen.findByRole('article', { name: 'Tetris 1.gb' });
+
+			expect(rows('Tetris 1.gb')).toContainEqual(['Identified by', text]);
+			expect(rows('Tetris 1.gb').map(([label]) => label)).toEqual([
+				'Size',
+				'SHA1',
+				'CRC32',
+				'MD5',
+				'Identified by',
+				'Date added'
+			]);
+		});
+
+		it('the action row holds Header details; the files toggle sits below it (B20)', async () => {
+			const detail = game([1]);
+			detail.roms[0].files = setFiles;
+			answers.push({ status: 200, body: detail });
+			render(GamePage);
+			await screen.findByRole('article', { name: 'Tetris 1.gb' });
+
+			const actions = details('Tetris 1.gb').querySelector('dl + .d-flex')!;
+			expect(actions.className).toBe('d-flex flex-wrap gap-2 mt-2');
+			const header = within(actions as HTMLElement).getByRole('button', {
+				name: 'Header details',
+				hidden: true
+			});
+			expect(header.className).toBe('btn btn-sm btn-outline-secondary');
+			expect(header.querySelector('.bi-info-circle')).toBeTruthy();
+			const files = within(details('Tetris 1.gb')).getByRole('button', {
+				name: /files$/,
+				hidden: true
+			});
+			expect(
+				actions.compareDocumentPosition(files) & Node.DOCUMENT_POSITION_FOLLOWING
+			).toBeTruthy();
+		});
+
+		it('no Header details without a header', async () => {
+			const detail = game([1]);
+			detail.roms[0].header = null as unknown as (typeof detail.roms)[0]['header'];
+			answers.push({ status: 200, body: detail });
+			render(GamePage);
+			await screen.findByRole('article', { name: 'Tetris 1.gb' });
+
+			expect(
+				within(details('Tetris 1.gb')).queryByRole('button', {
+					name: 'Header details',
+					hidden: true
+				})
+			).toBeNull();
+		});
+
+		it('the header modal shows two pairs per row; an odd last pair leaves an empty cell (R3)', async () => {
+			answers.push({ status: 200, body: game([1]) });
+			render(GamePage);
+			await screen.findByRole('article', { name: 'Tetris 1.gb' });
+
+			await fireEvent.click(chevron('Tetris 1.gb'));
+			await fireEvent.click(screen.getByRole('button', { name: 'Header details' }));
+
+			const table = screen.getByText('Header of Tetris 1.gb').closest('table')!;
+			expect(table.className).toBe('table table-sm table-striped table-hover mb-0');
+			expect(table.querySelector('thead')).toBeNull();
+			const cells = [...table.querySelectorAll('tbody tr')].map((tr) =>
+				[...tr.children].map((c) => `${c.tagName}:${c.textContent}`)
+			);
+			expect(cells).toEqual([
+				['TH:Title', 'TD:TETRIS', 'TH:Logo valid', 'TD:Yes'],
+				['TH:Rom size bytes', 'TD:—', 'TD:']
+			]);
+			expect(table.querySelector('td[colspan="2"]')).not.toBeNull();
+		});
+
+		it.each([
+			[true, 'btn-warning', 'bi-sticky-fill', 'View note', 'Note for Tetris 1.gb'],
+			[false, 'btn-outline-secondary', 'bi-sticky', 'Add note', 'Add note for Tetris 1.gb']
+		])(
+			'hasNote %s: note button %s, icon %s, tooltip %s (R4)',
+			async (hasNote, cls, icon, tip, name) => {
+				const detail = game([1]);
+				detail.roms[0].hasNote = hasNote;
+				answers.push({ status: 200, body: detail });
+				render(GamePage);
+
+				const button = await screen.findByRole('button', { name });
+				expect(button.className).toBe(`btn btn-sm ${cls}`);
+				expect(button.querySelector('i')!.className).toContain(icon);
+				expect(tooltips.find((t) => t.node === button)?.text).toBe(tip);
+			}
+		);
 	});
 
 	it('Download in the header does not toggle (R2)', async () => {
@@ -801,7 +954,8 @@ describe('game detail page', () => {
 			['Genres', '—']
 		]);
 		expect(table.querySelector('td .badge')).not.toBeNull();
-		expect(document.querySelector('dl')).toBeNull();
+		// The only definition lists are the release bodies (R2).
+		expect([...document.querySelectorAll('dl')].every((dl) => dl.closest('article'))).toBe(true);
 	});
 
 	it('the action row: ZIP, ROM, Google, info.json, Collections, all default size (B1, B25)', async () => {

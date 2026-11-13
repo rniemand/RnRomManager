@@ -28,7 +28,7 @@
 	import { canPlay } from '#lib/emulator.js';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
-	import { formatKey, formatSize, formatValue } from '#lib/format.js';
+	import { formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
@@ -177,6 +177,17 @@
 	}
 
 	const list = (items: string[]) => (items.length ? items.join(', ') : '—');
+
+	/** R2: how a release was identified. */
+	const identifiedBy = { Dat: 'DAT', Manual: 'Manual', TitleDb: 'Title DB' } as const;
+
+	/** R3: the header's key/value pairs, two per table row. */
+	function headerRows(header: Record<string, unknown>): [string, unknown][][] {
+		const entries = Object.entries(header);
+		const rows: [string, unknown][][] = [];
+		for (let i = 0; i < entries.length; i += 2) rows.push(entries.slice(i, i + 2));
+		return rows;
+	}
 
 	// R1–R4: release cards start collapsed. Open ones are kept by file name (unique within a game; ROM ids change on
 	// every ZIP rewrite), so a reload of the same game keeps them; a new game id starts collapsed again.
@@ -520,19 +531,12 @@
 								<span class="badge text-bg-secondary">{region}</span>
 							{/each}
 							<div class="ms-auto d-flex flex-wrap gap-1">
-								{#if rom.header}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-secondary"
-										onclick={() => showHeader(rom)}
-									>
-										Header
-									</button>
-								{/if}
+								<!-- R4: a filled button when the release has a note. -->
 								<button
 									type="button"
-									class="btn btn-sm btn-outline-secondary"
+									class="btn btn-sm {rom.hasNote ? 'btn-warning' : 'btn-outline-secondary'}"
 									aria-label="{rom.hasNote ? 'Note for' : 'Add note for'} {rom.fileName}"
+									use:tooltip={rom.hasNote ? 'View note' : 'Add note'}
 									onclick={() => showNote(rom)}
 								>
 									<Icon name={rom.hasNote ? 'note-filled' : 'note'} />
@@ -561,14 +565,6 @@
 								{#if auth.canEditLibrary}
 									<button
 										type="button"
-										class="btn btn-sm btn-outline-secondary"
-										aria-label="Move {rom.fileName}"
-										onclick={() => (action = { kind: 'move', rom })}
-									>
-										<Icon name="move" />
-									</button>
-									<button
-										type="button"
 										class="btn btn-sm btn-outline-danger"
 										aria-label="Delete {rom.fileName}"
 										onclick={() => (action = { kind: 'deleteRom', rom })}
@@ -578,43 +574,76 @@
 								{/if}
 							</div>
 						</div>
-						{#if rom.originalFileName !== rom.fileName}
-							<div class="small text-body-secondary text-break">
-								Original: {rom.originalFileName}
-							</div>
-						{/if}
 					</div>
 					<div class="card-body small" id="release-{rom.id}-details" hidden={!open}>
-						<div class="row row-cols-1 row-cols-sm-3 g-2 mb-2">
-							<div class="col">
-								<div class="text-body-secondary">Revision</div>
-								<div>{rom.revision ?? '—'}</div>
+						<!-- R2: label/value pairs, two per row from lg; each row only when it has a value. -->
+						<dl class="row mb-0">
+							{#if rom.originalFileName !== rom.fileName}
+								<dt class="col-sm-3 col-lg-2 text-body-secondary">Original file name</dt>
+								<dd class="col-sm-9 col-lg-4">
+									<span class="text-break">{rom.originalFileName}</span>
+									<CopyButton value={rom.originalFileName} label="original file name" />
+								</dd>
+							{/if}
+							<dt class="col-sm-3 col-lg-2 text-body-secondary">Size</dt>
+							<dd class="col-sm-9 col-lg-4"><FileSize bytes={rom.totalSizeBytes} /></dd>
+							{#each [['SHA1', rom.sha1], ['CRC32', rom.crc32], ['MD5', rom.md5]] as [name, hash] (name)}
+								<dt class="col-sm-3 col-lg-2 text-body-secondary">{name}</dt>
+								<dd class="col-sm-9 col-lg-4">
+									<span class="font-monospace text-break">{hash}</span>
+									<CopyButton value={hash} label={name} />
+								</dd>
+							{/each}
+							{#if rom.revision}
+								<dt class="col-sm-3 col-lg-2 text-body-secondary">Revision</dt>
+								<dd class="col-sm-9 col-lg-4">{rom.revision}</dd>
+							{/if}
+							{#if rom.languages.length}
+								<dt class="col-sm-3 col-lg-2 text-body-secondary">Languages</dt>
+								<dd class="col-sm-9 col-lg-4">{list(rom.languages)}</dd>
+							{/if}
+							{#if rom.flags.length}
+								<dt class="col-sm-3 col-lg-2 text-body-secondary">Flags</dt>
+								<dd class="col-sm-9 col-lg-4">{list(rom.flags)}</dd>
+							{/if}
+							<dt class="col-sm-3 col-lg-2 text-body-secondary">Identified by</dt>
+							<dd class="col-sm-9 col-lg-4">{identifiedBy[rom.identificationMethod]}</dd>
+							{#if rom.datName}
+								<dt class="col-sm-3 col-lg-2 text-body-secondary">DAT</dt>
+								<dd class="col-sm-9 col-lg-4 text-break">
+									{[rom.datName, rom.datVersion].filter(Boolean).join(' ')}
+								</dd>
+							{/if}
+							{#if rom.datGameName}
+								<dt class="col-sm-3 col-lg-2 text-body-secondary">DAT entry</dt>
+								<dd class="col-sm-9 col-lg-4 text-break">{rom.datGameName}</dd>
+							{/if}
+							<dt class="col-sm-3 col-lg-2 text-body-secondary">Date added</dt>
+							<dd class="col-sm-9 col-lg-4">{formatDateTime(rom.dateAdded)}</dd>
+						</dl>
+						{#if rom.header || auth.canEditLibrary}
+							<div class="d-flex flex-wrap gap-2 mt-2">
+								{#if rom.header}
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-secondary"
+										onclick={() => showHeader(rom)}
+									>
+										<Icon name="info" /> Header details
+									</button>
+								{/if}
+								{#if auth.canEditLibrary}
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-secondary"
+										aria-label="Move {rom.fileName}"
+										onclick={() => (action = { kind: 'move', rom })}
+									>
+										<Icon name="move" /> Move release
+									</button>
+								{/if}
 							</div>
-							<div class="col">
-								<div class="text-body-secondary">Flags</div>
-								<div>{list(rom.flags)}</div>
-							</div>
-							<div class="col">
-								<div class="text-body-secondary">Size</div>
-								<div><FileSize bytes={rom.totalSizeBytes} /></div>
-							</div>
-						</div>
-						<div class="row row-cols-1 row-cols-lg-2 g-2">
-							<div class="col">
-								<div class="text-body-secondary">CRC32</div>
-								<div>
-									<span class="font-monospace text-break">{rom.crc32}</span>
-									<CopyButton value={rom.crc32} label="CRC32" />
-								</div>
-							</div>
-							<div class="col">
-								<div class="text-body-secondary">SHA1</div>
-								<div>
-									<span class="font-monospace text-break">{rom.sha1}</span>
-									<CopyButton value={rom.sha1} label="SHA1" />
-								</div>
-							</div>
-						</div>
+						{/if}
 						{#if rom.files?.length}
 							{@const filesOpen = openFiles.has(rom.fileName)}
 							<!-- B20: the main file and the set's other files (cue, tracks); N counts all of them. -->
@@ -693,10 +722,14 @@
 			<table class="table table-sm table-striped table-hover mb-0">
 				<caption class="visually-hidden">Header of {headerRom.fileName}</caption>
 				<tbody>
-					{#each Object.entries(headerRom.header) as [key, value] (key)}
+					<!-- R3: two pairs per row; an odd last pair leaves the second half empty. -->
+					{#each headerRows(headerRom.header) as pairs (pairs[0][0])}
 						<tr>
-							<th scope="row" class="fw-normal text-body-secondary">{formatKey(key)}</th>
-							<td>{formatValue(value)}</td>
+							{#each pairs as [key, value] (key)}
+								<th scope="row" class="fw-normal text-body-secondary">{formatKey(key)}</th>
+								<td>{formatValue(value)}</td>
+							{/each}
+							{#if pairs.length === 1}<td colspan="2"></td>{/if}
 						</tr>
 					{/each}
 				</tbody>
