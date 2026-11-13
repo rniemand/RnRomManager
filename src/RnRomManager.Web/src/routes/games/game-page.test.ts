@@ -665,27 +665,42 @@ describe('game detail page', () => {
 		expect(selectedFolder()).toBe('Tetris.zip');
 	});
 
-	it('the chevron toggles without selecting; the name selects and expands but never collapses (Z4)', async () => {
+	it('every folder starts expanded; only the chevron toggles, selecting never does (Z1, Z4)', async () => {
 		navigateTo('/games/g1?tab=zip');
 		zipAnswers.push({ status: 200, body: listing(['roms/a/deep.gb', 'roms/b.gb']) });
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);
-		await (await folders()).findByRole('button', { name: 'roms' });
-		expect(tree().queryByRole('button', { name: 'a' })).toBeNull();
+		await (await folders()).findByRole('button', { name: 'a' });
 
-		const chevron = tree().getByRole('button', { name: 'Expand roms' });
+		const chevron = tree().getByRole('button', { name: 'Collapse roms' });
 		await fireEvent.click(chevron);
-		expect(chevron.getAttribute('aria-expanded')).toBe('true');
-		expect(tree().getByRole('button', { name: 'a' })).toBeTruthy();
-		expect(selectedFolder()).toBe('Tetris.zip');
-		await fireEvent.click(tree().getByRole('button', { name: 'Collapse roms' }));
+		expect(chevron.getAttribute('aria-expanded')).toBe('false');
 		expect(tree().queryByRole('button', { name: 'a' })).toBeNull();
+		expect(selectedFolder()).toBe('Tetris.zip');
 
 		await fireEvent.click(tree().getByRole('button', { name: 'roms' }));
 		expect(selectedFolder()).toBe('roms');
+		expect(tree().queryByRole('button', { name: 'a' })).toBeNull();
+		await fireEvent.click(tree().getByRole('button', { name: 'Expand roms' }));
 		expect(tree().getByRole('button', { name: 'a' })).toBeTruthy();
-		await fireEvent.click(tree().getByRole('button', { name: 'roms' }));
-		expect(tree().getByRole('button', { name: 'a' })).toBeTruthy();
+	});
+
+	it('a game reload keeps the folders the user collapsed (Z1)', async () => {
+		navigateTo('/games/g1?tab=zip');
+		zipAnswers.push(
+			{ status: 200, body: listing(['roms/a/deep.gb']) },
+			{ status: 200, body: listing(['roms/a/deep.gb']) }
+		);
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+		await (await folders()).findByRole('button', { name: 'a' });
+		await fireEvent.click(tree().getByRole('button', { name: 'Collapse roms' }));
+
+		await rate(game([2]), true);
+		await vi.waitFor(() => expect(zipFetches).toBe(2));
+		await (await folders()).findByRole('button', { name: 'roms' });
+
+		expect(tree().queryByRole('button', { name: 'a' })).toBeNull();
 	});
 
 	it('the table lists sub-folders then files with sizes and download links; breadcrumb and footer (Z4)', async () => {
@@ -704,6 +719,15 @@ describe('game detail page', () => {
 			'a b',
 			'Tetris (World).gb'
 		]);
+		// Z2: a folder row fills the columns with dashes; sizes are badges.
+		expect([...rows[0].querySelectorAll('td')].map((td) => td.textContent!.trim())).toEqual([
+			'a b',
+			'—',
+			'—',
+			'—',
+			''
+		]);
+		expect(rows[1].querySelectorAll('.badge.text-bg-light.border .file-size')).toHaveLength(2);
 		expect([...rows[1].querySelectorAll('.file-size')].map((s) => s.textContent)).toEqual([
 			'2.0 KiB',
 			'1.0 KiB'

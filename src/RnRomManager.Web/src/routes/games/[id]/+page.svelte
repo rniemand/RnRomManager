@@ -194,7 +194,8 @@
 	const openReleases = new SvelteSet<string>();
 	// Z1: the Zip Contents tree's selection and expansion; kept across reloads, reset (root selected) for a new game id.
 	let zipSelected = $state('');
-	const zipExpanded = new SvelteSet<string>(['']);
+	// Z1: empty; the browser expands every folder on a game's first load.
+	const zipExpanded = new SvelteSet<string>();
 	$effect(() => {
 		void id;
 		untrack(() => {
@@ -202,7 +203,6 @@
 			openFiles.clear();
 			zipSelected = '';
 			zipExpanded.clear();
-			zipExpanded.add('');
 		});
 	});
 	// B20: which releases' file lists are open, by file name like openReleases.
