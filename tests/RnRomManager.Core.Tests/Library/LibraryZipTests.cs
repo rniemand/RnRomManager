@@ -40,7 +40,7 @@ public class LibraryZipTests
         handler.Id.Returns("gb");
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns([handler]);
-        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), new InfoJsonUpgraderV4(), new InfoJsonUpgraderV5(), .. upgraders], registry);
+        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), new InfoJsonUpgraderV4(), new InfoJsonUpgraderV5(), new InfoJsonUpgraderV6(), .. upgraders], registry);
     }
 
     private static byte[] RomBytes(int seed) => new SyntheticRomBuilder { Seed = seed }.Build();

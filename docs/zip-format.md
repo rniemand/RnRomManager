@@ -123,7 +123,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `schemaVersion` | int | ✓ | `6` |
+| `schemaVersion` | int | ✓ | `7` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
 | `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`) |
 | `title` | string | ✓ | see Naming |
@@ -154,7 +154,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 | `version` | string? | ✓ | v5. An update's dotted version (`1.0.1`): the first `[x.y]`, `[x.y.z]` or `[x.y.z.w]` tag (1–9 ASCII digits per part) in `originalFileName`, set when a release flagged `Update` is ingested or resolved in Review; `null` otherwise. Orders the Game page's Updates tab. |
 | `flags` | string[] | ✓ | DAT tags (`SGB Enhanced`, `Proto`, `Unl`, …) plus `Hack` / `Translated` / `Unverified`; `Update` / `DLC` for Switch updates and add-on content |
 | `isPrimary` | bool | ✓ | |
-| `identification.method` | `Dat` \| `Manual` \| `TitleDb` | ✓ | `Dat` only for an exact SHA1 match; `TitleDb` (v4) for a Switch release matched by title id |
+| `identification.method` | `Dat` \| `Manual` \| `TitleDb` \| `Serial` | ✓ | `Dat` only for an exact SHA1 match; `TitleDb` (v4) for a Switch release matched by title id; `Serial` (v7) for a Wii `.wbfs` matched by its disc's game id against the DAT's serials (its hashes are the `.wbfs` file's own) |
 | `identification.datName` | string? | | DAT header name, e.g. `Nintendo - Game Boy`; also set for an `Unverified` release (the entry it was based on); `titledb` for a `TitleDb` release |
 | `identification.datVersion` | string? | | DAT header version, e.g. `2026.10.07`; for titledb the UTC download date `yyyy.MM.dd` |
 | `identification.datGameName` | string? | | DAT `game.name` (the thumbnail key; can differ from the ROM name); for titledb the base game's `<base title> [<TitleId>]`, also for its updates and DLC |
@@ -228,3 +228,4 @@ A schema change bumps `schemaVersion`, adds an upgrader and adds a row here.
 | 4 | 0.4.0 | Adds `externalFileName` (string?) to every ROM: the file next to the ZIP for a system that stores its ROMs outside it (Nintendo Switch), `null` otherwise. Adds `TitleDb` as an `identification.method` and `titledb` as an image `source`. The v3→v4 upgrader adds `externalFileName: null`. Apps before 0.4.0 treat a v4 file as `InfoJsonNewerSchema` (read-only). |
 | 5 | 0.4.0 | Adds `version` (string?) to every ROM: an update's dotted version from its file name, `null` otherwise. The v4→v5 upgrader sets it from `originalFileName` for releases flagged `Update` (else `null`); migration 0019 fills `roms.version` the same way for games already mirrored. A v5 file is `InfoJsonNewerSchema` (read-only) for an app that only knows v4. |
 | 6 | 0.4.0 | Adds `files` (File[]?) to every ROM: a disc set's other files, `null` otherwise. The v5→v6 upgrader adds `files: null`; migration 0020 adds the `rom_files` table, filled on each game's next mirror. A v6 file is `InfoJsonNewerSchema` (read-only) for an app that only knows v5. |
+| 7 | 0.4.0 | Adds `Serial` as an `identification.method`. The v6→v7 upgrader changes nothing. A v7 file is `InfoJsonNewerSchema` (read-only) for an app that only knows v6. |

@@ -179,7 +179,12 @@
 	const list = (items: string[]) => (items.length ? items.join(', ') : '—');
 
 	/** R2: how a release was identified. */
-	const identifiedBy = { Dat: 'DAT', Manual: 'Manual', TitleDb: 'Title DB' } as const;
+	const identifiedBy = {
+		Dat: 'DAT',
+		Manual: 'Manual',
+		TitleDb: 'Title DB',
+		Serial: 'Game ID'
+	} as const;
 
 	/** R3: the header's key/value pairs, two per table row. */
 	function headerRows(header: Record<string, unknown>): [string, unknown][][] {

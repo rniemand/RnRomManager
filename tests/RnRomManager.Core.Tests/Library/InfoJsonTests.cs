@@ -21,7 +21,7 @@ public class InfoJsonTests
         ISystemHandler[] handlers = [Handler("gb"), Handler("gbc"), new ExternalTestHandler(), new ExternalSetTestHandler()];
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns(handlers);
-        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), new InfoJsonUpgraderV4(), new InfoJsonUpgraderV5(), .. upgraders], registry);
+        return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), new InfoJsonUpgraderV4(), new InfoJsonUpgraderV5(), new InfoJsonUpgraderV6(), .. upgraders], registry);
     }
 
     private static ISystemHandler Handler(string id)
@@ -64,7 +64,7 @@ public class InfoJsonTests
 
     private static InfoJsonGame Game() => new()
     {
-        SchemaVersion = 6,
+        SchemaVersion = 7,
         GameId = Guid.Parse("6f1f6c3e-8a54-4f39-9d2b-0d2a7c1e9b11"),
         System = "gb",
         Title = "Tetris",
@@ -118,7 +118,7 @@ public class InfoJsonTests
         var text = Encoding.UTF8.GetString(bytes);
 
         Assert.That(bytes[0], Is.EqualTo((byte)'{'), "no BOM");
-        Assert.That(text, Does.Contain("\n  \"schemaVersion\": 6"));
+        Assert.That(text, Does.Contain("\n  \"schemaVersion\": 7"));
         Assert.That(text, Does.Contain("\"version\": null"));
         Assert.That(text, Does.Contain("\"externalFileName\": null"));
         Assert.That(text, Does.Contain("\"isCover\": true"));
@@ -169,9 +169,9 @@ public class InfoJsonTests
     [Test]
     public void NewerSchema_IsDetected_NotParsedFurther()
     {
-        var result = ReadJson("""{ "schemaVersion": 7, "anything": "goes" }""");
+        var result = ReadJson("""{ "schemaVersion": 8, "anything": "goes" }""");
 
-        Assert.That((result.Kind, result.FileVersion), Is.EqualTo((InfoJsonReadResult.Outcome.NewerSchema, (int?)7)));
+        Assert.That((result.Kind, result.FileVersion), Is.EqualTo((InfoJsonReadResult.Outcome.NewerSchema, (int?)8)));
     }
 
     [Test]
@@ -188,7 +188,7 @@ public class InfoJsonTests
         var result = reader.Read(Encoding.UTF8.GetBytes(v0.ToJsonString()));
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
-        Assert.That((result.FileVersion, result.Game!.SchemaVersion), Is.EqualTo(((int?)0, 6)));
+        Assert.That((result.FileVersion, result.Game!.SchemaVersion), Is.EqualTo(((int?)0, 7)));
         Assert.That(result.Game.Genres, Is.EqualTo(new[] { "Puzzle" }));
         upgrader.Received(1).Upgrade(Arg.Any<JsonObject>());
     }
@@ -207,7 +207,7 @@ public class InfoJsonTests
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
         Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Rating, result.Game.Favourite),
-            Is.EqualTo(((int?)1, 6, (int?)null, false)));
+            Is.EqualTo(((int?)1, 7, (int?)null, false)));
         Assert.That(result.Game.Roms[0].ExternalFileName, Is.Null);
     }
 
@@ -371,7 +371,7 @@ public class InfoJsonTests
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
         Assert.That(result.Game!.Images.Select(i => (i.FileName, i.IsCover)), Is.EqualTo(new[] { ("snap-01.png", false), ("boxart-01.png", true) }));
-        Assert.That((result.FileVersion, result.Game.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)2, 6, (string?)null)));
+        Assert.That((result.FileVersion, result.Game.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)2, 7, (string?)null)));
     }
 
     [Test]
@@ -414,7 +414,7 @@ public class InfoJsonTests
         });
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
-        Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)3, 6, (string?)null)));
+        Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Roms[0].ExternalFileName), Is.EqualTo(((int?)3, 7, (string?)null)));
     }
 
     [Test]
@@ -608,7 +608,7 @@ public class InfoJsonTests
         });
 
         Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
-        Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Roms[0].Version), Is.EqualTo(((int?)4, 6, expected)));
+        Assert.That((result.FileVersion, result.Game!.SchemaVersion, result.Game.Roms[0].Version), Is.EqualTo(((int?)4, 7, expected)));
     }
 
     [Test]
@@ -751,7 +751,7 @@ public class InfoJsonTests
             d["schemaVersion"] = 5;
             d["roms"]![0]!.AsObject().Remove("files");
         });
-        Assert.That((read.Kind, read.FileVersion, read.Game!.SchemaVersion, read.Game.Roms[0].Files), Is.EqualTo((InfoJsonReadResult.Outcome.Ok, (int?)5, 6, (IReadOnlyList<InfoJsonRomFile>?)null)));
+        Assert.That((read.Kind, read.FileVersion, read.Game!.SchemaVersion, read.Game.Roms[0].Files), Is.EqualTo((InfoJsonReadResult.Outcome.Ok, (int?)5, 7, (IReadOnlyList<InfoJsonRomFile>?)null)));
     }
 
     [Test]
@@ -769,5 +769,30 @@ public class InfoJsonTests
             SetTrack, "Disc (USA) (Disc 2) (Track 1).bin", "Disc (USA).cue", "Disc (USA) (Track 2).bin", "Disc (USA) (Disc 2).cue",
         }));
         Assert.That(Game().ExternalFileNames(), Is.Empty, "embedded roms have no external names");
+    }
+    [Test]
+    public void V6File_ReadsAsV7_Unchanged()
+    {
+        var read = ReadEdited(d => d["schemaVersion"] = 6);
+
+        Assert.That((read.Kind, read.FileVersion, read.Game?.SchemaVersion), Is.EqualTo((InfoJsonReadResult.Outcome.Ok, (int?)6, (int?)7)), read.Rule);
+        Assert.That(read.Game! with { SchemaVersion = 7, Roms = [], Images = [], Developers = [], Publishers = [], Genres = [] },
+            Is.EqualTo(Game() with { Roms = [], Images = [], Developers = [], Publishers = [], Genres = [] }));
+    }
+
+    [Test]
+    public void SerialMethod_RoundTrips()
+    {
+        var rom = Rom("Tetris (World) (Rev 1).gb") with
+        {
+            Identification = new InfoJsonIdentification(IdentificationMethod.Serial, "Nintendo - Game Boy", "2026.10.07", "Tetris (World) (Rev 1)"),
+        };
+        var bytes = InfoJsonSerializer.Serialize(Game() with { Roms = [rom] });
+
+        var result = _reader.Read(bytes);
+
+        Assert.That(Encoding.UTF8.GetString(bytes), Does.Contain("\"method\": \"Serial\""));
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+        Assert.That(result.Game!.Roms[0].Identification.Method, Is.EqualTo(IdentificationMethod.Serial));
     }
 }
