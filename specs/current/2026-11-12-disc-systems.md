@@ -410,7 +410,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - Files: `lib/api/types.ts`, `routes/games/[id]/+page.svelte`, `lib/components/GameAdminModal.svelte`, `routes/games/game-page.test.ts`, `routes/games/game-admin.test.ts`, `routes/games/release-note.test.ts` (fixture).
   - Tests: `game-page.test.ts`: a release with 2 `files` shows "3 files", and the toggle lists the main file then the 2 files, with download buttons that have an `aria-label`, and the size shows the total; `game-admin.test.ts`: deleting a release with 2 `files` reads "The ROM and its 2 other files move…", and one without files keeps today's text; `table-style.test.ts` passes.
   - Done when: `npm test`, `npm run lint` and `npm run check` pass.
-- [ ] **22. System colours and icons**: B22.
+- [x] **22. System colours and icons**: B22.
   - Files: `lib/systemColours.ts`, `lib/systemColours.test.ts`, `app.css`, `lib/components/icons.ts`, `lib/stores/stores.svelte.test.ts`.
   - Tests:
     - `systemColours.test.ts` for the six colours;

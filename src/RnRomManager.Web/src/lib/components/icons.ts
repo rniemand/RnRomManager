@@ -50,7 +50,14 @@ export const icons: Record<string, string> = {
 	empty: 'bi bi-inbox',
 	'not-allowed': 'bi bi-slash-circle',
 	'not-found': 'bi bi-signpost-split',
-	github: 'fa-brands fa-github'
+	github: 'fa-brands fa-github',
+	// Disc systems B22: the brand marks Bootstrap Icons has, a disc for the rest.
+	'system-psx': 'bi bi-playstation',
+	'system-psp': 'bi bi-playstation',
+	'system-x360': 'bi bi-xbox',
+	'system-gc': 'bi bi-disc',
+	'system-wii': 'bi bi-disc',
+	'system-saturn': 'bi bi-disc'
 };
 
 /** An unmapped `system-<id>` falls back to a controller, so a new system needs no UI change. */

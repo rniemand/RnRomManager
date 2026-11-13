@@ -24,6 +24,15 @@ describe('systemColour', () => {
 		expect(systemColour('switch')).toEqual({ name: 'switch', foreground: '#fff' });
 	});
 
+	it('gives the six disc systems their own colours (B22)', () => {
+		expect(systemColour('psx')).toEqual({ name: 'psx', foreground: '#fff' });
+		expect(systemColour('psp')).toEqual({ name: 'psp', foreground: '#fff' });
+		expect(systemColour('gc')).toEqual({ name: 'gc', foreground: '#000' });
+		expect(systemColour('wii')).toEqual({ name: 'wii', foreground: '#000' });
+		expect(systemColour('x360')).toEqual({ name: 'x360', foreground: '#000' });
+		expect(systemColour('saturn')).toEqual({ name: 'saturn', foreground: '#fff' });
+	});
+
 	it('keeps an unknown system neutral', () => {
 		expect(systemColour('sg1000')).toBe(fallbackColour);
 	});
