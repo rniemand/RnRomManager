@@ -352,7 +352,7 @@ test('game detail + downloads', async () => {
 	await frame.locator('#game').click();
 	await page.keyboard.press('Escape');
 	await expect(dialog()).toBeVisible();
-	await dialog().getByRole('button', { name: 'Close', exact: true }).click();
+	await dialog().locator('.modal-footer').getByRole('button', { name: 'Close' }).click();
 	await expect(dialog()).toBeHidden();
 	await expect(page.locator('iframe')).toHaveCount(0);
 
