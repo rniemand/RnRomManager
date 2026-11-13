@@ -172,8 +172,10 @@ describe('Library bulk add to a collection (B26)', () => {
 		await fireEvent.click(box('Charlie'));
 
 		await fireEvent.click(addButton());
-		const dialog = within(document.querySelector<HTMLElement>('.modal')!);
-		expect(dialog.getByText('Add 2 games to a collection')).toBeTruthy();
+		// GameResults also renders the (closed) emulator modal: pick the collection picker by its title.
+		const dialog = within(
+			screen.getByText('Add 2 games to a collection').closest<HTMLElement>('.modal')!
+		);
 		await fireEvent.click(await dialog.findByRole('radio', { name: /^Mine/, hidden: true }));
 		await fireEvent.click(dialog.getByRole('button', { name: 'Add', hidden: true }));
 

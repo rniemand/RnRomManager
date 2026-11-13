@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
-import type { RomDetail } from '../api/types';
 
 vi.mock('../bootstrap', () => ({
 	Modal: class {
@@ -14,7 +13,8 @@ vi.mock('../modal', () => ({ releaseModal: () => {} }));
 
 const { default: EmulatorModal } = await import('./EmulatorModal.svelte');
 
-const rom = { id: 13, fileName: 'Orbit Blocks (World) (Rev 1).gb' } as RomDetail;
+// C2: only id and file name, as a Library card passes them.
+const rom = { id: 13, fileName: 'Orbit Blocks (World) (Rev 1).gb' };
 
 describe('EmulatorModal', () => {
 	it('frames the play page for the release', () => {

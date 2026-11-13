@@ -2,7 +2,9 @@
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import type { GameListItem } from '../api/types';
+	import { formatCount } from '../format';
 	import { tooltip } from '../tooltip';
+	import EmulatorModal from './EmulatorModal.svelte';
 	import FileSize from './FileSize.svelte';
 	import Icon from './Icon.svelte';
 	import RatingControl from './RatingControl.svelte';
@@ -26,7 +28,31 @@
 		if (on) selected?.add(id);
 		else selected?.delete(id);
 	}
+
+	/** C1: `1 update`, `2 updates`. */
+	const updatesText = (n: number) => `${formatCount(n)} ${n === 1 ? 'update' : 'updates'}`;
+
+	// C2: one modal for every card; the list item carries what the emulator needs, so nothing is fetched.
+	let playing = $state<GameListItem | null>(null);
+	let playOpen = $state(false);
+
+	function play(game: GameListItem): void {
+		playing = game;
+		playOpen = true;
+	}
+
+	const canPlay = (game: GameListItem) => game.playRomId != null && !selected;
+	const actionsColumn = $derived(!!action || games.some((g) => g.playRomId != null));
 </script>
+
+{#snippet updatesBadge(game: GameListItem, extra: string)}
+	{#if game.updateCount > 0}
+		<span class="badge text-bg-info {extra}" use:tooltip={updatesText(game.updateCount)}>
+			<span aria-hidden="true"><Icon name="update" /> {formatCount(game.updateCount)}</span>
+			<span class="visually-hidden">{updatesText(game.updateCount)}</span>
+		</span>
+	{/if}
+{/snippet}
 
 {#if view === 'grid'}
 	<div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6 g-3">
@@ -59,6 +85,15 @@
 							<span class="badge text-bg-light border position-absolute top-0 end-0 m-1">
 								<FileSize bytes={game.primarySizeBytes} />
 							</span>
+						{/if}
+						{@render updatesBadge(game, 'position-absolute bottom-0 start-0 m-1')}
+						{#if canPlay(game)}
+							<button
+								type="button"
+								class="btn btn-sm btn-primary rounded-circle position-absolute bottom-0 end-0 m-1 z-2"
+								aria-label="Play {game.displayTitle}"
+								onclick={() => play(game)}><Icon name="play" /></button
+							>
 						{/if}
 					</div>
 					<div class="card-body p-2">
@@ -113,7 +148,7 @@
 					<th scope="col">Rating</th>
 					<th scope="col" class="text-end">Releases</th>
 					<th scope="col" class="text-end">Size</th>
-					{#if action}<th scope="col"><span class="visually-hidden">Actions</span></th>{/if}
+					{#if actionsColumn}<th scope="col"><span class="visually-hidden">Actions</span></th>{/if}
 				</tr>
 			</thead>
 			<tbody>
@@ -130,7 +165,10 @@
 								/>
 							</td>
 						{/if}
-						<td><a href={resolve('/games/[id]', { id: game.id })}>{game.displayTitle}</a></td>
+						<td>
+							<a href={resolve('/games/[id]', { id: game.id })}>{game.displayTitle}</a>
+							{@render updatesBadge(game, 'ms-1')}
+						</td>
 						<td><SystemBadge system={game.system} name={game.systemName} /></td>
 						<td>{game.releaseYear ?? ''}</td>
 						<td>{game.regions.join(', ')}</td>
@@ -144,10 +182,31 @@
 						</td>
 						<td class="text-end">{game.romCount}</td>
 						<td class="text-end text-nowrap"><FileSize bytes={game.primarySizeBytes} /></td>
-						{#if action}<td class="text-end">{@render action(game)}</td>{/if}
+						{#if actionsColumn}
+							<td class="text-end text-nowrap">
+								{#if canPlay(game)}
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-success"
+										aria-label="Play {game.displayTitle}"
+										onclick={() => play(game)}><Icon name="play" /></button
+									>
+								{/if}
+								{#if action}{@render action(game)}{/if}
+							</td>
+						{/if}
 					</tr>
 				{/each}
 			</tbody>
 		</table>
 	</div>
 {/if}
+
+<EmulatorModal
+	bind:open={playOpen}
+	gameId={playing?.id ?? ''}
+	core={playing?.browserCore ?? null}
+	rom={playing?.playRomId != null
+		? { id: playing.playRomId, fileName: playing.playRomFileName ?? '' }
+		: null}
+/>

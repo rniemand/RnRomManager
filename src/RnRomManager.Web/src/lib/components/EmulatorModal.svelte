@@ -11,7 +11,8 @@
 		open: boolean;
 		gameId: string;
 		core: string | null;
-		rom: RomDetail | null;
+		/** All it reads (through `playUrl`), so a Library card can pass its list item's primary release (C2). */
+		rom: Pick<RomDetail, 'id' | 'fileName'> | null;
 	}
 
 	let { open = $bindable(), gameId, core, rom }: Props = $props();
