@@ -20,11 +20,21 @@ vi.mock('#lib/bootstrap.js', () => ({
 		show() {}
 		hide() {}
 		dispose() {}
-	}
+	},
+	Dropdown: { getOrCreateInstance: () => ({ hide() {} }) }
 }));
 vi.mock('#lib/tooltip.js', () => ({ tooltip: () => ({}) }));
 
 const { default: LibraryPage } = await import('./+page.svelte');
+
+/** A FilterDropdown row (L1) by its label. */
+const menuItem = (field: string, label: string) =>
+	[
+		...screen
+			.getByRole('button', { name: new RegExp(`^${field}:`) })
+			.closest('.dropdown')!
+			.querySelectorAll<HTMLButtonElement>('.dropdown-item')
+	].find((b) => b.firstElementChild!.textContent!.trim() === label)!;
 
 const game = (id: string, displayTitle: string) => ({
 	id,
@@ -90,11 +100,11 @@ describe('Library bulk add to a collection (B26)', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 		await screen.findByText('Page 2 of 3');
-		await fireEvent.change(screen.getByLabelText('Sort by'), { target: { value: 'year' } });
+		await fireEvent.click(menuItem('Sort', 'Year'));
 		await screen.findByText('Alpha');
 		expect(facetCalls()).toEqual(['GET /api/games/facets']);
 
-		await fireEvent.change(screen.getByLabelText('Letter'), { target: { value: 'B' } });
+		await fireEvent.click(menuItem('Letter', 'B'));
 		await vi.waitFor(() =>
 			expect(facetCalls()).toEqual(['GET /api/games/facets', 'GET /api/games/facets?letter=B'])
 		);

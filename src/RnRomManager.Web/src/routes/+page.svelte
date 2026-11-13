@@ -8,6 +8,7 @@
 	import type { GameFacets, GameListItem, Page, SystemInfo } from '#lib/api/types.js';
 	import CollectionPickerModal from '#lib/components/CollectionPickerModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
+	import FilterDropdown, { type FilterOption } from '#lib/components/FilterDropdown.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import GameResults from '#lib/components/GameResults.svelte';
 	import Icon from '#lib/components/Icon.svelte';
@@ -20,7 +21,6 @@
 		letters,
 		libraryPageSize,
 		normaliseSearch,
-		optionLabel,
 		type FacetCounts,
 		parseFilters,
 		toSearch,
@@ -28,10 +28,12 @@
 		type LibrarySort
 	} from '#lib/libraryQuery.js';
 	import {
+		clearLibraryFilter,
 		libraryFilterParams,
 		readSavedLibraryFilter,
 		saveLibraryFilter
 	} from '#lib/libraryFilter.js';
+	import { formatCount } from '#lib/format.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 
 	type View = 'grid' | 'list';
@@ -85,6 +87,69 @@
 			? (systems.find((s) => s.id === filters.system)?.regions ?? [])
 			: [...new Set(systems.flatMap((s) => s.regions))].sort()
 	);
+	const systemOptions = $derived<FilterOption[]>(
+		systems.map((s) => ({
+			value: s.id,
+			label: s.displayName,
+			badge: { system: s.id, name: s.shortName },
+			search: [s.shortName]
+		}))
+	);
+	// A region from the URL that the list doesn't have stays listed, so it can be seen and changed.
+	const regionOptions = $derived<FilterOption[]>(
+		[
+			...regions,
+			...(filters.region && !regions.includes(filters.region) ? [filters.region] : [])
+		].map((r) => ({ value: r, label: r }))
+	);
+	const letterOptions: FilterOption[] = letters.map((l) => ({ value: l, label: l }));
+	const sortOptions: FilterOption[] = [
+		{ value: 'title', label: 'Title' },
+		{ value: 'year', label: 'Year' },
+		{ value: 'added', label: 'Date added' },
+		{ value: 'rating', label: 'Rating' }
+	];
+
+	/** L6: ` (1,234)` from the facet counts; '' while they load or after a failed call. */
+	function countSuffix(counts: FacetCounts, key: string): string {
+		return counts ? ` (${formatCount(counts[key] ?? 0)})` : '';
+	}
+
+	const chips = $derived.by(() => {
+		const list: { field: string; text: string; clear: Partial<LibraryFilters> }[] = [];
+		if (filters.system) {
+			const name = systems.find((s) => s.id === filters.system)?.displayName ?? filters.system;
+			list.push({
+				field: 'System',
+				text: `System: ${name}${countSuffix(facets.systems, filters.system)}`,
+				clear: { system: null, region: null }
+			});
+		}
+		if (filters.region)
+			list.push({
+				field: 'Region',
+				text: `Region: ${filters.region}${countSuffix(facets.regions, filters.region)}`,
+				clear: { region: null }
+			});
+		if (filters.letter)
+			list.push({
+				field: 'Letter',
+				text: `Letter: ${filters.letter}${countSuffix(facets.letters, filters.letter)}`,
+				clear: { letter: null }
+			});
+		if (filters.q) list.push({ field: 'Search', text: `Search: "${filters.q}"`, clear: { q: '' } });
+		if (filters.favourite)
+			list.push({ field: 'Favourites', text: 'Favourites', clear: { favourite: false } });
+		return list;
+	});
+	/** Shown when any filter, a non-default sort or direction, or a later page is in the URL. */
+	const showChipRow = $derived(toSearch(filters) !== '');
+
+	function resetFilters(): void {
+		clearLibraryFilter();
+		go(parseFilters(new URLSearchParams()));
+	}
+
 	const pages = $derived(result ? Math.max(1, Math.ceil(result.total / libraryPageSize)) : 1);
 	const dir = $derived(filters.dir ?? defaultDir(filters.sort));
 
@@ -182,124 +247,110 @@
 
 <h1 class="h3 mb-3"><Icon name="library" /> Library</h1>
 
-<form class="row g-2 align-items-end mb-3" role="search" onsubmit={(e) => e.preventDefault()}>
-	<div class="col-12 col-md-4 col-lg-2">
-		<label class="form-label" for="q">Search</label>
-		<input
-			id="q"
-			type="search"
-			class="form-control"
-			placeholder="At least 2 characters"
-			maxlength="255"
-			bind:value={search}
-			oninput={onSearchInput}
-		/>
-	</div>
-	<div class="col-6 col-md-4 col-lg-2">
-		<label class="form-label" for="system">System</label>
-		<select
-			id="system"
-			class="form-select"
-			value={filters.system ?? ''}
-			onchange={(e) => update({ system: e.currentTarget.value || null, region: null })}
-		>
-			<option value="">All systems</option>
-			{#each systems as system (system.id)}
-				<option value={system.id}
-					>{optionLabel(system.displayName, facets.systems, system.id)}</option
-				>
-			{/each}
-		</select>
-	</div>
-	<div class="col-6 col-md-4 col-lg-2">
-		<label class="form-label" for="region">Region</label>
-		<select
-			id="region"
-			class="form-select"
-			value={filters.region ?? ''}
-			onchange={(e) => update({ region: e.currentTarget.value || null })}
-		>
-			<option value="">Any region</option>
-			{#each regions as region (region)}
-				<option value={region}>{optionLabel(region, facets.regions, region)}</option>
-			{/each}
-			{#if filters.region && !regions.includes(filters.region)}
-				<option value={filters.region}
-					>{optionLabel(filters.region, facets.regions, filters.region)}</option
-				>
-			{/if}
-		</select>
-	</div>
-	<div class="col-6 col-md-4 col-lg-2">
-		<label class="form-label" for="letter">Letter</label>
-		<select
-			id="letter"
-			class="form-select"
-			value={filters.letter ?? ''}
-			onchange={(e) => update({ letter: e.currentTarget.value || null })}
-		>
-			<option value="">All</option>
-			{#each letters as letter (letter)}
-				<option value={letter}>{optionLabel(letter, facets.letters, letter)}</option>
-			{/each}
-		</select>
-	</div>
-	<div class="col-6 col-md-4 col-lg-2">
-		<label class="form-label" for="sort">Sort by</label>
-		<div class="input-group">
-			<select
-				id="sort"
-				class="form-select"
-				value={filters.sort}
-				onchange={(e) => update({ sort: e.currentTarget.value as LibrarySort, dir: null })}
-			>
-				<option value="title">Title</option>
-				<option value="year">Year</option>
-				<option value="added">Date added</option>
-				<option value="rating">Rating</option>
-			</select>
-			<button
-				type="button"
-				class="btn btn-outline-secondary"
-				aria-label={dir === 'asc'
-					? 'Ascending, switch to descending'
-					: 'Descending, switch to ascending'}
-				onclick={() => update({ dir: dir === 'asc' ? 'desc' : 'asc' })}
-			>
-				<Icon name={dir === 'asc' ? 'sort-asc' : 'sort-desc'} />
-			</button>
-		</div>
-	</div>
-	<div class="col-12 col-md-4 col-lg-2 d-flex gap-2 justify-content-md-end">
+<form
+	class="d-flex flex-wrap align-items-center gap-2 mb-2"
+	role="search"
+	onsubmit={(e) => e.preventDefault()}
+>
+	<label class="visually-hidden" for="q">Search</label>
+	<input
+		id="q"
+		type="search"
+		class="form-control form-control-sm flex-grow-1 search-input"
+		placeholder="At least 2 characters"
+		maxlength="255"
+		bind:value={search}
+		oninput={onSearchInput}
+	/>
+	<FilterDropdown
+		label="System"
+		options={systemOptions}
+		value={filters.system}
+		counts={facets.systems}
+		all={{ label: 'All systems', sum: true }}
+		filterPlaceholder="Filter systems…"
+		onselect={(system) => update({ system, region: null })}
+	/>
+	<FilterDropdown
+		label="Region"
+		options={regionOptions}
+		value={filters.region}
+		counts={facets.regions}
+		all={{ label: 'All regions', sum: false }}
+		onselect={(region) => update({ region })}
+	/>
+	<FilterDropdown
+		label="Letter"
+		options={letterOptions}
+		value={filters.letter}
+		counts={facets.letters}
+		all={{ label: 'All letters', sum: true }}
+		onselect={(letter) => update({ letter })}
+	/>
+	<FilterDropdown
+		label="Sort"
+		options={sortOptions}
+		value={filters.sort}
+		active={filters.sort !== 'title'}
+		onselect={(sort) => update({ sort: (sort ?? 'title') as LibrarySort, dir: null })}
+	/>
+	<button
+		type="button"
+		class="btn btn-sm btn-outline-secondary"
+		aria-label={dir === 'asc'
+			? 'Ascending, switch to descending'
+			: 'Descending, switch to ascending'}
+		onclick={() => update({ dir: dir === 'asc' ? 'desc' : 'asc' })}
+	>
+		<Icon name={dir === 'asc' ? 'sort-asc' : 'sort-desc'} />
+	</button>
+	<button
+		type="button"
+		class="btn btn-sm btn-outline-secondary"
+		class:active={filters.favourite}
+		aria-pressed={filters.favourite}
+		aria-label="Favourites"
+		onclick={() => update({ favourite: !filters.favourite })}
+		><Icon name={filters.favourite ? 'favourite-fill' : 'favourite'} /></button
+	>
+	<div class="btn-group" role="group" aria-label="View">
 		<button
 			type="button"
-			class="btn btn-outline-secondary"
-			class:active={filters.favourite}
-			aria-pressed={filters.favourite}
-			aria-label="Favourites"
-			onclick={() => update({ favourite: !filters.favourite })}
-			><Icon name={filters.favourite ? 'favourite-fill' : 'favourite'} /></button
+			class="btn btn-sm btn-outline-secondary"
+			class:active={view === 'grid'}
+			aria-pressed={view === 'grid'}
+			aria-label="Grid view"
+			onclick={() => setView('grid')}><Icon name="grid" /></button
 		>
-		<div class="btn-group" role="group" aria-label="View">
-			<button
-				type="button"
-				class="btn btn-outline-secondary"
-				class:active={view === 'grid'}
-				aria-pressed={view === 'grid'}
-				aria-label="Grid view"
-				onclick={() => setView('grid')}><Icon name="grid" /></button
-			>
-			<button
-				type="button"
-				class="btn btn-outline-secondary"
-				class:active={view === 'list'}
-				aria-pressed={view === 'list'}
-				aria-label="List view"
-				onclick={() => setView('list')}><Icon name="list" /></button
-			>
-		</div>
+		<button
+			type="button"
+			class="btn btn-sm btn-outline-secondary"
+			class:active={view === 'list'}
+			aria-pressed={view === 'list'}
+			aria-label="List view"
+			onclick={() => setView('list')}><Icon name="list" /></button
+		>
 	</div>
 </form>
+
+{#if showChipRow}
+	<div class="d-flex flex-wrap align-items-center gap-2 mb-2" data-testid="active-filters">
+		{#each chips as chip (chip.field)}
+			<span class="badge rounded-pill text-bg-secondary d-inline-flex align-items-center gap-1">
+				{chip.text}
+				<button
+					type="button"
+					class="btn-close btn-close-white chip-close"
+					aria-label="Remove {chip.field} filter"
+					onclick={() => update(chip.clear)}
+				></button>
+			</span>
+		{/each}
+		<button type="button" class="btn btn-link btn-sm ms-auto" onclick={resetFilters}
+			>Reset filters</button
+		>
+	</div>
+{/if}
 
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
 	<button
@@ -386,3 +437,14 @@
 	gameIds={[...selected]}
 	onadded={() => selected.clear()}
 />
+
+<style>
+	.search-input {
+		min-width: 12rem;
+		width: auto;
+	}
+
+	.chip-close {
+		font-size: 0.6em;
+	}
+</style>

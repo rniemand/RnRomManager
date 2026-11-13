@@ -29,8 +29,31 @@ vi.mock('#lib/tooltip.js', () => ({
 const { default: LibraryPage } = await import('./+page.svelte');
 
 const systems = [
-	{ id: 'gb', displayName: 'Game Boy', gameCount: 1, romCount: 1, regions: ['USA'] }
+	{
+		id: 'gb',
+		displayName: 'Game Boy',
+		shortName: 'GB',
+		gameCount: 1,
+		romCount: 1,
+		regions: ['USA']
+	}
 ];
+
+/** The FilterDropdown whose toggle reads `<field>: …` (L1). */
+const dropdown = (field: string) =>
+	screen
+		.getByRole('button', { name: new RegExp(`^${field}:`) })
+		.closest('.dropdown') as HTMLElement;
+const items = (field: string) => [
+	...dropdown(field).querySelectorAll<HTMLButtonElement>('.dropdown-item')
+];
+/** Each row as `label count` (the label includes a system badge's short name). */
+const optionTexts = (field: string) =>
+	items(field).map((b) => [...b.children].map((c) => c.textContent!.trim()).join(' '));
+const choose = (field: string, label: string) =>
+	fireEvent.click(
+		items(field).find((b) => b.firstElementChild!.textContent!.trim().endsWith(label))!
+	);
 let facets: unknown = {
 	systems: [{ id: 'gb', count: 12 }],
 	regions: [{ region: 'USA', count: 9 }],
@@ -100,7 +123,7 @@ describe('library page', () => {
 		render(LibraryPage);
 		await screen.findByAltText('4-in-1 Fun Pak box art');
 
-		await fireEvent.change(screen.getByLabelText('Letter'), { target: { value: 'T' } });
+		await choose('Letter', 'T');
 
 		expect(goto).toHaveBeenCalledWith('/?system=gb&letter=T', { reset: false });
 	});
@@ -162,7 +185,7 @@ describe('library page', () => {
 		expect(screen.getByRole('button', { name: 'Favourites' }).getAttribute('aria-pressed')).toBe(
 			'true'
 		);
-		await fireEvent.change(screen.getByLabelText('Sort by'), { target: { value: 'year' } });
+		await choose('Sort', 'Year');
 		expect(goto).toHaveBeenCalledWith('/?sort=year&favourite=true', { reset: false });
 	});
 
@@ -269,17 +292,14 @@ describe('library page', () => {
 		expect(row.querySelector('.file-size')!.textContent).toBe('128.0 KiB');
 	});
 
-	const optionTexts = (label: string) =>
-		[...(screen.getByLabelText(label) as HTMLSelectElement).options].map((o) =>
-			o.textContent!.trim()
-		);
-
 	it('filter options show their counts once the facets load (F3)', async () => {
 		render(LibraryPage);
 
-		await vi.waitFor(() => expect(optionTexts('System')).toEqual(['All systems', 'Game Boy (12)']));
-		expect(optionTexts('Region')).toEqual(['Any region', 'USA (9)']);
-		expect(optionTexts('Letter').slice(0, 4)).toEqual(['All', '# (0)', 'A (3)', 'B (0)']);
+		await vi.waitFor(() =>
+			expect(optionTexts('System')).toEqual(['All systems 12', 'GBGame Boy 12'])
+		);
+		expect(optionTexts('Region')).toEqual(['All regions', 'USA 9']);
+		expect(optionTexts('Letter').slice(0, 4)).toEqual(['All letters 3', '# 0', 'A 3', 'B 0']);
 		expect(requested).toContain('/api/games/facets?system=gb&letter=%23');
 	});
 
@@ -293,13 +313,191 @@ describe('library page', () => {
 			try {
 				render(LibraryPage);
 				await screen.findByAltText('4-in-1 Fun Pak box art');
-				await vi.waitFor(() => expect(optionTexts('System')).toEqual(['All systems', 'Game Boy']));
-				expect(optionTexts('Letter').slice(0, 3)).toEqual(['All', '#', 'A']);
+				await vi.waitFor(() =>
+					expect(optionTexts('System')).toEqual(['All systems', 'GBGame Boy'])
+				);
+				expect(optionTexts('Letter').slice(0, 3)).toEqual(['All letters', '#', 'A']);
 			} finally {
 				facets = loaded;
 			}
 		});
 	}
+
+	describe('toolbar (L1)', () => {
+		it('search, System, Region, Letter, Sort, direction, Favourites, then Grid/List', async () => {
+			navigateTo('/');
+			render(LibraryPage);
+			await screen.findByAltText('4-in-1 Fun Pak box art');
+
+			const form = screen.getByRole('search');
+			expect(form.className).toBe('d-flex flex-wrap align-items-center gap-2 mb-2');
+			const labels = [...form.children].map(
+				(c) =>
+					c.getAttribute('aria-label') ??
+					c.querySelector('.dropdown-toggle')?.getAttribute('aria-label') ??
+					c.id ??
+					c.textContent
+			);
+			expect(labels).toEqual([
+				'',
+				'q',
+				'System: All',
+				'Region: All',
+				'Letter: All',
+				'Sort: Title',
+				'Ascending, switch to descending',
+				'Favourites',
+				'View'
+			]);
+			const search = screen.getByLabelText('Search') as HTMLInputElement;
+			expect(search.id).toBe('q');
+			expect(search.placeholder).toBe('At least 2 characters');
+			expect(document.querySelector('label[for="q"]')!.className).toBe('visually-hidden');
+			expect(search.classList.contains('flex-grow-1')).toBe(true);
+		});
+
+		it('choosing a System clears the Region', async () => {
+			navigateTo('/?region=USA&page=2');
+			render(LibraryPage);
+			await vi.waitFor(() => expect(optionTexts('System')).toHaveLength(2));
+
+			await choose('System', 'Game Boy');
+
+			expect(goto).toHaveBeenCalledWith('/?system=gb', { reset: false });
+		});
+
+		it('a Sort change resets the direction', async () => {
+			navigateTo('/?sort=year&dir=desc');
+			render(LibraryPage);
+			await screen.findByAltText('4-in-1 Fun Pak box art');
+			expect(screen.getByRole('button', { name: 'Sort: Year' }).className).toMatch(
+				/\bbtn-secondary\b/
+			);
+
+			await choose('Sort', 'Rating');
+
+			expect(goto).toHaveBeenCalledWith('/?sort=rating', { reset: false });
+		});
+
+		it('the default sort is outlined; Sort has no counts and no All row', async () => {
+			navigateTo('/');
+			render(LibraryPage);
+			await screen.findByAltText('4-in-1 Fun Pak box art');
+
+			expect(screen.getByRole('button', { name: 'Sort: Title' }).className).toContain(
+				'btn-outline-secondary'
+			);
+			expect(optionTexts('Sort')).toEqual(['Title', 'Year', 'Date added', 'Rating']);
+		});
+
+		it('a region from the URL missing from the list is still listed', async () => {
+			navigateTo('/?region=Mars');
+			render(LibraryPage);
+			await vi.waitFor(() => expect(optionTexts('Region')).toHaveLength(3));
+
+			expect(optionTexts('Region')).toEqual(['All regions', 'USA 9', 'Mars 0']);
+			expect(screen.getByRole('button', { name: 'Region: Mars' })).toBeTruthy();
+		});
+	});
+
+	describe('active filters (L6)', () => {
+		const row = () =>
+			document.querySelector('[data-testid="active-filters"]') as HTMLElement | null;
+		const chipTexts = () =>
+			[...row()!.querySelectorAll('.badge.rounded-pill')].map((c) => c.textContent!.trim());
+
+		it('lists System, Region, Letter, Search, Favourites in order with facet counts', async () => {
+			facets = {
+				systems: [{ id: 'gb', count: 1234 }],
+				regions: [{ region: 'USA', count: 9 }],
+				letters: [{ letter: 'A', count: 3 }]
+			};
+			navigateTo('/?favourite=true&q=zelda&letter=A&region=USA&system=gb');
+			render(LibraryPage);
+
+			await vi.waitFor(() =>
+				expect(chipTexts()).toEqual([
+					'System: Game Boy (1,234)',
+					'Region: USA (9)',
+					'Letter: A (3)',
+					'Search: "zelda"',
+					'Favourites'
+				])
+			);
+			expect(
+				[...row()!.querySelectorAll('.btn-close')].map((b) => b.getAttribute('aria-label'))
+			).toEqual([
+				'Remove System filter',
+				'Remove Region filter',
+				'Remove Letter filter',
+				'Remove Search filter',
+				'Remove Favourites filter'
+			]);
+			facets = {
+				systems: [{ id: 'gb', count: 12 }],
+				regions: [{ region: 'USA', count: 9 }],
+				letters: [{ letter: 'A', count: 3 }]
+			};
+		});
+
+		it('chips leave out counts while the facets load', async () => {
+			const loaded = facets;
+			facets = 'pending';
+			try {
+				navigateTo('/?system=gb&letter=A');
+				render(LibraryPage);
+				await screen.findByAltText('4-in-1 Fun Pak box art');
+				await vi.waitFor(() => expect(chipTexts()).toEqual(['System: Game Boy', 'Letter: A']));
+			} finally {
+				facets = loaded;
+			}
+		});
+
+		it.each([
+			['System', '/?letter=A&q=zelda&favourite=true'],
+			['Region', '/?system=gb&letter=A&q=zelda&favourite=true'],
+			['Letter', '/?system=gb&region=USA&q=zelda&favourite=true'],
+			['Search', '/?system=gb&letter=A&region=USA&favourite=true'],
+			['Favourites', '/?system=gb&letter=A&region=USA&q=zelda']
+		])('× on %s clears just that filter (System also clears Region)', async (field, expected) => {
+			navigateTo('/?system=gb&region=USA&letter=A&q=zelda&favourite=true&page=3');
+			render(LibraryPage);
+			await screen.findByAltText('4-in-1 Fun Pak box art');
+
+			await fireEvent.click(screen.getByRole('button', { name: `Remove ${field} filter` }));
+
+			expect(goto).toHaveBeenCalledWith(expected, { reset: false });
+		});
+
+		it('Reset filters clears every filter, sort, direction and page, and the saved filter', async () => {
+			navigateTo('/?system=gb&sort=year&dir=desc&page=2');
+			render(LibraryPage);
+			await vi.waitFor(() => expect(store.get('rnrm.library.filter')).toBeTruthy());
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+
+			expect(goto).toHaveBeenCalledWith('/', { reset: false });
+			expect(store.has('rnrm.library.filter')).toBe(false);
+		});
+
+		it('is hidden at the defaults', async () => {
+			navigateTo('/');
+			render(LibraryPage);
+			await screen.findByAltText('4-in-1 Fun Pak box art');
+
+			expect(row()).toBeNull();
+			expect(screen.queryByRole('button', { name: 'Reset filters' })).toBeNull();
+		});
+
+		it('a non-default sort alone shows Reset without chips', async () => {
+			navigateTo('/?sort=rating');
+			render(LibraryPage);
+			await screen.findByAltText('4-in-1 Fun Pak box art');
+
+			expect(chipTexts()).toEqual([]);
+			expect(screen.getByRole('button', { name: 'Reset filters' })).toBeTruthy();
+		});
+	});
 
 	it('an unknown system gets the neutral callout colour (L4)', async () => {
 		games.items[0].system = 'sg1000';
