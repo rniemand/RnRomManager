@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -26,6 +27,7 @@ public class IngestPipelineSerialTests
     private WiiTestHandler _handler = null!;
     private IRomRepository _roms = null!;
     private IGameRepository _games = null!;
+    private IIngestReviewRepository _reviews = null!;
     private InfoJsonReader _reader = null!;
     private IngestPipeline _pipeline = null!;
     private DatCache _dats = null!;
@@ -47,8 +49,9 @@ public class IngestPipelineSerialTests
         _games.ListZipPathEquivalenceAsync(default!, default).ReturnsForAnyArgs(c =>
             c.Arg<IReadOnlyList<string>>().Select(path => new ZipPathEquivalenceGroup([path], [])).ToList());
         _reader = new InfoJsonReader([], systems);
+        _reviews = Substitute.For<IIngestReviewRepository>();
         _pipeline = new IngestPipeline(_dats, systems, _roms, _games, Substitute.For<ILibraryMirror>(),
-            Substitute.For<IIntegrityIssueRepository>(), Substitute.For<IIngestReviewRepository>(), _reader, TestMedia.Offline(),
+            Substitute.For<IIntegrityIssueRepository>(), _reviews, _reader, TestMedia.Offline(),
             options, Substitute.For<IAuditLog>(), new AuditPaths(options), TimeProvider.System, NullLogger<IngestPipeline>.Instance);
     }
 
@@ -121,6 +124,25 @@ public class IngestPipelineSerialTests
         Assert.That((result.Outcome, result.GameId), Is.EqualTo((IngestOutcome.Ingested, first.GameId)), result.Details);
         Assert.That(ReadGame().Roms.Select(r => (r.ExternalFileName, r.Identification.Method)),
             Is.EquivalentTo(new[] { (Title + ".iso", IdentificationMethod.Dat), (Title + ".wbfs", IdentificationMethod.Serial) }));
+    }
+
+    [TestCase(true, "Serial")]
+    [TestCase(false, null)]
+    public async Task AmbiguousGroup_QueuesMethodOnlyForASerialMatch(bool serial, string? expected)
+    {
+        LoadDat(Entry(Title));
+        _roms.ListGameIdsByBaseTitleAsync(default!, default!, default).ReturnsForAnyArgs([Guid.NewGuid(), Guid.NewGuid()]);
+        var extension = serial ? "wbfs" : "iso";
+        _handler.Header = Header(container: extension);
+
+        var result = await Import("bowling." + extension, serial ? Disc.Wbfs() : Disc.Build());
+
+        Assert.That((result.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Review, "AmbiguousGroup")));
+        var item = _reviews.ReceivedCalls().Single(call => call.GetMethodInfo().Name == nameof(IIngestReviewRepository.UpsertAsync))
+            .GetArguments().OfType<ReviewItem>().Single();
+        var identity = JsonNode.Parse(item.DatIdentification!)!.AsObject();
+        Assert.That(identity.ContainsKey("method"), Is.EqualTo(serial));
+        Assert.That(identity["method"]?.GetValue<string>(), Is.EqualTo(expected));
     }
 
     private static RomHeader Header(string container = "wbfs", string id = "RWBE01", byte disc = 0, byte version = 0) =>

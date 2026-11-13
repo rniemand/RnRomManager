@@ -345,13 +345,16 @@ public sealed class IngestPipeline(
         if (owners.Count > 1)
         {
             // T4: a TitleDb row also keeps the whole identity, so Attach doesn't depend on the DAT loaded later.
-            object queued = release.TitleId is null
-                ? new { datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName }
-                : new
+            object queued = release.Method switch
+            {
+                IdentificationMethod.Serial => new { datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName, method = nameof(IdentificationMethod.Serial) },
+                IdentificationMethod.TitleDb => new
                 {
                     datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName, titleId = release.TitleId,
                     baseTitle, regions = release.Regions, languages = release.Languages, revision = release.Revision, flags = release.Flags,
-                };
+                },
+                _ => new { datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName },
+            };
             return await QueueReviewAsync(file, file.Name, system.Id, "AmbiguousGroup", hashes, size, headers[system.Id], jobId,
                 [], queued, owners, cancellationToken).ConfigureAwait(false);
         }
