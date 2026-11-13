@@ -7,7 +7,16 @@ import type { Role } from './api/types';
  */
 
 export type HotkeyId =
-	'search' | 'nav.library' | 'nav.collections' | 'nav.ingestion' | 'nav.review' | 'review.next';
+	| 'search'
+	| 'nav.library'
+	| 'nav.collections'
+	| 'nav.ingestion'
+	| 'nav.review'
+	| 'review.next'
+	| 'nav.reports'
+	| 'nav.integrity'
+	| 'nav.admin'
+	| 'nav.deleted';
 export type EditableHotkeyId = Exclude<HotkeyId, 'search'>;
 export type Bindings = Record<EditableHotkeyId, string | null>;
 
@@ -61,6 +70,34 @@ export const actions: readonly HotkeyAction[] = [
 		id: 'review.next',
 		name: 'Open the first review item',
 		defaults: ['Alt+Shift+G'],
+		editable: true,
+		role: 'admin'
+	},
+	{
+		id: 'nav.reports',
+		name: 'Go to Reports',
+		defaults: ['Alt+Shift+R'],
+		editable: true,
+		role: null
+	},
+	{
+		id: 'nav.integrity',
+		name: 'Go to Integrity',
+		defaults: ['Alt+Shift+T'],
+		editable: true,
+		role: 'admin'
+	},
+	{
+		id: 'nav.admin',
+		name: 'Go to Admin',
+		defaults: ['Alt+Shift+A'],
+		editable: true,
+		role: 'admin'
+	},
+	{
+		id: 'nav.deleted',
+		name: 'Go to Deleted ROMs',
+		defaults: ['Alt+Shift+D'],
 		editable: true,
 		role: 'admin'
 	}

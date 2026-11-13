@@ -22,6 +22,10 @@ public static class Hotkeys
     public const string NavIngestion = "nav.ingestion";
     public const string NavReview = "nav.review";
     public const string ReviewNext = "review.next";
+    public const string NavReports = "nav.reports";
+    public const string NavIntegrity = "nav.integrity";
+    public const string NavAdmin = "nav.admin";
+    public const string NavDeleted = "nav.deleted";
 
     public const string FormatError = "Use Ctrl, Alt, Shift or Meta plus one key: A–Z, 0–9 or F1–F12.";
     public const string ModifierError = "Include Ctrl, Alt or Meta.";
@@ -44,6 +48,10 @@ public static class Hotkeys
         new(NavIngestion, "Go to Ingestion", ["Alt+Shift+I"], true, Roles.Admin),
         new(NavReview, "Go to Review", ["Alt+Shift+F"], true, Roles.Admin),
         new(ReviewNext, "Open the first review item", ["Alt+Shift+G"], true, Roles.Admin),
+        new(NavReports, "Go to Reports", ["Alt+Shift+R"], true, null),
+        new(NavIntegrity, "Go to Integrity", ["Alt+Shift+T"], true, Roles.Admin),
+        new(NavAdmin, "Go to Admin", ["Alt+Shift+A"], true, Roles.Admin),
+        new(NavDeleted, "Go to Deleted ROMs", ["Alt+Shift+D"], true, Roles.Admin),
     ];
 
     /// <summary>Global search's own bindings: no action may take them.</summary>

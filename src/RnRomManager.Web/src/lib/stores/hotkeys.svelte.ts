@@ -63,6 +63,14 @@ class HotkeyStore {
 				return goto(resolve('/ingestion'));
 			case 'nav.review':
 				return goto(resolve('/review'));
+			case 'nav.reports':
+				return goto(resolve('/reports'));
+			case 'nav.integrity':
+				return goto(resolve('/integrity'));
+			case 'nav.admin':
+				return goto(resolve('/admin/users'));
+			case 'nav.deleted':
+				return goto(resolve('/deleted'));
 			case 'review.next': {
 				let first: ReviewListItem | undefined;
 				try {

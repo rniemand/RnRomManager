@@ -37,7 +37,11 @@ describe('hotkey actions (B21)', () => {
 			['nav.collections', 'Alt+Shift+C', true, null],
 			['nav.ingestion', 'Alt+Shift+I', true, 'admin'],
 			['nav.review', 'Alt+Shift+F', true, 'admin'],
-			['review.next', 'Alt+Shift+G', true, 'admin']
+			['review.next', 'Alt+Shift+G', true, 'admin'],
+			['nav.reports', 'Alt+Shift+R', true, null],
+			['nav.integrity', 'Alt+Shift+T', true, 'admin'],
+			['nav.admin', 'Alt+Shift+A', true, 'admin'],
+			['nav.deleted', 'Alt+Shift+D', true, 'admin']
 		]);
 	});
 });
@@ -145,6 +149,14 @@ describe('actionFor', () => {
 		expect(actionFor('Alt+Shift+I', defaultBindings(), [])).toBeNull();
 		expect(actionFor('Alt+Shift+I', defaultBindings(), ['admin'])).toBe('nav.ingestion');
 		expect(actionFor('Alt+Shift+Q', defaultBindings(), ['admin'])).toBeNull();
+		// K1: Reports for everyone; Integrity, Admin and Deleted ROMs for admins only.
+		expect(actionFor('Alt+Shift+R', defaultBindings(), [])).toBe('nav.reports');
+		expect(actionFor('Alt+Shift+D', defaultBindings(), [])).toBeNull();
+		expect(actionFor('Alt+Shift+D', defaultBindings(), ['admin'])).toBe('nav.deleted');
+		// A stored override on a new default key: the earlier action in table order fires.
+		expect(actionFor('Alt+Shift+R', bindings({ 'nav.library': 'Alt+Shift+R' }), [])).toBe(
+			'nav.library'
+		);
 	});
 
 	it('a duplicated binding fires only the first action in table order', () => {
