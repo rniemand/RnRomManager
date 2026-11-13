@@ -27,6 +27,11 @@
 		type LibraryFilters,
 		type LibrarySort
 	} from '#lib/libraryQuery.js';
+	import {
+		libraryFilterParams,
+		readSavedLibraryFilter,
+		saveLibraryFilter
+	} from '#lib/libraryFilter.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 
 	type View = 'grid' | 'list';
@@ -92,6 +97,23 @@
 	function update(changes: Partial<LibraryFilters>): void {
 		go({ ...filters, page: 1, ...changes });
 	}
+
+	// L7: on mount, a URL without filter params restores the saved filter (parsed, so bad values fall back);
+	// after that every URL state is saved, so an explicit URL wins and a later bare `/` clears it.
+	let restoring =
+		!libraryFilterParams.some((p) => page.url.searchParams.has(p)) && !!readSavedLibraryFilter();
+	$effect(() => {
+		const search = toSearch(filters);
+		untrack(() => {
+			if (restoring) {
+				restoring = false;
+				const saved = toSearch(parseFilters(new URLSearchParams(readSavedLibraryFilter())));
+				saveLibraryFilter(saved);
+				// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
+				void goto(`/${saved}`, { replace: true, reset: false });
+			} else saveLibraryFilter(search);
+		});
+	});
 
 	function onSearchInput(): void {
 		clearTimeout(searchTimer);

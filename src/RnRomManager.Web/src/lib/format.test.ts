@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { flattenSettings, formatDateTime, formatKey, formatSize, formatValue } from './format';
+import {
+	flattenSettings,
+	formatCount,
+	formatDateTime,
+	formatKey,
+	formatSize,
+	formatValue
+} from './format';
 
 // The number part follows the browser's locale, so expectations are built the same way.
 const oneDecimal = (n: number) =>
@@ -92,4 +99,13 @@ describe('flattenSettings', () => {
 			['b', null]
 		]);
 	});
+});
+
+describe('formatCount (L5)', () => {
+	it.each([
+		[0, '0'],
+		[999, '999'],
+		[1250, '1,250'],
+		[1234567, '1,234,567']
+	])('%d -> %s', (n, expected) => expect(formatCount(n)).toBe(expected));
 });

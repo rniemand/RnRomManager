@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
+import { navigateTo, testUrl as url } from '#lib/testing/url.svelte.js';
 
 const goto = vi.fn();
-const url = { current: new URL('http://localhost/?system=gb&letter=%23') };
 
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => goto(...args) }));
 vi.mock('$app/state', () => ({
@@ -71,7 +71,8 @@ describe('library page', () => {
 		store = new Map();
 		vi.stubGlobal('localStorage', {
 			getItem: (key: string) => store.get(key) ?? null,
-			setItem: (key: string, value: string) => void store.set(key, value)
+			setItem: (key: string, value: string) => void store.set(key, value),
+			removeItem: (key: string) => void store.delete(key)
 		});
 		vi.stubGlobal('fetch', (input: string) => {
 			requested.push(input);
@@ -178,6 +179,68 @@ describe('library page', () => {
 		expect(row.querySelector('.badge')!.textContent!.trim()).toBe('Game Boy');
 		expect(row.querySelector('.badge')!.classList.contains('text-bg-success')).toBe(true);
 		expect(row.querySelector('[aria-label="Rate 1 of 5"]')).toBeTruthy();
+	});
+
+	describe('saved filter (L7)', () => {
+		const savedKey = 'rnrm.library.filter';
+		const replace = { replace: true, reset: false };
+
+		it.each(['/', '/?view=list'])('%s on mount restores the saved filter', async (path) => {
+			navigateTo(path);
+			store.set(savedKey, '?system=gb&page=2');
+			render(LibraryPage);
+
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/?system=gb&page=2', replace));
+		});
+
+		it('an explicit URL wins and is saved', async () => {
+			navigateTo('/?region=USA');
+			store.set(savedKey, '?system=gb');
+			render(LibraryPage);
+
+			await vi.waitFor(() => expect(store.get(savedKey)).toBe('?region=USA'));
+			expect(goto).not.toHaveBeenCalled();
+		});
+
+		it('a bare URL with nothing saved stays put and saves nothing', async () => {
+			navigateTo('/');
+			render(LibraryPage);
+
+			await screen.findByAltText('4-in-1 Fun Pak box art');
+			expect(goto).not.toHaveBeenCalled();
+			expect(store.has(savedKey)).toBe(false);
+		});
+
+		it('going to bare / while mounted clears the saved filter', async () => {
+			navigateTo('/?system=gb');
+			render(LibraryPage);
+			await vi.waitFor(() => expect(store.get(savedKey)).toBe('?system=gb'));
+
+			navigateTo('/');
+
+			await vi.waitFor(() => expect(store.has(savedKey)).toBe(false));
+			expect(goto).not.toHaveBeenCalled();
+		});
+
+		it('a saved bad sort, dir, letter or page falls back to the defaults', async () => {
+			navigateTo('/');
+			store.set(savedKey, '?system=gb&sort=nope&dir=up&letter=%3F&page=-3');
+			render(LibraryPage);
+
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/?system=gb', replace));
+			expect(store.get(savedKey)).toBe('?system=gb');
+		});
+
+		it('every later filter change is saved', async () => {
+			goto.mockImplementation((path: string) => navigateTo(path));
+			navigateTo('/?system=gb');
+			render(LibraryPage);
+
+			await fireEvent.click(await screen.findByRole('button', { name: /Favourites/ }));
+
+			await vi.waitFor(() => expect(store.get(savedKey)).toBe('?system=gb&favourite=true'));
+			goto.mockReset();
+		});
 	});
 
 	it('restores a saved list view on mount', async () => {
