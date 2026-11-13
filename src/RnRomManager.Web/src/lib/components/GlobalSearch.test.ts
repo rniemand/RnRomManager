@@ -259,7 +259,11 @@ describe('GlobalSearch', () => {
 		expect(cells[1].textContent!.trim()).toBe('Tetris');
 		expect(cells[2].className).toContain('badge');
 		expect(cells[2].textContent!.trim()).toBe('GB');
-		expect(cells[3].className).toBe('d-none d-md-block small text-body-secondary text-nowrap');
+		// The active (first) row isn't muted: grey on blue fails contrast; other rows are.
+		expect(cells[3].className).toBe('d-none d-md-block small text-nowrap');
+		expect([...second.children][3].className).toBe(
+			'd-none d-md-block small text-nowrap text-body-secondary'
+		);
 		expect(cells[3].textContent!.replace(/\s+/g, ' ').trim()).toBe('1989 · USA, Europe · 32.0 KiB');
 		expect(cells[4].className).toBe('d-none d-md-block');
 		// Empty parts are left out.

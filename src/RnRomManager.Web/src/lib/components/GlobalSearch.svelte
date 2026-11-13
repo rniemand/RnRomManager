@@ -257,7 +257,7 @@
 										<Icon name="collections" />
 									{/if}
 									<span>{collection.name}</span>
-									<span class="text-body-secondary">· {collection.gameCount}</span>
+									<span class:text-body-secondary={i !== active}>· {collection.gameCount}</span>
 								</div>
 							{/each}
 						</li>
@@ -297,7 +297,7 @@
 							<div class="min-w-0">
 								<div class="text-truncate fw-semibold">{game.displayTitle}</div>
 								{#if game.matchedOn}
-									<div class="text-truncate small text-body-secondary">
+									<div class="text-truncate small" class:text-body-secondary={i !== active}>
 										{matchLabels[game.matchedOn.field]}: {game.matchedOn.value}
 									</div>
 								{/if}
@@ -307,7 +307,11 @@
 								name={game.systemShortName}
 								title={game.systemName}
 							/>
-							<div class="d-none d-md-block small text-body-secondary text-nowrap">
+							<!-- Muted text doesn't contrast on the active (blue) row, which takes its own colour. -->
+							<div
+								class="d-none d-md-block small text-nowrap"
+								class:text-body-secondary={i !== active}
+							>
 								{meta}{#if game.primarySizeBytes != null}{meta ? ' · ' : ''}<FileSize
 										bytes={game.primarySizeBytes}
 									/>{/if}
