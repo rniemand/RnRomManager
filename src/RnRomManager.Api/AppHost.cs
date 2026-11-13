@@ -181,6 +181,8 @@ public static class AppHost
         builder.Services.AddSystemHandler<NesHandler>();
         builder.Services.AddSystemHandler<SnesHandler>();
         builder.Services.AddSystemHandler<Atari2600Handler>();
+        builder.Services.AddSystemHandler<AtariLynxHandler>();
+        builder.Services.AddSystemHandler<AtariJaguarHandler>();
         builder.Services.AddSystemHandler<ColecoVisionHandler>();
         builder.Services.AddSystemHandler<GameGearHandler>();
         builder.Services.AddSystemHandler<MasterSystemHandler>();

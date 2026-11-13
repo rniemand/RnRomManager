@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 32, 23)]
-    [TestCase(SeedSet.Full, 232, 223)]
+    [TestCase(SeedSet.Basic, 34, 25)]
+    [TestCase(SeedSet.Full, 234, 225)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -153,6 +153,18 @@ public class SeedIngestTests
                 Is.EqualTo(("LoROM", "MODE SEVEN RALLY", 8)));
             Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1992, new[] { "Racing" })));
         }
+        var lynx = infos.Single(g => g.System == "lynx").Roms.Single();
+        Assert.That(lynx.FileName, Is.EqualTo("Prism Racer (USA, Europe).lnx"));
+        Assert.That(lynx.Header!["bank0PageSize"]!.GetValue<int>(), Is.EqualTo(512));
+        Assert.That(lynx.Header["bank1PageSize"]!.GetValue<int>(), Is.Zero);
+        Assert.That(lynx.Header["version"]!.GetValue<int>(), Is.EqualTo(1));
+        Assert.That(lynx.Header["title"]!.GetValue<string>(), Is.EqualTo("PRISM RACER"));
+        Assert.That(lynx.Header["manufacturer"]!.GetValue<string>(), Is.EqualTo("RNRM"));
+        Assert.That(lynx.Header["rotation"]!.GetValue<string>(), Is.EqualTo("none"));
+        var jaguar = infos.Single(g => g.System == "jaguar").Roms.Single();
+        Assert.That(jaguar.FileName, Is.EqualTo("Cobalt Drift (World).j64"));
+        Assert.That(jaguar.Header, Is.Null);
+
         var lanes = Directory.GetFiles(Path.Combine(factory.Root, "roms", "a2600", "L"), "*.zip").Single();
         using (var zip = LibraryZip.Open(lanes, factory.Services.GetRequiredService<InfoJsonReader>()))
         {

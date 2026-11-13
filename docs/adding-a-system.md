@@ -64,6 +64,8 @@ Storage of every shipped system:
 | Nintendo Entertainment System | `nes` | true | Libretro |
 | Super Nintendo Entertainment System | `snes` | true | Libretro |
 | Atari 2600 | `a2600` | true | Libretro |
+| Atari Jaguar | `jaguar` | true | Libretro |
+| Atari Lynx | `lynx` | true | Libretro |
 | ColecoVision | `coleco` | true | Libretro |
 | Game Gear | `gg` | true | Libretro |
 | Master System | `sms` | true | Libretro |

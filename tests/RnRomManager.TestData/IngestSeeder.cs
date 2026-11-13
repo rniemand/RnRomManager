@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.IO.Compression;
 
 namespace RnRomManager.TestData;
@@ -12,6 +13,8 @@ public static class IngestSeeder
     public const string NesDat = "Nintendo - Nintendo Entertainment System";
     public const string SnesDat = "Nintendo - Super Nintendo Entertainment System";
     public const string Atari2600Dat = "Atari - 2600";
+    public const string LynxDat = "Atari - Lynx";
+    public const string JaguarDat = "Atari - Jaguar";
     public const string ColecoVisionDat = "Coleco - ColecoVision";
     public const string GameGearDat = "Sega - Game Gear";
     public const string MasterSystemDat = "Sega - Master System - Mark III";
@@ -47,6 +50,8 @@ public static class IngestSeeder
         Directory.CreateDirectory(Path.Combine(ingest, "nes"));
         Directory.CreateDirectory(Path.Combine(ingest, "snes"));
         Directory.CreateDirectory(Path.Combine(ingest, "a2600"));
+        Directory.CreateDirectory(Path.Combine(ingest, "lynx"));
+        Directory.CreateDirectory(Path.Combine(ingest, "jaguar"));
         Directory.CreateDirectory(Path.Combine(ingest, "coleco"));
         Directory.CreateDirectory(Path.Combine(ingest, "gg"));
         Directory.CreateDirectory(Path.Combine(ingest, "sms"));
@@ -107,6 +112,21 @@ public static class IngestSeeder
         { ReleaseYear = 1982, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Shooter"] };
         // A loose .bin: ingestion must accept it and store the DAT's .a26 name (A3).
         Loose("a2600", "01-laser-lanes.bin", laserRom);
+
+        var lynxRom = new byte[64 + 128 * 1024];
+        new Random(1202).NextBytes(lynxRom.AsSpan(64));
+        "LYNX"u8.CopyTo(lynxRom);
+        BinaryPrimitives.WriteUInt16LittleEndian(lynxRom.AsSpan(0x04), 512);
+        BinaryPrimitives.WriteUInt16LittleEndian(lynxRom.AsSpan(0x08), 1);
+        "PRISM RACER"u8.CopyTo(lynxRom.AsSpan(0x0A));
+        "RNRM"u8.CopyTo(lynxRom.AsSpan(0x2A));
+        var prism = new FixtureGame("Prism Racer (USA, Europe)", "Prism Racer (USA, Europe).lnx", lynxRom);
+        Loose("lynx", "01-prism-racer.lnx", lynxRom);
+
+        var jaguarRom = new byte[128 * 1024];
+        new Random(1203).NextBytes(jaguarRom);
+        var cobalt = new FixtureGame("Cobalt Drift (World)", "Cobalt Drift (World).j64", jaguarRom);
+        Loose("jaguar", "01-cobalt-drift.j64", jaguarRom);
         var pursuitRom = new byte[8192];
         new Random(1301).NextBytes(pursuitRom);
         (pursuitRom[0], pursuitRom[1]) = (0xAA, 0x55);
@@ -216,7 +236,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally] },
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally] },
             titleDb: new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = titleDb }, layouts: RedumpLayouts);
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);

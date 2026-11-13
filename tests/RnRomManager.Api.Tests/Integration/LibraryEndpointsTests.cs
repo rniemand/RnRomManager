@@ -55,6 +55,8 @@ public partial class LibraryEndpointsTests
             [IngestSeeder.NesDat] = [],
             [IngestSeeder.SnesDat] = [],
             [IngestSeeder.Atari2600Dat] = [],
+            [IngestSeeder.LynxDat] = [],
+            [IngestSeeder.JaguarDat] = [],
             [IngestSeeder.ColecoVisionDat] = [],
             [IngestSeeder.GameGearDat] = [],
             [IngestSeeder.MasterSystemDat] = [],
@@ -142,8 +144,8 @@ public partial class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "s32x", "a2600", "coleco", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "n64", "nes", "switch", "psx", "psp", "saturn", "snes", "tg16", "wii", "x360" }));
-        Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(13).True);
+            Is.EqualTo(new[] { "s32x", "a2600", "jaguar", "lynx", "coleco", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "n64", "nes", "switch", "psx", "psp", "saturn", "snes", "tg16", "wii", "x360" }));
+        Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(15).True);
         Assert.That(Find("switch").GetProperty("embedRoms").GetBoolean(), Is.False, "Switch stores its ROMs outside the ZIP");
         JsonElement Find(string id) => systems.EnumerateArray().Single(s => s.GetProperty("id").GetString() == id);
         var gb = Find("gb");
@@ -155,7 +157,7 @@ public partial class LibraryEndpointsTests
         Assert.That((gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()), Is.EqualTo((0, 0)));
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
-            "32X", "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo Entertainment System", "Nintendo Switch",
+            "32X", "Atari 2600", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo Entertainment System", "Nintendo Switch",
             "PlayStation", "PlayStation Portable", "Saturn", "Super Nintendo Entertainment System", "TurboGrafx-16", "Wii", "Xbox 360"
         }));
     }
