@@ -85,14 +85,15 @@ public partial class MediaRetryJobTests
     };
 
     /// <summary>Writes a one-ROM game ZIP with the given images; <paramref name="datGameName"/> null = a Manual release.</summary>
-    private async Task<GameRow> Add(string title, string? datGameName, bool defaultBoxArt = true, bool boxArt = true, bool snap = false)
+    private async Task<GameRow> Add(string title, string? datGameName, bool defaultBoxArt = true, bool boxArt = true, bool snap = false,
+        IdentificationMethod method = IdentificationMethod.Dat)
     {
         var rom = RomBytes(++_seed);
         var info = Rom($"{title}.gb", rom) with
         {
             Identification = datGameName is null
                 ? new InfoJsonIdentification(IdentificationMethod.Manual)
-                : new InfoJsonIdentification(IdentificationMethod.Dat, "Nintendo - Game Boy", "1", datGameName),
+                : new InfoJsonIdentification(method, "Nintendo - Game Boy", "1", datGameName),
         };
         var realArt = PngTests.Png(100, 100);
         var snapArt = PngTests.Png(160, 144);
@@ -201,6 +202,18 @@ public partial class MediaRetryJobTests
 
         Assert.That(summary, Is.EqualTo(Summary(skipped: 2)));
         Assert.That(_server.Requests, Is.Empty);
+    }
+
+    [Test]
+    public async Task SerialOnlyGames_AreNotSkipped_LikeDat()
+    {
+        var serial = await Add("Tetris", "Tetris (World)", method: IdentificationMethod.Serial);
+        _routes[GbBox + "Tetris%20%28World%29.png"] = () => StubHttpHandler.Bytes(PngTests.Png(300, 400));
+
+        var summary = await RunJob(serial);
+
+        Assert.That(summary, Is.EqualTo(Summary(updated: 1)));
+        Assert.That(_server.Requests, Is.Not.Empty);
     }
 
     [Test]

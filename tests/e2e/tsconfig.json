@@ -7,5 +7,5 @@
 		"noEmit": true,
 		"types": ["node"]
 	},
-	"include": ["*.ts", "specs/**/*.ts"]
+	"include": ["*.ts", "specs/**/*.ts", "screenshots/**/*.ts"]
 }

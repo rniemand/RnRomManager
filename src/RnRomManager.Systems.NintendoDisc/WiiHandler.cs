@@ -4,7 +4,7 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Systems.NintendoDisc;
 
 /// <summary>
-/// Nintendo Wii: one <c>.iso</c> per disc. Same size limits as GameCube on purpose: ingest checks size against the first handler in the family that lists the extension.
+/// Nintendo Wii: one <c>.iso</c> or <c>.wbfs</c> per disc (a <c>.wbfs</c> is matched by game id). Same size limits as GameCube on purpose: ingest checks size against the first handler in the family that lists the extension.
 /// Stored outside the ZIP under exact names (disc systems B4, B5); the redump DAT has no metadat. The disc header (B6) tells GameCube and Wii apart.
 /// </summary>
 public sealed class WiiHandler : ISystemHandler
@@ -17,7 +17,7 @@ public sealed class WiiHandler : ISystemHandler
     public string Family => "nintendo-disc";
 
     /// <summary><c>[0]</c> is what a file resolved through Review without a DAT entry is stored as.</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".iso"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".iso", ".wbfs"];
 
     public long MinRomSizeBytes => 32 * 1024;
 

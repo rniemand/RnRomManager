@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#f7e8d1"/>
+  <path d="M90 142h332v198q0 30-30 30H120q-30 0-30-30z" fill="#302a25" stroke="#1b1713" stroke-width="6"/>
+  <rect x="154" y="165" width="204" height="158" rx="12" fill="#161413"/>
+  <rect x="171" y="183" width="170" height="120" rx="4" fill="#ffbb62"/>
+  <path d="M180 287l45-56 39 41 29-34 38 49z" fill="#b9601d"/>
+  <path d="M110 240h32m-16-16v32" stroke="#968676" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="380" cy="253" r="9" fill="#d07a32"/>
+  <circle cx="402" cy="235" r="9" fill="#d07a32"/>
+  <text x="256" y="352" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="21" font-weight="700" letter-spacing="4" fill="#f7e8d1">ATARI LYNX</text>
+</svg>

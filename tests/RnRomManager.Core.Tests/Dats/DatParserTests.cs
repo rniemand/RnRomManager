@@ -48,7 +48,30 @@ public class DatParserTests
 
         Assert.That(roms.Select(r => r.GameName), Is.EqualTo(new[] { "Tetris (World) (Rev 1)", "Tetris 2 (USA)", "Yelu Wangzi (Prince Yeh Rude) (Taiwan) (Unl)" }));
         Assert.That(roms[1], Is.EqualTo(new DatRom("Tetris 2 (USA)", "Tetris 2 (USA).gb", 131072, "aa4a1edb",
-            "9ddc6f4f0dc369008cbd2ac4ec561e75", "ec7b3419c08f1a5713afff2b26c1534d91602338")));
+            "9ddc6f4f0dc369008cbd2ac4ec561e75", "ec7b3419c08f1a5713afff2b26c1534d91602338", "DMG-TP-USA")));
+        Assert.That(roms[0].Serial, Is.Null, "no serial");
+    }
+
+    [Test]
+    public void Serial_FromTheRomBlock_ElseTheGameBlock()
+    {
+        const string text = """
+            clrmamepro ( name "Nintendo - Wii" )
+            game (
+                name "A (USA)"
+                serial "RVL-GAME-USA"
+                rom ( name "A (USA).iso" size 1 crc 00000001 md5 00000000000000000000000000000001 sha1 0000000000000000000000000000000000000001 serial "RVL-ROMS-USA" )
+            )
+            game (
+                name "B (USA)"
+                serial "RVL-BBBE-USA, RVL-BBBP-EUR"
+                rom ( name "B (USA).iso" size 1 crc 00000002 md5 00000000000000000000000000000002 sha1 0000000000000000000000000000000000000002 )
+            )
+            """;
+
+        var roms = DatFiles.ParseNoIntro(text).Roms;
+
+        Assert.That(roms.Select(r => r.Serial), Is.EqualTo(new[] { "RVL-ROMS-USA", "RVL-BBBE-USA, RVL-BBBP-EUR" }));
     }
 
     [Test]

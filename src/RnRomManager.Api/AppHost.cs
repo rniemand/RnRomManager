@@ -135,6 +135,7 @@ public static class AppHost
         builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV3>();
         builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV4>();
         builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV5>();
+        builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV6>();
         builder.Services.AddSingleton<InfoJsonReader>();
         builder.Services.AddSingleton<DbSync>();
         builder.Services.AddSingleton<LibraryFiles>();
@@ -173,26 +174,7 @@ public static class AppHost
         builder.Services.Configure<HostOptions>(options => options.ShutdownTimeout = TimeSpan.FromSeconds(30));
         builder.Services.ConfigureHttpJsonOptions(options => options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
         builder.Services.AddAppAuth();
-        builder.Services.AddSystemHandler<GameBoyHandler>();
-        builder.Services.AddSystemHandler<GameBoyColorHandler>();
-        builder.Services.AddSystemHandler<GameBoyAdvanceHandler>();
-        builder.Services.AddSystemHandler<Nintendo64Handler>();
-        builder.Services.AddSystemHandler<NesHandler>();
-        builder.Services.AddSystemHandler<SnesHandler>();
-        builder.Services.AddSystemHandler<Atari2600Handler>();
-        builder.Services.AddSystemHandler<ColecoVisionHandler>();
-        builder.Services.AddSystemHandler<GameGearHandler>();
-        builder.Services.AddSystemHandler<MasterSystemHandler>();
-        builder.Services.AddSystemHandler<MegaDriveHandler>();
-        builder.Services.AddSystemHandler<Sega32xHandler>();
-        builder.Services.AddSystemHandler<TurboGrafx16Handler>();
-        builder.Services.AddSystemHandler<SwitchHandler>();
-        builder.Services.AddSystemHandler<PlayStationHandler>();
-        builder.Services.AddSystemHandler<PlayStationPortableHandler>();
-        builder.Services.AddSystemHandler<GameCubeHandler>();
-        builder.Services.AddSystemHandler<WiiHandler>();
-        builder.Services.AddSystemHandler<Xbox360Handler>();
-        builder.Services.AddSystemHandler<SaturnHandler>();
+        AddSystemHandlers(builder.Services);
 
         // Keys live in the DB so cookies survive restarts (spec §9.2).
         builder.Services.AddSingleton<IXmlRepository, DbXmlRepository>();
@@ -201,6 +183,32 @@ public static class AppHost
             .Configure<IXmlRepository>((options, repository) => options.XmlRepository = repository);
 
         return builder;
+    }
+
+    public static void AddSystemHandlers(IServiceCollection services)
+    {
+        services.AddSystemHandler<GameBoyHandler>();
+        services.AddSystemHandler<GameBoyColorHandler>();
+        services.AddSystemHandler<GameBoyAdvanceHandler>();
+        services.AddSystemHandler<Nintendo64Handler>();
+        services.AddSystemHandler<NesHandler>();
+        services.AddSystemHandler<SnesHandler>();
+        services.AddSystemHandler<Atari2600Handler>();
+        services.AddSystemHandler<AtariLynxHandler>();
+        services.AddSystemHandler<AtariJaguarHandler>();
+        services.AddSystemHandler<ColecoVisionHandler>();
+        services.AddSystemHandler<GameGearHandler>();
+        services.AddSystemHandler<MasterSystemHandler>();
+        services.AddSystemHandler<MegaDriveHandler>();
+        services.AddSystemHandler<Sega32xHandler>();
+        services.AddSystemHandler<TurboGrafx16Handler>();
+        services.AddSystemHandler<SwitchHandler>();
+        services.AddSystemHandler<PlayStationHandler>();
+        services.AddSystemHandler<PlayStationPortableHandler>();
+        services.AddSystemHandler<GameCubeHandler>();
+        services.AddSystemHandler<WiiHandler>();
+        services.AddSystemHandler<Xbox360Handler>();
+        services.AddSystemHandler<SaturnHandler>();
     }
 
     // spec §11: hashed SvelteKit assets are immutable; everything else (index.html, theme.js) must revalidate.

@@ -493,7 +493,9 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 else
                 {
                     // Keep the queued identity even when the loaded DATs have changed.
-                    identification = new(IdentificationMethod.Dat, dat["datName"]!.GetValue<string>(), dat["datVersion"]?.GetValue<string>(), datGameName);
+                    var method = dat["method"]?.GetValue<string>() == nameof(IdentificationMethod.Serial)
+                        ? IdentificationMethod.Serial : IdentificationMethod.Dat;
+                    identification = new(method, dat["datName"]!.GetValue<string>(), dat["datVersion"]?.GetValue<string>(), datGameName);
                     // B10: a FileSets release takes its tags from the DAT game name, as ingest does.
                     var tags = NoIntroName.Parse(system.FileSets ? datGameName : Path.GetFileNameWithoutExtension(filename));
                     title = NoIntroName.Parse(datGameName).BaseTitle;

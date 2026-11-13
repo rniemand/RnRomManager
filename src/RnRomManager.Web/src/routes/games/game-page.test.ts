@@ -430,7 +430,8 @@ describe('game detail page', () => {
 		it.each([
 			['Dat', 'DAT'],
 			['Manual', 'Manual'],
-			['TitleDb', 'Title DB']
+			['TitleDb', 'Title DB'],
+			['Serial', 'Game ID']
 		] as const)('Identified by %s reads %s; no DAT rows without a DAT', async (method, text) => {
 			const detail = game([1]);
 			detail.roms[0].identificationMethod = method as 'Dat';

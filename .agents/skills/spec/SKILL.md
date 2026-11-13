@@ -59,6 +59,6 @@ Keep the user's time and the token count low: read only what the request touches
 4. **Spec turns out wrong or unclear:** don't guess and don't silently match the spec to the code. Ask the user, update the spec section and § Decisions in the same commit as the code.
 5. **Finish**, after the last step:
    1. `git merge origin/main` (resolve conflicts on the branch, asking the user when the right resolution isn't clear), then `pwsh scripts/test-all.ps1` and `pwsh scripts/test-e2e.ps1` must both pass (Docker running). If one fails, fix it on the branch and rerun; never open the PR with failing tests.
-   2. Check the doc rule: every changed behaviour is in its doc (`docs/`, `README.md`, spec).
+   2. Check the doc rule: every changed behaviour is in its doc (`docs/`, `README.md`, spec). Changes to system storage, formats, DAT or browser play update the README supported-systems table.
    3. `git mv` the spec to `specs/completed/`, set `status: completed`, commit `Complete spec: <title>`.
    4. Push and open a PR from `dev/<slug>` to `main` titled `<title>` — the branch's first and only PR, carrying the spec and its implementation together. The body is the spec's summary, the steps done, test results and anything deferred or risky. Stop there: merging is the maintainer's call.

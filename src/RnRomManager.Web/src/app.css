@@ -86,6 +86,19 @@
 	background-color: var(--bs-a2600) !important;
 }
 
+:root {
+	--bs-lynx: #e67700;
+	--bs-jaguar: #c2255c;
+}
+.text-bg-lynx {
+	color: #000 !important;
+	background-color: var(--bs-lynx) !important;
+}
+.text-bg-jaguar {
+	color: #fff !important;
+	background-color: var(--bs-jaguar) !important;
+}
+
 /* ColecoVision system colour (C5): Coleco blue, same in both themes; white on it is AA. */
 :root {
 	--bs-coleco: #1d3f8f;

@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -382,6 +383,31 @@ public class ReviewResolverExternalTests
         Assert.That(File.Exists(Path.Combine(Path.GetDirectoryName(Path.Combine(_paths.Roms, zipPath))!, fileName)), Is.True, "moved next to the ZIP");
         Assert.That(File.Exists(_item.SourcePath), Is.False);
         await _reviews.Received(1).SetResolutionAsync(1, "Resolved", gameId, 42, Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
+    }
+
+    [TestCase("Serial", IdentificationMethod.Serial)]
+    [TestCase(null, IdentificationMethod.Dat)]
+    public async Task AttachNone_PreservesTheQueuedIdentificationMethod(string? method, IdentificationMethod expected)
+    {
+        var (gameId, zipPath) = await DiscGameAsync("dump.iso");
+        const string fileName = "My Game (Europe) (Disc 2).iso";
+        var identity = new JsonObject
+        {
+            ["datName"] = "Fixture DAT", ["datVersion"] = "fixture-1", ["datGameName"] = "My Game (Europe) (Disc 2)",
+            ["romName"] = fileName,
+        };
+        if (method is not null)
+            identity["method"] = method;
+        _item = _item with
+        {
+            Reason = "AmbiguousGroup", DatIdentification = identity.ToJsonString(), CandidateGameIds = $"[\"{gameId}\"]",
+        };
+
+        var request = new ReviewResolutionRequest { Action = "Attach", Flag = "None", TargetGameId = gameId };
+        var result = await _resolver.ResolveInJobAsync(1, request, Actor, default);
+
+        await AssertAddedAsync(result, gameId, zipPath, fileName);
+        Assert.That(StoredRelease(zipPath, fileName).Identification.Method, Is.EqualTo(expected));
     }
 
     [Test]

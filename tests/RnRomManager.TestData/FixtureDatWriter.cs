@@ -78,7 +78,10 @@ public static class FixtureDatWriter
             // Upper-case hashes like the real libretro DATs.
             text.Append($"game (\n\tname \"{game.GameName}\"\n\trom ( name \"{game.RomName}\" size {game.Rom.Length} ")
                 .Append($"crc {Crc32.ToHex(game.Rom).ToUpperInvariant()} md5 {Convert.ToHexString(MD5.HashData(game.Rom))} ")
-                .Append($"sha1 {Convert.ToHexString(SHA1.HashData(game.Rom))} )\n)\n");
+                .Append($"sha1 {Convert.ToHexString(SHA1.HashData(game.Rom))}");
+            if (game.Serial is { } serial)
+                text.Append($" serial \"{serial}\"");
+            text.Append(" )\n)\n");
         }
         return text.ToString();
     }

@@ -2,7 +2,6 @@ import { defineConfig, devices } from '@playwright/test';
 
 // Run through scripts/test-e2e.ps1 (spec §15.3), which starts docker-compose.e2e.yml and sets these variables.
 export default defineConfig({
-	testDir: './specs',
 	// The specs share one seeded library and walk through it in order.
 	fullyParallel: false,
 	workers: 1,
@@ -16,5 +15,20 @@ export default defineConfig({
 		trace: 'retain-on-failure',
 		screenshot: 'only-on-failure'
 	},
-	projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }]
+	projects: [
+		{ name: 'chromium', testDir: './specs', use: { ...devices['Desktop Chrome'] } },
+		...(process.env.E2E_SCREENSHOTS === '1'
+			? [
+					{
+						name: 'screenshots',
+						testDir: './screenshots',
+						use: {
+							...devices['Desktop Chrome'],
+							viewport: { width: 1440, height: 900 },
+							colorScheme: 'light' as const
+						}
+					}
+				]
+			: [])
+	]
 });

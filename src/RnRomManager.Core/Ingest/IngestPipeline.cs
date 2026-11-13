@@ -294,6 +294,15 @@ public sealed class IngestPipeline(
                     && TitleDb.TitleIdFrom(headers[x.Handler.Id]?.Fields, file.Name) is { } titleId
                     ? TitleDb.Match(titleId, file.Name, titles.ByTitleId) : null))
             .FirstOrDefault(x => x.Rom is not null || x.Title is not null);
+        var method = IdentificationMethod.Dat;
+        if (match.Rom is null && match.Title is null &&
+            Path.GetExtension(file.Name).Equals(".wbfs", StringComparison.OrdinalIgnoreCase) &&
+            candidates.FirstOrDefault(h => h.Id == "wii") is { } wii && dats.For(wii.Id) is { } wiiDat &&
+            MatchWbfs(wiiDat, headers[wii.Id]) is { } serialRom)
+        {
+            match = (wii, wiiDat, serialRom, null);
+            method = IdentificationMethod.Serial;
+        }
         if (match.Rom is null && match.Title is null)
         {
             // Step 5. Every ReadHeader null (headerless system) counts as plausible.
@@ -320,7 +329,7 @@ public sealed class IngestPipeline(
         var release = match.Title is { } title
             ? new Release(title.RomFileName, title.BaseTitle, title.GameName, [], title.Languages, title.Revision, title.Flags,
                 IdentificationMethod.TitleDb, TitleDb.MetadataOf(title.Base), title.TitleId)
-            : LibretroRelease(match.Rom!, store, file, external, match.Handler.FileSets);
+            : LibretroRelease(match.Rom!, store, file, external, match.Handler.FileSets) with { Method = method };
         // I3/E3: an external release's name is a portable logical name within budget. B10: a FileSets name is kept exactly.
         var romName = external && !system.FileSets ? ExternalRomName.AllocateLogicalName(release.FileName, new ExternalNameReservations([])) : release.FileName;
 
@@ -336,13 +345,16 @@ public sealed class IngestPipeline(
         if (owners.Count > 1)
         {
             // T4: a TitleDb row also keeps the whole identity, so Attach doesn't depend on the DAT loaded later.
-            object queued = release.TitleId is null
-                ? new { datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName }
-                : new
+            object queued = release.Method switch
+            {
+                IdentificationMethod.Serial => new { datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName, method = nameof(IdentificationMethod.Serial) },
+                IdentificationMethod.TitleDb => new
                 {
                     datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName, titleId = release.TitleId,
                     baseTitle, regions = release.Regions, languages = release.Languages, revision = release.Revision, flags = release.Flags,
-                };
+                },
+                _ => new { datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName },
+            };
             return await QueueReviewAsync(file, file.Name, system.Id, "AmbiguousGroup", hashes, size, headers[system.Id], jobId,
                 [], queued, owners, cancellationToken).ConfigureAwait(false);
         }
@@ -679,7 +691,31 @@ public sealed class IngestPipeline(
     /// <summary>B3: a Redump rom name's track tag, e.g. <c> (Track 1)</c> or <c> (Track 02)</c>.</summary>
     private static readonly System.Text.RegularExpressions.Regex TrackTag = new(@" \(Track \d+\)", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
-    /// <summary>What a DAT match names a release: from a libretro DAT entry (by SHA1) or a titledb entry (T4/T5, by title id).</summary>
+    private static DatRom? MatchWbfs(DatStore store, RomHeader? header)
+    {
+        if (header is not { IsPlausible: true, ClassifiedSystemId: "wii" } ||
+            header.Fields.GetValueOrDefault("container") is not "wbfs" ||
+            header.Fields.GetValueOrDefault("gameId") is not string { Length: 6 } gameId ||
+            header.Fields.GetValueOrDefault("discNumber") is not byte disc ||
+            header.Fields.GetValueOrDefault("version") is not byte version)
+            return null;
+
+        var discTag = FormattableString.Invariant($"Disc {disc + 1}");
+        var revision = version == 0 ? null : FormattableString.Invariant($"Rev {version}");
+        var matches = store.BySerialCode(gameId[..4]).Where(rom =>
+        {
+            var tags = NoIntroName.Parse(rom.GameName);
+            return tags.Revision == revision && (tags.Flags.Contains(discTag) ||
+                disc == 0 && !tags.Flags.Any(IsDiscNumber));
+        }).Take(2).ToArray();
+        return matches.Length == 1 ? matches[0] : null;
+    }
+
+    private static bool IsDiscNumber(string flag) =>
+        flag.StartsWith("Disc ", StringComparison.Ordinal) && int.TryParse(flag.AsSpan(5),
+            System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out _);
+
+    /// <summary>What a DAT match names a release: from a libretro DAT entry (by SHA1 or Wii game ID) or a titledb entry (by title id).</summary>
     /// <param name="FileName">Before E3 budgeting for an external system.</param>
     private sealed record Release(string FileName, string BaseTitle, string GameName, IReadOnlyList<string> Regions, IReadOnlyList<string> Languages,
         string? Revision, IReadOnlyList<string> Flags, IdentificationMethod Method, DatMetadata Metadata, string? TitleId);

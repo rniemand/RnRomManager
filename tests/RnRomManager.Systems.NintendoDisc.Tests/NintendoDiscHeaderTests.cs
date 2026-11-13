@@ -1,4 +1,5 @@
 using System.Text;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Systems.NintendoDisc.Tests;
 
@@ -29,6 +30,7 @@ public class NintendoDiscHeaderTests
         Assert.That(header.Fields, Is.EqualTo(new Dictionary<string, object?>
         {
             ["gameId"] = "GALE01", ["discNumber"] = (byte)1, ["version"] = (byte)2, ["title"] = "Super Smash Bros. Melee",
+            ["container"] = "iso",
         }));
     }
 
@@ -80,5 +82,52 @@ public class NintendoDiscHeaderTests
         var rom = Disc(title: new string('A', 0x400), gameCube: true, length: 0x500);
 
         Assert.That(NintendoDiscHeader.Read(rom, "gc").Title, Is.EqualTo(new string('A', 0x3E0)));
+    }
+
+    private static SyntheticDiscBuilder WiiDisc(string title = "WAVE BOWLING") =>
+        new() { Seed = 7, Magic = NintendoDiscMagic.Wii, GameId = "RWBE01", Title = title, DiscNumber = 1, Version = 2 };
+
+    [TestCase(9)]
+    [TestCase(12)]
+    public void Wbfs_IsReadFromTheDiscHeaderCopy(int shift)
+    {
+        var header = NintendoDiscHeader.Read(WiiDisc().Wbfs(shift), "gc");
+
+        Assert.That((header.ClassifiedSystemId, header.Title, header.IsPlausible), Is.EqualTo(("wii", "WAVE BOWLING", true)));
+        Assert.That(header.Fields, Is.EqualTo(new Dictionary<string, object?>
+        {
+            ["gameId"] = "RWBE01", ["discNumber"] = (byte)1, ["version"] = (byte)2, ["title"] = "WAVE BOWLING", ["container"] = "wbfs",
+        }));
+    }
+
+    [TestCase(8)]
+    [TestCase(13)]
+    [TestCase(0xFF)]
+    public void Wbfs_WithABadSectorShift_IsNotPlausible(int shift)
+    {
+        var wbfs = WiiDisc().Wbfs();
+        wbfs[8] = (byte)shift;
+
+        AssertUnreadableWbfs(NintendoDiscHeader.Read(wbfs, "wii"));
+    }
+
+    [TestCase(4)]
+    [TestCase(9)]
+    [TestCase(0x200 + 0xFF)]
+    public void Wbfs_WithATruncatedCopy_IsNotPlausible(int length) =>
+        AssertUnreadableWbfs(NintendoDiscHeader.Read(WiiDisc().Wbfs()[..length], "wii"));
+
+    [Test]
+    public void Wbfs_TitleFillingTheCopyWithoutANul_IsKeptWhole() =>
+        Assert.That(NintendoDiscHeader.Read(WiiDisc(new string('A', 0x100)).Wbfs(), "wii").Title, Is.EqualTo(new string('A', 0xE0)),
+            "the title never runs into the block table after the copy");
+
+    private static void AssertUnreadableWbfs(RnRomManager.Core.Systems.RomHeader header)
+    {
+        Assert.That((header.ClassifiedSystemId, header.Title, header.IsPlausible), Is.EqualTo(("wii", (string?)null, false)));
+        Assert.That(header.Fields, Is.EqualTo(new Dictionary<string, object?>
+        {
+            ["gameId"] = null, ["discNumber"] = null, ["version"] = null, ["title"] = null, ["container"] = "wbfs",
+        }));
     }
 }

@@ -19,6 +19,8 @@ roms/
   nes/                  Nintendo Entertainment System (headered .nes, header included)
   snes/                 Super Nintendo Entertainment System (stored as .sfc, copier header stripped)
   a2600/                Atari 2600 (.a26 or .bin, as the DAT names it)
+  lynx/                 Atari Lynx (.lnx or .lyx, as the DAT names it)
+  jaguar/               Atari Jaguar (.j64, .jag, .rom, .abs or .cof, as the DAT names it)
   coleco/               ColecoVision (.col)
   gg/                   Game Gear (.gg, or .sms for SMS-mode games, as the DAT names it)
   sms/                  Master System (.sms)
@@ -123,7 +125,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `schemaVersion` | int | ✓ | `6` |
+| `schemaVersion` | int | ✓ | `7` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
 | `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`) |
 | `title` | string | ✓ | see Naming |
@@ -154,7 +156,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 | `version` | string? | ✓ | v5. An update's dotted version (`1.0.1`): the first `[x.y]`, `[x.y.z]` or `[x.y.z.w]` tag (1–9 ASCII digits per part) in `originalFileName`, set when a release flagged `Update` is ingested or resolved in Review; `null` otherwise. Orders the Game page's Updates tab. |
 | `flags` | string[] | ✓ | DAT tags (`SGB Enhanced`, `Proto`, `Unl`, …) plus `Hack` / `Translated` / `Unverified`; `Update` / `DLC` for Switch updates and add-on content |
 | `isPrimary` | bool | ✓ | |
-| `identification.method` | `Dat` \| `Manual` \| `TitleDb` | ✓ | `Dat` only for an exact SHA1 match; `TitleDb` (v4) for a Switch release matched by title id |
+| `identification.method` | `Dat` \| `Manual` \| `TitleDb` \| `Serial` | ✓ | `Dat` only for an exact SHA1 match; `TitleDb` (v4) for a Switch release matched by title id; `Serial` (v7) for a Wii `.wbfs` matched by its disc's game id against the DAT's serials (its hashes are the `.wbfs` file's own) |
 | `identification.datName` | string? | | DAT header name, e.g. `Nintendo - Game Boy`; also set for an `Unverified` release (the entry it was based on); `titledb` for a `TitleDb` release |
 | `identification.datVersion` | string? | | DAT header version, e.g. `2026.10.07`; for titledb the UTC download date `yyyy.MM.dd` |
 | `identification.datGameName` | string? | | DAT `game.name` (the thumbnail key; can differ from the ROM name); for titledb the base game's `<base title> [<TitleId>]`, also for its updates and DLC |
@@ -179,6 +181,8 @@ Super Nintendo Entertainment System `header`, read after a copier header is stri
 
 Atari 2600 cartridges have no header: `header` is always null.
 
+Atari Lynx `header` is present on files at least 64 bytes long starting with `LYNX`. Its fields are `bank0PageSize`, `bank1PageSize` and `version` (little-endian unsigned 16-bit values at 0x04, 0x06 and 0x08), `title` (32 bytes from 0x0A), `manufacturer` (16 bytes from 0x2A) and `rotation` (byte at 0x3A, recorded as `none`, `left` or `right` for 0, 1 or 2, otherwise as a number). Text fields use Latin-1 through the first NUL, with whitespace trimmed and empty values stored as null. Atari Jaguar cartridges have no standard header, so their `header` is always null.
+
 ColecoVision `header`: `magic`, the first two bytes as upper-case hex (`AA55` shows the title screen, `55AA` skips it; anything else is not a valid header, empty for an empty file).
 
 Game Gear `header`, from the optional `TMR SEGA` header (looked for at 0x7FF0, 0x3FF0, then 0x1FF0; without it `header` is null): `offset` (`7FF0`, `3FF0` or `1FF0`), `checksum` (bytes +10–11, little-endian, 4 upper-case hex digits), `productCode` (the BCD product code as hex digits, leading zeros trimmed), `version` (low nibble of +14), `region` (`SMS Japan`, `SMS Export`, `GG Japan`, `GG Export`, `GG International`, or the nibble in hex) and `sizeCode` (low nibble of +15). Master System `header` has the same fields, read the same way.
@@ -191,7 +195,7 @@ TurboGrafx-16 `header`: always null (HuCards have no header).
 
 PlayStation, PlayStation Portable, Xbox 360 and Saturn `header`: always null.
 
-GameCube / Wii `header`, from the disc header (the GameCube magic `C2 33 9F 3D` at 0x1C, the Wii magic `5D 1C 9E A3` at 0x18; the magic decides the system): `gameId` (6 ASCII bytes at 0x00, null if one isn't printable), `discNumber` (byte 0x06), `version` (byte 0x07) and `title` (Latin-1 from 0x20 up to the first NUL, at most 0x3E0 bytes, trimmed; null when empty or cut off). A field the file is too short for is null.
+GameCube / Wii `header`, from the disc header (the GameCube magic `C2 33 9F 3D` at 0x1C, the Wii magic `5D 1C 9E A3` at 0x18; the magic decides the system): `gameId` (6 ASCII bytes at 0x00, null if one isn't printable), `discNumber` (byte 0x06), `version` (byte 0x07) and `title` (Latin-1 from 0x20 up to the first NUL, at most 0x3E0 bytes, trimmed; null when empty or cut off) and `container` (`iso` for a bare disc, `wbfs` for a WBFS file). A WBFS file (ASCII `WBFS` at 0x00, sector shift `hd_sec_sz_s` 9–12 at 0x08) is read from the 0x100-byte disc-header copy at `1 << hd_sec_sz_s` (512 in practice): the same fields at the same offsets within the copy, with a 0xE0-byte title field (0x20–0xFF; a title filling it without a NUL is kept whole). A WBFS file with another shift, or too short for the copy, is not plausible and has only `container`. A field the file is too short for is null.
 
 Nintendo Switch `header`, from the first MiB of the file: `container` (`PFS0` for `.nsp`/`.nsz`, `XCI` for `.xci`/`.xcz` with `HEAD` at 0x100 or 0x1100); for PFS0 also `fileCount` (u32 at 4, null for a span shorter than 8 bytes); `titleId` (the 16 upper-case hex digits shared by the PFS0's `<32 hex>.tik` ticket names, null when there is none, they disagree or the file table is damaged; always null for XCI, whose plain header doesn't carry it).
 
@@ -228,3 +232,4 @@ A schema change bumps `schemaVersion`, adds an upgrader and adds a row here.
 | 4 | 0.4.0 | Adds `externalFileName` (string?) to every ROM: the file next to the ZIP for a system that stores its ROMs outside it (Nintendo Switch), `null` otherwise. Adds `TitleDb` as an `identification.method` and `titledb` as an image `source`. The v3→v4 upgrader adds `externalFileName: null`. Apps before 0.4.0 treat a v4 file as `InfoJsonNewerSchema` (read-only). |
 | 5 | 0.4.0 | Adds `version` (string?) to every ROM: an update's dotted version from its file name, `null` otherwise. The v4→v5 upgrader sets it from `originalFileName` for releases flagged `Update` (else `null`); migration 0019 fills `roms.version` the same way for games already mirrored. A v5 file is `InfoJsonNewerSchema` (read-only) for an app that only knows v4. |
 | 6 | 0.4.0 | Adds `files` (File[]?) to every ROM: a disc set's other files, `null` otherwise. The v5→v6 upgrader adds `files: null`; migration 0020 adds the `rom_files` table, filled on each game's next mirror. A v6 file is `InfoJsonNewerSchema` (read-only) for an app that only knows v5. |
+| 7 | 0.4.0 | Adds `Serial` as an `identification.method`. The v6→v7 upgrader changes nothing. A v7 file is `InfoJsonNewerSchema` (read-only) for an app that only knows v6. |

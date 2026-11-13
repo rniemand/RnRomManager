@@ -16,19 +16,39 @@ public static class NintendoDiscHeader
     private const int WiiMagicOffset = 0x18;
     private const int TitleOffset = 0x20;
     private const int TitleMaxBytes = 0x3E0;
+    private const int WbfsCopyBytes = 0x100;
+    private static readonly byte[] WbfsMagic = "WBFS"u8.ToArray();
 
+    /// <summary>
+    /// A WBFS container (B2: <c>WBFS</c> at 0x00, sector shift 9–12 at 0x08) is read from its 0x100-byte disc-header
+    /// copy at <c>1 &lt;&lt; shift</c> (libwbfs <c>wbfs_disc_info_t.dhead</c>). <c>container</c> is <c>wbfs</c> or <c>iso</c>.
+    /// </summary>
     public static RomHeader Read(ReadOnlySpan<byte> rom, string callerId)
     {
-        var classified = Has(rom, WiiMagicOffset, WiiMagic) ? "wii" : Has(rom, GameCubeMagicOffset, GameCubeMagic) ? "gc" : null;
-        var title = Title(rom);
-        return new RomHeader(classified ?? callerId, title, classified is not null, new Dictionary<string, object?>
-        {
-            ["gameId"] = GameId(rom),
-            ["discNumber"] = rom.Length > 6 ? rom[6] : null,
-            ["version"] = rom.Length > 7 ? rom[7] : null,
-            ["title"] = title,
-        });
+        if (!Has(rom, 0, WbfsMagic))
+            return Read(rom, callerId, "iso", TitleMaxBytes);
+        if (rom.Length <= 8 || rom[8] is < 9 or > 12 || rom.Length < (1 << rom[8]) + WbfsCopyBytes)
+            return new RomHeader(callerId, null, false, Fields(null, null, null, null, "wbfs"));
+        // The copy is complete, so a NUL-less title filling its 0xE0 bytes is kept whole.
+        return Read(rom.Slice(1 << rom[8], WbfsCopyBytes), callerId, "wbfs", WbfsCopyBytes - TitleOffset);
     }
+
+    private static RomHeader Read(ReadOnlySpan<byte> rom, string callerId, string container, int titleMaxBytes)
+    {
+        var classified = Has(rom, WiiMagicOffset, WiiMagic) ? "wii" : Has(rom, GameCubeMagicOffset, GameCubeMagic) ? "gc" : null;
+        var title = Title(rom, titleMaxBytes);
+        return new RomHeader(classified ?? callerId, title, classified is not null,
+            Fields(GameId(rom), rom.Length > 6 ? rom[6] : null, rom.Length > 7 ? rom[7] : null, title, container));
+    }
+
+    private static Dictionary<string, object?> Fields(string? gameId, byte? discNumber, byte? version, string? title, string container) => new()
+    {
+        ["gameId"] = gameId,
+        ["discNumber"] = discNumber,
+        ["version"] = version,
+        ["title"] = title,
+        ["container"] = container,
+    };
 
     private static bool Has(ReadOnlySpan<byte> rom, int offset, byte[] magic) =>
         rom.Length >= offset + magic.Length && rom.Slice(offset, magic.Length).SequenceEqual(magic);
@@ -44,14 +64,14 @@ public static class NintendoDiscHeader
         return Encoding.ASCII.GetString(rom[..6]);
     }
 
-    /// <summary>0x20 up to the first NUL (at most 0x3E0 bytes) as Latin-1, trimmed; null when cut short or empty.</summary>
-    private static string? Title(ReadOnlySpan<byte> rom)
+    /// <summary>0x20 up to the first NUL (at most <paramref name="maxBytes"/>) as Latin-1, trimmed; null when cut short or empty.</summary>
+    private static string? Title(ReadOnlySpan<byte> rom, int maxBytes)
     {
         if (rom.Length <= TitleOffset)
             return null;
-        var field = rom[TitleOffset..Math.Min(rom.Length, TitleOffset + TitleMaxBytes)];
+        var field = rom[TitleOffset..Math.Min(rom.Length, TitleOffset + maxBytes)];
         var nul = field.IndexOf((byte)0);
-        if (nul < 0 && field.Length < TitleMaxBytes)
+        if (nul < 0 && field.Length < maxBytes)
             return null; // the span ends inside the title
         var title = Encoding.Latin1.GetString(nul < 0 ? field : field[..nul]).Trim();
         return title.Length == 0 ? null : title;

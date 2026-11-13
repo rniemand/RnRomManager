@@ -8,7 +8,7 @@ namespace RnRomManager.Systems.Atari;
 /// </summary>
 public sealed class Atari2600Handler : ISystemHandler
 {
-    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => LoadResource("boxart.a2600.png"));
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.a2600.png"));
 
     public string Id => "a2600";
     public string DisplayName => "Atari 2600";
@@ -30,13 +30,4 @@ public sealed class Atari2600Handler : ISystemHandler
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
-
-    private static byte[] LoadResource(string name)
-    {
-        using var stream = typeof(Atari2600Handler).Assembly.GetManifestResourceStream($"RnRomManager.Systems.Atari.Resources.{name}")
-            ?? throw new InvalidOperationException($"Embedded resource {name} is missing.");
-        using var copy = new MemoryStream();
-        stream.CopyTo(copy);
-        return copy.ToArray();
-    }
 }

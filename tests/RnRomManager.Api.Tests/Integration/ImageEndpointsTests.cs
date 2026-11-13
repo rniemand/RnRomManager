@@ -68,6 +68,8 @@ public class ImageEndpointsTests
             [IngestSeeder.NesDat] = [],
             [IngestSeeder.SnesDat] = [],
             [IngestSeeder.Atari2600Dat] = [],
+            [IngestSeeder.LynxDat] = [],
+            [IngestSeeder.JaguarDat] = [],
             [IngestSeeder.ColecoVisionDat] = [],
             [IngestSeeder.GameGearDat] = [],
             [IngestSeeder.MasterSystemDat] = [],

@@ -117,7 +117,7 @@ export interface RomDetail {
 	version: string | null;
 	flags: string[];
 	isPrimary: boolean;
-	identificationMethod: 'Dat' | 'Manual' | 'TitleDb';
+	identificationMethod: 'Dat' | 'Manual' | 'TitleDb' | 'Serial';
 	datName: string | null;
 	datVersion: string | null;
 	datGameName: string | null;
