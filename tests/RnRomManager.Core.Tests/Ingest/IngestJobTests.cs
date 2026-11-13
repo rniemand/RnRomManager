@@ -61,6 +61,8 @@ public class IngestJobTests
         handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns(id);
         handler.DatName.Returns(datName);
+        handler.DatFolder.Returns(DatKind.NoIntro);
+        handler.MetadatKinds.Returns(DatKind.Metadat);
         handler.Family.Returns("gameboy");
         handler.RomExtensions.Returns(["." + id]);
         handler.MinRomSizeBytes.Returns(0x150);
@@ -107,14 +109,14 @@ public class IngestJobTests
         Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Duplicate), R(IngestOutcome.Repaired)]), Is.EqualTo(IngestJob.ArchiveFate.Delete));
     }
 
-    private IngestJob Job()
+    private IngestJob Job(ExternalIngestHooks? hooks = null)
     {
         var roms = Substitute.For<IRomRepository>();
         roms.ListSha1sAsync(default).ReturnsForAnyArgs([]);
         var sync = new DbSync(_games, roms, _mirror, _reader, _systems, Options.Create(_paths), NullLogger<DbSync>.Instance);
         var media = TestMedia.Offline();
         var pipeline = new IngestPipeline(_dats, _systems, roms, _games, _mirror, Substitute.For<RnRomManager.Core.Integrity.IIntegrityIssueRepository>(), _reviews, _reader, media, Options.Create(_paths), _audit, new RnRomManager.Core.Audit.AuditPaths(Options.Create(_paths)), TimeProvider.System,
-            NullLogger<IngestPipeline>.Instance);
+            NullLogger<IngestPipeline>.Instance) { ExternalHooks = hooks };
         return new IngestJob(_dats, _systems, sync, _reviews, _items, _scanner, pipeline, new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance),
             Options.Create(_paths), TimeProvider.System, NullLogger<IngestJob>.Instance);
     }
@@ -228,5 +230,120 @@ public class IngestJobTests
         await jobs.DidNotReceiveWithAnyArgs().InsertAsync(default!, default);
         using var free = jobLock.TryAcquire();
         Assert.That(free, Is.Not.Null);
+    }
+
+    // --- disc sets (B7) ---
+
+    /// <summary>
+    /// A FileSets system that takes no .cue: nothing is planned there. A class, not a substitute: Castle proxies can't
+    /// intercept <see cref="ISystemHandler.ReadHeader"/>'s span parameter, which the external path calls.
+    /// </summary>
+    private sealed class DiscXHandler : ISystemHandler
+    {
+        public string Id => "discx";
+        public string DisplayName => "Disc X";
+        public string Family => "discx";
+        public IReadOnlyList<string> RomExtensions => [".bin"];
+        public long MinRomSizeBytes => 1;
+        public long MaxRomSizeBytes => 1024 * 1024;
+        public string DatName => "Test - Disc X";
+        public bool EmbedRomsInZip => false;
+        public bool FileSets => true;
+        public string DatFolder => DatKind.Redump;
+        public IReadOnlyList<string> MetadatKinds => [];
+        public ReadOnlyMemory<byte> DefaultBoxArtPng => ExternalTestHandler.FixtureBoxArtPng;
+        public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
+    }
+
+    private static ISystemHandler DiscX() => new DiscXHandler();
+
+    /// <summary>Adds <see cref="ExternalSetTestHandler"/> and <see cref="DiscX"/> to the registry, with their empty Redump DATs.</summary>
+    private void LoadDiscDats()
+    {
+        ISystemHandler[] handlers = [.. _systems.All, new ExternalSetTestHandler(), DiscX()];
+        _systems.All.Returns(handlers);
+        _systems.ById(Arg.Any<string>()).Returns(c => handlers.FirstOrDefault(h => h.Id == c.Arg<string>()));
+        _systems.ByFamily(ExternalSetTestHandler.SystemId).Returns([handlers[^2]]);
+        _systems.ByFamily("discx").Returns([handlers[^1]]);
+        FixtureDatWriter.Write(_dats.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
+        {
+            [ExternalSetTestHandler.DatNameValue] = [],
+            ["Test - Disc X"] = [],
+        }, layouts: new Dictionary<string, FixtureDatLayout>
+        {
+            [ExternalSetTestHandler.DatNameValue] = FixtureDatLayout.Redump,
+            ["Test - Disc X"] = FixtureDatLayout.Redump,
+        });
+        _dats.Load();
+    }
+
+    /// <summary>An unmatched 3-file set (it goes to Review), a minute old.</summary>
+    private void DropDisc(string system = ExternalSetTestHandler.SystemId)
+    {
+        var folder = Path.Combine(_paths.Ingest, system);
+        Directory.CreateDirectory(folder);
+        foreach (var (name, bytes) in new (string, byte[])[]
+        {
+            ("Disc.cue", System.Text.Encoding.UTF8.GetBytes("FILE \"Disc (Track 1).bin\" BINARY\nFILE \"Disc (Track 2).bin\" BINARY\n")),
+            ("Disc (Track 1).bin", RomBytes(21)),
+            ("Disc (Track 2).bin", RomBytes(22)),
+        })
+        {
+            File.WriteAllBytes(Path.Combine(folder, name), bytes);
+            File.SetLastWriteTimeUtc(Path.Combine(folder, name), DateTime.UtcNow.AddMinutes(-1));
+        }
+    }
+
+    private List<JobItem> Recorded() =>
+        [.. _items.ReceivedCalls().Where(c => c.GetMethodInfo().Name == nameof(IJobItemRepository.InsertAsync)).Select(c => (JobItem)c.GetArguments()[0]!)];
+
+    [Test]
+    public async Task Cancel_DuringASet_FinishesTheSet_ThenStops()
+    {
+        LoadDiscDats();
+        DropDisc();
+        Drop(ExternalSetTestHandler.SystemId, "Later.iso", TimeSpan.FromMinutes(1));
+        using var cancel = new CancellationTokenSource();
+        var job = Job(new ExternalIngestHooks { BeforeHash = f => { if (f.Name == "Disc (Track 1).bin") cancel.Cancel(); } });
+
+        Assert.That(async () => await job.RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), cancel.Token),
+            Throws.InstanceOf<OperationCanceledException>());
+
+        Assert.That(Recorded().Select(i => (Path.GetFileName(i.SourcePath), i.Outcome)), Is.EqualTo(new[]
+        {
+            ("Disc.cue", IngestOutcome.Review), ("Disc (Track 1).bin", IngestOutcome.Review), ("Disc (Track 2).bin", IngestOutcome.Review),
+        }), "the started set ran to the end; Later.iso was never processed");
+    }
+
+    [Test]
+    public async Task SelectingOneBinOfASet_CountsTheWholeSet()
+    {
+        LoadDiscDats();
+        DropDisc();
+        Drop(ExternalSetTestHandler.SystemId, "Other.iso", TimeSpan.FromMinutes(1));
+        var progress = new JobProgress();
+        var job = Job();
+        job.Selection = new HashSet<(string, string)> { (ExternalSetTestHandler.SystemId, "Disc (Track 2).bin") };
+
+        await job.RunAsync(new JobContext(Guid.NewGuid(), progress), CancellationToken.None);
+
+        Assert.That((progress.Current, progress.Total), Is.EqualTo((3, 3)));
+        Assert.That(Recorded().Select(i => Path.GetFileName(i.SourcePath)), Is.EqualTo(new[] { "Disc.cue", "Disc (Track 1).bin", "Disc (Track 2).bin" }));
+    }
+
+    [Test]
+    public async Task FileSetsSystemWithoutCue_PlansNothing()
+    {
+        LoadDiscDats();
+        DropDisc("discx");
+
+        await RunAsync();
+
+        Assert.That(Recorded().Select(i => (Path.GetFileName(i.SourcePath), i.Outcome, i.Reason)), Is.EquivalentTo(new[]
+        {
+            ("Disc.cue", IngestOutcome.Failed, (string?)IngestFailures.UnsupportedType),
+            ("Disc (Track 1).bin", IngestOutcome.Review, "NoDatMatch"),
+            ("Disc (Track 2).bin", IngestOutcome.Review, "NoDatMatch"),
+        }));
     }
 }

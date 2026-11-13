@@ -17,7 +17,7 @@ namespace RnRomManager.Api.Tests.Integration;
 
 /// <summary>Spec §23 <c>/api/systems</c>, <c>/api/games*</c> reads, images and downloads (S32), against MariaDB + real ZIPs.</summary>
 [Category("Integration")]
-public class LibraryEndpointsTests
+public partial class LibraryEndpointsTests
 {
     private const string Gb = "Nintendo - Game Boy";
     private static readonly byte[] TetrisWorld = new SyntheticRomBuilder { Seed = 1, Title = "TETRIS" }.Build();
@@ -51,6 +51,12 @@ public class LibraryEndpointsTests
             [IngestSeeder.MegaDriveDat] = [],
             [IngestSeeder.Sega32xDat] = [],
             [IngestSeeder.TurboGrafx16Dat] = [],
+            [IngestSeeder.PsxDat] = [],
+            [IngestSeeder.PspDat] = [],
+            [IngestSeeder.GameCubeDat] = [],
+            [IngestSeeder.WiiDat] = [],
+            [IngestSeeder.Xbox360Dat] = [],
+            [IngestSeeder.SaturnDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld) { ReleaseYear = 1989, Developers = ["Nintendo"], Genres = ["Puzzle"] },
@@ -58,7 +64,7 @@ public class LibraryEndpointsTests
                 new FixtureGame("Pokémon Pinball (Europe)", "Pokémon Pinball (Europe).gb", Pinball) { Publishers = ["Nintendo"] },
                 new FixtureGame("3 Choume no Tama (Japan)", "3 Choume no Tama (Japan).gb", Arcade),
             ],
-        }, titleDb: IngestSeeder.EmptySwitch);
+        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 
@@ -130,7 +136,7 @@ public class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "s32x", "a2600", "coleco", "gb", "gba", "gbc", "gg", "sms", "md", "n64", "nes", "switch", "snes", "tg16" }));
+            Is.EqualTo(new[] { "s32x", "a2600", "coleco", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "n64", "nes", "switch", "psx", "psp", "saturn", "snes", "tg16", "wii", "x360" }));
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(13).True);
         Assert.That(Find("switch").GetProperty("embedRoms").GetBoolean(), Is.False, "Switch stores its ROMs outside the ZIP");
         JsonElement Find(string id) => systems.EnumerateArray().Single(s => s.GetProperty("id").GetString() == id);
@@ -142,8 +148,8 @@ public class LibraryEndpointsTests
         Assert.That((gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()), Is.EqualTo((0, 0)));
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
-            "32X", "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo Entertainment System", "Nintendo Switch",
-            "Super Nintendo Entertainment System", "TurboGrafx-16"
+            "32X", "Atari 2600", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo Entertainment System", "Nintendo Switch",
+            "PlayStation", "PlayStation Portable", "Saturn", "Super Nintendo Entertainment System", "TurboGrafx-16", "Wii", "Xbox 360"
         }));
     }
 

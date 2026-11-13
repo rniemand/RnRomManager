@@ -37,6 +37,8 @@ const dialog = () => page.getByRole('dialog');
 let switchBase: Buffer;
 /** The seeded ticketless `[UPD]` update (game updates B7), read before ingestion. */
 let switchUpdate: Buffer;
+/** The seeded PlayStation set's audio track, read before ingestion moves it (disc systems B20). */
+let discTrack2: Buffer;
 
 /** A real square RGB PNG: the API checks magic bytes and dimensions, and the browser must render it. */
 function png(size: number, rgb: [number, number, number]): Buffer {
@@ -108,13 +110,14 @@ test('ingestion of the seeded Basic set', async () => {
 	switchUpdate = await readFile(
 		join(ingest, 'switch', '04-orbit-expedition [0100000000010000][UPD][1.1.0].nsp')
 	);
+	discTrack2 = await readFile(join(ingest, 'psx', 'Disc Runner (USA) (Track 2).bin'));
 	await page.getByRole('button', { name: 'Import all' }).click();
 
 	await page.getByRole('tab', { name: 'Last runs' }).click();
 	await expect(page).toHaveURL(/\/ingestion\?tab=runs$/);
 	await expect(page.getByRole('button', { name: 'Import all' })).toBeVisible();
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
-	await expect(run).toContainText('Ingested 22 · Duplicate 1 · Review 2 · Failed 1', {
+	await expect(run).toContainText('Ingested 32 · Duplicate 1 · Review 2 · Failed 1', {
 		timeout: 60_000
 	});
 
@@ -167,7 +170,8 @@ test('reports and the ingest audit trail', async () => {
 	const ingested = page
 		.getByRole('row')
 		.filter({ has: page.getByRole('cell', { name: 'Ingested', exact: true }) });
-	await expect(ingested).toHaveCount(22);
+	// One Ingested event per release: a bin/cue set is one event (B7a).
+	await expect(ingested).toHaveCount(28);
 	await expect(
 		page
 			.getByRole('row')
@@ -180,7 +184,7 @@ test('reports and the ingest audit trail', async () => {
 
 test('browse, search and filter the library', async () => {
 	await page.goto('/');
-	await expect(page.getByText('17 games')).toBeVisible();
+	await expect(page.getByText('23 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
 	// S1: systems in display-name order, "All systems" first; F3: each with its game count.
 	await expect(page.getByLabel('System').locator('option')).toHaveText([
@@ -192,13 +196,19 @@ test('browse, search and filter the library', async () => {
 		'Game Boy Advance (1)',
 		'Game Boy Color (2)',
 		'Game Gear (1)',
+		'GameCube (1)',
 		'Master System (1)',
 		'Mega Drive / Genesis (1)',
 		'Nintendo 64 (1)',
 		'Nintendo Entertainment System (1)',
 		'Nintendo Switch (1)',
+		'PlayStation (1)',
+		'PlayStation Portable (1)',
+		'Saturn (1)',
 		'Super Nintendo Entertainment System (1)',
-		'TurboGrafx-16 (1)'
+		'TurboGrafx-16 (1)',
+		'Wii (1)',
+		'Xbox 360 (1)'
 	]);
 	await expect(page.getByLabel('Letter').locator('option').nth(1)).toHaveText(/^# \(\d+\)$/);
 
@@ -412,10 +422,32 @@ test('Switch: external releases and a per-release download', async () => {
 	expect((await readFile((await updateFile.path())!)).equals(switchUpdate)).toBe(true);
 });
 
+test('PlayStation: a disc set lists its files and downloads a track byte-exact', async () => {
+	await openGame('Disc Runner');
+	await expect(page.getByRole('heading', { level: 3, name: 'Disc Runner (USA) (Track 1).bin' })).toBeVisible();
+	await page.getByRole('button', { name: 'Show details for Disc Runner (USA) (Track 1).bin' }).click();
+
+	// B20: the toggle counts the data track, the cue and Track 2; the list puts the main file first.
+	const toggle = page.getByRole('button', { name: '3 files' });
+	await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+	await toggle.click();
+	await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+	const rows = page.locator('#releases-panel table tbody tr');
+	await expect(rows).toHaveCount(3);
+	await expect(rows.first()).toContainText('Disc Runner (USA) (Track 1).bin');
+	await expectAccessible(page, 'disc set file list');
+
+	const download = page.waitForEvent('download');
+	await page.getByRole('button', { name: 'Download Disc Runner (USA) (Track 2).bin' }).click();
+	const file = await download;
+	expect(file.suggestedFilename()).toBe('Disc Runner (USA) (Track 2).bin');
+	expect((await readFile((await file.path())!)).equals(discTrack2)).toBe(true);
+});
+
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await page.goto('/');
-	await expect(page.getByText('17 games')).toBeVisible();
+	await expect(page.getByText('23 games')).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await expect(dialog()).toBeVisible();
 	await expect(dialog().getByRole('combobox')).toBeFocused();
@@ -547,7 +579,7 @@ test('collections: create, add from game page and bulk select, search, remove, d
 	await expect(page).toHaveURL(/\/collections$/);
 	await expect(page.getByText('You have no collections yet.')).toBeVisible();
 	await page.goto('/');
-	await expect(page.getByText('17 games')).toBeVisible();
+	await expect(page.getByText('23 games')).toBeVisible();
 });
 
 test('review queue: resolve with a suggestion', async () => {

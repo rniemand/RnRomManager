@@ -11,8 +11,8 @@ public class IngestSeederTests
     [SetUp] public void SetUp() => _dir = new TempDir();
     [TearDown] public void TearDown() => _dir.Dispose();
 
-    [TestCase(SeedSet.Basic, 26)]
-    [TestCase(SeedSet.Full, 226)]
+    [TestCase(SeedSet.Basic, 36)]
+    [TestCase(SeedSet.Full, 236)]
     public void Sets_HaveExpectedFilesArchivesAndReadyAges(SeedSet set, int count)
     {
         var ingest = _dir.Combine("ingest");
@@ -48,8 +48,20 @@ public class IngestSeederTests
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "sms", "01-harbor-patrol.sms"))[0x7FF0..0x7FF8], Is.EqualTo("TMR SEGA"u8.ToArray()));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "md", "01-turbo-comet.gen"))[0x100..0x104], Is.EqualTo("SEGA"u8.ToArray()));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "s32x", "01-star-relay.32x"))[0x100..0x108], Is.EqualTo("SEGA 32X"u8.ToArray()));
+        // Disc systems: a bin/cue set for PSX and Saturn, one .iso for the rest; every image 64 KiB and unique.
+        string[] Names(string system) => [.. Directory.GetFiles(Path.Combine(ingest, system)).Select(f => Path.GetFileName(f)!).Order(StringComparer.Ordinal)];
+        Assert.That(Names("psx"), Is.EqualTo(new[] { "Disc Runner (USA) (Track 1).bin", "Disc Runner (USA) (Track 2).bin", "Disc Runner (USA).cue" }));
+        Assert.That(Names("saturn"), Is.EqualTo(new[] { "Sky Rally (Japan) (Track 1).bin", "Sky Rally (Japan) (Track 2).bin", "Sky Rally (Japan).cue" }));
+        Assert.That((Names("psp"), Names("gc"), Names("wii"), Names("x360")), Is.EqualTo((new[] { "Pocket Ninja (USA).iso" }, new[] { "Cube Kart (USA).iso" },
+            new[] { "Wave Bowling (USA).iso" }, new[] { "Arc Strike (USA).iso" })));
+        var images = new[] { "psx", "saturn", "psp", "gc", "wii", "x360" }.SelectMany(s => Directory.GetFiles(Path.Combine(ingest, s)))
+            .Where(f => Path.GetExtension(f) != ".cue").ToList();
+        Assert.That(images.Select(f => new FileInfo(f).Length), Is.All.EqualTo(64 * 1024));
+        Assert.That(images.Select(f => Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(File.ReadAllBytes(f)))).Distinct().Count(), Is.EqualTo(8));
+        Assert.That(File.ReadAllText(Path.Combine(ingest, "psx", "Disc Runner (USA).cue")), Does.Contain("FILE \"Disc Runner (USA) (Track 2).bin\" BINARY"));
         Assert.That(new FileInfo(Path.Combine(ingest, "tg16", "01-neon-circuit.pce")).Length, Is.EqualTo(262656), "copier-headered");
-        Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(65));
+        Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(71));
+        Assert.That(File.Exists(_dir.Combine("cache", "dats", "redump", IngestSeeder.WiiDat + ".dat")), Is.True, "the disc systems' DATs go in redump/");
         Assert.That(File.Exists(_dir.Combine("cache", "dats", "titledb", "Nintendo - Nintendo Switch.json")), Is.True);
     }
 

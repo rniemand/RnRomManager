@@ -571,7 +571,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
         {
             using var zip = OpenChecked(zipPath);
             return zip.InfoJson is { Kind: InfoJsonReadResult.Outcome.Ok, Game: { } game }
-                ? game.Roms.Select(r => r.ExternalFileName).OfType<string>().ToHashSet(StringComparer.OrdinalIgnoreCase)
+                ? game.ExternalFileNames().ToHashSet(StringComparer.OrdinalIgnoreCase)
                 : null;
         }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException)

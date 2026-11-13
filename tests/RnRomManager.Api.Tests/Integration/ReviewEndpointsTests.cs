@@ -60,10 +60,16 @@ public class ReviewEndpointsTests
             [IngestSeeder.MegaDriveDat] = [],
             [IngestSeeder.Sega32xDat] = [],
             [IngestSeeder.TurboGrafx16Dat] = [],
+            [IngestSeeder.PsxDat] = [],
+            [IngestSeeder.PspDat] = [],
+            [IngestSeeder.GameCubeDat] = [],
+            [IngestSeeder.WiiDat] = [],
+            [IngestSeeder.Xbox360Dat] = [],
+            [IngestSeeder.SaturnDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)
             { ReleaseYear = 1989, Developers = ["Nintendo"], Publishers = ["Nintendo"], Genres = ["Puzzle"] }],
             ["Nintendo - Game Boy Color"] = [new FixtureGame("Color Game (World)", "Color Game (World).gbc", Color)],
-        }, titleDb: IngestSeeder.EmptySwitch);
+        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 
@@ -667,14 +673,69 @@ public class ReviewEndpointsTests
             [IngestSeeder.MegaDriveDat] = [],
             [IngestSeeder.Sega32xDat] = [],
             [IngestSeeder.TurboGrafx16Dat] = [],
+            [IngestSeeder.PsxDat] = [],
+            [IngestSeeder.PspDat] = [],
+            [IngestSeeder.GameCubeDat] = [],
+            [IngestSeeder.WiiDat] = [],
+            [IngestSeeder.Xbox360Dat] = [],
+            [IngestSeeder.SaturnDat] = [],
             [Gb] = Enumerable.Range(1, 25).Select(i => new FixtureGame($"Demo {i} (World)", $"Demo {i} (World).gb", new SyntheticRomBuilder { Seed = 1000 + i }.Build())).ToArray(),
             ["Nintendo - Game Boy Color"] = [],
-        }, titleDb: IngestSeeder.EmptySwitch);
+        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
         using var defaults = await _admin.GetAsync("/api/dat/search?system=gb&q=demo");
         Assert.That((await AuthClient.JsonAsync(defaults)).GetArrayLength(), Is.EqualTo(20));
         using var smaller = await _admin.GetAsync("/api/dat/search?system=gb&q=demo&limit=3");
         Assert.That((await AuthClient.JsonAsync(smaller)).GetArrayLength(), Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task Search_ListsARepeatedGameNameOnce_BeforeTheLimit()
+    {
+        // B15: Redump repeats a game once per serial, with the same name.
+        var cache = Service<DatCache>();
+        FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
+        {
+            [IngestSeeder.GbaDat] = [],
+            [IngestSeeder.N64Dat] = [],
+            [IngestSeeder.NesDat] = [],
+            [IngestSeeder.SnesDat] = [],
+            [IngestSeeder.Atari2600Dat] = [],
+            [IngestSeeder.ColecoVisionDat] = [],
+            [IngestSeeder.GameGearDat] = [],
+            [IngestSeeder.MasterSystemDat] = [],
+            [IngestSeeder.MegaDriveDat] = [],
+            [IngestSeeder.Sega32xDat] = [],
+            [IngestSeeder.TurboGrafx16Dat] = [],
+            [IngestSeeder.PsxDat] = [],
+            [IngestSeeder.PspDat] = [],
+            [IngestSeeder.GameCubeDat] = [],
+            [IngestSeeder.WiiDat] = [],
+            [IngestSeeder.Xbox360Dat] = [],
+            [IngestSeeder.SaturnDat] = [],
+            [Gb] =
+            [
+                new FixtureGame("Repeat (World)", "Repeat (World).gb", new SyntheticRomBuilder { Seed = 2001 }.Build()),
+                new FixtureGame("Repeat (World)", "Repeat (World) (Alt).gb", new SyntheticRomBuilder { Seed = 2002 }.Build()),
+                new FixtureGame("Repeat Two (World)", "Repeat Two (World).gb", new SyntheticRomBuilder { Seed = 2003 }.Build()),
+            ],
+            ["Nintendo - Game Boy Color"] = [],
+        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
+        cache.Load();
+
+        using var response = await _admin.GetAsync("/api/dat/search?system=gb&q=repeat&limit=2");
+
+        var hits = (await AuthClient.JsonAsync(response)).EnumerateArray().Select(h => (h.GetProperty("gameName").GetString(), h.GetProperty("romName").GetString())).ToList();
+        Assert.That(hits, Is.EqualTo(new[] { ("Repeat (World)", "Repeat (World).gb"), ("Repeat Two (World)", "Repeat Two (World).gb") }));
+    }
+
+    [Test]
+    public async Task ListFilter_AmbiguousSet_IsAccepted()
+    {
+        using var response = await _admin.GetAsync("/api/review?reason=AmbiguousSet");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("total").GetInt64(), Is.Zero);
     }
 
     [Test]

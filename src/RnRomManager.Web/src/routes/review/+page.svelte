@@ -195,6 +195,7 @@
 				<option value="">All reasons</option>
 				<option value="NoDatMatch">No DAT match</option>
 				<option value="AmbiguousGroup">Ambiguous group</option>
+				<option value="AmbiguousSet">Ambiguous set</option>
 			</select>
 		</div>
 		<div class="col-12 col-md-2">

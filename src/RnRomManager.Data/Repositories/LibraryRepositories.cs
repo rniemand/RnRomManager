@@ -180,7 +180,8 @@ public sealed class GameRepository : IGameRepository
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount,
                    (SELECT GROUP_CONCAT(r.region_key SEPARATOR '') FROM roms r WHERE r.game_id = g.id) AS RegionKeys,
                    (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.is_cover = 1) AS BoxArtImageId,
-                   (SELECT MAX(r.size_bytes) FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1) AS PrimarySizeBytes,
+                   (SELECT CAST(r.size_bytes + COALESCE((SELECT SUM(f.size_bytes) FROM rom_files f WHERE f.rom_id = r.id), 0) AS SIGNED)
+                    FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY 1 DESC LIMIT 1) AS PrimarySizeBytes,
                    g.rating AS Rating, g.favourite AS Favourite, g.title AS Title,
                    g.developers AS Developers, g.publishers AS Publishers, g.genres AS Genres
             FROM {from} {filter}
@@ -391,14 +392,52 @@ public sealed class RomRepository : IRomRepository
     public async Task<IReadOnlyList<ExternalRomRow>> ListExternalAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();
+        // B13: main files and set files together; a main file (ordinal -1) comes before its files.
         return (await connection.QueryAsync<ExternalRomRow>(new CommandDefinition("""
-            SELECT r.game_id AS GameId, g.zip_path AS ZipPath, r.external_file_name AS ExternalFileName,
-                   r.size_bytes AS SizeBytes, r.sha1 AS Sha1
-            FROM roms r
-            JOIN games g ON g.id = r.game_id
-            WHERE r.external_file_name IS NOT NULL
-            ORDER BY g.zip_path, r.id
+            SELECT GameId, ZipPath, ExternalFileName, SizeBytes, Sha1, FileId
+            FROM (
+                SELECT r.game_id AS GameId, g.zip_path AS ZipPath, r.external_file_name AS ExternalFileName,
+                       r.size_bytes AS SizeBytes, r.sha1 AS Sha1, CAST(NULL AS SIGNED) AS FileId, r.id AS RomId, -1 AS Ordinal
+                FROM roms r
+                JOIN games g ON g.id = r.game_id
+                WHERE r.external_file_name IS NOT NULL
+                UNION ALL
+                SELECT f.game_id, g.zip_path, f.external_file_name, f.size_bytes, f.sha1, f.id, f.rom_id, f.ordinal
+                FROM rom_files f
+                JOIN games g ON g.id = f.game_id
+            ) claims
+            ORDER BY ZipPath, RomId, Ordinal
             """, cancellationToken: cancellationToken))).AsList();
+    }
+
+    private const string SelectFiles = """
+        SELECT f.id AS Id, f.rom_id AS RomId, f.game_id AS GameId, r.sha1 AS RomSha1, f.ordinal AS Ordinal,
+               f.file_name AS FileName, f.external_file_name AS ExternalFileName, f.original_file_name AS OriginalFileName,
+               f.size_bytes AS SizeBytes, f.crc32 AS Crc32, f.md5 AS Md5, f.sha1 AS Sha1
+        FROM rom_files f
+        JOIN roms r ON r.id = f.rom_id
+        """;
+
+    public async Task<IReadOnlyList<RomFileRow>> ListFilesByGameAsync(Guid gameId, CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<RomFileRow>(new CommandDefinition(
+            $"{SelectFiles} WHERE f.game_id = @gameId ORDER BY f.rom_id, f.ordinal", new { gameId }, cancellationToken: cancellationToken))).AsList();
+    }
+
+    public async Task<RomFileRow?> GetFileAsync(Guid gameId, long romId, long fileId, CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return await connection.QuerySingleOrDefaultAsync<RomFileRow>(new CommandDefinition(
+            $"{SelectFiles} WHERE f.id = @fileId AND f.rom_id = @romId AND f.game_id = @gameId", new { gameId, romId, fileId },
+            cancellationToken: cancellationToken));
+    }
+
+    public async Task<IReadOnlyList<RomFileRow>> ListFilesBySha1Async(string sha1, CancellationToken cancellationToken)
+    {
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<RomFileRow>(new CommandDefinition(
+            $"{SelectFiles} WHERE f.sha1 = @sha1 ORDER BY f.id", new { sha1 }, cancellationToken: cancellationToken))).AsList();
     }
 }
 
@@ -446,7 +485,7 @@ public sealed class LibraryMirror : ILibraryMirror
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
 
-        // Cascades to roms/images. Deleting first lets moves and swapped paths re-insert without unique clashes.
+        // Cascades to roms/rom_files/images. Deleting first lets moves and swapped paths re-insert without unique clashes.
         if (ids.Count > 0)
             await connection.ExecuteAsync(new CommandDefinition("DELETE FROM games WHERE id IN @ids",
                 new { ids }, transaction, cancellationToken: cancellationToken));
@@ -454,7 +493,7 @@ public sealed class LibraryMirror : ILibraryMirror
             await connection.ExecuteAsync(new CommandDefinition("DELETE FROM games WHERE zip_path IN @zipPaths",
                 new { zipPaths }, transaction, cancellationToken: cancellationToken));
 
-        foreach (var (game, roms, images) in rows)
+        foreach (var (game, roms, images, files) in rows)
         {
             await connection.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO games (id, system_id, title, display_title, zip_path, bucket, release_year, developers, publishers,
@@ -479,6 +518,16 @@ public sealed class LibraryMirror : ILibraryMirror
                         r.RegionKey, r.Revision, r.IsPrimary, IdMethod = r.IdMethod.ToString(), r.DatName, r.DatVersion,
                         r.DatGameName, r.SizeBytes, r.Crc32, r.Md5, r.Sha1, r.Header, r.DateAdded, r.DateModified, r.ExternalFileName, r.Version,
                     }), transaction, cancellationToken: cancellationToken));
+
+            // B12: roms are batch-inserted without reading ids back, so each file finds its rom by the unique main sha1.
+            if (files.Count > 0)
+                await connection.ExecuteAsync(new CommandDefinition("""
+                    INSERT INTO rom_files (rom_id, game_id, ordinal, file_name, external_file_name, original_file_name,
+                                           size_bytes, crc32, md5, sha1)
+                    SELECT r.id, r.game_id, @Ordinal, @FileName, @ExternalFileName, @OriginalFileName, @SizeBytes, @Crc32, @Md5, @Sha1
+                    FROM roms r
+                    WHERE r.sha1 = @RomSha1
+                    """, files, transaction, cancellationToken: cancellationToken));
 
             if (images.Count > 0)
                 await connection.ExecuteAsync(new CommandDefinition("""

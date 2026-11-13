@@ -272,12 +272,14 @@
 					rel="noopener noreferrer"><Icon name="google" /> Google it</a
 				>
 				<!-- eslint-enable svelte/no-navigation-without-resolve -->
-				<button
-					type="button"
-					class="btn btn-outline-secondary"
-					disabled={busy}
-					onclick={() => (confirmDismiss = true)}>Dismiss</button
-				>
+				{#if item.resolvable}
+					<button
+						type="button"
+						class="btn btn-outline-secondary"
+						disabled={busy}
+						onclick={() => (confirmDismiss = true)}>Dismiss</button
+					>
+				{/if}
 				<button
 					type="button"
 					class="btn btn-outline-danger"
@@ -354,234 +356,246 @@
 			</div>
 
 			<div class="col-12 col-lg-7">
-				<ul class="nav nav-tabs mb-3" role="tablist">
-					{#each tabs as t (t)}
-						<li class="nav-item" role="presentation">
-							<button
-								type="button"
-								class="nav-link"
-								class:active={tab === t}
-								id="tab-{t}"
-								role="tab"
-								aria-selected={tab === t}
-								aria-controls="panel-{t}"
-								onclick={() => (chosenTab = t)}>{tabLabels[t]}</button
-							>
-						</li>
-					{/each}
-				</ul>
+				{#if !item.resolvable}
+					<!-- B15: a disc track file can't be resolved or dismissed, only deleted. -->
+					<p class="text-body-secondary">
+						Disc track files must match the Redump DAT to be imported.
+					</p>
+				{:else}
+					<ul class="nav nav-tabs mb-3" role="tablist">
+						{#each tabs as t (t)}
+							<li class="nav-item" role="presentation">
+								<button
+									type="button"
+									class="nav-link"
+									class:active={tab === t}
+									id="tab-{t}"
+									role="tab"
+									aria-selected={tab === t}
+									aria-controls="panel-{t}"
+									onclick={() => (chosenTab = t)}>{tabLabels[t]}</button
+								>
+							</li>
+						{/each}
+					</ul>
 
-				<div id="panel-{tab}" role="tabpanel" aria-labelledby="tab-{tab}">
-					{#if tab === 'matched'}
-						{#if item.datIdentification}
-							<p>
-								{item.datIdentification.romName}
-								<span class="text-body-secondary small">
-									({item.datIdentification.datName}
-									{item.datIdentification.datVersion})
-								</span>
+					<div id="panel-{tab}" role="tabpanel" aria-labelledby="tab-{tab}">
+						{#if tab === 'matched'}
+							{#if item.datIdentification}
+								<p>
+									{item.datIdentification.romName}
+									<span class="text-body-secondary small">
+										({item.datIdentification.datName}
+										{item.datIdentification.datVersion})
+									</span>
+								</p>
+							{/if}
+							<p>Several games share its title. Attach it to one of them:</p>
+							<ul class="list-group">
+								{#each item.candidateGames as game (game.id)}
+									<li class="list-group-item d-flex align-items-center gap-2">
+										<a class="me-auto" href={resolve('/games/[id]', { id: game.id })}
+											>{game.displayTitle}</a
+										>
+										<button
+											type="button"
+											class="btn btn-sm btn-primary"
+											disabled={busy}
+											onclick={() =>
+												resolveWith(
+													{ action: 'Attach', targetGameId: game.id, flag: 'None' },
+													`Attached to ${game.displayTitle}.`
+												)}>Attach</button
+										>
+									</li>
+								{:else}
+									<li class="list-group-item text-body-secondary">
+										None of the candidate games exist any more. Run ingestion again.
+									</li>
+								{/each}
+							</ul>
+						{:else if tab === 'suggestions'}
+							<p class="small text-body-secondary">
+								{#if titleDb}
+									Choose a titledb result to identify this release by title ID.
+								{:else}
+									Picking a DAT entry adds the file as an unverified release, because its hashes
+									differ.
+								{/if}
 							</p>
-						{/if}
-						<p>Several games share its title. Attach it to one of them:</p>
-						<ul class="list-group">
-							{#each item.candidateGames as game (game.id)}
-								<li class="list-group-item d-flex align-items-center gap-2">
-									<a class="me-auto" href={resolve('/games/[id]', { id: game.id })}
-										>{game.displayTitle}</a
-									>
-									<button
-										type="button"
-										class="btn btn-sm btn-primary"
-										disabled={busy}
-										onclick={() =>
-											resolveWith(
-												{ action: 'Attach', targetGameId: game.id, flag: 'None' },
-												`Attached to ${game.displayTitle}.`
-											)}>Attach</button
-									>
-								</li>
-							{:else}
-								<li class="list-group-item text-body-secondary">
-									None of the candidate games exist any more. Run ingestion again.
-								</li>
-							{/each}
-						</ul>
-					{:else if tab === 'suggestions'}
-						<p class="small text-body-secondary">
 							{#if titleDb}
-								Choose a titledb result to identify this release by title ID.
-							{:else}
-								Picking a DAT entry adds the file as an unverified release, because its hashes
-								differ.
-							{/if}
-						</p>
-						{#if titleDb}
-							<div class="form-check mb-3">
-								<input
-									id="as-update"
-									class="form-check-input"
-									type="checkbox"
-									checked={asUpdate}
-									onchange={(e) => (updateChoice = e.currentTarget.checked)}
-								/>
-								<label class="form-check-label" for="as-update">This file is an update</label>
-							</div>
-						{/if}
-						{#if item.suggestions?.length}
-							<div class="card mb-3">
-								<div class="table-responsive">
-									<table class="table table-sm table-striped table-hover align-middle mb-0">
-										<thead class="table-dark">
-											<tr class="small text-uppercase text-body-secondary">
-												<th scope="col">DAT entry</th>
-												<th scope="col" class="text-end">Score</th>
-												<th scope="col" class="text-end"
-													><span class="visually-hidden">Actions</span></th
-												>
-											</tr>
-										</thead>
-										<tbody>
-											{#each item.suggestions as suggestion (suggestion.romName)}
-												<tr>
-													<td class="text-break">{suggestion.romName}</td>
-													<td class="text-end text-nowrap">{percent(suggestion.score)}</td>
-													<td class="text-end">
-														<button
-															type="button"
-															class="btn btn-sm btn-primary"
-															disabled={busy}
-															onclick={() => useDat(suggestion.datGameName)}>Use</button
-														>
-													</td>
-												</tr>
-											{/each}
-										</tbody>
-									</table>
+								<div class="form-check mb-3">
+									<input
+										id="as-update"
+										class="form-check-input"
+										type="checkbox"
+										checked={asUpdate}
+										onchange={(e) => (updateChoice = e.currentTarget.checked)}
+									/>
+									<label class="form-check-label" for="as-update">This file is an update</label>
 								</div>
-							</div>
-						{:else}
-							<p class="text-body-secondary">No close DAT matches.</p>
-						{/if}
-
-						<form class="row g-2 align-items-end" role="search" onsubmit={search}>
-							<div class="col">
-								<label class="form-label" for="dat-search">Search the {item.system} DAT</label>
-								<input id="dat-search" type="search" class="form-control" bind:value={searchText} />
-							</div>
-							<div class="col-auto">
-								<button type="submit" class="btn btn-outline-secondary" disabled={searching}>
-									Search
-								</button>
-							</div>
-						</form>
-						{#if searchResults}
-							{#if searchResults.length}
-								<ul class="list-group mt-2">
-									{#each searchResults as result (result.romName)}
-										<li class="list-group-item d-flex align-items-center gap-2">
-											<span class="me-auto text-break">{result.romName}</span>
-											{#if !(titleDb && result.sizeBytes === 0)}
-												<!-- G8: titledb results carry no size (T3). -->
-												<span class="small text-body-secondary text-nowrap"
-													><FileSize bytes={result.sizeBytes} /></span
-												>
-											{/if}
-											<button
-												type="button"
-												class="btn btn-sm btn-primary"
-												disabled={busy}
-												onclick={() => useDat(result.gameName)}>Use</button
-											>
-										</li>
-									{/each}
-								</ul>
+							{/if}
+							{#if item.suggestions?.length}
+								<div class="card mb-3">
+									<div class="table-responsive">
+										<table class="table table-sm table-striped table-hover align-middle mb-0">
+											<thead class="table-dark">
+												<tr class="small text-uppercase text-body-secondary">
+													<th scope="col">DAT entry</th>
+													<th scope="col" class="text-end">Score</th>
+													<th scope="col" class="text-end"
+														><span class="visually-hidden">Actions</span></th
+													>
+												</tr>
+											</thead>
+											<tbody>
+												{#each item.suggestions as suggestion (suggestion.romName)}
+													<tr>
+														<td class="text-break">{suggestion.romName}</td>
+														<td class="text-end text-nowrap">{percent(suggestion.score)}</td>
+														<td class="text-end">
+															<button
+																type="button"
+																class="btn btn-sm btn-primary"
+																disabled={busy}
+																onclick={() => useDat(suggestion.datGameName)}>Use</button
+															>
+														</td>
+													</tr>
+												{/each}
+											</tbody>
+										</table>
+									</div>
+								</div>
 							{:else}
-								<p class="text-body-secondary mt-2">No DAT entries match.</p>
+								<p class="text-body-secondary">No close DAT matches.</p>
 							{/if}
+
+							<form class="row g-2 align-items-end" role="search" onsubmit={search}>
+								<div class="col">
+									<label class="form-label" for="dat-search">Search the {item.system} DAT</label>
+									<input
+										id="dat-search"
+										type="search"
+										class="form-control"
+										bind:value={searchText}
+									/>
+								</div>
+								<div class="col-auto">
+									<button type="submit" class="btn btn-outline-secondary" disabled={searching}>
+										Search
+									</button>
+								</div>
+							</form>
+							{#if searchResults}
+								{#if searchResults.length}
+									<ul class="list-group mt-2">
+										{#each searchResults as result (result.romName)}
+											<li class="list-group-item d-flex align-items-center gap-2">
+												<span class="me-auto text-break">{result.romName}</span>
+												{#if !(titleDb && result.sizeBytes === 0)}
+													<!-- G8: titledb results carry no size (T3). -->
+													<span class="small text-body-secondary text-nowrap"
+														><FileSize bytes={result.sizeBytes} /></span
+													>
+												{/if}
+												<button
+													type="button"
+													class="btn btn-sm btn-primary"
+													disabled={busy}
+													onclick={() => useDat(result.gameName)}>Use</button
+												>
+											</li>
+										{/each}
+									</ul>
+								{:else}
+									<p class="text-body-secondary mt-2">No DAT entries match.</p>
+								{/if}
+							{/if}
+						{:else if tab === 'attach'}
+							<p class="small text-body-secondary">Attach to a game as a hack or translation.</p>
+							<form onsubmit={attach} novalidate>
+								<div class="mb-2">
+									<GameTypeahead
+										id="attach-target"
+										label="Game"
+										system={item.system}
+										bind:selected={attachTarget}
+										invalid={attachTargetError}
+									/>
+								</div>
+								<fieldset class="mb-2">
+									<legend class="form-label fs-6">Flag</legend>
+									{#each ['Hack', 'Translated'] as const as flag (flag)}
+										<div class="form-check form-check-inline">
+											<input
+												id="flag-{flag}"
+												class="form-check-input"
+												type="radio"
+												value={flag}
+												bind:group={attachFlag}
+											/>
+											<label class="form-check-label" for="flag-{flag}">{flag}</label>
+										</div>
+									{/each}
+								</fieldset>
+								<button type="submit" class="btn btn-primary" disabled={busy}>Attach</button>
+							</form>
+						{:else}
+							<form onsubmit={submitManual} novalidate>
+								<div class="mb-2">
+									<label class="form-label" for="manual-title">Title</label>
+									<input
+										id="manual-title"
+										class="form-control"
+										class:is-invalid={manualErrors.title}
+										maxlength="255"
+										bind:value={manual.title}
+									/>
+									{#if manualErrors.title}<div class="invalid-feedback">
+											{manualErrors.title}
+										</div>{/if}
+								</div>
+								<div class="row g-2 mb-2">
+									{#each [['regions', 'Regions', 'e.g. USA, Europe'], ['languages', 'Languages', 'e.g. En, Fr'], ['flags', 'Flags', 'e.g. Proto, Unl']] as const as [field, label, hint] (field)}
+										<div class="col-12 col-md-4">
+											<label class="form-label" for="manual-{field}">{label}</label>
+											<input
+												id="manual-{field}"
+												class="form-control"
+												class:is-invalid={manualErrors[field]}
+												aria-describedby="manual-{field}-help"
+												bind:value={manual[field]}
+											/>
+											{#if manualErrors[field]}<div class="invalid-feedback">
+													{manualErrors[field]}
+												</div>{/if}
+											<div id="manual-{field}-help" class="form-text">Comma-separated, {hint}.</div>
+										</div>
+									{/each}
+								</div>
+								<div class="mb-2">
+									<label class="form-label" for="manual-revision">Revision</label>
+									<input
+										id="manual-revision"
+										class="form-control"
+										class:is-invalid={manualErrors.revision}
+										placeholder="e.g. Rev 1"
+										maxlength="32"
+										bind:value={manual.revision}
+									/>
+									{#if manualErrors.revision}<div class="invalid-feedback">
+											{manualErrors.revision}
+										</div>{/if}
+								</div>
+								{#if manual.title.trim()}
+									<p class="form-text">File name: {manualFileStem(manual)}</p>
+								{/if}
+								<button type="submit" class="btn btn-primary" disabled={busy}>Add manually</button>
+							</form>
 						{/if}
-					{:else if tab === 'attach'}
-						<p class="small text-body-secondary">Attach to a game as a hack or translation.</p>
-						<form onsubmit={attach} novalidate>
-							<div class="mb-2">
-								<GameTypeahead
-									id="attach-target"
-									label="Game"
-									system={item.system}
-									bind:selected={attachTarget}
-									invalid={attachTargetError}
-								/>
-							</div>
-							<fieldset class="mb-2">
-								<legend class="form-label fs-6">Flag</legend>
-								{#each ['Hack', 'Translated'] as const as flag (flag)}
-									<div class="form-check form-check-inline">
-										<input
-											id="flag-{flag}"
-											class="form-check-input"
-											type="radio"
-											value={flag}
-											bind:group={attachFlag}
-										/>
-										<label class="form-check-label" for="flag-{flag}">{flag}</label>
-									</div>
-								{/each}
-							</fieldset>
-							<button type="submit" class="btn btn-primary" disabled={busy}>Attach</button>
-						</form>
-					{:else}
-						<form onsubmit={submitManual} novalidate>
-							<div class="mb-2">
-								<label class="form-label" for="manual-title">Title</label>
-								<input
-									id="manual-title"
-									class="form-control"
-									class:is-invalid={manualErrors.title}
-									maxlength="255"
-									bind:value={manual.title}
-								/>
-								{#if manualErrors.title}<div class="invalid-feedback">
-										{manualErrors.title}
-									</div>{/if}
-							</div>
-							<div class="row g-2 mb-2">
-								{#each [['regions', 'Regions', 'e.g. USA, Europe'], ['languages', 'Languages', 'e.g. En, Fr'], ['flags', 'Flags', 'e.g. Proto, Unl']] as const as [field, label, hint] (field)}
-									<div class="col-12 col-md-4">
-										<label class="form-label" for="manual-{field}">{label}</label>
-										<input
-											id="manual-{field}"
-											class="form-control"
-											class:is-invalid={manualErrors[field]}
-											aria-describedby="manual-{field}-help"
-											bind:value={manual[field]}
-										/>
-										{#if manualErrors[field]}<div class="invalid-feedback">
-												{manualErrors[field]}
-											</div>{/if}
-										<div id="manual-{field}-help" class="form-text">Comma-separated, {hint}.</div>
-									</div>
-								{/each}
-							</div>
-							<div class="mb-2">
-								<label class="form-label" for="manual-revision">Revision</label>
-								<input
-									id="manual-revision"
-									class="form-control"
-									class:is-invalid={manualErrors.revision}
-									placeholder="e.g. Rev 1"
-									maxlength="32"
-									bind:value={manual.revision}
-								/>
-								{#if manualErrors.revision}<div class="invalid-feedback">
-										{manualErrors.revision}
-									</div>{/if}
-							</div>
-							{#if manual.title.trim()}
-								<p class="form-text">File name: {manualFileStem(manual)}</p>
-							{/if}
-							<button type="submit" class="btn btn-primary" disabled={busy}>Add manually</button>
-						</form>
-					{/if}
-				</div>
+					</div>
+				{/if}
 			</div>
 		</div>
 

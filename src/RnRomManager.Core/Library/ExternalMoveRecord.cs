@@ -12,6 +12,10 @@ namespace RnRomManager.Core.Library;
 /// backup (by SHA256) to the games, their library-relative ZIP paths, the moved release's SHA1 and its pointer before
 /// and after the move. Neither the record nor the backup alone authorizes recovery.
 /// </summary>
+/// <param name="Files">
+/// B18 (v2): the release's set files in <c>files</c> order, each with its name before and after the move; null in v1,
+/// written by a release without files.
+/// </param>
 public sealed record MoveRecord(
     int Version,
     string BackupSha256,
@@ -21,15 +25,27 @@ public sealed record MoveRecord(
     string TargetZipPath,
     string RomSha1,
     string SourceExternalFileName,
-    string TargetExternalFileName)
+    string TargetExternalFileName,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] IReadOnlyList<MoveRecordFile>? Files = null)
 {
-    public const int CurrentVersion = 1;
+    /// <summary>v1: one file per release (no <see cref="Files"/>).</summary>
+    public const int SingleFileVersion = 1;
+
+    /// <summary>v2 (B18): a release with set files.</summary>
+    public const int CurrentVersion = 2;
+
+    /// <summary>The version a move of a release with (or without) set files writes.</summary>
+    public static int VersionFor(IReadOnlyList<MoveRecordFile>? files) => files is null ? SingleFileVersion : CurrentVersion;
 }
+
+/// <summary>B18: one set file of a moved release, before and after the move.</summary>
+public sealed record MoveRecordFile(string SourceExternalFileName, string TargetExternalFileName);
 
 /// <summary>Publishes and reads the <c>&lt;backup&gt;.json</c> companion of an <see cref="ExternalZipBackup"/> (spec W3, W7).</summary>
 public static class ExternalMoveRecord
 {
-    public const int MaxBytes = 16 * 1024;
+    /// <summary>B18: 99 pairs of 250-byte names fit even when every byte is written as a 6-byte <c>\uXXXX</c> escape.</summary>
+    public const int MaxBytes = 320 * 1024;
 
     private static readonly JsonSerializerOptions Json = new()
     {
@@ -144,8 +160,10 @@ public static class ExternalMoveRecord
     /// <exception cref="InvalidDataException">The record doesn't describe a move of this backup.</exception>
     private static async Task ValidateAsync(string libraryRoot, string backupPath, MoveRecord record, InfoJsonReader reader, CancellationToken cancellationToken)
     {
-        if (record.Version != MoveRecord.CurrentVersion)
+        if (record.Version is not (MoveRecord.SingleFileVersion or MoveRecord.CurrentVersion))
             throw new InvalidDataException($"move record version {record.Version} isn't supported");
+        if (record.Version == MoveRecord.SingleFileVersion ? record.Files is not null : record.Files is not { Count: > 0 })
+            throw new InvalidDataException($"a version {record.Version} move record {(record.Version == MoveRecord.SingleFileVersion ? "has no" : "lists its")} files");
         if (Problem(record) is { } invalid)
             throw new InvalidDataException(invalid);
 
@@ -178,6 +196,10 @@ public static class ExternalMoveRecord
             throw new InvalidDataException($"the backup holds {releases.Count} releases with sha1 {record.RomSha1}, not one");
         if (!string.Equals(releases[0].ExternalFileName, record.SourceExternalFileName, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException($"the backed-up release's pointer is {releases[0].ExternalFileName}, not the recorded {record.SourceExternalFileName}");
+        // B18: a v2 record's files are the backed-up release's files, in order.
+        if (record.Files is { } files && (releases[0].Files is not { } backedUp || backedUp.Count != files.Count
+            || backedUp.Zip(files).Any(p => !string.Equals(p.First.ExternalFileName, p.Second.SourceExternalFileName, StringComparison.OrdinalIgnoreCase))))
+            throw new InvalidDataException("the backed-up release's files aren't the recorded ones");
     }
 
     private static async Task<byte[]> ReadCappedAsync(Stream stream, CancellationToken cancellationToken)
@@ -208,7 +230,8 @@ public static class ExternalMoveRecord
                 || !path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 return $"'{path}' isn't a library-relative ZIP path";
         }
-        foreach (var pointer in new[] { record.SourceExternalFileName, record.TargetExternalFileName })
+        foreach (var pointer in new[] { record.SourceExternalFileName, record.TargetExternalFileName }
+            .Concat((record.Files ?? []).SelectMany(f => new[] { f.SourceExternalFileName, f.TargetExternalFileName })))
         {
             if (pointer is "." or ".." || InfoJsonValidator.PortableNameProblem(pointer) is not null
                 || Encoding.UTF8.GetByteCount(pointer) > InfoJsonValidator.MaxExternalFileNameBytes)

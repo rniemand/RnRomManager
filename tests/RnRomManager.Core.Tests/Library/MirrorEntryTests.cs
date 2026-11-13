@@ -11,7 +11,7 @@ public class MirrorEntryTests
     [TestCase("Tetris.zip", "T")]
     public void Bucket_ComesFromTheZipName(string zipPath, string bucket)
     {
-        var (game, _, _) = new MirrorEntry(Game("x", Rom("a.gb", RomBytes(1))), zipPath, 1, DateTime.UtcNow).ToRows();
+        var (game, _, _, _) = new MirrorEntry(Game("x", Rom("a.gb", RomBytes(1))), zipPath, 1, DateTime.UtcNow).ToRows();
         Assert.That(game.Bucket, Is.EqualTo(bucket));
     }
 
@@ -20,7 +20,7 @@ public class MirrorEntryTests
     {
         var info = Game("x", Rom("a.gb", RomBytes(1), regions: ["USA", "Europe"]), Rom("b.gb", RomBytes(2), isPrimary: false, regions: []));
 
-        var (_, roms, _) = new MirrorEntry(info, "gb/X/x.zip", 1, DateTime.UtcNow).ToRows();
+        var (_, roms, _, _) = new MirrorEntry(info, "gb/X/x.zip", 1, DateTime.UtcNow).ToRows();
 
         Assert.That(roms.Select(r => r.RegionKey), Is.EqualTo(new[] { "|USA|Europe|", "|" }));
     }
@@ -30,7 +30,7 @@ public class MirrorEntryTests
     {
         var mtime = new DateTime(2026, 11, 4, 1, 2, 3, DateTimeKind.Utc).AddTicks(9_999_999);
 
-        var (game, _, _) = new MirrorEntry(Game("x", Rom("a.gb", RomBytes(1))), "gb/X/x.zip", 1, mtime).ToRows();
+        var (game, _, _, _) = new MirrorEntry(Game("x", Rom("a.gb", RomBytes(1))), "gb/X/x.zip", 1, mtime).ToRows();
 
         Assert.That(game.HasDefaultBoxArt, Is.False);
         Assert.That(game.ZipMtimeUtc, Is.EqualTo(new DateTime(2026, 11, 4, 1, 2, 3, DateTimeKind.Utc)));

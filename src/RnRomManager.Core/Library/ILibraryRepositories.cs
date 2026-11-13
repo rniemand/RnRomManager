@@ -60,17 +60,28 @@ public interface IRomRepository
     Task<IReadOnlyList<(Guid GameId, string Sha1)>> ListSha1sAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Every ROM stored outside its game's ZIP (<c>external_file_name</c> set), ordered by ZIP path then ROM id.
-    /// It lists what the mirror claims, whether or not the file is on disk: name allocation, integrity and orphan
-    /// checks all start from these claims.
+    /// Every file stored outside its game's ZIP: each external main ROM (<c>external_file_name</c> set) and each
+    /// <c>rom_files</c> row (B13), ordered by ZIP path, then ROM id, then the main file before its files in ordinal
+    /// order. It lists what the mirror claims, whether or not the file is on disk: name allocation, integrity and
+    /// orphan checks all start from these claims.
     /// </summary>
     Task<IReadOnlyList<ExternalRomRow>> ListExternalAsync(CancellationToken cancellationToken);
+
+    /// <summary>B13: every set file of a game, by ROM id then ordinal.</summary>
+    Task<IReadOnlyList<RomFileRow>> ListFilesByGameAsync(Guid gameId, CancellationToken cancellationToken);
+
+    /// <summary>B13: null unless the file belongs to that release of that game.</summary>
+    Task<RomFileRow?> GetFileAsync(Guid gameId, long romId, long fileId, CancellationToken cancellationToken);
+
+    /// <summary>B14: every set file with this SHA1 (not unique: audio tracks repeat).</summary>
+    Task<IReadOnlyList<RomFileRow>> ListFilesBySha1Async(string sha1, CancellationToken cancellationToken);
 }
 
 /// <summary>One mirrored claim on an external ROM file: <paramref name="ExternalFileName"/> in the folder of <paramref name="ZipPath"/>.</summary>
 /// <param name="ZipPath">The owning game's ZIP, relative to <c>Paths:Roms</c>, <c>/</c> separators.</param>
 /// <param name="SizeBytes">The recorded size, not the size on disk.</param>
-public sealed record ExternalRomRow(Guid GameId, string ZipPath, string ExternalFileName, long SizeBytes, string Sha1);
+/// <param name="FileId">B13: the <c>rom_files</c> id of a set file; null for a main file.</param>
+public sealed record ExternalRomRow(Guid GameId, string ZipPath, string ExternalFileName, long SizeBytes, string Sha1, long? FileId = null);
 
 public interface IImageRepository
 {

@@ -15,6 +15,8 @@ public static class NoIntroRegions
         "Italy", "Japan", "Korea", "Mexico", "Netherlands", "New Zealand", "Norway", "Poland", "Portugal", "Russia",
         "Singapore", "Slovakia", "South Africa", "Spain", "Sweden", "Switzerland", "Taiwan", "Thailand", "Turkey",
         "United Kingdom", "USA",
+        // B3a: Redump names use these.
+        "UK", "United Arab Emirates",
     };
 
     /// <summary>True when every <c>", "</c>-separated part of a group's content is a known region.</summary>

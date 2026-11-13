@@ -28,7 +28,7 @@ public sealed class DatStore
             ? noIntro.Roms
             : noIntro.Roms.Where(r => romExtensions.Contains(Path.GetExtension(r.RomName), StringComparer.OrdinalIgnoreCase)).ToList();
         foreach (var rom in Roms)
-            _bySha1.TryAdd(rom.Sha1, rom); // the DATs have no duplicate SHA1s; first wins if one appears
+            _bySha1.TryAdd(rom.Sha1, rom); // Redump DATs repeat a game per serial with the same rom (B3); the first wins
         BaseTitles = Roms.Select(r => NoIntroName.Parse(r.GameName).BaseTitle).Distinct(StringComparer.Ordinal).ToList();
         _metadata = MergeMetadata(Roms.Select(r => r.Crc32).ToHashSet(StringComparer.Ordinal), metadat);
     }

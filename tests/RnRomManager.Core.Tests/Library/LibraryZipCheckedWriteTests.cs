@@ -31,7 +31,7 @@ public class LibraryZipCheckedWriteTests
         var gb = Substitute.For<ISystemHandler>();
         gb.EmbedRomsInZip.Returns(true);
         gb.Id.Returns("gb");
-        ISystemHandler[] handlers = [gb, new ExternalTestHandler()];
+        ISystemHandler[] handlers = [gb, new ExternalTestHandler(), new ExternalSetTestHandler()];
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns(handlers);
         _reader = new InfoJsonReader([], registry);
@@ -169,6 +169,44 @@ public class LibraryZipCheckedWriteTests
 
         Assert.That(ex!.Message, Does.Contain("size 60 != info.json 64"));
         Assert.That(Left(), Is.EqualTo(new[] { Pointer }));
+    }
+
+    // --- B12 set files ---
+
+    private const string DataTrack = "Disc (USA) (Track 1).bin";
+    private const string Cue = "Disc (USA).cue";
+    private static readonly byte[] CueBytes = Bytes(7, 40);
+
+    private static InfoJsonGame SetGame(long cueSize) => Game(ExternalSetTestHandler.SystemId, Rom(DataTrack, RomBytes, DataTrack) with
+    {
+        Files = [new InfoJsonRomFile(Cue, Cue, Cue, cueSize, Crc32.ToHex(CueBytes), Convert.ToHexStringLower(MD5.HashData(CueBytes)),
+            Convert.ToHexStringLower(SHA1.HashData(CueBytes)))],
+    });
+
+    [Test]
+    public async Task TouchedSetFile_WithTheRightLength_IsVerified()
+    {
+        var touched = new Dictionary<string, ExternalFileSnapshot>(StringComparer.OrdinalIgnoreCase)
+        {
+            [DataTrack] = Place(DataTrack, RomBytes),
+            ["disc (usa).CUE"] = Place(Cue, CueBytes),
+        };
+
+        await WriteAsync(null, Changes(SetGame(CueBytes.Length), touched));
+
+        using var zip = LibraryZip.Open(_target, _reader);
+        Assert.That(zip.InfoJson!.Game!.Roms.Single().Files!.Single().ExternalFileName, Is.EqualTo(Cue));
+    }
+
+    [Test]
+    public async Task TouchedSetFile_OfTheWrongLength_VerifyFailed()
+    {
+        var placed = Place(Cue, CueBytes);
+
+        var ex = await Assert.ThrowsAsync<LibraryZipVerifyException>(() => WriteAsync(null, Changes(SetGame(CueBytes.Length + 1), Touched(Cue, placed))));
+
+        Assert.That((ex!.EntryName, ex.Message), Is.EqualTo((Cue, $"ZIP entry '{Cue}': size {CueBytes.Length} != info.json {CueBytes.Length + 1}")));
+        Assert.That(Left(), Is.EqualTo(new[] { Cue }));
     }
 
     [Test]

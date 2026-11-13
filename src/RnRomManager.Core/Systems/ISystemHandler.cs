@@ -37,8 +37,21 @@ public interface ISystemHandler
     /// </summary>
     bool EmbedRomsInZip { get; }
 
-    /// <summary>Spec T1: libretro's five DAT files, or blawar/titledb.</summary>
+    /// <summary>
+    /// B5: true for disc systems whose release can be a file set (a data track, its <c>.cue</c> and the other tracks).
+    /// External files then keep their exact names (B10), ingest groups bin/cue sets (B7) and Review restricts set
+    /// files (B15). Requires <see cref="EmbedRomsInZip"/> false; handlers sharing a <see cref="Family"/> must agree.
+    /// </summary>
+    bool FileSets => false;
+
+    /// <summary>Spec T1: libretro's DAT files, or blawar/titledb.</summary>
     DatSource DatSource => DatSource.Libretro;
+
+    /// <summary>B1: the main DAT's folder under <c>Sources:DatBaseUrl</c> and <c>cache/dats/</c>: <c>no-intro</c> or <c>redump</c>.</summary>
+    string DatFolder => DatKind.NoIntro;
+
+    /// <summary>B2: the metadat files that exist for this system; a kind not listed gives empty metadata.</summary>
+    IReadOnlyList<string> MetadatKinds => DatKind.Metadat;
 
     /// <summary>512×512 PNG stored as <c>boxart-01.png</c> with <c>isDefault: true</c> (§6.1).</summary>
     ReadOnlyMemory<byte> DefaultBoxArtPng { get; }

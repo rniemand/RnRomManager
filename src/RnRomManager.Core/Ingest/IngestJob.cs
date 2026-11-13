@@ -90,15 +90,46 @@ public sealed class IngestJob(
                 logger.LogInformation("Review item {Id} removed: {Path} no longer exists", row.Id, row.ArchivePath ?? row.SourcePath);
         }
 
-        // Step 6
-        var snapshot = scanner.Scan().SelectMany(s => s.Files)
-            .Where(f => Selection is null || Selection.Contains((f.SystemId, f.Name))).ToList();
-        context.Progress.SetTotal(snapshot.Count);
+        // Step 6. B7: a FileSets system that takes .cue files is planned into sets from all of its loose files, whatever the selection.
+        var scanned = scanner.Scan().SelectMany(s => s.Files).ToList();
+        var units = new List<WorkUnit>();
+        foreach (var folder in scanned.GroupBy(f => f.SystemId))
+        {
+            if (systems.ById(folder.Key) is { FileSets: true } handler && handler.RomExtensions.Contains(".cue", StringComparer.OrdinalIgnoreCase))
+            {
+                var byName = folder.ToDictionary(f => f.Name, StringComparer.Ordinal);
+                var selected = Selection?.Where(s => s.SystemId == folder.Key).Select(s => s.Name).ToHashSet(StringComparer.Ordinal);
+                foreach (var unit in IngestSetPlanner.Plan(folder.Select(f => new PlannerFile(f.Name, f.SizeBytes, ReadCue(f))).ToList(), selected))
+                    units.Add(new WorkUnit(unit.Kind, [.. unit.Members.Select(m => byName[m])], unit.Reason));
+            }
+            else
+            {
+                units.AddRange(folder.Where(f => Selection is null || Selection.Contains((f.SystemId, f.Name))).Select(f => new WorkUnit(PlannedKind.Lone, [f])));
+            }
+        }
+        context.Progress.SetTotal(units.Sum(u => u.Files.Count));
         var run = new Run(context, IngestOutcome.All.ToDictionary(o => o, _ => 0), new CircuitBreaker()); // one breaker per job (§10.2)
         var now = time.GetUtcNow().UtcDateTime;
-        foreach (var file in snapshot)
+        foreach (var unit in units)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (unit.Kind == PlannedKind.Set)
+            {
+                await SetAsync(run, unit.Files).ConfigureAwait(false);
+                continue;
+            }
+            if (unit.Kind == PlannedKind.Skipped)
+            {
+                foreach (var member in unit.Files)
+                {
+                    context.Progress.SetCurrentItem(member.Name);
+                    await ItemAsync(run, member, new IngestItemResult(IngestOutcome.Skipped, unit.Reason, SystemId: member.SystemId)).ConfigureAwait(false);
+                    context.Progress.ItemDone();
+                }
+                continue;
+            }
+
+            var file = unit.Files[0];
             context.Progress.SetCurrentItem(file.Name);
             var external = systems.ById(file.SystemId) is { EmbedRomsInZip: false };
             if (external && ExternalRomName.Scalars(file.FullPath) > ExternalRomName.MaxSourcePathScalars)
@@ -107,6 +138,12 @@ public sealed class IngestJob(
                 logger.LogError("{Path}: longer than the {Limit}-character source path limit; left in place", file.FullPath, ExternalRomName.MaxSourcePathScalars);
                 await ItemAsync(run, file with { FullPath = ExternalRomName.CutScalars(file.FullPath, ExternalRomName.MaxSourcePathScalars) },
                     IngestItemResult.Error(IngestErrors.IoError, $"the path is longer than {ExternalRomName.MaxSourcePathScalars} characters", file.SystemId)).ConfigureAwait(false);
+            }
+            else if (systems.ById(file.SystemId) is { FileSets: true } && ArchiveExtractor.IsArchive(file.Name))
+            {
+                // B9: disc systems take loose files only; the archive stays where it is.
+                await ItemAsync(run, file, new IngestItemResult(IngestOutcome.Skipped, IngestReason.ArchiveNotSupported, SystemId: file.SystemId))
+                    .ConfigureAwait(false);
             }
             else if (external && ArchiveExtractor.IsArchive(file.Name))
                 await ExternalArchiveAsync(run, file, Path.Combine(work, Guid.NewGuid().ToString())).ConfigureAwait(false); // its own fresh age check
@@ -141,8 +178,74 @@ public sealed class IngestJob(
 
     private sealed record Run(JobContext Context, Dictionary<string, int> Counts, CircuitBreaker Breaker);
 
+    /// <summary>B7: a planned unit: a set, a lone file, or members skipped with <paramref name="Reason"/>.</summary>
+    private sealed record WorkUnit(PlannedKind Kind, IReadOnlyList<IngestFile> Files, string? Reason = null);
+
+    /// <summary>B7: a cue's bytes for the planner, through the same checked open as other ingest reads; null when unreadable.</summary>
+    private byte[]? ReadCue(IngestFile file)
+    {
+        if (!file.Name.EndsWith(".cue", StringComparison.OrdinalIgnoreCase) || file.SizeBytes > IngestSetPlanner.MaxCueBytes)
+            return null;
+        var opened = ExternalRomPath.OpenRead(paths.Value.Ingest, file.FullPath, FileShare.Read);
+        if (opened.Status != ExternalPathStatus.Found)
+            return null;
+        try
+        {
+            using var stream = opened.Stream!;
+            using var buffer = new MemoryStream();
+            new LimitStream(stream, IngestSetPlanner.MaxCueBytes).CopyTo(buffer);
+            return buffer.ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or LimitExceededException)
+        {
+            logger.LogWarning("{Path}: the cue couldn't be read: {Error}", file.FullPath, ex.Message);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// B7: one set, processed to the end (I2). Every member gets its own item, recorded before its <c>ItemDone</c>; a
+    /// <c>DbWriteFailed</c> stops the job only once all of them are recorded.
+    /// </summary>
+    private async Task SetAsync(Run run, IReadOnlyList<IngestFile> members)
+    {
+        IReadOnlyList<IngestItemResult> results;
+        if (members.Any(m => ExternalRomName.Scalars(m.FullPath) > ExternalRomName.MaxSourcePathScalars))
+        {
+            // I1: an over-long path can't be recorded, so that member is an IoError and the rest of the set waits; all stay.
+            foreach (var member in members)
+            {
+                var tooLong = ExternalRomName.Scalars(member.FullPath) > ExternalRomName.MaxSourcePathScalars;
+                await ItemAsync(run, tooLong ? member with { FullPath = ExternalRomName.CutScalars(member.FullPath, ExternalRomName.MaxSourcePathScalars) } : member,
+                    tooLong
+                        ? IngestItemResult.Error(IngestErrors.IoError, $"the path is longer than {ExternalRomName.MaxSourcePathScalars} characters", member.SystemId)
+                        : new IngestItemResult(IngestOutcome.Skipped, IngestReason.IncompleteSet, "another file of the set has an over-long path", member.SystemId))
+                    .ConfigureAwait(false);
+                run.Context.Progress.ItemDone();
+            }
+            return;
+        }
+        try
+        {
+            results = await pipeline.ProcessSetAsync(members, run.Context.JobId, run.Context.Actor, run.Breaker, run.Context.Progress).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogError(ex, "{Path}: unexpected failure", members[0].FullPath);
+            results = [.. members.Select(m => IngestItemResult.Error(IngestErrors.Unexpected, ex.Message, m.SystemId))]; // I4: Pending rows stay
+        }
+        for (var i = 0; i < members.Count; i++)
+        {
+            await ItemAsync(run, members[i], results[i], stopOnDbWriteFailure: false).ConfigureAwait(false);
+            run.Context.Progress.ItemDone();
+        }
+        if (results.FirstOrDefault(r => r.Reason == IngestErrors.DbWriteFailed) is { } failed)
+            throw new IngestStoppedException($"{members[0].Name}: DB write failed ({failed.Details}); the job stopped so no later file groups against a stale DB");
+    }
+
     /// <summary>One item: processes it (unless <paramref name="known"/>), records its row; null = left in ingest.</summary>
-    private async Task<IngestItemResult?> ItemAsync(Run run, IngestFile file, IngestItemResult? known, CancellationToken cancellationToken = default)
+    private async Task<IngestItemResult?> ItemAsync(Run run, IngestFile file, IngestItemResult? known, CancellationToken cancellationToken = default,
+        bool stopOnDbWriteFailure = true)
     {
         var fileId = Guid.NewGuid();
         using var scope = logger.BeginScope(new Dictionary<string, object> { ["FileId"] = fileId });
@@ -152,7 +255,7 @@ public sealed class IngestJob(
 
         await RecordAsync(run.Context, file, fileId, result).ConfigureAwait(false);
         run.Counts[result.Outcome]++;
-        if (result.Reason == IngestErrors.DbWriteFailed)
+        if (stopOnDbWriteFailure && result.Reason == IngestErrors.DbWriteFailed)
             throw new IngestStoppedException($"{file.Name}: DB write failed ({result.Details}); the job stopped so no later file groups against a stale DB");
         return result;
     }

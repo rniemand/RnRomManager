@@ -101,6 +101,37 @@ public class ReviewResolverExternalTests
         Assert.That(Directory.Exists(Path.Combine(_ingest, "_failed")), Is.False, "nothing was moved");
     }
 
+    [TestCase("Disc (Track 1).bin", "Resolve")]
+    [TestCase("Disc (Track 1).BIN", "Dismiss")]
+    [TestCase("Disc.cue", "Resolve")]
+    [TestCase("Disc.cue", "Dismiss")]
+    public async Task SetFileItem_CantBeResolvedOrDismissed_AndKeepsPending(string name, string action)
+    {
+        // B15: an unmatched .cue/.bin on a FileSets system can only be deleted.
+        Build(new ExternalSetTestHandler());
+        var folder = Directory.CreateDirectory(Path.Combine(_paths.Ingest, ExternalSetTestHandler.SystemId)).FullName;
+        _item = _item with { SystemId = ExternalSetTestHandler.SystemId, SourcePath = Path.Combine(folder, name), OriginalFileName = name };
+        File.WriteAllBytes(_item.SourcePath, [1, 2, 3]);
+
+        var result = action == "Resolve" ? await _resolver.ResolveAsync(1, Manual, Actor, default) : await _resolver.DismissAsync(1, Actor, default);
+
+        Assert.That(result.Code, Is.EqualTo(ReviewResolver.SetFileNotResolvable));
+        Assert.That(File.Exists(_item.SourcePath), Is.True);
+        await AssertPendingKeptAsync();
+    }
+
+    [Test]
+    public void IsResolvable_OnlyRefusesCueAndBinOnAFileSetsSystem()
+    {
+        var systems = new SystemRegistry([new ExternalTestHandler(), new ExternalSetTestHandler()]);
+        ReviewItem Item(string system, string name) => _item with { SystemId = system, OriginalFileName = name };
+
+        Assert.That(ReviewResolver.IsResolvable(Item(ExternalSetTestHandler.SystemId, "x.bin"), systems), Is.False);
+        Assert.That(ReviewResolver.IsResolvable(Item(ExternalSetTestHandler.SystemId, "x.iso"), systems), Is.True);
+        Assert.That(ReviewResolver.IsResolvable(Item(ExternalSetTestHandler.SystemId, "x.nrg"), systems), Is.True);
+        Assert.That(ReviewResolver.IsResolvable(Item(ExternalTestHandler.SystemId, "x.bin"), systems), Is.True);
+    }
+
     [Test]
     public async Task ConfirmedMissingSource_ResolveIsSourceMissing_AndDropsTheRow()
     {

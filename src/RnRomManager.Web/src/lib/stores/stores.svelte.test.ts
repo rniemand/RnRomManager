@@ -114,4 +114,13 @@ describe('icons', () => {
 		expect(iconClass('github')).toBe('fa-brands fa-github');
 		expect(iconClass('system-snes')).toBe('bi bi-controller');
 	});
+
+	it('gives the disc systems brand or disc icons (B22)', () => {
+		expect(iconClass('system-psx')).toBe('bi bi-playstation');
+		expect(iconClass('system-psp')).toBe('bi bi-playstation');
+		expect(iconClass('system-x360')).toBe('bi bi-xbox');
+		expect(iconClass('system-gc')).toBe('bi bi-disc');
+		expect(iconClass('system-wii')).toBe('bi bi-disc');
+		expect(iconClass('system-saturn')).toBe('bi bi-disc');
+	});
 });

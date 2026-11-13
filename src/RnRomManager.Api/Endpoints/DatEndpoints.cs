@@ -45,9 +45,9 @@ public static class DatEndpoints
             {
                 manifest = []; // no usable DATs; the page offers Refresh
             }
-            // One row per system: a no-intro DAT (its metadat files share the name and have no version) or a titledb file.
+            // One row per system: a no-intro or redump DAT (its metadat files share the name and have no version) or a titledb file.
             return Results.Ok(manifest
-                .Where(e => e.File.StartsWith(DatKind.NoIntro + "/", StringComparison.Ordinal) || e.File.StartsWith(TitleDb.Folder + "/", StringComparison.Ordinal))
+                .Where(e => DatKind.IsMainDat(e.File) || e.File.StartsWith(TitleDb.Folder + "/", StringComparison.Ordinal))
                 .OrderBy(e => e.DatName, StringComparer.Ordinal)
                 .Select(e => new { datName = e.DatName, version = e.Version, downloadedAt = e.DownloadedAt }));
         }).RequireAuthorization(AuthSetup.AdminOnly);

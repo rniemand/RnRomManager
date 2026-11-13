@@ -53,7 +53,19 @@ const rom = (id: number) => ({
 	downloadUrl: '',
 	hasNote: false,
 	externalFileName: null as string | null,
-	version: null as string | null
+	version: null as string | null,
+	files: null as
+		| {
+				id: number;
+				fileName: string;
+				sizeBytes: number;
+				crc32: string;
+				md5: string;
+				sha1: string;
+				downloadUrl: string;
+		  }[]
+		| null,
+	totalSizeBytes: 1
 });
 
 const game = (romIds: number[]) => ({
@@ -170,6 +182,40 @@ describe('game detail admin actions', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Delete Tetris 1.gb' }));
 		await vi.waitFor(() => expect(modal().getByText(/Delete Tetris 1\.gb\?/)).toBeTruthy());
 		expect(modal().queryByText(/and its note/)).toBeNull();
+	});
+
+	it("the release delete confirmation counts a disc set's other files; one without files is unchanged (B17)", async () => {
+		const detail = game([1, 2]);
+		detail.roms[1].files = [
+			{
+				id: 11,
+				fileName: 'Disc.cue',
+				sizeBytes: 1,
+				crc32: '0',
+				md5: '0',
+				sha1: '0',
+				downloadUrl: ''
+			},
+			{
+				id: 12,
+				fileName: 'Disc (Track 2).bin',
+				sizeBytes: 1,
+				crc32: '0',
+				md5: '0',
+				sha1: '0',
+				downloadUrl: ''
+			}
+		];
+		answers['GET /api/games/g1'] = [{ status: 200, body: detail }];
+		render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Delete Tetris 2.gb' }));
+		expect(modal().getByText(/The ROM and its 2 other files move to the system's/)).toBeTruthy();
+
+		await fireEvent.click(modal().getByRole('button', { name: 'Cancel', hidden: true }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Delete Tetris 1.gb' }));
+		await vi.waitFor(() => expect(modal().getByText(/The ROM moves to the system's/)).toBeTruthy());
+		expect(modal().queryByText(/other files/)).toBeNull();
 	});
 
 	it('the game delete confirmation mentions notes when any release has one (B12)', async () => {

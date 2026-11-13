@@ -50,6 +50,12 @@ public class ReportEndpointsTests
             [IngestSeeder.MegaDriveDat] = [],
             [IngestSeeder.Sega32xDat] = [],
             [IngestSeeder.TurboGrafx16Dat] = [],
+            [IngestSeeder.PsxDat] = [],
+            [IngestSeeder.PspDat] = [],
+            [IngestSeeder.GameCubeDat] = [],
+            [IngestSeeder.WiiDat] = [],
+            [IngestSeeder.Xbox360Dat] = [],
+            [IngestSeeder.SaturnDat] = [],
             [Gb] =
             [
                 new FixtureGame("Alpha (World)", "Alpha (World).gb", Alpha),
@@ -58,7 +64,7 @@ public class ReportEndpointsTests
                 new FixtureGame("Delta (World)", "Delta (World).gb", Delta),
             ],
             [Gbc] = [new FixtureGame("Echo (World)", "Echo (World).gbc", Echo)],
-        }, titleDb: IngestSeeder.EmptySwitch);
+        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 
@@ -205,6 +211,27 @@ public class ReportEndpointsTests
         var systems = size.GetProperty("systems").EnumerateArray()
             .Select(s => (s.GetProperty("system").GetString(), s.GetProperty("bytes").GetInt64(), s.GetProperty("gameCount").GetInt32())).ToList();
         Assert.That(systems, Is.EqualTo(new[] { ("ext", 600L, 1), ("gb", 500L, 1) }), "the ZIP's 100 counts once, not per release");
+    }
+
+    [Test]
+    public async Task LibrarySize_IncludesSetFiles_AndRomCountStaysReleases()
+    {
+        // B21: a release's set files count toward the size; the drill-down's romCount is still one release.
+        var rom = TestLibrary.Rom("Disc (Track 1).bin", [.. Enumerable.Repeat((byte)1, 300)]) with
+        {
+            ExternalFileName = "Disc (Track 1).bin",
+            Files = [new InfoJsonRomFile("Disc.cue", "Disc.cue", "Disc.cue", 40, "00000000", new string('0', 32), new string('a', 40)),
+                new InfoJsonRomFile("Disc (Track 2).bin", "Disc (Track 2).bin", "Disc (Track 2).bin", 700, "00000000", new string('0', 32), new string('b', 40))],
+        };
+        var game = TestLibrary.Game("Disc", rom) with { System = "gb" };
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, "gb/D/Disc.zip", 100, DateTime.UtcNow), default);
+
+        var size = await GetJson("/api/reports/library-size");
+        var gb = await GetJson("/api/reports/library-size/gb");
+
+        Assert.That(size.GetProperty("totalBytes").GetInt64(), Is.EqualTo(1140L));
+        Assert.That(gb.GetProperty("games").EnumerateArray().Select(g => (g.GetProperty("bytes").GetInt64(), g.GetProperty("romCount").GetInt32())),
+            Is.EqualTo(new[] { (1140L, 1) }));
     }
 
     [Test]

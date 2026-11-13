@@ -145,6 +145,60 @@
 	background-color: var(--bs-switch) !important;
 }
 
+/* PlayStation system colour (disc systems B22): grey, same in both themes; white on it is AA (~5.9:1). */
+:root {
+	--bs-psx: #5c6670;
+}
+.text-bg-psx {
+	color: #fff !important;
+	background-color: var(--bs-psx) !important;
+}
+
+/* PlayStation Portable system colour (disc systems B22): plum, same in both themes; white on it is AA (~8.3:1). */
+:root {
+	--bs-psp: #8a1c7c;
+}
+.text-bg-psp {
+	color: #fff !important;
+	background-color: var(--bs-psp) !important;
+}
+
+/* GameCube system colour (disc systems B22): dark gold, same in both themes; black on it is AA (~6.5:1). */
+:root {
+	--bs-gc: #b8860b;
+}
+.text-bg-gc {
+	color: #000 !important;
+	background-color: var(--bs-gc) !important;
+}
+
+/* Wii system colour (disc systems B22): light blue, same in both themes; black on it is AA (~9.3:1). */
+:root {
+	--bs-wii: #7fb3d5;
+}
+.text-bg-wii {
+	color: #000 !important;
+	background-color: var(--bs-wii) !important;
+}
+
+/* Xbox 360 system colour (disc systems B22): green, same in both themes; black on it is AA (~9.2:1). */
+:root {
+	--bs-x360: #5dc21e;
+}
+.text-bg-x360 {
+	color: #000 !important;
+	background-color: var(--bs-x360) !important;
+}
+
+/* Saturn system colour (disc systems B22): slate, same in both themes; white on it is AA (~9.3:1). */
+:root {
+	--bs-saturn: #34495e;
+}
+.text-bg-saturn {
+	color: #fff !important;
+	background-color: var(--bs-saturn) !important;
+}
+
 /* Library cards (L1, L2): a step lighter than the body in dark mode; a small lift and shadow on hover or keyboard focus. */
 [data-bs-theme='dark'] .game-card {
 	--bs-card-bg: var(--bs-tertiary-bg);

@@ -13,7 +13,7 @@ public class SchemaMigrationTests
     private static readonly string[] Tables =
     [
         "app_settings", "audit_events", "collection_games", "collections", "data_protection_keys", "duplicate_dismissals", "games", "images", "ingest_review_items", "integrity_issues",
-        "job_items", "jobs", "roms", "user_roles", "users",
+        "job_items", "jobs", "rom_files", "roms", "user_roles", "users",
     ];
 
     private string _cs = null!;
@@ -42,7 +42,7 @@ public class SchemaMigrationTests
             "0007_ingest_review_items", "0008_integrity_issues", "0009_data_protection_keys",
             "0010_game_rating", "0011_user_roles", "0012_image_cover", "0013_duplicate_dismissals", "0014_audit_events",
             "0015_app_settings", "0016_user_hotkeys", "0017_collections", "0018_external_roms",
-            "0019_release_versions",
+            "0019_release_versions", "0020_rom_files",
         }));
     }
 
@@ -51,7 +51,7 @@ public class SchemaMigrationTests
     {
         Lifecycle(_cs).Migrate();
 
-        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 19L }));
+        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 20L }));
     }
 
     [Test]
@@ -70,6 +70,7 @@ public class SchemaMigrationTests
     [TestCase("user_roles", "user_id int(11), role varchar(32)")]
     [TestCase("games", "id char(36), system_id varchar(16), title varchar(255), display_title varchar(255), zip_path varchar(512), bucket char(1), release_year smallint(6) NULL, developers longtext, publishers longtext, genres longtext, description text NULL, has_default_boxart tinyint(1) =0, zip_size_bytes bigint(20), zip_mtime_utc datetime, info_schema_version int(11), created_at datetime(6), updated_at datetime(6), rating tinyint(4) NULL, favourite tinyint(1) =0")]
     [TestCase("roms", "id bigint(20), game_id char(36), system_id varchar(16), file_name varchar(255), original_file_name varchar(255), base_title varchar(255), regions longtext, languages longtext, flags longtext, region_key varchar(255), revision varchar(32) NULL, is_primary tinyint(1) =0, id_method varchar(16), dat_name varchar(255) NULL, dat_version varchar(255) NULL, dat_game_name varchar(255) NULL, size_bytes bigint(20), crc32 char(8), md5 char(32), sha1 char(40), header longtext NULL, date_added datetime(6), date_modified datetime(6), external_file_name varchar(255) NULL, version varchar(40) NULL")]
+    [TestCase("rom_files", "id bigint(20), rom_id bigint(20), game_id char(36), ordinal int(11), file_name varchar(255), external_file_name varchar(255), original_file_name varchar(255), size_bytes bigint(20), crc32 char(8), md5 char(32), sha1 char(40)")]
     [TestCase("images", "id bigint(20), game_id char(36), file_name varchar(255), type varchar(16), source varchar(32), source_url varchar(1024) NULL, is_default tinyint(1) =0, size_bytes bigint(20), sha1 char(40), width int(11), height int(11), date_added datetime(6), is_cover tinyint(1) =0")]
     [TestCase("jobs", "id char(36), type varchar(16), mode varchar(16) NULL, trigger_source varchar(16), status varchar(16), requested_by int(11) NULL, started_at datetime(6), finished_at datetime(6) NULL, summary longtext NULL, error text NULL")]
     [TestCase("job_items", "id bigint(20), job_id char(36), file_id char(36), system_id varchar(16) NULL, source_path varchar(1024), archive_entry varchar(512) NULL, outcome varchar(16), reason varchar(64) NULL, details text NULL, game_id char(36) NULL, sha1 char(40) NULL, created_at datetime(6)")]
@@ -128,6 +129,10 @@ public class SchemaMigrationTests
             "jobs fk_jobs_requested_by - requested_by",
             "jobs ix_jobs_type_started_at - type,started_at",
             "jobs PRIMARY U id",
+            "rom_files ix_rom_files_game_id - game_id",
+            "rom_files ix_rom_files_rom_id - rom_id",
+            "rom_files ix_rom_files_sha1 - sha1",
+            "rom_files PRIMARY U id",
             "roms ix_roms_crc32 - crc32",
             "roms ix_roms_game_id - game_id",
             "roms ix_roms_system_base_title - system_id,base_title",
@@ -162,6 +167,8 @@ public class SchemaMigrationTests
             "ingest_review_items -> users RESTRICT",
             "job_items -> jobs CASCADE",
             "jobs -> users RESTRICT",
+            "rom_files -> games CASCADE",
+            "rom_files -> roms CASCADE",
             "roms -> games CASCADE",
             "user_roles -> users CASCADE",
         }));

@@ -36,9 +36,9 @@ public static class InfoJsonValidator
             return "roms must not be empty";
         if (game.Roms.Count(r => r.IsPrimary) != 1)
             return "exactly one rom must be isPrimary";
-        if (FileNameProblem(game.Roms.Select(r => r.FileName), "roms") is { } romNames)
+        if (FileNameProblem(game.Roms.Select(r => r.FileName), "roms", handler.FileSets) is { } romNames)
             return romNames;
-        if (FileNameProblem(game.Images.Select(i => i.FileName), "images") is { } imageNames)
+        if (FileNameProblem(game.Images.Select(i => i.FileName), "images", dotsInside: false) is { } imageNames)
             return imageNames;
         if (ExternalProblem(game, handler) is { } external)
             return external;
@@ -81,6 +81,8 @@ public static class InfoJsonValidator
     /// </summary>
     private static string? ExternalProblem(InfoJsonGame game, ISystemHandler handler)
     {
+        if (!handler.FileSets && game.Roms.FirstOrDefault(r => r.Files is not null) is { } withFiles)
+            return $"rom '{withFiles.FileName}' files must be null: system '{game.System}' has no file sets";
         if (handler.EmbedRomsInZip)
         {
             return game.Roms.FirstOrDefault(r => r.ExternalFileName is not null) is { } stray
@@ -112,6 +114,46 @@ public static class InfoJsonValidator
                 return $"rom fileName '{rom.FileName}' must end with a ROM extension of system '{game.System}'";
             if (rom.Metadata.SizeBytes > handler.MaxRomSizeBytes)
                 return $"rom '{rom.FileName}' sizeBytes is over the system's limit of {handler.MaxRomSizeBytes}";
+            // B10: a FileSets file keeps its exact name, so its logical name is that name.
+            if (handler.FileSets && rom.FileName != pointer)
+                return $"rom fileName '{rom.FileName}' must equal its externalFileName on system '{game.System}'";
+        }
+        return FilesProblem(game, handler, seen);
+    }
+
+    /// <summary>
+    /// B12: each <c>files</c> entry follows the <c>externalFileName</c> rules, has <c>fileName</c> equal to
+    /// <c>externalFileName</c>, and is unique across the game's main and set files (ignoring case).
+    /// </summary>
+    /// <param name="seen">The main <c>externalFileName</c>s, compared ignoring case.</param>
+    private static string? FilesProblem(InfoJsonGame game, ISystemHandler handler, HashSet<string> seen)
+    {
+        foreach (var rom in game.Roms.Where(r => r.Files is not null))
+        {
+            if (rom.Files!.Count == 0)
+                return $"rom '{rom.FileName}' files must be null or non-empty";
+            foreach (var file in rom.Files)
+            {
+                if (file is null)
+                    return $"rom '{rom.FileName}' files must not contain null";
+                var name = file.ExternalFileName;
+                if (name is "." or ".." || PortableNameProblem(name) is not null)
+                    return $"rom '{rom.FileName}' file '{name}' must be a plain, portable file name";
+                if (Encoding.UTF8.GetByteCount(name) > MaxExternalFileNameBytes)
+                    return $"rom '{rom.FileName}' file '{name}' must be at most {MaxExternalFileNameBytes} UTF-8 bytes";
+                if (!HasRomExtension(name, handler))
+                    return $"rom '{rom.FileName}' file '{name}' must end with a ROM extension of system '{game.System}'";
+                if (file.FileName != name)
+                    return $"rom '{rom.FileName}' file fileName '{file.FileName}' must equal its externalFileName";
+                if (!seen.Add(name))
+                    return $"rom '{rom.FileName}' file '{name}' is not unique in the game (case-insensitive)";
+                if (!IsHex(file.Crc32, 8) || !IsHex(file.Md5, 32) || !IsHex(file.Sha1, 40))
+                    return $"rom '{rom.FileName}' file '{name}' hashes must be lowercase hex of the right length";
+                if (file.SizeBytes < 0)
+                    return $"rom '{rom.FileName}' file '{name}' sizeBytes must not be negative";
+                if (file.SizeBytes > handler.MaxRomSizeBytes)
+                    return $"rom '{rom.FileName}' file '{name}' sizeBytes is over the system's limit of {handler.MaxRomSizeBytes}";
+            }
         }
         return null;
     }
@@ -132,12 +174,17 @@ public static class InfoJsonValidator
     private static bool HasRomExtension(string name, ISystemHandler handler) =>
         handler.RomExtensions.Any(e => name.EndsWith(e, StringComparison.OrdinalIgnoreCase));
 
-    private static string? FileNameProblem(IEnumerable<string> names, string list)
+    /// <param name="dotsInside">
+    /// B12: on a <c>FileSets</c> system only a name equal to <c>.</c> or <c>..</c> is refused, since Redump names hold
+    /// <c>..</c> (<c>...Iru!</c>); elsewhere any <c>..</c> is.
+    /// </param>
+    private static string? FileNameProblem(IEnumerable<string> names, string list, bool dotsInside)
     {
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var name in names)
         {
-            if (name.Length == 0 || name.Contains('/') || name.Contains('\\') || name.Contains("..", StringComparison.Ordinal))
+            var dots = dotsInside ? name is "." or ".." : name.Contains("..", StringComparison.Ordinal);
+            if (name.Length == 0 || name.Contains('/') || name.Contains('\\') || dots)
                 return $"{list} fileName '{name}' must be a plain name without '/', '\\' or '..'";
             if (!seen.Add(name))
                 return $"{list} fileName '{name}' is not unique (case-insensitive)";

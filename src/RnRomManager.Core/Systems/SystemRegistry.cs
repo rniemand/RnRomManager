@@ -5,7 +5,8 @@ public sealed class SystemRegistry : ISystemRegistry
     private readonly Dictionary<string, ISystemHandler> _byId;
 
     /// <exception cref="InvalidOperationException">
-    /// Two handlers share an <c>Id</c>, or a family mixes embedded and external ROM storage.
+    /// Two handlers share an <c>Id</c>, a family mixes embedded and external ROM storage or <c>FileSets</c> values, or a
+    /// handler has <c>FileSets</c> with embedded storage (B5).
     /// </exception>
     public SystemRegistry(IEnumerable<ISystemHandler> handlers)
     {
@@ -16,6 +17,11 @@ public sealed class SystemRegistry : ISystemRegistry
         var mixed = All.GroupBy(h => h.Family).FirstOrDefault(g => g.Select(h => h.EmbedRomsInZip).Distinct().Count() > 1);
         if (mixed is not null)
             throw new InvalidOperationException($"System family '{mixed.Key}' mixes handlers with embedded and external ROM storage.");
+        if (All.FirstOrDefault(h => h.FileSets && h.EmbedRomsInZip) is { } embeddedSets)
+            throw new InvalidOperationException($"System '{embeddedSets.Id}' has FileSets with embedded ROM storage; file sets need external storage.");
+        var mixedSets = All.GroupBy(h => h.Family).FirstOrDefault(g => g.Select(h => h.FileSets).Distinct().Count() > 1);
+        if (mixedSets is not null)
+            throw new InvalidOperationException($"System family '{mixedSets.Key}' mixes handlers with and without FileSets.");
         _byId = All.ToDictionary(h => h.Id);
     }
 

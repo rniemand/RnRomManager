@@ -39,6 +39,8 @@ public class LibraryEditorCollectionTests
         handler.EmbedRomsInZip.Returns(true);
         handler.Id.Returns("gb");
         handler.DatName.Returns("Nintendo - Game Boy");
+        handler.DatFolder.Returns(DatKind.NoIntro);
+        handler.MetadatKinds.Returns(DatKind.Metadat);
         handler.DefaultBoxArtPng.Returns(PngTests.Png(512, 512));
         var systems = Substitute.For<ISystemRegistry>();
         systems.All.Returns([handler]);

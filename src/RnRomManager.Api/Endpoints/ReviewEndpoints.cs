@@ -23,8 +23,8 @@ public static class ReviewEndpoints
                 errors["status"] = ["Must be Pending, Resolved or Dismissed."];
             if (system is not null && systems.ById(system) is null)
                 errors["system"] = ["Choose a registered system."];
-            if (reason is not null and not ("NoDatMatch" or "AmbiguousGroup"))
-                errors["reason"] = ["Must be NoDatMatch or AmbiguousGroup."];
+            if (reason is not null and not ("NoDatMatch" or "AmbiguousGroup" or ReviewReasons.AmbiguousSet))
+                errors["reason"] = ["Must be NoDatMatch, AmbiguousGroup or AmbiguousSet."];
             q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
             if (q?.Length > 100)
                 errors["q"] = ["Must be at most 100 characters."];
@@ -58,6 +58,7 @@ public static class ReviewEndpoints
                 header = Parse(item.Header), suggestions = Parse(item.Suggestions), datIdentification = Parse(item.DatIdentification),
                 candidateGames = candidates, status = item.Status, gameId = item.GameId, createdAt = item.CreatedAt,
                 lastSeenJobId = item.LastSeenJobId, resolvedAt = item.ResolvedAt, resolvedBy = item.ResolvedBy,
+                resolvable = ReviewResolver.IsResolvable(item, systems),
             });
         });
         review.MapPost("/{id:long}/resolve", async (long id, ReviewResolutionRequest request, HttpContext ctx, ReviewResolver resolver) =>
@@ -88,8 +89,9 @@ public static class ReviewEndpoints
                 errors["limit"] = ["Must be 1–20."];
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
+            // B15: Redump repeats a game once per serial; each gameName is listed once (its first entry), before the limit.
             return Results.Ok((dats.For(system!)?.Roms ?? []).Where(r => r.GameName.Contains(q!, StringComparison.OrdinalIgnoreCase))
-                .Take(limit ?? 20).Select(r => new { gameName = r.GameName, romName = r.RomName, sizeBytes = r.SizeBytes, crc32 = r.Crc32 }));
+                .DistinctBy(r => r.GameName, StringComparer.Ordinal).Take(limit ?? 20).Select(r => new { gameName = r.GameName, romName = r.RomName, sizeBytes = r.SizeBytes, crc32 = r.Crc32 }));
         }).RequireAuthorization(AuthSetup.AdminOnly);
         return api;
     }
@@ -135,7 +137,8 @@ public static class ReviewEndpoints
         null => Results.Ok(new { gameId = result.GameId }),
         "ValidationFailed" => Problems.Validation(ctx, result.Errors!),
         "NotFound" => Problems.NotFound(ctx),
-        "JobRunning" or "SourceMissing" or "AmbiguousGroup" or "TargetZipUnreadable" or "InfoJsonNewerSchema" or "Duplicate" =>
+        "JobRunning" or "SourceMissing" or "AmbiguousGroup" or "TargetZipUnreadable" or "InfoJsonNewerSchema" or "Duplicate"
+            or ReviewResolver.SetFileNotResolvable or IngestErrors.NameTaken or IngestErrors.NameTooLong =>
             Problems.Create(ctx, 409, result.Code, result.Code),
         _ => Problems.Create(ctx, 500, result.Code, result.Code),
     };

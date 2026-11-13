@@ -18,7 +18,13 @@ export interface SystemColour {
 		| 'md'
 		| 's32x'
 		| 'tg16'
-		| 'switch';
+		| 'switch'
+		| 'psx'
+		| 'psp'
+		| 'gc'
+		| 'wii'
+		| 'x360'
+		| 'saturn';
 	foreground: '#fff' | '#000';
 }
 
@@ -36,7 +42,13 @@ export const systemColours: Record<string, SystemColour> = {
 	md: { name: 'md', foreground: '#fff' },
 	s32x: { name: 's32x', foreground: '#000' },
 	tg16: { name: 'tg16', foreground: '#fff' },
-	switch: { name: 'switch', foreground: '#fff' }
+	switch: { name: 'switch', foreground: '#fff' },
+	psx: { name: 'psx', foreground: '#fff' },
+	psp: { name: 'psp', foreground: '#fff' },
+	gc: { name: 'gc', foreground: '#000' },
+	wii: { name: 'wii', foreground: '#000' },
+	x360: { name: 'x360', foreground: '#000' },
+	saturn: { name: 'saturn', foreground: '#fff' }
 };
 
 /** Unknown systems stay neutral. */

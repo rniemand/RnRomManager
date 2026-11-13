@@ -2,7 +2,7 @@
 
 Every game in the library is one ZIP file. The ZIP is the **source of truth**: the database only mirrors its contents for browsing and search, and the integrity checker rebuilds the database from the ZIPs. You can copy, back up or inspect the library with any ZIP tool.
 
-Most systems keep their ROMs inside the ZIP (**embedded**). Systems with multi-GB images (Nintendo Switch) store each ROM as a plain file **next to** its game's ZIP (**external**): the ZIP still holds `info.json`, images and notes, and `info.json` names each file. Copy or back up the whole folder, not just the ZIPs, for those systems.
+Most systems keep their ROMs inside the ZIP (**embedded**). Systems with multi-GB images (Nintendo Switch, PlayStation, PlayStation Portable, GameCube, Wii, Xbox 360 and Saturn) store each ROM as a plain file **next to** its game's ZIP (**external**): the ZIP still holds `info.json`, images and notes, and `info.json` names each file. Copy or back up the whole folder, not just the ZIPs, for those systems.
 
 ## Layout
 
@@ -31,6 +31,17 @@ roms/
       Orbit Expedition.[0100000000010000][v0].nsp
       Orbit Expedition.[0100000000010800][v65536].nsp
       Orbit Expedition.[0100000000010800][v0][1.1.0].nsp
+  psx/                  PlayStation (external, exact names: a .cue with its .bin tracks, or a .bin/.iso)
+    D/
+      Disc Runner.zip
+      Disc Runner (USA) (Track 1).bin     the release's main file (the data track the DAT lists)
+      Disc Runner (USA).cue               its files: the cue, then the other tracks
+      Disc Runner (USA) (Track 2).bin
+  psp/                  PlayStation Portable (external, exact names: .iso)
+  gc/                   GameCube (external, exact names: .iso)
+  wii/                  Wii (external, exact names: .iso)
+  x360/                 Xbox 360 (external, exact names: .iso)
+  saturn/               Saturn (external, exact names: a .cue with its .bin tracks, or a .nrg)
 ```
 
 Inside a game's ZIP:
@@ -48,9 +59,9 @@ Tetris.zip
     Tetris (World) (Rev 1).gb.md
 ```
 
-- An external game's ZIP has no `roms/` folder: its ROM files are the `<ZipBase>.<…>` files beside it (see [External ROM files](#external-rom-files)).
+- An external game's ZIP has no `roms/` folder: its ROM files are the `<ZipBase>.<…>` files beside it (for a disc system, files under their exact names; see [External ROM files](#external-rom-files)).
 - Files written before game updates (B13) keep the longer form that repeats the title, e.g. `Orbit Expedition.Orbit Expedition [0100000000010000][v0].nsp`, until a title edit, move, merge or repair renames them; both forms are valid.
-- The system folder comes from the ROM's header, not the ingest folder: a GBC cart dropped into `ingest/gb/` is stored under `roms/gbc/`.
+- The system folder comes from the ROM's header, not the ingest folder: a GBC cart dropped into `ingest/gb/` is stored under `roms/gbc/`, and a Wii disc dropped into `ingest/gc/` under `roms/wii/`.
 - The letter folder is the first character of the ZIP file name, upper-cased if it's an ASCII letter (`seaQuest DSV.zip` → `S/`), otherwise `#`. ZIP names keep the No-Intro article form, so `Legend of Zelda, The - …` is in `L/`.
 - File names compare case-insensitively everywhere (clash checks, integrity), so the library stays portable to Windows and macOS.
 
@@ -58,12 +69,12 @@ Tetris.zip
 
 | Item | Rule |
 |---|---|
-| Base title | The DAT game name up to its region group: the first ` (…)` group whose comma-separated parts are all known No-Intro regions. Earlier groups belong to the title (`Yelu Wangzi (Prince Yeh Rude) (Taiwan)` → `Yelu Wangzi (Prince Yeh Rude)`). With no region group, up to the first ` (`. Releases with the same system and base title are grouped into one game. |
-| Tags | Regions, languages, revision and flags are parsed from the DAT **ROM name** (it can carry more tags than the game name, e.g. `(Aftermarket) (Unl)`). |
+| Base title | The DAT game name up to its region group: the first ` (…)` group whose comma-separated parts are all known No-Intro regions (plus `UK` and `United Arab Emirates`, which the Redump DATs use). Earlier groups belong to the title (`Yelu Wangzi (Prince Yeh Rude) (Taiwan)` → `Yelu Wangzi (Prince Yeh Rude)`). With no region group, up to the first ` (`. Releases with the same system and base title are grouped into one game. |
+| Tags | Regions, languages, revision and flags are parsed from the DAT **ROM name** (it can carry more tags than the game name, e.g. `(Aftermarket) (Unl)`). For a disc system they come from the DAT **game name** instead, so a data track's `(Track 1)` never becomes a flag. |
 | Game `title` | The base title of the release that created the game. Admins can edit it (1–255 characters after trimming, must not sanitize to an empty name); it never changes on its own. |
 | `displayTitle` | `title` with a trailing article moved to the front: `Maus, Die` → `Die Maus`, `Legend of Zelda, The - Link's Awakening` → `The Legend of Zelda - Link's Awakening`. Articles: The, A, An, Die, Der, Das, Le, La, Les, El, Il. |
 | ZIP name | `Sanitize(title) + ".zip"`. A different game already at that path (case-insensitive) → ` (2)`, ` (3)`, … |
-| ROM `fileName` | The DAT ROM name for DAT-matched releases; review resolutions build their own (see [features](features.md)). An entry-name clash inside a ZIP appends ` (2)`, … before the extension. An external release keeps its source file's extension (lower-cased) on the DAT stem. A titledb (Switch) release is named `<name> [<TitleId>][v<N>].<ext>`: the titledb name with `™ ® ©` removed, `: ` → ` - `, whitespace collapsed and each run of `..` turned into `…`, `N` from the first `[v<digits>]` in the ingest file name (else 0). An update with a version (see `version` in the Rom table) is named `<name> [<TitleId>][v<N>][<version>].<ext>`, so two updates of one game don't clash. |
+| ROM `fileName` | The DAT ROM name for DAT-matched releases; review resolutions build their own (see [features](features.md)). An entry-name clash inside a ZIP appends ` (2)`, … before the extension. An external release keeps its source file's extension (lower-cased) on the DAT stem. A disc set's files keep their source names, and a disc system's `fileName` always equals `externalFileName`. A titledb (Switch) release is named `<name> [<TitleId>][v<N>].<ext>`: the titledb name with `™ ® ©` removed, `: ` → ` - `, whitespace collapsed and each run of `..` turned into `…`, `N` from the first `[v<digits>]` in the ingest file name (else 0). An update with a version (see `version` in the Rom table) is named `<name> [<TitleId>][v<N>][<version>].<ext>`, so two updates of one game don't clash. |
 | Titledb base title | For Switch the grouping key and game title come from the base game's titledb name, with the same clean-up (but `...` kept) and a leading `The`/`A`/`An` moved to the end of the first ` - ` segment (`The Legend of Zelda: Tears of the Kingdom` → `Legend of Zelda, The - Tears of the Kingdom`). |
 | Images | `images/boxart-NN.<ext>` and `images/snap-NN.<ext>`: `NN` is the lowest free number 01–99 for that prefix (compared ignoring case and extension), `<ext>` is `png` or `jpg` from the file's magic bytes, for uploaded and fetched images alike. Fetched art is `boxart-01.<ext>` / `snap-01.<ext>` unless taken; fetched art replacing the placeholder keeps its number (`boxart-01.png` → `boxart-01.jpg`), or takes the next free name if that would clash. libretro thumbnails are PNG; titledb images (Switch) may be PNG or JPEG. At most 20 images per game, each at most 8 MiB (fetched images only up to 5 MiB). |
 | Sanitize | Unicode NFC; `\ / : * ? " < > \|` and control characters become `_`; leading/trailing spaces and trailing dots trimmed; at most 180 characters; Windows reserved names (`CON`, `NUL`, …) get a `_` prefix. |
@@ -78,13 +89,14 @@ All releases of a game (regions, revisions) **and** its hacks and translations l
 
 ## External ROM files
 
-For an external system (Nintendo Switch) each release is a file in the ZIP's own folder:
+For an external system (Nintendo Switch and the six disc systems) each release is a file in the ZIP's own folder, and a disc set's release also has its other files (`files`, below) there:
 
 - **Name (E1):** `<ZipBase>.<rom fileName>`, where `<ZipBase>` is the ZIP name without `.zip`, so a game's files sort together. When the rom name starts with `<ZipBase>` and a space (ignoring case) and something other than spaces follows, that repeated title is dropped: `Death's Door` + `Death's Door [0100B31015AF8000][v0].nsp` → `Death's Door.[0100B31015AF8000][v0].nsp`, an update → `Death's Door.[0100B31015AF8800][v0][1.0.1].nsp`. A rom name spelled differently from the title, or a ` (N)` ZIP name, keeps the full form (`Orbit` + `Orbit.nsp` → `Orbit.Orbit.nsp`). Only the file on disk is shorter: the logical `fileName` (info.json, downloads) keeps the full name.
 - **Length and clashes (E2):** the whole name, clash suffix included, is at most 250 UTF-8 bytes (so its `.tmp` staging name still fits a 255-byte file-name limit). A longer name is cut from the end of the rom part's stem (the extension is kept), then from `<ZipBase>` if needed, never splitting a character. A name already used by another file or folder, or by another release of any game in that folder, gets ` (2)`, ` (3)`, … The ZIP name of an external game uses the same 250-byte budget, `.zip` and clash suffix included.
+- **Exact names (disc systems):** E1 and E2 don't apply to the files: each keeps its exact name, with no `<ZipBase>.` prefix and no ` (N)` suffix (a set's cue refers to its tracks byte for byte). A name already used in the folder (on disk, by any game's file, or by the ZIP) stops the write with `NameTaken`, and a name over 250 UTF-8 bytes with `NameTooLong`; nothing is cut or renamed.
 - **Pointer (E3):** `info.json` records the file name in `externalFileName`. A missing or damaged file keeps its pointer: integrity reports it (`EntryMissing`, `EntrySizeMismatch`, `HashMismatch`), and ingesting the same bytes after that puts the file back (self-repair).
-- **Writes:** the file is moved into place before the ZIP is written, and moved back if the ZIP write fails. The ZIP write verifies each file it placed or renamed by its recorded length. A title edit renames the ZIP and every external file together; deleting a release moves its file to `ingest/<system>/_removed/`.
-- **Downloads:** each release downloads from its own file (with range support); Download ZIP returns the metadata ZIP only.
+- **Writes:** the file is moved into place before the ZIP is written, and moved back if the ZIP write fails; a disc set's files are placed one by one (cue first) and all moved back on a failure. The ZIP write verifies each file it placed or renamed by its recorded length, a set's files included. A title edit renames the ZIP and every external file together (disc systems keep the file names and move them only to a new letter folder); deleting a release moves its files to `ingest/<system>/_removed/`.
+- **Downloads:** each release downloads from its own file (with range support), and each of a disc set's files from its own download link; Download ZIP returns the metadata ZIP only.
 
 ## Release notes
 
@@ -98,12 +110,12 @@ A release can have one Markdown note, the entry `notes/<rom fileName>.md` (e.g. 
 ## Writes
 
 - Every write starts from the ZIP's own `info.json` and entries, never from database rows.
-- Writes are atomic: the new ZIP is streamed to `<name>.zip.tmp` next to the target, re-opened, every ROM entry's SHA1 checked against `info.json` (an external game's files are checked by length instead; see [External ROM files](#external-rom-files)), then moved over the old file. A ZIP is never edited in place. When the path changes (a title edit), the new ZIP is written and the database committed before the old ZIP is deleted.
+- Writes are atomic: the new ZIP is streamed to `<name>.zip.tmp` next to the target, re-opened, every ROM entry's SHA1 checked against `info.json` (an external game's files are checked by length instead; see [External ROM files](#external-rom-files)), then moved over the old file. An `info.json` over 1 MiB is refused (`VerifyFailed`) before anything is published, since the reader would refuse it. A ZIP is never edited in place. When the path changes (a title edit), the new ZIP is written and the database committed before the old ZIP is deleted.
 - Release notes of listed ROMs are carried into the new ZIP (see [Release notes](#release-notes)).
 - Entry modified times are stored as ZIP (DOS) times: the writer's local time at 2-second precision, with no time zone. The Zip Contents tab and `GET /api/games/{id}/zip-entries` read them as server local time, so they're exact only while the server's time zone is unchanged.
 - Compression: Deflate, optimal level. `info.json` is UTF-8 without a BOM, indented, camelCase, with nulls written.
 
-## `info.json` (schema version 5)
+## `info.json` (schema version 6)
 
 Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 
@@ -111,12 +123,12 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `schemaVersion` | int | ✓ | `5` |
+| `schemaVersion` | int | ✓ | `6` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
-| `releaseYear` | int? | | from the DAT metadata (titledb's release date for Switch) |
+| `releaseYear` | int? | | from the DAT metadata (titledb's release date for Switch; the disc systems have no metadata DATs) |
 | `developers` | string[] | ✓ | may be empty; distinct, in DAT order |
 | `publishers` | string[] | ✓ | as above |
 | `genres` | string[] | ✓ | may be empty |
@@ -151,6 +163,9 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 | `metadata.crc32` / `md5` / `sha1` | string | ✓ | |
 | `metadata.dateAdded` / `dateModified` | string | ✓ | `dateModified` = the last time the entry's bytes were (re)written |
 | `metadata.sourcePath` | string | ✓ | ingest path at ingestion (the archive's path for an archive entry) |
+| `files` | File[]? | ✓ | v6. A disc set's other files in order (the cue, then the tracks it names, leaving out the main file); `null` for a release that is one file. Only disc systems may set it, and never as an empty list. |
+
+A **File** has `fileName` and `externalFileName` (equal; plain, portable names of at most 255 UTF-8 bytes ending in one of the system's ROM extensions, unique across the game's main files and files ignoring case), `originalFileName`, `sizeBytes` (at most the system's maximum ROM size) and `crc32` / `md5` / `sha1` (lowercase hex).
 
 Game Boy / Game Boy Color `header`: `title`, `manufacturerCode`, `cgbFlag` and `sgbFlag` (hex strings), `cartridgeType`, `romSizeBytes` (null if the header can't express it), `ramSizeBytes`, `destination` (`Japan` or `Overseas`), `licensee`, `version`, `logoValid`, `headerChecksumValid`, `globalChecksumValid`, `sizeMatchesHeader`, `isMbc1Multicart`.
 
@@ -174,6 +189,10 @@ Mega Drive / Genesis `header`, present only when the 16-byte field at 0x100 star
 
 TurboGrafx-16 `header`: always null (HuCards have no header).
 
+PlayStation, PlayStation Portable, Xbox 360 and Saturn `header`: always null.
+
+GameCube / Wii `header`, from the disc header (the GameCube magic `C2 33 9F 3D` at 0x1C, the Wii magic `5D 1C 9E A3` at 0x18; the magic decides the system): `gameId` (6 ASCII bytes at 0x00, null if one isn't printable), `discNumber` (byte 0x06), `version` (byte 0x07) and `title` (Latin-1 from 0x20 up to the first NUL, at most 0x3E0 bytes, trimmed; null when empty or cut off). A field the file is too short for is null.
+
 Nintendo Switch `header`, from the first MiB of the file: `container` (`PFS0` for `.nsp`/`.nsz`, `XCI` for `.xci`/`.xcz` with `HEAD` at 0x100 or 0x1100); for PFS0 also `fileCount` (u32 at 4, null for a span shorter than 8 bytes); `titleId` (the 16 upper-case hex digits shared by the PFS0's `<32 hex>.tik` ticket names, null when there is none, they disagree or the file table is damaged; always null for XCI, whose plain header doesn't carry it).
 
 ### Image
@@ -193,7 +212,7 @@ Nintendo Switch `header`, from the first MiB of the file: `container` (`PFS0` fo
 
 ### Validation
 
-Checked on every read (after upgrading an older version): valid UTF-8 JSON of at most 1 MiB; every required field present with the right type; `gameId` a GUID; `system` a registered system; `rating` null or 1–5; at least one ROM and exactly one `isPrimary`; file names unique (case-insensitively) within `roms` and within `images`, and free of `/`, `\` and `..`; hashes lowercase hex of the right length; `source` one of the four values; at most 20 images, exactly one of them `isCover` (a game with no images is valid and reported as `MissingBoxArt`); at most one `isDefault` image, and it is a `BoxArt`; `version` null or a dotted version of 2–4 parts of 1–9 ASCII digits; `externalFileName` set exactly for a system that stores its ROMs outside the ZIP, following the rules in the Rom table, and an external release's recorded size within the system's maximum. Unknown properties are ignored on read and dropped on the next write. A failing file is reported by the integrity checker as `InfoJsonInvalid`, naming the first rule it breaks, and is left alone.
+Checked on every read (after upgrading an older version): valid UTF-8 JSON of at most 1 MiB; every required field present with the right type; `gameId` a GUID; `system` a registered system; `rating` null or 1–5; at least one ROM and exactly one `isPrimary`; file names unique (case-insensitively) within `roms` and within `images`, and free of `/`, `\` and `..` (for a disc system only a name that is `.` or `..`, or contains a path separator, is refused, since real disc names such as `...Iru!` contain `..`); hashes lowercase hex of the right length; `source` one of the four values; at most 20 images, exactly one of them `isCover` (a game with no images is valid and reported as `MissingBoxArt`); at most one `isDefault` image, and it is a `BoxArt`; `version` null or a dotted version of 2–4 parts of 1–9 ASCII digits; `externalFileName` set exactly for a system that stores its ROMs outside the ZIP, following the rules in the Rom table, and an external release's recorded size within the system's maximum; `files` null except on a disc system, following the rules for a File, and on a disc system `fileName` equal to `externalFileName`. Unknown properties are ignored on read and dropped on the next write. A failing file is reported by the integrity checker as `InfoJsonInvalid`, naming the first rule it breaks, and is left alone.
 
 ## Versions
 
@@ -208,3 +227,4 @@ A schema change bumps `schemaVersion`, adds an upgrader and adds a row here.
 | 3 | 0.3.0 | Adds `isCover` (bool) to every image and `upload` as an image `source`; image names may end in `.jpg`; drops the one-`BoxArt` / one-`Snap` limits (at most 20 images). The v2→v3 upgrader makes the `BoxArt` image the cover, else the first image, else none. Integrity's `MissingBoxArt` / `DefaultBoxArt` now mean "no cover" / "the cover is the placeholder". Apps before 0.3.0 treat a v3 file as `InfoJsonNewerSchema` (read-only). |
 | 4 | 0.4.0 | Adds `externalFileName` (string?) to every ROM: the file next to the ZIP for a system that stores its ROMs outside it (Nintendo Switch), `null` otherwise. Adds `TitleDb` as an `identification.method` and `titledb` as an image `source`. The v3→v4 upgrader adds `externalFileName: null`. Apps before 0.4.0 treat a v4 file as `InfoJsonNewerSchema` (read-only). |
 | 5 | 0.4.0 | Adds `version` (string?) to every ROM: an update's dotted version from its file name, `null` otherwise. The v4→v5 upgrader sets it from `originalFileName` for releases flagged `Update` (else `null`); migration 0019 fills `roms.version` the same way for games already mirrored. A v5 file is `InfoJsonNewerSchema` (read-only) for an app that only knows v4. |
+| 6 | 0.4.0 | Adds `files` (File[]?) to every ROM: a disc set's other files, `null` otherwise. The v5→v6 upgrader adds `files: null`; migration 0020 adds the `rom_files` table, filled on each game's next mirror. A v6 file is `InfoJsonNewerSchema` (read-only) for an app that only knows v5. |

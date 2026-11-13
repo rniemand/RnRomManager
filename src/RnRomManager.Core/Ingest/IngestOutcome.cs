@@ -19,6 +19,34 @@ public static class IngestOutcome
 public static class IngestReason
 {
     public const string TooRecent = "TooRecent";
+
+    /// <summary>B9: a <c>.zip</c>/<c>.7z</c> for a <c>FileSets</c> system stays in ingest; nothing is extracted.</summary>
+    public const string ArchiveNotSupported = "ArchiveNotSupported";
+
+    /// <summary>B7: a set member waits in ingest: a file its cue names is missing, its cue is broken, or a lone data track of a multi-track disc.</summary>
+    public const string IncompleteSet = "IncompleteSet";
+
+    /// <summary>B7: the cue names a file that isn't a <c>.bin</c>, names itself, or has a name that can't be stored.</summary>
+    public const string UnsupportedSetMember = "UnsupportedSetMember";
+
+    /// <summary>B7: a file is named by two cues, or a cue's name matches two files that differ only by case.</summary>
+    public const string SetConflict = "SetConflict";
+
+    /// <summary>B7a: two or more games own the data track's base title; the set stays until the Admin merges or moves them.</summary>
+    public const string AmbiguousGroup = "AmbiguousGroup";
+
+    /// <summary>
+    /// B7a: an unmatched set member whose SHA1 another source's Pending review row already holds (silent audio tracks
+    /// repeat); it stays, since moving it to <c>_duplicates/</c> would break its set.
+    /// </summary>
+    public const string AlreadyInReview = "AlreadyInReview";
+}
+
+/// <summary><c>ingest_review_items.reason</c> values added for disc sets (the older ones are literals at their call sites).</summary>
+public static class ReviewReasons
+{
+    /// <summary>B7a: two or more members of a set match the DAT; the items can't be resolved, only deleted (B15).</summary>
+    public const string AmbiguousSet = "AmbiguousSet";
 }
 
 /// <summary>A review row still <c>Pending</c>: just what step 5 needs to check its source still exists.</summary>

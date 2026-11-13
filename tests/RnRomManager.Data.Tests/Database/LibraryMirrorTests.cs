@@ -14,7 +14,7 @@ namespace RnRomManager.Data.Tests.Database;
 
 /// <summary>Spec §14.1/§14.2 mirror writes and §12.2 DB auto-repair (S22), against MariaDB + temp ZIPs.</summary>
 [Category("Integration")]
-public class LibraryMirrorTests
+public partial class LibraryMirrorTests
 {
     private static readonly DateTime Mtime = new(2026, 11, 4, 12, 30, 15, DateTimeKind.Utc);
 
@@ -42,7 +42,7 @@ public class LibraryMirrorTests
             handler.EmbedRomsInZip.Returns(true);
             handler.Id.Returns(id);
             return handler;
-        }).Append(new ExternalTestHandler()).ToArray();
+        }).Append(new ExternalTestHandler()).Append(new ExternalSetTestHandler()).ToArray();
         var systems = Substitute.For<ISystemRegistry>();
         systems.All.Returns(handlers);
         _reader = new InfoJsonReader([], systems);

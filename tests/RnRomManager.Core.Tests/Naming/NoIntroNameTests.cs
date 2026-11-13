@@ -18,6 +18,18 @@ public class NoIntroNameTests
     public void BaseTitle(string name, string expected) =>
         Assert.That(NoIntroName.Parse(name).BaseTitle, Is.EqualTo(expected));
 
+    // B3a: Redump's region names.
+    [TestCase("Foo (UK)", new[] { "UK" })]
+    [TestCase("Foo (UK, Australia)", new[] { "UK", "Australia" })]
+    [TestCase("Foo (United Arab Emirates)", new[] { "United Arab Emirates" })]
+    public void RedumpRegions_AreRegionsNotFlags(string text, string[] regions)
+    {
+        var name = NoIntroName.Parse(text);
+
+        Assert.That((name.BaseTitle, name.Flags.Count), Is.EqualTo(("Foo", 0)));
+        Assert.That(name.Regions, Is.EqualTo(regions));
+    }
+
     [Test]
     public void AllTagKinds_LeftToRight()
     {

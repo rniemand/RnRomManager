@@ -75,6 +75,29 @@ public sealed record RomRow
     public string? Version { get; init; }
 }
 
+/// <summary>
+/// A row of <c>rom_files</c> (B12): one <c>files</c> entry of a release. <see cref="RomSha1"/> is the release's main
+/// <c>sha1</c>, by which the mirror finds <see cref="RomId"/> (<c>ux_roms_sha1</c>).
+/// </summary>
+public sealed record RomFileRow
+{
+    public long Id { get; init; }
+    public long RomId { get; init; }
+    public required Guid GameId { get; init; }
+    public required string RomSha1 { get; init; }
+
+    /// <summary>The entry's 0-based index in <c>files</c>; 0 is the cue.</summary>
+    public required int Ordinal { get; init; }
+
+    public required string FileName { get; init; }
+    public required string ExternalFileName { get; init; }
+    public required string OriginalFileName { get; init; }
+    public required long SizeBytes { get; init; }
+    public required string Crc32 { get; init; }
+    public required string Md5 { get; init; }
+    public required string Sha1 { get; init; }
+}
+
 /// <summary>A row of <c>images</c> (spec §14.1).</summary>
 public sealed record ImageRow
 {
@@ -101,8 +124,8 @@ public sealed record GameSyncState(Guid Id, string ZipPath, long ZipSizeBytes, D
 /// <param name="ZipPath">Relative to <c>Paths:Roms</c>, <c>/</c> separators.</param>
 public sealed record MirrorEntry(InfoJsonGame Info, string ZipPath, long ZipSizeBytes, DateTime ZipMtimeUtc)
 {
-    /// <summary>The <c>games</c>/<c>roms</c>/<c>images</c> rows for this entry (§14.1 derived columns included).</summary>
-    public (GameRow Game, IReadOnlyList<RomRow> Roms, IReadOnlyList<ImageRow> Images) ToRows()
+    /// <summary>The <c>games</c>/<c>roms</c>/<c>images</c>/<c>rom_files</c> rows for this entry (§14.1 derived columns included).</summary>
+    public (GameRow Game, IReadOnlyList<RomRow> Roms, IReadOnlyList<ImageRow> Images, IReadOnlyList<RomFileRow> Files) ToRows()
     {
         var game = new GameRow
         {
@@ -172,7 +195,21 @@ public sealed record MirrorEntry(InfoJsonGame Info, string ZipPath, long ZipSize
             DateAdded = i.DateAdded.UtcDateTime,
         }).ToList();
 
-        return (game, roms, images);
+        var files = Info.Roms.SelectMany(r => (r.Files ?? []).Select((f, ordinal) => new RomFileRow
+        {
+            GameId = Info.GameId,
+            RomSha1 = r.Metadata.Sha1,
+            Ordinal = ordinal,
+            FileName = f.FileName,
+            ExternalFileName = f.ExternalFileName,
+            OriginalFileName = f.OriginalFileName,
+            SizeBytes = f.SizeBytes,
+            Crc32 = f.Crc32,
+            Md5 = f.Md5,
+            Sha1 = f.Sha1,
+        })).ToList();
+
+        return (game, roms, images, files);
     }
 
     /// <summary><c>zip_mtime_utc</c> is compared in whole seconds (§12.1): FS/SMB precision differs.</summary>

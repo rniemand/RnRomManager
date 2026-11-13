@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Wii). Made for this project; MIT licensed like the rest of the repo.
+       Exported to wii.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#e6f1f8"/>
+  <!-- slim white upright console -->
+  <rect x="200" y="72" width="112" height="368" rx="18" fill="#fbfbfb" stroke="#a7adb4" stroke-width="4"/>
+  <!-- glowing blue disc slot -->
+  <rect x="224" y="104" width="64" height="12" rx="6" fill="#36a9e1"/>
+  <!-- stand -->
+  <rect x="176" y="440" width="160" height="16" rx="8" fill="#a7adb4"/>
+  <text x="256" y="300" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="44" font-weight="800" fill="#36a9e1">Wii</text>
+</svg>

@@ -18,7 +18,7 @@ namespace RnRomManager.Data.Tests.Database;
 
 /// <summary>Spec §12 integrity checker (S36): every §15.1 "Integrity" row, against MariaDB + temp ZIPs.</summary>
 [Category("Integration")]
-public class IntegrityJobTests
+public partial class IntegrityJobTests
 {
     private static readonly byte[] Png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, .. "IHDR"u8, 0, 0, 2, 0, 0, 0, 2, 0,
         8, 6, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, .. "IEND"u8, 0xAE, 0x42, 0x60, 0x82];
@@ -49,7 +49,7 @@ public class IntegrityJobTests
             handler.EmbedRomsInZip.Returns(true);
             handler.Id.Returns(id);
             return handler;
-        }).Append(new ExternalTestHandler()).ToArray();
+        }).Append(new ExternalTestHandler()).Append(new ExternalSetTestHandler()).ToArray();
         _systems = Substitute.For<ISystemRegistry>();
         _systems.All.Returns(handlers);
         _systems.ById(Arg.Any<string>()).Returns(call =>
