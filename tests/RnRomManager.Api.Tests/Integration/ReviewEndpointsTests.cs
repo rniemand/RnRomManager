@@ -326,6 +326,9 @@ public class ReviewEndpointsTests
         Assert.That(File.Exists(first.SourcePath) || File.Exists(second.SourcePath), Is.False);
         Assert.That(await Reviews.GetAsync(first.Id, default), Is.Null);
         Assert.That(await Reviews.GetAsync(second.Id, default), Is.Null);
+        await Service<RnRomManager.Api.AuditWriter>().FlushAsync();
+        await using var db = Service<IDbConnectionFactory>().Create();
+        Assert.That(await db.QuerySingleAsync<int>("SELECT COUNT(*) FROM audit_events WHERE action = 'ReviewDeleted'"), Is.EqualTo(2));
     }
 
     [TestCase("[]")]

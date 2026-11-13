@@ -110,22 +110,24 @@ public class IngestDeleteEndpointsTests
     }
 
     [Test]
-    public async Task PlainUser_Is403_OnBothRoutes()
+    public async Task PlainUser_Is403_OnEveryRoute()
     {
         using var user = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "plain");
         (await user.LoginAsync("plain", TestUsers.Password)).Dispose();
 
         using var get = await user.GetAsync("/api/ingest/failed");
+        using var removed = await user.GetAsync("/api/ingest/removed");
         using var post = await user.PostAsync("/api/ingest/delete", new { files = new[] { new { system = "gb", folder = "pending", name = "a.gb" } } });
 
-        Assert.That((get.StatusCode, post.StatusCode), Is.EqualTo((HttpStatusCode.Forbidden, HttpStatusCode.Forbidden)));
+        Assert.That((get.StatusCode, removed.StatusCode, post.StatusCode),
+            Is.EqualTo((HttpStatusCode.Forbidden, HttpStatusCode.Forbidden, HttpStatusCode.Forbidden)));
     }
 
     [TestCase("[]")]
     [TestCase("""[{"system":"nope","folder":"pending","name":"a.gb"}]""")]
     [TestCase("""[{"system":"gb","folder":"pending","name":"../x.gb"}]""")]
-    [TestCase("""[{"system":"gb","folder":"removed","name":"a.gb"}]""")]
+    [TestCase("""[{"system":"gb","folder":"trash","name":"a.gb"}]""")]
     public async Task InvalidRequest_Is400_AndDeletesNothing(string files)
     {
         var keep = Ingest("gb", "a.gb");
@@ -176,6 +178,34 @@ public class IngestDeleteEndpointsTests
         Assert.That(File.Exists(failed) || File.Exists(failed + ".error.txt"), Is.False);
         Assert.That(await DeleteAuditRows(),
             Is.EqualTo(new[] { ("IngestFileDeleted", (string?)"gb", (string?)"ingest/gb/_failed/tiny.gb", (string?)"failed") }));
+    }
+
+    [Test]
+    public async Task Removed_ListsOnlySystemsWithFiles_AndPermanentDeleteIsAudited()
+    {
+        Directory.CreateDirectory(Ingest("gb", "_removed"));
+        var removed = Ingest("gb", "_removed", "Tetris (World).gb");
+        File.WriteAllBytes(removed, [1, 2, 3]);
+        File.WriteAllBytes(Ingest("gb", "_removed", "Thumbs.db"), [1]);
+
+        using var list = await _admin.GetAsync("/api/ingest/removed");
+
+        Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var systems = (await AuthClient.JsonAsync(list)).EnumerateArray().ToList();
+        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EqualTo(new[] { "gb" }));
+        var file = systems[0].GetProperty("files").EnumerateArray().Single();
+        Assert.That((file.GetProperty("name").GetString(), file.GetProperty("sizeBytes").GetInt64()), Is.EqualTo(("Tetris (World).gb", 3L)));
+        Assert.That(file.TryGetProperty("modifiedAt", out _), Is.True);
+        Assert.That(file.TryGetProperty("reason", out _), Is.False);
+
+        using var response = await Delete(new { system = "gb", folder = "removed", name = "Tetris (World).gb" });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(File.Exists(removed), Is.False);
+        Assert.That(await DeleteAuditRows(),
+            Is.EqualTo(new[] { ("IngestFileDeleted", (string?)"gb", (string?)"ingest/gb/_removed/Tetris (World).gb", (string?)"removed") }));
+        using var empty = await _admin.GetAsync("/api/ingest/removed");
+        Assert.That((await AuthClient.JsonAsync(empty)).GetArrayLength(), Is.EqualTo(0));
     }
 
     [Test]

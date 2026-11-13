@@ -46,7 +46,14 @@ public class IngestFileScanner(IOptions<PathsOptions> paths, ISystemRegistry sys
 
     /// <summary>D1: per registered system (in registry order), the top-level files of its <c>_failed/</c> folder, ordered by name, without <c>.error.txt</c> sidecars.</summary>
     public IReadOnlyList<(string SystemId, IReadOnlyList<FailedFile> Files)> ScanFailed() =>
-        systems.All.Select(h => (h.Id, ScanFailedSystem(h.Id))).ToList();
+        systems.All.Select(h => (h.Id, ScanFailedSystem(h.Id, StorageFolders.FailedFolder))).ToList();
+
+    /// <summary>
+    /// Deleted ROMs (D2): per registered system with at least one file (in registry order), the top-level files of its
+    /// <c>_removed/</c> folder, ordered by name. No <c>.error.txt</c> handling: <see cref="FailedFile.Reason"/> is always null.
+    /// </summary>
+    public IReadOnlyList<(string SystemId, IReadOnlyList<FailedFile> Files)> ScanRemoved() =>
+        systems.All.Select(h => (h.Id, ScanFailedSystem(h.Id, StorageFolders.RemovedFolder))).Where(s => s.Item2.Count > 0).ToList();
 
     public const string ErrorSuffix = ".error.txt";
 
@@ -60,20 +67,21 @@ public class IngestFileScanner(IOptions<PathsOptions> paths, ISystemRegistry sys
     /// nothing and a linked or special file is left out. A diagnostic is only read when it is a regular file, and
     /// then through the checked open.
     /// </summary>
-    private IReadOnlyList<FailedFile> ScanFailedChecked(string systemId)
+    private IReadOnlyList<FailedFile> ScanFailedChecked(string systemId, string subfolder)
     {
         var root = paths.Value.Ingest;
-        var scan = ExternalRomPath.ScanFolder(root, $"{systemId}/{StorageFolders.FailedFolder}");
+        var withReason = subfolder == StorageFolders.FailedFolder;
+        var scan = ExternalRomPath.ScanFolder(root, $"{systemId}/{subfolder}");
         foreach (var problem in scan.Problems)
             logger.LogWarning("Ingest listing skipped {Path}: {Details}", problem.RelativePath, problem.Details);
-        var prefix = $"{systemId}/{StorageFolders.FailedFolder}/";
+        var prefix = $"{systemId}/{subfolder}/";
         var top = scan.Files
             .Where(f => f.RelativePath.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) && f.RelativePath.IndexOf('/', prefix.Length) < 0)
             .ToDictionary(f => f.RelativePath[prefix.Length..], StringComparer.OrdinalIgnoreCase);
-        return top.Where(f => !IsIgnored(f.Key) && !f.Key.EndsWith(ErrorSuffix, StringComparison.OrdinalIgnoreCase))
+        return top.Where(f => !IsIgnored(f.Key) && !(withReason && f.Key.EndsWith(ErrorSuffix, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(f => f.Key, StringComparer.Ordinal)
             .Select(f => new FailedFile(f.Key, f.Value.Snapshot.Length, f.Value.Snapshot.LastWriteTimeUtc,
-                top.TryGetValue(f.Key + ErrorSuffix, out var diagnostic) ? ReadReasonChecked(root, diagnostic) : null))
+                withReason && top.TryGetValue(f.Key + ErrorSuffix, out var diagnostic) ? ReadReasonChecked(root, diagnostic) : null))
             .ToList();
     }
 
@@ -103,17 +111,19 @@ public class IngestFileScanner(IOptions<PathsOptions> paths, ISystemRegistry sys
         }
     }
 
-    private IReadOnlyList<FailedFile> ScanFailedSystem(string systemId)
+    /// <param name="subfolder"><c>_failed</c> (with <c>.error.txt</c> reasons) or <c>_removed</c> (without).</param>
+    private IReadOnlyList<FailedFile> ScanFailedSystem(string systemId, string subfolder)
     {
         if (IsExternal(systemId))
-            return ScanFailedChecked(systemId);
-        var folder = new DirectoryInfo(Path.Combine(paths.Value.Ingest, systemId, StorageFolders.FailedFolder));
+            return ScanFailedChecked(systemId, subfolder);
+        var withReason = subfolder == StorageFolders.FailedFolder;
+        var folder = new DirectoryInfo(Path.Combine(paths.Value.Ingest, systemId, subfolder));
         if (!folder.Exists)
             return [];
         return folder.EnumerateFiles()
-            .Where(f => !IsIgnored(f.Name) && !f.Name.EndsWith(ErrorSuffix, StringComparison.OrdinalIgnoreCase))
+            .Where(f => !IsIgnored(f.Name) && !(withReason && f.Name.EndsWith(ErrorSuffix, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(f => f.Name, StringComparer.Ordinal)
-            .Select(f => new FailedFile(f.Name, f.Length, f.LastWriteTimeUtc, ReadReason(f.FullName + ErrorSuffix)))
+            .Select(f => new FailedFile(f.Name, f.Length, f.LastWriteTimeUtc, withReason ? ReadReason(f.FullName + ErrorSuffix) : null))
             .ToList();
     }
 

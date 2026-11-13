@@ -56,13 +56,16 @@ public class IngestFileDeleterTests
     private Dictionary<string, string[]> Validate(params IngestDeleteRef?[] files) => IngestFileDeleter.Validate(files, _systems, _paths.Ingest);
 
     [Test]
-    public void Validate_AcceptsPendingAndFailedEntries() =>
-        Assert.That(Validate(new("gb", "pending", "a.gb"), new("gb", "failed", "b.gb")), Is.Empty);
+    public void Validate_AcceptsPendingFailedAndRemovedEntries() =>
+        Assert.That(Validate(new("gb", "pending", "a.gb"), new("gb", "failed", "b.gb"), new("gb", "removed", "c.gb (2).gb"),
+            new("gb", "removed", "d.error.txt")), Is.Empty);
 
     [TestCase(null, "pending", "a.gb")]
     [TestCase("nes", "pending", "a.gb")]
     [TestCase("GB", "pending", "a.gb")]
-    [TestCase("gb", "removed", "a.gb")]
+    [TestCase("gb", "trash", "a.gb")]
+    [TestCase("gb", "removed", "../a.gb")]
+    [TestCase("gb", "removed", ".hidden")]
     [TestCase("gb", null, "a.gb")]
     [TestCase("gb", "pending", null)]
     [TestCase("gb", "pending", "")]
@@ -129,6 +132,23 @@ public class IngestFileDeleterTests
         Assert.That(result.Deleted, Is.EqualTo(1));
         Assert.That(File.Exists(path) || File.Exists(sidecar), Is.False);
         await _reviews.DidNotReceiveWithAnyArgs().DeletePendingBySourceAsync(default!, default, default);
+    }
+
+    [Test]
+    public async Task Removed_DeletesFile_AuditsRemoved_WithoutTouchingReviewsOrSidecar()
+    {
+        Directory.CreateDirectory(Path.Combine(_paths.Ingest, "gb", "_removed"));
+        var path = Write("gb", "_removed", "a.gb");
+        var neighbour = Write("gb", "_removed", "a.gb.error.txt");
+
+        var result = await _deleter.DeleteAsync([new("gb", "removed", "a.gb")], Actor, default);
+
+        Assert.That(result.Deleted, Is.EqualTo(1));
+        Assert.That(File.Exists(path), Is.False);
+        Assert.That(File.Exists(neighbour), Is.True, "removed files have no .error.txt sidecar");
+        await _reviews.DidNotReceiveWithAnyArgs().DeletePendingBySourceAsync(default!, default, default);
+        var row = Recorded().Single();
+        Assert.That((row.Action, row.Path, row.Details), Is.EqualTo(("IngestFileDeleted", (string?)"ingest/gb/_removed/a.gb", (string?)"removed")));
     }
 
     [Test]

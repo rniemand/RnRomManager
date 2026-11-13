@@ -9,7 +9,7 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api.Endpoints;
 
-/// <summary><c>POST /api/jobs/ingest</c>, <c>GET /api/ingest/pending</c>, <c>GET /api/ingest/failed</c> and <c>POST /api/ingest/delete</c>, Admin only (spec §23, §7.1).</summary>
+/// <summary><c>POST /api/jobs/ingest</c>, <c>GET /api/ingest/pending</c>, <c>GET /api/ingest/failed</c>, <c>GET /api/ingest/removed</c> and <c>POST /api/ingest/delete</c>, Admin only (spec §23, §7.1).</summary>
 public static class IngestEndpoints
 {
     public static RouteGroupBuilder MapIngestEndpoints(this RouteGroupBuilder api)
@@ -60,6 +60,13 @@ public static class IngestEndpoints
         {
             system = s.SystemId,
             files = s.Files.Select(f => new { name = f.Name, sizeBytes = f.SizeBytes, modifiedAt = f.ModifiedAtUtc, reason = f.Reason }),
+        }))).RequireAuthorization(AuthSetup.AdminOnly);
+
+        // Deleted ROMs (D2): only systems with files in their _removed/ folder.
+        api.MapGet("/ingest/removed", (IngestFileScanner scanner) => Results.Ok(scanner.ScanRemoved().Select(s => new
+        {
+            system = s.SystemId,
+            files = s.Files.Select(f => new { name = f.Name, sizeBytes = f.SizeBytes, modifiedAt = f.ModifiedAtUtc }),
         }))).RequireAuthorization(AuthSetup.AdminOnly);
 
         api.MapPost("/ingest/delete", async (HttpContext ctx, IngestFileDeleter deleter, ISystemRegistry systems, IOptions<PathsOptions> paths) =>

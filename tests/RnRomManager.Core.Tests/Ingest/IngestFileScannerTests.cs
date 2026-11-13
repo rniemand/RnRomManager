@@ -63,6 +63,30 @@ public class IngestFileScannerTests
         Assert.That(result[1].Files, Is.Empty); // missing folder
     }
 
+    [Test]
+    public void ScanRemoved_ListsTopLevelFiles_OnlySystemsWithFiles_IncludingExternal()
+    {
+        Write("gb/_removed/b.gb", "1234");
+        Write("gb/_removed/a.gb");
+        Write("gb/_removed/a.gb.error.txt", "reason: X\n"); // no sidecar handling: just a file
+        Write("gb/_removed/.hidden");
+        Write("gb/_removed/desktop.ini");
+        Write("gb/_removed/sub/deep.gb");
+        Write("gb/_failed/f.gb");
+        Write("gb/pending.gb");
+        Write("ext/_removed/c.nsp", "12");
+        Write("ext/_removed/sub/d.nsp");
+
+        var result = _scanner.ScanRemoved();
+
+        Assert.That(result.Select(s => s.SystemId), Is.EqualTo(new[] { "gb", "ext" }), "nes has no _removed/ folder");
+        Assert.That(result[0].Files.Select(f => (f.Name, f.SizeBytes, f.Reason)), Is.EqualTo(new[]
+        {
+            ("a.gb", 1L, (string?)null), ("a.gb.error.txt", 10L, null), ("b.gb", 4L, null),
+        }));
+        Assert.That(result[1].Files.Select(f => (f.Name, f.SizeBytes)), Is.EqualTo(new[] { ("c.nsp", 2L) }));
+    }
+
     // --- external systems (spec G4) ---
 
     private IReadOnlyList<FailedFile> ExtFailed() => _scanner.ScanFailed().Single(s => s.SystemId == "ext").Files;
