@@ -81,6 +81,8 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/ingest/pending"] = Role.Admin,
         ["GET /api/ingest/failed"] = Role.Admin,
         ["POST /api/ingest/delete"] = Role.Admin,
+        ["GET /api/ingest/removed"] = Role.Admin,
+        ["POST /api/ingest/restore"] = Role.Admin,
         ["POST /api/jobs/ingest"] = Role.Admin,
         ["POST /api/jobs/integrity"] = Role.Admin,
         ["POST /api/jobs/dat-refresh"] = Role.Admin,
@@ -96,6 +98,7 @@ public partial class EndpointRoleMatrixTests
         ["POST /api/review/{id:long}/resolve"] = Role.Admin,
         ["POST /api/review/{id:long}/dismiss"] = Role.Admin,
         ["DELETE /api/review/{id:long}"] = Role.Admin,
+        ["POST /api/review/delete"] = Role.Admin,
         ["GET /api/dat/search"] = Role.Admin,
 
         ["GET /api/integrity/status"] = Role.Admin,
