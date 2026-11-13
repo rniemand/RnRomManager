@@ -47,6 +47,8 @@ export interface Page<T> {
 export interface SystemInfo {
 	id: string;
 	displayName: string;
+	/** The handler's short name (`GB`), for system badges (L3). */
+	shortName: string;
 	gameCount: number;
 	romCount: number;
 	regions: string[];
@@ -93,6 +95,13 @@ export interface GameListItem {
 	favourite: boolean;
 	/** With `q`: the metadata value that matched when no word was in a title (S3); null otherwise. */
 	matchedOn: { field: 'developer' | 'publisher' | 'genre'; value: string } | null;
+	/** Roms flagged `Update` (C1). */
+	updateCount: number;
+	/** Primary release to quick play (C2); null when the system has no browser core or the release is external. */
+	playRomId: number | null;
+	playRomFileName: string | null;
+	/** The system handler's browser core, null when it has none. */
+	browserCore: string | null;
 }
 
 /** One release of `GET /api/games/{id}` (spec §23, §6.2 Rom fields flattened). */

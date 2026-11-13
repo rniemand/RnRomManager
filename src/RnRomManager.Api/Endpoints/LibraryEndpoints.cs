@@ -26,8 +26,8 @@ public static class LibraryEndpoints
         {
             var stats = (await games.ListSystemStatsAsync(ctx.RequestAborted)).ToDictionary(s => s.SystemId);
             return Results.Ok(systems.All.OrderBy(h => h.DisplayName, StringComparer.OrdinalIgnoreCase).Select(handler => stats.TryGetValue(handler.Id, out var s)
-                ? new { id = handler.Id, displayName = handler.DisplayName, embedRoms = handler.EmbedRomsInZip, gameCount = s.GameCount, romCount = s.RomCount, regions = s.Regions }
-                : new { id = handler.Id, displayName = handler.DisplayName, embedRoms = handler.EmbedRomsInZip, gameCount = 0, romCount = 0, regions = (IReadOnlyList<string>)[] }));
+                ? new { id = handler.Id, displayName = handler.DisplayName, shortName = handler.ShortName, embedRoms = handler.EmbedRomsInZip, gameCount = s.GameCount, romCount = s.RomCount, regions = s.Regions }
+                : new { id = handler.Id, displayName = handler.DisplayName, shortName = handler.ShortName, embedRoms = handler.EmbedRomsInZip, gameCount = 0, romCount = 0, regions = (IReadOnlyList<string>)[] }));
         });
 
         var games = api.MapGroup("/games");
@@ -44,21 +44,31 @@ public static class LibraryEndpoints
                 if (collectionId is { } id && await collections.GetAsync(id, CollectionEndpoints.UserId(ctx), ctx.RequestAborted) is null)
                     return Problems.NotFound(ctx);
             var result = await repository.ListAsync(query, ctx.RequestAborted);
-            return Results.Ok(Paging.ToDto(result, game => new
+            return Results.Ok(Paging.ToDto(result, game =>
             {
-                id = game.Id,
-                system = game.SystemId,
-                systemName = systems.ById(game.SystemId)?.DisplayName ?? game.SystemId,
-                systemShortName = systems.ById(game.SystemId)?.ShortName ?? game.SystemId,
-                displayTitle = game.DisplayTitle,
-                releaseYear = game.ReleaseYear,
-                regions = game.Regions,
-                romCount = game.RomCount,
-                primarySizeBytes = game.PrimarySizeBytes,
-                boxArtUrl = game.BoxArtImageId is { } imageId ? ImageUrl(game.Id, imageId) : null,
-                rating = game.Rating,
-                favourite = game.Favourite,
-                matchedOn = game.MatchedOn is { } match ? new { field = match.Field, value = match.Value } : null,
+                // C2: quick play needs a browser core and a primary release stored in the zip.
+                var core = systems.ById(game.SystemId)?.BrowserCore;
+                var playable = core is not null && game.PrimaryRomId is not null && !game.PrimaryIsExternal;
+                return new
+                {
+                    id = game.Id,
+                    system = game.SystemId,
+                    systemName = systems.ById(game.SystemId)?.DisplayName ?? game.SystemId,
+                    systemShortName = systems.ById(game.SystemId)?.ShortName ?? game.SystemId,
+                    displayTitle = game.DisplayTitle,
+                    releaseYear = game.ReleaseYear,
+                    regions = game.Regions,
+                    romCount = game.RomCount,
+                    primarySizeBytes = game.PrimarySizeBytes,
+                    boxArtUrl = game.BoxArtImageId is { } imageId ? ImageUrl(game.Id, imageId) : null,
+                    rating = game.Rating,
+                    favourite = game.Favourite,
+                    matchedOn = game.MatchedOn is { } match ? new { field = match.Field, value = match.Value } : null,
+                    updateCount = game.UpdateCount,
+                    playRomId = playable ? game.PrimaryRomId : null,
+                    playRomFileName = playable ? game.PrimaryRomFileName : null,
+                    browserCore = core,
+                };
             }));
         });
 
