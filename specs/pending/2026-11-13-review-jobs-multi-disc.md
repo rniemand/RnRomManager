@@ -44,7 +44,7 @@ Resolving a Review item runs today inside one HTTP request: a multi-GB Xbox 360 
   - `JobRunner.Cancel` returns `CancelResult { NotFound, Cancelled, NotCancellable }` instead of `bool`. For a non-cancellable job it returns `NotCancellable` and does nothing.
   - `POST /api/jobs/{id}/cancel` maps `NotCancellable` to `409` ProblemDetails, code `NotCancellable`, title "This job can't be cancelled.". `NotFound` and `Cancelled` behave as false and true do today.
   - `JobRunner.StopAsync` (shutdown) doesn't cancel a non-cancellable job's token. `RunAsync` never marks such a job `Cancelled`. If the host's shutdown timeout ends the process first, the row is `Aborted` at the next start, as for any job (§7.4); the item is still Pending unless the resolution's last write had happened.
-  - The SPA shows no Cancel button for a `ReviewResolve` job: not on the job page, and not on the running-job cards of the Ingestion and Integrity pages, which today show one for whatever job runs. One helper, `isCancellable(type)` in `src/RnRomManager.Web/src/lib/jobs.ts`, decides for all three.
+  - The SPA shows no Cancel button for a `ReviewResolve` job on the running-job cards of the Ingestion and Integrity pages, which today show one for whatever job runs. One helper, `isCancellable(type)` in `src/RnRomManager.Web/src/lib/jobs.ts`, decides for both. The job page (`/jobs/[id]`) has no Cancel button today and gets none.
 - **B5 Result.** The job ends `Completed`, or `Failed` on an unexpected exception, as any job does. Its `summary` is `{ "reviewId": <id>, "fileName": "<originalFileName>", "gameId": "<guid>" | null, "code": "<code>" | null, "errors": { field: [messages] } | null }`.
   - On success, `code` is null and `gameId` is set.
   - On failure, `code` is the code the resolution returns today (`ValidationFailed` with `errors`, `NotFound` (also an Attach target game that no longer exists, as today), `SourceMissing`, `AmbiguousGroup`, `TargetZipUnreadable`, `InfoJsonNewerSchema`, `Duplicate`, `NameTaken`, `NameTooLong`, `VerifyFailed`, `IoError`, `DbWriteFailed`), or B2's re-check codes (`NotFound`, `SetFileNotResolvable`).
@@ -60,11 +60,11 @@ Resolving a Review item runs today inside one HTTP request: a multi-GB Xbox 360 
 - **B7 Progress.** After a `202`, the page keeps `{ jobId, reviewId, fileName, done }` in a module-level store, `src/RnRomManager.Web/src/lib/stores/reviewJobs.svelte.ts`, so it survives navigation within the SPA. `done` is today's per-action success text (`Added as <title>.` etc.). The store polls `GET /api/jobs/{jobId}` every 1.5 s, the first poll 1.5 s after the `202`, until the job isn't `Running`. A failed poll is retried at the next tick. While the job runs, the item page:
   - disables every action;
   - shows "Resolving <fileName>…" with a spinner;
-  - shows the `JobStepProgress` bar from `/api/jobs/current` (the `jobs` store).
+  - shows the `JobStepProgress` bar from `/api/jobs/current`: the page calls `jobs.watch()` on mount and its stop function on destroy, as the Ingestion page does, since the `jobs` store polls only while watched.
 
   Limit: after a full reload, or in another tab, the page doesn't know about the job. Its actions stay enabled, and Resolve, Dismiss and Delete each get `409 JobRunning`, shown as the standard `toasts.jobRunning` toast, as today.
 - **B8 Completion.** The rule is "the current URL is `/review/<reviewId>`".
-  - On that URL, success → `goto` the game, with the `done` toast. Failure → the summary's `code` and `errors` go through the page's existing error handling (`handle`) as an `ApiError` with that code would today: field errors on the form, otherwise `ErrorAlert`. The actions are enabled again. After `SourceMissing`, the page shows the item as gone (today's 404 state).
+  - On that URL, success → `goto` the game, with the `done` toast. Failure → the summary's `code` and `errors` go through the page's existing error handling (`handle`) as an `ApiError` with that code would today: field errors on the form, otherwise `ErrorAlert`. The actions are enabled again. `SourceMissing` keeps today's handling: the warning toast "The source file is gone, so the item was removed." and back to `/review`.
   - Anywhere else: no navigation. Success → a success toast "<fileName> added to the library." with an **Open game** link. Failure → a danger toast "Resolving <fileName> failed: <code>." with an **Open review item** link (no link for `SourceMissing`).
   - A job that ends with no summary (`Failed`, `Aborted`) is a failure with the job's `error` as its message: `ErrorAlert` on that URL, elsewhere a danger toast "Resolving <fileName> failed." with an **Open review item** link.
   - Toasts gain an optional `link: { href, text }`, which `ToastHost` renders.
@@ -72,10 +72,10 @@ Resolving a Review item runs today inside one HTTP request: a multi-GB Xbox 360 
 ### Disc numbers in Review
 - **B9 Request.** `ReviewResolutionRequest` gains `disc` (int, optional). `Validate` accepts `Disc` as an Attach `flag`; its `flag` error becomes "Must be Hack, Translated, None or Disc.". Every error below is `400` on the `disc` field:
   - not 1–99: "Must be 1–99.";
-  - set with an action other than `Manual`, or with `Attach` and a flag other than `Disc`: "A disc number needs Manual or Attach as a disc.";
+  - set with `Dat`, or with `Attach` and a flag other than `Disc`: "A disc number needs Manual or Attach as a disc.";
   - `Attach` with the new flag `Disc` and no `disc`: "A disc number is required.";
   - set on a system that isn't `FileSets`: `ValidationFailed` from the resolver, in the job summary, "Disc numbers are for disc systems.". The system is only known from the item, so the endpoint's `Validate` can't check it.
-- **B10 Disc flag.** A disc number becomes the release flag `Disc <n>` (no leading zero), the same flag `NoIntroName.Parse` makes from a Redump name. For Manual, any flag the user typed that matches `^Disc \d+$` (ignoring case) is removed first, so there is never two. A single file's generated name includes the flag, as every flag does today: Manual `Title (Region) (Disc 2).iso`.
+- **B10 Disc flag.** A disc number becomes the release flag `Disc <n>` (no leading zero), the same flag `NoIntroName.Parse` makes from a Redump name. For Manual, any flag the user typed that matches `^Disc \d+$` (ignoring case) is removed first, so there is never two, and `Disc <n>` is appended after the remaining flags. A single file's generated name includes the flag, as every flag does today: Manual `Title (Region) (Disc 2).iso`.
 - **B11 Attach as a disc.** `Attach` with `flag` `Disc` adds the file as a release of the chosen game: the same system, any game, not limited to ambiguous candidates.
   - **Title:** the target game's title, as Hack/Translated take it today.
   - **Regions, languages and revision:** copied from the target's primary release (`isPrimary`), so disc 2 lines up with disc 1. They are empty when the target has no releases. An unreadable target ZIP is `TargetZipUnreadable` (the existing `OpenTarget`).
@@ -86,8 +86,10 @@ Resolving a Review item runs today inside one HTTP request: a multi-GB Xbox 360 
 ### Unmatched bin/cue sets in Review
 - **B12 Finding a set.** `ReviewSets.FindAsync(item)` returns the set's members, each with its review row, or null. It returns null on any failure to read the folder or a cue. It finds a set when all of these hold:
   - the item is on a `FileSets` system whose `RomExtensions` include `.cue` (the systems `IngestJob` plans sets for) and is loose (`archivePath` is null);
-  - `IngestSetPlanner.Plan`, run over the system's ingest folder as `IngestFileScanner` lists it today (top-level files, ignored names left out; its private `ScanSystem` becomes public), puts the item's file in a complete `Set` unit. Cues up to `MaxCueBytes` are read by `IngestJob`'s `ReadCue`, which moves to a shared `internal static` helper beside `IngestSetPlanner` so both callers use the same checked read;
+  - `IngestSetPlanner.Plan`, run over the system's ingest folder as `IngestFileScanner` lists it today (top-level files, ignored names left out; its private `ScanSystem` becomes public), puts the item's file in a complete `Set` unit. Cues up to `MaxCueBytes` are read by `IngestJob`'s private instance `ReadCue`, which moves to `internal static byte[]? IngestCueReader.Read(string ingestRoot, IngestFile file, ILogger logger)` in `IngestSetPlanner.cs` (the planner itself stays pure), so both callers use the same checked read;
   - every member of that set has a `Pending` review row with reason `NoDatMatch`, from a new `IIngestReviewRepository.ListPendingByPathsAsync(IReadOnlyCollection<string> sourcePaths)`, which returns the `Pending` loose rows (`archive_path` null) whose `source_path` is one of the members' full paths.
+
+  `ReviewSets` is a class (`IngestFileScanner`, `IIngestReviewRepository`, `ISystemRegistry`, `IOptions<PathsOptions>`, logger), registered transient in `AppHost.cs`; the detail endpoint and `ReviewResolver` take it by injection.
 
   `ReviewResolver.IsResolvable` becomes `IsResolvableAsync(item)`: true for a non-`.cue`/`.bin` item, as today, and for a `.cue`/`.bin` item on a `FileSets` system exactly when `FindAsync` finds a set. Its callers in `ReviewEndpoints` and the resolver are updated. The cost is one folder listing and a few small cue reads per detail request, which is fine for an Admin-only page.
 - **B13 Detail.** `GET /api/review/{id}` adds two fields:
@@ -100,7 +102,7 @@ Resolving a Review item runs today inside one HTTP request: a multi-GB Xbox 360 
   2. **Store it.** A new public pipeline entry point, `IngestPipeline.StoreSetReleaseAsync(IReadOnlyList<(IngestFile File, string Sha1)> members, ISystemHandler system, InfoJsonRom rom, DatMetadata metadata, Guid? targetGameId, Func<Guid, Task> afterMirror, AuditActor actor, string reviewAction, JobProgress progress)`, does what `ProcessSetCoreAsync` does after planning. `members` are in set order (cue first), each with its review row's SHA1. `rom` carries what the action decides (step 3); the pipeline fills its `FileName`, `OriginalFileName`, `Version`, `Header`, `Metadata` and `Files` from the hashed members, as `ProcessSetCoreAsync` does. It reuses that method's private parts (`ExternalSource`, `SetPlacement`, `HashCheckedAsync`, `NewGameAsync`/`AddToGameAsync` with `set`), which stay private:
      - classify and hash every member, streamed and once each (`SetCurrentItem(<member>)`, then its `Hashing` step, then `ItemDone()`);
      - each member's SHA1 must be its review row's, else `VerifyFailed`;
-     - a member that changed between its check and the moves (the same snapshot re-check as set ingest) is `VerifyFailed` too, not `TooRecent`, and nothing moves;
+     - a member that changed between its check and the moves (the same snapshot re-check as set ingest) is `VerifyFailed` too, not `TooRecent`, and nothing moves. There is no `MinFileAge` check, as for a single-file resolve: the SHA1 decides;
      - the release's main file is the cue's first `FILE` (track 1, the data track by convention); the cue and every other track go in its `files`, as set ingest stores a matched set;
      - every file keeps its exact source name;
      - the files are placed with set ingest's all-or-nothing rollback; a name already used in the game's folder is `NameTaken`, and nothing moves;
@@ -109,7 +111,7 @@ Resolving a Review item runs today inside one HTTP request: a multi-GB Xbox 360 
      - **Manual:** from the form, with B10's disc flag;
      - **Attach:** from the target, as B11 describes, or the Hack/Translated flag;
      - **Dat pick:** the chosen system must be in the source's family, and every member's extension and size must fit it (`RomExtensions`, `Min`/`MaxRomSizeBytes`), else `ValidationFailed` on `datSystem`. Tags come from the DAT game name, with flags plus `Unverified`. Identification is `Manual` with the DAT's name, version and game name, as the single-file pick does. Metadata is `store.MetadataFor(crc)` of the DAT game's first rom (Redump has no metadat, so usually empty).
-  4. **Mark the rows.** The `afterMirror` hook calls a new `IIngestReviewRepository.SetResolutionAsync(IReadOnlyList<long> ids, …)`, which marks every member's row `Resolved` with the game id in one transaction. If that write fails after the files moved, the result is `DbWriteFailed`. The release is in the library, but the rows stay Pending. Their set can no longer be found, so they are unresolvable (`SetFileNotResolvable`), and the Admin clears them with **Delete**, one member at a time: the source is already gone, so each Delete only removes that member's Pending row (today's `DeleteExternalSourceAsync` rule for a missing source, by source path).
+  4. **Mark the rows.** The `afterMirror` hook calls a new overload `IIngestReviewRepository.SetResolutionAsync(IReadOnlyList<long> ids, string status, Guid? gameId, int userId, DateTime now, CancellationToken)`, which marks every member's row `Resolved` with the game id in one transaction. If that write fails after the files moved, the result is `DbWriteFailed`. The release is in the library, but the rows stay Pending. Their set can no longer be found, so they are unresolvable (`SetFileNotResolvable`), and the Admin clears them with **Delete**, one member at a time: the source is already gone, so each Delete only removes that member's Pending row (today's `DeleteExternalSourceAsync` rule for a missing source, by source path). The next ingest run also removes them, as its step 5 removes every Pending row whose source is gone.
 - **B15 Dismiss.** Dismissing a set member stays `409 SetFileNotResolvable`. Dismiss checks its own rule: refused for every `.cue`/`.bin` item on a `FileSets` system (= `!dismissible`).
 
 ### Review form and game page (SPA)
@@ -131,13 +133,13 @@ Unchanged: every Review endpoint is Admin-only. The job's audit rows carry the r
 | Core | `src/RnRomManager.Core/Ingest/ReviewResolutionRequest.cs`, `ReviewResolutionResult.cs` | `Disc`. |
 | Core | `src/RnRomManager.Core/Ingest/IngestPipeline.cs` | `StoreReleaseAsync(progress)`; new `StoreSetReleaseAsync` (B14). |
 | Data | `src/RnRomManager.Core/Ingest/IIngestReviewRepository` + `src/RnRomManager.Data` `IngestReviewRepository` | `ListPendingByPathsAsync(sourcePaths)` (B12); `SetResolutionAsync(ids, …)` in one transaction. |
-| Api | `src/RnRomManager.Api/AppHost.cs` | Register `ReviewResolveJob` transient. |
+| Api | `src/RnRomManager.Api/AppHost.cs` | Register `ReviewResolveJob` and `ReviewSets` transient. |
 | Api | `src/RnRomManager.Api/Endpoints/ReviewEndpoints.cs` | B1; `disc` validation; `dismissible`, `setMembers`, `fileSets` (B13, B16). |
 | Api | `src/RnRomManager.Api/Endpoints/JobEndpoints.cs` | `409 NotCancellable` (B4). |
 | Web | `src/RnRomManager.Web/src/lib/stores/reviewJobs.svelte.ts` (new), `src/RnRomManager.Web/src/lib/stores/toasts.svelte.ts`, `src/RnRomManager.Web/src/lib/components/ToastHost.svelte` | B7, B8; toast `link`. |
 | Web | `src/RnRomManager.Web/src/routes/review/[id]/+page.svelte`, `src/RnRomManager.Web/src/lib/reviewForm.ts`, `src/RnRomManager.Web/src/lib/api/types.ts` | B7, B8, B13, B16, B17; `JobType` gains `ReviewResolve`. |
 | Web | `src/RnRomManager.Web/src/lib/jobs.ts`, `src/RnRomManager.Web/src/routes/jobs/[id]/+page.svelte`, `src/RnRomManager.Web/src/routes/ingestion/+page.svelte`, `src/RnRomManager.Web/src/routes/integrity/+page.svelte` | B4 (`isCancellable`, no Cancel), B6. |
-| Web | `src/RnRomManager.Web/src/routes/games/[id]/+page.svelte` | B18. |
+| Web | `src/RnRomManager.Web/src/lib/releases.ts`, `src/RnRomManager.Web/src/routes/games/[id]/+page.svelte` | B18: the disc number and order in `releases.ts`, beside `compareUpdates`. |
 | Docs | `docs/features.md`, `docs/development.md` | Review resolves as a job (`features.md` also documents the resolve endpoint's response and the resolve audit row's job id; `development.md`'s "One job at a time" no longer lists review resolutions as synchronous); disc numbers; resolving sets and their limits. |
 
 **API contract changes:**
@@ -148,7 +150,7 @@ Unchanged: every Review endpoint is Admin-only. The job's audit rows carry the r
 The SPA is the only client. No migrations, no config keys, no info.json change; existing data is untouched.
 
 ## Risks
-- **Contract change** breaks every test that expects `200 { gameId }`: `ReviewEndpointsTests`, `IngestReviewTests`, `ExternalLibraryTests` (its `Retry`, `Review` and `SetReview` parts post to the endpoint), and the e2e test `review queue: resolve with a suggestion`. Removing `ResolveAsync` breaks its direct callers: `ReviewResolverTests`, `ReviewResolverExternalTests`, `ExternalLibraryTests` (`EditGuards`, `MoveRelease`, `TitleEdit`), `IngestPipelineTests` and `TitleDbIngestTests`. Step 3 moves the direct callers to `ResolveInJobAsync`, step 4 updates the HTTP tests, step 5 updates the SPA, and step 11 updates the e2e. Between steps 4 and 5, resolving from the SPA is broken; each commit still builds and passes its own tests.
+- **Contract change** breaks every test that expects `200 { gameId }`: `ReviewEndpointsTests`, `IngestReviewTests`, `ExternalLibraryTests` (its `Retry`, `Review` and `SetReview` parts post to the endpoint), and the e2e test `review queue: resolve with a suggestion`. Removing `ResolveAsync` breaks its direct callers: `ReviewResolverTests`, `ReviewResolverExternalTests`, `ExternalLibraryTests` (`EditGuards`, `MoveRelease`, `TitleEdit`), `IngestPipelineTests` and `TitleDbIngestTests`. Step 3 moves the direct callers to `ResolveInJobAsync`, step 4 updates the HTTP tests, step 5 updates the SPA, and step 12 updates the e2e. Between steps 4 and 5, resolving from the SPA is broken; each commit still builds and passes its own tests.
 - **Lock ownership:** a second `TryAcquire` inside the job would always get `JobRunning`. B2 removes it from the job path, and step 3's test proves it.
 - **Partial set moves:** B14 reuses set ingest's placement and rollback rather than a second implementation.
 - **Data track guess:** with no DAT match, track 1 is taken as the main file. If a set's first `FILE` isn't the data track, only the release's main-file label is off; all files are kept and listed.
@@ -166,8 +168,8 @@ The SPA is the only client. No migrations, no config keys, no info.json change; 
   - `JobEndpointsTests`: cancelling a running non-cancellable test job is `409 NotCancellable`; other jobs cancel as before (`202`, `404` when not running).
 
   Done when: those pass.
-- [ ] **3. Review resolve job (Core)**: B2, B3, B5. Files: `src/RnRomManager.Core/Jobs/Job.cs` (`JobType.ReviewResolve`), `src/RnRomManager.Core/Ingest/ReviewResolveJob.cs`, `ReviewResolver.cs`, `IngestPipeline.cs` (`StoreReleaseAsync(progress)`), `src/RnRomManager.Api/AppHost.cs` (registration), plus the existing resolve endpoint, which starts the job, awaits `StartedJob.Completion`, reads the summary through `IJobRepository.GetAsync` and maps its `code` through today's `ToResult` (`409 JobRunning` when `StartAsync` returns null), so the `200` contract holds until step 4. Tests:
-  - `ReviewResolveJobTests` (new): run inside a `JobRunner` holding the lock, it doesn't return `JobRunning`; success summary with `gameId`, `fileName` and an `Ingested` job item; `VerifyFailed` keeps the item Pending with an `Error` job item; `SourceMissing` removes the row; an item no longer Pending → `NotFound` summary with the job's `fileName` and no job item; an external resolve reports `Hashing` and `CopyingToLibrary` steps (`ExternalIngestHooks.WrapHashStream`); the job is not cancellable.
+- [ ] **3. Review resolve job (Core)**: B2, B3, B5. Files: `src/RnRomManager.Core/Jobs/Job.cs` (`JobType.ReviewResolve`), `src/RnRomManager.Core/Ingest/ReviewResolveJob.cs`, `ReviewResolver.cs`, `IngestPipeline.cs` (`StoreReleaseAsync(progress)`), `src/RnRomManager.Api/AppHost.cs` (registration), plus the existing resolve endpoint, which starts the job, awaits `StartedJob.Completion`, reads the summary through `IJobRepository.GetAsync` and maps its `code` through today's `ToResult` (`409 JobRunning` when `StartAsync` returns null; a job with no summary is `500`, as an unhandled exception is today), so the `200` contract holds until step 4. Tests:
+  - `ReviewResolveJobTests` (new, `tests/RnRomManager.Core.Tests/Ingest/`): run inside a `JobRunner` holding the lock, it doesn't return `JobRunning`; success summary with `gameId`, `fileName` and an `Ingested` job item; `VerifyFailed` keeps the item Pending with an `Error` job item; `SourceMissing` removes the row; an item no longer Pending → `NotFound` summary with the job's `fileName` and no job item; an external resolve reports `Hashing` and `CopyingToLibrary` steps (`ExternalIngestHooks.WrapHashStream`); the job is not cancellable.
   - The direct `ResolveAsync` callers move to `ResolveInJobAsync` and still pass: `ReviewResolverTests`, `ReviewResolverExternalTests`, and in the API test project `ExternalLibraryTests`, `IngestPipelineTests` and `TitleDbIngestTests`. Dismiss and Delete still return `JobRunning` while the lock is held.
 
   Done when: those pass.
@@ -179,35 +181,42 @@ The SPA is the only client. No migrations, no config keys, no info.json change; 
   Done when: those classes pass.
 - [ ] **5. Review page runs the job (SPA)**: B7, B8, and B4/B6 (SPA part). Files: `src/RnRomManager.Web/src/lib/stores/reviewJobs.svelte.ts`, `toasts.svelte.ts`, `ToastHost.svelte`, `src/RnRomManager.Web/src/lib/jobs.ts`, `src/RnRomManager.Web/src/routes/review/[id]/+page.svelte`, `src/RnRomManager.Web/src/routes/jobs/[id]/+page.svelte`, `src/RnRomManager.Web/src/routes/ingestion/+page.svelte`, `src/RnRomManager.Web/src/routes/integrity/+page.svelte`, `src/RnRomManager.Web/src/lib/api/types.ts`. Tests:
   - `stores.svelte.test.ts`: the store polls until the job is done; on `/review/<id>` it navigates to the game; elsewhere it shows a toast with an Open game link; failure shows a toast with an Open review item link, and none for `SourceMissing`; a `Failed` job with no summary shows the failure toast; toast `link` rendering.
-  - `review-page.test.ts`: resolving shows progress and disables actions; field errors from a failed summary show on the form.
-  - `job-page.test.ts`: a `ReviewResolve` job shows its file, game link or error, and no Cancel button; one with no summary shows the generic view.
+  - `review-page.test.ts`: resolving shows progress and disables actions; field errors from a failed summary show on the form; `SourceMissing` toasts and returns to the queue.
+  - `job-page.test.ts`: a `ReviewResolve` job shows its file, game link or error; one with no summary shows the generic view.
+  - `ingestion-page.test.ts`, `integrity-page.test.ts`: no Cancel button while a `ReviewResolve` job runs.
   - `jobs.test.ts`: `isCancellable` is false only for `ReviewResolve`.
 
   Done when: `npm run lint`, `npm run check` and those vitest files pass.
-- [ ] **6. Find review sets (Data + Core + API)**: B12's `ReviewSets.FindAsync`, plus B13, B15 and B16's `fileSets` on the detail. `IsResolvable` is unchanged in this step, so a set member is still unresolvable. Files: `IIngestReviewRepository`, `IngestReviewRepository` (`ListPendingByPathsAsync`), `src/RnRomManager.Core/Ingest/ReviewSets.cs`, `IngestSetPlanner.cs` (shared cue read), `IngestJob.cs`, `IngestFileScanner.cs`, `ReviewResolver.cs` (Dismiss rule), `ReviewEndpoints.cs`. Tests:
+- [ ] **6. Find review sets (Data + Core + API)**: B12's `ReviewSets.FindAsync`, plus B13, B15 and B16's `fileSets` on the detail. `IsResolvable` is unchanged in this step, so a set member is still unresolvable. The review page's Dismiss button switches from `resolvable` to `dismissible` here, before step 8 makes set members resolvable, so Dismiss never shows for one. Files: `IIngestReviewRepository`, `IngestReviewRepository` (`ListPendingByPathsAsync`), `src/RnRomManager.Core/Ingest/ReviewSets.cs`, `IngestSetPlanner.cs` (shared cue read), `IngestJob.cs`, `IngestFileScanner.cs`, `ReviewResolver.cs` (Dismiss rule), `ReviewEndpoints.cs`, `AppHost.cs` (`ReviewSets`), `src/RnRomManager.Web/src/routes/review/[id]/+page.svelte` and `types.ts` (`dismissible` only). Tests:
   - `IngestReviewRepositoryTests`: `ListPendingByPathsAsync` returns only Pending loose rows of the given paths.
   - `ReviewSetsTests` (new, real temp dirs): a complete set whose members are all Pending `NoDatMatch` is found from the cue and from a bin; null for a missing bin, a Resolved member, an `AmbiguousSet` member, a member with no row (`AlreadyInReview`), an archived item, a lone `.bin` and an unreadable cue.
   - `IngestJobTests` still pass with the shared cue read.
   - `ReviewEndpointsTests`: `dismissible`, `setMembers` and `fileSets` for a set member and for a single file; dismissing a set member is still `409`.
+  - `review-page.test.ts`: no Dismiss when `dismissible` is false.
+
+  Done when: those pass, and `npm run lint` and `npm run check`.
+- [ ] **7. Store a set release (Data + Core)**: B14 step 2's `IngestPipeline.StoreSetReleaseAsync`, taken from the second half of `ProcessSetCoreAsync`, which then calls the same private parts; and B14 step 4's `SetResolutionAsync(ids, …)`. Nothing calls `StoreSetReleaseAsync` yet. Files: `IngestPipeline.cs`, `IIngestReviewRepository`, `IngestReviewRepository`. Tests:
+  - `IngestPipelineSetReleaseTests` (new, `tests/RnRomManager.Core.Tests/Ingest/`, real temp dirs and `ExternalSetTestHandler`, the pipeline built as `ReviewResolverExternalTests` builds it): a cue and 2 bins become one release with names kept, track 1 as the main file and the cue and track 2 in `files`, `afterMirror` called once with the game id; a member whose SHA1 isn't its given one → `VerifyFailed`, nothing moved; a member changed before the moves → `VerifyFailed`, nothing moved; a failing second move (`ExternalIngestHooks.BeforePlacement`) rolls back the first; a member name already in the game's folder → `NameTaken`, nothing moved; a `Hashing` step per member.
+  - `IngestReviewRepositoryTests`: `SetResolutionAsync(ids)` marks all of them or none.
+  - `ExternalLibraryTests` (`SetIngest`) and `IngestJobTests` still pass.
 
   Done when: those pass.
-- [ ] **7. Resolve a set with Manual or Attach (Core)**: B14 steps 1, 2 and 4, Manual and Attach; `IsResolvableAsync` switches to `ReviewSets` (B12). Files: `ReviewResolver.cs`, `IngestPipeline.cs` (`StoreSetReleaseAsync`), `IIngestReviewRepository`, `IngestReviewRepository`, `ReviewEndpoints.cs` (async call). Tests:
-  - `ReviewResolverExternalTests`: Manual with disc 2 adds a cue and 2 bins as one release of the game whose disc 1 matched the DAT, with names kept, the cue and track 2 in `files`, and every row Resolved; Attach Disc on a set; a member changed since review → `VerifyFailed`, nothing moved; a set made incomplete → `SetFileNotResolvable`, nothing moved; a failing second move rolls back the first and every row stays Pending; a member name already in the folder → `NameTaken`; the rows' write failing after the move → `DbWriteFailed`; after that, resolving a member is `409 SetFileNotResolvable` and Delete on a member removes only that member's row; a Dat pick on a set → `ValidationFailed` on `action`, "Dat pick on a set isn't supported yet." (step 8 removes this).
-  - `IngestReviewRepositoryTests`: `SetResolutionAsync(ids)` marks all of them or none.
+- [ ] **8. Resolve a set with Manual or Attach (Core)**: B14 steps 1 and 3 and the resolver's part of step 4, Manual and Attach; `IsResolvableAsync` switches to `ReviewSets` (B12), which `ReviewResolver` now takes by injection. Until step 10, the review page offers a set member's tabs without the Set card. Files: `ReviewResolver.cs`, `ReviewEndpoints.cs` (async call), and the `ReviewResolver` constructions in `ReviewResolverTests` and `ReviewResolverExternalTests`. Tests:
+  - `ReviewResolverExternalTests`: Manual with disc 2 adds a cue and 2 bins as one release of the game whose disc 1 matched the DAT, with names kept and every row Resolved; Attach Disc on a set; a member changed since review → `VerifyFailed`, every row Pending; a set made incomplete → `SetFileNotResolvable`, nothing moved; the rows' write failing after the move → `DbWriteFailed`; after that, resolving a member is `409 SetFileNotResolvable` and Delete on a member removes only that member's row; a Dat pick on a set → `ValidationFailed` on `action`, "Dat pick on a set isn't supported yet." (step 9 removes this).
   - `ReviewEndpointsTests`: a set member is now `resolvable`; `ExternalLibraryTests.SetReview`'s `SetReview_BinItem_IsDeleteOnly_OverHttp` becomes: a complete unmatched set's bin is resolvable, dismiss is still `409`.
 
   Done when: those pass.
-- [ ] **8. Resolve a set with a Dat pick (Core)**: B14 step 3, Dat pick; removes step 7's interim refusal. Files: `ReviewResolver.cs`. Tests: `ReviewResolverExternalTests`: a Dat pick names the release from the DAT game name with `Unverified`, keeps the file names, and records the DAT's name in identification; a member whose extension or size doesn't fit the chosen system → `ValidationFailed` `datSystem`. Done when: those pass.
-- [ ] **9. Disc and set controls on the review page (SPA)**: B13 (SPA), B16, B17. Files: `src/RnRomManager.Web/src/routes/review/[id]/+page.svelte`, `src/RnRomManager.Web/src/lib/reviewForm.ts`, `types.ts`. Tests:
-  - `review-page.test.ts`: Attach Disc requires a number and sends `flag: 'Disc', disc`; Manual sends `disc`; the disc inputs are hidden when `fileSets` is false; the Set card lists the members; no Dismiss when `dismissible` is false.
+- [ ] **9. Resolve a set with a Dat pick (Core)**: B14 step 3, Dat pick; removes step 8's interim refusal. Files: `ReviewResolver.cs`. Tests: `ReviewResolverExternalTests`: a Dat pick names the release from the DAT game name with `Unverified`, keeps the file names, and records the DAT's name in identification; a member whose extension or size doesn't fit the chosen system → `ValidationFailed` `datSystem`. Done when: those pass.
+- [ ] **10. Disc and set controls on the review page (SPA)**: B13 (SPA), B16, B17. Files: `src/RnRomManager.Web/src/routes/review/[id]/+page.svelte`, `src/RnRomManager.Web/src/lib/reviewForm.ts`, `types.ts`. Tests:
+  - `review-page.test.ts`: Attach Disc requires a number and sends `flag: 'Disc', disc`; Manual sends `disc`; the disc inputs are hidden when `fileSets` is false; the Set card lists the members.
   - `reviewForm.test.ts`: disc validation.
 
   Done when: lint, check and those files pass.
-- [ ] **10. Disc badge and order on the game page (SPA)**: B18. Files: `src/RnRomManager.Web/src/routes/games/[id]/+page.svelte`. Tests: `game-page.test.ts`: the Disc badge shows; releases are ordered by disc; a game with one disc flag keeps today's order. Done when: lint, check and that file pass.
-- [ ] **11. e2e and docs**: Files: `tests/e2e/specs/mvp.spec.ts`, `docs/features.md`, `docs/development.md`. Tests: the e2e `review queue: resolve with a suggestion` sees the progress state and lands on the game (it runs in Finish). Done when the docs describe:
+- [ ] **11. Disc badge and order on the game page (SPA)**: B18. Files: `src/RnRomManager.Web/src/lib/releases.ts`, `src/RnRomManager.Web/src/routes/games/[id]/+page.svelte`. Tests: `releases.test.ts`: a flag list's disc number (none; `Disc 2`; `Disc 02` and `disc 2` count, as B10's pattern ignores case); releases ordered by disc, with no-disc releases first and ties in today's order; a single disc flag keeps today's order. `game-page.test.ts`: the Disc badge shows and the releases follow that order. Done when: lint, check and those files pass.
+- [ ] **12. e2e and docs**: Files: `tests/e2e/specs/mvp.spec.ts`, `docs/features.md`, `docs/development.md`. Tests: the e2e `review queue: resolve with a suggestion` sees the progress state and lands on the game (it runs in Finish). Done when the docs describe:
   - resolving as a job, with the endpoint's `202`, the job page, no Cancel for it, and the audit row's job id (`features.md`); `development.md`'s "One job at a time" lists review resolution as a job, with Dismiss and Delete still synchronous;
   - disc numbers on Attach and Manual;
-  - resolving sets, with their limits (`AmbiguousSet`, `AlreadyInReview` members, archives, track 1 as the main file, and Delete, per member, to clear rows left Pending after a `DbWriteFailed`), replacing `features.md`'s "a `.cue` or `.bin` can't be resolved in Review" and "none for a disc track file".
+  - resolving sets, with their limits (`AmbiguousSet`, `AlreadyInReview` members, archives, track 1 as the main file, and Delete, per member, or the next ingest run to clear rows left Pending after a `DbWriteFailed`), replacing `features.md`'s "a `.cue` or `.bin` can't be resolved in Review" and "none for a disc track file".
 
 ## Decisions
 - 2026-11-13 How should a slow resolve run? → as a background job with the existing step progress bar. On the page: open the game when done. Left the page: a toast with a link, never navigation (user)
@@ -229,7 +238,7 @@ The SPA is the only client. No migrations, no config keys, no info.json change; 
 - 2026-11-13 Set rows Resolved in one transaction from `afterMirror`. A failure after the move leaves Pending, unresolvable rows, which the Admin clears with Delete (reviewer R9; round 2 R1)
 - 2026-11-13 No `SetChanged` code: a set no longer found in the job is `SetFileNotResolvable` (round 2 R3, round 3 R2)
 - 2026-11-13 Delete stays per member (by source path); clearing rows after a post-move `DbWriteFailed` takes one Delete per member (round 3 R1)
-- 2026-11-13 Between steps 7 and 8 (numbered 6 and 7 before review pass 1's split), a Dat pick on a set is refused with `ValidationFailed` `action` (round 2 R2)
+- 2026-11-13 Between steps 8 and 9 (numbered 6 and 7 before review pass 1's split, 7 and 8 before review pass 2's), a Dat pick on a set is refused with `ValidationFailed` `action` (round 2 R2)
 - 2026-11-13 A set member skipped as `AlreadyInReview` leaves the set unresolvable; documented (reviewer R10)
 - 2026-11-13 Sets: `SetTotal(N)`, one job item per member (reviewer R11)
 - 2026-11-13 No re-attach to a running job after a reload or in another tab; actions get the standard `JobRunning` toast (reviewer R12)
@@ -246,6 +255,18 @@ The SPA is the only client. No migrations, no config keys, no info.json change; 
 - 2026-11-13 `Validate` accepts the Attach flag `Disc` (code, review pass 1)
 - 2026-11-13 Review job store keeps the per-action success text; first poll 1.5 s after the `202`; a job with no summary is a failure with its `error` (default, review pass 1)
 - 2026-11-13 Docs also update the audit row's job id and `development.md`'s "One job at a time" (code, review pass 1)
+- 2026-11-13 The job page has no Cancel button today → `isCancellable` serves the Ingestion and Integrity cards; their page tests check it (code, review pass 2)
+- 2026-11-13 The `jobs` store polls only while watched → the review page calls `jobs.watch()` for the step bar (code, review pass 2)
+- 2026-11-13 `SourceMissing` on the item's URL → today's toast and back to `/review`, not a 404 state (code, review pass 2)
+- 2026-11-13 B9's disc error read as refusing Attach too → refused for `Dat` and for a non-`Disc` Attach (review pass 2)
+- 2026-11-13 Manual's `Disc <n>` goes after the typed flags (default, review pass 2)
+- 2026-11-13 `ReadCue` needs the ingest root and a logger → `IngestCueReader.Read(ingestRoot, file, logger)`; `ReviewSets` is an injected transient class (code, review pass 2)
+- 2026-11-13 Set storage has no `MinFileAge` check, as a single-file resolve has none; the SHA1 decides (code, review pass 2)
+- 2026-11-13 Rows left Pending after a set's `DbWriteFailed` are also removed by the next ingest run's step 5 (code, review pass 2)
+- 2026-11-13 Release order helpers live in `releases.ts` beside `compareUpdates`, tested in `releases.test.ts` (code, review pass 2)
+- 2026-11-13 Dismiss shows when `resolvable` today, so it would show for set members once they resolve → the page switches to `dismissible` in step 6 (code, review pass 2)
+- 2026-11-13 Old step 7 (~600 lines) split: new step 7 stores a set in the pipeline with `IngestPipelineSetReleaseTests`, step 8 resolves sets; old steps 8–11 renumbered 9–12 (code, review pass 2)
+- 2026-11-13 Interim step 3 endpoint: a job with no summary is `500`; `ReviewResolveJobTests` lives in Core.Tests (code, review pass 2)
 
 ## Kickoff prompt
 ```text
