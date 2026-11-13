@@ -82,7 +82,7 @@ public class ReviewResolverExternalTests
     private async Task AssertPendingKeptAsync()
     {
         await _reviews.DidNotReceiveWithAnyArgs().DeleteAsync(default!, default);
-        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default, default!, default, default, default, default);
+        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default(long), default!, default, default, default, default);
         await _reviews.DidNotReceiveWithAnyArgs().DeletePendingBySourceAsync(default!, default, default);
     }
 

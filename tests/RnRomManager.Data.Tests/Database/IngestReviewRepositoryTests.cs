@@ -9,12 +9,13 @@ namespace RnRomManager.Data.Tests.Database;
 public class IngestReviewRepositoryTests
 {
     private IngestReviewRepository _reviews = null!;
+    private MySqlConnectionFactory _factory = null!;
     private static readonly DateTime Now = new(2026, 11, 4, 12, 0, 0, DateTimeKind.Utc);
 
     [SetUp]
     public async Task SetUp()
     {
-        var factory = new MySqlConnectionFactory(await MariaDbServer.CreateDatabaseAsync());
+        var factory = _factory = new MySqlConnectionFactory(await MariaDbServer.CreateDatabaseAsync());
         new MySqlDatabaseLifecycle(factory, NullLogger<MySqlDatabaseLifecycle>.Instance, TimeProvider.System).Migrate();
         _reviews = new IngestReviewRepository(factory);
     }
@@ -131,5 +132,33 @@ public class IngestReviewRepositoryTests
 
         Assert.That(found.Select(r => r.Sha1).Order(), Is.EqualTo(new[] { cue.Sha1, bin.Sha1 }));
         Assert.That(await _reviews.ListPendingByPathsAsync([], default), Is.Empty);
+    }
+
+    [Test]
+    public async Task SetResolutionOfMany_MarksAllOrNone_B14()
+    {
+        await using var connection = _factory.Create();
+        var userId = await Dapper.SqlMapper.ExecuteScalarAsync<int>(connection,
+            "INSERT INTO users (username, password_hash, failed_login_count, security_stamp, created_at, updated_at) " +
+            "VALUES ('boss', 'hash', 0, REPEAT('a', 32), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6)); SELECT LAST_INSERT_ID();");
+        ReviewItem Loose(char hash) => Item(hash, $"{hash}.bin") with { SourcePath = $"/ingest/psx/{hash}.bin", ArchivePath = null, ArchiveEntry = null };
+        var rows = new List<long>();
+        foreach (var hash in "abcd")
+        {
+            await _reviews.UpsertAsync(Loose(hash), default);
+            rows.Add((await _reviews.GetBySha1Async(new string(hash, 40), default))!.Id);
+        }
+        var gameId = Guid.NewGuid();
+        await _reviews.SetResolutionAsync(rows[3], "Dismissed", null, userId, Now, default);
+
+        Assert.That(() => _reviews.SetResolutionAsync([rows[2], rows[3]], "Resolved", gameId, userId, Now, default), Throws.InvalidOperationException);
+        Assert.That((await _reviews.GetAsync(rows[2], default))!.Status, Is.EqualTo("Pending"), "none changes when one isn't Pending");
+
+        await _reviews.SetResolutionAsync([rows[0], rows[1], rows[2]], "Resolved", gameId, userId, Now, default);
+        foreach (var id in rows.Take(3))
+        {
+            var row = (await _reviews.GetAsync(id, default))!;
+            Assert.That((row.Status, row.GameId, row.ResolvedBy), Is.EqualTo(("Resolved", (Guid?)gameId, (int?)userId)));
+        }
     }
 }

@@ -62,6 +62,9 @@ public interface IIngestReviewRepository
 
     Task SetResolutionAsync(long id, string status, Guid? gameId, int userId, DateTime now, CancellationToken cancellationToken);
 
+    /// <summary>B14: marks every one of <paramref name="ids"/> in one transaction; when any isn't Pending, none changes and it throws.</summary>
+    Task SetResolutionAsync(IReadOnlyList<long> ids, string status, Guid? gameId, int userId, DateTime now, CancellationToken cancellationToken);
+
     Task<ReviewItem?> GetBySha1Async(string sha1, CancellationToken cancellationToken);
 
     Task UpsertAsync(ReviewItem item, CancellationToken cancellationToken);

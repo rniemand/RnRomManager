@@ -62,6 +62,20 @@ public sealed class IngestReviewRepository(IDbConnectionFactory connections) : I
             """, new { id, status, gameId, userId, now }, cancellationToken: cancellationToken));
     }
 
+    public async Task SetResolutionAsync(IReadOnlyList<long> ids, string status, Guid? gameId, int userId, DateTime now, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+        var changed = await connection.ExecuteAsync(new CommandDefinition("""
+            UPDATE ingest_review_items SET status = @status, game_id = @gameId, resolved_at = @now, resolved_by = @userId
+            WHERE id IN @ids AND status = 'Pending'
+            """, new { ids, status, gameId, userId, now }, transaction, cancellationToken: cancellationToken));
+        if (changed != ids.Distinct().Count())
+            throw new InvalidOperationException($"Only {changed} of review items {string.Join(", ", ids)} were Pending; none was marked {status}.");
+        await transaction.CommitAsync(cancellationToken);
+    }
+
     public async Task UpsertAsync(ReviewItem item, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();

@@ -129,7 +129,7 @@ public class ReviewResolveJobTests
         Assert.That(summary.GetProperty("gameId").ValueKind, Is.EqualTo(JsonValueKind.Null));
         var item = Items().Single();
         Assert.That((item.Outcome, item.Reason), Is.EqualTo((IngestOutcome.Error, "VerifyFailed")));
-        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default, default!, default, default, default, default);
+        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default(long), default!, default, default, default, default);
         Assert.That(File.Exists(_item.SourcePath), Is.True);
     }
 

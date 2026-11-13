@@ -98,7 +98,7 @@ public class ReviewResolverTests
         Assert.That(result.Code, Is.EqualTo("ValidationFailed"));
         Assert.That(result.Errors!["disc"], Is.EqualTo(new[] { "Disc numbers are for disc systems." }));
         Assert.That(File.Exists(_item.SourcePath), Is.True);
-        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default, default!, default, default, default, default);
+        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default(long), default!, default, default, default, default);
     }
 
     [Test]
@@ -141,7 +141,7 @@ public class ReviewResolverTests
     {
         var result = await _resolver.ResolveInJobAsync(1, new ReviewResolutionRequest { Action = "Manual", Title = "My Game", Regions = [], Languages = [], Flags = [] }, Actor, default);
         Assert.That(result.Code, Is.EqualTo("VerifyFailed"));
-        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default, default!, default, default, default, default);
+        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default(long), default!, default, default, default, default);
         Assert.That(File.Exists(_item.SourcePath), Is.True);
         using var released = _lock.TryAcquire();
         Assert.That(released, Is.Not.Null);
@@ -178,7 +178,7 @@ public class ReviewResolverTests
         await _reviews.Received(1).DeletePendingBySourceAsync(_item.SourcePath, null, default);
         var row = Recorded().Single();
         Assert.That((row.Action, row.Actor, row.Path, row.TargetPath), Is.EqualTo(("ReviewDeleted", Actor, "ingest/test.gb", (string?)null)));
-        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default, default!, default, default, default, default);
+        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default(long), default!, default, default, default, default);
     }
 
     [Test]
