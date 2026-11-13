@@ -1,6 +1,6 @@
 ---
 title: In-browser emulators (GB, GBC, GBA)
-status: in-progress
+status: completed
 created: 2026-11-13
 ---
 
