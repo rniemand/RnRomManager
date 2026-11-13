@@ -1,6 +1,6 @@
 ---
 title: Review resolve jobs and multi-disc games
-status: ready
+status: in-progress
 created: 2026-11-13
 ---
 
