@@ -19,6 +19,8 @@ public class AppHostTests
         Directory.CreateDirectory(Path.Combine(webRoot, "_app", "immutable"));
         File.WriteAllText(Path.Combine(webRoot, "index.html"), IndexHtml);
         File.WriteAllText(Path.Combine(webRoot, "_app", "immutable", "x.js"), "console.log(1);");
+        Directory.CreateDirectory(Path.Combine(webRoot, "emulator"));
+        File.WriteAllBytes(Path.Combine(webRoot, "emulator", "test.data"), [1, 2, 3]);
         _factory.Settings[WebHostDefaults.WebRootKey] = webRoot;
         _client = _factory.CreateClient();
     }
@@ -99,5 +101,25 @@ public class AppHostTests
         using var response = await _client.GetAsync("/_app/immutable/missing.js");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task EmulatorDataFile_IsServedAsOctetStream()
+    {
+        using var response = await _client.GetAsync("/emulator/test.data");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(new byte[] { 1, 2, 3 }));
+    }
+
+    [TestCase("/emulator/missing.js")]
+    [TestCase("/emulator/missing")]
+    public async Task MissingEmulatorPath_Returns404NotSpa(string path)
+    {
+        using var response = await _client.GetAsync(path);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        Assert.That(await response.Content.ReadAsStringAsync(), Does.Not.Contain("spa"));
     }
 }

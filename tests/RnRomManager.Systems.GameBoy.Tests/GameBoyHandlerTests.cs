@@ -40,6 +40,12 @@ public class GameBoyHandlerTests
         Assert.That((gba.MinRomSizeBytes, gba.MaxRomSizeBytes), Is.EqualTo((0xC0L, 32L * 1024 * 1024)));
     }
 
+    [Test]
+    public void BrowserCore_GambatteForGbAndGbc_MgbaForGba()
+    {
+        Assert.That(AllHandlers.Select(h => h.BrowserCore), Is.EqualTo(new[] { "gambatte", "gambatte", "mgba" }));
+    }
+
     [TestCaseSource(nameof(Handlers))]
     public void Limits_Are0x150To16MiB(ISystemHandler handler)
     {

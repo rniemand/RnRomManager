@@ -53,6 +53,9 @@ public interface ISystemHandler
     /// <summary>B2: the metadat files that exist for this system; a kind not listed gives empty metadata.</summary>
     IReadOnlyList<string> MetadatKinds => DatKind.Metadat;
 
+    /// <summary>Browser emulators B1: the EmulatorJS core that plays this system in the browser, or null when none does.</summary>
+    string? BrowserCore => null;
+
     /// <summary>512×512 PNG stored as <c>boxart-01.png</c> with <c>isDefault: true</c> (§6.1).</summary>
     ReadOnlyMemory<byte> DefaultBoxArtPng { get; }
 

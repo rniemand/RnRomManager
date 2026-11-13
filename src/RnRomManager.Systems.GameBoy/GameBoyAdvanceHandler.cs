@@ -24,6 +24,9 @@ public sealed class GameBoyAdvanceHandler : ISystemHandler
     /// <inheritdoc />
     public bool EmbedRomsInZip => true;
 
+    /// <inheritdoc />
+    public string? BrowserCore => "mgba";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => GameBoyAdvanceHeaderReader.Read(rom);

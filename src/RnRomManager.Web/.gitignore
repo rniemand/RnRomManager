@@ -21,3 +21,6 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# EmulatorJS, copied from node_modules by scripts/vendor-emulatorjs.mjs
+/static/emulator/vendor/

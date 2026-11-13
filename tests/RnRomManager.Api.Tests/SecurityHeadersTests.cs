@@ -42,6 +42,35 @@ public class SecurityHeadersTests
         Assert.That(SecurityHeaders.ContentSecurityPolicy(null), Does.Contain("script-src 'self';"));
     }
 
+    [TestCase("/emulator/play.html")]
+    [TestCase("/Emulator/x")]
+    [TestCase("/emulator")]
+    public async Task EmulatorPaths_GetTheEmulatorPolicy(string path)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(path);
+
+        Assert.That(response.Headers.GetValues("Content-Security-Policy").Single(), Is.EqualTo(
+            "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' blob: data:; "
+            + "img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'"));
+    }
+
+    [TestCase("/")]
+    [TestCase("/api/systems")]
+    [TestCase("/emulatorx")]
+    public async Task OtherPaths_KeepTheAppPolicy(string path)
+    {
+        using var factory = new ApiFactory();
+        using var client = factory.CreateClient();
+
+        using var response = await client.GetAsync(path);
+
+        Assert.That(response.Headers.GetValues("Content-Security-Policy").Single(),
+            Does.StartWith("default-src 'self'; script-src 'self'").And.EndWith("frame-ancestors 'none'").And.Not.Contain("unsafe-eval"));
+    }
+
     [TestCase("/health/live")]
     [TestCase("/api/nope")]
     [TestCase("/api/auth/me")]

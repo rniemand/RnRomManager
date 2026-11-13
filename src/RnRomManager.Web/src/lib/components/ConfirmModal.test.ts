@@ -68,4 +68,11 @@ describe('ConfirmModal', () => {
 		unmount();
 		expect(calls).toEqual(['releaseModal', 'dispose']);
 	});
+
+	it('size xl adds modal-xl', () => {
+		const { container } = render(ConfirmModal, { open: false, title: 'T', size: 'xl' });
+		const dialog = container.querySelector('.modal-dialog')!;
+		expect(dialog.classList).toContain('modal-xl');
+		expect(dialog.classList).not.toContain('modal-lg');
+	});
 });

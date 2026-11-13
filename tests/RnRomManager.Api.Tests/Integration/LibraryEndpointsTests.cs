@@ -290,6 +290,34 @@ public partial class LibraryEndpointsTests
         Assert.That(image.GetProperty("url").GetString(), Is.EqualTo($"/api/games/{id}/images/{image.GetProperty("id").GetInt64()}"));
     }
 
+    [TestCase("gb", "gambatte")]
+    [TestCase("nes", null)]
+    [TestCase("nosuch", null)]
+    public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)
+    {
+        var id = await Tetris();
+        await using (var connection = Service<IDbConnectionFactory>().Create())
+            await connection.ExecuteAsync("UPDATE games SET system_id = @system WHERE id = @id", new { system, id });
+
+        var game = await GetJson($"/api/games/{id}");
+
+        Assert.That(game.GetProperty("browserCore").GetString(), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public async Task GameDetail_PatchResponse_CarriesBrowserCore()
+    {
+        var id = await Tetris();
+        using var admin = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
+        (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
+
+        using var response = await admin.PatchAsync($"/api/games/{id}", new { description = "x" });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("browserCore").GetString(), Is.EqualTo("gambatte"));
+    }
+
     [Test]
     public async Task Rating_UserCanRate_ReturnsFullDetail_ListAndDetailAndZipShowIt()
     {

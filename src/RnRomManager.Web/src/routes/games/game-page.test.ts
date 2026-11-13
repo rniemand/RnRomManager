@@ -104,6 +104,7 @@ function game(romIds: number[]): GameDetail {
 		id: 'g1',
 		system: 'gb',
 		systemName: 'Game Boy',
+		browserCore: null,
 		title: 'Tetris',
 		displayTitle: 'Tetris',
 		releaseYear: 1989,

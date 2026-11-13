@@ -28,6 +28,9 @@ public abstract class GameBoyHandlerBase : ISystemHandler
     /// <inheritdoc />
     public bool EmbedRomsInZip => true;
 
+    /// <inheritdoc />
+    public string? BrowserCore => "gambatte";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => GameBoyHeaderReader.Read(rom);

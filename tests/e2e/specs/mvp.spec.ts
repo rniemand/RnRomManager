@@ -333,6 +333,29 @@ test('game detail + downloads', async () => {
 	await expect(page.getByRole('button', { name: 'Collapse all' })).toBeVisible();
 	await expectAccessible(page, 'game detail with releases expanded');
 
+	// Browser emulators B3–B5, B7, B10: play the primary release in the Gambatte core, as served by the image.
+	const romDownload = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()));
+	await release.getByRole('button', { name: 'Play Orbit Blocks (World) (Rev 1).gb' }).click();
+	await expect(dialog()).toHaveAccessibleName('Play Orbit Blocks (World) (Rev 1).gb');
+	const emulator = dialog().locator('iframe');
+	await expect(emulator).toHaveAttribute('title', 'Emulator: Orbit Blocks (World) (Rev 1).gb');
+	expect((await romDownload).status()).toBe(200);
+	const frame = page.frameLocator('iframe');
+	await expect(frame.getByText('Start Game')).toBeVisible();
+	// EmulatorJS's own UI may not pass axe, so the scan covers the modal chrome only.
+	await expectAccessible(page, 'emulator modal', 'iframe');
+	const core = page.waitForResponse((r) => /\/emulator\/vendor\/data\/cores\/gambatte(-legacy)?-wasm\.data$/.test(r.url()));
+	await frame.getByText('Start Game').click();
+	expect((await core).status()).toBe(200);
+	// EmulatorJS removes .ejs_loading_text when the game starts; on a failure it stays, as .ejs_error_text.
+	await expect(frame.locator('.ejs_loading_text')).toHaveCount(0, { timeout: 30_000 });
+	await frame.locator('#game').click();
+	await page.keyboard.press('Escape');
+	await expect(dialog()).toBeVisible();
+	await dialog().locator('.modal-footer').getByRole('button', { name: 'Close' }).click();
+	await expect(dialog()).toBeHidden();
+	await expect(page.locator('iframe')).toHaveCount(0);
+
 	// Z1–Z4: the Zip Contents tab lists the ZIP and downloads one entry.
 	await page.getByRole('tab', { name: 'Zip Contents' }).click();
 	await expect(page).toHaveURL(/tab=zip/);

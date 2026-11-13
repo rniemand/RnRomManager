@@ -19,6 +19,7 @@ export const icons: Record<string, string> = {
 	'theme-dark': 'bi bi-moon-stars',
 	'theme-auto': 'bi bi-circle-half',
 	download: 'bi bi-download',
+	play: 'bi bi-play-fill',
 	upload: 'bi bi-upload',
 	copy: 'bi bi-clipboard',
 	edit: 'bi bi-pencil',

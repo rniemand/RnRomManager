@@ -24,6 +24,8 @@
 	import Loading from '#lib/components/Loading.svelte';
 	import RatingControl from '#lib/components/RatingControl.svelte';
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
+	import EmulatorModal from '#lib/components/EmulatorModal.svelte';
+	import { canPlay } from '#lib/emulator.js';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
 	import { formatKey, formatSize, formatValue } from '#lib/format.js';
@@ -47,6 +49,8 @@
 	let infoJsonOpen = $state(false);
 	let noteRom = $state<RomDetail | null>(null);
 	let noteOpen = $state(false);
+	let playRom = $state<RomDetail | null>(null);
+	let playOpen = $state(false);
 	/** B16/B25: the caller's collections holding this game. */
 	let memberOf = $state<CollectionRef[]>([]);
 	let collectionsOpen = $state(false);
@@ -533,6 +537,19 @@
 								>
 									<Icon name={rom.hasNote ? 'note-filled' : 'note'} />
 								</button>
+								{#if canPlay(game, rom)}
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-success"
+										aria-label="Play {rom.fileName}"
+										onclick={() => {
+											playRom = rom;
+											playOpen = true;
+										}}
+									>
+										<Icon name="play" />
+									</button>
+								{/if}
 								<button
 									type="button"
 									class="btn btn-sm btn-outline-primary"
@@ -690,6 +707,7 @@
 	<InfoJsonModal bind:open={infoJsonOpen} gameId={game.id} />
 
 	<ReleaseNoteModal bind:open={noteOpen} gameId={game.id} rom={noteRom} onsaved={onNoteSaved} />
+	<EmulatorModal bind:open={playOpen} gameId={game.id} core={game.browserCore} rom={playRom} />
 	<GameCollectionsModal
 		bind:open={collectionsOpen}
 		gameId={game.id}
