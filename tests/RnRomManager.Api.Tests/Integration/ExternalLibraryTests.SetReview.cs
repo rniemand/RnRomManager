@@ -32,7 +32,7 @@ public partial class ExternalLibraryTests
         new() { Action = "Dat", DatSystem = ExternalSetTestHandler.SystemId, DatGameName = game };
 
     [Test]
-    public async Task SetReview_BinItem_IsDeleteOnly_OverHttp()
+    public async Task SetReview_CompleteUnmatchedSetsBin_IsResolvable_ButNotDismissible_OverHttp()
     {
         var track1 = RandomNumberGenerator.GetBytes(2352);
         DropDisc("Mystery Disc.cue", ("Mystery Disc (Track 1).bin", track1), ("Mystery Disc (Track 2).bin", Audio2));
@@ -41,21 +41,27 @@ public partial class ExternalLibraryTests
         var iso = await QueueSetAsync("mystery.iso", RandomNumberGenerator.GetBytes(2000));
         using var admin = await AdminClientAsync();
 
-        using (var resolve = await admin.PostAsync($"/api/review/{bin}/resolve", ManualMystery))
-        {
-            Assert.That(resolve.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
-            Assert.That(await AuthClient.CodeAsync(resolve), Is.EqualTo(ReviewResolver.SetFileNotResolvable));
-        }
         using (var dismiss = await admin.PostAsync($"/api/review/{bin}/dismiss", null))
         {
             Assert.That(dismiss.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
             Assert.That(await AuthClient.CodeAsync(dismiss), Is.EqualTo(ReviewResolver.SetFileNotResolvable));
         }
         using (var detail = await admin.GetAsync($"/api/review/{bin}"))
-            Assert.That((await AuthClient.JsonAsync(detail)).GetProperty("resolvable").GetBoolean(), Is.False);
+        {
+            var json = await AuthClient.JsonAsync(detail);
+            Assert.That((json.GetProperty("resolvable").GetBoolean(), json.GetProperty("dismissible").GetBoolean()), Is.EqualTo((true, false)));
+        }
         using (var detail = await admin.GetAsync($"/api/review/{iso}"))
             Assert.That((await AuthClient.JsonAsync(detail)).GetProperty("resolvable").GetBoolean(), Is.True);
         Assert.That(await StatusAsync(bin), Is.EqualTo("Pending"));
+
+        // A .bin with no set found stays delete-only, refused before any job starts.
+        var lone = await QueueSetAsync("lone.bin", RandomNumberGenerator.GetBytes(2352));
+        using (var resolve = await admin.PostAsync($"/api/review/{lone}/resolve", ManualMystery))
+        {
+            Assert.That(resolve.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(await AuthClient.CodeAsync(resolve), Is.EqualTo(ReviewResolver.SetFileNotResolvable));
+        }
     }
 
     [Test]

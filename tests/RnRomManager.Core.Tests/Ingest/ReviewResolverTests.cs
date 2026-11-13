@@ -61,7 +61,9 @@ public class ReviewResolverTests
         var romRepository = Substitute.For<IRomRepository>();
         _resolver = new ReviewResolver(_lock, _reviews, games, romRepository,
             new DbSync(games, romRepository, Substitute.For<ILibraryMirror>(), reader, systems, options, NullLogger<DbSync>.Instance), pipeline, dats, systems,
-            new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance), options, _audit, new RnRomManager.Core.Audit.AuditPaths(options), _time,
+            new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance),
+            new ReviewSets(new IngestFileScanner(options, systems, NullLogger<IngestFileScanner>.Instance), _reviews, systems, options, NullLogger<ReviewSets>.Instance),
+            options, _audit, new RnRomManager.Core.Audit.AuditPaths(options), _time,
             NullLogger<ReviewResolver>.Instance);
     }
 

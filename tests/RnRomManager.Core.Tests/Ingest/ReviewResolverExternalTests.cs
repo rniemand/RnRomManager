@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
@@ -64,7 +65,9 @@ public class ReviewResolverExternalTests
             new AuditPaths(options), TimeProvider.System, NullLogger<IngestPipeline>.Instance);
         _resolver = new ReviewResolver(new JobLock(), _reviews, games, romRepository,
             new DbSync(games, romRepository, Substitute.For<ILibraryMirror>(), reader, systems, options, NullLogger<DbSync>.Instance), pipeline, dats, systems,
-            new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance), options, _audit, new AuditPaths(options), TimeProvider.System,
+            new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance),
+            new ReviewSets(new IngestFileScanner(options, systems, NullLogger<IngestFileScanner>.Instance), _reviews, systems, options, NullLogger<ReviewSets>.Instance),
+            options, _audit, new AuditPaths(options), TimeProvider.System,
             NullLogger<ReviewResolver>.Instance);
     }
 
@@ -126,15 +129,22 @@ public class ReviewResolverExternalTests
     }
 
     [Test]
-    public void IsResolvable_OnlyRefusesCueAndBinOnAFileSetsSystem()
+    public async Task IsResolvableAsync_RefusesCueAndBinOnAFileSetsSystem_UnlessTheirSetIsFound_B12()
     {
-        var systems = new SystemRegistry([new ExternalTestHandler(), new ExternalSetTestHandler()]);
-        ReviewItem Item(string system, string name) => _item with { SystemId = system, OriginalFileName = name };
+        Build(new ExternalSetTestHandler());
+        var folder = Directory.CreateDirectory(Path.Combine(_paths.Ingest, ExternalSetTestHandler.SystemId)).FullName;
+        ReviewItem Item(string system, string name) => _item with { SystemId = system, OriginalFileName = name, SourcePath = Path.Combine(folder, name) };
+        File.WriteAllBytes(Path.Combine(folder, "x.bin"), [1]);
+        File.WriteAllBytes(Path.Combine(folder, "y.cue"), [1]);
 
-        Assert.That(ReviewResolver.IsResolvable(Item(ExternalSetTestHandler.SystemId, "x.bin"), systems), Is.False);
-        Assert.That(ReviewResolver.IsResolvable(Item(ExternalSetTestHandler.SystemId, "x.iso"), systems), Is.True);
-        Assert.That(ReviewResolver.IsResolvable(Item(ExternalSetTestHandler.SystemId, "x.nrg"), systems), Is.True);
-        Assert.That(ReviewResolver.IsResolvable(Item(ExternalTestHandler.SystemId, "x.bin"), systems), Is.True);
+        Assert.That(await _resolver.IsResolvableAsync(Item(ExternalSetTestHandler.SystemId, "x.bin")), Is.False, "a lone .bin");
+        Assert.That(await _resolver.IsResolvableAsync(Item(ExternalSetTestHandler.SystemId, "y.cue")), Is.False, "a cue naming nothing here");
+        Assert.That(await _resolver.IsResolvableAsync(Item(ExternalSetTestHandler.SystemId, "x.iso")), Is.True);
+        Assert.That(await _resolver.IsResolvableAsync(Item(ExternalSetTestHandler.SystemId, "x.nrg")), Is.True);
+        Assert.That(await _resolver.IsResolvableAsync(Item(ExternalTestHandler.SystemId, "x.bin")), Is.True);
+
+        await DiscSetAsync();
+        Assert.That(await _resolver.IsResolvableAsync(_rows[2]), Is.True, "a complete Pending NoDatMatch set's member");
     }
 
     [Test]
@@ -193,6 +203,140 @@ public class ReviewResolverExternalTests
         };
         File.WriteAllBytes(_item.SourcePath, bytes);
         return (game.GameId, zipPath);
+    }
+
+    private const string SetCue = "Mystery (Disc 2).cue";
+    private const string SetTrack1 = "Mystery (Disc 2) (Track 1).bin";
+    private const string SetTrack2 = "Mystery (Disc 2) (Track 2).bin";
+    private Dictionary<long, ReviewItem> _rows = null!;
+
+    /// <summary>
+    /// <see cref="DiscGameAsync"/>'s game, and an unmatched set (a cue and 2 tracks) in ingest whose rows 1–3 are
+    /// Pending <c>NoDatMatch</c>; the item is the cue (row 1).
+    /// </summary>
+    private async Task<(Guid GameId, string ZipPath)> DiscSetAsync()
+    {
+        var (gameId, zipPath) = await DiscGameAsync(SetCue);
+        var folder = Path.GetDirectoryName(_item.SourcePath)!;
+        var files = new (string Name, byte[] Bytes)[]
+        {
+            (SetCue, System.Text.Encoding.UTF8.GetBytes($"FILE \"{SetTrack1}\" BINARY\n  TRACK 01 MODE1/2352\nFILE \"{SetTrack2}\" BINARY\n  TRACK 02 AUDIO\n")),
+            (SetTrack1, TestLibrary.RomBytes(3)),
+            (SetTrack2, TestLibrary.RomBytes(4)),
+        };
+        _rows = [];
+        for (var i = 0; i < files.Length; i++)
+        {
+            var (name, bytes) = files[i];
+            var path = Path.Combine(folder, name);
+            File.WriteAllBytes(path, bytes);
+            _rows[i + 1] = _item with
+            {
+                Id = i + 1, SourcePath = path, OriginalFileName = name, SizeBytes = bytes.Length,
+                Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(bytes)),
+            };
+        }
+        _item = _rows[1];
+        _reviews.GetAsync(Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns(c => _rows.GetValueOrDefault(c.Arg<long>()));
+        _reviews.ListPendingByPathsAsync(default!, default).ReturnsForAnyArgs(c =>
+            _rows.Values.Where(r => c.Arg<IReadOnlyCollection<string>>().Contains(r.SourcePath)).ToList());
+        return (gameId, zipPath);
+    }
+
+    private static readonly ReviewResolutionRequest AttachDisc2 = new() { Action = "Attach", Flag = "Disc", Disc = 2 };
+
+    private void AssertSetStaysInIngest()
+    {
+        Assert.That(_rows.Values.All(r => File.Exists(r.SourcePath)), Is.True, "every member stays in ingest");
+        _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default(IReadOnlyList<long>)!, default!, default, default, default, default);
+    }
+
+    [Test]
+    public async Task ManualWithDisc2_AddsTheWholeSetAsOneRelease_OfTheDisc1Game_B14()
+    {
+        var (gameId, zipPath) = await DiscSetAsync();
+
+        var result = await _resolver.ResolveInJobAsync(1, Manual with { Regions = ["Europe"], Disc = 2 }, Actor, new JobProgress());
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        Assert.That(result.GameId, Is.EqualTo(gameId));
+        Assert.That(result.Items.Select(r => r.Id), Is.EqualTo(new long[] { 1, 2, 3 }));
+        var folder = Path.GetDirectoryName(Path.Combine(_paths.Roms, zipPath))!;
+        Assert.That(new[] { SetCue, SetTrack1, SetTrack2 }.All(n => File.Exists(Path.Combine(folder, n))), Is.True, "names kept");
+        var rom = StoredRelease(zipPath, SetTrack1);
+        Assert.That((rom.BaseTitle, rom.Flags.Single(), rom.Regions.Single()), Is.EqualTo(("My Game", "Disc 2", "Europe")));
+        Assert.That(rom.Files!.Select(f => f.ExternalFileName), Is.EqualTo(new[] { SetCue, SetTrack2 }));
+        await _reviews.Received(1).SetResolutionAsync(Arg.Is<IReadOnlyList<long>>(ids => ids.SequenceEqual(new long[] { 1, 2, 3 })), "Resolved",
+            gameId, 42, Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task AttachDisc_OnASet_CopiesThePrimaryReleaseTags_B14()
+    {
+        var (gameId, zipPath) = await DiscSetAsync();
+
+        var result = await _resolver.ResolveInJobAsync(2, AttachDisc2 with { TargetGameId = gameId }, Actor, new JobProgress());
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        var rom = StoredRelease(zipPath, SetTrack1);
+        Assert.That((rom.Regions.Single(), rom.Revision, rom.Flags.Single()), Is.EqualTo(("Europe", "Rev 1", "Disc 2")));
+        Assert.That(rom.Languages, Is.EqualTo(new[] { "En", "Fr" }));
+    }
+
+    [Test]
+    public async Task AMemberChangedSinceReview_IsVerifyFailed_AndEveryRowStaysPending_B14()
+    {
+        await DiscSetAsync();
+        _rows[3] = _rows[3] with { Sha1 = new string('0', 40) };
+
+        var result = await _resolver.ResolveInJobAsync(1, Manual with { Disc = 2 }, Actor, new JobProgress());
+
+        Assert.That(result.Code, Is.EqualTo("VerifyFailed"));
+        AssertSetStaysInIngest();
+    }
+
+    [Test]
+    public async Task ASetMadeIncomplete_IsSetFileNotResolvable_AndNothingMoves_B14()
+    {
+        await DiscSetAsync();
+        File.Delete(_rows[3].SourcePath);
+
+        var result = await _resolver.ResolveInJobAsync(1, Manual with { Disc = 2 }, Actor, new JobProgress());
+
+        Assert.That(result.Code, Is.EqualTo(ReviewResolver.SetFileNotResolvable));
+        Assert.That(result.Items.Select(r => r.Id), Is.EqualTo(new long[] { 1 }), "no set: one job item, for the item");
+        Assert.That(File.Exists(_rows[1].SourcePath) && File.Exists(_rows[2].SourcePath), Is.True);
+    }
+
+    [Test]
+    public async Task TheRowsWriteFailing_IsDbWriteFailed_ThenMembersAreDeleteOnly_OneAtATime_B14()
+    {
+        var (gameId, _) = await DiscSetAsync();
+        _reviews.SetResolutionAsync(default(IReadOnlyList<long>)!, default!, default, default, default, default)
+            .ThrowsAsyncForAnyArgs(new InvalidOperationException("db down"));
+
+        var result = await _resolver.ResolveInJobAsync(1, Manual with { Disc = 2 }, Actor, new JobProgress());
+
+        Assert.That(result.Code, Is.EqualTo("DbWriteFailed"));
+        Assert.That(_rows.Values.Any(r => File.Exists(r.SourcePath)), Is.False, "the release is in the library");
+        Assert.That((await _resolver.ResolveInJobAsync(2, Manual with { Disc = 2 }, Actor, new JobProgress())).Code,
+            Is.EqualTo(ReviewResolver.SetFileNotResolvable));
+        Assert.That((await _resolver.DeleteSourceAsync(2, Actor, default)).Code, Is.Null);
+        await _reviews.Received(1).DeletePendingBySourceAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+        await _reviews.Received(1).DeletePendingBySourceAsync(_rows[2].SourcePath, null, Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ADatPickOnASet_IsNotSupportedYet_B14()
+    {
+        await DiscSetAsync();
+
+        var result = await _resolver.ResolveInJobAsync(1,
+            new ReviewResolutionRequest { Action = "Dat", DatSystem = ExternalSetTestHandler.SystemId, DatGameName = "Any" }, Actor, new JobProgress());
+
+        Assert.That(result.Code, Is.EqualTo("ValidationFailed"));
+        Assert.That(result.Errors!["action"], Is.EqualTo(new[] { "Dat pick on a set isn't supported yet." }));
+        AssertSetStaysInIngest();
     }
 
     private InfoJsonRom StoredRelease(string zipPath, string fileName)

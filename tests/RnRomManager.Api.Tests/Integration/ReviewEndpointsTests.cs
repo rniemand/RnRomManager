@@ -872,7 +872,7 @@ public class ReviewEndpointsTests
         {
             var json = await AuthClient.JsonAsync(detail);
             Assert.That((json.GetProperty("dismissible").GetBoolean(), json.GetProperty("fileSets").GetBoolean(), json.GetProperty("resolvable").GetBoolean()),
-                Is.EqualTo((false, true, false)), "set members become resolvable in a later step");
+                Is.EqualTo((false, true, true)));
             Assert.That(json.GetProperty("setMembers").EnumerateArray().Select(m => (m.GetProperty("fileName").GetString(), m.GetProperty("sizeBytes").GetInt64())),
                 Is.EqualTo(new[] { ("Disc.cue", (long)cueText.Length), ("Disc (Track 1).bin", 2352L), ("Disc (Track 2).bin", 2352L) }));
             Assert.That(json.GetProperty("setMembers")[0].GetProperty("reviewId").GetInt64(), Is.EqualTo(rows.Single(r => r.OriginalFileName == "Disc.cue").Id));

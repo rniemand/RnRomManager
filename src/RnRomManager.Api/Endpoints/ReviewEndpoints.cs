@@ -60,14 +60,14 @@ public static class ReviewEndpoints
                 header = Parse(item.Header), suggestions = Parse(item.Suggestions), datIdentification = Parse(item.DatIdentification),
                 candidateGames = candidates, status = item.Status, gameId = item.GameId, createdAt = item.CreatedAt,
                 lastSeenJobId = item.LastSeenJobId, resolvedAt = item.ResolvedAt, resolvedBy = item.ResolvedBy,
-                resolvable = ReviewResolver.IsResolvable(item, systems),
+                resolvable = ReviewResolver.IsDismissible(item, systems) || set is not null, // B12, from the set already found
                 dismissible = ReviewResolver.IsDismissible(item, systems),
                 fileSets = systems.ById(item.SystemId)?.FileSets ?? false,
                 setMembers = set?.Select(m => new { reviewId = m.Row.Id, fileName = m.Row.OriginalFileName, sizeBytes = m.Row.SizeBytes }),
             });
         });
         review.MapPost("/{id:long}/resolve", async (long id, ReviewResolutionRequest request, HttpContext ctx, IIngestReviewRepository repository,
-            ISystemRegistry systems, JobRunner runner, ReviewResolveJob job) =>
+            ReviewResolver resolver, JobRunner runner, ReviewResolveJob job) =>
         {
             // B1: the request and the item are checked here; the job checks the item again under the lock (B2).
             var errors = Validate(request);
@@ -76,7 +76,7 @@ public static class ReviewEndpoints
             var item = await repository.GetAsync(id, ctx.RequestAborted);
             if (item is not { Status: "Pending" })
                 return Problems.NotFound(ctx);
-            if (!ReviewResolver.IsResolvable(item, systems))
+            if (!await resolver.IsResolvableAsync(item, ctx.RequestAborted))
                 return ToResult(ctx, new(ReviewResolver.SetFileNotResolvable));
             job.ReviewId = id;
             job.FileName = item.OriginalFileName;

@@ -76,7 +76,9 @@ public class ReviewResolveJobTests
         var jobLock = new JobLock();
         var resolver = new ReviewResolver(jobLock, _reviews, games, roms,
             new DbSync(games, roms, Substitute.For<ILibraryMirror>(), reader, systems, options, NullLogger<DbSync>.Instance), pipeline, dats, systems,
-            new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance), options, audit, new AuditPaths(options), TimeProvider.System,
+            new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance),
+            new ReviewSets(new IngestFileScanner(options, systems, NullLogger<IngestFileScanner>.Instance), _reviews, systems, options, NullLogger<ReviewSets>.Instance),
+            options, audit, new AuditPaths(options), TimeProvider.System,
             NullLogger<ReviewResolver>.Instance);
         var runner = new JobRunner(_jobs, jobLock, Substitute.For<IUserRepository>(), TimeProvider.System, NullLogger<JobRunner>.Instance);
         var job = new ReviewResolveJob(resolver, _items, TimeProvider.System, NullLogger<ReviewResolveJob>.Instance)

@@ -20,12 +20,13 @@ namespace RnRomManager.Core.Ingest;
 /// <see cref="ReviewResolveJob"/>, whose runner holds the lock (B2); Dismiss and Delete take it themselves.
 /// </summary>
 public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository reviews, IGameRepository games, IRomRepository roms, DbSync dbSync,
-    IngestPipeline pipeline, DatCache dats, ISystemRegistry systems, ArchiveExtractor extractor,
+    IngestPipeline pipeline, DatCache dats, ISystemRegistry systems, ArchiveExtractor extractor, ReviewSets sets,
     IOptions<PathsOptions> paths, IAuditLog audit, AuditPaths auditPaths, TimeProvider time, ILogger<ReviewResolver> logger)
 {
     /// <summary>
     /// B2: resolves inside a job. The caller (the job runner) holds the lock; nothing here is cancellable. The result's
-    /// <see cref="ReviewResolutionResult.Items"/> is the row acted on, empty when it no longer exists or isn't Pending.
+    /// <see cref="ReviewResolutionResult.Items"/> are the rows acted on: the item, or its set's members in set order
+    /// (B14); empty when it no longer exists or isn't Pending.
     /// </summary>
     /// <param name="actor">The job's actor (AU3); <see cref="AuditActor.UserId"/> is required.</param>
     public async Task<ReviewResolutionResult> ResolveInJobAsync(long id, ReviewResolutionRequest request, AuditActor actor, JobProgress? progress)
@@ -33,11 +34,16 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         var item = await reviews.GetAsync(id, CancellationToken.None).ConfigureAwait(false);
         if (item is not { Status: "Pending" })
             return new("NotFound");
-        progress?.SetTotal(1);
-        progress?.SetCurrentItem(item.OriginalFileName);
-        var result = await ActCoreAsync(id, item, request, actor, CancellationToken.None, progress).ConfigureAwait(false);
-        progress?.ItemDone();
-        return result with { Items = [item] };
+        // B14 step 1: a set member's set is found again with the lock held.
+        var set = IsDismissible(item, systems) ? null : await sets.FindAsync(item, CancellationToken.None).ConfigureAwait(false);
+        var items = set?.Select(m => m.Row).ToList() ?? [item];
+        progress?.SetTotal(items.Count);
+        if (set is null)
+            progress?.SetCurrentItem(item.OriginalFileName); // a set's members are reported one by one as they are hashed
+        var result = await ActCoreAsync(id, item, request, actor, CancellationToken.None, progress, set).ConfigureAwait(false);
+        if (set is null)
+            progress?.ItemDone();
+        return result with { Items = items };
     }
 
     public async Task<ReviewResolutionResult> DismissAsync(long id, AuditActor actor, CancellationToken ct)
@@ -51,14 +57,15 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         return await ActCoreAsync(id, item, null, actor, ct, null).ConfigureAwait(false);
     }
 
-    /// <summary>B15: a review item can't be resolved or dismissed: an unmatched <c>.cue</c>/<c>.bin</c> on a <c>FileSets</c> system.</summary>
+    /// <summary>B12/B15: a <c>.cue</c>/<c>.bin</c> item on a <c>FileSets</c> system whose set isn't found can't be resolved; no set member can be dismissed.</summary>
     public const string SetFileNotResolvable = "SetFileNotResolvable";
 
     /// <summary>
-    /// B15: false for a <c>.cue</c> or <c>.bin</c> item (by its <c>originalFileName</c>, ignoring case) on a <c>FileSets</c>
-    /// system, which can only be deleted; true for every other item.
+    /// B12: true for every item but a <c>.cue</c> or <c>.bin</c> (by its <c>originalFileName</c>, ignoring case) on a
+    /// <c>FileSets</c> system, which is resolvable exactly when <see cref="ReviewSets.FindAsync"/> finds its set.
     /// </summary>
-    public static bool IsResolvable(ReviewItem item, ISystemRegistry systems) => IsDismissible(item, systems);
+    public async Task<bool> IsResolvableAsync(ReviewItem item, CancellationToken cancellationToken = default) =>
+        IsDismissible(item, systems) || await sets.FindAsync(item, cancellationToken).ConfigureAwait(false) is not null;
 
     /// <summary>B15: false for every <c>.cue</c>/<c>.bin</c> item on a <c>FileSets</c> system, so a set is never half dismissed.</summary>
     public static bool IsDismissible(ReviewItem item, ISystemRegistry systems) =>
@@ -252,6 +259,26 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         return result.Outcome == IngestOutcome.Ingested ? new(GameId: result.GameId) : new(result.Reason);
     }
 
+    /// <summary>
+    /// B14 steps 2 and 4: the set is stored as one release named by the action; every member's row is marked Resolved in
+    /// one transaction once the mirror is written. A failure after the moves is <c>DbWriteFailed</c>, with the rows Pending.
+    /// </summary>
+    private async Task<ReviewResolutionResult> ResolveSetAsync(IReadOnlyList<(IngestFile File, ReviewItem Row)> set, ISystemHandler system,
+        string action, string title, IReadOnlyList<string> regions, IReadOnlyList<string> languages, string? revision, IReadOnlyList<string> flags,
+        InfoJsonIdentification identification, DatMetadata metadata, Guid? target, AuditActor actor, int userId, JobProgress? progress)
+    {
+        var rom = new InfoJsonRom
+        {
+            FileName = "", OriginalFileName = "", BaseTitle = title, Regions = regions, Languages = languages, Revision = revision, Flags = flags,
+            IsPrimary = false, Identification = identification, Metadata = null!, // the pipeline fills names and metadata from the members
+        };
+        var ids = set.Select(m => m.Row.Id).ToList();
+        var result = await pipeline.StoreSetReleaseAsync([.. set.Select(m => (m.File, m.Row.Sha1))], system, rom, metadata, target,
+            gameId => reviews.SetResolutionAsync(ids, "Resolved", gameId, userId, time.GetUtcNow().UtcDateTime, CancellationToken.None),
+            actor, action, progress ?? new JobProgress()).ConfigureAwait(false);
+        return result.Outcome == IngestOutcome.Ingested ? new(GameId: result.GameId) : new(result.Reason);
+    }
+
     private bool IsExternal(ReviewItem item) => systems.ById(item.SystemId) is { EmbedRomsInZip: false };
 
     /// <summary>
@@ -287,11 +314,12 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
     }
 
     /// <summary>Resolve (<paramref name="request"/> set) or Dismiss of a Pending <paramref name="item"/>; the caller holds the lock.</summary>
+    /// <param name="set">B14: the item's set, found under the lock; the whole set is resolved as one release.</param>
     private async Task<ReviewResolutionResult> ActCoreAsync(long id, ReviewItem item, ReviewResolutionRequest? request, AuditActor actor,
-        CancellationToken ct, JobProgress? progress)
+        CancellationToken ct, JobProgress? progress, IReadOnlyList<(IngestFile File, ReviewItem Row)>? set = null)
     {
         var userId = actor.UserId!.Value; // review actions always have a user: the signed-in one, or the job's requester
-        if (request is null ? !IsDismissible(item, systems) : !IsResolvable(item, systems))
+        if (!IsDismissible(item, systems) && (request is null || set is null))
             return new(SetFileNotResolvable);
         var external = IsExternal(item);
         string source;
@@ -362,6 +390,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             var discFlag = request.Disc is { } disc ? $"Disc {disc}" : null; // B10: the flag NoIntroName.Parse makes from a Redump name
             if (request.Action == "Dat")
             {
+                if (set is not null)
+                    return ReviewResolutionResult.Invalid("action", "Dat pick on a set isn't supported yet.");
                 if (item.Reason != "NoDatMatch")
                     return ReviewResolutionResult.Invalid("action", "DAT selection requires a NoDatMatch item.");
                 var chosen = systems.ById(request.DatSystem!);
@@ -484,7 +514,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             }
 
             // B12: a FileSets name may hold "..", as Redump names do ("...Iru!"); only "." or ".." or a separator is refused.
-            if (system.FileSets ? filename is "." or ".." || filename.IndexOfAny(['/', '\\']) >= 0 : filename.Contains("..", StringComparison.Ordinal))
+            // B14: a set keeps its members' source names, so the generated name isn't used.
+            if (set is null && (system.FileSets ? filename is "." or ".." || filename.IndexOfAny(['/', '\\']) >= 0 : filename.Contains("..", StringComparison.Ordinal)))
                 return ReviewResolutionResult.Invalid("title", "The generated ROM filename must not contain '..'; use Manual with another title.");
             if (external && !system.FileSets)
                 filename = ExternalRomName.AllocateLogicalName(filename, new ExternalNameReservations([])); // E3: portable and within budget
@@ -496,6 +527,9 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 if (game.SystemId != system.Id)
                     return ReviewResolutionResult.Invalid("targetGameId", "Target must belong to the same system.");
             }
+            if (set is not null)
+                return await ResolveSetAsync(set, system, request.Action!, title, regions, languages, revision, flags, identification, metadata,
+                    target, actor, userId, progress).ConfigureAwait(false);
             if (external)
                 return await ResolveExternalAsync(id, item, file, preparedSnapshot!, system, request.Action!, filename, title, regions,
                     languages, revision, flags, identification, metadata, target, actor, userId, progress).ConfigureAwait(false);
