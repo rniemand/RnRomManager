@@ -1,6 +1,6 @@
 ---
 title: WBFS, Atari Lynx and Jaguar, systems table and screenshots
-status: ready
+status: in-progress
 created: 2026-11-13
 ---
 
