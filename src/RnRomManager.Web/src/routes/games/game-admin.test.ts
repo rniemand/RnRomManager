@@ -27,6 +27,8 @@ vi.mock('#lib/bootstrap.js', () => ({
 	}
 }));
 
+// The release note button has a tooltip (R4); Bootstrap's Tooltip isn't mocked here.
+vi.mock('#lib/tooltip.js', () => ({ tooltip: () => ({}) }));
 const { default: GamePage } = await import('./[id]/+page.svelte');
 
 const rom = (id: number) => ({
@@ -133,6 +135,25 @@ describe('game detail admin actions', () => {
 
 		expect(await screen.findByRole('button', { name: /Edit metadata/ })).toBeTruthy();
 		expect(screen.getByRole('button', { name: 'Delete Tetris 1.gb' })).toBeTruthy();
+	});
+
+	it('Move release sits in the release body and opens the move dialog (R2)', async () => {
+		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
+		render(GamePage);
+		await screen.findByRole('article', { name: 'Tetris 1.gb' });
+		expect(
+			screen
+				.getByRole('article', { name: 'Tetris 1.gb' })
+				.querySelector('.card-header [aria-label="Move release Tetris 1.gb"]')
+		).toBeNull();
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Show details for Tetris 1.gb' }));
+		const move = screen.getByRole('button', { name: 'Move release Tetris 1.gb' });
+		expect(move.closest('.card-body')).toBeTruthy();
+		expect(move.textContent!.trim()).toBe('Move release');
+		await fireEvent.click(move);
+
+		expect(modal().getByRole('heading', { name: 'Move release', hidden: true })).toBeTruthy();
 	});
 
 	it('an admin without rom-manager sees no actions', async () => {

@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
+	import { SvelteMap } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import type { Page, ReviewDetail, ReviewListItem, SystemInfo } from '#lib/api/types.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
+	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
@@ -17,7 +19,9 @@
 	import { formatDateTime } from '#lib/format.js';
 	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
-	import { deleteReviewItem, toastDeleteFailed } from '#lib/review.js';
+	import { deleteReviewItem, deleteReviewItems, toastDeleteFailed } from '#lib/review.js';
+	import { modalListSize } from '#lib/ingestDelete.js';
+	import { refreshCounts } from '#lib/stores/navCounts.svelte.js';
 	import {
 		parseReviewFilter,
 		readSavedReviewFilter,
@@ -145,17 +149,73 @@
 
 	function removed(fileName: string): void {
 		toasts.show(`Deleted ${fileName}.`, 'success');
+		void refreshCounts();
 		// D5: the page may now be empty; step back instead of showing an empty page.
 		if (result?.items.length === 1 && filter.page > 1)
 			go(reviewFilterSearch({ ...filter, page: filter.page - 1 }));
 		else reload++;
 	}
+
+	// Q2: selection across the pages of the current filter, by id → item (so Q3 can name items from other pages).
+	const selection = new SvelteMap<number, ReviewListItem>();
+	const filterKey = $derived(`${filter.q}|${filter.system}|${filter.reason}`);
+	$effect(() => {
+		void filterKey;
+		untrack(() => selection.clear());
+	});
+
+	const pageItems = $derived(result?.items ?? []);
+	const checkState = $derived.by(() => {
+		const picked = pageItems.filter((i) => selection.has(i.id)).length;
+		return picked === 0 ? 'none' : picked === pageItems.length ? 'all' : 'some';
+	});
+
+	function toggleAll(): void {
+		if (checkState === 'all') pageItems.forEach((i) => selection.delete(i.id));
+		else pageItems.forEach((i) => selection.set(i.id, i));
+	}
+
+	function toggle(item: ReviewListItem, on: boolean): void {
+		if (on) selection.set(item.id, item);
+		else selection.delete(item.id);
+	}
+
+	const selectedItems = $derived([...selection.values()]);
+	const selectedArchive = $derived(selectedItems.some((i) => i.isArchive));
+	let bulkOpen = $state(false);
+	let bulkBusy = $state(false);
+
+	/** Q3: Shift+click skips the modal unless an archive member is selected; a plain click or Enter confirms. */
+	function askBulkDelete(event: MouseEvent): void {
+		if (selection.size === 0) return;
+		if (event.shiftKey && !selectedArchive) void bulkDelete();
+		else bulkOpen = true;
+	}
+
+	async function bulkDelete(): Promise<void> {
+		const ids = [...selection.keys()];
+		const emptied = pageItems.every((i) => selection.has(i.id));
+		bulkBusy = true;
+		try {
+			await deleteReviewItems(ids);
+		} finally {
+			bulkBusy = false;
+		}
+		bulkOpen = false;
+		selection.clear();
+		void refreshCounts();
+		// The page may now be empty; step back instead of showing an empty page (as a single delete does).
+		if (emptied && filter.page > 1) go(reviewFilterSearch({ ...filter, page: filter.page - 1 }));
+		else reload++;
+	}
+
+	const plural = (n: number) => (n === 1 ? 'file' : 'files');
 </script>
 
-<svelte:head><title>Review queue · RnRomManager</title></svelte:head>
+<svelte:head><title>Review Queue · RnRomManager</title></svelte:head>
 
 <AdminOnly>
-	<h1 class="h3 mb-3"><Icon name="review" /> Review queue</h1>
+	<h1 class="h3 mb-3"><Icon name="review" /> Review Queue</h1>
 
 	<form class="row g-2 align-items-end mb-3" role="search" onsubmit={(e) => e.preventDefault()}>
 		<div class="col-12 col-md-5">
@@ -213,6 +273,23 @@
 	{:else if !result}
 		<Loading />
 	{:else}
+		<!-- Q2: the bulk toolbar. -->
+		<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+			<span class="small text-body-secondary" aria-live="polite">{selection.size} selected</span>
+			<button
+				type="button"
+				class="btn btn-sm btn-outline-secondary"
+				disabled={selection.size === 0}
+				onclick={() => selection.clear()}>Clear selection</button
+			>
+			<button
+				type="button"
+				class="btn btn-sm btn-danger"
+				disabled={selection.size === 0 || bulkBusy}
+				use:tooltip={'Delete (Shift+click to skip confirmation)'}
+				onclick={askBulkDelete}><Icon name="delete" /> Delete selected ({selection.size})</button
+			>
+		</div>
 		<div class="card">
 			<div class="table-responsive">
 				{#if result.items.length === 0}
@@ -223,6 +300,16 @@
 					<table class="table table-sm table-striped table-hover align-middle mb-0">
 						<thead class="table-dark">
 							<tr class="small text-uppercase text-body-secondary">
+								<th scope="col">
+									<input
+										class="form-check-input"
+										type="checkbox"
+										aria-label="Select all on this page"
+										checked={checkState === 'all'}
+										indeterminate={checkState === 'some'}
+										onchange={toggleAll}
+									/>
+								</th>
 								<th scope="col">File</th>
 								<th scope="col">System</th>
 								<th scope="col" class="text-end">Size</th>
@@ -235,6 +322,15 @@
 						<tbody>
 							{#each result.items as item (item.id)}
 								<tr>
+									<td>
+										<input
+											class="form-check-input"
+											type="checkbox"
+											aria-label="Select {item.fileName}"
+											checked={selection.has(item.id)}
+											onchange={(e) => toggle(item, e.currentTarget.checked)}
+										/>
+									</td>
 									<td class="text-truncate" style="max-width: 32rem" title={item.fileName}>
 										<a href={resolve('/review/[id]', { id: String(item.id) })}>{item.fileName}</a>
 									</td>
@@ -271,4 +367,27 @@
 	{/if}
 
 	<ReviewDeleteModal bind:open={deleteOpen} id={deleteId} ondeleted={deleted} />
+
+	<ConfirmModal
+		bind:open={bulkOpen}
+		title="Delete {selectedItems.length} review {plural(selectedItems.length)}?"
+		confirmLabel="Delete"
+		confirmClass="btn-danger"
+		busy={bulkBusy}
+		onconfirm={bulkDelete}
+	>
+		<ul class="mb-2">
+			{#each selectedItems.slice(0, modalListSize) as item (item.id)}
+				<li class="text-break">{item.fileName}</li>
+			{/each}
+		</ul>
+		{#if selectedItems.length > modalListSize}
+			<p class="mb-2">… and {selectedItems.length - modalListSize} more</p>
+		{/if}
+		{#if selectedArchive}
+			<p class="mb-0 text-danger">
+				Archive entries delete their whole archive, including its other pending items.
+			</p>
+		{/if}
+	</ConfirmModal>
 </AdminOnly>

@@ -8,18 +8,19 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Ingest;
 
-/// <summary>D2: one file to delete; <see cref="Folder"/> is <c>pending</c> (<c>ingest/&lt;system&gt;/</c>) or <c>failed</c> (its <c>_failed/</c>).</summary>
+/// <summary>D2: one file to delete; <see cref="Folder"/> is <c>pending</c> (<c>ingest/&lt;system&gt;/</c>), <c>failed</c> (its <c>_failed/</c>) or <c>removed</c> (its <c>_removed/</c>, Deleted ROMs D4).</summary>
 public sealed record IngestDeleteRef(string? System, string? Folder, string? Name);
 
 /// <param name="Code"><c>JobRunning</c> when the lock was busy (nothing deleted), else null.</param>
 public sealed record IngestDeleteResult(int Deleted, IReadOnlyList<IngestDeleteRef> Failed, string? Code = null);
 
-/// <summary>D2: hard-deletes pending files and failed files (with their <c>.error.txt</c>) under the global job lock.</summary>
+/// <summary>D2: hard-deletes pending files, failed files (with their <c>.error.txt</c>) and removed files (D4) under the global job lock.</summary>
 public sealed class IngestFileDeleter(JobLock jobLock, IIngestReviewRepository reviews, ISystemRegistry systems, IOptions<PathsOptions> paths,
     IAuditLog audit, AuditPaths auditPaths, ILogger<IngestFileDeleter> logger)
 {
     public const string Pending = "pending";
     public const string Failed = "failed";
+    public const string Removed = "removed";
     public const int MaxFiles = 500;
 
     /// <returns>Field errors under <c>files</c>; empty when the request is valid.</returns>
@@ -45,8 +46,8 @@ public sealed class IngestFileDeleter(JobLock jobLock, IIngestReviewRepository r
     {
         if (file?.System is not { } system || systems.ById(system) is null)
             return $"unknown system '{file?.System}'.";
-        if (file.Folder is not (Pending or Failed))
-            return $"folder must be '{Pending}' or '{Failed}'.";
+        if (file.Folder is not (Pending or Failed or Removed))
+            return $"folder must be '{Pending}', '{Failed}' or '{Removed}'.";
         if (file.Name is not { Length: > 0 } name || name is "." or ".." || name.Contains('/') || name.Contains('\\')
             || IngestFileScanner.IsIgnored(name)
             || (file.Folder == Failed && name.EndsWith(IngestFileScanner.ErrorSuffix, StringComparison.OrdinalIgnoreCase)))
@@ -64,9 +65,12 @@ public sealed class IngestFileDeleter(JobLock jobLock, IIngestReviewRepository r
 
     /// <exception cref="UnsafePathException">The entry resolves outside its folder (not possible after <see cref="Validate"/>).</exception>
     private static string PathOf(string ingestRoot, IngestDeleteRef file) =>
-        SafePath.Resolve(ingestRoot, file.Folder == Failed
-            ? Path.Combine(file.System!, StorageFolders.FailedFolder, file.Name!)
-            : Path.Combine(file.System!, file.Name!));
+        SafePath.Resolve(ingestRoot, file.Folder switch
+        {
+            Failed => Path.Combine(file.System!, StorageFolders.FailedFolder, file.Name!),
+            Removed => Path.Combine(file.System!, StorageFolders.RemovedFolder, file.Name!),
+            _ => Path.Combine(file.System!, file.Name!),
+        });
 
     /// <param name="files">Already checked by <see cref="Validate"/>.</param>
     public async Task<IngestDeleteResult> DeleteAsync(IReadOnlyList<IngestDeleteRef> files, AuditActor actor, CancellationToken ct)
@@ -136,7 +140,7 @@ public sealed class IngestFileDeleter(JobLock jobLock, IIngestReviewRepository r
                 logger.LogWarning("{Path}: couldn't delete the .error.txt: {Error}", path, ex.Message);
             }
         }
-        else
+        else if (file.Folder == Pending)
         {
             // External: the file is gone, so its rows are removed even when the request was abandoned meanwhile.
             await reviews.DeletePendingBySourceAsync(path, ArchiveExtractor.IsArchive(file.Name!) ? path : null,

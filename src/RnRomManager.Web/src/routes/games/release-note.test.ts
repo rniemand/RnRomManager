@@ -25,6 +25,8 @@ vi.mock('#lib/bootstrap.js', () => ({
 	}
 }));
 
+// The release note button has a tooltip (R4); Bootstrap's Tooltip isn't mocked here.
+vi.mock('#lib/tooltip.js', () => ({ tooltip: () => ({}) }));
 const { default: GamePage } = await import('./[id]/+page.svelte');
 
 const rom = (id: number, hasNote: boolean) => ({

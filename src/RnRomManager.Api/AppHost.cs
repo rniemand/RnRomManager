@@ -159,6 +159,7 @@ public static class AppHost
         builder.Services.AddSingleton<RnRomManager.Core.Reports.IReportRepository, ReportRepository>();
         builder.Services.AddSingleton<IngestFileScanner>();
         builder.Services.AddSingleton<IngestFileDeleter>();
+        builder.Services.AddSingleton<RemovedFileRestorer>();
         // One per start: a job instance holds per-run state (and, later, the per-job circuit breaker).
         builder.Services.AddTransient<IngestJob>();
         builder.Services.AddTransient<IngestPipeline>();

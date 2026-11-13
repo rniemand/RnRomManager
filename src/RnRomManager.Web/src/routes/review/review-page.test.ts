@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { pollIntervalMs } from '#lib/stores/jobs.svelte.js';
@@ -22,9 +22,15 @@ vi.mock('$app/paths', () => ({
 }));
 // Bootstrap's Modal needs layout/transitions jsdom lacks.
 vi.mock('#lib/bootstrap.js', () => ({
+	// Toggles `show` so a test can tell an open modal from a closed one.
 	Modal: class {
-		show() {}
-		hide() {}
+		constructor(private element: Element) {}
+		show() {
+			this.element.classList.add('show');
+		}
+		hide() {
+			this.element.classList.remove('show');
+		}
 		dispose() {}
 	}
 }));
@@ -39,6 +45,7 @@ const shiftTip = 'Delete (Shift+click to skip confirmation)';
 
 const { default: ReviewPage } = await import('./[id]/+page.svelte');
 const { default: QueuePage } = await import('./+page.svelte');
+const { deleteReviewItems } = await import('#lib/review.js');
 
 const base = {
 	id: 7,
@@ -693,6 +700,10 @@ describe('review queue page', () => {
 	let calls: string[];
 	let answers: Record<string, Answer>;
 	let store: Map<string, string>;
+	/** Q4: the bodies sent to POST /api/review/delete, in order. */
+	let deleteBodies: { ids: number[] }[];
+	/** Q4: per-call answers for POST /api/review/delete, used in order before `answers`. */
+	let deleteAnswers: Answer[];
 
 	const row = (id: number) => ({
 		id,
@@ -734,10 +745,14 @@ describe('review queue page', () => {
 			setItem: (k: string, v: string) => void store.set(k, v),
 			removeItem: (k: string) => void store.delete(k)
 		});
+		deleteBodies = [];
+		deleteAnswers = [];
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
 			const key = `${init?.method ?? 'GET'} ${url}`;
 			if (url !== '/api/auth/antiforgery') calls.push(key);
-			const answer = answers[key] ?? { status: 204 };
+			if (key === 'POST /api/review/delete') deleteBodies.push(JSON.parse(String(init!.body)));
+			const answer = (key === 'POST /api/review/delete' && deleteAnswers.shift()) ||
+				answers[key] || { status: 204 };
 			return Promise.resolve(
 				new Response(answer.body === undefined ? null : JSON.stringify(answer.body), {
 					status: answer.status
@@ -999,5 +1014,160 @@ describe('review queue page', () => {
 
 		await vi.waitFor(() => expect(calls).toContain('DELETE /api/review/11'));
 		await vi.waitFor(() => expect(calls.filter((c) => c === list(1, 10))).toHaveLength(2));
+	});
+
+	describe('multi-select delete (Q1–Q4)', () => {
+		const box = (name: string) => screen.getByRole('checkbox', { name }) as HTMLInputElement;
+		const selectAll = () => box('Select all on this page');
+		const deleteSelected = () =>
+			screen.getByRole('button', { name: /^Delete selected/ }) as HTMLButtonElement;
+		const modal = () =>
+			screen.getByText(/^Delete \d+ review files?\?$/).closest('.modal') as HTMLElement;
+		const ok = (deleted: number, failed: { id: number; code: string }[] = []) => ({
+			status: 200,
+			body: { deleted, skipped: 0, failed }
+		});
+
+		it('the page and document title read Review Queue (Q1)', async () => {
+			answers[list(1, 20)] = { status: 200, body: page([1], 1) };
+			render(QueuePage);
+
+			expect(await screen.findByRole('heading', { level: 1, name: 'Review Queue' })).toBeTruthy();
+			expect(document.title).toBe('Review Queue · RnRomManager');
+		});
+
+		it('select all on the page, with an indeterminate state; the toolbar counts (Q2)', async () => {
+			answers[list(1, 20)] = { status: 200, body: page([1, 2, 3], 3) };
+			render(QueuePage);
+			await screen.findByText('file1.gb');
+			expect(screen.getByText('0 selected')).toBeTruthy();
+			expect(deleteSelected().disabled).toBe(true);
+			expect(deleteSelected().className).toBe('btn btn-sm btn-danger');
+
+			await fireEvent.click(box('Select file2.gb'));
+			expect(selectAll().indeterminate).toBe(true);
+			expect(selectAll().checked).toBe(false);
+			expect(screen.getByText('1 selected')).toBeTruthy();
+
+			await fireEvent.click(selectAll());
+			expect(selectAll().checked).toBe(true);
+			expect(selectAll().indeterminate).toBe(false);
+			expect(deleteSelected().textContent!.trim()).toBe('Delete selected (3)');
+
+			await fireEvent.click(selectAll());
+			expect(screen.getByText('0 selected')).toBeTruthy();
+			await fireEvent.click(box('Select file1.gb'));
+			await fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
+			expect(box('Select file1.gb').checked).toBe(false);
+		});
+
+		it('the selection survives paging and clears when the filter changes (Q2)', async () => {
+			store.set('rnrm.pageSize.review', '10');
+			answers[list(1, 10)] = { status: 200, body: page([1], 11) };
+			answers[list(2, 10)] = { status: 200, body: page([11], 11) };
+			answers[`${list(1, 10)}&system=gb`] = { status: 200, body: page([1], 1) };
+			render(QueuePage);
+			await screen.findByText('file1.gb');
+			await fireEvent.click(box('Select file1.gb'));
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+			await screen.findByText('file11.gb');
+			await fireEvent.click(box('Select file11.gb'));
+			expect(screen.getByText('2 selected')).toBeTruthy();
+			await fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
+			await screen.findByText('file1.gb');
+			expect(box('Select file1.gb').checked).toBe(true);
+
+			await fireEvent.change(screen.getByLabelText('System'), { target: { value: 'gb' } });
+			await vi.waitFor(() => expect(screen.getByText('0 selected')).toBeTruthy());
+		});
+
+		it('the modal names items from every page, up to 10, then "… and m more" (Q3)', async () => {
+			store.set('rnrm.pageSize.review', '10');
+			const first = Array.from({ length: 10 }, (_, i) => i + 1);
+			answers[list(1, 10)] = { status: 200, body: page(first, 12) };
+			answers[list(2, 10)] = { status: 200, body: page([11, 12], 12) };
+			render(QueuePage);
+			await screen.findByText('file1.gb');
+			await fireEvent.click(selectAll());
+			await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+			await screen.findByText('file11.gb');
+			await fireEvent.click(selectAll());
+
+			await fireEvent.click(deleteSelected());
+
+			const dialog = modal();
+			expect(dialog.classList.contains('show')).toBe(true);
+			expect([...dialog.querySelectorAll('li')].map((li) => li.textContent)).toEqual(
+				first.map((id) => `file${id}.gb`)
+			);
+			expect(dialog.textContent).toContain('… and 2 more');
+			expect(dialog.textContent).not.toContain('Archive entries');
+			expect(calls).not.toContain('POST /api/review/delete');
+		});
+
+		it('an archive member in the selection adds the warning and Shift+click still confirms (Q3)', async () => {
+			answers[list(1, 20)] = { status: 200, body: page([1, 100], 2) };
+			render(QueuePage);
+			await screen.findByText('file1.gb');
+			await fireEvent.click(selectAll());
+
+			await fireEvent.click(deleteSelected(), { shiftKey: true });
+
+			expect(modal().classList.contains('show')).toBe(true);
+			expect(modal().textContent).toContain(
+				'Archive entries delete their whole archive, including its other pending items.'
+			);
+			expect(calls).not.toContain('POST /api/review/delete');
+		});
+
+		it('Shift+click without archive members deletes at once, toasts, clears and refreshes the counts (Q3, Q4)', async () => {
+			toasts.items = [];
+			answers[list(1, 20)] = { status: 200, body: page([1, 2], 2) };
+			deleteAnswers.push(ok(2));
+			render(QueuePage);
+			await screen.findByText('file1.gb');
+			await fireEvent.click(selectAll());
+
+			await fireEvent.click(deleteSelected(), { shiftKey: true });
+
+			await vi.waitFor(() => expect(deleteBodies).toEqual([{ ids: [1, 2] }]));
+			await vi.waitFor(() => expect(toasts.items.map((t) => t.text)).toContain('Deleted 2 files.'));
+			expect(screen.getByText('0 selected')).toBeTruthy();
+			await vi.waitFor(() => expect(calls).toContain('GET /api/ingest/removed'));
+			await vi.waitFor(() => expect(calls.filter((c) => c === list(1, 20))).toHaveLength(2));
+		});
+
+		it('confirming the modal deletes; failures are toasted as a count (Q4)', async () => {
+			toasts.items = [];
+			answers[list(1, 20)] = { status: 200, body: page([1, 2, 3], 3) };
+			deleteAnswers.push(ok(1, [{ id: 2, code: 'DeleteFailed' }]));
+			render(QueuePage);
+			await screen.findByText('file1.gb');
+			await fireEvent.click(selectAll());
+			await fireEvent.click(deleteSelected());
+
+			await fireEvent.click(within(modal()).getByRole('button', { name: 'Delete', hidden: true }));
+
+			await vi.waitFor(() =>
+				expect(toasts.items.map((t) => t.text)).toEqual([
+					'Deleted 1 file.',
+					"1 couldn't be deleted."
+				])
+			);
+		});
+
+		// Rendering 1,001 rows is too slow for jsdom: the page's helper is called directly.
+		it('sends batches of 500 and stops at the first error with the job-running toast (Q4)', async () => {
+			toasts.items = [];
+			deleteAnswers.push(ok(500), { status: 409, body: { code: 'JobRunning', title: 'busy' } });
+
+			await deleteReviewItems(Array.from({ length: 1001 }, (_, i) => i + 1));
+
+			expect(deleteBodies.map((b) => b.ids.length)).toEqual([500, 500]);
+			expect(deleteBodies[1].ids[0]).toBe(501);
+			expect(toasts.items.map((t) => t.kind)).toEqual(['success', 'warning']);
+			expect(toasts.items[0].text).toBe('Deleted 500 files.');
+		});
 	});
 });

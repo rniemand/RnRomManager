@@ -94,6 +94,16 @@ public static class ReviewEndpoints
             var result = await resolver.DeleteSourceAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted);
             return ToResult(ctx, result);
         });
+        review.MapPost("/delete", async (ReviewDeleteRequest request, HttpContext ctx, ReviewResolver resolver) =>
+        {
+            // Q4: 1–500 distinct positive ids, all deleted under one lock acquisition.
+            if (request.Ids is not { Length: >= 1 and <= 500 } ids || ids.Any(id => id <= 0) || ids.Distinct().Count() != ids.Length)
+                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["ids"] = ["Must be 1–500 distinct positive ids."] });
+            var result = await resolver.DeleteSourcesAsync(ids, AuditActor.From(ctx.User), ctx.RequestAborted);
+            return result is null
+                ? DatEndpoints.JobRunning(ctx)
+                : Results.Ok(new { deleted = result.Deleted, skipped = result.Skipped, failed = result.Failed.Select(f => new { id = f.Id, code = f.Code }) });
+        });
         api.MapGet("/dat/search", (string? system, string? q, int? limit, HttpContext ctx, ISystemRegistry systems, DatCache dats) =>
         {
             var errors = new Dictionary<string, string[]>();
@@ -166,3 +176,6 @@ public static class ReviewEndpoints
         _ => Problems.Create(ctx, 500, result.Code, result.Code),
     };
 }
+
+/// <summary>Q4 body of <c>POST /api/review/delete</c>.</summary>
+public sealed record ReviewDeleteRequest(long[]? Ids);

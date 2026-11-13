@@ -42,6 +42,8 @@
 	$effect(() => () => controller?.abort());
 
 	function load(current: GameDetail): void {
+		// Z1: a different game than the last load expands every folder; a refetch of the same game keeps the toggles.
+		const newGame = loadedFor?.id !== current.id;
 		loadedFor = current;
 		controller?.abort();
 		const signal = (controller = new AbortController()).signal;
@@ -56,7 +58,7 @@
 					// After a refetch: keep what still exists, else fall back to the root.
 					if (!folders.has(selected)) selected = '';
 					for (const path of [...expanded]) if (!folders.has(path)) expanded.delete(path);
-					ancestors(selected).forEach((path) => expanded.add(path));
+					if (newGame) for (const path of folders.keys()) expanded.add(path);
 				},
 				(e) => {
 					if (!signal.aborted) error = e;
@@ -69,10 +71,9 @@
 		else expanded.add(path);
 	}
 
-	/** Selecting expands the folder and its ancestors; it never collapses. */
+	/** Z1: selecting never changes expansion; only the chevron does. */
 	function select(path: string): void {
 		selected = path;
-		ancestors(path).forEach((p) => expanded.add(p));
 	}
 
 	const label = (f: ZipFolder) => (f.path ? f.name : (data?.zipName ?? ''));
@@ -83,7 +84,11 @@
 {#snippet node(f: ZipFolder)}
 	{@const open = expanded.has(f.path)}
 	<li>
-		<div class="d-flex align-items-center gap-1">
+		<div
+			class="d-flex align-items-center gap-1"
+			class:bg-primary-subtle={selected === f.path}
+			class:rounded={selected === f.path}
+		>
 			<button
 				type="button"
 				class="btn btn-sm btn-link text-body chevron-toggle"
@@ -95,6 +100,7 @@
 				type="button"
 				class="btn btn-sm btn-link text-start text-break text-decoration-none"
 				class:fw-semibold={selected === f.path}
+				class:text-primary-emphasis={selected === f.path}
 				aria-current={selected === f.path ? 'true' : undefined}
 				onclick={() => select(f.path)}><Icon name="folder" /> {label(f)}</button
 			>
@@ -150,21 +156,32 @@
 						<tbody>
 							{#each folder.folders as child (child.path)}
 								<tr>
-									<td colspan="5">
+									<td class="text-truncate name-cell" title={child.name}>
 										<button
 											type="button"
-											class="btn btn-link btn-sm p-0 text-start text-break text-decoration-none"
+											class="btn btn-link btn-sm p-0 text-start text-decoration-none"
 											onclick={() => select(child.path)}><Icon name="folder" /> {child.name}</button
 										>
 									</td>
+									<td class="text-end text-nowrap">—</td>
+									<td class="text-end text-nowrap">—</td>
+									<td class="text-nowrap">—</td>
+									<td></td>
 								</tr>
 							{/each}
 							{#each folder.files as file (file.entry.path)}
 								<tr>
-									<td class="text-break">{file.name}</td>
-									<td class="text-end text-nowrap"><FileSize bytes={file.entry.sizeBytes} /></td>
+									<td class="text-truncate name-cell" title={file.name}>{file.name}</td>
+									<!-- Z2: sizes as the Library card's size badge. -->
 									<td class="text-end text-nowrap"
-										><FileSize bytes={file.entry.compressedSizeBytes} /></td
+										><span class="badge text-bg-light border"
+											><FileSize bytes={file.entry.sizeBytes} /></span
+										></td
+									>
+									<td class="text-end text-nowrap"
+										><span class="badge text-bg-light border"
+											><FileSize bytes={file.entry.compressedSizeBytes} /></span
+										></td
 									>
 									<td class="text-nowrap">{formatDateTime(file.entry.modifiedUtc)}</td>
 									<td class="text-end">
@@ -193,3 +210,9 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	.name-cell {
+		max-width: 32rem;
+	}
+</style>

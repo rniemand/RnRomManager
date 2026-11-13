@@ -161,6 +161,28 @@ describe('hotkeys store (B24)', () => {
 			expect(hotkeys.handle(altShift('KeyL'))).toBe(false);
 		});
 
+		it.each([
+			['KeyR', '/reports'],
+			['KeyT', '/integrity'],
+			['KeyA', '/admin/users'],
+			['KeyD', '/deleted']
+		])('K1: Alt+Shift+%s goes to %s for an admin', async (code, url) => {
+			await signIn(admin);
+
+			expect(hotkeys.handle(altShift(code))).toBe(true);
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(url));
+		});
+
+		it('K1: a plain user gets Reports but not the admin-only shortcuts', async () => {
+			await signIn(user);
+
+			for (const code of ['KeyT', 'KeyA', 'KeyD'])
+				expect(hotkeys.handle(altShift(code))).toBe(false);
+			expect(hotkeys.handle(altShift('KeyR'))).toBe(true);
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/reports'));
+			expect(goto).toHaveBeenCalledTimes(1);
+		});
+
 		it("ignores actions the user's role doesn't allow", async () => {
 			await signIn(user);
 			const e = altShift('KeyI');

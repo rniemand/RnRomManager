@@ -81,6 +81,32 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         using var held = jobLock.TryAcquire();
         if (held is null)
             return new("JobRunning");
+        return await DeleteHeldAsync(id, actor, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Q4: <see cref="DeleteSourceAsync"/> for each id in order under one lock acquisition. An id that no longer exists or
+    /// isn't Pending (e.g. removed with its archive earlier in the batch) is skipped. Null when a job holds the lock (nothing deleted).
+    /// </summary>
+    public async Task<ReviewBatchDeleteResult?> DeleteSourcesAsync(IReadOnlyList<long> ids, AuditActor actor, CancellationToken ct)
+    {
+        using var held = jobLock.TryAcquire();
+        if (held is null)
+            return null;
+        int deleted = 0, skipped = 0;
+        var failed = new List<ReviewBatchDeleteFailure>();
+        foreach (var id in ids)
+        {
+            var result = await DeleteHeldAsync(id, actor, ct).ConfigureAwait(false);
+            if (result.Code is null) deleted++;
+            else if (result.Code == "NotFound") skipped++;
+            else failed.Add(new(id, result.Code));
+        }
+        return new(deleted, skipped, failed);
+    }
+
+    private async Task<ReviewResolutionResult> DeleteHeldAsync(long id, AuditActor actor, CancellationToken ct)
+    {
         var item = await reviews.GetAsync(id, ct).ConfigureAwait(false);
         if (item is not { Status: "Pending" })
             return new("NotFound");
@@ -596,3 +622,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
 
     private static IReadOnlyList<string> Strings(JsonNode? array) => array?.AsArray().Select(n => n!.GetValue<string>()).ToList() ?? [];
 }
+
+/// <summary>Q4: the outcome of a batch review delete.</summary>
+public sealed record ReviewBatchDeleteResult(int Deleted, int Skipped, IReadOnlyList<ReviewBatchDeleteFailure> Failed);
+
+public sealed record ReviewBatchDeleteFailure(long Id, string Code);

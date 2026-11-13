@@ -222,6 +222,41 @@ public class ReviewResolverTests
     }
 
     [Test]
+    public async Task DeleteMany_CountsDeletedSkippedAndFailed_InOrder_UnderOneLock()
+    {
+        var broken = _dir.Combine("ingest", "broken.gb");
+        Directory.CreateDirectory(broken); // File.Delete refuses a directory: DeleteFailed
+        var archive = _dir.Combine("ingest", "pack.zip");
+        File.WriteAllBytes(archive, [9]);
+        var item2 = _item with { Id = 2, SourcePath = broken, OriginalFileName = "broken.gb" };
+        var item3 = _item with { Id = 3, SourcePath = archive, ArchivePath = archive, ArchiveEntry = "a.gb" };
+        var item4 = _item with { Id = 4, SourcePath = archive, ArchivePath = archive, ArchiveEntry = "b.gb" };
+        _reviews.GetAsync(2, Arg.Any<CancellationToken>()).Returns(item2);
+        _reviews.GetAsync(3, Arg.Any<CancellationToken>()).Returns(item3);
+        // The archive sibling's row goes with the archive (DeletePendingBySourceAsync), so it's gone by its turn.
+        _reviews.GetAsync(4, Arg.Any<CancellationToken>()).Returns(_ => File.Exists(archive) ? item4 : null);
+
+        var result = await _resolver.DeleteSourcesAsync([1, 2, 3, 4, 99], Actor, default);
+
+        Assert.That((result!.Deleted, result.Skipped), Is.EqualTo((2, 2)));
+        Assert.That(result.Failed, Is.EqualTo(new[] { new ReviewBatchDeleteFailure(2, "DeleteFailed") }));
+        Assert.That(File.Exists(_item.SourcePath) || File.Exists(archive), Is.False);
+        Assert.That(Recorded().Select(r => (r.Action, r.Path)),
+            Is.EqualTo(new[] { ("ReviewDeleted", (string?)"ingest/test.gb"), ("ReviewDeleted", "ingest/pack.zip") }));
+        using var released = _lock.TryAcquire();
+        Assert.That(released, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task DeleteMany_WhenBusy_IsNull_AndDeletesNothing()
+    {
+        using (_lock.TryAcquire())
+            Assert.That(await _resolver.DeleteSourcesAsync([1], Actor, default), Is.Null);
+        Assert.That(File.Exists(_item.SourcePath), Is.True);
+        await _reviews.DidNotReceiveWithAnyArgs().GetAsync(default, default);
+    }
+
+    [Test]
     public async Task Delete_NonPendingOrBusy()
     {
         _item = _item with { Status = "Resolved" };

@@ -312,6 +312,58 @@ public class ReviewEndpointsTests
     }
 
     [Test]
+    public async Task DeleteBatch_DeletesEachInOrder_UnknownIsSkipped()
+    {
+        var first = await Queue();
+        var second = await Queue(name: "other.gb", bytes: new SyntheticRomBuilder { Seed = 931, Title = "OTHER" }.Build());
+
+        using var response = await _admin.PostAsync("/api/review/delete", new { ids = new[] { first.Id, 999999, second.Id } });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var body = await AuthClient.JsonAsync(response);
+        Assert.That((body.GetProperty("deleted").GetInt32(), body.GetProperty("skipped").GetInt32(), body.GetProperty("failed").GetArrayLength()),
+            Is.EqualTo((2, 1, 0)));
+        Assert.That(File.Exists(first.SourcePath) || File.Exists(second.SourcePath), Is.False);
+        Assert.That(await Reviews.GetAsync(first.Id, default), Is.Null);
+        Assert.That(await Reviews.GetAsync(second.Id, default), Is.Null);
+        await Service<RnRomManager.Api.AuditWriter>().FlushAsync();
+        await using var db = Service<IDbConnectionFactory>().Create();
+        Assert.That(await db.QuerySingleAsync<int>("SELECT COUNT(*) FROM audit_events WHERE action = 'ReviewDeleted'"), Is.EqualTo(2));
+    }
+
+    [TestCase("[]")]
+    [TestCase("[0]")]
+    [TestCase("[-3]")]
+    [TestCase("[5,5]")]
+    [TestCase("null")]
+    [TestCase("tooMany")]
+    public async Task DeleteBatch_InvalidIds_Is400(string ids)
+    {
+        object body = ids == "tooMany"
+            ? new { ids = Enumerable.Range(1, 501).ToArray() }
+            : System.Text.Json.JsonSerializer.Deserialize<object>($$"""{"ids":{{ids}}}""")!;
+
+        using var response = await _admin.PostAsync("/api/review/delete", body);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").TryGetProperty("ids", out _), Is.True);
+    }
+
+    [Test]
+    public async Task DeleteBatch_LockBusy_Is409_AndDeletesNothing()
+    {
+        var item = await Queue();
+        using (Service<JobLock>().TryAcquire())
+        {
+            using var busy = await _admin.PostAsync("/api/review/delete", new { ids = new[] { item.Id } });
+            Assert.That(busy.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(await AuthClient.CodeAsync(busy), Is.EqualTo("JobRunning"));
+        }
+        Assert.That(File.Exists(item.SourcePath), Is.True);
+        Assert.That(await Reviews.GetAsync(item.Id, default), Is.Not.Null);
+    }
+
+    [Test]
     public async Task Delete_RequiresAntiforgery()
     {
         var item = await Queue();
@@ -325,6 +377,7 @@ public class ReviewEndpointsTests
     [TestCase("POST", "/api/review/1/resolve")]
     [TestCase("POST", "/api/review/1/dismiss")]
     [TestCase("DELETE", "/api/review/1")]
+    [TestCase("POST", "/api/review/delete")]
     [TestCase("GET", "/api/dat/search?system=gb&q=tetris")]
     public async Task RoleMatrix_Anonymous401_User403(string method, string url)
     {

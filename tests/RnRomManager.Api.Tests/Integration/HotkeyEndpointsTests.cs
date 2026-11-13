@@ -62,6 +62,7 @@ public class HotkeyEndpointsTests
     private static readonly Dictionary<string, string?> Defaults = new()
     {
         ["nav.library"] = "Alt+Shift+L", ["nav.collections"] = "Alt+Shift+C", ["nav.ingestion"] = "Alt+Shift+I", ["nav.review"] = "Alt+Shift+F", ["review.next"] = "Alt+Shift+G",
+        ["nav.reports"] = "Alt+Shift+R", ["nav.integrity"] = "Alt+Shift+T", ["nav.admin"] = "Alt+Shift+A", ["nav.deleted"] = "Alt+Shift+D",
     };
 
     [Test]
@@ -79,14 +80,14 @@ public class HotkeyEndpointsTests
 
         using var response = await PutAsync(new Dictionary<string, string?>
         {
-            ["nav.library"] = "Alt+Shift+L", ["nav.review"] = "shift+alt+r", ["review.next"] = null,
+            ["nav.library"] = "Alt+Shift+L", ["nav.review"] = "shift+alt+q", ["review.next"] = null,
         });
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var expected = new Dictionary<string, string?>(Defaults) { ["nav.review"] = "Alt+Shift+R", ["review.next"] = null };
+        var expected = new Dictionary<string, string?>(Defaults) { ["nav.review"] = "Alt+Shift+Q", ["review.next"] = null };
         Assert.That(await BindingsAsync(response), Is.EqualTo(expected));
         Assert.That(await GetAsync(), Is.EqualTo(expected));
-        Assert.That(await Users.GetHotkeysAsync(_user.Id, default), Is.EqualTo("""{"nav.review":"Alt+Shift+R","review.next":null}"""));
+        Assert.That(await Users.GetHotkeysAsync(_user.Id, default), Is.EqualTo("""{"nav.review":"Alt+Shift+Q","review.next":null}"""));
     }
 
     [Test]

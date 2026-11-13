@@ -67,7 +67,12 @@ describe('HotkeysModal (B25)', () => {
 		open(user);
 
 		const names = [...document.querySelectorAll('tbody th')].map((th) => th.textContent);
-		expect(names).toEqual(['Open global search', 'Go to Library', 'Go to Collections']);
+		expect(names).toEqual([
+			'Open global search',
+			'Go to Library',
+			'Go to Collections',
+			'Go to Reports'
+		]);
 		expect(shown('nav.collections')).toBe('Alt+Shift+C');
 		expect(shown('nav.library')).toBe('Alt+Shift+L');
 		expect(row('search').queryByRole('button', { hidden: true })).toBeNull();
@@ -77,7 +82,7 @@ describe('HotkeysModal (B25)', () => {
 	it('an admin sees every action; unassigned shows Not assigned', () => {
 		open(admin, { 'review.next': null });
 
-		expect(document.querySelectorAll('tbody tr')).toHaveLength(6);
+		expect(document.querySelectorAll('tbody tr')).toHaveLength(10);
 		expect(row('review.next').getByText('Not assigned')).toBeTruthy();
 	});
 

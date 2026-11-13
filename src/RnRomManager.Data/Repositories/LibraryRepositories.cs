@@ -182,6 +182,10 @@ public sealed class GameRepository : IGameRepository
                    (SELECT MIN(i.id) FROM images i WHERE i.game_id = g.id AND i.is_cover = 1) AS BoxArtImageId,
                    (SELECT CAST(r.size_bytes + COALESCE((SELECT SUM(f.size_bytes) FROM rom_files f WHERE f.rom_id = r.id), 0) AS SIGNED)
                     FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY 1 DESC LIMIT 1) AS PrimarySizeBytes,
+                   (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id AND JSON_CONTAINS(r.flags, '"Update"')) AS UpdateCount,
+                   (SELECT r.id FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryRomId,
+                   (SELECT r.file_name FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryRomFileName,
+                   (SELECT r.external_file_name IS NOT NULL FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryIsExternal,
                    g.rating AS Rating, g.favourite AS Favourite, g.title AS Title,
                    g.developers AS Developers, g.publishers AS Publishers, g.genres AS Genres
             FROM {from} {filter}
@@ -191,7 +195,8 @@ public sealed class GameRepository : IGameRepository
 
         var items = rows.Select(r => new GameListItem(
             r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId,
-            r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres))).ToList();
+            r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres),
+            (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true)).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, total);
     }
 
@@ -322,6 +327,10 @@ public sealed class GameRepository : IGameRepository
         public string? RegionKeys { get; init; }
         public long? BoxArtImageId { get; init; }
         public long? PrimarySizeBytes { get; init; }
+        public long UpdateCount { get; init; }
+        public long? PrimaryRomId { get; init; }
+        public string? PrimaryRomFileName { get; init; }
+        public bool? PrimaryIsExternal { get; init; }
         public int? Rating { get; init; }
         public bool Favourite { get; init; }
         public string Title { get; init; } = "";

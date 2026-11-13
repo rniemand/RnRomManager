@@ -17,6 +17,11 @@ export function formatDateTime(iso: string | null | undefined): string {
 	return Number.isNaN(date.getTime()) ? '' : dateTime.format(date);
 }
 
+/** L5: a count with thousands separators, `1250` → `1,250` (en-US, as the other counts). */
+export function formatCount(n: number): string {
+	return n.toLocaleString('en-US');
+}
+
 /** `512 B`, `1.5 KiB`, `16.0 MiB`, `8.0 GiB`. */
 export function formatSize(bytes: number | null | undefined): string {
 	if (bytes === null || bytes === undefined || !Number.isFinite(bytes) || bytes < 0) return '';

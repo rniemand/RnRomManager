@@ -47,6 +47,8 @@ export interface Page<T> {
 export interface SystemInfo {
 	id: string;
 	displayName: string;
+	/** The handler's short name (`GB`), for system badges (L3). */
+	shortName: string;
 	gameCount: number;
 	romCount: number;
 	regions: string[];
@@ -93,6 +95,13 @@ export interface GameListItem {
 	favourite: boolean;
 	/** With `q`: the metadata value that matched when no word was in a title (S3); null otherwise. */
 	matchedOn: { field: 'developer' | 'publisher' | 'genre'; value: string } | null;
+	/** Roms flagged `Update` (C1). */
+	updateCount: number;
+	/** Primary release to quick play (C2); null when the system has no browser core or the release is external. */
+	playRomId: number | null;
+	playRomFileName: string | null;
+	/** The system handler's browser core, null when it has none. */
+	browserCore: string | null;
 }
 
 /** One release of `GET /api/games/{id}` (spec §23, §6.2 Rom fields flattened). */
@@ -187,6 +196,16 @@ export interface PendingSystem {
 	files: { name: string; sizeBytes: number; modifiedAt: string }[];
 }
 
+/** `GET /api/ingest/removed` (Deleted ROMs D2): only systems with files in their `_removed/` folder. */
+export type RemovedSystem = PendingSystem;
+
+/** `POST /api/ingest/restore` (Deleted ROMs D5); `jobId` is null when no ingest job started. */
+export interface RemovedRestoreResponse {
+	restored: number;
+	failed: { system: string; name: string }[];
+	jobId: string | null;
+}
+
 /** `GET /api/ingest/failed` (D1): the files in each system's `_failed/` folder; `reason` from its `.error.txt`. */
 export interface FailedSystem {
 	system: string;
@@ -196,7 +215,7 @@ export interface FailedSystem {
 /** One entry of `POST /api/ingest/delete` (D2). */
 export interface IngestDeleteEntry {
 	system: string;
-	folder: 'pending' | 'failed';
+	folder: 'pending' | 'failed' | 'removed';
 	name: string;
 }
 

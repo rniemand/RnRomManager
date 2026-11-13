@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { Me } from '../api/types';
+	import { formatCount } from '../format';
 	import Icon from './Icon.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
@@ -9,6 +10,8 @@
 		me: Me;
 		/** Pending review items (Admin); null until loaded. */
 		reviewCount: number | null;
+		/** Deleted ROMs (Admin, D6); null until loaded. */
+		deletedCount?: number | null;
 		onlogout: () => void;
 		/** Opens the global search; the button is hidden while the password must be changed. */
 		onsearch?: () => void;
@@ -16,7 +19,7 @@
 		onhotkeys?: () => void;
 	}
 
-	let { me, reviewCount, onlogout, onsearch, onhotkeys }: Props = $props();
+	let { me, reviewCount, deletedCount = null, onlogout, onsearch, onhotkeys }: Props = $props();
 
 	// Pages arrive in later steps (S41–S47); unknown ones show "Page not found" until then.
 	const links = $derived(
@@ -25,6 +28,7 @@
 			{ href: '/collections', label: 'Collections', icon: 'collections', admin: false },
 			{ href: '/ingestion', label: 'Ingestion', icon: 'ingest', admin: true },
 			{ href: '/review', label: 'Review', icon: 'review', admin: true },
+			{ href: '/deleted', label: 'Deleted ROMs', icon: 'delete', admin: true },
 			{ href: '/reports', label: 'Reports', icon: 'reports', admin: false },
 			{ href: '/integrity', label: 'Integrity', icon: 'integrity', admin: true },
 			{ href: '/admin/users', label: 'Admin', icon: 'admin', admin: true }
@@ -76,7 +80,12 @@
 							{link.label}
 							{#if link.href === '/review' && reviewCount}
 								<span class="badge rounded-pill text-bg-danger">
-									{reviewCount}<span class="visually-hidden"> pending</span>
+									{formatCount(reviewCount)}<span class="visually-hidden">&#32;pending</span>
+								</span>
+							{/if}
+							{#if link.href === '/deleted' && deletedCount}
+								<span class="badge rounded-pill text-bg-secondary">
+									{formatCount(deletedCount)}<span class="visually-hidden">&#32;deleted</span>
 								</span>
 							{/if}
 						</a>

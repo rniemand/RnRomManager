@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
 	facetsApiUrl,
 	gamesApiUrl,
-	optionLabel,
 	hasFilters,
 	parseFilters,
 	toSearch,
@@ -122,11 +121,5 @@ describe('filter counts (F3)', () => {
 				parse('system=gb&letter=%23&region=USA&q=fun&favourite=true&sort=year&dir=desc&page=3')
 			)
 		).toBe('/api/games/facets?system=gb&letter=%23&region=USA&q=fun&favourite=true');
-	});
-
-	it('optionLabel adds the count, (0) when missing, nothing without counts', () => {
-		expect(optionLabel('Game Boy', { gb: 12 }, 'gb')).toBe('Game Boy (12)');
-		expect(optionLabel('Game Boy', { gbc: 1 }, 'gb')).toBe('Game Boy (0)');
-		expect(optionLabel('Game Boy', null, 'gb')).toBe('Game Boy');
 	});
 });

@@ -148,6 +148,7 @@ public partial class LibraryEndpointsTests
         JsonElement Find(string id) => systems.EnumerateArray().Single(s => s.GetProperty("id").GetString() == id);
         var gb = Find("gb");
         Assert.That(gb.GetProperty("displayName").GetString(), Is.EqualTo("Game Boy"));
+        Assert.That(gb.GetProperty("shortName").GetString(), Is.EqualTo("GB"), "L3");
         Assert.That((gb.GetProperty("gameCount").GetInt32(), gb.GetProperty("romCount").GetInt32()), Is.EqualTo((1, 2)));
         Assert.That(gb.GetProperty("regions").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "Japan", "World" }));
         var gbc = Find("gbc");
@@ -189,6 +190,54 @@ public partial class LibraryEndpointsTests
         var item = (await GetJson("/api/games")).GetProperty("items")[0];
 
         Assert.That(item.GetProperty("primarySizeBytes").GetInt64(), Is.EqualTo(1234));
+    }
+
+    [Test]
+    public async Task Games_UpdateCount_CountsRomsFlaggedUpdate()
+    {
+        var id = await Tetris();
+        Assert.That((await GetJson("/api/games")).GetProperty("items")[0].GetProperty("updateCount").GetInt32(), Is.EqualTo(0));
+        await using (var connection = Service<IDbConnectionFactory>().Create())
+            await connection.ExecuteAsync("UPDATE roms SET flags = '[\"Beta\",\"Update\"]' WHERE game_id = @id", new { id });
+
+        var item = (await GetJson("/api/games")).GetProperty("items")[0];
+
+        Assert.That(item.GetProperty("updateCount").GetInt32(), Is.EqualTo(2));
+        Assert.That(item.GetProperty("romCount").GetInt32(), Is.EqualTo(2), "romCount still counts every rom");
+    }
+
+    // C2: playable only with a browser core and an embedded primary release.
+    [TestCase("gb", false, true, "gambatte")]
+    [TestCase("gb", true, false, "gambatte")]
+    [TestCase("nes", false, false, null)]
+    [TestCase("switch", false, false, null)]
+    public async Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(string system, bool external, bool playable, string? core)
+    {
+        var id = await Tetris();
+        long primaryId;
+        string primaryName;
+        await using (var connection = Service<IDbConnectionFactory>().Create())
+        {
+            await connection.ExecuteAsync("UPDATE games SET system_id = @system WHERE id = @id", new { system, id });
+            if (external)
+                await connection.ExecuteAsync("UPDATE roms SET external_file_name = 'x.gb' WHERE game_id = @id", new { id });
+            (primaryId, primaryName) = await connection.QuerySingleAsync<(long, string)>(
+                "SELECT id, file_name FROM roms WHERE game_id = @id AND is_primary = 1 ORDER BY id LIMIT 1", new { id });
+        }
+
+        var item = (await GetJson("/api/games")).GetProperty("items")[0];
+
+        Assert.That(item.GetProperty("browserCore").GetString(), Is.EqualTo(core));
+        if (playable)
+        {
+            Assert.That(item.GetProperty("playRomId").GetInt64(), Is.EqualTo(primaryId));
+            Assert.That(item.GetProperty("playRomFileName").GetString(), Is.EqualTo(primaryName));
+        }
+        else
+        {
+            Assert.That(item.GetProperty("playRomId").ValueKind, Is.EqualTo(JsonValueKind.Null));
+            Assert.That(item.GetProperty("playRomFileName").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        }
     }
 
     [Test]

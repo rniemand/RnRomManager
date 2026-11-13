@@ -103,11 +103,6 @@ export function facetsApiUrl(filters: LibraryFilters): string {
 /** Facet counts by option key; null while loading or after a failed call. */
 export type FacetCounts = Record<string, number> | null;
 
-/** F3: `Game Boy (12)`; an option missing from the counts is `(0)`; no counts yet → the plain name. */
-export function optionLabel(name: string, counts: FacetCounts, key: string): string {
-	return counts ? `${name} (${counts[key] ?? 0})` : name;
-}
-
 export function hasFilters(filters: LibraryFilters): boolean {
 	return !!(filters.system || filters.letter || filters.region || filters.q || filters.favourite);
 }

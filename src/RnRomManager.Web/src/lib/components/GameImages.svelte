@@ -38,11 +38,15 @@
 	let uploadError = $state<string | undefined>();
 	let typeError = $state<string | undefined>();
 	/** U6: upload a file, or have the server download a URL. */
-	let uploadMode = $state<'file' | 'url'>('file');
+	let uploadMode = $state<'file' | 'url'>('url');
 	let imageUrl = $state('');
 	let urlError = $state<string | undefined>();
 	/** The server couldn't use the URL: offer the file upload instead. */
 	let urlFallback = $state(false);
+	/** I3: a file is being dragged over the modal body. */
+	let dragging = $state(false);
+	/** I3: several files were dropped; the first is used. */
+	let dropNote = $state<string | undefined>();
 
 	const base = $derived(`/api/games/${encodeURIComponent(game.id)}/images`);
 
@@ -82,7 +86,9 @@
 	function openUpload(): void {
 		uploadError = typeError = urlError = undefined;
 		urlFallback = false;
-		uploadMode = 'file';
+		uploadMode = 'url';
+		dropNote = undefined;
+		dragging = false;
 		imageUrl = '';
 		uploadType = 'BoxArt';
 		if (fileInput) fileInput.value = '';
@@ -93,6 +99,37 @@
 		uploadMode = 'file';
 		urlError = undefined;
 		urlFallback = false;
+	}
+
+	/** I3: only drags that carry files are taken (text and links are left to the browser). */
+	const hasFiles = (e: DragEvent) => !!e.dataTransfer?.types.includes('Files');
+
+	function onDragOver(e: DragEvent): void {
+		if (!hasFiles(e)) return;
+		e.preventDefault(); // allow the drop, so the browser never navigates to the file
+		dragging = true;
+	}
+
+	function onDragLeave(e: DragEvent): void {
+		const target = e.currentTarget as HTMLElement;
+		if (!target.contains(e.relatedTarget as Node | null)) dragging = false;
+	}
+
+	function onDrop(e: DragEvent): void {
+		if (!hasFiles(e)) return;
+		e.preventDefault();
+		dragging = false;
+		const files = e.dataTransfer!.files;
+		if (!files.length || !fileInput) return;
+		const transfer = new DataTransfer();
+		transfer.items.add(files[0]);
+		fileInput.files = transfer.files; // as if picked; Upload runs the usual checks
+		uploadMode = 'file';
+		uploadError = undefined;
+		dropNote =
+			files.length > 1
+				? `Only one image can be uploaded at a time; using ${files[0].name}.`
+				: undefined;
 	}
 
 	async function upload(): Promise<void> {
@@ -173,8 +210,9 @@
 </script>
 
 <section class="mb-4" aria-labelledby="images-heading">
+	<!-- I1: the tab names the panel; the heading stays for the outline only. -->
+	<h2 class="visually-hidden" id="images-heading">Images</h2>
 	<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-		<h2 class="h5 mb-0" id="images-heading">Images</h2>
 		{#if auth.canEditLibrary}
 			<button type="button" class="btn btn-outline-primary btn-sm ms-auto" onclick={openUpload}>
 				<Icon name="upload" /> Upload image
@@ -252,85 +290,116 @@
 		{busy}
 		onconfirm={upload}
 	>
-		<div class="btn-group mb-3" role="group" aria-label="Image source">
-			<input
-				type="radio"
-				class="btn-check"
-				name="image-source"
-				id="image-source-file"
-				value="file"
-				autocomplete="off"
-				bind:group={uploadMode}
-			/>
-			<label class="btn btn-outline-secondary btn-sm" for="image-source-file">File</label>
-			<input
-				type="radio"
-				class="btn-check"
-				name="image-source"
-				id="image-source-url"
-				value="url"
-				autocomplete="off"
-				bind:group={uploadMode}
-			/>
-			<label class="btn btn-outline-secondary btn-sm" for="image-source-url">URL</label>
-		</div>
-		{#if uploadMode === 'url'}
-			<div class="mb-3">
-				<label class="form-label" for="image-url">Image URL</label>
+		<!-- I3: the whole body takes a dropped image file. -->
+		<div
+			class="position-relative"
+			role="group"
+			aria-label="Image to upload"
+			ondragenter={onDragOver}
+			ondragover={onDragOver}
+			ondragleave={onDragLeave}
+			ondrop={onDrop}
+		>
+			{#if dragging}
+				<div
+					class="drop-overlay position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center border border-2 border-primary rounded bg-body"
+					style="border-style: dashed !important"
+				>
+					Drop image to upload
+				</div>
+			{/if}
+			<div class="btn-group mb-3" role="group" aria-label="Image source">
 				<input
-					id="image-url"
-					class="form-control"
-					class:is-invalid={urlError}
-					type="url"
-					bind:value={imageUrl}
-					aria-describedby="image-url-help"
+					type="radio"
+					class="btn-check"
+					name="image-source"
+					id="image-source-url"
+					value="url"
+					autocomplete="off"
+					bind:group={uploadMode}
 				/>
-				{#if urlError}
-					<div class="invalid-feedback">
-						{urlError}
-						{#if urlFallback}
-							Download the image and upload the file instead.
-							<button
-								type="button"
-								class="btn btn-link btn-sm p-0 align-baseline"
-								onclick={useFileInstead}>Upload a file instead</button
-							>
-						{/if}
+				<label class="btn btn-outline-secondary btn-sm" for="image-source-url">URL</label>
+				<input
+					type="radio"
+					class="btn-check"
+					name="image-source"
+					id="image-source-file"
+					value="file"
+					autocomplete="off"
+					bind:group={uploadMode}
+				/>
+				<label class="btn btn-outline-secondary btn-sm" for="image-source-file">File</label>
+			</div>
+			{#if uploadMode === 'url'}
+				<div class="mb-3">
+					<label class="form-label" for="image-url">Image URL</label>
+					<input
+						id="image-url"
+						class="form-control"
+						class:is-invalid={urlError}
+						type="url"
+						bind:value={imageUrl}
+						aria-describedby="image-url-help"
+					/>
+					{#if urlError}
+						<div class="invalid-feedback">
+							{urlError}
+							{#if urlFallback}
+								Download the image and upload the file instead.
+								<button
+									type="button"
+									class="btn btn-link btn-sm p-0 align-baseline"
+									onclick={useFileInstead}>Upload a file instead</button
+								>
+							{/if}
+						</div>
+					{/if}
+					<div id="image-url-help" class="form-text">
+						The server downloads the image. PNG or JPEG, at most 8 MiB.
 					</div>
-				{/if}
-				<div id="image-url-help" class="form-text">
-					The server downloads the image. PNG or JPEG, at most 8 MiB.
+				</div>
+			{/if}
+			<div class="mb-3" hidden={uploadMode !== 'file'}>
+				<label class="form-label" for="image-file">Upload an image</label>
+				<input
+					bind:this={fileInput}
+					id="image-file"
+					class="form-control"
+					class:is-invalid={uploadError}
+					type="file"
+					accept="image/png,image/jpeg"
+					aria-describedby="image-file-help"
+					onchange={() => (dropNote = undefined)}
+				/>
+				{#if uploadError}<div class="invalid-feedback">{uploadError}</div>{/if}
+				{#if dropNote}<div class="form-text" role="status">{dropNote}</div>{/if}
+				<div id="image-file-help" class="form-text">
+					PNG or JPEG, at most <FileSize bytes={maxUploadBytes} />, or drop it here
 				</div>
 			</div>
-		{/if}
-		<div class="mb-3" hidden={uploadMode !== 'file'}>
-			<label class="form-label" for="image-file">Upload an image</label>
-			<input
-				bind:this={fileInput}
-				id="image-file"
-				class="form-control"
-				class:is-invalid={uploadError}
-				type="file"
-				accept="image/png,image/jpeg"
-				aria-describedby="image-file-help"
-			/>
-			{#if uploadError}<div class="invalid-feedback">{uploadError}</div>{/if}
-			<div id="image-file-help" class="form-text">
-				PNG or JPEG, at most <FileSize bytes={maxUploadBytes} />
+			<div class="btn-group" role="group" aria-label="Image type">
+				<input
+					type="radio"
+					class="btn-check"
+					name="image-type"
+					id="image-type-boxart"
+					value="BoxArt"
+					autocomplete="off"
+					bind:group={uploadType}
+				/>
+				<label class="btn btn-outline-secondary btn-sm" for="image-type-boxart">Box art</label>
+				<input
+					type="radio"
+					class="btn-check"
+					name="image-type"
+					id="image-type-snap"
+					value="Snap"
+					autocomplete="off"
+					bind:group={uploadType}
+				/>
+				<label class="btn btn-outline-secondary btn-sm" for="image-type-snap">Screenshot</label>
 			</div>
-		</div>
-		<div>
-			<label class="form-label" for="image-type">Type</label>
-			<select
-				id="image-type"
-				class="form-select"
-				class:is-invalid={typeError}
-				bind:value={uploadType}
-			>
-				<option value="BoxArt">Box art</option>
-				<option value="Snap">Screenshot</option>
-			</select>
-			{#if typeError}<div class="invalid-feedback">{typeError}</div>{/if}
+			{#if typeError}<div class="invalid-feedback d-block">{typeError}</div>{/if}
 		</div>
 	</ConfirmModal>
 {/if}

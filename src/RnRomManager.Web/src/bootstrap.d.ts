@@ -21,6 +21,10 @@ declare module 'bootstrap/dist/js/bootstrap.bundle.min.js' {
 		setContent(content: Record<string, string>): void;
 		dispose(): void;
 	}
-	const bootstrap: { Modal: typeof Modal; Tooltip: typeof Tooltip };
+	export class Dropdown {
+		static getOrCreateInstance(element: Element): Dropdown;
+		hide(): void;
+	}
+	const bootstrap: { Modal: typeof Modal; Tooltip: typeof Tooltip; Dropdown: typeof Dropdown };
 	export default bootstrap;
 }

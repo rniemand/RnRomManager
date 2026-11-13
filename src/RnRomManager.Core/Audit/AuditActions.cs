@@ -21,11 +21,12 @@ public static class AuditActions
     public const string GamesMerged = "GamesMerged";
     public const string DatsRefreshed = "DatsRefreshed";
     public const string IngestFileDeleted = "IngestFileDeleted";
+    public const string RemovedRestored = "RemovedRestored";
 
     public static readonly IReadOnlyList<string> All =
     [
         Ingested, ZipRepaired, ExtensionRenamed, MovedToFailed, MovedToDuplicates, ArchiveDeleted, ReviewDeleted, GameUpdated,
         ReleaseDeleted, GameDeleted, ImageAdded, ImageDeleted, CoverSet, MediaFetched, ReleaseMoved, GamesMerged, DatsRefreshed,
-        IngestFileDeleted,
+        IngestFileDeleted, RemovedRestored,
     ];
 }

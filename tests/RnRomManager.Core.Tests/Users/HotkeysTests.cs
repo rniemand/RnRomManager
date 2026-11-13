@@ -22,7 +22,22 @@ public class HotkeysTests
             ("nav.ingestion", "Alt+Shift+I", true, Roles.Admin),
             ("nav.review", "Alt+Shift+F", true, Roles.Admin),
             ("review.next", "Alt+Shift+G", true, Roles.Admin),
+            ("nav.reports", "Alt+Shift+R", true, null),
+            ("nav.integrity", "Alt+Shift+T", true, Roles.Admin),
+            ("nav.admin", "Alt+Shift+A", true, Roles.Admin),
+            ("nav.deleted", "Alt+Shift+D", true, Roles.Admin),
         }));
+        Assert.That(Hotkeys.Actions.Skip(1).SelectMany(a => a.Defaults), Has.None.AnyOf(Hotkeys.Reserved.ToArray()));
+        Assert.That(Hotkeys.Actions.Skip(1).SelectMany(a => a.Defaults), Is.Unique);
+    }
+
+    [Test]
+    public void Merge_AStoredOverrideOnANewDefaultKey_IsKept_NewActionsGetTheirDefaults()
+    {
+        // K1: stored JSON holds overrides only; the table-order duplicate rule decides which of the two fires.
+        var merged = Hotkeys.Merge(Map(("nav.library", "Alt+Shift+R")));
+
+        Assert.That((merged["nav.library"], merged["nav.reports"], merged["nav.deleted"]), Is.EqualTo(("Alt+Shift+R", "Alt+Shift+R", "Alt+Shift+D")));
     }
 
     [TestCase("Alt+Shift+L", "Alt+Shift+L")]
@@ -64,10 +79,10 @@ public class HotkeysTests
     [Test]
     public void Apply_StoresOnlyNonDefaultOverrides_Canonically()
     {
-        var (overrides, errors) = Hotkeys.Apply(Map(), Map(("nav.library", "Alt+Shift+L"), ("nav.review", "shift+alt+r")), Admin);
+        var (overrides, errors) = Hotkeys.Apply(Map(), Map(("nav.library", "Alt+Shift+L"), ("nav.review", "shift+alt+q")), Admin);
 
         Assert.That(errors, Is.Empty);
-        Assert.That(overrides, Is.EqualTo(Map(("nav.review", "Alt+Shift+R"))));
+        Assert.That(overrides, Is.EqualTo(Map(("nav.review", "Alt+Shift+Q"))));
     }
 
     [Test]
@@ -143,7 +158,8 @@ public class HotkeysTests
 
         Assert.That(merged, Is.EqualTo(Map(
             ("nav.library", "Alt+Shift+L"), ("nav.collections", "Alt+Shift+C"), ("nav.ingestion", "Alt+Shift+I"), ("nav.review", "Alt+Shift+L"),
-            ("review.next", "Alt+Shift+G"))));
+            ("review.next", "Alt+Shift+G"), ("nav.reports", "Alt+Shift+R"), ("nav.integrity", "Alt+Shift+T"), ("nav.admin", "Alt+Shift+A"),
+            ("nav.deleted", "Alt+Shift+D"))));
     }
 
     [TestCase(null)]

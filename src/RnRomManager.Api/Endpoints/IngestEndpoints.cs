@@ -9,7 +9,7 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api.Endpoints;
 
-/// <summary><c>POST /api/jobs/ingest</c>, <c>GET /api/ingest/pending</c>, <c>GET /api/ingest/failed</c> and <c>POST /api/ingest/delete</c>, Admin only (spec §23, §7.1).</summary>
+/// <summary><c>POST /api/jobs/ingest</c>, <c>GET /api/ingest/pending</c>, <c>GET /api/ingest/failed</c>, <c>GET /api/ingest/removed</c>, <c>POST /api/ingest/delete</c> and <c>POST /api/ingest/restore</c>, Admin only (spec §23, §7.1).</summary>
 public static class IngestEndpoints
 {
     public static RouteGroupBuilder MapIngestEndpoints(this RouteGroupBuilder api)
@@ -62,6 +62,13 @@ public static class IngestEndpoints
             files = s.Files.Select(f => new { name = f.Name, sizeBytes = f.SizeBytes, modifiedAt = f.ModifiedAtUtc, reason = f.Reason }),
         }))).RequireAuthorization(AuthSetup.AdminOnly);
 
+        // Deleted ROMs (D2): only systems with files in their _removed/ folder.
+        api.MapGet("/ingest/removed", (IngestFileScanner scanner) => Results.Ok(scanner.ScanRemoved().Select(s => new
+        {
+            system = s.SystemId,
+            files = s.Files.Select(f => new { name = f.Name, sizeBytes = f.SizeBytes, modifiedAt = f.ModifiedAtUtc }),
+        }))).RequireAuthorization(AuthSetup.AdminOnly);
+
         api.MapPost("/ingest/delete", async (HttpContext ctx, IngestFileDeleter deleter, ISystemRegistry systems, IOptions<PathsOptions> paths) =>
         {
             // D2: read by hand, as /jobs/ingest does, so a missing or non-JSON body is a 400 with errors.files.
@@ -86,9 +93,59 @@ public static class IngestEndpoints
                 : DatEndpoints.JobRunning(ctx);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
+        api.MapPost("/ingest/restore", async (HttpContext ctx, RemovedFileRestorer restorer, JobRunner runner, IngestJob job,
+            ISystemRegistry systems, IOptions<PathsOptions> paths, ILogger<IngestJob> logger) =>
+        {
+            // D5: read by hand, as /ingest/delete does; validated as removed-folder delete entries.
+            IngestRestoreRequest? request = null;
+            if (ctx.Request.ContentLength is not 0 && ctx.Request.HasJsonContentType())
+            {
+                try
+                {
+                    request = await ctx.Request.ReadFromJsonAsync<IngestRestoreRequest>(ctx.RequestAborted);
+                }
+                catch (JsonException)
+                {
+                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["files"] = ["The body isn't valid JSON."] });
+                }
+            }
+            var files = request?.Files?.Select(f => f is null ? null : new IngestDeleteRef(f.System, IngestFileDeleter.Removed, f.Name)).ToList();
+            var errors = IngestFileDeleter.Validate(files, systems, paths.Value.Ingest);
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+            var result = restorer.Restore(files!.Select(f => f!).ToList(), AuditActor.From(ctx.User));
+            if (result.Code is not null)
+                return DatEndpoints.JobRunning(ctx);
+            // After the lock is released: ingest exactly the restored files under their new names. If it can't start, they wait on Ingestion.
+            Guid? jobId = null;
+            if (result.Restored.Count > 0)
+            {
+                job.Selection = result.Restored.Select(f => (f.System, f.Name)).ToHashSet();
+                try
+                {
+                    jobId = (await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), CancellationToken.None))?.Id;
+                }
+                catch (JobRefusedException ex) when (ex.Code == IngestJob.DatsMissing)
+                {
+                    logger.LogWarning("Restored {Count} deleted ROM(s) but the ingest job didn't start: {Code}", result.Restored.Count, ex.Code);
+                }
+            }
+            return Results.Ok(new
+            {
+                restored = result.Restored.Count,
+                failed = result.Failed.Select(f => new { system = f.System, name = f.Name }),
+                jobId,
+            });
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
         return api;
     }
 }
+
+/// <summary><c>POST /api/ingest/restore</c> body (D5).</summary>
+public sealed record IngestRestoreRequest(IReadOnlyList<IngestRestoreRef?>? Files);
+
+public sealed record IngestRestoreRef(string? System, string? Name);
 
 /// <summary><c>POST /api/ingest/delete</c> body (D2).</summary>
 public sealed record IngestDeleteRequest(IReadOnlyList<IngestDeleteRef?>? Files);

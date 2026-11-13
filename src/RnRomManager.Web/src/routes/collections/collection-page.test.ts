@@ -102,6 +102,23 @@ describe('collection page (B24)', () => {
 		expect((screen.getByLabelText('Sort by') as HTMLSelectElement).value).toBe('added');
 	});
 
+	it('neither restores nor saves the Library filter (L7)', async () => {
+		const setItem = vi.fn();
+		vi.stubGlobal('localStorage', {
+			getItem: (key: string) => (key === 'rnrm.library.filter' ? '?system=gb' : null),
+			setItem,
+			removeItem: setItem
+		});
+		render(CollectionPage);
+		await screen.findByRole('link', { name: 'Pokémon Red' });
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Favourites' }));
+
+		expect(goto).toHaveBeenCalledTimes(1);
+		expect(goto).toHaveBeenLastCalledWith('/collections/c1?favourite=true', { reset: false });
+		expect(setItem.mock.calls.some(([key]) => key === 'rnrm.library.filter')).toBe(false);
+	});
+
 	it('filters and sort changes go into the URL', async () => {
 		render(CollectionPage);
 		await screen.findByRole('link', { name: 'Pokémon Red' });
