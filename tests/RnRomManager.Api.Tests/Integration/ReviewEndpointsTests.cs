@@ -134,9 +134,9 @@ public class ReviewEndpointsTests
     public async Task DatSelection_IsUnverified_UsesDatMetadataAndActualHashes(bool archive)
     {
         var item = await Queue(archive);
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", new { action = "Dat", datSystem = "gb", datGameName = "Tetris (World)" });
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var id = (await AuthClient.JsonAsync(response)).GetProperty("gameId").GetGuid();
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Dat", datSystem = "gb", datGameName = "Tetris (World)" });
+        Assert.That(response.Code, Is.Null);
+        var id = response.GameId!.Value;
         var game = await ReadGame(id);
         var rom = game.Roms.Single();
         Assert.That((rom.BaseTitle, rom.FileName, rom.Identification.Method), Is.EqualTo(("Tetris", "Tetris (World) (Unverified).gb", IdentificationMethod.Manual)));
@@ -161,9 +161,9 @@ public class ReviewEndpointsTests
     public async Task ManualEntry_UsesProvidedTagsAndSanitizedName_NoDatMetadata(bool archive)
     {
         var item = await Queue(archive);
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", Manual("My: Game"));
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var id = (await AuthClient.JsonAsync(response)).GetProperty("gameId").GetGuid();
+        var response = await _admin.ResolveAsync(item.Id, Manual("My: Game"));
+        Assert.That(response.Code, Is.Null);
+        var id = response.GameId!.Value;
         var game = await ReadGame(id);
         var rom = game.Roms.Single();
         Assert.That((game.Title, rom.BaseTitle, rom.FileName), Is.EqualTo(("My: Game", "My: Game", "My_ Game (USA, Europe) (Rev 2) (Homebrew).gb")));
@@ -182,9 +182,9 @@ public class ReviewEndpointsTests
     {
         var target = await KnownGame();
         var item = await Queue(archive, "mystery (Japan) (Rev 1).gb");
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", new { action = "Attach", targetGameId = target, flag });
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("gameId").GetGuid(), Is.EqualTo(target));
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Attach", targetGameId = target, flag });
+        Assert.That(response.Code, Is.Null);
+        Assert.That(response.GameId!.Value, Is.EqualTo(target));
         var game = await ReadGame(target);
         var rom = game.Roms.Single(r => r.Metadata.Sha1 == item.Sha1);
         Assert.That((rom.BaseTitle, rom.FileName, rom.Revision), Is.EqualTo(("Tetris", $"mystery (Japan) (Rev 1) ({flag}).gb", (string?)null)));
@@ -211,8 +211,8 @@ public class ReviewEndpointsTests
     {
         var target = await KnownGame();
         var item = await Ambiguous(await Queue(archive), target, Guid.NewGuid());
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", new { action = "Attach", targetGameId = target, flag = "None" });
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Attach", targetGameId = target, flag = "None" });
+        Assert.That(response.Code, Is.Null);
         var rom = (await ReadGame(target)).Roms.Single(r => r.Metadata.Sha1 == item.Sha1);
         Assert.That((rom.BaseTitle, rom.FileName), Is.EqualTo(("Mystery", "Mystery (USA).gb")));
         Assert.That(rom.Identification, Is.EqualTo(new InfoJsonIdentification(IdentificationMethod.Dat, Gb, "queued-version", "Mystery (USA)")));
@@ -248,10 +248,23 @@ public class ReviewEndpointsTests
     {
         var item = await Queue(archive);
         File.Delete(item.SourcePath);
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/{action}", action == "resolve" ? Manual() : null);
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
-        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("SourceMissing"));
+        // B5: a resolve reports SourceMissing in its job summary; Dismiss stays a synchronous 409.
+        string? code;
+        if (action == "resolve")
+        {
+            var result = await _admin.ResolveAsync(item.Id, Manual());
+            Assert.That(result.Status, Is.EqualTo(HttpStatusCode.Accepted));
+            code = result.Code;
+        }
+        else
+        {
+            using var response = await _admin.PostAsync($"/api/review/{item.Id}/dismiss");
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            code = await AuthClient.CodeAsync(response);
+        }
+        Assert.That(code, Is.EqualTo("SourceMissing"));
         Assert.That(await Reviews.GetAsync(item.Id, default), Is.Null);
+        await WaitIdleAsync();
         using var released = Service<JobLock>().TryAcquire();
         Assert.That(released, Is.Not.Null);
     }
@@ -357,13 +370,13 @@ public class ReviewEndpointsTests
     }
 
     [Test]
-    public async Task Audit_ResolveDismissDelete_RecordTheSignedInUser_WithoutAJob()
+    public async Task Audit_ResolveDismissDelete_RecordTheSignedInUser_ResolveWithItsJob()
     {
         var resolved = await Queue();
         var dismissed = await Queue(name: "second.gb", bytes: new SyntheticRomBuilder { Seed = 931, Title = "SECOND" }.Build());
         var deleted = await Queue(name: "third.gb", bytes: new SyntheticRomBuilder { Seed = 934, Title = "THIRD" }.Build());
 
-        (await _admin.PostAsync($"/api/review/{resolved.Id}/resolve", Manual())).Dispose();
+        await _admin.ResolveAsync(resolved.Id, Manual());
         (await _admin.PostAsync($"/api/review/{dismissed.Id}/dismiss")).Dispose();
         (await _admin.SendAsync(HttpMethod.Delete, $"/api/review/{deleted.Id}", null, sendXsrf: true)).Dispose();
 
@@ -371,9 +384,10 @@ public class ReviewEndpointsTests
         await using var db = Service<IDbConnectionFactory>().Create();
         var rows = (await db.QueryAsync<(string Action, int? UserId, string? Username, Guid? JobId, string? Path, string? Details)>(
             "SELECT action, user_id, username, job_id, path, details FROM audit_events ORDER BY id")).ToList();
+        var jobId = await db.QuerySingleAsync<Guid>("SELECT id FROM jobs WHERE type = 'ReviewResolve'");
         Assert.That(rows, Is.EqualTo(new (string, int?, string?, Guid?, string?, string?)[]
         {
-            ("Ingested", _adminId, "boss", null, "ingest/gb/mystery.gb", "review resolve (Manual)"),
+            ("Ingested", _adminId, "boss", jobId, "ingest/gb/mystery.gb", "review resolve (Manual)"),
             ("MovedToFailed", _adminId, "boss", null, "ingest/gb/second.gb", "review dismiss"),
             ("ReviewDeleted", _adminId, "boss", null, "ingest/gb/third.gb", null),
         }));
@@ -491,9 +505,9 @@ public class ReviewEndpointsTests
         var roms = Substitute.For<IRomRepository>();
         roms.ListGameIdsByBaseTitleAsync("gb", "My Game", Arg.Any<CancellationToken>()).Returns(new[] { Guid.NewGuid(), Guid.NewGuid() });
         _pipelineOverride = ActivatorUtilities.CreateInstance<IngestPipeline>(_factory.Services, roms);
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", Manual());
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
-        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("AmbiguousGroup"));
+        var response = await _admin.ResolveAsync(item.Id, Manual());
+        Assert.That(response.Status, Is.EqualTo(HttpStatusCode.Accepted));
+        Assert.That(response.Code, Is.EqualTo("AmbiguousGroup"));
         Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
         Assert.That(File.Exists(item.SourcePath), Is.True);
     }
@@ -518,9 +532,9 @@ public class ReviewEndpointsTests
             writer.Write(json.ToJsonString());
         }
         else File.WriteAllBytes(path, [1, 2, 3]);
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", new { action = "Attach", flag = "Hack", targetGameId = target });
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
-        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo(newer ? "InfoJsonNewerSchema" : "TargetZipUnreadable"));
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Attach", flag = "Hack", targetGameId = target });
+        Assert.That(response.Status, Is.EqualTo(HttpStatusCode.Accepted));
+        Assert.That(response.Code, Is.EqualTo(newer ? "InfoJsonNewerSchema" : "TargetZipUnreadable"));
         Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
         Assert.That(File.Exists(item.SourcePath), Is.True);
     }
@@ -530,9 +544,9 @@ public class ReviewEndpointsTests
     {
         var item = await Queue();
         File.WriteAllBytes(item.SourcePath, Known);
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", Manual());
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
-        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("VerifyFailed"));
+        var response = await _admin.ResolveAsync(item.Id, Manual());
+        Assert.That(response.Status, Is.EqualTo(HttpStatusCode.Accepted));
+        Assert.That(response.Code, Is.EqualTo("VerifyFailed"));
         Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
     }
 
@@ -543,9 +557,9 @@ public class ReviewEndpointsTests
         var mirror = Substitute.For<ILibraryMirror>();
         mirror.ReplaceAsync(Arg.Any<MirrorEntry>(), Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("DB unavailable"));
         _pipelineOverride = ActivatorUtilities.CreateInstance<IngestPipeline>(_factory.Services, mirror);
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", Manual());
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
-        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("DbWriteFailed"));
+        var response = await _admin.ResolveAsync(item.Id, Manual());
+        Assert.That(response.Status, Is.EqualTo(HttpStatusCode.Accepted));
+        Assert.That(response.Code, Is.EqualTo("DbWriteFailed"));
         Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
         Assert.That(File.Exists(item.SourcePath), Is.True);
         Assert.That(Directory.GetFiles(Path.Combine(_factory.Root, "roms"), "*.zip", SearchOption.AllDirectories), Has.Length.EqualTo(1));
@@ -556,9 +570,9 @@ public class ReviewEndpointsTests
     {
         var item = await Queue();
         using var locked = new FileStream(item.SourcePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", Manual());
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
-        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("IoError"));
+        var response = await _admin.ResolveAsync(item.Id, Manual());
+        Assert.That(response.Status, Is.EqualTo(HttpStatusCode.Accepted));
+        Assert.That(response.Code, Is.EqualTo("IoError"));
         Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
     }
 
@@ -584,12 +598,12 @@ public class ReviewEndpointsTests
             new { action = "Attach", flag = "None", targetGameId = target },
         })
         {
-            using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", body);
-            Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("ValidationFailed"));
+            var response = await _admin.ResolveAsync(item.Id, body);
+            Assert.That(response.Code, Is.EqualTo("ValidationFailed"));
         }
         await Ambiguous(item, Guid.NewGuid());
-        using var outside = await _admin.PostAsync($"/api/review/{item.Id}/resolve", new { action = "Attach", flag = "None", targetGameId = target });
-        Assert.That(await AuthClient.CodeAsync(outside), Is.EqualTo("ValidationFailed"));
+        var outside = await _admin.ResolveAsync(item.Id, new { action = "Attach", flag = "None", targetGameId = target });
+        Assert.That(outside.Code, Is.EqualTo("ValidationFailed"));
         Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
     }
 
@@ -600,9 +614,9 @@ public class ReviewEndpointsTests
         var target = await KnownGame();
         var item = await Queue();
         object body = action == "Dat" ? new { action, datSystem = "gb", datGameName = "Tetris (World)" } : Manual("Tetris");
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", body);
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("gameId").GetGuid(), Is.EqualTo(target));
+        var response = await _admin.ResolveAsync(item.Id, body);
+        Assert.That(response.Code, Is.Null);
+        Assert.That(response.GameId!.Value, Is.EqualTo(target));
         var game = await ReadGame(target);
         Assert.That(game.Roms, Has.Count.EqualTo(2));
         Assert.That(game.ReleaseYear, Is.EqualTo(1989));
@@ -624,9 +638,9 @@ public class ReviewEndpointsTests
             stream.Write(Unknown);
         }
         var before = File.ReadAllBytes(path);
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", new { action = "Attach", targetGameId = target, flag = "Hack" });
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
-        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("VerifyFailed"));
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Attach", targetGameId = target, flag = "Hack" });
+        Assert.That(response.Status, Is.EqualTo(HttpStatusCode.Accepted));
+        Assert.That(response.Code, Is.EqualTo("VerifyFailed"));
         Assert.That(File.ReadAllBytes(path), Is.EqualTo(before));
         Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
         Assert.That(File.Exists(item.SourcePath), Is.True);
@@ -636,11 +650,10 @@ public class ReviewEndpointsTests
     public async Task InvalidBody_ReportsFieldErrors_AndDoesNotResolve()
     {
         var item = await Queue();
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", new { action = "Manual", title = "   " });
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        var problem = await AuthClient.JsonAsync(response);
-        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo("ValidationFailed"));
-        Assert.That(problem.GetProperty("errors").TryGetProperty("title", out _), Is.True);
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "   " });
+        Assert.That(response.Status, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(response.Code, Is.EqualTo("ValidationFailed"));
+        Assert.That(response.Errors!.Value.TryGetProperty("title", out _), Is.True);
         Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
     }
 
@@ -648,9 +661,9 @@ public class ReviewEndpointsTests
     public async Task DatSelection_UsesSelectedFamilySystemAndItsFirstExtension()
     {
         var item = await Queue();
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", new { action = "Dat", datSystem = "gbc", datGameName = "Color Game (World)" });
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        var game = await ReadGame((await AuthClient.JsonAsync(response)).GetProperty("gameId").GetGuid());
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Dat", datSystem = "gbc", datGameName = "Color Game (World)" });
+        Assert.That(response.Code, Is.Null);
+        var game = await ReadGame(response.GameId!.Value);
         Assert.That(game.System, Is.EqualTo("gbc"));
         Assert.That(game.Roms.Single().FileName, Is.EqualTo("Color Game (World) (Unverified).gbc"));
     }
@@ -660,9 +673,9 @@ public class ReviewEndpointsTests
     {
         var target = (await Ingest(Drop("color.gbc", Color)))!.GameId!.Value;
         var item = await Queue();
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", new { action = "Attach", targetGameId = target, flag = "Hack" });
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("ValidationFailed"));
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Attach", targetGameId = target, flag = "Hack" });
+        Assert.That(response.Status, Is.EqualTo(HttpStatusCode.Accepted));
+        Assert.That(response.Code, Is.EqualTo("ValidationFailed"));
         Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
     }
 
@@ -752,8 +765,8 @@ public class ReviewEndpointsTests
     public async Task AlreadyResolvedItem_CannotBeResolvedOrDismissedAgain()
     {
         var item = await Queue();
-        using var first = await _admin.PostAsync($"/api/review/{item.Id}/resolve", Manual());
-        Assert.That(first.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var first = await _admin.ResolveAsync(item.Id, Manual());
+        Assert.That(first.Code, Is.Null);
         foreach (var action in new[] { "resolve", "dismiss" })
         {
             using var again = await _admin.PostAsync($"/api/review/{item.Id}/{action}", action == "resolve" ? Manual() : null);
@@ -776,9 +789,116 @@ public class ReviewEndpointsTests
     public async Task InvalidGeneratedEntryName_IsValidationFailed_StaysPending()
     {
         var item = await Queue();
-        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", Manual("My..Game"));
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
-        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("ValidationFailed"));
+        var response = await _admin.ResolveAsync(item.Id, Manual("My..Game"));
+        Assert.That(response.Status, Is.EqualTo(HttpStatusCode.Accepted));
+        Assert.That(response.Code, Is.EqualTo("ValidationFailed"));
         Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
+    }
+
+    [Test]
+    public async Task Resolve_Is202WithAJobId_AndTheJobIsAReviewResolve_B1()
+    {
+        var item = await Queue();
+
+        using var response = await _admin.PostAsync($"/api/review/{item.Id}/resolve", Manual());
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+        var jobId = (await AuthClient.JsonAsync(response)).GetProperty("jobId").GetGuid();
+        await WaitIdleAsync();
+        var job = (await Service<IJobRepository>().GetAsync(jobId, default))!;
+        Assert.That((job.Type, job.Mode, job.Status, job.RequestedBy), Is.EqualTo((JobType.ReviewResolve, (JobMode?)null, JobStatus.Completed, (int?)_adminId)));
+        var summary = JsonNode.Parse(job.Summary!)!;
+        Assert.That((summary["reviewId"]!.GetValue<long>(), summary["fileName"]!.GetValue<string>()), Is.EqualTo((item.Id, "mystery.gb")));
+        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Resolved"));
+    }
+
+    [Test]
+    public async Task Resolve_WhileAnotherJobRuns_Is409JobRunning_B1()
+    {
+        var item = await Queue();
+        var other = new NoopTestJob();
+        var started = await Service<JobRunner>().StartAsync(other, JobTrigger.Manual, null, default);
+        await other.Started.Task;
+
+        var result = await _admin.ResolveAsync(item.Id, Manual());
+
+        other.Release.SetResult();
+        await started!.Completion;
+        Assert.That((result.Status, result.Code), Is.EqualTo((HttpStatusCode.Conflict, "JobRunning")));
+        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
+    }
+
+    [Test]
+    public async Task Resolve_WithABadDisc_Is400OnDisc_B9()
+    {
+        var item = await Queue();
+
+        var result = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "My Game", regions = Array.Empty<string>(),
+            languages = Array.Empty<string>(), flags = Array.Empty<string>(), disc = 0 });
+
+        Assert.That((result.Status, result.Code), Is.EqualTo((HttpStatusCode.BadRequest, "ValidationFailed")));
+        Assert.That(result.Errors!.Value.TryGetProperty("disc", out _), Is.True);
+    }
+
+    [Test]
+    public async Task Resolve_OnAGbItemWithADisc_FailsInTheJobOnDisc_B9()
+    {
+        var item = await Queue();
+
+        var result = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "My Game", regions = Array.Empty<string>(),
+            languages = Array.Empty<string>(), flags = Array.Empty<string>(), disc = 2 });
+
+        Assert.That((result.Status, result.Code), Is.EqualTo((HttpStatusCode.Accepted, "ValidationFailed")));
+        Assert.That(result.Errors!.Value.GetProperty("disc")[0].GetString(), Is.EqualTo("Disc numbers are for disc systems."));
+    }
+
+    [Test]
+    public async Task Detail_OfAnUnmatchedSetMember_ListsTheSet_AndIsNotDismissible_B13()
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(_factory.Root, "ingest", "psx")).FullName;
+        var cueText = "FILE \"Disc (Track 1).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n"
+            + "FILE \"Disc (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n";
+        foreach (var (name, bytes) in new[] { ("Disc.cue", System.Text.Encoding.UTF8.GetBytes(cueText)),
+            ("Disc (Track 1).bin", RandomNumberGenerator.GetBytes(2352)), ("Disc (Track 2).bin", RandomNumberGenerator.GetBytes(2352)) })
+        {
+            File.WriteAllBytes(Path.Combine(folder, name), bytes);
+            File.SetLastWriteTimeUtc(Path.Combine(folder, name), DateTime.UtcNow.AddMinutes(-5));
+        }
+        await RunIngest();
+        var rows = (await Reviews.ListAsync("Pending", 1, 50, default)).Items.Where(r => r.SystemId == "psx").ToList();
+        var bin = rows.Single(r => r.OriginalFileName == "Disc (Track 2).bin");
+
+        using (var detail = await _admin.GetAsync($"/api/review/{bin.Id}"))
+        {
+            var json = await AuthClient.JsonAsync(detail);
+            Assert.That((json.GetProperty("dismissible").GetBoolean(), json.GetProperty("fileSets").GetBoolean(), json.GetProperty("resolvable").GetBoolean()),
+                Is.EqualTo((false, true, true)));
+            Assert.That(json.GetProperty("setMembers").EnumerateArray().Select(m => (m.GetProperty("fileName").GetString(), m.GetProperty("sizeBytes").GetInt64())),
+                Is.EqualTo(new[] { ("Disc.cue", (long)cueText.Length), ("Disc (Track 1).bin", 2352L), ("Disc (Track 2).bin", 2352L) }));
+            Assert.That(json.GetProperty("setMembers")[0].GetProperty("reviewId").GetInt64(), Is.EqualTo(rows.Single(r => r.OriginalFileName == "Disc.cue").Id));
+        }
+        using (var dismiss = await _admin.PostAsync($"/api/review/{bin.Id}/dismiss"))
+        {
+            Assert.That(dismiss.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(await AuthClient.CodeAsync(dismiss), Is.EqualTo(ReviewResolver.SetFileNotResolvable));
+        }
+    }
+
+    [Test]
+    public async Task Detail_OfASingleFile_IsDismissible_WithNoSet_B13()
+    {
+        var item = await Queue();
+
+        using var detail = await _admin.GetAsync($"/api/review/{item.Id}");
+        var json = await AuthClient.JsonAsync(detail);
+
+        Assert.That((json.GetProperty("dismissible").GetBoolean(), json.GetProperty("fileSets").GetBoolean()), Is.EqualTo((true, false)));
+        Assert.That(json.GetProperty("setMembers").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    private async Task WaitIdleAsync()
+    {
+        for (var i = 0; i < 600 && Service<JobRunner>().Current is not null; i++)
+            await Task.Delay(50);
     }
 }

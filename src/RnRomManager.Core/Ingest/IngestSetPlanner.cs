@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Logging;
+using RnRomManager.Core.Storage;
+
 namespace RnRomManager.Core.Ingest;
 
 /// <summary>One loose file of an ingest folder, as the planner sees it.</summary>
@@ -105,4 +108,31 @@ public static class IngestSetPlanner
     }
 
     private static bool IsExtension(string name, string extension) => name.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>B7/B12: the checked read of a small cue for <see cref="IngestSetPlanner"/>, shared by ingest and Review.</summary>
+internal static class IngestCueReader
+{
+    /// <returns>The cue's bytes, through the same checked open as other ingest reads; null for a non-cue, a cue over
+    /// <see cref="IngestSetPlanner.MaxCueBytes"/>, or one that can't be read.</returns>
+    public static byte[]? Read(string ingestRoot, IngestFile file, ILogger logger)
+    {
+        if (!file.Name.EndsWith(".cue", StringComparison.OrdinalIgnoreCase) || file.SizeBytes > IngestSetPlanner.MaxCueBytes)
+            return null;
+        var opened = ExternalRomPath.OpenRead(ingestRoot, file.FullPath, FileShare.Read);
+        if (opened.Status != ExternalPathStatus.Found)
+            return null;
+        try
+        {
+            using var stream = opened.Stream!;
+            using var buffer = new MemoryStream();
+            new LimitStream(stream, IngestSetPlanner.MaxCueBytes).CopyTo(buffer);
+            return buffer.ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or LimitExceededException)
+        {
+            logger.LogWarning("{Path}: the cue couldn't be read: {Error}", file.FullPath, ex.Message);
+            return null;
+        }
+    }
 }

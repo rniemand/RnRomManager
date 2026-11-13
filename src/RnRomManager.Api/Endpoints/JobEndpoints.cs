@@ -50,7 +50,12 @@ public static class JobEndpoints
         });
 
         jobs.MapPost("/{id:guid}/cancel", (Guid id, HttpContext ctx, JobRunner runner) =>
-            runner.Cancel(id) ? Results.Accepted() : Problems.NotFound(ctx));
+            runner.Cancel(id) switch
+            {
+                CancelResult.Cancelled => Results.Accepted(),
+                CancelResult.NotCancellable => Problems.Create(ctx, StatusCodes.Status409Conflict, "NotCancellable", "This job can't be cancelled."),
+                _ => Problems.NotFound(ctx),
+            });
 
         return api;
     }

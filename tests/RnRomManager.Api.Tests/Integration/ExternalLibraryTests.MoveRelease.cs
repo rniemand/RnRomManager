@@ -25,7 +25,7 @@ public partial class ExternalLibraryTests
     {
         var space = await TwoReleaseGameAsync();
         var (id, _) = await QueueAsync("mystery.xci");
-        var mystery = (await Resolver().ResolveAsync(id, ManualMystery, await AdminAsync(), default)).GameId!.Value;
+        var mystery = (await Resolver().ResolveInJobAsync(id, ManualMystery, await AdminAsync(), default)).GameId!.Value;
         return (space, mystery);
     }
 

@@ -61,7 +61,9 @@ public class ReviewResolverTests
         var romRepository = Substitute.For<IRomRepository>();
         _resolver = new ReviewResolver(_lock, _reviews, games, romRepository,
             new DbSync(games, romRepository, Substitute.For<ILibraryMirror>(), reader, systems, options, NullLogger<DbSync>.Instance), pipeline, dats, systems,
-            new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance), options, _audit, new RnRomManager.Core.Audit.AuditPaths(options), _time,
+            new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance),
+            new ReviewSets(new IngestFileScanner(options, systems, NullLogger<IngestFileScanner>.Instance), _reviews, systems, options, NullLogger<ReviewSets>.Instance),
+            options, _audit, new RnRomManager.Core.Audit.AuditPaths(options), _time,
             NullLogger<ReviewResolver>.Instance);
     }
 
@@ -86,6 +88,19 @@ public class ReviewResolverTests
         using var released = _lock.TryAcquire();
         Assert.That(released, Is.Not.Null);
         Assert.That(File.Exists(_item.SourcePath), Is.True);
+    }
+
+    [Test]
+    public async Task Disc_OnANonDiscSystem_IsAValidationError_AndKeepsPending()
+    {
+        var request = new ReviewResolutionRequest { Action = "Manual", Title = "My Game", Regions = [], Languages = [], Flags = [], Disc = 2 };
+
+        var result = await _resolver.ResolveInJobAsync(1, request, Actor, default);
+
+        Assert.That(result.Code, Is.EqualTo("ValidationFailed"));
+        Assert.That(result.Errors!["disc"], Is.EqualTo(new[] { "Disc numbers are for disc systems." }));
+        Assert.That(File.Exists(_item.SourcePath), Is.True);
+        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default(long), default!, default, default, default, default);
     }
 
     [Test]
@@ -126,9 +141,9 @@ public class ReviewResolverTests
     [Test]
     public async Task ChangedBytes_ReturnVerifyFailed_WithoutCompletingReview()
     {
-        var result = await _resolver.ResolveAsync(1, new ReviewResolutionRequest { Action = "Manual", Title = "My Game", Regions = [], Languages = [], Flags = [] }, Actor, default);
+        var result = await _resolver.ResolveInJobAsync(1, new ReviewResolutionRequest { Action = "Manual", Title = "My Game", Regions = [], Languages = [], Flags = [] }, Actor, default);
         Assert.That(result.Code, Is.EqualTo("VerifyFailed"));
-        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default, default!, default, default, default, default);
+        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default(long), default!, default, default, default, default);
         Assert.That(File.Exists(_item.SourcePath), Is.True);
         using var released = _lock.TryAcquire();
         Assert.That(released, Is.Not.Null);
@@ -165,7 +180,7 @@ public class ReviewResolverTests
         await _reviews.Received(1).DeletePendingBySourceAsync(_item.SourcePath, null, default);
         var row = Recorded().Single();
         Assert.That((row.Action, row.Actor, row.Path, row.TargetPath), Is.EqualTo(("ReviewDeleted", Actor, "ingest/test.gb", (string?)null)));
-        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default, default!, default, default, default, default);
+        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default(long), default!, default, default, default, default);
     }
 
     [Test]
@@ -236,7 +251,7 @@ public class ReviewResolverTests
         });
         _dats.Load();
 
-        var result = await _resolver.ResolveAsync(1,
+        var result = await _resolver.ResolveInJobAsync(1,
             new ReviewResolutionRequest { Action = "Dat", DatSystem = "gb", DatGameName = "Tide Runner (World)" }, Actor, default);
 
         Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));

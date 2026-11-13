@@ -295,7 +295,7 @@ public class TitleDbIngestTests
         var mystery = Bytes(9);
         Assert.That(Code(await IngestAsync(Drop("mystery.nsp", mystery))), Is.EqualTo((IngestOutcome.Review, (string?)"NoDatMatch")));
         var manual = new ReviewResolutionRequest { Action = "Manual", Title = "Orbit Expedition", Regions = [], Languages = [], Flags = [] };
-        Assert.That((await Resolver().ResolveAsync((await ReviewOfAsync(mystery)).Id, manual, await AdminAsync(), default)).Code, Is.Null);
+        Assert.That((await Resolver().ResolveInJobAsync((await ReviewOfAsync(mystery)).Id, manual, await AdminAsync(), default)).Code, Is.Null);
         Assert.That(ReadGame().ReleaseYear, Is.Null);
 
         await IngestBaseAsync();
@@ -329,7 +329,7 @@ public class TitleDbIngestTests
         var other = Bytes(9);
         Assert.That(Code(await IngestAsync(Drop("other.nsp", other))), Is.EqualTo((IngestOutcome.Review, (string?)"NoDatMatch")));
         var manual = new ReviewResolutionRequest { Action = "Manual", Title = "Another Game", Regions = [], Languages = [], Flags = [] };
-        var second = (await Resolver().ResolveAsync((await ReviewOfAsync(other)).Id, manual, await AdminAsync(), default)).GameId!.Value;
+        var second = (await Resolver().ResolveInJobAsync((await ReviewOfAsync(other)).Id, manual, await AdminAsync(), default)).GameId!.Value;
         await using (var db = Service<IDbConnectionFactory>().Create())
             await db.ExecuteAsync("UPDATE roms SET base_title = 'Orbit Expedition' WHERE game_id = @id", new { id = second.ToString() });
 
@@ -386,7 +386,7 @@ public class TitleDbIngestTests
         await StartAsync();
         var (item, file) = await QueueAsync("mystery [v2].XCI");
 
-        var result = await Resolver().ResolveAsync(item.Id, Dat($"Orbit Expedition [{BaseId}]"), await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(item.Id, Dat($"Orbit Expedition [{BaseId}]"), await AdminAsync(), default);
 
         Assert.That(result.Code, Is.Null);
         var rom = ReadGame().Roms.Single();
@@ -407,7 +407,7 @@ public class TitleDbIngestTests
         var gameId = await IngestBaseAsync();
         var (item, _) = await QueueAsync("pack.nsp");
 
-        var result = await Resolver().ResolveAsync(item.Id, Dat($"Orbit Expedition - Star Pack [{NamedDlcId}]"), await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(item.Id, Dat($"Orbit Expedition - Star Pack [{NamedDlcId}]"), await AdminAsync(), default);
 
         Assert.That((result.Code, result.GameId), Is.EqualTo(((string?)null, (Guid?)gameId)));
         var dlc = ReadGame().Roms.Single(r => r.Flags.Contains("DLC"));
@@ -425,7 +425,7 @@ public class TitleDbIngestTests
         var gameId = await IngestBaseAsync();
         var (item, _) = await QueueAsync("DREDGE[UPD][1.0.1].nsp");
 
-        var result = await Resolver().ResolveAsync(item.Id, UpdatePick($"Orbit Expedition [{BaseId}]"), await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(item.Id, UpdatePick($"Orbit Expedition [{BaseId}]"), await AdminAsync(), default);
 
         Assert.That((result.Code, result.GameId), Is.EqualTo(((string?)null, (Guid?)gameId)));
         var update = ReadGame().Roms.Single(r => r.Flags.Contains("Update"));
@@ -440,7 +440,7 @@ public class TitleDbIngestTests
         await StartAsync();
         var (item, _) = await QueueAsync("comet [2.0].nsp");
 
-        var result = await Resolver().ResolveAsync(item.Id, UpdatePick($"Comet Run Update [{CometUpdateId}]"), await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(item.Id, UpdatePick($"Comet Run Update [{CometUpdateId}]"), await AdminAsync(), default);
 
         Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.Select(e => e.Key + ": " + string.Join(",", e.Value)) ?? []));
         var rom = ReadGame(Path.Combine(Factory.Root, "roms", ExternalTitleDbTestHandler.SystemId, "C", "Comet Run.zip")).Roms.Single();
@@ -460,7 +460,7 @@ public class TitleDbIngestTests
             ? UpdatePick($"Orbit Expedition - Star Pack [{NamedDlcId}]")
             : new ReviewResolutionRequest { Action = "Attach", TargetGameId = gameId, Flag = "Hack", Update = true };
 
-        var result = await Resolver().ResolveAsync(item.Id, request, await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(item.Id, request, await AdminAsync(), default);
 
         Assert.That((result.Code, result.Errors?.Keys.Single()), Is.EqualTo(("ValidationFailed", (string?)"update")));
         Assert.That((await ReviewOfAsync(Bytes(9))).Status, Is.EqualTo("Pending"));
@@ -489,7 +489,7 @@ public class TitleDbIngestTests
             Service<DatCache>().Load();
         }
 
-        var result = await Resolver().ResolveAsync(item.Id, Dat(pick), await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(item.Id, Dat(pick), await AdminAsync(), default);
 
         Assert.That((result.Code, result.Errors?.Keys.Single()), Is.EqualTo(("ValidationFailed", (string?)"datGameName")));
         Assert.That((await ReviewOfAsync(Bytes(9))).Status, Is.EqualTo("Pending"));
@@ -503,7 +503,7 @@ public class TitleDbIngestTests
         var (item, _) = await QueueAsync("mystery.XCI");
         var manual = new ReviewResolutionRequest { Action = "Manual", Title = "Mystery Game", Regions = [], Languages = [], Flags = [] };
 
-        Assert.That((await Resolver().ResolveAsync(item.Id, manual, await AdminAsync(), default)).Code, Is.Null);
+        Assert.That((await Resolver().ResolveInJobAsync(item.Id, manual, await AdminAsync(), default)).Code, Is.Null);
 
         var rom = ReadGame(Path.Combine(Factory.Root, "roms", ExternalTitleDbTestHandler.SystemId, "M", "Mystery Game.zip")).Roms.Single();
         Assert.That((rom.FileName, rom.Identification.Method), Is.EqualTo(("Mystery Game.xci", IdentificationMethod.Manual)));
@@ -517,7 +517,7 @@ public class TitleDbIngestTests
         var (item, _) = await QueueAsync("mystery.xci");
         var attach = new ReviewResolutionRequest { Action = "Attach", TargetGameId = gameId, Flag = "Hack" };
 
-        Assert.That((await Resolver().ResolveAsync(item.Id, attach, await AdminAsync(), default)).Code, Is.Null);
+        Assert.That((await Resolver().ResolveInJobAsync(item.Id, attach, await AdminAsync(), default)).Code, Is.Null);
 
         Assert.That(ReadGame().Roms.Select(r => r.FileName), Does.Contain("mystery (Hack).xci"));
     }
@@ -529,7 +529,7 @@ public class TitleDbIngestTests
         var (item, file, first) = await AmbiguousAsync();
         RefreshWithoutEntries();
 
-        var result = await Resolver().ResolveAsync(item.Id, new ReviewResolutionRequest { Action = "Attach", TargetGameId = first, Flag = "None" },
+        var result = await Resolver().ResolveInJobAsync(item.Id, new ReviewResolutionRequest { Action = "Attach", TargetGameId = first, Flag = "None" },
             await AdminAsync(), default);
 
         Assert.That(result.Code, Is.Null);
@@ -548,7 +548,7 @@ public class TitleDbIngestTests
         await StartAsync();
         var (item, _, first) = await AmbiguousAsync($"orbit [{UpdateId}][v3][2.0.1].nsp");
 
-        var result = await Resolver().ResolveAsync(item.Id, new ReviewResolutionRequest { Action = "Attach", TargetGameId = first, Flag = "None" },
+        var result = await Resolver().ResolveInJobAsync(item.Id, new ReviewResolutionRequest { Action = "Attach", TargetGameId = first, Flag = "None" },
             await AdminAsync(), default);
 
         Assert.That(result.Code, Is.Null);
@@ -572,11 +572,11 @@ public class TitleDbIngestTests
         Assert.That((item.Status, item.ArchiveEntry), Is.EqualTo(("Pending", (string?)"dump.nsp")));
         var failing = ActivatorUtilities.CreateInstance<ReviewResolver>(Factory.Services,
             ExternalLibraryTests.FailFirstResolution.Wrap(Service<IIngestReviewRepository>()));
-        var first = await failing.ResolveAsync(item.Id, Dat($"Orbit Expedition [{BaseId}]"), await AdminAsync(), default);
+        var first = await failing.ResolveInJobAsync(item.Id, Dat($"Orbit Expedition [{BaseId}]"), await AdminAsync(), default);
         Assert.That(first.Code, Is.EqualTo(IngestErrors.DbWriteFailed), "committed, but the item stayed Pending");
         RefreshWithoutEntries();
 
-        var retry = await Resolver().ResolveAsync(item.Id, Dat($"Orbit Expedition [{BaseId}]"), await AdminAsync(), default);
+        var retry = await Resolver().ResolveInJobAsync(item.Id, Dat($"Orbit Expedition [{BaseId}]"), await AdminAsync(), default);
 
         Assert.That(retry.Code, Is.Null, "the committed release is recognised before the now-missing entry is looked up");
         Assert.That((await ReviewOfAsync(bytes)).Status, Is.EqualTo("Resolved"));

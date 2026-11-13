@@ -5,6 +5,28 @@ type UpdateFields = Pick<RomDetail, 'version' | 'revision' | 'dateAdded' | 'file
 /** B9: an update is a release flagged `Update`. */
 export const isUpdate = (rom: Pick<RomDetail, 'flags'>): boolean => rom.flags.includes('Update');
 
+/** B10: the flag a disc number becomes (`Disc 2`); the case and leading zeros don't matter. */
+const discFlag = /^disc (\d+)$/i;
+
+/** B18: the release's disc number from its first `Disc <n>` flag; null without one. */
+export function discNumber(rom: Pick<RomDetail, 'flags'>): number | null {
+	for (const flag of rom.flags) {
+		const match = discFlag.exec(flag);
+		if (match) return Number(match[1]);
+	}
+	return null;
+}
+
+/**
+ * B18: with two or more disc releases, releases without a disc come first in their given order, then by disc
+ * number, ties in their given order; otherwise the given order is kept.
+ */
+export function orderByDisc<T extends Pick<RomDetail, 'flags'>>(roms: T[]): T[] {
+	if (roms.filter((r) => discNumber(r) !== null).length < 2) return roms;
+	// Array.prototype.sort is stable; no disc sorts as 0, before disc 1.
+	return [...roms].sort((a, b) => (discNumber(a) ?? 0) - (discNumber(b) ?? 0));
+}
+
 /** `1.10` → [1, 10]. */
 const segments = (version: string): number[] => version.split('.').map(Number);
 

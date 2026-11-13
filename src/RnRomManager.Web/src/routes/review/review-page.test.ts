@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
+import { pollIntervalMs } from '#lib/stores/jobs.svelte.js';
+import { reviewJobs } from '#lib/stores/reviewJobs.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 
@@ -54,6 +56,9 @@ const base = {
 	header: { title: 'TETRIS' },
 	status: 'Pending',
 	resolvable: true,
+	dismissible: true,
+	fileSets: false,
+	setMembers: null,
 	gameId: null,
 	createdAt: ''
 };
@@ -84,6 +89,15 @@ const ambiguous = {
 
 type Answer = { status: number; body?: unknown };
 
+const summary = (changes: object = {}) => ({
+	reviewId: 7,
+	fileName: 'tetris hack.gb',
+	gameId: null,
+	code: null,
+	errors: null,
+	...changes
+});
+
 describe('review detail page', () => {
 	let posts: { url: string; body: unknown }[];
 	let answers: Record<string, Answer>;
@@ -99,6 +113,9 @@ describe('review detail page', () => {
 		});
 		posts = [];
 		answers = {};
+		vi.useFakeTimers({ shouldAdvanceTime: true });
+		navigateTo('/review/7'); // B8: the job's outcome goes to this page only while it is open
+		jobEnds(summary({ gameId: 'g9' }));
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
 			if (init?.method === 'POST' && url !== '/api/auth/antiforgery')
 				posts.push({ url, body: init.body ? JSON.parse(init.body as string) : undefined });
@@ -111,9 +128,27 @@ describe('review detail page', () => {
 		});
 	});
 	afterEach(() => {
+		vi.clearAllTimers();
+		vi.useRealTimers();
+		reviewJobs.running = null;
 		vi.unstubAllGlobals();
 		auth.set(null);
 	});
+
+	/** B7: the resolve starts job j1, which ends with `ended` at its first poll. */
+	function jobEnds(ended: object): void {
+		answers['POST /api/review/7/resolve'] = { status: 202, body: { jobId: 'j1' } };
+		answers['GET /api/jobs/j1'] = {
+			status: 200,
+			body: { id: 'j1', type: 'ReviewResolve', status: 'Completed', summary: ended, error: null }
+		};
+	}
+
+	/** Lets the started job reach its first poll. */
+	async function poll(): Promise<void> {
+		await vi.waitFor(() => expect(reviewJobs.running).not.toBeNull());
+		await vi.advanceTimersByTimeAsync(pollIntervalMs);
+	}
 
 	// G8: Switch is identified through titledb by title id.
 	const switchItem = {
@@ -178,7 +213,6 @@ describe('review detail page', () => {
 	it('a Switch item explains title-ID selection and toasts a plain added release (G8)', async () => {
 		toasts.items = [];
 		answers['GET /api/review/7'] = { status: 200, body: switchItem };
-		answers['POST /api/review/7/resolve'] = { status: 200, body: { gameId: 'g9' } };
 		render(ReviewPage);
 
 		expect(
@@ -187,6 +221,7 @@ describe('review detail page', () => {
 		expect(screen.queryByText(/unverified release, because its hashes differ/)).toBeNull();
 		await fireEvent.click(screen.getByRole('button', { name: 'Use' }));
 
+		await poll();
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/games/g9'));
 		expect(toasts.items.at(-1)?.text).toBe('Added release of Orbit Expedition [0100000000002000].');
 	});
@@ -194,19 +229,18 @@ describe('review detail page', () => {
 	it('a libretro item keeps the unverified explanation and toast (G8)', async () => {
 		toasts.items = [];
 		answers['GET /api/review/7'] = { status: 200, body: noMatch };
-		answers['POST /api/review/7/resolve'] = { status: 200, body: { gameId: 'g9' } };
 		render(ReviewPage);
 
 		expect(await screen.findByText(/unverified release, because its hashes differ/)).toBeTruthy();
 		await fireEvent.click(screen.getByRole('button', { name: 'Use' }));
 
+		await poll();
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/games/g9'));
 		expect(toasts.items.at(-1)?.text).toBe('Added as an unverified release of Tetris (World).');
 	});
 
 	it('a Switch item has one update checkbox, unticked, and sends update: false (B8)', async () => {
 		answers['GET /api/review/7'] = { status: 200, body: switchItem };
-		answers['POST /api/review/7/resolve'] = { status: 200, body: { gameId: 'g9' } };
 		render(ReviewPage);
 
 		const box = (await screen.findByLabelText('This file is an update')) as HTMLInputElement;
@@ -229,20 +263,19 @@ describe('review detail page', () => {
 			status: 200,
 			body: { ...switchItem, originalFileName: 'DREDGE[upd][1.0.1].nsp' }
 		};
-		answers['POST /api/review/7/resolve'] = { status: 200, body: { gameId: 'g9' } };
 		render(ReviewPage);
 
 		const box = (await screen.findByLabelText('This file is an update')) as HTMLInputElement;
 		expect(box.checked).toBe(true);
 		await fireEvent.click(screen.getByRole('button', { name: 'Use' }));
 
+		await poll();
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/games/g9'));
 		expect(posts[0].body).toMatchObject({ update: true });
 		expect(toasts.items.at(-1)?.text).toBe('Added update of Orbit Expedition [0100000000002000].');
 	});
 
 	it('ticking the checkbox applies to the DAT search results too (B8)', async () => {
-		answers['POST /api/review/7/resolve'] = { status: 200, body: { gameId: 'g9' } };
 		await searchFor(switchItem, [
 			{
 				gameName: 'Orbit Expedition [0100000000002000]',
@@ -277,11 +310,11 @@ describe('review detail page', () => {
 
 	it('picking a suggestion resolves as Dat and opens the game', async () => {
 		answers['GET /api/review/7'] = { status: 200, body: noMatch };
-		answers['POST /api/review/7/resolve'] = { status: 200, body: { gameId: 'g9' } };
 		render(ReviewPage);
 
 		await fireEvent.click(await screen.findByRole('button', { name: 'Use' }));
 
+		await poll();
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/games/g9'));
 		expect(posts).toEqual([
 			{
@@ -304,16 +337,14 @@ describe('review detail page', () => {
 
 	it('a manual entry with several candidate games explains AmbiguousGroup', async () => {
 		answers['GET /api/review/7'] = { status: 200, body: noMatch };
-		answers['POST /api/review/7/resolve'] = {
-			status: 409,
-			body: { code: 'AmbiguousGroup', title: 'AmbiguousGroup' }
-		};
+		jobEnds(summary({ code: 'AmbiguousGroup' }));
 		render(ReviewPage);
 
 		await fireEvent.click(await screen.findByRole('tab', { name: 'Manual' }));
 		await fireEvent.input(await screen.findByLabelText('Title'), { target: { value: 'Tetris' } });
 		await fireEvent.input(screen.getByLabelText('Regions'), { target: { value: 'USA, Europe' } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Add manually' }));
+		await poll();
 
 		expect(await screen.findByText(/Attach it to one of them instead/)).toBeTruthy();
 		expect(posts[0].body).toMatchObject({
@@ -325,7 +356,6 @@ describe('review detail page', () => {
 
 	it('AmbiguousGroup attaches to a candidate with flag None', async () => {
 		answers['GET /api/review/7'] = { status: 200, body: ambiguous };
-		answers['POST /api/review/7/resolve'] = { status: 200, body: { gameId: 'g2' } };
 		render(ReviewPage);
 
 		const buttons = await screen.findAllByRole('button', { name: 'Attach' });
@@ -387,7 +417,8 @@ describe('review detail page', () => {
 				reason: 'AmbiguousSet',
 				originalFileName: 'Disc (USA) (Track 2).bin',
 				suggestions: [],
-				resolvable: false
+				resolvable: false,
+				dismissible: false
 			}
 		};
 		render(ReviewPage);
@@ -527,15 +558,132 @@ describe('review detail page', () => {
 		expect(link.className).toBe('btn btn-outline-secondary');
 	});
 
-	it('SourceMissing goes back to the queue', async () => {
-		answers['GET /api/review/7'] = { status: 200, body: noMatch };
-		answers['POST /api/review/7/resolve'] = {
-			status: 409,
-			body: { code: 'SourceMissing', title: 'SourceMissing' }
+	/** Types into the Attach game picker and picks `title` from its results. */
+	async function chooseGame(query: string, title: string): Promise<void> {
+		await fireEvent.input(screen.getByLabelText('Game'), { target: { value: query } });
+		await vi.advanceTimersByTimeAsync(300);
+		await fireEvent.click(await screen.findByRole('button', { name: title }));
+	}
+
+	const discItem = {
+		...noMatch,
+		system: 'psx',
+		systemName: 'PlayStation',
+		systemShortName: 'PSX',
+		originalFileName: 'Mystery (Disc 2).cue',
+		suggestions: [],
+		fileSets: true,
+		dismissible: false,
+		setMembers: [
+			{ reviewId: 7, fileName: 'Mystery (Disc 2).cue', sizeBytes: 120 },
+			{ reviewId: 8, fileName: 'Mystery (Disc 2) (Track 1).bin', sizeBytes: 2352 },
+			{ reviewId: 9, fileName: 'Mystery (Disc 2) (Track 2).bin', sizeBytes: 4704 }
+		]
+	};
+
+	it('a set member shows the Set card with every member (B13)', async () => {
+		answers['GET /api/review/7'] = { status: 200, body: discItem };
+		render(ReviewPage);
+
+		expect(
+			await screen.findByText('Resolving this item adds all 3 files as one release.')
+		).toBeTruthy();
+		expect(
+			screen.getByRole('link', { name: 'Mystery (Disc 2) (Track 1).bin' }).getAttribute('href')
+		).toBe('/review/8');
+		expect(screen.queryByRole('link', { name: 'Mystery (Disc 2).cue' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+	});
+
+	it('Attach as a disc needs a number and sends flag Disc with it (B16)', async () => {
+		answers['GET /api/review/7'] = { status: 200, body: discItem };
+		answers['GET /api/games?q=Myst&system=psx&pageSize=10'] = {
+			status: 200,
+			body: {
+				items: [{ id: 'g1', displayTitle: 'Mystery', system: 'psx' }],
+				page: 1,
+				pageSize: 10,
+				total: 1
+			}
 		};
 		render(ReviewPage);
 
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Attach' }));
+		await fireEvent.click(screen.getByLabelText('Disc', { selector: 'input[type=radio]' }));
+		const disc = screen.getByLabelText('Disc', { selector: 'input[type=number]' });
+		await chooseGame('Myst', 'Mystery');
+		await fireEvent.click(screen.getByRole('button', { name: 'Attach' }));
+		expect(screen.getByText('A disc number is required.')).toBeTruthy();
+		expect(posts).toEqual([]);
+
+		await fireEvent.input(disc, { target: { value: '2' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Attach' }));
+		await vi.waitFor(() =>
+			expect(posts[0].body).toEqual({ action: 'Attach', targetGameId: 'g1', flag: 'Disc', disc: 2 })
+		);
+	});
+
+	it('Manual sends the disc number on a disc system (B17)', async () => {
+		answers['GET /api/review/7'] = { status: 200, body: discItem };
+		render(ReviewPage);
+
+		await fireEvent.input(await screen.findByLabelText('Title'), { target: { value: 'Mystery' } });
+		await fireEvent.input(screen.getByLabelText('Disc'), { target: { value: '2' } });
+		expect(screen.getByText('File name: Mystery (Disc 2)')).toBeTruthy();
+		await fireEvent.click(screen.getByRole('button', { name: 'Add manually' }));
+
+		await vi.waitFor(() =>
+			expect(posts[0].body).toMatchObject({ action: 'Manual', title: 'Mystery', disc: 2 })
+		);
+	});
+
+	it('hides the disc inputs and the Disc flag when the system has no discs (B16, B17)', async () => {
+		answers['GET /api/review/7'] = { status: 200, body: noMatch };
+		render(ReviewPage);
+
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Manual' }));
+		expect(screen.queryByLabelText('Disc')).toBeNull();
+		await fireEvent.click(screen.getByRole('tab', { name: 'Attach' }));
+		expect(screen.queryByLabelText('Disc')).toBeNull();
+		expect(screen.queryByText(/another disc/)).toBeNull();
+	});
+
+	it.each([
+		[
+			'a 400',
+			() => ({
+				status: 400,
+				body: {
+					code: 'ValidationFailed',
+					title: 'ValidationFailed',
+					errors: { disc: ['Must be 1–99.'] }
+				}
+			})
+		],
+		['a failed summary', null]
+	])('a disc error from %s shows under the Manual disc input', async (_from, answer) => {
+		answers['GET /api/review/7'] = { status: 200, body: discItem };
+		if (answer) answers['POST /api/review/7/resolve'] = answer();
+		else jobEnds(summary({ code: 'ValidationFailed', errors: { disc: ['Must be 1–99.'] } }));
+		render(ReviewPage);
+
+		await fireEvent.input(await screen.findByLabelText('Title'), { target: { value: 'Mystery' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Add manually' }));
+		if (!answer) await poll();
+
+		await vi.waitFor(() =>
+			expect(screen.getByLabelText('Disc').classList.contains('is-invalid')).toBe(true)
+		);
+		expect(screen.getAllByText('Must be 1–99.').length).toBeGreaterThan(0);
+	});
+
+	it('SourceMissing goes back to the queue', async () => {
+		answers['GET /api/review/7'] = { status: 200, body: noMatch };
+		jobEnds(summary({ code: 'SourceMissing' }));
+		render(ReviewPage);
+
 		await fireEvent.click(await screen.findByRole('button', { name: 'Use' }));
+		await poll();
 
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/review'));
 	});

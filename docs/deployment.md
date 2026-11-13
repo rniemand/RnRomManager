@@ -115,7 +115,7 @@ so the app sees the original scheme (for `Secure` cookies) and client address. *
 
 The live log (**Admin → Logs**) is a long-lived server-sent event stream at `/api/admin/logs/stream`. The app turns off response buffering and sends a keep-alive every 15 seconds, but the proxy must not buffer it either and must allow an idle read of more than 15 seconds. nginx needs `proxy_buffering off;` and a `proxy_read_timeout` above 15 s on that location; Caddy and Traefik stream it as it is.
 
-Resolving a Switch Review item, or moving or deleting a Switch release, can copy a multi-GB file when `/app/ingest` and `/app/roms` are on different volumes. The request stays open until that finishes, so raise the proxy's read timeout for `/api/` (nginx `proxy_read_timeout`, e.g. `600s`); otherwise the browser gets a gateway error while the action still completes in the background. Reload the page before trying again.
+Moving or deleting a Switch release can copy a multi-GB file when `/app/ingest` and `/app/roms` are on different volumes (Review resolutions run as background jobs, so they aren't affected). The request stays open until that finishes, so raise the proxy's read timeout for `/api/` (nginx `proxy_read_timeout`, e.g. `600s`); otherwise the browser gets a gateway error while the action still completes in the background. Reload the page before trying again.
 
 Use `ASPNETCORE_HTTP_PORTS` to change the listen port, not `ASPNETCORE_URLS`: the container health check reads the first port from `ASPNETCORE_HTTP_PORTS`.
 

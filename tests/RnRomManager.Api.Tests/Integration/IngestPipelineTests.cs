@@ -208,7 +208,7 @@ public class IngestPipelineTests
     private async Task<InfoJsonRom> ResolveGameGearAsync(ReviewItem item, ReviewResolutionRequest request)
     {
         var user = await TestUsers.CreateAsync(_factory, $"gg-{Guid.NewGuid():N}"[..20], TestUsers.AllRoles);
-        var resolved = await Service<ReviewResolver>().ResolveAsync(item.Id, request, new AuditActor(user.Id, user.Username, null), default);
+        var resolved = await Service<ReviewResolver>().ResolveInJobAsync(item.Id, request, new AuditActor(user.Id, user.Username, null), default);
         Assert.That(resolved.Code, Is.Null, string.Join("; ", resolved.Errors?.SelectMany(e => e.Value) ?? []));
         var row = (await Service<IGameRepository>().GetAsync(resolved.GameId!.Value, default))!;
         return ReadZip(row.ZipPath).Roms.Single(r => r.Metadata.Sha1 == item.Sha1);
@@ -863,7 +863,7 @@ public class IngestPipelineTests
         var user = await TestUsers.CreateAsync(_factory, "snes-resolver", TestUsers.AllRoles);
         var item = (await Service<IIngestReviewRepository>().GetBySha1Async(stripped, default))!;
 
-        var resolved = await Service<ReviewResolver>().ResolveAsync(item.Id,
+        var resolved = await Service<ReviewResolver>().ResolveInJobAsync(item.Id,
             new ReviewResolutionRequest { Action = "Manual", Title = "Rally Hack", Regions = ["USA"], Languages = ["En"], Flags = [] },
             new AuditActor(user.Id, user.Username, null), default);
 
@@ -962,7 +962,7 @@ public class IngestPipelineTests
         Assert.That(item.Suggestions, Does.Contain("Laser Lanes"));
         var user = await TestUsers.CreateAsync(_factory, "atari-resolver", TestUsers.AllRoles);
 
-        var resolved = await Service<ReviewResolver>().ResolveAsync(item.Id,
+        var resolved = await Service<ReviewResolver>().ResolveInJobAsync(item.Id,
             new ReviewResolutionRequest { Action = "Manual", Title = "Laser Lanes Hack", Regions = ["USA"], Languages = ["En"], Flags = [] },
             new AuditActor(user.Id, user.Username, null), default);
 
@@ -1020,7 +1020,7 @@ public class IngestPipelineTests
         Assert.That(item.Suggestions, Does.Contain("Pixel Pursuit"));
         var user = await TestUsers.CreateAsync(_factory, "coleco-resolver", TestUsers.AllRoles);
 
-        var resolved = await Service<ReviewResolver>().ResolveAsync(item.Id,
+        var resolved = await Service<ReviewResolver>().ResolveInJobAsync(item.Id,
             new ReviewResolutionRequest { Action = "Manual", Title = "Pixel Pursuit Hack", Regions = ["USA"], Languages = ["En"], Flags = [] },
             new AuditActor(user.Id, user.Username, null), default);
 

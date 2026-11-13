@@ -43,9 +43,9 @@ public class JobEndpointsTests
 
     private JobRunner Runner => _factory.Services.GetRequiredService<JobRunner>();
 
-    private async Task<(NoopTestJob Job, StartedJob Started)> StartNoopAsync()
+    private async Task<(NoopTestJob Job, StartedJob Started)> StartNoopAsync(bool cancellable = true)
     {
-        var job = new NoopTestJob();
+        var job = new NoopTestJob { Cancellable = cancellable };
         var started = await Runner.StartAsync(job, JobTrigger.Manual, null, CancellationToken.None);
         await job.Started.Task.WaitAsync(Timeout);
         return (job, started!);
@@ -135,6 +135,22 @@ public class JobEndpointsTests
     }
 
     [Test]
+    public async Task Cancel_OfANonCancellableJob_Is409NotCancellable_B4()
+    {
+        var (job, started) = await StartNoopAsync(cancellable: false);
+
+        using (var response = await _admin.PostAsync($"/api/jobs/{started.Id}/cancel"))
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("NotCancellable"));
+        }
+        job.Release.SetResult();
+        await started.Completion.WaitAsync(Timeout);
+        using var row = await _admin.GetAsync($"/api/jobs/{started.Id}");
+        Assert.That((await AuthClient.JsonAsync(row)).GetProperty("status").GetString(), Is.EqualTo("Completed"));
+    }
+
+    [Test]
     public async Task Cancel_WhenNotRunning_Is404()
     {
         using var response = await _admin.PostAsync($"/api/jobs/{Guid.NewGuid()}/cancel");
@@ -168,6 +184,23 @@ public class JobEndpointsTests
         var itemsJson = await AuthClient.JsonAsync(itemPage);
         Assert.That(itemsJson.GetProperty("total").GetInt64(), Is.EqualTo(1));
         Assert.That(itemsJson.GetProperty("items")[0].GetProperty("sourcePath").GetString(), Is.EqualTo("/app/ingest/gb/a.gb"));
+    }
+
+    [Test]
+    public async Task List_ByTypeReviewResolve_ListsOnlyThoseJobs_B6()
+    {
+        var jobs = _factory.Services.GetRequiredService<IJobRepository>();
+        var id = Guid.NewGuid();
+        await jobs.InsertAsync(new Job { Id = id, Type = JobType.ReviewResolve, Trigger = JobTrigger.Manual, Status = JobStatus.Running, StartedAt = DateTime.UtcNow },
+            CancellationToken.None);
+        await jobs.InsertAsync(new Job { Id = Guid.NewGuid(), Type = JobType.Ingest, Trigger = JobTrigger.Manual, Status = JobStatus.Running, StartedAt = DateTime.UtcNow },
+            CancellationToken.None);
+
+        using var list = await _admin.GetAsync("/api/jobs?type=ReviewResolve");
+        var items = (await AuthClient.JsonAsync(list)).GetProperty("items");
+
+        Assert.That(items.EnumerateArray().Select(i => (i.GetProperty("id").GetGuid(), i.GetProperty("type").GetString())),
+            Is.EqualTo(new[] { (id, "ReviewResolve") }));
     }
 
     [TestCase("/api/jobs?type=Nope", "type")]

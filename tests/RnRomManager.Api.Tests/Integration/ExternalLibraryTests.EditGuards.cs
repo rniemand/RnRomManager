@@ -54,7 +54,7 @@ public partial class ExternalLibraryTests
         var gameId = await FirstReleaseAsync();
         var romId = await RomIdAsync(gameId);
         var (otherId, _) = await QueueAsync("mystery.xci");
-        Assert.That((await Resolver().ResolveAsync(otherId, ManualMystery, await AdminAsync(), default)).Code, Is.Null);
+        Assert.That((await Resolver().ResolveInJobAsync(otherId, ManualMystery, await AdminAsync(), default)).Code, Is.Null);
         await SwapZipPathsAsync(ZipRelative, "ext/M/Mystery Game.zip");
         var mystery = Path.Combine(_factory.Root, "roms", "ext", "M", "Mystery Game.zip");
         var before = (File.ReadAllBytes(ZipPath), File.ReadAllBytes(mystery));

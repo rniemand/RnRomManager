@@ -30,7 +30,7 @@
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import { compareUpdates, isUpdate } from '#lib/releases.js';
+	import { compareUpdates, discNumber, isUpdate, orderByDisc } from '#lib/releases.js';
 	import { systemColour } from '#lib/systemColours.js';
 	import { tooltip } from '#lib/tooltip.js';
 
@@ -58,7 +58,7 @@
 	// G5: a release pointer means the game's ROMs are stored next to its ZIP.
 	const external = $derived(game?.roms.some((r) => r.externalFileName !== null) ?? false);
 	// B9/B11: updates have their own tab, newest first; the rest are the releases.
-	const releases = $derived(game?.roms.filter((r) => !isUpdate(r)) ?? []);
+	const releases = $derived(orderByDisc(game?.roms.filter((r) => !isUpdate(r)) ?? []));
 	const updates = $derived(game ? game.roms.filter(isUpdate).sort(compareUpdates) : []);
 	// B10: the header download lists releases only; a game with only updates offers those.
 	const downloadable = $derived(releases.length ? releases : updates);
@@ -502,6 +502,9 @@
 							<h3 class="h6 mb-0 text-break" id="release-{rom.id}-name">{rom.fileName}</h3>
 							{#if rom.isPrimary}<span class="badge text-bg-primary">Primary</span>{/if}
 							{#if rom.version}<span class="badge text-bg-info">Version {rom.version}</span>{/if}
+							{#if discNumber(rom) !== null}<span class="badge text-bg-info"
+									>Disc {discNumber(rom)}</span
+								>{/if}
 							{#if rom.externalFileName}
 								<!-- G7: stored next to the ZIP under this name. -->
 								<!-- svelte-ignore a11y_no_noninteractive_tabindex -->

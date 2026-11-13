@@ -160,6 +160,8 @@ public static class AppHost
         builder.Services.AddTransient<IngestJob>();
         builder.Services.AddTransient<IngestPipeline>();
         builder.Services.AddTransient<ReviewResolver>();
+        builder.Services.AddTransient<ReviewResolveJob>();
+        builder.Services.AddTransient<ReviewSets>();
         builder.Services.AddSingleton<ArchiveExtractor>();
         builder.Services.AddSingleton<RnRomManager.Core.Integrity.IIntegrityIssueRepository, IntegrityIssueRepository>();
         builder.Services.AddExternalHttpClients();

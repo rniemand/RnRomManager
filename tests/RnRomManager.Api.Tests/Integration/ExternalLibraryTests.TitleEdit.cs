@@ -152,7 +152,7 @@ public partial class ExternalLibraryTests
     {
         var gameId = await TwoReleaseGameAsync();
         var (otherId, _) = await QueueAsync("mystery.xci");
-        Assert.That((await Resolver().ResolveAsync(otherId, ManualMystery, await AdminAsync(), default)).Code, Is.Null);
+        Assert.That((await Resolver().ResolveInJobAsync(otherId, ManualMystery, await AdminAsync(), default)).Code, Is.Null);
         await SwapZipPathsAsync(ZipRelative, "ext/M/Mystery Game.zip");
 
         var result = await RetitleAsync(gameId, "Star Game");
@@ -282,7 +282,7 @@ public partial class ExternalLibraryTests
         var gameId = await TwoReleaseGameAsync();
         var (otherId, _) = await QueueAsync("mystery.xci");
         var request = ManualMystery with { Title = "Space Odyssey" };
-        Assert.That((await Resolver().ResolveAsync(otherId, request, await AdminAsync(), default)).Code, Is.Null);
+        Assert.That((await Resolver().ResolveInJobAsync(otherId, request, await AdminAsync(), default)).Code, Is.Null);
         await using (var db = Service<IDbConnectionFactory>().Create())
             await db.ExecuteAsync("UPDATE roms SET external_file_name = @name WHERE game_id <> @gameId",
                 new { name = Path.GetFileName(Sidecar), gameId = gameId.ToString() });

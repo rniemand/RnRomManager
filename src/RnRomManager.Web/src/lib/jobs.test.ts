@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	formatStep,
 	formatSummary,
+	isCancellable,
 	latestJobs,
 	outcomeClass,
 	percent,
@@ -93,5 +94,13 @@ describe('current file step (large ROM import progress B7)', () => {
 		expect(stepPercent(step())).toBe(25);
 		expect(stepPercent(step({ bytesTotal: 0 }))).toBe(0);
 		expect(stepPercent(step({ bytesDone: 9 * GiB }))).toBe(100);
+	});
+});
+
+describe('isCancellable', () => {
+	it('is false only for ReviewResolve (B4)', () => {
+		expect(
+			['Ingest', 'Integrity', 'DatRefresh', 'MediaRetry', 'ReviewResolve'].map(isCancellable)
+		).toEqual([true, true, true, true, false]);
 	});
 });

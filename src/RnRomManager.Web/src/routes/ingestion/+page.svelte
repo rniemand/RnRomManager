@@ -31,7 +31,7 @@
 		isArchive,
 		modalListSize
 	} from '#lib/ingestDelete.js';
-	import { formatSummary, percent, statusClass } from '#lib/jobs.js';
+	import { formatSummary, isCancellable, percent, statusClass } from '#lib/jobs.js';
 	import { pageCount } from '#lib/pageSize.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
@@ -223,11 +223,13 @@
 						<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
 							<strong>{job.type}{job.mode ? ` (${job.mode})` : ''} running</strong>
 							<span class="text-body-secondary small">since {formatDateTime(job.startedAt)}</span>
-							<button
-								type="button"
-								class="btn btn-sm btn-outline-danger ms-auto"
-								onclick={() => cancel(job.id)}>Cancel</button
-							>
+							{#if isCancellable(job.type)}
+								<button
+									type="button"
+									class="btn btn-sm btn-outline-danger ms-auto"
+									onclick={() => cancel(job.id)}>Cancel</button
+								>
+							{/if}
 						</div>
 						<div
 							class="progress mb-1"

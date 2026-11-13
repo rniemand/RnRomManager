@@ -16,6 +16,9 @@ public sealed record ReviewResolutionRequest
     /// <summary>B8: a titledb DAT pick stored as an update (its base's <c>| 0x800</c> id, or the update picked).</summary>
     public bool? Update { get; init; }
 
+    /// <summary>B9: a disc number (1–99) for Manual or Attach as a disc, stored as the release flag <c>Disc n</c>.</summary>
+    public int? Disc { get; init; }
+
     /// <summary>The <c>update</c> error for any action other than <c>Dat</c>.</summary>
     public const string UpdateNeedsDat = "Only a DAT pick can be stored as an update.";
 }

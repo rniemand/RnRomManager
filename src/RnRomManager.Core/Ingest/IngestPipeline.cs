@@ -500,9 +500,8 @@ public sealed class IngestPipeline(
             return Each(i => new IngestItemResult(IngestOutcome.Skipped, IngestReason.AmbiguousGroup, $"games {string.Join(", ", owners)} own '{release.BaseTitle}'",
                 system.Id, Sha1: hashed[i].Hashes.Sha1));
 
-        // B10: every member keeps its source name; the data track is the release's main file.
         var now = time.GetUtcNow();
-        var rom = new InfoJsonRom
+        var rom = SetRom(new InfoJsonRom
         {
             FileName = dataFile.Name,
             OriginalFileName = dataFile.Name,
@@ -511,16 +510,11 @@ public sealed class IngestPipeline(
             Languages = release.Languages,
             Revision = release.Revision,
             Flags = release.Flags,
-            Version = ReleaseVersion.For(release.Flags, dataFile.Name),
             IsPrimary = false,
             Identification = new InfoJsonIdentification(release.Method, store.DatName, store.Version, release.GameName),
-            Header = system.ReadHeader(dataHashes.Header) is { } header ? JsonSerializer.SerializeToNode(header.Fields) as JsonObject : null,
-            Metadata = new InfoJsonRomMetadata(dataHashes.SizeBytes, dataHashes.Crc32, dataHashes.Md5, dataHashes.Sha1, now, now, dataFile.SourcePath),
-            Files = hashed.Where((_, i) => i != data)
-                .Select(m => new InfoJsonRomFile(m.File.Name, m.File.Name, m.File.Name, m.Hashes.SizeBytes, m.Hashes.Crc32, m.Hashes.Md5, m.Hashes.Sha1))
-                .ToList(),
-        };
-        var set = hashed.Select(m => new SetPlacement(m.File, new ExternalPlacement(m.Source, m.File.Name), m.Hashes.Sha1)).ToList();
+            Metadata = null!, // SetRom fills it
+        }, system, hashed, data, now);
+        var set = SetPlacements(hashed);
         var result = new IngestItemResult(IngestOutcome.Ingested, SystemId: system.Id, Sha1: dataHashes.Sha1);
         var stored = owners.Count == 0
             ? await NewGameAsync(dataFile, system, rom, release.Metadata, null, breaker, result, now, actor, null, cancellationToken, source: dataSource, set: set)
@@ -529,6 +523,93 @@ public sealed class IngestPipeline(
                 source: dataSource, set: set).ConfigureAwait(false);
         // One outcome for the whole set; each member's item carries its own SHA1.
         return Each(i => stored with { Sha1 = hashed[i].Hashes.Sha1 });
+    }
+
+    /// <summary>
+    /// B10: completes a set's release from its hashed members: every member keeps its source name, the member at
+    /// <paramref name="main"/> is the release's main file and the rest go in its <c>files</c>.
+    /// </summary>
+    private static InfoJsonRom SetRom(InfoJsonRom rom, ISystemHandler system, List<(IngestFile File, ExternalSource Source, RomFileHashes Hashes)> hashed,
+        int main, DateTimeOffset now)
+    {
+        var (file, _, hashes) = hashed[main];
+        return rom with
+        {
+            FileName = file.Name,
+            OriginalFileName = file.Name,
+            Version = ReleaseVersion.For(rom.Flags, file.Name),
+            Header = system.ReadHeader(hashes.Header) is { } header ? JsonSerializer.SerializeToNode(header.Fields) as JsonObject : null,
+            Metadata = new InfoJsonRomMetadata(hashes.SizeBytes, hashes.Crc32, hashes.Md5, hashes.Sha1, now, now, file.SourcePath),
+            Files = hashed.Where((_, i) => i != main)
+                .Select(m => new InfoJsonRomFile(m.File.Name, m.File.Name, m.File.Name, m.Hashes.SizeBytes, m.Hashes.Crc32, m.Hashes.Md5, m.Hashes.Sha1))
+                .ToList(),
+        };
+    }
+
+    private static List<SetPlacement> SetPlacements(List<(IngestFile File, ExternalSource Source, RomFileHashes Hashes)> hashed) =>
+        hashed.Select(m => new SetPlacement(m.File, new ExternalPlacement(m.Source, m.File.Name), m.Hashes.Sha1)).ToList();
+
+    /// <summary>
+    /// B14: stores an unmatched bin/cue set resolved in Review as one release, all or nothing. <paramref name="members"/>
+    /// are in set order (the cue, then its <c>FILE</c>s), each with its review row's SHA1; the cue's first <c>FILE</c>
+    /// (<c>members[1]</c>) is the main file. <paramref name="rom"/> carries what the action decided (title, tags,
+    /// identification); its names, version, header, metadata and <c>files</c> come from the hashed members. Nothing is
+    /// moved to <c>_failed/</c>: a refusal leaves every file where it is.
+    /// </summary>
+    /// <returns><c>Ingested</c>, or an error: <c>Duplicate</c> (the main file is already a release), <c>IoError</c>,
+    /// <c>VerifyFailed</c> (a SHA1 differs, a member is over the size limit or changed), <c>AmbiguousGroup</c>,
+    /// <c>NameTaken</c>/<c>NameTooLong</c>, or the placement's and mirror's codes.</returns>
+    public async Task<IngestItemResult> StoreSetReleaseAsync(IReadOnlyList<(IngestFile File, string Sha1)> members, ISystemHandler system,
+        InfoJsonRom rom, DatMetadata metadata, Guid? targetGameId, Func<Guid, Task> afterMirror, AuditActor actor, string reviewAction,
+        JobProgress progress)
+    {
+        var cancellationToken = CancellationToken.None; // like a single-file resolve, it runs to the end
+        const int main = 1;
+        var root = paths.Value.Ingest;
+        var mainSha1 = members[main].Sha1;
+        IngestItemResult Fail(string code, string details) => IngestItemResult.Error(code, details, system.Id, mainSha1);
+
+        // roms.sha1 is unique: a main file already in the library would only fail at the mirror, after the moves.
+        if (await roms.GetBySha1Async(mainSha1, cancellationToken).ConfigureAwait(false) is { } known)
+            return Fail("Duplicate", $"{members[main].File.Name} is already a release of game {known.GameId}");
+
+        var hashed = new List<(IngestFile File, ExternalSource Source, RomFileHashes Hashes)>();
+        foreach (var (file, sha1) in members)
+        {
+            progress.SetCurrentItem(file.Name);
+            var fresh = ExternalRomPath.ClassifyFile(root, file.FullPath);
+            if (fresh.Status != ExternalPathStatus.Found)
+                return Fail(IngestErrors.IoError, $"{file.Name}: {fresh.Details}");
+            var (outcome, hashes, failure) = await HashCheckedAsync(file, root, fresh.Path, fresh.Snapshot!, system.MaxRomSizeBytes, recheckPath: true,
+                cancellationToken, progress).ConfigureAwait(false);
+            if (outcome == HashOutcome.Failed)
+                return Fail(IngestErrors.IoError, $"{file.Name}: {failure}");
+            // Changed covers a file over the size limit too: its hash stops at MaxRomSizeBytes.
+            if (outcome == HashOutcome.Changed || hashes!.Sha1 != sha1)
+                return Fail(IngestErrors.VerifyFailed, failure ?? $"{file.Name}: sha1 {hashes!.Sha1}, not {sha1}");
+            progress.ItemDone();
+            hashed.Add((file, new ExternalSource(root, fresh.Path, fresh.Snapshot!, progress), hashes));
+        }
+        if (hashed.Any(m => ExternalRomPath.ClassifyFile(root, m.Source.Path).Snapshot != m.Source.Snapshot))
+            return Fail(IngestErrors.VerifyFailed, "a file of the set changed after it was hashed");
+
+        var owners = targetGameId is { } target ? [target] :
+            await roms.ListGameIdsByBaseTitleAsync(system.Id, rom.BaseTitle, cancellationToken).ConfigureAwait(false);
+        if (owners.Count > 1)
+            return Fail("AmbiguousGroup", "Several games own this base title; use Attach.");
+        var now = time.GetUtcNow();
+        rom = SetRom(rom, system, hashed, main, now);
+        var (mainFile, mainSource, _) = hashed[main];
+        var result = new IngestItemResult(IngestOutcome.Ingested, SystemId: system.Id, Sha1: mainSha1);
+        var stored = owners.Count == 0
+            ? await NewGameAsync(mainFile, system, rom, metadata, null, new CircuitBreaker(), result, now, actor, reviewAction, cancellationToken,
+                afterMirror, mainSource, SetPlacements(hashed)).ConfigureAwait(false)
+            : await AddToGameAsync(mainFile, system, owners[0], rom, metadata, null, new CircuitBreaker(), result, now, actor, reviewAction,
+                cancellationToken, afterMirror, mainSource, SetPlacements(hashed)).ConfigureAwait(false);
+        // As for a single file: a member that changed before it could be moved is a verification failure, not a skip.
+        return stored.Outcome == IngestOutcome.Skipped
+            ? Fail(IngestErrors.VerifyFailed, "a file of the set changed before it could be moved")
+            : stored;
     }
 
     /// <summary>
@@ -619,16 +700,17 @@ public sealed class IngestPipeline(
     /// <param name="reviewAction">The resolution action (<c>Dat</c>, <c>Attach</c>, <c>Manual</c>), for the audit row's details.</param>
     /// <param name="bytes">The ROM of an embedded handler; null for an external one, whose file is re-hashed streamed and moved (T9).</param>
     /// <param name="snapshot">The external file as it was checked; required when <paramref name="bytes"/> is null.</param>
+    /// <param name="progress">B3: an external file's <c>Hashing</c> and <c>CopyingToLibrary</c> steps.</param>
     public async Task<IngestItemResult> StoreReleaseAsync(IngestFile file, ISystemHandler system, InfoJsonRom rom,
         DatMetadata metadata, byte[]? bytes, Guid? targetGameId, Func<Guid, Task> afterMirror, AuditActor actor, string? reviewAction,
-        CancellationToken cancellationToken, ExternalFileSnapshot? snapshot = null)
+        CancellationToken cancellationToken, ExternalFileSnapshot? snapshot = null, JobProgress? progress = null)
     {
         ExternalSource? source = null;
         if (bytes is null)
         {
             var root = file.ArchiveEntry is null ? paths.Value.Ingest : paths.Value.Cache;
             var (outcome, hashed, details) = await HashCheckedAsync(file, root, file.FullPath, snapshot!, system.MaxRomSizeBytes, recheckPath: true,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken, progress).ConfigureAwait(false);
             if (outcome == HashOutcome.Failed)
                 return IngestItemResult.Error(IngestErrors.IoError, details, system.Id, rom.Metadata.Sha1);
             if (outcome == HashOutcome.Changed || hashed!.Sha1 != rom.Metadata.Sha1)
@@ -637,7 +719,7 @@ public sealed class IngestPipeline(
                     system.Id, rom.Metadata.Sha1);
             }
             rom = rom with { Metadata = rom.Metadata with { SizeBytes = hashed.SizeBytes } };
-            source = new ExternalSource(root, file.FullPath, snapshot!);
+            source = new ExternalSource(root, file.FullPath, snapshot!, progress);
         }
 
         var owners = targetGameId is { } target ? new[] { target } :

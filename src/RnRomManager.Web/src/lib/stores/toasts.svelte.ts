@@ -4,6 +4,13 @@ export interface ToastMessage {
 	id: number;
 	text: string;
 	kind: 'info' | 'warning' | 'danger' | 'success';
+	/** A link (an app path, already `resolve()`d); a toast with one stays until closed (B8). */
+	link?: ToastLink;
+}
+
+export interface ToastLink {
+	href: string;
+	text: string;
 }
 
 export const toastDurationMs = 5000;
@@ -13,10 +20,10 @@ class Toasts {
 	items = $state<ToastMessage[]>([]);
 	#next = 1;
 
-	show(text: string, kind: ToastMessage['kind'] = 'info'): number {
+	show(text: string, kind: ToastMessage['kind'] = 'info', link?: ToastLink): number {
 		const id = this.#next++;
-		this.items.push({ id, text, kind });
-		setTimeout(() => this.dismiss(id), toastDurationMs);
+		this.items.push({ id, text, kind, link });
+		if (!link) setTimeout(() => this.dismiss(id), toastDurationMs);
 		return id;
 	}
 

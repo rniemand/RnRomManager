@@ -15,7 +15,7 @@ export interface Me {
 /** `GET /api/jobs/current` (spec §23, §3.1); 204 when idle. */
 export interface CurrentJob {
 	id: string;
-	type: 'Ingest' | 'Integrity' | 'DatRefresh' | 'MediaRetry';
+	type: 'Ingest' | 'Integrity' | 'DatRefresh' | 'MediaRetry' | 'ReviewResolve';
 	mode: 'Quick' | 'Deep' | 'Game' | null;
 	status: string;
 	current: number;
@@ -216,9 +216,18 @@ export interface Job {
 	requestedBy: number | null;
 	startedAt: string;
 	finishedAt: string | null;
-	/** Counts, e.g. `{ Ingested: 3, Review: 1 }`. */
-	summary: Record<string, number> | null;
+	/** Counts, e.g. `{ Ingested: 3, Review: 1 }`; a `ReviewResolve` job's is a {@link ReviewResolveSummary}. */
+	summary: Record<string, unknown> | null;
 	error: string | null;
+}
+
+/** A `ReviewResolve` job's summary (B5). */
+export interface ReviewResolveSummary {
+	reviewId: number;
+	fileName: string;
+	gameId: string | null;
+	code: string | null;
+	errors: Record<string, string[]> | null;
 }
 
 /** `GET /api/jobs/{id}/items` (spec §14.1 `job_items`). */
@@ -291,8 +300,14 @@ export interface ReviewDetail {
 	} | null;
 	candidateGames: { id: string; displayTitle: string }[];
 	status: 'Pending' | 'Resolved' | 'Dismissed';
-	/** B15: false for a disc track file (`.cue`/`.bin` on a disc system), which can only be deleted. */
+	/** B12: false for a `.cue`/`.bin` on a disc system whose bin/cue set isn't found; it can only be deleted. */
 	resolvable: boolean;
+	/** B16: a disc system (bin/cue sets, disc numbers). */
+	fileSets: boolean;
+	/** B13: the unmatched set this item belongs to, cue first; null when there is none. */
+	setMembers: { reviewId: number; fileName: string; sizeBytes: number }[] | null;
+	/** B15: false for every `.cue`/`.bin` on a disc system; Dismiss is hidden then. */
+	dismissible: boolean;
 	gameId: string | null;
 	createdAt: string;
 }

@@ -651,6 +651,31 @@ describe('game detail page', () => {
 		expect(cardNames()).toEqual(['Tetris 1.gb', 'Tetris 2.gb']);
 	});
 
+	it('disc releases show a Disc badge and are ordered by disc after the others (B18)', async () => {
+		const discs = game([1, 2, 3]);
+		discs.roms = [
+			{ ...discs.roms[0], fileName: 'Tetris (Disc 2).iso', flags: ['Disc 2'] },
+			{ ...discs.roms[1], fileName: 'Tetris (Disc 1).iso', flags: ['Disc 1'] },
+			{ ...discs.roms[2], fileName: 'Tetris (Demo).iso', flags: ['Demo'] }
+		];
+		answers.push({ status: 200, body: discs });
+		render(GamePage);
+
+		await screen.findByRole('tab', { name: 'Releases (3)' });
+		expect(cardNames()).toEqual([
+			'Tetris (Demo).iso',
+			'Tetris (Disc 1).iso',
+			'Tetris (Disc 2).iso'
+		]);
+		const headerBadge = (text: string) =>
+			screen
+				.getAllByText(text)
+				.filter((e) => e.classList.contains('badge') && e.closest('.release-header'));
+		expect(headerBadge('Disc 1')).toHaveLength(1);
+		expect(headerBadge('Disc 2')).toHaveLength(1);
+		expect(screen.queryAllByText('Demo').filter((e) => e.closest('.release-header'))).toEqual([]);
+	});
+
 	it('updates get their own tab; Releases counts and lists only the rest (B9, B10)', async () => {
 		answers.push({ status: 200, body: withUpdates() });
 		render(GamePage);

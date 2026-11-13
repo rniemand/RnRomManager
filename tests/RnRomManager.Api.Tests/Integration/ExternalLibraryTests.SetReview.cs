@@ -32,7 +32,7 @@ public partial class ExternalLibraryTests
         new() { Action = "Dat", DatSystem = ExternalSetTestHandler.SystemId, DatGameName = game };
 
     [Test]
-    public async Task SetReview_BinItem_IsDeleteOnly_OverHttp()
+    public async Task SetReview_CompleteUnmatchedSetsBin_IsResolvable_ButNotDismissible_OverHttp()
     {
         var track1 = RandomNumberGenerator.GetBytes(2352);
         DropDisc("Mystery Disc.cue", ("Mystery Disc (Track 1).bin", track1), ("Mystery Disc (Track 2).bin", Audio2));
@@ -41,21 +41,27 @@ public partial class ExternalLibraryTests
         var iso = await QueueSetAsync("mystery.iso", RandomNumberGenerator.GetBytes(2000));
         using var admin = await AdminClientAsync();
 
-        using (var resolve = await admin.PostAsync($"/api/review/{bin}/resolve", ManualMystery))
-        {
-            Assert.That(resolve.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
-            Assert.That(await AuthClient.CodeAsync(resolve), Is.EqualTo(ReviewResolver.SetFileNotResolvable));
-        }
         using (var dismiss = await admin.PostAsync($"/api/review/{bin}/dismiss", null))
         {
             Assert.That(dismiss.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
             Assert.That(await AuthClient.CodeAsync(dismiss), Is.EqualTo(ReviewResolver.SetFileNotResolvable));
         }
         using (var detail = await admin.GetAsync($"/api/review/{bin}"))
-            Assert.That((await AuthClient.JsonAsync(detail)).GetProperty("resolvable").GetBoolean(), Is.False);
+        {
+            var json = await AuthClient.JsonAsync(detail);
+            Assert.That((json.GetProperty("resolvable").GetBoolean(), json.GetProperty("dismissible").GetBoolean()), Is.EqualTo((true, false)));
+        }
         using (var detail = await admin.GetAsync($"/api/review/{iso}"))
             Assert.That((await AuthClient.JsonAsync(detail)).GetProperty("resolvable").GetBoolean(), Is.True);
         Assert.That(await StatusAsync(bin), Is.EqualTo("Pending"));
+
+        // A .bin with no set found stays delete-only, refused before any job starts.
+        var lone = await QueueSetAsync("lone.bin", RandomNumberGenerator.GetBytes(2352));
+        using (var resolve = await admin.PostAsync($"/api/review/{lone}/resolve", ManualMystery))
+        {
+            Assert.That(resolve.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(await AuthClient.CodeAsync(resolve), Is.EqualTo(ReviewResolver.SetFileNotResolvable));
+        }
     }
 
     [Test]
@@ -66,10 +72,9 @@ public partial class ExternalLibraryTests
         var id = await QueueSetAsync("mystery.iso", RandomNumberGenerator.GetBytes(2000));
         using var admin = await AdminClientAsync();
 
-        using var response = await admin.PostAsync($"/api/review/{id}/resolve", DatPick("Disc Game (USA)"));
+        var result = await admin.ResolveAsync(id, DatPick("Disc Game (USA)"));
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
-        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo(IngestErrors.NameTaken));
+        Assert.That((result.Status, result.Code), Is.EqualTo((HttpStatusCode.Accepted, (string?)IngestErrors.NameTaken)));
         Assert.That(await StatusAsync(id), Is.EqualTo("Pending"));
         Assert.That(File.Exists(Path.Combine(SetIngest, "mystery.iso")), Is.True);
     }
@@ -79,7 +84,7 @@ public partial class ExternalLibraryTests
     {
         var id = await QueueSetAsync("sky.nrg", RandomNumberGenerator.GetBytes(4096));
 
-        var result = await Resolver().ResolveAsync(id, DatPick("Track Game (USA)"), await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(id, DatPick("Track Game (USA)"), await AdminAsync(), default);
 
         Assert.That(result.Code, Is.Null);
         var rom = ReadSetGame(Path.Combine(SetFolder('T'), "Track Game.zip")).Roms.Single();
@@ -95,7 +100,7 @@ public partial class ExternalLibraryTests
         WriteDats(new FixtureGame("...Iru! (Japan)", "...Iru! (Japan) (Track 1).bin", RandomNumberGenerator.GetBytes(2352)));
         var id = await QueueSetAsync("iru.nrg", RandomNumberGenerator.GetBytes(4096));
 
-        var result = await Resolver().ResolveAsync(id, DatPick("...Iru! (Japan)"), await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(id, DatPick("...Iru! (Japan)"), await AdminAsync(), default);
 
         Assert.That(result.Code, Is.Null);
         var zip = Directory.GetFiles(Path.Combine(_factory.Root, "roms", ExternalSetTestHandler.SystemId), "*.zip", SearchOption.AllDirectories).Single();
@@ -113,7 +118,7 @@ public partial class ExternalLibraryTests
         var single = (await Service<RnRomManager.Core.Library.IGameRepository>().ListAsync(new GameQuery(), default)).Items.Single(g => g.DisplayTitle == "Single Game");
         var request = new ReviewResolutionRequest { Action = "Attach", TargetGameId = single.Id, Flag = "None" };
 
-        var result = await Resolver().ResolveAsync(await SetItemIdAsync(DiscRev1), request, await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(await SetItemIdAsync(DiscRev1), request, await AdminAsync(), default);
 
         Assert.That(result.Code, Is.Null);
         var rom = ReadSetGame(Path.Combine(SetFolder('S'), "Single Game.zip")).Roms.Single(r => r.FileName == "Disc Game (USA).iso");

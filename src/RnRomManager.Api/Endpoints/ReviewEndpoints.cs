@@ -4,6 +4,7 @@ using RnRomManager.Core.Audit;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
+using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Naming;
 using RnRomManager.Core.Systems;
@@ -40,7 +41,7 @@ public static class ReviewEndpoints
             }));
         });
         review.MapGet("/{id:long}", async (long id, HttpContext ctx, IIngestReviewRepository repository, IGameRepository games,
-            ISystemRegistry systems) =>
+            ISystemRegistry systems, ReviewSets sets) =>
         {
             var item = await repository.GetAsync(id, ctx.RequestAborted);
             if (item is null)
@@ -49,6 +50,7 @@ public static class ReviewEndpoints
             foreach (var node in JsonNode.Parse(item.CandidateGameIds ?? "[]")!.AsArray())
                 if (await games.GetAsync(node!.GetValue<Guid>(), ctx.RequestAborted) is { } game)
                     candidates.Add(new { id = game.Id, displayTitle = game.DisplayTitle });
+            var set = await sets.FindAsync(item, ctx.RequestAborted);
             return Results.Ok(new
             {
                 id = item.Id, system = item.SystemId, systemName = systems.ById(item.SystemId)?.DisplayName ?? item.SystemId,
@@ -58,25 +60,39 @@ public static class ReviewEndpoints
                 header = Parse(item.Header), suggestions = Parse(item.Suggestions), datIdentification = Parse(item.DatIdentification),
                 candidateGames = candidates, status = item.Status, gameId = item.GameId, createdAt = item.CreatedAt,
                 lastSeenJobId = item.LastSeenJobId, resolvedAt = item.ResolvedAt, resolvedBy = item.ResolvedBy,
-                resolvable = ReviewResolver.IsResolvable(item, systems),
+                resolvable = ReviewResolver.IsDismissible(item, systems) || set is not null, // B12, from the set already found
+                dismissible = ReviewResolver.IsDismissible(item, systems),
+                fileSets = systems.ById(item.SystemId)?.FileSets ?? false,
+                setMembers = set?.Select(m => new { reviewId = m.Row.Id, fileName = m.Row.OriginalFileName, sizeBytes = m.Row.SizeBytes }),
             });
         });
-        review.MapPost("/{id:long}/resolve", async (long id, ReviewResolutionRequest request, HttpContext ctx, ReviewResolver resolver) =>
+        review.MapPost("/{id:long}/resolve", async (long id, ReviewResolutionRequest request, HttpContext ctx, IIngestReviewRepository repository,
+            ReviewResolver resolver, JobRunner runner, ReviewResolveJob job) =>
         {
+            // B1: the request and the item are checked here; the job checks the item again under the lock (B2).
             var errors = Validate(request);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            return ToResult(ctx, await resolver.ResolveAsync(id, request, AuditActor.From(ctx.User), ctx.RequestAborted));
+            var item = await repository.GetAsync(id, ctx.RequestAborted);
+            if (item is not { Status: "Pending" })
+                return Problems.NotFound(ctx);
+            if (!await resolver.IsResolvableAsync(item, ctx.RequestAborted))
+                return ToResult(ctx, new(ReviewResolver.SetFileNotResolvable));
+            job.ReviewId = id;
+            job.FileName = item.OriginalFileName;
+            job.Request = request;
+            var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
+            return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
         });
         review.MapPost("/{id:long}/dismiss", async (long id, HttpContext ctx, ReviewResolver resolver) =>
         {
             var result = await resolver.DismissAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted);
-            return result.Code is null ? Results.NoContent() : ToResult(ctx, result);
+            return ToResult(ctx, result);
         });
         review.MapDelete("/{id:long}", async (long id, HttpContext ctx, ReviewResolver resolver) =>
         {
             var result = await resolver.DeleteSourceAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted);
-            return result.Code is null ? Results.NoContent() : ToResult(ctx, result);
+            return ToResult(ctx, result);
         });
         api.MapGet("/dat/search", (string? system, string? q, int? limit, HttpContext ctx, ISystemRegistry systems, DatCache dats) =>
         {
@@ -109,7 +125,7 @@ public static class ReviewEndpoints
                 break;
             case "Attach":
                 if (request.TargetGameId is null || request.TargetGameId == Guid.Empty) errors["targetGameId"] = ["A target game is required."];
-                if (request.Flag is not ("Hack" or "Translated" or "None")) errors["flag"] = ["Must be Hack, Translated or None."];
+                if (request.Flag is not ("Hack" or "Translated" or "None" or "Disc")) errors["flag"] = ["Must be Hack, Translated, None or Disc."];
                 break;
             case "Manual":
                 if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length > 255 || FileNameSanitizer.Sanitize(request.Title).Length == 0)
@@ -123,6 +139,13 @@ public static class ReviewEndpoints
         }
         if (request.Update == true && request.Action != "Dat")
             errors["update"] = [ReviewResolutionRequest.UpdateNeedsDat];
+        var asDisc = request.Action == "Attach" && request.Flag == "Disc";
+        if (request.Disc is < 1 or > 99)
+            errors["disc"] = ["Must be 1–99."];
+        else if (request.Disc is not null && !(asDisc || request.Action == "Manual"))
+            errors["disc"] = ["A disc number needs Manual or Attach as a disc."];
+        else if (request.Disc is null && asDisc)
+            errors["disc"] = ["A disc number is required."];
         return errors;
     }
 
@@ -134,7 +157,7 @@ public static class ReviewEndpoints
 
     private static IResult ToResult(HttpContext ctx, ReviewResolutionResult result) => result.Code switch
     {
-        null => Results.Ok(new { gameId = result.GameId }),
+        null => Results.NoContent(),
         "ValidationFailed" => Problems.Validation(ctx, result.Errors!),
         "NotFound" => Problems.NotFound(ctx),
         "JobRunning" or "SourceMissing" or "AmbiguousGroup" or "TargetZipUnreadable" or "InfoJsonNewerSchema" or "Duplicate"

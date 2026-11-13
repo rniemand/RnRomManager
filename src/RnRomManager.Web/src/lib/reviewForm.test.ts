@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	discError,
 	emptyManualForm,
 	manualFileStem,
 	splitList,
@@ -40,5 +41,22 @@ describe('manual review form', () => {
 		expect(manualFileStem(f)).toBe('Tetris (USA, Europe) (Rev 1) (Proto)');
 		expect(manualFileStem(form())).toBe('Tetris');
 		expect(toManualRequest(form()).revision).toBeNull();
+	});
+
+	it('a disc number is optional on Manual, 1–99 when given, and goes after the flags (B9, B10, B17)', () => {
+		expect(validateManual(form({ disc: null })).disc).toBeUndefined();
+		expect(validateManual(form({ disc: 0 })).disc).toBe('Must be 1–99.');
+		expect(validateManual(form({ disc: 100 })).disc).toBe('Must be 1–99.');
+		expect(validateManual(form({ disc: 1.5 })).disc).toBe('Must be 1–99.');
+		expect(validateManual(form({ disc: 99 })).disc).toBeUndefined();
+		expect(toManualRequest(form({ disc: 2 }))).toMatchObject({ disc: 2 });
+		expect(toManualRequest(form())).not.toHaveProperty('disc');
+		expect(manualFileStem(form({ flags: 'Disc 3, Beta', disc: 2 }))).toBe('Tetris (Beta) (Disc 2)');
+	});
+
+	it('Attach as a disc requires the number (B16)', () => {
+		expect(discError(null, true)).toBe('A disc number is required.');
+		expect(discError(Number.NaN, true)).toBe('A disc number is required.');
+		expect(discError(2, true)).toBeUndefined();
 	});
 });

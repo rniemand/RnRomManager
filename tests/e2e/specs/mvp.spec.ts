@@ -591,6 +591,9 @@ test('review queue: resolve with a suggestion', async () => {
 	await expectAccessible(page, 'review detail');
 
 	await page.getByRole('button', { name: 'Use' }).first().click();
+	// B7: the resolution runs as a job; the page shows it until the first poll finds it done.
+	await expect(page.getByText('Resolving 91-unmatched.gb…')).toBeVisible();
+	await expect(page.getByRole('button', { name: /Delete/ })).toBeDisabled();
 	await expect(page).toHaveURL(/\/games\//);
 	await expect(page.getByRole('article').getByText(/\(Unverified\)/)).toBeVisible();
 });
