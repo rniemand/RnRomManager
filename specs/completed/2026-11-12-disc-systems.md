@@ -1,6 +1,6 @@
 ---
 title: Disc systems (PlayStation, PSP, GameCube, Wii, Xbox 360, Saturn)
-status: in-progress
+status: completed
 created: 2026-11-12
 ---
 
