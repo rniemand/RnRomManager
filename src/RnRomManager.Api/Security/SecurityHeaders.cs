@@ -10,6 +10,14 @@ namespace RnRomManager.Api.Security;
 /// </summary>
 public static partial class SecurityHeaders
 {
+    /// <summary>
+    /// Browser emulators B7: the vendored EmulatorJS and its play page. <c>'unsafe-eval'</c> is for the 7z worker that
+    /// unpacks the cores (Emscripten's <c>cwrap</c>); <c>frame-ancestors 'self'</c> lets the SPA's modal frame it.
+    /// </summary>
+    public const string EmulatorPolicy =
+        "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' blob: data:; "
+        + "img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'";
+
     public static WebApplication UseSecurityHeaders(this WebApplication app)
     {
         var index = app.Environment.WebRootFileProvider.GetFileInfo("index.html");
@@ -24,7 +32,7 @@ public static partial class SecurityHeaders
         app.Use((ctx, next) =>
         {
             var headers = ctx.Response.Headers;
-            headers.ContentSecurityPolicy = csp;
+            headers.ContentSecurityPolicy = ctx.Request.Path.StartsWithSegments("/emulator", StringComparison.OrdinalIgnoreCase) ? EmulatorPolicy : csp;
             headers.XContentTypeOptions = "nosniff";
             headers["Referrer-Policy"] = "no-referrer";
             return next(ctx);

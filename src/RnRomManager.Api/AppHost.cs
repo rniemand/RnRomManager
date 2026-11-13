@@ -62,7 +62,10 @@ public static class AppHost
         var app = builder.Build();
         app.UseSecurityHeaders();
 
-        var staticFiles = new StaticFileOptions { OnPrepareResponse = ctx => SetCacheHeaders(ctx) };
+        // Browser emulators B10: EmulatorJS cores are .data files, which the default table doesn't know (they'd 404).
+        var contentTypes = new FileExtensionContentTypeProvider();
+        contentTypes.Mappings[".data"] = "application/octet-stream";
+        var staticFiles = new StaticFileOptions { ContentTypeProvider = contentTypes, OnPrepareResponse = ctx => SetCacheHeaders(ctx) };
         app.UseStaticFiles(staticFiles);
 
         app.UseAppAuth();
