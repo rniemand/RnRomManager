@@ -16,6 +16,7 @@ public class AtariLynxHandlerTests
         Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".lnx", ".lyx" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((1024L, 1048576L)));
         Assert.That(Handler.EmbedRomsInZip, Is.True);
+        Assert.That(Handler.BrowserCore, Is.EqualTo("handy"));
         Assert.That(Handler.MetadatKinds, Is.EqualTo(DatKind.Metadat));
     }
 

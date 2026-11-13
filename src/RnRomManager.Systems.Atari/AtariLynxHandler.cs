@@ -15,6 +15,7 @@ public sealed class AtariLynxHandler : ISystemHandler
     public long MaxRomSizeBytes => 1024 * 1024;
     public string DatName => "Atari - Lynx";
     public bool EmbedRomsInZip => true;
+    public string BrowserCore => "handy";
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => LynxHeader.Read(rom);

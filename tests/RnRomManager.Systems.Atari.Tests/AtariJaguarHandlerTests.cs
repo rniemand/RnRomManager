@@ -16,6 +16,7 @@ public class AtariJaguarHandlerTests
         Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".j64", ".jag", ".rom", ".abs", ".cof" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((16384L, 16777216L)));
         Assert.That(Handler.EmbedRomsInZip, Is.True);
+        Assert.That(Handler.BrowserCore, Is.EqualTo("virtualjaguar"));
         Assert.That(Handler.MetadatKinds, Is.EqualTo(DatKind.Metadat));
     }
 

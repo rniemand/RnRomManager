@@ -15,6 +15,7 @@ public sealed class AtariJaguarHandler : ISystemHandler
     public long MaxRomSizeBytes => 16 * 1024 * 1024;
     public string DatName => "Atari - Jaguar";
     public bool EmbedRomsInZip => true;
+    public string BrowserCore => "virtualjaguar";
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;

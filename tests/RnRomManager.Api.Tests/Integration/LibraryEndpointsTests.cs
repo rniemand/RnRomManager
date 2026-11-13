@@ -342,6 +342,8 @@ public partial class LibraryEndpointsTests
     }
 
     [TestCase("gb", "gambatte")]
+    [TestCase("lynx", "handy")]
+    [TestCase("jaguar", "virtualjaguar")]
     [TestCase("nes", null)]
     [TestCase("nosuch", null)]
     public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)

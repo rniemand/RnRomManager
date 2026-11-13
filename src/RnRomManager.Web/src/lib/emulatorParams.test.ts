@@ -26,6 +26,10 @@ describe('parsePlayParams', () => {
 		});
 	});
 
+	it.each(['handy', 'virtualjaguar'])('accepts the %s core', (core) => {
+		expect(parsePlayParams(query({ core }))?.core).toBe(core);
+	});
+
 	it.each([
 		['a bad GUID', { game: 'not-a-guid' }],
 		['rom 0', { rom: '0' }],
