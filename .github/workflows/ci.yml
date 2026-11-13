@@ -90,8 +90,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0 # build-docker.ps1 asks MinVer for the version
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
@@ -101,8 +99,20 @@ jobs:
           cache: npm
           cache-dependency-path: tests/e2e/package-lock.json
       - uses: docker/setup-buildx-action@v4
-      # Builds the amd64 image, seeds Basic, runs Playwright + axe against docker-compose.e2e.yml, tears down.
-      - run: pwsh scripts/test-e2e.ps1
+      # The amd64 image, reusing cached layers (npm ci, dotnet restore) from earlier e2e and release builds. The version
+      # is the Dockerfile default; nothing in e2e reads it.
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: niemandr/rnrommanager:e2e
+          cache-from: |
+            type=gha,scope=e2e
+            type=gha
+          cache-to: type=gha,scope=e2e,mode=max
+      # Seeds Basic, runs Playwright + axe against docker-compose.e2e.yml, tears down.
+      - run: pwsh scripts/test-e2e.ps1 -SkipBuild
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v7

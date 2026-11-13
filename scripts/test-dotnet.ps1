@@ -46,7 +46,7 @@ $apiShards = @(
     @('ExternalLibraryTests', 'ImageUrlEndpointsTests', 'AuditEndpointsTests', 'JobEndpointsTests'),
     @('IngestPipelineTests', 'ReviewEndpointsTests', 'UserEndpointsTests'),
     @('LibraryEndpointsTests', 'ReportEndpointsTests', 'LibraryEditTests', 'LibraryMoveMergeTests', 'TitleDbIngestTests',
-        'ZipEntryEndpointsTests')
+        'ZipEntryEndpointsTests', 'IngestEndpointsTests', 'ImageEndpointsTests', 'IngestReviewTests')
 )
 $shardCount = $apiShards.Count + 1
 

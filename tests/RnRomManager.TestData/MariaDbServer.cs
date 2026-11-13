@@ -20,7 +20,17 @@ public static class MariaDbServer
 
     public static async Task StartAsync()
     {
-        _container = new MariaDbBuilder("mariadb:11.4").WithUsername("root").Build();
+        _container = new MariaDbBuilder("mariadb:11.4")
+            .WithUsername("root")
+            // Throwaway data: keep it in memory and skip durability work. Every test creates a database and runs the
+            // migrations (dozens of CREATE/ALTER TABLE), which is mostly file creation and fsync on disk.
+            .WithTmpfsMount("/var/lib/mysql")
+            .WithCommand(
+                "--innodb-flush-log-at-trx-commit=0",
+                "--innodb-doublewrite=0",
+                "--sync-binlog=0",
+                "--skip-log-bin")
+            .Build();
         await _container.StartAsync();
     }
 
