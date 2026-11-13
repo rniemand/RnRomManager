@@ -417,10 +417,11 @@ public static class LibraryEndpoints
             return Problems.NotFound(ctx);
         var romRows = await roms.ListByGameAsync(id, ctx.RequestAborted);
         var imageRows = await images.ListByGameAsync(id, ctx.RequestAborted);
-        var systemName = ctx.RequestServices.GetRequiredService<ISystemRegistry>().ById(game.SystemId)?.DisplayName ?? game.SystemId;
+        var handler = ctx.RequestServices.GetRequiredService<ISystemRegistry>().ById(game.SystemId);
+        var systemName = handler?.DisplayName ?? game.SystemId;
         var notes = ctx.RequestServices.GetRequiredService<LibraryFiles>().NoteEntries(game);
         var fileRows = (await roms.ListFilesByGameAsync(id, ctx.RequestAborted)).ToLookup(f => f.RomId);
-        return Results.Ok(ToDetail(game, systemName, romRows, fileRows, imageRows, notes));
+        return Results.Ok(ToDetail(game, systemName, handler?.BrowserCore, romRows, fileRows, imageRows, notes));
     }
 
     private static IResult ToResult(HttpContext ctx, LibraryEditResult result) =>
@@ -673,12 +674,13 @@ public static class LibraryEndpoints
 
     internal static string ImageUrl(Guid gameId, long imageId) => $"/api/games/{gameId}/images/{imageId}";
 
-    private static object ToDetail(GameRow game, string systemName, IReadOnlyList<RomRow> roms, ILookup<long, RomFileRow> files,
+    private static object ToDetail(GameRow game, string systemName, string? browserCore, IReadOnlyList<RomRow> roms, ILookup<long, RomFileRow> files,
         IReadOnlyList<ImageRow> images, IReadOnlySet<string> notes) => new
     {
         id = game.Id,
         system = game.SystemId,
         systemName,
+        browserCore,
         title = game.Title,
         displayTitle = game.DisplayTitle,
         releaseYear = game.ReleaseYear,
