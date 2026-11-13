@@ -128,12 +128,14 @@ describe('game images', () => {
 		expect(screen.queryByRole('button', { name: /^Delete / })).toBeNull();
 	});
 
-	it('Upload image sits in the heading row, before the grid (G3)', () => {
+	it('Upload image sits right-aligned on its own row before the grid; the heading is visually hidden (G3, I1)', () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 
 		const upload = screen.getByRole('button', { name: 'Upload image' });
 		const heading = screen.getByRole('heading', { name: 'Images' });
-		expect(upload.parentElement).toBe(heading.parentElement);
+		expect(heading.className).toBe('visually-hidden');
+		expect(upload.classList.contains('ms-auto')).toBe(true);
+		expect(upload.parentElement!.children).toHaveLength(1);
 		const grid = screen.getAllByRole('button', { name: /full size/ })[0].closest('.row')!;
 		expect(upload.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		expect(grid.nextElementSibling).toBeNull();
@@ -165,8 +167,12 @@ describe('game images', () => {
 	const uploadModal = () => screen.getByLabelText('Upload an image').closest('.modal')!;
 	const confirmUpload = () =>
 		fireEvent.click(screen.getByRole('button', { name: 'Upload', hidden: true }));
-	const choose = (file: File) =>
-		fireEvent.change(screen.getByLabelText('Upload an image'), { target: { files: [file] } });
+	const choose = async (file: File) => {
+		await fireEvent.click(screen.getByLabelText('File'));
+		await fireEvent.change(screen.getByLabelText('Upload an image'), { target: { files: [file] } });
+	};
+	const typeRadio = (label: 'Box art' | 'Screenshot') =>
+		screen.getByLabelText(label) as HTMLInputElement;
 	const png = () => new File([new Uint8Array([1, 2, 3])], 'art.png', { type: 'image/png' });
 
 	it('the upload form lives in a modal opened by the Upload image button', async () => {
@@ -186,7 +192,7 @@ describe('game images', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
 		await choose(png());
-		await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'Snap' } });
+		await fireEvent.click(typeRadio('Screenshot'));
 		await confirmUpload();
 
 		await vi.waitFor(() => expect(onchanged).toHaveBeenCalledWith(fresh));
@@ -195,7 +201,7 @@ describe('game images', () => {
 		expect((body.get('file') as File).name).toBe('art.png');
 		expect(body.get('type')).toBe('Snap');
 		await vi.waitFor(() => expect(uploadModal().classList.contains('show')).toBe(false));
-		expect((screen.getByLabelText('Type') as HTMLSelectElement).value).toBe('BoxArt');
+		expect(typeRadio('Box art').checked).toBe(true);
 		expect((screen.getByLabelText('Upload an image') as HTMLInputElement).value).toBe('');
 	});
 
@@ -203,6 +209,7 @@ describe('game images', () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await fireEvent.click(screen.getByLabelText('File'));
 		await confirmUpload();
 
 		expect(screen.getByText('Choose an image file.')).toBeTruthy();
@@ -228,24 +235,67 @@ describe('game images', () => {
 		await fireEvent.input(urlInput(), { target: { value: url } });
 	}
 
-	it('opens on File; URL mode shows the URL field and hides the file input (U6)', async () => {
+	it('opens on URL, listed before File; File mode shows the file input and hides the URL field (U6, I2)', async () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
 
-		expect(fileRadio().checked).toBe(true);
-		expect(fileRadio().className).toBe('btn-check');
-		expect(screen.getByText('File').className).toBe('btn btn-outline-secondary btn-sm');
-		expect(screen.queryByLabelText('Image URL')).toBeNull();
-		expect(fileGroup().hidden).toBe(false);
-
-		await fireEvent.click(urlRadio());
-
+		const source = screen.getByRole('group', { name: 'Image source', hidden: true });
+		expect([...source.querySelectorAll('label')].map((l) => l.textContent)).toEqual([
+			'URL',
+			'File'
+		]);
+		expect(urlRadio().checked).toBe(true);
+		expect(urlRadio().className).toBe('btn-check');
+		expect(screen.getByText('URL').className).toBe('btn btn-outline-secondary btn-sm');
 		expect(urlInput().type).toBe('url');
 		expect(
 			screen.getByText('The server downloads the image. PNG or JPEG, at most 8 MiB.')
 		).toBeTruthy();
 		expect(fileGroup().hidden).toBe(true);
-		expect(screen.getByLabelText('Type')).toBeTruthy();
+
+		await fireEvent.click(fileRadio());
+
+		expect(screen.queryByLabelText('Image URL')).toBeNull();
+		expect(fileGroup().hidden).toBe(false);
+	});
+
+	it('Type is a Box art / Screenshot radio group after the inputs, Box art by default (I2)', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+
+		const group = screen.getByRole('group', { name: 'Image type', hidden: true });
+		expect(group.className).toBe('btn-group');
+		expect([...group.querySelectorAll('label')].map((l) => l.textContent)).toEqual([
+			'Box art',
+			'Screenshot'
+		]);
+		expect(typeRadio('Box art').checked).toBe(true);
+		expect(typeRadio('Box art').className).toBe('btn-check');
+		expect(
+			screen.getByLabelText('Upload an image').compareDocumentPosition(group) &
+				Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
+
+	it('a type error shows below the group (I2)', async () => {
+		answers['POST /api/games/g1/images/from-url'] = {
+			status: 400,
+			body: {
+				status: 400,
+				code: 'ValidationFailed',
+				title: 'One or more validation errors occurred.',
+				errors: { type: ['Choose BoxArt or Snap.'] }
+			}
+		};
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await openUrlMode('https://example.com/a.png');
+		await confirmUpload();
+
+		const error = await screen.findByText('Choose BoxArt or Snap.');
+		expect(error.className).toBe('invalid-feedback d-block');
+		expect(error.previousElementSibling).toBe(
+			screen.getByRole('group', { name: 'Image type', hidden: true })
+		);
 	});
 
 	it('an empty URL shows the error without a request (U6)', async () => {
@@ -265,7 +315,7 @@ describe('game images', () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged });
 
 		await openUrlMode('https://example.com:8443/a.png');
-		await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'Snap' } });
+		await fireEvent.click(typeRadio('Screenshot'));
 		await confirmUpload();
 
 		await vi.waitFor(() => expect(onchanged).toHaveBeenCalledWith(fresh));
@@ -307,7 +357,7 @@ describe('game images', () => {
 			render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 
 			await openUrlMode('https://example.com/a.png');
-			await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'Snap' } });
+			await fireEvent.click(typeRadio('Screenshot'));
 			await confirmUpload();
 
 			await vi.waitFor(() => expect(urlInput().classList).toContain('is-invalid'));
@@ -322,7 +372,7 @@ describe('game images', () => {
 			);
 			expect(fileRadio().checked).toBe(true);
 			expect(fileGroup().hidden).toBe(false);
-			expect((screen.getByLabelText('Type') as HTMLSelectElement).value).toBe('Snap');
+			expect(typeRadio('Screenshot').checked).toBe(true);
 		}
 	);
 
@@ -344,7 +394,7 @@ describe('game images', () => {
 	it('reopening after a cancel resets mode, URL, Type and errors (U6)', async () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 		await openUrlMode('');
-		await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'Snap' } });
+		await fireEvent.click(typeRadio('Screenshot'));
 		await confirmUpload();
 		await fireEvent.input(urlInput(), { target: { value: 'https://x.test/a.png' } });
 
@@ -353,11 +403,114 @@ describe('game images', () => {
 		);
 		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
 
-		expect(fileRadio().checked).toBe(true);
-		expect((screen.getByLabelText('Type') as HTMLSelectElement).value).toBe('BoxArt');
-		await fireEvent.click(urlRadio());
+		await fireEvent.click(fileRadio());
+		await fireEvent.click(
+			within(uploadModal() as HTMLElement).getByRole('button', { name: 'Cancel', hidden: true })
+		);
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+
+		expect(urlRadio().checked).toBe(true);
+		expect(typeRadio('Box art').checked).toBe(true);
 		expect(urlInput().value).toBe('');
 		expect(screen.queryByText('Enter an http or https image URL.')).toBeNull();
+	});
+
+	describe('drag and drop (I3)', () => {
+		/** jsdom has no DataTransfer and only takes a real FileList on `files`; both are stood in for. */
+		class FakeDataTransfer {
+			private list: File[] = [];
+			items = { add: (f: File) => void this.list.push(f) };
+			get files() {
+				return this.list;
+			}
+		}
+		function drag(type: string, files: File[] | null, types = files ? ['Files'] : ['text/plain']) {
+			const event = new Event(type, { bubbles: true, cancelable: true }) as DragEvent;
+			Object.defineProperty(event, 'dataTransfer', { value: { types, files: files ?? [] } });
+			return event;
+		}
+		const dropZone = () => screen.getByRole('group', { name: 'Image to upload', hidden: true });
+		let picked: unknown;
+
+		async function openWithFileInput(): Promise<HTMLInputElement> {
+			vi.stubGlobal('DataTransfer', FakeDataTransfer);
+			render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+			await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+			const input = screen.getByLabelText('Upload an image') as HTMLInputElement;
+			picked = undefined;
+			Object.defineProperty(input, 'files', {
+				configurable: true,
+				get: () => picked,
+				set: (v) => (picked = v)
+			});
+			return input;
+		}
+
+		it('dragging files over the body shows the overlay; leaving hides it', async () => {
+			await openWithFileInput();
+
+			const over = drag('dragover', [png()]);
+			await fireEvent(dropZone(), over);
+
+			expect(over.defaultPrevented).toBe(true);
+			const overlay = screen.getByText('Drop image to upload');
+			expect(overlay.className).toContain('border-primary');
+			await fireEvent(dropZone(), drag('dragleave', [png()]));
+			expect(screen.queryByText('Drop image to upload')).toBeNull();
+		});
+
+		it('dropping one file selects File and uses it as if picked', async () => {
+			await openWithFileInput();
+			expect(urlRadio().checked).toBe(true);
+
+			const drop = drag('drop', [png()]);
+			await fireEvent(dropZone(), drop);
+
+			expect(drop.defaultPrevented).toBe(true);
+			expect(fileRadio().checked).toBe(true);
+			expect((picked as File[]).map((f) => f.name)).toEqual(['art.png']);
+			expect(screen.queryByText(/Only one image/)).toBeNull();
+		});
+
+		it('dropping several uses the first and says so until the next drop, pick or open', async () => {
+			const input = await openWithFileInput();
+			const second = new File([new Uint8Array([4])], 'other.png', { type: 'image/png' });
+
+			await fireEvent(dropZone(), drag('drop', [png(), second]));
+
+			expect((picked as File[]).map((f) => f.name)).toEqual(['art.png']);
+			const note = screen.getByText('Only one image can be uploaded at a time; using art.png.');
+			expect(note.className).toBe('form-text');
+
+			await fireEvent(dropZone(), drag('drop', [second]));
+			expect(screen.queryByText(/Only one image/)).toBeNull();
+
+			await fireEvent(dropZone(), drag('drop', [png(), second]));
+			await fireEvent.change(input);
+			expect(screen.queryByText(/Only one image/)).toBeNull();
+
+			await fireEvent(dropZone(), drag('drop', [png(), second]));
+			await fireEvent.click(
+				within(uploadModal() as HTMLElement).getByRole('button', { name: 'Cancel', hidden: true })
+			);
+			await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+			expect(screen.queryByText(/Only one image/)).toBeNull();
+		});
+
+		it('dragging or dropping text is left alone (no preventDefault, no change)', async () => {
+			await openWithFileInput();
+
+			const over = drag('dragover', null);
+			const drop = drag('drop', null);
+			await fireEvent(dropZone(), over);
+			await fireEvent(dropZone(), drop);
+
+			expect(over.defaultPrevented).toBe(false);
+			expect(drop.defaultPrevented).toBe(false);
+			expect(screen.queryByText('Drop image to upload')).toBeNull();
+			expect(urlRadio().checked).toBe(true);
+			expect(picked).toBeUndefined();
+		});
 	});
 
 	it('a file over 8 MiB is refused before sending', async () => {
