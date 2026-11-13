@@ -44,6 +44,8 @@ public class IngestPipelineTests
     private static readonly byte[] Comet = new SyntheticMegaDriveRomBuilder { Seed = 160, Size = 65536 }.Build();
     private static readonly byte[] Relay = new SyntheticMegaDriveRomBuilder { Seed = 170, Size = 65536, SystemType = "SEGA 32X", OverseasTitle = "STAR RELAY" }.Build();
     private static readonly byte[] Circuit = Atari(262144, 180);
+    private static readonly SyntheticDiscBuilder WaveBowling = new()
+        { Seed = 2041, Magic = NintendoDiscMagic.Wii, GameId = "RWBE01", Title = "WAVE BOWLING" };
     private ApiFactory _shared = null!;
     /// <summary>The class's shared host, or a host of the test's own when it needs other services (<see cref="RestartWithOverrides"/>).</summary>
     private ApiFactory _factory = null!;
@@ -128,7 +130,8 @@ public class IngestPipelineTests
             [IngestSeeder.PsxDat] = [],
             [IngestSeeder.PspDat] = [],
             [IngestSeeder.GameCubeDat] = [],
-            [IngestSeeder.WiiDat] = [],
+            [IngestSeeder.WiiDat] =
+                [new FixtureGame("Wave Bowling (USA)", "Wave Bowling (USA).iso", WaveBowling.Build()) { Serial = "RVL-RWBE-USA" }],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
             [Gb] =
@@ -800,11 +803,25 @@ public class IngestPipelineTests
         Assert.That((small!.Reason, large!.Reason), Is.EqualTo((IngestFailures.TooSmall, IngestFailures.TooLarge)));
     }
 
+    [Test]
+    public async Task WbfsInGameCubeFolder_MatchesTheWiiDatByGameId()
+    {
+        var file = Drop("gc", "bowling.wbfs", WaveBowling.Wbfs());
+        File.SetLastWriteTimeUtc(file.FullPath, file.ModifiedAtUtc);
+        var result = await IngestAsync(file with { ModifiedAtUtc = File.GetLastWriteTimeUtc(file.FullPath) });
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, (string?)null, "wii")), result.Details);
+        var game = ReadZip("wii/W/Wave Bowling.zip");
+        var rom = game.Roms.Single();
+        Assert.That((rom.ExternalFileName, rom.Identification.Method, rom.Metadata.Sha1),
+            Is.EqualTo(("Wave Bowling (USA).wbfs", IdentificationMethod.Serial, result.Sha1)));
+    }
+
     [TestCase("wii")]
     [TestCase("gc")]
     public async Task WiiIsoOver2GiB_IsNotTooLarge_AndWaitsInReviewAsWii(string folder)
     {
-        // Disc systems B4/B6: the Wii magic at 0x18, the rest zeros; the six Redump DATs are empty, so nothing matches.
+        // Disc systems B4/B6: the Wii magic at 0x18, the rest zeros, so no DAT entry matches.
         var path = Path.Combine(_factory.Root, "ingest", folder, "disc.iso");
         using (var stream = File.Create(path))
         {

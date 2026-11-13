@@ -183,7 +183,8 @@ public static class IngestSeeder
         var skyRally = DiscSet("saturn", "Sky Rally (Japan)", 2011);
         var pocketNinja = Iso("psp", "Pocket Ninja (USA)", new SyntheticDiscBuilder { Seed = 2021 });
         var cubeKart = Iso("gc", "Cube Kart (USA)", new SyntheticDiscBuilder { Seed = 2031, Magic = NintendoDiscMagic.GameCube, GameId = "GCKE01", Title = "CUBE KART" });
-        var waveBowling = Iso("wii", "Wave Bowling (USA)", new SyntheticDiscBuilder { Seed = 2041, Magic = NintendoDiscMagic.Wii, GameId = "RWBE01", Title = "WAVE BOWLING" });
+        var waveBowling = Iso("wii", "Wave Bowling (USA)", new SyntheticDiscBuilder { Seed = 2041, Magic = NintendoDiscMagic.Wii, GameId = "RWBE01", Title = "WAVE BOWLING" })
+            with { Serial = "RVL-RWBE-USA" };
         var arcStrike = Iso("x360", "Arc Strike (USA)", new SyntheticDiscBuilder { Seed = 2051 });
 
         var zipPath = Path.Combine(ingest, "gb", "05-quest.zip");
