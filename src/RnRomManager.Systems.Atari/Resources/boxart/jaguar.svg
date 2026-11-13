@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#f2e3e9"/>
+  <path d="M104 184q0-27 27-27h250q27 0 27 27v138l-20 33H124l-20-33z" fill="#30252a" stroke="#1d1519" stroke-width="6"/>
+  <rect x="131" y="187" width="250" height="126" rx="7" fill="#932345"/>
+  <path d="M158 256l22-48h16l-22 48zm27 0 22-48h16l-22 48zm27 0 22-48h16l-22 48z" fill="#ef9fba"/>
+  <path d="M140 324h232m-217 11h202" stroke="#67535c" stroke-width="4" stroke-linecap="round"/>
+  <text x="256" y="288" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="23" font-weight="800" letter-spacing="3" fill="#fff2f7">ATARI JAGUAR</text>
+</svg>

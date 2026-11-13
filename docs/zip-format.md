@@ -179,6 +179,8 @@ Super Nintendo Entertainment System `header`, read after a copier header is stri
 
 Atari 2600 cartridges have no header: `header` is always null.
 
+Atari Lynx `header` is present on files at least 64 bytes long starting with `LYNX`. Its fields are `bank0PageSize`, `bank1PageSize` and `version` (little-endian unsigned 16-bit values at 0x04, 0x06 and 0x08), `title` (32 bytes from 0x0A), `manufacturer` (16 bytes from 0x2A) and `rotation` (byte at 0x3A, recorded as `none`, `left` or `right` for 0, 1 or 2, otherwise as a number). Text fields use Latin-1 through the first NUL, with whitespace trimmed and empty values stored as null. Atari Jaguar cartridges have no standard header, so their `header` is always null.
+
 ColecoVision `header`: `magic`, the first two bytes as upper-case hex (`AA55` shows the title screen, `55AA` skips it; anything else is not a valid header, empty for an empty file).
 
 Game Gear `header`, from the optional `TMR SEGA` header (looked for at 0x7FF0, 0x3FF0, then 0x1FF0; without it `header` is null): `offset` (`7FF0`, `3FF0` or `1FF0`), `checksum` (bytes +10–11, little-endian, 4 upper-case hex digits), `productCode` (the BCD product code as hex digits, leading zeros trimmed), `version` (low nibble of +14), `region` (`SMS Japan`, `SMS Export`, `GG Japan`, `GG Export`, `GG International`, or the nibble in hex) and `sizeCode` (low nibble of +15). Master System `header` has the same fields, read the same way.
