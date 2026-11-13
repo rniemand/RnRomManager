@@ -852,6 +852,50 @@ public class ReviewEndpointsTests
         Assert.That(result.Errors!.Value.GetProperty("disc")[0].GetString(), Is.EqualTo("Disc numbers are for disc systems."));
     }
 
+    [Test]
+    public async Task Detail_OfAnUnmatchedSetMember_ListsTheSet_AndIsNotDismissible_B13()
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(_factory.Root, "ingest", "psx")).FullName;
+        var cueText = "FILE \"Disc (Track 1).bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n"
+            + "FILE \"Disc (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n";
+        foreach (var (name, bytes) in new[] { ("Disc.cue", System.Text.Encoding.UTF8.GetBytes(cueText)),
+            ("Disc (Track 1).bin", RandomNumberGenerator.GetBytes(2352)), ("Disc (Track 2).bin", RandomNumberGenerator.GetBytes(2352)) })
+        {
+            File.WriteAllBytes(Path.Combine(folder, name), bytes);
+            File.SetLastWriteTimeUtc(Path.Combine(folder, name), DateTime.UtcNow.AddMinutes(-5));
+        }
+        await RunIngest();
+        var rows = (await Reviews.ListAsync("Pending", 1, 50, default)).Items.Where(r => r.SystemId == "psx").ToList();
+        var bin = rows.Single(r => r.OriginalFileName == "Disc (Track 2).bin");
+
+        using (var detail = await _admin.GetAsync($"/api/review/{bin.Id}"))
+        {
+            var json = await AuthClient.JsonAsync(detail);
+            Assert.That((json.GetProperty("dismissible").GetBoolean(), json.GetProperty("fileSets").GetBoolean(), json.GetProperty("resolvable").GetBoolean()),
+                Is.EqualTo((false, true, false)), "set members become resolvable in a later step");
+            Assert.That(json.GetProperty("setMembers").EnumerateArray().Select(m => (m.GetProperty("fileName").GetString(), m.GetProperty("sizeBytes").GetInt64())),
+                Is.EqualTo(new[] { ("Disc.cue", (long)cueText.Length), ("Disc (Track 1).bin", 2352L), ("Disc (Track 2).bin", 2352L) }));
+            Assert.That(json.GetProperty("setMembers")[0].GetProperty("reviewId").GetInt64(), Is.EqualTo(rows.Single(r => r.OriginalFileName == "Disc.cue").Id));
+        }
+        using (var dismiss = await _admin.PostAsync($"/api/review/{bin.Id}/dismiss"))
+        {
+            Assert.That(dismiss.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(await AuthClient.CodeAsync(dismiss), Is.EqualTo(ReviewResolver.SetFileNotResolvable));
+        }
+    }
+
+    [Test]
+    public async Task Detail_OfASingleFile_IsDismissible_WithNoSet_B13()
+    {
+        var item = await Queue();
+
+        using var detail = await _admin.GetAsync($"/api/review/{item.Id}");
+        var json = await AuthClient.JsonAsync(detail);
+
+        Assert.That((json.GetProperty("dismissible").GetBoolean(), json.GetProperty("fileSets").GetBoolean()), Is.EqualTo((true, false)));
+        Assert.That(json.GetProperty("setMembers").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
     private async Task WaitIdleAsync()
     {
         for (var i = 0; i < 600 && Service<JobRunner>().Current is not null; i++)

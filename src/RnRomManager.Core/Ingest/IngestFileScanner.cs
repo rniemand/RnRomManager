@@ -132,7 +132,8 @@ public class IngestFileScanner(IOptions<PathsOptions> paths, ISystemRegistry sys
         }
     }
 
-    private IReadOnlyList<IngestFile> ScanSystem(string systemId)
+    /// <summary>One system's top-level files, ordered by name, as <see cref="Scan"/> lists them.</summary>
+    public IReadOnlyList<IngestFile> ScanSystem(string systemId)
     {
         var folder = new DirectoryInfo(Path.Combine(paths.Value.Ingest, systemId));
         if (IsExternal(systemId))

@@ -99,7 +99,7 @@ public sealed class IngestJob(
             {
                 var byName = folder.ToDictionary(f => f.Name, StringComparer.Ordinal);
                 var selected = Selection?.Where(s => s.SystemId == folder.Key).Select(s => s.Name).ToHashSet(StringComparer.Ordinal);
-                foreach (var unit in IngestSetPlanner.Plan(folder.Select(f => new PlannerFile(f.Name, f.SizeBytes, ReadCue(f))).ToList(), selected))
+                foreach (var unit in IngestSetPlanner.Plan(folder.Select(f => new PlannerFile(f.Name, f.SizeBytes, IngestCueReader.Read(paths.Value.Ingest, f, logger))).ToList(), selected))
                     units.Add(new WorkUnit(unit.Kind, [.. unit.Members.Select(m => byName[m])], unit.Reason));
             }
             else
@@ -180,28 +180,6 @@ public sealed class IngestJob(
 
     /// <summary>B7: a planned unit: a set, a lone file, or members skipped with <paramref name="Reason"/>.</summary>
     private sealed record WorkUnit(PlannedKind Kind, IReadOnlyList<IngestFile> Files, string? Reason = null);
-
-    /// <summary>B7: a cue's bytes for the planner, through the same checked open as other ingest reads; null when unreadable.</summary>
-    private byte[]? ReadCue(IngestFile file)
-    {
-        if (!file.Name.EndsWith(".cue", StringComparison.OrdinalIgnoreCase) || file.SizeBytes > IngestSetPlanner.MaxCueBytes)
-            return null;
-        var opened = ExternalRomPath.OpenRead(paths.Value.Ingest, file.FullPath, FileShare.Read);
-        if (opened.Status != ExternalPathStatus.Found)
-            return null;
-        try
-        {
-            using var stream = opened.Stream!;
-            using var buffer = new MemoryStream();
-            new LimitStream(stream, IngestSetPlanner.MaxCueBytes).CopyTo(buffer);
-            return buffer.ToArray();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or LimitExceededException)
-        {
-            logger.LogWarning("{Path}: the cue couldn't be read: {Error}", file.FullPath, ex.Message);
-            return null;
-        }
-    }
 
     /// <summary>
     /// B7: one set, processed to the end (I2). Every member gets its own item, recorded before its <c>ItemDone</c>; a

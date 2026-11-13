@@ -48,7 +48,8 @@ const detail = (id: number) => ({
 	lastSeenJobId: null,
 	resolvedAt: null,
 	resolvedBy: null,
-	resolvable: true
+	resolvable: true,
+	dismissible: true
 });
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -144,6 +145,16 @@ describe('review item page: resolving as a job', () => {
 		).toBeGreaterThan(0);
 		expect(screen.getByLabelText('Title').classList.contains('is-invalid')).toBe(true);
 		expect(reviewJobs.running).toBeNull();
+	});
+
+	it('hides Dismiss when the item is not dismissible (B15)', async () => {
+		const plain = detail(7);
+		vi.stubGlobal('fetch', () => Promise.resolve(json({ ...plain, dismissible: false })));
+		render(ReviewPage);
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(screen.getByRole('button', { name: /Delete/ })).toBeTruthy();
+		expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
 	});
 
 	it('SourceMissing toasts and returns to the queue', async () => {

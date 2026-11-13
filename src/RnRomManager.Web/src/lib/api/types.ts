@@ -302,6 +302,8 @@ export interface ReviewDetail {
 	status: 'Pending' | 'Resolved' | 'Dismissed';
 	/** B15: false for a disc track file (`.cue`/`.bin` on a disc system), which can only be deleted. */
 	resolvable: boolean;
+	/** B15: false for every `.cue`/`.bin` on a disc system; Dismiss is hidden then. */
+	dismissible: boolean;
 	gameId: string | null;
 	createdAt: string;
 }

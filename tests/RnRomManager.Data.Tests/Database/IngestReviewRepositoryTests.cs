@@ -111,4 +111,25 @@ public class IngestReviewRepositoryTests
         Assert.That(await _reviews.GetBySha1Async(upper.Sha1, default), Is.Not.Null, "paths match exactly, as in CompleteSourceAsync");
         Assert.That(await _reviews.GetBySha1Async(otherArchive.Sha1, default), Is.Not.Null);
     }
+
+    [Test]
+    public async Task ListPendingByPaths_ReturnsOnlyPendingLooseRowsOfThosePaths_B12()
+    {
+        ReviewItem Loose(char hash, string path) => Item(hash, Path.GetFileName(path)) with { SourcePath = path, ArchivePath = null, ArchiveEntry = null };
+        var cue = Loose('a', "/ingest/psx/Game.cue");
+        var bin = Loose('b', "/ingest/psx/Game (Track 1).bin");
+        var resolved = Loose('c', "/ingest/psx/Game (Track 2).bin");
+        var otherCase = Loose('d', "/ingest/psx/GAME.cue");
+        var elsewhere = Loose('e', "/ingest/psx/Other.cue");
+        var entry = Item('f', "Game.cue") with { SourcePath = "/ingest/psx/Game.cue", ArchivePath = "/ingest/psx/Game.cue" };
+        foreach (var item in new[] { cue, bin, resolved, otherCase, elsewhere, entry })
+            await _reviews.UpsertAsync(item, default);
+        await _reviews.CompleteSourceAsync(resolved.SourcePath, null, new IngestItemResult("Ingested", GameId: Guid.NewGuid()), Guid.NewGuid(), Now, default);
+        Assert.That((await _reviews.GetBySha1Async(resolved.Sha1, default))!.Status, Is.EqualTo("Resolved"));
+
+        var found = await _reviews.ListPendingByPathsAsync([cue.SourcePath, bin.SourcePath, resolved.SourcePath], default);
+
+        Assert.That(found.Select(r => r.Sha1).Order(), Is.EqualTo(new[] { cue.Sha1, bin.Sha1 }));
+        Assert.That(await _reviews.ListPendingByPathsAsync([], default), Is.Empty);
+    }
 }

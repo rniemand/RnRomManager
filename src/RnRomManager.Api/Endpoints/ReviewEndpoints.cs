@@ -41,7 +41,7 @@ public static class ReviewEndpoints
             }));
         });
         review.MapGet("/{id:long}", async (long id, HttpContext ctx, IIngestReviewRepository repository, IGameRepository games,
-            ISystemRegistry systems) =>
+            ISystemRegistry systems, ReviewSets sets) =>
         {
             var item = await repository.GetAsync(id, ctx.RequestAborted);
             if (item is null)
@@ -50,6 +50,7 @@ public static class ReviewEndpoints
             foreach (var node in JsonNode.Parse(item.CandidateGameIds ?? "[]")!.AsArray())
                 if (await games.GetAsync(node!.GetValue<Guid>(), ctx.RequestAborted) is { } game)
                     candidates.Add(new { id = game.Id, displayTitle = game.DisplayTitle });
+            var set = await sets.FindAsync(item, ctx.RequestAborted);
             return Results.Ok(new
             {
                 id = item.Id, system = item.SystemId, systemName = systems.ById(item.SystemId)?.DisplayName ?? item.SystemId,
@@ -60,6 +61,9 @@ public static class ReviewEndpoints
                 candidateGames = candidates, status = item.Status, gameId = item.GameId, createdAt = item.CreatedAt,
                 lastSeenJobId = item.LastSeenJobId, resolvedAt = item.ResolvedAt, resolvedBy = item.ResolvedBy,
                 resolvable = ReviewResolver.IsResolvable(item, systems),
+                dismissible = ReviewResolver.IsDismissible(item, systems),
+                fileSets = systems.ById(item.SystemId)?.FileSets ?? false,
+                setMembers = set?.Select(m => new { reviewId = m.Row.Id, fileName = m.Row.OriginalFileName, sizeBytes = m.Row.SizeBytes }),
             });
         });
         review.MapPost("/{id:long}/resolve", async (long id, ReviewResolutionRequest request, HttpContext ctx, IIngestReviewRepository repository,

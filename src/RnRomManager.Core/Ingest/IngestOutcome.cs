@@ -84,6 +84,9 @@ public interface IIngestReviewRepository
     Task RetargetPendingAsync(string originalPath, string sha1, string restoredPath, CancellationToken cancellationToken);
 
     Task<int> DeletePendingBySourceAsync(string sourcePath, string? archivePath, CancellationToken cancellationToken);
+
+    /// <summary>B12: the <c>Pending</c> loose-file rows (<c>archive_path</c> null) whose exact <c>source_path</c> is one of <paramref name="sourcePaths"/>.</summary>
+    Task<IReadOnlyList<ReviewItem>> ListPendingByPathsAsync(IReadOnlyCollection<string> sourcePaths, CancellationToken cancellationToken);
 }
 
 /// <summary>RV3: optional review-list filters; null fields are not applied. <paramref name="Query"/> is a trimmed substring of the file name or header title.</summary>

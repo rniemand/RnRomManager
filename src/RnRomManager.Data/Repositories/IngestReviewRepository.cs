@@ -121,6 +121,16 @@ public sealed class IngestReviewRepository(IDbConnectionFactory connections) : I
             "DELETE FROM ingest_review_items WHERE id IN @ids", new { ids }, cancellationToken: cancellationToken));
     }
 
+    public async Task<IReadOnlyList<ReviewItem>> ListPendingByPathsAsync(IReadOnlyCollection<string> sourcePaths, CancellationToken cancellationToken)
+    {
+        if (sourcePaths.Count == 0)
+            return [];
+        await using var connection = connections.Create();
+        return (await connection.QueryAsync<ReviewItem>(new CommandDefinition(
+            Select + " WHERE status = 'Pending' AND archive_path IS NULL AND BINARY source_path IN @sourcePaths",
+            new { sourcePaths }, cancellationToken: cancellationToken))).ToList();
+    }
+
     public async Task<int> DeletePendingBySourceAsync(string sourcePath, string? archivePath, CancellationToken cancellationToken)
     {
         var sql = archivePath is null

@@ -58,7 +58,10 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
     /// B15: false for a <c>.cue</c> or <c>.bin</c> item (by its <c>originalFileName</c>, ignoring case) on a <c>FileSets</c>
     /// system, which can only be deleted; true for every other item.
     /// </summary>
-    public static bool IsResolvable(ReviewItem item, ISystemRegistry systems) =>
+    public static bool IsResolvable(ReviewItem item, ISystemRegistry systems) => IsDismissible(item, systems);
+
+    /// <summary>B15: false for every <c>.cue</c>/<c>.bin</c> item on a <c>FileSets</c> system, so a set is never half dismissed.</summary>
+    public static bool IsDismissible(ReviewItem item, ISystemRegistry systems) =>
         !(systems.ById(item.SystemId) is { FileSets: true }
             && Path.GetExtension(item.OriginalFileName).ToLowerInvariant() is ".cue" or ".bin");
 
@@ -288,8 +291,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         CancellationToken ct, JobProgress? progress)
     {
         var userId = actor.UserId!.Value; // review actions always have a user: the signed-in one, or the job's requester
-        if (!IsResolvable(item, systems))
-            return new(SetFileNotResolvable); // B15: resolve and dismiss alike, so a set is never half dismissed
+        if (request is null ? !IsDismissible(item, systems) : !IsResolvable(item, systems))
+            return new(SetFileNotResolvable);
         var external = IsExternal(item);
         string source;
         ExternalFileSnapshot? sourceSnapshot = null;

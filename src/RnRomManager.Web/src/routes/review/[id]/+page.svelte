@@ -287,7 +287,7 @@
 					rel="noopener noreferrer"><Icon name="google" /> Google it</a
 				>
 				<!-- eslint-enable svelte/no-navigation-without-resolve -->
-				{#if item.resolvable}
+				{#if item.dismissible}
 					<button
 						type="button"
 						class="btn btn-outline-secondary"
