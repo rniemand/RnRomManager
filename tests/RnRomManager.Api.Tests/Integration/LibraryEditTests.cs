@@ -25,11 +25,21 @@ public class LibraryEditTests
     private AuthClient _admin = null!;
     private T Service<T>() where T : notnull => _factory.Services.GetRequiredService<T>();
 
-    [SetUp]
-    public async Task SetUp()
+    [OneTimeSetUp]
+    public async Task StartHost()
     {
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
+    [SetUp]
+    public async Task SetUp()
+    {
+        await _factory.ResetAsync();
         _admin = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         (await _admin.LoginAsync("boss", TestUsers.Password)).Dispose();
@@ -67,7 +77,6 @@ public class LibraryEditTests
     public void TearDown()
     {
         _admin.Dispose();
-        _factory.Dispose();
     }
 
     private string Removed => Path.Combine(_factory.Root, "ingest", "gb", "_removed");

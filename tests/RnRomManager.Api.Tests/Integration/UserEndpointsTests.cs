@@ -16,11 +16,21 @@ public class UserEndpointsTests
     private AuthClient _admin = null!;
     private User _boss = null!;
 
-    [SetUp]
-    public async Task SetUp()
+    [OneTimeSetUp]
+    public async Task StartHost()
     {
         // The DB also holds the seeded 'admin' (an enabled Admin that must change its password).
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
+    [SetUp]
+    public async Task SetUp()
+    {
+        await _factory.ResetAsync();
         _admin = await AuthClient.CreateAsync(_factory);
         _boss = await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         (await _admin.LoginAsync("boss", TestUsers.Password)).Dispose();
@@ -30,7 +40,6 @@ public class UserEndpointsTests
     public void TearDown()
     {
         _admin.Dispose();
-        _factory.Dispose();
     }
 
     private IUserRepository Users => _factory.Services.GetRequiredService<IUserRepository>();

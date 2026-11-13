@@ -32,16 +32,26 @@ public class ReviewEndpointsTests
     private T Service<T>() where T : notnull => _factory.Services.GetRequiredService<T>();
     private IIngestReviewRepository Reviews => Service<IIngestReviewRepository>();
 
-    [SetUp]
-    public async Task SetUp()
+    [OneTimeSetUp]
+    public async Task StartHost()
     {
-        _pipelineOverride = null;
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
         {
             TestServices = services => services.AddTransient(sp => ActivatorUtilities.CreateInstance<ReviewResolver>(sp,
                 _pipelineOverride ?? sp.GetRequiredService<IngestPipeline>())),
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
+    [SetUp]
+    public async Task SetUp()
+    {
+        _pipelineOverride = null;
+        await _factory.ResetAsync();
         _admin = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         using var login = await _admin.LoginAsync("boss", TestUsers.Password);
@@ -74,7 +84,7 @@ public class ReviewEndpointsTests
     }
 
     [TearDown]
-    public void TearDown() { _admin.Dispose(); _factory.Dispose(); }
+    public void TearDown() { _admin.Dispose(); }
 
     private IngestFile Drop(string name, byte[] bytes)
     {

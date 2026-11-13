@@ -16,9 +16,21 @@ public class HotkeyEndpointsTests
 
     private IUserRepository Users => _factory.Services.GetRequiredService<IUserRepository>();
 
-    private async Task SignInAsync(IReadOnlySet<string>? roles = null, bool mustChangePassword = false)
+    [OneTimeSetUp]
+    public async Task StartHost()
     {
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
+    [SetUp]
+    public Task SetUp() => _factory.ResetAsync();
+
+    private async Task SignInAsync(IReadOnlySet<string>? roles = null, bool mustChangePassword = false)
+    {
         _client = await AuthClient.CreateAsync(_factory);
         _user = await TestUsers.CreateAsync(_factory, "keys", roles, mustChangePassword);
         (await _client.LoginAsync("keys", TestUsers.Password)).Dispose();
@@ -28,7 +40,6 @@ public class HotkeyEndpointsTests
     public void TearDown()
     {
         _client?.Dispose();
-        _factory?.Dispose();
     }
 
     private static async Task<Dictionary<string, string?>> BindingsAsync(HttpResponseMessage response)

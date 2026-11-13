@@ -38,8 +38,8 @@ public class AuditLibraryEditTests
             Fail ? throw new TimeoutException("DB down") : inner.ApplyAsync(replace, delete, cancellationToken);
     }
 
-    [SetUp]
-    public async Task SetUp()
+    [OneTimeSetUp]
+    public async Task StartHost()
     {
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
         {
@@ -47,6 +47,18 @@ public class AuditLibraryEditTests
                 _mirror = new FailingMirror(ActivatorUtilities.CreateInstance<LibraryMirror>(sp))),
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
+    [SetUp]
+    public async Task SetUp()
+    {
+        await _factory.ResetAsync();
+        if (_mirror is not null)
+            _mirror.Fail = false;
         _admin = await AuthClient.CreateAsync(_factory);
         _bossId = (await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles)).Id;
         (await _admin.LoginAsync("boss", TestUsers.Password)).Dispose();
@@ -84,7 +96,6 @@ public class AuditLibraryEditTests
     public void TearDown()
     {
         _admin.Dispose();
-        _factory.Dispose();
     }
 
     private async Task<Guid> Ingest(string name, byte[] bytes)

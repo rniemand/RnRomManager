@@ -30,10 +30,9 @@ public class ImageEndpointsTests
     private IDisposable? _held;
     private T Service<T>() where T : notnull => _factory.Services.GetRequiredService<T>();
 
-    [SetUp]
-    public async Task SetUp()
+    [OneTimeSetUp]
+    public async Task StartHost()
     {
-        _lockBeforeGameCheck = false;
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
         {
             // B14: the factory runs after the editor released the lock; grabbing it here plays another job starting first.
@@ -47,6 +46,17 @@ public class ImageEndpointsTests
             }),
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
+    [SetUp]
+    public async Task SetUp()
+    {
+        _lockBeforeGameCheck = false;
+        await _factory.ResetAsync();
         _manager = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "manager", Roles.Of(Roles.RomManager));
         (await _manager.LoginAsync("manager", TestUsers.Password)).Dispose();
@@ -84,7 +94,6 @@ public class ImageEndpointsTests
     {
         _held?.Dispose();
         _manager.Dispose();
-        _factory.Dispose();
     }
 
     private static byte[] Png(uint width, uint height)
