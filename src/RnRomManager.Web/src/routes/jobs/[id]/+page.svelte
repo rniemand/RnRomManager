@@ -10,7 +10,7 @@
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import { formatDateTime } from '#lib/format.js';
-	import { outcomeClass, outcomes, statusClass } from '#lib/jobs.js';
+	import { formatSummaryValue, outcomeClass, outcomes, statusClass } from '#lib/jobs.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 
@@ -135,7 +135,7 @@
 			<ul class="list-inline mb-4">
 				{#each Object.entries(job.summary) as [key, count] (key)}
 					<li class="list-inline-item">
-						<span class="badge {outcomeClass(key)}">{key} {count}</span>
+						<span class="badge {outcomeClass(key)}">{key} {formatSummaryValue(count)}</span>
 					</li>
 				{/each}
 			</ul>

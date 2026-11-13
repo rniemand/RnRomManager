@@ -12,6 +12,7 @@
 	import { formatDateTime } from '#lib/format.js';
 	import {
 		formatSummary,
+		isCancellable,
 		issueStatuses,
 		issueTypes,
 		latestJobs,
@@ -152,11 +153,13 @@
 					<div class="card card-body">
 						<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
 							<strong>{job.type}{job.mode ? ` (${job.mode})` : ''} running</strong>
-							<button
-								type="button"
-								class="btn btn-sm btn-outline-danger ms-auto"
-								onclick={() => cancel(job.id)}>Cancel</button
-							>
+							{#if isCancellable(job.type)}
+								<button
+									type="button"
+									class="btn btn-sm btn-outline-danger ms-auto"
+									onclick={() => cancel(job.id)}>Cancel</button
+								>
+							{/if}
 						</div>
 						<div
 							class="progress mb-1"

@@ -38,8 +38,20 @@ export function outcomeClass(outcome: string): string {
 	return outcomeClasses[outcome] ?? 'text-bg-secondary';
 }
 
+/** B4: a Review resolution runs to its end, so it has no Cancel button. */
+export function isCancellable(type: string): boolean {
+	return type !== 'ReviewResolve';
+}
+
+/** A summary value for a badge (B6): strings and numbers as they are, anything else (`null`, objects) as JSON. */
+export function formatSummaryValue(value: unknown): string {
+	return typeof value === 'string' || typeof value === 'number'
+		? String(value)
+		: JSON.stringify(value);
+}
+
 /** `Ingested 3 · Review 1`; zero counts left out. */
-export function formatSummary(summary: Record<string, number> | null): string {
+export function formatSummary(summary: Record<string, unknown> | null): string {
 	if (!summary) return '';
 	return Object.entries(summary)
 		.filter(([, count]) => count)

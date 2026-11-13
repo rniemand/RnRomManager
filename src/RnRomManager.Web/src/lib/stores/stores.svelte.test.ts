@@ -6,6 +6,22 @@ import { iconClass } from '../components/icons';
 import { auth } from './auth.svelte';
 import { jobs, pollIntervalMs } from './jobs.svelte';
 import { toasts, toastDurationMs } from './toasts.svelte';
+import { reviewJobs, summaryError } from './reviewJobs.svelte';
+import { render, screen } from '@testing-library/svelte';
+import ToastHost from '../components/ToastHost.svelte';
+
+const app = vi.hoisted(() => ({ goto: vi.fn(), url: new URL('http://localhost/review/7') }));
+vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => app.goto(...args) }));
+vi.mock('$app/paths', () => ({
+	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
+}));
+vi.mock('$app/state', () => ({
+	page: {
+		get url() {
+			return app.url;
+		}
+	}
+}));
 
 const job = (id: string): CurrentJob => ({
 	id,
@@ -122,5 +138,152 @@ describe('icons', () => {
 		expect(iconClass('system-gc')).toBe('bi bi-disc');
 		expect(iconClass('system-wii')).toBe('bi bi-disc');
 		expect(iconClass('system-saturn')).toBe('bi bi-disc');
+	});
+});
+
+describe('review resolve jobs', () => {
+	const started = { jobId: 'j9', reviewId: 7, fileName: 'disc2.iso', done: 'Added as Game.' };
+	const summary = (over: object = {}) => ({
+		reviewId: 7,
+		fileName: 'disc2.iso',
+		gameId: null,
+		code: null,
+		errors: null,
+		...over
+	});
+	const jobRow = (status: string, s: object | null, error: string | null = null) =>
+		ok({ id: 'j9', type: 'ReviewResolve', status, summary: s, error });
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		resetClient();
+		app.goto.mockClear();
+		toasts.items = [];
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.unstubAllGlobals();
+	});
+
+	/** Starts the job, answers `Running` once, then `last`; returns the polled URLs. */
+	async function run(last: Response): Promise<string[]> {
+		let polls = 0;
+		const urls = stubFetch(() => (polls++ === 0 ? jobRow('Running', null) : last));
+		reviewJobs.start(started);
+		expect(reviewJobs.running?.jobId).toBe('j9');
+		await vi.advanceTimersByTimeAsync(pollIntervalMs * 2);
+		return urls;
+	}
+
+	it('polls every 1.5 s until the job ends, then opens the game on the item page', async () => {
+		app.url = new URL('http://localhost/review/7');
+
+		const urls = await run(jobRow('Completed', summary({ gameId: 'g1' })));
+
+		expect(urls).toEqual(['/api/jobs/j9', '/api/jobs/j9']);
+		expect(reviewJobs.running).toBeNull();
+		expect(app.goto).toHaveBeenCalledWith('/games/g1');
+		expect(toasts.items.map((t) => [t.text, t.link])).toEqual([['Added as Game.', undefined]]);
+	});
+
+	it('elsewhere shows a toast with an Open game link and never navigates', async () => {
+		app.url = new URL('http://localhost/library');
+
+		await run(jobRow('Completed', summary({ gameId: 'g1' })));
+
+		expect(app.goto).not.toHaveBeenCalled();
+		expect(toasts.items.map((t) => [t.text, t.kind, t.link])).toEqual([
+			['disc2.iso added to the library.', 'success', { href: '/games/g1', text: 'Open game' }]
+		]);
+	});
+
+	it('elsewhere shows a failure toast with an Open review item link, none for SourceMissing', async () => {
+		app.url = new URL('http://localhost/review/8');
+		await run(jobRow('Completed', summary({ code: 'VerifyFailed' })));
+		await run(jobRow('Completed', summary({ code: 'SourceMissing' })));
+
+		expect(toasts.items.map((t) => [t.text, t.kind, t.link])).toEqual([
+			[
+				'Resolving disc2.iso failed: VerifyFailed.',
+				'danger',
+				{ href: '/review/7', text: 'Open review item' }
+			],
+			['Resolving disc2.iso failed: SourceMissing.', 'danger', undefined]
+		]);
+		expect(app.goto).not.toHaveBeenCalled();
+	});
+
+	it('a Failed job without a summary is a failure toast elsewhere and an error on the item page', async () => {
+		app.url = new URL('http://localhost/');
+		await run(jobRow('Failed', null, 'boom'));
+		expect(toasts.items.map((t) => t.text)).toEqual(['Resolving disc2.iso failed.']);
+
+		app.url = new URL('http://localhost/review/7');
+		const failures: unknown[] = [];
+		const stop = reviewJobs.onFailure((e) => failures.push(e));
+		await run(jobRow('Aborted', null, 'boom'));
+		stop();
+		expect(failures).toEqual([expect.objectContaining({ code: 'JobFailed', title: 'boom' })]);
+	});
+
+	it('hands a failed summary to the item page as the ApiError the endpoint would have thrown', async () => {
+		app.url = new URL('http://localhost/review/7');
+		const failures: unknown[] = [];
+		const stop = reviewJobs.onFailure((e) => failures.push(e));
+
+		await run(
+			jobRow('Completed', summary({ code: 'ValidationFailed', errors: { title: ['Bad.'] } }))
+		);
+		stop();
+
+		expect(failures).toEqual([
+			expect.objectContaining({
+				status: 400,
+				code: 'ValidationFailed',
+				errors: { title: ['Bad.'] }
+			})
+		]);
+	});
+
+	it('keeps polling after a failed poll', async () => {
+		let polls = 0;
+		stubFetch(() =>
+			polls++ === 0
+				? new Response(null, { status: 502 })
+				: jobRow('Completed', summary({ gameId: 'g1' }))
+		);
+		app.url = new URL('http://localhost/');
+		reviewJobs.start(started);
+		await vi.advanceTimersByTimeAsync(pollIntervalMs * 2);
+		expect(reviewJobs.running).toBeNull();
+		expect(polls).toBe(2);
+	});
+
+	it('gives a failed summary the status of its code (B8)', () => {
+		const status = (code: string) => summaryError(summary({ code })).status;
+		expect([
+			status('ValidationFailed'),
+			status('NotFound'),
+			status('NameTaken'),
+			status('IoError')
+		]).toEqual([400, 404, 409, 500]);
+		expect(summaryError(summary({ code: 'NotFound' })).title).toBe('Not found');
+	});
+});
+
+describe('toast links', () => {
+	afterEach(() => vi.useRealTimers());
+
+	it('renders the link, and a toast with one stays until closed', async () => {
+		vi.useFakeTimers();
+		toasts.items = [];
+		toasts.show('plain');
+		toasts.show('linked', 'success', { href: '/games/g1', text: 'Open game' });
+		render(ToastHost);
+
+		expect(screen.getByRole('link', { name: 'Open game' }).getAttribute('href')).toBe('/games/g1');
+		vi.advanceTimersByTime(toastDurationMs);
+		expect(toasts.items.map((t) => t.text)).toEqual(['linked']);
 	});
 });

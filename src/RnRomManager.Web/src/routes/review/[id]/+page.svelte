@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -13,6 +14,7 @@
 	import FileSize from '#lib/components/FileSize.svelte';
 	import GameTypeahead from '#lib/components/GameTypeahead.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import ReviewDeleteModal from '#lib/components/ReviewDeleteModal.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
@@ -26,6 +28,8 @@
 		type ManualForm
 	} from '#lib/reviewForm.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
+	import { jobs } from '#lib/stores/jobs.svelte.js';
+	import { reviewJobs } from '#lib/stores/reviewJobs.svelte.js';
 	import { googleSearchUrl, reviewSearchQuery } from '#lib/googleSearch.js';
 	import { deleteReviewItem, toastDeleteFailed } from '#lib/review.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
@@ -38,6 +42,19 @@
 
 	let busy = $state(false);
 	let actionError = $state<string | null>(null);
+	// B7: any action would get JobRunning while a resolution runs, on every item's page.
+	const resolving = $derived(reviewJobs.running);
+	const disabled = $derived(busy || resolving !== null);
+
+	onMount(() => {
+		// The jobs store polls only while watched; it feeds the step bar.
+		const stopWatching = jobs.watch();
+		const stopHandling = reviewJobs.onFailure(handle);
+		return () => {
+			stopWatching();
+			stopHandling();
+		};
+	});
 
 	let searchText = $state('');
 	let searchResults = $state<DatSearchResult[] | null>(null);
@@ -98,17 +115,15 @@
 		return () => controller.abort();
 	});
 
-	/** Sends a resolution; on success goes back to the queue. */
+	/** B7: starts a resolution job; the store reports how it ended. */
 	async function resolveWith(body: object, done: string): Promise<void> {
-		if (busy) return;
+		if (disabled || !item) return;
 		busy = true;
 		actionError = null;
 		try {
-			const result = await api.post<{ gameId: string }>(`${base}/resolve`, body);
-			toasts.show(done, 'success');
-			await goto(
-				result?.gameId ? resolve('/games/[id]', { id: result.gameId }) : resolve('/review')
-			);
+			const { jobId } = await api.post<{ jobId: string }>(`${base}/resolve`, body);
+			reviewJobs.start({ jobId, reviewId: item.id, fileName: item.originalFileName, done });
+			void jobs.refresh();
 		} catch (e) {
 			handle(e);
 		} finally {
@@ -276,19 +291,29 @@
 					<button
 						type="button"
 						class="btn btn-outline-secondary"
-						disabled={busy}
+						{disabled}
 						onclick={() => (confirmDismiss = true)}>Dismiss</button
 					>
 				{/if}
 				<button
 					type="button"
 					class="btn btn-outline-danger"
-					disabled={busy}
+					{disabled}
 					use:tooltip={'Delete (Shift+click to skip confirmation)'}
 					onclick={askDelete}><Icon name="delete" /> Delete</button
 				>
 			</div>
 		</div>
+
+		{#if resolving}
+			<div class="alert alert-info" role="status">
+				<div class="d-flex align-items-center gap-2">
+					<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+					Resolving {resolving.fileName}…
+				</div>
+				{#if jobs.current?.id === resolving.jobId}<JobStepProgress step={jobs.current.step} />{/if}
+			</div>
+		{/if}
 
 		{#if actionError}
 			<div class="alert alert-danger alert-dismissible" role="alert">
@@ -400,7 +425,7 @@
 										<button
 											type="button"
 											class="btn btn-sm btn-primary"
-											disabled={busy}
+											{disabled}
 											onclick={() =>
 												resolveWith(
 													{ action: 'Attach', targetGameId: game.id, flag: 'None' },
@@ -457,7 +482,7 @@
 															<button
 																type="button"
 																class="btn btn-sm btn-primary"
-																disabled={busy}
+																{disabled}
 																onclick={() => useDat(suggestion.datGameName)}>Use</button
 															>
 														</td>
@@ -502,7 +527,7 @@
 												<button
 													type="button"
 													class="btn btn-sm btn-primary"
-													disabled={busy}
+													{disabled}
 													onclick={() => useDat(result.gameName)}>Use</button
 												>
 											</li>
@@ -539,7 +564,7 @@
 										</div>
 									{/each}
 								</fieldset>
-								<button type="submit" class="btn btn-primary" disabled={busy}>Attach</button>
+								<button type="submit" class="btn btn-primary" {disabled}>Attach</button>
 							</form>
 						{:else}
 							<form onsubmit={submitManual} novalidate>
@@ -591,7 +616,7 @@
 								{#if manual.title.trim()}
 									<p class="form-text">File name: {manualFileStem(manual)}</p>
 								{/if}
-								<button type="submit" class="btn btn-primary" disabled={busy}>Add manually</button>
+								<button type="submit" class="btn btn-primary" {disabled}>Add manually</button>
 							</form>
 						{/if}
 					</div>
