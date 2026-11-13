@@ -14,8 +14,8 @@
 		busy?: boolean;
 		/** Disables only the confirm button (e.g. nothing changed yet); `busy` disables both. */
 		confirmDisabled?: boolean;
-		/** `lg` for a wide form (Edit metadata); default width otherwise. */
-		size?: 'lg';
+		/** `lg` for a wide form (Edit metadata), `xl` for the emulator; default width otherwise. */
+		size?: 'lg' | 'xl';
 		/** Omitted → info mode: the footer shows only "Close". */
 		onconfirm?: () => void;
 		children?: Snippet;
@@ -63,7 +63,11 @@
 	aria-labelledby="{id}-title"
 	aria-hidden="true"
 >
-	<div class="modal-dialog modal-dialog-centered" class:modal-lg={size === 'lg'}>
+	<div
+		class="modal-dialog modal-dialog-centered"
+		class:modal-lg={size === 'lg'}
+		class:modal-xl={size === 'xl'}
+	>
 		<div class="modal-content">
 			<div class="modal-header">
 				<h2 class="modal-title fs-5" id="{id}-title">{title}</h2>

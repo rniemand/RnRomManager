@@ -164,6 +164,8 @@ export interface GameDetail {
 	system: string;
 	/** The handler's display name (GP2). */
 	systemName: string;
+	/** Browser emulators B2: the EmulatorJS core that plays this system, or null. */
+	browserCore: string | null;
 	title: string;
 	displayTitle: string;
 	releaseYear: number | null;

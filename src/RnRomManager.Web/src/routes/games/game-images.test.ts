@@ -46,6 +46,7 @@ const game = (images: ImageInfo[]): GameDetail => ({
 	id: 'g1',
 	system: 'gb',
 	systemName: 'Game Boy',
+	browserCore: null,
 	title: 'Tetris',
 	displayTitle: 'Tetris',
 	releaseYear: null,
