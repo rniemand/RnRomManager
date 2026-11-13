@@ -19,6 +19,8 @@ roms/
   nes/                  Nintendo Entertainment System (headered .nes, header included)
   snes/                 Super Nintendo Entertainment System (stored as .sfc, copier header stripped)
   a2600/                Atari 2600 (.a26 or .bin, as the DAT names it)
+  lynx/                 Atari Lynx (.lnx or .lyx, as the DAT names it)
+  jaguar/               Atari Jaguar (.j64, .jag, .rom, .abs or .cof, as the DAT names it)
   coleco/               ColecoVision (.col)
   gg/                   Game Gear (.gg, or .sms for SMS-mode games, as the DAT names it)
   sms/                  Master System (.sms)

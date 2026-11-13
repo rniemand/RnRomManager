@@ -58,14 +58,14 @@ public class DatParserTests
         const string text = """
             clrmamepro ( name "Nintendo - Wii" )
             game (
-            	name "A (USA)"
-            	serial "RVL-GAME-USA"
-            	rom ( name "A (USA).iso" size 1 crc 00000001 md5 00000000000000000000000000000001 sha1 0000000000000000000000000000000000000001 serial "RVL-ROMS-USA" )
+                name "A (USA)"
+                serial "RVL-GAME-USA"
+                rom ( name "A (USA).iso" size 1 crc 00000001 md5 00000000000000000000000000000001 sha1 0000000000000000000000000000000000000001 serial "RVL-ROMS-USA" )
             )
             game (
-            	name "B (USA)"
-            	serial "RVL-BBBE-USA, RVL-BBBP-EUR"
-            	rom ( name "B (USA).iso" size 1 crc 00000002 md5 00000000000000000000000000000002 sha1 0000000000000000000000000000000000000002 )
+                name "B (USA)"
+                serial "RVL-BBBE-USA, RVL-BBBP-EUR"
+                rom ( name "B (USA).iso" size 1 crc 00000002 md5 00000000000000000000000000000002 sha1 0000000000000000000000000000000000000002 )
             )
             """;
 
