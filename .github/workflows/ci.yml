@@ -10,7 +10,43 @@ permissions:
   contents: read
 
 jobs:
+  # The .NET tests in shards, one job each (scripts/test-dotnet.ps1 defines them; -ExpectedShards fails the job if
+  # the script and this matrix disagree). The slowest shard sets the pace.
+  backend-shard:
+    name: backend (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - run: dotnet restore
+      - run: dotnet build -c Release --no-restore -warnaserror
+      # Includes Testcontainers tests (Docker is available on ubuntu runners).
+      - run: pwsh scripts/test-dotnet.ps1 -Shard ${{ matrix.shard }} -ExpectedShards 4 -Configuration Release -NoBuild -Coverage -ResultsDirectory ./coverage-raw
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage-${{ matrix.shard }}
+          path: coverage-raw/*/coverage.cobertura.xml
+          if-no-files-found: ignore
+          retention-days: 1
+
+  # Branch protection requires a check named "backend"; this reports the shards as one.
   backend:
+    needs: backend-shard
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.backend-shard.result }}" = success
+
+  coverage:
+    needs: backend-shard
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -18,15 +54,14 @@ jobs:
         with:
           global-json-file: global.json
       - run: dotnet tool restore
-      - run: dotnet restore
-      - run: dotnet build -c Release --no-restore -warnaserror
-      # Includes Testcontainers tests (Docker is available on ubuntu runners).
-      - run: dotnet test -c Release --no-build --collect "XPlat Code Coverage" --results-directory ./coverage-raw
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: coverage-*
+          path: coverage-raw
       - name: Coverage summary
-        if: always()
         run: |
-          if compgen -G "./coverage-raw/*/coverage.cobertura.xml" > /dev/null; then
-            dotnet reportgenerator -reports:"./coverage-raw/*/coverage.cobertura.xml" -targetdir:./coverage -reporttypes:MarkdownSummaryGithub
+          if find ./coverage-raw -name coverage.cobertura.xml 2>/dev/null | grep -q .; then
+            dotnet reportgenerator -reports:"./coverage-raw/**/coverage.cobertura.xml" -targetdir:./coverage -reporttypes:MarkdownSummaryGithub
             cat ./coverage/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No coverage files." >> "$GITHUB_STEP_SUMMARY"
@@ -50,8 +85,8 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  # Independent of the other jobs (it builds its own image), so it runs alongside them.
   e2e:
-    needs: [backend, web]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
