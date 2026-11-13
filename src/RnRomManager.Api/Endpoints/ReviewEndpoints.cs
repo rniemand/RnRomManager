@@ -109,7 +109,7 @@ public static class ReviewEndpoints
                 break;
             case "Attach":
                 if (request.TargetGameId is null || request.TargetGameId == Guid.Empty) errors["targetGameId"] = ["A target game is required."];
-                if (request.Flag is not ("Hack" or "Translated" or "None")) errors["flag"] = ["Must be Hack, Translated or None."];
+                if (request.Flag is not ("Hack" or "Translated" or "None" or "Disc")) errors["flag"] = ["Must be Hack, Translated, None or Disc."];
                 break;
             case "Manual":
                 if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length > 255 || FileNameSanitizer.Sanitize(request.Title).Length == 0)
@@ -123,6 +123,13 @@ public static class ReviewEndpoints
         }
         if (request.Update == true && request.Action != "Dat")
             errors["update"] = [ReviewResolutionRequest.UpdateNeedsDat];
+        var asDisc = request.Action == "Attach" && request.Flag == "Disc";
+        if (request.Disc is < 1 or > 99)
+            errors["disc"] = ["Must be 1–99."];
+        else if (request.Disc is not null && !(asDisc || request.Action == "Manual"))
+            errors["disc"] = ["A disc number needs Manual or Attach as a disc."];
+        else if (request.Disc is null && asDisc)
+            errors["disc"] = ["A disc number is required."];
         return errors;
     }
 

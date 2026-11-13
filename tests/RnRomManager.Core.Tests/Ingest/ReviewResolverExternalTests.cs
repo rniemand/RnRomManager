@@ -9,6 +9,7 @@ using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
+using RnRomManager.Core.Naming;
 using RnRomManager.Core.Systems;
 using RnRomManager.TestData;
 
@@ -42,6 +43,10 @@ public class ReviewResolverExternalTests
         Build();
     }
 
+    private IGameRepository _games = null!;
+    private IRomRepository _roms = null!;
+    private InfoJsonReader _reader = null!;
+
     private void Build(ISystemHandler? sibling = null)
     {
         _reviews = Substitute.For<IIngestReviewRepository>();
@@ -50,13 +55,13 @@ public class ReviewResolverExternalTests
         var systems = new SystemRegistry([new ExternalTestHandler(), .. sibling is null ? [] : new[] { sibling }]);
         var options = Options.Create(_paths);
         var dats = new DatCache(options, systems, NullLogger<DatCache>.Instance);
-        var games = Substitute.For<IGameRepository>();
+        var games = _games = Substitute.For<IGameRepository>();
         var media = TestMedia.Offline();
-        var pipeline = new IngestPipeline(dats, systems, Substitute.For<IRomRepository>(), games, Substitute.For<ILibraryMirror>(),
-            Substitute.For<IIntegrityIssueRepository>(), _reviews, new InfoJsonReader([], systems), media, options, _audit,
+        var romRepository = _roms = Substitute.For<IRomRepository>();
+        var reader = _reader = new InfoJsonReader([], systems);
+        var pipeline = new IngestPipeline(dats, systems, romRepository, games, Substitute.For<ILibraryMirror>(),
+            Substitute.For<IIntegrityIssueRepository>(), _reviews, reader, media, options, _audit,
             new AuditPaths(options), TimeProvider.System, NullLogger<IngestPipeline>.Instance);
-        var romRepository = Substitute.For<IRomRepository>();
-        var reader = new InfoJsonReader([], systems);
         _resolver = new ReviewResolver(new JobLock(), _reviews, games, romRepository,
             new DbSync(games, romRepository, Substitute.For<ILibraryMirror>(), reader, systems, options, NullLogger<DbSync>.Instance), pipeline, dats, systems,
             new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance), options, _audit, new AuditPaths(options), TimeProvider.System,
@@ -151,6 +156,110 @@ public class ReviewResolverExternalTests
         Assert.That(result.Code, Is.EqualTo("VerifyFailed"));
         Assert.That(File.Exists(_item.SourcePath), Is.True);
         await AssertPendingKeptAsync();
+    }
+
+    /// <summary>
+    /// A <see cref="ExternalSetTestHandler"/> game "My Game" whose only (primary) release is disc 1, and a Pending
+    /// <c>NoDatMatch</c> item for <paramref name="name"/> in its ingest folder; grouping finds the game.
+    /// </summary>
+    private async Task<(Guid GameId, string ZipPath)> DiscGameAsync(string name)
+    {
+        Build(new ExternalSetTestHandler());
+        var disc1 = TestLibrary.Rom("My Game (Europe) (Disc 1).iso", TestLibrary.RomBytes(1), regions: ["Europe"]) with
+        {
+            BaseTitle = "My Game", Languages = ["En", "Fr"], Revision = "Rev 1", Flags = ["Disc 1"], ExternalFileName = "My Game (Europe) (Disc 1).iso",
+        };
+        var game = TestLibrary.Game("My Game", disc1) with { System = ExternalSetTestHandler.SystemId };
+        var zipPath = $"{ExternalSetTestHandler.SystemId}/{Bucket.For("My Game.zip")}/My Game.zip";
+        var zip = Path.Combine(_paths.Roms, zipPath);
+        await TestLibrary.WriteZipAsync(_reader, zip, game);
+        File.WriteAllBytes(Path.Combine(Path.GetDirectoryName(zip)!, disc1.ExternalFileName!), TestLibrary.RomBytes(1));
+        _games.GetAsync(game.GameId, Arg.Any<CancellationToken>()).Returns(new GameRow
+        {
+            Id = game.GameId, SystemId = game.System, Title = game.Title, DisplayTitle = game.Title, ZipPath = zipPath,
+            Bucket = Bucket.For("My Game.zip"), Developers = [], Publishers = [], Genres = [], ZipSizeBytes = 0, ZipMtimeUtc = default,
+            InfoSchemaVersion = InfoJsonReader.CurrentVersion, CreatedAt = default, UpdatedAt = default,
+        });
+        _roms.ListGameIdsByBaseTitleAsync(default!, default!, default).ReturnsForAnyArgs([game.GameId]);
+        _roms.ListExternalAsync(default).ReturnsForAnyArgs([]);
+
+        var folder = Directory.CreateDirectory(Path.Combine(_paths.Ingest, ExternalSetTestHandler.SystemId)).FullName;
+        var bytes = TestLibrary.RomBytes(2);
+        _item = _item with
+        {
+            SystemId = ExternalSetTestHandler.SystemId, SourcePath = Path.Combine(folder, name), OriginalFileName = name,
+            Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(bytes)), SizeBytes = bytes.Length,
+            Crc32 = RnRomManager.Core.Storage.Crc32.ToHex(bytes), Md5 = Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(bytes)),
+        };
+        File.WriteAllBytes(_item.SourcePath, bytes);
+        return (game.GameId, zipPath);
+    }
+
+    private InfoJsonRom StoredRelease(string zipPath, string fileName)
+    {
+        var target = LibraryTarget.Open(_paths.Roms, zipPath, _reader);
+        using (target.Zip)
+            return target.Game!.Roms.Single(r => r.FileName == fileName);
+    }
+
+    private async Task AssertAddedAsync(ReviewResolutionResult result, Guid gameId, string zipPath, string fileName)
+    {
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        Assert.That(result.GameId, Is.EqualTo(gameId));
+        Assert.That(File.Exists(Path.Combine(Path.GetDirectoryName(Path.Combine(_paths.Roms, zipPath))!, fileName)), Is.True, "moved next to the ZIP");
+        Assert.That(File.Exists(_item.SourcePath), Is.False);
+        await _reviews.Received(1).SetResolutionAsync(1, "Resolved", gameId, 42, Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task ManualWithDisc2_NextToDisc1_IsAddedToThatGame_B10()
+    {
+        var (gameId, zipPath) = await DiscGameAsync("dump.iso");
+
+        var result = await _resolver.ResolveAsync(1, Manual with { Regions = ["Europe"], Disc = 2 }, Actor, default);
+
+        await AssertAddedAsync(result, gameId, zipPath, "My Game (Europe) (Disc 2).iso");
+        Assert.That(StoredRelease(zipPath, "My Game (Europe) (Disc 2).iso").Flags, Is.EqualTo(new[] { "Disc 2" }));
+    }
+
+    [Test]
+    public async Task ManualWithDisc_ReplacesATypedDiscFlag_AndAppendsItLast_B10()
+    {
+        var (gameId, zipPath) = await DiscGameAsync("dump.iso");
+
+        var result = await _resolver.ResolveAsync(1, Manual with { Flags = ["disc 3", "Beta"], Disc = 2 }, Actor, default);
+
+        await AssertAddedAsync(result, gameId, zipPath, "My Game (Beta) (Disc 2).iso");
+        Assert.That(StoredRelease(zipPath, "My Game (Beta) (Disc 2).iso").Flags, Is.EqualTo(new[] { "Beta", "Disc 2" }));
+    }
+
+    [Test]
+    public async Task AttachDisc_CopiesThePrimaryReleaseTags_AndKeepsTheExtension_B11()
+    {
+        var (gameId, zipPath) = await DiscGameAsync("dump.iso");
+        var request = new ReviewResolutionRequest { Action = "Attach", Flag = "Disc", Disc = 2, TargetGameId = gameId };
+
+        var result = await _resolver.ResolveAsync(1, request, Actor, default);
+
+        await AssertAddedAsync(result, gameId, zipPath, "dump (Disc 2).iso");
+        var rom = StoredRelease(zipPath, "dump (Disc 2).iso");
+        Assert.That(rom.BaseTitle, Is.EqualTo("My Game"));
+        Assert.That(rom.Regions, Is.EqualTo(new[] { "Europe" }));
+        Assert.That(rom.Languages, Is.EqualTo(new[] { "En", "Fr" }));
+        Assert.That(rom.Revision, Is.EqualTo("Rev 1"));
+        Assert.That(rom.Flags, Is.EqualTo(new[] { "Disc 2" }));
+        Assert.That(rom.Identification.Method, Is.EqualTo(IdentificationMethod.Manual));
+    }
+
+    [Test]
+    public async Task AttachDisc_DoesNotDoubleADiscTagInTheStem_B11()
+    {
+        var (gameId, zipPath) = await DiscGameAsync("My Game (disc 2).iso");
+        var request = new ReviewResolutionRequest { Action = "Attach", Flag = "Disc", Disc = 2, TargetGameId = gameId };
+
+        var result = await _resolver.ResolveAsync(1, request, Actor, default);
+
+        await AssertAddedAsync(result, gameId, zipPath, "My Game (disc 2).iso");
     }
 
     /// <summary>A same-family sibling of <see cref="ExternalTestHandler"/> with its own extensions and size cap.</summary>

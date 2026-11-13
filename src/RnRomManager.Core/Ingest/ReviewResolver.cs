@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RnRomManager.Core.Audit;
@@ -333,6 +334,9 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             string? revision = null;
             if (request.Update == true && request.Action != "Dat")
                 return ReviewResolutionResult.Invalid("update", ReviewResolutionRequest.UpdateNeedsDat);
+            if (request.Disc is not null && !system.FileSets)
+                return ReviewResolutionResult.Invalid("disc", "Disc numbers are for disc systems.");
+            var discFlag = request.Disc is { } disc ? $"Disc {disc}" : null; // B10: the flag NoIntroName.Parse makes from a Redump name
             if (request.Action == "Dat")
             {
                 if (item.Reason != "NoDatMatch")
@@ -432,14 +436,25 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                     if (error is not null)
                         return new(error.Reason);
                     title = current!.Title;
+                    if (discFlag is not null && current.Roms.FirstOrDefault(r => r.IsPrimary) is { } primary)
+                    {
+                        // B11: disc 2 lines up with disc 1.
+                        regions = primary.Regions; languages = primary.Languages; revision = primary.Revision;
+                    }
                 }
-                flags = [request.Flag!];
-                filename = FileNameSanitizer.Sanitize(Path.GetFileNameWithoutExtension(item.OriginalFileName)) + $" ({request.Flag})" + (external ? originalExtension : system.RomExtensions[0]);
+                var flag = discFlag ?? request.Flag!;
+                flags = [flag];
+                var stem = FileNameSanitizer.Sanitize(Path.GetFileNameWithoutExtension(item.OriginalFileName));
+                if (discFlag is null || !stem.Contains($"({discFlag})", StringComparison.OrdinalIgnoreCase))
+                    stem += $" ({flag})";
+                filename = stem + (external ? originalExtension : system.RomExtensions[0]);
             }
             else
             {
                 title = request.Title!.Trim();
                 regions = request.Regions!; languages = request.Languages!; flags = request.Flags!; revision = request.Revision;
+                if (discFlag is not null)
+                    flags = [.. flags.Where(f => !Regex.IsMatch(f, @"^Disc \d+$", RegexOptions.IgnoreCase)), discFlag];
                 var stem = title + (regions.Count == 0 ? "" : $" ({string.Join(", ", regions)})") +
                     (string.IsNullOrEmpty(revision) ? "" : $" ({revision})") + string.Concat(flags.Select(f => $" ({f})"));
                 filename = FileNameSanitizer.Sanitize(stem) + (external ? originalExtension : system.RomExtensions[0]);

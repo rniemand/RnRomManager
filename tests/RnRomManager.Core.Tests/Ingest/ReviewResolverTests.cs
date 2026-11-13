@@ -89,6 +89,19 @@ public class ReviewResolverTests
     }
 
     [Test]
+    public async Task Disc_OnANonDiscSystem_IsAValidationError_AndKeepsPending()
+    {
+        var request = new ReviewResolutionRequest { Action = "Manual", Title = "My Game", Regions = [], Languages = [], Flags = [], Disc = 2 };
+
+        var result = await _resolver.ResolveAsync(1, request, Actor, default);
+
+        Assert.That(result.Code, Is.EqualTo("ValidationFailed"));
+        Assert.That(result.Errors!["disc"], Is.EqualTo(new[] { "Disc numbers are for disc systems." }));
+        Assert.That(File.Exists(_item.SourcePath), Is.True);
+        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default, default!, default, default, default, default);
+    }
+
+    [Test]
     public async Task MissingSource_DeletesStaleRowAndReleasesLock()
     {
         File.Delete(_item.SourcePath);

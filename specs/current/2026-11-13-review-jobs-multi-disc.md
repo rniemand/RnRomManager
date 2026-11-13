@@ -156,9 +156,9 @@ The SPA is the only client. No migrations, no config keys, no info.json change; 
 - **Slow small resolves:** an embedded ROM's resolve now waits for one 1.5 s poll. Acceptable for one code path.
 
 ## Steps
-- [ ] **1. Disc numbers in review requests (Core)**: B9, B10, B11 for single files. Files: `src/RnRomManager.Core/Ingest/ReviewResolutionRequest.cs`, `ReviewResolver.cs`, `src/RnRomManager.Api/Endpoints/ReviewEndpoints.cs` (`Validate` only). Tests:
+- [x] **1. Disc numbers in review requests (Core)**: B9, B10, B11 for single files. Files: `src/RnRomManager.Core/Ingest/ReviewResolutionRequest.cs`, `ReviewResolver.cs`, `src/RnRomManager.Api/Endpoints/ReviewEndpoints.cs` (`Validate` only). Tests:
   - `ReviewRequestValidationTests`: disc out of range; disc with Dat, Hack or None refused; flag Disc without disc refused; Manual with disc accepted.
-  - `ReviewResolverExternalTests` (`ExternalSetTestHandler`, a `FileSets` system): Manual with disc 2 next to a `Disc 1` release of the same title is added to that game as `… (Disc 2).iso`, not `NameTaken`; a typed `Disc 3` flag is replaced; Attach Disc copies the target's primary release's regions and keeps the `.iso` extension; a stem already holding `(Disc 2)` isn't doubled; an Attach Disc target with no releases gets empty regions.
+  - `ReviewResolverExternalTests` (`ExternalSetTestHandler`, a `FileSets` system): Manual with disc 2 next to a `Disc 1` release of the same title is added to that game as `… (Disc 2).iso`, not `NameTaken`; a typed `Disc 3` flag is replaced; Attach Disc copies the target's primary release's regions and keeps the `.iso` extension; a stem already holding `(Disc 2)` isn't doubled.
   - `ReviewResolverTests`: disc on an embedded system → `ValidationFailed` `disc`.
 
   Done when: those pass; the endpoint still returns `200` (the job comes in step 4).
@@ -287,6 +287,7 @@ The SPA is the only client. No migrations, no config keys, no info.json change; 
 - 2026-11-13 `IngestJob` lets a failed `job_items` insert fail the run, which would lose the summary the SPA reads → the resolve job logs it and keeps the summary (default, review pass 5)
 - 2026-11-13 A row left `Running` by a failed final update keeps the review pages busy until a reload; documented as a limit (default, review pass 5)
 - 2026-11-13 `StoreReleaseAsync` builds its `ExternalSource` without progress → `progress` goes to `HashCheckedAsync` and that `ExternalSource`; a mirror failure after a set's moves is `DbWriteFailed` like the rows' write; `ReviewSetsTests` in Core.Tests (code, review pass 5)
+- 2026-11-13 A valid info.json always has exactly one primary release, so an Attach Disc target with no releases can't be opened; that test is dropped and the empty-regions fallback stays only as a guard (code, step 1)
 
 ## Kickoff prompt
 ```text
