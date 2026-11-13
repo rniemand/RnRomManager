@@ -186,6 +186,23 @@ public class JobEndpointsTests
         Assert.That(itemsJson.GetProperty("items")[0].GetProperty("sourcePath").GetString(), Is.EqualTo("/app/ingest/gb/a.gb"));
     }
 
+    [Test]
+    public async Task List_ByTypeReviewResolve_ListsOnlyThoseJobs_B6()
+    {
+        var jobs = _factory.Services.GetRequiredService<IJobRepository>();
+        var id = Guid.NewGuid();
+        await jobs.InsertAsync(new Job { Id = id, Type = JobType.ReviewResolve, Trigger = JobTrigger.Manual, Status = JobStatus.Running, StartedAt = DateTime.UtcNow },
+            CancellationToken.None);
+        await jobs.InsertAsync(new Job { Id = Guid.NewGuid(), Type = JobType.Ingest, Trigger = JobTrigger.Manual, Status = JobStatus.Running, StartedAt = DateTime.UtcNow },
+            CancellationToken.None);
+
+        using var list = await _admin.GetAsync("/api/jobs?type=ReviewResolve");
+        var items = (await AuthClient.JsonAsync(list)).GetProperty("items");
+
+        Assert.That(items.EnumerateArray().Select(i => (i.GetProperty("id").GetGuid(), i.GetProperty("type").GetString())),
+            Is.EqualTo(new[] { (id, "ReviewResolve") }));
+    }
+
     [TestCase("/api/jobs?type=Nope", "type")]
     [TestCase("/api/jobs?page=0", "page")]
     [TestCase("/api/jobs?pageSize=201", "pageSize")]

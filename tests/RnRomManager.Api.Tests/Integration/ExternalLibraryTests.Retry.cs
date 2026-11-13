@@ -1,3 +1,4 @@
+using System.Net;
 using System.Reflection;
 using System.Security.Cryptography;
 using Dapper;
@@ -187,9 +188,9 @@ public partial class ExternalLibraryTests
         await TestUsers.CreateAsync(_factory, "admin-only", RnRomManager.Core.Users.Roles.Of(RnRomManager.Core.Users.Roles.Admin));
         (await admin.LoginAsync("admin-only", TestUsers.Password)).Dispose();
 
-        using var response = await admin.PostAsync($"/api/review/{id}/resolve", ManualMystery);
+        var result = await admin.ResolveAsync(id, ManualMystery);
 
-        Assert.That(((int)response.StatusCode, await AuthClient.CodeAsync(response)), Is.EqualTo((409, (string?)"Duplicate")));
+        Assert.That((result.Status, result.Code), Is.EqualTo((HttpStatusCode.Accepted, (string?)"Duplicate")));
         Assert.That(await StatusAsync(id), Is.EqualTo("Pending"));
         Assert.That(File.Exists(archive), Is.True);
     }

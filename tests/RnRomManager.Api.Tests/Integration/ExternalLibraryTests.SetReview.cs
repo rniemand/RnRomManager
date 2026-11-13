@@ -66,10 +66,9 @@ public partial class ExternalLibraryTests
         var id = await QueueSetAsync("mystery.iso", RandomNumberGenerator.GetBytes(2000));
         using var admin = await AdminClientAsync();
 
-        using var response = await admin.PostAsync($"/api/review/{id}/resolve", DatPick("Disc Game (USA)"));
+        var result = await admin.ResolveAsync(id, DatPick("Disc Game (USA)"));
 
-        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
-        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo(IngestErrors.NameTaken));
+        Assert.That((result.Status, result.Code), Is.EqualTo((HttpStatusCode.Accepted, (string?)IngestErrors.NameTaken)));
         Assert.That(await StatusAsync(id), Is.EqualTo("Pending"));
         Assert.That(File.Exists(Path.Combine(SetIngest, "mystery.iso")), Is.True);
     }

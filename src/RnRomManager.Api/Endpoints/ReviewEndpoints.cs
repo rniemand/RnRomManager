@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using RnRomManager.Api.Auth;
 using RnRomManager.Core.Audit;
@@ -64,35 +63,32 @@ public static class ReviewEndpoints
             });
         });
         review.MapPost("/{id:long}/resolve", async (long id, ReviewResolutionRequest request, HttpContext ctx, IIngestReviewRepository repository,
-            JobRunner runner, ReviewResolveJob job, IJobRepository jobs) =>
+            ISystemRegistry systems, JobRunner runner, ReviewResolveJob job) =>
         {
+            // B1: the request and the item are checked here; the job checks the item again under the lock (B2).
             var errors = Validate(request);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
+            var item = await repository.GetAsync(id, ctx.RequestAborted);
+            if (item is not { Status: "Pending" })
+                return Problems.NotFound(ctx);
+            if (!ReviewResolver.IsResolvable(item, systems))
+                return ToResult(ctx, new(ReviewResolver.SetFileNotResolvable));
             job.ReviewId = id;
-            job.FileName = (await repository.GetAsync(id, ctx.RequestAborted))?.OriginalFileName ?? "";
+            job.FileName = item.OriginalFileName;
             job.Request = request;
             var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
-            if (started is null)
-                return DatEndpoints.JobRunning(ctx);
-            // shortcut: waits for the job so the 200 { gameId } contract holds until the endpoint returns 202 { jobId }.
-            await started.Completion;
-            var row = await jobs.GetAsync(started.Id, CancellationToken.None);
-            if (row?.Summary is null)
-                throw new InvalidOperationException($"Review resolve job {started.Id} ended {row?.Status} without a summary: {row?.Error}");
-            var summary = JsonNode.Parse(row.Summary)!;
-            return ToResult(ctx, new ReviewResolutionResult(summary["code"]?.GetValue<string>(), summary["gameId"]?.GetValue<Guid>(),
-                summary["errors"]?.Deserialize<Dictionary<string, string[]>>()));
+            return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
         });
         review.MapPost("/{id:long}/dismiss", async (long id, HttpContext ctx, ReviewResolver resolver) =>
         {
             var result = await resolver.DismissAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted);
-            return result.Code is null ? Results.NoContent() : ToResult(ctx, result);
+            return ToResult(ctx, result);
         });
         review.MapDelete("/{id:long}", async (long id, HttpContext ctx, ReviewResolver resolver) =>
         {
             var result = await resolver.DeleteSourceAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted);
-            return result.Code is null ? Results.NoContent() : ToResult(ctx, result);
+            return ToResult(ctx, result);
         });
         api.MapGet("/dat/search", (string? system, string? q, int? limit, HttpContext ctx, ISystemRegistry systems, DatCache dats) =>
         {
@@ -157,7 +153,7 @@ public static class ReviewEndpoints
 
     private static IResult ToResult(HttpContext ctx, ReviewResolutionResult result) => result.Code switch
     {
-        null => Results.Ok(new { gameId = result.GameId }),
+        null => Results.NoContent(),
         "ValidationFailed" => Problems.Validation(ctx, result.Errors!),
         "NotFound" => Problems.NotFound(ctx),
         "JobRunning" or "SourceMissing" or "AmbiguousGroup" or "TargetZipUnreadable" or "InfoJsonNewerSchema" or "Duplicate"

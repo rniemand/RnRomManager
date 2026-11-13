@@ -172,7 +172,7 @@ The SPA is the only client. No migrations, no config keys, no info.json change; 
   - The direct `ResolveAsync` callers move to `ResolveInJobAsync` and still pass: `ReviewResolverTests`, `ReviewResolverExternalTests`, and in the API test project `ExternalLibraryTests`, `IngestPipelineTests` and `TitleDbIngestTests`. Dismiss and Delete still return `JobRunning` while the lock is held.
 
   Done when: those pass.
-- [ ] **4. Resolve endpoint returns a job (API)**: B1 and B6 (API part). Files: `ReviewEndpoints.cs`. Tests:
+- [x] **4. Resolve endpoint returns a job (API)**: B1 and B6 (API part). Files: `ReviewEndpoints.cs`. Tests:
   - `ReviewEndpointsTests`: `202 { jobId }`; `404` for a missing or resolved item; `409 SetFileNotResolvable`; `409 JobRunning` while another job runs; `400` for a bad `disc`.
   - `ExternalLibraryTests` (`Retry`, `Review`, `SetReview`): every resolve over HTTP waits for the job and reads `gameId` or `code` from `GET /api/jobs/{id}`'s summary; the `SetFileNotResolvable` refusal stays a synchronous `409`.
   - `JobEndpointsTests`: `?type=ReviewResolve` lists it.
