@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareUpdates, isUpdate } from './releases.js';
+import { compareUpdates, discNumber, isUpdate, orderByDisc } from './releases.js';
 
 const rom = (fileName: string, over: Partial<Parameters<typeof compareUpdates>[0]> = {}) => ({
 	fileName,
@@ -60,5 +60,33 @@ describe('isUpdate', () => {
 		expect(isUpdate({ flags: ['Update'] })).toBe(true);
 		expect(isUpdate({ flags: ['DLC'] })).toBe(false);
 		expect(isUpdate({ flags: ['update'] })).toBe(false);
+	});
+});
+
+describe('disc numbers (B18)', () => {
+	const disc = (name: string, ...flags: string[]) => ({ name, flags });
+
+	it('reads the disc number from a Disc flag, ignoring case and leading zeros', () => {
+		expect(discNumber(disc('a'))).toBeNull();
+		expect(discNumber(disc('a', 'Disc 2'))).toBe(2);
+		expect(discNumber(disc('a', 'Beta', 'Disc 02'))).toBe(2);
+		expect(discNumber(disc('a', 'disc 2'))).toBe(2);
+		expect(discNumber(disc('a', 'Disc Two'))).toBeNull();
+	});
+
+	it('orders by disc, no-disc releases first, ties in their order', () => {
+		const roms = [
+			disc('d2', 'Disc 2'),
+			disc('none1'),
+			disc('d1', 'Disc 1'),
+			disc('d2b', 'Disc 2'),
+			disc('none2')
+		];
+		expect(orderByDisc(roms).map((r) => r.name)).toEqual(['none1', 'none2', 'd1', 'd2', 'd2b']);
+	});
+
+	it('keeps the order with a single disc release', () => {
+		const roms = [disc('d3', 'Disc 3'), disc('none')];
+		expect(orderByDisc(roms).map((r) => r.name)).toEqual(['d3', 'none']);
 	});
 });
