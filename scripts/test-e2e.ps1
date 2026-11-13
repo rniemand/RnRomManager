@@ -7,9 +7,11 @@
     Use the existing niemandr/rnrommanager:e2e image.
 .PARAMETER Headed
     Show the browser.
+.PARAMETER Screenshots
+    Regenerate the README screenshots with the screenshot project.
 #>
 [CmdletBinding()]
-param([switch]$SkipBuild, [switch]$Headed)
+param([switch]$SkipBuild, [switch]$Headed, [switch]$Screenshots)
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $e2eRoot = Join-Path $repoRoot 'tests/e2e'
@@ -68,6 +70,12 @@ try {
         & npx @install
         if ($LASTEXITCODE -ne 0) { throw "playwright install failed ($LASTEXITCODE)" }
         $testArgs = @('playwright', 'test')
+        if ($Screenshots) {
+            $env:E2E_SCREENSHOTS = '1'
+            $testArgs += '--project=screenshots'
+        } else {
+            $testArgs += '--project=chromium'
+        }
         if ($Headed) { $testArgs += '--headed' }
         & npx @testArgs
         $exitCode = $LASTEXITCODE
@@ -81,6 +89,11 @@ try {
 } finally {
     Write-Host '==> Tearing down'
     & docker compose -f $composeFile down -v --remove-orphans
-    Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue
+    $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
+    $resolvedWork = [IO.Path]::GetFullPath($work)
+    if ([IO.Path]::GetDirectoryName($resolvedWork) -eq [IO.Path]::TrimEndingDirectorySeparator($tempRoot) -and
+        [IO.Path]::GetFileName($resolvedWork) -match '^rnrm-e2e-[a-f0-9]{32}$') {
+        Remove-Item -LiteralPath $resolvedWork -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 exit $exitCode
