@@ -208,7 +208,7 @@ The SPA is the only client. No migrations, no config keys, no info.json change; 
 
   Done when: those pass.
 - [x] **9. Resolve a set with a Dat pick (Core)**: B14 step 3, Dat pick; removes step 8's interim refusal. Files: `ReviewResolver.cs`. Tests: `ReviewResolverExternalTests`: a Dat pick names the release from the DAT game name with `Unverified`, keeps the file names, and records the DAT's name in identification; a member whose extension or size doesn't fit the chosen system → `ValidationFailed` `datSystem`. Done when: those pass.
-- [ ] **10. Disc and set controls on the review page (SPA)**: B13 (SPA), B16, B17. Files: `src/RnRomManager.Web/src/routes/review/[id]/+page.svelte`, `src/RnRomManager.Web/src/lib/reviewForm.ts`, `types.ts`. Tests:
+- [x] **10. Disc and set controls on the review page (SPA)**: B13 (SPA), B16, B17. Files: `src/RnRomManager.Web/src/routes/review/[id]/+page.svelte`, `src/RnRomManager.Web/src/lib/reviewForm.ts`, `types.ts`. Tests:
   - `review-page.test.ts`: Attach Disc requires a number and sends `flag: 'Disc', disc`; Manual sends `disc`; the disc inputs are hidden when `fileSets` is false; the Set card lists the members; a `disc` field error (from `400` or a failed summary) shows under the active tab's disc input, as `handle` maps `title` and `targetGameId` today.
   - `reviewForm.test.ts`: disc validation.
 
@@ -289,6 +289,7 @@ The SPA is the only client. No migrations, no config keys, no info.json change; 
 - 2026-11-13 `StoreReleaseAsync` builds its `ExternalSource` without progress → `progress` goes to `HashCheckedAsync` and that `ExternalSource`; a mirror failure after a set's moves is `DbWriteFailed` like the rows' write; `ReviewSetsTests` in Core.Tests (code, review pass 5)
 - 2026-11-13 A valid info.json always has exactly one primary release, so an Attach Disc target with no releases can't be opened; that test is dropped and the empty-regions fallback stays only as a guard (code, step 1)
 - 2026-11-13 The job path has no request token, so `ExternalLibraryTests.AbortedRequest_StillCommitsAndResolves` is removed; the resolve audit row now carries the job id, and `ReviewEndpointsTests`' audit test checks it (code, step 3)
+- 2026-11-13 Step 5 missed the existing `src/routes/review/review-page.test.ts`; step 10 moves it to the job flow and adds the disc and set tests there, and step 5's job tests live beside it in `review-job.test.ts` (code, step 10)
 
 ## Kickoff prompt
 ```text

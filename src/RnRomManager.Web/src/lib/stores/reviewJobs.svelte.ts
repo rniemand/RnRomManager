@@ -67,14 +67,14 @@ class ReviewJobs {
 	}
 
 	async #poll(job: ReviewJob): Promise<void> {
-		let row: Job;
+		let row: Job | undefined;
 		try {
-			row = await api.get<Job>(`/api/jobs/${encodeURIComponent(job.jobId)}`);
+			row = await api.get<Job | undefined>(`/api/jobs/${encodeURIComponent(job.jobId)}`);
 		} catch {
-			this.#schedule(job); // try again at the next tick
-			return;
+			row = undefined;
 		}
-		if (row.status === 'Running') {
+		if (!row || row.status === 'Running') {
+			// Still running, or no answer: try again at the next tick.
 			this.#schedule(job);
 			return;
 		}

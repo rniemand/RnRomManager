@@ -8,6 +8,8 @@ export interface ManualForm {
 	languages: string;
 	revision: string;
 	flags: string;
+	/** B17: an optional disc number (disc systems only); null when empty. */
+	disc: number | null;
 }
 
 export type ManualErrors = Partial<Record<keyof ManualForm, string>>;
@@ -19,6 +21,7 @@ export interface ManualRequest {
 	languages: string[];
 	revision: string | null;
 	flags: string[];
+	disc?: number;
 }
 
 export const emptyManualForm = (): ManualForm => ({
@@ -26,8 +29,19 @@ export const emptyManualForm = (): ManualForm => ({
 	regions: '',
 	languages: '',
 	revision: '',
-	flags: ''
+	flags: '',
+	disc: null
 });
+
+/** B9: a disc number is a whole number 1–99; `required` for Attach as a disc. */
+export function discError(disc: number | null | undefined, required = false): string | undefined {
+	if (disc === null || disc === undefined || Number.isNaN(disc))
+		return required ? 'A disc number is required.' : undefined;
+	return Number.isInteger(disc) && disc >= 1 && disc <= 99 ? undefined : 'Must be 1–99.';
+}
+
+/** B10: the flag a disc number becomes, e.g. `Disc 2`; a typed `Disc n` flag is replaced by it. */
+const discFlag = /^disc \d+$/i;
 
 /** `USA, Europe,` → `['USA', 'Europe']`. */
 export function splitList(text: string): string[] {
@@ -42,6 +56,8 @@ export function validateManual(form: ManualForm): ManualErrors {
 	const title = titleError(form.title);
 	if (title) errors.title = title;
 	if (form.revision.trim().length > 32) errors.revision = 'At most 32 characters.';
+	const disc = discError(form.disc);
+	if (disc) errors.disc = disc;
 	return errors;
 }
 
@@ -52,16 +68,20 @@ export function toManualRequest(form: ManualForm): ManualRequest {
 		regions: splitList(form.regions),
 		languages: splitList(form.languages),
 		revision: form.revision.trim() || null,
-		flags: splitList(form.flags)
+		flags: splitList(form.flags),
+		...(form.disc === null ? {} : { disc: form.disc })
 	};
 }
 
 /** The §7.5 file name the manual entry produces (shown as a preview), without the extension. */
 export function manualFileStem(form: ManualForm): string {
+	const flags = splitList(form.flags);
 	const groups = [
 		splitList(form.regions).join(', '),
 		form.revision.trim(),
-		...splitList(form.flags)
+		...(form.disc === null
+			? flags
+			: [...flags.filter((f) => !discFlag.test(f)), `Disc ${form.disc}`])
 	];
 	return [form.title.trim(), ...groups.filter(Boolean).map((g) => `(${g})`)].join(' ');
 }

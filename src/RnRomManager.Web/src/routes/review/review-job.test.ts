@@ -23,7 +23,7 @@ vi.mock('$app/paths', () => ({
 }));
 vi.mock('#lib/tooltip.js', () => ({ tooltip: () => ({}) }));
 
-const { default: ReviewPage } = await import('./review/[id]/+page.svelte');
+const { default: ReviewPage } = await import('./[id]/+page.svelte');
 
 const detail = (id: number) => ({
 	id,
