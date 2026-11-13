@@ -33,14 +33,24 @@ public class ImageUrlEndpointsTests
 
     private T Service<T>() where T : notnull => _factory.Services.GetRequiredService<T>();
 
+    [OneTimeSetUp]
+    public async Task StartHost()
+    {
+        var policy = new ImageUrlPolicy(a => (!_realAddressCheck && IPAddress.IsLoopback(a)) || PublicAddress.IsPublic(a), TimeSpan.FromSeconds(1));
+        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync()) { TestServices = s => s.AddSingleton(policy) };
+        _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
     [SetUp]
     public async Task SetUp()
     {
         _realAddressCheck = false;
         _stub = await StubImageServer.StartAsync();
-        var policy = new ImageUrlPolicy(a => (!_realAddressCheck && IPAddress.IsLoopback(a)) || PublicAddress.IsPublic(a), TimeSpan.FromSeconds(1));
-        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync()) { TestServices = s => s.AddSingleton(policy) };
-        _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
+        await _factory.ResetAsync();
         _manager = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "manager", Roles.Of(Roles.RomManager));
         (await _manager.LoginAsync("manager", TestUsers.Password)).Dispose();
@@ -77,7 +87,6 @@ public class ImageUrlEndpointsTests
     public async Task TearDown()
     {
         _manager.Dispose();
-        _factory.Dispose();
         await _stub.DisposeAsync();
     }
 

@@ -34,8 +34,8 @@ public partial class ExternalLibraryTests
     private IJobItemRepository _itemRepository = null!;
     private Action? _mirrorHook;
 
-    [SetUp]
-    public async Task SetUp()
+    [OneTimeSetUp]
+    public async Task StartHost()
     {
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
         {
@@ -49,7 +49,17 @@ public partial class ExternalLibraryTests
             },
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = ""; // default art, no network
-        _ = _factory.Services; // start the host: it creates the system folders
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
+    [SetUp]
+    public async Task SetUp()
+    {
+        _mirrorHook = null;
+        await _factory.ResetAsync();
         WriteDats();
         _items = [];
         _itemRepository = Substitute.For<IJobItemRepository>();
@@ -72,9 +82,6 @@ public partial class ExternalLibraryTests
         }, layouts: new Dictionary<string, FixtureDatLayout> { [ExternalSetTestHandler.DatNameValue] = FixtureDatLayout.Redump });
         cache.Load();
     }
-
-    [TearDown]
-    public void TearDown() => _factory.Dispose();
 
     private T Service<T>() where T : notnull => _factory.Services.GetRequiredService<T>();
 

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using RnRomManager.Core.Users;
 
 namespace RnRomManager.Api.Tests.Integration;
@@ -8,6 +9,13 @@ namespace RnRomManager.Api.Tests.Integration;
 public static class TestUsers
 {
     public const string Password = "correct-horse-battery";
+
+    /// <summary>PBKDF2 rounds for test hashes, here and in <see cref="ApiFactory"/>'s hasher (the app's default is 100,000).</summary>
+    public const int HashIterations = 1;
+
+    /// <summary><see cref="Password"/> hashed once; the hasher ignores the user, so every test user can share it.</summary>
+    private static readonly string PasswordHash = new PasswordHasher<User>(
+        Options.Create(new PasswordHasherOptions { IterationCount = HashIterations })).HashPassword(null!, Password);
 
     /// <summary>What a migrated <c>Admin</c> has (R3): every role.</summary>
     public static readonly IReadOnlySet<string> AllRoles = Roles.Of(Roles.All);
@@ -26,7 +34,7 @@ public static class TestUsers
             CreatedAt = now,
             UpdatedAt = now,
         };
-        user = user with { PasswordHash = new PasswordHasher<User>().HashPassword(user, Password) };
+        user = user with { PasswordHash = PasswordHash };
         return user with { Id = await factory.Services.GetRequiredService<IUserRepository>().InsertAsync(user, CancellationToken.None) };
     }
 }

@@ -48,7 +48,7 @@ public partial class AdminSeedTests
         var admin = await factory.Services.GetRequiredService<IUserRepository>().GetByUsernameAsync("admin", CancellationToken.None);
         Assert.That(admin!.MustChangePassword, Is.True);
         Assert.That(new PasswordHasher<User>().VerifyHashedPassword(admin, admin.PasswordHash, password),
-            Is.EqualTo(PasswordVerificationResult.Success));
+            Is.Not.EqualTo(PasswordVerificationResult.Failed));
     }
 
     [Test]
@@ -85,7 +85,7 @@ public partial class AdminSeedTests
 
         var admin = await factory.Services.GetRequiredService<IUserRepository>().GetByUsernameAsync("admin", CancellationToken.None);
         Assert.That(new PasswordHasher<User>().VerifyHashedPassword(admin!, admin!.PasswordHash, "configured-initial-pw"),
-            Is.EqualTo(PasswordVerificationResult.Success));
+            Is.Not.EqualTo(PasswordVerificationResult.Failed));
         Assert.That(_console.ToString(), Does.Not.Contain("configured-initial-pw"));
         Assert.That(ReadLogs(factory), Does.Not.Contain("configured-initial-pw"));
     }

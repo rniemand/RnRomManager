@@ -31,11 +31,9 @@ public class LibraryMoveMergeTests
     private readonly HashSet<string> _snaps = [];
     private T Service<T>() where T : notnull => _factory.Services.GetRequiredService<T>();
 
-    [SetUp]
-    public async Task SetUp()
+    [OneTimeSetUp]
+    public async Task StartHost()
     {
-        _boxArt.Clear();
-        _snaps.Clear();
         // Thumbnails: Named_Boxarts/<name>.png is 300×400, Named_Snaps/<name>.png 160×144, for the names a test lists.
         var thumbnails = new StubHttpHandler(request =>
         {
@@ -52,6 +50,18 @@ public class LibraryMoveMergeTests
             TestServices = services => services.AddHttpClient(HttpClients.Thumbnails).ConfigurePrimaryHttpMessageHandler(() => thumbnails),
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "https://thumbs.test";
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
+    [SetUp]
+    public async Task SetUp()
+    {
+        _boxArt.Clear();
+        _snaps.Clear();
+        await _factory.ResetAsync();
         _admin = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         (await _admin.LoginAsync("boss", TestUsers.Password)).Dispose();
@@ -91,7 +101,6 @@ public class LibraryMoveMergeTests
     public void TearDown()
     {
         _admin.Dispose();
-        _factory.Dispose();
     }
 
     private static byte[] Png(uint width, uint height)

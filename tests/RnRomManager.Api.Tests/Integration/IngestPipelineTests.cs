@@ -44,22 +44,46 @@ public class IngestPipelineTests
     private static readonly byte[] Comet = new SyntheticMegaDriveRomBuilder { Seed = 160, Size = 65536 }.Build();
     private static readonly byte[] Relay = new SyntheticMegaDriveRomBuilder { Seed = 170, Size = 65536, SystemType = "SEGA 32X", OverseasTitle = "STAR RELAY" }.Build();
     private static readonly byte[] Circuit = Atari(262144, 180);
+    private ApiFactory _shared = null!;
+    /// <summary>The class's shared host, or a host of the test's own when it needs other services (<see cref="RestartWithOverrides"/>).</summary>
     private ApiFactory _factory = null!;
     private ILibraryMirror? _mirrorOverride;
     private Action<IServiceCollection>? _extraServices;
+
+    [OneTimeSetUp]
+    public async Task StartHost()
+    {
+        _shared = CreateFactory(await MariaDbServer.CreateDatabaseAsync());
+        await _shared.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _shared.Dispose();
 
     [SetUp]
     public async Task SetUp()
     {
         _mirrorOverride = null;
         _extraServices = null;
-        _factory = CreateFactory(await MariaDbServer.CreateDatabaseAsync());
-        _ = _factory.Services;
+        _factory = _shared;
+        await _factory.ResetAsync();
         LoadDats();
     }
 
     [TearDown]
-    public void TearDown() => _factory.Dispose();
+    public void TearDown()
+    {
+        if (_factory != _shared)
+            _factory.Dispose();
+    }
+
+    /// <summary>Swaps the shared host for one of the test's own (fresh database) built with the current overrides.</summary>
+    private async Task RestartWithOverrides()
+    {
+        _factory = CreateFactory(await MariaDbServer.CreateDatabaseAsync());
+        _ = _factory.Services;
+        LoadDats();
+    }
 
     private ApiFactory CreateFactory(string connectionString)
     {
@@ -609,14 +633,10 @@ public class IngestPipelineTests
     [Test]
     public async Task DbWriteFailed_StopsTheJob_ZipKept_SourceKept_LaterFilesUntouched()
     {
-        var connectionString = _factory.Settings["ConnectionStrings:Default"]!;
-        _factory.Dispose();
         _mirrorOverride = Substitute.For<ILibraryMirror>();
         _mirrorOverride.ApplyAsync(default!, default!, default).ThrowsAsyncForAnyArgs(new TimeoutException("DB down"));
         _mirrorOverride.ReplaceAsync(default!, default).ThrowsAsyncForAnyArgs(new TimeoutException("DB down")); // a substitute intercepts the default method too
-        _factory = CreateFactory(connectionString);
-        _ = _factory.Services;
-        LoadDats();
+        await RestartWithOverrides();
         var first = Drop("gb", "a.gb", TetrisJ);
         File.SetLastWriteTimeUtc(first.FullPath, DateTime.UtcNow.AddMinutes(-1));
         var later = Drop("gb", "z.gb", SeaQuest);
@@ -1184,15 +1204,11 @@ public class IngestPipelineTests
     [Test]
     public async Task UnexpectedException_IsErrorUnexpected_AndTheJobContinues()
     {
-        var connectionString = _factory.Settings["ConnectionStrings:Default"]!;
-        _factory.Dispose();
         var roms = Substitute.For<IRomRepository>();
         roms.ListSha1sAsync(default).ReturnsForAnyArgs([]);
         roms.GetBySha1Async(default!, default).ThrowsAsyncForAnyArgs(new InvalidOperationException("boom"));
         _extraServices = services => services.AddSingleton(roms);
-        _factory = CreateFactory(connectionString);
-        _ = _factory.Services;
-        LoadDats();
+        await RestartWithOverrides();
         foreach (var name in new[] { "a.gb", "b.gb" })
             File.SetLastWriteTimeUtc(Drop("gb", name, TetrisJ).FullPath, DateTime.UtcNow.AddMinutes(-1));
         var items = Substitute.For<IJobItemRepository>();

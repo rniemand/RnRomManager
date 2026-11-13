@@ -14,10 +14,20 @@ public class CollectionEndpointsTests
     private AuthClient _alice = null!;
     private AuthClient _bob = null!;
 
+    [OneTimeSetUp]
+    public async Task StartHost()
+    {
+        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
     [SetUp]
     public async Task SetUp()
     {
-        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
+        await _factory.ResetAsync();
         _alice = await SignInAsync("alice");
         _bob = await SignInAsync("bob");
     }
@@ -27,7 +37,6 @@ public class CollectionEndpointsTests
     {
         _alice?.Dispose();
         _bob?.Dispose();
-        _factory?.Dispose();
     }
 
     private async Task<AuthClient> SignInAsync(string username)

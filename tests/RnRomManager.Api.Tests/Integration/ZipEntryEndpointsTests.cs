@@ -22,11 +22,21 @@ public class ZipEntryEndpointsTests
     private Guid _game;
     private T Service<T>() where T : notnull => _factory.Services.GetRequiredService<T>();
 
-    [SetUp]
-    public async Task SetUp()
+    [OneTimeSetUp]
+    public async Task StartHost()
     {
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
+    [SetUp]
+    public async Task SetUp()
+    {
+        await _factory.ResetAsync();
         _user = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "plain"); // no roles: any signed-in user
         (await _user.LoginAsync("plain", TestUsers.Password)).Dispose();
@@ -65,7 +75,6 @@ public class ZipEntryEndpointsTests
     public void TearDown()
     {
         _user.Dispose();
-        _factory.Dispose();
     }
 
     private async Task<Guid> Ingest(string name, byte[] bytes)

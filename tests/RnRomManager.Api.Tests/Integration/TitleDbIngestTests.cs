@@ -33,6 +33,8 @@ public class TitleDbIngestTests
     private const string CometUpdateId = "0100000000006800";
 
     private ApiFactory? _factory;
+    /// <summary>The host for the default <see cref="StartAsync"/>, shared by the tests that use it.</summary>
+    private ApiFactory? _shared;
 
     private ApiFactory Factory => _factory ?? throw new InvalidOperationException("Start() first");
 
@@ -45,7 +47,27 @@ public class TitleDbIngestTests
     /// </summary>
     private async Task StartAsync(string? headerTitleId = null, HttpMessageHandler? cdn = null)
     {
-        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
+        if (headerTitleId is null && cdn is null)
+        {
+            if (_shared is null)
+            {
+                _shared = await CreateAsync(null, null);
+                await _shared.StartSharedAsync();
+            }
+            else
+            {
+                await _shared.ResetAsync();
+            }
+            _factory = _shared;
+            return;
+        }
+        _factory = await CreateAsync(headerTitleId, cdn);
+        _ = _factory.Services; // start: folders and the DAT load
+    }
+
+    private static async Task<ApiFactory> CreateAsync(string? headerTitleId, HttpMessageHandler? cdn)
+    {
+        var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
         {
             TestServices = services =>
             {
@@ -55,8 +77,8 @@ public class TitleDbIngestTests
                     services.AddHttpClient(RnRomManager.Api.Http.HttpClients.TitleDbImages).ConfigurePrimaryHttpMessageHandler(() => cdn);
             },
         };
-        _factory.Settings["Sources:ThumbnailBaseUrl"] = cdn is null ? "" : "https://thumbs.test"; // empty: default art, no network
-        FixtureDatWriter.Write(Path.Combine(_factory.Root, "cache", DatCache.FolderName), new Dictionary<string, IReadOnlyList<FixtureGame>>(),
+        factory.Settings["Sources:ThumbnailBaseUrl"] = cdn is null ? "" : "https://thumbs.test"; // empty: default art, no network
+        FixtureDatWriter.Write(Path.Combine(factory.Root, "cache", DatCache.FolderName), new Dictionary<string, IReadOnlyList<FixtureGame>>(),
             titleDb: new Dictionary<string, IReadOnlyList<TitleDbRow>>
             {
                 [ExternalTitleDbTestHandler.DatNameValue] =
@@ -70,11 +92,19 @@ public class TitleDbIngestTests
                     new(CometUpdateId, "Comet Run Update", null, null, null, [], ["en"], null, null),
                 ],
             });
-        _ = _factory.Services; // start: folders and the DAT load
+        return factory;
     }
 
     [TearDown]
-    public void TearDown() => _factory?.Dispose();
+    public void TearDown()
+    {
+        if (_factory != _shared)
+            _factory?.Dispose();
+        _factory = null;
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _shared?.Dispose();
 
     private T Service<T>() where T : notnull => Factory.Services.GetRequiredService<T>();
 

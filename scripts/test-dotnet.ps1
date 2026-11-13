@@ -40,14 +40,13 @@ if (-not $ResultsDirectory) { $ResultsDirectory = Join-Path $root '.dev/test-res
 $ResultsDirectory = [IO.Path]::GetFullPath($ResultsDirectory, $root)
 $apiTests = Join-Path $root 'tests/RnRomManager.Api.Tests'
 
-# API integration test classes per shard, balanced by measured run time (each about a quarter of the API suite).
-# Rebalance when one shard's CI job is clearly slower than the others; unlisted classes run in the last shard.
+# API integration test classes per shard, balanced by measured run time (each about a third of the API suite, the
+# last shard also running the other test projects). Rebalance when one shard's CI job is clearly slower than the
+# others; unlisted classes run in the last shard.
 $apiShards = @(
-    @('ExternalLibraryTests', 'ImageUrlEndpointsTests', 'AuditEndpointsTests', 'JobEndpointsTests', 'IngestReviewTests',
-        'ImageEndpointsTests'),
-    @('IngestPipelineTests', 'ReviewEndpointsTests', 'UserEndpointsTests'),
-    @('LibraryEndpointsTests', 'ReportEndpointsTests', 'LibraryEditTests', 'LibraryMoveMergeTests', 'TitleDbIngestTests',
-        'ZipEntryEndpointsTests', 'IngestEndpointsTests')
+    @('IngestPipelineTests', 'ExternalLibraryTests', 'ReviewEndpointsTests', 'LibraryEditTests', 'DatEndpointsTests'),
+    @('BackupEndpointsTests', 'SeedIngestTests', 'AuthTests', 'LibraryEndpointsTests', 'IntegrityEndpointsTests',
+        'ImageUrlEndpointsTests', 'TitleDbIngestTests', 'ReportEndpointsTests', 'LibraryMoveMergeTests')
 )
 $shardCount = $apiShards.Count + 1
 

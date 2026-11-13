@@ -21,14 +21,24 @@ public class ExternalZipReadTests
     private string _outside = null!;
     private string? _link;
 
-    [SetUp]
-    public async Task SetUp()
+    [OneTimeSetUp]
+    public async Task StartHost()
     {
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
         {
             TestServices = services => services.AddSystemHandler<ExternalTestHandler>(),
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
+    [SetUp]
+    public async Task SetUp()
+    {
+        await _factory.ResetAsync();
         _user = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "plain");
         (await _user.LoginAsync("plain", TestUsers.Password)).Dispose();
@@ -42,7 +52,6 @@ public class ExternalZipReadTests
             TestLinks.RemoveDirectoryLink(_link); // or the factory's cleanup would follow it
         _link = null; // NUnit reuses this instance for the next test
         _user.Dispose();
-        _factory.Dispose();
     }
 
     /// <summary>Mirrors a one-ROM game of <paramref name="system"/> at <paramref name="zipPath"/> and writes its ZIP into <paramref name="folder"/>.</summary>

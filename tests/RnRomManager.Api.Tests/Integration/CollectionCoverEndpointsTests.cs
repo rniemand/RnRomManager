@@ -24,13 +24,23 @@ public class CollectionCoverEndpointsTests
 
     private string CoversDir => _factory.Settings["Paths:Collections"]!;
 
+    [OneTimeSetUp]
+    public async Task StartHost()
+    {
+        // The stub is on 127.0.0.1, so loopback is allowed here.
+        var policy = new ImageUrlPolicy(a => IPAddress.IsLoopback(a) || PublicAddress.IsPublic(a), TimeSpan.FromSeconds(1));
+        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync()) { TestServices = s => s.AddSingleton(policy) };
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
     [SetUp]
     public async Task SetUp()
     {
         _stub = await StubImageServer.StartAsync();
-        // The stub is on 127.0.0.1, so loopback is allowed here.
-        var policy = new ImageUrlPolicy(a => IPAddress.IsLoopback(a) || PublicAddress.IsPublic(a), TimeSpan.FromSeconds(1));
-        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync()) { TestServices = s => s.AddSingleton(policy) };
+        await _factory.ResetAsync();
         _alice = await SignInAsync("alice");
         _bob = await SignInAsync("bob");
         using var created = await _alice.PostAsync("/api/collections", new { name = "Mine" });
@@ -42,7 +52,6 @@ public class CollectionCoverEndpointsTests
     {
         _alice?.Dispose();
         _bob?.Dispose();
-        _factory?.Dispose();
         await _stub.DisposeAsync();
     }
 

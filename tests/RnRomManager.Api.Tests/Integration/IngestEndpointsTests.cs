@@ -16,10 +16,20 @@ public class IngestEndpointsTests
     private ApiFactory _factory = null!;
     private AuthClient _admin = null!;
 
+    [OneTimeSetUp]
+    public async Task StartHost()
+    {
+        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
     [SetUp]
     public async Task SetUp()
     {
-        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
+        await _factory.ResetAsync();
         _admin = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         (await _admin.LoginAsync("boss", TestUsers.Password)).Dispose();
@@ -29,7 +39,6 @@ public class IngestEndpointsTests
     public void TearDown()
     {
         _admin.Dispose();
-        _factory.Dispose();
     }
 
     private string Drop(string system, string name, TimeSpan age)

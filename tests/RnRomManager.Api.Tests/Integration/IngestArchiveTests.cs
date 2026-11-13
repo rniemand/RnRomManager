@@ -24,11 +24,21 @@ public class IngestArchiveTests
     private List<JobItem> _items = null!;
     private IJobItemRepository _itemRepository = null!;
 
-    [SetUp]
-    public async Task SetUp()
+    [OneTimeSetUp]
+    public async Task StartHost()
     {
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
+    [SetUp]
+    public async Task SetUp()
+    {
+        await _factory.ResetAsync();
         var cache = _factory.Services.GetRequiredService<DatCache>();
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
         {
@@ -63,9 +73,6 @@ public class IngestArchiveTests
         _itemRepository = Substitute.For<IJobItemRepository>();
         _itemRepository.InsertAsync(Arg.Do<JobItem>(_items.Add), Arg.Any<CancellationToken>()).Returns(1L);
     }
-
-    [TearDown]
-    public void TearDown() => _factory.Dispose();
 
     private string Ingest => Path.Combine(_factory.Root, "ingest", "gb");
     private string Roms => Path.Combine(_factory.Root, "roms");
@@ -228,23 +235,29 @@ public class IngestExternalArchiveTests
     private List<JobItem> _items = null!;
     private IJobItemRepository _itemRepository = null!;
 
-    [SetUp]
-    public async Task SetUp()
+    [OneTimeSetUp]
+    public async Task StartHost()
     {
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
         {
             TestServices = services => RnRomManager.Core.Systems.SystemHandlerRegistration.AddSystemHandler<ExternalTestHandler>(services),
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
-        _ = _factory.Services; // start the host: it creates the system folders
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
+    [SetUp]
+    public async Task SetUp()
+    {
+        await _factory.ResetAsync();
         _progress = new JobProgress();
         _items = [];
         _itemRepository = Substitute.For<IJobItemRepository>();
         _itemRepository.InsertAsync(Arg.Do<JobItem>(_items.Add), Arg.Any<CancellationToken>()).Returns(1L);
     }
-
-    [TearDown]
-    public void TearDown() => _factory.Dispose();
 
     private string Ingest => Path.Combine(_factory.Root, "ingest", ExternalTestHandler.SystemId);
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -12,9 +13,14 @@ public sealed class AuthClient(HttpClient http) : IDisposable
 {
     private string? _xsrf;
 
+    private static int _lastClientId;
+
     public static async Task<AuthClient> CreateAsync(ApiFactory factory)
     {
-        var client = new AuthClient(factory.CreateClient());
+        var http = factory.CreateClient();
+        // Its own client IP (ApiFactory), like a separate browser: per-client limits don't carry over between tests.
+        http.DefaultRequestHeaders.Add(ApiFactory.ClientHeader, Interlocked.Increment(ref _lastClientId).ToString(CultureInfo.InvariantCulture));
+        var client = new AuthClient(http);
         (await client.GetAsync("/api/auth/antiforgery")).Dispose();
         return client;
     }

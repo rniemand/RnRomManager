@@ -43,8 +43,8 @@ public class DatEndpointsTests
         [IngestSeeder.SaturnDat] = [],
     };
 
-    [SetUp]
-    public async Task SetUp()
+    [OneTimeSetUp]
+    public async Task StartHost()
     {
         var connectionString = await MariaDbServer.CreateDatabaseAsync();
         _server = new StubHttpHandler(request =>
@@ -65,7 +65,16 @@ public class DatEndpointsTests
         // What a previous refresh left behind; loaded at startup (step 9).
         FixtureDatWriter.Write(Path.Combine(_factory.Root, "cache", DatCache.FolderName), Games(), version: "2026.01.01",
             downloadedAt: new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero), titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
+        await _factory.StartSharedAsync();
+    }
 
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
+    [SetUp]
+    public async Task SetUp()
+    {
+        await _factory.ResetAsync();
         _admin = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         (await _admin.LoginAsync("boss", TestUsers.Password)).Dispose();
@@ -75,7 +84,6 @@ public class DatEndpointsTests
     public void TearDown()
     {
         _admin.Dispose();
-        _factory.Dispose();
     }
 
     /// <summary>Spec T3 on its own host: the test titledb handler is registered and its compact file is cached before startup.</summary>

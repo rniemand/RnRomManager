@@ -14,10 +14,20 @@ public class AuditEndpointsTests
     private static readonly DateTime Start = new(2026, 11, 6, 12, 0, 0, DateTimeKind.Utc);
     private readonly Guid _game = Guid.NewGuid();
 
+    [OneTimeSetUp]
+    public async Task StartHost()
+    {
+        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
+        await _factory.StartSharedAsync();
+    }
+
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
     [SetUp]
     public async Task SetUp()
     {
-        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
+        await _factory.ResetAsync();
         _admin = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         (await _admin.LoginAsync("boss", TestUsers.Password)).Dispose();
@@ -31,7 +41,7 @@ public class AuditEndpointsTests
     }
 
     [TearDown]
-    public void TearDown() { _admin.Dispose(); _factory.Dispose(); }
+    public void TearDown() { _admin.Dispose(); }
 
     private async Task<JsonElement> Get(string query = "")
     {

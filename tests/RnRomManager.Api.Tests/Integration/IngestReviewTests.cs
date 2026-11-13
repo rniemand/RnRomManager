@@ -26,16 +26,23 @@ public class IngestReviewTests
     private T Service<T>() where T : notnull => _factory.Services.GetRequiredService<T>();
     private static string Sha(byte[] bytes) => Convert.ToHexStringLower(SHA1.HashData(bytes));
 
-    [SetUp]
-    public async Task SetUp()
+    [OneTimeSetUp]
+    public async Task StartHost()
     {
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
-        LoadDats(Known);
+        await _factory.StartSharedAsync();
     }
 
-    [TearDown]
-    public void TearDown() => _factory.Dispose();
+    [OneTimeTearDown]
+    public void StopHost() => _factory.Dispose();
+
+    [SetUp]
+    public async Task SetUp()
+    {
+        await _factory.ResetAsync();
+        LoadDats(Known);
+    }
 
     private void LoadDats(byte[] bytes)
     {
