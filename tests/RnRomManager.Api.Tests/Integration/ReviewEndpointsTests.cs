@@ -357,7 +357,7 @@ public class ReviewEndpointsTests
     }
 
     [Test]
-    public async Task Audit_ResolveDismissDelete_RecordTheSignedInUser_WithoutAJob()
+    public async Task Audit_ResolveDismissDelete_RecordTheSignedInUser_ResolveWithItsJob()
     {
         var resolved = await Queue();
         var dismissed = await Queue(name: "second.gb", bytes: new SyntheticRomBuilder { Seed = 931, Title = "SECOND" }.Build());
@@ -371,9 +371,10 @@ public class ReviewEndpointsTests
         await using var db = Service<IDbConnectionFactory>().Create();
         var rows = (await db.QueryAsync<(string Action, int? UserId, string? Username, Guid? JobId, string? Path, string? Details)>(
             "SELECT action, user_id, username, job_id, path, details FROM audit_events ORDER BY id")).ToList();
+        var jobId = await db.QuerySingleAsync<Guid>("SELECT id FROM jobs WHERE type = 'ReviewResolve'");
         Assert.That(rows, Is.EqualTo(new (string, int?, string?, Guid?, string?, string?)[]
         {
-            ("Ingested", _adminId, "boss", null, "ingest/gb/mystery.gb", "review resolve (Manual)"),
+            ("Ingested", _adminId, "boss", jobId, "ingest/gb/mystery.gb", "review resolve (Manual)"),
             ("MovedToFailed", _adminId, "boss", null, "ingest/gb/second.gb", "review dismiss"),
             ("ReviewDeleted", _adminId, "boss", null, "ingest/gb/third.gb", null),
         }));

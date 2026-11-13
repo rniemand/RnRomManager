@@ -6,6 +6,7 @@ public enum JobType
     Integrity,
     DatRefresh,
     MediaRetry,
+    ReviewResolve,
 }
 
 public enum JobMode

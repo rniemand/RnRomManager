@@ -52,7 +52,7 @@ public partial class ExternalLibraryTests
     {
         var (id, file) = await QueueAsync("mystery.XCI");
 
-        var result = await Resolver().ResolveAsync(id, ManualMystery, await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(id, ManualMystery, await AdminAsync(), default);
 
         Assert.That(result.Code, Is.Null);
         Assert.That(File.Exists(file.FullPath), Is.False);
@@ -69,7 +69,7 @@ public partial class ExternalLibraryTests
         var (id, _) = await QueueAsync("dump.xci");
         var request = new ReviewResolutionRequest { Action = "Dat", DatSystem = ExternalTestHandler.SystemId, DatGameName = GameName };
 
-        var result = await Resolver().ResolveAsync(id, request, await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(id, request, await AdminAsync(), default);
 
         Assert.That(result.Code, Is.Null);
         using var zip = LibraryZip.Open(ZipPath, Service<InfoJsonReader>());
@@ -93,7 +93,7 @@ public partial class ExternalLibraryTests
     {
         var (id, archive) = await QueueArchiveAsync();
 
-        var result = await Resolver().ResolveAsync(id, ManualMystery, await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(id, ManualMystery, await AdminAsync(), default);
 
         Assert.That(result.Code, Is.Null);
         Assert.That(File.ReadAllBytes(MysterySidecar(".nsp")), Is.EqualTo(Mystery));
@@ -114,7 +114,7 @@ public partial class ExternalLibraryTests
             }, MysteryZip),
         };
 
-        var result = await Resolver(hooks).ResolveAsync(id, ManualMystery, await AdminAsync(), default);
+        var result = await Resolver(hooks).ResolveInJobAsync(id, ManualMystery, await AdminAsync(), default);
 
         Assert.That(result.Code, Is.EqualTo(IngestErrors.VerifyFailed));
         Assert.That(await StatusAsync(id), Is.EqualTo("Pending"));
@@ -163,30 +163,12 @@ public partial class ExternalLibraryTests
             File.WriteAllBytes(file.FullPath, other);
         }
 
-        var result = await Resolver(hooks).ResolveAsync(id, ManualMystery, await AdminAsync(), default);
+        var result = await Resolver(hooks).ResolveInJobAsync(id, ManualMystery, await AdminAsync(), default);
 
         Assert.That(result.Code, Is.EqualTo(IngestErrors.VerifyFailed));
         Assert.That(await StatusAsync(id), Is.EqualTo("Pending"));
         Assert.That(File.Exists(file.FullPath), Is.True, "the source stays in ingest");
         Assert.That(File.Exists(MysteryZip), Is.False);
-    }
-
-    [TestCase("hash", TestName = "AbortedRequest_StillCommitsAndResolves during hashing")]
-    [TestCase("zip", TestName = "AbortedRequest_StillCommitsAndResolves during the ZIP write")]
-    public async Task AbortedRequest_StillCommitsAndResolves(string when)
-    {
-        var (id, _) = await QueueAsync("mystery.xci");
-        using var aborted = new CancellationTokenSource();
-        var hooks = when == "hash"
-            ? new ExternalIngestHooks { BeforeHash = _ => aborted.Cancel() }
-            : new ExternalIngestHooks { Writer = new LibraryZipWriterHooks { AfterTempClosed = aborted.Cancel } };
-
-        var result = await Resolver(hooks).ResolveAsync(id, ManualMystery, await AdminAsync(), aborted.Token);
-
-        Assert.That(aborted.IsCancellationRequested, Is.True);
-        Assert.That(result.Code, Is.Null);
-        Assert.That(File.ReadAllBytes(MysterySidecar(".xci")), Is.EqualTo(Mystery));
-        Assert.That(await StatusAsync(id), Is.EqualTo("Resolved"));
     }
 
     [Test]

@@ -79,7 +79,7 @@ public partial class ExternalLibraryTests
     {
         var id = await QueueSetAsync("sky.nrg", RandomNumberGenerator.GetBytes(4096));
 
-        var result = await Resolver().ResolveAsync(id, DatPick("Track Game (USA)"), await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(id, DatPick("Track Game (USA)"), await AdminAsync(), default);
 
         Assert.That(result.Code, Is.Null);
         var rom = ReadSetGame(Path.Combine(SetFolder('T'), "Track Game.zip")).Roms.Single();
@@ -95,7 +95,7 @@ public partial class ExternalLibraryTests
         WriteDats(new FixtureGame("...Iru! (Japan)", "...Iru! (Japan) (Track 1).bin", RandomNumberGenerator.GetBytes(2352)));
         var id = await QueueSetAsync("iru.nrg", RandomNumberGenerator.GetBytes(4096));
 
-        var result = await Resolver().ResolveAsync(id, DatPick("...Iru! (Japan)"), await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(id, DatPick("...Iru! (Japan)"), await AdminAsync(), default);
 
         Assert.That(result.Code, Is.Null);
         var zip = Directory.GetFiles(Path.Combine(_factory.Root, "roms", ExternalSetTestHandler.SystemId), "*.zip", SearchOption.AllDirectories).Single();
@@ -113,7 +113,7 @@ public partial class ExternalLibraryTests
         var single = (await Service<RnRomManager.Core.Library.IGameRepository>().ListAsync(new GameQuery(), default)).Items.Single(g => g.DisplayTitle == "Single Game");
         var request = new ReviewResolutionRequest { Action = "Attach", TargetGameId = single.Id, Flag = "None" };
 
-        var result = await Resolver().ResolveAsync(await SetItemIdAsync(DiscRev1), request, await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(await SetItemIdAsync(DiscRev1), request, await AdminAsync(), default);
 
         Assert.That(result.Code, Is.Null);
         var rom = ReadSetGame(Path.Combine(SetFolder('S'), "Single Game.zip")).Roms.Single(r => r.FileName == "Disc Game (USA).iso");

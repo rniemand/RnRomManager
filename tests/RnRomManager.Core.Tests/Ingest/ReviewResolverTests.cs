@@ -93,7 +93,7 @@ public class ReviewResolverTests
     {
         var request = new ReviewResolutionRequest { Action = "Manual", Title = "My Game", Regions = [], Languages = [], Flags = [], Disc = 2 };
 
-        var result = await _resolver.ResolveAsync(1, request, Actor, default);
+        var result = await _resolver.ResolveInJobAsync(1, request, Actor, default);
 
         Assert.That(result.Code, Is.EqualTo("ValidationFailed"));
         Assert.That(result.Errors!["disc"], Is.EqualTo(new[] { "Disc numbers are for disc systems." }));
@@ -139,7 +139,7 @@ public class ReviewResolverTests
     [Test]
     public async Task ChangedBytes_ReturnVerifyFailed_WithoutCompletingReview()
     {
-        var result = await _resolver.ResolveAsync(1, new ReviewResolutionRequest { Action = "Manual", Title = "My Game", Regions = [], Languages = [], Flags = [] }, Actor, default);
+        var result = await _resolver.ResolveInJobAsync(1, new ReviewResolutionRequest { Action = "Manual", Title = "My Game", Regions = [], Languages = [], Flags = [] }, Actor, default);
         Assert.That(result.Code, Is.EqualTo("VerifyFailed"));
         await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default, default!, default, default, default, default);
         Assert.That(File.Exists(_item.SourcePath), Is.True);
@@ -249,7 +249,7 @@ public class ReviewResolverTests
         });
         _dats.Load();
 
-        var result = await _resolver.ResolveAsync(1,
+        var result = await _resolver.ResolveInJobAsync(1,
             new ReviewResolutionRequest { Action = "Dat", DatSystem = "gb", DatGameName = "Tide Runner (World)" }, Actor, default);
 
         Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));

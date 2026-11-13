@@ -1,9 +1,11 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using RnRomManager.Api.Auth;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
+using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Naming;
 using RnRomManager.Core.Systems;
@@ -61,12 +63,26 @@ public static class ReviewEndpoints
                 resolvable = ReviewResolver.IsResolvable(item, systems),
             });
         });
-        review.MapPost("/{id:long}/resolve", async (long id, ReviewResolutionRequest request, HttpContext ctx, ReviewResolver resolver) =>
+        review.MapPost("/{id:long}/resolve", async (long id, ReviewResolutionRequest request, HttpContext ctx, IIngestReviewRepository repository,
+            JobRunner runner, ReviewResolveJob job, IJobRepository jobs) =>
         {
             var errors = Validate(request);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            return ToResult(ctx, await resolver.ResolveAsync(id, request, AuditActor.From(ctx.User), ctx.RequestAborted));
+            job.ReviewId = id;
+            job.FileName = (await repository.GetAsync(id, ctx.RequestAborted))?.OriginalFileName ?? "";
+            job.Request = request;
+            var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
+            if (started is null)
+                return DatEndpoints.JobRunning(ctx);
+            // shortcut: waits for the job so the 200 { gameId } contract holds until the endpoint returns 202 { jobId }.
+            await started.Completion;
+            var row = await jobs.GetAsync(started.Id, CancellationToken.None);
+            if (row?.Summary is null)
+                throw new InvalidOperationException($"Review resolve job {started.Id} ended {row?.Status} without a summary: {row?.Error}");
+            var summary = JsonNode.Parse(row.Summary)!;
+            return ToResult(ctx, new ReviewResolutionResult(summary["code"]?.GetValue<string>(), summary["gameId"]?.GetValue<Guid>(),
+                summary["errors"]?.Deserialize<Dictionary<string, string[]>>()));
         });
         review.MapPost("/{id:long}/dismiss", async (long id, HttpContext ctx, ReviewResolver resolver) =>
         {

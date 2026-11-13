@@ -619,16 +619,17 @@ public sealed class IngestPipeline(
     /// <param name="reviewAction">The resolution action (<c>Dat</c>, <c>Attach</c>, <c>Manual</c>), for the audit row's details.</param>
     /// <param name="bytes">The ROM of an embedded handler; null for an external one, whose file is re-hashed streamed and moved (T9).</param>
     /// <param name="snapshot">The external file as it was checked; required when <paramref name="bytes"/> is null.</param>
+    /// <param name="progress">B3: an external file's <c>Hashing</c> and <c>CopyingToLibrary</c> steps.</param>
     public async Task<IngestItemResult> StoreReleaseAsync(IngestFile file, ISystemHandler system, InfoJsonRom rom,
         DatMetadata metadata, byte[]? bytes, Guid? targetGameId, Func<Guid, Task> afterMirror, AuditActor actor, string? reviewAction,
-        CancellationToken cancellationToken, ExternalFileSnapshot? snapshot = null)
+        CancellationToken cancellationToken, ExternalFileSnapshot? snapshot = null, JobProgress? progress = null)
     {
         ExternalSource? source = null;
         if (bytes is null)
         {
             var root = file.ArchiveEntry is null ? paths.Value.Ingest : paths.Value.Cache;
             var (outcome, hashed, details) = await HashCheckedAsync(file, root, file.FullPath, snapshot!, system.MaxRomSizeBytes, recheckPath: true,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken, progress).ConfigureAwait(false);
             if (outcome == HashOutcome.Failed)
                 return IngestItemResult.Error(IngestErrors.IoError, details, system.Id, rom.Metadata.Sha1);
             if (outcome == HashOutcome.Changed || hashed!.Sha1 != rom.Metadata.Sha1)
@@ -637,7 +638,7 @@ public sealed class IngestPipeline(
                     system.Id, rom.Metadata.Sha1);
             }
             rom = rom with { Metadata = rom.Metadata with { SizeBytes = hashed.SizeBytes } };
-            source = new ExternalSource(root, file.FullPath, snapshot!);
+            source = new ExternalSource(root, file.FullPath, snapshot!, progress);
         }
 
         var owners = targetGameId is { } target ? new[] { target } :

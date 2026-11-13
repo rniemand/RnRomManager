@@ -98,7 +98,7 @@ public class ReviewResolverExternalTests
             Assert.Ignore($"this platform or account can't create a {kind}");
 
         var result = action == "Resolve"
-            ? await _resolver.ResolveAsync(1, Manual, Actor, default)
+            ? await _resolver.ResolveInJobAsync(1, Manual, Actor, default)
             : await _resolver.DismissAsync(1, Actor, default);
 
         Assert.That(result.Code, Is.EqualTo("IoError"));
@@ -118,7 +118,7 @@ public class ReviewResolverExternalTests
         _item = _item with { SystemId = ExternalSetTestHandler.SystemId, SourcePath = Path.Combine(folder, name), OriginalFileName = name };
         File.WriteAllBytes(_item.SourcePath, [1, 2, 3]);
 
-        var result = action == "Resolve" ? await _resolver.ResolveAsync(1, Manual, Actor, default) : await _resolver.DismissAsync(1, Actor, default);
+        var result = action == "Resolve" ? await _resolver.ResolveInJobAsync(1, Manual, Actor, default) : await _resolver.DismissAsync(1, Actor, default);
 
         Assert.That(result.Code, Is.EqualTo(ReviewResolver.SetFileNotResolvable));
         Assert.That(File.Exists(_item.SourcePath), Is.True);
@@ -140,7 +140,7 @@ public class ReviewResolverExternalTests
     [Test]
     public async Task ConfirmedMissingSource_ResolveIsSourceMissing_AndDropsTheRow()
     {
-        var result = await _resolver.ResolveAsync(1, Manual, Actor, default);
+        var result = await _resolver.ResolveInJobAsync(1, Manual, Actor, default);
 
         Assert.That(result.Code, Is.EqualTo("SourceMissing"));
         await _reviews.Received(1).DeleteAsync(Arg.Is<IReadOnlyCollection<long>>(ids => ids.SequenceEqual(new long[] { 1 })), Arg.Any<CancellationToken>());
@@ -151,7 +151,7 @@ public class ReviewResolverExternalTests
     {
         File.WriteAllBytes(_item.SourcePath, [1, 2, 3]); // the item's SHA1 is all zeros
 
-        var result = await _resolver.ResolveAsync(1, Manual, Actor, default);
+        var result = await _resolver.ResolveInJobAsync(1, Manual, Actor, default);
 
         Assert.That(result.Code, Is.EqualTo("VerifyFailed"));
         Assert.That(File.Exists(_item.SourcePath), Is.True);
@@ -216,7 +216,7 @@ public class ReviewResolverExternalTests
     {
         var (gameId, zipPath) = await DiscGameAsync("dump.iso");
 
-        var result = await _resolver.ResolveAsync(1, Manual with { Regions = ["Europe"], Disc = 2 }, Actor, default);
+        var result = await _resolver.ResolveInJobAsync(1, Manual with { Regions = ["Europe"], Disc = 2 }, Actor, default);
 
         await AssertAddedAsync(result, gameId, zipPath, "My Game (Europe) (Disc 2).iso");
         Assert.That(StoredRelease(zipPath, "My Game (Europe) (Disc 2).iso").Flags, Is.EqualTo(new[] { "Disc 2" }));
@@ -227,7 +227,7 @@ public class ReviewResolverExternalTests
     {
         var (gameId, zipPath) = await DiscGameAsync("dump.iso");
 
-        var result = await _resolver.ResolveAsync(1, Manual with { Flags = ["disc 3", "Beta"], Disc = 2 }, Actor, default);
+        var result = await _resolver.ResolveInJobAsync(1, Manual with { Flags = ["disc 3", "Beta"], Disc = 2 }, Actor, default);
 
         await AssertAddedAsync(result, gameId, zipPath, "My Game (Beta) (Disc 2).iso");
         Assert.That(StoredRelease(zipPath, "My Game (Beta) (Disc 2).iso").Flags, Is.EqualTo(new[] { "Beta", "Disc 2" }));
@@ -239,7 +239,7 @@ public class ReviewResolverExternalTests
         var (gameId, zipPath) = await DiscGameAsync("dump.iso");
         var request = new ReviewResolutionRequest { Action = "Attach", Flag = "Disc", Disc = 2, TargetGameId = gameId };
 
-        var result = await _resolver.ResolveAsync(1, request, Actor, default);
+        var result = await _resolver.ResolveInJobAsync(1, request, Actor, default);
 
         await AssertAddedAsync(result, gameId, zipPath, "dump (Disc 2).iso");
         var rom = StoredRelease(zipPath, "dump (Disc 2).iso");
@@ -257,7 +257,7 @@ public class ReviewResolverExternalTests
         var (gameId, zipPath) = await DiscGameAsync("My Game (disc 2).iso");
         var request = new ReviewResolutionRequest { Action = "Attach", Flag = "Disc", Disc = 2, TargetGameId = gameId };
 
-        var result = await _resolver.ResolveAsync(1, request, Actor, default);
+        var result = await _resolver.ResolveInJobAsync(1, request, Actor, default);
 
         await AssertAddedAsync(result, gameId, zipPath, "My Game (disc 2).iso");
     }
@@ -283,7 +283,7 @@ public class ReviewResolverExternalTests
         File.WriteAllBytes(_item.SourcePath, [1, 2, 3]);
         var request = new ReviewResolutionRequest { Action = "Dat", DatSystem = ExternalTestHandler.SystemId, DatGameName = "Any", Update = true };
 
-        var result = await _resolver.ResolveAsync(1, request, Actor, default);
+        var result = await _resolver.ResolveInJobAsync(1, request, Actor, default);
 
         Assert.That((result.Code, result.Errors?.Keys.Single()), Is.EqualTo(("ValidationFailed", (string?)"update")));
         Assert.That(File.Exists(_item.SourcePath), Is.True);
@@ -298,7 +298,7 @@ public class ReviewResolverExternalTests
         _item = _item with { SourcePath = Path.Combine(_ingest, "game.xci"), OriginalFileName = "game.xci" };
         File.WriteAllBytes(_item.SourcePath, [1, 2, 3]);
 
-        var result = await _resolver.ResolveAsync(1, new ReviewResolutionRequest { Action = "Dat", DatSystem = "ext2", DatGameName = "Any" }, Actor, default);
+        var result = await _resolver.ResolveInJobAsync(1, new ReviewResolutionRequest { Action = "Dat", DatSystem = "ext2", DatGameName = "Any" }, Actor, default);
 
         Assert.That(result.Code, Is.EqualTo("ValidationFailed"));
         Assert.That(result.Errors!.Keys, Is.EqualTo(new[] { "datSystem" }));

@@ -62,7 +62,7 @@ public partial class ExternalLibraryTests
             resolver = ResolverWith(Pipeline(), FailFirstResolution.Wrap(Reviews));
         }
 
-        var first = await resolver.ResolveAsync(id, ManualMystery, await AdminAsync(), default);
+        var first = await resolver.ResolveInJobAsync(id, ManualMystery, await AdminAsync(), default);
 
         Assert.That(first.Code, Is.EqualTo(IngestErrors.DbWriteFailed));
         Assert.That(await StatusAsync(id), Is.EqualTo("Pending"));
@@ -95,7 +95,7 @@ public partial class ExternalLibraryTests
     {
         var (id, file) = await QueueAsync("mystery.xci");
         var hooks = new ExternalIngestHooks { Writer = FailVerify(() => File.WriteAllText(file.FullPath, "replacement"), MysteryZip) };
-        var result = await ResolverWith(Pipeline(hooks, reviews: reviews)).ResolveAsync(id, ManualMystery, await AdminAsync(), default);
+        var result = await ResolverWith(Pipeline(hooks, reviews: reviews)).ResolveInJobAsync(id, ManualMystery, await AdminAsync(), default);
         var restored = Path.Combine(Ingest, "mystery (2).xci");
         Assert.That(File.ReadAllText(file.FullPath), Is.EqualTo("replacement"), "the replacement is preserved");
         Assert.That(File.ReadAllBytes(restored), Is.EqualTo(Mystery), "the verified bytes are back under a suffix");
@@ -111,7 +111,7 @@ public partial class ExternalLibraryTests
         var item = (await Reviews.GetAsync(id, default))!;
         Assert.That((item.Status, item.SourcePath, item.OriginalFileName), Is.EqualTo(("Pending", restored, "mystery.xci")));
 
-        var retry = await Resolver().ResolveAsync(id, ManualMystery, await AdminAsync(), default);
+        var retry = await Resolver().ResolveInJobAsync(id, ManualMystery, await AdminAsync(), default);
 
         Assert.That(retry.Code, Is.Null);
         Assert.That(File.ReadAllBytes(MysterySidecar(".xci")), Is.EqualTo(Mystery));
@@ -161,7 +161,7 @@ public partial class ExternalLibraryTests
         using (var library = LibraryZip.Open(MysteryZip, Service<InfoJsonReader>()))
             gameId = library.InfoJson!.Game!.GameId;
 
-        var result = await Resolver().ResolveAsync(id, ManualMystery, await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(id, ManualMystery, await AdminAsync(), default);
 
         Assert.That((result.Code, result.GameId), Is.EqualTo(((string?)null, (Guid?)gameId)));
         Assert.That(await StatusAsync(id), Is.EqualTo("Resolved"));
@@ -174,7 +174,7 @@ public partial class ExternalLibraryTests
     public async Task AnotherArchiveWithTheSameSha1_IsDuplicate()
     {
         var (looseId, _) = await QueueAsync("mystery.xci");
-        Assert.That((await Resolver().ResolveAsync(looseId, ManualMystery, await AdminAsync(), default)).Code, Is.Null);
+        Assert.That((await Resolver().ResolveInJobAsync(looseId, ManualMystery, await AdminAsync(), default)).Code, Is.Null);
         var archive = Archive("other.zip", Mystery);
         var item = (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(Mystery)), default))!;
         await Reviews.UpsertAsync(item with
@@ -205,7 +205,7 @@ public partial class ExternalLibraryTests
         await new LibraryZipWriter(Service<InfoJsonReader>()).WriteAsync(zip, null,
             new LibraryZipChanges(embedded, new Dictionary<string, Func<Stream>> { [LibraryZip.RomEntry("Mystery.gb")] = () => new MemoryStream(Mystery) }));
 
-        var result = await Resolver().ResolveAsync(id, ManualMystery, await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(id, ManualMystery, await AdminAsync(), default);
 
         Assert.That(result.Code, Is.EqualTo("Duplicate"));
         Assert.That(await StatusAsync(id), Is.EqualTo("Pending"));
@@ -236,7 +236,7 @@ public partial class ExternalLibraryTests
                 break;
         }
 
-        var result = await Resolver().ResolveAsync(id, ManualMystery, await AdminAsync(), default);
+        var result = await Resolver().ResolveInJobAsync(id, ManualMystery, await AdminAsync(), default);
 
         Assert.That(result.Code, Is.EqualTo(IngestErrors.VerifyFailed));
         Assert.That(await StatusAsync(id), Is.EqualTo("Pending"));
