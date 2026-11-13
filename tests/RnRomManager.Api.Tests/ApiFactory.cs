@@ -1,9 +1,12 @@
+using System.Xml.Linq;
+using Microsoft.AspNetCore.DataProtection.Repositories;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using NLog;
 using NSubstitute;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Jobs;
@@ -64,6 +67,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Stub jobs table (stub mode only): nothing to abort at startup.</summary>
     public IJobRepository Jobs { get; } = Substitute.For<IJobRepository>();
 
+    /// <summary>Stub audit table (stub mode only): the scheduler's startup purge deletes nothing.</summary>
+    public IAuditRepository Audit { get; } = Substitute.For<IAuditRepository>();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         // Not Development: that overlays the project's own wwwroot via static web assets.
@@ -84,6 +90,10 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 services.AddSingleton(Users);
                 services.AddSingleton(Jobs);
                 services.AddSingleton(AppSettings);
+                services.AddSingleton(Audit);
+                // Otherwise data protection reads its keys from MariaDB; with no server each host waits for the
+                // connection to be refused (seconds per test on Windows).
+                services.AddSingleton<IXmlRepository, InMemoryXmlRepository>();
             });
         }
     }
@@ -97,5 +107,23 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         // NLog keeps today's log file open; release it before deleting the folder.
         LogManager.Shutdown();
         Directory.Delete(Root, recursive: true);
+    }
+
+    /// <summary>Stub-mode key ring: keys live as long as the host.</summary>
+    private sealed class InMemoryXmlRepository : IXmlRepository
+    {
+        private readonly List<XElement> _elements = [];
+
+        public IReadOnlyCollection<XElement> GetAllElements()
+        {
+            lock (_elements)
+                return _elements.Select(e => new XElement(e)).ToList();
+        }
+
+        public void StoreElement(XElement element, string friendlyName)
+        {
+            lock (_elements)
+                _elements.Add(new XElement(element));
+        }
     }
 }
