@@ -9,7 +9,6 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { api, configureClient } from '#lib/api/client.js';
-	import type { Page } from '#lib/api/types.js';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import GlobalSearch from '#lib/components/GlobalSearch.svelte';
 	import HotkeysModal from '#lib/components/HotkeysModal.svelte';
@@ -21,6 +20,7 @@
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { hotkeys } from '#lib/stores/hotkeys.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
+	import { navCounts, refreshCounts } from '#lib/stores/navCounts.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import { theme } from '#lib/theme.svelte.js';
 	import type { LayoutProps } from './$types';
@@ -28,7 +28,6 @@
 	let { children }: LayoutProps = $props();
 
 	let bootError = $state<unknown>(null);
-	let reviewCount = $state<number | null>(null);
 	let searchOpen = $state(false);
 	let hotkeysOpen = $state(false);
 
@@ -46,8 +45,8 @@
 	onMount(() => {
 		const stopTheme = theme.init();
 		void boot();
-		// §23: the Review badge refreshes when a job ends (and on navigation, below).
-		const stopJobs = jobs.onEnded(() => void loadReviewCount());
+		// §23, D6: the Review and Deleted ROMs badges refresh when a job ends (and on navigation, below).
+		const stopJobs = jobs.onEnded(() => void refreshCounts());
 		return () => {
 			stopTheme();
 			stopJobs();
@@ -65,19 +64,9 @@
 	// B24: bindings load once signed in with the password changed, and again after a password change.
 	$effect(() => hotkeys.follow(auth.me));
 
-	async function loadReviewCount(): Promise<void> {
-		// Every /api call but me/change-password/logout is 403 until the password is changed (§9.1).
-		if (!auth.isAdmin || auth.me?.mustChangePassword) return;
-		try {
-			reviewCount = (await api.get<Page<unknown>>('/api/review?status=Pending&pageSize=1')).total;
-		} catch {
-			// the badge is a hint; leave the last value
-		}
-	}
-
 	$effect(() => {
 		void page.url.pathname; // re-run on navigation
-		if (auth.isAdmin && !redirect) void loadReviewCount();
+		if (auth.isAdmin && !redirect) void refreshCounts();
 	});
 
 	async function logout(): Promise<void> {
@@ -88,7 +77,7 @@
 			return;
 		}
 		auth.set(null);
-		reviewCount = null;
+		navCounts.reset();
 		await navigate('/login');
 	}
 </script>
@@ -105,7 +94,8 @@
 	{#if auth.me}
 		<Navbar
 			me={auth.me}
-			{reviewCount}
+			reviewCount={navCounts.review}
+			deletedCount={navCounts.deleted}
 			onlogout={logout}
 			onsearch={() => (searchOpen = true)}
 			onhotkeys={() => (hotkeysOpen = true)}

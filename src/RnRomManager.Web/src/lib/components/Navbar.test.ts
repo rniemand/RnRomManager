@@ -27,7 +27,7 @@ describe('Navbar', () => {
 		expect(library.classList.contains('active')).toBe(false);
 	});
 
-	it('an admin sees Library, Ingestion, Review, Reports, Integrity, Admin, in that order (B4)', () => {
+	it('an admin sees Library, Ingestion, Review, Deleted ROMs, Reports, Integrity, Admin, in that order (B4, D6)', () => {
 		render(Navbar, {
 			me: { id: 1, username: 'boss', roles: ['admin', 'rom-manager'], mustChangePassword: false },
 			reviewCount: null,
@@ -39,10 +39,42 @@ describe('Navbar', () => {
 			'Collections',
 			'Ingestion',
 			'Review',
+			'Deleted ROMs',
 			'Reports',
 			'Integrity',
 			'Admin'
 		]);
+		const deleted = screen.getByRole('link', { name: /Deleted ROMs/ });
+		expect(deleted.getAttribute('href')).toBe('/deleted');
+		expect(deleted.querySelector('.bi-trash')).toBeTruthy();
+	});
+
+	it('badges show only when the count is > 0, both formatted (D6)', () => {
+		render(Navbar, {
+			me: { id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false },
+			reviewCount: 1250,
+			deletedCount: 3400,
+			onlogout: () => {}
+		});
+
+		const review = screen.getByRole('link', { name: /Review/ }).querySelector('.badge')!;
+		expect(review.className).toBe('badge rounded-pill text-bg-danger');
+		expect(review.textContent).toBe('1,250 pending');
+		const deleted = screen.getByRole('link', { name: /Deleted ROMs/ }).querySelector('.badge')!;
+		expect(deleted.className).toBe('badge rounded-pill text-bg-secondary');
+		expect(deleted.textContent).toBe('3,400 deleted');
+		expect(deleted.querySelector('.visually-hidden')!.textContent).toBe(' deleted');
+	});
+
+	it.each([0, null])('no Deleted ROMs badge when the count is %s', (deletedCount) => {
+		render(Navbar, {
+			me: { id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false },
+			reviewCount: null,
+			deletedCount,
+			onlogout: () => {}
+		});
+
+		expect(screen.getByRole('link', { name: /Deleted ROMs/ }).querySelector('.badge')).toBeNull();
 	});
 
 	it('a non-admin sees Library and Reports, in that order (RP1)', () => {

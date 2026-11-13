@@ -196,6 +196,9 @@ export interface PendingSystem {
 	files: { name: string; sizeBytes: number; modifiedAt: string }[];
 }
 
+/** `GET /api/ingest/removed` (Deleted ROMs D2): only systems with files in their `_removed/` folder. */
+export type RemovedSystem = PendingSystem;
+
 /** `GET /api/ingest/failed` (D1): the files in each system's `_failed/` folder; `reason` from its `.error.txt`. */
 export interface FailedSystem {
 	system: string;
