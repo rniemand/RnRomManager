@@ -43,10 +43,11 @@ $apiTests = Join-Path $root 'tests/RnRomManager.Api.Tests'
 # API integration test classes per shard, balanced by measured run time (each about a quarter of the API suite).
 # Rebalance when one shard's CI job is clearly slower than the others; unlisted classes run in the last shard.
 $apiShards = @(
-    @('ExternalLibraryTests', 'ImageUrlEndpointsTests', 'AuditEndpointsTests', 'JobEndpointsTests'),
+    @('ExternalLibraryTests', 'ImageUrlEndpointsTests', 'AuditEndpointsTests', 'JobEndpointsTests', 'IngestReviewTests',
+        'ImageEndpointsTests'),
     @('IngestPipelineTests', 'ReviewEndpointsTests', 'UserEndpointsTests'),
     @('LibraryEndpointsTests', 'ReportEndpointsTests', 'LibraryEditTests', 'LibraryMoveMergeTests', 'TitleDbIngestTests',
-        'ZipEntryEndpointsTests', 'IngestEndpointsTests', 'ImageEndpointsTests', 'IngestReviewTests')
+        'ZipEntryEndpointsTests', 'IngestEndpointsTests')
 )
 $shardCount = $apiShards.Count + 1
 
