@@ -34,7 +34,7 @@ One container: the API serves the built SPA from `wwwroot` and everything under 
 | `src/RnRomManager.Systems.NintendoDisc` | the `gc` and `wii` disc handlers (`nintendo-disc` family) and the shared `NintendoDiscHeader` reader (magic word, game id, title), default box art |
 | `src/RnRomManager.Systems.Microsoft` | the `x360` disc handler: external `FileSets` storage, no header, default box art |
 | `src/RnRomManager.Web` | the SvelteKit SPA (see below) |
-| `tests/RnRomManager.TestData` | synthetic GB, GBA, N64, NES, SNES, Switch (`SyntheticNspBuilder`: PFS0 or XCI) and disc (`SyntheticDiscBuilder`: images, GameCube/Wii headers, cue sheets) ROM builders, fixture DAT writer (libretro DATs in `no-intro/` or `redump/` layouts, and titledb compact files), the `ExternalTestHandler` / `ExternalSetTestHandler` (a `FileSets` system with `.bin`/`.cue`/`.iso`/`.nrg`) / `ExternalTitleDbTestHandler` test systems and the seed CLI (also a library for the test projects) |
+| `tests/RnRomManager.TestData` | synthetic GB, GBA, N64, NES, SNES, Switch (`SyntheticNspBuilder`: PFS0 or XCI) and disc (`SyntheticDiscBuilder`: images, GameCube/Wii headers with disc number and version, WBFS files, cue sheets) ROM builders, fixture DAT writer (libretro DATs in `no-intro/` or `redump/` layouts, and titledb compact files), the `ExternalTestHandler` / `ExternalSetTestHandler` (a `FileSets` system with `.bin`/`.cue`/`.iso`/`.nrg`) / `ExternalTitleDbTestHandler` test systems and the seed CLI (also a library for the test projects) |
 | `tests/*.Tests` | NUnit + NSubstitute; database tests use Testcontainers (`[Category("Integration")]`) |
 | `tests/e2e` | Playwright + axe against the real image |
 

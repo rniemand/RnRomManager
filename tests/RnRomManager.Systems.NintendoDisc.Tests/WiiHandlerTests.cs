@@ -14,7 +14,7 @@ public class WiiHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("wii", "Wii", "Wii", "nintendo-disc", "Nintendo - Wii")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".iso" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".iso", ".wbfs" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((32768L, 9L * 1024L * 1024 * 1024)));
         Assert.That((Handler.EmbedRomsInZip, Handler.FileSets, Handler.DatSource, Handler.DatFolder),
             Is.EqualTo((false, true, DatSource.Libretro, DatKind.Redump)));

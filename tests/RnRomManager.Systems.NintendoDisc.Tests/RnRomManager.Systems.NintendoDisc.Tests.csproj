@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/RnRomManager.Systems.NintendoDisc/RnRomManager.Systems.NintendoDisc.csproj" />
+    <ProjectReference Include="../RnRomManager.TestData/RnRomManager.TestData.csproj" />
   </ItemGroup>
 
 </Project>
