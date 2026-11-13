@@ -1,6 +1,6 @@
 # RnRomManager
 
-A self-hosted web app for managing a personal backup collection of **Game Boy**, **Game Boy Color**, **Game Boy Advance**, **Nintendo 64**, **Nintendo Entertainment System**, **Super Nintendo Entertainment System**, **Atari 2600**, **Atari Lynx**, **Atari Jaguar**, **ColecoVision**, **Game Gear**, **Master System**, **Mega Drive / Genesis**, **32X**, **TurboGrafx-16**, **Nintendo Switch**, **PlayStation**, **PlayStation Portable**, **GameCube**, **Wii**, **Xbox 360** and **Saturn** ROMs. Switch dumps and disc images are stored as files next to each game's ZIP, since they're too large to pack; a PlayStation or Saturn bin/cue set is kept together as one release.
+A self-hosted web app for managing a personal backup collection of ROMs across [supported systems](#supported-systems). Switch dumps and disc images are stored as files next to each game's ZIP, since they're too large to pack; a PlayStation or Saturn bin/cue set is kept together as one release.
 
 Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder. RnRomManager identifies each one against the [No-Intro](https://no-intro.org/) DATs (cartridge systems) or the [Redump](http://redump.org/) DATs (disc systems), names it consistently, groups every region and revision of a game together, fetches box art and screenshots, and stores each game as one self-describing ZIP in a tidy `roms/<system>/<letter>/` layout. A MariaDB database mirrors the library for fast browsing, and a scheduled integrity checker keeps the two in sync.
 
@@ -21,6 +21,35 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Game detail | Ingestion |
 |---|---|
 | ![Game detail](https://raw.githubusercontent.com/rniemand/RnRomManager/main/docs/images/game-detail.png) | ![Ingestion](https://raw.githubusercontent.com/rniemand/RnRomManager/main/docs/images/ingestion.png) |
+
+## Supported systems
+
+<!-- systems:start -->
+| System | Id | ROMs stored | Formats | DAT | Play in browser |
+|---|---|---|---|---|---|
+| 32X | `s32x` | In ZIP | `.32x` | No-Intro | — |
+| Atari 2600 | `a2600` | In ZIP | `.a26`, `.bin` | No-Intro | — |
+| Atari Jaguar | `jaguar` | In ZIP | `.j64`, `.jag`, `.rom`, `.abs`, `.cof` | No-Intro | `virtualjaguar` |
+| Atari Lynx | `lynx` | In ZIP | `.lnx`, `.lyx` | No-Intro | `handy` |
+| ColecoVision | `coleco` | In ZIP | `.col`, `.rom`, `.bin` | No-Intro | — |
+| Game Boy | `gb` | In ZIP | `.gb` | No-Intro | `gambatte` |
+| Game Boy Advance | `gba` | In ZIP | `.gba` | No-Intro | `mgba` |
+| Game Boy Color | `gbc` | In ZIP | `.gbc` | No-Intro | `gambatte` |
+| Game Gear | `gg` | In ZIP | `.gg`, `.sms` | No-Intro | — |
+| GameCube | `gc` | Next to ZIP | `.iso` | Redump | — |
+| Master System | `sms` | In ZIP | `.sms` | No-Intro | — |
+| Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen` | No-Intro | — |
+| Nintendo 64 | `n64` | In ZIP | `.z64`, `.v64`, `.n64` | No-Intro | — |
+| Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | — |
+| Nintendo Switch | `switch` | Next to ZIP | `.nsp`, `.xci`, `.nsz`, `.xcz` | titledb | — |
+| PlayStation | `psx` | Next to ZIP | `.bin`, `.cue`, `.iso` | Redump | — |
+| PlayStation Portable | `psp` | Next to ZIP | `.iso` | Redump | — |
+| Saturn | `saturn` | Next to ZIP | `.bin`, `.cue`, `.nrg` | Redump | — |
+| Super Nintendo Entertainment System | `snes` | In ZIP | `.sfc`, `.smc` | No-Intro | — |
+| TurboGrafx-16 | `tg16` | In ZIP | `.pce` | No-Intro | — |
+| Wii | `wii` | Next to ZIP | `.iso`, `.wbfs` | Redump | — |
+| Xbox 360 | `x360` | Next to ZIP | `.iso` | Redump | — |
+<!-- systems:end -->
 
 ## Quick start
 
@@ -78,7 +107,7 @@ docker compose up -d
 
 1. Open `http://<host>:8080`, sign in as `admin` with `ADMIN_PASSWORD`, and choose a new password.
 2. **Admin → DATs → Refresh DATs** downloads the game databases (once, and whenever you want newer ones).
-3. Copy your `.gb` / `.gbc` files into `data/ingest/gb/`, your `.gba` files into `data/ingest/gba/` your `.z64` / `.v64` / `.n64` files into `data/ingest/n64/` your headered `.nes` files into `data/ingest/nes/` your `.sfc` / `.smc` files into `data/ingest/snes/` your `.a26` / `.bin` files into `data/ingest/a2600/`, your `.lnx` / `.lyx` files into `data/ingest/lynx/`, your `.j64` / `.jag` / `.rom` / `.abs` / `.cof` files into `data/ingest/jaguar/`, your `.col` / `.rom` / `.bin` files into `data/ingest/coleco/` your `.gg` / `.sms` files into `data/ingest/gg/` your Master System `.sms` files into `data/ingest/sms/` and your Mega Drive / Genesis `.md` / `.bin` / `.gen` files into `data/ingest/md/` your 32X `.32x` files into `data/ingest/s32x/` your TurboGrafx-16 / PC Engine `.pce` files into `data/ingest/tg16/` your Nintendo Switch `.nsp` / `.xci` / `.nsz` / `.xcz` files into `data/ingest/switch/` your PlayStation `.cue` + `.bin` sets (or `.iso`) into `data/ingest/psx/` your PSP `.iso` files into `data/ingest/psp/` your GameCube `.iso` files into `data/ingest/gc/` your Wii `.iso` / `.wbfs` files into `data/ingest/wii/` your Xbox 360 `.iso` files into `data/ingest/x360/` and your Saturn `.cue` + `.bin` sets (or `.nrg`) into `data/ingest/saturn/` (disc images loose, not in archives), then press **Ingestion → Import all**.
+3. Copy each system's files (formats in [Supported systems](#supported-systems)) into `data/ingest/<Id>/` (disc images loose, not in archives), then press **Ingestion → Import all**.
 
 Upgrading from a version without Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, Atari Lynx, Atari Jaguar, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch, PlayStation, PSP, GameCube, Wii, Xbox 360 or Saturn? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`): it downloads the new system's DATs (for Switch, the titledb file; for the disc systems, the Redump DAT).
 

@@ -53,32 +53,7 @@ What each member drives:
 | `ReadHeader` | Classification (`ClassifiedSystemId`), the invalid-header rule (`IsPlausible`), review suggestions (`Title`) and the stored header (`Fields`). Return null for a file with no recognisable header; an unmatched headerless file then belongs to the ingest folder's handler. A system whose cartridges have no header returns null always, as `Atari2600Handler` does: its unmatched files always go to Review (never `InvalidHeader`), its releases have no Header button, and `info.json` `header` is null. A system with an optional header returns it when found and null otherwise, as `GameGearHandler` and `MasterSystemHandler` do with `TMR SEGA` (one shared `TmrSegaHeader` reader, classified as the calling handler's id) and `MegaDriveHandler` with the `SEGA` header at 0x100: headerless files still go to Review, and only releases with a header show the Header button. `AtariLynxHandler` similarly reads the optional `LYNX` cartridge header. A system with only a magic-bytes check returns a header every time, plausible or not, as `ColecoVisionHandler` does with its `magic` field (`AA55`/`55AA`). |
 | `NormalizeForHashing` | The bytes that are hashed **and stored**, and the bytes `ReadHeader` sees. Stored bytes, `info.json` hashes and the integrity checker's deep hashes then always agree. Nintendo 64 is the example: `.v64` (byte-swapped) and `.n64` (little-endian) dumps are converted to big-endian here, so they match the DAT's `.z64` entries and are stored as `.z64` (`RomExtensions[0]`). SNES strips a 512-byte copier header here (by file size), so headered `.smc` dumps match the DAT's `.sfc` entries and are stored as `.sfc`. TurboGrafx-16 combines both patterns: no header (`ReadHeader` always null, like Atari 2600) plus a size-only 512-byte copier strip (size 512 bytes past a multiple of 8 KiB), with `MaxRomSizeBytes` set to the DAT's largest entry plus 512 because the size limit is checked before the strip. |
 
-Storage of every shipped system:
-
-| System | `Id` | `EmbedRomsInZip` | `DatSource` |
-|---|---|---|---|
-| Game Boy | `gb` | true | Libretro |
-| Game Boy Color | `gbc` | true | Libretro |
-| Game Boy Advance | `gba` | true | Libretro |
-| Nintendo 64 | `n64` | true | Libretro |
-| Nintendo Entertainment System | `nes` | true | Libretro |
-| Super Nintendo Entertainment System | `snes` | true | Libretro |
-| Atari 2600 | `a2600` | true | Libretro |
-| Atari Jaguar | `jaguar` | true | Libretro |
-| Atari Lynx | `lynx` | true | Libretro |
-| ColecoVision | `coleco` | true | Libretro |
-| Game Gear | `gg` | true | Libretro |
-| Master System | `sms` | true | Libretro |
-| Mega Drive / Genesis | `md` | true | Libretro |
-| 32X | `s32x` | true | Libretro |
-| TurboGrafx-16 | `tg16` | true | Libretro |
-| Nintendo Switch | `switch` | false | TitleDb |
-| PlayStation | `psx` | false (`FileSets`, bin/cue sets) | Libretro (`redump`, no metadat) |
-| PlayStation Portable | `psp` | false (`FileSets`) | Libretro (`redump`, no metadat) |
-| GameCube | `gc` | false (`FileSets`) | Libretro (`redump`, no metadat) |
-| Wii | `wii` | false (`FileSets`) | Libretro (`redump`, no metadat) |
-| Xbox 360 | `x360` | false (`FileSets`) | Libretro (`redump`, no metadat) |
-| Saturn | `saturn` | false (`FileSets`, bin/cue sets) | Libretro (`redump`, no metadat) |
+See the README's [supported systems](../README.md#supported-systems) table for storage, formats, DAT source and browser play.
 
 **Switch, the external + titledb example** (`RnRomManager.Systems.Switch`): `EmbedRomsInZip` is false and `DatSource` is `TitleDb`. `ReadHeader` reads only the first MiB it's given: a PFS0 (`.nsp`, `.nsz`) yields its file count and, from its ticket names, a `titleId`; an XCI (`HEAD` at 0x100 or 0x1100) yields no id, so the file name's `[0100…]` is used. Every offset is checked with widened arithmetic before it's sliced, and anything damaged gives a null id rather than an error. It needs no `NormalizeForHashing`.
 
@@ -95,14 +70,14 @@ Storage of every shipped system:
 
 1. Create `src/RnRomManager.Systems.<Name>` (class library, referencing `RnRomManager.Core`) and add it to `RnRomManager.slnx`. Add a matching `tests/RnRomManager.Systems.<Name>.Tests` project. A closely related system may instead live in an existing project when that is simpler: Game Boy Advance shares `RnRomManager.Systems.GameBoy` (and its box-art and resource code) but is its own `gba` family. Nintendo 64 has its own project, `RnRomManager.Systems.Nintendo64`, with a small private loader for its embedded box art; NES and SNES follow the same pattern in `RnRomManager.Systems.Nes`, `RnRomManager.Systems.Snes`, `RnRomManager.Systems.Coleco`, `RnRomManager.Systems.Sega` and `RnRomManager.Systems.Nec` (short names rather than the full system names). Atari 2600, Lynx and Jaguar share the `EmbeddedResources` box-art loader in `RnRomManager.Systems.Atari`. Master System and Mega Drive share `RnRomManager.Systems.Sega` with Game Gear: Master System reuses Game Gear's `TMR SEGA` reader (`TmrSegaHeader`) rather than copying it, and all of them load their box art through one `EmbeddedResources` helper. 32X shows the same for a header: its ROMs carry the Mega Drive header, so `Sega32xHandler` and `MegaDriveHandler` both call the shared `MegaDriveHeader.Read(rom, systemId)`, which classifies the result as the calling system. Also add the new project's `.csproj` to the restore layer in the `Dockerfile`.
 2. Implement `ISystemHandler` (one class per `Id`). Embed the default box-art PNG as a resource, together with its source file.
-3. Register it in `src/RnRomManager.Api/AppHost.cs` next to the existing ones:
+3. Register it in `AppHost.AddSystemHandlers` next to the existing ones:
    ```csharp
-   builder.Services.AddSystemHandler<Sg1000Handler>();
+   services.AddSystemHandler<Sg1000Handler>();
    ```
    and add a project reference from `RnRomManager.Api`.
 4. Add the system to the test data builders in `tests/RnRomManager.TestData` if you want seeded ROMs and fixture DATs for it (`FixtureDatWriter` writes the main DAT plus its metadat files per libretro system, in the folder its `layouts` entry gives (`FixtureDatLayout.NoIntro` by default, `FixtureDatLayout.Redump` for a disc system), or a titledb compact file through its `titleDb` map). Every test fixture that loads DATs for all systems must include the new one, or ingestion's `DatsMissing` preflight fails.
 5. Optionally map its icon in `src/RnRomManager.Web/src/lib/components/icons.ts` (`'system-sg1000': 'bi bi-…'`); without it the UI uses the controller fallback.
 6. Test the header reader with synthetic ROMs (never commit real ROMs), plus the registry lookups and the box-art PNG (valid, 512×512). See `tests/RnRomManager.Systems.GameBoy.Tests` for the pattern.
-7. Update the docs: this repository's README (supported systems), [features](features.md) if behaviour differs, and [ZIP format](zip-format.md) for the new `header` fields.
+7. Update the docs: the [README supported-systems table](../README.md#supported-systems), which `SupportedSystemsTableTests` enforces, [features](features.md) if behaviour differs, and [ZIP format](zip-format.md) for the new `header` fields.
 
 After deployment, an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs; ingestion refuses to start (`DatsMissing`) until every registered system has them.
