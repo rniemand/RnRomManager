@@ -1,6 +1,6 @@
 ---
 title: Library, Game page and Deleted ROMs quality of life
-status: ready # draft | ready | in-progress | completed
+status: in-progress # draft | ready | in-progress | completed
 created: 2026-11-13
 ---
 
