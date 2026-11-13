@@ -236,6 +236,109 @@ describe('Deleted ROMs page (D3, D4)', () => {
 		await vi.waitFor(() => expect(toasts.items.map((t) => t.kind)).toEqual(['warning']));
 	});
 
+	describe('restore (D3, D5)', () => {
+		it('a row Restore posts that file without confirmation, toasts with the job link and reloads', async () => {
+			answers['POST /api/ingest/restore'] = [
+				{ status: 200, body: { restored: 1, failed: [], jobId: 'job-9' } }
+			];
+			render(DeletedPage);
+			const restore = await screen.findByRole('button', { name: 'Restore Zelda.nes' });
+			expect(restore.className).toBe('btn btn-sm btn-outline-primary');
+			expect(restore.querySelector('.bi-arrow-counterclockwise')).toBeTruthy();
+			const del = screen.getByRole('button', { name: 'Delete Zelda.nes' });
+			expect(restore.compareDocumentPosition(del) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+			await fireEvent.click(restore);
+
+			await vi.waitFor(() =>
+				expect(bodies['POST /api/ingest/restore']).toEqual([
+					{ files: [{ system: 'nes', name: 'Zelda.nes' }] }
+				])
+			);
+			await vi.waitFor(() =>
+				expect(toasts.items).toContainEqual(
+					expect.objectContaining({
+						text: 'Restored 1 file; importing.',
+						kind: 'success',
+						link: { href: '/jobs/job-9', text: 'View job' }
+					})
+				)
+			);
+			expect(document.querySelector('.modal.show')).toBeNull();
+			await vi.waitFor(() =>
+				expect(calls.filter((c) => c === 'GET /api/ingest/removed').length).toBeGreaterThanOrEqual(
+					3
+				)
+			);
+			expect(calls).toContain('GET /api/review?status=Pending&pageSize=1');
+		});
+
+		it('Restore selected posts every selected file; without a job it points to Ingestion', async () => {
+			answers['POST /api/ingest/restore'] = [
+				{ status: 200, body: { restored: 3, failed: [], jobId: null } }
+			];
+			render(DeletedPage);
+			await screen.findByText('Zelda.nes');
+			const restoreSelected = screen.getByRole('button', {
+				name: /^Restore selected/
+			}) as HTMLButtonElement;
+			expect(restoreSelected.disabled).toBe(true);
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
+			expect(restoreSelected.textContent!.trim()).toBe('Restore selected (3)');
+			await fireEvent.click(restoreSelected);
+
+			await vi.waitFor(() =>
+				expect(bodies['POST /api/ingest/restore']).toEqual([
+					{
+						files: [
+							{ system: 'gb', name: 'Tetris (World).gb' },
+							{ system: 'gb', name: 'Tetris (World) (2).gb' },
+							{ system: 'nes', name: 'Zelda.nes' }
+						]
+					}
+				])
+			);
+			await vi.waitFor(() =>
+				expect(toasts.items.map((t) => [t.text, t.link])).toContainEqual([
+					'Restored 3 files to Ingestion; import them there.',
+					undefined
+				])
+			);
+		});
+
+		it('failed files and JobRunning are toasted', async () => {
+			answers['POST /api/ingest/restore'] = [
+				{
+					status: 200,
+					body: { restored: 0, failed: [{ system: 'nes', name: 'Zelda.nes' }], jobId: null }
+				},
+				{ status: 409, body: { code: 'JobRunning', title: 'x' } }
+			];
+			render(DeletedPage);
+			await fireEvent.click(await screen.findByRole('button', { name: 'Restore Zelda.nes' }));
+			await vi.waitFor(() =>
+				expect(toasts.items.map((t) => t.text)).toEqual(["Couldn't restore: nes/Zelda.nes"])
+			);
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Restore Zelda.nes' }));
+			await vi.waitFor(() => expect(toasts.items.at(-1)?.kind).toBe('warning'));
+		});
+
+		it('every restore button is disabled while a job runs', async () => {
+			fixed['GET /api/jobs/current'] = { status: 200, body: running };
+			jobs.current = running as never;
+			render(DeletedPage);
+			await screen.findByText('Zelda.nes');
+
+			const restores = screen
+				.getAllByRole('button')
+				.filter((b) => /^Restore/.test(b.getAttribute('aria-label') ?? b.textContent!.trim()));
+			expect(restores.length).toBe(4);
+			expect(restores.every((b) => (b as HTMLButtonElement).disabled)).toBe(true);
+		});
+	});
+
 	it('shows the empty state without deleted ROMs', async () => {
 		fixed['GET /api/ingest/removed'] = { status: 200, body: [] };
 		render(DeletedPage);

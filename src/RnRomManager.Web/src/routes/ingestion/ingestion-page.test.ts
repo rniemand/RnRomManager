@@ -577,6 +577,13 @@ describe('ingestion page', () => {
 		});
 	});
 
+	it('has no Restore buttons (D3: only Deleted ROMs passes onrestore)', async () => {
+		render(IngestionPage);
+		await screen.findByText('Tetris.gb');
+
+		expect(screen.queryByRole('button', { name: /^Restore/, hidden: true })).toBeNull();
+	});
+
 	it('a User sees Not allowed and nothing is fetched', async () => {
 		auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
 		render(IngestionPage);

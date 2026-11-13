@@ -27,6 +27,8 @@
 		/** Disables the delete buttons (a job runs or a delete is in flight). */
 		disabled: boolean;
 		ondelete: (event: MouseEvent, name: string) => void;
+		/** Deleted ROMs (D3): a Restore button before Delete on each row; the Ingestion page leaves it out. */
+		onrestore?: (event: MouseEvent, name: string) => void;
 	}
 
 	let {
@@ -36,7 +38,8 @@
 		label = `${system} files`,
 		showReason = false,
 		disabled,
-		ondelete
+		ondelete,
+		onrestore
 	}: Props = $props();
 
 	/** G1/G2: fixed 20 rows per page, no selector. */
@@ -101,7 +104,18 @@
 						{/if}
 						<td class="text-end"><FileSize bytes={file.sizeBytes} /></td>
 						<td class="text-nowrap">{formatDateTime(file.modifiedAt)}</td>
-						<td class="text-end">
+						<td class="text-end text-nowrap">
+							{#if onrestore}
+								<button
+									type="button"
+									class="btn btn-sm btn-outline-primary"
+									aria-label="Restore {file.name}"
+									{disabled}
+									onclick={(e) => onrestore(e, file.name)}
+								>
+									<Icon name="restore" />
+								</button>
+							{/if}
 							<button
 								type="button"
 								class="btn btn-sm btn-outline-danger"

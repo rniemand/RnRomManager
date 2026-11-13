@@ -1,8 +1,15 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { resolve } from '$app/paths';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { api } from '#lib/api/client.js';
-	import type { IngestDeleteEntry, RemovedSystem, SystemInfo } from '#lib/api/types.js';
+	import { isApiError } from '#lib/api/errors.js';
+	import type {
+		IngestDeleteEntry,
+		RemovedRestoreResponse,
+		RemovedSystem,
+		SystemInfo
+	} from '#lib/api/types.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
@@ -16,9 +23,10 @@
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { refreshCounts } from '#lib/stores/navCounts.svelte.js';
+	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import { tooltip } from '#lib/tooltip.js';
 
-	/** D1–D4: the files library edits moved to `ingest/<system>/_removed/`, with permanent delete. */
+	/** D1–D5: the files library edits moved to `ingest/<system>/_removed/`, with restore and permanent delete. */
 	let removed = $state<RemovedSystem[] | null>(null);
 	let names = $state<Record<string, string>>({});
 	let error = $state<unknown>(null);
@@ -33,7 +41,8 @@
 	let deleteEntries = $state<IngestDeleteEntry[]>([]);
 	let deleteOpen = $state(false);
 	let deleting = $state(false);
-	const disabled = $derived(!!jobs.current || deleting);
+	let restoring = $state(false);
+	const disabled = $derived(!!jobs.current || deleting || restoring);
 
 	const files = (n: number) => `${formatCount(n)} ${n === 1 ? 'file' : 'files'}`;
 
@@ -62,6 +71,44 @@
 		} finally {
 			deleting = false;
 			deleteOpen = false;
+		}
+		void refreshCounts();
+		await load();
+	}
+
+	/**
+	 * D5: moves the files back to Ingestion (no confirmation); the server starts an ingest job for them. A bin/cue set
+	 * must be restored together to import as a set.
+	 */
+	async function restore(entries: IngestDeleteEntry[]): Promise<void> {
+		if (entries.length === 0 || disabled) return;
+		restoring = true;
+		try {
+			const result = await api.post<RemovedRestoreResponse>('/api/ingest/restore', {
+				files: entries.map((e) => ({ system: e.system, name: e.name }))
+			});
+			if (result.restored > 0) {
+				if (result.jobId)
+					toasts.show(`Restored ${files(result.restored)}; importing.`, 'success', {
+						href: resolve('/jobs/[id]', { id: result.jobId }),
+						text: 'View job'
+					});
+				else
+					toasts.show(
+						`Restored ${files(result.restored)} to Ingestion; import them there.`,
+						'success'
+					);
+			}
+			if (result.failed.length)
+				toasts.show(
+					`Couldn't restore: ${result.failed.map((f) => key(f.system, f.name)).join(', ')}`,
+					'danger'
+				);
+		} catch (e) {
+			if (!toasts.jobRunning(e))
+				toasts.show(isApiError(e) ? e.title : "The files couldn't be restored.", 'danger');
+		} finally {
+			restoring = false;
 		}
 		void refreshCounts();
 		await load();
@@ -120,6 +167,13 @@
 			>
 			<button
 				type="button"
+				class="btn btn-sm btn-outline-primary"
+				disabled={disabled || selectedCount === 0}
+				onclick={() => restore(selectedEntries())}
+				><Icon name="restore" /> Restore selected ({selectedCount})</button
+			>
+			<button
+				type="button"
 				class="btn btn-sm btn-outline-danger"
 				disabled={disabled || selectedCount === 0}
 				use:tooltip={'Delete (Shift+click to skip confirmation)'}
@@ -140,6 +194,7 @@
 					label="deleted {system.system} files"
 					{disabled}
 					ondelete={(e, name) => askDelete(e, [{ system: system.system, folder: 'removed', name }])}
+					onrestore={(_e, name) => restore([{ system: system.system, folder: 'removed', name }])}
 				/>
 			</section>
 		{/each}
