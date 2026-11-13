@@ -390,15 +390,15 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             var discFlag = request.Disc is { } disc ? $"Disc {disc}" : null; // B10: the flag NoIntroName.Parse makes from a Redump name
             if (request.Action == "Dat")
             {
-                if (set is not null)
-                    return ReviewResolutionResult.Invalid("action", "Dat pick on a set isn't supported yet.");
                 if (item.Reason != "NoDatMatch")
                     return ReviewResolutionResult.Invalid("action", "DAT selection requires a NoDatMatch item.");
                 var chosen = systems.ById(request.DatSystem!);
                 if (chosen is null || chosen.Family != system.Family)
                     return ReviewResolutionResult.Invalid("datSystem", "Choose a system in the source's family.");
-                if (external && (!chosen.RomExtensions.Contains(originalExtension, StringComparer.OrdinalIgnoreCase)
-                    || item.SizeBytes < chosen.MinRomSizeBytes || item.SizeBytes > chosen.MaxRomSizeBytes))
+                // B14: a set's every member must fit the chosen system, as the one file must.
+                var stored = set?.Select(m => (Name: m.File.Name, m.Row.SizeBytes)).ToList() ?? [(item.OriginalFileName, item.SizeBytes)];
+                if (external && stored.Any(f => !chosen.RomExtensions.Contains(Path.GetExtension(f.Name), StringComparer.OrdinalIgnoreCase)
+                    || f.SizeBytes < chosen.MinRomSizeBytes || f.SizeBytes > chosen.MaxRomSizeBytes))
                     return ReviewResolutionResult.Invalid("datSystem", "That system can't store this file's extension or size.");
                 if (request.Update == true && chosen.DatSource != DatSource.TitleDb)
                     return ReviewResolutionResult.Invalid("update", "Only a titledb game can be stored as an update.");

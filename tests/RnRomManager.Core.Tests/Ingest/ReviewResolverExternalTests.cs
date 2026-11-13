@@ -45,6 +45,7 @@ public class ReviewResolverExternalTests
     }
 
     private IGameRepository _games = null!;
+    private DatCache _dats = null!;
     private IRomRepository _roms = null!;
     private InfoJsonReader _reader = null!;
 
@@ -55,7 +56,7 @@ public class ReviewResolverExternalTests
         _reviews.GetAsync(1, Arg.Any<CancellationToken>()).Returns(_ => _item);
         var systems = new SystemRegistry([new ExternalTestHandler(), .. sibling is null ? [] : new[] { sibling }]);
         var options = Options.Create(_paths);
-        var dats = new DatCache(options, systems, NullLogger<DatCache>.Instance);
+        var dats = _dats = new DatCache(options, systems, NullLogger<DatCache>.Instance);
         var games = _games = Substitute.For<IGameRepository>();
         var media = TestMedia.Offline();
         var romRepository = _roms = Substitute.For<IRomRepository>();
@@ -326,16 +327,44 @@ public class ReviewResolverExternalTests
         await _reviews.Received(1).DeletePendingBySourceAsync(_rows[2].SourcePath, null, Arg.Any<CancellationToken>());
     }
 
+    private ReviewResolutionRequest SetDatPick(string system = ExternalSetTestHandler.SystemId)
+    {
+        FixtureDatWriter.Write(_dats.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
+        {
+            [ExternalSetTestHandler.DatNameValue] = [new FixtureGame("My Game (Japan) (Disc 2)", "My Game (Japan) (Disc 2) (Track 1).bin", [7, 7, 7])],
+        }, layouts: new Dictionary<string, FixtureDatLayout> { [ExternalSetTestHandler.DatNameValue] = FixtureDatLayout.Redump });
+        _dats.Load();
+        return new ReviewResolutionRequest { Action = "Dat", DatSystem = system, DatGameName = "My Game (Japan) (Disc 2)" };
+    }
+
     [Test]
-    public async Task ADatPickOnASet_IsNotSupportedYet_B14()
+    public async Task ADatPickOnASet_IsNamedByTheDatGame_Unverified_AndKeepsTheFileNames_B14()
+    {
+        var (gameId, zipPath) = await DiscSetAsync();
+
+        var result = await _resolver.ResolveInJobAsync(1, SetDatPick(), Actor, new JobProgress());
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        Assert.That(result.GameId, Is.EqualTo(gameId), "grouped with the game that owns the base title");
+        var rom = StoredRelease(zipPath, SetTrack1);
+        Assert.That((rom.BaseTitle, rom.Regions.Single()), Is.EqualTo(("My Game", "Japan")));
+        Assert.That(rom.Flags, Is.EqualTo(new[] { "Disc 2", "Unverified" }));
+        Assert.That(rom.Identification, Is.EqualTo(new InfoJsonIdentification(IdentificationMethod.Manual, ExternalSetTestHandler.DatNameValue,
+            FixtureDatWriter.Version, "My Game (Japan) (Disc 2)")));
+        Assert.That(rom.Files!.Select(f => f.ExternalFileName), Is.EqualTo(new[] { SetCue, SetTrack2 }));
+    }
+
+    [Test]
+    public async Task ADatPickOnASet_WhoseMemberDoesntFitTheSystem_IsAValidationErrorOnDatSystem_B14()
     {
         await DiscSetAsync();
+        var request = SetDatPick();
+        _rows[3] = _rows[3] with { SizeBytes = new ExternalSetTestHandler().MaxRomSizeBytes + 1 };
 
-        var result = await _resolver.ResolveInJobAsync(1,
-            new ReviewResolutionRequest { Action = "Dat", DatSystem = ExternalSetTestHandler.SystemId, DatGameName = "Any" }, Actor, new JobProgress());
+        var result = await _resolver.ResolveInJobAsync(1, request, Actor, new JobProgress());
 
         Assert.That(result.Code, Is.EqualTo("ValidationFailed"));
-        Assert.That(result.Errors!["action"], Is.EqualTo(new[] { "Dat pick on a set isn't supported yet." }));
+        Assert.That(result.Errors!.Keys, Is.EqualTo(new[] { "datSystem" }));
         AssertSetStaysInIngest();
     }
 
