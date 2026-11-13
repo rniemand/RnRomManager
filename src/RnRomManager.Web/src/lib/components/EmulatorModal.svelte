@@ -18,7 +18,8 @@
 </script>
 
 <ConfirmModal bind:open title="Play {rom?.fileName ?? ''}" size="xl">
-	<div class="ratio ratio-4x3">
+	<!-- Cap the width so the 4:3 frame fits the viewport height (dialog chrome ≈ 14rem): Start Game needs no scrolling. -->
+	<div class="ratio ratio-4x3 mx-auto" style="max-width: calc((100vh - 14rem) * 4 / 3)">
 		{#if open && rom && core}
 			<iframe
 				title="Emulator: {rom.fileName}"
