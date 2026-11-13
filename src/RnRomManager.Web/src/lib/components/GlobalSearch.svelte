@@ -8,12 +8,15 @@
 	import { Modal } from '../bootstrap';
 	import { releaseModal } from '../modal';
 	import { auth } from '../stores/auth.svelte';
+	import FileSize from './FileSize.svelte';
 	import Icon from './Icon.svelte';
 	import RatingControl from './RatingControl.svelte';
+	import SystemBadge from './SystemBadge.svelte';
 
 	/**
 	 * Global search (spec B12–B16, B27): Ctrl+Space, Ctrl+K, Cmd+K or the navbar button open it. Up to 5 of the
-	 * caller's collections, then the top 10 games by relevance, in one keyboard-navigable combobox list.
+	 * caller's collections (S2: chips), then the top 20 games by relevance (rich rows), in one keyboard-navigable
+	 * combobox list.
 	 */
 	interface Props {
 		/** Shown while true; set back to false when closed. */
@@ -117,7 +120,7 @@
 	async function search(q: string): Promise<void> {
 		controller = new AbortController();
 		const signal = controller.signal;
-		const gameParams = new URLSearchParams({ q, sort: 'relevance', pageSize: '10' });
+		const gameParams = new URLSearchParams({ q, sort: 'relevance', pageSize: '20' });
 		const collectionParams = new URLSearchParams({ q, pageSize: '5' });
 		// B27: one failing keeps the other's results and shows its error.
 		const [gamePage, collectionPage] = await Promise.allSettled([
@@ -175,7 +178,7 @@
 	aria-labelledby="global-search-title"
 	aria-hidden="true"
 >
-	<div class="modal-dialog modal-dialog-scrollable">
+	<div class="modal-dialog modal-xl modal-dialog-scrollable">
 		<div class="modal-content">
 			<div class="modal-header">
 				<h2 class="modal-title fs-5" id="global-search-title">Search</h2>
@@ -221,79 +224,102 @@
 				</div>
 
 				<ul id={listId} class="list-group mt-2" role="listbox" aria-label="Search results">
-					{#each results as entry, i (`${entry.kind}-${entry.item.id}`)}
-						{#if i === 0 && entry.kind === 'collection'}
-							<li class="list-group-item small fw-semibold text-body-secondary" role="presentation">
-								Collections
-							</li>
-						{/if}
-						{#if entry.kind === 'game' && i === collections.length}
-							<li class="list-group-item small fw-semibold text-body-secondary" role="presentation">
-								Games
-							</li>
-						{/if}
+					{#if collections.length}
+						<li class="list-group-item small fw-semibold text-body-secondary" role="presentation">
+							Collections
+						</li>
+						<!-- S2: the collections as compact chips, each still an option of the one listbox. -->
 						<li
-							id="{listId}-{i}"
-							class="list-group-item list-group-item-action d-flex align-items-center gap-3"
-							class:active={i === active}
-							role="option"
-							aria-selected={i === active}
-							onclick={() => void choose(entry)}
-							onkeydown={() => {}}
-							onmousemove={() => (active = i)}
+							class="list-group-item d-flex flex-wrap gap-2"
+							role="group"
+							aria-label="Collections"
 						>
-							<div
-								class="flex-shrink-0 bg-body-secondary rounded d-flex align-items-center justify-content-center overflow-hidden"
-								style="width: 3rem; height: 3rem"
-							>
-								{#if entry.kind === 'collection'}
-									{#if entry.item.coverUrl}
+							{#each collections as collection, i (collection.id)}
+								<div
+									id="{listId}-{i}"
+									class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+									class:active={i === active}
+									role="option"
+									aria-selected={i === active}
+									tabindex="-1"
+									onclick={() => void choose({ kind: 'collection', item: collection })}
+									onkeydown={() => {}}
+									onmousemove={() => (active = i)}
+								>
+									{#if collection.coverUrl}
 										<img
-											class="w-100 h-100 object-fit-cover"
-											src={entry.item.coverUrl}
+											class="rounded object-fit-cover chip-thumb"
+											src={collection.coverUrl}
 											alt=""
 											loading="lazy"
 										/>
 									{:else}
-										<Icon name="collections" class="fs-4" />
+										<Icon name="collections" />
 									{/if}
-								{:else if entry.item.boxArtUrl}
+									<span>{collection.name}</span>
+									<span class="text-body-secondary">· {collection.gameCount}</span>
+								</div>
+							{/each}
+						</li>
+					{/if}
+					{#if games.length}
+						<li class="list-group-item small fw-semibold text-body-secondary" role="presentation">
+							Games
+						</li>
+					{/if}
+					{#each games as game, g (game.id)}
+						{@const i = collections.length + g}
+						{@const meta = [game.releaseYear, game.regions.join(', ')].filter(Boolean).join(' · ')}
+						<li
+							id="{listId}-{i}"
+							class="list-group-item list-group-item-action d-grid align-items-center gap-3 game-row"
+							class:active={i === active}
+							role="option"
+							aria-selected={i === active}
+							onclick={() => void choose({ kind: 'game', item: game })}
+							onkeydown={() => {}}
+							onmousemove={() => (active = i)}
+						>
+							<div
+								class="bg-body-secondary rounded d-flex align-items-center justify-content-center overflow-hidden game-thumb"
+							>
+								{#if game.boxArtUrl}
 									<img
 										class="w-100 h-100 object-fit-contain"
-										src={entry.item.boxArtUrl}
+										src={game.boxArtUrl}
 										alt=""
 										loading="lazy"
 									/>
 								{:else}
-									<Icon name="system-{entry.item.system}" class="fs-4" />
+									<Icon name="system-{game.system}" class="fs-4" />
 								{/if}
 							</div>
-							<div class="flex-grow-1 min-w-0" style="min-width: 0">
-								{#if entry.kind === 'collection'}
-									<div class="text-truncate fw-semibold">{entry.item.name}</div>
-									<div class="small text-body-secondary">
-										{`Collection · ${entry.item.gameCount} ${entry.item.gameCount === 1 ? 'game' : 'games'}`}
-									</div>
-								{:else}
-									{@const game = entry.item}
-									<div class="text-truncate fw-semibold">{game.displayTitle}</div>
-									{#if game.matchedOn}
-										<div class="text-truncate small text-body-secondary">
-											{matchLabels[game.matchedOn.field]}: {game.matchedOn.value}
-										</div>
-									{/if}
-									<div class="d-flex flex-wrap align-items-center gap-2 small">
-										<span class="badge text-bg-secondary">{game.systemName}</span>
-										{#if game.releaseYear}<span>{game.releaseYear}</span>{/if}
-										<RatingControl
-											gameId={game.id}
-											title={game.displayTitle}
-											rating={game.rating}
-											favourite={game.favourite}
-											readonly
-										/>
+							<div class="min-w-0">
+								<div class="text-truncate fw-semibold">{game.displayTitle}</div>
+								{#if game.matchedOn}
+									<div class="text-truncate small text-body-secondary">
+										{matchLabels[game.matchedOn.field]}: {game.matchedOn.value}
 									</div>
 								{/if}
+							</div>
+							<SystemBadge
+								system={game.system}
+								name={game.systemShortName}
+								title={game.systemName}
+							/>
+							<div class="d-none d-md-block small text-body-secondary text-nowrap">
+								{meta}{#if game.primarySizeBytes != null}{meta ? ' · ' : ''}<FileSize
+										bytes={game.primarySizeBytes}
+									/>{/if}
+							</div>
+							<div class="d-none d-md-block">
+								<RatingControl
+									gameId={game.id}
+									title={game.displayTitle}
+									rating={game.rating}
+									favourite={game.favourite}
+									readonly
+								/>
 							</div>
 						</li>
 					{/each}
@@ -302,3 +328,30 @@
 		</div>
 	</div>
 </div>
+
+<style>
+	.chip-thumb {
+		width: 20px;
+		height: 20px;
+	}
+
+	.game-thumb {
+		width: 48px;
+		height: 48px;
+	}
+
+	.min-w-0 {
+		min-width: 0;
+	}
+
+	/* S2: thumbnail, title, badge; meta and rating join from md. */
+	.game-row {
+		grid-template-columns: 48px 1fr auto;
+	}
+
+	@media (min-width: 768px) {
+		.game-row {
+			grid-template-columns: 48px 1fr auto auto auto;
+		}
+	}
+</style>

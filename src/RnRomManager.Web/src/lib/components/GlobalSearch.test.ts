@@ -38,6 +38,8 @@ const item = (id: string, displayTitle: string, extra = {}) => ({
 	id,
 	system: 'gb',
 	systemName: 'Game Boy',
+	systemShortName: 'GB',
+	primarySizeBytes: null as number | null,
 	displayTitle,
 	releaseYear: null as number | null,
 	regions: [],
@@ -208,7 +210,7 @@ describe('GlobalSearch', () => {
 		expect(requested).toEqual([]);
 	});
 
-	it('debounces 250 ms, asks for 5 collections and the top 10 games by relevance, aborts the older requests (B27)', async () => {
+	it('debounces 250 ms, asks for 5 collections and the top 20 games by relevance, aborts the older requests (B27, S2)', async () => {
 		render(GlobalSearch, { open: true });
 
 		await type('tet');
@@ -219,13 +221,49 @@ describe('GlobalSearch', () => {
 		await vi.advanceTimersByTimeAsync(250);
 
 		expect(requested).toEqual([
-			'/api/games?q=tet&sort=relevance&pageSize=10',
+			'/api/games?q=tet&sort=relevance&pageSize=20',
 			'/api/collections?q=tet&pageSize=5',
-			'/api/games?q=tetris&sort=relevance&pageSize=10',
+			'/api/games?q=tetris&sort=relevance&pageSize=20',
 			'/api/collections?q=tetris&pageSize=5'
 		]);
-		expect(aborted).toContain('/api/games?q=tet&sort=relevance&pageSize=10');
+		expect(aborted).toContain('/api/games?q=tet&sort=relevance&pageSize=20');
 		expect(aborted).toContain('/api/collections?q=tet&pageSize=5');
+	});
+
+	it('the dialog is extra large and scrollable (S1)', () => {
+		render(GlobalSearch, { open: true });
+
+		const dialog = document.querySelector('.global-search .modal-dialog')!;
+		expect(dialog.className).toBe('modal-dialog modal-xl modal-dialog-scrollable');
+	});
+
+	it('a game row is a five-cell grid: thumbnail, title, badge, meta, rating; meta and rating from md (S2)', async () => {
+		items = [
+			item('g1', 'Tetris', {
+				releaseYear: 1989,
+				regions: ['USA', 'Europe'],
+				primarySizeBytes: 32768,
+				boxArtUrl: '/api/games/g1/images/1'
+			}),
+			item('g2', 'Tetris 2')
+		];
+		render(GlobalSearch, { open: true });
+		await typeAndWait('tetris');
+
+		const [first, second] = screen.getAllByRole('option', { hidden: true });
+		expect(first.className).toContain('d-grid');
+		expect(first.classList.contains('game-row')).toBe(true);
+		const cells = [...first.children];
+		expect(cells).toHaveLength(5);
+		expect(cells[0].querySelector('img')!.className).toContain('object-fit-contain');
+		expect(cells[1].textContent!.trim()).toBe('Tetris');
+		expect(cells[2].className).toContain('badge');
+		expect(cells[2].textContent!.trim()).toBe('GB');
+		expect(cells[3].className).toBe('d-none d-md-block small text-body-secondary text-nowrap');
+		expect(cells[3].textContent!.replace(/\s+/g, ' ').trim()).toBe('1989 · USA, Europe · 32.0 KiB');
+		expect(cells[4].className).toBe('d-none d-md-block');
+		// Empty parts are left out.
+		expect([...second.children][3].textContent!.trim()).toBe('');
 	});
 
 	it('results show title, system badge, year, box art or placeholder and the read-only rating', async () => {
@@ -235,7 +273,7 @@ describe('GlobalSearch', () => {
 
 		const [first, second] = screen.getAllByRole('option', { hidden: true });
 		expect(first.textContent).toContain('Tetris');
-		expect(first.querySelector('.badge')!.textContent).toBe('Game Boy');
+		expect(first.querySelector('.badge')!.textContent!.trim()).toBe('GB');
 		expect(first.textContent).toContain('1989');
 		expect(first.querySelector('img')!.getAttribute('src')).toBe('/api/games/g1/images/1');
 		expect(first.textContent).toContain('Rated 4 of 5');
@@ -321,6 +359,10 @@ describe('GlobalSearch', () => {
 		});
 
 		const options = () => screen.getAllByRole('option', { hidden: true });
+		/** A chip's name is its first span; a game row's the bold title. */
+		const name = (o: HTMLElement) =>
+			(o.classList.contains('btn') ? o.querySelector('span') : o.querySelector('.fw-semibold'))!
+				.textContent;
 
 		it('shows Collections first, then Games, with cover, name and game count', async () => {
 			render(GlobalSearch, { open: true });
@@ -331,18 +373,20 @@ describe('GlobalSearch', () => {
 				h.textContent?.trim()
 			);
 			expect(headings).toEqual(['Collections', 'Games']);
-			expect(options().map((o) => o.querySelector('.fw-semibold')?.textContent)).toEqual([
-				'Tetris family',
-				'Puzzles',
-				'Tetris',
-				'Tetris 2'
-			]);
-			expect(options()[0].querySelector('img')!.getAttribute('src')).toBe(
-				'/api/collections/c1/cover?v=1'
-			);
-			expect(options()[0].textContent).toContain('3 games');
-			expect(options()[1].textContent).toContain('1 game');
+			expect(options().map(name)).toEqual(['Tetris family', 'Puzzles', 'Tetris', 'Tetris 2']);
+			// S2: compact chips in one Collections group inside the listbox.
+			const group = screen.getByRole('group', { name: 'Collections', hidden: true });
+			expect(group.className).toBe('list-group-item d-flex flex-wrap gap-2');
+			expect(group.closest('[role="listbox"]')).toBe(listbox);
+			expect([...group.querySelectorAll('[role="option"]')]).toEqual(options().slice(0, 2));
+			expect(options()[0].className).toContain('btn btn-sm btn-outline-secondary');
+			const cover = options()[0].querySelector('img')!;
+			expect(cover.getAttribute('src')).toBe('/api/collections/c1/cover?v=1');
+			expect(cover.classList.contains('chip-thumb')).toBe(true);
+			expect(options()[0].textContent!.replace(/\s+/g, ' ').trim()).toBe('Tetris family · 3');
+			expect(options()[1].textContent!.replace(/\s+/g, ' ').trim()).toBe('Puzzles · 1');
 			expect(options()[1].querySelector('.bi-bookmarks')).toBeTruthy();
+			expect(options()[0].getAttribute('aria-selected')).toBe('true');
 		});
 
 		it('arrow keys cross from collections into games and wrap around', async () => {
@@ -362,6 +406,15 @@ describe('GlobalSearch', () => {
 			expect(goto).toHaveBeenLastCalledWith('/games/g2');
 		});
 
+		it('clicking a chip opens its collection', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('tetris');
+
+			await fireEvent.click(options()[1]);
+
+			expect(goto).toHaveBeenLastCalledWith('/collections/c2');
+		});
+
 		it('Enter on a collection opens it', async () => {
 			render(GlobalSearch, { open: true });
 			await typeAndWait('tetris');
@@ -378,10 +431,7 @@ describe('GlobalSearch', () => {
 			await typeAndWait('tetris');
 
 			expect(screen.getByText('Collections are down')).toBeTruthy();
-			expect(options().map((o) => o.querySelector('.fw-semibold')?.textContent)).toEqual([
-				'Tetris',
-				'Tetris 2'
-			]);
+			expect(options().map(name)).toEqual(['Tetris', 'Tetris 2']);
 		});
 
 		it('a failing games request shows its error and keeps the collections', async () => {
@@ -390,10 +440,7 @@ describe('GlobalSearch', () => {
 			await typeAndWait('tetris');
 
 			expect(screen.getByText('Search is down')).toBeTruthy();
-			expect(options().map((o) => o.querySelector('.fw-semibold')?.textContent)).toEqual([
-				'Tetris family',
-				'Puzzles'
-			]);
+			expect(options().map(name)).toEqual(['Tetris family', 'Puzzles']);
 		});
 
 		it('only collections match: no Games heading, no "no results" text', async () => {
