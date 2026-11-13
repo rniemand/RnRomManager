@@ -12,7 +12,7 @@ permissions:
 jobs:
   # The .NET tests in shards, one job each (scripts/test-dotnet.ps1 defines them; -ExpectedShards fails the job if
   # the script and this matrix disagree). The slowest shard sets the pace.
-  backend:
+  backend-shard:
     name: backend (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     strategy:
@@ -36,8 +36,16 @@ jobs:
           if-no-files-found: ignore
           retention-days: 1
 
+  # Branch protection requires a check named "backend"; this reports the shards as one.
+  backend:
+    needs: backend-shard
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.backend-shard.result }}" = success
+
   coverage:
-    needs: backend
+    needs: backend-shard
     if: always()
     runs-on: ubuntu-latest
     steps:
