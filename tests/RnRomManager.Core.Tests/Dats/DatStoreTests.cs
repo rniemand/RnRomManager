@@ -92,4 +92,30 @@ public class DatStoreTests
         Assert.That(store.MetadataFor("deadbeef"), Is.SameAs(DatMetadata.Empty));
         Assert.That(store.MetadataFor("46df91ad"), Is.SameAs(DatMetadata.Empty));
     }
+
+    private static DatRom Wii(string game, string serial, char sha1, string ext = ".iso") =>
+        new(game, game + ext, 1, "0000000" + sha1, new string(sha1, 32), new string(sha1, 40), serial);
+
+    [Test]
+    public void BySerialCode_MatchesTheSecondSegment_CaseInsensitive_DistinctByGame()
+    {
+        var store = new DatStore(new NoIntroDat("Nintendo - Wii", "v1",
+        [
+            Wii("Mario Kart Wii (Europe)", "RVL-RMCP-EUR", '1'),
+            Wii("Mario Kart Wii (Europe)", "RVL-RMCP-EUR-B0", '1'), // repeated once per serial
+            Wii("Sengoku (Japan)", "RVL-S6TJ-0-JPN-B0", '2'),
+            Wii("Two Codes (USA)", " RVL-TWOE-USA , ,RVL-TWOE-USA-B0", '3'), // comma list, both values match
+            Wii("Other (USA)", "RVL-RMCP-USA", '4'),
+            Wii("Disc Channel", "DS000101", '5'),
+            new DatRom("No Serial (USA)", "No Serial (USA).iso", 1, "00000006", new string('6', 32), new string('6', 40)),
+            Wii("Filtered (USA)", "RVL-FILT-USA", '7', ".wbfs"),
+        ]), [], [".iso"]);
+
+        Assert.That(store.BySerialCode("rmcp").Select(r => r.GameName), Is.EqualTo(new[] { "Mario Kart Wii (Europe)", "Other (USA)" }));
+        Assert.That(store.BySerialCode("S6TJ").Single().GameName, Is.EqualTo("Sengoku (Japan)"));
+        Assert.That(store.BySerialCode("TWOE").Single().GameName, Is.EqualTo("Two Codes (USA)"));
+        Assert.That(store.BySerialCode("DS000101"), Is.Empty, "a value with no '-' matches nothing");
+        Assert.That(store.BySerialCode("FILT"), Is.Empty, "extension-filtered rom isn't indexed");
+        Assert.That(store.BySerialCode("NONE"), Is.Empty);
+    }
 }

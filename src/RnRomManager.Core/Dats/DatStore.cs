@@ -12,6 +12,7 @@ public sealed class DatStore
     private readonly Dictionary<string, DatRom> _bySha1 = new(StringComparer.Ordinal);
     private readonly Dictionary<string, DatMetadata> _metadata;
     private readonly Dictionary<string, TitleDbRow> _byTitleId = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, List<DatRom>> _bySerialCode = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The <see cref="DatName"/> of every titledb store (T3).</summary>
     public const string TitleDbName = "titledb";
@@ -29,6 +30,7 @@ public sealed class DatStore
             : noIntro.Roms.Where(r => romExtensions.Contains(Path.GetExtension(r.RomName), StringComparer.OrdinalIgnoreCase)).ToList();
         foreach (var rom in Roms)
             _bySha1.TryAdd(rom.Sha1, rom); // Redump DATs repeat a game per serial with the same rom (B3); the first wins
+        IndexSerials();
         BaseTitles = Roms.Select(r => NoIntroName.Parse(r.GameName).BaseTitle).Distinct(StringComparer.Ordinal).ToList();
         _metadata = MergeMetadata(Roms.Select(r => r.Crc32).ToHashSet(StringComparer.Ordinal), metadat);
     }
@@ -63,6 +65,32 @@ public sealed class DatStore
 
     /// <summary>A titledb store's entry for an upper-case title id; null for a libretro store.</summary>
     public TitleDbRow? ByTitleId(string titleId) => _byTitleId.GetValueOrDefault(titleId);
+
+    /// <summary>
+    /// B4: the ROMs whose serial (any listed value) has <paramref name="code"/> as its second <c>-</c>-separated segment
+    /// (case-insensitive; <c>RVL-SP3E-USA-B0</c> → <c>SP3E</c>), in DAT order, distinct by game name (first ROM wins).
+    /// </summary>
+    public IReadOnlyList<DatRom> BySerialCode(string code) =>
+        _bySerialCode.TryGetValue(code, out var roms) ? roms : [];
+
+    private void IndexSerials()
+    {
+        foreach (var rom in Roms)
+        {
+            if (rom.Serial is null)
+                continue;
+            foreach (var value in rom.Serial.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+            {
+                var parts = value.Split('-');
+                if (parts.Length < 2 || parts[1].Length == 0)
+                    continue; // e.g. the Wii DAT's DS000101
+                if (!_bySerialCode.TryGetValue(parts[1], out var list))
+                    _bySerialCode[parts[1]] = list = [];
+                if (!list.Exists(r => r.GameName == rom.GameName))
+                    list.Add(rom);
+            }
+        }
+    }
 
     /// <param name="sha1">Lowercase hex.</param>
     public DatRom? BySha1(string sha1) => _bySha1.GetValueOrDefault(sha1);

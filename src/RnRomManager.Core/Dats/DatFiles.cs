@@ -14,6 +14,7 @@ public static class DatFiles
         foreach (var game in root.Blocks("game"))
         {
             var gameName = game.Value("name") ?? throw new DatParseException("A game has no name.");
+            var gameSerial = game.Value("serial");
             foreach (var rom in game.Blocks("rom"))
             {
                 roms.Add(new DatRom(
@@ -24,7 +25,8 @@ public static class DatFiles
                         : throw new DatParseException($"ROM of '{gameName}' has an invalid size."),
                     Hex(rom, "crc", 8, gameName),
                     Hex(rom, "md5", 32, gameName),
-                    Hex(rom, "sha1", 40, gameName)));
+                    Hex(rom, "sha1", 40, gameName),
+                    rom.Value("serial") ?? gameSerial));
             }
         }
         return new NoIntroDat(header.Value("name")!, header.Value("version"), roms);
