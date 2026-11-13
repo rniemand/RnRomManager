@@ -416,7 +416,7 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
     - `systemColours.test.ts` for the six colours;
     - `stores.svelte.test.ts` (it holds the `iconClass` cases): `system-psx` and `system-psp` give `bi bi-playstation`, `system-x360` gives `bi bi-xbox`, and `system-gc`, `system-wii` and `system-saturn` give `bi bi-disc`.
   - Done when: `npm run lint`, `npm run check` and `npx vitest run src/lib/systemColours.test.ts src/lib/stores/stores.svelte.test.ts` pass.
-- [ ] **23. Seed, integration and e2e**: one synthetic game per system in Basic, written loose:
+- [x] **23. Seed, integration and e2e**: one synthetic game per system in Basic, written loose:
   - `ingest/psx/`: `Disc Runner (USA).cue`, `Disc Runner (USA) (Track 1).bin` (data, in the fixture Redump DAT) and `Disc Runner (USA) (Track 2).bin`.
   - `ingest/saturn/`: `Sky Rally (Japan).cue`, `Sky Rally (Japan) (Track 1).bin` (data) and `Sky Rally (Japan) (Track 2).bin`.
   - `ingest/psp/`: `Pocket Ninja (USA).iso`.
@@ -424,8 +424,8 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - `ingest/wii/`: `Wave Bowling (USA).iso`, 64 KiB with the Wii magic, game id `RWBE01` and title `WAVE BOWLING`.
   - `ingest/x360/`: `Arc Strike (USA).iso`.
 
-  Every `.bin` and `.iso` is 64 KiB of deterministic bytes from its own builder seed, so no two files share a SHA1 (above every minimum in B4). Each `.cue` names its two tracks with `FILE "…" BINARY` lines. Each system's fixture Redump DAT (step 19's `EmptyRedump` entry, now filled) lists exactly one game: the `.iso`, or the `(Track 1).bin` data track, under its seeded file name and with its game name (the file name without extension; for a set, the cue's stem). Track 2 and the cues are in no DAT, as in Redump (B3).
-  - Files: `tests/RnRomManager.TestData/IngestSeeder.cs`, a synthetic disc builder in `tests/RnRomManager.TestData/` (new), `IngestSeederTests.cs`, `SeedIngestTests.cs`, `tests/e2e/specs/mvp.spec.ts`.
+  Every `.bin` and `.iso` is 64 KiB of deterministic bytes from its own builder seed, so no two files share a SHA1 (above every minimum in B4). Each `.cue` names its two tracks with `FILE "…" BINARY` lines. Each system's fixture Redump DAT (step 19's empty entry, now filled) lists exactly one game: the `.iso`, or the `(Track 1).bin` data track, under its seeded file name and with its game name (the file name without extension; for a set, the cue's stem). Track 2 and the cues are in no DAT, as in Redump (B3).
+  - Files: `tests/RnRomManager.TestData/IngestSeeder.cs`, `tests/RnRomManager.TestData/SyntheticDiscBuilder.cs` (new), `IngestSeederTests.cs`, `SeedIngestTests.cs`, `tests/e2e/specs/mvp.spec.ts`.
 
   None of the six fixture games has metadat (B2). Basic goes from 17 games, 22 releases and 22 Ingested to 23 games, 28 releases and 32 Ingested items, because each set member is an item; Duplicate 1, Review 2 and Failed 1 don't change. Full goes from 217 games, 222 releases and 222 Ingested to 223, 228 and 232.
   - Update every count:

@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 22, 17)]
-    [TestCase(SeedSet.Full, 222, 217)]
+    [TestCase(SeedSet.Basic, 32, 23)]
+    [TestCase(SeedSet.Full, 232, 223)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -54,7 +54,7 @@ public class SeedIngestTests
             using var zip = LibraryZip.Open(path, factory.Services.GetRequiredService<InfoJsonReader>());
             return zip.InfoJson!.Game!;
         }).ToList();
-        Assert.That(infos.Sum(g => g.Roms.Count), Is.EqualTo(ingested));
+        Assert.That(infos.Sum(g => g.Roms.Count), Is.EqualTo(ingested - 4), "each set member is an item; the 4 beyond the data tracks are files, not releases");
         Assert.That(infos.Single(g => g.Title == "Quest, The").DisplayTitle, Is.EqualTo("The Quest"));
         var orbit = infos.Single(g => g.Title == "Orbit Blocks");
         Assert.That(orbit.Roms, Has.Count.EqualTo(3));
@@ -85,6 +85,25 @@ public class SeedIngestTests
             Assert.That(rom.Identification.Method, Is.EqualTo(IdentificationMethod.TitleDb), fileName);
         }
         Assert.That(expedition.Roms, Has.Count.EqualTo(4));
+        // Disc systems (B7–B9): each set is one release whose main file is the data track; the cue and Track 2 are its files,
+        // stored beside the ZIP under their exact names with their original bytes. No "Track 1" flag.
+        foreach (var (system, title, stem) in new[] { ("psx", "Disc Runner", "Disc Runner (USA)"), ("saturn", "Sky Rally", "Sky Rally (Japan)") })
+        {
+            var disc = infos.Single(g => g.System == system);
+            var release = disc.Roms.Single();
+            var folder = Path.Combine(factory.Root, "roms", system, title[..1]);
+            Assert.That((disc.Title, release.FileName, release.ExternalFileName), Is.EqualTo((title, $"{stem} (Track 1).bin", $"{stem} (Track 1).bin")), system);
+            Assert.That(release.Files!.Select(f => f.ExternalFileName), Is.EqualTo(new[] { $"{stem}.cue", $"{stem} (Track 2).bin" }), system);
+            Assert.That(release.Flags, Has.None.Contains("Track"), system);
+            foreach (var name in new[] { $"{stem}.cue", $"{stem} (Track 1).bin", $"{stem} (Track 2).bin" })
+                Assert.That(File.ReadAllBytes(Path.Combine(folder, name)), Is.EqualTo(File.ReadAllBytes(Path.Combine(reseeded, system, name))), name);
+        }
+        var cube = infos.Single(g => g.System == "gc").Roms.Single();
+        Assert.That((cube.Header!["gameId"]!.GetValue<string>(), cube.Header["title"]!.GetValue<string>()), Is.EqualTo(("GCKE01", "CUBE KART")));
+        var wave = infos.Single(g => g.System == "wii").Roms.Single();
+        Assert.That((wave.Header!["gameId"]!.GetValue<string>(), wave.Header["title"]!.GetValue<string>()), Is.EqualTo(("RWBE01", "WAVE BOWLING")));
+        Assert.That(infos.Where(g => g.System is "psp" or "x360").Select(g => g.Roms.Single().ExternalFileName),
+            Is.EquivalentTo(new[] { "Pocket Ninja (USA).iso", "Arc Strike (USA).iso" }));
         Assert.That(expedition.Roms.Select(r => r.Version), Is.EquivalentTo(new[] { null, null, null, "1.1.0" }), "B7: the ticketless [UPD] file is the 1.1.0 update");
         Assert.That(infos.Single(g => g.Title == "Color Garden").System, Is.EqualTo("gbc"));
         Assert.That(infos.All(g => g.Images.Single().IsDefault), Is.True);
