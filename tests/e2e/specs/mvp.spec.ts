@@ -703,7 +703,7 @@ test('images: upload, set cover, delete', async () => {
 	await expect(dialog()).toHaveAccessibleName('Upload image');
 	await expectAccessible(page, 'upload image modal');
 	// U6/I2: URL is the default source; a loopback URL is refused by the server; the fallback switches to the file input.
-	await expect(dialog().getByLabel('URL')).toBeChecked();
+	await expect(dialog().getByRole('radio', { name: 'URL', exact: true })).toBeChecked();
 	await dialog().getByLabel('Image URL').fill('http://127.0.0.1/x.png');
 	await dialog().getByRole('button', { name: 'Upload', exact: true }).click();
 	await expect(
