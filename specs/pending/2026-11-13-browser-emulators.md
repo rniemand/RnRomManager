@@ -25,7 +25,7 @@ Signed-in users can play a Game Boy, Game Boy Color or Game Boy Advance release 
   1. Calls `parsePlayParams(location.search)` from `params.js`: `game` a GUID, `rom` a positive integer, `core` one of `gambatte`/`mgba`, `name` 1–255 chars. Anything else shows "Invalid emulator link." and stops.
   2. `fetch`es `/api/games/{game}/roms/{rom}/download` (same origin, cookies). A non-2xx shows "Couldn't load the ROM (HTTP {status})." (401: "Your session has expired. Sign in again.").
   3. Wraps the bytes as `new File([blob], name.replaceAll('#', '_'))`, so the core sees the real extension (the URL ends in `/download`). EmulatorJS cuts the name it gives the core at the first `#` (`getBaseFileName`), which would drop the extension; `?` can't occur (`FileNameSanitizer`).
-  4. Sets the globals `EJS_player = '#game'`, `EJS_core`, `EJS_gameUrl = file`, `EJS_gameName = name`, `EJS_pathtodata = '/emulator/vendor/data/'`, `EJS_disableDatabases = true` (no ROM/core cache in IndexedDB), `EJS_disableAutoLang = false` (with `EJS_language` unset, `loader.js` loads no localization file and uses its built-in English), and `EJS_Buttons = { saveState: false, loadState: false, quickSave: false, quickLoad: false, netplay: false, cheat: false, exitEmulation: false }` (a boolean sets the button's `visible`), and `EJS_defaultOptions = { 'save-save-interval': '30' }` (B8).
+  4. Sets the globals as `window` properties (`window.EJS_player = '#game'` and so on: module code is strict, so a bare `EJS_player = …` would throw), which `loader.js` reads: `EJS_player = '#game'`, `EJS_core`, `EJS_gameUrl = file`, `EJS_gameName = name`, `EJS_pathtodata = '/emulator/vendor/data/'`, `EJS_disableDatabases = true` (no ROM/core cache in IndexedDB), `EJS_disableAutoLang = false` (with `EJS_language` unset, `loader.js` loads no localization file and uses its built-in English), and `EJS_Buttons = { saveState: false, loadState: false, quickSave: false, quickLoad: false, netplay: false, cheat: false, exitEmulation: false }` (a boolean sets the button's `visible`), and `EJS_defaultOptions = { 'save-save-interval': '30' }` (B8).
   5. Only then appends `<script src="/emulator/vendor/data/loader.js">`. Its `error` event shows "Couldn't load the emulator."
 
   All status text is set with `textContent`. EmulatorJS's own start button stays (browsers need a click inside the frame before audio).
@@ -104,6 +104,7 @@ There's no migration, no config key and no data change. The API change is additi
 - 2026-11-13 Where does the e2e play flow go? → Right after the `game detail with releases expanded` axe scan, while Orbit Blocks' Releases tab is open (review)
 - 2026-11-13 EmulatorJS's quick save/load (keys 1/2/3, right-click menu) can't be hidden through `EJS_Buttons`. → Keep it and document that quick states are lost when the modal closes (user)
 - 2026-11-13 Do `quickSave`/`quickLoad: false` hide anything? → Yes, the right-click menu's Quick Save/Quick Load (`emulator.js` hides them when `visible === false`); only the keys 1/2/3 stay, so the decision above applies to the keys (review)
+- 2026-11-13 How does the module `play.js` set EmulatorJS's globals? → As `window.EJS_*` properties: a bare assignment throws in a module's strict mode, and `loader.js` reads them as globals (review)
 
 ## Kickoff prompt
 ```text
