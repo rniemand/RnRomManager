@@ -165,7 +165,7 @@ public class JobRunnerTests
     {
         var (_, started) = await StartAsync();
 
-        Assert.That(_runner.Cancel(started.Id), Is.True);
+        Assert.That(_runner.Cancel(started.Id), Is.EqualTo(CancelResult.Cancelled));
         await started.Completion.WaitAsync(Timeout);
 
         await FinishedWith(started.Id, JobStatus.Cancelled);
@@ -177,14 +177,26 @@ public class JobRunnerTests
     {
         var (job, started) = await StartAsync();
 
-        Assert.That(_runner.Cancel(Guid.NewGuid()), Is.False);
+        Assert.That(_runner.Cancel(Guid.NewGuid()), Is.EqualTo(CancelResult.NotFound));
         job.Release.SetResult();
         await started.Completion.WaitAsync(Timeout);
         await FinishedWith(started.Id, JobStatus.Completed, """{"done":1}""");
     }
 
     [Test]
-    public void Cancel_WhenIdle_IsFalse() => Assert.That(_runner.Cancel(Guid.NewGuid()), Is.False);
+    public void Cancel_WhenIdle_IsNotFound() => Assert.That(_runner.Cancel(Guid.NewGuid()), Is.EqualTo(CancelResult.NotFound));
+
+    [Test]
+    public async Task Cancel_OfANonCancellableJob_IsNotCancellable_AndItEndsCompleted_B4()
+    {
+        var (job, started) = await StartAsync(new NoopTestJob { Cancellable = false });
+
+        Assert.That(_runner.Cancel(started.Id), Is.EqualTo(CancelResult.NotCancellable));
+        job.Release.SetResult();
+        await started.Completion.WaitAsync(Timeout);
+
+        await FinishedWith(started.Id, JobStatus.Completed, """{"done":1}""");
+    }
 
     [Test]
     public async Task Exception_EndsFailedWithError()
@@ -230,6 +242,20 @@ public class JobRunnerTests
 
         Assert.That(started.Completion.IsCompleted, Is.True);
         await FinishedWith(started.Id, JobStatus.Cancelled);
+    }
+
+    [Test]
+    public async Task Stop_LeavesANonCancellableJobRunning_B4()
+    {
+        var (job, started) = await StartAsync(new NoopTestJob { Cancellable = false });
+        using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        await _runner.StopAsync(timeout.Token).WaitAsync(Timeout);
+
+        Assert.That(started.Completion.IsCompleted, Is.False, "its token wasn't cancelled");
+        job.Release.SetResult();
+        await started.Completion.WaitAsync(Timeout);
+        await FinishedWith(started.Id, JobStatus.Completed, """{"done":1}""");
     }
 
     [Test]

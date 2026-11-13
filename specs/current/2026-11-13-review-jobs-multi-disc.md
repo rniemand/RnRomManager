@@ -162,7 +162,7 @@ The SPA is the only client. No migrations, no config keys, no info.json change; 
   - `ReviewResolverTests`: disc on an embedded system → `ValidationFailed` `disc`.
 
   Done when: those pass; the endpoint still returns `200` (the job comes in step 4).
-- [ ] **2. Non-cancellable jobs (Core + API)**: B4's runner and endpoint parts. `JobEndpoints` changes in the same commit, because `Cancel`'s new return type wouldn't build without it. Files: `src/RnRomManager.Core/Jobs/IJob.cs`, `JobRunner.cs`, `src/RnRomManager.Api/Endpoints/JobEndpoints.cs`, `tests/RnRomManager.TestData/NoopTestJob.cs` (a `Cancellable` init property, default true). Tests:
+- [x] **2. Non-cancellable jobs (Core + API)**: B4's runner and endpoint parts. `JobEndpoints` changes in the same commit, because `Cancel`'s new return type wouldn't build without it. Files: `src/RnRomManager.Core/Jobs/IJob.cs`, `JobRunner.cs`, `src/RnRomManager.Api/Endpoints/JobEndpoints.cs`, `tests/RnRomManager.TestData/NoopTestJob.cs` (a `Cancellable` init property, default true). Tests:
   - `JobRunnerTests`: `Cancel` on a non-cancellable test job → `NotCancellable`, and it ends `Completed`; the existing `Cancel` asserts move from `true`/`false` to `Cancelled`/`NotFound`; `StopAsync` doesn't cancel it; a cancellable job still gets `Cancelled`, and an unknown id `NotFound`.
   - `JobEndpointsTests`: cancelling a running non-cancellable test job is `409 NotCancellable`; other jobs cancel as before (`202`, `404` when not running).
 

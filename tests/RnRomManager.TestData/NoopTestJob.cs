@@ -20,6 +20,9 @@ public sealed class NoopTestJob : IJob
     /// <summary>The context the runner passed in (AU3 actor checks).</summary>
     public JobContext? Context { get; private set; }
 
+    /// <summary>B4: a job <c>Cancel</c> and shutdown leave alone.</summary>
+    public bool Cancellable { get; init; } = true;
+
     public JobType Type => JobType.Integrity;
     public JobMode? Mode => JobMode.Quick;
 

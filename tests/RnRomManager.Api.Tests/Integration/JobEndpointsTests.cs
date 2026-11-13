@@ -43,9 +43,9 @@ public class JobEndpointsTests
 
     private JobRunner Runner => _factory.Services.GetRequiredService<JobRunner>();
 
-    private async Task<(NoopTestJob Job, StartedJob Started)> StartNoopAsync()
+    private async Task<(NoopTestJob Job, StartedJob Started)> StartNoopAsync(bool cancellable = true)
     {
-        var job = new NoopTestJob();
+        var job = new NoopTestJob { Cancellable = cancellable };
         var started = await Runner.StartAsync(job, JobTrigger.Manual, null, CancellationToken.None);
         await job.Started.Task.WaitAsync(Timeout);
         return (job, started!);
@@ -132,6 +132,22 @@ public class JobEndpointsTests
 
         job.Release.SetResult();
         await started.Completion.WaitAsync(Timeout);
+    }
+
+    [Test]
+    public async Task Cancel_OfANonCancellableJob_Is409NotCancellable_B4()
+    {
+        var (job, started) = await StartNoopAsync(cancellable: false);
+
+        using (var response = await _admin.PostAsync($"/api/jobs/{started.Id}/cancel"))
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("NotCancellable"));
+        }
+        job.Release.SetResult();
+        await started.Completion.WaitAsync(Timeout);
+        using var row = await _admin.GetAsync($"/api/jobs/{started.Id}");
+        Assert.That((await AuthClient.JsonAsync(row)).GetProperty("status").GetString(), Is.EqualTo("Completed"));
     }
 
     [Test]

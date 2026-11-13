@@ -50,30 +50,42 @@ public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, IUserReposit
             throw;
         }
 
-        var running = new RunningJob(row);
+        var running = new RunningJob(row, job.Cancellable);
         Volatile.Write(ref _current, running);
         running.Completion = Task.Run(() => RunAsync(job, running, release), CancellationToken.None);
         return new StartedJob(row.Id, running.Completion);
     }
 
-    /// <returns>False when <paramref name="id"/> isn't the running job (<c>404</c>).</returns>
-    public bool Cancel(Guid id)
+    /// <returns><c>NotFound</c> when <paramref name="id"/> isn't the running job (<c>404</c>); <c>NotCancellable</c> (B4) does nothing.</returns>
+    public CancelResult Cancel(Guid id)
     {
         var running = Volatile.Read(ref _current);
         if (running?.Row.Id != id)
-            return false;
+            return CancelResult.NotFound;
+        if (!running.Cancellable)
+            return CancelResult.NotCancellable;
         running.Cancellation.Cancel();
-        return true;
+        return CancelResult.Cancelled;
     }
 
-    /// <summary>Shutdown (SIGTERM): cancels the running job and waits for it until <paramref name="cancellationToken"/>.</summary>
+    /// <summary>
+    /// Shutdown (SIGTERM): cancels the running job (B4: not a non-cancellable one) and waits for it until
+    /// <paramref name="cancellationToken"/>.
+    /// </summary>
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         var running = Volatile.Read(ref _current);
         if (running?.Completion is not { } completion)
             return;
-        logger.LogInformation("Shutting down: cancelling job {JobId}", running.Row.Id);
-        running.Cancellation.Cancel();
+        if (running.Cancellable)
+        {
+            logger.LogInformation("Shutting down: cancelling job {JobId}", running.Row.Id);
+            running.Cancellation.Cancel();
+        }
+        else
+        {
+            logger.LogInformation("Shutting down: waiting for job {JobId}, which can't be cancelled", running.Row.Id);
+        }
         try
         {
             await completion.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -148,9 +160,10 @@ public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, IUserReposit
         }
     }
 
-    private sealed class RunningJob(Job row)
+    private sealed class RunningJob(Job row, bool cancellable)
     {
         public Job Row { get; } = row;
+        public bool Cancellable { get; } = cancellable;
         public JobProgress Progress { get; } = new();
 
         // Not disposed: Cancel() may race the job's end, and a CTS without timers holds nothing to free.
@@ -163,6 +176,8 @@ public sealed class JobRunner(IJobRepository jobs, JobLock jobLock, IUserReposit
             Progress.StepAt(nowUtc));
     }
 }
+
+public enum CancelResult { NotFound, Cancelled, NotCancellable }
 
 /// <param name="Completion">Ends when the job's row is final (tests and shutdown wait on it).</param>
 public sealed record StartedJob(Guid Id, Task Completion);
