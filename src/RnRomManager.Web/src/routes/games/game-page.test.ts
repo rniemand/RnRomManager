@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
-import type { GameDetail } from '#lib/api/types.js';
+import type { GameDetail, ReleaseFile } from '#lib/api/types.js';
+import { formatSize } from '#lib/format.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 
 const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
@@ -63,8 +64,30 @@ const rom = (id: number, fileName: string, isPrimary: boolean) => ({
 	downloadUrl: `/api/games/g1/roms/${id}/download`,
 	hasNote: false,
 	externalFileName: null as string | null,
-	version: null as string | null
+	version: null as string | null,
+	files: null as ReleaseFile[] | null,
+	totalSizeBytes: 32768
 });
+const setFiles = [
+	{
+		id: 11,
+		fileName: 'Disc (USA).cue',
+		sizeBytes: 100,
+		crc32: 'c1',
+		md5: 'm1',
+		sha1: 'cue1',
+		downloadUrl: '/api/games/g1/roms/1/files/11/download'
+	},
+	{
+		id: 12,
+		fileName: 'Disc (USA) (Track 2).bin',
+		sizeBytes: 2048,
+		crc32: 'c2',
+		md5: 'm2',
+		sha1: 'track2',
+		downloadUrl: '/api/games/g1/roms/1/files/12/download'
+	}
+];
 
 const listing = (paths = ['info.json', 'roms/Tetris 1.gb', 'images/boxart-01.png']) => ({
 	zipName: 'Tetris.zip',
@@ -283,6 +306,52 @@ describe('game detail page', () => {
 
 		await fireEvent.click(toggle);
 		expect(details('Tetris 1.gb').hidden).toBe(true);
+	});
+
+	it('a disc set shows "3 files"; the toggle lists the main file then its files, with downloads, and Size is the total (B20)', async () => {
+		const detail = game([1]);
+		detail.roms[0] = { ...detail.roms[0], files: setFiles, totalSizeBytes: 32768 + 100 + 2048 };
+		answers.push({ status: 200, body: detail });
+		render(GamePage);
+		await screen.findByRole('article', { name: 'Tetris 1.gb' });
+		await fireEvent.click(chevron('Tetris 1.gb'));
+
+		const toggle = within(details('Tetris 1.gb')).getByRole('button', { name: /3 files/ });
+		const list = document.getElementById('release-1-files')!;
+		expect(toggle.getAttribute('aria-controls')).toBe('release-1-files');
+		expect(toggle.getAttribute('aria-expanded')).toBe('false');
+		expect(list.hidden).toBe(true);
+		expect(within(details('Tetris 1.gb')).getByText(formatSize(34916))).toBeTruthy();
+
+		await fireEvent.click(toggle);
+		expect(toggle.getAttribute('aria-expanded')).toBe('true');
+		expect(list.hidden).toBe(false);
+		const rows = within(list).getAllByRole('row').slice(1);
+		expect(rows.map((r) => r.querySelector('td')!.textContent)).toEqual([
+			'Tetris 1.gb',
+			'Disc (USA).cue',
+			'Disc (USA) (Track 2).bin'
+		]);
+		expect(
+			within(list)
+				.getAllByRole('button', { name: /^Download / })
+				.map((b) => b.getAttribute('aria-label'))
+		).toEqual([
+			'Download Tetris 1.gb',
+			'Download Disc (USA).cue',
+			'Download Disc (USA) (Track 2).bin'
+		]);
+	});
+
+	it('a release without files has no file toggle, and Size is its own size (B20)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+		await screen.findByRole('article', { name: 'Tetris 1.gb' });
+
+		expect(
+			within(details('Tetris 1.gb')).queryByRole('button', { name: /files/, hidden: true })
+		).toBeNull();
+		expect(within(details('Tetris 1.gb')).getByText(formatSize(32768))).toBeTruthy();
 	});
 
 	it('a click on empty header space toggles; header buttons and a text selection do not (R2)', async () => {

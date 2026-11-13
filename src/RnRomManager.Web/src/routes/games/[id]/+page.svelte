@@ -184,11 +184,14 @@
 		void id;
 		untrack(() => {
 			openReleases.clear();
+			openFiles.clear();
 			zipSelected = '';
 			zipExpanded.clear();
 			zipExpanded.add('');
 		});
 	});
+	// B20: which releases' file lists are open, by file name like openReleases.
+	const openFiles = new SvelteSet<string>();
 	const allReleasesOpen = $derived.by(() => shownRoms.every((r) => openReleases.has(r.fileName)));
 
 	function toggleRelease(fileName: string): void {
@@ -573,7 +576,7 @@
 							</div>
 							<div class="col">
 								<div class="text-body-secondary">Size</div>
-								<div><FileSize bytes={rom.sizeBytes} /></div>
+								<div><FileSize bytes={rom.totalSizeBytes} /></div>
 							</div>
 						</div>
 						<div class="row row-cols-1 row-cols-lg-2 g-2">
@@ -592,6 +595,58 @@
 								</div>
 							</div>
 						</div>
+						{#if rom.files?.length}
+							{@const filesOpen = openFiles.has(rom.fileName)}
+							<!-- B20: the main file and the set's other files (cue, tracks); N counts all of them. -->
+							<button
+								type="button"
+								class="btn btn-sm btn-outline-secondary mt-2"
+								aria-expanded={filesOpen}
+								aria-controls="release-{rom.id}-files"
+								onclick={() =>
+									filesOpen ? openFiles.delete(rom.fileName) : openFiles.add(rom.fileName)}
+								><Icon name="chevron" /> {rom.files.length + 1} files</button
+							>
+							<div class="card mt-2" id="release-{rom.id}-files" hidden={!filesOpen}>
+								<div class="table-responsive">
+									<table class="table table-sm table-striped table-hover align-middle mb-0">
+										<caption class="visually-hidden">Files of {rom.fileName}</caption>
+										<thead class="table-dark">
+											<tr>
+												<th scope="col">File</th>
+												<th scope="col" class="text-end">Size</th>
+												<th scope="col">SHA1</th>
+												<th scope="col"><span class="visually-hidden">Actions</span></th>
+											</tr>
+										</thead>
+										<tbody>
+											{#each [{ fileName: rom.fileName, sizeBytes: rom.sizeBytes, sha1: rom.sha1, downloadUrl: rom.downloadUrl }, ...rom.files] as file (file.fileName)}
+												<tr>
+													<td class="text-truncate" style="max-width: 32rem" title={file.fileName}
+														>{file.fileName}</td
+													>
+													<td class="text-end text-nowrap"><FileSize bytes={file.sizeBytes} /></td>
+													<td class="text-nowrap">
+														<span class="font-monospace">{file.sha1}</span>
+														<CopyButton value={file.sha1} label="SHA1 of {file.fileName}" />
+													</td>
+													<td class="text-end">
+														<button
+															type="button"
+															class="btn btn-sm btn-outline-primary"
+															aria-label="Download {file.fileName}"
+															onclick={() => download(file.downloadUrl, rom)}
+														>
+															<Icon name="download" />
+														</button>
+													</td>
+												</tr>
+											{/each}
+										</tbody>
+									</table>
+								</div>
+							</div>
+						{/if}
 					</div>
 				</article>
 			{/each}

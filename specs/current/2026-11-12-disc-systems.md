@@ -406,8 +406,8 @@ Six disc-based systems join the library: PlayStation (`psx`), PlayStation Portab
   - Files: `lib/api/types.ts`, `routes/review/+page.svelte`, `routes/review/[id]/+page.svelte`, `routes/review/review-page.test.ts`.
   - Tests: `review-page.test.ts` (it tests `review/[id]` and the queue): an item with `resolvable` false shows the hint and Delete, with no action tabs and no Dismiss button; one with `resolvable` true shows today's actions; the queue's reason filter offers "Ambiguous set" and puts `reason=AmbiguousSet` in the URL.
   - Done when: `npm run lint`, `npm run check` and `npx vitest run src/routes/review/review-page.test.ts` pass.
-- [ ] **21. Game page file list**: B20 (UI part). `lib/api/types.ts`, the Game page toggle and table, and the delete-release text.
-  - Files: `lib/api/types.ts`, `routes/games/[id]/+page.svelte`, `lib/components/GameAdminModal.svelte`, `routes/games/game-page.test.ts`, `routes/games/game-admin.test.ts`.
+- [x] **21. Game page file list**: B20 (UI part). `lib/api/types.ts`, the Game page toggle and table, and the delete-release text.
+  - Files: `lib/api/types.ts`, `routes/games/[id]/+page.svelte`, `lib/components/GameAdminModal.svelte`, `routes/games/game-page.test.ts`, `routes/games/game-admin.test.ts`, `routes/games/release-note.test.ts` (fixture).
   - Tests: `game-page.test.ts`: a release with 2 `files` shows "3 files", and the toggle lists the main file then the 2 files, with download buttons that have an `aria-label`, and the size shows the total; `game-admin.test.ts`: deleting a release with 2 `files` reads "The ROM and its 2 other files move…", and one without files keeps today's text; `table-style.test.ts` passes.
   - Done when: `npm test`, `npm run lint` and `npm run check` pass.
 - [ ] **22. System colours and icons**: B22.

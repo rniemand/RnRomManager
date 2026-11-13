@@ -125,6 +125,21 @@ export interface RomDetail {
 	hasNote: boolean;
 	/** G7: the file next to the ZIP for an external system's release; null when the ROM is in the ZIP. */
 	externalFileName: string | null;
+	/** B20: a disc set's other files (cue, other tracks) in order; null for a release without. */
+	files: ReleaseFile[] | null;
+	/** B20: `sizeBytes` plus every `files` entry. */
+	totalSizeBytes: number;
+}
+
+/** B20: one file of a disc set, besides the release's main file. */
+export interface ReleaseFile {
+	id: number;
+	fileName: string;
+	sizeBytes: number;
+	crc32: string;
+	md5: string;
+	sha1: string;
+	downloadUrl: string;
 }
 
 export interface ImageInfo {
