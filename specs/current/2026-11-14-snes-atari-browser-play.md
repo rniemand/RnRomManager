@@ -1,6 +1,6 @@
 ---
 title: SNES and Atari browser play
-status: ready
+status: in-progress
 created: 2026-11-14
 ---
 
