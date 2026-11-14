@@ -25,7 +25,7 @@ public class NintendoDsHandlerTests
             Is.EqualTo((true, false, DatSource.Libretro, DatKind.NoIntro)));
         Assert.That(Handler.MetadatKinds, Is.EqualTo(DatKind.Metadat));
         Assert.That(Handler.MetadatKinds, Has.Count.EqualTo(4));
-        Assert.That(Handler.BrowserCore, Is.Null, "Play is enabled only after the browser size gate");
+        Assert.That(Handler.BrowserCore, Is.EqualTo("desmume"));
     }
 
     [Test]

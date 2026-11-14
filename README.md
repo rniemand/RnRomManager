@@ -42,7 +42,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Master System | `sms` | In ZIP | `.sms` | No-Intro | `smsplus` |
 | Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen` | No-Intro | `genesis_plus_gx` |
 | Nintendo 64 | `n64` | In ZIP | `.z64`, `.v64`, `.n64` | No-Intro | — |
-| Nintendo DS | `nds` | In ZIP | `.nds` | No-Intro | — |
+| Nintendo DS | `nds` | In ZIP | `.nds` | No-Intro | `desmume` |
 | Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | `fceumm` |
 | Nintendo Switch | `switch` | Next to ZIP | `.nsp`, `.xci`, `.nsz`, `.xcz` | titledb | — |
 | PlayStation | `psx` | Next to ZIP | `.bin`, `.cue`, `.iso` | Redump | `pcsx_rearmed` |

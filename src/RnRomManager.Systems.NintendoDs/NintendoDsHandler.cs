@@ -23,6 +23,12 @@ public sealed class NintendoDsHandler : ISystemHandler
 
     public string DatName => "Nintendo - Nintendo DS";
 
+    /// <summary>
+    /// DeSmuME from EmulatorJS 4.2.3, vendored (non-threaded payloads only). The browser size gate on 2026-11-14 passed
+    /// at 512 MiB, so Play has no size limit below the import maximum.
+    /// </summary>
+    public string BrowserCore => "desmume";
+
     /// <inheritdoc />
     public bool EmbedRomsInZip => true;
 

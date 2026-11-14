@@ -2,35 +2,30 @@ nds-marker.nds: what it contains and under which terms
 =====================================================
 
 nds-marker.nds is built from source/main.c and Makefile in this folder with build.sh, in the
-devkitpro/devkitarm image pinned there by digest (devkitARM r68, GCC 16.1.0, libnds 2.0.2, calico 1.2.0,
-newlib 4.6.0.20260123, ndstool 2.3.1). source/main.c, Makefile and build.sh are original to RnRomManager
-and MIT-licensed like the rest of the repository.
+devkitpro/devkitarm image pinned there by digest (the 2024-05-11 image: devkitARM r64, GCC 14.1.0,
+libnds 1.8.2, default-arm7 0.7.4, dswifi 0.4.2, maxmod-nds 1.0.15, ndstool 2.3.1). source/main.c, Makefile
+and build.sh are original to RnRomManager and MIT-licensed like the rest of the repository.
 
-The cartridge links these devkitPro libraries (from the linker map's archive members):
+The cartridge links these devkitPro libraries:
 
-- libnds 2.0.2 (libnds9.a: cardEeprom.o, keys.o): Copyright (C) 2005 - 2024 Michael Noland (joat),
-  Jason Rogers (dovoto), Dave Murphy (WinterMute), fincs. zlib licence (licenses/libnds-LICENSE.txt, the
-  image's /opt/devkitpro/libnds/libnds_license.txt).
+- libnds 1.8.2 on the ARM9 (libnds9.a: system start-up, interrupts, FIFO, keys, video, BIOS calls; from
+  the linker map's archive members) and in libnds' default ARM7 binary (default.elf): Copyright (C)
+  2005 - 2008 Michael Noland (joat), Jason Rogers (dovoto), Dave Murphy (WinterMute). zlib licence
+  (licenses/libnds-LICENSE.txt, the image's /opt/devkitpro/libnds/libnds_license.txt).
 
-- calico 1.2.0 (libcalico_ds9.a on the ARM9: crt0, startup, interrupts, threads, PXI, power management,
-  keypad, touch, slot-1 card; and calico's default ARM7 binary ds7_maine.elf): Copyright fincs, devkitPro
-  (each source file's SPDX-FileCopyrightText). Zope Public License 2.1 (licenses/calico-COPYING.txt, the
-  COPYING file at https://github.com/devkitPro/calico/tree/v1.2.0).
+- dswifi 0.4.2, linked into default.elf: Copyright (c) 2005-2006 Stephen Stair. MIT licence
+  (licenses/dswifi-LICENSE.txt, the image's /opt/devkitpro/libnds/dswifi_license.txt).
 
-  Copyright fincs, devkitPro. Redistribution and use in source and binary forms, with or without
-  modification, are permitted provided that the conditions of the Zope Public License 2.1 in
-  licenses/calico-COPYING.txt are met; that file holds the list of conditions and the disclaimer.
+- maxmod 1.0.15, linked into default.elf: Copyright (c) 2008, Mukunda Johnson. ISC-style licence
+  (licenses/maxmod-LICENSE.txt, the image's /opt/devkitpro/libnds/maxmod_license.txt).
 
-- newlib (libc.a: exit, fini, init, mallocr, freer, memcpy-stub, memset, mlock; and devkitPro's
-  libsysbase.a: clocks, _exit, malloc_vars, sbrk, syscall_support), as built for devkitARM. Its licences
-  are collected in licenses/newlib-COPYING.NEWLIB.txt (COPYING.NEWLIB from the devkitPro branch of
-  https://github.com/devkitPro/newlib, fetched 2026-11-14). The linked files carry: exit.c, Copyright (c)
-  1990 Regents of the University of California (BSD, section 2); init.c, Copyright (C) 2004 CodeSourcery,
-  LLC, and fini.c, Copyright (C) 2010 CodeSourcery, Inc. ("Permission to use, copy, modify, and
-  distribute this file for any purpose is hereby granted without fee, provided that the above copyright
-  notice and this notice appears in all copies."); mallocr.c, Doug Lea's malloc ("released to the public
-  domain"); memset.c, freer.c and mlock.c, Red Hat (section 1); and the ARM memcpy-stub.c, whose notice
-  follows verbatim:
+- newlib (on the ARM9, libc.a: init, memcpy-stub; and devkitPro's libsysbase.a: build_argv, malloc_vars;
+  default.elf links newlib too), as built for devkitARM. Its licences are collected in
+  licenses/newlib-COPYING.NEWLIB.txt (COPYING.NEWLIB from the devkitPro branch of
+  https://github.com/devkitPro/newlib, fetched 2026-11-14). init.c is Copyright (C) 2004 CodeSourcery,
+  LLC ("Permission to use, copy, modify, and distribute this file for any purpose is hereby granted
+  without fee, provided that the above copyright notice and this notice appears in all copies."). The ARM
+  memcpy-stub.c carries this notice, verbatim:
 
     Copyright (c) 2015 ARM Ltd.
     All rights reserved.
@@ -58,7 +53,7 @@ The cartridge links these devkitPro libraries (from the linker map's archive mem
     (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
     OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-- libgcc (division and count-leading-zeros helpers): GPL-3.0 with the GCC Runtime Library Exception, which
-  places no conditions on this program's distribution.
+- libgcc (a sync stub): GPL-3.0 with the GCC Runtime Library Exception, which places no conditions on this
+  program's distribution.
 
 The cartridge contains no Nintendo code, BIOS or firmware, and no banner icon.

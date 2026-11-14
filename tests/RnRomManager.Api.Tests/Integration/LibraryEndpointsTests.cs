@@ -593,6 +593,19 @@ public partial class LibraryEndpointsTests
         return (id, (await GetJson($"/api/games/{id}")).GetProperty("roms")[0].GetProperty("id").GetInt64());
     }
 
+    /// <summary>Nintendo DS B4: DeSmuME plays the embedded release from the detail page and the library's Quick Play, with no size limit.</summary>
+    [Test]
+    public async Task Ds_DetailAndLibrary_OfferDesmume_ForTheEmbeddedRelease()
+    {
+        var (id, romId) = await IngestDs();
+
+        Assert.That((await GetJson($"/api/games/{id}")).GetProperty("browserCore").GetString(), Is.EqualTo("desmume"));
+        var item = (await GetJson("/api/games?system=nds")).GetProperty("items").EnumerateArray().Single();
+        Assert.That(item.GetProperty("browserCore").GetString(), Is.EqualTo("desmume"));
+        Assert.That(item.GetProperty("playRomId").GetInt64(), Is.EqualTo(romId));
+        Assert.That(item.GetProperty("playRomFileName").GetString(), Is.EqualTo("Download Quest (USA).nds"));
+    }
+
     [Test]
     public async Task Ds_RoleLessUser_DownloadsTheStoredBytes_AndARangeIsIgnored()
     {

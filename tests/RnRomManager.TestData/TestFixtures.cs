@@ -32,7 +32,7 @@ public static class TestFixtures
     /// SHA-1 of <c>Fixtures/nds-marker/nds-marker.nds</c>, the original runnable DS cartridge (built from its source with
     /// <c>build.sh</c>; see <c>Fixtures/README.md</c>). A rebuild with the pinned image reproduces it.
     /// </summary>
-    public const string NdsMarkerSha1 = "46e5d09f6629957c04f40f758626d5e97d9ee956";
+    public const string NdsMarkerSha1 = "b33ad3b81088aed4e672764de256b8089d2d1a83";
 
     /// <summary>The name E2E stages the cartridge under, so the seeded DS DAT matches it as <c>Marker Test (World)</c>.</summary>
     public const string NdsMarkerStagedName = "Marker Test (World).nds";

@@ -14,9 +14,57 @@
 #define TOUCHED_COLOUR RGB15(8, 24, 8) // about (66, 197, 66)
 
 #define MARKER 0x5A
-#define MARKER_ADDRESS 0
-// libnds' EEPROM address type 2: a 64 KiB SPI EEPROM, addressed with 2 bytes.
-#define EEPROM_ADDRESS_TYPE 2
+
+// SPI backup memory, driven directly: each command keeps chip-select held (AUXSPICNT bit 6) and clears the hold for
+// its last byte, so the chip is deselected after that byte (GBATEK "DS Cartridge Backup"). libnds' cardReadEeprom
+// keeps the hold set and deselects by disabling the bus, which DeSmuME doesn't treat as the end of a command.
+#define SPI_ENABLE 0xA000 // bit 15: slot-1 enable, bit 13: SPI mode
+#define SPI_HOLD 0x0040   // bit 6: keep chip-select after this byte
+#define SPI_BUSY 0x0080   // bit 7: transfer in progress
+
+#define EEPROM_READ 0x03
+#define EEPROM_WRITE 0x02
+#define EEPROM_WREN 0x06
+#define EEPROM_RDSR 0x05
+
+static u8 spiByte(u8 value, bool last) {
+	REG_AUXSPICNT = SPI_ENABLE | (last ? 0 : SPI_HOLD);
+	REG_AUXSPIDATA = value;
+	while (REG_AUXSPICNT & SPI_BUSY)
+		;
+	return REG_AUXSPIDATA;
+}
+
+static void spiEnd(void) {
+	REG_AUXSPICNT = 0;
+}
+
+// Reads the byte at address 0 (a 2-byte address).
+static u8 readMarker(void) {
+	spiByte(EEPROM_READ, false);
+	spiByte(0, false);
+	spiByte(0, false);
+	u8 value = spiByte(0, true);
+	spiEnd();
+	return value;
+}
+
+// Writes MARKER to address 0, then waits for the write to finish.
+static void writeMarker(void) {
+	spiByte(EEPROM_WREN, true);
+	spiEnd();
+	spiByte(EEPROM_WRITE, false);
+	spiByte(0, false);
+	spiByte(0, false);
+	spiByte(MARKER, true);
+	spiEnd();
+	u8 status;
+	do {
+		spiByte(EEPROM_RDSR, false);
+		status = spiByte(0, true);
+		spiEnd();
+	} while (status & 1);
+}
 
 int main(void) {
 	videoSetMode(MODE_0_2D);
@@ -24,24 +72,18 @@ int main(void) {
 	lcdMainOnTop();
 	BG_PALETTE[0] = TOP_COLOUR;
 
-	// The ARM9 needs the slot-1 bus to reach backup memory; without it the cartridge still shows its colours.
-	bool card = ntrcardOpen();
-	u8 marker = 0xFF;
-	if (card)
-		cardReadEeprom(MARKER_ADDRESS, &marker, 1, EEPROM_ADDRESS_TYPE);
-	bool touched = marker == MARKER;
+	// The ARM9 needs the slot-1 bus to reach backup memory.
+	sysSetBusOwners(true, true);
+	bool touched = readMarker() == MARKER;
 	BG_PALETTE_SUB[0] = touched ? TOUCHED_COLOUR : LOWER_COLOUR;
 
-	while (pmMainLoop()) {
+	while (1) {
 		swiWaitForVBlank();
 		scanKeys();
 		if (!touched && (keysDown() & KEY_TOUCH)) {
 			touched = true;
 			BG_PALETTE_SUB[0] = TOUCHED_COLOUR;
-			if (card) {
-				u8 value = MARKER;
-				cardWriteEeprom(MARKER_ADDRESS, &value, 1, EEPROM_ADDRESS_TYPE);
-			}
+			writeMarker();
 		}
 	}
 	return 0;

@@ -1189,6 +1189,83 @@ test('Deleted ROMs: restore one release, delete the rest for good', async () => 
 	await expect(page.getByText('No deleted ROMs')).toBeVisible();
 });
 
+// Nintendo DS (spec Steps 10 and 11): the runnable cartridge is imported only now, after every test that asserts
+// library-wide counts. scripts/test-e2e.ps1 staged it outside ingest/ and listed it in the seeded DS DAT.
+// Colours from tests/RnRomManager.TestData/Fixtures/README.md (nds-marker): top screen, lower screen, lower after a press.
+const NdsMarkerColours = {
+	top: [33, 99, 197],
+	lower: [197, 66, 33],
+	touched: [66, 197, 66]
+} as const;
+type Rgb = readonly [number, number, number];
+const nearColour = (actual: Rgb | undefined, expected: Rgb) =>
+	!!actual && actual.every((v, i) => Math.abs(v - expected[i]) <= 24);
+
+type GuestFrame = { image: [number, number]; box: { x: number; y: number; w: number; h: number }; top: Rgb; lower: Rgb };
+
+/**
+ * EmulatorJS letterboxes the guest frame inside its canvas: decode a canvas screenshot in a CSP-free page, take the
+ * bounding box of pixels that aren't near-black (any channel above 16), and sample each screen (top and bottom half of
+ * that box) a quarter of the way in from its top-left corner.
+ */
+async function guestFrame(decoder: Page, png: Buffer): Promise<GuestFrame | null> {
+	return decoder.evaluate(async (b64) => {
+		const img = new Image();
+		img.src = `data:image/png;base64,${b64}`;
+		await img.decode();
+		const c = document.createElement('canvas');
+		c.width = img.width;
+		c.height = img.height;
+		const ctx = c.getContext('2d')!;
+		ctx.drawImage(img, 0, 0);
+		const d = ctx.getImageData(0, 0, c.width, c.height).data;
+		let minX = Infinity;
+		let minY = Infinity;
+		let maxX = -1;
+		let maxY = -1;
+		for (let y = 0; y < c.height; y++)
+			for (let x = 0; x < c.width; x++) {
+				const p = (y * c.width + x) * 4;
+				if (d[p] > 16 || d[p + 1] > 16 || d[p + 2] > 16) {
+					minX = Math.min(minX, x);
+					maxX = Math.max(maxX, x);
+					minY = Math.min(minY, y);
+					maxY = Math.max(maxY, y);
+				}
+			}
+		if (maxX < 0) return null;
+		const w = maxX - minX + 1;
+		const h = maxY - minY + 1;
+		const at = (x: number, y: number): [number, number, number] => {
+			const p = (Math.floor(y) * c.width + Math.floor(x)) * 4;
+			return [d[p], d[p + 1], d[p + 2]];
+		};
+		return {
+			image: [c.width, c.height] as [number, number],
+			box: { x: minX, y: minY, w, h },
+			top: at(minX + w / 4, minY + h / 8),
+			lower: at(minX + w / 4, minY + h / 2 + h / 8)
+		};
+	}, png.toString('base64'));
+}
+
+/** Polls the guest frame until `ok` holds, within `timeout` ms; returns the last frame. */
+async function waitForFrame(
+	decoder: Page,
+	canvas: ReturnType<Page['locator']>,
+	ok: (f: GuestFrame) => boolean,
+	timeout: number
+): Promise<GuestFrame | null> {
+	const until = Date.now() + timeout;
+	let frame: GuestFrame | null = null;
+	while (Date.now() < until) {
+		frame = await guestFrame(decoder, await canvas.screenshot());
+		if (frame && ok(frame)) return frame;
+		await decoder.waitForTimeout(250);
+	}
+	return frame;
+}
+
 /** Polls GET /api/jobs/current (the Admin session) until no job holds the lock, within `seconds`. */
 async function waitForIdleJobs(seconds = 30): Promise<void> {
 	await expect
@@ -1196,12 +1273,13 @@ async function waitForIdleJobs(seconds = 30): Promise<void> {
 		.toBe(204);
 }
 
-// Nintendo DS (spec Step 10): the runnable cartridge is imported only now, after every test that asserts library-wide
-// counts. scripts/test-e2e.ps1 staged it outside ingest/ and listed it in the seeded DS DAT.
-test('Nintendo DS: the staged cartridge imports by DAT match, with no Play yet', async () => {
+test('Nintendo DS: the staged cartridge imports by DAT match and plays in DeSmuME with stylus and saves', async () => {
+	// It boots the core twice and waits for an autosave in between.
+	test.setTimeout(180_000);
 	const staged = process.env.E2E_STAGED_NDS;
 	const ingest = process.env.E2E_INGEST;
-	if (!staged || !ingest) throw new Error('E2E_STAGED_NDS or E2E_INGEST is not set (run scripts/test-e2e.ps1).');
+	const base = process.env.E2E_BASE_URL;
+	if (!staged || !ingest || !base) throw new Error('E2E_STAGED_NDS, E2E_INGEST or E2E_BASE_URL is not set (run scripts/test-e2e.ps1).');
 	// The previous test's Restore started an import; a second start would be 409 JobRunning.
 	await waitForIdleJobs();
 
@@ -1219,13 +1297,115 @@ test('Nintendo DS: the staged cartridge imports by DAT match, with no Play yet',
 	await waitForIdleJobs();
 
 	await openGame('Marker Test');
-	const releases = page.getByRole('article');
-	await expect(releases).toHaveCount(1);
-	const release = page.getByRole('article', { name });
-	await expect(release).toBeVisible();
-	// DS Play is enabled in Step 11, after the browser size gate.
-	await expect(release.getByRole('button', { name: `Play ${name}` })).toHaveCount(0);
-	await expect(page.getByRole('button', { name: /^Play / })).toHaveCount(0);
+	await expect(page.getByRole('article')).toHaveCount(1);
+	await expect(page.getByRole('article', { name })).toBeVisible();
+	const detailUrl = page.url();
+
+	// A viewer who never played DS: a new context with the Admin session. Every off-origin request is aborted and noted.
+	const ds = await context.browser()!.newContext({ storageState: await context.storageState() });
+	const origin = new URL(base).origin;
+	const offOrigin: string[] = [];
+	await ds.route('**/*', (route) => {
+		const url = route.request().url();
+		if (new URL(url).origin === origin) return route.continue();
+		offOrigin.push(url);
+		return route.abort();
+	});
+	let requests: string[] = [];
+	const responses = new Map<string, number>();
+	ds.on('request', (r) => requests.push(r.url()));
+	ds.on('response', (r) => responses.set(r.url(), r.status()));
+	const viewer = await ds.newPage();
+	const decoder = await ds.newPage();
+	const settingsKey = `ejs-1-nds-${name}-settings`;
+	const coreFiles = () =>
+		requests
+			.filter((u) => u.includes('/emulator/vendor/data/cores/'))
+			.map((u) => u.split('/emulator/vendor/data/cores/')[1]);
+
+	async function launch(): Promise<ReturnType<Page['locator']>> {
+		requests = [];
+		await viewer.goto(detailUrl);
+		const release = viewer.getByRole('article', { name });
+		await release.getByRole('button', { name: `Play ${name}` }).click();
+		await expect(viewer.getByRole('dialog')).toHaveAccessibleName(`Play ${name}`);
+		const frame = viewer.frameLocator('iframe');
+		await frame.getByText('Start Game').click();
+		return frame.locator('#game canvas').first();
+	}
+
+	function assertCoreRequests(): void {
+		const files = coreFiles();
+		expect(files[0]).toBe('reports/desmume.json');
+		expect(responses.get(`${origin}/emulator/vendor/data/cores/reports/desmume.json`)).toBe(200);
+		expect(files.slice(1)).toHaveLength(1);
+		expect(['desmume-wasm.data', 'desmume-legacy-wasm.data']).toContain(files[1]);
+		expect(files.some((f) => f.includes('-thread') || f.includes('melonds'))).toBe(false);
+		expect(requests.some((u) => u.includes('/api/emulator/bios/'))).toBe(false);
+		// EmulatorJS's localhost-only update check is the one off-origin request, and CSP blocks it anyway.
+		expect(offOrigin.filter((u) => !u.endsWith('/stable/data/version.json'))).toEqual([]);
+	}
+
+	// First launch: no saved settings, so the stylus defaults reach DeSmuME through EmulatorJS's runtime option update.
+	await viewer.goto(detailUrl);
+	expect(await viewer.evaluate((key) => localStorage.getItem(key), settingsKey)).toBeNull();
+	const romDownload = viewer.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()));
+	let canvas = await launch();
+	expect((await romDownload).status()).toBe(200);
+	const booted = await waitForFrame(
+		decoder,
+		canvas,
+		(f) => nearColour(f.top, NdsMarkerColours.top) && nearColour(f.lower, NdsMarkerColours.lower),
+		60_000
+	);
+	expect(booted?.top).toBeDefined();
+	expect(nearColour(booted!.top, NdsMarkerColours.top), `top ${booted!.top}`).toBe(true);
+	expect(nearColour(booted!.lower, NdsMarkerColours.lower), `lower ${booted!.lower}`).toBe(true);
+	assertCoreRequests();
+
+	// A stylus press at the centre of the lower screen. The DS reads the touch screen once a frame, so the press is
+	// held (a bare click is too short to be seen). The quarter point sampled is well clear of the press.
+	const rect = (await canvas.boundingBox())!;
+	const scale = rect.width / booted!.image[0];
+	await viewer.mouse.move(
+		rect.x + (booted!.box.x + booted!.box.w / 2) * scale,
+		rect.y + (booted!.box.y + (booted!.box.h * 3) / 4) * scale
+	);
+	await viewer.mouse.down();
+	await viewer.waitForTimeout(300);
+	await viewer.mouse.up();
+	const touched = await waitForFrame(decoder, canvas, (f) => nearColour(f.lower, NdsMarkerColours.touched), 15_000);
+	expect(nearColour(touched?.lower, NdsMarkerColours.touched), `lower ${touched?.lower}`).toBe(true);
+	// At least one 30-second battery-save tick (with the vendored syncfs) after the press.
+	await viewer.waitForTimeout(35_000);
+	await viewer.getByRole('dialog').locator('.modal-footer').getByRole('button', { name: 'Close' }).click();
+	await expect(viewer.getByRole('dialog')).toBeHidden();
+
+	// Second launch: stale saved settings (melonDS, threads, external BIOS) are in the boot-time core options file.
+	await viewer.evaluate(
+		(key) =>
+			localStorage.setItem(
+				key,
+				JSON.stringify({
+					controlSettings: {},
+					settings: { retroarch_core: 'melonds', ejs_threads: 'enabled', desmume_use_external_bios: 'enabled' },
+					cheats: []
+				})
+			),
+		settingsKey
+	);
+	canvas = await launch();
+	// The saved marker shows the third colour at boot, with no press: the save persisted, on the built-in BIOS.
+	const reopened = await waitForFrame(
+		decoder,
+		canvas,
+		(f) => nearColour(f.top, NdsMarkerColours.top) && nearColour(f.lower, NdsMarkerColours.touched),
+		60_000
+	);
+	expect(nearColour(reopened?.top, NdsMarkerColours.top), `top ${reopened?.top}`).toBe(true);
+	expect(nearColour(reopened?.lower, NdsMarkerColours.touched), `lower ${reopened?.lower}`).toBe(true);
+	assertCoreRequests();
+	await ds.close();
 });
 
 test('Admin: roles and the create-user modal', async () => {
