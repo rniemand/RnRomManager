@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using Microsoft.Extensions.DependencyInjection;
+using RnRomManager.Api.Endpoints;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
@@ -89,6 +90,20 @@ public partial class EmulatorEndpointsTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(Bios));
         Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"));
+        AssertNoStore(response);
+    }
+
+    [Test]
+    public async Task SaturnBios_IsServedFromTheBiosFolder()
+    {
+        // Saturn B7: the player's optional firmware passes the BIOS name check and is served like any other.
+        WriteBios("saturn_bios.bin");
+
+        using var response = await _client.GetAsync("/api/emulator/bios/saturn_bios.bin");
+
+        Assert.That(EmulatorEndpoints.IsBiosName("saturn_bios.bin"), Is.True);
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(Bios));
         AssertNoStore(response);
     }
 

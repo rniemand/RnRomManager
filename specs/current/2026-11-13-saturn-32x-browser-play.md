@@ -182,7 +182,7 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
     - `emulator.test.ts`: `canPlay` is false for `pcsx_rearmed` with an `.nrg` or `.NRG` external file name, and true for `.bin`.
     - `emulatorPlay.test.ts`: `play page PlayStation` passes unchanged.
   - Done when `npm run lint`, `npm run check` and those tests pass.
-- [ ] **8. Saturn play** (B6, B7):
+- [x] **8. Saturn play** (B6, B7):
   - `SaturnHandler.BrowserCore = "yabause"`, and the README table's Saturn row → `yabause`.
   - `LibraryEndpoints`: `yabause` in `ExternalBrowserCores`.
   - `params.js`: the `yabause` allowlist entry, the `segaSaturn` scheme, the hidden chooser, `saturnBios = 'saturn_bios.bin'`, `saturnBiosSizeError` and the `contentFileName` guard.

@@ -554,6 +554,39 @@ test('Play: a PlayStation set streams its disc ZIP from the detail page and the 
 	await closeEmulator();
 });
 
+test('Play: a Saturn set asks for saturn_bios.bin, streams its disc and fetches the vendored Yabause core', async () => {
+	// Saturn B6/B7: no firmware in the e2e image (HLE), then play-disc, then the loader. The synthetic disc isn't a real
+	// Saturn game, so the case stops once the core payload has arrived instead of waiting for the game to run.
+	const order: string[] = [];
+	const track = (r: { url: () => string }) => {
+		const url = r.url();
+		if (url.endsWith('/api/emulator/bios/saturn_bios.bin')) order.push('bios');
+		else if (/\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(url)) order.push('disc');
+		else if (url.endsWith('/emulator/vendor/data/loader.js')) order.push('loader');
+	};
+	await openGame('Sky Rally');
+	page.on('request', track);
+	try {
+		const bios = page.waitForResponse((r) => r.url().endsWith('/api/emulator/bios/saturn_bios.bin'));
+		const disc = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(r.url()));
+		await page.getByRole('button', { name: 'Play Sky Rally (Japan) (Track 1).bin' }).click();
+		await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=yabause&name=Sky%20Rally%20\(Japan\)%20\(Track%201\)\.bin$/);
+		expect((await bios).status()).toBe(404);
+		const response = await disc;
+		expect(response.status()).toBe(200);
+		expect(response.headers()['content-type']).toBe('application/zip');
+		const frame = page.frameLocator('iframe');
+		await expect(frame.getByText('Start Game')).toBeVisible();
+		expect(order).toEqual(['bios', 'disc', 'loader']);
+		const payload = page.waitForResponse((r) => /\/emulator\/vendor\/data\/cores\/yabause(-legacy)?-wasm\.data$/.test(r.url()));
+		await frame.getByText('Start Game').click();
+		expect((await payload).status()).toBe(200);
+	} finally {
+		page.off('request', track);
+	}
+	await closeEmulator();
+});
+
 /** PSP B3: what PPSSPP needs, as the isolated tab actually sees it. */
 async function pspBrowser(psp: Page) {
 	return psp.evaluate(() => ({

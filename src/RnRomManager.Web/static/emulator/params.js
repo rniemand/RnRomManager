@@ -18,7 +18,8 @@ const cores = [
 	'pcsx_rearmed',
 	'ppsspp',
 	'genesis_plus_gx',
-	'picodrive'
+	'picodrive',
+	'yabause'
 ];
 
 /** PSP B3: the core that runs only on the isolated play-psp.html page (and never in the modal's play.html). */
@@ -68,8 +69,9 @@ export function biosError(name, status) {
 /**
  * EmulatorJS 4.2.3 takes the controls from the core's group, `segaMS` for smsplus (no Start button). A `.gg` release
  * gets the Game Gear scheme instead. Genesis B5: Genesis Plus GX's first group is also `segaMS`, so it gets the Mega
- * Drive scheme explicitly. 32X B3: PicoDrive's first group is `segaMS` too, so it gets the 32X scheme. Anything else
- * keeps the default (null).
+ * Drive scheme explicitly. 32X B3: PicoDrive's first group is `segaMS` too, so it gets the 32X scheme. Saturn B6:
+ * Yabause gets `segaSaturn`, upstream's default too, set so it doesn't depend on the group order. Anything else keeps
+ * the default (null).
  * @param {string} core
  * @param {string} name the release's file name
  * @returns {string | null}
@@ -77,6 +79,7 @@ export function biosError(name, status) {
 export function controlSchemeFor(core, name) {
 	if (core === 'genesis_plus_gx') return 'segaMD';
 	if (core === 'picodrive') return 'sega32x';
+	if (core === 'yabause') return 'segaSaturn';
 	return core === 'smsplus' && name.toLowerCase().endsWith('.gg') ? 'segaGG' : null;
 }
 
@@ -156,7 +159,7 @@ export function operatorCoreError(core, status) {
  * @returns {boolean}
  */
 export function hidesCoreChooser(core) {
-	return ['smsplus', 'fceumm', 'pcsx_rearmed', 'genesis_plus_gx', 'picodrive'].includes(core);
+	return ['smsplus', 'fceumm', 'pcsx_rearmed', 'genesis_plus_gx', 'picodrive', 'yabause'].includes(core);
 }
 
 /** PCSX ReARMed's optional firmware: the operator's scph5501.bin, else the core's built-in HLE BIOS. */
@@ -168,7 +171,8 @@ export const psxBiosBytes = 512 * 1024;
 export const sessionExpired = 'Your session has expired. Sign in again.';
 
 /**
- * The play page's message for the optional PlayStation BIOS request: null when it may go on (2xx, or 404 for HLE).
+ * The play page's message for an optional BIOS request (PlayStation, Saturn): null when it may go on (2xx, or 404 for
+ * HLE).
  * @param {number | null} status the HTTP status, or null for a network or body-read failure
  * @returns {string | null}
  */
@@ -180,6 +184,18 @@ export function optionalBiosError(status) {
 
 /** Shown when the BIOS folder's scph5501.bin isn't exactly 512 KiB. */
 export const psxBiosSizeError = `The PlayStation BIOS in the BIOS folder (Paths:Bios) must be the 512 KiB ${psxBios}: ask an Admin to replace it.`;
+
+/** Saturn B7: Yabause's optional firmware, the operator's saturn_bios.bin, else the core's built-in HLE BIOS. */
+export const saturnBios = 'saturn_bios.bin';
+
+/** The exact size of saturn_bios.bin (512 KiB). */
+export const saturnBiosBytes = 512 * 1024;
+
+/** Saturn B7: shown when the BIOS folder's saturn_bios.bin isn't exactly 512 KiB. */
+export const saturnBiosSizeError = `The Saturn BIOS in the BIOS folder (Paths:Bios) must be the 512 KiB ${saturnBios}: ask an Admin to replace it.`;
+
+/** Saturn B7: every name Yabause looks for its firmware under, in the content root. */
+const saturnBiosNames = [saturnBios, 'sega_101.bin', 'mpr-17933.bin'];
 
 /**
  * The play page's message for a failed play-disc request.
@@ -221,7 +237,8 @@ export function pspBrowserError(browser) {
 /**
  * The name of the File EmulatorJS writes the content under: the release name, with '#' replaced (EmulatorJS cuts
  * names there). A standalone PlayStation image named like the BIOS gets a name scoped to the game, so the firmware
- * written at /scph5501.bin can't overwrite it.
+ * written at /scph5501.bin can't overwrite it. Saturn B7: the same for a Saturn image named like any of Yabause's
+ * three BIOS names, so the firmware can't overwrite it and Yabause never takes the disc for its BIOS.
  * @param {string} core
  * @param {string} game the game id
  * @param {string} name the release's file name
@@ -229,5 +246,9 @@ export function pspBrowserError(browser) {
  */
 export function contentFileName(core, game, name) {
 	const safe = name.replaceAll('#', '_');
-	return core === 'pcsx_rearmed' && name.toLowerCase() === psxBios ? `${game}-${safe}` : safe;
+	const lower = name.toLowerCase();
+	const clashes =
+		(core === 'pcsx_rearmed' && lower === psxBios) ||
+		(core === 'yabause' && saturnBiosNames.includes(lower));
+	return clashes ? `${game}-${safe}` : safe;
 }

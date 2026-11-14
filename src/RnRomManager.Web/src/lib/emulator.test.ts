@@ -27,7 +27,17 @@ describe('canPlay', () => {
 
 	it('is false for an external release of another core, and without a core', () => {
 		expect(canPlay({ browserCore: 'fceumm' }, { externalFileName: 'x.nes' })).toBe(false);
-		expect(canPlay({ browserCore: null }, { externalFileName: 'Saturn (Track 1).bin' })).toBe(
+		expect(canPlay({ browserCore: null }, { externalFileName: 'Disc (Track 1).bin' })).toBe(false);
+	});
+
+	it('is true for an external Saturn bin, and false for its .nrg (Saturn B6)', () => {
+		expect(
+			canPlay({ browserCore: 'yabause' }, { externalFileName: 'Sky Rally (USA) (Track 1).bin' })
+		).toBe(true);
+		expect(canPlay({ browserCore: 'yabause' }, { externalFileName: 'Sky Rally (USA).nrg' })).toBe(
+			false
+		);
+		expect(canPlay({ browserCore: 'yabause' }, { externalFileName: 'Sky Rally (USA).NRG' })).toBe(
 			false
 		);
 	});

@@ -24,7 +24,7 @@ public static class LibraryEndpoints
     /// Play B1: the browser cores that play a release stored outside the ZIP through play-disc: PCSX ReARMed for
     /// PlayStation and (PSP B1) PPSSPP for PlayStation Portable.
     /// </summary>
-    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp" };
+    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause" };
 
     public static RouteGroupBuilder MapLibraryEndpoints(this RouteGroupBuilder api)
     {

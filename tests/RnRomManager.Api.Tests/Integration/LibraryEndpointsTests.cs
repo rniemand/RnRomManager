@@ -226,7 +226,7 @@ public partial class LibraryEndpointsTests
     [TestCase("psx", true, true, "pcsx_rearmed")]
     [TestCase("psx", false, true, "pcsx_rearmed")]
     [TestCase("psp", true, true, "ppsspp")]
-    [TestCase("saturn", true, false, null)]
+    [TestCase("saturn", true, true, "yabause")]
     [TestCase("switch", false, false, null)]
     [TestCase("switch", true, false, null)]
     public Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(string system, bool external, bool playable, string? core) =>
@@ -236,8 +236,10 @@ public partial class LibraryEndpointsTests
     [TestCase("psx", "x.NRG", "x.bin", false)]
     [TestCase("psx", "x.nrg", "x.bin", false)]
     [TestCase("psx", "x.bin", "x.nrg", true)]
+    [TestCase("saturn", "x.NRG", "x.bin", false)]
+    [TestCase("saturn", "x.bin", "x.nrg", true)]
     public Task Games_QuickPlay_AnNrgPrimary_IsNotPlayable(string system, string fileName, string externalName, bool playable) =>
-        AssertQuickPlayAsync(system, true, playable, "pcsx_rearmed", fileName, externalName);
+        AssertQuickPlayAsync(system, true, playable, system == "saturn" ? "yabause" : "pcsx_rearmed", fileName, externalName);
 
     private async Task AssertQuickPlayAsync(string system, bool external, bool playable, string? core,
         string? fileName = null, string externalName = "x.gb")
@@ -385,7 +387,7 @@ public partial class LibraryEndpointsTests
     [TestCase("nes", "fceumm")]
     [TestCase("psx", "pcsx_rearmed")]
     [TestCase("psp", "ppsspp")]
-    [TestCase("saturn", null)]
+    [TestCase("saturn", "yabause")]
     [TestCase("nosuch", null)]
     public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)
     {

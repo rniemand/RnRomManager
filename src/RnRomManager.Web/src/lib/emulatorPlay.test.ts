@@ -609,3 +609,125 @@ describe('play page 32X (B3)', () => {
 		expect(atLoader).toBeNull();
 	});
 });
+
+describe('play page Saturn (B6, B7)', () => {
+	const saturnBiosUrl = '/api/emulator/bios/saturn_bios.bin';
+	const discUrl = `/api/games/${game}/roms/12/play-disc`;
+	const disc = new Uint8Array([0x50, 0x4b, 3, 4, 7, 7]);
+	const name = 'Sky Rally (USA) (Track 1).bin';
+
+	function body(bytes: Uint8Array) {
+		const cancelled = vi.fn();
+		const chunks = [bytes];
+		const stream = new ReadableStream<Uint8Array>({
+			pull(controller) {
+				const next = chunks.shift();
+				if (next) controller.enqueue(next);
+				else controller.close();
+			},
+			cancel: cancelled
+		});
+		return {
+			response: { ok: true, status: 200, body: stream } as unknown as FakeResponse,
+			cancelled
+		};
+	}
+
+	function discResponse(status: number) {
+		return {
+			ok: status >= 200 && status < 300,
+			status,
+			body: { cancel: async () => {} },
+			blob: async () => new Blob([disc]),
+			json: async () => {
+				throw new SyntaxError('no body');
+			}
+		};
+	}
+
+	it('gets saturn_bios.bin once, then the disc from play-disc, and hands both to EmulatorJS', async () => {
+		const bytes = new Uint8Array(512 * 1024).map((_, i) => i % 239);
+		serve({
+			[saturnBiosUrl]: async () => body(bytes).response,
+			[discUrl]: async () => discResponse(200)
+		});
+
+		await play('yabause', name);
+
+		expect(urls()).toEqual([saturnBiosUrl, discUrl]);
+		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
+		expect(Object.keys(files)).toEqual(['/saturn_bios.bin']);
+		expect(new Uint8Array(files['/saturn_bios.bin'])).toEqual(bytes);
+		expect(atLoader).toMatchObject({
+			EJS_core: 'yabause',
+			EJS_gameName: name,
+			EJS_controlScheme: 'segaSaturn',
+			EJS_hideSettings: ['retroarch_core']
+		});
+		expect(atLoader?.EJS_biosUrl).toBeUndefined();
+		expect(atLoader?.EJS_paths).toBeUndefined();
+		expect(atLoader?.EJS_threads).toBeUndefined();
+		const file = atLoader?.EJS_gameUrl as File;
+		expect(file.name).toBe(name);
+		expect(new Uint8Array(await file.arrayBuffer())).toEqual(disc);
+	});
+
+	it('uses the HLE BIOS when there is no saturn_bios.bin (404)', async () => {
+		serve({ [saturnBiosUrl]: async () => response(404), [discUrl]: async () => discResponse(200) });
+
+		await play('yabause', name);
+
+		expect(urls()).toEqual([saturnBiosUrl, discUrl]);
+		expect(atLoader?.EJS_externalFiles).toBeUndefined();
+		expect(atLoader?.EJS_core).toBe('yabause');
+	});
+
+	it.each([512 * 1024 - 1, 512 * 1024 + 1])(
+		'stops on a %i-byte saturn_bios.bin before the disc is requested',
+		async (size) => {
+			serve({
+				[saturnBiosUrl]: async () => body(new Uint8Array(size)).response,
+				[discUrl]: async () => discResponse(200)
+			});
+
+			expect(await play('yabause', name)).toBe(
+				'The Saturn BIOS in the BIOS folder (Paths:Bios) must be the 512 KiB saturn_bios.bin: ask an Admin to replace it.'
+			);
+			expect(urls()).toEqual([saturnBiosUrl]);
+			expect(atLoader).toBeNull();
+		}
+	);
+
+	it.each([
+		[401, 'Your session has expired. Sign in again.'],
+		[500, "Couldn't load the BIOS (HTTP 500)."]
+	])('stops on a BIOS HTTP %i before the disc is requested', async (status, message) => {
+		serve({
+			[saturnBiosUrl]: async () => response(status),
+			[discUrl]: async () => discResponse(200)
+		});
+
+		expect(await play('yabause', name)).toBe(message);
+		expect(urls()).toEqual([saturnBiosUrl]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops when the BIOS request fails to reach the server', async () => {
+		serve({
+			[saturnBiosUrl]: async () => Promise.reject(new TypeError('network')),
+			[discUrl]: async () => discResponse(200)
+		});
+
+		expect(await play('yabause', name)).toBe("Couldn't load the BIOS.");
+		expect(urls()).toEqual([saturnBiosUrl]);
+	});
+
+	it('names a standalone disc called like a Saturn BIOS after the game', async () => {
+		serve({ [saturnBiosUrl]: async () => response(404), [discUrl]: async () => discResponse(200) });
+
+		await play('yabause', 'Sega_101.BIN');
+
+		expect((atLoader?.EJS_gameUrl as File).name).toBe(`${game}-Sega_101.BIN`);
+		expect(atLoader?.EJS_gameName).toBe('Sega_101.BIN');
+	});
+});
