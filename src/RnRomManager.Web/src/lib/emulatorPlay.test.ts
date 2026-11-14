@@ -23,6 +23,7 @@ const ejsGlobals = [
 	'EJS_biosUrl',
 	'EJS_hideSettings',
 	'EJS_controlScheme',
+	'EJS_externalFiles',
 	'EJS_Buttons',
 	'EJS_defaultOptions'
 ];
@@ -176,5 +177,184 @@ describe('play page Sega settings', () => {
 
 		expect(atLoader?.EJS_hideSettings).toBeUndefined();
 		expect(atLoader?.EJS_controlScheme).toBeUndefined();
+	});
+});
+
+describe('play page PlayStation', () => {
+	const psxBiosUrl = '/api/emulator/bios/scph5501.bin';
+	const discUrl = `/api/games/${game}/roms/12/play-disc`;
+	const disc = new Uint8Array([0x50, 0x4b, 3, 4, 9, 9]);
+
+	/** A BIOS response whose body arrives in the given chunks, recording a reader cancel. */
+	function biosBody(chunks: Uint8Array[], status = 200) {
+		const cancelled = vi.fn();
+		const stream = new ReadableStream<Uint8Array>({
+			pull(controller) {
+				const next = chunks.shift();
+				if (next) controller.enqueue(next);
+				else controller.close();
+			},
+			cancel: cancelled
+		});
+		return { response: { ok: true, status, body: stream } as unknown as FakeResponse, cancelled };
+	}
+
+	function discResponse(status: number, problem?: object) {
+		return {
+			ok: status >= 200 && status < 300,
+			status,
+			body: { cancel: async () => {} },
+			blob: async () => new Blob([disc]),
+			json: async () => {
+				if (!problem) throw new SyntaxError('no body');
+				return problem;
+			}
+		};
+	}
+
+	function firmware(size = 512 * 1024) {
+		return new Uint8Array(size).map((_, i) => i % 251);
+	}
+
+	it('gets the BIOS once, then the disc, and hands the exact bytes to EmulatorJS', async () => {
+		const bytes = firmware();
+		const { response: bios } = biosBody([bytes.slice(0, 200_000), bytes.slice(200_000)]);
+		serve({ [psxBiosUrl]: async () => bios, [discUrl]: async () => discResponse(200) });
+
+		await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin');
+
+		expect(urls()).toEqual([psxBiosUrl, discUrl]);
+		expect(fetchMock.mock.calls.map((c) => c[1])).toEqual([
+			{ credentials: 'same-origin' },
+			{ credentials: 'same-origin' }
+		]);
+		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
+		expect(Object.keys(files)).toEqual(['/scph5501.bin']);
+		expect(new Uint8Array(files['/scph5501.bin'])).toEqual(bytes);
+		expect(atLoader).toMatchObject({
+			EJS_core: 'pcsx_rearmed',
+			EJS_gameName: 'Disc (USA) (Track 1).bin',
+			EJS_hideSettings: ['retroarch_core']
+		});
+		expect(atLoader?.EJS_biosUrl).toBeUndefined();
+		const file = atLoader?.EJS_gameUrl as File;
+		expect(file.name).toBe('Disc (USA) (Track 1).bin');
+		expect(new Uint8Array(await file.arrayBuffer())).toEqual(disc);
+	});
+
+	it('uses HLE when there is no BIOS (404)', async () => {
+		serve({ [psxBiosUrl]: async () => response(404), [discUrl]: async () => discResponse(200) });
+
+		await play('pcsx_rearmed', 'Solo (USA).iso');
+
+		expect(urls()).toEqual([psxBiosUrl, discUrl]);
+		expect(atLoader?.EJS_externalFiles).toBeUndefined();
+		expect(atLoader?.EJS_core).toBe('pcsx_rearmed');
+	});
+
+	it.each([
+		['a short', [firmware(512 * 1024 - 1)]],
+		['an oversized', [firmware(), new Uint8Array(1)]]
+	])('stops on %s BIOS before fetching the disc', async (_, chunks) => {
+		const { response: bios, cancelled } = biosBody(chunks);
+		serve({ [psxBiosUrl]: async () => bios, [discUrl]: async () => discResponse(200) });
+
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe(
+			'The PlayStation BIOS in the BIOS folder (Paths:Bios) must be the 512 KiB scph5501.bin: ask an Admin to replace it.'
+		);
+		expect(urls()).toEqual([psxBiosUrl]);
+		expect(atLoader).toBeNull();
+		if (chunks.length === 2) expect(cancelled).toHaveBeenCalledOnce();
+	});
+
+	it.each([
+		[401, 'Your session has expired. Sign in again.'],
+		[500, "Couldn't load the BIOS (HTTP 500)."]
+	])('stops on a BIOS %i before fetching the disc', async (code, message) => {
+		serve({ [psxBiosUrl]: async () => response(code), [discUrl]: async () => discResponse(200) });
+
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe(message);
+		expect(urls()).toEqual([psxBiosUrl]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops when the BIOS request or its body fails', async () => {
+		const failing = new ReadableStream<Uint8Array>({
+			pull(controller) {
+				controller.error(new TypeError('reset'));
+			}
+		});
+		serve({
+			[psxBiosUrl]: async () =>
+				({ ok: true, status: 200, body: failing }) as unknown as FakeResponse,
+			[discUrl]: async () => discResponse(200)
+		});
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe("Couldn't load the BIOS.");
+		expect(urls()).toEqual([psxBiosUrl]);
+
+		vi.resetModules();
+		serve({
+			[psxBiosUrl]: () => Promise.reject(new TypeError('network')),
+			[discUrl]: async () => discResponse(200)
+		});
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe("Couldn't load the BIOS.");
+		expect(atLoader).toBeNull();
+	});
+
+	it.each([
+		[
+			409,
+			{ code: 'PlayDiscTooLarge' },
+			'This disc is larger than 1 GiB, too large to play in the browser.'
+		],
+		[
+			409,
+			{ code: 'InvalidPlayDisc' },
+			"This disc can't be played in the browser: its cue sheet or files are invalid or don't match."
+		],
+		[401, { code: 'Unauthorized' }, 'Your session has expired. Sign in again.'],
+		[404, { code: 'NotFound' }, "Couldn't load the disc (HTTP 404)."],
+		[502, undefined, "Couldn't load the disc (HTTP 502)."]
+	])('stops on a disc %i with its message, without the loader', async (code, problem, message) => {
+		serve({
+			[psxBiosUrl]: async () => response(404),
+			[discUrl]: async () => discResponse(code, problem)
+		});
+
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe(message);
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops when the disc request fails', async () => {
+		serve({
+			[psxBiosUrl]: async () => response(404),
+			[discUrl]: () => Promise.reject(new TypeError('network'))
+		});
+
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe("Couldn't load the disc.");
+		expect(atLoader).toBeNull();
+	});
+
+	it('scopes a standalone image named like the BIOS to the game', async () => {
+		serve({ [psxBiosUrl]: async () => response(404), [discUrl]: async () => discResponse(200) });
+
+		await play('pcsx_rearmed', 'SCPH5501.BIN');
+
+		expect((atLoader?.EJS_gameUrl as File).name).toBe(`${game}-SCPH5501.BIN`);
+		expect(atLoader?.EJS_gameName).toBe('SCPH5501.BIN');
+	});
+});
+
+describe('play page NES', () => {
+	it('loads the cartridge through the download route, with only the core chooser hidden', async () => {
+		serve({ [romUrl]: async () => response(200) });
+
+		await play('fceumm', 'Pixel Quest (USA).nes');
+
+		expect(urls()).toEqual([romUrl]);
+		expect(atLoader).toMatchObject({ EJS_core: 'fceumm', EJS_hideSettings: ['retroarch_core'] });
+		expect(atLoader?.EJS_biosUrl).toBeUndefined();
+		expect(atLoader?.EJS_externalFiles).toBeUndefined();
+		expect((atLoader?.EJS_gameUrl as File).name).toBe('Pixel Quest (USA).nes');
 	});
 });
