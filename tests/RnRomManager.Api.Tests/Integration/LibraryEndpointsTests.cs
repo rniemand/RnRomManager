@@ -221,6 +221,8 @@ public partial class LibraryEndpointsTests
     [TestCase("md", false, true, "genesis_plus_gx")]
     [TestCase("md", true, false, "genesis_plus_gx")]
     [TestCase("s32x", false, true, "picodrive")]
+    [TestCase("snes", false, true, "snes9x")]
+    [TestCase("snes", true, false, "snes9x")]
     [TestCase("nes", false, true, "fceumm")]
     [TestCase("nes", true, false, "fceumm")]
     [TestCase("psx", true, true, "pcsx_rearmed")]
@@ -384,6 +386,7 @@ public partial class LibraryEndpointsTests
     [TestCase("sms", "smsplus")]
     [TestCase("md", "genesis_plus_gx")]
     [TestCase("s32x", "picodrive")]
+    [TestCase("snes", "snes9x")]
     [TestCase("nes", "fceumm")]
     [TestCase("psx", "pcsx_rearmed")]
     [TestCase("psp", "ppsspp")]
@@ -539,6 +542,40 @@ public partial class LibraryEndpointsTests
         Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"));
         Assert.That(response.Content.Headers.ContentDisposition?.FileNameStar, Is.EqualTo("Pokémon Pinball (Europe).gb"));
         Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(Pinball));
+    }
+
+    // SNES B1: a legacy embedded entry named .smc plays and downloads as stored, under its own name.
+    [Test]
+    public async Task Snes_ALegacySmcEntry_IsQuickPlayed_AndDownloadsItsExactBytes()
+    {
+        var id = await Tetris();
+        byte[] legacy = [.. Enumerable.Range(0, 8192).Select(i => (byte)(i * 3 + 1))];
+        using (var zip = ZipFile.Open(await ZipPath(id), ZipArchiveMode.Update))
+        {
+            await using var entry = zip.CreateEntry(LibraryZip.RomEntry("legacy.smc")).Open();
+            await entry.WriteAsync(legacy);
+        }
+        long primaryId;
+        await using (var connection = Service<IDbConnectionFactory>().Create())
+        {
+            await connection.ExecuteAsync("UPDATE games SET system_id = 'snes' WHERE id = @id", new { id });
+            primaryId = await connection.QuerySingleAsync<long>(
+                "SELECT id FROM roms WHERE game_id = @id AND is_primary = 1 ORDER BY id LIMIT 1", new { id });
+            await connection.ExecuteAsync("UPDATE roms SET file_name = 'legacy.smc', size_bytes = @size WHERE id = @primaryId",
+                new { size = legacy.Length, primaryId });
+        }
+
+        var item = (await GetJson("/api/games")).GetProperty("items")[0];
+        Assert.That(item.GetProperty("browserCore").GetString(), Is.EqualTo("snes9x"));
+        Assert.That(item.GetProperty("playRomId").GetInt64(), Is.EqualTo(primaryId));
+        Assert.That(item.GetProperty("playRomFileName").GetString(), Is.EqualTo("legacy.smc"));
+        Assert.That((await GetJson($"/api/games/{id}")).GetProperty("browserCore").GetString(), Is.EqualTo("snes9x"));
+
+        using var response = await _user.GetAsync($"/api/games/{id}/roms/{primaryId}/download");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName,
+            Is.EqualTo("legacy.smc"));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(legacy));
     }
 
     [Test]

@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page, type Route } from '@playwright/test';
 import { expectAccessible } from './axe';
 
 /**
@@ -715,6 +715,111 @@ test('Play: 32X explains its missing PicoDrive core', async () => {
 	}
 	expect(later).toEqual([]);
 	await closeEmulator();
+});
+
+test('Play: SNES explains its missing Snes9x core from the detail page', async () => {
+	// SNES B3: the e2e image has no Emulator:Snes9xCorePath, so the HEAD check stops before the ROM or loader.
+	const later: string[] = [];
+	let checked = false;
+	const track = (r: { url: () => string }) => {
+		if (checked && (r.url().includes('/api/emulator/') || r.url().includes('/roms/') || r.url().includes('loader.js')))
+			later.push(r.url());
+	};
+	await openGame('Mode Seven Rally');
+	page.on('request', track);
+	try {
+		const check = page.waitForResponse((r) => r.url().endsWith('/api/emulator/cores/snes9x') && r.request().method() === 'HEAD');
+		await page.getByRole('button', { name: 'Play Mode Seven Rally (USA).sfc' }).click();
+		await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=snes9x&name=Mode%20Seven%20Rally%20\(USA\)\.sfc$/);
+		expect((await check).status()).toBe(404);
+		checked = true;
+		await expect(page.frameLocator('iframe').getByRole('status')).toHaveText(
+			'SNES games need the Snes9x core files: ask an Admin to set them up (Emulator:Snes9xCorePath).'
+		);
+		await expect(page.frameLocator('iframe').getByText('Start Game')).toHaveCount(0);
+	} finally {
+		page.off('request', track);
+	}
+	expect(later).toEqual([]);
+	await closeEmulator();
+});
+
+test('Play: SNES Quick Play from the library loads the release and the player once the core check passes', async () => {
+	// SNES B1/B3: only the Snes9x HEAD is stubbed; the ROM and the loader are the real ones. Stops before Start Game,
+	// since the stock image has no Snes9x payload to serve.
+	const coreCheck = '**/api/emulator/cores/snes9x';
+	const stub = async (route: Route) =>
+		route.request().method() === 'HEAD' ? route.fulfill({ status: 204 }) : route.continue();
+	const bios: string[] = [];
+	const track = (r: { url: () => string }) => {
+		if (r.url().includes('/api/emulator/bios/')) bios.push(r.url());
+	};
+	await page.route(coreCheck, stub);
+	page.on('request', track);
+	try {
+		await openLibrary();
+		await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('Mode Seven Rally');
+		await expect(page).toHaveURL(/[?&]q=/);
+		await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+		const check = page.waitForResponse((r) => r.url().endsWith('/api/emulator/cores/snes9x') && r.request().method() === 'HEAD');
+		const rom = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()));
+		const loader = page.waitForResponse((r) => r.url().endsWith('/emulator/vendor/data/loader.js'));
+		await page.getByRole('button', { name: 'Play Mode Seven Rally' }).click();
+		await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=snes9x&name=Mode%20Seven%20Rally%20\(USA\)\.sfc$/);
+		expect((await check).status()).toBe(204);
+		expect((await rom).status()).toBe(200);
+		expect((await loader).status()).toBe(200);
+		await expect(page.frameLocator('iframe').getByText('Start Game')).toBeVisible();
+	} finally {
+		page.off('request', track);
+		await page.unroute(coreCheck, stub);
+	}
+	expect(bios).toEqual([]);
+	await closeEmulator();
+});
+
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * B4: plays a seeded Atari cartridge from its detail page with its bundled core and an empty BIOS folder: the real ROM,
+ * then after Start Game the same-origin report and a non-threaded payload, with no BIOS request along the way.
+ */
+async function launchBundled(title: string, fileName: string, core: string): Promise<void> {
+	const bios: string[] = [];
+	const track = (r: { url: () => string }) => {
+		if (r.url().includes('/api/emulator/bios/')) bios.push(r.url());
+	};
+	await openGame(title);
+	page.on('request', track);
+	try {
+		const rom = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()));
+		await page.getByRole('button', { name: `Play ${fileName}` }).click();
+		await expect(dialog().locator('iframe')).toHaveAttribute(
+			'src',
+			new RegExp(`core=${core}&name=${escapeRegExp(encodeURIComponent(fileName))}$`)
+		);
+		expect((await rom).status()).toBe(200);
+		const frame = page.frameLocator('iframe');
+		await expect(frame.getByText('Start Game')).toBeVisible();
+		const origin = new URL(page.url()).origin;
+		const report = page.waitForResponse((r) => r.url() === `${origin}/emulator/vendor/data/cores/reports/${core}.json`);
+		// Single-threaded only: the modern or the legacy payload, never a "-thread" one.
+		const payloads = ['', '-legacy'].map((v) => `${origin}/emulator/vendor/data/cores/${core}${v}-wasm.data`);
+		const payload = page.waitForResponse((r) => payloads.includes(r.url()));
+		await frame.getByText('Start Game').click();
+		expect((await report).status()).toBe(200);
+		expect((await payload).status()).toBe(200);
+	} finally {
+		page.off('request', track);
+	}
+	expect(bios).toEqual([]);
+	await closeEmulator();
+}
+
+test('Play: Atari 7800, Jaguar and Lynx launch with their bundled cores', async () => {
+	await launchBundled('Canyon Glide', 'Canyon Glide (USA).a78', 'prosystem');
+	await launchBundled('Cobalt Drift', 'Cobalt Drift (World).j64', 'virtualjaguar');
+	await launchBundled('Prism Racer', 'Prism Racer (USA, Europe).lnx', 'handy');
 });
 
 test('global search, ratings and favourites', async () => {

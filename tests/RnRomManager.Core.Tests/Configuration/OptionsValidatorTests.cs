@@ -122,4 +122,21 @@ public class OptionsValidatorTests
         Assert.That(relative.FailureMessage, Does.Not.Contain("Emulator:GenesisCorePath"));
         Assert.That(new EmulatorOptionsValidator().Validate(null, new() { PicodriveCorePath = " " }).Succeeded, Is.False, "whitespace isn't blank");
     }
+
+    [Test]
+    public void Snes9xCorePath_EmptyOrAbsolute()
+    {
+        var absolute = Path.Combine(Path.GetTempPath(), "snes9x");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { Snes9xCorePath = "" }).Succeeded, Is.True, "blank disables");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { Snes9xCorePath = absolute }).Succeeded, Is.True);
+        Assert.That(new EmulatorOptionsValidator().Validate(null,
+            new() { Snes9xCorePath = absolute, GenesisCorePath = absolute, PicodriveCorePath = absolute }).Succeeded,
+            Is.True, "may share the other operator cores' folder");
+        var relative = new EmulatorOptionsValidator().Validate(null, new() { Snes9xCorePath = "snes9x" });
+        Assert.That(relative.Succeeded, Is.False);
+        Assert.That(relative.FailureMessage, Does.Contain("Emulator:Snes9xCorePath"));
+        Assert.That(relative.FailureMessage, Does.Not.Contain("Emulator:GenesisCorePath"));
+        Assert.That(relative.FailureMessage, Does.Not.Contain("Emulator:PicodriveCorePath"));
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { Snes9xCorePath = " " }).Succeeded, Is.False, "whitespace isn't blank");
+    }
 }

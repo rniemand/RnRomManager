@@ -11,6 +11,22 @@ public partial class EmulatorEndpointsTests
 {
     private const string GenesisCore = "/api/emulator/cores/genesis_plus_gx";
     private const string PicodriveCore = "/api/emulator/cores/picodrive";
+    private const string Snes9xCore = "/api/emulator/cores/snes9x";
+
+    private static readonly (string Name, byte[] Bytes, string ContentType)[] SyntheticSnes9x =
+    [
+        ("snes9x-wasm.data", [.. Enumerable.Range(0, 3072).Select(i => (byte)(i * 5 + 1))], "application/octet-stream"),
+        ("snes9x-legacy-wasm.data", [.. Enumerable.Range(0, 2900).Select(i => (byte)(i * 13 + 2))], "application/octet-stream"),
+        ("snes9x.json", "{\"options\":{\"snes\":1}}"u8.ToArray(), "application/json"),
+    ];
+
+    private string Snes9xDir => _factory.Settings["Emulator:Snes9xCorePath"]!;
+
+    private void WriteSnes9xSet(string? except = null)
+    {
+        foreach (var (name, bytes, _) in SyntheticSnes9x.Where(f => f.Name != except))
+            File.WriteAllBytes(Path.Combine(Snes9xDir, name), bytes);
+    }
 
     private static readonly (string Name, byte[] Bytes, string ContentType)[] SyntheticPicodrive =
     [
@@ -44,14 +60,22 @@ public partial class EmulatorEndpointsTests
         var genesis = OperatorCoreManifest.Pinned.Find("genesis_plus_gx")!;
 
         var picodrive = OperatorCoreManifest.Pinned.Find("picodrive")!;
-        var options = new EmulatorOptions { GenesisCorePath = "/cores/genesis", PicodriveCorePath = "/cores/picodrive" };
+        var snes9x = OperatorCoreManifest.Pinned.Find("snes9x")!;
+        var options = new EmulatorOptions
+        {
+            GenesisCorePath = "/cores/genesis", PicodriveCorePath = "/cores/picodrive", Snes9xCorePath = "/cores/snes9x",
+        };
 
-        Assert.That(OperatorCoreManifest.Pinned.Cores.Select(c => c.Id), Is.EqualTo(new[] { "genesis_plus_gx", "picodrive" }));
+        Assert.That(OperatorCoreManifest.Pinned.Cores.Select(c => c.Id),
+            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x" }));
         Assert.That((genesis.DisplayName, genesis.MismatchCode), Is.EqualTo(("Genesis Plus GX", "GenesisCoreMismatch")));
         Assert.That((picodrive.DisplayName, picodrive.MismatchCode), Is.EqualTo(("PicoDrive", "PicodriveCoreMismatch")));
-        Assert.That((genesis.PathOf(options), picodrive.PathOf(options)), Is.EqualTo(("/cores/genesis", "/cores/picodrive")));
+        Assert.That((snes9x.DisplayName, snes9x.MismatchCode), Is.EqualTo(("Snes9x", "Snes9xCoreMismatch")));
+        Assert.That((genesis.PathOf(options), picodrive.PathOf(options), snes9x.PathOf(options)),
+            Is.EqualTo(("/cores/genesis", "/cores/picodrive", "/cores/snes9x")));
         Assert.That(OperatorCoreManifest.Pinned.Find("GENESIS_PLUS_GX"), Is.Null);
         Assert.That(OperatorCoreManifest.Pinned.Find("PicoDrive"), Is.Null);
+        Assert.That(OperatorCoreManifest.Pinned.Find("Snes9x"), Is.Null);
     }
 
     [Test]
@@ -66,6 +90,93 @@ public partial class EmulatorEndpointsTests
             new OperatorCoreFile("picodrive.json", 123,
                 "2b09f29e095a003c15abf8e5bdfb0eaca96d6c6121183b3bd92ed85e860918d3", "application/json"),
         }));
+    }
+
+    [Test]
+    public void PinnedManifest_HoldsExactlyTheSnes9x4_2_3Files()
+    {
+        Assert.That(OperatorCoreManifest.Pinned.Find(OperatorCoreManifest.Snes9x)!.Files, Is.EqualTo(new[]
+        {
+            new OperatorCoreFile("snes9x-wasm.data", 1_093_765,
+                "eaa0bcfce67673809886e50387a80a616b719502175db64c090d04c9d75958ee", "application/octet-stream"),
+            new OperatorCoreFile("snes9x-legacy-wasm.data", 1_092_437,
+                "7d427a575cefad98ff400493fa1d7e892da63fe7bab68979babd9cea0bfaaf3b", "application/octet-stream"),
+            new OperatorCoreFile("snes9x.json", 120,
+                "dc7ac963eb7935a7ac78956235ac0b8912ec785c57026336825aa2ed8031b3ad", "application/json"),
+        }));
+    }
+
+    [Test]
+    public async Task Snes9x_AMatchingSet_Is204_AndEachFileIsServedExactly()
+    {
+        WriteSnes9xSet();
+
+        Assert.That(await HeadAsync(_client, Snes9xCore), Is.EqualTo(HttpStatusCode.NoContent));
+        foreach (var (name, bytes, contentType) in SyntheticSnes9x)
+        {
+            using var response = await _client.GetAsync($"{Snes9xCore}/{name}");
+
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), name);
+            Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo(contentType), name);
+            Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(bytes), name);
+            AssertNoStore(response);
+        }
+    }
+
+    [Test]
+    public async Task Snes9x_AMissingMount_AnIncompleteSet_OrAnEmptyFile_Is404()
+    {
+        Directory.Delete(Snes9xDir);
+        Assert.That(await HeadAsync(_client, Snes9xCore), Is.EqualTo(HttpStatusCode.NotFound), "missing mount");
+        await AssertNotFoundAsync($"{Snes9xCore}/snes9x.json");
+
+        Directory.CreateDirectory(Snes9xDir);
+        WriteSnes9xSet(except: "snes9x-legacy-wasm.data");
+        Assert.That(await HeadAsync(_client, Snes9xCore), Is.EqualTo(HttpStatusCode.NotFound), "incomplete set");
+        await AssertNotFoundAsync($"{Snes9xCore}/snes9x-legacy-wasm.data");
+        await AssertNotFoundAsync($"{Snes9xCore}/SNES9X.JSON");
+
+        File.WriteAllBytes(Path.Combine(Snes9xDir, "snes9x-legacy-wasm.data"), []);
+        Assert.That(await HeadAsync(_client, Snes9xCore), Is.EqualTo(HttpStatusCode.NotFound), "zero-byte file");
+        await AssertNotFoundAsync($"{Snes9xCore}/snes9x-legacy-wasm.data");
+    }
+
+    [TestCase("wrong length")]
+    [TestCase("same-length wrong hash")]
+    public async Task Snes9x_AMismatch_Is409Snes9xCoreMismatch(string kind)
+    {
+        WriteSnes9xSet();
+        var path = Path.Combine(Snes9xDir, "snes9x-wasm.data");
+        if (kind == "wrong length")
+            File.AppendAllText(path, "x");
+        else
+        {
+            var bytes = File.ReadAllBytes(path);
+            bytes[100] ^= 0xFF;
+            File.WriteAllBytes(path, bytes);
+        }
+
+        Assert.That(await HeadAsync(_client, Snes9xCore), Is.EqualTo(HttpStatusCode.Conflict));
+        using var response = await _client.GetAsync($"{Snes9xCore}/snes9x-wasm.data");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo(EmulatorEndpoints.Snes9xCoreMismatch));
+        Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("The Snes9x core file doesn't match EmulatorJS 4.2.3"));
+        AssertNoStore(response);
+    }
+
+    [Test]
+    public async Task Snes9x_AnonymousIs401_AndAForcedPasswordChangeIs403()
+    {
+        WriteSnes9xSet();
+        using var anonymous = await AuthClient.CreateAsync(_factory);
+        using var flagged = await SignInAsync("flagged-snes9x", mustChangePassword: true);
+
+        using var anonGet = await anonymous.GetAsync($"{Snes9xCore}/snes9x.json");
+        using var flaggedGet = await flagged.GetAsync($"{Snes9xCore}/snes9x.json");
+
+        Assert.That(await HeadAsync(anonymous, Snes9xCore), Is.EqualTo(HttpStatusCode.Unauthorized));
+        Assert.That(await HeadAsync(flagged, Snes9xCore), Is.EqualTo(HttpStatusCode.Forbidden));
+        Assert.That((anonGet.StatusCode, flaggedGet.StatusCode), Is.EqualTo((HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden)));
     }
 
     [Test]
@@ -147,9 +258,13 @@ public partial class EmulatorEndpointsTests
         foreach (var (name, bytes, _) in SyntheticPicodrive)
             File.WriteAllBytes(Path.Combine(GenesisDir, name), bytes);
         WritePicodriveSet();
+        foreach (var (name, bytes, _) in SyntheticSnes9x)
+            File.WriteAllBytes(Path.Combine(GenesisDir, name), bytes);
+        WriteSnes9xSet();
 
         Assert.That(await HeadAsync(_client, GenesisCore), Is.EqualTo(HttpStatusCode.NoContent));
         Assert.That(await HeadAsync(_client, PicodriveCore), Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(await HeadAsync(_client, Snes9xCore), Is.EqualTo(HttpStatusCode.NoContent));
     }
 
     [Test]
