@@ -8,6 +8,7 @@ import {
 	hidesCoreChooser,
 	optionalBiosError,
 	parsePlayParams,
+	pspBrowserError,
 	psxBiosBytes
 } from '../../static/emulator/params.js';
 
@@ -187,5 +188,59 @@ describe('contentFileName', () => {
 
 	it('leaves the BIOS-like name alone for another core', () => {
 		expect(contentFileName('gambatte', game, 'scph5501.bin')).toBe('scph5501.bin');
+	});
+});
+
+describe('PSP page (PSP B3)', () => {
+	it('play-psp.html accepts only ppsspp, and play.html rejects it', () => {
+		expect(parsePlayParams(query({ core: 'ppsspp', name: 'Umd (USA).iso' }), true)).toEqual({
+			game,
+			rom: 12,
+			core: 'ppsspp',
+			name: 'Umd (USA).iso'
+		});
+		expect(parsePlayParams(query({ core: 'ppsspp' }))).toBeNull();
+		expect(parsePlayParams(query({ core: 'ppsspp' }), false)).toBeNull();
+		for (const core of ['gambatte', 'pcsx_rearmed', 'smsplus'])
+			expect(parsePlayParams(query({ core }), true), core).toBeNull();
+	});
+
+	it('names the PSP limits for a too-large or invalid UMD image', () => {
+		expect(discError(409, 'PlayDiscTooLarge', 'ppsspp')).toBe(
+			'This UMD image is larger than 2 GiB, too large to play in the browser.'
+		);
+		expect(discError(409, 'InvalidPlayDisc', 'ppsspp')).toBe(
+			"This UMD image can't be played in the browser: it must be one non-empty .iso whose name matches the release."
+		);
+		expect(discError(401, 'PlayDiscTooLarge', 'ppsspp')).toBe(
+			'Your session has expired. Sign in again.'
+		);
+		expect(discError(null, null, 'ppsspp')).toBe("Couldn't load the disc.");
+		expect(discError(409, 'PlayDiscTooLarge')).toBe(
+			'This disc is larger than 1 GiB, too large to play in the browser.'
+		);
+	});
+
+	const capable = { secure: true, isolated: true, sharedArrayBuffer: true, webgl2: true };
+
+	it('lets a secure, isolated, WebGL 2 browser go on', () => {
+		expect(pspBrowserError(capable)).toBeNull();
+	});
+
+	it.each([
+		[{ secure: false }, 'PSP games need a secure page'],
+		[{ isolated: false }, "This page isn't cross-origin isolated"],
+		[{ sharedArrayBuffer: false }, "This page isn't cross-origin isolated"],
+		[{ webgl2: false }, 'PSP games need WebGL 2']
+	])('reports %o', (missing, message) => {
+		expect(pspBrowserError({ ...capable, ...missing })).toMatch(new RegExp(`^${message}`));
+	});
+
+	it('reports an insecure context first', () => {
+		expect(
+			pspBrowserError({ secure: false, isolated: false, sharedArrayBuffer: false, webgl2: false })
+		).toBe(
+			"PSP games need a secure page: open RnRomManager over HTTPS or on localhost. A plain-HTTP network address can't run them."
+		);
 	});
 });

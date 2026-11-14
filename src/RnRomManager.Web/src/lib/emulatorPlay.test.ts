@@ -65,6 +65,7 @@ function urls(): string[] {
 beforeEach(() => {
 	vi.resetModules();
 	document.body.innerHTML = '<p id="status"></p><div id="game"></div>';
+	delete document.body.dataset.player;
 	for (const key of ejsGlobals) delete win[key];
 	atLoader = null;
 	const append = document.body.append.bind(document.body);
@@ -356,5 +357,119 @@ describe('play page NES', () => {
 		expect(atLoader?.EJS_biosUrl).toBeUndefined();
 		expect(atLoader?.EJS_externalFiles).toBeUndefined();
 		expect((atLoader?.EJS_gameUrl as File).name).toBe('Pixel Quest (USA).nes');
+	});
+});
+
+describe('play page PSP (PSP B3)', () => {
+	const discUrl = `/api/games/${game}/roms/12/play-disc`;
+	const iso = new Uint8Array([0x43, 0x44, 0x30, 0x30, 0x31, 7]);
+
+	function isoResponse(status: number, problem?: object, blob = async () => new Blob([iso])) {
+		return {
+			ok: status >= 200 && status < 300,
+			status,
+			body: { cancel: async () => {} },
+			blob,
+			json: async () => {
+				if (!problem) throw new SyntaxError('no body');
+				return problem;
+			}
+		};
+	}
+
+	/** A browser context; each flag defaults to what PPSSPP needs. */
+	function browser({ secure = true, isolated = true, webgl2 = true } = {}) {
+		vi.stubGlobal('isSecureContext', secure);
+		vi.stubGlobal('crossOriginIsolated', isolated);
+		vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(((kind: string) =>
+			kind === 'webgl2' && webgl2 ? ({} as RenderingContext) : null) as never);
+	}
+
+	async function playPsp(core: string, name: string, page = 'play-psp.html'): Promise<string> {
+		if (page === 'play-psp.html') document.body.dataset.player = 'psp';
+		const query = new URLSearchParams({ game, rom: '12', core, name });
+		history.replaceState(null, '', `/emulator/${page}?${query}`);
+		const { started } = await import('../../static/emulator/play.js');
+		await started;
+		return document.getElementById('status')!.textContent ?? '';
+	}
+
+	it('fetches only the ISO from play-disc and starts PPSSPP threaded, with no BIOS', async () => {
+		browser();
+		serve({ [discUrl]: async () => isoResponse(200) as unknown as FakeResponse });
+
+		await playPsp('ppsspp', 'Pocket #Ninja (USA).iso');
+
+		expect(urls()).toEqual([discUrl]);
+		expect(fetchMock.mock.calls[0][1]).toEqual({ credentials: 'same-origin' });
+		expect(atLoader).toMatchObject({ EJS_core: 'ppsspp', EJS_gameName: 'Pocket #Ninja (USA).iso' });
+		expect(win.EJS_threads).toBe(true);
+		expect(atLoader?.EJS_biosUrl).toBeUndefined();
+		expect(atLoader?.EJS_externalFiles).toBeUndefined();
+		const file = atLoader?.EJS_gameUrl as File;
+		expect(file.name).toBe('Pocket _Ninja (USA).iso');
+		expect(new Uint8Array(await file.arrayBuffer())).toEqual(iso);
+		delete win.EJS_threads;
+	});
+
+	it.each([
+		[{ secure: false }, 'PSP games need a secure page'],
+		[{ isolated: false }, "This page isn't cross-origin isolated"],
+		[{ webgl2: false }, 'PSP games need WebGL 2']
+	])(
+		'stops before any ISO or loader request when the browser lacks %o',
+		async (missing, message) => {
+			browser(missing);
+			serve({});
+
+			expect(await playPsp('ppsspp', 'Umd (USA).iso')).toMatch(new RegExp(`^${message}`));
+			expect(fetchMock).not.toHaveBeenCalled();
+			expect(atLoader).toBeNull();
+		}
+	);
+
+	it('rejects PPSSPP on the modal page and other cores on the PSP page', async () => {
+		browser();
+		serve({});
+
+		expect(await playPsp('ppsspp', 'Umd (USA).iso', 'play.html')).toBe('Invalid emulator link.');
+		vi.resetModules();
+		expect(await playPsp('pcsx_rearmed', 'Disc (USA).iso')).toBe('Invalid emulator link.');
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(atLoader).toBeNull();
+	});
+
+	it.each([
+		[
+			409,
+			{ code: 'PlayDiscTooLarge' },
+			'This UMD image is larger than 2 GiB, too large to play in the browser.'
+		],
+		[
+			409,
+			{ code: 'InvalidPlayDisc' },
+			"This UMD image can't be played in the browser: it must be one non-empty .iso whose name matches the release."
+		],
+		[401, undefined, 'Your session has expired. Sign in again.'],
+		[500, { code: 'IoError' }, "Couldn't load the disc (HTTP 500)."]
+	])('shows the PSP message for HTTP %i', async (status, problem, message) => {
+		browser();
+		serve({ [discUrl]: async () => isoResponse(status, problem) as unknown as FakeResponse });
+
+		expect(await playPsp('ppsspp', 'Umd (USA).iso')).toBe(message);
+		expect(atLoader).toBeNull();
+	});
+
+	it('shows a disc-loading error when the ISO body fails to read', async () => {
+		browser();
+		serve({
+			[discUrl]: async () =>
+				isoResponse(200, undefined, async () => {
+					throw new TypeError('network');
+				}) as unknown as FakeResponse
+		});
+
+		expect(await playPsp('ppsspp', 'Umd (USA).iso')).toBe("Couldn't load the disc.");
+		expect(atLoader).toBeNull();
 	});
 });
