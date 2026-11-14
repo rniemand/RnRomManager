@@ -84,6 +84,7 @@ public static class AppHost
             .MapReviewEndpoints()
             .MapLibraryEndpoints()
             .MapCollectionEndpoints()
+            .MapEmulatorEndpoints()
             .MapIntegrityEndpoints()
             .MapReportEndpoints()
             .MapAuditEndpoints()
