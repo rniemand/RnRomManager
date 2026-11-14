@@ -110,7 +110,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
   - family isolation: a 64 KiB `.bin` with no `SEGA` header at 0x100 whose SHA-1 is in the Sega CD DAT, dropped in `ingest/md/`, is not matched against the Sega CD DAT. It goes to Review as `NoDatMatch` with system `md`: Mega Drive's header is optional, so a headerless file isn't `InvalidHeader`. Nothing is stored under `roms/segacd/`;
   - a file over 1 GiB is `TooLarge` (use a sparse file or the existing size-stub pattern, not 1 GiB of data).
   - Done when: those cases and the existing ingest suites pass.
-- [ ] **4. Sega CD play-disc** (B4): `segacd` in `MaxBytesBySystem`. `BrowserCore` stays null.
+- [x] **4. Sega CD play-disc** (B4): `segacd` in `MaxBytesBySystem`. `BrowserCore` stays null.
   - Files: `PlayDisc.cs`, `LibraryEndpointsTests.PlayDisc.cs`.
   - Tests: `LibraryEndpointsTests.PlayDisc`: Sega CD single `.bin`, single `.iso`, cue set; exactly 1 GiB → 200, one byte over → 409 `PlayDiscTooLarge`; two cues → 409 `InvalidPlayDisc`; psx, psp and saturn cases unchanged; `PlayDisc_CapsEachSystem` gains `["segacd"] = 1L << 30`. `PlayDiscCopyTests`.
   - Done when: those pass.
