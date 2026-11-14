@@ -27,6 +27,9 @@ public sealed class NesHandler : ISystemHandler
     /// <inheritdoc />
     public bool EmbedRomsInZip => true;
 
+    /// <summary>Play B1: FCEUmm, from the stored headered <c>.nes</c>; no BIOS.</summary>
+    public string BrowserCore => "fceumm";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => NesHeaderReader.Read(rom);

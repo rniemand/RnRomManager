@@ -12,6 +12,13 @@ public class NesHandlerTests
     private static readonly ISystemHandler Handler = new NesHandler();
 
     [Test]
+    public void BrowserCore_IsFceumm_WithEmbeddedRoms()
+    {
+        Assert.That(Handler.BrowserCore, Is.EqualTo("fceumm"));
+        Assert.That(Handler.EmbedRomsInZip, Is.True);
+    }
+
+    [Test]
     public void Nes_Contract()
     {
         Assert.That(Handler.ShortName, Is.EqualTo("NES"));

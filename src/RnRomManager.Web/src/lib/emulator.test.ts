@@ -12,6 +12,20 @@ describe('canPlay', () => {
 
 	it('is true for a supported release inside the ZIP', () => {
 		expect(canPlay({ browserCore: 'mgba' }, { externalFileName: null })).toBe(true);
+		expect(canPlay({ browserCore: 'fceumm' }, { externalFileName: null })).toBe(true);
+	});
+
+	it('is true for an external PlayStation disc', () => {
+		expect(
+			canPlay({ browserCore: 'pcsx_rearmed' }, { externalFileName: 'Disc (USA) (Track 1).bin' })
+		).toBe(true);
+	});
+
+	it('is false for an external release of another core, and without a core', () => {
+		expect(canPlay({ browserCore: 'fceumm' }, { externalFileName: 'x.nes' })).toBe(false);
+		expect(canPlay({ browserCore: null }, { externalFileName: 'Saturn (Track 1).bin' })).toBe(
+			false
+		);
 	});
 });
 

@@ -211,15 +211,20 @@ public partial class LibraryEndpointsTests
         Assert.That(item.GetProperty("romCount").GetInt32(), Is.EqualTo(2), "romCount still counts every rom");
     }
 
-    // C2: playable only with a browser core and an embedded primary release.
+    // C2: playable only with a browser core and an embedded primary release; Play B1: PlayStation's external primary too.
     [TestCase("gb", false, true, "gambatte")]
     [TestCase("gb", true, false, "gambatte")]
     [TestCase("a2600", false, true, "stella2014")]
     [TestCase("coleco", false, true, "gearcoleco")]
     [TestCase("gg", false, true, "smsplus")]
     [TestCase("sms", false, true, "smsplus")]
-    [TestCase("nes", false, false, null)]
+    [TestCase("nes", false, true, "fceumm")]
+    [TestCase("nes", true, false, "fceumm")]
+    [TestCase("psx", true, true, "pcsx_rearmed")]
+    [TestCase("psx", false, true, "pcsx_rearmed")]
+    [TestCase("saturn", true, false, null)]
     [TestCase("switch", false, false, null)]
+    [TestCase("switch", true, false, null)]
     public async Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(string system, bool external, bool playable, string? core)
     {
         var id = await Tetris();
@@ -358,7 +363,9 @@ public partial class LibraryEndpointsTests
     [TestCase("coleco", "gearcoleco")]
     [TestCase("gg", "smsplus")]
     [TestCase("sms", "smsplus")]
-    [TestCase("nes", null)]
+    [TestCase("nes", "fceumm")]
+    [TestCase("psx", "pcsx_rearmed")]
+    [TestCase("saturn", null)]
     [TestCase("nosuch", null)]
     public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)
     {
