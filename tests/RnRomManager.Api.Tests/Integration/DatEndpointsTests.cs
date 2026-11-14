@@ -46,6 +46,7 @@ public class DatEndpointsTests
         [IngestSeeder.WiiDat] = [],
         [IngestSeeder.Xbox360Dat] = [],
         [IngestSeeder.SaturnDat] = [],
+        [IngestSeeder.SegaCdDat] = [],
         [IngestSeeder.NintendoDsDat] = [],
     };
 
@@ -140,7 +141,7 @@ public class DatEndpointsTests
         var rows = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
         var names = rows.Select(r => r.GetProperty("datName").GetString()!).ToList();
-        Assert.That(names, Has.Count.EqualTo(27), "19 libretro systems, the 6 disc systems, Switch and the test titledb system");
+        Assert.That(names, Has.Count.EqualTo(28), "19 libretro systems, the 7 disc systems, Switch and the test titledb system");
         Assert.That(names, Is.EqualTo(names.Order(StringComparer.Ordinal)));
         var titleDb = rows.Single(r => r.GetProperty("datName").GetString() == ExternalTitleDbTestHandler.DatNameValue);
         Assert.That(titleDb.GetProperty("version").GetString(), Is.EqualTo(FixtureDatWriter.TitleDbVersion));
@@ -208,7 +209,7 @@ public class DatEndpointsTests
         using var response = await _admin.GetAsync("/api/admin/dats");
         var rows = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
-        Assert.That(rows.Select(r => r.GetProperty("datName").GetString()), Is.EqualTo(new[] { IngestSeeder.Atari2600Dat, IngestSeeder.Atari5200Dat, IngestSeeder.Atari7800Dat, IngestSeeder.JaguarDat, IngestSeeder.LynxDat, IngestSeeder.ColecoVisionDat, IngestSeeder.Xbox360Dat, IngestSeeder.TurboGrafx16Dat, Gb, IngestSeeder.GbaDat, Gbc, IngestSeeder.GameCubeDat, IngestSeeder.N64Dat, IngestSeeder.NintendoDsDat, IngestSeeder.NesDat, IngestSeeder.SwitchDat, IngestSeeder.SnesDat, IngestSeeder.VirtualBoyDat, IngestSeeder.WiiDat, IngestSeeder.Sega32xDat, IngestSeeder.GameGearDat, IngestSeeder.MasterSystemDat, IngestSeeder.MegaDriveDat, IngestSeeder.SaturnDat, IngestSeeder.PsxDat, IngestSeeder.PspDat }));
+        Assert.That(rows.Select(r => r.GetProperty("datName").GetString()), Is.EqualTo(new[] { IngestSeeder.Atari2600Dat, IngestSeeder.Atari5200Dat, IngestSeeder.Atari7800Dat, IngestSeeder.JaguarDat, IngestSeeder.LynxDat, IngestSeeder.ColecoVisionDat, IngestSeeder.Xbox360Dat, IngestSeeder.TurboGrafx16Dat, Gb, IngestSeeder.GbaDat, Gbc, IngestSeeder.GameCubeDat, IngestSeeder.N64Dat, IngestSeeder.NintendoDsDat, IngestSeeder.NesDat, IngestSeeder.SwitchDat, IngestSeeder.SnesDat, IngestSeeder.VirtualBoyDat, IngestSeeder.WiiDat, IngestSeeder.Sega32xDat, IngestSeeder.GameGearDat, IngestSeeder.MasterSystemDat, IngestSeeder.MegaDriveDat, IngestSeeder.SegaCdDat, IngestSeeder.SaturnDat, IngestSeeder.PsxDat, IngestSeeder.PspDat }));
         Assert.That(rows.Select(r => r.GetProperty("version").GetString()), Is.All.EqualTo("2026.01.01"));
         Assert.That(rows[0].GetProperty("downloadedAt").GetDateTimeOffset(), Is.EqualTo(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero)));
     }
@@ -250,7 +251,7 @@ public class DatEndpointsTests
         var after = clock.GetUtcNow().UtcDateTime.ToString("yyyy.MM.dd", System.Globalization.CultureInfo.InvariantCulture);
 
         Assert.That(job.Status, Is.EqualTo(JobStatus.Completed), job.Error);
-        Assert.That(_server.Requests, Has.Count.EqualTo(102), "5 per No-Intro libretro system, 1 per disc system (no metadat) and one titledb source");
+        Assert.That(_server.Requests, Has.Count.EqualTo(103), "5 per No-Intro libretro system, 1 per disc system (no metadat) and one titledb source");
         Assert.That(_server.Requests.Count(r => r.RequestUri!.AbsoluteUri == "https://dats.test/metadat/US.en.json"), Is.EqualTo(1));
         // titledb is versioned by the UTC date of its download, apart from the libretro fixture version.
         Assert.That(_factory.Services.GetRequiredService<DatCache>().For("switch")!.Version, Is.AnyOf(before, after));

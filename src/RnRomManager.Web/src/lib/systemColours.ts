@@ -30,7 +30,8 @@ export interface SystemColour {
 		| 'wii'
 		| 'x360'
 		| 'saturn'
-		| 'nds';
+		| 'nds'
+		| 'segacd';
 	foreground: '#fff' | '#000';
 }
 
@@ -60,7 +61,8 @@ export const systemColours: Record<string, SystemColour> = {
 	wii: { name: 'wii', foreground: '#000' },
 	x360: { name: 'x360', foreground: '#000' },
 	saturn: { name: 'saturn', foreground: '#fff' },
-	nds: { name: 'nds', foreground: '#000' }
+	nds: { name: 'nds', foreground: '#000' },
+	segacd: { name: 'segacd', foreground: '#fff' }
 };
 
 /** Unknown systems stay neutral. */

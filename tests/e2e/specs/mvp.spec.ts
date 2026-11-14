@@ -209,7 +209,7 @@ test('browse, search and filter the library', async () => {
 	await expect(systemMenu.locator('.dropdown-item').first().locator('.font-monospace')).toHaveText('28');
 	expect(await systemMenu.locator('[data-value]').evaluateAll((rows) => rows.map((r) => (r as HTMLElement).dataset.value))).toEqual([
 		's32x', 'a2600', 'a5200', 'a7800', 'jaguar', 'lynx', 'coleco', 'gb', 'gba', 'gbc', 'gg', 'gc', 'sms', 'md', 'n64', 'nds', 'nes', 'switch', 'psx', 'psp', 'saturn',
-		'snes', 'tg16', 'vb', 'wii', 'x360'
+		'segacd', 'snes', 'tg16', 'vb', 'wii', 'x360'
 	]);
 	await expect(systemMenu.locator('[data-value="gb"] .font-monospace')).toHaveText('3');
 	await expect(systemMenu.locator('[data-value="gbc"] .font-monospace')).toHaveText('2');
