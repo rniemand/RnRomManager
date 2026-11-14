@@ -1,0 +1,59 @@
+nds-marker.nds: what it contains and under which terms
+=====================================================
+
+nds-marker.nds is built from source/main.c and Makefile in this folder with build.sh, in the
+devkitpro/devkitarm image pinned there by digest (the 2024-05-11 image: devkitARM r64, GCC 14.1.0,
+libnds 1.8.2, default-arm7 0.7.4, dswifi 0.4.2, maxmod-nds 1.0.15, ndstool 2.3.1). source/main.c, Makefile
+and build.sh are original to RnRomManager and MIT-licensed like the rest of the repository.
+
+The cartridge links these devkitPro libraries:
+
+- libnds 1.8.2 on the ARM9 (libnds9.a: system start-up, interrupts, FIFO, keys, video, BIOS calls; from
+  the linker map's archive members) and in libnds' default ARM7 binary (default.elf): Copyright (C)
+  2005 - 2008 Michael Noland (joat), Jason Rogers (dovoto), Dave Murphy (WinterMute). zlib licence
+  (licenses/libnds-LICENSE.txt, the image's /opt/devkitpro/libnds/libnds_license.txt).
+
+- dswifi 0.4.2, linked into default.elf: Copyright (c) 2005-2006 Stephen Stair. MIT licence
+  (licenses/dswifi-LICENSE.txt, the image's /opt/devkitpro/libnds/dswifi_license.txt).
+
+- maxmod 1.0.15, linked into default.elf: Copyright (c) 2008, Mukunda Johnson. ISC-style licence
+  (licenses/maxmod-LICENSE.txt, the image's /opt/devkitpro/libnds/maxmod_license.txt).
+
+- newlib (on the ARM9, libc.a: init, memcpy-stub; and devkitPro's libsysbase.a: build_argv, malloc_vars;
+  default.elf links newlib too), as built for devkitARM. Its licences are collected in
+  licenses/newlib-COPYING.NEWLIB.txt (COPYING.NEWLIB from the devkitPro branch of
+  https://github.com/devkitPro/newlib, fetched 2026-11-14). init.c is Copyright (C) 2004 CodeSourcery,
+  LLC ("Permission to use, copy, modify, and distribute this file for any purpose is hereby granted
+  without fee, provided that the above copyright notice and this notice appears in all copies."). The ARM
+  memcpy-stub.c carries this notice, verbatim:
+
+    Copyright (c) 2015 ARM Ltd.
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+        * Redistributions of source code must retain the above copyright
+          notice, this list of conditions and the following disclaimer.
+        * Redistributions in binary form must reproduce the above copyright
+          notice, this list of conditions and the following disclaimer in the
+          documentation and/or other materials provided with the distribution.
+        * Neither the name of the Linaro nor the
+          names of its contributors may be used to endorse or promote products
+          derived from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT
+    HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+    LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+    DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+    THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+- libgcc (a sync stub): GPL-3.0 with the GCC Runtime Library Exception, which places no conditions on this
+  program's distribution.
+
+The cartridge contains no Nintendo code, BIOS or firmware, and no banner icon.

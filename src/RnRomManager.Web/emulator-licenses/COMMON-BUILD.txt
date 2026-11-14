@@ -3,7 +3,8 @@ EmulatorJS 4.2.3 core payloads: how they were built
 
 The npm packages @emulatorjs/core-stella2014, @emulatorjs/core-gearcoleco,
 @emulatorjs/core-smsplus, @emulatorjs/core-fceumm,
-@emulatorjs/core-pcsx_rearmed and @emulatorjs/core-yabause 4.2.3 each
+@emulatorjs/core-pcsx_rearmed, @emulatorjs/core-yabause and
+@emulatorjs/core-desmume 4.2.3 each
 contain a "<core>-wasm.data" and a
 "<core>-legacy-wasm.data" file (7z archives). Each archive holds the core's
 WebAssembly binary and JavaScript loader, core.json, build.json and, for

@@ -29,7 +29,8 @@ export interface SystemColour {
 		| 'gc'
 		| 'wii'
 		| 'x360'
-		| 'saturn';
+		| 'saturn'
+		| 'nds';
 	foreground: '#fff' | '#000';
 }
 
@@ -58,7 +59,8 @@ export const systemColours: Record<string, SystemColour> = {
 	gc: { name: 'gc', foreground: '#000' },
 	wii: { name: 'wii', foreground: '#000' },
 	x360: { name: 'x360', foreground: '#000' },
-	saturn: { name: 'saturn', foreground: '#fff' }
+	saturn: { name: 'saturn', foreground: '#fff' },
+	nds: { name: 'nds', foreground: '#000' }
 };
 
 /** Unknown systems stay neutral. */

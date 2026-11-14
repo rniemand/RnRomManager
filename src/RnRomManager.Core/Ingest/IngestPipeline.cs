@@ -105,6 +105,9 @@ public sealed class IngestPipeline(
     /// <summary>Test seams of the external ingest path.</summary>
     public ExternalIngestHooks? ExternalHooks { get; set; }
 
+    /// <summary>Test seam: wraps the stream an embedded source is read from, in ingest and in Review.</summary>
+    public Func<Stream, Stream>? WrapEmbeddedReadStream { get; set; }
+
     /// <summary>AU1: the source as recorded: <c>ingest/…</c>, or <c>ingest/&lt;archive&gt; › &lt;entry&gt;</c> for an archive entry.</summary>
     private string AuditSource(IngestFile file) =>
         file.ArchiveEntry is { } entry ? auditPaths.ArchiveEntry(file.ArchivePath!, entry) : auditPaths.Of(file.FullPath);
@@ -143,15 +146,24 @@ public sealed class IngestPipeline(
             return FailFile(file, actor, IngestFailures.TooLarge, $"{file.SizeBytes} bytes; {byExtension.Id} ROMs are at most {byExtension.MaxRomSizeBytes}");
 
         // Step 2: hash the normalised bytes (what gets stored).
-        byte[] bytes;
+        BoundedReadResult read;
         try
         {
-            bytes = byExtension.NormalizeForHashing(await File.ReadAllBytesAsync(file.FullPath, cancellationToken).ConfigureAwait(false)).ToArray();
+            read = await BoundedRomRead.ReadAsync(file.FullPath, byExtension.MinRomSizeBytes, byExtension.MaxRomSizeBytes, WrapEmbeddedReadStream,
+                cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             return IngestItemResult.Error(IngestErrors.IoError, ex.Message, file.SystemId);
         }
+        if (read.Status == BoundedReadStatus.OutOfRange)
+            return read.Length < byExtension.MinRomSizeBytes
+                ? FailFile(file, actor, IngestFailures.TooSmall, $"{read.Length} bytes; {byExtension.Id} ROMs are at least {byExtension.MinRomSizeBytes}")
+                : FailFile(file, actor, IngestFailures.TooLarge, $"{read.Length} bytes; {byExtension.Id} ROMs are at most {byExtension.MaxRomSizeBytes}");
+        // Changed while read: an Error leaves the file where it is.
+        if (read.Status == BoundedReadStatus.Changed)
+            return IngestItemResult.Error(IngestErrors.IoError, read.Details, file.SystemId);
+        var bytes = BoundedRomRead.Normalize(byExtension, read.Bytes!);
         var hashes = RomHashes.Of(bytes);
         logger.LogDebug("{Path}: {Size} bytes, crc32 {Crc32}, sha1 {Sha1}", file.FullPath, bytes.Length, hashes.Crc32, hashes.Sha1);
         return await IdentifyAsync(file, folder, family, hashes, bytes.Length, bytes, bytes, null, jobId, actor, breaker, cancellationToken).ConfigureAwait(false);

@@ -13,6 +13,7 @@ using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
@@ -25,6 +26,11 @@ public class ReviewEndpointsTests
     private static readonly byte[] Known = new SyntheticRomBuilder { Seed = 1, Title = "TETRIS" }.Build();
     private static readonly byte[] Unknown = new SyntheticRomBuilder { Seed = 930, Title = "MYSTERY" }.Build();
     private static readonly byte[] Color = new SyntheticRomBuilder { Seed = 932, CgbFlag = 0xC0 }.Build();
+    /// <summary>The DS DAT's one game; Review items are other dumps that resolve to it or suggest it.</summary>
+    private static readonly byte[] StylusQuest = new SyntheticNdsRomBuilder { Seed = 940, Title = "STYLUS QUEST", GameCode = "ASQE" }.Build();
+    private static readonly byte[] DsUnknown = new SyntheticNdsRomBuilder { Seed = 941, Title = "STYLUS QUEST", GameCode = "ASQP" }.Build();
+    private static readonly byte[] DsOther = new SyntheticNdsRomBuilder { Seed = 942, Title = "PEN PALS", GameCode = "APPE" }.Build();
+    private static readonly byte[] DsBadCrc = new SyntheticNdsRomBuilder { Seed = 943, Title = "BROKEN", BadHeaderCrc = true }.Build();
     private ApiFactory _factory = null!;
     private AuthClient _admin = null!;
     private IngestPipeline? _pipelineOverride;
@@ -81,6 +87,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.WiiDat] = [],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
+            [IngestSeeder.NintendoDsDat] = [new FixtureGame("Stylus Quest (USA)", "Stylus Quest (USA).nds", StylusQuest) { ReleaseYear = 2006 }],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)
             { ReleaseYear = 1989, Developers = ["Nintendo"], Publishers = ["Nintendo"], Genres = ["Puzzle"] }],
             ["Nintendo - Game Boy Color"] = [new FixtureGame("Color Game (World)", "Color Game (World).gbc", Color)],
@@ -597,6 +604,137 @@ public class ReviewEndpointsTests
         Assert.That(File.Exists(item.SourcePath), Is.True);
     }
 
+    private IngestFile DropDs(string name, byte[] bytes)
+    {
+        var path = Path.Combine(_factory.Root, "ingest", "nds", name);
+        File.WriteAllBytes(path, bytes);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+        return new IngestFile("nds", path, name, bytes.Length, File.GetLastWriteTimeUtc(path));
+    }
+
+    private async Task<ReviewItem> QueueDs(string name, byte[] bytes, bool archive = false)
+    {
+        if (archive)
+        {
+            var path = Path.Combine(_factory.Root, "ingest", "nds", "ds-pack.zip");
+            using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+            {
+                using (var entry = zip.CreateEntry("nested/" + name).Open())
+                    entry.Write(bytes);
+                using (var notes = zip.CreateEntry("notes.txt").Open())
+                    notes.Write("companion"u8);
+            }
+            File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+            await RunIngest();
+        }
+        else
+        {
+            var result = await Ingest(DropDs(name, bytes));
+            Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Review, "NoDatMatch")));
+        }
+        var item = (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(bytes)), default))!;
+        Assert.That((item.SystemId, item.Reason), Is.EqualTo(("nds", "NoDatMatch")));
+        return item;
+    }
+
+    /// <summary>The stored entry, <c>info.json</c> and the source agree, and no ROM file sits next to the ZIP.</summary>
+    private async Task AssertStoredInZip(Guid gameId, string sha1, byte[] source)
+    {
+        var row = (await Service<IGameRepository>().GetAsync(gameId, default))!;
+        var zipPath = Path.GetFullPath(Path.Combine(_factory.Root, "roms", row.ZipPath));
+        using var zip = LibraryZip.Open(zipPath, Service<InfoJsonReader>());
+        var rom = zip.InfoJson!.Game!.Roms.Single(r => r.Metadata.Sha1 == sha1);
+        using var entry = zip.OpenEntry(LibraryZip.RomEntry(rom.FileName), long.MaxValue);
+        using var copy = new MemoryStream();
+        entry.CopyTo(copy);
+        Assert.That(copy.ToArray(), Is.EqualTo(source));
+        Assert.That((rom.Metadata.SizeBytes, rom.Metadata.Crc32, rom.Metadata.Md5, rom.Metadata.Sha1),
+            Is.EqualTo(((long)source.Length, Crc32.ToHex(source), Convert.ToHexStringLower(MD5.HashData(source)), Convert.ToHexStringLower(SHA1.HashData(source)))));
+        Assert.That(rom.ExternalFileName, Is.Null);
+        Assert.That(Directory.EnumerateFiles(Path.GetDirectoryName(zipPath)!), Is.EqualTo(new[] { zipPath }), "no external ROM file");
+    }
+
+    [Test]
+    public async Task Ds_UnmatchedHeaders_AValidCrcGoesToReview_ABadCrcIsInvalidHeader()
+    {
+        var valid = await Ingest(DropDs("other.nds", DsOther));
+        var invalid = await Ingest(DropDs("broken.nds", DsBadCrc));
+
+        Assert.That((valid!.Outcome, valid.Reason), Is.EqualTo((IngestOutcome.Review, "NoDatMatch")));
+        Assert.That((invalid!.Outcome, invalid.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.InvalidHeader)));
+        var item = (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(DsOther)), default))!;
+        Assert.That(JsonNode.Parse(item.Header!)!["title"]!.GetValue<string>(), Is.EqualTo("PEN PALS"));
+        Assert.That(await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(DsBadCrc)), default), Is.Null);
+    }
+
+    [Test]
+    public async Task Ds_HeaderTitle_SuggestsTheDatGame()
+    {
+        var item = await QueueDs("quest-eu.nds", DsUnknown);
+
+        Assert.That(item.Suggestions, Does.Contain("Stylus Quest"));
+    }
+
+    [Test]
+    public async Task Ds_ManualResolution_OfALooseItem_StoresTheSourceBytesInTheZip()
+    {
+        var item = await QueueDs("pen pals.nds", DsOther);
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "Pen Pals", regions = new[] { "USA" }, languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+
+        Assert.That(response.Code, Is.Null);
+        var game = await ReadGame(response.GameId!.Value);
+        Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("nds", "Pen Pals (USA).nds")));
+        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Resolved"));
+        Assert.That(File.Exists(item.SourcePath), Is.False);
+        await AssertStoredInZip(response.GameId.Value, item.Sha1, DsOther);
+    }
+
+    [Test]
+    public async Task Ds_DatSelection_OfAnArchiveItem_StoresTheEntryBytesInTheZip()
+    {
+        var item = await QueueDs("quest-eu.nds", DsUnknown, archive: true);
+        Assert.That((item.ArchivePath, item.ArchiveEntry), Is.EqualTo((Path.Combine(_factory.Root, "ingest", "nds", "ds-pack.zip"), "nested/quest-eu.nds")));
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Dat", datSystem = "nds", datGameName = "Stylus Quest (USA)" });
+
+        Assert.That(response.Code, Is.Null);
+        var game = await ReadGame(response.GameId!.Value);
+        Assert.That((game.Title, game.ReleaseYear), Is.EqualTo(("Stylus Quest", (int?)2006)));
+        Assert.That(game.Roms.Single().FileName, Is.EqualTo("Stylus Quest (USA) (Unverified).nds"));
+        await AssertStoredInZip(response.GameId.Value, item.Sha1, DsUnknown);
+    }
+
+    [Test]
+    public async Task Ds_SameLengthChangedSource_IsVerifyFailed_AndStaysPending()
+    {
+        var item = await QueueDs("pen pals.nds", DsOther);
+        var changed = DsOther.ToArray();
+        changed[^1] ^= 0xFF;
+        File.WriteAllBytes(item.SourcePath, changed);
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "Pen Pals", regions = Array.Empty<string>(), languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+
+        Assert.That(response.Code, Is.EqualTo("VerifyFailed"));
+        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
+        Assert.That(File.ReadAllBytes(item.SourcePath), Is.EqualTo(changed), "the source is left where it is");
+    }
+
+    [Test]
+    public async Task Ds_ASignedInUserWithoutAdmin_Gets403_ForImportAndResolution()
+    {
+        var item = await QueueDs("pen pals.nds", DsOther);
+        using var user = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "ds-user");
+        (await user.LoginAsync("ds-user", TestUsers.Password)).Dispose();
+
+        using var import = await user.PostAsync("/api/jobs/ingest", new { files = new[] { new { system = "nds", name = "pen pals.nds" } } });
+        using var resolve = await user.PostAsync($"/api/review/{item.Id}/resolve", Manual());
+
+        Assert.That((import.StatusCode, resolve.StatusCode), Is.EqualTo((HttpStatusCode.Forbidden, HttpStatusCode.Forbidden)));
+        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
+    }
+
     [Test]
     public async Task ChangedSource_Is500VerifyFailed_StaysPending()
     {
@@ -765,6 +903,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.WiiDat] = [],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
+            [IngestSeeder.NintendoDsDat] = [],
             [Gb] = Enumerable.Range(1, 25).Select(i => new FixtureGame($"Demo {i} (World)", $"Demo {i} (World).gb", new SyntheticRomBuilder { Seed = 1000 + i }.Build())).ToArray(),
             ["Nintendo - Game Boy Color"] = [],
         }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
@@ -804,6 +943,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.WiiDat] = [],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
+            [IngestSeeder.NintendoDsDat] = [],
             [Gb] =
             [
                 new FixtureGame("Repeat (World)", "Repeat (World).gb", new SyntheticRomBuilder { Seed = 2001 }.Build()),

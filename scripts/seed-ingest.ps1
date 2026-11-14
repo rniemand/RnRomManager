@@ -4,16 +4,35 @@
     Seeds synthetic ROMs and matching fixture DATs for local ingestion (§15.2).
 .PARAMETER Clean
     Empty the selected ingest folder before seeding. Cache and library contents are not removed.
+.PARAMETER NdsDat
+    ROM files the seeded Nintendo DS No-Intro DAT lists instead of the empty catalog (game name: the file name without its
+    extension; ROM name: the file name). The files are not copied into ingest.
+.PARAMETER NdsGenerate
+    Instead of seeding, write one synthetic DS ROM with a valid header CRC to this path (streamed), using -Size and -Seed.
+.EXAMPLE
+    pwsh scripts/seed-ingest.ps1 -NdsGenerate big-a.nds -Size 536870912 -Seed 1
 #>
 [CmdletBinding()]
 param(
     [string]$Path = (Join-Path $PSScriptRoot '../.dev/ingest'),
     [string]$CachePath = (Join-Path $PSScriptRoot '../.dev/cache'),
     [ValidateSet('Basic', 'Full')][string]$Set = 'Basic',
-    [switch]$Clean
+    [switch]$Clean,
+    [string[]]$NdsDat = @(),
+    [string]$NdsGenerate,
+    [long]$Size,
+    [int]$Seed
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
+$project = Join-Path $repoRoot 'tests/RnRomManager.TestData'
+if ($NdsGenerate) {
+    if (-not $PSBoundParameters.ContainsKey('Size') -or -not $PSBoundParameters.ContainsKey('Seed')) { throw '-NdsGenerate needs -Size and -Seed.' }
+    $target = [IO.Path]::GetFullPath($NdsGenerate, $PWD.ProviderPath)
+    & dotnet run --project $project -- --nds-generate $target --size $Size --seed $Seed
+    if ($LASTEXITCODE -ne 0) { throw "TestData CLI failed (exit $LASTEXITCODE)" }
+    return
+}
 $ingestRoot = [IO.Path]::TrimEndingDirectorySeparator([IO.Path]::GetFullPath($Path, $PWD.ProviderPath))
 $cacheRoot = [IO.Path]::TrimEndingDirectorySeparator([IO.Path]::GetFullPath($CachePath, $PWD.ProviderPath))
 $comparison = [StringComparison]::OrdinalIgnoreCase
@@ -43,5 +62,6 @@ if ($Clean) {
         foreach ($target in $targets) { Remove-Item -LiteralPath $target -Recurse -Force }
     }
 }
-& dotnet run --project (Join-Path $repoRoot 'tests/RnRomManager.TestData') -- --ingest $ingestRoot --cache $cacheRoot --set $canonicalSet
+$ndsArgs = @($NdsDat | ForEach-Object { '--nds-dat'; [IO.Path]::GetFullPath($_, $PWD.ProviderPath) })
+& dotnet run --project $project -- --ingest $ingestRoot --cache $cacheRoot --set $canonicalSet @ndsArgs
 if ($LASTEXITCODE -ne 0) { throw "TestData CLI failed (exit $LASTEXITCODE)" }

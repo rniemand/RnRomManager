@@ -24,6 +24,7 @@ public partial class LibraryEndpointsTests
     private static readonly byte[] TetrisJapan = new SyntheticRomBuilder { Seed = 2, Title = "TETRIS" }.Build();
     private static readonly byte[] Pinball = new SyntheticRomBuilder { Seed = 3, Title = "POKEPINBALL" }.Build();
     private static readonly byte[] Arcade = new SyntheticRomBuilder { Seed = 4, Title = "ARCADE" }.Build();
+    private static readonly byte[] DsQuest = new SyntheticNdsRomBuilder { Seed = 950, Title = "DOWNLOAD QUEST", GameCode = "ADQE" }.Build();
 
     private ApiFactory _factory = null!;
     private AuthClient _user = null!;
@@ -72,6 +73,7 @@ public partial class LibraryEndpointsTests
             [IngestSeeder.WiiDat] = [],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
+            [IngestSeeder.NintendoDsDat] = [new FixtureGame("Download Quest (USA)", "Download Quest (USA).nds", DsQuest)],
             [Gb] =
             [
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", TetrisWorld) { ReleaseYear = 1989, Developers = ["Nintendo"], Genres = ["Puzzle"] },
@@ -147,20 +149,21 @@ public partial class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "s32x", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "n64", "nes", "switch", "psx", "psp", "saturn", "snes", "tg16", "vb", "wii", "x360" }));
-        Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(18).True);
+            Is.EqualTo(new[] { "s32x", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "n64", "nds", "nes", "switch", "psx", "psp", "saturn", "snes", "tg16", "vb", "wii", "x360" }));
+        Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(19).True);
         Assert.That(Find("switch").GetProperty("embedRoms").GetBoolean(), Is.False, "Switch stores its ROMs outside the ZIP");
         JsonElement Find(string id) => systems.EnumerateArray().Single(s => s.GetProperty("id").GetString() == id);
         var gb = Find("gb");
         Assert.That(gb.GetProperty("displayName").GetString(), Is.EqualTo("Game Boy"));
         Assert.That(gb.GetProperty("shortName").GetString(), Is.EqualTo("GB"), "L3");
+        Assert.That((Find("nds").GetProperty("displayName").GetString(), Find("nds").GetProperty("shortName").GetString()), Is.EqualTo(("Nintendo DS", "DS")));
         Assert.That((gb.GetProperty("gameCount").GetInt32(), gb.GetProperty("romCount").GetInt32()), Is.EqualTo((1, 2)));
         Assert.That(gb.GetProperty("regions").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "Japan", "World" }));
         var gbc = Find("gbc");
         Assert.That((gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()), Is.EqualTo((0, 0)));
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
-            "32X", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo Entertainment System", "Nintendo Switch",
+            "32X", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
             "PlayStation", "PlayStation Portable", "Saturn", "Super Nintendo Entertainment System", "TurboGrafx-16", "Virtual Boy", "Wii", "Xbox 360"
         }));
     }
@@ -576,6 +579,76 @@ public partial class LibraryEndpointsTests
         Assert.That(response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName,
             Is.EqualTo("legacy.smc"));
         Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(legacy));
+    }
+
+    private async Task<(Guid GameId, long RomId)> IngestDs()
+    {
+        var path = Path.Combine(_factory.Root, "ingest", "nds", "dq.nds");
+        await File.WriteAllBytesAsync(path, DsQuest);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+        var result = await Service<IngestPipeline>().ProcessAsync(new IngestFile("nds", path, "dq.nds", DsQuest.Length, File.GetLastWriteTimeUtc(path)),
+            Guid.NewGuid(), new CircuitBreaker(), default);
+        Assert.That(result!.Outcome, Is.EqualTo("Ingested"), result.Details);
+        var id = result.GameId!.Value;
+        return (id, (await GetJson($"/api/games/{id}")).GetProperty("roms")[0].GetProperty("id").GetInt64());
+    }
+
+    /// <summary>Nintendo DS B4: DeSmuME plays the embedded release from the detail page and the library's Quick Play, with no size limit.</summary>
+    [Test]
+    public async Task Ds_DetailAndLibrary_OfferDesmume_ForTheEmbeddedRelease()
+    {
+        var (id, romId) = await IngestDs();
+
+        Assert.That((await GetJson($"/api/games/{id}")).GetProperty("browserCore").GetString(), Is.EqualTo("desmume"));
+        var item = (await GetJson("/api/games?system=nds")).GetProperty("items").EnumerateArray().Single();
+        Assert.That(item.GetProperty("browserCore").GetString(), Is.EqualTo("desmume"));
+        Assert.That(item.GetProperty("playRomId").GetInt64(), Is.EqualTo(romId));
+        Assert.That(item.GetProperty("playRomFileName").GetString(), Is.EqualTo("Download Quest (USA).nds"));
+    }
+
+    [Test]
+    public async Task Ds_RoleLessUser_DownloadsTheStoredBytes_AndARangeIsIgnored()
+    {
+        var (id, romId) = await IngestDs();
+        var url = $"/api/games/{id}/roms/{romId}/download";
+
+        using var response = await _user.GetAsync(url);
+        using var ranged = await _user.SendAsync(HttpMethod.Get, url, null, sendXsrf: false, headers => headers.Range = new RangeHeaderValue(0, 1));
+
+        foreach (var r in new[] { response, ranged })
+        {
+            Assert.That(r.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(r.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"));
+            Assert.That(r.Content.Headers.ContentDisposition?.FileNameStar ?? r.Content.Headers.ContentDisposition?.FileName,
+                Is.EqualTo("Download Quest (USA).nds"));
+            Assert.That(await r.Content.ReadAsByteArrayAsync(), Is.EqualTo(DsQuest));
+        }
+    }
+
+    [Test]
+    public async Task Ds_SignedOutDownload_Is401()
+    {
+        var (id, romId) = await IngestDs();
+        using var anonymous = await AuthClient.CreateAsync(_factory);
+
+        using var response = await anonymous.GetAsync($"/api/games/{id}/roms/{romId}/download");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+    }
+
+    [Test]
+    public async Task Ds_MismatchedGameAndRelease_OrAMissingEntry_Is404()
+    {
+        var (id, romId) = await IngestDs();
+        var other = await Ingest("p.gb", Pinball);
+
+        using (var mismatched = await _user.GetAsync($"/api/games/{other}/roms/{romId}/download"))
+            Assert.That(mismatched.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        using (var zip = ZipFile.Open(await ZipPath(id), ZipArchiveMode.Update))
+            zip.GetEntry(LibraryZip.RomEntry("Download Quest (USA).nds"))!.Delete();
+        using var missing = await _user.GetAsync($"/api/games/{id}/roms/{romId}/download");
+        Assert.That(missing.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 
     [Test]

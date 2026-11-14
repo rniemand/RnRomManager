@@ -38,7 +38,18 @@ $env:E2E_BASE_URL = "http://localhost:$port"
 
 $exitCode = 1
 try {
-    & (Join-Path $PSScriptRoot 'seed-ingest.ps1') -Path $env:E2E_INGEST -CachePath $env:E2E_CACHE -Set Basic
+    # Nintendo DS (spec Step 10): the runnable test cartridge waits outside ingest/ until mvp.spec.ts copies it in, after
+    # the count-sensitive tests; the seeded DS DAT lists it (one FixtureDatWriter pass, one manifest). The screenshots run
+    # seeds the empty DS catalog and doesn't run mvp.spec.ts.
+    $seedArgs = @{ Path = $env:E2E_INGEST; CachePath = $env:E2E_CACHE; Set = 'Basic' }
+    if (-not $Screenshots) {
+        $staged = Join-Path $work 'staged'
+        New-Item -ItemType Directory -Force $staged | Out-Null
+        $env:E2E_STAGED_NDS = Join-Path $staged 'Marker Test (World).nds'
+        Copy-Item -LiteralPath (Join-Path $repoRoot 'tests/RnRomManager.TestData/Fixtures/nds-marker/nds-marker.nds') -Destination $env:E2E_STAGED_NDS
+        $seedArgs.NdsDat = @($env:E2E_STAGED_NDS)
+    }
+    & (Join-Path $PSScriptRoot 'seed-ingest.ps1') @seedArgs
     # The container runs as UID 1654; a Linux bind mount needs to be writable by it (Docker Desktop maps this itself).
     if ($IsLinux) {
         & chmod -R a+rwX $work

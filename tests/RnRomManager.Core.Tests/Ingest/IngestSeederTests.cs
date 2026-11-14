@@ -60,7 +60,7 @@ public class IngestSeederTests
         Assert.That(images.Select(f => Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(File.ReadAllBytes(f)))).Distinct().Count(), Is.EqualTo(8));
         Assert.That(File.ReadAllText(Path.Combine(ingest, "psx", "Disc Runner (USA).cue")), Does.Contain("FILE \"Disc Runner (USA) (Track 2).bin\" BINARY"));
         Assert.That(new FileInfo(Path.Combine(ingest, "tg16", "01-neon-circuit.pce")).Length, Is.EqualTo(262656), "copier-headered");
-        Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(96));
+        Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(101));
         Assert.That(File.Exists(_dir.Combine("cache", "dats", "redump", IngestSeeder.WiiDat + ".dat")), Is.True, "the disc systems' DATs go in redump/");
         Assert.That(File.Exists(_dir.Combine("cache", "dats", "titledb", "Nintendo - Nintendo Switch.json")), Is.True);
     }
@@ -122,5 +122,87 @@ public class IngestSeederTests
         using var error = new StringWriter();
         Assert.That(TestDataCommand.Run(["--ingest", path, "--cache", _dir.Combine("cache"), "--set", "Basic"], output, error, _time), Is.EqualTo(1));
         Assert.That(error.ToString(), Does.Contain("Seeding failed:"));
+    }
+
+    private string DsDat() => File.ReadAllText(_dir.Combine("cache", "dats", "no-intro", IngestSeeder.NintendoDsDat + ".dat"));
+
+    [Test]
+    public void NdsDat_ListsEachFile_WithItsSizeAndHashes()
+    {
+        var rom = _dir.Combine("staged", "Marker Test (World).nds");
+        Directory.CreateDirectory(Path.GetDirectoryName(rom)!);
+        var bytes = new SyntheticNdsRomBuilder { Seed = 21, SizeBytes = 1024 * 1024 }.Build();
+        File.WriteAllBytes(rom, bytes);
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Assert.That(TestDataCommand.Run(["--ingest", _dir.Combine("ingest"), "--cache", _dir.Combine("cache"), "--set", "Basic", "--nds-dat", rom],
+            output, error, _time), Is.Zero, error.ToString());
+
+        var dat = DsDat();
+        Assert.That(dat, Does.Contain("name \"Marker Test (World)\""));
+        Assert.That(dat, Does.Contain($"rom ( name \"Marker Test (World).nds\" size {bytes.Length} crc {RnRomManager.Core.Storage.Crc32.ToHex(bytes).ToUpperInvariant()} " +
+            $"md5 {Convert.ToHexString(MD5.HashData(bytes))} sha1 {Convert.ToHexString(SHA1.HashData(bytes))} )"));
+        Assert.That(Directory.GetFiles(_dir.Combine("ingest", "nds")), Is.Empty, "the staged file is not copied into ingest");
+        Assert.That(File.ReadAllText(_dir.Combine("cache", "dats", "dats.json")), Does.Contain(IngestSeeder.GbDat), "one manifest with every system");
+    }
+
+    [Test]
+    public void WithoutNdsDat_TheDsCatalogIsEmpty()
+    {
+        IngestSeeder.Seed(_dir.Combine("ingest"), _dir.Combine("cache"), SeedSet.Basic, _time);
+
+        Assert.That(DsDat(), Does.Not.Contain("game ("));
+        Assert.That(Directory.Exists(_dir.Combine("ingest", "nds")), Is.True);
+    }
+
+    [Test]
+    public void NdsDat_AMissingFile_FailsBeforeWriting()
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Assert.That(TestDataCommand.Run(["--ingest", _dir.Combine("ingest"), "--cache", _dir.Combine("cache"), "--set", "Basic", "--nds-dat", _dir.Combine("missing.nds")],
+            output, error, _time), Is.EqualTo(1));
+
+        Assert.That(error.ToString(), Does.Contain("Seeding failed:"));
+        Assert.That(Directory.Exists(_dir.Combine("ingest")), Is.False);
+    }
+
+    [Test]
+    public void NdsGenerate_WritesAStreamedRomWithAValidHeaderCrc()
+    {
+        var path = _dir.Combine("big.nds");
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+
+        Assert.That(TestDataCommand.Run(["--nds-generate", path, "--size", "1048576", "--seed", "7"], output, error, _time), Is.Zero, error.ToString());
+
+        var bytes = File.ReadAllBytes(path);
+        Assert.That(bytes, Has.Length.EqualTo(1048576));
+        Assert.That(bytes, Is.EqualTo(new SyntheticNdsRomBuilder { Seed = 7, SizeBytes = 1048576, Title = "SYNTH 7" }.Build()));
+        var crc = SyntheticNdsRomBuilder.HeaderCrc(bytes.AsSpan(0, SyntheticNdsRomBuilder.HeaderCrcOffset));
+        Assert.That(bytes[0x15E] | bytes[0x15F] << 8, Is.EqualTo(crc));
+    }
+
+    [TestCase("--nds-generate x.nds --size 1024")]
+    [TestCase("--nds-generate x.nds --seed 1")]
+    [TestCase("--nds-generate x.nds --size 10 --seed 1")]
+    [TestCase("--nds-generate x.nds --size big --seed 1")]
+    [TestCase("--nds-generate x.nds --size 1024 --seed 1 --set Basic")]
+    [TestCase("--ingest x --cache y --set Basic --size 1024")]
+    [TestCase("--ingest x --cache y --set Basic --nds-dat")]
+    public void Cli_InvalidNdsArguments_ReturnOneAndUsage(string command)
+    {
+        using var output = new StringWriter();
+        using var error = new StringWriter();
+        Assert.That(TestDataCommand.Run(command.Split(' ', StringSplitOptions.RemoveEmptyEntries), output, error, _time), Is.EqualTo(1));
+        Assert.That(error.ToString(), Does.Contain("Usage:"));
+    }
+
+    [Test]
+    public void Usage_ListsBothDsOptions()
+    {
+        Assert.That(TestDataCommand.Usage, Does.Contain("--nds-dat <file>").And.Contain("--nds-generate <file> --size <bytes> --seed <n>"));
     }
 }

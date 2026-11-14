@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Net;
 using Microsoft.Extensions.DependencyInjection;
+using RnRomManager.Api.Http;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Jobs;
@@ -49,37 +50,41 @@ public class IngestEndpointsTests
         return path;
     }
 
+    /// <summary>Every registered system's DAT, all empty (Switch's titledb file is passed separately).</summary>
+    private static Dictionary<string, IReadOnlyList<FixtureGame>> Manifest() => new()
+    {
+        [IngestSeeder.GbaDat] = [],
+        [IngestSeeder.N64Dat] = [],
+        [IngestSeeder.NesDat] = [],
+        [IngestSeeder.SnesDat] = [],
+        [IngestSeeder.Atari2600Dat] = [],
+        [IngestSeeder.LynxDat] = [],
+        [IngestSeeder.JaguarDat] = [],
+        [IngestSeeder.VirtualBoyDat] = [],
+        [IngestSeeder.Atari5200Dat] = [],
+        [IngestSeeder.Atari7800Dat] = [],
+        [IngestSeeder.ColecoVisionDat] = [],
+        [IngestSeeder.GameGearDat] = [],
+        [IngestSeeder.MasterSystemDat] = [],
+        [IngestSeeder.MegaDriveDat] = [],
+        [IngestSeeder.Sega32xDat] = [],
+        [IngestSeeder.TurboGrafx16Dat] = [],
+        [IngestSeeder.PsxDat] = [],
+        [IngestSeeder.PspDat] = [],
+        [IngestSeeder.GameCubeDat] = [],
+        [IngestSeeder.WiiDat] = [],
+        [IngestSeeder.Xbox360Dat] = [],
+        [IngestSeeder.SaturnDat] = [],
+        [IngestSeeder.NintendoDsDat] = [],
+        ["Nintendo - Game Boy"] = [],
+        ["Nintendo - Game Boy Color"] = [],
+    };
+
     /// <param name="withSwitch">False leaves out the Switch titledb file, so one registered system has no DATs (N4).</param>
     private void LoadDats(bool withSwitch = true)
     {
         var cache = _factory.Services.GetRequiredService<DatCache>();
-        FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
-        {
-            [IngestSeeder.GbaDat] = [],
-            [IngestSeeder.N64Dat] = [],
-            [IngestSeeder.NesDat] = [],
-            [IngestSeeder.SnesDat] = [],
-            [IngestSeeder.Atari2600Dat] = [],
-            [IngestSeeder.LynxDat] = [],
-            [IngestSeeder.JaguarDat] = [],
-            [IngestSeeder.VirtualBoyDat] = [],
-            [IngestSeeder.Atari5200Dat] = [],
-            [IngestSeeder.Atari7800Dat] = [],
-            [IngestSeeder.ColecoVisionDat] = [],
-            [IngestSeeder.GameGearDat] = [],
-            [IngestSeeder.MasterSystemDat] = [],
-            [IngestSeeder.MegaDriveDat] = [],
-            [IngestSeeder.Sega32xDat] = [],
-            [IngestSeeder.TurboGrafx16Dat] = [],
-            [IngestSeeder.PsxDat] = [],
-            [IngestSeeder.PspDat] = [],
-            [IngestSeeder.GameCubeDat] = [],
-            [IngestSeeder.WiiDat] = [],
-            [IngestSeeder.Xbox360Dat] = [],
-            [IngestSeeder.SaturnDat] = [],
-            ["Nintendo - Game Boy"] = [],
-            ["Nintendo - Game Boy Color"] = [],
-        }, titleDb: withSwitch ? IngestSeeder.EmptySwitch : null, layouts: IngestSeeder.RedumpLayouts);
+        FixtureDatWriter.Write(cache.Directory, Manifest(), titleDb: withSwitch ? IngestSeeder.EmptySwitch : null, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 
@@ -276,7 +281,7 @@ public class IngestEndpointsTests
         using var response = await _admin.GetAsync("/api/ingest/pending");
         var systems = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
-        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64", "nes", "snes", "vb", "a2600", "a5200", "a7800", "lynx", "jaguar", "coleco", "gg", "sms", "md", "s32x", "tg16", "switch", "psx", "psp", "gc", "wii", "x360", "saturn" }));
+        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64", "nes", "snes", "vb", "a2600", "a5200", "a7800", "lynx", "jaguar", "coleco", "gg", "sms", "md", "s32x", "tg16", "switch", "psx", "psp", "gc", "wii", "x360", "saturn", "nds" }));
         var gb = systems.Single(s => s.GetProperty("system").GetString() == "gb").GetProperty("files");
         Assert.That(gb.GetArrayLength(), Is.EqualTo(1));
         Assert.That(gb[0].GetProperty("name").GetString(), Is.EqualTo("Tetris.gb"));
@@ -284,9 +289,93 @@ public class IngestEndpointsTests
         Assert.That(gb[0].TryGetProperty("modifiedAt", out _), Is.True);
     }
 
-    private async Task<Job> WaitForEndAsync(Guid jobId)
+    /// <summary>
+    /// Upgrade: a cache left by a version without DS lacks DS files (here one metadat file), so every import, even one of
+    /// only another system's files, is refused until a refresh loads all five DS files.
+    /// </summary>
+    [Test]
+    public async Task Upgrade_AMissingDsFile_BlocksEveryImport_UntilARefreshLoadsTheFiveDsFiles()
     {
-        var jobs = _factory.Services.GetRequiredService<IJobRepository>();
+        StubHttpHandler server = null!;
+        using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
+        {
+            TestServices = services => services.AddHttpClient(HttpClients.Dats).ConfigurePrimaryHttpMessageHandler(() => server),
+        };
+        var remote = Path.Combine(factory.Root, "remote");
+        server = new StubHttpHandler(request =>
+        {
+            var file = Path.Combine(remote, Uri.UnescapeDataString(request.RequestUri!.AbsolutePath["/metadat/".Length..]));
+            return File.Exists(file) ? StubHttpHandler.Bytes(File.ReadAllBytes(file)) : StubHttpHandler.Status(HttpStatusCode.NotFound);
+        });
+        factory.Settings["Sources:DatBaseUrl"] = "https://dats.test/metadat";
+        factory.Settings["Sources:TitleDbUrl"] = "https://dats.test/metadat/US.en.json";
+        FixtureDatWriter.Write(remote, Manifest(), layouts: IngestSeeder.RedumpLayouts);
+        File.WriteAllText(Path.Combine(remote, "US.en.json"), "{}", new System.Text.UTF8Encoding(false));
+        // What a version without DS left behind, here missing the DS genre metadat file.
+        var layouts = new Dictionary<string, FixtureDatLayout>(IngestSeeder.RedumpLayouts)
+        {
+            [IngestSeeder.NintendoDsDat] = new(DatKind.NoIntro, [DatKind.ReleaseYear, DatKind.Developer, DatKind.Publisher]),
+        };
+        FixtureDatWriter.Write(Path.Combine(factory.Root, "cache", DatCache.FolderName), Manifest(), titleDb: IngestSeeder.EmptySwitch, layouts: layouts);
+        using var admin = await AuthClient.CreateAsync(factory);
+        await TestUsers.CreateAsync(factory, "boss", TestUsers.AllRoles);
+        (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
+        Assert.That(Directory.Exists(Path.Combine(factory.Root, "ingest", "nds", "_failed")), Is.True, "startup creates the DS folders");
+        var path = Path.Combine(factory.Root, "ingest", "gb", "tetris.gb");
+        File.WriteAllBytes(path, [1, 2, 3, 4]);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1));
+        var selection = new { files = new[] { new { system = "gb", name = "tetris.gb" } } };
+
+        using (var refused = await admin.PostAsync("/api/jobs/ingest", selection))
+        {
+            Assert.That((refused.StatusCode, await AuthClient.CodeAsync(refused)), Is.EqualTo((HttpStatusCode.Conflict, "DatsMissing")));
+            Assert.That((await factory.Services.GetRequiredService<IJobRepository>().ListAsync(null, 1, 10, CancellationToken.None)).Total, Is.Zero);
+        }
+
+        using (var refresh = await admin.PostAsync("/api/jobs/dat-refresh"))
+        {
+            Assert.That(refresh.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+            var job = await WaitForEndAsync(factory, (await AuthClient.JsonAsync(refresh)).GetProperty("jobId").GetGuid());
+            Assert.That(job.Status, Is.EqualTo(JobStatus.Completed), job.Error);
+        }
+        Assert.That(factory.Services.GetRequiredService<DatCache>().For("nds"), Is.Not.Null);
+
+        using var retried = await admin.PostAsync("/api/jobs/ingest", selection);
+        Assert.That(retried.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+        var ingest = await WaitForEndAsync(factory, (await AuthClient.JsonAsync(retried)).GetProperty("jobId").GetGuid());
+        Assert.That(ingest.Status, Is.EqualTo(JobStatus.Completed), ingest.Error);
+    }
+
+    [Test]
+    public async Task LooseNds_WithAValidHeaderCrc_GoesToReviewAsNoDatMatch_WithTheSixHeaderFields()
+    {
+        LoadDats();
+        var path = Path.Combine(_factory.Root, "ingest", "nds", "review me.nds");
+        await File.WriteAllBytesAsync(path, new SyntheticNdsRomBuilder { Seed = 5, Title = "REVIEW ME", GameCode = "ARVE", RomVersion = 1 }.Build());
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddHours(-1));
+
+        await StartWith(new { files = new[] { new { system = "nds", name = "review me.nds" } } });
+
+        using var list = await _admin.GetAsync("/api/review?system=nds");
+        var item = (await AuthClient.JsonAsync(list)).GetProperty("items").EnumerateArray().Single();
+        Assert.That((item.GetProperty("system").GetString(), item.GetProperty("reason").GetString(), item.GetProperty("headerTitle").GetString()),
+            Is.EqualTo(("nds", "NoDatMatch", "REVIEW ME")));
+        using var detail = await _admin.GetAsync($"/api/review/{item.GetProperty("id").GetInt64()}");
+        var header = (await AuthClient.JsonAsync(detail)).GetProperty("header");
+        Assert.That(header.EnumerateObject().Select(p => p.Name),
+            Is.EquivalentTo(new[] { "title", "gameCode", "makerCode", "unitCode", "romVersion", "headerChecksumValid" }));
+        Assert.That((header.GetProperty("title").GetString(), header.GetProperty("gameCode").GetString(), header.GetProperty("makerCode").GetString()),
+            Is.EqualTo(("REVIEW ME", "ARVE", "01")));
+        Assert.That((header.GetProperty("unitCode").GetInt32(), header.GetProperty("romVersion").GetInt32(), header.GetProperty("headerChecksumValid").GetBoolean()),
+            Is.EqualTo((0, 1, true)));
+    }
+
+
+    private Task<Job> WaitForEndAsync(Guid jobId) => WaitForEndAsync(_factory, jobId);
+
+    private static async Task<Job> WaitForEndAsync(ApiFactory factory, Guid jobId)
+    {
+        var jobs = factory.Services.GetRequiredService<IJobRepository>();
         var deadline = DateTime.UtcNow.AddSeconds(15);
         while (true)
         {

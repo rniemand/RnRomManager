@@ -21,7 +21,8 @@ const cores = [
 	'smsplus',
 	'fceumm',
 	'pcsx_rearmed',
-	'yabause'
+	'yabause',
+	'desmume'
 ];
 
 // Guarded edits of the pinned EmulatorJS scripts: each anchor must occur exactly once, or vendoring fails so the edit
@@ -43,6 +44,12 @@ const cores = [
 // Snes9x never select a "-thread" one, and a payload that can't be fetched shows a local error instead of falling back to the
 // EmulatorJS CDN. Saturn B9: only Yabause's non-threaded payloads are vendored, so it never selects a "-thread" one
 // either (its missing payloads still take upstream's path).
+//
+// Nintendo DS B4: desmume joins the pinned cores (the generic nds settings key stays, so a saved retroarch_core such as
+// melonds is ignored), never selects a "-thread" payload, shows a local error for a missing payload instead of trying
+// the CDN, and shows "Error reading the game file" for a rejected ROM read. DeSmuME writes its own open .dsv into
+// /data/saves, which EmulatorJS 4.2.3's IDBFS persists only when a file closes, and saveSaveFiles() never syncs (the
+// call is commented out), so for desmume only it syncs, and the 30-second save interval persists the battery save.
 const edits = [
 	{
 		file: 'emulator.js',
@@ -50,7 +57,7 @@ const edits = [
 			'        const gen = this.getCore(true);\n' +
 			'        if (cores[gen] && cores[gen].includes(this.preGetSetting("retroarch_core"))) {',
 		insertBefore:
-			'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x"].includes(core)) {\n' +
+			'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume"].includes(core)) {\n' +
 			'            return core;\n' +
 			'        }\n'
 	},
@@ -61,7 +68,7 @@ const edits = [
 			'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
 			'                threads = true;\n' +
 			'            }\n' +
-			'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x"].includes(this.getCore())) {\n' +
+			'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume"].includes(this.getCore())) {\n' +
 			'                threads = false;\n' +
 			'            }\n'
 	},
@@ -71,7 +78,7 @@ const edits = [
 			'            if (res === -1) {\n' +
 			'                console.log("File not found, attemping to fetch from emulatorjs cdn.");\n',
 		insertAfter:
-			'                if (["genesis_plus_gx", "picodrive", "snes9x"].includes(this.getCore())) {\n' +
+			'                if (["genesis_plus_gx", "picodrive", "snes9x", "desmume"].includes(this.getCore())) {\n' +
 			'                    this.startGameError(this.localization("Error downloading core") + " (" + filename + ")");\n' +
 			'                    return;\n' +
 			'                }\n'
@@ -84,7 +91,7 @@ const edits = [
 			'                try {\n' +
 			'                    bytes = await data.arrayBuffer();\n' +
 			'                } catch (e) {\n' +
-			'                    if (this.getCore() !== "ppsspp") throw e;\n' +
+			'                    if (!["ppsspp", "desmume"].includes(this.getCore())) throw e;\n' +
 			'                    this.startGameError(this.localization("Error reading the game file"));\n' +
 			'                    return;\n' +
 			'                }\n' +
@@ -106,6 +113,14 @@ const edits = [
 			'                        this.EJS.textElem.style.color = "red";\n',
 		replace:
 			'                        this.EJS.startGameError(this.EJS.localization("Error downloading core") + " (ppsspp-assets.zip)");\n'
+	},
+	{
+		file: 'GameManager.js',
+		find: '        //this.FS.syncfs(false, () => {});\n',
+		replace:
+			'        if (this.EJS.getCore() === "desmume") {\n' +
+			'            this.FS.syncfs(false, (err) => { if (err) console.warn(err); });\n' +
+			'        }\n'
 	}
 ];
 

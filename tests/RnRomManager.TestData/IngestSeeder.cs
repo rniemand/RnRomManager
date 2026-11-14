@@ -31,6 +31,7 @@ public static class IngestSeeder
     public const string WiiDat = "Nintendo - Wii";
     public const string Xbox360Dat = "Microsoft - Xbox 360";
     public const string SaturnDat = "Sega - Saturn";
+    public const string NintendoDsDat = "Nintendo - Nintendo DS";
 
     /// <summary>The six disc systems' DATs (disc systems B1/B2): each in <c>redump/</c>, with no metadat.</summary>
     public static IReadOnlyDictionary<string, FixtureDatLayout> RedumpLayouts { get; } =
@@ -40,9 +41,15 @@ public static class IngestSeeder
     public static IReadOnlyDictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> EmptySwitch =>
         new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = [] };
 
-    public static void Seed(string ingest, string cache, SeedSet set, TimeProvider time)
+    /// <param name="ndsDatFiles">
+    /// ROM files the DS No-Intro DAT lists instead of the empty catalog (game name: the file name without its extension;
+    /// ROM name: the file name). They are hashed in one streamed read and are not copied into ingest.
+    /// </param>
+    public static void Seed(string ingest, string cache, SeedSet set, TimeProvider time, IReadOnlyList<string>? ndsDatFiles = null)
     {
         ValidatePaths(ingest, cache);
+        // Hashed first, so a missing or unreadable file fails before anything is written.
+        var dsGames = (ndsDatFiles ?? []).Select(FixtureGame.FromFile).ToList();
         if (!Enum.IsDefined(set)) throw new ArgumentOutOfRangeException(nameof(set));
         ingest = Path.GetFullPath(ingest);
         cache = Path.GetFullPath(cache);
@@ -65,6 +72,7 @@ public static class IngestSeeder
         Directory.CreateDirectory(Path.Combine(ingest, "s32x"));
         Directory.CreateDirectory(Path.Combine(ingest, "tg16"));
         Directory.CreateDirectory(Path.Combine(ingest, "switch"));
+        Directory.CreateDirectory(Path.Combine(ingest, "nds"));
         foreach (var disc in new[] { "psx", "psp", "gc", "wii", "x360", "saturn" })
             Directory.CreateDirectory(Path.Combine(ingest, disc));
         var files = new List<string>();
@@ -260,7 +268,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [VirtualBoyDat] = [redHorizon], [Atari2600Dat] = [lanes], [Atari5200Dat] = [starLattice], [Atari7800Dat] = [canyonGlide], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally] },
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [VirtualBoyDat] = [redHorizon], [Atari2600Dat] = [lanes], [Atari5200Dat] = [starLattice], [Atari7800Dat] = [canyonGlide], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally], [NintendoDsDat] = dsGames },
             titleDb: new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = titleDb }, layouts: RedumpLayouts);
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);

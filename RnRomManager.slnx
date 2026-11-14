@@ -16,6 +16,7 @@
     <Project Path="src/RnRomManager.Systems.Microsoft/RnRomManager.Systems.Microsoft.csproj" />
     <Project Path="src/RnRomManager.Systems.NintendoDisc/RnRomManager.Systems.NintendoDisc.csproj" />
     <Project Path="src/RnRomManager.Systems.VirtualBoy/RnRomManager.Systems.VirtualBoy.csproj" />
+    <Project Path="src/RnRomManager.Systems.NintendoDs/RnRomManager.Systems.NintendoDs.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/RnRomManager.Api.Tests/RnRomManager.Api.Tests.csproj" />
@@ -34,6 +35,7 @@
     <Project Path="tests/RnRomManager.Systems.Microsoft.Tests/RnRomManager.Systems.Microsoft.Tests.csproj" />
     <Project Path="tests/RnRomManager.Systems.NintendoDisc.Tests/RnRomManager.Systems.NintendoDisc.Tests.csproj" />
     <Project Path="tests/RnRomManager.Systems.VirtualBoy.Tests/RnRomManager.Systems.VirtualBoy.Tests.csproj" />
+    <Project Path="tests/RnRomManager.Systems.NintendoDs.Tests/RnRomManager.Systems.NintendoDs.Tests.csproj" />
     <Project Path="tests/RnRomManager.TestData/RnRomManager.TestData.csproj" />
   </Folder>
 </Solution>

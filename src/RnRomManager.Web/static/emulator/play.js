@@ -174,6 +174,7 @@ async function start() {
 	const isPsx = params.core === 'pcsx_rearmed';
 	const isSaturn = params.core === 'yabause';
 	const isPsp = params.core === pspCore;
+	const isDs = params.core === 'desmume';
 	if (isPsp) {
 		const problem = pspBrowserError(pspBrowser());
 		if (problem) return show(problem);
@@ -239,9 +240,11 @@ async function start() {
 	// B3/B8: an operator-supplied core loads its payloads and report by name from the API; the vendored loader keeps
 	// them non-threaded.
 	if (isOperator) ejs.EJS_paths = operatorCorePaths(params.core);
-	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX, PicoDrive, Yabause, Snes9x): hide only the core
-	// selector.
-	if (hidesCoreChooser(params.core)) ejs.EJS_hideSettings = ['retroarch_core'];
+	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX, PicoDrive, Yabause, Snes9x, DeSmuME): hide the
+	// core selector. DeSmuME gets no EJS_biosUrl or external files: it uses its built-in BIOS and firmware.
+	// Nintendo DS B4: DeSmuME also hides the threads setting; the vendored loader never picks a threaded payload.
+	if (hidesCoreChooser(params.core))
+		ejs.EJS_hideSettings = isDs ? ['retroarch_core', 'ejs_threads'] : ['retroarch_core'];
 	const scheme = controlSchemeFor(params.core, params.name);
 	if (scheme) ejs.EJS_controlScheme = scheme;
 	ejs.EJS_Buttons = {
@@ -251,9 +254,23 @@ async function start() {
 		quickLoad: false,
 		netplay: false,
 		cheat: false,
-		exitEmulation: false
+		exitEmulation: false,
+		// Nintendo DS B4: the save-file export and import use RetroArch's SRAM path, which DeSmuME never writes.
+		...(isDs ? { saveSavFiles: false, loadSavFiles: false } : {})
 	};
-	ejs.EJS_defaultOptions = { 'save-save-interval': '30' };
+	ejs.EJS_defaultOptions = {
+		'save-save-interval': '30',
+		// Nintendo DS B4: both screens, lower below; a pointer press is a stylus press; no pointer lock on click.
+		// Saved per-game settings override these, as for every core.
+		...(isDs
+			? {
+					desmume_screens_layout: 'top/bottom',
+					desmume_pointer_mouse: 'enabled',
+					desmume_pointer_type: 'touch',
+					lockMouse: 'disabled'
+				}
+			: {})
+	};
 	// PSP B3: PPSSPP has only a threaded build; the vendored loader also ignores a saved "threads disabled".
 	if (isPsp) ejs.EJS_threads = true;
 

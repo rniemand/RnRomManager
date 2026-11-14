@@ -85,7 +85,7 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 | Path | Contents |
 |---|---|
 | `/app/roms` | the library: one ZIP per game (see [ZIP format](zip-format.md)), plus the Nintendo Switch ROM files stored next to their ZIPs |
-| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`) `ingest/nes/` (NES: headered `.nes` only) `ingest/snes/` (SNES: `.sfc` or `.smc`, copier header stripped) `ingest/a2600/` (Atari 2600: `.a26` or `.bin`) `ingest/coleco/` (ColecoVision: `.col`, `.rom` or `.bin`) `ingest/gg/` (Game Gear: `.gg` or `.sms`) `ingest/sms/` (Master System: `.sms`) `ingest/md/` (Mega Drive / Genesis: `.md`, `.bin` or `.gen`) `ingest/s32x/` (32X: `.32x`) `ingest/tg16/` (TurboGrafx-16 / PC Engine: `.pce`, copier header stripped) `ingest/switch/` (Nintendo Switch: `.nsp`, `.xci`, `.nsz` or `.xcz`) `ingest/psx/` (PlayStation: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`) `ingest/psp/` (PSP: `.iso`) `ingest/gc/` (GameCube: `.iso`) `ingest/wii/` (Wii: `.iso`) `ingest/x360/` (Xbox 360: `.iso`) or `ingest/saturn/` (Saturn: a `.cue` with its `.bin` tracks, or `.nrg`); Switch and the disc systems are stored as files next to the ZIP (see [External ROM storage](#external-rom-storage-nintendo-switch-and-disc-systems)), and disc images must be dropped loose, not in archives; `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way (`_removed/` is managed on the Admin **Deleted ROMs** page: restore or delete for good) |
+| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`) `ingest/nds/` (Nintendo DS: `.nds`; dumps over 256 MiB must be dropped loose, since archives are capped at 256 MiB of ROM data) `ingest/nes/` (NES: headered `.nes` only) `ingest/snes/` (SNES: `.sfc` or `.smc`, copier header stripped) `ingest/a2600/` (Atari 2600: `.a26` or `.bin`) `ingest/coleco/` (ColecoVision: `.col`, `.rom` or `.bin`) `ingest/gg/` (Game Gear: `.gg` or `.sms`) `ingest/sms/` (Master System: `.sms`) `ingest/md/` (Mega Drive / Genesis: `.md`, `.bin` or `.gen`) `ingest/s32x/` (32X: `.32x`) `ingest/tg16/` (TurboGrafx-16 / PC Engine: `.pce`, copier header stripped) `ingest/switch/` (Nintendo Switch: `.nsp`, `.xci`, `.nsz` or `.xcz`) `ingest/psx/` (PlayStation: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`) `ingest/psp/` (PSP: `.iso`) `ingest/gc/` (GameCube: `.iso`) `ingest/wii/` (Wii: `.iso`) `ingest/x360/` (Xbox 360: `.iso`) or `ingest/saturn/` (Saturn: a `.cue` with its `.bin` tracks, or `.nrg`); Switch and the disc systems are stored as files next to the ZIP (see [External ROM storage](#external-rom-storage-nintendo-switch-and-disc-systems)), and disc images must be dropped loose, not in archives; `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way (`_removed/` is managed on the Admin **Deleted ROMs** page: restore or delete for good) |
 | `/app/logs` | `rnrommanager-yyyy-MM-dd.log`, kept for `Logging:RetentionDays` |
 | `/app/cache` | downloaded DATs and temporary work folders |
 | `/app/backups` | the daily database backups (see [Backup and restore](#backup-and-restore)); keep it private |
@@ -209,6 +209,26 @@ Upgrading to 0.4.0:
 After upgrading to a version that adds a system (such as the ones that add Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch and the six disc systems), ingestion refuses to start with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs.
 
 On `docker compose stop` a running job gets 30 seconds to finish its current item (`stop_grace_period: 35s` allows for that). A job that's cut off is marked `Aborted` at the next start and its leftovers are cleaned up; just start it again.
+
+Upgrading to the release that adds Nintendo DS:
+
+- **Refresh DATs after upgrading.** Nintendo DS is identified against libretro's No-Intro `Nintendo - Nintendo DS` DAT and its four metadat files. Until **Admin → DATs → Refresh DATs** has downloaded all five, every import is refused with `DatsMissing`, including one that selects only other systems' files. `ingest/nds/` is created at startup.
+
+## Nintendo DS: memory, disk and time
+
+DS dumps are stored inside the game's ZIP and reach 512 MiB. Importing or resolving one in Review holds the whole ROM in memory while it is hashed and written, so plan for the extra memory and disk below. These figures come from a run on 2026-11-14 with the e2e stack (Docker Desktop on Windows 11, a WSL 2 VM with 16 GiB and 16 CPUs) and two synthetic 512 MiB ROMs of random, incompressible bytes:
+
+| Operation | Peak memory above idle | Time | Extra library disk at the lowest point |
+|---|---:|---:|---:|
+| Import a 512 MiB DS ROM (DAT match) | about 550 MiB | 12–15 s | about 540 MiB (the new ZIP) |
+| Import a 512 MiB DS ROM that goes to Review | about 0–510 MiB | 4 s | none |
+| Resolve that Review item (**Manual**) | up to about 510 MiB | 11–12 s | about 540 MiB |
+| Save a note on a game with one 512 MiB release | none | 14–15 s | about 540 MiB (the rewritten ZIP) |
+| Delete a game with one 512 MiB release | none | 4 s | none (its `_removed/` copy goes to the ingest volume) |
+
+- **Memory.** The app idled at about 145 MiB. A maximum-size import or resolution needs about 550 MiB more. Without a container memory limit, .NET keeps the freed buffers, so the process stayed at about 1.7 GiB after three large operations. With a 1 GiB limit, every operation finished with the process at or below about 700 MiB. If you store maximum-size DS dumps, give the container at least 1 GiB and set the limit when the container starts (`mem_limit` in Compose): .NET reads it at startup, and a limit lowered on a running container (`docker update`) got the process killed.
+- **Disk.** Every ZIP write builds the new ZIP beside the old one, so the library volume needs free space at least the size of the game's new ZIP, here about 540 MiB per 512 MiB release (random data doesn't compress). Deleting a release or game also needs space for its `_removed/` copy on the ingest volume.
+- **Time.** Every ZIP write re-compresses every entry and re-reads each ROM to verify it, and holds the job lock while it does. A note, image or metadata edit on a game with several 512 MiB releases therefore takes tens of seconds, and other edits and jobs wait. ROM entries above 128 MiB are written at Deflate's fastest level to keep this down ([ZIP format](zip-format.md)).
 
 ## External ROM storage (Nintendo Switch and disc systems)
 

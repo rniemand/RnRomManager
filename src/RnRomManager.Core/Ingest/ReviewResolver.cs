@@ -573,10 +573,12 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                     return new("VerifyFailed");
                 file = file with { FullPath = entry.ExtractedPath, ArchivePath = source, ArchiveEntry = item.ArchiveEntry };
             }
-            await using var limited = new LimitStream(File.OpenRead(file.FullPath), system.MaxRomSizeBytes);
-            using var buffer = new MemoryStream();
-            await limited.CopyToAsync(buffer, ct).ConfigureAwait(false);
-            var bytes = systems.ById(item.SystemId)!.NormalizeForHashing(buffer.ToArray()).ToArray();
+            // The handle is closed on return, before the pipeline deletes the source (Windows FileShare semantics).
+            var read = await BoundedRomRead.ReadAsync(file.FullPath, system.MinRomSizeBytes, system.MaxRomSizeBytes,
+                pipeline.WrapEmbeddedReadStream, ct).ConfigureAwait(false);
+            if (read.Status != BoundedReadStatus.Read)
+                return new("VerifyFailed");
+            var bytes = BoundedRomRead.Normalize(system, read.Bytes!);
             if (Convert.ToHexStringLower(SHA1.HashData(bytes)) != item.Sha1)
                 return new("VerifyFailed");
             var now = time.GetUtcNow();
@@ -588,8 +590,6 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 Identification = identification, Header = item.Header is null ? null : JsonNode.Parse(item.Header) as JsonObject,
                 Metadata = new InfoJsonRomMetadata(bytes.Length, item.Crc32, item.Md5, item.Sha1, now, now, file.SourcePath),
             };
-            // Close the source before the pipeline deletes it (Windows FileShare semantics).
-            await limited.DisposeAsync().ConfigureAwait(false);
             var result = await pipeline.StoreReleaseAsync(file, system, rom, metadata, bytes, target,
                 gameId => reviews.SetResolutionAsync(id, "Resolved", gameId, userId, time.GetUtcNow().UtcDateTime, ct),
                 actor, request.Action, ct).ConfigureAwait(false);
