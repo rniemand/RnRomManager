@@ -71,6 +71,75 @@ public class SecurityHeadersTests
             Does.StartWith("default-src 'self'; script-src 'self'").And.EndWith("frame-ancestors 'none'").And.Not.Contain("unsafe-eval"));
     }
 
+    /// <summary>A host serving the real emulator pages and a vendored script from a temp web root, plus the SPA index.</summary>
+    private static (ApiFactory Factory, HttpClient Client) EmulatorSite()
+    {
+        var factory = new ApiFactory();
+        var webRoot = Path.Combine(factory.Root, "wwwroot");
+        var emulator = Path.Combine(webRoot, "emulator");
+        Directory.CreateDirectory(Path.Combine(emulator, "vendor", "data"));
+        var source = Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "src", "RnRomManager.Web", "static", "emulator");
+        foreach (var page in new[] { "play.html", "play-psp.html", "play.css" })
+            File.Copy(Path.Combine(source, page), Path.Combine(emulator, page));
+        File.WriteAllText(Path.Combine(emulator, "vendor", "data", "loader.js"), "console.log(1);");
+        File.WriteAllText(Path.Combine(webRoot, "index.html"), IndexHtml.ReplaceLineEndings("\n"));
+        factory.Settings[WebHostDefaults.WebRootKey] = webRoot;
+        return (factory, factory.CreateClient());
+    }
+
+    [Test]
+    public async Task ThePspDocument_IsCrossOriginIsolated_AndCannotBeFramed()
+    {
+        var (factory, client) = EmulatorSite();
+        using var _ = factory;
+        using var __ = client;
+
+        using var response = await client.GetAsync("/emulator/play-psp.html");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("play.css").And.Contain("play.js"));
+        Assert.That(response.Headers.GetValues("Cross-Origin-Opener-Policy").Single(), Is.EqualTo("same-origin"));
+        Assert.That(response.Headers.GetValues("Cross-Origin-Embedder-Policy").Single(), Is.EqualTo("require-corp"));
+        Assert.That(response.Headers.GetValues("Content-Security-Policy").Single(), Is.EqualTo(
+            "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' blob: data:; "
+            + "img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"));
+        Assert.That(response.Headers.GetValues("X-Content-Type-Options").Single(), Is.EqualTo("nosniff"));
+    }
+
+    [TestCase("/emulator/play.html", "frame-ancestors 'self'")]
+    [TestCase("/emulator/play.css", "frame-ancestors 'self'")]
+    [TestCase("/emulator/vendor/data/loader.js", "frame-ancestors 'self'")]
+    [TestCase("/", "frame-ancestors 'none'")]
+    [TestCase("/api/systems", "frame-ancestors 'none'")]
+    public async Task OtherResponses_AreNotIsolated(string path, string frameAncestors)
+    {
+        var (factory, client) = EmulatorSite();
+        using var _ = factory;
+        using var __ = client;
+
+        using var response = await client.GetAsync(path);
+
+        Assert.That(response.StatusCode, Is.Not.EqualTo(HttpStatusCode.InternalServerError), path);
+        Assert.That(response.Headers.Contains("Cross-Origin-Opener-Policy"), Is.False, path);
+        Assert.That(response.Headers.Contains("Cross-Origin-Embedder-Policy"), Is.False, path);
+        Assert.That(response.Headers.GetValues("Content-Security-Policy").Single(), Does.EndWith(frameAncestors), path);
+    }
+
+    [Test]
+    public async Task TheModalPage_StillLoadsItsSharedStyles()
+    {
+        var (factory, client) = EmulatorSite();
+        using var _ = factory;
+        using var __ = client;
+
+        var page = await client.GetStringAsync("/emulator/play.html");
+        using var css = await client.GetAsync("/emulator/play.css");
+
+        Assert.That(page, Does.Contain("<link rel=\"stylesheet\" href=\"play.css\" />").And.Not.Contain("<style"));
+        Assert.That(css.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(css.Content.Headers.ContentType?.MediaType, Is.EqualTo("text/css"));
+    }
+
     [TestCase("/health/live")]
     [TestCase("/api/nope")]
     [TestCase("/api/auth/me")]

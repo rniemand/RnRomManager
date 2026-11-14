@@ -18,6 +18,14 @@ public static partial class SecurityHeaders
         "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' blob: data:; "
         + "img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'";
 
+    /// <summary>PSP B3: the dedicated top-level PSP player, the only cross-origin isolated document.</summary>
+    public const string PspDocumentPath = "/emulator/play-psp.html";
+
+    /// <summary>PSP B3: the emulator policy for the isolated PSP tab, which nothing may frame.</summary>
+    public const string PspEmulatorPolicy =
+        "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' blob: data:; "
+        + "img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'";
+
     public static WebApplication UseSecurityHeaders(this WebApplication app)
     {
         var index = app.Environment.WebRootFileProvider.GetFileInfo("index.html");
@@ -32,7 +40,18 @@ public static partial class SecurityHeaders
         app.Use((ctx, next) =>
         {
             var headers = ctx.Response.Headers;
-            headers.ContentSecurityPolicy = ctx.Request.Path.StartsWithSegments("/emulator", StringComparison.OrdinalIgnoreCase) ? EmulatorPolicy : csp;
+            if (string.Equals(ctx.Request.Path.Value, PspDocumentPath, StringComparison.OrdinalIgnoreCase))
+            {
+                // PSP B3: SharedArrayBuffer for PPSSPP's threads needs a cross-origin isolated top-level document. Only
+                // this document opts in, so the SPA and the modal player keep working as before.
+                headers.ContentSecurityPolicy = PspEmulatorPolicy;
+                headers["Cross-Origin-Opener-Policy"] = "same-origin";
+                headers["Cross-Origin-Embedder-Policy"] = "require-corp";
+            }
+            else
+            {
+                headers.ContentSecurityPolicy = ctx.Request.Path.StartsWithSegments("/emulator", StringComparison.OrdinalIgnoreCase) ? EmulatorPolicy : csp;
+            }
             headers.XContentTypeOptions = "nosniff";
             headers["Referrer-Policy"] = "no-referrer";
             return next(ctx);
