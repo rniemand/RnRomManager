@@ -99,7 +99,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
 - [ ] **2. Register Sega CD and update fixtures** (B2):
   - Registration after `NintendoDsHandler`; README row `| Sega CD | `segacd` | Next to ZIP | `.bin`, `.cue`, `.iso` | Redump | — |` between Saturn and SNES.
   - `IngestSeeder`: `segacd` in the disc-folder loop and an empty Sega CD catalog for Basic and Full. If Step 1 shows `RedumpLayouts` membership changes seeder output, that check moves here.
-  - Every API integration test file whose full-registry manifest lists `IngestSeeder.NintendoDsDat` adds `[IngestSeeder.SegaCdDat] = []` (keep intentional omissions). Update the counts that grow by one Redump file and one system: `DatEndpointsTests` (refresh requests +1, system rows +1, the ordered DAT-name list), `IngestSeederTests` (`.dat` files +1), `SystemStartupTests` (`segacd` appended to both id lists), `IngestEndpointsTests.Pending_ListsEverySystem_IgnoringJunk` (`segacd` last), `LibraryEndpointsTests` (`/api/systems` lists `Sega CD`/`SCD` between Saturn and Super Nintendo), `DatRefreshJobTests.Redump`, and the ordered system list in `mvp.spec.ts`.
+  - Every API integration test file whose full-registry manifest lists `IngestSeeder.NintendoDsDat` adds `[IngestSeeder.SegaCdDat] = []` (keep intentional omissions). Update the counts that grow by one Redump file and one system: `DatEndpointsTests` (refresh requests 102 → 103; DAT names 27 → 28 with the message "the 7 disc systems"; `SegaCdDat` in the ordered DAT-name list between `MegaDriveDat` and `SaturnDat`, since the list is ordered by DAT name and `Sega - Mega Drive…` < `Sega - Mega-CD…` < `Sega - Saturn`), `IngestSeederTests` (`.dat` files +1), `SystemStartupTests` (`segacd` appended to both id lists), `IngestEndpointsTests.Pending_ListsEverySystem_IgnoringJunk` (`segacd` last), `LibraryEndpointsTests` (`/api/systems` lists `Sega CD`/`SCD` between Saturn and Super Nintendo), and the ordered system list in `mvp.spec.ts`.
   - Colour (`systemColours.ts`, `app.css`, with the contrast ratio in the comment) and icon (`icons.ts`).
   - Files: `AppHost.cs`, `README.md` (row only), `IngestSeeder.cs`, the test files above, `systemColours.ts`, `app.css`, `icons.ts`, `systemColours.test.ts`. Mechanical manifest lines don't count toward the line budget.
   - Tests: the updated integration files, `IngestSeederTests`, `SeedIngestTests` (Basic/Full counts unchanged), `SystemStartupTests`, `SupportedSystemsTableTests`, `systemColours.test.ts`; web `npm run lint` and `npm run check`.
@@ -112,14 +112,14 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
   - Done when: those cases and the existing ingest suites pass.
 - [ ] **4. Sega CD play-disc** (B4): `segacd` in `MaxBytesBySystem`. `BrowserCore` stays null.
   - Files: `PlayDisc.cs`, `LibraryEndpointsTests.PlayDisc.cs`.
-  - Tests: `LibraryEndpointsTests.PlayDisc`: Sega CD single `.bin`, single `.iso`, cue set; exactly 1 GiB → 200, one byte over → 409 `PlayDiscTooLarge`; two cues → 409 `InvalidPlayDisc`; psx, psp and saturn cases unchanged. `PlayDiscCopyTests`.
+  - Tests: `LibraryEndpointsTests.PlayDisc`: Sega CD single `.bin`, single `.iso`, cue set; exactly 1 GiB → 200, one byte over → 409 `PlayDiscTooLarge`; two cues → 409 `InvalidPlayDisc`; psx, psp and saturn cases unchanged; `PlayDisc_CapsEachSystem` gains `["segacd"] = 1L << 30`. `PlayDiscCopyTests`.
   - Done when: those pass.
 - [ ] **5. Play-URL `disc` flag** (B6): no Sega CD link exists yet; PlayStation, PSP and Saturn gain `&disc=1`.
   - `LibraryEndpoints`: `playDisc` on list items. `types.ts`: `GameListItem.playDisc`.
   - `emulator.ts`: `playUrl(gameId, rom, core, disc)`.
   - `EmulatorModal.svelte` gains a required `disc: boolean` prop and passes it to `playUrl`. The game page passes `disc={playRom?.externalFileName != null}` to the modal and `rom.externalFileName !== null` to the PSP new-tab `href`. `GameResults.svelte` passes `playing?.playDisc ?? false` to the modal and `game.playDisc` to its PSP `href`.
   - `params.js`: `disc` in `parsePlayParams`/`PlayParams`. `play.js`: disc loading when `params.disc`.
-  - Files: those, plus `EmulatorModal.test.ts`, `GameResults.test.ts`, `game-page.test.ts`, `emulator.test.ts`, `emulatorParams.test.ts`, `emulatorPlay.test.ts`, `LibraryEndpointsTests.cs`.
+  - Files: those, plus `EmulatorModal.test.ts`, `GameResults.test.ts`, `game-page.test.ts`, `emulator.test.ts`, `emulatorParams.test.ts`, `emulatorPlay.test.ts`, `LibraryEndpointsTests.cs`, `tests/e2e/specs/mvp.spec.ts`.
   - Tests:
     - `LibraryEndpointsTests`: `playDisc` is true for an external playable `psx` primary, and false for an embedded `gb` one and for a non-playable game.
     - `emulator.test.ts`: `playUrl` adds `&disc=1` after `name` only when `disc` is true.
@@ -128,6 +128,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
     - `game-page.test.ts`: the PSX modal iframe `src` and the PSP `href` gain `&disc=1`.
     - `GameResults.test.ts`: the quick-play URLs, plus a `playDisc: true` item whose modal `src` has `&disc=1`.
     - `emulatorPlay.test.ts`: `play page PlayStation` and `play page Saturn` pass with `disc=1` in their URLs.
+    - `mvp.spec.ts` (runs in Finish): the four `$`-anchored play-URL regexes for Disc Runner (game page and Library quick play), Sky Rally and Pocket Ninja end in `&disc=1$`; the Mega Drive, Master System, 32X, SNES and bundled-core regexes stay as they are.
   - Done when: `npm run lint`, `npm run check`, those vitest files and the `LibraryEndpointsTests` cases pass.
 - [ ] **6. Sega CD player** (B7–B9): first verify B9 and record it in § Decisions (stop and ask if it fails). Then:
   - `params.js`: `segaCdBios` (the three names, in U, E, J order), `segaCdBiosBytes = 131072`, `segaCdBiosSizeError(name)`, `segaCdBiosMissing`, the `contentFileName` guard and B8's label.
@@ -167,7 +168,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
   - Done when: those tests pass.
 - [ ] **8. Docs**:
   - `README.md`: intro line (Sega CD bin/cue sets kept together), the Play bullet (Sega CD: one disc per launch, up to 1 GiB, standalone `.bin`/`.iso` or a cue with its tracks, needs the Genesis Plus GX files and at least one of `bios_CD_U.bin`/`bios_CD_E.bin`/`bios_CD_J.bin` in `data/bios/`), the upgrade/Refresh DATs list, and the attribution note that no Sega CD BIOS is included.
-  - `docs/features.md`: Sega CD ingest and play rules, the BIOS files and the region-mismatch note.
+  - `docs/features.md`: Sega CD ingest and play rules, the BIOS files and the region-mismatch note; the quoted Genesis missing-core message gets B8's "Genesis and Sega CD games" label.
   - `docs/configuration.md`: the Genesis Plus GX section also enables Sega CD.
   - `docs/deployment.md`: the DAT refresh after upgrade and the BIOS files.
   - `docs/zip-format.md`: `segacd` in the layout and `system` list (no `header`).
