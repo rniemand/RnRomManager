@@ -31,6 +31,7 @@ public static class IngestSeeder
     public const string WiiDat = "Nintendo - Wii";
     public const string Xbox360Dat = "Microsoft - Xbox 360";
     public const string SaturnDat = "Sega - Saturn";
+    public const string NintendoDsDat = "Nintendo - Nintendo DS";
 
     /// <summary>The six disc systems' DATs (disc systems B1/B2): each in <c>redump/</c>, with no metadat.</summary>
     public static IReadOnlyDictionary<string, FixtureDatLayout> RedumpLayouts { get; } =

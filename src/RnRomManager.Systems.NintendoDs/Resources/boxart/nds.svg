@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Nintendo DS). Made for this project; MIT licensed like the rest of the repo.
+       Exported to nds.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#e3e6ea"/>
+  <!-- open clamshell: upper half -->
+  <rect x="136" y="56" width="240" height="176" rx="18" fill="#5c6670" stroke="#2f363d" stroke-width="5"/>
+  <rect x="172" y="80" width="168" height="126" rx="4" fill="#1d2228"/>
+  <rect x="180" y="88" width="152" height="110" fill="#8fc7e8"/>
+  <!-- hinge -->
+  <rect x="146" y="230" width="220" height="18" rx="8" fill="#2f363d"/>
+  <!-- lower half -->
+  <rect x="136" y="246" width="240" height="176" rx="18" fill="#5c6670" stroke="#2f363d" stroke-width="5"/>
+  <rect x="200" y="268" width="112" height="86" rx="3" fill="#1d2228"/>
+  <rect x="206" y="274" width="100" height="74" fill="#cfe8b8"/>
+  <!-- d-pad -->
+  <path d="M160 300h14v-14h12v14h14v12h-14v14h-12v-14h-14z" fill="#1d2228"/>
+  <!-- face buttons -->
+  <circle cx="340" cy="290" r="8" fill="#1d2228"/>
+  <circle cx="356" cy="306" r="8" fill="#1d2228"/>
+  <circle cx="324" cy="306" r="8" fill="#1d2228"/>
+  <circle cx="340" cy="322" r="8" fill="#1d2228"/>
+  <!-- stylus -->
+  <path d="M392 140 L406 136 L420 400 L410 414 L402 402 Z" fill="#9aa4ad" stroke="#2f363d" stroke-width="3"/>
+  <text x="256" y="474" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="30" font-weight="700" letter-spacing="3" fill="#2f363d">NINTENDO DS</text>
+</svg>
