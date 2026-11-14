@@ -1,0 +1,96 @@
+DeSmuME (EmulatorJS core "desmume", Nintendo DS)
+=================================================
+
+Files: desmume-wasm.data, desmume-legacy-wasm.data
+       (npm @emulatorjs/core-desmume 4.2.3)
+
+Corresponding source:
+- Core: https://github.com/EmulatorJS/desmume/tree/c6317a446c3146ee30efe55a5c0763975a100ce7
+  (the string "git c6317a4" in both binaries; the fork's master head from
+  2024-12-10 through the build date). Fork of https://github.com/libretro/desmume.
+- Built with the core.json entry {"makescript": "Makefile.libretro",
+  "buildpath": "./desmume/src/frontend/libretro", "arguments": []} and
+  platform=emscripten, so desmume/src/frontend/libretro/Makefile.libretro's
+  defaults apply: DEBUG = 0, HAVE_LIBFAT = 1, EMULATORJS_THREADS = 0 (no
+  -pthread), STATIC_LINKING = 1, no JIT (DESMUME_JIT and DESMUME_JIT_ARM unset,
+  so utils/AsmJit and arm_jit.cpp are not compiled) and no OpenGL renderer
+  (DESMUME_OPENGL unset). Makefile.common lists the compiled sources: the
+  DeSmuME core (ARM interpreters, MMU, GPU, the software 3D rasterizer, SPU,
+  slot-1/slot-2 add-ons, cheats, saves), the libretro frontend (libretro.cpp)
+  and the components below. HAVE_LIBAGG, HAVE_LIBSOUNDTOUCH, Lua, the Windows
+  winpcap headers and the OpenGL headers are not used by this build.
+- RetroArch, build scripts and compiler: see COMMON-BUILD.txt (both binaries
+  carry RetroArch "6dd4353").
+
+DeSmuME is Copyright (C) its authors (desmume/AUTHORS and the per-file
+headers; for example src/NDSSystem.cpp: 2006 yopyop, 2008-2018 DeSmuME team).
+
+Licence: GNU General Public License, version 2 or (at your option) any later
+version (the source headers: "either version 2 of the License, or (at your
+option) any later version"). desmume-LICENSE.txt is the source's
+desmume/COPYING, copied byte for byte (the GPLv2 text). RetroArch:
+GPL-3.0-or-later (retroarch-LICENSE.txt), so the combined binaries are
+distributed under the GPL, version 3.
+
+Components compiled into this build that carry their own terms (from the
+licence header of every source file Makefile.common and Makefile.libretro
+select for platform=emscripten, and of every repository header those files
+include, reviewed on 2026-11-14):
+
+- src/filter/xbrz.cpp and xbrz.h (always compiled): xBRZ 1.4 by Zenju, GNU
+  General Public License version 3 with a special exception for linking with
+  MAME (desmume-xbrz-LICENSE.txt, its header verbatim; the GPL-3.0 text is
+  retroarch-LICENSE.txt).
+
+- src/instructions.h, included by the ARM and Thumb interpreters: Copyright
+  (C) 2006 yopyop, 2012-2015 DeSmuME team, GNU General Public License
+  version 3 or (at your option) any later version (retroarch-LICENSE.txt).
+
+- src/utils/libfat (partition, cache, directory, disc, fatdir, fatfile,
+  filetime, file_allocation_table and libfat, with their headers; DeSmuME's
+  libfat_public_api.cpp and lock.cpp carry no header of their own):
+  libFAT, Copyright (c) 2006-2009 Michael "Chishm" Chisholm, Dave
+  "WinterMute" Murphy and (c) 2008 Sven Peter, BSD 3-Clause, including its
+  clause that binary redistributions reproduce the notice
+  (desmume-libfat-LICENSE.txt).
+
+- src/utils/tinyxml (tinystr, tinyxml, tinyxmlerror, tinyxmlparser): TinyXML
+  by Lee Thomason, (c) 2000-2006, zlib-style licence
+  (desmume-tinyxml-LICENSE.txt).
+
+- src/utils/datetime.cpp and datetime.h: GPL-2.0-or-later, "based on
+  System.DateTime.cs and System.TimeSpan.cs from mono-2.6.7", and carrying
+  Mono's MIT notices: (C) 2001 Marcel Narings, Copyright (C) 2004-2006 Novell,
+  Inc and Copyright (C) 2004 Novell (desmume-mono-LICENSE.txt, verbatim).
+
+- src/emufile.cpp and emufile.h: Copyright (C) 2009-2019 DeSmuME team, MIT
+  licence (desmume-emufile-LICENSE.txt).
+
+- src/libretro-common, MIT licence, Copyright (C) 2010-2018 The RetroArch team
+  (2010-2020 for libretro.h and retro_inline.h); each file's notice "only
+  applies to this file" (desmume-libretro-common-LICENSE.txt). Compiled:
+  rthreads/rthreads.c, memmap/memalign.c, features/features_cpu.c,
+  compat/compat_strl.c, compat/compat_strcasestr.c, compat/fopen_utf8.c,
+  compat/compat_posix_string.c, file/retro_dirent.c, file/file_path.c,
+  string/stdstring.c and encodings/encoding_utf.c, with their headers under
+  include/ (boolean.h, compat/, encodings/utf.h, features/features_cpu.h,
+  file/file_path.h, libretro.h, math/fxp.h, memalign.h, retro_*.h,
+  rthreads/rthreads.h, streams/file_stream.h and file_stream_transforms.h,
+  string/stdstring.h). The streams/ and vfs/ sources are not compiled
+  (STATIC_LINKING = 1).
+
+- libretro-common/include/utils/md5.h (declarations only; md5.c is not
+  compiled): by Alexander Peslyak, placed in the public domain.
+
+Every other compiled source and header carries the GPL-2.0-or-later header
+or no licence header of its own (for example frontend/libretro/libretro.cpp,
+scrc32.cpp and utils/libfat/lock.cpp), which the source's COPYING covers.
+That includes src/utils/dlditool.cpp, Copyright (C) 2006 Michael Chisholm
+(Chishm), GPL-2.0-or-later.
+
+The Nintendo DS BIOS and firmware are not part of this core or of
+RnRomManager. RnRomManager never supplies them: the core uses its built-in
+HLE BIOS and firmware.
+
+The payloads ship no licence text (the package's "license" field is empty);
+this file and the licence files named above supply it.

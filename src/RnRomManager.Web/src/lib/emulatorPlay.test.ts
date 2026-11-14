@@ -827,3 +827,56 @@ describe('play page SNES (SNES B3)', () => {
 		expect(atLoader).toBeNull();
 	});
 });
+
+describe('play page Nintendo DS (Nintendo DS B4)', () => {
+	const buttons = {
+		saveState: false,
+		loadState: false,
+		quickSave: false,
+		quickLoad: false,
+		netplay: false,
+		cheat: false,
+		exitEmulation: false
+	};
+
+	it('loads the cartridge through the download route with the DS defaults and no BIOS', async () => {
+		serve({ [romUrl]: async () => response(200) });
+
+		await play('desmume', 'Marker Test (World).nds');
+
+		expect(urls()).toEqual([romUrl]);
+		expect(atLoader).toMatchObject({
+			EJS_core: 'desmume',
+			EJS_gameName: 'Marker Test (World).nds',
+			EJS_disableDatabases: true
+		});
+		expect(atLoader?.EJS_hideSettings).toEqual(['retroarch_core', 'ejs_threads']);
+		expect(atLoader?.EJS_defaultOptions).toEqual({
+			'save-save-interval': '30',
+			desmume_screens_layout: 'top/bottom',
+			desmume_pointer_mouse: 'enabled',
+			desmume_pointer_type: 'touch',
+			lockMouse: 'disabled'
+		});
+		expect(atLoader?.EJS_Buttons).toEqual({ ...buttons, saveSavFiles: false, loadSavFiles: false });
+		for (const key of [
+			'EJS_biosUrl',
+			'EJS_externalFiles',
+			'EJS_paths',
+			'EJS_threads',
+			'EJS_controlScheme'
+		])
+			expect(atLoader?.[key], key).toBeUndefined();
+		expect((atLoader?.EJS_gameUrl as File).name).toBe('Marker Test (World).nds');
+	});
+
+	it('leaves the buttons, defaults and settings of an existing core unchanged', async () => {
+		serve({ [romUrl]: async () => response(200) });
+
+		await play('gambatte', 'Orbit Blocks (World).gb');
+
+		expect(atLoader?.EJS_Buttons).toEqual(buttons);
+		expect(atLoader?.EJS_defaultOptions).toEqual({ 'save-save-interval': '30' });
+		expect(atLoader?.EJS_hideSettings).toBeUndefined();
+	});
+});

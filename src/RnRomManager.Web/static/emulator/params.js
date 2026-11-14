@@ -20,7 +20,8 @@ const cores = [
 	'genesis_plus_gx',
 	'picodrive',
 	'yabause',
-	'snes9x'
+	'snes9x',
+	'desmume'
 ];
 
 /** PSP B3: the core that runs only on the isolated play-psp.html page (and never in the modal's play.html). */
@@ -166,9 +167,16 @@ export function operatorCoreError(core, status) {
  * @returns {boolean}
  */
 export function hidesCoreChooser(core) {
-	return ['smsplus', 'fceumm', 'pcsx_rearmed', 'genesis_plus_gx', 'picodrive', 'yabause', 'snes9x'].includes(
-		core
-	);
+	return [
+		'smsplus',
+		'fceumm',
+		'pcsx_rearmed',
+		'genesis_plus_gx',
+		'picodrive',
+		'yabause',
+		'snes9x',
+		'desmume'
+	].includes(core);
 }
 
 /** PCSX ReARMed's optional firmware: the operator's scph5501.bin, else the core's built-in HLE BIOS. */

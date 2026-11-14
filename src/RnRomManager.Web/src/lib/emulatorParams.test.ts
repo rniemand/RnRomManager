@@ -6,6 +6,7 @@ import {
 	controlSchemeFor,
 	discError,
 	hidesCoreChooser,
+	isOperatorCore,
 	operatorCoreError,
 	operatorCorePaths,
 	optionalBiosError,
@@ -56,7 +57,8 @@ describe('parsePlayParams', () => {
 		'genesis_plus_gx',
 		'picodrive',
 		'yabause',
-		'snes9x'
+		'snes9x',
+		'desmume'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});
@@ -451,5 +453,28 @@ describe('SNES (SNES B3)', () => {
 		[null, "Couldn't load the Snes9x core."]
 	])('reports the availability check %s', (status, message) => {
 		expect(operatorCoreError('snes9x', status)).toBe(message);
+	});
+});
+
+describe('Nintendo DS (Nintendo DS B4)', () => {
+	it('accepts desmume on the modal page only', () => {
+		expect(parsePlayParams(query({ core: 'desmume', name: 'Marker Test (World).nds' }))).toEqual({
+			game,
+			rom: 12,
+			core: 'desmume',
+			name: 'Marker Test (World).nds'
+		});
+		expect(parsePlayParams(query({ core: 'desmume' }), true)).toBeNull();
+	});
+
+	it('needs no BIOS, is vendored and hides the core chooser', () => {
+		expect(biosFor('desmume')).toBeNull();
+		expect(isOperatorCore('desmume')).toBe(false);
+		expect(hidesCoreChooser('desmume')).toBe(true);
+	});
+
+	it('keeps the generic nds controls and the release name as the content file name', () => {
+		expect(controlSchemeFor('desmume', 'Marker Test (World).nds')).toBeNull();
+		expect(contentFileName('desmume', game, 'Marker #1 (World).nds')).toBe('Marker _1 (World).nds');
 	});
 });

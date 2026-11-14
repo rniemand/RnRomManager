@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
@@ -45,6 +46,14 @@ function coreResolver(
 // The reviewed notices and licence texts in emulator-licenses/ (2600/Coleco/GG spec step 6, NES/PSX spec step 1).
 const coreLicenses = [
 	'COMMON-BUILD.txt',
+	'desmume-LICENSE.txt',
+	'desmume-NOTICE.txt',
+	'desmume-emufile-LICENSE.txt',
+	'desmume-libfat-LICENSE.txt',
+	'desmume-libretro-common-LICENSE.txt',
+	'desmume-mono-LICENSE.txt',
+	'desmume-tinyxml-LICENSE.txt',
+	'desmume-xbrz-LICENSE.txt',
 	'fceumm-LICENSE.txt',
 	'fceumm-NOTICE.txt',
 	'gearcoleco-LICENSE.txt',
@@ -70,7 +79,7 @@ const coreLicenses = [
 // The guarded vendoring edits (anchor → its replacement), applied in order.
 const getCoreAnchor = '        const gen = this.getCore(true);\n';
 const pinGuard =
-	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x"].includes(core)) {\n' +
+	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume"].includes(core)) {\n' +
 	'            return core;\n' +
 	'        }\n';
 const legacyAnchor =
@@ -79,14 +88,14 @@ const threadOverride =
 	'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
 	'                threads = true;\n' +
 	'            }\n' +
-	'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x"].includes(this.getCore())) {\n' +
+	'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume"].includes(this.getCore())) {\n' +
 	'                threads = false;\n' +
 	'            }\n';
 const cdnAnchor =
 	'            if (res === -1) {\n' +
 	'                console.log("File not found, attemping to fetch from emulatorjs cdn.");\n';
 const cdnSkip =
-	'                if (["genesis_plus_gx", "picodrive", "snes9x"].includes(this.getCore())) {\n' +
+	'                if (["genesis_plus_gx", "picodrive", "snes9x", "desmume"].includes(this.getCore())) {\n' +
 	'                    this.startGameError(this.localization("Error downloading core") + " (" + filename + ")");\n' +
 	'                    return;\n' +
 	'                }\n';
@@ -94,6 +103,12 @@ const assetsRequest =
 	'            this.EJS.downloadFile("cores/ppsspp-assets.zip", null, false, { responseType: "arraybuffer", method: "GET" }).then((res) => {\n';
 const assetsError =
 	'this.EJS.startGameError(this.EJS.localization("Error downloading core") + " (ppsspp-assets.zip)");\n';
+// Nintendo DS B4: saveSaveFiles() syncs /data/saves for DeSmuME only (upstream comments the call out).
+const syncfsAnchor = '        //this.FS.syncfs(false, () => {});\n';
+const syncfsEdit =
+	'        if (this.EJS.getCore() === "desmume") {\n' +
+	'            this.FS.syncfs(false, (err) => { if (err) console.warn(err); });\n' +
+	'        }\n';
 const guardedEdits: Record<string, [string, string][]> = {
 	'emulator.js': [
 		[getCoreAnchor, pinGuard + getCoreAnchor],
@@ -105,7 +120,7 @@ const guardedEdits: Record<string, [string, string][]> = {
 				'                try {\n' +
 				'                    bytes = await data.arrayBuffer();\n' +
 				'                } catch (e) {\n' +
-				'                    if (this.getCore() !== "ppsspp") throw e;\n' +
+				'                    if (!["ppsspp", "desmume"].includes(this.getCore())) throw e;\n' +
 				'                    this.startGameError(this.localization("Error reading the game file"));\n' +
 				'                    return;\n' +
 				'                }\n' +
@@ -126,7 +141,8 @@ const guardedEdits: Record<string, [string, string][]> = {
 			'                        this.EJS.textElem.innerText = this.localization("Network Error");\n' +
 				'                        this.EJS.textElem.style.color = "red";\n',
 			'                        ' + assetsError
-		]
+		],
+		[syncfsAnchor, syncfsEdit]
 	]
 };
 
@@ -161,6 +177,7 @@ async function downloadCore(
 		supportsWebgl2 = true,
 		webgl2Enabled = null as boolean | null,
 		savedThreads = null as string | null,
+		savedCore = null as string | null,
 		report = async (): Promise<unknown> => ({ data: { buildStart: 1, options: {} } }),
 		payload = async (): Promise<unknown> => ({ data: new ArrayBuffer(4) })
 	} = {}
@@ -187,7 +204,8 @@ async function downloadCore(
 		requiresThreads: proto.requiresThreads,
 		requiresWebGL2: proto.requiresWebGL2,
 		localization: (t: string) => t,
-		preGetSetting: (name: string) => (name === 'ejs_threads' ? savedThreads : null),
+		preGetSetting: (name: string) =>
+			name === 'ejs_threads' ? savedThreads : name === 'retroarch_core' ? savedCore : null,
 		startGameError: (m: string) => run.errors.push(m),
 		checkCompression: () => new Promise(() => {}),
 		downloadFile: (path: string) => {
@@ -201,13 +219,13 @@ async function downloadCore(
 }
 
 /** EJS_GameManager's prototype from GameManager.js, run outside a browser. */
-function gameManagerPrototype(source: string): {
+type GameManagerPrototype = {
 	loadPpssppAssets: (this: object) => Promise<void>;
-} {
-	const window: Record<
-		string,
-		{ prototype: { loadPpssppAssets: (this: object) => Promise<void> } }
-	> = {};
+	saveSaveFiles: (this: object) => void;
+};
+
+function gameManagerPrototype(source: string): GameManagerPrototype {
+	const window: Record<string, { prototype: GameManagerPrototype }> = {};
 	runInNewContext(source, { window });
 	return window.EJS_GameManager.prototype;
 }
@@ -243,7 +261,8 @@ describe('vendor-emulatorjs', () => {
 			'smsplus',
 			'fceumm',
 			'pcsx_rearmed',
-			'yabause'
+			'yabause',
+			'desmume'
 		].flatMap((c) => [
 			`data/cores/${c}-legacy-wasm.data`,
 			`data/cores/${c}-wasm.data`,
@@ -444,16 +463,16 @@ describe('vendor-emulatorjs', () => {
 	);
 
 	it.each(['src/emulator.js', 'emulator.min.js'])(
-		'%s keeps the operator-supplied cores and Yabause non-threaded, and requires threads only for PPSSPP and DOSBox Pure (B9)',
+		'%s keeps the operator-supplied cores, Yabause and DeSmuME non-threaded, and requires threads only for PPSSPP and DOSBox Pure (B9)',
 		(file) => {
 			const source = readFileSync(join(out, 'data', file), 'utf8');
 			expect(source).toContain('const requiresThreads = ["ppsspp", "dosbox_pure"];');
 			expect(threadOverride).toContain(
-				'["genesis_plus_gx", "picodrive", "yabause", "snes9x"].includes(this.getCore())'
+				'["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume"].includes(this.getCore())'
 			);
-			// Only the operator-supplied cores skip the CDN; Yabause is vendored.
+			// The operator-supplied cores and DeSmuME skip the CDN; Yabause takes upstream's path.
 			expect(cdnSkip).toContain(
-				'["genesis_plus_gx", "picodrive", "snes9x"].includes(this.getCore())'
+				'["genesis_plus_gx", "picodrive", "snes9x", "desmume"].includes(this.getCore())'
 			);
 		}
 	);
@@ -537,6 +556,140 @@ describe('vendor-emulatorjs', () => {
 				expect(resolve('yabause', saved), `${saved}`).toBe('yabause');
 			}
 			expect(resolve('yabause', null, true)).toBe('segaSaturn');
+		}
+	);
+
+	it('vendors exactly the pinned DeSmuME files (Nintendo DS B4)', () => {
+		const pinned: Record<string, [number, string]> = {
+			'desmume-wasm.data': [
+				1172604,
+				'a9fddaa4bd742e558dfe5095fa4eaf074493b591a7bc18c5f7c65d64b9fa7572'
+			],
+			'desmume-legacy-wasm.data': [
+				1171393,
+				'2af5d9642356b9ff8460a04ae5ab013afe34825abaded974a9b613dab73c1d4b'
+			],
+			'reports/desmume.json': [
+				167,
+				'd658e595994c6bf66acf3955d31eefe41e1418d58569c702fac80535262f02c2'
+			]
+		};
+		expect(files(out).filter((f) => f.includes('desmume'))).toEqual(
+			[
+				...Object.keys(pinned).map((f) => `data/cores/${f}`),
+				...coreLicenses.filter((f) => f.startsWith('desmume')).map((f) => `licenses/${f}`)
+			].sort()
+		);
+		for (const [f, [size, sha256]] of Object.entries(pinned)) {
+			const bytes = readFileSync(join(out, 'data', 'cores', f));
+			expect(bytes.length, f).toBe(size);
+			expect(createHash('sha256').update(bytes).digest('hex'), f).toBe(sha256);
+		}
+	});
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s pins desmume despite a saved melonDS and keeps the generic nds group (Nintendo DS B4)',
+		(file) => {
+			const resolve = coreResolver(readFileSync(join(out, 'data', file), 'utf8'));
+			const upstream = coreResolver(readFileSync(join(pkg, 'src', 'emulator.js'), 'utf8'));
+			// Upstream resolves desmume's nds group, so a saved melonDS wins.
+			expect(upstream('desmume', 'melonds')).toBe('melonds');
+			for (const saved of ['melonds', 'desmume2015', null])
+				expect(resolve('desmume', saved), `${saved}`).toBe('desmume');
+			expect(resolve('desmume', 'melonds', true)).toBe('nds');
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s picks a non-threaded DeSmuME payload despite saved melonDS and threads (Nintendo DS B4)',
+		async (file) => {
+			const source = readFileSync(join(out, 'data', file), 'utf8');
+			const report = 'cores/reports/desmume.json';
+			const desmumeReport = async () => ({
+				data: { buildStart: 1, options: { defaultWebGL2: true, supportsMouse: true } }
+			});
+			const saved = { savedCore: 'melonds', savedThreads: 'enabled', report: desmumeReport };
+			// SharedArrayBuffer is defined in the sandbox; the pinned report turns WebGL 2 on by default.
+			expect(typeof SharedArrayBuffer).toBe('function');
+			expect((await downloadCore(source, 'desmume', saved)).requests).toEqual([
+				report,
+				'cores/desmume-wasm.data'
+			]);
+			expect(
+				(
+					await downloadCore(source, 'desmume', {
+						...saved,
+						supportsWebgl2: false,
+						webgl2Enabled: false
+					})
+				).requests
+			).toEqual([report, 'cores/desmume-legacy-wasm.data']);
+			// Upstream would pick the threaded payload of the saved core.
+			const upstream = readFileSync(join(pkg, 'src', 'emulator.js'), 'utf8');
+			expect((await downloadCore(upstream, 'desmume', saved)).requests[0]).toBe(
+				'cores/reports/melonds.json'
+			);
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s shows a local error for a missing DeSmuME payload, without the CDN (Nintendo DS B4)',
+		async (file) => {
+			const source = readFileSync(join(out, 'data', file), 'utf8');
+			const run = await downloadCore(source, 'desmume', { payload: async () => -1 });
+			expect(run.requests).toEqual([
+				'cores/reports/desmume.json',
+				'cores/desmume-legacy-wasm.data'
+			]);
+			expect(run.errors).toEqual(['Error downloading core (desmume-legacy-wasm.data)']);
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s shows the read error when a DeSmuME ROM read rejects (Nintendo DS B4)',
+		async (file) => {
+			const toData = emulatorMethod(readFileSync(join(out, 'data', file), 'utf8'), 'toData');
+			const failing = new Blob(['nds']);
+			failing.arrayBuffer = () => Promise.reject(new Error('read failed'));
+			const errors: string[] = [];
+			void toData.call(
+				{
+					getCore: () => 'desmume',
+					localization: (t: string) => t,
+					startGameError: (m: string) => errors.push(m)
+				},
+				failing
+			);
+			await tick();
+			await tick();
+			expect(errors).toEqual(['Error reading the game file']);
+		}
+	);
+
+	it.each(['src/GameManager.js', 'emulator.min.js'])(
+		'%s syncs the save folder in saveSaveFiles() for DeSmuME only (Nintendo DS B4)',
+		(file) => {
+			const emitted = readFileSync(join(out, 'data', 'src', 'GameManager.js'), 'utf8');
+			const source = readFileSync(join(out, 'data', file), 'utf8');
+			// The bundle carries the same edited GameManager.js.
+			expect(source.split(syncfsEdit)).toHaveLength(2);
+			expect(source).toContain(emitted);
+			const manager = gameManagerPrototype(emitted);
+			for (const [core, expected] of [
+				['desmume', [false]],
+				['gambatte', []]
+			] as const) {
+				const syncs: boolean[] = [];
+				let saved = 0;
+				manager.saveSaveFiles.call({
+					functions: { saveSaveFiles: () => saved++ },
+					getSaveFile: () => null,
+					EJS: { callEvent: () => {}, getCore: () => core },
+					FS: { syncfs: (populate: boolean) => syncs.push(populate) }
+				});
+				expect(saved, core).toBe(1);
+				expect(syncs, core).toEqual(expected);
+			}
 		}
 	);
 
