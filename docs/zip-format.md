@@ -118,7 +118,7 @@ A release can have one Markdown note, the entry `notes/<rom fileName>.md` (e.g. 
 - Writes are atomic: the new ZIP is streamed to `<name>.zip.tmp` next to the target, re-opened, every ROM entry's SHA1 checked against `info.json` (an external game's files are checked by length instead; see [External ROM files](#external-rom-files)), then moved over the old file. An `info.json` over 1 MiB is refused (`VerifyFailed`) before anything is published, since the reader would refuse it. A ZIP is never edited in place. When the path changes (a title edit), the new ZIP is written and the database committed before the old ZIP is deleted.
 - Release notes of listed ROMs are carried into the new ZIP (see [Release notes](#release-notes)).
 - Entry modified times are stored as ZIP (DOS) times: the writer's local time at 2-second precision, with no time zone. The Zip Contents tab and `GET /api/games/{id}/zip-entries` read them as server local time, so they're exact only while the server's time zone is unchanged.
-- Compression: Deflate, optimal level. `info.json` is UTF-8 without a BOM, indented, camelCase, with nulls written.
+- Compression: Deflate, optimal level, except a `roms/` entry larger than 128 MiB, which is written at the fastest level so rewrites of games with large releases stay quick. Every ZIP write re-deflates every entry, so an existing large entry moves to the fastest level on its game's next write. Readers need not care: both are plain Deflate. `info.json` is UTF-8 without a BOM, indented, camelCase, with nulls written.
 
 ## `info.json` (schema version 6)
 
