@@ -1479,39 +1479,95 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
                 continue;
             }
 
-            byte[] bytes;
-            try
-            {
-                using var stream = zip.OpenEntry(entry, rom.Metadata.SizeBytes);
-                using var buffer = new MemoryStream();
-                stream.CopyTo(buffer);
-                bytes = buffer.ToArray();
-            }
-            catch (Exception ex) when (ex is LimitExceededException or InvalidDataException)
-            {
-                logger.LogError(ex, "{Zip} › {Entry} can't be read; nothing was changed", zip.Path, entry);
-                return new(VerifyFailed, $"{entry}: {ex.Message}");
-            }
-            if (Convert.ToHexStringLower(SHA1.HashData(bytes)) != rom.Metadata.Sha1)
-                logger.LogWarning("{Zip} › {Entry} doesn't match its info.json SHA1; moved as it is", zip.Path, entry);
-
-            try
-            {
-                Directory.CreateDirectory(folder);
-                var path = Path.Combine(folder, FileNameRules.FirstFreeIn(folder, rom.FileName));
-                using (var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write))
-                    file.Write(bytes);
-                copies.Add(path);
-                logger.LogInformation("{Zip} › {Entry} moved to {Path}", zip.Path, entry, path);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                logger.LogError(ex, "Copying {Zip} › {Entry} to {Folder}/ failed", zip.Path, entry, StorageFolders.RemovedFolder);
-                return new(IoError, ex.Message);
-            }
+            if (CopyEntryToRemoved(zip, entry, rom, folder) is { Failure: { } failure })
+                return failure;
         }
         return null;
+
+        LibraryEditResult ReadFailed(string entry, Exception ex)
+        {
+            logger.LogError(ex, "{Zip} › {Entry} can't be read; nothing was changed", zip.Path, entry);
+            return new(VerifyFailed, $"{entry}: {ex.Message}");
+        }
+
+        LibraryEditResult WriteFailed(string entry, Exception ex)
+        {
+            logger.LogError(ex, "Copying {Zip} › {Entry} to {Folder}/ failed", zip.Path, entry, StorageFolders.RemovedFolder);
+            return new(IoError, ex.Message);
+        }
+
+        // Streams one entry to a new _removed/ file, hashing as it goes, so a large release is never held in memory.
+        // ZIP-side failures are VerifyFailed, destination failures IoError; either deletes the partial copy.
+        (LibraryEditResult? Failure, string? Path) CopyEntryToRemoved(LibraryZip zip, string entry, InfoJsonRom rom, string folder)
+        {
+            Stream source;
+            try { source = zip.OpenEntry(entry, rom.Metadata.SizeBytes); }
+            catch (Exception ex) when (IsEntryReadFailure(ex)) { return (ReadFailed(entry, ex), null); }
+
+            using (source)
+            {
+                string path;
+                FileStream file;
+                try
+                {
+                    Directory.CreateDirectory(folder);
+                    path = Path.Combine(folder, FileNameRules.FirstFreeIn(folder, rom.FileName));
+                    file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, CopyBufferBytes);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return (WriteFailed(entry, ex), null); }
+
+                LibraryEditResult? failure = null;
+                using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
+                var buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(CopyBufferBytes);
+                try
+                {
+                    while (failure is null)
+                    {
+                        int read;
+                        try { read = source.Read(buffer, 0, CopyBufferBytes); }
+                        catch (Exception ex) when (IsEntryReadFailure(ex)) { failure = ReadFailed(entry, ex); break; }
+                        if (read == 0)
+                            break;
+                        sha1.AppendData(buffer, 0, read);
+                        try { file.Write(buffer, 0, read); }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failure = WriteFailed(entry, ex); }
+                    }
+                    try
+                    {
+                        if (failure is null)
+                            file.Flush();
+                        file.Dispose();
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failure ??= WriteFailed(entry, ex); }
+                }
+                finally
+                {
+                    file.Dispose();
+                    System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+                }
+
+                if (failure is not null)
+                {
+                    try { File.Delete(path); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                        logger.LogWarning("Couldn't delete the partial copy {Path}: {Error}", path, ex.Message);
+                    }
+                    return (failure, null);
+                }
+                if (Convert.ToHexStringLower(sha1.GetHashAndReset()) != rom.Metadata.Sha1)
+                    logger.LogWarning("{Zip} › {Entry} doesn't match its info.json SHA1; moved as it is", zip.Path, entry);
+                copies.Add(path);
+                logger.LogInformation("{Zip} › {Entry} moved to {Path}", zip.Path, entry, path);
+                return (null, path);
+            }
+        }
     }
+
+    private const int CopyBufferBytes = 1024 * 1024;
+
+    /// <summary>A failure reading a ZIP entry: over its recorded size, corrupt or CRC mismatch, or an IO error from the entry stream.</summary>
+    private static bool IsEntryReadFailure(Exception ex) => ex is LimitExceededException or InvalidDataException or IOException;
 
     /// <summary>Atomic ZIP write (§6.1) then the DB mirror. Not cancellable once started, so a ZIP is never left half-applied.</summary>
     private async Task<LibraryEditResult> WriteAsync(LibraryZip existing, string zipPath, InfoJsonGame game,

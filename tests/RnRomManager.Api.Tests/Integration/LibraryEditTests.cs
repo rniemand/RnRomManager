@@ -430,4 +430,91 @@ public class LibraryEditTests
         Assert.That(ReadZip((await Row(id))!.ZipPath).Roms.Count, Is.EqualTo(2), "the ZIP is unchanged");
         Assert.That(Directory.EnumerateFiles(Removed), Is.Empty, "the World copy is taken back");
     }
+
+    private async Task<HttpResponseMessage> DeleteWorld(Guid id) =>
+        await _admin.SendAsync(HttpMethod.Delete, $"/api/games/{id}/roms/{await RomId(id, "Tetris (World).gb")}", null, sendXsrf: true);
+
+    [Test]
+    public async Task DeleteRelease_StreamsTheCopy_WithTheRecordedBytesAndSha1()
+    {
+        var id = await Tetris();
+        var recorded = ReadZip((await Row(id))!.ZipPath).Roms.Single(r => r.FileName == "Tetris (World).gb").Metadata.Sha1;
+
+        using var response = await DeleteWorld(id);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        var copy = await File.ReadAllBytesAsync(Path.Combine(Removed, "Tetris (World).gb"));
+        Assert.That(copy, Is.EqualTo(TetrisWorld));
+        Assert.That(Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(copy)), Is.EqualTo(recorded));
+    }
+
+    [Test]
+    public async Task DeleteRelease_CorruptCompressedEntry_IsVerifyFailed_LeavesNoCopyAndTheZipUnchanged()
+    {
+        var id = await Tetris();
+        var path = Abs((await Row(id))!.ZipPath);
+        CorruptDeflateData(path, "roms/Tetris (World).gb");
+        var before = await File.ReadAllBytesAsync(path);
+
+        using var response = await DeleteWorld(id);
+
+        Assert.That((response.StatusCode, await AuthClient.CodeAsync(response)), Is.EqualTo((HttpStatusCode.InternalServerError, "VerifyFailed")));
+        Assert.That(Directory.Exists(Removed) && Directory.EnumerateFiles(Removed).Any(), Is.False, "the partial copy is deleted");
+        Assert.That(await File.ReadAllBytesAsync(path), Is.EqualTo(before));
+    }
+
+    [Test]
+    public async Task DeleteRelease_EntryShorterThanRecorded_IsCopiedAsItIs()
+    {
+        var id = await Tetris();
+        var path = Abs((await Row(id))!.ZipPath);
+        var shorter = TetrisWorld[..^16];
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Update))
+        {
+            zip.GetEntry("roms/Tetris (World).gb")!.Delete();
+            using var stream = zip.CreateEntry("roms/Tetris (World).gb").Open();
+            stream.Write(shorter);
+        }
+
+        using var response = await DeleteWorld(id);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(await File.ReadAllBytesAsync(Path.Combine(Removed, "Tetris (World).gb")), Is.EqualTo(shorter), "copied with the SHA-1 warning");
+    }
+
+    [Test]
+    public async Task DeleteRelease_RemovedFolderIsAFile_IsIoError_AndTheZipUnchanged()
+    {
+        var id = await Tetris();
+        var path = Abs((await Row(id))!.ZipPath);
+        var before = await File.ReadAllBytesAsync(path);
+        // Replace the folder with a regular file of that name: Directory.CreateDirectory then fails on every OS.
+        if (Directory.Exists(Removed))
+            Directory.Delete(Removed, recursive: true);
+        await File.WriteAllBytesAsync(Removed, [1]);
+
+        using var response = await DeleteWorld(id);
+
+        Assert.That((response.StatusCode, await AuthClient.CodeAsync(response)), Is.EqualTo((HttpStatusCode.InternalServerError, "IoError")));
+        Assert.That(await File.ReadAllBytesAsync(path), Is.EqualTo(before));
+        Assert.That(File.ReadAllBytes(Removed), Is.EqualTo(new byte[] { 1 }));
+    }
+
+    /// <summary>Overwrites the first byte of an entry's Deflate data with 0xFF (a final block of the reserved type 3).</summary>
+    private static void CorruptDeflateData(string zipPath, string entryName)
+    {
+        var bytes = File.ReadAllBytes(zipPath);
+        var name = System.Text.Encoding.UTF8.GetBytes(entryName);
+        for (var i = 0; i + 30 + name.Length <= bytes.Length; i++)
+        {
+            if (BitConverter.ToUInt32(bytes, i) != 0x04034B50 || !bytes.AsSpan(i + 30, name.Length).SequenceEqual(name))
+                continue;
+            Assert.That(BitConverter.ToUInt16(bytes, i + 8), Is.EqualTo(8), "the entry is Deflate");
+            var data = i + 30 + BitConverter.ToUInt16(bytes, i + 26) + BitConverter.ToUInt16(bytes, i + 28);
+            bytes[data] = 0xFF;
+            File.WriteAllBytes(zipPath, bytes);
+            return;
+        }
+        Assert.Fail($"No local header for {entryName}");
+    }
 }
