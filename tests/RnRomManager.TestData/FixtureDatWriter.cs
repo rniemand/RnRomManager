@@ -1,7 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
 using RnRomManager.Core.Dats;
-using RnRomManager.Core.Storage;
 
 namespace RnRomManager.TestData;
 
@@ -76,9 +75,10 @@ public static class FixtureDatWriter
         foreach (var game in games)
         {
             // Upper-case hashes like the real libretro DATs.
-            text.Append($"game (\n\tname \"{game.GameName}\"\n\trom ( name \"{game.RomName}\" size {game.Rom.Length} ")
-                .Append($"crc {Crc32.ToHex(game.Rom).ToUpperInvariant()} md5 {Convert.ToHexString(MD5.HashData(game.Rom))} ")
-                .Append($"sha1 {Convert.ToHexString(SHA1.HashData(game.Rom))}");
+            var hashes = game.RomHashes;
+            text.Append($"game (\n\tname \"{game.GameName}\"\n\trom ( name \"{game.RomName}\" size {hashes.SizeBytes} ")
+                .Append($"crc {hashes.Crc32.ToUpperInvariant()} md5 {hashes.Md5.ToUpperInvariant()} ")
+                .Append($"sha1 {hashes.Sha1.ToUpperInvariant()}");
             if (game.Serial is { } serial)
                 text.Append($" serial \"{serial}\"");
             text.Append(" )\n)\n");
@@ -94,7 +94,7 @@ public static class FixtureDatWriter
             foreach (var value in values(game))
             {
                 text.Append($"game (\n\tcomment \"{game.GameName}\"\n\t{field} \"{value}\"\n")
-                    .Append($"\trom ( crc {Crc32.ToHex(game.Rom).ToUpperInvariant()} )\n)\n\n");
+                    .Append($"\trom ( crc {game.RomHashes.Crc32.ToUpperInvariant()} )\n)\n\n");
             }
         }
         return text.ToString();

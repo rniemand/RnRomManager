@@ -214,6 +214,22 @@ Upgrading to the release that adds Nintendo DS:
 
 - **Refresh DATs after upgrading.** Nintendo DS is identified against libretro's No-Intro `Nintendo - Nintendo DS` DAT and its four metadat files. Until **Admin → DATs → Refresh DATs** has downloaded all five, every import is refused with `DatsMissing`, including one that selects only other systems' files. `ingest/nds/` is created at startup.
 
+## Nintendo DS: memory, disk and time
+
+DS dumps are stored inside the game's ZIP and reach 512 MiB. Importing or resolving one in Review holds the whole ROM in memory while it is hashed and written, so plan for the extra memory and disk below. These figures come from a run on 2026-11-14 with the e2e stack (Docker Desktop on Windows 11, a WSL 2 VM with 16 GiB and 16 CPUs) and two synthetic 512 MiB ROMs of random, incompressible bytes:
+
+| Operation | Peak memory above idle | Time | Extra library disk at the lowest point |
+|---|---:|---:|---:|
+| Import a 512 MiB DS ROM (DAT match) | about 550 MiB | 12–15 s | about 540 MiB (the new ZIP) |
+| Import a 512 MiB DS ROM that goes to Review | about 0–510 MiB | 4 s | none |
+| Resolve that Review item (**Manual**) | up to about 510 MiB | 11–12 s | about 540 MiB |
+| Save a note on a game with one 512 MiB release | none | 14–15 s | about 540 MiB (the rewritten ZIP) |
+| Delete a game with one 512 MiB release | none | 4 s | none (its `_removed/` copy goes to the ingest volume) |
+
+- **Memory.** The app idled at about 145 MiB. A maximum-size import or resolution needs about 550 MiB more. Without a container memory limit, .NET keeps the freed buffers, so the process stayed at about 1.7 GiB after three large operations. With a 1 GiB limit, every operation finished with the process at or below about 700 MiB. If you store maximum-size DS dumps, give the container at least 1 GiB and set the limit when the container starts (`mem_limit` in Compose): .NET reads it at startup, and a limit lowered on a running container (`docker update`) got the process killed.
+- **Disk.** Every ZIP write builds the new ZIP beside the old one, so the library volume needs free space at least the size of the game's new ZIP, here about 540 MiB per 512 MiB release (random data doesn't compress). Deleting a release or game also needs space for its `_removed/` copy on the ingest volume.
+- **Time.** Every ZIP write re-compresses every entry and re-reads each ROM to verify it, and holds the job lock while it does. A note, image or metadata edit on a game with several 512 MiB releases therefore takes tens of seconds, and other edits and jobs wait. ROM entries above 128 MiB are written at Deflate's fastest level to keep this down ([ZIP format](zip-format.md)).
+
 ## External ROM storage (Nintendo Switch and disc systems)
 
 Switch ROMs and disc images (PlayStation, PSP, GameCube, Wii, Xbox 360 and Saturn) are files next to their game's ZIP in `/app/roms/<system>/<letter>/` (see [ZIP format](zip-format.md#external-rom-files)); a disc set's cue and tracks sit there under their exact names. The app never overwrites a file it didn't create and never follows a link: every path is checked below its configured root, and a linked or special file or folder is reported and left alone.
