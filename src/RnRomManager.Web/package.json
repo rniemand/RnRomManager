@@ -44,10 +44,12 @@
 	"dependencies": {
 		"@emulatorjs/core-a5200": "4.2.3",
 		"@emulatorjs/core-beetle_vb": "4.2.3",
+		"@emulatorjs/core-fceumm": "4.2.3",
 		"@emulatorjs/core-gambatte": "4.2.3",
 		"@emulatorjs/core-gearcoleco": "4.2.3",
 		"@emulatorjs/core-handy": "4.2.3",
 		"@emulatorjs/core-mgba": "4.2.3",
+		"@emulatorjs/core-pcsx_rearmed": "4.2.3",
 		"@emulatorjs/core-prosystem": "4.2.3",
 		"@emulatorjs/core-smsplus": "4.2.3",
 		"@emulatorjs/core-stella2014": "4.2.3",

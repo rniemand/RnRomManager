@@ -1,0 +1,96 @@
+PCSX ReARMed (EmulatorJS core "pcsx_rearmed", PlayStation)
+==========================================================
+
+Files: pcsx_rearmed-wasm.data, pcsx_rearmed-legacy-wasm.data
+       (npm @emulatorjs/core-pcsx_rearmed 4.2.3)
+
+Corresponding source:
+- Core: https://github.com/EmulatorJS/pcsx_rearmed/tree/f29871dde1742cafb0ab56ba33636a8600bbbd80
+  (version string "f29871d" in both binaries, the libretro revision of that
+  checkout; the "092633f8" the core prints is the tracked frontend/revision.h
+  at that commit). Fork of https://github.com/libretro/pcsx_rearmed.
+- Submodule: frontend/libpicofe at
+  https://github.com/notaz/libpicofe/tree/ee0dca9e10ef44d7900c1158cd8025eb86064aeb
+  (headers only: frontend/main.c includes them; no libpicofe source file is
+  compiled for the libretro platform). deps/lightning/gnulib is inactive and
+  unused.
+- Built with the cores.json entry {"makescript": "Makefile.libretro",
+  "buildpath": "./", "arguments": []} and platform=emscripten (plus
+  EMULATORJS_LEGACY=1 for the legacy variant, which changes nothing in this
+  core's Makefile). Makefile.libretro's emscripten branch sets DYNAREC = 0
+  (interpreter only; lightrec, GNU lightning and the ARM dynarec are not
+  compiled), NO_PTHREAD = 1, USE_ASYNC_CDROM = 0, HAVE_PHYSICAL_CDROM = 0,
+  WANT_ZLIB = 0, NO_MMAP = 1, STATIC_LINKING = 1, -msimd128 -ftree-vectorize;
+  the defaults leave HAVE_CHD = 1 and BUILTIN_GPU = peops (the P.E.Op.S. soft
+  GPU in plugins/dfxvideo with plugins/gpulib). The other compiled sources are
+  libpcsxcore (core, interpreter, GTE, HLE BIOS), plugins/dfsound and
+  frontend/libretro.c, main.c, plugin.c and cspace.c.
+- RetroArch, build scripts and compiler: see COMMON-BUILD.txt. RetroArch's
+  emulatorjs/build-emulatorjs.sh links this core with a 512 MiB initial heap
+  and the frontend's own CHD support off (HAVE_CHD=0; the core reads CHD
+  itself), WebGL 2 for the plain variant and WebGL 1 for legacy
+  (reports/pcsx_rearmed.json: defaultWebGL2).
+
+PCSX is (C) 1999-2003 PCSX Team, (C) 2005-2009 PCSX-df Team and (C) 2009-2011
+PCSX-Reloaded Team; PCSX ReARMed integration, optimisation and frontend (C)
+2010-2012 notaz; P.E.Op.S. GPU and SPU (C) 2001-2002 Pete Bernert; later
+changes by their contributors (AUTHORS, readme.txt and the per-file headers).
+
+Licence: GNU General Public License, version 2 or (at your option) any later
+version (readme.txt: "Source code is released under GNU GPL license, version
+2 or later"; the P.E.Op.S. headers in plugins/dfxvideo and plugins/dfsound say
+the same; plugins/gpulib is GPL-2.0-or-later or LGPL-2.1-or-later).
+pcsx_rearmed-LICENSE.txt is the license.txt inside both payloads, copied byte
+for byte (the GPLv2 text, the source's COPYING). Files without a header
+(e.g. libpcsxcore/database.c, psxevents.c, plugins/dfsound/out.c,
+plugins/gpulib/prim.c) are part of the project and distributed under its
+licence. RetroArch: GPL-3.0-or-later (retroarch-LICENSE.txt), so the combined
+binaries are distributed under the GPL, version 3.
+
+Components compiled into this build that carry their own terms:
+
+- libpcsxcore/gte_divider.c: from MAME, "Copyright 2003-2013 smf. Licensed
+  under the BSD-3-Clause":
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+    1. Redistributions of source code must retain the above copyright notice,
+       this list of conditions and the following disclaimer.
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+    3. Neither the name of the copyright holder nor the names of its
+       contributors may be used to endorse or promote products derived from
+       this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+    LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+    CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+
+- deps/libchdr: libchdr, Copyright Romain Tisserand, BSD 3-Clause
+  (pcsx_rearmed-libchdr-LICENSE.txt, the source's deps/libchdr/LICENSE.txt).
+  It compiles these bundled libraries:
+  - deps/libchdr/deps/lzma-24.05 (LzmaDec, LzmaEnc, LzFind and helpers): LZMA
+    SDK by Igor Pavlov, "placed in the public domain" (its LICENSE).
+  - deps/libchdr/deps/zstd-1.5.6 (decompressor only): Zstandard, Copyright (c)
+    Meta Platforms, Inc. and affiliates, BSD licence
+    (pcsx_rearmed-zstd-LICENSE.txt, the source's LICENSE; zstd is dual
+    licensed BSD or GPLv2, and is used here under the BSD licence).
+  - include/dr_libs/dr_flac.h: dr_flac v0.12.42 by David Reid, public domain
+    or MIT No Attribution, at your choice (its closing licence statement).
+
+- zlib: WANT_ZLIB = 0, so the bundled zlib-1.3.1 is not compiled; cdriso.c and
+  libchdr use Emscripten's zlib port that the RetroArch link supplies (see
+  COMMON-BUILD.txt).
+
+The PlayStation BIOS is not part of this core or of RnRomManager. Without one
+the core uses its built-in HLE BIOS (libpcsxcore/psxbios.c, GPL-2.0-or-later);
+the operator may supply scph5501.bin.
