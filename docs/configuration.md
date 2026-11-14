@@ -21,6 +21,7 @@ All settings come from `appsettings.json` and can be overridden with environment
 | `Sources:ThumbnailBaseUrl` | `Sources__ThumbnailBaseUrl` | `https://thumbnails.libretro.com` | absolute http(s) URL, or empty to disable all media downloads, Switch's titledb images included (default box art only) |
 | `Emulator:GenesisCorePath` | `Emulator__GenesisCorePath` | *(empty)* | empty (Genesis play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Genesis Plus GX files ([below](#genesis-plus-gx-core)). A relative path fails startup; a path that doesn't exist just means Genesis play isn't set up. Not created or probed, and not one of the paths that must differ. Shown on **Admin → Settings** as `emulator.genesisCorePath`. |
 | `Emulator:PicodriveCorePath` | `Emulator__PicodriveCorePath` | *(empty)* | empty (32X play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 PicoDrive files ([below](#picodrive-core)). It may be the same folder as `Emulator:GenesisCorePath`, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.picodriveCorePath`). |
+| `Emulator:Snes9xCorePath` | `Emulator__Snes9xCorePath` | *(empty)* | empty (SNES play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Snes9x files ([below](#snes9x-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.snes9xCorePath`). |
 | `Backup:RestoreFrom` | `Backup__RestoreFrom` | *(empty)* | empty, or the bare file name of a backup in `Paths:Backups` to restore at startup (no `/`, `\` or `..`). See [restoring a backup](deployment.md#restoring-a-backup). Remove it once the restore is done. |
 
 ## Paths
@@ -48,6 +49,17 @@ The app checks each file's exact size and SHA-256 before it serves any byte (`GE
 | `picodrive.json` | 123 | `2b09f29e095a003c15abf8e5bdfb0eaca96d6c6121183b3bd92ed85e860918d3` |
 
 The checks are the same as for Genesis Plus GX (`GET /api/emulator/cores/picodrive/<file>`); a file that doesn't match is refused with `409 PicodriveCoreMismatch`. Mega Drive / Genesis keeps Genesis Plus GX: PicoDrive is never used for it.
+
+## Snes9x core
+SNES plays with Snes9x, whose licence forbids commercial use ([Snes9x licence](https://github.com/snes9xgit/snes9x/blob/master/LICENSE)), so the image doesn't contain it either. To turn SNES play on, put these three files from the [`@emulatorjs/core-snes9x@4.2.3`](https://registry.npmjs.org/@emulatorjs/core-snes9x/-/core-snes9x-4.2.3.tgz) npm archive at the root of a folder and set `Emulator:Snes9xCorePath` to it ([deployment](deployment.md#snes9x-core) shows how to get them and mount the folder):
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `snes9x-wasm.data` | 1,093,765 | `eaa0bcfce67673809886e50387a80a616b719502175db64c090d04c9d75958ee` |
+| `snes9x-legacy-wasm.data` | 1,092,437 | `7d427a575cefad98ff400493fa1d7e892da63fe7bab68979babd9cea0bfaaf3b` |
+| `snes9x.json` | 120 | `dc7ac963eb7935a7ac78956235ac0b8912ec785c57026336825aa2ed8031b3ad` |
+
+The checks are the same as for Genesis Plus GX (`GET /api/emulator/cores/snes9x/<file>`); a file that doesn't match is refused with `409 Snes9xCoreMismatch`, and the play page says *The Snes9x core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:Snes9xCorePath).* Without the files it says *SNES games need the Snes9x core files: ask an Admin to set them up (Emulator:Snes9xCorePath).*
 
 ## Other settings
 - **Port:** the standard `ASPNETCORE_HTTP_PORTS` (image default `8080`). The container health check reads the first port from it, so don't use `ASPNETCORE_URLS` instead.

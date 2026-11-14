@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test, type BrowserContext, type Page, type Route } from '@playwright/test';
 import { expectAccessible } from './axe';
 
 /**
@@ -714,6 +714,67 @@ test('Play: 32X explains its missing PicoDrive core', async () => {
 		page.off('request', track);
 	}
 	expect(later).toEqual([]);
+	await closeEmulator();
+});
+
+test('Play: SNES explains its missing Snes9x core from the detail page', async () => {
+	// SNES B3: the e2e image has no Emulator:Snes9xCorePath, so the HEAD check stops before the ROM or loader.
+	const later: string[] = [];
+	let checked = false;
+	const track = (r: { url: () => string }) => {
+		if (checked && (r.url().includes('/api/emulator/') || r.url().includes('/roms/') || r.url().includes('loader.js')))
+			later.push(r.url());
+	};
+	await openGame('Mode Seven Rally');
+	page.on('request', track);
+	try {
+		const check = page.waitForResponse((r) => r.url().endsWith('/api/emulator/cores/snes9x') && r.request().method() === 'HEAD');
+		await page.getByRole('button', { name: 'Play Mode Seven Rally (USA).sfc' }).click();
+		await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=snes9x&name=Mode%20Seven%20Rally%20\(USA\)\.sfc$/);
+		expect((await check).status()).toBe(404);
+		checked = true;
+		await expect(page.frameLocator('iframe').getByRole('status')).toHaveText(
+			'SNES games need the Snes9x core files: ask an Admin to set them up (Emulator:Snes9xCorePath).'
+		);
+		await expect(page.frameLocator('iframe').getByText('Start Game')).toHaveCount(0);
+	} finally {
+		page.off('request', track);
+	}
+	expect(later).toEqual([]);
+	await closeEmulator();
+});
+
+test('Play: SNES Quick Play from the library loads the release and the player once the core check passes', async () => {
+	// SNES B1/B3: only the Snes9x HEAD is stubbed; the ROM and the loader are the real ones. Stops before Start Game,
+	// since the stock image has no Snes9x payload to serve.
+	const coreCheck = '**/api/emulator/cores/snes9x';
+	const stub = async (route: Route) =>
+		route.request().method() === 'HEAD' ? route.fulfill({ status: 204 }) : route.continue();
+	const bios: string[] = [];
+	const track = (r: { url: () => string }) => {
+		if (r.url().includes('/api/emulator/bios/')) bios.push(r.url());
+	};
+	await page.route(coreCheck, stub);
+	page.on('request', track);
+	try {
+		await openLibrary();
+		await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('Mode Seven Rally');
+		await expect(page).toHaveURL(/[?&]q=/);
+		await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+		const check = page.waitForResponse((r) => r.url().endsWith('/api/emulator/cores/snes9x') && r.request().method() === 'HEAD');
+		const rom = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()));
+		const loader = page.waitForResponse((r) => r.url().endsWith('/emulator/vendor/data/loader.js'));
+		await page.getByRole('button', { name: 'Play Mode Seven Rally' }).click();
+		await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=snes9x&name=Mode%20Seven%20Rally%20\(USA\)\.sfc$/);
+		expect((await check).status()).toBe(204);
+		expect((await rom).status()).toBe(200);
+		expect((await loader).status()).toBe(200);
+		await expect(page.frameLocator('iframe').getByText('Start Game')).toBeVisible();
+	} finally {
+		page.off('request', track);
+		await page.unroute(coreCheck, stub);
+	}
+	expect(bios).toEqual([]);
 	await closeEmulator();
 });
 

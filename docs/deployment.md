@@ -258,6 +258,43 @@ The app runs as UID 1654, which needs read access to the folder and files (e.g. 
 
 The same advice as for Genesis Plus GX applies: the app's UID 1654 needs read access (e.g. `chmod -R a+rX data/picodrive`), and the folder must stay outside anything the app or its users can write to, since EmulatorJS runs the JavaScript inside these files in the app's origin. You may also put the PicoDrive files in the Genesis folder and point both settings at it. Without the setting, Play on a 32X game explains that the core needs setting up.
 
+## Snes9x core
+
+SNES play needs three Snes9x files you supply ([configuration](configuration.md#snes9x-core) lists their sizes and SHA-256). Follow the core's own licence terms: both payloads' `license.txt` is the Snes9x licence, which forbids commercial use ([Snes9x licence](https://github.com/snes9xgit/snes9x/blob/master/LICENSE)). Get the exact archive in a scratch folder outside the app and the repository (this downloads it without installing anything):
+
+```bash
+mkdir -p ~/snes9x-core && cd ~/snes9x-core
+npm pack @emulatorjs/core-snes9x@4.2.3
+tar -xzf emulatorjs-core-snes9x-4.2.3.tgz
+```
+
+Copy the two payloads from `package/` and the report from `package/reports/` to the root of the folder you'll mount, then check all three hashes before setting the path:
+
+```bash
+mkdir -p /srv/rnrommanager/snes9x
+cp package/snes9x-wasm.data package/snes9x-legacy-wasm.data package/reports/snes9x.json /srv/rnrommanager/snes9x/
+cd /srv/rnrommanager/snes9x && sha256sum snes9x-wasm.data snes9x-legacy-wasm.data snes9x.json
+```
+
+The output must be exactly:
+
+```text
+eaa0bcfce67673809886e50387a80a616b719502175db64c090d04c9d75958ee  snes9x-wasm.data
+7d427a575cefad98ff400493fa1d7e892da63fe7bab68979babd9cea0bfaaf3b  snes9x-legacy-wasm.data
+dc7ac963eb7935a7ac78956235ac0b8912ec785c57026336825aa2ed8031b3ad  snes9x.json
+```
+
+Then mount the folder read-only and point the setting at it:
+
+```yaml
+    volumes:
+      - /srv/rnrommanager/snes9x:/app/snes9x:ro
+    environment:
+      Emulator__Snes9xCorePath: /app/snes9x
+```
+
+The same advice as for Genesis Plus GX applies: the app's UID 1654 needs read access (e.g. `chmod -R a+rX /srv/rnrommanager/snes9x`), and the folder must stay outside anything the app or its users can write to (not under `data/`'s library, ingest, cache or backup folders), since EmulatorJS runs the JavaScript inside these files in the app's origin. You may also put the Snes9x files in the Genesis or PicoDrive folder and point the settings at it. Without the setting, Play on a SNES game explains that the core needs setting up.
+
 ## Admin password recovery
 
 If every Admin is locked out, reset a password from the host:

@@ -21,6 +21,13 @@ public class SnesHandlerTests
     }
 
     [Test]
+    public void BrowserCore_IsSnes9x_WithEmbeddedRoms()
+    {
+        Assert.That(Handler.BrowserCore, Is.EqualTo("snes9x"));
+        Assert.That(Handler.EmbedRomsInZip, Is.True);
+    }
+
+    [Test]
     public void DefaultBoxArt_IsA512x512Png_DifferentFromTheNesOne()
     {
         var png = Handler.DefaultBoxArtPng.Span;

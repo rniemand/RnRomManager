@@ -29,6 +29,12 @@ public sealed class SnesHandler : ISystemHandler
     /// <inheritdoc />
     public bool EmbedRomsInZip => true;
 
+    /// <summary>
+    /// SNES B1: Snes9x, whose files the operator supplies (<c>Emulator:Snes9xCorePath</c>); Play shows either way and
+    /// explains a missing setup. Embedded <c>.sfc</c> and legacy <c>.smc</c> entries play as stored.
+    /// </summary>
+    public string BrowserCore => "snes9x";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     /// <summary>Called after <see cref="NormalizeForHashing"/>, so the bytes are headerless.</summary>
