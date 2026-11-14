@@ -206,7 +206,8 @@ async function start() {
 
 	/** @type {Blob} */
 	let content;
-	if (isPsx || isPsp || isSaturn) {
+	// Sega CD B6: `disc=1` also loads from play-disc, for a core (Genesis Plus GX) that plays cartridges too.
+	if (isPsx || isPsp || isSaturn || params.disc) {
 		const disc = await loadDisc(`/api/games/${params.game}/roms/${params.rom}/play-disc`, params.core);
 		if ('error' in disc) return show(disc.error);
 		content = disc.data;

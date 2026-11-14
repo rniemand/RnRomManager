@@ -551,7 +551,7 @@
 									<!-- eslint-disable svelte/no-navigation-without-resolve -->
 									<a
 										class="btn btn-sm btn-outline-success"
-										href={playUrl(game.id, rom, game.browserCore)}
+										href={playUrl(game.id, rom, game.browserCore, rom.externalFileName !== null)}
 										target="_blank"
 										rel="noopener"
 										aria-label="Play {rom.fileName} (opens in a new tab)"
@@ -757,7 +757,13 @@
 	<InfoJsonModal bind:open={infoJsonOpen} gameId={game.id} />
 
 	<ReleaseNoteModal bind:open={noteOpen} gameId={game.id} rom={noteRom} onsaved={onNoteSaved} />
-	<EmulatorModal bind:open={playOpen} gameId={game.id} core={game.browserCore} rom={playRom} />
+	<EmulatorModal
+		bind:open={playOpen}
+		gameId={game.id}
+		core={game.browserCore}
+		rom={playRom}
+		disc={playRom?.externalFileName != null}
+	/>
 	<GameCollectionsModal
 		bind:open={collectionsOpen}
 		gameId={game.id}

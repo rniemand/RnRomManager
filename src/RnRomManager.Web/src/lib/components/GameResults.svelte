@@ -56,7 +56,8 @@
 			href={playUrl(
 				game.id,
 				{ id: game.playRomId!, fileName: game.playRomFileName ?? '' },
-				game.browserCore
+				game.browserCore,
+				game.playDisc
 			)}
 			target="_blank"
 			rel="noopener"
@@ -230,4 +231,5 @@
 	rom={playing?.playRomId != null
 		? { id: playing.playRomId, fileName: playing.playRomFileName ?? '' }
 		: null}
+	disc={playing?.playDisc ?? false}
 />

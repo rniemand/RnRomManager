@@ -43,6 +43,7 @@ function game(id: string, extra: Partial<GameListItem> = {}): GameListItem {
 		updateCount: 0,
 		playRomId: null,
 		playRomFileName: null,
+		playDisc: false,
 		browserCore: null,
 		...extra
 	};
@@ -135,6 +136,7 @@ describe('GameResults cards (C1, C2)', () => {
 					game('p', {
 						playRomId: 4,
 						playRomFileName: 'Disc (USA) (Track 1).bin',
+						playDisc: true,
 						browserCore: 'pcsx_rearmed'
 					})
 				],
@@ -144,14 +146,19 @@ describe('GameResults cards (C1, C2)', () => {
 			await fireEvent.click(screen.getByRole('button', { name: 'Play Game p' }));
 
 			expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
-				'/emulator/play.html?game=p&rom=4&core=pcsx_rearmed&name=Disc%20(USA)%20(Track%201).bin'
+				'/emulator/play.html?game=p&rom=4&core=pcsx_rearmed&name=Disc%20(USA)%20(Track%201).bin&disc=1'
 			);
 			expect(screen.getByRole('button', { name: 'Play Game n' })).not.toBeNull();
 		}
 	);
 
 	const psp = () =>
-		game('u', { playRomId: 5, playRomFileName: 'Umd (USA).iso', browserCore: 'ppsspp' });
+		game('u', {
+			playRomId: 5,
+			playRomFileName: 'Umd (USA).iso',
+			playDisc: true,
+			browserCore: 'ppsspp'
+		});
 
 	it.each([
 		['grid', 'btn btn-sm btn-primary rounded-circle position-absolute bottom-0 end-0 m-1 z-2'],
@@ -163,7 +170,7 @@ describe('GameResults cards (C1, C2)', () => {
 
 			const link = screen.getByRole('link', { name: 'Play Game u (opens in a new tab)' });
 			expect(link.getAttribute('href')).toBe(
-				'/emulator/play-psp.html?game=u&rom=5&core=ppsspp&name=Umd%20(USA).iso'
+				'/emulator/play-psp.html?game=u&rom=5&core=ppsspp&name=Umd%20(USA).iso&disc=1'
 			);
 			expect(link.getAttribute('target')).toBe('_blank');
 			expect(link.getAttribute('rel')).toBe('noopener');

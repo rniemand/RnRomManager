@@ -192,7 +192,7 @@ describe('game detail page', () => {
 
 		await fireEvent.click(await screen.findByRole('button', { name: 'Play Tetris 1.gb' }));
 		expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
-			`/emulator/play.html?game=${psx.id}&rom=1&core=pcsx_rearmed&name=Tetris%201.gb`
+			`/emulator/play.html?game=${psx.id}&rom=1&core=pcsx_rearmed&name=Tetris%201.gb&disc=1`
 		);
 		unmount();
 
@@ -218,7 +218,7 @@ describe('game detail page', () => {
 				name: `Play ${rom.fileName} (opens in a new tab)`
 			});
 			expect(link.getAttribute('href')).toBe(
-				`/emulator/play-psp.html?game=${psp.id}&rom=${rom.id}&core=ppsspp&name=${encodeURIComponent(rom.fileName)}`
+				`/emulator/play-psp.html?game=${psp.id}&rom=${rom.id}&core=ppsspp&name=${encodeURIComponent(rom.fileName)}&disc=1`
 			);
 			expect(link.getAttribute('target')).toBe('_blank');
 			expect(link.getAttribute('rel')).toBe('noopener');

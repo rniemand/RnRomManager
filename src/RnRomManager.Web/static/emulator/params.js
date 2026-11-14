@@ -1,6 +1,9 @@
 // Browser emulators B5 step 1: the play page's query, validated before anything is fetched or loaded.
 
-/** @typedef {{ game: string, rom: number, core: string, name: string }} PlayParams */
+/**
+ * Sega CD B6: `disc` is true for an external release (`disc=1`), which loads from play-disc whatever the core.
+ * @typedef {{ game: string, rom: number, core: string, name: string, disc: boolean }} PlayParams
+ */
 
 const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const cores = [
@@ -41,7 +44,10 @@ export function parsePlayParams(search, pspPage = false) {
 	if (!guid.test(game) || !/^[1-9][0-9]{0,15}$/.test(rom) || !cores.includes(core)) return null;
 	if (name.length < 1 || name.length > 255) return null;
 	if ((core === pspCore) !== pspPage) return null;
-	return { game, rom: Number(rom), core, name };
+	// Sega CD B6: `disc` is absent or exactly `1`, given once.
+	const disc = query.getAll('disc');
+	if (disc.length > 1 || (disc.length === 1 && disc[0] !== '1')) return null;
+	return { game, rom: Number(rom), core, name, disc: disc.length === 1 };
 }
 
 /**

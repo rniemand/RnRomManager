@@ -77,6 +77,8 @@ public static class LibraryEndpoints
                     updateCount = game.UpdateCount,
                     playRomId = playable ? game.PrimaryRomId : null,
                     playRomFileName = playable ? game.PrimaryRomFileName : null,
+                    // Sega CD B6: quick play adds disc=1 for an external primary, since a shared core can't tell on its own.
+                    playDisc = playable && game.PrimaryIsExternal,
                     browserCore = core,
                 };
             }));

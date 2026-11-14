@@ -39,8 +39,23 @@ describe('parsePlayParams', () => {
 			game,
 			rom: 12,
 			core: 'mgba',
-			name: 'A #1 & B.gba'
+			name: 'A #1 & B.gba',
+			disc: false
 		});
+	});
+
+	it('reads disc=1 as a disc release (Sega CD B6)', () => {
+		expect(parsePlayParams(query({ core: 'pcsx_rearmed', disc: '1' }))?.disc).toBe(true);
+		expect(parsePlayParams(query({ core: 'ppsspp', disc: '1' }), true)?.disc).toBe(true);
+		expect(parsePlayParams(query({ core: 'genesis_plus_gx' }))?.disc).toBe(false);
+	});
+
+	it.each(['0', 'true', '', '01'])('rejects disc=%s (Sega CD B6)', (disc) => {
+		expect(parsePlayParams(query({ disc }))).toBeNull();
+	});
+
+	it('rejects a repeated disc (Sega CD B6)', () => {
+		expect(parsePlayParams(`${query({})}&disc=1&disc=1`)).toBeNull();
 	});
 
 	it.each([
@@ -209,7 +224,8 @@ describe('PSP page (PSP B3)', () => {
 			game,
 			rom: 12,
 			core: 'ppsspp',
-			name: 'Umd (USA).iso'
+			name: 'Umd (USA).iso',
+			disc: false
 		});
 		expect(parsePlayParams(query({ core: 'ppsspp' }))).toBeNull();
 		expect(parsePlayParams(query({ core: 'ppsspp' }), false)).toBeNull();
@@ -462,7 +478,8 @@ describe('Nintendo DS (Nintendo DS B4)', () => {
 			game,
 			rom: 12,
 			core: 'desmume',
-			name: 'Marker Test (World).nds'
+			name: 'Marker Test (World).nds',
+			disc: false
 		});
 		expect(parsePlayParams(query({ core: 'desmume' }), true)).toBeNull();
 	});

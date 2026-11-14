@@ -526,7 +526,7 @@ test('Play: a PlayStation set streams its disc ZIP from the detail page and the 
 	const bios = page.waitForResponse((r) => r.url().endsWith('/api/emulator/bios/scph5501.bin'));
 	const disc = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(r.url()));
 	await page.getByRole('button', { name: 'Play Disc Runner (USA) (Track 1).bin' }).click();
-	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=pcsx_rearmed&name=Disc%20Runner%20\(USA\)%20\(Track%201\)\.bin$/);
+	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=pcsx_rearmed&name=Disc%20Runner%20\(USA\)%20\(Track%201\)\.bin&disc=1$/);
 	expect((await bios).status()).toBe(404); // no firmware in the e2e image: the core uses HLE
 	const response = await disc;
 	expect(response.status()).toBe(200);
@@ -550,7 +550,7 @@ test('Play: a PlayStation set streams its disc ZIP from the detail page and the 
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Disc Runner', exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Play Disc Runner' }).click();
-	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=pcsx_rearmed&name=Disc%20Runner%20\(USA\)%20\(Track%201\)\.bin$/);
+	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=pcsx_rearmed&name=Disc%20Runner%20\(USA\)%20\(Track%201\)\.bin&disc=1$/);
 	await closeEmulator();
 });
 
@@ -570,7 +570,7 @@ test('Play: a Saturn set asks for saturn_bios.bin, streams its disc and fetches 
 		const bios = page.waitForResponse((r) => r.url().endsWith('/api/emulator/bios/saturn_bios.bin'));
 		const disc = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(r.url()));
 		await page.getByRole('button', { name: 'Play Sky Rally (Japan) (Track 1).bin' }).click();
-		await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=yabause&name=Sky%20Rally%20\(Japan\)%20\(Track%201\)\.bin$/);
+		await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=yabause&name=Sky%20Rally%20\(Japan\)%20\(Track%201\)\.bin&disc=1$/);
 		expect((await bios).status()).toBe(404);
 		const response = await disc;
 		expect(response.status()).toBe(200);
@@ -598,7 +598,7 @@ async function pspBrowser(psp: Page) {
 }
 
 test('Play: a PSP UMD image opens the isolated player in a new tab from the detail page and the library', async () => {
-	const tab = /\/emulator\/play-psp\.html\?.*core=ppsspp&name=Pocket%20Ninja%20\(USA\)\.iso$/;
+	const tab = /\/emulator\/play-psp\.html\?.*core=ppsspp&name=Pocket%20Ninja%20\(USA\)\.iso&disc=1$/;
 	await openGame('Pocket Ninja');
 	// Observers first: the popup, its document and its authenticated ISO request.
 	const popup = context.waitForEvent('page');

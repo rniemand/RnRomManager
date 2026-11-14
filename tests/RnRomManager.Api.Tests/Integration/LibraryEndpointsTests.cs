@@ -268,6 +268,8 @@ public partial class LibraryEndpointsTests
         var item = (await GetJson("/api/games")).GetProperty("items")[0];
 
         Assert.That(item.GetProperty("browserCore").GetString(), Is.EqualTo(core));
+        // Sega CD B6: true only for a playable external primary (e.g. psx), false for an embedded (gb) or unplayable one.
+        Assert.That(item.GetProperty("playDisc").GetBoolean(), Is.EqualTo(playable && external));
         if (playable)
         {
             Assert.That(item.GetProperty("playRomId").GetInt64(), Is.EqualTo(primaryId));

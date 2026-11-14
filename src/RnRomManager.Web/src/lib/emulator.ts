@@ -31,12 +31,17 @@ export function canPlay(
 	);
 }
 
-/** B4: the play page's URL (PSP B3: the isolated PSP page for PPSSPP); params.js validates it on the other side. */
+/**
+ * B4: the play page's URL (PSP B3: the isolated PSP page for PPSSPP); params.js validates it on the other side.
+ * Sega CD B6: `disc` (an external release) adds `&disc=1`, so a core shared by cartridges and discs loads from play-disc.
+ */
 export function playUrl(
 	gameId: string,
 	rom: Pick<RomDetail, 'id' | 'fileName'>,
-	core: string
+	core: string,
+	disc: boolean
 ): string {
 	const page = opensInNewTab(core) ? 'play-psp.html' : 'play.html';
-	return `/emulator/${page}?game=${gameId}&rom=${rom.id}&core=${core}&name=${encodeURIComponent(rom.fileName)}`;
+	const url = `/emulator/${page}?game=${gameId}&rom=${rom.id}&core=${core}&name=${encodeURIComponent(rom.fileName)}`;
+	return disc ? `${url}&disc=1` : url;
 }

@@ -114,7 +114,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
   - Files: `PlayDisc.cs`, `LibraryEndpointsTests.PlayDisc.cs`.
   - Tests: `LibraryEndpointsTests.PlayDisc`: Sega CD single `.bin`, single `.iso`, cue set; exactly 1 GiB → 200, one byte over → 409 `PlayDiscTooLarge`; two cues → 409 `InvalidPlayDisc`; psx, psp and saturn cases unchanged; `PlayDisc_CapsEachSystem` gains `["segacd"] = 1L << 30`. `PlayDiscCopyTests`.
   - Done when: those pass.
-- [ ] **5. Play-URL `disc` flag** (B6): no Sega CD link exists yet; PlayStation, PSP and Saturn gain `&disc=1`.
+- [x] **5. Play-URL `disc` flag** (B6): no Sega CD link exists yet; PlayStation, PSP and Saturn gain `&disc=1`.
   - `LibraryEndpoints`: `playDisc` on list items. `types.ts`: `GameListItem.playDisc`.
   - `emulator.ts`: `playUrl(gameId, rom, core, disc)`.
   - `EmulatorModal.svelte` gains a required `disc: boolean` prop and passes it to `playUrl`. The game page passes `disc={playRom?.externalFileName != null}` to the modal and `rom.externalFileName !== null` to the PSP new-tab `href`. `GameResults.svelte` passes `playing?.playDisc ?? false` to the modal and `game.playDisc` to its PSP `href`.

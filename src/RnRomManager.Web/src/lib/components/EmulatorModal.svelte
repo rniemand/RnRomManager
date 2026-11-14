@@ -13,9 +13,11 @@
 		core: string | null;
 		/** All it reads (through `playUrl`), so a Library card can pass its list item's primary release (C2). */
 		rom: Pick<RomDetail, 'id' | 'fileName'> | null;
+		/** Sega CD B6: the release is external (a disc), so the play URL carries `disc=1`. */
+		disc: boolean;
 	}
 
-	let { open = $bindable(), gameId, core, rom }: Props = $props();
+	let { open = $bindable(), gameId, core, rom, disc }: Props = $props();
 </script>
 
 <ConfirmModal bind:open title="Play {rom?.fileName ?? ''}" size="xl">
@@ -25,7 +27,7 @@
 			<iframe
 				title="Emulator: {rom.fileName}"
 				allow="fullscreen; gamepad; autoplay"
-				src={playUrl(gameId, rom, core)}
+				src={playUrl(gameId, rom, core, disc)}
 			></iframe>
 		{/if}
 	</div>

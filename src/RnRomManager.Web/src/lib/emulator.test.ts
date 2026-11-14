@@ -65,17 +65,33 @@ describe('canPlay', () => {
 
 describe('playUrl', () => {
 	it('encodes the file name', () => {
-		expect(playUrl('g-1', { id: 7, fileName: 'A & B #1 (World).gb' }, 'gambatte')).toBe(
+		expect(playUrl('g-1', { id: 7, fileName: 'A & B #1 (World).gb' }, 'gambatte', false)).toBe(
 			'/emulator/play.html?game=g-1&rom=7&core=gambatte&name=A%20%26%20B%20%231%20(World).gb'
 		);
 	});
 
 	it('points PPSSPP at the isolated PSP page (PSP B3)', () => {
-		expect(playUrl('g-2', { id: 9, fileName: 'Umd & Co (USA).iso' }, 'ppsspp')).toBe(
+		expect(playUrl('g-2', { id: 9, fileName: 'Umd & Co (USA).iso' }, 'ppsspp', false)).toBe(
 			'/emulator/play-psp.html?game=g-2&rom=9&core=ppsspp&name=Umd%20%26%20Co%20(USA).iso'
 		);
 		for (const core of ['pcsx_rearmed', 'fceumm', 'smsplus'])
-			expect(playUrl('g', { id: 1, fileName: 'x' }, core)).toMatch(/^\/emulator\/play\.html\?/);
+			expect(playUrl('g', { id: 1, fileName: 'x' }, core, false)).toMatch(
+				/^\/emulator\/play\.html\?/
+			);
+	});
+
+	it('adds &disc=1 after name only for a disc release (Sega CD B6)', () => {
+		expect(
+			playUrl('g-3', { id: 4, fileName: 'Disc & Co (USA).cue' }, 'genesis_plus_gx', true)
+		).toBe(
+			'/emulator/play.html?game=g-3&rom=4&core=genesis_plus_gx&name=Disc%20%26%20Co%20(USA).cue&disc=1'
+		);
+		expect(
+			playUrl('g-3', { id: 4, fileName: 'Comet (USA).md' }, 'genesis_plus_gx', false)
+		).not.toContain('disc');
+		expect(playUrl('g-4', { id: 5, fileName: 'Umd (USA).iso' }, 'ppsspp', true)).toBe(
+			'/emulator/play-psp.html?game=g-4&rom=5&core=ppsspp&name=Umd%20(USA).iso&disc=1'
+		);
 	});
 });
 

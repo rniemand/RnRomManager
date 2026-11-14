@@ -100,6 +100,8 @@ export interface GameListItem {
 	/** Primary release to quick play (C2); null when the system has no browser core or the release is external. */
 	playRomId: number | null;
 	playRomFileName: string | null;
+	/** Sega CD B6: the quick-play release is external, so its play URL carries `disc=1`. */
+	playDisc: boolean;
 	/** The system handler's browser core, null when it has none. */
 	browserCore: string | null;
 }

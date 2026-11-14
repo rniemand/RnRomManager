@@ -53,8 +53,10 @@ function serve(routes: Record<string, () => Promise<FakeResponse>>) {
 	vi.stubGlobal('fetch', fetchMock);
 }
 
-async function play(core: string, name: string): Promise<string> {
+/** Sega CD B6: `disc` adds `disc=1`, as the SPA does for an external (disc) release. */
+async function play(core: string, name: string, disc = false): Promise<string> {
 	const query = new URLSearchParams({ game, rom: '12', core, name });
+	if (disc) query.set('disc', '1');
 	history.replaceState(null, '', `/emulator/play.html?${query}`);
 	const { started } = await import('../../static/emulator/play.js');
 	await started;
@@ -225,7 +227,7 @@ describe('play page PlayStation', () => {
 		const { response: bios } = biosBody([bytes.slice(0, 200_000), bytes.slice(200_000)]);
 		serve({ [psxBiosUrl]: async () => bios, [discUrl]: async () => discResponse(200) });
 
-		await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin');
+		await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin', true);
 
 		expect(urls()).toEqual([psxBiosUrl, discUrl]);
 		expect(fetchMock.mock.calls.map((c) => c[1])).toEqual([
@@ -249,7 +251,7 @@ describe('play page PlayStation', () => {
 	it('uses HLE when there is no BIOS (404)', async () => {
 		serve({ [psxBiosUrl]: async () => response(404), [discUrl]: async () => discResponse(200) });
 
-		await play('pcsx_rearmed', 'Solo (USA).iso');
+		await play('pcsx_rearmed', 'Solo (USA).iso', true);
 
 		expect(urls()).toEqual([psxBiosUrl, discUrl]);
 		expect(atLoader?.EJS_externalFiles).toBeUndefined();
@@ -263,7 +265,7 @@ describe('play page PlayStation', () => {
 		const { response: bios, cancelled } = biosBody(chunks);
 		serve({ [psxBiosUrl]: async () => bios, [discUrl]: async () => discResponse(200) });
 
-		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe(
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin', true)).toBe(
 			'The PlayStation BIOS in the BIOS folder (Paths:Bios) must be the 512 KiB scph5501.bin: ask an Admin to replace it.'
 		);
 		expect(urls()).toEqual([psxBiosUrl]);
@@ -277,7 +279,7 @@ describe('play page PlayStation', () => {
 	])('stops on a BIOS %i before fetching the disc', async (code, message) => {
 		serve({ [psxBiosUrl]: async () => response(code), [discUrl]: async () => discResponse(200) });
 
-		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe(message);
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin', true)).toBe(message);
 		expect(urls()).toEqual([psxBiosUrl]);
 		expect(atLoader).toBeNull();
 	});
@@ -293,7 +295,9 @@ describe('play page PlayStation', () => {
 				({ ok: true, status: 200, body: failing }) as unknown as FakeResponse,
 			[discUrl]: async () => discResponse(200)
 		});
-		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe("Couldn't load the BIOS.");
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin', true)).toBe(
+			"Couldn't load the BIOS."
+		);
 		expect(urls()).toEqual([psxBiosUrl]);
 
 		vi.resetModules();
@@ -301,7 +305,9 @@ describe('play page PlayStation', () => {
 			[psxBiosUrl]: () => Promise.reject(new TypeError('network')),
 			[discUrl]: async () => discResponse(200)
 		});
-		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe("Couldn't load the BIOS.");
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin', true)).toBe(
+			"Couldn't load the BIOS."
+		);
 		expect(atLoader).toBeNull();
 	});
 
@@ -325,7 +331,7 @@ describe('play page PlayStation', () => {
 			[discUrl]: async () => discResponse(code, problem)
 		});
 
-		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe(message);
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin', true)).toBe(message);
 		expect(atLoader).toBeNull();
 	});
 
@@ -335,14 +341,16 @@ describe('play page PlayStation', () => {
 			[discUrl]: () => Promise.reject(new TypeError('network'))
 		});
 
-		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe("Couldn't load the disc.");
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin', true)).toBe(
+			"Couldn't load the disc."
+		);
 		expect(atLoader).toBeNull();
 	});
 
 	it('scopes a standalone image named like the BIOS to the game', async () => {
 		serve({ [psxBiosUrl]: async () => response(404), [discUrl]: async () => discResponse(200) });
 
-		await play('pcsx_rearmed', 'SCPH5501.BIN');
+		await play('pcsx_rearmed', 'SCPH5501.BIN', true);
 
 		expect((atLoader?.EJS_gameUrl as File).name).toBe(`${game}-SCPH5501.BIN`);
 		expect(atLoader?.EJS_gameName).toBe('SCPH5501.BIN');
@@ -653,7 +661,7 @@ describe('play page Saturn (B6, B7)', () => {
 			[discUrl]: async () => discResponse(200)
 		});
 
-		await play('yabause', name);
+		await play('yabause', name, true);
 
 		expect(urls()).toEqual([saturnBiosUrl, discUrl]);
 		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
@@ -676,7 +684,7 @@ describe('play page Saturn (B6, B7)', () => {
 	it('uses the HLE BIOS when there is no saturn_bios.bin (404)', async () => {
 		serve({ [saturnBiosUrl]: async () => response(404), [discUrl]: async () => discResponse(200) });
 
-		await play('yabause', name);
+		await play('yabause', name, true);
 
 		expect(urls()).toEqual([saturnBiosUrl, discUrl]);
 		expect(atLoader?.EJS_externalFiles).toBeUndefined();
@@ -691,7 +699,7 @@ describe('play page Saturn (B6, B7)', () => {
 				[discUrl]: async () => discResponse(200)
 			});
 
-			expect(await play('yabause', name)).toBe(
+			expect(await play('yabause', name, true)).toBe(
 				'The Saturn BIOS in the BIOS folder (Paths:Bios) must be the 512 KiB saturn_bios.bin: ask an Admin to replace it.'
 			);
 			expect(urls()).toEqual([saturnBiosUrl]);
@@ -708,7 +716,7 @@ describe('play page Saturn (B6, B7)', () => {
 			[discUrl]: async () => discResponse(200)
 		});
 
-		expect(await play('yabause', name)).toBe(message);
+		expect(await play('yabause', name, true)).toBe(message);
 		expect(urls()).toEqual([saturnBiosUrl]);
 		expect(atLoader).toBeNull();
 	});
@@ -719,14 +727,14 @@ describe('play page Saturn (B6, B7)', () => {
 			[discUrl]: async () => discResponse(200)
 		});
 
-		expect(await play('yabause', name)).toBe("Couldn't load the BIOS.");
+		expect(await play('yabause', name, true)).toBe("Couldn't load the BIOS.");
 		expect(urls()).toEqual([saturnBiosUrl]);
 	});
 
 	it('names a standalone disc called like a Saturn BIOS after the game', async () => {
 		serve({ [saturnBiosUrl]: async () => response(404), [discUrl]: async () => discResponse(200) });
 
-		await play('yabause', 'Sega_101.BIN');
+		await play('yabause', 'Sega_101.BIN', true);
 
 		expect((atLoader?.EJS_gameUrl as File).name).toBe(`${game}-Sega_101.BIN`);
 		expect(atLoader?.EJS_gameName).toBe('Sega_101.BIN');
