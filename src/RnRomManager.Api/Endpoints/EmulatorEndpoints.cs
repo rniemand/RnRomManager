@@ -7,7 +7,7 @@ using RnRomManager.Core.Storage;
 namespace RnRomManager.Api.Endpoints;
 
 /// <summary>
-/// <c>/api/emulator/*</c>: files the browser play page needs besides the ROM (BIOS files, the optional Genesis core).
+/// <c>/api/emulator/*</c>: files the browser play page needs besides the ROM (BIOS files, the optional operator-supplied cores).
 /// Any signed-in user; nothing is audited.
 /// </summary>
 public static partial class EmulatorEndpoints
@@ -55,62 +55,75 @@ public static partial class EmulatorEndpoints
             }
         });
 
-        // Genesis B4: one operator-supplied Genesis Plus GX file, served only when it matches the pinned manifest. The
-        // verified in-memory copy is what's sent, so a file swapped after the check is never served; Range is ignored.
-        api.MapGet("/emulator/genesis/{name}", async (string name, HttpContext ctx, IOptions<EmulatorOptions> options,
-            GenesisCoreManifest manifest, ILogger<GenesisLog> logger) =>
-        {
-            ctx.Response.Headers.CacheControl = "no-store";
-            var root = options.Value.GenesisCorePath;
-            if (root.Length == 0 || manifest.Find(name) is not { } file)
-                return Problems.NotFound(ctx);
+        // B2: one operator-supplied core file, served only when it matches the pinned manifest. The verified in-memory
+        // copy is what's sent, so a file swapped after the check is never served; Range is ignored.
+        api.MapGet("/emulator/cores/{core}/{name}", (string core, string name, HttpContext ctx, IOptions<EmulatorOptions> options,
+            OperatorCoreManifest manifest, ILogger<OperatorCoreLog> logger) => GetCoreFileAsync(core, name, ctx, options, manifest, logger));
 
-            var (outcome, bytes) = await ReadGenesisFileAsync(root, file, logger, ctx.RequestAborted);
-            return outcome switch
-            {
-                GenesisOutcome.Verified => Results.Bytes(bytes!, file.ContentType),
-                GenesisOutcome.Mismatch => Problems.Create(ctx, StatusCodes.Status409Conflict, GenesisCoreMismatch,
-                    "The Genesis core file doesn't match EmulatorJS 4.2.3"),
-                GenesisOutcome.Unreadable => Problems.Create(ctx, StatusCodes.Status500InternalServerError, "IoError",
-                    "The Genesis core file can't be read"),
-                _ => Problems.NotFound(ctx),
-            };
-        });
+        // B2: bodyless availability check of a core's whole set, run by the player before it fetches the ROM.
+        api.MapMethods("/emulator/cores/{core}", [HttpMethods.Head], (string core, HttpContext ctx, IOptions<EmulatorOptions> options,
+            OperatorCoreManifest manifest, ILogger<OperatorCoreLog> logger) => HeadCoreAsync(core, ctx, options, manifest, logger));
 
-        // Genesis B4: bodyless availability check of the whole set, run by the player before it fetches the ROM.
-        api.MapMethods("/emulator/genesis", [HttpMethods.Head], async (HttpContext ctx, IOptions<EmulatorOptions> options,
-            GenesisCoreManifest manifest, ILogger<GenesisLog> logger) =>
-        {
-            ctx.Response.Headers.CacheControl = "no-store";
-            var root = options.Value.GenesisCorePath;
-            if (root.Length == 0)
-                return Results.StatusCode(StatusCodes.Status404NotFound);
-
-            var outcomes = new List<GenesisOutcome>();
-            foreach (var file in manifest.Files)
-                outcomes.Add((await ReadGenesisFileAsync(root, file, logger, ctx.RequestAborted)).Outcome);
-            return Results.StatusCode(
-                outcomes.Contains(GenesisOutcome.Unreadable) ? StatusCodes.Status500InternalServerError
-                : outcomes.Contains(GenesisOutcome.Mismatch) ? StatusCodes.Status409Conflict
-                : outcomes.Contains(GenesisOutcome.Unavailable) ? StatusCodes.Status404NotFound
-                : StatusCodes.Status204NoContent);
-        });
+        // Genesis B4 routes, kept as aliases of the genesis_plus_gx ones.
+        api.MapGet("/emulator/genesis/{name}", (string name, HttpContext ctx, IOptions<EmulatorOptions> options,
+            OperatorCoreManifest manifest, ILogger<OperatorCoreLog> logger) =>
+            GetCoreFileAsync(OperatorCoreManifest.GenesisPlusGx, name, ctx, options, manifest, logger));
+        api.MapMethods("/emulator/genesis", [HttpMethods.Head], (HttpContext ctx, IOptions<EmulatorOptions> options,
+            OperatorCoreManifest manifest, ILogger<OperatorCoreLog> logger) =>
+            HeadCoreAsync(OperatorCoreManifest.GenesisPlusGx, ctx, options, manifest, logger));
         return api;
     }
 
     public const string GenesisCoreMismatch = "GenesisCoreMismatch";
 
-    private enum GenesisOutcome { Verified, Unavailable, Mismatch, Unreadable }
+    private enum CoreOutcome { Verified, Unavailable, Mismatch, Unreadable }
+
+    private static async Task<IResult> GetCoreFileAsync(string coreId, string name, HttpContext ctx,
+        IOptions<EmulatorOptions> options, OperatorCoreManifest manifest, ILogger logger)
+    {
+        ctx.Response.Headers.CacheControl = "no-store";
+        if (manifest.Find(coreId) is not { } core || core.PathOf(options.Value) is not { Length: > 0 } root
+            || core.Find(name) is not { } file)
+            return Problems.NotFound(ctx);
+
+        var (outcome, bytes) = await ReadCoreFileAsync(core, root, file, logger, ctx.RequestAborted);
+        return outcome switch
+        {
+            CoreOutcome.Verified => Results.Bytes(bytes!, file.ContentType),
+            CoreOutcome.Mismatch => Problems.Create(ctx, StatusCodes.Status409Conflict, core.MismatchCode,
+                $"The {core.DisplayName} core file doesn't match EmulatorJS 4.2.3"),
+            CoreOutcome.Unreadable => Problems.Create(ctx, StatusCodes.Status500InternalServerError, "IoError",
+                $"The {core.DisplayName} core file can't be read"),
+            _ => Problems.NotFound(ctx),
+        };
+    }
+
+    private static async Task<IResult> HeadCoreAsync(string coreId, HttpContext ctx, IOptions<EmulatorOptions> options,
+        OperatorCoreManifest manifest, ILogger logger)
+    {
+        ctx.Response.Headers.CacheControl = "no-store";
+        if (manifest.Find(coreId) is not { } core || core.PathOf(options.Value) is not { Length: > 0 } root)
+            return Results.StatusCode(StatusCodes.Status404NotFound);
+
+        var outcomes = new List<CoreOutcome>();
+        foreach (var file in core.Files)
+            outcomes.Add((await ReadCoreFileAsync(core, root, file, logger, ctx.RequestAborted)).Outcome);
+        return Results.StatusCode(
+            outcomes.Contains(CoreOutcome.Unreadable) ? StatusCodes.Status500InternalServerError
+            : outcomes.Contains(CoreOutcome.Mismatch) ? StatusCodes.Status409Conflict
+            : outcomes.Contains(CoreOutcome.Unavailable) ? StatusCodes.Status404NotFound
+            : StatusCodes.Status204NoContent);
+    }
 
     /// <summary>
-    /// Genesis B4: opens <paramref name="file"/> under <paramref name="root"/> with the checked resolver (links and
-    /// ambiguous case variants are refused), checks its length, reads exactly that many bytes and verifies the hash.
+    /// B2: opens <paramref name="file"/> under <paramref name="root"/> with the checked resolver (links and ambiguous
+    /// case variants are refused), checks its length, reads exactly that many bytes and verifies the hash.
     /// </summary>
-    private static async Task<(GenesisOutcome Outcome, byte[]? Bytes)> ReadGenesisFileAsync(string root, GenesisCoreFile file,
-        ILogger logger, CancellationToken cancellationToken)
+    private static async Task<(CoreOutcome Outcome, byte[]? Bytes)> ReadCoreFileAsync(OperatorCore core, string root,
+        OperatorCoreFile file, ILogger logger, CancellationToken cancellationToken)
     {
         if (!Directory.Exists(root))
-            return (GenesisOutcome.Unavailable, null); // a missing mount is "not set up", not a failure
+            return (CoreOutcome.Unavailable, null); // a missing mount is "not set up", not a failure
 
         ExternalOpenResult opened;
         try
@@ -119,7 +132,7 @@ public static partial class EmulatorEndpoints
         }
         catch (UnsafePathException)
         {
-            return (GenesisOutcome.Unavailable, null);
+            return (CoreOutcome.Unavailable, null);
         }
 
         switch (opened.Status)
@@ -127,13 +140,13 @@ public static partial class EmulatorEndpoints
             case ExternalPathStatus.Found:
                 break;
             case ExternalPathStatus.Unreadable:
-                logger.LogError("Genesis core file {Name} in {Root} can't be read: {Details}", file.Name, root, opened.Details);
-                return (GenesisOutcome.Unreadable, null);
+                logger.LogError("{Core} core file {Name} in {Root} can't be read: {Details}", core.DisplayName, file.Name, root, opened.Details);
+                return (CoreOutcome.Unreadable, null);
             case ExternalPathStatus.Unsafe:
-                logger.LogWarning("Genesis core file {Name} in {Root} is unsafe: {Details}", file.Name, root, opened.Details);
-                return (GenesisOutcome.Unavailable, null);
+                logger.LogWarning("{Core} core file {Name} in {Root} is unsafe: {Details}", core.DisplayName, file.Name, root, opened.Details);
+                return (CoreOutcome.Unavailable, null);
             default:
-                return (GenesisOutcome.Unavailable, null);
+                return (CoreOutcome.Unavailable, null);
         }
 
         await using var stream = opened.Stream!;
@@ -141,27 +154,27 @@ public static partial class EmulatorEndpoints
         {
             var length = stream.Length;
             if (length == 0)
-                return (GenesisOutcome.Unavailable, null);
+                return (CoreOutcome.Unavailable, null);
             if (length != file.Length)
             {
-                logger.LogWarning("Genesis core file {Name} in {Root} is {Length} bytes, not the {Expected} of EmulatorJS 4.2.3; replace it",
-                    file.Name, root, length, file.Length);
-                return (GenesisOutcome.Mismatch, null);
+                logger.LogWarning("{Core} core file {Name} in {Root} is {Length} bytes, not the {Expected} of EmulatorJS 4.2.3; replace it",
+                    core.DisplayName, file.Name, root, length, file.Length);
+                return (CoreOutcome.Mismatch, null);
             }
             var bytes = new byte[length];
             await stream.ReadExactlyAsync(bytes, cancellationToken);
             if (!string.Equals(Convert.ToHexStringLower(SHA256.HashData(bytes)), file.Sha256, StringComparison.Ordinal))
             {
-                logger.LogWarning("Genesis core file {Name} in {Root} has a different SHA-256 than EmulatorJS 4.2.3; replace it",
-                    file.Name, root);
-                return (GenesisOutcome.Mismatch, null);
+                logger.LogWarning("{Core} core file {Name} in {Root} has a different SHA-256 than EmulatorJS 4.2.3; replace it",
+                    core.DisplayName, file.Name, root);
+                return (CoreOutcome.Mismatch, null);
             }
-            return (GenesisOutcome.Verified, bytes);
+            return (CoreOutcome.Verified, bytes);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            logger.LogError(ex, "Genesis core file {Name} in {Root} can't be read", file.Name, root);
-            return (GenesisOutcome.Unreadable, null);
+            logger.LogError(ex, "{Core} core file {Name} in {Root} can't be read", core.DisplayName, file.Name, root);
+            return (CoreOutcome.Unreadable, null);
         }
     }
 
@@ -177,6 +190,6 @@ public static partial class EmulatorEndpoints
     /// <summary>Logger category for the BIOS endpoint.</summary>
     public sealed class BiosLog;
 
-    /// <summary>Logger category for the Genesis core endpoints.</summary>
-    public sealed class GenesisLog;
+    /// <summary>Logger category for the operator-supplied core endpoints.</summary>
+    public sealed class OperatorCoreLog;
 }

@@ -109,7 +109,7 @@ API contract: the new routes are additive, and the existing Genesis routes and `
 ## Steps
 Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 4, 7 and 8 run integration tests (category `Integration`), which need Docker. Playwright (`mvp.spec.ts`) runs only in Finish.
 
-- [ ] **1. Per-core operator-supplied core API, Genesis only** (B2, B8): `GenesisCoreManifest.cs` becomes `OperatorCoreManifest.cs` with only the Genesis entry; the `/api/emulator/cores/{core}` HEAD and GET routes; the Genesis aliases; all on the shared verifier. No behaviour change for Genesis.
+- [x] **1. Per-core operator-supplied core API, Genesis only** (B2, B8): `GenesisCoreManifest.cs` becomes `OperatorCoreManifest.cs` with only the Genesis entry; the `/api/emulator/cores/{core}` HEAD and GET routes; the Genesis aliases; all on the shared verifier. No behaviour change for Genesis.
   - Files: `OperatorCoreManifest.cs`, `EmulatorEndpoints.cs`, `AppHost.cs`, `tests/RnRomManager.Api.Tests/Integration/EmulatorEndpointsTests.cs`, `EmulatorEndpointsTests.Genesis.cs`, new `EmulatorEndpointsTests.OperatorCores.cs`, `EndpointRoleMatrixTests.cs`.
   - Tests:
     - `EmulatorEndpointsTests`: the existing Genesis cases, moved to the new manifest type (`PinnedManifest_HoldsExactlyTheThree4_2_3Files` and `Genesis_ByDefault_ExposesNothing` follow the rename).
