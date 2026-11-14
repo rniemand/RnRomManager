@@ -46,6 +46,10 @@ public class IngestPipelineTests
     private static readonly byte[] Circuit = Atari(262144, 180);
     private static readonly SyntheticDiscBuilder WaveBowling = new()
         { Seed = 2041, Magic = NintendoDiscMagic.Wii, GameId = "RWBE01", Title = "WAVE BOWLING" };
+    /// <summary>A DS DAT hit whose header CRC is wrong: the DAT match wins.</summary>
+    private static readonly byte[] BadCrcHero = new SyntheticNdsRomBuilder { Seed = 610, Title = "BAD CRC HERO", BadHeaderCrc = true }.Build();
+    /// <summary>A valid-CRC DS ROM whose SHA-1 only a <c>.bcn</c> DAT entry lists; the DS store ignores that entry.</summary>
+    private static readonly byte[] HiddenTwin = new SyntheticNdsRomBuilder { Seed = 611, Title = "HIDDEN TWIN", GameCode = "AHTE" }.Build();
     private ApiFactory _shared = null!;
     /// <summary>The class's shared host, or a host of the test's own when it needs other services (<see cref="RestartWithOverrides"/>).</summary>
     private ApiFactory _factory = null!;
@@ -139,7 +143,11 @@ public class IngestPipelineTests
                 [new FixtureGame("Wave Bowling (USA)", "Wave Bowling (USA).iso", WaveBowling.Build()) { Serial = "RVL-RWBE-USA" }],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
-            [IngestSeeder.NintendoDsDat] = [],
+            [IngestSeeder.NintendoDsDat] =
+            [
+                new FixtureGame("Bad Crc Hero (USA)", "Bad Crc Hero (USA).nds", BadCrcHero),
+                new FixtureGame("Hidden Twin (USA)", "Hidden Twin (USA).bcn", HiddenTwin),
+            ],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },
@@ -225,6 +233,68 @@ public class IngestPipelineTests
 
     private static ReviewResolutionRequest GameGearManual(string title) =>
         new() { Action = "Manual", Title = title, Regions = ["World"], Languages = [], Flags = [] };
+
+    [Test]
+    public async Task Ds_DatHitWithABadHeaderCrc_IsIngested_AndKeepsTheHeaderFlag()
+    {
+        var result = await IngestAsync(Drop("nds", "hero.nds", BadCrcHero));
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Ingested), result.Details);
+        var rom = ReadZip("nds/B/Bad Crc Hero.zip").Roms.Single();
+        Assert.That((rom.FileName, rom.Identification.Method), Is.EqualTo(("Bad Crc Hero (USA).nds", IdentificationMethod.Dat)));
+        Assert.That(rom.Header!["headerChecksumValid"]!.GetValue<bool>(), Is.False);
+    }
+
+    [Test]
+    public async Task Ds_BcnDatEntry_IsIgnored_ForMatchingSearchSuggestionsAndBaseTitles()
+    {
+        var result = await IngestAsync(Drop("nds", "twin.nds", HiddenTwin));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Review, "NoDatMatch")));
+        var store = Service<DatCache>().For("nds")!;
+        Assert.That(store.Roms.Select(r => r.RomName), Is.EqualTo(new[] { "Bad Crc Hero (USA).nds" }), "only .nds entries are indexed");
+        Assert.That(store.BySha1(Convert.ToHexStringLower(SHA1.HashData(HiddenTwin))), Is.Null);
+        Assert.That(store.BaseTitles, Does.Not.Contain("Hidden Twin"));
+        var row = (await Service<IIngestReviewRepository>().GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(HiddenTwin)), default))!;
+        Assert.That(row.Suggestions, Does.Not.Contain("Hidden Twin"), "the header title HIDDEN TWIN finds no .bcn suggestion");
+        await TestUsers.CreateAsync(_factory, "ds-searcher", TestUsers.AllRoles);
+        using var client = await AuthClient.CreateAsync(_factory);
+        (await client.LoginAsync("ds-searcher", TestUsers.Password)).Dispose();
+        using var search = await client.GetAsync("/api/dat/search?system=nds&q=twin");
+        Assert.That((await AuthClient.JsonAsync(search)).GetArrayLength(), Is.Zero);
+    }
+
+    [Test]
+    public async Task Ds_SameBytesUnderAnotherName_IsADuplicate_WithNoExtraRelease()
+    {
+        Assert.That((await IngestAsync(Drop("nds", "hero.nds", BadCrcHero)))!.Outcome, Is.EqualTo(IngestOutcome.Ingested));
+
+        var again = await IngestAsync(Drop("nds", "hero copy.nds", BadCrcHero));
+
+        Assert.That(again!.Outcome, Is.EqualTo(IngestOutcome.Duplicate));
+        Assert.That(ReadZip("nds/B/Bad Crc Hero.zip").Roms, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task Ds_LooseUnderTheMinimum_IsTooSmall()
+    {
+        var result = await IngestAsync(Drop("nds", "tiny.nds", new byte[511]));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooSmall)));
+    }
+
+    [Test]
+    public async Task Ds_LooseOverTheMaximum_IsTooLarge_WithoutReadingIt()
+    {
+        var path = Path.Combine(_factory.Root, "ingest", "nds", "huge.nds");
+        using (var file = File.Create(path))
+            file.SetLength(512L * 1024 * 1024 + 1); // sparse where the file system allows
+
+        var result = await IngestAsync(new IngestFile("nds", path, "huge.nds", 512L * 1024 * 1024 + 1, DateTime.UtcNow.AddMinutes(-1)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooLarge)));
+        Assert.That(File.Exists(path), Is.False, "moved to _failed/");
+    }
 
     [TestCase("nes", "drift.gg")]
     [TestCase("gg", "pioneer.nes")]

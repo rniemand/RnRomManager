@@ -20,6 +20,11 @@ public class IngestArchiveTests
     private static readonly byte[] Kirby = new SyntheticRomBuilder { Seed = 5, Title = "KIRBY" }.Build();
     private static readonly byte[] Unknown = new SyntheticRomBuilder { Seed = 99, Title = "MYSTERY" }.Build();
 
+    // Three regional DS dumps of one game, each reaching ingest a different way (loose, ZIP, 7z).
+    private static readonly byte[] TalesUsa = new SyntheticNdsRomBuilder { Seed = 601, Title = "ARCHIVE TALES", GameCode = "AATE" }.Build();
+    private static readonly byte[] TalesJapan = new SyntheticNdsRomBuilder { Seed = 602, Title = "ARCHIVE TALES", GameCode = "AATJ" }.Build();
+    private static readonly byte[] TalesEurope = TestFixtures.Nds7zRom();
+
     private ApiFactory _factory = null!;
     private List<JobItem> _items = null!;
     private IJobItemRepository _itemRepository = null!;
@@ -64,7 +69,12 @@ public class IngestArchiveTests
             [IngestSeeder.WiiDat] = [],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
-            [IngestSeeder.NintendoDsDat] = [],
+            [IngestSeeder.NintendoDsDat] =
+            [
+                Tales("Archive Tales (USA)", TalesUsa),
+                Tales("Archive Tales (Japan)", TalesJapan),
+                Tales("Archive Tales (Europe)", TalesEurope),
+            ],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ),
@@ -80,7 +90,13 @@ public class IngestArchiveTests
         _itemRepository.InsertAsync(Arg.Do<JobItem>(_items.Add), Arg.Any<CancellationToken>()).Returns(1L);
     }
 
+    private static FixtureGame Tales(string name, byte[] rom) => new(name, name + ".nds", rom)
+    {
+        ReleaseYear = 2007, Developers = ["Synthetic Studio"], Publishers = ["Synthetic Publishing"], Genres = ["Adventure"],
+    };
+
     private string Ingest => Path.Combine(_factory.Root, "ingest", "gb");
+    private string IngestNds => Path.Combine(_factory.Root, "ingest", "nds");
     private string Roms => Path.Combine(_factory.Root, "roms");
 
     private string Old(string path)
@@ -197,6 +213,104 @@ public class IngestArchiveTests
 
         Assert.That((_items.Single().Outcome, _items.Single().Reason), Is.EqualTo((IngestOutcome.Failed, (string?)IngestFailures.UnsupportedType)));
         Assert.That(File.Exists(Path.Combine(Ingest, "_failed", "docs.zip")), Is.True);
+    }
+
+    [Test]
+    public async Task Ds_LooseZipAnd7z_AreIdentified_GroupedByRegion_WithMetadata_AndCompanionsSkipped()
+    {
+        var loose = Path.Combine(IngestNds, "TALES_US.NDS");
+        File.WriteAllBytes(loose, TalesUsa);
+        Old(loose);
+        var zip = Path.Combine(IngestNds, "tales-jp.zip");
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        {
+            using (var rom = archive.CreateEntry("jp/tales.nds").Open())
+                rom.Write(TalesJapan);
+            using (var notes = archive.CreateEntry("notes.txt").Open())
+                notes.Write("not a ROM"u8);
+        }
+        Old(zip);
+        var sevenZip = Path.Combine(IngestNds, "tales-eu.7z");
+        File.Copy(TestFixtures.Nds7zPath, sevenZip);
+        Old(sevenZip);
+
+        await RunAsync();
+
+        Assert.That(_items.Select(i => (i.SourcePath, i.ArchiveEntry, i.Outcome)), Is.EquivalentTo(new[]
+        {
+            (loose, (string?)null, IngestOutcome.Ingested),
+            (zip, (string?)"jp/tales.nds", IngestOutcome.Ingested),
+            (sevenZip, (string?)TestFixtures.Nds7zEntry, IngestOutcome.Ingested),
+        }), "the companions are skipped, not items");
+        Assert.That((File.Exists(loose), File.Exists(zip), File.Exists(sevenZip)), Is.EqualTo((false, false, false)));
+
+        var game = ReadZip("nds/A/Archive Tales.zip");
+        Assert.That((game.System, game.Title), Is.EqualTo(("nds", "Archive Tales")));
+        Assert.That(game.Roms.Select(r => r.FileName),
+            Is.EquivalentTo(new[] { "Archive Tales (USA).nds", "Archive Tales (Japan).nds", "Archive Tales (Europe).nds" }), "DAT names, lower-case extension");
+        Assert.That(game.Roms.Select(r => r.Identification.Method), Is.All.EqualTo(IdentificationMethod.Dat));
+        Assert.That((game.ReleaseYear, game.Developers, game.Publishers, game.Genres),
+            Is.EqualTo(((int?)2007, (IReadOnlyList<string>)["Synthetic Studio"], (IReadOnlyList<string>)["Synthetic Publishing"], (IReadOnlyList<string>)["Adventure"])));
+        Assert.That(game.Roms.Single(r => r.FileName == "Archive Tales (USA).nds").OriginalFileName, Is.EqualTo("TALES_US.NDS"));
+        using var library = LibraryZip.Open(Path.Combine(Roms, "nds/A/Archive Tales.zip"), _factory.Services.GetRequiredService<InfoJsonReader>());
+        foreach (var (name, bytes) in new[] { ("USA", TalesUsa), ("Japan", TalesJapan), ("Europe", TalesEurope) })
+        {
+            using var entry = library.OpenEntry($"roms/Archive Tales ({name}).nds", long.MaxValue);
+            using var copy = new MemoryStream();
+            entry.CopyTo(copy);
+            Assert.That(copy.ToArray(), Is.EqualTo(bytes), name);
+        }
+        Assert.That(library.EntryNames.Where(n => n.StartsWith("roms/", StringComparison.Ordinal)).ToList(), Has.Count.EqualTo(3), "no companion stored");
+    }
+
+    [Test]
+    public async Task Ds_ZipOverTheEntryCap_IsArchiveUnsafe()
+    {
+        var path = Path.Combine(IngestNds, "crowded.zip");
+        using (var archive = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            using (var rom = archive.CreateEntry("tales.nds").Open())
+                rom.Write(TalesJapan);
+            for (var i = 0; i < 100; i++)
+            {
+                using var extra = archive.CreateEntry($"extra-{i:D3}.txt").Open();
+                extra.WriteByte(1);
+            }
+        }
+        Old(path);
+
+        await RunAsync();
+
+        var item = _items.Single();
+        Assert.That((item.SourcePath, item.Outcome, item.Reason), Is.EqualTo((path, IngestOutcome.Failed, (string?)ArchiveFailures.ArchiveUnsafe)));
+        Assert.That(File.Exists(Path.Combine(Roms, "nds", "A", "Archive Tales.zip")), Is.False, "nothing stored");
+        Assert.That(File.Exists(Path.Combine(IngestNds, "_failed", "crowded.zip")), Is.True);
+    }
+
+    /// <summary>Each member is within the DS limit, but together they pass the 256 MiB archive budget (counted on the streamed bytes).</summary>
+    [Test]
+    public async Task Ds_ZipOverTheTotalBudget_IsArchiveUnsafe_AndNothingIsStored()
+    {
+        const long member = 128L * 1024 * 1024 + 1;
+        var path = Path.Combine(IngestNds, "huge.zip");
+        using (var archive = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            foreach (var (name, title) in new[] { ("a.nds", "BIG A"), ("b.nds", "BIG B") })
+            {
+                using var entry = archive.CreateEntry(name, CompressionLevel.SmallestSize).Open();
+                new SyntheticNdsRomBuilder { SizeBytes = member, Title = title, FillWithFF = true }.WriteTo(entry);
+            }
+        }
+        Old(path);
+        Assert.That(new FileInfo(path).Length, Is.LessThan(1024 * 1024), "the test ZIP stays a few hundred KiB");
+
+        await RunAsync();
+
+        var item = _items.Single();
+        Assert.That((item.SourcePath, item.Outcome, item.Reason), Is.EqualTo((path, IngestOutcome.Failed, (string?)ArchiveFailures.ArchiveUnsafe)));
+        Assert.That(Directory.Exists(Path.Combine(Roms, "nds")) && Directory.EnumerateFiles(Path.Combine(Roms, "nds"), "*", SearchOption.AllDirectories).Any(),
+            Is.False, "nothing stored");
+        Assert.That(File.Exists(Path.Combine(IngestNds, "_failed", "huge.zip")), Is.True);
     }
 
     [Test]
