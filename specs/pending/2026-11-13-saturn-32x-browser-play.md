@@ -45,6 +45,7 @@ Saturn and 32X releases get a **Play** button. Saturn runs on EmulatorJS's Yabau
     - a name that doesn't exactly match a name in that core's manifest returns 404. Traversal attempts such as `..%2F` fall under this rule.
   - `HEAD /api/emulator/genesis` and `GET /api/emulator/genesis/{name}` keep working unchanged, as aliases of the `genesis_plus_gx` routes.
   - Access is the same as for the existing Genesis routes (any signed-in user; 401 anonymous, 403 during a forced password change; nothing audited). Both cores share one verify/read routine.
+  - The shared routine's log messages name the core's display name ("PicoDrive core file … can't be read", not "Genesis core file …"), and its logger category is `EmulatorEndpoints.OperatorCoreLog`, replacing `GenesisLog`.
 - **B3 32X play.** The `s32x` handler declares `BrowserCore => "picodrive"`. The player:
   1. runs the B2 HEAD check for `picodrive`. When the core is unavailable, it shows `operatorCoreError`'s message and stops before the ROM or loader, as Genesis does: 404 → "32X games need the PicoDrive core files: ask an Admin to set them up (Emulator:PicodriveCorePath).", 409 → "The PicoDrive core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:PicodriveCorePath).", 401 → the session-expiry message, anything else → "Couldn't load the PicoDrive core." (with ` (HTTP <status>)` when there is a status);
   2. otherwise sets `EJS_paths` to the `/api/emulator/cores/picodrive/<file>` URLs and loads the ROM from `/download`, because the ROM is in the ZIP.
@@ -57,7 +58,7 @@ Saturn and 32X releases get a **Play** button. Saturn runs on EmulatorJS's Yabau
   - Licence: GPL-2.0-or-later (the source headers say "either version 2 of the License, or (at your option) any later version").
   - Compiled-in components: `yabause/src/libretro/Makefile` defaults to `ENABLE_CHD = 1`, `ENABLE_ZLIB = 1` and `HAVE_MUSASHI = 1`, and `Makefile.common` then compiles libchdr, FLAC 1.3.3's decoder, the LZMA SDK 19.00 (`LzmaDec`, `LzmaEnc`, `LzFind`), zlib 1.2.11's inflate, JUnzip and the Musashi 68000 core. Step 5 re-checks each one's terms at that commit.
 
-  As for `pcsx_rearmed`, a component whose licence must travel with binaries gets its text copied byte for byte as `yabause-<component>-LICENSE.txt` (for example `yabause-libchdr-LICENSE.txt` and `yabause-flac-LICENSE.txt`), and the NOTICE names every component and its terms. `COMMON-BUILD.txt` gains the package. The `licenses.json` and README licence expression starts from `GPL-2.0-or-later AND BSD-3-Clause AND Zlib, plus the public-domain LZMA SDK`, adjusted to what the NOTICE finds. The vendored `emulator.js` keeps `yabause` as an explicit core even when another core was saved in settings. See B9 for threading.
+  As for `pcsx_rearmed`, a component whose licence must travel with binaries gets its text copied byte for byte as `yabause-<component>-LICENSE.txt` (for example `yabause-libchdr-LICENSE.txt` and `yabause-flac-LICENSE.txt`), and the NOTICE names every component and its terms. `COMMON-BUILD.txt` gains the package. The `licenses.json` and README licence expression starts from `GPL-2.0-or-later AND BSD-3-Clause AND Zlib, plus the public-domain LZMA SDK`, adjusted to what the NOTICE finds. The vendored `emulator.js` lists `yabause` in the explicit-core patch, and `hidesCoreChooser` lists it, so every pinned core is listed in both places. In 4.2.3 both are defensive only: `yabause` resolves to the `segaSaturn` group, which holds only `yabause`, so no other saved core can be chosen and the chooser never shows. See B9 for threading.
 - **B5 Saturn disc.** `GET /api/games/{id}/roms/{romId}/play-disc` accepts `saturn` alongside `psx` and `psp`. Limits come from a per-system table: `psx` and `saturn` 1 GiB, `psp` 2 GiB, all inclusive; above the cap the endpoint returns 409 `PlayDiscTooLarge`.
 
   The accepted shapes for Saturn match PlayStation:
@@ -71,7 +72,7 @@ Saturn and 32X releases get a **Play** button. Saturn runs on EmulatorJS's Yabau
 
   Both checks apply whatever the system; only Saturn stores `.nrg` today.
 
-  The player loads the disc from play-disc. Yabause's `core.json` lists `cue` but not `bin`, so EmulatorJS 4.2.3 picks the cue from a set's ZIP, and for a lone `.bin` writes its own `MODE1/2352` cue: `EJS_disableCue` stays unset. `discError` doesn't change: its non-PSP wording names no system and already says 1 GiB. The core is pinned, the chooser is hidden, and the control scheme is `segaSaturn`.
+  The player loads the disc from play-disc. Yabause's `core.json` lists `cue`, `iso`, `ccd`, `mds`, `chd`, `zip` and `m3u` but not `bin`, so EmulatorJS 4.2.3 picks the cue from a set's ZIP, and for a lone `.bin` writes its own `MODE1/2352` cue (`<base>-0.cue`, next to the image): `EJS_disableCue` stays unset. `discError` doesn't change: its non-PSP wording names no system and already says 1 GiB. The core is pinned, the chooser is hidden, and the control scheme is set to `segaSaturn` explicitly (the same as upstream's default for `yabause`, set so the scheme doesn't depend on the group order).
 - **B7 Saturn BIOS.** Saturn uses the PlayStation BIOS path, generalised: `loadPsxBios` becomes `loadOptionalBios(name, bytes, sizeError)`, used by both systems, and `optionalBiosError` is reused unchanged. The player tries only `/api/emulator/bios/saturn_bios.bin`. Yabause (`libretro.c` at `e24ebfc`) looks in its system directory for `saturn_bios.bin`, then `sega_101.bin`, then `mpr-17933.bin`, and falls back to HLE when none exists. EmulatorJS 4.2.3 sets no `system_directory`, so RetroArch uses the content directory `/`, where `EJS_externalFiles` writes the file, as for `scph5501.bin`:
   - when the file is present and exactly 512 KiB, it is passed as `EJS_externalFiles['/saturn_bios.bin']`;
   - on a 404, the player falls back to Yabause's HLE BIOS;
@@ -99,19 +100,20 @@ API contract: the new routes are additive, and the existing Genesis routes and `
 - **Licences.** PicoDrive isn't distributed, so it stays out of the image and the npm lockfile, like Genesis Plus GX (its payload's `license.txt` forbids selling or commercial use). Yabause is distributed, but its package carries no licence, so Step 5 writes the licence and NOTICE from the source: source commit, the RetroArch commit it links (via `COMMON-BUILD.txt`), and the licences of compiled-in components, matching the other bundled cores. The package's own `dependencies` ask for `@emulatorjs/emulatorjs@latest`; the existing `overrides` entry pins it to the direct 4.2.3 dependency, and Step 5 checks the lockfile still holds only that version.
 - **Operator-supplied code.** PicoDrive's payloads run JavaScript in the app's origin, like Genesis Plus GX's. Only files whose length and SHA-256 match B1 are served, and `docs/deployment.md` gives the same read-only mount and permissions advice as for Genesis.
 - **Pinned hashes.** The PicoDrive values in B1 come from `https://registry.npmjs.org/@emulatorjs/core-picodrive/-/core-picodrive-4.2.3.tgz`. Step 2 re-checks them with `npm pack @emulatorjs/core-picodrive@4.2.3` into a temp folder outside the repo before writing them into the manifest and its test. Nothing from the package is committed. Operators whose files differ get a clear 409.
-- **Saturn performance.** Yabause in WASM is slow on weak devices. This is documented in `docs/features.md`, not solved.
+- **Saturn performance and HLE.** Yabause in WASM is slow on weak devices, and its HLE BIOS boots fewer games than a real `saturn_bios.bin`. Both are documented in `docs/features.md`, not solved.
 - **Image size.** Yabause adds about 2 MB of vendored payloads to the image.
 - **Threading.** See B9; implementation stops and asks if a core needs threads.
 - **Refactoring the Genesis plumbing** could break the shipped Genesis feature. To guard against that, the API refactor (Step 1) and the SPA refactor (Step 3) land as their own commits with no behaviour change, the old routes stay as aliases, and the existing Genesis tests keep passing.
-- **Green commits.** `SupportedSystemsTableTests` compares the README table with each handler's `BrowserCore`, and `LibraryEndpointsTests.GameDetail_BrowserCore_IsTheSystemHandlers` pins each system's core (it has `saturn` → null today), so each step that changes a `BrowserCore` updates that README row and that test in the same commit.
+- **Green commits.** `SupportedSystemsTableTests` compares the README table with each handler's `BrowserCore`, and two `LibraryEndpointsTests` cases pin each system's core: `GameDetail_BrowserCore_IsTheSystemHandlers` (it has `saturn` → null today) and `Games_QuickPlay_IsThePrimaryReleaseWhenPlayable` (it has `("saturn", true, false, null)` today). Each step that changes a `BrowserCore` updates that README row and both tests in the same commit. `EndpointRoleMatrixTests` fails when a mapped `/api` route has no expected role, so the step that maps the generic routes adds them there.
 
 ## Steps
-Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 4 and 7 run integration tests (category `Integration`), which need Docker. Playwright (`mvp.spec.ts`) runs only in Finish.
+Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 4, 7 and 8 run integration tests (category `Integration`), which need Docker. Playwright (`mvp.spec.ts`) runs only in Finish.
 
 - [ ] **1. Per-core operator-supplied core API, Genesis only** (B2, B8): `GenesisCoreManifest.cs` becomes `OperatorCoreManifest.cs` with only the Genesis entry; the `/api/emulator/cores/{core}` HEAD and GET routes; the Genesis aliases; all on the shared verifier. No behaviour change for Genesis.
-  - Files: `OperatorCoreManifest.cs`, `EmulatorEndpoints.cs`, `AppHost.cs`, `tests/RnRomManager.Api.Tests/Integration/EmulatorEndpointsTests.cs`, `EmulatorEndpointsTests.Genesis.cs`, new `EmulatorEndpointsTests.OperatorCores.cs`.
+  - Files: `OperatorCoreManifest.cs`, `EmulatorEndpoints.cs`, `AppHost.cs`, `tests/RnRomManager.Api.Tests/Integration/EmulatorEndpointsTests.cs`, `EmulatorEndpointsTests.Genesis.cs`, new `EmulatorEndpointsTests.OperatorCores.cs`, `EndpointRoleMatrixTests.cs`.
   - Tests:
     - `EmulatorEndpointsTests`: the existing Genesis cases, moved to the new manifest type (`PinnedManifest_HoldsExactlyTheThree4_2_3Files` and `Genesis_ByDefault_ExposesNothing` follow the rename).
+    - `EndpointRoleMatrixTests`: `HEAD /api/emulator/cores/{core}` and `GET /api/emulator/cores/{core}/{name}` added as `Role.User` (the test fails on a mapped route without an entry).
     - `EmulatorEndpointsTests.OperatorCores.cs` for `genesis_plus_gx` on the generic routes: 204, 404, 409 and 500 (500 forced as `Genesis_ALockedFile_Is500` does); the 500 > 409 > 404 priority across mixed files; unknown or case-variant core → 404 on HEAD and GET; unknown, case-variant or traversal name → 404; alias parity (same status and bytes from both routes); anonymous → 401 and a forced password change → 403 on both generic routes.
   - Done when:
     - the listed tests pass;
@@ -120,13 +122,13 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
   - The `PicodriveCorePath` option and its validation; the pinned PicoDrive entry (re-checked from the package, see Risks) with the tarball URL in a code comment; `PicodriveCoreMismatch`.
   - Files: `EmulatorOptions.cs`, `EmulatorOptionsValidator.cs`, `OperatorCoreManifest.cs`, `EmulatorEndpointsTests.cs` (synthetic manifest and temp folder for both cores), `EmulatorEndpointsTests.OperatorCores.cs`, `OptionsValidatorTests.cs`, `OptionsRegistrationTests.cs`, `EffectiveSettingsTests.cs`.
   - Tests:
-    - `OptionsValidatorTests` (`PicodriveCorePath_EmptyOrAbsolute`), `OptionsRegistrationTests` (default blank, missing absolute folder passes startup, relative path fails), `EffectiveSettingsTests` (`"picodriveCorePath"` in the JSON).
+    - `OptionsValidatorTests` (`PicodriveCorePath_EmptyOrAbsolute`), `OptionsRegistrationTests` (default blank, missing absolute folder passes startup, relative path fails), `EffectiveSettingsTests` (`"picodriveCorePath"` in the JSON; the existing assertion that matches the whole `"emulator":{…}` object is updated to include it).
     - `EmulatorEndpointsTests.OperatorCores.cs`: `picodrive` 204, 404, 409 and 500; 404 on a host with no `PicodriveCorePath` and the pinned manifest, as `Genesis_ByDefault_ExposesNothing` does; the `PicodriveCoreMismatch` body; one core's files don't satisfy the other; a manifest test that pins the PicoDrive names, lengths and hashes of B1.
   - Done when:
     - the listed tests pass;
     - § Decisions records that the re-checked values match B1.
 - [ ] **3. Generic operator-core helpers in the player** (B8): `params.js` gains `operatorCorePaths(core)`, `operatorCoreCheckUrl(core)` and `operatorCoreError(core, status)`; Genesis moves onto them (so it now checks `/api/emulator/cores/genesis_plus_gx` and loads its files from there) and the Genesis-only exports go. `play.js` uses the generic check. No other behaviour change.
-  - Files: `params.js`, `play.js`, `emulatorParams.test.ts`, `emulatorPlay.test.ts`, `tests/e2e/specs/mvp.spec.ts` (the Genesis test's URL match only).
+  - Files: `params.js`, `play.js`, `emulatorParams.test.ts`, `emulatorPlay.test.ts`, `tests/e2e/specs/mvp.spec.ts` (the Genesis test's URL matchers only: the HEAD `waitForResponse` matches `/api/emulator/cores/genesis_plus_gx`, and the `track` matcher that must stay empty for Master System and Game Gear matches any `/api/emulator/cores/` or `/api/emulator/genesis` URL, so it doesn't pass vacuously).
   - Tests: `emulatorParams.test.ts` (`Genesis (Genesis B4, B5)`) and `emulatorPlay.test.ts` (`play page Genesis and Master System (Genesis B4, B5)`) pass with only URLs and helper names updated, and their message texts unchanged.
   - Done when `npm run lint`, `npm run check` and those tests pass.
 - [ ] **4. 32X play** (B3, B9):
@@ -138,7 +140,7 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
   - Files: `Sega32xHandler.cs`, `README.md` (table row only), `scripts/vendor-emulatorjs.mjs`, `params.js`, `play.js`, and the tests below.
   - Tests:
     - `Sega32xHandlerTests` (`BrowserCore` is `picodrive`), `MegaDriveHandlerTests`, `SupportedSystemsTableTests`.
-    - `LibraryEndpointsTests`: `GameDetail_BrowserCore_IsTheSystemHandlers` gains `s32x` → `picodrive`; a 32X game in the list has `playRomId`.
+    - `LibraryEndpointsTests`: `GameDetail_BrowserCore_IsTheSystemHandlers` gains `s32x` → `picodrive`; `Games_QuickPlay_IsThePrimaryReleaseWhenPlayable` gains `("s32x", false, true, "picodrive")`.
     - `vendorEmulatorjs.test.ts`.
     - `emulatorParams.test.ts`: a new `describe('32X (B3)')`; the Genesis suite still passes.
     - `emulatorPlay.test.ts`: a new `play page 32X`; `play page Genesis and Master System` still passes.
@@ -170,34 +172,44 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
       - psx and psp unchanged.
     - `PlayDiscCopyTests`.
   - Done when those tests pass and PlayStation and PSP behaviour is unchanged.
-- [ ] **7. Saturn play** (B6, B7):
+- [ ] **7. `.nrg` play guards and the generic optional BIOS** (B6, B7): no Play button appears or disappears yet, because no system with a core stores `.nrg`.
+  - `LibraryEndpoints`: `playRomId`/`playRomFileName` null for an `.nrg` primary, whatever the system.
+  - `emulator.ts`: `canPlay` false when `externalFileName` ends in `.nrg` (any case), whatever the core.
+  - `play.js`: `loadPsxBios` becomes `loadOptionalBios(name, bytes, sizeError)`, and PlayStation moves onto it with no behaviour change.
+  - Files: `LibraryEndpoints.cs`, `src/lib/emulator.ts`, `play.js`, and the tests below.
+  - Tests:
+    - `LibraryEndpointsTests`: `Games_QuickPlay_IsThePrimaryReleaseWhenPlayable` gains an external `psx` primary whose `file_name` is `x.NRG` → not playable (`browserCore` still `pcsx_rearmed`); the list reads `roms.file_name`, not `external_file_name`.
+    - `emulator.test.ts`: `canPlay` is false for `pcsx_rearmed` with an `.nrg` or `.NRG` external file name, and true for `.bin`.
+    - `emulatorPlay.test.ts`: `play page PlayStation` passes unchanged.
+  - Done when `npm run lint`, `npm run check` and those tests pass.
+- [ ] **8. Saturn play** (B6, B7):
   - `SaturnHandler.BrowserCore = "yabause"`, and the README table's Saturn row → `yabause`.
-  - `LibraryEndpoints`: `yabause` in `ExternalBrowserCores`; `playRomId`/`playRomFileName` null for an `.nrg` primary.
+  - `LibraryEndpoints`: `yabause` in `ExternalBrowserCores`.
   - `params.js`: the `yabause` allowlist entry, the `segaSaturn` scheme, the hidden chooser, `saturnBios = 'saturn_bios.bin'`, `saturnBiosSizeError` and the `contentFileName` guard.
-  - `play.js`: `loadOptionalBios` (PlayStation moved onto it), a Saturn disc path, and the optional BIOS through `EJS_externalFiles`.
-  - `emulator.ts`: `yabause` in the external cores, and `canPlay` false for `.nrg`. The existing "Saturn doesn't play" case is replaced.
-  - `mvp.spec.ts`: Sky Rally's Play requests `saturn_bios.bin` (404, so HLE), then play-disc, then `loader.js`; after **Start Game**, a Yabause payload (`yabause-wasm.data` or `yabause-legacy-wasm.data`) is fetched from `/emulator/vendor/data/cores/`, as the Disc Runner case checks PCSX ReARMed's. It doesn't wait for the game to run.
+  - `play.js`: a Saturn disc path, and the optional BIOS through `loadOptionalBios` and `EJS_externalFiles`.
+  - `emulator.ts`: `yabause` in the external cores. The existing "Saturn doesn't play" case is replaced.
+  - `mvp.spec.ts`: Sky Rally's Play requests `saturn_bios.bin` (404, so HLE), then play-disc, then `loader.js`; after **Start Game**, a Yabause payload (`yabause-wasm.data` or `yabause-legacy-wasm.data`) is fetched with status 200 from `/emulator/vendor/data/cores/`. It doesn't use `startEmulator`, which also waits for the loading text to go and for no `.ejs_error_text`: the synthetic disc isn't a real Saturn game, so the case closes the modal once the payload has arrived.
   - Files: `SaturnHandler.cs`, `LibraryEndpoints.cs`, `README.md` (table row only), `params.js`, `play.js`, `src/lib/emulator.ts`, and the tests below.
   - Tests:
     - `SaturnHandlerTests`, `SupportedSystemsTableTests`.
-    - `LibraryEndpointsTests`: `GameDetail_BrowserCore_IsTheSystemHandlers` `saturn` → `yabause`; in the list, a Saturn bin/cue game has `playRomId` and an `.nrg` one doesn't.
+    - `LibraryEndpointsTests`: `GameDetail_BrowserCore_IsTheSystemHandlers` `saturn` → `yabause`; `Games_QuickPlay_IsThePrimaryReleaseWhenPlayable`'s `("saturn", true, false, null)` becomes `("saturn", true, true, "yabause")`, plus an external Saturn primary named `.nrg` → not playable.
     - `EmulatorEndpointsTests`: `saturn_bios.bin` is served from `Paths:Bios`.
     - `emulatorParams.test.ts`: a new `describe('Saturn (B6, B7)')`, including `contentFileName` for all three BIOS names (any case) and `discError` for `yabause`.
     - `emulatorPlay.test.ts`:
       - a new `play page Saturn` covering the disc URL, BIOS present, BIOS 404 → HLE, BIOS not 512 KiB → `saturnBiosSizeError`, other BIOS error → shown;
       - `play page PlayStation` still passes.
-    - `emulator.test.ts`.
+    - `emulator.test.ts`: `yabause` plays an external `.bin` and not an `.nrg`.
     - `mvp.spec.ts`: the Saturn case (runs in Finish).
   - Done when:
     - `npm run lint`, `npm run check` and those tests (except Playwright) pass;
     - a Saturn bin/cue game shows Play and an `.nrg` one doesn't.
-- [ ] **8. Docs**:
+- [ ] **9. Docs**:
   - `README.md`:
     - the Play bullet gains Saturn (one disc per launch, up to 1 GiB, bin/cue only, optional `saturn_bios.bin`) and 32X (needs the PicoDrive files you supply);
     - the attribution gains Yabause with its source commit and licence, and a line saying PicoDrive isn't included.
   - `docs/configuration.md`: the `Emulator:PicodriveCorePath` row and a "PicoDrive core" section with the B1 file table.
   - `docs/deployment.md`: the PicoDrive mount, from `@emulatorjs/core-picodrive@4.2.3` (the two payloads at the package root, the report from `reports/`), with the Genesis section's read-only, UID 1654 and trusted-folder advice.
-  - `docs/features.md`: the Saturn and 32X play rules, the Saturn performance note, the `/api/emulator/cores` routes and the Saturn BIOS.
+  - `docs/features.md`: the Saturn and 32X play rules, the Saturn performance and HLE-compatibility note, the `/api/emulator/cores` routes and the Saturn BIOS.
   - `docs/development.md`: the vendored core list and count, the explicit-core patch list and the non-threaded and no-CDN guards, the operator-core manifest and routes (replacing the `GenesisCoreManifest` and `/api/emulator/genesis` mentions), and the e2e walkthrough's 32X and Saturn cases.
   - `docs/adding-a-system.md`: how to add an operator-supplied core.
   - Tests: `SupportedSystemsTableTests`.
@@ -228,6 +240,9 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
 - 2026-11-13 Yabause source and licence → commit `e24ebfca357bf70732a77a58c14491f13209a1cd`, GPL-2.0-or-later, with libchdr, FLAC 1.3.3, LZMA SDK 19.00, zlib 1.2.11, JUnzip and Musashi compiled in; component texts as `yabause-<component>-LICENSE.txt`, as for `pcsx_rearmed` (code)
 - 2026-11-13 Problem titles on the generic routes → "The <display name> core file …", so Genesis's 409/500 titles now say "Genesis Plus GX"; codes, statuses and the SPA's Genesis messages don't change (reviewer)
 - 2026-11-13 What does the Saturn e2e case check after Start Game? → that the vendored Yabause payload is fetched, as the Disc Runner case does; not that the synthetic disc runs (reviewer)
+- 2026-11-13 Saturn play step size → split: Step 7 lands the system-agnostic `.nrg` guards and `loadOptionalBios` (PlayStation only), Step 8 the Saturn core, so neither passes ~300 lines (reviewer)
+- 2026-11-13 Why list `yabause` in the explicit-core patch and `hidesCoreChooser`? → defensive and consistent only: in 4.2.3 the `segaSaturn` group holds just `yabause`, so neither edit changes behaviour (code)
+- 2026-11-13 PicoDrive and Yabause package facts re-checked at the second review → B1's PicoDrive lengths and SHA-256 match `npm pack @emulatorjs/core-picodrive@4.2.3`; Yabause's payloads have no `license.txt`, carry `0.9.15 e24ebfc` and RetroArch `6dd4353`, and neither core's non-threaded binaries reference `SharedArrayBuffer` or `pthread_create` (code)
 
 ## Kickoff prompt
 ```text
