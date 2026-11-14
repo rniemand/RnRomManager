@@ -25,6 +25,7 @@ One container: the API serves the built SPA from `wwwroot` and everything under 
 | `src/RnRomManager.Systems.Nintendo64` | the `n64` handler: byte-order conversion, header reader, default box art |
 | `src/RnRomManager.Systems.Nes` | the `nes` handler: iNES / NES 2.0 header reader, default box art (headered `.nes` only) |
 | `src/RnRomManager.Systems.Snes` | the `snes` handler: copier-header strip, LoROM / HiROM / ExHiROM header reader, default box art |
+| `src/RnRomManager.Systems.VirtualBoy` | the `vb` handler (no header), default box art |
 | `src/RnRomManager.Systems.Atari` | the `a2600`, `lynx`, `jaguar`, `a5200` and `a7800` handlers, with the Lynx (`LYNX`) and 7800 (`ATARI7800`) header readers, default box art |
 | `src/RnRomManager.Systems.Coleco` | the `coleco` handler (`AA55`/`55AA` magic check), default box art |
 | `src/RnRomManager.Systems.Sega` | the `gg`, `sms` (shared optional `TMR SEGA` header reader) `md` and `s32x` (both read the optional `SEGA` header at 0x100 through the shared `MegaDriveHeader`) handlers, and the headerless `saturn` disc handler, default box art |

@@ -18,6 +18,7 @@ roms/
   n64/                  Nintendo 64 (always stored big-endian, as .z64)
   nes/                  Nintendo Entertainment System (headered .nes, header included)
   snes/                 Super Nintendo Entertainment System (stored as .sfc, copier header stripped)
+  vb/                   Virtual Boy (.vb)
   a2600/                Atari 2600 (.a26 or .bin, as the DAT names it)
   a5200/                Atari 5200 (.a52)
   a7800/                Atari 7800 (.a78 or .bin, as the DAT names it)
@@ -180,6 +181,8 @@ Nintendo 64 `header`, read after the ROM is converted to big-endian (so it can't
 Nintendo Entertainment System `header`, from the 16-byte iNES / NES 2.0 header (the ROM is stored and hashed with it): `headerValid` (bytes 0–3 are `NES` + 0x1A), `format` (`NES 2.0` when byte 7 bits 2–3 are `10`, else `iNES`), `mapper` (byte 6 high nibble, byte 7 high nibble, and for NES 2.0 byte 8's low nibble as bits 8–11), `prgRomSizeBytes` (byte 4 × 16 KiB; NES 2.0 adds byte 9's low nibble as the high byte, null in the exponent form), `chrRomSizeBytes` (byte 5 × 8 KiB; NES 2.0 adds byte 9's high nibble, null in the exponent form), `mirroring` (`Four-screen`, `Vertical` or `Horizontal`), `battery`, `trainer`, `tvSystem` (iNES: `NTSC` or `PAL` from byte 9; NES 2.0: `NTSC`, `PAL`, `Multi-region` or `Dendy` from byte 12), `romSizeBytes` (the file length). Without the magic only `headerValid` (false) and `romSizeBytes` are set; the rest are null. iNES has no title.
 
 Super Nintendo Entertainment System `header`, read after a copier header is stripped (so it doesn't say whether the dump had one): the internal header is looked for as LoROM at 0x7FC0, HiROM at 0xFFC0 and ExHiROM at 0x40FFC0 (ExHiROM first for ROMs over 4 MiB); the first location with a valid checksum/complement pair wins, else the first with a printable 21-byte title and a map mode that fits the location. `headerValid` (a location was chosen), `title` (21 chars, ASCII up to the first NUL, other bytes as `?`), `mapping` (`LoROM`, `HiROM` or `ExHiROM`), `fastRom` (map mode bit 0x10), `romType` (the chipset byte, as a number), `romSizeKiB` (2^byte, null when 0 or over 13), `sramSizeKiB` (0, or 2^byte up to 10, else null), `region` (`Japan`, `USA`, `Europe`, `Sweden`, `Finland`, `Denmark`, `France`, `Netherlands`, `Spain`, `Germany`, `Italy`, `China`, `Indonesia`, `Korea`, `Canada`, `Brazil`, `Australia`, else null), `version`, `checksum` (4 upper-case hex digits), `checksumValid`, `romSizeBytes` (the stored length). With no location chosen only `headerValid` (false) and `romSizeBytes` are set; the rest are null.
+
+Virtual Boy cartridges have no header: `header` is always null.
 
 Atari 2600 cartridges have no header: `header` is always null.
 
