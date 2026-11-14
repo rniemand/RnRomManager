@@ -10,14 +10,20 @@ namespace RnRomManager.Api.Endpoints;
 /// Play B2–B3: <c>GET /api/games/{id}/roms/{romId}/play-disc</c>, one PlayStation disc for the browser emulator. A
 /// standalone <c>.bin</c>/<c>.iso</c> streams unchanged; a cue set streams as an uncompressed ZIP holding a playback
 /// copy of the cue (<see cref="CueSheet.ForPlayback"/>) and the tracks as <c>track-NN.bin</c>. Every member is opened
-/// and checked before the response starts; nothing is written to disk and nothing is audited.
+/// and checked before the response starts; nothing is written to disk and nothing is audited. PSP B2: a PlayStation
+/// Portable release streams its standalone <c>.iso</c> the same way, bounded by <see cref="PspMaxBytes"/>.
 /// </summary>
 public static class PlayDisc
 {
     public const string SystemId = "psx";
 
+    public const string PspSystemId = "psp";
+
     /// <summary>The combined opened lengths a launch may stream: a standard CD, bounded for browser memory.</summary>
     public const long MaxBytes = 1024L * 1024 * 1024;
+
+    /// <summary>PSP B2: the opened ISO length a launch may stream (inclusive), covering standard UMD sizes.</summary>
+    public const long PspMaxBytes = 2L * 1024 * 1024 * 1024;
 
     public const string InvalidPlayDisc = "InvalidPlayDisc";
     public const string PlayDiscTooLarge = "PlayDiscTooLarge";
@@ -31,8 +37,11 @@ public static class PlayDisc
         var cancellationToken = ctx.RequestAborted;
         if (await roms.GetAsync(id, romId, cancellationToken) is not { } rom
             || await repository.GetAsync(id, cancellationToken) is not { } game
-            || game.SystemId != SystemId || rom.SystemId != SystemId || rom.ExternalFileName is not { } mainName)
+            || game.SystemId is not (SystemId or PspSystemId) || rom.SystemId != game.SystemId
+            || rom.ExternalFileName is not { } mainName)
             return Problems.NotFound(ctx);
+        var psp = game.SystemId == PspSystemId;
+        var maxBytes = psp ? PspMaxBytes : MaxBytes;
 
         var setFiles = (await roms.ListFilesByGameAsync(id, cancellationToken)).Where(f => f.RomId == romId).OrderBy(f => f.Ordinal).ToList();
         var claims = await roms.ListExternalAsync(cancellationToken);
@@ -43,7 +52,7 @@ public static class PlayDisc
 
         var members = new List<Member> { new(mainName, null) };
         members.AddRange(setFiles.Select(f => new Member(f.ExternalFileName, f.Id)));
-        if (ShapeProblem(members) is { } shape)
+        if (ShapeProblem(members, psp) is { } shape)
             return Invalid(ctx, shape);
         if (members.Any(m => !IsSoleClaim(game, m, claims)))
             return Problems.NotFound(ctx);
@@ -68,10 +77,11 @@ public static class PlayDisc
                     return Invalid(ctx, $"'{member.Name}' is empty");
                 }
                 total += length;
-                if (total > MaxBytes)
+                if (total > maxBytes)
                 {
                     DisposeAll(opened);
-                    return Problems.Create(ctx, StatusCodes.Status409Conflict, PlayDiscTooLarge, "The disc is larger than 1 GiB.");
+                    return Problems.Create(ctx, StatusCodes.Status409Conflict, PlayDiscTooLarge,
+                        $"The disc is larger than {maxBytes / (1024 * 1024 * 1024)} GiB.");
                 }
             }
 
@@ -123,12 +133,15 @@ public static class PlayDisc
 
     /// <summary>
     /// B2: a standalone <c>.bin</c>/<c>.iso</c>, or one cue with 1–99 BINs (the main file among them), all portable
-    /// names that are unique ignoring case.
+    /// names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>.
     /// </summary>
-    private static string? ShapeProblem(List<Member> members)
+    private static string? ShapeProblem(List<Member> members, bool psp)
     {
         if (members.FirstOrDefault(m => CueSheet.NameProblem(m.Name) is not null) is { } bad)
             return $"'{bad.Name}' is not a portable file name";
+        if (psp)
+            return members is [var iso] && iso.Name.EndsWith(".iso", StringComparison.OrdinalIgnoreCase)
+                ? null : "a PSP disc must be a single .iso";
         if (members.Select(m => m.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != members.Count)
             return "two disc files have the same name ignoring case";
         if (members.Count == 1)
