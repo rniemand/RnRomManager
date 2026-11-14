@@ -16,7 +16,16 @@ export default defineConfig({
 		screenshot: 'only-on-failure'
 	},
 	projects: [
-		{ name: 'chromium', testDir: './specs', use: { ...devices['Desktop Chrome'] } },
+		{
+			name: 'chromium',
+			testDir: './specs',
+			use: {
+				...devices['Desktop Chrome'],
+				// PSP B3: PPSSPP needs WebGL 2; on GPU-less runners Chromium only offers it through SwiftShader. The PSP
+				// test still checks for a real WebGL 2 context.
+				launchOptions: { args: ['--enable-unsafe-swiftshader'] }
+			}
+		},
 		...(process.env.E2E_SCREENSHOTS === '1'
 			? [
 					{

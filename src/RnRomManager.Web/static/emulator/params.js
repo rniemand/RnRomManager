@@ -15,14 +15,20 @@ const cores = [
 	'gearcoleco',
 	'smsplus',
 	'fceumm',
-	'pcsx_rearmed'
+	'pcsx_rearmed',
+	'ppsspp',
+	'genesis_plus_gx'
 ];
+
+/** PSP B3: the core that runs only on the isolated play-psp.html page (and never in the modal's play.html). */
+export const pspCore = 'ppsspp';
 
 /**
  * @param {string} search `location.search`
- * @returns {PlayParams | null} null when any value is missing or invalid
+ * @param {boolean} [pspPage] PSP B3: true on play-psp.html, which plays PPSSPP only; play.html rejects PPSSPP
+ * @returns {PlayParams | null} null when any value is missing or invalid, or the core doesn't belong on this page
  */
-export function parsePlayParams(search) {
+export function parsePlayParams(search, pspPage = false) {
 	const query = new URLSearchParams(search);
 	const game = query.get('game') ?? '';
 	const rom = query.get('rom') ?? '';
@@ -30,6 +36,7 @@ export function parsePlayParams(search) {
 	const name = query.get('name') ?? '';
 	if (!guid.test(game) || !/^[1-9][0-9]{0,15}$/.test(rom) || !cores.includes(core)) return null;
 	if (name.length < 1 || name.length > 255) return null;
+	if ((core === pspCore) !== pspPage) return null;
 	return { game, rom: Number(rom), core, name };
 }
 
@@ -59,13 +66,51 @@ export function biosError(name, status) {
 
 /**
  * EmulatorJS 4.2.3 takes the controls from the core's group, `segaMS` for smsplus (no Start button). A `.gg` release
- * gets the Game Gear scheme instead; anything else keeps the default (null).
+ * gets the Game Gear scheme instead. Genesis B5: Genesis Plus GX's first group is also `segaMS`, so it gets the Mega
+ * Drive scheme explicitly. Anything else keeps the default (null).
  * @param {string} core
  * @param {string} name the release's file name
  * @returns {string | null}
  */
 export function controlSchemeFor(core, name) {
+	if (core === genesisCore) return 'segaMD';
 	return core === 'smsplus' && name.toLowerCase().endsWith('.gg') ? 'segaGG' : null;
+}
+
+/** Genesis B5: the core whose files the operator supplies (Emulator:GenesisCorePath), served by the API. */
+export const genesisCore = 'genesis_plus_gx';
+
+/** Genesis B4: the availability check run before the ROM is fetched. */
+export const genesisCheckUrl = '/api/emulator/genesis';
+
+/**
+ * Genesis B5: EJS_paths, mapping the files EmulatorJS asks for by name to the authenticated same-origin endpoint.
+ * @returns {Record<string, string>}
+ */
+export function genesisPaths() {
+	return Object.fromEntries(
+		['genesis_plus_gx-wasm.data', 'genesis_plus_gx-legacy-wasm.data', 'genesis_plus_gx.json'].map((f) => [
+			f,
+			`${genesisCheckUrl}/${f}`
+		])
+	);
+}
+
+/**
+ * Genesis B4: the play page's message for the core availability check, or null when the files are there and match.
+ * @param {number | null} status the HTTP status, or null for a network failure
+ * @returns {string | null}
+ */
+export function genesisCoreError(status) {
+	if (status !== null && status >= 200 && status < 300) return null;
+	if (status === 401) return sessionExpired;
+	if (status === 404)
+		return 'Genesis games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).';
+	if (status === 409)
+		return "The Genesis Plus GX core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:GenesisCorePath).";
+	return status === null
+		? "Couldn't load the Genesis core."
+		: `Couldn't load the Genesis core (HTTP ${status}).`;
 }
 
 /**
@@ -74,7 +119,7 @@ export function controlSchemeFor(core, name) {
  * @returns {boolean}
  */
 export function hidesCoreChooser(core) {
-	return ['smsplus', 'fceumm', 'pcsx_rearmed'].includes(core);
+	return ['smsplus', 'fceumm', 'pcsx_rearmed', genesisCore].includes(core);
 }
 
 /** PCSX ReARMed's optional firmware: the operator's scph5501.bin, else the core's built-in HLE BIOS. */
@@ -103,14 +148,37 @@ export const psxBiosSizeError = `The PlayStation BIOS in the BIOS folder (Paths:
  * The play page's message for a failed play-disc request.
  * @param {number | null} status the HTTP status, or null for a network or body-read failure
  * @param {string | null} code the problem's `code`, when the body had one
+ * @param {string} [core] PSP B3: `ppsspp` gets the UMD wording and its 2 GiB limit
  * @returns {string}
  */
-export function discError(status, code) {
+export function discError(status, code, core = 'pcsx_rearmed') {
+	const psp = core === pspCore;
 	if (status === 401) return sessionExpired;
-	if (code === 'PlayDiscTooLarge') return 'This disc is larger than 1 GiB, too large to play in the browser.';
+	if (code === 'PlayDiscTooLarge')
+		return psp
+			? 'This UMD image is larger than 2 GiB, too large to play in the browser.'
+			: 'This disc is larger than 1 GiB, too large to play in the browser.';
 	if (code === 'InvalidPlayDisc')
-		return "This disc can't be played in the browser: its cue sheet or files are invalid or don't match.";
+		return psp
+			? "This UMD image can't be played in the browser: it must be one non-empty .iso whose name matches the release."
+			: "This disc can't be played in the browser: its cue sheet or files are invalid or don't match.";
 	return status === null ? "Couldn't load the disc." : `Couldn't load the disc (HTTP ${status}).`;
+}
+
+/** @typedef {{ secure: boolean, isolated: boolean, sharedArrayBuffer: boolean, webgl2: boolean }} PspBrowser */
+
+/**
+ * PSP B3: why this browser context can't run PPSSPP, checked before the ISO is fetched, or null when it can.
+ * @param {PspBrowser} browser
+ * @returns {string | null}
+ */
+export function pspBrowserError(browser) {
+	if (!browser.secure)
+		return "PSP games need a secure page: open RnRomManager over HTTPS or on localhost. A plain-HTTP network address can't run them.";
+	if (!browser.isolated || !browser.sharedArrayBuffer)
+		return "This page isn't cross-origin isolated, so PSP games can't use threads. Ask an Admin to check that the proxy keeps the Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers.";
+	if (!browser.webgl2) return "PSP games need WebGL 2, which this browser or graphics driver doesn't provide.";
+	return null;
 }
 
 /**

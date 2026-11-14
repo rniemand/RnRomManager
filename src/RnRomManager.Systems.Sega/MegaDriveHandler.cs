@@ -26,6 +26,12 @@ public sealed class MegaDriveHandler : ISystemHandler
     /// <inheritdoc />
     public bool EmbedRomsInZip => true;
 
+    /// <summary>
+    /// Genesis B5: Genesis Plus GX, whose files the operator supplies (<c>Emulator:GenesisCorePath</c>); Play shows
+    /// either way and explains a missing setup.
+    /// </summary>
+    public string BrowserCore => "genesis_plus_gx";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => MegaDriveHeader.Read(rom, Id);

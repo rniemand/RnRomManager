@@ -4,6 +4,7 @@
 	import type { GameListItem } from '../api/types';
 	import { formatCount } from '../format';
 	import { tooltip } from '../tooltip';
+	import { opensInNewTab, playUrl } from '../emulator';
 	import EmulatorModal from './EmulatorModal.svelte';
 	import FileSize from './FileSize.svelte';
 	import Icon from './Icon.svelte';
@@ -44,6 +45,33 @@
 	const canPlay = (game: GameListItem) => game.playRomId != null && !selected;
 	const actionsColumn = $derived(!!action || games.some((g) => g.playRomId != null));
 </script>
+
+<!-- C2: Play, or (PSP B3) a link that opens the isolated player in its own tab. -->
+{#snippet playAction(game: GameListItem, classes: string)}
+	{#if game.browserCore && opensInNewTab(game.browserCore)}
+		<!-- Static player page outside the SPA router. -->
+		<!-- eslint-disable svelte/no-navigation-without-resolve -->
+		<a
+			class={classes}
+			href={playUrl(
+				game.id,
+				{ id: game.playRomId!, fileName: game.playRomFileName ?? '' },
+				game.browserCore
+			)}
+			target="_blank"
+			rel="noopener"
+			aria-label="Play {game.displayTitle} (opens in a new tab)"
+			><!-- eslint-enable svelte/no-navigation-without-resolve --><Icon name="play" /></a
+		>
+	{:else}
+		<button
+			type="button"
+			class={classes}
+			aria-label="Play {game.displayTitle}"
+			onclick={() => play(game)}><Icon name="play" /></button
+		>
+	{/if}
+{/snippet}
 
 {#snippet updatesBadge(game: GameListItem, extra: string)}
 	{#if game.updateCount > 0}
@@ -88,12 +116,10 @@
 						{/if}
 						{@render updatesBadge(game, 'position-absolute bottom-0 start-0 m-1')}
 						{#if canPlay(game)}
-							<button
-								type="button"
-								class="btn btn-sm btn-primary rounded-circle position-absolute bottom-0 end-0 m-1 z-2"
-								aria-label="Play {game.displayTitle}"
-								onclick={() => play(game)}><Icon name="play" /></button
-							>
+							{@render playAction(
+								game,
+								'btn btn-sm btn-primary rounded-circle position-absolute bottom-0 end-0 m-1 z-2'
+							)}
 						{/if}
 					</div>
 					<div class="card-body p-2">
@@ -185,12 +211,7 @@
 						{#if actionsColumn}
 							<td class="text-end text-nowrap">
 								{#if canPlay(game)}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-success"
-										aria-label="Play {game.displayTitle}"
-										onclick={() => play(game)}><Icon name="play" /></button
-									>
+									{@render playAction(game, 'btn btn-sm btn-outline-success')}
 								{/if}
 								{#if action}{@render action(game)}{/if}
 							</td>

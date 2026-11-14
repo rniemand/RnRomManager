@@ -12,7 +12,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 - **Review queue:** files the DATs don't know get name suggestions, a DAT search, or manual entry; filter the queue, search Google and Shift+click Delete for loose files.
 - **Library edits (`rom-manager`):** edit metadata, move or merge releases between games, upload box art and screenshots and choose the cover, delete to a recoverable `_removed/` folder, which Admins restore from or empty on the **Deleted ROMs** page.
 - **Reports:** library size treemap and system drill-down, missing cover images, and duplicate groups with merge/dismiss for ROM managers.
-- **Game detail:** Releases/Images tabs, a **Play** button that runs Game Boy, Game Boy Color, Game Boy Advance, NES, Virtual Boy, Atari 2600, Atari 5200, Atari 7800, Atari Lynx, Atari Jaguar, ColecoVision, Game Gear, Master System and PlayStation releases in the browser (ColecoVision needs its BIOS, `colecovision.rom`, copied into `data/bios/`; PlayStation plays one disc per launch, up to 1 GiB, a standalone `.bin`/`.iso` or a cue with its tracks, using `data/bios/scph5501.bin` when you supply it and its built-in HLE BIOS otherwise), each release's original ingest name and a Markdown note per release (kept in the game's ZIP), a read-only info.json tree with copying, Google search and merge suggestions.
+- **Game detail:** Releases/Images tabs, a **Play** button that runs Game Boy, Game Boy Color, Game Boy Advance, NES, Virtual Boy, Atari 2600, Atari 5200, Atari 7800, Atari Lynx, Atari Jaguar, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, PlayStation and PSP releases in the browser (ColecoVision needs its BIOS, `colecovision.rom`, copied into `data/bios/`; PlayStation plays one disc per launch, up to 1 GiB, a standalone `.bin`/`.iso` or a cue with its tracks, using `data/bios/scph5501.bin` when you supply it and its built-in HLE BIOS otherwise; PSP opens a `.iso` of up to 2 GiB in its own tab and needs HTTPS or `localhost`; Genesis needs the Genesis Plus GX core files you supply, see [configuration](docs/configuration.md#genesis-plus-gx-core)), each release's original ingest name and a Markdown note per release (kept in the game's ZIP), a read-only info.json tree with copying, Google search and merge suggestions.
 - **Auditing (Admin):** filterable file-action history, retained for 30 days, with user/job and relative source/target paths.
 - **Integrity checks:** daily quick checks and on-demand deep (hash) checks, with automatic database repair.
 - **Database backups (Admin):** daily backups to a volume with configurable time and retention, Back up now, and a restore at startup.
@@ -40,12 +40,12 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Game Gear | `gg` | In ZIP | `.gg`, `.sms` | No-Intro | `smsplus` |
 | GameCube | `gc` | Next to ZIP | `.iso` | Redump | — |
 | Master System | `sms` | In ZIP | `.sms` | No-Intro | `smsplus` |
-| Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen` | No-Intro | — |
+| Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen` | No-Intro | `genesis_plus_gx` |
 | Nintendo 64 | `n64` | In ZIP | `.z64`, `.v64`, `.n64` | No-Intro | — |
 | Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | `fceumm` |
 | Nintendo Switch | `switch` | Next to ZIP | `.nsp`, `.xci`, `.nsz`, `.xcz` | titledb | — |
 | PlayStation | `psx` | Next to ZIP | `.bin`, `.cue`, `.iso` | Redump | `pcsx_rearmed` |
-| PlayStation Portable | `psp` | Next to ZIP | `.iso` | Redump | — |
+| PlayStation Portable | `psp` | Next to ZIP | `.iso` | Redump | `ppsspp` |
 | Saturn | `saturn` | Next to ZIP | `.bin`, `.cue`, `.nrg` | Redump | — |
 | Super Nintendo Entertainment System | `snes` | In ZIP | `.sfc`, `.smc` | No-Intro | — |
 | TurboGrafx-16 | `tg16` | In ZIP | `.pce` | No-Intro | — |
@@ -143,6 +143,8 @@ RnRomManager manages ROM files **you already own**, for personal backup. It does
   - [SMS Plus GX `c642bbd`](https://github.com/EmulatorJS/smsplus-gx/tree/c642bbd0680b5959180a420036108893d0aec961) (Game Gear and Master System): GPL-2.0-or-later. It includes MAME's Z80 core (BSD-3-Clause, Juergen Buchmueller), MAME's YM2413 with CrabEmu changes (GPL-2.0-or-later), Shay Green's sms_ntsc (LGPL-2.1-or-later) and Maxim's SN76489 PSG emulation. Maxim's terms for that file ask to be told when it's distributed and not to pass it off as your own work. **Anyone who publishes an image containing this core should let Maxim know.**
   - [FCEUmm `d9d7e14`](https://github.com/EmulatorJS/libretro-fceumm/tree/d9d7e141274d07186b6a871ca2919b6f13cfb2f9) (NES): GPL-2.0-or-later. It includes Shay Green's nes_ntsc (LGPL-2.1-or-later), MAME's PIC16C5x core (BSD-3-Clause, Tony La Porta) and Mitsutaka Okazaki's emu2413 (MIT).
   - [PCSX ReARMed `f29871d`](https://github.com/EmulatorJS/pcsx_rearmed/tree/f29871dde1742cafb0ab56ba33636a8600bbbd80) (PlayStation): GPL-2.0-or-later, with the P.E.Op.S. GPU and SPU (GPL-2.0-or-later). It includes MAME's GTE divider (BSD-3-Clause, smf) and libchdr (BSD-3-Clause) with the LZMA SDK (public domain), Zstandard (BSD) and dr_flac (public domain or MIT-0). No PlayStation BIOS is included.
+  - [PPSSPP `47efdd0`](https://github.com/EmulatorJS/ppsspp/tree/47efdd01da182e2a8f8f2ed078d56fd230480432) (PSP): GPL-2.0-or-later, with the PSPSDK BSD-style notice. Its asset archive adds the ppsspp-debugger web build (GPL-3.0-or-later), SDL_GameControllerDB (zlib), Roboto Condensed (Apache-2.0) and the PSP system fonts PPSSPP ships (Sony firmware fonts with no published licence; see `ppsspp-NOTICE.txt`). No PSP firmware is included.
+  - Genesis Plus GX (Mega Drive / Genesis) isn't included: its licence forbids commercial use, so operators supply its files themselves.
   - The notices and licence texts are in [`src/RnRomManager.Web/emulator-licenses/`](https://github.com/rniemand/RnRomManager/tree/main/src/RnRomManager.Web/emulator-licenses) and are copied next to the emulator in the image (`/emulator/vendor/licenses/`).
 - The placeholder cartridge box art is made for this project. Admin → About lists the licence of every dependency.
 

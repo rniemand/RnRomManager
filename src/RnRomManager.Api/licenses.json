@@ -27,6 +27,7 @@
   { "name": "@emulatorjs/core-handy", "license": "Zlib", "url": "https://github.com/EmulatorJS/libretro-handy" },
   { "name": "@emulatorjs/core-mgba", "license": "MPL-2.0", "url": "https://github.com/EmulatorJS/mgba" },
   { "name": "@emulatorjs/core-pcsx_rearmed", "license": "GPL-2.0-or-later AND BSD-3-Clause AND MIT-0, plus the public-domain LZMA SDK", "url": "https://github.com/EmulatorJS/pcsx_rearmed" },
+  { "name": "@emulatorjs/core-ppsspp", "license": "GPL-2.0-or-later AND GPL-3.0-or-later AND Zlib AND Apache-2.0, plus the PSPSDK BSD-style notice and Sony PSP system fonts (see ppsspp-NOTICE.txt)", "url": "https://github.com/EmulatorJS/ppsspp" },
   { "name": "@emulatorjs/core-prosystem", "license": "GPL-2.0", "url": "https://github.com/EmulatorJS/prosystem-libretro" },
   { "name": "@emulatorjs/core-smsplus", "license": "GPL-2.0-or-later AND BSD-3-Clause AND LGPL-2.1-or-later, plus Maxim's SN76489 terms", "url": "https://github.com/EmulatorJS/smsplus-gx" },
   { "name": "@emulatorjs/core-stella2014", "license": "GPL-2.0", "url": "https://github.com/EmulatorJS/stella2014-libretro" },

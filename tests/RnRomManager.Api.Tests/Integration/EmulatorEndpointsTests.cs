@@ -1,12 +1,16 @@
 using System.Net;
 using System.Net.Http.Headers;
+using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
 
-/// <summary>B3: <c>GET /api/emulator/bios/{name}</c> against MariaDB and a temp <c>Paths:Bios</c> folder.</summary>
+/// <summary>
+/// B3: <c>GET /api/emulator/bios/{name}</c> against MariaDB and a temp <c>Paths:Bios</c> folder; Genesis B4 in the
+/// <c>.Genesis</c> part, against a temp <c>Emulator:GenesisCorePath</c> and a synthetic manifest.
+/// </summary>
 [Category("Integration")]
-public class EmulatorEndpointsTests
+public partial class EmulatorEndpointsTests
 {
     private static readonly byte[] Bios = [.. Enumerable.Range(0, 8192).Select(i => (byte)(i * 7))];
 
@@ -18,7 +22,11 @@ public class EmulatorEndpointsTests
     [OneTimeSetUp]
     public async Task StartHost()
     {
-        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
+        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
+        {
+            TestServices = services => services.AddSingleton(SyntheticManifest),
+        };
+        _factory.Settings["Emulator:GenesisCorePath"] = Path.Combine(_factory.Root, "genesis");
         await _factory.StartSharedAsync();
     }
 
@@ -36,6 +44,7 @@ public class EmulatorEndpointsTests
             else
                 entry.Delete();
         }
+        ResetGenesisDir();
         _client = await SignInAsync("player");
     }
 

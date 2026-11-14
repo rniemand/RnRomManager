@@ -22,6 +22,9 @@ public class PlayStationPortableHandlerTests
     }
 
     [Test]
+    public void BrowserCore_IsPpsspp() => Assert.That(Handler.BrowserCore, Is.EqualTo("ppsspp"));
+
+    [Test]
     public void ReadHeader_IsNull() => Assert.That(Handler.ReadHeader(new byte[4096]), Is.Null);
 
     [Test]

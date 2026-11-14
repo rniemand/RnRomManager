@@ -20,6 +20,13 @@ public class MegaDriveHandlerTests
     }
 
     [Test]
+    public void BrowserCore_IsGenesisPlusGx_WithEmbeddedRoms()
+    {
+        Assert.That(Handler.BrowserCore, Is.EqualTo("genesis_plus_gx"));
+        Assert.That(Handler.EmbedRomsInZip, Is.True);
+    }
+
+    [Test]
     public void ReadHeader_ReadsEveryField()
     {
         var header = Handler.ReadHeader(Builder.Build())!;

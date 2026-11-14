@@ -119,6 +119,8 @@ The live log (**Admin → Logs**) is a long-lived server-sent event stream at `/
 
 Moving or deleting a Switch release can copy a multi-GB file when `/app/ingest` and `/app/roms` are on different volumes (Review resolutions run as background jobs, so they aren't affected). The request stays open until that finishes, so raise the proxy's read timeout for `/api/` (nginx `proxy_read_timeout`, e.g. `600s`); otherwise the browser gets a gateway error while the action still completes in the background. Reload the page before trying again.
 
+**PSP play** runs in its own tab that must be cross-origin isolated: the app sends `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` on `/emulator/play-psp.html` only. The proxy must pass those two headers through unchanged (Caddy, Traefik and nginx do by default; don't strip or override them). The browser also needs a secure origin: serve the app over HTTPS, or open it on `localhost`/`127.0.0.1`. Opened over plain HTTP at a LAN address, the PSP tab says it needs a secure page; every other system plays as before.
+
 Use `ASPNETCORE_HTTP_PORTS` to change the listen port, not `ASPNETCORE_URLS`: the container health check reads the first port from `ASPNETCORE_HTTP_PORTS`.
 
 ## Outbound HTTP
@@ -229,6 +231,19 @@ Switch ROMs and disc images (PlayStation, PSP, GameCube, Wii, Xbox 360 and Satur
 - **Interrupted edits.** If a title edit, move or merge is cut off, both the old and new ZIP can survive: integrity reports `DuplicateGameId` or `DuplicateSha1` and keeps the existing rows, and a file named by the losing ZIP can show as `OrphanFile`. Stop writes, back up both ZIPs and their files, keep the ZIP whose pointers match the files on disk (for a completed move or merge: the target, after checking it lists the moved releases), move the obsolete ZIP outside `roms/`, and run integrity. Keep orphan bytes until both ZIPs have been checked.
 - **Multi-release moves.** Before moving one release out of a game with several, the app writes a verified copy of the source ZIP as `<name>.move-backup.tmp` plus a recovery record `<name>.move-backup.tmp.json` (format version 1: backup SHA256, both game IDs and ZIP paths, the moved SHA1 and both pointers), and removes them when the move finishes. If they survive a crash, use the pair to restore whichever releases are missing from the source or target ZIP, after checking the record matches the backup; a backup's presence alone doesn't mean the move failed. A `.partial` file is an interrupted copy: never use it, and delete it once nothing is running.
 - **DAT publication.** A DAT refresh builds and checks the whole new set in `cache/work/<job>/` before swapping it in through a fixed backup, `cache/dats.previous/`. If the app stops mid-swap, startup puts the previous set back (or keeps the new one if the swap had finished) and removes the backup. A linked or non-folder `cache/dats` or `cache/dats.previous` is never moved or deleted; fix it by hand. The DAT manifest is read only up to 1 MiB and the titledb file up to 256 MiB, through the same checked reads.
+
+## Genesis Plus GX core
+
+Genesis play needs three Genesis Plus GX files you supply ([configuration](configuration.md#genesis-plus-gx-core) lists their sizes and SHA-256). They come from the npm package `@emulatorjs/core-genesis_plus_gx@4.2.3`: the two `.data` payloads are at the package root and the report is `reports/genesis_plus_gx.json`; copy all three to one folder, the report at its root too. Follow the core's own licence terms. Then mount the folder read-only and point the setting at it:
+
+```yaml
+    volumes:
+      - ./data/genesis:/app/genesis:ro
+    environment:
+      Emulator__GenesisCorePath: /app/genesis
+```
+
+The app runs as UID 1654, which needs read access to the folder and files (e.g. `chmod -R a+rX data/genesis`). Keep the folder outside anything the app or its users can write to: EmulatorJS runs the JavaScript inside these files in the app's origin, and the hash check only accepts the exact 4.2.3 files. No restart is needed to add or replace files once the setting is there. Without the setting (the default) the API serves no Genesis files, and Play on a Genesis game explains that the core needs setting up.
 
 ## Admin password recovery
 

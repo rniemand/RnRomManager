@@ -31,12 +31,16 @@ public partial class LibraryEndpointsTests
         TestLibrary.Rom(name, bytes, isPrimary) with { ExternalFileName = name };
 
     /// <summary>Mirrors a PlayStation game at <c>psx/D/&lt;title&gt;.zip</c> and writes <paramref name="onDisk"/> beside it.</summary>
-    private async Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> PsxGame(string title, InfoJsonRom[] roms,
-        params (string Name, byte[] Bytes)[] onDisk)
+    private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> PsxGame(string title, InfoJsonRom[] roms,
+        params (string Name, byte[] Bytes)[] onDisk) => DiscGame(PlayDisc.SystemId, title, roms, onDisk);
+
+    /// <summary>Mirrors a disc game of <paramref name="system"/> at <c>&lt;system&gt;/D/&lt;title&gt;.zip</c>.</summary>
+    private async Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> DiscGame(string system, string title,
+        InfoJsonRom[] roms, params (string Name, byte[] Bytes)[] onDisk)
     {
-        var game = TestLibrary.Game(title, roms) with { System = PlayDisc.SystemId };
-        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, $"psx/D/{title}.zip", 100, DateTime.UtcNow), default);
-        var folder = RomsFolder("psx", "D");
+        var game = TestLibrary.Game(title, roms) with { System = system };
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, $"{system}/D/{title}.zip", 100, DateTime.UtcNow), default);
+        var folder = RomsFolder(system, "D");
         foreach (var (name, bytes) in onDisk)
             await File.WriteAllBytesAsync(Path.Combine(folder, name), bytes);
         var detail = await GetJson($"/api/games/{game.GameId}");
@@ -266,6 +270,128 @@ public partial class LibraryEndpointsTests
         await TestUsers.CreateAsync(_factory, "forced", mustChangePassword: true);
         using var forced = await AuthClient.CreateAsync(_factory);
         (await forced.LoginAsync("forced", TestUsers.Password)).Dispose();
+
+        using var asAnonymous = await anonymous.GetAsync(PlayDiscUrl(id, romId));
+        using var asForced = await forced.GetAsync(PlayDiscUrl(id, romId));
+
+        Assert.That(asAnonymous.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+        Assert.That(asForced.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+        Assert.That(await AuthClient.CodeAsync(asForced), Is.EqualTo("PasswordChangeRequired"));
+    }
+
+    // PSP B2: a PlayStation Portable release streams its standalone .iso, bounded at 2 GiB inclusive.
+
+    private static readonly byte[] PspIso = Umd(3);
+
+    /// <summary>A small synthetic image; each <paramref name="seed"/> gives distinct bytes (stored SHA-1s are unique).</summary>
+    private static byte[] Umd(int seed) => [.. Enumerable.Range(0, 2048 * 5).Select(i => (byte)(i * 11 + seed))];
+
+    private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> PspGame(string title, InfoJsonRom[] roms,
+        params (string Name, byte[] Bytes)[] onDisk) => DiscGame(PlayDisc.PspSystemId, title, roms, onDisk);
+
+    private async Task<(Guid Id, string Folder, long RomId)> PspUmd(string title = "Umd", int seed = 3)
+    {
+        var name = $"{title} (USA).iso";
+        var bytes = Umd(seed);
+        var (id, folder, ids) = await PspGame(title, [PsxSolo(name, bytes)], (name, bytes));
+        return (id, folder, ids[0]);
+    }
+
+    [Test]
+    public async Task PlayDisc_APspIso_StreamsByteForByte_EvenForARangeRequest()
+    {
+        var (id, folder, romId) = await PspUmd();
+
+        using var response = await _user.SendAsync(HttpMethod.Get, PlayDiscUrl(id, romId), null, sendXsrf: false,
+            headers => headers.Range = new RangeHeaderValue(10, 19));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"));
+        Assert.That(response.Content.Headers.ContentLength, Is.EqualTo(PspIso.Length));
+        Assert.That(response.Headers.CacheControl?.NoStore, Is.True);
+        Assert.That(response.Headers.AcceptRanges, Is.EqualTo(new[] { "none" }));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(PspIso));
+        AssertNotOpen(Path.Combine(folder, "Umd (USA).iso"));
+    }
+
+    [Test]
+    public async Task PlayDisc_APspIsoOfExactlyTwoGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
+    {
+        var (atId, atFolder, atRom) = await PspUmd("Big", 5);
+        var (overId, overFolder, overRom) = await PspUmd("Bigger", 7);
+        // Lengths are set on disk only: the stored sizes stay the small originals.
+        await using (var grown = new FileStream(Path.Combine(atFolder, "Big (USA).iso"), FileMode.Open, FileAccess.Write))
+            grown.SetLength(PlayDisc.PspMaxBytes);
+        await using (var grown = new FileStream(Path.Combine(overFolder, "Bigger (USA).iso"), FileMode.Open, FileAccess.Write))
+            grown.SetLength(PlayDisc.PspMaxBytes + 1);
+
+        using (var atLimit = await _user.SendAsync(HttpMethod.Get, PlayDiscUrl(atId, atRom), null, sendXsrf: false,
+            completion: HttpCompletionOption.ResponseHeadersRead))
+        {
+            Assert.That(atLimit.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(atLimit.Content.Headers.ContentLength, Is.EqualTo(PlayDisc.PspMaxBytes));
+        } // disposed with the body unread: the stream is cancelled
+
+        using var over = await _user.GetAsync(PlayDiscUrl(overId, overRom));
+        Assert.That(over.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        var problem = await AuthClient.JsonAsync(over);
+        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.PlayDiscTooLarge));
+        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("2 GiB"));
+        AssertNotOpen(Path.Combine(overFolder, "Bigger (USA).iso"));
+    }
+
+    [Test]
+    public async Task PlayDisc_APspReleaseThatIsNotOneIso_OrIsEmpty_OrMisnamed_Is409InvalidPlayDisc()
+    {
+        var bin = await PspGame("Binary", [PsxSolo("Binary (USA).bin", Umd(10))], ("Binary (USA).bin", Umd(10)));
+        var set = await PspGame("Setted",
+            [PsxSolo("Setted (USA).iso", Umd(11)) with { Files = [SetFile("Setted (USA).cue", Umd(12))] }],
+            ("Setted (USA).iso", Umd(11)), ("Setted (USA).cue", Umd(12)));
+        var empty = await PspGame("Hollow", [PsxSolo("Hollow (USA).iso", Umd(13))], ("Hollow (USA).iso", []));
+        var misnamed = await PspGame("Renamed",
+            [PsxSolo("Renamed (USA).iso", Umd(14)) with { FileName = "Renamed (USA) [b].iso" }], ("Renamed (USA).iso", Umd(14)));
+
+        foreach (var (id, _, ids) in new[] { bin, set, empty, misnamed })
+        {
+            using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+            Assert.That(await ProblemCode(response, HttpStatusCode.Conflict), Is.EqualTo(PlayDisc.InvalidPlayDisc), id.ToString());
+        }
+    }
+
+    [Test]
+    public async Task PlayDisc_APspIsoThatIsMissing_NotAFile_OrClaimedByAnotherRelease_Is404()
+    {
+        var (missingId, missingFolder, missingRom) = await PspUmd("Gone", 20);
+        File.Delete(Path.Combine(missingFolder, "Gone (USA).iso"));
+        var (dirId, dirFolder, dirRom) = await PspUmd("Folder", 21);
+        File.Delete(Path.Combine(dirFolder, "Folder (USA).iso"));
+        Directory.CreateDirectory(Path.Combine(dirFolder, "Folder (USA).iso"));
+        var (twinId, _, twinRoms) = await PspGame("Twin Umd",
+            [PsxSolo("Twin Umd (USA).iso", Umd(22)), PsxSolo("TWIN UMD (USA).ISO", Umd(23), isPrimary: false)],
+            ("Twin Umd (USA).iso", Umd(22)));
+        var (psxId, _, psxRom) = await PsxUsaSet();
+        var (pspId, _, pspRom) = await PspUmd("Mixed", 24);
+
+        foreach (var url in new[]
+        {
+            PlayDiscUrl(missingId, missingRom), PlayDiscUrl(dirId, dirRom), PlayDiscUrl(twinId, twinRoms[0]),
+            PlayDiscUrl(pspId, psxRom), PlayDiscUrl(psxId, pspRom), PlayDiscUrl(pspId, pspRom + 1000),
+        })
+        {
+            using var response = await _user.GetAsync(url);
+            Assert.That(await ProblemCode(response, HttpStatusCode.NotFound), Is.EqualTo("NotFound"), url);
+        }
+        Directory.Delete(Path.Combine(dirFolder, "Folder (USA).iso"));
+    }
+
+    [Test]
+    public async Task PlayDisc_APspIso_AnonymousIs401_AndAForcedPasswordChangeIs403()
+    {
+        var (id, _, romId) = await PspUmd("Locked", 25);
+        using var anonymous = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "forced-psp", mustChangePassword: true);
+        using var forced = await AuthClient.CreateAsync(_factory);
+        (await forced.LoginAsync("forced-psp", TestUsers.Password)).Dispose();
 
         using var asAnonymous = await anonymous.GetAsync(PlayDiscUrl(id, romId));
         using var asForced = await forced.GetAsync(PlayDiscUrl(id, romId));

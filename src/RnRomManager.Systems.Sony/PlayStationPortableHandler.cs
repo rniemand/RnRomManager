@@ -39,5 +39,8 @@ public sealed class PlayStationPortableHandler : ISystemHandler
 
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
+    /// <summary>PSP B1: PPSSPP, in the isolated PSP tab; the external <c>.iso</c> streams through play-disc.</summary>
+    public string BrowserCore => "ppsspp";
+
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
 }

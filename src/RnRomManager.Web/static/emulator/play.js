@@ -1,14 +1,23 @@
 // Browser emulators B5: fetches the release through the download endpoint and starts EmulatorJS on it.
 // Play B4: PlayStation fetches its disc from play-disc, with the optional scph5501.bin handed over in memory.
+// PSP B3: on play-psp.html (its own cross-origin isolated tab) PPSSPP checks the browser, then fetches its UMD image
+// from play-disc and runs threaded. Genesis B4/B5: Genesis Plus GX checks the operator's core files first and loads
+// them from the API.
 import {
 	biosError,
 	biosFor,
 	contentFileName,
 	controlSchemeFor,
 	discError,
+	genesisCheckUrl,
+	genesisCore,
+	genesisCoreError,
+	genesisPaths,
 	hidesCoreChooser,
 	optionalBiosError,
 	parsePlayParams,
+	pspBrowserError,
+	pspCore,
 	psxBios,
 	psxBiosBytes,
 	psxBiosSizeError,
@@ -86,16 +95,50 @@ async function loadPsxBios() {
 }
 
 /**
- * Play B4: the disc from play-disc (a standalone image, or a ZIP of the playback cue and its tracks).
+ * Genesis B4: one bodyless HEAD of the operator's core files, before the ROM is fetched or the loader starts.
+ * @returns {Promise<string | null>} the message to show, or null when the files are there and match
+ */
+async function checkGenesisCore() {
+	try {
+		const response = await fetch(genesisCheckUrl, { method: 'HEAD', credentials: 'same-origin' });
+		return genesisCoreError(response.status);
+	} catch {
+		return genesisCoreError(null);
+	}
+}
+
+/**
+ * PSP B3: what PPSSPP needs from this browser context, read before anything is fetched.
+ * @returns {import('./params.js').PspBrowser}
+ */
+function pspBrowser() {
+	let webgl2 = false;
+	try {
+		webgl2 = !!document.createElement('canvas').getContext('webgl2');
+	} catch {
+		// No WebGL 2 context: reported below.
+	}
+	return {
+		secure: window.isSecureContext === true,
+		isolated: window.crossOriginIsolated === true,
+		sharedArrayBuffer: typeof SharedArrayBuffer === 'function',
+		webgl2
+	};
+}
+
+/**
+ * Play B4: the disc from play-disc (a standalone image, or a ZIP of the playback cue and its tracks; PSP B3: a UMD
+ * image).
  * @param {string} url
+ * @param {string} core
  * @returns {Promise<{ data: Blob } | { error: string }>}
  */
-async function loadDisc(url) {
+async function loadDisc(url, core) {
 	let response;
 	try {
 		response = await fetch(url, { credentials: 'same-origin' });
 	} catch {
-		return { error: discError(null, null) };
+		return { error: discError(null, null, core) };
 	}
 	if (!response.ok) {
 		let code = null;
@@ -105,21 +148,32 @@ async function loadDisc(url) {
 		} catch {
 			// No problem body: the status decides.
 		}
-		return { error: discError(response.status, code) };
+		return { error: discError(response.status, code, core) };
 	}
 	try {
 		return { data: await response.blob() };
 	} catch {
-		return { error: discError(null, null) };
+		return { error: discError(null, null, core) };
 	}
 }
 
 async function start() {
-	const params = parsePlayParams(location.search);
+	const pspPage = document.body.dataset.player === 'psp';
+	const params = parsePlayParams(location.search, pspPage);
 	if (!params) return show('Invalid emulator link.');
 
-	show('Loading…');
 	const isPsx = params.core === 'pcsx_rearmed';
+	const isPsp = params.core === pspCore;
+	if (isPsp) {
+		const problem = pspBrowserError(pspBrowser());
+		if (problem) return show(problem);
+	}
+	show('Loading…');
+	const isGenesis = params.core === genesisCore;
+	if (isGenesis) {
+		const problem = await checkGenesisCore();
+		if (problem) return show(problem);
+	}
 	const bios = biosFor(params.core);
 	if (bios) {
 		const problem = await checkBios(bios);
@@ -135,8 +189,8 @@ async function start() {
 
 	/** @type {Blob} */
 	let content;
-	if (isPsx) {
-		const disc = await loadDisc(`/api/games/${params.game}/roms/${params.rom}/play-disc`);
+	if (isPsx || isPsp) {
+		const disc = await loadDisc(`/api/games/${params.game}/roms/${params.rom}/play-disc`, params.core);
 		if ('error' in disc) return show(disc.error);
 		content = disc.data;
 	} else {
@@ -165,7 +219,9 @@ async function start() {
 	if (bios) ejs.EJS_biosUrl = `/api/emulator/bios/${bios}`;
 	// PCSX ReARMed finds scph5501.bin in the content root; GameManager writes this key before loading the content.
 	if (psxFirmware) ejs.EJS_externalFiles = { [`/${psxBios}`]: psxFirmware };
-	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed): hide only the core selector.
+	// Genesis B5: the payloads and report by name from the API; the vendored loader keeps them non-threaded.
+	if (isGenesis) ejs.EJS_paths = genesisPaths();
+	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX): hide only the core selector.
 	if (hidesCoreChooser(params.core)) ejs.EJS_hideSettings = ['retroarch_core'];
 	const scheme = controlSchemeFor(params.core, params.name);
 	if (scheme) ejs.EJS_controlScheme = scheme;
@@ -179,6 +235,8 @@ async function start() {
 		exitEmulation: false
 	};
 	ejs.EJS_defaultOptions = { 'save-save-interval': '30' };
+	// PSP B3: PPSSPP has only a threaded build; the vendored loader also ignores a saved "threads disabled".
+	if (isPsp) ejs.EJS_threads = true;
 
 	const loader = document.createElement('script');
 	loader.src = '/emulator/vendor/data/loader.js';

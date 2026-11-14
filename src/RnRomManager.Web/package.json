@@ -50,6 +50,7 @@
 		"@emulatorjs/core-handy": "4.2.3",
 		"@emulatorjs/core-mgba": "4.2.3",
 		"@emulatorjs/core-pcsx_rearmed": "4.2.3",
+		"@emulatorjs/core-ppsspp": "4.2.3",
 		"@emulatorjs/core-prosystem": "4.2.3",
 		"@emulatorjs/core-smsplus": "4.2.3",
 		"@emulatorjs/core-stella2014": "4.2.3",

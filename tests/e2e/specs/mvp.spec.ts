@@ -554,6 +554,109 @@ test('Play: a PlayStation set streams its disc ZIP from the detail page and the 
 	await closeEmulator();
 });
 
+/** PSP B3: what PPSSPP needs, as the isolated tab actually sees it. */
+async function pspBrowser(psp: Page) {
+	return psp.evaluate(() => ({
+		secure: isSecureContext,
+		isolated: crossOriginIsolated,
+		sharedArrayBuffer: typeof SharedArrayBuffer,
+		webgl2: document.createElement('canvas').getContext('webgl2') !== null
+	}));
+}
+
+test('Play: a PSP UMD image opens the isolated player in a new tab from the detail page and the library', async () => {
+	const tab = /\/emulator\/play-psp\.html\?.*core=ppsspp&name=Pocket%20Ninja%20\(USA\)\.iso$/;
+	await openGame('Pocket Ninja');
+	// Observers first: the popup, its document and its authenticated ISO request.
+	const popup = context.waitForEvent('page');
+	const pageResponse = context.waitForEvent('response', (r) => tab.test(r.url()));
+	const iso = context.waitForEvent('response', (r) => /\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(r.url()));
+	await page.getByRole('link', { name: 'Play Pocket Ninja (USA).iso (opens in a new tab)' }).click();
+	const psp = await popup;
+	await expect(page.locator('iframe')).toHaveCount(0); // no modal: the SPA stays as it was
+
+	const served = await pageResponse;
+	expect(served.status()).toBe(200);
+	expect(served.headers()['cross-origin-opener-policy']).toBe('same-origin');
+	expect(served.headers()['cross-origin-embedder-policy']).toBe('require-corp');
+	expect(served.headers()['content-security-policy']).toContain("frame-ancestors 'none'");
+	const disc = await iso;
+	expect(disc.status()).toBe(200);
+	expect(disc.headers()['content-type']).toBe('application/octet-stream');
+	expect(disc.headers()['content-length']).toBe(String(64 * 1024));
+	expect(disc.headers()['accept-ranges']).toBe('none');
+	expect(await pspBrowser(psp)).toEqual({ secure: true, isolated: true, sharedArrayBuffer: 'function', webgl2: true });
+
+	// Core startup follows Start Game: the pinned report, threaded payload and asset archive, all local. The synthetic
+	// image can't boot, so nothing past the downloads is asserted.
+	await expect(psp.getByText('Start Game')).toBeVisible();
+	const report = psp.waitForResponse((r) => r.url().endsWith('/emulator/vendor/data/cores/reports/ppsspp.json'));
+	const payload = psp.waitForResponse((r) => r.url().endsWith('/emulator/vendor/data/cores/ppsspp-thread-wasm.data'));
+	const assets = psp.waitForResponse((r) => r.url().endsWith('/emulator/vendor/data/cores/ppsspp-assets.zip'));
+	await psp.getByText('Start Game').click();
+	expect((await report).status()).toBe(200);
+	expect((await payload).status()).toBe(200);
+	expect((await assets).status()).toBe(200);
+	await psp.close();
+
+	await openLibrary();
+	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('Pocket Ninja');
+	await expect(page).toHaveURL(/[?&]q=/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	const quick = page.getByRole('link', { name: 'Play Pocket Ninja (opens in a new tab)' });
+	await expect(quick).toHaveAttribute('target', '_blank');
+	await expect(quick).toHaveAttribute('rel', 'noopener');
+	const second = context.waitForEvent('page');
+	await quick.click();
+	const fromLibrary = await second;
+	await expect(fromLibrary).toHaveURL(tab);
+	await expect(fromLibrary.getByText('Start Game')).toBeVisible();
+	expect((await pspBrowser(fromLibrary)).isolated).toBe(true);
+	await fromLibrary.close();
+});
+
+/** Plays a seeded Sega cartridge from its detail page with the bundled SMS Plus GX and waits for a running frame. */
+async function playWithSmsPlus(title: string, fileName: string, nameInUrl: RegExp): Promise<void> {
+	await openGame(title);
+	const rom = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()));
+	await page.getByRole('button', { name: `Play ${fileName}` }).click();
+	await expect(dialog().locator('iframe')).toHaveAttribute('src', nameInUrl);
+	expect((await rom).status()).toBe(200);
+	await startEmulator('smsplus');
+	const frame = page.frameLocator('iframe');
+	await expect(frame.locator('.ejs_canvas_parent canvas')).toHaveCount(1);
+	await expect(frame.locator('.ejs_error_text')).toHaveCount(0);
+	await closeEmulator();
+}
+
+test('Play: Genesis explains its missing core; Master System and Game Gear start with SMS Plus GX', async () => {
+	// Genesis B4: the e2e image has no Emulator:GenesisCorePath, so the HEAD check stops before the ROM or loader.
+	const genesisRequests: string[] = [];
+	const track = (r: { url: () => string }) => {
+		if (r.url().includes('/api/emulator/genesis')) genesisRequests.push(r.url());
+	};
+	await openGame('Turbo Comet');
+	const check = page.waitForResponse((r) => r.url().endsWith('/api/emulator/genesis') && r.request().method() === 'HEAD');
+	await page.getByRole('button', { name: 'Play Turbo Comet (USA, Europe).md' }).click();
+	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=genesis_plus_gx&name=Turbo%20Comet%20\(USA%2C%20Europe\)\.md$/);
+	expect((await check).status()).toBe(404);
+	await expect(page.frameLocator('iframe').getByRole('status')).toHaveText(
+		'Genesis games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
+	);
+	await expect(page.frameLocator('iframe').getByText('Start Game')).toHaveCount(0);
+	await closeEmulator();
+
+	// Genesis B6: Master System keeps SMS Plus GX (with the Genesis files absent), and Game Gear its .gg scheme.
+	page.on('request', track);
+	try {
+		await playWithSmsPlus('Harbor Patrol', 'Harbor Patrol (World).sms', /core=smsplus&name=Harbor%20Patrol%20\(World\)\.sms$/);
+		await playWithSmsPlus('Pocket Drift', 'Pocket Drift (World).gg', /core=smsplus&name=Pocket%20Drift%20\(World\)\.gg$/);
+	} finally {
+		page.off('request', track);
+	}
+	expect(genesisRequests).toEqual([]);
+});
+
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await openLibrary();
