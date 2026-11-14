@@ -60,13 +60,17 @@ const coreLicenses = [
 	'smsplus-NOTICE.txt',
 	'smsplus-sms_ntsc-LICENSE.txt',
 	'stella2014-LICENSE.txt',
-	'stella2014-NOTICE.txt'
+	'stella2014-NOTICE.txt',
+	'yabause-LICENSE.txt',
+	'yabause-NOTICE.txt',
+	'yabause-flac-LICENSE.txt',
+	'yabause-libchdr-LICENSE.txt'
 ];
 
 // The guarded vendoring edits (anchor → its replacement), applied in order.
 const getCoreAnchor = '        const gen = this.getCore(true);\n';
 const pinGuard =
-	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive"].includes(core)) {\n' +
+	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause"].includes(core)) {\n' +
 	'            return core;\n' +
 	'        }\n';
 const legacyAnchor =
@@ -75,7 +79,7 @@ const threadOverride =
 	'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
 	'                threads = true;\n' +
 	'            }\n' +
-	'            if (["genesis_plus_gx", "picodrive"].includes(this.getCore())) {\n' +
+	'            if (["genesis_plus_gx", "picodrive", "yabause"].includes(this.getCore())) {\n' +
 	'                threads = false;\n' +
 	'            }\n';
 const cdnAnchor =
@@ -185,7 +189,8 @@ describe('vendor-emulatorjs', () => {
 			'gearcoleco',
 			'smsplus',
 			'fceumm',
-			'pcsx_rearmed'
+			'pcsx_rearmed',
+			'yabause'
 		].flatMap((c) => [
 			`data/cores/${c}-legacy-wasm.data`,
 			`data/cores/${c}-wasm.data`,
@@ -384,12 +389,28 @@ describe('vendor-emulatorjs', () => {
 	);
 
 	it.each(['src/emulator.js', 'emulator.min.js'])(
-		'%s keeps both operator-supplied cores non-threaded, and requires threads only for PPSSPP and DOSBox Pure (B9)',
+		'%s keeps the operator-supplied cores and Yabause non-threaded, and requires threads only for PPSSPP and DOSBox Pure (B9)',
 		(file) => {
 			const source = readFileSync(join(out, 'data', file), 'utf8');
 			expect(source).toContain('const requiresThreads = ["ppsspp", "dosbox_pure"];');
-			expect(threadOverride).toContain('["genesis_plus_gx", "picodrive"].includes(this.getCore())');
+			expect(threadOverride).toContain(
+				'["genesis_plus_gx", "picodrive", "yabause"].includes(this.getCore())'
+			);
+			// Only the operator-supplied cores skip the CDN; Yabause is vendored.
 			expect(cdnSkip).toContain('["genesis_plus_gx", "picodrive"].includes(this.getCore())');
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s pins an explicit yabause, as upstream already does (Saturn B4)',
+		(file) => {
+			const resolve = coreResolver(readFileSync(join(out, 'data', file), 'utf8'));
+			const upstream = coreResolver(readFileSync(join(pkg, 'src', 'emulator.js'), 'utf8'));
+			for (const saved of ['picodrive', 'mednafen_saturn', null]) {
+				expect(upstream('yabause', saved), `${saved}`).toBe('yabause');
+				expect(resolve('yabause', saved), `${saved}`).toBe('yabause');
+			}
+			expect(resolve('yabause', null, true)).toBe('segaSaturn');
 		}
 	);
 

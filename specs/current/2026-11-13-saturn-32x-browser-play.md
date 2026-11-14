@@ -151,7 +151,7 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
     - the player requests `/api/emulator/cores/picodrive` and the three file URLs;
     - a missing core shows the PicoDrive message;
     - Genesis behaves as before.
-- [ ] **5. Vendor Yabause** (B4, B9):
+- [x] **5. Vendor Yabause** (B4, B9):
   - Adds `@emulatorjs/core-yabause@4.2.3` (exact version) to `package.json` and the lockfile, and `yabause` to the vendor `cores` list.
   - Adds `yabause` to the explicit-core patch and to the non-threaded guard, after confirming B9 (stop and ask if it fails). The finding goes into § Decisions.
   - Adds `yabause-LICENSE.txt`, `yabause-NOTICE.txt` and the `yabause-<component>-LICENSE.txt` files (B4) to `emulator-licenses/`, the package to `COMMON-BUILD.txt`, and an entry to `src/RnRomManager.Api/licenses.json`.
@@ -245,8 +245,8 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
 - 2026-11-13 PicoDrive and Yabause package facts re-checked at the second review → B1's PicoDrive lengths and SHA-256 match `npm pack @emulatorjs/core-picodrive@4.2.3`; Yabause's payloads have no `license.txt`, carry `0.9.15 e24ebfc` and RetroArch `6dd4353`, and neither core's non-threaded binaries reference `SharedArrayBuffer` or `pthread_create` (code)
 
 - 2026-11-14 Step 2 re-check of the PicoDrive pinned values → `npm pack @emulatorjs/core-picodrive@4.2.3` (outside the repo) gives exactly B1's lengths and SHA-256 for `picodrive-wasm.data`, `picodrive-legacy-wasm.data` and `reports/picodrive.json` (code)
-
 - 2026-11-14 Step 4 B9 re-check for PicoDrive → the vendored 4.2.3 `emulator.js` has `requiresThreads = ["ppsspp", "dosbox_pure"]`, so PicoDrive runs non-threaded on `play.html`; the non-threaded and no-CDN guards now cover `genesis_plus_gx` and `picodrive` (code)
+- 2026-11-14 Step 5 Yabause licence check at `e24ebfc` → both payloads lack `license.txt` and carry `0.9.15 e24ebfc` and RetroArch `6dd4353`; their binaries reference neither `SharedArrayBuffer` nor `pthread_create`, and `requiresThreads` excludes `yabause`. Components: libchdr (BSD-3-Clause, `yabause-libchdr-LICENSE.txt`), FLAC 1.3.3 decoder (Xiph BSD, `yabause-flac-LICENSE.txt`; its `md5.c` public domain), LZMA SDK 19.00 (public domain), zlib 1.2.11 inflate (zlib licence, quoted in the NOTICE), JUnzip (public domain) and Musashi 3.4 (MIT, quoted in the NOTICE). So the licence expression is `GPL-2.0-or-later AND BSD-3-Clause AND Zlib AND MIT, plus the public-domain LZMA SDK and JUnzip` (code)
 
 ## Kickoff prompt
 ```text

@@ -20,7 +20,8 @@ const cores = [
 	'gearcoleco',
 	'smsplus',
 	'fceumm',
-	'pcsx_rearmed'
+	'pcsx_rearmed',
+	'yabause'
 ];
 
 // Guarded edits of the pinned EmulatorJS scripts: each anchor must occur exactly once, or vendoring fails so the edit
@@ -30,7 +31,8 @@ const cores = [
 // Mega Drive to Genesis Plus GX and (32X B3) 32X to PicoDrive: EmulatorJS 4.2.3's getCore() would otherwise switch to
 // a core saved in the retroarch_core setting (genesis_plus_gx, picodrive, nestopia, mednafen_psx_hw, or smsplus for
 // Genesis and PicoDrive, whose first group is segaMS), none of which is vendored or delivered for that system. An
-// explicit pinned core returns itself before the saved setting is read.
+// explicit pinned core returns itself before the saved setting is read. Saturn B4: yabause is listed too, defensively
+// only: its segaSaturn group holds just yabause, so no other saved core could be chosen.
 //
 // PSP B3 (PPSSPP only): the core needs threads, so a saved "ejs_threads: disabled" must not select a payload that
 // isn't vendored; and a failed ppsspp-assets.zip request or a rejected File read must show a startup error instead of
@@ -38,7 +40,8 @@ const cores = [
 //
 // Genesis B5, 32X B3: the operator supplies only the non-threaded payloads, so Genesis Plus GX and PicoDrive never
 // select a "-thread" one, and a payload that can't be fetched shows a local error instead of falling back to the
-// EmulatorJS CDN.
+// EmulatorJS CDN. Saturn B9: only Yabause's non-threaded payloads are vendored, so it never selects a "-thread" one
+// either (its missing payloads still take upstream's path).
 const edits = [
 	{
 		file: 'emulator.js',
@@ -46,7 +49,7 @@ const edits = [
 			'        const gen = this.getCore(true);\n' +
 			'        if (cores[gen] && cores[gen].includes(this.preGetSetting("retroarch_core"))) {',
 		insertBefore:
-			'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive"].includes(core)) {\n' +
+			'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause"].includes(core)) {\n' +
 			'            return core;\n' +
 			'        }\n'
 	},
@@ -57,7 +60,7 @@ const edits = [
 			'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
 			'                threads = true;\n' +
 			'            }\n' +
-			'            if (["genesis_plus_gx", "picodrive"].includes(this.getCore())) {\n' +
+			'            if (["genesis_plus_gx", "picodrive", "yabause"].includes(this.getCore())) {\n' +
 			'                threads = false;\n' +
 			'            }\n'
 	},
