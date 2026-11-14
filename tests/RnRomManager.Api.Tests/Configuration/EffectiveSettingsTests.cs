@@ -40,6 +40,7 @@ public class EffectiveSettingsTests
             ["Paths:Bios"] = Path.Combine(root, "bios"),
             ["Backup:RestoreFrom"] = "rnrommanager-20261106-033000.zip",
             ["Emulator:GenesisCorePath"] = Path.Combine(root, "genesis"),
+            ["Emulator:PicodriveCorePath"] = Path.Combine(root, "picodrive"),
         }).Build();
         using var services = new ServiceCollection().AddAppOptions(config).BuildServiceProvider();
 
@@ -52,7 +53,9 @@ public class EffectiveSettingsTests
         Assert.That(settings.Paths.Bios, Is.EqualTo(Path.Combine(root, "bios")));
         Assert.That(json, Does.Contain($"\"bios\":{JsonSerializer.Serialize(Path.Combine(root, "bios"))}"));
         Assert.That(settings.Emulator.GenesisCorePath, Is.EqualTo(Path.Combine(root, "genesis")));
-        Assert.That(json, Does.Contain($"\"emulator\":{{\"genesisCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "genesis"))}}}"));
+        Assert.That(settings.Emulator.PicodriveCorePath, Is.EqualTo(Path.Combine(root, "picodrive")));
+        Assert.That(json, Does.Contain($"\"emulator\":{{\"genesisCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "genesis"))},"
+            + $"\"picodriveCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "picodrive"))}}}"));
         Assert.That(json, Does.Not.Contain("hunter2"));
     }
 }

@@ -554,6 +554,39 @@ test('Play: a PlayStation set streams its disc ZIP from the detail page and the 
 	await closeEmulator();
 });
 
+test('Play: a Saturn set asks for saturn_bios.bin, streams its disc and fetches the vendored Yabause core', async () => {
+	// Saturn B6/B7: no firmware in the e2e image (HLE), then play-disc, then the loader. The synthetic disc isn't a real
+	// Saturn game, so the case stops once the core payload has arrived instead of waiting for the game to run.
+	const order: string[] = [];
+	const track = (r: { url: () => string }) => {
+		const url = r.url();
+		if (url.endsWith('/api/emulator/bios/saturn_bios.bin')) order.push('bios');
+		else if (/\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(url)) order.push('disc');
+		else if (url.endsWith('/emulator/vendor/data/loader.js')) order.push('loader');
+	};
+	await openGame('Sky Rally');
+	page.on('request', track);
+	try {
+		const bios = page.waitForResponse((r) => r.url().endsWith('/api/emulator/bios/saturn_bios.bin'));
+		const disc = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(r.url()));
+		await page.getByRole('button', { name: 'Play Sky Rally (Japan) (Track 1).bin' }).click();
+		await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=yabause&name=Sky%20Rally%20\(Japan\)%20\(Track%201\)\.bin$/);
+		expect((await bios).status()).toBe(404);
+		const response = await disc;
+		expect(response.status()).toBe(200);
+		expect(response.headers()['content-type']).toBe('application/zip');
+		const frame = page.frameLocator('iframe');
+		await expect(frame.getByText('Start Game')).toBeVisible();
+		expect(order).toEqual(['bios', 'disc', 'loader']);
+		const payload = page.waitForResponse((r) => /\/emulator\/vendor\/data\/cores\/yabause(-legacy)?-wasm\.data$/.test(r.url()));
+		await frame.getByText('Start Game').click();
+		expect((await payload).status()).toBe(200);
+	} finally {
+		page.off('request', track);
+	}
+	await closeEmulator();
+});
+
 /** PSP B3: what PPSSPP needs, as the isolated tab actually sees it. */
 async function pspBrowser(psp: Page) {
 	return psp.evaluate(() => ({
@@ -633,10 +666,10 @@ test('Play: Genesis explains its missing core; Master System and Game Gear start
 	// Genesis B4: the e2e image has no Emulator:GenesisCorePath, so the HEAD check stops before the ROM or loader.
 	const genesisRequests: string[] = [];
 	const track = (r: { url: () => string }) => {
-		if (r.url().includes('/api/emulator/genesis')) genesisRequests.push(r.url());
+		if (r.url().includes('/api/emulator/cores/') || r.url().includes('/api/emulator/genesis')) genesisRequests.push(r.url());
 	};
 	await openGame('Turbo Comet');
-	const check = page.waitForResponse((r) => r.url().endsWith('/api/emulator/genesis') && r.request().method() === 'HEAD');
+	const check = page.waitForResponse((r) => r.url().endsWith('/api/emulator/cores/genesis_plus_gx') && r.request().method() === 'HEAD');
 	await page.getByRole('button', { name: 'Play Turbo Comet (USA, Europe).md' }).click();
 	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=genesis_plus_gx&name=Turbo%20Comet%20\(USA%2C%20Europe\)\.md$/);
 	expect((await check).status()).toBe(404);
@@ -655,6 +688,33 @@ test('Play: Genesis explains its missing core; Master System and Game Gear start
 		page.off('request', track);
 	}
 	expect(genesisRequests).toEqual([]);
+});
+
+test('Play: 32X explains its missing PicoDrive core', async () => {
+	// 32X B3: the e2e image has no Emulator:PicodriveCorePath, so the HEAD check stops before the ROM or loader.
+	const later: string[] = [];
+	let checked = false;
+	const track = (r: { url: () => string }) => {
+		if (checked && (r.url().includes('/api/emulator/cores/') || r.url().includes('/roms/') || r.url().includes('loader.js')))
+			later.push(r.url());
+	};
+	await openGame('Star Relay');
+	page.on('request', track);
+	try {
+		const check = page.waitForResponse((r) => r.url().endsWith('/api/emulator/cores/picodrive') && r.request().method() === 'HEAD');
+		await page.getByRole('button', { name: 'Play Star Relay (USA).32x' }).click();
+		await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=picodrive&name=Star%20Relay%20\(USA\)\.32x$/);
+		expect((await check).status()).toBe(404);
+		checked = true;
+		await expect(page.frameLocator('iframe').getByRole('status')).toHaveText(
+			'32X games need the PicoDrive core files: ask an Admin to set them up (Emulator:PicodriveCorePath).'
+		);
+		await expect(page.frameLocator('iframe').getByText('Start Game')).toHaveCount(0);
+	} finally {
+		page.off('request', track);
+	}
+	expect(later).toEqual([]);
+	await closeEmulator();
 });
 
 test('global search, ratings and favourites', async () => {

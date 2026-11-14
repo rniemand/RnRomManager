@@ -70,6 +70,8 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/emulator/bios/{name}"] = Role.User,
         ["GET /api/emulator/genesis/{name}"] = Role.User,
         ["HEAD /api/emulator/genesis"] = Role.User,
+        ["GET /api/emulator/cores/{core}/{name}"] = Role.User,
+        ["HEAD /api/emulator/cores/{core}"] = Role.User,
 
         ["GET /api/collections"] = Role.User,
         ["POST /api/collections"] = Role.User,

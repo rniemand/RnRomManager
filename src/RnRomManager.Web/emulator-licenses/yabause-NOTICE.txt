@@ -1,0 +1,99 @@
+Yabause (EmulatorJS core "yabause", Saturn)
+===========================================
+
+Files: yabause-wasm.data, yabause-legacy-wasm.data
+       (npm @emulatorjs/core-yabause 4.2.3)
+
+Corresponding source:
+- Core: https://github.com/EmulatorJS/yabause/tree/e24ebfca357bf70732a77a58c14491f13209a1cd
+  (version string "0.9.15 e24ebfc" in both binaries). Fork of
+  https://github.com/libretro/yabause.
+- Built with the core.json entry {"makescript": "Makefile",
+  "buildpath": "./yabause/src/libretro", "arguments": []} and
+  platform=emscripten, so yabause/src/libretro/Makefile's defaults apply:
+  DYNAREC = 0 (interpreter only), HAVE_MUSASHI = 1, ENABLE_ZLIB = 1,
+  ENABLE_CHD = 1, USE_SCSP2 = 0, ENABLE_TSUNAMI = 0, USE_PLAY_JIT = 0,
+  HAVE_GRIFFIN = 0, EMULATORJS_THREADS = 0 (no -pthread), STATIC_LINKING = 1,
+  -msimd128 -ftree-vectorize. Makefile.common lists the compiled sources:
+  the Yabause core, the software video renderer (vidsoft.c, titan), the SCSP,
+  the libretro frontend (libretro.c) and the components below.
+- RetroArch, build scripts and compiler: see COMMON-BUILD.txt (both binaries
+  carry RetroArch "6dd4353").
+
+Yabause is Copyright (C) its authors (yabause/AUTHORS and the per-file
+headers; for example src/yabause.c: 2003-2005 Guillaume Duhamel, 2004-2006
+Theo Berkau, 2006 Anders Montonen).
+
+Licence: GNU General Public License, version 2 or (at your option) any later
+version (the source headers: "either version 2 of the License, or (at your
+option) any later version"). yabause-LICENSE.txt is the source's
+yabause/COPYING, copied byte for byte (the GPLv2 text). RetroArch:
+GPL-3.0-or-later (retroarch-LICENSE.txt), so the combined binaries are
+distributed under the GPL, version 3.
+
+Components compiled into this build that carry their own terms:
+
+- src/libchdr: libchdr, Copyright Romain Tisserand, BSD 3-Clause
+  (yabause-libchdr-LICENSE.txt, the source's src/libchdr/LICENSE.txt).
+  It compiles these bundled libraries:
+  - deps/flac-1.3.3 (libFLAC's stream decoder: stream_decoder.c, format.c,
+    bitreader.c, crc.c, memory.c, lpc.c, cpu.c, md5.c, fixed.c): FLAC 1.3.3,
+    Copyright (C) 2000-2009 Josh Coalson and (C) 2011-2016 Xiph.Org
+    Foundation, Xiph.Org's BSD-style licence (yabause-flac-LICENSE.txt, the
+    source's COPYING.Xiph; FLAC's README: "The libraries (libFLAC, libFLAC++)
+    are licensed under Xiph.org's BSD-like license"). Its md5.c is Colin
+    Plumb's MD5 code, "in the public domain".
+  - deps/lzma-19.00 (LzmaDec, LzmaEnc, LzFind): LZMA SDK 19.00 by Igor
+    Pavlov, "placed in the public domain" (its LICENSE).
+  - deps/zlib-1.2.11 (adler32, crc32, inffast, inflate, inftrees, zutil:
+    decompression only), (C) 1995-2017 Jean-loup Gailly and Mark Adler,
+    zlib licence (its README):
+
+    This software is provided 'as-is', without any express or implied
+    warranty.  In no event will the authors be held liable for any damages
+    arising from the use of this software.
+
+    Permission is granted to anyone to use this software for any purpose,
+    including commercial applications, and to alter it and redistribute it
+    freely, subject to the following restrictions:
+
+    1. The origin of this software must not be misrepresented; you must not
+       claim that you wrote the original software. If you use this software
+       in a product, an acknowledgment in the product documentation would be
+       appreciated but is not required.
+    2. Altered source versions must be plainly marked as such, and must not be
+       misrepresented as being the original software.
+    3. This notice may not be removed or altered from any source distribution.
+
+- src/junzip.c: JUnzip by Joonas Pihlajamaa, "Released into public domain"
+  (src/junzip.h).
+
+- src/musashi: Musashi 3.4, the Motorola 680x0 emulator used for the sound
+  CPU, Copyright 1998-2001 Karl Stenerud (src/musashi/readme.txt and the
+  headers of m68kcpu.c and the generated m68kop*.c files):
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to permit
+    persons to whom the Software is furnished to do so, subject to the
+    following conditions:
+
+    The above copyright notice and this permission notice shall be included
+    in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+    NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+    DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+    OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+    USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+The Saturn BIOS is not part of this core or of RnRomManager. Without one the
+core uses its built-in HLE BIOS (GPL-2.0-or-later); the operator may supply
+saturn_bios.bin.
+
+The payloads ship no licence text (the package's "license" field is empty);
+this file and the licence files named above supply it.

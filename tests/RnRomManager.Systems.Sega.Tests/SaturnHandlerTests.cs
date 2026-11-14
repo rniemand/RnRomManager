@@ -22,6 +22,13 @@ public class SaturnHandlerTests
     }
 
     [Test]
+    public void BrowserCore_IsYabause_WithExternalDiscs()
+    {
+        Assert.That(Handler.BrowserCore, Is.EqualTo("yabause"));
+        Assert.That(Handler.EmbedRomsInZip, Is.False);
+    }
+
+    [Test]
     public void ReadHeader_IsNull() => Assert.That(Handler.ReadHeader(new byte[4096]), Is.Null);
 
     [Test]

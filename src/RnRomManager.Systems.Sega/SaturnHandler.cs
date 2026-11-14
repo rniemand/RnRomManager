@@ -37,6 +37,11 @@ public sealed class SaturnHandler : ISystemHandler
     /// <inheritdoc />
     public IReadOnlyList<string> MetadatKinds => [];
 
+    /// <summary>
+    /// Saturn B6: Yabause plays a bin/cue disc from play-disc, one per launch; an <c>.nrg</c> release never plays.
+    /// </summary>
+    public string BrowserCore => "yabause";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;

@@ -17,7 +17,9 @@ const cores = [
 	'fceumm',
 	'pcsx_rearmed',
 	'ppsspp',
-	'genesis_plus_gx'
+	'genesis_plus_gx',
+	'picodrive',
+	'yabause'
 ];
 
 /** PSP B3: the core that runs only on the isolated play-psp.html page (and never in the modal's play.html). */
@@ -67,50 +69,88 @@ export function biosError(name, status) {
 /**
  * EmulatorJS 4.2.3 takes the controls from the core's group, `segaMS` for smsplus (no Start button). A `.gg` release
  * gets the Game Gear scheme instead. Genesis B5: Genesis Plus GX's first group is also `segaMS`, so it gets the Mega
- * Drive scheme explicitly. Anything else keeps the default (null).
+ * Drive scheme explicitly. 32X B3: PicoDrive's first group is `segaMS` too, so it gets the 32X scheme. Saturn B6:
+ * Yabause gets `segaSaturn`, upstream's default too, set so it doesn't depend on the group order. Anything else keeps
+ * the default (null).
  * @param {string} core
  * @param {string} name the release's file name
  * @returns {string | null}
  */
 export function controlSchemeFor(core, name) {
-	if (core === genesisCore) return 'segaMD';
+	if (core === 'genesis_plus_gx') return 'segaMD';
+	if (core === 'picodrive') return 'sega32x';
+	if (core === 'yabause') return 'segaSaturn';
 	return core === 'smsplus' && name.toLowerCase().endsWith('.gg') ? 'segaGG' : null;
 }
 
-/** Genesis B5: the core whose files the operator supplies (Emulator:GenesisCorePath), served by the API. */
-export const genesisCore = 'genesis_plus_gx';
-
-/** Genesis B4: the availability check run before the ROM is fetched. */
-export const genesisCheckUrl = '/api/emulator/genesis';
+/**
+ * B3/B8: the cores whose files the operator supplies, served by the API after a length and hash check, with the
+ * wording of their messages: the system label, the core's display name, the short name of the fallback message and
+ * the option holding the folder.
+ * @type {Record<string, { system: string, display: string, short: string, option: string }>}
+ */
+const operatorCores = {
+	genesis_plus_gx: {
+		system: 'Genesis games',
+		display: 'Genesis Plus GX',
+		short: 'Genesis',
+		option: 'Emulator:GenesisCorePath'
+	},
+	picodrive: {
+		system: '32X games',
+		display: 'PicoDrive',
+		short: 'PicoDrive',
+		option: 'Emulator:PicodriveCorePath'
+	}
+};
 
 /**
- * Genesis B5: EJS_paths, mapping the files EmulatorJS asks for by name to the authenticated same-origin endpoint.
+ * @param {string} core
+ * @returns {boolean} whether the operator supplies this core's files
+ */
+export function isOperatorCore(core) {
+	return Object.hasOwn(operatorCores, core);
+}
+
+/**
+ * B2: the bodyless availability check run before the ROM is fetched.
+ * @param {string} core
+ * @returns {string}
+ */
+export function operatorCoreCheckUrl(core) {
+	return `/api/emulator/cores/${core}`;
+}
+
+/**
+ * B3/B8: EJS_paths, mapping the files EmulatorJS asks for by name to the authenticated same-origin endpoint.
+ * @param {string} core
  * @returns {Record<string, string>}
  */
-export function genesisPaths() {
+export function operatorCorePaths(core) {
 	return Object.fromEntries(
-		['genesis_plus_gx-wasm.data', 'genesis_plus_gx-legacy-wasm.data', 'genesis_plus_gx.json'].map((f) => [
+		[`${core}-wasm.data`, `${core}-legacy-wasm.data`, `${core}.json`].map((f) => [
 			f,
-			`${genesisCheckUrl}/${f}`
+			`${operatorCoreCheckUrl(core)}/${f}`
 		])
 	);
 }
 
 /**
- * Genesis B4: the play page's message for the core availability check, or null when the files are there and match.
+ * B3/B8: the play page's message for the core availability check, or null when the files are there and match.
+ * @param {string} core an operator-supplied core
  * @param {number | null} status the HTTP status, or null for a network failure
  * @returns {string | null}
  */
-export function genesisCoreError(status) {
+export function operatorCoreError(core, status) {
 	if (status !== null && status >= 200 && status < 300) return null;
 	if (status === 401) return sessionExpired;
-	if (status === 404)
-		return 'Genesis games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).';
+	const { system, display, short, option } = operatorCores[core];
+	if (status === 404) return `${system} need the ${display} core files: ask an Admin to set them up (${option}).`;
 	if (status === 409)
-		return "The Genesis Plus GX core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:GenesisCorePath).";
+		return `The ${display} core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (${option}).`;
 	return status === null
-		? "Couldn't load the Genesis core."
-		: `Couldn't load the Genesis core (HTTP ${status}).`;
+		? `Couldn't load the ${short} core.`
+		: `Couldn't load the ${short} core (HTTP ${status}).`;
 }
 
 /**
@@ -119,7 +159,7 @@ export function genesisCoreError(status) {
  * @returns {boolean}
  */
 export function hidesCoreChooser(core) {
-	return ['smsplus', 'fceumm', 'pcsx_rearmed', genesisCore].includes(core);
+	return ['smsplus', 'fceumm', 'pcsx_rearmed', 'genesis_plus_gx', 'picodrive', 'yabause'].includes(core);
 }
 
 /** PCSX ReARMed's optional firmware: the operator's scph5501.bin, else the core's built-in HLE BIOS. */
@@ -131,7 +171,8 @@ export const psxBiosBytes = 512 * 1024;
 export const sessionExpired = 'Your session has expired. Sign in again.';
 
 /**
- * The play page's message for the optional PlayStation BIOS request: null when it may go on (2xx, or 404 for HLE).
+ * The play page's message for an optional BIOS request (PlayStation, Saturn): null when it may go on (2xx, or 404 for
+ * HLE).
  * @param {number | null} status the HTTP status, or null for a network or body-read failure
  * @returns {string | null}
  */
@@ -143,6 +184,18 @@ export function optionalBiosError(status) {
 
 /** Shown when the BIOS folder's scph5501.bin isn't exactly 512 KiB. */
 export const psxBiosSizeError = `The PlayStation BIOS in the BIOS folder (Paths:Bios) must be the 512 KiB ${psxBios}: ask an Admin to replace it.`;
+
+/** Saturn B7: Yabause's optional firmware, the operator's saturn_bios.bin, else the core's built-in HLE BIOS. */
+export const saturnBios = 'saturn_bios.bin';
+
+/** The exact size of saturn_bios.bin (512 KiB). */
+export const saturnBiosBytes = 512 * 1024;
+
+/** Saturn B7: shown when the BIOS folder's saturn_bios.bin isn't exactly 512 KiB. */
+export const saturnBiosSizeError = `The Saturn BIOS in the BIOS folder (Paths:Bios) must be the 512 KiB ${saturnBios}: ask an Admin to replace it.`;
+
+/** Saturn B7: every name Yabause looks for its firmware under, in the content root. */
+const saturnBiosNames = [saturnBios, 'sega_101.bin', 'mpr-17933.bin'];
 
 /**
  * The play page's message for a failed play-disc request.
@@ -184,7 +237,8 @@ export function pspBrowserError(browser) {
 /**
  * The name of the File EmulatorJS writes the content under: the release name, with '#' replaced (EmulatorJS cuts
  * names there). A standalone PlayStation image named like the BIOS gets a name scoped to the game, so the firmware
- * written at /scph5501.bin can't overwrite it.
+ * written at /scph5501.bin can't overwrite it. Saturn B7: the same for a Saturn image named like any of Yabause's
+ * three BIOS names, so the firmware can't overwrite it and Yabause never takes the disc for its BIOS.
  * @param {string} core
  * @param {string} game the game id
  * @param {string} name the release's file name
@@ -192,5 +246,9 @@ export function pspBrowserError(browser) {
  */
 export function contentFileName(core, game, name) {
 	const safe = name.replaceAll('#', '_');
-	return core === 'pcsx_rearmed' && name.toLowerCase() === psxBios ? `${game}-${safe}` : safe;
+	const lower = name.toLowerCase();
+	const clashes =
+		(core === 'pcsx_rearmed' && lower === psxBios) ||
+		(core === 'yabause' && saturnBiosNames.includes(lower));
+	return clashes ? `${game}-${safe}` : safe;
 }

@@ -20,6 +20,7 @@ All settings come from `appsettings.json` and can be overridden with environment
 | `Sources:TitleDbUrl` | `Sources__TitleDbUrl` | `https://raw.githubusercontent.com/blawar/titledb/master/US.en.json` | absolute http(s) URL; the [blawar/titledb](https://github.com/blawar/titledb) file a DAT refresh downloads for systems identified by title ID (Nintendo Switch) |
 | `Sources:ThumbnailBaseUrl` | `Sources__ThumbnailBaseUrl` | `https://thumbnails.libretro.com` | absolute http(s) URL, or empty to disable all media downloads, Switch's titledb images included (default box art only) |
 | `Emulator:GenesisCorePath` | `Emulator__GenesisCorePath` | *(empty)* | empty (Genesis play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Genesis Plus GX files ([below](#genesis-plus-gx-core)). A relative path fails startup; a path that doesn't exist just means Genesis play isn't set up. Not created or probed, and not one of the paths that must differ. Shown on **Admin → Settings** as `emulator.genesisCorePath`. |
+| `Emulator:PicodriveCorePath` | `Emulator__PicodriveCorePath` | *(empty)* | empty (32X play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 PicoDrive files ([below](#picodrive-core)). It may be the same folder as `Emulator:GenesisCorePath`, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.picodriveCorePath`). |
 | `Backup:RestoreFrom` | `Backup__RestoreFrom` | *(empty)* | empty, or the bare file name of a backup in `Paths:Backups` to restore at startup (no `/`, `\` or `..`). See [restoring a backup](deployment.md#restoring-a-backup). Remove it once the restore is done. |
 
 ## Paths
@@ -35,7 +36,18 @@ Mega Drive / Genesis plays with Genesis Plus GX, whose licence forbids commercia
 | `genesis_plus_gx-legacy-wasm.data` | 1,204,803 | `2a1edeb68d7ec882149ed3cd5d3aa95a6ac231ebabaf82cdb56175a8b62967cc` |
 | `genesis_plus_gx.json` | 129 | `5936a8ce8d7f010d5bfdd8c3bba2b2414f103b3a703121e56f2724b24dbe7ff3` |
 
-The app checks each file's exact size and SHA-256 before it serves any byte (`GET /api/emulator/genesis/<file>`, signed-in users only), so a corrupt, altered or other-version file is refused with `409 GenesisCoreMismatch` and the play page says the files *don't match EmulatorJS 4.2.3*; the server log names the file. Replace that file with the right one (no restart needed). Missing, empty or unsafe files (links, names that differ only in case) count as not set up.
+The app checks each file's exact size and SHA-256 before it serves any byte (`GET /api/emulator/cores/genesis_plus_gx/<file>`, or the older `/api/emulator/genesis/<file>`; signed-in users only), so a corrupt, altered or other-version file is refused with `409 GenesisCoreMismatch` and the play page says the files *don't match EmulatorJS 4.2.3*; the server log names the file. Replace that file with the right one (no restart needed). Missing, empty or unsafe files (links, names that differ only in case) count as not set up.
+
+## PicoDrive core
+32X plays with PicoDrive, whose licence also forbids commercial use, so the image doesn't contain it either. To turn 32X play on, put these three files from the EmulatorJS 4.2.3 build at the root of a folder and set `Emulator:PicodriveCorePath` to it ([deployment](deployment.md#picodrive-core) shows the mount):
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `picodrive-wasm.data` | 1,034,483 | `bb5d50b8b88111b583977d2f7a16d01a822b3deda9205048d99ecaad2c56d861` |
+| `picodrive-legacy-wasm.data` | 1,035,609 | `cc42b0c95e9edfd0e5c689211e8e85e45f4525be2d814af8ca9331ef90e0620b` |
+| `picodrive.json` | 123 | `2b09f29e095a003c15abf8e5bdfb0eaca96d6c6121183b3bd92ed85e860918d3` |
+
+The checks are the same as for Genesis Plus GX (`GET /api/emulator/cores/picodrive/<file>`); a file that doesn't match is refused with `409 PicodriveCoreMismatch`. Mega Drive / Genesis keeps Genesis Plus GX: PicoDrive is never used for it.
 
 ## Other settings
 - **Port:** the standard `ASPNETCORE_HTTP_PORTS` (image default `8080`). The container health check reads the first port from it, so don't use `ASPNETCORE_URLS` instead.

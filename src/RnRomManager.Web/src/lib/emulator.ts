@@ -1,10 +1,10 @@
 import type { GameDetail, RomDetail } from './api/types';
 
 /**
- * Play B1: the cores that play a release stored outside the ZIP through play-disc: a PlayStation disc and (PSP B2) a
- * PlayStation Portable UMD image.
+ * Play B1: the cores that play a release stored outside the ZIP through play-disc: a PlayStation disc, (PSP B2) a
+ * PlayStation Portable UMD image and (Saturn B6) a Saturn disc.
  */
-export const externalBrowserCores: readonly string[] = ['pcsx_rearmed', 'ppsspp'];
+export const externalBrowserCores: readonly string[] = ['pcsx_rearmed', 'ppsspp', 'yabause'];
 
 /** PSP B3: the core that plays only in the dedicated, cross-origin isolated tab. */
 export const isolatedBrowserCore = 'ppsspp';
@@ -16,7 +16,8 @@ export function opensInNewTab(core: string | null): boolean {
 
 /**
  * Browser emulators B3: the system has an EmulatorJS core and the release is inside the ZIP. Play B1: a PlayStation
- * or PSP release is external and plays anyway; other external releases (Switch, Saturn…) don't.
+ * or PSP release is external and plays anyway, and (Saturn B6) a Saturn bin/cue disc; other external releases (Switch,
+ * GameCube…) don't, nor does an .nrg image.
  */
 export function canPlay(
 	game: Pick<GameDetail, 'browserCore'>,
@@ -24,7 +25,9 @@ export function canPlay(
 ): boolean {
 	return (
 		game.browserCore !== null &&
-		(rom.externalFileName === null || externalBrowserCores.includes(game.browserCore))
+		(rom.externalFileName === null || externalBrowserCores.includes(game.browserCore)) &&
+		// Saturn B6: an .nrg image never plays, whatever the core.
+		!(rom.externalFileName?.toLowerCase().endsWith('.nrg') ?? false)
 	);
 }
 

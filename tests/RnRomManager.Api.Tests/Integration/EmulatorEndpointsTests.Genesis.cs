@@ -17,18 +17,31 @@ public partial class EmulatorEndpointsTests
         ("genesis_plus_gx.json", "{\"options\":{}}"u8.ToArray(), "application/json"),
     ];
 
-    private static readonly GenesisCoreManifest SyntheticManifest = new(
-        [.. Synthetic.Select(f => new GenesisCoreFile(f.Name, f.Bytes.Length, Convert.ToHexStringLower(SHA256.HashData(f.Bytes)), f.ContentType))]);
+    // Computed, not a field: partial files initialise their static fields in no guaranteed order.
+    private static OperatorCoreManifest SyntheticManifest => new(
+    [
+        SyntheticCore(OperatorCoreManifest.GenesisPlusGx, Synthetic),
+        SyntheticCore(OperatorCoreManifest.Picodrive, SyntheticPicodrive),
+    ]);
+
+    /// <summary>A pinned core with its files replaced by synthetic bytes of the same names.</summary>
+    private static OperatorCore SyntheticCore(string id, (string Name, byte[] Bytes, string ContentType)[] files) =>
+        OperatorCoreManifest.Pinned.Find(id)! with
+        {
+            Files = [.. files.Select(f => new OperatorCoreFile(f.Name, f.Bytes.Length, Convert.ToHexStringLower(SHA256.HashData(f.Bytes)), f.ContentType))],
+        };
 
     private const string GenesisHead = "/api/emulator/genesis";
 
     private string GenesisDir => _factory.Settings["Emulator:GenesisCorePath"]!;
 
-    private void ResetGenesisDir()
+    private void ResetGenesisDir() => ResetDir(GenesisDir);
+
+    private static void ResetDir(string path)
     {
-        if (Directory.Exists(GenesisDir))
+        if (Directory.Exists(path))
         {
-            foreach (var entry in new DirectoryInfo(GenesisDir).EnumerateFileSystemInfos())
+            foreach (var entry in new DirectoryInfo(path).EnumerateFileSystemInfos())
             {
                 if (entry is DirectoryInfo dir)
                     dir.Delete(recursive: !dir.Attributes.HasFlag(FileAttributes.ReparsePoint));
@@ -36,7 +49,7 @@ public partial class EmulatorEndpointsTests
                     entry.Delete();
             }
         }
-        Directory.CreateDirectory(GenesisDir);
+        Directory.CreateDirectory(path);
     }
 
     private void WriteGenesisSet(string? except = null)
@@ -45,27 +58,18 @@ public partial class EmulatorEndpointsTests
             File.WriteAllBytes(Path.Combine(GenesisDir, name), bytes);
     }
 
-    private async Task<HttpStatusCode> HeadGenesisAsync(AuthClient client)
-    {
-        using var response = await client.SendAsync(HttpMethod.Head, GenesisHead, null, false);
-        if (response.StatusCode != HttpStatusCode.Unauthorized && response.StatusCode != HttpStatusCode.Forbidden)
-        {
-            AssertNoStore(response);
-            Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.Empty, "HEAD is bodyless");
-        }
-        return response.StatusCode;
-    }
+    private Task<HttpStatusCode> HeadGenesisAsync(AuthClient client) => HeadAsync(client, GenesisHead);
 
     [Test]
     public void PinnedManifest_HoldsExactlyTheThree4_2_3Files()
     {
-        Assert.That(GenesisCoreManifest.Pinned.Files, Is.EqualTo(new[]
+        Assert.That(OperatorCoreManifest.Pinned.Find(OperatorCoreManifest.GenesisPlusGx)!.Files, Is.EqualTo(new[]
         {
-            new GenesisCoreFile("genesis_plus_gx-wasm.data", 1_203_661,
+            new OperatorCoreFile("genesis_plus_gx-wasm.data", 1_203_661,
                 "190297a6f86757405090f1a2266f67dfe1a570a528c583434ed3641a5664f768", "application/octet-stream"),
-            new GenesisCoreFile("genesis_plus_gx-legacy-wasm.data", 1_204_803,
+            new OperatorCoreFile("genesis_plus_gx-legacy-wasm.data", 1_204_803,
                 "2a1edeb68d7ec882149ed3cd5d3aa95a6ac231ebabaf82cdb56175a8b62967cc", "application/octet-stream"),
-            new GenesisCoreFile("genesis_plus_gx.json", 129,
+            new OperatorCoreFile("genesis_plus_gx.json", 129,
                 "5936a8ce8d7f010d5bfdd8c3bba2b2414f103b3a703121e56f2724b24dbe7ff3", "application/json"),
         }));
     }
@@ -220,7 +224,7 @@ public partial class EmulatorEndpointsTests
         await TestUsers.CreateAsync(factory, "player");
         (await client.LoginAsync("player", TestUsers.Password)).Dispose();
 
-        Assert.That(factory.Services.GetRequiredService<GenesisCoreManifest>(), Is.SameAs(GenesisCoreManifest.Pinned));
+        Assert.That(factory.Services.GetRequiredService<OperatorCoreManifest>(), Is.SameAs(OperatorCoreManifest.Pinned));
         Assert.That(await HeadGenesisAsync(client), Is.EqualTo(HttpStatusCode.NotFound));
         using var response = await client.GetAsync("/api/emulator/genesis/genesis_plus_gx.json");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));

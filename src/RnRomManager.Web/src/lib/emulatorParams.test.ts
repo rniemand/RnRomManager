@@ -5,13 +5,16 @@ import {
 	contentFileName,
 	controlSchemeFor,
 	discError,
-	genesisCoreError,
-	genesisPaths,
 	hidesCoreChooser,
+	operatorCoreError,
+	operatorCorePaths,
 	optionalBiosError,
 	parsePlayParams,
 	pspBrowserError,
-	psxBiosBytes
+	psxBiosBytes,
+	saturnBios,
+	saturnBiosBytes,
+	saturnBiosSizeError
 } from '../../static/emulator/params.js';
 
 const game = '0f8fad5b-d9cb-469f-a165-70867728950e';
@@ -50,7 +53,9 @@ describe('parsePlayParams', () => {
 		'smsplus',
 		'fceumm',
 		'pcsx_rearmed',
-		'genesis_plus_gx'
+		'genesis_plus_gx',
+		'picodrive',
+		'yabause'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});
@@ -273,10 +278,11 @@ describe('Genesis (Genesis B4, B5)', () => {
 	});
 
 	it('maps the three operator files to the API by name', () => {
-		expect(genesisPaths()).toEqual({
-			'genesis_plus_gx-wasm.data': '/api/emulator/genesis/genesis_plus_gx-wasm.data',
-			'genesis_plus_gx-legacy-wasm.data': '/api/emulator/genesis/genesis_plus_gx-legacy-wasm.data',
-			'genesis_plus_gx.json': '/api/emulator/genesis/genesis_plus_gx.json'
+		expect(operatorCorePaths('genesis_plus_gx')).toEqual({
+			'genesis_plus_gx-wasm.data': '/api/emulator/cores/genesis_plus_gx/genesis_plus_gx-wasm.data',
+			'genesis_plus_gx-legacy-wasm.data':
+				'/api/emulator/cores/genesis_plus_gx/genesis_plus_gx-legacy-wasm.data',
+			'genesis_plus_gx.json': '/api/emulator/cores/genesis_plus_gx/genesis_plus_gx.json'
 		});
 	});
 
@@ -295,6 +301,101 @@ describe('Genesis (Genesis B4, B5)', () => {
 		[500, "Couldn't load the Genesis core (HTTP 500)."],
 		[null, "Couldn't load the Genesis core."]
 	])('reports the availability check %s', (status, message) => {
-		expect(genesisCoreError(status)).toBe(message);
+		expect(operatorCoreError('genesis_plus_gx', status)).toBe(message);
+	});
+});
+
+describe('32X (B3)', () => {
+	it('accepts picodrive on the modal page only', () => {
+		expect(parsePlayParams(query({ core: 'picodrive', name: 'Star Relay (USA).32x' }))?.core).toBe(
+			'picodrive'
+		);
+		expect(parsePlayParams(query({ core: 'picodrive' }), true)).toBeNull();
+	});
+
+	it.each(['Star Relay (USA).32x', 'X.GG', 'X.md'])('uses the 32X controls for %s', (name) => {
+		expect(controlSchemeFor('picodrive', name)).toBe('sega32x');
+	});
+
+	it('hides the core chooser for PicoDrive', () => {
+		expect(hidesCoreChooser('picodrive')).toBe(true);
+	});
+
+	it('maps the three operator files to the API by name', () => {
+		expect(operatorCorePaths('picodrive')).toEqual({
+			'picodrive-wasm.data': '/api/emulator/cores/picodrive/picodrive-wasm.data',
+			'picodrive-legacy-wasm.data': '/api/emulator/cores/picodrive/picodrive-legacy-wasm.data',
+			'picodrive.json': '/api/emulator/cores/picodrive/picodrive.json'
+		});
+	});
+
+	it.each([
+		[204, null],
+		[401, 'Your session has expired. Sign in again.'],
+		[
+			404,
+			'32X games need the PicoDrive core files: ask an Admin to set them up (Emulator:PicodriveCorePath).'
+		],
+		[
+			409,
+			"The PicoDrive core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:PicodriveCorePath)."
+		],
+		[500, "Couldn't load the PicoDrive core (HTTP 500)."],
+		[null, "Couldn't load the PicoDrive core."]
+	])('reports the availability check %s', (status, message) => {
+		expect(operatorCoreError('picodrive', status)).toBe(message);
+	});
+});
+
+describe('Saturn (B6, B7)', () => {
+	it('accepts yabause on the modal page only', () => {
+		expect(
+			parsePlayParams(query({ core: 'yabause', name: 'Sky Rally (USA) (Track 1).bin' }))?.core
+		).toBe('yabause');
+		expect(parsePlayParams(query({ core: 'yabause' }), true)).toBeNull();
+	});
+
+	it('uses the Saturn controls and hides the core chooser', () => {
+		expect(controlSchemeFor('yabause', 'Sky Rally (USA).cue')).toBe('segaSaturn');
+		expect(hidesCoreChooser('yabause')).toBe(true);
+	});
+
+	it.each([
+		'saturn_bios.bin',
+		'SATURN_BIOS.BIN',
+		'sega_101.bin',
+		'Sega_101.Bin',
+		'mpr-17933.bin',
+		'MPR-17933.BIN'
+	])('scopes a Saturn image named %s to the game', (name) => {
+		expect(contentFileName('yabause', game, name)).toBe(`${game}-${name}`);
+	});
+
+	it('leaves other Saturn names, and other cores, alone', () => {
+		expect(contentFileName('yabause', game, 'Sky Rally (USA) (Track 1).bin')).toBe(
+			'Sky Rally (USA) (Track 1).bin'
+		);
+		expect(contentFileName('yabause', game, 'scph5501.bin')).toBe('scph5501.bin');
+		expect(contentFileName('pcsx_rearmed', game, 'saturn_bios.bin')).toBe('saturn_bios.bin');
+	});
+
+	it('pins saturn_bios.bin at 512 KiB with its own size message', () => {
+		expect(saturnBios).toBe('saturn_bios.bin');
+		expect(saturnBiosBytes).toBe(512 * 1024);
+		expect(saturnBiosSizeError).toBe(
+			'The Saturn BIOS in the BIOS folder (Paths:Bios) must be the 512 KiB saturn_bios.bin: ask an Admin to replace it.'
+		);
+	});
+
+	it.each([
+		[409, 'PlayDiscTooLarge', 'This disc is larger than 1 GiB, too large to play in the browser.'],
+		[
+			409,
+			'InvalidPlayDisc',
+			"This disc can't be played in the browser: its cue sheet or files are invalid or don't match."
+		],
+		[500, null, "Couldn't load the disc (HTTP 500)."]
+	])('words a play-disc %i %s like PlayStation', (status, code, message) => {
+		expect(discError(status, code, 'yabause')).toBe(message);
 	});
 });

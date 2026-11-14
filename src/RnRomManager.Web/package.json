@@ -55,6 +55,7 @@
 		"@emulatorjs/core-smsplus": "4.2.3",
 		"@emulatorjs/core-stella2014": "4.2.3",
 		"@emulatorjs/core-virtualjaguar": "4.2.3",
+		"@emulatorjs/core-yabause": "4.2.3",
 		"@emulatorjs/emulatorjs": "4.2.3",
 		"@fortawesome/fontawesome-free": "^7.3.1",
 		"bootstrap": "^5.3.8",

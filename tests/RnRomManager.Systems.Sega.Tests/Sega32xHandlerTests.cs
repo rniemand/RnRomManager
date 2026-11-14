@@ -20,6 +20,13 @@ public class Sega32xHandlerTests
     }
 
     [Test]
+    public void BrowserCore_IsPicodrive_WithEmbeddedRoms()
+    {
+        Assert.That(Handler.BrowserCore, Is.EqualTo("picodrive"));
+        Assert.That(Handler.EmbedRomsInZip, Is.True);
+    }
+
+    [Test]
     public void ReadHeader_ReadsTheMegaDriveFields_ClassifiedS32x()
     {
         var header = Handler.ReadHeader(Builder.Build())!;

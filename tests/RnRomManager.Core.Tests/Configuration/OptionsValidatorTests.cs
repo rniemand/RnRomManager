@@ -108,4 +108,18 @@ public class OptionsValidatorTests
         Assert.That(relative.FailureMessage, Does.Contain("Emulator:GenesisCorePath"));
         Assert.That(new EmulatorOptionsValidator().Validate(null, new() { GenesisCorePath = " " }).Succeeded, Is.False, "whitespace isn't blank");
     }
+
+    [Test]
+    public void PicodriveCorePath_EmptyOrAbsolute()
+    {
+        var absolute = Path.Combine(Path.GetTempPath(), "picodrive");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { PicodriveCorePath = absolute }).Succeeded, Is.True);
+        Assert.That(new EmulatorOptionsValidator().Validate(null,
+            new() { PicodriveCorePath = absolute, GenesisCorePath = absolute }).Succeeded, Is.True, "may share the Genesis folder");
+        var relative = new EmulatorOptionsValidator().Validate(null, new() { PicodriveCorePath = "picodrive" });
+        Assert.That(relative.Succeeded, Is.False);
+        Assert.That(relative.FailureMessage, Does.Contain("Emulator:PicodriveCorePath"));
+        Assert.That(relative.FailureMessage, Does.Not.Contain("Emulator:GenesisCorePath"));
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { PicodriveCorePath = " " }).Succeeded, Is.False, "whitespace isn't blank");
+    }
 }

@@ -1,18 +1,19 @@
 // Browser emulators B5: fetches the release through the download endpoint and starts EmulatorJS on it.
 // Play B4: PlayStation fetches its disc from play-disc, with the optional scph5501.bin handed over in memory.
 // PSP B3: on play-psp.html (its own cross-origin isolated tab) PPSSPP checks the browser, then fetches its UMD image
-// from play-disc and runs threaded. Genesis B4/B5: Genesis Plus GX checks the operator's core files first and loads
-// them from the API.
+// from play-disc and runs threaded. Genesis B4/B5: an operator-supplied core (Genesis Plus GX) checks its files
+// first and loads them from the API. Saturn B6/B7: Yabause fetches its disc from play-disc, with the optional
+// saturn_bios.bin handed over in memory like scph5501.bin.
 import {
 	biosError,
 	biosFor,
 	contentFileName,
 	controlSchemeFor,
 	discError,
-	genesisCheckUrl,
-	genesisCore,
-	genesisCoreError,
-	genesisPaths,
+	isOperatorCore,
+	operatorCoreCheckUrl,
+	operatorCoreError,
+	operatorCorePaths,
 	hidesCoreChooser,
 	optionalBiosError,
 	parsePlayParams,
@@ -21,6 +22,9 @@ import {
 	psxBios,
 	psxBiosBytes,
 	psxBiosSizeError,
+	saturnBios,
+	saturnBiosBytes,
+	saturnBiosSizeError,
 	sessionExpired
 } from './params.js';
 
@@ -53,13 +57,17 @@ async function checkBios(name) {
 }
 
 /**
- * Play B4: one GET of the optional scph5501.bin, read with a 512 KiB bound (cancelled as soon as it's exceeded).
+ * Play B4, Saturn B7: one GET of an optional BIOS (scph5501.bin, saturn_bios.bin), read with a bound of its exact
+ * size (cancelled as soon as it's exceeded).
+ * @param {string} name the BIOS file name in Paths:Bios
+ * @param {number} size the only accepted length
+ * @param {string} sizeError the message for a file of any other length
  * @returns {Promise<{ bios: ArrayBuffer | null } | { error: string }>} the firmware, null for HLE (404), or why to stop
  */
-async function loadPsxBios() {
+async function loadOptionalBios(name, size, sizeError) {
 	let response;
 	try {
-		response = await fetch(`/api/emulator/bios/${psxBios}`, { credentials: 'same-origin' });
+		response = await fetch(`/api/emulator/bios/${name}`, { credentials: 'same-origin' });
 	} catch {
 		return { error: /** @type {string} */ (optionalBiosError(null)) };
 	}
@@ -74,16 +82,16 @@ async function loadPsxBios() {
 	}
 	if (!response.body) return { error: /** @type {string} */ (optionalBiosError(null)) };
 
-	const bytes = new Uint8Array(psxBiosBytes);
+	const bytes = new Uint8Array(size);
 	let length = 0;
 	const reader = response.body.getReader();
 	try {
 		for (;;) {
 			const { done, value } = await reader.read();
 			if (done) break;
-			if (length + value.length > psxBiosBytes) {
+			if (length + value.length > size) {
 				await reader.cancel().catch(() => {});
-				return { error: psxBiosSizeError };
+				return { error: sizeError };
 			}
 			bytes.set(value, length);
 			length += value.length;
@@ -91,19 +99,20 @@ async function loadPsxBios() {
 	} catch {
 		return { error: /** @type {string} */ (optionalBiosError(null)) };
 	}
-	return length === psxBiosBytes ? { bios: bytes.buffer } : { error: psxBiosSizeError };
+	return length === size ? { bios: bytes.buffer } : { error: sizeError };
 }
 
 /**
- * Genesis B4: one bodyless HEAD of the operator's core files, before the ROM is fetched or the loader starts.
+ * B2/B3: one bodyless HEAD of an operator-supplied core's files, before the ROM is fetched or the loader starts.
+ * @param {string} core
  * @returns {Promise<string | null>} the message to show, or null when the files are there and match
  */
-async function checkGenesisCore() {
+async function checkOperatorCore(core) {
 	try {
-		const response = await fetch(genesisCheckUrl, { method: 'HEAD', credentials: 'same-origin' });
-		return genesisCoreError(response.status);
+		const response = await fetch(operatorCoreCheckUrl(core), { method: 'HEAD', credentials: 'same-origin' });
+		return operatorCoreError(core, response.status);
 	} catch {
-		return genesisCoreError(null);
+		return operatorCoreError(core, null);
 	}
 }
 
@@ -163,15 +172,16 @@ async function start() {
 	if (!params) return show('Invalid emulator link.');
 
 	const isPsx = params.core === 'pcsx_rearmed';
+	const isSaturn = params.core === 'yabause';
 	const isPsp = params.core === pspCore;
 	if (isPsp) {
 		const problem = pspBrowserError(pspBrowser());
 		if (problem) return show(problem);
 	}
 	show('Loading…');
-	const isGenesis = params.core === genesisCore;
-	if (isGenesis) {
-		const problem = await checkGenesisCore();
+	const isOperator = isOperatorCore(params.core);
+	if (isOperator) {
+		const problem = await checkOperatorCore(params.core);
 		if (problem) return show(problem);
 	}
 	const bios = biosFor(params.core);
@@ -179,17 +189,23 @@ async function start() {
 		const problem = await checkBios(bios);
 		if (problem) return show(problem);
 	}
+	// Play B4, Saturn B7: the optional firmware, handed over in memory; a 404 means the core's HLE BIOS.
+	const optional = isPsx
+		? { name: psxBios, bytes: psxBiosBytes, sizeError: psxBiosSizeError }
+		: isSaturn
+			? { name: saturnBios, bytes: saturnBiosBytes, sizeError: saturnBiosSizeError }
+			: null;
 	/** @type {ArrayBuffer | null} */
-	let psxFirmware = null;
-	if (isPsx) {
-		const result = await loadPsxBios();
+	let firmware = null;
+	if (optional) {
+		const result = await loadOptionalBios(optional.name, optional.bytes, optional.sizeError);
 		if ('error' in result) return show(result.error);
-		psxFirmware = result.bios;
+		firmware = result.bios;
 	}
 
 	/** @type {Blob} */
 	let content;
-	if (isPsx || isPsp) {
+	if (isPsx || isPsp || isSaturn) {
 		const disc = await loadDisc(`/api/games/${params.game}/roms/${params.rom}/play-disc`, params.core);
 		if ('error' in disc) return show(disc.error);
 		content = disc.data;
@@ -217,11 +233,14 @@ async function start() {
 	ejs.EJS_disableAutoLang = false;
 	// EmulatorJS writes the BIOS next to the ROM under the URL's last segment, the name the core looks for.
 	if (bios) ejs.EJS_biosUrl = `/api/emulator/bios/${bios}`;
-	// PCSX ReARMed finds scph5501.bin in the content root; GameManager writes this key before loading the content.
-	if (psxFirmware) ejs.EJS_externalFiles = { [`/${psxBios}`]: psxFirmware };
-	// Genesis B5: the payloads and report by name from the API; the vendored loader keeps them non-threaded.
-	if (isGenesis) ejs.EJS_paths = genesisPaths();
-	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX): hide only the core selector.
+	// PCSX ReARMed and Yabause find their firmware in the content root (EmulatorJS sets no system directory);
+	// GameManager writes this key before loading the content.
+	if (optional && firmware) ejs.EJS_externalFiles = { [`/${optional.name}`]: firmware };
+	// B3/B8: an operator-supplied core loads its payloads and report by name from the API; the vendored loader keeps
+	// them non-threaded.
+	if (isOperator) ejs.EJS_paths = operatorCorePaths(params.core);
+	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX, PicoDrive, Yabause): hide only the core
+	// selector.
 	if (hidesCoreChooser(params.core)) ejs.EJS_hideSettings = ['retroarch_core'];
 	const scheme = controlSchemeFor(params.core, params.name);
 	if (scheme) ejs.EJS_controlScheme = scheme;
