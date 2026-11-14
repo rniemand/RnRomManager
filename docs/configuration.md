@@ -11,6 +11,7 @@ All settings come from `appsettings.json` and can be overridden with environment
 | `Paths:Cache` | `Paths__Cache` | `/app/cache` | as above |
 | `Paths:Backups` | `Paths__Backups` | `/app/backups` | as above. Holds the database backups ([deployment](deployment.md#backup-and-restore)); keep it private, they contain password hashes and keys. |
 | `Paths:Collections` | `Paths__Collections` | `/app/collections` | as above. Holds collection cover images (`<collection id>.png` or `.jpg`); not included in database backups. |
+| `Paths:Bios` | `Paths__Bios` | `/app/bios` | as above. A dedicated folder for emulator BIOS files the browser play page needs (`colecovision.rom` for ColecoVision); you copy them in. Names are matched ignoring case. Any validly named file in it can be downloaded by a signed-in user, so keep only BIOS files there. Not included in database backups: keep your own copy. |
 | `Admin:InitialPassword` | `Admin__InitialPassword` | *(empty)* | empty, or 12–128 characters and not `admin`. Used only when the first `admin` user is created; if empty, a random password is printed to the console once. |
 | `Integrity:QuickCheckTime` | `Integrity__QuickCheckTime` | `03:00` | `HH:mm` (24 h, container local time from `TZ`) or empty to disable the daily quick check. Missed runs are not caught up. On a daylight-saving change, a time that is skipped runs at the first valid minute after it, and a time that happens twice runs once. If another job is running at that moment, the check is skipped (logged at `Info`). |
 | `Logging:MinLevel` | `Logging__MinLevel` | `Debug` | `Trace`, `Debug`, `Info`, `Warn`, `Error`, `Fatal` or `Off` (case-insensitive). Applies to the app's own loggers; framework loggers log `Warn` and above. |
@@ -21,7 +22,7 @@ All settings come from `appsettings.json` and can be overridden with environment
 | `Backup:RestoreFrom` | `Backup__RestoreFrom` | *(empty)* | empty, or the bare file name of a backup in `Paths:Backups` to restore at startup (no `/`, `\` or `..`). See [restoring a backup](deployment.md#restoring-a-backup). Remove it once the restore is done. |
 
 ## Paths
-- The five paths must be different, and none may be inside another (compared case-insensitively).
+- The seven paths must be different, and none may be inside another (compared case-insensitively).
 - At startup the app creates each folder and writes and deletes a `.rnrm-probe` file in it. If that fails, the error names the path and the user the process runs as (UID/GID on Linux), so you can fix the ownership of a bind mount.
 
 ## Other settings

@@ -20,6 +20,7 @@ public class OptionsRegistrationTests
         ["Paths:Cache"] = Path.Combine(Root, "cache"),
         ["Paths:Backups"] = Path.Combine(Root, "backups"),
         ["Paths:Collections"] = Path.Combine(Root, "collections"),
+        ["Paths:Bios"] = Path.Combine(Root, "bios"),
     };
 
     private static ServiceProvider Build(Dictionary<string, string?> settings)
@@ -40,9 +41,11 @@ public class OptionsRegistrationTests
         Assert.That(services.GetRequiredService<IOptions<LoggingOptions>>().Value.RetentionDays, Is.EqualTo(30));
         Assert.That(services.GetRequiredService<IOptions<SourcesOptions>>().Value.ThumbnailBaseUrl, Is.Empty);
         Assert.That(services.GetRequiredService<IOptions<IntegrityOptions>>().Value.QuickCheckTime, Is.EqualTo("03:00"));
+        Assert.That(services.GetRequiredService<IOptions<PathsOptions>>().Value.Bios, Is.EqualTo(Path.Combine(Root, "bios")));
     }
 
     [TestCase("Paths:Roms", "relative")]
+    [TestCase("Paths:Bios", "relative/bios")]
     [TestCase("ConnectionStrings:Default", "")]
     [TestCase("Admin:InitialPassword", "short")]
     [TestCase("Integrity:QuickCheckTime", "3am")]

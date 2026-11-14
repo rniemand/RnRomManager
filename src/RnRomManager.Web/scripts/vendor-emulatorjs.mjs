@@ -8,7 +8,33 @@ const web = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = resolve(web, process.argv[2] ?? 'static/emulator/vendor');
 const pkgs = join(web, 'node_modules', '@emulatorjs');
 const src = join(pkgs, 'emulatorjs', 'data');
-const cores = ['gambatte', 'mgba', 'handy', 'virtualjaguar', 'beetle_vb', 'a5200', 'prosystem'];
+const cores = [
+	'gambatte',
+	'mgba',
+	'handy',
+	'virtualjaguar',
+	'beetle_vb',
+	'a5200',
+	'prosystem',
+	'stella2014',
+	'gearcoleco',
+	'smsplus'
+];
+
+// Game Gear and Master System are pinned to SMS Plus GX (GPL): EmulatorJS 4.2.3's getCore() would otherwise switch to
+// a core saved in the retroarch_core setting (genesis_plus_gx, non-commercial, or picodrive), which isn't vendored.
+// A narrow, guarded edit of emulator.js: an explicit "smsplus" returns itself before the saved setting is read.
+const smsplusFind =
+	'        const gen = this.getCore(true);\n' +
+	'        if (cores[gen] && cores[gen].includes(this.preGetSetting("retroarch_core"))) {';
+const smsplusGuard = '        if (core === "smsplus") {\n            return core;\n        }\n';
+
+function patchEmulatorJs(source) {
+	const at = source.indexOf(smsplusFind);
+	if (at < 0 || source.indexOf(smsplusFind, at + 1) >= 0)
+		throw new Error('vendor-emulatorjs: emulator.js getCore() changed; review the smsplus patch');
+	return source.slice(0, at) + smsplusGuard + source.slice(at);
+}
 
 function copy(from, to) {
 	mkdirSync(dirname(to), { recursive: true });
@@ -22,6 +48,8 @@ for (const file of ['loader.js', 'emulator.css', 'version.json'])
 	copy(join(src, file), join(data, file));
 for (const file of readdirSync(join(src, 'src')))
 	copy(join(src, 'src', file), join(data, 'src', file));
+const emulatorJs = patchEmulatorJs(readFileSync(join(src, 'src', 'emulator.js'), 'utf8'));
+writeFileSync(join(data, 'src', 'emulator.js'), emulatorJs);
 for (const file of readdirSync(join(src, 'compression')).filter((f) => f !== 'README.md'))
 	copy(join(src, 'compression', file), join(data, 'compression', file));
 
@@ -40,9 +68,16 @@ const order = [
 if (order.length === 0) throw new Error('vendor-emulatorjs: no script list found in loader.js');
 writeFileSync(
 	join(data, 'emulator.min.js'),
-	order.map((f) => readFileSync(join(src, 'src', f), 'utf8') + '\n').join('')
+	order
+		.map(
+			(f) => (f === 'emulator.js' ? emulatorJs : readFileSync(join(src, 'src', f), 'utf8')) + '\n'
+		)
+		.join('')
 );
 copy(join(src, 'emulator.css'), join(data, 'emulator.min.css'));
 
 copy(join(pkgs, 'emulatorjs', 'LICENSE'), join(outDir, 'licenses', 'emulatorjs.txt'));
+// Reviewed notices, licence texts and source records for cores whose packages ship none (emulator-licenses/).
+for (const file of readdirSync(join(web, 'emulator-licenses')))
+	copy(join(web, 'emulator-licenses', file), join(outDir, 'licenses', file));
 console.log(`vendor-emulatorjs: wrote ${outDir}`);

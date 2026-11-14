@@ -44,6 +44,7 @@ public class HealthReadyTests
 
     [TestCase("Paths:Roms")]
     [TestCase("Paths:Cache")]
+    [TestCase("Paths:Bios")]
     public async Task PathMissing_Returns503(string key)
     {
         Directory.Delete(_factory.Settings[key]!, recursive: true);

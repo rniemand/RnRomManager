@@ -1,0 +1,72 @@
+SMS Plus GX (EmulatorJS core "smsplus", Game Gear and Master System)
+====================================================================
+
+Files: smsplus-wasm.data, smsplus-legacy-wasm.data
+       (npm @emulatorjs/core-smsplus 4.2.3)
+
+Corresponding source:
+- Core: https://github.com/EmulatorJS/smsplus-gx/tree/c642bbd0680b5959180a420036108893d0aec961
+  (version string "1.8 c642bbd" in both binaries; master at build time and
+  still master). Fork of https://github.com/libretro/smsplus-gx.
+- Built with the cores.json entry {"makescript": "Makefile.libretro",
+  "buildpath": "./", "arguments": []}, so Makefile.libretro's defaults apply:
+  SOUND_ENGINE = maxim_sn76489, ZIP_SUPPORT = 0, HAVE_NTSC = 1.
+- RetroArch, build scripts and compiler: see COMMON-BUILD.txt.
+
+SMS Plus is Copyright (C) 1998-2007 Charles MacDonald; SMS Plus GX and later
+changes by their contributors (docs/contributors.txt in the source).
+
+Licence: GNU General Public License, version 2 or (at your option) any later
+version (smsplus-LICENSE.txt, the source's docs/license; its README: "free
+software under the GPLv2 or later"). RetroArch: GPL-3.0-or-later
+(retroarch-LICENSE.txt).
+
+Components compiled into this build that carry their own terms:
+
+- source/cpu_cores/z80/z80.c: a C conversion of MAME's Z80 interpreter.
+  license:BSD-3-Clause, copyright-holders: Juergen Buchmueller.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+    1. Redistributions of source code must retain the above copyright notice,
+       this list of conditions and the following disclaimer.
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+    3. Neither the name of the copyright holder nor the names of its
+       contributors may be used to endorse or promote products derived from
+       this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+    LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+    CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+
+- source/sound/ym2413.c: YM2413 (OPLL) from MAME, license:GPL-2.0+,
+  copyright-holders: Jarek Burczynski, Ernesto Corvi; CrabEmu modifications
+  Copyright (C) 2012, 2016 Lawrence Sebald, GPLv2 or newer.
+
+- source/ntsc/sms_ntsc.c: sms_ntsc 0.2.3, Copyright (C) 2006-2007 Shay Green,
+  GNU Lesser General Public License version 2.1 or (at your option) any later
+  version (smsplus-sms_ntsc-LICENSE.txt, the source's source/ntsc/license.txt).
+
+- source/sound/maxim_sn76489/sn76489.c: SN76489 PSG emulation by Maxim
+  (2001-2002), modified by Charles MacDonald. The file carries no licence
+  header. The source's docs/contributors.txt records the terms the author gave
+  by email for it, as released with in_vgm:
+    "You are allowed to do what you like with it just so long as:
+     1. You let me know if you distribute it (any included files or anything
+        derived from them), and
+     2. You don't pass it off as your own."
+  Credit: SN76489 emulation by Maxim. Whoever publishes a build or image that
+  contains this core should let Maxim know, as those terms ask.
+
+The payloads ship no licence text; this file and the licence files named above
+supply it.

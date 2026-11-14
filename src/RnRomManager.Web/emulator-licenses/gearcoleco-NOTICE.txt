@@ -1,0 +1,23 @@
+Gearcoleco (EmulatorJS core "gearcoleco", ColecoVision)
+=======================================================
+
+Files: gearcoleco-wasm.data, gearcoleco-legacy-wasm.data
+       (npm @emulatorjs/core-gearcoleco 4.2.3)
+
+Corresponding source:
+- Core: https://github.com/EmulatorJS/Gearcoleco/tree/f80af5d6f0f78b0228e060e158e7f2500e0caa6d
+  (version string "f80af5d" in both binaries; the head of main from
+  2025-05-12 until 2025-10-19). Fork of https://github.com/drhelius/Gearcoleco.
+- Built with the cores.json entry {"makescript": "Makefile",
+  "buildpath": "./platforms/libretro/", "arguments": []}.
+- RetroArch, build scripts and compiler: see COMMON-BUILD.txt.
+
+Copyright (C) Ignacio Sanchez (drhelius) and the Gearcoleco contributors.
+
+Licence: GNU General Public License, version 3 or (at your option) any later
+version (gearcoleco-LICENSE.txt, the source's LICENSE; byte-identical to the
+license.txt inside both payloads). RetroArch: GPL-3.0-or-later
+(retroarch-LICENSE.txt).
+
+The ColecoVision BIOS is not part of this core or of RnRomManager: the operator
+supplies colecovision.rom.

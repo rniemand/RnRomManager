@@ -28,6 +28,8 @@ public sealed class ColecoVisionHandler : ISystemHandler
     /// <inheritdoc />
     public bool EmbedRomsInZip => true;
 
+    public string BrowserCore => "gearcoleco";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom)

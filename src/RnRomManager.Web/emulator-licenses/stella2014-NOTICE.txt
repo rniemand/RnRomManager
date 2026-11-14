@@ -1,0 +1,24 @@
+Stella 2014 (EmulatorJS core "stella2014", Atari 2600)
+======================================================
+
+Files: stella2014-wasm.data, stella2014-legacy-wasm.data
+       (npm @emulatorjs/core-stella2014 4.2.3)
+
+Corresponding source:
+- Core: https://github.com/EmulatorJS/stella2014-libretro/tree/1f578c36382bb5a86a0fe245973fa557f369738b
+  (version string "3.9.3 1f578c3" in both binaries; master at build time and
+  still master). Fork of https://github.com/libretro/stella2014-libretro.
+- Built with the cores.json entry {"makescript": "Makefile", "buildpath": "./",
+  "arguments": []}.
+- RetroArch, build scripts and compiler: see COMMON-BUILD.txt.
+
+Copyright (c) 1995-2014 Bradford W. Mott, Stephen Anthony and the Stella Team.
+
+Licence: the core is distributed under the GNU General Public License,
+version 2 (stella2014-LICENSE.txt, the source's stella/license.txt). Its file
+headers refer to that file and state no "only" or "or later" qualifier. The
+binary statically links RetroArch, which is GPL-3.0-or-later
+(retroarch-LICENSE.txt); the combined binary is redistributed here unchanged,
+under the GPL terms, as EmulatorJS publishes it.
+
+The payloads ship no licence text; this file and stella2014-LICENSE.txt supply it.

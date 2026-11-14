@@ -10,6 +10,13 @@ public class GameGearHandlerTests
 {
     private static readonly ISystemHandler Handler = new GameGearHandler();
 
+    [Test]
+    public void BrowserCore_IsSmsplus_WithEmbeddedRoms()
+    {
+        Assert.That(Handler.BrowserCore, Is.EqualTo("smsplus"));
+        Assert.That(Handler.EmbedRomsInZip, Is.True);
+    }
+
     private static byte[] Rom(int size, int offset, byte regionSize = 0x6C)
     {
         var rom = new byte[size];

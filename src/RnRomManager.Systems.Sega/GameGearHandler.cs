@@ -28,6 +28,8 @@ public sealed class GameGearHandler : ISystemHandler
     /// <inheritdoc />
     public bool EmbedRomsInZip => true;
 
+    public string BrowserCore => "smsplus";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => TmrSegaHeader.Read(rom, Id);

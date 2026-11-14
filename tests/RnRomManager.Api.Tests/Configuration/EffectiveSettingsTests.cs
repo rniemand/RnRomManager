@@ -37,6 +37,7 @@ public class EffectiveSettingsTests
             ["Paths:Cache"] = Path.Combine(root, "cache"),
             ["Paths:Backups"] = Path.Combine(root, "backups"),
             ["Paths:Collections"] = Path.Combine(root, "collections"),
+            ["Paths:Bios"] = Path.Combine(root, "bios"),
             ["Backup:RestoreFrom"] = "rnrommanager-20261106-033000.zip",
         }).Build();
         using var services = new ServiceCollection().AddAppOptions(config).BuildServiceProvider();
@@ -47,6 +48,8 @@ public class EffectiveSettingsTests
         Assert.That(settings.Backup.RestoreFrom, Is.EqualTo("rnrommanager-20261106-033000.zip"));
         Assert.That(json, Does.Contain("\"backup\":{\"restoreFrom\":\"rnrommanager-20261106-033000.zip\"}"));
         Assert.That(json, Does.Contain("\"backups\":"));
+        Assert.That(settings.Paths.Bios, Is.EqualTo(Path.Combine(root, "bios")));
+        Assert.That(json, Does.Contain($"\"bios\":{JsonSerializer.Serialize(Path.Combine(root, "bios"))}"));
         Assert.That(json, Does.Not.Contain("hunter2"));
     }
 }
