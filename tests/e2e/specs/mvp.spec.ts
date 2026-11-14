@@ -778,6 +778,50 @@ test('Play: SNES Quick Play from the library loads the release and the player on
 	await closeEmulator();
 });
 
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * B4: plays a seeded Atari cartridge from its detail page with its bundled core and an empty BIOS folder: the real ROM,
+ * then after Start Game the same-origin report and a non-threaded payload, with no BIOS request along the way.
+ */
+async function launchBundled(title: string, fileName: string, core: string): Promise<void> {
+	const bios: string[] = [];
+	const track = (r: { url: () => string }) => {
+		if (r.url().includes('/api/emulator/bios/')) bios.push(r.url());
+	};
+	await openGame(title);
+	page.on('request', track);
+	try {
+		const rom = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()));
+		await page.getByRole('button', { name: `Play ${fileName}` }).click();
+		await expect(dialog().locator('iframe')).toHaveAttribute(
+			'src',
+			new RegExp(`core=${core}&name=${escapeRegExp(encodeURIComponent(fileName))}$`)
+		);
+		expect((await rom).status()).toBe(200);
+		const frame = page.frameLocator('iframe');
+		await expect(frame.getByText('Start Game')).toBeVisible();
+		const origin = new URL(page.url()).origin;
+		const report = page.waitForResponse((r) => r.url() === `${origin}/emulator/vendor/data/cores/reports/${core}.json`);
+		// Single-threaded only: the modern or the legacy payload, never a "-thread" one.
+		const payloads = ['', '-legacy'].map((v) => `${origin}/emulator/vendor/data/cores/${core}${v}-wasm.data`);
+		const payload = page.waitForResponse((r) => payloads.includes(r.url()));
+		await frame.getByText('Start Game').click();
+		expect((await report).status()).toBe(200);
+		expect((await payload).status()).toBe(200);
+	} finally {
+		page.off('request', track);
+	}
+	expect(bios).toEqual([]);
+	await closeEmulator();
+}
+
+test('Play: Atari 7800, Jaguar and Lynx launch with their bundled cores', async () => {
+	await launchBundled('Canyon Glide', 'Canyon Glide (USA).a78', 'prosystem');
+	await launchBundled('Cobalt Drift', 'Cobalt Drift (World).j64', 'virtualjaguar');
+	await launchBundled('Prism Racer', 'Prism Racer (USA, Europe).lnx', 'handy');
+});
+
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await openLibrary();
