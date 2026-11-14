@@ -455,7 +455,10 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 }
                 else
                 {
-                    var datRom = store?.Roms.FirstOrDefault(r => r.GameName == request.DatGameName);
+                    // B3a: a game listed more than once (Atari 7800 .a78 and .bin) uses the ROM with the file's own extension, else the first.
+                    var datRom = store?.Roms.FirstOrDefault(r => r.GameName == request.DatGameName
+                            && string.Equals(Path.GetExtension(r.RomName), originalExtension, StringComparison.OrdinalIgnoreCase))
+                        ?? store?.Roms.FirstOrDefault(r => r.GameName == request.DatGameName);
                     if (datRom is null || store is null)
                         return ReviewResolutionResult.Invalid("datGameName", "Choose a game in the loaded DAT.");
                     // B15: a FileSets game's DAT rom may be a "(Track 1).bin" data track, so its name and tags come from the game name.

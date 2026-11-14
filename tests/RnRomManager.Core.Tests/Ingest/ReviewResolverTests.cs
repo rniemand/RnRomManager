@@ -294,4 +294,39 @@ public class ReviewResolverTests
         using var archive = System.IO.Compression.ZipFile.OpenRead(zip);
         Assert.That(archive.Entries.Select(e => e.Name), Does.Contain("Tide Runner (World) (Unverified).sms"));
     }
+
+    [TestCase("test.bin", "X (USA) (Unverified).bin", 1985)]
+    [TestCase("test.a78", "X (USA) (Unverified).a78", 1984)]
+    public async Task Dat_PrefersTheDatRomWithTheFilesExtension(string source, string stored, int year)
+    {
+        _dir.Dispose();
+        Build(new Headerless(".a78", ".bin"));
+        var bytes = new byte[] { 1, 2, 3 };
+        var path = Path.Combine(_paths.Ingest, source);
+        File.Move(_item.SourcePath, path);
+        _item = _item with
+        {
+            SourcePath = path, OriginalFileName = source, Reason = "NoDatMatch",
+            Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(bytes)),
+            Crc32 = RnRomManager.Core.Storage.Crc32.ToHex(bytes), Md5 = Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(bytes)),
+        };
+        FixtureDatWriter.Write(_dats.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
+        {
+            ["GB"] =
+            [
+                new FixtureGame("X (USA)", "X (USA).a78", [7, 7, 7, 7]) { ReleaseYear = 1984 },
+                new FixtureGame("X (USA)", "X (USA).bin", [8, 8, 8, 8]) { ReleaseYear = 1985 },
+            ],
+        });
+        _dats.Load();
+
+        var result = await _resolver.ResolveInJobAsync(1,
+            new ReviewResolutionRequest { Action = "Dat", DatSystem = "gb", DatGameName = "X (USA)" }, Actor, default);
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        var zip = Directory.GetFiles(_paths.Roms, "*.zip", SearchOption.AllDirectories).Single();
+        using var archive = LibraryZip.Open(zip, new InfoJsonReader([], new SystemRegistry([new Headerless(".a78", ".bin")])));
+        var game = archive.InfoJson!.Game!;
+        Assert.That((game.Roms.Single().FileName, game.ReleaseYear), Is.EqualTo((stored, (int?)year)));
+    }
 }
