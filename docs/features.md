@@ -434,7 +434,7 @@ A scheduled run that finds a manual one running is skipped (logged at Info). The
 
 ### Admin settings, logs and About
 
-- `GET /api/admin/settings` (Admin) returns the effective configuration: the same redacted model that is logged at startup (including `backup.restoreFrom`). The connection string has its password removed, and `adminInitialPassword` shows `***` when one is set.
+- `GET /api/admin/settings` (Admin) returns the effective configuration: the same redacted model that is logged at startup (including every storage root, such as `paths.bios`, and `backup.restoreFrom`). The connection string has its password removed, and `adminInitialPassword` shows `***` when one is set.
 - `GET /api/admin/logs/recent` (Admin) returns the last 20 log events the server holds in memory as a JSON array, oldest first (`[]` when there are none).
 - `GET /api/admin/logs` (Admin) downloads `rnrommanager-logs-<UTC time>.zip`. It contains every `*.log` file in `Paths:Logs` (including today's file while the app is writing to it), `settings.json` (the redacted configuration) and `version.txt`.
 - `GET /api/admin/logs/stream` (Admin) is a server-sent event stream (`text/event-stream`). It first sends the buffered events newer than the `Last-Event-ID` header (all of them when the header is missing, unreadable or newer than anything buffered), then each new event as `id: <number>` and `data: {time, level, logger, message, exception}`. Ids keep increasing across restarts. A `: keep-alive` comment follows every 15 seconds; at each one the stream ends if the user was disabled, lost `admin` or was signed out.

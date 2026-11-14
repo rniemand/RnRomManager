@@ -14,6 +14,7 @@ public class PathsOptionsValidatorTests
         Cache = Path.Combine(Root, "cache"),
         Backups = Path.Combine(Root, "backups"),
         Collections = Path.Combine(Root, "collections"),
+        Bios = Path.Combine(Root, "bios"),
     };
 
     private static IEnumerable<string> Failures(PathsOptions options) =>
@@ -143,5 +144,28 @@ public class PathsOptionsValidatorTests
         var options = Valid();
         options.Collections = Path.Combine(options.Roms, "collections");
         Assert.That(Failures(options), Has.Some.EqualTo("Paths:Collections must not be inside Paths:Roms."));
+    }
+
+    [Test]
+    public void Bios_DefaultsToAppBios()
+    {
+        Assert.That(new PathsOptions().Bios, Is.EqualTo("/app/bios"));
+        Assert.That(new PathsOptions().All(), Has.Member(("Paths:Bios", "/app/bios")));
+    }
+
+    [Test]
+    public void Bios_InsideTheLibrary_Fails()
+    {
+        var options = Valid();
+        options.Bios = Path.Combine(options.Roms, "bios");
+        Assert.That(Failures(options), Has.Some.EqualTo("Paths:Bios must not be inside Paths:Roms."));
+    }
+
+    [Test]
+    public void Bios_SameAsTheLibrary_Fails()
+    {
+        var options = Valid();
+        options.Bios = options.Roms;
+        Assert.That(Failures(options), Has.Some.EqualTo("Paths:Roms and Paths:Bios must be different paths."));
     }
 }

@@ -32,6 +32,7 @@ services:
       - ./data/cache:/app/cache
       - ./data/backups:/app/backups
       - ./data/collections:/app/collections
+      - ./data/bios:/app/bios
     user: "1000:1000"   # owner of ./data
     stop_grace_period: 35s   # lets a running job stop cleanly
     depends_on:
@@ -54,7 +55,7 @@ services:
 Then:
 
 ```bash
-mkdir -p data/{roms,ingest,logs,cache,backups,db}
+mkdir -p data/{roms,ingest,logs,cache,backups,collections,bios,db}
 docker compose up -d
 docker compose logs -f rnrommanager
 ```
@@ -89,15 +90,16 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 | `/app/cache` | downloaded DATs and temporary work folders |
 | `/app/backups` | the daily database backups (see [Backup and restore](#backup-and-restore)); keep it private |
 | `/app/collections` | collection cover images (`<collection id>.png` or `.jpg`) |
+| `/app/bios` | emulator BIOS files you copy in for browser play (`colecovision.rom` for ColecoVision); any file here can be downloaded by a signed-in user, so keep only BIOS files in it |
 
-An existing deployment that doesn't map `/app/collections` still starts (the folder is created), but covers then live in an anonymous Docker volume and are lost when the container is recreated: add the mapping when you upgrade.
+An existing deployment that doesn't map `/app/collections` or `/app/bios` still starts (the folders are created), but their files then live in anonymous Docker volumes and are lost when the container is recreated: add the mappings when you upgrade (`mkdir -p data/bios`, then add `- ./data/bios:/app/bios`).
 
 The container runs as UID 1654 unless you set `user:`.
 
 - **Named volumes** work as they are: the image's folders are already owned by 1654.
-- **Bind mounts** (as above) must be writable by the container's user. Either set `user: "<uid>:<gid>"` to the owner of `./data` (find it with `id -u` / `id -g`), or `chown -R 1654:1654 ./data/{roms,ingest,logs,cache,backups,collections}`.
+- **Bind mounts** (as above) must be writable by the container's user. Either set `user: "<uid>:<gid>"` to the owner of `./data` (find it with `id -u` / `id -g`), or `chown -R 1654:1654 ./data/{roms,ingest,logs,cache,backups,collections,bios}`.
 
-At startup the app writes and deletes a `.rnrm-probe` file in each of the five folders. If that fails, it stops with a `FATAL` line naming the path and the UID/GID it runs as.
+At startup the app writes and deletes a `.rnrm-probe` file in each of the seven folders. If that fails, it stops with a `FATAL` line naming the path and the UID/GID it runs as.
 
 ## Time zone
 
@@ -126,7 +128,7 @@ Besides the DAT downloads (libretro-database and the [titledb](https://github.co
 ## Health checks
 
 - `GET /health/live`: the process is up (used by the image's `HEALTHCHECK`).
-- `GET /health/ready`: the database answers within 2 seconds and the five folders exist; 503 otherwise.
+- `GET /health/ready`: the database answers within 2 seconds and the seven folders exist; 503 otherwise.
 
 Both are anonymous and return no details.
 
@@ -138,6 +140,7 @@ Both are anonymous and return no details.
 - **`/app/roms`**, the library itself, including release notes and the Switch ROM files next to their ZIPs. Stop the app (or make sure no job is running) for a consistent copy.
 - **`/app/backups`**, so the database backups survive the loss of the host. Copy it somewhere else.
 - **`/app/collections`**, the collection cover images. Collections themselves are in the database (and its backups), but their cover files are not: copy this folder with the backups. After a restore without it, collections show a placeholder until a cover is set again.
+- **`/app/bios`**, the emulator BIOS files you copied in. Database backups don't include them: keep your own copy.
 
 The library ZIPs, together with the external ROM files next to them in `/app/roms`, are the source of truth for games: if the database is lost but they are not, a new database is rebuilt from them by the next ingestion or **Integrity → Run quick** (accounts and history are not). `/app/ingest` holds anything not yet ingested plus `_removed/` (the ROMs listed on **Deleted ROMs**, until restored or deleted there); back it up too if you keep files there. `/app/cache` can be re-downloaded with **Refresh DATs**.
 
@@ -198,6 +201,7 @@ Upgrading to 0.4.0:
 - **ZIPs move to `info.json` version 6** as each game is next written (`externalFileName`, `TitleDb`, `titledb` images, an update's `version`, and a disc set's `files`). Migration 0020 adds the `rom_files` table. Apps before 0.4.0 can read them but refuse to change them.
 - **Migration 0019** adds `roms.version` and fills it for Switch updates already in the library from the `[x.y.z]` tag in their original file name, so the Game page's Updates tab orders them at once. Existing Switch files keep their names; only files written from now on drop the repeated title (`Orbit Expedition.[0100…][v0].nsp`, see [ZIP format](zip-format.md#external-rom-files)).
 - **Plan disk space** for Switch dumps and disc images (often several GB each). Keep `/app/ingest` and `/app/roms` on the same volume where you can: placement is then an instant rename; across volumes each file is copied and needs free space for a second copy while it moves.
+- **Add the BIOS folder** for ColecoVision browser play: `mkdir -p data/bios`, add `- ./data/bios:/app/bios` to the app's `volumes:` (and `chown` it like the others if you don't set `user:`), then copy `colecovision.rom` into it. Without the mapping the folder lives in an anonymous volume.
 - **To be able to downgrade,** take a database backup (**Back up now**) and a filesystem snapshot of `/app/roms` (and `/app/ingest`) at the same moment before upgrading, and restore **both** to go back: the database alone doesn't know where external files were.
 
 After upgrading to a version that adds a system (such as the ones that add Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch and the six disc systems), ingestion refuses to start with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs.

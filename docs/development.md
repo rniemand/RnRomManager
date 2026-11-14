@@ -10,6 +10,7 @@ Browser (Svelte SPA) ──HTTP/JSON──> ASP.NET Core API ──Dapper──>
                                           ├── /app/cache    DATs, work folders
                                           ├── /app/backups  database backups
                                           ├── /app/collections  collection cover images
+                                          ├── /app/bios     emulator BIOS files (operator-supplied)
                                           └── HTTPS: raw.githubusercontent.com (DATs, titledb), thumbnails.libretro.com,
                                                      img-eshop.cdn.nintendo.net (Switch images)
 ```
@@ -56,7 +57,7 @@ pwsh scripts/seed-ingest.ps1 # synthetic ROMs + fixture DATs (below)
 pwsh scripts/start-dev.ps1   # API on :5080 (dotnet watch) + Vite on http://localhost:5173
 ```
 
-- `setup-dev.ps1` (`-SkipDb` to leave the database alone) is safe to re-run. It keeps the dev DB password in the git-ignored `.env` (creating one if missing), starts `docker-compose.dev.yml` (MariaDB 11.4 on 3306), creates `.dev/{roms,ingest,logs,cache,backups,collections}`, and writes a git-ignored `src/RnRomManager.Api/appsettings.Development.json` with the connection string and absolute `.dev` paths. An existing settings file is kept (only missing `Paths` entries, such as `Backups` or `Collections`, are added); delete it to regenerate. It also installs the e2e project's packages and Playwright's Chromium (on Linux, run `npx playwright install-deps` once for the system libraries).
+- `setup-dev.ps1` (`-SkipDb` to leave the database alone) is safe to re-run. It keeps the dev DB password in the git-ignored `.env` (creating one if missing), starts `docker-compose.dev.yml` (MariaDB 11.4 on 3306), creates `.dev/{roms,ingest,logs,cache,backups,collections,bios}`, and writes a git-ignored `src/RnRomManager.Api/appsettings.Development.json` with the connection string and absolute `.dev` paths. An existing settings file is kept (only missing `Paths` entries, such as `Backups`, `Collections` or `Bios`, are added: re-run it after pulling a change that adds a storage root); delete it to regenerate. It also installs the e2e project's packages and Playwright's Chromium (on Linux, run `npx playwright install-deps` once for the system libraries).
 - `start-dev.ps1` runs both servers in one console; Ctrl+C stops both. `-ApiOnly` / `-WebOnly` run one. Vite proxies `/api` and `/health` to the API.
 - The first API start on an empty database prints the generated `admin` password to the console once; signing in asks you to change it. Then Ingestion → Import all ingests the seeded files.
 

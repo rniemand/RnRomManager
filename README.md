@@ -82,6 +82,7 @@ services:
       - ./data/cache:/app/cache
       - ./data/backups:/app/backups
       - ./data/collections:/app/collections
+      - ./data/bios:/app/bios
     user: "1000:1000"   # owner of ./data
     stop_grace_period: 35s   # lets a running job stop cleanly
     depends_on:
@@ -104,7 +105,7 @@ services:
 Then:
 
 ```bash
-mkdir -p data/{roms,ingest,logs,cache,backups,db}
+mkdir -p data/{roms,ingest,logs,cache,backups,collections,bios,db}
 docker compose up -d
 ```
 
