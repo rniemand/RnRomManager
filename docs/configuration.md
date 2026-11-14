@@ -19,11 +19,23 @@ All settings come from `appsettings.json` and can be overridden with environment
 | `Sources:DatBaseUrl` | `Sources__DatBaseUrl` | `https://raw.githubusercontent.com/libretro/libretro-database/master/metadat` | absolute http(s) URL |
 | `Sources:TitleDbUrl` | `Sources__TitleDbUrl` | `https://raw.githubusercontent.com/blawar/titledb/master/US.en.json` | absolute http(s) URL; the [blawar/titledb](https://github.com/blawar/titledb) file a DAT refresh downloads for systems identified by title ID (Nintendo Switch) |
 | `Sources:ThumbnailBaseUrl` | `Sources__ThumbnailBaseUrl` | `https://thumbnails.libretro.com` | absolute http(s) URL, or empty to disable all media downloads, Switch's titledb images included (default box art only) |
+| `Emulator:GenesisCorePath` | `Emulator__GenesisCorePath` | *(empty)* | empty (Genesis play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Genesis Plus GX files ([below](#genesis-plus-gx-core)). A relative path fails startup; a path that doesn't exist just means Genesis play isn't set up. Not created or probed, and not one of the paths that must differ. Shown on **Admin → Settings** as `emulator.genesisCorePath`. |
 | `Backup:RestoreFrom` | `Backup__RestoreFrom` | *(empty)* | empty, or the bare file name of a backup in `Paths:Backups` to restore at startup (no `/`, `\` or `..`). See [restoring a backup](deployment.md#restoring-a-backup). Remove it once the restore is done. |
 
 ## Paths
 - The seven paths must be different, and none may be inside another (compared case-insensitively).
 - At startup the app creates each folder and writes and deletes a `.rnrm-probe` file in it. If that fails, the error names the path and the user the process runs as (UID/GID on Linux), so you can fix the ownership of a bind mount.
+
+## Genesis Plus GX core
+Mega Drive / Genesis plays with Genesis Plus GX, whose licence forbids commercial use, so the image doesn't contain it. To turn Genesis play on, put these three files from the EmulatorJS 4.2.3 build at the root of a folder and set `Emulator:GenesisCorePath` to it ([deployment](deployment.md#genesis-plus-gx-core) shows the mount):
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `genesis_plus_gx-wasm.data` | 1,203,661 | `190297a6f86757405090f1a2266f67dfe1a570a528c583434ed3641a5664f768` |
+| `genesis_plus_gx-legacy-wasm.data` | 1,204,803 | `2a1edeb68d7ec882149ed3cd5d3aa95a6ac231ebabaf82cdb56175a8b62967cc` |
+| `genesis_plus_gx.json` | 129 | `5936a8ce8d7f010d5bfdd8c3bba2b2414f103b3a703121e56f2724b24dbe7ff3` |
+
+The app checks each file's exact size and SHA-256 before it serves any byte (`GET /api/emulator/genesis/<file>`, signed-in users only), so a corrupt, altered or other-version file is refused with `409 GenesisCoreMismatch` and the play page says the files *don't match EmulatorJS 4.2.3*; the server log names the file. Replace that file with the right one (no restart needed). Missing, empty or unsafe files (links, names that differ only in case) count as not set up.
 
 ## Other settings
 - **Port:** the standard `ASPNETCORE_HTTP_PORTS` (image default `8080`). The container health check reads the first port from it, so don't use `ASPNETCORE_URLS` instead.
