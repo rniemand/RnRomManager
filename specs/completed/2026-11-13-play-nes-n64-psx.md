@@ -1,6 +1,6 @@
 ---
 title: Play NES and PlayStation in the browser
-status: in-progress
+status: completed
 created: 2026-11-13
 ---
 
