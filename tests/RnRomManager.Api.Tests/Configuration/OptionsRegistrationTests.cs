@@ -44,6 +44,7 @@ public class OptionsRegistrationTests
         Assert.That(services.GetRequiredService<IOptions<PathsOptions>>().Value.Bios, Is.EqualTo(Path.Combine(Root, "bios")));
         Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.GenesisCorePath, Is.Empty, "Genesis is off by default");
         Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.PicodriveCorePath, Is.Empty, "32X is off by default");
+        Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.Snes9xCorePath, Is.Empty, "SNES is off by default");
     }
 
     [Test]
@@ -70,6 +71,18 @@ public class OptionsRegistrationTests
             Is.EqualTo(Path.Combine(Root, "no-such-picodrive-mount")));
     }
 
+    [Test]
+    public void Snes9xCorePath_AnAbsoluteMountThatDoesNotExist_PassesStartup()
+    {
+        var settings = ValidSettings();
+        settings["Emulator:Snes9xCorePath"] = Path.Combine(Root, "no-such-snes9x-mount");
+        using var services = Build(settings);
+
+        Assert.DoesNotThrow(() => services.GetRequiredService<IStartupValidator>().Validate());
+        Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.Snes9xCorePath,
+            Is.EqualTo(Path.Combine(Root, "no-such-snes9x-mount")));
+    }
+
     [TestCase("Paths:Roms", "relative")]
     [TestCase("Paths:Bios", "relative/bios")]
     [TestCase("ConnectionStrings:Default", "")]
@@ -83,6 +96,7 @@ public class OptionsRegistrationTests
     [TestCase("Sources:ThumbnailBaseUrl", "nope")]
     [TestCase("Emulator:GenesisCorePath", "relative/genesis")]
     [TestCase("Emulator:PicodriveCorePath", "relative/picodrive")]
+    [TestCase("Emulator:Snes9xCorePath", "relative/snes9x")]
     public void InvalidSetting_FailsStartupValidationNamingTheKey(string key, string value)
     {
         var settings = ValidSettings();

@@ -41,6 +41,7 @@ public class EffectiveSettingsTests
             ["Backup:RestoreFrom"] = "rnrommanager-20261106-033000.zip",
             ["Emulator:GenesisCorePath"] = Path.Combine(root, "genesis"),
             ["Emulator:PicodriveCorePath"] = Path.Combine(root, "picodrive"),
+            ["Emulator:Snes9xCorePath"] = Path.Combine(root, "snes9x"),
         }).Build();
         using var services = new ServiceCollection().AddAppOptions(config).BuildServiceProvider();
 
@@ -54,8 +55,10 @@ public class EffectiveSettingsTests
         Assert.That(json, Does.Contain($"\"bios\":{JsonSerializer.Serialize(Path.Combine(root, "bios"))}"));
         Assert.That(settings.Emulator.GenesisCorePath, Is.EqualTo(Path.Combine(root, "genesis")));
         Assert.That(settings.Emulator.PicodriveCorePath, Is.EqualTo(Path.Combine(root, "picodrive")));
+        Assert.That(settings.Emulator.Snes9xCorePath, Is.EqualTo(Path.Combine(root, "snes9x")));
         Assert.That(json, Does.Contain($"\"emulator\":{{\"genesisCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "genesis"))},"
-            + $"\"picodriveCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "picodrive"))}}}"));
+            + $"\"picodriveCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "picodrive"))},"
+            + $"\"snes9xCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "snes9x"))}}}"));
         Assert.That(json, Does.Not.Contain("hunter2"));
     }
 }

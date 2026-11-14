@@ -24,6 +24,7 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
 {
     public const string GenesisPlusGx = "genesis_plus_gx";
     public const string Picodrive = "picodrive";
+    public const string Snes9x = "snes9x";
 
     /// <summary>The pinned 4.2.3 files of each core (each report is its package's <c>reports/</c> copy).</summary>
     public static OperatorCoreManifest Pinned { get; } = new(
@@ -48,6 +49,17 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
                 "cc42b0c95e9edfd0e5c689211e8e85e45f4525be2d814af8ca9331ef90e0620b", "application/octet-stream"),
             new("picodrive.json", 123,
                 "2b09f29e095a003c15abf8e5bdfb0eaca96d6c6121183b3bd92ed85e860918d3", "application/json"),
+        ]),
+        // SNES B2: https://registry.npmjs.org/@emulatorjs/core-snes9x/-/core-snes9x-4.2.3.tgz (payloads at the package
+        // root, the report from reports/). Its licence forbids commercial use, so it's never bundled.
+        new(Snes9x, "Snes9x", o => o.Snes9xCorePath, EmulatorEndpoints.Snes9xCoreMismatch,
+        [
+            new("snes9x-wasm.data", 1_093_765,
+                "eaa0bcfce67673809886e50387a80a616b719502175db64c090d04c9d75958ee", "application/octet-stream"),
+            new("snes9x-legacy-wasm.data", 1_092_437,
+                "7d427a575cefad98ff400493fa1d7e892da63fe7bab68979babd9cea0bfaaf3b", "application/octet-stream"),
+            new("snes9x.json", 120,
+                "dc7ac963eb7935a7ac78956235ac0b8912ec785c57026336825aa2ed8031b3ad", "application/json"),
         ]),
     ]);
 
