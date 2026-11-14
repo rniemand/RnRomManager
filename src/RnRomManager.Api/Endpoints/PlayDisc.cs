@@ -7,11 +7,12 @@ using RnRomManager.Core.Library;
 namespace RnRomManager.Api.Endpoints;
 
 /// <summary>
-/// Play B2–B3: <c>GET /api/games/{id}/roms/{romId}/play-disc</c>, one PlayStation disc for the browser emulator. A
+/// Play B2–B3: <c>GET /api/games/{id}/roms/{romId}/play-disc</c>, one PlayStation (or Saturn) disc for the browser emulator. A
 /// standalone <c>.bin</c>/<c>.iso</c> streams unchanged; a cue set streams as an uncompressed ZIP holding a playback
 /// copy of the cue (<see cref="CueSheet.ForPlayback"/>) and the tracks as <c>track-NN.bin</c>. Every member is opened
 /// and checked before the response starts; nothing is written to disk and nothing is audited. PSP B2: a PlayStation
-/// Portable release streams its standalone <c>.iso</c> the same way, bounded by <see cref="PspMaxBytes"/>.
+/// Portable release streams its standalone <c>.iso</c> the same way, bounded by <see cref="PspMaxBytes"/>. Saturn B5: a
+/// Saturn release takes PlayStation's shapes and cap (<see cref="MaxBytesBySystem"/>).
 /// </summary>
 public static class PlayDisc
 {
@@ -19,11 +20,23 @@ public static class PlayDisc
 
     public const string PspSystemId = "psp";
 
+    public const string SaturnSystemId = "saturn";
+
     /// <summary>The combined opened lengths a launch may stream: a standard CD, bounded for browser memory.</summary>
     public const long MaxBytes = 1024L * 1024 * 1024;
 
     /// <summary>PSP B2: the opened ISO length a launch may stream (inclusive), covering standard UMD sizes.</summary>
     public const long PspMaxBytes = 2L * 1024 * 1024 * 1024;
+
+    /// <summary>
+    /// Saturn B5: the systems play-disc serves and each one's inclusive cap. Saturn's shapes are PlayStation's.
+    /// </summary>
+    public static IReadOnlyDictionary<string, long> MaxBytesBySystem { get; } = new Dictionary<string, long>(StringComparer.Ordinal)
+    {
+        [SystemId] = MaxBytes,
+        [PspSystemId] = PspMaxBytes,
+        [SaturnSystemId] = MaxBytes,
+    };
 
     public const string InvalidPlayDisc = "InvalidPlayDisc";
     public const string PlayDiscTooLarge = "PlayDiscTooLarge";
@@ -37,11 +50,10 @@ public static class PlayDisc
         var cancellationToken = ctx.RequestAborted;
         if (await roms.GetAsync(id, romId, cancellationToken) is not { } rom
             || await repository.GetAsync(id, cancellationToken) is not { } game
-            || game.SystemId is not (SystemId or PspSystemId) || rom.SystemId != game.SystemId
+            || !MaxBytesBySystem.TryGetValue(game.SystemId, out var maxBytes) || rom.SystemId != game.SystemId
             || rom.ExternalFileName is not { } mainName)
             return Problems.NotFound(ctx);
         var psp = game.SystemId == PspSystemId;
-        var maxBytes = psp ? PspMaxBytes : MaxBytes;
 
         var setFiles = (await roms.ListFilesByGameAsync(id, cancellationToken)).Where(f => f.RomId == romId).OrderBy(f => f.Ordinal).ToList();
         var claims = await roms.ListExternalAsync(cancellationToken);

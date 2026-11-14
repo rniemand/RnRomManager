@@ -9,7 +9,7 @@ using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
 
-/// <summary>Play B2–B3: <c>/play-disc</c> for PlayStation releases, against real files under <c>Paths:Roms</c>.</summary>
+/// <summary>Play B2–B3: <c>/play-disc</c> for PlayStation (PSP B2, Saturn B5) releases, against real files under <c>Paths:Roms</c>.</summary>
 public partial class LibraryEndpointsTests
 {
     private static readonly byte[] PsxTrack1 = [.. Enumerable.Range(0, 2352 * 3).Select(i => (byte)(i * 7))];
@@ -399,5 +399,109 @@ public partial class LibraryEndpointsTests
         Assert.That(asAnonymous.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
         Assert.That(asForced.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
         Assert.That(await AuthClient.CodeAsync(asForced), Is.EqualTo("PasswordChangeRequired"));
+    }
+
+    // Saturn B5: PlayStation's shapes and its 1 GiB inclusive cap; .nrg never plays.
+
+    private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> SaturnGame(string title, InfoJsonRom[] roms,
+        params (string Name, byte[] Bytes)[] onDisk) => DiscGame(PlayDisc.SaturnSystemId, title, roms, onDisk);
+
+    [Test]
+    public void PlayDisc_CapsEachSystem()
+    {
+        Assert.That(PlayDisc.MaxBytesBySystem, Is.EquivalentTo(new Dictionary<string, long>
+        {
+            ["psx"] = 1L << 30, ["psp"] = 2L << 30, ["saturn"] = 1L << 30,
+        }));
+    }
+
+    [Test]
+    public async Task PlayDisc_ASaturnSingleBin_StreamsUnchanged()
+    {
+        var (id, folder, ids) = await SaturnGame("Sky Solo", [PsxSolo("Sky Solo (USA).bin", PsxTrack1)], ("Sky Solo (USA).bin", PsxTrack1));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(PsxTrack1));
+        AssertNotOpen(Path.Combine(folder, "Sky Solo (USA).bin"));
+    }
+
+    [Test]
+    public async Task PlayDisc_ASaturnCueSet_IsAStoredZip_WithThePlaybackCue()
+    {
+        var cue = PsxCue("Sky Rally (USA) (Track 1).bin", "Sky Rally (USA) (Track 2).bin");
+        var (id, _, ids) = await SaturnGame("Sky Rally", [PsxSet("Sky Rally (USA)", PsxTrack1, cue, PsxTrack2)],
+            ("Sky Rally (USA) (Track 1).bin", PsxTrack1), ("Sky Rally (USA).cue", cue), ("Sky Rally (USA) (Track 2).bin", PsxTrack2));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/zip"));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Sky Rally (USA).cue", "track-01.bin", "track-02.bin" }));
+        Assert.That(zip.Entries.Select(e => e.CompressedLength == e.Length), Has.All.True, "stored, not deflated");
+        Assert.That(ReadEntry(zip, "track-01.bin"), Is.EqualTo(PsxTrack1));
+        Assert.That(ReadEntry(zip, "track-02.bin"), Is.EqualTo(PsxTrack2));
+    }
+
+    [Test]
+    public async Task PlayDisc_ASaturnDiscOfExactlyOneGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
+    {
+        var (atId, atFolder, atRoms) = await SaturnGame("Wide", [PsxSolo("Wide (USA).bin", Umd(30))], ("Wide (USA).bin", Umd(30)));
+        var (overId, overFolder, overRoms) = await SaturnGame("Wider", [PsxSolo("Wider (USA).bin", Umd(31))], ("Wider (USA).bin", Umd(31)));
+        // Lengths are set on disk only: the stored sizes stay the small originals.
+        await using (var grown = new FileStream(Path.Combine(atFolder, "Wide (USA).bin"), FileMode.Open, FileAccess.Write))
+            grown.SetLength(PlayDisc.MaxBytes);
+        await using (var grown = new FileStream(Path.Combine(overFolder, "Wider (USA).bin"), FileMode.Open, FileAccess.Write))
+            grown.SetLength(PlayDisc.MaxBytes + 1);
+
+        using (var atLimit = await _user.SendAsync(HttpMethod.Get, PlayDiscUrl(atId, atRoms[0]), null, sendXsrf: false,
+            completion: HttpCompletionOption.ResponseHeadersRead))
+        {
+            Assert.That(atLimit.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(atLimit.Content.Headers.ContentLength, Is.EqualTo(PlayDisc.MaxBytes));
+        } // disposed with the body unread: the stream is cancelled
+
+        using var over = await _user.GetAsync(PlayDiscUrl(overId, overRoms[0]));
+        Assert.That(over.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        var problem = await AuthClient.JsonAsync(over);
+        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.PlayDiscTooLarge));
+        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("1 GiB"));
+        AssertNotOpen(Path.Combine(overFolder, "Wider (USA).bin"));
+    }
+
+    [Test]
+    public async Task PlayDisc_ASaturnNrg_AloneOrInASet_Is409InvalidPlayDisc()
+    {
+        var lone = await SaturnGame("Nero", [PsxSolo("Nero (USA).nrg", Umd(32))], ("Nero (USA).nrg", Umd(32)));
+        var cue = PsxCue("Mixed Nero (USA) (Track 1).bin", "Mixed Nero (USA) (Track 2).bin");
+        var set = await SaturnGame("Mixed Nero",
+            [PsxSolo("Mixed Nero (USA) (Track 1).bin", PsxTrack1) with
+            {
+                Files = [SetFile("Mixed Nero (USA).cue", cue), SetFile("Mixed Nero (USA).nrg", Umd(33))],
+            }],
+            ("Mixed Nero (USA) (Track 1).bin", PsxTrack1), ("Mixed Nero (USA).cue", cue), ("Mixed Nero (USA).nrg", Umd(33)));
+
+        foreach (var (id, _, ids) in new[] { lone, set })
+        {
+            using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+            Assert.That(await ProblemCode(response, HttpStatusCode.Conflict), Is.EqualTo(PlayDisc.InvalidPlayDisc), id.ToString());
+        }
+    }
+
+    [Test]
+    public async Task PlayDisc_ASaturnRom_UnderAnotherSystemsGame_Is404()
+    {
+        var (saturnId, _, saturnRoms) = await SaturnGame("Cross", [PsxSolo("Cross (USA).bin", Umd(34))], ("Cross (USA).bin", Umd(34)));
+        var (psxId, _, psxRom) = await PsxUsaSet();
+
+        foreach (var url in new[] { PlayDiscUrl(psxId, saturnRoms[0]), PlayDiscUrl(saturnId, psxRom) })
+        {
+            using var response = await _user.GetAsync(url);
+            Assert.That(await ProblemCode(response, HttpStatusCode.NotFound), Is.EqualTo("NotFound"), url);
+        }
     }
 }

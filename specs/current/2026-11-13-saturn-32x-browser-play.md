@@ -162,7 +162,7 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
     - `node scripts/vendor-emulatorjs.mjs` (run in `src/RnRomManager.Web`) copies the three Yabause files and its licences, and no `yabause-thread` file;
     - `package-lock.json` resolves `@emulatorjs/emulatorjs` only at 4.2.3;
     - `npm run lint`, `npm run check` and the listed tests pass.
-- [ ] **6. Saturn play-disc** (B5): `PlayDisc` takes the per-system cap table (`psx` and `saturn` 1 GiB, `psp` 2 GiB). `BrowserCore` isn't changed yet, so no Play button appears.
+- [x] **6. Saturn play-disc** (B5): `PlayDisc` takes the per-system cap table (`psx` and `saturn` 1 GiB, `psp` 2 GiB). `BrowserCore` isn't changed yet, so no Play button appears.
   - Files: `PlayDisc.cs`, `LibraryEndpointsTests.PlayDisc.cs`.
   - Tests:
     - `LibraryEndpointsTests.PlayDisc`:
