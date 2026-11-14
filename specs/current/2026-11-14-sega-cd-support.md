@@ -166,7 +166,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
     - `emulator.test.ts`: `canPlay` is true for `genesis_plus_gx` with an external `.cue` or `.iso`.
     - `game-page.test.ts`: for a `segacd` game with `browserCore: 'genesis_plus_gx'` and an external `.cue` release, clicking the release's Play button opens the modal, and its iframe `src` has `core=genesis_plus_gx` and `&disc=1`.
   - Done when: those tests pass.
-- [ ] **8. Docs**:
+- [x] **8. Docs**:
   - `README.md`: intro line (Sega CD bin/cue sets kept together), the Play bullet (Sega CD: one disc per launch, up to 1 GiB, standalone `.bin`/`.iso` or a cue with its tracks, needs the Genesis Plus GX files and at least one of `bios_CD_U.bin`/`bios_CD_E.bin`/`bios_CD_J.bin` in `data/bios/`), the upgrade/Refresh DATs list, and the attribution note that no Sega CD BIOS is included.
   - `docs/features.md`: Sega CD ingest and play rules, the BIOS files and the region-mismatch note; the quoted Genesis missing-core message gets B8's "Genesis and Sega CD games" label.
   - `docs/configuration.md`: the Genesis Plus GX section also enables Sega CD.
