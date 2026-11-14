@@ -85,12 +85,12 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 | Path | Contents |
 |---|---|
 | `/app/roms` | the library: one ZIP per game (see [ZIP format](zip-format.md)), plus the Nintendo Switch ROM files stored next to their ZIPs |
-| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`) `ingest/nds/` (Nintendo DS: `.nds`; dumps over 256 MiB must be dropped loose, since archives are capped at 256 MiB of ROM data) `ingest/nes/` (NES: headered `.nes` only) `ingest/snes/` (SNES: `.sfc` or `.smc`, copier header stripped) `ingest/a2600/` (Atari 2600: `.a26` or `.bin`) `ingest/coleco/` (ColecoVision: `.col`, `.rom` or `.bin`) `ingest/gg/` (Game Gear: `.gg` or `.sms`) `ingest/sms/` (Master System: `.sms`) `ingest/md/` (Mega Drive / Genesis: `.md`, `.bin` or `.gen`) `ingest/s32x/` (32X: `.32x`) `ingest/tg16/` (TurboGrafx-16 / PC Engine: `.pce`, copier header stripped) `ingest/switch/` (Nintendo Switch: `.nsp`, `.xci`, `.nsz` or `.xcz`) `ingest/psx/` (PlayStation: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`) `ingest/psp/` (PSP: `.iso`) `ingest/gc/` (GameCube: `.iso`) `ingest/wii/` (Wii: `.iso`) `ingest/x360/` (Xbox 360: `.iso`) or `ingest/saturn/` (Saturn: a `.cue` with its `.bin` tracks, or `.nrg`); Switch and the disc systems are stored as files next to the ZIP (see [External ROM storage](#external-rom-storage-nintendo-switch-and-disc-systems)), and disc images must be dropped loose, not in archives; `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way (`_removed/` is managed on the Admin **Deleted ROMs** page: restore or delete for good) |
+| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`) `ingest/nds/` (Nintendo DS: `.nds`; dumps over 256 MiB must be dropped loose, since archives are capped at 256 MiB of ROM data) `ingest/nes/` (NES: headered `.nes` only) `ingest/snes/` (SNES: `.sfc` or `.smc`, copier header stripped) `ingest/a2600/` (Atari 2600: `.a26` or `.bin`) `ingest/coleco/` (ColecoVision: `.col`, `.rom` or `.bin`) `ingest/gg/` (Game Gear: `.gg` or `.sms`) `ingest/sms/` (Master System: `.sms`) `ingest/md/` (Mega Drive / Genesis: `.md`, `.bin` or `.gen`) `ingest/s32x/` (32X: `.32x`) `ingest/tg16/` (TurboGrafx-16 / PC Engine: `.pce`, copier header stripped) `ingest/switch/` (Nintendo Switch: `.nsp`, `.xci`, `.nsz` or `.xcz`) `ingest/psx/` (PlayStation: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`) `ingest/psp/` (PSP: `.iso`) `ingest/gc/` (GameCube: `.iso`) `ingest/wii/` (Wii: `.iso`) `ingest/x360/` (Xbox 360: `.iso`) `ingest/saturn/` (Saturn: a `.cue` with its `.bin` tracks, or `.nrg`) or `ingest/segacd/` (Sega CD: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`); Switch and the disc systems are stored as files next to the ZIP (see [External ROM storage](#external-rom-storage-nintendo-switch-and-disc-systems)), and disc images must be dropped loose, not in archives; `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way (`_removed/` is managed on the Admin **Deleted ROMs** page: restore or delete for good) |
 | `/app/logs` | `rnrommanager-yyyy-MM-dd.log`, kept for `Logging:RetentionDays` |
 | `/app/cache` | downloaded DATs and temporary work folders |
 | `/app/backups` | the daily database backups (see [Backup and restore](#backup-and-restore)); keep it private |
 | `/app/collections` | collection cover images (`<collection id>.png` or `.jpg`) |
-| `/app/bios` | emulator BIOS files you copy in for browser play (`colecovision.rom` for ColecoVision, required; the optional 512 KiB `scph5501.bin` for PlayStation, which otherwise uses its built-in HLE BIOS); any file here can be downloaded by a signed-in user, so keep only BIOS files in it |
+| `/app/bios` | emulator BIOS files you copy in for browser play (`colecovision.rom` for ColecoVision, required; the optional 512 KiB `scph5501.bin` for PlayStation, which otherwise uses its built-in HLE BIOS; at least one of the 128 KiB `bios_CD_U.bin`, `bios_CD_E.bin` or `bios_CD_J.bin` for Sega CD, required); any file here can be downloaded by a signed-in user, so keep only BIOS files in it |
 
 An existing deployment that doesn't map `/app/collections` or `/app/bios` still starts (the folders are created), but their files then live in anonymous Docker volumes and are lost when the container is recreated: add the mappings when you upgrade (`mkdir -p data/bios`, then add `- ./data/bios:/app/bios`).
 
@@ -206,13 +206,18 @@ Upgrading to 0.4.0:
 - **Add the BIOS folder** for ColecoVision browser play: `mkdir -p data/bios`, add `- ./data/bios:/app/bios` to the app's `volumes:` (and `chown` it like the others if you don't set `user:`), then copy `colecovision.rom` (and, optionally, `scph5501.bin` for PlayStation) into it. Without the mapping the folder lives in an anonymous volume.
 - **To be able to downgrade,** take a database backup (**Back up now**) and a filesystem snapshot of `/app/roms` (and `/app/ingest`) at the same moment before upgrading, and restore **both** to go back: the database alone doesn't know where external files were.
 
-After upgrading to a version that adds a system (such as the ones that add Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch and the six disc systems), ingestion refuses to start with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs.
+After upgrading to a version that adds a system (such as the ones that add Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch, the disc systems and Sega CD), ingestion refuses to start with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs.
 
 On `docker compose stop` a running job gets 30 seconds to finish its current item (`stop_grace_period: 35s` allows for that). A job that's cut off is marked `Aborted` at the next start and its leftovers are cleaned up; just start it again.
 
 Upgrading to the release that adds Nintendo DS:
 
 - **Refresh DATs after upgrading.** Nintendo DS is identified against libretro's No-Intro `Nintendo - Nintendo DS` DAT and its four metadat files. Until **Admin → DATs → Refresh DATs** has downloaded all five, every import is refused with `DatsMissing`, including one that selects only other systems' files. `ingest/nds/` is created at startup.
+
+Upgrading to the release that adds Sega CD:
+
+- **Refresh DATs after upgrading.** Sega CD is identified against libretro's Redump `Sega - Mega-CD - Sega CD` DAT (one file, no metadat). Until **Admin → DATs → Refresh DATs** has downloaded it, every import is refused with `DatsMissing`. `roms/segacd/` and `ingest/segacd/` are created at startup.
+- **For Sega CD browser play,** set up the [Genesis Plus GX core](#genesis-plus-gx-core) (the same files as Mega Drive / Genesis) and copy at least one regional BIOS, `bios_CD_U.bin`, `bios_CD_E.bin` or `bios_CD_J.bin` (128 KiB each), into `/app/bios`. The app doesn't include any Sega CD BIOS; a disc whose region's BIOS is missing doesn't boot.
 
 ## Nintendo DS: memory, disk and time
 
@@ -232,7 +237,7 @@ DS dumps are stored inside the game's ZIP and reach 512 MiB. Importing or resolv
 
 ## External ROM storage (Nintendo Switch and disc systems)
 
-Switch ROMs and disc images (PlayStation, PSP, GameCube, Wii, Xbox 360 and Saturn) are files next to their game's ZIP in `/app/roms/<system>/<letter>/` (see [ZIP format](zip-format.md#external-rom-files)); a disc set's cue and tracks sit there under their exact names. The app never overwrites a file it didn't create and never follows a link: every path is checked below its configured root, and a linked or special file or folder is reported and left alone.
+Switch ROMs and disc images (PlayStation, PSP, GameCube, Wii, Xbox 360, Saturn and Sega CD) are files next to their game's ZIP in `/app/roms/<system>/<letter>/` (see [ZIP format](zip-format.md#external-rom-files)); a disc set's cue and tracks sit there under their exact names. The app never overwrites a file it didn't create and never follows a link: every path is checked below its configured root, and a linked or special file or folder is reported and left alone.
 
 **Requirements**
 
@@ -254,7 +259,7 @@ Switch ROMs and disc images (PlayStation, PSP, GameCube, Wii, Xbox 360 and Satur
 
 ## Genesis Plus GX core
 
-Genesis play needs three Genesis Plus GX files you supply ([configuration](configuration.md#genesis-plus-gx-core) lists their sizes and SHA-256). They come from the npm package `@emulatorjs/core-genesis_plus_gx@4.2.3`: the two `.data` payloads are at the package root and the report is `reports/genesis_plus_gx.json`; copy all three to one folder, the report at its root too. Follow the core's own licence terms. Then mount the folder read-only and point the setting at it:
+Genesis and Sega CD play need three Genesis Plus GX files you supply (Sega CD also needs a regional BIOS in `/app/bios`, see [volumes](#volumes-and-permissions)) ([configuration](configuration.md#genesis-plus-gx-core) lists their sizes and SHA-256). They come from the npm package `@emulatorjs/core-genesis_plus_gx@4.2.3`: the two `.data` payloads are at the package root and the report is `reports/genesis_plus_gx.json`; copy all three to one folder, the report at its root too. Follow the core's own licence terms. Then mount the folder read-only and point the setting at it:
 
 ```yaml
     volumes:

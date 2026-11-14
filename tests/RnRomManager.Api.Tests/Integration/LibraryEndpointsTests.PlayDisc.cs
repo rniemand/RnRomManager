@@ -411,7 +411,7 @@ public partial class LibraryEndpointsTests
     {
         Assert.That(PlayDisc.MaxBytesBySystem, Is.EquivalentTo(new Dictionary<string, long>
         {
-            ["psx"] = 1L << 30, ["psp"] = 2L << 30, ["saturn"] = 1L << 30,
+            ["psx"] = 1L << 30, ["psp"] = 2L << 30, ["saturn"] = 1L << 30, ["segacd"] = 1L << 30,
         }));
     }
 
@@ -503,5 +503,86 @@ public partial class LibraryEndpointsTests
             using var response = await _user.GetAsync(url);
             Assert.That(await ProblemCode(response, HttpStatusCode.NotFound), Is.EqualTo("NotFound"), url);
         }
+    }
+
+    // Sega CD B4: PlayStation's shapes and its 1 GiB inclusive cap.
+
+    private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> SegaCdGame(string title, InfoJsonRom[] roms,
+        params (string Name, byte[] Bytes)[] onDisk) => DiscGame(PlayDisc.SegaCdSystemId, title, roms, onDisk);
+
+    [TestCase("Comet Solo (USA).bin")]
+    [TestCase("Comet Solo (USA).iso")]
+    public async Task PlayDisc_ASegaCdStandaloneImage_StreamsUnchanged(string name)
+    {
+        var (id, folder, ids) = await SegaCdGame("Comet Solo", [PsxSolo(name, PsxTrack1)], (name, PsxTrack1));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(PsxTrack1));
+        AssertNotOpen(Path.Combine(folder, name));
+    }
+
+    [Test]
+    public async Task PlayDisc_ASegaCdCueSet_IsAStoredZip_WithThePlaybackCue()
+    {
+        var cue = PsxCue("Disc Comet (USA) (Track 1).bin", "Disc Comet (USA) (Track 2).bin");
+        var (id, _, ids) = await SegaCdGame("Disc Comet", [PsxSet("Disc Comet (USA)", PsxTrack1, cue, PsxTrack2)],
+            ("Disc Comet (USA) (Track 1).bin", PsxTrack1), ("Disc Comet (USA).cue", cue), ("Disc Comet (USA) (Track 2).bin", PsxTrack2));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/zip"));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Disc Comet (USA).cue", "track-01.bin", "track-02.bin" }));
+        Assert.That(zip.Entries.Select(e => e.CompressedLength == e.Length), Has.All.True, "stored, not deflated");
+        Assert.That(ReadEntry(zip, "track-01.bin"), Is.EqualTo(PsxTrack1));
+        Assert.That(ReadEntry(zip, "track-02.bin"), Is.EqualTo(PsxTrack2));
+    }
+
+    [Test]
+    public async Task PlayDisc_ASegaCdDiscOfExactlyOneGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
+    {
+        var (atId, atFolder, atRoms) = await SegaCdGame("Wide", [PsxSolo("Wide (USA).iso", Umd(40))], ("Wide (USA).iso", Umd(40)));
+        var (overId, overFolder, overRoms) = await SegaCdGame("Wider", [PsxSolo("Wider (USA).iso", Umd(41))], ("Wider (USA).iso", Umd(41)));
+        // Lengths are set on disk only: the stored sizes stay the small originals.
+        await using (var grown = new FileStream(Path.Combine(atFolder, "Wide (USA).iso"), FileMode.Open, FileAccess.Write))
+            grown.SetLength(PlayDisc.MaxBytes);
+        await using (var grown = new FileStream(Path.Combine(overFolder, "Wider (USA).iso"), FileMode.Open, FileAccess.Write))
+            grown.SetLength(PlayDisc.MaxBytes + 1);
+
+        using (var atLimit = await _user.SendAsync(HttpMethod.Get, PlayDiscUrl(atId, atRoms[0]), null, sendXsrf: false,
+            completion: HttpCompletionOption.ResponseHeadersRead))
+        {
+            Assert.That(atLimit.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(atLimit.Content.Headers.ContentLength, Is.EqualTo(PlayDisc.MaxBytes));
+        } // disposed with the body unread: the stream is cancelled
+
+        using var over = await _user.GetAsync(PlayDiscUrl(overId, overRoms[0]));
+        Assert.That(over.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        var problem = await AuthClient.JsonAsync(over);
+        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.PlayDiscTooLarge));
+        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("1 GiB"));
+        AssertNotOpen(Path.Combine(overFolder, "Wider (USA).iso"));
+    }
+
+    [Test]
+    public async Task PlayDisc_ASegaCdSetWithTwoCues_Is409InvalidPlayDisc()
+    {
+        var cue = PsxCue("Twin Cue (USA) (Track 1).bin", "Twin Cue (USA) (Track 2).bin");
+        var (id, _, ids) = await SegaCdGame("Twin Cue",
+            [PsxSolo("Twin Cue (USA) (Track 1).bin", PsxTrack1) with
+            {
+                Files = [SetFile("Twin Cue (USA).cue", cue), SetFile("Twin Cue (USA) (Alt).cue", cue), SetFile("Twin Cue (USA) (Track 2).bin", PsxTrack2)],
+            }],
+            ("Twin Cue (USA) (Track 1).bin", PsxTrack1), ("Twin Cue (USA).cue", cue), ("Twin Cue (USA) (Alt).cue", cue),
+            ("Twin Cue (USA) (Track 2).bin", PsxTrack2));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(await ProblemCode(response, HttpStatusCode.Conflict), Is.EqualTo(PlayDisc.InvalidPlayDisc));
     }
 }

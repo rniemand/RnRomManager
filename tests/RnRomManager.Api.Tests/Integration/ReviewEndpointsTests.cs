@@ -87,6 +87,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.WiiDat] = [],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
+            [IngestSeeder.SegaCdDat] = [],
             [IngestSeeder.NintendoDsDat] = [new FixtureGame("Stylus Quest (USA)", "Stylus Quest (USA).nds", StylusQuest) { ReleaseYear = 2006 }],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)
             { ReleaseYear = 1989, Developers = ["Nintendo"], Publishers = ["Nintendo"], Genres = ["Puzzle"] }],
@@ -612,6 +613,32 @@ public class ReviewEndpointsTests
         return new IngestFile("nds", path, name, bytes.Length, File.GetLastWriteTimeUtc(path));
     }
 
+    [Test]
+    public async Task SegaCd_UnmatchedIso_WaitsInReview_AndManualStoresItAsIsoNextToTheZip()
+    {
+        var bytes = new SyntheticDiscBuilder { Seed = 2201 }.Build();
+        var path = Path.Combine(_factory.Root, "ingest", "segacd", "mystery.iso");
+        File.WriteAllBytes(path, bytes);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+
+        var result = await Ingest(new IngestFile("segacd", path, "mystery.iso", bytes.Length, File.GetLastWriteTimeUtc(path)));
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "segacd")));
+        var item = (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(bytes)), default))!;
+        Assert.That(item.SystemId, Is.EqualTo("segacd"));
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "Mystery Disc", regions = new[] { "USA" }, languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+
+        Assert.That(response.Code, Is.Null);
+        var game = await ReadGame(response.GameId!.Value);
+        var rom = game.Roms.Single();
+        Assert.That((game.System, rom.FileName, rom.ExternalFileName, rom.Identification.Method),
+            Is.EqualTo(("segacd", "Mystery Disc (USA).iso", "Mystery Disc (USA).iso", IdentificationMethod.Manual)));
+        Assert.That(File.ReadAllBytes(Path.Combine(_factory.Root, "roms", "segacd", "M", "Mystery Disc (USA).iso")), Is.EqualTo(bytes));
+        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Resolved"));
+        Assert.That(File.Exists(path), Is.False);
+    }
+
     private async Task<ReviewItem> QueueDs(string name, byte[] bytes, bool archive = false)
     {
         if (archive)
@@ -903,6 +930,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.WiiDat] = [],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
+            [IngestSeeder.SegaCdDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] = Enumerable.Range(1, 25).Select(i => new FixtureGame($"Demo {i} (World)", $"Demo {i} (World).gb", new SyntheticRomBuilder { Seed = 1000 + i }.Build())).ToArray(),
             ["Nintendo - Game Boy Color"] = [],
@@ -943,6 +971,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.WiiDat] = [],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
+            [IngestSeeder.SegaCdDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] =
             [

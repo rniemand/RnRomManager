@@ -3,7 +3,8 @@
 // PSP B3: on play-psp.html (its own cross-origin isolated tab) PPSSPP checks the browser, then fetches its UMD image
 // from play-disc and runs threaded. Genesis B4/B5: an operator-supplied core (Genesis Plus GX) checks its files
 // first and loads them from the API. Saturn B6/B7: Yabause fetches its disc from play-disc, with the optional
-// saturn_bios.bin handed over in memory like scph5501.bin.
+// saturn_bios.bin handed over in memory like scph5501.bin. Sega CD B7: Genesis Plus GX with `disc=1` needs at least one of
+// the regional Sega CD BIOS files, fetched one after another and all handed over in memory, then loads from play-disc.
 import {
 	biosError,
 	biosFor,
@@ -25,6 +26,10 @@ import {
 	saturnBios,
 	saturnBiosBytes,
 	saturnBiosSizeError,
+	segaCdBios,
+	segaCdBiosBytes,
+	segaCdBiosMissing,
+	segaCdBiosSizeError,
 	sessionExpired
 } from './params.js';
 
@@ -175,6 +180,7 @@ async function start() {
 	const isSaturn = params.core === 'yabause';
 	const isPsp = params.core === pspCore;
 	const isDs = params.core === 'desmume';
+	const isSegaCd = params.core === 'genesis_plus_gx' && params.disc;
 	if (isPsp) {
 		const problem = pspBrowserError(pspBrowser());
 		if (problem) return show(problem);
@@ -203,10 +209,22 @@ async function start() {
 		if ('error' in result) return show(result.error);
 		firmware = result.bios;
 	}
+	// Sega CD B7: U, E, then J, one at a time; a 404 skips a file, any other problem stops the launch there.
+	/** @type {Record<string, ArrayBuffer>} */
+	const segaCdFirmware = {};
+	if (isSegaCd) {
+		for (const name of segaCdBios) {
+			const result = await loadOptionalBios(name, segaCdBiosBytes, segaCdBiosSizeError(name));
+			if ('error' in result) return show(result.error);
+			if (result.bios) segaCdFirmware[`/${name}`] = result.bios;
+		}
+		if (Object.keys(segaCdFirmware).length === 0) return show(segaCdBiosMissing);
+	}
 
 	/** @type {Blob} */
 	let content;
-	if (isPsx || isPsp || isSaturn) {
+	// Sega CD B6: `disc=1` also loads from play-disc, for a core (Genesis Plus GX) that plays cartridges too.
+	if (isPsx || isPsp || isSaturn || params.disc) {
 		const disc = await loadDisc(`/api/games/${params.game}/roms/${params.rom}/play-disc`, params.core);
 		if ('error' in disc) return show(disc.error);
 		content = disc.data;
@@ -237,6 +255,12 @@ async function start() {
 	// PCSX ReARMed and Yabause find their firmware in the content root (EmulatorJS sets no system directory);
 	// GameManager writes this key before loading the content.
 	if (optional && firmware) ejs.EJS_externalFiles = { [`/${optional.name}`]: firmware };
+	// Sega CD B7/B9: Genesis Plus GX also looks in the content root, for bios_CD_U/E/J.bin. EmulatorJS 4.2.3 disables
+	// cue generation for this core, so a lone .bin would load as a cartridge: keep it on for a disc.
+	if (isSegaCd) {
+		ejs.EJS_externalFiles = segaCdFirmware;
+		ejs.EJS_disableCue = false;
+	}
 	// B3/B8: an operator-supplied core loads its payloads and report by name from the API; the vendored loader keeps
 	// them non-threaded.
 	if (isOperator) ejs.EJS_paths = operatorCorePaths(params.core);

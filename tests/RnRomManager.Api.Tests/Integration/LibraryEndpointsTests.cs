@@ -73,6 +73,7 @@ public partial class LibraryEndpointsTests
             [IngestSeeder.WiiDat] = [],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
+            [IngestSeeder.SegaCdDat] = [],
             [IngestSeeder.NintendoDsDat] = [new FixtureGame("Download Quest (USA)", "Download Quest (USA).nds", DsQuest)],
             [Gb] =
             [
@@ -149,7 +150,7 @@ public partial class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "s32x", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "n64", "nds", "nes", "switch", "psx", "psp", "saturn", "snes", "tg16", "vb", "wii", "x360" }));
+            Is.EqualTo(new[] { "s32x", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "n64", "nds", "nes", "switch", "psx", "psp", "saturn", "segacd", "snes", "tg16", "vb", "wii", "x360" }));
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(19).True);
         Assert.That(Find("switch").GetProperty("embedRoms").GetBoolean(), Is.False, "Switch stores its ROMs outside the ZIP");
         JsonElement Find(string id) => systems.EnumerateArray().Single(s => s.GetProperty("id").GetString() == id);
@@ -157,6 +158,7 @@ public partial class LibraryEndpointsTests
         Assert.That(gb.GetProperty("displayName").GetString(), Is.EqualTo("Game Boy"));
         Assert.That(gb.GetProperty("shortName").GetString(), Is.EqualTo("GB"), "L3");
         Assert.That((Find("nds").GetProperty("displayName").GetString(), Find("nds").GetProperty("shortName").GetString()), Is.EqualTo(("Nintendo DS", "DS")));
+        Assert.That((Find("segacd").GetProperty("displayName").GetString(), Find("segacd").GetProperty("shortName").GetString()), Is.EqualTo(("Sega CD", "SCD")));
         Assert.That((gb.GetProperty("gameCount").GetInt32(), gb.GetProperty("romCount").GetInt32()), Is.EqualTo((1, 2)));
         Assert.That(gb.GetProperty("regions").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "Japan", "World" }));
         var gbc = Find("gbc");
@@ -164,7 +166,7 @@ public partial class LibraryEndpointsTests
         Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
             "32X", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
-            "PlayStation", "PlayStation Portable", "Saturn", "Super Nintendo Entertainment System", "TurboGrafx-16", "Virtual Boy", "Wii", "Xbox 360"
+            "PlayStation", "PlayStation Portable", "Saturn", "Sega CD", "Super Nintendo Entertainment System", "TurboGrafx-16", "Virtual Boy", "Wii", "Xbox 360"
         }));
     }
 
@@ -215,6 +217,7 @@ public partial class LibraryEndpointsTests
     }
 
     // C2: playable only with a browser core and an embedded primary release; Play B1: PlayStation's external primary too.
+    // Sega CD B5: eligibility is per core, so a (hand-made, registry-impossible) external md primary plays like a Sega CD disc.
     [TestCase("gb", false, true, "gambatte")]
     [TestCase("gb", true, false, "gambatte")]
     [TestCase("a2600", false, true, "stella2014")]
@@ -222,7 +225,7 @@ public partial class LibraryEndpointsTests
     [TestCase("gg", false, true, "smsplus")]
     [TestCase("sms", false, true, "smsplus")]
     [TestCase("md", false, true, "genesis_plus_gx")]
-    [TestCase("md", true, false, "genesis_plus_gx")]
+    [TestCase("md", true, true, "genesis_plus_gx")]
     [TestCase("s32x", false, true, "picodrive")]
     [TestCase("snes", false, true, "snes9x")]
     [TestCase("snes", true, false, "snes9x")]
@@ -232,6 +235,7 @@ public partial class LibraryEndpointsTests
     [TestCase("psx", false, true, "pcsx_rearmed")]
     [TestCase("psp", true, true, "ppsspp")]
     [TestCase("saturn", true, true, "yabause")]
+    [TestCase("segacd", true, true, "genesis_plus_gx")]
     [TestCase("switch", false, false, null)]
     [TestCase("switch", true, false, null)]
     public Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(string system, bool external, bool playable, string? core) =>
@@ -266,6 +270,8 @@ public partial class LibraryEndpointsTests
         var item = (await GetJson("/api/games")).GetProperty("items")[0];
 
         Assert.That(item.GetProperty("browserCore").GetString(), Is.EqualTo(core));
+        // Sega CD B6: true only for a playable external primary (e.g. psx), false for an embedded (gb) or unplayable one.
+        Assert.That(item.GetProperty("playDisc").GetBoolean(), Is.EqualTo(playable && external));
         if (playable)
         {
             Assert.That(item.GetProperty("playRomId").GetInt64(), Is.EqualTo(primaryId));
@@ -394,6 +400,7 @@ public partial class LibraryEndpointsTests
     [TestCase("psx", "pcsx_rearmed")]
     [TestCase("psp", "ppsspp")]
     [TestCase("saturn", "yabause")]
+    [TestCase("segacd", "genesis_plus_gx")]
     [TestCase("nosuch", null)]
     public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)
     {

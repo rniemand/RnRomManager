@@ -22,7 +22,8 @@ describe('EmulatorModal', () => {
 			open: true,
 			gameId: 'g-1',
 			core: 'gambatte',
-			rom
+			rom,
+			disc: false
 		});
 
 		const iframe = container.querySelector('iframe')!;
@@ -39,7 +40,8 @@ describe('EmulatorModal', () => {
 			open: true,
 			gameId: 'g-1',
 			core: 'gambatte',
-			rom
+			rom,
+			disc: false
 		});
 		expect(container.querySelector('iframe')).not.toBeNull();
 
@@ -52,7 +54,25 @@ describe('EmulatorModal', () => {
 	});
 
 	it('renders no iframe without a core', () => {
-		const { container } = render(EmulatorModal, { open: true, gameId: 'g-1', core: null, rom });
+		const { container } = render(EmulatorModal, {
+			open: true,
+			gameId: 'g-1',
+			core: null,
+			rom,
+			disc: false
+		});
 		expect(container.querySelector('iframe')).toBeNull();
+	});
+
+	it('adds disc=1 for a disc release (Sega CD B6)', () => {
+		const { container } = render(EmulatorModal, {
+			open: true,
+			gameId: 'g-2',
+			core: 'genesis_plus_gx',
+			rom: { id: 14, fileName: 'Disc Comet (USA).cue' },
+			disc: true
+		});
+
+		expect(container.querySelector('iframe')!.getAttribute('src')).toMatch(/&disc=1$/);
 	});
 });

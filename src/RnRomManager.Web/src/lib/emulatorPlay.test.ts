@@ -53,8 +53,10 @@ function serve(routes: Record<string, () => Promise<FakeResponse>>) {
 	vi.stubGlobal('fetch', fetchMock);
 }
 
-async function play(core: string, name: string): Promise<string> {
+/** Sega CD B6: `disc` adds `disc=1`, as the SPA does for an external (disc) release. */
+async function play(core: string, name: string, disc = false): Promise<string> {
 	const query = new URLSearchParams({ game, rom: '12', core, name });
+	if (disc) query.set('disc', '1');
 	history.replaceState(null, '', `/emulator/play.html?${query}`);
 	const { started } = await import('../../static/emulator/play.js');
 	await started;
@@ -225,7 +227,7 @@ describe('play page PlayStation', () => {
 		const { response: bios } = biosBody([bytes.slice(0, 200_000), bytes.slice(200_000)]);
 		serve({ [psxBiosUrl]: async () => bios, [discUrl]: async () => discResponse(200) });
 
-		await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin');
+		await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin', true);
 
 		expect(urls()).toEqual([psxBiosUrl, discUrl]);
 		expect(fetchMock.mock.calls.map((c) => c[1])).toEqual([
@@ -249,7 +251,7 @@ describe('play page PlayStation', () => {
 	it('uses HLE when there is no BIOS (404)', async () => {
 		serve({ [psxBiosUrl]: async () => response(404), [discUrl]: async () => discResponse(200) });
 
-		await play('pcsx_rearmed', 'Solo (USA).iso');
+		await play('pcsx_rearmed', 'Solo (USA).iso', true);
 
 		expect(urls()).toEqual([psxBiosUrl, discUrl]);
 		expect(atLoader?.EJS_externalFiles).toBeUndefined();
@@ -263,7 +265,7 @@ describe('play page PlayStation', () => {
 		const { response: bios, cancelled } = biosBody(chunks);
 		serve({ [psxBiosUrl]: async () => bios, [discUrl]: async () => discResponse(200) });
 
-		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe(
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin', true)).toBe(
 			'The PlayStation BIOS in the BIOS folder (Paths:Bios) must be the 512 KiB scph5501.bin: ask an Admin to replace it.'
 		);
 		expect(urls()).toEqual([psxBiosUrl]);
@@ -277,7 +279,7 @@ describe('play page PlayStation', () => {
 	])('stops on a BIOS %i before fetching the disc', async (code, message) => {
 		serve({ [psxBiosUrl]: async () => response(code), [discUrl]: async () => discResponse(200) });
 
-		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe(message);
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin', true)).toBe(message);
 		expect(urls()).toEqual([psxBiosUrl]);
 		expect(atLoader).toBeNull();
 	});
@@ -293,7 +295,9 @@ describe('play page PlayStation', () => {
 				({ ok: true, status: 200, body: failing }) as unknown as FakeResponse,
 			[discUrl]: async () => discResponse(200)
 		});
-		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe("Couldn't load the BIOS.");
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin', true)).toBe(
+			"Couldn't load the BIOS."
+		);
 		expect(urls()).toEqual([psxBiosUrl]);
 
 		vi.resetModules();
@@ -301,7 +305,9 @@ describe('play page PlayStation', () => {
 			[psxBiosUrl]: () => Promise.reject(new TypeError('network')),
 			[discUrl]: async () => discResponse(200)
 		});
-		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe("Couldn't load the BIOS.");
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin', true)).toBe(
+			"Couldn't load the BIOS."
+		);
 		expect(atLoader).toBeNull();
 	});
 
@@ -325,7 +331,7 @@ describe('play page PlayStation', () => {
 			[discUrl]: async () => discResponse(code, problem)
 		});
 
-		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe(message);
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin', true)).toBe(message);
 		expect(atLoader).toBeNull();
 	});
 
@@ -335,14 +341,16 @@ describe('play page PlayStation', () => {
 			[discUrl]: () => Promise.reject(new TypeError('network'))
 		});
 
-		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin')).toBe("Couldn't load the disc.");
+		expect(await play('pcsx_rearmed', 'Disc (USA) (Track 1).bin', true)).toBe(
+			"Couldn't load the disc."
+		);
 		expect(atLoader).toBeNull();
 	});
 
 	it('scopes a standalone image named like the BIOS to the game', async () => {
 		serve({ [psxBiosUrl]: async () => response(404), [discUrl]: async () => discResponse(200) });
 
-		await play('pcsx_rearmed', 'SCPH5501.BIN');
+		await play('pcsx_rearmed', 'SCPH5501.BIN', true);
 
 		expect((atLoader?.EJS_gameUrl as File).name).toBe(`${game}-SCPH5501.BIN`);
 		expect(atLoader?.EJS_gameName).toBe('SCPH5501.BIN');
@@ -504,6 +512,9 @@ describe('play page Genesis and Master System (Genesis B4, B5)', () => {
 			});
 			expect(atLoader?.EJS_threads).toBeUndefined();
 			expect(atLoader?.EJS_biosUrl).toBeUndefined();
+			// Sega CD B6/B7: a cartridge has no disc flag, so no Sega CD BIOS, external files or cue setting.
+			expect(atLoader?.EJS_externalFiles).toBeUndefined();
+			expect(atLoader?.EJS_disableCue).toBeUndefined();
 			expect((atLoader?.EJS_gameUrl as File).name).toBe(name);
 		}
 	);
@@ -511,7 +522,7 @@ describe('play page Genesis and Master System (Genesis B4, B5)', () => {
 	it.each([
 		[
 			404,
-			'Genesis games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
+			'Genesis and Sega CD games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
 		],
 		[
 			409,
@@ -653,7 +664,7 @@ describe('play page Saturn (B6, B7)', () => {
 			[discUrl]: async () => discResponse(200)
 		});
 
-		await play('yabause', name);
+		await play('yabause', name, true);
 
 		expect(urls()).toEqual([saturnBiosUrl, discUrl]);
 		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
@@ -676,7 +687,7 @@ describe('play page Saturn (B6, B7)', () => {
 	it('uses the HLE BIOS when there is no saturn_bios.bin (404)', async () => {
 		serve({ [saturnBiosUrl]: async () => response(404), [discUrl]: async () => discResponse(200) });
 
-		await play('yabause', name);
+		await play('yabause', name, true);
 
 		expect(urls()).toEqual([saturnBiosUrl, discUrl]);
 		expect(atLoader?.EJS_externalFiles).toBeUndefined();
@@ -691,7 +702,7 @@ describe('play page Saturn (B6, B7)', () => {
 				[discUrl]: async () => discResponse(200)
 			});
 
-			expect(await play('yabause', name)).toBe(
+			expect(await play('yabause', name, true)).toBe(
 				'The Saturn BIOS in the BIOS folder (Paths:Bios) must be the 512 KiB saturn_bios.bin: ask an Admin to replace it.'
 			);
 			expect(urls()).toEqual([saturnBiosUrl]);
@@ -708,7 +719,7 @@ describe('play page Saturn (B6, B7)', () => {
 			[discUrl]: async () => discResponse(200)
 		});
 
-		expect(await play('yabause', name)).toBe(message);
+		expect(await play('yabause', name, true)).toBe(message);
 		expect(urls()).toEqual([saturnBiosUrl]);
 		expect(atLoader).toBeNull();
 	});
@@ -719,17 +730,167 @@ describe('play page Saturn (B6, B7)', () => {
 			[discUrl]: async () => discResponse(200)
 		});
 
-		expect(await play('yabause', name)).toBe("Couldn't load the BIOS.");
+		expect(await play('yabause', name, true)).toBe("Couldn't load the BIOS.");
 		expect(urls()).toEqual([saturnBiosUrl]);
 	});
 
 	it('names a standalone disc called like a Saturn BIOS after the game', async () => {
 		serve({ [saturnBiosUrl]: async () => response(404), [discUrl]: async () => discResponse(200) });
 
-		await play('yabause', 'Sega_101.BIN');
+		await play('yabause', 'Sega_101.BIN', true);
 
 		expect((atLoader?.EJS_gameUrl as File).name).toBe(`${game}-Sega_101.BIN`);
 		expect(atLoader?.EJS_gameName).toBe('Sega_101.BIN');
+	});
+});
+
+describe('play page Sega CD (Sega CD B7)', () => {
+	const check = '/api/emulator/cores/genesis_plus_gx';
+	const bios = (name: string) => `/api/emulator/bios/${name}`;
+	const [biosU, biosE, biosJ] = ['bios_CD_U.bin', 'bios_CD_E.bin', 'bios_CD_J.bin'].map(bios);
+	const discUrl = `/api/games/${game}/roms/12/play-disc`;
+	const disc = new Uint8Array([0x50, 0x4b, 3, 4, 5, 5]);
+	const name = 'Disc Comet (USA).cue';
+	const firmware = (seed: number, size = 131072) =>
+		new Uint8Array(size).map((_, i) => (i + seed) % 233);
+
+	function body(bytes: Uint8Array): FakeResponse {
+		const chunks = [bytes];
+		const stream = new ReadableStream<Uint8Array>({
+			pull(controller) {
+				const next = chunks.shift();
+				if (next) controller.enqueue(next);
+				else controller.close();
+			}
+		});
+		return { ok: true, status: 200, body: stream } as unknown as FakeResponse;
+	}
+
+	function discResponse(): FakeResponse {
+		return {
+			ok: true,
+			status: 200,
+			body: { cancel: async () => {} },
+			blob: async () => new Blob([disc])
+		} as unknown as FakeResponse;
+	}
+
+	/** Serves the core check, the disc and the given BIOS responses (the others are 404). */
+	function serveSegaCd(found: Record<string, () => Promise<FakeResponse>>, core = 204) {
+		serve({
+			[check]: async () => response(core),
+			[biosU]: async () => response(404),
+			[biosE]: async () => response(404),
+			[biosJ]: async () => response(404),
+			...found,
+			[discUrl]: async () => discResponse(),
+			[romUrl]: async () => response(200)
+		});
+	}
+
+	it('checks the core, then asks for U, E and J one after another, then the disc', async () => {
+		const u = firmware(1);
+		serveSegaCd({ [biosU]: async () => body(u) });
+
+		await play('genesis_plus_gx', name, true);
+
+		expect(urls()).toEqual([check, biosU, biosE, biosJ, discUrl]);
+		expect(fetchMock.mock.calls[0][1]).toEqual({ method: 'HEAD', credentials: 'same-origin' });
+		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
+		expect(Object.keys(files)).toEqual(['/bios_CD_U.bin']);
+		expect(new Uint8Array(files['/bios_CD_U.bin'])).toEqual(u);
+		expect(atLoader).toMatchObject({
+			EJS_core: 'genesis_plus_gx',
+			EJS_gameName: name,
+			EJS_controlScheme: 'segaMD',
+			EJS_hideSettings: ['retroarch_core'],
+			EJS_disableCue: false,
+			EJS_paths: {
+				'genesis_plus_gx-wasm.data':
+					'/api/emulator/cores/genesis_plus_gx/genesis_plus_gx-wasm.data',
+				'genesis_plus_gx-legacy-wasm.data':
+					'/api/emulator/cores/genesis_plus_gx/genesis_plus_gx-legacy-wasm.data',
+				'genesis_plus_gx.json': '/api/emulator/cores/genesis_plus_gx/genesis_plus_gx.json'
+			}
+		});
+		expect(atLoader?.EJS_biosUrl).toBeUndefined();
+		const file = atLoader?.EJS_gameUrl as File;
+		expect(file.name).toBe(name);
+		expect(new Uint8Array(await file.arrayBuffer())).toEqual(disc);
+	});
+
+	it.each([
+		['E only', { E: 2 }],
+		['U and J', { U: 1, J: 3 }],
+		['all three', { U: 1, E: 2, J: 3 }]
+	] as const)('hands over every BIOS found: %s', async (_, seeds) => {
+		const urlOf = { U: biosU, E: biosE, J: biosJ };
+		const found = Object.entries(seeds) as ['U' | 'E' | 'J', number][];
+		serveSegaCd(
+			Object.fromEntries(
+				found.map(([region, seed]) => [urlOf[region], async () => body(firmware(seed))])
+			)
+		);
+
+		await play('genesis_plus_gx', name, true);
+
+		expect(urls()).toEqual([check, biosU, biosE, biosJ, discUrl]);
+		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
+		expect(Object.keys(files)).toEqual(found.map(([region]) => `/bios_CD_${region}.bin`));
+		for (const [region, seed] of found)
+			expect(new Uint8Array(files[`/bios_CD_${region}.bin`])).toEqual(firmware(seed));
+	});
+
+	it('stops with the missing message when no BIOS file is there, before the disc or loader', async () => {
+		serveSegaCd({});
+
+		expect(await play('genesis_plus_gx', name, true)).toBe(
+			'Sega CD games need a BIOS: ask an Admin to put bios_CD_U.bin, bios_CD_E.bin or bios_CD_J.bin in the BIOS folder (Paths:Bios).'
+		);
+		expect(urls()).toEqual([check, biosU, biosE, biosJ]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops on a wrong-size bios_CD_E.bin after a valid bios_CD_U.bin, without asking for J or the disc', async () => {
+		serveSegaCd({
+			[biosU]: async () => body(firmware(1)),
+			[biosE]: async () => body(firmware(2, 131073))
+		});
+
+		expect(await play('genesis_plus_gx', name, true)).toBe(
+			'The Sega CD BIOS bios_CD_E.bin in the BIOS folder (Paths:Bios) must be 128 KiB: ask an Admin to replace it.'
+		);
+		expect(urls()).toEqual([check, biosU, biosE]);
+		expect(atLoader).toBeNull();
+	});
+
+	it.each([
+		[500, "Couldn't load the BIOS (HTTP 500)."],
+		[401, 'Your session has expired. Sign in again.']
+	])('stops on a BIOS HTTP %i', async (status, message) => {
+		serveSegaCd({ [biosU]: async () => response(status) });
+
+		expect(await play('genesis_plus_gx', name, true)).toBe(message);
+		expect(urls()).toEqual([check, biosU]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops on a core 404 before any BIOS request', async () => {
+		serveSegaCd({}, 404);
+
+		expect(await play('genesis_plus_gx', name, true)).toBe(
+			'Genesis and Sega CD games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
+		);
+		expect(urls()).toEqual([check]);
+	});
+
+	it('names a disc called like a Sega CD BIOS after the game', async () => {
+		serveSegaCd({ [biosJ]: async () => body(firmware(3)) });
+
+		await play('genesis_plus_gx', 'BIOS_CD_U.BIN', true);
+
+		expect((atLoader?.EJS_gameUrl as File).name).toBe(`${game}-BIOS_CD_U.BIN`);
+		expect(Object.keys(atLoader?.EJS_externalFiles as object)).toEqual(['/bios_CD_J.bin']);
 	});
 });
 

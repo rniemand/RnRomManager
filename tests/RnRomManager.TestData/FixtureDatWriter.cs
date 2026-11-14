@@ -106,6 +106,6 @@ public sealed record FixtureDatLayout(string DatFolder, IReadOnlyList<string> Me
 {
     public static FixtureDatLayout NoIntro { get; } = new(DatKind.NoIntro, DatKind.Metadat);
 
-    /// <summary>The six disc systems' layout: <c>redump</c>, no metadat.</summary>
+    /// <summary>The seven disc systems' layout: <c>redump</c>, no metadat.</summary>
     public static FixtureDatLayout Redump { get; } = new(DatKind.Redump, []);
 }

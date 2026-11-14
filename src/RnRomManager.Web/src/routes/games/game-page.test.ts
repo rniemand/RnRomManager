@@ -192,7 +192,7 @@ describe('game detail page', () => {
 
 		await fireEvent.click(await screen.findByRole('button', { name: 'Play Tetris 1.gb' }));
 		expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
-			`/emulator/play.html?game=${psx.id}&rom=1&core=pcsx_rearmed&name=Tetris%201.gb`
+			`/emulator/play.html?game=${psx.id}&rom=1&core=pcsx_rearmed&name=Tetris%201.gb&disc=1`
 		);
 		unmount();
 
@@ -203,6 +203,25 @@ describe('game detail page', () => {
 		render(GamePage);
 		await screen.findByRole('article', { name: 'Tetris 1.gb' });
 		expect(screen.queryByRole('button', { name: 'Play Tetris 1.gb' })).toBeNull();
+	});
+
+	it('an external Sega CD cue release plays on Genesis Plus GX from play-disc (Sega CD B5, B6)', async () => {
+		const scd = game([1]);
+		scd.system = 'segacd';
+		scd.browserCore = 'genesis_plus_gx';
+		scd.roms[0].fileName = 'Disc Runner (USA).cue';
+		scd.roms[0].externalFileName = 'Disc Runner (USA).cue';
+		answers.push({ status: 200, body: scd });
+		render(GamePage);
+
+		await fireEvent.click(
+			await screen.findByRole('button', { name: 'Play Disc Runner (USA).cue' })
+		);
+		const src = document.querySelector('iframe')!.getAttribute('src')!;
+		expect(src).toContain('core=genesis_plus_gx');
+		expect(src).toBe(
+			`/emulator/play.html?game=${scd.id}&rom=1&core=genesis_plus_gx&name=Disc%20Runner%20(USA).cue&disc=1`
+		);
 	});
 
 	it('each external PSP release has a Play link to the isolated player in a new tab (PSP B3)', async () => {
@@ -218,7 +237,7 @@ describe('game detail page', () => {
 				name: `Play ${rom.fileName} (opens in a new tab)`
 			});
 			expect(link.getAttribute('href')).toBe(
-				`/emulator/play-psp.html?game=${psp.id}&rom=${rom.id}&core=ppsspp&name=${encodeURIComponent(rom.fileName)}`
+				`/emulator/play-psp.html?game=${psp.id}&rom=${rom.id}&core=ppsspp&name=${encodeURIComponent(rom.fileName)}&disc=1`
 			);
 			expect(link.getAttribute('target')).toBe('_blank');
 			expect(link.getAttribute('rel')).toBe('noopener');

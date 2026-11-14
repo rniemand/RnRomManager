@@ -209,7 +209,7 @@ test('browse, search and filter the library', async () => {
 	await expect(systemMenu.locator('.dropdown-item').first().locator('.font-monospace')).toHaveText('28');
 	expect(await systemMenu.locator('[data-value]').evaluateAll((rows) => rows.map((r) => (r as HTMLElement).dataset.value))).toEqual([
 		's32x', 'a2600', 'a5200', 'a7800', 'jaguar', 'lynx', 'coleco', 'gb', 'gba', 'gbc', 'gg', 'gc', 'sms', 'md', 'n64', 'nds', 'nes', 'switch', 'psx', 'psp', 'saturn',
-		'snes', 'tg16', 'vb', 'wii', 'x360'
+		'segacd', 'snes', 'tg16', 'vb', 'wii', 'x360'
 	]);
 	await expect(systemMenu.locator('[data-value="gb"] .font-monospace')).toHaveText('3');
 	await expect(systemMenu.locator('[data-value="gbc"] .font-monospace')).toHaveText('2');
@@ -526,7 +526,7 @@ test('Play: a PlayStation set streams its disc ZIP from the detail page and the 
 	const bios = page.waitForResponse((r) => r.url().endsWith('/api/emulator/bios/scph5501.bin'));
 	const disc = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(r.url()));
 	await page.getByRole('button', { name: 'Play Disc Runner (USA) (Track 1).bin' }).click();
-	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=pcsx_rearmed&name=Disc%20Runner%20\(USA\)%20\(Track%201\)\.bin$/);
+	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=pcsx_rearmed&name=Disc%20Runner%20\(USA\)%20\(Track%201\)\.bin&disc=1$/);
 	expect((await bios).status()).toBe(404); // no firmware in the e2e image: the core uses HLE
 	const response = await disc;
 	expect(response.status()).toBe(200);
@@ -550,7 +550,7 @@ test('Play: a PlayStation set streams its disc ZIP from the detail page and the 
 	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Disc Runner', exact: true })).toBeVisible();
 	await page.getByRole('button', { name: 'Play Disc Runner' }).click();
-	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=pcsx_rearmed&name=Disc%20Runner%20\(USA\)%20\(Track%201\)\.bin$/);
+	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=pcsx_rearmed&name=Disc%20Runner%20\(USA\)%20\(Track%201\)\.bin&disc=1$/);
 	await closeEmulator();
 });
 
@@ -570,7 +570,7 @@ test('Play: a Saturn set asks for saturn_bios.bin, streams its disc and fetches 
 		const bios = page.waitForResponse((r) => r.url().endsWith('/api/emulator/bios/saturn_bios.bin'));
 		const disc = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(r.url()));
 		await page.getByRole('button', { name: 'Play Sky Rally (Japan) (Track 1).bin' }).click();
-		await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=yabause&name=Sky%20Rally%20\(Japan\)%20\(Track%201\)\.bin$/);
+		await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=yabause&name=Sky%20Rally%20\(Japan\)%20\(Track%201\)\.bin&disc=1$/);
 		expect((await bios).status()).toBe(404);
 		const response = await disc;
 		expect(response.status()).toBe(200);
@@ -598,7 +598,7 @@ async function pspBrowser(psp: Page) {
 }
 
 test('Play: a PSP UMD image opens the isolated player in a new tab from the detail page and the library', async () => {
-	const tab = /\/emulator\/play-psp\.html\?.*core=ppsspp&name=Pocket%20Ninja%20\(USA\)\.iso$/;
+	const tab = /\/emulator\/play-psp\.html\?.*core=ppsspp&name=Pocket%20Ninja%20\(USA\)\.iso&disc=1$/;
 	await openGame('Pocket Ninja');
 	// Observers first: the popup, its document and its authenticated ISO request.
 	const popup = context.waitForEvent('page');
@@ -674,7 +674,7 @@ test('Play: Genesis explains its missing core; Master System and Game Gear start
 	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=genesis_plus_gx&name=Turbo%20Comet%20\(USA%2C%20Europe\)\.md$/);
 	expect((await check).status()).toBe(404);
 	await expect(page.frameLocator('iframe').getByRole('status')).toHaveText(
-		'Genesis games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
+		'Genesis and Sega CD games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
 	);
 	await expect(page.frameLocator('iframe').getByText('Start Game')).toHaveCount(0);
 	await closeEmulator();

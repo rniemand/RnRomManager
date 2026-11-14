@@ -15,7 +15,11 @@ import {
 	psxBiosBytes,
 	saturnBios,
 	saturnBiosBytes,
-	saturnBiosSizeError
+	saturnBiosSizeError,
+	segaCdBios,
+	segaCdBiosBytes,
+	segaCdBiosMissing,
+	segaCdBiosSizeError
 } from '../../static/emulator/params.js';
 
 const game = '0f8fad5b-d9cb-469f-a165-70867728950e';
@@ -39,8 +43,23 @@ describe('parsePlayParams', () => {
 			game,
 			rom: 12,
 			core: 'mgba',
-			name: 'A #1 & B.gba'
+			name: 'A #1 & B.gba',
+			disc: false
 		});
+	});
+
+	it('reads disc=1 as a disc release (Sega CD B6)', () => {
+		expect(parsePlayParams(query({ core: 'pcsx_rearmed', disc: '1' }))?.disc).toBe(true);
+		expect(parsePlayParams(query({ core: 'ppsspp', disc: '1' }), true)?.disc).toBe(true);
+		expect(parsePlayParams(query({ core: 'genesis_plus_gx' }))?.disc).toBe(false);
+	});
+
+	it.each(['0', 'true', '', '01'])('rejects disc=%s (Sega CD B6)', (disc) => {
+		expect(parsePlayParams(query({ disc }))).toBeNull();
+	});
+
+	it('rejects a repeated disc (Sega CD B6)', () => {
+		expect(parsePlayParams(`${query({})}&disc=1&disc=1`)).toBeNull();
 	});
 
 	it.each([
@@ -209,7 +228,8 @@ describe('PSP page (PSP B3)', () => {
 			game,
 			rom: 12,
 			core: 'ppsspp',
-			name: 'Umd (USA).iso'
+			name: 'Umd (USA).iso',
+			disc: false
 		});
 		expect(parsePlayParams(query({ core: 'ppsspp' }))).toBeNull();
 		expect(parsePlayParams(query({ core: 'ppsspp' }), false)).toBeNull();
@@ -296,7 +316,7 @@ describe('Genesis (Genesis B4, B5)', () => {
 		[401, 'Your session has expired. Sign in again.'],
 		[
 			404,
-			'Genesis games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
+			'Genesis and Sega CD games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
 		],
 		[
 			409,
@@ -462,7 +482,8 @@ describe('Nintendo DS (Nintendo DS B4)', () => {
 			game,
 			rom: 12,
 			core: 'desmume',
-			name: 'Marker Test (World).nds'
+			name: 'Marker Test (World).nds',
+			disc: false
 		});
 		expect(parsePlayParams(query({ core: 'desmume' }), true)).toBeNull();
 	});
@@ -476,5 +497,44 @@ describe('Nintendo DS (Nintendo DS B4)', () => {
 	it('keeps the generic nds controls and the release name as the content file name', () => {
 		expect(controlSchemeFor('desmume', 'Marker Test (World).nds')).toBeNull();
 		expect(contentFileName('desmume', game, 'Marker #1 (World).nds')).toBe('Marker _1 (World).nds');
+	});
+});
+
+describe('Sega CD (B7, B8)', () => {
+	it('fetches the three regional BIOS files in U, E, J order, each exactly 128 KiB', () => {
+		expect(segaCdBios).toEqual(['bios_CD_U.bin', 'bios_CD_E.bin', 'bios_CD_J.bin']);
+		expect(segaCdBiosBytes).toBe(131072);
+	});
+
+	it.each(['bios_CD_U.bin', 'BIOS_CD_E.BIN', 'bios_cd_j.bin'])(
+		'renames content called %s after the game, for a disc and a cartridge alike',
+		(name) => {
+			expect(parsePlayParams(query({ core: 'genesis_plus_gx', name, disc: '1' }))?.disc).toBe(true);
+			expect(parsePlayParams(query({ core: 'genesis_plus_gx', name }))?.disc).toBe(false);
+			expect(contentFileName('genesis_plus_gx', game, name)).toBe(`${game}-${name}`);
+		}
+	);
+
+	it('leaves other Genesis Plus GX names and other cores alone', () => {
+		expect(contentFileName('genesis_plus_gx', game, 'Disc Comet (USA).cue')).toBe(
+			'Disc Comet (USA).cue'
+		);
+		expect(contentFileName('picodrive', game, 'bios_CD_U.bin')).toBe('bios_CD_U.bin');
+		expect(contentFileName('yabause', game, 'bios_CD_U.bin')).toBe('bios_CD_U.bin');
+	});
+
+	it('names the BIOS file in the size message, and all three in the missing message', () => {
+		expect(segaCdBiosSizeError('bios_CD_E.bin')).toBe(
+			'The Sega CD BIOS bios_CD_E.bin in the BIOS folder (Paths:Bios) must be 128 KiB: ask an Admin to replace it.'
+		);
+		expect(segaCdBiosMissing).toBe(
+			'Sega CD games need a BIOS: ask an Admin to put bios_CD_U.bin, bios_CD_E.bin or bios_CD_J.bin in the BIOS folder (Paths:Bios).'
+		);
+	});
+
+	it('labels the shared core for both systems (B8)', () => {
+		expect(operatorCoreError('genesis_plus_gx', 404)).toBe(
+			'Genesis and Sega CD games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
+		);
 	});
 });

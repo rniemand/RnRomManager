@@ -67,6 +67,7 @@ public class NoteEndpointsTests
             [IngestSeeder.WiiDat] = [],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
+            [IngestSeeder.SegaCdDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] =
             [
