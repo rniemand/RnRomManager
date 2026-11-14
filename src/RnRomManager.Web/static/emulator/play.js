@@ -239,7 +239,7 @@ async function start() {
 	// B3/B8: an operator-supplied core loads its payloads and report by name from the API; the vendored loader keeps
 	// them non-threaded.
 	if (isOperator) ejs.EJS_paths = operatorCorePaths(params.core);
-	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX, PicoDrive, Yabause): hide only the core
+	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX, PicoDrive, Yabause, Snes9x): hide only the core
 	// selector.
 	if (hidesCoreChooser(params.core)) ejs.EJS_hideSettings = ['retroarch_core'];
 	const scheme = controlSchemeFor(params.core, params.name);

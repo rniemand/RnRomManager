@@ -27,7 +27,8 @@ const ejsGlobals = [
 	'EJS_Buttons',
 	'EJS_defaultOptions',
 	'EJS_paths',
-	'EJS_threads'
+	'EJS_threads',
+	'EJS_disableCue'
 ];
 
 const win = window as unknown as Record<string, unknown>;
@@ -729,5 +730,100 @@ describe('play page Saturn (B6, B7)', () => {
 
 		expect((atLoader?.EJS_gameUrl as File).name).toBe(`${game}-Sega_101.BIN`);
 		expect(atLoader?.EJS_gameName).toBe('Sega_101.BIN');
+	});
+});
+
+describe('play page SNES (SNES B3)', () => {
+	const check = '/api/emulator/cores/snes9x';
+
+	it.each(['Mode Seven Rally (USA).sfc', 'Legacy Cart (USA).smc'])(
+		'checks the core files with one HEAD, then loads %s with the API paths and upstream controls',
+		async (name) => {
+			serve({ [check]: async () => response(204), [romUrl]: async () => response(200) });
+
+			await play('snes9x', name);
+
+			expect(urls()).toEqual([check, romUrl]);
+			expect(fetchMock.mock.calls[0][1]).toEqual({ method: 'HEAD', credentials: 'same-origin' });
+			expect(fetchMock.mock.calls[1][1]).toEqual({ credentials: 'same-origin' });
+			expect(atLoader).toMatchObject({
+				EJS_core: 'snes9x',
+				EJS_gameName: name,
+				EJS_disableDatabases: true,
+				EJS_hideSettings: ['retroarch_core'],
+				EJS_defaultOptions: { 'save-save-interval': '30' },
+				EJS_paths: {
+					'snes9x-wasm.data': '/api/emulator/cores/snes9x/snes9x-wasm.data',
+					'snes9x-legacy-wasm.data': '/api/emulator/cores/snes9x/snes9x-legacy-wasm.data',
+					'snes9x.json': '/api/emulator/cores/snes9x/snes9x.json'
+				}
+			});
+			expect(atLoader?.EJS_controlScheme).toBeUndefined();
+			expect(atLoader?.EJS_threads).toBeUndefined();
+			expect(atLoader?.EJS_biosUrl).toBeUndefined();
+			expect(atLoader?.EJS_externalFiles).toBeUndefined();
+			expect(atLoader?.EJS_disableCue).toBeUndefined();
+			expect((atLoader?.EJS_gameUrl as File).name).toBe(name);
+		}
+	);
+
+	it.each([
+		[
+			404,
+			'SNES games need the Snes9x core files: ask an Admin to set them up (Emulator:Snes9xCorePath).'
+		],
+		[
+			409,
+			"The Snes9x core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:Snes9xCorePath)."
+		],
+		[401, 'Your session has expired. Sign in again.'],
+		[500, "Couldn't load the Snes9x core (HTTP 500)."]
+	])('stops on HTTP %i before fetching the ROM or starting the loader', async (status, message) => {
+		serve({ [check]: async () => response(status), [romUrl]: async () => response(200) });
+
+		expect(await play('snes9x', 'Mode Seven Rally (USA).sfc')).toBe(message);
+		expect(urls()).toEqual([check]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops when the availability check fails to reach the server', async () => {
+		serve({
+			[check]: async () => Promise.reject(new TypeError('network')),
+			[romUrl]: async () => response(200)
+		});
+
+		expect(await play('snes9x', 'Mode Seven Rally (USA).sfc')).toBe(
+			"Couldn't load the Snes9x core."
+		);
+		expect(urls()).toEqual([check]);
+		expect(atLoader).toBeNull();
+	});
+
+	it.each([
+		[401, 'Your session has expired. Sign in again.'],
+		[500, "Couldn't load the ROM (HTTP 500)."]
+	])('keeps the ROM error for HTTP %i after a passing check', async (status, message) => {
+		serve({ [check]: async () => response(204), [romUrl]: async () => response(status) });
+
+		expect(await play('snes9x', 'Mode Seven Rally (USA).sfc')).toBe(message);
+		expect(urls()).toEqual([check, romUrl]);
+		expect(atLoader).toBeNull();
+	});
+
+	it.each([
+		['request', () => Promise.reject(new TypeError('network'))],
+		[
+			'body read',
+			async () => ({
+				...response(200),
+				blob: () => Promise.reject(new TypeError('read'))
+			})
+		]
+	])('shows the generic ROM error when the ROM %s fails', async (_, rom) => {
+		serve({ [check]: async () => response(204), [romUrl]: rom });
+
+		expect(await play('snes9x', 'Mode Seven Rally (USA).sfc')).toBe("Couldn't load the ROM.");
+		expect(urls()).toEqual([check, romUrl]);
+		expect(atLoader).toBeNull();
 	});
 });

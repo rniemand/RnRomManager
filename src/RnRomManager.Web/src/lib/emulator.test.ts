@@ -15,6 +15,13 @@ describe('canPlay', () => {
 		expect(canPlay({ browserCore: 'fceumm' }, { externalFileName: null })).toBe(true);
 	});
 
+	it('is true for an embedded SNES release and false for an external one (SNES B1)', () => {
+		expect(canPlay({ browserCore: 'snes9x' }, { externalFileName: null })).toBe(true);
+		expect(
+			canPlay({ browserCore: 'snes9x' }, { externalFileName: 'Mode Seven Rally (USA).sfc' })
+		).toBe(false);
+	});
+
 	it('is true for an external PlayStation disc', () => {
 		expect(
 			canPlay({ browserCore: 'pcsx_rearmed' }, { externalFileName: 'Disc (USA) (Track 1).bin' })

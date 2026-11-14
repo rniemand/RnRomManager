@@ -70,7 +70,7 @@ const coreLicenses = [
 // The guarded vendoring edits (anchor → its replacement), applied in order.
 const getCoreAnchor = '        const gen = this.getCore(true);\n';
 const pinGuard =
-	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause"].includes(core)) {\n' +
+	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x"].includes(core)) {\n' +
 	'            return core;\n' +
 	'        }\n';
 const legacyAnchor =
@@ -79,14 +79,14 @@ const threadOverride =
 	'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
 	'                threads = true;\n' +
 	'            }\n' +
-	'            if (["genesis_plus_gx", "picodrive", "yabause"].includes(this.getCore())) {\n' +
+	'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x"].includes(this.getCore())) {\n' +
 	'                threads = false;\n' +
 	'            }\n';
 const cdnAnchor =
 	'            if (res === -1) {\n' +
 	'                console.log("File not found, attemping to fetch from emulatorjs cdn.");\n';
 const cdnSkip =
-	'                if (["genesis_plus_gx", "picodrive"].includes(this.getCore())) {\n' +
+	'                if (["genesis_plus_gx", "picodrive", "snes9x"].includes(this.getCore())) {\n' +
 	'                    this.startGameError(this.localization("Error downloading core") + " (" + filename + ")");\n' +
 	'                    return;\n' +
 	'                }\n';
@@ -145,6 +145,59 @@ function emulatorMethod(
 		Uint8Array
 	}) as Record<string, (this: object, ...args: unknown[]) => unknown>;
 	return proto[name];
+}
+
+type CoreDownload = { requests: string[]; errors: string[] };
+
+/**
+ * SNES B3: runs EmulatorJS's downloadGameCore() from emulator.js source (or the bundle) for an operator core outside a
+ * browser, with the report and payload requests stubbed, and records the requested paths and startup errors.
+ * Decompression never settles, so the run stops once the payload is handed over.
+ */
+async function downloadCore(
+	source: string,
+	core: string,
+	{
+		supportsWebgl2 = true,
+		webgl2Enabled = null as boolean | null,
+		savedThreads = null as string | null,
+		report = async (): Promise<unknown> => ({ data: { buildStart: 1, options: {} } }),
+		payload = async (): Promise<unknown> => ({ data: new ArrayBuffer(4) })
+	} = {}
+): Promise<CoreDownload> {
+	const end = source.indexOf('window.EmulatorJS = EmulatorJS;');
+	expect(end).toBeGreaterThan(0);
+	const proto = runInNewContext(`${source.slice(0, end)}EmulatorJS.prototype`, {
+		window: { SharedArrayBuffer },
+		console: { log: () => {}, warn: () => {}, error: () => {} },
+		Uint8Array,
+		TextDecoder
+	}) as Record<string, (this: object, ...args: unknown[]) => unknown>;
+	const run: CoreDownload = { requests: [], errors: [] };
+	const ejs = {
+		config: { system: core, threads: false },
+		debug: true,
+		ejs_version: '4.2.3',
+		supportsWebgl2,
+		webgl2Enabled,
+		textElem: {},
+		storage: { core: { get: async () => null, put: () => {} } },
+		getCores: proto.getCores,
+		getCore: proto.getCore,
+		requiresThreads: proto.requiresThreads,
+		requiresWebGL2: proto.requiresWebGL2,
+		localization: (t: string) => t,
+		preGetSetting: (name: string) => (name === 'ejs_threads' ? savedThreads : null),
+		startGameError: (m: string) => run.errors.push(m),
+		checkCompression: () => new Promise(() => {}),
+		downloadFile: (path: string) => {
+			run.requests.push(path);
+			return path.startsWith('cores/reports/') ? report() : payload();
+		}
+	};
+	proto.downloadGameCore.call(ejs);
+	for (let i = 0; i < 5; i++) await tick();
+	return run;
 }
 
 /** EJS_GameManager's prototype from GameManager.js, run outside a browser. */
@@ -216,6 +269,8 @@ describe('vendor-emulatorjs', () => {
 				...coreLicenses.map((f) => `licenses/${f}`)
 			].sort()
 		);
+		// SNES B3: the operator supplies Snes9x, so none of its files is vendored.
+		expect(files(out).filter((f) => f.includes('snes9x'))).toEqual([]);
 		// PSP B3: PPSSPP's threaded payload is the only one; every other core is single-threaded.
 		expect(files(out).filter((f) => f.includes('-thread'))).toEqual([
 			'data/cores/ppsspp-thread-wasm.data'
@@ -394,10 +449,81 @@ describe('vendor-emulatorjs', () => {
 			const source = readFileSync(join(out, 'data', file), 'utf8');
 			expect(source).toContain('const requiresThreads = ["ppsspp", "dosbox_pure"];');
 			expect(threadOverride).toContain(
-				'["genesis_plus_gx", "picodrive", "yabause"].includes(this.getCore())'
+				'["genesis_plus_gx", "picodrive", "yabause", "snes9x"].includes(this.getCore())'
 			);
 			// Only the operator-supplied cores skip the CDN; Yabause is vendored.
-			expect(cdnSkip).toContain('["genesis_plus_gx", "picodrive"].includes(this.getCore())');
+			expect(cdnSkip).toContain(
+				'["genesis_plus_gx", "picodrive", "snes9x"].includes(this.getCore())'
+			);
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s pins an explicit snes9x despite a saved alternate core (SNES B3)',
+		(file) => {
+			const resolve = coreResolver(readFileSync(join(out, 'data', file), 'utf8'));
+			for (const saved of ['snes9x', 'bsnes', 'genesis_plus_gx', null])
+				expect(resolve('snes9x', saved), `${saved}`).toBe('snes9x');
+			// The control and settings group stays upstream's singleton snes group.
+			expect(resolve('snes9x', null, true)).toBe('snes');
+			expect(resolve('snes9x', 'bsnes', true)).toBe('snes');
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s picks the Snes9x payload from the WebGL 2 setting and never a threaded one (SNES B3)',
+		async (file) => {
+			const source = readFileSync(join(out, 'data', file), 'utf8');
+			const report = 'cores/reports/snes9x.json';
+			// Fresh settings: the pinned report has no defaultWebGL2, so legacy.
+			expect((await downloadCore(source, 'snes9x')).requests).toEqual([
+				report,
+				'cores/snes9x-legacy-wasm.data'
+			]);
+			// A saved enabled WebGL 2 setting on a browser that supports it.
+			expect((await downloadCore(source, 'snes9x', { webgl2Enabled: true })).requests).toEqual([
+				report,
+				'cores/snes9x-wasm.data'
+			]);
+			// Without WebGL 2 the constructor turns the setting off.
+			expect(
+				(await downloadCore(source, 'snes9x', { supportsWebgl2: false, webgl2Enabled: false }))
+					.requests
+			).toEqual([report, 'cores/snes9x-legacy-wasm.data']);
+			// A saved "threads enabled" can't pick a threaded payload, which upstream would.
+			const upstream = readFileSync(join(pkg, 'src', 'emulator.js'), 'utf8');
+			expect(
+				(await downloadCore(upstream, 'snes9x', { savedThreads: 'enabled' })).requests
+			).toEqual([report, 'cores/snes9x-thread-legacy-wasm.data']);
+			for (const webgl2Enabled of [null, true])
+				expect(
+					(await downloadCore(source, 'snes9x', { savedThreads: 'enabled', webgl2Enabled }))
+						.requests[1]
+				).not.toContain('-thread');
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s still fetches the Snes9x payload after a failed report (SNES B3)',
+		async (file) => {
+			const source = readFileSync(join(out, 'data', file), 'utf8');
+			const run = await downloadCore(source, 'snes9x', { report: async () => -1 });
+			expect(run.requests).toEqual(['cores/reports/snes9x.json', 'cores/snes9x-legacy-wasm.data']);
+			expect(run.errors).toEqual([]);
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s shows a local error for a failed Snes9x payload, without the CDN (SNES B3)',
+		async (file) => {
+			const source = readFileSync(join(out, 'data', file), 'utf8');
+			const run = await downloadCore(source, 'snes9x', { payload: async () => -1 });
+			expect(run.requests).toEqual(['cores/reports/snes9x.json', 'cores/snes9x-legacy-wasm.data']);
+			expect(run.errors).toEqual(['Error downloading core (snes9x-legacy-wasm.data)']);
+			// Upstream would retry the payload from the EmulatorJS CDN.
+			const upstream = readFileSync(join(pkg, 'src', 'emulator.js'), 'utf8');
+			const fallback = await downloadCore(upstream, 'snes9x', { payload: async () => -1 });
+			expect(fallback.requests[2]).toMatch(/^https:\/\/cdn\.emulatorjs\.org\//);
 		}
 	);
 

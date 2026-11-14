@@ -55,7 +55,8 @@ describe('parsePlayParams', () => {
 		'pcsx_rearmed',
 		'genesis_plus_gx',
 		'picodrive',
-		'yabause'
+		'yabause',
+		'snes9x'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});
@@ -65,7 +66,8 @@ describe('parsePlayParams', () => {
 		['rom 0', { rom: '0' }],
 		['rom -1', { rom: '-1' }],
 		['rom 1.5', { rom: '1.5' }],
-		['an unknown core', { core: 'snes9x' }],
+		['an unknown core', { core: 'bsnes' }],
+		['a case variant of a core', { core: 'Snes9x' }],
 		['an empty name', { name: '' }],
 		['a 256-char name', { name: 'a'.repeat(256) }],
 		['a missing game', { game: null }],
@@ -397,5 +399,57 @@ describe('Saturn (B6, B7)', () => {
 		[500, null, "Couldn't load the disc (HTTP 500)."]
 	])('words a play-disc %i %s like PlayStation', (status, code, message) => {
 		expect(discError(status, code, 'yabause')).toBe(message);
+	});
+});
+
+describe('SNES (SNES B3)', () => {
+	it('accepts snes9x on the modal page only', () => {
+		expect(
+			parsePlayParams(query({ core: 'snes9x', name: 'Mode Seven Rally (USA).sfc' }))?.core
+		).toBe('snes9x');
+		expect(parsePlayParams(query({ core: 'snes9x' }), true)).toBeNull();
+	});
+
+	it.each(['Mode Seven Rally (USA).sfc', 'Legacy (USA).smc', 'X.GG'])(
+		'leaves the control scheme to upstream for %s',
+		(name) => {
+			expect(controlSchemeFor('snes9x', name)).toBeNull();
+		}
+	);
+
+	it('needs no BIOS and hides the core chooser', () => {
+		expect(biosFor('snes9x')).toBeNull();
+		expect(hidesCoreChooser('snes9x')).toBe(true);
+	});
+
+	it('keeps the release name as the content file name', () => {
+		expect(contentFileName('snes9x', game, 'Mode Seven #2 (USA).smc')).toBe(
+			'Mode Seven _2 (USA).smc'
+		);
+	});
+
+	it('maps the three operator files to the API by name', () => {
+		expect(operatorCorePaths('snes9x')).toEqual({
+			'snes9x-wasm.data': '/api/emulator/cores/snes9x/snes9x-wasm.data',
+			'snes9x-legacy-wasm.data': '/api/emulator/cores/snes9x/snes9x-legacy-wasm.data',
+			'snes9x.json': '/api/emulator/cores/snes9x/snes9x.json'
+		});
+	});
+
+	it.each([
+		[204, null],
+		[401, 'Your session has expired. Sign in again.'],
+		[
+			404,
+			'SNES games need the Snes9x core files: ask an Admin to set them up (Emulator:Snes9xCorePath).'
+		],
+		[
+			409,
+			"The Snes9x core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:Snes9xCorePath)."
+		],
+		[500, "Couldn't load the Snes9x core (HTTP 500)."],
+		[null, "Couldn't load the Snes9x core."]
+	])('reports the availability check %s', (status, message) => {
+		expect(operatorCoreError('snes9x', status)).toBe(message);
 	});
 });

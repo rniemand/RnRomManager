@@ -19,7 +19,8 @@ const cores = [
 	'ppsspp',
 	'genesis_plus_gx',
 	'picodrive',
-	'yabause'
+	'yabause',
+	'snes9x'
 ];
 
 /** PSP B3: the core that runs only on the isolated play-psp.html page (and never in the modal's play.html). */
@@ -84,7 +85,7 @@ export function controlSchemeFor(core, name) {
 }
 
 /**
- * B3/B8: the cores whose files the operator supplies, served by the API after a length and hash check, with the
+ * B3/B8 (SNES B3 adds Snes9x): the cores whose files the operator supplies, served by the API after a length and hash check, with the
  * wording of their messages: the system label, the core's display name, the short name of the fallback message and
  * the option holding the folder.
  * @type {Record<string, { system: string, display: string, short: string, option: string }>}
@@ -101,6 +102,12 @@ const operatorCores = {
 		display: 'PicoDrive',
 		short: 'PicoDrive',
 		option: 'Emulator:PicodriveCorePath'
+	},
+	snes9x: {
+		system: 'SNES games',
+		display: 'Snes9x',
+		short: 'Snes9x',
+		option: 'Emulator:Snes9xCorePath'
 	}
 };
 
@@ -159,7 +166,9 @@ export function operatorCoreError(core, status) {
  * @returns {boolean}
  */
 export function hidesCoreChooser(core) {
-	return ['smsplus', 'fceumm', 'pcsx_rearmed', 'genesis_plus_gx', 'picodrive', 'yabause'].includes(core);
+	return ['smsplus', 'fceumm', 'pcsx_rearmed', 'genesis_plus_gx', 'picodrive', 'yabause', 'snes9x'].includes(
+		core
+	);
 }
 
 /** PCSX ReARMed's optional firmware: the operator's scph5501.bin, else the core's built-in HLE BIOS. */
