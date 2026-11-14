@@ -10,6 +10,13 @@ public class Atari2600HandlerTests
     private static readonly ISystemHandler Handler = new Atari2600Handler();
 
     [Test]
+    public void BrowserCore_IsStella2014_WithEmbeddedRoms()
+    {
+        Assert.That(Handler.BrowserCore, Is.EqualTo("stella2014"));
+        Assert.That(Handler.EmbedRomsInZip, Is.True);
+    }
+
+    [Test]
     public void Atari2600_Contract()
     {
         Assert.That(Handler.ShortName, Is.EqualTo("2600"));

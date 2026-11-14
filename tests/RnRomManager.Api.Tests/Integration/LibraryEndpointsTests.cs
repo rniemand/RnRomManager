@@ -214,6 +214,10 @@ public partial class LibraryEndpointsTests
     // C2: playable only with a browser core and an embedded primary release.
     [TestCase("gb", false, true, "gambatte")]
     [TestCase("gb", true, false, "gambatte")]
+    [TestCase("a2600", false, true, "stella2014")]
+    [TestCase("coleco", false, true, "gearcoleco")]
+    [TestCase("gg", false, true, "smsplus")]
+    [TestCase("sms", false, true, "smsplus")]
     [TestCase("nes", false, false, null)]
     [TestCase("switch", false, false, null)]
     public async Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(string system, bool external, bool playable, string? core)
@@ -350,6 +354,10 @@ public partial class LibraryEndpointsTests
     [TestCase("vb", "beetle_vb")]
     [TestCase("a5200", "a5200")]
     [TestCase("a7800", "prosystem")]
+    [TestCase("a2600", "stella2014")]
+    [TestCase("coleco", "gearcoleco")]
+    [TestCase("gg", "smsplus")]
+    [TestCase("sms", "smsplus")]
     [TestCase("nes", null)]
     [TestCase("nosuch", null)]
     public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)

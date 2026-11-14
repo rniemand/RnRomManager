@@ -10,6 +10,13 @@ public class ColecoVisionHandlerTests
     private static readonly ISystemHandler Handler = new ColecoVisionHandler();
 
     [Test]
+    public void BrowserCore_IsGearcoleco_WithEmbeddedRoms()
+    {
+        Assert.That(Handler.BrowserCore, Is.EqualTo("gearcoleco"));
+        Assert.That(Handler.EmbedRomsInZip, Is.True);
+    }
+
+    [Test]
     public void ColecoVision_Contract()
     {
         Assert.That(Handler.ShortName, Is.EqualTo("CV"));

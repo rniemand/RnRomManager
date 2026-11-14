@@ -12,7 +12,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 - **Review queue:** files the DATs don't know get name suggestions, a DAT search, or manual entry; filter the queue, search Google and Shift+click Delete for loose files.
 - **Library edits (`rom-manager`):** edit metadata, move or merge releases between games, upload box art and screenshots and choose the cover, delete to a recoverable `_removed/` folder, which Admins restore from or empty on the **Deleted ROMs** page.
 - **Reports:** library size treemap and system drill-down, missing cover images, and duplicate groups with merge/dismiss for ROM managers.
-- **Game detail:** Releases/Images tabs, a **Play** button that runs Game Boy, Game Boy Color, Game Boy Advance, Virtual Boy, Atari 5200, Atari 7800, Atari Lynx and Atari Jaguar releases in the browser, each release's original ingest name and a Markdown note per release (kept in the game's ZIP), a read-only info.json tree with copying, Google search and merge suggestions.
+- **Game detail:** Releases/Images tabs, a **Play** button that runs Game Boy, Game Boy Color, Game Boy Advance, Virtual Boy, Atari 2600, Atari 5200, Atari 7800, Atari Lynx, Atari Jaguar, ColecoVision, Game Gear and Master System releases in the browser (ColecoVision needs its BIOS, `colecovision.rom`, copied into `data/bios/`), each release's original ingest name and a Markdown note per release (kept in the game's ZIP), a read-only info.json tree with copying, Google search and merge suggestions.
 - **Auditing (Admin):** filterable file-action history, retained for 30 days, with user/job and relative source/target paths.
 - **Integrity checks:** daily quick checks and on-demand deep (hash) checks, with automatic database repair.
 - **Database backups (Admin):** daily backups to a volume with configurable time and retention, Back up now, and a restore at startup.
@@ -28,18 +28,18 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | System | Id | ROMs stored | Formats | DAT | Play in browser |
 |---|---|---|---|---|---|
 | 32X | `s32x` | In ZIP | `.32x` | No-Intro | — |
-| Atari 2600 | `a2600` | In ZIP | `.a26`, `.bin` | No-Intro | — |
+| Atari 2600 | `a2600` | In ZIP | `.a26`, `.bin` | No-Intro | `stella2014` |
 | Atari 5200 | `a5200` | In ZIP | `.a52`, `.bin` | No-Intro | `a5200` |
 | Atari 7800 | `a7800` | In ZIP | `.a78`, `.bin` | No-Intro | `prosystem` |
 | Atari Jaguar | `jaguar` | In ZIP | `.j64`, `.jag`, `.rom`, `.abs`, `.cof` | No-Intro | `virtualjaguar` |
 | Atari Lynx | `lynx` | In ZIP | `.lnx`, `.lyx` | No-Intro | `handy` |
-| ColecoVision | `coleco` | In ZIP | `.col`, `.rom`, `.bin` | No-Intro | — |
+| ColecoVision | `coleco` | In ZIP | `.col`, `.rom`, `.bin` | No-Intro | `gearcoleco` |
 | Game Boy | `gb` | In ZIP | `.gb` | No-Intro | `gambatte` |
 | Game Boy Advance | `gba` | In ZIP | `.gba` | No-Intro | `mgba` |
 | Game Boy Color | `gbc` | In ZIP | `.gbc` | No-Intro | `gambatte` |
-| Game Gear | `gg` | In ZIP | `.gg`, `.sms` | No-Intro | — |
+| Game Gear | `gg` | In ZIP | `.gg`, `.sms` | No-Intro | `smsplus` |
 | GameCube | `gc` | Next to ZIP | `.iso` | Redump | — |
-| Master System | `sms` | In ZIP | `.sms` | No-Intro | — |
+| Master System | `sms` | In ZIP | `.sms` | No-Intro | `smsplus` |
 | Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen` | No-Intro | — |
 | Nintendo 64 | `n64` | In ZIP | `.z64`, `.v64`, `.n64` | No-Intro | — |
 | Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | — |
@@ -112,6 +112,7 @@ docker compose up -d
 1. Open `http://<host>:8080`, sign in as `admin` with `ADMIN_PASSWORD`, and choose a new password.
 2. **Admin → DATs → Refresh DATs** downloads the game databases (once, and whenever you want newer ones).
 3. Copy each system's files (formats in [Supported systems](#supported-systems)) into `data/ingest/<Id>/` (disc images loose, not in archives), then press **Ingestion → Import all**.
+4. To play ColecoVision games in the browser, copy the console's BIOS as `data/bios/colecovision.rom` (the app can't ship it).
 
 Upgrading from a version without Game Boy Advance, Nintendo 64, NES, SNES, Virtual Boy, Atari 2600, Atari 5200, Atari 7800, Atari Lynx, Atari Jaguar, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch, PlayStation, PSP, GameCube, Wii, Xbox 360 or Saturn? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`): it downloads the new system's DATs (for Switch, the titledb file; for the disc systems, the Redump DAT).
 
