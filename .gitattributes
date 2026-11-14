@@ -1,5 +1,11 @@
 * text=auto
 *.7z binary
 *.png binary
+*.nds binary
 # Verbatim third-party licence texts: keep their upstream bytes.
 src/RnRomManager.Web/emulator-licenses/** -text
+tests/RnRomManager.TestData/Fixtures/nds-marker/licenses/** -text
+# The DS test cartridge builds in Linux: keep its source, Makefile and script LF everywhere.
+tests/RnRomManager.TestData/Fixtures/nds-marker/source/** text eol=lf
+tests/RnRomManager.TestData/Fixtures/nds-marker/Makefile text eol=lf
+tests/RnRomManager.TestData/Fixtures/nds-marker/build.sh text eol=lf

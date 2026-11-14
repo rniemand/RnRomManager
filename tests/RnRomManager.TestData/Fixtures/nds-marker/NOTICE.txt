@@ -1,0 +1,64 @@
+nds-marker.nds: what it contains and under which terms
+=====================================================
+
+nds-marker.nds is built from source/main.c and Makefile in this folder with build.sh, in the
+devkitpro/devkitarm image pinned there by digest (devkitARM r68, GCC 16.1.0, libnds 2.0.2, calico 1.2.0,
+newlib 4.6.0.20260123, ndstool 2.3.1). source/main.c, Makefile and build.sh are original to RnRomManager
+and MIT-licensed like the rest of the repository.
+
+The cartridge links these devkitPro libraries (from the linker map's archive members):
+
+- libnds 2.0.2 (libnds9.a: cardEeprom.o, keys.o): Copyright (C) 2005 - 2024 Michael Noland (joat),
+  Jason Rogers (dovoto), Dave Murphy (WinterMute), fincs. zlib licence (licenses/libnds-LICENSE.txt, the
+  image's /opt/devkitpro/libnds/libnds_license.txt).
+
+- calico 1.2.0 (libcalico_ds9.a on the ARM9: crt0, startup, interrupts, threads, PXI, power management,
+  keypad, touch, slot-1 card; and calico's default ARM7 binary ds7_maine.elf): Copyright fincs, devkitPro
+  (each source file's SPDX-FileCopyrightText). Zope Public License 2.1 (licenses/calico-COPYING.txt, the
+  COPYING file at https://github.com/devkitPro/calico/tree/v1.2.0).
+
+  Copyright fincs, devkitPro. Redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the conditions of the Zope Public License 2.1 in
+  licenses/calico-COPYING.txt are met; that file holds the list of conditions and the disclaimer.
+
+- newlib (libc.a: exit, fini, init, mallocr, freer, memcpy-stub, memset, mlock; and devkitPro's
+  libsysbase.a: clocks, _exit, malloc_vars, sbrk, syscall_support), as built for devkitARM. Its licences
+  are collected in licenses/newlib-COPYING.NEWLIB.txt (COPYING.NEWLIB from the devkitPro branch of
+  https://github.com/devkitPro/newlib, fetched 2026-11-14). The linked files carry: exit.c, Copyright (c)
+  1990 Regents of the University of California (BSD, section 2); init.c, Copyright (C) 2004 CodeSourcery,
+  LLC, and fini.c, Copyright (C) 2010 CodeSourcery, Inc. ("Permission to use, copy, modify, and
+  distribute this file for any purpose is hereby granted without fee, provided that the above copyright
+  notice and this notice appears in all copies."); mallocr.c, Doug Lea's malloc ("released to the public
+  domain"); memset.c, freer.c and mlock.c, Red Hat (section 1); and the ARM memcpy-stub.c, whose notice
+  follows verbatim:
+
+    Copyright (c) 2015 ARM Ltd.
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+        * Redistributions of source code must retain the above copyright
+          notice, this list of conditions and the following disclaimer.
+        * Redistributions in binary form must reproduce the above copyright
+          notice, this list of conditions and the following disclaimer in the
+          documentation and/or other materials provided with the distribution.
+        * Neither the name of the Linaro nor the
+          names of its contributors may be used to endorse or promote products
+          derived from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT
+    HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+    LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+    DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+    THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+- libgcc (division and count-leading-zeros helpers): GPL-3.0 with the GCC Runtime Library Exception, which
+  places no conditions on this program's distribution.
+
+The cartridge contains no Nintendo code, BIOS or firmware, and no banner icon.
