@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises';
+import { copyFile, readFile, stat, utimes } from 'node:fs/promises';
 import { join } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { expect, test, type BrowserContext, type Page, type Route } from '@playwright/test';
@@ -1187,6 +1187,45 @@ test('Deleted ROMs: restore one release, delete the rest for good', async () => 
 	await expectAccessible(page, 'permanent delete modal');
 	await dialog().getByRole('button', { name: 'Delete', exact: true }).click();
 	await expect(page.getByText('No deleted ROMs')).toBeVisible();
+});
+
+/** Polls GET /api/jobs/current (the Admin session) until no job holds the lock, within `seconds`. */
+async function waitForIdleJobs(seconds = 30): Promise<void> {
+	await expect
+		.poll(async () => (await page.request.get('/api/jobs/current')).status(), { timeout: seconds * 1000 })
+		.toBe(204);
+}
+
+// Nintendo DS (spec Step 10): the runnable cartridge is imported only now, after every test that asserts library-wide
+// counts. scripts/test-e2e.ps1 staged it outside ingest/ and listed it in the seeded DS DAT.
+test('Nintendo DS: the staged cartridge imports by DAT match, with no Play yet', async () => {
+	const staged = process.env.E2E_STAGED_NDS;
+	const ingest = process.env.E2E_INGEST;
+	if (!staged || !ingest) throw new Error('E2E_STAGED_NDS or E2E_INGEST is not set (run scripts/test-e2e.ps1).');
+	// The previous test's Restore started an import; a second start would be 409 JobRunning.
+	await waitForIdleJobs();
+
+	const name = 'Marker Test (World).nds';
+	const target = join(ingest, 'nds', name);
+	await copyFile(staged, target);
+	const old = new Date(Date.now() - 60_000);
+	await utimes(target, old, old);
+	const xsrf = (await context.cookies()).find((c) => c.name === 'XSRF-TOKEN')?.value ?? '';
+	const start = await page.request.post('/api/jobs/ingest', {
+		data: { files: [{ system: 'nds', name }] },
+		headers: { 'X-XSRF-TOKEN': decodeURIComponent(xsrf) }
+	});
+	expect(start.status()).toBe(202);
+	await waitForIdleJobs();
+
+	await openGame('Marker Test');
+	const releases = page.getByRole('article');
+	await expect(releases).toHaveCount(1);
+	const release = page.getByRole('article', { name });
+	await expect(release).toBeVisible();
+	// DS Play is enabled in Step 11, after the browser size gate.
+	await expect(release.getByRole('button', { name: `Play ${name}` })).toHaveCount(0);
+	await expect(page.getByRole('button', { name: /^Play / })).toHaveCount(0);
 });
 
 test('Admin: roles and the create-user modal', async () => {
