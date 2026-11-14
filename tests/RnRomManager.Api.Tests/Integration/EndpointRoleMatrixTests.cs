@@ -51,6 +51,7 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/games/{id:guid}/collections"] = Role.User,
         ["GET /api/games/{id:guid}/roms/{romId:long}/download"] = Role.User,
         ["GET /api/games/{id:guid}/roms/{romId:long}/files/{fileId:long}/download"] = Role.User,
+        ["GET /api/games/{id:guid}/roms/{romId:long}/play-disc"] = Role.User,
         ["GET /api/games/{id:guid}/roms/{romId:long}/note"] = Role.User,
         ["PUT /api/games/{id:guid}/roms/{romId:long}/note"] = Role.User,
         ["DELETE /api/games/{id:guid}/roms/{romId:long}/note"] = Role.User,

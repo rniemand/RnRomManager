@@ -42,11 +42,17 @@ function coreResolver(
 		);
 }
 
-// The reviewed notices and licence texts in emulator-licenses/ (step 6 of the 2600/Coleco/GG spec).
+// The reviewed notices and licence texts in emulator-licenses/ (2600/Coleco/GG spec step 6, NES/PSX spec step 1).
 const coreLicenses = [
 	'COMMON-BUILD.txt',
+	'fceumm-LICENSE.txt',
+	'fceumm-NOTICE.txt',
 	'gearcoleco-LICENSE.txt',
 	'gearcoleco-NOTICE.txt',
+	'pcsx_rearmed-LICENSE.txt',
+	'pcsx_rearmed-NOTICE.txt',
+	'pcsx_rearmed-libchdr-LICENSE.txt',
+	'pcsx_rearmed-zstd-LICENSE.txt',
 	'retroarch-LICENSE.txt',
 	'smsplus-LICENSE.txt',
 	'smsplus-NOTICE.txt',
@@ -83,7 +89,9 @@ describe('vendor-emulatorjs', () => {
 			'prosystem',
 			'stella2014',
 			'gearcoleco',
-			'smsplus'
+			'smsplus',
+			'fceumm',
+			'pcsx_rearmed'
 		].flatMap((c) => [
 			`data/cores/${c}-legacy-wasm.data`,
 			`data/cores/${c}-wasm.data`,
@@ -116,7 +124,10 @@ describe('vendor-emulatorjs', () => {
 			);
 		const upstream = readFileSync(join(pkg, 'src', 'emulator.js'), 'utf8');
 		const anchor = '        const gen = this.getCore(true);\n';
-		const guard = '        if (core === "smsplus") {\n            return core;\n        }\n';
+		const guard =
+			'        if (["smsplus", "fceumm", "pcsx_rearmed"].includes(core)) {\n' +
+			'            return core;\n' +
+			'        }\n';
 		expect(upstream.split(anchor)).toHaveLength(2);
 		expect(readFileSync(join(out, 'data', 'src', 'emulator.js'), 'utf8')).toBe(
 			upstream.replace(anchor, guard + anchor)
@@ -135,6 +146,24 @@ describe('vendor-emulatorjs', () => {
 	);
 
 	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s keeps an explicit fceumm or pcsx_rearmed despite a saved alternate core',
+		(file) => {
+			const resolve = coreResolver(readFileSync(join(out, 'data', file), 'utf8'));
+			const upstream = coreResolver(readFileSync(join(pkg, 'src', 'emulator.js'), 'utf8'));
+			// Upstream switches to the saved alternative, which isn't vendored.
+			expect(upstream('fceumm', 'nestopia')).toBe('nestopia');
+			expect(upstream('pcsx_rearmed', 'mednafen_psx_hw')).toBe('mednafen_psx_hw');
+			expect(resolve('fceumm', 'nestopia')).toBe('fceumm');
+			expect(resolve('fceumm', null)).toBe('fceumm');
+			expect(resolve('pcsx_rearmed', 'mednafen_psx_hw')).toBe('pcsx_rearmed');
+			expect(resolve('pcsx_rearmed', null)).toBe('pcsx_rearmed');
+			// Control and settings groups still come from the generic lookup.
+			expect(resolve('fceumm', 'nestopia', true)).toBe('nes');
+			expect(resolve('pcsx_rearmed', null, true)).toBe('psx');
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
 		'%s resolves generic groups and other cores as upstream does',
 		(file) => {
 			const patched = coreResolver(readFileSync(join(out, 'data', file), 'utf8'));
@@ -144,6 +173,11 @@ describe('vendor-emulatorjs', () => {
 				['segaMD', 'picodrive', false],
 				['segaMD', null, false],
 				['nes', 'nestopia', false],
+				['nes', null, false],
+				['psx', 'mednafen_psx_hw', false],
+				['psx', null, false],
+				['fceumm', null, true],
+				['pcsx_rearmed', null, true],
 				['gearcoleco', null, false],
 				['gearcoleco', null, true],
 				['stella2014', 'gambatte', false],

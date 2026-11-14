@@ -13,7 +13,9 @@ const cores = [
 	'prosystem',
 	'stella2014',
 	'gearcoleco',
-	'smsplus'
+	'smsplus',
+	'fceumm',
+	'pcsx_rearmed'
 ];
 
 /**
@@ -64,4 +66,63 @@ export function biosError(name, status) {
  */
 export function controlSchemeFor(core, name) {
 	return core === 'smsplus' && name.toLowerCase().endsWith('.gg') ? 'segaGG' : null;
+}
+
+/**
+ * Cores pinned by the vendored getCore() edit: the emulator's core chooser is hidden for them (other settings stay).
+ * @param {string} core
+ * @returns {boolean}
+ */
+export function hidesCoreChooser(core) {
+	return ['smsplus', 'fceumm', 'pcsx_rearmed'].includes(core);
+}
+
+/** PCSX ReARMed's optional firmware: the operator's scph5501.bin, else the core's built-in HLE BIOS. */
+export const psxBios = 'scph5501.bin';
+
+/** The exact size of scph5501.bin (512 KiB). */
+export const psxBiosBytes = 512 * 1024;
+
+export const sessionExpired = 'Your session has expired. Sign in again.';
+
+/**
+ * The play page's message for the optional PlayStation BIOS request: null when it may go on (2xx, or 404 for HLE).
+ * @param {number | null} status the HTTP status, or null for a network or body-read failure
+ * @returns {string | null}
+ */
+export function optionalBiosError(status) {
+	if (status !== null && ((status >= 200 && status < 300) || status === 404)) return null;
+	if (status === 401) return sessionExpired;
+	return status === null ? "Couldn't load the BIOS." : `Couldn't load the BIOS (HTTP ${status}).`;
+}
+
+/** Shown when the BIOS folder's scph5501.bin isn't exactly 512 KiB. */
+export const psxBiosSizeError = `The PlayStation BIOS in the BIOS folder (Paths:Bios) must be the 512 KiB ${psxBios}: ask an Admin to replace it.`;
+
+/**
+ * The play page's message for a failed play-disc request.
+ * @param {number | null} status the HTTP status, or null for a network or body-read failure
+ * @param {string | null} code the problem's `code`, when the body had one
+ * @returns {string}
+ */
+export function discError(status, code) {
+	if (status === 401) return sessionExpired;
+	if (code === 'PlayDiscTooLarge') return 'This disc is larger than 1 GiB, too large to play in the browser.';
+	if (code === 'InvalidPlayDisc')
+		return "This disc can't be played in the browser: its cue sheet or files are invalid or don't match.";
+	return status === null ? "Couldn't load the disc." : `Couldn't load the disc (HTTP ${status}).`;
+}
+
+/**
+ * The name of the File EmulatorJS writes the content under: the release name, with '#' replaced (EmulatorJS cuts
+ * names there). A standalone PlayStation image named like the BIOS gets a name scoped to the game, so the firmware
+ * written at /scph5501.bin can't overwrite it.
+ * @param {string} core
+ * @param {string} game the game id
+ * @param {string} name the release's file name
+ * @returns {string}
+ */
+export function contentFileName(core, game, name) {
+	const safe = name.replaceAll('#', '_');
+	return core === 'pcsx_rearmed' && name.toLowerCase() === psxBios ? `${game}-${safe}` : safe;
 }

@@ -90,7 +90,7 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 | `/app/cache` | downloaded DATs and temporary work folders |
 | `/app/backups` | the daily database backups (see [Backup and restore](#backup-and-restore)); keep it private |
 | `/app/collections` | collection cover images (`<collection id>.png` or `.jpg`) |
-| `/app/bios` | emulator BIOS files you copy in for browser play (`colecovision.rom` for ColecoVision); any file here can be downloaded by a signed-in user, so keep only BIOS files in it |
+| `/app/bios` | emulator BIOS files you copy in for browser play (`colecovision.rom` for ColecoVision, required; the optional 512 KiB `scph5501.bin` for PlayStation, which otherwise uses its built-in HLE BIOS); any file here can be downloaded by a signed-in user, so keep only BIOS files in it |
 
 An existing deployment that doesn't map `/app/collections` or `/app/bios` still starts (the folders are created), but their files then live in anonymous Docker volumes and are lost when the container is recreated: add the mappings when you upgrade (`mkdir -p data/bios`, then add `- ./data/bios:/app/bios`).
 
@@ -201,7 +201,7 @@ Upgrading to 0.4.0:
 - **ZIPs move to `info.json` version 6** as each game is next written (`externalFileName`, `TitleDb`, `titledb` images, an update's `version`, and a disc set's `files`). Migration 0020 adds the `rom_files` table. Apps before 0.4.0 can read them but refuse to change them.
 - **Migration 0019** adds `roms.version` and fills it for Switch updates already in the library from the `[x.y.z]` tag in their original file name, so the Game page's Updates tab orders them at once. Existing Switch files keep their names; only files written from now on drop the repeated title (`Orbit Expedition.[0100…][v0].nsp`, see [ZIP format](zip-format.md#external-rom-files)).
 - **Plan disk space** for Switch dumps and disc images (often several GB each). Keep `/app/ingest` and `/app/roms` on the same volume where you can: placement is then an instant rename; across volumes each file is copied and needs free space for a second copy while it moves.
-- **Add the BIOS folder** for ColecoVision browser play: `mkdir -p data/bios`, add `- ./data/bios:/app/bios` to the app's `volumes:` (and `chown` it like the others if you don't set `user:`), then copy `colecovision.rom` into it. Without the mapping the folder lives in an anonymous volume.
+- **Add the BIOS folder** for ColecoVision browser play: `mkdir -p data/bios`, add `- ./data/bios:/app/bios` to the app's `volumes:` (and `chown` it like the others if you don't set `user:`), then copy `colecovision.rom` (and, optionally, `scph5501.bin` for PlayStation) into it. Without the mapping the folder lives in an anonymous volume.
 - **To be able to downgrade,** take a database backup (**Back up now**) and a filesystem snapshot of `/app/roms` (and `/app/ingest`) at the same moment before upgrading, and restore **both** to go back: the database alone doesn't know where external files were.
 
 After upgrading to a version that adds a system (such as the ones that add Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch and the six disc systems), ingestion refuses to start with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs.

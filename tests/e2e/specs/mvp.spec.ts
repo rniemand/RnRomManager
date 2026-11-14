@@ -490,6 +490,70 @@ test('PlayStation: a disc set lists its files and downloads a track byte-exact',
 	expect((await readFile((await file.path())!)).equals(discTrack2)).toBe(true);
 });
 
+/** Starts the open emulator dialog's game and waits for the core's local .data file and the game to start. */
+async function startEmulator(core: string): Promise<void> {
+	const frame = page.frameLocator('iframe');
+	await expect(frame.getByText('Start Game')).toBeVisible();
+	const data = page.waitForResponse((r) => new RegExp(`/emulator/vendor/data/cores/${core}(-legacy)?-wasm\\.data$`).test(r.url()));
+	await frame.getByText('Start Game').click();
+	expect((await data).status()).toBe(200);
+	await expect(frame.locator('.ejs_loading_text')).toHaveCount(0, { timeout: 60_000 });
+	await expect(frame.locator('.ejs_error_text')).toHaveCount(0);
+}
+
+async function closeEmulator(): Promise<void> {
+	await dialog().locator('.modal-footer').getByRole('button', { name: 'Close' }).click();
+	await expect(dialog()).toBeHidden();
+	await expect(page.locator('iframe')).toHaveCount(0);
+}
+
+test('Play: NES Quick Play from the library uses the local FCEUmm core', async () => {
+	await openLibrary();
+	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('Pixel Pioneer');
+	await expect(page).toHaveURL(/[?&]q=/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Pixel Pioneer', exact: true })).toBeVisible();
+	const rom = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()));
+	await page.getByRole('button', { name: 'Play Pixel Pioneer' }).click();
+	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=fceumm&name=Pixel%20Pioneer%20\(USA\)\.nes$/);
+	expect((await rom).status()).toBe(200);
+	await startEmulator('fceumm');
+	await closeEmulator();
+});
+
+test('Play: a PlayStation set streams its disc ZIP from the detail page and the library', async () => {
+	await openGame('Disc Runner');
+	const bios = page.waitForResponse((r) => r.url().endsWith('/api/emulator/bios/scph5501.bin'));
+	const disc = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(r.url()));
+	await page.getByRole('button', { name: 'Play Disc Runner (USA) (Track 1).bin' }).click();
+	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=pcsx_rearmed&name=Disc%20Runner%20\(USA\)%20\(Track%201\)\.bin$/);
+	expect((await bios).status()).toBe(404); // no firmware in the e2e image: the core uses HLE
+	const response = await disc;
+	expect(response.status()).toBe(200);
+	expect(response.headers()['content-type']).toBe('application/zip');
+	expect(response.headers()['cache-control']).toBe('no-store');
+	// Kestrel with synchronous IO off: the stored (uncompressed) ZIP holds the playback cue and both tracks.
+	const direct = await page.request.get(response.url());
+	expect(direct.status()).toBe(200);
+	const zip = await direct.body();
+	expect(zip.subarray(0, 4).toString('hex'), `${zip.length} bytes`).toBe('504b0304');
+	expect(zip.includes('Disc Runner (USA).cue')).toBe(true);
+	expect(zip.includes('FILE "track-01.bin" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE "track-02.bin" BINARY\n  TRACK 02 AUDIO\n')).toBe(true);
+	expect(zip.includes(discTrack2)).toBe(true);
+	await expectAccessible(page, 'PlayStation emulator modal', 'iframe');
+	await startEmulator('pcsx_rearmed');
+	await closeEmulator();
+
+	await openLibrary();
+	await page.getByRole('searchbox', { name: 'Search', exact: true }).fill('Disc Runner');
+	await expect(page).toHaveURL(/[?&]q=/);
+	await expect(page.getByText('1 game', { exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Disc Runner', exact: true })).toBeVisible();
+	await page.getByRole('button', { name: 'Play Disc Runner' }).click();
+	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=pcsx_rearmed&name=Disc%20Runner%20\(USA\)%20\(Track%201\)\.bin$/);
+	await closeEmulator();
+});
+
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await openLibrary();

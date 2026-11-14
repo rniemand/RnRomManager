@@ -1,11 +1,13 @@
 EmulatorJS 4.2.3 core payloads: how they were built
 ===================================================
 
-The npm packages @emulatorjs/core-stella2014, @emulatorjs/core-gearcoleco and
-@emulatorjs/core-smsplus 4.2.3 each contain a "<core>-wasm.data" and a
+The npm packages @emulatorjs/core-stella2014, @emulatorjs/core-gearcoleco,
+@emulatorjs/core-smsplus, @emulatorjs/core-fceumm and
+@emulatorjs/core-pcsx_rearmed 4.2.3 each contain a "<core>-wasm.data" and a
 "<core>-legacy-wasm.data" file (7z archives). Each archive holds the core's
 WebAssembly binary and JavaScript loader, core.json, build.json and, for
-Gearcoleco only, license.txt. RnRomManager copies these files unchanged.
+Gearcoleco, FCEUmm and PCSX ReARMed only, license.txt. RnRomManager copies
+these files unchanged (the packages' "-thread" variants are not copied).
 
 Every binary is a RetroArch frontend statically linked with one libretro core.
 The binaries were built on 2025-06-14 (see reports/<core>.json in each package).
@@ -19,7 +21,7 @@ and checked against the public repositories:
   emulatorjs/build-emulatorjs.sh (plain and --legacy) and packs the result.
 - RetroArch (EmulatorJS fork), branch "next":
   https://github.com/EmulatorJS/RetroArch/tree/6dd4353937ef48b6ec0bfbdbb15d1c5992d86927
-  (version string "6dd4353" in all three cores' binaries; the head of "next"
+  (version string "6dd4353" in every listed core's binaries; the head of "next"
   from 2025-06-11 until September 2025). Licence: GPL-3.0-or-later
   (retroarch-LICENSE.txt, the fork's COPYING at that commit).
 - Compiler: Emscripten 4.0.8. The binaries' "producers" section names
@@ -27,5 +29,8 @@ and checked against the public repositories:
   llvm_project_revision of emscripten-releases for emsdk 4.0.8 and of no
   neighbouring release. (The CI workflow takes the version from a repository
   variable, so it isn't in the build repository itself.)
+- zlib: RetroArch's Makefile.emulatorjs links with "-s USE_ZLIB=1", Emscripten's
+  port of zlib (zlib licence, Copyright (C) 1995-2024 Jean-loup Gailly and
+  Mark Adler). Cores that don't compile their own zlib use it.
 
 Core sources: see the NOTICE file for each core.

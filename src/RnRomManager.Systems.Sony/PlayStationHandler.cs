@@ -31,6 +31,9 @@ public sealed class PlayStationHandler : ISystemHandler
     /// <inheritdoc />
     public bool FileSets => true;
 
+    /// <summary>Play B1: PCSX ReARMed, one disc per launch through <c>play-disc</c>; optional scph5501.bin, else HLE.</summary>
+    public string BrowserCore => "pcsx_rearmed";
+
     /// <inheritdoc />
     public string DatFolder => DatKind.Redump;
 

@@ -10,6 +10,13 @@ public class PlayStationHandlerTests
     private static readonly ISystemHandler Handler = new PlayStationHandler();
 
     [Test]
+    public void BrowserCore_IsPcsxRearmed_ForExternalDiscSets()
+    {
+        Assert.That(Handler.BrowserCore, Is.EqualTo("pcsx_rearmed"));
+        Assert.That((Handler.EmbedRomsInZip, Handler.FileSets), Is.EqualTo((false, true)));
+    }
+
+    [Test]
     public void PlayStation_Contract()
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),

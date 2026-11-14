@@ -183,6 +183,28 @@ describe('game detail page', () => {
 		expect(screen.getAllByText('External')).toHaveLength(1);
 	});
 
+	it('an external PlayStation release has Play; an external release of another system has none (Play B1)', async () => {
+		const psx = game([1]);
+		psx.browserCore = 'pcsx_rearmed';
+		psx.roms[0].externalFileName = 'Tetris 1.gb';
+		answers.push({ status: 200, body: psx });
+		const { unmount } = render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Play Tetris 1.gb' }));
+		expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
+			`/emulator/play.html?game=${psx.id}&rom=1&core=pcsx_rearmed&name=Tetris%201.gb`
+		);
+		unmount();
+
+		const nes = game([1]);
+		nes.browserCore = 'fceumm';
+		nes.roms[0].externalFileName = 'Tetris.Tetris 1.nsp';
+		answers.push({ status: 200, body: nes });
+		render(GamePage);
+		await screen.findByRole('article', { name: 'Tetris 1.gb' });
+		expect(screen.queryByRole('button', { name: 'Play Tetris 1.gb' })).toBeNull();
+	});
+
 	it('the ZIP button explains per-release downloads only when a release is external (G5)', async () => {
 		tooltips.length = 0;
 		const detail = game([1]);

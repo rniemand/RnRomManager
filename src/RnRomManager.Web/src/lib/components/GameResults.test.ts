@@ -127,6 +127,30 @@ describe('GameResults cards (C1, C2)', () => {
 	});
 
 	it.each(['grid', 'list'] as const)(
+		'%s: Quick Play starts an NES or PlayStation primary with its core (Play B1)',
+		async (view) => {
+			render(GameResults, {
+				games: [
+					game('n', { playRomId: 3, playRomFileName: 'Hero (USA).nes', browserCore: 'fceumm' }),
+					game('p', {
+						playRomId: 4,
+						playRomFileName: 'Disc (USA) (Track 1).bin',
+						browserCore: 'pcsx_rearmed'
+					})
+				],
+				view
+			});
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Play Game p' }));
+
+			expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
+				'/emulator/play.html?game=p&rom=4&core=pcsx_rearmed&name=Disc%20(USA)%20(Track%201).bin'
+			);
+			expect(screen.getByRole('button', { name: 'Play Game n' })).not.toBeNull();
+		}
+	);
+
+	it.each(['grid', 'list'] as const)(
 		'%s: Play opens the emulator with the game, primary release and core',
 		async (view) => {
 			render(GameResults, { games: [game('b'), playable('a')], view });

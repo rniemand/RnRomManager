@@ -1,0 +1,95 @@
+FCEUmm (EmulatorJS core "fceumm", NES)
+=======================================
+
+Files: fceumm-wasm.data, fceumm-legacy-wasm.data
+       (npm @emulatorjs/core-fceumm 4.2.3)
+
+Corresponding source:
+- Core: https://github.com/EmulatorJS/libretro-fceumm/tree/d9d7e141274d07186b6a871ca2919b6f13cfb2f9
+  (version string "d9d7e14" in both binaries). Fork of
+  https://github.com/libretro/libretro-fceumm. No submodules.
+- Built with the cores.json entry {"makescript": "Makefile.libretro",
+  "buildpath": "./", "arguments": []} and platform=emscripten (plus
+  EMULATORJS_LEGACY=1 for the legacy variant, which changes nothing in this
+  core's Makefile), so Makefile.libretro's defaults apply: HAVE_NTSC = 1,
+  STATIC_LINKING = 1, EXTERNAL_ZLIB = 1, -O3 -DNDEBUG. The compiled sources are
+  Makefile.common's SOURCES_C: src/*.c listed there, src/boards/*.c,
+  src/input/*.c, src/ntsc/nes_ntsc.c and src/drivers/libretro/*.c.
+- RetroArch, build scripts and compiler: see COMMON-BUILD.txt. RetroArch's
+  emulatorjs/build-emulatorjs.sh links this core with the default 128 MiB
+  initial heap, WebGL 2 for the plain variant and WebGL 1 for legacy.
+
+FCE Ultra is Copyright (C) 1998 BERO and (C) 2002, 2003 Xodnizel; FCEUmm and
+later changes by CaH4e3 and the other contributors (Authors and the per-file
+headers in the source).
+
+Licence: GNU General Public License, version 2 or (at your option) any later
+version (the source files' headers, e.g. src/fceu.c). fceumm-LICENSE.txt is the
+license.txt inside both payloads, copied byte for byte (the GPLv2 text, the
+source's Copying). A few files carry no header (src/filter.c,
+src/boards/__serial.c, eeprom_93Cx6.c, flashrom.c, vrcirq.c,
+src/input/cursor.c, src/drivers/libretro/*.c); they were written for this
+project and are distributed under its licence. RetroArch: GPL-3.0-or-later
+(retroarch-LICENSE.txt), so the combined binaries are distributed under the
+GPL, version 3.
+
+Components compiled into this build that carry their own terms:
+
+- src/ntsc/nes_ntsc.c: nes_ntsc 0.2.2, Copyright (C) 2006-2007 Shay Green,
+  GNU Lesser General Public License version 2.1 or (at your option) any later
+  version. The source's src/ntsc/license.txt is byte-identical to
+  smsplus-sms_ntsc-LICENSE.txt, which supplies the text.
+
+- src/boards/pic16c5x.c: Microchip PIC16C5x emulator from MAME,
+  license:BSD-3-Clause, copyright-holders: Tony La Porta.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions are met:
+    1. Redistributions of source code must retain the above copyright notice,
+       this list of conditions and the following disclaimer.
+    2. Redistributions in binary form must reproduce the above copyright
+       notice, this list of conditions and the following disclaimer in the
+       documentation and/or other materials provided with the distribution.
+    3. Neither the name of the copyright holder nor the names of its
+       contributors may be used to endorse or promote products derived from
+       this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+    AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+    IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+    ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+    LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+    CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+    SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+    INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+    CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+    POSSIBILITY OF SUCH DAMAGE.
+
+- src/boards/emu2413.c: YM2413 emulator (VRC7 sound) written by Mitsutaka
+  Okazaki, 2001-2002 (version 0.6x), modified by Xodnizel in 2004. The file
+  carries no licence statement. The author publishes emu2413 under the MIT
+  licence, "Copyright (c) 2001-2019 Mitsutaka Okazaki"
+  (https://github.com/digital-sound-antiques/emu2413/blob/master/LICENSE):
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to permit
+    persons to whom the Software is furnished to do so, subject to the
+    following conditions:
+
+    The above copyright notice and this permission notice shall be included
+    in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN
+    NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+    DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+    OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
+    USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+- zlib: EXTERNAL_ZLIB = 1, so the core uses Emscripten's zlib port that the
+  RetroArch link supplies (see COMMON-BUILD.txt).

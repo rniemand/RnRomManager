@@ -20,6 +20,9 @@ namespace RnRomManager.Api.Endpoints;
 /// </summary>
 public static class LibraryEndpoints
 {
+    /// <summary>Play B1: the one browser core that plays a release stored outside the ZIP (through play-disc).</summary>
+    public const string ExternalBrowserCore = "pcsx_rearmed";
+
     public static RouteGroupBuilder MapLibraryEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/systems", async (HttpContext ctx, ISystemRegistry systems, IGameRepository games) =>
@@ -46,9 +49,11 @@ public static class LibraryEndpoints
             var result = await repository.ListAsync(query, ctx.RequestAborted);
             return Results.Ok(Paging.ToDto(result, game =>
             {
-                // C2: quick play needs a browser core and a primary release stored in the zip.
+                // C2: quick play needs a browser core and a primary release stored in the zip; Play B1: PlayStation
+                // plays its external primary disc through play-disc.
                 var core = systems.ById(game.SystemId)?.BrowserCore;
-                var playable = core is not null && game.PrimaryRomId is not null && !game.PrimaryIsExternal;
+                var playable = core is not null && game.PrimaryRomId is not null
+                    && (!game.PrimaryIsExternal || core == ExternalBrowserCore);
                 return new
                 {
                     id = game.Id,
@@ -196,6 +201,9 @@ public static class LibraryEndpoints
                 ? problem
                 : Results.Stream(file!, "application/octet-stream", setFile.FileName, enableRangeProcessing: true);
         });
+
+        // Play B2–B3: one PlayStation disc for the browser emulator (a standalone image, or its cue set as a ZIP).
+        games.MapGet("/{id:guid}/roms/{romId:long}/play-disc", PlayDisc.HandleAsync);
 
         // B4–B7 release notes: any signed-in user, like ratings; not audited.
         games.MapGet("/{id:guid}/roms/{romId:long}/note", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,

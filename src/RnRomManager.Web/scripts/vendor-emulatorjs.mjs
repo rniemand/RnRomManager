@@ -18,22 +18,30 @@ const cores = [
 	'prosystem',
 	'stella2014',
 	'gearcoleco',
-	'smsplus'
+	'smsplus',
+	'fceumm',
+	'pcsx_rearmed'
 ];
 
-// Game Gear and Master System are pinned to SMS Plus GX (GPL): EmulatorJS 4.2.3's getCore() would otherwise switch to
-// a core saved in the retroarch_core setting (genesis_plus_gx, non-commercial, or picodrive), which isn't vendored.
-// A narrow, guarded edit of emulator.js: an explicit "smsplus" returns itself before the saved setting is read.
-const smsplusFind =
+// Game Gear and Master System are pinned to SMS Plus GX, NES to FCEUmm and PlayStation to PCSX ReARMed: EmulatorJS
+// 4.2.3's getCore() would otherwise switch to a core saved in the retroarch_core setting (genesis_plus_gx with its
+// non-commercial licence, picodrive, nestopia, mednafen_psx_hw), none of which is vendored. A narrow, guarded edit of
+// emulator.js: an explicit pinned core returns itself before the saved setting is read.
+const getCoreFind =
 	'        const gen = this.getCore(true);\n' +
 	'        if (cores[gen] && cores[gen].includes(this.preGetSetting("retroarch_core"))) {';
-const smsplusGuard = '        if (core === "smsplus") {\n            return core;\n        }\n';
+const pinnedCoreGuard =
+	'        if (["smsplus", "fceumm", "pcsx_rearmed"].includes(core)) {\n' +
+	'            return core;\n' +
+	'        }\n';
 
 function patchEmulatorJs(source) {
-	const at = source.indexOf(smsplusFind);
-	if (at < 0 || source.indexOf(smsplusFind, at + 1) >= 0)
-		throw new Error('vendor-emulatorjs: emulator.js getCore() changed; review the smsplus patch');
-	return source.slice(0, at) + smsplusGuard + source.slice(at);
+	const at = source.indexOf(getCoreFind);
+	if (at < 0 || source.indexOf(getCoreFind, at + 1) >= 0)
+		throw new Error(
+			'vendor-emulatorjs: emulator.js getCore() changed; review the pinned-core patch'
+		);
+	return source.slice(0, at) + pinnedCoreGuard + source.slice(at);
 }
 
 function copy(from, to) {
