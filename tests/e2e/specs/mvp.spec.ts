@@ -633,10 +633,10 @@ test('Play: Genesis explains its missing core; Master System and Game Gear start
 	// Genesis B4: the e2e image has no Emulator:GenesisCorePath, so the HEAD check stops before the ROM or loader.
 	const genesisRequests: string[] = [];
 	const track = (r: { url: () => string }) => {
-		if (r.url().includes('/api/emulator/genesis')) genesisRequests.push(r.url());
+		if (r.url().includes('/api/emulator/cores/') || r.url().includes('/api/emulator/genesis')) genesisRequests.push(r.url());
 	};
 	await openGame('Turbo Comet');
-	const check = page.waitForResponse((r) => r.url().endsWith('/api/emulator/genesis') && r.request().method() === 'HEAD');
+	const check = page.waitForResponse((r) => r.url().endsWith('/api/emulator/cores/genesis_plus_gx') && r.request().method() === 'HEAD');
 	await page.getByRole('button', { name: 'Play Turbo Comet (USA, Europe).md' }).click();
 	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=genesis_plus_gx&name=Turbo%20Comet%20\(USA%2C%20Europe\)\.md$/);
 	expect((await check).status()).toBe(404);

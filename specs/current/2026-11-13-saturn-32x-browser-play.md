@@ -127,7 +127,7 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
   - Done when:
     - the listed tests pass;
     - § Decisions records that the re-checked values match B1.
-- [ ] **3. Generic operator-core helpers in the player** (B8): `params.js` gains `operatorCorePaths(core)`, `operatorCoreCheckUrl(core)` and `operatorCoreError(core, status)`; Genesis moves onto them (so it now checks `/api/emulator/cores/genesis_plus_gx` and loads its files from there) and the Genesis-only exports go. `play.js` uses the generic check. No other behaviour change.
+- [x] **3. Generic operator-core helpers in the player** (B8): `params.js` gains `operatorCorePaths(core)`, `operatorCoreCheckUrl(core)` and `operatorCoreError(core, status)`; Genesis moves onto them (so it now checks `/api/emulator/cores/genesis_plus_gx` and loads its files from there) and the Genesis-only exports go. `play.js` uses the generic check. No other behaviour change.
   - Files: `params.js`, `play.js`, `emulatorParams.test.ts`, `emulatorPlay.test.ts`, `tests/e2e/specs/mvp.spec.ts` (the Genesis test's URL matchers only: the HEAD `waitForResponse` matches `/api/emulator/cores/genesis_plus_gx`, and the `track` matcher that must stay empty for Master System and Game Gear matches any `/api/emulator/cores/` or `/api/emulator/genesis` URL, so it doesn't pass vacuously).
   - Tests: `emulatorParams.test.ts` (`Genesis (Genesis B4, B5)`) and `emulatorPlay.test.ts` (`play page Genesis and Master System (Genesis B4, B5)`) pass with only URLs and helper names updated, and their message texts unchanged.
   - Done when `npm run lint`, `npm run check` and those tests pass.

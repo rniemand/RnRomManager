@@ -5,9 +5,9 @@ import {
 	contentFileName,
 	controlSchemeFor,
 	discError,
-	genesisCoreError,
-	genesisPaths,
 	hidesCoreChooser,
+	operatorCoreError,
+	operatorCorePaths,
 	optionalBiosError,
 	parsePlayParams,
 	pspBrowserError,
@@ -273,10 +273,11 @@ describe('Genesis (Genesis B4, B5)', () => {
 	});
 
 	it('maps the three operator files to the API by name', () => {
-		expect(genesisPaths()).toEqual({
-			'genesis_plus_gx-wasm.data': '/api/emulator/genesis/genesis_plus_gx-wasm.data',
-			'genesis_plus_gx-legacy-wasm.data': '/api/emulator/genesis/genesis_plus_gx-legacy-wasm.data',
-			'genesis_plus_gx.json': '/api/emulator/genesis/genesis_plus_gx.json'
+		expect(operatorCorePaths('genesis_plus_gx')).toEqual({
+			'genesis_plus_gx-wasm.data': '/api/emulator/cores/genesis_plus_gx/genesis_plus_gx-wasm.data',
+			'genesis_plus_gx-legacy-wasm.data':
+				'/api/emulator/cores/genesis_plus_gx/genesis_plus_gx-legacy-wasm.data',
+			'genesis_plus_gx.json': '/api/emulator/cores/genesis_plus_gx/genesis_plus_gx.json'
 		});
 	});
 
@@ -295,6 +296,6 @@ describe('Genesis (Genesis B4, B5)', () => {
 		[500, "Couldn't load the Genesis core (HTTP 500)."],
 		[null, "Couldn't load the Genesis core."]
 	])('reports the availability check %s', (status, message) => {
-		expect(genesisCoreError(status)).toBe(message);
+		expect(operatorCoreError('genesis_plus_gx', status)).toBe(message);
 	});
 });

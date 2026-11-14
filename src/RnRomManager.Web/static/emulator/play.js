@@ -1,18 +1,18 @@
 // Browser emulators B5: fetches the release through the download endpoint and starts EmulatorJS on it.
 // Play B4: PlayStation fetches its disc from play-disc, with the optional scph5501.bin handed over in memory.
 // PSP B3: on play-psp.html (its own cross-origin isolated tab) PPSSPP checks the browser, then fetches its UMD image
-// from play-disc and runs threaded. Genesis B4/B5: Genesis Plus GX checks the operator's core files first and loads
-// them from the API.
+// from play-disc and runs threaded. Genesis B4/B5: an operator-supplied core (Genesis Plus GX) checks its files
+// first and loads them from the API.
 import {
 	biosError,
 	biosFor,
 	contentFileName,
 	controlSchemeFor,
 	discError,
-	genesisCheckUrl,
-	genesisCore,
-	genesisCoreError,
-	genesisPaths,
+	isOperatorCore,
+	operatorCoreCheckUrl,
+	operatorCoreError,
+	operatorCorePaths,
 	hidesCoreChooser,
 	optionalBiosError,
 	parsePlayParams,
@@ -95,15 +95,16 @@ async function loadPsxBios() {
 }
 
 /**
- * Genesis B4: one bodyless HEAD of the operator's core files, before the ROM is fetched or the loader starts.
+ * B2/B3: one bodyless HEAD of an operator-supplied core's files, before the ROM is fetched or the loader starts.
+ * @param {string} core
  * @returns {Promise<string | null>} the message to show, or null when the files are there and match
  */
-async function checkGenesisCore() {
+async function checkOperatorCore(core) {
 	try {
-		const response = await fetch(genesisCheckUrl, { method: 'HEAD', credentials: 'same-origin' });
-		return genesisCoreError(response.status);
+		const response = await fetch(operatorCoreCheckUrl(core), { method: 'HEAD', credentials: 'same-origin' });
+		return operatorCoreError(core, response.status);
 	} catch {
-		return genesisCoreError(null);
+		return operatorCoreError(core, null);
 	}
 }
 
@@ -169,9 +170,9 @@ async function start() {
 		if (problem) return show(problem);
 	}
 	show('Loading…');
-	const isGenesis = params.core === genesisCore;
-	if (isGenesis) {
-		const problem = await checkGenesisCore();
+	const isOperator = isOperatorCore(params.core);
+	if (isOperator) {
+		const problem = await checkOperatorCore(params.core);
 		if (problem) return show(problem);
 	}
 	const bios = biosFor(params.core);
@@ -219,8 +220,9 @@ async function start() {
 	if (bios) ejs.EJS_biosUrl = `/api/emulator/bios/${bios}`;
 	// PCSX ReARMed finds scph5501.bin in the content root; GameManager writes this key before loading the content.
 	if (psxFirmware) ejs.EJS_externalFiles = { [`/${psxBios}`]: psxFirmware };
-	// Genesis B5: the payloads and report by name from the API; the vendored loader keeps them non-threaded.
-	if (isGenesis) ejs.EJS_paths = genesisPaths();
+	// B3/B8: an operator-supplied core loads its payloads and report by name from the API; the vendored loader keeps
+	// them non-threaded.
+	if (isOperator) ejs.EJS_paths = operatorCorePaths(params.core);
 	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX): hide only the core selector.
 	if (hidesCoreChooser(params.core)) ejs.EJS_hideSettings = ['retroarch_core'];
 	const scheme = controlSchemeFor(params.core, params.name);

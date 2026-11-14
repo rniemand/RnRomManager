@@ -477,7 +477,7 @@ describe('play page PSP (PSP B3)', () => {
 });
 
 describe('play page Genesis and Master System (Genesis B4, B5)', () => {
-	const check = '/api/emulator/genesis';
+	const check = '/api/emulator/cores/genesis_plus_gx';
 
 	it.each(['Turbo Comet (USA).md', 'Turbo Comet (USA).gen', 'Turbo Comet (USA).bin'])(
 		'checks the core files with one HEAD, then loads %s with the API paths and Mega Drive controls',
@@ -494,10 +494,11 @@ describe('play page Genesis and Master System (Genesis B4, B5)', () => {
 				EJS_controlScheme: 'segaMD',
 				EJS_hideSettings: ['retroarch_core'],
 				EJS_paths: {
-					'genesis_plus_gx-wasm.data': '/api/emulator/genesis/genesis_plus_gx-wasm.data',
+					'genesis_plus_gx-wasm.data':
+						'/api/emulator/cores/genesis_plus_gx/genesis_plus_gx-wasm.data',
 					'genesis_plus_gx-legacy-wasm.data':
-						'/api/emulator/genesis/genesis_plus_gx-legacy-wasm.data',
-					'genesis_plus_gx.json': '/api/emulator/genesis/genesis_plus_gx.json'
+						'/api/emulator/cores/genesis_plus_gx/genesis_plus_gx-legacy-wasm.data',
+					'genesis_plus_gx.json': '/api/emulator/cores/genesis_plus_gx/genesis_plus_gx.json'
 				}
 			});
 			expect(atLoader?.EJS_threads).toBeUndefined();

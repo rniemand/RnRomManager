@@ -73,44 +73,72 @@ export function biosError(name, status) {
  * @returns {string | null}
  */
 export function controlSchemeFor(core, name) {
-	if (core === genesisCore) return 'segaMD';
+	if (core === 'genesis_plus_gx') return 'segaMD';
 	return core === 'smsplus' && name.toLowerCase().endsWith('.gg') ? 'segaGG' : null;
 }
 
-/** Genesis B5: the core whose files the operator supplies (Emulator:GenesisCorePath), served by the API. */
-export const genesisCore = 'genesis_plus_gx';
-
-/** Genesis B4: the availability check run before the ROM is fetched. */
-export const genesisCheckUrl = '/api/emulator/genesis';
+/**
+ * B3/B8: the cores whose files the operator supplies, served by the API after a length and hash check, with the
+ * wording of their messages: the system label, the core's display name, the short name of the fallback message and
+ * the option holding the folder.
+ * @type {Record<string, { system: string, display: string, short: string, option: string }>}
+ */
+const operatorCores = {
+	genesis_plus_gx: {
+		system: 'Genesis games',
+		display: 'Genesis Plus GX',
+		short: 'Genesis',
+		option: 'Emulator:GenesisCorePath'
+	}
+};
 
 /**
- * Genesis B5: EJS_paths, mapping the files EmulatorJS asks for by name to the authenticated same-origin endpoint.
+ * @param {string} core
+ * @returns {boolean} whether the operator supplies this core's files
+ */
+export function isOperatorCore(core) {
+	return Object.hasOwn(operatorCores, core);
+}
+
+/**
+ * B2: the bodyless availability check run before the ROM is fetched.
+ * @param {string} core
+ * @returns {string}
+ */
+export function operatorCoreCheckUrl(core) {
+	return `/api/emulator/cores/${core}`;
+}
+
+/**
+ * B3/B8: EJS_paths, mapping the files EmulatorJS asks for by name to the authenticated same-origin endpoint.
+ * @param {string} core
  * @returns {Record<string, string>}
  */
-export function genesisPaths() {
+export function operatorCorePaths(core) {
 	return Object.fromEntries(
-		['genesis_plus_gx-wasm.data', 'genesis_plus_gx-legacy-wasm.data', 'genesis_plus_gx.json'].map((f) => [
+		[`${core}-wasm.data`, `${core}-legacy-wasm.data`, `${core}.json`].map((f) => [
 			f,
-			`${genesisCheckUrl}/${f}`
+			`${operatorCoreCheckUrl(core)}/${f}`
 		])
 	);
 }
 
 /**
- * Genesis B4: the play page's message for the core availability check, or null when the files are there and match.
+ * B3/B8: the play page's message for the core availability check, or null when the files are there and match.
+ * @param {string} core an operator-supplied core
  * @param {number | null} status the HTTP status, or null for a network failure
  * @returns {string | null}
  */
-export function genesisCoreError(status) {
+export function operatorCoreError(core, status) {
 	if (status !== null && status >= 200 && status < 300) return null;
 	if (status === 401) return sessionExpired;
-	if (status === 404)
-		return 'Genesis games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).';
+	const { system, display, short, option } = operatorCores[core];
+	if (status === 404) return `${system} need the ${display} core files: ask an Admin to set them up (${option}).`;
 	if (status === 409)
-		return "The Genesis Plus GX core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:GenesisCorePath).";
+		return `The ${display} core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (${option}).`;
 	return status === null
-		? "Couldn't load the Genesis core."
-		: `Couldn't load the Genesis core (HTTP ${status}).`;
+		? `Couldn't load the ${short} core.`
+		: `Couldn't load the ${short} core (HTTP ${status}).`;
 }
 
 /**
@@ -119,7 +147,7 @@ export function genesisCoreError(status) {
  * @returns {boolean}
  */
 export function hidesCoreChooser(core) {
-	return ['smsplus', 'fceumm', 'pcsx_rearmed', genesisCore].includes(core);
+	return ['smsplus', 'fceumm', 'pcsx_rearmed', 'genesis_plus_gx'].includes(core);
 }
 
 /** PCSX ReARMed's optional firmware: the operator's scph5501.bin, else the core's built-in HLE BIOS. */
