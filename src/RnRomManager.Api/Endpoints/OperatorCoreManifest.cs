@@ -23,6 +23,7 @@ public sealed record OperatorCore(string Id, string DisplayName, Func<EmulatorOp
 public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
 {
     public const string GenesisPlusGx = "genesis_plus_gx";
+    public const string Picodrive = "picodrive";
 
     /// <summary>The pinned 4.2.3 files of each core (each report is its package's <c>reports/</c> copy).</summary>
     public static OperatorCoreManifest Pinned { get; } = new(
@@ -36,6 +37,17 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
                 "2a1edeb68d7ec882149ed3cd5d3aa95a6ac231ebabaf82cdb56175a8b62967cc", "application/octet-stream"),
             new("genesis_plus_gx.json", 129,
                 "5936a8ce8d7f010d5bfdd8c3bba2b2414f103b3a703121e56f2724b24dbe7ff3", "application/json"),
+        ]),
+        // https://registry.npmjs.org/@emulatorjs/core-picodrive/-/core-picodrive-4.2.3.tgz (payloads at the package
+        // root, the report from reports/). Its licence forbids commercial use, so it's never bundled.
+        new(Picodrive, "PicoDrive", o => o.PicodriveCorePath, EmulatorEndpoints.PicodriveCoreMismatch,
+        [
+            new("picodrive-wasm.data", 1_034_483,
+                "bb5d50b8b88111b583977d2f7a16d01a822b3deda9205048d99ecaad2c56d861", "application/octet-stream"),
+            new("picodrive-legacy-wasm.data", 1_035_609,
+                "cc42b0c95e9edfd0e5c689211e8e85e45f4525be2d814af8ca9331ef90e0620b", "application/octet-stream"),
+            new("picodrive.json", 123,
+                "2b09f29e095a003c15abf8e5bdfb0eaca96d6c6121183b3bd92ed85e860918d3", "application/json"),
         ]),
     ]);
 

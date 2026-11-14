@@ -75,6 +75,7 @@ public static partial class EmulatorEndpoints
     }
 
     public const string GenesisCoreMismatch = "GenesisCoreMismatch";
+    public const string PicodriveCoreMismatch = "PicodriveCoreMismatch";
 
     private enum CoreOutcome { Verified, Unavailable, Mismatch, Unreadable }
 

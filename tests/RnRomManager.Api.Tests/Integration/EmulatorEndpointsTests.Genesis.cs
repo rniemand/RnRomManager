@@ -17,18 +17,31 @@ public partial class EmulatorEndpointsTests
         ("genesis_plus_gx.json", "{\"options\":{}}"u8.ToArray(), "application/json"),
     ];
 
-    private static readonly OperatorCoreManifest SyntheticManifest = new([OperatorCoreManifest.Pinned.Find(OperatorCoreManifest.GenesisPlusGx)! with { Files =
-            [.. Synthetic.Select(f => new OperatorCoreFile(f.Name, f.Bytes.Length, Convert.ToHexStringLower(SHA256.HashData(f.Bytes)), f.ContentType))] }]);
+    // Computed, not a field: partial files initialise their static fields in no guaranteed order.
+    private static OperatorCoreManifest SyntheticManifest => new(
+    [
+        SyntheticCore(OperatorCoreManifest.GenesisPlusGx, Synthetic),
+        SyntheticCore(OperatorCoreManifest.Picodrive, SyntheticPicodrive),
+    ]);
+
+    /// <summary>A pinned core with its files replaced by synthetic bytes of the same names.</summary>
+    private static OperatorCore SyntheticCore(string id, (string Name, byte[] Bytes, string ContentType)[] files) =>
+        OperatorCoreManifest.Pinned.Find(id)! with
+        {
+            Files = [.. files.Select(f => new OperatorCoreFile(f.Name, f.Bytes.Length, Convert.ToHexStringLower(SHA256.HashData(f.Bytes)), f.ContentType))],
+        };
 
     private const string GenesisHead = "/api/emulator/genesis";
 
     private string GenesisDir => _factory.Settings["Emulator:GenesisCorePath"]!;
 
-    private void ResetGenesisDir()
+    private void ResetGenesisDir() => ResetDir(GenesisDir);
+
+    private static void ResetDir(string path)
     {
-        if (Directory.Exists(GenesisDir))
+        if (Directory.Exists(path))
         {
-            foreach (var entry in new DirectoryInfo(GenesisDir).EnumerateFileSystemInfos())
+            foreach (var entry in new DirectoryInfo(path).EnumerateFileSystemInfos())
             {
                 if (entry is DirectoryInfo dir)
                     dir.Delete(recursive: !dir.Attributes.HasFlag(FileAttributes.ReparsePoint));
@@ -36,7 +49,7 @@ public partial class EmulatorEndpointsTests
                     entry.Delete();
             }
         }
-        Directory.CreateDirectory(GenesisDir);
+        Directory.CreateDirectory(path);
     }
 
     private void WriteGenesisSet(string? except = null)

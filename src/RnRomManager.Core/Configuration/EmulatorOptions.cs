@@ -1,6 +1,6 @@
 namespace RnRomManager.Core.Configuration;
 
-/// <summary>Optional browser-play assets the deployment operator supplies (Genesis B4).</summary>
+/// <summary>Optional browser-play assets the deployment operator supplies (Genesis B4, 32X B1).</summary>
 public sealed class EmulatorOptions
 {
     public const string Section = "Emulator";
@@ -10,4 +10,10 @@ public sealed class EmulatorOptions
     /// disables Genesis play; a missing directory behaves as unavailable without failing startup.
     /// </summary>
     public string GenesisCorePath { get; set; } = "";
+
+    /// <summary>
+    /// B1: a fully qualified, read-only directory holding the EmulatorJS 4.2.3 PicoDrive files at its root (it may be
+    /// the Genesis folder). Empty disables 32X play; a missing directory behaves as unavailable without failing startup.
+    /// </summary>
+    public string PicodriveCorePath { get; set; } = "";
 }

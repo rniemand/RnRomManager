@@ -27,6 +27,7 @@ public partial class EmulatorEndpointsTests
             TestServices = services => services.AddSingleton(SyntheticManifest),
         };
         _factory.Settings["Emulator:GenesisCorePath"] = Path.Combine(_factory.Root, "genesis");
+        _factory.Settings["Emulator:PicodriveCorePath"] = Path.Combine(_factory.Root, "picodrive");
         await _factory.StartSharedAsync();
     }
 
@@ -45,6 +46,7 @@ public partial class EmulatorEndpointsTests
                 entry.Delete();
         }
         ResetGenesisDir();
+        ResetDir(PicodriveDir);
         _client = await SignInAsync("player");
     }
 

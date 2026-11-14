@@ -1,6 +1,8 @@
 using System.Net;
+using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Api.Endpoints;
 using RnRomManager.Core.Configuration;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
 
@@ -8,6 +10,22 @@ namespace RnRomManager.Api.Tests.Integration;
 public partial class EmulatorEndpointsTests
 {
     private const string GenesisCore = "/api/emulator/cores/genesis_plus_gx";
+    private const string PicodriveCore = "/api/emulator/cores/picodrive";
+
+    private static readonly (string Name, byte[] Bytes, string ContentType)[] SyntheticPicodrive =
+    [
+        ("picodrive-wasm.data", [.. Enumerable.Range(0, 2048).Select(i => (byte)(i * 3 + 7))], "application/octet-stream"),
+        ("picodrive-legacy-wasm.data", [.. Enumerable.Range(0, 2500).Select(i => (byte)(i * 11 + 4))], "application/octet-stream"),
+        ("picodrive.json", "{\"options\":{\"x\":1}}"u8.ToArray(), "application/json"),
+    ];
+
+    private string PicodriveDir => _factory.Settings["Emulator:PicodriveCorePath"]!;
+
+    private void WritePicodriveSet(string? except = null)
+    {
+        foreach (var (name, bytes, _) in SyntheticPicodrive.Where(f => f.Name != except))
+            File.WriteAllBytes(Path.Combine(PicodriveDir, name), bytes);
+    }
 
     private async Task<HttpStatusCode> HeadAsync(AuthClient client, string url)
     {
@@ -25,10 +43,132 @@ public partial class EmulatorEndpointsTests
     {
         var genesis = OperatorCoreManifest.Pinned.Find("genesis_plus_gx")!;
 
-        Assert.That(OperatorCoreManifest.Pinned.Cores.Select(c => c.Id), Is.EqualTo(new[] { "genesis_plus_gx" }));
+        var picodrive = OperatorCoreManifest.Pinned.Find("picodrive")!;
+        var options = new EmulatorOptions { GenesisCorePath = "/cores/genesis", PicodriveCorePath = "/cores/picodrive" };
+
+        Assert.That(OperatorCoreManifest.Pinned.Cores.Select(c => c.Id), Is.EqualTo(new[] { "genesis_plus_gx", "picodrive" }));
         Assert.That((genesis.DisplayName, genesis.MismatchCode), Is.EqualTo(("Genesis Plus GX", "GenesisCoreMismatch")));
-        Assert.That(genesis.PathOf(new EmulatorOptions { GenesisCorePath = "/cores/genesis" }), Is.EqualTo("/cores/genesis"));
+        Assert.That((picodrive.DisplayName, picodrive.MismatchCode), Is.EqualTo(("PicoDrive", "PicodriveCoreMismatch")));
+        Assert.That((genesis.PathOf(options), picodrive.PathOf(options)), Is.EqualTo(("/cores/genesis", "/cores/picodrive")));
         Assert.That(OperatorCoreManifest.Pinned.Find("GENESIS_PLUS_GX"), Is.Null);
+        Assert.That(OperatorCoreManifest.Pinned.Find("PicoDrive"), Is.Null);
+    }
+
+    [Test]
+    public void PinnedManifest_HoldsExactlyThePicodrive4_2_3Files()
+    {
+        Assert.That(OperatorCoreManifest.Pinned.Find(OperatorCoreManifest.Picodrive)!.Files, Is.EqualTo(new[]
+        {
+            new OperatorCoreFile("picodrive-wasm.data", 1_034_483,
+                "bb5d50b8b88111b583977d2f7a16d01a822b3deda9205048d99ecaad2c56d861", "application/octet-stream"),
+            new OperatorCoreFile("picodrive-legacy-wasm.data", 1_035_609,
+                "cc42b0c95e9edfd0e5c689211e8e85e45f4525be2d814af8ca9331ef90e0620b", "application/octet-stream"),
+            new OperatorCoreFile("picodrive.json", 123,
+                "2b09f29e095a003c15abf8e5bdfb0eaca96d6c6121183b3bd92ed85e860918d3", "application/json"),
+        }));
+    }
+
+    [Test]
+    public async Task Picodrive_AMatchingSet_Is204_AndEachFileIsServedExactly()
+    {
+        WritePicodriveSet();
+
+        Assert.That(await HeadAsync(_client, PicodriveCore), Is.EqualTo(HttpStatusCode.NoContent));
+        foreach (var (name, bytes, contentType) in SyntheticPicodrive)
+        {
+            using var response = await _client.GetAsync($"{PicodriveCore}/{name}");
+
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), name);
+            Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo(contentType), name);
+            Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(bytes), name);
+            AssertNoStore(response);
+        }
+    }
+
+    [Test]
+    public async Task Picodrive_AMissingMount_OrAnIncompleteSet_Is404()
+    {
+        Directory.Delete(PicodriveDir);
+        Assert.That(await HeadAsync(_client, PicodriveCore), Is.EqualTo(HttpStatusCode.NotFound), "missing mount");
+        await AssertNotFoundAsync($"{PicodriveCore}/picodrive.json");
+
+        Directory.CreateDirectory(PicodriveDir);
+        WritePicodriveSet(except: "picodrive-wasm.data");
+        Assert.That(await HeadAsync(_client, PicodriveCore), Is.EqualTo(HttpStatusCode.NotFound), "incomplete set");
+        await AssertNotFoundAsync($"{PicodriveCore}/picodrive-wasm.data");
+    }
+
+    [Test]
+    public async Task Picodrive_AMismatch_Is409PicodriveCoreMismatch()
+    {
+        WritePicodriveSet();
+        File.AppendAllText(Path.Combine(PicodriveDir, "picodrive-legacy-wasm.data"), "x");
+
+        Assert.That(await HeadAsync(_client, PicodriveCore), Is.EqualTo(HttpStatusCode.Conflict));
+        using var response = await _client.GetAsync($"{PicodriveCore}/picodrive-legacy-wasm.data");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo(EmulatorEndpoints.PicodriveCoreMismatch));
+        Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("The PicoDrive core file doesn't match EmulatorJS 4.2.3"));
+        AssertNoStore(response);
+    }
+
+    [Test]
+    public async Task Picodrive_ALockedFile_Is500IoError()
+    {
+        Assume.That(OperatingSystem.IsWindows(), "FileShare.None only blocks other opens on Windows.");
+        WritePicodriveSet();
+        using var held = new FileStream(Path.Combine(PicodriveDir, "picodrive.json"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        Assert.That(await HeadAsync(_client, PicodriveCore), Is.EqualTo(HttpStatusCode.InternalServerError));
+        using var response = await _client.GetAsync($"{PicodriveCore}/picodrive.json");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("IoError"));
+        Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("The PicoDrive core file can't be read"));
+    }
+
+    [Test]
+    public async Task Cores_OneCoresFiles_DoNotSatisfyTheOther()
+    {
+        foreach (var (name, bytes, _) in Synthetic)
+            File.WriteAllBytes(Path.Combine(PicodriveDir, name), bytes);
+        foreach (var (name, bytes, _) in SyntheticPicodrive)
+            File.WriteAllBytes(Path.Combine(GenesisDir, name), bytes);
+
+        Assert.That(await HeadAsync(_client, PicodriveCore), Is.EqualTo(HttpStatusCode.NotFound));
+        Assert.That(await HeadAsync(_client, GenesisCore), Is.EqualTo(HttpStatusCode.NotFound));
+        await AssertNotFoundAsync($"{PicodriveCore}/genesis_plus_gx.json");
+        await AssertNotFoundAsync($"{GenesisCore}/picodrive.json");
+    }
+
+    [Test]
+    public async Task Cores_BothSetsInOneFolder_EachIsAvailable()
+    {
+        WriteGenesisSet();
+        foreach (var (name, bytes, _) in SyntheticPicodrive)
+            File.WriteAllBytes(Path.Combine(GenesisDir, name), bytes);
+        WritePicodriveSet();
+
+        Assert.That(await HeadAsync(_client, GenesisCore), Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(await HeadAsync(_client, PicodriveCore), Is.EqualTo(HttpStatusCode.NoContent));
+    }
+
+    [Test]
+    public async Task Picodrive_ByDefault_ExposesNothing()
+    {
+        // A default deployment: no Emulator:PicodriveCorePath, the pinned manifest. Files at a would-be mount stay unserved.
+        using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
+        await factory.StartSharedAsync();
+        Directory.CreateDirectory(Path.Combine(factory.Root, "picodrive"));
+        File.WriteAllBytes(Path.Combine(factory.Root, "picodrive", "picodrive.json"), SyntheticPicodrive[2].Bytes);
+        using var client = await AuthClient.CreateAsync(factory);
+        await TestUsers.CreateAsync(factory, "player");
+        (await client.LoginAsync("player", TestUsers.Password)).Dispose();
+
+        Assert.That(factory.Services.GetRequiredService<OperatorCoreManifest>(), Is.SameAs(OperatorCoreManifest.Pinned));
+        Assert.That(await HeadAsync(client, PicodriveCore), Is.EqualTo(HttpStatusCode.NotFound));
+        using var response = await client.GetAsync($"{PicodriveCore}/picodrive.json");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        AssertNoStore(response);
     }
 
     [Test]

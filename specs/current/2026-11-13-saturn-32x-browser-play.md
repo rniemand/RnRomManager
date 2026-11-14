@@ -118,7 +118,7 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
   - Done when:
     - the listed tests pass;
     - `/api/emulator/genesis` behaves as before.
-- [ ] **2. PicoDrive core config and manifest** (B1, B2):
+- [x] **2. PicoDrive core config and manifest** (B1, B2):
   - The `PicodriveCorePath` option and its validation; the pinned PicoDrive entry (re-checked from the package, see Risks) with the tarball URL in a code comment; `PicodriveCoreMismatch`.
   - Files: `EmulatorOptions.cs`, `EmulatorOptionsValidator.cs`, `OperatorCoreManifest.cs`, `EmulatorEndpointsTests.cs` (synthetic manifest and temp folder for both cores), `EmulatorEndpointsTests.OperatorCores.cs`, `OptionsValidatorTests.cs`, `OptionsRegistrationTests.cs`, `EffectiveSettingsTests.cs`.
   - Tests:
@@ -243,6 +243,8 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
 - 2026-11-13 Saturn play step size → split: Step 7 lands the system-agnostic `.nrg` guards and `loadOptionalBios` (PlayStation only), Step 8 the Saturn core, so neither passes ~300 lines (reviewer)
 - 2026-11-13 Why list `yabause` in the explicit-core patch and `hidesCoreChooser`? → defensive and consistent only: in 4.2.3 the `segaSaturn` group holds just `yabause`, so neither edit changes behaviour (code)
 - 2026-11-13 PicoDrive and Yabause package facts re-checked at the second review → B1's PicoDrive lengths and SHA-256 match `npm pack @emulatorjs/core-picodrive@4.2.3`; Yabause's payloads have no `license.txt`, carry `0.9.15 e24ebfc` and RetroArch `6dd4353`, and neither core's non-threaded binaries reference `SharedArrayBuffer` or `pthread_create` (code)
+
+- 2026-11-14 Step 2 re-check of the PicoDrive pinned values → `npm pack @emulatorjs/core-picodrive@4.2.3` (outside the repo) gives exactly B1's lengths and SHA-256 for `picodrive-wasm.data`, `picodrive-legacy-wasm.data` and `reports/picodrive.json` (code)
 
 ## Kickoff prompt
 ```text
