@@ -1,6 +1,6 @@
 ---
 title: PSP, Genesis and Master System browser play
-status: in-progress
+status: completed
 created: 2026-11-13
 ---
 
@@ -70,6 +70,7 @@ No migrations or changes to stored ROMs are needed. Existing library records gai
 - 2026-11-13 PSP steps → split library linking from player startup to keep each step within the step-size rule (spec rules).
 - 2026-11-14 Step 2 test locations → the options registration and effective settings tests live in `RnRomManager.Api.Tests`, not `RnRomManager.Core.Tests`; the step names the real files (code).
 - 2026-11-14 PPSSPP asset ZIP → bundle the upstream ppsspp-assets.zip unchanged, although its flash0/font/*.pgf files are Sony PSP firmware fonts with no published licence; ppsspp-NOTICE.txt records their provenance and the trace of the archive to EmulatorJS/ppsspp 47efdd0 (user).
+- 2026-11-14 Boot checks → the real-ISO PSP boot (with the save-persistence observation) and the private Genesis boot of `.md`, `.gen` and `.bin` with Start/A/B/C are done by the maintainer in production after merge, not before the PR; the docs say PSP save behaviour is unverified until then (user).
 - 2026-11-13 Game Gear coverage → add a real-player e2e start, because the shared pinned-core edit changes and no Game Gear player test exists (code).
 
 ## Kickoff prompt
