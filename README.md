@@ -29,6 +29,8 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 |---|---|---|---|---|---|
 | 32X | `s32x` | In ZIP | `.32x` | No-Intro | — |
 | Atari 2600 | `a2600` | In ZIP | `.a26`, `.bin` | No-Intro | — |
+| Atari 5200 | `a5200` | In ZIP | `.a52`, `.bin` | No-Intro | — |
+| Atari 7800 | `a7800` | In ZIP | `.a78`, `.bin` | No-Intro | — |
 | Atari Jaguar | `jaguar` | In ZIP | `.j64`, `.jag`, `.rom`, `.abs`, `.cof` | No-Intro | `virtualjaguar` |
 | Atari Lynx | `lynx` | In ZIP | `.lnx`, `.lyx` | No-Intro | `handy` |
 | ColecoVision | `coleco` | In ZIP | `.col`, `.rom`, `.bin` | No-Intro | — |
@@ -47,6 +49,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Saturn | `saturn` | Next to ZIP | `.bin`, `.cue`, `.nrg` | Redump | — |
 | Super Nintendo Entertainment System | `snes` | In ZIP | `.sfc`, `.smc` | No-Intro | — |
 | TurboGrafx-16 | `tg16` | In ZIP | `.pce` | No-Intro | — |
+| Virtual Boy | `vb` | In ZIP | `.vb` | No-Intro | — |
 | Wii | `wii` | Next to ZIP | `.iso`, `.wbfs` | Redump | — |
 | Xbox 360 | `x360` | Next to ZIP | `.iso` | Redump | — |
 <!-- systems:end -->
@@ -109,7 +112,7 @@ docker compose up -d
 2. **Admin → DATs → Refresh DATs** downloads the game databases (once, and whenever you want newer ones).
 3. Copy each system's files (formats in [Supported systems](#supported-systems)) into `data/ingest/<Id>/` (disc images loose, not in archives), then press **Ingestion → Import all**.
 
-Upgrading from a version without Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, Atari Lynx, Atari Jaguar, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch, PlayStation, PSP, GameCube, Wii, Xbox 360 or Saturn? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`): it downloads the new system's DATs (for Switch, the titledb file; for the disc systems, the Redump DAT).
+Upgrading from a version without Game Boy Advance, Nintendo 64, NES, SNES, Virtual Boy, Atari 2600, Atari 5200, Atari 7800, Atari Lynx, Atari Jaguar, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch, PlayStation, PSP, GameCube, Wii, Xbox 360 or Saturn? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`): it downloads the new system's DATs (for Switch, the titledb file; for the disc systems, the Redump DAT).
 
 Set `user:` to the owner of `./data` (`id -u`:`id -g`). An existing MariaDB server, reverse proxies, backups, upgrades and password recovery are covered in the [deployment guide](https://github.com/rniemand/RnRomManager/blob/main/docs/deployment.md).
 

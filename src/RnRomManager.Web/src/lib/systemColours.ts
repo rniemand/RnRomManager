@@ -11,7 +11,10 @@ export interface SystemColour {
 		| 'warning'
 		| 'secondary'
 		| 'snes'
+		| 'vb'
 		| 'a2600'
+		| 'a5200'
+		| 'a7800'
 		| 'lynx'
 		| 'jaguar'
 		| 'coleco'
@@ -37,7 +40,10 @@ export const systemColours: Record<string, SystemColour> = {
 	n64: { name: 'danger', foreground: '#fff' },
 	nes: { name: 'warning', foreground: '#000' },
 	snes: { name: 'snes', foreground: '#fff' },
+	vb: { name: 'vb', foreground: '#000' },
 	a2600: { name: 'a2600', foreground: '#fff' },
+	a5200: { name: 'a5200', foreground: '#fff' },
+	a7800: { name: 'a7800', foreground: '#000' },
 	lynx: { name: 'lynx', foreground: '#000' },
 	jaguar: { name: 'jaguar', foreground: '#fff' },
 	coleco: { name: 'coleco', foreground: '#fff' },

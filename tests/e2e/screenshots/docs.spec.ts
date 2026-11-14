@@ -25,13 +25,13 @@ test('capture the README screenshots', async ({ page }) => {
 	await page.getByRole('button', { name: 'Import all' }).click();
 	await page.getByRole('tab', { name: 'Last runs' }).click();
 	await expect(page.getByRole('row').filter({ hasText: 'Completed' })).toContainText(
-		'Ingested 34 · Duplicate 1 · Review 2 · Failed 1',
+		'Ingested 37 · Duplicate 1 · Review 2 · Failed 1',
 		{ timeout: 60_000 }
 	);
 
 	await page.goto('/?page=1');
 	await expect(page.getByRole('button', { name: 'System: All' })).toBeVisible();
-	await expect(page.getByText('25 games', { exact: true })).toBeVisible();
+	await expect(page.getByText('28 games', { exact: true })).toBeVisible();
 	await page.screenshot({ path: imagePath('library'), animations: 'disabled' });
 	await page.getByRole('link', { name: 'Orbit Blocks', exact: true }).click();
 	await expect(page.getByRole('heading', { level: 1, name: 'Orbit Blocks' })).toBeVisible();

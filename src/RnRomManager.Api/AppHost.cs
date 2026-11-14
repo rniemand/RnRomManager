@@ -38,6 +38,7 @@ using RnRomManager.Systems.Nec;
 using RnRomManager.Systems.Switch;
 using RnRomManager.Systems.Snes;
 using RnRomManager.Systems.Nintendo64;
+using RnRomManager.Systems.VirtualBoy;
 
 namespace RnRomManager.Api;
 
@@ -193,7 +194,10 @@ public static class AppHost
         services.AddSystemHandler<Nintendo64Handler>();
         services.AddSystemHandler<NesHandler>();
         services.AddSystemHandler<SnesHandler>();
+        services.AddSystemHandler<VirtualBoyHandler>();
         services.AddSystemHandler<Atari2600Handler>();
+        services.AddSystemHandler<Atari5200Handler>();
+        services.AddSystemHandler<Atari7800Handler>();
         services.AddSystemHandler<AtariLynxHandler>();
         services.AddSystemHandler<AtariJaguarHandler>();
         services.AddSystemHandler<ColecoVisionHandler>();
