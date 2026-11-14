@@ -1,0 +1,31 @@
+EmulatorJS 4.2.3 core payloads: how they were built
+===================================================
+
+The npm packages @emulatorjs/core-stella2014, @emulatorjs/core-gearcoleco and
+@emulatorjs/core-smsplus 4.2.3 each contain a "<core>-wasm.data" and a
+"<core>-legacy-wasm.data" file (7z archives). Each archive holds the core's
+WebAssembly binary and JavaScript loader, core.json, build.json and, for
+Gearcoleco only, license.txt. RnRomManager copies these files unchanged.
+
+Every binary is a RetroArch frontend statically linked with one libretro core.
+The binaries were built on 2025-06-14 (see reports/<core>.json in each package).
+The build inputs below were identified from strings embedded in the binaries
+and checked against the public repositories:
+
+- Build scripts: https://github.com/EmulatorJS/build/tree/b24e5b5
+  (main at build time, unchanged from 2025-06-02 to 2025-10-19). Its
+  build.json says version 2.0.2, the same as the build.json in each payload.
+  build.sh builds each core from cores.json, then runs RetroArch's
+  emulatorjs/build-emulatorjs.sh (plain and --legacy) and packs the result.
+- RetroArch (EmulatorJS fork), branch "next":
+  https://github.com/EmulatorJS/RetroArch/tree/6dd4353937ef48b6ec0bfbdbb15d1c5992d86927
+  (version string "6dd4353" in all three cores' binaries; the head of "next"
+  from 2025-06-11 until September 2025). Licence: GPL-3.0-or-later
+  (retroarch-LICENSE.txt, the fork's COPYING at that commit).
+- Compiler: Emscripten 4.0.8. The binaries' "producers" section names
+  LLVM 21.0.0git 23e3cbb2e82b62586266116c8ab77ce68e412cf8, which is the
+  llvm_project_revision of emscripten-releases for emsdk 4.0.8 and of no
+  neighbouring release. (The CI workflow takes the version from a repository
+  variable, so it isn't in the build repository itself.)
+
+Core sources: see the NOTICE file for each core.

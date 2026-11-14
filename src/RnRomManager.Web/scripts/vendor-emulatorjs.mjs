@@ -77,4 +77,7 @@ writeFileSync(
 copy(join(src, 'emulator.css'), join(data, 'emulator.min.css'));
 
 copy(join(pkgs, 'emulatorjs', 'LICENSE'), join(outDir, 'licenses', 'emulatorjs.txt'));
+// Reviewed notices, licence texts and source records for cores whose packages ship none (emulator-licenses/).
+for (const file of readdirSync(join(web, 'emulator-licenses')))
+	copy(join(web, 'emulator-licenses', file), join(outDir, 'licenses', file));
 console.log(`vendor-emulatorjs: wrote ${outDir}`);

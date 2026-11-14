@@ -1,3 +1,5 @@
 * text=auto
 *.7z binary
 *.png binary
+# Verbatim third-party licence texts: keep their upstream bytes.
+src/RnRomManager.Web/emulator-licenses/** -text

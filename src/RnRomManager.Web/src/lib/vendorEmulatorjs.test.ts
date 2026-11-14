@@ -42,6 +42,19 @@ function coreResolver(
 		);
 }
 
+// The reviewed notices and licence texts in emulator-licenses/ (step 6 of the 2600/Coleco/GG spec).
+const coreLicenses = [
+	'COMMON-BUILD.txt',
+	'gearcoleco-LICENSE.txt',
+	'gearcoleco-NOTICE.txt',
+	'retroarch-LICENSE.txt',
+	'smsplus-LICENSE.txt',
+	'smsplus-NOTICE.txt',
+	'smsplus-sms_ntsc-LICENSE.txt',
+	'stella2014-LICENSE.txt',
+	'stella2014-NOTICE.txt'
+];
+
 function files(dir: string): string[] {
 	return readdirSync(dir, { recursive: true, withFileTypes: true })
 		.filter((e) => e.isFile())
@@ -89,7 +102,8 @@ describe('vendor-emulatorjs', () => {
 				...loaderOrder.map((f) => `data/src/${f}`),
 				...compression,
 				...cores,
-				'licenses/emulatorjs.txt'
+				'licenses/emulatorjs.txt',
+				...coreLicenses.map((f) => `licenses/${f}`)
 			].sort()
 		);
 		expect(files(out).some((f) => f.includes('-thread'))).toBe(false);
@@ -156,6 +170,14 @@ describe('vendor-emulatorjs', () => {
 			)
 			.join('');
 		expect(readFileSync(join(out, 'data', 'emulator.min.js'), 'utf8')).toBe(expected);
+	});
+
+	it('copies the reviewed core notices and licence texts byte for byte', () => {
+		expect(readdirSync('emulator-licenses').sort()).toEqual(coreLicenses);
+		for (const f of coreLicenses)
+			expect(readFileSync(join(out, 'licenses', f)), f).toEqual(
+				readFileSync(join('emulator-licenses', f))
+			);
 	});
 
 	it('copies the EmulatorJS licence', () => {
