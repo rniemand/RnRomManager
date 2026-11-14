@@ -92,7 +92,7 @@ No migration: `system_id` is a `VARCHAR`. No new config key. API contract: addit
 ## Steps
 Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which need Docker. Playwright (`mvp.spec.ts`) runs only in Finish.
 
-- [ ] **1. Sega CD handler** (B1): `SegaCdHandler` with `BrowserCore` null and its box art (SVG source + 512×512 PNG). Add the `IngestSeeder.SegaCdDat` constant and add it to `RedumpLayouts`. The seeder doesn't write it yet: every catalog it writes comes from its own system list, so its output is unchanged.
+- [x] **1. Sega CD handler** (B1): `SegaCdHandler` with `BrowserCore` null and its box art (SVG source + 512×512 PNG). Add the `IngestSeeder.SegaCdDat` constant and add it to `RedumpLayouts`. The seeder doesn't write it yet: every catalog it writes comes from its own system list, so its output is unchanged.
   - Files: `SegaCdHandler.cs`, `Resources/boxart/`, `tests/RnRomManager.Systems.Sega.Tests/SegaCdHandlerTests.cs`, `tests/RnRomManager.TestData/IngestSeeder.cs`.
   - Tests: `SegaCdHandlerTests`: every B1 value, `ReadHeader` null for any bytes, `NormalizeForHashing` unchanged, PNG valid and 512×512; with a registry holding only this handler, `DatCache` loads a `FixtureDatWriter` Redump catalog with one synthetic cue/bin game and finds its `.bin` by SHA-1, and loads an empty catalog.
   - Done when: those tests pass and the solution builds with warnings as errors.
