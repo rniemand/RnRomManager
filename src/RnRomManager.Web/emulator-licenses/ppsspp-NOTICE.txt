@@ -1,0 +1,54 @@
+PPSSPP (PlayStation Portable) for EmulatorJS 4.2.3
+==================================================
+
+Files: ppsspp-thread-wasm.data, ppsspp-assets.zip and reports/ppsspp.json from the
+npm package @emulatorjs/core-ppsspp 4.2.3, copied unchanged. The package has no
+non-threaded or legacy (WebGL 1) payload: its report sets defaultWebGL2 and
+requireThreads, so RnRomManager plays PSP only in a cross-origin isolated page.
+
+Source
+------
+Core: https://github.com/EmulatorJS/ppsspp, a fork that tracks
+hrydgard/ppsspp. The payload's report records a build started at
+2025-06-14T19:28:55Z; the fork's master branch was then at
+47efdd01da182e2a8f8f2ed078d56fd230480432. The payload's license.txt is
+byte-identical to LICENSE.TXT at that commit. Build: core.json runs
+libretro/emscripten/build_emscripten.sh and RetroArch's
+"build-emulatorjs.sh --clean --threads" (see COMMON-BUILD.txt for the
+RetroArch fork, EmulatorJS build scripts and Emscripten version).
+
+Licence
+-------
+PPSSPP is GPL-2.0-or-later (ppsspp-LICENSE.txt, which also carries the PSPSDK
+BSD-style notice for headers and constants). Combined with RetroArch the
+binary is distributed under GPL-3.0-or-later (retroarch-LICENSE.txt).
+Copyright (C) 2012 PPSSPP Project and PPSSPP contributors.
+
+ppsspp-assets.zip
+-----------------
+166 entries (about 19.6 MB unpacked), loaded into the emulator's virtual
+filesystem at /PPSSPP. Traced against assets/ at commit 47efdd0 by git blob
+hash: 87 files are byte-identical, including every flash0/font/*.pgf file,
+the VFPU tables, sounds and images. 54 text and data files (compat.ini,
+compatvr.ini, knownfuncs.ini, langregion.ini, gamecontrollerdb.txt, lang/*.ini,
+shaders/defaultshaders.ini, shaders/tex_mmpx.csh, themes/defaultthemes.ini,
+the ui_atlas files and Roboto-Condensed.ttf) differ from that commit's copies
+and come from a nearby revision of the same tree. Unless noted below they are
+PPSSPP's own data under its GPL-2.0-or-later licence.
+
+- debugger/: the ppsspp-debugger web build (submodule
+  https://github.com/unknownbrackets/ppsspp-debugger at
+  9776332f720c854ef26f325a0cf9e32c02115a9c), GPL-3.0-or-later; its bundled
+  JavaScript dependencies list their licences in
+  debugger/static/js/main.fe87e942.js.LICENSE.txt inside the archive.
+- gamecontrollerdb.txt: SDL_GameControllerDB (zlib licence).
+- Roboto-Condensed.ttf: Google's Roboto Condensed (Apache-2.0).
+- flash0/font/*.pgf: PSP system fonts as shipped in PPSSPP's assets/
+  (embedded names "FTT-NewRodin Pro" and "AsiaKNHH-SONY-uni"). These are
+  Sony PSP firmware fonts. No licence for them is published by PPSSPP,
+  EmulatorJS or the npm package; RnRomManager redistributes the upstream
+  archive unchanged, as PPSSPP and EmulatorJS do (decision recorded in the
+  PSP, Genesis and Master System browser play spec).
+
+No PSP firmware or BIOS is shipped or requested; PPSSPP runs games with its
+high-level emulation of the PSP operating system.

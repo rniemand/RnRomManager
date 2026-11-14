@@ -8,6 +8,8 @@ The npm packages @emulatorjs/core-stella2014, @emulatorjs/core-gearcoleco,
 WebAssembly binary and JavaScript loader, core.json, build.json and, for
 Gearcoleco, FCEUmm and PCSX ReARMed only, license.txt. RnRomManager copies
 these files unchanged (the packages' "-thread" variants are not copied).
+@emulatorjs/core-ppsspp 4.2.3 is the exception: it has only a threaded payload
+(see ppsspp-NOTICE.txt).
 
 Every binary is a RetroArch frontend statically linked with one libretro core.
 The binaries were built on 2025-06-14 (see reports/<core>.json in each package).

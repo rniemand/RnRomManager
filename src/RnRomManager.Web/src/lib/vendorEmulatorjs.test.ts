@@ -53,6 +53,8 @@ const coreLicenses = [
 	'pcsx_rearmed-NOTICE.txt',
 	'pcsx_rearmed-libchdr-LICENSE.txt',
 	'pcsx_rearmed-zstd-LICENSE.txt',
+	'ppsspp-LICENSE.txt',
+	'ppsspp-NOTICE.txt',
 	'retroarch-LICENSE.txt',
 	'smsplus-LICENSE.txt',
 	'smsplus-NOTICE.txt',
@@ -60,6 +62,86 @@ const coreLicenses = [
 	'stella2014-LICENSE.txt',
 	'stella2014-NOTICE.txt'
 ];
+
+// The guarded vendoring edits (anchor → its replacement), applied in order.
+const getCoreAnchor = '        const gen = this.getCore(true);\n';
+const pinGuard =
+	'        if (["smsplus", "fceumm", "pcsx_rearmed"].includes(core)) {\n' +
+	'            return core;\n' +
+	'        }\n';
+const legacyAnchor =
+	'            let legacy = (this.supportsWebgl2 && this.webgl2Enabled ? "" : "-legacy");\n';
+const threadOverride =
+	'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
+	'                threads = true;\n' +
+	'            }\n';
+const assetsRequest =
+	'            this.EJS.downloadFile("cores/ppsspp-assets.zip", null, false, { responseType: "arraybuffer", method: "GET" }).then((res) => {\n';
+const assetsError =
+	'this.EJS.startGameError(this.EJS.localization("Error downloading core") + " (ppsspp-assets.zip)");\n';
+const guardedEdits: Record<string, [string, string][]> = {
+	'emulator.js': [
+		[getCoreAnchor, pinGuard + getCoreAnchor],
+		[legacyAnchor, threadOverride + legacyAnchor],
+		[
+			'                resolve(new Uint8Array(await data.arrayBuffer()));\n',
+			'                let bytes;\n' +
+				'                try {\n' +
+				'                    bytes = await data.arrayBuffer();\n' +
+				'                } catch (e) {\n' +
+				'                    if (this.getCore() !== "ppsspp") throw e;\n' +
+				'                    this.startGameError(this.localization("Error reading the game file"));\n' +
+				'                    return;\n' +
+				'                }\n' +
+				'                resolve(new Uint8Array(bytes));\n'
+		]
+	],
+	'GameManager.js': [
+		[
+			assetsRequest,
+			assetsRequest +
+				'                if (res === -1) {\n' +
+				'                    ' +
+				assetsError +
+				'                    return;\n' +
+				'                }\n'
+		],
+		[
+			'                        this.EJS.textElem.innerText = this.localization("Network Error");\n' +
+				'                        this.EJS.textElem.style.color = "red";\n',
+			'                        ' + assetsError
+		]
+	]
+};
+
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+/** One EmulatorJS method from emulator.js source (or the bundle, which starts with it), run outside a browser. */
+function emulatorMethod(
+	source: string,
+	name: string
+): (this: object, ...args: unknown[]) => unknown {
+	const end = source.indexOf('window.EmulatorJS = EmulatorJS;');
+	expect(end).toBeGreaterThan(0);
+	const proto = runInNewContext(`${source.slice(0, end)}EmulatorJS.prototype`, {
+		Blob,
+		ArrayBuffer,
+		Uint8Array
+	}) as Record<string, (this: object, ...args: unknown[]) => unknown>;
+	return proto[name];
+}
+
+/** EJS_GameManager's prototype from GameManager.js, run outside a browser. */
+function gameManagerPrototype(source: string): {
+	loadPpssppAssets: (this: object) => Promise<void>;
+} {
+	const window: Record<
+		string,
+		{ prototype: { loadPpssppAssets: (this: object) => Promise<void> } }
+	> = {};
+	runInNewContext(source, { window });
+	return window.EJS_GameManager.prototype;
+}
 
 function files(dir: string): string[] {
 	return readdirSync(dir, { recursive: true, withFileTypes: true })
@@ -110,29 +192,122 @@ describe('vendor-emulatorjs', () => {
 				...loaderOrder.map((f) => `data/src/${f}`),
 				...compression,
 				...cores,
+				'data/cores/ppsspp-assets.zip',
+				'data/cores/ppsspp-thread-wasm.data',
+				'data/cores/reports/ppsspp.json',
 				'licenses/emulatorjs.txt',
 				...coreLicenses.map((f) => `licenses/${f}`)
 			].sort()
 		);
-		expect(files(out).some((f) => f.includes('-thread'))).toBe(false);
+		// PSP B3: PPSSPP's threaded payload is the only one; every other core is single-threaded.
+		expect(files(out).filter((f) => f.includes('-thread'))).toEqual([
+			'data/cores/ppsspp-thread-wasm.data'
+		]);
+		for (const f of ['ppsspp-thread-wasm.data', 'ppsspp-assets.zip', 'reports/ppsspp.json'])
+			expect(
+				readFileSync(join(out, 'data', 'cores', f)).equals(
+					readFileSync(join('node_modules', '@emulatorjs', 'core-ppsspp', f))
+				),
+				f
+			).toBe(true);
 	});
 
-	it('copies the src scripts unchanged except the guarded getCore() edit in emulator.js', () => {
-		for (const f of loaderOrder.filter((f) => f !== 'emulator.js'))
+	it('copies the src scripts unchanged except the guarded edits in emulator.js and GameManager.js', () => {
+		for (const f of loaderOrder.filter((f) => !(f in guardedEdits)))
 			expect(readFileSync(join(out, 'data', 'src', f), 'utf8')).toBe(
 				readFileSync(join(pkg, 'src', f), 'utf8')
 			);
-		const upstream = readFileSync(join(pkg, 'src', 'emulator.js'), 'utf8');
-		const anchor = '        const gen = this.getCore(true);\n';
-		const guard =
-			'        if (["smsplus", "fceumm", "pcsx_rearmed"].includes(core)) {\n' +
-			'            return core;\n' +
-			'        }\n';
-		expect(upstream.split(anchor)).toHaveLength(2);
-		expect(readFileSync(join(out, 'data', 'src', 'emulator.js'), 'utf8')).toBe(
-			upstream.replace(anchor, guard + anchor)
-		);
+		for (const [f, edits] of Object.entries(guardedEdits)) {
+			let expected = readFileSync(join(pkg, 'src', f), 'utf8');
+			for (const [anchor, replacement] of edits) {
+				expect(expected.split(anchor), anchor).toHaveLength(2);
+				expected = expected.replace(anchor, () => replacement);
+			}
+			expect(readFileSync(join(out, 'data', 'src', f), 'utf8'), f).toBe(expected);
+		}
 	});
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s forces the threaded payload for PPSSPP only, despite a saved ejs_threads setting',
+		(file) => {
+			const source = readFileSync(join(out, 'data', file), 'utf8');
+			const select = source.indexOf(legacyAnchor);
+			const override = source.lastIndexOf(threadOverride, select);
+			// After the saved-setting branch, right before the payload name is built.
+			expect(override).toBeGreaterThan(
+				source.lastIndexOf('const opt = this.preGetSetting("ejs_threads");', select)
+			);
+			expect(override + threadOverride.length).toBe(select);
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s shows a startup error when PPSSPP reads a File that rejects, and rethrows for other cores',
+		async (file) => {
+			const toData = emulatorMethod(readFileSync(join(out, 'data', file), 'utf8'), 'toData');
+			const failing = new Blob(['iso']);
+			failing.arrayBuffer = () => Promise.reject(new Error('read failed'));
+			const errors: string[] = [];
+			const ejs = (core: string) => ({
+				getCore: () => core,
+				localization: (t: string) => t,
+				startGameError: (m: string) => errors.push(m)
+			});
+
+			const pending = toData.call(ejs('ppsspp'), failing) as Promise<unknown>;
+			const settled = await Promise.race([
+				pending.then(() => 'settled'),
+				tick().then(() => 'pending')
+			]);
+			expect(settled).toBe('pending');
+			expect(errors).toEqual(['Error reading the game file']);
+			expect(await toData.call(ejs('ppsspp'), new Blob([new Uint8Array([1, 2])]))).toEqual(
+				new Uint8Array([1, 2])
+			);
+
+			const rejections: unknown[] = [];
+			const onRejection = (e: unknown) => rejections.push(e);
+			process.on('unhandledRejection', onRejection);
+			try {
+				void toData.call(ejs('pcsx_rearmed'), failing);
+				await tick();
+				await tick();
+			} finally {
+				process.off('unhandledRejection', onRejection);
+			}
+			expect(rejections).toHaveLength(1);
+			expect(errors).toHaveLength(1);
+		}
+	);
+
+	it.each([
+		['a failed request', () => Promise.resolve(-1), () => Promise.resolve({})],
+		[
+			'an unreadable archive',
+			() => Promise.resolve({ data: new ArrayBuffer(1) }),
+			() => Promise.resolve(-1)
+		]
+	])(
+		'GameManager.js shows a startup error for %s of ppsspp-assets.zip',
+		async (_, download, decompress) => {
+			const errors: string[] = [];
+			const manager = gameManagerPrototype(
+				readFileSync(join(out, 'data', 'src', 'GameManager.js'), 'utf8')
+			);
+			void manager.loadPpssppAssets.call({
+				EJS: {
+					downloadFile: download,
+					checkCompression: decompress,
+					localization: (t: string) => t,
+					startGameError: (m: string) => errors.push(m),
+					textElem: { style: {} }
+				}
+			});
+			await tick();
+			await tick();
+			expect(errors).toEqual(['Error downloading core (ppsspp-assets.zip)']);
+		}
+	);
 
 	it.each(['src/emulator.js', 'emulator.min.js'])(
 		'%s keeps an explicit smsplus despite a saved alternate core',
@@ -196,11 +371,11 @@ describe('vendor-emulatorjs', () => {
 		expect(loaderOrder.map((f) => loader.indexOf(`"${f}"`))).toEqual(
 			loaderOrder.map((f) => loader.indexOf(`"${f}"`)).toSorted((a, b) => a - b)
 		);
-		// The emitted (patched) emulator.js, then the unchanged upstream scripts.
+		// The emitted (patched) emulator.js and GameManager.js, then the unchanged upstream scripts.
 		const expected = loaderOrder
 			.map(
 				(f) =>
-					readFileSync(join(f === 'emulator.js' ? join(out, 'data') : pkg, 'src', f), 'utf8') + '\n'
+					readFileSync(join(f in guardedEdits ? join(out, 'data') : pkg, 'src', f), 'utf8') + '\n'
 			)
 			.join('');
 		expect(readFileSync(join(out, 'data', 'emulator.min.js'), 'utf8')).toBe(expected);
