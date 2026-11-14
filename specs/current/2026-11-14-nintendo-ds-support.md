@@ -1,6 +1,6 @@
 ---
 title: Nintendo DS support
-status: ready
+status: in-progress
 created: 2026-11-14
 ---
 
