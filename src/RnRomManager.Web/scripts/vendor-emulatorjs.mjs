@@ -26,14 +26,18 @@ const cores = [
 // Guarded edits of the pinned EmulatorJS scripts: each anchor must occur exactly once, or vendoring fails so the edit
 // is reviewed against the new upstream text.
 //
-// Game Gear and Master System are pinned to SMS Plus GX, NES to FCEUmm and PlayStation to PCSX ReARMed: EmulatorJS
-// 4.2.3's getCore() would otherwise switch to a core saved in the retroarch_core setting (genesis_plus_gx with its
-// non-commercial licence, picodrive, nestopia, mednafen_psx_hw), none of which is vendored. An explicit pinned core
-// returns itself before the saved setting is read.
+// Game Gear and Master System are pinned to SMS Plus GX, NES to FCEUmm, PlayStation to PCSX ReARMed and (Genesis B5)
+// Mega Drive to Genesis Plus GX: EmulatorJS 4.2.3's getCore() would otherwise switch to a core saved in the
+// retroarch_core setting (genesis_plus_gx, picodrive, nestopia, mednafen_psx_hw, or smsplus for Genesis, whose first
+// group is segaMS), none of which is vendored or delivered for that system. An explicit pinned core returns itself
+// before the saved setting is read.
 //
 // PSP B3 (PPSSPP only): the core needs threads, so a saved "ejs_threads: disabled" must not select a payload that
 // isn't vendored; and a failed ppsspp-assets.zip request or a rejected File read must show a startup error instead of
 // leaving the loader's promises pending.
+//
+// Genesis B5: the operator supplies only the non-threaded payloads, so Genesis Plus GX never selects a "-thread" one,
+// and a payload that can't be fetched shows a local error instead of falling back to the EmulatorJS CDN.
 const edits = [
 	{
 		file: 'emulator.js',
@@ -41,7 +45,7 @@ const edits = [
 			'        const gen = this.getCore(true);\n' +
 			'        if (cores[gen] && cores[gen].includes(this.preGetSetting("retroarch_core"))) {',
 		insertBefore:
-			'        if (["smsplus", "fceumm", "pcsx_rearmed"].includes(core)) {\n' +
+			'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx"].includes(core)) {\n' +
 			'            return core;\n' +
 			'        }\n'
 	},
@@ -51,7 +55,21 @@ const edits = [
 		insertBefore:
 			'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
 			'                threads = true;\n' +
+			'            }\n' +
+			'            if (this.getCore() === "genesis_plus_gx") {\n' +
+			'                threads = false;\n' +
 			'            }\n'
+	},
+	{
+		file: 'emulator.js',
+		find:
+			'            if (res === -1) {\n' +
+			'                console.log("File not found, attemping to fetch from emulatorjs cdn.");\n',
+		insertAfter:
+			'                if (this.getCore() === "genesis_plus_gx") {\n' +
+			'                    this.startGameError(this.localization("Error downloading core") + " (" + filename + ")");\n' +
+			'                    return;\n' +
+			'                }\n'
 	},
 	{
 		file: 'emulator.js',

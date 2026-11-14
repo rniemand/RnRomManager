@@ -5,6 +5,8 @@ import {
 	contentFileName,
 	controlSchemeFor,
 	discError,
+	genesisCoreError,
+	genesisPaths,
 	hidesCoreChooser,
 	optionalBiosError,
 	parsePlayParams,
@@ -47,7 +49,8 @@ describe('parsePlayParams', () => {
 		'gearcoleco',
 		'smsplus',
 		'fceumm',
-		'pcsx_rearmed'
+		'pcsx_rearmed',
+		'genesis_plus_gx'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});
@@ -242,5 +245,56 @@ describe('PSP page (PSP B3)', () => {
 		).toBe(
 			"PSP games need a secure page: open RnRomManager over HTTPS or on localhost. A plain-HTTP network address can't run them."
 		);
+	});
+});
+
+describe('Genesis (Genesis B4, B5)', () => {
+	it('accepts genesis_plus_gx on the modal page only', () => {
+		expect(
+			parsePlayParams(query({ core: 'genesis_plus_gx', name: 'Turbo Comet (USA).md' }))?.core
+		).toBe('genesis_plus_gx');
+		expect(parsePlayParams(query({ core: 'genesis_plus_gx' }), true)).toBeNull();
+	});
+
+	it.each(['Turbo Comet (USA).md', 'Turbo Comet (USA).gen', 'Turbo Comet (USA).bin', 'X.GG'])(
+		'uses the Mega Drive controls for %s',
+		(name) => {
+			expect(controlSchemeFor('genesis_plus_gx', name)).toBe('segaMD');
+		}
+	);
+
+	it('keeps SMS Plus GX on its own schemes', () => {
+		expect(controlSchemeFor('smsplus', 'Harbor Patrol (USA).sms')).toBeNull();
+		expect(controlSchemeFor('smsplus', 'Pocket Drift (World).gg')).toBe('segaGG');
+	});
+
+	it('hides the core chooser for Genesis Plus GX', () => {
+		expect(hidesCoreChooser('genesis_plus_gx')).toBe(true);
+	});
+
+	it('maps the three operator files to the API by name', () => {
+		expect(genesisPaths()).toEqual({
+			'genesis_plus_gx-wasm.data': '/api/emulator/genesis/genesis_plus_gx-wasm.data',
+			'genesis_plus_gx-legacy-wasm.data': '/api/emulator/genesis/genesis_plus_gx-legacy-wasm.data',
+			'genesis_plus_gx.json': '/api/emulator/genesis/genesis_plus_gx.json'
+		});
+	});
+
+	it.each([
+		[204, null],
+		[200, null],
+		[401, 'Your session has expired. Sign in again.'],
+		[
+			404,
+			'Genesis games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
+		],
+		[
+			409,
+			"The Genesis Plus GX core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:GenesisCorePath)."
+		],
+		[500, "Couldn't load the Genesis core (HTTP 500)."],
+		[null, "Couldn't load the Genesis core."]
+	])('reports the availability check %s', (status, message) => {
+		expect(genesisCoreError(status)).toBe(message);
 	});
 });

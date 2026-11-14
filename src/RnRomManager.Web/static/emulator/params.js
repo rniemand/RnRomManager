@@ -16,7 +16,8 @@ const cores = [
 	'smsplus',
 	'fceumm',
 	'pcsx_rearmed',
-	'ppsspp'
+	'ppsspp',
+	'genesis_plus_gx'
 ];
 
 /** PSP B3: the core that runs only on the isolated play-psp.html page (and never in the modal's play.html). */
@@ -65,13 +66,51 @@ export function biosError(name, status) {
 
 /**
  * EmulatorJS 4.2.3 takes the controls from the core's group, `segaMS` for smsplus (no Start button). A `.gg` release
- * gets the Game Gear scheme instead; anything else keeps the default (null).
+ * gets the Game Gear scheme instead. Genesis B5: Genesis Plus GX's first group is also `segaMS`, so it gets the Mega
+ * Drive scheme explicitly. Anything else keeps the default (null).
  * @param {string} core
  * @param {string} name the release's file name
  * @returns {string | null}
  */
 export function controlSchemeFor(core, name) {
+	if (core === genesisCore) return 'segaMD';
 	return core === 'smsplus' && name.toLowerCase().endsWith('.gg') ? 'segaGG' : null;
+}
+
+/** Genesis B5: the core whose files the operator supplies (Emulator:GenesisCorePath), served by the API. */
+export const genesisCore = 'genesis_plus_gx';
+
+/** Genesis B4: the availability check run before the ROM is fetched. */
+export const genesisCheckUrl = '/api/emulator/genesis';
+
+/**
+ * Genesis B5: EJS_paths, mapping the files EmulatorJS asks for by name to the authenticated same-origin endpoint.
+ * @returns {Record<string, string>}
+ */
+export function genesisPaths() {
+	return Object.fromEntries(
+		['genesis_plus_gx-wasm.data', 'genesis_plus_gx-legacy-wasm.data', 'genesis_plus_gx.json'].map((f) => [
+			f,
+			`${genesisCheckUrl}/${f}`
+		])
+	);
+}
+
+/**
+ * Genesis B4: the play page's message for the core availability check, or null when the files are there and match.
+ * @param {number | null} status the HTTP status, or null for a network failure
+ * @returns {string | null}
+ */
+export function genesisCoreError(status) {
+	if (status !== null && status >= 200 && status < 300) return null;
+	if (status === 401) return sessionExpired;
+	if (status === 404)
+		return 'Genesis games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).';
+	if (status === 409)
+		return "The Genesis Plus GX core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:GenesisCorePath).";
+	return status === null
+		? "Couldn't load the Genesis core."
+		: `Couldn't load the Genesis core (HTTP ${status}).`;
 }
 
 /**
@@ -80,7 +119,7 @@ export function controlSchemeFor(core, name) {
  * @returns {boolean}
  */
 export function hidesCoreChooser(core) {
-	return ['smsplus', 'fceumm', 'pcsx_rearmed'].includes(core);
+	return ['smsplus', 'fceumm', 'pcsx_rearmed', genesisCore].includes(core);
 }
 
 /** PCSX ReARMed's optional firmware: the operator's scph5501.bin, else the core's built-in HLE BIOS. */

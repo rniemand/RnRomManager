@@ -1,13 +1,18 @@
 // Browser emulators B5: fetches the release through the download endpoint and starts EmulatorJS on it.
 // Play B4: PlayStation fetches its disc from play-disc, with the optional scph5501.bin handed over in memory.
 // PSP B3: on play-psp.html (its own cross-origin isolated tab) PPSSPP checks the browser, then fetches its UMD image
-// from play-disc and runs threaded.
+// from play-disc and runs threaded. Genesis B4/B5: Genesis Plus GX checks the operator's core files first and loads
+// them from the API.
 import {
 	biosError,
 	biosFor,
 	contentFileName,
 	controlSchemeFor,
 	discError,
+	genesisCheckUrl,
+	genesisCore,
+	genesisCoreError,
+	genesisPaths,
 	hidesCoreChooser,
 	optionalBiosError,
 	parsePlayParams,
@@ -90,6 +95,19 @@ async function loadPsxBios() {
 }
 
 /**
+ * Genesis B4: one bodyless HEAD of the operator's core files, before the ROM is fetched or the loader starts.
+ * @returns {Promise<string | null>} the message to show, or null when the files are there and match
+ */
+async function checkGenesisCore() {
+	try {
+		const response = await fetch(genesisCheckUrl, { method: 'HEAD', credentials: 'same-origin' });
+		return genesisCoreError(response.status);
+	} catch {
+		return genesisCoreError(null);
+	}
+}
+
+/**
  * PSP B3: what PPSSPP needs from this browser context, read before anything is fetched.
  * @returns {import('./params.js').PspBrowser}
  */
@@ -151,6 +169,11 @@ async function start() {
 		if (problem) return show(problem);
 	}
 	show('Loading…');
+	const isGenesis = params.core === genesisCore;
+	if (isGenesis) {
+		const problem = await checkGenesisCore();
+		if (problem) return show(problem);
+	}
 	const bios = biosFor(params.core);
 	if (bios) {
 		const problem = await checkBios(bios);
@@ -196,7 +219,9 @@ async function start() {
 	if (bios) ejs.EJS_biosUrl = `/api/emulator/bios/${bios}`;
 	// PCSX ReARMed finds scph5501.bin in the content root; GameManager writes this key before loading the content.
 	if (psxFirmware) ejs.EJS_externalFiles = { [`/${psxBios}`]: psxFirmware };
-	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed): hide only the core selector.
+	// Genesis B5: the payloads and report by name from the API; the vendored loader keeps them non-threaded.
+	if (isGenesis) ejs.EJS_paths = genesisPaths();
+	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX): hide only the core selector.
 	if (hidesCoreChooser(params.core)) ejs.EJS_hideSettings = ['retroarch_core'];
 	const scheme = controlSchemeFor(params.core, params.name);
 	if (scheme) ejs.EJS_controlScheme = scheme;

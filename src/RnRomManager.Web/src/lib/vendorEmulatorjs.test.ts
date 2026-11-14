@@ -66,7 +66,7 @@ const coreLicenses = [
 // The guarded vendoring edits (anchor → its replacement), applied in order.
 const getCoreAnchor = '        const gen = this.getCore(true);\n';
 const pinGuard =
-	'        if (["smsplus", "fceumm", "pcsx_rearmed"].includes(core)) {\n' +
+	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx"].includes(core)) {\n' +
 	'            return core;\n' +
 	'        }\n';
 const legacyAnchor =
@@ -74,7 +74,18 @@ const legacyAnchor =
 const threadOverride =
 	'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
 	'                threads = true;\n' +
+	'            }\n' +
+	'            if (this.getCore() === "genesis_plus_gx") {\n' +
+	'                threads = false;\n' +
 	'            }\n';
+const cdnAnchor =
+	'            if (res === -1) {\n' +
+	'                console.log("File not found, attemping to fetch from emulatorjs cdn.");\n';
+const cdnSkip =
+	'                if (this.getCore() === "genesis_plus_gx") {\n' +
+	'                    this.startGameError(this.localization("Error downloading core") + " (" + filename + ")");\n' +
+	'                    return;\n' +
+	'                }\n';
 const assetsRequest =
 	'            this.EJS.downloadFile("cores/ppsspp-assets.zip", null, false, { responseType: "arraybuffer", method: "GET" }).then((res) => {\n';
 const assetsError =
@@ -83,6 +94,7 @@ const guardedEdits: Record<string, [string, string][]> = {
 	'emulator.js': [
 		[getCoreAnchor, pinGuard + getCoreAnchor],
 		[legacyAnchor, threadOverride + legacyAnchor],
+		[cdnAnchor, cdnAnchor + cdnSkip],
 		[
 			'                resolve(new Uint8Array(await data.arrayBuffer()));\n',
 			'                let bytes;\n' +
@@ -335,6 +347,39 @@ describe('vendor-emulatorjs', () => {
 			// Control and settings groups still come from the generic lookup.
 			expect(resolve('fceumm', 'nestopia', true)).toBe('nes');
 			expect(resolve('pcsx_rearmed', null, true)).toBe('psx');
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s keeps an explicit genesis_plus_gx despite a saved alternate core (Genesis B5)',
+		(file) => {
+			const resolve = coreResolver(readFileSync(join(out, 'data', file), 'utf8'));
+			const upstream = coreResolver(readFileSync(join(pkg, 'src', 'emulator.js'), 'utf8'));
+			// Upstream resolves genesis_plus_gx's first group, segaMS, so a saved SMS Plus GX or PicoDrive wins.
+			expect(upstream('genesis_plus_gx', 'smsplus')).toBe('smsplus');
+			expect(upstream('genesis_plus_gx', 'picodrive')).toBe('picodrive');
+			for (const saved of ['smsplus', 'picodrive', null])
+				expect(resolve('genesis_plus_gx', saved), `${saved}`).toBe('genesis_plus_gx');
+			expect(resolve('genesis_plus_gx', null, true)).toBe('segaMS');
+			// The other pinned cores keep theirs, whatever was saved while playing Genesis.
+			expect(resolve('smsplus', 'genesis_plus_gx')).toBe('smsplus');
+			expect(resolve('pcsx_rearmed', 'genesis_plus_gx')).toBe('pcsx_rearmed');
+			expect(resolve('fceumm', 'genesis_plus_gx')).toBe('fceumm');
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s never offers Genesis Plus GX a threaded payload or the CDN fallback (Genesis B5)',
+		(file) => {
+			const source = readFileSync(join(out, 'data', file), 'utf8');
+			const select = source.indexOf(legacyAnchor);
+			expect(source.lastIndexOf(threadOverride, select) + threadOverride.length).toBe(select);
+			const cdn = source.indexOf(cdnAnchor);
+			expect(source.indexOf(cdnAnchor + cdnSkip)).toBe(cdn);
+			// The skip returns before the CDN URL is built.
+			expect(source.indexOf('https://cdn.emulatorjs.org/', cdn)).toBeGreaterThan(
+				cdn + (cdnAnchor + cdnSkip).length
+			);
 		}
 	);
 

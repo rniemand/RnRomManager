@@ -615,6 +615,48 @@ test('Play: a PSP UMD image opens the isolated player in a new tab from the deta
 	await fromLibrary.close();
 });
 
+/** Plays a seeded Sega cartridge from its detail page with the bundled SMS Plus GX and waits for a running frame. */
+async function playWithSmsPlus(title: string, fileName: string, nameInUrl: RegExp): Promise<void> {
+	await openGame(title);
+	const rom = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()));
+	await page.getByRole('button', { name: `Play ${fileName}` }).click();
+	await expect(dialog().locator('iframe')).toHaveAttribute('src', nameInUrl);
+	expect((await rom).status()).toBe(200);
+	await startEmulator('smsplus');
+	const frame = page.frameLocator('iframe');
+	await expect(frame.locator('.ejs_canvas_parent canvas')).toHaveCount(1);
+	await expect(frame.locator('.ejs_error_text')).toHaveCount(0);
+	await closeEmulator();
+}
+
+test('Play: Genesis explains its missing core; Master System and Game Gear start with SMS Plus GX', async () => {
+	// Genesis B4: the e2e image has no Emulator:GenesisCorePath, so the HEAD check stops before the ROM or loader.
+	const genesisRequests: string[] = [];
+	const track = (r: { url: () => string }) => {
+		if (r.url().includes('/api/emulator/genesis')) genesisRequests.push(r.url());
+	};
+	await openGame('Turbo Comet');
+	const check = page.waitForResponse((r) => r.url().endsWith('/api/emulator/genesis') && r.request().method() === 'HEAD');
+	await page.getByRole('button', { name: 'Play Turbo Comet (USA, Europe).md' }).click();
+	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=genesis_plus_gx&name=Turbo%20Comet%20\(USA%2C%20Europe\)\.md$/);
+	expect((await check).status()).toBe(404);
+	await expect(page.frameLocator('iframe').getByRole('status')).toHaveText(
+		'Genesis games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
+	);
+	await expect(page.frameLocator('iframe').getByText('Start Game')).toHaveCount(0);
+	await closeEmulator();
+
+	// Genesis B6: Master System keeps SMS Plus GX (with the Genesis files absent), and Game Gear its .gg scheme.
+	page.on('request', track);
+	try {
+		await playWithSmsPlus('Harbor Patrol', 'Harbor Patrol (World).sms', /core=smsplus&name=Harbor%20Patrol%20\(World\)\.sms$/);
+		await playWithSmsPlus('Pocket Drift', 'Pocket Drift (World).gg', /core=smsplus&name=Pocket%20Drift%20\(World\)\.gg$/);
+	} finally {
+		page.off('request', track);
+	}
+	expect(genesisRequests).toEqual([]);
+});
+
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await openLibrary();

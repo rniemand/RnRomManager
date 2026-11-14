@@ -25,7 +25,9 @@ const ejsGlobals = [
 	'EJS_controlScheme',
 	'EJS_externalFiles',
 	'EJS_Buttons',
-	'EJS_defaultOptions'
+	'EJS_defaultOptions',
+	'EJS_paths',
+	'EJS_threads'
 ];
 
 const win = window as unknown as Record<string, unknown>;
@@ -471,5 +473,79 @@ describe('play page PSP (PSP B3)', () => {
 
 		expect(await playPsp('ppsspp', 'Umd (USA).iso')).toBe("Couldn't load the disc.");
 		expect(atLoader).toBeNull();
+	});
+});
+
+describe('play page Genesis and Master System (Genesis B4, B5)', () => {
+	const check = '/api/emulator/genesis';
+
+	it.each(['Turbo Comet (USA).md', 'Turbo Comet (USA).gen', 'Turbo Comet (USA).bin'])(
+		'checks the core files with one HEAD, then loads %s with the API paths and Mega Drive controls',
+		async (name) => {
+			serve({ [check]: async () => response(204), [romUrl]: async () => response(200) });
+
+			await play('genesis_plus_gx', name);
+
+			expect(urls()).toEqual([check, romUrl]);
+			expect(fetchMock.mock.calls[0][1]).toEqual({ method: 'HEAD', credentials: 'same-origin' });
+			expect(atLoader).toMatchObject({
+				EJS_core: 'genesis_plus_gx',
+				EJS_gameName: name,
+				EJS_controlScheme: 'segaMD',
+				EJS_hideSettings: ['retroarch_core'],
+				EJS_paths: {
+					'genesis_plus_gx-wasm.data': '/api/emulator/genesis/genesis_plus_gx-wasm.data',
+					'genesis_plus_gx-legacy-wasm.data':
+						'/api/emulator/genesis/genesis_plus_gx-legacy-wasm.data',
+					'genesis_plus_gx.json': '/api/emulator/genesis/genesis_plus_gx.json'
+				}
+			});
+			expect(atLoader?.EJS_threads).toBeUndefined();
+			expect(atLoader?.EJS_biosUrl).toBeUndefined();
+			expect((atLoader?.EJS_gameUrl as File).name).toBe(name);
+		}
+	);
+
+	it.each([
+		[
+			404,
+			'Genesis games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
+		],
+		[
+			409,
+			"The Genesis Plus GX core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:GenesisCorePath)."
+		],
+		[401, 'Your session has expired. Sign in again.'],
+		[500, "Couldn't load the Genesis core (HTTP 500)."]
+	])('stops on HTTP %i before fetching the ROM or starting the loader', async (status, message) => {
+		serve({ [check]: async () => response(status), [romUrl]: async () => response(200) });
+
+		expect(await play('genesis_plus_gx', 'Turbo Comet (USA).md')).toBe(message);
+		expect(urls()).toEqual([check]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops when the availability check fails to reach the server', async () => {
+		serve({
+			[check]: async () => Promise.reject(new TypeError('network')),
+			[romUrl]: async () => response(200)
+		});
+
+		expect(await play('genesis_plus_gx', 'Turbo Comet (USA).md')).toBe(
+			"Couldn't load the Genesis core."
+		);
+		expect(urls()).toEqual([check]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('plays a Master System release with SMS Plus GX and never asks for Genesis files', async () => {
+		serve({ [romUrl]: async () => response(200) });
+
+		await play('smsplus', 'Harbor Patrol (USA).sms');
+
+		expect(urls()).toEqual([romUrl]);
+		expect(atLoader?.EJS_core).toBe('smsplus');
+		expect(atLoader?.EJS_paths).toBeUndefined();
+		expect(atLoader?.EJS_controlScheme).toBeUndefined();
 	});
 });
