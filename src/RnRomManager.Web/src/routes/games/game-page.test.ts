@@ -205,6 +205,28 @@ describe('game detail page', () => {
 		expect(screen.queryByRole('button', { name: 'Play Tetris 1.gb' })).toBeNull();
 	});
 
+	it('each external PSP release has a Play link to the isolated player in a new tab (PSP B3)', async () => {
+		const psp = game([1, 2]);
+		psp.browserCore = 'ppsspp';
+		psp.roms[0].externalFileName = psp.roms[0].fileName;
+		psp.roms[1].externalFileName = psp.roms[1].fileName;
+		answers.push({ status: 200, body: psp });
+		render(GamePage);
+
+		for (const rom of psp.roms) {
+			const link = await screen.findByRole('link', {
+				name: `Play ${rom.fileName} (opens in a new tab)`
+			});
+			expect(link.getAttribute('href')).toBe(
+				`/emulator/play-psp.html?game=${psp.id}&rom=${rom.id}&core=ppsspp&name=${encodeURIComponent(rom.fileName)}`
+			);
+			expect(link.getAttribute('target')).toBe('_blank');
+			expect(link.getAttribute('rel')).toBe('noopener');
+		}
+		expect(screen.queryByRole('button', { name: /^Play / })).toBeNull();
+		expect(document.querySelector('iframe')).toBeNull();
+	});
+
 	it('the ZIP button explains per-release downloads only when a release is external (G5)', async () => {
 		tooltips.length = 0;
 		const detail = game([1]);

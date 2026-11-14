@@ -222,6 +222,7 @@ public partial class LibraryEndpointsTests
     [TestCase("nes", true, false, "fceumm")]
     [TestCase("psx", true, true, "pcsx_rearmed")]
     [TestCase("psx", false, true, "pcsx_rearmed")]
+    [TestCase("psp", true, true, "ppsspp")]
     [TestCase("saturn", true, false, null)]
     [TestCase("switch", false, false, null)]
     [TestCase("switch", true, false, null)]
@@ -365,6 +366,7 @@ public partial class LibraryEndpointsTests
     [TestCase("sms", "smsplus")]
     [TestCase("nes", "fceumm")]
     [TestCase("psx", "pcsx_rearmed")]
+    [TestCase("psp", "ppsspp")]
     [TestCase("saturn", null)]
     [TestCase("nosuch", null)]
     public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)

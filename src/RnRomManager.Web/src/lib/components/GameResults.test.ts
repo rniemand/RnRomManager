@@ -150,6 +150,38 @@ describe('GameResults cards (C1, C2)', () => {
 		}
 	);
 
+	const psp = () =>
+		game('u', { playRomId: 5, playRomFileName: 'Umd (USA).iso', browserCore: 'ppsspp' });
+
+	it.each([
+		['grid', 'btn btn-sm btn-primary rounded-circle position-absolute bottom-0 end-0 m-1 z-2'],
+		['list', 'btn btn-sm btn-outline-success']
+	] as const)(
+		'%s: PSP Play is a link that opens the isolated player in a new tab (PSP B3)',
+		async (view, classes) => {
+			render(GameResults, { games: [psp(), playable('a')], view });
+
+			const link = screen.getByRole('link', { name: 'Play Game u (opens in a new tab)' });
+			expect(link.getAttribute('href')).toBe(
+				'/emulator/play-psp.html?game=u&rom=5&core=ppsspp&name=Umd%20(USA).iso'
+			);
+			expect(link.getAttribute('target')).toBe('_blank');
+			expect(link.getAttribute('rel')).toBe('noopener');
+			expect(link.className).toBe(classes);
+			expect(screen.queryByRole('button', { name: /Play Game u/ })).toBeNull();
+			await fireEvent.click(link);
+			expect(document.querySelector('iframe')).toBeNull();
+			// Every other system keeps its modal button.
+			expect(screen.getByRole('button', { name: 'Play Game a' })).not.toBeNull();
+		}
+	);
+
+	it.each(['grid', 'list'] as const)('%s: PSP Play is hidden in select mode', (view) => {
+		render(GameResults, { games: [psp()], view, selected: new SvelteSet<string>() });
+
+		expect(screen.queryByRole('link', { name: /Play Game u/ })).toBeNull();
+	});
+
 	it.each(['grid', 'list'] as const)(
 		'%s: Play opens the emulator with the game, primary release and core',
 		async (view) => {

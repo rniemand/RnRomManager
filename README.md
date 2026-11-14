@@ -45,7 +45,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | `fceumm` |
 | Nintendo Switch | `switch` | Next to ZIP | `.nsp`, `.xci`, `.nsz`, `.xcz` | titledb | — |
 | PlayStation | `psx` | Next to ZIP | `.bin`, `.cue`, `.iso` | Redump | `pcsx_rearmed` |
-| PlayStation Portable | `psp` | Next to ZIP | `.iso` | Redump | — |
+| PlayStation Portable | `psp` | Next to ZIP | `.iso` | Redump | `ppsspp` |
 | Saturn | `saturn` | Next to ZIP | `.bin`, `.cue`, `.nrg` | Redump | — |
 | Super Nintendo Entertainment System | `snes` | In ZIP | `.sfc`, `.smc` | No-Intro | — |
 | TurboGrafx-16 | `tg16` | In ZIP | `.pce` | No-Intro | — |

@@ -25,7 +25,7 @@
 	import RatingControl from '#lib/components/RatingControl.svelte';
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
 	import EmulatorModal from '#lib/components/EmulatorModal.svelte';
-	import { canPlay } from '#lib/emulator.js';
+	import { canPlay, opensInNewTab, playUrl } from '#lib/emulator.js';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
 	import { formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
@@ -546,7 +546,19 @@
 								>
 									<Icon name={rom.hasNote ? 'note-filled' : 'note'} />
 								</button>
-								{#if canPlay(game, rom)}
+								{#if canPlay(game, rom) && game.browserCore && opensInNewTab(game.browserCore)}
+									<!-- PSP B3: the isolated player runs in its own tab; a static page outside the SPA router. -->
+									<!-- eslint-disable svelte/no-navigation-without-resolve -->
+									<a
+										class="btn btn-sm btn-outline-success"
+										href={playUrl(game.id, rom, game.browserCore)}
+										target="_blank"
+										rel="noopener"
+										aria-label="Play {rom.fileName} (opens in a new tab)"
+										><!-- eslint-enable svelte/no-navigation-without-resolve -->
+										<Icon name="play" />
+									</a>
+								{:else if canPlay(game, rom)}
 									<button
 										type="button"
 										class="btn btn-sm btn-outline-success"
