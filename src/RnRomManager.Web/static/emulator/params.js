@@ -17,7 +17,8 @@ const cores = [
 	'fceumm',
 	'pcsx_rearmed',
 	'ppsspp',
-	'genesis_plus_gx'
+	'genesis_plus_gx',
+	'picodrive'
 ];
 
 /** PSP B3: the core that runs only on the isolated play-psp.html page (and never in the modal's play.html). */
@@ -67,13 +68,15 @@ export function biosError(name, status) {
 /**
  * EmulatorJS 4.2.3 takes the controls from the core's group, `segaMS` for smsplus (no Start button). A `.gg` release
  * gets the Game Gear scheme instead. Genesis B5: Genesis Plus GX's first group is also `segaMS`, so it gets the Mega
- * Drive scheme explicitly. Anything else keeps the default (null).
+ * Drive scheme explicitly. 32X B3: PicoDrive's first group is `segaMS` too, so it gets the 32X scheme. Anything else
+ * keeps the default (null).
  * @param {string} core
  * @param {string} name the release's file name
  * @returns {string | null}
  */
 export function controlSchemeFor(core, name) {
 	if (core === 'genesis_plus_gx') return 'segaMD';
+	if (core === 'picodrive') return 'sega32x';
 	return core === 'smsplus' && name.toLowerCase().endsWith('.gg') ? 'segaGG' : null;
 }
 
@@ -89,6 +92,12 @@ const operatorCores = {
 		display: 'Genesis Plus GX',
 		short: 'Genesis',
 		option: 'Emulator:GenesisCorePath'
+	},
+	picodrive: {
+		system: '32X games',
+		display: 'PicoDrive',
+		short: 'PicoDrive',
+		option: 'Emulator:PicodriveCorePath'
 	}
 };
 
@@ -147,7 +156,7 @@ export function operatorCoreError(core, status) {
  * @returns {boolean}
  */
 export function hidesCoreChooser(core) {
-	return ['smsplus', 'fceumm', 'pcsx_rearmed', 'genesis_plus_gx'].includes(core);
+	return ['smsplus', 'fceumm', 'pcsx_rearmed', 'genesis_plus_gx', 'picodrive'].includes(core);
 }
 
 /** PCSX ReARMed's optional firmware: the operator's scph5501.bin, else the core's built-in HLE BIOS. */

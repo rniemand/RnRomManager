@@ -657,6 +657,33 @@ test('Play: Genesis explains its missing core; Master System and Game Gear start
 	expect(genesisRequests).toEqual([]);
 });
 
+test('Play: 32X explains its missing PicoDrive core', async () => {
+	// 32X B3: the e2e image has no Emulator:PicodriveCorePath, so the HEAD check stops before the ROM or loader.
+	const later: string[] = [];
+	let checked = false;
+	const track = (r: { url: () => string }) => {
+		if (checked && (r.url().includes('/api/emulator/cores/') || r.url().includes('/roms/') || r.url().includes('loader.js')))
+			later.push(r.url());
+	};
+	await openGame('Star Relay');
+	page.on('request', track);
+	try {
+		const check = page.waitForResponse((r) => r.url().endsWith('/api/emulator/cores/picodrive') && r.request().method() === 'HEAD');
+		await page.getByRole('button', { name: 'Play Star Relay (USA).32x' }).click();
+		await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=picodrive&name=Star%20Relay%20\(USA\)\.32x$/);
+		expect((await check).status()).toBe(404);
+		checked = true;
+		await expect(page.frameLocator('iframe').getByRole('status')).toHaveText(
+			'32X games need the PicoDrive core files: ask an Admin to set them up (Emulator:PicodriveCorePath).'
+		);
+		await expect(page.frameLocator('iframe').getByText('Start Game')).toHaveCount(0);
+	} finally {
+		page.off('request', track);
+	}
+	expect(later).toEqual([]);
+	await closeEmulator();
+});
+
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await openLibrary();

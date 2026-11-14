@@ -66,7 +66,7 @@ const coreLicenses = [
 // The guarded vendoring edits (anchor → its replacement), applied in order.
 const getCoreAnchor = '        const gen = this.getCore(true);\n';
 const pinGuard =
-	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx"].includes(core)) {\n' +
+	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive"].includes(core)) {\n' +
 	'            return core;\n' +
 	'        }\n';
 const legacyAnchor =
@@ -75,14 +75,14 @@ const threadOverride =
 	'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
 	'                threads = true;\n' +
 	'            }\n' +
-	'            if (this.getCore() === "genesis_plus_gx") {\n' +
+	'            if (["genesis_plus_gx", "picodrive"].includes(this.getCore())) {\n' +
 	'                threads = false;\n' +
 	'            }\n';
 const cdnAnchor =
 	'            if (res === -1) {\n' +
 	'                console.log("File not found, attemping to fetch from emulatorjs cdn.");\n';
 const cdnSkip =
-	'                if (this.getCore() === "genesis_plus_gx") {\n' +
+	'                if (["genesis_plus_gx", "picodrive"].includes(this.getCore())) {\n' +
 	'                    this.startGameError(this.localization("Error downloading core") + " (" + filename + ")");\n' +
 	'                    return;\n' +
 	'                }\n';
@@ -365,6 +365,31 @@ describe('vendor-emulatorjs', () => {
 			expect(resolve('smsplus', 'genesis_plus_gx')).toBe('smsplus');
 			expect(resolve('pcsx_rearmed', 'genesis_plus_gx')).toBe('pcsx_rearmed');
 			expect(resolve('fceumm', 'genesis_plus_gx')).toBe('fceumm');
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s keeps an explicit picodrive despite a saved alternate core (32X B3)',
+		(file) => {
+			const resolve = coreResolver(readFileSync(join(out, 'data', file), 'utf8'));
+			const upstream = coreResolver(readFileSync(join(pkg, 'src', 'emulator.js'), 'utf8'));
+			// Upstream resolves picodrive's first group, segaMS, so a saved SMS Plus GX or Genesis Plus GX wins.
+			expect(upstream('picodrive', 'smsplus')).toBe('smsplus');
+			expect(upstream('picodrive', 'genesis_plus_gx')).toBe('genesis_plus_gx');
+			for (const saved of ['smsplus', 'genesis_plus_gx', null])
+				expect(resolve('picodrive', saved), `${saved}`).toBe('picodrive');
+			expect(resolve('picodrive', null, true)).toBe('segaMS');
+			expect(resolve('genesis_plus_gx', 'picodrive')).toBe('genesis_plus_gx');
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s keeps both operator-supplied cores non-threaded, and requires threads only for PPSSPP and DOSBox Pure (B9)',
+		(file) => {
+			const source = readFileSync(join(out, 'data', file), 'utf8');
+			expect(source).toContain('const requiresThreads = ["ppsspp", "dosbox_pure"];');
+			expect(threadOverride).toContain('["genesis_plus_gx", "picodrive"].includes(this.getCore())');
+			expect(cdnSkip).toContain('["genesis_plus_gx", "picodrive"].includes(this.getCore())');
 		}
 	);
 

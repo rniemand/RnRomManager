@@ -550,3 +550,62 @@ describe('play page Genesis and Master System (Genesis B4, B5)', () => {
 		expect(atLoader?.EJS_controlScheme).toBeUndefined();
 	});
 });
+
+describe('play page 32X (B3)', () => {
+	const check = '/api/emulator/cores/picodrive';
+	const name = 'Star Relay (USA).32x';
+
+	it('checks the core files with one HEAD, then loads the ROM with the API paths and 32X controls', async () => {
+		serve({ [check]: async () => response(204), [romUrl]: async () => response(200) });
+
+		await play('picodrive', name);
+
+		expect(urls()).toEqual([check, romUrl]);
+		expect(fetchMock.mock.calls[0][1]).toEqual({ method: 'HEAD', credentials: 'same-origin' });
+		expect(atLoader).toMatchObject({
+			EJS_core: 'picodrive',
+			EJS_gameName: name,
+			EJS_controlScheme: 'sega32x',
+			EJS_hideSettings: ['retroarch_core'],
+			EJS_paths: {
+				'picodrive-wasm.data': '/api/emulator/cores/picodrive/picodrive-wasm.data',
+				'picodrive-legacy-wasm.data': '/api/emulator/cores/picodrive/picodrive-legacy-wasm.data',
+				'picodrive.json': '/api/emulator/cores/picodrive/picodrive.json'
+			}
+		});
+		expect(atLoader?.EJS_threads).toBeUndefined();
+		expect(atLoader?.EJS_biosUrl).toBeUndefined();
+		expect(atLoader?.EJS_externalFiles).toBeUndefined();
+		expect((atLoader?.EJS_gameUrl as File).name).toBe(name);
+	});
+
+	it.each([
+		[
+			404,
+			'32X games need the PicoDrive core files: ask an Admin to set them up (Emulator:PicodriveCorePath).'
+		],
+		[
+			409,
+			"The PicoDrive core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:PicodriveCorePath)."
+		],
+		[401, 'Your session has expired. Sign in again.'],
+		[503, "Couldn't load the PicoDrive core (HTTP 503)."]
+	])('stops on HTTP %i before fetching the ROM or starting the loader', async (status, message) => {
+		serve({ [check]: async () => response(status), [romUrl]: async () => response(200) });
+
+		expect(await play('picodrive', name)).toBe(message);
+		expect(urls()).toEqual([check]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops when the availability check fails to reach the server', async () => {
+		serve({
+			[check]: async () => Promise.reject(new TypeError('network')),
+			[romUrl]: async () => response(200)
+		});
+
+		expect(await play('picodrive', name)).toBe("Couldn't load the PicoDrive core.");
+		expect(urls()).toEqual([check]);
+		expect(atLoader).toBeNull();
+	});
+});

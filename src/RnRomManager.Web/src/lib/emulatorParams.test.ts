@@ -50,7 +50,8 @@ describe('parsePlayParams', () => {
 		'smsplus',
 		'fceumm',
 		'pcsx_rearmed',
-		'genesis_plus_gx'
+		'genesis_plus_gx',
+		'picodrive'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});
@@ -297,5 +298,47 @@ describe('Genesis (Genesis B4, B5)', () => {
 		[null, "Couldn't load the Genesis core."]
 	])('reports the availability check %s', (status, message) => {
 		expect(operatorCoreError('genesis_plus_gx', status)).toBe(message);
+	});
+});
+
+describe('32X (B3)', () => {
+	it('accepts picodrive on the modal page only', () => {
+		expect(parsePlayParams(query({ core: 'picodrive', name: 'Star Relay (USA).32x' }))?.core).toBe(
+			'picodrive'
+		);
+		expect(parsePlayParams(query({ core: 'picodrive' }), true)).toBeNull();
+	});
+
+	it.each(['Star Relay (USA).32x', 'X.GG', 'X.md'])('uses the 32X controls for %s', (name) => {
+		expect(controlSchemeFor('picodrive', name)).toBe('sega32x');
+	});
+
+	it('hides the core chooser for PicoDrive', () => {
+		expect(hidesCoreChooser('picodrive')).toBe(true);
+	});
+
+	it('maps the three operator files to the API by name', () => {
+		expect(operatorCorePaths('picodrive')).toEqual({
+			'picodrive-wasm.data': '/api/emulator/cores/picodrive/picodrive-wasm.data',
+			'picodrive-legacy-wasm.data': '/api/emulator/cores/picodrive/picodrive-legacy-wasm.data',
+			'picodrive.json': '/api/emulator/cores/picodrive/picodrive.json'
+		});
+	});
+
+	it.each([
+		[204, null],
+		[401, 'Your session has expired. Sign in again.'],
+		[
+			404,
+			'32X games need the PicoDrive core files: ask an Admin to set them up (Emulator:PicodriveCorePath).'
+		],
+		[
+			409,
+			"The PicoDrive core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:PicodriveCorePath)."
+		],
+		[500, "Couldn't load the PicoDrive core (HTTP 500)."],
+		[null, "Couldn't load the PicoDrive core."]
+	])('reports the availability check %s', (status, message) => {
+		expect(operatorCoreError('picodrive', status)).toBe(message);
 	});
 });

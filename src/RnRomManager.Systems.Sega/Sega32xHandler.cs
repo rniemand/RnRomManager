@@ -22,6 +22,12 @@ public sealed class Sega32xHandler : ISystemHandler
     /// <inheritdoc />
     public bool EmbedRomsInZip => true;
 
+    /// <summary>
+    /// 32X B3: PicoDrive, whose files the operator supplies (<c>Emulator:PicodriveCorePath</c>); Play shows either way
+    /// and explains a missing setup.
+    /// </summary>
+    public string BrowserCore => "picodrive";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => MegaDriveHeader.Read(rom, Id);

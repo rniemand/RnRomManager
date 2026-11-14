@@ -131,7 +131,7 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
   - Files: `params.js`, `play.js`, `emulatorParams.test.ts`, `emulatorPlay.test.ts`, `tests/e2e/specs/mvp.spec.ts` (the Genesis test's URL matchers only: the HEAD `waitForResponse` matches `/api/emulator/cores/genesis_plus_gx`, and the `track` matcher that must stay empty for Master System and Game Gear matches any `/api/emulator/cores/` or `/api/emulator/genesis` URL, so it doesn't pass vacuously).
   - Tests: `emulatorParams.test.ts` (`Genesis (Genesis B4, B5)`) and `emulatorPlay.test.ts` (`play page Genesis and Master System (Genesis B4, B5)`) pass with only URLs and helper names updated, and their message texts unchanged.
   - Done when `npm run lint`, `npm run check` and those tests pass.
-- [ ] **4. 32X play** (B3, B9):
+- [x] **4. 32X play** (B3, B9):
   - `Sega32xHandler.BrowserCore = "picodrive"`, and the README table's 32X row → `picodrive`.
   - Vendor script: adds `picodrive` to the explicit-core patch, the non-threaded guard and the no-CDN guard, after confirming B9 against `emulator.js`. The finding goes into § Decisions.
   - `params.js`: the allowlist entry, PicoDrive in the operator-core helpers with the B3 messages, the `sega32x` scheme and the hidden chooser.
@@ -245,6 +245,8 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
 - 2026-11-13 PicoDrive and Yabause package facts re-checked at the second review → B1's PicoDrive lengths and SHA-256 match `npm pack @emulatorjs/core-picodrive@4.2.3`; Yabause's payloads have no `license.txt`, carry `0.9.15 e24ebfc` and RetroArch `6dd4353`, and neither core's non-threaded binaries reference `SharedArrayBuffer` or `pthread_create` (code)
 
 - 2026-11-14 Step 2 re-check of the PicoDrive pinned values → `npm pack @emulatorjs/core-picodrive@4.2.3` (outside the repo) gives exactly B1's lengths and SHA-256 for `picodrive-wasm.data`, `picodrive-legacy-wasm.data` and `reports/picodrive.json` (code)
+
+- 2026-11-14 Step 4 B9 re-check for PicoDrive → the vendored 4.2.3 `emulator.js` has `requiresThreads = ["ppsspp", "dosbox_pure"]`, so PicoDrive runs non-threaded on `play.html`; the non-threaded and no-CDN guards now cover `genesis_plus_gx` and `picodrive` (code)
 
 ## Kickoff prompt
 ```text
