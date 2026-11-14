@@ -99,7 +99,7 @@ export function controlSchemeFor(core, name) {
  */
 const operatorCores = {
 	genesis_plus_gx: {
-		system: 'Genesis games',
+		system: 'Genesis and Sega CD games',
 		display: 'Genesis Plus GX',
 		short: 'Genesis',
 		option: 'Emulator:GenesisCorePath'
@@ -221,6 +221,30 @@ export const saturnBiosSizeError = `The Saturn BIOS in the BIOS folder (Paths:Bi
 const saturnBiosNames = [saturnBios, 'sega_101.bin', 'mpr-17933.bin'];
 
 /**
+ * Sega CD B7: the regional BIOS files Genesis Plus GX looks for in the content root, fetched in this order (U, E, J).
+ * At least one is needed; every one found is handed over.
+ */
+export const segaCdBios = ['bios_CD_U.bin', 'bios_CD_E.bin', 'bios_CD_J.bin'];
+
+/** The exact size of each Sega CD BIOS file (128 KiB). */
+export const segaCdBiosBytes = 131072;
+
+/**
+ * Sega CD B7: shown when a Sega CD BIOS file in the BIOS folder isn't exactly 128 KiB.
+ * @param {string} name the BIOS file name
+ * @returns {string}
+ */
+export function segaCdBiosSizeError(name) {
+	return `The Sega CD BIOS ${name} in the BIOS folder (Paths:Bios) must be 128 KiB: ask an Admin to replace it.`;
+}
+
+/** Sega CD B7: shown when none of the three Sega CD BIOS files is in the BIOS folder. */
+export const segaCdBiosMissing =
+	'Sega CD games need a BIOS: ask an Admin to put bios_CD_U.bin, bios_CD_E.bin or bios_CD_J.bin in the BIOS folder (Paths:Bios).';
+
+const segaCdBiosNames = segaCdBios.map((name) => name.toLowerCase());
+
+/**
  * The play page's message for a failed play-disc request.
  * @param {number | null} status the HTTP status, or null for a network or body-read failure
  * @param {string | null} code the problem's `code`, when the body had one
@@ -261,7 +285,8 @@ export function pspBrowserError(browser) {
  * The name of the File EmulatorJS writes the content under: the release name, with '#' replaced (EmulatorJS cuts
  * names there). A standalone PlayStation image named like the BIOS gets a name scoped to the game, so the firmware
  * written at /scph5501.bin can't overwrite it. Saturn B7: the same for a Saturn image named like any of Yabause's
- * three BIOS names, so the firmware can't overwrite it and Yabause never takes the disc for its BIOS.
+ * three BIOS names, so the firmware can't overwrite it and Yabause never takes the disc for its BIOS. Sega CD B7: the
+ * same for any Genesis Plus GX content named like a Sega CD BIOS, disc or cartridge alike (harmless for a cartridge).
  * @param {string} core
  * @param {string} game the game id
  * @param {string} name the release's file name
@@ -272,6 +297,7 @@ export function contentFileName(core, game, name) {
 	const lower = name.toLowerCase();
 	const clashes =
 		(core === 'pcsx_rearmed' && lower === psxBios) ||
-		(core === 'yabause' && saturnBiosNames.includes(lower));
+		(core === 'yabause' && saturnBiosNames.includes(lower)) ||
+		(core === 'genesis_plus_gx' && segaCdBiosNames.includes(lower));
 	return clashes ? `${game}-${safe}` : safe;
 }

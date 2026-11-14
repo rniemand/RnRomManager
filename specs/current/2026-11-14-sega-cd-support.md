@@ -130,7 +130,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
     - `emulatorPlay.test.ts`: `play page PlayStation` and `play page Saturn` pass with `disc=1` in their URLs.
     - `mvp.spec.ts` (runs in Finish): the four `$`-anchored play-URL regexes for Disc Runner (game page and Library quick play), Sky Rally and Pocket Ninja end in `&disc=1$`; the Mega Drive, Master System, 32X, SNES and bundled-core regexes stay as they are.
   - Done when: `npm run lint`, `npm run check`, those vitest files and the `LibraryEndpointsTests` cases pass.
-- [ ] **6. Sega CD player** (B7–B9): first verify B9 and record it in § Decisions (stop and ask if it fails). Then:
+- [x] **6. Sega CD player** (B7–B9): first verify B9 and record it in § Decisions (stop and ask if it fails). Then:
   - `params.js`: `segaCdBios` (the three names, in U, E, J order), `segaCdBiosBytes = 131072`, `segaCdBiosSizeError(name)`, `segaCdBiosMissing`, the `contentFileName` guard and B8's label.
   - `play.js`: the B7 order, `EJS_externalFiles` with every BIOS found, and `EJS_disableCue = false` for the Sega CD path only.
   - Nothing produces a Sega CD play link yet, since `BrowserCore` is null.
@@ -190,6 +190,8 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
 - 2026-11-14 `contentFileName` guard → by core only (`genesis_plus_gx`), so it renames with or without `disc`; it's harmless for Mega Drive (reviewer)
 - 2026-11-14 Player work size → two steps, 5 (URL `disc` flag) and 6 (Sega CD player), each its own commit and tick (reviewer)
 - 2026-11-14 Seeded games and e2e → empty Sega CD catalog in Basic/Full (no count changes), no e2e play case; vitest covers the player, as for the DS steps before its staged cartridge (code)
+- 2026-11-14 B9 cue/iso → verified: `@emulatorjs/core-genesis_plus_gx@4.2.3`'s `core.json` (in `genesis_plus_gx-wasm.data`, build 2.0.2) lists `cue` and `iso` among its extensions (code)
+- 2026-11-14 B9 BIOS location → verified: the package names no source commit, so EmulatorJS/Genesis-Plus-GX `master` `libretro/libretro.c` was read. Without a system directory it falls back to the content's folder (`g_rom_dir`) and joins `bios_CD_E/U/J.bin` to it; the binary carries those names. EmulatorJS 4.2.3's `retroarch.cfg` sets no `system_directory` and writes content and `EJS_externalFiles` at `/`, so the BIOS files sit next to the disc (code)
 
 ## Kickoff prompt
 ```text

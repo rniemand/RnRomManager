@@ -674,7 +674,7 @@ test('Play: Genesis explains its missing core; Master System and Game Gear start
 	await expect(dialog().locator('iframe')).toHaveAttribute('src', /core=genesis_plus_gx&name=Turbo%20Comet%20\(USA%2C%20Europe\)\.md$/);
 	expect((await check).status()).toBe(404);
 	await expect(page.frameLocator('iframe').getByRole('status')).toHaveText(
-		'Genesis games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
+		'Genesis and Sega CD games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
 	);
 	await expect(page.frameLocator('iframe').getByText('Start Game')).toHaveCount(0);
 	await closeEmulator();
