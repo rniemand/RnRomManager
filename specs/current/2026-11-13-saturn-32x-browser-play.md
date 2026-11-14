@@ -172,7 +172,7 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
       - psx and psp unchanged.
     - `PlayDiscCopyTests`.
   - Done when those tests pass and PlayStation and PSP behaviour is unchanged.
-- [ ] **7. `.nrg` play guards and the generic optional BIOS** (B6, B7): no Play button appears or disappears yet, because no system with a core stores `.nrg`.
+- [x] **7. `.nrg` play guards and the generic optional BIOS** (B6, B7): no Play button appears or disappears yet, because no system with a core stores `.nrg`.
   - `LibraryEndpoints`: `playRomId`/`playRomFileName` null for an `.nrg` primary, whatever the system.
   - `emulator.ts`: `canPlay` false when `externalFileName` ends in `.nrg` (any case), whatever the core.
   - `play.js`: `loadPsxBios` becomes `loadOptionalBios(name, bytes, sizeError)`, and PlayStation moves onto it with no behaviour change.

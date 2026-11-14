@@ -53,13 +53,17 @@ async function checkBios(name) {
 }
 
 /**
- * Play B4: one GET of the optional scph5501.bin, read with a 512 KiB bound (cancelled as soon as it's exceeded).
+ * Play B4, Saturn B7: one GET of an optional BIOS (scph5501.bin, saturn_bios.bin), read with a bound of its exact
+ * size (cancelled as soon as it's exceeded).
+ * @param {string} name the BIOS file name in Paths:Bios
+ * @param {number} size the only accepted length
+ * @param {string} sizeError the message for a file of any other length
  * @returns {Promise<{ bios: ArrayBuffer | null } | { error: string }>} the firmware, null for HLE (404), or why to stop
  */
-async function loadPsxBios() {
+async function loadOptionalBios(name, size, sizeError) {
 	let response;
 	try {
-		response = await fetch(`/api/emulator/bios/${psxBios}`, { credentials: 'same-origin' });
+		response = await fetch(`/api/emulator/bios/${name}`, { credentials: 'same-origin' });
 	} catch {
 		return { error: /** @type {string} */ (optionalBiosError(null)) };
 	}
@@ -74,16 +78,16 @@ async function loadPsxBios() {
 	}
 	if (!response.body) return { error: /** @type {string} */ (optionalBiosError(null)) };
 
-	const bytes = new Uint8Array(psxBiosBytes);
+	const bytes = new Uint8Array(size);
 	let length = 0;
 	const reader = response.body.getReader();
 	try {
 		for (;;) {
 			const { done, value } = await reader.read();
 			if (done) break;
-			if (length + value.length > psxBiosBytes) {
+			if (length + value.length > size) {
 				await reader.cancel().catch(() => {});
-				return { error: psxBiosSizeError };
+				return { error: sizeError };
 			}
 			bytes.set(value, length);
 			length += value.length;
@@ -91,7 +95,7 @@ async function loadPsxBios() {
 	} catch {
 		return { error: /** @type {string} */ (optionalBiosError(null)) };
 	}
-	return length === psxBiosBytes ? { bios: bytes.buffer } : { error: psxBiosSizeError };
+	return length === size ? { bios: bytes.buffer } : { error: sizeError };
 }
 
 /**
@@ -183,7 +187,7 @@ async function start() {
 	/** @type {ArrayBuffer | null} */
 	let psxFirmware = null;
 	if (isPsx) {
-		const result = await loadPsxBios();
+		const result = await loadOptionalBios(psxBios, psxBiosBytes, psxBiosSizeError);
 		if ('error' in result) return show(result.error);
 		psxFirmware = result.bios;
 	}

@@ -24,7 +24,9 @@ export function canPlay(
 ): boolean {
 	return (
 		game.browserCore !== null &&
-		(rom.externalFileName === null || externalBrowserCores.includes(game.browserCore))
+		(rom.externalFileName === null || externalBrowserCores.includes(game.browserCore)) &&
+		// Saturn B6: an .nrg image never plays, whatever the core.
+		!(rom.externalFileName?.toLowerCase().endsWith('.nrg') ?? false)
 	);
 }
 

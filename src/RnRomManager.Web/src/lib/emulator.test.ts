@@ -31,6 +31,19 @@ describe('canPlay', () => {
 			false
 		);
 	});
+
+	it.each(['Disc (USA).nrg', 'Disc (USA).NRG'])(
+		'is false for an external %s image, whatever the core (Saturn B6)',
+		(externalFileName) => {
+			expect(canPlay({ browserCore: 'pcsx_rearmed' }, { externalFileName })).toBe(false);
+		}
+	);
+
+	it('still plays an external .bin with the same core (Saturn B6)', () => {
+		expect(canPlay({ browserCore: 'pcsx_rearmed' }, { externalFileName: 'Disc (USA).bin' })).toBe(
+			true
+		);
+	});
 });
 
 describe('playUrl', () => {

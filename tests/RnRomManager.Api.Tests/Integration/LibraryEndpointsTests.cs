@@ -229,7 +229,18 @@ public partial class LibraryEndpointsTests
     [TestCase("saturn", true, false, null)]
     [TestCase("switch", false, false, null)]
     [TestCase("switch", true, false, null)]
-    public async Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(string system, bool external, bool playable, string? core)
+    public Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(string system, bool external, bool playable, string? core) =>
+        AssertQuickPlayAsync(system, external, playable, core);
+
+    // Saturn B6: an .nrg primary (read from roms.file_name, any case) never plays, whatever the system.
+    [TestCase("psx", "x.NRG", "x.bin", false)]
+    [TestCase("psx", "x.nrg", "x.bin", false)]
+    [TestCase("psx", "x.bin", "x.nrg", true)]
+    public Task Games_QuickPlay_AnNrgPrimary_IsNotPlayable(string system, string fileName, string externalName, bool playable) =>
+        AssertQuickPlayAsync(system, true, playable, "pcsx_rearmed", fileName, externalName);
+
+    private async Task AssertQuickPlayAsync(string system, bool external, bool playable, string? core,
+        string? fileName = null, string externalName = "x.gb")
     {
         var id = await Tetris();
         long primaryId;
@@ -238,7 +249,9 @@ public partial class LibraryEndpointsTests
         {
             await connection.ExecuteAsync("UPDATE games SET system_id = @system WHERE id = @id", new { system, id });
             if (external)
-                await connection.ExecuteAsync("UPDATE roms SET external_file_name = 'x.gb' WHERE game_id = @id", new { id });
+                await connection.ExecuteAsync("UPDATE roms SET external_file_name = @externalName WHERE game_id = @id", new { id, externalName });
+            if (fileName is not null)
+                await connection.ExecuteAsync("UPDATE roms SET file_name = @fileName WHERE game_id = @id AND is_primary = 1", new { id, fileName });
             (primaryId, primaryName) = await connection.QuerySingleAsync<(long, string)>(
                 "SELECT id, file_name FROM roms WHERE game_id = @id AND is_primary = 1 ORDER BY id LIMIT 1", new { id });
         }

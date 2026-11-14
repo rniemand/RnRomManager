@@ -53,10 +53,12 @@ public static class LibraryEndpoints
             return Results.Ok(Paging.ToDto(result, game =>
             {
                 // C2: quick play needs a browser core and a primary release stored in the zip; Play B1 / PSP B1:
-                // PlayStation and PSP play their external primary disc through play-disc.
+                // PlayStation and PSP play their external primary disc through play-disc. Saturn B6: an .nrg primary
+                // never plays, whatever the system (its file name equals its external name for a FileSets system).
                 var core = systems.ById(game.SystemId)?.BrowserCore;
                 var playable = core is not null && game.PrimaryRomId is not null
-                    && (!game.PrimaryIsExternal || ExternalBrowserCores.Contains(core));
+                    && (!game.PrimaryIsExternal || ExternalBrowserCores.Contains(core))
+                    && game.PrimaryRomFileName?.EndsWith(".nrg", StringComparison.OrdinalIgnoreCase) != true;
                 return new
                 {
                     id = game.Id,
