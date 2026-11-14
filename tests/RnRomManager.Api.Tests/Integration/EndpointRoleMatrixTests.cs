@@ -68,6 +68,8 @@ public partial class EndpointRoleMatrixTests
         ["POST /api/games/{id:guid}/images/{imageId:long}/cover"] = Role.RomManager,
 
         ["GET /api/emulator/bios/{name}"] = Role.User,
+        ["GET /api/emulator/genesis/{name}"] = Role.User,
+        ["HEAD /api/emulator/genesis"] = Role.User,
 
         ["GET /api/collections"] = Role.User,
         ["POST /api/collections"] = Role.User,

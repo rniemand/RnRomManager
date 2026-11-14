@@ -96,4 +96,16 @@ public class OptionsValidatorTests
         Assert.That(new LoggingOptionsValidator().Validate(null, new()).Succeeded, Is.True);
         Assert.That(new SourcesOptionsValidator().Validate(null, new()).Succeeded, Is.True);
     }
+
+    [Test]
+    public void GenesisCorePath_EmptyOrAbsolute()
+    {
+        var absolute = Path.Combine(Path.GetTempPath(), "genesis");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new()).Succeeded, Is.True, "blank disables");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { GenesisCorePath = absolute }).Succeeded, Is.True);
+        var relative = new EmulatorOptionsValidator().Validate(null, new() { GenesisCorePath = "genesis" });
+        Assert.That(relative.Succeeded, Is.False);
+        Assert.That(relative.FailureMessage, Does.Contain("Emulator:GenesisCorePath"));
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { GenesisCorePath = " " }).Succeeded, Is.False, "whitespace isn't blank");
+    }
 }

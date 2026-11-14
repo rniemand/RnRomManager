@@ -100,6 +100,7 @@ public static class AppHost
         NLogSetup.Configure(builder);
         builder.Services.AddAppOptions(builder.Configuration);
         builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton(Endpoints.GenesisCoreManifest.Pinned);
         // Only the image upload (I5) reads forms; match its request limit.
         builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(
             options => options.MultipartBodyLengthLimit = Endpoints.LibraryEndpoints.UploadRequestLimit);

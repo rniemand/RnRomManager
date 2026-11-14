@@ -13,6 +13,7 @@ public sealed record EffectiveSettings(
     IntegrityOptions Integrity,
     LoggingOptions Logging,
     SourcesOptions Sources,
+    EmulatorOptions Emulator,
     BackupOptions Backup)
 {
     public const string Masked = "***";
@@ -24,6 +25,7 @@ public sealed record EffectiveSettings(
         services.GetRequiredService<IOptions<IntegrityOptions>>().Value,
         services.GetRequiredService<IOptions<LoggingOptions>>().Value,
         services.GetRequiredService<IOptions<SourcesOptions>>().Value,
+        services.GetRequiredService<IOptions<EmulatorOptions>>().Value,
         services.GetRequiredService<IOptions<BackupOptions>>().Value);
 
     /// <summary>Only via <see cref="MySqlConnectionStringBuilder"/> with <c>Password</c> removed (spec §13).</summary>

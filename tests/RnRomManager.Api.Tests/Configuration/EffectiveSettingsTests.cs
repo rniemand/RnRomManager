@@ -39,6 +39,7 @@ public class EffectiveSettingsTests
             ["Paths:Collections"] = Path.Combine(root, "collections"),
             ["Paths:Bios"] = Path.Combine(root, "bios"),
             ["Backup:RestoreFrom"] = "rnrommanager-20261106-033000.zip",
+            ["Emulator:GenesisCorePath"] = Path.Combine(root, "genesis"),
         }).Build();
         using var services = new ServiceCollection().AddAppOptions(config).BuildServiceProvider();
 
@@ -50,6 +51,8 @@ public class EffectiveSettingsTests
         Assert.That(json, Does.Contain("\"backups\":"));
         Assert.That(settings.Paths.Bios, Is.EqualTo(Path.Combine(root, "bios")));
         Assert.That(json, Does.Contain($"\"bios\":{JsonSerializer.Serialize(Path.Combine(root, "bios"))}"));
+        Assert.That(settings.Emulator.GenesisCorePath, Is.EqualTo(Path.Combine(root, "genesis")));
+        Assert.That(json, Does.Contain($"\"emulator\":{{\"genesisCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "genesis"))}}}"));
         Assert.That(json, Does.Not.Contain("hunter2"));
     }
 }

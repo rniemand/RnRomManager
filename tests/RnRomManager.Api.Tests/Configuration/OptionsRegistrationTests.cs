@@ -42,6 +42,19 @@ public class OptionsRegistrationTests
         Assert.That(services.GetRequiredService<IOptions<SourcesOptions>>().Value.ThumbnailBaseUrl, Is.Empty);
         Assert.That(services.GetRequiredService<IOptions<IntegrityOptions>>().Value.QuickCheckTime, Is.EqualTo("03:00"));
         Assert.That(services.GetRequiredService<IOptions<PathsOptions>>().Value.Bios, Is.EqualTo(Path.Combine(Root, "bios")));
+        Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.GenesisCorePath, Is.Empty, "Genesis is off by default");
+    }
+
+    [Test]
+    public void GenesisCorePath_AnAbsoluteMountThatDoesNotExist_PassesStartup()
+    {
+        var settings = ValidSettings();
+        settings["Emulator:GenesisCorePath"] = Path.Combine(Root, "no-such-genesis-mount");
+        using var services = Build(settings);
+
+        Assert.DoesNotThrow(() => services.GetRequiredService<IStartupValidator>().Validate());
+        Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.GenesisCorePath,
+            Is.EqualTo(Path.Combine(Root, "no-such-genesis-mount")));
     }
 
     [TestCase("Paths:Roms", "relative")]
@@ -55,6 +68,7 @@ public class OptionsRegistrationTests
     [TestCase("Sources:TitleDbUrl", "")]
     [TestCase("Sources:TitleDbUrl", "ftp://x")]
     [TestCase("Sources:ThumbnailBaseUrl", "nope")]
+    [TestCase("Emulator:GenesisCorePath", "relative/genesis")]
     public void InvalidSetting_FailsStartupValidationNamingTheKey(string key, string value)
     {
         var settings = ValidSettings();

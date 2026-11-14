@@ -14,6 +14,7 @@ public static class OptionsRegistration
         .AddValidated<IntegrityOptions, IntegrityOptionsValidator>(config, IntegrityOptions.Section)
         .AddValidated<LoggingOptions, LoggingOptionsValidator>(config, LoggingOptions.Section)
         .AddValidated<SourcesOptions, SourcesOptionsValidator>(config, SourcesOptions.Section)
+        .AddValidated<EmulatorOptions, EmulatorOptionsValidator>(config, EmulatorOptions.Section)
         // B19: checked by the startup restore (it needs Paths:Backups and the file), not by an options validator.
         .AddBackupOptions(config);
 
