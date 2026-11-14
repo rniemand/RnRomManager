@@ -1,6 +1,6 @@
 ---
 title: Saturn and 32X browser play
-status: ready
+status: in-progress
 created: 2026-11-13
 ---
 
