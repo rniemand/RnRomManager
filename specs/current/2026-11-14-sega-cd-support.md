@@ -104,7 +104,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
   - Files: `AppHost.cs`, `README.md` (row only), `IngestSeeder.cs`, the test files above, `systemColours.ts`, `app.css`, `icons.ts`, `systemColours.test.ts`. Mechanical manifest lines don't count toward the line budget.
   - Tests: the updated integration files, `IngestSeederTests`, `SeedIngestTests` (Basic/Full counts unchanged), `SystemStartupTests`, `SupportedSystemsTableTests`, `systemColours.test.ts`; web `npm run lint` and `npm run check`.
   - Done when: those pass and `pwsh scripts/build-docker.ps1` builds.
-- [ ] **3. Verify Sega CD ingest** (B3): Testcontainers cases in `IngestPipelineTests.cs` and `ReviewEndpointsTests.cs` with synthetic files (never real images):
+- [x] **3. Verify Sega CD ingest** (B3): Testcontainers cases in `IngestPipelineTests.cs` and `ReviewEndpointsTests.cs` with synthetic files (never real images):
   - a DAT-matched cue + 2 bins → one release, files next to the ZIP under their exact names, info.json `files` lists the tracks;
   - an unmatched standalone `.iso` → Review `NoDatMatch` with system `segacd`, resolvable with **Manual**, stored as `.iso`;
   - family isolation: a 64 KiB `.bin` with no `SEGA` header at 0x100 whose SHA-1 is in the Sega CD DAT, dropped in `ingest/md/`, is not matched against the Sega CD DAT. It goes to Review as `NoDatMatch` with system `md`: Mega Drive's header is optional, so a headerless file isn't `InvalidHeader`. Nothing is stored under `roms/segacd/`;

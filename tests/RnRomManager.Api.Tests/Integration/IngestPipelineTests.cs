@@ -50,6 +50,11 @@ public class IngestPipelineTests
     private static readonly byte[] BadCrcHero = new SyntheticNdsRomBuilder { Seed = 610, Title = "BAD CRC HERO", BadHeaderCrc = true }.Build();
     /// <summary>A valid-CRC DS ROM whose SHA-1 only a <c>.bcn</c> DAT entry lists; the DS store ignores that entry.</summary>
     private static readonly byte[] HiddenTwin = new SyntheticNdsRomBuilder { Seed = 611, Title = "HIDDEN TWIN", GameCode = "AHTE" }.Build();
+    /// <summary>Sega CD B3: the DAT-matched data track of a cue + 2 bins set, and its audio track.</summary>
+    private static readonly byte[] CometData = new SyntheticDiscBuilder { Seed = 2101 }.Build();
+    private static readonly byte[] CometAudio = new SyntheticDiscBuilder { Seed = 2102, Size = 32 * 1024 }.Build();
+    /// <summary>A 64 KiB <c>.bin</c> without <c>SEGA</c> at 0x100 whose SHA-1 only the Sega CD DAT lists (family isolation).</summary>
+    private static readonly byte[] CartTwin = SegaCdTwin();
     private ApiFactory _shared = null!;
     /// <summary>The class's shared host, or a host of the test's own when it needs other services (<see cref="RestartWithOverrides"/>).</summary>
     private ApiFactory _factory = null!;
@@ -143,7 +148,11 @@ public class IngestPipelineTests
                 [new FixtureGame("Wave Bowling (USA)", "Wave Bowling (USA).iso", WaveBowling.Build()) { Serial = "RVL-RWBE-USA" }],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
-            [IngestSeeder.SegaCdDat] = [],
+            [IngestSeeder.SegaCdDat] =
+            [
+                new FixtureGame("Disc Comet (USA)", "Disc Comet (USA) (Track 1).bin", CometData),
+                new FixtureGame("Cart Twin (USA)", "Cart Twin (USA) (Track 1).bin", CartTwin),
+            ],
             [IngestSeeder.NintendoDsDat] =
             [
                 new FixtureGame("Bad Crc Hero (USA)", "Bad Crc Hero (USA).nds", BadCrcHero),
@@ -292,6 +301,72 @@ public class IngestPipelineTests
             file.SetLength(512L * 1024 * 1024 + 1); // sparse where the file system allows
 
         var result = await IngestAsync(new IngestFile("nds", path, "huge.nds", 512L * 1024 * 1024 + 1, DateTime.UtcNow.AddMinutes(-1)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooLarge)));
+        Assert.That(File.Exists(path), Is.False, "moved to _failed/");
+    }
+
+    private static byte[] SegaCdTwin()
+    {
+        var bytes = new SyntheticDiscBuilder { Seed = 2103 }.Build();
+        bytes.AsSpan(0x100, 16).Fill((byte)' '); // no SEGA header by chance
+        return bytes;
+    }
+
+    /// <summary>Runs a whole ingest job (cue sets are grouped there, not in <see cref="IngestPipeline.ProcessAsync"/>) and returns its items.</summary>
+    private async Task<List<JobItem>> RunIngestJobWithItemsAsync()
+    {
+        var items = new List<JobItem>();
+        var repository = Substitute.For<IJobItemRepository>();
+        repository.InsertAsync(Arg.Do<JobItem>(items.Add), Arg.Any<CancellationToken>()).Returns(1L);
+        await ActivatorUtilities.CreateInstance<IngestJob>(_factory.Services, repository)
+            .RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None);
+        return items;
+    }
+
+    [Test]
+    public async Task SegaCd_DatMatchedCueWithTwoBins_IsOneRelease_FilesNextToTheZipUnderTheirExactNames()
+    {
+        const string cue = "Disc Comet (USA).cue", track1 = "Disc Comet (USA) (Track 1).bin", track2 = "Disc Comet (USA) (Track 2).bin";
+        var cueText = $"FILE \"{track1}\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"{track2}\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n";
+        foreach (var (name, bytes) in new[] { (cue, System.Text.Encoding.UTF8.GetBytes(cueText)), (track1, CometData), (track2, CometAudio) })
+            File.SetLastWriteTimeUtc(Drop("segacd", name, bytes).FullPath, DateTime.UtcNow.AddMinutes(-1));
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "segacd").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome)),
+            Is.EquivalentTo(new[] { (cue, IngestOutcome.Ingested), (track1, IngestOutcome.Ingested), (track2, IngestOutcome.Ingested) }));
+        var folder = Path.Combine(Roms, "segacd", "D");
+        Assert.That(Directory.GetFiles(folder).Select(Path.GetFileName).Order(StringComparer.Ordinal),
+            Is.EqualTo(new[] { track1, track2, cue, "Disc Comet.zip" }));
+        Assert.That(File.ReadAllBytes(Path.Combine(folder, track2)), Is.EqualTo(CometAudio));
+        var game = ReadZip("segacd/D/Disc Comet.zip");
+        var rom = game.Roms.Single();
+        Assert.That((game.System, rom.FileName, rom.ExternalFileName, rom.Identification.Method), Is.EqualTo(("segacd", track1, track1, IdentificationMethod.Dat)));
+        Assert.That(rom.Header, Is.Null);
+        Assert.That(rom.Files!.Select(f => f.ExternalFileName), Is.EqualTo(new[] { cue, track2 }));
+        Assert.That(Directory.GetFiles(Ingest("segacd")), Is.Empty);
+    }
+
+    [Test]
+    public async Task SegaCd_DatTrackDroppedInTheMegaDriveFolder_IsNotMatchedAgainstTheSegaCdDat()
+    {
+        var result = await IngestAsync(Drop("md", "twin.bin", CartTwin));
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "md")));
+        Assert.That(Directory.Exists(Path.Combine(Roms, "segacd")) ? Directory.GetFiles(Path.Combine(Roms, "segacd"), "*", SearchOption.AllDirectories) : [],
+            Is.Empty);
+    }
+
+    [Test]
+    public async Task SegaCd_LooseOverTheMaximum_IsTooLarge_WithoutReadingIt()
+    {
+        var path = Path.Combine(Ingest("segacd"), "huge.iso");
+        using (var file = File.Create(path))
+            file.SetLength((1L << 30) + 1); // sparse where the file system allows
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1));
+
+        var result = await IngestAsync(new IngestFile("segacd", path, "huge.iso", (1L << 30) + 1, File.GetLastWriteTimeUtc(path)));
 
         Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooLarge)));
         Assert.That(File.Exists(path), Is.False, "moved to _failed/");
