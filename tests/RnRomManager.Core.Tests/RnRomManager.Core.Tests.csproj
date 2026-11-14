@@ -21,6 +21,9 @@
   <ItemGroup>
     <ProjectReference Include="../../src/RnRomManager.Core/RnRomManager.Core.csproj" />
     <ProjectReference Include="../RnRomManager.TestData/RnRomManager.TestData.csproj" />
+    <!-- BoundedRomReadTests: real sliced (SNES) and rewritten (N64) normalization. -->
+    <ProjectReference Include="../../src/RnRomManager.Systems.Snes/RnRomManager.Systems.Snes.csproj" />
+    <ProjectReference Include="../../src/RnRomManager.Systems.Nintendo64/RnRomManager.Systems.Nintendo64.csproj" />
   </ItemGroup>
 
 </Project>

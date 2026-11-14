@@ -32,6 +32,7 @@ public class ReviewResolverTests
 
     private PathsOptions _paths = null!;
     private DatCache _dats = null!;
+    private IngestPipeline _pipeline = null!;
 
     [SetUp]
     public void SetUp() => Build(new Headerless());
@@ -58,8 +59,9 @@ public class ReviewResolverTests
         var pipeline = new IngestPipeline(dats, systems, Substitute.For<IRomRepository>(), games, Substitute.For<ILibraryMirror>(),
             Substitute.For<IIntegrityIssueRepository>(), _reviews, reader, media, options, _audit,
             new RnRomManager.Core.Audit.AuditPaths(options), _time, NullLogger<IngestPipeline>.Instance);
+        _pipeline = pipeline;
         var romRepository = Substitute.For<IRomRepository>();
-        _resolver = new ReviewResolver(_lock, _reviews, games, romRepository,
+        _resolver =new ReviewResolver(_lock, _reviews, games, romRepository,
             new DbSync(games, romRepository, Substitute.For<ILibraryMirror>(), reader, systems, options, NullLogger<DbSync>.Instance), pipeline, dats, systems,
             new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance),
             new ReviewSets(new IngestFileScanner(options, systems, NullLogger<IngestFileScanner>.Instance), _reviews, systems, options, NullLogger<ReviewSets>.Instance),
@@ -147,6 +149,34 @@ public class ReviewResolverTests
         Assert.That(File.Exists(_item.SourcePath), Is.True);
         using var released = _lock.TryAcquire();
         Assert.That(released, Is.Not.Null);
+    }
+
+    private static ReviewResolutionRequest Manual() =>
+        new() { Action = "Manual", Title = "My Game", Regions = [], Languages = [], Flags = [] };
+
+    private async Task AssertVerifyFailedAndPending(ReviewResolutionResult result)
+    {
+        Assert.That(result.Code, Is.EqualTo("VerifyFailed"));
+        await _reviews.DidNotReceiveWithAnyArgs().SetResolutionAsync(default(long), default!, default, default, default, default);
+        Assert.That(File.Exists(_item.SourcePath), Is.True);
+        using var released = _lock.TryAcquire();
+        Assert.That(released, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task SourceOverTheLimit_IsVerifyFailed_AndKeepsPending()
+    {
+        File.WriteAllBytes(_item.SourcePath, new byte[2048]);
+        await AssertVerifyFailedAndPending(await _resolver.ResolveInJobAsync(1, Manual(), Actor, default));
+    }
+
+    [TestCase(1, 0, TestName = "SourceEndsEarlyDuringTheRead_IsVerifyFailed_AndKeepsPending")]
+    [TestCase(long.MaxValue, 1, TestName = "SourceGrowsDuringTheRead_IsVerifyFailed_AndKeepsPending")]
+    public async Task SourceChangesDuringTheRead(long endAfter, int extra)
+    {
+        _item = _item with { Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(new byte[] { 1, 2, 3 })) };
+        _pipeline.WrapEmbeddedReadStream = s => new ChangingStream(s, endAfter, extra);
+        await AssertVerifyFailedAndPending(await _resolver.ResolveInJobAsync(1, Manual(), Actor, default));
     }
 
     private sealed class Headerless(params string[] extensions) : ISystemHandler
