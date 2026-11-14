@@ -28,6 +28,8 @@ public sealed class Atari5200Handler : ISystemHandler
     /// <inheritdoc />
     public bool EmbedRomsInZip => true;
 
+    public string BrowserCore => "a5200";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;

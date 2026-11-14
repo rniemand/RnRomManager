@@ -26,9 +26,12 @@ describe('parsePlayParams', () => {
 		});
 	});
 
-	it.each(['handy', 'virtualjaguar'])('accepts the %s core', (core) => {
-		expect(parsePlayParams(query({ core }))?.core).toBe(core);
-	});
+	it.each(['handy', 'virtualjaguar', 'beetle_vb', 'a5200', 'prosystem'])(
+		'accepts the %s core',
+		(core) => {
+			expect(parsePlayParams(query({ core }))?.core).toBe(core);
+		}
+	);
 
 	it.each([
 		['a bad GUID', { game: 'not-a-guid' }],

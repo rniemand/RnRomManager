@@ -12,7 +12,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 - **Review queue:** files the DATs don't know get name suggestions, a DAT search, or manual entry; filter the queue, search Google and Shift+click Delete for loose files.
 - **Library edits (`rom-manager`):** edit metadata, move or merge releases between games, upload box art and screenshots and choose the cover, delete to a recoverable `_removed/` folder, which Admins restore from or empty on the **Deleted ROMs** page.
 - **Reports:** library size treemap and system drill-down, missing cover images, and duplicate groups with merge/dismiss for ROM managers.
-- **Game detail:** Releases/Images tabs, a **Play** button that runs Game Boy, Game Boy Color, Game Boy Advance, Atari Lynx and Atari Jaguar releases in the browser, each release's original ingest name and a Markdown note per release (kept in the game's ZIP), a read-only info.json tree with copying, Google search and merge suggestions.
+- **Game detail:** Releases/Images tabs, a **Play** button that runs Game Boy, Game Boy Color, Game Boy Advance, Virtual Boy, Atari 5200, Atari 7800, Atari Lynx and Atari Jaguar releases in the browser, each release's original ingest name and a Markdown note per release (kept in the game's ZIP), a read-only info.json tree with copying, Google search and merge suggestions.
 - **Auditing (Admin):** filterable file-action history, retained for 30 days, with user/job and relative source/target paths.
 - **Integrity checks:** daily quick checks and on-demand deep (hash) checks, with automatic database repair.
 - **Database backups (Admin):** daily backups to a volume with configurable time and retention, Back up now, and a restore at startup.
@@ -29,8 +29,8 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 |---|---|---|---|---|---|
 | 32X | `s32x` | In ZIP | `.32x` | No-Intro | — |
 | Atari 2600 | `a2600` | In ZIP | `.a26`, `.bin` | No-Intro | — |
-| Atari 5200 | `a5200` | In ZIP | `.a52`, `.bin` | No-Intro | — |
-| Atari 7800 | `a7800` | In ZIP | `.a78`, `.bin` | No-Intro | — |
+| Atari 5200 | `a5200` | In ZIP | `.a52`, `.bin` | No-Intro | `a5200` |
+| Atari 7800 | `a7800` | In ZIP | `.a78`, `.bin` | No-Intro | `prosystem` |
 | Atari Jaguar | `jaguar` | In ZIP | `.j64`, `.jag`, `.rom`, `.abs`, `.cof` | No-Intro | `virtualjaguar` |
 | Atari Lynx | `lynx` | In ZIP | `.lnx`, `.lyx` | No-Intro | `handy` |
 | ColecoVision | `coleco` | In ZIP | `.col`, `.rom`, `.bin` | No-Intro | — |
@@ -49,7 +49,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Saturn | `saturn` | Next to ZIP | `.bin`, `.cue`, `.nrg` | Redump | — |
 | Super Nintendo Entertainment System | `snes` | In ZIP | `.sfc`, `.smc` | No-Intro | — |
 | TurboGrafx-16 | `tg16` | In ZIP | `.pce` | No-Intro | — |
-| Virtual Boy | `vb` | In ZIP | `.vb` | No-Intro | — |
+| Virtual Boy | `vb` | In ZIP | `.vb` | No-Intro | `beetle_vb` |
 | Wii | `wii` | Next to ZIP | `.iso`, `.wbfs` | Redump | — |
 | Xbox 360 | `x360` | Next to ZIP | `.iso` | Redump | — |
 <!-- systems:end -->
@@ -134,7 +134,7 @@ RnRomManager manages ROM files **you already own**, for personal backup. It does
 - Game identification and metadata come from [libretro-database](https://github.com/libretro/libretro-database), licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/).
 - Box art and screenshots are downloaded from [libretro-thumbnails](https://github.com/libretro-thumbnails/libretro-thumbnails). They remain the copyright of their respective owners and are stored for personal use only.
 - Nintendo Switch titles are identified with [blawar/titledb](https://github.com/blawar/titledb), and their box art and screenshots are downloaded from the image URLs it lists on Nintendo's eShop image server (`img-eshop.cdn.nintendo.net`). Those images remain the copyright of their owners and are stored for personal use only.
-- The in-browser emulator is [EmulatorJS](https://github.com/EmulatorJS/EmulatorJS) ([GPL-3.0](https://github.com/EmulatorJS/EmulatorJS/blob/main/LICENSE)) with the [Gambatte](https://github.com/EmulatorJS/gambatte-libretro) (GPL-2.0), [mGBA](https://github.com/EmulatorJS/mgba) (MPL-2.0), [Handy](https://github.com/EmulatorJS/libretro-handy) (Zlib) and [Virtual Jaguar](https://github.com/EmulatorJS/virtualjaguar-libretro) (GPL-3.0) cores, shipped unmodified as separate files with their licences.
+- The in-browser emulator is [EmulatorJS](https://github.com/EmulatorJS/EmulatorJS) ([GPL-3.0](https://github.com/EmulatorJS/EmulatorJS/blob/main/LICENSE)) with the [Gambatte](https://github.com/EmulatorJS/gambatte-libretro) (GPL-2.0), [mGBA](https://github.com/EmulatorJS/mgba) (MPL-2.0), [Handy](https://github.com/EmulatorJS/libretro-handy) (Zlib), [Virtual Jaguar](https://github.com/EmulatorJS/virtualjaguar-libretro) (GPL-3.0), [Beetle VB](https://github.com/EmulatorJS/beetle-vb-libretro) (GPL-2.0), [a5200](https://github.com/EmulatorJS/a5200) (GPL-2.0) and [ProSystem](https://github.com/EmulatorJS/prosystem-libretro) (GPL-2.0) cores, shipped unmodified as separate files with their licences.
 - The placeholder cartridge box art is made for this project. Admin → About lists the licence of every dependency.
 
 ## License

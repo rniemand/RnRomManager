@@ -23,6 +23,8 @@ public sealed class VirtualBoyHandler : ISystemHandler
     /// <inheritdoc />
     public bool EmbedRomsInZip => true;
 
+    public string BrowserCore => "beetle_vb";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;

@@ -35,7 +35,15 @@ describe('vendor-emulatorjs', () => {
 	afterAll(() => rmSync(out, { recursive: true, force: true }));
 
 	it('writes exactly the B9 files', () => {
-		const cores = ['gambatte', 'mgba', 'handy', 'virtualjaguar'].flatMap((c) => [
+		const cores = [
+			'gambatte',
+			'mgba',
+			'handy',
+			'virtualjaguar',
+			'beetle_vb',
+			'a5200',
+			'prosystem'
+		].flatMap((c) => [
 			`data/cores/${c}-legacy-wasm.data`,
 			`data/cores/${c}-wasm.data`,
 			`data/cores/reports/${c}.json`

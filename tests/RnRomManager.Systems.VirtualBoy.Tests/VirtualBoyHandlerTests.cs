@@ -18,7 +18,7 @@ public class VirtualBoyHandlerTests
         Assert.That(Handler.EmbedRomsInZip, Is.True);
         Assert.That(Handler.FileSets, Is.False);
         Assert.That((Handler.DatSource, Handler.DatFolder), Is.EqualTo((DatSource.Libretro, DatKind.NoIntro)));
-        Assert.That(Handler.BrowserCore, Is.Null);
+        Assert.That(Handler.BrowserCore, Is.EqualTo("beetle_vb"));
         Assert.That(Handler.MetadatKinds, Is.EqualTo(DatKind.Metadat));
     }
 

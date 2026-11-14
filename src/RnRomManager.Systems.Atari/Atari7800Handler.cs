@@ -27,6 +27,8 @@ public sealed class Atari7800Handler : ISystemHandler
     /// <inheritdoc />
     public bool EmbedRomsInZip => true;
 
+    public string BrowserCore => "prosystem";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => A78Header.Read(rom);
