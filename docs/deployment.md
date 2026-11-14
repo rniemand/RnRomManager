@@ -245,6 +245,19 @@ Genesis play needs three Genesis Plus GX files you supply ([configuration](confi
 
 The app runs as UID 1654, which needs read access to the folder and files (e.g. `chmod -R a+rX data/genesis`). Keep the folder outside anything the app or its users can write to: EmulatorJS runs the JavaScript inside these files in the app's origin, and the hash check only accepts the exact 4.2.3 files. No restart is needed to add or replace files once the setting is there. Without the setting (the default) the API serves no Genesis files, and Play on a Genesis game explains that the core needs setting up.
 
+## PicoDrive core
+
+32X play needs three PicoDrive files you supply ([configuration](configuration.md#picodrive-core) lists their sizes and SHA-256). They come from the npm package `@emulatorjs/core-picodrive@4.2.3`: the two `.data` payloads are at the package root and the report is `reports/picodrive.json`; copy all three to one folder, the report at its root too. Follow the core's own licence terms (its payloads' `license.txt` forbids selling it or using it commercially). Then mount the folder read-only and point the setting at it:
+
+```yaml
+    volumes:
+      - ./data/picodrive:/app/picodrive:ro
+    environment:
+      Emulator__PicodriveCorePath: /app/picodrive
+```
+
+The same advice as for Genesis Plus GX applies: the app's UID 1654 needs read access (e.g. `chmod -R a+rX data/picodrive`), and the folder must stay outside anything the app or its users can write to, since EmulatorJS runs the JavaScript inside these files in the app's origin. You may also put the PicoDrive files in the Genesis folder and point both settings at it. Without the setting, Play on a 32X game explains that the core needs setting up.
+
 ## Admin password recovery
 
 If every Admin is locked out, reset a password from the host:

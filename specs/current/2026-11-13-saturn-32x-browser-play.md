@@ -203,7 +203,7 @@ Steps 1, 2, 6 and the `LibraryEndpointsTests`/`EmulatorEndpointsTests` parts of 
   - Done when:
     - `npm run lint`, `npm run check` and those tests (except Playwright) pass;
     - a Saturn bin/cue game shows Play and an `.nrg` one doesn't.
-- [ ] **9. Docs**:
+- [x] **9. Docs**:
   - `README.md`:
     - the Play bullet gains Saturn (one disc per launch, up to 1 GiB, bin/cue only, optional `saturn_bios.bin`) and 32X (needs the PicoDrive files you supply);
     - the attribution gains Yabause with its source commit and licence, and a line saying PicoDrive isn't included.
