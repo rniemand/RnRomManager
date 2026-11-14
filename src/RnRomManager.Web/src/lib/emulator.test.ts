@@ -32,6 +32,13 @@ describe('canPlay', () => {
 		expect(canPlay({ browserCore: 'ppsspp' }, { externalFileName: 'Umd (USA).iso' })).toBe(true);
 	});
 
+	it.each(['Disc Runner (USA).cue', 'Disc Runner (USA).iso', 'Disc Runner (USA) (Track 1).bin'])(
+		'is true for an external Sega CD %s on Genesis Plus GX (Sega CD B5)',
+		(externalFileName) => {
+			expect(canPlay({ browserCore: 'genesis_plus_gx' }, { externalFileName })).toBe(true);
+		}
+	);
+
 	it('is false for an external release of another core, and without a core', () => {
 		expect(canPlay({ browserCore: 'fceumm' }, { externalFileName: 'x.nes' })).toBe(false);
 		expect(canPlay({ browserCore: null }, { externalFileName: 'Disc (Track 1).bin' })).toBe(false);

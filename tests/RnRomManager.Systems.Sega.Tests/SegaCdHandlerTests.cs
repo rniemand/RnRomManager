@@ -32,7 +32,7 @@ public class SegaCdHandlerTests
         Assert.That(Handler.Family, Is.Not.EqualTo(new MegaDriveHandler().Family));
 
     [Test]
-    public void BrowserCore_IsNull_UntilPlayIsEnabled() => Assert.That(Handler.BrowserCore, Is.Null);
+    public void BrowserCore_IsGenesisPlusGx() => Assert.That(Handler.BrowserCore, Is.EqualTo("genesis_plus_gx"));
 
     [TestCase(16)]
     [TestCase(4096)]

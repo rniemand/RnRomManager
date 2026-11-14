@@ -39,8 +39,11 @@ public sealed class SegaCdHandler : ISystemHandler
     /// <inheritdoc />
     public IReadOnlyList<string> MetadatKinds => [];
 
-    /// <summary>No browser play yet (Sega CD B5 enables Genesis Plus GX).</summary>
-    public string? BrowserCore => null;
+    /// <summary>
+    /// Genesis Plus GX, shared with Mega Drive: the play URL's <c>disc</c> flag sends a Sega CD release through play-disc and
+    /// the regional BIOS files (Sega CD B5–B7).
+    /// </summary>
+    public string? BrowserCore => "genesis_plus_gx";
 
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 

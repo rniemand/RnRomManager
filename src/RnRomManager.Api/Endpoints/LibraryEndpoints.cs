@@ -22,9 +22,11 @@ public static class LibraryEndpoints
 {
     /// <summary>
     /// Play B1: the browser cores that play a release stored outside the ZIP through play-disc: PCSX ReARMed for
-    /// PlayStation and (PSP B1) PPSSPP for PlayStation Portable.
+    /// PlayStation, (PSP B1) PPSSPP for PlayStation Portable, (Saturn B6) Yabause for Saturn and (Sega CD B5) Genesis Plus GX
+    /// for Sega CD. Eligibility is per core, so Genesis Plus GX also accepts an external primary of Mega Drive, a family that
+    /// the registry keeps embedded.
     /// </summary>
-    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause" };
+    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx" };
 
     public static RouteGroupBuilder MapLibraryEndpoints(this RouteGroupBuilder api)
     {

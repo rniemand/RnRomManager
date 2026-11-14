@@ -154,7 +154,7 @@ Steps 2, 3, 4, 5 and 7 run integration tests (category `Integration`), which nee
       `play page Genesis and Master System` passes with only B8's label updated (line ~514). Mega Drive still has no `disc`, loads its ROM from `/download` and leaves `EJS_disableCue` unset.
     - `mvp.spec.ts:677`: the Genesis missing-core text gets B8's label (runs in Finish).
   - Done when: `npm run lint`, `npm run check` and those vitest files pass.
-- [ ] **7. Enable Sega CD Play** (B5): `SegaCdHandler.BrowserCore = "genesis_plus_gx"`; `genesis_plus_gx` in both external-core sets; README Play cell → `` `genesis_plus_gx` ``.
+- [x] **7. Enable Sega CD Play** (B5): `SegaCdHandler.BrowserCore = "genesis_plus_gx"`; `genesis_plus_gx` in both external-core sets; README Play cell → `` `genesis_plus_gx` ``.
   - Files: `SegaCdHandler.cs`, `LibraryEndpoints.cs`, `emulator.ts`, `README.md` (cell only), and the tests below.
   - Tests:
     - `SegaCdHandlerTests` and `SupportedSystemsTableTests`.

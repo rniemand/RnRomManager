@@ -48,7 +48,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | PlayStation | `psx` | Next to ZIP | `.bin`, `.cue`, `.iso` | Redump | `pcsx_rearmed` |
 | PlayStation Portable | `psp` | Next to ZIP | `.iso` | Redump | `ppsspp` |
 | Saturn | `saturn` | Next to ZIP | `.bin`, `.cue`, `.nrg` | Redump | `yabause` |
-| Sega CD | `segacd` | Next to ZIP | `.bin`, `.cue`, `.iso` | Redump | — |
+| Sega CD | `segacd` | Next to ZIP | `.bin`, `.cue`, `.iso` | Redump | `genesis_plus_gx` |
 | Super Nintendo Entertainment System | `snes` | In ZIP | `.sfc`, `.smc` | No-Intro | `snes9x` |
 | TurboGrafx-16 | `tg16` | In ZIP | `.pce` | No-Intro | — |
 | Virtual Boy | `vb` | In ZIP | `.vb` | No-Intro | `beetle_vb` |

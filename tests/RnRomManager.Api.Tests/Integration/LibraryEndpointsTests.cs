@@ -217,6 +217,7 @@ public partial class LibraryEndpointsTests
     }
 
     // C2: playable only with a browser core and an embedded primary release; Play B1: PlayStation's external primary too.
+    // Sega CD B5: eligibility is per core, so a (hand-made, registry-impossible) external md primary plays like a Sega CD disc.
     [TestCase("gb", false, true, "gambatte")]
     [TestCase("gb", true, false, "gambatte")]
     [TestCase("a2600", false, true, "stella2014")]
@@ -224,7 +225,7 @@ public partial class LibraryEndpointsTests
     [TestCase("gg", false, true, "smsplus")]
     [TestCase("sms", false, true, "smsplus")]
     [TestCase("md", false, true, "genesis_plus_gx")]
-    [TestCase("md", true, false, "genesis_plus_gx")]
+    [TestCase("md", true, true, "genesis_plus_gx")]
     [TestCase("s32x", false, true, "picodrive")]
     [TestCase("snes", false, true, "snes9x")]
     [TestCase("snes", true, false, "snes9x")]
@@ -234,6 +235,7 @@ public partial class LibraryEndpointsTests
     [TestCase("psx", false, true, "pcsx_rearmed")]
     [TestCase("psp", true, true, "ppsspp")]
     [TestCase("saturn", true, true, "yabause")]
+    [TestCase("segacd", true, true, "genesis_plus_gx")]
     [TestCase("switch", false, false, null)]
     [TestCase("switch", true, false, null)]
     public Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(string system, bool external, bool playable, string? core) =>
@@ -398,6 +400,7 @@ public partial class LibraryEndpointsTests
     [TestCase("psx", "pcsx_rearmed")]
     [TestCase("psp", "ppsspp")]
     [TestCase("saturn", "yabause")]
+    [TestCase("segacd", "genesis_plus_gx")]
     [TestCase("nosuch", null)]
     public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)
     {
