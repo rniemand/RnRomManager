@@ -99,6 +99,25 @@
 	background-color: var(--bs-jaguar) !important;
 }
 
+/* Virtual Boy, Atari 5200 and Atari 7800 system colours: same in both themes; black, white and black on them are AA (5.5:1, 6.8:1, 6.1:1). */
+:root {
+	--bs-vb: #f03e3e;
+	--bs-a5200: #364fc7;
+	--bs-a7800: #1098ad;
+}
+.text-bg-vb {
+	color: #000 !important;
+	background-color: var(--bs-vb) !important;
+}
+.text-bg-a5200 {
+	color: #fff !important;
+	background-color: var(--bs-a5200) !important;
+}
+.text-bg-a7800 {
+	color: #000 !important;
+	background-color: var(--bs-a7800) !important;
+}
+
 /* ColecoVision system colour (C5): Coleco blue, same in both themes; white on it is AA. */
 :root {
 	--bs-coleco: #1d3f8f;

@@ -12,7 +12,10 @@ public static class IngestSeeder
     public const string N64Dat = "Nintendo - Nintendo 64";
     public const string NesDat = "Nintendo - Nintendo Entertainment System";
     public const string SnesDat = "Nintendo - Super Nintendo Entertainment System";
+    public const string VirtualBoyDat = "Nintendo - Virtual Boy";
     public const string Atari2600Dat = "Atari - 2600";
+    public const string Atari5200Dat = "Atari - 5200";
+    public const string Atari7800Dat = "Atari - 7800";
     public const string LynxDat = "Atari - Lynx";
     public const string JaguarDat = "Atari - Jaguar";
     public const string ColecoVisionDat = "Coleco - ColecoVision";
@@ -49,7 +52,10 @@ public static class IngestSeeder
         Directory.CreateDirectory(Path.Combine(ingest, "n64"));
         Directory.CreateDirectory(Path.Combine(ingest, "nes"));
         Directory.CreateDirectory(Path.Combine(ingest, "snes"));
+        Directory.CreateDirectory(Path.Combine(ingest, "vb"));
         Directory.CreateDirectory(Path.Combine(ingest, "a2600"));
+        Directory.CreateDirectory(Path.Combine(ingest, "a5200"));
+        Directory.CreateDirectory(Path.Combine(ingest, "a7800"));
         Directory.CreateDirectory(Path.Combine(ingest, "lynx"));
         Directory.CreateDirectory(Path.Combine(ingest, "jaguar"));
         Directory.CreateDirectory(Path.Combine(ingest, "coleco"));
@@ -106,12 +112,30 @@ public static class IngestSeeder
         { ReleaseYear = 1992, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Racing"] };
         // Copier-headered on disk, so ingestion must strip it to match the DAT's .sfc entry (S3).
         Loose("snes", "01-mode-seven-rally.smc", (modeSeven with { CopierHeader = true }).Build());
+        var redHorizonRom = new byte[256 * 1024];
+        new Random(1204).NextBytes(redHorizonRom);
+        var redHorizon = new FixtureGame("Red Horizon (Japan, USA)", "Red Horizon (Japan, USA).vb", redHorizonRom);
+        Loose("vb", "01-red-horizon.vb", redHorizonRom);
         var laserRom = new byte[4096];
         new Random(1201).NextBytes(laserRom);
         var lanes = new FixtureGame("Laser Lanes (USA)", "Laser Lanes (USA).a26", laserRom)
         { ReleaseYear = 1982, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Shooter"] };
         // A loose .bin: ingestion must accept it and store the DAT's .a26 name (A3).
         Loose("a2600", "01-laser-lanes.bin", laserRom);
+        var starLatticeRom = new byte[16 * 1024];
+        new Random(1205).NextBytes(starLatticeRom);
+        var starLattice = new FixtureGame("Star Lattice (USA)", "Star Lattice (USA).a52", starLatticeRom);
+        Loose("a5200", "01-star-lattice.a52", starLatticeRom);
+        // An .a78 dump: the 128-byte ATARI7800 header is read but kept (B2).
+        var canyonRom = new byte[128 + 32 * 1024];
+        new Random(1206).NextBytes(canyonRom.AsSpan(128));
+        canyonRom[0x00] = 1;
+        "ATARI7800"u8.CopyTo(canyonRom.AsSpan(0x01));
+        "CANYON GLIDE"u8.CopyTo(canyonRom.AsSpan(0x11));
+        BinaryPrimitives.WriteUInt32BigEndian(canyonRom.AsSpan(0x31), 32768);
+        (canyonRom[0x37], canyonRom[0x38]) = (1, 1);
+        var canyonGlide = new FixtureGame("Canyon Glide (USA)", "Canyon Glide (USA).a78", canyonRom);
+        Loose("a7800", "01-canyon-glide.a78", canyonRom);
 
         var lynxRom = new byte[64 + 128 * 1024];
         new Random(1202).NextBytes(lynxRom.AsSpan(64));
@@ -236,7 +260,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [Atari2600Dat] = [lanes], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally] },
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [VirtualBoyDat] = [redHorizon], [Atari2600Dat] = [lanes], [Atari5200Dat] = [starLattice], [Atari7800Dat] = [canyonGlide], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally] },
             titleDb: new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = titleDb }, layouts: RedumpLayouts);
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);

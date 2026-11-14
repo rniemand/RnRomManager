@@ -119,6 +119,9 @@ public class IngestPipelineTests
             [IngestSeeder.Atari2600Dat] = [new FixtureGame("Laser Lanes (USA)", "Laser Lanes (USA).a26", Lanes)],
             [IngestSeeder.LynxDat] = [],
             [IngestSeeder.JaguarDat] = [],
+            [IngestSeeder.VirtualBoyDat] = [],
+            [IngestSeeder.Atari5200Dat] = [],
+            [IngestSeeder.Atari7800Dat] = [],
             [IngestSeeder.ColecoVisionDat] = [new FixtureGame("Pixel Pursuit (USA)", "Pixel Pursuit (USA).col", Pursuit)],
             [IngestSeeder.GameGearDat] =
             [

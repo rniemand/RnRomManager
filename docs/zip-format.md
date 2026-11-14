@@ -18,7 +18,10 @@ roms/
   n64/                  Nintendo 64 (always stored big-endian, as .z64)
   nes/                  Nintendo Entertainment System (headered .nes, header included)
   snes/                 Super Nintendo Entertainment System (stored as .sfc, copier header stripped)
+  vb/                   Virtual Boy (.vb)
   a2600/                Atari 2600 (.a26 or .bin, as the DAT names it)
+  a5200/                Atari 5200 (.a52)
+  a7800/                Atari 7800 (.a78 or .bin, as the DAT names it)
   lynx/                 Atari Lynx (.lnx or .lyx, as the DAT names it)
   jaguar/               Atari Jaguar (.j64, .jag, .rom, .abs or .cof, as the DAT names it)
   coleco/               ColecoVision (.col)
@@ -179,9 +182,13 @@ Nintendo Entertainment System `header`, from the 16-byte iNES / NES 2.0 header (
 
 Super Nintendo Entertainment System `header`, read after a copier header is stripped (so it doesn't say whether the dump had one): the internal header is looked for as LoROM at 0x7FC0, HiROM at 0xFFC0 and ExHiROM at 0x40FFC0 (ExHiROM first for ROMs over 4 MiB); the first location with a valid checksum/complement pair wins, else the first with a printable 21-byte title and a map mode that fits the location. `headerValid` (a location was chosen), `title` (21 chars, ASCII up to the first NUL, other bytes as `?`), `mapping` (`LoROM`, `HiROM` or `ExHiROM`), `fastRom` (map mode bit 0x10), `romType` (the chipset byte, as a number), `romSizeKiB` (2^byte, null when 0 or over 13), `sramSizeKiB` (0, or 2^byte up to 10, else null), `region` (`Japan`, `USA`, `Europe`, `Sweden`, `Finland`, `Denmark`, `France`, `Netherlands`, `Spain`, `Germany`, `Italy`, `China`, `Indonesia`, `Korea`, `Canada`, `Brazil`, `Australia`, else null), `version`, `checksum` (4 upper-case hex digits), `checksumValid`, `romSizeBytes` (the stored length). With no location chosen only `headerValid` (false) and `romSizeBytes` are set; the rest are null.
 
+Virtual Boy cartridges have no header: `header` is always null.
+
 Atari 2600 cartridges have no header: `header` is always null.
 
 Atari Lynx `header` is present on files at least 64 bytes long starting with `LYNX`. Its fields are `bank0PageSize`, `bank1PageSize` and `version` (little-endian unsigned 16-bit values at 0x04, 0x06 and 0x08), `title` (32 bytes from 0x0A), `manufacturer` (16 bytes from 0x2A) and `rotation` (byte at 0x3A, recorded as `none`, `left` or `right` for 0, 1 or 2, otherwise as a number). Text fields use Latin-1 through the first NUL, with whitespace trimmed and empty values stored as null. Atari Jaguar cartridges have no standard header, so their `header` is always null.
+
+Atari 5200 cartridges have no header: `header` is always null. Atari 7800 `header` is present on files at least 128 bytes long with `ATARI7800` at 0x01 (an `.a78` dump). Its fields are `version` (byte at 0x00), `title` (32 bytes from 0x11), `romSize` (big-endian unsigned 32-bit at 0x31), `cartType` (big-endian unsigned 16-bit at 0x35), `controller1` and `controller2` (bytes at 0x37 and 0x38) and `tvType` (`ntsc` or `pal`, bit 0 of 0x39). `title` uses Latin-1 through the first NUL, trimmed, empty stored as null. A headerless `.bin` dump has `header` null.
 
 ColecoVision `header`: `magic`, the first two bytes as upper-case hex (`AA55` shows the title screen, `55AA` skips it; anything else is not a valid header, empty for an empty file).
 

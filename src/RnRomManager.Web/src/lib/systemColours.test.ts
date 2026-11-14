@@ -35,6 +35,12 @@ describe('systemColour', () => {
 		expect(systemColour('saturn')).toEqual({ name: 'saturn', foreground: '#fff' });
 	});
 
+	it('gives Virtual Boy, Atari 5200 and Atari 7800 their own colours (B5)', () => {
+		expect(systemColour('vb')).toEqual({ name: 'vb', foreground: '#000' });
+		expect(systemColour('a5200')).toEqual({ name: 'a5200', foreground: '#fff' });
+		expect(systemColour('a7800')).toEqual({ name: 'a7800', foreground: '#000' });
+	});
+
 	it('keeps an unknown system neutral', () => {
 		expect(systemColour('sg1000')).toBe(fallbackColour);
 	});

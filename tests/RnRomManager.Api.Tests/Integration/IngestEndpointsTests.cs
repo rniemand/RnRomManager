@@ -62,6 +62,9 @@ public class IngestEndpointsTests
             [IngestSeeder.Atari2600Dat] = [],
             [IngestSeeder.LynxDat] = [],
             [IngestSeeder.JaguarDat] = [],
+            [IngestSeeder.VirtualBoyDat] = [],
+            [IngestSeeder.Atari5200Dat] = [],
+            [IngestSeeder.Atari7800Dat] = [],
             [IngestSeeder.ColecoVisionDat] = [],
             [IngestSeeder.GameGearDat] = [],
             [IngestSeeder.MasterSystemDat] = [],
@@ -273,7 +276,7 @@ public class IngestEndpointsTests
         using var response = await _admin.GetAsync("/api/ingest/pending");
         var systems = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
-        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64", "nes", "snes", "a2600", "lynx", "jaguar", "coleco", "gg", "sms", "md", "s32x", "tg16", "switch", "psx", "psp", "gc", "wii", "x360", "saturn" }));
+        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64", "nes", "snes", "vb", "a2600", "a5200", "a7800", "lynx", "jaguar", "coleco", "gg", "sms", "md", "s32x", "tg16", "switch", "psx", "psp", "gc", "wii", "x360", "saturn" }));
         var gb = systems.Single(s => s.GetProperty("system").GetString() == "gb").GetProperty("files");
         Assert.That(gb.GetArrayLength(), Is.EqualTo(1));
         Assert.That(gb[0].GetProperty("name").GetString(), Is.EqualTo("Tetris.gb"));

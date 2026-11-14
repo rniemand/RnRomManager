@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#fbe4e4"/>
+  <path d="M236 270h40v86h-40z" fill="#2a2a2e"/>
+  <path d="M176 356h160l20 30H156z" fill="#2a2a2e"/>
+  <path d="M96 150q0-26 26-26h268q26 0 26 26v94q0 30-30 30H126q-30 0-30-30z" fill="#c92a2a" stroke="#8f1d1d" stroke-width="6"/>
+  <path d="M120 140h272v24H120z" fill="#1e1e22"/>
+  <circle cx="196" cy="212" r="38" fill="#1e1e22"/>
+  <circle cx="316" cy="212" r="38" fill="#1e1e22"/>
+  <circle cx="196" cy="212" r="22" fill="#f03e3e"/>
+  <circle cx="316" cy="212" r="22" fill="#f03e3e"/>
+  <text x="256" y="430" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="21" font-weight="700" letter-spacing="4" fill="#8f1d1d">VIRTUAL BOY</text>
+</svg>

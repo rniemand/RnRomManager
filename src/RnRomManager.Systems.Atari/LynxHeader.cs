@@ -23,7 +23,7 @@ internal static class LynxHeader
         });
     }
 
-    private static string? ReadText(ReadOnlySpan<byte> field)
+    internal static string? ReadText(ReadOnlySpan<byte> field)
     {
         var nul = field.IndexOf((byte)0);
         var value = Encoding.Latin1.GetString(nul < 0 ? field : field[..nul]).Trim();

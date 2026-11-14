@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 34, 25)]
-    [TestCase(SeedSet.Full, 234, 225)]
+    [TestCase(SeedSet.Basic, 37, 28)]
+    [TestCase(SeedSet.Full, 237, 228)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -164,6 +164,21 @@ public class SeedIngestTests
         var jaguar = infos.Single(g => g.System == "jaguar").Roms.Single();
         Assert.That(jaguar.FileName, Is.EqualTo("Cobalt Drift (World).j64"));
         Assert.That(jaguar.Header, Is.Null);
+        var vb = infos.Single(g => g.System == "vb").Roms.Single();
+        Assert.That(vb.FileName, Is.EqualTo("Red Horizon (Japan, USA).vb"));
+        Assert.That(vb.Header, Is.Null);
+        var a5200 = infos.Single(g => g.System == "a5200").Roms.Single();
+        Assert.That(a5200.FileName, Is.EqualTo("Star Lattice (USA).a52"));
+        Assert.That(a5200.Header, Is.Null);
+        var a7800 = infos.Single(g => g.System == "a7800").Roms.Single();
+        Assert.That(a7800.FileName, Is.EqualTo("Canyon Glide (USA).a78"));
+        Assert.That(a7800.Header!["version"]!.GetValue<int>(), Is.EqualTo(1));
+        Assert.That(a7800.Header["title"]!.GetValue<string>(), Is.EqualTo("CANYON GLIDE"));
+        Assert.That(a7800.Header["romSize"]!.GetValue<long>(), Is.EqualTo(32768));
+        Assert.That(a7800.Header["cartType"]!.GetValue<int>(), Is.Zero);
+        Assert.That(a7800.Header["controller1"]!.GetValue<int>(), Is.EqualTo(1));
+        Assert.That(a7800.Header["controller2"]!.GetValue<int>(), Is.EqualTo(1));
+        Assert.That(a7800.Header["tvType"]!.GetValue<string>(), Is.EqualTo("ntsc"));
 
         var lanes = Directory.GetFiles(Path.Combine(factory.Root, "roms", "a2600", "L"), "*.zip").Single();
         using (var zip = LibraryZip.Open(lanes, factory.Services.GetRequiredService<InfoJsonReader>()))

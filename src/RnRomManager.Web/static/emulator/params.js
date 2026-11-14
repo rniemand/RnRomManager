@@ -3,7 +3,7 @@
 /** @typedef {{ game: string, rom: number, core: string, name: string }} PlayParams */
 
 const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const cores = ['gambatte', 'mgba', 'handy', 'virtualjaguar'];
+const cores = ['gambatte', 'mgba', 'handy', 'virtualjaguar', 'beetle_vb', 'a5200', 'prosystem'];
 
 /**
  * @param {string} search `location.search`

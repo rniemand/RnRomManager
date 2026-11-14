@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#e3e8f8"/>
+  <path d="M70 250l40-80h292l40 80v70q0 26-26 26H96q-26 0-26-26z" fill="#1d1f26" stroke="#0f1014" stroke-width="6"/>
+  <rect x="96" y="250" width="320" height="22" fill="#b8bfd0"/>
+  <rect x="96" y="282" width="320" height="10" fill="#b8bfd0"/>
+  <rect x="186" y="184" width="140" height="44" rx="6" fill="#0f1014"/>
+  <rect x="196" y="192" width="120" height="28" rx="3" fill="#364fc7"/>
+  <rect x="134" y="306" width="54" height="22" rx="4" fill="#364fc7"/>
+  <rect x="324" y="306" width="54" height="22" rx="4" fill="#4c5a7a"/>
+  <text x="256" y="400" text-anchor="middle" font-family="Segoe UI, sans-serif" font-size="21" font-weight="700" letter-spacing="4" fill="#1d1f26">ATARI 5200</text>
+</svg>

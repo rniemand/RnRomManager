@@ -8,7 +8,7 @@ const web = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = resolve(web, process.argv[2] ?? 'static/emulator/vendor');
 const pkgs = join(web, 'node_modules', '@emulatorjs');
 const src = join(pkgs, 'emulatorjs', 'data');
-const cores = ['gambatte', 'mgba', 'handy', 'virtualjaguar'];
+const cores = ['gambatte', 'mgba', 'handy', 'virtualjaguar', 'beetle_vb', 'a5200', 'prosystem'];
 
 function copy(from, to) {
 	mkdirSync(dirname(to), { recursive: true });
