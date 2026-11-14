@@ -70,6 +70,7 @@ public class IngestRestoreEndpointsTests
             [IngestSeeder.WiiDat] = [],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
+            [IngestSeeder.NintendoDsDat] = [],
             ["Nintendo - Game Boy"] = [],
             ["Nintendo - Game Boy Color"] = [],
         }, titleDb: withSwitch ? IngestSeeder.EmptySwitch : null, layouts: IngestSeeder.RedumpLayouts);

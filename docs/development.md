@@ -27,6 +27,7 @@ One container: the API serves the built SPA from `wwwroot` and everything under 
 | `src/RnRomManager.Systems.Nes` | the `nes` handler: iNES / NES 2.0 header reader, default box art (headered `.nes` only) |
 | `src/RnRomManager.Systems.Snes` | the `snes` handler: copier-header strip, LoROM / HiROM / ExHiROM header reader, default box art |
 | `src/RnRomManager.Systems.VirtualBoy` | the `vb` handler (no header), default box art |
+| `src/RnRomManager.Systems.NintendoDs` | the `nds` (Nintendo DS) handler: cartridge header reader (title, game and maker codes, unit code, ROM version, header CRC-16), default box art |
 | `src/RnRomManager.Systems.Atari` | the `a2600`, `lynx`, `jaguar`, `a5200` and `a7800` handlers, with the Lynx (`LYNX`) and 7800 (`ATARI7800`) header readers, default box art |
 | `src/RnRomManager.Systems.Coleco` | the `coleco` handler (`AA55`/`55AA` magic check), default box art |
 | `src/RnRomManager.Systems.Sega` | the `gg`, `sms` (shared optional `TMR SEGA` header reader) `md` and `s32x` (both read the optional `SEGA` header at 0x100 through the shared `MegaDriveHeader`) handlers, and the headerless `saturn` disc handler, default box art |
@@ -36,7 +37,7 @@ One container: the API serves the built SPA from `wwwroot` and everything under 
 | `src/RnRomManager.Systems.NintendoDisc` | the `gc` and `wii` disc handlers (`nintendo-disc` family) and the shared `NintendoDiscHeader` reader (magic word, game id, title), default box art |
 | `src/RnRomManager.Systems.Microsoft` | the `x360` disc handler: external `FileSets` storage, no header, default box art |
 | `src/RnRomManager.Web` | the SvelteKit SPA (see below) |
-| `tests/RnRomManager.TestData` | synthetic GB, GBA, N64, NES, SNES, Switch (`SyntheticNspBuilder`: PFS0 or XCI) and disc (`SyntheticDiscBuilder`: images, GameCube/Wii headers with disc number and version, WBFS files, cue sheets) ROM builders, fixture DAT writer (libretro DATs in `no-intro/` or `redump/` layouts, and titledb compact files), the `ExternalTestHandler` / `ExternalSetTestHandler` (a `FileSets` system with `.bin`/`.cue`/`.iso`/`.nrg`) / `ExternalTitleDbTestHandler` test systems and the seed CLI (also a library for the test projects) |
+| `tests/RnRomManager.TestData` | synthetic GB, GBA, N64, NES, SNES, DS (`SyntheticNdsRomBuilder`: header with a valid or bad CRC, seeded or 0xFF body, streamed with `WriteTo`), Switch (`SyntheticNspBuilder`: PFS0 or XCI) and disc (`SyntheticDiscBuilder`: images, GameCube/Wii headers with disc number and version, WBFS files, cue sheets) ROM builders, fixture DAT writer (libretro DATs in `no-intro/` or `redump/` layouts, and titledb compact files), the `ExternalTestHandler` / `ExternalSetTestHandler` (a `FileSets` system with `.bin`/`.cue`/`.iso`/`.nrg`) / `ExternalTitleDbTestHandler` test systems and the seed CLI (also a library for the test projects) |
 | `tests/*.Tests` | NUnit + NSubstitute; database tests use Testcontainers (`[Category("Integration")]`) |
 | `tests/e2e` | Playwright + axe against the real image |
 

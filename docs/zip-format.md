@@ -16,6 +16,7 @@ roms/
   gbc/                  GBC-only and dual-mode carts
   gba/                  Game Boy Advance
   n64/                  Nintendo 64 (always stored big-endian, as .z64)
+  nds/                  Nintendo DS (.nds)
   nes/                  Nintendo Entertainment System (headered .nes, header included)
   snes/                 Super Nintendo Entertainment System (stored as .sfc, copier header stripped)
   vb/                   Virtual Boy (.vb)
@@ -130,7 +131,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 |---|---|---|---|
 | `schemaVersion` | int | ✓ | `7` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
 | `releaseYear` | int? | | from the DAT metadata (titledb's release date for Switch; the disc systems have no metadata DATs) |
@@ -183,6 +184,8 @@ Nintendo Entertainment System `header`, from the 16-byte iNES / NES 2.0 header (
 Super Nintendo Entertainment System `header`, read after a copier header is stripped (so it doesn't say whether the dump had one): the internal header is looked for as LoROM at 0x7FC0, HiROM at 0xFFC0 and ExHiROM at 0x40FFC0 (ExHiROM first for ROMs over 4 MiB); the first location with a valid checksum/complement pair wins, else the first with a printable 21-byte title and a map mode that fits the location. `headerValid` (a location was chosen), `title` (21 chars, ASCII up to the first NUL, other bytes as `?`), `mapping` (`LoROM`, `HiROM` or `ExHiROM`), `fastRom` (map mode bit 0x10), `romType` (the chipset byte, as a number), `romSizeKiB` (2^byte, null when 0 or over 13), `sramSizeKiB` (0, or 2^byte up to 10, else null), `region` (`Japan`, `USA`, `Europe`, `Sweden`, `Finland`, `Denmark`, `France`, `Netherlands`, `Spain`, `Germany`, `Italy`, `China`, `Indonesia`, `Korea`, `Canada`, `Brazil`, `Australia`, else null), `version`, `checksum` (4 upper-case hex digits), `checksumValid`, `romSizeBytes` (the stored length). With no location chosen only `headerValid` (false) and `romSizeBytes` are set; the rest are null.
 
 Virtual Boy cartridges have no header: `header` is always null.
+
+Nintendo DS `header`, from the cartridge header (null for a file shorter than 0x160 bytes): `title` (12 bytes at 0x00 up to the first NUL, trailing spaces trimmed, null when empty), `gameCode` (4 bytes at 0x0C) and `makerCode` (2 bytes at 0x10), both kept whole, `unitCode` (0x12) and `romVersion` (0x1E) as unsigned numbers, and `headerChecksumValid` (CRC-16, initial 0xFFFF, reflected polynomial 0xA001, over 0x000–0x15D, compared with the little-endian value at 0x15E). Text fields keep bytes 0x20–0x7E and turn every other byte into `?`. A bad CRC makes an unmatched ROM `InvalidHeader`; a DAT match still wins.
 
 Atari 2600 cartridges have no header: `header` is always null.
 

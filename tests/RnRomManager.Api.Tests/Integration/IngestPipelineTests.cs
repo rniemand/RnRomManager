@@ -139,6 +139,7 @@ public class IngestPipelineTests
                 [new FixtureGame("Wave Bowling (USA)", "Wave Bowling (USA).iso", WaveBowling.Build()) { Serial = "RVL-RWBE-USA" }],
             [IngestSeeder.Xbox360Dat] = [],
             [IngestSeeder.SaturnDat] = [],
+            [IngestSeeder.NintendoDsDat] = [],
             [Gb] =
             [
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJ) { Publishers = ["Nintendo"] },

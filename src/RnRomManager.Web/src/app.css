@@ -231,6 +231,15 @@
 	background-color: var(--bs-saturn) !important;
 }
 
+/* Nintendo DS system colour: jade, same in both themes; black on it is AA (~6.7:1). */
+:root {
+	--bs-nds: #0ca678;
+}
+.text-bg-nds {
+	color: #000 !important;
+	background-color: var(--bs-nds) !important;
+}
+
 /* Library cards (L1, L2): a step lighter than the body in dark mode; a small lift and shadow on hover or keyboard focus. */
 [data-bs-theme='dark'] .game-card {
 	--bs-card-bg: var(--bs-tertiary-bg);
