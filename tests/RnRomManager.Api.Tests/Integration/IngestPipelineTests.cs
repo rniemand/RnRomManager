@@ -55,6 +55,9 @@ public class IngestPipelineTests
     private static readonly byte[] CometAudio = new SyntheticDiscBuilder { Seed = 2102, Size = 32 * 1024 }.Build();
     /// <summary>A 64 KiB <c>.bin</c> without <c>SEGA</c> at 0x100 whose SHA-1 only the Sega CD DAT lists (family isolation).</summary>
     private static readonly byte[] CartTwin = SegaCdTwin();
+    /// <summary>3DO B3: the DAT-matched data track of a cue + 2 bins set, and its audio track.</summary>
+    private static readonly byte[] OpalData = new SyntheticDiscBuilder { Seed = 2501 }.Build();
+    private static readonly byte[] OpalAudio = new SyntheticDiscBuilder { Seed = 2502, Size = 32 * 1024 }.Build();
     private ApiFactory _shared = null!;
     /// <summary>The class's shared host, or a host of the test's own when it needs other services (<see cref="RestartWithOverrides"/>).</summary>
     private ApiFactory _factory = null!;
@@ -153,7 +156,7 @@ public class IngestPipelineTests
                 new FixtureGame("Disc Comet (USA)", "Disc Comet (USA) (Track 1).bin", CometData),
                 new FixtureGame("Cart Twin (USA)", "Cart Twin (USA) (Track 1).bin", CartTwin),
             ],
-            [IngestSeeder.ThreeDoDat] = [],
+            [IngestSeeder.ThreeDoDat] = [new FixtureGame("Opal Orbit (USA)", "Opal Orbit (USA) (Track 1).bin", OpalData)],
             [IngestSeeder.NintendoDsDat] =
             [
                 new FixtureGame("Bad Crc Hero (USA)", "Bad Crc Hero (USA).nds", BadCrcHero),
@@ -368,6 +371,54 @@ public class IngestPipelineTests
         File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1));
 
         var result = await IngestAsync(new IngestFile("segacd", path, "huge.iso", (1L << 30) + 1, File.GetLastWriteTimeUtc(path)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooLarge)));
+        Assert.That(File.Exists(path), Is.False, "moved to _failed/");
+    }
+
+    [Test]
+    public async Task ThreeDo_DatMatchedCueWithTwoBins_IsOneRelease_FilesNextToTheZipUnderTheirExactNames()
+    {
+        const string cue = "Opal Orbit (USA).cue", track1 = "Opal Orbit (USA) (Track 1).bin", track2 = "Opal Orbit (USA) (Track 2).bin";
+        var cueText = $"FILE \"{track1}\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"{track2}\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n";
+        foreach (var (name, bytes) in new[] { (cue, System.Text.Encoding.UTF8.GetBytes(cueText)), (track1, OpalData), (track2, OpalAudio) })
+            File.SetLastWriteTimeUtc(Drop("3do", name, bytes).FullPath, DateTime.UtcNow.AddMinutes(-1));
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "3do").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome)),
+            Is.EquivalentTo(new[] { (cue, IngestOutcome.Ingested), (track1, IngestOutcome.Ingested), (track2, IngestOutcome.Ingested) }));
+        var folder = Path.Combine(Roms, "3do", "O");
+        Assert.That(Directory.GetFiles(folder).Select(Path.GetFileName).Order(StringComparer.Ordinal),
+            Is.EqualTo(new[] { track1, track2, cue, "Opal Orbit.zip" }));
+        Assert.That(File.ReadAllBytes(Path.Combine(folder, track2)), Is.EqualTo(OpalAudio));
+        var game = ReadZip("3do/O/Opal Orbit.zip");
+        var rom = game.Roms.Single();
+        Assert.That((game.System, rom.FileName, rom.ExternalFileName, rom.Identification.Method), Is.EqualTo(("3do", track1, track1, IdentificationMethod.Dat)));
+        Assert.That(rom.Header, Is.Null);
+        Assert.That(rom.Files!.Select(f => f.ExternalFileName), Is.EqualTo(new[] { cue, track2 }));
+        Assert.That(Directory.GetFiles(Ingest("3do")), Is.Empty);
+    }
+
+    [Test]
+    public async Task ThreeDo_DatTrackDroppedInTheSegaCdFolder_IsNotMatchedAgainstThe3doDat()
+    {
+        var result = await IngestAsync(DropAged("segacd", "opal.bin", OpalData));
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "segacd")));
+        Assert.That(Directory.Exists(Path.Combine(Roms, "3do")) ? Directory.GetFiles(Path.Combine(Roms, "3do"), "*", SearchOption.AllDirectories) : [],
+            Is.Empty);
+    }
+
+    [Test]
+    public async Task ThreeDo_LooseOverTheMaximum_IsTooLarge_WithoutReadingIt()
+    {
+        var path = Path.Combine(Ingest("3do"), "huge.iso");
+        using (var file = File.Create(path))
+            file.SetLength((1L << 30) + 1); // sparse where the file system allows
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1));
+
+        var result = await IngestAsync(new IngestFile("3do", path, "huge.iso", (1L << 30) + 1, File.GetLastWriteTimeUtc(path)));
 
         Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooLarge)));
         Assert.That(File.Exists(path), Is.False, "moved to _failed/");

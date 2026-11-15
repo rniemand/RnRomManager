@@ -642,6 +642,32 @@ public class ReviewEndpointsTests
         Assert.That(File.Exists(path), Is.False);
     }
 
+    [Test]
+    public async Task ThreeDo_UnmatchedIso_WaitsInReview_AndManualStoresItAsIsoNextToTheZip()
+    {
+        var bytes = new SyntheticDiscBuilder { Seed = 2511 }.Build();
+        var path = Path.Combine(_factory.Root, "ingest", "3do", "mystery.iso");
+        File.WriteAllBytes(path, bytes);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+
+        var result = await Ingest(new IngestFile("3do", path, "mystery.iso", bytes.Length, File.GetLastWriteTimeUtc(path)));
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "3do")));
+        var item = (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(bytes)), default))!;
+        Assert.That(item.SystemId, Is.EqualTo("3do"));
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "Mystery Disc", regions = new[] { "USA" }, languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+
+        Assert.That(response.Code, Is.Null);
+        var game = await ReadGame(response.GameId!.Value);
+        var rom = game.Roms.Single();
+        Assert.That((game.System, rom.FileName, rom.ExternalFileName, rom.Identification.Method),
+            Is.EqualTo(("3do", "Mystery Disc (USA).iso", "Mystery Disc (USA).iso", IdentificationMethod.Manual)));
+        Assert.That(File.ReadAllBytes(Path.Combine(_factory.Root, "roms", "3do", "M", "Mystery Disc (USA).iso")), Is.EqualTo(bytes));
+        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Resolved"));
+        Assert.That(File.Exists(path), Is.False);
+    }
+
     private async Task<ReviewItem> QueueDs(string name, byte[] bytes, bool archive = false)
     {
         if (archive)
