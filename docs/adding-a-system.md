@@ -63,7 +63,7 @@ See the README's [supported systems](../README.md#supported-systems) table for s
 
 **Limits of the contract:**
 
-- A release is one file unless the system sets `FileSets`, and then only bin/cue sets (a `.cue` naming `.bin` tracks) are grouped. Other multi-file formats (`.gdi`, `.ccd`, `.mds`, `.chd`, audio tracks as `.wav`/`.ape`) aren't supported. Multi-disc games are one release per disc, grouped by title.
+- A release is one file unless the system sets `FileSets`, and then only bin/cue sets (a `.cue` naming `.bin` tracks) are grouped. Other multi-file formats (`.gdi`, `.ccd`, `.mds`, audio tracks as `.wav`/`.ape`) aren't supported. PlayStation, Saturn and Sega CD also list `.chd` as a single-file format: it's never part of a set and never matches the Redump DAT, so it always goes to Review. Multi-disc games are one release per disc, grouped by title.
 - `Fields` values must be JSON primitives (string, number, bool or null), because the UI renders them generically.
 
 ## Step by step

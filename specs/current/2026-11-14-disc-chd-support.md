@@ -77,7 +77,7 @@ Steps 2–3 run integration tests (category `Integration`), which need Docker. P
   - Files: `src/RnRomManager.Web/src/lib/emulator.ts` (comment), `src/RnRomManager.Web/src/lib/emulator.test.ts`, `src/RnRomManager.Web/src/lib/emulatorPlay.test.ts`.
   - Tests: `emulator.test.ts`: `canPlay` is true for `pcsx_rearmed`, `yabause` and `genesis_plus_gx` with an external `.chd`. `emulatorPlay.test.ts`: for each of the three cores, a `disc=1` launch named `Game.chd` requests play-disc and sets `EJS_gameUrl` to a `File` named `Game.chd`; the Sega CD case still fetches the BIOS first and sets `EJS_disableCue === false`.
   - Done when: `npm run lint`, `npm run check` and those vitest files pass.
-- [ ] **5. Docs**:
+- [x] **5. Docs**:
   - `README.md`: the Game detail Play bullet (line 15) adds `.chd` to the PlayStation, Saturn and Sega CD single-file shapes; a sentence that a `.chd` always goes to Review (never DAT-matched).
   - `docs/features.md`:
     - the ingest paragraph (line ~124): PlayStation "(a `.cue` with its `.bin` tracks, or a `.bin`/`.iso`/`.chd`)", Saturn "(… or a `.nrg`/`.chd`)";
