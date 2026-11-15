@@ -33,10 +33,11 @@ public static class IngestSeeder
     public const string SaturnDat = "Sega - Saturn";
     public const string NintendoDsDat = "Nintendo - Nintendo DS";
     public const string SegaCdDat = "Sega - Mega-CD - Sega CD";
+    public const string ThreeDoDat = "The 3DO Company - 3DO";
 
-    /// <summary>The seven disc systems' DATs (disc systems B1/B2): each in <c>redump/</c>, with no metadat.</summary>
+    /// <summary>The eight disc systems' DATs (disc systems B1/B2): each in <c>redump/</c>, with no metadat.</summary>
     public static IReadOnlyDictionary<string, FixtureDatLayout> RedumpLayouts { get; } =
-        new[] { PsxDat, PspDat, GameCubeDat, WiiDat, Xbox360Dat, SaturnDat, SegaCdDat }.ToDictionary(n => n, _ => FixtureDatLayout.Redump);
+        new[] { PsxDat, PspDat, GameCubeDat, WiiDat, Xbox360Dat, SaturnDat, SegaCdDat, ThreeDoDat }.ToDictionary(n => n, _ => FixtureDatLayout.Redump);
 
     /// <summary>An empty titledb compact file for Switch: enough for the DAT preflight of a fixture cache.</summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> EmptySwitch =>
