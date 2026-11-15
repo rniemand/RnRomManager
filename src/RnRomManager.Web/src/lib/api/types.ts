@@ -1,3 +1,5 @@
+import type { Bindings, EditableHotkeyId } from '../hotkeys';
+
 /** A user role; a user has any subset (sorted in API responses). */
 export type Role = 'admin' | 'rom-manager';
 
@@ -10,6 +12,12 @@ export interface Me {
 	username: string;
 	roles: Role[];
 	mustChangePassword: boolean;
+}
+
+/** `GET`/`PUT /api/auth/me/hotkeys` (B23). `implicitUnassigned`: actions whose default yields to an older override. */
+export interface HotkeysResponse {
+	bindings: Bindings;
+	implicitUnassigned: EditableHotkeyId[];
 }
 
 /** `GET /api/jobs/current` (spec §23, §3.1); 204 when idle. */

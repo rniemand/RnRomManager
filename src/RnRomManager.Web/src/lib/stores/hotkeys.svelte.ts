@@ -1,13 +1,15 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { api } from '../api/client';
-import type { Me, Page, ReviewListItem } from '../api/types';
+import type { HotkeysResponse, Me, Page, ReviewListItem } from '../api/types';
 import { actionFor, fromEvent, type Bindings, type EditableHotkeyId } from '../hotkeys';
 import { auth } from './auth.svelte';
 
 /** B23–B24: the signed-in user's hotkey bindings and the global keydown handler. */
 class HotkeyStore {
 	bindings = $state<Bindings | null>(null);
+	/** Actions the server left unassigned because their default yields to an older override (the editor omits them). */
+	implicitUnassigned = $state<EditableHotkeyId[]>([]);
 	#loadedFor: string | null = null;
 
 	/**
@@ -19,23 +21,29 @@ class HotkeyStore {
 		if (key === this.#loadedFor) return;
 		this.#loadedFor = key;
 		this.bindings = null;
+		this.implicitUnassigned = [];
 		if (key !== null) void this.load(key);
 	}
 
 	async load(key: string | null = this.#loadedFor): Promise<void> {
 		try {
-			const { bindings } = await api.get<{ bindings: Bindings }>('/api/auth/me/hotkeys');
-			if (this.#loadedFor === key) this.bindings = bindings;
+			const loaded = await api.get<HotkeysResponse>('/api/auth/me/hotkeys');
+			if (this.#loadedFor === key) this.#set(loaded);
 		} catch {
 			// Hotkeys are a convenience: without them the app works as before.
 		}
 	}
 
 	/** `PUT` the bindings; the live ones change at once. Errors propagate (the modal shows them). */
-	async save(bindings: Bindings): Promise<Bindings> {
-		const saved = await api.put<{ bindings: Bindings }>('/api/auth/me/hotkeys', { bindings });
-		this.bindings = saved.bindings;
+	async save(bindings: Partial<Bindings>): Promise<Bindings> {
+		const saved = await api.put<HotkeysResponse>('/api/auth/me/hotkeys', { bindings });
+		this.#set(saved);
 		return saved.bindings;
+	}
+
+	#set(response: HotkeysResponse): void {
+		this.bindings = response.bindings;
+		this.implicitUnassigned = response.implicitUnassigned ?? [];
 	}
 
 	/** The `window` keydown handler (B24); true when the event ran an action. */
