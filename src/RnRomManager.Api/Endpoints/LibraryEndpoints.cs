@@ -26,7 +26,7 @@ public static class LibraryEndpoints
     /// for Sega CD. Eligibility is per core, so Genesis Plus GX also accepts an external primary of Mega Drive, a family that
     /// the registry keeps embedded.
     /// </summary>
-    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx" };
+    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera" };
 
     public static RouteGroupBuilder MapLibraryEndpoints(this RouteGroupBuilder api)
     {

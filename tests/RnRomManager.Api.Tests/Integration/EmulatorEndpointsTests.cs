@@ -30,6 +30,7 @@ public partial class EmulatorEndpointsTests
         _factory.Settings["Emulator:GenesisCorePath"] = Path.Combine(_factory.Root, "genesis");
         _factory.Settings["Emulator:PicodriveCorePath"] = Path.Combine(_factory.Root, "picodrive");
         _factory.Settings["Emulator:Snes9xCorePath"] = Path.Combine(_factory.Root, "snes9x");
+        _factory.Settings["Emulator:OperaCorePath"] = Path.Combine(_factory.Root, "opera");
         await _factory.StartSharedAsync();
     }
 
@@ -50,6 +51,7 @@ public partial class EmulatorEndpointsTests
         ResetGenesisDir();
         ResetDir(PicodriveDir);
         ResetDir(Snes9xDir);
+        ResetDir(OperaDir);
         _client = await SignInAsync("player");
     }
 
@@ -104,6 +106,9 @@ public partial class EmulatorEndpointsTests
         using var response = await _client.GetAsync("/api/emulator/bios/saturn_bios.bin");
 
         Assert.That(EmulatorEndpoints.IsBiosName("saturn_bios.bin"), Is.True);
+        // 3DO B8: the five 3DO BIOS names.
+        foreach (var name in new[] { "panafz10.bin", "panafz1.bin", "panafz1j.bin", "goldstar.bin", "sanyotry.bin" })
+            Assert.That(EmulatorEndpoints.IsBiosName(name), Is.True, name);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(Bios));
         AssertNoStore(response);

@@ -411,7 +411,7 @@ public partial class LibraryEndpointsTests
     {
         Assert.That(PlayDisc.MaxBytesBySystem, Is.EquivalentTo(new Dictionary<string, long>
         {
-            ["psx"] = 1L << 30, ["psp"] = 2L << 30, ["saturn"] = 1L << 30, ["segacd"] = 1L << 30,
+            ["psx"] = 1L << 30, ["psp"] = 2L << 30, ["saturn"] = 1L << 30, ["segacd"] = 1L << 30, ["3do"] = 1L << 30,
         }));
     }
 
@@ -656,6 +656,87 @@ public partial class LibraryEndpointsTests
             }],
             ("Twin Cue (USA) (Track 1).bin", PsxTrack1), ("Twin Cue (USA).cue", cue), ("Twin Cue (USA) (Alt).cue", cue),
             ("Twin Cue (USA) (Track 2).bin", PsxTrack2));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(await ProblemCode(response, HttpStatusCode.Conflict), Is.EqualTo(PlayDisc.InvalidPlayDisc));
+    }
+
+    // 3DO B4: Sega CD's shapes and its 1 GiB inclusive cap.
+
+    private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> ThreeDoGame(string title, InfoJsonRom[] roms,
+        params (string Name, byte[] Bytes)[] onDisk) => DiscGame(PlayDisc.ThreeDoSystemId, title, roms, onDisk);
+
+    [TestCase("Opal Solo (USA).bin")]
+    [TestCase("Opal Solo (USA).iso")]
+    public async Task PlayDisc_AThreeDoStandaloneImage_StreamsUnchanged(string name)
+    {
+        var (id, folder, ids) = await ThreeDoGame("Opal Solo", [PsxSolo(name, PsxTrack1)], (name, PsxTrack1));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(PsxTrack1));
+        AssertNotOpen(Path.Combine(folder, name));
+    }
+
+    [Test]
+    public async Task PlayDisc_AThreeDoCueSet_IsAStoredZip_WithThePlaybackCue()
+    {
+        var cue = PsxCue("Opal Rally (USA) (Track 1).bin", "Opal Rally (USA) (Track 2).bin");
+        var (id, _, ids) = await ThreeDoGame("Opal Rally", [PsxSet("Opal Rally (USA)", PsxTrack1, cue, PsxTrack2)],
+            ("Opal Rally (USA) (Track 1).bin", PsxTrack1), ("Opal Rally (USA).cue", cue), ("Opal Rally (USA) (Track 2).bin", PsxTrack2));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/zip"));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Opal Rally (USA).cue", "track-01.bin", "track-02.bin" }));
+        Assert.That(zip.Entries.Select(e => e.CompressedLength == e.Length), Has.All.True, "stored, not deflated");
+        Assert.That(ReadEntry(zip, "track-01.bin"), Is.EqualTo(PsxTrack1));
+        Assert.That(ReadEntry(zip, "track-02.bin"), Is.EqualTo(PsxTrack2));
+    }
+
+    [Test]
+    public async Task PlayDisc_AThreeDoDiscOfExactlyOneGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
+    {
+        var (atId, atFolder, atRoms) = await ThreeDoGame("Opal Wide", [PsxSolo("Opal Wide (USA).iso", Umd(60))], ("Opal Wide (USA).iso", Umd(60)));
+        var (overId, overFolder, overRoms) = await ThreeDoGame("Opal Wider", [PsxSolo("Opal Wider (USA).iso", Umd(61))], ("Opal Wider (USA).iso", Umd(61)));
+        // Lengths are set on disk only: the stored sizes stay the small originals.
+        await using (var grown = new FileStream(Path.Combine(atFolder, "Opal Wide (USA).iso"), FileMode.Open, FileAccess.Write))
+            grown.SetLength(PlayDisc.MaxBytes);
+        await using (var grown = new FileStream(Path.Combine(overFolder, "Opal Wider (USA).iso"), FileMode.Open, FileAccess.Write))
+            grown.SetLength(PlayDisc.MaxBytes + 1);
+
+        using (var atLimit = await _user.SendAsync(HttpMethod.Get, PlayDiscUrl(atId, atRoms[0]), null, sendXsrf: false,
+            completion: HttpCompletionOption.ResponseHeadersRead))
+        {
+            Assert.That(atLimit.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(atLimit.Content.Headers.ContentLength, Is.EqualTo(PlayDisc.MaxBytes));
+        } // disposed with the body unread: the stream is cancelled
+
+        using var over = await _user.GetAsync(PlayDiscUrl(overId, overRoms[0]));
+        Assert.That(over.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        var problem = await AuthClient.JsonAsync(over);
+        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.PlayDiscTooLarge));
+        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("1 GiB"));
+        AssertNotOpen(Path.Combine(overFolder, "Opal Wider (USA).iso"));
+    }
+
+    [Test]
+    public async Task PlayDisc_AThreeDoSetWithTwoCues_Is409InvalidPlayDisc()
+    {
+        var cue = PsxCue("Opal Twin (USA) (Track 1).bin", "Opal Twin (USA) (Track 2).bin");
+        var (id, _, ids) = await ThreeDoGame("Opal Twin",
+            [PsxSolo("Opal Twin (USA) (Track 1).bin", PsxTrack1) with
+            {
+                Files = [SetFile("Opal Twin (USA).cue", cue), SetFile("Opal Twin (USA) (Alt).cue", cue), SetFile("Opal Twin (USA) (Track 2).bin", PsxTrack2)],
+            }],
+            ("Opal Twin (USA) (Track 1).bin", PsxTrack1), ("Opal Twin (USA).cue", cue), ("Opal Twin (USA) (Alt).cue", cue),
+            ("Opal Twin (USA) (Track 2).bin", PsxTrack2));
 
         using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
 

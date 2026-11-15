@@ -139,4 +139,20 @@ public class OptionsValidatorTests
         Assert.That(relative.FailureMessage, Does.Not.Contain("Emulator:PicodriveCorePath"));
         Assert.That(new EmulatorOptionsValidator().Validate(null, new() { Snes9xCorePath = " " }).Succeeded, Is.False, "whitespace isn't blank");
     }
+
+    [Test]
+    public void OperaCorePath_EmptyOrAbsolute()
+    {
+        var absolute = Path.Combine(Path.GetTempPath(), "opera");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { OperaCorePath = "" }).Succeeded, Is.True, "blank disables");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { OperaCorePath = absolute }).Succeeded, Is.True);
+        Assert.That(new EmulatorOptionsValidator().Validate(null,
+            new() { OperaCorePath = absolute, GenesisCorePath = absolute, PicodriveCorePath = absolute, Snes9xCorePath = absolute }).Succeeded,
+            Is.True, "may share the other operator cores' folder");
+        var relative = new EmulatorOptionsValidator().Validate(null, new() { OperaCorePath = "opera" });
+        Assert.That(relative.Succeeded, Is.False);
+        Assert.That(relative.FailureMessage, Does.Contain("Emulator:OperaCorePath"));
+        Assert.That(relative.FailureMessage, Does.Not.Contain("Emulator:Snes9xCorePath"));
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { OperaCorePath = " " }).Succeeded, Is.False, "whitespace isn't blank");
+    }
 }

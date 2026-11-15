@@ -40,6 +40,10 @@ describe('systemColour', () => {
 		expect(systemColour('segacd')).toEqual({ name: 'segacd', foreground: '#fff' });
 	});
 
+	it('gives 3DO its own olive with black text (3DO B2)', () => {
+		expect(systemColour('3do')).toEqual({ name: '3do', foreground: '#000' });
+	});
+
 	it('gives Virtual Boy, Atari 5200 and Atari 7800 their own colours (B5)', () => {
 		expect(systemColour('vb')).toEqual({ name: 'vb', foreground: '#000' });
 		expect(systemColour('a5200')).toEqual({ name: 'a5200', foreground: '#fff' });

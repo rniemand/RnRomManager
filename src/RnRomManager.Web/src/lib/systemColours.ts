@@ -31,7 +31,8 @@ export interface SystemColour {
 		| 'x360'
 		| 'saturn'
 		| 'nds'
-		| 'segacd';
+		| 'segacd'
+		| '3do';
 	foreground: '#fff' | '#000';
 }
 
@@ -62,7 +63,8 @@ export const systemColours: Record<string, SystemColour> = {
 	x360: { name: 'x360', foreground: '#000' },
 	saturn: { name: 'saturn', foreground: '#fff' },
 	nds: { name: 'nds', foreground: '#000' },
-	segacd: { name: 'segacd', foreground: '#fff' }
+	segacd: { name: 'segacd', foreground: '#fff' },
+	'3do': { name: '3do', foreground: '#000' }
 };
 
 /** Unknown systems stay neutral. */

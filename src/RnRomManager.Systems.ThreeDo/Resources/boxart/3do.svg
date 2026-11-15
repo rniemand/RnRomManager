@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (3DO). Made for this project; MIT licensed like the rest of the repo.
+       A generic disc console and a compact disc: no logo or trade dress. Exported to 3do.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#e6e2ea"/>
+  <!-- compact disc behind the console -->
+  <circle cx="256" cy="176" r="124" fill="#c9ccd6" stroke="#3a3346" stroke-width="5"/>
+  <circle cx="256" cy="176" r="100" fill="none" stroke="#a9adbb" stroke-width="3"/>
+  <path d="M256 76 A100 100 0 0 1 350 142 L322 152 A70 70 0 0 0 256 106 Z" fill="#e9ecf4"/>
+  <circle cx="256" cy="176" r="36" fill="#e6e2ea" stroke="#3a3346" stroke-width="4"/>
+  <circle cx="256" cy="176" r="14" fill="#3a3346"/>
+  <!-- console body -->
+  <path d="M96 286 L416 286 L440 392 L72 392 Z" fill="#4b4358" stroke="#2a2433" stroke-width="5" stroke-linejoin="round"/>
+  <rect x="72" y="392" width="368" height="22" rx="6" fill="#2a2433"/>
+  <!-- disc tray -->
+  <rect x="150" y="304" width="212" height="26" rx="6" fill="#2a2433"/>
+  <rect x="160" y="312" width="192" height="10" rx="3" fill="#6d6480"/>
+  <!-- buttons and light -->
+  <circle cx="130" cy="362" r="12" fill="#2a2433"/>
+  <rect x="330" y="352" width="70" height="20" rx="6" fill="#2a2433"/>
+  <circle cx="176" cy="362" r="7" fill="#7fd08a"/>
+  <text x="256" y="476" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="34" font-weight="700" letter-spacing="4" fill="#2a2433">3DO</text>
+</svg>

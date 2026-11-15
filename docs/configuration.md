@@ -11,7 +11,7 @@ All settings come from `appsettings.json` and can be overridden with environment
 | `Paths:Cache` | `Paths__Cache` | `/app/cache` | as above |
 | `Paths:Backups` | `Paths__Backups` | `/app/backups` | as above. Holds the database backups ([deployment](deployment.md#backup-and-restore)); keep it private, they contain password hashes and keys. |
 | `Paths:Collections` | `Paths__Collections` | `/app/collections` | as above. Holds collection cover images (`<collection id>.png` or `.jpg`); not included in database backups. |
-| `Paths:Bios` | `Paths__Bios` | `/app/bios` | as above. A dedicated folder for emulator BIOS files the browser play page needs (`colecovision.rom` for ColecoVision, required; `scph5501.bin` for PlayStation, optional: exactly 512 KiB, otherwise the core's HLE BIOS is used); you copy them in. Names are matched ignoring case. Any validly named file in it can be downloaded by a signed-in user, so keep only BIOS files there. Not included in database backups: keep your own copy. |
+| `Paths:Bios` | `Paths__Bios` | `/app/bios` | as above. A dedicated folder for emulator BIOS files the browser play page needs (`colecovision.rom` for ColecoVision, required; `scph5501.bin` for PlayStation, optional: exactly 512 KiB, otherwise the core's HLE BIOS is used; for 3DO, required, at least one of `panafz10.bin`, `panafz1.bin`, `panafz1j.bin`, `goldstar.bin` or `sanyotry.bin`, each exactly 1 MiB); you copy them in. Names are matched ignoring case. Any validly named file in it can be downloaded by a signed-in user, so keep only BIOS files there. Not included in database backups: keep your own copy. |
 | `Admin:InitialPassword` | `Admin__InitialPassword` | *(empty)* | empty, or 12–128 characters and not `admin`. Used only when the first `admin` user is created; if empty, a random password is printed to the console once. |
 | `Integrity:QuickCheckTime` | `Integrity__QuickCheckTime` | `03:00` | `HH:mm` (24 h, container local time from `TZ`) or empty to disable the daily quick check. Missed runs are not caught up. On a daylight-saving change, a time that is skipped runs at the first valid minute after it, and a time that happens twice runs once. If another job is running at that moment, the check is skipped (logged at `Info`). |
 | `Logging:MinLevel` | `Logging__MinLevel` | `Debug` | `Trace`, `Debug`, `Info`, `Warn`, `Error`, `Fatal` or `Off` (case-insensitive). Applies to the app's own loggers; framework loggers log `Warn` and above. |
@@ -22,6 +22,7 @@ All settings come from `appsettings.json` and can be overridden with environment
 | `Emulator:GenesisCorePath` | `Emulator__GenesisCorePath` | *(empty)* | empty (Genesis and Sega CD play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Genesis Plus GX files ([below](#genesis-plus-gx-core)). A relative path fails startup; a path that doesn't exist just means Genesis play isn't set up. Not created or probed, and not one of the paths that must differ. Shown on **Admin → Settings** as `emulator.genesisCorePath`. |
 | `Emulator:PicodriveCorePath` | `Emulator__PicodriveCorePath` | *(empty)* | empty (32X play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 PicoDrive files ([below](#picodrive-core)). It may be the same folder as `Emulator:GenesisCorePath`, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.picodriveCorePath`). |
 | `Emulator:Snes9xCorePath` | `Emulator__Snes9xCorePath` | *(empty)* | empty (SNES play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Snes9x files ([below](#snes9x-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.snes9xCorePath`). |
+| `Emulator:OperaCorePath` | `Emulator__OperaCorePath` | *(empty)* | empty (3DO play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Opera files ([below](#opera-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.operaCorePath`). |
 | `Backup:RestoreFrom` | `Backup__RestoreFrom` | *(empty)* | empty, or the bare file name of a backup in `Paths:Backups` to restore at startup (no `/`, `\` or `..`). See [restoring a backup](deployment.md#restoring-a-backup). Remove it once the restore is done. |
 
 ## Paths
@@ -60,6 +61,17 @@ SNES plays with Snes9x, whose licence forbids commercial use ([Snes9x licence](h
 | `snes9x.json` | 120 | `dc7ac963eb7935a7ac78956235ac0b8912ec785c57026336825aa2ed8031b3ad` |
 
 The checks are the same as for Genesis Plus GX (`GET /api/emulator/cores/snes9x/<file>`); a file that doesn't match is refused with `409 Snes9xCoreMismatch`, and the play page says *The Snes9x core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:Snes9xCorePath).* Without the files it says *SNES games need the Snes9x core files: ask an Admin to set them up (Emulator:Snes9xCorePath).*
+
+## Opera core
+3DO plays with Opera, whose licence forbids commercial use ("LGPL/Non-commercial" in its [libretro core info](https://github.com/libretro/libretro-core-info/blob/master/opera_libretro.info)), so the image doesn't contain it either. To turn 3DO play on, put these three files from the [`@emulatorjs/core-opera@4.2.3`](https://registry.npmjs.org/@emulatorjs/core-opera/-/core-opera-4.2.3.tgz) npm archive at the root of a folder and set `Emulator:OperaCorePath` to it ([deployment](deployment.md#opera-core) shows how to get them and mount the folder):
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `opera-wasm.data` | 854,147 | `3e737f4f739814c12c017a5f26cb1e43bdfe3ac6f2d3bf6e8972633df49e33d4` |
+| `opera-legacy-wasm.data` | 853,889 | `41d3a7336cd304693c86974b50df5f7a90d9557077b01e0a1e928b3a38fe4f86` |
+| `opera.json` | 119 | `0245b492b516ef4b1c0490e3f05dbeb1d74074ea767cd54fc34747e31b2a0203` |
+
+The archive's two `-thread` payloads aren't used. The checks are the same as for Genesis Plus GX (`GET /api/emulator/cores/opera/<file>`); a file that doesn't match is refused with `409 OperaCoreMismatch`, and the play page says *The Opera core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:OperaCorePath).* Without the files it says *3DO games need the Opera core files: ask an Admin to set them up (Emulator:OperaCorePath).* 3DO also needs a BIOS in `Paths:Bios` (above); none is included.
 
 ## Other settings
 - **Port:** the standard `ASPNETCORE_HTTP_PORTS` (image default `8080`). The container health check reads the first port from it, so don't use `ASPNETCORE_URLS` instead.

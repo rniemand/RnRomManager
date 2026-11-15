@@ -19,7 +19,11 @@ import {
 	segaCdBios,
 	segaCdBiosBytes,
 	segaCdBiosMissing,
-	segaCdBiosSizeError
+	segaCdBiosSizeError,
+	threeDoBios,
+	threeDoBiosBytes,
+	threeDoBiosMissing,
+	threeDoBiosSizeError
 } from '../../static/emulator/params.js';
 
 const game = '0f8fad5b-d9cb-469f-a165-70867728950e';
@@ -77,7 +81,8 @@ describe('parsePlayParams', () => {
 		'picodrive',
 		'yabause',
 		'snes9x',
-		'desmume'
+		'desmume',
+		'opera'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});
@@ -473,6 +478,84 @@ describe('SNES (SNES B3)', () => {
 		[null, "Couldn't load the Snes9x core."]
 	])('reports the availability check %s', (status, message) => {
 		expect(operatorCoreError('snes9x', status)).toBe(message);
+	});
+});
+
+describe('3DO (B6)', () => {
+	it('accepts opera on the modal page only', () => {
+		expect(parsePlayParams(query({ core: 'opera', name: 'Opal Rally (USA).cue' }))?.core).toBe(
+			'opera'
+		);
+		expect(parsePlayParams(query({ core: 'opera' }), true)).toBeNull();
+	});
+
+	it('is an operator core that hides the chooser and keeps upstream controls', () => {
+		expect(isOperatorCore('opera')).toBe(true);
+		expect(hidesCoreChooser('opera')).toBe(true);
+		for (const name of ['Opal Rally (USA).cue', 'Opal Solo (USA).iso', 'X.GG'])
+			expect(controlSchemeFor('opera', name)).toBeNull();
+	});
+
+	it('maps the three operator files to the API by name', () => {
+		expect(operatorCorePaths('opera')).toEqual({
+			'opera-wasm.data': '/api/emulator/cores/opera/opera-wasm.data',
+			'opera-legacy-wasm.data': '/api/emulator/cores/opera/opera-legacy-wasm.data',
+			'opera.json': '/api/emulator/cores/opera/opera.json'
+		});
+	});
+
+	it.each([
+		[204, null],
+		[401, 'Your session has expired. Sign in again.'],
+		[
+			404,
+			'3DO games need the Opera core files: ask an Admin to set them up (Emulator:OperaCorePath).'
+		],
+		[
+			409,
+			"The Opera core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:OperaCorePath)."
+		],
+		[500, "Couldn't load the Opera core (HTTP 500)."],
+		[null, "Couldn't load the Opera core."]
+	])('reports the availability check %s', (status, message) => {
+		expect(operatorCoreError('opera', status)).toBe(message);
+	});
+});
+
+describe('3DO (B8)', () => {
+	it('fetches the five BIOS files in order, each 1 MiB', () => {
+		expect(threeDoBios).toEqual([
+			'panafz10.bin',
+			'panafz1.bin',
+			'panafz1j.bin',
+			'goldstar.bin',
+			'sanyotry.bin'
+		]);
+		expect(threeDoBiosBytes).toBe(1048576);
+	});
+
+	it.each(['panafz10.bin', 'PANAFZ1.BIN', 'Panafz1j.bin', 'goldstar.BIN', 'SanyoTry.bin'])(
+		'names a disc called %s after the game',
+		(name) => {
+			expect(contentFileName('opera', game, name)).toBe(`${game}-${name}`);
+		}
+	);
+
+	it('leaves other names alone, and BIOS names on other cores', () => {
+		expect(contentFileName('opera', game, 'Opal Rally #2 (USA).cue')).toBe(
+			'Opal Rally _2 (USA).cue'
+		);
+		expect(contentFileName('opera', game, 'panafz10.iso')).toBe('panafz10.iso');
+		expect(contentFileName('snes9x', game, 'panafz10.bin')).toBe('panafz10.bin');
+	});
+
+	it('words the size and missing messages', () => {
+		expect(threeDoBiosSizeError('goldstar.bin')).toBe(
+			'The 3DO BIOS goldstar.bin in the BIOS folder (Paths:Bios) must be 1 MiB: ask an Admin to replace it.'
+		);
+		expect(threeDoBiosMissing).toBe(
+			'3DO games need a BIOS: ask an Admin to put panafz10.bin, panafz1.bin, panafz1j.bin, goldstar.bin or sanyotry.bin in the BIOS folder (Paths:Bios).'
+		);
 	});
 });
 

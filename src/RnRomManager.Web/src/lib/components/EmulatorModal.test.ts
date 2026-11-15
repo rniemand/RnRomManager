@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 
@@ -74,5 +74,73 @@ describe('EmulatorModal', () => {
 		});
 
 		expect(container.querySelector('iframe')!.getAttribute('src')).toMatch(/&disc=1$/);
+	});
+});
+
+describe('EmulatorModal 3DO saves (3DO B11)', () => {
+	afterEach(() => vi.useRealTimers());
+
+	const close = { type: 'rnrm-emulator-close' };
+
+	function openFor(core: string) {
+		vi.useFakeTimers();
+		const { container } = render(EmulatorModal, {
+			open: true,
+			gameId: 'g-3',
+			core,
+			rom: { id: 15, fileName: 'Opal Rally (USA).cue' },
+			disc: true
+		});
+		const iframe = container.querySelector('iframe')!;
+		const posted = vi.spyOn(iframe.contentWindow!, 'postMessage').mockImplementation(() => {});
+		return { container, iframe, posted };
+	}
+
+	function reply(source: Window | null, data: unknown = { type: 'rnrm-emulator-closed' }) {
+		window.dispatchEvent(new MessageEvent('message', { data, origin: location.origin, source }));
+	}
+
+	async function closeButton(container: HTMLElement) {
+		(container.querySelector('.btn-close') as HTMLButtonElement).click();
+		flushSync();
+	}
+
+	it('asks the player to save and closes on its reply', async () => {
+		const { container, iframe, posted } = openFor('opera');
+
+		await closeButton(container);
+		expect(posted).toHaveBeenCalledWith(close, location.origin);
+		expect(container.querySelector('iframe')).not.toBeNull();
+
+		reply(window, { type: 'rnrm-emulator-closed' });
+		await vi.advanceTimersByTimeAsync(0);
+		flushSync();
+		expect(container.querySelector('iframe')).not.toBeNull();
+
+		reply(iframe.contentWindow);
+		await vi.advanceTimersByTimeAsync(0);
+		flushSync();
+		expect(container.querySelector('iframe')).toBeNull();
+	});
+
+	it('closes after 3 s without a reply', async () => {
+		const { container } = openFor('opera');
+
+		await closeButton(container);
+		await vi.advanceTimersByTimeAsync(2999);
+		flushSync();
+		expect(container.querySelector('iframe')).not.toBeNull();
+		await vi.advanceTimersByTimeAsync(1);
+		flushSync();
+		expect(container.querySelector('iframe')).toBeNull();
+	});
+
+	it('closes at once and posts nothing for another core', async () => {
+		const { container, posted } = openFor('snes9x');
+
+		await closeButton(container);
+
+		expect(posted).not.toHaveBeenCalled();
+		expect(container.querySelector('iframe')).toBeNull();
 	});
 });

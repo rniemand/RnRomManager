@@ -45,6 +45,7 @@ function response(status: number, cancel = vi.fn(async () => {})): FakeResponse 
 let fetchMock: ReturnType<typeof vi.fn>;
 /** The EJS_* globals as they were when the loader script was added, or null if it never was. */
 let atLoader: Record<string, unknown> | null;
+const messageListeners: EventListenerOrEventListenerObject[] = [];
 
 function serve(routes: Record<string, () => Promise<FakeResponse>>) {
 	fetchMock = vi.fn(
@@ -72,7 +73,14 @@ beforeEach(() => {
 	document.body.innerHTML = '<p id="status"></p><div id="game"></div>';
 	delete document.body.dataset.player;
 	for (const key of ejsGlobals) delete win[key];
+	delete win.EJS_emulator;
 	atLoader = null;
+	// 3DO B11: each import of the page adds a message listener; drop them between tests.
+	const add = window.addEventListener.bind(window);
+	vi.spyOn(window, 'addEventListener').mockImplementation((type, listener, options) => {
+		if (type === 'message' && listener) messageListeners.push(listener);
+		add(type, listener, options);
+	});
 	const append = document.body.append.bind(document.body);
 	vi.spyOn(document.body, 'append').mockImplementation((...nodes) => {
 		atLoader = Object.fromEntries(ejsGlobals.map((k) => [k, win[k]]));
@@ -81,6 +89,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	for (const listener of messageListeners.splice(0))
+		window.removeEventListener('message', listener);
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
 });
@@ -1017,6 +1027,288 @@ describe('play page SNES (SNES B3)', () => {
 		expect(await play('snes9x', 'Mode Seven Rally (USA).sfc')).toBe("Couldn't load the ROM.");
 		expect(urls()).toEqual([check, romUrl]);
 		expect(atLoader).toBeNull();
+	});
+});
+
+describe('play page 3DO (3DO B8)', () => {
+	const check = '/api/emulator/cores/opera';
+	const names = ['panafz10.bin', 'panafz1.bin', 'panafz1j.bin', 'goldstar.bin', 'sanyotry.bin'];
+	const biosUrls = names.map((name) => `/api/emulator/bios/${name}`);
+	const discUrl = `/api/games/${game}/roms/12/play-disc`;
+	const disc = new Uint8Array([0x50, 0x4b, 3, 4, 3, 0xd0]);
+	const name = 'Opal Rally (USA).cue';
+	const firmware = (seed: number, size = 1048576) => new Uint8Array(size).fill(seed);
+	/** 1 MiB buffers: a byte compare, since a deep equality of a million elements is too slow. */
+	const sameBytes = (actual: ArrayBuffer, expected: Uint8Array) =>
+		Buffer.compare(Buffer.from(actual), Buffer.from(expected)) === 0;
+
+	function body(bytes: Uint8Array): FakeResponse {
+		const chunks = [bytes];
+		const stream = new ReadableStream<Uint8Array>({
+			pull(controller) {
+				const next = chunks.shift();
+				if (next) controller.enqueue(next);
+				else controller.close();
+			}
+		});
+		return { ok: true, status: 200, body: stream } as unknown as FakeResponse;
+	}
+
+	function discResponse(): FakeResponse {
+		return {
+			ok: true,
+			status: 200,
+			body: { cancel: async () => {} },
+			blob: async () => new Blob([disc])
+		} as unknown as FakeResponse;
+	}
+
+	/** Serves the core check, the disc and the given BIOS responses (the others are 404). */
+	function serveThreeDo(found: Record<string, () => Promise<FakeResponse>>, core = 204) {
+		serve({
+			[check]: async () => response(core),
+			...Object.fromEntries(biosUrls.map((url) => [url, async () => response(404)])),
+			...found,
+			[discUrl]: async () => discResponse(),
+			[romUrl]: async () => response(200)
+		});
+	}
+
+	it('checks the core, then asks for the five BIOS files one after another, then the disc', async () => {
+		const goldstar = firmware(4);
+		serveThreeDo({ [biosUrls[3]]: async () => body(goldstar) });
+
+		await play('opera', name, true);
+
+		expect(urls()).toEqual([check, ...biosUrls, discUrl]);
+		expect(fetchMock.mock.calls[0][1]).toEqual({ method: 'HEAD', credentials: 'same-origin' });
+		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
+		expect(Object.keys(files)).toEqual(['/goldstar.bin']);
+		expect(sameBytes(files['/goldstar.bin'], goldstar)).toBe(true);
+		expect(atLoader).toMatchObject({
+			EJS_core: 'opera',
+			EJS_gameName: name,
+			EJS_hideSettings: ['retroarch_core'],
+			EJS_defaultOptions: { 'save-save-interval': '30' },
+			EJS_paths: {
+				'opera-wasm.data': '/api/emulator/cores/opera/opera-wasm.data',
+				'opera-legacy-wasm.data': '/api/emulator/cores/opera/opera-legacy-wasm.data',
+				'opera.json': '/api/emulator/cores/opera/opera.json'
+			}
+		});
+		expect(Object.keys(atLoader?.EJS_defaultOptions as object)).toEqual(['save-save-interval']);
+		expect(atLoader?.EJS_disableCue).toBeUndefined();
+		expect(atLoader?.EJS_controlScheme).toBeUndefined();
+		expect(atLoader?.EJS_biosUrl).toBeUndefined();
+		expect((atLoader?.EJS_Buttons as Record<string, boolean>).exitEmulation).toBe(true);
+		const file = atLoader?.EJS_gameUrl as File;
+		expect(file.name).toBe(name);
+		expect(new Uint8Array(await file.arrayBuffer())).toEqual(disc);
+	});
+
+	it('hands over all five BIOS files when all are there', async () => {
+		serveThreeDo(
+			Object.fromEntries(biosUrls.map((url, i) => [url, async () => body(firmware(i + 1))]))
+		);
+
+		await play('opera', name, true);
+
+		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
+		expect(Object.keys(files)).toEqual(names.map((n) => `/${n}`));
+		names.forEach((n, i) => expect(sameBytes(files[`/${n}`], firmware(i + 1)), n).toBe(true));
+	});
+
+	it('stops with the missing message when no BIOS file is there, before the disc or loader', async () => {
+		serveThreeDo({});
+
+		expect(await play('opera', name, true)).toBe(
+			'3DO games need a BIOS: ask an Admin to put panafz10.bin, panafz1.bin, panafz1j.bin, goldstar.bin or sanyotry.bin in the BIOS folder (Paths:Bios).'
+		);
+		expect(urls()).toEqual([check, ...biosUrls]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops on a wrong-size panafz1.bin after a valid panafz10.bin, without later requests', async () => {
+		serveThreeDo({
+			[biosUrls[0]]: async () => body(firmware(1)),
+			[biosUrls[1]]: async () => body(firmware(2, 1048577))
+		});
+
+		expect(await play('opera', name, true)).toBe(
+			'The 3DO BIOS panafz1.bin in the BIOS folder (Paths:Bios) must be 1 MiB: ask an Admin to replace it.'
+		);
+		expect(urls()).toEqual([check, biosUrls[0], biosUrls[1]]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops on a BIOS HTTP 500', async () => {
+		serveThreeDo({ [biosUrls[0]]: async () => response(500) });
+
+		expect(await play('opera', name, true)).toBe("Couldn't load the BIOS (HTTP 500).");
+		expect(urls()).toEqual([check, biosUrls[0]]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops on a core 404 before any BIOS request', async () => {
+		serveThreeDo({}, 404);
+
+		expect(await play('opera', name, true)).toBe(
+			'3DO games need the Opera core files: ask an Admin to set them up (Emulator:OperaCorePath).'
+		);
+		expect(urls()).toEqual([check]);
+	});
+
+	it('loads from play-disc without disc=1, never /download', async () => {
+		serveThreeDo({ [biosUrls[0]]: async () => body(firmware(1)) });
+
+		await play('opera', 'Opal Solo (USA).iso');
+
+		expect(urls()).toEqual([check, ...biosUrls, discUrl]);
+		expect(urls()).not.toContain(romUrl);
+	});
+
+	it('names a disc called like a 3DO BIOS after the game', async () => {
+		serveThreeDo({ [biosUrls[4]]: async () => body(firmware(5)) });
+
+		await play('opera', 'PANAFZ10.BIN', true);
+
+		expect((atLoader?.EJS_gameUrl as File).name).toBe(`${game}-PANAFZ10.BIN`);
+	});
+
+	it('keeps Exit hidden for other cores', async () => {
+		serve({
+			['/api/emulator/cores/snes9x']: async () => response(204),
+			[romUrl]: async () => response(200)
+		});
+
+		await play('snes9x', 'Mode Seven Rally (USA).sfc');
+
+		expect((atLoader?.EJS_Buttons as Record<string, boolean>).exitEmulation).toBe(false);
+	});
+});
+
+describe('play page 3DO saves (3DO B11)', () => {
+	const discUrl = `/api/games/${game}/roms/12/play-disc`;
+	const close = { type: 'rnrm-emulator-close' };
+	const closed = { type: 'rnrm-emulator-closed' };
+
+	let restart: ReturnType<typeof vi.fn>;
+	let syncfs: ReturnType<typeof vi.fn>;
+	let posted: ReturnType<typeof vi.spyOn>;
+
+	async function playCore(core: string, started = true) {
+		const check = `/api/emulator/cores/${core}`;
+		const firmware = new Uint8Array(1048576);
+		const stream = () =>
+			({
+				ok: true,
+				status: 200,
+				body: new ReadableStream<Uint8Array>({
+					start(controller) {
+						controller.enqueue(firmware);
+						controller.close();
+					}
+				})
+			}) as unknown as FakeResponse;
+		serve({
+			[check]: async () => response(204),
+			'/api/emulator/bios/panafz10.bin': async () => stream(),
+			'/api/emulator/bios/panafz1.bin': async () => response(404),
+			'/api/emulator/bios/panafz1j.bin': async () => response(404),
+			'/api/emulator/bios/goldstar.bin': async () => response(404),
+			'/api/emulator/bios/sanyotry.bin': async () => response(404),
+			[discUrl]: async () => response(200),
+			[romUrl]: async () => response(200)
+		});
+		await play(
+			core,
+			core === 'opera' ? 'Opal Rally (USA).cue' : 'Mode Seven Rally (USA).sfc',
+			true
+		);
+		restart = vi.fn();
+		syncfs = vi.fn();
+		if (started) win.EJS_emulator = { gameManager: { restart, FS: { syncfs } } };
+		posted = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
+		vi.useFakeTimers();
+	}
+
+	function send(data: unknown, init: Partial<MessageEventInit> = {}) {
+		window.dispatchEvent(
+			new MessageEvent('message', { data, origin: location.origin, source: window, ...init })
+		);
+	}
+
+	afterEach(() => vi.useRealTimers());
+
+	it.each([
+		['without an error', undefined],
+		['with an error', new Error('quota')]
+	])('resets, syncs after 250 ms, then replies once (%s)', async (_, error) => {
+		await playCore('opera');
+
+		send(close);
+		expect(restart).toHaveBeenCalledTimes(1);
+		expect(syncfs).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(249);
+		expect(syncfs).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(1);
+		expect(syncfs).toHaveBeenCalledTimes(1);
+		expect(syncfs.mock.calls[0][0]).toBe(false);
+		expect(posted).not.toHaveBeenCalled();
+
+		syncfs.mock.calls[0][1](error);
+		await vi.advanceTimersByTimeAsync(0);
+		expect(posted).toHaveBeenCalledTimes(1);
+		expect(posted).toHaveBeenCalledWith(closed, location.origin);
+	});
+
+	it('answers two requests during one save with one reset and one reply', async () => {
+		await playCore('opera');
+
+		send(close);
+		send(close);
+		await vi.advanceTimersByTimeAsync(250);
+		syncfs.mock.calls[0][1]();
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(restart).toHaveBeenCalledTimes(1);
+		expect(syncfs).toHaveBeenCalledTimes(1);
+		expect(posted).toHaveBeenCalledTimes(1);
+	});
+
+	it('replies at once before the game has started', async () => {
+		await playCore('opera', false);
+
+		send(close);
+
+		expect(posted).toHaveBeenCalledTimes(1);
+		expect(posted).toHaveBeenCalledWith(closed, location.origin);
+	});
+
+	it.each([
+		['another origin', close, { origin: 'https://evil.example' }],
+		['another source', close, { source: null }],
+		['other data', { type: 'rnrm-emulator-close', extra: 1 }, {}],
+		['a string', 'rnrm-emulator-close', {}],
+		['the reply', closed, {}]
+	])('ignores %s', async (_, data, init) => {
+		await playCore('opera');
+
+		send(data, init as Partial<MessageEventInit>);
+		await vi.advanceTimersByTimeAsync(500);
+
+		expect(restart).not.toHaveBeenCalled();
+		expect(posted).not.toHaveBeenCalled();
+	});
+
+	it('does nothing on another core', async () => {
+		await playCore('snes9x');
+
+		send(close);
+		await vi.advanceTimersByTimeAsync(500);
+
+		expect(restart).not.toHaveBeenCalled();
+		expect(posted).not.toHaveBeenCalled();
 	});
 });
 

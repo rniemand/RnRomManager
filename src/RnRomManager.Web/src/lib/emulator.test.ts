@@ -39,6 +39,13 @@ describe('canPlay', () => {
 		}
 	);
 
+	it.each(['Opal Rally (USA).cue', 'Opal Solo (USA).iso'])(
+		'is true for an external 3DO %s on Opera (3DO B7)',
+		(externalFileName) => {
+			expect(canPlay({ browserCore: 'opera' }, { externalFileName })).toBe(true);
+		}
+	);
+
 	it.each(['pcsx_rearmed', 'yabause', 'genesis_plus_gx'])(
 		'is true for an external .chd on %s (CHD B5)',
 		(browserCore) => {

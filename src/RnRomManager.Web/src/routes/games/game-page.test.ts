@@ -224,6 +224,21 @@ describe('game detail page', () => {
 		);
 	});
 
+	it('an external 3DO cue release plays on Opera from play-disc (3DO B7)', async () => {
+		const tdo = game([1]);
+		tdo.system = '3do';
+		tdo.browserCore = 'opera';
+		tdo.roms[0].fileName = 'Opal Rally (USA).cue';
+		tdo.roms[0].externalFileName = 'Opal Rally (USA).cue';
+		answers.push({ status: 200, body: tdo });
+		render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Play Opal Rally (USA).cue' }));
+		expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
+			`/emulator/play.html?game=${tdo.id}&rom=1&core=opera&name=Opal%20Rally%20(USA).cue&disc=1`
+		);
+	});
+
 	it('each external PSP release has a Play link to the isolated player in a new tab (PSP B3)', async () => {
 		const psp = game([1, 2]);
 		psp.browserCore = 'ppsspp';

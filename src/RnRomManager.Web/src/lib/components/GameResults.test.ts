@@ -152,6 +152,29 @@ describe('GameResults cards (C1, C2)', () => {
 		}
 	);
 
+	it.each(['grid', 'list'] as const)(
+		'%s: Quick Play starts a 3DO disc on Opera with disc=1 (3DO B7)',
+		async (view) => {
+			render(GameResults, {
+				games: [
+					game('t', {
+						playRomId: 6,
+						playRomFileName: 'Opal Rally (USA).cue',
+						playDisc: true,
+						browserCore: 'opera'
+					})
+				],
+				view
+			});
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Play Game t' }));
+
+			expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
+				'/emulator/play.html?game=t&rom=6&core=opera&name=Opal%20Rally%20(USA).cue&disc=1'
+			);
+		}
+	);
+
 	const psp = () =>
 		game('u', {
 			playRomId: 5,

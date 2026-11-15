@@ -249,6 +249,15 @@
 	background-color: var(--bs-segacd) !important;
 }
 
+/* 3DO system colour (3DO B2): olive, same in both themes; black on it is AA (~5.7:1). */
+:root {
+	--bs-3do: #5c940d;
+}
+.text-bg-3do {
+	color: #000 !important;
+	background-color: var(--bs-3do) !important;
+}
+
 /* Library cards (L1, L2): a step lighter than the body in dark mode; a small lift and shadow on hover or keyboard focus. */
 [data-bs-theme='dark'] .game-card {
 	--bs-card-bg: var(--bs-tertiary-bg);

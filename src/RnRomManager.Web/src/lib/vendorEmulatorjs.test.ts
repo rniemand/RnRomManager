@@ -79,7 +79,7 @@ const coreLicenses = [
 // The guarded vendoring edits (anchor → its replacement), applied in order.
 const getCoreAnchor = '        const gen = this.getCore(true);\n';
 const pinGuard =
-	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume"].includes(core)) {\n' +
+	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera"].includes(core)) {\n' +
 	'            return core;\n' +
 	'        }\n';
 const legacyAnchor =
@@ -88,14 +88,14 @@ const threadOverride =
 	'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
 	'                threads = true;\n' +
 	'            }\n' +
-	'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume"].includes(this.getCore())) {\n' +
+	'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera"].includes(this.getCore())) {\n' +
 	'                threads = false;\n' +
 	'            }\n';
 const cdnAnchor =
 	'            if (res === -1) {\n' +
 	'                console.log("File not found, attemping to fetch from emulatorjs cdn.");\n';
 const cdnSkip =
-	'                if (["genesis_plus_gx", "picodrive", "snes9x", "desmume"].includes(this.getCore())) {\n' +
+	'                if (["genesis_plus_gx", "picodrive", "snes9x", "desmume", "opera"].includes(this.getCore())) {\n' +
 	'                    this.startGameError(this.localization("Error downloading core") + " (" + filename + ")");\n' +
 	'                    return;\n' +
 	'                }\n';
@@ -290,6 +290,8 @@ describe('vendor-emulatorjs', () => {
 		);
 		// SNES B3: the operator supplies Snes9x, so none of its files is vendored.
 		expect(files(out).filter((f) => f.includes('snes9x'))).toEqual([]);
+		// 3DO B6: nor Opera.
+		expect(files(out).filter((f) => f.includes('opera'))).toEqual([]);
 		// PSP B3: PPSSPP's threaded payload is the only one; every other core is single-threaded.
 		expect(files(out).filter((f) => f.includes('-thread'))).toEqual([
 			'data/cores/ppsspp-thread-wasm.data'
@@ -468,11 +470,11 @@ describe('vendor-emulatorjs', () => {
 			const source = readFileSync(join(out, 'data', file), 'utf8');
 			expect(source).toContain('const requiresThreads = ["ppsspp", "dosbox_pure"];');
 			expect(threadOverride).toContain(
-				'["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume"].includes(this.getCore())'
+				'["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera"].includes(this.getCore())'
 			);
 			// The operator-supplied cores and DeSmuME skip the CDN; Yabause takes upstream's path.
 			expect(cdnSkip).toContain(
-				'["genesis_plus_gx", "picodrive", "snes9x", "desmume"].includes(this.getCore())'
+				'["genesis_plus_gx", "picodrive", "snes9x", "desmume", "opera"].includes(this.getCore())'
 			);
 		}
 	);
@@ -542,6 +544,51 @@ describe('vendor-emulatorjs', () => {
 			// Upstream would retry the payload from the EmulatorJS CDN.
 			const upstream = readFileSync(join(pkg, 'src', 'emulator.js'), 'utf8');
 			const fallback = await downloadCore(upstream, 'snes9x', { payload: async () => -1 });
+			expect(fallback.requests[2]).toMatch(/^https:\/\/cdn\.emulatorjs\.org\//);
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s pins an explicit opera, in the 3do group (3DO B6)',
+		(file) => {
+			const resolve = coreResolver(readFileSync(join(out, 'data', file), 'utf8'));
+			for (const saved of ['opera', 'snes9x', null])
+				expect(resolve('opera', saved), `${saved}`).toBe('opera');
+			expect(resolve('opera', null, true)).toBe('3do');
+			expect(resolve('opera', 'snes9x', true)).toBe('3do');
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s never picks a threaded Opera payload (3DO B6)',
+		async (file) => {
+			const source = readFileSync(join(out, 'data', file), 'utf8');
+			const report = 'cores/reports/opera.json';
+			expect((await downloadCore(source, 'opera')).requests).toEqual([
+				report,
+				'cores/opera-legacy-wasm.data'
+			]);
+			const upstream = readFileSync(join(pkg, 'src', 'emulator.js'), 'utf8');
+			expect((await downloadCore(upstream, 'opera', { savedThreads: 'enabled' })).requests).toEqual(
+				[report, 'cores/opera-thread-legacy-wasm.data']
+			);
+			for (const webgl2Enabled of [null, true])
+				expect(
+					(await downloadCore(source, 'opera', { savedThreads: 'enabled', webgl2Enabled }))
+						.requests[1]
+				).not.toContain('-thread');
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s shows a local error for a failed Opera payload, without the CDN (3DO B6)',
+		async (file) => {
+			const source = readFileSync(join(out, 'data', file), 'utf8');
+			const run = await downloadCore(source, 'opera', { payload: async () => -1 });
+			expect(run.requests).toEqual(['cores/reports/opera.json', 'cores/opera-legacy-wasm.data']);
+			expect(run.errors).toEqual(['Error downloading core (opera-legacy-wasm.data)']);
+			const upstream = readFileSync(join(pkg, 'src', 'emulator.js'), 'utf8');
+			const fallback = await downloadCore(upstream, 'opera', { payload: async () => -1 });
 			expect(fallback.requests[2]).toMatch(/^https:\/\/cdn\.emulatorjs\.org\//);
 		}
 	);
