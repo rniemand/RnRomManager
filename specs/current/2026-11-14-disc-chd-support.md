@@ -69,7 +69,7 @@ Steps 2–3 run integration tests (category `Integration`), which need Docker. P
     - a `psx` `.chd` named `Game.chd` **Attach**ed with flag `Disc` 2 to a game holding a bin/cue disc 1 becomes a second release `Game (Disc 2).chd` with flag `Disc 2`;
     - a `.chd` item can be dismissed.
   - Done when: those cases and the existing `IngestPipelineTests`/`ReviewEndpointsTests` pass.
-- [ ] **3. play-disc** (B4, B5 API side): the shape rule and message.
+- [x] **3. play-disc** (B4, B5 API side): the shape rule and message.
   - Files: `src/RnRomManager.Api/Endpoints/PlayDisc.cs`, `tests/RnRomManager.Api.Tests/Integration/LibraryEndpointsTests.PlayDisc.cs`, `tests/RnRomManager.Api.Tests/Integration/LibraryEndpointsTests.cs`.
   - Tests: `LibraryEndpointsTests.PlayDisc`: a single `.chd` (and `.CHD`) streams unchanged as `application/octet-stream` with its length for `psx`, `saturn` and `segacd`; a `.chd` exactly at 1 GiB → 200, one byte over → `PlayDiscTooLarge`; a `.chd` in a cue set → `InvalidPlayDisc`; a PSP `.chd` → `InvalidPlayDisc`; a new case: a lone Saturn `.nrg` release → `InvalidPlayDisc` whose detail contains "a single-file disc must be a .bin, .iso or .chd". `LibraryEndpointsTests`: a `segacd` game whose external primary is a `.chd` has `playRomId` set and `playDisc` true.
   - Done when: those pass.

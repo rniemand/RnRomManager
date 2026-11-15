@@ -569,6 +569,82 @@ public partial class LibraryEndpointsTests
         AssertNotOpen(Path.Combine(overFolder, "Wider (USA).iso"));
     }
 
+    // CHD B4: a standalone .chd streams unchanged on PlayStation, Saturn and Sega CD; never in a set, never on PSP.
+
+    [TestCase("psx", "Chd Solo (USA).chd")]
+    [TestCase("psx", "Chd Solo (USA).CHD")]
+    [TestCase("saturn", "Chd Solo (USA).chd")]
+    [TestCase("saturn", "Chd Solo (USA).CHD")]
+    [TestCase("segacd", "Chd Solo (USA).chd")]
+    [TestCase("segacd", "Chd Solo (USA).CHD")]
+    public async Task PlayDisc_AStandaloneChd_StreamsUnchanged(string system, string name)
+    {
+        var (id, folder, ids) = await DiscGame(system, "Chd Solo", [PsxSolo(name, PsxTrack1)], (name, PsxTrack1));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"));
+        Assert.That(response.Content.Headers.ContentLength, Is.EqualTo(PsxTrack1.Length));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(PsxTrack1));
+        AssertNotOpen(Path.Combine(folder, name));
+    }
+
+    [Test]
+    public async Task PlayDisc_AChdOfExactlyOneGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
+    {
+        var (atId, atFolder, atRoms) = await SegaCdGame("Wide", [PsxSolo("Wide (USA).chd", Umd(50))], ("Wide (USA).chd", Umd(50)));
+        var (overId, overFolder, overRoms) = await SegaCdGame("Wider", [PsxSolo("Wider (USA).chd", Umd(51))], ("Wider (USA).chd", Umd(51)));
+        // Lengths are set on disk only: the stored sizes stay the small originals.
+        await using (var grown = new FileStream(Path.Combine(atFolder, "Wide (USA).chd"), FileMode.Open, FileAccess.Write))
+            grown.SetLength(PlayDisc.MaxBytes);
+        await using (var grown = new FileStream(Path.Combine(overFolder, "Wider (USA).chd"), FileMode.Open, FileAccess.Write))
+            grown.SetLength(PlayDisc.MaxBytes + 1);
+
+        using (var atLimit = await _user.SendAsync(HttpMethod.Get, PlayDiscUrl(atId, atRoms[0]), null, sendXsrf: false,
+            completion: HttpCompletionOption.ResponseHeadersRead))
+        {
+            Assert.That(atLimit.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(atLimit.Content.Headers.ContentLength, Is.EqualTo(PlayDisc.MaxBytes));
+        } // disposed with the body unread: the stream is cancelled
+
+        using var over = await _user.GetAsync(PlayDiscUrl(overId, overRoms[0]));
+        Assert.That(await ProblemCode(over, HttpStatusCode.Conflict), Is.EqualTo(PlayDisc.PlayDiscTooLarge));
+        AssertNotOpen(Path.Combine(overFolder, "Wider (USA).chd"));
+    }
+
+    [Test]
+    public async Task PlayDisc_AChdInACueSet_OrOnPsp_Is409InvalidPlayDisc()
+    {
+        var cue = PsxCue("Mixed Chd (USA) (Track 1).bin", "Mixed Chd (USA) (Track 2).bin");
+        var set = await SegaCdGame("Mixed Chd",
+            [PsxSolo("Mixed Chd (USA) (Track 1).bin", PsxTrack1) with
+            {
+                Files = [SetFile("Mixed Chd (USA).cue", cue), SetFile("Mixed Chd (USA).chd", Umd(52))],
+            }],
+            ("Mixed Chd (USA) (Track 1).bin", PsxTrack1), ("Mixed Chd (USA).cue", cue), ("Mixed Chd (USA).chd", Umd(52)));
+        var psp = await PspGame("Umd Chd", [PsxSolo("Umd Chd (USA).chd", Umd(53))], ("Umd Chd (USA).chd", Umd(53)));
+
+        foreach (var (id, _, ids) in new[] { set, psp })
+        {
+            using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+            Assert.That(await ProblemCode(response, HttpStatusCode.Conflict), Is.EqualTo(PlayDisc.InvalidPlayDisc), id.ToString());
+        }
+    }
+
+    [Test]
+    public async Task PlayDisc_ALoneNrg_NamesTheSingleFileShapes()
+    {
+        var (id, _, ids) = await SaturnGame("Lone Nero", [PsxSolo("Lone Nero (USA).nrg", Umd(54))], ("Lone Nero (USA).nrg", Umd(54)));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        var problem = await AuthClient.JsonAsync(response);
+        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.InvalidPlayDisc));
+        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("a single-file disc must be a .bin, .iso or .chd"));
+    }
+
     [Test]
     public async Task PlayDisc_ASegaCdSetWithTwoCues_Is409InvalidPlayDisc()
     {
