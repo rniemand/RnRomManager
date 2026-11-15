@@ -8,7 +8,7 @@ const biosUrl = '/api/emulator/bios/colecovision.rom';
 type FakeResponse = {
 	ok: boolean;
 	status: number;
-	body: { cancel: () => Promise<void> };
+	body: { cancel: () => Promise<void> } | null;
 	blob: () => Promise<Blob>;
 };
 
@@ -33,11 +33,11 @@ const ejsGlobals = [
 
 const win = window as unknown as Record<string, unknown>;
 
-function response(status: number, cancel = vi.fn(async () => {})): FakeResponse {
+function response(status: number, cancel?: () => Promise<void>): FakeResponse {
 	return {
 		ok: status >= 200 && status < 300,
 		status,
-		body: { cancel },
+		body: cancel ? { cancel } : null,
 		blob: async () => new Blob(['rom'])
 	};
 }
@@ -71,7 +71,7 @@ function urls(): string[] {
 beforeEach(() => {
 	vi.resetModules();
 	document.body.innerHTML =
-		'<p id="status"></p><progress id="loading" hidden></progress><div id="game"></div>';
+		'<p id="status"></p><progress id="loading" hidden></progress><span id="downloaded" hidden></span><div id="game"></div>';
 	delete document.body.dataset.player;
 	for (const key of ejsGlobals) delete win[key];
 	delete win.EJS_emulator;
@@ -98,40 +98,60 @@ afterEach(() => {
 
 describe('play page loading indicator', () => {
 	it.each([
-		['load', ''],
-		['error', "Couldn't load the emulator."]
+		['load', '', true],
+		['error', "Couldn't load the emulator.", false]
 	])(
-		'shows indeterminate progress while downloading and hides it on loader %s',
-		async (event, message) => {
-			const { promise, resolve } = Promise.withResolvers<Blob>();
-			const blob = vi.fn(() => promise);
-			serve({ [romUrl]: async () => ({ ...response(200), blob }) });
-			const finished = play('gambatte', 'Game.gb');
+		'reports bytes received and clears the startup message on loader %s',
+		async (event, message, knownLength) => {
+			const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+			const writer = writable.getWriter();
+			const url = knownLength ? romUrl : `/api/games/${game}/roms/12/play-disc`;
+			serve({
+				'/api/emulator/bios/scph5501.bin': async () => response(404),
+				[url]: async () =>
+					new Response(readable, { headers: knownLength ? { 'Content-Length': '4' } : {} })
+			});
+			const finished = play(knownLength ? 'gambatte' : 'pcsx_rearmed', 'Game');
 			const progress = document.querySelector('progress')!;
+			const downloaded = document.getElementById('downloaded')!;
 
-			await vi.waitFor(() => expect(blob).toHaveBeenCalledOnce());
-			expect(progress.hidden).toBe(false);
-			expect(progress.hasAttribute('value')).toBe(false);
+			await writer.write(new Uint8Array([1, 2]));
+			expect(progress.hidden).toBe(!knownLength);
+			expect(downloaded.hidden).toBe(knownLength);
+			if (knownLength) {
+				expect(progress.max).toBe(4);
+				expect(progress.value).toBe(2);
+			} else {
+				expect(downloaded.textContent).toBe(
+					new Intl.NumberFormat(undefined, { style: 'unit', unit: 'byte', unitDisplay: 'long' }).format(2)
+				);
+			}
 			expect(atLoader).toBeNull();
 
-			resolve(new Blob(['rom']));
-			await finished;
-			expect(progress.hidden).toBe(false);
-			document.querySelector('script')!.dispatchEvent(new Event(event));
+			await writer.write(new Uint8Array([3, 4]));
+			await writer.close();
+			expect(await finished).toBe('Starting emulator…');
+			expect((atLoader?.EJS_gameUrl as File).size).toBe(4);
 			expect(progress.hidden).toBe(true);
+			expect(downloaded.hidden).toBe(true);
+			document.querySelector('script')!.dispatchEvent(new Event(event));
 			expect(document.getElementById('status')!.textContent).toBe(message);
 		}
 	);
 
 	it('hides the indicator if the ROM transfer fails', async () => {
-		const blob = vi.fn(async () => {
-			throw new Error('connection lost');
-		});
-		serve({ [romUrl]: async () => ({ ...response(200), blob }) });
+		const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+		const writer = writable.getWriter();
+		serve({ [romUrl]: async () => new Response(readable, { headers: { 'Content-Length': '4' } }) });
 
-		expect(await play('gambatte', 'Game.gb')).toBe("Couldn't load the ROM.");
-		expect(blob).toHaveBeenCalledOnce();
-		expect(document.querySelector('progress')!.hidden).toBe(true);
+		const finished = play('gambatte', 'Game.gb');
+		await writer.write(new Uint8Array([1, 2]));
+		const progress = document.querySelector('progress')!;
+		expect(progress.hidden).toBe(false);
+		await writer.abort(new Error('connection lost'));
+
+		expect(await finished).toBe("Couldn't load the ROM.");
+		expect(progress.hidden).toBe(true);
 		expect(atLoader).toBeNull();
 	});
 });
@@ -162,7 +182,7 @@ describe('play page BIOS check', () => {
 
 		const status = await play('gearcoleco', 'Pixel Pursuit (USA).col');
 
-		expect(status).toBe('Loading…');
+		expect(status).toBe('Starting emulator…');
 		expect(atLoader?.EJS_biosUrl).toBe(biosUrl);
 	});
 
@@ -260,7 +280,7 @@ describe('play page PlayStation', () => {
 		return {
 			ok: status >= 200 && status < 300,
 			status,
-			body: { cancel: async () => {} },
+			body: null,
 			blob: async () => new Blob([disc]),
 			json: async () => {
 				if (!problem) throw new SyntaxError('no body');
@@ -440,7 +460,7 @@ describe('play page PSP (PSP B3)', () => {
 		return {
 			ok: status >= 200 && status < 300,
 			status,
-			body: { cancel: async () => {} },
+			body: null,
 			blob,
 			json: async () => {
 				if (!problem) throw new SyntaxError('no body');
@@ -710,7 +730,7 @@ describe('play page Saturn (B6, B7)', () => {
 		return {
 			ok: status >= 200 && status < 300,
 			status,
-			body: { cancel: async () => {} },
+			body: null,
 			blob: async () => new Blob([disc]),
 			json: async () => {
 				throw new SyntaxError('no body');
@@ -841,7 +861,7 @@ describe('play page Sega CD (Sega CD B7)', () => {
 		return {
 			ok: true,
 			status: 200,
-			body: { cancel: async () => {} },
+			body: null,
 			blob: async () => new Blob([disc])
 		} as unknown as FakeResponse;
 	}
@@ -1099,7 +1119,7 @@ describe('play page 3DO (3DO B8)', () => {
 		return {
 			ok: true,
 			status: 200,
-			body: { cancel: async () => {} },
+			body: null,
 			blob: async () => new Blob([disc])
 		} as unknown as FakeResponse;
 	}

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import { expect, test, type BrowserContext, type Page, type Route } from '@playwright/test';
 import { expectAccessible } from './axe';
+import { expectRomDownloadProgress, stageRomDownload } from './rom-progress';
 
 /**
  * Spec §15.1 "E2E": the MVP smoke path against the real image with the seeded `Basic` set (§15.2), in order:
@@ -355,7 +356,7 @@ test('browse, search and filter the library', async () => {
 	await page.setViewportSize(viewport);
 });
 
-test('game detail + downloads', async () => {
+test('game detail + downloads + ROM playback progress', async () => {
 	await openGame('Orbit Blocks');
 	await expect(page.getByText('Primary')).toBeVisible();
 	await expectAccessible(page, 'game detail');
@@ -393,6 +394,7 @@ test('game detail + downloads', async () => {
 	await expectAccessible(page, 'game detail with releases expanded');
 
 	// Browser emulators B3–B5, B7, B10: play the primary release in the Gambatte core, as served by the image.
+	await stageRomDownload(page, 'Orbit Blocks (World) (Rev 1).gb');
 	const romDownload = page.waitForResponse((r) => /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()));
 	await release.getByRole('button', { name: 'Play Orbit Blocks (World) (Rev 1).gb' }).click();
 	await expect(dialog()).toHaveAccessibleName('Play Orbit Blocks (World) (Rev 1).gb');
@@ -400,14 +402,15 @@ test('game detail + downloads', async () => {
 	await expect(emulator).toHaveAttribute('title', 'Emulator: Orbit Blocks (World) (Rev 1).gb');
 	expect((await romDownload).status()).toBe(200);
 	const frame = page.frameLocator('iframe');
+	await expectRomDownloadProgress(frame);
 	await expect(frame.getByText('Start Game')).toBeVisible();
 	// EmulatorJS's own UI may not pass axe, so the scan covers the modal chrome only.
 	await expectAccessible(page, 'emulator modal', 'iframe');
 	const core = page.waitForResponse((r) => /\/emulator\/vendor\/data\/cores\/gambatte(-legacy)?-wasm\.data$/.test(r.url()));
 	await frame.getByText('Start Game').click();
 	expect((await core).status()).toBe(200);
-	// EmulatorJS removes .ejs_loading_text when the game starts; on a failure it stays, as .ejs_error_text.
-	await expect(frame.locator('.ejs_loading_text')).toHaveCount(0, { timeout: 30_000 });
+	await expect(frame.locator('body')).toHaveAttribute('data-game-started', 'true', { timeout: 30_000 });
+	await expect(frame.locator('#game canvas')).toBeVisible();
 	await frame.locator('#game').click();
 	await page.keyboard.press('Escape');
 	await expect(dialog()).toBeVisible();

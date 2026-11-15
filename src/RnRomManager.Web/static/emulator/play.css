@@ -22,3 +22,6 @@ body {
 	width: min(16rem, calc(100% - 2rem));
 	margin: 0 1rem 1rem;
 }
+#downloaded {
+	margin: 0 1rem;
+}

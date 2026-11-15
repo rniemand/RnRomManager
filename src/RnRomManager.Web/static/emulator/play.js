@@ -41,11 +41,42 @@ import {
 
 const status = /** @type {HTMLElement} */ (document.getElementById('status'));
 const progress = /** @type {HTMLProgressElement} */ (document.getElementById('loading'));
+const downloaded = /** @type {HTMLElement} */ (document.getElementById('downloaded'));
+const formatBytes = new Intl.NumberFormat(undefined, { style: 'unit', unit: 'byte', unitDisplay: 'long' });
 
 /** @param {string} text */
-function show(text, loading = false) {
+function show(text) {
 	status.textContent = text;
-	progress.hidden = !loading;
+	progress.hidden = true;
+	downloaded.hidden = true;
+}
+
+/** @param {Response} response */
+function readContent(response) {
+	if (!response.body) return response.blob();
+	const encoding = response.headers.get('Content-Encoding');
+	const total = Number(response.headers.get('Content-Length'));
+	const hasTotal = (!encoding || encoding === 'identity') && Number.isSafeInteger(total) && total > 0;
+	if (hasTotal) {
+		progress.max = total;
+		progress.value = 0;
+		progress.hidden = false;
+	} else {
+		downloaded.textContent = formatBytes.format(0);
+		downloaded.hidden = false;
+	}
+	let bytes = 0;
+	const body = response.body.pipeThrough(
+		new TransformStream({
+			transform(chunk, controller) {
+				bytes += chunk.byteLength;
+				if (hasTotal) progress.value = bytes;
+				else downloaded.textContent = formatBytes.format(bytes);
+				controller.enqueue(chunk);
+			}
+		})
+	);
+	return new Response(body, { headers: { 'Content-Type': response.headers.get('Content-Type') ?? '' } }).blob();
 }
 
 /**
@@ -173,7 +204,7 @@ async function loadDisc(url, core) {
 		return { error: discError(response.status, code, core) };
 	}
 	try {
-		return { data: await response.blob() };
+		return { data: await readContent(response) };
 	} catch {
 		return { error: discError(null, null, core) };
 	}
@@ -246,7 +277,7 @@ async function start() {
 		const problem = pspBrowserError(pspBrowser());
 		if (problem) return show(problem);
 	}
-	show('Loading…', true);
+	show('Preparing emulator…');
 	const isOperator = isOperatorCore(params.core);
 	if (isOperator) {
 		const problem = await checkOperatorCore(params.core);
@@ -298,10 +329,12 @@ async function start() {
 	// Sega CD B6: `disc=1` also loads from play-disc, for a core (Genesis Plus GX) that plays cartridges too.
 	// 3DO B7: Opera plays only discs, so it loads from play-disc with or without `disc=1`, like Yabause.
 	if (isPsx || isPsp || isSaturn || isThreeDo || params.disc) {
+		show('Downloading disc…');
 		const disc = await loadDisc(`/api/games/${params.game}/roms/${params.rom}/play-disc`, params.core);
 		if ('error' in disc) return show(disc.error);
 		content = disc.data;
 	} else {
+		show('Downloading ROM…');
 		const response = await fetch(`/api/games/${params.game}/roms/${params.rom}/download`, {
 			credentials: 'same-origin'
 		});
@@ -309,8 +342,9 @@ async function start() {
 			return show(
 				response.status === 401 ? sessionExpired : `Couldn't load the ROM (HTTP ${response.status}).`
 			);
-		content = await response.blob();
+		content = await readContent(response);
 	}
+	show('Starting emulator…');
 	const file = new File([content], contentFileName(params.core, params.game, params.name));
 
 	// Module code is strict: the globals loader.js reads must be set on window.
