@@ -106,6 +106,9 @@ public partial class EmulatorEndpointsTests
         using var response = await _client.GetAsync("/api/emulator/bios/saturn_bios.bin");
 
         Assert.That(EmulatorEndpoints.IsBiosName("saturn_bios.bin"), Is.True);
+        // 3DO B8: the five 3DO BIOS names.
+        foreach (var name in new[] { "panafz10.bin", "panafz1.bin", "panafz1j.bin", "goldstar.bin", "sanyotry.bin" })
+            Assert.That(EmulatorEndpoints.IsBiosName(name), Is.True, name);
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(Bios));
         AssertNoStore(response);

@@ -253,6 +253,30 @@ export const segaCdBiosMissing =
 const segaCdBiosNames = segaCdBios.map((name) => name.toLowerCase());
 
 /**
+ * 3DO B8: the 3DO BIOS files, fetched in this order. At least one is needed; every one found is handed over, and Opera
+ * boots the first present in its own order.
+ */
+export const threeDoBios = ['panafz10.bin', 'panafz1.bin', 'panafz1j.bin', 'goldstar.bin', 'sanyotry.bin'];
+
+/** The exact size of each 3DO BIOS file (1 MiB). */
+export const threeDoBiosBytes = 1048576;
+
+/**
+ * 3DO B8: shown when a 3DO BIOS file in the BIOS folder isn't exactly 1 MiB.
+ * @param {string} name the BIOS file name
+ * @returns {string}
+ */
+export function threeDoBiosSizeError(name) {
+	return `The 3DO BIOS ${name} in the BIOS folder (Paths:Bios) must be 1 MiB: ask an Admin to replace it.`;
+}
+
+/** 3DO B8: shown when none of the five 3DO BIOS files is in the BIOS folder. */
+export const threeDoBiosMissing =
+	'3DO games need a BIOS: ask an Admin to put panafz10.bin, panafz1.bin, panafz1j.bin, goldstar.bin or sanyotry.bin in the BIOS folder (Paths:Bios).';
+
+const threeDoBiosNames = threeDoBios.map((name) => name.toLowerCase());
+
+/**
  * The play page's message for a failed play-disc request.
  * @param {number | null} status the HTTP status, or null for a network or body-read failure
  * @param {string | null} code the problem's `code`, when the body had one
@@ -295,6 +319,7 @@ export function pspBrowserError(browser) {
  * written at /scph5501.bin can't overwrite it. Saturn B7: the same for a Saturn image named like any of Yabause's
  * three BIOS names, so the firmware can't overwrite it and Yabause never takes the disc for its BIOS. Sega CD B7: the
  * same for any Genesis Plus GX content named like a Sega CD BIOS, disc or cartridge alike (harmless for a cartridge).
+ * 3DO B8: the same for an Opera disc named like any of the five 3DO BIOS files.
  * @param {string} core
  * @param {string} game the game id
  * @param {string} name the release's file name
@@ -306,6 +331,7 @@ export function contentFileName(core, game, name) {
 	const clashes =
 		(core === 'pcsx_rearmed' && lower === psxBios) ||
 		(core === 'yabause' && saturnBiosNames.includes(lower)) ||
-		(core === 'genesis_plus_gx' && segaCdBiosNames.includes(lower));
+		(core === 'genesis_plus_gx' && segaCdBiosNames.includes(lower)) ||
+		(core === 'opera' && threeDoBiosNames.includes(lower));
 	return clashes ? `${game}-${safe}` : safe;
 }

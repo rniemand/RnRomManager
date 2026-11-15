@@ -19,7 +19,11 @@ import {
 	segaCdBios,
 	segaCdBiosBytes,
 	segaCdBiosMissing,
-	segaCdBiosSizeError
+	segaCdBiosSizeError,
+	threeDoBios,
+	threeDoBiosBytes,
+	threeDoBiosMissing,
+	threeDoBiosSizeError
 } from '../../static/emulator/params.js';
 
 const game = '0f8fad5b-d9cb-469f-a165-70867728950e';
@@ -515,6 +519,43 @@ describe('3DO (B6)', () => {
 		[null, "Couldn't load the Opera core."]
 	])('reports the availability check %s', (status, message) => {
 		expect(operatorCoreError('opera', status)).toBe(message);
+	});
+});
+
+describe('3DO (B8)', () => {
+	it('fetches the five BIOS files in order, each 1 MiB', () => {
+		expect(threeDoBios).toEqual([
+			'panafz10.bin',
+			'panafz1.bin',
+			'panafz1j.bin',
+			'goldstar.bin',
+			'sanyotry.bin'
+		]);
+		expect(threeDoBiosBytes).toBe(1048576);
+	});
+
+	it.each(['panafz10.bin', 'PANAFZ1.BIN', 'Panafz1j.bin', 'goldstar.BIN', 'SanyoTry.bin'])(
+		'names a disc called %s after the game',
+		(name) => {
+			expect(contentFileName('opera', game, name)).toBe(`${game}-${name}`);
+		}
+	);
+
+	it('leaves other names alone, and BIOS names on other cores', () => {
+		expect(contentFileName('opera', game, 'Opal Rally #2 (USA).cue')).toBe(
+			'Opal Rally _2 (USA).cue'
+		);
+		expect(contentFileName('opera', game, 'panafz10.iso')).toBe('panafz10.iso');
+		expect(contentFileName('snes9x', game, 'panafz10.bin')).toBe('panafz10.bin');
+	});
+
+	it('words the size and missing messages', () => {
+		expect(threeDoBiosSizeError('goldstar.bin')).toBe(
+			'The 3DO BIOS goldstar.bin in the BIOS folder (Paths:Bios) must be 1 MiB: ask an Admin to replace it.'
+		);
+		expect(threeDoBiosMissing).toBe(
+			'3DO games need a BIOS: ask an Admin to put panafz10.bin, panafz1.bin, panafz1j.bin, goldstar.bin or sanyotry.bin in the BIOS folder (Paths:Bios).'
+		);
 	});
 });
 

@@ -5,6 +5,8 @@
 // first and loads them from the API. Saturn B6/B7: Yabause fetches its disc from play-disc, with the optional
 // saturn_bios.bin handed over in memory like scph5501.bin. Sega CD B7: Genesis Plus GX with `disc=1` needs at least one of
 // the regional Sega CD BIOS files, fetched one after another and all handed over in memory, then loads from play-disc.
+// 3DO B8: Opera does the same with the five 3DO BIOS files, and always loads from play-disc. 3DO B11: Opera writes its
+// NVRAM only on reset, so the modal asks the page to reset and sync /data/saves before it closes.
 import {
 	biosError,
 	biosFor,
@@ -30,7 +32,11 @@ import {
 	segaCdBiosBytes,
 	segaCdBiosMissing,
 	segaCdBiosSizeError,
-	sessionExpired
+	sessionExpired,
+	threeDoBios,
+	threeDoBiosBytes,
+	threeDoBiosMissing,
+	threeDoBiosSizeError
 } from './params.js';
 
 const status = /** @type {HTMLElement} */ (document.getElementById('status'));
@@ -171,6 +177,57 @@ async function loadDisc(url, core) {
 	}
 }
 
+/**
+ * The part of EmulatorJS's game manager the close handler uses.
+ * @typedef {{ restart: () => void, FS: { syncfs: (populate: boolean, done: (e?: unknown) => void) => void } }} SaveManager
+ */
+
+/** 3DO B11: how long Opera's reset gets to write its NVRAM file before /data/saves is synced. */
+const saveSyncDelayMs = 250;
+
+/**
+ * 3DO B11: answers the modal's close request. Opera's reset writes the NVRAM file; the sync then persists
+ * /data/saves (EmulatorJS's IDBFS mount) before the reply lets the modal remove the iframe.
+ */
+function listenForClose() {
+	/** @type {Promise<void> | null} */
+	let saving = null;
+	const reply = () => window.parent.postMessage({ type: 'rnrm-emulator-closed' }, location.origin);
+	window.addEventListener('message', (event) => {
+		if (event.source !== window.parent || event.origin !== location.origin) return;
+		const data = event.data;
+		const isClose =
+			data !== null &&
+			typeof data === 'object' &&
+			Object.keys(data).length === 1 &&
+			data.type === 'rnrm-emulator-close';
+		if (!isClose) return;
+		if (saving) return;
+		const emulator = /** @type {{ gameManager?: SaveManager } | undefined} */ (
+			/** @type {Record<string, unknown>} */ (/** @type {unknown} */ (window)).EJS_emulator
+		);
+		const manager = emulator?.gameManager;
+		if (!manager) return reply();
+		saving = new Promise((resolve) => {
+			try {
+				manager.restart();
+			} catch {
+				// Saved or not, the modal may close.
+			}
+			setTimeout(() => {
+				try {
+					manager.FS.syncfs(false, () => resolve(undefined));
+				} catch {
+					resolve(undefined);
+				}
+			}, saveSyncDelayMs);
+		}).then(() => {
+			saving = null;
+			reply();
+		});
+	});
+}
+
 async function start() {
 	const pspPage = document.body.dataset.player === 'psp';
 	const params = parsePlayParams(location.search, pspPage);
@@ -181,6 +238,8 @@ async function start() {
 	const isPsp = params.core === pspCore;
 	const isDs = params.core === 'desmume';
 	const isSegaCd = params.core === 'genesis_plus_gx' && params.disc;
+	const isThreeDo = params.core === 'opera';
+	if (isThreeDo) listenForClose();
 	if (isPsp) {
 		const problem = pspBrowserError(pspBrowser());
 		if (problem) return show(problem);
@@ -220,11 +279,23 @@ async function start() {
 		}
 		if (Object.keys(segaCdFirmware).length === 0) return show(segaCdBiosMissing);
 	}
+	// 3DO B8: the five names in order, one at a time; a 404 skips a file, any other problem stops the launch there.
+	/** @type {Record<string, ArrayBuffer>} */
+	const threeDoFirmware = {};
+	if (isThreeDo) {
+		for (const name of threeDoBios) {
+			const result = await loadOptionalBios(name, threeDoBiosBytes, threeDoBiosSizeError(name));
+			if ('error' in result) return show(result.error);
+			if (result.bios) threeDoFirmware[`/${name}`] = result.bios;
+		}
+		if (Object.keys(threeDoFirmware).length === 0) return show(threeDoBiosMissing);
+	}
 
 	/** @type {Blob} */
 	let content;
 	// Sega CD B6: `disc=1` also loads from play-disc, for a core (Genesis Plus GX) that plays cartridges too.
-	if (isPsx || isPsp || isSaturn || params.disc) {
+	// 3DO B7: Opera plays only discs, so it loads from play-disc with or without `disc=1`, like Yabause.
+	if (isPsx || isPsp || isSaturn || isThreeDo || params.disc) {
 		const disc = await loadDisc(`/api/games/${params.game}/roms/${params.rom}/play-disc`, params.core);
 		if ('error' in disc) return show(disc.error);
 		content = disc.data;
@@ -261,6 +332,9 @@ async function start() {
 		ejs.EJS_externalFiles = segaCdFirmware;
 		ejs.EJS_disableCue = false;
 	}
+	// 3DO B8: Opera reads its BIOS from the content root too, and keeps cue handling on by itself; it boots the first
+	// BIOS present in its own order, so no core option is set.
+	if (isThreeDo) ejs.EJS_externalFiles = threeDoFirmware;
 	// B3/B8: an operator-supplied core loads its payloads and report by name from the API; the vendored loader keeps
 	// them non-threaded.
 	if (isOperator) ejs.EJS_paths = operatorCorePaths(params.core);
@@ -278,7 +352,8 @@ async function start() {
 		quickLoad: false,
 		netplay: false,
 		cheat: false,
-		exitEmulation: false,
+		// 3DO B11: EmulatorJS's Exit resets Opera, which writes its NVRAM file.
+		exitEmulation: isThreeDo,
 		// Nintendo DS B4: the save-file export and import use RetroArch's SRAM path, which DeSmuME never writes.
 		...(isDs ? { saveSavFiles: false, loadSavFiles: false } : {})
 	};
