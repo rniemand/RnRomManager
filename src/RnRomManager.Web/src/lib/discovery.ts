@@ -3,6 +3,9 @@
  * `q` and `page`; the discovery tabs use `tab`, `key` (the selected group), `groupPage` and `gamePage`.
  */
 
+import { api } from './api/client';
+import type { DiscoveryGroup, Page } from './api/types';
+
 export type DiscoveryKind = 'publishers' | 'genres';
 export type CollectionsTab = 'collections' | DiscoveryKind;
 
@@ -65,3 +68,13 @@ export function tabSearch(tab: CollectionsTab): string {
 		? ''
 		: discoverySearch({ kind: tab, key: null, groupPage: 1, gamePage: 1 });
 }
+
+/** B3: `/api/discovery/{kind}` reads. */
+export const discoveryApi = {
+	groups: (kind: DiscoveryKind, params: { page: number; pageSize: number }) => {
+		const search = new URLSearchParams();
+		if (params.page > 1) search.set('page', String(params.page));
+		search.set('pageSize', String(params.pageSize));
+		return api.get<Page<DiscoveryGroup>>(`/api/discovery/${kind}?${search}`);
+	}
+};

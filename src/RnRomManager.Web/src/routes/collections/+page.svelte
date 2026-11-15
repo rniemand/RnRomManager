@@ -5,8 +5,16 @@
 	import { page } from '$app/state';
 	import type { CollectionListItem, Page } from '#lib/api/types.js';
 	import { collectionsApi, collectionsSearch } from '#lib/collections.js';
-	import { collectionsTab, collectionsTabs, tabSearch } from '#lib/discovery.js';
+	import {
+		collectionsTab,
+		collectionsTabs,
+		discoverySearch,
+		discoveryState,
+		tabSearch,
+		type DiscoveryState
+	} from '#lib/discovery.js';
 	import CollectionModal from '#lib/components/CollectionModal.svelte';
+	import DiscoveryGroups from '#lib/components/DiscoveryGroups.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
@@ -38,6 +46,14 @@
 	function go(next: { q: string; page: number }): void {
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
 		void goto(`/collections${collectionsSearch(next)}`, { replace: true, reset: false });
+	}
+
+	const discovery = $derived(discoveryState(page.url));
+
+	/** Paging within a discovery tab replaces the history entry; selecting a group is a link (a new entry). */
+	function goDiscovery(next: DiscoveryState): void {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
+		void goto(`/collections${discoverySearch(next)}`, { replace: true, reset: false });
 	}
 
 	function onFilterInput(): void {
@@ -187,6 +203,11 @@
 			label="Collection pages"
 		/>
 	{/if}
+{:else if discovery}
+	<DiscoveryGroups
+		view={discovery}
+		onpage={(groupPage) => goDiscovery({ ...discovery, groupPage })}
+	/>
 {/if}
 
 <CollectionModal bind:open={creating} collection={null} />
