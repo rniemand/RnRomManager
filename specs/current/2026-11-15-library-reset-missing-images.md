@@ -61,7 +61,7 @@ Every step adding a route also updates `tests/RnRomManager.Api.Tests/Integration
 - [x] **3. Editor support for the new action.** Files: `Web/src/lib/hotkeys.ts`, `Web/src/lib/api/types.ts`, `Web/src/lib/components/HotkeysModal.svelte`. Tests: `hotkeys.test.ts` catalog/default parity with `Hotkeys.cs`; `HotkeysModal.test.ts` unrelated save omits the implicit action, deliberate disable saves null, Reset all. Done when: B2's editor rules hold.
 - [x] **4. Dispatch Next missing image.** Files: `Web/src/lib/stores/hotkeys.svelte.ts`. Tests: `hotkeys.svelte.test.ts` from the report, from a game page, wraparound, sole-current and empty messages, error toast, coalesced presses and stale responses. Done when: B3 works from any page.
 - [x] **5. Move Library Reset.** Files: `Web/src/routes/+page.svelte`, `library-page.test.ts`. Tests: `library-page.test.ts` DOM and filter state; Playwright mobile/desktop placement (run in Finish). Done when: B1 holds at 320 pixels.
-- [ ] **6. Document.** Files: `docs/features.md`. Done when: Reset placement and the new shortcut are documented and the full repository and Playwright suites pass.
+- [x] **6. Document.** Files: `docs/features.md`. Done when: Reset placement and the new shortcut are documented and the full repository and Playwright suites pass.
 
 ## Decisions
 
