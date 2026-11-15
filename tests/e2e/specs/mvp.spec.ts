@@ -1047,6 +1047,80 @@ test('collections discovery: browse publishers and genres across systems, share 
 	await expect(page).toHaveURL(/\/collections\?tab=genres$/);
 });
 
+test('collections discovery: two signed-in users share, replace and remove a publisher logo', async () => {
+	// A plain user (no roles) next to the admin, in a browser of their own.
+	const curatorPassword = `${newPassword}-curator`;
+	await page.goto('/admin/users');
+	await page.getByRole('button', { name: 'Create user' }).click();
+	await dialog().getByLabel('Username').fill('curator');
+	await dialog().getByLabel('Initial password').fill(`${curatorPassword}-initial`);
+	await dialog().getByRole('button', { name: 'Create' }).click();
+	await expect(dialog()).toBeHidden();
+
+	const curatorContext = await context.browser()!.newContext();
+	const curator = await curatorContext.newPage();
+	try {
+		await curator.goto('/login');
+		await curator.getByLabel('Username').fill('curator');
+		await curator.getByLabel('Password').fill(`${curatorPassword}-initial`);
+		await curator.getByRole('button', { name: 'Sign in' }).click();
+		await expect(curator).toHaveURL(/\/change-password$/);
+		await curator.getByLabel('Current password').fill(`${curatorPassword}-initial`);
+		await curator.getByLabel('New password', { exact: true }).fill(curatorPassword);
+		await curator.getByLabel('Confirm new password').fill(curatorPassword);
+		await curator.getByRole('button', { name: 'Change password' }).click();
+		await expect(curator).not.toHaveURL(/\/change-password$/);
+
+		const logoOf = (p: Page) =>
+			p.getByRole('list', { name: 'Publishers' }).getByRole('link', { name: /Fixture Works/ }).locator('img');
+
+		// B5: the admin adds the shared logo; Fixture Works has no starter art, so it showed text only.
+		await page.goto('/collections?tab=publishers');
+		await expect(logoOf(page)).toHaveCount(0);
+		await page.getByRole('button', { name: 'Change logo for Fixture Works' }).click();
+		await expect(dialog()).toHaveAccessibleName('Logo for Fixture Works');
+		await expect(dialog().getByText('No logo: the name shows as text.')).toBeVisible();
+		await expectAccessible(page, 'publisher logo modal');
+		await dialog()
+			.getByLabel('Logo image file')
+			.setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: png(48, [200, 60, 40]) });
+		await dialog().getByRole('button', { name: 'Save logo' }).click();
+		await expect(dialog()).toBeHidden();
+		await expect(logoOf(page)).toHaveAttribute('src', /\/api\/discovery\/publishers\/logo\?key=[0-9a-f]{64}&v=\d+$/);
+		const adminVersion = await logoOf(page).getAttribute('src');
+		await expect.poll(() => logoOf(page).evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(48);
+
+		// Shared: the curator sees it, then replaces it; the last writer wins for everyone.
+		await curator.goto('/collections?tab=publishers');
+		await expect(logoOf(curator)).toHaveAttribute('src', adminVersion!);
+		await curator.getByRole('button', { name: 'Change logo for Fixture Works' }).click();
+		const curatorDialog = curator.getByRole('dialog');
+		await expect(curatorDialog.getByText('Shared logo, set by a user.')).toBeVisible();
+		await curatorDialog
+			.getByLabel('Logo image file')
+			.setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: png(64, [40, 160, 90]) });
+		await curatorDialog.getByRole('button', { name: 'Save logo' }).click();
+		await expect(curatorDialog).toBeHidden();
+		await expect(logoOf(curator)).not.toHaveAttribute('src', adminVersion!);
+		const curatorVersion = await logoOf(curator).getAttribute('src');
+
+		await page.reload();
+		await expect(logoOf(page)).toHaveAttribute('src', curatorVersion!);
+		await expect.poll(() => logoOf(page).evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(64);
+
+		// Either user removes it; the text fallback shows again for both.
+		await page.getByRole('button', { name: 'Change logo for Fixture Works' }).click();
+		await dialog().getByRole('button', { name: /Remove shared logo/ }).click();
+		await expect(dialog()).toBeHidden();
+		await expect(logoOf(page)).toHaveCount(0);
+		await curator.reload();
+		await expect(curator.getByRole('link', { name: /Fixture Works/ })).toBeVisible();
+		await expect(logoOf(curator)).toHaveCount(0);
+	} finally {
+		await curatorContext.close();
+	}
+});
+
 test('review queue: resolve with a suggestion', async () => {
 	await page.goto('/review');
 	await expectAccessible(page, 'review queue');

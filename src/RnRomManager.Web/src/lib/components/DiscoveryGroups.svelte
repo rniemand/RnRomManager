@@ -8,6 +8,8 @@
 	import ErrorAlert from './ErrorAlert.svelte';
 	import Loading from './Loading.svelte';
 	import Pagination from './Pagination.svelte';
+	import Icon from './Icon.svelte';
+	import PublisherLogoModal from './PublisherLogoModal.svelte';
 
 	/**
 	 * Discovery B2: one page of a kind's live groups (publishers or genres across systems), each a link selecting it.
@@ -35,6 +37,9 @@
 	let reload = $state(0);
 	/** B6: image sources that failed to load; the next source (or the text alone) shows instead. */
 	const failedArt = new SvelteSet<string>();
+	/** B5: the publisher whose logo is being changed. */
+	let editing = $state<DiscoveryGroup | null>(null);
+	let logoOpen = $state(false);
 
 	const noun = $derived(view.kind === 'publishers' ? 'publishers' : 'genres');
 
@@ -81,9 +86,9 @@
 {:else}
 	<ul class="list-group" aria-label={view.kind === 'publishers' ? 'Publishers' : 'Genres'}>
 		{#each result.items as group (group.key)}
-			<li class="list-group-item p-0">
+			<li class="list-group-item p-0 d-flex align-items-stretch">
 				<a
-					class="list-group-item-action d-flex align-items-center justify-content-between gap-2 px-3 py-2 text-decoration-none"
+					class="list-group-item-action flex-grow-1 min-w-0 d-flex align-items-center justify-content-between gap-2 px-3 py-2 text-decoration-none"
 					class:active={group.key === view.key}
 					aria-current={group.key === view.key ? 'true' : undefined}
 					href="{resolve('/collections')}{selection(group)}"
@@ -110,6 +115,19 @@
 						>{group.gameCount} {group.gameCount === 1 ? 'game' : 'games'}</span
 					>
 				</a>
+				{#if view.kind === 'publishers'}
+					<!-- B5: beside the link, not in it (no button inside a link). -->
+					<button
+						type="button"
+						class="btn btn-link btn-sm border-start rounded-0 px-2"
+						aria-label="Change logo for {group.name}"
+						title="Change logo"
+						onclick={() => {
+							editing = group;
+							logoOpen = true;
+						}}><Icon name="edit" /></button
+					>
+				{/if}
 			</li>
 		{/each}
 	</ul>
@@ -124,6 +142,10 @@
 		onpagesize={setPageSize}
 		label="{view.kind === 'publishers' ? 'Publisher' : 'Genre'} pages"
 	/>
+{/if}
+
+{#if view.kind === 'publishers'}
+	<PublisherLogoModal bind:open={logoOpen} publisher={editing} onchanged={() => reload++} />
 {/if}
 
 <style>

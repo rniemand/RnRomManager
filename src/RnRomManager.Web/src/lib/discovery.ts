@@ -167,3 +167,28 @@ export function publisherArt(
 	const sources = [group.logoUrl, starterByKey.get(group.key)].filter((s): s is string => !!s);
 	return sources.filter((s) => !failed.has(s));
 }
+
+/** B5: a logo override's limits, as the server checks them (it also checks the type and 2048 px per side). */
+export const maxLogoBytes = 512 * 1024;
+export const maxLogoDimension = 2048;
+
+/** B5's checks the browser can make before uploading; null when the file may be sent. */
+export function logoFileError(file: File | null | undefined): string | null {
+	if (!file || file.size === 0) return 'Choose an image file.';
+	if (file.type !== 'image/png' && file.type !== 'image/jpeg')
+		return 'The logo must be a PNG or JPEG image.';
+	if (file.size > maxLogoBytes) return 'The logo must be at most 512 KiB.';
+	return null;
+}
+
+const logoUrl = (key: string) => `/api/discovery/publishers/logo?key=${encodeURIComponent(key)}`;
+
+/** B5: the shared logo override any signed-in user may replace or remove. */
+export const publisherLogoApi = {
+	replace: (key: string, file: File) => {
+		const form = new FormData();
+		form.append('file', file);
+		return api.put<void>(logoUrl(key), form);
+	},
+	remove: (key: string) => api.delete<void>(logoUrl(key))
+};
