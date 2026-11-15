@@ -180,9 +180,9 @@
 			</p>
 
 			<div class="table-responsive">
-				<table class="table table-sm align-middle mb-0">
+				<table class="table table-sm table-striped table-hover align-middle mb-0">
 					<caption class="visually-hidden">Download progress</caption>
-					<thead>
+					<thead class="table-dark">
 						<tr>
 							<th scope="col" class="text-end">#</th>
 							<th scope="col">File</th>
