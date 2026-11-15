@@ -64,7 +64,7 @@ Signed-in users can browse the whole library by publisher or genre across platfo
 
 Every step adding a route also updates `tests/RnRomManager.Api.Tests/Integration/EndpointRoleMatrixTests.cs` for the signed-in User role and uses the normal signed-in API and antiforgery group.
 
-- [ ] **1. Store publisher logo overrides.** Files: `Data/Migrations/00NN_publisher_logos.sql`, `Data/Repositories/PublisherLogoRepository.cs`, `Core/Discovery/PublisherLogo.cs`. Tests: `PublisherLogoRepositoryTests` (Data Testcontainers) atomic replace, delete, key isolation; `MySqlBackupStoreTests` binary round-trip. Done when: one publisher's replacement is isolated and survives backup and restore.
+- [x] **1. Store publisher logo overrides.** Files: `Data/Migrations/00NN_publisher_logos.sql`, `Data/Repositories/PublisherLogoRepository.cs`, `Core/Discovery/PublisherLogo.cs`. Tests: `PublisherLogoRepositoryTests` (Data Testcontainers) atomic replace, delete, key isolation; `MySqlBackupStoreTests` binary round-trip. Done when: one publisher's replacement is isolated and survives backup and restore.
 - [ ] **2. Query discovery group pages.** Files: `Core/Discovery/`, `Data/Repositories/DiscoveryRepository.cs`. Tests: `DiscoveryRepositoryTests` (Data Testcontainers) normalization, null and empty arrays, Unicode whitespace, case and accents, long values, multiple values, duplicate counting and stable paging for both kinds. Done when: individual metadata values are listed as groups across systems.
 - [ ] **3. Query discovery game pages and measure.** Files: `Core/Discovery/`, `Data/Repositories/DiscoveryRepository.cs`, `Data/Repositories/LibraryRepositories.cs`. Tests: `DiscoveryRepositoryTests` exact selection, cross-platform results, rename and removal visibility, case and accents; an `Explicit` 50,000-game timing test. Done when: every matched game is projected once and the 500 ms budget is met or the cache fallback is in place.
 - [ ] **4. Expose discovery reads.** Files: `Api/Endpoints/DiscoveryEndpoints.cs`, `Api/AppHost.cs`. Tests: `DiscoveryEndpointsTests` (API Testcontainers) auth, response shapes, invalid key and kind, paging validation. Done when: both kinds and both page shapes are usable.
@@ -83,6 +83,7 @@ Every step adding a route also updates `tests/RnRomManager.Api.Tests/Integration
 - 2026-11-15 Starter art? → redistributable logos where available, original name tiles otherwise (design).
 - 2026-11-15 Where do starter art and overrides merge? → API returns only the override URL; the SPA falls back to starter art, then text (reviewer).
 - 2026-11-15 Split from the combined curation/bundles spec to keep each branch reviewable (reviewer).
+- 2026-11-15 Backup restore of many 512 KiB logos? → restore's multi-row INSERT also ends a batch at 4 MiB of dumped JSON, since 500 logo rows would exceed MariaDB's 16 MiB `max_allowed_packet` (step 1, code).
 
 ## Kickoff prompt
 

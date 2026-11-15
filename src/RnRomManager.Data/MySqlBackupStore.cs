@@ -22,6 +22,12 @@ public sealed class MySqlBackupStore(MySqlConnectionFactory connections) : IBack
     /// <summary>Rows per multi-row <c>INSERT</c> on restore (B19).</summary>
     public const int InsertBatchSize = 500;
 
+    /// <summary>
+    /// A batch also ends once its dumped lines reach this many characters, so rows with large blobs (publisher logos)
+    /// stay well under MariaDB's 16 MiB <c>max_allowed_packet</c>.
+    /// </summary>
+    public const int InsertBatchChars = 4 * 1024 * 1024;
+
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
     /// <summary>Where the migration scripts are embedded (the same scripts <see cref="MySqlDatabaseLifecycle"/> runs).</summary>
@@ -249,6 +255,7 @@ public sealed class MySqlBackupStore(MySqlConnectionFactory connections) : IBack
     {
         var types = await ColumnTypesAsync(connection, table, cancellationToken);
         var batch = new List<JsonElement>(InsertBatchSize);
+        long batchChars = 0;
         long rows = 0;
         await using var stream = await entry.OpenAsync(cancellationToken);
         using var reader = new StreamReader(stream, Utf8);
@@ -256,10 +263,12 @@ public sealed class MySqlBackupStore(MySqlConnectionFactory connections) : IBack
         {
             if (line.Length == 0) continue;
             batch.Add(JsonSerializer.Deserialize<JsonElement>(line));
-            if (batch.Count == InsertBatchSize)
+            batchChars += line.Length;
+            if (batch.Count == InsertBatchSize || batchChars >= InsertBatchChars)
             {
                 rows += await InsertBatchAsync(connection, table, types, batch, cancellationToken);
                 batch.Clear();
+                batchChars = 0;
             }
         }
 
