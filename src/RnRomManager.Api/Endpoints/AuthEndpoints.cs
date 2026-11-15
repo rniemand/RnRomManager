@@ -62,11 +62,13 @@ public static class AuthEndpoints
             return Results.NoContent();
         });
 
-        // B23: the signed-in user's hotkey bindings (defaults merged in for every editable action).
+        // B23: the signed-in user's hotkey bindings (defaults merged in for every editable action), plus the actions whose
+        // default yielded to an older override (library-reset-missing-images B2).
         auth.MapGet("/me/hotkeys", async (HttpContext ctx, IUserRepository users) =>
         {
-            var stored = Hotkeys.ParseStored(await users.GetHotkeysAsync(Session.CurrentUser(ctx)!.Id, ctx.RequestAborted));
-            return Results.Ok(new { bindings = Hotkeys.Merge(stored) });
+            var user = Session.CurrentUser(ctx)!;
+            var stored = Hotkeys.ParseStored(await users.GetHotkeysAsync(user.Id, ctx.RequestAborted));
+            return Results.Ok(HotkeysDto(stored, user.Roles));
         });
 
         auth.MapPut("/me/hotkeys", async (JsonElement body, HttpContext ctx, IUserRepository users, ILoggerFactory loggers) =>
@@ -83,11 +85,17 @@ public static class AuthEndpoints
 
             await users.SetHotkeysAsync(user.Id, Hotkeys.Serialize(overrides), ctx.RequestAborted);
             loggers.CreateLogger(typeof(AuthEndpoints)).LogInformation("User {UserId} saved {Count} hotkey override(s)", user.Id, overrides.Count);
-            return Results.Ok(new { bindings = Hotkeys.Merge(overrides) });
+            return Results.Ok(HotkeysDto(overrides, user.Roles));
         });
 
         return api;
     }
+
+    private static object HotkeysDto(IReadOnlyDictionary<string, string?> overrides, IReadOnlySet<string> roles) => new
+    {
+        bindings = Hotkeys.Merge(overrides, roles),
+        implicitUnassigned = Hotkeys.ImplicitUnassigned(overrides, roles),
+    };
 
     /// <summary><c>{ bindings: { &lt;id&gt;: string | null } }</c> (B23); rule checks happen in <see cref="Hotkeys.Apply"/>.</summary>
     public static (Dictionary<string, string?>? Bindings, Dictionary<string, string[]> Errors) ParseHotkeys(JsonElement body)

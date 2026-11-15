@@ -57,7 +57,7 @@ No migration: hotkey overrides stay in `users.hotkeys`; existing values are read
 Every step adding a route also updates `tests/RnRomManager.Api.Tests/Integration/EndpointRoleMatrixTests.cs` for the signed-in User role.
 
 - [x] **1. Query missing-image successor.** Files: `Core/Reports/IReportRepository.cs`, `Data/Repositories/ReportRepository.cs`, `Api/Endpoints/ReportEndpoints.cs`. Tests: `ReportEndpointsTests` (API Testcontainers) for order across systems, title ties broken by id, fixed and deleted anchor, empty, sole current, wraparound, invalid GUID and auth. Done when: B4's endpoint returns the successor using the same predicate and order as the report.
-- [ ] **2. Hotkey action and implicit fallback on the server.** Files: `Core/Users/Hotkeys.cs`, `Api/Endpoints/AuthEndpoints.cs`. Tests: `HotkeysTests` (NUnit) for the fallback in `Merge` and `Apply`, explicit conflict error, role-scoped stored overrides; `HotkeyEndpointsTests` (API Testcontainers) for `implicitUnassigned` on GET and PUT. Done when: a user with a stored `Alt+Shift+M` override sees the new action unassigned and can still save other changes.
+- [x] **2. Hotkey action and implicit fallback on the server.** Files: `Core/Users/Hotkeys.cs`, `Api/Endpoints/AuthEndpoints.cs`. Tests: `HotkeysTests` (NUnit) for the fallback in `Merge` and `Apply`, explicit conflict error, role-scoped stored overrides; `HotkeyEndpointsTests` (API Testcontainers) for `implicitUnassigned` on GET and PUT. Done when: a user with a stored `Alt+Shift+M` override sees the new action unassigned and can still save other changes.
 - [ ] **3. Editor support for the new action.** Files: `Web/src/lib/hotkeys.ts`, `Web/src/lib/api/types.ts`, `Web/src/lib/components/HotkeysModal.svelte`. Tests: `hotkeys.test.ts` catalog/default parity with `Hotkeys.cs`; `HotkeysModal.test.ts` unrelated save omits the implicit action, deliberate disable saves null, Reset all. Done when: B2's editor rules hold.
 - [ ] **4. Dispatch Next missing image.** Files: `Web/src/lib/stores/hotkeys.svelte.ts`. Tests: `hotkeys.svelte.test.ts` from the report, from a game page, wraparound, sole-current and empty messages, error toast, coalesced presses and stale responses. Done when: B3 works from any page.
 - [ ] **5. Move Library Reset.** Files: `Web/src/routes/+page.svelte`, `library-page.test.ts`. Tests: `library-page.test.ts` DOM and filter state; Playwright mobile/desktop placement (run in Finish). Done when: B1 holds at 320 pixels.
@@ -68,6 +68,8 @@ Every step adding a route also updates `tests/RnRomManager.Api.Tests/Integration
 - 2026-11-15 Which shortcut? → `Alt+Shift+M`, wrapping through the live report (default).
 - 2026-11-15 Who gets the shortcut? → every signed-in user, as Reports is; image editing stays `LibraryEditor` (reviewer).
 - 2026-11-15 Split from the combined curation/bundles spec to keep each branch reviewable (reviewer).
+- 2026-11-15 When the current game is the only one left, B4 returns `id: null` with `currentIsOnly: true` (the client stays put) (implementation).
+- 2026-11-15 The implicit-unassigned fallback applies only to the new action; older actions keep the existing K1 duplicate behaviour, so no current user's bindings change (implementation).
 
 ## Kickoff prompt
 

@@ -26,6 +26,7 @@ public static class Hotkeys
     public const string NavIntegrity = "nav.integrity";
     public const string NavAdmin = "nav.admin";
     public const string NavDeleted = "nav.deleted";
+    public const string MissingImageNext = "reports.missingImage.next";
 
     public const string FormatError = "Use Ctrl, Alt, Shift or Meta plus one key: A–Z, 0–9 or F1–F12.";
     public const string ModifierError = "Include Ctrl, Alt or Meta.";
@@ -52,7 +53,15 @@ public static class Hotkeys
         new(NavIntegrity, "Go to Integrity", ["Alt+Shift+T"], true, Roles.Admin),
         new(NavAdmin, "Go to Admin", ["Alt+Shift+A"], true, Roles.Admin),
         new(NavDeleted, "Go to Deleted ROMs", ["Alt+Shift+D"], true, Roles.Admin),
+        new(MissingImageNext, "Next missing image", ["Alt+Shift+M"], true, null),
     ];
+
+    /// <summary>
+    /// Actions added after users could store overrides, whose default yields to an existing override (spec
+    /// library-reset-missing-images B2): with no override of their own, they are unassigned while another allowed action's
+    /// override holds their default, so that older override keeps working and saves don't start failing. Older actions keep K1.
+    /// </summary>
+    private static readonly HashSet<string> YieldingDefaults = new(StringComparer.Ordinal) { MissingImageNext };
 
     /// <summary>Global search's own bindings: no action may take them.</summary>
     public static IReadOnlyList<string> Reserved => Actions[0].Defaults;
@@ -138,14 +147,37 @@ public static class Hotkeys
             ? null
             : JsonSerializer.Serialize(Editable.Where(a => overrides.ContainsKey(a.Id)).ToDictionary(a => a.Id, a => overrides[a.Id]), StoredJson);
 
-    /// <summary>Every editable action's binding: its override, else its default (B23 GET).</summary>
-    public static Dictionary<string, string?> Merge(IReadOnlyDictionary<string, string?> overrides) =>
-        Editable.ToDictionary(a => a.Id, a => overrides.TryGetValue(a.Id, out var value) ? value : a.Defaults[0]);
+    /// <summary>
+    /// Every editable action's binding (B23 GET): its override, else its default, except the implicitly unassigned ones
+    /// (<see cref="ImplicitUnassigned"/>), which are null.
+    /// </summary>
+    public static Dictionary<string, string?> Merge(IReadOnlyDictionary<string, string?> overrides, IReadOnlySet<string> roles)
+    {
+        var unassigned = ImplicitUnassigned(overrides, roles);
+        return Editable.ToDictionary(a => a.Id,
+            a => overrides.TryGetValue(a.Id, out var value) ? value : unassigned.Contains(a.Id) ? null : a.Defaults[0]);
+    }
+
+    /// <summary>
+    /// The yielding actions (in table order) that have no override and whose default is taken by another action's override the
+    /// user's roles allow. <paramref name="explicitIds"/> are treated as assigned: a PUT that names the action asks for its binding.
+    /// </summary>
+    public static IReadOnlyList<string> ImplicitUnassigned(IReadOnlyDictionary<string, string?> overrides, IReadOnlySet<string> roles,
+        IEnumerable<string>? explicitIds = null)
+    {
+        var named = explicitIds?.ToHashSet(StringComparer.Ordinal) ?? [];
+        var taken = overrides.Where(o => o.Value is not null && Find(o.Key) is { } a && a.AllowedFor(roles))
+            .Select(o => (o.Key, o.Value!)).ToList();
+        return Editable.Where(a => YieldingDefaults.Contains(a.Id) && a.AllowedFor(roles) && !overrides.ContainsKey(a.Id)
+                && !named.Contains(a.Id) && taken.Any(t => t.Key != a.Id && t.Item2 == a.Defaults[0]))
+            .Select(a => a.Id).ToList();
+    }
 
     /// <summary>
     /// B23 PUT: <paramref name="requested"/> replaces the overrides of every action the user's roles allow (missing = its
     /// default); overrides of other actions are kept unchanged and ignored for conflicts (B22). Overrides equal to the
-    /// default aren't stored.
+    /// default aren't stored. A yielding action left out of the request falls back to unassigned (<see cref="ImplicitUnassigned"/>);
+    /// one the request names keeps its binding and gets the normal duplicate error.
     /// </summary>
     /// <returns>The new overrides, or null with field errors keyed <c>bindings.&lt;id&gt;</c>.</returns>
     public static (Dictionary<string, string?>? Overrides, Dictionary<string, string[]> Errors) Apply(
@@ -197,7 +229,9 @@ public static class Hotkeys
         }
 
         // Duplicates among the actions this user can use; the later one in table order gets the error.
-        var merged = Merge(overrides);
+        var unassigned = ImplicitUnassigned(overrides, roles, requested.Keys);
+        var merged = Editable.ToDictionary(a => a.Id,
+            a => overrides.TryGetValue(a.Id, out var value) ? value : unassigned.Contains(a.Id) ? null : a.Defaults[0]);
         var taken = new Dictionary<string, HotkeyAction>(StringComparer.Ordinal);
         foreach (var action in Editable.Where(a => a.AllowedFor(roles)))
         {
