@@ -89,6 +89,7 @@ public static class AppHost
             .MapLibraryEndpoints()
             .MapCollectionEndpoints()
             .MapBundleQueueEndpoints()
+            .MapBundleFileEndpoints()
             .MapDiscoveryEndpoints()
             .MapPublisherLogoEndpoints()
             .MapEmulatorEndpoints()
