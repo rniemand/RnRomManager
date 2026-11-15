@@ -41,13 +41,13 @@ $ResultsDirectory = [IO.Path]::GetFullPath($ResultsDirectory, $root)
 $apiTests = Join-Path $root 'tests/RnRomManager.Api.Tests'
 $solution = Join-Path $root 'RnRomManager.slnx'
 
-# API integration test classes per shard, balanced by measured run time (each about a third of the API suite, the
-# last shard also running the other test projects). Rebalance when one shard's CI job is clearly slower than the
-# others; unlisted classes run in the last shard.
+# API test classes per shard, balanced using summed TRX class durations and the wall time of each shard.
+# The last shard also runs the other test projects and any API classes unlisted here.
 $apiShards = @(
-    @('IngestPipelineTests', 'ExternalLibraryTests', 'ReviewEndpointsTests', 'LibraryEditTests', 'DatEndpointsTests'),
+    @('IngestPipelineTests', 'ExternalLibraryTests', 'ReviewEndpointsTests', 'LibraryEditTests', 'DatEndpointsTests',
+        'BundleDownloadEndpointsTests'),
     @('BackupEndpointsTests', 'SeedIngestTests', 'AuthTests', 'LibraryEndpointsTests', 'IntegrityEndpointsTests',
-        'ImageUrlEndpointsTests', 'TitleDbIngestTests', 'ReportEndpointsTests', 'LibraryMoveMergeTests')
+        'ImageUrlEndpointsTests', 'TitleDbIngestTests', 'ReportEndpointsTests', 'LibraryMoveMergeTests', 'SecurityHeadersTests')
 )
 $shardCount = $apiShards.Count + 1
 

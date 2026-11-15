@@ -1505,7 +1505,7 @@ async function waitForIdleJobs(seconds = 30): Promise<void> {
 }
 
 test('Nintendo DS: the staged cartridge imports by DAT match and plays in DeSmuME with stylus and saves', async () => {
-	// It boots the core twice and waits for an autosave in between.
+	// Allow for two cold emulator boots.
 	test.setTimeout(180_000);
 	const staged = process.env.E2E_STAGED_NDS;
 	const ingest = process.env.E2E_INGEST;
@@ -1548,6 +1548,53 @@ test('Nintendo DS: the staged cartridge imports by DAT match and plays in DeSmuM
 	ds.on('response', (r) => responses.set(r.url(), r.status()));
 	const viewer = await ds.newPage();
 	const decoder = await ds.newPage();
+	type SyncCallback = (error: Error | null) => void;
+	type AutosaveWindow = Window & {
+		EJS_emulator?: {
+			saveSaveInterval: number;
+			gameManager: { FS: { syncfs: (populate: boolean, callback: SyncCallback) => void } };
+		};
+		runNdsAutosave?: () => Promise<void>;
+	};
+	await viewer.addInitScript(() => {
+		if (location.pathname !== '/emulator/play.html' || new URLSearchParams(location.search).get('core') !== 'desmume') {
+			return;
+		}
+		const emulatorWindow = window as AutosaveWindow;
+		const timers = new Map<number, () => void>();
+		const setInterval = emulatorWindow.setInterval.bind(emulatorWindow);
+		emulatorWindow.setInterval = (handler, delay, ...args) => {
+			const id = setInterval(handler, delay, ...args);
+			if (delay === 30_000 && typeof handler === 'function') timers.set(id, () => handler(...args));
+			return id;
+		};
+		// Run the real periodic callback on demand and wait for its IndexedDB flush.
+		emulatorWindow.runNdsAutosave = async () => {
+			const emulator = emulatorWindow.EJS_emulator;
+			const tick = emulator && timers.get(emulator.saveSaveInterval);
+			if (!emulator || !tick) throw new Error('DeSmuME did not register its 30-second autosave timer');
+			const fs = emulator.gameManager.FS;
+			const syncfs = fs.syncfs;
+			await new Promise<void>((resolve, reject) => {
+				let flushStarted = false;
+				fs.syncfs = (populate, callback) => {
+					if (populate !== false) return syncfs.call(fs, populate, callback);
+					flushStarted = true;
+					syncfs.call(fs, populate, (error) => {
+						if (error) reject(error);
+						else resolve();
+						callback(error);
+					});
+				};
+				try {
+					tick();
+					if (!flushStarted) throw new Error('The DeSmuME autosave did not flush the filesystem');
+				} finally {
+					fs.syncfs = syncfs;
+				}
+			});
+		};
+	});
 	const settingsKey = `ejs-1-nds-${name}-settings`;
 	const coreFiles = () =>
 		requests
@@ -1607,8 +1654,11 @@ test('Nintendo DS: the staged cartridge imports by DAT match and plays in DeSmuM
 	await viewer.mouse.up();
 	const touched = await waitForFrame(decoder, canvas, (f) => nearColour(f.lower, NdsMarkerColours.touched), 15_000);
 	expect(nearColour(touched?.lower, NdsMarkerColours.touched), `lower ${touched?.lower}`).toBe(true);
-	// At least one 30-second battery-save tick (with the vendored syncfs) after the press.
-	await viewer.waitForTimeout(35_000);
+	await canvas.evaluate(() => {
+		const runAutosave = (window as AutosaveWindow).runNdsAutosave;
+		if (!runAutosave) throw new Error('The DeSmuME autosave probe was not installed');
+		return runAutosave();
+	});
 	await viewer.getByRole('dialog').locator('.modal-footer').getByRole('button', { name: 'Close' }).click();
 	await expect(viewer.getByRole('dialog')).toBeHidden();
 
