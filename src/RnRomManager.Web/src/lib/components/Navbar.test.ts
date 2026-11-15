@@ -171,7 +171,7 @@ describe('Navbar', () => {
 		it('names the count for screen readers and shows it as a badge', () => {
 			render(Navbar, { me: user, reviewCount: null, onlogout: () => {}, cartCount: 1250 });
 
-			const link = screen.getByRole('link', { name: 'Bundle, 1,250 files in the cart' });
+			const link = screen.getByRole('link', { name: 'Bundle 1,250 files in the cart' });
 			expect(link.getAttribute('href')).toBe('/bundle-creator');
 			expect(link.querySelector('.badge')!.textContent).toBe('1,250');
 			expect(link.querySelector('i')!.className).toContain('bi-cart3');
@@ -185,7 +185,7 @@ describe('Navbar', () => {
 				onlogout: () => {},
 				cartCount: 1
 			});
-			expect(screen.getByRole('link', { name: 'Bundle, 1 file in the cart' })).toBeTruthy();
+			expect(screen.getByRole('link', { name: 'Bundle 1 file in the cart' })).toBeTruthy();
 			unmount();
 
 			render(Navbar, { me: user, reviewCount: null, onlogout: () => {}, cartCount: 0 });

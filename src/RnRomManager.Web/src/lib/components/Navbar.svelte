@@ -31,7 +31,7 @@
 		cartCount
 	}: Props = $props();
 
-	// The link's name is its visible text plus hidden words ("Bundle, 2 files in the cart"), so axe's
+	// The link's name is its visible text plus hidden words ("Bundle 2 files in the cart"), so axe's
 	// label-content-name-mismatch holds: visible text must be part of the accessible name.
 	const cartFiles = $derived(cartCount === 1 ? 'file' : 'files');
 
@@ -115,7 +115,7 @@
 							aria-current={isActive('/bundle-creator') ? 'page' : undefined}
 							href={resolve('/bundle-creator')}
 						>
-							<Icon name="cart" /> Bundle{#if cartCount}<span class="visually-hidden">,</span>
+							<Icon name="cart" /> Bundle{#if cartCount}{' '}
 								<span class="badge rounded-pill text-bg-primary">{formatCount(cartCount)}</span>
 								<span class="visually-hidden">{cartFiles} in the cart</span>
 							{/if}

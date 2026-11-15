@@ -533,16 +533,16 @@ test('Bundle Creator: files from two games fill one working cart', async () => {
 	const mainName = (await addMain.getAttribute('aria-label'))!.replace(/^Add (.+) to the bundle$/, '$1');
 	await addMain.click();
 	await expect(page.getByRole('button', { name: `${mainName} is in the bundle` }).first()).toBeVisible();
-	await expect(page.getByRole('link', { name: 'Bundle, 1 file in the cart' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Bundle 1 file in the cart' })).toBeVisible();
 
 	// B1: a disc set's separately downloadable Track 2 from the release's file list.
 	await openGame('Disc Runner');
 	await page.getByRole('button', { name: 'Show details for Disc Runner (USA) (Track 1).bin' }).click();
 	await page.getByRole('button', { name: '3 files' }).click();
 	await page.getByRole('button', { name: 'Add Disc Runner (USA) (Track 2).bin to the bundle' }).click();
-	await expect(page.getByRole('link', { name: 'Bundle, 2 files in the cart' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Bundle 2 files in the cart' })).toBeVisible();
 
-	await page.getByRole('link', { name: 'Bundle, 2 files in the cart' }).click();
+	await page.getByRole('link', { name: 'Bundle 2 files in the cart' }).click();
 	await expect(page.getByRole('heading', { level: 1, name: 'Bundle Creator' })).toBeVisible();
 	const rows = page.locator('main table tbody tr');
 	await expect(rows).toHaveCount(2);
