@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
+	import BundleDownload from '#lib/components/BundleDownload.svelte';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Icon from '#lib/components/Icon.svelte';
@@ -124,6 +125,8 @@
 		</div>
 	</div>
 {/if}
+
+<div class="mt-4"><BundleDownload /></div>
 
 <div class="mt-4"><SavedBundleQueues /></div>
 

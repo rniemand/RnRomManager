@@ -556,6 +556,45 @@ test('Bundle Creator: files from two games fill one working cart', async () => {
 	await expect(rows).toHaveCount(2);
 });
 
+test('Bundle Creator: the queue downloads two cross-system files in order, with a manual fallback and retry', async () => {
+	// Continues from the cart above: a cartridge main file, then a PlayStation set's Track 2.
+	await expect(page.getByRole('heading', { level: 1, name: 'Bundle Creator' })).toBeVisible();
+	const cartRows = page.locator('main table').first().locator('tbody tr');
+	await expect(cartRows.getByText('Available')).toHaveCount(2);
+	const firstName = (await cartRows.nth(0).locator('td').nth(1).textContent())!.trim();
+	const secondName = 'Disc Runner (USA) (Track 2).bin';
+
+	// B7: the server is full for the second file, so the run pauses and offers its manual link (B6).
+	let issues = 0;
+	await page.route('**/api/bundle-downloads', (route) =>
+		++issues === 2
+			? route.fulfill({
+					status: 503,
+					contentType: 'application/problem+json',
+					body: JSON.stringify({ status: 503, code: 'BundleDownloadsFull', title: 'Too many downloads' })
+				})
+			: route.continue()
+	);
+	const first = page.waitForEvent('download');
+	await page.getByRole('button', { name: 'Download queue' }).click();
+	expect((await first).suggestedFilename()).toBe(firstName);
+	await expect(page.getByRole('alert').filter({ hasText: 'too many downloads' })).toBeVisible();
+	await expect(page.getByText('1 of 2 sent')).toBeVisible();
+	await page.getByText(/Download the remaining files manually/).click();
+	await expect(page.getByRole('link', { name: secondName })).toBeVisible();
+
+	// B8: retry sends only the remaining file; the first isn't sent again.
+	await page.unroute('**/api/bundle-downloads');
+	const second = page.waitForEvent('download');
+	await page.getByRole('button', { name: 'Retry' }).click();
+	expect((await second).suggestedFilename()).toBe(secondName);
+	await expect(page.getByText('2 of 2 sent')).toBeVisible();
+	const runRows = page.getByRole('table', { name: 'Download progress' }).locator('tbody tr');
+	await expect(runRows.getByText('Sent to the browser')).toHaveCount(2);
+	expect(issues).toBe(2);
+	await expectAccessible(page, 'Bundle Creator download');
+});
+
 /** Starts the open emulator dialog's game and waits for the core's local .data file and the game to start. */
 async function startEmulator(core: string): Promise<void> {
 	const frame = page.frameLocator('iframe');
