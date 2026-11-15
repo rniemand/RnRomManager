@@ -494,8 +494,25 @@ describe('library page', () => {
 			render(LibraryPage);
 			await screen.findByAltText('4-in-1 Fun Pak box art');
 
-			expect(chipTexts()).toEqual([]);
+			expect(row()).toBeNull();
 			expect(screen.getByRole('button', { name: 'Reset filters' })).toBeTruthy();
+		});
+
+		it('Reset sits in the filter row, after the filters and before the view toggle (B1)', async () => {
+			navigateTo('/?system=gb&page=2');
+			render(LibraryPage);
+			await screen.findByAltText('4-in-1 Fun Pak box art');
+
+			const reset = screen.getByRole('button', { name: 'Reset filters' });
+			const form = screen.getByRole('search');
+			expect(reset.parentElement).toBe(form);
+			const order = [...form.children].map(
+				(el) => el.getAttribute('aria-label') ?? el.textContent!.trim()
+			);
+			expect(order.indexOf('Reset filters')).toBe(order.indexOf('Favourites') + 1);
+			expect(order.indexOf('View')).toBe(order.indexOf('Reset filters') + 1);
+			expect(row()!.contains(reset)).toBe(false);
+			expect(chipTexts()).toEqual([expect.stringMatching(/^System: Game Boy/)]);
 		});
 	});
 
