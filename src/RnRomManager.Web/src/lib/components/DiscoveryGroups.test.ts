@@ -68,6 +68,49 @@ describe('DiscoveryGroups (discovery B2)', () => {
 		expect(capcom.textContent).toContain('1 game');
 	});
 
+	it('publishers show their override, else starter art, else just the name; genres show text', async () => {
+		const nintendo = 'c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516';
+		const sega = '44cddc3f1be25271c8c2a824d85521ee8087db49c90efed6c5b884c995f4dd90';
+		const override = `/api/discovery/publishers/logo?key=${sega}&v=5`;
+		answers['/api/discovery/publishers?pageSize=20'] = [
+			{
+				status: 200,
+				body: pageOf([
+					{ key: keyOf(1), name: 'Hudson', gameCount: 1, logoUrl: null },
+					{ key: nintendo, name: 'Nintendo', gameCount: 3, logoUrl: null },
+					{ key: sega, name: 'Sega', gameCount: 2, logoUrl: override }
+				])
+			}
+		];
+		render(DiscoveryGroups, { view: state(), onpage: vi.fn() });
+
+		const art = (name: RegExp) =>
+			screen.getByRole('link', { name }).querySelector('img')?.getAttribute('src') ?? null;
+		await screen.findByRole('link', { name: /Nintendo/ });
+		expect(art(/Hudson/)).toBeNull();
+		expect(art(/Nintendo/)).toBe('/publishers/nintendo.svg');
+		expect(art(/Sega/)).toBe(override);
+		expect(
+			screen.getByRole('link', { name: /Sega/ }).querySelector('img')!.getAttribute('alt')
+		).toBe('');
+
+		// A broken override falls back to the starter art, which here doesn't exist either.
+		await fireEvent.error(screen.getByRole('link', { name: /Sega/ }).querySelector('img')!);
+		expect(art(/Sega/)).toBe('/publishers/sega.svg');
+		await fireEvent.error(screen.getByRole('link', { name: /Sega/ }).querySelector('img')!);
+		expect(art(/Sega/)).toBeNull();
+		expect(screen.getByRole('link', { name: /Sega/ }).textContent).toContain('Sega');
+	});
+
+	it('genre groups never show art', async () => {
+		answers['/api/discovery/genres?pageSize=20'] = [
+			{ status: 200, body: pageOf([group(1, 'Puzzle')]) }
+		];
+		render(DiscoveryGroups, { view: state({ kind: 'genres' }), onpage: vi.fn() });
+
+		expect((await screen.findByRole('link', { name: /Puzzle/ })).querySelector('img')).toBeNull();
+	});
+
 	it('pages through the URL, keeping the group page in selection links', async () => {
 		const onpage = vi.fn();
 		answers['/api/discovery/genres?page=2&pageSize=20'] = [

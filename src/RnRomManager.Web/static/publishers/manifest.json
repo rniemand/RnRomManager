@@ -1,0 +1,84 @@
+{
+	"$comment": "Starter publisher art (collections discovery B4). Every file here needs an entry. Redistribution terms of the publishers' own logos could not be verified, so each is an original typographic name tile made for RnRomManager: no logo, mark or brand colour, only the name as plain text. Names are trademarks of their owners, used to identify them.",
+	"assets": [
+		{
+			"file": "activision.svg",
+			"publisher": "Activision",
+			"kind": "original typographic name tile",
+			"source": "Made for RnRomManager",
+			"license": "MIT (the RnRomManager license)"
+		}
+		,
+		{
+			"file": "atari.svg",
+			"publisher": "Atari",
+			"kind": "original typographic name tile",
+			"source": "Made for RnRomManager",
+			"license": "MIT (the RnRomManager license)"
+		}
+		,
+		{
+			"file": "bandai-namco.svg",
+			"publisher": "Bandai Namco",
+			"kind": "original typographic name tile",
+			"source": "Made for RnRomManager",
+			"license": "MIT (the RnRomManager license)"
+		}
+		,
+		{
+			"file": "capcom.svg",
+			"publisher": "Capcom",
+			"kind": "original typographic name tile",
+			"source": "Made for RnRomManager",
+			"license": "MIT (the RnRomManager license)"
+		}
+		,
+		{
+			"file": "electronic-arts.svg",
+			"publisher": "Electronic Arts",
+			"kind": "original typographic name tile",
+			"source": "Made for RnRomManager",
+			"license": "MIT (the RnRomManager license)"
+		}
+		,
+		{
+			"file": "konami.svg",
+			"publisher": "Konami",
+			"kind": "original typographic name tile",
+			"source": "Made for RnRomManager",
+			"license": "MIT (the RnRomManager license)"
+		}
+		,
+		{
+			"file": "nintendo.svg",
+			"publisher": "Nintendo",
+			"kind": "original typographic name tile",
+			"source": "Made for RnRomManager",
+			"license": "MIT (the RnRomManager license)"
+		}
+		,
+		{
+			"file": "sega.svg",
+			"publisher": "Sega",
+			"kind": "original typographic name tile",
+			"source": "Made for RnRomManager",
+			"license": "MIT (the RnRomManager license)"
+		}
+		,
+		{
+			"file": "square-enix.svg",
+			"publisher": "Square Enix",
+			"kind": "original typographic name tile",
+			"source": "Made for RnRomManager",
+			"license": "MIT (the RnRomManager license)"
+		}
+		,
+		{
+			"file": "ubisoft.svg",
+			"publisher": "Ubisoft",
+			"kind": "original typographic name tile",
+			"source": "Made for RnRomManager",
+			"license": "MIT (the RnRomManager license)"
+		}
+	]
+}

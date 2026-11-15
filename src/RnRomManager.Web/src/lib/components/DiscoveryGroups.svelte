@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import type { DiscoveryGroup, Page } from '../api/types';
-	import { discoveryApi, discoverySearch, type DiscoveryState } from '../discovery';
+	import { SvelteSet } from 'svelte/reactivity';
+	import { discoveryApi, discoverySearch, publisherArt, type DiscoveryState } from '../discovery';
 	import { pageCount, readPageSize, writePageSize } from '../pageSize';
 	import EmptyState from './EmptyState.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
@@ -32,6 +33,8 @@
 	let result = $state<Page<DiscoveryGroup> | null>(null);
 	let error = $state<unknown>(null);
 	let reload = $state(0);
+	/** B6: image sources that failed to load; the next source (or the text alone) shows instead. */
+	const failedArt = new SvelteSet<string>();
 
 	const noun = $derived(view.kind === 'publishers' ? 'publishers' : 'genres');
 
@@ -85,7 +88,24 @@
 					aria-current={group.key === view.key ? 'true' : undefined}
 					href="{resolve('/collections')}{selection(group)}"
 				>
-					<span class="text-truncate" title={group.name}>{group.name}</span>
+					<span class="d-flex align-items-center gap-2 min-w-0">
+						{#if view.kind === 'publishers'}
+							{@const art = publisherArt(group, failedArt)[0]}
+							{#if art}
+								<!-- Decorative: the name follows as text. -->
+								<img
+									class="publisher-art flex-shrink-0"
+									src={art}
+									alt=""
+									width="100"
+									height="28"
+									loading="lazy"
+									onerror={() => failedArt.add(art)}
+								/>
+							{/if}
+						{/if}
+						<span class="text-truncate" title={group.name}>{group.name}</span>
+					</span>
 					<span class="badge text-bg-secondary rounded-pill"
 						>{group.gameCount} {group.gameCount === 1 ? 'game' : 'games'}</span
 					>
@@ -105,3 +125,12 @@
 		label="{view.kind === 'publishers' ? 'Publisher' : 'Genre'} pages"
 	/>
 {/if}
+
+<style>
+	.publisher-art {
+		object-fit: contain;
+	}
+	.min-w-0 {
+		min-width: 0;
+	}
+</style>

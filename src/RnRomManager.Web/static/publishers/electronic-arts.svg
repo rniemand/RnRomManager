@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 56" role="img" aria-label="Electronic Arts">
+  <style>
+    rect { fill: #e9ecef; stroke: #adb5bd; }
+    text { fill: #212529; font: 600 19px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    @media (prefers-color-scheme: dark) { rect { fill: #343a40; stroke: #6c757d; } text { fill: #f8f9fa; } }
+  </style>
+  <rect x="1" y="1" width="198" height="54" rx="8" stroke-width="2"/>
+  <text x="100" y="35" text-anchor="middle">Electronic Arts</text>
+</svg>
