@@ -123,7 +123,11 @@ describe('play page loading indicator', () => {
 				expect(progress.value).toBe(2);
 			} else {
 				expect(downloaded.textContent).toBe(
-					new Intl.NumberFormat(undefined, { style: 'unit', unit: 'byte', unitDisplay: 'long' }).format(2)
+					new Intl.NumberFormat(undefined, {
+						style: 'unit',
+						unit: 'byte',
+						unitDisplay: 'long'
+					}).format(2)
 				);
 			}
 			expect(atLoader).toBeNull();
