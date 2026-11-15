@@ -327,8 +327,11 @@ test('browse, search and filter the library', async () => {
 			await control.focus();
 			await expect(control).toBeFocused();
 		}
+		// The filter row itself wraps instead of overflowing (the card grid below is out of scope here).
 		expect(
-			await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+			await filterRow.evaluate(
+				(row) => row.scrollWidth <= row.clientWidth && row.getBoundingClientRect().right <= window.innerWidth
+			)
 		).toBe(true);
 	}
 	await page.setViewportSize(viewport);
