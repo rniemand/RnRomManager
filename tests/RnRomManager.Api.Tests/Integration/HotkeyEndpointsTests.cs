@@ -63,6 +63,7 @@ public class HotkeyEndpointsTests
     {
         ["nav.library"] = "Alt+Shift+L", ["nav.collections"] = "Alt+Shift+C", ["nav.ingestion"] = "Alt+Shift+I", ["nav.review"] = "Alt+Shift+F", ["review.next"] = "Alt+Shift+G",
         ["nav.reports"] = "Alt+Shift+R", ["nav.integrity"] = "Alt+Shift+T", ["nav.admin"] = "Alt+Shift+A", ["nav.deleted"] = "Alt+Shift+D",
+        ["reports.missingImage.next"] = "Alt+Shift+M",
     };
 
     [Test]
@@ -156,6 +157,62 @@ public class HotkeyEndpointsTests
         Assert.That(await Users.GetHotkeysAsync(_user.Id, default),
             Is.EqualTo("""{"nav.library":"Alt+Shift+I","nav.review":"Alt+Shift+Z"}"""));
     }
+
+    [Test]
+    public async Task Get_AnOlderOverrideOnAltShiftM_LeavesNextMissingImageImplicitlyUnassigned()
+    {
+        await SignInAsync();
+        await Users.SetHotkeysAsync(_user.Id, """{"nav.library":"Alt+Shift+M"}""", default);
+
+        using var response = await _client.GetAsync("/api/auth/me/hotkeys");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var body = await AuthClient.JsonAsync(response);
+
+        Assert.That((Bindings(body)["nav.library"], Bindings(body)["reports.missingImage.next"]), Is.EqualTo(("Alt+Shift+M", (string?)null)));
+        Assert.That(Implicit(body), Is.EqualTo(new[] { "reports.missingImage.next" }));
+    }
+
+    [Test]
+    public async Task Get_WithoutAConflict_ImplicitUnassignedIsEmpty()
+    {
+        await SignInAsync();
+        // A User's stored Admin override doesn't take the default (role-scoped).
+        await Users.SetHotkeysAsync(_user.Id, """{"nav.review":"Alt+Shift+M"}""", default);
+
+        using var response = await _client.GetAsync("/api/auth/me/hotkeys");
+        var body = await AuthClient.JsonAsync(response);
+
+        Assert.That(Implicit(body), Is.Empty);
+        Assert.That(Bindings(body)["reports.missingImage.next"], Is.EqualTo("Alt+Shift+M"));
+    }
+
+    [Test]
+    public async Task Put_Unrelated_SavesAndKeepsTheFallback_ExplicitConflictIs400()
+    {
+        await SignInAsync();
+        await Users.SetHotkeysAsync(_user.Id, """{"nav.library":"Alt+Shift+M"}""", default);
+
+        using (var unrelated = await PutAsync(new Dictionary<string, string?> { ["nav.library"] = "Alt+Shift+M", ["nav.collections"] = "Alt+Shift+Q" }))
+        {
+            Assert.That(unrelated.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(Implicit(await AuthClient.JsonAsync(unrelated)), Is.EqualTo(new[] { "reports.missingImage.next" }));
+        }
+        Assert.That(await Users.GetHotkeysAsync(_user.Id, default),
+            Is.EqualTo("""{"nav.library":"Alt+Shift+M","nav.collections":"Alt+Shift+Q"}"""));
+
+        using var conflict = await PutAsync(new Dictionary<string, string?>
+        {
+            ["nav.library"] = "Alt+Shift+M", ["reports.missingImage.next"] = "Alt+Shift+M",
+        });
+        Assert.That(conflict.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(conflict)).GetProperty("errors").TryGetProperty("bindings.reports.missingImage.next", out _), Is.True);
+    }
+
+    private static Dictionary<string, string?> Bindings(JsonElement body) => body.GetProperty("bindings").EnumerateObject()
+        .ToDictionary(p => p.Name, p => p.Value.ValueKind == JsonValueKind.Null ? null : p.Value.GetString());
+
+    private static string[] Implicit(JsonElement body) =>
+        body.GetProperty("implicitUnassigned").EnumerateArray().Select(e => e.GetString()!).ToArray();
 
     [Test]
     public async Task Get_ReturnsAStoredDuplicateUnchanged()

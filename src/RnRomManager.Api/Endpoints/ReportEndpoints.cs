@@ -28,6 +28,20 @@ public static partial class ReportEndpoints
             }));
         });
 
+        // B4: the next game for the Next missing image shortcut, in the unfiltered report order.
+        reports.MapGet("/missing-images/next", async (string? afterGameId, HttpContext ctx, IReportRepository repository) =>
+        {
+            Guid? after = null;
+            if (afterGameId is not null)
+            {
+                if (!Guid.TryParse(afterGameId, out var parsed))
+                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["afterGameId"] = ["Must be a game ID."] });
+                after = parsed;
+            }
+            var next = await repository.NextMissingImageAsync(after, ctx.RequestAborted);
+            return Results.Ok(new { id = next.Id, currentIsOnly = next.CurrentIsOnly });
+        });
+
         reports.MapGet("/library-size", async (IReportRepository repository, ISystemRegistry systems, CancellationToken cancellationToken) =>
         {
             var sizes = await repository.ListSystemSizesAsync(cancellationToken);

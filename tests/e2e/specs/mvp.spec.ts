@@ -315,13 +315,32 @@ test('browse, search and filter the library', async () => {
 	await page.getByRole('link', { name: '← Library' }).click();
 	await expect(page).toHaveURL(/system=gb/);
 	await expect(page.getByText('3 games', { exact: true })).toBeVisible();
+	// B1 (library-reset-missing-images): Reset is in the filter row, usable on a 320px phone and on a desktop.
+	const filterRow = page.getByRole('search');
+	await expect(filterRow.getByRole('button', { name: 'Reset filters' })).toBeVisible();
+	const viewport = page.viewportSize()!;
+	for (const width of [320, 1280]) {
+		await page.setViewportSize({ width, height: 800 });
+		for (const name of ['System: Game Boy', 'Reset filters']) {
+			const control = filterRow.getByRole('button', { name, exact: name === 'Reset filters' });
+			await expect(control).toBeInViewport({ ratio: 1 });
+			await control.focus();
+			await expect(control).toBeFocused();
+		}
+		// The filter row itself wraps instead of overflowing (the card grid below is out of scope here).
+		expect(
+			await filterRow.evaluate(
+				(row) => row.scrollWidth <= row.clientWidth && row.getBoundingClientRect().right <= window.innerWidth
+			)
+		).toBe(true);
+	}
+	await page.setViewportSize(viewport);
 	await page.getByRole('button', { name: 'Reset filters' }).click();
 	await expect(page.getByText('28 games')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Reset filters' })).toHaveCount(0);
 
 	// The card grid fits a 320px phone: no sideways page scroll, and each card's Favourite button is on screen.
 	await expect(page.getByRole('button', { name: 'Grid view' })).toHaveAttribute('aria-pressed', 'true');
-	const viewport = page.viewportSize()!;
 	await page.setViewportSize({ width: 320, height: 800 });
 	expect(
 		await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)

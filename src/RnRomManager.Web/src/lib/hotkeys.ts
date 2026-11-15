@@ -16,7 +16,8 @@ export type HotkeyId =
 	| 'nav.reports'
 	| 'nav.integrity'
 	| 'nav.admin'
-	| 'nav.deleted';
+	| 'nav.deleted'
+	| 'reports.missingImage.next';
 export type EditableHotkeyId = Exclude<HotkeyId, 'search'>;
 export type Bindings = Record<EditableHotkeyId, string | null>;
 
@@ -100,6 +101,13 @@ export const actions: readonly HotkeyAction[] = [
 		defaults: ['Alt+Shift+D'],
 		editable: true,
 		role: 'admin'
+	},
+	{
+		id: 'reports.missingImage.next',
+		name: 'Next missing image',
+		defaults: ['Alt+Shift+M'],
+		editable: true,
+		role: null
 	}
 ];
 
@@ -186,6 +194,21 @@ export function validate(
 		else taken.set(canonical!, action);
 	}
 	return result;
+}
+
+/**
+ * The PUT body (spec library-reset-missing-images B2): an action the server returned as implicitly unassigned (its default
+ * yields to an older override) is left out unless the user edited it, so an unrelated save keeps the fallback implicit.
+ * Anything edited, a deliberate disable (null) or Reset included, is sent.
+ */
+export function toSave(
+	pending: Bindings,
+	implicitUnassigned: readonly string[],
+	edited: ReadonlySet<string>
+): Partial<Bindings> {
+	return Object.fromEntries(
+		Object.entries(pending).filter(([id]) => !implicitUnassigned.includes(id) || edited.has(id))
+	) as Partial<Bindings>;
 }
 
 /** The key part of a binding from `KeyboardEvent.code`, so Alt/Option and layouts don't change the letter. */

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { isApiError } from '../api/errors';
 	import type { Me } from '../api/types';
 	import {
@@ -9,6 +10,7 @@
 		errors as hotkeyErrors,
 		fromEvent,
 		ruleError,
+		toSave,
 		validate,
 		type Bindings,
 		type EditableHotkeyId,
@@ -33,11 +35,17 @@
 	let serverErrors = $state<Partial<Record<string, string>>>({});
 	let saveError = $state<unknown>(null);
 	let busy = $state(false);
+	/** Actions the user captured, cleared or reset in this session: sent even when implicitly unassigned (B2). */
+	const edited = new SvelteSet<string>();
 
 	const rows = $derived(actions.filter((a) => allowedFor(a, me.roles)));
 	const ruleErrors = $derived(pending ? validate(pending, me.roles) : {});
+	// Disabling an implicitly unassigned action leaves it null but makes it explicit, so it counts as a change.
 	const changed = $derived(
-		!!pending && !!hotkeys.bindings && JSON.stringify(pending) !== JSON.stringify(hotkeys.bindings)
+		!!pending &&
+			!!hotkeys.bindings &&
+			(JSON.stringify(pending) !== JSON.stringify(hotkeys.bindings) ||
+				hotkeys.implicitUnassigned.some((id) => edited.has(id)))
 	);
 	const blocked = $derived(
 		!pending || !changed || Object.keys(ruleErrors).length > 0 || capturing !== null
@@ -52,6 +60,7 @@
 		serverErrors = {};
 		saveError = null;
 		busy = false;
+		untrack(() => edited.clear());
 	});
 
 	// Opened before the bindings arrived: pick them up when they do.
@@ -82,6 +91,7 @@
 		}
 		if (plain && (e.key === 'Backspace' || e.key === 'Delete')) {
 			pending[id] = null;
+			edited.add(id);
 			delete serverErrors[`bindings.${id}`];
 			capturing = null;
 			captureError = null;
@@ -102,6 +112,7 @@
 			return;
 		}
 		pending[id] = combination;
+		edited.add(id);
 		delete serverErrors[`bindings.${id}`];
 		capturing = null;
 		captureError = null;
@@ -123,7 +134,10 @@
 		if (!pending) return;
 		const defaults = defaultBindings();
 		for (const row of rows)
-			if (row.editable) pending[row.id as EditableHotkeyId] = defaults[row.id as EditableHotkeyId];
+			if (row.editable) {
+				pending[row.id as EditableHotkeyId] = defaults[row.id as EditableHotkeyId];
+				edited.add(row.id);
+			}
 		capturing = null;
 		captureError = null;
 		serverErrors = {};
@@ -134,7 +148,7 @@
 		busy = true;
 		saveError = null;
 		try {
-			await hotkeys.save(pending);
+			await hotkeys.save(toSave(pending, hotkeys.implicitUnassigned, edited));
 			toasts.show('Keyboard shortcuts saved.', 'success');
 			open = false;
 		} catch (e) {
@@ -198,6 +212,11 @@
 								{#each keys(pending[id]!) as key, k (k)}{#if k > 0}+{/if}<kbd>{key}</kbd>{/each}
 							{:else}
 								<span class="text-body-secondary">Not assigned</span>
+								{#if hotkeys.implicitUnassigned.includes(id) && !edited.has(id)}
+									<div class="small text-body-secondary">
+										Its default, {action.defaults[0]}, is used by another shortcut.
+									</div>
+								{/if}
 							{/if}
 							{#if error}<div class="small text-danger" role="alert">{error}</div>{/if}
 						</td>
