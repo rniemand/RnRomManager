@@ -17,9 +17,25 @@
 		onsearch?: () => void;
 		/** Opens the keyboard shortcuts (B25); hidden while the password must be changed. */
 		onhotkeys?: () => void;
+		/** Bundle Creator B1: files in the working cart; the cart link shows when set and the password is changed. */
+		cartCount?: number;
 	}
 
-	let { me, reviewCount, deletedCount = null, onlogout, onsearch, onhotkeys }: Props = $props();
+	let {
+		me,
+		reviewCount,
+		deletedCount = null,
+		onlogout,
+		onsearch,
+		onhotkeys,
+		cartCount
+	}: Props = $props();
+
+	const cartLabel = $derived(
+		cartCount
+			? `Bundle Creator, ${formatCount(cartCount)} ${cartCount === 1 ? 'file' : 'files'} in the cart`
+			: 'Bundle Creator'
+	);
 
 	// Pages arrive in later steps (S41–S47); unknown ones show "Page not found" until then.
 	const links = $derived(
@@ -93,6 +109,24 @@
 				{/each}
 			</ul>
 			<ul class="navbar-nav align-items-lg-center">
+				{#if cartCount !== undefined && !me.mustChangePassword}
+					<li class="nav-item">
+						<a
+							class="nav-link d-flex align-items-center gap-1"
+							class:active={isActive('/bundle-creator')}
+							aria-current={isActive('/bundle-creator') ? 'page' : undefined}
+							aria-label={cartLabel}
+							href={resolve('/bundle-creator')}
+						>
+							<Icon name="cart" /> Bundle
+							{#if cartCount}
+								<span class="badge rounded-pill text-bg-primary" aria-hidden="true"
+									>{formatCount(cartCount)}</span
+								>
+							{/if}
+						</a>
+					</li>
+				{/if}
 				{#if onsearch && !me.mustChangePassword}
 					<li class="nav-item">
 						<button

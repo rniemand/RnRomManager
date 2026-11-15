@@ -19,6 +19,10 @@ export const icons: Record<string, string> = {
 	'theme-dark': 'bi bi-moon-stars',
 	'theme-auto': 'bi bi-circle-half',
 	download: 'bi bi-download',
+	// Bundle Creator B1: the cart link and the add-to-cart controls.
+	cart: 'bi bi-cart3',
+	'cart-add': 'bi bi-cart-plus',
+	'cart-check': 'bi bi-cart-check-fill',
 	play: 'bi bi-play-fill',
 	update: 'bi bi-arrow-up-circle',
 	restore: 'bi bi-arrow-counterclockwise',

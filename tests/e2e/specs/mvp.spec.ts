@@ -526,6 +526,36 @@ test('PlayStation: a disc set lists its files and downloads a track byte-exact',
 	expect((await readFile((await file.path())!)).equals(discTrack2)).toBe(true);
 });
 
+test('Bundle Creator: files from two games fill one working cart', async () => {
+	// B1: a cartridge game's main file from its release card.
+	await openGame('Pixel Pioneer');
+	const addMain = page.getByRole('button', { name: /^Add .+ to the bundle$/ }).first();
+	const mainName = (await addMain.getAttribute('aria-label'))!.replace(/^Add (.+) to the bundle$/, '$1');
+	await addMain.click();
+	await expect(page.getByRole('button', { name: `${mainName} is in the bundle` }).first()).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Bundle Creator, 1 file in the cart' })).toBeVisible();
+
+	// B1: a disc set's separately downloadable Track 2 from the release's file list.
+	await openGame('Disc Runner');
+	await page.getByRole('button', { name: 'Show details for Disc Runner (USA) (Track 1).bin' }).click();
+	await page.getByRole('button', { name: '3 files' }).click();
+	await page.getByRole('button', { name: 'Add Disc Runner (USA) (Track 2).bin to the bundle' }).click();
+	await expect(page.getByRole('link', { name: 'Bundle Creator, 2 files in the cart' })).toBeVisible();
+
+	await page.getByRole('link', { name: 'Bundle Creator, 2 files in the cart' }).click();
+	await expect(page.getByRole('heading', { level: 1, name: 'Bundle Creator' })).toBeVisible();
+	const rows = page.locator('main table tbody tr');
+	await expect(rows).toHaveCount(2);
+	await expect(rows.nth(0)).toContainText(mainName);
+	await expect(rows.nth(1)).toContainText('Disc Runner (USA) (Track 2).bin');
+	await expect(rows.getByText('Available')).toHaveCount(2);
+	await expectAccessible(page, 'Bundle Creator');
+
+	// B2: the cart is this browser's, per account, and survives a reload.
+	await page.reload();
+	await expect(rows).toHaveCount(2);
+});
+
 /** Starts the open emulator dialog's game and waits for the core's local .data file and the game to start. */
 async function startEmulator(core: string): Promise<void> {
 	const frame = page.frameLocator('iframe');

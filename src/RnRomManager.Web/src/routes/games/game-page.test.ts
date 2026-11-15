@@ -351,14 +351,15 @@ describe('game detail page', () => {
 		expect(second.querySelector('.badge.text-bg-primary')).toBeNull();
 		expect(second.querySelector('.card-body')!.textContent).not.toContain('Revision');
 
-		// R1: the header keeps only the chevron, Note, Play, Download and Delete.
+		// R1: the header keeps only the chevron, Note, Play, Download, Add to bundle (Bundle Creator B1) and Delete.
 		const labels = [...card.querySelectorAll('.card-header button')].map(
 			(b) => b.getAttribute('aria-label') ?? b.textContent?.trim()
 		);
 		expect(labels).toEqual([
 			'Hide details for Tetris 1.gb',
 			'Add note for Tetris 1.gb',
-			'Download Tetris 1.gb'
+			'Download Tetris 1.gb',
+			'Add Tetris 1.gb to the bundle'
 		]);
 		expect(document.getElementById('releases-panel')!.querySelector('table')).toBeNull();
 	});

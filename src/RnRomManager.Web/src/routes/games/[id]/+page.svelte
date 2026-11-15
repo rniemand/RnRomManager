@@ -6,7 +6,13 @@
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { CollectionRef, GameDetail, RomDetail } from '#lib/api/types.js';
+	import type {
+		BundleEntry,
+		CollectionRef,
+		GameDetail,
+		ReleaseFile,
+		RomDetail
+	} from '#lib/api/types.js';
 	import { collectionsApi } from '#lib/collections.js';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import CopyButton from '#lib/components/CopyButton.svelte';
@@ -31,6 +37,7 @@
 	import { formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
+	import { bundle, maxBundleEntries, type AddResult } from '#lib/stores/bundle.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import { compareUpdates, discNumber, isUpdate, orderByDisc } from '#lib/releases.js';
 	import { systemColour } from '#lib/systemColours.js';
@@ -135,6 +142,30 @@
 		} else {
 			window.location.assign(url);
 		}
+	}
+
+	/** Bundle Creator B1/B3: a cart entry from the rendered metadata; `file` names a set file, else the main file. */
+	function bundleEntry(g: GameDetail, rom: RomDetail, file?: ReleaseFile): BundleEntry {
+		return {
+			gameId: g.id,
+			releaseSha1: rom.sha1,
+			member: file ? { sha1: file.sha1, fileName: file.fileName } : null,
+			gameTitle: g.displayTitle,
+			fileName: file?.fileName ?? rom.fileName
+		};
+	}
+
+	const bundleMessages: Record<AddResult, [string, 'success' | 'info' | 'warning' | 'danger']> = {
+		added: ['Added {file} to the bundle.', 'success'],
+		duplicate: ['{file} is already in the bundle.', 'info'],
+		full: [`The bundle holds at most ${maxBundleEntries} files.`, 'warning'],
+		signedOut: ['Sign in to use the bundle.', 'warning'],
+		invalid: ["{file} can't be added to the bundle.", 'danger']
+	};
+
+	function addToBundle(entry: BundleEntry): void {
+		const [text, kind] = bundleMessages[bundle.add(entry)];
+		toasts.show(text.replace('{file}', entry.fileName), kind);
 	}
 
 	function showHeader(rom: RomDetail): void {
@@ -579,6 +610,7 @@
 								>
 									<Icon name="download" />
 								</button>
+								{@render bundleButton(bundleEntry(game, rom))}
 								{#if auth.canEditLibrary}
 									<button
 										type="button"
@@ -686,7 +718,7 @@
 											</tr>
 										</thead>
 										<tbody>
-											{#each [{ fileName: rom.fileName, sizeBytes: rom.sizeBytes, sha1: rom.sha1, downloadUrl: rom.downloadUrl }, ...rom.files] as file (file.fileName)}
+											{#each [{ fileName: rom.fileName, sizeBytes: rom.sizeBytes, sha1: rom.sha1, downloadUrl: rom.downloadUrl }, ...rom.files] as file, index (file.fileName)}
 												<tr>
 													<td class="text-truncate" style="max-width: 32rem" title={file.fileName}
 														>{file.fileName}</td
@@ -705,6 +737,10 @@
 														>
 															<Icon name="download" />
 														</button>
+														<!-- Row 0 is the main file; the rest are separately downloadable set files (B1). -->
+														{@render bundleButton(
+															bundleEntry(game, rom, index === 0 ? undefined : rom.files[index - 1])
+														)}
 													</td>
 												</tr>
 											{/each}
@@ -771,3 +807,19 @@
 		bind:memberOf
 	/>
 {/if}
+
+<!-- Bundle Creator B1: adds one file to the working cart; shows a check once it's there. -->
+{#snippet bundleButton(entry: BundleEntry)}
+	{@const inCart = bundle.has(entry)}
+	<button
+		type="button"
+		class="btn btn-sm {inCart ? 'btn-primary' : 'btn-outline-primary'}"
+		aria-label={inCart
+			? `${entry.fileName} is in the bundle`
+			: `Add ${entry.fileName} to the bundle`}
+		title={inCart ? 'In the bundle' : 'Add to bundle'}
+		onclick={() => addToBundle(entry)}
+	>
+		<Icon name={inCart ? 'cart-check' : 'cart-add'} />
+	</button>
+{/snippet}
