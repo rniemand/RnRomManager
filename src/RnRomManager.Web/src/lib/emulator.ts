@@ -3,13 +3,15 @@ import type { GameDetail, RomDetail } from './api/types';
 /**
  * Play B1: the cores that play a release stored outside the ZIP through play-disc: a PlayStation disc, (PSP B2) a
  * PlayStation Portable UMD image, (Saturn B6) a Saturn disc and (Sega CD B5) a Sega CD disc on Genesis Plus GX, which
- * also plays Mega Drive cartridges from the ZIP: the play URL's `disc` flag tells the two apart.
+ * also plays Mega Drive cartridges from the ZIP: the play URL's `disc` flag tells the two apart. 3DO B7: Opera plays
+ * only discs.
  */
 export const externalBrowserCores: readonly string[] = [
 	'pcsx_rearmed',
 	'ppsspp',
 	'yabause',
-	'genesis_plus_gx'
+	'genesis_plus_gx',
+	'opera'
 ];
 
 /** PSP B3: the core that plays only in the dedicated, cross-origin isolated tab. */

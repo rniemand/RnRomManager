@@ -40,8 +40,11 @@ public sealed class ThreeDoHandler : ISystemHandler
     /// <inheritdoc />
     public IReadOnlyList<string> MetadatKinds => [];
 
-    /// <summary>None yet: browser play comes with the operator-supplied Opera core (3DO B5–B8).</summary>
-    public string? BrowserCore => null;
+    /// <summary>
+    /// 3DO B7: Opera, whose files the operator supplies (<c>Emulator:OperaCorePath</c>); every release is a disc, so it
+    /// plays through play-disc.
+    /// </summary>
+    public string? BrowserCore => "opera";
 
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 

@@ -18,6 +18,11 @@
 		size?: 'lg' | 'xl';
 		/** Omitted → info mode: the footer shows only "Close". */
 		onconfirm?: () => void;
+		/**
+		 * 3DO B11: awaited before ×, Close/Cancel or Escape closes the modal, with both buttons disabled meanwhile; a
+		 * rejection closes too. Omitted → those close at once.
+		 */
+		beforeclose?: () => Promise<void>;
 		children?: Snippet;
 	}
 
@@ -30,8 +35,26 @@
 		confirmDisabled = false,
 		size,
 		onconfirm,
+		beforeclose,
 		children
 	}: Props = $props();
+
+	let closing = $state(false);
+
+	function requestClose() {
+		if (!beforeclose) {
+			open = false;
+			return;
+		}
+		if (closing) return;
+		closing = true;
+		beforeclose()
+			.catch(() => {})
+			.finally(() => {
+				closing = false;
+				open = false;
+			});
+	}
 
 	const id = `confirm-${Math.random().toString(36).slice(2)}`;
 	let element: HTMLDivElement;
@@ -42,6 +65,13 @@
 		// closes a modal; Escape, × and the footer button do.
 		modal = new Modal(element, { backdrop: 'static', keyboard: true });
 		element.addEventListener('hidden.bs.modal', () => (open = false));
+		// 3DO B11: Escape goes through Bootstrap's hide; hold it while beforeclose runs (a hide from `open = false`
+		// passes, since open is already false then).
+		element.addEventListener('hide.bs.modal', (event) => {
+			if (!beforeclose || !open) return;
+			event.preventDefault();
+			requestClose();
+		});
 	});
 
 	onDestroy(() => {
@@ -71,7 +101,12 @@
 		<div class="modal-content">
 			<div class="modal-header">
 				<h2 class="modal-title fs-5" id="{id}-title">{title}</h2>
-				<button type="button" class="btn-close" aria-label="Close" onclick={() => (open = false)}
+				<button
+					type="button"
+					class="btn-close"
+					aria-label="Close"
+					onclick={requestClose}
+					disabled={closing}
 				></button>
 			</div>
 			<div class="modal-body">{@render children?.()}</div>
@@ -79,15 +114,15 @@
 				<button
 					type="button"
 					class="btn btn-secondary"
-					onclick={() => (open = false)}
-					disabled={busy}>{onconfirm ? 'Cancel' : 'Close'}</button
+					onclick={requestClose}
+					disabled={busy || closing}>{onconfirm ? 'Cancel' : 'Close'}</button
 				>
 				{#if onconfirm}
 					<button
 						type="button"
 						class="btn {confirmClass}"
 						onclick={onconfirm}
-						disabled={busy || confirmDisabled}
+						disabled={busy || confirmDisabled || closing}
 					>
 						{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
 						{confirmLabel}

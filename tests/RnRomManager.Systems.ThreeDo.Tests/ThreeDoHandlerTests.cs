@@ -29,7 +29,7 @@ public class ThreeDoHandlerTests
     }
 
     [Test]
-    public void BrowserCore_IsNull_UntilOperaPlayIsEnabled() => Assert.That(Handler.BrowserCore, Is.Null);
+    public void BrowserCore_IsOpera() => Assert.That(Handler.BrowserCore, Is.EqualTo("opera"));
 
     [TestCase(16)]
     [TestCase(4096)]
