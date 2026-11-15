@@ -1,6 +1,6 @@
 ---
 title: CHD disc images
-status: in-progress
+status: completed
 created: 2026-11-14
 ---
 
