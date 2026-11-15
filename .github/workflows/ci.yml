@@ -24,10 +24,8 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-      - run: dotnet restore
-      - run: dotnet build -c Release --no-restore -warnaserror
       # Includes Testcontainers tests (Docker is available on ubuntu runners).
-      - run: pwsh scripts/test-dotnet.ps1 -Shard ${{ matrix.shard }} -ExpectedShards 3 -Configuration Release -NoBuild -Coverage -ResultsDirectory ./coverage-raw
+      - run: pwsh scripts/test-dotnet.ps1 -Shard ${{ matrix.shard }} -ExpectedShards 3 -Configuration Release -Coverage -ResultsDirectory ./coverage-raw
       - uses: actions/upload-artifact@v7
         if: always()
         with:

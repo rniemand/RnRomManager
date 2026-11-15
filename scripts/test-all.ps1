@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Runs every test the CI runs (spec §16): dotnet test (sharded, in parallel), then web lint, check and unit tests.
+    Runs the .NET test shards and web lint, type checks and unit tests concurrently.
 .PARAMETER SkipIntegration
     Skip Testcontainers tests ([Category("Integration")]), so Docker isn't needed.
 .PARAMETER SkipWeb
@@ -25,6 +25,7 @@ function Invoke-Step([string]$Name, [scriptblock]$Command) {
     if ($LASTEXITCODE -ne 0) { throw "$Name failed (exit $LASTEXITCODE)" }
 }
 
+$webJob = $null
 Push-Location $root
 try {
     # Builds once, then runs the test shards in parallel (see test-dotnet.ps1).
@@ -37,6 +38,18 @@ try {
         $testArgs.Coverage = $true
         $testArgs.ResultsDirectory = $rawDir
     }
+    if (-not $SkipWeb) {
+        $webRoot = Join-Path $root 'src/RnRomManager.Web'
+        $webJob = Start-Job -WorkingDirectory $webRoot -ScriptBlock {
+            $ErrorActionPreference = 'Stop'
+            foreach ($arguments in @(@('run', 'lint'), @('run', 'check'), @('test'))) {
+                Write-Host "==> npm $arguments" -ForegroundColor Cyan
+                & npm @arguments
+                if ($LASTEXITCODE -ne 0) { throw "npm $arguments failed (exit $LASTEXITCODE)" }
+            }
+        }
+    }
+
     Invoke-Step 'dotnet test' { & (Join-Path $PSScriptRoot 'test-dotnet.ps1') @testArgs }
 
     if ($Coverage) {
@@ -47,20 +60,14 @@ try {
         Write-Host "Coverage report: $(Join-Path $coverageDir 'index.html')"
     }
 
-    if (-not $SkipWeb) {
-        Push-Location (Join-Path $root 'src/RnRomManager.Web')
-        try {
-            Invoke-Step 'npm run lint' { npm run lint }
-            Invoke-Step 'npm run check' { npm run check }
-            Invoke-Step 'npm test' { npm test }
-        }
-        finally {
-            Pop-Location
-        }
+    if ($webJob) {
+        Receive-Job -Job $webJob -Wait
+        if ($webJob.State -ne 'Completed') { throw "Web checks ended in state $($webJob.State)" }
     }
 
     Write-Host 'All tests passed.' -ForegroundColor Green
 }
 finally {
+    if ($webJob) { Remove-Job -Job $webJob -Force -ErrorAction SilentlyContinue }
     Pop-Location
 }

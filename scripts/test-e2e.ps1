@@ -24,7 +24,8 @@ function New-Secret {
 }
 
 if (-not $SkipBuild) {
-    & (Join-Path $PSScriptRoot 'build-docker.ps1') -Tag e2e
+    # Match the CI e2e image version so version changes alone don't invalidate the publish layer.
+    & (Join-Path $PSScriptRoot 'build-docker.ps1') -Tag e2e -Version '0.0.0-dev'
 }
 
 $work = Join-Path ([IO.Path]::GetTempPath()) "rnrm-e2e-$([Guid]::NewGuid().ToString('N'))"

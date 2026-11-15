@@ -39,6 +39,7 @@ $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not $ResultsDirectory) { $ResultsDirectory = Join-Path $root '.dev/test-results' }
 $ResultsDirectory = [IO.Path]::GetFullPath($ResultsDirectory, $root)
 $apiTests = Join-Path $root 'tests/RnRomManager.Api.Tests'
+$solution = Join-Path $root 'RnRomManager.slnx'
 
 # API integration test classes per shard, balanced by measured run time (each about a third of the API suite, the
 # last shard also running the other test projects). Rebalance when one shard's CI job is clearly slower than the
@@ -56,7 +57,7 @@ function Get-ShardArgs([int]$n) {
         $target = $apiTests
         $filter = '(' + (($apiShards[$n - 1] | ForEach-Object { "FullyQualifiedName~.$_." }) -join '|') + ')'
     } else {
-        $target = Join-Path $root 'RnRomManager.slnx'
+        $target = $solution
         $filter = ($apiShards | ForEach-Object { $_ } | ForEach-Object { "FullyQualifiedName!~.$_." }) -join '&'
     }
     if ($SkipIntegration) { $filter = "($filter)&Category!=Integration" }
@@ -71,8 +72,9 @@ if ($ExpectedShards -and $ExpectedShards -ne $shardCount) {
 if ($Shard -lt 0 -or $Shard -gt $shardCount) { throw "-Shard must be 0..$shardCount." }
 
 if (-not $NoBuild) {
+    $buildTarget = if ($Shard -gt 0 -and $Shard -le $apiShards.Count) { $apiTests } else { $solution }
     Write-Host "==> dotnet build ($Configuration)" -ForegroundColor Cyan
-    & dotnet build (Join-Path $root 'RnRomManager.slnx') -c $Configuration
+    & dotnet build $buildTarget -c $Configuration -warnaserror
     if ($LASTEXITCODE -ne 0) { throw "dotnet build failed (exit $LASTEXITCODE)" }
 }
 
