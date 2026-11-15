@@ -1,6 +1,6 @@
 ---
 title: Bundle Creator for ROM files
-status: in-progress
+status: completed
 created: 2026-11-15
 ---
 
@@ -109,6 +109,7 @@ Every step adding a route also updates `tests/RnRomManager.Api.Tests/Integration
 - 2026-11-15 Split from the combined curation/bundles spec to keep each branch reviewable (reviewer).
 
 - 2026-11-15 Where are stalled streams tested? → in `BundleDownloadStreamTests`, a fake-clock unit test of the copy loop, since a two-minute stall can't be driven through the test host; `BundleDownloadEndpointsTests` uses a host per test because tickets live outside the shared-host reset (implementation).
+- 2026-11-15 How is the navbar cart link named? → by its visible text plus hidden words, "Bundle 2 files in the cart", with no `aria-label`, so axe's label-content-name-mismatch holds and Chromium and jsdom compute the same name (implementation, found by the e2e run).
 
 ## Kickoff prompt
 
