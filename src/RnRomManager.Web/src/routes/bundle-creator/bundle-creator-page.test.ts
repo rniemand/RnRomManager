@@ -55,6 +55,7 @@ describe('Bundle Creator page: the working cart (B1, B5)', () => {
 				resolveBodies.push(JSON.parse(String(init?.body)));
 				return Promise.resolve(answer());
 			}
+			if (url === '/api/bundle-queues') return Promise.resolve(new Response('[]', { status: 200 }));
 			return Promise.resolve(new Response(null, { status: 204 }));
 		});
 		bundle.follow({ id: 4, username: 'u', roles: [], mustChangePassword: false });
@@ -106,7 +107,9 @@ describe('Bundle Creator page: the working cart (B1, B5)', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
 		expect(bundle.count).toBe(2);
-		const dialog = document.querySelector<HTMLElement>('.modal')!;
+		const dialog = [...document.querySelectorAll<HTMLElement>('.modal')].find((m) =>
+			m.textContent?.includes('Clear the bundle?')
+		)!;
 		expect(dialog.textContent).toContain('This removes all 2 files');
 		await fireEvent.click(within(dialog).getByRole('button', { name: 'Clear', hidden: true }));
 

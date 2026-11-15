@@ -120,7 +120,8 @@ class BundleCart {
 	resolved = $state<Record<string, BundleResolvedItem>>({});
 	refreshing = $state(false);
 	refreshError = $state(false);
-	#userId: number | null = null;
+	/** Reactive, so components that follow the account (saved queues) re-run on a switch. */
+	#userId = $state<number | null>(null);
 	/** Bumped on every account change and every content change, so stale refresh answers are dropped. */
 	#generation = 0;
 

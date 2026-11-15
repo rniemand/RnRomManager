@@ -4,6 +4,7 @@
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import SavedBundleQueues from '#lib/components/SavedBundleQueues.svelte';
 	import { formatCount } from '#lib/format.js';
 	import { bundle, maxBundleEntries } from '#lib/stores/bundle.svelte.js';
 
@@ -123,6 +124,8 @@
 		</div>
 	</div>
 {/if}
+
+<div class="mt-4"><SavedBundleQueues /></div>
 
 <ConfirmModal
 	bind:open={clearOpen}
