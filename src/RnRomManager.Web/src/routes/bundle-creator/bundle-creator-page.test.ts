@@ -89,6 +89,23 @@ describe('Bundle Creator page: the working cart (B1, B5)', () => {
 		);
 	});
 
+	it('refreshes once the account is known, as after a reload, and not on every cart change', async () => {
+		bundle.add(entry(1, 'one.gb'));
+		bundle.add(entry(2, 'two.gb'));
+		bundle.follow(null);
+		render(BundlePage);
+		await Promise.resolve();
+		expect(resolveBodies).toHaveLength(0);
+
+		bundle.follow({ id: 4, username: 'u', roles: [], mustChangePassword: false });
+
+		await waitFor(() => expect(screen.getByText('Unavailable')).toBeTruthy());
+		expect(resolveBodies).toHaveLength(1);
+		bundle.remove(bundle.items[1].key);
+		await Promise.resolve();
+		expect(resolveBodies).toHaveLength(1);
+	});
+
 	it('removes one file', async () => {
 		bundle.add(entry(1, 'one.gb'));
 		bundle.add(entry(2, 'two.gb'));

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import BundleDownload from '#lib/components/BundleDownload.svelte';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
@@ -14,8 +14,11 @@
 	const items = $derived(bundle.items);
 	const unavailable = $derived(items.filter((i) => i.status === 'unavailable').length);
 
-	// B5: availability is refreshed when the page opens and on demand.
-	onMount(() => void bundle.refresh());
+	// B5: availability is refreshed when the page opens and on demand. After a reload the account is known only once
+	// sign-in has loaded, so this waits for it (and refreshes again for another account); it doesn't follow the cart.
+	$effect(() => {
+		if (bundle.userId !== null) untrack(() => void bundle.refresh());
+	});
 
 	function clearCart(): void {
 		bundle.clear();
