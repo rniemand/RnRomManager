@@ -18,10 +18,17 @@ body {
 	margin: 0;
 	padding: 1rem;
 }
-#loading {
-	width: min(16rem, calc(100% - 2rem));
-	margin: 0 1rem 1rem;
+#download-progress {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	margin-inline: 1rem;
 }
+#loading {
+	width: 16rem;
+	min-width: 0;
+}
+#loading,
 #downloaded {
-	margin: 0 1rem;
+	margin-bottom: 1rem;
 }

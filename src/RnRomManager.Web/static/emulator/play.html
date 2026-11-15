@@ -8,8 +8,10 @@
 	</head>
 	<body>
 		<p id="status" role="status"></p>
-		<progress id="loading" aria-label="Game download progress" hidden></progress>
-		<span id="downloaded" hidden></span>
+		<div id="download-progress">
+			<progress id="loading" aria-label="Game download progress" hidden></progress>
+			<span id="downloaded" hidden></span>
+		</div>
 		<div id="game"></div>
 		<script type="module" src="play.js"></script>
 	</body>

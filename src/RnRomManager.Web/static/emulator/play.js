@@ -43,6 +43,7 @@ const status = /** @type {HTMLElement} */ (document.getElementById('status'));
 const progress = /** @type {HTMLProgressElement} */ (document.getElementById('loading'));
 const downloaded = /** @type {HTMLElement} */ (document.getElementById('downloaded'));
 const formatBytes = new Intl.NumberFormat(undefined, { style: 'unit', unit: 'byte', unitDisplay: 'long' });
+const formatPercent = new Intl.NumberFormat(undefined, { style: 'percent' });
 
 /** @param {string} text */
 function show(text) {
@@ -61,17 +62,22 @@ function readContent(response) {
 		progress.max = total;
 		progress.value = 0;
 		progress.hidden = false;
-	} else {
-		downloaded.textContent = formatBytes.format(0);
-		downloaded.hidden = false;
 	}
+	downloaded.textContent = hasTotal ? formatPercent.format(0) : formatBytes.format(0);
+	downloaded.hidden = false;
 	let bytes = 0;
 	const body = response.body.pipeThrough(
 		new TransformStream({
 			transform(chunk, controller) {
 				bytes += chunk.byteLength;
-				if (hasTotal) progress.value = bytes;
-				else downloaded.textContent = formatBytes.format(bytes);
+				if (hasTotal) {
+					progress.value = bytes;
+					const percent = Math.floor((progress.value * 100) / total);
+					const label = formatPercent.format(percent / 100);
+					if (downloaded.textContent !== label) downloaded.textContent = label;
+				} else {
+					downloaded.textContent = formatBytes.format(bytes);
+				}
 				controller.enqueue(chunk);
 			}
 		})

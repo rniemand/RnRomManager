@@ -47,6 +47,7 @@ export async function stageRomDownload(page: Page, name: string): Promise<void> 
 
 export async function expectRomDownloadProgress(frame: FrameLocator): Promise<void> {
 	const bar = frame.locator('progress');
+	const label = frame.locator('#downloaded');
 	const advance = (fraction: number) =>
 		bar.evaluate(
 			(_, fraction) => (window as unknown as PlayerWindow).advanceRomDownload(fraction),
@@ -54,12 +55,16 @@ export async function expectRomDownloadProgress(frame: FrameLocator): Promise<vo
 		);
 	await expect(bar).toBeVisible();
 	await expect(bar).toHaveJSProperty('position', 0);
+	await expect(label).toHaveText('0%');
+	await expect(label).toBeVisible();
 	for (const fraction of [0.25, 0.75]) {
 		await advance(fraction);
 		await expect.poll(() => bar.evaluate((el: HTMLProgressElement) => el.position)).toBe(fraction);
 		await expect(bar).toBeVisible();
+		await expect(label).toHaveText(`${fraction * 100}%`);
 	}
 	await advance(1);
 	await expect(bar).toBeHidden();
+	await expect(label).toBeHidden();
 	await expect(frame.locator('#status')).toBeEmpty();
 }

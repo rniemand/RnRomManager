@@ -117,10 +117,11 @@ describe('play page loading indicator', () => {
 
 			await writer.write(new Uint8Array([1, 2]));
 			expect(progress.hidden).toBe(!knownLength);
-			expect(downloaded.hidden).toBe(knownLength);
+			expect(downloaded.hidden).toBe(false);
 			if (knownLength) {
 				expect(progress.max).toBe(4);
 				expect(progress.value).toBe(2);
+				expect(downloaded.textContent).toBe('50%');
 			} else {
 				expect(downloaded.textContent).toBe(
 					new Intl.NumberFormat(undefined, {
