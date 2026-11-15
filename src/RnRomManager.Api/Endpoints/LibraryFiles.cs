@@ -69,7 +69,10 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
         }
     }
 
-    /// <summary>The entry stream, capped at <paramref name="maxBytes"/>; the ZIP is disposed with the response.</summary>
+    /// <summary>
+    /// The entry stream, capped at <paramref name="maxBytes"/>. It owns the ZIP (disposing the stream closes it), and the
+    /// ZIP is also disposed with the response.
+    /// </summary>
     public IResult? OpenEntry(HttpContext ctx, GameRow game, string entry, long maxBytes, out Stream? stream)
     {
         stream = null;
@@ -77,7 +80,7 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
         try
         {
             zip = OpenLibraryZip(game);
-            stream = zip.OpenEntry(entry, maxBytes);
+            stream = new OwningStream(zip.OpenEntry(entry, maxBytes), zip);
             ctx.Response.RegisterForDispose(zip);
             return null;
         }

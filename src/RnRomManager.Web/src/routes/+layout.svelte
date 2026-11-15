@@ -18,6 +18,7 @@
 	import { guard } from '#lib/guard.js';
 	import { navigate } from '#lib/navigation.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
+	import { bundle } from '#lib/stores/bundle.svelte.js';
 	import { hotkeys } from '#lib/stores/hotkeys.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { navCounts, refreshCounts } from '#lib/stores/navCounts.svelte.js';
@@ -64,6 +65,9 @@
 	// B24: bindings load once signed in with the password changed, and again after a password change.
 	$effect(() => hotkeys.follow(auth.me));
 
+	// Bundle Creator B2: the working cart is this browser's, per account; sign-out or a switch clears it from memory.
+	$effect(() => bundle.follow(auth.me));
+
 	$effect(() => {
 		void page.url.pathname; // re-run on navigation
 		if (auth.isAdmin && !redirect) void refreshCounts();
@@ -96,6 +100,7 @@
 			me={auth.me}
 			reviewCount={navCounts.review}
 			deletedCount={navCounts.deleted}
+			cartCount={bundle.count}
 			onlogout={logout}
 			onsearch={() => (searchOpen = true)}
 			onhotkeys={() => (hotkeysOpen = true)}

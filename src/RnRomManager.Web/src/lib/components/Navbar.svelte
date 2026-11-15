@@ -17,9 +17,23 @@
 		onsearch?: () => void;
 		/** Opens the keyboard shortcuts (B25); hidden while the password must be changed. */
 		onhotkeys?: () => void;
+		/** Bundle Creator B1: files in the working cart; the cart link shows when set and the password is changed. */
+		cartCount?: number;
 	}
 
-	let { me, reviewCount, deletedCount = null, onlogout, onsearch, onhotkeys }: Props = $props();
+	let {
+		me,
+		reviewCount,
+		deletedCount = null,
+		onlogout,
+		onsearch,
+		onhotkeys,
+		cartCount
+	}: Props = $props();
+
+	// The link's name is its visible text plus hidden words ("Bundle 2 files in the cart"), so axe's
+	// label-content-name-mismatch holds: visible text must be part of the accessible name.
+	const cartFiles = $derived(cartCount === 1 ? 'file' : 'files');
 
 	// Pages arrive in later steps (S41–S47); unknown ones show "Page not found" until then.
 	const links = $derived(
@@ -93,6 +107,22 @@
 				{/each}
 			</ul>
 			<ul class="navbar-nav align-items-lg-center">
+				{#if cartCount !== undefined && !me.mustChangePassword}
+					<li class="nav-item">
+						<a
+							class="nav-link d-flex align-items-center gap-1"
+							class:active={isActive('/bundle-creator')}
+							aria-current={isActive('/bundle-creator') ? 'page' : undefined}
+							href={resolve('/bundle-creator')}
+						>
+							<!-- eslint-disable-next-line svelte/no-useless-mustaches -- Svelte trims a literal space at the start of a block -->
+							<Icon name="cart" /> Bundle{#if cartCount}{' '}
+								<span class="badge rounded-pill text-bg-primary">{formatCount(cartCount)}</span>
+								<span class="visually-hidden">{cartFiles} in the cart</span>
+							{/if}
+						</a>
+					</li>
+				{/if}
 				{#if onsearch && !me.mustChangePassword}
 					<li class="nav-item">
 						<button

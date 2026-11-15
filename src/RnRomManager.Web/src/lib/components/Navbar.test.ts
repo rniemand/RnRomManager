@@ -164,4 +164,77 @@ describe('Navbar', () => {
 		});
 		expect(screen.queryByRole('button', { name: 'Keyboard shortcuts' })).toBeNull();
 	});
+
+	describe('Bundle Creator cart link (B1)', () => {
+		const user = { id: 1, username: 'u', roles: [], mustChangePassword: false };
+
+		it('names the count for screen readers and shows it as a badge', () => {
+			render(Navbar, { me: user, reviewCount: null, onlogout: () => {}, cartCount: 1250 });
+
+			const link = screen.getByRole('link', { name: 'Bundle 1,250 files in the cart' });
+			expect(link.getAttribute('href')).toBe('/bundle-creator');
+			expect(link.querySelector('.badge')!.textContent).toBe('1,250');
+			expect(link.querySelector('i')!.className).toContain('bi-cart3');
+			expect(link.textContent).toContain('Bundle');
+		});
+
+		it('says one file, and shows no badge for an empty cart', () => {
+			const { unmount } = render(Navbar, {
+				me: user,
+				reviewCount: null,
+				onlogout: () => {},
+				cartCount: 1
+			});
+			expect(screen.getByRole('link', { name: 'Bundle 1 file in the cart' })).toBeTruthy();
+			unmount();
+
+			render(Navbar, { me: user, reviewCount: null, onlogout: () => {}, cartCount: 0 });
+			const empty = screen.getByRole('link', { name: 'Bundle' });
+			expect(empty.querySelector('.badge')).toBeNull();
+		});
+
+		it('is hidden while the password must be changed, like Search', () => {
+			render(Navbar, {
+				me: { ...user, mustChangePassword: true },
+				reviewCount: null,
+				onlogout: () => {},
+				onsearch: () => {},
+				cartCount: 3
+			});
+			expect(screen.queryByRole('link', { name: /^Bundle/ })).toBeNull();
+			expect(screen.queryByRole('button', { name: /Search/ })).toBeNull();
+		});
+
+		it('is a plain keyboard-focusable link inside the collapsible menu the mobile toggler opens', () => {
+			render(Navbar, { me: user, reviewCount: null, onlogout: () => {}, cartCount: 2 });
+
+			const link = screen.getByRole('link', { name: /^Bundle/ });
+			link.focus();
+			expect(document.activeElement).toBe(link);
+			expect(link.getAttribute('tabindex')).toBeNull();
+			const menu = link.closest('#main-nav')!;
+			expect(menu.classList.contains('navbar-collapse')).toBe(true);
+			expect(
+				screen.getByRole('button', { name: 'Toggle navigation' }).getAttribute('aria-controls')
+			).toBe('main-nav');
+			expect(link.closest('.d-none, [hidden]')).toBeNull();
+		});
+
+		it('is active on the Bundle Creator page', () => {
+			page.url = new URL('http://localhost/bundle-creator');
+			render(Navbar, { me: user, reviewCount: null, onlogout: () => {}, cartCount: 0 });
+
+			expect(screen.getByRole('link', { name: 'Bundle' }).getAttribute('aria-current')).toBe(
+				'page'
+			);
+		});
+
+		it('does not join the main page links', () => {
+			render(Navbar, { me: user, reviewCount: null, onlogout: () => {}, cartCount: 2 });
+			const main = [...document.querySelectorAll('ul.me-auto a.nav-link')].map((a) =>
+				a.textContent?.trim()
+			);
+			expect(main).toEqual(['Library', 'Collections', 'Reports']);
+		});
+	});
 });

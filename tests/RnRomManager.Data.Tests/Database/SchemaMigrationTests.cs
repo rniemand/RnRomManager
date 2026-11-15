@@ -12,7 +12,7 @@ public class SchemaMigrationTests
 {
     private static readonly string[] Tables =
     [
-        "app_settings", "audit_events", "collection_games", "collections", "data_protection_keys", "duplicate_dismissals", "games", "images", "ingest_review_items", "integrity_issues",
+        "app_settings", "audit_events", "bundle_queues", "collection_games", "collections", "data_protection_keys", "duplicate_dismissals", "games", "images", "ingest_review_items", "integrity_issues",
         "job_items", "jobs", "publisher_logos", "rom_files", "roms", "user_roles", "users",
     ];
 
@@ -42,7 +42,7 @@ public class SchemaMigrationTests
             "0007_ingest_review_items", "0008_integrity_issues", "0009_data_protection_keys",
             "0010_game_rating", "0011_user_roles", "0012_image_cover", "0013_duplicate_dismissals", "0014_audit_events",
             "0015_app_settings", "0016_user_hotkeys", "0017_collections", "0018_external_roms",
-            "0019_release_versions", "0020_rom_files", "0021_publisher_logos",
+            "0019_release_versions", "0020_rom_files", "0021_publisher_logos", "0022_bundle_queues",
         }));
     }
 
@@ -51,7 +51,7 @@ public class SchemaMigrationTests
     {
         Lifecycle(_cs).Migrate();
 
-        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 21L }));
+        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 22L }));
     }
 
     [Test]
@@ -83,6 +83,7 @@ public class SchemaMigrationTests
     [TestCase("duplicate_dismissals", "system_id varchar(16), base_title varchar(255), games_key char(64), dismissed_by int(11) NULL, dismissed_at datetime(6)")]
     [TestCase("collections", "id char(36), user_id int(11), name varchar(100), notes text NULL, cover_format varchar(8) NULL, cover_updated_at datetime(6) NULL, created_at datetime(6), updated_at datetime(6)")]
     [TestCase("collection_games", "collection_id char(36), game_id char(36), added_at datetime(6)")]
+    [TestCase("bundle_queues", "id char(36), user_id int(11), name varchar(100), revision int(11), item_count int(11), entries mediumtext, created_at datetime(6), updated_at datetime(6)")]
     public async Task Columns_MatchSpec(string table, string expected)
     {
         var columns = await ColumnAsync<string>(_cs,
@@ -105,6 +106,8 @@ public class SchemaMigrationTests
             "audit_events ix_audit_events_system_occurred_at - system_id,occurred_at",
             "audit_events ix_audit_events_user_occurred_at - user_id,occurred_at",
             "audit_events PRIMARY U id",
+            "bundle_queues PRIMARY U id",
+            "bundle_queues ux_bundle_queues_user_name U user_id,name",
             "collection_games ix_collection_games_game - game_id",
             "collection_games PRIMARY U collection_id,game_id",
             "collections PRIMARY U id",
@@ -164,6 +167,7 @@ public class SchemaMigrationTests
 
         Assert.That(actual, Is.EquivalentTo(new[]
         {
+            "bundle_queues -> users CASCADE",
             "collection_games -> collections CASCADE",
             "collections -> users CASCADE",
             "images -> games CASCADE",

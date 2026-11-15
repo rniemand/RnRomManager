@@ -1,3 +1,4 @@
+using RnRomManager.Core.Bundles;
 using RnRomManager.Core.Database;
 
 namespace RnRomManager.Core.Library;
@@ -75,6 +76,13 @@ public interface IRomRepository
 
     /// <summary>B14: every set file with this SHA1 (not unique: audio tracks repeat).</summary>
     Task<IReadOnlyList<RomFileRow>> ListFilesBySha1Async(string sha1, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Bundle Creator B3/B5: each identity's current download target, in input order, or null when it can't be resolved
+    /// uniquely (the release is gone or belongs to another game; the set file is missing, renamed or ambiguous). Set-file
+    /// names compare ordinally. Callers validate identities first and bound the batch to <see cref="BundleFile.MaxBatch"/>.
+    /// </summary>
+    Task<IReadOnlyList<BundleFileTarget?>> ResolveBundleFilesAsync(IReadOnlyList<BundleFileIdentity> identities, CancellationToken cancellationToken);
 }
 
 /// <summary>One mirrored claim on an external ROM file: <paramref name="ExternalFileName"/> in the folder of <paramref name="ZipPath"/>.</summary>
