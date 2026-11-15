@@ -1,6 +1,6 @@
 ---
 title: Library Reset placement and missing-image shortcut
-status: ready
+status: in-progress
 created: 2026-11-15
 ---
 
