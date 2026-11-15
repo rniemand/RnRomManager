@@ -25,6 +25,7 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
     public const string GenesisPlusGx = "genesis_plus_gx";
     public const string Picodrive = "picodrive";
     public const string Snes9x = "snes9x";
+    public const string Opera = "opera";
 
     /// <summary>The pinned 4.2.3 files of each core (each report is its package's <c>reports/</c> copy).</summary>
     public static OperatorCoreManifest Pinned { get; } = new(
@@ -60,6 +61,17 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
                 "7d427a575cefad98ff400493fa1d7e892da63fe7bab68979babd9cea0bfaaf3b", "application/octet-stream"),
             new("snes9x.json", 120,
                 "dc7ac963eb7935a7ac78956235ac0b8912ec785c57026336825aa2ed8031b3ad", "application/json"),
+        ]),
+        // 3DO B5: https://registry.npmjs.org/@emulatorjs/core-opera/-/core-opera-4.2.3.tgz (payloads at the package
+        // root, the report from reports/). Its licence forbids commercial use, so it's never bundled.
+        new(Opera, "Opera", o => o.OperaCorePath, EmulatorEndpoints.OperaCoreMismatch,
+        [
+            new("opera-wasm.data", 854_147,
+                "3e737f4f739814c12c017a5f26cb1e43bdfe3ac6f2d3bf6e8972633df49e33d4", "application/octet-stream"),
+            new("opera-legacy-wasm.data", 853_889,
+                "41d3a7336cd304693c86974b50df5f7a90d9557077b01e0a1e928b3a38fe4f86", "application/octet-stream"),
+            new("opera.json", 119,
+                "0245b492b516ef4b1c0490e3f05dbeb1d74074ea767cd54fc34747e31b2a0203", "application/json"),
         ]),
     ]);
 

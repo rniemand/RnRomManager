@@ -30,6 +30,7 @@ public partial class EmulatorEndpointsTests
         _factory.Settings["Emulator:GenesisCorePath"] = Path.Combine(_factory.Root, "genesis");
         _factory.Settings["Emulator:PicodriveCorePath"] = Path.Combine(_factory.Root, "picodrive");
         _factory.Settings["Emulator:Snes9xCorePath"] = Path.Combine(_factory.Root, "snes9x");
+        _factory.Settings["Emulator:OperaCorePath"] = Path.Combine(_factory.Root, "opera");
         await _factory.StartSharedAsync();
     }
 
@@ -50,6 +51,7 @@ public partial class EmulatorEndpointsTests
         ResetGenesisDir();
         ResetDir(PicodriveDir);
         ResetDir(Snes9xDir);
+        ResetDir(OperaDir);
         _client = await SignInAsync("player");
     }
 

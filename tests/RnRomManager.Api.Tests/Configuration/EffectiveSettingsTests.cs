@@ -42,6 +42,7 @@ public class EffectiveSettingsTests
             ["Emulator:GenesisCorePath"] = Path.Combine(root, "genesis"),
             ["Emulator:PicodriveCorePath"] = Path.Combine(root, "picodrive"),
             ["Emulator:Snes9xCorePath"] = Path.Combine(root, "snes9x"),
+            ["Emulator:OperaCorePath"] = Path.Combine(root, "opera"),
         }).Build();
         using var services = new ServiceCollection().AddAppOptions(config).BuildServiceProvider();
 
@@ -56,9 +57,11 @@ public class EffectiveSettingsTests
         Assert.That(settings.Emulator.GenesisCorePath, Is.EqualTo(Path.Combine(root, "genesis")));
         Assert.That(settings.Emulator.PicodriveCorePath, Is.EqualTo(Path.Combine(root, "picodrive")));
         Assert.That(settings.Emulator.Snes9xCorePath, Is.EqualTo(Path.Combine(root, "snes9x")));
+        Assert.That(settings.Emulator.OperaCorePath, Is.EqualTo(Path.Combine(root, "opera")));
         Assert.That(json, Does.Contain($"\"emulator\":{{\"genesisCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "genesis"))},"
             + $"\"picodriveCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "picodrive"))},"
-            + $"\"snes9xCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "snes9x"))}}}"));
+            + $"\"snes9xCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "snes9x"))},"
+            + $"\"operaCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "opera"))}}}"));
         Assert.That(json, Does.Not.Contain("hunter2"));
     }
 }

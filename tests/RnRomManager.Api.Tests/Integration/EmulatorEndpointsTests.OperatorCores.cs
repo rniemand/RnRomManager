@@ -12,6 +12,22 @@ public partial class EmulatorEndpointsTests
     private const string GenesisCore = "/api/emulator/cores/genesis_plus_gx";
     private const string PicodriveCore = "/api/emulator/cores/picodrive";
     private const string Snes9xCore = "/api/emulator/cores/snes9x";
+    private const string OperaCore = "/api/emulator/cores/opera";
+
+    private static readonly (string Name, byte[] Bytes, string ContentType)[] SyntheticOpera =
+    [
+        ("opera-wasm.data", [.. Enumerable.Range(0, 3300).Select(i => (byte)(i * 17 + 3))], "application/octet-stream"),
+        ("opera-legacy-wasm.data", [.. Enumerable.Range(0, 3100).Select(i => (byte)(i * 19 + 6))], "application/octet-stream"),
+        ("opera.json", "{\"options\":{\"3do\":1}}"u8.ToArray(), "application/json"),
+    ];
+
+    private string OperaDir => _factory.Settings["Emulator:OperaCorePath"]!;
+
+    private void WriteOperaSet(string? except = null)
+    {
+        foreach (var (name, bytes, _) in SyntheticOpera.Where(f => f.Name != except))
+            File.WriteAllBytes(Path.Combine(OperaDir, name), bytes);
+    }
 
     private static readonly (string Name, byte[] Bytes, string ContentType)[] SyntheticSnes9x =
     [
@@ -61,21 +77,26 @@ public partial class EmulatorEndpointsTests
 
         var picodrive = OperatorCoreManifest.Pinned.Find("picodrive")!;
         var snes9x = OperatorCoreManifest.Pinned.Find("snes9x")!;
+        var opera = OperatorCoreManifest.Pinned.Find("opera")!;
         var options = new EmulatorOptions
         {
             GenesisCorePath = "/cores/genesis", PicodriveCorePath = "/cores/picodrive", Snes9xCorePath = "/cores/snes9x",
+            OperaCorePath = "/cores/opera",
         };
 
         Assert.That(OperatorCoreManifest.Pinned.Cores.Select(c => c.Id),
-            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x" }));
+            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x", "opera" }));
         Assert.That((genesis.DisplayName, genesis.MismatchCode), Is.EqualTo(("Genesis Plus GX", "GenesisCoreMismatch")));
         Assert.That((picodrive.DisplayName, picodrive.MismatchCode), Is.EqualTo(("PicoDrive", "PicodriveCoreMismatch")));
         Assert.That((snes9x.DisplayName, snes9x.MismatchCode), Is.EqualTo(("Snes9x", "Snes9xCoreMismatch")));
+        Assert.That((opera.DisplayName, opera.MismatchCode), Is.EqualTo(("Opera", "OperaCoreMismatch")));
+        Assert.That(opera.PathOf(options), Is.EqualTo("/cores/opera"));
         Assert.That((genesis.PathOf(options), picodrive.PathOf(options), snes9x.PathOf(options)),
             Is.EqualTo(("/cores/genesis", "/cores/picodrive", "/cores/snes9x")));
         Assert.That(OperatorCoreManifest.Pinned.Find("GENESIS_PLUS_GX"), Is.Null);
         Assert.That(OperatorCoreManifest.Pinned.Find("PicoDrive"), Is.Null);
         Assert.That(OperatorCoreManifest.Pinned.Find("Snes9x"), Is.Null);
+        Assert.That(OperatorCoreManifest.Pinned.Find("OPERA"), Is.Null);
     }
 
     [Test]
@@ -419,5 +440,120 @@ public partial class EmulatorEndpointsTests
         Assert.That(await HeadAsync(anonymous, GenesisCore), Is.EqualTo(HttpStatusCode.Unauthorized));
         Assert.That(await HeadAsync(flagged, GenesisCore), Is.EqualTo(HttpStatusCode.Forbidden));
         Assert.That((anonGet.StatusCode, flaggedGet.StatusCode), Is.EqualTo((HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden)));
+    }
+
+    // 3DO B5: the operator-supplied Opera files behave exactly as Snes9x's.
+
+    [Test]
+    public void PinnedManifest_HoldsExactlyTheOpera4_2_3Files()
+    {
+        Assert.That(OperatorCoreManifest.Pinned.Find(OperatorCoreManifest.Opera)!.Files, Is.EqualTo(new[]
+        {
+            new OperatorCoreFile("opera-wasm.data", 854_147,
+                "3e737f4f739814c12c017a5f26cb1e43bdfe3ac6f2d3bf6e8972633df49e33d4", "application/octet-stream"),
+            new OperatorCoreFile("opera-legacy-wasm.data", 853_889,
+                "41d3a7336cd304693c86974b50df5f7a90d9557077b01e0a1e928b3a38fe4f86", "application/octet-stream"),
+            new OperatorCoreFile("opera.json", 119,
+                "0245b492b516ef4b1c0490e3f05dbeb1d74074ea767cd54fc34747e31b2a0203", "application/json"),
+        }));
+    }
+
+    [Test]
+    public async Task Opera_AMatchingSet_Is204_AndEachFileIsServedExactly()
+    {
+        WriteOperaSet();
+
+        Assert.That(await HeadAsync(_client, OperaCore), Is.EqualTo(HttpStatusCode.NoContent));
+        foreach (var (name, bytes, contentType) in SyntheticOpera)
+        {
+            using var response = await _client.GetAsync($"{OperaCore}/{name}");
+
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), name);
+            Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo(contentType), name);
+            Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(bytes), name);
+            AssertNoStore(response);
+        }
+    }
+
+    [Test]
+    public async Task Opera_AMissingMount_AnIncompleteSet_OrAnEmptyFile_Is404()
+    {
+        Directory.Delete(OperaDir);
+        Assert.That(await HeadAsync(_client, OperaCore), Is.EqualTo(HttpStatusCode.NotFound), "missing mount");
+        await AssertNotFoundAsync($"{OperaCore}/opera.json");
+
+        Directory.CreateDirectory(OperaDir);
+        WriteOperaSet(except: "opera-legacy-wasm.data");
+        Assert.That(await HeadAsync(_client, OperaCore), Is.EqualTo(HttpStatusCode.NotFound), "incomplete set");
+        await AssertNotFoundAsync($"{OperaCore}/opera-legacy-wasm.data");
+        await AssertNotFoundAsync($"{OperaCore}/OPERA.JSON");
+
+        File.WriteAllBytes(Path.Combine(OperaDir, "opera-legacy-wasm.data"), []);
+        Assert.That(await HeadAsync(_client, OperaCore), Is.EqualTo(HttpStatusCode.NotFound), "zero-byte file");
+        await AssertNotFoundAsync($"{OperaCore}/opera-legacy-wasm.data");
+    }
+
+    [TestCase("wrong length")]
+    [TestCase("same-length wrong hash")]
+    public async Task Opera_AMismatch_Is409OperaCoreMismatch(string kind)
+    {
+        WriteOperaSet();
+        var path = Path.Combine(OperaDir, "opera-wasm.data");
+        if (kind == "wrong length")
+            File.AppendAllText(path, "x");
+        else
+        {
+            var bytes = File.ReadAllBytes(path);
+            bytes[100] ^= 0xFF;
+            File.WriteAllBytes(path, bytes);
+        }
+
+        Assert.That(await HeadAsync(_client, OperaCore), Is.EqualTo(HttpStatusCode.Conflict));
+        using var response = await _client.GetAsync($"{OperaCore}/opera-wasm.data");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo(EmulatorEndpoints.OperaCoreMismatch));
+        Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("The Opera core file doesn't match EmulatorJS 4.2.3"));
+        AssertNoStore(response);
+    }
+
+    [Test]
+    public async Task Opera_ALockedFile_Is500IoError()
+    {
+        Assume.That(OperatingSystem.IsWindows(), "FileShare.None only blocks other opens on Windows.");
+        WriteOperaSet();
+        using var held = new FileStream(Path.Combine(OperaDir, "opera.json"), FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        Assert.That(await HeadAsync(_client, OperaCore), Is.EqualTo(HttpStatusCode.InternalServerError));
+        using var response = await _client.GetAsync($"{OperaCore}/opera.json");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("IoError"));
+        Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("The Opera core file can't be read"));
+    }
+
+    [Test]
+    public async Task Opera_AnonymousIs401_AndAForcedPasswordChangeIs403()
+    {
+        WriteOperaSet();
+        using var anonymous = await AuthClient.CreateAsync(_factory);
+        using var flagged = await SignInAsync("flagged-opera", mustChangePassword: true);
+
+        using var anonGet = await anonymous.GetAsync($"{OperaCore}/opera.json");
+        using var flaggedGet = await flagged.GetAsync($"{OperaCore}/opera.json");
+
+        Assert.That(await HeadAsync(anonymous, OperaCore), Is.EqualTo(HttpStatusCode.Unauthorized));
+        Assert.That(await HeadAsync(flagged, OperaCore), Is.EqualTo(HttpStatusCode.Forbidden));
+        Assert.That((anonGet.StatusCode, flaggedGet.StatusCode), Is.EqualTo((HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden)));
+    }
+
+    [Test]
+    public async Task Opera_SharingAFolderWithTheOtherCores_IsAvailable()
+    {
+        WriteGenesisSet();
+        foreach (var (name, bytes, _) in SyntheticOpera)
+            File.WriteAllBytes(Path.Combine(GenesisDir, name), bytes);
+        WriteOperaSet();
+
+        Assert.That(await HeadAsync(_client, GenesisCore), Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(await HeadAsync(_client, OperaCore), Is.EqualTo(HttpStatusCode.NoContent));
     }
 }

@@ -45,6 +45,7 @@ public class OptionsRegistrationTests
         Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.GenesisCorePath, Is.Empty, "Genesis is off by default");
         Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.PicodriveCorePath, Is.Empty, "32X is off by default");
         Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.Snes9xCorePath, Is.Empty, "SNES is off by default");
+        Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.OperaCorePath, Is.Empty, "3DO is off by default");
     }
 
     [Test]
@@ -83,6 +84,18 @@ public class OptionsRegistrationTests
             Is.EqualTo(Path.Combine(Root, "no-such-snes9x-mount")));
     }
 
+    [Test]
+    public void OperaCorePath_AnAbsoluteMountThatDoesNotExist_PassesStartup()
+    {
+        var settings = ValidSettings();
+        settings["Emulator:OperaCorePath"] = Path.Combine(Root, "no-such-opera-mount");
+        using var services = Build(settings);
+
+        Assert.DoesNotThrow(() => services.GetRequiredService<IStartupValidator>().Validate());
+        Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.OperaCorePath,
+            Is.EqualTo(Path.Combine(Root, "no-such-opera-mount")));
+    }
+
     [TestCase("Paths:Roms", "relative")]
     [TestCase("Paths:Bios", "relative/bios")]
     [TestCase("ConnectionStrings:Default", "")]
@@ -97,6 +110,7 @@ public class OptionsRegistrationTests
     [TestCase("Emulator:GenesisCorePath", "relative/genesis")]
     [TestCase("Emulator:PicodriveCorePath", "relative/picodrive")]
     [TestCase("Emulator:Snes9xCorePath", "relative/snes9x")]
+    [TestCase("Emulator:OperaCorePath", "relative/opera")]
     public void InvalidSetting_FailsStartupValidationNamingTheKey(string key, string value)
     {
         var settings = ValidSettings();
