@@ -31,6 +31,8 @@ public class ReviewEndpointsTests
     private static readonly byte[] DsUnknown = new SyntheticNdsRomBuilder { Seed = 941, Title = "STYLUS QUEST", GameCode = "ASQP" }.Build();
     private static readonly byte[] DsOther = new SyntheticNdsRomBuilder { Seed = 942, Title = "PEN PALS", GameCode = "APPE" }.Build();
     private static readonly byte[] DsBadCrc = new SyntheticNdsRomBuilder { Seed = 943, Title = "BROKEN", BadHeaderCrc = true }.Build();
+    /// <summary>CHD B3: the Saturn DAT's data track a <c>.chd</c> is DAT-picked against (the <c>.chd</c> itself never matches).</summary>
+    private static readonly byte[] ChdQuestTrack = new SyntheticDiscBuilder { Seed = 2401 }.Build();
     private ApiFactory _factory = null!;
     private AuthClient _admin = null!;
     private IngestPipeline? _pipelineOverride;
@@ -86,7 +88,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.GameCubeDat] = [],
             [IngestSeeder.WiiDat] = [],
             [IngestSeeder.Xbox360Dat] = [],
-            [IngestSeeder.SaturnDat] = [],
+            [IngestSeeder.SaturnDat] = [new FixtureGame("Chd Quest (Japan)", "Chd Quest (Japan) (Track 1).bin", ChdQuestTrack)],
             [IngestSeeder.SegaCdDat] = [],
             [IngestSeeder.NintendoDsDat] = [new FixtureGame("Stylus Quest (USA)", "Stylus Quest (USA).nds", StylusQuest) { ReleaseYear = 2006 }],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)
@@ -1119,6 +1121,100 @@ public class ReviewEndpointsTests
             Assert.That(dismiss.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
             Assert.That(await AuthClient.CodeAsync(dismiss), Is.EqualTo(ReviewResolver.SetFileNotResolvable));
         }
+    }
+
+    /// <summary>CHD B3: synthetic bytes standing in for a CHD (never a real image).</summary>
+    private static byte[] FakeChd(int seed)
+    {
+        var bytes = new SyntheticDiscBuilder { Seed = seed }.Build();
+        "MComprHD"u8.CopyTo(bytes);
+        return bytes;
+    }
+
+    private string DropDisc(string system, string name, byte[] bytes)
+    {
+        var path = Path.Combine(_factory.Root, "ingest", system, name);
+        File.WriteAllBytes(path, bytes);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+        return path;
+    }
+
+    /// <summary>CHD B2: a lone <c>.chd</c> queued as <c>NoDatMatch</c> on <paramref name="system"/>.</summary>
+    private async Task<ReviewItem> QueueChd(string system, string name, int seed)
+    {
+        var bytes = FakeChd(seed);
+        var path = DropDisc(system, name, bytes);
+        var result = await Ingest(new IngestFile(system, path, name, bytes.Length, File.GetLastWriteTimeUtc(path)));
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", system)));
+        return (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(bytes)), default))!;
+    }
+
+    [Test]
+    public async Task Chd_Manual_IsStoredNextToTheZip_UnderTheBuiltName()
+    {
+        var item = await QueueChd("segacd", "sonic.chd", 2402);
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "Sonic CD", regions = new[] { "USA" }, languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+
+        Assert.That(response.Code, Is.Null);
+        var rom = (await ReadGame(response.GameId!.Value)).Roms.Single();
+        Assert.That((rom.FileName, rom.ExternalFileName, rom.Identification.Method),
+            Is.EqualTo(("Sonic CD (USA).chd", "Sonic CD (USA).chd", IdentificationMethod.Manual)));
+        Assert.That(File.Exists(Path.Combine(_factory.Root, "roms", "segacd", "S", "Sonic CD (USA).chd")), Is.True);
+        Assert.That(File.Exists(item.SourcePath), Is.False);
+    }
+
+    [Test]
+    public async Task Chd_DatPick_IsStoredAsTheDatGameUnverified()
+    {
+        var item = await QueueChd("saturn", "quest.chd", 2403);
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Dat", datSystem = "saturn", datGameName = "Chd Quest (Japan)" });
+
+        Assert.That(response.Code, Is.Null);
+        var rom = (await ReadGame(response.GameId!.Value)).Roms.Single();
+        Assert.That((rom.FileName, rom.Identification.Method, rom.Identification.DatGameName),
+            Is.EqualTo(("Chd Quest (Japan) (Unverified).chd", IdentificationMethod.Manual, (string?)"Chd Quest (Japan)")));
+        Assert.That(rom.Flags, Does.Contain("Unverified"));
+        Assert.That(File.Exists(Path.Combine(_factory.Root, "roms", "saturn", "C", "Chd Quest (Japan) (Unverified).chd")), Is.True);
+    }
+
+    [Test]
+    public async Task Chd_AttachedAsDisc2_ToABinCueGame_IsASecondRelease()
+    {
+        // Disc 1: an unmatched cue + bin set, resolved with Manual as one release.
+        const string cue = "Game.cue", bin = "Game.bin";
+        DropDisc("psx", bin, new SyntheticDiscBuilder { Seed = 2404 }.Build());
+        var cueBytes = System.Text.Encoding.UTF8.GetBytes($"FILE \"{bin}\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n");
+        DropDisc("psx", cue, cueBytes);
+        await RunIngest();
+        var cueItem = (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(cueBytes)), default))!;
+        var first = await _admin.ResolveAsync(cueItem.Id, new { action = "Manual", title = "Game", regions = new[] { "USA" }, languages = Array.Empty<string>(), flags = Array.Empty<string>(), disc = 1 });
+        Assert.That(first.Code, Is.Null);
+        var target = first.GameId!.Value;
+
+        var item = await QueueChd("psx", "Game.chd", 2405);
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Attach", targetGameId = target, flag = "Disc", disc = 2 });
+
+        Assert.That(response.Code, Is.Null);
+        var game = await ReadGame(target);
+        Assert.That(game.Roms, Has.Count.EqualTo(2));
+        var rom = game.Roms.Single(r => r.Metadata.Sha1 == item.Sha1);
+        Assert.That((rom.FileName, rom.ExternalFileName), Is.EqualTo(("Game (Disc 2).chd", "Game (Disc 2).chd")));
+        Assert.That(game.Roms.Single(r => r.Metadata.Sha1 != item.Sha1).FileName, Is.EqualTo(bin), "disc 1 keeps its set name");
+        Assert.That(rom.Flags, Is.EqualTo(new[] { "Disc 2" }));
+        Assert.That(rom.Regions, Is.EqualTo(new[] { "USA" }));
+    }
+
+    [Test]
+    public async Task Chd_CanBeDismissed()
+    {
+        var item = await QueueChd("segacd", "junk.chd", 2406);
+
+        using var response = await _admin.PostAsync($"/api/review/{item.Id}/dismiss");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Dismissed"));
     }
 
     [Test]

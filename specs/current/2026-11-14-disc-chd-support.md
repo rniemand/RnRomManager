@@ -55,7 +55,7 @@ Steps 2–3 run integration tests (category `Integration`), which need Docker. P
   - Files: the three handlers, `README.md` (three rows only), `tests/RnRomManager.Systems.Sony.Tests/PlayStationHandlerTests.cs`, `tests/RnRomManager.Systems.Sega.Tests/SaturnHandlerTests.cs`, `tests/RnRomManager.Systems.Sega.Tests/SegaCdHandlerTests.cs`.
   - Tests: the three handler test classes (exact `RomExtensions`, `[0]` still `.bin`), `SupportedSystemsTableTests`.
   - Done when: those pass and the solution builds with warnings as errors.
-- [ ] **2. Verify `.chd` ingest and Review** (B2, B3): Testcontainers cases with synthetic files (never real images), no Core change expected (if one is needed, stop and ask):
+- [x] **2. Verify `.chd` ingest and Review** (B2, B3): Testcontainers cases with synthetic files (never real images), no Core change expected (if one is needed, stop and ask):
   - Files: `tests/RnRomManager.Api.Tests/Integration/IngestPipelineTests.cs`, `tests/RnRomManager.Api.Tests/Integration/ReviewEndpointsTests.cs`.
   - `IngestPipelineTests`:
     - for each of `psx`, `saturn`, `segacd` (`[TestCase]`), a lone `.chd` → Review `NoDatMatch` with that system;
