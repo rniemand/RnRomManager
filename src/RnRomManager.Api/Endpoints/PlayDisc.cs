@@ -13,7 +13,7 @@ namespace RnRomManager.Api.Endpoints;
 /// <c>.chd</c> streams unchanged like an <c>.iso</c>. Every member is opened
 /// and checked before the response starts; nothing is written to disk and nothing is audited. PSP B2: a PlayStation
 /// Portable release streams its standalone <c>.iso</c> the same way, bounded by <see cref="PspMaxBytes"/>. Saturn B5: a
-/// Saturn release takes PlayStation's shapes and cap (<see cref="MaxBytesBySystem"/>), and so does a Sega CD one (Sega CD B4).
+/// Saturn release takes PlayStation's shapes and cap (<see cref="MaxBytesBySystem"/>), and so does a Sega CD one (Sega CD B4) and a 3DO one (3DO B4).
 /// </summary>
 public static class PlayDisc
 {
@@ -25,6 +25,8 @@ public static class PlayDisc
 
     public const string SegaCdSystemId = "segacd";
 
+    public const string ThreeDoSystemId = "3do";
+
     /// <summary>The combined opened lengths a launch may stream: a standard CD, bounded for browser memory.</summary>
     public const long MaxBytes = 1024L * 1024 * 1024;
 
@@ -32,7 +34,8 @@ public static class PlayDisc
     public const long PspMaxBytes = 2L * 1024 * 1024 * 1024;
 
     /// <summary>
-    /// Saturn B5, Sega CD B4: the systems play-disc serves and each one's inclusive cap. Saturn's and Sega CD's shapes are PlayStation's.
+    /// Saturn B5, Sega CD B4, 3DO B4: the systems play-disc serves and each one's inclusive cap. Saturn's, Sega CD's and
+    /// 3DO's shapes are PlayStation's.
     /// </summary>
     public static IReadOnlyDictionary<string, long> MaxBytesBySystem { get; } = new Dictionary<string, long>(StringComparer.Ordinal)
     {
@@ -40,6 +43,7 @@ public static class PlayDisc
         [PspSystemId] = PspMaxBytes,
         [SaturnSystemId] = MaxBytes,
         [SegaCdSystemId] = MaxBytes,
+        [ThreeDoSystemId] = MaxBytes,
     };
 
     public const string InvalidPlayDisc = "InvalidPlayDisc";
