@@ -198,8 +198,8 @@
 								>
 								<td
 									class="text-nowrap"
-									class:text-danger={item.state === 'failed' || item.state === 'expired'}
-									class:text-success={item.state === 'sent'}
+									class:text-danger-emphasis={item.state === 'failed' || item.state === 'expired'}
+									class:text-success-emphasis={item.state === 'sent'}
 									class:text-warning-emphasis={item.state === 'unknown'}
 								>
 									{runItemLabel(item)}
