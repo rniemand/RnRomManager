@@ -26,6 +26,9 @@ public sealed record GameQuery
     /// <summary>Only games not in this collection (P1), e.g. the Add games picker.</summary>
     public Guid? NotInCollectionId { get; init; }
 
+    /// <summary>Only these games (a discovery group's page); callers keep the list within <see cref="Database.Page{T}.MaxSize"/>.</summary>
+    public IReadOnlyCollection<Guid>? GameIds { get; init; }
+
     public GameSort Sort { get; init; } = GameSort.Title;
     public bool Descending { get; init; }
     public int Page { get; init; } = 1;

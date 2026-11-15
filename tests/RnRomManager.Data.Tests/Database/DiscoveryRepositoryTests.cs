@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Dapper;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 using MySqlConnector;
 using RnRomManager.Core.Discovery;
 using RnRomManager.Data.Repositories;
@@ -11,12 +12,14 @@ namespace RnRomManager.Data.Tests.Database;
 
 /// <summary>B2–B3 live discovery indexes against MariaDB.</summary>
 [Category("Integration")]
-public class DiscoveryRepositoryTests
+public partial class DiscoveryRepositoryTests
 {
     private static readonly DateTime T0 = new(2026, 11, 15, 10, 0, 0, DateTimeKind.Utc);
 
     private string _cs = null!;
     private DiscoveryRepository _repository = null!;
+    private MySqlConnectionFactory _factory = null!;
+    private FakeTimeProvider _time = null!;
 
     [SetUp]
     public async Task SetUp()
@@ -24,7 +27,9 @@ public class DiscoveryRepositoryTests
         _cs = await MariaDbServer.CreateDatabaseAsync();
         var factory = new MySqlConnectionFactory(_cs);
         new MySqlDatabaseLifecycle(factory, NullLogger<MySqlDatabaseLifecycle>.Instance, TimeProvider.System).Migrate();
-        _repository = new DiscoveryRepository(factory);
+        _time = new FakeTimeProvider(T0);
+        _repository = new DiscoveryRepository(factory, new GameRepository(factory), _time);
+        _factory = factory;
     }
 
     /// <summary>Inserts a game whose arrays are raw JSON, so tests can store anything MariaDB accepts.</summary>

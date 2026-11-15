@@ -4,7 +4,8 @@ namespace RnRomManager.Data.Repositories;
 
 /// <summary>
 /// B2's one canonical normalization, shared by every discovery read, existence check and logo write.
-/// MariaDB is the sole authority: the app never normalizes names itself.
+/// MariaDB is the sole authority: the app never trims, lowercases or hashes names itself; it only compares the bytes
+/// MariaDB returns.
 /// </summary>
 internal static class DiscoverySql
 {
@@ -20,7 +21,8 @@ internal static class DiscoverySql
     /// CTEs <c>discovery_values(game_id, trimmed, norm)</c>: one row per non-blank string entry of every game's array.
     /// <c>JSON_TABLE</c> only numbers the entries; each complete value is extracted by ordinal, so no column width
     /// truncates it. <c>trimmed</c> drops leading and trailing Unicode whitespace; <c>norm</c> is its lowercase bytes
-    /// under an explicit accent- and case-sensitive collation (the JSON columns are <c>utf8mb4_bin</c>).
+    /// under an explicit accent- and case-sensitive collation (the JSON columns are <c>utf8mb4_bin</c>, whose case
+    /// mapping differs), compared as binary.
     /// </summary>
     public static string ValuesCte(DiscoveryKind kind)
     {
@@ -42,13 +44,6 @@ internal static class DiscoverySql
             """;
     }
 
-    /// <summary>The public key of a grouped <c>norm</c>.</summary>
+    /// <summary>The public key of a <c>norm</c>: lowercase hexadecimal SHA-256 of its bytes.</summary>
     public const string Key = "SHA2(norm, 256)";
-
-    /// <summary>The group label (binary-smallest trimmed spelling), cut to the display limit with an ellipsis.</summary>
-    public static readonly string Name = $"""
-        IF(CHAR_LENGTH(CONVERT(MIN(CAST(trimmed AS BINARY)) USING utf8mb4)) > {DiscoveryGroup.MaxNameLength},
-           CONCAT(LEFT(CONVERT(MIN(CAST(trimmed AS BINARY)) USING utf8mb4), {DiscoveryGroup.MaxNameLength - 1}), '…'),
-           CONVERT(MIN(CAST(trimmed AS BINARY)) USING utf8mb4))
-        """;
 }

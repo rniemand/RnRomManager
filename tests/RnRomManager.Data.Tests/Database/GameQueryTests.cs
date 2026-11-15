@@ -96,6 +96,21 @@ public class GameQueryTests
     }
 
     [Test]
+    public async Task GameIds_LimitsTheListAndItsTotal()
+    {
+        var tetris = await Add("Tetris");
+        await Add("Tennis");
+        var toki = await Add("Toki", system: "gbc");
+
+        var page = await _games.ListAsync(new GameQuery { GameIds = [toki, tetris, Guid.NewGuid()] }, default);
+
+        Assert.That(page.Items.Select(i => i.DisplayTitle), Is.EqualTo(new[] { "Tetris", "Toki" }));
+        Assert.That(page.Total, Is.EqualTo(2));
+        Assert.That(await Titles(new GameQuery { GameIds = [] }), Is.Empty);
+        Assert.That(await Titles(new GameQuery { GameIds = [tetris], System = "gbc" }), Is.Empty, "combines with other filters");
+    }
+
+    [Test]
     public async Task Region_MatchesAnyRelease_WholeRegionsOnly()
     {
         await Add("Both", releases: [["Japan"], ["USA", "Europe"]]);
