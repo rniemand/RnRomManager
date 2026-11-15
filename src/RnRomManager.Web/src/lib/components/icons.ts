@@ -3,6 +3,7 @@ export const icons: Record<string, string> = {
 	library: 'bi bi-collection',
 	collections: 'bi bi-bookmarks',
 	ingest: 'bi bi-box-arrow-in-down',
+	tools: 'bi bi-tools',
 	review: 'bi bi-clipboard-check',
 	integrity: 'bi bi-shield-check',
 	reports: 'bi bi-bar-chart',

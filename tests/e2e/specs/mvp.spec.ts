@@ -1397,6 +1397,7 @@ test('Admin: edit metadata, move a release, delete a release and a game', async 
 test('Deleted ROMs: restore one release, delete the rest for good', async () => {
 	await page.goto('/deleted');
 	await expect(page.getByRole('heading', { level: 1, name: 'Deleted ROMs' })).toBeVisible();
+	await page.getByRole('button', { name: /^ROM Tools/ }).click();
 	await expect(page.getByRole('link', { name: /Deleted ROMs/ }).locator('.badge')).toBeVisible();
 	await expect(page.getByText('Orbit Blocks (Japan).gb', { exact: true })).toBeVisible();
 	await expectAccessible(page, 'deleted ROMs');

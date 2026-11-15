@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import type { PageRouteId } from '$app/types';
 	import type { Me } from '../api/types';
 	import { formatCount } from '../format';
 	import Icon from './Icon.svelte';
@@ -35,18 +36,35 @@
 	// label-content-name-mismatch holds: visible text must be part of the accessible name.
 	const cartFiles = $derived(cartCount === 1 ? 'file' : 'files');
 
-	// Pages arrive in later steps (S41–S47); unknown ones show "Page not found" until then.
-	const links = $derived(
-		[
-			{ href: '/', label: 'Library', icon: 'library', admin: false },
-			{ href: '/collections', label: 'Collections', icon: 'collections', admin: false },
-			{ href: '/ingestion', label: 'Ingestion', icon: 'ingest', admin: true },
-			{ href: '/review', label: 'Review', icon: 'review', admin: true },
-			{ href: '/deleted', label: 'Deleted ROMs', icon: 'delete', admin: true },
-			{ href: '/reports', label: 'Reports', icon: 'reports', admin: false },
-			{ href: '/integrity', label: 'Integrity', icon: 'integrity', admin: true },
-			{ href: '/admin/users', label: 'Admin', icon: 'admin', admin: true }
-		].filter((l) => !l.admin || me.roles.includes('admin'))
+	type NavLink = {
+		href: Exclude<PageRouteId, `${string}[${string}`>;
+		label: string;
+		icon: string;
+	};
+
+	type NavItem = (NavLink | { label: string; icon: string; links: NavLink[] }) & {
+		admin?: boolean;
+	};
+
+	const navigation: NavItem[] = [
+		{ href: '/', label: 'Library', icon: 'library' },
+		{ href: '/collections', label: 'Collections', icon: 'collections' },
+		{ href: '/reports', label: 'Reports', icon: 'reports' },
+		{
+			label: 'ROM Tools',
+			icon: 'tools',
+			admin: true,
+			links: [
+				{ href: '/ingestion', label: 'Ingestion', icon: 'ingest' },
+				{ href: '/review', label: 'Review', icon: 'review' },
+				{ href: '/deleted', label: 'Deleted ROMs', icon: 'delete' },
+				{ href: '/integrity', label: 'Integrity', icon: 'integrity' }
+			]
+		},
+		{ href: '/admin/users', label: 'Admin', icon: 'admin', admin: true }
+	];
+	const visibleNavigation = $derived(
+		navigation.filter((item) => !item.admin || me.roles.includes('admin'))
 	);
 
 	function isActive(href: string): boolean {
@@ -79,34 +97,37 @@
 		</button>
 		<div class="collapse navbar-collapse" id="main-nav">
 			<ul class="navbar-nav me-auto">
-				{#each links as link (link.href)}
-					<li class="nav-item">
-						<!-- Plain paths: most of these routes arrive in S41–S47, and resolve() only accepts existing ones. -->
-						<!-- eslint-disable svelte/no-navigation-without-resolve -->
-						<a
-							class="nav-link d-flex align-items-center gap-1"
-							class:active={isActive(link.href)}
-							aria-current={isActive(link.href) ? 'page' : undefined}
-							href={link.href}
-						>
-							<!-- eslint-enable svelte/no-navigation-without-resolve -->
-							<Icon name={link.icon} />
-							{link.label}
-							{#if link.href === '/review' && reviewCount}
-								<span class="badge rounded-pill text-bg-danger">
-									{formatCount(reviewCount)}<span class="visually-hidden">&#32;pending</span>
-								</span>
-							{/if}
-							{#if link.href === '/deleted' && deletedCount}
-								<span class="badge rounded-pill text-bg-secondary">
-									{formatCount(deletedCount)}<span class="visually-hidden">&#32;deleted</span>
-								</span>
-							{/if}
-						</a>
-					</li>
+				{#each visibleNavigation as item (item.label)}
+					{#if 'links' in item}
+						<li class="nav-item dropdown">
+							<button
+								type="button"
+								class="btn btn-link nav-link dropdown-toggle d-flex align-items-center gap-1"
+								class:active={item.links.some((link) => isActive(link.href))}
+								data-bs-toggle="dropdown"
+								aria-expanded="false"
+							>
+								<Icon name={item.icon} />
+								{item.label}
+								{#if item.links.some((link) => link.href === '/review') && reviewCount}
+									<span class="badge rounded-pill text-bg-danger" aria-hidden="true">
+										{formatCount(reviewCount)}
+									</span>
+									<span class="visually-hidden">{formatCount(reviewCount)} pending review</span>
+								{/if}
+							</button>
+							<ul class="dropdown-menu navigation-menu">
+								{#each item.links as link (link.href)}
+									<li>{@render navigationLink(link, true)}</li>
+								{/each}
+							</ul>
+						</li>
+					{:else}
+						<li class="nav-item">{@render navigationLink(item)}</li>
+					{/if}
 				{/each}
 			</ul>
-			<ul class="navbar-nav align-items-lg-center">
+			<ul class="navbar-nav align-items-lg-center navigation-utilities">
 				{#if cartCount !== undefined && !me.mustChangePassword}
 					<li class="nav-item">
 						<a
@@ -183,3 +204,62 @@
 		</div>
 	</div>
 </nav>
+
+{#snippet navigationLink(link: NavLink, inDropdown = false)}
+	<a
+		class={inDropdown
+			? 'dropdown-item d-flex align-items-center gap-2'
+			: 'nav-link d-flex align-items-center gap-1'}
+		class:active={isActive(link.href)}
+		aria-current={isActive(link.href) ? 'page' : undefined}
+		href={resolve(link.href)}
+	>
+		<Icon name={link.icon} />
+		{link.label}
+		{#if link.href === '/review' && reviewCount}
+			<span class="badge rounded-pill text-bg-danger">
+				{formatCount(reviewCount)}<span class="visually-hidden">&#32;pending</span>
+			</span>
+		{/if}
+		{#if link.href === '/deleted' && deletedCount}
+			<span class="badge rounded-pill text-bg-secondary">
+				{formatCount(deletedCount)}<span class="visually-hidden">&#32;deleted</span>
+			</span>
+		{/if}
+	</a>
+{/snippet}
+
+<style>
+	.navigation-menu {
+		--bs-dropdown-link-active-bg: var(--bs-primary-bg-subtle);
+		--bs-dropdown-link-active-color: var(--bs-primary-text-emphasis);
+	}
+
+	.navigation-menu .dropdown-item.active {
+		font-weight: 600;
+	}
+
+	@media (min-width: 992px) {
+		.navigation-menu {
+			max-height: calc(100dvh - 4rem);
+			overflow-y: auto;
+		}
+	}
+
+	@media (max-width: 991.98px) {
+		.navbar-collapse:global(.show) {
+			max-height: calc(100dvh - 4rem);
+			overflow-y: auto;
+		}
+
+		.navigation-menu {
+			margin: 0.25rem 0.5rem 0.5rem;
+		}
+
+		.navigation-utilities {
+			margin-top: 0.5rem;
+			padding-top: 0.5rem;
+			border-top: 1px solid var(--bs-border-color);
+		}
+	}
+</style>

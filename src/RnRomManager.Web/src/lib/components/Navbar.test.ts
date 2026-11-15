@@ -22,28 +22,27 @@ describe('Navbar', () => {
 		const review = screen.getByRole('link', { name: /Review/ });
 		expect(review.getAttribute('aria-current')).toBe('page');
 		expect(review.classList.contains('active')).toBe(true);
+		const tools = screen.getByRole('button', { name: 'ROM Tools' });
+		expect(tools.classList.contains('active')).toBe(true);
+		expect(tools.getAttribute('aria-current')).toBeNull();
 		const library = screen.getByRole('link', { name: /Library/ });
 		expect(library.getAttribute('aria-current')).toBeNull();
 		expect(library.classList.contains('active')).toBe(false);
 	});
 
-	it('an admin sees Library, Ingestion, Review, Deleted ROMs, Reports, Integrity, Admin, in that order (B4, D6)', () => {
+	it('keeps common destinations in the header and groups ROM tools for admins', () => {
 		render(Navbar, {
 			me: { id: 1, username: 'boss', roles: ['admin', 'rom-manager'], mustChangePassword: false },
 			reviewCount: null,
 			onlogout: () => {}
 		});
 		const links = [...document.querySelectorAll('a.nav-link')].map((a) => a.textContent?.trim());
-		expect(links).toEqual([
-			'Library',
-			'Collections',
-			'Ingestion',
-			'Review',
-			'Deleted ROMs',
-			'Reports',
-			'Integrity',
-			'Admin'
-		]);
+		expect(links).toEqual(['Library', 'Collections', 'Reports', 'Admin']);
+		const tools = screen.getByRole('button', { name: 'ROM Tools' });
+		const toolLinks = [...tools.parentElement!.querySelectorAll('a')].map((a) =>
+			a.textContent?.trim()
+		);
+		expect(toolLinks).toEqual(['Ingestion', 'Review', 'Deleted ROMs', 'Integrity']);
 		const deleted = screen.getByRole('link', { name: /Deleted ROMs/ });
 		expect(deleted.getAttribute('href')).toBe('/deleted');
 		expect(deleted.querySelector('.bi-trash')).toBeTruthy();
@@ -60,6 +59,7 @@ describe('Navbar', () => {
 		const review = screen.getByRole('link', { name: /Review/ }).querySelector('.badge')!;
 		expect(review.className).toBe('badge rounded-pill text-bg-danger');
 		expect(review.textContent).toBe('1,250 pending');
+		expect(screen.getByRole('button', { name: 'ROM Tools 1,250 pending review' })).toBeTruthy();
 		const deleted = screen.getByRole('link', { name: /Deleted ROMs/ }).querySelector('.badge')!;
 		expect(deleted.className).toBe('badge rounded-pill text-bg-secondary');
 		expect(deleted.textContent).toBe('3,400 deleted');
@@ -77,7 +77,7 @@ describe('Navbar', () => {
 		expect(screen.getByRole('link', { name: /Deleted ROMs/ }).querySelector('.badge')).toBeNull();
 	});
 
-	it('a non-admin sees Library and Reports, in that order (RP1)', () => {
+	it('a non-admin sees Library, Collections, and Reports (RP1)', () => {
 		render(Navbar, {
 			me: { id: 1, username: 'u', roles: [], mustChangePassword: false },
 			reviewCount: null,
@@ -85,6 +85,7 @@ describe('Navbar', () => {
 		});
 		const links = [...document.querySelectorAll('a.nav-link')].map((a) => a.textContent?.trim());
 		expect(links).toEqual(['Library', 'Collections', 'Reports']);
+		expect(screen.queryByRole('button', { name: 'ROM Tools' })).toBeNull();
 		expect(screen.getByRole('link', { name: /Reports/ }).getAttribute('href')).toBe('/reports');
 		expect(screen.getByRole('link', { name: /Collections/ }).getAttribute('href')).toBe(
 			'/collections'
