@@ -1,6 +1,6 @@
 ---
 title: Collections discovery by publisher and genre
-status: in-progress
+status: completed
 created: 2026-11-15
 ---
 
