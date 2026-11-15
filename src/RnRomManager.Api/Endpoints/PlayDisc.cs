@@ -12,8 +12,8 @@ namespace RnRomManager.Api.Endpoints;
 /// copy of the cue (<see cref="CueSheet.ForPlayback"/>) and the tracks as <c>track-NN.bin</c>. CHD B4: a standalone
 /// <c>.chd</c> streams unchanged like an <c>.iso</c>. Every member is opened
 /// and checked before the response starts; nothing is written to disk and nothing is audited. PSP B2: a PlayStation
-/// Portable release streams its standalone <c>.iso</c> the same way, bounded by <see cref="PspMaxBytes"/>. Saturn B5: a
-/// Saturn release takes PlayStation's shapes and cap (<see cref="MaxBytesBySystem"/>), and so does a Sega CD one (Sega CD B4) and a 3DO one (3DO B4).
+/// Portable release streams its standalone <c>.iso</c> the same way. Saturn, Sega CD and 3DO take PlayStation's disc
+/// shapes. All these systems share the same cap (<see cref="MaxBytes"/>).
 /// </summary>
 public static class PlayDisc
 {
@@ -27,23 +27,12 @@ public static class PlayDisc
 
     public const string ThreeDoSystemId = "3do";
 
-    /// <summary>The combined opened lengths a launch may stream: a standard CD, bounded for browser memory.</summary>
-    public const long MaxBytes = 1024L * 1024 * 1024;
+    /// <summary>The inclusive cap on the combined opened lengths a launch may stream.</summary>
+    public const long MaxBytes = 2L * 1024 * 1024 * 1024;
 
-    /// <summary>PSP B2: the opened ISO length a launch may stream (inclusive), covering standard UMD sizes.</summary>
-    public const long PspMaxBytes = 2L * 1024 * 1024 * 1024;
-
-    /// <summary>
-    /// Saturn B5, Sega CD B4, 3DO B4: the systems play-disc serves and each one's inclusive cap. Saturn's, Sega CD's and
-    /// 3DO's shapes are PlayStation's.
-    /// </summary>
-    public static IReadOnlyDictionary<string, long> MaxBytesBySystem { get; } = new Dictionary<string, long>(StringComparer.Ordinal)
+    private static readonly HashSet<string> SupportedSystems = new(StringComparer.Ordinal)
     {
-        [SystemId] = MaxBytes,
-        [PspSystemId] = PspMaxBytes,
-        [SaturnSystemId] = MaxBytes,
-        [SegaCdSystemId] = MaxBytes,
-        [ThreeDoSystemId] = MaxBytes,
+        SystemId, PspSystemId, SaturnSystemId, SegaCdSystemId, ThreeDoSystemId,
     };
 
     public const string InvalidPlayDisc = "InvalidPlayDisc";
@@ -58,7 +47,7 @@ public static class PlayDisc
         var cancellationToken = ctx.RequestAborted;
         if (await roms.GetAsync(id, romId, cancellationToken) is not { } rom
             || await repository.GetAsync(id, cancellationToken) is not { } game
-            || !MaxBytesBySystem.TryGetValue(game.SystemId, out var maxBytes) || rom.SystemId != game.SystemId
+            || !SupportedSystems.Contains(game.SystemId) || rom.SystemId != game.SystemId
             || rom.ExternalFileName is not { } mainName)
             return Problems.NotFound(ctx);
         var psp = game.SystemId == PspSystemId;
@@ -97,11 +86,11 @@ public static class PlayDisc
                     return Invalid(ctx, $"'{member.Name}' is empty");
                 }
                 total += length;
-                if (total > maxBytes)
+                if (total > MaxBytes)
                 {
                     DisposeAll(opened);
                     return Problems.Create(ctx, StatusCodes.Status409Conflict, PlayDiscTooLarge,
-                        $"The disc is larger than {maxBytes / (1024 * 1024 * 1024)} GiB.");
+                        $"The disc is larger than {MaxBytes / (1024 * 1024 * 1024)} GiB.");
                 }
             }
 

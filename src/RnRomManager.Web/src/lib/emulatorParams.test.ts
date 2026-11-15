@@ -193,7 +193,7 @@ describe('discError', () => {
 
 	it('names a disc that is too large or invalid', () => {
 		expect(discError(409, 'PlayDiscTooLarge')).toBe(
-			'This disc is larger than 1 GiB, too large to play in the browser.'
+			'This disc is larger than 2 GiB, too large to play in the browser.'
 		);
 		expect(discError(409, 'InvalidPlayDisc')).toBe(
 			"This disc can't be played in the browser: its cue sheet or files are invalid or don't match."
@@ -254,7 +254,7 @@ describe('PSP page (PSP B3)', () => {
 		);
 		expect(discError(null, null, 'ppsspp')).toBe("Couldn't load the disc.");
 		expect(discError(409, 'PlayDiscTooLarge')).toBe(
-			'This disc is larger than 1 GiB, too large to play in the browser.'
+			'This disc is larger than 2 GiB, too large to play in the browser.'
 		);
 	});
 
@@ -417,7 +417,7 @@ describe('Saturn (B6, B7)', () => {
 	});
 
 	it.each([
-		[409, 'PlayDiscTooLarge', 'This disc is larger than 1 GiB, too large to play in the browser.'],
+		[409, 'PlayDiscTooLarge', 'This disc is larger than 2 GiB, too large to play in the browser.'],
 		[
 			409,
 			'InvalidPlayDisc',

@@ -70,7 +70,8 @@ function urls(): string[] {
 
 beforeEach(() => {
 	vi.resetModules();
-	document.body.innerHTML = '<p id="status"></p><div id="game"></div>';
+	document.body.innerHTML =
+		'<p id="status"></p><progress id="loading" hidden></progress><div id="game"></div>';
 	delete document.body.dataset.player;
 	for (const key of ejsGlobals) delete win[key];
 	delete win.EJS_emulator;
@@ -93,6 +94,46 @@ afterEach(() => {
 		window.removeEventListener('message', listener);
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
+});
+
+describe('play page loading indicator', () => {
+	it.each([
+		['load', ''],
+		['error', "Couldn't load the emulator."]
+	])(
+		'shows indeterminate progress while downloading and hides it on loader %s',
+		async (event, message) => {
+			const { promise, resolve } = Promise.withResolvers<Blob>();
+			const blob = vi.fn(() => promise);
+			serve({ [romUrl]: async () => ({ ...response(200), blob }) });
+			const finished = play('gambatte', 'Game.gb');
+			const progress = document.querySelector('progress')!;
+
+			await vi.waitFor(() => expect(blob).toHaveBeenCalledOnce());
+			expect(progress.hidden).toBe(false);
+			expect(progress.hasAttribute('value')).toBe(false);
+			expect(atLoader).toBeNull();
+
+			resolve(new Blob(['rom']));
+			await finished;
+			expect(progress.hidden).toBe(false);
+			document.querySelector('script')!.dispatchEvent(new Event(event));
+			expect(progress.hidden).toBe(true);
+			expect(document.getElementById('status')!.textContent).toBe(message);
+		}
+	);
+
+	it('hides the indicator if the ROM transfer fails', async () => {
+		const blob = vi.fn(async () => {
+			throw new Error('connection lost');
+		});
+		serve({ [romUrl]: async () => ({ ...response(200), blob }) });
+
+		expect(await play('gambatte', 'Game.gb')).toBe("Couldn't load the ROM.");
+		expect(blob).toHaveBeenCalledOnce();
+		expect(document.querySelector('progress')!.hidden).toBe(true);
+		expect(atLoader).toBeNull();
+	});
 });
 
 describe('play page BIOS check', () => {
@@ -325,7 +366,7 @@ describe('play page PlayStation', () => {
 		[
 			409,
 			{ code: 'PlayDiscTooLarge' },
-			'This disc is larger than 1 GiB, too large to play in the browser.'
+			'This disc is larger than 2 GiB, too large to play in the browser.'
 		],
 		[
 			409,

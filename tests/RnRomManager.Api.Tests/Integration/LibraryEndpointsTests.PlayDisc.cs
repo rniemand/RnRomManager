@@ -250,11 +250,11 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
-    public async Task PlayDisc_OverOneGiB_Is409PlayDiscTooLarge()
+    public async Task PlayDisc_OverTwoGiB_Is409PlayDiscTooLarge()
     {
         var (id, folder, romId) = await PsxUsaSet();
         await using (var grown = new FileStream(Path.Combine(folder, "Disc (USA) (Track 2).bin"), FileMode.Open, FileAccess.Write))
-            grown.SetLength(PlayDisc.MaxBytes - PsxTrack1.Length); // with the cue, one GiB plus a few bytes
+            grown.SetLength(PlayDisc.MaxBytes - PsxTrack1.Length); // with the cue, two GiB plus a few bytes
 
         using var response = await _user.GetAsync(PlayDiscUrl(id, romId));
 
@@ -321,15 +321,15 @@ public partial class LibraryEndpointsTests
         var (overId, overFolder, overRom) = await PspUmd("Bigger", 7);
         // Lengths are set on disk only: the stored sizes stay the small originals.
         await using (var grown = new FileStream(Path.Combine(atFolder, "Big (USA).iso"), FileMode.Open, FileAccess.Write))
-            grown.SetLength(PlayDisc.PspMaxBytes);
+            grown.SetLength(PlayDisc.MaxBytes);
         await using (var grown = new FileStream(Path.Combine(overFolder, "Bigger (USA).iso"), FileMode.Open, FileAccess.Write))
-            grown.SetLength(PlayDisc.PspMaxBytes + 1);
+            grown.SetLength(PlayDisc.MaxBytes + 1);
 
         using (var atLimit = await _user.SendAsync(HttpMethod.Get, PlayDiscUrl(atId, atRom), null, sendXsrf: false,
             completion: HttpCompletionOption.ResponseHeadersRead))
         {
             Assert.That(atLimit.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(atLimit.Content.Headers.ContentLength, Is.EqualTo(PlayDisc.PspMaxBytes));
+            Assert.That(atLimit.Content.Headers.ContentLength, Is.EqualTo(PlayDisc.MaxBytes));
         } // disposed with the body unread: the stream is cancelled
 
         using var over = await _user.GetAsync(PlayDiscUrl(overId, overRom));
@@ -401,19 +401,10 @@ public partial class LibraryEndpointsTests
         Assert.That(await AuthClient.CodeAsync(asForced), Is.EqualTo("PasswordChangeRequired"));
     }
 
-    // Saturn B5: PlayStation's shapes and its 1 GiB inclusive cap; .nrg never plays.
+    // Saturn B5: PlayStation's shapes and its 2 GiB inclusive cap; .nrg never plays.
 
     private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> SaturnGame(string title, InfoJsonRom[] roms,
         params (string Name, byte[] Bytes)[] onDisk) => DiscGame(PlayDisc.SaturnSystemId, title, roms, onDisk);
-
-    [Test]
-    public void PlayDisc_CapsEachSystem()
-    {
-        Assert.That(PlayDisc.MaxBytesBySystem, Is.EquivalentTo(new Dictionary<string, long>
-        {
-            ["psx"] = 1L << 30, ["psp"] = 2L << 30, ["saturn"] = 1L << 30, ["segacd"] = 1L << 30, ["3do"] = 1L << 30,
-        }));
-    }
 
     [Test]
     public async Task PlayDisc_ASaturnSingleBin_StreamsUnchanged()
@@ -448,7 +439,7 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
-    public async Task PlayDisc_ASaturnDiscOfExactlyOneGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
+    public async Task PlayDisc_ASaturnDiscOfExactlyTwoGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
     {
         var (atId, atFolder, atRoms) = await SaturnGame("Wide", [PsxSolo("Wide (USA).bin", Umd(30))], ("Wide (USA).bin", Umd(30)));
         var (overId, overFolder, overRoms) = await SaturnGame("Wider", [PsxSolo("Wider (USA).bin", Umd(31))], ("Wider (USA).bin", Umd(31)));
@@ -469,7 +460,7 @@ public partial class LibraryEndpointsTests
         Assert.That(over.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
         var problem = await AuthClient.JsonAsync(over);
         Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.PlayDiscTooLarge));
-        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("1 GiB"));
+        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("2 GiB"));
         AssertNotOpen(Path.Combine(overFolder, "Wider (USA).bin"));
     }
 
@@ -505,7 +496,7 @@ public partial class LibraryEndpointsTests
         }
     }
 
-    // Sega CD B4: PlayStation's shapes and its 1 GiB inclusive cap.
+    // Sega CD B4: PlayStation's shapes and its 2 GiB inclusive cap.
 
     private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> SegaCdGame(string title, InfoJsonRom[] roms,
         params (string Name, byte[] Bytes)[] onDisk) => DiscGame(PlayDisc.SegaCdSystemId, title, roms, onDisk);
@@ -544,7 +535,7 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
-    public async Task PlayDisc_ASegaCdDiscOfExactlyOneGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
+    public async Task PlayDisc_ASegaCdDiscOfExactlyTwoGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
     {
         var (atId, atFolder, atRoms) = await SegaCdGame("Wide", [PsxSolo("Wide (USA).iso", Umd(40))], ("Wide (USA).iso", Umd(40)));
         var (overId, overFolder, overRoms) = await SegaCdGame("Wider", [PsxSolo("Wider (USA).iso", Umd(41))], ("Wider (USA).iso", Umd(41)));
@@ -565,7 +556,7 @@ public partial class LibraryEndpointsTests
         Assert.That(over.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
         var problem = await AuthClient.JsonAsync(over);
         Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.PlayDiscTooLarge));
-        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("1 GiB"));
+        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("2 GiB"));
         AssertNotOpen(Path.Combine(overFolder, "Wider (USA).iso"));
     }
 
@@ -591,7 +582,7 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
-    public async Task PlayDisc_AChdOfExactlyOneGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
+    public async Task PlayDisc_AChdOfExactlyTwoGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
     {
         var (atId, atFolder, atRoms) = await SegaCdGame("Wide", [PsxSolo("Wide (USA).chd", Umd(50))], ("Wide (USA).chd", Umd(50)));
         var (overId, overFolder, overRoms) = await SegaCdGame("Wider", [PsxSolo("Wider (USA).chd", Umd(51))], ("Wider (USA).chd", Umd(51)));
@@ -662,7 +653,7 @@ public partial class LibraryEndpointsTests
         Assert.That(await ProblemCode(response, HttpStatusCode.Conflict), Is.EqualTo(PlayDisc.InvalidPlayDisc));
     }
 
-    // 3DO B4: Sega CD's shapes and its 1 GiB inclusive cap.
+    // 3DO B4: Sega CD's shapes and its 2 GiB inclusive cap.
 
     private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> ThreeDoGame(string title, InfoJsonRom[] roms,
         params (string Name, byte[] Bytes)[] onDisk) => DiscGame(PlayDisc.ThreeDoSystemId, title, roms, onDisk);
@@ -701,7 +692,7 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
-    public async Task PlayDisc_AThreeDoDiscOfExactlyOneGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
+    public async Task PlayDisc_AThreeDoDiscOfExactlyTwoGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
     {
         var (atId, atFolder, atRoms) = await ThreeDoGame("Opal Wide", [PsxSolo("Opal Wide (USA).iso", Umd(60))], ("Opal Wide (USA).iso", Umd(60)));
         var (overId, overFolder, overRoms) = await ThreeDoGame("Opal Wider", [PsxSolo("Opal Wider (USA).iso", Umd(61))], ("Opal Wider (USA).iso", Umd(61)));
@@ -722,7 +713,7 @@ public partial class LibraryEndpointsTests
         Assert.That(over.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
         var problem = await AuthClient.JsonAsync(over);
         Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.PlayDiscTooLarge));
-        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("1 GiB"));
+        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("2 GiB"));
         AssertNotOpen(Path.Combine(overFolder, "Opal Wider (USA).iso"));
     }
 

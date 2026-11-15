@@ -280,7 +280,7 @@ const threeDoBiosNames = threeDoBios.map((name) => name.toLowerCase());
  * The play page's message for a failed play-disc request.
  * @param {number | null} status the HTTP status, or null for a network or body-read failure
  * @param {string | null} code the problem's `code`, when the body had one
- * @param {string} [core] PSP B3: `ppsspp` gets the UMD wording and its 2 GiB limit
+ * @param {string} [core] PSP B3: `ppsspp` gets the UMD wording
  * @returns {string}
  */
 export function discError(status, code, core = 'pcsx_rearmed') {
@@ -289,7 +289,7 @@ export function discError(status, code, core = 'pcsx_rearmed') {
 	if (code === 'PlayDiscTooLarge')
 		return psp
 			? 'This UMD image is larger than 2 GiB, too large to play in the browser.'
-			: 'This disc is larger than 1 GiB, too large to play in the browser.';
+			: 'This disc is larger than 2 GiB, too large to play in the browser.';
 	if (code === 'InvalidPlayDisc')
 		return psp
 			? "This UMD image can't be played in the browser: it must be one non-empty .iso whose name matches the release."

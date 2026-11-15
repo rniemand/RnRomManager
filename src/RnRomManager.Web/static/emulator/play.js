@@ -40,10 +40,12 @@ import {
 } from './params.js';
 
 const status = /** @type {HTMLElement} */ (document.getElementById('status'));
+const progress = /** @type {HTMLProgressElement} */ (document.getElementById('loading'));
 
 /** @param {string} text */
-function show(text) {
+function show(text, loading = false) {
 	status.textContent = text;
+	progress.hidden = !loading;
 }
 
 /**
@@ -244,7 +246,7 @@ async function start() {
 		const problem = pspBrowserError(pspBrowser());
 		if (problem) return show(problem);
 	}
-	show('Loading…');
+	show('Loading…', true);
 	const isOperator = isOperatorCore(params.core);
 	if (isOperator) {
 		const problem = await checkOperatorCore(params.core);
