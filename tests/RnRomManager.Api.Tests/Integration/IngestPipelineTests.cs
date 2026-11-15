@@ -153,6 +153,7 @@ public class IngestPipelineTests
                 new FixtureGame("Disc Comet (USA)", "Disc Comet (USA) (Track 1).bin", CometData),
                 new FixtureGame("Cart Twin (USA)", "Cart Twin (USA) (Track 1).bin", CartTwin),
             ],
+            [IngestSeeder.ThreeDoDat] = [],
             [IngestSeeder.NintendoDsDat] =
             [
                 new FixtureGame("Bad Crc Hero (USA)", "Bad Crc Hero (USA).nds", BadCrcHero),

@@ -28,6 +28,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | System | Id | ROMs stored | Formats | DAT | Play in browser |
 |---|---|---|---|---|---|
 | 32X | `s32x` | In ZIP | `.32x` | No-Intro | `picodrive` |
+| 3DO | `3do` | Next to ZIP | `.bin`, `.cue`, `.iso` | Redump | — |
 | Atari 2600 | `a2600` | In ZIP | `.a26`, `.bin` | No-Intro | `stella2014` |
 | Atari 5200 | `a5200` | In ZIP | `.a52`, `.bin` | No-Intro | `a5200` |
 | Atari 7800 | `a7800` | In ZIP | `.a78`, `.bin` | No-Intro | `prosystem` |

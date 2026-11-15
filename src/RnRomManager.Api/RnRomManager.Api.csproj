@@ -17,6 +17,7 @@
     <ProjectReference Include="../RnRomManager.Systems.Microsoft/RnRomManager.Systems.Microsoft.csproj" />
     <ProjectReference Include="../RnRomManager.Systems.VirtualBoy/RnRomManager.Systems.VirtualBoy.csproj" />
     <ProjectReference Include="../RnRomManager.Systems.NintendoDs/RnRomManager.Systems.NintendoDs.csproj" />
+    <ProjectReference Include="../RnRomManager.Systems.ThreeDo/RnRomManager.Systems.ThreeDo.csproj" />
   </ItemGroup>
 
   <ItemGroup>
