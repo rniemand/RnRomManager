@@ -355,6 +355,16 @@ describe('play page PlayStation', () => {
 		expect((atLoader?.EJS_gameUrl as File).name).toBe(`${game}-SCPH5501.BIN`);
 		expect(atLoader?.EJS_gameName).toBe('SCPH5501.BIN');
 	});
+	it('loads a standalone .chd from play-disc under its own name (CHD B5)', async () => {
+		serve({ [psxBiosUrl]: async () => response(404), [discUrl]: async () => discResponse(200) });
+
+		await play('pcsx_rearmed', 'Game.chd', true);
+
+		expect(urls()).toEqual([psxBiosUrl, discUrl]);
+		const file = atLoader?.EJS_gameUrl as File;
+		expect(file.name).toBe('Game.chd');
+		expect(new Uint8Array(await file.arrayBuffer())).toEqual(disc);
+	});
 });
 
 describe('play page NES', () => {
@@ -742,6 +752,16 @@ describe('play page Saturn (B6, B7)', () => {
 		expect((atLoader?.EJS_gameUrl as File).name).toBe(`${game}-Sega_101.BIN`);
 		expect(atLoader?.EJS_gameName).toBe('Sega_101.BIN');
 	});
+	it('loads a standalone .chd from play-disc under its own name (CHD B5)', async () => {
+		serve({ [saturnBiosUrl]: async () => response(404), [discUrl]: async () => discResponse(200) });
+
+		await play('yabause', 'Game.chd', true);
+
+		expect(urls()).toEqual([saturnBiosUrl, discUrl]);
+		const file = atLoader?.EJS_gameUrl as File;
+		expect(file.name).toBe('Game.chd');
+		expect(new Uint8Array(await file.arrayBuffer())).toEqual(disc);
+	});
 });
 
 describe('play page Sega CD (Sega CD B7)', () => {
@@ -891,6 +911,17 @@ describe('play page Sega CD (Sega CD B7)', () => {
 
 		expect((atLoader?.EJS_gameUrl as File).name).toBe(`${game}-BIOS_CD_U.BIN`);
 		expect(Object.keys(atLoader?.EJS_externalFiles as object)).toEqual(['/bios_CD_J.bin']);
+	});
+	it('loads a standalone .chd from play-disc after the BIOS, with cue generation on (CHD B5)', async () => {
+		serveSegaCd({ [biosU]: async () => body(firmware(4)) });
+
+		await play('genesis_plus_gx', 'Game.chd', true);
+
+		expect(urls()).toEqual([check, biosU, biosE, biosJ, discUrl]);
+		const file = atLoader?.EJS_gameUrl as File;
+		expect(file.name).toBe('Game.chd');
+		expect(new Uint8Array(await file.arrayBuffer())).toEqual(disc);
+		expect(atLoader?.EJS_disableCue).toBe(false);
 	});
 });
 

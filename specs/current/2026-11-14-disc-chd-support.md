@@ -73,7 +73,7 @@ Steps 2–3 run integration tests (category `Integration`), which need Docker. P
   - Files: `src/RnRomManager.Api/Endpoints/PlayDisc.cs`, `tests/RnRomManager.Api.Tests/Integration/LibraryEndpointsTests.PlayDisc.cs`, `tests/RnRomManager.Api.Tests/Integration/LibraryEndpointsTests.cs`.
   - Tests: `LibraryEndpointsTests.PlayDisc`: a single `.chd` (and `.CHD`) streams unchanged as `application/octet-stream` with its length for `psx`, `saturn` and `segacd`; a `.chd` exactly at 1 GiB → 200, one byte over → `PlayDiscTooLarge`; a `.chd` in a cue set → `InvalidPlayDisc`; a PSP `.chd` → `InvalidPlayDisc`; a new case: a lone Saturn `.nrg` release → `InvalidPlayDisc` whose detail contains "a single-file disc must be a .bin, .iso or .chd". `LibraryEndpointsTests`: a `segacd` game whose external primary is a `.chd` has `playRomId` set and `playDisc` true.
   - Done when: those pass.
-- [ ] **4. Player checks** (B5 SPA side): no player logic change expected (if one is needed, stop and ask); `canPlay`'s comment.
+- [x] **4. Player checks** (B5 SPA side): no player logic change expected (if one is needed, stop and ask); `canPlay`'s comment.
   - Files: `src/RnRomManager.Web/src/lib/emulator.ts` (comment), `src/RnRomManager.Web/src/lib/emulator.test.ts`, `src/RnRomManager.Web/src/lib/emulatorPlay.test.ts`.
   - Tests: `emulator.test.ts`: `canPlay` is true for `pcsx_rearmed`, `yabause` and `genesis_plus_gx` with an external `.chd`. `emulatorPlay.test.ts`: for each of the three cores, a `disc=1` launch named `Game.chd` requests play-disc and sets `EJS_gameUrl` to a `File` named `Game.chd`; the Sega CD case still fetches the BIOS first and sets `EJS_disableCue === false`.
   - Done when: `npm run lint`, `npm run check` and those vitest files pass.

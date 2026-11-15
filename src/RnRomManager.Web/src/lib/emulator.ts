@@ -23,7 +23,7 @@ export function opensInNewTab(core: string | null): boolean {
 /**
  * Browser emulators B3: the system has an EmulatorJS core and the release is inside the ZIP. Play B1: a PlayStation
  * or PSP release is external and plays anyway, and (Saturn B6) a Saturn bin/cue disc; other external releases (Switch,
- * GameCube…) don't, nor does an .nrg image.
+ * GameCube…) don't, nor does an .nrg image. CHD B5: a standalone .chd plays like an .iso (PlayStation, Saturn, Sega CD).
  */
 export function canPlay(
 	game: Pick<GameDetail, 'browserCore'>,

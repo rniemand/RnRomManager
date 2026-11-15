@@ -39,6 +39,13 @@ describe('canPlay', () => {
 		}
 	);
 
+	it.each(['pcsx_rearmed', 'yabause', 'genesis_plus_gx'])(
+		'is true for an external .chd on %s (CHD B5)',
+		(browserCore) => {
+			expect(canPlay({ browserCore }, { externalFileName: 'Disc (USA).chd' })).toBe(true);
+		}
+	);
+
 	it('is false for an external release of another core, and without a core', () => {
 		expect(canPlay({ browserCore: 'fceumm' }, { externalFileName: 'x.nes' })).toBe(false);
 		expect(canPlay({ browserCore: null }, { externalFileName: 'Disc (Track 1).bin' })).toBe(false);
