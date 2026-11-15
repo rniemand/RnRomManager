@@ -142,7 +142,7 @@
 			list.push({ field: 'Favourites', text: 'Favourites', clear: { favourite: false } });
 		return list;
 	});
-	/** Shown when any filter, a non-default sort or direction, or a later page is in the URL. */
+	/** Reset filters is shown when any filter, a non-default sort or direction, or a later page is in the URL. */
 	const showChipRow = $derived(toSearch(filters) !== '');
 
 	function resetFilters(): void {
@@ -313,6 +313,12 @@
 		onclick={() => update({ favourite: !filters.favourite })}
 		><Icon name={filters.favourite ? 'favourite-fill' : 'favourite'} /></button
 	>
+	<!-- B1 (library-reset-missing-images): Reset sits in the filter row, shown under the same condition as before. -->
+	{#if showChipRow}
+		<button type="button" class="btn btn-sm btn-outline-secondary" onclick={resetFilters}
+			>Reset filters</button
+		>
+	{/if}
 	<div class="btn-group" role="group" aria-label="View">
 		<button
 			type="button"
@@ -333,7 +339,7 @@
 	</div>
 </form>
 
-{#if showChipRow}
+{#if chips.length > 0}
 	<div class="d-flex flex-wrap align-items-center gap-2 mb-2" data-testid="active-filters">
 		{#each chips as chip (chip.field)}
 			<span class="badge rounded-pill text-bg-secondary d-inline-flex align-items-center gap-1">
@@ -346,9 +352,6 @@
 				></button>
 			</span>
 		{/each}
-		<button type="button" class="btn btn-link btn-sm ms-auto" onclick={resetFilters}
-			>Reset filters</button
-		>
 	</div>
 {/if}
 

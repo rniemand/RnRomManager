@@ -47,6 +47,7 @@ describe('HotkeysModal (B25)', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		hotkeys.bindings = null;
+		hotkeys.implicitUnassigned = [];
 	});
 
 	const open = (me: Me, bindings?: Partial<Bindings>) => {
@@ -71,7 +72,8 @@ describe('HotkeysModal (B25)', () => {
 			'Open global search',
 			'Go to Library',
 			'Go to Collections',
-			'Go to Reports'
+			'Go to Reports',
+			'Next missing image'
 		]);
 		expect(shown('nav.collections')).toBe('Alt+Shift+C');
 		expect(shown('nav.library')).toBe('Alt+Shift+L');
@@ -82,7 +84,7 @@ describe('HotkeysModal (B25)', () => {
 	it('an admin sees every action; unassigned shows Not assigned', () => {
 		open(admin, { 'review.next': null });
 
-		expect(document.querySelectorAll('tbody tr')).toHaveLength(10);
+		expect(document.querySelectorAll('tbody tr')).toHaveLength(11);
 		expect(row('review.next').getByText('Not assigned')).toBeTruthy();
 	});
 
@@ -253,5 +255,76 @@ describe('HotkeysModal (B25)', () => {
 		);
 		expect(shown('nav.library')).toBe('Alt+Shift+I');
 		expect(hotkeys.bindings).toEqual(defaultBindings());
+	});
+
+	describe('Next missing image yielding to an older override (library-reset-missing-images B2)', () => {
+		const next = 'reports.missingImage.next';
+		const putBody = () =>
+			(calls.find((c) => c.key === 'PUT /api/auth/me/hotkeys')?.body as { bindings: Bindings })
+				?.bindings;
+
+		beforeEach(() => {
+			answers['PUT /api/auth/me/hotkeys'] = {
+				status: 200,
+				body: { bindings: defaultBindings(), implicitUnassigned: [] }
+			};
+			hotkeys.implicitUnassigned = [next];
+		});
+
+		const openImplicit = () => open(user, { 'nav.library': 'Alt+Shift+M', [next]: null });
+
+		it('shows it as not assigned with the reason', () => {
+			openImplicit();
+
+			expect(row(next).getByText('Not assigned')).toBeTruthy();
+			expect(row(next).getByText(/Alt\+Shift\+M, is used by another shortcut/)).toBeTruthy();
+		});
+
+		it('an unrelated save leaves it out of the PUT', async () => {
+			openImplicit();
+
+			await fireEvent.click(button('Edit Go to Collections'));
+			await fireEvent.keyDown(button('Cancel editing Go to Collections'), {
+				code: 'KeyQ',
+				key: 'Q',
+				altKey: true,
+				shiftKey: true
+			});
+			await fireEvent.click(save());
+
+			await vi.waitFor(() => expect(putBody()).toBeDefined());
+			expect(next in putBody()!).toBe(false);
+			expect(putBody()!['nav.library']).toBe('Alt+Shift+M');
+			expect(putBody()!['nav.collections']).toBe('Alt+Shift+Q');
+		});
+
+		it('a deliberate disable can be saved and sends null', async () => {
+			openImplicit();
+			expect(save().disabled).toBe(true);
+
+			await fireEvent.click(button('Edit Next missing image'));
+			await fireEvent.keyDown(button('Cancel editing Next missing image'), {
+				code: 'Backspace',
+				key: 'Backspace'
+			});
+			expect(save().disabled).toBe(false);
+			await fireEvent.click(save());
+
+			await vi.waitFor(() => expect(putBody()).toBeDefined());
+			expect(putBody()![next]).toBeNull();
+		});
+
+		it('Reset all sends the default and frees it from the older binding', async () => {
+			openImplicit();
+
+			await fireEvent.click(button('Reset to defaults'));
+			expect(shown(next)).toBe('Alt+Shift+M');
+			await fireEvent.click(save());
+
+			await vi.waitFor(() => expect(putBody()).toBeDefined());
+			expect(putBody()![next]).toBe('Alt+Shift+M');
+			expect(putBody()!['nav.library']).toBe('Alt+Shift+L');
+			await vi.waitFor(() => expect(hotkeys.implicitUnassigned).toEqual([]));
+		});
 	});
 });

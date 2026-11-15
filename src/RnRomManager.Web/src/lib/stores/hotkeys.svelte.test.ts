@@ -4,6 +4,7 @@ import { resetClient } from '../api/client';
 import type { Me } from '../api/types';
 import { defaultBindings } from '../hotkeys';
 import { auth } from './auth.svelte';
+import { toasts } from './toasts.svelte';
 
 const goto = vi.fn<(url: string) => Promise<void>>(() => Promise.resolve());
 vi.mock('$app/navigation', () => ({ goto: (url: string) => goto(url) }));
@@ -11,7 +12,7 @@ vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
 
-const { hotkeys } = await import('./hotkeys.svelte');
+const { hotkeys, missingImageMessages } = await import('./hotkeys.svelte');
 
 const admin: Me = { id: 1, username: 'a', roles: ['admin'], mustChangePassword: false };
 const user: Me = { id: 2, username: 'u', roles: [], mustChangePassword: false };
@@ -52,6 +53,8 @@ describe('hotkeys store (B24)', () => {
 		hotkeys.follow(null);
 		auth.set(null);
 		document.body.innerHTML = '';
+		toasts.items = [];
+		window.history.replaceState({}, '', '/');
 	});
 	afterEach(() => {
 		vi.unstubAllGlobals();
@@ -242,6 +245,131 @@ describe('hotkeys store (B24)', () => {
 			hotkeys.handle(altShift('KeyG'));
 
 			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/review'));
+		});
+	});
+
+	describe('reports.missingImage.next (library-reset-missing-images B3)', () => {
+		const gameA = '11111111-1111-1111-1111-111111111111';
+		const gameB = '22222222-2222-2222-2222-222222222222';
+		const next = (after?: string) =>
+			`GET /api/reports/missing-images/next${after ? `?afterGameId=${after}` : ''}`;
+		const press = () => hotkeys.handle(altShift('KeyM'));
+		const toastTexts = () => toasts.items.map((t) => [t.text, t.kind]);
+
+		it('from the report (or any non-game page) opens the first row', async () => {
+			window.history.replaceState({}, '', '/reports/missing-images');
+			answers[next()] = { status: 200, body: { id: gameA, currentIsOnly: false } };
+			await signIn(user);
+
+			expect(press()).toBe(true);
+
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(`/games/${gameA}`));
+			expect(calls).toContain(next());
+		});
+
+		it('from a game page asks for the row after the current game', async () => {
+			window.history.replaceState({}, '', `/games/${gameA}`);
+			answers[next(gameA)] = { status: 200, body: { id: gameB, currentIsOnly: false } };
+			await signIn(user);
+
+			press();
+
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(`/games/${gameB}`));
+		});
+
+		it('wraps: whatever the server picks is opened, even an earlier game', async () => {
+			window.history.replaceState({}, '', `/games/${gameB}`);
+			answers[next(gameB)] = { status: 200, body: { id: gameA, currentIsOnly: false } };
+			await signIn(user);
+
+			press();
+
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(`/games/${gameA}`));
+		});
+
+		it('stays on the only remaining game with a message', async () => {
+			window.history.replaceState({}, '', `/games/${gameA}`);
+			answers[next(gameA)] = { status: 200, body: { id: null, currentIsOnly: true } };
+			await signIn(user);
+
+			await hotkeys.nextMissingImage();
+
+			expect(goto).not.toHaveBeenCalled();
+			expect(toastTexts()).toEqual([[missingImageMessages.onlyCurrent, 'info']]);
+			expect(missingImageMessages.onlyCurrent).toBe(
+				'This game is the only one still missing images.'
+			);
+		});
+
+		it('an empty report says so', async () => {
+			answers[next()] = { status: 200, body: { id: null, currentIsOnly: false } };
+			await signIn(user);
+
+			await hotkeys.nextMissingImage();
+
+			expect(goto).not.toHaveBeenCalled();
+			expect(toastTexts()).toEqual([['No more games are missing images.', 'info']]);
+		});
+
+		it('a failure shows a separate error toast', async () => {
+			answers[next()] = { status: 500 };
+			await signIn(user);
+
+			await hotkeys.nextMissingImage();
+
+			expect(goto).not.toHaveBeenCalled();
+			expect(toastTexts()).toEqual([[missingImageMessages.failed, 'danger']]);
+		});
+
+		describe('with a held response', () => {
+			let release: () => void;
+
+			beforeEach(() => {
+				const real = globalThis.fetch;
+				vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+					if (!url.startsWith('/api/reports/missing-images/next')) return real(url, init);
+					calls.push(`GET ${url}`);
+					return new Promise<Response>((done) => {
+						release = () => done(new Response(JSON.stringify({ id: gameB, currentIsOnly: false })));
+					});
+				});
+			});
+
+			it('overlapping presses share one request', async () => {
+				await signIn(user);
+
+				press();
+				press();
+				press();
+				release();
+
+				await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(`/games/${gameB}`));
+				expect(calls.filter((c) => c === next())).toHaveLength(1);
+				expect(goto).toHaveBeenCalledTimes(1);
+			});
+
+			it('drops the answer after navigation', async () => {
+				await signIn(user);
+
+				const pending = hotkeys.nextMissingImage();
+				window.history.replaceState({}, '', '/collections');
+				release();
+				await pending;
+
+				expect(goto).not.toHaveBeenCalled();
+				expect(toasts.items).toEqual([]);
+			});
+
+			it('drops the answer after the session changes', async () => {
+				await signIn(user);
+
+				const pending = hotkeys.nextMissingImage();
+				hotkeys.follow(null);
+				release();
+				await pending;
+
+				expect(goto).not.toHaveBeenCalled();
+			});
 		});
 	});
 

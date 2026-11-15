@@ -7,6 +7,7 @@ import {
 	fromEvent,
 	normalize,
 	ruleError,
+	toSave,
 	validate,
 	type Bindings
 } from './hotkeys';
@@ -41,8 +42,28 @@ describe('hotkey actions (B21)', () => {
 			['nav.reports', 'Alt+Shift+R', true, null],
 			['nav.integrity', 'Alt+Shift+T', true, 'admin'],
 			['nav.admin', 'Alt+Shift+A', true, 'admin'],
-			['nav.deleted', 'Alt+Shift+D', true, 'admin']
+			['nav.deleted', 'Alt+Shift+D', true, 'admin'],
+			['reports.missingImage.next', 'Alt+Shift+M', true, null]
 		]);
+	});
+});
+
+describe('toSave (library-reset-missing-images B2)', () => {
+	const next = 'reports.missingImage.next';
+	const pending = bindings({ 'nav.library': 'Alt+Shift+M', [next]: null });
+
+	it('leaves out an implicitly unassigned action nobody edited', () => {
+		const body = toSave(pending, [next], new Set(['nav.collections']));
+		expect(next in body).toBe(false);
+		expect(body['nav.library']).toBe('Alt+Shift+M');
+	});
+
+	it('sends it once edited, a deliberate null included', () => {
+		expect(toSave(pending, [next], new Set([next]))).toEqual(pending);
+	});
+
+	it('sends everything when nothing is implicit', () => {
+		expect(toSave(bindings(), [], new Set())).toEqual(bindings());
 	});
 });
 

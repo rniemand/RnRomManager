@@ -9,10 +9,15 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
 {
     private const string NoCover = "NOT EXISTS (SELECT 1 FROM images i WHERE i.game_id = g.id AND i.is_cover = 1)";
 
+    /// <summary>RP4's predicate and order, shared by the report and <see cref="NextMissingImageAsync"/>.</summary>
+    private const string MissingImage = $"({NoCover} OR g.has_default_boxart = 1)";
+
+    private const string MissingImageOrder = "g.system_id, g.display_title, g.id";
+
     public async Task<Page<MissingImageItem>> ListMissingImagesAsync(string? systemId, int page, int pageSize,
         CancellationToken cancellationToken)
     {
-        var where = $"WHERE ({NoCover} OR g.has_default_boxart = 1)" + (systemId is null ? "" : " AND g.system_id = @systemId");
+        var where = $"WHERE {MissingImage}" + (systemId is null ? "" : " AND g.system_id = @systemId");
         var args = new { systemId, pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
         await using var connection = connections.Create();
         var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
@@ -21,10 +26,35 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
             SELECT g.id AS Id, g.display_title AS DisplayTitle, g.system_id AS SystemId,
                    CASE WHEN {NoCover} THEN '{MissingImageReasons.NoCover}' ELSE '{MissingImageReasons.Placeholder}' END AS Reason
             FROM games g {where}
-            ORDER BY g.system_id, g.display_title, g.id
+            ORDER BY {MissingImageOrder}
             LIMIT @pageSize OFFSET @offset
             """, args, cancellationToken: cancellationToken));
         return new Page<MissingImageItem>(rows.AsList(), page, pageSize, total);
+    }
+
+    public async Task<MissingImageSuccessor> NextMissingImageAsync(Guid? afterGameId, CancellationToken cancellationToken)
+    {
+        // The anchor is joined from games (not the report), so a game that was just fixed keeps its place. Both sides of the row
+        // comparison are columns, so display_title compares under its own collation, exactly as the report sorts it. Rows after the
+        // anchor come first, then the wrap from the top; the anchor itself is never picked.
+        await using var connection = connections.Create();
+        var next = await connection.ExecuteScalarAsync<Guid?>(new CommandDefinition($"""
+            SELECT g.id FROM games g
+            LEFT JOIN games a ON a.id = @afterGameId
+            WHERE {MissingImage} AND (a.id IS NULL OR g.id <> a.id)
+            ORDER BY CASE WHEN a.id IS NULL OR (g.system_id, g.display_title, g.id) > (a.system_id, a.display_title, a.id)
+                          THEN 0 ELSE 1 END,
+                     {MissingImageOrder}
+            LIMIT 1
+            """, new { afterGameId }, cancellationToken: cancellationToken));
+        if (next is not null)
+            return new MissingImageSuccessor(next, false);
+        if (afterGameId is null)
+            return new MissingImageSuccessor(null, false);
+        var currentMissing = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            $"SELECT COUNT(*) FROM games g WHERE g.id = @afterGameId AND {MissingImage}", new { afterGameId },
+            cancellationToken: cancellationToken));
+        return new MissingImageSuccessor(null, currentMissing > 0);
     }
 
     /// <summary>
