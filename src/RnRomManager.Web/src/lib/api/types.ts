@@ -454,3 +454,56 @@ export interface CollectionRef {
 	id: string;
 	name: string;
 }
+
+/** Bundle Creator B3: a set file inside a release, by its SHA-1 and stored `rom_files.file_name`. */
+export interface BundleMember {
+	sha1: string;
+	fileName: string;
+}
+
+/** Bundle Creator B3/B4: one cart or queue entry, a stable identity plus its last-known labels. */
+export interface BundleEntry {
+	gameId: string;
+	releaseSha1: string;
+	member: BundleMember | null;
+	gameTitle: string;
+	fileName: string;
+}
+
+/** `GET /api/bundle-queues` (B4). */
+export interface BundleQueueSummary {
+	id: string;
+	name: string;
+	revision: number;
+	itemCount: number;
+}
+
+/** `GET /api/bundle-queues/{id}` and the create/replace answers (B4). */
+export interface BundleQueue {
+	id: string;
+	name: string;
+	revision: number;
+	entries: BundleEntry[];
+}
+
+/** One `POST /api/bundle-files/resolve` answer item (B5); the strings are null when unavailable. */
+export interface BundleResolvedItem {
+	available: boolean;
+	gameTitle: string | null;
+	fileName: string | null;
+	downloadUrl: string | null;
+}
+
+/** `POST /api/bundle-downloads` (B7). */
+export interface BundleDownloadTicket {
+	ticket: string;
+	fileUrl: string;
+}
+
+export type BundleTicketState = 'pending' | 'sending' | 'sent' | 'failed' | 'expired';
+
+/** `GET /api/bundle-downloads/{ticket}` (B7). */
+export interface BundleTicketStatus {
+	state: BundleTicketState;
+	errorCode: string | null;
+}
