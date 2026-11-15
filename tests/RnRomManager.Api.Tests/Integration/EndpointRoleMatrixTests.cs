@@ -91,6 +91,9 @@ public partial class EndpointRoleMatrixTests
         ["PUT /api/bundle-queues/{id:guid}"] = Role.User,
         ["DELETE /api/bundle-queues/{id:guid}"] = Role.User,
         ["POST /api/bundle-files/resolve"] = Role.User,
+        ["POST /api/bundle-downloads"] = Role.User,
+        ["GET /api/bundle-downloads/{ticket}"] = Role.User,
+        ["GET /api/bundle-downloads/{ticket}/file"] = Role.User,
 
         ["GET /api/discovery/{kind}"] = Role.User,
         ["GET /api/discovery/{kind}/games"] = Role.User,
