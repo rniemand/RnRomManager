@@ -423,6 +423,16 @@ export interface BackupStatus {
 	backups: BackupFile[];
 }
 
+/** `GET /api/discovery/{kind}` item (discovery B3): one publisher or genre across systems. */
+export interface DiscoveryGroup {
+	/** Lowercase hex SHA-256 of the normalized name. */
+	key: string;
+	name: string;
+	gameCount: number;
+	/** Publishers only: the shared override's `…/logo?key=…&v=…`, or null without one (B6). */
+	logoUrl?: string | null;
+}
+
 /** `GET /api/collections` item (B6). */
 export interface CollectionListItem {
 	id: string;

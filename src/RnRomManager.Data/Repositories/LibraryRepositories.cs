@@ -247,6 +247,8 @@ public sealed class GameRepository : IGameRepository
             where.Add("g.favourite = @favourite");
         if (query.NotInCollectionId is not null)
             where.Add("NOT EXISTS (SELECT 1 FROM collection_games x WHERE x.game_id = g.id AND x.collection_id = @notInCollection)");
+        if (query.GameIds is not null)
+            where.Add(query.GameIds.Count == 0 ? "FALSE" : "g.id IN @gameIds");
         var filter = where.Count == 0 ? "" : "WHERE " + string.Join(" AND ", where);
         var args = new DynamicParameters(new
         {
@@ -255,6 +257,7 @@ public sealed class GameRepository : IGameRepository
             letter = query.Letter,
             region = query.Region is null ? null : SqlLike.Contains("|" + query.Region + "|"),
             favourite = query.Favourite,
+            gameIds = query.GameIds is { Count: > 0 } ids ? ids : null,
         });
         for (var i = 0; i < words.Count; i++)
             args.Add($"w{i}", SqlLike.Contains(words[i]));

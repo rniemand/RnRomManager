@@ -52,38 +52,7 @@ public static class LibraryEndpoints
                 if (collectionId is { } id && await collections.GetAsync(id, CollectionEndpoints.UserId(ctx), ctx.RequestAborted) is null)
                     return Problems.NotFound(ctx);
             var result = await repository.ListAsync(query, ctx.RequestAborted);
-            return Results.Ok(Paging.ToDto(result, game =>
-            {
-                // C2: quick play needs a browser core and a primary release stored in the zip; Play B1 / PSP B1:
-                // PlayStation and PSP play their external primary disc through play-disc. Saturn B6: an .nrg primary
-                // never plays, whatever the system (its file name equals its external name for a FileSets system).
-                var core = systems.ById(game.SystemId)?.BrowserCore;
-                var playable = core is not null && game.PrimaryRomId is not null
-                    && (!game.PrimaryIsExternal || ExternalBrowserCores.Contains(core))
-                    && game.PrimaryRomFileName?.EndsWith(".nrg", StringComparison.OrdinalIgnoreCase) != true;
-                return new
-                {
-                    id = game.Id,
-                    system = game.SystemId,
-                    systemName = systems.ById(game.SystemId)?.DisplayName ?? game.SystemId,
-                    systemShortName = systems.ById(game.SystemId)?.ShortName ?? game.SystemId,
-                    displayTitle = game.DisplayTitle,
-                    releaseYear = game.ReleaseYear,
-                    regions = game.Regions,
-                    romCount = game.RomCount,
-                    primarySizeBytes = game.PrimarySizeBytes,
-                    boxArtUrl = game.BoxArtImageId is { } imageId ? ImageUrl(game.Id, imageId) : null,
-                    rating = game.Rating,
-                    favourite = game.Favourite,
-                    matchedOn = game.MatchedOn is { } match ? new { field = match.Field, value = match.Value } : null,
-                    updateCount = game.UpdateCount,
-                    playRomId = playable ? game.PrimaryRomId : null,
-                    playRomFileName = playable ? game.PrimaryRomFileName : null,
-                    // Sega CD B6: quick play adds disc=1 for an external primary, since a shared core can't tell on its own.
-                    playDisc = playable && game.PrimaryIsExternal,
-                    browserCore = core,
-                };
-            }));
+            return Results.Ok(Paging.ToDto(result, game => ToListItemDto(game, systems)));
         });
 
         // F1: per-option counts for the Library filters; each facet ignores its own filter. Sort, paging and collections aren't read.
@@ -700,6 +669,40 @@ public static class LibraryEndpoints
     }
 
     internal static string ImageUrl(Guid gameId, long imageId) => $"/api/games/{gameId}/images/{imageId}";
+
+    /// <summary>One <c>/api/games</c> row (spec §23), also used by discovery group pages.</summary>
+    internal static object ToListItemDto(GameListItem game, ISystemRegistry systems)
+    {
+        // C2: quick play needs a browser core and a primary release stored in the zip; Play B1 / PSP B1:
+        // PlayStation and PSP play their external primary disc through play-disc. Saturn B6: an .nrg primary
+        // never plays, whatever the system (its file name equals its external name for a FileSets system).
+        var core = systems.ById(game.SystemId)?.BrowserCore;
+        var playable = core is not null && game.PrimaryRomId is not null
+            && (!game.PrimaryIsExternal || ExternalBrowserCores.Contains(core))
+            && game.PrimaryRomFileName?.EndsWith(".nrg", StringComparison.OrdinalIgnoreCase) != true;
+        return new
+        {
+            id = game.Id,
+            system = game.SystemId,
+            systemName = systems.ById(game.SystemId)?.DisplayName ?? game.SystemId,
+            systemShortName = systems.ById(game.SystemId)?.ShortName ?? game.SystemId,
+            displayTitle = game.DisplayTitle,
+            releaseYear = game.ReleaseYear,
+            regions = game.Regions,
+            romCount = game.RomCount,
+            primarySizeBytes = game.PrimarySizeBytes,
+            boxArtUrl = game.BoxArtImageId is { } imageId ? ImageUrl(game.Id, imageId) : null,
+            rating = game.Rating,
+            favourite = game.Favourite,
+            matchedOn = game.MatchedOn is { } match ? new { field = match.Field, value = match.Value } : null,
+            updateCount = game.UpdateCount,
+            playRomId = playable ? game.PrimaryRomId : null,
+            playRomFileName = playable ? game.PrimaryRomFileName : null,
+            // Sega CD B6: quick play adds disc=1 for an external primary, since a shared core can't tell on its own.
+            playDisc = playable && game.PrimaryIsExternal,
+            browserCore = core,
+        };
+    }
 
     private static object ToDetail(GameRow game, string systemName, string? browserCore, IReadOnlyList<RomRow> roms, ILookup<long, RomFileRow> files,
         IReadOnlyList<ImageRow> images, IReadOnlySet<string> notes) => new

@@ -16,6 +16,7 @@ using RnRomManager.Core.Backups;
 using RnRomManager.Core.Collections;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
+using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Integrity;
@@ -86,6 +87,8 @@ public static class AppHost
             .MapReviewEndpoints()
             .MapLibraryEndpoints()
             .MapCollectionEndpoints()
+            .MapDiscoveryEndpoints()
+            .MapPublisherLogoEndpoints()
             .MapEmulatorEndpoints()
             .MapIntegrityEndpoints()
             .MapReportEndpoints()
@@ -132,6 +135,9 @@ public static class AppHost
         builder.Services.AddSingleton<CollectionCovers>();
         builder.Services.AddSingleton<CollectionService>();
         builder.Services.AddSingleton<IGameRepository, GameRepository>();
+        // A singleton: it holds each kind's discovery index for a minute.
+        builder.Services.AddSingleton<IDiscoveryRepository, DiscoveryRepository>();
+        builder.Services.AddSingleton<IPublisherLogoRepository, PublisherLogoRepository>();
         builder.Services.AddSingleton<IRomRepository, RomRepository>();
         builder.Services.AddSingleton<IImageRepository, ImageRepository>();
         builder.Services.AddSingleton<ILibraryMirror, LibraryMirror>();

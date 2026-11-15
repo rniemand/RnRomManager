@@ -5,7 +5,17 @@
 	import { page } from '$app/state';
 	import type { CollectionListItem, Page } from '#lib/api/types.js';
 	import { collectionsApi, collectionsSearch } from '#lib/collections.js';
+	import {
+		collectionsTab,
+		collectionsTabs,
+		discoverySearch,
+		discoveryState,
+		tabSearch,
+		type DiscoveryState
+	} from '#lib/discovery.js';
 	import CollectionModal from '#lib/components/CollectionModal.svelte';
+	import DiscoveryGames from '#lib/components/DiscoveryGames.svelte';
+	import DiscoveryGroups from '#lib/components/DiscoveryGroups.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
@@ -13,8 +23,12 @@
 	import Pagination from '#lib/components/Pagination.svelte';
 	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 
-	/** B22: the caller's collections as cards, filtered by `q` and paged; both live in the URL. */
+	/**
+	 * B22: the caller's collections as cards, filtered by `q` and paged; both live in the URL. Discovery B1: link tabs
+	 * switch to the Publishers and Genres indexes (`?tab=`); a bare URL is User collections.
+	 */
 	const sizeKey = 'collections';
+	const tab = $derived(collectionsTab(page.url));
 
 	let result = $state<Page<CollectionListItem> | null>(null);
 	let error = $state<unknown>(null);
@@ -33,6 +47,16 @@
 	function go(next: { q: string; page: number }): void {
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
 		void goto(`/collections${collectionsSearch(next)}`, { replace: true, reset: false });
+	}
+
+	const discovery = $derived(discoveryState(page.url));
+	/** Group names seen in the group list, by key, for the games heading (the API's games page has none). */
+	const groupNames = $state<Record<string, string>>({});
+
+	/** Paging within a discovery tab replaces the history entry; selecting a group is a link (a new entry). */
+	function goDiscovery(next: DiscoveryState): void {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
+		void goto(`/collections${discoverySearch(next)}`, { replace: true, reset: false });
 	}
 
 	function onFilterInput(): void {
@@ -57,6 +81,7 @@
 	});
 
 	$effect(() => {
+		if (tab !== 'collections') return;
 		const params = { q, page: pageNumber, pageSize };
 		void reload;
 		let stale = false;
@@ -78,90 +103,137 @@
 
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
 	<h1 class="h3 mb-0"><Icon name="collections" /> Collections</h1>
-	<button type="button" class="btn btn-primary" onclick={() => (creating = true)}>
-		<Icon name="add" /> New collection
-	</button>
+	{#if tab === 'collections'}
+		<button type="button" class="btn btn-primary" onclick={() => (creating = true)}>
+			<Icon name="add" /> New collection
+		</button>
+	{/if}
 </div>
 
-<form class="row g-2 mb-3" role="search" onsubmit={(e) => e.preventDefault()}>
-	<div class="col-12 col-md-6 col-lg-4">
-		<label class="visually-hidden" for="collection-filter">Filter collections</label>
-		<input
-			id="collection-filter"
-			type="search"
-			class="form-control"
-			placeholder="Filter by name"
-			maxlength="255"
-			bind:value={filter}
-			oninput={onFilterInput}
-		/>
-	</div>
-</form>
+<nav class="mb-3" aria-label="Collections views">
+	<ul class="nav nav-tabs">
+		{#each collectionsTabs as item (item.tab)}
+			<li class="nav-item">
+				<a
+					class="nav-link"
+					class:active={tab === item.tab}
+					aria-current={tab === item.tab ? 'page' : undefined}
+					href="{resolve('/collections')}{tabSearch(item.tab)}">{item.label}</a
+				>
+			</li>
+		{/each}
+	</ul>
+</nav>
 
-{#if error}
-	<ErrorAlert {error} onretry={() => reload++} />
-{:else if !result}
-	<Loading label="Loading collections…" />
-{:else if result.items.length === 0}
-	{#if q}
-		<EmptyState message="No collections match “{q}”." />
+{#if tab === 'collections'}
+	<form class="row g-2 mb-3" role="search" onsubmit={(e) => e.preventDefault()}>
+		<div class="col-12 col-md-6 col-lg-4">
+			<label class="visually-hidden" for="collection-filter">Filter collections</label>
+			<input
+				id="collection-filter"
+				type="search"
+				class="form-control"
+				placeholder="Filter by name"
+				maxlength="255"
+				bind:value={filter}
+				oninput={onFilterInput}
+			/>
+		</div>
+	</form>
+
+	{#if error}
+		<ErrorAlert {error} onretry={() => reload++} />
+	{:else if !result}
+		<Loading label="Loading collections…" />
+	{:else if result.items.length === 0}
+		{#if q}
+			<EmptyState message="No collections match “{q}”." />
+		{:else}
+			<EmptyState message="You have no collections yet." icon="collections">
+				{#snippet action()}
+					<button type="button" class="btn btn-primary" onclick={() => (creating = true)}>
+						<Icon name="add" /> New collection
+					</button>
+				{/snippet}
+			</EmptyState>
+		{/if}
 	{:else}
-		<EmptyState message="You have no collections yet." icon="collections">
-			{#snippet action()}
-				<button type="button" class="btn btn-primary" onclick={() => (creating = true)}>
-					<Icon name="add" /> New collection
-				</button>
-			{/snippet}
-		</EmptyState>
-	{/if}
-{:else}
-	<div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6 g-3">
-		{#each result.items as collection (collection.id)}
-			<div class="col">
-				<div class="card h-100">
-					<div class="card-img-top ratio ratio-1x1 bg-body-secondary">
-						{#if collection.coverUrl}
-							<img
-								class="object-fit-cover"
-								src={collection.coverUrl}
-								alt="{collection.name} cover"
-								loading="lazy"
-							/>
-						{:else}
-							<div
-								class="d-flex align-items-center justify-content-center"
-								data-testid="placeholder"
+		<div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6 g-3">
+			{#each result.items as collection (collection.id)}
+				<div class="col">
+					<div class="card h-100">
+						<div class="card-img-top ratio ratio-1x1 bg-body-secondary">
+							{#if collection.coverUrl}
+								<img
+									class="object-fit-cover"
+									src={collection.coverUrl}
+									alt="{collection.name} cover"
+									loading="lazy"
+								/>
+							{:else}
+								<div
+									class="d-flex align-items-center justify-content-center"
+									data-testid="placeholder"
+								>
+									<Icon name="collections" class="fs-1" />
+								</div>
+							{/if}
+						</div>
+						<div class="card-body p-2">
+							<a
+								class="d-block small fw-semibold text-truncate text-decoration-none stretched-link"
+								href={resolve('/collections/[id]', { id: collection.id })}
+								title={collection.name}>{collection.name}</a
 							>
-								<Icon name="collections" class="fs-1" />
+							<div class="small text-body-secondary">
+								{collection.gameCount}
+								{collection.gameCount === 1 ? 'game' : 'games'}
 							</div>
-						{/if}
-					</div>
-					<div class="card-body p-2">
-						<a
-							class="d-block small fw-semibold text-truncate text-decoration-none stretched-link"
-							href={resolve('/collections/[id]', { id: collection.id })}
-							title={collection.name}>{collection.name}</a
-						>
-						<div class="small text-body-secondary">
-							{collection.gameCount}
-							{collection.gameCount === 1 ? 'game' : 'games'}
 						</div>
 					</div>
 				</div>
-			</div>
-		{/each}
-	</div>
-{/if}
+			{/each}
+		</div>
+	{/if}
 
-{#if result}
-	<Pagination
-		page={pageNumber}
-		pages={pageCount(result.total, pageSize)}
-		onpage={(p) => go({ q, page: p })}
-		{pageSize}
-		onpagesize={setPageSize}
-		label="Collection pages"
-	/>
+	{#if result}
+		<Pagination
+			page={pageNumber}
+			pages={pageCount(result.total, pageSize)}
+			onpage={(p) => go({ q, page: p })}
+			{pageSize}
+			onpagesize={setPageSize}
+			label="Collection pages"
+		/>
+	{/if}
+{:else if discovery}
+	<div class="row g-4">
+		<div class="col-12 col-lg-4">
+			<DiscoveryGroups
+				view={discovery}
+				onpage={(groupPage) => goDiscovery({ ...discovery, groupPage })}
+				onselected={(group) => (groupNames[group.key] = group.name)}
+			/>
+		</div>
+		<div class="col-12 col-lg-8">
+			{#if discovery.key}
+				{#key `${discovery.kind}:${discovery.key}`}
+					<DiscoveryGames
+						view={{ ...discovery, key: discovery.key }}
+						name={groupNames[discovery.key] ?? null}
+						onpage={(gamePage) => goDiscovery({ ...discovery, gamePage })}
+					/>
+				{/key}
+			{:else}
+				<EmptyState
+					message="Choose a {discovery.kind === 'publishers'
+						? 'publisher'
+						: 'genre'} to see its games across every system."
+					icon="collections"
+				/>
+			{/if}
+		</div>
+	</div>
 {/if}
 
 <CollectionModal bind:open={creating} collection={null} />

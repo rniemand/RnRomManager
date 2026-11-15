@@ -173,6 +173,115 @@ describe('collections page (B22)', () => {
 	});
 });
 
+describe('collections tabs (discovery B1)', () => {
+	const tabLink = (name: string) =>
+		within(screen.getByRole('navigation', { name: 'Collections views' })).getByRole('link', {
+			name
+		});
+	const current = () =>
+		within(screen.getByRole('navigation', { name: 'Collections views' }))
+			.getAllByRole('link')
+			.filter((l) => l.getAttribute('aria-current') === 'page')
+			.map((l) => l.textContent?.trim());
+
+	it('a bare URL shows User collections as the current tab', async () => {
+		answers['GET /api/collections?pageSize=20'] = [
+			{ status: 200, body: pageOf([item('c1', 'A')]) }
+		];
+		render(CollectionsPage);
+
+		await screen.findByRole('link', { name: 'A' });
+		expect(current()).toEqual(['User collections']);
+		expect(tabLink('User collections').getAttribute('href')).toBe('/collections');
+		expect(tabLink('Publishers').getAttribute('href')).toBe('/collections?tab=publishers');
+		expect(tabLink('Genres').getAttribute('href')).toBe('/collections?tab=genres');
+		expect(screen.getAllByRole('button', { name: /New collection/ })).toHaveLength(1);
+	});
+
+	it('a discovery tab hides the collections list and fetches none', async () => {
+		navigateTo('/collections?tab=genres&q=poke');
+		render(CollectionsPage);
+
+		expect(current()).toEqual(['Genres']);
+		expect(screen.queryByLabelText('Filter collections')).toBeNull();
+		expect(screen.queryByRole('button', { name: /New collection/ })).toBeNull();
+		await Promise.resolve();
+		expect(keys().filter((k) => k.startsWith('GET /api/collections'))).toEqual([]);
+	});
+
+	it('an unknown tab value is User collections with its legacy query kept', async () => {
+		navigateTo('/collections?tab=developers&q=zel&page=2');
+		answers['GET /api/collections?q=zel&page=2&pageSize=20'] = [
+			{ status: 200, body: { ...pageOf([item('c1', 'Zelda')], 45), page: 2 } }
+		];
+		render(CollectionsPage);
+
+		expect(await screen.findByRole('link', { name: 'Zelda' })).toBeTruthy();
+		expect(current()).toEqual(['User collections']);
+		expect((screen.getByLabelText('Filter collections') as HTMLInputElement).value).toBe('zel');
+	});
+
+	it('a shared selection link opens the group and its games directly', async () => {
+		const key = 'c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516';
+		navigateTo(`/collections?tab=publishers&key=${key}&groupPage=2&gamePage=2`);
+		answers['GET /api/discovery/publishers?page=2&pageSize=20'] = [
+			{
+				status: 200,
+				body: {
+					items: [{ key, name: 'Nintendo', gameCount: 30, logoUrl: null }],
+					page: 2,
+					pageSize: 20,
+					total: 21
+				}
+			}
+		];
+		answers[`GET /api/discovery/publishers/games?key=${key}&page=2&pageSize=20`] = [
+			{ status: 200, body: { items: [], page: 2, pageSize: 20, total: 30 } }
+		];
+		render(CollectionsPage);
+
+		const selected = await screen.findByRole('link', { name: /Nintendo/ });
+		expect(selected.getAttribute('aria-current')).toBe('true');
+		await vi.waitFor(() =>
+			expect(screen.getByRole('heading', { name: /Nintendo/ }).textContent).toContain('30 games')
+		);
+		expect(current()).toEqual(['Publishers']);
+	});
+
+	it('a discovery tab without a selection asks for one', async () => {
+		navigateTo('/collections?tab=genres');
+		render(CollectionsPage);
+
+		expect(
+			await screen.findByText('Choose a genre to see its games across every system.')
+		).toBeTruthy();
+		expect(keys().some((k) => k.includes('/games'))).toBe(false);
+	});
+
+	it('back and forward between tabs follow the URL', async () => {
+		navigateTo('/collections?q=zel');
+		answers['GET /api/collections?q=zel&pageSize=20'] = [
+			{ status: 200, body: pageOf([item('c1', 'Zelda')]) },
+			{ status: 200, body: pageOf([item('c1', 'Zelda')]) }
+		];
+		render(CollectionsPage);
+		await screen.findByRole('link', { name: 'Zelda' });
+
+		navigateTo('/collections?tab=publishers');
+		await vi.waitFor(() => expect(current()).toEqual(['Publishers']));
+		expect(screen.queryByRole('link', { name: 'Zelda' })).toBeNull();
+
+		navigateTo('/collections?q=zel');
+		expect(await screen.findByRole('link', { name: 'Zelda' })).toBeTruthy();
+		expect(current()).toEqual(['User collections']);
+		expect((screen.getByLabelText('Filter collections') as HTMLInputElement).value).toBe('zel');
+		expect(keys().filter((k) => k.startsWith('GET /api/collections'))).toEqual([
+			'GET /api/collections?q=zel&pageSize=20',
+			'GET /api/collections?q=zel&pageSize=20'
+		]);
+	});
+});
+
 describe('CollectionModal (B23)', () => {
 	async function openCreate(): Promise<void> {
 		answers['GET /api/collections?pageSize=20'] = [{ status: 200, body: pageOf([]) }];
