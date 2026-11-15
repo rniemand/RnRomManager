@@ -84,7 +84,8 @@ public class DiscoveryEndpointsTests
         Assert.That(items.Select(i => i.GetProperty("name").GetString()), Is.EqualTo(new[] { "Hudson", "NINTENDO", "Sega" }));
         Assert.That(items[1].GetProperty("key").GetString(), Is.EqualTo(Key("nintendo")));
         Assert.That(items[1].GetProperty("gameCount").GetInt64(), Is.EqualTo(2));
-        Assert.That(items[1].EnumerateObject().Select(p => p.Name), Is.EquivalentTo(new[] { "key", "name", "gameCount" }));
+        Assert.That(items[1].EnumerateObject().Select(p => p.Name), Is.EquivalentTo(new[] { "key", "name", "gameCount", "logoUrl" }));
+        Assert.That(items[1].GetProperty("logoUrl").ValueKind, Is.EqualTo(JsonValueKind.Null), "no override");
 
         var (_, genres) = await GetAsync(_user, "/api/discovery/genres?page=2&pageSize=1");
         Assert.That(genres.GetProperty("total").GetInt64(), Is.EqualTo(2));

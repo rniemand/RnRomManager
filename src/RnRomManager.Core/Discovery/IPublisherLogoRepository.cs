@@ -13,4 +13,7 @@ public interface IPublisherLogoRepository
 
     /// <summary>Removes the override; false when there was none.</summary>
     Task<bool> DeleteAsync(string key, CancellationToken cancellationToken);
+
+    /// <summary><c>updated_at</c> of the overrides among <paramref name="keys"/> (a page of groups), by key (B6 <c>logoUrl</c>).</summary>
+    Task<IReadOnlyDictionary<string, DateTime>> ListUpdatedAtAsync(IReadOnlyCollection<string> keys, CancellationToken cancellationToken);
 }

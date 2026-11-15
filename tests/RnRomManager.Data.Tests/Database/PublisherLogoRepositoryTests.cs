@@ -138,6 +138,20 @@ public class PublisherLogoRepositoryTests
     }
 
     [Test]
+    public async Task ListUpdatedAt_ReturnsOnlyStoredKeys()
+    {
+        await _repository.UpsertAsync(new PublisherLogo(Key("nintendo"), "image/png", [1], _alice, T0), default);
+        await _repository.UpsertAsync(new PublisherLogo(Key("sega"), "image/png", [1], _alice, T0.AddMinutes(5)), default);
+        await _repository.UpsertAsync(new PublisherLogo(Key("atari"), "image/png", [1], _alice, T0), default);
+
+        var updated = await _repository.ListUpdatedAtAsync([Key("nintendo"), Key("sega"), Key("konami")], default);
+
+        Assert.That(updated, Is.EquivalentTo(new Dictionary<string, DateTime> { [Key("nintendo")] = T0, [Key("sega")] = T0.AddMinutes(5) }));
+        Assert.That(updated[Key("sega")].Kind, Is.EqualTo(DateTimeKind.Utc));
+        Assert.That(await _repository.ListUpdatedAtAsync([], default), Is.Empty);
+    }
+
+    [Test]
     public async Task Upsert_MaximumSize_RoundTrips()
     {
         var logo = new PublisherLogo(Key("ubisoft"), "image/jpeg", RandomNumberGenerator.GetBytes(512 * 1024), _alice, T0);

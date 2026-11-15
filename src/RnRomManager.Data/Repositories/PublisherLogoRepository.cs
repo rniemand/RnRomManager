@@ -34,4 +34,22 @@ public sealed class PublisherLogoRepository(IDbConnectionFactory connections) : 
         return await connection.ExecuteAsync(new CommandDefinition(
             "DELETE FROM publisher_logos WHERE key_digest = UNHEX(@key)", new { key }, cancellationToken: cancellationToken)) > 0;
     }
+
+    public async Task<IReadOnlyDictionary<string, DateTime>> ListUpdatedAtAsync(
+        IReadOnlyCollection<string> keys, CancellationToken cancellationToken)
+    {
+        if (keys.Count == 0)
+            return new Dictionary<string, DateTime>();
+        var args = new DynamicParameters();
+        var names = keys.Select((key, i) =>
+        {
+            args.Add($"k{i}", key);
+            return $"UNHEX(@k{i})";
+        }).ToList();
+        await using var connection = connections.Create();
+        var rows = await connection.QueryAsync<(string Key, DateTime UpdatedAt)>(new CommandDefinition(
+            $"SELECT LOWER(HEX(key_digest)), updated_at FROM publisher_logos WHERE key_digest IN ({string.Join(", ", names)})",
+            args, cancellationToken: cancellationToken));
+        return rows.ToDictionary(r => r.Key, r => DateTime.SpecifyKind(r.UpdatedAt, DateTimeKind.Utc), StringComparer.Ordinal);
+    }
 }

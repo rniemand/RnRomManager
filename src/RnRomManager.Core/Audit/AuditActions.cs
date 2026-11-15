@@ -23,10 +23,16 @@ public static class AuditActions
     public const string IngestFileDeleted = "IngestFileDeleted";
     public const string RemovedRestored = "RemovedRestored";
 
+    /// <summary>Collections discovery B5: a publisher's shared logo override was added or replaced.</summary>
+    public const string PublisherLogoReplaced = "PublisherLogoReplaced";
+
+    /// <summary>Collections discovery B5: a publisher's shared logo override was removed.</summary>
+    public const string PublisherLogoRemoved = "PublisherLogoRemoved";
+
     public static readonly IReadOnlyList<string> All =
     [
         Ingested, ZipRepaired, ExtensionRenamed, MovedToFailed, MovedToDuplicates, ArchiveDeleted, ReviewDeleted, GameUpdated,
         ReleaseDeleted, GameDeleted, ImageAdded, ImageDeleted, CoverSet, MediaFetched, ReleaseMoved, GamesMerged, DatsRefreshed,
-        IngestFileDeleted, RemovedRestored,
+        IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved,
     ];
 }

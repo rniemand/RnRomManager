@@ -88,6 +88,7 @@ public static class AppHost
             .MapLibraryEndpoints()
             .MapCollectionEndpoints()
             .MapDiscoveryEndpoints()
+            .MapPublisherLogoEndpoints()
             .MapEmulatorEndpoints()
             .MapIntegrityEndpoints()
             .MapReportEndpoints()
@@ -136,6 +137,7 @@ public static class AppHost
         builder.Services.AddSingleton<IGameRepository, GameRepository>();
         // A singleton: it holds each kind's discovery index for a minute.
         builder.Services.AddSingleton<IDiscoveryRepository, DiscoveryRepository>();
+        builder.Services.AddSingleton<IPublisherLogoRepository, PublisherLogoRepository>();
         builder.Services.AddSingleton<IRomRepository, RomRepository>();
         builder.Services.AddSingleton<IImageRepository, ImageRepository>();
         builder.Services.AddSingleton<ILibraryMirror, LibraryMirror>();

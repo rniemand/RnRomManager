@@ -87,6 +87,9 @@ public partial class EndpointRoleMatrixTests
 
         ["GET /api/discovery/{kind}"] = Role.User,
         ["GET /api/discovery/{kind}/games"] = Role.User,
+        ["GET /api/discovery/publishers/logo"] = Role.User,
+        ["PUT /api/discovery/publishers/logo"] = Role.User,
+        ["DELETE /api/discovery/publishers/logo"] = Role.User,
 
         ["GET /api/ingest/pending"] = Role.Admin,
         ["GET /api/ingest/failed"] = Role.Admin,
