@@ -47,6 +47,35 @@ public static class BundleQueueEndpoints
                 ? Results.Ok(ToDto(queue))
                 : Problems.NotFound(ctx));
 
+        // B4: an atomic replace at the caller's revision; ownership, then revision, then the name are checked.
+        queues.MapPut("/{id:guid}", async (Guid id, HttpContext ctx, IBundleQueueRepository repository, TimeProvider time) =>
+        {
+            var (request, problem) = await ReadJsonAsync<QueueRequest>(ctx);
+            if (problem is not null)
+                return problem;
+            var (name, entries, errors) = Validate(request!);
+            errors ??= [];
+            var revision = request!.Revision ?? 0;
+            if (revision <= 0)
+                errors["revision"] = ["The queue's current revision is required."];
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+
+            var write = await repository.ReplaceAsync(id, CollectionEndpoints.UserId(ctx), name!, entries!, revision,
+                time.GetUtcNow().UtcDateTime, ctx.RequestAborted);
+            return WriteResult(ctx, write, q => Results.Ok(ToDto(q)));
+        }).WithMetadata(new RequestSizeLimitAttribute(RequestLimit));
+
+        // B4: deletes only at the given revision; the working cart is the browser's and is never touched.
+        queues.MapDelete("/{id:guid}", async (Guid id, string? revision, HttpContext ctx, IBundleQueueRepository repository) =>
+        {
+            if (!int.TryParse(revision, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var expected)
+                || expected <= 0)
+                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["revision"] = ["The queue's current revision is required."] });
+            var status = await repository.DeleteAsync(id, CollectionEndpoints.UserId(ctx), expected, ctx.RequestAborted);
+            return WriteResult(ctx, new BundleQueueWrite(status), _ => Results.NoContent());
+        });
+
         return api;
     }
 
