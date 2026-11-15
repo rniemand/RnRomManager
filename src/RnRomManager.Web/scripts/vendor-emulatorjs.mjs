@@ -34,14 +34,14 @@ const cores = [
 // Genesis and PicoDrive, whose first group is segaMS), none of which is vendored or delivered for that system. An
 // explicit pinned core returns itself before the saved setting is read. Saturn B4: yabause is listed too, defensively
 // only: its segaSaturn group holds just yabause, so no other saved core could be chosen. SNES B3: snes9x likewise, as
-// the only member of the snes group.
+// the only member of the snes group. 3DO B6: opera likewise, as the only member of the 3do group.
 //
 // PSP B3 (PPSSPP only): the core needs threads, so a saved "ejs_threads: disabled" must not select a payload that
 // isn't vendored; and a failed ppsspp-assets.zip request or a rejected File read must show a startup error instead of
 // leaving the loader's promises pending.
 //
-// Genesis B5, 32X B3, SNES B3: the operator supplies only the non-threaded payloads, so Genesis Plus GX, PicoDrive and
-// Snes9x never select a "-thread" one, and a payload that can't be fetched shows a local error instead of falling back to the
+// Genesis B5, 32X B3, SNES B3, 3DO B6: the operator supplies only the non-threaded payloads, so Genesis Plus GX,
+// PicoDrive, Snes9x and Opera never select a "-thread" one, and a payload that can't be fetched shows a local error instead of falling back to the
 // EmulatorJS CDN. Saturn B9: only Yabause's non-threaded payloads are vendored, so it never selects a "-thread" one
 // either (its missing payloads still take upstream's path).
 //
@@ -57,7 +57,7 @@ const edits = [
 			'        const gen = this.getCore(true);\n' +
 			'        if (cores[gen] && cores[gen].includes(this.preGetSetting("retroarch_core"))) {',
 		insertBefore:
-			'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume"].includes(core)) {\n' +
+			'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera"].includes(core)) {\n' +
 			'            return core;\n' +
 			'        }\n'
 	},
@@ -68,7 +68,7 @@ const edits = [
 			'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
 			'                threads = true;\n' +
 			'            }\n' +
-			'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume"].includes(this.getCore())) {\n' +
+			'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera"].includes(this.getCore())) {\n' +
 			'                threads = false;\n' +
 			'            }\n'
 	},
@@ -78,7 +78,7 @@ const edits = [
 			'            if (res === -1) {\n' +
 			'                console.log("File not found, attemping to fetch from emulatorjs cdn.");\n',
 		insertAfter:
-			'                if (["genesis_plus_gx", "picodrive", "snes9x", "desmume"].includes(this.getCore())) {\n' +
+			'                if (["genesis_plus_gx", "picodrive", "snes9x", "desmume", "opera"].includes(this.getCore())) {\n' +
 			'                    this.startGameError(this.localization("Error downloading core") + " (" + filename + ")");\n' +
 			'                    return;\n' +
 			'                }\n'

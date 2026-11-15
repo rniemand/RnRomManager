@@ -77,7 +77,8 @@ describe('parsePlayParams', () => {
 		'picodrive',
 		'yabause',
 		'snes9x',
-		'desmume'
+		'desmume',
+		'opera'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});
@@ -473,6 +474,47 @@ describe('SNES (SNES B3)', () => {
 		[null, "Couldn't load the Snes9x core."]
 	])('reports the availability check %s', (status, message) => {
 		expect(operatorCoreError('snes9x', status)).toBe(message);
+	});
+});
+
+describe('3DO (B6)', () => {
+	it('accepts opera on the modal page only', () => {
+		expect(parsePlayParams(query({ core: 'opera', name: 'Opal Rally (USA).cue' }))?.core).toBe(
+			'opera'
+		);
+		expect(parsePlayParams(query({ core: 'opera' }), true)).toBeNull();
+	});
+
+	it('is an operator core that hides the chooser and keeps upstream controls', () => {
+		expect(isOperatorCore('opera')).toBe(true);
+		expect(hidesCoreChooser('opera')).toBe(true);
+		for (const name of ['Opal Rally (USA).cue', 'Opal Solo (USA).iso', 'X.GG'])
+			expect(controlSchemeFor('opera', name)).toBeNull();
+	});
+
+	it('maps the three operator files to the API by name', () => {
+		expect(operatorCorePaths('opera')).toEqual({
+			'opera-wasm.data': '/api/emulator/cores/opera/opera-wasm.data',
+			'opera-legacy-wasm.data': '/api/emulator/cores/opera/opera-legacy-wasm.data',
+			'opera.json': '/api/emulator/cores/opera/opera.json'
+		});
+	});
+
+	it.each([
+		[204, null],
+		[401, 'Your session has expired. Sign in again.'],
+		[
+			404,
+			'3DO games need the Opera core files: ask an Admin to set them up (Emulator:OperaCorePath).'
+		],
+		[
+			409,
+			"The Opera core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:OperaCorePath)."
+		],
+		[500, "Couldn't load the Opera core (HTTP 500)."],
+		[null, "Couldn't load the Opera core."]
+	])('reports the availability check %s', (status, message) => {
+		expect(operatorCoreError('opera', status)).toBe(message);
 	});
 });
 
