@@ -138,7 +138,7 @@ Both are anonymous and return no details.
 
 ### What to back up
 
-- **The database**, which holds users, the Data Protection keys that keep sign-ins valid across restarts, job history, the review queue, integrity issues, the audit trail and settings. The app backs it up itself (below).
+- **The database**, which holds users, the Data Protection keys that keep sign-ins valid across restarts, job history, the review queue, integrity issues, the audit trail, settings and the shared publisher logos. The app backs it up itself (below).
 - **`/app/roms`**, the library itself, including release notes and the Switch ROM files next to their ZIPs. Stop the app (or make sure no job is running) for a consistent copy.
 - **`/app/backups`**, so the database backups survive the loss of the host. Copy it somewhere else.
 - **`/app/collections`**, the collection cover images. Collections themselves are in the database (and its backups), but their cover files are not: copy this folder with the backups. After a restore without it, collections show a placeholder until a cover is set again.

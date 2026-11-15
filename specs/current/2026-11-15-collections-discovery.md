@@ -74,7 +74,7 @@ Every step adding a route also updates `tests/RnRomManager.Api.Tests/Integration
 - [x] **8. Render selected-group games.** Files: `Web/src/lib/components/DiscoveryGames.svelte`, `Web/src/routes/collections/+page.svelte`. Tests: `DiscoveryGames.test.ts` group selection, stale key, cross-platform paging and game links; Playwright browse flow (run in Finish). Done when: group links can be shared and opened directly.
 - [x] **9. Add starter publisher images.** Files: `Web/static/publishers/` (art and manifest), `Web/src/lib/discovery.ts`, `Web/src/lib/components/DiscoveryGroups.svelte`. Tests: `discovery.test.ts` catalog key coverage (keys match B2 for each alias) and fallback order. Done when: starter art renders locally with no third-party request and every asset has a manifest entry.
 - [x] **10. Add publisher logo editing.** Files: `Web/src/lib/components/PublisherLogoModal.svelte`, `Web/src/lib/components/DiscoveryGroups.svelte`, `Web/src/lib/discovery.ts`. Tests: `PublisherLogoModal.test.ts` validation, immediate refresh after upload and removal; Playwright shared replacement with two signed-in accounts (run in Finish). Done when: any signed-in user can replace or remove an override.
-- [ ] **11. Document.** Files: `docs/features.md`, `docs/development.md`. Done when: discovery, logo storage and audit, and starter-art attribution are documented and the full repository and Playwright suites pass.
+- [x] **11. Document.** Files: `docs/features.md`, `docs/development.md`. Done when: discovery, logo storage and audit, and starter-art attribution are documented and the full repository and Playwright suites pass.
 
 ## Decisions
 
