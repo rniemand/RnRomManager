@@ -250,6 +250,13 @@ public partial class LibraryEndpointsTests
     public Task Games_QuickPlay_AnNrgPrimary_IsNotPlayable(string system, string fileName, string externalName, bool playable) =>
         AssertQuickPlayAsync(system, true, playable, system == "saturn" ? "yabause" : "pcsx_rearmed", fileName, externalName);
 
+    // CHD B5: a .chd primary plays on all three disc cores, with playDisc true.
+    [TestCase("psx", "pcsx_rearmed")]
+    [TestCase("saturn", "yabause")]
+    [TestCase("segacd", "genesis_plus_gx")]
+    public Task Games_QuickPlay_AChdPrimary_IsPlayable(string system, string core) =>
+        AssertQuickPlayAsync(system, true, true, core, "x.chd", "x.chd");
+
     private async Task AssertQuickPlayAsync(string system, bool external, bool playable, string? core,
         string? fileName = null, string externalName = "x.gb")
     {

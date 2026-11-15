@@ -372,6 +372,90 @@ public class IngestPipelineTests
         Assert.That(File.Exists(path), Is.False, "moved to _failed/");
     }
 
+    /// <summary>CHD B2: synthetic bytes standing in for a CHD (never a real image); the MAME magic only for realism.</summary>
+    private static byte[] FakeChd(int seed)
+    {
+        var bytes = new SyntheticDiscBuilder { Seed = seed }.Build();
+        "MComprHD"u8.CopyTo(bytes);
+        return bytes;
+    }
+
+    /// <summary><see cref="Drop"/> with the file aged on disk too, past the pipeline's recency check.</summary>
+    private IngestFile DropAged(string system, string name, byte[] bytes)
+    {
+        var file = Drop(system, name, bytes);
+        File.SetLastWriteTimeUtc(file.FullPath, file.ModifiedAtUtc);
+        return file;
+    }
+
+    [TestCase("psx")]
+    [TestCase("saturn")]
+    [TestCase("segacd")]
+    public async Task Chd_Lone_GoesToReviewAsNoDatMatch_WithItsFoldersSystem(string system)
+    {
+        var result = await IngestAsync(DropAged(system, "Mystery Disc.chd", FakeChd(2301)));
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", system)));
+        Assert.That(Directory.Exists(Path.Combine(Roms, system)) ? Directory.GetFiles(Path.Combine(Roms, system), "*", SearchOption.AllDirectories) : [],
+            Is.Empty);
+    }
+
+    [Test]
+    public async Task Chd_BesideADatMatchedCueSet_IsItsOwnReviewItem_AndTheSetOneRelease()
+    {
+        const string cue = "Disc Comet (USA).cue", track1 = "Disc Comet (USA) (Track 1).bin", track2 = "Disc Comet (USA) (Track 2).bin";
+        const string chd = "Disc Comet (USA).chd";
+        var cueText = $"FILE \"{track1}\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\nFILE \"{track2}\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n";
+        foreach (var (name, bytes) in new[] { (cue, System.Text.Encoding.UTF8.GetBytes(cueText)), (track1, CometData), (track2, CometAudio), (chd, FakeChd(2302)) })
+            File.SetLastWriteTimeUtc(Drop("segacd", name, bytes).FullPath, DateTime.UtcNow.AddMinutes(-1));
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "segacd").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome, i.Reason)),
+            Is.EquivalentTo(new[]
+            {
+                (cue, IngestOutcome.Ingested, (string?)null), (track1, IngestOutcome.Ingested, null), (track2, IngestOutcome.Ingested, null),
+                (chd, IngestOutcome.Review, "NoDatMatch"),
+            }));
+        var rom = ReadZip("segacd/D/Disc Comet.zip").Roms.Single();
+        Assert.That(rom.Files!.Select(f => f.ExternalFileName), Is.EqualTo(new[] { cue, track2 }));
+        Assert.That(File.Exists(Path.Combine(Roms, "segacd", "D", chd)), Is.False);
+    }
+
+    [Test]
+    public async Task Chd_InTheMegaDriveFolder_IsUnsupportedType()
+    {
+        var result = await IngestAsync(DropAged("md", "disc.chd", FakeChd(2303)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+    }
+
+    [Test]
+    public async Task Chd_NamedByACue_WaitsWithItAsUnsupportedSetMember()
+    {
+        const string cue = "Wrapped.cue", chd = "Wrapped.chd";
+        var cueText = $"FILE \"{chd}\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n";
+        foreach (var (name, bytes) in new[] { (cue, System.Text.Encoding.UTF8.GetBytes(cueText)), (chd, FakeChd(2304)) })
+            File.SetLastWriteTimeUtc(Drop("psx", name, bytes).FullPath, DateTime.UtcNow.AddMinutes(-1));
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "psx").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome, i.Reason)),
+            Is.EquivalentTo(new[] { (cue, IngestOutcome.Skipped, IngestReason.UnsupportedSetMember), (chd, IngestOutcome.Skipped, IngestReason.UnsupportedSetMember) }));
+        Assert.That(Directory.GetFiles(Ingest("psx")).Select(Path.GetFileName), Is.EquivalentTo(new[] { cue, chd }));
+    }
+
+    [Test]
+    public async Task Chd_TwoIdenticalFiles_AreOneReviewItemAndOneDuplicate()
+    {
+        var bytes = FakeChd(2305);
+
+        var first = await IngestAsync(DropAged("psx", "Twin.chd", bytes));
+        var second = await IngestAsync(DropAged("psx", "Twin copy.chd", bytes));
+
+        Assert.That((first!.Outcome, second!.Outcome), Is.EqualTo((IngestOutcome.Review, IngestOutcome.Duplicate)));
+    }
+
     [TestCase("nes", "drift.gg")]
     [TestCase("gg", "pioneer.nes")]
     public async Task GameGear_FileInAnotherFamilysFolder_IsUnsupportedType(string folder, string name)

@@ -9,7 +9,8 @@ namespace RnRomManager.Api.Endpoints;
 /// <summary>
 /// Play B2–B3: <c>GET /api/games/{id}/roms/{romId}/play-disc</c>, one PlayStation (or Saturn) disc for the browser emulator. A
 /// standalone <c>.bin</c>/<c>.iso</c> streams unchanged; a cue set streams as an uncompressed ZIP holding a playback
-/// copy of the cue (<see cref="CueSheet.ForPlayback"/>) and the tracks as <c>track-NN.bin</c>. Every member is opened
+/// copy of the cue (<see cref="CueSheet.ForPlayback"/>) and the tracks as <c>track-NN.bin</c>. CHD B4: a standalone
+/// <c>.chd</c> streams unchanged like an <c>.iso</c>. Every member is opened
 /// and checked before the response starts; nothing is written to disk and nothing is audited. PSP B2: a PlayStation
 /// Portable release streams its standalone <c>.iso</c> the same way, bounded by <see cref="PspMaxBytes"/>. Saturn B5: a
 /// Saturn release takes PlayStation's shapes and cap (<see cref="MaxBytesBySystem"/>), and so does a Sega CD one (Sega CD B4).
@@ -147,8 +148,8 @@ public static class PlayDisc
     private static bool IsBin(string name) => name.EndsWith(".bin", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// B2: a standalone <c>.bin</c>/<c>.iso</c>, or one cue with 1–99 BINs (the main file among them), all portable
-    /// names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>.
+    /// B2: a standalone <c>.bin</c>/<c>.iso</c> (CHD B4: or <c>.chd</c>), or one cue with 1–99 BINs (the main file among
+    /// them), all portable names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>.
     /// </summary>
     private static string? ShapeProblem(List<Member> members, bool psp)
     {
@@ -161,7 +162,8 @@ public static class PlayDisc
             return "two disc files have the same name ignoring case";
         if (members.Count == 1)
             return IsBin(members[0].Name) || members[0].Name.EndsWith(".iso", StringComparison.OrdinalIgnoreCase)
-                ? null : "a single-file disc must be a .bin or .iso";
+                || members[0].Name.EndsWith(".chd", StringComparison.OrdinalIgnoreCase)
+                ? null : "a single-file disc must be a .bin, .iso or .chd";
         var cues = members.Count(m => IsCue(m.Name));
         var bins = members.Count(m => IsBin(m.Name));
         if (cues != 1 || bins != members.Count - 1 || !IsBin(members[0].Name))
