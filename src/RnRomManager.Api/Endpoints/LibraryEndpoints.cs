@@ -148,36 +148,20 @@ public static class LibraryEndpoints
                 : Results.Bytes(bytes!, "application/json");
         });
 
+        // The open/check logic is shared with the bundle ticket stream (LibraryDownload).
         games.MapGet("/{id:guid}/roms/{romId:long}/download", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,
             IRomRepository roms, LibraryFiles files) =>
         {
-            if (await roms.GetAsync(id, romId, ctx.RequestAborted) is not { } rom
-                || await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
-                return Problems.NotFound(ctx);
-            if (rom.ExternalFileName is { } externalFileName)
-            {
-                // shortcut: reads every external claim per download; add a per-folder query if this shows up in profiles.
-                var claims = await roms.ListExternalAsync(ctx.RequestAborted);
-                return files.OpenExternal(ctx, game, externalFileName, claims, out var file) is { } externalProblem
-                    ? externalProblem
-                    : Results.Stream(file!, "application/octet-stream", rom.FileName, enableRangeProcessing: true);
-            }
-            return files.OpenEntry(ctx, game, LibraryZip.RomEntry(rom.FileName), rom.SizeBytes, out var stream) is { } problem
-                ? problem
-                : Results.Stream(stream!, "application/octet-stream", rom.FileName);
+            var (attachment, problem) = await LibraryDownload.OpenReleaseAsync(ctx, id, romId, repository, roms, files);
+            return problem ?? LibraryDownload.Send(ctx, attachment!);
         });
 
         // B20: one file of a set, found by the release it belongs to (another release's file id is a 404).
         games.MapGet("/{id:guid}/roms/{romId:long}/files/{fileId:long}/download", async (Guid id, long romId, long fileId, HttpContext ctx,
             IGameRepository repository, IRomRepository roms, LibraryFiles files) =>
         {
-            if (await roms.GetFileAsync(id, romId, fileId, ctx.RequestAborted) is not { } setFile
-                || await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
-                return Problems.NotFound(ctx);
-            var claims = await roms.ListExternalAsync(ctx.RequestAborted);
-            return files.OpenExternal(ctx, game, setFile.ExternalFileName, claims, out var file) is { } problem
-                ? problem
-                : Results.Stream(file!, "application/octet-stream", setFile.FileName, enableRangeProcessing: true);
+            var (attachment, problem) = await LibraryDownload.OpenSetFileAsync(ctx, id, romId, fileId, repository, roms, files);
+            return problem ?? LibraryDownload.Send(ctx, attachment!);
         });
 
         // Play B2–B3: one PlayStation disc for the browser emulator (a standalone image, or its cue set as a ZIP).
