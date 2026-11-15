@@ -171,7 +171,7 @@ describe('Navbar', () => {
 		it('names the count for screen readers and shows it as a badge', () => {
 			render(Navbar, { me: user, reviewCount: null, onlogout: () => {}, cartCount: 1250 });
 
-			const link = screen.getByRole('link', { name: 'Bundle Creator, 1,250 files in the cart' });
+			const link = screen.getByRole('link', { name: 'Bundle, 1,250 files in the cart' });
 			expect(link.getAttribute('href')).toBe('/bundle-creator');
 			expect(link.querySelector('.badge')!.textContent).toBe('1,250');
 			expect(link.querySelector('i')!.className).toContain('bi-cart3');
@@ -185,11 +185,11 @@ describe('Navbar', () => {
 				onlogout: () => {},
 				cartCount: 1
 			});
-			expect(screen.getByRole('link', { name: 'Bundle Creator, 1 file in the cart' })).toBeTruthy();
+			expect(screen.getByRole('link', { name: 'Bundle, 1 file in the cart' })).toBeTruthy();
 			unmount();
 
 			render(Navbar, { me: user, reviewCount: null, onlogout: () => {}, cartCount: 0 });
-			const empty = screen.getByRole('link', { name: 'Bundle Creator' });
+			const empty = screen.getByRole('link', { name: 'Bundle' });
 			expect(empty.querySelector('.badge')).toBeNull();
 		});
 
@@ -201,14 +201,14 @@ describe('Navbar', () => {
 				onsearch: () => {},
 				cartCount: 3
 			});
-			expect(screen.queryByRole('link', { name: /Bundle Creator/ })).toBeNull();
+			expect(screen.queryByRole('link', { name: /^Bundle/ })).toBeNull();
 			expect(screen.queryByRole('button', { name: /Search/ })).toBeNull();
 		});
 
 		it('is a plain keyboard-focusable link inside the collapsible menu the mobile toggler opens', () => {
 			render(Navbar, { me: user, reviewCount: null, onlogout: () => {}, cartCount: 2 });
 
-			const link = screen.getByRole('link', { name: /Bundle Creator/ });
+			const link = screen.getByRole('link', { name: /^Bundle/ });
 			link.focus();
 			expect(document.activeElement).toBe(link);
 			expect(link.getAttribute('tabindex')).toBeNull();
@@ -224,9 +224,9 @@ describe('Navbar', () => {
 			page.url = new URL('http://localhost/bundle-creator');
 			render(Navbar, { me: user, reviewCount: null, onlogout: () => {}, cartCount: 0 });
 
-			expect(
-				screen.getByRole('link', { name: 'Bundle Creator' }).getAttribute('aria-current')
-			).toBe('page');
+			expect(screen.getByRole('link', { name: 'Bundle' }).getAttribute('aria-current')).toBe(
+				'page'
+			);
 		});
 
 		it('does not join the main page links', () => {

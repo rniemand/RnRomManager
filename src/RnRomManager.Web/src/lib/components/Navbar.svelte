@@ -31,11 +31,9 @@
 		cartCount
 	}: Props = $props();
 
-	const cartLabel = $derived(
-		cartCount
-			? `Bundle Creator, ${formatCount(cartCount)} ${cartCount === 1 ? 'file' : 'files'} in the cart`
-			: 'Bundle Creator'
-	);
+	// The link's name is its visible text plus hidden words ("Bundle, 2 files in the cart"), so axe's
+	// label-content-name-mismatch holds: visible text must be part of the accessible name.
+	const cartFiles = $derived(cartCount === 1 ? 'file' : 'files');
 
 	// Pages arrive in later steps (S41–S47); unknown ones show "Page not found" until then.
 	const links = $derived(
@@ -115,14 +113,11 @@
 							class="nav-link d-flex align-items-center gap-1"
 							class:active={isActive('/bundle-creator')}
 							aria-current={isActive('/bundle-creator') ? 'page' : undefined}
-							aria-label={cartLabel}
 							href={resolve('/bundle-creator')}
 						>
-							<Icon name="cart" /> Bundle
-							{#if cartCount}
-								<span class="badge rounded-pill text-bg-primary" aria-hidden="true"
-									>{formatCount(cartCount)}</span
-								>
+							<Icon name="cart" /> Bundle{#if cartCount}<span class="visually-hidden">,</span>
+								<span class="badge rounded-pill text-bg-primary">{formatCount(cartCount)}</span>
+								<span class="visually-hidden">{cartFiles} in the cart</span>
 							{/if}
 						</a>
 					</li>
