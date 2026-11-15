@@ -996,6 +996,57 @@ test('collections: create, add from game page and bulk select, search, remove, d
 	await expect(page.getByText('28 games')).toBeVisible();
 });
 
+test('collections discovery: browse publishers and genres across systems, share a selection', async () => {
+	// Discovery B1: link tabs; a bare URL is User collections.
+	await page.goto('/collections');
+	const tabs = page.getByRole('navigation', { name: 'Collections views' });
+	await expect(tabs.getByRole('link', { name: 'User collections' })).toHaveAttribute('aria-current', 'page');
+	await tabs.getByRole('link', { name: 'Publishers' }).click();
+	await expect(page).toHaveURL(/\/collections\?tab=publishers$/);
+	await expect(tabs.getByRole('link', { name: 'Publishers' })).toHaveAttribute('aria-current', 'page');
+	await expect(page.getByText('Choose a publisher to see its games across every system.')).toBeVisible();
+	await expectAccessible(page, 'publishers tab');
+
+	// B2: the seeded publisher groups games from every system.
+	const publishers = page.getByRole('list', { name: 'Publishers' });
+	await publishers.getByRole('link', { name: /Fixture Works/ }).click();
+	await expect(page).toHaveURL(/tab=publishers&key=[0-9a-f]{64}$/);
+	await expect(page.getByRole('heading', { name: /Fixture Works/ })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Orbit Kart 64', exact: true })).toBeVisible();
+	await expectAccessible(page, 'publisher games');
+
+	// Genres: Racing spans N64, SNES and Game Gear; a game link opens its page.
+	await tabs.getByRole('link', { name: 'Genres' }).click();
+	await expect(page).toHaveURL(/\/collections\?tab=genres$/);
+	await page.getByRole('list', { name: 'Genres' }).getByRole('link', { name: /Racing/ }).click();
+	await expect(page.getByRole('heading', { name: /Racing/ })).toBeVisible();
+	for (const title of ['Orbit Kart 64', 'Mode Seven Rally', 'Pocket Drift'])
+		await expect(page.getByRole('link', { name: title, exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Orbit Blocks', exact: true })).toBeHidden();
+	const racing = page.url();
+
+	// Back and forward restore the selection.
+	await page.goBack();
+	await expect(page).toHaveURL(/\/collections\?tab=genres$/);
+	await expect(page.getByText('Choose a genre to see its games across every system.')).toBeVisible();
+	await page.goForward();
+	await expect(page.getByRole('heading', { name: /Racing/ })).toBeVisible();
+
+	// A shared link opens the selection directly.
+	await page.goto('/collections');
+	await page.goto(racing);
+	await expect(page.getByRole('link', { name: /Racing/ })).toHaveAttribute('aria-current', 'true');
+	await expect(page.getByRole('link', { name: 'Pocket Drift', exact: true })).toBeVisible();
+	await page.getByRole('link', { name: 'Pocket Drift', exact: true }).click();
+	await expect(page).toHaveURL(/\/games\/[0-9a-f-]{36}$/);
+
+	// A selection no game has gets its own empty state.
+	await page.goto(`/collections?tab=genres&key=${'0'.repeat(64)}`);
+	await expect(page.getByText('No games have this genre any more.')).toBeVisible();
+	await page.getByRole('link', { name: 'Back to all genres' }).click();
+	await expect(page).toHaveURL(/\/collections\?tab=genres$/);
+});
+
 test('review queue: resolve with a suggestion', async () => {
 	await page.goto('/review');
 	await expectAccessible(page, 'review queue');

@@ -221,6 +221,43 @@ describe('collections tabs (discovery B1)', () => {
 		expect((screen.getByLabelText('Filter collections') as HTMLInputElement).value).toBe('zel');
 	});
 
+	it('a shared selection link opens the group and its games directly', async () => {
+		const key = 'c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516';
+		navigateTo(`/collections?tab=publishers&key=${key}&groupPage=2&gamePage=2`);
+		answers['GET /api/discovery/publishers?page=2&pageSize=20'] = [
+			{
+				status: 200,
+				body: {
+					items: [{ key, name: 'Nintendo', gameCount: 30, logoUrl: null }],
+					page: 2,
+					pageSize: 20,
+					total: 21
+				}
+			}
+		];
+		answers[`GET /api/discovery/publishers/games?key=${key}&page=2&pageSize=20`] = [
+			{ status: 200, body: { items: [], page: 2, pageSize: 20, total: 30 } }
+		];
+		render(CollectionsPage);
+
+		const selected = await screen.findByRole('link', { name: /Nintendo/ });
+		expect(selected.getAttribute('aria-current')).toBe('true');
+		await vi.waitFor(() =>
+			expect(screen.getByRole('heading', { name: /Nintendo/ }).textContent).toContain('30 games')
+		);
+		expect(current()).toEqual(['Publishers']);
+	});
+
+	it('a discovery tab without a selection asks for one', async () => {
+		navigateTo('/collections?tab=genres');
+		render(CollectionsPage);
+
+		expect(
+			await screen.findByText('Choose a genre to see its games across every system.')
+		).toBeTruthy();
+		expect(keys().some((k) => k.includes('/games'))).toBe(false);
+	});
+
 	it('back and forward between tabs follow the URL', async () => {
 		navigateTo('/collections?q=zel');
 		answers['GET /api/collections?q=zel&pageSize=20'] = [

@@ -16,9 +16,16 @@
 		view: DiscoveryState;
 		/** Go to another group page, keeping the selection. */
 		onpage: (groupPage: number) => void;
+		/** Called with the selected group whenever a loaded page holds it (for the games heading). */
+		onselected?: (group: DiscoveryGroup) => void;
 	}
 
-	let { view, onpage }: Props = $props();
+	let { view, onpage, onselected }: Props = $props();
+
+	$effect(() => {
+		const selected = result?.items.find((g) => g.key === view.key);
+		if (selected) onselected?.(selected);
+	});
 
 	const sizeKey = 'discoveryGroups';
 	let pageSize = $state(readPageSize(sizeKey));

@@ -14,6 +14,7 @@
 		type DiscoveryState
 	} from '#lib/discovery.js';
 	import CollectionModal from '#lib/components/CollectionModal.svelte';
+	import DiscoveryGames from '#lib/components/DiscoveryGames.svelte';
 	import DiscoveryGroups from '#lib/components/DiscoveryGroups.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
@@ -49,6 +50,8 @@
 	}
 
 	const discovery = $derived(discoveryState(page.url));
+	/** Group names seen in the group list, by key, for the games heading (the API's games page has none). */
+	const groupNames = $state<Record<string, string>>({});
 
 	/** Paging within a discovery tab replaces the history entry; selecting a group is a link (a new entry). */
 	function goDiscovery(next: DiscoveryState): void {
@@ -204,10 +207,33 @@
 		/>
 	{/if}
 {:else if discovery}
-	<DiscoveryGroups
-		view={discovery}
-		onpage={(groupPage) => goDiscovery({ ...discovery, groupPage })}
-	/>
+	<div class="row g-4">
+		<div class="col-12 col-lg-4">
+			<DiscoveryGroups
+				view={discovery}
+				onpage={(groupPage) => goDiscovery({ ...discovery, groupPage })}
+				onselected={(group) => (groupNames[group.key] = group.name)}
+			/>
+		</div>
+		<div class="col-12 col-lg-8">
+			{#if discovery.key}
+				{#key `${discovery.kind}:${discovery.key}`}
+					<DiscoveryGames
+						view={{ ...discovery, key: discovery.key }}
+						name={groupNames[discovery.key] ?? null}
+						onpage={(gamePage) => goDiscovery({ ...discovery, gamePage })}
+					/>
+				{/key}
+			{:else}
+				<EmptyState
+					message="Choose a {discovery.kind === 'publishers'
+						? 'publisher'
+						: 'genre'} to see its games across every system."
+					icon="collections"
+				/>
+			{/if}
+		</div>
+	</div>
 {/if}
 
 <CollectionModal bind:open={creating} collection={null} />

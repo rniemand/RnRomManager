@@ -4,7 +4,7 @@
  */
 
 import { api } from './api/client';
-import type { DiscoveryGroup, Page } from './api/types';
+import type { DiscoveryGroup, GameListItem, Page } from './api/types';
 
 export type DiscoveryKind = 'publishers' | 'genres';
 export type CollectionsTab = 'collections' | DiscoveryKind;
@@ -76,5 +76,12 @@ export const discoveryApi = {
 		if (params.page > 1) search.set('page', String(params.page));
 		search.set('pageSize', String(params.pageSize));
 		return api.get<Page<DiscoveryGroup>>(`/api/discovery/${kind}?${search}`);
+	},
+	/** The group's games across systems; 404 when no game has that value any more. */
+	games: (kind: DiscoveryKind, key: string, params: { page: number; pageSize: number }) => {
+		const search = new URLSearchParams({ key });
+		if (params.page > 1) search.set('page', String(params.page));
+		search.set('pageSize', String(params.pageSize));
+		return api.get<Page<GameListItem>>(`/api/discovery/${kind}/games?${search}`);
 	}
 };
