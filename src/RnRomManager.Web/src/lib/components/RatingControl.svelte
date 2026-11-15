@@ -66,7 +66,11 @@
 		</span>
 	{/if}
 {:else}
-	<div class="d-inline-flex align-items-center" role="group" aria-label="Rating for {title}">
+	<div
+		class="d-inline-flex flex-wrap align-items-center"
+		role="group"
+		aria-label="Rating for {title}"
+	>
 		{#each stars as n (n)}
 			<button
 				type="button"
