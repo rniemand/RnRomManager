@@ -18,8 +18,8 @@ public sealed class SegaCdHandler : ISystemHandler
     public string ShortName => "SCD";
     public string Family => "segacd";
 
-    /// <summary><c>[0]</c> is what a file resolved through Review without a DAT entry is stored as.</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".bin", ".cue", ".iso"];
+    /// <summary><c>[0]</c> is what a file resolved through Review without a DAT entry is stored as. A <c>.chd</c> is a lone file that never matches the DAT (CHD B1–B2).</summary>
+    public IReadOnlyList<string> RomExtensions { get; } = [".bin", ".cue", ".iso", ".chd"];
 
     public long MinRomSizeBytes => 16;
 

@@ -51,7 +51,7 @@ No migration, no config key. API contract: unchanged shapes; play-disc returns 2
 ## Steps
 Steps 2–3 run integration tests (category `Integration`), which need Docker. Playwright runs only in Finish; this spec adds no e2e case.
 
-- [ ] **1. Handlers** (B1): `.chd` appended in the three handlers; README table rows' format cells gain `` `.chd` ``.
+- [x] **1. Handlers** (B1): `.chd` appended in the three handlers; README table rows' format cells gain `` `.chd` ``.
   - Files: the three handlers, `README.md` (three rows only), `tests/RnRomManager.Systems.Sony.Tests/PlayStationHandlerTests.cs`, `tests/RnRomManager.Systems.Sega.Tests/SaturnHandlerTests.cs`, `tests/RnRomManager.Systems.Sega.Tests/SegaCdHandlerTests.cs`.
   - Tests: the three handler test classes (exact `RomExtensions`, `[0]` still `.bin`), `SupportedSystemsTableTests`.
   - Done when: those pass and the solution builds with warnings as errors.
