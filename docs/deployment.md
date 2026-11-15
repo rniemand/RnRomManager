@@ -85,12 +85,12 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 | Path | Contents |
 |---|---|
 | `/app/roms` | the library: one ZIP per game (see [ZIP format](zip-format.md)), plus the Nintendo Switch ROM files stored next to their ZIPs |
-| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`) `ingest/nds/` (Nintendo DS: `.nds`; dumps over 256 MiB must be dropped loose, since archives are capped at 256 MiB of ROM data) `ingest/nes/` (NES: headered `.nes` only) `ingest/snes/` (SNES: `.sfc` or `.smc`, copier header stripped) `ingest/a2600/` (Atari 2600: `.a26` or `.bin`) `ingest/coleco/` (ColecoVision: `.col`, `.rom` or `.bin`) `ingest/gg/` (Game Gear: `.gg` or `.sms`) `ingest/sms/` (Master System: `.sms`) `ingest/md/` (Mega Drive / Genesis: `.md`, `.bin` or `.gen`) `ingest/s32x/` (32X: `.32x`) `ingest/tg16/` (TurboGrafx-16 / PC Engine: `.pce`, copier header stripped) `ingest/switch/` (Nintendo Switch: `.nsp`, `.xci`, `.nsz` or `.xcz`) `ingest/psx/` (PlayStation: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`) `ingest/psp/` (PSP: `.iso`) `ingest/gc/` (GameCube: `.iso`) `ingest/wii/` (Wii: `.iso`) `ingest/x360/` (Xbox 360: `.iso`) `ingest/saturn/` (Saturn: a `.cue` with its `.bin` tracks, or `.nrg`/`.chd`) or `ingest/segacd/` (Sega CD: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`); Switch and the disc systems are stored as files next to the ZIP (see [External ROM storage](#external-rom-storage-nintendo-switch-and-disc-systems)), and disc images must be dropped loose, not in archives; `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way (`_removed/` is managed on the Admin **Deleted ROMs** page: restore or delete for good) |
+| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`) `ingest/nds/` (Nintendo DS: `.nds`; dumps over 256 MiB must be dropped loose, since archives are capped at 256 MiB of ROM data) `ingest/nes/` (NES: headered `.nes` only) `ingest/snes/` (SNES: `.sfc` or `.smc`, copier header stripped) `ingest/a2600/` (Atari 2600: `.a26` or `.bin`) `ingest/coleco/` (ColecoVision: `.col`, `.rom` or `.bin`) `ingest/gg/` (Game Gear: `.gg` or `.sms`) `ingest/sms/` (Master System: `.sms`) `ingest/md/` (Mega Drive / Genesis: `.md`, `.bin` or `.gen`) `ingest/s32x/` (32X: `.32x`) `ingest/tg16/` (TurboGrafx-16 / PC Engine: `.pce`, copier header stripped) `ingest/switch/` (Nintendo Switch: `.nsp`, `.xci`, `.nsz` or `.xcz`) `ingest/psx/` (PlayStation: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`) `ingest/psp/` (PSP: `.iso`) `ingest/gc/` (GameCube: `.iso`) `ingest/wii/` (Wii: `.iso`) `ingest/x360/` (Xbox 360: `.iso`) `ingest/saturn/` (Saturn: a `.cue` with its `.bin` tracks, or `.nrg`/`.chd`) `ingest/segacd/` (Sega CD: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`) or `ingest/3do/` (3DO: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`); Switch and the disc systems are stored as files next to the ZIP (see [External ROM storage](#external-rom-storage-nintendo-switch-and-disc-systems)), and disc images must be dropped loose, not in archives; `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way (`_removed/` is managed on the Admin **Deleted ROMs** page: restore or delete for good) |
 | `/app/logs` | `rnrommanager-yyyy-MM-dd.log`, kept for `Logging:RetentionDays` |
 | `/app/cache` | downloaded DATs and temporary work folders |
 | `/app/backups` | the daily database backups (see [Backup and restore](#backup-and-restore)); keep it private |
 | `/app/collections` | collection cover images (`<collection id>.png` or `.jpg`) |
-| `/app/bios` | emulator BIOS files you copy in for browser play (`colecovision.rom` for ColecoVision, required; the optional 512 KiB `scph5501.bin` for PlayStation, which otherwise uses its built-in HLE BIOS; at least one of the 128 KiB `bios_CD_U.bin`, `bios_CD_E.bin` or `bios_CD_J.bin` for Sega CD, required); any file here can be downloaded by a signed-in user, so keep only BIOS files in it |
+| `/app/bios` | emulator BIOS files you copy in for browser play (`colecovision.rom` for ColecoVision, required; the optional 512 KiB `scph5501.bin` for PlayStation, which otherwise uses its built-in HLE BIOS; at least one of the 128 KiB `bios_CD_U.bin`, `bios_CD_E.bin` or `bios_CD_J.bin` for Sega CD, required; at least one of the 1 MiB `panafz10.bin`, `panafz1.bin`, `panafz1j.bin`, `goldstar.bin` or `sanyotry.bin` for 3DO, required); any file here can be downloaded by a signed-in user, so keep only BIOS files in it |
 
 An existing deployment that doesn't map `/app/collections` or `/app/bios` still starts (the folders are created), but their files then live in anonymous Docker volumes and are lost when the container is recreated: add the mappings when you upgrade (`mkdir -p data/bios`, then add `- ./data/bios:/app/bios`).
 
@@ -206,7 +206,7 @@ Upgrading to 0.4.0:
 - **Add the BIOS folder** for ColecoVision browser play: `mkdir -p data/bios`, add `- ./data/bios:/app/bios` to the app's `volumes:` (and `chown` it like the others if you don't set `user:`), then copy `colecovision.rom` (and, optionally, `scph5501.bin` for PlayStation) into it. Without the mapping the folder lives in an anonymous volume.
 - **To be able to downgrade,** take a database backup (**Back up now**) and a filesystem snapshot of `/app/roms` (and `/app/ingest`) at the same moment before upgrading, and restore **both** to go back: the database alone doesn't know where external files were.
 
-After upgrading to a version that adds a system (such as the ones that add Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch, the disc systems and Sega CD), ingestion refuses to start with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs.
+After upgrading to a version that adds a system (such as the ones that add Game Boy Advance, Nintendo 64, NES, SNES, Atari 2600, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch, the disc systems, Sega CD and 3DO), ingestion refuses to start with `DatsMissing` until an Admin runs **Admin → DATs → Refresh DATs** to download the new system's DATs.
 
 On `docker compose stop` a running job gets 30 seconds to finish its current item (`stop_grace_period: 35s` allows for that). A job that's cut off is marked `Aborted` at the next start and its leftovers are cleaned up; just start it again.
 
@@ -218,6 +218,11 @@ Upgrading to the release that adds Sega CD:
 
 - **Refresh DATs after upgrading.** Sega CD is identified against libretro's Redump `Sega - Mega-CD - Sega CD` DAT (one file, no metadat). Until **Admin → DATs → Refresh DATs** has downloaded it, every import is refused with `DatsMissing`. `roms/segacd/` and `ingest/segacd/` are created at startup.
 - **For Sega CD browser play,** set up the [Genesis Plus GX core](#genesis-plus-gx-core) (the same files as Mega Drive / Genesis) and copy at least one regional BIOS, `bios_CD_U.bin`, `bios_CD_E.bin` or `bios_CD_J.bin` (128 KiB each), into `/app/bios`. The app doesn't include any Sega CD BIOS; a disc whose region's BIOS is missing doesn't boot.
+
+Upgrading to the release that adds 3DO:
+
+- **Refresh DATs after upgrading.** 3DO is identified against libretro's Redump `The 3DO Company - 3DO` DAT (one file, no metadat). Until **Admin → DATs → Refresh DATs** has downloaded it, every import is refused with `DatsMissing`. `roms/3do/` and `ingest/3do/` are created at startup.
+- **For 3DO browser play,** set up the [Opera core](#opera-core) (`Emulator:OperaCorePath`) and copy at least one 3DO BIOS, `panafz10.bin`, `panafz1.bin`, `panafz1j.bin`, `goldstar.bin` or `sanyotry.bin` (1 MiB each), into `/app/bios`. The app doesn't include any 3DO BIOS.
 
 ## Nintendo DS: memory, disk and time
 
@@ -237,7 +242,7 @@ DS dumps are stored inside the game's ZIP and reach 512 MiB. Importing or resolv
 
 ## External ROM storage (Nintendo Switch and disc systems)
 
-Switch ROMs and disc images (PlayStation, PSP, GameCube, Wii, Xbox 360, Saturn and Sega CD) are files next to their game's ZIP in `/app/roms/<system>/<letter>/` (see [ZIP format](zip-format.md#external-rom-files)); a disc set's cue and tracks sit there under their exact names. The app never overwrites a file it didn't create and never follows a link: every path is checked below its configured root, and a linked or special file or folder is reported and left alone.
+Switch ROMs and disc images (PlayStation, PSP, GameCube, Wii, Xbox 360, Saturn, Sega CD and 3DO) are files next to their game's ZIP in `/app/roms/<system>/<letter>/` (see [ZIP format](zip-format.md#external-rom-files)); a disc set's cue and tracks sit there under their exact names. The app never overwrites a file it didn't create and never follows a link: every path is checked below its configured root, and a linked or special file or folder is reported and left alone.
 
 **Requirements**
 
@@ -319,6 +324,43 @@ Then mount the folder read-only and point the setting at it:
 ```
 
 The same advice as for Genesis Plus GX applies: the app's UID 1654 needs read access (e.g. `chmod -R a+rX /srv/rnrommanager/snes9x`), and the folder must stay outside anything the app or its users can write to (not under `data/`'s library, ingest, cache or backup folders), since EmulatorJS runs the JavaScript inside these files in the app's origin. You may also put the Snes9x files in the Genesis or PicoDrive folder and point the settings at it. Without the setting, Play on a SNES game explains that the core needs setting up.
+
+## Opera core
+
+3DO play needs three Opera files you supply ([configuration](configuration.md#opera-core) lists their sizes and SHA-256). Follow the core's own licence terms: Opera's libretro core info gives its licence as "LGPL/Non-commercial" ([core info](https://github.com/libretro/libretro-core-info/blob/master/opera_libretro.info)); the payloads carry no `license.txt` of their own. Get the exact archive in a scratch folder outside the app and the repository (this downloads it without installing anything):
+
+```bash
+mkdir -p ~/opera-core && cd ~/opera-core
+npm pack @emulatorjs/core-opera@4.2.3
+tar -xzf emulatorjs-core-opera-4.2.3.tgz
+```
+
+Copy the two non-threaded payloads from `package/` and the report from `package/reports/` to the root of the folder you'll mount (the archive's `-thread` payloads aren't used), then check all three hashes before setting the path:
+
+```bash
+mkdir -p /srv/rnrommanager/opera
+cp package/opera-wasm.data package/opera-legacy-wasm.data package/reports/opera.json /srv/rnrommanager/opera/
+cd /srv/rnrommanager/opera && sha256sum opera-wasm.data opera-legacy-wasm.data opera.json
+```
+
+The output must be exactly:
+
+```text
+3e737f4f739814c12c017a5f26cb1e43bdfe3ac6f2d3bf6e8972633df49e33d4  opera-wasm.data
+41d3a7336cd304693c86974b50df5f7a90d9557077b01e0a1e928b3a38fe4f86  opera-legacy-wasm.data
+0245b492b516ef4b1c0490e3f05dbeb1d74074ea767cd54fc34747e31b2a0203  opera.json
+```
+
+Then mount the folder read-only and point the setting at it:
+
+```yaml
+    volumes:
+      - /srv/rnrommanager/opera:/app/opera:ro
+    environment:
+      Emulator__OperaCorePath: /app/opera
+```
+
+The same advice as for Genesis Plus GX applies: the app's UID 1654 needs read access (e.g. `chmod -R a+rX /srv/rnrommanager/opera`), and the folder must stay outside anything the app or its users can write to (not under `data/`'s library, ingest, cache or backup folders), since EmulatorJS runs the JavaScript inside these files in the app's origin. You may also put the Opera files in another operator core's folder and point the settings at it. 3DO also needs at least one BIOS in `/app/bios` ([volumes](#volumes-and-permissions)); none is included. Without the setting, Play on a 3DO game explains that the core needs setting up.
 
 ## Admin password recovery
 
