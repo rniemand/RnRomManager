@@ -1,6 +1,7 @@
 using System.Data;
 using System.Text.Json;
 using Dapper;
+using RnRomManager.Core.Bundles;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Library;
 
@@ -450,6 +451,54 @@ public sealed class RomRepository : IRomRepository
         await using var connection = _connections.Create();
         return (await connection.QueryAsync<RomFileRow>(new CommandDefinition(
             $"{SelectFiles} WHERE f.sha1 = @sha1 ORDER BY f.id", new { sha1 }, cancellationToken: cancellationToken))).AsList();
+    }
+
+    private sealed record BundleRelease(long Id, Guid GameId, string Sha1, string FileName, string GameTitle);
+
+    private sealed record BundleSetFile(long Id, long RomId, string Sha1, string FileName);
+
+    public async Task<IReadOnlyList<BundleFileTarget?>> ResolveBundleFilesAsync(IReadOnlyList<BundleFileIdentity> identities,
+        CancellationToken cancellationToken)
+    {
+        if (identities.Count == 0) return [];
+        var releaseShas = identities.Select(i => i.ReleaseSha1).Distinct(StringComparer.Ordinal).ToList();
+
+        // Two bounded reads in one snapshot: the releases by their unique SHA-1, then the set files of those releases.
+        await using var connection = _connections.Create();
+        await connection.OpenAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
+        var releases = (await connection.QueryAsync<BundleRelease>(new CommandDefinition("""
+            SELECT r.id AS Id, r.game_id AS GameId, r.sha1 AS Sha1, r.file_name AS FileName, g.display_title AS GameTitle
+            FROM roms r JOIN games g ON g.id = r.game_id
+            WHERE r.sha1 IN @releaseShas
+            """, new { releaseShas }, transaction, cancellationToken: cancellationToken)))
+            .ToDictionary(r => r.Sha1, StringComparer.Ordinal);
+
+        var memberRomIds = identities
+            .Where(i => i.Member is not null && releases.TryGetValue(i.ReleaseSha1, out var r) && r.GameId == i.GameId)
+            .Select(i => releases[i.ReleaseSha1].Id).Distinct().ToList();
+        var files = memberRomIds.Count == 0
+            ? []
+            : (await connection.QueryAsync<BundleSetFile>(new CommandDefinition("""
+                SELECT id AS Id, rom_id AS RomId, sha1 AS Sha1, file_name AS FileName FROM rom_files WHERE rom_id IN @memberRomIds
+                """, new { memberRomIds }, transaction, cancellationToken: cancellationToken))).AsList();
+        await transaction.CommitAsync(cancellationToken);
+        var filesByRom = files.ToLookup(f => f.RomId);
+
+        return identities.Select(identity =>
+        {
+            // B3: never substitute another game's release.
+            if (!releases.TryGetValue(identity.ReleaseSha1, out var release) || release.GameId != identity.GameId) return null;
+            if (identity.Member is not { } member)
+                return new BundleFileTarget(release.GameId, release.GameTitle, release.Id, null, release.FileName);
+            var matches = filesByRom[release.Id]
+                .Where(f => string.Equals(f.Sha1, member.Sha1, StringComparison.Ordinal)
+                            && string.Equals(f.FileName, member.FileName, StringComparison.Ordinal))
+                .Take(2).ToList();
+            return matches.Count == 1
+                ? new BundleFileTarget(release.GameId, release.GameTitle, release.Id, matches[0].Id, matches[0].FileName)
+                : (BundleFileTarget?)null;
+        }).ToList();
     }
 }
 
