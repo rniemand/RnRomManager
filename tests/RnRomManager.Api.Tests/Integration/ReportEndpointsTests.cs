@@ -163,6 +163,95 @@ public class ReportEndpointsTests
         Assert.That((second.GetProperty("total").GetInt64(), Rows(second)), Is.EqualTo((3L, new List<(Guid, string)> { (bravo, "NoCover") })));
     }
 
+    private async Task<(Guid? Id, bool CurrentIsOnly)> Next(Guid? after = null)
+    {
+        var json = await GetJson("/api/reports/missing-images/next" + (after is { } id ? $"?afterGameId={id}" : ""));
+        var next = json.GetProperty("id");
+        return (next.ValueKind == JsonValueKind.Null ? null : next.GetGuid(), json.GetProperty("currentIsOnly").GetBoolean());
+    }
+
+    [Test]
+    public async Task NextMissingImage_FollowsTheReportOrder_AcrossSystems_AndWraps()
+    {
+        var (alpha, bravo, delta, echo) = await SeedMissingImages();
+
+        Assert.That(await Next(), Is.EqualTo(((Guid?)alpha, false)), "no anchor starts at the first row");
+        Assert.That(await Next(alpha), Is.EqualTo(((Guid?)bravo, false)));
+        Assert.That(await Next(delta), Is.EqualTo(((Guid?)echo, false)), "gb's last row is followed by gbc's first");
+        Assert.That(await Next(echo), Is.EqualTo(((Guid?)alpha, false)), "the last row wraps to the first");
+    }
+
+    [Test]
+    public async Task NextMissingImage_FixedAnchor_KeepsItsPosition()
+    {
+        var (alpha, bravo, delta, _) = await SeedMissingImages();
+        var charlie = await GameId("Charlie");
+        // Bravo has just been fixed: the next press still continues after it, not from the top.
+        await Sql("UPDATE images SET is_cover = 1 WHERE game_id = @bravo", new { bravo });
+
+        Assert.That(await Next(bravo), Is.EqualTo(((Guid?)delta, false)));
+        Assert.That(await Next(charlie), Is.EqualTo(((Guid?)delta, false)), "Charlie, never in the report, sorts between Bravo and Delta");
+        Assert.That(await Next(alpha), Is.EqualTo(((Guid?)delta, false)));
+    }
+
+    [Test]
+    public async Task NextMissingImage_DeletedAnchor_StartsAtTheFirstRow()
+    {
+        var (alpha, _, _, _) = await SeedMissingImages();
+
+        Assert.That(await Next(Guid.NewGuid()), Is.EqualTo(((Guid?)alpha, false)));
+    }
+
+    [Test]
+    public async Task NextMissingImage_TitleTies_AreBrokenById_UnderTheColumnCollation()
+    {
+        var (alpha, bravo, delta, _) = await SeedMissingImages();
+        // "ALPHA" equals "Alpha" under the column's case-insensitive collation, so only the id orders the two.
+        await Sql("UPDATE games SET display_title = 'ALPHA' WHERE id = @bravo", new { bravo });
+        var (low, high) = string.CompareOrdinal(alpha.ToString("D"), bravo.ToString("D")) < 0 ? (alpha, bravo) : (bravo, alpha);
+
+        var report = Rows(await GetJson("/api/reports/missing-images")).Select(r => r.Id).ToList();
+        Assert.That(report.Take(3), Is.EqualTo(new[] { low, high, delta }), "the report itself breaks the tie by id");
+        Assert.That(await Next(), Is.EqualTo(((Guid?)low, false)));
+        Assert.That(await Next(low), Is.EqualTo(((Guid?)high, false)));
+        Assert.That(await Next(high), Is.EqualTo(((Guid?)delta, false)));
+    }
+
+    [Test]
+    public async Task NextMissingImage_SoleCurrent_And_Empty()
+    {
+        var (alpha, bravo, delta, echo) = await SeedMissingImages();
+        await Sql("""
+            UPDATE images SET is_cover = 1 WHERE game_id IN (@bravo, @delta);
+            UPDATE games SET has_default_boxart = 0 WHERE id IN (@bravo, @delta, @echo)
+            """, new { bravo, delta, echo });
+
+        Assert.That(await Next(alpha), Is.EqualTo(((Guid?)null, true)), "only the current game is left");
+        Assert.That(await Next(), Is.EqualTo(((Guid?)alpha, false)));
+        Assert.That(await Next(bravo), Is.EqualTo(((Guid?)alpha, false)), "a fixed anchor still finds the remaining game");
+
+        await Sql("UPDATE games SET has_default_boxart = 0 WHERE id = @alpha", new { alpha });
+        Assert.That(await Next(), Is.EqualTo(((Guid?)null, false)));
+        Assert.That(await Next(alpha), Is.EqualTo(((Guid?)null, false)), "a fixed current game is not the only one left");
+    }
+
+    [Test]
+    public async Task NextMissingImage_InvalidGuid_Is400_AndAnonymousIs401()
+    {
+        using var invalid = await _user.GetAsync("/api/reports/missing-images/next?afterGameId=not-a-guid");
+        Assert.That((invalid.StatusCode, await AuthClient.CodeAsync(invalid)), Is.EqualTo((HttpStatusCode.BadRequest, "ValidationFailed")));
+
+        using var anonymous = await AuthClient.CreateAsync(_factory);
+        using var response = await anonymous.GetAsync("/api/reports/missing-images/next");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+    }
+
+    private async Task<Guid> GameId(string displayTitle)
+    {
+        await using var db = Service<IDbConnectionFactory>().Create();
+        return await db.ExecuteScalarAsync<Guid>("SELECT id FROM games WHERE display_title = @displayTitle", new { displayTitle });
+    }
+
     private async Task<(Guid Alpha, Guid Bravo, Guid Charlie, Guid Echo)> SeedSizes()
     {
         var alpha = await Ingest("gb", "a.gb", Alpha);

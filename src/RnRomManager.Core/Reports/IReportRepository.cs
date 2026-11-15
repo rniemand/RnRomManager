@@ -8,6 +8,13 @@ public interface IReportRepository
     /// <summary>RP4: games with no cover image, or whose cover is the placeholder, sorted by system then title.</summary>
     Task<Page<MissingImageItem>> ListMissingImagesAsync(string? systemId, int page, int pageSize, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// The missing-image report row after <paramref name="afterGameId"/> in the unfiltered report order (system, title, id),
+    /// wrapping to the first row other than the anchor. An absent or deleted anchor starts at the first row; an anchor that is no
+    /// longer missing images still keeps its sort position.
+    /// </summary>
+    Task<MissingImageSuccessor> NextMissingImageAsync(Guid? afterGameId, CancellationToken cancellationToken);
+
     /// <summary>RP2: per system with at least one game, <c>SUM(games.zip_size_bytes)</c> and the game count, largest first.</summary>
     Task<IReadOnlyList<SystemSize>> ListSystemSizesAsync(CancellationToken cancellationToken);
 
@@ -28,6 +35,10 @@ public sealed record GameSize(Guid Id, string DisplayTitle, long Bytes, int RomC
 
 /// <param name="Reason">A <see cref="MissingImageReasons"/> value.</param>
 public sealed record MissingImageItem(Guid Id, string DisplayTitle, string SystemId, string Reason);
+
+/// <param name="Id">The game to open, or null when no other game is missing images.</param>
+/// <param name="CurrentIsOnly">True when <c>Id</c> is null because the anchor itself is the only game still missing images.</param>
+public sealed record MissingImageSuccessor(Guid? Id, bool CurrentIsOnly);
 
 public static class MissingImageReasons
 {
