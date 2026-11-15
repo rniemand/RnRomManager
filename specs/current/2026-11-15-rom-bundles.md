@@ -1,6 +1,6 @@
 ---
 title: Bundle Creator for ROM files
-status: ready
+status: in-progress
 created: 2026-11-15
 ---
 
