@@ -115,6 +115,7 @@
 							aria-current={isActive('/bundle-creator') ? 'page' : undefined}
 							href={resolve('/bundle-creator')}
 						>
+							<!-- eslint-disable-next-line svelte/no-useless-mustaches -- Svelte trims a literal space at the start of a block -->
 							<Icon name="cart" /> Bundle{#if cartCount}{' '}
 								<span class="badge rounded-pill text-bg-primary">{formatCount(cartCount)}</span>
 								<span class="visually-hidden">{cartFiles} in the cart</span>
