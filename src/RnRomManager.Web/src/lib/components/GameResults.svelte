@@ -146,6 +146,7 @@
 						<div
 							class="position-relative z-2 mt-1"
 							class:d-flex={action}
+							class:flex-wrap={action}
 							class:align-items-center={action}
 							class:justify-content-between={action}
 						>

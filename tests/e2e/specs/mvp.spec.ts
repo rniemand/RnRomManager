@@ -318,6 +318,22 @@ test('browse, search and filter the library', async () => {
 	await page.getByRole('button', { name: 'Reset filters' }).click();
 	await expect(page.getByText('28 games')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Reset filters' })).toHaveCount(0);
+
+	// The card grid fits a 320px phone: no sideways page scroll, and each card's Favourite button is on screen.
+	await expect(page.getByRole('button', { name: 'Grid view' })).toHaveAttribute('aria-pressed', 'true');
+	const viewport = page.viewportSize()!;
+	await page.setViewportSize({ width: 320, height: 800 });
+	expect(
+		await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+	).toBe(true);
+	const favouritesOffScreen = await page.evaluate(() =>
+		[...document.querySelectorAll('.game-card button[aria-label="Favourite"]')].filter((b) => {
+			const box = b.getBoundingClientRect();
+			return box.left < 0 || box.right > window.innerWidth;
+		}).length
+	);
+	expect(favouritesOffScreen).toBe(0);
+	await page.setViewportSize(viewport);
 });
 
 test('game detail + downloads', async () => {
