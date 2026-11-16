@@ -42,6 +42,7 @@ const game = (id: string, title: string): GameListItem => ({
 	favourite: false,
 	matchedOn: null,
 	updateCount: 0,
+	saveCount: 0,
 	playRomId: null,
 	playRomFileName: null,
 	playDisc: false,

@@ -25,11 +25,12 @@ public partial class LibraryMirrorTests
     private InfoJsonReader _reader = null!;
     private TempDir _dir = null!;
     private DbSync _sync = null!;
+    private MySqlConnectionFactory _factory = null!;
 
     [SetUp]
     public async Task SetUp()
     {
-        var factory = new MySqlConnectionFactory(await MariaDbServer.CreateDatabaseAsync());
+        var factory = _factory = new MySqlConnectionFactory(await MariaDbServer.CreateDatabaseAsync());
         new MySqlDatabaseLifecycle(factory, NullLogger<MySqlDatabaseLifecycle>.Instance, TimeProvider.System).Migrate();
         _mirror = new LibraryMirror(factory);
         _games = new GameRepository(factory);
@@ -132,6 +133,38 @@ public partial class LibraryMirrorTests
         Assert.That(await _roms.ListByGameAsync(game.GameId, CancellationToken.None), Has.Count.EqualTo(1));
         Assert.That((await _games.GetAsync(game.GameId, CancellationToken.None))!.ZipPath, Is.EqualTo("gb/T/Tetris DX.zip"));
         Assert.That(await _games.ListSyncStateAsync(CancellationToken.None), Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task Replace_KeepsEachReleasesRomId_AndNumbersANewOne()
+    {
+        var game = Game("Tetris", Rom("a.gb", RomBytes(1)));
+        await _mirror.ReplaceAsync(Entry(game), CancellationToken.None);
+        var before = (await _roms.ListByGameAsync(game.GameId, CancellationToken.None)).Single().Id;
+
+        await _mirror.ReplaceAsync(Entry(game with { Roms = [.. game.Roms, Rom("b.gb", RomBytes(2), isPrimary: false)] }), CancellationToken.None);
+
+        var after = await _roms.ListByGameAsync(game.GameId, CancellationToken.None);
+        Assert.That(after.Single(r => r.FileName == "a.gb").Id, Is.EqualTo(before));
+        Assert.That(after.Single(r => r.FileName == "b.gb").Id, Is.Not.EqualTo(before));
+    }
+
+    [Test]
+    public async Task Replace_CountsTheZipsSaves_AndZeroWithoutAZip()
+    {
+        var mirror = (ILibraryMirror)new LibraryMirror(_factory, Options.Create(new PathsOptions { Roms = _dir.Path }));
+        var game = Game("Tetris", Rom("a.gb", RomBytes(1)));
+        await mirror.ReplaceAsync(Entry(game), CancellationToken.None);
+        Assert.That((await _games.GetAsync(game.GameId, CancellationToken.None))!.SaveCount, Is.Zero);
+
+        Directory.CreateDirectory(Path.GetDirectoryName(Abs("gb/T/Tetris.zip"))!);
+        using (var zip = System.IO.Compression.ZipFile.Open(Abs("gb/T/Tetris.zip"), System.IO.Compression.ZipArchiveMode.Create))
+            foreach (var name in new[] { "info.json", "saves/saves.json", "saves/a.state", "saves/b.srm" })
+                zip.CreateEntry(name);
+        await mirror.ReplaceAsync(Entry(game), CancellationToken.None);
+
+        Assert.That((await _games.GetAsync(game.GameId, CancellationToken.None))!.SaveCount, Is.EqualTo(2));
+        Assert.That((await _games.ListAsync(new GameQuery(), CancellationToken.None)).Items.Single().SaveCount, Is.EqualTo(2));
     }
 
     [Test]

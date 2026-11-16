@@ -93,14 +93,21 @@
 				toasts.show('This save is larger than 256 MiB', 'danger');
 				return;
 			}
-			await savesApi.add(gameId, {
-				romId: rom.id,
-				kind,
-				name: saveName(kind),
-				description: '',
-				file: new Blob([result.bytes]),
-				fileName: `save${result.extension}`
-			});
+			const file = new File([result.bytes], `save${result.extension}`);
+			// Overwrites this release's newest save of the same kind (the list is newest first); adds one when there is none.
+			const existing = (await savesApi.list(gameId)).find(
+				(s) => s.kind === kind && s.releaseFileName === rom.fileName
+			);
+			if (existing) await savesApi.replace(gameId, existing.id, file);
+			else
+				await savesApi.add(gameId, {
+					romId: rom.id,
+					kind,
+					name: saveName(kind),
+					description: '',
+					file,
+					fileName: file.name
+				});
 			toasts.show('Saved to library', 'success');
 			onsaved?.();
 		} catch (e) {

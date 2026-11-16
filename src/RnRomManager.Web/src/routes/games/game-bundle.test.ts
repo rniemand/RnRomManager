@@ -71,6 +71,7 @@ function game(): GameDetail {
 		hasDefaultBoxArt: false,
 		rating: null,
 		favourite: false,
+		saveCount: 0,
 		metadata: { createdAt: '', updatedAt: '' },
 		roms: [
 			{

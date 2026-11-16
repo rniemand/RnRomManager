@@ -1,9 +1,13 @@
 using System.Data;
 using System.Text.Json;
+using System.IO.Compression;
 using Dapper;
+using Microsoft.Extensions.Options;
 using RnRomManager.Core.Bundles;
+using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Library;
+using RnRomManager.Core.Storage;
 
 namespace RnRomManager.Data.Repositories;
 
@@ -33,7 +37,7 @@ public sealed class GameRepository : IGameRepository
         SELECT id AS Id, system_id AS SystemId, title AS Title, display_title AS DisplayTitle, zip_path AS ZipPath,
                bucket AS Bucket, release_year AS ReleaseYear, developers AS Developers, publishers AS Publishers,
                genres AS Genres, description AS Description, has_default_boxart AS HasDefaultBoxArt,
-               rating AS Rating, favourite AS Favourite,
+               rating AS Rating, favourite AS Favourite, save_count AS SaveCount,
                zip_size_bytes AS ZipSizeBytes, zip_mtime_utc AS ZipMtimeUtc, info_schema_version AS InfoSchemaVersion,
                created_at AS CreatedAt, updated_at AS UpdatedAt
         FROM games
@@ -187,7 +191,7 @@ public sealed class GameRepository : IGameRepository
                    (SELECT r.id FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryRomId,
                    (SELECT r.file_name FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryRomFileName,
                    (SELECT r.external_file_name IS NOT NULL FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryIsExternal,
-                   g.rating AS Rating, g.favourite AS Favourite, g.title AS Title,
+                   g.rating AS Rating, g.favourite AS Favourite, g.save_count AS SaveCount, g.title AS Title,
                    g.developers AS Developers, g.publishers AS Publishers, g.genres AS Genres
             FROM {from} {filter}
             ORDER BY {order}
@@ -197,7 +201,7 @@ public sealed class GameRepository : IGameRepository
         var items = rows.Select(r => new GameListItem(
             r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId,
             r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres),
-            (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true)).ToList();
+            (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true, r.SaveCount)).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, total);
     }
 
@@ -345,6 +349,7 @@ public sealed class GameRepository : IGameRepository
         public long? BoxArtImageId { get; init; }
         public long? PrimarySizeBytes { get; init; }
         public long UpdateCount { get; init; }
+        public int SaveCount { get; init; }
         public long? PrimaryRomId { get; init; }
         public string? PrimaryRomFileName { get; init; }
         public bool? PrimaryIsExternal { get; init; }
@@ -542,22 +547,31 @@ public sealed class ImageRepository(IDbConnectionFactory connections) : IImageRe
 public sealed class LibraryMirror : ILibraryMirror
 {
     private readonly IDbConnectionFactory _connections;
+    private readonly string? _roms;
 
-    public LibraryMirror(IDbConnectionFactory connections)
+    /// <param name="paths">Where the ZIPs are, to count their saves; without it every game mirrors 0 saves.</param>
+    public LibraryMirror(IDbConnectionFactory connections, IOptions<PathsOptions>? paths = null)
     {
         JsonStringListHandler.Register();
         _connections = connections;
+        _roms = paths?.Value.Roms;
     }
 
     public async Task ApplyAsync(IReadOnlyList<MirrorEntry> replace, IReadOnlyCollection<Guid> delete, CancellationToken cancellationToken)
     {
-        var rows = replace.Select(e => e.ToRows()).ToList();
+        var rows = replace.Select(e => e.ToRows()).Select(r => r with { Game = r.Game with { SaveCount = SaveCount(r.Game.ZipPath) } }).ToList();
         var ids = delete.Concat(rows.Select(r => r.Game.Id)).Distinct().ToList();
         var zipPaths = rows.Select(r => r.Game.ZipPath).ToList();
 
         await using var connection = _connections.Create();
         await connection.OpenAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        // A rewritten ZIP keeps its releases' ids (matched by the unique SHA1), so a client holding a rom id stays valid.
+        var romIds = (await connection.QueryAsync<(long Id, string Sha1)>(new CommandDefinition("""
+            SELECT r.id, r.sha1 FROM roms r JOIN games g ON g.id = r.game_id WHERE g.id IN @ids OR g.zip_path IN @zipPaths
+            """, new { ids, zipPaths }, transaction, cancellationToken: cancellationToken)))
+            .ToDictionary(r => r.Sha1, r => r.Id, StringComparer.OrdinalIgnoreCase);
 
         // Cascades to roms/rom_files/images. Deleting first lets moves and swapped paths re-insert without unique clashes.
         if (ids.Count > 0)
@@ -571,23 +585,24 @@ public sealed class LibraryMirror : ILibraryMirror
         {
             await connection.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO games (id, system_id, title, display_title, zip_path, bucket, release_year, developers, publishers,
-                                   genres, description, has_default_boxart, rating, favourite, zip_size_bytes, zip_mtime_utc, info_schema_version,
+                                   genres, description, has_default_boxart, rating, favourite, save_count, zip_size_bytes, zip_mtime_utc, info_schema_version,
                                    created_at, updated_at)
                 VALUES (@Id, @SystemId, @Title, @DisplayTitle, @ZipPath, @Bucket, @ReleaseYear, @Developers, @Publishers,
-                        @Genres, @Description, @HasDefaultBoxArt, @Rating, @Favourite, @ZipSizeBytes, @ZipMtimeUtc, @InfoSchemaVersion,
+                        @Genres, @Description, @HasDefaultBoxArt, @Rating, @Favourite, @SaveCount, @ZipSizeBytes, @ZipMtimeUtc, @InfoSchemaVersion,
                         @CreatedAt, @UpdatedAt)
                 """, game, transaction, cancellationToken: cancellationToken));
 
             if (roms.Count > 0)
                 await connection.ExecuteAsync(new CommandDefinition("""
-                    INSERT INTO roms (game_id, system_id, file_name, original_file_name, base_title, regions, languages, flags,
+                    INSERT INTO roms (id, game_id, system_id, file_name, original_file_name, base_title, regions, languages, flags,
                                       region_key, revision, is_primary, id_method, dat_name, dat_version, dat_game_name,
                                       size_bytes, crc32, md5, sha1, header, date_added, date_modified, external_file_name, version)
-                    VALUES (@GameId, @SystemId, @FileName, @OriginalFileName, @BaseTitle, @Regions, @Languages, @Flags,
+                    VALUES (@Id, @GameId, @SystemId, @FileName, @OriginalFileName, @BaseTitle, @Regions, @Languages, @Flags,
                             @RegionKey, @Revision, @IsPrimary, @IdMethod, @DatName, @DatVersion, @DatGameName,
                             @SizeBytes, @Crc32, @Md5, @Sha1, @Header, @DateAdded, @DateModified, @ExternalFileName, @Version)
                     """, roms.Select(r => new
                     {
+                        Id = romIds.TryGetValue(r.Sha1, out var id) ? id : (long?)null, // null: AUTO_INCREMENT picks a new one
                         r.GameId, r.SystemId, r.FileName, r.OriginalFileName, r.BaseTitle, r.Regions, r.Languages, r.Flags,
                         r.RegionKey, r.Revision, r.IsPrimary, IdMethod = r.IdMethod.ToString(), r.DatName, r.DatVersion,
                         r.DatGameName, r.SizeBytes, r.Crc32, r.Md5, r.Sha1, r.Header, r.DateAdded, r.DateModified, r.ExternalFileName, r.Version,
@@ -615,5 +630,22 @@ public sealed class LibraryMirror : ILibraryMirror
         }
 
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    /// <summary>The ZIP's <c>saves/</c> entries but the index; 0 when it can't be read (display only: the next write or sync corrects it).</summary>
+    private int SaveCount(string zipPath)
+    {
+        if (_roms is null)
+            return 0;
+        try
+        {
+            using var zip = ZipFile.OpenRead(SafePath.Resolve(_roms, zipPath));
+            return zip.Entries.Count(e => e.FullName.StartsWith(LibraryZip.SavesFolder, StringComparison.Ordinal)
+                && e.FullName != LibraryZip.SavesIndexEntry && !e.FullName.EndsWith('/'));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or UnsafePathException)
+        {
+            return 0;
+        }
     }
 }

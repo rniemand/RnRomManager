@@ -59,6 +59,7 @@ const game = (images: ImageInfo[]): GameDetail => ({
 	hasDefaultBoxArt: false,
 	rating: null,
 	favourite: false,
+	saveCount: 0,
 	metadata: { createdAt: '', updatedAt: '' },
 	roms: [],
 	images

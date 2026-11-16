@@ -309,7 +309,7 @@ describe('GameSaves Play (B16, B19)', () => {
 
 	it('reloads the list after its own Play dialog saved to the library', async () => {
 		listed([save()]);
-		answers['POST /api/games/g1/saves'] = [{ status: 201, body: save() }];
+		answers[`PUT /api/games/g1/saves/${save().id}/file`] = [{ status: 200, body: save() }];
 		render(GameSaves, { game: playable('gambatte') });
 		await fireEvent.click(await screen.findByRole('button', { name: 'Play Before boss' }));
 		const frame = iframe()!;
@@ -332,6 +332,8 @@ describe('GameSaves Play (B16, B19)', () => {
 			})
 		);
 
-		await vi.waitFor(() => expect(calls.filter((c) => c.key === list)).toHaveLength(2));
+		// The first list, the overwrite lookup, then the reload.
+		await vi.waitFor(() => expect(calls.filter((c) => c.key === list)).toHaveLength(3));
+		expect(writes().map((c) => c.key)).toEqual([`PUT /api/games/g1/saves/${save().id}/file`]);
 	});
 });

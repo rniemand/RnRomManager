@@ -156,7 +156,7 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 		resetClient();
 		toasts.items.length = 0;
 		calls = [];
-		answers = {};
+		answers = { 'GET /api/games/g-1/saves': { status: 200, body: { items: [] } } };
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
 			const key = `${init?.method ?? 'GET'} ${url}`;
 			calls.push({ key, body: init?.body });
@@ -238,6 +238,42 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 		expect((form.get('file') as File).size).toBe(3);
 		expect(toasts.items.map((t) => [t.text, t.kind])).toEqual([['Saved to library', 'success']]);
 		expect(button(container, 'Save state to library')!.disabled).toBe(false);
+	});
+
+	it("overwrites the release's newest save of the same kind instead of adding one", async () => {
+		const onsaved = vi.fn();
+		const save = (id: string, kind: string, releaseFileName: string) => ({
+			id,
+			kind,
+			releaseFileName
+		});
+		answers['GET /api/games/g-1/saves'] = {
+			status: 200,
+			body: {
+				items: [
+					save('other-release', 'state', 'Other.gb'),
+					save('battery', 'battery', rom.fileName),
+					save('newest', 'state', rom.fileName),
+					save('older', 'state', rom.fileName)
+				]
+			}
+		};
+		answers['PUT /api/games/g-1/saves/newest/file'] = { status: 200, body: {} };
+		const { container, iframe } = openFor('gambatte', onsaved);
+
+		await fireEvent.click(button(container, 'Save state to library')!);
+		reply(iframe.contentWindow, {
+			type: 'rnrm-emulator-export-result',
+			kind: 'state',
+			ok: true,
+			bytes: new Uint8Array([1, 2]).buffer,
+			extension: '.state'
+		});
+
+		await vi.waitFor(() => expect(onsaved).toHaveBeenCalledTimes(1));
+		expect(uploads()).toEqual([]);
+		const put = calls.find((c) => c.key === 'PUT /api/games/g-1/saves/newest/file')!;
+		expect(((put.body as FormData).get('file') as File).size).toBe(2);
 	});
 
 	it('refuses a save over 256 MiB without uploading', async () => {
