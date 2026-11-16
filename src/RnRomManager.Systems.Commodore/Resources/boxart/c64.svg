@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Commodore 64). Made for this project; MIT licensed like the rest of the repo.
+       A generic 8-bit home computer with a floppy disk and a tape: no logo or trade dress. Exported to c64.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#e4e2ef"/>
+  <!-- floppy disk behind the computer -->
+  <g transform="rotate(-8 170 160)">
+    <rect x="86" y="70" width="168" height="168" rx="8" fill="#3b3a4a" stroke="#22212c" stroke-width="5"/>
+    <rect x="132" y="70" width="76" height="46" fill="#9a99a8"/>
+    <rect x="182" y="78" width="16" height="30" fill="#3b3a4a"/>
+    <circle cx="170" cy="168" r="26" fill="#22212c"/>
+    <circle cx="170" cy="168" r="9" fill="#9a99a8"/>
+    <rect x="106" y="198" width="128" height="28" rx="3" fill="#f2f0e6"/>
+  </g>
+  <!-- cassette tape -->
+  <g transform="rotate(7 350 150)">
+    <rect x="270" y="96" width="170" height="108" rx="10" fill="#6c5eb5" stroke="#352879" stroke-width="5"/>
+    <rect x="290" y="112" width="130" height="50" rx="6" fill="#f2f0e6"/>
+    <circle cx="322" cy="137" r="14" fill="#352879"/>
+    <circle cx="388" cy="137" r="14" fill="#352879"/>
+    <path d="M300 204 L312 178 L398 178 L410 204 Z" fill="#352879"/>
+  </g>
+  <!-- computer body -->
+  <path d="M64 290 Q70 266 98 266 L414 266 Q442 266 448 290 L470 398 Q472 416 452 416 L60 416 Q40 416 42 398 Z"
+        fill="#d8cfb4" stroke="#6f6650" stroke-width="5" stroke-linejoin="round"/>
+  <!-- keyboard -->
+  <rect x="86" y="292" width="340" height="104" rx="8" fill="#5a4f3e"/>
+  <g fill="#8a7c62">
+    <rect x="96" y="302" width="28" height="18" rx="3"/><rect x="130" y="302" width="28" height="18" rx="3"/>
+    <rect x="164" y="302" width="28" height="18" rx="3"/><rect x="198" y="302" width="28" height="18" rx="3"/>
+    <rect x="232" y="302" width="28" height="18" rx="3"/><rect x="266" y="302" width="28" height="18" rx="3"/>
+    <rect x="300" y="302" width="28" height="18" rx="3"/><rect x="334" y="302" width="28" height="18" rx="3"/>
+    <rect x="104" y="326" width="28" height="18" rx="3"/><rect x="138" y="326" width="28" height="18" rx="3"/>
+    <rect x="172" y="326" width="28" height="18" rx="3"/><rect x="206" y="326" width="28" height="18" rx="3"/>
+    <rect x="240" y="326" width="28" height="18" rx="3"/><rect x="274" y="326" width="28" height="18" rx="3"/>
+    <rect x="308" y="326" width="28" height="18" rx="3"/><rect x="342" y="326" width="28" height="18" rx="3"/>
+    <rect x="112" y="350" width="28" height="18" rx="3"/><rect x="146" y="350" width="28" height="18" rx="3"/>
+    <rect x="180" y="350" width="28" height="18" rx="3"/><rect x="214" y="350" width="28" height="18" rx="3"/>
+    <rect x="248" y="350" width="28" height="18" rx="3"/><rect x="282" y="350" width="28" height="18" rx="3"/>
+    <rect x="316" y="350" width="28" height="18" rx="3"/><rect x="350" y="350" width="28" height="18" rx="3"/>
+    <rect x="160" y="374" width="170" height="16" rx="3"/>
+  </g>
+  <g fill="#c9b98f">
+    <rect x="380" y="302" width="36" height="18" rx="3"/><rect x="380" y="326" width="36" height="18" rx="3"/>
+    <rect x="388" y="350" width="28" height="18" rx="3"/>
+  </g>
+  <!-- power light -->
+  <circle cx="76" cy="282" r="5" fill="#d9534f"/>
+  <text x="256" y="476" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="34" font-weight="700" letter-spacing="4" fill="#352879">C64</text>
+</svg>
