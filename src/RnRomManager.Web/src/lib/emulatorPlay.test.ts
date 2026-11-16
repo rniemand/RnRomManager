@@ -1469,6 +1469,8 @@ describe('play page library saves (Saves B17, B18)', () => {
 		win.EJS_onGameStart = earlier;
 		await playWithSave('state');
 		manager();
+		// Fake timers drop the 10 ms save apply with the test; a real one would fire into a later test's manager.
+		vi.useFakeTimers();
 
 		gameStart();
 

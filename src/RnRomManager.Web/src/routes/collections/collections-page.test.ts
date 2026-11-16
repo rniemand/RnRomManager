@@ -195,6 +195,7 @@ describe('collections tabs (discovery B1)', () => {
 		expect(tabLink('User collections').getAttribute('href')).toBe('/collections');
 		expect(tabLink('Publishers').getAttribute('href')).toBe('/collections?tab=publishers');
 		expect(tabLink('Genres').getAttribute('href')).toBe('/collections?tab=genres');
+		expect(tabLink('Systems').getAttribute('href')).toBe('/collections?tab=systems');
 		expect(screen.getAllByRole('button', { name: /New collection/ })).toHaveLength(1);
 	});
 
@@ -279,6 +280,107 @@ describe('collections tabs (discovery B1)', () => {
 			'GET /api/collections?q=zel&pageSize=20',
 			'GET /api/collections?q=zel&pageSize=20'
 		]);
+	});
+});
+
+describe('systems tab (Systems tab B1–B6)', () => {
+	const system = (id: string, displayName: string, gameCount: number) => ({
+		id,
+		displayName,
+		shortName: id.toUpperCase(),
+		gameCount,
+		romCount: gameCount,
+		regions: []
+	});
+	const systems = [system('gb', 'Game Boy', 1), system('nes', 'NES', 0)];
+	const games = (system: string) => `GET /api/games?system=${system}&page=1&pageSize=20`;
+	const current = () =>
+		within(screen.getByRole('navigation', { name: 'Collections views' }))
+			.getAllByRole('link')
+			.filter((l) => l.getAttribute('aria-current') === 'page')
+			.map((l) => l.textContent?.trim());
+	const gameRequests = () => keys().filter((k) => k.startsWith('GET /api/games'));
+
+	it('is a tab that asks for a system at once, before the list loads', async () => {
+		navigateTo('/collections?tab=systems');
+		answers['GET /api/systems'] = [{ status: 200, body: systems }];
+		render(CollectionsPage);
+
+		expect(current()).toEqual(['Systems']);
+		expect(screen.getByText('Choose a system to see its games and emulators.')).toBeTruthy();
+		expect(screen.queryByRole('list', { name: 'Systems' })).toBeNull();
+		expect(await screen.findByRole('list', { name: 'Systems' })).toBeTruthy();
+		expect(screen.queryByLabelText('Filter collections')).toBeNull();
+		expect(keys().filter((k) => k.startsWith('GET /api/collections'))).toEqual([]);
+		expect(gameRequests()).toEqual([]);
+	});
+
+	it('a selected system shows its games, and selecting others never refetches the list', async () => {
+		navigateTo('/collections?tab=systems&system=gb');
+		answers['GET /api/systems'] = [{ status: 200, body: systems }];
+		answers[games('gb')] = [{ status: 200, body: pageOf([], 0) }];
+		answers[games('nes')] = [{ status: 200, body: pageOf([], 0) }];
+		render(CollectionsPage);
+
+		expect(await screen.findByText('No games for Game Boy yet.')).toBeTruthy();
+		expect(screen.getByRole('link', { name: /Game Boy/ }).getAttribute('aria-current')).toBe(
+			'true'
+		);
+		expect(screen.getByRole('button', { name: 'Emulators' })).toBeTruthy();
+
+		navigateTo('/collections?tab=systems&system=nes');
+		expect(await screen.findByText('No games for NES yet.')).toBeTruthy();
+		navigateTo('/collections?tab=systems');
+		expect(await screen.findByText('Choose a system to see its games and emulators.')).toBeTruthy();
+		expect(keys().filter((k) => k === 'GET /api/systems')).toHaveLength(1);
+		expect(gameRequests()).toEqual([games('gb'), games('nes')]);
+	});
+
+	it.each(['GB', 'zzz', '../gb'])(
+		'an unknown system %j is not supported, with no games request',
+		async (id) => {
+			navigateTo(`/collections?tab=systems&system=${encodeURIComponent(id)}`);
+			answers['GET /api/systems'] = [{ status: 200, body: systems }];
+			render(CollectionsPage);
+
+			expect(screen.getAllByText('Loading systems…', { exact: false })).toHaveLength(2);
+			expect(await screen.findByText("This system isn't supported.")).toBeTruthy();
+			expect(screen.getByRole('link', { name: 'Back to all systems' }).getAttribute('href')).toBe(
+				'/collections?tab=systems'
+			);
+			expect(screen.queryByRole('button', { name: 'Emulators' })).toBeNull();
+			expect(
+				screen.getAllByRole('link').filter((l) => l.getAttribute('aria-current') === 'true')
+			).toEqual([]);
+			expect(gameRequests()).toEqual([]);
+		}
+	);
+
+	it('a failed system list shows the error with nothing on the right, and retries', async () => {
+		navigateTo('/collections?tab=systems&system=gb');
+		answers['GET /api/systems'] = [
+			{ status: 500, body: { status: 500, title: 'Boom' } },
+			{ status: 200, body: systems }
+		];
+		answers[games('gb')] = [{ status: 200, body: pageOf([], 0) }];
+		render(CollectionsPage);
+
+		const retry = await screen.findByRole('button', { name: /Retry/ });
+		expect(screen.queryByText("This system isn't supported.")).toBeNull();
+		expect(screen.queryByText('Loading systems…', { exact: false })).toBeNull();
+		expect(gameRequests()).toEqual([]);
+
+		await fireEvent.click(retry);
+		expect(await screen.findByText('No games for Game Boy yet.')).toBeTruthy();
+	});
+
+	it('a failed list without a selection shows no prompt', async () => {
+		navigateTo('/collections?tab=systems');
+		answers['GET /api/systems'] = [{ status: 500, body: { status: 500, title: 'Boom' } }];
+		render(CollectionsPage);
+
+		await screen.findByRole('button', { name: /Retry/ });
+		expect(screen.queryByText('Choose a system to see its games and emulators.')).toBeNull();
 	});
 });
 

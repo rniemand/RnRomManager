@@ -1199,6 +1199,36 @@ test('collections discovery: browse publishers and genres across systems, share 
 	await expect(page).toHaveURL(/\/collections\?tab=genres$/);
 });
 
+test("collections systems: browse a system's games and its emulator links", async () => {
+	// Systems tab B1/B4: a link tab that asks for a system.
+	await page.goto('/collections');
+	const tabs = page.getByRole('navigation', { name: 'Collections views' });
+	await tabs.getByRole('link', { name: 'Systems' }).click();
+	await expect(page).toHaveURL(/\/collections\?tab=systems$/);
+	await expect(tabs.getByRole('link', { name: 'Systems' })).toHaveAttribute('aria-current', 'page');
+	await expect(page.getByText('Choose a system to see its games and emulators.')).toBeVisible();
+
+	// B3/B5: choosing Game Boy shows its games.
+	await page.getByRole('list', { name: 'Systems' }).getByRole('link', { name: /^Game Boy\s+\d+ games?$/ }).click();
+	await expect(page).toHaveURL(/\/collections\?tab=systems&system=gb$/);
+	await expect(page.getByRole('link', { name: 'Orbit Blocks', exact: true })).toBeVisible();
+	await expectAccessible(page, 'system games');
+
+	// B7: the Emulators modal links to project sites in a new tab.
+	const emulators = page.getByRole('button', { name: 'Emulators' });
+	await emulators.click();
+	await expect(dialog()).toHaveAccessibleName('Game Boy emulators');
+	const mgba = dialog()
+		.getByRole('list', { name: 'Windows' })
+		.getByRole('link', { name: 'mGBA (opens in a new tab)' });
+	await expect(mgba).toHaveAttribute('href', /^https:\/\//);
+	await expect(mgba).toHaveAttribute('target', '_blank');
+	await expectAccessible(page, 'emulators modal');
+	await dialog().getByRole('button', { name: 'Close' }).last().click();
+	await expect(dialog()).toBeHidden();
+	await expect(emulators).toBeFocused();
+});
+
 test('collections discovery: two signed-in users share, replace and remove a publisher logo', async () => {
 	// A plain user (no roles) next to the admin, in a browser of their own.
 	const curatorPassword = `${newPassword}-curator`;

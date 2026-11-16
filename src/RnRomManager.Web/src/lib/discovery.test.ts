@@ -4,11 +4,14 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
 	collectionsTab,
+	collectionsTabs,
 	discoverySearch,
 	discoveryState,
 	isDiscoveryKey,
 	publisherArt,
 	starterPublishers,
+	systemsSearch,
+	systemsState,
 	tabSearch
 } from './discovery';
 
@@ -20,6 +23,8 @@ describe('collections tab URLs (discovery B1)', () => {
 		['', 'collections'],
 		['?tab=publishers', 'publishers'],
 		['?tab=genres', 'genres'],
+		['?tab=systems', 'systems'],
+		['?tab=Systems', 'collections'],
 		['?tab=Publishers', 'collections'],
 		['?tab=developers', 'collections'],
 		['?tab=', 'collections']
@@ -67,11 +72,58 @@ describe('collections tab URLs (discovery B1)', () => {
 		expect(tabSearch('collections')).toBe('');
 		expect(tabSearch('publishers')).toBe('?tab=publishers');
 		expect(tabSearch('genres')).toBe('?tab=genres');
+		expect(tabSearch('systems')).toBe('?tab=systems');
 	});
 
 	it('a written state reads back the same', () => {
 		const state = { kind: 'publishers' as const, key, groupPage: 4, gamePage: 2 };
 		expect(discoveryState(url(discoverySearch(state)))).toEqual(state);
+	});
+
+	it('lists the four tabs in order', () => {
+		expect(collectionsTabs.map((t) => [t.tab, t.label])).toEqual([
+			['collections', 'User collections'],
+			['publishers', 'Publishers'],
+			['genres', 'Genres'],
+			['systems', 'Systems']
+		]);
+	});
+});
+
+describe('systems tab URLs (Systems tab B2)', () => {
+	it('is not a discovery tab', () => {
+		expect(discoveryState(url(`?tab=systems&system=gb&key=${key}`))).toBeNull();
+	});
+
+	it('reads the system as given and the one-based game page', () => {
+		expect(systemsState(url('?tab=systems&system=gb&gamePage=3'))).toEqual({
+			system: 'gb',
+			gamePage: 3
+		});
+		expect(systemsState(url('?tab=systems&system=GB'))).toEqual({ system: 'GB', gamePage: 1 });
+		expect(systemsState(url('?tab=systems&system=gb&gamePage=0'))?.gamePage).toBe(1);
+		expect(systemsState(url('?tab=systems&system=gb&gamePage=-2'))?.gamePage).toBe(1);
+		expect(systemsState(url('?tab=systems&system=gb&gamePage=x'))?.gamePage).toBe(1);
+	});
+
+	it.each(['', '%20%20', '?tab=systems'])(
+		'an empty or whitespace system %j selects nothing',
+		(value) => {
+			const search = value.startsWith('?') ? value : `?tab=systems&system=${value}`;
+			expect(systemsState(url(search)).system).toBeNull();
+		}
+	);
+
+	it('writes page 1 and game paging without a system as nothing', () => {
+		expect(systemsSearch({ system: null, gamePage: 1 })).toBe('?tab=systems');
+		expect(systemsSearch({ system: null, gamePage: 4 })).toBe('?tab=systems');
+		expect(systemsSearch({ system: 'gb', gamePage: 1 })).toBe('?tab=systems&system=gb');
+		expect(systemsSearch({ system: 'gb', gamePage: 2 })).toBe('?tab=systems&system=gb&gamePage=2');
+	});
+
+	it('a written state reads back the same', () => {
+		const state = { system: 's32x', gamePage: 5 };
+		expect(systemsState(url(systemsSearch(state)))).toEqual(state);
 	});
 });
 

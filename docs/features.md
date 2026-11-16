@@ -78,7 +78,7 @@ Every signed-in user can group library games from any system into **collections*
 
 ### Publishers and genres
 
-The Collections page has three tabs: **User collections** (the default, everything above), **Publishers** and **Genres**. They're links, so each tab, selection and page has its own address you can bookmark or share (`/collections?tab=publishers&key=…`), and Back/Forward step through them. Changing tab clears the selection and paging.
+The Collections page has four tabs: **User collections** (the default, everything above), **Publishers**, **Genres** and [**Systems**](#systems). They're links, so each tab, selection and page has its own address you can bookmark or share (`/collections?tab=publishers&key=…`), and Back/Forward step through them. Changing tab clears the selection and paging.
 
 - **Publishers** and **Genres** list every value in the library's game metadata, across every system, with how many games have it, sorted by name, paged. Each publisher or genre in a game's list counts on its own (a game with two publishers is in both).
 - Values are matched exactly after trimming spaces and ignoring case. Accents and punctuation count: "Café" and "Cafe", or "Bandai Namco" and "Namco", are different groups. A group shows its spelling that sorts first (e.g. "NINTENDO" over "Nintendo").
@@ -86,6 +86,13 @@ The Collections page has three tabs: **User collections** (the default, everythi
 - The lists are recomputed at most once a minute, so a metadata edit can take up to a minute to show here; a deleted game drops out at once.
 - **Publisher logos:** each publisher shows its shared logo if someone set one, else bundled starter art for well-known publishers (Nintendo, Sega, Capcom, Konami, Bandai Namco, Electronic Arts, Square Enix, Ubisoft, Activision, Atari), else just its name. The starter art is plain name tiles made for RnRomManager, not the publishers' own logos; nothing is fetched from other sites.
 - **Change logo** (the pencil beside a publisher) lets any signed-in user upload a PNG or JPEG (at most 512 KiB and 2048 pixels per side) or remove the shared logo. The change applies for everyone and is [audited](#file-action-auditing); the last upload wins. A logo stays when its publisher leaves the library for a while and shows again when it's back. Logos are stored in the database, so database backups include them.
+
+### Systems
+
+The **Systems** tab (`/collections?tab=systems`) lists every supported system with its icon and game count, systems with no games included. Choosing one (`?tab=systems&system=gb`) shows its games with the Library's grid, title A–Z, paged; the rows per page are remembered in this browser. The selection and page are in the address, like the other tabs. An address with an unknown system (ids are case-sensitive: `gb`, not `GB`) says the system isn't supported and links back to all systems.
+
+- **Emulators** (above the games, shown even when the system has no games) opens a list of known emulators for that system, grouped by **Windows**, **macOS**, **Linux**, **Android** and **iOS** (only groups with an emulator show). Each entry links to the project's own site in a new tab and shows where the link goes; RetroArch entries name the core to use (e.g. "RetroArch core: Gambatte"). A system with no known emulators says so.
+- **Links only:** RnRomManager doesn't host, mirror or check these downloads, and never links to ROMs, BIOS files, keys or firmware. The list is `src/RnRomManager.Web/src/lib/systemEmulators.json`, checked by hand when it changes; every supported system must have an entry ([adding a system](adding-a-system.md)).
 
 ## Bundle Creator
 
