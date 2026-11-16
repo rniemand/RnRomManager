@@ -112,7 +112,8 @@ describe('parsePlayParams', () => {
 		'yabause',
 		'snes9x',
 		'desmume',
-		'opera'
+		'opera',
+		'vice_x64sc'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});
@@ -550,6 +551,47 @@ describe('3DO (B6)', () => {
 		[null, "Couldn't load the Opera core."]
 	])('reports the availability check %s', (status, message) => {
 		expect(operatorCoreError('opera', status)).toBe(message);
+	});
+});
+
+describe('Commodore 64 (C64 B7)', () => {
+	it('accepts vice_x64sc on the modal page only', () => {
+		expect(
+			parsePlayParams(query({ core: 'vice_x64sc', name: 'Pixel Pilot (Europe).crt' }))?.core
+		).toBe('vice_x64sc');
+		expect(parsePlayParams(query({ core: 'vice_x64sc' }), true)).toBeNull();
+	});
+
+	it('is an operator core that hides the chooser and keeps upstream controls', () => {
+		expect(isOperatorCore('vice_x64sc')).toBe(true);
+		expect(hidesCoreChooser('vice_x64sc')).toBe(true);
+		for (const name of ['Pixel Pilot (Europe).crt', 'Acrojet (Europe) (Side 2).tap', 'X.d64'])
+			expect(controlSchemeFor('vice_x64sc', name)).toBeNull();
+	});
+
+	it('maps the three operator files to the API by name', () => {
+		expect(operatorCorePaths('vice_x64sc')).toEqual({
+			'vice_x64sc-wasm.data': '/api/emulator/cores/vice_x64sc/vice_x64sc-wasm.data',
+			'vice_x64sc-legacy-wasm.data': '/api/emulator/cores/vice_x64sc/vice_x64sc-legacy-wasm.data',
+			'vice_x64sc.json': '/api/emulator/cores/vice_x64sc/vice_x64sc.json'
+		});
+	});
+
+	it.each([
+		[204, null],
+		[401, 'Your session has expired. Sign in again.'],
+		[
+			404,
+			'Commodore 64 games need the VICE core files: ask an Admin to set them up (Emulator:ViceCorePath).'
+		],
+		[
+			409,
+			"The VICE core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:ViceCorePath)."
+		],
+		[500, "Couldn't load the VICE core (HTTP 500)."],
+		[null, "Couldn't load the VICE core."]
+	])('reports the availability check %s', (status, message) => {
+		expect(operatorCoreError('vice_x64sc', status)).toBe(message);
 	});
 });
 

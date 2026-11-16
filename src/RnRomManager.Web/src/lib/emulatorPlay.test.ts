@@ -1097,6 +1097,45 @@ describe('play page SNES (SNES B3)', () => {
 	});
 });
 
+describe('play page Commodore 64 (C64 B7)', () => {
+	const check = '/api/emulator/cores/vice_x64sc';
+
+	it.each(['Pixel Pilot (Europe).crt', 'Acrojet (Europe) (Side 2).tap', 'Disk Demo (Europe).nib'])(
+		'checks the core files with one HEAD, then loads %s from the ZIP with the API paths',
+		async (name) => {
+			serve({ [check]: async () => response(204), [romUrl]: async () => response(200) });
+
+			await play('vice_x64sc', name);
+
+			expect(urls()).toEqual([check, romUrl]);
+			expect(atLoader).toMatchObject({
+				EJS_core: 'vice_x64sc',
+				EJS_gameName: name,
+				EJS_hideSettings: ['retroarch_core'],
+				EJS_paths: {
+					'vice_x64sc-wasm.data': '/api/emulator/cores/vice_x64sc/vice_x64sc-wasm.data',
+					'vice_x64sc-legacy-wasm.data':
+						'/api/emulator/cores/vice_x64sc/vice_x64sc-legacy-wasm.data',
+					'vice_x64sc.json': '/api/emulator/cores/vice_x64sc/vice_x64sc.json'
+				}
+			});
+			expect(atLoader?.EJS_biosUrl).toBeUndefined();
+			expect(atLoader?.EJS_controlScheme).toBeUndefined();
+			expect((atLoader?.EJS_gameUrl as File).name).toBe(name);
+		}
+	);
+
+	it('stops on a missing core before fetching the ROM', async () => {
+		serve({ [check]: async () => response(404), [romUrl]: async () => response(200) });
+
+		expect(await play('vice_x64sc', 'Pixel Pilot (Europe).crt')).toBe(
+			'Commodore 64 games need the VICE core files: ask an Admin to set them up (Emulator:ViceCorePath).'
+		);
+		expect(urls()).toEqual([check]);
+		expect(atLoader).toBeNull();
+	});
+});
+
 describe('play page 3DO (3DO B8)', () => {
 	const check = '/api/emulator/cores/opera';
 	const names = ['panafz10.bin', 'panafz1.bin', 'panafz1j.bin', 'goldstar.bin', 'sanyotry.bin'];

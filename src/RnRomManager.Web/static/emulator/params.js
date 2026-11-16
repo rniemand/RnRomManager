@@ -27,7 +27,8 @@ const cores = [
 	'yabause',
 	'snes9x',
 	'desmume',
-	'opera'
+	'opera',
+	'vice_x64sc'
 ];
 
 /** PSP B3: the core that runs only on the isolated play-psp.html page (and never in the modal's play.html). */
@@ -108,7 +109,7 @@ export function controlSchemeFor(core, name) {
 }
 
 /**
- * B3/B8 (SNES B3 adds Snes9x, 3DO B6 Opera): the cores whose files the operator supplies, served by the API after a length and hash check, with the
+ * B3/B8 (SNES B3 adds Snes9x, 3DO B6 Opera, C64 B7 VICE): the cores whose files the operator supplies, served by the API after a length and hash check, with the
  * wording of their messages: the system label, the core's display name, the short name of the fallback message and
  * the option holding the folder.
  * @type {Record<string, { system: string, display: string, short: string, option: string }>}
@@ -137,6 +138,12 @@ const operatorCores = {
 		display: 'Opera',
 		short: 'Opera',
 		option: 'Emulator:OperaCorePath'
+	},
+	vice_x64sc: {
+		system: 'Commodore 64 games',
+		display: 'VICE',
+		short: 'VICE',
+		option: 'Emulator:ViceCorePath'
 	}
 };
 
@@ -204,7 +211,8 @@ export function hidesCoreChooser(core) {
 		'yabause',
 		'snes9x',
 		'desmume',
-		'opera'
+		'opera',
+		'vice_x64sc'
 	].includes(core);
 }
 

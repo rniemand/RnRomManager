@@ -79,7 +79,7 @@ const coreLicenses = [
 // The guarded vendoring edits (anchor → its replacement), applied in order.
 const getCoreAnchor = '        const gen = this.getCore(true);\n';
 const pinGuard =
-	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera"].includes(core)) {\n' +
+	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc"].includes(core)) {\n' +
 	'            return core;\n' +
 	'        }\n';
 const legacyAnchor =
@@ -88,14 +88,14 @@ const threadOverride =
 	'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
 	'                threads = true;\n' +
 	'            }\n' +
-	'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera"].includes(this.getCore())) {\n' +
+	'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc"].includes(this.getCore())) {\n' +
 	'                threads = false;\n' +
 	'            }\n';
 const cdnAnchor =
 	'            if (res === -1) {\n' +
 	'                console.log("File not found, attemping to fetch from emulatorjs cdn.");\n';
 const cdnSkip =
-	'                if (["genesis_plus_gx", "picodrive", "snes9x", "desmume", "opera"].includes(this.getCore())) {\n' +
+	'                if (["genesis_plus_gx", "picodrive", "snes9x", "desmume", "opera", "vice_x64sc"].includes(this.getCore())) {\n' +
 	'                    this.startGameError(this.localization("Error downloading core") + " (" + filename + ")");\n' +
 	'                    return;\n' +
 	'                }\n';
@@ -292,6 +292,8 @@ describe('vendor-emulatorjs', () => {
 		expect(files(out).filter((f) => f.includes('snes9x'))).toEqual([]);
 		// 3DO B6: nor Opera.
 		expect(files(out).filter((f) => f.includes('opera'))).toEqual([]);
+		// C64 B7: nor VICE.
+		expect(files(out).filter((f) => f.includes('vice'))).toEqual([]);
 		// PSP B3: PPSSPP's threaded payload is the only one; every other core is single-threaded.
 		expect(files(out).filter((f) => f.includes('-thread'))).toEqual([
 			'data/cores/ppsspp-thread-wasm.data'
@@ -470,11 +472,11 @@ describe('vendor-emulatorjs', () => {
 			const source = readFileSync(join(out, 'data', file), 'utf8');
 			expect(source).toContain('const requiresThreads = ["ppsspp", "dosbox_pure"];');
 			expect(threadOverride).toContain(
-				'["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera"].includes(this.getCore())'
+				'["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc"].includes(this.getCore())'
 			);
 			// The operator-supplied cores and DeSmuME skip the CDN; Yabause takes upstream's path.
 			expect(cdnSkip).toContain(
-				'["genesis_plus_gx", "picodrive", "snes9x", "desmume", "opera"].includes(this.getCore())'
+				'["genesis_plus_gx", "picodrive", "snes9x", "desmume", "opera", "vice_x64sc"].includes(this.getCore())'
 			);
 		}
 	);
@@ -590,6 +592,35 @@ describe('vendor-emulatorjs', () => {
 			const upstream = readFileSync(join(pkg, 'src', 'emulator.js'), 'utf8');
 			const fallback = await downloadCore(upstream, 'opera', { payload: async () => -1 });
 			expect(fallback.requests[2]).toMatch(/^https:\/\/cdn\.emulatorjs\.org\//);
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s pins an explicit vice_x64sc, in the c64 group (C64 B7)',
+		(file) => {
+			const resolve = coreResolver(readFileSync(join(out, 'data', file), 'utf8'));
+			for (const saved of ['vice_x64sc', 'opera', null])
+				expect(resolve('vice_x64sc', saved), `${saved}`).toBe('vice_x64sc');
+			expect(resolve('vice_x64sc', null, true)).toBe('c64');
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s never picks a threaded VICE payload, and shows a local error for a failed one (C64 B7)',
+		async (file) => {
+			const source = readFileSync(join(out, 'data', file), 'utf8');
+			const report = 'cores/reports/vice_x64sc.json';
+			expect((await downloadCore(source, 'vice_x64sc')).requests).toEqual([
+				report,
+				'cores/vice_x64sc-legacy-wasm.data'
+			]);
+			for (const webgl2Enabled of [null, true])
+				expect(
+					(await downloadCore(source, 'vice_x64sc', { savedThreads: 'enabled', webgl2Enabled }))
+						.requests[1]
+				).not.toContain('-thread');
+			const run = await downloadCore(source, 'vice_x64sc', { payload: async () => -1 });
+			expect(run.errors).toEqual(['Error downloading core (vice_x64sc-legacy-wasm.data)']);
 		}
 	);
 
