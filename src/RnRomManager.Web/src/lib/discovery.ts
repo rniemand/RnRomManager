@@ -7,12 +7,13 @@ import { api } from './api/client';
 import type { DiscoveryGroup, GameListItem, Page } from './api/types';
 
 export type DiscoveryKind = 'publishers' | 'genres';
-export type CollectionsTab = 'collections' | DiscoveryKind;
+export type CollectionsTab = 'collections' | DiscoveryKind | 'systems';
 
 export const collectionsTabs: readonly { tab: CollectionsTab; label: string }[] = [
 	{ tab: 'collections', label: 'User collections' },
 	{ tab: 'publishers', label: 'Publishers' },
-	{ tab: 'genres', label: 'Genres' }
+	{ tab: 'genres', label: 'Genres' },
+	{ tab: 'systems', label: 'Systems' }
 ];
 
 /** A discovery tab's URL state; pages are one-based. */
@@ -37,13 +38,13 @@ function pageParam(params: UrlLike['searchParams'], name: string): number {
 /** The tab a `/collections` URL shows: a bare URL, or any other `tab` value, is User collections. */
 export function collectionsTab(url: UrlLike): CollectionsTab {
 	const tab = url.searchParams.get('tab');
-	return tab === 'publishers' || tab === 'genres' ? tab : 'collections';
+	return tab === 'publishers' || tab === 'genres' || tab === 'systems' ? tab : 'collections';
 }
 
-/** A discovery tab's state from its URL, or null on User collections. A malformed key selects nothing. */
+/** A discovery tab's state from its URL, or null on User collections and Systems. A malformed key selects nothing. */
 export function discoveryState(url: UrlLike): DiscoveryState | null {
 	const kind = collectionsTab(url);
-	if (kind === 'collections') return null;
+	if (kind === 'collections' || kind === 'systems') return null;
 	const key = url.searchParams.get('key');
 	return {
 		kind,
@@ -64,9 +65,32 @@ export function discoverySearch(state: DiscoveryState): string {
 
 /** A tab link's query: changing tab clears the selection and paging (and User collections' filter). */
 export function tabSearch(tab: CollectionsTab): string {
-	return tab === 'collections'
-		? ''
-		: discoverySearch({ kind: tab, key: null, groupPage: 1, gamePage: 1 });
+	if (tab === 'collections') return '';
+	if (tab === 'systems') return systemsSearch({ system: null, gamePage: 1 });
+	return discoverySearch({ kind: tab, key: null, groupPage: 1, gamePage: 1 });
+}
+
+/** Systems tab B2: the selected system id (as given, case-sensitive) and the one-based games page. */
+export interface SystemsState {
+	system: string | null;
+	gamePage: number;
+}
+
+/** The Systems tab's state from its URL; an empty or whitespace-only `system` selects nothing. */
+export function systemsState(url: UrlLike): SystemsState {
+	const system = url.searchParams.get('system');
+	return {
+		system: system?.trim() ? system : null,
+		gamePage: pageParam(url.searchParams, 'gamePage')
+	};
+}
+
+/** The query for a Systems state, page 1 and `gamePage` without a system omitted (`?tab=systems&system=gb`). */
+export function systemsSearch(state: SystemsState): string {
+	const params = new URLSearchParams({ tab: 'systems' });
+	if (state.system) params.set('system', state.system);
+	if (state.system && state.gamePage > 1) params.set('gamePage', String(state.gamePage));
+	return `?${params}`;
 }
 
 /** B3: `/api/discovery/{kind}` reads. */
