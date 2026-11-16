@@ -7,6 +7,7 @@
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import RomToolsTabs from '#lib/components/RomToolsTabs.svelte';
 	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import { formatDateTime } from '#lib/format.js';
@@ -126,6 +127,7 @@
 
 <AdminOnly>
 	<h1 class="h3 mb-3"><Icon name="integrity" /> Integrity</h1>
+	<RomToolsTabs />
 
 	{#if error}
 		<ErrorAlert {error} onretry={load} />

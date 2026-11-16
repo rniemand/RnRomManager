@@ -19,6 +19,7 @@
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import RomToolsTabs from '#lib/components/RomToolsTabs.svelte';
 	import JobStepProgress from '#lib/components/JobStepProgress.svelte';
 	import IngestFileTable from '#lib/components/IngestFileTable.svelte';
 	import Loading from '#lib/components/Loading.svelte';
@@ -209,6 +210,7 @@
 
 <AdminOnly>
 	<h1 class="h3 mb-3"><Icon name="ingest" /> Ingestion</h1>
+	<RomToolsTabs />
 
 	{#if error}
 		<ErrorAlert {error} onretry={load} />
