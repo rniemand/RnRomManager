@@ -39,7 +39,7 @@ public sealed class ExternalEditHooks
     public Action? BeforeMirror { get; init; }
 }
 
-public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRepository roms, IImageRepository images, ILibraryMirror mirror,
+public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRepository roms, IImageRepository images, ILibraryMirror mirror,
     InfoJsonReader reader, DatCache dats, ISystemRegistry systems, MediaService media, GameMediaRetry mediaRetry,
     IOptions<PathsOptions> paths, IAuditLog audit, AuditPaths auditPaths, ICollectionRepository collections, TimeProvider time,
     ILogger<LibraryEditor> logger)
@@ -1603,19 +1603,19 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
 
     /// <summary>Atomic ZIP write (§6.1) then the DB mirror. Not cancellable once started, so a ZIP is never left half-applied.</summary>
     private async Task<LibraryEditResult> WriteAsync(LibraryZip existing, string zipPath, InfoJsonGame game,
-        Dictionary<string, Func<Stream>>? newEntries = null, IReadOnlySet<string>? removedEntries = null) =>
-        await WriteZipAsync(existing, zipPath, game, newEntries ?? [], removedEntries).ConfigureAwait(false)
+        Dictionary<string, Func<Stream>>? newEntries = null, IReadOnlySet<string>? removedEntries = null, SavesChange? saves = null) =>
+        await WriteZipAsync(existing, zipPath, game, newEntries ?? [], removedEntries, saves).ConfigureAwait(false)
         ?? await MirrorAsync(() => mirror.ReplaceAsync(Mirror(zipPath, game), CancellationToken.None), zipPath).ConfigureAwait(false);
 
     /// <param name="existing">The game's current ZIP (disposed by the writer), or null for a new game.</param>
     /// <returns>null when written and verified.</returns>
     private async Task<LibraryEditResult?> WriteZipAsync(LibraryZip? existing, string zipPath, InfoJsonGame game,
-        Dictionary<string, Func<Stream>> newEntries, IReadOnlySet<string>? removedEntries = null)
+        Dictionary<string, Func<Stream>> newEntries, IReadOnlySet<string>? removedEntries = null, SavesChange? saves = null)
     {
         try
         {
             var path = SafePath.Resolve(paths.Value.Roms, zipPath);
-            var changes = new LibraryZipChanges(game, newEntries, removedEntries);
+            var changes = new LibraryZipChanges(game, newEntries, removedEntries, Saves: saves);
             // G4: a ZIP opened through a checked handle is replaced only through the checked write.
             if (LibraryTarget.NeedsCheck(systems, zipPath, game.System))
                 await new LibraryZipWriter(reader).WriteCheckedAsync(paths.Value.Roms, path, existing, changes).ConfigureAwait(false);
