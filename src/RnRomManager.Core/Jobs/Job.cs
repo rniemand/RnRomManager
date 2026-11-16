@@ -7,6 +7,9 @@ public enum JobType
     DatRefresh,
     MediaRetry,
     ReviewResolve,
+
+    /// <summary>S4: moves legacy games' embedded ROMs next to their ZIPs.</summary>
+    StorageMigration,
 }
 
 public enum JobMode
@@ -22,6 +25,9 @@ public enum JobTrigger
 {
     Manual,
     Schedule,
+
+    /// <summary>S4: started by the app itself after startup.</summary>
+    Startup,
 }
 
 public enum JobStatus

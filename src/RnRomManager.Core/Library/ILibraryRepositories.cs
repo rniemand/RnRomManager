@@ -35,6 +35,12 @@ public interface IGameRepository
 
     /// <summary>Games with the default box art, no <c>BoxArt</c> image or no <c>Snap</c>, ordered by title then id (§10.2).</summary>
     Task<IReadOnlyList<GameRow>> ListMediaRetryCandidatesAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// S4: games of <paramref name="systemIds"/> with at least one ROM whose <c>external_file_name</c> is null, by ZIP path.
+    /// Candidates only: the storage migration re-opens each ZIP to decide.
+    /// </summary>
+    Task<IReadOnlyList<GameRow>> ListLegacyEmbeddedAsync(IReadOnlyCollection<string> systemIds, CancellationToken cancellationToken);
 }
 
 /// <summary>Input paths the database treats as one <c>zip_path</c>, and the games already stored under it.</summary>

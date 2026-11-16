@@ -111,4 +111,20 @@ public class JobRepositoryTests
         Assert.That((await _items.ListAsync(job.Id, null, 1, 48, CancellationToken.None)).Total, Is.EqualTo(3));
         Assert.That((await _items.ListAsync(Guid.NewGuid(), null, 1, 48, CancellationToken.None)).Total, Is.Zero);
     }
+    [Test]
+    public async Task StorageMigration_StartupJob_AndItsItem_RoundTrip()
+    {
+        var job = NewJob(JobType.StorageMigration) with { Trigger = JobTrigger.Startup };
+        await _jobs.InsertAsync(job, CancellationToken.None);
+        var gameId = Guid.NewGuid();
+        var item = new JobItem
+        {
+            JobId = job.Id, FileId = gameId, GameId = gameId, SystemId = "nds", SourcePath = "roms/nds/Q/Quest.zip", Outcome = "Migrated",
+            CreatedAt = T0,
+        };
+        var id = await _items.InsertAsync(item, CancellationToken.None);
+
+        Assert.That(await _jobs.GetAsync(job.Id, CancellationToken.None), Is.EqualTo(job));
+        Assert.That((await _items.ListAsync(job.Id, null, 1, 48, CancellationToken.None)).Items.Single(), Is.EqualTo(item with { Id = id }));
+    }
 }

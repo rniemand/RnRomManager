@@ -97,6 +97,18 @@ public class CrashRecoveryTests
     }
 
     [Test]
+    public async Task RemovesAStorageMigrationLeftover()
+    {
+        var work = Path.Combine(_paths.Cache, CrashRecovery.WorkFolder);
+        var leftover = Touch(Path.Combine(work, RnRomManager.Core.Storage.StorageMigrationJob.WorkFolder, Guid.NewGuid().ToString("N"), "rom.tmp"));
+
+        await RunAsync();
+
+        Assert.That(File.Exists(leftover), Is.False);
+        Assert.That(Directory.EnumerateFileSystemEntries(work), Is.Empty);
+    }
+
+    [Test]
     public async Task DeletesEveryZipTmpUnderRoms_KeepsZips()
     {
         var tmp1 = Touch(Path.Combine(_paths.Roms, "gb", "T", "Tetris.zip.tmp"));

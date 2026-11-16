@@ -29,10 +29,13 @@ public static class AuditActions
     /// <summary>Collections discovery B5: a publisher's shared logo override was removed.</summary>
     public const string PublisherLogoRemoved = "PublisherLogoRemoved";
 
+    /// <summary>S6: the storage migration moved a legacy game's ROMs out of its ZIP.</summary>
+    public const string RomsExternalized = "RomsExternalized";
+
     public static readonly IReadOnlyList<string> All =
     [
         Ingested, ZipRepaired, ExtensionRenamed, MovedToFailed, MovedToDuplicates, ArchiveDeleted, ReviewDeleted, GameUpdated,
         ReleaseDeleted, GameDeleted, ImageAdded, ImageDeleted, CoverSet, MediaFetched, ReleaseMoved, GamesMerged, DatsRefreshed,
-        IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved,
+        IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved, RomsExternalized,
     ];
 }
