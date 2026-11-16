@@ -108,4 +108,7 @@ public sealed record FixtureDatLayout(string DatFolder, IReadOnlyList<string> Me
 
     /// <summary>The seven disc systems' layout: <c>redump</c>, no metadat.</summary>
     public static FixtureDatLayout Redump { get; } = new(DatKind.Redump, []);
+
+    /// <summary>Commodore PET: <c>tosec</c>, no metadat.</summary>
+    public static FixtureDatLayout Tosec { get; } = new(DatKind.Tosec, []);
 }

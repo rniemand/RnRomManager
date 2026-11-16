@@ -28,6 +28,7 @@ roms/
   jaguar/               Atari Jaguar (.j64, .jag, .rom, .abs or .cof, as the DAT names it)
   coleco/               ColecoVision (.col)
   c64/                  Commodore 64 (.crt, .tap, .nib, .d64, .g64, .t64, .prg, .bin)
+  pet/                  Commodore PET (.prg, .d64)
   gg/                   Game Gear (.gg, or .sms for SMS-mode games, as the DAT names it)
   sms/                  Master System (.sms)
   md/                   Mega Drive / Genesis (.md, or .bin for the one lock-on entry, as the DAT names it)

@@ -85,7 +85,7 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 | Path | Contents |
 |---|---|
 | `/app/roms` | the library: one ZIP per game (see [ZIP format](zip-format.md)), plus the Nintendo Switch ROM files stored next to their ZIPs |
-| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`) `ingest/nds/` (Nintendo DS: `.nds`, stored next to the ZIP; dumps over 256 MiB must be dropped loose, since archives are capped at 256 MiB of ROM data) `ingest/nes/` (NES: headered `.nes` only) `ingest/snes/` (SNES: `.sfc` or `.smc`, copier header stripped) `ingest/a2600/` (Atari 2600: `.a26` or `.bin`) `ingest/coleco/` (ColecoVision: `.col`, `.rom` or `.bin`) `ingest/gg/` (Game Gear: `.gg` or `.sms`) `ingest/sms/` (Master System: `.sms`) `ingest/md/` (Mega Drive / Genesis: `.md`, `.bin` or `.gen`) `ingest/s32x/` (32X: `.32x`) `ingest/tg16/` (TurboGrafx-16 / PC Engine: `.pce`, copier header stripped) `ingest/switch/` (Nintendo Switch: `.nsp`, `.xci`, `.nsz` or `.xcz`) `ingest/psx/` (PlayStation: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`) `ingest/psp/` (PSP: `.iso`) `ingest/gc/` (GameCube: `.iso`) `ingest/wii/` (Wii: `.iso`) `ingest/x360/` (Xbox 360: `.iso`) `ingest/saturn/` (Saturn: a `.cue` with its `.bin` tracks, or `.nrg`/`.chd`) `ingest/segacd/` (Sega CD: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`) `ingest/3do/` (3DO: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`) or `ingest/c64/` (Commodore 64: `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.t64`, `.prg` or `.bin`); Switch, Nintendo DS and the disc systems are stored as files next to the ZIP (see [External ROM storage](#external-rom-storage-nintendo-switch-nintendo-ds-and-disc-systems)), and disc images must be dropped loose, not in archives; `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way (`_removed/` is managed on the Admin **Deleted ROMs** page: restore or delete for good) |
+| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`) `ingest/nds/` (Nintendo DS: `.nds`, stored next to the ZIP; dumps over 256 MiB must be dropped loose, since archives are capped at 256 MiB of ROM data) `ingest/nes/` (NES: headered `.nes` only) `ingest/snes/` (SNES: `.sfc` or `.smc`, copier header stripped) `ingest/a2600/` (Atari 2600: `.a26` or `.bin`) `ingest/coleco/` (ColecoVision: `.col`, `.rom` or `.bin`) `ingest/gg/` (Game Gear: `.gg` or `.sms`) `ingest/sms/` (Master System: `.sms`) `ingest/md/` (Mega Drive / Genesis: `.md`, `.bin` or `.gen`) `ingest/s32x/` (32X: `.32x`) `ingest/tg16/` (TurboGrafx-16 / PC Engine: `.pce`, copier header stripped) `ingest/switch/` (Nintendo Switch: `.nsp`, `.xci`, `.nsz` or `.xcz`) `ingest/psx/` (PlayStation: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`) `ingest/psp/` (PSP: `.iso`) `ingest/gc/` (GameCube: `.iso`) `ingest/wii/` (Wii: `.iso`) `ingest/x360/` (Xbox 360: `.iso`) `ingest/saturn/` (Saturn: a `.cue` with its `.bin` tracks, or `.nrg`/`.chd`) `ingest/segacd/` (Sega CD: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`) `ingest/3do/` (3DO: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`) or `ingest/c64/` (Commodore 64: `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.t64`, `.prg` or `.bin`), `ingest/pet/` (Commodore PET: `.prg` or `.d64`); Switch, Nintendo DS and the disc systems are stored as files next to the ZIP (see [External ROM storage](#external-rom-storage-nintendo-switch-nintendo-ds-and-disc-systems)), and disc images must be dropped loose, not in archives; `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way (`_removed/` is managed on the Admin **Deleted ROMs** page: restore or delete for good) |
 | `/app/logs` | `rnrommanager-yyyy-MM-dd.log`, kept for `Logging:RetentionDays` |
 | `/app/cache` | downloaded DATs and temporary work folders |
 | `/app/backups` | the daily database backups (see [Backup and restore](#backup-and-restore)); keep it private |
@@ -234,6 +234,11 @@ Upgrading to the release that adds Commodore 64:
 
 - **Refresh DATs after upgrading.** Commodore 64 is identified against libretro's No-Intro `Commodore - 64` DAT (one file, no metadat). Until **Admin → DATs → Refresh DATs** has downloaded it, every import is refused with `DatsMissing`. `roms/c64/` and `ingest/c64/` are created at startup.
 - **For Commodore 64 browser play,** set up the [VICE core](#vice-core) (`Emulator:ViceCorePath`).
+
+Upgrading to the release that adds Commodore PET:
+
+- **Refresh DATs after upgrading.** Commodore PET is identified against libretro's TOSEC `Commodore - PET` DAT (`metadat/tosec/`, one file, no metadat). Until **Admin → DATs → Refresh DATs** has downloaded it, every import is refused with `DatsMissing`. `roms/pet/` and `ingest/pet/` are created at startup.
+- **For Commodore PET browser play,** add the `vice_xpet` files to the [VICE core](#vice-core) folder.
 
 ## Nintendo DS: memory, disk and time
 
@@ -398,6 +403,8 @@ The output must be exactly:
 8a22bc81c0dd7104cd23ceec5117a9f47ca9503e280e4fbc9d0346f51b75253e  vice_x64sc-legacy-wasm.data
 5c50bc4ff5546a2c6fc4bb7949efd200ea0ac6b4723713e742fb659228e9a3aa  vice_x64sc.json
 ```
+
+For Commodore PET, do the same with `@emulatorjs/core-vice_xpet@4.2.3` (`vice_xpet-wasm.data`, `vice_xpet-legacy-wasm.data`, `reports/vice_xpet.json`) into the same folder; the hashes must match [configuration](configuration.md#vice-core).
 
 Then mount the folder read-only and point the setting at it:
 

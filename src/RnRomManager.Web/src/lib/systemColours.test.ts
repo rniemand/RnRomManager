@@ -46,6 +46,7 @@ describe('systemColour', () => {
 
 	it('gives Commodore 64 its palette light blue with white text (C64 B5)', () => {
 		expect(systemColour('c64')).toEqual({ name: 'c64', foreground: '#fff' });
+		expect(systemColour('pet')).toEqual({ name: 'pet', foreground: '#fff' });
 	});
 
 	it('gives Virtual Boy, Atari 5200 and Atari 7800 their own colours (B5)', () => {

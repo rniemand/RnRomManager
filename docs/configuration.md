@@ -23,7 +23,7 @@ All settings come from `appsettings.json` and can be overridden with environment
 | `Emulator:PicodriveCorePath` | `Emulator__PicodriveCorePath` | *(empty)* | empty (32X play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 PicoDrive files ([below](#picodrive-core)). It may be the same folder as `Emulator:GenesisCorePath`, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.picodriveCorePath`). |
 | `Emulator:Snes9xCorePath` | `Emulator__Snes9xCorePath` | *(empty)* | empty (SNES play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Snes9x files ([below](#snes9x-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.snes9xCorePath`). |
 | `Emulator:OperaCorePath` | `Emulator__OperaCorePath` | *(empty)* | empty (3DO play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Opera files ([below](#opera-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.operaCorePath`). |
-| `Emulator:ViceCorePath` | `Emulator__ViceCorePath` | *(empty)* | empty (Commodore 64 play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 VICE files ([below](#vice-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.viceCorePath`). |
+| `Emulator:ViceCorePath` | `Emulator__ViceCorePath` | *(empty)* | empty (Commodore 64 and PET play off), or an absolute path to a read-only folder holding the EmulatorJS 4.2.3 VICE files ([below](#vice-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.viceCorePath`). |
 | `Backup:RestoreFrom` | `Backup__RestoreFrom` | *(empty)* | empty, or the bare file name of a backup in `Paths:Backups` to restore at startup (no `/`, `\` or `..`). See [restoring a backup](deployment.md#restoring-a-backup). Remove it once the restore is done. |
 
 ## Paths
@@ -82,6 +82,14 @@ Commodore 64 plays with VICE (x64sc). Its licence is GPL-2.0-or-later, but its b
 | `vice_x64sc-wasm.data` | 1,523,457 | `77f58884c81b58721cbc4754ffc5574838219258e9390630c352a494a3f335ab` |
 | `vice_x64sc-legacy-wasm.data` | 1,523,390 | `8a22bc81c0dd7104cd23ceec5117a9f47ca9503e280e4fbc9d0346f51b75253e` |
 | `vice_x64sc.json` | 147 | `5c50bc4ff5546a2c6fc4bb7949efd200ea0ac6b4723713e742fb659228e9a3aa` |
+
+Commodore PET plays with VICE (xpet), which embeds the PET's ROMs for the same reason. Its three files from [`@emulatorjs/core-vice_xpet@4.2.3`](https://registry.npmjs.org/@emulatorjs/core-vice_xpet/-/core-vice_xpet-4.2.3.tgz) go in the **same** `Emulator:ViceCorePath` folder (`GET /api/emulator/cores/vice_xpet/<file>`, the same `409 ViceCoreMismatch`); either set works without the other:
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `vice_xpet-wasm.data` | 1,368,677 | `eef0d83f7c1af43d51c3384a07db4196ea7c2bbe1292e9e52fade3d3107513c5` |
+| `vice_xpet-legacy-wasm.data` | 1,368,450 | `98ac6fbb90824a77ae6480a431c465d41e8cecce39394e036648d57e86297361` |
+| `vice_xpet.json` | 123 | `9bf5ec80ab1f58dc7cdccd73f0141385b030f262ce20aaae4403369dd7061301` |
 
 The archive's two `-thread` payloads aren't used. The checks are the same as for Genesis Plus GX (`GET /api/emulator/cores/vice_x64sc/<file>`); a file that doesn't match is refused with `409 ViceCoreMismatch`, and the play page says *The VICE core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:ViceCorePath).* Without the files it says *Commodore 64 games need the VICE core files: ask an Admin to set them up (Emulator:ViceCorePath).* No BIOS is needed in `Paths:Bios`.
 

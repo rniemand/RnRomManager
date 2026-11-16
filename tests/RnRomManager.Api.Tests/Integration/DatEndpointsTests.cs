@@ -49,6 +49,7 @@ public class DatEndpointsTests
         [IngestSeeder.SegaCdDat] = [],
         [IngestSeeder.ThreeDoDat] = [],
         [IngestSeeder.C64Dat] = [],
+        [IngestSeeder.PetDat] = [],
         [IngestSeeder.NintendoDsDat] = [],
     };
 
@@ -143,7 +144,7 @@ public class DatEndpointsTests
         var rows = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
         var names = rows.Select(r => r.GetProperty("datName").GetString()!).ToList();
-        Assert.That(names, Has.Count.EqualTo(30), "20 libretro systems, the 8 disc systems, Switch and the test titledb system");
+        Assert.That(names, Has.Count.EqualTo(31), "21 libretro systems, the 8 disc systems, Switch and the test titledb system");
         Assert.That(names, Is.EqualTo(names.Order(StringComparer.Ordinal)));
         var titleDb = rows.Single(r => r.GetProperty("datName").GetString() == ExternalTitleDbTestHandler.DatNameValue);
         Assert.That(titleDb.GetProperty("version").GetString(), Is.EqualTo(FixtureDatWriter.TitleDbVersion));
@@ -211,7 +212,7 @@ public class DatEndpointsTests
         using var response = await _admin.GetAsync("/api/admin/dats");
         var rows = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
-        Assert.That(rows.Select(r => r.GetProperty("datName").GetString()), Is.EqualTo(new[] { IngestSeeder.Atari2600Dat, IngestSeeder.Atari5200Dat, IngestSeeder.Atari7800Dat, IngestSeeder.JaguarDat, IngestSeeder.LynxDat, IngestSeeder.ColecoVisionDat, IngestSeeder.C64Dat, IngestSeeder.Xbox360Dat, IngestSeeder.TurboGrafx16Dat, Gb, IngestSeeder.GbaDat, Gbc, IngestSeeder.GameCubeDat, IngestSeeder.N64Dat, IngestSeeder.NintendoDsDat, IngestSeeder.NesDat, IngestSeeder.SwitchDat, IngestSeeder.SnesDat, IngestSeeder.VirtualBoyDat, IngestSeeder.WiiDat, IngestSeeder.Sega32xDat, IngestSeeder.GameGearDat, IngestSeeder.MasterSystemDat, IngestSeeder.MegaDriveDat, IngestSeeder.SegaCdDat, IngestSeeder.SaturnDat, IngestSeeder.PsxDat, IngestSeeder.PspDat, IngestSeeder.ThreeDoDat }));
+        Assert.That(rows.Select(r => r.GetProperty("datName").GetString()), Is.EqualTo(new[] { IngestSeeder.Atari2600Dat, IngestSeeder.Atari5200Dat, IngestSeeder.Atari7800Dat, IngestSeeder.JaguarDat, IngestSeeder.LynxDat, IngestSeeder.ColecoVisionDat, IngestSeeder.C64Dat, IngestSeeder.PetDat, IngestSeeder.Xbox360Dat, IngestSeeder.TurboGrafx16Dat, Gb, IngestSeeder.GbaDat, Gbc, IngestSeeder.GameCubeDat, IngestSeeder.N64Dat, IngestSeeder.NintendoDsDat, IngestSeeder.NesDat, IngestSeeder.SwitchDat, IngestSeeder.SnesDat, IngestSeeder.VirtualBoyDat, IngestSeeder.WiiDat, IngestSeeder.Sega32xDat, IngestSeeder.GameGearDat, IngestSeeder.MasterSystemDat, IngestSeeder.MegaDriveDat, IngestSeeder.SegaCdDat, IngestSeeder.SaturnDat, IngestSeeder.PsxDat, IngestSeeder.PspDat, IngestSeeder.ThreeDoDat }));
         Assert.That(rows.Select(r => r.GetProperty("version").GetString()), Is.All.EqualTo("2026.01.01"));
         Assert.That(rows[0].GetProperty("downloadedAt").GetDateTimeOffset(), Is.EqualTo(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero)));
     }
@@ -253,7 +254,7 @@ public class DatEndpointsTests
         var after = clock.GetUtcNow().UtcDateTime.ToString("yyyy.MM.dd", System.Globalization.CultureInfo.InvariantCulture);
 
         Assert.That(job.Status, Is.EqualTo(JobStatus.Completed), job.Error);
-        Assert.That(_server.Requests, Has.Count.EqualTo(105), "5 per No-Intro libretro system with metadat, 1 for Commodore 64 and each disc system (no metadat) and one titledb source");
+        Assert.That(_server.Requests, Has.Count.EqualTo(106), "5 per No-Intro libretro system with metadat, 1 for Commodore 64, Commodore PET and each disc system (no metadat) and one titledb source");
         Assert.That(_server.Requests.Count(r => r.RequestUri!.AbsoluteUri == "https://dats.test/metadat/US.en.json"), Is.EqualTo(1));
         // titledb is versioned by the UTC date of its download, apart from the libretro fixture version.
         Assert.That(_factory.Services.GetRequiredService<DatCache>().For("switch")!.Version, Is.AnyOf(before, after));

@@ -102,13 +102,15 @@ public partial class EmulatorEndpointsTests
         };
 
         Assert.That(OperatorCoreManifest.Pinned.Cores.Select(c => c.Id),
-            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x", "opera", "vice_x64sc" }));
+            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x", "opera", "vice_x64sc", "vice_xpet" }));
         Assert.That((genesis.DisplayName, genesis.MismatchCode), Is.EqualTo(("Genesis Plus GX", "GenesisCoreMismatch")));
         Assert.That((picodrive.DisplayName, picodrive.MismatchCode), Is.EqualTo(("PicoDrive", "PicodriveCoreMismatch")));
         Assert.That((snes9x.DisplayName, snes9x.MismatchCode), Is.EqualTo(("Snes9x", "Snes9xCoreMismatch")));
         Assert.That((opera.DisplayName, opera.MismatchCode), Is.EqualTo(("Opera", "OperaCoreMismatch")));
         Assert.That(opera.PathOf(options), Is.EqualTo("/cores/opera"));
         Assert.That((vice.DisplayName, vice.MismatchCode, vice.PathOf(options)), Is.EqualTo(("VICE", "ViceCoreMismatch", "/cores/vice")));
+        var pet = OperatorCoreManifest.Pinned.Find("vice_xpet")!;
+        Assert.That((pet.DisplayName, pet.MismatchCode, pet.PathOf(options)), Is.EqualTo(("VICE (PET)", "ViceCoreMismatch", "/cores/vice")), "shares the C64 folder");
         Assert.That((genesis.PathOf(options), picodrive.PathOf(options), snes9x.PathOf(options)),
             Is.EqualTo(("/cores/genesis", "/cores/picodrive", "/cores/snes9x")));
         Assert.That(OperatorCoreManifest.Pinned.Find("GENESIS_PLUS_GX"), Is.Null);
@@ -589,6 +591,20 @@ public partial class EmulatorEndpointsTests
                 "8a22bc81c0dd7104cd23ceec5117a9f47ca9503e280e4fbc9d0346f51b75253e", "application/octet-stream"),
             new OperatorCoreFile("vice_x64sc.json", 147,
                 "5c50bc4ff5546a2c6fc4bb7949efd200ea0ac6b4723713e742fb659228e9a3aa", "application/json"),
+        }));
+    }
+
+    [Test]
+    public void PinnedManifest_HoldsExactlyTheVicePet4_2_3Files()
+    {
+        Assert.That(OperatorCoreManifest.Pinned.Find(OperatorCoreManifest.VicePet)!.Files, Is.EqualTo(new[]
+        {
+            new OperatorCoreFile("vice_xpet-wasm.data", 1_368_677,
+                "eef0d83f7c1af43d51c3384a07db4196ea7c2bbe1292e9e52fade3d3107513c5", "application/octet-stream"),
+            new OperatorCoreFile("vice_xpet-legacy-wasm.data", 1_368_450,
+                "98ac6fbb90824a77ae6480a431c465d41e8cecce39394e036648d57e86297361", "application/octet-stream"),
+            new OperatorCoreFile("vice_xpet.json", 123,
+                "9bf5ec80ab1f58dc7cdccd73f0141385b030f262ce20aaae4403369dd7061301", "application/json"),
         }));
     }
 

@@ -79,7 +79,7 @@ const coreLicenses = [
 // The guarded vendoring edits (anchor → its replacement), applied in order.
 const getCoreAnchor = '        const gen = this.getCore(true);\n';
 const pinGuard =
-	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc"].includes(core)) {\n' +
+	'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc", "vice_xpet"].includes(core)) {\n' +
 	'            return core;\n' +
 	'        }\n';
 const legacyAnchor =
@@ -88,14 +88,14 @@ const threadOverride =
 	'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
 	'                threads = true;\n' +
 	'            }\n' +
-	'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc"].includes(this.getCore())) {\n' +
+	'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc", "vice_xpet"].includes(this.getCore())) {\n' +
 	'                threads = false;\n' +
 	'            }\n';
 const cdnAnchor =
 	'            if (res === -1) {\n' +
 	'                console.log("File not found, attemping to fetch from emulatorjs cdn.");\n';
 const cdnSkip =
-	'                if (["genesis_plus_gx", "picodrive", "snes9x", "desmume", "opera", "vice_x64sc"].includes(this.getCore())) {\n' +
+	'                if (["genesis_plus_gx", "picodrive", "snes9x", "desmume", "opera", "vice_x64sc", "vice_xpet"].includes(this.getCore())) {\n' +
 	'                    this.startGameError(this.localization("Error downloading core") + " (" + filename + ")");\n' +
 	'                    return;\n' +
 	'                }\n';
@@ -472,11 +472,11 @@ describe('vendor-emulatorjs', () => {
 			const source = readFileSync(join(out, 'data', file), 'utf8');
 			expect(source).toContain('const requiresThreads = ["ppsspp", "dosbox_pure"];');
 			expect(threadOverride).toContain(
-				'["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc"].includes(this.getCore())'
+				'["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc", "vice_xpet"].includes(this.getCore())'
 			);
 			// The operator-supplied cores and DeSmuME skip the CDN; Yabause takes upstream's path.
 			expect(cdnSkip).toContain(
-				'["genesis_plus_gx", "picodrive", "snes9x", "desmume", "opera", "vice_x64sc"].includes(this.getCore())'
+				'["genesis_plus_gx", "picodrive", "snes9x", "desmume", "opera", "vice_x64sc", "vice_xpet"].includes(this.getCore())'
 			);
 		}
 	);
