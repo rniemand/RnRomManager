@@ -1,6 +1,8 @@
 using System.Text.Json;
 using RnRomManager.Api.Auth;
+using Microsoft.Extensions.Options;
 using RnRomManager.Core.Audit;
+using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Library;
 
 namespace RnRomManager.Api.Endpoints;
@@ -11,9 +13,66 @@ namespace RnRomManager.Api.Endpoints;
 /// </summary>
 public static class SaveEndpoints
 {
+    /// <summary>B8: the whole upload request: a 256 MiB save plus 64 KiB for the framing and the text fields.</summary>
+    public const long UploadRequestLimit = SaveUploadReader.RequestLimit;
+
+    private static readonly HashSet<string> AddFields = new(StringComparer.Ordinal) { "romId", "kind", "name", "description" };
+
     public static RouteGroupBuilder MapSaveEndpoints(this RouteGroupBuilder api)
     {
         var saves = api.MapGroup("/games/{id:guid}/saves");
+
+        // B8: Content-Length 413 first; text fields; 400 validation; the cheap 404/409 checks; then the file is streamed.
+        saves.MapPost("", async (Guid id, HttpContext ctx, LibraryEditor editor, IRomRepository roms, IOptions<PathsOptions> paths) =>
+        {
+            var (form, problem) = await SaveUploadReader.ReadFieldsAsync(ctx, AddFields);
+            if (problem is not null)
+                return problem;
+            using var upload = form!;
+            var fields = upload.Fields;
+            var errors = new Dictionary<string, string[]>();
+            if (!long.TryParse(fields.GetValueOrDefault("romId"), System.Globalization.NumberStyles.None, null, out var romId) || romId <= 0)
+                errors["romId"] = ["Choose a release of this game."];
+            var kind = fields.GetValueOrDefault("kind");
+            if (!GameSaves.IsKind(kind))
+                errors["kind"] = ["Choose State or Battery."];
+            if (GameSaves.NameProblem(fields.GetValueOrDefault("name"), out var name) is { } nameProblem)
+                errors["name"] = [nameProblem];
+            var description = fields.GetValueOrDefault("description");
+            if (GameSaves.DescriptionProblem(description) is { } descriptionProblem)
+                errors["description"] = [descriptionProblem];
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+            if (await editor.PrecheckSaveAsync(id, romId, null, ctx.RequestAborted) is { } refused)
+                return LibraryEndpoints.ToProblem(ctx, refused);
+
+            var (file, fileProblem) = await upload.ReadFileAsync(ctx, paths);
+            if (fileProblem is not null)
+                return fileProblem;
+            var result = await editor.AddSaveAsync(id, romId, kind!, name, description, file!, AuditActor.From(ctx.User), ctx.RequestAborted);
+            return result.Code is null
+                ? Results.Created($"/api/games/{id}/saves/{result.Save!.Id}", ToItem(result.Save, await roms.ListByGameAsync(id, ctx.RequestAborted)))
+                : LibraryEndpoints.ToProblem(ctx, result);
+        }).WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(UploadRequestLimit));
+
+        // B10: one file part only; the entry is renamed when the extension changes.
+        saves.MapPut("/{saveId}/file", async (Guid id, string saveId, HttpContext ctx, LibraryEditor editor, IRomRepository roms,
+            IOptions<PathsOptions> paths) =>
+        {
+            var (form, problem) = await SaveUploadReader.ReadFieldsAsync(ctx, new HashSet<string>());
+            if (problem is not null)
+                return problem;
+            using var upload = form!;
+            if (await editor.PrecheckSaveAsync(id, null, saveId, ctx.RequestAborted) is { } refused)
+                return LibraryEndpoints.ToProblem(ctx, refused);
+            var (file, fileProblem) = await upload.ReadFileAsync(ctx, paths);
+            if (fileProblem is not null)
+                return fileProblem;
+            var result = await editor.ReplaceSaveFileAsync(id, saveId, file!, AuditActor.From(ctx.User), ctx.RequestAborted);
+            return result.Code is null
+                ? Results.Ok(ToItem(result.Save!, await roms.ListByGameAsync(id, ctx.RequestAborted)))
+                : LibraryEndpoints.ToProblem(ctx, result);
+        }).WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(UploadRequestLimit));
 
         saves.MapGet("", async (Guid id, HttpContext ctx, IGameRepository games, IRomRepository roms, LibraryFiles files) =>
         {
