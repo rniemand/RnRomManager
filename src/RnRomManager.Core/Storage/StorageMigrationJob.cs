@@ -14,13 +14,18 @@ namespace RnRomManager.Core.Storage;
 /// with all ROMs inside) next to its ZIP. Per game: each ROM entry is streamed to <c>cache/work/storage-migration/</c>
 /// while hashed and checked against <c>info.json</c>, moved next to the ZIP under its external name, then the ZIP is
 /// rewritten without <c>roms/</c> entries (notes, images and other entries carried) and mirrored. A failure before
-/// the ZIP is published deletes the files this game created and leaves the ZIP untouched. One job item per game;
-/// cancel and shutdown stop between games.
+/// the ZIP is published deletes the files this game created and leaves the ZIP untouched. A leftover of a crash after
+/// the move (an unclaimed file with the ROM's name, size and SHA-1) is reused. A game needs its ROMs + its ZIP + 64 MiB
+/// free on the library volume and its largest ROM free on the cache volume. One job item per
+/// game; cancel and shutdown stop between games.
 /// </summary>
 public sealed class StorageMigrationJob(IGameRepository games, IRomRepository roms, ILibraryMirror mirror, InfoJsonReader reader,
-    ISystemRegistry systems, IJobItemRepository items, IOptions<PathsOptions> paths, IAuditLog audit, TimeProvider time,
+    ISystemRegistry systems, IJobItemRepository items, IOptions<PathsOptions> paths, IAuditLog audit, IFreeSpace freeSpace, TimeProvider time,
     ILogger<StorageMigrationJob> logger) : IJob
 {
+    /// <summary>S6: room kept free on the library volume on top of the game's ROMs and its ZIP.</summary>
+    public const long SpaceMarginBytes = 64L * 1024 * 1024;
+
     public const string WorkFolder = "storage-migration";
     public const string Migrated = "Migrated";
     public const string Error = "Error";
@@ -109,14 +114,21 @@ public sealed class StorageMigrationJob(IGameRepository games, IRomRepository ro
         var folder = ExternalRomPath.ClassifyDirectory(library, Path.GetDirectoryName(existing.Path)!);
         if (folder.Status != ExternalPathStatus.Found)
             return new("IoError", folder.Details);
+        if (SpaceProblem(game, existing.Path, cache) is { } space)
+            return new("InsufficientSpace", space);
         var work = ExternalRomPath.CreateDirectory(cache, Path.Combine(cache, CrashRecovery.WorkFolder, WorkFolder, Guid.NewGuid().ToString("N")));
         if (work.Status != ExternalPathStatus.Found)
             return new("IoError", work.Details);
 
         var claims = await roms.ListExternalAsync(ct).ConfigureAwait(false);
-        var names = ExternalNameReservations.ForFolder(folder.Path, row.ZipPath[..row.ZipPath.LastIndexOf('/')], claims);
+        var folderPath = row.ZipPath[..row.ZipPath.LastIndexOf('/')];
+        var names = ExternalNameReservations.ForFolder(folder.Path, folderPath, claims);
+        var claimed = claims.Where(c => string.Equals(c.ZipPath[..c.ZipPath.LastIndexOf('/')], folderPath, StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.ExternalFileName).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var zipBase = Path.GetFileNameWithoutExtension(row.ZipPath);
+        // Every file the new ZIP points at; only those this run created are removed on failure.
         var placed = new List<(string Path, ExternalFileSnapshot Snapshot)>();
+        var created = new List<(string Path, ExternalFileSnapshot Snapshot)>();
         var migratedRoms = new List<InfoJsonRom>();
         try
         {
@@ -129,12 +141,33 @@ public sealed class StorageMigrationJob(IGameRepository games, IRomRepository ro
                 if (copied.Status != ExternalPathStatus.Found)
                     return Fail(new("IoError", copied.Details));
 
-                var name = ExternalRomName.Allocate(zipBase, rom.FileName, names);
-                var moved = ExternalRomMove.Move(cache, tmp, Path.Combine(folder.Path, name), copied.Snapshot!, logger, rom.Metadata.Sha1);
-                if (moved.Status != ExternalMoveStatus.Moved)
-                    return Fail(new("IoError", moved.Details));
-                placed.Add((moved.Path!, moved.Snapshot!));
-                migratedRoms.Add(rom with { ExternalFileName = name });
+                // The walk Allocate does, but a crash leftover (unclaimed, same size and SHA-1) is taken as it is.
+                for (var n = 1; ; n++)
+                {
+                    var name = ExternalRomName.Build(zipBase, rom.FileName, n);
+                    var staging = ExternalRomName.StagingName(name);
+                    if (!names.IsTaken(name) && !names.IsTaken(staging))
+                    {
+                        names.Reserve(name);
+                        names.Reserve(staging);
+                        var moved = ExternalRomMove.Move(cache, tmp, Path.Combine(folder.Path, name), copied.Snapshot!, logger, rom.Metadata.Sha1);
+                        if (moved.Status != ExternalMoveStatus.Moved)
+                            return Fail(new("IoError", moved.Details));
+                        placed.Add((moved.Path!, moved.Snapshot!));
+                        created.Add((moved.Path!, moved.Snapshot!));
+                        migratedRoms.Add(rom with { ExternalFileName = name });
+                        break;
+                    }
+                    if (!claimed.Contains(name) && placed.All(p => !string.Equals(Path.GetFileName(p.Path), name, StringComparison.OrdinalIgnoreCase))
+                        && await LeftoverAsync(Path.Combine(folder.Path, name), rom).ConfigureAwait(false) is { } leftover)
+                    {
+                        logger.LogInformation("Storage migration: reusing {Path}, left by an earlier run", leftover.Path);
+                        File.Delete(tmp);
+                        placed.Add((leftover.Path, leftover.Snapshot!));
+                        migratedRoms.Add(rom with { ExternalFileName = name });
+                        break;
+                    }
+                }
             }
 
             var migrated = game with { Roms = migratedRoms };
@@ -155,7 +188,7 @@ public sealed class StorageMigrationJob(IGameRepository games, IRomRepository ro
             }
 
             // The ZIP now names the files, so they stay even if the mirror fails (the next sync repairs the rows).
-            placed.Clear();
+            created.Clear();
             try
             {
                 await mirror.ReplaceAsync(new MirrorEntry(migrated, row.ZipPath, published.Length, published.LastWriteTimeUtc), ct).ConfigureAwait(false);
@@ -174,7 +207,7 @@ public sealed class StorageMigrationJob(IGameRepository games, IRomRepository ro
         Outcome Fail(Outcome failure)
         {
             // Nothing was published: only files this run created and still holds are removed.
-            foreach (var (path, snapshot) in placed)
+            foreach (var (path, snapshot) in created)
             {
                 if (ExternalRomPath.ClassifyFile(library, path).Snapshot == snapshot)
                     File.Delete(path);
@@ -183,6 +216,38 @@ public sealed class StorageMigrationJob(IGameRepository games, IRomRepository ro
             }
             return failure;
         }
+    }
+
+    /// <returns>Why the game doesn't fit (S6), or null; an unreadable free space is logged and doesn't stop it.</returns>
+    private string? SpaceProblem(InfoJsonGame game, string zip, string cache)
+    {
+        var needed = game.Roms.Sum(r => r.Metadata.SizeBytes) + new FileInfo(zip).Length + SpaceMarginBytes;
+        // On a shared volume the cache check is implied by the library one (same free bytes, a smaller need).
+        return Short(zip, needed) ?? Short(cache, game.Roms.Max(r => r.Metadata.SizeBytes));
+
+        string? Short(string path, long bytes)
+        {
+            if (freeSpace.AvailableBytes(path) is not { } free)
+            {
+                logger.LogWarning("Storage migration: the free space at {Path} can't be read; going ahead", path);
+                return null;
+            }
+            return free < bytes ? $"{bytes} bytes needed at {path}, {free} free" : null;
+        }
+    }
+
+    /// <returns>The existing file at <paramref name="path"/> when it holds exactly <paramref name="rom"/>'s bytes; otherwise null.</returns>
+    private async Task<ExternalPathCheck?> LeftoverAsync(string path, InfoJsonRom rom)
+    {
+        var check = ExternalRomPath.ClassifyFile(paths.Value.Roms, path);
+        if (check.Status != ExternalPathStatus.Found || check.Snapshot!.Length != rom.Metadata.SizeBytes)
+            return null;
+        var opened = ExternalRomPath.OpenRead(paths.Value.Roms, check.Path, FileShare.Read, check.Snapshot);
+        if (opened.Status != ExternalPathStatus.Found)
+            return null;
+        await using var stream = opened.Stream!;
+        var sha1 = Convert.ToHexStringLower(await SHA1.HashDataAsync(stream).ConfigureAwait(false));
+        return sha1 == rom.Metadata.Sha1 ? check : null;
     }
 
     /// <summary>Streams one ROM entry to <paramref name="tmp"/>, hashing it, and checks size and SHA-1 against <c>info.json</c>.</summary>

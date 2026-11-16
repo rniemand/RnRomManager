@@ -73,9 +73,9 @@ public class StorageMigrationJobTests
         return new(game, zipPath, zip, bytes, File.ReadAllBytes(zip));
     }
 
-    private StorageMigrationJob Job(LibraryZipWriterHooks? hooks = null)
+    private StorageMigrationJob Job(LibraryZipWriterHooks? hooks = null, IFreeSpace? free = null)
     {
-        var job = Service<StorageMigrationJob>();
+        var job = free is null ? Service<StorageMigrationJob>() : ActivatorUtilities.CreateInstance<StorageMigrationJob>(_factory.Services, free);
         job.WriterHooks = hooks;
         return job;
     }
@@ -186,6 +186,107 @@ public class StorageMigrationJobTests
 
         Assert.That(ReadZip(legacy.Zip).Roms[0].ExternalFileName, Is.EqualTo(ExternalRomName.Build("Alpha", "Alpha (0).nds", 2)));
         Assert.That(File.ReadAllBytes(taken), Is.EqualTo(new byte[] { 1, 2, 3 }), "the occupant is left alone");
+    }
+
+    [Test]
+    public async Task ACrashLeftover_WithTheRomsSizeAndSha1_IsReused()
+    {
+        var legacy = await WriteLegacy("Alpha");
+        var name = ExternalRomName.Build("Alpha", "Alpha (0).nds");
+        var leftover = Path.Combine(legacy.Folder, name);
+        File.WriteAllBytes(leftover, legacy.Roms[0]);
+        var before = File.GetLastWriteTimeUtc(leftover).AddMinutes(-5);
+        File.SetLastWriteTimeUtc(leftover, before);
+
+        await RunAsync(Job(), Guid.NewGuid());
+
+        Assert.That(ReadZip(legacy.Zip).Roms[0].ExternalFileName, Is.EqualTo(name));
+        Assert.That(File.GetLastWriteTimeUtc(leftover), Is.EqualTo(before), "the leftover itself is used, not replaced");
+        Assert.That(Directory.GetFiles(legacy.Folder).Order(), Is.EqualTo(new[] { leftover, legacy.Zip }.Order()));
+        var work = Path.Combine(_factory.Root, "cache", "work", StorageMigrationJob.WorkFolder);
+        Assert.That(!Directory.Exists(work) || !Directory.EnumerateFileSystemEntries(work, "*", SearchOption.AllDirectories).Any(), Is.True,
+            "the temp copy is gone");
+    }
+
+    [Test]
+    public async Task ASameNamedFileWithOtherBytesOfTheSameSize_GetsTheNextCandidate()
+    {
+        var legacy = await WriteLegacy("Alpha");
+        var taken = Path.Combine(legacy.Folder, ExternalRomName.Build("Alpha", "Alpha (0).nds"));
+        var other = legacy.Roms[0].ToArray();
+        other[^1] ^= 0xFF;
+        File.WriteAllBytes(taken, other);
+
+        await RunAsync(Job(), Guid.NewGuid());
+
+        Assert.That(ReadZip(legacy.Zip).Roms[0].ExternalFileName, Is.EqualTo(ExternalRomName.Build("Alpha", "Alpha (0).nds", 2)));
+        Assert.That(File.ReadAllBytes(taken), Is.EqualTo(other));
+    }
+
+    [Test]
+    public async Task AFileClaimedByARomRow_IsNeverReused()
+    {
+        var legacy = await WriteLegacy("Alpha");
+        var name = ExternalRomName.Build("Alpha", "Alpha (0).nds");
+        var claimed = Path.Combine(legacy.Folder, name);
+        File.WriteAllBytes(claimed, legacy.Roms[0]);
+        var owner = TestLibrary.Game("Other", TestLibrary.Rom("Other (USA).nds", TestLibrary.RomBytes(++_seed)) with { ExternalFileName = name })
+            with { System = LegacyExternalTestHandler.SystemId };
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(owner, "legacy/A/Other.zip", 100, DateTime.UtcNow), default);
+
+        await RunAsync(Job(), Guid.NewGuid());
+
+        Assert.That(ReadZip(legacy.Zip).Roms[0].ExternalFileName, Is.EqualTo(ExternalRomName.Build("Alpha", "Alpha (0).nds", 2)));
+        Assert.That(File.Exists(claimed), Is.True);
+    }
+
+    private sealed class FakeFreeSpace(Func<string, long?> free) : IFreeSpace
+    {
+        public long? AvailableBytes(string path) => free(path);
+    }
+
+    [TestCase(true, TestName = "ShortSpace_IsInsufficientSpace_AndTheNextGameContinues library volume")]
+    [TestCase(false, TestName = "ShortSpace_IsInsufficientSpace_AndTheNextGameContinues cache volume")]
+    public async Task ShortSpace_IsInsufficientSpace_AndTheNextGameContinues(bool library)
+    {
+        var alpha = await WriteLegacy("Alpha");
+        var beta = await WriteLegacy("Beta");
+        var cache = Path.GetFullPath(Path.Combine(_factory.Root, "cache"));
+        var needed = alpha.Roms[0].Length + alpha.ZipBytes.Length + StorageMigrationJob.SpaceMarginBytes;
+        string? lastZip = null;
+        // The library check gets the ZIP's path, then the cache check the cache's: only Alpha is short, on one of them.
+        var free = new FakeFreeSpace(path =>
+        {
+            if (!path.StartsWith(cache, StringComparison.OrdinalIgnoreCase))
+            {
+                lastZip = path;
+                return library && path.Contains("Alpha", StringComparison.Ordinal) ? needed - 1 : needed;
+            }
+            return !library && lastZip!.Contains("Alpha", StringComparison.Ordinal) ? alpha.Roms[0].Length - 1 : long.MaxValue;
+        });
+        var jobId = Guid.NewGuid();
+
+        var summary = await RunAsync(Job(free: free), jobId);
+
+        Assert.That((summary.GetProperty("migrated").GetInt32(), summary.GetProperty("error").GetInt32()), Is.EqualTo((1, 1)));
+        var items = await Items(jobId);
+        Assert.That(items.Select(i => (i.GameId, i.Outcome, i.Reason)), Is.EqualTo(new[]
+        {
+            ((Guid?)alpha.Game.GameId, "Error", (string?)"InsufficientSpace"),
+            ((Guid?)beta.Game.GameId, "Migrated", (string?)null),
+        }));
+        Assert.That(File.ReadAllBytes(alpha.Zip), Is.EqualTo(alpha.ZipBytes));
+    }
+
+    [Test]
+    public async Task UnreadableFreeSpace_IsLogged_AndTheGameMigrates()
+    {
+        var legacy = await WriteLegacy("Alpha");
+
+        var summary = await RunAsync(Job(free: new FakeFreeSpace(_ => null)), Guid.NewGuid());
+
+        Assert.That(summary.GetProperty("migrated").GetInt32(), Is.EqualTo(1));
+        Assert.That(ReadZip(legacy.Zip).Roms[0].ExternalFileName, Is.Not.Null);
     }
 
     [Test]
