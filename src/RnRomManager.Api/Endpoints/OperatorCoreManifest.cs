@@ -26,6 +26,7 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
     public const string Picodrive = "picodrive";
     public const string Snes9x = "snes9x";
     public const string Opera = "opera";
+    public const string Vice = "vice_x64sc";
 
     /// <summary>The pinned 4.2.3 files of each core (each report is its package's <c>reports/</c> copy).</summary>
     public static OperatorCoreManifest Pinned { get; } = new(
@@ -72,6 +73,17 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
                 "41d3a7336cd304693c86974b50df5f7a90d9557077b01e0a1e928b3a38fe4f86", "application/octet-stream"),
             new("opera.json", 119,
                 "0245b492b516ef4b1c0490e3f05dbeb1d74074ea767cd54fc34747e31b2a0203", "application/json"),
+        ]),
+        // C64 B7: https://registry.npmjs.org/@emulatorjs/core-vice_x64sc/-/core-vice_x64sc-4.2.3.tgz (payloads at the
+        // package root, the report from reports/). Its binary embeds Commodore's system ROMs, so it's never bundled.
+        new(Vice, "VICE", o => o.ViceCorePath, EmulatorEndpoints.ViceCoreMismatch,
+        [
+            new("vice_x64sc-wasm.data", 1_523_457,
+                "77f58884c81b58721cbc4754ffc5574838219258e9390630c352a494a3f335ab", "application/octet-stream"),
+            new("vice_x64sc-legacy-wasm.data", 1_523_390,
+                "8a22bc81c0dd7104cd23ceec5117a9f47ca9503e280e4fbc9d0346f51b75253e", "application/octet-stream"),
+            new("vice_x64sc.json", 147,
+                "5c50bc4ff5546a2c6fc4bb7949efd200ea0ac6b4723713e742fb659228e9a3aa", "application/json"),
         ]),
     ]);
 

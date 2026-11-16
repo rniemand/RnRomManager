@@ -33,7 +33,8 @@ public sealed class C64Handler : ISystemHandler
     /// <inheritdoc />
     public bool KeepsSourceExtension => true;
 
-    public string? BrowserCore => null;
+    /// <summary>C64 B7: VICE (x64sc), whose files the operator supplies (<c>Emulator:ViceCorePath</c>).</summary>
+    public string BrowserCore => "vice_x64sc";
 
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 

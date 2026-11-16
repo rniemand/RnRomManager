@@ -233,6 +233,7 @@ Upgrading to the release that adds 3DO:
 Upgrading to the release that adds Commodore 64:
 
 - **Refresh DATs after upgrading.** Commodore 64 is identified against libretro's No-Intro `Commodore - 64` DAT (one file, no metadat). Until **Admin → DATs → Refresh DATs** has downloaded it, every import is refused with `DatsMissing`. `roms/c64/` and `ingest/c64/` are created at startup.
+- **For Commodore 64 browser play,** set up the [VICE core](#vice-core) (`Emulator:ViceCorePath`).
 
 ## Nintendo DS: memory, disk and time
 
@@ -371,6 +372,43 @@ Then mount the folder read-only and point the setting at it:
 ```
 
 The same advice as for Genesis Plus GX applies: the app's UID 1654 needs read access (e.g. `chmod -R a+rX /srv/rnrommanager/opera`), and the folder must stay outside anything the app or its users can write to (not under `data/`'s library, ingest, cache or backup folders), since EmulatorJS runs the JavaScript inside these files in the app's origin. You may also put the Opera files in another operator core's folder and point the settings at it. 3DO also needs at least one BIOS in `/app/bios` ([volumes](#volumes-and-permissions)); none is included. Without the setting, Play on a 3DO game explains that the core needs setting up.
+
+## VICE core
+
+Commodore 64 play needs three VICE files you supply ([configuration](configuration.md#vice-core) lists their sizes and SHA-256). VICE is GPL-2.0-or-later (each payload carries its `license.txt`), and its binary embeds Commodore's copyrighted system ROMs, which is why the image doesn't include it: follow both sets of terms. Get the exact archive in a scratch folder outside the app and the repository (this downloads it without installing anything):
+
+```bash
+mkdir -p ~/vice-core && cd ~/vice-core
+npm pack @emulatorjs/core-vice_x64sc@4.2.3
+tar -xzf emulatorjs-core-vice_x64sc-4.2.3.tgz
+```
+
+Copy the two non-threaded payloads from `package/` and the report from `package/reports/` to the root of the folder you'll mount (the archive's `-thread` payloads aren't used), then check all three hashes before setting the path:
+
+```bash
+mkdir -p /srv/rnrommanager/vice
+cp package/vice_x64sc-wasm.data package/vice_x64sc-legacy-wasm.data package/reports/vice_x64sc.json /srv/rnrommanager/vice/
+cd /srv/rnrommanager/vice && sha256sum vice_x64sc-wasm.data vice_x64sc-legacy-wasm.data vice_x64sc.json
+```
+
+The output must be exactly:
+
+```text
+77f58884c81b58721cbc4754ffc5574838219258e9390630c352a494a3f335ab  vice_x64sc-wasm.data
+8a22bc81c0dd7104cd23ceec5117a9f47ca9503e280e4fbc9d0346f51b75253e  vice_x64sc-legacy-wasm.data
+5c50bc4ff5546a2c6fc4bb7949efd200ea0ac6b4723713e742fb659228e9a3aa  vice_x64sc.json
+```
+
+Then mount the folder read-only and point the setting at it:
+
+```yaml
+    volumes:
+      - /srv/rnrommanager/vice:/app/vice:ro
+    environment:
+      Emulator__ViceCorePath: /app/vice
+```
+
+The same advice as for Genesis Plus GX applies: the app's UID 1654 needs read access (e.g. `chmod -R a+rX /srv/rnrommanager/vice`), and the folder must stay outside anything the app or its users can write to (not under `data/`'s library, ingest, cache or backup folders), since EmulatorJS runs the JavaScript inside these files in the app's origin. You may also put the VICE files in another operator core's folder and point the settings at it. No BIOS is needed. Without the setting, Play on a Commodore 64 game explains that the core needs setting up.
 
 ## Admin password recovery
 

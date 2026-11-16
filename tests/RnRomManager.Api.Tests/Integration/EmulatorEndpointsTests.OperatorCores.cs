@@ -13,6 +13,22 @@ public partial class EmulatorEndpointsTests
     private const string PicodriveCore = "/api/emulator/cores/picodrive";
     private const string Snes9xCore = "/api/emulator/cores/snes9x";
     private const string OperaCore = "/api/emulator/cores/opera";
+    private const string ViceCore = "/api/emulator/cores/vice_x64sc";
+
+    private static readonly (string Name, byte[] Bytes, string ContentType)[] SyntheticVice =
+    [
+        ("vice_x64sc-wasm.data", [.. Enumerable.Range(0, 3400).Select(i => (byte)(i * 23 + 5))], "application/octet-stream"),
+        ("vice_x64sc-legacy-wasm.data", [.. Enumerable.Range(0, 3200).Select(i => (byte)(i * 29 + 8))], "application/octet-stream"),
+        ("vice_x64sc.json", "{\"options\":{\"supportsMouse\":true}}"u8.ToArray(), "application/json"),
+    ];
+
+    private string ViceDir => _factory.Settings["Emulator:ViceCorePath"]!;
+
+    private void WriteViceSet(string? except = null)
+    {
+        foreach (var (name, bytes, _) in SyntheticVice.Where(f => f.Name != except))
+            File.WriteAllBytes(Path.Combine(ViceDir, name), bytes);
+    }
 
     private static readonly (string Name, byte[] Bytes, string ContentType)[] SyntheticOpera =
     [
@@ -78,25 +94,28 @@ public partial class EmulatorEndpointsTests
         var picodrive = OperatorCoreManifest.Pinned.Find("picodrive")!;
         var snes9x = OperatorCoreManifest.Pinned.Find("snes9x")!;
         var opera = OperatorCoreManifest.Pinned.Find("opera")!;
+        var vice = OperatorCoreManifest.Pinned.Find("vice_x64sc")!;
         var options = new EmulatorOptions
         {
             GenesisCorePath = "/cores/genesis", PicodriveCorePath = "/cores/picodrive", Snes9xCorePath = "/cores/snes9x",
-            OperaCorePath = "/cores/opera",
+            OperaCorePath = "/cores/opera", ViceCorePath = "/cores/vice",
         };
 
         Assert.That(OperatorCoreManifest.Pinned.Cores.Select(c => c.Id),
-            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x", "opera" }));
+            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x", "opera", "vice_x64sc" }));
         Assert.That((genesis.DisplayName, genesis.MismatchCode), Is.EqualTo(("Genesis Plus GX", "GenesisCoreMismatch")));
         Assert.That((picodrive.DisplayName, picodrive.MismatchCode), Is.EqualTo(("PicoDrive", "PicodriveCoreMismatch")));
         Assert.That((snes9x.DisplayName, snes9x.MismatchCode), Is.EqualTo(("Snes9x", "Snes9xCoreMismatch")));
         Assert.That((opera.DisplayName, opera.MismatchCode), Is.EqualTo(("Opera", "OperaCoreMismatch")));
         Assert.That(opera.PathOf(options), Is.EqualTo("/cores/opera"));
+        Assert.That((vice.DisplayName, vice.MismatchCode, vice.PathOf(options)), Is.EqualTo(("VICE", "ViceCoreMismatch", "/cores/vice")));
         Assert.That((genesis.PathOf(options), picodrive.PathOf(options), snes9x.PathOf(options)),
             Is.EqualTo(("/cores/genesis", "/cores/picodrive", "/cores/snes9x")));
         Assert.That(OperatorCoreManifest.Pinned.Find("GENESIS_PLUS_GX"), Is.Null);
         Assert.That(OperatorCoreManifest.Pinned.Find("PicoDrive"), Is.Null);
         Assert.That(OperatorCoreManifest.Pinned.Find("Snes9x"), Is.Null);
         Assert.That(OperatorCoreManifest.Pinned.Find("OPERA"), Is.Null);
+        Assert.That(OperatorCoreManifest.Pinned.Find("VICE_X64SC"), Is.Null);
     }
 
     [Test]
@@ -555,5 +574,78 @@ public partial class EmulatorEndpointsTests
 
         Assert.That(await HeadAsync(_client, GenesisCore), Is.EqualTo(HttpStatusCode.NoContent));
         Assert.That(await HeadAsync(_client, OperaCore), Is.EqualTo(HttpStatusCode.NoContent));
+    }
+
+    // C64 B7: the operator-supplied VICE files behave exactly as Opera's.
+
+    [Test]
+    public void PinnedManifest_HoldsExactlyTheVice4_2_3Files()
+    {
+        Assert.That(OperatorCoreManifest.Pinned.Find(OperatorCoreManifest.Vice)!.Files, Is.EqualTo(new[]
+        {
+            new OperatorCoreFile("vice_x64sc-wasm.data", 1_523_457,
+                "77f58884c81b58721cbc4754ffc5574838219258e9390630c352a494a3f335ab", "application/octet-stream"),
+            new OperatorCoreFile("vice_x64sc-legacy-wasm.data", 1_523_390,
+                "8a22bc81c0dd7104cd23ceec5117a9f47ca9503e280e4fbc9d0346f51b75253e", "application/octet-stream"),
+            new OperatorCoreFile("vice_x64sc.json", 147,
+                "5c50bc4ff5546a2c6fc4bb7949efd200ea0ac6b4723713e742fb659228e9a3aa", "application/json"),
+        }));
+    }
+
+    [Test]
+    public async Task Vice_AMatchingSet_Is204_AndEachFileIsServedExactly()
+    {
+        WriteViceSet();
+
+        Assert.That(await HeadAsync(_client, ViceCore), Is.EqualTo(HttpStatusCode.NoContent));
+        foreach (var (name, bytes, contentType) in SyntheticVice)
+        {
+            using var response = await _client.GetAsync($"{ViceCore}/{name}");
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK), name);
+            Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo(contentType), name);
+            Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(bytes), name);
+            AssertNoStore(response);
+        }
+    }
+
+    [Test]
+    public async Task Vice_AMissingMount_AnIncompleteSet_OrAnEmptyFile_Is404()
+    {
+        Directory.Delete(ViceDir);
+        Assert.That(await HeadAsync(_client, ViceCore), Is.EqualTo(HttpStatusCode.NotFound), "missing mount");
+        await AssertNotFoundAsync($"{ViceCore}/vice_x64sc.json");
+
+        Directory.CreateDirectory(ViceDir);
+        WriteViceSet(except: "vice_x64sc-legacy-wasm.data");
+        Assert.That(await HeadAsync(_client, ViceCore), Is.EqualTo(HttpStatusCode.NotFound), "incomplete set");
+        await AssertNotFoundAsync($"{ViceCore}/vice_x64sc-legacy-wasm.data");
+        await AssertNotFoundAsync($"{ViceCore}/VICE_X64SC.JSON");
+
+        File.WriteAllBytes(Path.Combine(ViceDir, "vice_x64sc-legacy-wasm.data"), []);
+        Assert.That(await HeadAsync(_client, ViceCore), Is.EqualTo(HttpStatusCode.NotFound), "zero-byte file");
+        await AssertNotFoundAsync($"{ViceCore}/vice_x64sc-legacy-wasm.data");
+    }
+
+    [TestCase("wrong length")]
+    [TestCase("same-length wrong hash")]
+    public async Task Vice_AMismatch_Is409ViceCoreMismatch(string kind)
+    {
+        WriteViceSet();
+        var path = Path.Combine(ViceDir, "vice_x64sc-wasm.data");
+        if (kind == "wrong length")
+            File.AppendAllText(path, "x");
+        else
+        {
+            var bytes = File.ReadAllBytes(path);
+            bytes[100] ^= 0xFF;
+            File.WriteAllBytes(path, bytes);
+        }
+
+        Assert.That(await HeadAsync(_client, ViceCore), Is.EqualTo(HttpStatusCode.Conflict));
+        using var response = await _client.GetAsync($"{ViceCore}/vice_x64sc-wasm.data");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo(EmulatorEndpoints.ViceCoreMismatch));
+        Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("The VICE core file doesn't match EmulatorJS 4.2.3"));
+        AssertNoStore(response);
     }
 }

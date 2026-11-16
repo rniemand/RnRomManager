@@ -1,6 +1,6 @@
 namespace RnRomManager.Core.Configuration;
 
-/// <summary>Optional browser-play assets the deployment operator supplies (Genesis B4, 32X B1, SNES B2, 3DO B5).</summary>
+/// <summary>Optional browser-play assets the deployment operator supplies (Genesis B4, 32X B1, SNES B2, 3DO B5, C64 B7).</summary>
 public sealed class EmulatorOptions
 {
     public const string Section = "Emulator";
@@ -30,4 +30,11 @@ public sealed class EmulatorOptions
     /// without failing startup.
     /// </summary>
     public string OperaCorePath { get; set; } = "";
+
+    /// <summary>
+    /// C64 B7: a fully qualified, read-only directory holding the EmulatorJS 4.2.3 VICE (x64sc) files at its root (it may
+    /// be shared with the other operator cores). Never bundled: the binary embeds Commodore's system ROMs. Empty disables
+    /// Commodore 64 play; a missing directory behaves as unavailable without failing startup.
+    /// </summary>
+    public string ViceCorePath { get; set; } = "";
 }

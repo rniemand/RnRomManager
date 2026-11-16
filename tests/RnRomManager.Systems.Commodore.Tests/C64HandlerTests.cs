@@ -22,7 +22,7 @@ public class C64HandlerTests
     }
 
     [Test]
-    public void BrowserCore_IsNull() => Assert.That(Handler.BrowserCore, Is.Null);
+    public void BrowserCore_IsVice() => Assert.That(Handler.BrowserCore, Is.EqualTo("vice_x64sc"));
 
     [Test]
     public void NormalizeForHashing_ReturnsTheInputUnchanged()

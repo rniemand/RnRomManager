@@ -246,6 +246,7 @@ public partial class LibraryEndpointsTests
     [TestCase("saturn", true, true, "yabause")]
     [TestCase("segacd", true, true, "genesis_plus_gx")]
     [TestCase("3do", true, true, "opera")]
+    [TestCase("c64", false, true, "vice_x64sc")]
     [TestCase("switch", false, false, null)]
     [TestCase("switch", true, false, null)]
     public Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(string system, bool external, bool playable, string? core) =>
@@ -419,6 +420,7 @@ public partial class LibraryEndpointsTests
     [TestCase("saturn", "yabause")]
     [TestCase("segacd", "genesis_plus_gx")]
     [TestCase("3do", "opera")]
+    [TestCase("c64", "vice_x64sc")]
     [TestCase("nosuch", null)]
     public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)
     {
