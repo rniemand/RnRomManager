@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canPlay, opensInNewTab, playUrl } from './emulator';
+import { canPlay, opensInNewTab, playUrl, usesPlayDisc } from './emulator';
 
 describe('canPlay', () => {
 	it('is false without a browser core', () => {
@@ -84,7 +84,42 @@ describe('canPlay', () => {
 	});
 });
 
+describe('S8 Nintendo DS', () => {
+	it('plays an external DS release on DeSmuME', () => {
+		expect(canPlay({ browserCore: 'desmume' }, { externalFileName: 'Quest.(USA).nds' })).toBe(true);
+	});
+
+	it.each(['pcsx_rearmed', 'ppsspp', 'yabause', 'genesis_plus_gx', 'opera'])(
+		'usesPlayDisc is true for an external %s release',
+		(core) => {
+			expect(usesPlayDisc(core, { externalFileName: 'Disc (USA).cue' })).toBe(true);
+		}
+	);
+
+	it('usesPlayDisc is false for DeSmuME and for an embedded release', () => {
+		expect(usesPlayDisc('desmume', { externalFileName: 'Quest.(USA).nds' })).toBe(false);
+		expect(usesPlayDisc('pcsx_rearmed', { externalFileName: null })).toBe(false);
+	});
+});
+
 describe('playUrl', () => {
+	it('adds the save to load at start (Saves B17)', () => {
+		const id = 'a'.repeat(32);
+		expect(
+			playUrl('g-1', { id: 7, fileName: 'x.gb' }, 'gambatte', false, {
+				saveId: id,
+				saveKind: 'battery'
+			})
+		).toBe(
+			`/emulator/play.html?game=g-1&rom=7&core=gambatte&name=x.gb&save=${id}&saveKind=battery`
+		);
+		expect(
+			playUrl('g-1', { id: 7, fileName: 'x.cue' }, 'opera', true, { saveId: id, saveKind: 'state' })
+		).toBe(
+			`/emulator/play.html?game=g-1&rom=7&core=opera&name=x.cue&disc=1&save=${id}&saveKind=state`
+		);
+	});
+
 	it('encodes the file name', () => {
 		expect(playUrl('g-1', { id: 7, fileName: 'A & B #1 (World).gb' }, 'gambatte', false)).toBe(
 			'/emulator/play.html?game=g-1&rom=7&core=gambatte&name=A%20%26%20B%20%231%20(World).gb'

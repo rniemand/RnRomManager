@@ -23,7 +23,7 @@ export interface HotkeysResponse {
 /** `GET /api/jobs/current` (spec §23, §3.1); 204 when idle. */
 export interface CurrentJob {
 	id: string;
-	type: 'Ingest' | 'Integrity' | 'DatRefresh' | 'MediaRetry' | 'ReviewResolve';
+	type: 'Ingest' | 'Integrity' | 'DatRefresh' | 'MediaRetry' | 'ReviewResolve' | 'StorageMigration';
 	mode: 'Quick' | 'Deep' | 'Game' | null;
 	status: string;
 	current: number;
@@ -115,6 +115,24 @@ export interface GameListItem {
 }
 
 /** One release of `GET /api/games/{id}` (spec §23, §6.2 Rom fields flattened). */
+export type SaveKind = 'state' | 'battery';
+
+/** B7: one save of a game; `romId` is null when no release has its `releaseFileName` (B4). */
+export interface SaveItem {
+	id: string;
+	name: string;
+	description: string;
+	kind: SaveKind;
+	releaseFileName: string;
+	romId: number | null;
+	sizeBytes: number;
+	extension: string;
+	uploadedBy: string | null;
+	uploadedAt: string;
+	updatedBy: string | null;
+	updatedAt: string;
+}
+
 export interface RomDetail {
 	id: number;
 	fileName: string;
@@ -242,7 +260,7 @@ export interface Job {
 	id: string;
 	type: CurrentJob['type'];
 	mode: 'Quick' | 'Deep' | 'Game' | null;
-	triggerSource: 'Manual' | 'Schedule';
+	triggerSource: 'Manual' | 'Schedule' | 'Startup';
 	status: JobStatus;
 	requestedBy: number | null;
 	startedAt: string;

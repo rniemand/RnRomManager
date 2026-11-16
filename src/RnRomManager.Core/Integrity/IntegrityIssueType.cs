@@ -21,11 +21,14 @@ public static class IntegrityIssueType
     public const string DbRowUpdated = "DbRowUpdated";
     public const string DbRowDeleted = "DbRowDeleted";
 
+    /// <summary>S7: a game whose ROMs are still inside the ZIP of a system that now stores them next to it.</summary>
+    public const string LegacyEmbeddedStorage = "LegacyEmbeddedStorage";
+
     /// <summary>Every type, in §12.2 table order.</summary>
     public static IReadOnlyList<string> All { get; } =
     [
         ZipUnreadable, InfoJsonMissing, InfoJsonInvalid, InfoJsonNewerSchema, EntryMissing, EntrySizeMismatch, EntryUnlisted, HashMismatch,
-        MissingBoxArt, DefaultBoxArt, WrongLocation, OrphanFile, DuplicateGameId, DuplicateSha1, DbRowInserted, DbRowUpdated, DbRowDeleted,
+        MissingBoxArt, DefaultBoxArt, WrongLocation, LegacyEmbeddedStorage, OrphanFile, DuplicateGameId, DuplicateSha1, DbRowInserted, DbRowUpdated, DbRowDeleted,
     ];
 
     /// <summary>The issues ingesting a byte-identical copy can fix (§7.2 step 3, D30).</summary>
@@ -37,7 +40,7 @@ public static class IntegrityIssueType
     /// <returns><c>Info</c>, <c>Warn</c> or <c>Error</c> (§12.2 table).</returns>
     public static string SeverityOf(string type) => type switch
     {
-        InfoJsonNewerSchema or EntryUnlisted or WrongLocation or OrphanFile or DuplicateSha1 => IssueSeverity.Warn,
+        InfoJsonNewerSchema or EntryUnlisted or WrongLocation or LegacyEmbeddedStorage or OrphanFile or DuplicateSha1 => IssueSeverity.Warn,
         DefaultBoxArt or DbRowInserted or DbRowUpdated or DbRowDeleted => IssueSeverity.Info,
         _ => IssueSeverity.Error,
     };

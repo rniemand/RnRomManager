@@ -4,6 +4,7 @@ import { resetClient } from '#lib/api/client.js';
 import type { GameDetail, ReleaseFile } from '#lib/api/types.js';
 import { formatDateTime, formatSize } from '#lib/format.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
+import { toasts } from '#lib/stores/toasts.svelte.js';
 
 const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
 vi.mock('$app/navigation', () => ({ goto: (...args: [string, unknown?]) => goto(...args) }));
@@ -221,6 +222,21 @@ describe('game detail page', () => {
 		expect(src).toContain('core=genesis_plus_gx');
 		expect(src).toBe(
 			`/emulator/play.html?game=${scd.id}&rom=1&core=genesis_plus_gx&name=Disc%20Runner%20(USA).cue&disc=1`
+		);
+	});
+
+	it('an external DS release plays on DeSmuME from /download, without disc=1 (S8)', async () => {
+		const ds = game([1]);
+		ds.system = 'nds';
+		ds.browserCore = 'desmume';
+		ds.roms[0].fileName = 'Quest (USA).nds';
+		ds.roms[0].externalFileName = 'Quest.(USA).nds';
+		answers.push({ status: 200, body: ds });
+		render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Play Quest (USA).nds' }));
+		expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
+			`/emulator/play.html?game=${ds.id}&rom=1&core=desmume&name=Quest%20(USA).nds`
 		);
 	});
 
@@ -680,6 +696,25 @@ describe('game detail page', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Rate 4 of 5' }));
 	};
 
+	it('a 409 StorageMigrationPending from an edit shows its title (S3)', async () => {
+		const title =
+			"This game's ROMs are being moved out of its ZIP. Try again when the storage migration job has finished.";
+		toasts.items = [];
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+		await screen.findByRole('article', { name: 'Tetris 1.gb' });
+
+		answers.push(
+			{ status: 204 },
+			{ status: 409, body: { code: 'StorageMigrationPending', title } }
+		);
+		await fireEvent.click(screen.getByRole('button', { name: 'Rate 4 of 5' }));
+
+		await vi.waitFor(() =>
+			expect(toasts.items.map((t) => [t.text, t.kind])).toContainEqual([title, 'danger'])
+		);
+	});
+
 	it('?tab=zip opens Zip Contents and loads the listing; the root is the ZIP name (Z1, Z4)', async () => {
 		navigateTo('/games/g1?tab=zip');
 		answers.push({ status: 200, body: game([1]) });
@@ -878,6 +913,23 @@ describe('game detail page', () => {
 		expect(releasesPanel.hidden).toBe(false);
 		expect(imagesPanel.hidden).toBe(true);
 		expect(imagesPanel.querySelector('#images-heading')).toBeTruthy();
+	});
+
+	it('?tab=saves opens the Saves tab, between Images and Zip Contents, and loads the saves (B14)', async () => {
+		navigateTo('/games/g1?tab=saves');
+		answers.push({ status: 200, body: game([1]) }, { status: 200, body: { items: [] } });
+		render(GamePage);
+
+		const saves = await screen.findByRole('tab', { name: 'Saves' });
+		expect(saves.getAttribute('aria-selected')).toBe('true');
+		expect(screen.getAllByRole('tab').map((t) => t.textContent?.trim())).toEqual([
+			'Releases (1)',
+			'Images (1)',
+			'Saves',
+			'Zip Contents'
+		]);
+		expect(document.getElementById('saves-panel')!.hidden).toBe(false);
+		expect(await screen.findByText('No saves yet')).toBeTruthy();
 	});
 
 	/** Game 1 with base rom 1 and updates 2 (1.0.1), 3 (1.10.0) and 4 (no version). */

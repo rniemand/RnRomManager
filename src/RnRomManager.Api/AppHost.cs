@@ -64,6 +64,8 @@ public static class AppHost
         builder.Services.AddHostedService(sp => sp.GetRequiredService<Scheduler>());
         // B16: after StartupRunner (the restore and migrations run first).
         builder.Services.AddHostedService(sp => sp.GetRequiredService<BackupScheduler>());
+        // S4: waits for ApplicationStarted itself, so its position doesn't delay startup.
+        builder.Services.AddHostedService<StorageMigrationStarter>();
         var app = builder.Build();
         app.UseSecurityHeaders();
 
@@ -87,6 +89,7 @@ public static class AppHost
             .MapIngestEndpoints()
             .MapReviewEndpoints()
             .MapLibraryEndpoints()
+            .MapSaveEndpoints()
             .MapCollectionEndpoints()
             .MapBundleQueueEndpoints()
             .MapBundleFileEndpoints()
@@ -160,6 +163,9 @@ public static class AppHost
         builder.Services.AddTransient<LibraryEditor>();
         builder.Services.AddTransient<GameMediaRetry>();
         builder.Services.AddTransient<MediaRetryJob>();
+        builder.Services.AddTransient<RnRomManager.Core.Storage.StorageMigrationJob>();
+        builder.Services.AddSingleton<StorageMigrationJobFactory>(sp => () => sp.GetRequiredService<RnRomManager.Core.Storage.StorageMigrationJob>());
+        builder.Services.AddSingleton<RnRomManager.Core.Storage.IFreeSpace, RnRomManager.Core.Storage.DriveFreeSpace>();
         // The ZIP path is set afterwards: ActivatorUtilities can't match a null string? argument.
         builder.Services.AddSingleton<IntegrityJobFactory>(sp => (mode, zipPath) =>
         {

@@ -317,6 +317,19 @@ public sealed class GameRepository : IGameRepository
             """, cancellationToken: cancellationToken))).AsList();
     }
 
+    public async Task<IReadOnlyList<GameRow>> ListLegacyEmbeddedAsync(IReadOnlyCollection<string> systemIds, CancellationToken cancellationToken)
+    {
+        if (systemIds.Count == 0)
+            return [];
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<GameRow>(new CommandDefinition($"""
+            {Select} g
+            WHERE g.system_id IN @systemIds
+              AND EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND r.external_file_name IS NULL)
+            ORDER BY g.zip_path
+            """, new { systemIds }, cancellationToken: cancellationToken))).AsList();
+    }
+
     /// <summary>Concatenated <c>region_key</c>s (<c>|USA||Europe|</c>) → distinct regions, sorted ordinally.</summary>
     private static List<string> Regions(string? regionKeys) =>
         (regionKeys ?? "").Split('|', StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();

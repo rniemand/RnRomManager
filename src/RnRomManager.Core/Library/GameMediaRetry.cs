@@ -29,6 +29,9 @@ public sealed class GameMediaRetry(ILibraryMirror mirror, InfoJsonReader reader,
 
         using var existing = target.Zip!;
         var current = target.Game!;
+        // S3: a legacy game is read-only until the storage migration moves its ROMs out of the ZIP.
+        if (systems.ById(current.System) is { } legacySystem && RomStorage.IsLegacy(legacySystem, current))
+            return new(MediaRetryOutcome.Skipped);
         var hasSnap = current.Images.Any(i => i.Type == ImageType.Snap);
         if (current.Images.Count > 0 && !current.Images.Any(i => i.IsDefault) && hasSnap)
             return new(MediaRetryOutcome.Skipped);

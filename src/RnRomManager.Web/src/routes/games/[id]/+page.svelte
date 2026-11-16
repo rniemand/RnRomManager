@@ -22,6 +22,7 @@
 	} from '#lib/components/GameAdminModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import GameImages from '#lib/components/GameImages.svelte';
+	import GameSaves from '#lib/components/GameSaves.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
 	import GameCollectionsModal from '#lib/components/GameCollectionsModal.svelte';
@@ -31,7 +32,7 @@
 	import RatingControl from '#lib/components/RatingControl.svelte';
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
 	import EmulatorModal from '#lib/components/EmulatorModal.svelte';
-	import { canPlay, opensInNewTab, playUrl } from '#lib/emulator.js';
+	import { canPlay, opensInNewTab, playUrl, usesPlayDisc } from '#lib/emulator.js';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
 	import { formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
@@ -193,6 +194,16 @@
 		}
 	}
 
+	/** A save change rewrote the ZIP and renumbered the release ids: reload them. */
+	async function refreshGame(): Promise<void> {
+		try {
+			const fresh = await fetchGame(id);
+			if (fresh) game = fresh;
+		} catch {
+			// A stale id later reloads and asks for a retry as usual.
+		}
+	}
+
 	async function onAdminDone(outcome: AdminOutcome): Promise<void> {
 		if ('game' in outcome) {
 			game = outcome.game;
@@ -263,10 +274,10 @@
 	}
 
 	// GP1: the tab is URL state (`?tab=images`); switching never reloads the game (the load effect keys on the id).
-	type Tab = 'releases' | 'updates' | 'images' | 'zip';
+	type Tab = 'releases' | 'updates' | 'images' | 'saves' | 'zip';
 	// B9: ?tab=updates on a game without updates shows Releases, as an unknown tab does.
 	const tab = $derived<Tab>(
-		(['images', 'zip', ...(updates.length ? ['updates' as const] : [])] as const).find(
+		(['images', 'saves', 'zip', ...(updates.length ? ['updates' as const] : [])] as const).find(
 			(t) => t === page.url.searchParams.get('tab')
 		) ?? 'releases'
 	);
@@ -276,8 +287,12 @@
 		['releases', `Releases (${releases.length})`],
 		...(updates.length ? [['updates', `Updates (${updates.length})`] as [Tab, string]] : []),
 		['images', `Images (${game?.images.length ?? 0})`],
+		['saves', 'Saves'],
 		['zip', 'Zip Contents']
 	]);
+
+	/** B19: bumped after the Play dialog saved to the library, so the Saves tab reloads. */
+	let savesVersion = $state(0);
 
 	function selectTab(next: Tab): void {
 		const path = resolve('/games/[id]', { id });
@@ -582,7 +597,12 @@
 									<!-- eslint-disable svelte/no-navigation-without-resolve -->
 									<a
 										class="btn btn-sm btn-outline-success"
-										href={playUrl(game.id, rom, game.browserCore, rom.externalFileName !== null)}
+										href={playUrl(
+											game.id,
+											rom,
+											game.browserCore,
+											usesPlayDisc(game.browserCore, rom)
+										)}
 										target="_blank"
 										rel="noopener"
 										aria-label="Play {rom.fileName} (opens in a new tab)"
@@ -765,6 +785,10 @@
 		<GameImages {game} onchanged={(detail) => (game = detail)} />
 	</div>
 
+	<div id="saves-panel" role="tabpanel" aria-labelledby="saves-tab" hidden={tab !== 'saves'}>
+		{#if tab === 'saves'}<GameSaves {game} version={savesVersion} onchanged={refreshGame} />{/if}
+	</div>
+
 	<div id="zip-panel" role="tabpanel" aria-labelledby="zip-tab" hidden={tab !== 'zip'}>
 		<h2 class="h5 visually-hidden">Zip Contents</h2>
 		<ZipBrowser {game} active={tab === 'zip'} bind:selected={zipSelected} expanded={zipExpanded} />
@@ -798,7 +822,11 @@
 		gameId={game.id}
 		core={game.browserCore}
 		rom={playRom}
-		disc={playRom?.externalFileName != null}
+		disc={playRom != null && game.browserCore != null && usesPlayDisc(game.browserCore, playRom)}
+		onsaved={() => {
+			savesVersion++;
+			void refreshGame();
+		}}
 	/>
 	<GameCollectionsModal
 		bind:open={collectionsOpen}

@@ -39,7 +39,7 @@ public sealed class ExternalEditHooks
     public Action? BeforeMirror { get; init; }
 }
 
-public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRepository roms, IImageRepository images, ILibraryMirror mirror,
+public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRepository roms, IImageRepository images, ILibraryMirror mirror,
     InfoJsonReader reader, DatCache dats, ISystemRegistry systems, MediaService media, GameMediaRetry mediaRetry,
     IOptions<PathsOptions> paths, IAuditLog audit, AuditPaths auditPaths, ICollectionRepository collections, TimeProvider time,
     ILogger<LibraryEditor> logger)
@@ -55,6 +55,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return new(NotFound);
+        if (LegacyRefusal(row) is { } legacy)
+            return legacy;
         if (systems.ById(row.SystemId) is { EmbedRomsInZip: false })
             return await PatchExternalAsync(row, patch, actor).ConfigureAwait(false);
         var target = OpenForEdit(row);
@@ -296,6 +298,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
             || await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return new(NotFound);
+        if (LegacyRefusal(row) is { } legacy)
+            return legacy;
         var target = OpenForEdit(row);
         if (target.Code is not null)
             return new(target.Code, target.Details);
@@ -324,6 +328,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
             || await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return new(NotFound);
+        if (LegacyRefusal(row) is { } legacy)
+            return legacy;
         var target = OpenForEdit(row);
         if (target.Code is not null)
             return new(target.Code, target.Details);
@@ -361,6 +367,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return new(NotFound);
+        if (LegacyRefusal(row) is { } legacy)
+            return legacy;
         var target = OpenForEdit(row);
         if (target.Code is not null)
             return new(target.Code, target.Details);
@@ -396,6 +404,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return new(NotFound);
+        if (LegacyRefusal(row) is { } legacy)
+            return legacy;
         var target = OpenForEdit(row);
         if (target.Code is not null)
             return new(target.Code, target.Details);
@@ -518,6 +528,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         if (await images.GetAsync(gameId, imageId, ct).ConfigureAwait(false) is not { } imageRow
             || await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return (new(NotFound), null, null, null, null);
+        if (LegacyRefusal(row) is { } legacy)
+            return (legacy, null, null, null, null);
         var target = OpenForEdit(row);
         if (target.Code is not null)
             return (new(target.Code, target.Details), null, null, null, null);
@@ -538,6 +550,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             return new(JobRunning);
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return new(NotFound);
+        if (LegacyRefusal(row) is { } legacy)
+            return legacy;
         var result = await mediaRetry.RetryAsync(row, new CircuitBreaker(), skipManualOnly: false, actor, ct).ConfigureAwait(false);
         if (result.Outcome == MediaRetryOutcome.Error)
             logger.LogError("Media retry for {ZipPath} failed: {Code} {Details}", row.ZipPath, result.Code, result.Details);
@@ -569,6 +583,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             if (targetRow.SystemId != row.SystemId)
                 return Invalid("targetGameId", "The target game must be in the same system.");
         }
+        if ((LegacyRefusal(row) ?? (targetRow is null ? null : LegacyRefusal(targetRow))) is { } legacy)
+            return legacy;
         if (systems.ById(row.SystemId) is { EmbedRomsInZip: false })
             return await MoveReleaseExternalAsync(row, romRow, targetRow, newGameTitle, actor).ConfigureAwait(false);
 
@@ -637,8 +653,12 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
 
         var remaining = source.Game.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
         var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining, DatSourceOf(row.SystemId)), Metadata = Touched(source.Game) };
+        // B5: the last release deletes the source game, so its saves go with it into the target.
+        var (savesError, saves) = sourceGame is null ? CarrySaves(sourceZip, targetZip, Renames((rom.FileName, moved.FileName))) : (null, null);
+        if (savesError is not null)
+            return savesError;
 
-        if (await WriteZipAsync(targetZip, targetPath, targetGame, entries, removed).ConfigureAwait(false) is { } failed)
+        if (await WriteZipAsync(targetZip, targetPath, targetGame, entries, removed, saves).ConfigureAwait(false) is { } failed)
             return failed;
         if (sourceGame is not null && await WriteZipAsync(sourceZip, row.ZipPath, sourceGame, []).ConfigureAwait(false) is { } sourceFailed)
         {
@@ -775,6 +795,10 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         targetGame = targetGame with { Roms = PrimaryRelease.Apply([.. targetGame.Roms, moved], DatSourceOf(row.SystemId)), Metadata = target is null ? targetGame.Metadata : Touched(targetGame) };
         var remaining = source.Game.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
         var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining, DatSourceOf(row.SystemId)), Metadata = Touched(source.Game) };
+        // B5: the last release deletes the source game, so its saves go with it into the target.
+        var (savesError, saves) = sourceGame is null ? CarrySaves(sourceZip, targetZip, Renames((rom.FileName, moved.FileName))) : (null, null);
+        if (savesError is not null)
+            return savesError;
 
         var sourceFull = SafePath.Resolve(library, row.ZipPath);
         // B18: the main file, then each set file (none move within one folder); a missing one only moves its entry.
@@ -832,7 +856,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         try
         {
             publishedTarget = await new LibraryZipWriter(reader).WriteCheckedAsync(library, targetFull, targetZip,
-                new LibraryZipChanges(targetGame, entries, removed, touched), ct, ExternalHooks?.Writer).ConfigureAwait(false);
+                new LibraryZipChanges(targetGame, entries, removed, touched, saves), ct, ExternalHooks?.Writer).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -1014,6 +1038,8 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             return new(NotFound);
         if (targetRow.SystemId != row.SystemId)
             return Invalid("targetGameId", "The target game must be in the same system.");
+        if ((LegacyRefusal(row) ?? LegacyRefusal(targetRow)) is { } legacy)
+            return legacy;
         if (systems.ById(row.SystemId) is { EmbedRomsInZip: false })
             return await MergeExternalAsync(row, targetRow, actor).ConfigureAwait(false);
 
@@ -1031,9 +1057,11 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         var removed = new HashSet<string>(StringComparer.Ordinal);
         var names = into.Roms.Select(r => r.FileName).ToList();
         var merged = new List<InfoJsonRom>(into.Roms);
+        var renames = Renames();
         foreach (var rom in from.Roms)
         {
             var moved = rom with { FileName = FreeName(rom.FileName, names) };
+            renames[rom.FileName] = moved.FileName;
             names.Add(moved.FileName);
             merged.Add(moved);
             entries[LibraryZip.RomEntry(moved.FileName)] = () => sourceZip.OpenEntry(LibraryZip.RomEntry(rom.FileName), rom.Metadata.SizeBytes);
@@ -1046,8 +1074,11 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
             entries[LibraryZip.ImageEntry(copy.FileName)] = () => sourceZip.OpenEntry(LibraryZip.ImageEntry(sourceName), copy.SizeBytes);
 
         var targetGame = MergedInto(into, from, merged, images);
+        var (savesError, saves) = CarrySaves(sourceZip, targetZip, renames);
+        if (savesError is not null)
+            return savesError;
 
-        if (await WriteZipAsync(targetZip, targetRow.ZipPath, targetGame, entries, removed).ConfigureAwait(false) is { } failed)
+        if (await WriteZipAsync(targetZip, targetRow.ZipPath, targetGame, entries, removed, saves).ConfigureAwait(false) is { } failed)
             return failed;
         audit.Record(new AuditEvent(AuditActions.GamesMerged, actor, row.SystemId, gameId, AuditPaths.Library(row.ZipPath),
             AuditPaths.Library(targetRow.ZipPath), $"{from.Roms.Count} releases, {copies.Count} images"));
@@ -1102,6 +1133,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         var zipBase = Path.GetFileNameWithoutExtension(targetRow.ZipPath);
         var sourceFolder = Path.GetDirectoryName(sourceZip.Path)!;
         var merged = new List<InfoJsonRom>(into.Roms);
+        var renames = Renames();
         var moves = new List<(string From, string To, ExternalFileSnapshot Snapshot)>();
         if (systems.ById(row.SystemId) is { FileSets: true })
         {
@@ -1133,6 +1165,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         else foreach (var rom in from.Roms)
         {
             var name = ExternalRomName.AllocateLogicalName(rom.FileName, logical);
+            renames[rom.FileName] = name;
             var pointer = ExternalRomName.Allocate(zipBase, name, pointers);
             merged.Add(rom with { FileName = name, ExternalFileName = pointer });
             CarryNote(sourceZip, rom.FileName, name, entries, removed);
@@ -1145,6 +1178,10 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
                 moves.Add((file.Path, Path.Combine(folder.Path, pointer), file.Snapshot!));
         }
         var targetGame = MergedInto(into, from, merged, images);
+        // B5: refused before any file moves.
+        var (savesError, saves) = CarrySaves(sourceZip, targetZip, renames);
+        if (savesError is not null)
+            return savesError;
 
         var placed = new List<(string From, string To, ExternalFileSnapshot Snapshot)>();
         var touched = new Dictionary<string, ExternalFileSnapshot>(StringComparer.OrdinalIgnoreCase);
@@ -1164,7 +1201,7 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
         try
         {
             published = await new LibraryZipWriter(reader).WriteCheckedAsync(library, targetFull, targetZip,
-                new LibraryZipChanges(targetGame, entries, removed, touched), ct, ExternalHooks?.Writer).ConfigureAwait(false);
+                new LibraryZipChanges(targetGame, entries, removed, touched, saves), ct, ExternalHooks?.Writer).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -1285,6 +1322,10 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
     }
 
     /// <summary>§6.1 entry name clash: ` (2)`… before the extension, case-insensitively.</summary>
+    /// <summary>B5: a release's name before → after a merge or move, the same pairs <see cref="CarryNote"/> gets (ignoring case).</summary>
+    private static Dictionary<string, string> Renames(params (string From, string To)[] pairs) =>
+        pairs.ToDictionary(p => p.From, p => p.To, StringComparer.OrdinalIgnoreCase);
+
     private static string FreeName(string fileName, IEnumerable<string> taken) =>
         FileNameRules.FirstFree(fileName, taken.ToHashSet(StringComparer.OrdinalIgnoreCase).Contains);
 
@@ -1438,6 +1479,20 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
 
     private bool IsExternal(GameRow row) => systems.ById(row.SystemId) is { EmbedRomsInZip: false };
 
+    /// <summary>
+    /// S3: <c>StorageMigrationPending</c> for a legacy game (its <c>info.json</c> keeps every ROM in the ZIP of a
+    /// <c>LegacyEmbeddedRoms</c> system), checked before any other conflict. Only such systems' ZIPs are opened; an
+    /// unreadable one is left to the write's own open to report.
+    /// </summary>
+    private LibraryEditResult? LegacyRefusal(GameRow row)
+    {
+        if (systems.ById(row.SystemId) is not { LegacyEmbeddedRoms: true } handler)
+            return null;
+        var target = OpenForEdit(row);
+        using var zip = target.Zip;
+        return target.Game is { } game && RomStorage.IsLegacy(handler, game) ? new(StorageMigrationPending, StorageMigrationPendingTitle) : null;
+    }
+
     /// <summary>The game's ZIP; an external game's through a checked handle that must be the mirrored game (G4, I4).</summary>
     private LibraryTarget OpenForEdit(GameRow row) =>
         LibraryTarget.OpenForWrite(paths.Value.Roms, row.ZipPath, reader, systems, row.Id, row.SystemId);
@@ -1571,19 +1626,19 @@ public sealed class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRe
 
     /// <summary>Atomic ZIP write (§6.1) then the DB mirror. Not cancellable once started, so a ZIP is never left half-applied.</summary>
     private async Task<LibraryEditResult> WriteAsync(LibraryZip existing, string zipPath, InfoJsonGame game,
-        Dictionary<string, Func<Stream>>? newEntries = null, IReadOnlySet<string>? removedEntries = null) =>
-        await WriteZipAsync(existing, zipPath, game, newEntries ?? [], removedEntries).ConfigureAwait(false)
+        Dictionary<string, Func<Stream>>? newEntries = null, IReadOnlySet<string>? removedEntries = null, SavesChange? saves = null) =>
+        await WriteZipAsync(existing, zipPath, game, newEntries ?? [], removedEntries, saves).ConfigureAwait(false)
         ?? await MirrorAsync(() => mirror.ReplaceAsync(Mirror(zipPath, game), CancellationToken.None), zipPath).ConfigureAwait(false);
 
     /// <param name="existing">The game's current ZIP (disposed by the writer), or null for a new game.</param>
     /// <returns>null when written and verified.</returns>
     private async Task<LibraryEditResult?> WriteZipAsync(LibraryZip? existing, string zipPath, InfoJsonGame game,
-        Dictionary<string, Func<Stream>> newEntries, IReadOnlySet<string>? removedEntries = null)
+        Dictionary<string, Func<Stream>> newEntries, IReadOnlySet<string>? removedEntries = null, SavesChange? saves = null)
     {
         try
         {
             var path = SafePath.Resolve(paths.Value.Roms, zipPath);
-            var changes = new LibraryZipChanges(game, newEntries, removedEntries);
+            var changes = new LibraryZipChanges(game, newEntries, removedEntries, Saves: saves);
             // G4: a ZIP opened through a checked handle is replaced only through the checked write.
             if (LibraryTarget.NeedsCheck(systems, zipPath, game.System))
                 await new LibraryZipWriter(reader).WriteCheckedAsync(paths.Value.Roms, path, existing, changes).ConfigureAwait(false);

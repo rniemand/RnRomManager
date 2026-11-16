@@ -8,7 +8,7 @@ public enum MediaRetryOutcome
     /// <summary>The lookup found nothing new; nothing was written.</summary>
     NotFound,
 
-    /// <summary>Not looked up: the game needs no media, or (job only) every release is <c>Manual</c>.</summary>
+    /// <summary>Not looked up: the game needs no media, (job only) every release is <c>Manual</c>, or it's a legacy game (S3).</summary>
     Skipped,
 
     /// <summary>The ZIP couldn't be read or written (<see cref="MediaRetryResult.Code"/>).</summary>

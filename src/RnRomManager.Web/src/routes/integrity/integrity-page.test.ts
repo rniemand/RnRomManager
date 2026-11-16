@@ -71,6 +71,25 @@ describe('integrity page', () => {
 		auth.set(null);
 	});
 
+	it('hides the storage migration button when no legacy games remain (S4)', async () => {
+		fixed['GET /api/jobs/storage-migration'] = { legacyGames: 0 };
+		render(IntegrityPage);
+
+		await screen.findByRole('button', { name: 'Run quick' });
+		expect(screen.queryByRole('button', { name: /Move DS ROMs out of ZIPs/ })).toBeNull();
+	});
+
+	it('starts the storage migration while legacy games remain (S4)', async () => {
+		fixed['GET /api/jobs/storage-migration'] = { legacyGames: 3 };
+		render(IntegrityPage);
+
+		await fireEvent.click(
+			await screen.findByRole('button', { name: 'Move DS ROMs out of ZIPs (3)' })
+		);
+
+		expect(calls.map((c) => c.key)).toContain('POST /api/jobs/storage-migration');
+	});
+
 	it('shows status, merged history (newest first) and open issues', async () => {
 		render(IntegrityPage);
 

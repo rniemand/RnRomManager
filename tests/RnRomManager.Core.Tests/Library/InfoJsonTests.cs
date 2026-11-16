@@ -18,7 +18,7 @@ public class InfoJsonTests
 
     private static InfoJsonReader Reader(params IInfoJsonUpgrader[] upgraders)
     {
-        ISystemHandler[] handlers = [Handler("gb"), Handler("gbc"), new ExternalTestHandler(), new ExternalSetTestHandler()];
+        ISystemHandler[] handlers = [Handler("gb"), Handler("gbc"), new ExternalTestHandler(), new ExternalSetTestHandler(), new LegacyExternalTestHandler()];
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns(handlers);
         return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), new InfoJsonUpgraderV4(), new InfoJsonUpgraderV5(), new InfoJsonUpgraderV6(), .. upgraders], registry);
@@ -525,6 +525,23 @@ public class InfoJsonTests
     [Test]
     public void ExternalSystem_WithoutAPointer_IsInvalid() =>
         Assert.That(RuleOf(ReadGame(ExtGame(ExtRom(null)))), Does.Contain("externalFileName is required"));
+
+    private static InfoJsonGame LegacyGame(params InfoJsonRom[] roms) => Game() with { System = LegacyExternalTestHandler.SystemId, Roms = roms };
+
+    [Test]
+    public void LegacySystem_AllRomsEmbedded_IsValid() =>
+        Assert.That(ReadGame(LegacyGame(ExtRom(null, "A.nds"), ExtRom(null, "B.nds", isPrimary: false, hash: 'c'))).Kind,
+            Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+
+    [Test]
+    public void LegacySystem_AllRomsExternal_IsValid() =>
+        Assert.That(ReadGame(LegacyGame(ExtRom("G.A.nds", "A.nds"), ExtRom("G.B.nds", "B.nds", isPrimary: false, hash: 'c'))).Kind,
+            Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+
+    [Test]
+    public void LegacySystem_MixedStorage_IsInvalid() =>
+        Assert.That(RuleOf(ReadGame(LegacyGame(ExtRom("G.A.nds", "A.nds"), ExtRom(null, "B.nds", isPrimary: false, hash: 'c')))),
+            Does.Contain("externalFileName is required"));
 
     [Test]
     public void EmbeddedSystem_WithAPointer_IsInvalid() =>

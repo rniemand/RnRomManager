@@ -6,7 +6,9 @@
 // saturn_bios.bin handed over in memory like scph5501.bin. Sega CD B7: Genesis Plus GX with `disc=1` needs at least one of
 // the regional Sega CD BIOS files, fetched one after another and all handed over in memory, then loads from play-disc.
 // 3DO B8: Opera does the same with the five 3DO BIOS files, and always loads from play-disc. 3DO B11: Opera writes its
-// NVRAM only on reset, so the modal asks the page to reset and sync /data/saves before it closes.
+// NVRAM only on reset, so the modal asks the page to reset and sync /data/saves before it closes. Saves B17/B18: a
+// library save is fetched before the loader and applied once at game start; the modal asks the page to export the
+// running game's state or battery save, which it sends back for upload.
 import {
 	biosError,
 	biosFor,
@@ -217,35 +219,152 @@ async function loadDisc(url, core) {
 }
 
 /**
- * The part of EmulatorJS's game manager the close handler uses.
- * @typedef {{ restart: () => void, FS: { syncfs: (populate: boolean, done: (e?: unknown) => void) => void } }} SaveManager
+ * The part of EmulatorJS 4.2.3's game manager the close, export and save-load handlers use.
+ * @typedef {{
+ *   restart: () => void,
+ *   supportsStates: () => boolean,
+ *   getState: () => Uint8Array,
+ *   loadState: (state: Uint8Array) => void,
+ *   getSaveFile: () => Uint8Array | null,
+ *   getSaveFilePath: () => string,
+ *   loadSaveFiles: () => void,
+ *   FS: {
+ *     syncfs: (populate: boolean, done: (e?: unknown) => void) => void,
+ *     analyzePath: (path: string) => { exists: boolean },
+ *     mkdir: (path: string) => void,
+ *     unlink: (path: string) => void,
+ *     writeFile: (path: string, data: Uint8Array) => void
+ *   }
+ * }} SaveManager
  */
+
+/** @returns {SaveManager | undefined} */
+function gameManager() {
+	const emulator = /** @type {{ gameManager?: SaveManager } | undefined} */ (
+		/** @type {Record<string, unknown>} */ (/** @type {unknown} */ (window)).EJS_emulator
+	);
+	return emulator?.gameManager;
+}
+
+/** Set by EJS_onGameStart: exports answer `not-started` before it. */
+let gameStarted = false;
+
+/** @param {Uint8Array} view @returns {ArrayBuffer} exactly the view's bytes, transferable */
+function ownBuffer(view) {
+	return /** @type {ArrayBuffer} */ (view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength));
+}
+
+/**
+ * Saves B18: the running game's state or battery save, or why there is none.
+ * @param {'state' | 'battery'} kind
+ * @param {boolean} busy the 3DO close sync is running
+ * @returns {{ ok: true, bytes: ArrayBuffer, extension: string } | { ok: false, reason: string }}
+ */
+function exportSave(kind, busy) {
+	const manager = gameManager();
+	if (!gameStarted || !manager) return { ok: false, reason: 'not-started' };
+	if (busy) return { ok: false, reason: 'busy' };
+	try {
+		if (kind === 'state') {
+			if (!manager.supportsStates()) return { ok: false, reason: 'unsupported' };
+			const state = manager.getState();
+			return state.byteLength === 0
+				? { ok: false, reason: 'empty' }
+				: { ok: true, bytes: ownBuffer(state), extension: '.state' };
+		}
+		// getSaveFile() with no argument runs saveSaveFiles() itself and returns null when there's no file.
+		const file = manager.getSaveFile();
+		if (!file || file.byteLength === 0) return { ok: false, reason: 'empty' };
+		const fileName = manager.getSaveFilePath().split('/').pop() ?? '';
+		const dot = fileName.lastIndexOf('.');
+		return { ok: true, bytes: ownBuffer(file), extension: dot >= 0 ? fileName.slice(dot).toLowerCase() : '.srm' };
+	} catch {
+		return { ok: false, reason: 'error' };
+	}
+}
+
+/**
+ * Saves B17: puts a library save into the started game, as EmulatorJS 4.2.3's own import does for a battery save,
+ * then restarts and syncs so the in-browser save for this release is replaced at once.
+ * @param {'state' | 'battery'} kind
+ * @param {ArrayBuffer} bytes
+ */
+function applySave(kind, bytes) {
+	const manager = gameManager();
+	try {
+		if (!manager) throw new Error('no game manager');
+		if (kind === 'state') {
+			if (!manager.supportsStates()) return show("This emulator can't load save states.");
+			manager.loadState(new Uint8Array(bytes));
+			return;
+		}
+		const path = manager.getSaveFilePath();
+		let folder = '';
+		for (const part of path.split('/').slice(0, -1)) {
+			if (part === '') continue;
+			folder += `/${part}`;
+			if (!manager.FS.analyzePath(folder).exists) manager.FS.mkdir(folder);
+		}
+		if (manager.FS.analyzePath(path).exists) manager.FS.unlink(path);
+		manager.FS.writeFile(path, new Uint8Array(bytes));
+		manager.loadSaveFiles();
+		manager.restart();
+		manager.FS.syncfs(false, () => {});
+	} catch {
+		show("Couldn't load the save.");
+	}
+}
+
+/**
+ * Saves B17: the library save, fetched before the loader is added.
+ * @param {string} game
+ * @param {string} id
+ * @returns {Promise<{ bytes: ArrayBuffer } | { error: string }>}
+ */
+async function loadLibrarySave(game, id) {
+	try {
+		const response = await fetch(`/api/games/${game}/saves/${id}/download`, { credentials: 'same-origin' });
+		if (response.status === 401) return { error: sessionExpired };
+		if (!response.ok) return { error: "Couldn't load the save." };
+		return { bytes: await response.arrayBuffer() };
+	} catch {
+		return { error: "Couldn't load the save." };
+	}
+}
 
 /** 3DO B11: how long Opera's reset gets to write its NVRAM file before /data/saves is synced. */
 const saveSyncDelayMs = 250;
 
 /**
- * 3DO B11: answers the modal's close request. Opera's reset writes the NVRAM file; the sync then persists
- * /data/saves (EmulatorJS's IDBFS mount) before the reply lets the modal remove the iframe.
+ * The page's one message listener, from the modal (window.parent, same origin) only. 3DO B11: answers the close
+ * request on Opera; its reset writes the NVRAM file, and the sync then persists /data/saves (EmulatorJS's IDBFS mount)
+ * before the reply lets the modal remove the iframe. Saves B18: answers an export request on every core; an export is
+ * synchronous, so a close request never interleaves with one.
+ * @param {boolean} isThreeDo
  */
-function listenForClose() {
+function listenForMessages(isThreeDo) {
 	/** @type {Promise<void> | null} */
 	let saving = null;
 	const reply = () => window.parent.postMessage({ type: 'rnrm-emulator-closed' }, location.origin);
 	window.addEventListener('message', (event) => {
 		if (event.source !== window.parent || event.origin !== location.origin) return;
 		const data = event.data;
-		const isClose =
-			data !== null &&
-			typeof data === 'object' &&
-			Object.keys(data).length === 1 &&
-			data.type === 'rnrm-emulator-close';
-		if (!isClose) return;
+		if (data === null || typeof data !== 'object') return;
+		const keys = Object.keys(data);
+		const isExport =
+			keys.length === 2 &&
+			data.type === 'rnrm-emulator-export' &&
+			(data.kind === 'state' || data.kind === 'battery');
+		if (isExport) {
+			const result = exportSave(data.kind, saving !== null);
+			const message = { type: 'rnrm-emulator-export-result', kind: data.kind, ...result };
+			window.parent.postMessage(message, location.origin, result.ok ? [result.bytes] : []);
+			return;
+		}
+		const isClose = keys.length === 1 && data.type === 'rnrm-emulator-close';
+		if (!isClose || !isThreeDo) return;
 		if (saving) return;
-		const emulator = /** @type {{ gameManager?: SaveManager } | undefined} */ (
-			/** @type {Record<string, unknown>} */ (/** @type {unknown} */ (window)).EJS_emulator
-		);
-		const manager = emulator?.gameManager;
+		const manager = gameManager();
 		if (!manager) return reply();
 		saving = new Promise((resolve) => {
 			try {
@@ -278,7 +397,8 @@ async function start() {
 	const isDs = params.core === 'desmume';
 	const isSegaCd = params.core === 'genesis_plus_gx' && params.disc;
 	const isThreeDo = params.core === 'opera';
-	if (isThreeDo) listenForClose();
+	// PSP B3: play-psp.html is its own tab, with no modal to talk to.
+	if (!pspPage) listenForMessages(isThreeDo);
 	if (isPsp) {
 		const problem = pspBrowserError(pspBrowser());
 		if (problem) return show(problem);
@@ -350,6 +470,15 @@ async function start() {
 			);
 		content = await readContent(response);
 	}
+	// Saves B17: the library save comes before the loader; a failure stops the launch here.
+	/** @type {ArrayBuffer | null} */
+	let saveBytes = null;
+	if (params.save) {
+		show('Downloading save…');
+		const save = await loadLibrarySave(params.game, params.save.id);
+		if ('error' in save) return show(save.error);
+		saveBytes = save.bytes;
+	}
 	show('Starting emulator…');
 	const file = new File([content], contentFileName(params.core, params.game, params.name));
 
@@ -414,6 +543,20 @@ async function start() {
 	};
 	// PSP B3: PPSSPP has only a threaded build; the vendored loader also ignores a saved "threads disabled".
 	if (isPsp) ejs.EJS_threads = true;
+	// Saves B17/B18: loader.js runs this on `start`, once at the end of startGame() (restart() doesn't fire it); the
+	// save goes in 10 ms later, as EmulatorJS's own start state does, and only once.
+	let saveApplied = false;
+	// A handler set before this page ran (the e2e suite's start marker) still runs.
+	const earlier = typeof ejs.EJS_onGameStart === 'function' ? /** @type {() => void} */ (ejs.EJS_onGameStart) : null;
+	ejs.EJS_onGameStart = () => {
+		earlier?.();
+		gameStarted = true;
+		if (!params.save || !saveBytes || saveApplied) return;
+		saveApplied = true;
+		const { kind } = params.save;
+		const bytes = saveBytes;
+		setTimeout(() => applySave(kind, bytes), 10);
+	};
 
 	const loader = document.createElement('script');
 	loader.src = '/emulator/vendor/data/loader.js';

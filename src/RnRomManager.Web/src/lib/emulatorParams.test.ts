@@ -41,6 +41,35 @@ function query(overrides: Record<string, string | null>): string {
 	return `?${params}`;
 }
 
+describe('parsePlayParams saves (Saves B17)', () => {
+	const id = 'a'.repeat(32);
+
+	it.each(['state', 'battery'] as const)('reads save + saveKind=%s', (kind) => {
+		expect(parsePlayParams(query({ save: id, saveKind: kind }))?.save).toEqual({ id, kind });
+	});
+
+	it('has no save without either', () => {
+		expect(parsePlayParams(query({}))?.save).toBeNull();
+	});
+
+	it.each([
+		['a lone save', { save: id }],
+		['a lone saveKind', { saveKind: 'state' }],
+		['an uppercase id', { save: 'A'.repeat(32), saveKind: 'state' }],
+		['a short id', { save: 'a'.repeat(31), saveKind: 'state' }],
+		['a GUID with dashes', { save: game, saveKind: 'state' }],
+		['an unknown kind', { save: id, saveKind: 'sram' }]
+	])('refuses %s', (_, overrides) => {
+		expect(parsePlayParams(query(overrides))).toBeNull();
+	});
+
+	it('refuses a repeated save', () => {
+		expect(
+			parsePlayParams(`${query({ save: id, saveKind: 'state' })}&save=${id}&saveKind=state`)
+		).toBeNull();
+	});
+});
+
 describe('parsePlayParams', () => {
 	it('parses a valid query', () => {
 		expect(parsePlayParams(query({ core: 'mgba', name: 'A #1 & B.gba' }))).toEqual({
@@ -48,7 +77,8 @@ describe('parsePlayParams', () => {
 			rom: 12,
 			core: 'mgba',
 			name: 'A #1 & B.gba',
-			disc: false
+			disc: false,
+			save: null
 		});
 	});
 
@@ -234,7 +264,8 @@ describe('PSP page (PSP B3)', () => {
 			rom: 12,
 			core: 'ppsspp',
 			name: 'Umd (USA).iso',
-			disc: false
+			disc: false,
+			save: null
 		});
 		expect(parsePlayParams(query({ core: 'ppsspp' }))).toBeNull();
 		expect(parsePlayParams(query({ core: 'ppsspp' }), false)).toBeNull();
@@ -566,7 +597,8 @@ describe('Nintendo DS (Nintendo DS B4)', () => {
 			rom: 12,
 			core: 'desmume',
 			name: 'Marker Test (World).nds',
-			disc: false
+			disc: false,
+			save: null
 		});
 		expect(parsePlayParams(query({ core: 'desmume' }), true)).toBeNull();
 	});

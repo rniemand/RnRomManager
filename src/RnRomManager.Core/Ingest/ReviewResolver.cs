@@ -211,7 +211,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         }
         if (owner is null)
             return null;
-        if (systems.ById(owner.SystemId) is not { EmbedRomsInZip: false })
+        // S3a: a legacy game's embedded ROM is an embedded owner too.
+        if (systems.ById(owner.SystemId) is not { EmbedRomsInZip: false } || owner.ExternalFileName is null)
             return new("Duplicate");
 
         var game = await games.GetAsync(owner.GameId, CancellationToken.None).ConfigureAwait(false);

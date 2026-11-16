@@ -33,7 +33,10 @@ public partial class LibraryEndpointsTests
     [OneTimeSetUp]
     public async Task StartHost()
     {
-        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
+        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
+        {
+            TestServices = services => SystemHandlerRegistration.AddSystemHandler<LegacyExternalTestHandler>(services),
+        };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
         await _factory.StartSharedAsync();
     }
@@ -147,14 +150,16 @@ public partial class LibraryEndpointsTests
     {
         await Tetris();
 
-        var systems = await GetJson("/api/systems");
+        // The host's legacy test system aside.
+        var systems = (await GetJson("/api/systems")).EnumerateArray()
+            .Where(s => s.GetProperty("id").GetString() != LegacyExternalTestHandler.SystemId).ToList();
 
         // S1: ordered by display name.
-        Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("id").GetString()),
+        Assert.That(systems.Select(s => s.GetProperty("id").GetString()),
             Is.EqualTo(new[] { "s32x", "3do", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "n64", "nds", "nes", "switch", "psx", "psp", "saturn", "segacd", "snes", "tg16", "vb", "wii", "x360" }));
-        Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(19).True);
+        Assert.That(systems.Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(18).True);
         Assert.That(Find("switch").GetProperty("embedRoms").GetBoolean(), Is.False, "Switch stores its ROMs outside the ZIP");
-        JsonElement Find(string id) => systems.EnumerateArray().Single(s => s.GetProperty("id").GetString() == id);
+        JsonElement Find(string id) => systems.Single(s => s.GetProperty("id").GetString() == id);
         var gb = Find("gb");
         Assert.That(gb.GetProperty("displayName").GetString(), Is.EqualTo("Game Boy"));
         Assert.That(gb.GetProperty("shortName").GetString(), Is.EqualTo("GB"), "L3");
@@ -165,7 +170,7 @@ public partial class LibraryEndpointsTests
         Assert.That(gb.GetProperty("regions").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "Japan", "World" }));
         var gbc = Find("gbc");
         Assert.That((gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()), Is.EqualTo((0, 0)));
-        Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
+        Assert.That(systems.Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
             "32X", "3DO", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
             "PlayStation", "PlayStation Portable", "Saturn", "Sega CD", "Super Nintendo Entertainment System", "TurboGrafx-16", "Virtual Boy", "Wii", "Xbox 360"
@@ -611,9 +616,9 @@ public partial class LibraryEndpointsTests
         return (id, (await GetJson($"/api/games/{id}")).GetProperty("roms")[0].GetProperty("id").GetInt64());
     }
 
-    /// <summary>Nintendo DS B4: DeSmuME plays the embedded release from the detail page and the library's Quick Play, with no size limit.</summary>
+    /// <summary>Nintendo DS B4, S8: DeSmuME plays the external release from <c>/download</c> (no <c>disc=1</c>), with no size limit.</summary>
     [Test]
-    public async Task Ds_DetailAndLibrary_OfferDesmume_ForTheEmbeddedRelease()
+    public async Task Ds_DetailAndLibrary_OfferDesmume_ForTheExternalRelease_WithoutPlayDisc()
     {
         var (id, romId) = await IngestDs();
 
@@ -622,10 +627,12 @@ public partial class LibraryEndpointsTests
         Assert.That(item.GetProperty("browserCore").GetString(), Is.EqualTo("desmume"));
         Assert.That(item.GetProperty("playRomId").GetInt64(), Is.EqualTo(romId));
         Assert.That(item.GetProperty("playRomFileName").GetString(), Is.EqualTo("Download Quest (USA).nds"));
+        Assert.That(item.GetProperty("playDisc").GetBoolean(), Is.False);
+        Assert.That((await GetJson($"/api/games/{id}")).GetProperty("roms")[0].GetProperty("externalFileName").GetString(), Is.Not.Null);
     }
 
     [Test]
-    public async Task Ds_RoleLessUser_DownloadsTheStoredBytes_AndARangeIsIgnored()
+    public async Task Ds_RoleLessUser_DownloadsTheStoredBytes_WithRanges()
     {
         var (id, romId) = await IngestDs();
         var url = $"/api/games/{id}/roms/{romId}/download";
@@ -633,14 +640,34 @@ public partial class LibraryEndpointsTests
         using var response = await _user.GetAsync(url);
         using var ranged = await _user.SendAsync(HttpMethod.Get, url, null, sendXsrf: false, headers => headers.Range = new RangeHeaderValue(0, 1));
 
-        foreach (var r in new[] { response, ranged })
-        {
-            Assert.That(r.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-            Assert.That(r.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"));
-            Assert.That(r.Content.Headers.ContentDisposition?.FileNameStar ?? r.Content.Headers.ContentDisposition?.FileName,
-                Is.EqualTo("Download Quest (USA).nds"));
-            Assert.That(await r.Content.ReadAsByteArrayAsync(), Is.EqualTo(DsQuest));
-        }
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"));
+        Assert.That(response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName,
+            Is.EqualTo("Download Quest (USA).nds"));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(DsQuest));
+        // S1: an external file is served with ranges, like Switch.
+        Assert.That(ranged.StatusCode, Is.EqualTo(HttpStatusCode.PartialContent));
+        Assert.That(await ranged.Content.ReadAsByteArrayAsync(), Is.EqualTo(DsQuest[..2]));
+    }
+
+    /// <summary>S2: a legacy DS game (ROM still inside the ZIP) still lists, plays from the ZIP and downloads.</summary>
+    [Test]
+    public async Task Ds_LegacyGame_ListsDownloadsAndPlays()
+    {
+        var game = TestLibrary.Game("Old Quest", TestLibrary.Rom("Old Quest (USA).nds", DsQuest)) with { System = "nds" };
+        var zip = Path.Combine(RomsFolder("nds", "O"), "Old Quest.zip");
+        LegacyZipWriter.Write(zip, game, DsQuest);
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, "nds/O/Old Quest.zip", new FileInfo(zip).Length, DateTime.UtcNow), default);
+
+        var item = (await GetJson("/api/games?system=nds")).GetProperty("items").EnumerateArray().Single();
+        var rom = (await GetJson($"/api/games/{game.GameId}")).GetProperty("roms")[0];
+        using var download = await _user.GetAsync(rom.GetProperty("downloadUrl").GetString()!);
+
+        Assert.That((item.GetProperty("browserCore").GetString(), item.GetProperty("playDisc").GetBoolean()), Is.EqualTo(("desmume", false)));
+        Assert.That(item.GetProperty("playRomId").GetInt64(), Is.EqualTo(rom.GetProperty("id").GetInt64()));
+        Assert.That(rom.GetProperty("externalFileName").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        Assert.That(download.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await download.Content.ReadAsByteArrayAsync(), Is.EqualTo(DsQuest));
     }
 
     [Test]
@@ -655,7 +682,7 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
-    public async Task Ds_MismatchedGameAndRelease_OrAMissingEntry_Is404()
+    public async Task Ds_MismatchedGameAndRelease_OrAMissingFile_Is404()
     {
         var (id, romId) = await IngestDs();
         var other = await Ingest("p.gb", Pinball);
@@ -663,8 +690,8 @@ public partial class LibraryEndpointsTests
         using (var mismatched = await _user.GetAsync($"/api/games/{other}/roms/{romId}/download"))
             Assert.That(mismatched.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
 
-        using (var zip = ZipFile.Open(await ZipPath(id), ZipArchiveMode.Update))
-            zip.GetEntry(LibraryZip.RomEntry("Download Quest (USA).nds"))!.Delete();
+        var pointer = (await GetJson($"/api/games/{id}")).GetProperty("roms")[0].GetProperty("externalFileName").GetString()!;
+        File.Delete(Path.Combine(Path.GetDirectoryName(await ZipPath(id))!, pointer));
         using var missing = await _user.GetAsync($"/api/games/{id}/roms/{romId}/download");
         Assert.That(missing.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
@@ -828,6 +855,25 @@ public partial class LibraryEndpointsTests
         Assert.That(externalRom.GetProperty("externalFileName").GetString(), Is.EqualTo("Orbit Test.Orbit Test [v0].nsp"));
         Assert.That(externalRom.GetProperty("fileName").GetString(), Is.EqualTo("Orbit Test [v0].nsp"));
         Assert.That(embeddedRom.GetProperty("externalFileName").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    [Test]
+    public async Task LegacyGame_DetailInfoJsonAndRomDownload_Work()
+    {
+        var bytes = Enumerable.Range(0, 300).Select(i => (byte)i).ToArray();
+        var game = TestLibrary.Game("Old Ds", TestLibrary.Rom("Old Ds (USA).nds", bytes)) with { System = LegacyExternalTestHandler.SystemId };
+        var zip = Path.Combine(RomsFolder("legacy", "O"), "Old Ds.zip");
+        LegacyZipWriter.Write(zip, game, bytes);
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, "legacy/O/Old Ds.zip", new FileInfo(zip).Length, DateTime.UtcNow), default);
+
+        var rom = (await GetJson($"/api/games/{game.GameId}")).GetProperty("roms")[0];
+        using var info = await _user.GetAsync($"/api/games/{game.GameId}/info-json");
+        using var download = await _user.GetAsync(rom.GetProperty("downloadUrl").GetString()!);
+
+        Assert.That(rom.GetProperty("externalFileName").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        Assert.That(info.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(download.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await download.Content.ReadAsByteArrayAsync(), Is.EqualTo(bytes));
     }
 
     [Test]

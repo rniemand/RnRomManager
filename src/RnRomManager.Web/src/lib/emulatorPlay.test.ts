@@ -28,7 +28,8 @@ const ejsGlobals = [
 	'EJS_defaultOptions',
 	'EJS_paths',
 	'EJS_threads',
-	'EJS_disableCue'
+	'EJS_disableCue',
+	'EJS_onGameStart'
 ];
 
 const win = window as unknown as Record<string, unknown>;
@@ -1375,6 +1376,301 @@ describe('play page 3DO saves (3DO B11)', () => {
 
 		expect(restart).not.toHaveBeenCalled();
 		expect(posted).not.toHaveBeenCalled();
+	});
+});
+
+describe('play page library saves (Saves B17, B18)', () => {
+	const saveId = 'a'.repeat(32);
+	const saveUrl = `/api/games/${game}/saves/${saveId}/download`;
+	const saveBytes = new Uint8Array([7, 8, 9]);
+
+	function saveResponse(status: number) {
+		return async () =>
+			({
+				ok: status >= 200 && status < 300,
+				status,
+				arrayBuffer: async () => saveBytes.slice().buffer
+			}) as unknown as FakeResponse;
+	}
+
+	async function playWithSave(kind: 'state' | 'battery', status = 200): Promise<string> {
+		serve({ [romUrl]: async () => response(200), [saveUrl]: saveResponse(status) });
+		const query = new URLSearchParams({
+			game,
+			rom: '12',
+			core: 'gambatte',
+			name: 'Orbit Blocks (World).gb',
+			save: saveId,
+			saveKind: kind
+		});
+		history.replaceState(null, '', `/emulator/play.html?${query}`);
+		const { started } = await import('../../static/emulator/play.js');
+		await started;
+		return document.getElementById('status')!.textContent ?? '';
+	}
+
+	/** A fake EmulatorJS 4.2.3 game manager recording what is called, in order. */
+	function manager(
+		options: {
+			states?: boolean;
+			existing?: string[];
+			saveFile?: Uint8Array | null;
+			path?: string;
+		} = {}
+	) {
+		const order: string[] = [];
+		const existing = new Set(options.existing ?? []);
+		const fake = {
+			order,
+			supportsStates: vi.fn(() => options.states ?? true),
+			getState: vi.fn(() => new Uint8Array([1, 2, 3])),
+			loadState: vi.fn((state: Uint8Array) => void order.push(`loadState ${[...state]}`)),
+			getSaveFile: vi.fn(() =>
+				options.saveFile === undefined ? new Uint8Array([4, 5]) : options.saveFile
+			),
+			getSaveFilePath: vi.fn(() => options.path ?? '/data/saves/Orbit Blocks (World).srm'),
+			loadSaveFiles: vi.fn(() => void order.push('loadSaveFiles')),
+			restart: vi.fn(() => void order.push('restart')),
+			FS: {
+				analyzePath: vi.fn((p: string) => ({ exists: existing.has(p) })),
+				mkdir: vi.fn((p: string) => void order.push(`mkdir ${p}`)),
+				unlink: vi.fn((p: string) => void order.push(`unlink ${p}`)),
+				writeFile: vi.fn(
+					(p: string, data: Uint8Array) => void order.push(`writeFile ${p} ${[...data]}`)
+				),
+				syncfs: vi.fn((populate: boolean) => void order.push(`syncfs ${populate}`))
+			}
+		};
+		win.EJS_emulator = { gameManager: fake };
+		return fake;
+	}
+
+	const gameStart = () => (atLoader?.EJS_onGameStart as () => void)();
+
+	afterEach(() => vi.useRealTimers());
+
+	it('fetches the save after the ROM and before the loader', async () => {
+		expect(await playWithSave('state')).toBe('Starting emulator…');
+		expect(urls()).toEqual([romUrl, saveUrl]);
+		expect(atLoader?.EJS_onGameStart).toBeTypeOf('function');
+	});
+
+	it.each([
+		[401, 'Your session has expired. Sign in again.'],
+		[404, "Couldn't load the save."],
+		[500, "Couldn't load the save."]
+	])('a %i on the save stops before the loader', async (status, message) => {
+		expect(await playWithSave('state', status)).toBe(message);
+		expect(atLoader).toBeNull();
+	});
+
+	it('keeps a start handler set before the page ran', async () => {
+		const earlier = vi.fn();
+		win.EJS_onGameStart = earlier;
+		await playWithSave('state');
+		manager();
+
+		gameStart();
+
+		expect(earlier).toHaveBeenCalledTimes(1);
+	});
+
+	it('applies a state once, 10 ms after start, even if start fires twice', async () => {
+		await playWithSave('state');
+		const fake = manager();
+		vi.useFakeTimers();
+
+		gameStart();
+		gameStart();
+		await vi.advanceTimersByTimeAsync(9);
+		expect(fake.loadState).not.toHaveBeenCalled();
+		await vi.advanceTimersByTimeAsync(1);
+
+		expect(fake.order).toEqual(['loadState 7,8,9']);
+	});
+
+	it('does not load a state the core cannot, and says so', async () => {
+		await playWithSave('state');
+		const fake = manager({ states: false });
+		vi.useFakeTimers();
+
+		gameStart();
+		await vi.advanceTimersByTimeAsync(10);
+
+		expect(fake.loadState).not.toHaveBeenCalled();
+		expect(document.getElementById('status')!.textContent).toBe(
+			"This emulator can't load save states."
+		);
+	});
+
+	it('applies a battery save like the upstream import, then restarts and syncs', async () => {
+		await playWithSave('battery');
+		const fake = manager({ existing: ['/data', '/data/saves/Orbit Blocks (World).srm'] });
+		vi.useFakeTimers();
+
+		gameStart();
+		await vi.advanceTimersByTimeAsync(10);
+
+		expect(fake.order).toEqual([
+			'mkdir /data/saves',
+			'unlink /data/saves/Orbit Blocks (World).srm',
+			'writeFile /data/saves/Orbit Blocks (World).srm 7,8,9',
+			'loadSaveFiles',
+			'restart',
+			'syncfs false'
+		]);
+	});
+
+	it('reports a failure to apply the save and keeps the game running', async () => {
+		await playWithSave('state');
+		const fake = manager();
+		fake.loadState.mockImplementation(() => {
+			throw new Error('bad state');
+		});
+		vi.useFakeTimers();
+
+		gameStart();
+		await vi.advanceTimersByTimeAsync(10);
+
+		expect(document.getElementById('status')!.textContent).toBe("Couldn't load the save.");
+	});
+
+	describe('exports', () => {
+		let posted: ReturnType<typeof vi.spyOn>;
+
+		async function ready(
+			core = 'gambatte',
+			options: Parameters<typeof manager>[0] = {},
+			start = true
+		) {
+			serve({ [romUrl]: async () => response(200) });
+			await play(core, 'Orbit Blocks (World).gb');
+			const fake = manager(options);
+			if (start) gameStart();
+			posted = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
+			return fake;
+		}
+
+		function send(data: unknown, init: Partial<MessageEventInit> = {}) {
+			window.dispatchEvent(
+				new MessageEvent('message', { data, origin: location.origin, source: window, ...init })
+			);
+		}
+
+		const result = () => posted.mock.calls[0][0] as Record<string, unknown>;
+
+		it('sends the state as a transferred buffer with the .state extension', async () => {
+			await ready();
+
+			send({ type: 'rnrm-emulator-export', kind: 'state' });
+
+			expect(posted).toHaveBeenCalledTimes(1);
+			const [message, origin, transfer] = posted.mock.calls[0];
+			expect(origin).toBe(location.origin);
+			expect(message).toMatchObject({
+				type: 'rnrm-emulator-export-result',
+				kind: 'state',
+				ok: true,
+				extension: '.state'
+			});
+			expect([...new Uint8Array((message as { bytes: ArrayBuffer }).bytes)]).toEqual([1, 2, 3]);
+			expect(transfer).toEqual([(message as { bytes: ArrayBuffer }).bytes]);
+		});
+
+		it.each([
+			['/data/saves/Orbit Blocks (World).SAV', '.sav'],
+			['/data/saves/noextension', '.srm']
+		])('sends the battery save, its extension from %s', async (path, extension) => {
+			await ready('gambatte', { path });
+
+			send({ type: 'rnrm-emulator-export', kind: 'battery' });
+
+			expect(result()).toMatchObject({ kind: 'battery', ok: true, extension });
+			expect([...new Uint8Array(result().bytes as ArrayBuffer)]).toEqual([4, 5]);
+		});
+
+		it.each([
+			['not-started', 'state', {}, false],
+			['unsupported', 'state', { states: false }, true],
+			['empty', 'battery', { saveFile: null }, true]
+		] as const)('answers %s', async (reason, kind, options, start) => {
+			await ready('gambatte', options, start);
+
+			send({ type: 'rnrm-emulator-export', kind });
+
+			expect(result()).toEqual({ type: 'rnrm-emulator-export-result', kind, ok: false, reason });
+		});
+
+		it('answers error when the emulator throws', async () => {
+			const fake = await ready();
+			fake.getState.mockImplementation(() => {
+				throw new Error('boom');
+			});
+
+			send({ type: 'rnrm-emulator-export', kind: 'state' });
+
+			expect(result()).toEqual({
+				type: 'rnrm-emulator-export-result',
+				kind: 'state',
+				ok: false,
+				reason: 'error'
+			});
+		});
+
+		it('answers busy while the 3DO close sync runs', async () => {
+			const firmware = new Uint8Array(1048576);
+			serve({
+				'/api/emulator/cores/opera': async () => response(204),
+				'/api/emulator/bios/panafz10.bin': async () =>
+					({
+						ok: true,
+						status: 200,
+						body: new ReadableStream<Uint8Array>({
+							start(controller) {
+								controller.enqueue(firmware);
+								controller.close();
+							}
+						})
+					}) as unknown as FakeResponse,
+				'/api/emulator/bios/panafz1.bin': async () => response(404),
+				'/api/emulator/bios/panafz1j.bin': async () => response(404),
+				'/api/emulator/bios/goldstar.bin': async () => response(404),
+				'/api/emulator/bios/sanyotry.bin': async () => response(404),
+				[`/api/games/${game}/roms/12/play-disc`]: async () => response(200)
+			});
+			await play('opera', 'Opal Rally (USA).cue', true);
+			manager();
+			gameStart();
+			posted = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
+			vi.useFakeTimers();
+
+			send({ type: 'rnrm-emulator-close' });
+			send({ type: 'rnrm-emulator-export', kind: 'state' });
+
+			expect(result()).toEqual({
+				type: 'rnrm-emulator-export-result',
+				kind: 'state',
+				ok: false,
+				reason: 'busy'
+			});
+		});
+
+		it.each([
+			[
+				'another origin',
+				{ type: 'rnrm-emulator-export', kind: 'state' },
+				{ origin: 'https://evil.example' }
+			],
+			['another source', { type: 'rnrm-emulator-export', kind: 'state' }, { source: null }],
+			['an unknown kind', { type: 'rnrm-emulator-export', kind: 'sram' }, {}],
+			['extra keys', { type: 'rnrm-emulator-export', kind: 'state', extra: 1 }, {}]
+		])('ignores %s', async (_, data, init) => {
+			await ready();
+
+			send(data, init as Partial<MessageEventInit>);
+
+			expect(posted).not.toHaveBeenCalled();
+		});
 	});
 });
 

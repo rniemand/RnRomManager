@@ -45,8 +45,11 @@ public class ReviewEndpointsTests
     {
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
         {
-            TestServices = services => services.AddTransient(sp => ActivatorUtilities.CreateInstance<ReviewResolver>(sp,
-                _pipelineOverride ?? sp.GetRequiredService<IngestPipeline>())),
+            TestServices = services =>
+            {
+                services.AddTransient(sp => ActivatorUtilities.CreateInstance<ReviewResolver>(sp, _pipelineOverride ?? sp.GetRequiredService<IngestPipeline>()));
+                RnRomManager.Core.Systems.SystemHandlerRegistration.AddSystemHandler<LegacyExternalTestHandler>(services);
+            },
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
         await _factory.StartSharedAsync();
@@ -94,6 +97,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.NintendoDsDat] = [new FixtureGame("Stylus Quest (USA)", "Stylus Quest (USA).nds", StylusQuest) { ReleaseYear = 2006 }],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)
             { ReleaseYear = 1989, Developers = ["Nintendo"], Publishers = ["Nintendo"], Genres = ["Puzzle"] }],
+            [LegacyExternalTestHandler.DatNameValue] = [],
             ["Nintendo - Game Boy Color"] = [new FixtureGame("Color Game (World)", "Color Game (World).gbc", Color)],
         }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
@@ -211,6 +215,32 @@ public class ReviewEndpointsTests
         Assert.That(game.Roms.Single(r => r.IsPrimary).Identification.Method, Is.EqualTo(IdentificationMethod.Dat));
         Assert.That(rom.Identification.DatName, Is.Null);
         Assert.That(File.Exists(item.SourcePath), Is.EqualTo(archive));
+    }
+
+    [Test]
+    public async Task Attach_ToALegacyGame_IsStorageMigrationPending_AndStaysPending()
+    {
+        var legacyRom = new SyntheticRomBuilder { Seed = 950 }.Build();
+        var game = TestLibrary.Game("Old Ds", TestLibrary.Rom("Old Ds (USA).nds", legacyRom)) with { System = LegacyExternalTestHandler.SystemId };
+        var zip = Path.Combine(_factory.Root, "roms", "legacy", "O", "Old Ds.zip");
+        LegacyZipWriter.Write(zip, game, legacyRom);
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, "legacy/O/Old Ds.zip", new FileInfo(zip).Length, DateTime.UtcNow), default);
+        var zipBytes = File.ReadAllBytes(zip);
+        var bytes = new SyntheticRomBuilder { Seed = 951 }.Build();
+        var path = Path.Combine(_factory.Root, "ingest", LegacyExternalTestHandler.SystemId, "hack.nds");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, bytes);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+        var queued = await Ingest(new IngestFile(LegacyExternalTestHandler.SystemId, path, "hack.nds", bytes.Length, File.GetLastWriteTimeUtc(path)));
+        Assert.That(queued!.Outcome, Is.EqualTo(IngestOutcome.Review), queued.Details);
+        var item = (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(bytes)), default))!;
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Attach", targetGameId = game.GameId, flag = "Hack" });
+
+        Assert.That(response.Code, Is.EqualTo(IngestErrors.StorageMigrationPending));
+        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
+        Assert.That(File.Exists(path), Is.True);
+        Assert.That(File.ReadAllBytes(zip), Is.EqualTo(zipBytes));
     }
 
     private async Task<ReviewItem> Ambiguous(ReviewItem item, params Guid[] candidates)
@@ -693,21 +723,18 @@ public class ReviewEndpointsTests
         return item;
     }
 
-    /// <summary>The stored entry, <c>info.json</c> and the source agree, and no ROM file sits next to the ZIP.</summary>
-    private async Task AssertStoredInZip(Guid gameId, string sha1, byte[] source)
+    /// <summary>S1: the file next to the ZIP, <c>info.json</c> and the source agree, and the ZIP holds no ROM entry.</summary>
+    private async Task AssertStoredExternal(Guid gameId, string sha1, byte[] source)
     {
         var row = (await Service<IGameRepository>().GetAsync(gameId, default))!;
         var zipPath = Path.GetFullPath(Path.Combine(_factory.Root, "roms", row.ZipPath));
         using var zip = LibraryZip.Open(zipPath, Service<InfoJsonReader>());
         var rom = zip.InfoJson!.Game!.Roms.Single(r => r.Metadata.Sha1 == sha1);
-        using var entry = zip.OpenEntry(LibraryZip.RomEntry(rom.FileName), long.MaxValue);
-        using var copy = new MemoryStream();
-        entry.CopyTo(copy);
-        Assert.That(copy.ToArray(), Is.EqualTo(source));
+        Assert.That(rom.ExternalFileName, Is.Not.Null);
+        Assert.That(File.ReadAllBytes(Path.Combine(Path.GetDirectoryName(zipPath)!, rom.ExternalFileName!)), Is.EqualTo(source));
+        Assert.That(zip.EntryNames.Where(n => n.StartsWith("roms/", StringComparison.Ordinal)), Is.Empty);
         Assert.That((rom.Metadata.SizeBytes, rom.Metadata.Crc32, rom.Metadata.Md5, rom.Metadata.Sha1),
             Is.EqualTo(((long)source.Length, Crc32.ToHex(source), Convert.ToHexStringLower(MD5.HashData(source)), Convert.ToHexStringLower(SHA1.HashData(source)))));
-        Assert.That(rom.ExternalFileName, Is.Null);
-        Assert.That(Directory.EnumerateFiles(Path.GetDirectoryName(zipPath)!), Is.EqualTo(new[] { zipPath }), "no external ROM file");
     }
 
     [Test]
@@ -732,7 +759,7 @@ public class ReviewEndpointsTests
     }
 
     [Test]
-    public async Task Ds_ManualResolution_OfALooseItem_StoresTheSourceBytesInTheZip()
+    public async Task Ds_ManualResolution_OfALooseItem_StoresTheSourceBytesNextToTheZip()
     {
         var item = await QueueDs("pen pals.nds", DsOther);
 
@@ -743,11 +770,11 @@ public class ReviewEndpointsTests
         Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("nds", "Pen Pals (USA).nds")));
         Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Resolved"));
         Assert.That(File.Exists(item.SourcePath), Is.False);
-        await AssertStoredInZip(response.GameId.Value, item.Sha1, DsOther);
+        await AssertStoredExternal(response.GameId.Value, item.Sha1, DsOther);
     }
 
     [Test]
-    public async Task Ds_DatSelection_OfAnArchiveItem_StoresTheEntryBytesInTheZip()
+    public async Task Ds_DatSelection_OfAnArchiveItem_StoresTheEntryBytesNextToTheZip()
     {
         var item = await QueueDs("quest-eu.nds", DsUnknown, archive: true);
         Assert.That((item.ArchivePath, item.ArchiveEntry), Is.EqualTo((Path.Combine(_factory.Root, "ingest", "nds", "ds-pack.zip"), "nested/quest-eu.nds")));
@@ -758,7 +785,7 @@ public class ReviewEndpointsTests
         var game = await ReadGame(response.GameId!.Value);
         Assert.That((game.Title, game.ReleaseYear), Is.EqualTo(("Stylus Quest", (int?)2006)));
         Assert.That(game.Roms.Single().FileName, Is.EqualTo("Stylus Quest (USA) (Unverified).nds"));
-        await AssertStoredInZip(response.GameId.Value, item.Sha1, DsUnknown);
+        await AssertStoredExternal(response.GameId.Value, item.Sha1, DsUnknown);
     }
 
     [Test]

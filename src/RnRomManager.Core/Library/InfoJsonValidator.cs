@@ -83,7 +83,8 @@ public static class InfoJsonValidator
     {
         if (!handler.FileSets && game.Roms.FirstOrDefault(r => r.Files is not null) is { } withFiles)
             return $"rom '{withFiles.FileName}' files must be null: system '{game.System}' has no file sets";
-        if (handler.EmbedRomsInZip)
+        // S2: a legacy game of a LegacyEmbeddedRoms system keeps every ROM in the ZIP until migrated; mixed stays invalid.
+        if (RomStorage.IsEmbedded(handler, game))
         {
             return game.Roms.FirstOrDefault(r => r.ExternalFileName is not null) is { } stray
                 ? $"rom '{stray.FileName}' externalFileName must be null: system '{game.System}' stores ROMs in the ZIP"

@@ -465,6 +465,86 @@ test('game detail + downloads + ROM playback progress', async () => {
 	await page.setViewportSize(viewport);
 });
 
+test('saves: upload, rename, save state from Play, play it, delete, audit', async () => {
+	await openGame('Orbit Blocks');
+	const savesTab = () => page.getByRole('tab', { name: 'Saves' });
+	const rows = () => page.locator('#saves-panel tbody tr');
+	await savesTab().click();
+	await expect(page).toHaveURL(/[?&]tab=saves/);
+	await expect(page.getByText('No saves yet')).toBeVisible();
+	await expectAccessible(page, 'saves tab');
+
+	// B15: upload a battery save from a file.
+	await page.getByRole('button', { name: 'Add save' }).click();
+	await expect(dialog()).toHaveAccessibleName('Add save');
+	await dialog().getByLabel('Battery').check();
+	await dialog().getByLabel('Name').fill('Uploaded save');
+	await dialog().getByLabel('Description').fill('From the e2e walk');
+	await dialog().getByLabel('File').setInputFiles({ name: 'slot.srm', mimeType: 'application/octet-stream', buffer: Buffer.from([1, 2, 3, 4]) });
+	await expectAccessible(page, 'add save modal');
+	await dialog().locator('.modal-footer').getByRole('button', { name: 'Add save' }).click();
+	await expect(dialog()).toBeHidden();
+	await expect(rows()).toHaveCount(1);
+	await expect(rows().first()).toContainText('Uploaded save');
+	await expect(rows().first()).toContainText('Battery');
+
+	// B15: rename it.
+	await page.getByRole('button', { name: 'Edit Uploaded save' }).click();
+	await dialog().getByLabel('Name').fill('Renamed save');
+	await dialog().locator('.modal-footer').getByRole('button', { name: 'Save' }).click();
+	await expect(dialog()).toBeHidden();
+	await expect(rows().first()).toContainText('Renamed save');
+
+	// B18/B19: start the game and copy its state into the library from the Play dialog.
+	await page.getByRole('tab', { name: /^Releases/ }).click();
+	await page.getByRole('button', { name: 'Play Orbit Blocks (World) (Rev 1).gb' }).click();
+	const frame = page.frameLocator('iframe');
+	// The ROM download of this release is gated by the staging script installed for the game detail test.
+	await expectRomDownloadProgress(frame);
+	await expect(frame.getByText('Start Game')).toBeVisible();
+	await frame.getByText('Start Game').click();
+	await expect(frame.locator('body')).toHaveAttribute('data-game-started', 'true', { timeout: 30_000 });
+	const upload = page.waitForResponse((r) => /\/api\/games\/[^/]+\/saves$/.test(r.url()) && r.request().method() === 'POST');
+	await dialog().getByRole('button', { name: 'Save state to library' }).click();
+	expect((await upload).status()).toBe(201);
+	await expect(page.getByText('Saved to library')).toBeVisible();
+	await dialog().locator('.modal-footer').getByRole('button', { name: 'Close' }).click();
+	await expect(page.locator('iframe')).toHaveCount(0);
+
+	await savesTab().click();
+	await expect(rows()).toHaveCount(2);
+	const state = rows().filter({ hasText: /State \d{4}-\d{2}-\d{2} \d{2}:\d{2}/ });
+	await expect(state).toHaveCount(1);
+
+	// B16/B17: play that state; the play page loads it at game start.
+	const stateName = (await state.locator('td').first().innerText()).trim();
+	const saveDownload = page.waitForResponse((r) => /\/api\/games\/[^/]+\/saves\/[0-9a-f]{32}\/download$/.test(r.url()));
+	await page.getByRole('button', { name: `Play ${stateName}` }).click();
+	await expect(dialog().locator('iframe')).toHaveAttribute('src', /&save=[0-9a-f]{32}&saveKind=state$/);
+	await expectRomDownloadProgress(frame);
+	expect((await saveDownload).status()).toBe(200);
+	await expect(frame.getByText('Start Game')).toBeVisible();
+	await frame.getByText('Start Game').click();
+	await expect(frame.locator('body')).toHaveAttribute('data-game-started', 'true', { timeout: 30_000 });
+	await expect(frame.locator('#status')).not.toContainText("Couldn't load the save.");
+	await dialog().locator('.modal-footer').getByRole('button', { name: 'Close' }).click();
+
+	// B15: delete the renamed save after a confirmation that names it.
+	await page.getByRole('button', { name: 'Delete Renamed save' }).click();
+	await expect(dialog()).toContainText('Renamed save');
+	await expectAccessible(page, 'delete save modal');
+	await dialog().locator('.modal-footer').getByRole('button', { name: 'Delete save' }).click();
+	await expect(rows()).toHaveCount(1);
+
+	// B13: the audit trail.
+	await page.getByRole('link', { name: 'Admin', exact: true }).click();
+	await page.getByRole('link', { name: 'Auditing', exact: true }).click();
+	for (const action of ['SaveAdded', 'SaveUpdated', 'SaveDeleted'])
+		await expect(
+			page.getByRole('row').filter({ has: page.getByRole('cell', { name: action, exact: true }) }).first()
+		).toContainText('Orbit Blocks');
+});
+
 test('Switch: external releases and a per-release download', async () => {
 	await openLibrary();
 	await chooseFilter('System', 'switch');

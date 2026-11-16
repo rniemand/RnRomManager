@@ -153,6 +153,29 @@ describe('GameResults cards (C1, C2)', () => {
 	);
 
 	it.each(['grid', 'list'] as const)(
+		'%s: Quick Play starts an external DS release on DeSmuME without disc=1 (S8)',
+		async (view) => {
+			render(GameResults, {
+				games: [
+					game('d', {
+						playRomId: 8,
+						playRomFileName: 'Quest (USA).nds',
+						playDisc: false,
+						browserCore: 'desmume'
+					})
+				],
+				view
+			});
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Play Game d' }));
+
+			expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
+				'/emulator/play.html?game=d&rom=8&core=desmume&name=Quest%20(USA).nds'
+			);
+		}
+	);
+
+	it.each(['grid', 'list'] as const)(
 		'%s: Quick Play starts a 3DO disc on Opera with disc=1 (3DO B7)',
 		async (view) => {
 			render(GameResults, {
