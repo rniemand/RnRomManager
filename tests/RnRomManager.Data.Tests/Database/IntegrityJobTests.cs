@@ -284,6 +284,55 @@ public partial class IntegrityJobTests
         Assert.That((await Open()).Select(i => i.Type), Does.Contain(ZipUnreadable));
     }
 
+    private static GameSave Save(byte[] bytes) => new()
+    {
+        Id = GameSaves.NewId(), Name = "S", Description = "", Kind = GameSaves.KindState, Release = "x.gb", Extension = ".state",
+        SizeBytes = bytes.Length, Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(bytes)), UploadedBy = null,
+        UploadedAt = When, UpdatedBy = null, UpdatedAt = When,
+    };
+
+    private async Task<IReadOnlyList<string?>> Unlisted() =>
+        [.. (await Open()).Where(i => i.Type == EntryUnlisted).Select(i => i.Entry).Order()];
+
+    [Test]
+    public async Task Saves_AValidIndexAndItsEntries_AreExpected_AStrayEntryIsUnlisted()
+    {
+        await Write("gb/A/Alpha.zip", "Alpha");
+        var save = Save([1, 2, 3]);
+        Damage("gb/A/Alpha.zip", zip =>
+        {
+            Replace(zip, LibraryZip.SavesIndexEntry, GameSaves.Serialize([save])!);
+            Replace(zip, save.Entry, [1, 2, 3]);
+            Replace(zip, "saves/stray.bin", [9]);
+        });
+
+        await Run();
+
+        Assert.That(await Unlisted(), Is.EqualTo(new[] { "saves/stray.bin" }));
+    }
+
+    [Test]
+    public async Task Saves_AnInvalidIndex_OrOneListingAMissingEntry_MakesEverySavesEntryUnlisted()
+    {
+        await Write("gb/A/Alpha.zip", "Alpha");
+        await Write("gb/B/Beta.zip", "Beta");
+        var save = Save([1, 2, 3]);
+        Damage("gb/A/Alpha.zip", zip =>
+        {
+            Replace(zip, LibraryZip.SavesIndexEntry, "{ no"u8.ToArray());
+            Replace(zip, "saves/a.state", [1]);
+        });
+        Damage("gb/B/Beta.zip", zip => Replace(zip, LibraryZip.SavesIndexEntry, GameSaves.Serialize([save])!));
+
+        await Run();
+
+        var unlisted = (await Open()).Where(i => i.Type == EntryUnlisted).Select(i => (i.ZipPath, i.Entry)).ToList();
+        Assert.That(unlisted, Is.EquivalentTo(new (string?, string?)[]
+        {
+            ("gb/A/Alpha.zip", LibraryZip.SavesIndexEntry), ("gb/A/Alpha.zip", "saves/a.state"), ("gb/B/Beta.zip", LibraryZip.SavesIndexEntry),
+        }));
+    }
+
     [Test]
     public async Task WrongLocation_SystemBucketOrName_ClashSuffixAndCaseAccepted()
     {

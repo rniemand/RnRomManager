@@ -181,6 +181,20 @@ public static class GameSaves
         return null;
     }
 
+    /// <summary>The records of an index this app serialized (no validation: the writer's caller built it).</summary>
+    /// <exception cref="ArgumentException">Not a <c>saves.json</c>.</exception>
+    public static IReadOnlyList<GameSave> Records(byte[] index)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<GameSavesIndex>(index, Options)?.Saves ?? throw new ArgumentException("saves.json is empty.", nameof(index));
+        }
+        catch (JsonException ex)
+        {
+            throw new ArgumentException($"Not a saves.json: {ex.Message}", nameof(index), ex);
+        }
+    }
+
     /// <returns>The UTF-8 <c>saves.json</c>, or null when it would be over 1 MiB (<c>SavesIndexFull</c>).</returns>
     public static byte[]? Serialize(IReadOnlyList<GameSave> saves)
     {
