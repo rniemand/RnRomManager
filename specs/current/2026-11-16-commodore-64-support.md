@@ -1,6 +1,6 @@
 ---
 title: Commodore 64 support
-status: ready
+status: in-progress
 created: 2026-11-16
 ---
 
