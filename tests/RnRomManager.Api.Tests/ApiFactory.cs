@@ -65,6 +65,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Replaces the app's clock when set (lockout tests).</summary>
     public TimeProvider? Time { get; init; }
 
+    /// <summary>S4: keep the storage migration starter; off by default, so tests that seed legacy games keep them legacy.</summary>
+    public bool RunStorageMigrationStarter { get; init; }
+
     /// <summary>Extra service overrides (e.g. a stub HTTP handler).</summary>
     public Action<IServiceCollection>? TestServices { get; init; }
 
@@ -153,6 +156,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         foreach (var (key, value) in Settings)
             builder.UseSetting(key, value);
 
+        if (!RunStorageMigrationStarter)
+            builder.ConfigureTestServices(services =>
+            {
+                foreach (var starter in services.Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService) && d.ImplementationType == typeof(StorageMigrationStarter)).ToList())
+                    services.Remove(starter);
+            });
         if (Time is not null)
             builder.ConfigureTestServices(services => services.AddSingleton(Time));
         if (TestServices is not null)

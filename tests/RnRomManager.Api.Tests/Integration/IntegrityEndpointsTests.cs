@@ -54,6 +54,8 @@ public class IntegrityEndpointsTests
         yield return new TestCaseData("POST", "/api/jobs/integrity").SetName("RoleMatrix POST jobs/integrity");
         yield return new TestCaseData("GET", "/api/integrity/status").SetName("RoleMatrix GET integrity/status");
         yield return new TestCaseData("GET", "/api/integrity/issues").SetName("RoleMatrix GET integrity/issues");
+        yield return new TestCaseData("GET", "/api/jobs/storage-migration").SetName("RoleMatrix GET jobs/storage-migration");
+        yield return new TestCaseData("POST", "/api/jobs/storage-migration").SetName("RoleMatrix POST jobs/storage-migration");
     }
 
     [TestCaseSource(nameof(Endpoints))]
@@ -70,6 +72,53 @@ public class IntegrityEndpointsTests
 
         Assert.That(anonymousResponse.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
         Assert.That(userResponse.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+    }
+
+    /// <summary>S4: a mirrored legacy DS game (its ROM row has no external file name); no ZIP is needed to count it.</summary>
+    private async Task MirrorLegacyDs(string title)
+    {
+        var game = TestLibrary.Game(title, TestLibrary.Rom($"{title} (USA).nds", TestLibrary.RomBytes(title.Length))) with { System = "nds" };
+        await Service<RnRomManager.Core.Library.ILibraryMirror>().ReplaceAsync(
+            new RnRomManager.Core.Library.MirrorEntry(game, $"nds/{title[..1]}/{title}.zip", 100, DateTime.UtcNow), default);
+    }
+
+    private async Task<int> LegacyGames()
+    {
+        using var response = await _admin.GetAsync("/api/jobs/storage-migration");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        return (await AuthClient.JsonAsync(response)).GetProperty("legacyGames").GetInt32();
+    }
+
+    [Test]
+    public async Task StorageMigration_CountsLegacyGames_StartsWith202_NoneLeftIs204()
+    {
+        await Start();
+        Assert.That(await LegacyGames(), Is.Zero);
+        using (var none = await _admin.PostAsync("/api/jobs/storage-migration"))
+            Assert.That(none.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+
+        await MirrorLegacyDs("Alpha");
+        await MirrorLegacyDs("Beta");
+        Assert.That(await LegacyGames(), Is.EqualTo(2));
+
+        using var started = await _admin.PostAsync("/api/jobs/storage-migration");
+        Assert.That(started.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));
+        var id = (await AuthClient.JsonAsync(started)).GetProperty("jobId").GetGuid();
+        var job = (await Service<IJobRepository>().GetAsync(id, default))!;
+        var boss = (await Service<IUserRepository>().GetByUsernameAsync("boss", default))!;
+        Assert.That((job.Type, job.Trigger, job.RequestedBy), Is.EqualTo((JobType.StorageMigration, JobTrigger.Manual, (int?)boss.Id)));
+    }
+
+    [Test]
+    public async Task StorageMigration_WhileAJobRuns_Is409JobRunning()
+    {
+        await Start();
+        await MirrorLegacyDs("Alpha");
+        using var held = Service<JobLock>().TryAcquire();
+
+        using var response = await _admin.PostAsync("/api/jobs/storage-migration");
+
+        Assert.That((response.StatusCode, await AuthClient.CodeAsync(response)), Is.EqualTo((HttpStatusCode.Conflict, "JobRunning")));
     }
 
     [Test]

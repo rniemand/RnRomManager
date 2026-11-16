@@ -2,10 +2,15 @@ using RnRomManager.Api.Auth;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
+using RnRomManager.Core.Library;
+using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api.Endpoints;
 
-/// <summary><c>POST /api/jobs/integrity</c>, <c>GET /api/integrity/status</c> and <c>/issues</c>, Admin only (spec §23, §12).</summary>
+/// <summary>
+/// <c>POST /api/jobs/integrity</c>, <c>GET /api/integrity/status</c> and <c>/issues</c>, and (S4) <c>GET</c>/<c>POST
+/// /api/jobs/storage-migration</c>, Admin only (spec §23, §12).
+/// </summary>
 public static class IntegrityEndpoints
 {
     private static readonly string[] Statuses = [IntegrityIssue.Open, IntegrityIssue.AutoRepaired, IntegrityIssue.Resolved];
@@ -18,6 +23,21 @@ public static class IntegrityEndpoints
                 return Problems.Validation(ctx, new Dictionary<string, string[]> { ["mode"] = ["Must be Quick or Deep."] });
             var job = integrity(Enum.Parse<JobMode>(request.Mode));
             var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
+            return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
+        // S4: how many legacy games remain, and a manual start of the storage migration.
+        api.MapGet("/jobs/storage-migration", async (HttpContext ctx, IGameRepository games, ISystemRegistry systems) =>
+            Results.Ok(new
+            {
+                legacyGames = (await games.ListLegacyEmbeddedAsync(StorageMigrationStarter.LegacySystems(systems), ctx.RequestAborted)).Count,
+            })).RequireAuthorization(AuthSetup.AdminOnly);
+        api.MapPost("/jobs/storage-migration", async (HttpContext ctx, JobRunner runner, StorageMigrationJobFactory createJob, IGameRepository games,
+            ISystemRegistry systems) =>
+        {
+            if ((await games.ListLegacyEmbeddedAsync(StorageMigrationStarter.LegacySystems(systems), ctx.RequestAborted)).Count == 0)
+                return Results.NoContent();
+            var started = await runner.StartAsync(createJob(), JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
             return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
