@@ -115,6 +115,24 @@ export interface GameListItem {
 }
 
 /** One release of `GET /api/games/{id}` (spec §23, §6.2 Rom fields flattened). */
+export type SaveKind = 'state' | 'battery';
+
+/** B7: one save of a game; `romId` is null when no release has its `releaseFileName` (B4). */
+export interface SaveItem {
+	id: string;
+	name: string;
+	description: string;
+	kind: SaveKind;
+	releaseFileName: string;
+	romId: number | null;
+	sizeBytes: number;
+	extension: string;
+	uploadedBy: string | null;
+	uploadedAt: string;
+	updatedBy: string | null;
+	updatedAt: string;
+}
+
 export interface RomDetail {
 	id: number;
 	fileName: string;

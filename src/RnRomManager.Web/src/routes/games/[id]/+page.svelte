@@ -22,6 +22,7 @@
 	} from '#lib/components/GameAdminModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import GameImages from '#lib/components/GameImages.svelte';
+	import GameSaves from '#lib/components/GameSaves.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
 	import GameCollectionsModal from '#lib/components/GameCollectionsModal.svelte';
@@ -263,10 +264,10 @@
 	}
 
 	// GP1: the tab is URL state (`?tab=images`); switching never reloads the game (the load effect keys on the id).
-	type Tab = 'releases' | 'updates' | 'images' | 'zip';
+	type Tab = 'releases' | 'updates' | 'images' | 'saves' | 'zip';
 	// B9: ?tab=updates on a game without updates shows Releases, as an unknown tab does.
 	const tab = $derived<Tab>(
-		(['images', 'zip', ...(updates.length ? ['updates' as const] : [])] as const).find(
+		(['images', 'saves', 'zip', ...(updates.length ? ['updates' as const] : [])] as const).find(
 			(t) => t === page.url.searchParams.get('tab')
 		) ?? 'releases'
 	);
@@ -276,8 +277,12 @@
 		['releases', `Releases (${releases.length})`],
 		...(updates.length ? [['updates', `Updates (${updates.length})`] as [Tab, string]] : []),
 		['images', `Images (${game?.images.length ?? 0})`],
+		['saves', 'Saves'],
 		['zip', 'Zip Contents']
 	]);
+
+	/** B19: bumped after the Play dialog saved to the library, so the Saves tab reloads. */
+	let savesVersion = $state(0);
 
 	function selectTab(next: Tab): void {
 		const path = resolve('/games/[id]', { id });
@@ -768,6 +773,10 @@
 
 	<div id="images-panel" role="tabpanel" aria-labelledby="images-tab" hidden={tab !== 'images'}>
 		<GameImages {game} onchanged={(detail) => (game = detail)} />
+	</div>
+
+	<div id="saves-panel" role="tabpanel" aria-labelledby="saves-tab" hidden={tab !== 'saves'}>
+		{#if tab === 'saves'}<GameSaves {game} version={savesVersion} />{/if}
 	</div>
 
 	<div id="zip-panel" role="tabpanel" aria-labelledby="zip-tab" hidden={tab !== 'zip'}>

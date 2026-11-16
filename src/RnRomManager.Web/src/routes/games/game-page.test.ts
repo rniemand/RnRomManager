@@ -915,6 +915,23 @@ describe('game detail page', () => {
 		expect(imagesPanel.querySelector('#images-heading')).toBeTruthy();
 	});
 
+	it('?tab=saves opens the Saves tab, between Images and Zip Contents, and loads the saves (B14)', async () => {
+		navigateTo('/games/g1?tab=saves');
+		answers.push({ status: 200, body: game([1]) }, { status: 200, body: { items: [] } });
+		render(GamePage);
+
+		const saves = await screen.findByRole('tab', { name: 'Saves' });
+		expect(saves.getAttribute('aria-selected')).toBe('true');
+		expect(screen.getAllByRole('tab').map((t) => t.textContent?.trim())).toEqual([
+			'Releases (1)',
+			'Images (1)',
+			'Saves',
+			'Zip Contents'
+		]);
+		expect(document.getElementById('saves-panel')!.hidden).toBe(false);
+		expect(await screen.findByText('No saves yet')).toBeTruthy();
+	});
+
 	/** Game 1 with base rom 1 and updates 2 (1.0.1), 3 (1.10.0) and 4 (no version). */
 	function withUpdates(): GameDetail {
 		const detail = game([1, 2, 3, 4]);
