@@ -653,8 +653,12 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
 
         var remaining = source.Game.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
         var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining, DatSourceOf(row.SystemId)), Metadata = Touched(source.Game) };
+        // B5: the last release deletes the source game, so its saves go with it into the target.
+        var (savesError, saves) = sourceGame is null ? CarrySaves(sourceZip, targetZip, Renames((rom.FileName, moved.FileName))) : (null, null);
+        if (savesError is not null)
+            return savesError;
 
-        if (await WriteZipAsync(targetZip, targetPath, targetGame, entries, removed).ConfigureAwait(false) is { } failed)
+        if (await WriteZipAsync(targetZip, targetPath, targetGame, entries, removed, saves).ConfigureAwait(false) is { } failed)
             return failed;
         if (sourceGame is not null && await WriteZipAsync(sourceZip, row.ZipPath, sourceGame, []).ConfigureAwait(false) is { } sourceFailed)
         {
@@ -791,6 +795,10 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         targetGame = targetGame with { Roms = PrimaryRelease.Apply([.. targetGame.Roms, moved], DatSourceOf(row.SystemId)), Metadata = target is null ? targetGame.Metadata : Touched(targetGame) };
         var remaining = source.Game.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
         var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining, DatSourceOf(row.SystemId)), Metadata = Touched(source.Game) };
+        // B5: the last release deletes the source game, so its saves go with it into the target.
+        var (savesError, saves) = sourceGame is null ? CarrySaves(sourceZip, targetZip, Renames((rom.FileName, moved.FileName))) : (null, null);
+        if (savesError is not null)
+            return savesError;
 
         var sourceFull = SafePath.Resolve(library, row.ZipPath);
         // B18: the main file, then each set file (none move within one folder); a missing one only moves its entry.
@@ -848,7 +856,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         try
         {
             publishedTarget = await new LibraryZipWriter(reader).WriteCheckedAsync(library, targetFull, targetZip,
-                new LibraryZipChanges(targetGame, entries, removed, touched), ct, ExternalHooks?.Writer).ConfigureAwait(false);
+                new LibraryZipChanges(targetGame, entries, removed, touched, saves), ct, ExternalHooks?.Writer).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -1049,9 +1057,11 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         var removed = new HashSet<string>(StringComparer.Ordinal);
         var names = into.Roms.Select(r => r.FileName).ToList();
         var merged = new List<InfoJsonRom>(into.Roms);
+        var renames = Renames();
         foreach (var rom in from.Roms)
         {
             var moved = rom with { FileName = FreeName(rom.FileName, names) };
+            renames[rom.FileName] = moved.FileName;
             names.Add(moved.FileName);
             merged.Add(moved);
             entries[LibraryZip.RomEntry(moved.FileName)] = () => sourceZip.OpenEntry(LibraryZip.RomEntry(rom.FileName), rom.Metadata.SizeBytes);
@@ -1064,8 +1074,11 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
             entries[LibraryZip.ImageEntry(copy.FileName)] = () => sourceZip.OpenEntry(LibraryZip.ImageEntry(sourceName), copy.SizeBytes);
 
         var targetGame = MergedInto(into, from, merged, images);
+        var (savesError, saves) = CarrySaves(sourceZip, targetZip, renames);
+        if (savesError is not null)
+            return savesError;
 
-        if (await WriteZipAsync(targetZip, targetRow.ZipPath, targetGame, entries, removed).ConfigureAwait(false) is { } failed)
+        if (await WriteZipAsync(targetZip, targetRow.ZipPath, targetGame, entries, removed, saves).ConfigureAwait(false) is { } failed)
             return failed;
         audit.Record(new AuditEvent(AuditActions.GamesMerged, actor, row.SystemId, gameId, AuditPaths.Library(row.ZipPath),
             AuditPaths.Library(targetRow.ZipPath), $"{from.Roms.Count} releases, {copies.Count} images"));
@@ -1120,6 +1133,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         var zipBase = Path.GetFileNameWithoutExtension(targetRow.ZipPath);
         var sourceFolder = Path.GetDirectoryName(sourceZip.Path)!;
         var merged = new List<InfoJsonRom>(into.Roms);
+        var renames = Renames();
         var moves = new List<(string From, string To, ExternalFileSnapshot Snapshot)>();
         if (systems.ById(row.SystemId) is { FileSets: true })
         {
@@ -1151,6 +1165,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         else foreach (var rom in from.Roms)
         {
             var name = ExternalRomName.AllocateLogicalName(rom.FileName, logical);
+            renames[rom.FileName] = name;
             var pointer = ExternalRomName.Allocate(zipBase, name, pointers);
             merged.Add(rom with { FileName = name, ExternalFileName = pointer });
             CarryNote(sourceZip, rom.FileName, name, entries, removed);
@@ -1163,6 +1178,10 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
                 moves.Add((file.Path, Path.Combine(folder.Path, pointer), file.Snapshot!));
         }
         var targetGame = MergedInto(into, from, merged, images);
+        // B5: refused before any file moves.
+        var (savesError, saves) = CarrySaves(sourceZip, targetZip, renames);
+        if (savesError is not null)
+            return savesError;
 
         var placed = new List<(string From, string To, ExternalFileSnapshot Snapshot)>();
         var touched = new Dictionary<string, ExternalFileSnapshot>(StringComparer.OrdinalIgnoreCase);
@@ -1182,7 +1201,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         try
         {
             published = await new LibraryZipWriter(reader).WriteCheckedAsync(library, targetFull, targetZip,
-                new LibraryZipChanges(targetGame, entries, removed, touched), ct, ExternalHooks?.Writer).ConfigureAwait(false);
+                new LibraryZipChanges(targetGame, entries, removed, touched, saves), ct, ExternalHooks?.Writer).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -1303,6 +1322,10 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     }
 
     /// <summary>§6.1 entry name clash: ` (2)`… before the extension, case-insensitively.</summary>
+    /// <summary>B5: a release's name before → after a merge or move, the same pairs <see cref="CarryNote"/> gets (ignoring case).</summary>
+    private static Dictionary<string, string> Renames(params (string From, string To)[] pairs) =>
+        pairs.ToDictionary(p => p.From, p => p.To, StringComparer.OrdinalIgnoreCase);
+
     private static string FreeName(string fileName, IEnumerable<string> taken) =>
         FileNameRules.FirstFree(fileName, taken.ToHashSet(StringComparer.OrdinalIgnoreCase).Contains);
 

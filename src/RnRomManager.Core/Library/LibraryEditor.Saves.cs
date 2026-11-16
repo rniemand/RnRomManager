@@ -142,6 +142,40 @@ public sealed partial class LibraryEditor
         return (null, zip, row, game, saves, save);
     }
 
+    /// <summary>
+    /// B5: the target write's saves when a merge or a last-release move carries the source's saves: the target's records,
+    /// then the source's (a clashing id gets a new one), each source record's <c>release</c> renamed as its release was
+    /// (<paramref name="renames"/>, matched ignoring case; an orphan stays as it is), their bytes streamed from the source.
+    /// </summary>
+    /// <param name="target">The target's ZIP; null for a new game.</param>
+    /// <returns><c>SavesUnreadable</c> (either side) or <c>SavesIndexFull</c>; else the change, null when the source has no saves.</returns>
+    private static (LibraryEditResult? Error, SavesChange? Change) CarrySaves(LibraryZip source, LibraryZip? target,
+        IReadOnlyDictionary<string, string> renames)
+    {
+        var from = GameSaves.Read(source);
+        var into = target is null ? new SavesReadResult(SavesState.Absent) : GameSaves.Read(target);
+        if (from.State == SavesState.Unreadable || into.State == SavesState.Unreadable)
+            return (new(SavesUnreadable, SavesUnreadableTitle), null);
+        if (from.State == SavesState.Absent)
+            return (null, null);
+
+        var records = new List<GameSave>(into.Index?.Saves ?? []);
+        var ids = records.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
+        var added = new Dictionary<string, Func<Stream>>();
+        foreach (var save in from.Index!.Saves)
+        {
+            var carried = ids.Add(save.Id) ? save : save with { Id = GameSaves.NewId() };
+            ids.Add(carried.Id);
+            if (renames.TryGetValue(save.Release, out var renamed))
+                carried = carried with { Release = renamed };
+            added[carried.Entry] = () => source.OpenEntry(save.Entry, save.SizeBytes);
+            records.Add(carried);
+        }
+        return GameSaves.Serialize(records) is { } index
+            ? (null, new SavesChange(index, added, new HashSet<string>()))
+            : (new(SavesIndexFull, SavesIndexFullTitle), null);
+    }
+
     /// <summary>Writes the new <c>saves.json</c> (none when <paramref name="saves"/> is empty), mirrors the ZIP and audits (B13).</summary>
     private async Task<LibraryEditResult> WriteSavesAsync(LibraryZip zip, GameRow row, InfoJsonGame game, IReadOnlyList<GameSave> saves, GameSave save,
         string action, AuditActor actor, Dictionary<string, Func<Stream>> added, HashSet<string> removed)
