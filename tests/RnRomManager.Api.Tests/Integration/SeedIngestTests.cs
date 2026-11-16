@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 37, 28)]
-    [TestCase(SeedSet.Full, 237, 228)]
+    [TestCase(SeedSet.Basic, 38, 29)]
+    [TestCase(SeedSet.Full, 238, 229)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -179,6 +179,12 @@ public class SeedIngestTests
         Assert.That(a7800.Header["controller1"]!.GetValue<int>(), Is.EqualTo(1));
         Assert.That(a7800.Header["controller2"]!.GetValue<int>(), Is.EqualTo(1));
         Assert.That(a7800.Header["tvType"]!.GetValue<string>(), Is.EqualTo("ntsc"));
+        var c64 = infos.Single(g => g.System == "c64").Roms.Single();
+        Assert.That(c64.FileName, Is.EqualTo("Pixel Pilot (Europe).crt"));
+        Assert.That(c64.Header!["format"]!.GetValue<string>(), Is.EqualTo("crt"));
+        Assert.That(c64.Header["version"]!.GetValue<string>(), Is.EqualTo("1.0"));
+        Assert.That((c64.Header["hardwareType"]!.GetValue<int>(), c64.Header["exrom"]!.GetValue<int>(), c64.Header["game"]!.GetValue<int>()), Is.EqualTo((0, 0, 1)));
+        Assert.That(c64.Header["title"]!.GetValue<string>(), Is.EqualTo("PIXEL PILOT"));
 
         var lanes = Directory.GetFiles(Path.Combine(factory.Root, "roms", "a2600", "L"), "*.zip").Single();
         using (var zip = LibraryZip.Open(lanes, factory.Services.GetRequiredService<InfoJsonReader>()))

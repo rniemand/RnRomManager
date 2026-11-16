@@ -391,7 +391,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             }
 
             var system = systems.ById(item.SystemId)!;
-            // T9: an external release keeps its original extension; an embedded one takes the handler's first (its bytes may be normalised).
+            // T9: an external release keeps its original extension, as does a KeepsSourceExtension system's; an embedded one takes the handler's first (its bytes may be normalised).
             var originalExtension = Path.GetExtension(item.OriginalFileName).ToLowerInvariant();
             ExternalFileSnapshot? preparedSnapshot = null;
             if (external)
@@ -469,7 +469,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                     // G4: the DAT name's own extension (DAT entries are filtered to RomExtensions), e.g. an SMS-mode Game Gear .sms.
                     filename = chosen.FileSets
                         ? datRom.GameName + " (Unverified)" + originalExtension
-                        : Path.GetFileNameWithoutExtension(datRom.RomName) + " (Unverified)" + (external ? originalExtension : Path.GetExtension(datRom.RomName));
+                        : Path.GetFileNameWithoutExtension(datRom.RomName) + " (Unverified)" + (external || chosen.KeepsSourceExtension ? originalExtension : Path.GetExtension(datRom.RomName));
                     identification = new(IdentificationMethod.Manual, store.DatName, store.Version, datRom.GameName);
                     metadata = store.MetadataFor(datRom.Crc32);
                 }
@@ -532,7 +532,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 var stem = FileNameSanitizer.Sanitize(Path.GetFileNameWithoutExtension(item.OriginalFileName));
                 if (discFlag is null || !stem.Contains($"({discFlag})", StringComparison.OrdinalIgnoreCase))
                     stem += $" ({flag})";
-                filename = stem + (external ? originalExtension : system.RomExtensions[0]);
+                filename = stem + (external || system.KeepsSourceExtension ? originalExtension : system.RomExtensions[0]);
             }
             else
             {
@@ -542,7 +542,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                     flags = [.. flags.Where(f => !Regex.IsMatch(f, @"^Disc \d+$", RegexOptions.IgnoreCase)), discFlag];
                 var stem = title + (regions.Count == 0 ? "" : $" ({string.Join(", ", regions)})") +
                     (string.IsNullOrEmpty(revision) ? "" : $" ({revision})") + string.Concat(flags.Select(f => $" ({f})"));
-                filename = FileNameSanitizer.Sanitize(stem) + (external ? originalExtension : system.RomExtensions[0]);
+                filename = FileNameSanitizer.Sanitize(stem) + (external || system.KeepsSourceExtension ? originalExtension : system.RomExtensions[0]);
             }
 
             // B12: a FileSets name may hold "..", as Redump names do ("...Iru!"); only "." or ".." or a separator is refused.

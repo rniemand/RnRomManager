@@ -78,6 +78,7 @@ public partial class LibraryEndpointsTests
             [IngestSeeder.SaturnDat] = [],
             [IngestSeeder.SegaCdDat] = [],
             [IngestSeeder.ThreeDoDat] = [],
+            [IngestSeeder.C64Dat] = [],
             [IngestSeeder.NintendoDsDat] = [new FixtureGame("Download Quest (USA)", "Download Quest (USA).nds", DsQuest)],
             [Gb] =
             [
@@ -156,8 +157,8 @@ public partial class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "s32x", "3do", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "n64", "nds", "nes", "switch", "psx", "psp", "saturn", "segacd", "snes", "tg16", "vb", "wii", "x360" }));
-        Assert.That(systems.Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(18).True);
+            Is.EqualTo(new[] { "s32x", "3do", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "c64", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "n64", "nds", "nes", "switch", "psx", "psp", "saturn", "segacd", "snes", "tg16", "vb", "wii", "x360" }));
+        Assert.That(systems.Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(19).True);
         Assert.That(Find("switch").GetProperty("embedRoms").GetBoolean(), Is.False, "Switch stores its ROMs outside the ZIP");
         JsonElement Find(string id) => systems.Single(s => s.GetProperty("id").GetString() == id);
         var gb = Find("gb");
@@ -166,13 +167,14 @@ public partial class LibraryEndpointsTests
         Assert.That((Find("nds").GetProperty("displayName").GetString(), Find("nds").GetProperty("shortName").GetString()), Is.EqualTo(("Nintendo DS", "DS")));
         Assert.That((Find("segacd").GetProperty("displayName").GetString(), Find("segacd").GetProperty("shortName").GetString()), Is.EqualTo(("Sega CD", "SCD")));
         Assert.That((Find("3do").GetProperty("displayName").GetString(), Find("3do").GetProperty("shortName").GetString()), Is.EqualTo(("3DO", "3DO")));
+        Assert.That((Find("c64").GetProperty("displayName").GetString(), Find("c64").GetProperty("shortName").GetString()), Is.EqualTo(("Commodore 64", "C64")));
         Assert.That((gb.GetProperty("gameCount").GetInt32(), gb.GetProperty("romCount").GetInt32()), Is.EqualTo((1, 2)));
         Assert.That(gb.GetProperty("regions").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "Japan", "World" }));
         var gbc = Find("gbc");
         Assert.That((gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()), Is.EqualTo((0, 0)));
         Assert.That(systems.Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
-            "32X", "3DO", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
+            "32X", "3DO", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Commodore 64", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
             "PlayStation", "PlayStation Portable", "Saturn", "Sega CD", "Super Nintendo Entertainment System", "TurboGrafx-16", "Virtual Boy", "Wii", "Xbox 360"
         }));
     }
@@ -244,6 +246,7 @@ public partial class LibraryEndpointsTests
     [TestCase("saturn", true, true, "yabause")]
     [TestCase("segacd", true, true, "genesis_plus_gx")]
     [TestCase("3do", true, true, "opera")]
+    [TestCase("c64", false, true, "vice_x64sc")]
     [TestCase("switch", false, false, null)]
     [TestCase("switch", true, false, null)]
     public Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(string system, bool external, bool playable, string? core) =>
@@ -417,6 +420,7 @@ public partial class LibraryEndpointsTests
     [TestCase("saturn", "yabause")]
     [TestCase("segacd", "genesis_plus_gx")]
     [TestCase("3do", "opera")]
+    [TestCase("c64", "vice_x64sc")]
     [TestCase("nosuch", null)]
     public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)
     {

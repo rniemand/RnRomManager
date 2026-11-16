@@ -11,8 +11,8 @@ public class IngestSeederTests
     [SetUp] public void SetUp() => _dir = new TempDir();
     [TearDown] public void TearDown() => _dir.Dispose();
 
-    [TestCase(SeedSet.Basic, 41)]
-    [TestCase(SeedSet.Full, 241)]
+    [TestCase(SeedSet.Basic, 42)]
+    [TestCase(SeedSet.Full, 242)]
     public void Sets_HaveExpectedFilesArchivesAndReadyAges(SeedSet set, int count)
     {
         var ingest = _dir.Combine("ingest");
@@ -44,6 +44,8 @@ public class IngestSeederTests
         Assert.That(new FileInfo(Path.Combine(ingest, "snes", "01-mode-seven-rally.smc")).Length % 1024, Is.EqualTo(512), "copier-headered");
         Assert.That(new FileInfo(Path.Combine(ingest, "a2600", "01-laser-lanes.bin")).Length, Is.EqualTo(4096));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "coleco", "01-pixel-pursuit.rom"))[..2], Is.EqualTo(new byte[] { 0xAA, 0x55 }));
+        var pilot = File.ReadAllBytes(Path.Combine(ingest, "c64", "01-pixel-pilot.crt"));
+        Assert.That((pilot.Length, pilot[..16]), Is.EqualTo((8272, "C64 CARTRIDGE   "u8.ToArray())));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "gg", "01-pocket-drift.gg"))[0x7FF0..0x7FF8], Is.EqualTo("TMR SEGA"u8.ToArray()));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "sms", "01-harbor-patrol.sms"))[0x7FF0..0x7FF8], Is.EqualTo("TMR SEGA"u8.ToArray()));
         Assert.That(File.ReadAllBytes(Path.Combine(ingest, "md", "01-turbo-comet.gen"))[0x100..0x104], Is.EqualTo("SEGA"u8.ToArray()));
@@ -60,7 +62,7 @@ public class IngestSeederTests
         Assert.That(images.Select(f => Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(File.ReadAllBytes(f)))).Distinct().Count(), Is.EqualTo(8));
         Assert.That(File.ReadAllText(Path.Combine(ingest, "psx", "Disc Runner (USA).cue")), Does.Contain("FILE \"Disc Runner (USA) (Track 2).bin\" BINARY"));
         Assert.That(new FileInfo(Path.Combine(ingest, "tg16", "01-neon-circuit.pce")).Length, Is.EqualTo(262656), "copier-headered");
-        Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(103));
+        Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(108));
         Assert.That(File.Exists(_dir.Combine("cache", "dats", "redump", IngestSeeder.WiiDat + ".dat")), Is.True, "the disc systems' DATs go in redump/");
         Assert.That(File.Exists(_dir.Combine("cache", "dats", "titledb", "Nintendo - Nintendo Switch.json")), Is.True);
     }

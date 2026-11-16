@@ -24,6 +24,7 @@ public partial class EmulatorEndpointsTests
         SyntheticCore(OperatorCoreManifest.Picodrive, SyntheticPicodrive),
         SyntheticCore(OperatorCoreManifest.Snes9x, SyntheticSnes9x),
         SyntheticCore(OperatorCoreManifest.Opera, SyntheticOpera),
+        SyntheticCore(OperatorCoreManifest.Vice, SyntheticVice),
     ]);
 
     /// <summary>A pinned core with its files replaced by synthetic bytes of the same names.</summary>

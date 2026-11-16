@@ -133,7 +133,7 @@ test('ingestion of the seeded Basic set', async () => {
 	await expect(page).toHaveURL(/\/ingestion\?tab=runs$/);
 	await expect(page.getByRole('button', { name: 'Import all' })).toBeVisible();
 	const run = page.getByRole('row').filter({ hasText: 'Completed' });
-	await expect(run).toContainText('Ingested 37 · Duplicate 1 · Review 2 · Failed 1', {
+	await expect(run).toContainText('Ingested 38 · Duplicate 1 · Review 2 · Failed 1', {
 		timeout: 60_000
 	});
 
@@ -187,7 +187,7 @@ test('reports and the ingest audit trail', async () => {
 		.getByRole('row')
 		.filter({ has: page.getByRole('cell', { name: 'Ingested', exact: true }) });
 	// One Ingested event per release: a bin/cue set is one event (B7a).
-	await expect(ingested).toHaveCount(33);
+	await expect(ingested).toHaveCount(34);
 	await expect(
 		page
 			.getByRole('row')
@@ -200,16 +200,16 @@ test('reports and the ingest audit trail', async () => {
 
 test('browse, search and filter the library', async () => {
 	await openLibrary();
-	await expect(page.getByText('28 games')).toBeVisible();
+	await expect(page.getByText('29 games')).toBeVisible();
 	await expectAccessible(page, 'library grid');
 	// S1/L3: systems in display-name order after "All systems"; F3/L2: each with its game count, right-aligned.
 	await page.getByRole('button', { name: 'System: All' }).click();
 	const systemMenu = page.locator('.dropdown-menu.show');
 	await expect(systemMenu.getByPlaceholder('Filter systems…')).toBeFocused();
 	await expect(systemMenu.locator('.dropdown-item').first()).toContainText('All systems');
-	await expect(systemMenu.locator('.dropdown-item').first().locator('.font-monospace')).toHaveText('28');
+	await expect(systemMenu.locator('.dropdown-item').first().locator('.font-monospace')).toHaveText('29');
 	expect(await systemMenu.locator('[data-value]').evaluateAll((rows) => rows.map((r) => (r as HTMLElement).dataset.value))).toEqual([
-		's32x', '3do', 'a2600', 'a5200', 'a7800', 'jaguar', 'lynx', 'coleco', 'gb', 'gba', 'gbc', 'gg', 'gc', 'sms', 'md', 'n64', 'nds', 'nes', 'switch', 'psx', 'psp',
+		's32x', '3do', 'a2600', 'a5200', 'a7800', 'jaguar', 'lynx', 'coleco', 'c64', 'gb', 'gba', 'gbc', 'gg', 'gc', 'sms', 'md', 'n64', 'nds', 'nes', 'switch', 'psx', 'psp',
 		'saturn',
 		'segacd', 'snes', 'tg16', 'vb', 'wii', 'x360'
 	]);
@@ -337,7 +337,7 @@ test('browse, search and filter the library', async () => {
 	}
 	await page.setViewportSize(viewport);
 	await page.getByRole('button', { name: 'Reset filters' }).click();
-	await expect(page.getByText('28 games')).toBeVisible();
+	await expect(page.getByText('29 games')).toBeVisible();
 	await expect(page.getByRole('button', { name: 'Reset filters' })).toHaveCount(0);
 
 	// The card grid fits a 320px phone: no sideways page scroll, and each card's Favourite button is on screen.
@@ -1013,7 +1013,7 @@ test('Play: Atari 7800, Jaguar and Lynx launch with their bundled cores', async 
 test('global search, ratings and favourites', async () => {
 	// Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
 	await openLibrary();
-	await expect(page.getByText('28 games')).toBeVisible();
+	await expect(page.getByText('29 games')).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await expect(dialog()).toBeVisible();
 	await expect(dialog().getByRole('combobox')).toBeFocused();
@@ -1145,7 +1145,7 @@ test('collections: create, add from game page and bulk select, search, remove, d
 	await expect(page).toHaveURL(/\/collections$/);
 	await expect(page.getByText('You have no collections yet.')).toBeVisible();
 	await openLibrary();
-	await expect(page.getByText('28 games')).toBeVisible();
+	await expect(page.getByText('29 games')).toBeVisible();
 });
 
 test('collections discovery: browse publishers and genres across systems, share a selection', async () => {

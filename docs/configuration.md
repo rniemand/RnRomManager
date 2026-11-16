@@ -23,6 +23,7 @@ All settings come from `appsettings.json` and can be overridden with environment
 | `Emulator:PicodriveCorePath` | `Emulator__PicodriveCorePath` | *(empty)* | empty (32X play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 PicoDrive files ([below](#picodrive-core)). It may be the same folder as `Emulator:GenesisCorePath`, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.picodriveCorePath`). |
 | `Emulator:Snes9xCorePath` | `Emulator__Snes9xCorePath` | *(empty)* | empty (SNES play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Snes9x files ([below](#snes9x-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.snes9xCorePath`). |
 | `Emulator:OperaCorePath` | `Emulator__OperaCorePath` | *(empty)* | empty (3DO play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Opera files ([below](#opera-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.operaCorePath`). |
+| `Emulator:ViceCorePath` | `Emulator__ViceCorePath` | *(empty)* | empty (Commodore 64 play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 VICE files ([below](#vice-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.viceCorePath`). |
 | `Backup:RestoreFrom` | `Backup__RestoreFrom` | *(empty)* | empty, or the bare file name of a backup in `Paths:Backups` to restore at startup (no `/`, `\` or `..`). See [restoring a backup](deployment.md#restoring-a-backup). Remove it once the restore is done. |
 
 ## Paths
@@ -72,6 +73,17 @@ The checks are the same as for Genesis Plus GX (`GET /api/emulator/cores/snes9x/
 | `opera.json` | 119 | `0245b492b516ef4b1c0490e3f05dbeb1d74074ea767cd54fc34747e31b2a0203` |
 
 The archive's two `-thread` payloads aren't used. The checks are the same as for Genesis Plus GX (`GET /api/emulator/cores/opera/<file>`); a file that doesn't match is refused with `409 OperaCoreMismatch`, and the play page says *The Opera core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:OperaCorePath).* Without the files it says *3DO games need the Opera core files: ask an Admin to set them up (Emulator:OperaCorePath).* 3DO also needs a BIOS in `Paths:Bios` (above); none is included.
+
+## VICE core
+Commodore 64 plays with VICE (x64sc). Its licence is GPL-2.0-or-later, but its binary embeds Commodore's copyrighted system ROMs (KERNAL, BASIC, character set, drive DOS and printer ROMs), and the app ships no console BIOS, so the image doesn't contain it. To turn Commodore 64 play on, put these three files from the [`@emulatorjs/core-vice_x64sc@4.2.3`](https://registry.npmjs.org/@emulatorjs/core-vice_x64sc/-/core-vice_x64sc-4.2.3.tgz) npm archive at the root of a folder and set `Emulator:ViceCorePath` to it ([deployment](deployment.md#vice-core) shows how to get them and mount the folder):
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `vice_x64sc-wasm.data` | 1,523,457 | `77f58884c81b58721cbc4754ffc5574838219258e9390630c352a494a3f335ab` |
+| `vice_x64sc-legacy-wasm.data` | 1,523,390 | `8a22bc81c0dd7104cd23ceec5117a9f47ca9503e280e4fbc9d0346f51b75253e` |
+| `vice_x64sc.json` | 147 | `5c50bc4ff5546a2c6fc4bb7949efd200ea0ac6b4723713e742fb659228e9a3aa` |
+
+The archive's two `-thread` payloads aren't used. The checks are the same as for Genesis Plus GX (`GET /api/emulator/cores/vice_x64sc/<file>`); a file that doesn't match is refused with `409 ViceCoreMismatch`, and the play page says *The VICE core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:ViceCorePath).* Without the files it says *Commodore 64 games need the VICE core files: ask an Admin to set them up (Emulator:ViceCorePath).* No BIOS is needed in `Paths:Bios`.
 
 ## Other settings
 - **Port:** the standard `ASPNETCORE_HTTP_PORTS` (image default `8080`). The container health check reads the first port from it, so don't use `ASPNETCORE_URLS` instead.

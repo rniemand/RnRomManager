@@ -22,6 +22,7 @@ public class ReviewResolverTests
     private ReviewResolver _resolver = null!;
     private ReviewItem _item = null!;
     private FakeTimeProvider _time = null!;
+    private IGameRepository _games = null!;
 
     private static readonly RnRomManager.Core.Audit.AuditActor Actor = new(42, "boss", null);
     private RnRomManager.Core.Audit.IAuditLog _audit = null!;
@@ -53,7 +54,7 @@ public class ReviewResolverTests
         var systems = new SystemRegistry([handler]);
         var options = Options.Create(paths);
         var dats = _dats = new DatCache(options, systems, NullLogger<DatCache>.Instance);
-        var games = Substitute.For<IGameRepository>();
+        var games = _games = Substitute.For<IGameRepository>();
         var reader = new InfoJsonReader([], systems);
         var media = TestMedia.Offline();
         var pipeline = new IngestPipeline(dats, systems, Substitute.For<IRomRepository>(), games, Substitute.For<ILibraryMirror>(),
@@ -189,6 +190,7 @@ public class ReviewResolverTests
         public long MaxRomSizeBytes => 1024;
         public string DatName => "GB";
         public bool EmbedRomsInZip => true;
+        public bool KeepsSourceExtension { get; init; }
         // A 512×512 PNG header: enough for MediaService's default-art check when a resolve stores a new game.
         public ReadOnlyMemory<byte> DefaultBoxArtPng { get; } = new byte[]
         {
@@ -323,6 +325,83 @@ public class ReviewResolverTests
         var zip = Directory.GetFiles(_paths.Roms, "*.zip", SearchOption.AllDirectories).Single();
         using var archive = System.IO.Compression.ZipFile.OpenRead(zip);
         Assert.That(archive.Entries.Select(e => e.Name), Does.Contain("Tide Runner (World) (Unverified).sms"));
+    }
+
+    /// <summary>Rebuilds with a <c>KeepsSourceExtension</c> handler (<c>.aaa</c> first) and a pending <c>test.bbb</c> holding <paramref name="bytes"/>.</summary>
+    private void KeepsSourceExtensionItem(byte[] bytes, string reason = "NoDatMatch", bool rebuild = true)
+    {
+        if (rebuild)
+        {
+            _dir.Dispose();
+            Build(new Headerless(".aaa", ".bbb") { KeepsSourceExtension = true });
+        }
+        var path = Path.Combine(_paths.Ingest, "test.bbb");
+        if (File.Exists(_item.SourcePath))
+            File.Delete(_item.SourcePath);
+        File.WriteAllBytes(path, bytes);
+        _item = _item with
+        {
+            Status = "Pending", SourcePath = path, OriginalFileName = "test.bbb", Reason = reason, SizeBytes = bytes.Length,
+            Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(bytes)),
+            Crc32 = RnRomManager.Core.Storage.Crc32.ToHex(bytes), Md5 = Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(bytes)),
+        };
+    }
+
+    private IReadOnlyList<string> StoredEntryNames()
+    {
+        var zip = Directory.GetFiles(_paths.Roms, "*.zip", SearchOption.AllDirectories).Single();
+        using var archive = System.IO.Compression.ZipFile.OpenRead(zip);
+        return archive.Entries.Select(e => e.Name).ToList();
+    }
+
+    [Test]
+    public async Task Manual_KeepsSourceExtension_WhenTheHandlerAsks()
+    {
+        KeepsSourceExtensionItem([1, 2, 3]);
+
+        var result = await _resolver.ResolveInJobAsync(1, Manual(), Actor, default);
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        Assert.That(StoredEntryNames(), Does.Contain("My Game.bbb").And.Not.Contain("My Game.aaa"));
+    }
+
+    [Test]
+    public async Task Attach_KeepsSourceExtension_WhenTheHandlerAsks()
+    {
+        KeepsSourceExtensionItem([1, 2, 3]);
+        Assert.That((await _resolver.ResolveInJobAsync(1, Manual(), Actor, default)).Code, Is.Null);
+        var zip = Directory.GetFiles(_paths.Roms, "*.zip", SearchOption.AllDirectories).Single();
+        var gameId = Guid.NewGuid();
+        _games.GetAsync(gameId, Arg.Any<CancellationToken>()).Returns(new GameRow
+        {
+            Id = gameId, SystemId = "gb", Title = "My Game", DisplayTitle = "My Game", Bucket = "M",
+            ZipPath = Path.GetRelativePath(_paths.Roms, zip).Replace('\\', '/'), Developers = [], Publishers = [], Genres = [],
+            ZipSizeBytes = new FileInfo(zip).Length, ZipMtimeUtc = DateTime.UtcNow, InfoSchemaVersion = 1, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+        });
+        KeepsSourceExtensionItem([4, 5, 6], "Unidentified", rebuild: false);
+
+        var result = await _resolver.ResolveInJobAsync(1,
+            new ReviewResolutionRequest { Action = "Attach", TargetGameId = gameId, Flag = "Beta" }, Actor, default);
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        Assert.That(StoredEntryNames(), Does.Contain("test (Beta).bbb"));
+    }
+
+    [Test]
+    public async Task Dat_KeepsSourceExtension_WhenTheHandlerAsks()
+    {
+        KeepsSourceExtensionItem([1, 2, 3]);
+        FixtureDatWriter.Write(_dats.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
+        {
+            ["GB"] = [new FixtureGame("X (USA)", "X (USA).aaa", [9, 9, 9, 9])],
+        });
+        _dats.Load();
+
+        var result = await _resolver.ResolveInJobAsync(1,
+            new ReviewResolutionRequest { Action = "Dat", DatSystem = "gb", DatGameName = "X (USA)" }, Actor, default);
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        Assert.That(StoredEntryNames(), Does.Contain("X (USA) (Unverified).bbb"));
     }
 
     [TestCase("test.bin", "X (USA) (Unverified).bin", 1985)]

@@ -94,6 +94,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.SaturnDat] = [new FixtureGame("Chd Quest (Japan)", "Chd Quest (Japan) (Track 1).bin", ChdQuestTrack)],
             [IngestSeeder.SegaCdDat] = [],
             [IngestSeeder.ThreeDoDat] = [],
+            [IngestSeeder.C64Dat] = [],
             [IngestSeeder.NintendoDsDat] = [new FixtureGame("Stylus Quest (USA)", "Stylus Quest (USA).nds", StylusQuest) { ReleaseYear = 2006 }],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)
             { ReleaseYear = 1989, Developers = ["Nintendo"], Publishers = ["Nintendo"], Genres = ["Puzzle"] }],
@@ -988,6 +989,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.SaturnDat] = [],
             [IngestSeeder.SegaCdDat] = [],
             [IngestSeeder.ThreeDoDat] = [],
+            [IngestSeeder.C64Dat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] = Enumerable.Range(1, 25).Select(i => new FixtureGame($"Demo {i} (World)", $"Demo {i} (World).gb", new SyntheticRomBuilder { Seed = 1000 + i }.Build())).ToArray(),
             ["Nintendo - Game Boy Color"] = [],
@@ -1030,6 +1032,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.SaturnDat] = [],
             [IngestSeeder.SegaCdDat] = [],
             [IngestSeeder.ThreeDoDat] = [],
+            [IngestSeeder.C64Dat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] =
             [

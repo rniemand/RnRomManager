@@ -1,0 +1,42 @@
+using RnRomManager.Core.Systems;
+
+namespace RnRomManager.Systems.Commodore;
+
+/// <summary>
+/// Commodore 64 (spec B1). Each extension names a distinct format (tape, disk image, cartridge, program), so Review keeps
+/// the source extension. <see cref="ReadHeader"/> recognises the optional CRT/TAP/G64/NIB container headers and returns
+/// null otherwise, so an unmatched file goes to Review. Sizes follow the libretro No-Intro <c>Commodore - 64</c> DAT
+/// (2,010 B–4.19 MB) with room for homebrew below and headroom above.
+/// </summary>
+public sealed class C64Handler : ISystemHandler
+{
+    private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.c64.png"));
+
+    public string Id => "c64";
+    public string DisplayName => "Commodore 64";
+    public string ShortName => "C64";
+    public string Family => Id;
+
+    /// <summary><c>[0]</c> (<c>.crt</c>) is the first extension; Review keeps the source's own (<see cref="KeepsSourceExtension"/>).</summary>
+    public IReadOnlyList<string> RomExtensions { get; } = [".crt", ".tap", ".nib", ".d64", ".g64", ".prg", ".bin"];
+
+    public long MinRomSizeBytes => 1024;
+    public long MaxRomSizeBytes => 8 * 1024 * 1024;
+    public string DatName => "Commodore - 64";
+
+    /// <inheritdoc />
+    public bool EmbedRomsInZip => true;
+
+    /// <summary>libretro has no metadat for this DAT.</summary>
+    public IReadOnlyList<string> MetadatKinds => [];
+
+    /// <inheritdoc />
+    public bool KeepsSourceExtension => true;
+
+    /// <summary>C64 B7: VICE (x64sc), whose files the operator supplies (<c>Emulator:ViceCorePath</c>).</summary>
+    public string BrowserCore => "vice_x64sc";
+
+    public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
+
+    public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => C64Header.Read(rom, Id);
+}

@@ -34,6 +34,7 @@ public static class IngestSeeder
     public const string NintendoDsDat = "Nintendo - Nintendo DS";
     public const string SegaCdDat = "Sega - Mega-CD - Sega CD";
     public const string ThreeDoDat = "The 3DO Company - 3DO";
+    public const string C64Dat = "Commodore - 64";
 
     /// <summary>The eight disc systems' DATs (disc systems B1/B2): each in <c>redump/</c>, with no metadat.</summary>
     public static IReadOnlyDictionary<string, FixtureDatLayout> RedumpLayouts { get; } =
@@ -77,6 +78,7 @@ public static class IngestSeeder
         Directory.CreateDirectory(Path.Combine(ingest, "nds"));
         foreach (var disc in new[] { "psx", "psp", "gc", "wii", "x360", "saturn", "segacd", "3do" })
             Directory.CreateDirectory(Path.Combine(ingest, disc));
+        Directory.CreateDirectory(Path.Combine(ingest, "c64"));
         var files = new List<string>();
         var gb = new List<FixtureGame>();
         var gbc = new List<FixtureGame>();
@@ -198,6 +200,19 @@ public static class IngestSeeder
         { ReleaseYear = 1990, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Racing"] };
         // Seeded with a 512-byte copier header: ingestion must strip it to match the DAT (T2).
         Loose("tg16", "01-neon-circuit.pce", [.. new byte[512], .. circuitRom]);
+        // A CRT cartridge: 64-byte header, one 16-byte CHIP packet header, 8 KiB of ROM (8,272 bytes, big-endian fields).
+        var pilotRom = new byte[64 + 16 + 8192];
+        System.Text.Encoding.ASCII.GetBytes("C64 CARTRIDGE   ").CopyTo(pilotRom, 0);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(pilotRom.AsSpan(0x10), 0x40);
+        (pilotRom[0x14], pilotRom[0x15], pilotRom[0x19]) = (1, 0, 1); // version 1.0, hardware type 0, EXROM 0, GAME 1
+        System.Text.Encoding.ASCII.GetBytes("PIXEL PILOT").CopyTo(pilotRom, 0x20);
+        System.Text.Encoding.ASCII.GetBytes("CHIP").CopyTo(pilotRom, 0x40);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(pilotRom.AsSpan(0x44), 0x2010);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(pilotRom.AsSpan(0x4C), 0x8000);
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(pilotRom.AsSpan(0x4E), 0x2000);
+        new Random(1207).NextBytes(pilotRom.AsSpan(0x50));
+        var pilot = new FixtureGame("Pixel Pilot (Europe)", "Pixel Pilot (Europe).crt", pilotRom);
+        Loose("c64", "01-pixel-pilot.crt", pilotRom);
         // Switch (external, titledb): a base game, its update and a DLC, identified by their tickets' title ids (N2, T4).
         const string orbitBase = "0100000000010000", orbitUpdate = "0100000000010800", orbitBonus = "0100000000011001";
         byte[] Nsp(string titleId, int seed) => new SyntheticNspBuilder
@@ -270,7 +285,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [VirtualBoyDat] = [redHorizon], [Atari2600Dat] = [lanes], [Atari5200Dat] = [starLattice], [Atari7800Dat] = [canyonGlide], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally], [NintendoDsDat] = dsGames, [SegaCdDat] = [], [ThreeDoDat] = [] },
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [VirtualBoyDat] = [redHorizon], [Atari2600Dat] = [lanes], [Atari5200Dat] = [starLattice], [Atari7800Dat] = [canyonGlide], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally], [NintendoDsDat] = dsGames, [SegaCdDat] = [], [ThreeDoDat] = [], [C64Dat] = [pilot] },
             titleDb: new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = titleDb }, layouts: RedumpLayouts);
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);

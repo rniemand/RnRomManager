@@ -78,6 +78,7 @@ public static partial class EmulatorEndpoints
     public const string PicodriveCoreMismatch = "PicodriveCoreMismatch";
     public const string Snes9xCoreMismatch = "Snes9xCoreMismatch";
     public const string OperaCoreMismatch = "OperaCoreMismatch";
+    public const string ViceCoreMismatch = "ViceCoreMismatch";
 
     private enum CoreOutcome { Verified, Unavailable, Mismatch, Unreadable }
 

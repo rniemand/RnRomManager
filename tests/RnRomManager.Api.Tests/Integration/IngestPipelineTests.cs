@@ -160,6 +160,7 @@ public class IngestPipelineTests
                 new FixtureGame("Cart Twin (USA)", "Cart Twin (USA) (Track 1).bin", CartTwin),
             ],
             [IngestSeeder.ThreeDoDat] = [new FixtureGame("Opal Orbit (USA)", "Opal Orbit (USA) (Track 1).bin", OpalData)],
+            [IngestSeeder.C64Dat] = [],
             [IngestSeeder.NintendoDsDat] =
             [
                 new FixtureGame("Bad Crc Hero (USA)", "Bad Crc Hero (USA).nds", BadCrcHero),
