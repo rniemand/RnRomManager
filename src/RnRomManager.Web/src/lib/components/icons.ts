@@ -59,6 +59,14 @@ export const icons: Record<string, string> = {
 	'not-allowed': 'bi bi-slash-circle',
 	'not-found': 'bi bi-signpost-split',
 	github: 'fa-brands fa-github',
+	// Systems tab B5/B7: the Emulators button, external links and the modal's OS groups.
+	emulators: 'bi bi-joystick',
+	external: 'bi bi-box-arrow-up-right',
+	'os-windows': 'bi bi-windows',
+	'os-macos': 'bi bi-apple',
+	'os-linux': 'bi bi-tux',
+	'os-android': 'bi bi-android2',
+	'os-ios': 'bi bi-apple',
 	// Disc systems B22: the brand marks Bootstrap Icons has, a disc for the rest.
 	'system-psx': 'bi bi-playstation',
 	'system-psp': 'bi bi-playstation',
