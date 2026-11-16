@@ -27,7 +27,7 @@ roms/
   lynx/                 Atari Lynx (.lnx or .lyx, as the DAT names it)
   jaguar/               Atari Jaguar (.j64, .jag, .rom, .abs or .cof, as the DAT names it)
   coleco/               ColecoVision (.col)
-  c64/                  Commodore 64 (.crt, .tap, .nib, .d64, .g64, .prg, .bin)
+  c64/                  Commodore 64 (.crt, .tap, .nib, .d64, .g64, .t64, .prg, .bin)
   gg/                   Game Gear (.gg, or .sms for SMS-mode games, as the DAT names it)
   sms/                  Master System (.sms)
   md/                   Mega Drive / Genesis (.md, or .bin for the one lock-on entry, as the DAT names it)
@@ -215,7 +215,7 @@ Atari 5200 cartridges have no header: `header` is always null. Atari 7800 `heade
 
 ColecoVision `header`: `magic`, the first two bytes as upper-case hex (`AA55` shows the title screen, `55AA` skips it; anything else is not a valid header, empty for an empty file).
 
-Commodore 64 `header` is present when the file starts with one of four container magics; `.prg`, `.d64` and `.bin` files (and anything shorter or unrecognised) have `header` null. A `.crt` (at least 64 bytes, `C64 CARTRIDGE   `) has `format` `crt`, `version` (`"<byte 0x14>.<byte 0x15>"`, e.g. `1.0`), `hardwareType` (big-endian unsigned 16-bit at 0x16), `exrom` and `game` (bytes at 0x18 and 0x19) and `title` (32 bytes from 0x20, Latin-1 through the first NUL, trimmed, empty stored as null). A `.tap` (at least 20 bytes, `C64-TAPE-RAW`) has `format` `tap` and `version` (byte 0x0C). A `.g64` (at least 12 bytes, `GCR-1541`) has `format` `g64`, `version` (byte 0x08) and `tracks` (byte 0x09). A `.nib` (at least 14 bytes, `MNIB-1541-RAW`) has `format` `nib` and `version` (byte 0x0D). Numbers are unsigned as read.
+Commodore 64 `header` is present when the file starts with one of four container magics; `.prg`, `.d64`, `.t64` and `.bin` files (and anything shorter or unrecognised) have `header` null. A `.crt` (at least 64 bytes, `C64 CARTRIDGE   `) has `format` `crt`, `version` (`"<byte 0x14>.<byte 0x15>"`, e.g. `1.0`), `hardwareType` (big-endian unsigned 16-bit at 0x16), `exrom` and `game` (bytes at 0x18 and 0x19) and `title` (32 bytes from 0x20, Latin-1 through the first NUL, trimmed, empty stored as null). A `.tap` (at least 20 bytes, `C64-TAPE-RAW`) has `format` `tap` and `version` (byte 0x0C). A `.g64` (at least 12 bytes, `GCR-1541`) has `format` `g64`, `version` (byte 0x08) and `tracks` (byte 0x09). A `.nib` (at least 14 bytes, `MNIB-1541-RAW`) has `format` `nib` and `version` (byte 0x0D). Numbers are unsigned as read.
 
 Game Gear `header`, from the optional `TMR SEGA` header (looked for at 0x7FF0, 0x3FF0, then 0x1FF0; without it `header` is null): `offset` (`7FF0`, `3FF0` or `1FF0`), `checksum` (bytes +10–11, little-endian, 4 upper-case hex digits), `productCode` (the BCD product code as hex digits, leading zeros trimmed), `version` (low nibble of +14), `region` (`SMS Japan`, `SMS Export`, `GG Japan`, `GG Export`, `GG International`, or the nibble in hex) and `sizeCode` (low nibble of +15). Master System `header` has the same fields, read the same way.
 
