@@ -4,6 +4,7 @@ import { resetClient } from '#lib/api/client.js';
 import type { GameDetail, ReleaseFile } from '#lib/api/types.js';
 import { formatDateTime, formatSize } from '#lib/format.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
+import { toasts } from '#lib/stores/toasts.svelte.js';
 
 const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
 vi.mock('$app/navigation', () => ({ goto: (...args: [string, unknown?]) => goto(...args) }));
@@ -694,6 +695,25 @@ describe('game detail page', () => {
 		answers.push({ status: 200, body: { ...detail, rating: 4 } });
 		await fireEvent.click(screen.getByRole('button', { name: 'Rate 4 of 5' }));
 	};
+
+	it('a 409 StorageMigrationPending from an edit shows its title (S3)', async () => {
+		const title =
+			"This game's ROMs are being moved out of its ZIP. Try again when the storage migration job has finished.";
+		toasts.items = [];
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+		await screen.findByRole('article', { name: 'Tetris 1.gb' });
+
+		answers.push(
+			{ status: 204 },
+			{ status: 409, body: { code: 'StorageMigrationPending', title } }
+		);
+		await fireEvent.click(screen.getByRole('button', { name: 'Rate 4 of 5' }));
+
+		await vi.waitFor(() =>
+			expect(toasts.items.map((t) => [t.text, t.kind])).toContainEqual([title, 'danger'])
+		);
+	});
 
 	it('?tab=zip opens Zip Contents and loads the listing; the root is the ZIP name (Z1, Z4)', async () => {
 		navigateTo('/games/g1?tab=zip');

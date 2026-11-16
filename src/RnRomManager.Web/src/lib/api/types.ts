@@ -23,7 +23,7 @@ export interface HotkeysResponse {
 /** `GET /api/jobs/current` (spec §23, §3.1); 204 when idle. */
 export interface CurrentJob {
 	id: string;
-	type: 'Ingest' | 'Integrity' | 'DatRefresh' | 'MediaRetry' | 'ReviewResolve';
+	type: 'Ingest' | 'Integrity' | 'DatRefresh' | 'MediaRetry' | 'ReviewResolve' | 'StorageMigration';
 	mode: 'Quick' | 'Deep' | 'Game' | null;
 	status: string;
 	current: number;
@@ -242,7 +242,7 @@ export interface Job {
 	id: string;
 	type: CurrentJob['type'];
 	mode: 'Quick' | 'Deep' | 'Game' | null;
-	triggerSource: 'Manual' | 'Schedule';
+	triggerSource: 'Manual' | 'Schedule' | 'Startup';
 	status: JobStatus;
 	requestedBy: number | null;
 	startedAt: string;
