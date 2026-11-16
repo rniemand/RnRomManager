@@ -683,7 +683,8 @@ public partial class IntegrityJobTests
     [TestCase(false, TestName = "Legacy_ZipUnderEitherNameRule_IsNotWrongLocation migrated game, external name")]
     public async Task Legacy_ZipUnderEitherNameRule_IsNotWrongLocation(bool legacy)
     {
-        var title = string.Concat(Enumerable.Repeat("ゲーム", 60)); // the two rules give different names
+        // 180 characters, 250 UTF-8 bytes: the rules give different names (254 vs 250 bytes), both within Linux's 255.
+        var title = new string('é', 70) + new string('a', 110);
         var name = legacy ? Core.Naming.FileNameSanitizer.Sanitize(title) + ".zip" : ExternalRomName.ZipName(title);
         Assert.That(name, Is.Not.EqualTo(legacy ? ExternalRomName.ZipName(title) : Core.Naming.FileNameSanitizer.Sanitize(title) + ".zip"));
         var zipPath = $"legacy/{Core.Naming.Bucket.For(name)}/{name}";
