@@ -82,7 +82,7 @@ public class BundleFileResolutionTests
     }
 
     [Test]
-    public async Task AMirrorRewrite_ChangesNumericIds_ButResolvesTheSameFiles()
+    public async Task AMirrorRewrite_KeepsTheRomId_ChangesFileIds_AndResolvesTheSameFiles()
     {
         var game = SetGame("Disc Runner", Disc("Disc Runner (USA)", 1, File("Disc Runner (USA).cue", 101), File("Disc Runner (USA) (Track 2).bin", 50)));
         await MirrorAsync(game, "extset/D/Disc Runner.zip");
@@ -91,7 +91,7 @@ public class BundleFileResolutionTests
         await MirrorAsync(game, "extset/D/Disc Runner.zip");
         var after = await ResolveAsync(MainOf(game), MemberOf(game, 1));
 
-        Assert.That(after[0]!.RomId, Is.Not.EqualTo(before[0]!.RomId));
+        Assert.That(after[0]!.RomId, Is.EqualTo(before[0]!.RomId));
         Assert.That(after[1]!.FileId, Is.Not.EqualTo(before[1]!.FileId));
         var rom = (await _roms.ListByGameAsync(game.GameId, default)).Single();
         var files = await _roms.ListFilesByGameAsync(game.GameId, default);
