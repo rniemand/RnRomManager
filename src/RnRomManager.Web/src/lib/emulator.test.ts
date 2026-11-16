@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canPlay, opensInNewTab, playUrl } from './emulator';
+import { canPlay, opensInNewTab, playUrl, usesPlayDisc } from './emulator';
 
 describe('canPlay', () => {
 	it('is false without a browser core', () => {
@@ -81,6 +81,24 @@ describe('canPlay', () => {
 		expect(canPlay({ browserCore: 'pcsx_rearmed' }, { externalFileName: 'Disc (USA).bin' })).toBe(
 			true
 		);
+	});
+});
+
+describe('S8 Nintendo DS', () => {
+	it('plays an external DS release on DeSmuME', () => {
+		expect(canPlay({ browserCore: 'desmume' }, { externalFileName: 'Quest.(USA).nds' })).toBe(true);
+	});
+
+	it.each(['pcsx_rearmed', 'ppsspp', 'yabause', 'genesis_plus_gx', 'opera'])(
+		'usesPlayDisc is true for an external %s release',
+		(core) => {
+			expect(usesPlayDisc(core, { externalFileName: 'Disc (USA).cue' })).toBe(true);
+		}
+	);
+
+	it('usesPlayDisc is false for DeSmuME and for an embedded release', () => {
+		expect(usesPlayDisc('desmume', { externalFileName: 'Quest.(USA).nds' })).toBe(false);
+		expect(usesPlayDisc('pcsx_rearmed', { externalFileName: null })).toBe(false);
 	});
 });
 

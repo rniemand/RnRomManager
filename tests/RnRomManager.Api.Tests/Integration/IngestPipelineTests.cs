@@ -186,7 +186,9 @@ public class IngestPipelineTests
     {
         var path = Path.Combine(_factory.Root, "ingest", system, name);
         File.WriteAllBytes(path, bytes);
-        return new IngestFile(system, path, name, bytes.Length, DateTime.UtcNow.AddMinutes(-1));
+        // An external system's file-age check reads the file's own mtime.
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1));
+        return new IngestFile(system, path, name, bytes.Length, File.GetLastWriteTimeUtc(path));
     }
 
     private Task<IngestItemResult?> IngestAsync(IngestFile file) =>
@@ -261,6 +263,9 @@ public class IngestPipelineTests
         var rom = ReadZip("nds/B/Bad Crc Hero.zip").Roms.Single();
         Assert.That((rom.FileName, rom.Identification.Method), Is.EqualTo(("Bad Crc Hero (USA).nds", IdentificationMethod.Dat)));
         Assert.That(rom.Header!["headerChecksumValid"]!.GetValue<bool>(), Is.False);
+        // S1: stored next to the ZIP.
+        Assert.That(rom.ExternalFileName, Is.Not.Null);
+        Assert.That(File.ReadAllBytes(Path.Combine(Roms, "nds", "B", rom.ExternalFileName!)), Is.EqualTo(BadCrcHero));
     }
 
     [Test]
@@ -356,8 +361,9 @@ public class IngestPipelineTests
         var path = Path.Combine(_factory.Root, "ingest", "nds", "huge.nds");
         using (var file = File.Create(path))
             file.SetLength(512L * 1024 * 1024 + 1); // sparse where the file system allows
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1)); // S1: the external file-age check reads the file's mtime
 
-        var result = await IngestAsync(new IngestFile("nds", path, "huge.nds", 512L * 1024 * 1024 + 1, DateTime.UtcNow.AddMinutes(-1)));
+        var result = await IngestAsync(new IngestFile("nds", path, "huge.nds", 512L * 1024 * 1024 + 1, File.GetLastWriteTimeUtc(path)));
 
         Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooLarge)));
         Assert.That(File.Exists(path), Is.False, "moved to _failed/");

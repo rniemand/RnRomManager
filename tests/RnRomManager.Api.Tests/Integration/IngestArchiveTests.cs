@@ -254,15 +254,16 @@ public class IngestArchiveTests
         Assert.That((game.ReleaseYear, game.Developers, game.Publishers, game.Genres),
             Is.EqualTo(((int?)2007, (IReadOnlyList<string>)["Synthetic Studio"], (IReadOnlyList<string>)["Synthetic Publishing"], (IReadOnlyList<string>)["Adventure"])));
         Assert.That(game.Roms.Single(r => r.FileName == "Archive Tales (USA).nds").OriginalFileName, Is.EqualTo("TALES_US.NDS"));
+        // S1: each release is a file next to the ZIP; the ZIP holds no ROM entry and no companion.
         using var library = LibraryZip.Open(Path.Combine(Roms, "nds/A/Archive Tales.zip"), _factory.Services.GetRequiredService<InfoJsonReader>());
         foreach (var (name, bytes) in new[] { ("USA", TalesUsa), ("Japan", TalesJapan), ("Europe", TalesEurope) })
         {
-            using var entry = library.OpenEntry($"roms/Archive Tales ({name}).nds", long.MaxValue);
-            using var copy = new MemoryStream();
-            entry.CopyTo(copy);
-            Assert.That(copy.ToArray(), Is.EqualTo(bytes), name);
+            var pointer = game.Roms.Single(r => r.FileName == $"Archive Tales ({name}).nds").ExternalFileName;
+            Assert.That(pointer, Is.Not.Null, name);
+            Assert.That(File.ReadAllBytes(Path.Combine(Roms, "nds", "A", pointer!)), Is.EqualTo(bytes), name);
         }
-        Assert.That(library.EntryNames.Where(n => n.StartsWith("roms/", StringComparison.Ordinal)).ToList(), Has.Count.EqualTo(3), "no companion stored");
+        Assert.That(library.EntryNames.Where(n => n.StartsWith("roms/", StringComparison.Ordinal)), Is.Empty);
+        Assert.That(Directory.GetFiles(Path.Combine(Roms, "nds", "A")), Has.Length.EqualTo(4), "the ZIP and three ROMs, no companion");
     }
 
     [Test]

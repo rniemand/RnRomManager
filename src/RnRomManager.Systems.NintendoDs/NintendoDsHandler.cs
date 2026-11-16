@@ -3,7 +3,8 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Systems.NintendoDs;
 
 /// <summary>
-/// Nintendo DS cartridge dumps (<c>.nds</c>), stored in the game's ZIP. Sizes cover the libretro No-Intro
+/// Nintendo DS cartridge dumps (<c>.nds</c>), stored next to the game's ZIP (S1); games from older versions keep them
+/// inside it until the storage migration job moves them out (<see cref="LegacyEmbeddedRoms"/>). Sizes cover the libretro No-Intro
 /// <c>Nintendo - Nintendo DS</c> DAT (128 KiB–512 MiB), with the minimum left lower for homebrew. An unmatched ROM
 /// with a bad header CRC is <c>InvalidHeader</c>; one with a valid CRC goes to Review.
 /// </summary>
@@ -30,7 +31,10 @@ public sealed class NintendoDsHandler : ISystemHandler
     public string BrowserCore => "desmume";
 
     /// <inheritdoc />
-    public bool EmbedRomsInZip => true;
+    public bool EmbedRomsInZip => false;
+
+    /// <inheritdoc />
+    public bool LegacyEmbeddedRoms => true;
 
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 

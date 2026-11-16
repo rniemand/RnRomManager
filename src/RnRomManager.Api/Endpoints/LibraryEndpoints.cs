@@ -21,12 +21,15 @@ namespace RnRomManager.Api.Endpoints;
 public static class LibraryEndpoints
 {
     /// <summary>
-    /// Play B1: the browser cores that play a release stored outside the ZIP through play-disc: PCSX ReARMed for
+    /// Play B1: the browser cores that play a release stored outside the ZIP: through play-disc (<see cref="PlayDiscCores"/>) PCSX ReARMed for
     /// PlayStation, (PSP B1) PPSSPP for PlayStation Portable, (Saturn B6) Yabause for Saturn and (Sega CD B5) Genesis Plus GX
     /// for Sega CD. Eligibility is per core, so Genesis Plus GX also accepts an external primary of Mega Drive, a family that
-    /// the registry keeps embedded.
+    /// the registry keeps embedded. S8: DeSmuME plays an external DS release from <c>/download</c>.
     /// </summary>
-    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera" };
+    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "desmume" };
+
+    /// <summary>S8: the cores whose external releases play through <c>play-disc</c>; any other (DS) loads from <c>/download</c>.</summary>
+    public static readonly IReadOnlySet<string> PlayDiscCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera" };
 
     public static RouteGroupBuilder MapLibraryEndpoints(this RouteGroupBuilder api)
     {
@@ -685,7 +688,7 @@ public static class LibraryEndpoints
             playRomId = playable ? game.PrimaryRomId : null,
             playRomFileName = playable ? game.PrimaryRomFileName : null,
             // Sega CD B6: quick play adds disc=1 for an external primary, since a shared core can't tell on its own.
-            playDisc = playable && game.PrimaryIsExternal,
+            playDisc = playable && game.PrimaryIsExternal && PlayDiscCores.Contains(core!),
             browserCore = core,
         };
     }

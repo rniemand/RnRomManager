@@ -21,8 +21,8 @@ public class NintendoDsHandlerTests
             Is.EqualTo(("nds", "Nintendo DS", "DS", "nds", "Nintendo - Nintendo DS")));
         Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".nds" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((512L, 536_870_912L)));
-        Assert.That((Handler.EmbedRomsInZip, Handler.FileSets, Handler.DatSource, Handler.DatFolder),
-            Is.EqualTo((true, false, DatSource.Libretro, DatKind.NoIntro)));
+        Assert.That((Handler.EmbedRomsInZip, Handler.LegacyEmbeddedRoms, Handler.FileSets, Handler.DatSource, Handler.DatFolder),
+            Is.EqualTo((false, true, false, DatSource.Libretro, DatKind.NoIntro)), "S1: stored next to the ZIP; older games until migrated");
         Assert.That(Handler.MetadatKinds, Is.EqualTo(DatKind.Metadat));
         Assert.That(Handler.MetadatKinds, Has.Count.EqualTo(4));
         Assert.That(Handler.BrowserCore, Is.EqualTo("desmume"));

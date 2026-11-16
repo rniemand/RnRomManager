@@ -11,8 +11,23 @@ export const externalBrowserCores: readonly string[] = [
 	'ppsspp',
 	'yabause',
 	'genesis_plus_gx',
+	'opera',
+	'desmume'
+];
+
+/** S8: the cores whose external releases load through play-disc; DeSmuME loads an external DS ROM from `/download`. */
+export const playDiscCores: readonly string[] = [
+	'pcsx_rearmed',
+	'ppsspp',
+	'yabause',
+	'genesis_plus_gx',
 	'opera'
 ];
+
+/** S8: whether the play URL carries `disc=1`: an external release of a play-disc core. */
+export function usesPlayDisc(core: string, rom: Pick<RomDetail, 'externalFileName'>): boolean {
+	return rom.externalFileName !== null && playDiscCores.includes(core);
+}
 
 /** PSP B3: the core that plays only in the dedicated, cross-origin isolated tab. */
 export const isolatedBrowserCore = 'ppsspp';

@@ -31,7 +31,7 @@
 	import RatingControl from '#lib/components/RatingControl.svelte';
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
 	import EmulatorModal from '#lib/components/EmulatorModal.svelte';
-	import { canPlay, opensInNewTab, playUrl } from '#lib/emulator.js';
+	import { canPlay, opensInNewTab, playUrl, usesPlayDisc } from '#lib/emulator.js';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
 	import { formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
@@ -582,7 +582,12 @@
 									<!-- eslint-disable svelte/no-navigation-without-resolve -->
 									<a
 										class="btn btn-sm btn-outline-success"
-										href={playUrl(game.id, rom, game.browserCore, rom.externalFileName !== null)}
+										href={playUrl(
+											game.id,
+											rom,
+											game.browserCore,
+											usesPlayDisc(game.browserCore, rom)
+										)}
 										target="_blank"
 										rel="noopener"
 										aria-label="Play {rom.fileName} (opens in a new tab)"
@@ -798,7 +803,7 @@
 		gameId={game.id}
 		core={game.browserCore}
 		rom={playRom}
-		disc={playRom?.externalFileName != null}
+		disc={playRom != null && game.browserCore != null && usesPlayDisc(game.browserCore, playRom)}
 	/>
 	<GameCollectionsModal
 		bind:open={collectionsOpen}

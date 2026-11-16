@@ -224,6 +224,21 @@ describe('game detail page', () => {
 		);
 	});
 
+	it('an external DS release plays on DeSmuME from /download, without disc=1 (S8)', async () => {
+		const ds = game([1]);
+		ds.system = 'nds';
+		ds.browserCore = 'desmume';
+		ds.roms[0].fileName = 'Quest (USA).nds';
+		ds.roms[0].externalFileName = 'Quest.(USA).nds';
+		answers.push({ status: 200, body: ds });
+		render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Play Quest (USA).nds' }));
+		expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
+			`/emulator/play.html?game=${ds.id}&rom=1&core=desmume&name=Quest%20(USA).nds`
+		);
+	});
+
 	it('an external 3DO cue release plays on Opera from play-disc (3DO B7)', async () => {
 		const tdo = game([1]);
 		tdo.system = '3do';
