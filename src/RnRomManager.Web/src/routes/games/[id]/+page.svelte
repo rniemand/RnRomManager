@@ -287,7 +287,7 @@
 		['releases', `Releases (${releases.length})`],
 		...(updates.length ? [['updates', `Updates (${updates.length})`] as [Tab, string]] : []),
 		['images', `Images (${game?.images.length ?? 0})`],
-		['saves', 'Saves'],
+		['saves', `Saves (${game?.saveCount ?? 0})`],
 		['zip', 'Zip Contents']
 	]);
 

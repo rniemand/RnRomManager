@@ -25,6 +25,7 @@ export const icons: Record<string, string> = {
 	'cart-add': 'bi bi-cart-plus',
 	'cart-check': 'bi bi-cart-check-fill',
 	play: 'bi bi-play-fill',
+	save: 'bi bi-floppy-fill',
 	update: 'bi bi-arrow-up-circle',
 	restore: 'bi bi-arrow-counterclockwise',
 	upload: 'bi bi-upload',

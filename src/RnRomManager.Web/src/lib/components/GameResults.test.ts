@@ -41,6 +41,7 @@ function game(id: string, extra: Partial<GameListItem> = {}): GameListItem {
 		favourite: false,
 		matchedOn: null,
 		updateCount: 0,
+		saveCount: 0,
 		playRomId: null,
 		playRomFileName: null,
 		playDisc: false,
@@ -53,6 +54,15 @@ const playable = (id: string) =>
 	game(id, { playRomId: 7, playRomFileName: 'Game (World).gb', browserCore: 'gambatte' });
 
 describe('GameResults cards (C1, C2)', () => {
+	it.each(['grid', 'list'] as const)('%s: a game with saves links to its Saves tab', (view) => {
+		render(GameResults, { games: [game('a', { saveCount: 2 }), game('b')], view });
+
+		const links = screen.getAllByRole('link', { name: /^Saves of/ });
+		expect(links.map((l) => [l.getAttribute('aria-label'), l.getAttribute('href')])).toEqual([
+			['Saves of Game a', '/games/a?tab=saves']
+		]);
+	});
+
 	it.each(['grid', 'list'] as const)(
 		'%s: the updates badge shows only when updateCount > 0',
 		(view) => {

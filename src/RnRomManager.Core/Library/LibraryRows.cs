@@ -22,6 +22,10 @@ public sealed record GameRow
     public bool HasDefaultBoxArt { get; init; }
     public int? Rating { get; init; }
     public bool Favourite { get; init; }
+
+    /// <summary>The saves in the ZIP (its <c>saves/</c> entries but the index); set by the mirror, not from <c>info.json</c>.</summary>
+    public int SaveCount { get; init; }
+
     public required long ZipSizeBytes { get; init; }
 
     /// <summary>Whole seconds, UTC (§12.1).</summary>

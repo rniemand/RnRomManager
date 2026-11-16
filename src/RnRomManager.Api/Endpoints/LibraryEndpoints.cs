@@ -693,6 +693,7 @@ public static class LibraryEndpoints
             favourite = game.Favourite,
             matchedOn = game.MatchedOn is { } match ? new { field = match.Field, value = match.Value } : null,
             updateCount = game.UpdateCount,
+            saveCount = game.SaveCount,
             playRomId = playable ? game.PrimaryRomId : null,
             playRomFileName = playable ? game.PrimaryRomFileName : null,
             // Sega CD B6: quick play adds disc=1 for an external primary, since a shared core can't tell on its own.
@@ -718,6 +719,7 @@ public static class LibraryEndpoints
         hasDefaultBoxArt = game.HasDefaultBoxArt,
         rating = game.Rating,
         favourite = game.Favourite,
+        saveCount = game.SaveCount,
         metadata = new { createdAt = game.CreatedAt, updatedAt = game.UpdatedAt },
         roms = roms.OrderByDescending(r => r.IsPrimary).ThenBy(r => r.FileName, StringComparer.Ordinal).Select(r => new
         {

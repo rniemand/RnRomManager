@@ -105,6 +105,8 @@ export interface GameListItem {
 	matchedOn: { field: 'developer' | 'publisher' | 'genre'; value: string } | null;
 	/** Roms flagged `Update` (C1). */
 	updateCount: number;
+	/** Saves in the game's ZIP. */
+	saveCount: number;
 	/** Primary release to quick play (C2); null when the system has no browser core or the release is external. */
 	playRomId: number | null;
 	playRomFileName: string | null;
@@ -213,6 +215,8 @@ export interface GameDetail {
 	hasDefaultBoxArt: boolean;
 	rating: number | null;
 	favourite: boolean;
+	/** Saves in the game's ZIP. */
+	saveCount: number;
 	metadata: { createdAt: string; updatedAt: string };
 	roms: RomDetail[];
 	images: ImageInfo[];

@@ -116,6 +116,7 @@ function game(romIds: number[]): GameDetail {
 		hasDefaultBoxArt: false,
 		rating: null,
 		favourite: false,
+		saveCount: 0,
 		metadata: { createdAt: '', updatedAt: '' },
 		roms: romIds.map((id, i) => rom(id, `Tetris ${id}.gb`, i === 0)),
 		images: [
@@ -920,12 +921,12 @@ describe('game detail page', () => {
 		answers.push({ status: 200, body: game([1]) }, { status: 200, body: { items: [] } });
 		render(GamePage);
 
-		const saves = await screen.findByRole('tab', { name: 'Saves' });
+		const saves = await screen.findByRole('tab', { name: 'Saves (0)' });
 		expect(saves.getAttribute('aria-selected')).toBe('true');
 		expect(screen.getAllByRole('tab').map((t) => t.textContent?.trim())).toEqual([
 			'Releases (1)',
 			'Images (1)',
-			'Saves',
+			'Saves (0)',
 			'Zip Contents'
 		]);
 		expect(document.getElementById('saves-panel')!.hidden).toBe(false);

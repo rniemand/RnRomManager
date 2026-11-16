@@ -74,6 +74,20 @@
 	{/if}
 {/snippet}
 
+<!-- Saves: opens the game on its Saves tab, to load a save and carry on. -->
+{#snippet savesLink(game: GameListItem, classes: string, style = '')}
+	{#if game.saveCount > 0}
+		<a
+			class={classes}
+			{style}
+			href="{resolve('/games/[id]', { id: game.id })}?tab=saves"
+			aria-label="Saves of {game.displayTitle}"
+			use:tooltip={`${formatCount(game.saveCount)} ${game.saveCount === 1 ? 'save' : 'saves'}`}
+			><Icon name="save" /></a
+		>
+	{/if}
+{/snippet}
+
 {#snippet updatesBadge(game: GameListItem, extra: string)}
 	{#if game.updateCount > 0}
 		<span class="badge text-bg-info {extra}" use:tooltip={updatesText(game.updateCount)}>
@@ -116,6 +130,12 @@
 							</span>
 						{/if}
 						{@render updatesBadge(game, 'position-absolute bottom-0 start-0 m-1')}
+						{@render savesLink(
+							game,
+							'btn btn-sm btn-secondary rounded-circle position-absolute end-0 m-1 z-2',
+							// Above the Play button when there is one.
+							canPlay(game) ? 'bottom: 2.25rem' : 'bottom: 0'
+						)}
 						{#if canPlay(game)}
 							{@render playAction(
 								game,
@@ -196,6 +216,7 @@
 						<td>
 							<a href={resolve('/games/[id]', { id: game.id })}>{game.displayTitle}</a>
 							{@render updatesBadge(game, 'ms-1')}
+							{@render savesLink(game, 'ms-1 link-secondary')}
 						</td>
 						<td><SystemBadge system={game.system} name={game.systemName} /></td>
 						<td>{game.releaseYear ?? ''}</td>
