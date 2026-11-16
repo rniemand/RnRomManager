@@ -15,6 +15,7 @@
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import RomToolsTabs from '#lib/components/RomToolsTabs.svelte';
 	import IngestFileTable from '#lib/components/IngestFileTable.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
@@ -144,6 +145,7 @@
 
 <AdminOnly>
 	<h1 class="h3 mb-3"><Icon name="delete" /> Deleted ROMs</h1>
+	<RomToolsTabs />
 
 	{#if error}
 		<ErrorAlert {error} onretry={load} />

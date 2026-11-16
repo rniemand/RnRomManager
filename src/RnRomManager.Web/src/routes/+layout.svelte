@@ -99,7 +99,6 @@
 		<Navbar
 			me={auth.me}
 			reviewCount={navCounts.review}
-			deletedCount={navCounts.deleted}
 			cartCount={bundle.count}
 			onlogout={logout}
 			onsearch={() => (searchOpen = true)}

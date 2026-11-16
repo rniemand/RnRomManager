@@ -12,6 +12,7 @@
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import RomToolsTabs from '#lib/components/RomToolsTabs.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import Pagination from '#lib/components/Pagination.svelte';
 	import ReviewDeleteModal from '#lib/components/ReviewDeleteModal.svelte';
@@ -216,6 +217,7 @@
 
 <AdminOnly>
 	<h1 class="h3 mb-3"><Icon name="review" /> Review Queue</h1>
+	<RomToolsTabs />
 
 	<form class="row g-2 align-items-end mb-3" role="search" onsubmit={(e) => e.preventDefault()}>
 		<div class="col-12 col-md-5">

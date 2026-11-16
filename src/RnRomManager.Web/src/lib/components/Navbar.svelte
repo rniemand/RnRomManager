@@ -5,14 +5,13 @@
 	import type { Me } from '../api/types';
 	import { formatCount } from '../format';
 	import Icon from './Icon.svelte';
+	import { romTools } from './RomToolsTabs.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
 	interface Props {
 		me: Me;
 		/** Pending review items (Admin); null until loaded. */
 		reviewCount: number | null;
-		/** Deleted ROMs (Admin, D6); null until loaded. */
-		deletedCount?: number | null;
 		onlogout: () => void;
 		/** Opens the global search; the button is hidden while the password must be changed. */
 		onsearch?: () => void;
@@ -22,15 +21,7 @@
 		cartCount?: number;
 	}
 
-	let {
-		me,
-		reviewCount,
-		deletedCount = null,
-		onlogout,
-		onsearch,
-		onhotkeys,
-		cartCount
-	}: Props = $props();
+	let { me, reviewCount, onlogout, onsearch, onhotkeys, cartCount }: Props = $props();
 
 	// The link's name is its visible text plus hidden words ("Bundle 2 files in the cart"), so axe's
 	// label-content-name-mismatch holds: visible text must be part of the accessible name.
@@ -40,26 +31,21 @@
 		href: Exclude<PageRouteId, `${string}[${string}`>;
 		label: string;
 		icon: string;
-	};
-
-	type NavItem = (NavLink | { label: string; icon: string; links: NavLink[] }) & {
 		admin?: boolean;
+		/** Pages that also make this link active (the ROM Tools tabs). */
+		section?: readonly string[];
 	};
 
-	const navigation: NavItem[] = [
+	const navigation: NavLink[] = [
 		{ href: '/', label: 'Library', icon: 'library' },
 		{ href: '/collections', label: 'Collections', icon: 'collections' },
 		{ href: '/reports', label: 'Reports', icon: 'reports' },
 		{
+			href: '/ingestion',
 			label: 'ROM Tools',
 			icon: 'tools',
 			admin: true,
-			links: [
-				{ href: '/ingestion', label: 'Ingestion', icon: 'ingest' },
-				{ href: '/review', label: 'Review', icon: 'review' },
-				{ href: '/deleted', label: 'Deleted ROMs', icon: 'delete' },
-				{ href: '/integrity', label: 'Integrity', icon: 'integrity' }
-			]
+			section: romTools.map((tool) => tool.href)
 		},
 		{ href: '/admin/users', label: 'Admin', icon: 'admin', admin: true }
 	];
@@ -98,33 +84,7 @@
 		<div class="collapse navbar-collapse" id="main-nav">
 			<ul class="navbar-nav me-auto">
 				{#each visibleNavigation as item (item.label)}
-					{#if 'links' in item}
-						<li class="nav-item dropdown">
-							<button
-								type="button"
-								class="btn btn-link nav-link dropdown-toggle d-flex align-items-center gap-1"
-								class:active={item.links.some((link) => isActive(link.href))}
-								data-bs-toggle="dropdown"
-								aria-expanded="false"
-							>
-								<Icon name={item.icon} />
-								{item.label}
-								{#if item.links.some((link) => link.href === '/review') && reviewCount}
-									<span class="badge rounded-pill text-bg-danger" aria-hidden="true">
-										{formatCount(reviewCount)}
-									</span>
-									<span class="visually-hidden">{formatCount(reviewCount)} pending review</span>
-								{/if}
-							</button>
-							<ul class="dropdown-menu navigation-menu">
-								{#each item.links as link (link.href)}
-									<li>{@render navigationLink(link, true)}</li>
-								{/each}
-							</ul>
-						</li>
-					{:else}
-						<li class="nav-item">{@render navigationLink(item)}</li>
-					{/if}
+					<li class="nav-item">{@render navigationLink(item)}</li>
 				{/each}
 			</ul>
 			<ul class="navbar-nav align-items-lg-center navigation-utilities">
@@ -205,55 +165,29 @@
 	</div>
 </nav>
 
-{#snippet navigationLink(link: NavLink, inDropdown = false)}
+{#snippet navigationLink(link: NavLink)}
+	{@const active = link.section ? link.section.some(isActive) : isActive(link.href)}
 	<a
-		class={inDropdown
-			? 'dropdown-item d-flex align-items-center gap-2'
-			: 'nav-link d-flex align-items-center gap-1'}
-		class:active={isActive(link.href)}
-		aria-current={isActive(link.href) ? 'page' : undefined}
+		class="nav-link d-flex align-items-center gap-1"
+		class:active
+		aria-current={active ? 'page' : undefined}
 		href={resolve(link.href)}
 	>
 		<Icon name={link.icon} />
 		{link.label}
-		{#if link.href === '/review' && reviewCount}
+		{#if link.section?.includes('/review') && reviewCount}
 			<span class="badge rounded-pill text-bg-danger">
-				{formatCount(reviewCount)}<span class="visually-hidden">&#32;pending</span>
-			</span>
-		{/if}
-		{#if link.href === '/deleted' && deletedCount}
-			<span class="badge rounded-pill text-bg-secondary">
-				{formatCount(deletedCount)}<span class="visually-hidden">&#32;deleted</span>
+				{formatCount(reviewCount)}<span class="visually-hidden">&#32;pending review</span>
 			</span>
 		{/if}
 	</a>
 {/snippet}
 
 <style>
-	.navigation-menu {
-		--bs-dropdown-link-active-bg: var(--bs-primary-bg-subtle);
-		--bs-dropdown-link-active-color: var(--bs-primary-text-emphasis);
-	}
-
-	.navigation-menu .dropdown-item.active {
-		font-weight: 600;
-	}
-
-	@media (min-width: 992px) {
-		.navigation-menu {
-			max-height: calc(100dvh - 4rem);
-			overflow-y: auto;
-		}
-	}
-
 	@media (max-width: 991.98px) {
 		.navbar-collapse:global(.show) {
 			max-height: calc(100dvh - 4rem);
 			overflow-y: auto;
-		}
-
-		.navigation-menu {
-			margin: 0.25rem 0.5rem 0.5rem;
 		}
 
 		.navigation-utilities {
