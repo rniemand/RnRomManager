@@ -83,6 +83,30 @@ public class SystemRegistryTests
         Assert.That(ex!.Message, Does.Contain("'disc'").And.Contain("FileSets"));
     }
 
+    [TestCase(true, false)]
+    [TestCase(false, true)]
+    public void LegacyEmbeddedRoms_OnlyOnExternalWithoutFileSets(bool embedded, bool fileSets)
+    {
+        var legacy = Handler("nds", "nds", ".nds");
+        legacy.EmbedRomsInZip.Returns(embedded);
+        legacy.FileSets.Returns(fileSets);
+        legacy.LegacyEmbeddedRoms.Returns(true);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => new SystemRegistry([_gb, legacy]));
+
+        Assert.That(ex!.Message, Does.Contain("'nds'").And.Contain("LegacyEmbeddedRoms"));
+    }
+
+    [Test]
+    public void LegacyEmbeddedRoms_OnExternal_IsAccepted()
+    {
+        var legacy = Handler("nds", "nds", ".nds");
+        legacy.EmbedRomsInZip.Returns(false);
+        legacy.LegacyEmbeddedRoms.Returns(true);
+
+        Assert.That(new SystemRegistry([_gb, legacy]).ById("nds"), Is.SameAs(legacy));
+    }
+
     [Test]
     public void FamilyMixingFileSets_Throws_NamingTheFamily()
     {

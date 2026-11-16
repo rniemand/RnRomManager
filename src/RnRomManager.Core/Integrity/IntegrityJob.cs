@@ -285,6 +285,9 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
             CheckLocation(zipPath, game.System, game.Title, game.GameId, add);
             IntegrityFinding Finding(string type, string? entry = null, string? details = null) =>
                 new(type, zipPath, entry, game.System, game.GameId, details);
+            // S7: its roms/ entries are checked below as for any embedded game.
+            if (systems.ById(game.System) is { } handler && RomStorage.IsLegacy(handler, game))
+                add(Finding(LegacyEmbeddedStorage));
 
             // G1: an external ROM has no roms/ entry; its file is checked by StatExternal.
             var listed = game.Roms.Where(r => r.ExternalFileName is null).Select(r => (Entry: LibraryZip.RomEntry(r.FileName), r.Metadata.SizeBytes, r.Metadata.Sha1))
@@ -444,17 +447,22 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
 
     /// <summary>
     /// §12.2 <c>WrongLocation</c>: system/bucket/name ≠ §6.1 (case-insensitive, §5); a clash suffix ` (N)` is accepted.
-    /// An external game's name is the budgeted one its builder gives the title (E2), suffixed or not.
+    /// An external game's name is the budgeted one its builder gives the title (E2), suffixed or not; a
+    /// <c>LegacyEmbeddedRoms</c> system also accepts the embedded name (S7a).
     /// </summary>
     private void CheckLocation(string zipPath, string systemId, string title, Guid gameId, Action<IntegrityFinding> add)
     {
         var parts = zipPath.Split('/');
         var name = parts[^1];
-        var external = systems.ById(systemId) is { EmbedRomsInZip: false };
+        var handler = systems.ById(systemId);
+        var external = handler is { EmbedRomsInZip: false };
         var stem = external ? Path.GetFileNameWithoutExtension(ExternalRomName.ZipName(title)) : FileNameSanitizer.Sanitize(title);
+        var embeddedStem = FileNameSanitizer.Sanitize(title);
+        var embeddedOk = name.Equals(embeddedStem + ".zip", StringComparison.OrdinalIgnoreCase) || IsClashSuffixed(name, embeddedStem);
+        // S7a: the storage migration keeps each ZIP's path, so a legacy system's ZIP may carry either name rule.
         var nameOk = external
-            ? ExternalRomName.IsZipNameFor(title, name)
-            : name.Equals(stem + ".zip", StringComparison.OrdinalIgnoreCase) || IsClashSuffixed(name, stem);
+            ? ExternalRomName.IsZipNameFor(title, name) || (handler!.LegacyEmbeddedRoms && embeddedOk)
+            : embeddedOk;
         var ok = parts.Length == 3 && nameOk
             && parts[0].Equals(systemId, StringComparison.OrdinalIgnoreCase)
             && parts[1].Equals(Bucket.For(name), StringComparison.OrdinalIgnoreCase);

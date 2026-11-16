@@ -108,6 +108,7 @@ export const issueTypes = [
 	'MissingBoxArt',
 	'DefaultBoxArt',
 	'WrongLocation',
+	'LegacyEmbeddedStorage',
 	'OrphanFile',
 	'DuplicateGameId',
 	'DuplicateSha1',

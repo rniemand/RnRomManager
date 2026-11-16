@@ -33,7 +33,10 @@ public partial class LibraryEndpointsTests
     [OneTimeSetUp]
     public async Task StartHost()
     {
-        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
+        _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
+        {
+            TestServices = services => SystemHandlerRegistration.AddSystemHandler<LegacyExternalTestHandler>(services),
+        };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
         await _factory.StartSharedAsync();
     }
@@ -147,14 +150,16 @@ public partial class LibraryEndpointsTests
     {
         await Tetris();
 
-        var systems = await GetJson("/api/systems");
+        // The host's legacy test system aside.
+        var systems = (await GetJson("/api/systems")).EnumerateArray()
+            .Where(s => s.GetProperty("id").GetString() != LegacyExternalTestHandler.SystemId).ToList();
 
         // S1: ordered by display name.
-        Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("id").GetString()),
+        Assert.That(systems.Select(s => s.GetProperty("id").GetString()),
             Is.EqualTo(new[] { "s32x", "3do", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "n64", "nds", "nes", "switch", "psx", "psp", "saturn", "segacd", "snes", "tg16", "vb", "wii", "x360" }));
-        Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(19).True);
+        Assert.That(systems.Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(19).True);
         Assert.That(Find("switch").GetProperty("embedRoms").GetBoolean(), Is.False, "Switch stores its ROMs outside the ZIP");
-        JsonElement Find(string id) => systems.EnumerateArray().Single(s => s.GetProperty("id").GetString() == id);
+        JsonElement Find(string id) => systems.Single(s => s.GetProperty("id").GetString() == id);
         var gb = Find("gb");
         Assert.That(gb.GetProperty("displayName").GetString(), Is.EqualTo("Game Boy"));
         Assert.That(gb.GetProperty("shortName").GetString(), Is.EqualTo("GB"), "L3");
@@ -165,7 +170,7 @@ public partial class LibraryEndpointsTests
         Assert.That(gb.GetProperty("regions").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "Japan", "World" }));
         var gbc = Find("gbc");
         Assert.That((gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()), Is.EqualTo((0, 0)));
-        Assert.That(systems.EnumerateArray().Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
+        Assert.That(systems.Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
             "32X", "3DO", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
             "PlayStation", "PlayStation Portable", "Saturn", "Sega CD", "Super Nintendo Entertainment System", "TurboGrafx-16", "Virtual Boy", "Wii", "Xbox 360"
@@ -828,6 +833,25 @@ public partial class LibraryEndpointsTests
         Assert.That(externalRom.GetProperty("externalFileName").GetString(), Is.EqualTo("Orbit Test.Orbit Test [v0].nsp"));
         Assert.That(externalRom.GetProperty("fileName").GetString(), Is.EqualTo("Orbit Test [v0].nsp"));
         Assert.That(embeddedRom.GetProperty("externalFileName").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    [Test]
+    public async Task LegacyGame_DetailInfoJsonAndRomDownload_Work()
+    {
+        var bytes = Enumerable.Range(0, 300).Select(i => (byte)i).ToArray();
+        var game = TestLibrary.Game("Old Ds", TestLibrary.Rom("Old Ds (USA).nds", bytes)) with { System = LegacyExternalTestHandler.SystemId };
+        var zip = Path.Combine(RomsFolder("legacy", "O"), "Old Ds.zip");
+        LegacyZipWriter.Write(zip, game, bytes);
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, "legacy/O/Old Ds.zip", new FileInfo(zip).Length, DateTime.UtcNow), default);
+
+        var rom = (await GetJson($"/api/games/{game.GameId}")).GetProperty("roms")[0];
+        using var info = await _user.GetAsync($"/api/games/{game.GameId}/info-json");
+        using var download = await _user.GetAsync(rom.GetProperty("downloadUrl").GetString()!);
+
+        Assert.That(rom.GetProperty("externalFileName").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        Assert.That(info.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(download.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await download.Content.ReadAsByteArrayAsync(), Is.EqualTo(bytes));
     }
 
     [Test]

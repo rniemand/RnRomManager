@@ -49,7 +49,7 @@ public partial class IntegrityJobTests
             handler.EmbedRomsInZip.Returns(true);
             handler.Id.Returns(id);
             return handler;
-        }).Append(new ExternalTestHandler()).Append(new ExternalSetTestHandler()).ToArray();
+        }).Append(new ExternalTestHandler()).Append(new ExternalSetTestHandler()).Append(new LegacyExternalTestHandler()).ToArray();
         _systems = Substitute.For<ISystemRegistry>();
         _systems.All.Returns(handlers);
         _systems.ById(Arg.Any<string>()).Returns(call =>
@@ -590,6 +590,71 @@ public partial class IntegrityJobTests
         await new LibraryZipWriter(_reader).WriteAsync(path, null, new LibraryZipChanges(game, new Dictionary<string, Func<Stream>>()));
         Touch(zipPath);
         return Path.Combine(Path.GetDirectoryName(path)!, pointer);
+    }
+
+    /// <summary>A legacy game (S2): every ROM inside the ZIP of a <c>LegacyEmbeddedRoms</c> system.</summary>
+    private string WriteLegacy(string zipPath, string title, int romCount = 1)
+    {
+        var roms = Enumerable.Range(0, romCount).Select(_ => RomBytes(++_seed)).ToArray();
+        var game = Game(title, [.. roms.Select((b, i) => Rom($"{title} {i}.nds", b, isPrimary: i == 0))]) with { System = LegacyExternalTestHandler.SystemId };
+        LegacyZipWriter.Write(Abs(zipPath), game, roms);
+        Touch(zipPath);
+        return Abs(zipPath);
+    }
+
+    [Test]
+    public async Task Legacy_GameIsOneWarning_AndItsRomEntriesAreCheckedAsEmbedded()
+    {
+        WriteLegacy("legacy/A/Alpha.zip", "Alpha", romCount: 2);
+        WriteLegacy("legacy/B/Beta.zip", "Beta");
+        Damage("legacy/B/Beta.zip", zip => zip.GetEntry(LibraryZip.RomEntry("Beta 0.nds"))!.Delete());
+
+        await Run(JobMode.Deep);
+
+        Assert.That(await OpenExternal(), Is.EquivalentTo(new[]
+        {
+            (LegacyEmbeddedStorage, (string?)"legacy/A/Alpha.zip", (string?)null),
+            (LegacyEmbeddedStorage, (string?)"legacy/B/Beta.zip", (string?)null),
+            (EntryMissing, (string?)"legacy/B/Beta.zip", (string?)LibraryZip.RomEntry("Beta 0.nds")),
+        }));
+        Assert.That(SeverityOf(LegacyEmbeddedStorage), Is.EqualTo(IssueSeverity.Warn));
+    }
+
+    [Test]
+    public async Task Legacy_MigratedGame_IsNoWarning()
+    {
+        await WriteExternal("ext/A/Alpha.zip", "Alpha");
+
+        await Run();
+
+        Assert.That((await Open()).Select(i => i.Type), Does.Not.Contain(LegacyEmbeddedStorage));
+    }
+
+    [TestCase(true, TestName = "Legacy_ZipUnderEitherNameRule_IsNotWrongLocation legacy game, embedded name")]
+    [TestCase(false, TestName = "Legacy_ZipUnderEitherNameRule_IsNotWrongLocation migrated game, external name")]
+    public async Task Legacy_ZipUnderEitherNameRule_IsNotWrongLocation(bool legacy)
+    {
+        var title = string.Concat(Enumerable.Repeat("ゲーム", 60)); // the two rules give different names
+        var name = legacy ? Core.Naming.FileNameSanitizer.Sanitize(title) + ".zip" : ExternalRomName.ZipName(title);
+        Assert.That(name, Is.Not.EqualTo(legacy ? ExternalRomName.ZipName(title) : Core.Naming.FileNameSanitizer.Sanitize(title) + ".zip"));
+        var zipPath = $"legacy/{Core.Naming.Bucket.For(name)}/{name}";
+        if (legacy)
+        {
+            WriteLegacy(zipPath, title);
+        }
+        else
+        {
+            var bytes = RomBytes(++_seed);
+            var game = Game(title, Rom("x.nds", bytes) with { ExternalFileName = "x.nds" }) with { System = LegacyExternalTestHandler.SystemId };
+            Directory.CreateDirectory(Path.GetDirectoryName(Abs(zipPath))!);
+            File.WriteAllBytes(Path.Combine(Path.GetDirectoryName(Abs(zipPath))!, "x.nds"), bytes);
+            await new LibraryZipWriter(_reader).WriteAsync(Abs(zipPath), null, new LibraryZipChanges(game, new Dictionary<string, Func<Stream>>()));
+            Touch(zipPath);
+        }
+
+        await Run();
+
+        Assert.That((await Open()).Select(i => i.Type), Does.Not.Contain(WrongLocation));
     }
 
     /// <summary>Open issues other than the cover codes these image-less games always get.</summary>

@@ -105,6 +105,7 @@ public class IngestPipelineTests
         {
             TestServices = services =>
             {
+                RnRomManager.Core.Systems.SystemHandlerRegistration.AddSystemHandler<LegacyExternalTestHandler>(services);
                 if (_mirrorOverride is not null)
                     services.AddSingleton(_mirrorOverride);
                 _extraServices?.Invoke(services);
@@ -171,6 +172,7 @@ public class IngestPipelineTests
                 },
                 new FixtureGame("seaQuest DSV (USA, Europe)", "seaQuest DSV (USA, Europe).gb", SeaQuest),
             ],
+            [LegacyExternalTestHandler.DatNameValue] = [],
             [Gbc] = [new FixtureGame("Pokemon - Gold Version (USA, Europe)", "Pokemon - Gold Version (USA, Europe).gbc", Gold) { ReleaseYear = 2000 }],
         }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
@@ -287,6 +289,28 @@ public class IngestPipelineTests
 
         Assert.That(again!.Outcome, Is.EqualTo(IngestOutcome.Duplicate));
         Assert.That(ReadZip("nds/B/Bad Crc Hero.zip").Roms, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public async Task LegacyGame_ExternalCopyOfItsEmbeddedRom_IsADuplicate_WithNoRepair()
+    {
+        var bytes = Atari(4096, 620);
+        var game = TestLibrary.Game("Old Ds", TestLibrary.Rom("Old Ds (USA).nds", bytes)) with { System = LegacyExternalTestHandler.SystemId };
+        var zip = Path.Combine(Roms, "legacy", "O", "Old Ds.zip");
+        LegacyZipWriter.Write(zip, game, bytes);
+        var zipBytes = File.ReadAllBytes(zip);
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, "legacy/O/Old Ds.zip", zipBytes.Length, DateTime.UtcNow), default);
+        var path = Path.Combine(_factory.Root, "ingest", LegacyExternalTestHandler.SystemId, "copy.nds");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, bytes);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1));
+        var info = new FileInfo(path);
+
+        var result = await IngestAsync(new IngestFile(LegacyExternalTestHandler.SystemId, path, "copy.nds", info.Length, info.LastWriteTimeUtc));
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Duplicate), result.Details);
+        Assert.That(File.ReadAllBytes(zip), Is.EqualTo(zipBytes), "the legacy ZIP is untouched");
+        Assert.That(Directory.GetFiles(Path.GetDirectoryName(zip)!), Is.EqualTo(new[] { zip }), "nothing written next to it");
     }
 
     [Test]

@@ -996,7 +996,9 @@ public sealed class IngestPipeline(
         var entryName = known.ExternalFileName ?? LibraryZip.RomEntry(known.FileName);
         IReadOnlyList<OpenIssue> open = [];
         // I6: only an input of the owner's storage mode repairs it; across modes the bytes on disk may differ.
-        if (game is not null && (systems.ById(known.SystemId) is { EmbedRomsInZip: false }) == (source is not null))
+        // S3a: the owner's effective mode, so a legacy (all-embedded) game never takes an external repair.
+        var ownerExternal = systems.ById(known.SystemId) is { EmbedRomsInZip: false } && known.ExternalFileName is not null;
+        if (game is not null && ownerExternal == (source is not null))
         {
             if (source is null)
             {

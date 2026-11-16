@@ -44,6 +44,13 @@ public interface ISystemHandler
     /// </summary>
     bool FileSets => false;
 
+    /// <summary>
+    /// S2: true for an external system whose older games may still hold every ROM inside the ZIP (all
+    /// <c>externalFileName</c> null) until the storage migration job moves them out. Requires
+    /// <see cref="EmbedRomsInZip"/> false and <see cref="FileSets"/> false. See <c>RomStorage.IsEmbedded</c>.
+    /// </summary>
+    bool LegacyEmbeddedRoms => false;
+
     /// <summary>Spec T1: libretro's DAT files, or blawar/titledb.</summary>
     DatSource DatSource => DatSource.Libretro;
 
