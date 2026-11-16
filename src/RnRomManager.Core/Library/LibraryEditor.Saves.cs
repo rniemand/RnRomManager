@@ -106,6 +106,39 @@ public sealed partial class LibraryEditor
     }
 
     /// <summary>
+    /// B8–B11: the cheap checks an endpoint runs before it reads a file, in the documented order: <c>404</c> game, then
+    /// release (<paramref name="romId"/>), <c>StorageMigrationPending</c>, <c>JobRunning</c> (a probe of the lock,
+    /// released at once), <c>SavesUnreadable</c>, then <c>404</c> save (<paramref name="saveId"/>) or, for an add,
+    /// <c>SaveLimitReached</c>. The operation checks them all again under the lock.
+    /// </summary>
+    /// <returns>null when the operation may go ahead.</returns>
+    public async Task<LibraryEditResult?> PrecheckSaveAsync(Guid gameId, long? romId, string? saveId, CancellationToken ct)
+    {
+        if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
+            return new(NotFound);
+        RomRow? romRow = null;
+        if (romId is { } id && (romRow = await roms.GetAsync(gameId, id, ct).ConfigureAwait(false)) is null)
+            return new(NotFound);
+        if (LegacyRefusal(row) is { } legacy)
+            return legacy;
+        using (var probe = jobLock.TryAcquire())
+        {
+            if (probe is null)
+                return new(JobRunning);
+        }
+        var (error, zip, game, saves) = OpenSaves(row);
+        if (error is not null)
+            return error;
+        using var _ = zip;
+        if (saveId is not null && saves!.All(s => s.Id != saveId))
+            return new(NotFound);
+        if (romRow is not null && game!.Roms.FirstOrDefault(r => r.Metadata.Sha1 == romRow.Sha1) is { } rom
+            && saves!.Count(s => GameSaves.Names(s, rom.FileName)) >= GameSaves.MaxPerRelease)
+            return new(SaveLimitReached, SaveLimitReachedTitle);
+        return null;
+    }
+
+    /// <summary>
     /// The game's ZIP and saves, in the B8 order after the game lookup: <c>StorageMigrationPending</c>, then
     /// <c>SavesUnreadable</c>. The caller disposes the ZIP.
     /// </summary>

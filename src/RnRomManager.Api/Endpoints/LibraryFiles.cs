@@ -227,6 +227,22 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
         }
     }
 
+    /// <summary>B7, B12: the game's <c>saves/</c> folder (B3); a missing or unreadable ZIP answers as for any read.</summary>
+    public IResult? ReadSaves(HttpContext ctx, GameRow game, out SavesReadResult? saves)
+    {
+        saves = null;
+        try
+        {
+            using var zip = OpenLibraryZip(game);
+            saves = GameSaves.Read(zip);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return Fail(ctx, game, ex);
+        }
+    }
+
     private LibraryZip OpenLibraryZip(GameRow game)
     {
         var file = OpenFile(game, out var path);
