@@ -51,6 +51,9 @@ public interface ISystemHandler
     /// </summary>
     bool LegacyEmbeddedRoms => false;
 
+    /// <summary>true: the extension names the file's format, so Review keeps the source file's extension.</summary>
+    bool KeepsSourceExtension => false;
+
     /// <summary>Spec T1: libretro's DAT files, or blawar/titledb.</summary>
     DatSource DatSource => DatSource.Libretro;
 
