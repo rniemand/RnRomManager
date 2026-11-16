@@ -1464,6 +1464,17 @@ describe('play page library saves (Saves B17, B18)', () => {
 		expect(atLoader).toBeNull();
 	});
 
+	it('keeps a start handler set before the page ran', async () => {
+		const earlier = vi.fn();
+		win.EJS_onGameStart = earlier;
+		await playWithSave('state');
+		manager();
+
+		gameStart();
+
+		expect(earlier).toHaveBeenCalledTimes(1);
+	});
+
 	it('applies a state once, 10 ms after start, even if start fires twice', async () => {
 		await playWithSave('state');
 		const fake = manager();

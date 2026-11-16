@@ -546,7 +546,10 @@ async function start() {
 	// Saves B17/B18: loader.js runs this on `start`, once at the end of startGame() (restart() doesn't fire it); the
 	// save goes in 10 ms later, as EmulatorJS's own start state does, and only once.
 	let saveApplied = false;
+	// A handler set before this page ran (the e2e suite's start marker) still runs.
+	const earlier = typeof ejs.EJS_onGameStart === 'function' ? /** @type {() => void} */ (ejs.EJS_onGameStart) : null;
 	ejs.EJS_onGameStart = () => {
+		earlier?.();
 		gameStarted = true;
 		if (!params.save || !saveBytes || saveApplied) return;
 		saveApplied = true;

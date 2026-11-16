@@ -16,7 +16,8 @@ roms/
   gbc/                  GBC-only and dual-mode carts
   gba/                  Game Boy Advance
   n64/                  Nintendo 64 (always stored big-endian, as .z64)
-  nds/                  Nintendo DS (.nds)
+  nds/                  Nintendo DS (external: .nds files next to the ZIP; games stored before then keep them
+                        inside until the storage migration job moves them out)
   nes/                  Nintendo Entertainment System (headered .nes, header included)
   snes/                 Super Nintendo Entertainment System (stored as .sfc, copier header stripped)
   vb/                   Virtual Boy (.vb)
@@ -65,6 +66,9 @@ Tetris.zip
     snap-01.png
   notes/
     Tetris (World) (Rev 1).gb.md
+  saves/
+    saves.json
+    0123456789abcdef0123456789abcdef.state
 ```
 
 - An external game's ZIP has no `roms/` folder: its ROM files are the `<ZipBase>.<…>` files beside it (for a disc system, files under their exact names; see [External ROM files](#external-rom-files)).
@@ -97,7 +101,7 @@ All releases of a game (regions, revisions) **and** its hacks and translations l
 
 ## External ROM files
 
-For an external system (Nintendo Switch and the six disc systems) each release is a file in the ZIP's own folder, and a disc set's release also has its other files (`files`, below) there:
+For an external system (Nintendo Switch, Nintendo DS and the disc systems) each release is a file in the ZIP's own folder, and a disc set's release also has its other files (`files`, below) there:
 
 - **Name (E1):** `<ZipBase>.<rom fileName>`, where `<ZipBase>` is the ZIP name without `.zip`, so a game's files sort together. When the rom name starts with `<ZipBase>` and a space (ignoring case) and something other than spaces follows, that repeated title is dropped: `Death's Door` + `Death's Door [0100B31015AF8000][v0].nsp` → `Death's Door.[0100B31015AF8000][v0].nsp`, an update → `Death's Door.[0100B31015AF8800][v0][1.0.1].nsp`. A rom name spelled differently from the title, or a ` (N)` ZIP name, keeps the full form (`Orbit` + `Orbit.nsp` → `Orbit.Orbit.nsp`). Only the file on disk is shorter: the logical `fileName` (info.json, downloads) keeps the full name.
 - **Length and clashes (E2):** the whole name, clash suffix included, is at most 250 UTF-8 bytes (so its `.tmp` staging name still fits a 255-byte file-name limit). A longer name is cut from the end of the rom part's stem (the extension is kept), then from `<ZipBase>` if needed, never splitting a character. A name already used by another file or folder, or by another release of any game in that folder, gets ` (2)`, ` (3)`, … The ZIP name of an external game uses the same 250-byte budget, `.zip` and clash suffix included.
@@ -115,13 +119,26 @@ A release can have one Markdown note, the entry `notes/<rom fileName>.md` (e.g. 
 - **Integrity:** the `EntryUnlisted` check ignores `notes/<f>.md` for every listed ROM `f`. Any other `notes/` entry is an orphan, reported as `EntryUnlisted` (Warn) and left alone.
 - **Downgrades drop notes:** an app version older than this one copies only the entries it lists, so its next write of a ZIP silently drops `notes/`. Back up before downgrading.
 
+## Saves
+
+A game's saves are shared by every user of the library and live in its ZIP:
+
+- `saves/saves.json` (UTF-8, at most 1 MiB, written only by the app): `{ "version": 1, "saves": [ … ] }`, one record per save with `id` (32 lowercase hex), `name` (1–100 characters, trimmed, no control characters), `description` (≤ 1,000 characters, line breaks allowed), `kind` (`state` or `battery`), `release` (the release's `fileName`, matched ignoring case), `extension`, `sizeBytes`, `sha1`, `uploadedBy`/`uploadedAt` and `updatedBy`/`updatedAt` (usernames at the time, may be `null`).
+- Each save's bytes are the entry `saves/<id><extension>`. `extension` comes from the uploaded file name: the text after its last `.`, lowercased, when it is 1–8 of `[a-z0-9]` (`x.tar.gz` → `.gz`), else empty. Entries are never named after user text.
+- A save belongs to the game, not the release: when its release is deleted or moved away it stays as an orphan (no release, can't be played) until a release of that name joins the game again. A release has at most 25 saves, each at most 256 MiB.
+- **Every write keeps saves:** a valid `saves.json` and the entries it lists are copied; other `saves/` entries are dropped. When `saves.json` is missing while other `saves/` entries exist, or it is unreadable, over 1 MiB or invalid (including a listed entry that is missing or has another length), every `saves/` entry is copied byte for byte, and the save routes and merges refuse that game with `409 SavesUnreadable`. An Admin fixes such a ZIP by hand: repair `saves/saves.json` or remove the `saves/` folder (integrity's `EntryUnlisted` findings point at it).
+- **Verification:** each listed entry must exist with its `sizeBytes`; newly written bytes are also checked against their `sha1`. Copied entries are never re-hashed.
+- **Merges** carry the source's saves into the target (a clashing id gets a new one; each save's `release` is renamed with its release). Moving a release leaves its saves behind, except when it is the source's last release: then all of the source's saves go with it. A `saves.json` that would pass 1 MiB is refused with `409 SavesIndexFull` before anything is written.
+- **Integrity** expects `saves/saves.json` and the entries a valid index lists; any other `saves/` entry is `EntryUnlisted`.
+- **Downgrades drop saves:** an app version older than this one copies only the entries it lists, so its next write of a ZIP silently drops `saves/`. Back up before downgrading.
+
 ## Writes
 
 - Every write starts from the ZIP's own `info.json` and entries, never from database rows.
 - Writes are atomic: the new ZIP is streamed to `<name>.zip.tmp` next to the target, re-opened, every ROM entry's SHA1 checked against `info.json` (an external game's files are checked by length instead; see [External ROM files](#external-rom-files)), then moved over the old file. An `info.json` over 1 MiB is refused (`VerifyFailed`) before anything is published, since the reader would refuse it. A ZIP is never edited in place. When the path changes (a title edit), the new ZIP is written and the database committed before the old ZIP is deleted.
-- Release notes of listed ROMs are carried into the new ZIP (see [Release notes](#release-notes)).
+- Release notes of listed ROMs are carried into the new ZIP (see [Release notes](#release-notes)), and so are saves (see [Saves](#saves)).
 - Entry modified times are stored as ZIP (DOS) times: the writer's local time at 2-second precision, with no time zone. The Zip Contents tab and `GET /api/games/{id}/zip-entries` read them as server local time, so they're exact only while the server's time zone is unchanged.
-- Compression: Deflate, optimal level, except a `roms/` entry larger than 128 MiB, which is written at the fastest level so rewrites of games with large releases stay quick. Every ZIP write re-deflates every entry, so an existing large entry moves to the fastest level on its game's next write. Readers need not care: both are plain Deflate. `info.json` is UTF-8 without a BOM, indented, camelCase, with nulls written.
+- Compression: Deflate, optimal level, except a `roms/` or `saves/` entry larger than 128 MiB, which is written at the fastest level so rewrites of games with large releases stay quick. Every ZIP write re-deflates every entry, so an existing large entry moves to the fastest level on its game's next write. Readers need not care: both are plain Deflate. `info.json` is UTF-8 without a BOM, indented, camelCase, with nulls written.
 
 ## `info.json` (schema version 6)
 
