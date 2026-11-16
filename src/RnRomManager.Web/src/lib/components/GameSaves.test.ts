@@ -215,6 +215,17 @@ describe('GameSaves', () => {
 		);
 	});
 
+	it('tells the page after each change, so it reloads the renumbered releases', async () => {
+		listed([save()]);
+		const onchanged = vi.fn();
+		render(GameSaves, { game, onchanged });
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Delete Before boss' }));
+		await fireEvent.click(modal().getByRole('button', { name: 'Delete save', hidden: true }));
+
+		await vi.waitFor(() => expect(onchanged).toHaveBeenCalledTimes(1));
+	});
+
 	it('reloads the list when version changes', async () => {
 		listed([]);
 		const view = render(GameSaves, { game, version: 0 });

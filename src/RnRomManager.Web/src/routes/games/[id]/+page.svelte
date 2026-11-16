@@ -194,6 +194,16 @@
 		}
 	}
 
+	/** A save change rewrote the ZIP and renumbered the release ids: reload them. */
+	async function refreshGame(): Promise<void> {
+		try {
+			const fresh = await fetchGame(id);
+			if (fresh) game = fresh;
+		} catch {
+			// A stale id later reloads and asks for a retry as usual.
+		}
+	}
+
 	async function onAdminDone(outcome: AdminOutcome): Promise<void> {
 		if ('game' in outcome) {
 			game = outcome.game;
@@ -776,7 +786,7 @@
 	</div>
 
 	<div id="saves-panel" role="tabpanel" aria-labelledby="saves-tab" hidden={tab !== 'saves'}>
-		{#if tab === 'saves'}<GameSaves {game} version={savesVersion} />{/if}
+		{#if tab === 'saves'}<GameSaves {game} version={savesVersion} onchanged={refreshGame} />{/if}
 	</div>
 
 	<div id="zip-panel" role="tabpanel" aria-labelledby="zip-tab" hidden={tab !== 'zip'}>
@@ -813,7 +823,10 @@
 		core={game.browserCore}
 		rom={playRom}
 		disc={playRom != null && game.browserCore != null && usesPlayDisc(game.browserCore, playRom)}
-		onsaved={() => savesVersion++}
+		onsaved={() => {
+			savesVersion++;
+			void refreshGame();
+		}}
 	/>
 	<GameCollectionsModal
 		bind:open={collectionsOpen}

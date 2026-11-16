@@ -26,9 +26,14 @@
 		game: GameDetail;
 		/** B19: bumped by the page after the Play dialog saved to the library; the list reloads. */
 		version?: number;
+		/**
+		 * After each change that rewrote the ZIP: every write renumbers the release ids, so the page reloads the game
+		 * (its Play and Download buttons would 404 on the old ids).
+		 */
+		onchanged?: () => void;
 	}
 
-	let { game, version = 0 }: Props = $props();
+	let { game, version = 0, onchanged }: Props = $props();
 
 	let items = $state<SaveItem[] | null>(null);
 	let loadError = $state<unknown>(null);
@@ -140,6 +145,7 @@
 			else if (mode === 'replace') await savesApi.replace(game.id, target!.id, file!);
 			else if (mode === 'delete') await savesApi.remove(game.id, target!.id);
 			open = false;
+			onchanged?.();
 			await load();
 		} catch (e) {
 			if (toasts.jobRunning(e)) open = false;
@@ -368,5 +374,8 @@
 		game.browserCore !== null &&
 		usesPlayDisc(game.browserCore, playing.rom)}
 	save={playing ? { saveId: playing.save.id, saveKind: playing.save.kind } : null}
-	onsaved={load}
+	onsaved={() => {
+		onchanged?.();
+		void load();
+	}}
 />
