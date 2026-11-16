@@ -1,0 +1,411 @@
+{
+	"3do": [
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Opera"
+		}
+	],
+	"a2600": [
+		{
+			"name": "Stella",
+			"url": "https://stella-emu.github.io/downloads.html",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Stella"
+		}
+	],
+	"a5200": [
+		{
+			"name": "Altirra",
+			"url": "https://www.virtualdub.org/altirra.html",
+			"os": ["windows"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: a5200"
+		}
+	],
+	"a7800": [
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: ProSystem"
+		}
+	],
+	"coleco": [
+		{
+			"name": "Gearcoleco",
+			"url": "https://github.com/drhelius/Gearcoleco",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Gearcoleco"
+		}
+	],
+	"gb": [
+		{
+			"name": "mGBA",
+			"url": "https://mgba.io/downloads.html",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "SameBoy",
+			"url": "https://sameboy.github.io/downloads/",
+			"os": ["windows", "macos", "ios"]
+		},
+		{
+			"name": "Delta",
+			"url": "https://deltaemulator.com/",
+			"os": ["ios"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Gambatte"
+		}
+	],
+	"gba": [
+		{
+			"name": "mGBA",
+			"url": "https://mgba.io/downloads.html",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "Delta",
+			"url": "https://deltaemulator.com/",
+			"os": ["ios"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: mGBA"
+		}
+	],
+	"gbc": [
+		{
+			"name": "mGBA",
+			"url": "https://mgba.io/downloads.html",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "SameBoy",
+			"url": "https://sameboy.github.io/downloads/",
+			"os": ["windows", "macos", "ios"]
+		},
+		{
+			"name": "Delta",
+			"url": "https://deltaemulator.com/",
+			"os": ["ios"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Gambatte"
+		}
+	],
+	"gc": [
+		{
+			"name": "Dolphin",
+			"url": "https://dolphin-emu.org/download/",
+			"os": ["windows", "macos", "linux", "android"]
+		}
+	],
+	"gg": [
+		{
+			"name": "Gearsystem",
+			"url": "https://github.com/drhelius/Gearsystem",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "Emulicious",
+			"url": "https://emulicious.net/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Genesis Plus GX"
+		}
+	],
+	"jaguar": [
+		{
+			"name": "BigPEmu",
+			"url": "https://www.richwhitehouse.com/jaguar/",
+			"os": ["windows", "linux", "ios"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Virtual Jaguar"
+		}
+	],
+	"lynx": [
+		{
+			"name": "Mednafen",
+			"url": "https://mednafen.github.io/releases/",
+			"os": ["windows"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Handy"
+		}
+	],
+	"md": [
+		{
+			"name": "BlastEm",
+			"url": "https://www.retrodev.com/blastem/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "ares",
+			"url": "https://ares-emu.net/",
+			"os": ["windows", "macos"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Genesis Plus GX"
+		}
+	],
+	"n64": [
+		{
+			"name": "Gopher64",
+			"url": "https://github.com/gopher64/gopher64",
+			"os": ["windows", "macos", "linux", "android"]
+		},
+		{
+			"name": "Delta",
+			"url": "https://deltaemulator.com/",
+			"os": ["ios"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Mupen64Plus-Next"
+		}
+	],
+	"nds": [
+		{
+			"name": "melonDS",
+			"url": "https://melonds.kuribo64.net/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "DeSmuME",
+			"url": "https://desmume.org/",
+			"os": ["windows", "macos"]
+		},
+		{
+			"name": "Delta",
+			"url": "https://deltaemulator.com/",
+			"os": ["ios"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: melonDS DS"
+		}
+	],
+	"nes": [
+		{
+			"name": "Mesen",
+			"url": "https://www.mesen.ca/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "Delta",
+			"url": "https://deltaemulator.com/",
+			"os": ["ios"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Mesen"
+		}
+	],
+	"psp": [
+		{
+			"name": "PPSSPP",
+			"url": "https://www.ppsspp.org/download/",
+			"os": ["windows", "macos", "linux", "android", "ios"]
+		}
+	],
+	"psx": [
+		{
+			"name": "DuckStation",
+			"url": "https://www.duckstation.org/",
+			"os": ["windows", "macos", "linux", "android"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: SwanStation"
+		}
+	],
+	"s32x": [
+		{
+			"name": "ares",
+			"url": "https://ares-emu.net/",
+			"os": ["windows", "macos"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: PicoDrive"
+		}
+	],
+	"saturn": [
+		{
+			"name": "Ymir",
+			"url": "https://github.com/ymir-emu/Ymir",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "Mednafen",
+			"url": "https://mednafen.github.io/releases/",
+			"os": ["windows"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Beetle Saturn"
+		}
+	],
+	"segacd": [
+		{
+			"name": "ares",
+			"url": "https://ares-emu.net/",
+			"os": ["windows", "macos"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Genesis Plus GX"
+		}
+	],
+	"sms": [
+		{
+			"name": "Gearsystem",
+			"url": "https://github.com/drhelius/Gearsystem",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "Emulicious",
+			"url": "https://emulicious.net/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Genesis Plus GX"
+		}
+	],
+	"snes": [
+		{
+			"name": "Snes9x",
+			"url": "https://www.snes9x.com/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "bsnes",
+			"url": "https://github.com/bsnes-emu/bsnes",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "Delta",
+			"url": "https://deltaemulator.com/",
+			"os": ["ios"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Snes9x"
+		}
+	],
+	"switch": [
+		{
+			"name": "Ryubing",
+			"url": "https://ryujinx.app/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "Eden",
+			"url": "https://eden-emu.dev/",
+			"os": ["windows", "macos", "linux", "android"]
+		}
+	],
+	"tg16": [
+		{
+			"name": "Mednafen",
+			"url": "https://mednafen.github.io/releases/",
+			"os": ["windows"]
+		},
+		{
+			"name": "ares",
+			"url": "https://ares-emu.net/",
+			"os": ["windows", "macos"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Beetle PCE FAST"
+		}
+	],
+	"vb": [
+		{
+			"name": "Mednafen",
+			"url": "https://mednafen.github.io/releases/",
+			"os": ["windows"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Beetle VB"
+		}
+	],
+	"wii": [
+		{
+			"name": "Dolphin",
+			"url": "https://dolphin-emu.org/download/",
+			"os": ["windows", "macos", "linux", "android"]
+		}
+	],
+	"x360": [
+		{
+			"name": "Xenia Canary",
+			"url": "https://xenia.jp/",
+			"os": ["windows", "linux"]
+		}
+	]
+}

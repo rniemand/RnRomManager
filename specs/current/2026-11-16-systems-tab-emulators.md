@@ -48,27 +48,27 @@ OS codes: W Windows, M macOS, L Linux, A Android, I iOS. RetroArch is W M L A I 
 | `gba` | mGBA (W M L), Delta (I), RetroArch (mGBA) |
 | `nes` | Mesen (W M L), Delta (I), RetroArch (Mesen) |
 | `snes` | Snes9x (W M L), bsnes (W M L), Delta (I), RetroArch (Snes9x) |
-| `n64` | Gopher64 (W L), Delta (I), RetroArch (Mupen64Plus-Next) |
+| `n64` | Gopher64 (W M L A), Delta (I), RetroArch (Mupen64Plus-Next) |
 | `vb` | Mednafen (W), RetroArch (Beetle VB) |
 | `a2600` | Stella (W M L), RetroArch (Stella) |
 | `a5200` | Altirra (W), RetroArch (a5200) |
 | `a7800` | RetroArch (ProSystem) |
 | `lynx` | Mednafen (W), RetroArch (Handy) |
-| `jaguar` | BigPEmu (W L), RetroArch (Virtual Jaguar) |
+| `jaguar` | BigPEmu (W L I), RetroArch (Virtual Jaguar) |
 | `coleco` | Gearcoleco (W M L), RetroArch (Gearcoleco) |
 | `gg`, `sms` | Gearsystem (W M L), Emulicious (W M L), RetroArch (Genesis Plus GX) |
 | `md` | BlastEm (W M L), ares (W M), RetroArch (Genesis Plus GX) |
 | `s32x` | ares (W M), RetroArch (PicoDrive) |
 | `segacd` | ares (W M), RetroArch (Genesis Plus GX) |
-| `tg16` | Mednafen (W), ares (W M), RetroArch (Beetle PCE Fast) |
+| `tg16` | Mednafen (W), ares (W M), RetroArch (Beetle PCE FAST) |
 | `saturn` | Ymir (W M L), Mednafen (W), RetroArch (Beetle Saturn) |
 | `3do` | RetroArch (Opera) |
 | `psx` | DuckStation (W M L A), RetroArch (SwanStation) |
 | `psp` | PPSSPP (W M L A I) |
 | `nds` | melonDS (W M L), DeSmuME (W M), Delta (I), RetroArch (melonDS DS) |
-| `gc`, `wii` | Dolphin (W M A) |
-| `x360` | Xenia Canary (W) |
-| `switch` | Per B10a. |
+| `gc`, `wii` | Dolphin (W M L A) |
+| `x360` | Xenia Canary (W L) |
+| `switch` | Ryubing (W M L), Eden (W M L A), per B10a. |
 
 Canonical URLs (B9: one URL per name):
 
@@ -91,13 +91,15 @@ Canonical URLs (B9: one URL per name):
 | Emulicious | `https://emulicious.net/` |
 | BlastEm | `https://www.retrodev.com/blastem/` |
 | ares | `https://ares-emu.net/` |
-| Ymir | `https://github.com/StrikerX3/Ymir` |
+| Ymir | `https://github.com/ymir-emu/Ymir` |
 | DuckStation | `https://www.duckstation.org/` |
 | PPSSPP | `https://www.ppsspp.org/download/` |
 | melonDS | `https://melonds.kuribo64.net/` |
 | DeSmuME | `https://desmume.org/` |
 | Dolphin | `https://dolphin-emu.org/download/` |
 | Xenia Canary | `https://xenia.jp/` |
+| Ryubing | `https://ryujinx.app/` |
+| Eden | `https://eden-emu.dev/` |
 
 ## Changes
 | Area | File(s) | Change |
@@ -124,7 +126,7 @@ No migrations, config keys or API contract changes. The README supported-systems
 - **Tab helpers.** `discoveryState` must keep returning null for `systems`, or the page would render the discovery panes for it; covered by `discovery.test.ts`.
 
 ## Steps
-- [ ] **1. Emulator catalog**: `systemEmulators.json` with all 28 systems per § Catalog and B10a (each URL and OS list opened and checked by hand), `systemEmulators.ts` helpers, the .NET check, and the adding-a-system doc step. Data-heavy, so it may exceed 300 lines. Files: `src/RnRomManager.Web/src/lib/systemEmulators.json`, `src/RnRomManager.Web/src/lib/systemEmulators.ts`, `tests/RnRomManager.Api.Tests/SystemEmulatorsCatalogTests.cs`, `docs/adding-a-system.md`. Tests: `SystemEmulatorsCatalogTests` (keys == handler ids, each B9 rule including one URL per name, with failure messages naming the system), `systemEmulators.test.ts` (group order W→I, empty groups dropped, an emulator in several groups, unknown/empty system → `[]`, `linkHost`). Done when: both pass; removing a key or adding a stray one makes the .NET test fail with its name; § Decisions records the check date, the Switch forks chosen, and every entry dropped or changed from § Catalog (URL, OS list or core name).
+- [x] **1. Emulator catalog**: `systemEmulators.json` with all 28 systems per § Catalog and B10a (each URL and OS list opened and checked by hand), `systemEmulators.ts` helpers, the .NET check, and the adding-a-system doc step. Data-heavy, so it may exceed 300 lines. Files: `src/RnRomManager.Web/src/lib/systemEmulators.json`, `src/RnRomManager.Web/src/lib/systemEmulators.ts`, `tests/RnRomManager.Api.Tests/SystemEmulatorsCatalogTests.cs`, `docs/adding-a-system.md`. Tests: `SystemEmulatorsCatalogTests` (keys == handler ids, each B9 rule including one URL per name, with failure messages naming the system), `systemEmulators.test.ts` (group order W→I, empty groups dropped, an emulator in several groups, unknown/empty system → `[]`, `linkHost`). Done when: both pass; removing a key or adding a stray one makes the .NET test fail with its name; § Decisions records the check date, the Switch forks chosen, and every entry dropped or changed from § Catalog (URL, OS list or core name).
 - [ ] **2. Systems tab URL state**: `discovery.ts` changes. Files: `src/RnRomManager.Web/src/lib/discovery.ts`, `src/RnRomManager.Web/src/lib/discovery.test.ts`. Tests: `discovery.test.ts` (`collectionsTab` → `systems`; `discoveryState` null for systems; `systemsState` parses `system`, empty/whitespace → null, keeps case as given, defaults `gamePage` to 1, drops bad pages; `systemsSearch` omits page 1 and `gamePage` without a system; `tabSearch('systems')`; `collectionsTabs` has four tabs in order). Done when: tests, `npm run lint` and `npm run check` pass.
 - [ ] **3. Emulators modal**: standalone `SystemEmulatorsModal` (props `open` bindable, `system: SystemInfo`) and its icons. Files: `SystemEmulatorsModal.svelte`, `icons.ts`. Tests: `SystemEmulatorsModal.test.ts` (title and `aria-labelledby`, group order and only non-empty groups with their `aria-label`, link `href`/`target`/`rel` and hidden "(opens in a new tab)", note and host shown, B8 message for an empty system, the closing note, **Close** sets `open` false; Escape and the static backdrop are `ConfirmModal`'s and stay covered by `ConfirmModal.test.ts`). Done when: tests, lint and check pass.
 - [ ] **4. System games panel**: `SystemGames` with the full B5 header (heading, count, Emulators button opening the modal) and games grid. Files: `SystemGames.svelte`. Tests: `SystemGames.test.ts` (requests `/api/games?system=…`, heading + count from `total`, empty-system and past-the-end messages, error + retry, page-size key `systemGames`, stale response ignored, Emulators button shows with and without games and opens the modal, the button is focused when the modal's `open` goes back to false). Done when: tests, lint and check pass.
@@ -150,6 +152,8 @@ No migrations, config keys or API contract changes. The README supported-systems
 - 2026-11-16 Catalog OS lists checked on the web → SameBoy W M I (no Linux build), Mednafen W (Linux is source only), ares W M, DeSmuME W M, Dolphin W M A (no Linux builds on its site); RetroArch TG16 core is "Beetle PCE Fast". Still re-checked by hand at implementation (B10); Snes9x, DeSmuME, Ymir and the Switch forks couldn't be fully verified this pass. (reviewer)
 - 2026-11-16 simple64 is archived (Feb 2025) → replace with Gopher64 (`https://github.com/gopher64/gopher64`, OS list confirmed at implementation). (user)
 - 2026-11-16 Delta also plays GB, GBC and DS → add Delta (I) to `gb`, `gbc` and `nds`. (user)
+- 2026-11-16 Catalog checked by hand (B10, each page opened; GitHub release assets read for OS lists) → changes from § Catalog: Gopher64 W M L A (macOS and Android builds exist); BigPEmu W L I (iOS App Store port); Dolphin W M L A (Linux AppImages now offered); Xenia Canary W L (official release repo ships a Linux build); Ymir URL `https://github.com/ymir-emu/Ymir` (repo moved); TG16 core named "Beetle PCE FAST" (libretro `display_name`). All other entries confirmed as listed. (implementation)
+- 2026-11-16 Switch forks (B10a) → Ryubing (`https://ryujinx.app/`, domain verified by the Ryubing GitHub org; W M L) and Eden (`https://eden-emu.dev/`, project's own site; W M L A). Citron dropped: its site is parked and its successor couldn't be verified. (implementation)
 
 ## Kickoff prompt
 ```text
