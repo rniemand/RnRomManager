@@ -68,6 +68,7 @@ public class IngestDeleteEndpointsTests
             [IngestSeeder.SaturnDat] = [],
             [IngestSeeder.SegaCdDat] = [],
             [IngestSeeder.ThreeDoDat] = [],
+            [IngestSeeder.C64Dat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)],
             ["Nintendo - Game Boy Color"] = [],

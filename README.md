@@ -35,6 +35,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Atari Jaguar | `jaguar` | In ZIP | `.j64`, `.jag`, `.rom`, `.abs`, `.cof` | No-Intro | `virtualjaguar` |
 | Atari Lynx | `lynx` | In ZIP | `.lnx`, `.lyx` | No-Intro | `handy` |
 | ColecoVision | `coleco` | In ZIP | `.col`, `.rom`, `.bin` | No-Intro | `gearcoleco` |
+| Commodore 64 | `c64` | In ZIP | `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.prg`, `.bin` | No-Intro | — |
 | Game Boy | `gb` | In ZIP | `.gb` | No-Intro | `gambatte` |
 | Game Boy Advance | `gba` | In ZIP | `.gba` | No-Intro | `mgba` |
 | Game Boy Color | `gbc` | In ZIP | `.gbc` | No-Intro | `gambatte` |
@@ -117,7 +118,7 @@ docker compose up -d
 3. Copy each system's files (formats in [Supported systems](#supported-systems)) into `data/ingest/<Id>/` (disc images loose, not in archives), then press **Ingestion → Import all**.
 4. To play ColecoVision games in the browser, copy the console's BIOS as `data/bios/colecovision.rom` (the app can't ship it). PlayStation games play without a BIOS (the emulator's built-in HLE BIOS); for better compatibility copy your own 512 KiB `scph5501.bin` into `data/bios/`.
 
-Upgrading from a version without Game Boy Advance, Nintendo 64, NES, SNES, Virtual Boy, Atari 2600, Atari 5200, Atari 7800, Atari Lynx, Atari Jaguar, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch, PlayStation, PSP, GameCube, Wii, Xbox 360, Saturn, Nintendo DS, Sega CD or 3DO? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`): it downloads the new system's DATs (for Switch, the titledb file; for the disc systems, the Redump DAT).
+Upgrading from a version without Game Boy Advance, Nintendo 64, NES, SNES, Virtual Boy, Atari 2600, Atari 5200, Atari 7800, Atari Lynx, Atari Jaguar, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch, PlayStation, PSP, GameCube, Wii, Xbox 360, Saturn, Nintendo DS, Sega CD, 3DO or Commodore 64? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`): it downloads the new system's DATs (for Switch, the titledb file; for the disc systems, the Redump DAT).
 
 Set `user:` to the owner of `./data` (`id -u`:`id -g`). An existing MariaDB server, reverse proxies, backups, upgrades and password recovery are covered in the [deployment guide](https://github.com/rniemand/RnRomManager/blob/main/docs/deployment.md).
 
