@@ -35,7 +35,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Atari Jaguar | `jaguar` | In ZIP | `.j64`, `.jag`, `.rom`, `.abs`, `.cof` | No-Intro | `virtualjaguar` |
 | Atari Lynx | `lynx` | In ZIP | `.lnx`, `.lyx` | No-Intro | `handy` |
 | ColecoVision | `coleco` | In ZIP | `.col`, `.rom`, `.bin` | No-Intro | `gearcoleco` |
-| Commodore 64 | `c64` | In ZIP | `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.prg`, `.bin` | No-Intro | `vice_x64sc` |
+| Commodore 64 | `c64` | In ZIP | `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.t64`, `.prg`, `.bin` | No-Intro | `vice_x64sc` |
 | Game Boy | `gb` | In ZIP | `.gb` | No-Intro | `gambatte` |
 | Game Boy Advance | `gba` | In ZIP | `.gba` | No-Intro | `mgba` |
 | Game Boy Color | `gbc` | In ZIP | `.gbc` | No-Intro | `gambatte` |

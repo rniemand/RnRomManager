@@ -18,7 +18,7 @@ public sealed class C64Handler : ISystemHandler
     public string Family => Id;
 
     /// <summary><c>[0]</c> (<c>.crt</c>) is the first extension; Review keeps the source's own (<see cref="KeepsSourceExtension"/>).</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".crt", ".tap", ".nib", ".d64", ".g64", ".prg", ".bin"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".crt", ".tap", ".nib", ".d64", ".g64", ".t64", ".prg", ".bin"];
 
     public long MinRomSizeBytes => 1024;
     public long MaxRomSizeBytes => 8 * 1024 * 1024;
