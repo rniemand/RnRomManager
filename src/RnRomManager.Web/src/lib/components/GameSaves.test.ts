@@ -225,3 +225,102 @@ describe('GameSaves', () => {
 		await vi.waitFor(() => expect(calls.filter((c) => c.key === list)).toHaveLength(2));
 	});
 });
+
+describe('GameSaves Play (B16, B19)', () => {
+	const id = 'a'.repeat(32);
+	const playable = (core: string | null, externalFileName: string | null = null) =>
+		({
+			...game,
+			browserCore: core,
+			roms: game.roms.map((r) => ({ ...r, externalFileName }))
+		}) as unknown as GameDetail;
+	const iframe = () => document.querySelector('iframe');
+
+	it('shows Play only for a save of a release the modal can play', async () => {
+		listed([save(), save({ id: 'b'.repeat(32), name: 'Orphan', romId: null })]);
+		render(GameSaves, { game: playable('gambatte') });
+
+		expect(await screen.findByRole('button', { name: 'Play Before boss' })).toBeTruthy();
+		expect(screen.queryByRole('button', { name: 'Play Orphan' })).toBeNull();
+	});
+
+	it.each([
+		['no core', null],
+		['the PSP tab player', 'ppsspp']
+	])('hides Play with %s', async (_, core) => {
+		listed([save()]);
+		render(GameSaves, { game: playable(core, core ? 'x.iso' : null) });
+
+		await screen.findByRole('button', { name: 'Edit Before boss' });
+		expect(screen.queryByRole('button', { name: 'Play Before boss' })).toBeNull();
+	});
+
+	it.each(['desmume', 'opera'])(
+		'hides Play for a battery save on %s, not for a state',
+		async (core) => {
+			listed([
+				save({ kind: 'battery', name: 'Battery' }),
+				save({ id: 'b'.repeat(32), name: 'State' })
+			]);
+			render(GameSaves, { game: playable(core, 'x.nds') });
+
+			expect(await screen.findByRole('button', { name: 'Play State' })).toBeTruthy();
+			expect(screen.queryByRole('button', { name: 'Play Battery' })).toBeNull();
+		}
+	);
+
+	it('plays a state at once, with the save in the URL and no disc=1 for an external DS release', async () => {
+		listed([save()]);
+		render(GameSaves, { game: playable('desmume', 'Tetris.(World).nds') });
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Play Before boss' }));
+
+		expect(iframe()!.getAttribute('src')).toBe(
+			`/emulator/play.html?game=g1&rom=1&core=desmume&name=Tetris%20(World).gb&save=${id}&saveKind=state`
+		);
+	});
+
+	it('asks before loading a battery save', async () => {
+		listed([save({ kind: 'battery' })]);
+		render(GameSaves, { game: playable('gambatte') });
+
+		await fireEvent.click(await screen.findByRole('button', { name: 'Play Before boss' }));
+		expect(iframe()).toBeNull();
+		const confirm = within(
+			[...document.querySelectorAll<HTMLElement>('.modal')].find((m) =>
+				m.textContent?.includes('replaces the in-browser save')
+			)!
+		);
+		await fireEvent.click(confirm.getByRole('button', { name: 'Play', hidden: true }));
+
+		expect(iframe()!.getAttribute('src')).toMatch(new RegExp(`&save=${id}&saveKind=battery$`));
+	});
+
+	it('reloads the list after its own Play dialog saved to the library', async () => {
+		listed([save()]);
+		answers['POST /api/games/g1/saves'] = [{ status: 201, body: save() }];
+		render(GameSaves, { game: playable('gambatte') });
+		await fireEvent.click(await screen.findByRole('button', { name: 'Play Before boss' }));
+		const frame = iframe()!;
+		vi.spyOn(frame.contentWindow!, 'postMessage').mockImplementation(() => {});
+
+		await fireEvent.click(
+			screen.getByRole('button', { name: 'Save state to library', hidden: true })
+		);
+		window.dispatchEvent(
+			new MessageEvent('message', {
+				data: {
+					type: 'rnrm-emulator-export-result',
+					kind: 'state',
+					ok: true,
+					bytes: new Uint8Array([1]).buffer,
+					extension: '.state'
+				},
+				origin: location.origin,
+				source: frame.contentWindow
+			})
+		);
+
+		await vi.waitFor(() => expect(calls.filter((c) => c.key === list)).toHaveLength(2));
+	});
+});

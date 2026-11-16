@@ -813,6 +813,7 @@
 		core={game.browserCore}
 		rom={playRom}
 		disc={playRom != null && game.browserCore != null && usesPlayDisc(game.browserCore, playRom)}
+		onsaved={() => savesVersion++}
 	/>
 	<GameCollectionsModal
 		bind:open={collectionsOpen}

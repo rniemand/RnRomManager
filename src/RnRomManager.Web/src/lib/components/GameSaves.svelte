@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import type { GameDetail, SaveItem, SaveKind } from '../api/types';
+	import type { GameDetail, RomDetail, SaveItem, SaveKind } from '../api/types';
+	import { canPlay, opensInNewTab, usesPlayDisc } from '../emulator';
 	import { formatDateTime } from '../format';
 	import {
 		descriptionError,
@@ -13,6 +14,7 @@
 	} from '../saves';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
+	import EmulatorModal from './EmulatorModal.svelte';
 	import EmptyState from './EmptyState.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
 	import FileSize from './FileSize.svelte';
@@ -47,6 +49,36 @@
 	let fileInput = $state<HTMLInputElement | null>(null);
 
 	const formId = `save-form-${Math.random().toString(36).slice(2)}`;
+
+	/** B16: the release a save plays on in the modal, or null when it can't be played from here. */
+	function playableRom(save: SaveItem): RomDetail | null {
+		const core = game.browserCore;
+		const rom = game.roms.find((r) => r.id === save.romId);
+		if (!rom || !core || !canPlay(game, rom) || opensInNewTab(core)) return null;
+		// B18: neither core's battery save goes through EmulatorJS's save file.
+		return save.kind === 'battery' && (core === 'desmume' || core === 'opera') ? null : rom;
+	}
+
+	let playOpen = $state(false);
+	let playing = $state<{ rom: RomDetail; save: SaveItem } | null>(null);
+	let confirmBattery = $state<{ rom: RomDetail; save: SaveItem } | null>(null);
+	let batteryOpen = $state(false);
+
+	function play(save: SaveItem, rom: RomDetail): void {
+		if (save.kind === 'battery') {
+			confirmBattery = { rom, save };
+			batteryOpen = true;
+			return;
+		}
+		playing = { rom, save };
+		playOpen = true;
+	}
+
+	function playBattery(): void {
+		batteryOpen = false;
+		playing = confirmBattery;
+		playOpen = true;
+	}
 	const errors = $derived({
 		name: mode === 'add' || mode === 'edit' ? nameError(name) : null,
 		description: mode === 'add' || mode === 'edit' ? descriptionError(description) : null,
@@ -165,6 +197,7 @@
 				</thead>
 				<tbody>
 					{#each items as save (save.id)}
+						{@const playable = playableRom(save)}
 						<tr>
 							<td>
 								<div class="text-break">{save.name}</div>
@@ -194,6 +227,14 @@
 									</div>{/if}
 							</td>
 							<td class="text-end text-nowrap">
+								{#if playable}
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-success"
+										aria-label="Play {save.name}"
+										onclick={() => play(save, playable)}><Icon name="play" /></button
+									>
+								{/if}
 								<!-- eslint-disable svelte/no-navigation-without-resolve -- an API download, not a page -->
 								<a
 									class="btn btn-sm btn-outline-secondary"
@@ -308,3 +349,24 @@
 		</form>
 	{/if}
 </ConfirmModal>
+
+<ConfirmModal
+	bind:open={batteryOpen}
+	title="Load battery save"
+	confirmLabel="Play"
+	onconfirm={playBattery}
+>
+	<p class="mb-0">Loading this battery save replaces the in-browser save for this release.</p>
+</ConfirmModal>
+
+<EmulatorModal
+	bind:open={playOpen}
+	gameId={game.id}
+	core={game.browserCore}
+	rom={playing?.rom ?? null}
+	disc={playing !== null &&
+		game.browserCore !== null &&
+		usesPlayDisc(game.browserCore, playing.rom)}
+	save={playing ? { saveId: playing.save.id, saveKind: playing.save.kind } : null}
+	onsaved={load}
+/>
