@@ -43,6 +43,9 @@ public static class IngestErrors
 
     /// <summary>B10: a <c>FileSets</c> file's exact name is over 250 UTF-8 bytes; it is never cut.</summary>
     public const string NameTooLong = "NameTooLong";
+
+    /// <summary>S3: the target is a legacy game whose ROMs are still inside its ZIP; the file stays in ingest for the next import.</summary>
+    public const string StorageMigrationPending = "StorageMigrationPending";
 }
 
 /// <summary>§7.2 reason codes for <c>Failed</c> items (spec §23.1): the file moves to <c>_failed/</c>.</summary>
@@ -888,6 +891,10 @@ public sealed class IngestPipeline(
 
         using (existing)
         {
+            // S3: before any other conflict check; a legacy game is read-only until the storage migration.
+            if (RomStorage.IsLegacy(system, current))
+                return IngestItemResult.Error(IngestErrors.StorageMigrationPending, $"{row.ZipPath} still holds its ROMs; waiting for the storage migration",
+                    system.Id, result.Sha1);
             ExternalPlacement? placement = null;
             if (source is null)
             {

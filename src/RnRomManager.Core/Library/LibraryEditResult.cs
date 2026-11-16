@@ -21,6 +21,13 @@ public sealed record LibraryEditResult(string? Code = null, string? Details = nu
     /// <summary>B16/B18: a FileSets file keeps its exact name, and that name is already used where it has to go (409).</summary>
     public const string NameTaken = "NameTaken";
 
+    /// <summary>S3: a legacy game's ROMs are still inside its ZIP; every write waits for the storage migration (409).</summary>
+    public const string StorageMigrationPending = "StorageMigrationPending";
+
+    /// <summary>S3: the ProblemDetails title of <see cref="StorageMigrationPending"/>.</summary>
+    public const string StorageMigrationPendingTitle =
+        "This game's ROMs are being moved out of its ZIP. Try again when the storage migration job has finished.";
+
     public static LibraryEditResult Ok { get; } = new();
 
     public Guid? GameId { get; init; }

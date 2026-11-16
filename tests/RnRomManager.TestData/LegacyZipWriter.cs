@@ -10,7 +10,11 @@ namespace RnRomManager.TestData;
 public static class LegacyZipWriter
 {
     /// <param name="roms">Each ROM's bytes, in the order of <paramref name="game"/>'s ROMs.</param>
-    public static void Write(string path, InfoJsonGame game, params byte[][] roms)
+    public static void Write(string path, InfoJsonGame game, params byte[][] roms) => Write(path, game, null, roms);
+
+    /// <param name="extra">More entries by name, e.g. <c>images/…</c> or <c>notes/…</c>.</param>
+    /// <param name="roms">Each ROM's bytes, in the order of <paramref name="game"/>'s ROMs.</param>
+    public static void Write(string path, InfoJsonGame game, IReadOnlyDictionary<string, byte[]>? extra, params byte[][] roms)
     {
         if (roms.Length != game.Roms.Count)
             throw new ArgumentException("One byte array per ROM.", nameof(roms));
@@ -19,9 +23,9 @@ public static class LegacyZipWriter
         using var zip = ZipFile.Open(path, ZipArchiveMode.Create);
         using (var info = zip.CreateEntry(LibraryZip.InfoJsonEntry).Open())
             info.Write(InfoJsonSerializer.Serialize(game));
-        foreach (var (rom, bytes) in game.Roms.Zip(roms))
+        foreach (var (name, bytes) in game.Roms.Select(r => LibraryZip.RomEntry(r.FileName)).Zip(roms).Concat(extra?.Select(e => (e.Key, e.Value)) ?? []))
         {
-            using var entry = zip.CreateEntry(LibraryZip.RomEntry(rom.FileName)).Open();
+            using var entry = zip.CreateEntry(name).Open();
             entry.Write(bytes);
         }
     }

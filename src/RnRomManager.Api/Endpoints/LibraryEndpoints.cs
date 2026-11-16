@@ -416,6 +416,8 @@ public static class LibraryEndpoints
             LibraryEditResult.JobRunning or LibraryEditResult.TooManyImages or LibraryFiles.NoteTooLarge or LibraryEditResult.DuplicateImage or LibraryEditResult.DefaultImage
                 or LibraryTarget.InfoJsonNewerSchema or LibraryTarget.TargetZipUnreadable or LibraryEditResult.NameTaken =>
                 Problems.Create(ctx, StatusCodes.Status409Conflict, result.Code, result.Code, extensions),
+            LibraryEditResult.StorageMigrationPending =>
+                Problems.Create(ctx, StatusCodes.Status409Conflict, result.Code, LibraryEditResult.StorageMigrationPendingTitle, extensions),
             _ => Problems.Create(ctx, StatusCodes.Status500InternalServerError, result.Code!, result.Code!, extensions),
         };
 

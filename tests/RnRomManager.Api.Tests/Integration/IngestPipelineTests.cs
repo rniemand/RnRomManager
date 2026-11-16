@@ -58,6 +58,8 @@ public class IngestPipelineTests
     /// <summary>3DO B3: the DAT-matched data track of a cue + 2 bins set, and its audio track.</summary>
     private static readonly byte[] OpalData = new SyntheticDiscBuilder { Seed = 2501 }.Build();
     private static readonly byte[] OpalAudio = new SyntheticDiscBuilder { Seed = 2502, Size = 32 * 1024 }.Build();
+    /// <summary>S3: a DAT-matched release of the legacy test system's "Old Ds".</summary>
+    private static readonly byte[] OldDsEurope = Atari(4096, 621);
     private ApiFactory _shared = null!;
     /// <summary>The class's shared host, or a host of the test's own when it needs other services (<see cref="RestartWithOverrides"/>).</summary>
     private ApiFactory _factory = null!;
@@ -172,7 +174,7 @@ public class IngestPipelineTests
                 },
                 new FixtureGame("seaQuest DSV (USA, Europe)", "seaQuest DSV (USA, Europe).gb", SeaQuest),
             ],
-            [LegacyExternalTestHandler.DatNameValue] = [],
+            [LegacyExternalTestHandler.DatNameValue] = [new FixtureGame("Old Ds (Europe)", "Old Ds (Europe).nds", OldDsEurope)],
             [Gbc] = [new FixtureGame("Pokemon - Gold Version (USA, Europe)", "Pokemon - Gold Version (USA, Europe).gbc", Gold) { ReleaseYear = 2000 }],
         }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
@@ -295,22 +297,49 @@ public class IngestPipelineTests
     public async Task LegacyGame_ExternalCopyOfItsEmbeddedRom_IsADuplicate_WithNoRepair()
     {
         var bytes = Atari(4096, 620);
-        var game = TestLibrary.Game("Old Ds", TestLibrary.Rom("Old Ds (USA).nds", bytes)) with { System = LegacyExternalTestHandler.SystemId };
-        var zip = Path.Combine(Roms, "legacy", "O", "Old Ds.zip");
-        LegacyZipWriter.Write(zip, game, bytes);
+        var zip = await WriteLegacyOldDs(bytes);
         var zipBytes = File.ReadAllBytes(zip);
-        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, "legacy/O/Old Ds.zip", zipBytes.Length, DateTime.UtcNow), default);
-        var path = Path.Combine(_factory.Root, "ingest", LegacyExternalTestHandler.SystemId, "copy.nds");
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        File.WriteAllBytes(path, bytes);
-        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1));
-        var info = new FileInfo(path);
 
-        var result = await IngestAsync(new IngestFile(LegacyExternalTestHandler.SystemId, path, "copy.nds", info.Length, info.LastWriteTimeUtc));
+        var result = await IngestAsync(DropAged(Path.Combine(_factory.Root, "ingest", LegacyExternalTestHandler.SystemId, "copy.nds"), bytes));
 
         Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Duplicate), result.Details);
         Assert.That(File.ReadAllBytes(zip), Is.EqualTo(zipBytes), "the legacy ZIP is untouched");
         Assert.That(Directory.GetFiles(Path.GetDirectoryName(zip)!), Is.EqualTo(new[] { zip }), "nothing written next to it");
+    }
+
+    /// <summary>A mirrored legacy game "Old Ds" (S2) whose one release is inside its ZIP; returns the ZIP's path.</summary>
+    private async Task<string> WriteLegacyOldDs(byte[] bytes)
+    {
+        var rom = TestLibrary.Rom("Old Ds (USA).nds", bytes) with { BaseTitle = "Old Ds" };
+        var game = TestLibrary.Game("Old Ds", rom) with { System = LegacyExternalTestHandler.SystemId };
+        var zip = Path.Combine(Roms, "legacy", "O", "Old Ds.zip");
+        LegacyZipWriter.Write(zip, game, bytes);
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, "legacy/O/Old Ds.zip", new FileInfo(zip).Length, DateTime.UtcNow), default);
+        return zip;
+    }
+
+    private static IngestFile DropAged(string path, byte[] bytes)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, bytes);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1));
+        var info = new FileInfo(path);
+        return new IngestFile(LegacyExternalTestHandler.SystemId, path, info.Name, info.Length, info.LastWriteTimeUtc);
+    }
+
+    [Test]
+    public async Task LegacyGame_NewRelease_IsStorageMigrationPending_AndStaysInIngest()
+    {
+        var zip = await WriteLegacyOldDs(Atari(4096, 622));
+        var zipBytes = File.ReadAllBytes(zip);
+        var file = DropAged(Path.Combine(_factory.Root, "ingest", LegacyExternalTestHandler.SystemId, "europe.nds"), OldDsEurope);
+
+        var result = await IngestAsync(file);
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Error, IngestErrors.StorageMigrationPending)), result.Details);
+        Assert.That(File.Exists(file.FullPath), Is.True, "left in ingest for the next import");
+        Assert.That(File.ReadAllBytes(zip), Is.EqualTo(zipBytes));
+        Assert.That(Directory.GetFiles(Path.GetDirectoryName(zip)!), Is.EqualTo(new[] { zip }));
     }
 
     [Test]
