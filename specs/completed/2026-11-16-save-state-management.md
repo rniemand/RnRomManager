@@ -1,6 +1,6 @@
 ---
 title: Save State Management
-status: in-progress
+status: completed
 created: 2026-11-16
 ---
 
