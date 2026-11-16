@@ -2,7 +2,9 @@
 
 /**
  * Sega CD B6: `disc` is true for an external release (`disc=1`), which loads from play-disc whatever the core.
- * @typedef {{ game: string, rom: number, core: string, name: string, disc: boolean }} PlayParams
+ * Saves B17: `save` is the library save to load at game start (`save` + `saveKind`), or null.
+ * @typedef {{ id: string, kind: 'state' | 'battery' }} PlaySave
+ * @typedef {{ game: string, rom: number, core: string, name: string, disc: boolean, save: PlaySave | null }} PlayParams
  */
 
 const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -48,7 +50,20 @@ export function parsePlayParams(search, pspPage = false) {
 	// Sega CD B6: `disc` is absent or exactly `1`, given once.
 	const disc = query.getAll('disc');
 	if (disc.length > 1 || (disc.length === 1 && disc[0] !== '1')) return null;
-	return { game, rom: Number(rom), core, name, disc: disc.length === 1 };
+	// Saves B17: both or neither, each once; the id is a lowercase 32-hex GUID.
+	const save = query.getAll('save');
+	const saveKind = query.getAll('saveKind');
+	if (save.length > 1 || saveKind.length > 1 || save.length !== saveKind.length) return null;
+	if (save.length === 1 && (!/^[0-9a-f]{32}$/.test(save[0]) || !['state', 'battery'].includes(saveKind[0])))
+		return null;
+	return {
+		game,
+		rom: Number(rom),
+		core,
+		name,
+		disc: disc.length === 1,
+		save: save.length === 1 ? { id: save[0], kind: /** @type {'state' | 'battery'} */ (saveKind[0]) } : null
+	};
 }
 
 /**

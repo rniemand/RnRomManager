@@ -62,9 +62,18 @@ export function playUrl(
 	gameId: string,
 	rom: Pick<RomDetail, 'id' | 'fileName'>,
 	core: string,
-	disc: boolean
+	disc: boolean,
+	save: PlaySave | null = null
 ): string {
 	const page = opensInNewTab(core) ? 'play-psp.html' : 'play.html';
-	const url = `/emulator/${page}?game=${gameId}&rom=${rom.id}&core=${core}&name=${encodeURIComponent(rom.fileName)}`;
-	return disc ? `${url}&disc=1` : url;
+	let url = `/emulator/${page}?game=${gameId}&rom=${rom.id}&core=${core}&name=${encodeURIComponent(rom.fileName)}`;
+	if (disc) url += '&disc=1';
+	// Saves B17: the library save the play page loads at game start.
+	return save ? `${url}&save=${save.saveId}&saveKind=${save.saveKind}` : url;
+}
+
+/** Saves B17: a library save to load when the game starts. */
+export interface PlaySave {
+	saveId: string;
+	saveKind: 'state' | 'battery';
 }
