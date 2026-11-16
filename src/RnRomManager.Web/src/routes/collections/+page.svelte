@@ -3,15 +3,19 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import type { CollectionListItem, Page } from '#lib/api/types.js';
+	import { api } from '#lib/api/client.js';
+	import type { CollectionListItem, Page, SystemInfo } from '#lib/api/types.js';
 	import { collectionsApi, collectionsSearch } from '#lib/collections.js';
 	import {
 		collectionsTab,
 		collectionsTabs,
 		discoverySearch,
 		discoveryState,
+		systemsSearch,
+		systemsState,
 		tabSearch,
-		type DiscoveryState
+		type DiscoveryState,
+		type SystemsState
 	} from '#lib/discovery.js';
 	import CollectionModal from '#lib/components/CollectionModal.svelte';
 	import DiscoveryGames from '#lib/components/DiscoveryGames.svelte';
@@ -21,11 +25,13 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import Pagination from '#lib/components/Pagination.svelte';
+	import SystemGames from '#lib/components/SystemGames.svelte';
+	import SystemList from '#lib/components/SystemList.svelte';
 	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 
 	/**
 	 * B22: the caller's collections as cards, filtered by `q` and paged; both live in the URL. Discovery B1: link tabs
-	 * switch to the Publishers and Genres indexes (`?tab=`); a bare URL is User collections.
+	 * switch to the Publishers and Genres indexes and the Systems tab (`?tab=`); a bare URL is User collections.
 	 */
 	const sizeKey = 'collections';
 	const tab = $derived(collectionsTab(page.url));
@@ -58,6 +64,37 @@
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
 		void goto(`/collections${discoverySearch(next)}`, { replace: true, reset: false });
 	}
+
+	/** Systems tab B2/B3: the selection from the URL, and the system list, loaded on entering the tab. */
+	const systemsView = $derived(tab === 'systems' ? systemsState(page.url) : null);
+	let systems = $state<SystemInfo[] | null>(null);
+	let systemsError = $state<unknown>(null);
+	let systemsReload = $state(0);
+	const selectedSystem = $derived(
+		systemsView?.system ? systems?.find((s) => s.id === systemsView.system) : undefined
+	);
+
+	function goSystems(next: SystemsState): void {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
+		void goto(`/collections${systemsSearch(next)}`, { replace: true, reset: false });
+	}
+
+	$effect(() => {
+		if (tab !== 'systems') return;
+		void systemsReload;
+		let stale = false;
+		systemsError = null;
+		systems = null;
+		api.get<SystemInfo[]>('/api/systems').then(
+			(list) => {
+				if (!stale) systems = list;
+			},
+			(e) => {
+				if (!stale) systemsError = e;
+			}
+		);
+		return () => (stale = true);
+	});
 
 	function onFilterInput(): void {
 		clearTimeout(filterTimer);
@@ -231,6 +268,51 @@
 						: 'genre'} to see its games across every system."
 					icon="collections"
 				/>
+			{/if}
+		</div>
+	</div>
+{:else if systemsView}
+	<div class="row g-4">
+		<div class="col-12 col-lg-4">
+			{#if systemsError}
+				<ErrorAlert error={systemsError} onretry={() => systemsReload++} />
+			{:else if !systems}
+				<Loading label="Loading systems…" />
+			{:else if systems.length === 0}
+				<EmptyState message="No systems are supported." />
+			{:else}
+				<SystemList {systems} selected={systemsView.system} />
+			{/if}
+		</div>
+		<div class="col-12 col-lg-8">
+			{#if !systemsView.system}
+				{#if !systemsError}
+					<EmptyState
+						message="Choose a system to see its games and emulators."
+						icon="collections"
+					/>
+				{/if}
+			{:else if systemsError}
+				<!-- B6: nothing on the right until the list loads. -->
+			{:else if !systems}
+				<Loading label="Loading systems…" />
+			{:else if selectedSystem}
+				{#key selectedSystem.id}
+					<SystemGames
+						system={selectedSystem}
+						gamePage={systemsView.gamePage}
+						onpage={(gamePage) => goSystems({ ...systemsView, gamePage })}
+					/>
+				{/key}
+			{:else}
+				<EmptyState message="This system isn't supported.">
+					{#snippet action()}
+						<a
+							class="btn btn-outline-primary"
+							href="{resolve('/collections')}{tabSearch('systems')}">Back to all systems</a
+						>
+					{/snippet}
+				</EmptyState>
 			{/if}
 		</div>
 	</div>
