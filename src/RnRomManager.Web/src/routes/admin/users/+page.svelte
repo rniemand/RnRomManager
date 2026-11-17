@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import { roles, type Role, type UserInfo } from '#lib/api/types.js';
+	import type { Role, UserInfo } from '#lib/api/types.js';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
@@ -12,12 +12,20 @@
 	import { passwordError, policyHint, usernameError } from '#lib/passwordPolicy.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
+	import { tooltip } from '#lib/tooltip.js';
 
 	let users = $state<UserInfo[] | null>(null);
 	let error = $state<unknown>(null);
 
 	let newUsername = $state('');
-	let newRoles = $state<Role[]>([]);
+	/** U1: the two account types, mapped to the API's `roles`. The create form starts on Site user. */
+	type AccountType = 'admin' | 'site-user';
+	const typeLabels: Record<AccountType, string> = { admin: 'Admin', 'site-user': 'Site user' };
+	const typeOf = (user: UserInfo): AccountType =>
+		user.roles.includes('admin') ? 'admin' : 'site-user';
+	const rolesOf = (type: AccountType): Role[] => (type === 'admin' ? ['admin'] : []);
+	const selfHint = "You can't change your own account type or disable yourself";
+	let newType = $state<AccountType>('site-user');
 	let newPassword = $state('');
 	let createOpen = $state(false);
 	let createErrors = $state<{ username?: string; password?: string; roles?: string }>({});
@@ -45,13 +53,14 @@
 	function failed(e: unknown): void {
 		if (isApiError(e, 'LastAdmin'))
 			toasts.show("The last enabled Admin can't be disabled or demoted.", 'warning');
+		else if (isApiError(e, 'SelfChange')) toasts.show(e.title, 'warning');
 		else toasts.show(isApiError(e) ? e.title : 'Something went wrong.', 'danger');
 	}
 
 	function openCreate(): void {
 		newUsername = '';
 		newPassword = '';
-		newRoles = [];
+		newType = 'site-user';
 		createErrors = {};
 		createOpen = true;
 	}
@@ -69,7 +78,7 @@
 		try {
 			const user = await api.post<UserInfo>('/api/users', {
 				username,
-				roles: newRoles,
+				roles: rolesOf(newType),
 				password: newPassword
 			});
 			createOpen = false;
@@ -101,13 +110,8 @@
 			users = users?.map((u) => (u.id === updated.id ? updated : u)) ?? null;
 		} catch (e) {
 			failed(e);
-			await load(); // put the role checkboxes back
+			await load(); // put the type select back
 		}
-	}
-
-	/** The full sorted role list with `role` added or removed. */
-	function withRole(current: Role[], role: Role, on: boolean): Role[] {
-		return roles.filter((r) => (r === role ? on : current.includes(r)));
 	}
 
 	function openReset(user: UserInfo): void {
@@ -162,7 +166,7 @@
 					<thead class="table-dark">
 						<tr class="small text-uppercase text-body-secondary">
 							<th scope="col">Username</th>
-							<th scope="col">Roles</th>
+							<th scope="col">Type</th>
 							<th scope="col">Status</th>
 							<th scope="col">Last sign-in</th>
 							<th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
@@ -170,32 +174,24 @@
 					</thead>
 					<tbody>
 						{#each users as user (user.id)}
+							{@const self = user.id === auth.me?.id}
 							<tr>
 								<td>{user.username}</td>
 								<td>
-									{#each roles as role (role)}
-										{@const on = user.roles.includes(role)}
-										<div class="form-check form-check-inline mb-0">
-											<input
-												id="role-{user.id}-{role}"
-												class="form-check-input"
-												type="checkbox"
-												aria-label="{role} role of {user.username}"
-												checked={on}
-												onchange={(e) =>
-													update(user, {
-														roles: withRole(user.roles, role, e.currentTarget.checked)
-													})}
-											/>
-											<label
-												class="form-check-label badge {on
-													? 'text-bg-primary'
-													: 'text-body-secondary border'}"
-												for="role-{user.id}-{role}"
-												aria-hidden="true">{role}</label
-											>
-										</div>
-									{/each}
+									<span use:tooltip={self ? selfHint : ''}>
+										<select
+											class="form-select form-select-sm w-auto"
+											aria-label="Account type of {user.username}"
+											value={typeOf(user)}
+											disabled={self}
+											onchange={(e) =>
+												update(user, { roles: rolesOf(e.currentTarget.value as AccountType) })}
+										>
+											{#each Object.entries(typeLabels) as [value, label] (value)}
+												<option {value}>{label}</option>
+											{/each}
+										</select>
+									</span>
 								</td>
 								<td>
 									{#if user.isDisabled}
@@ -208,14 +204,17 @@
 									>{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : 'Never'}</td
 								>
 								<td class="text-nowrap text-end">
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-secondary"
-										aria-label="{user.isDisabled ? 'Enable' : 'Disable'} {user.username}"
-										onclick={() => update(user, { isDisabled: !user.isDisabled })}
-									>
-										<Icon name={user.isDisabled ? 'enable' : 'disable'} />
-									</button>
+									<span class="d-inline-block" use:tooltip={self ? selfHint : ''}>
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-secondary"
+											aria-label="{user.isDisabled ? 'Enable' : 'Disable'} {user.username}"
+											disabled={self}
+											onclick={() => update(user, { isDisabled: !user.isDisabled })}
+										>
+											<Icon name={user.isDisabled ? 'enable' : 'disable'} />
+										</button>
+									</span>
 									<button
 										type="button"
 										class="btn btn-sm btn-outline-secondary"
@@ -269,25 +268,20 @@
 				{#if createErrors.password}<div class="invalid-feedback">{createErrors.password}</div>{/if}
 				<div id="new-password-help" class="form-text">{policyHint}</div>
 			</div>
-			<fieldset class="col-12">
-				<legend class="form-label fs-6">Roles</legend>
-				{#each roles as role (role)}
-					<div class="form-check form-check-inline">
-						<input
-							id="new-role-{role}"
-							class="form-check-input"
-							class:is-invalid={createErrors.roles}
-							type="checkbox"
-							checked={newRoles.includes(role)}
-							onchange={(e) => (newRoles = withRole(newRoles, role, e.currentTarget.checked))}
-						/>
-						<label class="form-check-label" for="new-role-{role}">{role}</label>
-					</div>
-				{/each}
-				{#if createErrors.roles}<div class="invalid-feedback d-block">
-						{createErrors.roles}
-					</div>{/if}
-			</fieldset>
+			<div class="col-12 col-md-6">
+				<label class="form-label" for="new-type">Account type</label>
+				<select
+					id="new-type"
+					class="form-select"
+					class:is-invalid={createErrors.roles}
+					bind:value={newType}
+				>
+					{#each Object.entries(typeLabels) as [value, label] (value)}
+						<option {value}>{label}</option>
+					{/each}
+				</select>
+				{#if createErrors.roles}<div class="invalid-feedback">{createErrors.roles}</div>{/if}
+			</div>
 			<!-- Enter in a field submits; the visible button is the modal's Create. -->
 			<button type="submit" class="d-none" tabindex="-1" aria-hidden="true"></button>
 		</form>

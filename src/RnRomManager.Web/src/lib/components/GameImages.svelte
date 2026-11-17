@@ -213,7 +213,7 @@
 	<!-- I1: the tab names the panel; the heading stays for the outline only. -->
 	<h2 class="visually-hidden" id="images-heading">Images</h2>
 	<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-		{#if auth.canEditLibrary}
+		{#if auth.isAdmin}
 			<button type="button" class="btn btn-outline-primary btn-sm ms-auto" onclick={openUpload}>
 				<Icon name="upload" /> Upload image
 			</button>
@@ -246,7 +246,7 @@
 						<div class="text-body-secondary text-nowrap">
 							<FileSize bytes={image.sizeBytes} /> · {image.width}×{image.height}
 						</div>
-						{#if auth.canEditLibrary}
+						{#if auth.isAdmin}
 							<div class="d-flex flex-wrap gap-1 mt-2">
 								{#if !image.isCover}
 									<button
@@ -282,7 +282,7 @@
 	</div>
 </section>
 
-{#if auth.canEditLibrary}
+{#if auth.isAdmin}
 	<ConfirmModal
 		bind:open={uploadOpen}
 		title="Upload image"

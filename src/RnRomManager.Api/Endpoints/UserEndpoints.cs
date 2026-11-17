@@ -1,4 +1,5 @@
 using RnRomManager.Api.Auth;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Users;
 
 namespace RnRomManager.Api.Endpoints;
@@ -20,15 +21,15 @@ public static class UserEndpoints
             Results.Ok((await repository.ListAsync(ct)).Select(ToDto)));
 
         users.MapPost("", async (CreateUserRequest? request, HttpContext ctx, UserAdminService admin) =>
-            ToResult(ctx, await admin.CreateAsync(request?.Username, request?.Roles, request?.Password, ctx.RequestAborted),
+            ToResult(ctx, await admin.CreateAsync(request?.Username, request?.Roles, request?.Password, AuditActor.From(ctx.User), ctx.RequestAborted),
                 user => Results.Created($"/api/users/{user.Id}", ToDto(user))));
 
         users.MapPatch("/{id:int}", async (int id, UpdateUserRequest? request, HttpContext ctx, UserAdminService admin) =>
-            ToResult(ctx, await admin.UpdateAsync(id, request?.Roles, request?.IsDisabled, ctx.RequestAborted),
+            ToResult(ctx, await admin.UpdateAsync(id, request?.Roles, request?.IsDisabled, AuditActor.From(ctx.User), ctx.RequestAborted),
                 user => Results.Ok(ToDto(user))));
 
         users.MapPost("/{id:int}/reset-password", async (int id, ResetPasswordRequest? request, HttpContext ctx, UserAdminService admin) =>
-            ToResult(ctx, await admin.ResetPasswordAsync(id, request?.NewPassword, ctx.RequestAborted),
+            ToResult(ctx, await admin.ResetPasswordAsync(id, request?.NewPassword, AuditActor.From(ctx.User), ctx.RequestAborted),
                 _ => Results.NoContent()));
 
         return api;
@@ -41,6 +42,7 @@ public static class UserEndpoints
         UserAdminResult.Failure.ValidationFailed => Problems.Validation(ctx, result.Errors!),
         UserAdminResult.Failure.UsernameTaken => Problems.Create(ctx, StatusCodes.Status409Conflict, "UsernameTaken", "Username is already taken"),
         UserAdminResult.Failure.LastAdmin => Problems.Create(ctx, StatusCodes.Status409Conflict, "LastAdmin", "The last enabled Admin can't be disabled or demoted"),
+        UserAdminResult.Failure.SelfChange => Problems.Create(ctx, StatusCodes.Status409Conflict, "SelfChange", "You can't disable or demote your own account"),
         _ => throw new ArgumentOutOfRangeException(nameof(result)),
     };
 

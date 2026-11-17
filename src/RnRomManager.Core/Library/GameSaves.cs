@@ -56,6 +56,13 @@ public enum SavesState
 /// <param name="Problem">Why it is <see cref="SavesState.Unreadable"/>.</param>
 public sealed record SavesReadResult(SavesState State, GameSavesIndex? Index = null, string? Problem = null);
 
+/// <summary>User Management S3: who is asking about saves. An Admin sees and acts on every save; a Site user only on their own.</summary>
+/// <param name="Username">The session's username; null never owns a save.</param>
+public sealed record SaveViewer(string? Username, bool IsAdmin)
+{
+    public bool CanSee(GameSave save) => IsAdmin || GameSaves.IsOwner(save, Username);
+}
+
 /// <summary>B1, B2, B8: the <c>saves.json</c> rules, limits, reader and writer.</summary>
 public static class GameSaves
 {
@@ -76,6 +83,10 @@ public static class GameSaves
         RespectNullableAnnotations = true,
         RespectRequiredConstructorParameters = true,
     };
+
+    /// <summary>S1: the save's owner is its <c>uploadedBy</c>, matched ignoring case; a null on either side owns nothing.</summary>
+    public static bool IsOwner(GameSave save, string? username) =>
+        save.UploadedBy is not null && username is not null && string.Equals(save.UploadedBy, username, StringComparison.OrdinalIgnoreCase);
 
     public static string NewId() => Guid.NewGuid().ToString("N");
 

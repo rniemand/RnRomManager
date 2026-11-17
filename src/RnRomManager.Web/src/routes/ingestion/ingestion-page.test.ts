@@ -65,7 +65,7 @@ describe('ingestion page', () => {
 		auth.set({
 			id: 1,
 			username: 'admin',
-			roles: ['admin', 'rom-manager'],
+			roles: ['admin'],
 			mustChangePassword: false
 		});
 		calls = [];

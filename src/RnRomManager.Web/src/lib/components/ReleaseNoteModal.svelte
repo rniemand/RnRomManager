@@ -4,12 +4,13 @@
 	import { isApiError } from '../api/errors';
 	import type { RomDetail } from '../api/types';
 	import { maxNoteBytes, normaliseNote, noteBytes, renderMarkdown } from '../markdown';
+	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
 	import Loading from './Loading.svelte';
 
-	/** B11: one release's Markdown note — view, edit with a live preview, save or delete. */
+	/** B11: one release's Markdown note — view, edit with a live preview, save or delete. Site users only view (U3). */
 	interface Props {
 		open: boolean;
 		gameId: string;
@@ -21,6 +22,8 @@
 	let { open = $bindable(), gameId, rom, onsaved }: Props = $props();
 
 	type Mode = 'view' | 'edit' | 'preview';
+
+	const editable = $derived(auth.isAdmin);
 
 	let mode = $state<Mode>('edit');
 	/** The stored note ('' when there's none). */
@@ -76,7 +79,7 @@
 			return;
 		}
 		const target = rom;
-		mode = 'edit';
+		mode = untrack(() => editable) ? 'edit' : 'view';
 		original = '';
 		text = '';
 		exists = false;
@@ -140,7 +143,7 @@
 	confirmLabel="Save"
 	{busy}
 	confirmDisabled={loading || !!loadError || !changed || over}
-	onconfirm={save}
+	onconfirm={editable ? save : undefined}
 >
 	{#if loadError}
 		<ErrorAlert error={loadError} onretry={() => rom && load(rom)} />
@@ -149,21 +152,21 @@
 	{:else}
 		{#if error}<ErrorAlert {error} ondismiss={() => (error = null)} />{/if}
 
-		<div class="btn-group btn-group-sm mb-3" role="group" aria-label="Note mode">
-			{#each modes as [value, label] (value)}
-				<input
-					type="radio"
-					class="btn-check"
-					name={groupName}
-					id="{groupName}-{value}"
-					autocomplete="off"
-					{value}
-					bind:group={mode}
-					disabled={value === 'view' && !exists}
-				/>
-				<label class="btn btn-outline-secondary" for="{groupName}-{value}">{label}</label>
-			{/each}
-		</div>
+		{#if editable}<div class="btn-group btn-group-sm mb-3" role="group" aria-label="Note mode">
+				{#each modes as [value, label] (value)}
+					<input
+						type="radio"
+						class="btn-check"
+						name={groupName}
+						id="{groupName}-{value}"
+						autocomplete="off"
+						{value}
+						bind:group={mode}
+						disabled={value === 'view' && !exists}
+					/>
+					<label class="btn btn-outline-secondary" for="{groupName}-{value}">{label}</label>
+				{/each}
+			</div>{/if}
 
 		{#if mode === 'edit'}
 			<label class="visually-hidden" for="{groupName}-text">Note (Markdown)</label>
@@ -185,11 +188,13 @@
 					{@html renderMarkdown(source)}
 				</div>
 			{:else}
-				<p class="text-body-secondary mb-0">Nothing to preview.</p>
+				<p class="text-body-secondary mb-0">
+					{editable ? 'Nothing to preview.' : 'This release has no note.'}
+				</p>
 			{/if}
 		{/if}
 
-		{#if exists}
+		{#if exists && editable}
 			<div class="d-flex align-items-center gap-2 mt-3">
 				{#if confirmingDelete}
 					<span>Delete this note?</span>

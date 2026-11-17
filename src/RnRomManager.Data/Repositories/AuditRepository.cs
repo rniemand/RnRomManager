@@ -13,7 +13,7 @@ public sealed class AuditRepository(IDbConnectionFactory connections) : IAuditRe
         if (query.Action is not null) clauses.Add("action = @Action");
         if (query.System is not null) clauses.Add("system_id = @System");
         if (query.User is not null) clauses.Add("username = @User");
-        if (query.Scheduled) clauses.Add("user_id IS NULL");
+        if (query.Scheduled) clauses.Add("user_id IS NULL AND username IS NULL");
         if (query.Q is not null) clauses.Add("(path LIKE @pattern OR target_path LIKE @pattern OR details LIKE @pattern)");
         if (query.From is not null) clauses.Add("occurred_at >= @From");
         if (query.To is not null) clauses.Add("occurred_at < @To");

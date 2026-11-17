@@ -58,7 +58,7 @@ public class ImageEndpointsTests
         _lockBeforeGameCheck = false;
         await _factory.ResetAsync();
         _manager = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "manager", Roles.Of(Roles.RomManager));
+        await TestUsers.CreateAsync(_factory, "manager", Roles.Of(Roles.Admin));
         (await _manager.LoginAsync("manager", TestUsers.Password)).Dispose();
         var cache = Service<DatCache>();
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
@@ -299,13 +299,13 @@ public class ImageEndpointsTests
     }
 
     [Test]
-    public async Task UserWithoutRomManager_Is403()
+    public async Task SiteUser_Is403()
     {
-        using var admin = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "admin-only", Roles.Of(Roles.Admin));
-        (await admin.LoginAsync("admin-only", TestUsers.Password)).Dispose();
+        using var site = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "site-user");
+        (await site.LoginAsync("site-user", TestUsers.Password)).Dispose();
 
-        using var response = await Upload(admin, Png(1, 1), "BoxArt");
+        using var response = await Upload(site, Png(1, 1), "BoxArt");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
     }

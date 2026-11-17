@@ -4,12 +4,14 @@ using Microsoft.Extensions.Options;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Library;
+using RnRomManager.Core.Users;
 
 namespace RnRomManager.Api.Endpoints;
 
 /// <summary>
-/// B7–B12: a game's saves, for any signed-in user (the <c>/api</c> group's session and antiforgery, no extra policy),
-/// like the note routes. Writes go through <see cref="LibraryEditor"/>, which takes the job lock.
+/// B7–B12: a game's saves, for any signed-in user (the <c>/api</c> group's session and antiforgery, no extra policy).
+/// A Site user sees and acts on only their own saves, and another user's save answers 404 like an unknown id (S2, S3);
+/// an Admin sees every save. Writes go through <see cref="LibraryEditor"/>, which takes the job lock.
 /// </summary>
 public static class SaveEndpoints
 {
@@ -17,6 +19,9 @@ public static class SaveEndpoints
     public const long UploadRequestLimit = SaveUploadReader.RequestLimit;
 
     private static readonly HashSet<string> AddFields = new(StringComparer.Ordinal) { "romId", "kind", "name", "description" };
+
+    /// <summary>S3: the session as a save viewer.</summary>
+    internal static SaveViewer Viewer(HttpContext ctx) => new(ctx.User.Identity?.Name, ctx.User.IsInRole(Roles.Admin));
 
     public static RouteGroupBuilder MapSaveEndpoints(this RouteGroupBuilder api)
     {
@@ -43,7 +48,7 @@ public static class SaveEndpoints
                 errors["description"] = [descriptionProblem];
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            if (await editor.PrecheckSaveAsync(id, romId, null, ctx.RequestAborted) is { } refused)
+            if (await editor.PrecheckSaveAsync(id, romId, null, Viewer(ctx), ctx.RequestAborted) is { } refused)
                 return LibraryEndpoints.ToProblem(ctx, refused);
 
             var (file, fileProblem) = await upload.ReadFileAsync(ctx, paths);
@@ -63,12 +68,12 @@ public static class SaveEndpoints
             if (problem is not null)
                 return problem;
             using var upload = form!;
-            if (await editor.PrecheckSaveAsync(id, null, saveId, ctx.RequestAborted) is { } refused)
+            if (await editor.PrecheckSaveAsync(id, null, saveId, Viewer(ctx), ctx.RequestAborted) is { } refused)
                 return LibraryEndpoints.ToProblem(ctx, refused);
             var (file, fileProblem) = await upload.ReadFileAsync(ctx, paths);
             if (fileProblem is not null)
                 return fileProblem;
-            var result = await editor.ReplaceSaveFileAsync(id, saveId, file!, AuditActor.From(ctx.User), ctx.RequestAborted);
+            var result = await editor.ReplaceSaveFileAsync(id, saveId, file!, AuditActor.From(ctx.User), Viewer(ctx), ctx.RequestAborted);
             return result.Code is null
                 ? Results.Ok(ToItem(result.Save!, await roms.ListByGameAsync(id, ctx.RequestAborted)))
                 : LibraryEndpoints.ToProblem(ctx, result);
@@ -83,9 +88,10 @@ public static class SaveEndpoints
             if (read!.State == SavesState.Unreadable)
                 return LibraryEndpoints.ToProblem(ctx, new LibraryEditResult(LibraryEditResult.SavesUnreadable));
             var releases = await roms.ListByGameAsync(id, ctx.RequestAborted);
+            var viewer = Viewer(ctx);
             return Results.Ok(new
             {
-                items = (read.Index?.Saves ?? []).OrderByDescending(s => s.UpdatedAt).Select(s => ToItem(s, releases)),
+                items = (read.Index?.Saves ?? []).Where(viewer.CanSee).OrderByDescending(s => s.UpdatedAt).Select(s => ToItem(s, releases)),
             });
         });
 
@@ -95,9 +101,9 @@ public static class SaveEndpoints
             var (name, description, errors) = ParsePatch(body);
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            if (await editor.PrecheckSaveAsync(id, null, saveId, ctx.RequestAborted) is { } refused)
+            if (await editor.PrecheckSaveAsync(id, null, saveId, Viewer(ctx), ctx.RequestAborted) is { } refused)
                 return LibraryEndpoints.ToProblem(ctx, refused);
-            var result = await editor.UpdateSaveAsync(id, saveId, name, description, AuditActor.From(ctx.User), ctx.RequestAborted);
+            var result = await editor.UpdateSaveAsync(id, saveId, name, description, AuditActor.From(ctx.User), Viewer(ctx), ctx.RequestAborted);
             return result.Code is null
                 ? Results.Ok(ToItem(result.Save!, await roms.ListByGameAsync(id, ctx.RequestAborted)))
                 : LibraryEndpoints.ToProblem(ctx, result);
@@ -105,9 +111,9 @@ public static class SaveEndpoints
 
         saves.MapDelete("/{saveId}", async (Guid id, string saveId, HttpContext ctx, LibraryEditor editor) =>
         {
-            if (await editor.PrecheckSaveAsync(id, null, saveId, ctx.RequestAborted) is { } refused)
+            if (await editor.PrecheckSaveAsync(id, null, saveId, Viewer(ctx), ctx.RequestAborted) is { } refused)
                 return LibraryEndpoints.ToProblem(ctx, refused);
-            var result = await editor.DeleteSaveAsync(id, saveId, AuditActor.From(ctx.User), ctx.RequestAborted);
+            var result = await editor.DeleteSaveAsync(id, saveId, AuditActor.From(ctx.User), Viewer(ctx), ctx.RequestAborted);
             return result.Code is null ? Results.NoContent() : LibraryEndpoints.ToProblem(ctx, result);
         });
 
@@ -120,7 +126,8 @@ public static class SaveEndpoints
                 return problem;
             if (read!.State == SavesState.Unreadable)
                 return LibraryEndpoints.ToProblem(ctx, new LibraryEditResult(LibraryEditResult.SavesUnreadable));
-            if (read.Index?.Saves.FirstOrDefault(s => s.Id == saveId) is not { } save)
+            var viewer = Viewer(ctx);
+            if (read.Index?.Saves.FirstOrDefault(s => s.Id == saveId && viewer.CanSee(s)) is not { } save)
                 return Problems.NotFound(ctx);
             if (files.OpenEntry(ctx, game, save.Entry, save.SizeBytes, out var stream) is { } entryProblem)
                 return entryProblem;

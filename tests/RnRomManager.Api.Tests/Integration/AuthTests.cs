@@ -38,15 +38,15 @@ public class AuthTests
         TestUsers.CreateAsync(_factory, username, mustChangePassword: mustChangePassword);
 
     [Test]
-    public async Task Me_ListsTheRolesSorted()
+    public async Task Me_ListsTheRoles()
     {
-        await TestUsers.CreateAsync(_factory, "richard", Roles.Of(Roles.RomManager, Roles.Admin));
+        await TestUsers.CreateAsync(_factory, "richard", Roles.Of(Roles.Admin));
         (await _client.LoginAsync("richard", Password)).Dispose();
 
         using var me = await _client.GetAsync("/api/auth/me");
         var body = await AuthClient.JsonAsync(me);
 
-        Assert.That(body.GetProperty("roles").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "admin", "rom-manager" }));
+        Assert.That(body.GetProperty("roles").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "admin" }));
     }
 
     [Test]
@@ -210,6 +210,20 @@ public class AuthTests
         Assert.That(change.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         Assert.That(body.GetProperty("code").GetString(), Is.EqualTo("ValidationFailed"));
         Assert.That(body.GetProperty("errors").TryGetProperty("currentPassword", out _), Is.True);
+    }
+
+    [Test]
+    public async Task ChangePassword_SameAsCurrent_IsValidationFailed()
+    {
+        await CreateUserAsync();
+        (await _client.LoginAsync("richard", Password)).Dispose();
+
+        using var change = await _client.PostAsync("/api/auth/change-password", new { currentPassword = Password, newPassword = Password });
+        var body = await AuthClient.JsonAsync(change);
+
+        Assert.That(change.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(body.GetProperty("code").GetString(), Is.EqualTo("ValidationFailed"));
+        Assert.That(body.GetProperty("errors").GetProperty("newPassword")[0].GetString(), Is.EqualTo("New password must be different from the current password."));
     }
 
     [Test]

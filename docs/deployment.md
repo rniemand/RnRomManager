@@ -250,6 +250,13 @@ Upgrading to the release that adds Commodore Amiga:
 - **Refresh DATs after upgrading.** Commodore Amiga is identified against libretro's TOSEC `Commodore - Amiga` DAT (one file, no metadat). Until **Admin → DATs → Refresh DATs** has downloaded it, every import is refused with `DatsMissing`. `roms/amiga/` and `ingest/amiga/` are created at startup.
 - Browser play needs nothing extra: the PUAE core ships in the image and boots its built-in AROS Kickstart.
 
+Upgrading to the release that adds user management (Admin and Site user accounts):
+
+- **Most users, normally every Admin, are signed out once.** The `rom-manager` role is folded into `admin` (migration `0024`): every account that had `rom-manager` is signed out, which includes every Admin from before roles were split and the first account. Accounts with only `rom-manager` become **Site users** and lose library edits; accounts with only `admin` gain them. Release notes, ratings and favourites, and publisher logos become Admin-only.
+- **Saves become private.** Each save belongs to its uploader; a Site user sees only their own, an Admin every save. Existing saves keep their uploader as owner; saves with no uploader are visible to Admins only. The game ZIP (download and Zip Contents) still holds every save.
+- **A Site user's save counts start at 0.** Per-user counts (migration `0025`) fill in when a game's ZIP is next written by the app, or found changed by a sync; until then a Site user sees no save badge and `Saves (0)` on that game, though its Saves tab lists their saves. Admin counts are unaffected.
+- **Sign-ins and account changes are audited** from now on (see [features](features.md#file-action-auditing)).
+
 ## Nintendo DS: memory, disk and time
 
 DS dumps reach 512 MiB. They are stored as files next to the game's ZIP (see [External ROM storage](#external-rom-storage-nintendo-switch-nintendo-ds-and-disc-systems)), so imports stream them like Switch dumps and edits, notes and saves rewrite only the small metadata ZIP. The figures below were measured on 2026-11-14, when DS ROMs were still stored inside the ZIP, with the e2e stack (Docker Desktop on Windows 11, a WSL 2 VM with 16 GiB and 16 CPUs) and two synthetic 512 MiB ROMs of random, incompressible bytes; they are the upper bound for a game the [storage migration](#upgrades) hasn't moved yet, and for the migration itself, which copies each ROM once:

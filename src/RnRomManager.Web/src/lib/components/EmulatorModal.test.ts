@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, within } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
+import { auth } from '../stores/auth.svelte';
 import { toasts } from '../stores/toasts.svelte';
 import { flushSync } from 'svelte';
 
@@ -157,6 +158,7 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 		toasts.items.length = 0;
 		calls = [];
 		answers = { 'GET /api/games/g-1/saves': { status: 200, body: { items: [] } } };
+		auth.set({ id: 1, username: 'alice', roles: ['admin'], mustChangePassword: false });
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
 			const key = `${init?.method ?? 'GET'} ${url}`;
 			calls.push({ key, body: init?.body });
@@ -240,12 +242,14 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 		expect(button(container, 'Save state to library')!.disabled).toBe(false);
 	});
 
-	it("overwrites the release's newest save of the same kind instead of adding one", async () => {
+	it("overwrites the user's newest save of the same kind for the release instead of adding one", async () => {
 		const onsaved = vi.fn();
+		// S5: ownership is matched ignoring case.
 		const save = (id: string, kind: string, releaseFileName: string) => ({
 			id,
 			kind,
-			releaseFileName
+			releaseFileName,
+			uploadedBy: 'ALICE'
 		});
 		answers['GET /api/games/g-1/saves'] = {
 			status: 200,
@@ -274,6 +278,34 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 		expect(uploads()).toEqual([]);
 		const put = calls.find((c) => c.key === 'PUT /api/games/g-1/saves/newest/file')!;
 		expect(((put.body as FormData).get('file') as File).size).toBe(2);
+	});
+
+	it("adds a new save rather than replace another user's newer save of that kind (S5)", async () => {
+		const onsaved = vi.fn();
+		answers['GET /api/games/g-1/saves'] = {
+			status: 200,
+			body: {
+				items: [
+					{ id: 'bobs', kind: 'state', releaseFileName: rom.fileName, uploadedBy: 'bob' },
+					{ id: 'unowned', kind: 'state', releaseFileName: rom.fileName, uploadedBy: null }
+				]
+			}
+		};
+		answers['POST /api/games/g-1/saves'] = { status: 201, body: {} };
+		const { container, iframe } = openFor('gambatte', onsaved);
+
+		await fireEvent.click(button(container, 'Save state to library')!);
+		reply(iframe.contentWindow, {
+			type: 'rnrm-emulator-export-result',
+			kind: 'state',
+			ok: true,
+			bytes: new Uint8Array([1]).buffer,
+			extension: '.state'
+		});
+
+		await vi.waitFor(() => expect(onsaved).toHaveBeenCalledTimes(1));
+		expect(uploads()).toHaveLength(1);
+		expect(calls.some((c) => c.key.startsWith('PUT '))).toBe(false);
 	});
 
 	it('refuses a save over 256 MiB without uploading', async () => {

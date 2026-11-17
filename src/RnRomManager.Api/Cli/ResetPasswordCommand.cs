@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using NLog;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Users;
 
@@ -20,7 +21,7 @@ public static class ResetPasswordCommand
             app.Services.GetRequiredService<IStartupValidator>().Validate();
             await app.Services.GetRequiredService<IDatabaseLifecycle>().WaitUntilAvailableAsync(CancellationToken.None);
 
-            if (await app.Services.GetRequiredService<UserAdminService>().RecoverAsync(username, CancellationToken.None) is not var (user, password))
+            if (await app.Services.GetRequiredService<UserAdminService>().RecoverAsync(username, CancellationToken.None) is not var (user, password, promoted, reenabled))
             {
                 await stderr.WriteLineAsync($"User '{username}' not found.");
                 return 1;
@@ -28,6 +29,7 @@ public static class ResetPasswordCommand
 
             await stdout.WriteLineAsync(
                 $"New password for user '{user.Username}' (shown once, must be changed at next login, roles {(user.Roles.Count > 0 ? string.Join(", ", user.Roles) : "none")}): {password}");
+            await RecordAsync(app.Services, user.Username, promoted, reenabled, stderr);
             return 0;
         }
         catch (Exception ex)
@@ -38,6 +40,27 @@ public static class ResetPasswordCommand
         finally
         {
             LogManager.Shutdown();
+        }
+    }
+
+    /// <summary>
+    /// U9: the CLI host never starts <c>AuditWriter</c>, so the row is inserted synchronously, after the password was
+    /// printed; a failure only warns (AU2 best effort) and keeps exit code 0.
+    /// </summary>
+    private static async Task RecordAsync(IServiceProvider services, string username, bool promoted, bool reenabled, TextWriter stderr)
+    {
+        try
+        {
+            var details = $"user={username} via=cli{(promoted ? " promoted=admin" : "")}{(reenabled ? " reenabled=true" : "")}";
+            var auditEvent = new AuditEvent(AuditActions.PasswordReset, new AuditActor(null, null, null), Details: details)
+            {
+                OccurredAt = services.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime,
+            };
+            await services.GetRequiredService<IAuditRepository>().InsertAsync(auditEvent, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            await stderr.WriteLineAsync($"Warning: the password was reset, but its audit event wasn't written: {ex.Message}");
         }
     }
 }

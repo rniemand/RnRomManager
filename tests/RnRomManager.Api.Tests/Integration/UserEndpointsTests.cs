@@ -78,7 +78,7 @@ public class UserEndpointsTests
         Assert.That(body.EnumerateArray().Select(u => u.GetProperty("username").GetString()), Is.EqualTo(new[] { "admin", "boss" }));
         var boss = body.EnumerateArray().Single(u => u.GetProperty("username").GetString() == "boss");
         Assert.That(boss.GetProperty("id").GetInt32(), Is.EqualTo(_boss.Id));
-        Assert.That(boss.GetProperty("roles").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "admin", "rom-manager" }));
+        Assert.That(boss.GetProperty("roles").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "admin" }));
         Assert.That(boss.GetProperty("isDisabled").GetBoolean(), Is.False);
         Assert.That(boss.GetProperty("lastLoginAt").ValueKind, Is.EqualTo(JsonValueKind.String));
     }
@@ -86,14 +86,14 @@ public class UserEndpointsTests
     [Test]
     public async Task Create_Returns201_AndTheUserMustChangePasswordAtFirstLogin()
     {
-        using var response = await _admin.PostAsync("/api/users", new { username = "newbie", roles = new[] { "rom-manager" }, password = NewPassword });
+        using var response = await _admin.PostAsync("/api/users", new { username = "newbie", roles = new[] { "admin" }, password = NewPassword });
         var body = await AuthClient.JsonAsync(response);
         using var newbie = await AuthClient.CreateAsync(_factory);
         using var login = await newbie.LoginAsync("newbie", NewPassword);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
         Assert.That(body.GetProperty("username").GetString(), Is.EqualTo("newbie"));
-        Assert.That(body.GetProperty("roles").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "rom-manager" }));
+        Assert.That(body.GetProperty("roles").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "admin" }));
         Assert.That((await AuthClient.JsonAsync(login)).GetProperty("mustChangePassword").GetBoolean(), Is.True);
     }
 
@@ -118,20 +118,36 @@ public class UserEndpointsTests
     }
 
     [Test]
-    public async Task DisablingOrDemotingTheLastEnabledAdmin_Is409LastAdmin()
+    public async Task DisablingOrDemotingYourself_Is409SelfChange()
     {
+        // With the seeded admin disabled, the caller is also the last enabled Admin: SelfChange wins over LastAdmin.
         var seeded = await Users.GetByUsernameAsync("admin", CancellationToken.None);
         using var disableSeeded = await _admin.PatchAsync($"/api/users/{seeded!.Id}", new { isDisabled = true });
 
-        using var demoteSelf = await _admin.PatchAsync($"/api/users/{_boss.Id}", new { roles = new[] { "rom-manager" } });
+        using var demoteSelf = await _admin.PatchAsync($"/api/users/{_boss.Id}", new { roles = Array.Empty<string>() });
         using var disableSelf = await _admin.PatchAsync($"/api/users/{_boss.Id}", new { isDisabled = true });
+        using var noOpSelf = await _admin.PatchAsync($"/api/users/{_boss.Id}", new { roles = new[] { "admin" }, isDisabled = false });
 
         Assert.That(disableSeeded.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That((await AuthClient.JsonAsync(disableSeeded)).GetProperty("isDisabled").GetBoolean(), Is.True);
         Assert.That(demoteSelf.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
-        Assert.That(await AuthClient.CodeAsync(demoteSelf), Is.EqualTo("LastAdmin"));
-        Assert.That(await AuthClient.CodeAsync(disableSelf), Is.EqualTo("LastAdmin"));
-        Assert.That((await Users.GetByIdAsync(_boss.Id, CancellationToken.None))!.Roles, Is.EquivalentTo(TestUsers.AllRoles));
+        Assert.That(await AuthClient.CodeAsync(demoteSelf), Is.EqualTo("SelfChange"));
+        Assert.That(disableSelf.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(await AuthClient.CodeAsync(disableSelf), Is.EqualTo("SelfChange"));
+        Assert.That(noOpSelf.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var stored = (await Users.GetByIdAsync(_boss.Id, CancellationToken.None))!;
+        Assert.That(stored.Roles, Is.EquivalentTo(TestUsers.AllRoles));
+        Assert.That(stored.IsDisabled, Is.False);
+    }
+
+    [Test]
+    public async Task ResetPassword_OnYourself_Is204AndEndsYourSession()
+    {
+        using var reset = await _admin.PostAsync($"/api/users/{_boss.Id}/reset-password", new { newPassword = NewPassword });
+        using var me = await _admin.GetAsync("/api/auth/me");
+
+        Assert.That(reset.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(me.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
     [Test]
@@ -160,6 +176,7 @@ public class UserEndpointsTests
     [TestCase("[\"Admin\"]")]
     [TestCase("[\"admin\",\"admin\"]")]
     [TestCase("[null]")]
+    [TestCase("[\"rom-manager\"]")]
     public async Task InvalidRoles_Is400OnTheRolesField(string roles)
     {
         var plain = await TestUsers.CreateAsync(_factory, "plain");
@@ -180,12 +197,12 @@ public class UserEndpointsTests
     [Test]
     public async Task Patch_WithoutRoles_KeepsThem()
     {
-        var manager = await TestUsers.CreateAsync(_factory, "manager", Roles.Of(Roles.RomManager));
+        var manager = await TestUsers.CreateAsync(_factory, "manager", Roles.Of(Roles.Admin));
 
         using var patch = await _admin.PatchAsync($"/api/users/{manager.Id}", new { isDisabled = true });
 
         Assert.That(patch.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        Assert.That((await Users.GetByIdAsync(manager.Id, CancellationToken.None))!.Roles, Is.EquivalentTo(new[] { Roles.RomManager }));
+        Assert.That((await Users.GetByIdAsync(manager.Id, CancellationToken.None))!.Roles, Is.EquivalentTo(new[] { Roles.Admin }));
     }
 
     [Test]

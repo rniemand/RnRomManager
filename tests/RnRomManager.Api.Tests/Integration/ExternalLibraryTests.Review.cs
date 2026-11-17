@@ -172,12 +172,12 @@ public partial class ExternalLibraryTests
     }
 
     [Test]
-    public async Task RomManagerWithoutAdmin_CannotResolve()
+    public async Task SiteUser_CannotResolve()
     {
         var (id, file) = await QueueAsync("mystery.xci");
         using var manager = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "manager-only", Roles.Of(Roles.RomManager));
-        (await manager.LoginAsync("manager-only", TestUsers.Password)).Dispose();
+        await TestUsers.CreateAsync(_factory, "site-user");
+        (await manager.LoginAsync("site-user", TestUsers.Password)).Dispose();
 
         using var response = await manager.PostAsync($"/api/review/{id}/resolve", ManualMystery);
 

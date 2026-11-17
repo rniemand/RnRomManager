@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { auth } from '../stores/auth.svelte';
 	import { resolve } from '$app/paths';
 	import type { DiscoveryGroup, Page } from '../api/types';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -115,7 +116,7 @@
 						>{group.gameCount} {group.gameCount === 1 ? 'game' : 'games'}</span
 					>
 				</a>
-				{#if view.kind === 'publishers'}
+				{#if view.kind === 'publishers' && auth.isAdmin}
 					<!-- B5: beside the link, not in it (no button inside a link). -->
 					<button
 						type="button"

@@ -5,11 +5,15 @@ import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { fakePassword } from '#lib/testing/fakePassword.js';
 
-// Bootstrap's Modal needs layout/transitions jsdom lacks.
+// Bootstrap's Modal and Tooltip need layout/transitions jsdom lacks.
 vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
 		show() {}
 		hide() {}
+		dispose() {}
+	},
+	Tooltip: class {
+		setContent() {}
 		dispose() {}
 	}
 }));
@@ -22,7 +26,7 @@ const { default: AboutPage } = await import('./about/+page.svelte');
 const admin = {
 	id: 1,
 	username: 'admin',
-	roles: ['admin', 'rom-manager'],
+	roles: ['admin'],
 	isDisabled: false,
 	lastLoginAt: null
 };
@@ -39,7 +43,7 @@ describe('admin pages', () => {
 		auth.set({
 			id: 1,
 			username: 'admin',
-			roles: ['admin', 'rom-manager'],
+			roles: ['admin'],
 			mustChangePassword: false
 		});
 		calls = [];
@@ -70,7 +74,13 @@ describe('admin pages', () => {
 	const submitCreate = () =>
 		fireEvent.click(screen.getByRole('button', { name: 'Create', hidden: true }));
 
-	it('the users table uses the standard style with role badges', async () => {
+	const boss = { id: 2, username: 'boss', roles: ['admin'], isDisabled: false, lastLoginAt: null };
+	const visitor = { id: 3, username: 'visitor', roles: [], isDisabled: false, lastLoginAt: null };
+	const typeSelect = (username: string) =>
+		screen.getByLabelText(`Account type of ${username}`) as HTMLSelectElement;
+
+	it('the users table uses the standard style with a Type column', async () => {
+		answers['GET /api/users'] = { status: 200, body: [admin, visitor] };
 		render(UsersPage);
 		await screen.findByRole('cell', { name: 'admin' });
 
@@ -79,9 +89,37 @@ describe('admin pages', () => {
 		expect(table.closest('.table-responsive')?.parentElement?.classList.contains('card')).toBe(
 			true
 		);
-		const badges = [...document.querySelectorAll('td label.badge')].map((b) => b.className);
-		expect(badges.every((c) => c.includes('text-bg-primary'))).toBe(true);
-		expect(badges).toHaveLength(2);
+		expect(screen.getByRole('columnheader', { name: 'Type' })).toBeTruthy();
+		expect(typeSelect('admin').value).toBe('admin');
+		expect(typeSelect('visitor').value).toBe('site-user');
+		expect([...typeSelect('visitor').options].map((o) => o.text)).toEqual(['Admin', 'Site user']);
+	});
+
+	it("the signed-in admin's own row can't change its type or be disabled", async () => {
+		answers['GET /api/users'] = { status: 200, body: [admin, visitor] };
+		render(UsersPage);
+		await screen.findByRole('cell', { name: 'admin' });
+
+		expect(typeSelect('admin').disabled).toBe(true);
+		expect(
+			(screen.getByRole('button', { name: 'Disable admin' }) as HTMLButtonElement).disabled
+		).toBe(true);
+		expect(typeSelect('visitor').disabled).toBe(false);
+		expect(
+			(screen.getByRole('button', { name: 'Disable visitor' }) as HTMLButtonElement).disabled
+		).toBe(false);
+	});
+
+	it('changing a row type PATCHes its roles', async () => {
+		answers['GET /api/users'] = { status: 200, body: [admin, visitor] };
+		answers['PATCH /api/users/3'] = { status: 200, body: { ...visitor, roles: ['admin'] } };
+		render(UsersPage);
+		await screen.findByRole('cell', { name: 'visitor' });
+
+		await fireEvent.change(typeSelect('visitor'), { target: { value: 'admin' } });
+
+		expect(calls).toContainEqual({ key: 'PATCH /api/users/3', body: { roles: ['admin'] } });
+		await vi.waitFor(() => expect(typeSelect('visitor').value).toBe('admin'));
 	});
 
 	it('create user validates username and password before sending', async () => {
@@ -101,22 +139,41 @@ describe('admin pages', () => {
 		const password = fakePassword('new');
 		answers['POST /api/users'] = {
 			status: 201,
-			body: { id: 2, username: 'bob', roles: ['rom-manager'], isDisabled: false, lastLoginAt: null }
+			body: { id: 2, username: 'bob', roles: ['admin'], isDisabled: false, lastLoginAt: null }
 		};
 		render(UsersPage);
 		await openCreate();
 
 		await type('Username', 'bob');
 		await type('Initial password', password);
-		await fireEvent.click(screen.getByRole('checkbox', { name: 'rom-manager', hidden: true }));
+		await fireEvent.change(screen.getByLabelText('Account type'), { target: { value: 'admin' } });
 		await submitCreate();
 
 		await vi.waitFor(() => expect(calls.filter((c) => c.key === 'GET /api/users')).toHaveLength(2));
 		expect(calls).toContainEqual({
 			key: 'POST /api/users',
-			body: { username: 'bob', roles: ['rom-manager'], password }
+			body: { username: 'bob', roles: ['admin'], password }
 		});
 		expect(toasts.items.map((t) => t.text)[0]).toMatch(/^bob created/);
+	});
+
+	it('the create form starts on Site user, which sends no roles', async () => {
+		const password = fakePassword('new');
+		answers['POST /api/users'] = { status: 201, body: { ...visitor, username: 'carol' } };
+		render(UsersPage);
+		await openCreate();
+
+		expect((screen.getByLabelText('Account type') as HTMLSelectElement).value).toBe('site-user');
+		await type('Username', 'carol');
+		await type('Initial password', password);
+		await submitCreate();
+
+		await vi.waitFor(() =>
+			expect(calls).toContainEqual({
+				key: 'POST /api/users',
+				body: { username: 'carol', roles: [], password }
+			})
+		);
 	});
 
 	it('shows UsernameTaken and API field errors inline', async () => {
@@ -135,29 +192,37 @@ describe('admin pages', () => {
 			body: {
 				code: 'ValidationFailed',
 				title: 'x',
-				errors: { roles: ['Roles must be any of: admin, rom-manager.'] }
+				errors: { roles: ['Roles must be any of: admin.'] }
 			}
 		};
 		await submitCreate();
-		expect(await screen.findByText('Roles must be any of: admin, rom-manager.')).toBeTruthy();
+		expect(await screen.findByText('Roles must be any of: admin.')).toBeTruthy();
 		expect(calls.filter((c) => c.key === 'GET /api/users')).toHaveLength(1);
 	});
 
-	it('a role checkbox PATCHes the full roles array', async () => {
-		answers['PATCH /api/users/1'] = { status: 200, body: { ...admin, roles: ['admin'] } };
+	it('a SelfChange answer is a warning toast with its title, and the list reloads', async () => {
+		const title = "You can't disable or demote your own account";
+		answers['GET /api/users'] = { status: 200, body: [admin, boss] };
+		answers['PATCH /api/users/2'] = { status: 409, body: { code: 'SelfChange', title } };
 		render(UsersPage);
+		await screen.findByRole('cell', { name: 'boss' });
 
-		await fireEvent.click(await screen.findByLabelText('rom-manager role of admin'));
+		await fireEvent.click(screen.getByRole('button', { name: 'Disable boss' }));
 
-		expect(calls).toContainEqual({ key: 'PATCH /api/users/1', body: { roles: ['admin'] } });
+		await vi.waitFor(() =>
+			expect(toasts.items.map((t) => [t.text, t.kind])).toContainEqual([title, 'warning'])
+		);
+		expect(calls.filter((c) => c.key === 'GET /api/users')).toHaveLength(2);
 	});
 
 	it('demoting the last admin shows the LastAdmin toast and reloads', async () => {
-		answers['PATCH /api/users/1'] = { status: 409, body: { code: 'LastAdmin', title: 'x' } };
+		answers['GET /api/users'] = { status: 200, body: [admin, boss] };
+		answers['PATCH /api/users/2'] = { status: 409, body: { code: 'LastAdmin', title: 'x' } };
 		render(UsersPage);
+		await screen.findByRole('cell', { name: 'boss' });
 
-		await fireEvent.click(await screen.findByLabelText('admin role of admin'));
-		expect(calls).toContainEqual({ key: 'PATCH /api/users/1', body: { roles: ['rom-manager'] } });
+		await fireEvent.change(typeSelect('boss'), { target: { value: 'site-user' } });
+		expect(calls).toContainEqual({ key: 'PATCH /api/users/2', body: { roles: [] } });
 
 		await vi.waitFor(() =>
 			expect(toasts.items.map((t) => t.text)).toContain(

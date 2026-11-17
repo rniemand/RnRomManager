@@ -12,7 +12,6 @@ public static class AuthSetup
 {
     public const string Authenticated = "Authenticated";
     public const string AdminOnly = "AdminOnly";
-    public const string LibraryEditor = "LibraryEditor";
     public const string LoginRateLimit = "login";
     public const string AntiforgeryHeader = "X-XSRF-TOKEN";
 
@@ -39,8 +38,7 @@ public static class AuthSetup
             });
         services.AddAuthorizationBuilder()
             .AddPolicy(Authenticated, policy => policy.RequireAuthenticatedUser())
-            .AddPolicy(AdminOnly, policy => policy.RequireRole(Roles.Admin))
-            .AddPolicy(LibraryEditor, policy => policy.RequireRole(Roles.RomManager));
+            .AddPolicy(AdminOnly, policy => policy.RequireRole(Roles.Admin));
         services.AddAntiforgery(options =>
         {
             options.HeaderName = AntiforgeryHeader;

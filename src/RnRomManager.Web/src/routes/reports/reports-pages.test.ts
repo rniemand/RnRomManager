@@ -203,13 +203,13 @@ describe('reports pages', () => {
 			games: [game('g1', 'Quest', 2), game('g2', 'Quest DX', 1), game('g3', 'Quest II', 1)]
 		};
 		const page = { items: [group], page: 1, pageSize: 25, total: 1 };
-		const signIn = (roles: ('admin' | 'rom-manager')[]) =>
+		const signIn = (roles: 'admin'[]) =>
 			auth.set({ id: 1, username: 'u', roles, mustChangePassword: false });
 		const radio = (title: string) =>
 			screen.getByRole('radio', { name: `Merge into ${title}` }) as HTMLInputElement;
 
 		it('renders a card per group; the first game is pre-selected and labelled', async () => {
-			signIn(['rom-manager']);
+			signIn(['admin']);
 			answers[list] = { status: 200, body: page };
 			render(Duplicates);
 
@@ -232,8 +232,8 @@ describe('reports pages', () => {
 			expect(row.textContent).toMatch(/2(\.0)? KiB|2 KB/);
 		});
 
-		it('a user without rom-manager sees the list without radios or buttons', async () => {
-			signIn(['admin']);
+		it('a Site user sees the list without radios or buttons', async () => {
+			signIn([]);
 			answers[list] = { status: 200, body: page };
 			render(Duplicates);
 
@@ -244,7 +244,7 @@ describe('reports pages', () => {
 		});
 
 		it('merge confirms, posts the selected target and the other ids, then reloads', async () => {
-			signIn(['rom-manager']);
+			signIn(['admin']);
 			answers[list] = { status: 200, body: page };
 			answers['POST /api/reports/duplicates/merge'] = { status: 200, body: { targetGameId: 'g2' } };
 			render(Duplicates);
@@ -263,7 +263,7 @@ describe('reports pages', () => {
 		});
 
 		it('dismiss posts the group key and reloads', async () => {
-			signIn(['rom-manager']);
+			signIn(['admin']);
 			answers[list] = { status: 200, body: page };
 			render(Duplicates);
 			await screen.findByRole('link', { name: 'Quest DX' });
@@ -277,7 +277,7 @@ describe('reports pages', () => {
 		});
 
 		it('a merge that stops part-way toasts the problem and the merged count', async () => {
-			signIn(['rom-manager']);
+			signIn(['admin']);
 			toasts.items = [];
 			answers[list] = { status: 200, body: page };
 			answers['POST /api/reports/duplicates/merge'] = {

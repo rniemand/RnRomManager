@@ -152,7 +152,7 @@ public partial class ExternalLibraryTests
     {
         await Service<RnRomManager.Api.AuditWriter>().FlushAsync();
         await using var db = Service<IDbConnectionFactory>().Create();
-        return [.. await db.QueryAsync<(string, string?)>("SELECT action, details FROM audit_events ORDER BY id")];
+        return [.. await db.QueryAsync<(string, string?)>("SELECT action, details FROM audit_events WHERE action NOT IN ('SignedIn', 'SignInFailed', 'LockedOut', 'PasswordChanged') ORDER BY id")];
     }
 
     [TestCase(false)]

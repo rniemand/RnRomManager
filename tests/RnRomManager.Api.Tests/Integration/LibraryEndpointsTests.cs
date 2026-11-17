@@ -460,11 +460,12 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
-    public async Task Rating_UserCanRate_ReturnsFullDetail_ListAndDetailAndZipShowIt()
+    public async Task Rating_AdminCanRate_ReturnsFullDetail_ListAndDetailAndZipShowIt()
     {
         var id = await Tetris();
+        using var admin = await AdminAsync();
 
-        using var response = await _user.PatchAsync($"/api/games/{id}/rating", new { rating = 4, favourite = true });
+        using var response = await admin.PatchAsync($"/api/games/{id}/rating", new { rating = 4, favourite = true });
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var body = await AuthClient.JsonAsync(response);
@@ -480,7 +481,7 @@ public partial class LibraryEndpointsTests
         using (var zip = LibraryZip.Open(await ZipPath(id), Service<InfoJsonReader>()))
             Assert.That((zip.InfoJson!.Game!.Rating, zip.InfoJson.Game.Favourite), Is.EqualTo(((int?)4, true)));
 
-        using var cleared = await _user.PatchAsync($"/api/games/{id}/rating", new { rating = (int?)null });
+        using var cleared = await admin.PatchAsync($"/api/games/{id}/rating", new { rating = (int?)null });
         Assert.That(cleared.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var after = await AuthClient.JsonAsync(cleared);
         Assert.That((after.GetProperty("rating").ValueKind, after.GetProperty("favourite").GetBoolean()), Is.EqualTo((JsonValueKind.Null, true)));
@@ -490,21 +491,41 @@ public partial class LibraryEndpointsTests
     public async Task Rating_UnknownIdIs404_BadBodyIs400_JobRunningIs409()
     {
         var id = await Tetris();
+        using var admin = await AdminAsync();
 
-        using (var missing = await _user.PatchAsync($"/api/games/{Guid.NewGuid()}/rating", new { rating = 3 }))
+        using (var missing = await admin.PatchAsync($"/api/games/{Guid.NewGuid()}/rating", new { rating = 3 }))
             Assert.That(missing.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
-        using (var bad = await _user.PatchAsync($"/api/games/{id}/rating", new { rating = 9 }))
+        using (var bad = await admin.PatchAsync($"/api/games/{id}/rating", new { rating = 9 }))
         {
             Assert.That(bad.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
             Assert.That(await AuthClient.CodeAsync(bad), Is.EqualTo("ValidationFailed"));
         }
         using (Service<RnRomManager.Core.Jobs.JobLock>().TryAcquire())
-        using (var busy = await _user.PatchAsync($"/api/games/{id}/rating", new { rating = 3 }))
+        using (var busy = await admin.PatchAsync($"/api/games/{id}/rating", new { rating = 3 }))
         {
             Assert.That(busy.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
             Assert.That(await AuthClient.CodeAsync(busy), Is.EqualTo("JobRunning"));
         }
         Assert.That((await Service<IGameRepository>().GetAsync(id, default))!.Rating, Is.Null);
+    }
+
+    [Test]
+    public async Task Rating_SiteUser_Is403()
+    {
+        var id = await Tetris();
+
+        using var response = await _user.PatchAsync($"/api/games/{id}/rating", new { rating = 3 });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+        Assert.That((await Service<IGameRepository>().GetAsync(id, default))!.Rating, Is.Null);
+    }
+
+    private async Task<AuthClient> AdminAsync()
+    {
+        var admin = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
+        (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
+        return admin;
     }
 
     [Test]

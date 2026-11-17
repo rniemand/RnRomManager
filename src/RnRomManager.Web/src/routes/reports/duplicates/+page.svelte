@@ -155,8 +155,7 @@
 				<table class="table table-sm table-striped table-hover align-middle mb-0">
 					<thead class="table-dark">
 						<tr>
-							{#if auth.canEditLibrary}<th scope="col"
-									><span class="visually-hidden">Target</span></th
+							{#if auth.isAdmin}<th scope="col"><span class="visually-hidden">Target</span></th
 								>{/if}
 							<th scope="col">Game</th>
 							<th scope="col" class="text-end">Releases</th>
@@ -168,7 +167,7 @@
 					<tbody>
 						{#each group.games as game, i (game.id)}
 							<tr>
-								{#if auth.canEditLibrary}
+								{#if auth.isAdmin}
 									<td>
 										<input
 											class="form-check-input"
@@ -193,7 +192,7 @@
 					</tbody>
 				</table>
 			</div>
-			{#if auth.canEditLibrary}
+			{#if auth.isAdmin}
 				<div class="card-footer d-flex gap-2 justify-content-end">
 					<button
 						type="button"

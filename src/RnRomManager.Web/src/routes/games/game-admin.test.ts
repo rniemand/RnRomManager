@@ -103,7 +103,7 @@ describe('game detail admin actions', () => {
 		auth.set({
 			id: 1,
 			username: 'admin',
-			roles: ['admin', 'rom-manager'],
+			roles: ['admin'],
 			mustChangePassword: false
 		});
 		calls = [];
@@ -128,8 +128,8 @@ describe('game detail admin actions', () => {
 
 	const modal = () => within(document.querySelector<HTMLElement>('.modal')!);
 
-	it('a rom-manager sees the actions', async () => {
-		auth.set({ id: 3, username: 'm', roles: ['rom-manager'], mustChangePassword: false });
+	it('an admin sees the actions', async () => {
+		auth.set({ id: 3, username: 'm', roles: ['admin'], mustChangePassword: false });
 		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
 		render(GamePage);
 
@@ -156,17 +156,7 @@ describe('game detail admin actions', () => {
 		expect(modal().getByRole('heading', { name: 'Move release', hidden: true })).toBeTruthy();
 	});
 
-	it('an admin without rom-manager sees no actions', async () => {
-		auth.set({ id: 4, username: 'a', roles: ['admin'], mustChangePassword: false });
-		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
-		render(GamePage);
-
-		await screen.findByText('Releases');
-		expect(screen.queryByRole('button', { name: /Edit metadata/ })).toBeNull();
-		expect(screen.queryByRole('button', { name: 'Delete Tetris 1.gb' })).toBeNull();
-	});
-
-	it('a User sees no admin actions', async () => {
+	it('a Site user sees no admin actions and a read-only rating', async () => {
 		auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
 		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
 		render(GamePage);
@@ -174,6 +164,7 @@ describe('game detail admin actions', () => {
 		await screen.findByText('Releases');
 		expect(screen.queryByRole('button', { name: /Edit metadata/ })).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Delete Tetris 1.gb' })).toBeNull();
+		expect(screen.queryByRole('button', { name: /Rate 1 of 5/ })).toBeNull();
 	});
 
 	it('deleting a release calls the API and reloads', async () => {

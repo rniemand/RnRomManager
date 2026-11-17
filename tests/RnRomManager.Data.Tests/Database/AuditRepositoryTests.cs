@@ -68,6 +68,18 @@ public class AuditRepositoryTests
     }
 
     [Test]
+    public async Task Scheduled_ListsOnlyRowsWithoutIdAndUsername()
+    {
+        await _audit.InsertAsync(new AuditEvent(AuditActions.DatsRefreshed, new AuditActor(null, null, null)) { OccurredAt = T0 }, default);
+        await _audit.InsertAsync(new AuditEvent(AuditActions.SignInFailed, new AuditActor(null, "nobody", null)) { OccurredAt = T0 }, default);
+        await _audit.InsertAsync(new AuditEvent(AuditActions.SignedIn, new AuditActor(7, "boss", null)) { OccurredAt = T0 }, default);
+
+        var page = await _audit.ListAsync(new AuditQuery(Scheduled: true), 1, 50, default);
+
+        Assert.That(page.Items.Select(i => i.Action), Is.EqualTo(new[] { AuditActions.DatsRefreshed }));
+    }
+
+    [Test]
     public async Task Insert_TruncatesTextOverTheColumnLength()
     {
         await _audit.InsertAsync(new AuditEvent(new string('a', 40), new AuditActor(1, new string('u', 70), null), new string('s', 20),

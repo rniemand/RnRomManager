@@ -125,7 +125,7 @@ A release can have one Markdown note, the entry `notes/<rom fileName>.md` (e.g. 
 
 ## Saves
 
-A game's saves are shared by every user of the library and live in its ZIP:
+A game's saves live in its ZIP. Each save belongs to the user in its `uploadedBy` (matched ignoring case; `null` belongs to nobody): the app shows a Site user only their own, but the ZIP holds every user's saves:
 
 - `saves/saves.json` (UTF-8, at most 1 MiB, written only by the app): `{ "version": 1, "saves": [ … ] }`, one record per save with `id` (32 lowercase hex), `name` (1–100 characters, trimmed, no control characters), `description` (≤ 1,000 characters, line breaks allowed), `kind` (`state` or `battery`), `release` (the release's `fileName`, matched ignoring case), `extension`, `sizeBytes`, `sha1`, `uploadedBy`/`uploadedAt` and `updatedBy`/`updatedAt` (usernames at the time, may be `null`).
 - Each save's bytes are the entry `saves/<id><extension>`. `extension` comes from the uploaded file name: the text after its last `.`, lowercased, when it is 1–8 of `[a-z0-9]` (`x.tar.gz` → `.gz`), else empty. Entries are never named after user text.

@@ -418,6 +418,8 @@ public partial class LibraryMirrorTests
         var game = await ZipAsync("gb/T/Tetris.zip", "Tetris", 1);
         await _sync.SyncAllAsync(CancellationToken.None);
         await WriteZipAsync(_reader, Abs("gb/T/Tetris.zip"), game with { Roms = [game.Roms[0] with { Version = "1.2" }] }, 1);
+        // Sync sees a change by size or whole-second mtime; a fast rewrite can match both, so move the mtime.
+        File.SetLastWriteTimeUtc(Abs("gb/T/Tetris.zip"), Mtime);
 
         await _sync.SyncAllAsync(CancellationToken.None);
 

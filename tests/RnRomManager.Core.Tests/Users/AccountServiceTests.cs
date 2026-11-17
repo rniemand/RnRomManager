@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Users;
 
 namespace RnRomManager.Core.Tests.Users;
@@ -13,6 +14,7 @@ public class AccountServiceTests
 
     private readonly PasswordHasher<User> _hasher = new();
     private IUserRepository _users = null!;
+    private IAuditLog _audit = null!;
     private FakeTimeProvider _time = null!;
     private AccountService _service = null!;
     private User _user = null!;
@@ -21,8 +23,9 @@ public class AccountServiceTests
     public void SetUp()
     {
         _users = Substitute.For<IUserRepository>();
+        _audit = Substitute.For<IAuditLog>();
         _time = new FakeTimeProvider(Now);
-        _service = new AccountService(_users, _hasher, _time, NullLogger<AccountService>.Instance);
+        _service = new AccountService(_users, _hasher, _time, _audit, NullLogger<AccountService>.Instance);
         _user = new User
         {
             Id = 7,
@@ -131,5 +134,79 @@ public class AccountServiceTests
         var (_, errors) = await _service.ChangePasswordAsync(_user, Password, newPassword, CancellationToken.None);
 
         Assert.That(errors!.Keys, Is.EqualTo(new[] { "newPassword" }));
+    }
+
+    [Test]
+    public async Task ChangePassword_SameAsCurrent_IsAFieldError()
+    {
+        var (updated, errors) = await _service.ChangePasswordAsync(_user, Password, Password, CancellationToken.None);
+
+        Assert.That(updated, Is.Null);
+        Assert.That(errors!["newPassword"], Is.EqualTo(new[] { "New password must be different from the current password." }));
+        await _users.DidNotReceiveWithAnyArgs().UpdateAsync(default!, default);
+    }
+
+    private static readonly AuditActor Richard = new(7, "richard", null);
+
+    private IReadOnlyList<AuditEvent> Recorded() =>
+        _audit.ReceivedCalls().Select(c => (AuditEvent)c.GetArguments()[0]!).ToList();
+
+    [Test]
+    public async Task Audit_SignedIn()
+    {
+        await Login();
+
+        Assert.That(Recorded(), Is.EqualTo(new[] { new AuditEvent(AuditActions.SignedIn, Richard) }));
+    }
+
+    [Test]
+    public async Task Audit_UnknownUser_KeepsTheAttemptedNameWithoutAnId()
+    {
+        await _service.LoginAsync("Nobody", Password, CancellationToken.None);
+
+        Assert.That(Recorded(), Is.EqualTo(new[]
+        {
+            new AuditEvent(AuditActions.SignInFailed, new AuditActor(null, "Nobody", null), Details: "reason=unknown-user"),
+        }));
+    }
+
+    [TestCase(true, 1, "reason=disabled", TestName = "Audit_Reason_DisabledBeforeLockedOut")]
+    [TestCase(false, 1, "reason=locked-out", TestName = "Audit_Reason_LockedOut")]
+    [TestCase(false, 0, "reason=wrong-password", TestName = "Audit_Reason_WrongPassword")]
+    public async Task Audit_FailureReason(bool disabled, int lockoutMinutes, string details)
+    {
+        _user = _user with { IsDisabled = disabled, LockoutUntil = lockoutMinutes > 0 ? Now.UtcDateTime.AddMinutes(lockoutMinutes) : null };
+        _users.IncrementFailedLoginCountAsync(7, Arg.Any<CancellationToken>()).Returns(1);
+
+        await Login("wrong-password-x");
+
+        Assert.That(Recorded(), Is.EqualTo(new[] { new AuditEvent(AuditActions.SignInFailed, Richard, Details: details) }));
+    }
+
+    [Test]
+    public async Task Audit_LockingAttempt_RecordsSignInFailedThenLockedOut()
+    {
+        _users.IncrementFailedLoginCountAsync(7, Arg.Any<CancellationToken>()).Returns(5);
+
+        await Login("wrong-password-x");
+
+        Assert.That(Recorded(), Is.EqualTo(new[]
+        {
+            new AuditEvent(AuditActions.SignInFailed, Richard, Details: "reason=wrong-password"),
+            new AuditEvent(AuditActions.LockedOut, Richard, Details: "until=2026-11-04T12:15:00Z"),
+        }));
+    }
+
+    [Test]
+    public async Task Audit_PasswordChanged_AndARejectedChangeRecordsNothing()
+    {
+        await _service.ChangePasswordAsync(_user, "wrong-password-x", "a-brand-new-password", CancellationToken.None);
+        await _service.ChangePasswordAsync(_user, Password, Password, CancellationToken.None);
+        await _service.ChangePasswordAsync(_user, Password, "short", CancellationToken.None);
+        Assert.That(Recorded(), Is.Empty);
+
+        await _service.ChangePasswordAsync(_user, Password, "a-brand-new-password", CancellationToken.None);
+
+        Assert.That(Recorded(), Is.EqualTo(new[] { new AuditEvent(AuditActions.PasswordChanged, Richard) }));
     }
 }

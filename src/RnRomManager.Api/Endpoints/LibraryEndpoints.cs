@@ -11,6 +11,7 @@ using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Naming;
 using RnRomManager.Core.Systems;
+using RnRomManager.Core.Users;
 
 namespace RnRomManager.Api.Endpoints;
 
@@ -54,7 +55,7 @@ public static class LibraryEndpoints
             foreach (var collectionId in new[] { query.CollectionId, query.NotInCollectionId })
                 if (collectionId is { } id && await collections.GetAsync(id, CollectionEndpoints.UserId(ctx), ctx.RequestAborted) is null)
                     return Problems.NotFound(ctx);
-            var result = await repository.ListAsync(query, ctx.RequestAborted);
+            var result = await ForViewerAsync(await repository.ListAsync(query, ctx.RequestAborted), ctx, repository);
             return Results.Ok(Paging.ToDto(result, game => ToListItemDto(game, systems)));
         });
 
@@ -170,7 +171,7 @@ public static class LibraryEndpoints
         // Play B2–B3: one PlayStation disc for the browser emulator (a standalone image, or its cue set as a ZIP).
         games.MapGet("/{id:guid}/roms/{romId:long}/play-disc", PlayDisc.HandleAsync);
 
-        // B4–B7 release notes: any signed-in user, like ratings; not audited.
+        // B4–B7 release notes: any signed-in user reads them; writes are admin-only (U3), not audited.
         games.MapGet("/{id:guid}/roms/{romId:long}/note", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,
             IRomRepository roms, LibraryFiles files) =>
         {
@@ -188,10 +189,11 @@ public static class LibraryEndpoints
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             return ToResult(ctx, await editor.SaveNoteAsync(id, romId, text!, AuditActor.From(ctx.User).UserId, ctx.RequestAborted));
-        });
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         games.MapDelete("/{id:guid}/roms/{romId:long}/note", async (Guid id, long romId, HttpContext ctx, LibraryEditor editor) =>
-            ToResult(ctx, await editor.DeleteNoteAsync(id, romId, AuditActor.From(ctx.User).UserId, ctx.RequestAborted)));
+            ToResult(ctx, await editor.DeleteNoteAsync(id, romId, AuditActor.From(ctx.User).UserId, ctx.RequestAborted)))
+            .RequireAuthorization(AuthSetup.AdminOnly);
 
         // Admin edits (§11, D28, D35): each takes the job lock inside LibraryEditor.
         games.MapPatch("/{id:guid}", async (Guid id, JsonElement body, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
@@ -202,9 +204,9 @@ public static class LibraryEndpoints
                 return Problems.Validation(ctx, errors);
             var result = await editor.PatchAsync(id, patch, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.LibraryEditor);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
-        // Any signed-in user (shared per game); takes the job lock and rewrites the ZIP like every edit.
+        // Admin-only (U3; shared per game); takes the job lock and rewrites the ZIP like every edit.
         games.MapPatch("/{id:guid}/rating", async (Guid id, JsonElement body, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
             IRomRepository roms, IImageRepository images) =>
         {
@@ -213,13 +215,13 @@ public static class LibraryEndpoints
                 return Problems.Validation(ctx, errors);
             var result = await editor.PatchAsync(id, patch, null, ctx.RequestAborted); // rating/favourite: not audited
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        });
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         games.MapDelete("/{id:guid}", async (Guid id, HttpContext ctx, LibraryEditor editor) =>
-            ToResult(ctx, await editor.DeleteGameAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted))).RequireAuthorization(AuthSetup.LibraryEditor);
+            ToResult(ctx, await editor.DeleteGameAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted))).RequireAuthorization(AuthSetup.AdminOnly);
 
         games.MapDelete("/{id:guid}/roms/{romId:long}", async (Guid id, long romId, HttpContext ctx, LibraryEditor editor) =>
-            ToResult(ctx, await editor.DeleteReleaseAsync(id, romId, AuditActor.From(ctx.User), ctx.RequestAborted))).RequireAuthorization(AuthSetup.LibraryEditor);
+            ToResult(ctx, await editor.DeleteReleaseAsync(id, romId, AuditActor.From(ctx.User), ctx.RequestAborted))).RequireAuthorization(AuthSetup.AdminOnly);
 
         games.MapPost("/{id:guid}/roms/{romId:long}/move", async (Guid id, long romId, MoveReleaseRequest request, HttpContext ctx,
             LibraryEditor editor) =>
@@ -230,14 +232,14 @@ public static class LibraryEndpoints
             var result = await editor.MoveReleaseAsync(id, romId, request.TargetGameId, request.NewGameTitle?.Trim(), AuditActor.From(ctx.User),
                 ctx.RequestAborted);
             return result.Code is null ? Results.Ok(new { targetGameId = result.GameId }) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.LibraryEditor);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         games.MapPost("/{id:guid}/media/retry", async (Guid id, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
             IRomRepository roms, IImageRepository images) =>
         {
             var result = await editor.RetryMediaAsync(id, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.LibraryEditor);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         // I5–I7: image management. The upload reads the form itself (no IFormFile binding), so the group's own
         // X-XSRF-TOKEN filter is the antiforgery check, as for every other mutation.
@@ -258,7 +260,7 @@ public static class LibraryEndpoints
             var result = await editor.AddImageAsync(id, type!.Value, bytes!, AuditActor.From(ctx.User), ctx.RequestAborted);
             await StartGameCheckAsync(result, id, ctx, repository, runner, integrity, loggers);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.LibraryEditor).WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(UploadRequestLimit));
+        }).RequireAuthorization(AuthSetup.AdminOnly).WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(UploadRequestLimit));
 
         // U1–U5: the server downloads the image (public addresses only), then stores it exactly like an upload.
         games.MapPost("/{id:guid}/images/from-url", async (Guid id, ImageUrlRequest request, HttpContext ctx, ImageUrlDownloader downloader,
@@ -278,21 +280,21 @@ public static class LibraryEndpoints
             var result = await editor.AddImageAsync(id, type, bytes, AuditActor.From(ctx.User), ctx.RequestAborted, request.Url);
             await StartGameCheckAsync(result, id, ctx, repository, runner, integrity, loggers);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.LibraryEditor);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         games.MapDelete("/{id:guid}/images/{imageId:long}", async (Guid id, long imageId, HttpContext ctx, LibraryEditor editor,
             IGameRepository repository, IRomRepository roms, IImageRepository images) =>
         {
             var result = await editor.DeleteImageAsync(id, imageId, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.LibraryEditor);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         games.MapPost("/{id:guid}/images/{imageId:long}/cover", async (Guid id, long imageId, HttpContext ctx, LibraryEditor editor,
             IGameRepository repository, IRomRepository roms, IImageRepository images) =>
         {
             var result = await editor.SetCoverAsync(id, imageId, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.LibraryEditor);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         api.MapPost("/jobs/media-retry", async (HttpContext ctx, JobRunner runner, MediaRetryJob job) =>
         {
@@ -306,7 +308,7 @@ public static class LibraryEndpoints
                 return Problems.Validation(ctx, new Dictionary<string, string[]> { ["targetGameId"] = ["A target game is required."] });
             var result = await editor.MergeAsync(id, target, AuditActor.From(ctx.User), ctx.RequestAborted);
             return result.Code is null ? Results.Ok(new { targetGameId = result.GameId }) : ToProblem(ctx, result);
-        }).RequireAuthorization(AuthSetup.LibraryEditor);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         return api;
     }
@@ -398,6 +400,11 @@ public static class LibraryEndpoints
     {
         if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
             return Problems.NotFound(ctx);
+        if (SiteUserName(ctx) is { } username)
+            game = game with
+            {
+                SaveCount = (await repository.GetUserSaveCountsAsync(username, [id], ctx.RequestAborted)).GetValueOrDefault(id),
+            };
         var romRows = await roms.ListByGameAsync(id, ctx.RequestAborted);
         var imageRows = await images.ListByGameAsync(id, ctx.RequestAborted);
         var handler = ctx.RequestServices.GetRequiredService<ISystemRegistry>().ById(game.SystemId);
@@ -668,6 +675,19 @@ public static class LibraryEndpoints
     internal static string ImageUrl(Guid gameId, long imageId) => $"/api/games/{gameId}/images/{imageId}";
 
     /// <summary>One <c>/api/games</c> row (spec §23), also used by discovery group pages.</summary>
+    /// <summary>S7: a Site user's name (their saves are counted apart); null for an Admin, who sees every save.</summary>
+    internal static string? SiteUserName(HttpContext ctx) =>
+        ctx.User.IsInRole(Roles.Admin) ? null : ctx.User.Identity?.Name;
+
+    /// <summary>S7: for a Site user, each game's <c>saveCount</c> becomes their own count (0 without a row).</summary>
+    internal static async Task<Page<GameListItem>> ForViewerAsync(Page<GameListItem> page, HttpContext ctx, IGameRepository repository)
+    {
+        if (SiteUserName(ctx) is not { } username)
+            return page;
+        var counts = await repository.GetUserSaveCountsAsync(username, page.Items.Select(g => g.Id).ToList(), ctx.RequestAborted);
+        return page with { Items = page.Items.Select(g => g with { SaveCount = counts.GetValueOrDefault(g.Id) }).ToList() };
+    }
+
     internal static object ToListItemDto(GameListItem game, ISystemRegistry systems)
     {
         // C2: quick play needs a browser core and a primary release stored in the zip; Play B1 / PSP B1:

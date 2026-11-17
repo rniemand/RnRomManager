@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
 import type { DiscoveryGroup } from '../api/types';
+import { auth } from '../stores/auth.svelte';
 import { toasts } from '../stores/toasts.svelte';
 
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
@@ -50,7 +51,10 @@ beforeEach(() => {
 		return Promise.resolve(new Response(payload, { status: answer.status }));
 	});
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+	vi.unstubAllGlobals();
+	auth.set(null);
+});
 
 const modal = () => within(document.querySelector<HTMLElement>('.modal')!);
 const button = (name: string | RegExp) =>
@@ -173,6 +177,7 @@ describe('PublisherLogoModal (discovery B5)', () => {
 			page(`${logo}&v=7`),
 			page(null)
 		];
+		auth.set({ id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false });
 		render(DiscoveryGroups, {
 			view: { kind: 'publishers', key: null, groupPage: 1, gamePage: 1 },
 			onpage: vi.fn()

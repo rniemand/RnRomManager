@@ -13,12 +13,13 @@ using RnRomManager.Core.Database;
 using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Library;
 using RnRomManager.Data.Repositories;
+using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 using static RnRomManager.TestData.TestLibrary;
 
 namespace RnRomManager.Api.Tests.Integration;
 
-/// <summary>Collections discovery B5–B6: <c>/api/discovery/publishers/logo</c> against MariaDB, with two plain users.</summary>
+/// <summary>Collections discovery B5–B6: <c>/api/discovery/publishers/logo</c> against MariaDB, with two admins (writes are admin-only, U3).</summary>
 [Category("Integration")]
 public class PublisherLogoEndpointsTests
 {
@@ -68,10 +69,10 @@ public class PublisherLogoEndpointsTests
 
     private static string Url(string key) => $"/api/discovery/publishers/logo?key={key}";
 
-    private async Task<AuthClient> SignInAsync(string username)
+    private async Task<AuthClient> SignInAsync(string username, bool siteUser = false)
     {
         var client = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, username);
+        await TestUsers.CreateAsync(_factory, username, siteUser ? null : Roles.Of(Roles.Admin));
         (await client.LoginAsync(username, TestUsers.Password)).Dispose();
         return client;
     }
@@ -299,6 +300,17 @@ public class PublisherLogoEndpointsTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.RequestEntityTooLarge));
         Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("PayloadTooLarge"));
         Assert.That(await StatusAsync(_alice.GetAsync(Url(Nintendo))), Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task SiteUser_Is403OnWrites_ButSeesTheLogo()
+    {
+        await StatusAsync(PutAsync(_alice, Nintendo, Png(5, 5)));
+        using var site = await SignInAsync("carol", siteUser: true);
+
+        Assert.That(await StatusAsync(site.GetAsync(Url(Nintendo))), Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await StatusAsync(PutAsync(site, Nintendo, Png(1, 1))), Is.EqualTo(HttpStatusCode.Forbidden));
+        Assert.That(await StatusAsync(site.SendAsync(HttpMethod.Delete, Url(Nintendo), null, sendXsrf: true)), Is.EqualTo(HttpStatusCode.Forbidden));
     }
 
     [Test]

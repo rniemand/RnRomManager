@@ -7,6 +7,7 @@ using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
+using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
@@ -40,7 +41,7 @@ public class NoteEndpointsTests
     {
         await _factory.ResetAsync();
         _user = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "plain"); // no roles: notes are open to every signed-in user
+        await TestUsers.CreateAsync(_factory, "plain", Roles.Of(Roles.Admin)); // note writes are admin-only (U3)
         (await _user.LoginAsync("plain", TestUsers.Password)).Dispose();
         var cache = Service<DatCache>();
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
@@ -214,6 +215,19 @@ public class NoteEndpointsTests
         await Expect(await _user.GetAsync(await Url(999_999)), HttpStatusCode.NotFound);
         await Expect(await Put(new { text = "x" }, 999_999), HttpStatusCode.NotFound);
         await Expect(await _user.SendAsync(HttpMethod.Put, $"/api/games/{Guid.NewGuid()}/roms/{await World()}/note", new { text = "x" }, true), HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    public async Task SiteUser_ReadsNotes_ButWritesAre403()
+    {
+        await Expect(await Put(new { text = "hello" }), HttpStatusCode.NoContent);
+        using var site = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "site-user");
+        (await site.LoginAsync("site-user", TestUsers.Password)).Dispose();
+
+        await Expect(await site.GetAsync(await Url()), HttpStatusCode.OK);
+        await Expect(await site.SendAsync(HttpMethod.Put, await Url(), new { text = "x" }, true), HttpStatusCode.Forbidden);
+        await Expect(await site.SendAsync(HttpMethod.Delete, await Url(), null, true), HttpStatusCode.Forbidden);
     }
 
     [Test]

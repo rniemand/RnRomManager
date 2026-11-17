@@ -28,9 +28,9 @@ public sealed record LibraryEditResult(string? Code = null, string? Details = nu
     public const string StorageMigrationPendingTitle =
         "This game's ROMs are being moved out of its ZIP. Try again when the storage migration job has finished.";
 
-    /// <summary>B8: the release already has 25 saves (409).</summary>
+    /// <summary>B8, S4: the uploader already has 25 saves on the release (409).</summary>
     public const string SaveLimitReached = "SaveLimitReached";
-    public const string SaveLimitReachedTitle = "This release already has 25 saves. Delete one first.";
+    public const string SaveLimitReachedTitle = "You already have 25 saves for this release. Delete one first.";
 
     /// <summary>B3: the game's <c>saves/</c> folder can't be read; an Admin repairs it by hand (409).</summary>
     public const string SavesUnreadable = "SavesUnreadable";

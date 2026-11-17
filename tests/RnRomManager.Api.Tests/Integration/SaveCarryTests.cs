@@ -17,6 +17,7 @@ namespace RnRomManager.Api.Tests.Integration;
 public class SaveCarryTests(bool external)
 {
     private static readonly AuditActor Alice = new(null, "alice", null);
+    private static readonly SaveViewer AliceViewer = new("alice", false);
 
     private ApiFactory _factory = null!;
     private int _seed;
@@ -217,7 +218,7 @@ public class SaveCarryTests(bool external)
         var source = await WriteGame("Alpha", "Alpha (World)");
         var target = await WriteGame("Beta", "Beta (World)");
         var added = await AddSave(source, "Alpha (World)", "S", [1]);
-        var carried = (await Editor.UpdateSaveAsync(source.Id, added.Id, null, new string('d', GameSaves.MaxDescriptionLength), Alice, default)).Save!;
+        var carried = (await Editor.UpdateSaveAsync(source.Id, added.Id, null, new string('d', GameSaves.MaxDescriptionLength), Alice, AliceViewer, default)).Save!;
         // Fill the target's index with records no bigger than the carried one, until one more would pass 1 MiB.
         var record = carried with { Release = "Gone" };
         var filler = new List<GameSave>();

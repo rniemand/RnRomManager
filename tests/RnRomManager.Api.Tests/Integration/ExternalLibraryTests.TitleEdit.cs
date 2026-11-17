@@ -293,18 +293,18 @@ public partial class ExternalLibraryTests
         AssertUntouched();
     }
 
-    [TestCase(false, HttpStatusCode.Forbidden, TestName = "TitleEdit_OverHttp_NeedsTheRomManagerRole plain user")]
-    [TestCase(true, HttpStatusCode.OK, TestName = "TitleEdit_OverHttp_NeedsTheRomManagerRole rom manager")]
-    public async Task TitleEdit_OverHttp_NeedsTheRomManagerRole(bool romManager, HttpStatusCode expected)
+    [TestCase(false, HttpStatusCode.Forbidden, TestName = "TitleEdit_OverHttp_NeedsAdmin site user")]
+    [TestCase(true, HttpStatusCode.OK, TestName = "TitleEdit_OverHttp_NeedsAdmin admin")]
+    public async Task TitleEdit_OverHttp_NeedsAdmin(bool admin, HttpStatusCode expected)
     {
         var gameId = await TwoReleaseGameAsync();
         using var client = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "someone", romManager ? Roles.Of(Roles.RomManager) : Roles.Of());
+        await TestUsers.CreateAsync(_factory, "someone", admin ? Roles.Of(Roles.Admin) : Roles.None);
         (await client.LoginAsync("someone", TestUsers.Password)).Dispose();
 
         using var response = await client.PatchAsync($"/api/games/{gameId}", new { title = "Star Game" });
 
         Assert.That(response.StatusCode, Is.EqualTo(expected));
-        Assert.That(File.Exists(StarUsa), Is.EqualTo(romManager));
+        Assert.That(File.Exists(StarUsa), Is.EqualTo(admin));
     }
 }

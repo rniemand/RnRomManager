@@ -12,6 +12,7 @@
 		nameError,
 		savesApi
 	} from '../saves';
+	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import EmulatorModal from './EmulatorModal.svelte';
@@ -21,7 +22,7 @@
 	import Icon from './Icon.svelte';
 	import Loading from './Loading.svelte';
 
-	/** B14–B15: the game's shared saves: list, add, edit, replace, delete and download. */
+	/** B14–B15: the game's saves (S2: a Site user's own, every user's for an Admin): list, add, edit, replace, delete and download. */
 	interface Props {
 		game: GameDetail;
 		/** B19: bumped by the page after the Play dialog saved to the library; the list reloads. */
@@ -196,6 +197,7 @@
 						<th scope="col">Name</th>
 						<th scope="col">Kind</th>
 						<th scope="col">Release</th>
+						{#if auth.isAdmin}<th scope="col">Owner</th>{/if}
 						<th scope="col" class="text-end">Size</th>
 						<th scope="col">Updated</th>
 						<th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
@@ -225,6 +227,14 @@
 									{save.releaseFileName}
 								{/if}
 							</td>
+							{#if auth.isAdmin}
+								<!-- S8: an Admin lists every user's saves; a Site user sees only their own. -->
+								<td class="text-nowrap">
+									{#if save.uploadedBy}{save.uploadedBy}{:else}<span class="text-body-secondary"
+											>Unknown</span
+										>{/if}
+								</td>
+							{/if}
 							<td class="text-end"><FileSize bytes={save.sizeBytes} /></td>
 							<td class="text-nowrap">
 								{formatDateTime(save.updatedAt)}

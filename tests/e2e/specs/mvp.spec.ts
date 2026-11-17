@@ -15,7 +15,7 @@ import { expectRomDownloadProgress, stageRomDownload } from "./rom-progress";
  * Spec §15.1 "E2E": the MVP smoke path against the real image with the seeded `Basic` set (§15.2), in order:
  * login + forced password change → ingest → browse/search/filter → game detail + downloads → global search +
  * ratings → collections → review resolve/delete → images → Admin edit/move/delete → users and logs, with axe on every page and
- * modal visited. The seeded admin has both roles (`admin` + `rom-manager`).
+ * modal visited. The seeded admin is an Admin; Site users are created by the tests that need them.
  *
  * scripts/test-e2e.ps1 runs it on two stacks at once (playwright.config.ts): `@both` tests sign in and ingest on each,
  * `@shard-b` tests run only on the second, the rest only on the first. A `@shard-b` test may only rely on `@both`
@@ -111,6 +111,41 @@ async function openGame(title: string): Promise<void> {
   await expect(
     page.getByRole("heading", { level: 1, name: title }),
   ).toBeVisible();
+}
+
+/** Creates a Site user (the create form's default type) on the Admin's users page. */
+async function createSiteUser(username: string, initialPassword: string): Promise<void> {
+  await page.goto("/admin/users");
+  await page.getByRole("button", { name: "Create user" }).click();
+  await expect(dialog().getByLabel("Account type")).toHaveValue("site-user");
+  await dialog().getByLabel("Username").fill(username);
+  await dialog().getByLabel("Initial password").fill(initialPassword);
+  await dialog().getByRole("button", { name: "Create" }).click();
+  await expect(dialog()).toBeHidden();
+  await expect(page.getByLabel(`Account type of ${username}`)).toHaveValue(
+    "site-user",
+  );
+}
+
+/** Signs `username` in on a page of its own browser context and makes the forced password change. */
+async function signInNewUser(
+  username: string,
+  initialPassword: string,
+  password: string,
+): Promise<{ userContext: BrowserContext; user: Page }> {
+  const userContext = await context.browser()!.newContext();
+  const user = await userContext.newPage();
+  await user.goto("/login");
+  await user.getByLabel("Username").fill(username);
+  await user.getByLabel("Password").fill(initialPassword);
+  await user.getByRole("button", { name: "Sign in" }).click();
+  await expect(user).toHaveURL(/\/change-password$/);
+  await user.getByLabel("Current password").fill(initialPassword);
+  await user.getByLabel("New password", { exact: true }).fill(password);
+  await user.getByLabel("Confirm new password").fill(password);
+  await user.getByRole("button", { name: "Change password" }).click();
+  await expect(user).not.toHaveURL(/\/change-password$/);
+  return { userContext, user };
 }
 
 test("login + forced password change", { tag: "@both" }, async () => {
@@ -1788,107 +1823,84 @@ test("collections systems: browse a system's games and its emulator links", { ta
   await expect(emulators).toBeFocused();
 });
 
-test("collections discovery: two signed-in users share, replace and remove a publisher logo", { tag: "@shard-b" }, async () => {
-  // A plain user (no roles) next to the admin, in a browser of their own.
+test("collections discovery: an Admin replaces and removes a publisher logo a Site user only sees", { tag: "@shard-b" }, async () => {
+  // A Site user next to the admin, in a browser of their own.
   const curatorPassword = `${newPassword}-curator`;
-  await page.goto("/admin/users");
-  await page.getByRole("button", { name: "Create user" }).click();
-  await dialog().getByLabel("Username").fill("curator");
-  await dialog()
-    .getByLabel("Initial password")
-    .fill(`${curatorPassword}-initial`);
-  await dialog().getByRole("button", { name: "Create" }).click();
-  await expect(dialog()).toBeHidden();
-
-  const curatorContext = await context.browser()!.newContext();
-  const curator = await curatorContext.newPage();
+  await createSiteUser("curator", `${curatorPassword}-initial`);
+  const { userContext: curatorContext, user: curator } = await signInNewUser(
+    "curator",
+    `${curatorPassword}-initial`,
+    curatorPassword,
+  );
   try {
-    await curator.goto("/login");
-    await curator.getByLabel("Username").fill("curator");
-    await curator.getByLabel("Password").fill(`${curatorPassword}-initial`);
-    await curator.getByRole("button", { name: "Sign in" }).click();
-    await expect(curator).toHaveURL(/\/change-password$/);
-    await curator
-      .getByLabel("Current password")
-      .fill(`${curatorPassword}-initial`);
-    await curator
-      .getByLabel("New password", { exact: true })
-      .fill(curatorPassword);
-    await curator.getByLabel("Confirm new password").fill(curatorPassword);
-    await curator.getByRole("button", { name: "Change password" }).click();
-    await expect(curator).not.toHaveURL(/\/change-password$/);
-
     const logoOf = (p: Page) =>
       p
         .getByRole("list", { name: "Publishers" })
         .getByRole("link", { name: /Fixture Works/ })
         .locator("img");
+    const changeLogo = (p: Page) =>
+      p.getByRole("button", { name: "Change logo for Fixture Works" });
+    const upload = async (
+      size: number,
+      rgb: [number, number, number],
+      before?: () => Promise<void>,
+    ) => {
+      await changeLogo(page).click();
+      await expect(dialog()).toHaveAccessibleName("Logo for Fixture Works");
+      await before?.();
+      await dialog()
+        .getByLabel("Logo image file")
+        .setInputFiles({
+          name: "logo.png",
+          mimeType: "image/png",
+          buffer: png(size, rgb),
+        });
+      await dialog().getByRole("button", { name: "Save logo" }).click();
+      await expect(dialog()).toBeHidden();
+    };
 
     // B5: the admin adds the shared logo; Fixture Works has no starter art, so it showed text only.
     await page.goto("/collections?tab=publishers");
     await expect(logoOf(page)).toHaveCount(0);
-    await page
-      .getByRole("button", { name: "Change logo for Fixture Works" })
-      .click();
-    await expect(dialog()).toHaveAccessibleName("Logo for Fixture Works");
-    await expect(
-      dialog().getByText("No logo: the name shows as text."),
-    ).toBeVisible();
-    await expectAccessible(page, "publisher logo modal");
-    await dialog()
-      .getByLabel("Logo image file")
-      .setInputFiles({
-        name: "logo.png",
-        mimeType: "image/png",
-        buffer: png(48, [200, 60, 40]),
-      });
-    await dialog().getByRole("button", { name: "Save logo" }).click();
-    await expect(dialog()).toBeHidden();
+    await upload(48, [200, 60, 40], async () => {
+      await expect(
+        dialog().getByText("No logo: the name shows as text."),
+      ).toBeVisible();
+      await expectAccessible(page, "publisher logo modal");
+    });
     await expect(logoOf(page)).toHaveAttribute(
       "src",
       /\/api\/discovery\/publishers\/logo\?key=[0-9a-f]{64}&v=\d+$/,
     );
-    const adminVersion = await logoOf(page).getAttribute("src");
+    const firstVersion = await logoOf(page).getAttribute("src");
+
+    // Shared: the Site user sees it, but has no Change logo (U3: logos are Admin-only).
+    await curator.goto("/collections?tab=publishers");
+    await expect(logoOf(curator)).toHaveAttribute("src", firstVersion!);
     await expect
       .poll(() =>
-        logoOf(page).evaluate((img: HTMLImageElement) => img.naturalWidth),
+        logoOf(curator).evaluate((img: HTMLImageElement) => img.naturalWidth),
       )
       .toBe(48);
+    await expect(changeLogo(curator)).toHaveCount(0);
 
-    // Shared: the curator sees it, then replaces it; the last writer wins for everyone.
-    await curator.goto("/collections?tab=publishers");
-    await expect(logoOf(curator)).toHaveAttribute("src", adminVersion!);
-    await curator
-      .getByRole("button", { name: "Change logo for Fixture Works" })
-      .click();
-    const curatorDialog = curator.getByRole("dialog");
-    await expect(
-      curatorDialog.getByText("Shared logo, set by a user."),
-    ).toBeVisible();
-    await curatorDialog
-      .getByLabel("Logo image file")
-      .setInputFiles({
-        name: "logo.png",
-        mimeType: "image/png",
-        buffer: png(64, [40, 160, 90]),
-      });
-    await curatorDialog.getByRole("button", { name: "Save logo" }).click();
-    await expect(curatorDialog).toBeHidden();
-    await expect(logoOf(curator)).not.toHaveAttribute("src", adminVersion!);
-    const curatorVersion = await logoOf(curator).getAttribute("src");
-
-    await page.reload();
-    await expect(logoOf(page)).toHaveAttribute("src", curatorVersion!);
+    // The admin replaces it; the Site user gets the new one.
+    await upload(64, [40, 160, 90]);
+    await expect(logoOf(page)).not.toHaveAttribute("src", firstVersion!);
+    const secondVersion = await logoOf(page).getAttribute("src");
+    await curator.reload();
+    await expect(logoOf(curator)).toHaveAttribute("src", secondVersion!);
     await expect
       .poll(() =>
-        logoOf(page).evaluate((img: HTMLImageElement) => img.naturalWidth),
+        logoOf(curator).evaluate((img: HTMLImageElement) => img.naturalWidth),
       )
       .toBe(64);
 
-    // Either user removes it; the text fallback shows again for both.
-    await page
-      .getByRole("button", { name: "Change logo for Fixture Works" })
-      .click();
+    // The admin removes it; the text fallback shows again for both.
+    await changeLogo(page).click();
+    await expect(
+      dialog().getByText("Shared logo, set by a user."),
+    ).toBeVisible();
     await dialog()
       .getByRole("button", { name: /Remove shared logo/ })
       .click();
@@ -1901,6 +1913,132 @@ test("collections discovery: two signed-in users share, replace and remove a pub
     await expect(logoOf(curator)).toHaveCount(0);
   } finally {
     await curatorContext.close();
+  }
+});
+
+test("user management: a Site user's account, private saves and audit trail", { tag: "@shard-b" }, async () => {
+  // Two Site users only this test uses; it relies on @both state only (the ingested library).
+  const visitor = "visitor-a";
+  const other = "visitor-b";
+  const visitorPassword = `${newPassword}-visitor`;
+  const otherPassword = `${newPassword}-other`;
+  await createSiteUser(visitor, `${visitorPassword}-initial`);
+  await expectAccessible(page, "users with a site user");
+  await createSiteUser(other, `${otherPassword}-initial`);
+
+  const visitorContext = await context.browser()!.newContext();
+  const user = await visitorContext.newPage();
+  const otherSession = await signInNewUser(
+    other,
+    `${otherPassword}-initial`,
+    otherPassword,
+  );
+  try {
+    // A wrong password fails (SignInFailed); the right one asks for a new password, which must differ (U7).
+    await user.goto("/login");
+    await user.getByLabel("Username").fill(visitor);
+    await user.getByLabel("Password").fill("not-the-password-for-e2e");
+    await user.getByRole("button", { name: "Sign in" }).click();
+    await expect(user.getByRole("alert")).toHaveText(
+      "Invalid username or password.",
+    );
+    await user.getByLabel("Password").fill(`${visitorPassword}-initial`);
+    await user.getByRole("button", { name: "Sign in" }).click();
+    await expect(user).toHaveURL(/\/change-password$/);
+    await user.getByLabel("Current password").fill(`${visitorPassword}-initial`);
+    await user
+      .getByLabel("New password", { exact: true })
+      .fill(`${visitorPassword}-initial`);
+    await user.getByLabel("Confirm new password").fill(`${visitorPassword}-initial`);
+    await user.getByRole("button", { name: "Change password" }).click();
+    await expect(
+      user.getByText("New password must be different from the current password."),
+    ).toBeVisible();
+    await expect(user).toHaveURL(/\/change-password$/);
+    await user.getByLabel("New password", { exact: true }).fill(visitorPassword);
+    await user.getByLabel("Confirm new password").fill(visitorPassword);
+    await user.getByRole("button", { name: "Change password" }).click();
+    await expect(user).not.toHaveURL(/\/change-password$/);
+
+    // U3/U4: no Admin pages and no library edits.
+    await expect(
+      user.getByRole("link", { name: "Admin", exact: true }),
+    ).toHaveCount(0);
+    await user.goto("/?page=1");
+    await user
+      .getByRole("searchbox", { name: "Search", exact: true })
+      .fill("Orbit Blocks");
+    await user.getByRole("link", { name: "Orbit Blocks", exact: true }).click();
+    await expect(
+      user.getByRole("heading", { level: 1, name: "Orbit Blocks" }),
+    ).toBeVisible();
+    await expect(user.getByRole("button", { name: "Edit metadata" })).toHaveCount(0);
+    await expect(user.getByRole("button", { name: /^Add note for / })).toHaveCount(0);
+    await expectAccessible(user, "game detail as a site user");
+
+    // S2/S4: the Site user uploads a save; the Admin sees it with its owner, the other Site user doesn't.
+    await user.getByRole("tab", { name: "Saves" }).click();
+    await user.getByRole("button", { name: "Add save" }).click();
+    const userDialog = user.getByRole("dialog");
+    await userDialog.getByLabel("Name").fill("Visitor save");
+    await userDialog
+      .getByLabel("File")
+      .setInputFiles({
+        name: "slot.state",
+        mimeType: "application/octet-stream",
+        buffer: Buffer.from([9, 8, 7]),
+      });
+    await userDialog
+      .locator(".modal-footer")
+      .getByRole("button", { name: "Add save" })
+      .click();
+    await expect(userDialog).toBeHidden();
+    await expect(user.locator("#saves-panel tbody tr")).toContainText("Visitor save");
+    await expect(user.getByRole("columnheader", { name: "Owner" })).toHaveCount(0);
+
+    const otherUser = otherSession.user;
+    await otherUser.goto(user.url());
+    await expect(
+      otherUser.getByRole("heading", { level: 1, name: "Orbit Blocks" }),
+    ).toBeVisible();
+    await expect(otherUser.getByText("No saves yet")).toBeVisible();
+
+    await page.goto(user.url());
+    const ownerRow = page
+      .locator("#saves-panel tbody tr")
+      .filter({ hasText: "Visitor save" });
+    await expect(page.getByRole("columnheader", { name: "Owner" })).toBeVisible();
+    await expect(ownerRow).toContainText(visitor);
+    await expectAccessible(page, "saves tab with an owner column");
+
+    // U8: disabling the user ends their session on the next request.
+    await page.goto("/admin/users");
+    await page.getByRole("button", { name: `Disable ${visitor}` }).click();
+    await expect(
+      page.getByRole("row").filter({ hasText: visitor }).getByText("Disabled"),
+    ).toBeVisible();
+    await user.goto("/");
+    await expect(user).toHaveURL(/\/login/);
+
+    // U9/U10: the audit trail lists the account events (the User filter is the actor; `user=<name>` finds actions on them).
+    const actions = (p: Page) =>
+      p.getByRole("row").getByRole("cell", { exact: true });
+    await expect(async () => {
+      await page.goto(`/admin/audit?user=${visitor}`);
+      for (const action of ["SignedIn", "SignInFailed", "PasswordChanged"])
+        await expect(
+          actions(page).filter({ hasText: new RegExp(`^${action}$`) }).first(),
+        ).toBeVisible({ timeout: 1_000 });
+    }).toPass();
+    await page.goto(`/admin/audit?q=${encodeURIComponent(`user=${visitor}`)}`);
+    for (const action of ["UserCreated", "UserDisabled"])
+      await expect(
+        actions(page).filter({ hasText: new RegExp(`^${action}$`) }).first(),
+      ).toBeVisible();
+    await expectAccessible(page, "audit trail with account events");
+  } finally {
+    await visitorContext.close();
+    await otherSession.userContext.close();
   }
 });
 
@@ -2578,21 +2716,23 @@ test("Nintendo DS: the staged cartridge imports by DAT match and plays in DeSmuM
   await ds.close();
 });
 
-test("Admin: roles and the create-user modal", { tag: "@shard-b" }, async () => {
+test("Admin: account types and the create-user modal", { tag: "@shard-b" }, async () => {
   await page.goto("/admin/users");
-  await expect(page.getByLabel("admin role of admin")).toBeChecked();
-  await expect(page.getByLabel("rom-manager role of admin")).toBeChecked();
+  // U6: the signed-in admin can't change their own type or disable themselves.
+  await expect(page.getByLabel("Account type of admin")).toHaveValue("admin");
+  await expect(page.getByLabel("Account type of admin")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Disable admin" })).toBeDisabled();
 
   await page.getByRole("button", { name: "Create user" }).click();
   await expect(dialog()).toHaveAccessibleName("Create user");
   await expectAccessible(page, "create user modal");
   await dialog().getByLabel("Username").fill("editor");
   await dialog().getByLabel("Initial password").fill(`${newPassword}-editor`);
-  await dialog().getByLabel("rom-manager").check();
+  await dialog().getByLabel("Account type").selectOption("admin");
   await dialog().getByRole("button", { name: "Create" }).click();
   await expect(dialog()).toBeHidden();
-  await expect(page.getByLabel("rom-manager role of editor")).toBeChecked();
-  await expect(page.getByLabel("admin role of editor")).not.toBeChecked();
+  await expect(page.getByLabel("Account type of editor")).toHaveValue("admin");
+  await expect(page.getByLabel("Account type of editor")).toBeEnabled();
 });
 
 test("Admin: live logs", { tag: "@shard-b" }, async () => {

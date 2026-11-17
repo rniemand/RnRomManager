@@ -34,7 +34,7 @@ public sealed partial class LibraryEditor
         using var _ = zip;
         if (game!.Roms.FirstOrDefault(r => r.Metadata.Sha1 == romRow.Sha1) is not { } rom)
             return new(NotFound, $"{row.ZipPath} no longer lists SHA1 {romRow.Sha1}");
-        if (saves!.Count(s => GameSaves.Names(s, rom.FileName)) >= GameSaves.MaxPerRelease)
+        if (OwnSavesOn(saves!, rom.FileName, actor.Username) >= GameSaves.MaxPerRelease)
             return new(SaveLimitReached, SaveLimitReachedTitle);
 
         var now = time.GetUtcNow();
@@ -50,7 +50,7 @@ public sealed partial class LibraryEditor
 
     /// <summary>B9: changes a save's name and/or description; a change to neither writes nothing.</summary>
     public async Task<LibraryEditResult> UpdateSaveAsync(Guid gameId, string saveId, string? name, string? description, AuditActor actor,
-        CancellationToken ct)
+        SaveViewer viewer, CancellationToken ct)
     {
         var trimmed = (string?)null;
         if (name is not null && GameSaves.NameProblem(name, out trimmed) is { } nameProblem)
@@ -61,7 +61,7 @@ public sealed partial class LibraryEditor
         using var held = jobLock.TryAcquire();
         if (held is null)
             return new(JobRunning);
-        var (error, zip, row, game, saves, current) = await OpenSaveAsync(gameId, saveId, ct).ConfigureAwait(false);
+        var (error, zip, row, game, saves, current) = await OpenSaveAsync(gameId, saveId, viewer, ct).ConfigureAwait(false);
         if (error is not null)
             return error;
         using var _ = zip;
@@ -74,12 +74,13 @@ public sealed partial class LibraryEditor
     }
 
     /// <summary>B10: replaces a save's bytes; the entry is renamed when the extension changes.</summary>
-    public async Task<LibraryEditResult> ReplaceSaveFileAsync(Guid gameId, string saveId, SaveUpload file, AuditActor actor, CancellationToken ct)
+    public async Task<LibraryEditResult> ReplaceSaveFileAsync(Guid gameId, string saveId, SaveUpload file, AuditActor actor, SaveViewer viewer,
+        CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();
         if (held is null)
             return new(JobRunning);
-        var (error, zip, row, game, saves, current) = await OpenSaveAsync(gameId, saveId, ct).ConfigureAwait(false);
+        var (error, zip, row, game, saves, current) = await OpenSaveAsync(gameId, saveId, viewer, ct).ConfigureAwait(false);
         if (error is not null)
             return error;
         using var _ = zip;
@@ -92,12 +93,12 @@ public sealed partial class LibraryEditor
     }
 
     /// <summary>B11: removes a save, and <c>saves.json</c> with the last one.</summary>
-    public async Task<LibraryEditResult> DeleteSaveAsync(Guid gameId, string saveId, AuditActor actor, CancellationToken ct)
+    public async Task<LibraryEditResult> DeleteSaveAsync(Guid gameId, string saveId, AuditActor actor, SaveViewer viewer, CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();
         if (held is null)
             return new(JobRunning);
-        var (error, zip, row, game, saves, current) = await OpenSaveAsync(gameId, saveId, ct).ConfigureAwait(false);
+        var (error, zip, row, game, saves, current) = await OpenSaveAsync(gameId, saveId, viewer, ct).ConfigureAwait(false);
         if (error is not null)
             return error;
         using var _ = zip;
@@ -109,10 +110,11 @@ public sealed partial class LibraryEditor
     /// B8–B11: the cheap checks an endpoint runs before it reads a file, in the documented order: <c>404</c> game, then
     /// release (<paramref name="romId"/>), <c>StorageMigrationPending</c>, <c>JobRunning</c> (a probe of the lock,
     /// released at once), <c>SavesUnreadable</c>, then <c>404</c> save (<paramref name="saveId"/>) or, for an add,
-    /// <c>SaveLimitReached</c>. The operation checks them all again under the lock.
+    /// <c>SaveLimitReached</c> (the viewer's own saves on that release, S4). A save the viewer can't see answers like an
+    /// unknown id (S3). The operation checks them all again under the lock.
     /// </summary>
     /// <returns>null when the operation may go ahead.</returns>
-    public async Task<LibraryEditResult?> PrecheckSaveAsync(Guid gameId, long? romId, string? saveId, CancellationToken ct)
+    public async Task<LibraryEditResult?> PrecheckSaveAsync(Guid gameId, long? romId, string? saveId, SaveViewer viewer, CancellationToken ct)
     {
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return new(NotFound);
@@ -130,10 +132,10 @@ public sealed partial class LibraryEditor
         if (error is not null)
             return error;
         using var _ = zip;
-        if (saveId is not null && saves!.All(s => s.Id != saveId))
+        if (saveId is not null && !saves!.Any(s => s.Id == saveId && viewer.CanSee(s)))
             return new(NotFound);
         if (romRow is not null && game!.Roms.FirstOrDefault(r => r.Metadata.Sha1 == romRow.Sha1) is { } rom
-            && saves!.Count(s => GameSaves.Names(s, rom.FileName)) >= GameSaves.MaxPerRelease)
+            && OwnSavesOn(saves!, rom.FileName, viewer.Username) >= GameSaves.MaxPerRelease)
             return new(SaveLimitReached, SaveLimitReachedTitle);
         return null;
     }
@@ -158,16 +160,22 @@ public sealed partial class LibraryEditor
         return (null, target.Zip, target.Game, read.Index?.Saves ?? []);
     }
 
-    /// <summary><see cref="OpenSaves"/> for one save; an unknown id is <c>NotFound</c> (B9: after <c>SavesUnreadable</c>).</summary>
+    /// <summary>S4: <c>MaxPerRelease</c> counts only <paramref name="username"/>'s own saves on the release.</summary>
+    private static int OwnSavesOn(IReadOnlyList<GameSave> saves, string releaseFileName, string? username) =>
+        saves.Count(s => GameSaves.Names(s, releaseFileName) && GameSaves.IsOwner(s, username));
+
+    /// <summary>
+    /// <see cref="OpenSaves"/> for one save; an unknown id, or one the viewer can't see (S3), is <c>NotFound</c> (B9: after <c>SavesUnreadable</c>).
+    /// </summary>
     private async Task<(LibraryEditResult? Error, LibraryZip? Zip, GameRow? Row, InfoJsonGame? Game, IReadOnlyList<GameSave>? Saves, GameSave? Save)>
-        OpenSaveAsync(Guid gameId, string saveId, CancellationToken ct)
+        OpenSaveAsync(Guid gameId, string saveId, SaveViewer viewer, CancellationToken ct)
     {
         if (await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
             return (new(NotFound), null, null, null, null, null);
         var (error, zip, game, saves) = OpenSaves(row);
         if (error is not null)
             return (error, null, null, null, null, null);
-        if (saves!.FirstOrDefault(s => s.Id == saveId) is not { } save)
+        if (saves!.FirstOrDefault(s => s.Id == saveId && viewer.CanSee(s)) is not { } save)
         {
             zip!.Dispose();
             return (new(NotFound), null, null, null, null, null);

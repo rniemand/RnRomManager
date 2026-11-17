@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import type { GameListItem } from '../api/types';
+import { auth } from '../stores/auth.svelte';
 
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
@@ -54,6 +55,22 @@ const playable = (id: string) =>
 	game(id, { playRomId: 7, playRomFileName: 'Game (World).gb', browserCore: 'gambatte' });
 
 describe('GameResults cards (C1, C2)', () => {
+	afterEach(() => auth.set(null));
+
+	it.each(['grid', 'list'] as const)(
+		'%s: ratings are editable for an Admin and read-only for a Site user (U3)',
+		(view) => {
+			auth.set({ id: 1, username: 'a', roles: ['admin'], mustChangePassword: false });
+			const admin = render(GameResults, { games: [game('a')], view });
+			expect(screen.getAllByRole('button', { name: /Rate 1 of 5/ })).toHaveLength(1);
+			admin.unmount();
+
+			auth.set({ id: 2, username: 's', roles: [], mustChangePassword: false });
+			render(GameResults, { games: [game('a')], view });
+			expect(screen.queryByRole('button', { name: /Rate 1 of 5/ })).toBeNull();
+		}
+	);
+
 	it.each(['grid', 'list'] as const)('%s: a game with saves links to its Saves tab', (view) => {
 		render(GameResults, { games: [game('a', { saveCount: 2 }), game('b')], view });
 
