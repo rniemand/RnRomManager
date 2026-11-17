@@ -183,7 +183,7 @@ public partial class LibraryEndpointsTests
         Assert.That(systems.Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
             "32X", "3DO", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Commodore 64", "Commodore Amiga", "Commodore PET", "Commodore VIC-20", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 3DS", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
-            "PlayStation", "PlayStation Portable", "Saturn", "Sega CD", "Super Nintendo Entertainment System", "TurboGrafx-16", "Virtual Boy", "Wii", "Xbox 360"
+            "PlayStation", "PlayStation Portable", "Saturn", "Sega CD", "Super Nintendo Entertainment System", "TurboGrafx-16 / PC Engine", "Virtual Boy", "Wii", "Xbox 360"
         }));
     }
 
@@ -271,6 +271,7 @@ public partial class LibraryEndpointsTests
     [TestCase("pet", false, true, "vice_xpet")]
     [TestCase("vic20", false, true, "vice_xvic")]
     [TestCase("amiga", false, true, "puae")]
+    [TestCase("tg16", false, true, "mednafen_pce")]
     [TestCase("switch", false, false, null)]
     [TestCase("switch", true, false, null)]
     public Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(string system, bool external, bool playable, string? core) =>
@@ -448,6 +449,7 @@ public partial class LibraryEndpointsTests
     [TestCase("pet", "vice_xpet")]
     [TestCase("vic20", "vice_xvic")]
     [TestCase("amiga", "puae")]
+    [TestCase("tg16", "mednafen_pce")]
     [TestCase("nosuch", null)]
     public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)
     {
