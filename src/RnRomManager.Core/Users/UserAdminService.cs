@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
+using RnRomManager.Core.Audit;
 
 namespace RnRomManager.Core.Users;
 
@@ -11,7 +12,7 @@ public sealed class UserAdminService(
     ILogger<UserAdminService> logger)
 {
     /// <summary>New users must change the password on first login.</summary>
-    public async Task<UserAdminResult> CreateAsync(string? username, IReadOnlyList<string?>? roles, string? password, CancellationToken cancellationToken)
+    public async Task<UserAdminResult> CreateAsync(string? username, IReadOnlyList<string?>? roles, string? password, AuditActor actor, CancellationToken cancellationToken)
     {
         if (UsernamePolicy.Validate(username) is { } usernameError)
             return UserAdminResult.Invalid("username", usernameError);
@@ -44,8 +45,11 @@ public sealed class UserAdminService(
         return UserAdminResult.Ok(user);
     }
 
-    /// <summary>Roles or disabled change (null = unchanged); either one rotates the security stamp so the user's sessions die (spec §9.2).</summary>
-    public async Task<UserAdminResult> UpdateAsync(int id, IReadOnlyList<string?>? roles, bool? isDisabled, CancellationToken cancellationToken)
+    /// <summary>
+    /// Roles or disabled change (null = unchanged); either one rotates the security stamp so the user's sessions die (spec §9.2).
+    /// The actor can't disable or demote themselves (U6 <see cref="UserAdminResult.Failure.SelfChange"/>).
+    /// </summary>
+    public async Task<UserAdminResult> UpdateAsync(int id, IReadOnlyList<string?>? roles, bool? isDisabled, AuditActor actor, CancellationToken cancellationToken)
     {
         IReadOnlySet<string>? parsedRoles = null;
         if (roles is not null && (parsedRoles = Roles.Parse(roles)) is null)
@@ -55,6 +59,8 @@ public sealed class UserAdminService(
 
         var newRoles = parsedRoles ?? user.Roles;
         var newDisabled = isDisabled ?? user.IsDisabled;
+        if (actor.UserId == id && (newDisabled || !newRoles.Contains(Roles.Admin)))
+            return UserAdminResult.Fail(UserAdminResult.Failure.SelfChange);
         if (newRoles.SetEquals(user.Roles) && newDisabled == user.IsDisabled)
             return UserAdminResult.Ok(user);
 
@@ -69,7 +75,7 @@ public sealed class UserAdminService(
     }
 
     /// <summary>Admin reset: new password, lockout cleared, must change at next login, sessions die.</summary>
-    public async Task<UserAdminResult> ResetPasswordAsync(int id, string? newPassword, CancellationToken cancellationToken)
+    public async Task<UserAdminResult> ResetPasswordAsync(int id, string? newPassword, AuditActor actor, CancellationToken cancellationToken)
     {
         if (await users.GetByIdAsync(id, cancellationToken) is not { } user)
             return UserAdminResult.Fail(UserAdminResult.Failure.NotFound);

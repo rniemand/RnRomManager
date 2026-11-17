@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Users;
 
 namespace RnRomManager.Core.Tests.Users;
@@ -9,6 +10,7 @@ namespace RnRomManager.Core.Tests.Users;
 public class UserAdminServiceTests
 {
     private const string NewPassword = "a-long-password-1";
+    private static readonly AuditActor Actor = new(1, "root", null);
     private static readonly DateTimeOffset Now = new(2026, 11, 4, 12, 0, 0, TimeSpan.Zero);
 
     private readonly PasswordHasher<User> _hasher = new();
@@ -44,7 +46,7 @@ public class UserAdminServiceTests
     {
         _users.InsertAsync(Arg.Any<User>(), Arg.Any<CancellationToken>()).Returns(42);
 
-        var result = await _service.CreateAsync("newbie", ["admin"], NewPassword, CancellationToken.None);
+        var result = await _service.CreateAsync("newbie", ["admin"], NewPassword, Actor, CancellationToken.None);
 
         Assert.That(result.Error, Is.EqualTo(UserAdminResult.Failure.None));
         Assert.That(result.User!.Id, Is.EqualTo(42));
@@ -61,7 +63,7 @@ public class UserAdminServiceTests
     [TestCase("newbie", "", "short", "password")]
     public async Task Create_Invalid_NamesTheField(string? username, string roles, string? password, string field)
     {
-        var result = await _service.CreateAsync(username, roles.Split(',', StringSplitOptions.RemoveEmptyEntries), password, CancellationToken.None);
+        var result = await _service.CreateAsync(username, roles.Split(',', StringSplitOptions.RemoveEmptyEntries), password, Actor, CancellationToken.None);
 
         Assert.That(result.Error, Is.EqualTo(UserAdminResult.Failure.ValidationFailed));
         Assert.That(result.Errors!.Keys, Is.EqualTo(new[] { field }));
@@ -73,8 +75,8 @@ public class UserAdminServiceTests
     {
         _users.InsertAsync(Arg.Any<User>(), Arg.Any<CancellationToken>()).Returns(42);
 
-        Assert.That((await _service.CreateAsync("newbie", null, NewPassword, CancellationToken.None)).User!.Roles, Is.Empty);
-        Assert.That((await _service.CreateAsync("newbie", [null], NewPassword, CancellationToken.None)).Errors!.Keys, Is.EqualTo(new[] { "roles" }));
+        Assert.That((await _service.CreateAsync("newbie", null, NewPassword, Actor, CancellationToken.None)).User!.Roles, Is.Empty);
+        Assert.That((await _service.CreateAsync("newbie", [null], NewPassword, Actor, CancellationToken.None)).Errors!.Keys, Is.EqualTo(new[] { "roles" }));
     }
 
     [Test]
@@ -82,7 +84,7 @@ public class UserAdminServiceTests
     {
         _users.InsertAsync(Arg.Any<User>(), Arg.Any<CancellationToken>()).Returns<int>(_ => throw new UsernameTakenException("plain"));
 
-        var result = await _service.CreateAsync("PLAIN", null, NewPassword, CancellationToken.None);
+        var result = await _service.CreateAsync("PLAIN", null, NewPassword, Actor, CancellationToken.None);
 
         Assert.That(result.Error, Is.EqualTo(UserAdminResult.Failure.UsernameTaken));
     }
@@ -90,7 +92,7 @@ public class UserAdminServiceTests
     [Test]
     public async Task Update_ChangesRolesAndRotatesTheStamp()
     {
-        var result = await _service.UpdateAsync(7, ["admin"], null, CancellationToken.None);
+        var result = await _service.UpdateAsync(7, ["admin"], null, Actor, CancellationToken.None);
 
         Assert.That(result.User!.Roles, Is.EqualTo(new[] { Roles.Admin }));
         Assert.That(result.User.SecurityStamp, Is.Not.EqualTo(_plain.SecurityStamp));
@@ -103,7 +105,7 @@ public class UserAdminServiceTests
     {
         _plain = _plain with { Roles = Roles.Of(Roles.Admin) };
 
-        var result = await _service.UpdateAsync(7, ["admin"], false, CancellationToken.None);
+        var result = await _service.UpdateAsync(7, ["admin"], false, Actor, CancellationToken.None);
 
         Assert.That(result.User, Is.EqualTo(_plain));
         await _users.DidNotReceiveWithAnyArgs().UpdateUnlessLastAdminAsync(default!, default);
@@ -114,7 +116,7 @@ public class UserAdminServiceTests
     {
         _users.UpdateUnlessLastAdminAsync(Arg.Any<User>(), Arg.Any<CancellationToken>()).Returns(false);
 
-        var result = await _service.UpdateAsync(7, null, true, CancellationToken.None);
+        var result = await _service.UpdateAsync(7, null, true, Actor, CancellationToken.None);
 
         Assert.That(result.Error, Is.EqualTo(UserAdminResult.Failure.LastAdmin));
     }
@@ -122,8 +124,55 @@ public class UserAdminServiceTests
     [Test]
     public async Task Update_UnknownIdOrBadRole()
     {
-        Assert.That((await _service.UpdateAsync(99, null, true, CancellationToken.None)).Error, Is.EqualTo(UserAdminResult.Failure.NotFound));
-        Assert.That((await _service.UpdateAsync(7, ["root"], null, CancellationToken.None)).Error, Is.EqualTo(UserAdminResult.Failure.ValidationFailed));
+        Assert.That((await _service.UpdateAsync(99, null, true, Actor, CancellationToken.None)).Error, Is.EqualTo(UserAdminResult.Failure.NotFound));
+        Assert.That((await _service.UpdateAsync(7, ["root"], null, Actor, CancellationToken.None)).Error, Is.EqualTo(UserAdminResult.Failure.ValidationFailed));
+    }
+
+    [TestCase(null, true, TestName = "Update_Self_Disable_IsSelfChange")]
+    [TestCase("", null, TestName = "Update_Self_Demote_IsSelfChange")]
+    public async Task Update_Self_IsSelfChange(string? roles, bool? disabled)
+    {
+        _plain = _plain with { Id = 1, Roles = Roles.Of(Roles.Admin) };
+        _users.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(_ => _plain);
+
+        var result = await _service.UpdateAsync(1, roles?.Split(',', StringSplitOptions.RemoveEmptyEntries), disabled, Actor, CancellationToken.None);
+
+        Assert.That(result.Error, Is.EqualTo(UserAdminResult.Failure.SelfChange));
+        await _users.DidNotReceiveWithAnyArgs().UpdateUnlessLastAdminAsync(default!, default);
+    }
+
+    [Test]
+    public async Task Update_Self_NoChange_IsOk()
+    {
+        _plain = _plain with { Id = 1, Roles = Roles.Of(Roles.Admin) };
+        _users.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(_ => _plain);
+
+        var result = await _service.UpdateAsync(1, ["admin"], false, Actor, CancellationToken.None);
+
+        Assert.That(result.Error, Is.EqualTo(UserAdminResult.Failure.None));
+        await _users.DidNotReceiveWithAnyArgs().UpdateUnlessLastAdminAsync(default!, default);
+    }
+
+    [Test]
+    public async Task Update_AnotherAdmin_DisableAndDemote_IsOk()
+    {
+        _plain = _plain with { Roles = Roles.Of(Roles.Admin) };
+
+        Assert.That((await _service.UpdateAsync(7, null, true, Actor, CancellationToken.None)).Error, Is.EqualTo(UserAdminResult.Failure.None));
+        Assert.That((await _service.UpdateAsync(7, [], null, Actor, CancellationToken.None)).Error, Is.EqualTo(UserAdminResult.Failure.None));
+    }
+
+    [Test]
+    public async Task Update_Self_CheckOrder()
+    {
+        // NotFound before SelfChange: the actor's own id, but no such user.
+        Assert.That((await _service.UpdateAsync(1, null, true, Actor, CancellationToken.None)).Error, Is.EqualTo(UserAdminResult.Failure.NotFound));
+
+        // SelfChange before LastAdmin: the repository would refuse, but it's never asked.
+        _plain = _plain with { Id = 1, Roles = Roles.Of(Roles.Admin) };
+        _users.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(_ => _plain);
+        _users.UpdateUnlessLastAdminAsync(Arg.Any<User>(), Arg.Any<CancellationToken>()).Returns(false);
+        Assert.That((await _service.UpdateAsync(1, null, true, Actor, CancellationToken.None)).Error, Is.EqualTo(UserAdminResult.Failure.SelfChange));
     }
 
     [Test]
@@ -131,7 +180,7 @@ public class UserAdminServiceTests
     {
         _plain = _plain with { FailedLoginCount = 3, LockoutUntil = Now.UtcDateTime.AddMinutes(10) };
 
-        var result = await _service.ResetPasswordAsync(7, NewPassword, CancellationToken.None);
+        var result = await _service.ResetPasswordAsync(7, NewPassword, Actor, CancellationToken.None);
 
         var user = result.User!;
         Assert.That((user.FailedLoginCount, user.LockoutUntil, user.MustChangePassword), Is.EqualTo((0, (DateTime?)null, true)));
@@ -143,8 +192,8 @@ public class UserAdminServiceTests
     [Test]
     public async Task ResetPassword_PolicyFailureOrUnknownId()
     {
-        Assert.That((await _service.ResetPasswordAsync(7, "short", CancellationToken.None)).Errors!.Keys, Is.EqualTo(new[] { "newPassword" }));
-        Assert.That((await _service.ResetPasswordAsync(99, NewPassword, CancellationToken.None)).Error, Is.EqualTo(UserAdminResult.Failure.NotFound));
+        Assert.That((await _service.ResetPasswordAsync(7, "short", Actor, CancellationToken.None)).Errors!.Keys, Is.EqualTo(new[] { "newPassword" }));
+        Assert.That((await _service.ResetPasswordAsync(99, NewPassword, Actor, CancellationToken.None)).Error, Is.EqualTo(UserAdminResult.Failure.NotFound));
     }
 
     [Test]

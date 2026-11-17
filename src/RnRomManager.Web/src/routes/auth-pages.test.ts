@@ -185,6 +185,25 @@ describe('change password page', () => {
 		expect(goto).not.toHaveBeenCalled();
 	});
 
+	it('shows the server error for a new password equal to the current one', async () => {
+		const message = 'New password must be different from the current password.';
+		stubApi({
+			'/api/auth/change-password': {
+				status: 400,
+				body: { code: 'ValidationFailed', title: 'Invalid', errors: { newPassword: [message] } }
+			}
+		});
+		render(ChangePasswordPage);
+
+		await type('Current password', current);
+		await type('New password', current);
+		await type('Confirm new password', current);
+		await fireEvent.click(screen.getByRole('button', { name: 'Change password' }));
+
+		expect(await screen.findByText(message)).toBeTruthy();
+		expect(goto).not.toHaveBeenCalled();
+	});
+
 	it('changes the password, reloads me and goes to the Library', async () => {
 		const requests = stubApi({
 			'/api/auth/me': {

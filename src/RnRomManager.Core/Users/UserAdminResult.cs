@@ -10,6 +10,7 @@ public sealed record UserAdminResult
         ValidationFailed,
         UsernameTaken,
         LastAdmin,
+        SelfChange,
     }
 
     public User? User { get; private init; }

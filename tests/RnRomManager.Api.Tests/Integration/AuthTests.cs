@@ -213,6 +213,20 @@ public class AuthTests
     }
 
     [Test]
+    public async Task ChangePassword_SameAsCurrent_IsValidationFailed()
+    {
+        await CreateUserAsync();
+        (await _client.LoginAsync("richard", Password)).Dispose();
+
+        using var change = await _client.PostAsync("/api/auth/change-password", new { currentPassword = Password, newPassword = Password });
+        var body = await AuthClient.JsonAsync(change);
+
+        Assert.That(change.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(body.GetProperty("code").GetString(), Is.EqualTo("ValidationFailed"));
+        Assert.That(body.GetProperty("errors").GetProperty("newPassword")[0].GetString(), Is.EqualTo("New password must be different from the current password."));
+    }
+
+    [Test]
     public async Task DisablingAUser_KillsTheirSession()
     {
         var user = await CreateUserAsync();

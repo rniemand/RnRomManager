@@ -118,20 +118,36 @@ public class UserEndpointsTests
     }
 
     [Test]
-    public async Task DisablingOrDemotingTheLastEnabledAdmin_Is409LastAdmin()
+    public async Task DisablingOrDemotingYourself_Is409SelfChange()
     {
+        // With the seeded admin disabled, the caller is also the last enabled Admin: SelfChange wins over LastAdmin.
         var seeded = await Users.GetByUsernameAsync("admin", CancellationToken.None);
         using var disableSeeded = await _admin.PatchAsync($"/api/users/{seeded!.Id}", new { isDisabled = true });
 
         using var demoteSelf = await _admin.PatchAsync($"/api/users/{_boss.Id}", new { roles = Array.Empty<string>() });
         using var disableSelf = await _admin.PatchAsync($"/api/users/{_boss.Id}", new { isDisabled = true });
+        using var noOpSelf = await _admin.PatchAsync($"/api/users/{_boss.Id}", new { roles = new[] { "admin" }, isDisabled = false });
 
         Assert.That(disableSeeded.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That((await AuthClient.JsonAsync(disableSeeded)).GetProperty("isDisabled").GetBoolean(), Is.True);
         Assert.That(demoteSelf.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
-        Assert.That(await AuthClient.CodeAsync(demoteSelf), Is.EqualTo("LastAdmin"));
-        Assert.That(await AuthClient.CodeAsync(disableSelf), Is.EqualTo("LastAdmin"));
-        Assert.That((await Users.GetByIdAsync(_boss.Id, CancellationToken.None))!.Roles, Is.EquivalentTo(TestUsers.AllRoles));
+        Assert.That(await AuthClient.CodeAsync(demoteSelf), Is.EqualTo("SelfChange"));
+        Assert.That(disableSelf.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(await AuthClient.CodeAsync(disableSelf), Is.EqualTo("SelfChange"));
+        Assert.That(noOpSelf.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var stored = (await Users.GetByIdAsync(_boss.Id, CancellationToken.None))!;
+        Assert.That(stored.Roles, Is.EquivalentTo(TestUsers.AllRoles));
+        Assert.That(stored.IsDisabled, Is.False);
+    }
+
+    [Test]
+    public async Task ResetPassword_OnYourself_Is204AndEndsYourSession()
+    {
+        using var reset = await _admin.PostAsync($"/api/users/{_boss.Id}/reset-password", new { newPassword = NewPassword });
+        using var me = await _admin.GetAsync("/api/auth/me");
+
+        Assert.That(reset.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(me.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
 
     [Test]

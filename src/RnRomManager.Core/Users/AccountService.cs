@@ -58,6 +58,8 @@ public sealed class AccountService(
     {
         if (currentPassword is null || hasher.VerifyHashedPassword(user, user.PasswordHash, currentPassword) == PasswordVerificationResult.Failed)
             return (null, new() { ["currentPassword"] = ["Current password is incorrect."] });
+        if (string.Equals(newPassword, currentPassword, StringComparison.Ordinal))
+            return (null, new() { ["newPassword"] = ["New password must be different from the current password."] });
         if (PasswordPolicy.Validate(newPassword, user.Username) is { } error)
             return (null, new() { ["newPassword"] = [error] });
 

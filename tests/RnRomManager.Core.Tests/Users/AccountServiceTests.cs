@@ -132,4 +132,14 @@ public class AccountServiceTests
 
         Assert.That(errors!.Keys, Is.EqualTo(new[] { "newPassword" }));
     }
+
+    [Test]
+    public async Task ChangePassword_SameAsCurrent_IsAFieldError()
+    {
+        var (updated, errors) = await _service.ChangePasswordAsync(_user, Password, Password, CancellationToken.None);
+
+        Assert.That(updated, Is.Null);
+        Assert.That(errors!["newPassword"], Is.EqualTo(new[] { "New password must be different from the current password." }));
+        await _users.DidNotReceiveWithAnyArgs().UpdateAsync(default!, default);
+    }
 }
