@@ -101,7 +101,7 @@ describe('bundle cart store (B1–B3, B5)', () => {
 		expect(bundle.add(main(9999))).toBe('full');
 		expect(bundle.add(main(0))).toBe('duplicate');
 		expect(bundle.count).toBe(maxBundleEntries);
-	});
+	}, 20_000); // 500 adds: slow on a loaded machine (also on main)
 
 	it('refuses adds while signed out and malformed entries', () => {
 		expect(bundle.add(main(1))).toBe('signedOut');
