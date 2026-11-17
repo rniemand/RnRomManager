@@ -7,7 +7,7 @@ namespace RnRomManager.Api.Tests;
 public class SystemStartupTests
 {
     [Test]
-    public void Startup_RegistersGbGbcGbaN64NesSnesAndA2600_AndCreatesTheirFolders()
+    public void Startup_RegistersEverySystem_AndCreatesTheirIngestFoldersOnly()
     {
         using var factory = new ApiFactory();
         using var _ = factory.CreateClient();
@@ -17,8 +17,8 @@ public class SystemStartupTests
         Assert.That(registry.All.Select(h => h.Id), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64", "nes", "snes", "vb", "a2600", "a5200", "a7800", "lynx", "jaguar", "coleco", "gg", "sms", "md", "s32x", "tg16", "switch", "psx", "psp", "gc", "wii", "x360", "saturn", "nds", "segacd", "3do", "c64", "pet", "vic20", "amiga" }));
         foreach (var id in new[] { "gb", "gbc", "gba", "n64", "nes", "snes", "vb", "a2600", "a5200", "a7800", "lynx", "jaguar", "coleco", "gg", "sms", "md", "s32x", "tg16", "switch", "psx", "psp", "gc", "wii", "x360", "saturn", "nds", "segacd", "3do", "c64", "pet", "vic20", "amiga" })
         {
-            Assert.That(Directory.Exists(Path.Combine(factory.Settings["Paths:Roms"]!, id, "#")), Is.True);
-            Assert.That(Directory.Exists(Path.Combine(factory.Settings["Paths:Roms"]!, id, "Z")), Is.True);
+            // B30: the library folder is created by the first ROM written there.
+            Assert.That(Directory.Exists(Path.Combine(factory.Settings["Paths:Roms"]!, id)), Is.False);
             Assert.That(Directory.Exists(Path.Combine(factory.Settings["Paths:Ingest"]!, id, "_removed")), Is.True);
         }
     }
