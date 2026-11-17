@@ -41,6 +41,24 @@
 			"note": "RetroArch core: ProSystem"
 		}
 	],
+	"amiga": [
+		{
+			"name": "WinUAE",
+			"url": "https://www.winuae.net/",
+			"os": ["windows"]
+		},
+		{
+			"name": "FS-UAE",
+			"url": "https://fs-uae.net/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: PUAE"
+		}
+	],
 	"c64": [
 		{
 			"name": "VICE",

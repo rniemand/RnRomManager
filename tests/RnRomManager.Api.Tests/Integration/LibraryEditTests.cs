@@ -73,6 +73,7 @@ public class LibraryEditTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [],
+            [IngestSeeder.AmigaDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] =
             [
