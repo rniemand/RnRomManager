@@ -15,7 +15,7 @@ import { expectRomDownloadProgress, stageRomDownload } from "./rom-progress";
  * Spec §15.1 "E2E": the MVP smoke path against the real image with the seeded `Basic` set (§15.2), in order:
  * login + forced password change → ingest → browse/search/filter → game detail + downloads → global search +
  * ratings → collections → review resolve/delete → images → Admin edit/move/delete → users and logs, with axe on every page and
- * modal visited. The seeded admin has both roles (`admin` + `rom-manager`).
+ * modal visited. The seeded admin is an Admin; Site users are created by the tests that need them.
  *
  * scripts/test-e2e.ps1 runs it on two stacks at once (playwright.config.ts): `@both` tests sign in and ingest on each,
  * `@shard-b` tests run only on the second, the rest only on the first. A `@shard-b` test may only rely on `@both`
@@ -111,6 +111,44 @@ async function openGame(title: string): Promise<void> {
   await expect(
     page.getByRole("heading", { level: 1, name: title }),
   ).toBeVisible();
+}
+
+/** Creates a Site user (the create form's default type) on the Admin's users page. */
+async function createSiteUser(
+  username: string,
+  initialPassword: string,
+): Promise<void> {
+  await page.goto("/admin/users");
+  await page.getByRole("button", { name: "Create user" }).click();
+  await expect(dialog().getByLabel("Account type")).toHaveValue("site-user");
+  await dialog().getByLabel("Username").fill(username);
+  await dialog().getByLabel("Initial password").fill(initialPassword);
+  await dialog().getByRole("button", { name: "Create" }).click();
+  await expect(dialog()).toBeHidden();
+  await expect(page.getByLabel(`Account type of ${username}`)).toHaveValue(
+    "site-user",
+  );
+}
+
+/** Signs `username` in on a page of its own browser context and makes the forced password change. */
+async function signInNewUser(
+  username: string,
+  initialPassword: string,
+  password: string,
+): Promise<{ userContext: BrowserContext; user: Page }> {
+  const userContext = await context.browser()!.newContext();
+  const user = await userContext.newPage();
+  await user.goto("/login");
+  await user.getByLabel("Username").fill(username);
+  await user.getByLabel("Password").fill(initialPassword);
+  await user.getByRole("button", { name: "Sign in" }).click();
+  await expect(user).toHaveURL(/\/change-password$/);
+  await user.getByLabel("Current password").fill(initialPassword);
+  await user.getByLabel("New password", { exact: true }).fill(password);
+  await user.getByLabel("Confirm new password").fill(password);
+  await user.getByRole("button", { name: "Change password" }).click();
+  await expect(user).not.toHaveURL(/\/change-password$/);
+  return { userContext, user };
 }
 
 test("login + forced password change", { tag: "@both" }, async () => {
@@ -242,11 +280,9 @@ test("reports and the ingest audit trail", async () => {
   // One Ingested event per release: a bin/cue set is one event (B7a).
   await expect(ingested).toHaveCount(34);
   await expect(
-    page
-      .getByRole("row")
-      .filter({
-        has: page.getByRole("cell", { name: "IngestFileDeleted", exact: true }),
-      }),
+    page.getByRole("row").filter({
+      has: page.getByRole("cell", { name: "IngestFileDeleted", exact: true }),
+    }),
   ).toContainText("ingest/gb/_failed/92-invalid.gb");
   await expect(ingested.first()).toContainText("admin");
   await expect(ingested.first()).toContainText("ingest/");
@@ -1012,131 +1048,144 @@ async function closeEmulator(): Promise<void> {
   await expect(page.locator("iframe")).toHaveCount(0);
 }
 
-test("Play: NES Quick Play from the library uses the local FCEUmm core", { tag: "@shard-b" }, async () => {
-  await openLibrary();
-  await page
-    .getByRole("searchbox", { name: "Search", exact: true })
-    .fill("Pixel Pioneer");
-  await expect(page).toHaveURL(/[?&]q=/);
-  await expect(page.getByText("1 game", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Pixel Pioneer", exact: true }),
-  ).toBeVisible();
-  const rom = page.waitForResponse((r) =>
-    /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()),
-  );
-  await page.getByRole("button", { name: "Play Pixel Pioneer" }).click();
-  await expect(dialog().locator("iframe")).toHaveAttribute(
-    "src",
-    /core=fceumm&name=Pixel%20Pioneer%20\(USA\)\.nes$/,
-  );
-  expect((await rom).status()).toBe(200);
-  await startEmulator("fceumm");
-  await closeEmulator();
-});
+test(
+  "Play: NES Quick Play from the library uses the local FCEUmm core",
+  { tag: "@shard-b" },
+  async () => {
+    await openLibrary();
+    await page
+      .getByRole("searchbox", { name: "Search", exact: true })
+      .fill("Pixel Pioneer");
+    await expect(page).toHaveURL(/[?&]q=/);
+    await expect(page.getByText("1 game", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Pixel Pioneer", exact: true }),
+    ).toBeVisible();
+    const rom = page.waitForResponse((r) =>
+      /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()),
+    );
+    await page.getByRole("button", { name: "Play Pixel Pioneer" }).click();
+    await expect(dialog().locator("iframe")).toHaveAttribute(
+      "src",
+      /core=fceumm&name=Pixel%20Pioneer%20\(USA\)\.nes$/,
+    );
+    expect((await rom).status()).toBe(200);
+    await startEmulator("fceumm");
+    await closeEmulator();
+  },
+);
 
-test("Play: a PlayStation set streams its disc ZIP from the detail page and the library", { tag: "@shard-b" }, async () => {
-  await openGame("Disc Runner");
-  const bios = page.waitForResponse((r) =>
-    r.url().endsWith("/api/emulator/bios/scph5501.bin"),
-  );
-  const disc = page.waitForResponse((r) =>
-    /\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(r.url()),
-  );
-  await page
-    .getByRole("button", { name: "Play Disc Runner (USA) (Track 1).bin" })
-    .click();
-  await expect(dialog().locator("iframe")).toHaveAttribute(
-    "src",
-    /core=pcsx_rearmed&name=Disc%20Runner%20\(USA\)%20\(Track%201\)\.bin&disc=1$/,
-  );
-  expect((await bios).status()).toBe(404); // no firmware in the e2e image: the core uses HLE
-  const response = await disc;
-  expect(response.status()).toBe(200);
-  expect(response.headers()["content-type"]).toBe("application/zip");
-  expect(response.headers()["cache-control"]).toBe("no-store");
-  // Kestrel with synchronous IO off: the stored (uncompressed) ZIP holds the playback cue and both tracks.
-  const direct = await page.request.get(response.url());
-  expect(direct.status()).toBe(200);
-  const zip = await direct.body();
-  expect(zip.subarray(0, 4).toString("hex"), `${zip.length} bytes`).toBe(
-    "504b0304",
-  );
-  expect(zip.includes("Disc Runner (USA).cue")).toBe(true);
-  expect(
-    zip.includes(
-      'FILE "track-01.bin" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE "track-02.bin" BINARY\n  TRACK 02 AUDIO\n',
-    ),
-  ).toBe(true);
-  expect(zip.includes(discTrack2)).toBe(true);
-  await expectAccessible(page, "PlayStation emulator modal", "iframe");
-  await startEmulator("pcsx_rearmed");
-  await closeEmulator();
-
-  await openLibrary();
-  await page
-    .getByRole("searchbox", { name: "Search", exact: true })
-    .fill("Disc Runner");
-  await expect(page).toHaveURL(/[?&]q=/);
-  await expect(page.getByText("1 game", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Disc Runner", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Play Disc Runner" }).click();
-  await expect(dialog().locator("iframe")).toHaveAttribute(
-    "src",
-    /core=pcsx_rearmed&name=Disc%20Runner%20\(USA\)%20\(Track%201\)\.bin&disc=1$/,
-  );
-  await closeEmulator();
-});
-
-test("Play: a Saturn set asks for saturn_bios.bin, streams its disc and fetches the vendored Yabause core", { tag: "@shard-b" }, async () => {
-  // Saturn B6/B7: no firmware in the e2e image (HLE), then play-disc, then the loader. The synthetic disc isn't a real
-  // Saturn game, so the case stops once the core payload has arrived instead of waiting for the game to run.
-  const order: string[] = [];
-  const track = (r: { url: () => string }) => {
-    const url = r.url();
-    if (url.endsWith("/api/emulator/bios/saturn_bios.bin")) order.push("bios");
-    else if (/\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(url))
-      order.push("disc");
-    else if (url.endsWith("/emulator/vendor/data/loader.js"))
-      order.push("loader");
-  };
-  await openGame("Sky Rally");
-  page.on("request", track);
-  try {
+test(
+  "Play: a PlayStation set streams its disc ZIP from the detail page and the library",
+  { tag: "@shard-b" },
+  async () => {
+    await openGame("Disc Runner");
     const bios = page.waitForResponse((r) =>
-      r.url().endsWith("/api/emulator/bios/saturn_bios.bin"),
+      r.url().endsWith("/api/emulator/bios/scph5501.bin"),
     );
     const disc = page.waitForResponse((r) =>
       /\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(r.url()),
     );
     await page
-      .getByRole("button", { name: "Play Sky Rally (Japan) (Track 1).bin" })
+      .getByRole("button", { name: "Play Disc Runner (USA) (Track 1).bin" })
       .click();
     await expect(dialog().locator("iframe")).toHaveAttribute(
       "src",
-      /core=yabause&name=Sky%20Rally%20\(Japan\)%20\(Track%201\)\.bin&disc=1$/,
+      /core=pcsx_rearmed&name=Disc%20Runner%20\(USA\)%20\(Track%201\)\.bin&disc=1$/,
     );
-    expect((await bios).status()).toBe(404);
+    expect((await bios).status()).toBe(404); // no firmware in the e2e image: the core uses HLE
     const response = await disc;
     expect(response.status()).toBe(200);
     expect(response.headers()["content-type"]).toBe("application/zip");
-    const frame = page.frameLocator("iframe");
-    await expect(frame.getByText("Start Game")).toBeVisible();
-    expect(order).toEqual(["bios", "disc", "loader"]);
-    const payload = page.waitForResponse((r) =>
-      /\/emulator\/vendor\/data\/cores\/yabause(-legacy)?-wasm\.data$/.test(
-        r.url(),
-      ),
+    expect(response.headers()["cache-control"]).toBe("no-store");
+    // Kestrel with synchronous IO off: the stored (uncompressed) ZIP holds the playback cue and both tracks.
+    const direct = await page.request.get(response.url());
+    expect(direct.status()).toBe(200);
+    const zip = await direct.body();
+    expect(zip.subarray(0, 4).toString("hex"), `${zip.length} bytes`).toBe(
+      "504b0304",
     );
-    await frame.getByText("Start Game").click();
-    expect((await payload).status()).toBe(200);
-  } finally {
-    page.off("request", track);
-  }
-  await closeEmulator();
-});
+    expect(zip.includes("Disc Runner (USA).cue")).toBe(true);
+    expect(
+      zip.includes(
+        'FILE "track-01.bin" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE "track-02.bin" BINARY\n  TRACK 02 AUDIO\n',
+      ),
+    ).toBe(true);
+    expect(zip.includes(discTrack2)).toBe(true);
+    await expectAccessible(page, "PlayStation emulator modal", "iframe");
+    await startEmulator("pcsx_rearmed");
+    await closeEmulator();
+
+    await openLibrary();
+    await page
+      .getByRole("searchbox", { name: "Search", exact: true })
+      .fill("Disc Runner");
+    await expect(page).toHaveURL(/[?&]q=/);
+    await expect(page.getByText("1 game", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Disc Runner", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Play Disc Runner" }).click();
+    await expect(dialog().locator("iframe")).toHaveAttribute(
+      "src",
+      /core=pcsx_rearmed&name=Disc%20Runner%20\(USA\)%20\(Track%201\)\.bin&disc=1$/,
+    );
+    await closeEmulator();
+  },
+);
+
+test(
+  "Play: a Saturn set asks for saturn_bios.bin, streams its disc and fetches the vendored Yabause core",
+  { tag: "@shard-b" },
+  async () => {
+    // Saturn B6/B7: no firmware in the e2e image (HLE), then play-disc, then the loader. The synthetic disc isn't a real
+    // Saturn game, so the case stops once the core payload has arrived instead of waiting for the game to run.
+    const order: string[] = [];
+    const track = (r: { url: () => string }) => {
+      const url = r.url();
+      if (url.endsWith("/api/emulator/bios/saturn_bios.bin"))
+        order.push("bios");
+      else if (/\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(url))
+        order.push("disc");
+      else if (url.endsWith("/emulator/vendor/data/loader.js"))
+        order.push("loader");
+    };
+    await openGame("Sky Rally");
+    page.on("request", track);
+    try {
+      const bios = page.waitForResponse((r) =>
+        r.url().endsWith("/api/emulator/bios/saturn_bios.bin"),
+      );
+      const disc = page.waitForResponse((r) =>
+        /\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(r.url()),
+      );
+      await page
+        .getByRole("button", { name: "Play Sky Rally (Japan) (Track 1).bin" })
+        .click();
+      await expect(dialog().locator("iframe")).toHaveAttribute(
+        "src",
+        /core=yabause&name=Sky%20Rally%20\(Japan\)%20\(Track%201\)\.bin&disc=1$/,
+      );
+      expect((await bios).status()).toBe(404);
+      const response = await disc;
+      expect(response.status()).toBe(200);
+      expect(response.headers()["content-type"]).toBe("application/zip");
+      const frame = page.frameLocator("iframe");
+      await expect(frame.getByText("Start Game")).toBeVisible();
+      expect(order).toEqual(["bios", "disc", "loader"]);
+      const payload = page.waitForResponse((r) =>
+        /\/emulator\/vendor\/data\/cores\/yabause(-legacy)?-wasm\.data$/.test(
+          r.url(),
+        ),
+      );
+      await frame.getByText("Start Game").click();
+      expect((await payload).status()).toBe(200);
+    } finally {
+      page.off("request", track);
+    }
+    await closeEmulator();
+  },
+);
 
 /** PSP B3: what PPSSPP needs, as the isolated tab actually sees it. */
 async function pspBrowser(psp: Page) {
@@ -1148,82 +1197,88 @@ async function pspBrowser(psp: Page) {
   }));
 }
 
-test("Play: a PSP UMD image opens the isolated player in a new tab from the detail page and the library", { tag: "@shard-b" }, async () => {
-  const tab =
-    /\/emulator\/play-psp\.html\?.*core=ppsspp&name=Pocket%20Ninja%20\(USA\)\.iso&disc=1$/;
-  await openGame("Pocket Ninja");
-  // Observers first: the popup, its document and its authenticated ISO request.
-  const popup = context.waitForEvent("page");
-  const pageResponse = context.waitForEvent("response", (r) =>
-    tab.test(r.url()),
-  );
-  const iso = context.waitForEvent("response", (r) =>
-    /\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(r.url()),
-  );
-  await page
-    .getByRole("link", {
-      name: "Play Pocket Ninja (USA).iso (opens in a new tab)",
-    })
-    .click();
-  const psp = await popup;
-  await expect(page.locator("iframe")).toHaveCount(0); // no modal: the SPA stays as it was
+test(
+  "Play: a PSP UMD image opens the isolated player in a new tab from the detail page and the library",
+  { tag: "@shard-b" },
+  async () => {
+    const tab =
+      /\/emulator\/play-psp\.html\?.*core=ppsspp&name=Pocket%20Ninja%20\(USA\)\.iso&disc=1$/;
+    await openGame("Pocket Ninja");
+    // Observers first: the popup, its document and its authenticated ISO request.
+    const popup = context.waitForEvent("page");
+    const pageResponse = context.waitForEvent("response", (r) =>
+      tab.test(r.url()),
+    );
+    const iso = context.waitForEvent("response", (r) =>
+      /\/api\/games\/[^/]+\/roms\/\d+\/play-disc$/.test(r.url()),
+    );
+    await page
+      .getByRole("link", {
+        name: "Play Pocket Ninja (USA).iso (opens in a new tab)",
+      })
+      .click();
+    const psp = await popup;
+    await expect(page.locator("iframe")).toHaveCount(0); // no modal: the SPA stays as it was
 
-  const served = await pageResponse;
-  expect(served.status()).toBe(200);
-  expect(served.headers()["cross-origin-opener-policy"]).toBe("same-origin");
-  expect(served.headers()["cross-origin-embedder-policy"]).toBe("require-corp");
-  expect(served.headers()["content-security-policy"]).toContain(
-    "frame-ancestors 'none'",
-  );
-  const disc = await iso;
-  expect(disc.status()).toBe(200);
-  expect(disc.headers()["content-type"]).toBe("application/octet-stream");
-  expect(disc.headers()["content-length"]).toBe(String(64 * 1024));
-  expect(disc.headers()["accept-ranges"]).toBe("none");
-  expect(await pspBrowser(psp)).toEqual({
-    secure: true,
-    isolated: true,
-    sharedArrayBuffer: "function",
-    webgl2: true,
-  });
+    const served = await pageResponse;
+    expect(served.status()).toBe(200);
+    expect(served.headers()["cross-origin-opener-policy"]).toBe("same-origin");
+    expect(served.headers()["cross-origin-embedder-policy"]).toBe(
+      "require-corp",
+    );
+    expect(served.headers()["content-security-policy"]).toContain(
+      "frame-ancestors 'none'",
+    );
+    const disc = await iso;
+    expect(disc.status()).toBe(200);
+    expect(disc.headers()["content-type"]).toBe("application/octet-stream");
+    expect(disc.headers()["content-length"]).toBe(String(64 * 1024));
+    expect(disc.headers()["accept-ranges"]).toBe("none");
+    expect(await pspBrowser(psp)).toEqual({
+      secure: true,
+      isolated: true,
+      sharedArrayBuffer: "function",
+      webgl2: true,
+    });
 
-  // Core startup follows Start Game: the pinned report, threaded payload and asset archive, all local. The synthetic
-  // image can't boot, so nothing past the downloads is asserted.
-  await expect(psp.getByText("Start Game")).toBeVisible();
-  const report = psp.waitForResponse((r) =>
-    r.url().endsWith("/emulator/vendor/data/cores/reports/ppsspp.json"),
-  );
-  const payload = psp.waitForResponse((r) =>
-    r.url().endsWith("/emulator/vendor/data/cores/ppsspp-thread-wasm.data"),
-  );
-  const assets = psp.waitForResponse((r) =>
-    r.url().endsWith("/emulator/vendor/data/cores/ppsspp-assets.zip"),
-  );
-  await psp.getByText("Start Game").click();
-  expect((await report).status()).toBe(200);
-  expect((await payload).status()).toBe(200);
-  expect((await assets).status()).toBe(200);
-  await psp.close();
+    // Core startup follows Start Game: the pinned report, threaded payload and asset archive, all local. The synthetic
+    // image can't boot, so nothing past the downloads is asserted.
+    await expect(psp.getByText("Start Game")).toBeVisible();
+    const report = psp.waitForResponse((r) =>
+      r.url().endsWith("/emulator/vendor/data/cores/reports/ppsspp.json"),
+    );
+    const payload = psp.waitForResponse((r) =>
+      r.url().endsWith("/emulator/vendor/data/cores/ppsspp-thread-wasm.data"),
+    );
+    const assets = psp.waitForResponse((r) =>
+      r.url().endsWith("/emulator/vendor/data/cores/ppsspp-assets.zip"),
+    );
+    await psp.getByText("Start Game").click();
+    expect((await report).status()).toBe(200);
+    expect((await payload).status()).toBe(200);
+    expect((await assets).status()).toBe(200);
+    await psp.close();
 
-  await openLibrary();
-  await page
-    .getByRole("searchbox", { name: "Search", exact: true })
-    .fill("Pocket Ninja");
-  await expect(page).toHaveURL(/[?&]q=/);
-  await expect(page.getByText("1 game", { exact: true })).toBeVisible();
-  const quick = page.getByRole("link", {
-    name: "Play Pocket Ninja (opens in a new tab)",
-  });
-  await expect(quick).toHaveAttribute("target", "_blank");
-  await expect(quick).toHaveAttribute("rel", "noopener");
-  const second = context.waitForEvent("page");
-  await quick.click();
-  const fromLibrary = await second;
-  await expect(fromLibrary).toHaveURL(tab);
-  await expect(fromLibrary.getByText("Start Game")).toBeVisible();
-  expect((await pspBrowser(fromLibrary)).isolated).toBe(true);
-  await fromLibrary.close();
-});
+    await openLibrary();
+    await page
+      .getByRole("searchbox", { name: "Search", exact: true })
+      .fill("Pocket Ninja");
+    await expect(page).toHaveURL(/[?&]q=/);
+    await expect(page.getByText("1 game", { exact: true })).toBeVisible();
+    const quick = page.getByRole("link", {
+      name: "Play Pocket Ninja (opens in a new tab)",
+    });
+    await expect(quick).toHaveAttribute("target", "_blank");
+    await expect(quick).toHaveAttribute("rel", "noopener");
+    const second = context.waitForEvent("page");
+    await quick.click();
+    const fromLibrary = await second;
+    await expect(fromLibrary).toHaveURL(tab);
+    await expect(fromLibrary.getByText("Start Game")).toBeVisible();
+    expect((await pspBrowser(fromLibrary)).isolated).toBe(true);
+    await fromLibrary.close();
+  },
+);
 
 /** Plays a seeded Sega cartridge from its detail page with the bundled SMS Plus GX and waits for a running frame. */
 async function playWithSmsPlus(
@@ -1245,193 +1300,209 @@ async function playWithSmsPlus(
   await closeEmulator();
 }
 
-test("Play: Genesis explains its missing core; Master System and Game Gear start with SMS Plus GX", { tag: "@shard-b" }, async () => {
-  // Genesis B4: the e2e image has no Emulator:GenesisCorePath, so the HEAD check stops before the ROM or loader.
-  const genesisRequests: string[] = [];
-  const track = (r: { url: () => string }) => {
-    if (
-      r.url().includes("/api/emulator/cores/") ||
-      r.url().includes("/api/emulator/genesis")
-    )
-      genesisRequests.push(r.url());
-  };
-  await openGame("Turbo Comet");
-  const check = page.waitForResponse(
-    (r) =>
-      r.url().endsWith("/api/emulator/cores/genesis_plus_gx") &&
-      r.request().method() === "HEAD",
-  );
-  await page
-    .getByRole("button", { name: "Play Turbo Comet (USA, Europe).md" })
-    .click();
-  await expect(dialog().locator("iframe")).toHaveAttribute(
-    "src",
-    /core=genesis_plus_gx&name=Turbo%20Comet%20\(USA%2C%20Europe\)\.md$/,
-  );
-  expect((await check).status()).toBe(404);
-  await expect(page.frameLocator("iframe").getByRole("status")).toHaveText(
-    "Genesis and Sega CD games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).",
-  );
-  await expect(page.frameLocator("iframe").getByText("Start Game")).toHaveCount(
-    0,
-  );
-  await closeEmulator();
-
-  // Genesis B6: Master System keeps SMS Plus GX (with the Genesis files absent), and Game Gear its .gg scheme.
-  page.on("request", track);
-  try {
-    await playWithSmsPlus(
-      "Harbor Patrol",
-      "Harbor Patrol (World).sms",
-      /core=smsplus&name=Harbor%20Patrol%20\(World\)\.sms$/,
-    );
-    await playWithSmsPlus(
-      "Pocket Drift",
-      "Pocket Drift (World).gg",
-      /core=smsplus&name=Pocket%20Drift%20\(World\)\.gg$/,
-    );
-  } finally {
-    page.off("request", track);
-  }
-  expect(genesisRequests).toEqual([]);
-});
-
-test("Play: 32X explains its missing PicoDrive core", { tag: "@shard-b" }, async () => {
-  // 32X B3: the e2e image has no Emulator:PicodriveCorePath, so the HEAD check stops before the ROM or loader.
-  const later: string[] = [];
-  let checked = false;
-  const track = (r: { url: () => string }) => {
-    if (
-      checked &&
-      (r.url().includes("/api/emulator/cores/") ||
-        r.url().includes("/roms/") ||
-        r.url().includes("loader.js"))
-    )
-      later.push(r.url());
-  };
-  await openGame("Star Relay");
-  page.on("request", track);
-  try {
+test(
+  "Play: Genesis explains its missing core; Master System and Game Gear start with SMS Plus GX",
+  { tag: "@shard-b" },
+  async () => {
+    // Genesis B4: the e2e image has no Emulator:GenesisCorePath, so the HEAD check stops before the ROM or loader.
+    const genesisRequests: string[] = [];
+    const track = (r: { url: () => string }) => {
+      if (
+        r.url().includes("/api/emulator/cores/") ||
+        r.url().includes("/api/emulator/genesis")
+      )
+        genesisRequests.push(r.url());
+    };
+    await openGame("Turbo Comet");
     const check = page.waitForResponse(
       (r) =>
-        r.url().endsWith("/api/emulator/cores/picodrive") &&
+        r.url().endsWith("/api/emulator/cores/genesis_plus_gx") &&
         r.request().method() === "HEAD",
     );
     await page
-      .getByRole("button", { name: "Play Star Relay (USA).32x" })
+      .getByRole("button", { name: "Play Turbo Comet (USA, Europe).md" })
       .click();
     await expect(dialog().locator("iframe")).toHaveAttribute(
       "src",
-      /core=picodrive&name=Star%20Relay%20\(USA\)\.32x$/,
+      /core=genesis_plus_gx&name=Turbo%20Comet%20\(USA%2C%20Europe\)\.md$/,
     );
     expect((await check).status()).toBe(404);
-    checked = true;
     await expect(page.frameLocator("iframe").getByRole("status")).toHaveText(
-      "32X games need the PicoDrive core files: ask an Admin to set them up (Emulator:PicodriveCorePath).",
+      "Genesis and Sega CD games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).",
     );
     await expect(
       page.frameLocator("iframe").getByText("Start Game"),
     ).toHaveCount(0);
-  } finally {
-    page.off("request", track);
-  }
-  expect(later).toEqual([]);
-  await closeEmulator();
-});
+    await closeEmulator();
 
-test("Play: SNES explains its missing Snes9x core from the detail page", { tag: "@shard-b" }, async () => {
-  // SNES B3: the e2e image has no Emulator:Snes9xCorePath, so the HEAD check stops before the ROM or loader.
-  const later: string[] = [];
-  let checked = false;
-  const track = (r: { url: () => string }) => {
-    if (
-      checked &&
-      (r.url().includes("/api/emulator/") ||
-        r.url().includes("/roms/") ||
-        r.url().includes("loader.js"))
-    )
-      later.push(r.url());
-  };
-  await openGame("Mode Seven Rally");
-  page.on("request", track);
-  try {
-    const check = page.waitForResponse(
-      (r) =>
-        r.url().endsWith("/api/emulator/cores/snes9x") &&
-        r.request().method() === "HEAD",
-    );
-    await page
-      .getByRole("button", { name: "Play Mode Seven Rally (USA).sfc" })
-      .click();
-    await expect(dialog().locator("iframe")).toHaveAttribute(
-      "src",
-      /core=snes9x&name=Mode%20Seven%20Rally%20\(USA\)\.sfc$/,
-    );
-    expect((await check).status()).toBe(404);
-    checked = true;
-    await expect(page.frameLocator("iframe").getByRole("status")).toHaveText(
-      "SNES games need the Snes9x core files: ask an Admin to set them up (Emulator:Snes9xCorePath).",
-    );
-    await expect(
-      page.frameLocator("iframe").getByText("Start Game"),
-    ).toHaveCount(0);
-  } finally {
-    page.off("request", track);
-  }
-  expect(later).toEqual([]);
-  await closeEmulator();
-});
+    // Genesis B6: Master System keeps SMS Plus GX (with the Genesis files absent), and Game Gear its .gg scheme.
+    page.on("request", track);
+    try {
+      await playWithSmsPlus(
+        "Harbor Patrol",
+        "Harbor Patrol (World).sms",
+        /core=smsplus&name=Harbor%20Patrol%20\(World\)\.sms$/,
+      );
+      await playWithSmsPlus(
+        "Pocket Drift",
+        "Pocket Drift (World).gg",
+        /core=smsplus&name=Pocket%20Drift%20\(World\)\.gg$/,
+      );
+    } finally {
+      page.off("request", track);
+    }
+    expect(genesisRequests).toEqual([]);
+  },
+);
 
-test("Play: SNES Quick Play from the library loads the release and the player once the core check passes", { tag: "@shard-b" }, async () => {
-  // SNES B1/B3: only the Snes9x HEAD is stubbed; the ROM and the loader are the real ones. Stops before Start Game,
-  // since the stock image has no Snes9x payload to serve.
-  const coreCheck = "**/api/emulator/cores/snes9x";
-  const stub = async (route: Route) =>
-    route.request().method() === "HEAD"
-      ? route.fulfill({ status: 204 })
-      : route.continue();
-  const bios: string[] = [];
-  const track = (r: { url: () => string }) => {
-    if (r.url().includes("/api/emulator/bios/")) bios.push(r.url());
-  };
-  await page.route(coreCheck, stub);
-  page.on("request", track);
-  try {
-    await openLibrary();
-    await page
-      .getByRole("searchbox", { name: "Search", exact: true })
-      .fill("Mode Seven Rally");
-    await expect(page).toHaveURL(/[?&]q=/);
-    await expect(page.getByText("1 game", { exact: true })).toBeVisible();
-    const check = page.waitForResponse(
-      (r) =>
-        r.url().endsWith("/api/emulator/cores/snes9x") &&
-        r.request().method() === "HEAD",
-    );
-    const rom = page.waitForResponse((r) =>
-      /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()),
-    );
-    const loader = page.waitForResponse((r) =>
-      r.url().endsWith("/emulator/vendor/data/loader.js"),
-    );
-    await page.getByRole("button", { name: "Play Mode Seven Rally" }).click();
-    await expect(dialog().locator("iframe")).toHaveAttribute(
-      "src",
-      /core=snes9x&name=Mode%20Seven%20Rally%20\(USA\)\.sfc$/,
-    );
-    expect((await check).status()).toBe(204);
-    expect((await rom).status()).toBe(200);
-    expect((await loader).status()).toBe(200);
-    await expect(
-      page.frameLocator("iframe").getByText("Start Game"),
-    ).toBeVisible();
-  } finally {
-    page.off("request", track);
-    await page.unroute(coreCheck, stub);
-  }
-  expect(bios).toEqual([]);
-  await closeEmulator();
-});
+test(
+  "Play: 32X explains its missing PicoDrive core",
+  { tag: "@shard-b" },
+  async () => {
+    // 32X B3: the e2e image has no Emulator:PicodriveCorePath, so the HEAD check stops before the ROM or loader.
+    const later: string[] = [];
+    let checked = false;
+    const track = (r: { url: () => string }) => {
+      if (
+        checked &&
+        (r.url().includes("/api/emulator/cores/") ||
+          r.url().includes("/roms/") ||
+          r.url().includes("loader.js"))
+      )
+        later.push(r.url());
+    };
+    await openGame("Star Relay");
+    page.on("request", track);
+    try {
+      const check = page.waitForResponse(
+        (r) =>
+          r.url().endsWith("/api/emulator/cores/picodrive") &&
+          r.request().method() === "HEAD",
+      );
+      await page
+        .getByRole("button", { name: "Play Star Relay (USA).32x" })
+        .click();
+      await expect(dialog().locator("iframe")).toHaveAttribute(
+        "src",
+        /core=picodrive&name=Star%20Relay%20\(USA\)\.32x$/,
+      );
+      expect((await check).status()).toBe(404);
+      checked = true;
+      await expect(page.frameLocator("iframe").getByRole("status")).toHaveText(
+        "32X games need the PicoDrive core files: ask an Admin to set them up (Emulator:PicodriveCorePath).",
+      );
+      await expect(
+        page.frameLocator("iframe").getByText("Start Game"),
+      ).toHaveCount(0);
+    } finally {
+      page.off("request", track);
+    }
+    expect(later).toEqual([]);
+    await closeEmulator();
+  },
+);
+
+test(
+  "Play: SNES explains its missing Snes9x core from the detail page",
+  { tag: "@shard-b" },
+  async () => {
+    // SNES B3: the e2e image has no Emulator:Snes9xCorePath, so the HEAD check stops before the ROM or loader.
+    const later: string[] = [];
+    let checked = false;
+    const track = (r: { url: () => string }) => {
+      if (
+        checked &&
+        (r.url().includes("/api/emulator/") ||
+          r.url().includes("/roms/") ||
+          r.url().includes("loader.js"))
+      )
+        later.push(r.url());
+    };
+    await openGame("Mode Seven Rally");
+    page.on("request", track);
+    try {
+      const check = page.waitForResponse(
+        (r) =>
+          r.url().endsWith("/api/emulator/cores/snes9x") &&
+          r.request().method() === "HEAD",
+      );
+      await page
+        .getByRole("button", { name: "Play Mode Seven Rally (USA).sfc" })
+        .click();
+      await expect(dialog().locator("iframe")).toHaveAttribute(
+        "src",
+        /core=snes9x&name=Mode%20Seven%20Rally%20\(USA\)\.sfc$/,
+      );
+      expect((await check).status()).toBe(404);
+      checked = true;
+      await expect(page.frameLocator("iframe").getByRole("status")).toHaveText(
+        "SNES games need the Snes9x core files: ask an Admin to set them up (Emulator:Snes9xCorePath).",
+      );
+      await expect(
+        page.frameLocator("iframe").getByText("Start Game"),
+      ).toHaveCount(0);
+    } finally {
+      page.off("request", track);
+    }
+    expect(later).toEqual([]);
+    await closeEmulator();
+  },
+);
+
+test(
+  "Play: SNES Quick Play from the library loads the release and the player once the core check passes",
+  { tag: "@shard-b" },
+  async () => {
+    // SNES B1/B3: only the Snes9x HEAD is stubbed; the ROM and the loader are the real ones. Stops before Start Game,
+    // since the stock image has no Snes9x payload to serve.
+    const coreCheck = "**/api/emulator/cores/snes9x";
+    const stub = async (route: Route) =>
+      route.request().method() === "HEAD"
+        ? route.fulfill({ status: 204 })
+        : route.continue();
+    const bios: string[] = [];
+    const track = (r: { url: () => string }) => {
+      if (r.url().includes("/api/emulator/bios/")) bios.push(r.url());
+    };
+    await page.route(coreCheck, stub);
+    page.on("request", track);
+    try {
+      await openLibrary();
+      await page
+        .getByRole("searchbox", { name: "Search", exact: true })
+        .fill("Mode Seven Rally");
+      await expect(page).toHaveURL(/[?&]q=/);
+      await expect(page.getByText("1 game", { exact: true })).toBeVisible();
+      const check = page.waitForResponse(
+        (r) =>
+          r.url().endsWith("/api/emulator/cores/snes9x") &&
+          r.request().method() === "HEAD",
+      );
+      const rom = page.waitForResponse((r) =>
+        /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()),
+      );
+      const loader = page.waitForResponse((r) =>
+        r.url().endsWith("/emulator/vendor/data/loader.js"),
+      );
+      await page.getByRole("button", { name: "Play Mode Seven Rally" }).click();
+      await expect(dialog().locator("iframe")).toHaveAttribute(
+        "src",
+        /core=snes9x&name=Mode%20Seven%20Rally%20\(USA\)\.sfc$/,
+      );
+      expect((await check).status()).toBe(204);
+      expect((await rom).status()).toBe(200);
+      expect((await loader).status()).toBe(200);
+      await expect(
+        page.frameLocator("iframe").getByText("Start Game"),
+      ).toBeVisible();
+    } finally {
+      page.off("request", track);
+      await page.unroute(coreCheck, stub);
+    }
+    expect(bios).toEqual([]);
+    await closeEmulator();
+  },
+);
 
 const escapeRegExp = (text: string) =>
   text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -1485,15 +1556,23 @@ async function launchBundled(
   await closeEmulator();
 }
 
-test("Play: Atari 7800, Jaguar and Lynx launch with their bundled cores", { tag: "@shard-b" }, async () => {
-  await launchBundled("Canyon Glide", "Canyon Glide (USA).a78", "prosystem");
-  await launchBundled(
-    "Cobalt Drift",
-    "Cobalt Drift (World).j64",
-    "virtualjaguar",
-  );
-  await launchBundled("Prism Racer", "Prism Racer (USA, Europe).lnx", "handy");
-});
+test(
+  "Play: Atari 7800, Jaguar and Lynx launch with their bundled cores",
+  { tag: "@shard-b" },
+  async () => {
+    await launchBundled("Canyon Glide", "Canyon Glide (USA).a78", "prosystem");
+    await launchBundled(
+      "Cobalt Drift",
+      "Cobalt Drift (World).j64",
+      "virtualjaguar",
+    );
+    await launchBundled(
+      "Prism Racer",
+      "Prism Racer (USA, Europe).lnx",
+      "handy",
+    );
+  },
+);
 
 test("global search, ratings and favourites", { tag: "@shard-b" }, async () => {
   // Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
@@ -1551,358 +1630,513 @@ test("global search, ratings and favourites", { tag: "@shard-b" }, async () => {
   await expect(heart).toHaveAttribute("aria-pressed", "false");
 });
 
-test("collections: create, add from game page and bulk select, search, remove, delete", { tag: "@shard-b" }, async () => {
-  await page.goto("/collections");
-  await expect(page.getByText("You have no collections yet.")).toBeVisible();
-  await expectAccessible(page, "collections page (empty)");
+test(
+  "collections: create, add from game page and bulk select, search, remove, delete",
+  { tag: "@shard-b" },
+  async () => {
+    await page.goto("/collections");
+    await expect(page.getByText("You have no collections yet.")).toBeVisible();
+    await expectAccessible(page, "collections page (empty)");
 
-  // B23: create with Markdown notes and an uploaded cover, then land on the new collection.
-  await page.getByRole("button", { name: "New collection" }).first().click();
-  await expect(dialog()).toHaveAccessibleName("New collection");
-  await dialog().getByLabel("Name").fill("Puzzle picks");
-  await dialog().getByLabel("Notes (Markdown)").fill("The **best** puzzles");
-  await dialog()
-    .getByLabel("Cover image file")
-    .setInputFiles({
-      name: "cover.png",
-      mimeType: "image/png",
-      buffer: png(32, [40, 120, 200]),
-    });
-  await expectAccessible(page, "collection modal");
-  await dialog().getByRole("button", { name: "Create" }).click();
-  await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Puzzle picks" }),
-  ).toBeVisible();
-  await expect(
-    page.getByTestId("collection-notes").locator("strong"),
-  ).toHaveText("best");
-  await expect(
-    page.getByRole("img", { name: "Puzzle picks cover" }),
-  ).toBeVisible();
-
-  // B25: add Orbit Blocks from its game page; a badge links back.
-  await openGame("Orbit Blocks");
-  await page.getByRole("button", { name: "Collections", exact: true }).click();
-  await dialog()
-    .getByRole("checkbox", { name: /^Puzzle picks/ })
-    .check();
-  await expect(
-    page.getByRole("list", { name: "In collections" }).getByRole("link"),
-  ).toHaveText("Puzzle picks");
-  await expectAccessible(page, "game collections modal");
-  await page.keyboard.press("Escape");
-  await expect(dialog()).toBeHidden();
-
-  // B26: add a game from another system with the Library's bulk select.
-  await openLibrary();
-  await chooseFilter("System", "n64");
-  await expect(page).toHaveURL(/system=n64/);
-  await page.getByRole("button", { name: "Select", exact: true }).click();
-  await page.getByRole("checkbox", { name: "Select Orbit Kart 64" }).check();
-  await page.getByRole("button", { name: /Add to collection/ }).click();
-  await dialog()
-    .getByRole("radio", { name: /^Puzzle picks/ })
-    .check();
-  await dialog().getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.getByText("Added 1 game to Puzzle picks")).toBeVisible();
-
-  // B27: global search finds the collection; Enter opens it.
-  await page.keyboard.press("Control+k");
-  await dialog().getByRole("combobox").fill("puzzle");
-  await expect(dialog().getByRole("option").first()).toContainText(
-    "Puzzle picks",
-  );
-  await page.keyboard.press("Enter");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Puzzle picks" }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Orbit Blocks", exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Orbit Kart 64", exact: true }),
-  ).toBeVisible();
-  await expectAccessible(page, "collection page");
-
-  // P1–P4: Add games leaves out members; results show a cover and a short system name.
-  const addGames = page.getByLabel("Add games");
-  await addGames.fill("orbit");
-  const results = page.locator(".list-group").getByRole("button");
-  // Orbit Expedition is suggested; both members stay excluded.
-  await expect(results.filter({ hasText: "Orbit Expedition" })).toBeVisible();
-  await expect(results.filter({ hasText: "Orbit Blocks" })).toHaveCount(0);
-  await expect(results.filter({ hasText: "Orbit Kart 64" })).toHaveCount(0);
-  await addGames.fill("zzz no such game");
-  await expect(page.getByText("No matching games.")).toBeVisible();
-  await addGames.fill("pocket");
-  const drift = results.filter({ hasText: "Pocket Drift" });
-  await expect(drift).toBeVisible();
-  await expect(drift.locator("img")).toHaveCount(1);
-  await expect(drift.locator(".badge")).toHaveText("GG");
-  await expect(drift.locator(".badge")).toHaveAttribute("title", "Game Gear");
-  await addGames.fill("");
-
-  // B24: remove one game.
-  await page
-    .getByRole("button", { name: "Remove Orbit Blocks from collection" })
-    .click();
-  await expect(
-    page.getByRole("link", { name: "Orbit Blocks", exact: true }),
-  ).toBeHidden();
-  await expect(
-    page.getByRole("link", { name: "Orbit Kart 64", exact: true }),
-  ).toBeVisible();
-
-  await page.goto("/collections");
-  await expect(page.getByRole("link", { name: "Puzzle picks" })).toBeVisible();
-  await expect(page.getByText("1 game", { exact: true })).toBeVisible();
-  await expectAccessible(page, "collections page");
-
-  // B5: delete it; the games stay in the Library.
-  await page.getByRole("link", { name: "Puzzle picks" }).click();
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
-  await expect(dialog()).toHaveAccessibleName("Delete Puzzle picks?");
-  await dialog().getByRole("button", { name: "Delete", exact: true }).click();
-  await expect(page).toHaveURL(/\/collections$/);
-  await expect(page.getByText("You have no collections yet.")).toBeVisible();
-  await openLibrary();
-  await expect(page.getByText("29 games")).toBeVisible();
-});
-
-test("collections discovery: browse publishers and genres across systems, share a selection", { tag: "@shard-b" }, async () => {
-  // Discovery B1: link tabs; a bare URL is User collections.
-  await page.goto("/collections");
-  const tabs = page.getByRole("navigation", { name: "Collections views" });
-  await expect(
-    tabs.getByRole("link", { name: "User collections" }),
-  ).toHaveAttribute("aria-current", "page");
-  await tabs.getByRole("link", { name: "Publishers" }).click();
-  await expect(page).toHaveURL(/\/collections\?tab=publishers$/);
-  await expect(tabs.getByRole("link", { name: "Publishers" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-  await expect(
-    page.getByText("Choose a publisher to see its games across every system."),
-  ).toBeVisible();
-  await expectAccessible(page, "publishers tab");
-
-  // B2: the seeded publisher groups games from every system.
-  const publishers = page.getByRole("list", { name: "Publishers" });
-  await publishers.getByRole("link", { name: /Fixture Works/ }).click();
-  await expect(page).toHaveURL(/tab=publishers&key=[0-9a-f]{64}$/);
-  await expect(
-    page.getByRole("heading", { name: /Fixture Works/ }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Orbit Kart 64", exact: true }),
-  ).toBeVisible();
-  await expectAccessible(page, "publisher games");
-
-  // Genres: Racing spans N64, SNES and Game Gear; a game link opens its page.
-  await tabs.getByRole("link", { name: "Genres" }).click();
-  await expect(page).toHaveURL(/\/collections\?tab=genres$/);
-  await page
-    .getByRole("list", { name: "Genres" })
-    .getByRole("link", { name: /Racing/ })
-    .click();
-  await expect(page.getByRole("heading", { name: /Racing/ })).toBeVisible();
-  for (const title of ["Orbit Kart 64", "Mode Seven Rally", "Pocket Drift"])
-    await expect(
-      page.getByRole("link", { name: title, exact: true }),
-    ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Orbit Blocks", exact: true }),
-  ).toBeHidden();
-  const racing = page.url();
-
-  // Back and forward restore the selection.
-  await page.goBack();
-  await expect(page).toHaveURL(/\/collections\?tab=genres$/);
-  await expect(
-    page.getByText("Choose a genre to see its games across every system."),
-  ).toBeVisible();
-  await page.goForward();
-  await expect(page.getByRole("heading", { name: /Racing/ })).toBeVisible();
-
-  // A shared link opens the selection directly.
-  await page.goto("/collections");
-  await page.goto(racing);
-  await expect(page.getByRole("link", { name: /Racing/ })).toHaveAttribute(
-    "aria-current",
-    "true",
-  );
-  await expect(
-    page.getByRole("link", { name: "Pocket Drift", exact: true }),
-  ).toBeVisible();
-  await page.getByRole("link", { name: "Pocket Drift", exact: true }).click();
-  await expect(page).toHaveURL(/\/games\/[0-9a-f-]{36}$/);
-
-  // A selection no game has gets its own empty state.
-  await page.goto(`/collections?tab=genres&key=${"0".repeat(64)}`);
-  await expect(
-    page.getByText("No games have this genre any more."),
-  ).toBeVisible();
-  await page.getByRole("link", { name: "Back to all genres" }).click();
-  await expect(page).toHaveURL(/\/collections\?tab=genres$/);
-});
-
-test("collections systems: browse a system's games and its emulator links", { tag: "@shard-b" }, async () => {
-  // Systems tab B1/B4: a link tab that asks for a system.
-  await page.goto("/collections");
-  const tabs = page.getByRole("navigation", { name: "Collections views" });
-  await tabs.getByRole("link", { name: "Systems" }).click();
-  await expect(page).toHaveURL(/\/collections\?tab=systems$/);
-  await expect(tabs.getByRole("link", { name: "Systems" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-  await expect(
-    page.getByText("Choose a system to see its games and emulators."),
-  ).toBeVisible();
-
-  // B3/B5: choosing Game Boy shows its games.
-  await page
-    .getByRole("list", { name: "Systems" })
-    .getByRole("link", { name: /^Game Boy\s+\d+ games?$/ })
-    .click();
-  await expect(page).toHaveURL(/\/collections\?tab=systems&system=gb$/);
-  await expect(
-    page.getByRole("link", { name: "Orbit Blocks", exact: true }),
-  ).toBeVisible();
-  await expectAccessible(page, "system games");
-
-  // B7: the Emulators modal links to project sites in a new tab.
-  const emulators = page.getByRole("button", { name: "Emulators" });
-  await emulators.click();
-  await expect(dialog()).toHaveAccessibleName("Game Boy emulators");
-  const mgba = dialog()
-    .getByRole("list", { name: "Windows" })
-    .getByRole("link", { name: "mGBA (opens in a new tab)" });
-  await expect(mgba).toHaveAttribute("href", /^https:\/\//);
-  await expect(mgba).toHaveAttribute("target", "_blank");
-  await expectAccessible(page, "emulators modal");
-  await dialog().getByRole("button", { name: "Close" }).last().click();
-  await expect(dialog()).toBeHidden();
-  await expect(emulators).toBeFocused();
-});
-
-test("collections discovery: two signed-in users share, replace and remove a publisher logo", { tag: "@shard-b" }, async () => {
-  // A plain user (no roles) next to the admin, in a browser of their own.
-  const curatorPassword = `${newPassword}-curator`;
-  await page.goto("/admin/users");
-  await page.getByRole("button", { name: "Create user" }).click();
-  await dialog().getByLabel("Username").fill("curator");
-  await dialog()
-    .getByLabel("Initial password")
-    .fill(`${curatorPassword}-initial`);
-  await dialog().getByRole("button", { name: "Create" }).click();
-  await expect(dialog()).toBeHidden();
-
-  const curatorContext = await context.browser()!.newContext();
-  const curator = await curatorContext.newPage();
-  try {
-    await curator.goto("/login");
-    await curator.getByLabel("Username").fill("curator");
-    await curator.getByLabel("Password").fill(`${curatorPassword}-initial`);
-    await curator.getByRole("button", { name: "Sign in" }).click();
-    await expect(curator).toHaveURL(/\/change-password$/);
-    await curator
-      .getByLabel("Current password")
-      .fill(`${curatorPassword}-initial`);
-    await curator
-      .getByLabel("New password", { exact: true })
-      .fill(curatorPassword);
-    await curator.getByLabel("Confirm new password").fill(curatorPassword);
-    await curator.getByRole("button", { name: "Change password" }).click();
-    await expect(curator).not.toHaveURL(/\/change-password$/);
-
-    const logoOf = (p: Page) =>
-      p
-        .getByRole("list", { name: "Publishers" })
-        .getByRole("link", { name: /Fixture Works/ })
-        .locator("img");
-
-    // B5: the admin adds the shared logo; Fixture Works has no starter art, so it showed text only.
-    await page.goto("/collections?tab=publishers");
-    await expect(logoOf(page)).toHaveCount(0);
-    await page
-      .getByRole("button", { name: "Change logo for Fixture Works" })
-      .click();
-    await expect(dialog()).toHaveAccessibleName("Logo for Fixture Works");
-    await expect(
-      dialog().getByText("No logo: the name shows as text."),
-    ).toBeVisible();
-    await expectAccessible(page, "publisher logo modal");
+    // B23: create with Markdown notes and an uploaded cover, then land on the new collection.
+    await page.getByRole("button", { name: "New collection" }).first().click();
+    await expect(dialog()).toHaveAccessibleName("New collection");
+    await dialog().getByLabel("Name").fill("Puzzle picks");
+    await dialog().getByLabel("Notes (Markdown)").fill("The **best** puzzles");
     await dialog()
-      .getByLabel("Logo image file")
+      .getByLabel("Cover image file")
       .setInputFiles({
-        name: "logo.png",
+        name: "cover.png",
         mimeType: "image/png",
-        buffer: png(48, [200, 60, 40]),
+        buffer: png(32, [40, 120, 200]),
       });
-    await dialog().getByRole("button", { name: "Save logo" }).click();
+    await expectAccessible(page, "collection modal");
+    await dialog().getByRole("button", { name: "Create" }).click();
+    await expect(page).toHaveURL(/\/collections\/[0-9a-f-]{36}$/);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Puzzle picks" }),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("collection-notes").locator("strong"),
+    ).toHaveText("best");
+    await expect(
+      page.getByRole("img", { name: "Puzzle picks cover" }),
+    ).toBeVisible();
+
+    // B25: add Orbit Blocks from its game page; a badge links back.
+    await openGame("Orbit Blocks");
+    await page
+      .getByRole("button", { name: "Collections", exact: true })
+      .click();
+    await dialog()
+      .getByRole("checkbox", { name: /^Puzzle picks/ })
+      .check();
+    await expect(
+      page.getByRole("list", { name: "In collections" }).getByRole("link"),
+    ).toHaveText("Puzzle picks");
+    await expectAccessible(page, "game collections modal");
+    await page.keyboard.press("Escape");
     await expect(dialog()).toBeHidden();
-    await expect(logoOf(page)).toHaveAttribute(
-      "src",
-      /\/api\/discovery\/publishers\/logo\?key=[0-9a-f]{64}&v=\d+$/,
+
+    // B26: add a game from another system with the Library's bulk select.
+    await openLibrary();
+    await chooseFilter("System", "n64");
+    await expect(page).toHaveURL(/system=n64/);
+    await page.getByRole("button", { name: "Select", exact: true }).click();
+    await page.getByRole("checkbox", { name: "Select Orbit Kart 64" }).check();
+    await page.getByRole("button", { name: /Add to collection/ }).click();
+    await dialog()
+      .getByRole("radio", { name: /^Puzzle picks/ })
+      .check();
+    await dialog().getByRole("button", { name: "Add", exact: true }).click();
+    await expect(page.getByText("Added 1 game to Puzzle picks")).toBeVisible();
+
+    // B27: global search finds the collection; Enter opens it.
+    await page.keyboard.press("Control+k");
+    await dialog().getByRole("combobox").fill("puzzle");
+    await expect(dialog().getByRole("option").first()).toContainText(
+      "Puzzle picks",
     );
-    const adminVersion = await logoOf(page).getAttribute("src");
-    await expect
-      .poll(() =>
-        logoOf(page).evaluate((img: HTMLImageElement) => img.naturalWidth),
-      )
-      .toBe(48);
-
-    // Shared: the curator sees it, then replaces it; the last writer wins for everyone.
-    await curator.goto("/collections?tab=publishers");
-    await expect(logoOf(curator)).toHaveAttribute("src", adminVersion!);
-    await curator
-      .getByRole("button", { name: "Change logo for Fixture Works" })
-      .click();
-    const curatorDialog = curator.getByRole("dialog");
+    await page.keyboard.press("Enter");
     await expect(
-      curatorDialog.getByText("Shared logo, set by a user."),
+      page.getByRole("heading", { level: 1, name: "Puzzle picks" }),
     ).toBeVisible();
-    await curatorDialog
-      .getByLabel("Logo image file")
-      .setInputFiles({
-        name: "logo.png",
-        mimeType: "image/png",
-        buffer: png(64, [40, 160, 90]),
-      });
-    await curatorDialog.getByRole("button", { name: "Save logo" }).click();
-    await expect(curatorDialog).toBeHidden();
-    await expect(logoOf(curator)).not.toHaveAttribute("src", adminVersion!);
-    const curatorVersion = await logoOf(curator).getAttribute("src");
+    await expect(
+      page.getByRole("link", { name: "Orbit Blocks", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Orbit Kart 64", exact: true }),
+    ).toBeVisible();
+    await expectAccessible(page, "collection page");
 
-    await page.reload();
-    await expect(logoOf(page)).toHaveAttribute("src", curatorVersion!);
-    await expect
-      .poll(() =>
-        logoOf(page).evaluate((img: HTMLImageElement) => img.naturalWidth),
-      )
-      .toBe(64);
+    // P1–P4: Add games leaves out members; results show a cover and a short system name.
+    const addGames = page.getByLabel("Add games");
+    await addGames.fill("orbit");
+    const results = page.locator(".list-group").getByRole("button");
+    // Orbit Expedition is suggested; both members stay excluded.
+    await expect(results.filter({ hasText: "Orbit Expedition" })).toBeVisible();
+    await expect(results.filter({ hasText: "Orbit Blocks" })).toHaveCount(0);
+    await expect(results.filter({ hasText: "Orbit Kart 64" })).toHaveCount(0);
+    await addGames.fill("zzz no such game");
+    await expect(page.getByText("No matching games.")).toBeVisible();
+    await addGames.fill("pocket");
+    const drift = results.filter({ hasText: "Pocket Drift" });
+    await expect(drift).toBeVisible();
+    await expect(drift.locator("img")).toHaveCount(1);
+    await expect(drift.locator(".badge")).toHaveText("GG");
+    await expect(drift.locator(".badge")).toHaveAttribute("title", "Game Gear");
+    await addGames.fill("");
 
-    // Either user removes it; the text fallback shows again for both.
+    // B24: remove one game.
     await page
-      .getByRole("button", { name: "Change logo for Fixture Works" })
+      .getByRole("button", { name: "Remove Orbit Blocks from collection" })
       .click();
-    await dialog()
-      .getByRole("button", { name: /Remove shared logo/ })
-      .click();
-    await expect(dialog()).toBeHidden();
-    await expect(logoOf(page)).toHaveCount(0);
-    await curator.reload();
     await expect(
-      curator.getByRole("link", { name: /Fixture Works/ }),
+      page.getByRole("link", { name: "Orbit Blocks", exact: true }),
+    ).toBeHidden();
+    await expect(
+      page.getByRole("link", { name: "Orbit Kart 64", exact: true }),
     ).toBeVisible();
-    await expect(logoOf(curator)).toHaveCount(0);
-  } finally {
-    await curatorContext.close();
-  }
-});
+
+    await page.goto("/collections");
+    await expect(
+      page.getByRole("link", { name: "Puzzle picks" }),
+    ).toBeVisible();
+    await expect(page.getByText("1 game", { exact: true })).toBeVisible();
+    await expectAccessible(page, "collections page");
+
+    // B5: delete it; the games stay in the Library.
+    await page.getByRole("link", { name: "Puzzle picks" }).click();
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(dialog()).toHaveAccessibleName("Delete Puzzle picks?");
+    await dialog().getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(page).toHaveURL(/\/collections$/);
+    await expect(page.getByText("You have no collections yet.")).toBeVisible();
+    await openLibrary();
+    await expect(page.getByText("29 games")).toBeVisible();
+  },
+);
+
+test(
+  "collections discovery: browse publishers and genres across systems, share a selection",
+  { tag: "@shard-b" },
+  async () => {
+    // Discovery B1: link tabs; a bare URL is User collections.
+    await page.goto("/collections");
+    const tabs = page.getByRole("navigation", { name: "Collections views" });
+    await expect(
+      tabs.getByRole("link", { name: "User collections" }),
+    ).toHaveAttribute("aria-current", "page");
+    await tabs.getByRole("link", { name: "Publishers" }).click();
+    await expect(page).toHaveURL(/\/collections\?tab=publishers$/);
+    await expect(
+      tabs.getByRole("link", { name: "Publishers" }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(
+      page.getByText(
+        "Choose a publisher to see its games across every system.",
+      ),
+    ).toBeVisible();
+    await expectAccessible(page, "publishers tab");
+
+    // B2: the seeded publisher groups games from every system.
+    const publishers = page.getByRole("list", { name: "Publishers" });
+    await publishers.getByRole("link", { name: /Fixture Works/ }).click();
+    await expect(page).toHaveURL(/tab=publishers&key=[0-9a-f]{64}$/);
+    await expect(
+      page.getByRole("heading", { name: /Fixture Works/ }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Orbit Kart 64", exact: true }),
+    ).toBeVisible();
+    await expectAccessible(page, "publisher games");
+
+    // Genres: Racing spans N64, SNES and Game Gear; a game link opens its page.
+    await tabs.getByRole("link", { name: "Genres" }).click();
+    await expect(page).toHaveURL(/\/collections\?tab=genres$/);
+    await page
+      .getByRole("list", { name: "Genres" })
+      .getByRole("link", { name: /Racing/ })
+      .click();
+    await expect(page.getByRole("heading", { name: /Racing/ })).toBeVisible();
+    for (const title of ["Orbit Kart 64", "Mode Seven Rally", "Pocket Drift"])
+      await expect(
+        page.getByRole("link", { name: title, exact: true }),
+      ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Orbit Blocks", exact: true }),
+    ).toBeHidden();
+    const racing = page.url();
+
+    // Back and forward restore the selection.
+    await page.goBack();
+    await expect(page).toHaveURL(/\/collections\?tab=genres$/);
+    await expect(
+      page.getByText("Choose a genre to see its games across every system."),
+    ).toBeVisible();
+    await page.goForward();
+    await expect(page.getByRole("heading", { name: /Racing/ })).toBeVisible();
+
+    // A shared link opens the selection directly.
+    await page.goto("/collections");
+    await page.goto(racing);
+    await expect(page.getByRole("link", { name: /Racing/ })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    await expect(
+      page.getByRole("link", { name: "Pocket Drift", exact: true }),
+    ).toBeVisible();
+    await page.getByRole("link", { name: "Pocket Drift", exact: true }).click();
+    await expect(page).toHaveURL(/\/games\/[0-9a-f-]{36}$/);
+
+    // A selection no game has gets its own empty state.
+    await page.goto(`/collections?tab=genres&key=${"0".repeat(64)}`);
+    await expect(
+      page.getByText("No games have this genre any more."),
+    ).toBeVisible();
+    await page.getByRole("link", { name: "Back to all genres" }).click();
+    await expect(page).toHaveURL(/\/collections\?tab=genres$/);
+  },
+);
+
+test(
+  "collections systems: browse a system's games and its emulator links",
+  { tag: "@shard-b" },
+  async () => {
+    // Systems tab B1/B4: a link tab that asks for a system.
+    await page.goto("/collections");
+    const tabs = page.getByRole("navigation", { name: "Collections views" });
+    await tabs.getByRole("link", { name: "Systems" }).click();
+    await expect(page).toHaveURL(/\/collections\?tab=systems$/);
+    await expect(tabs.getByRole("link", { name: "Systems" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await expect(
+      page.getByText("Choose a system to see its games and emulators."),
+    ).toBeVisible();
+
+    // B3/B5: choosing Game Boy shows its games.
+    await page
+      .getByRole("list", { name: "Systems" })
+      .getByRole("link", { name: /^Game Boy\s+\d+ games?$/ })
+      .click();
+    await expect(page).toHaveURL(/\/collections\?tab=systems&system=gb$/);
+    await expect(
+      page.getByRole("link", { name: "Orbit Blocks", exact: true }),
+    ).toBeVisible();
+    await expectAccessible(page, "system games");
+
+    // B7: the Emulators modal links to project sites in a new tab.
+    const emulators = page.getByRole("button", { name: "Emulators" });
+    await emulators.click();
+    await expect(dialog()).toHaveAccessibleName("Game Boy emulators");
+    const mgba = dialog()
+      .getByRole("list", { name: "Windows" })
+      .getByRole("link", { name: "mGBA (opens in a new tab)" });
+    await expect(mgba).toHaveAttribute("href", /^https:\/\//);
+    await expect(mgba).toHaveAttribute("target", "_blank");
+    await expectAccessible(page, "emulators modal");
+    await dialog().getByRole("button", { name: "Close" }).last().click();
+    await expect(dialog()).toBeHidden();
+    await expect(emulators).toBeFocused();
+  },
+);
+
+test(
+  "collections discovery: an Admin replaces and removes a publisher logo a Site user only sees",
+  { tag: "@shard-b" },
+  async () => {
+    // A Site user next to the admin, in a browser of their own.
+    const curatorPassword = `${newPassword}-curator`;
+    await createSiteUser("curator", `${curatorPassword}-initial`);
+    const { userContext: curatorContext, user: curator } = await signInNewUser(
+      "curator",
+      `${curatorPassword}-initial`,
+      curatorPassword,
+    );
+    try {
+      const logoOf = (p: Page) =>
+        p
+          .getByRole("list", { name: "Publishers" })
+          .getByRole("link", { name: /Fixture Works/ })
+          .locator("img");
+      const changeLogo = (p: Page) =>
+        p.getByRole("button", { name: "Change logo for Fixture Works" });
+      const upload = async (
+        size: number,
+        rgb: [number, number, number],
+        before?: () => Promise<void>,
+      ) => {
+        await changeLogo(page).click();
+        await expect(dialog()).toHaveAccessibleName("Logo for Fixture Works");
+        await before?.();
+        await dialog()
+          .getByLabel("Logo image file")
+          .setInputFiles({
+            name: "logo.png",
+            mimeType: "image/png",
+            buffer: png(size, rgb),
+          });
+        await dialog().getByRole("button", { name: "Save logo" }).click();
+        await expect(dialog()).toBeHidden();
+      };
+
+      // B5: the admin adds the shared logo; Fixture Works has no starter art, so it showed text only.
+      await page.goto("/collections?tab=publishers");
+      await expect(logoOf(page)).toHaveCount(0);
+      await upload(48, [200, 60, 40], async () => {
+        await expect(
+          dialog().getByText("No logo: the name shows as text."),
+        ).toBeVisible();
+        await expectAccessible(page, "publisher logo modal");
+      });
+      await expect(logoOf(page)).toHaveAttribute(
+        "src",
+        /\/api\/discovery\/publishers\/logo\?key=[0-9a-f]{64}&v=\d+$/,
+      );
+      const firstVersion = await logoOf(page).getAttribute("src");
+
+      // Shared: the Site user sees it, but has no Change logo (U3: logos are Admin-only).
+      await curator.goto("/collections?tab=publishers");
+      await expect(logoOf(curator)).toHaveAttribute("src", firstVersion!);
+      await expect
+        .poll(() =>
+          logoOf(curator).evaluate((img: HTMLImageElement) => img.naturalWidth),
+        )
+        .toBe(48);
+      await expect(changeLogo(curator)).toHaveCount(0);
+
+      // The admin replaces it; the Site user gets the new one.
+      await upload(64, [40, 160, 90]);
+      await expect(logoOf(page)).not.toHaveAttribute("src", firstVersion!);
+      const secondVersion = await logoOf(page).getAttribute("src");
+      await curator.reload();
+      await expect(logoOf(curator)).toHaveAttribute("src", secondVersion!);
+      await expect
+        .poll(() =>
+          logoOf(curator).evaluate((img: HTMLImageElement) => img.naturalWidth),
+        )
+        .toBe(64);
+
+      // The admin removes it; the text fallback shows again for both.
+      await changeLogo(page).click();
+      await expect(
+        dialog().getByText("Shared logo, set by a user."),
+      ).toBeVisible();
+      await dialog()
+        .getByRole("button", { name: /Remove shared logo/ })
+        .click();
+      await expect(dialog()).toBeHidden();
+      await expect(logoOf(page)).toHaveCount(0);
+      await curator.reload();
+      await expect(
+        curator.getByRole("link", { name: /Fixture Works/ }),
+      ).toBeVisible();
+      await expect(logoOf(curator)).toHaveCount(0);
+    } finally {
+      await curatorContext.close();
+    }
+  },
+);
+
+test(
+  "user management: a Site user's account, private saves and audit trail",
+  { tag: "@shard-b" },
+  async () => {
+    // Two Site users only this test uses; it relies on @both state only (the ingested library).
+    const visitor = "visitor-a";
+    const other = "visitor-b";
+    const visitorPassword = `${newPassword}-visitor`;
+    const otherPassword = `${newPassword}-other`;
+    await createSiteUser(visitor, `${visitorPassword}-initial`);
+    await expectAccessible(page, "users with a site user");
+    await createSiteUser(other, `${otherPassword}-initial`);
+
+    const visitorContext = await context.browser()!.newContext();
+    const user = await visitorContext.newPage();
+    const otherSession = await signInNewUser(
+      other,
+      `${otherPassword}-initial`,
+      otherPassword,
+    );
+    try {
+      // A wrong password fails (SignInFailed); the right one asks for a new password, which must differ (U7).
+      await user.goto("/login");
+      await user.getByLabel("Username").fill(visitor);
+      await user.getByLabel("Password").fill("not-the-password-for-e2e");
+      await user.getByRole("button", { name: "Sign in" }).click();
+      await expect(user.getByRole("alert")).toHaveText(
+        "Invalid username or password.",
+      );
+      await user.getByLabel("Password").fill(`${visitorPassword}-initial`);
+      await user.getByRole("button", { name: "Sign in" }).click();
+      await expect(user).toHaveURL(/\/change-password$/);
+      await user
+        .getByLabel("Current password")
+        .fill(`${visitorPassword}-initial`);
+      await user
+        .getByLabel("New password", { exact: true })
+        .fill(`${visitorPassword}-initial`);
+      await user
+        .getByLabel("Confirm new password")
+        .fill(`${visitorPassword}-initial`);
+      await user.getByRole("button", { name: "Change password" }).click();
+      await expect(
+        user.getByText(
+          "New password must be different from the current password.",
+        ),
+      ).toBeVisible();
+      await expect(user).toHaveURL(/\/change-password$/);
+      await user
+        .getByLabel("New password", { exact: true })
+        .fill(visitorPassword);
+      await user.getByLabel("Confirm new password").fill(visitorPassword);
+      await user.getByRole("button", { name: "Change password" }).click();
+      await expect(user).not.toHaveURL(/\/change-password$/);
+
+      // U3/U4: no Admin pages and no library edits.
+      await expect(
+        user.getByRole("link", { name: "Admin", exact: true }),
+      ).toHaveCount(0);
+      await user.goto("/?page=1");
+      await user
+        .getByRole("searchbox", { name: "Search", exact: true })
+        .fill("Orbit Blocks");
+      await user
+        .getByRole("link", { name: "Orbit Blocks", exact: true })
+        .click();
+      await expect(
+        user.getByRole("heading", { level: 1, name: "Orbit Blocks" }),
+      ).toBeVisible();
+      await expect(
+        user.getByRole("button", { name: "Edit metadata" }),
+      ).toHaveCount(0);
+      await expect(
+        user.getByRole("button", { name: /^Add note for / }),
+      ).toHaveCount(0);
+      await expectAccessible(user, "game detail as a site user");
+
+      // S2/S4: the Site user uploads a save; the Admin sees it with its owner, the other Site user doesn't.
+      await user.getByRole("tab", { name: "Saves" }).click();
+      await user.getByRole("button", { name: "Add save" }).click();
+      const userDialog = user.getByRole("dialog");
+      await userDialog.getByLabel("Name").fill("Visitor save");
+      await userDialog.getByLabel("File").setInputFiles({
+        name: "slot.state",
+        mimeType: "application/octet-stream",
+        buffer: Buffer.from([9, 8, 7]),
+      });
+      await userDialog
+        .locator(".modal-footer")
+        .getByRole("button", { name: "Add save" })
+        .click();
+      await expect(userDialog).toBeHidden();
+      await expect(user.locator("#saves-panel tbody tr")).toContainText(
+        "Visitor save",
+      );
+      await expect(
+        user.getByRole("columnheader", { name: "Owner" }),
+      ).toHaveCount(0);
+
+      const otherUser = otherSession.user;
+      await otherUser.goto(user.url());
+      await expect(
+        otherUser.getByRole("heading", { level: 1, name: "Orbit Blocks" }),
+      ).toBeVisible();
+      await expect(otherUser.getByText("No saves yet")).toBeVisible();
+
+      await page.goto(user.url());
+      const ownerRow = page
+        .locator("#saves-panel tbody tr")
+        .filter({ hasText: "Visitor save" });
+      await expect(
+        page.getByRole("columnheader", { name: "Owner" }),
+      ).toBeVisible();
+      await expect(ownerRow).toContainText(visitor);
+      await expectAccessible(page, "saves tab with an owner column");
+
+      // U8: disabling the user ends their session on the next request.
+      await page.goto("/admin/users");
+      await page.getByRole("button", { name: `Disable ${visitor}` }).click();
+      await expect(
+        page
+          .getByRole("row")
+          .filter({ hasText: visitor })
+          .getByText("Disabled"),
+      ).toBeVisible();
+      await user.goto("/");
+      await expect(user).toHaveURL(/\/login/);
+
+      // U9/U10: the audit trail lists the account events (the User filter is the actor; `user=<name>` finds actions on them).
+      const actions = (p: Page) =>
+        p.getByRole("row").getByRole("cell", { exact: true });
+      await expect(async () => {
+        await page.goto(`/admin/audit?user=${visitor}`);
+        for (const action of ["SignedIn", "SignInFailed", "PasswordChanged"])
+          await expect(
+            actions(page)
+              .filter({ hasText: new RegExp(`^${action}$`) })
+              .first(),
+          ).toBeVisible({ timeout: 1_000 });
+      }).toPass();
+      await page.goto(
+        `/admin/audit?q=${encodeURIComponent(`user=${visitor}`)}`,
+      );
+      for (const action of ["UserCreated", "UserDisabled"])
+        await expect(
+          actions(page)
+            .filter({ hasText: new RegExp(`^${action}$`) })
+            .first(),
+        ).toBeVisible();
+      await expectAccessible(page, "audit trail with account events");
+    } finally {
+      await visitorContext.close();
+      await otherSession.userContext.close();
+    }
+  },
+);
 
 test("review queue: resolve with a suggestion", async () => {
   await page.goto("/review");
@@ -1978,11 +2212,9 @@ test("images: upload, set cover, delete", async () => {
   await expect(page).toHaveURL(/tab=images/);
   const images = page.getByRole("region", { name: "Images" });
   const card = (fileName: string) =>
-    images
-      .locator(".card")
-      .filter({
-        has: page.getByRole("button", { name: `View ${fileName} full size` }),
-      });
+    images.locator(".card").filter({
+      has: page.getByRole("button", { name: `View ${fileName} full size` }),
+    });
   await expect(images.getByText("Placeholder")).toBeVisible();
 
   // A box art upload replaces the placeholder and takes over as cover.
@@ -2578,22 +2810,32 @@ test("Nintendo DS: the staged cartridge imports by DAT match and plays in DeSmuM
   await ds.close();
 });
 
-test("Admin: roles and the create-user modal", { tag: "@shard-b" }, async () => {
-  await page.goto("/admin/users");
-  await expect(page.getByLabel("admin role of admin")).toBeChecked();
-  await expect(page.getByLabel("rom-manager role of admin")).toBeChecked();
+test(
+  "Admin: account types and the create-user modal",
+  { tag: "@shard-b" },
+  async () => {
+    await page.goto("/admin/users");
+    // U6: the signed-in admin can't change their own type or disable themselves.
+    await expect(page.getByLabel("Account type of admin")).toHaveValue("admin");
+    await expect(page.getByLabel("Account type of admin")).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: "Disable admin" }),
+    ).toBeDisabled();
 
-  await page.getByRole("button", { name: "Create user" }).click();
-  await expect(dialog()).toHaveAccessibleName("Create user");
-  await expectAccessible(page, "create user modal");
-  await dialog().getByLabel("Username").fill("editor");
-  await dialog().getByLabel("Initial password").fill(`${newPassword}-editor`);
-  await dialog().getByLabel("rom-manager").check();
-  await dialog().getByRole("button", { name: "Create" }).click();
-  await expect(dialog()).toBeHidden();
-  await expect(page.getByLabel("rom-manager role of editor")).toBeChecked();
-  await expect(page.getByLabel("admin role of editor")).not.toBeChecked();
-});
+    await page.getByRole("button", { name: "Create user" }).click();
+    await expect(dialog()).toHaveAccessibleName("Create user");
+    await expectAccessible(page, "create user modal");
+    await dialog().getByLabel("Username").fill("editor");
+    await dialog().getByLabel("Initial password").fill(`${newPassword}-editor`);
+    await dialog().getByLabel("Account type").selectOption("admin");
+    await dialog().getByRole("button", { name: "Create" }).click();
+    await expect(dialog()).toBeHidden();
+    await expect(page.getByLabel("Account type of editor")).toHaveValue(
+      "admin",
+    );
+    await expect(page.getByLabel("Account type of editor")).toBeEnabled();
+  },
+);
 
 test("Admin: live logs", { tag: "@shard-b" }, async () => {
   await page.goto("/admin/logs");
@@ -2607,52 +2849,56 @@ test("Admin: live logs", { tag: "@shard-b" }, async () => {
   await expectAccessible(page, "logs");
 });
 
-test("keyboard shortcuts: use, rebind and use again", { tag: "@shard-b" }, async () => {
-  await openLibrary();
-  await expect(page.locator("nav.navbar")).toHaveClass(/sticky-top/);
-  await expect(
-    page.getByRole("button", { name: "Keyboard shortcuts" }),
-  ).toBeVisible();
+test(
+  "keyboard shortcuts: use, rebind and use again",
+  { tag: "@shard-b" },
+  async () => {
+    await openLibrary();
+    await expect(page.locator("nav.navbar")).toHaveClass(/sticky-top/);
+    await expect(
+      page.getByRole("button", { name: "Keyboard shortcuts" }),
+    ).toBeVisible();
 
-  // The default Alt+Shift+I goes to Ingestion (bindings load after sign-in, so retry until they have).
-  await expect(async () => {
-    await page.keyboard.press("Alt+Shift+KeyI");
-    await expect(page).toHaveURL(/\/ingestion$/, { timeout: 1_000 });
-  }).toPass();
+    // The default Alt+Shift+I goes to Ingestion (bindings load after sign-in, so retry until they have).
+    await expect(async () => {
+      await page.keyboard.press("Alt+Shift+KeyI");
+      await expect(page).toHaveURL(/\/ingestion$/, { timeout: 1_000 });
+    }).toPass();
 
-  await page.getByRole("button", { name: "Keyboard shortcuts" }).click();
-  await expect(dialog()).toHaveAccessibleName("Keyboard shortcuts");
-  await expect(
-    dialog().getByRole("row", { name: /Go to Library/ }),
-  ).toContainText("Alt+Shift+L");
-  await expectAccessible(page, "keyboard shortcuts modal");
+    await page.getByRole("button", { name: "Keyboard shortcuts" }).click();
+    await expect(dialog()).toHaveAccessibleName("Keyboard shortcuts");
+    await expect(
+      dialog().getByRole("row", { name: /Go to Library/ }),
+    ).toContainText("Alt+Shift+L");
+    await expectAccessible(page, "keyboard shortcuts modal");
 
-  await dialog().getByRole("button", { name: "Edit Go to Library" }).click();
-  await expect(dialog().getByText("Press keys…")).toBeVisible();
-  // Escape only stops capturing; the dialog stays open.
-  await page.keyboard.press("Escape");
-  await expect(dialog()).toBeVisible();
-  await dialog().getByRole("button", { name: "Edit Go to Library" }).click();
-  await page.keyboard.press("Alt+Shift+KeyK");
-  await expect(
-    dialog().getByRole("row", { name: /Go to Library/ }),
-  ).toContainText("Alt+Shift+K");
-  await dialog().getByRole("button", { name: "Save" }).click();
-  await expect(dialog()).toBeHidden();
-
-  // A full load fetches the saved bindings again: retry until they're in.
-  await page.goto("/reports/library-size");
-  await expect(async () => {
+    await dialog().getByRole("button", { name: "Edit Go to Library" }).click();
+    await expect(dialog().getByText("Press keys…")).toBeVisible();
+    // Escape only stops capturing; the dialog stays open.
+    await page.keyboard.press("Escape");
+    await expect(dialog()).toBeVisible();
+    await dialog().getByRole("button", { name: "Edit Go to Library" }).click();
     await page.keyboard.press("Alt+Shift+KeyK");
-    await expect(page).toHaveURL(/\/$/, { timeout: 1_000 });
-  }).toPass();
+    await expect(
+      dialog().getByRole("row", { name: /Go to Library/ }),
+    ).toContainText("Alt+Shift+K");
+    await dialog().getByRole("button", { name: "Save" }).click();
+    await expect(dialog()).toBeHidden();
 
-  // Back to the defaults for anything after this.
-  await page.getByRole("button", { name: "Keyboard shortcuts" }).click();
-  await dialog().getByRole("button", { name: "Reset to defaults" }).click();
-  await dialog().getByRole("button", { name: "Save" }).click();
-  await expect(dialog()).toBeHidden();
-});
+    // A full load fetches the saved bindings again: retry until they're in.
+    await page.goto("/reports/library-size");
+    await expect(async () => {
+      await page.keyboard.press("Alt+Shift+KeyK");
+      await expect(page).toHaveURL(/\/$/, { timeout: 1_000 });
+    }).toPass();
+
+    // Back to the defaults for anything after this.
+    await page.getByRole("button", { name: "Keyboard shortcuts" }).click();
+    await dialog().getByRole("button", { name: "Reset to defaults" }).click();
+    await dialog().getByRole("button", { name: "Save" }).click();
+    await expect(dialog()).toBeHidden();
+  },
+);
 
 test("Admin: database backups", { tag: "@shard-b" }, async () => {
   await page.goto("/admin/backups");
@@ -2685,19 +2931,23 @@ test("Admin: database backups", { tag: "@shard-b" }, async () => {
   await expectAccessible(page, "backups with a backup");
 });
 
-test("Admin and Integrity pages are accessible", { tag: "@shard-b" }, async () => {
-  for (const [path, heading] of [
-    ["/integrity", "Integrity"],
-    ["/admin/users", "Admin"],
-    ["/admin/dats", "Admin"],
-    ["/admin/settings", "Admin"],
-    ["/admin/about", "Admin"],
-  ]) {
-    await page.goto(path);
-    await expect(
-      page.getByRole("heading", { level: 1, name: heading }),
-    ).toBeVisible();
-    await expect(page.locator('[role="status"]')).toHaveCount(0); // finished loading
-    await expectAccessible(page, path);
-  }
-});
+test(
+  "Admin and Integrity pages are accessible",
+  { tag: "@shard-b" },
+  async () => {
+    for (const [path, heading] of [
+      ["/integrity", "Integrity"],
+      ["/admin/users", "Admin"],
+      ["/admin/dats", "Admin"],
+      ["/admin/settings", "Admin"],
+      ["/admin/about", "Admin"],
+    ]) {
+      await page.goto(path);
+      await expect(
+        page.getByRole("heading", { level: 1, name: heading }),
+      ).toBeVisible();
+      await expect(page.locator('[role="status"]')).toHaveCount(0); // finished loading
+      await expectAccessible(page, path);
+    }
+  },
+);
