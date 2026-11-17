@@ -11,4 +11,8 @@ public static class DiscoveryKey
     /// <summary>True when <paramref name="value"/> is exactly 64 lowercase hexadecimal characters.</summary>
     public static bool IsValid(string? value) =>
         value is { Length: Length } && value.All(c => c is (>= '0' and <= '9') or (>= 'a' and <= 'f'));
+
+    /// <summary>A system's logo key (B13): the lowercase hexadecimal SHA-256 of its id in lowercase ASCII.</summary>
+    public static string ForSystem(string systemId) =>
+        Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(systemId.ToLowerInvariant())));
 }

@@ -17,7 +17,7 @@ public static class DiscoveryEndpoints
         var discovery = api.MapGroup("/discovery");
 
         discovery.MapGet("/{kind}", async (string kind, int? page, int? pageSize, HttpContext ctx, IDiscoveryRepository repository,
-            IPublisherLogoRepository logos) =>
+            IDiscoveryLogoRepository logos) =>
         {
             if (!DiscoveryKinds.TryParse(kind, out var parsed))
                 return Problems.NotFound(ctx);
@@ -30,7 +30,7 @@ public static class DiscoveryEndpoints
                 return Results.Ok(Paging.ToDto(result, g => new { key = g.Key, name = g.Name, gameCount = g.GameCount }));
 
             // B6: only the override's URL; the SPA falls back to its starter art, then text.
-            var updated = await logos.ListUpdatedAtAsync(result.Items.Select(g => g.Key).ToList(), ctx.RequestAborted);
+            var updated = await logos.ListUpdatedAtAsync(LogoKind.Publishers, result.Items.Select(g => g.Key).ToList(), ctx.RequestAborted);
             return Results.Ok(Paging.ToDto(result, g => new
             {
                 key = g.Key,

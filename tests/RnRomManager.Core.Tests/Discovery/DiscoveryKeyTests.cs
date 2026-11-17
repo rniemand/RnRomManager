@@ -18,6 +18,16 @@ public class DiscoveryKeyTests
         Assert.That(DiscoveryKey.IsValid(value), Is.EqualTo(valid));
     }
 
+    [TestCase("nes")]
+    [TestCase("NES")]
+    public void ForSystem_IsTheSha256OfTheLowercaseId(string systemId)
+    {
+        var key = DiscoveryKey.ForSystem(systemId);
+
+        Assert.That(key, Is.EqualTo("7accb4417aea998fa57c118399884150b6daa597addcc83a3ec4ff9a1c4f5c1c"));
+        Assert.That(DiscoveryKey.IsValid(key), Is.True);
+    }
+
     [TestCase("publishers", DiscoveryKind.Publishers)]
     [TestCase("genres", DiscoveryKind.Genres)]
     public void TryParse_KnownKind_RoundTripsItsName(string name, DiscoveryKind expected)

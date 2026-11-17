@@ -253,22 +253,22 @@ public class MySqlBackupStoreTests
     public async Task Restore_BringsBackLargePublisherLogos()
     {
         await SeedUserAsync();
-        var repository = new PublisherLogoRepository(_factory);
+        var repository = new DiscoveryLogoRepository(_factory);
         // 40 × 512 KiB is more than one restore INSERT may carry (max_allowed_packet).
-        var logos = Enumerable.Range(0, 40).Select(i => new PublisherLogo(
+        var logos = Enumerable.Range(0, 40).Select(i => new DiscoveryLogo(LogoKind.Publishers, 
             Convert.ToHexStringLower(SHA256.HashData([(byte)i])), i % 2 == 0 ? "image/png" : "image/jpeg",
             RandomNumberGenerator.GetBytes(512 * 1024), i % 3 == 0 ? null : 1, Created)).ToList();
         foreach (var logo in logos) await repository.UpsertAsync(logo, default);
         var (backup, manifest) = await DumpToStreamAsync();
 
-        await ExecuteAsync("DELETE FROM publisher_logos");
+        await ExecuteAsync("DELETE FROM discovery_logos");
         backup.Position = 0;
         using (var zip = new ZipArchive(backup, ZipArchiveMode.Read, leaveOpen: true))
             await new MySqlBackupStore(_factory).RestoreAsync(zip, manifest, default);
 
         foreach (var logo in logos)
         {
-            var restored = await repository.GetAsync(logo.Key, default);
+            var restored = await repository.GetAsync(LogoKind.Publishers, logo.Key, default);
             Assert.That(restored, Is.Not.Null, logo.Key);
             Assert.That(restored!.Bytes, Is.EqualTo(logo.Bytes), logo.Key);
             Assert.That((restored.MediaType, restored.UpdatedBy, restored.UpdatedAt),

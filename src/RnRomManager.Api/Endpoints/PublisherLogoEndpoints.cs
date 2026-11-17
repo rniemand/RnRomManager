@@ -8,7 +8,7 @@ namespace RnRomManager.Api.Endpoints;
 
 /// <summary>
 /// <c>/api/discovery/publishers/logo?key=</c> (collections discovery B5): a publisher's shared logo override. Any
-/// signed-in user reads, replaces or removes it; every change is audited. The bytes live in <c>publisher_logos</c>.
+/// signed-in user reads, replaces or removes it; every change is audited. The bytes live in <c>discovery_logos</c>.
 /// </summary>
 public static class PublisherLogoEndpoints
 {
@@ -28,18 +28,18 @@ public static class PublisherLogoEndpoints
 
     public static RouteGroupBuilder MapPublisherLogoEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet(Route, async (string? key, HttpContext ctx, IPublisherLogoRepository logos) =>
+        api.MapGet(Route, async (string? key, HttpContext ctx, IDiscoveryLogoRepository logos) =>
         {
             if (KeyError(ctx, key) is { } invalid)
                 return invalid;
-            if (await logos.GetAsync(key!, ctx.RequestAborted) is not { } logo)
+            if (await logos.GetAsync(LogoKind.Publishers, key!, ctx.RequestAborted) is not { } logo)
                 return Problems.NotFound(ctx);
             ctx.Response.Headers.CacheControl = "private, no-cache";
             ctx.Response.Headers.XContentTypeOptions = "nosniff";
             return Results.Bytes(logo.Bytes, logo.MediaType);
         });
 
-        api.MapPut(Route, async (string? key, HttpContext ctx, IPublisherLogoRepository logos, IDiscoveryRepository discovery,
+        api.MapPut(Route, async (string? key, HttpContext ctx, IDiscoveryLogoRepository logos, IDiscoveryRepository discovery,
             IAuditLog audit, TimeProvider time) =>
         {
             if (KeyError(ctx, key) is { } invalid)
@@ -54,19 +54,19 @@ public static class PublisherLogoEndpoints
                 return Problems.NotFound(ctx);
 
             var actor = AuditActor.From(ctx.User);
-            await logos.UpsertAsync(new PublisherLogo(key!, mediaType!, bytes!, actor.UserId, time.GetUtcNow().UtcDateTime), ctx.RequestAborted);
+            await logos.UpsertAsync(new DiscoveryLogo(LogoKind.Publishers, key!, mediaType!, bytes!, actor.UserId, time.GetUtcNow().UtcDateTime), ctx.RequestAborted);
             audit.Record(new AuditEvent(AuditActions.PublisherLogoReplaced, actor, Details: Details(publisher.Name, key!)));
             return Results.NoContent();
         }).RequireAuthorization(AuthSetup.AdminOnly).WithMetadata(new RequestSizeLimitAttribute(RequestLimit));
 
-        api.MapDelete(Route, async (string? key, HttpContext ctx, IPublisherLogoRepository logos, IDiscoveryRepository discovery,
+        api.MapDelete(Route, async (string? key, HttpContext ctx, IDiscoveryLogoRepository logos, IDiscoveryRepository discovery,
             IAuditLog audit) =>
         {
             if (KeyError(ctx, key) is { } invalid)
                 return invalid;
             // The override outlives its publisher leaving the index (B5), so removal doesn't need it there.
             var label = (await discovery.GetGroupAsync(DiscoveryKind.Publishers, key!, ctx.RequestAborted))?.Name;
-            if (!await logos.DeleteAsync(key!, ctx.RequestAborted))
+            if (!await logos.DeleteAsync(LogoKind.Publishers, key!, ctx.RequestAborted))
                 return Problems.NotFound(ctx);
             audit.Record(new AuditEvent(AuditActions.PublisherLogoRemoved, AuditActor.From(ctx.User), Details: Details(label, key!)));
             return Results.NoContent();
