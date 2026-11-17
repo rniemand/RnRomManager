@@ -57,6 +57,8 @@ export interface SystemInfo {
 	gameCount: number;
 	romCount: number;
 	regions: string[];
+	/** B15: the shared logo's `/api/discovery/systems/logo?key=<id>&v=…`, or null without one. */
+	logoUrl: string | null;
 }
 
 /** One file entry of a library ZIP (Z2); sizes from the central directory. */
@@ -448,7 +450,7 @@ export interface DiscoveryGroup {
 	key: string;
 	name: string;
 	gameCount: number;
-	/** Publishers only: the shared override's `…/logo?key=…&v=…`, or null without one (B6). */
+	/** The shared logo's `…/logo?key=…&v=…`, or null without one (B6, B15). */
 	logoUrl?: string | null;
 }
 

@@ -27,6 +27,7 @@
 	import Pagination from '#lib/components/Pagination.svelte';
 	import SystemGames from '#lib/components/SystemGames.svelte';
 	import SystemList from '#lib/components/SystemList.svelte';
+	import LogoModal from '#lib/components/LogoModal.svelte';
 	import { pageCount, readPageSize, writePageSize } from '#lib/pageSize.js';
 
 	/**
@@ -73,6 +74,14 @@
 	const selectedSystem = $derived(
 		systemsView?.system ? systems?.find((s) => s.id === systemsView.system) : undefined
 	);
+
+	/** B19: the system whose logo is being changed; a save reloads the list (new `v=` URLs). */
+	let editingSystem = $state<SystemInfo | null>(null);
+	let systemLogoOpen = $state(false);
+	function editSystemLogo(system: SystemInfo): void {
+		editingSystem = system;
+		systemLogoOpen = true;
+	}
 
 	function goSystems(next: SystemsState): void {
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
@@ -281,7 +290,7 @@
 			{:else if systems.length === 0}
 				<EmptyState message="No systems are supported." />
 			{:else}
-				<SystemList {systems} selected={systemsView.system} />
+				<SystemList {systems} selected={systemsView.system} onedit={editSystemLogo} />
 			{/if}
 		</div>
 		<div class="col-12 col-lg-8">
@@ -302,6 +311,7 @@
 						system={selectedSystem}
 						gamePage={systemsView.gamePage}
 						onpage={(gamePage) => goSystems({ ...systemsView, gamePage })}
+						onedit={editSystemLogo}
 					/>
 				{/key}
 			{:else}
@@ -319,3 +329,12 @@
 {/if}
 
 <CollectionModal bind:open={creating} collection={null} />
+
+<LogoModal
+	bind:open={systemLogoOpen}
+	kind="systems"
+	item={editingSystem
+		? { key: editingSystem.id, name: editingSystem.displayName, logoUrl: editingSystem.logoUrl }
+		: null}
+	onchanged={() => systemsReload++}
+/>

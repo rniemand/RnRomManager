@@ -2,15 +2,15 @@
 	import { auth } from '../stores/auth.svelte';
 	import { resolve } from '$app/paths';
 	import type { DiscoveryGroup, Page } from '../api/types';
-	import { SvelteSet } from 'svelte/reactivity';
-	import { discoveryApi, discoverySearch, publisherArt, type DiscoveryState } from '../discovery';
+	import { discoveryApi, discoverySearch, type DiscoveryState } from '../discovery';
 	import { pageCount, readPageSize, writePageSize } from '../pageSize';
 	import EmptyState from './EmptyState.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
 	import Loading from './Loading.svelte';
 	import Pagination from './Pagination.svelte';
 	import Icon from './Icon.svelte';
-	import PublisherLogoModal from './PublisherLogoModal.svelte';
+	import GroupLogo from './GroupLogo.svelte';
+	import LogoModal from './LogoModal.svelte';
 
 	/**
 	 * Discovery B2: one page of a kind's live groups (publishers or genres across systems), each a link selecting it.
@@ -36,9 +36,7 @@
 	let result = $state<Page<DiscoveryGroup> | null>(null);
 	let error = $state<unknown>(null);
 	let reload = $state(0);
-	/** B6: image sources that failed to load; the next source (or the text alone) shows instead. */
-	const failedArt = new SvelteSet<string>();
-	/** B5: the publisher whose logo is being changed. */
+	/** B19: the group whose logo is being changed. */
 	let editing = $state<DiscoveryGroup | null>(null);
 	let logoOpen = $state(false);
 
@@ -95,29 +93,15 @@
 					href="{resolve('/collections')}{selection(group)}"
 				>
 					<span class="d-flex align-items-center gap-2 min-w-0">
-						{#if view.kind === 'publishers'}
-							{@const art = publisherArt(group, failedArt)[0]}
-							{#if art}
-								<!-- Decorative: the name follows as text. -->
-								<img
-									class="publisher-art flex-shrink-0"
-									src={art}
-									alt=""
-									width="100"
-									height="28"
-									loading="lazy"
-									onerror={() => failedArt.add(art)}
-								/>
-							{/if}
-						{/if}
+						<GroupLogo kind={view.kind} item={group} />
 						<span class="text-truncate" title={group.name}>{group.name}</span>
 					</span>
 					<span class="badge text-bg-secondary rounded-pill"
 						>{group.gameCount} {group.gameCount === 1 ? 'game' : 'games'}</span
 					>
 				</a>
-				{#if view.kind === 'publishers' && auth.isAdmin}
-					<!-- B5: beside the link, not in it (no button inside a link). -->
+				{#if auth.isAdmin}
+					<!-- B19: beside the link, not in it (no button inside a link). -->
 					<button
 						type="button"
 						class="btn btn-link btn-sm border-start rounded-0 px-2"
@@ -145,14 +129,9 @@
 	/>
 {/if}
 
-{#if view.kind === 'publishers'}
-	<PublisherLogoModal bind:open={logoOpen} publisher={editing} onchanged={() => reload++} />
-{/if}
+<LogoModal bind:open={logoOpen} kind={view.kind} item={editing} onchanged={() => reload++} />
 
 <style>
-	.publisher-art {
-		object-fit: contain;
-	}
 	.min-w-0 {
 		min-width: 0;
 	}

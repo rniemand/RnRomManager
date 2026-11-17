@@ -58,14 +58,16 @@ const list = (name: string) => within(screen.getByRole('list', { name }));
 
 describe('DiscoveryGroups (discovery B2)', () => {
 	it.each([
-		[['admin'] as 'admin'[], 1],
-		[[] as 'admin'[], 0]
-	])('Change logo shows only for an Admin (roles %j)', async (roles, count) => {
-		auth.set({ id: 1, username: 'u', roles, mustChangePassword: false });
-		answers['/api/discovery/publishers?pageSize=20'] = [
+		['publishers', ['admin'] as 'admin'[], 1],
+		['publishers', [] as 'admin'[], 0],
+		['genres', ['admin'] as 'admin'[], 1],
+		['genres', [] as 'admin'[], 0]
+	] as const)('Change logo shows only for an Admin (%s, roles %j)', async (kind, roles, count) => {
+		auth.set({ id: 1, username: 'u', roles: [...roles], mustChangePassword: false });
+		answers[`/api/discovery/${kind}?pageSize=20`] = [
 			{ status: 200, body: pageOf([group(1, 'Capcom')]) }
 		];
-		render(DiscoveryGroups, { view: state(), onpage: vi.fn() });
+		render(DiscoveryGroups, { view: state({ kind }), onpage: vi.fn() });
 
 		await screen.findByRole('link', { name: /Capcom/ });
 		expect(screen.queryAllByRole('button', { name: /Change logo/ })).toHaveLength(count);
@@ -86,7 +88,7 @@ describe('DiscoveryGroups (discovery B2)', () => {
 		expect(capcom.textContent).toContain('1 game');
 	});
 
-	it('publishers show their override, else starter art, else just the name; genres show text', async () => {
+	it('publishers show their override, else starter art, else a text banner', async () => {
 		const nintendo = 'c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516';
 		const sega = '44cddc3f1be25271c8c2a824d85521ee8087db49c90efed6c5b884c995f4dd90';
 		const override = `/api/discovery/publishers/logo?key=${sega}&v=5`;
@@ -104,8 +106,14 @@ describe('DiscoveryGroups (discovery B2)', () => {
 
 		const art = (name: RegExp) =>
 			screen.getByRole('link', { name }).querySelector('img')?.getAttribute('src') ?? null;
+		const banner = (name: RegExp) =>
+			screen.getByRole('link', { name }).querySelector('.group-logo-banner')?.textContent ?? null;
 		await screen.findByRole('link', { name: /Nintendo/ });
 		expect(art(/Hudson/)).toBeNull();
+		expect(banner(/Hudson/)).toBe('Hudson');
+		expect(
+			screen.getByRole('link', { name: /Hudson/ }).querySelector('[aria-hidden="true"]')
+		).not.toBeNull();
 		expect(art(/Nintendo/)).toBe('/publishers/nintendo.svg');
 		expect(art(/Sega/)).toBe(override);
 		expect(
@@ -117,16 +125,31 @@ describe('DiscoveryGroups (discovery B2)', () => {
 		expect(art(/Sega/)).toBe('/publishers/sega.svg');
 		await fireEvent.error(screen.getByRole('link', { name: /Sega/ }).querySelector('img')!);
 		expect(art(/Sega/)).toBeNull();
-		expect(screen.getByRole('link', { name: /Sega/ }).textContent).toContain('Sega');
+		expect(banner(/Sega/)).toBe('Sega');
 	});
 
-	it('genre groups never show art', async () => {
+	it('genres show their shared logo, else starter art, else a text banner', async () => {
+		const puzzle = 'd4fba09b856cc0aa0f2b643f7d9ca20d309dc89b5e562f1229809c51f1e20dcc';
+		const shared = `/api/discovery/genres/logo?key=${keyOf(2)}&v=3`;
 		answers['/api/discovery/genres?pageSize=20'] = [
-			{ status: 200, body: pageOf([group(1, 'Puzzle')]) }
+			{
+				status: 200,
+				body: pageOf([
+					{ key: puzzle, name: 'Puzzle', gameCount: 1, logoUrl: null },
+					{ key: keyOf(2), name: 'Pinball', gameCount: 1, logoUrl: shared },
+					{ key: keyOf(3), name: 'Quiz', gameCount: 1, logoUrl: null }
+				])
+			}
 		];
 		render(DiscoveryGroups, { view: state({ kind: 'genres' }), onpage: vi.fn() });
 
-		expect((await screen.findByRole('link', { name: /Puzzle/ })).querySelector('img')).toBeNull();
+		const link = async (name: RegExp) => await screen.findByRole('link', { name });
+		expect((await link(/Puzzle/)).querySelector('img')!.getAttribute('src')).toBe(
+			'/genres/puzzle.svg'
+		);
+		expect((await link(/Pinball/)).querySelector('img')!.getAttribute('src')).toBe(shared);
+		expect((await link(/Quiz/)).querySelector('img')).toBeNull();
+		expect((await link(/Quiz/)).querySelector('.group-logo-banner')!.textContent).toBe('Quiz');
 	});
 
 	it('pages through the URL, keeping the group page in selection links', async () => {

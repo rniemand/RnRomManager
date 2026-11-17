@@ -178,17 +178,110 @@ export const starterPublishers: readonly { alias: string; key: string; file: str
 	}
 ];
 
-const starterByKey = new Map(starterPublishers.map((p) => [p.key, `/publishers/${p.file}`]));
+/**
+ * B17: bundled starter genre art (a Bootstrap Icons glyph plus the name), keyed like `starterPublishers`: the SHA-256 of
+ * the alias's lowercase ASCII bytes. `discovery.test.ts` recomputes every key; every file has an entry in
+ * `static/genres/manifest.json`.
+ */
+export const starterGenres: readonly { alias: string; key: string; file: string }[] = [
+	{
+		alias: 'action',
+		key: 'bd938c688f49b77c7fc537c6b9222e2c97ebddd63076b87f2feaec66fb9c05d0',
+		file: 'action.svg'
+	},
+	{
+		alias: 'adventure',
+		key: '47360b8c5f58c5ba04c8ce848545342c0490cfab23ce9f50e16e40b1df254ef8',
+		file: 'adventure.svg'
+	},
+	{
+		alias: 'platform',
+		key: 'd294fcce0cc88587843099d85dd805aeef1b09a63b0db1dd3e4dc62a343c1db5',
+		file: 'platform.svg'
+	},
+	{
+		alias: 'shooter',
+		key: 'c3e8e999bf52bb9aa3309c8e81233f1815029e6067c3c534d6eccebe3650e737',
+		file: 'shooter.svg'
+	},
+	{
+		alias: "shoot'em up",
+		key: 'fbb78489e52b977613aaf723667af28840530e6075ed7b21acf331c891efbdef',
+		file: 'shoot-em-up.svg'
+	},
+	{
+		alias: 'fighting',
+		key: 'b84707239ea1484db0110700aa7f4298d7212d69618f17167409790efa290b08',
+		file: 'fighting.svg'
+	},
+	{
+		alias: "beat'em up",
+		key: '3da283867ce306e7912b13d05363acebc7b27f8c441273a3a82fff4d0171015e',
+		file: 'beat-em-up.svg'
+	},
+	{
+		alias: 'sports',
+		key: '1cb542228c76558789d114d3cb273a75850cca54ec3ee9a41100f2dc56ee561e',
+		file: 'sports.svg'
+	},
+	{
+		alias: 'racing',
+		key: '0323eeb8b2e7c8900df1fadcf87b06f40d9c6d1f57aeb95d30f7d6e3abc7f2ec',
+		file: 'racing.svg'
+	},
+	{
+		alias: 'driving',
+		key: 'd9c1acf117657bb04a8309ecbd6f3771e4f5e0bbeb437019748ffb5028bda1b7',
+		file: 'driving.svg'
+	},
+	{
+		alias: 'puzzle',
+		key: 'd4fba09b856cc0aa0f2b643f7d9ca20d309dc89b5e562f1229809c51f1e20dcc',
+		file: 'puzzle.svg'
+	},
+	{
+		alias: 'role-playing (rpg)',
+		key: 'a8eeb595a8ffaf114a4483c59fb2f561082d80922291c55859646a3f9f3ad9f9',
+		file: 'role-playing-rpg.svg'
+	},
+	{
+		alias: 'strategy',
+		key: '73dff70e25ad51ca765a584eef93a1cd909527e2ef4860e0b12f0a7e7ae1979a',
+		file: 'strategy.svg'
+	},
+	{
+		alias: 'simulation',
+		key: '32e4bc02a7ccf34d72692db7f08aa945102e290beb4832d5673b987015d8cb4f',
+		file: 'simulation.svg'
+	},
+	{
+		alias: 'board game',
+		key: '3c1d39cd6c8133f7be430e318602688bd4d58cff039331340fe81322142fb07a',
+		file: 'board-game.svg'
+	}
+];
+
+/** B13: the lists that can have a shared logo; systems are keyed by their id. */
+export type LogoKind = DiscoveryKind | 'systems';
+
+const starterByKind: Record<LogoKind, Map<string, string>> = {
+	publishers: new Map(starterPublishers.map((p) => [p.key, `/publishers/${p.file}`])),
+	genres: new Map(starterGenres.map((g) => [g.key, `/genres/${g.file}`])),
+	systems: new Map()
+};
 
 /**
- * B6: the image for a publisher group, best first: its shared override, then the starter art for its key. Empty when
- * neither applies (text only). Pass the sources that failed to load in `failed` to fall through to the next one.
+ * B16: a group's or system's logo sources, best first: its shared logo, then its starter art (publishers and genres).
+ * Empty when neither applies (the text banner shows). Sources in `failed` are left out, so a broken image falls through.
  */
-export function publisherArt(
-	group: Pick<DiscoveryGroup, 'key' | 'logoUrl'>,
+export function logoSources(
+	kind: LogoKind,
+	target: { key: string; logoUrl?: string | null },
 	failed: ReadonlySet<string> = new Set()
 ): string[] {
-	const sources = [group.logoUrl, starterByKey.get(group.key)].filter((s): s is string => !!s);
+	const sources = [target.logoUrl, starterByKind[kind].get(target.key)].filter(
+		(s): s is string => !!s
+	);
 	return sources.filter((s) => !failed.has(s));
 }
 
@@ -205,14 +298,36 @@ export function logoFileError(file: File | null | undefined): string | null {
 	return null;
 }
 
-const logoUrl = (key: string) => `/api/discovery/publishers/logo?key=${encodeURIComponent(key)}`;
+/** B14's URL rules the browser can check: http or https, at most 1024 characters, no user info; null when valid. */
+export function logoUrlError(text: string): string | null {
+	const value = text.trim();
+	let parsed: URL | null;
+	try {
+		parsed = value.length > 0 && value.length <= 1024 ? new URL(value) : null;
+	} catch {
+		parsed = null;
+	}
+	if (
+		!parsed ||
+		(parsed.protocol !== 'http:' && parsed.protocol !== 'https:') ||
+		parsed.username ||
+		parsed.password
+	)
+		return 'Enter an http or https image URL.';
+	return null;
+}
 
-/** B5: the shared logo override; only Admins may replace or remove it. */
-export const publisherLogoApi = {
-	replace: (key: string, file: File) => {
+const logoRoute = (kind: LogoKind, key: string, suffix = '') =>
+	`/api/discovery/${kind}/logo${suffix}?key=${encodeURIComponent(key)}`;
+
+/** B14: a shared logo; only Admins may replace or remove it. Systems pass their id as the key. */
+export const logoApi = {
+	replace: (kind: LogoKind, key: string, file: File) => {
 		const form = new FormData();
 		form.append('file', file);
-		return api.put<void>(logoUrl(key), form);
+		return api.put<void>(logoRoute(kind, key), form);
 	},
-	remove: (key: string) => api.delete<void>(logoUrl(key))
+	fromUrl: (kind: LogoKind, key: string, url: string) =>
+		api.put<void>(logoRoute(kind, key, '/from-url'), { url }),
+	remove: (kind: LogoKind, key: string) => api.delete<void>(logoRoute(kind, key))
 };
