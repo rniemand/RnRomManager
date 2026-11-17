@@ -2,7 +2,7 @@
 
 Every game in the library is one ZIP file. The ZIP is the **source of truth**: the database only mirrors its contents for browsing and search, and the integrity checker rebuilds the database from the ZIPs. You can copy, back up or inspect the library with any ZIP tool.
 
-Most systems keep their ROMs inside the ZIP (**embedded**). Systems with multi-GB images (Nintendo Switch, PlayStation, PlayStation Portable, GameCube, Wii, Xbox 360, Saturn, Sega CD and 3DO) store each ROM as a plain file **next to** its game's ZIP (**external**): the ZIP still holds `info.json`, images and notes, and `info.json` names each file. Copy or back up the whole folder, not just the ZIPs, for those systems.
+Most systems keep their ROMs inside the ZIP (**embedded**). Systems with multi-GB images (Nintendo Switch, Nintendo 3DS, PlayStation, PlayStation Portable, GameCube, Wii, Xbox 360, Saturn, Sega CD and 3DO) store each ROM as a plain file **next to** its game's ZIP (**external**): the ZIP still holds `info.json`, images and notes, and `info.json` names each file. Copy or back up the whole folder, not just the ZIPs, for those systems.
 
 ## Layout
 
@@ -16,6 +16,7 @@ roms/
   gbc/                  GBC-only and dual-mode carts
   gba/                  Game Boy Advance
   n64/                  Nintendo 64 (always stored big-endian, as .z64)
+  3ds/                  Nintendo 3DS (external: .3ds, .cci, .cia files next to the ZIP)
   nds/                  Nintendo DS (external: .nds files next to the ZIP; games stored before then keep them
                         inside until the storage migration job moves them out)
   nes/                  Nintendo Entertainment System (headered .nes, header included)
@@ -105,7 +106,7 @@ All releases of a game (regions, revisions) **and** its hacks and translations l
 
 ## External ROM files
 
-For an external system (Nintendo Switch, Nintendo DS and the disc systems) each release is a file in the ZIP's own folder, and a disc set's release also has its other files (`files`, below) there:
+For an external system (Nintendo Switch, Nintendo DS, Nintendo 3DS and the disc systems) each release is a file in the ZIP's own folder, and a disc set's release also has its other files (`files`, below) there:
 
 - **Name (E1):** `<ZipBase>.<rom fileName>`, where `<ZipBase>` is the ZIP name without `.zip`, so a game's files sort together. When the rom name starts with `<ZipBase>` and a space (ignoring case) and something other than spaces follows, that repeated title is dropped: `Death's Door` + `Death's Door [0100B31015AF8000][v0].nsp` → `Death's Door.[0100B31015AF8000][v0].nsp`, an update → `Death's Door.[0100B31015AF8800][v0][1.0.1].nsp`. A rom name spelled differently from the title, or a ` (N)` ZIP name, keeps the full form (`Orbit` + `Orbit.nsp` → `Orbit.Orbit.nsp`). Only the file on disk is shorter: the logical `fileName` (info.json, downloads) keeps the full name.
 - **Length and clashes (E2):** the whole name, clash suffix included, is at most 250 UTF-8 bytes (so its `.tmp` staging name still fits a 255-byte file-name limit). A longer name is cut from the end of the rom part's stem (the extension is kept), then from `<ZipBase>` if needed, never splitting a character. A name already used by another file or folder, or by another release of any game in that folder, gets ` (2)`, ` (3)`, … The ZIP name of an external game uses the same 250-byte budget, `.zip` and clash suffix included.
@@ -154,7 +155,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 |---|---|---|---|
 | `schemaVersion` | int | ✓ | `7` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `segacd`, `3do`, `c64`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c64`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
 | `releaseYear` | int? | | from the DAT metadata (titledb's release date for Switch; the disc systems have no metadata DATs) |
@@ -209,6 +210,8 @@ Super Nintendo Entertainment System `header`, read after a copier header is stri
 Virtual Boy cartridges have no header: `header` is always null.
 
 Nintendo DS `header`, from the cartridge header (null for a file shorter than 0x160 bytes): `title` (12 bytes at 0x00 up to the first NUL, trailing spaces trimmed, null when empty), `gameCode` (4 bytes at 0x0C) and `makerCode` (2 bytes at 0x10), both kept whole, `unitCode` (0x12) and `romVersion` (0x1E) as unsigned numbers, and `headerChecksumValid` (CRC-16, initial 0xFFFF, reflected polynomial 0xA001, over 0x000–0x15D, compared with the little-endian value at 0x15E). Text fields keep bytes 0x20–0x7E and turn every other byte into `?`. A bad CRC makes an unmatched ROM `InvalidHeader`; a DAT match still wins.
+
+Nintendo 3DS `header`, from the first MiB of the file (layout from 3dbrew's NCSD, NCCH and CIA pages): null for a file shorter than 0x200 bytes, and null for a CIA (first little-endian u32 is `0x2020`, the CIA header size), so an unmatched `.cia` always goes to Review. With ASCII `NCSD` at 0x100: `format` (`NCSD`), `mediaId` (u64 at 0x108 as 16 upper-case hex digits), then, when partition 0 (u32 at 0x120 × 0x200) starts with an NCCH header (`NCCH` at its 0x100) inside the first MiB, `productCode` (16 bytes at its 0x150 up to the first NUL, trailing spaces trimmed, null when empty), `makerCode` (2 bytes at its 0x110, kept whole) and `programId` (u64 at its 0x118, 16 upper-case hex digits); otherwise those three are null. Text fields keep bytes 0x20–0x7E and turn every other byte into `?`. The title (in the encrypted ExeFS) isn't read. Any other file has `format` null and is implausible, so an unmatched one is `InvalidHeader`; a DAT match still wins.
 
 Atari 2600 cartridges have no header: `header` is always null.
 
