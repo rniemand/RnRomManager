@@ -1,6 +1,6 @@
 ---
 title: UI shell, group logos, backup restore and DAT schedule
-status: in-progress
+status: completed
 created: 2026-11-17
 ---
 
