@@ -66,7 +66,9 @@ function Get-ShardArgs([int]$n) {
         $filter = ($apiShards | ForEach-Object { $_ } | ForEach-Object { "FullyQualifiedName!~.$_." }) -join '&'
     }
     if ($SkipIntegration) { $filter = "($filter)&Category!=Integration" }
-    $a = @('test', $target, '-c', $Configuration, '--no-build', '--filter', $filter, '--results-directory', $ResultsDirectory)
+    $a = @('test', $target, '-c', $Configuration, '--no-build', '--filter', $filter, '--results-directory', $ResultsDirectory,
+        # Per-test durations, for balancing $apiShards (CI uploads them with the coverage).
+        '--logger', 'trx')
     if ($Coverage) { $a += @('--collect', 'XPlat Code Coverage') }
     return , $a
 }
