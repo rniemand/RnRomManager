@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { onDestroy, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -147,10 +148,11 @@
 
 <svelte:head><title>Collections · RnRomManager</title></svelte:head>
 
-<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-	<h1 class="h3 mb-0"><Icon name="collections" /> Collections</h1>
+<!-- B2: ms-auto keeps New collection at the right when the title is hidden. -->
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+	<PageTitle icon="collections" text="Collections" class="mb-0" />
 	{#if tab === 'collections'}
-		<button type="button" class="btn btn-primary" onclick={() => (creating = true)}>
+		<button type="button" class="btn btn-primary ms-auto" onclick={() => (creating = true)}>
 			<Icon name="add" /> New collection
 		</button>
 	{/if}

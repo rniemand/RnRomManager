@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import type { DiscoveryGroup, Page } from '../api/types';
 	import { discoveryApi, discoverySearch, type DiscoveryState } from '../discovery';
+	import { formatCount } from '../format';
 	import { pageCount, readPageSize, writePageSize } from '../pageSize';
 	import EmptyState from './EmptyState.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
@@ -97,7 +98,7 @@
 						<span class="text-truncate" title={group.name}>{group.name}</span>
 					</span>
 					<span class="badge text-bg-secondary rounded-pill"
-						>{group.gameCount} {group.gameCount === 1 ? 'game' : 'games'}</span
+						>{formatCount(group.gameCount)} {group.gameCount === 1 ? 'game' : 'games'}</span
 					>
 				</a>
 				{#if auth.isAdmin}

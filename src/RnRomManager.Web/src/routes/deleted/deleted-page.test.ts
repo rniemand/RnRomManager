@@ -4,6 +4,7 @@ import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { jobs } from '#lib/stores/jobs.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
+import { expectOnePageTitle } from '#lib/testing/pageTitle.js';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$app/state', () => ({ page: { params: {}, url: new URL('http://localhost/deleted') } }));
@@ -352,5 +353,10 @@ describe('Deleted ROMs page (D3, D4)', () => {
 
 		expect(await screen.findByText(/Not allowed/i)).toBeTruthy();
 		expect(calls).toEqual([]);
+	});
+
+	it('has one page-title h1 (B1)', () => {
+		render(DeletedPage);
+		expectOnePageTitle('Deleted ROMs');
 	});
 });

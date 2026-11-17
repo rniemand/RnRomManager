@@ -4,6 +4,8 @@ import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
+import { createRawSnippet } from 'svelte';
+import { expectOnePageTitle } from '#lib/testing/pageTitle.js';
 
 const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
 vi.mock('$app/navigation', () => ({ goto: (...args: [string, unknown?]) => goto(...args) }));
@@ -27,6 +29,7 @@ vi.mock('$app/paths', () => ({
 }));
 
 const { default: ReportsIndex } = await import('./+page.svelte');
+const { default: ReportsLayout } = await import('./+layout.svelte');
 const { default: MissingImages } = await import('./missing-images/+page.svelte');
 const { default: LibrarySize } = await import('./library-size/+page.svelte');
 const { default: Duplicates } = await import('./duplicates/+page.svelte');
@@ -364,5 +367,12 @@ describe('reports pages', () => {
 
 			expect(await screen.findByText('Every game has a cover image.')).toBeTruthy();
 		});
+	});
+
+	it('the Reports layout has one page-title h1 (B1)', () => {
+		render(ReportsLayout, {
+			children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))
+		});
+		expectOnePageTitle('Reports');
 	});
 });

@@ -1,8 +1,8 @@
 <script lang="ts">
+	import PageTitle from '#lib/components/PageTitle.svelte';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import Icon from '#lib/components/Icon.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -14,7 +14,7 @@
 	];
 </script>
 
-<h1 class="h3 mb-3"><Icon name="reports" /> Reports</h1>
+<PageTitle icon="reports" text="Reports" />
 <ul class="nav nav-tabs mb-3">
 	{#each tabs as tab (tab.href)}
 		<li class="nav-item">

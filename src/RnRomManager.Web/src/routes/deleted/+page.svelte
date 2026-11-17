@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -144,7 +145,7 @@
 <svelte:head><title>Deleted ROMs · RnRomManager</title></svelte:head>
 
 <AdminOnly>
-	<h1 class="h3 mb-3"><Icon name="delete" /> Deleted ROMs</h1>
+	<PageTitle icon="delete" text="Deleted ROMs" />
 	<RomToolsTabs />
 
 	{#if error}

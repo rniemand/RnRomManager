@@ -28,7 +28,7 @@ const system = (id: string, displayName: string, gameCount: number): SystemInfo 
 const systems = [
 	system('a2600', 'Atari 2600', 0),
 	system('gb', 'Game Boy', 1),
-	system('nes', 'Nintendo Entertainment System', 12)
+	system('nes', 'Nintendo Entertainment System', 1250)
 ];
 
 describe('SystemList (Systems tab B3)', () => {
@@ -39,7 +39,7 @@ describe('SystemList (Systems tab B3)', () => {
 		expect(links.map(shownText)).toEqual([
 			'Atari 2600 0 games',
 			'Game Boy 1 game',
-			'Nintendo Entertainment System 12 games'
+			'Nintendo Entertainment System 1,250 games'
 		]);
 		expect(links.map((l) => l.getAttribute('href'))).toEqual([
 			'/collections?tab=systems&system=a2600',

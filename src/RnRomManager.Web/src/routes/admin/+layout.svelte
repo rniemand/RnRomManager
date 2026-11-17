@@ -1,9 +1,9 @@
 <script lang="ts">
+	import PageTitle from '#lib/components/PageTitle.svelte';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
-	import Icon from '#lib/components/Icon.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
@@ -18,7 +18,7 @@
 </script>
 
 <AdminOnly>
-	<h1 class="h3 mb-3"><Icon name="admin" /> Admin</h1>
+	<PageTitle icon="admin" text="Admin" />
 	<ul class="nav nav-tabs mb-3">
 		{#each tabs as tab (tab.href)}
 			<li class="nav-item">

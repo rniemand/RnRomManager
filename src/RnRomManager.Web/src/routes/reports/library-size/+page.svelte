@@ -6,7 +6,7 @@
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
 	import Loading from '#lib/components/Loading.svelte';
-	import { formatSize } from '#lib/format.js';
+	import { formatCount, formatSize } from '#lib/format.js';
 	import { systemColour } from '#lib/systemColours.js';
 	import { squarify } from '#lib/treemap.js';
 
@@ -142,7 +142,7 @@
 		<EmptyState message={system ? 'This system has no games.' : 'The library is empty.'} />
 	</div>
 {:else}
-	<p><FileSize bytes={total} /> in {count} {count === 1 ? 'game' : 'games'}</p>
+	<p><FileSize bytes={total} /> in {formatCount(count)} {count === 1 ? 'game' : 'games'}</p>
 
 	<svg
 		class="d-block w-100 h-auto mb-3 border rounded"
@@ -194,7 +194,7 @@
 						{#each library.systems as s (s.system)}
 							<tr>
 								<td><a href={systemHref(s.system)}>{s.systemName}</a></td>
-								<td class="text-end">{s.gameCount}</td>
+								<td class="text-end">{formatCount(s.gameCount)}</td>
 								<td class="text-end text-nowrap"><FileSize bytes={s.bytes} /></td>
 								<td class="text-end text-nowrap">{percent(s.bytes, total)}</td>
 							</tr>
@@ -203,7 +203,7 @@
 						{#each detail.games as g (g.id)}
 							<tr>
 								<td><a href={gameHref(g.id)}>{g.displayTitle}</a></td>
-								<td class="text-end">{g.romCount}</td>
+								<td class="text-end">{formatCount(g.romCount)}</td>
 								<td class="text-end text-nowrap"><FileSize bytes={g.bytes} /></td>
 								<td class="text-end text-nowrap">{percent(g.bytes, total)}</td>
 							</tr>

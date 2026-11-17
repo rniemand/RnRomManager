@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { jobs } from '#lib/stores/jobs.svelte.js';
+import { expectOnePageTitle } from '#lib/testing/pageTitle.js';
 
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
@@ -125,5 +126,10 @@ describe('integrity page', () => {
 				'GET /api/integrity/issues?page=1&pageSize=50&status=Open&type=HashMismatch'
 			)
 		);
+	});
+
+	it('has one page-title h1 (B1)', () => {
+		render(IntegrityPage);
+		expectOnePageTitle('Integrity');
 	});
 });

@@ -2,6 +2,7 @@
 	import { resolve } from '$app/paths';
 	import type { SystemInfo } from '../api/types';
 	import { systemsSearch } from '../discovery';
+	import { formatCount } from '../format';
 	import { auth } from '../stores/auth.svelte';
 	import GroupLogo from './GroupLogo.svelte';
 	import Icon from './Icon.svelte';
@@ -37,7 +38,7 @@
 					<span class="text-truncate" title={system.displayName}>{system.displayName}</span>
 				</span>
 				<span class="badge text-bg-secondary rounded-pill"
-					>{system.gameCount} {system.gameCount === 1 ? 'game' : 'games'}</span
+					>{formatCount(system.gameCount)} {system.gameCount === 1 ? 'game' : 'games'}</span
 				>
 			</a>
 			{#if auth.isAdmin && onedit}

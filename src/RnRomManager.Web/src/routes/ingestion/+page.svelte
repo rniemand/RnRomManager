@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { onMount } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
@@ -209,7 +210,7 @@
 <svelte:head><title>Ingestion · RnRomManager</title></svelte:head>
 
 <AdminOnly>
-	<h1 class="h3 mb-3"><Icon name="ingest" /> Ingestion</h1>
+	<PageTitle icon="ingest" text="Ingestion" />
 	<RomToolsTabs />
 
 	{#if error}

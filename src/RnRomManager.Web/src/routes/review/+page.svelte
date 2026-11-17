@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { onDestroy, untrack } from 'svelte';
 	import { SvelteMap } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
@@ -216,7 +217,7 @@
 <svelte:head><title>Review Queue · RnRomManager</title></svelte:head>
 
 <AdminOnly>
-	<h1 class="h3 mb-3"><Icon name="review" /> Review Queue</h1>
+	<PageTitle icon="review" text="Review Queue" />
 	<RomToolsTabs />
 
 	<form class="row g-2 align-items-end mb-3" role="search" onsubmit={(e) => e.preventDefault()}>

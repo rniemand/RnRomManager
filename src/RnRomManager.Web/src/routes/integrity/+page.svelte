@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { onMount } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
@@ -126,7 +127,7 @@
 <svelte:head><title>Integrity · RnRomManager</title></svelte:head>
 
 <AdminOnly>
-	<h1 class="h3 mb-3"><Icon name="integrity" /> Integrity</h1>
+	<PageTitle icon="integrity" text="Integrity" />
 	<RomToolsTabs />
 
 	{#if error}

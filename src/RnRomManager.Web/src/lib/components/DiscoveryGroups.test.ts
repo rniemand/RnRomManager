@@ -75,14 +75,14 @@ describe('DiscoveryGroups (discovery B2)', () => {
 
 	it('lists each group with its count, linking to its selection', async () => {
 		answers['/api/discovery/publishers?pageSize=20'] = [
-			{ status: 200, body: pageOf([group(1, 'Capcom', 1), group(2, 'Nintendo', 12)]) }
+			{ status: 200, body: pageOf([group(1, 'Capcom', 1), group(2, 'Nintendo', 1250)]) }
 		];
 		render(DiscoveryGroups, { view: state({ key: keyOf(2) }), onpage: vi.fn() });
 
 		const nintendo = await screen.findByRole('link', { name: /Nintendo/ });
 		expect(nintendo.getAttribute('href')).toBe(`/collections?tab=publishers&key=${keyOf(2)}`);
 		expect(nintendo.getAttribute('aria-current')).toBe('true');
-		expect(nintendo.textContent).toContain('12 games');
+		expect(nintendo.textContent).toContain('1,250 games');
 		const capcom = list('Publishers').getByRole('link', { name: /Capcom/ });
 		expect(capcom.getAttribute('aria-current')).toBeNull();
 		expect(capcom.textContent).toContain('1 game');

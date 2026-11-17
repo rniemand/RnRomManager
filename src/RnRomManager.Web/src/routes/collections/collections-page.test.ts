@@ -4,6 +4,7 @@ import { resetClient } from '#lib/api/client.js';
 import type { CollectionDetail, CollectionListItem } from '#lib/api/types.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
+import { expectOnePageTitle } from '#lib/testing/pageTitle.js';
 
 const goto = vi.fn<(url: string, opts?: unknown) => void>((url) => navigateTo(url));
 vi.mock('$app/navigation', () => ({ goto: (url: string, opts?: unknown) => goto(url, opts) }));
@@ -170,6 +171,15 @@ describe('collections page (B22)', () => {
 
 		expect(localStorage.getItem('rnrm.pageSize.collections')).toBe('50');
 		await vi.waitFor(() => expect(keys()).toContain('GET /api/collections?pageSize=50'));
+	});
+
+	it('has one page-title h1, with New collection kept at the right (B1, B2)', async () => {
+		render(CollectionsPage);
+
+		expectOnePageTitle('Collections');
+		expect(
+			screen.getByRole('button', { name: /New collection/ }).classList.contains('ms-auto')
+		).toBe(true);
 	});
 });
 
