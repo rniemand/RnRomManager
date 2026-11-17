@@ -294,6 +294,15 @@
 	background-color: var(--bs-amiga) !important;
 }
 
+/* Nintendo 3DS system colour: a light pink no other system uses, same in both themes; black on it is AAA (~8.8:1). */
+:root {
+	--bs-3ds: #f783ac;
+}
+.text-bg-3ds {
+	color: #000 !important;
+	background-color: var(--bs-3ds) !important;
+}
+
 /* Library cards (L1, L2): a step lighter than the body in dark mode; a small lift and shadow on hover or keyboard focus. */
 [data-bs-theme='dark'] .game-card {
 	--bs-card-bg: var(--bs-tertiary-bg);

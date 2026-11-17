@@ -36,7 +36,8 @@ export interface SystemColour {
 		| 'c64'
 		| 'pet'
 		| 'vic20'
-		| 'amiga';
+		| 'amiga'
+		| '3ds';
 	foreground: '#fff' | '#000';
 }
 
@@ -72,7 +73,8 @@ export const systemColours: Record<string, SystemColour> = {
 	c64: { name: 'c64', foreground: '#fff' },
 	pet: { name: 'pet', foreground: '#fff' },
 	vic20: { name: 'vic20', foreground: '#fff' },
-	amiga: { name: 'amiga', foreground: '#fff' }
+	amiga: { name: 'amiga', foreground: '#fff' },
+	'3ds': { name: '3ds', foreground: '#000' }
 };
 
 /** Unknown systems stay neutral. */
