@@ -58,6 +58,11 @@ const coreLicenses = [
 	'fceumm-NOTICE.txt',
 	'gearcoleco-LICENSE.txt',
 	'gearcoleco-NOTICE.txt',
+	'mednafen_pce-LICENSE.txt',
+	'mednafen_pce-NOTICE.txt',
+	'mednafen_pce-libchdr-LICENSE.txt',
+	'mednafen_pce-lzma-LICENSE.txt',
+	'mednafen_pce-tremor-LICENSE.txt',
 	'pcsx_rearmed-LICENSE.txt',
 	'pcsx_rearmed-NOTICE.txt',
 	'pcsx_rearmed-libchdr-LICENSE.txt',
@@ -266,7 +271,8 @@ describe('vendor-emulatorjs', () => {
 			'pcsx_rearmed',
 			'yabause',
 			'desmume',
-			'puae'
+			'puae',
+			'mednafen_pce'
 		].flatMap((c) => [
 			`data/cores/${c}-legacy-wasm.data`,
 			`data/cores/${c}-wasm.data`,
@@ -681,6 +687,34 @@ describe('vendor-emulatorjs', () => {
 			],
 			'reports/puae.json': [141, 'a49ac77870e383d85894aaf791aa21bd104488a40e726c0b7aba8113a55094c8']
 		};
+		for (const [f, [size, sha256]] of Object.entries(pinned)) {
+			const bytes = readFileSync(join(out, 'data', 'cores', f));
+			expect(bytes.length, f).toBe(size);
+			expect(createHash('sha256').update(bytes).digest('hex'), f).toBe(sha256);
+		}
+	});
+
+	it('vendors exactly the pinned Beetle PCE files and no threaded payload (TurboGrafx-16 / PC Engine)', () => {
+		const pinned: Record<string, [number, string]> = {
+			'mednafen_pce-wasm.data': [
+				994844,
+				'29cebda0c7a93bbcb5e67e97fe28a1886bd030715d5a25224e7d9175d1d985c3'
+			],
+			'mednafen_pce-legacy-wasm.data': [
+				995095,
+				'c3d6e52680175b5528964b2c506a462bfd330d856661f28c5a54f7114b9b9a4c'
+			],
+			'reports/mednafen_pce.json': [
+				223,
+				'3c82092f1433cc2cf0d9265e137f44c5a80f5a7dfbfcb712ef659797299a67ca'
+			]
+		};
+		expect(files(out).filter((f) => f.includes('mednafen_pce'))).toEqual(
+			[
+				...Object.keys(pinned).map((f) => `data/cores/${f}`),
+				...coreLicenses.filter((f) => f.startsWith('mednafen_pce')).map((f) => `licenses/${f}`)
+			].sort()
+		);
 		for (const [f, [size, sha256]] of Object.entries(pinned)) {
 			const bytes = readFileSync(join(out, 'data', 'cores', f));
 			expect(bytes.length, f).toBe(size);

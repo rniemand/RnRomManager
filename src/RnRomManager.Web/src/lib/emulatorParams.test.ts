@@ -116,7 +116,8 @@ describe('parsePlayParams', () => {
 		'vice_x64sc',
 		'vice_xpet',
 		'vice_xvic',
-		'puae'
+		'puae',
+		'mednafen_pce'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});
@@ -188,6 +189,10 @@ describe('controlSchemeFor', () => {
 	it('keeps the default for another core with a .gg name', () => {
 		expect(controlSchemeFor('gambatte', 'Odd.gg')).toBeNull();
 	});
+
+	it('keeps the default for mednafen_pce (TurboGrafx-16 / PC Engine)', () => {
+		expect(controlSchemeFor('mednafen_pce', 'X (USA).pce')).toBeNull();
+	});
 });
 
 describe('hidesCoreChooser', () => {
@@ -195,7 +200,7 @@ describe('hidesCoreChooser', () => {
 		expect(hidesCoreChooser(core)).toBe(true);
 	});
 
-	it.each(['gambatte', 'gearcoleco'])('keeps it for %s', (core) => {
+	it.each(['gambatte', 'gearcoleco', 'mednafen_pce'])('keeps it for %s', (core) => {
 		expect(hidesCoreChooser(core)).toBe(false);
 	});
 });

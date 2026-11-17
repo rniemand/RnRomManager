@@ -31,7 +31,8 @@ const cores = [
 	'vice_x64sc',
 	'vice_xpet',
 	'vice_xvic',
-	'puae'
+	'puae',
+	'mednafen_pce'
 ];
 
 /** PSP B3: the core that runs only on the isolated play-psp.html page (and never in the modal's play.html). */

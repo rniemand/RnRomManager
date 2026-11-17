@@ -1,0 +1,89 @@
+Beetle PCE (EmulatorJS core "mednafen_pce", TurboGrafx-16 / PC Engine)
+======================================================================
+
+Files: mednafen_pce-wasm.data, mednafen_pce-legacy-wasm.data
+       (npm @emulatorjs/core-mednafen_pce 4.2.3)
+
+Corresponding source:
+- Core: https://github.com/EmulatorJS/beetle-pce-libretro/tree/e1ac90d5a97ad328c51b8b01e68da8af5faa1579
+  (version string "v1.29.0 e1ac90d" in both binaries). Fork of
+  https://github.com/libretro/beetle-pce-libretro, which holds the same commit.
+- Built with the cores.json entry {"makescript": "Makefile", "buildpath":
+  "./", "arguments": []} and platform=emscripten, whose Makefile branch sets
+  STATIC_LINKING = 1; the Makefile always sets HAVE_CHD = 1, NEED_TREMOR = 1
+  and NEED_BLIP = 1, and leaves SYSTEM_ZLIB and SYSTEM_LIBCHDR unset.
+- RetroArch, build scripts and compiler: see COMMON-BUILD.txt.
+
+Beetle PCE is a port of the PC Engine module of Mednafen, by the Mednafen
+team (mednafen/ and the per-file headers); the libretro port by its
+contributors.
+
+Licence: GNU General Public License, version 2 or (at your option) any later
+version (every GPL header under mednafen/ says so). mednafen_pce-LICENSE.txt
+is the license.txt inside both payloads, byte-identical to the source's
+COPYING (the GPL v2 text). RetroArch: GPL-3.0-or-later (retroarch-LICENSE.txt),
+so the combined binaries are distributed under the GPL, version 3.
+
+Components compiled into this build that carry their own terms:
+
+- deps/libchdr: libchdr, Copyright Romain Tisserand, BSD 3-Clause
+  (mednafen_pce-libchdr-LICENSE.txt, the source's deps/libchdr/LICENSE.txt),
+  with deps/libchdr/src/libchdr_flac.c and
+  deps/libchdr/include/dr_libs/dr_flac.h: dr_flac v0.12.28 by David Reid,
+  public domain or MIT No Attribution, at your choice (its closing licence
+  statement).
+- deps/lzma-19.00: the LZMA SDK by Igor Pavlov, public domain
+  (mednafen_pce-lzma-LICENSE.txt, the source's deps/lzma-19.00/LICENSE).
+- deps/zlib-1.2.11: zlib, (C) 1995-2017 Jean-loup Gailly and Mark Adler,
+  under the zlib licence stated in its README:
+
+    This software is provided 'as-is', without any express or implied
+    warranty.  In no event will the authors be held liable for any damages
+    arising from the use of this software.
+
+    Permission is granted to anyone to use this software for any purpose,
+    including commercial applications, and to alter it and redistribute it
+    freely, subject to the following restrictions:
+
+    1. The origin of this software must not be misrepresented; you must not
+       claim that you wrote the original software. If you use this software
+       in a product, an acknowledgment in the product documentation would be
+       appreciated but is not required.
+    2. Altered source versions must be plainly marked as such, and must not be
+       misrepresented as being the original software.
+    3. This notice may not be removed or altered from any source distribution.
+
+- mednafen/tremor: Tremor (integer Ogg Vorbis decoder), Copyright (c) 2002
+  Xiph.org Foundation, BSD 3-Clause (mednafen_pce-tremor-LICENSE.txt, the
+  source's mednafen/tremor/COPYING).
+- mednafen/sound/Blip_Buffer.c: Blip_Buffer 0.4.1, Copyright (C) 2003-2006
+  Shay Green, GNU Lesser General Public License, version 2.1 or (at your
+  option) any later version (its header).
+- libretro-common: Copyright (C) 2010-2020 The RetroArch team and others,
+  MIT licence, stated in each file's header, for example
+  libretro-common/file/file_path.c:
+
+    Permission is hereby granted, free of charge, to any person obtaining a
+    copy of this software and associated documentation files (the
+    "Software"), to deal in the Software without restriction, including
+    without limitation the rights to use, copy, modify, merge, publish,
+    distribute, sublicense, and/or sell copies of the Software, and to permit
+    persons to whom the Software is furnished to do so, subject to the
+    following conditions:
+
+    The above copyright notice and this permission notice shall be included
+    in all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+    OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+    MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+    IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+    CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT
+    OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR
+    THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+Licence expression: GPL-2.0-or-later AND LGPL-2.1-or-later AND BSD-3-Clause
+AND Zlib AND MIT, plus the public-domain LZMA SDK and dr_flac.
+
+No PC Engine CD System Card BIOS is part of this core or of RnRomManager.
+RnRomManager plays HuCard (.pce) images only.
