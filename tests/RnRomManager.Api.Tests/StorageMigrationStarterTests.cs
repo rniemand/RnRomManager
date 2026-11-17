@@ -22,7 +22,21 @@ public class StorageMigrationStarterTests
         InfoSchemaVersion = 6, CreatedAt = DateTime.UnixEpoch, UpdatedAt = DateTime.UnixEpoch,
     };
 
-    private FakeTimeProvider _time = null!;
+    /// <summary>Counts created timers, so a test advances time only once the starter's retry delay exists.</summary>
+    private sealed class CountingTimeProvider(DateTimeOffset start) : FakeTimeProvider(start)
+    {
+        private int _timers;
+        public int Timers => Volatile.Read(ref _timers);
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            var timer = base.CreateTimer(callback, state, dueTime, period);
+            Interlocked.Increment(ref _timers);
+            return timer;
+        }
+    }
+
+    private CountingTimeProvider _time = null!;
     private CancellationTokenSource _appStarted = null!;
     private JobLock _lock = null!;
     private IJobRepository _jobs = null!;
@@ -33,7 +47,7 @@ public class StorageMigrationStarterTests
     [SetUp]
     public void SetUp()
     {
-        _time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 16, 8, 0, 0, TimeSpan.Zero));
+        _time = new CountingTimeProvider(new DateTimeOffset(2026, 11, 16, 8, 0, 0, TimeSpan.Zero));
         _appStarted = new CancellationTokenSource();
         _lock = new JobLock();
         _jobs = Substitute.For<IJobRepository>();
@@ -122,9 +136,8 @@ public class StorageMigrationStarterTests
         var held = _lock.TryAcquire()!;
         _appStarted.Cancel();
         await _starter.StartAsync(CancellationToken.None);
-        await Until(() => Checks == 1);
-        await Task.Delay(50);
-        Assert.That(await Starts(), Is.Zero);
+        await Until(() => _time.Timers == 1);
+        Assert.That((Checks, await Starts()), Is.EqualTo((1, 0)));
 
         held.Dispose();
         _time.Advance(StorageMigrationStarter.RetryInterval - TimeSpan.FromSeconds(1));
@@ -143,7 +156,7 @@ public class StorageMigrationStarterTests
             .Returns(_ => throw new InvalidOperationException("db down"), _ => Task.FromResult<IReadOnlyList<GameRow>>([Legacy]));
         _appStarted.Cancel();
         await _starter.StartAsync(CancellationToken.None);
-        await Until(() => Checks == 1);
+        await Until(() => _time.Timers == 1);
 
         _time.Advance(StorageMigrationStarter.RetryInterval);
         await _starter.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(5));
