@@ -106,19 +106,15 @@ jobs:
       # Compiles the seeding tool while the image builds; waited for below. A failed build shows up when seeding runs it.
       - run: dotnet build tests/RnRomManager.TestData > "$RUNNER_TEMP/seed-build.log" 2>&1 & echo $! > "$RUNNER_TEMP/seed-build.pid"
       - uses: docker/setup-buildx-action@v4
-      # The amd64 image, reusing cached layers (npm ci, dotnet restore) from earlier e2e and release builds. The version
-      # is the Dockerfile default; nothing in e2e reads it.
+      # The amd64 image, reusing cached layers (npm ci, dotnet restore) from release builds on main (release.yml's
+      # docker-cache job). The version is the Dockerfile default; nothing in e2e reads it.
       - uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64
           load: true
           tags: niemandr/rnrommanager:e2e
-          cache-from: |
-            type=gha,scope=e2e
-            type=gha
-          # PRs only read the cache (exporting it takes 15-30 s); release runs on main refresh it.
-          cache-to: ${{ github.event_name != 'pull_request' && 'type=gha,scope=e2e,mode=max' || '' }}
+          cache-from: type=gha
       - run: |
           while kill -0 "$(cat "$RUNNER_TEMP/seed-build.pid")" 2>/dev/null; do sleep 1; done
           tail -n 3 "$RUNNER_TEMP/seed-build.log"
