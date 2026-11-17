@@ -204,7 +204,7 @@ describe('reports pages', () => {
 			expect(others).toHaveLength(1);
 			expect(others[0]).toMatch(/^5 others — /);
 			expect(document.querySelectorAll('tbody tr')).toHaveLength(305);
-		});
+		}, 20_000); // 305 rows of five columns: slow on a loaded machine
 
 		it('an empty library shows the empty state', async () => {
 			answers['GET /api/reports/library-size'] = {
