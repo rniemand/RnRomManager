@@ -86,7 +86,9 @@ public class AuditEndpointsTests
     {
         Assert.That((await Get("?user=%20&q=%20")).GetProperty("total").GetInt64(), Is.EqualTo(3));
         using var response = await _admin.GetAsync("/api/admin/audit/actions");
-        Assert.That((await AuthClient.JsonAsync(response)).EnumerateArray().Select(x => x.GetString()), Is.EqualTo(AuditActions.All));
+        var actions = (await AuthClient.JsonAsync(response)).EnumerateArray().Select(x => x.GetString()).ToList();
+        Assert.That(actions, Is.EqualTo(AuditActions.All));
+        Assert.That(actions, Is.SupersetOf(new[] { "UserCreated", "UserTypeChanged", "UserDisabled", "UserEnabled", "PasswordReset" }));
     }
 
     [TestCase("scheduled=true&user=boss")]

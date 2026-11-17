@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Api.Cli;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
@@ -34,6 +35,10 @@ public partial class ResetPasswordCommandTests
     }
 
     private IUserRepository Users => _factory.Services.GetRequiredService<IUserRepository>();
+
+    private async Task<IReadOnlyList<AuditItem>> AuditRowsAsync() =>
+        (await _factory.Services.GetRequiredService<IAuditRepository>()
+            .ListAsync(new AuditQuery(Action: AuditActions.PasswordReset), 1, 50, CancellationToken.None)).Items;
 
     private string[] Args() => _factory.Settings.Select(s => $"--{s.Key}={s.Value}").ToArray();
 
@@ -75,6 +80,16 @@ public partial class ResetPasswordCommandTests
         Assert.That(after.Roles, Is.Empty, "the seeded admin is still enabled, so no promotion");
         Assert.That(new PasswordHasher<User>().VerifyHashedPassword(after, after.PasswordHash, match.Groups[1].Value),
             Is.Not.EqualTo(PasswordVerificationResult.Failed));
+        var row = (await AuditRowsAsync()).Single();
+        Assert.That((row.User, row.Details), Is.EqualTo(((string?)null, "user=plain via=cli reenabled=true")));
+    }
+
+    [Test]
+    public async Task SoleExistingAdmin_IsNotPromoted_AndTheRowSaysOnlyCli()
+    {
+        Assert.That(await RunAsync("admin"), Is.EqualTo(0), _stderr.ToString());
+
+        Assert.That((await AuditRowsAsync()).Single().Details, Is.EqualTo("user=admin via=cli"));
     }
 
     [Test]
@@ -88,6 +103,7 @@ public partial class ResetPasswordCommandTests
 
         Assert.That((await Users.GetByIdAsync(plain.Id, CancellationToken.None))!.Roles, Is.EquivalentTo(new[] { Roles.Admin }));
         Assert.That(_stdout.ToString(), Does.Contain("roles admin)"));
+        Assert.That((await AuditRowsAsync()).Single().Details, Is.EqualTo("user=plain via=cli promoted=admin"));
     }
 
     [Test]

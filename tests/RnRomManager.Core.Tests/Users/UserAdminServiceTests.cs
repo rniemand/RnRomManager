@@ -15,6 +15,7 @@ public class UserAdminServiceTests
 
     private readonly PasswordHasher<User> _hasher = new();
     private IUserRepository _users = null!;
+    private IAuditLog _audit = null!;
     private UserAdminService _service = null!;
     private User _plain = null!;
 
@@ -22,7 +23,8 @@ public class UserAdminServiceTests
     public void SetUp()
     {
         _users = Substitute.For<IUserRepository>();
-        _service = new UserAdminService(_users, _hasher, new FakeTimeProvider(Now), NullLogger<UserAdminService>.Instance);
+        _audit = Substitute.For<IAuditLog>();
+        _service = new UserAdminService(_users, _hasher, new FakeTimeProvider(Now), _audit, NullLogger<UserAdminService>.Instance);
         _plain = NewUser(7, "plain", Roles.None);
         _users.GetByIdAsync(7, Arg.Any<CancellationToken>()).Returns(_ => _plain);
         _users.GetByUsernameAsync("plain", Arg.Any<CancellationToken>()).Returns(_ => _plain);
@@ -208,12 +210,24 @@ public class UserAdminServiceTests
         _plain = _plain with { IsDisabled = true };
         _users.ListAsync(Arg.Any<CancellationToken>()).Returns([_plain, NewUser(1, "admin", Roles.Of(Roles.Admin))]);
 
-        var (user, password) = (await _service.RecoverAsync("plain", CancellationToken.None))!.Value;
+        var (user, password, promoted, reenabled) = (await _service.RecoverAsync("plain", CancellationToken.None))!.Value;
 
         Assert.That(password, Has.Length.EqualTo(20));
         Assert.That((user.IsDisabled, user.MustChangePassword, user.Roles.Count), Is.EqualTo((false, true, 0)));
         Assert.That(_hasher.VerifyHashedPassword(user, user.PasswordHash, password), Is.Not.EqualTo(PasswordVerificationResult.Failed));
         await _users.Received(1).UpdateAsync(user, Arg.Any<CancellationToken>());
+        Assert.That((promoted, reenabled), Is.EqualTo((false, true)));
+    }
+
+    [Test]
+    public async Task Recover_SoleExistingAdmin_IsNotPromoted()
+    {
+        _plain = _plain with { Roles = Roles.Of(Roles.Admin) };
+        _users.ListAsync(Arg.Any<CancellationToken>()).Returns([_plain]);
+
+        var (_, _, promoted, reenabled) = (await _service.RecoverAsync("plain", CancellationToken.None))!.Value;
+
+        Assert.That((promoted, reenabled), Is.EqualTo((false, false)));
     }
 
     [Test]
@@ -222,8 +236,78 @@ public class UserAdminServiceTests
         _users.ListAsync(Arg.Any<CancellationToken>()).Returns([_plain, NewUser(1, "admin", Roles.Of(Roles.Admin), disabled: true),
             NewUser(2, "site", Roles.None)]);
 
-        var (user, _) = (await _service.RecoverAsync("plain", CancellationToken.None))!.Value;
+        var (user, _, promoted, _) = (await _service.RecoverAsync("plain", CancellationToken.None))!.Value;
 
         Assert.That(user.Roles, Is.EqualTo(new[] { Roles.Admin }), "a Site user isn't an admin");
+        Assert.That(promoted, Is.True);
+        _audit.DidNotReceiveWithAnyArgs().Record(default!);
+    }
+
+    private IReadOnlyList<AuditEvent> Recorded() =>
+        _audit.ReceivedCalls().Select(c => (AuditEvent)c.GetArguments()[0]!).ToList();
+
+    [Test]
+    public async Task Audit_Create_RecordsUserCreated()
+    {
+        _users.InsertAsync(Arg.Any<User>(), Arg.Any<CancellationToken>()).Returns(42);
+
+        await _service.CreateAsync("newbie", ["admin"], NewPassword, Actor, CancellationToken.None);
+        await _service.CreateAsync("visitor", null, NewPassword, Actor, CancellationToken.None);
+
+        Assert.That(Recorded(), Is.EqualTo(new[]
+        {
+            new AuditEvent(AuditActions.UserCreated, Actor, Details: "user=newbie type=admin"),
+            new AuditEvent(AuditActions.UserCreated, Actor, Details: "user=visitor type=site-user"),
+        }));
+    }
+
+    [Test]
+    public async Task Audit_TypeAndDisabledPatch_RecordsTwo_TypeFirst()
+    {
+        await _service.UpdateAsync(7, ["admin"], true, Actor, CancellationToken.None);
+
+        Assert.That(Recorded(), Is.EqualTo(new[]
+        {
+            new AuditEvent(AuditActions.UserTypeChanged, Actor, Details: "user=plain from=site-user to=admin"),
+            new AuditEvent(AuditActions.UserDisabled, Actor, Details: "user=plain"),
+        }));
+    }
+
+    [Test]
+    public async Task Audit_Enable_RecordsUserEnabled()
+    {
+        _plain = _plain with { IsDisabled = true };
+
+        await _service.UpdateAsync(7, null, false, Actor, CancellationToken.None);
+
+        Assert.That(Recorded(), Is.EqualTo(new[] { new AuditEvent(AuditActions.UserEnabled, Actor, Details: "user=plain") }));
+    }
+
+    [Test]
+    public async Task Audit_ResetPassword_RecordsPasswordReset()
+    {
+        await _service.ResetPasswordAsync(7, NewPassword, Actor, CancellationToken.None);
+
+        Assert.That(Recorded(), Is.EqualTo(new[] { new AuditEvent(AuditActions.PasswordReset, Actor, Details: "user=plain") }));
+    }
+
+    [Test]
+    public async Task Audit_NoOpAndFailedOperations_RecordNothing()
+    {
+        _users.InsertAsync(Arg.Any<User>(), Arg.Any<CancellationToken>()).Returns<int>(_ => throw new UsernameTakenException("plain"));
+        await _service.UpdateAsync(7, [], false, Actor, CancellationToken.None); // no-op
+        await _service.CreateAsync("plain", null, NewPassword, Actor, CancellationToken.None); // UsernameTaken
+        await _service.CreateAsync("x", null, NewPassword, Actor, CancellationToken.None); // invalid
+        await _service.UpdateAsync(99, null, true, Actor, CancellationToken.None); // NotFound
+        await _service.ResetPasswordAsync(7, "short", Actor, CancellationToken.None); // invalid
+
+        var self = _plain with { Id = 1, Roles = Roles.Of(Roles.Admin) };
+        _users.GetByIdAsync(1, Arg.Any<CancellationToken>()).Returns(self);
+        await _service.UpdateAsync(1, null, true, Actor, CancellationToken.None); // SelfChange
+
+        _users.UpdateUnlessLastAdminAsync(Arg.Any<User>(), Arg.Any<CancellationToken>()).Returns(false);
+        await _service.UpdateAsync(7, ["admin"], null, Actor, CancellationToken.None); // LastAdmin
+
+        _audit.DidNotReceiveWithAnyArgs().Record(default!);
     }
 }
