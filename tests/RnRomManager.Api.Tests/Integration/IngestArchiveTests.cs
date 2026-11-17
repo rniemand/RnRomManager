@@ -72,6 +72,7 @@ public class IngestArchiveTests
             [IngestSeeder.SegaCdDat] = [],
             [IngestSeeder.ThreeDoDat] = [],
             [IngestSeeder.C64Dat] = [],
+            [IngestSeeder.PetDat] = [],
             [IngestSeeder.NintendoDsDat] =
             [
                 Tales("Archive Tales (USA)", TalesUsa),

@@ -113,7 +113,8 @@ describe('parsePlayParams', () => {
 		'snes9x',
 		'desmume',
 		'opera',
-		'vice_x64sc'
+		'vice_x64sc',
+		'vice_xpet'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});
@@ -592,6 +593,22 @@ describe('Commodore 64 (C64 B7)', () => {
 		[null, "Couldn't load the VICE core."]
 	])('reports the availability check %s', (status, message) => {
 		expect(operatorCoreError('vice_x64sc', status)).toBe(message);
+	});
+});
+
+describe('Commodore PET', () => {
+	it('is an operator core sharing the VICE folder', () => {
+		expect(isOperatorCore('vice_xpet')).toBe(true);
+		expect(hidesCoreChooser('vice_xpet')).toBe(true);
+		expect(controlSchemeFor('vice_xpet', 'X.prg')).toBeNull();
+		expect(operatorCorePaths('vice_xpet')).toEqual({
+			'vice_xpet-wasm.data': '/api/emulator/cores/vice_xpet/vice_xpet-wasm.data',
+			'vice_xpet-legacy-wasm.data': '/api/emulator/cores/vice_xpet/vice_xpet-legacy-wasm.data',
+			'vice_xpet.json': '/api/emulator/cores/vice_xpet/vice_xpet.json'
+		});
+		expect(operatorCoreError('vice_xpet', 404)).toBe(
+			'Commodore PET games need the VICE (PET) core files: ask an Admin to set them up (Emulator:ViceCorePath).'
+		);
 	});
 });
 

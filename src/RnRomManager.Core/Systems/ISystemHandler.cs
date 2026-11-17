@@ -57,7 +57,7 @@ public interface ISystemHandler
     /// <summary>Spec T1: libretro's DAT files, or blawar/titledb.</summary>
     DatSource DatSource => DatSource.Libretro;
 
-    /// <summary>B1: the main DAT's folder under <c>Sources:DatBaseUrl</c> and <c>cache/dats/</c>: <c>no-intro</c> or <c>redump</c>.</summary>
+    /// <summary>B1: the main DAT's folder under <c>Sources:DatBaseUrl</c> and <c>cache/dats/</c>: <c>no-intro</c>, <c>redump</c> or <c>tosec</c>.</summary>
     string DatFolder => DatKind.NoIntro;
 
     /// <summary>B2: the metadat files that exist for this system; a kind not listed gives empty metadata.</summary>

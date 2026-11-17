@@ -70,6 +70,7 @@ public class NoteEndpointsTests
             [IngestSeeder.SegaCdDat] = [],
             [IngestSeeder.ThreeDoDat] = [],
             [IngestSeeder.C64Dat] = [],
+            [IngestSeeder.PetDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] =
             [

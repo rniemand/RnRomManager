@@ -88,6 +88,7 @@ public class MediaRetryEndpointsTests
             [IngestSeeder.SegaCdDat] = [],
             [IngestSeeder.ThreeDoDat] = [],
             [IngestSeeder.C64Dat] = [],
+            [IngestSeeder.PetDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Tetris), new FixtureGame("Zelda (USA)", "Zelda (USA).gb", Zelda)],
         }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);

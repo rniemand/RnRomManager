@@ -259,6 +259,19 @@
 			"note": "RetroArch core: Mesen"
 		}
 	],
+	"pet": [
+		{
+			"name": "VICE",
+			"url": "https://vice-emu.sourceforge.io/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: VICE xpet"
+		}
+	],
 	"psp": [
 		{
 			"name": "PPSSPP",

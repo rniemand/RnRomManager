@@ -33,7 +33,8 @@ export interface SystemColour {
 		| 'nds'
 		| 'segacd'
 		| '3do'
-		| 'c64';
+		| 'c64'
+		| 'pet';
 	foreground: '#fff' | '#000';
 }
 
@@ -66,7 +67,8 @@ export const systemColours: Record<string, SystemColour> = {
 	nds: { name: 'nds', foreground: '#000' },
 	segacd: { name: 'segacd', foreground: '#fff' },
 	'3do': { name: '3do', foreground: '#000' },
-	c64: { name: 'c64', foreground: '#fff' }
+	c64: { name: 'c64', foreground: '#fff' },
+	pet: { name: 'pet', foreground: '#fff' }
 };
 
 /** Unknown systems stay neutral. */

@@ -27,6 +27,7 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
     public const string Snes9x = "snes9x";
     public const string Opera = "opera";
     public const string Vice = "vice_x64sc";
+    public const string VicePet = "vice_xpet";
 
     /// <summary>The pinned 4.2.3 files of each core (each report is its package's <c>reports/</c> copy).</summary>
     public static OperatorCoreManifest Pinned { get; } = new(
@@ -84,6 +85,17 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
                 "8a22bc81c0dd7104cd23ceec5117a9f47ca9503e280e4fbc9d0346f51b75253e", "application/octet-stream"),
             new("vice_x64sc.json", 147,
                 "5c50bc4ff5546a2c6fc4bb7949efd200ea0ac6b4723713e742fb659228e9a3aa", "application/json"),
+        ]),
+        // Commodore PET: https://registry.npmjs.org/@emulatorjs/core-vice_xpet/-/core-vice_xpet-4.2.3.tgz. Embeds the PET's
+        // ROMs like vice_x64sc, so it's never bundled; its files sit in the same folder as the C64 core's.
+        new(VicePet, "VICE (PET)", o => o.ViceCorePath, EmulatorEndpoints.ViceCoreMismatch,
+        [
+            new("vice_xpet-wasm.data", 1_368_677,
+                "eef0d83f7c1af43d51c3384a07db4196ea7c2bbe1292e9e52fade3d3107513c5", "application/octet-stream"),
+            new("vice_xpet-legacy-wasm.data", 1_368_450,
+                "98ac6fbb90824a77ae6480a431c465d41e8cecce39394e036648d57e86297361", "application/octet-stream"),
+            new("vice_xpet.json", 123,
+                "9bf5ec80ab1f58dc7cdccd73f0141385b030f262ce20aaae4403369dd7061301", "application/json"),
         ]),
     ]);
 
