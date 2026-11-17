@@ -114,7 +114,8 @@ describe('parsePlayParams', () => {
 		'desmume',
 		'opera',
 		'vice_x64sc',
-		'vice_xpet'
+		'vice_xpet',
+		'vice_xvic'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});
@@ -608,6 +609,22 @@ describe('Commodore PET', () => {
 		});
 		expect(operatorCoreError('vice_xpet', 404)).toBe(
 			'Commodore PET games need the VICE (PET) core files: ask an Admin to set them up (Emulator:ViceCorePath).'
+		);
+	});
+});
+
+describe('Commodore VIC-20', () => {
+	it('is an operator core sharing the VICE folder', () => {
+		expect(isOperatorCore('vice_xvic')).toBe(true);
+		expect(hidesCoreChooser('vice_xvic')).toBe(true);
+		expect(controlSchemeFor('vice_xvic', 'X.a0')).toBeNull();
+		expect(operatorCorePaths('vice_xvic')).toEqual({
+			'vice_xvic-wasm.data': '/api/emulator/cores/vice_xvic/vice_xvic-wasm.data',
+			'vice_xvic-legacy-wasm.data': '/api/emulator/cores/vice_xvic/vice_xvic-legacy-wasm.data',
+			'vice_xvic.json': '/api/emulator/cores/vice_xvic/vice_xvic.json'
+		});
+		expect(operatorCoreError('vice_xvic', 404)).toBe(
+			'Commodore VIC-20 games need the VICE (VIC-20) core files: ask an Admin to set them up (Emulator:ViceCorePath).'
 		);
 	});
 });

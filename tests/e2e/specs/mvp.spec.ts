@@ -277,6 +277,7 @@ test("browse, search and filter the library", async () => {
     "coleco",
     "c64",
     "pet",
+    "vic20",
     "gb",
     "gba",
     "gbc",

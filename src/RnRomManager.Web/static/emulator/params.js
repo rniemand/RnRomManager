@@ -29,7 +29,8 @@ const cores = [
 	'desmume',
 	'opera',
 	'vice_x64sc',
-	'vice_xpet'
+	'vice_xpet',
+	'vice_xvic'
 ];
 
 /** PSP B3: the core that runs only on the isolated play-psp.html page (and never in the modal's play.html). */
@@ -110,7 +111,7 @@ export function controlSchemeFor(core, name) {
 }
 
 /**
- * B3/B8 (SNES B3 adds Snes9x, 3DO B6 Opera, C64 B7 VICE, PET VICE xpet): the cores whose files the operator supplies, served by the API after a length and hash check, with the
+ * B3/B8 (SNES B3 adds Snes9x, 3DO B6 Opera, C64 B7 VICE, PET VICE xpet, VIC-20 VICE xvic): the cores whose files the operator supplies, served by the API after a length and hash check, with the
  * wording of their messages: the system label, the core's display name, the short name of the fallback message and
  * the option holding the folder.
  * @type {Record<string, { system: string, display: string, short: string, option: string }>}
@@ -149,6 +150,12 @@ const operatorCores = {
 	vice_xpet: {
 		system: 'Commodore PET games',
 		display: 'VICE (PET)',
+		short: 'VICE',
+		option: 'Emulator:ViceCorePath'
+	},
+	vice_xvic: {
+		system: 'Commodore VIC-20 games',
+		display: 'VICE (VIC-20)',
 		short: 'VICE',
 		option: 'Emulator:ViceCorePath'
 	}
@@ -220,7 +227,8 @@ export function hidesCoreChooser(core) {
 		'desmume',
 		'opera',
 		'vice_x64sc',
-		'vice_xpet'
+		'vice_xpet',
+		'vice_xvic'
 	].includes(core);
 }
 

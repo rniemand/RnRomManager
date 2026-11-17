@@ -91,6 +91,7 @@ public class AuditLibraryEditTests
             [IngestSeeder.ThreeDoDat] = [],
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
+            [IngestSeeder.Vic20Dat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] =
             [

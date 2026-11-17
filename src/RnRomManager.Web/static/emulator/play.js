@@ -509,7 +509,7 @@ async function start() {
 	// B3/B8: an operator-supplied core loads its payloads and report by name from the API; the vendored loader keeps
 	// them non-threaded.
 	if (isOperator) ejs.EJS_paths = operatorCorePaths(params.core);
-	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX, PicoDrive, Yabause, Snes9x, DeSmuME, Opera, VICE x64sc and xpet): hide the
+	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX, PicoDrive, Yabause, Snes9x, DeSmuME, Opera, VICE x64sc, xpet and xvic): hide the
 	// core selector. DeSmuME gets no EJS_biosUrl or external files: it uses its built-in BIOS and firmware.
 	// Nintendo DS B4: DeSmuME also hides the threads setting; the vendored loader never picks a threaded payload.
 	if (hidesCoreChooser(params.core))
