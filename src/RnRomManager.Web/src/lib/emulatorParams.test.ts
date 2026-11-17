@@ -115,7 +115,8 @@ describe('parsePlayParams', () => {
 		'opera',
 		'vice_x64sc',
 		'vice_xpet',
-		'vice_xvic'
+		'vice_xvic',
+		'puae'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});

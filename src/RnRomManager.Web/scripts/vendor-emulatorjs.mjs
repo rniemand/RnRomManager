@@ -22,7 +22,8 @@ const cores = [
 	'fceumm',
 	'pcsx_rearmed',
 	'yabause',
-	'desmume'
+	'desmume',
+	'puae'
 ];
 
 // Guarded edits of the pinned EmulatorJS scripts: each anchor must occur exactly once, or vendoring fails so the edit

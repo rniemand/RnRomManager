@@ -53,6 +53,7 @@
 		"@emulatorjs/core-pcsx_rearmed": "4.2.3",
 		"@emulatorjs/core-ppsspp": "4.2.3",
 		"@emulatorjs/core-prosystem": "4.2.3",
+		"@emulatorjs/core-puae": "4.2.3",
 		"@emulatorjs/core-smsplus": "4.2.3",
 		"@emulatorjs/core-stella2014": "4.2.3",
 		"@emulatorjs/core-virtualjaguar": "4.2.3",

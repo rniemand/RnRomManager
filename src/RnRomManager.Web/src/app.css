@@ -285,6 +285,15 @@
 	background-color: var(--bs-vic20) !important;
 }
 
+/* Commodore Amiga system colour: a deep boing-ball blue, same in both themes; white on it is AAA (~10:1). */
+:root {
+	--bs-amiga: #1f3f7a;
+}
+.text-bg-amiga {
+	color: #fff !important;
+	background-color: var(--bs-amiga) !important;
+}
+
 /* Library cards (L1, L2): a step lighter than the body in dark mode; a small lift and shadow on hover or keyboard focus. */
 [data-bs-theme='dark'] .game-card {
 	--bs-card-bg: var(--bs-tertiary-bg);

@@ -242,6 +242,7 @@ public static class AppHost
         services.AddSystemHandler<C64Handler>();
         services.AddSystemHandler<PetHandler>();
         services.AddSystemHandler<Vic20Handler>();
+        services.AddSystemHandler<AmigaHandler>();
     }
 
     // spec §11: hashed SvelteKit assets are immutable; everything else (index.html, theme.js) must revalidate.

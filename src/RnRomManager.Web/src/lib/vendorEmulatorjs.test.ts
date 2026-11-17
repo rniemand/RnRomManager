@@ -64,6 +64,9 @@ const coreLicenses = [
 	'pcsx_rearmed-zstd-LICENSE.txt',
 	'ppsspp-LICENSE.txt',
 	'ppsspp-NOTICE.txt',
+	'puae-LICENSE.txt',
+	'puae-NOTICE.txt',
+	'puae-libchdr-LICENSE.txt',
 	'retroarch-LICENSE.txt',
 	'smsplus-LICENSE.txt',
 	'smsplus-NOTICE.txt',
@@ -262,7 +265,8 @@ describe('vendor-emulatorjs', () => {
 			'fceumm',
 			'pcsx_rearmed',
 			'yabause',
-			'desmume'
+			'desmume',
+			'puae'
 		].flatMap((c) => [
 			`data/cores/${c}-legacy-wasm.data`,
 			`data/cores/${c}-wasm.data`,
@@ -658,6 +662,25 @@ describe('vendor-emulatorjs', () => {
 				...coreLicenses.filter((f) => f.startsWith('desmume')).map((f) => `licenses/${f}`)
 			].sort()
 		);
+		for (const [f, [size, sha256]] of Object.entries(pinned)) {
+			const bytes = readFileSync(join(out, 'data', 'cores', f));
+			expect(bytes.length, f).toBe(size);
+			expect(createHash('sha256').update(bytes).digest('hex'), f).toBe(sha256);
+		}
+	});
+
+	it('vendors exactly the pinned PUAE files (Amiga)', () => {
+		const pinned: Record<string, [number, string]> = {
+			'puae-wasm.data': [
+				4140232,
+				'8b58d776244c650c872dcaaf8693a2d75fd92a5219c7250cf5be5f517b11f1b5'
+			],
+			'puae-legacy-wasm.data': [
+				4138844,
+				'8d49f7b0bdb83992904a5f9a0d4b0c12e6e6b9b2e9bb619095b5ca6e6547279b'
+			],
+			'reports/puae.json': [141, 'a49ac77870e383d85894aaf791aa21bd104488a40e726c0b7aba8113a55094c8']
+		};
 		for (const [f, [size, sha256]] of Object.entries(pinned)) {
 			const bytes = readFileSync(join(out, 'data', 'cores', f));
 			expect(bytes.length, f).toBe(size);

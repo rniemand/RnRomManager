@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Commodore Amiga). Made for this project; MIT licensed like the rest of the repo.
+       A generic 3.5" floppy disk: no logo or trade dress. Exported to amiga.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#e4e8ee"/>
+  <!-- disk body -->
+  <path d="M106 60 L382 60 L420 98 L420 412 Q420 424 408 424 L106 424 Q94 424 94 412 L94 72 Q94 60 106 60 Z"
+        fill="#2f3a4a" stroke="#1b222c" stroke-width="5" stroke-linejoin="round"/>
+  <!-- metal shutter -->
+  <rect x="170" y="60" width="176" height="122" fill="#b8c0c8" stroke="#7d8790" stroke-width="4"/>
+  <rect x="290" y="78" width="34" height="86" rx="3" fill="#2f3a4a"/>
+  <!-- label -->
+  <rect x="134" y="226" width="246" height="176" rx="6" fill="#f4f1e8"/>
+  <rect x="158" y="256" width="198" height="10" rx="3" fill="#3f6fb5"/>
+  <rect x="158" y="286" width="150" height="10" rx="3" fill="#3f6fb5"/>
+  <rect x="158" y="316" width="176" height="10" rx="3" fill="#3f6fb5"/>
+  <!-- write-protect tab -->
+  <rect x="112" y="396" width="16" height="16" fill="#1b222c"/>
+  <text x="256" y="476" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="34" font-weight="700" letter-spacing="4" fill="#3f6fb5">AMIGA</text>
+</svg>

@@ -1,0 +1,45 @@
+PUAE (EmulatorJS core "puae", Commodore Amiga)
+==============================================
+
+Files: puae-wasm.data, puae-legacy-wasm.data
+       (npm @emulatorjs/core-puae 4.2.3)
+
+Corresponding source:
+- Core: https://github.com/EmulatorJS/libretro-uae/tree/2245d3443cc12447c2c36c591ec50d6ed934fe69
+  (version string "5.0.0 2245d34" in both binaries). Fork of
+  https://github.com/libretro/libretro-uae, which holds the same commit.
+- Built with the cores.json entry {"makescript": "Makefile", "buildpath":
+  "./", "arguments": []} and platform=emscripten, whose Makefile branch sets
+  STATIC_LINKING = 1; the Makefile always sets HAVE_CHD = 1 and HAVE_MPEG2 = 1.
+- RetroArch, build scripts and compiler: see COMMON-BUILD.txt.
+
+UAE, the Un*x Amiga Emulator, is Copyright 1995 Ed Hanway, 1995-1997 Bernd
+Schmidt and later contributors (sources/src/main.c and the per-file headers);
+the libretro port by its contributors.
+
+Licence: GNU General Public License, version 2 (puae-LICENSE.txt, the
+license.txt inside both payloads, byte-identical to the source's COPYING).
+RetroArch: GPL-3.0-or-later (retroarch-LICENSE.txt), so the combined binaries
+are distributed under the GPL, version 3.
+
+Components compiled into this build that carry their own terms:
+
+- sources/src/aros.rom.c: the AROS m68k Kickstart replacement ROM, used when
+  no Kickstart ROM is supplied (README.md: "a somewhat compatible built-in AROS
+  Kickstart"). AROS is distributed under the AROS Public License, version 1.1
+  (https://aros.sourceforge.io/license.html); its source is at
+  https://github.com/aros-development-team/AROS.
+- deps/libchdr: libchdr, Copyright Romain Tisserand, BSD 3-Clause
+  (puae-libchdr-LICENSE.txt, the source's deps/libchdr/LICENSE.txt), with
+  deps/libchdr/include/dr_libs/dr_flac.h: dr_flac v0.12.28 by David Reid,
+  public domain or MIT No Attribution, at your choice (its closing licence
+  statement).
+- deps/libmpeg2: libmpeg2, GNU General Public License, version 2 or later
+  (its README and COPYING; the same text as puae-LICENSE.txt).
+- deps/libz and deps/7zip are not compiled (STATIC_LINKING = 1): zlib comes
+  from Emscripten's port and LZMA decoding from RetroArch's bundled LZMA SDK
+  (HAVE_7ZIP = 1 in its Makefile.emulatorjs; Igor Pavlov, public domain).
+
+No Commodore Kickstart ROM is part of this core or of RnRomManager. The core
+loads IPF images only through capsimg, a separate native library this build
+cannot load, so RnRomManager imports and plays ADF images only.
