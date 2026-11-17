@@ -209,7 +209,7 @@ public class IngestPipelineTests
         return (await db.QueryAsync<AuditRow>("""
             SELECT action AS Action, system_id AS SystemId, game_id AS GameId, user_id AS UserId, username AS Username, job_id AS JobId,
                    path AS Path, target_path AS TargetPath, details AS Details
-            FROM audit_events ORDER BY id
+            FROM audit_events WHERE action NOT IN ('SignedIn', 'SignInFailed', 'LockedOut', 'PasswordChanged') ORDER BY id
             """)).AsList();
     }
 

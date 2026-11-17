@@ -46,11 +46,18 @@ public static class AuditActions
     /// <summary>U9: an admin or the CLI (<c>via=cli</c>, no actor) reset a user's password.</summary>
     public const string PasswordReset = "PasswordReset";
 
+    /// <summary>U9: account events; the actor is the user (an unknown name for <see cref="SignInFailed"/> has no id).</summary>
+    public const string PasswordChanged = "PasswordChanged";
+    public const string SignedIn = "SignedIn";
+    public const string SignInFailed = "SignInFailed";
+    public const string LockedOut = "LockedOut";
+
     public static readonly IReadOnlyList<string> All =
     [
         Ingested, ZipRepaired, ExtensionRenamed, MovedToFailed, MovedToDuplicates, ArchiveDeleted, ReviewDeleted, GameUpdated,
         ReleaseDeleted, GameDeleted, ImageAdded, ImageDeleted, CoverSet, MediaFetched, ReleaseMoved, GamesMerged, DatsRefreshed,
         IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved, RomsExternalized,
         SaveAdded, SaveUpdated, SaveDeleted, UserCreated, UserTypeChanged, UserDisabled, UserEnabled, PasswordReset,
+        PasswordChanged, SignedIn, SignInFailed, LockedOut,
     ];
 }

@@ -32,6 +32,9 @@ public class AuditEndpointsTests
         await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         (await _admin.LoginAsync("boss", TestUsers.Password)).Dispose();
         var repository = _factory.Services.GetRequiredService<IAuditRepository>();
+        // The sign-in above records SignedIn (U9); drop it so the fixture rows are the only ones.
+        await _factory.Services.GetRequiredService<AuditWriter>().FlushAsync();
+        await repository.PurgeAsync(DateTime.UtcNow.AddDays(1), default);
         await repository.InsertAsync(new AuditEvent(AuditActions.Ingested, new AuditActor(1, "André", null), "gb", _game,
             "ingest/100%_rom.gb", "roms/a.zip", "alpha") { OccurredAt = Start }, default);
         await repository.InsertAsync(new AuditEvent(AuditActions.DatsRefreshed, new AuditActor(null, null, null), Details: "beta")
@@ -88,7 +91,32 @@ public class AuditEndpointsTests
         using var response = await _admin.GetAsync("/api/admin/audit/actions");
         var actions = (await AuthClient.JsonAsync(response)).EnumerateArray().Select(x => x.GetString()).ToList();
         Assert.That(actions, Is.EqualTo(AuditActions.All));
-        Assert.That(actions, Is.SupersetOf(new[] { "UserCreated", "UserTypeChanged", "UserDisabled", "UserEnabled", "PasswordReset" }));
+        Assert.That(actions, Is.SupersetOf(new[] { "UserCreated", "UserTypeChanged", "UserDisabled", "UserEnabled", "PasswordReset",
+            "PasswordChanged", "SignedIn", "SignInFailed", "LockedOut" }));
+    }
+
+    [Test]
+    public async Task SignIns_AreListed_AndAnUnknownNameIsCutTo64AndNotScheduled()
+    {
+        var unknown = new string('z', 200);
+        using (var other = await AuthClient.CreateAsync(_factory))
+        {
+            await TestUsers.CreateAsync(_factory, "visitor");
+            using var ok = await other.LoginAsync("visitor", TestUsers.Password);
+            using var failed = await other.LoginAsync(unknown, TestUsers.Password);
+            Assert.That((ok.StatusCode, failed.StatusCode), Is.EqualTo((HttpStatusCode.OK, HttpStatusCode.Unauthorized)));
+        }
+        await _factory.Services.GetRequiredService<AuditWriter>().FlushAsync();
+
+        var signedIn = (await Get("?action=SignedIn")).GetProperty("items");
+        var signInFailed = (await Get("?action=SignInFailed")).GetProperty("items");
+
+        Assert.That(signedIn.EnumerateArray().Select(i => i.GetProperty("user").GetString()), Is.EqualTo(new[] { "visitor" }));
+        Assert.That(signInFailed.GetArrayLength(), Is.EqualTo(1));
+        Assert.That(signInFailed[0].GetProperty("user").GetString(), Is.EqualTo(unknown[..64]));
+        Assert.That(signInFailed[0].GetProperty("details").GetString(), Is.EqualTo("reason=unknown-user"));
+        var scheduled = (await Get("?scheduled=true")).GetProperty("items");
+        Assert.That(scheduled.EnumerateArray().Select(i => i.GetProperty("action").GetString()), Is.EqualTo(new[] { "DatsRefreshed" }));
     }
 
     [TestCase("scheduled=true&user=boss")]

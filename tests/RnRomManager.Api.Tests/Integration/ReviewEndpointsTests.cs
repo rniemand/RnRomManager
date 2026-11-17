@@ -486,7 +486,7 @@ public class ReviewEndpointsTests
         await Service<RnRomManager.Api.AuditWriter>().FlushAsync();
         await using var db = Service<IDbConnectionFactory>().Create();
         var rows = (await db.QueryAsync<(string Action, int? UserId, string? Username, Guid? JobId, string? Path, string? Details)>(
-            "SELECT action, user_id, username, job_id, path, details FROM audit_events ORDER BY id")).ToList();
+            "SELECT action, user_id, username, job_id, path, details FROM audit_events WHERE action NOT IN ('SignedIn', 'SignInFailed', 'LockedOut', 'PasswordChanged') ORDER BY id")).ToList();
         var jobId = await db.QuerySingleAsync<Guid>("SELECT id FROM jobs WHERE type = 'ReviewResolve'");
         Assert.That(rows, Is.EqualTo(new (string, int?, string?, Guid?, string?, string?)[]
         {

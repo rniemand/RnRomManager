@@ -133,7 +133,7 @@ public class AuditLibraryEditTests
         return (await db.QueryAsync<Row>("""
             SELECT action AS Action, user_id AS UserId, username AS Username, job_id AS JobId, game_id AS GameId, path AS Path,
                    target_path AS TargetPath, details AS Details
-            FROM audit_events WHERE action <> 'Ingested' ORDER BY id
+            FROM audit_events WHERE action <> 'Ingested' AND action NOT IN ('SignedIn', 'SignInFailed', 'LockedOut', 'PasswordChanged') ORDER BY id
             """)).AsList();
     }
 
