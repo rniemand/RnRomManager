@@ -59,6 +59,18 @@ public sealed class GameRepository : IGameRepository
             new CommandDefinition($"{Select} WHERE id = @id", new { id }, cancellationToken: cancellationToken));
     }
 
+    public async Task<IReadOnlyDictionary<Guid, int>> GetUserSaveCountsAsync(string username, IReadOnlyCollection<Guid> gameIds,
+        CancellationToken cancellationToken)
+    {
+        if (gameIds.Count == 0)
+            return new Dictionary<Guid, int>();
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<(Guid GameId, int SaveCount)>(new CommandDefinition(
+                "SELECT game_id, save_count FROM game_user_save_counts WHERE username = @username AND game_id IN @gameIds",
+                new { username, gameIds }, cancellationToken: cancellationToken)))
+            .ToDictionary(r => r.GameId, r => r.SaveCount);
+    }
+
     public async Task<IReadOnlyList<GameRow>> ListAllAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();

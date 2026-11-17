@@ -97,4 +97,21 @@ public partial class LibraryMirrorTests
         await mirror.DeleteAsync(game.GameId, CancellationToken.None);
         Assert.That(await OwnerCountsAsync(game.GameId), Is.Empty);
     }
+
+    [Test]
+    public async Task GetUserSaveCounts_OwnCountAfterAMirrorWrite_MissingIsAbsent()
+    {
+        var saves = new[] { Save(1, "bob"), Save(2, "bob") };
+        WriteSavesZip(saves, GameSaves.Serialize(saves));
+        var game = Game("Tetris", Rom("a.gb", RomBytes(1)));
+        await CountingMirror().ReplaceAsync(Entry(game), CancellationToken.None);
+        var other = Guid.NewGuid();
+
+        var bob = await _games.GetUserSaveCountsAsync("BOB", [game.GameId, other], CancellationToken.None);
+        var alice = await _games.GetUserSaveCountsAsync("alice", [game.GameId], CancellationToken.None);
+
+        Assert.That(bob, Is.EqualTo(new Dictionary<Guid, int> { [game.GameId] = 2 }));
+        Assert.That(alice, Is.Empty);
+        Assert.That(await _games.GetUserSaveCountsAsync("bob", [], CancellationToken.None), Is.Empty);
+    }
 }

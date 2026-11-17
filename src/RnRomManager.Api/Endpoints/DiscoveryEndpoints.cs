@@ -41,7 +41,7 @@ public static class DiscoveryEndpoints
         });
 
         discovery.MapGet("/{kind}/games", async (string kind, string? key, int? page, int? pageSize, HttpContext ctx,
-            IDiscoveryRepository repository, ISystemRegistry systems) =>
+            IDiscoveryRepository repository, ISystemRegistry systems, IGameRepository games) =>
         {
             if (!DiscoveryKinds.TryParse(kind, out var parsed))
                 return Problems.NotFound(ctx);
@@ -55,7 +55,7 @@ public static class DiscoveryEndpoints
                 parsed, key!, page ?? 1, pageSize ?? Page<GameListItem>.DefaultSize, ctx.RequestAborted);
             return result is null
                 ? Problems.NotFound(ctx)
-                : Results.Ok(Paging.ToDto(result, game => LibraryEndpoints.ToListItemDto(game, systems)));
+                : Results.Ok(Paging.ToDto(await LibraryEndpoints.ForViewerAsync(result, ctx, games), game => LibraryEndpoints.ToListItemDto(game, systems)));
         });
 
         return api;

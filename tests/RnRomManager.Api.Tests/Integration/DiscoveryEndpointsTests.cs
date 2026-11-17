@@ -190,4 +190,25 @@ public class DiscoveryEndpointsTests
 
         Assert.That((await GetAsync(anonymous, url)).Status, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
+
+    [Test]
+    public async Task GameList_SaveCount_IsTheSiteUsersOwn_AndTheTotalForAnAdmin()
+    {
+        var id = await AddGameAsync("Tetris", "gb", ["Nintendo"]);
+        await using (var connection = _factory.Services.GetRequiredService<IDbConnectionFactory>().Create())
+            await Dapper.SqlMapper.ExecuteAsync(connection, """
+                UPDATE games SET save_count = 3 WHERE id = @id;
+                INSERT INTO game_user_save_counts (game_id, username, save_count) VALUES (@id, 'alice', 2);
+                """, new { id });
+        using var admin = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
+        (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
+        var url = $"/api/discovery/publishers/games?key={Key("nintendo")}";
+
+        var (_, own) = await GetAsync(_user, url);
+        var (_, all) = await GetAsync(admin, url);
+
+        Assert.That(own.GetProperty("items")[0].GetProperty("saveCount").GetInt32(), Is.EqualTo(2));
+        Assert.That(all.GetProperty("items")[0].GetProperty("saveCount").GetInt32(), Is.EqualTo(3));
+    }
 }

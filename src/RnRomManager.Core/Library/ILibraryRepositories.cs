@@ -21,6 +21,9 @@ public interface IGameRepository
     /// <summary>Every <c>games</c> row (integrity: the state before its DB repair, §12.1).</summary>
     Task<IReadOnlyList<GameRow>> ListAllAsync(CancellationToken cancellationToken);
 
+    /// <summary>S7: <paramref name="username"/>'s own save count per game (from <c>game_user_save_counts</c>); games without a row are absent.</summary>
+    Task<IReadOnlyDictionary<Guid, int>> GetUserSaveCountsAsync(string username, IReadOnlyCollection<Guid> gameIds, CancellationToken cancellationToken);
+
     /// <summary>The library list: filters, sort (year nulls last), tie-break <c>id</c>, one page (spec §23, §14.2).</summary>
     Task<Page<GameListItem>> ListAsync(GameQuery query, CancellationToken cancellationToken);
 

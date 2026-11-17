@@ -11,6 +11,7 @@ using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Naming;
 using RnRomManager.Core.Systems;
+using RnRomManager.Core.Users;
 
 namespace RnRomManager.Api.Endpoints;
 
@@ -54,7 +55,7 @@ public static class LibraryEndpoints
             foreach (var collectionId in new[] { query.CollectionId, query.NotInCollectionId })
                 if (collectionId is { } id && await collections.GetAsync(id, CollectionEndpoints.UserId(ctx), ctx.RequestAborted) is null)
                     return Problems.NotFound(ctx);
-            var result = await repository.ListAsync(query, ctx.RequestAborted);
+            var result = await ForViewerAsync(await repository.ListAsync(query, ctx.RequestAborted), ctx, repository);
             return Results.Ok(Paging.ToDto(result, game => ToListItemDto(game, systems)));
         });
 
@@ -399,6 +400,11 @@ public static class LibraryEndpoints
     {
         if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
             return Problems.NotFound(ctx);
+        if (SiteUserName(ctx) is { } username)
+            game = game with
+            {
+                SaveCount = (await repository.GetUserSaveCountsAsync(username, [id], ctx.RequestAborted)).GetValueOrDefault(id),
+            };
         var romRows = await roms.ListByGameAsync(id, ctx.RequestAborted);
         var imageRows = await images.ListByGameAsync(id, ctx.RequestAborted);
         var handler = ctx.RequestServices.GetRequiredService<ISystemRegistry>().ById(game.SystemId);
@@ -669,6 +675,19 @@ public static class LibraryEndpoints
     internal static string ImageUrl(Guid gameId, long imageId) => $"/api/games/{gameId}/images/{imageId}";
 
     /// <summary>One <c>/api/games</c> row (spec §23), also used by discovery group pages.</summary>
+    /// <summary>S7: a Site user's name (their saves are counted apart); null for an Admin, who sees every save.</summary>
+    internal static string? SiteUserName(HttpContext ctx) =>
+        ctx.User.IsInRole(Roles.Admin) ? null : ctx.User.Identity?.Name;
+
+    /// <summary>S7: for a Site user, each game's <c>saveCount</c> becomes their own count (0 without a row).</summary>
+    internal static async Task<Page<GameListItem>> ForViewerAsync(Page<GameListItem> page, HttpContext ctx, IGameRepository repository)
+    {
+        if (SiteUserName(ctx) is not { } username)
+            return page;
+        var counts = await repository.GetUserSaveCountsAsync(username, page.Items.Select(g => g.Id).ToList(), ctx.RequestAborted);
+        return page with { Items = page.Items.Select(g => g with { SaveCount = counts.GetValueOrDefault(g.Id) }).ToList() };
+    }
+
     internal static object ToListItemDto(GameListItem game, ISystemRegistry systems)
     {
         // C2: quick play needs a browser core and a primary release stored in the zip; Play B1 / PSP B1:
