@@ -276,6 +276,15 @@
 	background-color: var(--bs-pet) !important;
 }
 
+/* Commodore VIC-20 system colour: a dark brick red, same in both themes; white on it is AAA (~7.5:1). */
+:root {
+	--bs-vic20: #7a2e24;
+}
+.text-bg-vic20 {
+	color: #fff !important;
+	background-color: var(--bs-vic20) !important;
+}
+
 /* Library cards (L1, L2): a step lighter than the body in dark mode; a small lift and shadow on hover or keyboard focus. */
 [data-bs-theme='dark'] .game-card {
 	--bs-card-bg: var(--bs-tertiary-bg);

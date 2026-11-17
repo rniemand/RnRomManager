@@ -28,6 +28,7 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
     public const string Opera = "opera";
     public const string Vice = "vice_x64sc";
     public const string VicePet = "vice_xpet";
+    public const string ViceVic = "vice_xvic";
 
     /// <summary>The pinned 4.2.3 files of each core (each report is its package's <c>reports/</c> copy).</summary>
     public static OperatorCoreManifest Pinned { get; } = new(
@@ -96,6 +97,17 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
                 "98ac6fbb90824a77ae6480a431c465d41e8cecce39394e036648d57e86297361", "application/octet-stream"),
             new("vice_xpet.json", 123,
                 "9bf5ec80ab1f58dc7cdccd73f0141385b030f262ce20aaae4403369dd7061301", "application/json"),
+        ]),
+        // Commodore VIC-20: https://registry.npmjs.org/@emulatorjs/core-vice_xvic/-/core-vice_xvic-4.2.3.tgz. Embeds the VIC-20's
+        // ROMs like vice_x64sc, so it's never bundled; its files sit in the same folder as the C64 core's.
+        new(ViceVic, "VICE (VIC-20)", o => o.ViceCorePath, EmulatorEndpoints.ViceCoreMismatch,
+        [
+            new("vice_xvic-wasm.data", 1_396_793,
+                "4c7de6f858e100e9aea93085d5aef01bdfe87399c21c0fde4e1b6c7f1da56316", "application/octet-stream"),
+            new("vice_xvic-legacy-wasm.data", 1_396_460,
+                "42067705c2fd9c3861247f0d251a1481a85b5c00fb7ba93798ed0fe65b9fdd70", "application/octet-stream"),
+            new("vice_xvic.json", 123,
+                "9c3439164e63320da512deded61cdbfa37ce018eedb3995e9eb0af616a0198fe", "application/json"),
         ]),
     ]);
 

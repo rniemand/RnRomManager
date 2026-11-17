@@ -74,6 +74,7 @@ public class IngestRestoreEndpointsTests
             [IngestSeeder.ThreeDoDat] = [],
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
+            [IngestSeeder.Vic20Dat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             ["Nintendo - Game Boy"] = [],
             ["Nintendo - Game Boy Color"] = [],

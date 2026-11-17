@@ -29,6 +29,7 @@ roms/
   coleco/               ColecoVision (.col)
   c64/                  Commodore 64 (.crt, .tap, .nib, .d64, .g64, .t64, .prg, .bin)
   pet/                  Commodore PET (.prg, .d64)
+  vic20/                Commodore VIC-20 (.a0, .20, .40, .60, .bin)
   gg/                   Game Gear (.gg, or .sms for SMS-mode games, as the DAT names it)
   sms/                  Master System (.sms)
   md/                   Mega Drive / Genesis (.md, or .bin for the one lock-on entry, as the DAT names it)

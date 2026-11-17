@@ -162,6 +162,7 @@ public class IngestPipelineTests
             [IngestSeeder.ThreeDoDat] = [new FixtureGame("Opal Orbit (USA)", "Opal Orbit (USA) (Track 1).bin", OpalData)],
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
+            [IngestSeeder.Vic20Dat] = [],
             [IngestSeeder.NintendoDsDat] =
             [
                 new FixtureGame("Bad Crc Hero (USA)", "Bad Crc Hero (USA).nds", BadCrcHero),

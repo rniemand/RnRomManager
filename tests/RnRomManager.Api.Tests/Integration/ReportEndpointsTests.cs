@@ -75,6 +75,7 @@ public class ReportEndpointsTests
             [IngestSeeder.ThreeDoDat] = [],
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
+            [IngestSeeder.Vic20Dat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] =
             [
