@@ -1,0 +1,125 @@
+{
+	"$comment": "Starter genre art (B17). Every file here needs an entry. Each tile is a Bootstrap Icons glyph (MIT) plus the genre name, made for RnRomManager.",
+	"assets": [
+		{
+			"file": "action.svg",
+			"genre": "Action",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons lightning-charge (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		},
+		{
+			"file": "adventure.svg",
+			"genre": "Adventure",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons compass (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		},
+		{
+			"file": "platform.svg",
+			"genre": "Platform",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons bricks (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		},
+		{
+			"file": "shooter.svg",
+			"genre": "Shooter",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons crosshair (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		},
+		{
+			"file": "shoot-em-up.svg",
+			"genre": "Shoot'em Up",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons rocket-takeoff (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		},
+		{
+			"file": "fighting.svg",
+			"genre": "Fighting",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons hand-index-thumb (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		},
+		{
+			"file": "beat-em-up.svg",
+			"genre": "Beat'em Up",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons people (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		},
+		{
+			"file": "sports.svg",
+			"genre": "Sports",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons trophy (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		},
+		{
+			"file": "racing.svg",
+			"genre": "Racing",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons flag (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		},
+		{
+			"file": "driving.svg",
+			"genre": "Driving",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons car-front (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		},
+		{
+			"file": "puzzle.svg",
+			"genre": "Puzzle",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons puzzle (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		},
+		{
+			"file": "role-playing-rpg.svg",
+			"genre": "Role-Playing (RPG)",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons shield (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		},
+		{
+			"file": "strategy.svg",
+			"genre": "Strategy",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons map (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		},
+		{
+			"file": "simulation.svg",
+			"genre": "Simulation",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons airplane (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		},
+		{
+			"file": "board-game.svg",
+			"genre": "Board Game",
+			"kind": "genre name tile with a Bootstrap Icons glyph",
+			"glyph": "bootstrap-icons dice-5 (v1.13.2)",
+			"source": "Made for RnRomManager from https://icons.getbootstrap.com",
+			"license": "Glyph: MIT (Bootstrap Icons, see licenses.json); tile: MIT (the RnRomManager license)"
+		}
+	]
+}
