@@ -2493,26 +2493,38 @@ test("Nintendo DS: the staged cartridge imports by DAT match and plays in DeSmuM
   assertCoreRequests();
 
   // A stylus press at the centre of the lower screen. The DS reads the touch screen once a frame, so the press is
-  // held (a bare click is too short to be seen). The quarter point sampled is well clear of the press.
+  // held (a bare click is too short to be seen). The quarter point sampled is well clear of the press. On a slow
+  // machine the first press can land before touch input is live (the stylus options arrive by a runtime update after
+  // boot), so it is repeated until the lower screen changes; only the first press the cartridge sees has any effect.
   const rect = (await canvas.boundingBox())!;
   const scale = rect.width / booted!.image[0];
   await viewer.mouse.move(
     rect.x + (booted!.box.x + booted!.box.w / 2) * scale,
     rect.y + (booted!.box.y + (booted!.box.h * 3) / 4) * scale,
   );
-  await viewer.mouse.down();
-  await viewer.waitForTimeout(300);
-  await viewer.mouse.up();
-  const touched = await waitForFrame(
-    decoder,
-    canvas,
-    (f) => nearColour(f.lower, NdsMarkerColours.touched),
-    15_000,
+  const pressUntil = Date.now() + 15_000;
+  let touched: GuestFrame | null = null;
+  let presses = 0;
+  do {
+    presses++;
+    await viewer.mouse.down();
+    await viewer.waitForTimeout(300);
+    await viewer.mouse.up();
+    touched = await waitForFrame(
+      decoder,
+      canvas,
+      (f) => nearColour(f.lower, NdsMarkerColours.touched),
+      Math.min(3_000, Math.max(0, pressUntil - Date.now())),
+    );
+  } while (
+    !nearColour(touched?.lower, NdsMarkerColours.touched) &&
+    Date.now() < pressUntil
   );
   expect(
     nearColour(touched?.lower, NdsMarkerColours.touched),
-    `lower ${touched?.lower}`,
+    `lower ${touched?.lower} after ${presses} press(es)`,
   ).toBe(true);
+  if (presses > 1) console.log(`DS stylus: touched after ${presses} presses`);
   await canvas.evaluate(() => {
     const runAutosave = (window as AutosaveWindow).runNdsAutosave;
     if (!runAutosave)
