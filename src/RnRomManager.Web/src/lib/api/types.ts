@@ -444,6 +444,22 @@ export interface BackupStatus {
 	backups: BackupFile[];
 }
 
+/** B27: `POST /api/admin/backups/{fileName}/restore`. */
+export interface BackupRestoreResult {
+	restored: string;
+	safetyBackup: string;
+}
+
+/** B28: `GET/PUT /api/admin/dats/settings`. */
+export interface DatRefreshSettings {
+	enabled: boolean;
+	/** `HH:mm` in the server's time zone. */
+	time: string;
+	/** The container's `TZ` id. */
+	timeZone: string;
+	nextRunAt: string | null;
+}
+
 /** `GET /api/discovery/{kind}` item (discovery B3): one publisher or genre across systems. */
 export interface DiscoveryGroup {
 	/** Lowercase hex SHA-256 of the normalized name. */

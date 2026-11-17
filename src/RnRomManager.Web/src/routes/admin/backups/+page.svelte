@@ -1,15 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { api } from '#lib/api/client.js';
+	import { api, resetClient } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { BackupFile, BackupStatus } from '#lib/api/types.js';
+	import type { BackupFile, BackupRestoreResult, BackupStatus } from '#lib/api/types.js';
+	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import { formatDateTime } from '#lib/format.js';
+	import { navigate } from '#lib/navigation.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
+	import { navCounts } from '#lib/stores/navCounts.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
 	const restoreDocs =
@@ -76,6 +79,59 @@
 			}
 		} finally {
 			saving = false;
+		}
+	}
+
+	/** B26: the backup being restored, and the modal's state. */
+	let restoring = $state<BackupFile | null>(null);
+	let restoreOpen = $state(false);
+	let restoreBusy = $state(false);
+	let restoreError = $state<{ title: string; detail?: string } | null>(null);
+
+	function askRestore(backup: BackupFile): void {
+		restoring = backup;
+		restoreError = null;
+		restoreOpen = true;
+	}
+
+	/** B27.8: every session ended, so forget this one (as logout does) and the cached antiforgery token, then sign in. */
+	async function signedOut(message: string, kind: 'success' | 'warning'): Promise<void> {
+		resetClient();
+		auth.set(null);
+		navCounts.reset();
+		toasts.show(message, kind);
+		await navigate('/login');
+	}
+
+	async function restore(): Promise<void> {
+		if (!restoring) return;
+		restoreBusy = true;
+		restoreError = null;
+		try {
+			const result = await api.post<BackupRestoreResult>(
+				`/api/admin/backups/${encodeURIComponent(restoring.fileName)}/restore`
+			);
+			restoreOpen = false;
+			await signedOut(
+				`Restored ${result.restored}; safety backup ${result.safetyBackup}. Sign in again, then run Integrity → Run quick.`,
+				'success'
+			);
+		} catch (e) {
+			// No ProblemDetails came back (network error, or a proxy's 502/504): the restore may still be running.
+			const lost =
+				isApiError(e, 'NetworkError') ||
+				(isApiError(e, 'HttpError') && (e.status === 502 || e.status === 504));
+			if (lost || !isApiError(e)) {
+				restoreOpen = false;
+				await signedOut(
+					'The restore may still be running. Sign in again in a minute, then check Backups.',
+					'warning'
+				);
+			} else {
+				restoreError = { title: e.title, detail: e.detail };
+			}
+		} finally {
+			restoreBusy = false;
 		}
 	}
 
@@ -220,6 +276,7 @@
 							<th scope="col">File</th>
 							<th scope="col">Created</th>
 							<th scope="col" class="text-end">Size</th>
+							<th scope="col"><span class="visually-hidden">Actions</span></th>
 						</tr>
 					</thead>
 					<tbody>
@@ -228,6 +285,14 @@
 								<td class="text-break font-monospace small">{backup.fileName}</td>
 								<td class="text-nowrap">{formatDateTime(backup.createdAt)}</td>
 								<td class="text-end"><FileSize bytes={backup.sizeBytes} /></td>
+								<td class="text-end">
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-danger"
+										aria-label="Restore {backup.fileName}"
+										onclick={() => askRestore(backup)}><Icon name="restore" /> Restore</button
+									>
+								</td>
 							</tr>
 						{/each}
 					</tbody>
@@ -236,3 +301,33 @@
 		</div>
 	{/if}
 {/if}
+
+<ConfirmModal
+	bind:open={restoreOpen}
+	title="Restore backup"
+	confirmLabel="Restore"
+	confirmClass="btn-danger"
+	busy={restoreBusy}
+	onconfirm={restore}
+>
+	{#if restoring}
+		<p>
+			Restore <strong class="font-monospace">{restoring.fileName}</strong> from {formatDateTime(
+				restoring.createdAt
+			)}?
+		</p>
+		<ul>
+			<li>Every table in the database is replaced by the backup's.</li>
+			<li>A safety backup of the current database is taken first.</li>
+			<li>Everyone, including you, is signed out.</li>
+			<li>Run Integrity → Run quick afterwards: the library ZIPs may be newer than the backup.</li>
+		</ul>
+		{#if restoreError}
+			<div class="alert alert-danger mb-0" role="alert">
+				<strong>{restoreError.title}</strong>{#if restoreError.detail}<div>
+						{restoreError.detail}
+					</div>{/if}
+			</div>
+		{/if}
+	{/if}
+</ConfirmModal>

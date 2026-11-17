@@ -2,6 +2,8 @@
 export interface ProblemDetails {
 	status?: number;
 	title?: string;
+	/** The longer explanation some problems carry (e.g. B27's `BackupTooNew`, `RestoreFailed`). */
+	detail?: string;
 	code?: string;
 	traceId?: string;
 	errors?: Record<string, string[]>;
@@ -14,6 +16,7 @@ export class ApiError extends Error {
 	readonly status: number;
 	readonly code: string;
 	readonly title: string;
+	readonly detail?: string;
 	readonly traceId?: string;
 	readonly errors: Record<string, string[]>;
 	/** RP8: the sources already merged when a group merge stopped; empty otherwise. */
@@ -26,6 +29,7 @@ export class ApiError extends Error {
 		this.status = status;
 		this.code = problem.code ?? (status === 0 ? 'NetworkError' : 'HttpError');
 		this.title = title;
+		this.detail = problem.detail;
 		this.traceId = problem.traceId;
 		this.errors = problem.errors ?? {};
 		this.merged = problem.merged ?? [];
