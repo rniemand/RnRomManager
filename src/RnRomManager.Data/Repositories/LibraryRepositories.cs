@@ -8,6 +8,7 @@ using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Storage;
+using RnRomManager.Core.Users;
 
 namespace RnRomManager.Data.Repositories;
 
@@ -559,7 +560,9 @@ public sealed class LibraryMirror : ILibraryMirror
 
     public async Task ApplyAsync(IReadOnlyList<MirrorEntry> replace, IReadOnlyCollection<Guid> delete, CancellationToken cancellationToken)
     {
-        var rows = replace.Select(e => e.ToRows()).Select(r => r with { Game = r.Game with { SaveCount = SaveCount(r.Game.ZipPath) } }).ToList();
+        var counts = replace.Select(e => e.ToRows()).Select(r => (Rows: r, Counts: SaveCounts(r.Game.ZipPath))).ToList();
+        var rows = counts.Select(c => c.Rows with { Game = c.Rows.Game with { SaveCount = c.Counts.Total } }).ToList();
+        var ownerCounts = counts.ToDictionary(c => c.Rows.Game.Id, c => c.Counts.PerOwner);
         var ids = delete.Concat(rows.Select(r => r.Game.Id)).Distinct().ToList();
         var zipPaths = rows.Select(r => r.Game.ZipPath).ToList();
 
@@ -591,6 +594,13 @@ public sealed class LibraryMirror : ILibraryMirror
                         @Genres, @Description, @HasDefaultBoxArt, @Rating, @Favourite, @SaveCount, @ZipSizeBytes, @ZipMtimeUtc, @InfoSchemaVersion,
                         @CreatedAt, @UpdatedAt)
                 """, game, transaction, cancellationToken: cancellationToken));
+
+            // S6: the delete above cascaded the game's old per-owner rows.
+            if (ownerCounts[game.Id].Count > 0)
+                await connection.ExecuteAsync(new CommandDefinition("""
+                    INSERT INTO game_user_save_counts (game_id, username, save_count) VALUES (@GameId, @Username, @SaveCount)
+                    """, ownerCounts[game.Id].Select(o => new { GameId = game.Id, Username = o.Key, SaveCount = o.Value }),
+                    transaction, cancellationToken: cancellationToken));
 
             if (roms.Count > 0)
                 await connection.ExecuteAsync(new CommandDefinition("""
@@ -632,20 +642,49 @@ public sealed class LibraryMirror : ILibraryMirror
         await transaction.CommitAsync(cancellationToken);
     }
 
-    /// <summary>The ZIP's <c>saves/</c> entries but the index; 0 when it can't be read (display only: the next write or sync corrects it).</summary>
-    private int SaveCount(string zipPath)
+    private static readonly IReadOnlyDictionary<string, int> NoOwners = new Dictionary<string, int>();
+
+    /// <summary>
+    /// The ZIP's <c>saves/</c> entries but the index (<c>games.save_count</c>), and per owner (S6) the saves of a readable
+    /// <c>saves.json</c> whose <c>uploadedBy</c> passes <see cref="UsernamePolicy"/>, grouped ignoring case like the column's
+    /// collation. 0 and none when the ZIP can't be read (display only: the next write or sync corrects it).
+    /// </summary>
+    private (int Total, IReadOnlyDictionary<string, int> PerOwner) SaveCounts(string zipPath)
     {
         if (_roms is null)
-            return 0;
+            return (0, NoOwners);
         try
         {
             using var zip = ZipFile.OpenRead(SafePath.Resolve(_roms, zipPath));
-            return zip.Entries.Count(e => e.FullName.StartsWith(LibraryZip.SavesFolder, StringComparison.Ordinal)
+            var total = zip.Entries.Count(e => e.FullName.StartsWith(LibraryZip.SavesFolder, StringComparison.Ordinal)
                 && e.FullName != LibraryZip.SavesIndexEntry && !e.FullName.EndsWith('/'));
+            return (total, OwnerCounts(zip));
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or UnsafePathException)
         {
-            return 0;
+            return (0, NoOwners);
         }
+    }
+
+    private static IReadOnlyDictionary<string, int> OwnerCounts(ZipArchive zip)
+    {
+        if (zip.GetEntry(LibraryZip.SavesIndexEntry) is not { } index || index.Length > GameSaves.MaxIndexBytes)
+            return NoOwners;
+        using var copy = new MemoryStream();
+        using (var stream = index.Open())
+        {
+            // Bounded even if the entry's header lies: going past the limit makes Parse call it unreadable.
+            var buffer = new byte[81920];
+            int read;
+            while (copy.Length <= GameSaves.MaxIndexBytes && (read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                copy.Write(buffer, 0, read);
+        }
+        var result = GameSaves.Parse(copy.ToArray(), name => zip.GetEntry(name)?.Length);
+        if (result.State != SavesState.Valid)
+            return NoOwners;
+        return result.Index!.Saves
+            .Where(s => UsernamePolicy.Validate(s.UploadedBy) is null)
+            .GroupBy(s => s.UploadedBy!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
     }
 }

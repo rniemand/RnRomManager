@@ -12,7 +12,7 @@ public class SchemaMigrationTests
 {
     private static readonly string[] Tables =
     [
-        "app_settings", "audit_events", "bundle_queues", "collection_games", "collections", "data_protection_keys", "duplicate_dismissals", "games", "images", "ingest_review_items", "integrity_issues",
+        "app_settings", "audit_events", "bundle_queues", "collection_games", "collections", "data_protection_keys", "duplicate_dismissals", "game_user_save_counts", "games", "images", "ingest_review_items", "integrity_issues",
         "job_items", "jobs", "publisher_logos", "rom_files", "roms", "user_roles", "users",
     ];
 
@@ -43,7 +43,7 @@ public class SchemaMigrationTests
             "0010_game_rating", "0011_user_roles", "0012_image_cover", "0013_duplicate_dismissals", "0014_audit_events",
             "0015_app_settings", "0016_user_hotkeys", "0017_collections", "0018_external_roms",
             "0019_release_versions", "0020_rom_files", "0021_publisher_logos", "0022_bundle_queues", "0023_game_save_count",
-            "0024_fold_rom_manager",
+            "0024_fold_rom_manager", "0025_game_user_save_counts",
         }));
     }
 
@@ -52,7 +52,7 @@ public class SchemaMigrationTests
     {
         Lifecycle(_cs).Migrate();
 
-        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 24L }));
+        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 25L }));
     }
 
     [Test]
@@ -84,6 +84,7 @@ public class SchemaMigrationTests
     [TestCase("duplicate_dismissals", "system_id varchar(16), base_title varchar(255), games_key char(64), dismissed_by int(11) NULL, dismissed_at datetime(6)")]
     [TestCase("collections", "id char(36), user_id int(11), name varchar(100), notes text NULL, cover_format varchar(8) NULL, cover_updated_at datetime(6) NULL, created_at datetime(6), updated_at datetime(6)")]
     [TestCase("collection_games", "collection_id char(36), game_id char(36), added_at datetime(6)")]
+    [TestCase("game_user_save_counts", "game_id char(36), username varchar(64), save_count int(11)")]
     [TestCase("bundle_queues", "id char(36), user_id int(11), name varchar(100), revision int(11), item_count int(11), entries mediumtext, created_at datetime(6), updated_at datetime(6)")]
     public async Task Columns_MatchSpec(string table, string expected)
     {
@@ -115,6 +116,7 @@ public class SchemaMigrationTests
             "collections ux_collections_user_name U user_id,name",
             "data_protection_keys PRIMARY U id",
             "duplicate_dismissals PRIMARY U system_id,base_title,games_key",
+            "game_user_save_counts PRIMARY U game_id,username",
             "games ix_games_created_at - created_at",
             "games ix_games_system_bucket_title - system_id,bucket,title",
             "games ix_games_title - title",
@@ -171,6 +173,7 @@ public class SchemaMigrationTests
             "bundle_queues -> users CASCADE",
             "collection_games -> collections CASCADE",
             "collections -> users CASCADE",
+            "game_user_save_counts -> games CASCADE",
             "images -> games CASCADE",
             "ingest_review_items -> users RESTRICT",
             "job_items -> jobs CASCADE",
@@ -227,10 +230,12 @@ public class SchemaMigrationTests
         await ExecuteAsync(cs,
             "INSERT INTO images (game_id, file_name, type, source, size_bytes, sha1, width, height, date_added) VALUES " +
             "(@g, 'boxart.png', 'BoxArt', 'Default', 1, REPEAT('0', 40), 512, 512, UTC_TIMESTAMP(6))", ("@g", gameId));
+        await ExecuteAsync(cs, "INSERT INTO game_user_save_counts (game_id, username, save_count) VALUES (@g, 'bob', 2)", ("@g", gameId));
 
         await ExecuteAsync(cs, "DELETE FROM games WHERE id = @g", ("@g", gameId));
 
-        Assert.That(await ColumnAsync<long>(cs, "SELECT (SELECT COUNT(*) FROM roms) + (SELECT COUNT(*) FROM images)"), Is.EqualTo(new[] { 0L }));
+        Assert.That(await ColumnAsync<long>(cs,
+            "SELECT (SELECT COUNT(*) FROM roms) + (SELECT COUNT(*) FROM images) + (SELECT COUNT(*) FROM game_user_save_counts)"), Is.EqualTo(new[] { 0L }));
     }
 
     [Test]
