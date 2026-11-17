@@ -100,16 +100,15 @@ public class StorageFoldersTests
     }
 
     [Test]
-    public void EnsureSystemFolders_CreatesLetterAndIngestFoldersPerSystem()
+    public void EnsureSystemFolders_CreatesIngestFoldersPerSystem_AndNoLibraryFolders()
     {
         var paths = Paths();
 
-        StorageFolders.EnsureSystemFolders(paths, [Handler("gb"), Handler("gbc")], NullLogger.Instance);
+        StorageFolders.EnsureSystemFolders(paths, [Handler("gb"), Handler("gbc"), Handler("ext", embed: false)], NullLogger.Instance);
 
-        foreach (var id in new[] { "gb", "gbc" })
+        Assert.That(Directory.Exists(paths.Roms), Is.False, "B30: roms/<system> is created on first write");
+        foreach (var id in new[] { "gb", "gbc", "ext" })
         {
-            Assert.That(Directory.GetDirectories(Path.Combine(paths.Roms, id)).Select(Path.GetFileName),
-                Is.EquivalentTo(new[] { "#" }.Concat(Enumerable.Range('A', 26).Select(c => ((char)c).ToString()))));
             Assert.That(Directory.GetDirectories(Path.Combine(paths.Ingest, id)).Select(Path.GetFileName),
                 Is.EquivalentTo(new[] { "_duplicates", "_failed", "_removed" }));
         }
@@ -120,7 +119,7 @@ public class StorageFoldersTests
     {
         var paths = Paths();
         StorageFolders.EnsureSystemFolders(paths, [Handler("gb")], NullLogger.Instance);
-        var keep = Path.Combine(paths.Roms, "gb", "T", "Tetris.zip");
+        var keep = Path.Combine(paths.Ingest, "gb", "_failed", "Tetris.zip");
         File.WriteAllText(keep, "x");
 
         StorageFolders.EnsureSystemFolders(paths, [Handler("gb")], NullLogger.Instance);
@@ -138,27 +137,15 @@ public class StorageFoldersTests
     public void EnsureSystemFolders_BlockedByAFile_ThrowsNamingTheFolder()
     {
         var paths = Paths();
-        Directory.CreateDirectory(Path.Combine(paths.Roms, "gb"));
-        File.WriteAllText(Path.Combine(paths.Roms, "gb", "A"), "file where a folder should be");
+        Directory.CreateDirectory(Path.Combine(paths.Ingest, "gb"));
+        File.WriteAllText(Path.Combine(paths.Ingest, "gb", "_failed"), "file where a folder should be");
 
         var ex = Assert.Throws<StorageNotWritableException>(() => StorageFolders.EnsureSystemFolders(paths, [Handler("gb")], NullLogger.Instance));
 
-        Assert.That(ex!.Message, Does.Contain(Path.Combine(paths.Roms, "gb", "A")));
+        Assert.That(ex!.Message, Does.Contain(Path.Combine(paths.Ingest, "gb", "_failed")));
     }
 
     private static readonly string[] AllBuckets = ["#", .. Enumerable.Range('A', 26).Select(c => ((char)c).ToString())];
-
-    [Test]
-    public void EnsureSystemFolders_External_CreatesBucketsAndSideFolders()
-    {
-        var paths = Paths();
-
-        StorageFolders.EnsureSystemFolders(paths, [Handler("ext", embed: false)], NullLogger.Instance);
-
-        Assert.That(Directory.GetDirectories(Path.Combine(paths.Roms, "ext")).Select(Path.GetFileName), Is.EquivalentTo(AllBuckets));
-        Assert.That(Directory.GetDirectories(Path.Combine(paths.Ingest, "ext")).Select(Path.GetFileName),
-            Is.EquivalentTo(new[] { "_duplicates", "_failed", "_removed" }));
-    }
 
     /// <summary>Links <paramref name="link"/> (its parent is created) to a new empty folder outside both roots.</summary>
     private string LinkOutside(string link)
@@ -170,14 +157,12 @@ public class StorageFoldersTests
         return outside;
     }
 
-    [TestCase("roms", "ext", TestName = "EnsureSystemFolders_LinkedExternalFolder_IsSkipped rom system folder")]
-    [TestCase("roms", "ext/A", TestName = "EnsureSystemFolders_LinkedExternalFolder_IsSkipped bucket")]
-    [TestCase("ingest", "ext", TestName = "EnsureSystemFolders_LinkedExternalFolder_IsSkipped ingest system folder")]
-    [TestCase("ingest", "ext/_failed", TestName = "EnsureSystemFolders_LinkedExternalFolder_IsSkipped side folder")]
-    public void EnsureSystemFolders_LinkedExternalFolder_IsSkipped(string tree, string linked)
+    [TestCase("ext", TestName = "EnsureSystemFolders_LinkedExternalFolder_IsSkipped ingest system folder")]
+    [TestCase("ext/_failed", TestName = "EnsureSystemFolders_LinkedExternalFolder_IsSkipped side folder")]
+    public void EnsureSystemFolders_LinkedExternalFolder_IsSkipped(string linked)
     {
         var paths = Paths();
-        var root = tree == "roms" ? paths.Roms : paths.Ingest;
+        var root = paths.Ingest;
         var link = Path.Combine(root, linked);
         var outside = LinkOutside(link);
         var logger = Substitute.For<ILogger>();
@@ -187,15 +172,106 @@ public class StorageFoldersTests
 
             Assert.That(Directory.GetFileSystemEntries(outside), Is.Empty, "nothing is created through the link");
             Assert.That(logger.ReceivedCalls().Count(c => c.GetArguments()[0] is LogLevel.Warning), Is.EqualTo(1));
-            // The other tree, and the link's siblings, are still created.
-            var other = tree == "roms" ? Path.Combine(paths.Ingest, "ext", "_removed") : Path.Combine(paths.Roms, "ext", "B");
-            Assert.That(Directory.Exists(other), Is.True);
+            // The link's siblings are still created.
             if (linked.Contains('/'))
-                Assert.That(Directory.Exists(Path.Combine(root, "ext", tree == "roms" ? "B" : "_removed")), Is.True);
+                Assert.That(Directory.Exists(Path.Combine(root, "ext", "_removed")), Is.True);
         }
         finally
         {
             TestLinks.RemoveDirectoryLink(link);
         }
+    }
+
+    private static string[] Entries(string folder) =>
+        Directory.EnumerateFileSystemEntries(folder).Select(f => Path.GetFileName(f)!).Order(StringComparer.Ordinal).ToArray();
+
+    private static int Warnings(ILogger logger) => logger.ReceivedCalls().Count(c => c.GetArguments()[0] is LogLevel.Warning);
+
+    [TestCase(true)]
+    [TestCase(false)]
+    public void RemoveEmptyLibraryFolders_RemovesEmptyBuckets_ThenTheEmptySystemFolder(bool embed)
+    {
+        var paths = Paths();
+        foreach (var bucket in AllBuckets)
+            Directory.CreateDirectory(Path.Combine(paths.Roms, "gb", bucket));
+        Directory.CreateDirectory(Path.Combine(paths.Roms, "nes", "A"));
+        File.WriteAllText(Path.Combine(paths.Roms, "nes", "A", "Adventure.zip"), "x");
+        Directory.CreateDirectory(Path.Combine(paths.Roms, "nes", "B"));
+
+        StorageFolders.RemoveEmptyLibraryFolders(paths, [Handler("gb", embed), Handler("nes", embed), Handler("snes", embed)], NullLogger.Instance);
+
+        Assert.That(Entries(paths.Roms), Is.EqualTo(new[] { "nes" }));
+        Assert.That(Entries(Path.Combine(paths.Roms, "nes")), Is.EqualTo(new[] { "A" }));
+        Assert.That(File.Exists(Path.Combine(paths.Roms, "nes", "A", "Adventure.zip")), Is.True);
+    }
+
+    [Test]
+    public void RemoveEmptyLibraryFolders_KeepsHiddenFiles_Subfolders_AndOtherNames()
+    {
+        var paths = Paths();
+        var hidden = Path.Combine(paths.Roms, "gb", "A", ".hidden");
+        Directory.CreateDirectory(Path.GetDirectoryName(hidden)!);
+        File.WriteAllText(hidden, "x");
+        if (OperatingSystem.IsWindows())
+            File.SetAttributes(hidden, FileAttributes.Hidden);
+        Directory.CreateDirectory(Path.Combine(paths.Roms, "gb", "B", "nested"));
+        Directory.CreateDirectory(Path.Combine(paths.Roms, "gb", "_extra"));
+
+        StorageFolders.RemoveEmptyLibraryFolders(paths, [Handler("gb")], NullLogger.Instance);
+
+        Assert.That(Entries(Path.Combine(paths.Roms, "gb")), Is.EqualTo(new[] { "A", "B", "_extra" }));
+        Assert.That(Directory.Exists(Path.Combine(paths.Roms, "gb", "B", "nested")), Is.True, "only bucket folders themselves are candidates");
+    }
+
+    [Test]
+    public void RemoveEmptyLibraryFolders_NoLibraryFolders_DoesNothingQuietly()
+    {
+        var logger = Substitute.For<ILogger>();
+
+        StorageFolders.RemoveEmptyLibraryFolders(Paths(), [Handler("gb"), Handler("ext", embed: false)], logger);
+
+        Assert.That(Warnings(logger), Is.Zero, "missing folders are skipped silently");
+    }
+
+    [TestCase(true, "gb", TestName = "RemoveEmptyLibraryFolders_LinkedFolder_IsLeftAlone embedded system folder")]
+    [TestCase(true, "gb/A", TestName = "RemoveEmptyLibraryFolders_LinkedFolder_IsLeftAlone embedded bucket")]
+    [TestCase(false, "gb", TestName = "RemoveEmptyLibraryFolders_LinkedFolder_IsLeftAlone external system folder")]
+    [TestCase(false, "gb/A", TestName = "RemoveEmptyLibraryFolders_LinkedFolder_IsLeftAlone external bucket")]
+    public void RemoveEmptyLibraryFolders_LinkedFolder_IsLeftAlone(bool embed, string linked)
+    {
+        var paths = Paths();
+        var link = Path.Combine(paths.Roms, linked);
+        var outside = LinkOutside(link);
+        Directory.CreateDirectory(Path.Combine(outside, "Z"));
+        if (linked.Contains('/'))
+            Directory.CreateDirectory(Path.Combine(paths.Roms, "gb", "B"));
+        var logger = Substitute.For<ILogger>();
+        try
+        {
+            StorageFolders.RemoveEmptyLibraryFolders(paths, [Handler("gb", embed)], logger);
+
+            Assert.That(Directory.Exists(Path.Combine(outside, "Z")), Is.True, "nothing is deleted through the link");
+            Assert.That(Directory.Exists(link), Is.True, "the link itself stays");
+            Assert.That(Warnings(logger), Is.EqualTo(1));
+            if (linked.Contains('/'))
+                Assert.That(Directory.Exists(Path.Combine(paths.Roms, "gb", "B")), Is.False, "its empty siblings still go");
+        }
+        finally
+        {
+            TestLinks.RemoveDirectoryLink(link);
+        }
+    }
+
+    [Test]
+    public void RemoveEmptyLibraryFolders_Failure_LogsInsteadOfThrowing_AndGoesOn()
+    {
+        var paths = Paths();
+        Directory.CreateDirectory(Path.Combine(paths.Roms, "gb", "A"));
+        var logger = Substitute.For<ILogger>();
+
+        StorageFolders.RemoveEmptyLibraryFolders(paths, [Handler("../escape"), Handler("gb")], logger);
+
+        Assert.That(Warnings(logger), Is.EqualTo(1));
+        Assert.That(Directory.Exists(Path.Combine(paths.Roms, "gb")), Is.False, "the next system is still cleaned");
     }
 }
