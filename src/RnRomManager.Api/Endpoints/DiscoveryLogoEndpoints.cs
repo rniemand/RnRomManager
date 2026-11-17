@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using RnRomManager.Api.Auth;
+using RnRomManager.Api.Http;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Library;
@@ -26,6 +27,8 @@ public static partial class DiscoveryLogoEndpoints
     public const int MaxDimension = 2048;
 
     private const string Route = "/discovery/{kind}/logo";
+
+    public sealed record LogoUrlRequest(string? Url);
 
     /// <summary>The route name of each kind.</summary>
     private static readonly IReadOnlyDictionary<string, LogoKind> Kinds = new Dictionary<string, LogoKind>(StringComparer.Ordinal)
@@ -79,6 +82,32 @@ public static partial class DiscoveryLogoEndpoints
             audit.Record(Event(parsed, replaced: true, actor, name, key!));
             return Results.NoContent();
         }).RequireAuthorization(AuthSetup.AdminOnly).WithMetadata(new RequestSizeLimitAttribute(RequestLimit));
+
+        // B14: key, group, URL, download, then the upload's own checks; the downloader only reaches public addresses.
+        api.MapPut(Route + "/from-url", async (string kind, string? key, LogoUrlRequest? request, HttpContext ctx, IDiscoveryLogoRepository logos,
+            IDiscoveryRepository discovery, ISystemRegistry systems, ImageUrlDownloader downloader, IAuditLog audit, TimeProvider time) =>
+        {
+            if (!Kinds.TryGetValue(kind, out var parsed))
+                return Problems.NotFound(ctx);
+            if (KeyError(ctx, parsed, key) is { } invalid)
+                return invalid;
+            if (await NameAsync(parsed, key!, discovery, systems, ctx.RequestAborted) is not { } name)
+                return Problems.NotFound(ctx);
+            if (LibraryEndpoints.ParseImageUrl(request?.Url) is not { } url)
+                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = ["Enter an http or https image URL."] });
+            var download = await downloader.DownloadAsync(url, ctx.RequestAborted);
+            if (download.Bytes is not { } bytes)
+                return Problems.Create(ctx, download.Status, download.Code!, download.Title!);
+            var (mediaType, error) = CheckLogo(bytes);
+            if (error is not null)
+                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = [error] });
+
+            var actor = AuditActor.From(ctx.User);
+            await logos.UpsertAsync(new DiscoveryLogo(parsed, StoredKey(parsed, key!), mediaType!, bytes, actor.UserId, time.GetUtcNow().UtcDateTime),
+                ctx.RequestAborted);
+            audit.Record(Event(parsed, replaced: true, actor, name, key!, $" from {request!.Url}"));
+            return Results.NoContent();
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         api.MapDelete(Route, async (string kind, string? key, HttpContext ctx, IDiscoveryLogoRepository logos, IDiscoveryRepository discovery,
             ISystemRegistry systems, IAuditLog audit) =>

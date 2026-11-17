@@ -8,10 +8,12 @@ using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using RnRomManager.Api.Endpoints;
+using RnRomManager.Api.Http;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Library;
+using RnRomManager.Core.Media;
 using RnRomManager.Core.Systems;
 using RnRomManager.Data.Repositories;
 using RnRomManager.Core.Users;
@@ -29,6 +31,7 @@ public class DiscoveryLogoEndpointsTests
     private ApiFactory _factory = null!;
     private AuthClient _alice = null!;
     private AuthClient _bob = null!;
+    private StubImageServer _stub = null!;
     private int _seed;
 
     private static readonly string Nintendo = Key("nintendo");
@@ -36,10 +39,16 @@ public class DiscoveryLogoEndpointsTests
     [OneTimeSetUp]
     public async Task StartHost()
     {
+        // The URL stub is on 127.0.0.1, so loopback is allowed here; other private addresses stay blocked.
+        var policy = new ImageUrlPolicy(a => IPAddress.IsLoopback(a) || PublicAddress.IsPublic(a), TimeSpan.FromSeconds(1));
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
         {
-            TestServices = services => services.AddSingleton<IDiscoveryRepository>(sp => new DiscoveryRepository(
-                sp.GetRequiredService<IDbConnectionFactory>(), sp.GetRequiredService<IGameRepository>(), _indexClock)),
+            TestServices = services =>
+            {
+                services.AddSingleton<IDiscoveryRepository>(sp => new DiscoveryRepository(
+                    sp.GetRequiredService<IDbConnectionFactory>(), sp.GetRequiredService<IGameRepository>(), _indexClock));
+                services.AddSingleton(policy);
+            },
         };
         await _factory.StartSharedAsync();
     }
@@ -50,6 +59,7 @@ public class DiscoveryLogoEndpointsTests
     [SetUp]
     public async Task SetUp()
     {
+        _stub = await StubImageServer.StartAsync();
         await _factory.ResetAsync();
         _alice = await SignInAsync("alice");
         _bob = await SignInAsync("bob");
@@ -58,8 +68,9 @@ public class DiscoveryLogoEndpointsTests
     }
 
     [TearDown]
-    public void TearDown()
+    public async Task TearDown()
     {
+        await _stub.DisposeAsync();
         _alice?.Dispose();
         _bob?.Dispose();
     }
@@ -333,6 +344,146 @@ public class DiscoveryLogoEndpointsTests
     public async Task SystemKey_Of32Characters_IsWellFormed()
     {
         Assert.That(await StatusAsync(_alice.GetAsync($"/api/discovery/systems/logo?key={new string('a', 32)}")), Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    private static string FromUrl(string kind, string key) => $"/api/discovery/{kind}/logo/from-url?key={key}";
+
+    private static Task<HttpResponseMessage> PutUrlAsync(AuthClient client, string kind, string key, string url) =>
+        client.SendAsync(HttpMethod.Put, FromUrl(kind, key), new { url }, sendXsrf: true);
+
+    [TestCase("publishers")]
+    [TestCase("genres")]
+    [TestCase("systems")]
+    public async Task FromUrl_DownloadsStoresAndAuditsTheSource(string kind)
+    {
+        await AddGameAsync("Tetris", ["Nintendo"], ["Puzzle"]);
+        ExpireIndex();
+        var (key, details) = kind switch
+        {
+            "publishers" => (Nintendo, $"Nintendo (key {Nintendo})"),
+            "genres" => (Key("puzzle"), $"Puzzle (key {Key("puzzle")})"),
+            _ => ("gb", $"{SystemName("gb")} (system gb)"),
+        };
+        var jpeg = Jpeg(40, 40);
+        _stub.Routes["/logo.jpg"] = StubImageServer.Bytes(jpeg, "text/plain");
+        var url = _stub.Url("/logo.jpg").ToString();
+
+        Assert.That(await StatusAsync(PutUrlAsync(_alice, kind, key, url)), Is.EqualTo(HttpStatusCode.NoContent));
+
+        using (var served = await _bob.GetAsync($"/api/discovery/{kind}/logo?key={key}"))
+        {
+            Assert.That(served.Content.Headers.ContentType!.MediaType, Is.EqualTo("image/jpeg"), "by content, not the served type");
+            Assert.That(await served.Content.ReadAsByteArrayAsync(), Is.EqualTo(jpeg));
+        }
+        var replaced = kind switch
+        {
+            "publishers" => AuditActions.PublisherLogoReplaced,
+            "genres" => AuditActions.GenreLogoReplaced,
+            _ => AuditActions.SystemLogoReplaced,
+        };
+        Assert.That(await AuditRowsAsync(), Is.EqualTo(new[] { new AuditRow(replaced, "alice", $"{details} from {url}") }));
+    }
+
+    private static IEnumerable<TestCaseData> BadUrls()
+    {
+        yield return new TestCaseData("ftp://example.com/a.png").SetName("FromUrl not http");
+        yield return new TestCaseData("https://user:pw@example.com/a.png").SetName("FromUrl with userinfo");
+        yield return new TestCaseData("relative.png").SetName("FromUrl relative");
+        yield return new TestCaseData("").SetName("FromUrl empty");
+        yield return new TestCaseData("https://example.com/" + new string('a', 1010)).SetName("FromUrl over 1024 characters");
+    }
+
+    [TestCaseSource(nameof(BadUrls))]
+    public async Task FromUrl_BadUrl_Is400OnUrl_WithoutDownloading(string url)
+    {
+        using var response = await PutUrlAsync(_alice, "publishers", Nintendo, url);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").GetProperty("url")[0].GetString(),
+            Is.EqualTo("Enter an http or https image URL."));
+        Assert.That(_stub.Requests, Is.Empty);
+    }
+
+    [Test]
+    public async Task FromUrl_NoBody_Is400OnUrl()
+    {
+        using var response = await _alice.SendAsync(HttpMethod.Put, FromUrl("publishers", Nintendo), new { }, sendXsrf: true);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").TryGetProperty("url", out _), Is.True);
+    }
+
+    private static IEnumerable<TestCaseData> UnusableImages()
+    {
+        yield return new TestCaseData("<svg/>"u8.ToArray(), "The logo must be a PNG or JPEG image.").SetName("FromUrl not a PNG or JPEG");
+        yield return new TestCaseData(Png(10, 10, DiscoveryLogoEndpoints.MaxBytes + 1), "The logo must be at most 512 KiB.").SetName("FromUrl over 512 KiB");
+        yield return new TestCaseData(Png(2049, 10), "The logo must be at most 2048 pixels wide and high.").SetName("FromUrl too wide");
+    }
+
+    [TestCaseSource(nameof(UnusableImages))]
+    public async Task FromUrl_UnusableImage_Is400OnUrl_AndKeepsTheCurrentLogo(byte[] body, string message)
+    {
+        var current = Png(5, 5);
+        await StatusAsync(PutAsync(_alice, Nintendo, current));
+        _stub.Routes["/bad"] = StubImageServer.Bytes(body);
+
+        using var response = await PutUrlAsync(_alice, "publishers", Nintendo, _stub.Url("/bad").ToString());
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").GetProperty("url")[0].GetString(), Is.EqualTo(message));
+        using var served = await _alice.GetAsync(Url(Nintendo));
+        Assert.That(await served.Content.ReadAsByteArrayAsync(), Is.EqualTo(current));
+    }
+
+    [Test]
+    public async Task FromUrl_PrivateAddress_IsTheDownloadersBlockedProblem()
+    {
+        using var response = await PutUrlAsync(_alice, "publishers", Nintendo, "http://10.0.0.1/logo.png");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo(ImageUrlDownloader.Blocked));
+    }
+
+    [Test]
+    public async Task FromUrl_FailedDownload_Is502()
+    {
+        using var response = await PutUrlAsync(_alice, "publishers", Nintendo, _stub.Url("/missing.png").ToString());
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadGateway));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo(ImageUrlDownloader.Failed));
+        Assert.That(await AuditRowsAsync(), Is.Empty);
+    }
+
+    [TestCase("publishers")]
+    [TestCase("genres")]
+    [TestCase("systems")]
+    public async Task FromUrl_UnknownGroupOrSystem_Is404_BeforeAnyDownload(string kind)
+    {
+        _stub.Routes["/logo.png"] = StubImageServer.Bytes(Png(5, 5));
+        var key = kind == "systems" ? "zx81" : Key("sega");
+
+        Assert.That(await StatusAsync(PutUrlAsync(_alice, kind, key, _stub.Url("/logo.png").ToString())), Is.EqualTo(HttpStatusCode.NotFound));
+        Assert.That(_stub.Requests, Is.Empty);
+    }
+
+    [Test]
+    public async Task FromUrl_UnknownKindOrBadKey_IsRefusedBeforeAnyDownload()
+    {
+        var url = _stub.Url("/logo.png").ToString();
+
+        Assert.That(await StatusAsync(PutUrlAsync(_alice, "developers", Nintendo, url)), Is.EqualTo(HttpStatusCode.NotFound));
+        Assert.That(await StatusAsync(PutUrlAsync(_alice, "systems", "GB", url)), Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(_stub.Requests, Is.Empty);
+    }
+
+    [Test]
+    public async Task FromUrl_SiteUser_Is403()
+    {
+        _stub.Routes["/logo.png"] = StubImageServer.Bytes(Png(5, 5));
+        using var site = await SignInAsync("carol", siteUser: true);
+
+        Assert.That(await StatusAsync(PutUrlAsync(site, "publishers", Nintendo, _stub.Url("/logo.png").ToString())), Is.EqualTo(HttpStatusCode.Forbidden));
+        Assert.That(_stub.Requests, Is.Empty);
     }
 
     [TestCase("")]

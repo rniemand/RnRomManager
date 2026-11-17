@@ -103,6 +103,7 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/discovery/{kind}/games"] = Role.User,
         ["GET /api/discovery/{kind}/logo"] = Role.User,
         ["PUT /api/discovery/{kind}/logo"] = Role.Admin,
+        ["PUT /api/discovery/{kind}/logo/from-url"] = Role.Admin,
         ["DELETE /api/discovery/{kind}/logo"] = Role.Admin,
 
         ["GET /api/ingest/pending"] = Role.Admin,
