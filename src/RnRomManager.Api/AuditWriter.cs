@@ -12,12 +12,34 @@ public sealed class AuditWriter(AuditLog log, IAuditRepository repository, ILogg
 {
     public static readonly TimeSpan DrainTimeout = TimeSpan.FromSeconds(5);
 
+    // B27.4: held by a live restore; each insert waits for it, so held events stay queued until Release.
+    private readonly SemaphoreSlim _hold = new(1, 1);
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         try
         {
             await foreach (var auditEvent in log.Reader.ReadAllAsync(stoppingToken).ConfigureAwait(false))
-                await WriteAsync(auditEvent).ConfigureAwait(false);
+            {
+                try
+                {
+                    await _hold.WaitAsync(stoppingToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    // Stopping while held: write this one anyway rather than lose it.
+                    await WriteAsync(auditEvent).ConfigureAwait(false);
+                    throw;
+                }
+                try
+                {
+                    await WriteAsync(auditEvent).ConfigureAwait(false);
+                }
+                finally
+                {
+                    _hold.Release();
+                }
+            }
         }
         catch (OperationCanceledException)
         {
@@ -46,6 +68,16 @@ public sealed class AuditWriter(AuditLog log, IAuditRepository repository, ILogg
             await Task.Delay(10).ConfigureAwait(false);
         }
     }
+
+    /// <summary>B27.4: writes what is pending, then stops inserting until <see cref="Release"/>; new events stay queued.</summary>
+    public async Task HoldAsync()
+    {
+        await FlushAsync().ConfigureAwait(false);
+        await _hold.WaitAsync().ConfigureAwait(false);
+    }
+
+    /// <summary>Resumes inserting after <see cref="HoldAsync"/>; the held events are written in order.</summary>
+    public void Release() => _hold.Release();
 
     private async Task WriteAsync(AuditEvent auditEvent)
     {

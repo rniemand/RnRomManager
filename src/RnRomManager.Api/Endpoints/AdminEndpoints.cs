@@ -24,7 +24,7 @@ public static class AdminEndpoints
 
         admin.MapGet("/logs/recent", (LogBuffer buffer) => Results.Ok(buffer.Recent(20)));
 
-        admin.MapGet("/logs/stream", LogStream.RunAsync);
+        admin.MapGet("/logs/stream", LogStream.RunAsync).WithMetadata(MaintenanceExempt.Instance);
 
         // B17: database backups.
         admin.MapGet("/backups", async (BackupService backups, CancellationToken ct) =>

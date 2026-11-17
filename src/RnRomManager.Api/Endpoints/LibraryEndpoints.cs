@@ -108,7 +108,7 @@ public static class LibraryEndpoints
             var name = game.ZipPath[(game.ZipPath.LastIndexOf('/') + 1)..];
             // fileDownloadName sets Content-Disposition with both filename and RFC 5987 filename*.
             return Results.Stream(stream!, "application/zip", name, File.GetLastWriteTimeUtc(stream!.SafeFileHandle), enableRangeProcessing: true);
-        });
+        }).WithMetadata(MaintenanceExempt.Instance);
 
         // Z2: the ZIP's file entries for the Zip Contents tab.
         games.MapGet("/{id:guid}/zip-entries", async (Guid id, HttpContext ctx, IGameRepository repository, LibraryFiles files) =>
@@ -138,7 +138,7 @@ public static class LibraryEndpoints
             return files.OpenRawEntry(ctx, game, path, out var stream) is { } problem
                 ? problem
                 : Results.Stream(stream!, "application/octet-stream", path[(path.LastIndexOf('/') + 1)..]);
-        });
+        }).WithMetadata(MaintenanceExempt.Instance);
 
         // B16: the caller's collections holding this game.
         games.MapGet("/{id:guid}/collections", async (Guid id, HttpContext ctx, IGameRepository repository, ICollectionRepository collections) =>
@@ -165,7 +165,7 @@ public static class LibraryEndpoints
         {
             var (attachment, problem) = await LibraryDownload.OpenReleaseAsync(ctx, id, romId, repository, roms, files);
             return problem ?? LibraryDownload.Send(ctx, attachment!);
-        });
+        }).WithMetadata(MaintenanceExempt.Instance);
 
         // B20: one file of a set, found by the release it belongs to (another release's file id is a 404).
         games.MapGet("/{id:guid}/roms/{romId:long}/files/{fileId:long}/download", async (Guid id, long romId, long fileId, HttpContext ctx,
@@ -173,10 +173,10 @@ public static class LibraryEndpoints
         {
             var (attachment, problem) = await LibraryDownload.OpenSetFileAsync(ctx, id, romId, fileId, repository, roms, files);
             return problem ?? LibraryDownload.Send(ctx, attachment!);
-        });
+        }).WithMetadata(MaintenanceExempt.Instance);
 
         // Play B2–B3: one PlayStation disc for the browser emulator (a standalone image, or its cue set as a ZIP).
-        games.MapGet("/{id:guid}/roms/{romId:long}/play-disc", PlayDisc.HandleAsync);
+        games.MapGet("/{id:guid}/roms/{romId:long}/play-disc", PlayDisc.HandleAsync).WithMetadata(MaintenanceExempt.Instance);
 
         // B4–B7 release notes: any signed-in user reads them; writes are admin-only (U3), not audited.
         games.MapGet("/{id:guid}/roms/{romId:long}/note", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,

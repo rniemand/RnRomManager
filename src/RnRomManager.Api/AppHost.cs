@@ -71,6 +71,9 @@ public static class AppHost
         builder.Services.AddHostedService<DatRefreshScheduler>();
         var app = builder.Build();
         app.UseSecurityHeaders();
+        // B27.4: before static files and auth (cookie validation reads users); routing already ran, so endpoint metadata is set.
+        var gate = app.Services.GetRequiredService<MaintenanceGate>();
+        app.Use((ctx, next) => gate.InvokeAsync(ctx, next));
 
         // Browser emulators B10: EmulatorJS cores are .data files, which the default table doesn't know (they'd 404).
         var contentTypes = new FileExtensionContentTypeProvider();
@@ -138,6 +141,9 @@ public static class AppHost
         builder.Services.AddSingleton<ISettingsRepository, SettingsRepository>();
         builder.Services.AddSingleton<BackupScheduler>();
         builder.Services.AddSingleton<DatRefreshSettingsService>();
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddSingleton<MaintenanceGate>();
+        builder.Services.AddSingleton<IMaintenanceWindow>(sp => sp.GetRequiredService<MaintenanceGate>());
         builder.Services.AddSingleton<DatRefreshJobFactory>(sp => () => new DatRefreshJob(
             sp.GetRequiredService<IHttpClientFactory>().CreateClient(HttpClients.Dats),
             sp.GetRequiredService<IOptions<SourcesOptions>>().Value,
