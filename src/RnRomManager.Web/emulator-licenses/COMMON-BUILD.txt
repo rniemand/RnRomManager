@@ -4,11 +4,11 @@ EmulatorJS 4.2.3 core payloads: how they were built
 The npm packages @emulatorjs/core-stella2014, @emulatorjs/core-gearcoleco,
 @emulatorjs/core-smsplus, @emulatorjs/core-fceumm,
 @emulatorjs/core-pcsx_rearmed, @emulatorjs/core-yabause,
-@emulatorjs/core-desmume and @emulatorjs/core-puae 4.2.3 each
-contain a "<core>-wasm.data" and a
+@emulatorjs/core-desmume, @emulatorjs/core-puae and
+@emulatorjs/core-mednafen_pce 4.2.3 each contain a "<core>-wasm.data" and a
 "<core>-legacy-wasm.data" file (7z archives). Each archive holds the core's
 WebAssembly binary and JavaScript loader, core.json, build.json and, for
-Gearcoleco, FCEUmm, PCSX ReARMed and PUAE only, license.txt. RnRomManager copies
+Gearcoleco, FCEUmm, PCSX ReARMed, PUAE and Beetle PCE only, license.txt. RnRomManager copies
 these files unchanged (the packages' "-thread" variants are not copied).
 @emulatorjs/core-ppsspp 4.2.3 is the exception: it has only a threaded payload
 (see ppsspp-NOTICE.txt).

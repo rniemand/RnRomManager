@@ -14,9 +14,10 @@ public class TurboGrafx16HandlerTests
     {
         Assert.That(Handler.ShortName, Is.EqualTo("TG16"));
         Assert.That((Handler.Id, Handler.DisplayName, Handler.Family, Handler.DatName),
-            Is.EqualTo(("tg16", "TurboGrafx-16", "tg16", "NEC - PC Engine - TurboGrafx 16")));
+            Is.EqualTo(("tg16", "TurboGrafx-16 / PC Engine", "tg16", "NEC - PC Engine - TurboGrafx 16")));
         Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".pce" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((73728L, 2621952L)));
+        Assert.That(Handler.BrowserCore, Is.EqualTo("mednafen_pce"));
     }
 
     [TestCase(0)]

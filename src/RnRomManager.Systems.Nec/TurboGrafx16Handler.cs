@@ -13,7 +13,7 @@ public sealed class TurboGrafx16Handler : ISystemHandler
     private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => LoadResource("boxart.tg16.png"));
 
     public string Id => "tg16";
-    public string DisplayName => "TurboGrafx-16";
+    public string DisplayName => "TurboGrafx-16 / PC Engine";
     public string ShortName => "TG16";
     public string Family => "tg16";
 
@@ -30,6 +30,9 @@ public sealed class TurboGrafx16Handler : ISystemHandler
     public bool EmbedRomsInZip => true;
 
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
+
+    /// <summary>Beetle PCE, vendored like PUAE; HuCards need no BIOS.</summary>
+    public string BrowserCore => "mednafen_pce";
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
 

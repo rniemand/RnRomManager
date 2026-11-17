@@ -1087,6 +1087,39 @@ test("Play: NES Quick Play from the library uses the local FCEUmm core", { tag: 
   await closeEmulator();
 });
 
+test("Play: TurboGrafx-16 / PC Engine Quick Play from the library uses the local Beetle PCE core", { tag: "@shard-b" }, async () => {
+  await openLibrary();
+  await page
+    .getByRole("searchbox", { name: "Search", exact: true })
+    .fill("Neon Circuit");
+  await expect(page).toHaveURL(/[?&]q=/);
+  await expect(page.getByText("1 game", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Neon Circuit", exact: true }),
+  ).toBeVisible();
+  const bios: string[] = [];
+  const track = (r: { url: () => string }) => {
+    if (r.url().includes("/api/emulator/bios/")) bios.push(r.url());
+  };
+  page.on("request", track);
+  try {
+    const rom = page.waitForResponse((r) =>
+      /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()),
+    );
+    await page.getByRole("button", { name: "Play Neon Circuit" }).click();
+    await expect(dialog().locator("iframe")).toHaveAttribute(
+      "src",
+      /core=mednafen_pce&name=Neon%20Circuit%20\(USA\)\.pce$/,
+    );
+    expect((await rom).status()).toBe(200);
+    await startEmulator("mednafen_pce");
+  } finally {
+    page.off("request", track);
+  }
+  expect(bios).toEqual([]);
+  await closeEmulator();
+});
+
 test("Play: a PlayStation set streams its disc ZIP from the detail page and the library", { tag: "@shard-b" }, async () => {
   await openGame("Disc Runner");
   const bios = page.waitForResponse((r) =>
