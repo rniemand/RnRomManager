@@ -39,11 +39,11 @@
 	<div class="container d-flex align-items-center gap-3 py-1">
 		<button
 			type="button"
-			class="btn btn-link btn-sm p-0 text-decoration-none"
+			class="btn btn-link btn-sm p-0 link-body-emphasis text-decoration-none"
 			onclick={() => (aboutOpen = true)}><Icon name="info" /> About</button
 		>
 		<a
-			class="link-secondary text-decoration-none"
+			class="link-body-emphasis text-decoration-none"
 			href={releasesUrl}
 			target="_blank"
 			rel="noopener noreferrer">RnRomManager{about ? ` ${about.version}` : ''}</a
@@ -51,7 +51,7 @@
 		{#if !me.mustChangePassword}
 			<button
 				type="button"
-				class="btn btn-link btn-sm p-0 ms-auto"
+				class="btn btn-link btn-sm p-0 ms-auto link-body-emphasis"
 				aria-label="Keyboard shortcuts"
 				title="Keyboard shortcuts"
 				onclick={onhotkeys}><Icon name="help" /></button
