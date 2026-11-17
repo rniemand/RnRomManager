@@ -84,7 +84,7 @@ public class ImageUrlEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [],
-            [IngestSeeder.AmigaDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Tetris)],
         }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);

@@ -342,6 +342,7 @@ test("browse, search and filter the library", async () => {
     "gc",
     "sms",
     "md",
+    "3ds",
     "n64",
     "nds",
     "nes",

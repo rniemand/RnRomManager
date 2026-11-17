@@ -7,6 +7,13 @@
 			"note": "RetroArch core: Opera"
 		}
 	],
+	"3ds": [
+		{
+			"name": "Azahar",
+			"url": "https://azahar-emu.org/",
+			"os": ["windows", "macos", "linux", "android"]
+		}
+	],
 	"a2600": [
 		{
 			"name": "Stella",

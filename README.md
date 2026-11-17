@@ -1,6 +1,6 @@
 # RnRomManager
 
-A self-hosted web app for managing a personal backup collection of ROMs across [supported systems](#supported-systems). Switch dumps, Nintendo DS dumps and disc images are stored as files next to each game's ZIP, since they're too large to pack; a PlayStation, Saturn, Sega CD or 3DO bin/cue set is kept together as one release. PlayStation, Saturn and Sega CD also take MAME `.chd` images, which never match the Redump DAT and always go to Review.
+A self-hosted web app for managing a personal backup collection of ROMs across [supported systems](#supported-systems). Switch dumps, Nintendo DS dumps, Nintendo 3DS dumps and disc images are stored as files next to each game's ZIP, since they're too large to pack; a PlayStation, Saturn, Sega CD or 3DO bin/cue set is kept together as one release. PlayStation, Saturn and Sega CD also take MAME `.chd` images, which never match the Redump DAT and always go to Review.
 
 Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder. RnRomManager identifies each one against the [No-Intro](https://no-intro.org/) DATs (cartridge systems) or the [Redump](http://redump.org/) DATs (disc systems), names it consistently, groups every region and revision of a game together, fetches box art and screenshots, and stores each game as one self-describing ZIP in a tidy `roms/<system>/<letter>/` layout. A MariaDB database mirrors the library for fast browsing, and a scheduled integrity checker keeps the two in sync.
 
@@ -47,6 +47,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | GameCube | `gc` | Next to ZIP | `.iso` | Redump | — |
 | Master System | `sms` | In ZIP | `.sms` | No-Intro | `smsplus` |
 | Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen` | No-Intro | `genesis_plus_gx` |
+| Nintendo 3DS | `3ds` | Next to ZIP | `.3ds`, `.cci`, `.cia` | No-Intro | — |
 | Nintendo 64 | `n64` | In ZIP | `.z64`, `.v64`, `.n64` | No-Intro | — |
 | Nintendo DS | `nds` | Next to ZIP | `.nds` | No-Intro | `desmume` |
 | Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | `fceumm` |
@@ -122,7 +123,7 @@ docker compose up -d
 3. Copy each system's files (formats in [Supported systems](#supported-systems)) into `data/ingest/<Id>/` (disc images loose, not in archives), then press **Ingestion → Import all**.
 4. To play ColecoVision games in the browser, copy the console's BIOS as `data/bios/colecovision.rom` (the app can't ship it). PlayStation games play without a BIOS (the emulator's built-in HLE BIOS); for better compatibility copy your own 512 KiB `scph5501.bin` into `data/bios/`.
 
-Upgrading from a version without Game Boy Advance, Nintendo 64, NES, SNES, Virtual Boy, Atari 2600, Atari 5200, Atari 7800, Atari Lynx, Atari Jaguar, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch, PlayStation, PSP, GameCube, Wii, Xbox 360, Saturn, Nintendo DS, Sega CD, 3DO, Commodore 64, Commodore PET, Commodore VIC-20 or Commodore Amiga? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`): it downloads the new system's DATs (for Switch, the titledb file; for the disc systems, the Redump DAT).
+Upgrading from a version without Game Boy Advance, Nintendo 64, NES, SNES, Virtual Boy, Atari 2600, Atari 5200, Atari 7800, Atari Lynx, Atari Jaguar, ColecoVision, Game Gear, Master System, Mega Drive / Genesis, 32X, TurboGrafx-16, Nintendo Switch, PlayStation, PSP, GameCube, Wii, Xbox 360, Saturn, Nintendo DS, Nintendo 3DS, Sega CD, 3DO, Commodore 64, Commodore PET, Commodore VIC-20 or Commodore Amiga? Run **Admin → DATs → Refresh DATs** once, or ingestion won't start (`DatsMissing`): it downloads the new system's DATs (for Switch, the titledb file; for the disc systems, the Redump DAT).
 
 Set `user:` to the owner of `./data` (`id -u`:`id -g`). An existing MariaDB server, reverse proxies, backups, upgrades and password recovery are covered in the [deployment guide](https://github.com/rniemand/RnRomManager/blob/main/docs/deployment.md).
 

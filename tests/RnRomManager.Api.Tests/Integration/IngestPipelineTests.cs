@@ -58,6 +58,9 @@ public class IngestPipelineTests
     /// <summary>3DO B3: the DAT-matched data track of a cue + 2 bins set, and its audio track.</summary>
     private static readonly byte[] OpalData = new SyntheticDiscBuilder { Seed = 2501 }.Build();
     private static readonly byte[] OpalAudio = new SyntheticDiscBuilder { Seed = 2502, Size = 32 * 1024 }.Build();
+    /// <summary>3DS B2: two DAT-matched NCSD dumps.</summary>
+    private static readonly byte[] CartQuest = Ncsd(3001, "CTR-P-CQST");
+    private static readonly byte[] CartRally = Ncsd(3002, "CTR-P-CRLY");
     /// <summary>S3: a DAT-matched release of the legacy test system's "Old Ds".</summary>
     private static readonly byte[] OldDsEurope = Atari(4096, 621);
     private ApiFactory _shared = null!;
@@ -164,6 +167,11 @@ public class IngestPipelineTests
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [],
             [IngestSeeder.AmigaDat] = [],
+            [IngestSeeder.ThreeDsDat] =
+            [
+                new FixtureGame("Cart Quest (USA)", "Cart Quest (USA).3ds", CartQuest),
+                new FixtureGame("Cart Rally (Europe)", "Cart Rally (Europe).3ds", CartRally),
+            ],
             [IngestSeeder.NintendoDsDat] =
             [
                 new FixtureGame("Bad Crc Hero (USA)", "Bad Crc Hero (USA).nds", BadCrcHero),
@@ -257,6 +265,76 @@ public class IngestPipelineTests
 
     private static ReviewResolutionRequest GameGearManual(string title) =>
         new() { Action = "Manual", Title = title, Regions = ["World"], Languages = [], Flags = [] };
+
+    /// <summary>A 32 KiB NCSD dump with an NCCH partition at 0x4000 holding <paramref name="productCode"/>.</summary>
+    private static byte[] Ncsd(int seed, string productCode)
+    {
+        var rom = Atari(32 * 1024, seed);
+        rom.AsSpan(0, 4).Clear(); // never the CIA header size
+        "NCSD"u8.CopyTo(rom.AsSpan(0x100));
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32LittleEndian(rom.AsSpan(0x120), 0x4000 / 0x200);
+        "NCCH"u8.CopyTo(rom.AsSpan(0x4100));
+        rom.AsSpan(0x4150, 16).Clear();
+        System.Text.Encoding.ASCII.GetBytes(productCode).CopyTo(rom, 0x4150);
+        return rom;
+    }
+
+    [Test]
+    public async Task ThreeDs_DatMatch_IsStoredNextToTheZip()
+    {
+        var result = await IngestAsync(Drop("3ds", "quest.3ds", CartQuest));
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Ingested), result.Details);
+        var rom = ReadZip("3ds/C/Cart Quest.zip").Roms.Single();
+        Assert.That((rom.FileName, rom.Identification.Method), Is.EqualTo(("Cart Quest (USA).3ds", IdentificationMethod.Dat)));
+        Assert.That(rom.ExternalFileName, Is.EqualTo("Cart Quest.(USA).3ds"));
+        Assert.That(File.ReadAllBytes(Path.Combine(Roms, "3ds", "C", rom.ExternalFileName!)), Is.EqualTo(CartQuest));
+    }
+
+    [Test]
+    public async Task ThreeDs_DatMatchedCci_KeepsItsLowerCasedExtension()
+    {
+        var result = await IngestAsync(Drop("3ds", "rally.CCI", CartRally));
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Ingested), result.Details);
+        var rom = ReadZip("3ds/C/Cart Rally.zip").Roms.Single();
+        Assert.That(rom.FileName, Is.EqualTo("Cart Rally (Europe).cci"));
+        Assert.That(File.ReadAllBytes(Path.Combine(Roms, "3ds", "C", rom.ExternalFileName!)), Is.EqualTo(CartRally));
+    }
+
+    [Test]
+    public async Task ThreeDs_UnmatchedWithoutNcsd_IsInvalidHeader()
+    {
+        var junk = Atari(16 * 1024, 3003);
+        junk.AsSpan(0, 4).Clear();
+        var result = await IngestAsync(Drop("3ds", "junk.cci", junk));
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.InvalidHeader)));
+    }
+
+    [Test]
+    public async Task ThreeDs_UnmatchedCia_GoesToReview()
+    {
+        var cia = Atari(16 * 1024, 3004);
+        new byte[] { 0x20, 0x20, 0, 0 }.CopyTo(cia, 0);
+
+        var result = await IngestAsync(Drop("3ds", "homebrew.cia", cia));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Review, "NoDatMatch")));
+        var item = (await Service<IIngestReviewRepository>().GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(cia)), default))!;
+        Assert.That(item.Header, Is.Null);
+    }
+
+    [Test]
+    public async Task ThreeDs_UnmatchedNcsd_GoesToReviewWithItsHeader()
+    {
+        var dump = Ncsd(3005, "CTR-P-DCRY");
+
+        var result = await IngestAsync(Drop("3ds", "decrypted.3ds", dump));
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "3ds")));
+        var item = (await Service<IIngestReviewRepository>().GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(dump)), default))!;
+        Assert.That(item.Header, Does.Contain("CTR-P-DCRY"));
+    }
 
     [Test]
     public async Task Ds_DatHitWithABadHeaderCrc_IsIngested_AndKeepsTheHeaderFlag()
