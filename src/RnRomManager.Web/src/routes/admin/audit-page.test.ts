@@ -67,7 +67,7 @@ describe('Auditing', () => {
 		auth.set(null);
 	});
 
-	it('places the Auditing tab between Logs and About', () => {
+	it('places the Auditing tab last, after Logs; there is no About tab (B12)', () => {
 		render(AdminLayout, {
 			children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))
 		});
@@ -78,8 +78,7 @@ describe('Auditing', () => {
 			'Settings',
 			'Backups',
 			'Logs',
-			'Auditing',
-			'About'
+			'Auditing'
 		]);
 		expect(screen.getByRole('link', { name: 'Auditing' }).getAttribute('href')).toBe(
 			'/admin/audit'

@@ -21,7 +21,6 @@ vi.mock('#lib/bootstrap.js', () => ({
 const { default: UsersPage } = await import('./users/+page.svelte');
 const { default: SettingsPage } = await import('./settings/+page.svelte');
 const { default: DatsPage } = await import('./dats/+page.svelte');
-const { default: AboutPage } = await import('./about/+page.svelte');
 
 const admin = {
 	id: 1,
@@ -292,16 +291,6 @@ describe('admin pages', () => {
 		};
 		render(DatsPage);
 		await screen.findByText('gb.dat');
-		expectT1();
-	});
-
-	it('the licences table uses the standard style', async () => {
-		answers['GET /api/about'] = {
-			status: 200,
-			body: { version: '1.0', licenses: [{ name: 'Svelte', license: 'MIT', url: 'https://x' }] }
-		};
-		render(AboutPage);
-		await screen.findByText('Svelte');
 		expectT1();
 	});
 });

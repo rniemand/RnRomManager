@@ -180,6 +180,21 @@ public class AuthTests
     }
 
     [Test]
+    public async Task MustChangePassword_StillReadsAbout_ForTheFooter()
+    {
+        await CreateUserAsync(mustChangePassword: true);
+        (await _client.LoginAsync("richard", Password)).Dispose();
+
+        using var about = await _client.GetAsync("/api/about");
+        using var games = await _client.GetAsync("/api/games");
+
+        Assert.That(about.StatusCode, Is.EqualTo(HttpStatusCode.OK), "B11: on the allow-list");
+        Assert.That((await AuthClient.JsonAsync(about)).GetProperty("version").GetString(), Is.Not.Empty);
+        Assert.That(games.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+        Assert.That(await AuthClient.CodeAsync(games), Is.EqualTo("PasswordChangeRequired"));
+    }
+
+    [Test]
     public async Task ChangePassword_KillsOtherSessionsButKeepsTheCurrentOne()
     {
         await CreateUserAsync();

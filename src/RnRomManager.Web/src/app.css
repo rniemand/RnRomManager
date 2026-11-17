@@ -334,3 +334,17 @@
 		transition: none;
 	}
 }
+
+/* B10: the fixed footer; the last content and the toasts stay above it. */
+:root {
+	--rnrm-footer-height: 2.25rem;
+}
+.app-footer {
+	min-height: var(--rnrm-footer-height);
+}
+main.above-footer {
+	padding-bottom: calc(var(--rnrm-footer-height) + 1.5rem) !important;
+}
+body:has(.app-footer) .toast-container {
+	bottom: var(--rnrm-footer-height) !important;
+}
