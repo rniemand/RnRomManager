@@ -35,7 +35,7 @@ PC Engine HuCards already import as the `tg16` system: `.pce`, stored in the gam
   - **Provenance:** `reports/mednafen_pce.json` `buildStart` is 2025-06-14, payload `build.json` `version` is `2.0.2`, both `.wasm` files contain the RetroArch version string `6dd4353`, and their producers section names LLVM `21.0.0git 23e3cbb2e82b62586266116c8ab77ce68e412cf8` (Emscripten 4.0.8). This matches COMMON-BUILD.txt, so it lists the package in its opening package list and in its "license.txt only for" list.
 
   **The licence expression** used in the NOTICE, `licenses.json` and the README is `GPL-2.0-or-later AND LGPL-2.1-or-later AND BSD-3-Clause AND Zlib AND MIT, plus the public-domain LZMA SDK and dr_flac`. `src/RnRomManager.Api/licenses.json` gains an `@emulatorjs/core-mednafen_pce` entry with that expression and `https://github.com/EmulatorJS/beetle-pce-libretro`. README attribution: Beetle PCE joins the line-148 core name list ("…, DeSmuME, PUAE and Beetle PCE cores") and the line-149 RetroArch-build list, with its own sub-bullet after PUAE's: `[Beetle PCE \`e1ac90d\`](https://github.com/EmulatorJS/beetle-pce-libretro/tree/e1ac90d5a97ad328c51b8b01e68da8af5faa1579) (TurboGrafx-16 / PC Engine): GPL-2.0-or-later`, followed by the components above in the PUAE sub-bullet's style.
-- **P5 README.** The supported-systems row becomes `| TurboGrafx-16 / PC Engine | \`tg16\` | In ZIP | \`.pce\` | No-Intro | \`mednafen_pce\` |` (generated and checked by `SupportedSystemsTableTests`). The feature overview's Play list gains `TurboGrafx-16 / PC Engine`, and the upgrade note's system list uses the new name.
+- **P5 README.** The supported-systems row becomes `| TurboGrafx-16 / PC Engine | \`tg16\` | In ZIP | \`.pce\` | No-Intro | \`mednafen_pce\` |` (generated and checked by `SupportedSystemsTableTests`). The feature overview's Play list gains `TurboGrafx-16 / PC Engine`, and the README's upgrade note (line 126, "Upgrading from a version without …") uses the new name in its system list. `docs/deployment.md` gets no new "Upgrading to the release that adds …" section: there's no new DAT, folder or operator file, so an upgrade needs no action.
 
 ## Changes
 | Area | File(s) | Change |
@@ -72,6 +72,7 @@ No migrations, config keys or new routes. The API change is additive (`browserCo
 - 2026-11-17 Emscripten 4.0.8 → confirmed now. Both `.wasm` producers sections name LLVM `23e3cbb`, as COMMON-BUILD.txt states, so step 1 no longer has a stop-and-ask check (upstream, reviewer).
 - 2026-11-17 Component licence files → `libchdr`, `lzma` and `tremor` get `mednafen_pce-<component>-LICENSE.txt`. zlib, Blip_Buffer, dr_flac and libretro-common ship no file, so the NOTICE quotes their terms (upstream, reviewer).
 - 2026-11-17 Step 3 "Done when" → a type check, not a Playwright run. The spec skill runs Playwright only in Finish (repo rule, reviewer).
+- 2026-11-17 Which upgrade note P5 renames, and whether `deployment.md` gets a new one → only README line 126. There's no deployment note, since the upgrade needs no DAT refresh, folder or operator file (code, reviewer).
 - 2026-11-17 PC Engine CD and SuperGrafx → out of scope. The request covers files stored in the ZIP (user request, `core.json`).
 
 ## Kickoff prompt
