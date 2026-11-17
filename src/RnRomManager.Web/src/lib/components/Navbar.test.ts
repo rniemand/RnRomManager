@@ -40,7 +40,7 @@ describe('Navbar', () => {
 		const links = [...document.querySelectorAll('ul.me-auto a.nav-link')].map((a) =>
 			a.textContent?.trim()
 		);
-		expect(links).toEqual(['Library', 'Collections', 'Reports', 'ROM Tools', 'Admin']);
+		expect(links).toEqual(['Library', 'Collections', 'Reports', 'ROM Tools']);
 		expect(screen.getByRole('link', { name: 'ROM Tools' }).getAttribute('href')).toBe('/ingestion');
 		expect(document.querySelector('ul.me-auto .dropdown-menu')).toBeNull();
 	});
@@ -92,15 +92,32 @@ describe('Navbar', () => {
 		expect(screen.getByRole('link', { name: /Library/ }).getAttribute('aria-current')).toBeNull();
 	});
 
-	it('the Search button has no Ctrl K hint (G2)', () => {
+	it('Search is an icon-only button named Search, with its key in the tooltip (B4)', () => {
+		const onsearch = vi.fn();
 		render(Navbar, {
 			me: { id: 1, username: 'u', roles: [], mustChangePassword: false },
 			reviewCount: null,
 			onlogout: () => {},
-			onsearch: () => {}
+			onsearch
 		});
-		expect(screen.getByRole('button', { name: /Search/ }).textContent?.trim()).toBe('Search');
+		const search = screen.getByRole('button', { name: 'Search' });
+		expect(search.textContent?.trim()).toBe('');
+		expect(search.getAttribute('title')).toBe('Search (Ctrl+K)');
+		expect(search.querySelector('i')!.className).toContain('bi-search');
 		expect(document.querySelector('kbd')).toBeNull();
+		search.click();
+		expect(onsearch).toHaveBeenCalledOnce();
+	});
+
+	it('ROM Tools uses the adjustable wrench icon (B8)', () => {
+		render(Navbar, {
+			me: { id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false },
+			reviewCount: null,
+			onlogout: () => {}
+		});
+		expect(screen.getByRole('link', { name: 'ROM Tools' }).querySelector('i')!.className).toContain(
+			'bi-wrench-adjustable'
+		);
 	});
 
 	it('the brand is the icon only, named for screen readers (N1)', () => {
@@ -123,34 +140,74 @@ describe('Navbar', () => {
 		expect(document.querySelector('nav')!.classList.contains('sticky-top')).toBe(true);
 	});
 
-	it('the (?) button opens the shortcuts, before the theme toggle (B25)', async () => {
-		const onhotkeys = vi.fn();
+	it('has no keyboard shortcuts button, theme toggle or Admin link outside the user menu (B6, B7, B9)', () => {
 		render(Navbar, {
-			me: { id: 1, username: 'u', roles: [], mustChangePassword: false },
+			me: { id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false },
 			reviewCount: null,
 			onlogout: () => {},
-			onhotkeys
-		});
-
-		const help = screen.getByRole('button', { name: 'Keyboard shortcuts' });
-		expect(help.querySelector('i')!.className).toContain('bi-question-circle');
-		const items = [...document.querySelectorAll('ul.navbar-nav.align-items-lg-center > li')];
-		const helpIndex = items.findIndex((li) => li.contains(help));
-		expect(items[helpIndex + 1].querySelector('button')!.getAttribute('aria-label')).toMatch(
-			/theme/i
-		);
-		help.click();
-		expect(onhotkeys).toHaveBeenCalledOnce();
-	});
-
-	it('the (?) button is hidden while the password must be changed', () => {
-		render(Navbar, {
-			me: { id: 1, username: 'u', roles: [], mustChangePassword: true },
-			reviewCount: null,
-			onlogout: () => {},
-			onhotkeys: () => {}
+			onsearch: () => {}
 		});
 		expect(screen.queryByRole('button', { name: 'Keyboard shortcuts' })).toBeNull();
+		expect(screen.queryByRole('button', { name: /^Theme/ })).toBeNull();
+		const outside = [...document.querySelectorAll('#main-nav a, #main-nav button')].filter(
+			(el) => !el.closest('.dropdown-menu')
+		);
+		expect(outside.map((el) => el.textContent?.trim())).not.toContain('Admin');
+	});
+
+	describe('user menu (B6, B7)', () => {
+		const menuItems = () =>
+			[...document.querySelectorAll('.dropdown-menu > li')].map((li) =>
+				li.querySelector('hr') ? '---' : li.textContent?.trim()
+			);
+
+		it('an Admin gets Admin first, then the Theme choices, Change password and Logout', () => {
+			render(Navbar, {
+				me: { id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false },
+				reviewCount: null,
+				onlogout: () => {}
+			});
+			expect(menuItems()).toEqual([
+				'Admin',
+				'---',
+				'Theme',
+				'Light',
+				'Dark',
+				'Auto',
+				'---',
+				'Change password',
+				'---',
+				'Logout'
+			]);
+			expect(screen.getByRole('link', { name: 'Admin' }).getAttribute('href')).toBe('/admin/users');
+		});
+
+		it('a non-admin has no Admin item', () => {
+			render(Navbar, {
+				me: { id: 1, username: 'u', roles: [], mustChangePassword: false },
+				reviewCount: null,
+				onlogout: () => {}
+			});
+			expect(menuItems()[0]).toBe('Theme');
+			expect(screen.queryByRole('link', { name: 'Admin' })).toBeNull();
+		});
+
+		it.each([
+			['/admin/users', true],
+			['/admin/audit', true],
+			['/admin/backups', true],
+			['/reports', false]
+		])('Admin is active on %s: %s', (path, active) => {
+			page.url = new URL(`http://localhost${path}`);
+			render(Navbar, {
+				me: { id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false },
+				reviewCount: null,
+				onlogout: () => {}
+			});
+			const admin = screen.getByRole('link', { name: 'Admin' });
+			expect(admin.classList.contains('active')).toBe(active);
+			expect(admin.getAttribute('aria-current')).toBe(active ? 'page' : null);
+		});
 	});
 
 	describe('Bundle Creator cart link (B1)', () => {
@@ -163,7 +220,8 @@ describe('Navbar', () => {
 			expect(link.getAttribute('href')).toBe('/bundle-creator');
 			expect(link.querySelector('.badge')!.textContent).toBe('1,250');
 			expect(link.querySelector('i')!.className).toContain('bi-cart3');
-			expect(link.textContent).toContain('Bundle');
+			// B5: icon only; "Bundle" stays in the name as hidden text.
+			expect(link.querySelector('.visually-hidden')!.textContent).toBe('Bundle');
 		});
 
 		it('says one file, and shows no badge for an empty cart', () => {

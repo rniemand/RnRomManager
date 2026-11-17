@@ -102,7 +102,6 @@
 			cartCount={bundle.count}
 			onlogout={logout}
 			onsearch={() => (searchOpen = true)}
-			onhotkeys={() => (hotkeysOpen = true)}
 		/>
 		<GlobalSearch bind:open={searchOpen} />
 		<HotkeysModal bind:open={hotkeysOpen} me={auth.me} />

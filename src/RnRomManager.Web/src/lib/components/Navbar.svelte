@@ -5,8 +5,8 @@
 	import type { Me } from '../api/types';
 	import { formatCount } from '../format';
 	import Icon from './Icon.svelte';
+	import { theme, type ThemeChoice } from '../theme.svelte';
 	import { romTools } from './RomToolsTabs.svelte';
-	import ThemeToggle from './ThemeToggle.svelte';
 
 	interface Props {
 		me: Me;
@@ -15,17 +15,23 @@
 		onlogout: () => void;
 		/** Opens the global search; the button is hidden while the password must be changed. */
 		onsearch?: () => void;
-		/** Opens the keyboard shortcuts (B25); hidden while the password must be changed. */
-		onhotkeys?: () => void;
 		/** Bundle Creator B1: files in the working cart; the cart link shows when set and the password is changed. */
 		cartCount?: number;
 	}
 
-	let { me, reviewCount, onlogout, onsearch, onhotkeys, cartCount }: Props = $props();
+	let { me, reviewCount, onlogout, onsearch, cartCount }: Props = $props();
 
-	// The link's name is its visible text plus hidden words ("Bundle 2 files in the cart"), so axe's
-	// label-content-name-mismatch holds: visible text must be part of the accessible name.
+	// B5: the link's name is hidden "Bundle" plus the visible badge plus hidden words ("Bundle 2 files in the cart"),
+	// so axe's label-content-name-mismatch holds: the visible count is part of the accessible name.
 	const cartFiles = $derived(cartCount === 1 ? 'file' : 'files');
+	const isAdmin = $derived(me.roles.includes('admin'));
+
+	/** B6: the theme choice lives in the user menu. */
+	const themes: { value: ThemeChoice; label: string }[] = [
+		{ value: 'light', label: 'Light' },
+		{ value: 'dark', label: 'Dark' },
+		{ value: 'auto', label: 'Auto' }
+	];
 
 	type NavLink = {
 		href: Exclude<PageRouteId, `${string}[${string}`>;
@@ -46,12 +52,10 @@
 			icon: 'tools',
 			admin: true,
 			section: romTools.map((tool) => tool.href)
-		},
-		{ href: '/admin/users', label: 'Admin', icon: 'admin', admin: true }
+		}
 	];
-	const visibleNavigation = $derived(
-		navigation.filter((item) => !item.admin || me.roles.includes('admin'))
-	);
+	const visibleNavigation = $derived(navigation.filter((item) => !item.admin || isAdmin));
+	const adminActive = $derived(isActive('/admin/users'));
 
 	function isActive(href: string): boolean {
 		const path = page.url.pathname;
@@ -95,9 +99,10 @@
 							class:active={isActive('/bundle-creator')}
 							aria-current={isActive('/bundle-creator') ? 'page' : undefined}
 							href={resolve('/bundle-creator')}
+							title="Bundle"
 						>
 							<!-- eslint-disable-next-line svelte/no-useless-mustaches -- Svelte trims a literal space at the start of a block -->
-							<Icon name="cart" /> Bundle{#if cartCount}{' '}
+							<Icon name="cart" /><span class="visually-hidden">Bundle</span>{#if cartCount}{' '}
 								<span class="badge rounded-pill text-bg-primary">{formatCount(cartCount)}</span>
 								<span class="visually-hidden">{cartFiles} in the cart</span>
 							{/if}
@@ -106,29 +111,18 @@
 				{/if}
 				{#if onsearch && !me.mustChangePassword}
 					<li class="nav-item">
-						<button
-							type="button"
-							class="btn btn-link nav-link d-flex align-items-center gap-1"
-							onclick={onsearch}
-						>
-							<Icon name="search" /> Search
-						</button>
-					</li>
-				{/if}
-				{#if onhotkeys && !me.mustChangePassword}
-					<li class="nav-item">
+						<!-- B4: Ctrl+K is reserved for search (hotkeys.ts), so the hint names it. -->
 						<button
 							type="button"
 							class="btn btn-link nav-link d-flex align-items-center"
-							aria-label="Keyboard shortcuts"
-							title="Keyboard shortcuts"
-							onclick={onhotkeys}
+							aria-label="Search"
+							title="Search (Ctrl+K)"
+							onclick={onsearch}
 						>
-							<Icon name="help" />
+							<Icon name="search" />
 						</button>
 					</li>
 				{/if}
-				<li class="nav-item"><ThemeToggle /></li>
 				<li class="nav-item dropdown">
 					<button
 						type="button"
@@ -140,6 +134,35 @@
 						{me.username}
 					</button>
 					<ul class="dropdown-menu dropdown-menu-end">
+						{#if isAdmin}
+							<li>
+								<a
+									class="dropdown-item d-flex align-items-center gap-2"
+									class:active={adminActive}
+									aria-current={adminActive ? 'page' : undefined}
+									href={resolve('/admin/users')}
+								>
+									<Icon name="admin" /> Admin
+								</a>
+							</li>
+							<li><hr class="dropdown-divider" /></li>
+						{/if}
+						<li><h6 class="dropdown-header">Theme</h6></li>
+						{#each themes as option (option.value)}
+							<li>
+								<button
+									type="button"
+									class="dropdown-item d-flex align-items-center gap-2"
+									class:active={theme.choice === option.value}
+									aria-pressed={theme.choice === option.value}
+									onclick={() => theme.set(option.value)}
+								>
+									<Icon name="theme-{option.value}" />
+									{option.label}
+								</button>
+							</li>
+						{/each}
+						<li><hr class="dropdown-divider" /></li>
 						<li>
 							<a
 								class="dropdown-item d-flex align-items-center gap-2"
