@@ -283,6 +283,50 @@ public class ReportEndpointsTests
         Assert.That(systems, Is.EqualTo(new[] { ("gbc", "Game Boy Color", 1000L, 1), ("gb", "Game Boy", 500L, 3) }));
     }
 
+    /// <summary>Adds an update release (flags <c>["Update"]</c>) to <paramref name="gameId"/>, copied from its primary.</summary>
+    private Task AddUpdateRelease(Guid gameId, int n) => Sql("""
+        INSERT INTO roms (game_id, system_id, file_name, original_file_name, base_title, regions, languages, flags, region_key,
+                          is_primary, id_method, size_bytes, crc32, md5, sha1, date_added, date_modified)
+        SELECT game_id, system_id, CONCAT('Update ', @n, ' ', file_name), original_file_name, base_title, regions, languages,
+               '["Update"]', region_key, 0, id_method, 0, crc32, md5, SHA1(CONCAT(sha1, @n)), date_added, date_modified
+        FROM roms WHERE game_id = @gameId AND is_primary = 1
+        """, new { gameId, n });
+
+    [Test]
+    public async Task LibrarySize_CountsUpdateReleases_PerGame_PerSystem_AndInTotal()
+    {
+        var (alpha, bravo, charlie, echo) = await SeedSizes();
+        await AddUpdateRelease(bravo, 1);
+        await AddUpdateRelease(bravo, 2);
+        await AddUpdateRelease(echo, 1);
+
+        var size = await GetJson("/api/reports/library-size");
+        var gb = await GetJson("/api/reports/library-size/gb");
+
+        Assert.That(size.GetProperty("updateCount").GetInt32(), Is.EqualTo(3));
+        Assert.That(size.GetProperty("systems").EnumerateArray().Select(s => (s.GetProperty("system").GetString(), s.GetProperty("updateCount").GetInt32())),
+            Is.EqualTo(new[] { ("gbc", 1), ("gb", 2) }));
+        Assert.That(gb.GetProperty("updateCount").GetInt32(), Is.EqualTo(2));
+        Assert.That(gb.GetProperty("games").EnumerateArray().Select(g => (g.GetProperty("id").GetGuid(), g.GetProperty("romCount").GetInt32(),
+                g.GetProperty("updateCount").GetInt32())),
+            Is.EqualTo(new[] { (bravo, 3, 2), (alpha, 1, 0), (charlie, 1, 0) }));
+        Assert.That((size.GetProperty("totalBytes").GetInt64(), gb.GetProperty("bytes").GetInt64()), Is.EqualTo((1500L, 500L)), "sizes unchanged");
+    }
+
+    [Test]
+    public async Task LibrarySize_NoUpdates_CountsZero()
+    {
+        await SeedSizes();
+
+        var size = await GetJson("/api/reports/library-size");
+        var gb = await GetJson("/api/reports/library-size/gb");
+
+        Assert.That(size.GetProperty("updateCount").GetInt32(), Is.Zero);
+        Assert.That(size.GetProperty("systems").EnumerateArray().Select(s => s.GetProperty("updateCount").GetInt32()), Is.All.Zero);
+        Assert.That(gb.GetProperty("updateCount").GetInt32(), Is.Zero);
+        Assert.That(gb.GetProperty("games").EnumerateArray().Select(g => g.GetProperty("updateCount").GetInt32()), Is.All.Zero);
+    }
+
     [Test]
     public async Task LibrarySize_System_ListsGamesLargestFirst_TiesByTitle()
     {

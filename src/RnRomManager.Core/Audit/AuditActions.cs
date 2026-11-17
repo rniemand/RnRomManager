@@ -29,6 +29,15 @@ public static class AuditActions
     /// <summary>Collections discovery B5: a publisher's shared logo override was removed.</summary>
     public const string PublisherLogoRemoved = "PublisherLogoRemoved";
 
+    /// <summary>B13–B14: a genre's or system's shared logo was added or replaced, or removed.</summary>
+    public const string GenreLogoReplaced = "GenreLogoReplaced";
+    public const string GenreLogoRemoved = "GenreLogoRemoved";
+    public const string SystemLogoReplaced = "SystemLogoReplaced";
+    public const string SystemLogoRemoved = "SystemLogoRemoved";
+
+    /// <summary>B27: an Admin restored a backup while the app ran (details <c>&lt;file&gt;; safety backup &lt;file&gt;</c>).</summary>
+    public const string BackupRestored = "BackupRestored";
+
     /// <summary>S6: the storage migration moved a legacy game's ROMs out of its ZIP.</summary>
     public const string RomsExternalized = "RomsExternalized";
 
@@ -56,7 +65,8 @@ public static class AuditActions
     [
         Ingested, ZipRepaired, ExtensionRenamed, MovedToFailed, MovedToDuplicates, ArchiveDeleted, ReviewDeleted, GameUpdated,
         ReleaseDeleted, GameDeleted, ImageAdded, ImageDeleted, CoverSet, MediaFetched, ReleaseMoved, GamesMerged, DatsRefreshed,
-        IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved, RomsExternalized,
+        IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved, GenreLogoReplaced, GenreLogoRemoved,
+        SystemLogoReplaced, SystemLogoRemoved, BackupRestored, RomsExternalized,
         SaveAdded, SaveUpdated, SaveDeleted, UserCreated, UserTypeChanged, UserDisabled, UserEnabled, PasswordReset,
         PasswordChanged, SignedIn, SignInFailed, LockedOut,
     ];

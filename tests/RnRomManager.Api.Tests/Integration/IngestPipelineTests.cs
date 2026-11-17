@@ -791,6 +791,21 @@ public class IngestPipelineTests
     }
 
     [Test]
+    public async Task FirstRom_OnAFreshRoot_CreatesExactlyItsSystemAndBucketFolder()
+    {
+        Assert.That(Directory.Exists(Path.Combine(Roms, "md")), Is.False, "B30: startup creates no library folders");
+        Assert.That(Directory.Exists(Path.Combine(Roms, "nds")), Is.False);
+
+        Assert.That((await IngestAsync(Drop("md", "comet.bin", Comet)))!.Outcome, Is.EqualTo(IngestOutcome.Ingested), "embedded");
+        Assert.That((await IngestAsync(Drop("nds", "hero.nds", BadCrcHero)))!.Outcome, Is.EqualTo(IngestOutcome.Ingested), "external");
+
+        Assert.That(Directory.GetDirectories(Path.Combine(Roms, "md")).Select(Path.GetFileName), Is.EqualTo(new[] { "T" }));
+        Assert.That(Directory.GetDirectories(Path.Combine(Roms, "nds")).Select(Path.GetFileName), Is.EqualTo(new[] { "B" }));
+        Assert.That(File.Exists(Path.Combine(Roms, "md", "T", "Turbo Comet.zip")), Is.True);
+        Assert.That(File.Exists(Path.Combine(Roms, "nds", "B", "Bad Crc Hero.zip")), Is.True);
+    }
+
+    [Test]
     public async Task MegaDrive_ZipHoldingADatGame_IsIngested()
     {
         var path = Zip("md", "comet.zip", ("Turbo Comet (USA, Europe).md", Comet));

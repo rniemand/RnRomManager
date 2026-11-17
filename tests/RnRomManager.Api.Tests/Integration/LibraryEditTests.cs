@@ -232,6 +232,7 @@ public class LibraryEditTests
     {
         var id = await Tetris();
         var old = (await Row(id))!.ZipPath;
+        Assert.That(Directory.Exists(Abs("gb/Z")), Is.False, "B30: the new bucket folder is created by the rename");
 
         using var response = await _admin.PatchAsync($"/api/games/{id}", new { title = "Zoo, The" });
 

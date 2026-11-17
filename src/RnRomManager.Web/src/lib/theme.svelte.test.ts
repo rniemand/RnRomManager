@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/svelte';
-import ThemeToggle from './components/ThemeToggle.svelte';
+
+vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/') } }));
+vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
+const { default: Navbar } = await import('./components/Navbar.svelte');
 import { theme } from './theme.svelte';
 
 /** A fake `matchMedia` whose dark preference the test flips, firing `change` like the browser. */
@@ -85,16 +88,24 @@ describe('theme toggle', () => {
 		expect(current()).toBe('light');
 	});
 
-	it('the navbar toggle switches theme and marks the active choice', async () => {
+	it('the user menu switches theme and marks the active choice (B6)', async () => {
 		fakeStorage();
 		fakeMedia(false);
 		stop = theme.init();
-		render(ThemeToggle);
+		render(Navbar, {
+			me: { id: 1, username: 'u', roles: [], mustChangePassword: false },
+			reviewCount: null,
+			onlogout: () => {}
+		});
+		const choice = (name: string) => screen.getByRole('button', { name });
+		expect(choice('Auto').getAttribute('aria-pressed')).toBe('true');
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Dark' }));
+		await fireEvent.click(choice('Dark'));
 
 		expect(current()).toBe('dark');
-		expect(screen.getByRole('button', { name: 'Dark' }).getAttribute('aria-pressed')).toBe('true');
-		expect(screen.getByRole('button', { name: 'Theme: Dark' })).toBeTruthy();
+		expect(choice('Dark').getAttribute('aria-pressed')).toBe('true');
+		expect(choice('Dark').classList.contains('active')).toBe(true);
+		expect(choice('Light').getAttribute('aria-pressed')).toBe('false');
+		expect(choice('Dark').closest('.dropdown-menu')).not.toBeNull();
 	});
 });

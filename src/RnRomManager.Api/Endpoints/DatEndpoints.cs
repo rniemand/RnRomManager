@@ -16,19 +16,23 @@ public static class DatEndpoints
 {
     public static RouteGroupBuilder MapDatEndpoints(this RouteGroupBuilder api)
     {
-        api.MapPost("/jobs/dat-refresh", async (HttpContext ctx, JobRunner runner, IServiceProvider services) =>
+        api.MapPost("/jobs/dat-refresh", async (HttpContext ctx, JobRunner runner, DatRefreshJobFactory jobs) =>
         {
-            var job = new DatRefreshJob(
-                services.GetRequiredService<IHttpClientFactory>().CreateClient(HttpClients.Dats),
-                services.GetRequiredService<IOptions<SourcesOptions>>().Value,
-                services.GetRequiredService<IOptions<PathsOptions>>().Value,
-                services.GetRequiredService<DatCache>(),
-                services.GetRequiredService<ISystemRegistry>(),
-                services.GetRequiredService<RnRomManager.Core.Audit.IAuditLog>(),
-                services.GetRequiredService<TimeProvider>(),
-                services.GetRequiredService<ILogger<DatRefreshJob>>());
-            var started = await runner.StartAsync(job, JobTrigger.Manual, UserId(ctx.User), ctx.RequestAborted);
+            var started = await runner.StartAsync(jobs(), JobTrigger.Manual, UserId(ctx.User), ctx.RequestAborted);
             return started is null ? JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
+        // B28: the daily refresh schedule; not audited, like the backup settings.
+        api.MapGet("/admin/dats/settings", async (HttpContext ctx, DatRefreshSettingsService settings) =>
+            Results.Ok(await SettingsAsync(settings, ctx.RequestAborted))).RequireAuthorization(AuthSetup.AdminOnly);
+
+        api.MapPut("/admin/dats/settings", async (JsonElement body, HttpContext ctx, DatRefreshSettingsService settings) =>
+        {
+            var (value, errors) = ParseSettings(body);
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+            await settings.SaveAsync(value!, ctx.RequestAborted);
+            return Results.Ok(await SettingsAsync(settings, ctx.RequestAborted));
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         api.MapGet("/admin/dats", (DatCache cache, IOptions<PathsOptions> paths) =>
@@ -53,6 +57,35 @@ public static class DatEndpoints
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         return api;
+    }
+
+    private static async Task<object> SettingsAsync(DatRefreshSettingsService settings, CancellationToken ct)
+    {
+        var value = await settings.GetAsync(ct);
+        return new { value.Enabled, value.Time, TimeZone = settings.TimeZoneId, NextRunAt = settings.NextRunAt(value) };
+    }
+
+    /// <summary><c>{enabled: bool, time: "HH:mm"}</c>, both required (B28), parsed like the backup settings.</summary>
+    public static (DatRefreshSettings? Settings, Dictionary<string, string[]> Errors) ParseSettings(JsonElement body)
+    {
+        var errors = new Dictionary<string, string[]>();
+        if (body.ValueKind != JsonValueKind.Object)
+        {
+            errors[""] = ["A JSON object is required."];
+            return (null, errors);
+        }
+
+        bool? enabled = body.TryGetProperty("enabled", out var e) && e.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? e.GetBoolean()
+            : null;
+        if (enabled is null)
+            errors["enabled"] = ["Must be true or false."];
+
+        string? time = body.TryGetProperty("time", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null;
+        if (RnRomManager.Core.Backups.BackupSettings.TimeError(time) is { } timeError)
+            errors["time"] = [timeError];
+
+        return errors.Count > 0 ? (null, errors) : (new DatRefreshSettings(enabled!.Value, time!), errors);
     }
 
     public static IResult JobRunning(HttpContext ctx) =>

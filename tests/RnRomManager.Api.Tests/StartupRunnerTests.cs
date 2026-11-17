@@ -23,6 +23,21 @@ public class StartupRunnerTests
     }
 
     [Test]
+    public void Startup_CreatesIngestFolders_ButNoLibraryFolders_AndRemovesEmptyOnes()
+    {
+        var roms = _factory.Settings["Paths:Roms"]!;
+        Directory.CreateDirectory(Path.Combine(roms, "gb", "A"));
+        Directory.CreateDirectory(Path.Combine(roms, "nes", "T"));
+        File.WriteAllText(Path.Combine(roms, "nes", "T", "Tetris.zip"), "x");
+
+        using var client = _factory.CreateClient();
+
+        Assert.That(Directory.Exists(Path.Combine(_factory.Settings["Paths:Ingest"]!, "gb", "_failed")), Is.True);
+        Assert.That(Directory.GetDirectories(roms).Select(Path.GetFileName), Is.EqualTo(new[] { "nes" }), "B30–B31");
+        Assert.That(File.Exists(Path.Combine(roms, "nes", "T", "Tetris.zip")), Is.True);
+    }
+
+    [Test]
     public void ValidConfig_LogsVersionAndRedactedConfigToFile()
     {
         _factory.Settings["Admin:InitialPassword"] = "initial-secret-pw";

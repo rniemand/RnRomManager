@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 56" role="img" aria-label="Action">
+  <style>
+    rect { fill: #e9ecef; stroke: #adb5bd; }
+    .glyph { fill: #495057; }
+    text { fill: #212529; font: 600 18px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    @media (prefers-color-scheme: dark) { rect { fill: #343a40; stroke: #6c757d; } .glyph { fill: #ced4da; } text { fill: #f8f9fa; } }
+  </style>
+  <rect x="1" y="1" width="198" height="54" rx="8" stroke-width="2"/>
+  <g class="glyph" transform="translate(14 16) scale(1.5)"><path d="M11.251.068a.5.5 0 0 1 .227.58L9.677 6.5H13a.5.5 0 0 1 .364.843l-8 8.5a.5.5 0 0 1-.842-.49L6.323 9.5H3a.5.5 0 0 1-.364-.843l8-8.5a.5.5 0 0 1 .615-.09zM4.157 8.5H7a.5.5 0 0 1 .478.647L6.11 13.59l5.732-6.09H9a.5.5 0 0 1-.478-.647L9.89 2.41z"/></g>
+  <text x="118" y="34" text-anchor="middle">Action</text>
+</svg>

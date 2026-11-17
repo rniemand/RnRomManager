@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
+import { auth } from '../stores/auth.svelte';
 import { resetClient } from '../api/client';
 import type { GameListItem, SystemInfo } from '../api/types';
 
@@ -25,7 +26,8 @@ const gb: SystemInfo = {
 	shortName: 'GB',
 	gameCount: 3,
 	romCount: 3,
-	regions: []
+	regions: [],
+	logoUrl: null
 };
 const game = (id: string, title: string): GameListItem => ({
 	id,
@@ -57,6 +59,12 @@ const pageOf = (items: GameListItem[], total = items.length, page = 1) => ({
 const url = (page = 1, size = 20, system = 'gb') =>
 	`/api/games?system=${system}&page=${page}&pageSize=${size}`;
 const hidden = { hidden: true };
+/** Text a reader gets: the decorative logo (`aria-hidden`) left out. */
+const shownText = (el: Element) => {
+	const copy = el.cloneNode(true) as Element;
+	copy.querySelectorAll('[aria-hidden="true"]').forEach((n) => n.remove());
+	return copy.textContent?.replace(/\s+/g, ' ').trim();
+};
 
 type Reply = { status: number; body?: unknown };
 let calls: string[];
@@ -79,7 +87,10 @@ beforeEach(() => {
 		return new Response(payload, { status: answer.status });
 	});
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+	vi.unstubAllGlobals();
+	auth.set(null);
+});
 
 describe('SystemGames (Systems tab B5)', () => {
 	it("shows the system's games with the heading and count from total", async () => {
@@ -92,8 +103,8 @@ describe('SystemGames (Systems tab B5)', () => {
 			'/games/g1'
 		);
 		expect(calls).toEqual([url()]);
-		expect(screen.getByRole('heading', { level: 2, name: /Game Boy/ }).textContent?.trim()).toMatch(
-			/^Game Boy\s+· 2 games$/
+		expect(shownText(screen.getByRole('heading', { level: 2, name: /Game Boy/ }))).toBe(
+			'Game Boy · 2 games'
 		);
 	});
 
@@ -149,6 +160,46 @@ describe('SystemGames (Systems tab B5)', () => {
 		expect(screen.queryByRole('link', { name: 'Tetris' })).toBeNull();
 		expect(screen.getByRole('link', { name: 'Mario' })).toBeTruthy();
 	});
+
+	it('the heading shows the shared logo, else a text banner of the name', async () => {
+		answers[url()] = [
+			{ status: 200, body: pageOf([]) },
+			{ status: 200, body: pageOf([]) }
+		];
+		const shared = '/api/discovery/systems/logo?key=gb&v=4';
+		const view = render(SystemGames, {
+			system: { ...gb, logoUrl: shared },
+			gamePage: 1,
+			onpage: vi.fn()
+		});
+		const heading = () => screen.getByRole('heading', { level: 2, name: /Game Boy/ });
+
+		expect(heading().querySelector('img')!.getAttribute('src')).toBe(shared);
+		view.unmount();
+		render(SystemGames, { system: gb, gamePage: 1, onpage: vi.fn() });
+		expect(heading().querySelector('img')).toBeNull();
+		expect(heading().querySelector('.group-logo-banner')!.textContent).toBe('Game Boy');
+	});
+
+	it.each([
+		[['admin'] as 'admin'[], 1],
+		[[] as 'admin'[], 0]
+	])(
+		'Change logo shows only for an Admin (roles %j) and opens it for this system',
+		async (roles, count) => {
+			auth.set({ id: 1, username: 'u', roles, mustChangePassword: false });
+			answers[url()] = [{ status: 200, body: pageOf([]) }];
+			const onedit = vi.fn();
+			render(SystemGames, { system: gb, gamePage: 1, onpage: vi.fn(), onedit });
+
+			const buttons = screen.queryAllByRole('button', { name: /Change logo/ });
+			expect(buttons).toHaveLength(count);
+			if (count) {
+				await fireEvent.click(buttons[0]);
+				expect(onedit).toHaveBeenCalledWith(gb);
+			}
+		}
+	);
 
 	it('opens the emulators modal and returns focus to the button when it closes', async () => {
 		answers[url()] = [{ status: 200, body: pageOf([game('g1', 'Tetris')]) }];

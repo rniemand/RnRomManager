@@ -4,6 +4,8 @@ import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { fakePassword } from '#lib/testing/fakePassword.js';
+import { createRawSnippet } from 'svelte';
+import { expectOnePageTitle } from '#lib/testing/pageTitle.js';
 
 // Bootstrap's Modal and Tooltip need layout/transitions jsdom lacks.
 vi.mock('#lib/bootstrap.js', () => ({
@@ -21,7 +23,7 @@ vi.mock('#lib/bootstrap.js', () => ({
 const { default: UsersPage } = await import('./users/+page.svelte');
 const { default: SettingsPage } = await import('./settings/+page.svelte');
 const { default: DatsPage } = await import('./dats/+page.svelte');
-const { default: AboutPage } = await import('./about/+page.svelte');
+const { default: AdminLayout } = await import('./+layout.svelte');
 
 const admin = {
 	id: 1,
@@ -295,13 +297,10 @@ describe('admin pages', () => {
 		expectT1();
 	});
 
-	it('the licences table uses the standard style', async () => {
-		answers['GET /api/about'] = {
-			status: 200,
-			body: { version: '1.0', licenses: [{ name: 'Svelte', license: 'MIT', url: 'https://x' }] }
-		};
-		render(AboutPage);
-		await screen.findByText('Svelte');
-		expectT1();
+	it('the Admin layout has one page-title h1 (B1)', () => {
+		render(AdminLayout, {
+			children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))
+		});
+		expectOnePageTitle('Admin');
 	});
 });

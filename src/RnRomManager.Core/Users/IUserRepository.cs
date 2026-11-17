@@ -40,4 +40,7 @@ public interface IUserRepository
 
     /// <summary>B23: replaces the hotkey overrides; null resets to the defaults. Not a profile edit: no stamp change.</summary>
     Task SetHotkeysAsync(int id, string? hotkeys, CancellationToken cancellationToken);
+
+    /// <summary>B27.6: gives every user a new security stamp (each its own), so every session ends at its next request.</summary>
+    Task RotateAllSecurityStampsAsync(CancellationToken cancellationToken);
 }

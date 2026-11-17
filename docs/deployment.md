@@ -84,7 +84,7 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 
 | Path | Contents |
 |---|---|
-| `/app/roms` | the library: one ZIP per game (see [ZIP format](zip-format.md)), plus the Nintendo Switch ROM files stored next to their ZIPs |
+| `/app/roms` | the library: one ZIP per game (see [ZIP format](zip-format.md)), plus the Nintendo Switch ROM files stored next to their ZIPs. A system's folder (`roms/<system>/`) and its letter folders are created when its first ROM is written, not at startup; at each start the app removes letter folders (`#`, `A`–`Z`) that are empty, then the system folder if that leaves it empty. Only plain, empty folders go: a folder holding anything (hidden files included), any other name, and a linked or unreadable folder (logged as a Warning) are left alone. |
 | `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64` or `.n64`) `ingest/nds/` (Nintendo DS: `.nds`, stored next to the ZIP; dumps over 256 MiB must be dropped loose, since archives are capped at 256 MiB of ROM data) `ingest/nes/` (NES: headered `.nes` only) `ingest/snes/` (SNES: `.sfc` or `.smc`, copier header stripped) `ingest/a2600/` (Atari 2600: `.a26` or `.bin`) `ingest/coleco/` (ColecoVision: `.col`, `.rom` or `.bin`) `ingest/gg/` (Game Gear: `.gg` or `.sms`) `ingest/sms/` (Master System: `.sms`) `ingest/md/` (Mega Drive / Genesis: `.md`, `.bin` or `.gen`) `ingest/s32x/` (32X: `.32x`) `ingest/tg16/` (TurboGrafx-16 / PC Engine: `.pce`, copier header stripped) `ingest/switch/` (Nintendo Switch: `.nsp`, `.xci`, `.nsz` or `.xcz`) `ingest/psx/` (PlayStation: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`) `ingest/psp/` (PSP: `.iso`) `ingest/gc/` (GameCube: `.iso`) `ingest/wii/` (Wii: `.iso`) `ingest/x360/` (Xbox 360: `.iso`) `ingest/saturn/` (Saturn: a `.cue` with its `.bin` tracks, or `.nrg`/`.chd`) `ingest/segacd/` (Sega CD: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`) `ingest/3do/` (3DO: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`) or `ingest/c64/` (Commodore 64: `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.t64`, `.prg` or `.bin`), `ingest/pet/` (Commodore PET: `.prg` or `.d64`), `ingest/vic20/` (Commodore VIC-20: `.a0`, `.20`, `.40`, `.60` or `.bin`), `ingest/amiga/` (Commodore Amiga: `.adf`); Switch, Nintendo DS and the disc systems are stored as files next to the ZIP (see [External ROM storage](#external-rom-storage-nintendo-switch-nintendo-ds-and-disc-systems)), and disc images must be dropped loose, not in archives; `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way (`_removed/` is managed on the Admin **Deleted ROMs** page: restore or delete for good) |
 | `/app/logs` | `rnrommanager-yyyy-MM-dd.log`, kept for `Logging:RetentionDays` |
 | `/app/cache` | downloaded DATs and temporary work folders |
@@ -138,7 +138,7 @@ Both are anonymous and return no details.
 
 ### What to back up
 
-- **The database**, which holds users, the Data Protection keys that keep sign-ins valid across restarts, job history, the review queue, integrity issues, the audit trail, settings and the shared publisher logos. The app backs it up itself (below).
+- **The database**, which holds users, the Data Protection keys that keep sign-ins valid across restarts, job history, the review queue, integrity issues, the audit trail, settings and the shared publisher, genre and system logos. The app backs it up itself (below).
 - **`/app/roms`**, the library itself, including release notes and the Switch ROM files next to their ZIPs. Stop the app (or make sure no job is running) for a consistent copy.
 - **`/app/backups`**, so the database backups survive the loss of the host. Copy it somewhere else.
 - **`/app/collections`**, the collection cover images. Collections themselves are in the database (and its backups), but their cover files are not: copy this folder with the backups. After a restore without it, collections show a placeholder until a cover is set again.
@@ -152,14 +152,30 @@ Every day at **03:30** (container time, `TZ`) the app writes `rnrommanager-<yyyy
 
 - A backup is a ZIP with `manifest.json` (format version, backup id, time, app version, the migrations applied and each table's row count), `schema.sql` (`SHOW CREATE TABLE` for every table) and `data/<table>.jsonl` (one JSON object per row). It's read inside one consistent snapshot, so jobs and edits keep running.
 - It's written to `<name>.zip.tmp` and renamed only when complete; leftover `.tmp` files from a crash are deleted before the next run. Two backups in the same second get ` (2)`, ` (3)`… before `.zip`.
-- Only files named `rnrommanager-*.zip` are ever deleted. A backup that was restored (it has a `.restored` file next to it) or is named by `Backup__RestoreFrom` is never deleted and doesn't count toward the number kept.
+- Only files named `rnrommanager-*.zip` are ever deleted. A backup that was restored at startup (it has a `.restored` file next to it) or is named by `Backup__RestoreFrom` is never deleted and doesn't count toward the number kept; neither does the backup a live restore is restoring while its safety backup is written.
 - **Backups contain password hashes and the Data Protection keys.** Keep the folder private; the app never serves backup files over HTTP.
 
 `mariadb-dump rnrommanager` still works as an extra backup; it isn't needed for a restore.
 
 ### Restoring a backup
 
-A restore replaces **every table** in the database with the backup's contents. It can't be undone.
+A restore replaces **every table** in the database with the backup's contents. It can't be undone. There are two ways: from **Admin → Backups** while the app runs, or at startup with `Backup__RestoreFrom`.
+
+#### From Admin → Backups (live)
+
+Choose **Restore** on a backup and confirm. The app then:
+
+1. Refuses without changing anything if a job, a library edit or another backup is running (`409`), if the backup is from a newer app version, or if it can't be read.
+2. Answers every other request (other users, other tabs, `/health/ready`) with `503 Maintenance` and `Retry-After: 5` until it's done, after waiting up to 10 seconds for requests already running (downloads and the live log aren't waited for). If they don't finish, the restore is refused (`409 Busy`).
+3. Writes a **safety backup** of the current database (it counts toward the number kept, but the backup being restored is never deleted by it). If that fails, nothing is restored.
+4. Drops every table, recreates them from the backup, applies newer migrations, marks jobs that were Running in the backup as Aborted and signs **everyone** out, you included. It records `BackupRestored` in the audit log.
+5. Sends you to the sign-in page. Run **Integrity → Run quick** afterwards: the library ZIPs may be newer than the backup.
+
+On a large library this can take a while; the rest of the app is unavailable meanwhile. **Don't stop or restart the container during a restore**: a shutdown between the drop and the inserts leaves a partial database. If that happens, or the restore reports `RestoreFailed`, restore the safety backup it names (live, or at startup as below). If the page lost its connection mid-restore, it says the restore may still be running: wait a minute, sign in again and check **Backups**.
+
+Sign-in keys created after the backup was taken are gone from the database but may still be cached by the running app, so a sign-in right after a restore can need repeating after the next restart (or within about a day).
+
+#### At startup (`Backup__RestoreFrom`)
 
 1. If the database is still readable, take a fresh backup first (**Back up now**), so you can go back.
 2. Stop the app: `docker compose stop rnrommanager`.
@@ -179,6 +195,11 @@ A restore replaces **every table** in the database with the backup's contents. I
    At startup, after the database is reachable and before migrations, the app checks the backup (format version 1, and every migration it lists must be known to this app version: a backup from a newer version is refused), drops every table, recreates them from `schema.sql`, inserts the rows and checks the row counts. Then it writes `<file>.restored` (the time) next to the backup, logs a Warning with the backup id and row counts, and starts normally; migrations bring an older backup up to date. Any problem stops startup with a `FATAL` line. The checks run before anything is dropped, and a restore that fails half-way can simply be run again.
 5. Run **Integrity → Run quick**: the library ZIPs may be newer than the backup, and the check brings the database back in line with them (a Warning at startup reminds you).
 6. Remove `Backup__RestoreFrom` from the environment. Until you do, every start logs a Warning and skips the restore, because the `.restored` file is there.
+
+## Outbound connections
+
+- **DATs:** the daily automatic refresh (**Admin → DATs**, on by default at 04:00) and **Refresh DATs** download from `Sources:DatBaseUrl` and `Sources:TitleDbUrl` (GitHub by default).
+- **Images by URL:** a game image, collection cover or publisher, genre or system logo added from a URL is downloaded by the server, from public addresses only (private, loopback and link-local addresses are refused, redirects included), with a 15-second limit.
 
 ## Upgrades
 
@@ -249,6 +270,13 @@ Upgrading to the release that adds Commodore Amiga:
 
 - **Refresh DATs after upgrading.** Commodore Amiga is identified against libretro's TOSEC `Commodore - Amiga` DAT (one file, no metadat). Until **Admin → DATs → Refresh DATs** has downloaded it, every import is refused with `DatsMissing`. `roms/amiga/` and `ingest/amiga/` are created at startup.
 - Browser play needs nothing extra: the PUAE core ships in the image and boots its built-in AROS Kickstart.
+
+Upgrading to the release that adds the footer, group logos, live restore and the DAT schedule:
+
+- **DATs refresh daily.** A new **Automatic refresh** (on by default, 04:00 container time) downloads the DATs from GitHub every day. On a host without outbound access each run fails and logs a failed job; turn it off on **Admin → DATs**.
+- **Library folders are created on demand.** `roms/<system>/` and its letter folders are no longer created at startup, and empty ones left by earlier versions are removed at the next start (only empty, plain folders; see [volumes](#volumes-and-permissions)). `ingest/<system>/` is still created at startup.
+- **`publisher_logos` becomes `discovery_logos`** (migration `0026`): existing publisher logos keep working. Older backups still restore; migrations bring them up to date.
+- **About moved** from the Admin tabs to the footer, for every user.
 
 Upgrading to the release that adds user management (Admin and Site user accounts):
 

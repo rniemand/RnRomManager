@@ -15,7 +15,7 @@ vi.mock('../bootstrap', () => ({
 }));
 vi.mock('../modal', () => ({ releaseModal: () => {} }));
 
-const { default: PublisherLogoModal } = await import('./PublisherLogoModal.svelte');
+const { default: LogoModal } = await import('./LogoModal.svelte');
 const { default: DiscoveryGroups } = await import('./DiscoveryGroups.svelte');
 
 const nintendo = 'c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516';
@@ -64,17 +64,22 @@ const writes = () => calls.map((c) => c.key).filter((k) => !k.startsWith('GET'))
 const alertText = () => modal().getByRole('alert', { hidden: true }).textContent;
 const png = (size = 10) => new File([new Uint8Array(size)], 'logo.png', { type: 'image/png' });
 
+/** Switches the modal from its default URL source to File. */
+async function useFile(): Promise<void> {
+	await fireEvent.click(modal().getByLabelText('File', { exact: true }));
+}
+
 async function choose(file: File): Promise<void> {
 	await fireEvent.change(fileInput(), { target: { files: [file] } });
 }
 
-describe('PublisherLogoModal (discovery B5)', () => {
+describe('LogoModal (B19)', () => {
 	it.each([
 		[publisher({ logoUrl: `${logo}&v=2` }), 'Shared logo, set by a user.', `${logo}&v=2`],
 		[publisher(), 'Starter art bundled with RnRomManager.', '/publishers/nintendo.svg'],
 		[publisher({ key: hudson, name: 'Hudson' }), 'No logo: the name shows as text.', null]
 	])('says where the current logo comes from (%#)', (group, text, src) => {
-		render(PublisherLogoModal, { open: true, publisher: group, onchanged: vi.fn() });
+		render(LogoModal, { open: true, kind: 'publishers', item: group, onchanged: vi.fn() });
 
 		expect(modal().getByText(text)).toBeTruthy();
 		const image = modal().queryByRole('img', { name: /Current logo/, hidden: true });
@@ -89,7 +94,8 @@ describe('PublisherLogoModal (discovery B5)', () => {
 		],
 		[png(512 * 1024 + 1), 'The logo must be at most 512 KiB.']
 	])('checks the file before uploading (%#)', async (file, message) => {
-		render(PublisherLogoModal, { open: true, publisher: publisher(), onchanged: vi.fn() });
+		render(LogoModal, { open: true, kind: 'publishers', item: publisher(), onchanged: vi.fn() });
+		await useFile();
 		if (file) await choose(file);
 
 		await fireEvent.click(button('Save logo'));
@@ -101,7 +107,8 @@ describe('PublisherLogoModal (discovery B5)', () => {
 
 	it('uploads the file, toasts and asks for a refresh', async () => {
 		const onchanged = vi.fn();
-		render(PublisherLogoModal, { open: true, publisher: publisher(), onchanged });
+		render(LogoModal, { open: true, kind: 'publishers', item: publisher(), onchanged });
+		await useFile();
 		const file = png(512 * 1024);
 		await choose(file);
 
@@ -140,7 +147,8 @@ describe('PublisherLogoModal (discovery B5)', () => {
 	])('shows the server refusal on the file field (%#)', async (reply, message) => {
 		const onchanged = vi.fn();
 		answers[`PUT ${logo}`] = [reply];
-		render(PublisherLogoModal, { open: true, publisher: publisher(), onchanged });
+		render(LogoModal, { open: true, kind: 'publishers', item: publisher(), onchanged });
+		await useFile();
 		await choose(png());
 
 		await fireEvent.click(button('Save logo'));
@@ -151,9 +159,10 @@ describe('PublisherLogoModal (discovery B5)', () => {
 
 	it('removes a shared logo; without one there is nothing to remove', async () => {
 		const onchanged = vi.fn();
-		const view = render(PublisherLogoModal, {
+		const view = render(LogoModal, {
 			open: true,
-			publisher: publisher({ logoUrl: `${logo}&v=2` }),
+			kind: 'publishers',
+			item: publisher({ logoUrl: `${logo}&v=2` }),
 			onchanged
 		});
 
@@ -163,7 +172,7 @@ describe('PublisherLogoModal (discovery B5)', () => {
 		expect(writes()).toEqual([`DELETE ${logo}`]);
 		expect(toasts.items.map((t) => t.text)).toContain("Nintendo's shared logo was removed.");
 
-		await view.rerender({ open: true, publisher: publisher(), onchanged });
+		await view.rerender({ open: true, kind: 'publishers', item: publisher(), onchanged });
 		expect(modal().queryByRole('button', { name: /Remove shared logo/, hidden: true })).toBeNull();
 	});
 
@@ -189,6 +198,7 @@ describe('PublisherLogoModal (discovery B5)', () => {
 		expect(await art()).toBe('/publishers/nintendo.svg');
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Change logo for Nintendo' }));
+		await useFile();
 		await choose(png());
 		await fireEvent.click(button('Save logo'));
 		await vi.waitFor(async () => expect(await art()).toBe(`${logo}&v=7`));
@@ -205,24 +215,169 @@ describe('PublisherLogoModal (discovery B5)', () => {
 		]);
 	});
 
-	it('genre rows have no logo button', async () => {
-		answers['GET /api/discovery/genres?pageSize=20'] = [
-			{
-				status: 200,
-				body: {
-					items: [{ key: hudson, name: 'Puzzle', gameCount: 1 }],
-					page: 1,
-					pageSize: 20,
-					total: 1
-				}
-			}
-		];
-		render(DiscoveryGroups, {
-			view: { kind: 'genres', key: null, groupPage: 1, gamePage: 1 },
-			onpage: vi.fn()
+	it('opens on URL each time, and File can be chosen', async () => {
+		const view = render(LogoModal, {
+			open: true,
+			kind: 'publishers',
+			item: publisher(),
+			onchanged: vi.fn()
+		});
+		const url = () => modal().getByLabelText('URL', { exact: true }) as HTMLInputElement;
+
+		expect(url().checked).toBe(true);
+		expect(modal().getByLabelText('Logo image URL')).toBeTruthy();
+		expect(modal().queryByLabelText('Logo image file')).toBeNull();
+
+		await useFile();
+		expect(fileInput()).toBeTruthy();
+		expect(modal().queryByLabelText('Logo image URL')).toBeNull();
+
+		await view.rerender({
+			open: false,
+			kind: 'publishers',
+			item: publisher(),
+			onchanged: vi.fn()
+		});
+		await view.rerender({
+			open: true,
+			kind: 'publishers',
+			item: publisher(),
+			onchanged: vi.fn()
+		});
+		expect(url().checked).toBe(true);
+	});
+
+	it.each(['ftp://example.com/a.png', 'logo.png', ''])(
+		'checks the URL before sending (%j)',
+		async (value) => {
+			render(LogoModal, {
+				open: true,
+				kind: 'publishers',
+				item: publisher(),
+				onchanged: vi.fn()
+			});
+			await fireEvent.input(modal().getByLabelText('Logo image URL'), { target: { value } });
+
+			await fireEvent.click(button('Save logo'));
+
+			expect(alertText()).toContain('Enter an http or https image URL.');
+			expect(writes()).toEqual([]);
+		}
+	);
+
+	it.each([
+		['publishers', nintendo],
+		['genres', hudson],
+		['systems', 'gb']
+	] as const)('saves a %s logo from a URL to its own route', async (kind, key) => {
+		const onchanged = vi.fn();
+		render(LogoModal, {
+			open: true,
+			kind,
+			item: { key, name: 'Thing', logoUrl: null },
+			onchanged
+		});
+		await fireEvent.input(modal().getByLabelText('Logo image URL'), {
+			target: { value: ' https://example.com/logo.png ' }
 		});
 
-		await screen.findByRole('link', { name: /Puzzle/ });
-		expect(screen.queryByRole('button', { name: /Change logo/ })).toBeNull();
+		await fireEvent.click(button('Save logo'));
+
+		await vi.waitFor(() => expect(onchanged).toHaveBeenCalledOnce());
+		const put = calls.find((c) => c.key === `PUT /api/discovery/${kind}/logo/from-url?key=${key}`)!;
+		expect(JSON.parse(put.body as string)).toEqual({ url: 'https://example.com/logo.png' });
+		expect(toasts.items.map((t) => t.text)).toContain("Thing's logo was saved.");
+	});
+
+	it.each([
+		['genres', hudson],
+		['systems', 'gb']
+	] as const)('uploads and removes a %s logo on its own route', async (kind, key) => {
+		const onchanged = vi.fn();
+		const shared = `/api/discovery/${kind}/logo?key=${key}`;
+		render(LogoModal, {
+			open: true,
+			kind,
+			item: { key, name: 'Thing', logoUrl: `${shared}&v=1` },
+			onchanged
+		});
+		await useFile();
+		await choose(png());
+		await fireEvent.click(button('Save logo'));
+		await vi.waitFor(() => expect(onchanged).toHaveBeenCalledOnce());
+
+		await fireEvent.click(button(/Remove shared logo/));
+		await vi.waitFor(() => expect(onchanged).toHaveBeenCalledTimes(2));
+		expect(writes()).toEqual([`PUT ${shared}`, `DELETE ${shared}`]);
+	});
+
+	it.each([
+		[
+			{
+				status: 400,
+				body: {
+					status: 400,
+					code: 'ValidationFailed',
+					title: 'Validation failed',
+					errors: { url: ['The logo must be a PNG or JPEG image.'] }
+				}
+			},
+			'The logo must be a PNG or JPEG image.'
+		],
+		[
+			{
+				status: 400,
+				body: {
+					status: 400,
+					code: 'ImageUrlBlocked',
+					title: 'The URL points to a private or local network address.'
+				}
+			},
+			'The URL points to a private or local network address.'
+		],
+		[
+			{
+				status: 502,
+				body: {
+					status: 502,
+					code: 'ImageDownloadFailed',
+					title: "Couldn't download the image: HTTP 404."
+				}
+			},
+			"Couldn't download the image: HTTP 404."
+		],
+		[
+			{ status: 404, body: { status: 404, code: 'NotFound', title: 'Not found' } },
+			'This genre is no longer in the library.'
+		]
+	])('shows the server refusal of a URL under the field (%#)', async (reply, message) => {
+		const onchanged = vi.fn();
+		answers[`PUT /api/discovery/genres/logo/from-url?key=${hudson}`] = [reply];
+		render(LogoModal, {
+			open: true,
+			kind: 'genres',
+			item: { key: hudson, name: 'Puzzle' },
+			onchanged
+		});
+		await fireEvent.input(modal().getByLabelText('Logo image URL'), {
+			target: { value: 'https://example.com/a.png' }
+		});
+
+		await fireEvent.click(button('Save logo'));
+
+		await vi.waitFor(() => expect(alertText()).toContain(message));
+		expect(onchanged).not.toHaveBeenCalled();
+	});
+
+	it('a system without a shared logo says the name shows as text', () => {
+		render(LogoModal, {
+			open: true,
+			kind: 'systems',
+			item: { key: 'gb', name: 'Game Boy', logoUrl: null },
+			onchanged: vi.fn()
+		});
+
+		expect(modal().getByText('No logo: the name shows as text.')).toBeTruthy();
+		expect(modal().queryByRole('img', { name: /Current logo/, hidden: true })).toBeNull();
 	});
 });

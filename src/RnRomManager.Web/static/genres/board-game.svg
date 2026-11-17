@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 56" role="img" aria-label="Board Game">
+  <style>
+    rect { fill: #e9ecef; stroke: #adb5bd; }
+    .glyph { fill: #495057; }
+    text { fill: #212529; font: 600 18px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    @media (prefers-color-scheme: dark) { rect { fill: #343a40; stroke: #6c757d; } .glyph { fill: #ced4da; } text { fill: #f8f9fa; } }
+  </style>
+  <rect x="1" y="1" width="198" height="54" rx="8" stroke-width="2"/>
+  <g class="glyph" transform="translate(14 16) scale(1.5)"><path d="M13 1a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2zM3 0a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3V3a3 3 0 0 0-3-3z"/><path d="M5.5 4a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m8 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m-8 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m4-4a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/></g>
+  <text x="118" y="34" text-anchor="middle">Board Game</text>
+</svg>

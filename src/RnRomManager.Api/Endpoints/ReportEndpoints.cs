@@ -49,9 +49,11 @@ public static partial class ReportEndpoints
             {
                 totalBytes = sizes.Sum(s => s.Bytes),
                 gameCount = sizes.Sum(s => s.GameCount),
+                updateCount = sizes.Sum(s => s.UpdateCount),
                 systems = sizes.Select(s => new
                 {
                     system = s.SystemId, systemName = SystemName(systems, s.SystemId), bytes = s.Bytes, gameCount = s.GameCount,
+                    updateCount = s.UpdateCount,
                 }),
             });
         });
@@ -64,8 +66,11 @@ public static partial class ReportEndpoints
             var games = await repository.ListGameSizesAsync(system, ctx.RequestAborted);
             return Results.Ok(new
             {
-                system, systemName = SystemName(systems, system), bytes = games.Sum(g => g.Bytes),
-                games = games.Select(g => new { id = g.Id, displayTitle = g.DisplayTitle, bytes = g.Bytes, romCount = g.RomCount }),
+                system, systemName = SystemName(systems, system), bytes = games.Sum(g => g.Bytes), updateCount = games.Sum(g => g.UpdateCount),
+                games = games.Select(g => new
+                {
+                    id = g.Id, displayTitle = g.DisplayTitle, bytes = g.Bytes, romCount = g.RomCount, updateCount = g.UpdateCount,
+                }),
             });
         });
 

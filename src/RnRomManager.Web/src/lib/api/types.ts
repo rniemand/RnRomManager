@@ -57,6 +57,8 @@ export interface SystemInfo {
 	gameCount: number;
 	romCount: number;
 	regions: string[];
+	/** B15: the shared logo's `/api/discovery/systems/logo?key=<id>&v=…`, or null without one. */
+	logoUrl: string | null;
 }
 
 /** One file entry of a library ZIP (Z2); sizes from the central directory. */
@@ -442,13 +444,29 @@ export interface BackupStatus {
 	backups: BackupFile[];
 }
 
+/** B27: `POST /api/admin/backups/{fileName}/restore`. */
+export interface BackupRestoreResult {
+	restored: string;
+	safetyBackup: string;
+}
+
+/** B28: `GET/PUT /api/admin/dats/settings`. */
+export interface DatRefreshSettings {
+	enabled: boolean;
+	/** `HH:mm` in the server's time zone. */
+	time: string;
+	/** The container's `TZ` id. */
+	timeZone: string;
+	nextRunAt: string | null;
+}
+
 /** `GET /api/discovery/{kind}` item (discovery B3): one publisher or genre across systems. */
 export interface DiscoveryGroup {
 	/** Lowercase hex SHA-256 of the normalized name. */
 	key: string;
 	name: string;
 	gameCount: number;
-	/** Publishers only: the shared override's `…/logo?key=…&v=…`, or null without one (B6). */
+	/** The shared logo's `…/logo?key=…&v=…`, or null without one (B6, B15). */
 	logoUrl?: string | null;
 }
 

@@ -44,7 +44,13 @@ public class BackupSchedulerTests
             });
         _log = new ListLogger();
         _service = new BackupService(_store, new InMemorySettings(), Options.Create(new PathsOptions { Backups = _dir.Combine("backups") }),
-            Options.Create(new BackupOptions()), TimeZoneInfo.Utc, _time, NullLogger<BackupService>.Instance);
+            Options.Create(new BackupOptions()), TimeZoneInfo.Utc, _time, NullLogger<BackupService>.Instance, new RnRomManager.Core.Jobs.JobLock(),
+            Substitute.For<IMaintenanceWindow>(), Substitute.For<RnRomManager.Core.Database.IDatabaseLifecycle>(),
+            Substitute.For<RnRomManager.Core.Jobs.IJobRepository>(), Substitute.For<RnRomManager.Core.Users.IUserRepository>(),
+            Substitute.For<RnRomManager.Core.Discovery.IDiscoveryRepository>(),
+            new RnRomManager.Core.Dats.DatRefreshSettingsService(new InMemorySettings(), TimeZoneInfo.Utc, _time,
+                NullLogger<RnRomManager.Core.Dats.DatRefreshSettingsService>.Instance),
+            Substitute.For<RnRomManager.Core.Audit.IAuditLog>());
     }
 
     [TearDown]

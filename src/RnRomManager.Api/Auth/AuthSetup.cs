@@ -17,7 +17,9 @@ public static class AuthSetup
 
     // spec §9.1 (D42): what a user who must change their password can still call.
     private static readonly string[] MustChangeAllowed =
-        ["/api/auth/me", "/api/auth/change-password", "/api/auth/logout", "/api/auth/antiforgery", "/api/auth/login"];
+        ["/api/auth/me", "/api/auth/change-password", "/api/auth/logout", "/api/auth/antiforgery", "/api/auth/login",
+            // B11: the footer's version and About; read-only, no user data.
+            "/api/about"];
 
     public static IServiceCollection AddAppAuth(this IServiceCollection services)
     {

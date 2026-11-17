@@ -158,6 +158,28 @@ public partial class IntegrityJobTests
         Assert.That(await _games.GetAsync(game.GameId, default), Is.Not.Null);
     }
 
+    [TestCase(JobMode.Quick)]
+    [TestCase(JobMode.Deep)]
+    public async Task NoSystemFolders_IsAHealthyEmptyLibrary(JobMode mode)
+    {
+        // B32: library folders are created on first write, so a fresh root has no roms/<system> at all.
+        Assert.That(Directory.EnumerateFileSystemEntries(_dir.Path), Is.Empty);
+
+        await Run(mode);
+
+        Assert.That(await All(), Is.Empty);
+    }
+
+    [Test]
+    public async Task OnlySomeSystemFolders_ScansThoseAndToleratesTheRest()
+    {
+        await Write("gb/T/Tetris.zip", "Tetris");
+
+        await Run();
+
+        Assert.That((await All()).Select(i => i.Type), Is.EqualTo(new[] { DbRowInserted }));
+    }
+
     [Test]
     public async Task UnreadableOrBadInfoJson_EachGetsItsType()
     {

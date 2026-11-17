@@ -160,6 +160,34 @@ public partial class DiscoveryRepositoryTests
     }
 
     [Test]
+    public async Task Invalidate_DropsEveryCachedIndex_AtOnce()
+    {
+        await MirrorAsync("A", publishers: ["Nintendo"], genres: ["Puzzle"]);
+        Assert.That((await AllAsync(DiscoveryKind.Publishers)).Select(g => g.Name), Is.EqualTo(new[] { "Nintendo" }));
+        Assert.That((await AllAsync(DiscoveryKind.Genres)).Select(g => g.Name), Is.EqualTo(new[] { "Puzzle" }));
+        await MirrorAsync("B", publishers: ["Sega"], genres: ["Action"]);
+
+        _repository.Invalidate();
+
+        Assert.That((await AllAsync(DiscoveryKind.Publishers)).Select(g => g.Name), Is.EqualTo(new[] { "Nintendo", "Sega" }), "within the lifetime");
+        Assert.That((await AllAsync(DiscoveryKind.Genres)).Select(g => g.Name), Is.EqualTo(new[] { "Action", "Puzzle" }));
+    }
+
+    [Test]
+    public async Task Invalidate_DiscardsAnInFlightBuildsResult()
+    {
+        await MirrorAsync("A", publishers: ["Nintendo"]);
+        var inFlight = AllAsync(DiscoveryKind.Publishers); // may or may not see B: it was started first
+
+        _repository.Invalidate();
+        await MirrorAsync("B", publishers: ["Sega"]);
+        await inFlight;
+
+        Assert.That((await AllAsync(DiscoveryKind.Publishers)).Select(g => g.Name), Is.EqualTo(new[] { "Nintendo", "Sega" }),
+            "the next read builds again instead of reusing the in-flight result");
+    }
+
+    [Test]
     public async Task Kinds_HaveSeparateIndexes()
     {
         await MirrorAsync("A", publishers: ["Nintendo"], genres: ["Puzzle"]);

@@ -5,6 +5,7 @@ import { auth } from '#lib/stores/auth.svelte.js';
 import { jobs } from '#lib/stores/jobs.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
+import { expectOnePageTitle } from '#lib/testing/pageTitle.js';
 
 const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
 vi.mock('$app/navigation', () => ({ goto: (...args: [string, unknown?]) => goto(...args) }));
@@ -590,5 +591,10 @@ describe('ingestion page', () => {
 
 		expect(await screen.findByText(/Not allowed/i)).toBeTruthy();
 		expect(calls).toEqual([]);
+	});
+
+	it('has one page-title h1 (B1)', () => {
+		render(IngestionPage);
+		expectOnePageTitle('Ingestion');
 	});
 });

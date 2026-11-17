@@ -41,6 +41,37 @@ public class AuditWriterTests
     }
 
     [Test]
+    public async Task Hold_FlushesFirst_ThenInsertsNothingUntilRelease_ThenWritesTheHeldEventsInOrder()
+    {
+        var repository = Substitute.For<IAuditRepository>();
+        var written = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        repository.InsertAsync(Arg.Any<AuditEvent>(), Arg.Any<CancellationToken>()).Returns(call =>
+        {
+            written.Enqueue(call.Arg<AuditEvent>().Details!);
+            return Task.CompletedTask;
+        });
+        var log = new AuditLog(repository, TimeProvider.System, Substitute.For<ILogger<AuditLog>>());
+        using var writer = new AuditWriter(log, repository, Substitute.For<ILogger<AuditWriter>>());
+        log.Record(new AuditEvent(AuditActions.Ingested, Actor, Details: "before"));
+        await writer.StartAsync(CancellationToken.None);
+
+        await writer.HoldAsync();
+        Assert.That(written, Is.EqualTo(new[] { "before" }), "pending events are flushed first");
+
+        log.Record(new AuditEvent(AuditActions.Ingested, Actor, Details: "held 1"));
+        log.Record(new AuditEvent(AuditActions.Ingested, Actor, Details: "held 2"));
+        await Task.Delay(100);
+        Assert.That(written, Is.EqualTo(new[] { "before" }), "nothing is inserted while held");
+        Assert.That(log.Pending, Is.EqualTo(2), "held events stay queued");
+
+        writer.Release();
+        await writer.FlushAsync();
+
+        Assert.That(written, Is.EqualTo(new[] { "before", "held 1", "held 2" }));
+        await writer.StopAsync(CancellationToken.None);
+    }
+
+    [Test]
     public async Task Inserts_UseCancellationTokenNone_AndStopDrainsTheQueue()
     {
         var repository = Substitute.For<IAuditRepository>();

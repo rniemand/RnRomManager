@@ -195,4 +195,12 @@ public sealed class UserRepository(IDbConnectionFactory connections) : IUserRepo
         await connection.ExecuteAsync(new CommandDefinition(
             "UPDATE users SET hotkeys = @hotkeys WHERE id = @id", new { id, hotkeys }, cancellationToken: cancellationToken));
     }
+
+    public async Task RotateAllSecurityStampsAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        // UUID() is evaluated per row, so each user gets a different 32-hex stamp.
+        await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE users SET security_stamp = REPLACE(UUID(), '-', '')", cancellationToken: cancellationToken));
+    }
 }

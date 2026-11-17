@@ -5,19 +5,26 @@
 	import EmptyState from './EmptyState.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
 	import GameResults from './GameResults.svelte';
+	import { auth } from '../stores/auth.svelte';
+	import GroupLogo from './GroupLogo.svelte';
 	import Icon from './Icon.svelte';
 	import Loading from './Loading.svelte';
 	import Pagination from './Pagination.svelte';
 	import SystemEmulatorsModal from './SystemEmulatorsModal.svelte';
 
-	/** Systems tab B5: the selected system's games, paged by the URL's `gamePage`, and its Emulators button. */
+	/**
+	 * Systems tab B5: the selected system's games, paged by the URL's `gamePage`, its logo (B18) and Emulators button,
+	 * and for Admins a Change logo button (B19).
+	 */
 	interface Props {
 		system: SystemInfo;
 		gamePage: number;
 		onpage: (gamePage: number) => void;
+		/** B19: open the logo modal for this system. */
+		onedit?: (system: SystemInfo) => void;
 	}
 
-	let { system, gamePage, onpage }: Props = $props();
+	let { system, gamePage, onpage, onedit }: Props = $props();
 
 	const sizeKey = 'systemGames';
 	let pageSize = $state(readPageSize(sizeKey));
@@ -64,7 +71,15 @@
 </script>
 
 <section aria-labelledby="system-games-heading">
-	<h2 class="h5 text-truncate" id="system-games-heading" title={system.displayName}>
+	<h2
+		class="h5 text-truncate d-flex align-items-center gap-2"
+		id="system-games-heading"
+		title={system.displayName}
+	>
+		<GroupLogo
+			kind="systems"
+			item={{ key: system.id, name: system.displayName, logoUrl: system.logoUrl }}
+		/>
 		{system.displayName}
 		{#if result}
 			<span class="small text-body-secondary fw-normal"
@@ -80,6 +95,11 @@
 			class="btn btn-outline-primary"
 			onclick={() => (emulatorsOpen = true)}><Icon name="emulators" /> Emulators</button
 		>
+		{#if auth.isAdmin && onedit}
+			<button type="button" class="btn btn-outline-secondary ms-2" onclick={() => onedit(system)}
+				><Icon name="edit" /> Change logo</button
+			>
+		{/if}
 	</div>
 
 	{#if error}

@@ -53,6 +53,8 @@ public sealed class StartupRunner(
 
         // Step 7
         await crashRecovery.RunAsync(cancellationToken);
+        // B31: after crash recovery, so folders that held only *.zip.tmp leftovers are empty by now; before any job.
+        StorageFolders.RemoveEmptyLibraryFolders(paths.Value, systems.All, logger);
 
         // Step 8
         await adminSeeder.SeedAsync(cancellationToken);

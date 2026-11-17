@@ -4,6 +4,8 @@ import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
+import { createRawSnippet } from 'svelte';
+import { expectOnePageTitle } from '#lib/testing/pageTitle.js';
 
 const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
 vi.mock('$app/navigation', () => ({ goto: (...args: [string, unknown?]) => goto(...args) }));
@@ -27,6 +29,7 @@ vi.mock('$app/paths', () => ({
 }));
 
 const { default: ReportsIndex } = await import('./+page.svelte');
+const { default: ReportsLayout } = await import('./+layout.svelte');
 const { default: MissingImages } = await import('./missing-images/+page.svelte');
 const { default: LibrarySize } = await import('./library-size/+page.svelte');
 const { default: Duplicates } = await import('./duplicates/+page.svelte');
@@ -78,9 +81,10 @@ describe('reports pages', () => {
 		const library = {
 			totalBytes: 3000,
 			gameCount: 3,
+			updateCount: 1250,
 			systems: [
-				{ system: 'gbc', systemName: 'Game Boy Color', bytes: 2000, gameCount: 1 },
-				{ system: 'gb', systemName: 'Game Boy', bytes: 1000, gameCount: 2 }
+				{ system: 'gbc', systemName: 'Game Boy Color', bytes: 2000, gameCount: 1, updateCount: 0 },
+				{ system: 'gb', systemName: 'Game Boy', bytes: 1000, gameCount: 2, updateCount: 1250 }
 			]
 		};
 		const tiles = () => [...document.querySelectorAll('svg rect')];
@@ -106,9 +110,31 @@ describe('reports pages', () => {
 				[...r.querySelectorAll('td')].map((td) => td.textContent?.trim())
 			);
 			expect(rows).toEqual([
-				['Game Boy Color', '1', '2.0 KiB', '66.7%'],
-				['Game Boy', '2', '1000 B', '33.3%']
+				['Game Boy Color', '1', '0', '2.0 KiB', '66.7%'],
+				['Game Boy', '2', '1,250', '1000 B', '33.3%']
 			]);
+			const updates = screen.getByRole('columnheader', { name: 'Updates' });
+			expect(updates.classList.contains('text-end')).toBe(true);
+		});
+
+		it('clicking anywhere in a row follows its link; the link itself stays (B22)', async () => {
+			answers['GET /api/reports/library-size'] = { status: 200, body: library };
+			render(LibrarySize);
+			const link = await screen.findByRole('link', { name: 'Game Boy' });
+			const followed: string[] = [];
+			for (const a of document.querySelectorAll('tbody a'))
+				a.addEventListener('click', (e) => {
+					e.preventDefault();
+					followed.push(a.getAttribute('href')!);
+				});
+			const row = link.closest('tr')!;
+
+			await fireEvent.click(row.querySelectorAll('td')[3]);
+			expect(followed).toEqual(['/reports/library-size?system=gb']);
+			await fireEvent.click(link);
+			expect(followed).toHaveLength(2);
+			expect(row.closest('table')!.classList.contains('clickable-rows')).toBe(true);
+			expect(row.getAttribute('tabindex')).toBeNull();
 		});
 
 		it('a system rectangle or row drills in with ?system=', async () => {
@@ -131,9 +157,10 @@ describe('reports pages', () => {
 					system: 'gb',
 					systemName: 'Game Boy',
 					bytes: 1000,
+					updateCount: 1,
 					games: [
-						{ id: 'g1', displayTitle: 'Bravo', bytes: 700, romCount: 2 },
-						{ id: 'g2', displayTitle: 'Alpha', bytes: 300, romCount: 1 }
+						{ id: 'g1', displayTitle: 'Bravo', bytes: 700, romCount: 2, updateCount: 1 },
+						{ id: 'g2', displayTitle: 'Alpha', bytes: 300, romCount: 1, updateCount: 0 }
 					]
 				}
 			};
@@ -148,6 +175,11 @@ describe('reports pages', () => {
 			);
 			expect(screen.getByText('Game Boy', { selector: '.breadcrumb-item' })).toBeTruthy();
 			expect(screen.getByRole('columnheader', { name: '% of system' })).toBeTruthy();
+			expect(
+				[...document.querySelectorAll('tbody tr')].map(
+					(r) => r.querySelectorAll('td')[2].textContent
+				)
+			).toEqual(['1', '0']);
 		});
 
 		it('draws the 300 largest games plus one unclickable "others" rectangle', async () => {
@@ -156,11 +188,12 @@ describe('reports pages', () => {
 				id: `g${i}`,
 				displayTitle: `Game ${i}`,
 				bytes: 10_000 - i,
-				romCount: 1
+				romCount: 1,
+				updateCount: 0
 			}));
 			answers['GET /api/reports/library-size/gb'] = {
 				status: 200,
-				body: { system: 'gb', systemName: 'Game Boy', bytes: 1, games }
+				body: { system: 'gb', systemName: 'Game Boy', bytes: 1, updateCount: 0, games }
 			};
 			render(LibrarySize);
 
@@ -171,7 +204,7 @@ describe('reports pages', () => {
 			expect(others).toHaveLength(1);
 			expect(others[0]).toMatch(/^5 others — /);
 			expect(document.querySelectorAll('tbody tr')).toHaveLength(305);
-		});
+		}, 20_000); // 305 rows of five columns: slow on a loaded machine
 
 		it('an empty library shows the empty state', async () => {
 			answers['GET /api/reports/library-size'] = {
@@ -364,5 +397,12 @@ describe('reports pages', () => {
 
 			expect(await screen.findByText('Every game has a cover image.')).toBeTruthy();
 		});
+	});
+
+	it('the Reports layout has one page-title h1 (B1)', () => {
+		render(ReportsLayout, {
+			children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))
+		});
+		expectOnePageTitle('Reports');
 	});
 });

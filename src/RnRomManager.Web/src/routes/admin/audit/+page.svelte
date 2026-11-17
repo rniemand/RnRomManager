@@ -9,6 +9,7 @@
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import Pagination from '#lib/components/Pagination.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
@@ -32,6 +33,15 @@
 	const params = $derived(page.url.searchParams);
 	const currentPage = $derived(Math.max(1, Number(params.get('page')) || 1));
 	const scheduled = $derived(params.get('scheduled') === 'true');
+	/** B25: what the User and Date toggles show beside their field name; null when unfiltered. */
+	const userLabel = $derived(scheduled ? 'Scheduled' : params.get('user') || null);
+	const dateLabel = $derived.by(() => {
+		const from = params.get('from');
+		const to = params.get('to');
+		if (from && to) return `${from} – ${to}`;
+		if (from) return `from ${from}`;
+		return to ? `to ${to}` : null;
+	});
 	let actions = $state<string[]>([]);
 	let systems = $state<SystemInfo[]>([]);
 	let result = $state<Page<AuditItem> | null>(null);
@@ -131,88 +141,109 @@
 
 <AdminOnly>
 	<h2 class="h4">Auditing</h2>
-	<div class="row g-2 mb-3">
-		<div class="col-sm-6 col-lg-3">
-			<label for="audit-action" class="form-label">Action</label>
-			<select
-				id="audit-action"
-				class="form-select"
-				value={params.get('action') ?? ''}
-				onchange={(e) => update({ action: e.currentTarget.value })}
+	<!-- B25: one toolbar row like the Library's; each toggle names its field and chosen value; it wraps on narrow screens. -->
+	<form
+		class="d-flex flex-wrap align-items-center gap-2 mb-3"
+		role="search"
+		onsubmit={(e) => e.preventDefault()}
+	>
+		<label for="audit-search" class="visually-hidden">Search</label>
+		<input
+			id="audit-search"
+			type="search"
+			class="form-control form-control-sm flex-grow-1 audit-search"
+			placeholder="Search details and paths"
+			maxlength="200"
+			value={params.get('q') ?? ''}
+			oninput={(e) => textInput('q', e.currentTarget.value)}
+		/>
+		<FilterDropdown
+			label="Action"
+			options={actions.map((a) => ({ value: a, label: a }))}
+			value={params.get('action')}
+			all={{ label: 'All actions', sum: false }}
+			filterPlaceholder="Filter actions…"
+			onselect={(action) => update({ action: action ?? '' })}
+		/>
+		<FilterDropdown
+			label="System"
+			options={systems.map((s) => ({
+				value: s.id,
+				label: s.displayName,
+				badge: { system: s.id, name: s.displayName },
+				search: [s.shortName]
+			}))}
+			value={params.get('system')}
+			all={{ label: 'All systems', sum: false }}
+			filterPlaceholder="Filter systems…"
+			onselect={(system) => update({ system: system ?? '' })}
+		/>
+		<div class="dropdown">
+			<button
+				type="button"
+				class="btn btn-sm dropdown-toggle {userLabel ? 'btn-secondary' : 'btn-outline-secondary'}"
+				data-bs-toggle="dropdown"
+				data-bs-auto-close="outside"
+				aria-expanded="false"
 			>
-				<option value="">All actions</option>
-				{#each actions as action (action)}<option value={action}>{action}</option>{/each}
-			</select>
-		</div>
-		<div class="col-sm-6 col-lg-3">
-			<label for="audit-system" class="form-label">System</label>
-			<select
-				id="audit-system"
-				class="form-select"
-				value={params.get('system') ?? ''}
-				onchange={(e) => update({ system: e.currentTarget.value })}
-			>
-				<option value="">All systems</option>
-				{#each systems as system (system.id)}<option value={system.id}>{system.displayName}</option
-					>{/each}
-			</select>
-		</div>
-		<div class="col-sm-6 col-lg-3">
-			<label for="audit-user" class="form-label">User</label>
-			<input
-				id="audit-user"
-				class="form-control"
-				value={scheduled ? '' : (params.get('user') ?? '')}
-				disabled={scheduled}
-				oninput={(e) => textInput('user', e.currentTarget.value)}
-			/>
-			<div class="form-check mt-1">
+				User{#if userLabel}: {userLabel}{/if}
+			</button>
+			<div class="dropdown-menu p-2 filter-panel">
+				<label for="audit-user" class="form-label small mb-1">User</label>
 				<input
-					id="audit-scheduled"
-					type="checkbox"
-					class="form-check-input"
-					checked={scheduled}
-					onchange={(e) => setScheduled(e.currentTarget.checked)}
-				/><label for="audit-scheduled" class="form-check-label">Scheduled only</label>
+					id="audit-user"
+					class="form-control form-control-sm"
+					value={scheduled ? '' : (params.get('user') ?? '')}
+					disabled={scheduled}
+					oninput={(e) => textInput('user', e.currentTarget.value)}
+				/>
+				<div class="form-check mt-2 mb-0">
+					<input
+						id="audit-scheduled"
+						type="checkbox"
+						class="form-check-input"
+						checked={scheduled}
+						onchange={(e) => setScheduled(e.currentTarget.checked)}
+					/><label for="audit-scheduled" class="form-check-label">Scheduled only</label>
+				</div>
 			</div>
 		</div>
-		<div class="col-sm-6 col-lg-3">
-			<label for="audit-search" class="form-label">Search</label>
-			<input
-				id="audit-search"
-				type="search"
-				class="form-control"
-				maxlength="200"
-				value={params.get('q') ?? ''}
-				oninput={(e) => textInput('q', e.currentTarget.value)}
-			/>
-		</div>
-		<div class="col-sm-4">
-			<label for="audit-from" class="form-label">From</label><input
-				id="audit-from"
-				type="date"
-				class="form-control"
-				value={params.get('from') ?? ''}
-				onchange={(e) => update({ from: e.currentTarget.value })}
-			/>
-		</div>
-		<div class="col-sm-4">
-			<label for="audit-to" class="form-label">To</label><input
-				id="audit-to"
-				type="date"
-				class="form-control"
-				value={params.get('to') ?? ''}
-				onchange={(e) => update({ to: e.currentTarget.value })}
-			/>
-		</div>
-		<div class="col-sm-4 d-flex align-items-end">
+		<div class="dropdown">
 			<button
-				class="btn btn-outline-secondary"
-				disabled={!keys.some((key) => params.has(key))}
-				onclick={clear}>Clear</button
+				type="button"
+				class="btn btn-sm dropdown-toggle {dateLabel ? 'btn-secondary' : 'btn-outline-secondary'}"
+				data-bs-toggle="dropdown"
+				data-bs-auto-close="outside"
+				aria-expanded="false"
 			>
+				Date{#if dateLabel}: {dateLabel}{/if}
+			</button>
+			<div class="dropdown-menu p-2 filter-panel">
+				<label for="audit-from" class="form-label small mb-1">From</label>
+				<input
+					id="audit-from"
+					type="date"
+					class="form-control form-control-sm mb-2"
+					value={params.get('from') ?? ''}
+					onchange={(e) => update({ from: e.currentTarget.value })}
+				/>
+				<label for="audit-to" class="form-label small mb-1">To</label>
+				<input
+					id="audit-to"
+					type="date"
+					class="form-control form-control-sm"
+					value={params.get('to') ?? ''}
+					onchange={(e) => update({ to: e.currentTarget.value })}
+				/>
+			</div>
 		</div>
-	</div>
+		<button
+			type="button"
+			class="btn btn-sm btn-outline-secondary"
+			disabled={!keys.some((key) => params.has(key))}
+			onclick={clear}>Clear</button
+		>
+	</form>
 	{#if optionsError}<ErrorAlert error={optionsError} onretry={() => reload++} />{/if}
 	{#if error}
 		<ErrorAlert {error} onretry={() => reload++} />
@@ -262,7 +293,10 @@
 									style="max-width: 32rem"
 									title={item.targetPath ?? undefined}>{item.targetPath ?? '—'}</td
 								>
-								<td>{item.details ?? '—'}</td>
+								<!-- B24: a long Details (e.g. DatsRefreshed's list) no longer widens the table. -->
+								<td class="text-truncate" style="max-width: 32rem" title={item.details ?? undefined}
+									>{item.details ?? '—'}</td
+								>
 							</tr>{/each}</tbody
 					>
 				</table>
@@ -275,3 +309,13 @@
 			onpage={(p) => update({ page: String(p) })}
 		/>{/if}
 </AdminOnly>
+
+<style>
+	.audit-search {
+		min-width: 12rem;
+		max-width: 24rem;
+	}
+	.filter-panel {
+		min-width: 14rem;
+	}
+</style>

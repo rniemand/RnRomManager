@@ -3,8 +3,14 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Backups;
 using RnRomManager.Core.Configuration;
+using RnRomManager.Core.Database;
+using RnRomManager.Core.Dats;
+using RnRomManager.Core.Discovery;
+using RnRomManager.Core.Jobs;
+using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Backups;
@@ -19,6 +25,15 @@ public class BackupServiceTests
     private BackupOptions _options = null!;
     private InMemorySettings _settings = null!;
     private BackupService _service = null!;
+    private JobLock _jobLock = null!;
+    private IMaintenanceWindow _maintenance = null!;
+    private int _windowClosed;
+    private IDatabaseLifecycle _database = null!;
+    private IJobRepository _jobs = null!;
+    private IUserRepository _users = null!;
+    private IDiscoveryRepository _discovery = null!;
+    private DatRefreshSettingsService _datRefresh = null!;
+    private IAuditLog _audit = null!;
 
     private string Folder => _dir.Combine("backups");
 
@@ -36,15 +51,34 @@ public class BackupServiceTests
         _time = new FakeTimeProvider(T0);
         _options = new BackupOptions();
         _settings = new InMemorySettings();
+        _store.KnownMigrations.Returns(new HashSet<string> { Known });
+        _jobLock = new JobLock();
+        _windowClosed = 0;
+        var window = Substitute.For<IAsyncDisposable>();
+        window.DisposeAsync().Returns(_ =>
+        {
+            _windowClosed++;
+            return ValueTask.CompletedTask;
+        });
+        _maintenance = Substitute.For<IMaintenanceWindow>();
+        _maintenance.TryEnterAsync(Arg.Any<CancellationToken>()).Returns(window);
+        _database = Substitute.For<IDatabaseLifecycle>();
+        _jobs = Substitute.For<IJobRepository>();
+        _jobs.AbortRunningAsync(Arg.Any<DateTime>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>());
+        _users = Substitute.For<IUserRepository>();
+        _discovery = Substitute.For<IDiscoveryRepository>();
+        _datRefresh = new DatRefreshSettingsService(_settings, TimeZoneInfo.Utc, _time, NullLogger<DatRefreshSettingsService>.Instance);
+        _audit = Substitute.For<IAuditLog>();
         _service = new BackupService(_store, _settings, Options.Create(new PathsOptions { Backups = Folder }), Options.Create(_options),
-            TimeZoneInfo.Utc, _time, NullLogger<BackupService>.Instance);
+            TimeZoneInfo.Utc, _time, NullLogger<BackupService>.Instance, _jobLock, _maintenance, _database, _jobs, _users, _discovery,
+            _datRefresh, _audit);
     }
 
     [TearDown]
     public void TearDown() => _dir.Dispose();
 
     private static BackupManifest Manifest(Guid id, DateTimeOffset at) =>
-        new(1, id, at, "1.0.0", "rnrommanager", ["0001_users.sql"], [new BackupTable("users", 1)]);
+        new(1, id, at, "1.0.0", "rnrommanager", [Known], [new BackupTable("users", 1)]);
 
     private string[] Files() => Directory.GetFiles(Folder).Select(Path.GetFileName).Order(StringComparer.Ordinal).ToArray()!;
 
@@ -122,6 +156,17 @@ public class BackupServiceTests
         await _service.CreateAsync(1, default);
 
         Assert.That(Files(), Is.EqualTo(new[] { BackupNames.For(T0.AddDays(-3)), BackupNames.For(T0) }));
+    }
+
+    [Test]
+    public void Retention_NeverDeletesTheKeptBackup_WhichDoesntCount()
+    {
+        ExistingBackups(4);
+        var oldest = BackupNames.For(T0.AddDays(-4));
+
+        _service.ApplyRetention(2, keep: oldest);
+
+        Assert.That(Files(), Is.EqualTo(new[] { oldest, BackupNames.For(T0.AddDays(-2)), BackupNames.For(T0.AddDays(-1)) }));
     }
 
     [Test]
@@ -265,6 +310,195 @@ public class BackupServiceTests
         Assert.That(_service.NextRunAt(new BackupSettings(true, "04:00", 30)), Is.EqualTo(T0.AddMinutes(30)));
         Assert.That(_service.NextRunAt(new BackupSettings(false, "04:00", 30)), Is.Null);
         Assert.That(_service.TimeZoneId, Is.EqualTo(TimeZoneInfo.Utc.Id));
+    }
+
+    // --- B27 live restore ---
+
+    private static readonly AuditActor Boss = new(1, "boss", null);
+    private const string Known = "0001_users.sql";
+
+    /// <summary>A restorable backup in the folder: manifest, schema and the users data entry.</summary>
+    private string RestorableBackup(DateTimeOffset at, int formatVersion = 1, string? omit = null)
+    {
+        Directory.CreateDirectory(Folder);
+        var name = BackupNames.For(at);
+        using var zip = System.IO.Compression.ZipFile.Open(Path.Combine(Folder, name), System.IO.Compression.ZipArchiveMode.Create);
+        foreach (var entry in new[] { BackupManifest.SchemaFileName, BackupManifest.DataEntry("users") }.Where(e => e != omit))
+            using (var content = new StreamWriter(zip.CreateEntry(entry).Open()))
+                content.Write("x");
+        using var writer = new StreamWriter(zip.CreateEntry(BackupManifest.FileName).Open());
+        writer.Write(System.Text.Json.JsonSerializer.Serialize(Manifest(Guid.NewGuid(), at) with { FormatVersion = formatVersion },
+            new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web)));
+        return name;
+    }
+
+    private Task<BackupRestoreResult> RestoreAsync(string name, CancellationToken ct = default) => _service.RestoreAsync(name, Boss, ct);
+
+    private async Task AssertNothingChanged()
+    {
+        await _store.DidNotReceiveWithAnyArgs().RestoreAsync(default!, default!, default);
+        _database.DidNotReceive().Migrate();
+        await _users.DidNotReceiveWithAnyArgs().RotateAllSecurityStampsAsync(default);
+        _audit.DidNotReceiveWithAnyArgs().Record(default!);
+    }
+
+    [TestCase("../rnrommanager-20261105-033000.zip")]
+    [TestCase("rnrommanager-20261105-033000.zip.tmp")]
+    [TestCase("rnrommanager-20261105-033000.zip.restored")]
+    [TestCase("notes.zip")]
+    [TestCase("")]
+    public async Task Restore_NameNotInTheList_IsInvalidName_WithoutTakingALock(string name)
+    {
+        using var held = _jobLock.TryAcquire();
+
+        Assert.That((await RestoreAsync(name)).Status, Is.EqualTo(BackupRestoreStatus.InvalidName), "checked before the locks");
+        await _maintenance.DidNotReceiveWithAnyArgs().TryEnterAsync(default);
+    }
+
+    [Test]
+    public async Task Restore_JobLockHeld_IsJobRunning()
+    {
+        var name = RestorableBackup(T0.AddDays(-1));
+        using var held = _jobLock.TryAcquire();
+
+        Assert.That((await RestoreAsync(name)).Status, Is.EqualTo(BackupRestoreStatus.JobRunning));
+        await AssertNothingChanged();
+    }
+
+    [Test]
+    public async Task Restore_WhileABackupRuns_IsBackupRunning_AndReleasesTheJobLock()
+    {
+        var name = RestorableBackup(T0.AddDays(-1));
+        var block = new TaskCompletionSource();
+        _store.DumpAsync(Arg.Any<Stream>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(async call =>
+            {
+                await block.Task;
+                return Manifest(call.Arg<Guid>(), call.Arg<DateTimeOffset>());
+            });
+        var running = _service.CreateAsync(5, default);
+
+        Assert.That((await RestoreAsync(name)).Status, Is.EqualTo(BackupRestoreStatus.BackupRunning));
+        using (var free = _jobLock.TryAcquire())
+            Assert.That(free, Is.Not.Null, "the job lock is released again");
+        block.SetResult();
+        await running;
+        await AssertNothingChanged();
+    }
+
+    [Test]
+    public async Task Restore_UnknownFile_IsNotFound()
+    {
+        Assert.That((await RestoreAsync(BackupNames.For(T0.AddDays(-9)))).Status, Is.EqualTo(BackupRestoreStatus.NotFound));
+        await AssertNothingChanged();
+    }
+
+    [Test]
+    public async Task Restore_TooNewOrUnusableBackup_IsRefusedBeforeTheGate()
+    {
+        var tooNew = RestorableBackup(T0.AddDays(-2), formatVersion: 2);
+        var noSchema = RestorableBackup(T0.AddDays(-1), omit: BackupManifest.SchemaFileName);
+
+        var a = await RestoreAsync(tooNew);
+        var b = await RestoreAsync(noSchema);
+
+        Assert.That((a.Status, a.Message), Is.EqualTo((BackupRestoreStatus.TooNew, (string?)$"Backup {tooNew} is from a newer app version (format version 2, app {AppInfo.Version}); it can't be restored.")));
+        Assert.That((b.Status, b.Message), Is.EqualTo((BackupRestoreStatus.InvalidBackup, (string?)"The backup has no schema.sql.")));
+        await _maintenance.DidNotReceiveWithAnyArgs().TryEnterAsync(default);
+        await AssertNothingChanged();
+    }
+
+    [Test]
+    public async Task Restore_GateRefused_IsBusy_WithNoSafetyBackup()
+    {
+        var name = RestorableBackup(T0.AddDays(-1));
+        _maintenance.TryEnterAsync(Arg.Any<CancellationToken>()).Returns((IAsyncDisposable?)null);
+
+        Assert.That((await RestoreAsync(name)).Status, Is.EqualTo(BackupRestoreStatus.Busy));
+        await _store.DidNotReceiveWithAnyArgs().DumpAsync(default!, default, default, default);
+        await AssertNothingChanged();
+    }
+
+    [Test]
+    public async Task Restore_SafetyBackupFails_IsBackupFailed_NothingChanges_AndTheGateCloses()
+    {
+        var name = RestorableBackup(T0.AddDays(-1));
+        _store.DumpAsync(Arg.Any<Stream>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new IOException("disk full"));
+
+        Assert.That((await RestoreAsync(name)).Status, Is.EqualTo(BackupRestoreStatus.BackupFailed));
+        await AssertNothingChanged();
+        Assert.That(_windowClosed, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task Restore_RunsEveryStepInOrder_KeepsTheSource_AndReturnsTheSafetyBackup()
+    {
+        // The oldest of three with retention 1: the safety backup's retention must neither delete nor count it.
+        var name = RestorableBackup(T0.AddDays(-3));
+        RestorableBackup(T0.AddDays(-2));
+        _settings.Values[BackupSettings.RetentionKey] = "1";
+        var backupWoken = 0;
+        var datWoken = 0;
+        _service.SettingsChanged += () => backupWoken++;
+        _datRefresh.SettingsChanged += () => datWoken++;
+
+        var result = await RestoreAsync(name);
+
+        Assert.That(result, Is.EqualTo(new BackupRestoreResult(BackupRestoreStatus.Restored, name, BackupNames.For(T0))));
+        Assert.That(Files(), Is.EqualTo(new[] { name, BackupNames.For(T0) }), "source kept, older one beyond retention 1 deleted");
+        Received.InOrder(() =>
+        {
+            _maintenance.TryEnterAsync(Arg.Any<CancellationToken>());
+            _store.DumpAsync(Arg.Any<Stream>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
+            _store.RestoreAsync(Arg.Any<System.IO.Compression.ZipArchive>(), Arg.Any<BackupManifest>(), CancellationToken.None);
+            _database.Migrate();
+            _jobs.AbortRunningAsync(T0.UtcDateTime, CancellationToken.None);
+            _users.RotateAllSecurityStampsAsync(CancellationToken.None);
+            _discovery.Invalidate();
+            _audit.Record(Arg.Is<AuditEvent>(e => e.Action == AuditActions.BackupRestored && e.Actor == Boss
+                && e.Details == $"{name}; safety backup {BackupNames.For(T0)}"));
+        });
+        Assert.That((backupWoken, datWoken), Is.EqualTo((1, 1)), "both schedulers re-read the restored settings");
+        Assert.That(_windowClosed, Is.EqualTo(1));
+        using (var free = _jobLock.TryAcquire())
+            Assert.That(free, Is.Not.Null);
+        Assert.That(_service.IsRunning, Is.False);
+    }
+
+    [Test]
+    public async Task Restore_FailureAfterTheDrop_IsRestoreFailed_NamingTheSafetyBackup()
+    {
+        var name = RestorableBackup(T0.AddDays(-1));
+        _store.RestoreAsync(Arg.Any<System.IO.Compression.ZipArchive>(), Arg.Any<BackupManifest>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new BackupRestoreException("Table users: restored 1 rows but the manifest lists 2."));
+
+        var result = await RestoreAsync(name);
+
+        Assert.That((result.Status, result.SafetyBackup), Is.EqualTo((BackupRestoreStatus.RestoreFailed, (string?)BackupNames.For(T0))));
+        Assert.That(result.Message, Does.Contain(BackupNames.For(T0)));
+        _audit.DidNotReceiveWithAnyArgs().Record(default!);
+        Assert.That(_windowClosed, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task Restore_RequestCancelledAfterTheDrop_StillFinishes()
+    {
+        var name = RestorableBackup(T0.AddDays(-1));
+        using var request = new CancellationTokenSource();
+        _store.RestoreAsync(Arg.Any<System.IO.Compression.ZipArchive>(), Arg.Any<BackupManifest>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                request.Cancel(); // the tab closed mid-restore
+                return Task.CompletedTask;
+            });
+
+        var result = await RestoreAsync(name, request.Token);
+
+        Assert.That(result.Status, Is.EqualTo(BackupRestoreStatus.Restored));
+        _database.Received(1).Migrate();
+        await _users.Received(1).RotateAllSecurityStampsAsync(CancellationToken.None);
+        _audit.Received(1).Record(Arg.Any<AuditEvent>());
     }
 
     private sealed class InMemorySettings : ISettingsRepository

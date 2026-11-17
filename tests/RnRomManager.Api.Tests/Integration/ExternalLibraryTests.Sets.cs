@@ -38,6 +38,10 @@ public partial class ExternalLibraryTests
 
     private string SetFolder(char bucket) => Path.Combine(_factory.Root, "roms", ExternalSetTestHandler.SystemId, bucket.ToString());
 
+    /// <summary>B30: library folders exist only once something was written there, so a missing one holds nothing.</summary>
+    private static string[] FilesIn(string folder, string pattern = "*", SearchOption option = SearchOption.TopDirectoryOnly) =>
+        Directory.Exists(folder) ? Directory.GetFiles(folder, pattern, option) : [];
+
     private IngestFile DropSet(string name, byte[] bytes)
     {
         var path = Path.Combine(SetIngest, name);
@@ -148,6 +152,6 @@ public partial class ExternalLibraryTests
         var item = _items.Single(i => i.SystemId == ExternalSetTestHandler.SystemId);
         Assert.That((item.Outcome, item.Reason, item.ArchiveEntry), Is.EqualTo((IngestOutcome.Skipped, IngestReason.ArchiveNotSupported, (string?)null)));
         Assert.That(File.Exists(path), Is.True);
-        Assert.That(Directory.GetFiles(Path.Combine(_factory.Root, "roms", ExternalSetTestHandler.SystemId), "*", SearchOption.AllDirectories), Is.Empty);
+        Assert.That(FilesIn(Path.Combine(_factory.Root, "roms", ExternalSetTestHandler.SystemId), "*", SearchOption.AllDirectories), Is.Empty);
     }
 }

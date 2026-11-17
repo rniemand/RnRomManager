@@ -101,9 +101,10 @@ public partial class EndpointRoleMatrixTests
 
         ["GET /api/discovery/{kind}"] = Role.User,
         ["GET /api/discovery/{kind}/games"] = Role.User,
-        ["GET /api/discovery/publishers/logo"] = Role.User,
-        ["PUT /api/discovery/publishers/logo"] = Role.Admin,
-        ["DELETE /api/discovery/publishers/logo"] = Role.Admin,
+        ["GET /api/discovery/{kind}/logo"] = Role.User,
+        ["PUT /api/discovery/{kind}/logo"] = Role.Admin,
+        ["PUT /api/discovery/{kind}/logo/from-url"] = Role.Admin,
+        ["DELETE /api/discovery/{kind}/logo"] = Role.Admin,
 
         ["GET /api/ingest/pending"] = Role.Admin,
         ["GET /api/ingest/failed"] = Role.Admin,
@@ -134,10 +135,13 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/integrity/issues"] = Role.Admin,
 
         ["GET /api/admin/dats"] = Role.Admin,
+        ["GET /api/admin/dats/settings"] = Role.Admin,
+        ["PUT /api/admin/dats/settings"] = Role.Admin,
         ["GET /api/admin/settings"] = Role.Admin,
         ["GET /api/admin/backups"] = Role.Admin,
         ["PUT /api/admin/backups/settings"] = Role.Admin,
         ["POST /api/admin/backups"] = Role.Admin,
+        ["POST /api/admin/backups/{fileName}/restore"] = Role.Admin,
         ["GET /api/admin/logs"] = Role.Admin,
         ["GET /api/admin/logs/recent"] = Role.Admin,
         ["GET /api/admin/logs/stream"] = Role.Admin,

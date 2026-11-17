@@ -13,7 +13,7 @@ public class SchemaMigrationTests
     private static readonly string[] Tables =
     [
         "app_settings", "audit_events", "bundle_queues", "collection_games", "collections", "data_protection_keys", "duplicate_dismissals", "game_user_save_counts", "games", "images", "ingest_review_items", "integrity_issues",
-        "job_items", "jobs", "publisher_logos", "rom_files", "roms", "user_roles", "users",
+        "discovery_logos", "job_items", "jobs", "rom_files", "roms", "user_roles", "users",
     ];
 
     private string _cs = null!;
@@ -43,7 +43,7 @@ public class SchemaMigrationTests
             "0010_game_rating", "0011_user_roles", "0012_image_cover", "0013_duplicate_dismissals", "0014_audit_events",
             "0015_app_settings", "0016_user_hotkeys", "0017_collections", "0018_external_roms",
             "0019_release_versions", "0020_rom_files", "0021_publisher_logos", "0022_bundle_queues", "0023_game_save_count",
-            "0024_fold_rom_manager", "0025_game_user_save_counts",
+            "0024_fold_rom_manager", "0025_game_user_save_counts", "0026_discovery_logos",
         }));
     }
 
@@ -52,7 +52,7 @@ public class SchemaMigrationTests
     {
         Lifecycle(_cs).Migrate();
 
-        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 25L }));
+        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 26L }));
     }
 
     [Test]
@@ -71,7 +71,7 @@ public class SchemaMigrationTests
     [TestCase("user_roles", "user_id int(11), role varchar(32)")]
     [TestCase("games", "id char(36), system_id varchar(16), title varchar(255), display_title varchar(255), zip_path varchar(512), bucket char(1), release_year smallint(6) NULL, developers longtext, publishers longtext, genres longtext, description text NULL, has_default_boxart tinyint(1) =0, zip_size_bytes bigint(20), zip_mtime_utc datetime, info_schema_version int(11), created_at datetime(6), updated_at datetime(6), rating tinyint(4) NULL, favourite tinyint(1) =0, save_count int(11) =0")]
     [TestCase("roms", "id bigint(20), game_id char(36), system_id varchar(16), file_name varchar(255), original_file_name varchar(255), base_title varchar(255), regions longtext, languages longtext, flags longtext, region_key varchar(255), revision varchar(32) NULL, is_primary tinyint(1) =0, id_method varchar(16), dat_name varchar(255) NULL, dat_version varchar(255) NULL, dat_game_name varchar(255) NULL, size_bytes bigint(20), crc32 char(8), md5 char(32), sha1 char(40), header longtext NULL, date_added datetime(6), date_modified datetime(6), external_file_name varchar(255) NULL, version varchar(40) NULL")]
-    [TestCase("publisher_logos", "key_digest binary(32), media_type varchar(16), bytes mediumblob, updated_by int(11) NULL, updated_at datetime(6)")]
+    [TestCase("discovery_logos", "kind varchar(16) ='publishers', key_digest binary(32), media_type varchar(16), bytes mediumblob, updated_by int(11) NULL, updated_at datetime(6)")]
     [TestCase("rom_files", "id bigint(20), rom_id bigint(20), game_id char(36), ordinal int(11), file_name varchar(255), external_file_name varchar(255), original_file_name varchar(255), size_bytes bigint(20), crc32 char(8), md5 char(32), sha1 char(40)")]
     [TestCase("images", "id bigint(20), game_id char(36), file_name varchar(255), type varchar(16), source varchar(32), source_url varchar(1024) NULL, is_default tinyint(1) =0, size_bytes bigint(20), sha1 char(40), width int(11), height int(11), date_added datetime(6), is_cover tinyint(1) =0")]
     [TestCase("jobs", "id char(36), type varchar(16), mode varchar(16) NULL, trigger_source varchar(16), status varchar(16), requested_by int(11) NULL, started_at datetime(6), finished_at datetime(6) NULL, summary longtext NULL, error text NULL")]
@@ -136,8 +136,8 @@ public class SchemaMigrationTests
             "jobs fk_jobs_requested_by - requested_by",
             "jobs ix_jobs_type_started_at - type,started_at",
             "jobs PRIMARY U id",
-            "publisher_logos fk_publisher_logos_updated_by - updated_by",
-            "publisher_logos PRIMARY U key_digest",
+            "discovery_logos fk_discovery_logos_updated_by - updated_by",
+            "discovery_logos PRIMARY U kind,key_digest",
             "rom_files ix_rom_files_game_id - game_id",
             "rom_files ix_rom_files_rom_id - rom_id",
             "rom_files ix_rom_files_sha1 - sha1",
@@ -178,7 +178,7 @@ public class SchemaMigrationTests
             "ingest_review_items -> users RESTRICT",
             "job_items -> jobs CASCADE",
             "jobs -> users RESTRICT",
-            "publisher_logos -> users SET NULL",
+            "discovery_logos -> users SET NULL",
             "rom_files -> games CASCADE",
             "rom_files -> roms CASCADE",
             "roms -> games CASCADE",
@@ -356,6 +356,27 @@ public class SchemaMigrationTests
             Is.EqualTo(new[] { "adminonly admin", "both admin" }), "manager becomes a Site user");
         var stamps = await ColumnAsync<string>(cs, "SELECT CONCAT(username, ' ', security_stamp = REPEAT('a', 32)) FROM users ORDER BY username");
         Assert.That(stamps, Is.EqualTo(new[] { "adminonly 1", "both 0", "manager 0" }));
+    }
+
+    [Test]
+    public async Task DiscoveryLogos_ExistingPublisherLogosSurvive_AsPublishers()
+    {
+        var cs = await MariaDbServer.CreateDatabaseAsync();
+        foreach (var script in MigrationScripts().TakeWhile(s => !s.Name.Contains("0026_", StringComparison.Ordinal)))
+            await ExecuteAsync(cs, script.Sql);
+        await InsertUserAsync(cs, "boss");
+        await ExecuteAsync(cs, "INSERT INTO publisher_logos (key_digest, media_type, bytes, updated_by, updated_at) " +
+            "SELECT UNHEX(SHA2('nintendo', 256)), 'image/png', 0x0102, id, UTC_TIMESTAMP(6) FROM users");
+
+        await ExecuteAsync(cs, MigrationScripts().Single(s => s.Name.Contains("0026_", StringComparison.Ordinal)).Sql);
+
+        Assert.That(await ColumnAsync<string>(cs,
+                "SELECT CONCAT(l.kind, ' ', LOWER(HEX(l.key_digest)) = SHA2('nintendo', 256), ' ', HEX(l.bytes), ' ', u.username) " +
+                "FROM discovery_logos l JOIN users u ON u.id = l.updated_by"),
+            Is.EqualTo(new[] { "publishers 1 0102 boss" }));
+        await ExecuteAsync(cs, "DELETE FROM users");
+        Assert.That(await ColumnAsync<long>(cs, "SELECT COUNT(*) FROM discovery_logos WHERE updated_by IS NULL"), Is.EqualTo(new[] { 1L }),
+            "the renamed FK still sets the author to NULL");
     }
 
     [Test]

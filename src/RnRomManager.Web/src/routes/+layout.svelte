@@ -9,6 +9,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { api, configureClient } from '#lib/api/client.js';
+	import AppFooter from '#lib/components/AppFooter.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import GlobalSearch from '#lib/components/GlobalSearch.svelte';
 	import HotkeysModal from '#lib/components/HotkeysModal.svelte';
@@ -102,13 +103,16 @@
 			cartCount={bundle.count}
 			onlogout={logout}
 			onsearch={() => (searchOpen = true)}
-			onhotkeys={() => (hotkeysOpen = true)}
 		/>
 		<GlobalSearch bind:open={searchOpen} />
 		<HotkeysModal bind:open={hotkeysOpen} me={auth.me} />
 	{/if}
-	<main class="container py-4">
+	<!-- B10: room below the content for the fixed footer. -->
+	<main class="container py-4" class:above-footer={auth.me}>
 		{@render children()}
 	</main>
+	{#if auth.me}
+		<AppFooter me={auth.me} onhotkeys={() => (hotkeysOpen = true)} />
+	{/if}
 {/if}
 <ToastHost />

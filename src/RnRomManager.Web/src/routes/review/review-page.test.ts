@@ -6,6 +6,7 @@ import { pollIntervalMs } from '#lib/stores/jobs.svelte.js';
 import { reviewJobs } from '#lib/stores/reviewJobs.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
+import { expectOnePageTitle } from '#lib/testing/pageTitle.js';
 
 const goto = vi.fn();
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => goto(...args) }));
@@ -1169,5 +1170,10 @@ describe('review queue page', () => {
 			expect(toasts.items.map((t) => t.kind)).toEqual(['success', 'warning']);
 			expect(toasts.items[0].text).toBe('Deleted 500 files.');
 		});
+	});
+
+	it('has one page-title h1 (B1)', () => {
+		render(QueuePage);
+		expectOnePageTitle('Review Queue');
 	});
 });

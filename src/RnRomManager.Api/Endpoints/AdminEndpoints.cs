@@ -2,6 +2,7 @@ using System.Text.Json;
 using RnRomManager.Api.Auth;
 using RnRomManager.Api.Configuration;
 using RnRomManager.Api.Logging;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Backups;
 
 namespace RnRomManager.Api.Endpoints;
@@ -24,7 +25,7 @@ public static class AdminEndpoints
 
         admin.MapGet("/logs/recent", (LogBuffer buffer) => Results.Ok(buffer.Recent(20)));
 
-        admin.MapGet("/logs/stream", LogStream.RunAsync);
+        admin.MapGet("/logs/stream", LogStream.RunAsync).WithMetadata(MaintenanceExempt.Instance);
 
         // B17: database backups.
         admin.MapGet("/backups", async (BackupService backups, CancellationToken ct) =>
@@ -55,6 +56,38 @@ public static class AdminEndpoints
             {
                 // The cause is logged at Error by BackupService; the client only learns that it failed.
                 return Problems.Create(ctx, StatusCodes.Status500InternalServerError, "BackupFailed", "The backup failed");
+            }
+        });
+
+        // B27: a live restore; on success the caller is signed out like POST /api/auth/logout (every session ends anyway).
+        admin.MapPost("/backups/{fileName}/restore", async (string fileName, HttpContext ctx, BackupService backups) =>
+        {
+            var result = await backups.RestoreAsync(fileName, AuditActor.From(ctx.User), ctx.RequestAborted);
+            switch (result.Status)
+            {
+                case BackupRestoreStatus.Restored:
+                    await Session.SignOutAsync(ctx);
+                    Session.IssueAntiforgery(ctx);
+                    return Results.Ok(new { restored = result.Restored, safetyBackup = result.SafetyBackup });
+                case BackupRestoreStatus.InvalidName:
+                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["fileName"] = ["Choose a backup from the list."] });
+                case BackupRestoreStatus.NotFound:
+                    return Problems.NotFound(ctx);
+                case BackupRestoreStatus.JobRunning:
+                    return DatEndpoints.JobRunning(ctx);
+                case BackupRestoreStatus.BackupRunning:
+                    return Problems.Create(ctx, StatusCodes.Status409Conflict, "BackupRunning", "A backup is already running");
+                case BackupRestoreStatus.TooNew:
+                    return Problems.Create(ctx, StatusCodes.Status409Conflict, "BackupTooNew", "The backup is from a newer app version", detail: result.Message);
+                case BackupRestoreStatus.InvalidBackup:
+                    return Problems.Create(ctx, StatusCodes.Status400BadRequest, "InvalidBackup", "The backup can't be read", detail: result.Message);
+                case BackupRestoreStatus.Busy:
+                    return Problems.Create(ctx, StatusCodes.Status409Conflict, "Busy", "Other requests didn't finish in time; try again");
+                case BackupRestoreStatus.BackupFailed:
+                    return Problems.Create(ctx, StatusCodes.Status500InternalServerError, "BackupFailed", "The safety backup failed; nothing was restored");
+                default:
+                    return Problems.Create(ctx, StatusCodes.Status500InternalServerError, "RestoreFailed", "The restore failed", detail: result.Message,
+                        extensions: new Dictionary<string, object?> { ["safetyBackup"] = result.SafetyBackup });
             }
         });
 

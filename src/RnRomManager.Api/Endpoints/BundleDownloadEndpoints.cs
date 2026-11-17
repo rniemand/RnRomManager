@@ -82,7 +82,7 @@ public static class BundleDownloadEndpoints
         var downloads = api.MapGroup("/bundle-downloads");
         downloads.MapPost("", IssueAsync).WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(BundleQueueEndpoints.RequestLimit));
         downloads.MapGet("/{ticket}", Status);
-        downloads.MapGet("/{ticket}/file", FileAsync);
+        downloads.MapGet("/{ticket}/file", FileAsync).WithMetadata(MaintenanceExempt.Instance);
         return api;
     }
 

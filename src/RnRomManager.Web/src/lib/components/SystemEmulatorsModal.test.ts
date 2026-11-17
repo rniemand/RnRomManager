@@ -18,7 +18,8 @@ const system = (id: string, displayName: string): SystemInfo => ({
 	shortName: id.toUpperCase(),
 	gameCount: 0,
 	romCount: 0,
-	regions: []
+	regions: [],
+	logoUrl: null
 });
 const hidden = { hidden: true };
 

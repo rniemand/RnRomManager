@@ -230,6 +230,20 @@ public partial class LibraryMirrorTests
     }
 
     [Test]
+    public async Task Sync_NoSystemFolders_IsEmpty_AndMissingOnesDontStopTheOthers()
+    {
+        // B32: a fresh root has no roms/<system>; every registered system's folder is treated as empty.
+        var empty = await _sync.SyncAllAsync(CancellationToken.None);
+        Assert.That(empty.Changes, Is.Empty);
+        Assert.That(empty.Skipped, Is.Empty);
+
+        var tetris = await ZipAsync("gb/T/Tetris.zip", "Tetris", 1);
+        var result = await _sync.SyncAllAsync(CancellationToken.None);
+
+        Assert.That(result.Changes, Is.EqualTo(new[] { new DbSyncChangeItem(DbSyncChange.Inserted, tetris.GameId, "gb/T/Tetris.zip") }));
+    }
+
+    [Test]
     public async Task Sync_UpdatesChangedZip()
     {
         var game = await ZipAsync("gb/T/Tetris.zip", "Tetris", 1);

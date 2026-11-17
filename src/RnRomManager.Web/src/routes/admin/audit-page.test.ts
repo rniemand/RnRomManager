@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import { api } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
@@ -67,7 +67,7 @@ describe('Auditing', () => {
 		auth.set(null);
 	});
 
-	it('places the Auditing tab between Logs and About', () => {
+	it('places the Auditing tab last, after Logs; there is no About tab (B12)', () => {
 		render(AdminLayout, {
 			children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))
 		});
@@ -78,8 +78,7 @@ describe('Auditing', () => {
 			'Settings',
 			'Backups',
 			'Logs',
-			'Auditing',
-			'About'
+			'Auditing'
 		]);
 		expect(screen.getByRole('link', { name: 'Auditing' }).getAttribute('href')).toBe(
 			'/admin/audit'
@@ -96,8 +95,22 @@ describe('Auditing', () => {
 		expect(latest().toString()).toBe('page=1&pageSize=100');
 		expect(screen.getByText('System', { selector: 'em' })).toBeTruthy();
 		expect(screen.getByText('ingest/a.gb').getAttribute('title')).toBe('ingest/a.gb');
-		expect(screen.getByText('Game Boy', { selector: '.badge' })).toBeTruthy();
+		expect(
+			within(document.querySelector('tbody')!).getByText('Game Boy', { selector: '.badge' })
+		).toBeTruthy();
 	});
+
+	/** B25: the toolbar dropdown whose toggle starts with `field`. */
+	const toggle = (field: string) =>
+		screen
+			.getAllByRole('button')
+			.find(
+				(b) => b.classList.contains('dropdown-toggle') && b.textContent!.trim().startsWith(field)
+			)!;
+	const menuItem = (field: string, text: string) =>
+		[
+			...toggle(field).closest('.dropdown')!.querySelectorAll<HTMLButtonElement>('.dropdown-item')
+		].find((b) => b.textContent!.trim().endsWith(text))!;
 
 	it.each([
 		['Action', 'action', 'GameUpdated'],
@@ -108,10 +121,10 @@ describe('Auditing', () => {
 		navigateTo('/admin/audit?page=2');
 		render(AuditPage);
 		await screen.findByRole('link', { name: game });
-		const input = screen.getByLabelText(label, { exact: true });
-		if (label === 'Action' || label === 'System')
-			await fireEvent.change(input, { target: { value } });
-		else await fireEvent.input(input, { target: { value } });
+		if (label === 'Action') await fireEvent.click(menuItem('Action', 'GameUpdated'));
+		else if (label === 'System') await fireEvent.click(menuItem('System', 'Game Boy'));
+		else
+			await fireEvent.input(screen.getByLabelText(label, { exact: true }), { target: { value } });
 		await vi.waitFor(() => expect(latest().get(key)).toBe(value));
 		expect(testUrl.current.searchParams.get(key)).toBe(value);
 		expect(latest().get('page')).toBe('1');
@@ -160,6 +173,62 @@ describe('Auditing', () => {
 		await vi.waitFor(() => expect(latest().toString()).toBe('page=1&pageSize=100'));
 		expect(testUrl.current.search).toBe('');
 		expect((screen.getByLabelText('Search') as HTMLInputElement).value).toBe('');
+	});
+
+	it('the filters are one toolbar of dropdowns, each toggle showing its value (B25)', async () => {
+		navigateTo('/admin/audit?action=Ingested&system=gb&user=boss&from=2026-11-01&to=2026-11-02');
+		render(AuditPage);
+		await screen.findByRole('link', { name: game });
+
+		const form = screen.getByRole('search');
+		expect(form.classList.contains('flex-wrap')).toBe(true);
+		const toggles = [...form.querySelectorAll('.dropdown-toggle')].map((b) =>
+			b.textContent!.replace(/\s+/g, ' ').trim()
+		);
+		expect(toggles).toEqual([
+			'Action: Ingested',
+			'System: Game Boy',
+			'User: boss',
+			'Date: 2026-11-01 – 2026-11-02'
+		]);
+		expect(form.querySelectorAll('select')).toHaveLength(0);
+		expect(screen.getByRole('button', { name: 'Clear' }).closest('form')).toBe(form);
+	});
+
+	it('an unfiltered toolbar shows the bare field names; Scheduled only names the User toggle', async () => {
+		render(AuditPage);
+		await screen.findByRole('link', { name: game });
+		expect(toggle('User').textContent!.trim()).toBe('User');
+		expect(toggle('Date').textContent!.trim()).toBe('Date');
+		expect(toggle('Action').classList.contains('btn-outline-secondary')).toBe(true);
+
+		await fireEvent.click(screen.getByLabelText('Scheduled only'));
+		await vi.waitFor(() =>
+			expect(toggle('User').textContent!.replace(/\s+/g, ' ').trim()).toBe('User: Scheduled')
+		);
+		expect(toggle('User').classList.contains('btn-secondary')).toBe(true);
+	});
+
+	it('choosing All actions clears the action', async () => {
+		navigateTo('/admin/audit?action=Ingested');
+		render(AuditPage);
+		await screen.findByRole('link', { name: game });
+
+		await fireEvent.click(menuItem('Action', 'All actions'));
+
+		await vi.waitFor(() => expect(latest().has('action')).toBe(false));
+		expect(testUrl.current.searchParams.has('action')).toBe(false);
+	});
+
+	it('truncates a long Details value and keeps the full text as its title (B24)', async () => {
+		const long = Array.from({ length: 40 }, (_, i) => `Nintendo - System ${i}.dat`).join(', ');
+		items = [{ ...(items[0] as object), details: long }];
+		render(AuditPage);
+
+		const cell = await screen.findByText(long);
+		expect(cell.classList.contains('text-truncate')).toBe(true);
+		expect(cell.getAttribute('title')).toBe(long);
+		expect((cell as HTMLElement).style.maxWidth).toBe('32rem');
 	});
 
 	it('shows an empty state', async () => {

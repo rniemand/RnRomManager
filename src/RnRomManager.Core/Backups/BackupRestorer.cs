@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO.Compression;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RnRomManager.Core.Configuration;
@@ -25,8 +24,7 @@ public sealed class BackupRestorer(
         if (string.IsNullOrEmpty(name)) return false;
 
         // Rule 1: a bare file name of an existing file in Paths:Backups.
-        if (name.Contains('/') || name.Contains('\\') || name.Contains("..", StringComparison.Ordinal)
-            || Path.GetFileName(name) != name || Path.IsPathRooted(name))
+        if (!BackupCheck.IsBareName(name))
             throw new BackupRestoreException(
                 $"Backup:RestoreFrom must be a file name in Paths:Backups, without a folder (got '{name}').");
         var folder = paths.Value.Backups;
@@ -44,30 +42,14 @@ public sealed class BackupRestorer(
         }
 
         await using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
-        ZipArchive zip;
-        try
-        {
-            zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
-        }
-        catch (InvalidDataException ex)
-        {
-            throw new BackupRestoreException($"Backup {name} isn't a readable ZIP: {ex.Message}", ex);
-        }
+        // Rule 3: checked before anything is dropped.
+        var inspection = BackupCheck.Open(stream, name, store.KnownMigrations);
+        if (inspection.Zip is not { } zip)
+            throw new BackupRestoreException(inspection.Message!);
 
         using (zip)
         {
-            // Rule 3: checked before anything is dropped.
-            var manifest = BackupArchive.ReadManifest(zip);
-            var unknown = manifest.Migrations.Where(m => !store.KnownMigrations.Contains(m)).ToList();
-            if (manifest.FormatVersion != BackupManifest.CurrentFormatVersion || unknown.Count > 0)
-            {
-                var detail = unknown.Count > 0
-                    ? $"unknown migrations {string.Join(", ", unknown)}"
-                    : $"format version {manifest.FormatVersion}";
-                throw new BackupRestoreException(
-                    $"Backup {name} is from a newer app version ({detail}, app {AppInfo.Version}); it can't be restored.");
-            }
-
+            var manifest = inspection.Manifest!;
             // Rule 4
             logger.LogWarning("Restoring backup {FileName} (id {BackupId}, created {CreatedAt:O}, app {AppVersion}): every table is replaced",
                 name, manifest.BackupId, manifest.CreatedAt, manifest.AppVersion);

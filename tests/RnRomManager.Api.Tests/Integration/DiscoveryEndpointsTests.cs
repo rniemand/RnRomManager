@@ -93,6 +93,23 @@ public class DiscoveryEndpointsTests
     }
 
     [Test]
+    public async Task GenreGroups_CarryTheirOwnLogoUrl()
+    {
+        await AddGameAsync("Tetris", "gb", ["Puzzle"], ["Puzzle"]);
+        var at = new DateTime(2026, 11, 17, 4, 0, 0, DateTimeKind.Utc);
+        await _factory.Services.GetRequiredService<IDiscoveryLogoRepository>().UpsertAsync(
+            new DiscoveryLogo(LogoKind.Genres, Key("puzzle"), "image/png", [1], null, at), default);
+
+        var (_, genres) = await GetAsync(_user, "/api/discovery/genres");
+        var (_, publishers) = await GetAsync(_user, "/api/discovery/publishers");
+
+        Assert.That(genres.GetProperty("items")[0].GetProperty("logoUrl").GetString(),
+            Is.EqualTo($"/api/discovery/genres/logo?key={Key("puzzle")}&v={at.Ticks}"));
+        Assert.That(publishers.GetProperty("items")[0].GetProperty("logoUrl").ValueKind, Is.EqualTo(JsonValueKind.Null),
+            "the same key as a publisher has no logo");
+    }
+
+    [Test]
     public async Task Groups_NoGames_IsAnEmptyPage()
     {
         var (status, body) = await GetAsync(_user, "/api/discovery/genres");

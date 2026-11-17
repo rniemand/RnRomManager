@@ -1,10 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/svelte';
-import { resetClient } from '#lib/api/client.js';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import { api, resetClient } from '#lib/api/client.js';
 import type { BackupStatus } from '#lib/api/types.js';
 import { formatDateTime } from '#lib/format.js';
 import { auth } from '#lib/stores/auth.svelte.js';
+import { navCounts } from '#lib/stores/navCounts.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
+
+// Bootstrap's Modal needs layout/transitions jsdom lacks.
+vi.mock('#lib/bootstrap.js', () => ({
+	Modal: class {
+		show() {}
+		hide() {}
+		dispose() {}
+	}
+}));
+vi.mock('#lib/modal.js', () => ({ releaseModal: () => {} }));
+const goto = vi.fn(() => Promise.resolve());
+vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => goto(...(args as [])) }));
 
 const { default: BackupsPage } = await import('./backups/+page.svelte');
 
@@ -38,6 +51,7 @@ describe('admin backups page (B18)', () => {
 
 	beforeEach(() => {
 		resetClient();
+		goto.mockClear();
 		toasts.items = [];
 		auth.set({ id: 1, username: 'admin', roles: ['admin'], mustChangePassword: false });
 		calls = [];
@@ -252,5 +266,115 @@ describe('admin backups page (B18)', () => {
 
 		const button = (await screen.findByRole('button', { name: /Backing up/ })) as HTMLButtonElement;
 		expect(button.disabled).toBe(true);
+	});
+
+	describe('restore (B26, B27.8)', () => {
+		const name = 'rnrommanager-20261117-040000 (2).zip';
+		const encoded = 'rnrommanager-20261117-040000%20(2).zip';
+		const restoreKey = `POST /api/admin/backups/${encoded}/restore`;
+		const modal = () => document.querySelector<HTMLElement>('.modal')!;
+		const confirm = () =>
+			screen.getByRole('button', { name: 'Restore', hidden: true }) as HTMLButtonElement;
+
+		async function open(): Promise<void> {
+			answers['GET /api/admin/backups'] = [
+				{ status: 200, body: status({ backups: [backup(name, '2026-11-17T04:00:00+00:00')] }) }
+			];
+			navCounts.review = 4;
+			render(BackupsPage);
+			await fireEvent.click(await screen.findByRole('button', { name: `Restore ${name}` }));
+		}
+
+		it('every backup row has a Restore button that opens the danger confirm with the warnings', async () => {
+			await open();
+
+			const text = modal().textContent!;
+			expect(text).toContain(name);
+			expect(text).toContain(formatDateTime('2026-11-17T04:00:00+00:00'));
+			expect(text).toContain('Every table in the database is replaced');
+			expect(text).toContain('safety backup of the current database is taken first');
+			expect(text).toContain('Everyone, including you, is signed out');
+			expect(text).toContain('Integrity → Run quick');
+			expect(confirm().className).toContain('btn-danger');
+			expect(calls.some((c) => c.key.includes('/restore'))).toBe(false);
+		});
+
+		it('confirm posts the encoded name, forgets the session and goes to /login', async () => {
+			answers[restoreKey] = [
+				{ status: 200, body: { restored: name, safetyBackup: 'rnrommanager-20261117-050000.zip' } }
+			];
+			await open();
+
+			await fireEvent.click(confirm());
+
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/login', { replaceState: true }));
+			expect(calls.map((c) => c.key)).toContain(restoreKey);
+			expect(auth.me).toBeNull();
+			expect(navCounts.review).toBeNull();
+			expect(toasts.items.at(-1)!.kind).toBe('success');
+			expect(toasts.items.at(-1)!.text).toContain('rnrommanager-20261117-050000.zip');
+			// The cached antiforgery call is forgotten: the next POST fetches a fresh token.
+			calls = [];
+			await api.post('/api/auth/logout');
+			expect(calls.map((c) => c.key)).toEqual([
+				'GET /api/auth/antiforgery',
+				'POST /api/auth/logout'
+			]);
+		});
+
+		it.each([
+			['JobRunning', 409, 'Another job is running', undefined],
+			[
+				'BackupTooNew',
+				409,
+				'The backup is from a newer app version',
+				'Backup x is from a newer app version (format version 2).'
+			],
+			['Busy', 409, "Other requests didn't finish in time; try again", undefined],
+			['RestoreFailed', 500, 'The restore failed', 'Restore the safety backup y.zip.']
+		])('%s is shown in the modal and the page stays', async (code, status, title, detail) => {
+			answers[restoreKey] = [{ status, body: { status, code, title, detail } }];
+			await open();
+
+			await fireEvent.click(confirm());
+
+			const alert = await vi.waitFor(() => within(modal()).getByRole('alert', { hidden: true }));
+			expect(alert.textContent).toContain(title);
+			if (detail) expect(alert.textContent).toContain(detail);
+			expect(goto).not.toHaveBeenCalled();
+			expect(auth.me).not.toBeNull();
+		});
+
+		it.each([502, 504])(
+			'a response lost behind a proxy (%i) warns that it may still be running',
+			async (code) => {
+				answers[restoreKey] = [{ status: code }];
+				await open();
+
+				await fireEvent.click(confirm());
+
+				await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/login', { replaceState: true }));
+				expect(auth.me).toBeNull();
+				expect(toasts.items.at(-1)).toMatchObject({
+					kind: 'warning',
+					text: 'The restore may still be running. Sign in again in a minute, then check Backups.'
+				});
+			}
+		);
+
+		it('a network error does the same', async () => {
+			await open();
+			const fetcher = globalThis.fetch;
+			vi.stubGlobal('fetch', (url: string, init?: RequestInit) =>
+				`${init?.method ?? 'GET'} ${url}` === restoreKey
+					? Promise.reject(new TypeError('Failed to fetch'))
+					: fetcher(url, init)
+			);
+
+			await fireEvent.click(confirm());
+
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/login', { replaceState: true }));
+			expect(toasts.items.at(-1)!.kind).toBe('warning');
+		});
 	});
 });

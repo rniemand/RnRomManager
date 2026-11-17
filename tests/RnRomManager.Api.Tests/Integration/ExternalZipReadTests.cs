@@ -91,6 +91,7 @@ public class ExternalZipReadTests
     {
         var id = await Game(system, "ext/linked/Orbit.zip", _outside);
         var link = Path.Combine(_factory.Root, "roms", "ext", "linked");
+        Directory.CreateDirectory(Path.GetDirectoryName(link)!); // B30: roms/<system> is no longer created at startup
         Assert.That(TestLinks.TryLinkDirectory(link, _outside), Is.True, "this account can't create a directory link");
         _link = link;
 

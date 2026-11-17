@@ -100,6 +100,12 @@ async function chooseFilter(
   await page.locator(`.dropdown-menu.show [data-value="${value}"]`).click();
 }
 
+/** B7: Admin is the first item of the user menu (the toggle reads the username). */
+async function openAdmin(p: Page = page): Promise<void> {
+  await p.getByRole("button", { name: "admin", exact: true }).click();
+  await p.getByRole("link", { name: "Admin", exact: true }).click();
+}
+
 async function openGame(title: string): Promise<void> {
   await openLibrary();
   await page
@@ -172,6 +178,16 @@ test("login + forced password change", { tag: "@both" }, async () => {
 
   await expect(page.getByText("The library is empty.")).toBeVisible();
   await expectAccessible(page, "empty library");
+
+  // B28/B29: no scheduled DAT refresh (it would need GitHub) if a run crosses 04:00.
+  const xsrf =
+    (await context.cookies()).find((c) => c.name === "XSRF-TOKEN")?.value ?? "";
+  const schedule = await page.request.put("/api/admin/dats/settings", {
+    data: { enabled: false, time: "04:00" },
+    headers: { "X-XSRF-TOKEN": decodeURIComponent(xsrf) },
+  });
+  expect(schedule.status()).toBe(200);
+  expect((await schedule.json()).nextRunAt).toBeNull();
 });
 
 test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
@@ -269,7 +285,7 @@ test("reports and the ingest audit trail", async () => {
   await expect(page.getByText("No duplicate games found.")).toBeVisible();
   await expectAccessible(page, "duplicates report");
 
-  await page.getByRole("link", { name: "Admin", exact: true }).click();
+  await openAdmin();
   await page.getByRole("link", { name: "Auditing", exact: true }).click();
   const ingested = page
     .getByRole("row")
@@ -814,7 +830,7 @@ test("saves: upload, rename, save state from Play, play it, delete, audit", asyn
   await expect(rows()).toHaveCount(1);
 
   // B13: the audit trail.
-  await page.getByRole("link", { name: "Admin", exact: true }).click();
+  await openAdmin();
   await page.getByRole("link", { name: "Auditing", exact: true }).click();
   for (const action of ["SaveAdded", "SaveUpdated", "SaveDeleted"])
     await expect(
@@ -1848,6 +1864,8 @@ test("collections discovery: an Admin replaces and removes a publisher logo a Si
       await changeLogo(page).click();
       await expect(dialog()).toHaveAccessibleName("Logo for Fixture Works");
       await before?.();
+      // B19: the dialog opens on URL; a file upload needs no outbound network.
+      await dialog().getByText("File", { exact: true }).click();
       await dialog()
         .getByLabel("Logo image file")
         .setInputFiles({
@@ -2831,13 +2849,65 @@ test("Admin and Integrity pages are accessible", { tag: "@shard-b" }, async () =
     ["/admin/users", "Admin"],
     ["/admin/dats", "Admin"],
     ["/admin/settings", "Admin"],
-    ["/admin/about", "Admin"],
   ]) {
     await page.goto(path);
+    // B1: the section title is visually hidden on a wide screen but stays the page's one h1.
     await expect(
       page.getByRole("heading", { level: 1, name: heading }),
-    ).toBeVisible();
+    ).toBeAttached();
     await expect(page.locator('[role="status"]')).toHaveCount(0); // finished loading
     await expectAccessible(page, path);
   }
+});
+
+test("footer: About and the version, for everyone", { tag: "@shard-b" }, async () => {
+  await page.goto("/");
+  const footer = page.locator("footer.app-footer");
+  await expect(footer).toBeVisible();
+  await expect(
+    footer.getByRole("link", { name: /^RnRomManager/ }),
+  ).toHaveAttribute("href", "https://github.com/rniemand/RnRomManager/releases");
+  await footer.getByRole("button", { name: "About" }).click();
+  await expect(dialog()).toHaveAccessibleName("About RnRomManager");
+  await expect(dialog().getByRole("cell", { name: "MIT" }).first()).toBeVisible();
+  await expectAccessible(page, "about modal");
+  await dialog().getByRole("button", { name: "Close" }).last().click();
+  await expect(dialog()).toBeHidden();
+});
+
+// B26/B27: keep this the LAST test in the file. It replaces every table and signs everyone out, so nothing may run
+// after it, even in a single-stack run where tags don't filter.
+test("Admin: restore a backup from the Backups page", { tag: "@shard-b" }, async () => {
+  await page.goto("/admin/backups");
+  const backupFiles = page.getByRole("cell", {
+    name: /^rnrommanager-\d{8}-\d{6}( \(\d+\))?\.zip$/,
+  });
+  const before = await backupFiles.allTextContents();
+  await page.getByRole("button", { name: /Back up now/ }).click();
+  await expect
+    .poll(
+      async () =>
+        (await backupFiles.allTextContents()).find((n) => !before.includes(n)),
+      { timeout: 30_000 },
+    )
+    .toBeTruthy();
+  const created = (await backupFiles.allTextContents()).find(
+    (n) => !before.includes(n),
+  )!;
+
+  await page.getByRole("button", { name: `Restore ${created}` }).click();
+  await expect(dialog()).toHaveAccessibleName("Restore backup");
+  await expect(dialog()).toContainText("Everyone, including you, is signed out.");
+  await expectAccessible(page, "restore confirm");
+  await dialog().getByRole("button", { name: "Restore", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/login/, { timeout: 120_000 });
+  await page.getByLabel("Username").fill("admin");
+  await page.getByLabel("Password").fill(newPassword);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).not.toHaveURL(/\/login/);
+
+  await page.goto("/admin/backups");
+  await expect(page.getByRole("cell", { name: created, exact: true })).toBeVisible();
+  await expect(backupFiles).not.toHaveCount(before.length + 1); // the safety backup was added too
 });

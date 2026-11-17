@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
-	import type { DatVersion } from '#lib/api/types.js';
+	import type { DatRefreshSettings, DatVersion } from '#lib/api/types.js';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
@@ -19,6 +19,45 @@
 
 	const job = $derived(jobs.current);
 
+	/** B28: the daily automatic refresh. */
+	let schedule = $state<DatRefreshSettings | null>(null);
+	let scheduleError = $state<unknown>(null);
+	let form = $state({ enabled: true, time: '04:00' });
+	let timeError = $state<string | null>(null);
+	let saving = $state(false);
+
+	function applySchedule(next: DatRefreshSettings): void {
+		schedule = next;
+		form = { enabled: next.enabled, time: next.time };
+	}
+
+	async function loadSchedule(): Promise<void> {
+		scheduleError = null;
+		try {
+			applySchedule(await api.get<DatRefreshSettings>('/api/admin/dats/settings'));
+		} catch (e) {
+			scheduleError = e;
+		}
+	}
+
+	async function saveSchedule(event: SubmitEvent): Promise<void> {
+		event.preventDefault();
+		timeError = /^([01][0-9]|2[0-3]):[0-5][0-9]$/.test(form.time)
+			? null
+			: 'Use HH:mm, 00:00–23:59.';
+		if (timeError) return;
+		saving = true;
+		try {
+			applySchedule(await api.put<DatRefreshSettings>('/api/admin/dats/settings', form));
+			toasts.show('DAT refresh schedule saved.', 'success');
+		} catch (e) {
+			if (isApiError(e, 'ValidationFailed') && e.errors.time) timeError = e.errors.time[0];
+			else toasts.show(isApiError(e) ? e.title : 'The schedule could not be saved.', 'danger');
+		} finally {
+			saving = false;
+		}
+	}
+
 	async function load(): Promise<void> {
 		error = null;
 		try {
@@ -31,6 +70,7 @@
 	onMount(() => {
 		if (!auth.isAdmin) return;
 		void load();
+		void loadSchedule();
 		const stopWatching = jobs.watch();
 		const stopEnded = jobs.onEnded((ended) => {
 			if (ended.type === 'DatRefresh') void load();
@@ -81,6 +121,46 @@
 	{/if}
 </div>
 
+<form class="card card-body mb-3" novalidate onsubmit={saveSchedule} aria-labelledby="dat-schedule">
+	<h2 class="h5" id="dat-schedule">Automatic refresh</h2>
+	{#if scheduleError}
+		<ErrorAlert error={scheduleError} onretry={loadSchedule} />
+	{:else if !schedule}
+		<Loading />
+	{:else}
+		<div class="form-check form-switch mb-3">
+			<input
+				id="dat-enabled"
+				class="form-check-input"
+				type="checkbox"
+				role="switch"
+				bind:checked={form.enabled}
+			/>
+			<label class="form-check-label" for="dat-enabled">Enabled</label>
+		</div>
+		<div class="mb-3 dat-time">
+			<label class="form-label" for="dat-time">Time (server time, {schedule.timeZone})</label>
+			<input
+				id="dat-time"
+				class="form-control"
+				class:is-invalid={timeError}
+				type="time"
+				bind:value={form.time}
+			/>
+			{#if timeError}<div class="invalid-feedback">{timeError}</div>{/if}
+		</div>
+		<p class="small text-body-secondary" data-testid="dat-next-run">
+			Next run: {schedule.nextRunAt ? formatDateTime(schedule.nextRunAt) : 'Disabled'}
+		</p>
+		<div>
+			<button type="submit" class="btn btn-primary" disabled={saving}>
+				{#if saving}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
+				Save
+			</button>
+		</div>
+	{/if}
+</form>
+
 {#if error}
 	<ErrorAlert {error} onretry={load} />
 {:else if !dats}
@@ -111,3 +191,9 @@
 		</div>
 	</div>
 {/if}
+
+<style>
+	.dat-time {
+		max-width: 16rem;
+	}
+</style>

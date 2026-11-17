@@ -68,6 +68,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>S4: keep the storage migration starter; off by default, so tests that seed legacy games keep them legacy.</summary>
     public bool RunStorageMigrationStarter { get; init; }
 
+    /// <summary>B29: hosts the daily DAT refresh only when set; otherwise a real-database test could start a refresh at 04:00.</summary>
+    public bool RunDatRefreshScheduler { get; init; }
+
     /// <summary>Extra service overrides (e.g. a stub HTTP handler).</summary>
     public Action<IServiceCollection>? TestServices { get; init; }
 
@@ -161,6 +164,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             {
                 foreach (var starter in services.Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService) && d.ImplementationType == typeof(StorageMigrationStarter)).ToList())
                     services.Remove(starter);
+            });
+        if (!RunDatRefreshScheduler)
+            builder.ConfigureTestServices(services =>
+            {
+                foreach (var scheduler in services.Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService) && d.ImplementationType == typeof(DatRefreshScheduler)).ToList())
+                    services.Remove(scheduler);
             });
         if (Time is not null)
             builder.ConfigureTestServices(services => services.AddSingleton(Time));

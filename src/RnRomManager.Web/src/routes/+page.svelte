@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { onDestroy, untrack } from 'svelte';
 	import { SvelteSet } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
@@ -245,7 +246,7 @@
 
 <svelte:head><title>Library · RnRomManager</title></svelte:head>
 
-<h1 class="h3 mb-3"><Icon name="library" /> Library</h1>
+<PageTitle icon="library" text="Library" />
 
 <form
 	class="d-flex flex-wrap align-items-center gap-2 mb-2"
@@ -411,7 +412,7 @@
 	{/if}
 {:else}
 	<p class="text-body-secondary small" aria-live="polite">
-		{result.total}
+		{formatCount(result.total)}
 		{result.total === 1 ? 'game' : 'games'}
 	</p>
 	<GameResults bind:games={result.items} {view} selected={selecting ? selected : undefined} />

@@ -4,4 +4,7 @@
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="SharpCompress" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="RnRomManager.Core.Tests" />
+  </ItemGroup>
 </Project>

@@ -6,6 +6,7 @@ using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
+using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
@@ -183,6 +184,19 @@ public partial class LibraryEndpointsTests
             "32X", "3DO", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Commodore 64", "Commodore Amiga", "Commodore PET", "Commodore VIC-20", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
             "PlayStation", "PlayStation Portable", "Saturn", "Sega CD", "Super Nintendo Entertainment System", "TurboGrafx-16", "Virtual Boy", "Wii", "Xbox 360"
         }));
+    }
+
+    [Test]
+    public async Task Systems_CarryTheirLogoUrl_KeyedBySystemId()
+    {
+        var at = new DateTime(2026, 11, 17, 4, 0, 0, DateTimeKind.Utc);
+        await Service<IDiscoveryLogoRepository>().UpsertAsync(
+            new DiscoveryLogo(LogoKind.Systems, DiscoveryKey.ForSystem("gb"), "image/png", [1], null, at), default);
+
+        var systems = (await GetJson("/api/systems")).EnumerateArray().ToDictionary(s => s.GetProperty("id").GetString()!);
+
+        Assert.That(systems["gb"].GetProperty("logoUrl").GetString(), Is.EqualTo($"/api/discovery/systems/logo?key=gb&v={at.Ticks}"));
+        Assert.That(systems["gbc"].GetProperty("logoUrl").ValueKind, Is.EqualTo(JsonValueKind.Null));
     }
 
     [Test]

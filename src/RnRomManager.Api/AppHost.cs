@@ -67,8 +67,13 @@ public static class AppHost
         builder.Services.AddHostedService(sp => sp.GetRequiredService<BackupScheduler>());
         // S4: waits for ApplicationStarted itself, so its position doesn't delay startup.
         builder.Services.AddHostedService<StorageMigrationStarter>();
+        // B29: the type form (not a factory), so tests can remove it by ImplementationType.
+        builder.Services.AddHostedService<DatRefreshScheduler>();
         var app = builder.Build();
         app.UseSecurityHeaders();
+        // B27.4: before static files and auth (cookie validation reads users); routing already ran, so endpoint metadata is set.
+        var gate = app.Services.GetRequiredService<MaintenanceGate>();
+        app.Use((ctx, next) => gate.InvokeAsync(ctx, next));
 
         // Browser emulators B10: EmulatorJS cores are .data files, which the default table doesn't know (they'd 404).
         var contentTypes = new FileExtensionContentTypeProvider();
@@ -96,7 +101,7 @@ public static class AppHost
             .MapBundleFileEndpoints()
             .MapBundleDownloadEndpoints()
             .MapDiscoveryEndpoints()
-            .MapPublisherLogoEndpoints()
+            .MapDiscoveryLogoEndpoints()
             .MapEmulatorEndpoints()
             .MapIntegrityEndpoints()
             .MapReportEndpoints()
@@ -135,6 +140,19 @@ public static class AppHost
         builder.Services.AddSingleton<BackupRestorer>();
         builder.Services.AddSingleton<ISettingsRepository, SettingsRepository>();
         builder.Services.AddSingleton<BackupScheduler>();
+        builder.Services.AddSingleton<DatRefreshSettingsService>();
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddSingleton<MaintenanceGate>();
+        builder.Services.AddSingleton<IMaintenanceWindow>(sp => sp.GetRequiredService<MaintenanceGate>());
+        builder.Services.AddSingleton<DatRefreshJobFactory>(sp => () => new DatRefreshJob(
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient(HttpClients.Dats),
+            sp.GetRequiredService<IOptions<SourcesOptions>>().Value,
+            sp.GetRequiredService<IOptions<PathsOptions>>().Value,
+            sp.GetRequiredService<DatCache>(),
+            sp.GetRequiredService<ISystemRegistry>(),
+            sp.GetRequiredService<IAuditLog>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<DatRefreshJob>>()));
         builder.Services.AddSingleton<IAuditRepository, AuditRepository>();
         builder.Services.AddSingleton<AuditLog>();
         builder.Services.AddSingleton<IAuditLog>(sp => sp.GetRequiredService<AuditLog>());
@@ -147,7 +165,7 @@ public static class AppHost
         builder.Services.AddSingleton<IGameRepository, GameRepository>();
         // A singleton: it holds each kind's discovery index for a minute.
         builder.Services.AddSingleton<IDiscoveryRepository, DiscoveryRepository>();
-        builder.Services.AddSingleton<IPublisherLogoRepository, PublisherLogoRepository>();
+        builder.Services.AddSingleton<IDiscoveryLogoRepository, DiscoveryLogoRepository>();
         builder.Services.AddSingleton<IRomRepository, RomRepository>();
         builder.Services.AddSingleton<IImageRepository, ImageRepository>();
         builder.Services.AddSingleton<ILibraryMirror, LibraryMirror>();

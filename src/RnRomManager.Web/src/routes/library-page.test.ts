@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { navigateTo, testUrl as url } from '#lib/testing/url.svelte.js';
+import { expectOnePageTitle } from '#lib/testing/pageTitle.js';
 
 const goto = vi.fn();
 
@@ -545,5 +546,15 @@ describe('library page', () => {
 		} finally {
 			games.items[0].primarySizeBytes = 131072;
 		}
+	});
+
+	it('has one page-title h1 and a formatted result count (B1, B3)', async () => {
+		const total = games.total;
+		games.total = 1250;
+		render(LibraryPage);
+
+		expect(await screen.findByText(/1,250 games/)).toBeTruthy();
+		expectOnePageTitle('Library');
+		games.total = total;
 	});
 });

@@ -120,7 +120,7 @@ public partial class ExternalLibraryTests
         Assert.That(SetItems(), Is.EqualTo(dropped.Select(n => (n, IngestOutcome.Error, (string?)IngestErrors.IoError))));
         Assert.That(IngestLeft(), Is.EqualTo(dropped.Order(StringComparer.Ordinal)));
         Assert.That(File.ReadAllBytes(Path.Combine(SetIngest, SetTrack1)), Is.EqualTo(SetData));
-        Assert.That(Directory.GetFiles(SetFolder('S')), Is.Empty);
+        Assert.That(FilesIn(SetFolder('S')), Is.Empty);
         await using var db = Service<IDbConnectionFactory>().Create();
         Assert.That(await db.QuerySingleAsync<long>("SELECT COUNT(*) FROM games"), Is.Zero);
     }
@@ -176,7 +176,7 @@ public partial class ExternalLibraryTests
 
         Assert.That(SetItems(), Is.EqualTo(dropped.Select(n => (n, IngestOutcome.Skipped, (string?)IngestReason.TooRecent))));
         Assert.That(IngestLeft(), Is.EqualTo(dropped.Order(StringComparer.Ordinal)));
-        Assert.That(Directory.GetFiles(SetFolder('S')), Is.Empty);
+        Assert.That(FilesIn(SetFolder('S')), Is.Empty);
     }
 
     [Test]
