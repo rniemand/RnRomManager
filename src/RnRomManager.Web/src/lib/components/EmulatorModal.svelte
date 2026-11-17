@@ -3,6 +3,7 @@
 	import type { RomDetail, SaveKind } from '../api/types';
 	import { playUrl, type PlaySave } from '../emulator';
 	import { kindLabels, maxSaveBytes, savesApi } from '../saves';
+	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import Icon from './Icon.svelte';
@@ -94,9 +95,15 @@
 				return;
 			}
 			const file = new File([result.bytes], `save${result.extension}`);
-			// Overwrites this release's newest save of the same kind (the list is newest first); adds one when there is none.
+			// Overwrites the signed-in user's newest save of this kind for this release (the list is newest first; S5: an
+			// admin lists everyone's saves, so ownership is checked too); adds one when there is none.
+			const me = auth.me?.username.toLowerCase();
 			const existing = (await savesApi.list(gameId)).find(
-				(s) => s.kind === kind && s.releaseFileName === rom.fileName
+				(s) =>
+					s.kind === kind &&
+					s.releaseFileName === rom.fileName &&
+					me !== undefined &&
+					s.uploadedBy?.toLowerCase() === me
 			);
 			if (existing) await savesApi.replace(gameId, existing.id, file);
 			else

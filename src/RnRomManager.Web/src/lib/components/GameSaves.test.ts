@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
 import type { GameDetail, SaveItem } from '../api/types';
+import { auth } from '../stores/auth.svelte';
 import { toasts } from '../stores/toasts.svelte';
 
 vi.mock('../bootstrap', () => ({
@@ -48,6 +49,7 @@ const list = 'GET /api/games/g1/saves';
 beforeEach(() => {
 	resetClient();
 	toasts.items.length = 0;
+	auth.set({ id: 2, username: 'alice', roles: [], mustChangePassword: false });
 	calls = [];
 	answers = {};
 	vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
@@ -102,6 +104,24 @@ describe('GameSaves', () => {
 		);
 		for (const action of ['Edit', 'Replace', 'Delete'])
 			expect(first.getByRole('button', { name: `${action} Before boss` })).toBeTruthy();
+	});
+
+	it('shows no Owner column to a Site user (S8)', async () => {
+		listed([save(), save({ id: 'b'.repeat(32), name: 'Old', uploadedBy: null })]);
+		render(GameSaves, { game });
+		await screen.findAllByRole('row');
+		expect(screen.queryByRole('columnheader', { name: 'Owner' })).toBeNull();
+	});
+
+	it('shows the Owner column to an Admin', async () => {
+		auth.set({ id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false });
+		listed([save(), save({ id: 'b'.repeat(32), name: 'Old', uploadedBy: null })]);
+		render(GameSaves, { game });
+
+		const rows = await screen.findAllByRole('row');
+		expect(screen.getByRole('columnheader', { name: 'Owner' })).toBeTruthy();
+		expect(within(rows[1]).getByText('alice')).toBeTruthy();
+		expect(within(rows[2]).getByText('Unknown')).toBeTruthy();
 	});
 
 	it('shows an empty state without saves', async () => {
