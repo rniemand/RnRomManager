@@ -98,7 +98,9 @@ public class BackupSchedulerTests
         Assert.That(_dumps, Is.Empty);
 
         await AdvanceTo(new DateTimeOffset(2026, 11, 5, 3, 30, 0, TimeSpan.Zero));
-        await Eventually(() => _dumps.Count == 1);
+        // LastResult is set after DumpAsync returns, so wait for it rather than the dump.
+        await Eventually(() => _service.LastResult is not null);
+        Assert.That(_dumps, Has.Count.EqualTo(1));
         Assert.That(_service.LastResult!.Ok, Is.True);
         Assert.That(_service.List().Single().FileName, Is.EqualTo("rnrommanager-20261105-033000.zip"));
         await Eventually(() => Logged("Next scheduled backup: 2026-11-06T03:30:00"));
