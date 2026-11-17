@@ -3,9 +3,6 @@ import type { Bindings, EditableHotkeyId } from '../hotkeys';
 /** A user role: an Admin has `admin`, a Site user none. */
 export type Role = 'admin';
 
-/** Every role, in display order. */
-export const roles: readonly Role[] = ['admin'];
-
 /** `GET /api/auth/me` (spec §23). */
 export interface Me {
 	id: number;
