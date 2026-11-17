@@ -14,13 +14,27 @@
 	interface LibrarySize {
 		totalBytes: number;
 		gameCount: number;
-		systems: { system: string; systemName: string; bytes: number; gameCount: number }[];
+		updateCount: number;
+		systems: {
+			system: string;
+			systemName: string;
+			bytes: number;
+			gameCount: number;
+			updateCount: number;
+		}[];
 	}
 	interface SystemSize {
 		system: string;
 		systemName: string;
 		bytes: number;
-		games: { id: string; displayTitle: string; bytes: number; romCount: number }[];
+		updateCount: number;
+		games: {
+			id: string;
+			displayTitle: string;
+			bytes: number;
+			romCount: number;
+			updateCount: number;
+		}[];
 	}
 	interface Tile {
 		key: string;
@@ -112,6 +126,12 @@
 			(tiles.length > 5 ? `, and ${tiles.length - 5} more` : '')
 	);
 
+	/** B22: a click anywhere in a row follows its first-cell link (which stays the keyboard and screen-reader route). */
+	function followRow(e: MouseEvent): void {
+		if ((e.target as Element).closest('a')) return;
+		(e.currentTarget as HTMLElement).querySelector('a')?.click();
+	}
+
 	/** A label only fits a tile of at least 60×20; long names are cut to the width. */
 	function label(text: string, w: number): string {
 		const max = Math.floor((w - 8) / 7);
@@ -180,11 +200,12 @@
 
 	<div class="card">
 		<div class="table-responsive">
-			<table class="table table-sm table-striped table-hover align-middle mb-0">
+			<table class="table table-sm table-striped table-hover align-middle mb-0 clickable-rows">
 				<thead class="table-dark">
 					<tr>
 						<th scope="col">{detail ? 'Game' : 'System'}</th>
 						<th scope="col" class="text-end">{detail ? 'Releases' : 'Games'}</th>
+						<th scope="col" class="text-end">Updates</th>
 						<th scope="col" class="text-end">Size</th>
 						<th scope="col" class="text-end">% of {detail ? 'system' : 'library'}</th>
 					</tr>
@@ -192,18 +213,22 @@
 				<tbody>
 					{#if library}
 						{#each library.systems as s (s.system)}
-							<tr>
+							<!-- B22: a pointer shortcut; the link in the first cell is the keyboard route. -->
+							<tr onclick={followRow}>
 								<td><a href={systemHref(s.system)}>{s.systemName}</a></td>
 								<td class="text-end">{formatCount(s.gameCount)}</td>
+								<td class="text-end">{formatCount(s.updateCount)}</td>
 								<td class="text-end text-nowrap"><FileSize bytes={s.bytes} /></td>
 								<td class="text-end text-nowrap">{percent(s.bytes, total)}</td>
 							</tr>
 						{/each}
 					{:else if detail}
 						{#each detail.games as g (g.id)}
-							<tr>
+							<!-- B22: a pointer shortcut; the link in the first cell is the keyboard route. -->
+							<tr onclick={followRow}>
 								<td><a href={gameHref(g.id)}>{g.displayTitle}</a></td>
 								<td class="text-end">{formatCount(g.romCount)}</td>
+								<td class="text-end">{formatCount(g.updateCount)}</td>
 								<td class="text-end text-nowrap"><FileSize bytes={g.bytes} /></td>
 								<td class="text-end text-nowrap">{percent(g.bytes, total)}</td>
 							</tr>

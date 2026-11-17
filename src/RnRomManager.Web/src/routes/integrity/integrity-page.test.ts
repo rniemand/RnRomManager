@@ -128,6 +128,21 @@ describe('integrity page', () => {
 		);
 	});
 
+	it('shows the status as a key/value table in the house style (B23)', async () => {
+		render(IntegrityPage);
+		const label = await screen.findByRole('rowheader', { name: 'Last quick check' });
+
+		const table = label.closest('table')!;
+		expect(table.className).toBe('table table-sm table-striped table-hover align-middle mb-0');
+		expect(table.closest('.table-responsive')?.parentElement?.classList.contains('card')).toBe(
+			true
+		);
+		expect(
+			[...table.querySelectorAll('th[scope="row"]')].map((th) => th.textContent?.trim())
+		).toEqual(['Last quick check', 'Last deep check', 'Next scheduled check']);
+		expect(document.querySelector('dl')).toBeNull();
+	});
+
 	it('has one page-title h1 (B1)', () => {
 		render(IntegrityPage);
 		expectOnePageTitle('Integrity');

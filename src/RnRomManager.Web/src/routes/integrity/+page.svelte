@@ -137,23 +137,38 @@
 	{:else}
 		<section class="mb-4" aria-labelledby="status-heading">
 			<h2 class="visually-hidden" id="status-heading">Status</h2>
-			<dl class="row mb-3">
-				{#each [['Last quick check', status.lastQuick], ['Last deep check', status.lastDeep]] as const as [label, run] (label)}
-					<dt class="col-sm-4 col-lg-3">{label}</dt>
-					<dd class="col-sm-8 col-lg-9">
-						{#if run}
-							<a href={resolve('/jobs/[id]', { id: run.id })}>{formatDateTime(run.startedAt)}</a>
-							<span class="badge {statusClass(run.status)}">{run.status}</span>
-						{:else}
-							Never
-						{/if}
-					</dd>
-				{/each}
-				<dt class="col-sm-4 col-lg-3">Next scheduled check</dt>
-				<dd class="col-sm-8 col-lg-9">
-					{status.nextScheduledAt ? formatDateTime(status.nextScheduledAt) : 'Not scheduled'}
-				</dd>
-			</dl>
+			<!-- B23: a key/value table in the house style (T1–T4). -->
+			<div class="card mb-3">
+				<div class="table-responsive">
+					<table class="table table-sm table-striped table-hover align-middle mb-0">
+						<tbody>
+							{#each [['Last quick check', status.lastQuick], ['Last deep check', status.lastDeep]] as const as [label, run] (label)}
+								<tr>
+									<th scope="row">{label}</th>
+									<td>
+										{#if run}
+											<a class="text-nowrap" href={resolve('/jobs/[id]', { id: run.id })}
+												>{formatDateTime(run.startedAt)}</a
+											>
+											<span class="badge {statusClass(run.status)}">{run.status}</span>
+										{:else}
+											Never
+										{/if}
+									</td>
+								</tr>
+							{/each}
+							<tr>
+								<th scope="row">Next scheduled check</th>
+								<td class="text-nowrap">
+									{status.nextScheduledAt
+										? formatDateTime(status.nextScheduledAt)
+										: 'Not scheduled'}
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</div>
 
 			<div>
 				{#if job}
