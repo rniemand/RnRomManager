@@ -44,10 +44,15 @@ $solution = Join-Path $root 'RnRomManager.slnx'
 # API test classes per shard, balanced using summed TRX class durations and the wall time of each shard.
 # The last shard also runs the other test projects and any API classes unlisted here.
 $apiShards = @(
-    @('IngestPipelineTests', 'ExternalLibraryTests', 'ReviewEndpointsTests', 'LibraryEditTests', 'DatEndpointsTests',
-        'BundleDownloadEndpointsTests'),
-    @('BackupEndpointsTests', 'SeedIngestTests', 'AuthTests', 'LibraryEndpointsTests', 'IntegrityEndpointsTests',
-        'ImageUrlEndpointsTests', 'TitleDbIngestTests', 'ReportEndpointsTests', 'LibraryMoveMergeTests', 'SecurityHeadersTests')
+    @('IngestPipelineTests', 'SeedIngestTests', 'ImageUrlEndpointsTests', 'LibraryMoveMergeTests', 'IngestEndpointsTests',
+        'DataProtectionKeysTests'),
+    @('ExternalLibraryTests', 'SecurityHeadersTests', 'AdminEndpointsTests', 'ImageEndpointsTests', 'BundleQueueEndpointsTests',
+        'AdminSeedTests'),
+    @('LibraryEndpointsTests', 'BundleDownloadEndpointsTests', 'HealthReadyTests', 'DatEndpointsTests', 'IngestReviewTests'),
+    @('AppHostTests', 'AuthTests', 'IntegrityEndpointsTests', 'SaveEndpointsTests', 'ReportEndpointsTests', 'IngestArchiveTests',
+        'PublisherLogoEndpointsTests'),
+    @('ReviewEndpointsTests', 'BackupEndpointsTests', 'EmulatorEndpointsTests', 'TitleDbIngestTests', 'LibraryEditTests',
+        'ResetPasswordCommandTests', 'LogStreamTests')
 )
 $shardCount = $apiShards.Count + 1
 
