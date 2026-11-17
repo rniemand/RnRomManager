@@ -7,8 +7,8 @@ public static class Problems
 {
     /// <param name="extensions">Extra members (e.g. RP8's <c>merged</c>), added next to <c>code</c> and <c>traceId</c>.</param>
     public static IResult Create(HttpContext ctx, int status, string code, string title,
-        IReadOnlyDictionary<string, object?>? extensions = null) =>
-        Results.Problem(statusCode: status, title: title, extensions: Extensions(ctx, code, extensions));
+        IReadOnlyDictionary<string, object?>? extensions = null, string? detail = null) =>
+        Results.Problem(statusCode: status, title: title, detail: detail, extensions: Extensions(ctx, code, extensions));
 
     public static IResult Validation(HttpContext ctx, IDictionary<string, string[]> errors,
         IReadOnlyDictionary<string, object?>? extensions = null) =>

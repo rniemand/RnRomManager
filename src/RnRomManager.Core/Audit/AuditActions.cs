@@ -35,6 +35,9 @@ public static class AuditActions
     public const string SystemLogoReplaced = "SystemLogoReplaced";
     public const string SystemLogoRemoved = "SystemLogoRemoved";
 
+    /// <summary>B27: an Admin restored a backup while the app ran (details <c>&lt;file&gt;; safety backup &lt;file&gt;</c>).</summary>
+    public const string BackupRestored = "BackupRestored";
+
     /// <summary>S6: the storage migration moved a legacy game's ROMs out of its ZIP.</summary>
     public const string RomsExternalized = "RomsExternalized";
 
@@ -63,7 +66,7 @@ public static class AuditActions
         Ingested, ZipRepaired, ExtensionRenamed, MovedToFailed, MovedToDuplicates, ArchiveDeleted, ReviewDeleted, GameUpdated,
         ReleaseDeleted, GameDeleted, ImageAdded, ImageDeleted, CoverSet, MediaFetched, ReleaseMoved, GamesMerged, DatsRefreshed,
         IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved, GenreLogoReplaced, GenreLogoRemoved,
-        SystemLogoReplaced, SystemLogoRemoved, RomsExternalized,
+        SystemLogoReplaced, SystemLogoRemoved, BackupRestored, RomsExternalized,
         SaveAdded, SaveUpdated, SaveDeleted, UserCreated, UserTypeChanged, UserDisabled, UserEnabled, PasswordReset,
         PasswordChanged, SignedIn, SignInFailed, LockedOut,
     ];

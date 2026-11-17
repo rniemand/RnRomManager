@@ -186,6 +186,108 @@ public class BackupEndpointsTests
         Assert.That(Directory.GetFiles(Folder), Is.Empty);
     }
 
+    // --- B27 live restore ---
+
+    private Task<HttpResponseMessage> RestoreAsync(AuthClient client, string fileName) =>
+        client.PostAsync($"/api/admin/backups/{Uri.EscapeDataString(fileName)}/restore");
+
+    private async Task<string> BackupNowAsync()
+    {
+        using var response = await Admin.PostAsync("/api/admin/backups");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+        return (await AuthClient.JsonAsync(response)).GetProperty("fileName").GetString()!;
+    }
+
+    private async Task<List<string>> ColumnAsync(string sql)
+    {
+        await using var db = Factory.Services.GetRequiredService<RnRomManager.Core.Database.IDbConnectionFactory>().Create();
+        return (await Dapper.SqlMapper.QueryAsync<string>(db, sql)).ToList();
+    }
+
+    [Test]
+    public async Task Restore_BringsBackTheEarlierRows_EndsEverySession_AndIsAudited()
+    {
+        await StartAsync();
+        // A job that was Running when the backup was taken comes back with it and must be aborted.
+        await using (var db = Factory.Services.GetRequiredService<RnRomManager.Core.Database.IDbConnectionFactory>().Create())
+            await Dapper.SqlMapper.ExecuteAsync(db, "INSERT INTO jobs (id, type, trigger_source, status, started_at) " +
+                "VALUES (UUID(), 'Integrity', 'Manual', 'Running', UTC_TIMESTAMP(6))");
+        var earlier = await BackupNowAsync();
+        await TestUsers.CreateAsync(Factory, "later");
+        using var other = await AuthClient.CreateAsync(Factory);
+        (await other.LoginAsync("later", TestUsers.Password)).Dispose();
+
+        using var response = await RestoreAsync(Admin, earlier);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var body = await AuthClient.JsonAsync(response);
+        var safety = body.GetProperty("safetyBackup").GetString()!;
+        Assert.That(body.GetProperty("restored").GetString(), Is.EqualTo(earlier));
+        Assert.That(File.Exists(Path.Combine(Folder, safety)) && File.Exists(Path.Combine(Folder, earlier)), Is.True, "safety backup written, source kept");
+        var cookies = response.Headers.GetValues("Set-Cookie").ToList();
+        Assert.That(cookies.Any(c => c.StartsWith("rnrm.auth=;", StringComparison.Ordinal)), Is.True, "the auth cookie is cleared");
+        Assert.That(cookies.Any(c => c.StartsWith("XSRF-TOKEN=", StringComparison.Ordinal)), Is.True, "a fresh anonymous antiforgery token");
+
+        Assert.That(await ColumnAsync("SELECT username FROM users ORDER BY username"), Is.EqualTo(new[] { "admin", "boss" }), "the earlier rows are back (the seeded admin included)");
+        Assert.That(await ColumnAsync("SELECT status FROM jobs"), Is.EqualTo(new[] { "Aborted" }), "no job is left Running");
+        using (var me = await other.GetAsync("/api/auth/me"))
+            Assert.That(me.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized), "every other session ends");
+        using (var me = await Admin.GetAsync("/api/auth/me"))
+            Assert.That(me.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized), "the caller is signed out");
+
+        await Factory.Services.GetRequiredService<AuditWriter>().FlushAsync();
+        Assert.That(await ColumnAsync("SELECT CONCAT(action, ' | ', username, ' | ', details) FROM audit_events ORDER BY id DESC LIMIT 1"),
+            Is.EqualTo(new[] { $"BackupRestored | boss | {earlier}; safety backup {safety}" }));
+    }
+
+    [Test]
+    public async Task Restore_Refusals()
+    {
+        await StartAsync();
+        var earlier = await BackupNowAsync();
+
+        using (var missing = await RestoreAsync(Admin, "rnrommanager-20200101-000000.zip"))
+            Assert.That(missing.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        foreach (var bad in new[] { "../" + earlier, earlier + ".tmp", "notes.zip" })
+        {
+            using var response = await RestoreAsync(Admin, bad);
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest), bad);
+            Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").TryGetProperty("fileName", out _), Is.True, bad);
+        }
+
+        using (Factory.Services.GetRequiredService<RnRomManager.Core.Jobs.JobLock>().TryAcquire())
+        using (var busy = await RestoreAsync(Admin, earlier))
+        {
+            Assert.That(busy.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(await AuthClient.CodeAsync(busy), Is.EqualTo("JobRunning"));
+        }
+
+        using var user = await AuthClient.CreateAsync(Factory);
+        await TestUsers.CreateAsync(Factory, "plain");
+        (await user.LoginAsync("plain", TestUsers.Password)).Dispose();
+        using (var forbidden = await RestoreAsync(user, earlier))
+            Assert.That(forbidden.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+        Assert.That(await ColumnAsync("SELECT username FROM users WHERE username = 'plain'"), Is.EqualTo(new[] { "plain" }), "nothing was restored");
+    }
+
+    [Test]
+    public async Task Restore_WhileABackupRuns_Is409BackupRunning()
+    {
+        await StartAsync(blockingStore: true);
+        File.WriteAllText(Path.Combine(Folder, "rnrommanager-20200101-000000.zip"), "x");
+        var first = Admin.PostAsync("/api/admin/backups");
+        await WaitUntilRunningAsync();
+
+        using (var response = await RestoreAsync(Admin, "rnrommanager-20200101-000000.zip"))
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("BackupRunning"));
+        }
+
+        _block!.SetResult();
+        (await first).Dispose();
+    }
+
     private async Task WaitUntilRunningAsync()
     {
         var service = Factory.Services.GetRequiredService<BackupService>();

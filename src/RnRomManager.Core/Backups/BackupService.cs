@@ -1,7 +1,12 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using RnRomManager.Core.Audit;
 using RnRomManager.Core.Configuration;
+using RnRomManager.Core.Database;
+using RnRomManager.Core.Dats;
+using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Jobs;
+using RnRomManager.Core.Users;
 
 namespace RnRomManager.Core.Backups;
 
@@ -13,7 +18,8 @@ public sealed record BackupResult(DateTimeOffset At, bool Ok, string? FileName, 
 
 /// <summary>
 /// Creates database backups (B13), applies retention (B14) and lists them. One run at a time, on its own lock: the
-/// store reads a consistent snapshot, so jobs and edits keep running and the job lock isn't taken.
+/// store reads a consistent snapshot, so jobs and edits keep running and the job lock isn't taken. A live restore (B27)
+/// takes both the job lock and its own.
 /// </summary>
 public sealed class BackupService(
     IBackupStore store,
@@ -22,7 +28,15 @@ public sealed class BackupService(
     IOptions<BackupOptions> options,
     TimeZoneInfo zone,
     TimeProvider time,
-    ILogger<BackupService> logger)
+    ILogger<BackupService> logger,
+    JobLock jobLock,
+    IMaintenanceWindow maintenance,
+    IDatabaseLifecycle database,
+    IJobRepository jobs,
+    IUserRepository users,
+    IDiscoveryRepository discovery,
+    DatRefreshSettingsService datRefresh,
+    IAuditLog audit)
 {
     private readonly SemaphoreSlim _lock = new(1, 1);
     private volatile BackupResult? _lastResult;
@@ -73,6 +87,97 @@ public sealed class BackupService(
         {
             _lock.Release();
         }
+    }
+
+    /// <summary>
+    /// B27: restores <paramref name="fileName"/> while the app runs. Checks run in this order and refuse without changing
+    /// anything: the name, the job and backup locks, the file and its pre-drop checks, the maintenance window, a safety
+    /// backup. From the drop on nothing is cancelled: store restore, migrations, stale jobs aborted, every session ended,
+    /// caches dropped, schedulers woken, then <see cref="AuditActions.BackupRestored"/>.
+    /// </summary>
+    public async Task<BackupRestoreResult> RestoreAsync(string fileName, AuditActor actor, CancellationToken cancellationToken)
+    {
+        // 1: exactly the names the backups list shows (never a path, .tmp or .restored file).
+        if (!BackupCheck.IsBareName(fileName) || BackupNames.Parse(fileName) is null)
+            return new(BackupRestoreStatus.InvalidName);
+
+        // 3: no job, library edit, scheduled backup or retention runs while it holds both locks.
+        using var job = jobLock.TryAcquire();
+        if (job is null)
+            return new(BackupRestoreStatus.JobRunning);
+        if (!await _lock.WaitAsync(0, cancellationToken))
+            return new(BackupRestoreStatus.BackupRunning);
+        try
+        {
+            // 2: the file stays open until the restore ends.
+            var path = Path.Combine(Folder, fileName);
+            if (!File.Exists(path))
+                return new(BackupRestoreStatus.NotFound);
+            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+            var inspection = BackupCheck.Open(stream, fileName, store.KnownMigrations);
+            if (inspection.Zip is not { } zip)
+                return new(inspection.Failure == BackupCheckFailure.TooNew ? BackupRestoreStatus.TooNew : BackupRestoreStatus.InvalidBackup,
+                    fileName, Message: inspection.Message);
+            using (zip)
+            {
+                var retention = (await GetSettingsAsync(cancellationToken)).Retention;
+
+                // 4: every other request is 503 and audit writes are held until the window closes.
+                await using var window = await maintenance.TryEnterAsync(cancellationToken);
+                if (window is null)
+                    return new(BackupRestoreStatus.Busy, fileName);
+
+                // 5: under the backup lock already, so RunAsync, not CreateAsync; the source isn't touched by retention.
+                string safety;
+                try
+                {
+                    safety = (await RunAsync(retention, cancellationToken, keep: fileName)).FileName;
+                }
+                catch (BackupFailedException)
+                {
+                    return new(BackupRestoreStatus.BackupFailed, fileName);
+                }
+
+                return await ReplaceAsync(fileName, safety, zip, inspection.Manifest!, actor);
+            }
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
+    /// <summary>B27.6–7, B27.10: everything from the drop on, with <see cref="CancellationToken.None"/>.</summary>
+    private async Task<BackupRestoreResult> ReplaceAsync(string fileName, string safety, System.IO.Compression.ZipArchive zip,
+        BackupManifest manifest, AuditActor actor)
+    {
+        var none = CancellationToken.None;
+        try
+        {
+            logger.LogWarning("Restoring backup {FileName} (id {BackupId}, created {CreatedAt:O}, app {AppVersion}): every table is replaced; safety backup {Safety}",
+                fileName, manifest.BackupId, manifest.CreatedAt, manifest.AppVersion, safety);
+            await store.RestoreAsync(zip, manifest, none);
+            database.Migrate();
+            foreach (var id in await jobs.AbortRunningAsync(time.GetUtcNow().UtcDateTime, none))
+                logger.LogWarning("Job {JobId} was Running in the restored backup; marked Aborted", id);
+            await users.RotateAllSecurityStampsAsync(none);
+            discovery.Invalidate();
+            SettingsChanged?.Invoke();
+            datRefresh.NotifySettingsChanged();
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Restoring backup {FileName} failed after the tables were dropped; the database may be partial. Restore the safety backup {Safety}",
+                fileName, safety);
+            return new(BackupRestoreStatus.RestoreFailed, fileName, safety,
+                $"The restore failed and the database may be incomplete. Restore the safety backup {safety}.");
+        }
+
+        audit.Record(new AuditEvent(AuditActions.BackupRestored, actor, Details: $"{fileName}; safety backup {safety}"));
+        logger.LogWarning("Restored backup {FileName} (id {BackupId}, created {CreatedAt:O}): {Rows}",
+            fileName, manifest.BackupId, manifest.CreatedAt, string.Join(", ", manifest.Tables.Select(t => $"{t.Name} {t.Rows}")));
+        logger.LogWarning("The library ZIPs may be newer than this backup: run Integrity → Run quick so the database matches them.");
+        return new(BackupRestoreStatus.Restored, fileName, safety);
     }
 
     /// <summary>Every backup in <c>Paths:Backups</c>, newest first.</summary>
