@@ -41,18 +41,22 @@ $ResultsDirectory = [IO.Path]::GetFullPath($ResultsDirectory, $root)
 $apiTests = Join-Path $root 'tests/RnRomManager.Api.Tests'
 $solution = Join-Path $root 'RnRomManager.slnx'
 
-# API test classes per shard, balanced using summed TRX class durations and the wall time of each shard.
-# The last shard also runs the other test projects and any API classes unlisted here.
+# API test classes per shard, balanced on CI (ubuntu-latest) class durations from the shards' TRX files: each class
+# counted from the previous class's last test to its own, so fixture setup is included. Local Windows timings differ a
+# lot and aren't a guide. The last shard also runs the other test projects (Data's ~90 s alongside its API tests) and
+# any API classes unlisted here.
 $apiShards = @(
-    @('IngestPipelineTests', 'SeedIngestTests', 'ImageUrlEndpointsTests', 'LibraryMoveMergeTests', 'IngestEndpointsTests',
-        'DataProtectionKeysTests'),
-    @('ExternalLibraryTests', 'SecurityHeadersTests', 'AdminEndpointsTests', 'ImageEndpointsTests', 'BundleQueueEndpointsTests',
-        'AdminSeedTests'),
-    @('LibraryEndpointsTests', 'BundleDownloadEndpointsTests', 'HealthReadyTests', 'DatEndpointsTests', 'IngestReviewTests'),
-    @('AppHostTests', 'AuthTests', 'IntegrityEndpointsTests', 'SaveEndpointsTests', 'ReportEndpointsTests', 'IngestArchiveTests',
-        'PublisherLogoEndpointsTests'),
-    @('ReviewEndpointsTests', 'BackupEndpointsTests', 'EmulatorEndpointsTests', 'TitleDbIngestTests', 'LibraryEditTests',
-        'ResetPasswordCommandTests', 'LogStreamTests')
+    @('IngestPipelineTests'),
+    @('BackupEndpointsTests', 'AuditWriterTests', 'HealthReadyTests', 'JobEndpointsTests', 'DiscoveryEndpointsTests',
+        'ResetPasswordCommandTests', 'CollectionEndpointsTests', 'ExternalZipReadTests', 'IngestDeleteExternalEndpointsTests'),
+    @('DataProtectionKeysTests', 'AuditEndpointsTests', 'ExternalLibraryTests', 'EmulatorEndpointsTests', 'ReportEndpointsTests',
+        'DatEndpointsTests', 'LegacyStorageTests', 'AuditLibraryEditTests', 'IngestReviewTests'),
+    @('BundleDownloadEndpointsTests', 'AppHostTests', 'LibraryEndpointsTests', 'SeedIngestTests', 'LibraryEditTests',
+        'IngestArchiveTests', 'LibraryEditorSaveTests', 'LibraryMoveMergeTests', 'BundleFileEndpointsTests',
+        'IngestExternalArchiveTests'),
+    @('AdminEndpointsTests', 'AuthTests', 'ReviewEndpointsTests', 'SaveEndpointsTests', 'IngestRestoreEndpointsTests',
+        'LogStreamTests', 'IngestDeleteEndpointsTests', 'HotkeyEndpointsTests', 'CollectionCoverEndpointsTests',
+        'MediaRetryEndpointsTests')
 )
 $shardCount = $apiShards.Count + 1
 
@@ -66,7 +70,9 @@ function Get-ShardArgs([int]$n) {
         $filter = ($apiShards | ForEach-Object { $_ } | ForEach-Object { "FullyQualifiedName!~.$_." }) -join '&'
     }
     if ($SkipIntegration) { $filter = "($filter)&Category!=Integration" }
-    $a = @('test', $target, '-c', $Configuration, '--no-build', '--filter', $filter, '--results-directory', $ResultsDirectory)
+    $a = @('test', $target, '-c', $Configuration, '--no-build', '--filter', $filter, '--results-directory', $ResultsDirectory,
+        # Per-test durations, for balancing $apiShards (CI uploads them with the coverage).
+        '--logger', 'trx')
     if ($Coverage) { $a += @('--collect', 'XPlat Code Coverage') }
     return , $a
 }

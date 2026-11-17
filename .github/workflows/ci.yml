@@ -30,7 +30,9 @@ jobs:
         if: always()
         with:
           name: coverage-${{ matrix.shard }}
-          path: coverage-raw/*/coverage.cobertura.xml
+          path: |
+            coverage-raw/*/coverage.cobertura.xml
+            coverage-raw/*.trx
           if-no-files-found: ignore
           retention-days: 1
 
