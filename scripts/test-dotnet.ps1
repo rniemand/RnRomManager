@@ -43,14 +43,17 @@ $solution = Join-Path $root 'RnRomManager.slnx'
 
 # API test classes per shard, balanced on CI (ubuntu-latest) class durations from the shards' TRX files: each class
 # counted from the previous class's last test to its own, so fixture setup is included. Local Windows timings differ a
-# lot and aren't a guide. The last shard also runs the other test projects (Data's ~90 s alongside its API tests) and
-# any API classes unlisted here.
+# lot and aren't a guide. The last shard also runs the other test projects in parallel processes and any API classes
+# unlisted here; on a 4-vCPU runner that contention makes API tests there 2-3x slower, so only small classes stay
+# unlisted.
 $apiShards = @(
     @('IngestPipelineTests'),
     @('BackupEndpointsTests', 'AuditWriterTests', 'HealthReadyTests', 'JobEndpointsTests', 'DiscoveryEndpointsTests',
-        'ResetPasswordCommandTests', 'CollectionEndpointsTests', 'ExternalZipReadTests', 'IngestDeleteExternalEndpointsTests'),
+        'ResetPasswordCommandTests', 'CollectionEndpointsTests', 'ExternalZipReadTests', 'IngestDeleteExternalEndpointsTests',
+        'SecurityHeadersTests', 'IntegrityEndpointsTests', 'ImageUrlEndpointsTests', 'IngestEndpointsTests', 'AdminSeedTests'),
     @('DataProtectionKeysTests', 'AuditEndpointsTests', 'ExternalLibraryTests', 'EmulatorEndpointsTests', 'ReportEndpointsTests',
-        'DatEndpointsTests', 'LegacyStorageTests', 'AuditLibraryEditTests', 'IngestReviewTests'),
+        'DatEndpointsTests', 'LegacyStorageTests', 'AuditLibraryEditTests', 'IngestReviewTests', 'EndpointRoleMatrixTests',
+        'ImageEndpointsTests', 'BundleQueueEndpointsTests', 'TitleDbIngestTests', 'NoteEndpointsTests'),
     @('BundleDownloadEndpointsTests', 'AppHostTests', 'LibraryEndpointsTests', 'SeedIngestTests', 'LibraryEditTests',
         'IngestArchiveTests', 'LibraryEditorSaveTests', 'LibraryMoveMergeTests', 'BundleFileEndpointsTests',
         'IngestExternalArchiveTests'),
