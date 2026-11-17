@@ -2,7 +2,8 @@
 <#
 .SYNOPSIS
     End-to-end tests (spec §15.3): builds the image for the local arch, seeds Basic into temp ingest/cache dirs, starts
-    tests/e2e/docker-compose.e2e.yml, waits for /health/ready, runs Playwright, and always tears down.
+    tests/e2e/docker-compose.e2e.yml, waits for /health/ready, runs Playwright, and always tears down. The specs run on
+    two stacks at once (ports E2E_PORT and E2E_PORT + 1), split by tag (see tests/e2e/specs/mvp.spec.ts).
 .PARAMETER SkipBuild
     Use the existing niemandr/rnrommanager:e2e image.
 .PARAMETER Headed
@@ -36,6 +37,17 @@ $env:E2E_PORT = $port
 $env:E2E_DB_PASSWORD = New-Secret
 $env:E2E_ADMIN_PASSWORD = New-Secret
 $env:E2E_BASE_URL = "http://localhost:$port"
+# Stack A runs the screenshots or the untagged and @both specs; stack B (not for screenshots) the @both and @shard-b ones.
+$stacks = @([pscustomobject]@{ Project = 'rnrommanager-e2e'; Port = $port; Ingest = $env:E2E_INGEST; Cache = $env:E2E_CACHE })
+if (-not $Screenshots) {
+    $portB = [string]([int]$port + 1)
+    $env:E2E_INGEST_B = Join-Path $work 'ingest-b'
+    $cacheB = Join-Path $work 'cache-b'
+    $env:E2E_BASE_URL_B = "http://localhost:$portB"
+    $stacks += [pscustomobject]@{ Project = 'rnrommanager-e2e-b'; Port = $portB; Ingest = $env:E2E_INGEST_B; Cache = $cacheB }
+} else {
+    Remove-Item Env:E2E_BASE_URL_B, Env:E2E_INGEST_B -ErrorAction SilentlyContinue
+}
 
 $exitCode = 1
 try {
@@ -51,26 +63,45 @@ try {
         $seedArgs.NdsDat = @($env:E2E_STAGED_NDS)
     }
     & (Join-Path $PSScriptRoot 'seed-ingest.ps1') @seedArgs
+    if (-not $Screenshots) {
+        # Stack B gets its own identical seed; it shares the passwords and the image.
+        $seedB = $seedArgs.Clone()
+        $seedB.Path = $env:E2E_INGEST_B
+        $seedB.CachePath = $cacheB
+        & (Join-Path $PSScriptRoot 'seed-ingest.ps1') @seedB
+    }
     # The container runs as UID 1654; a Linux bind mount needs to be writable by it (Docker Desktop maps this itself).
     if ($IsLinux) {
         & chmod -R a+rwX $work
         if ($LASTEXITCODE -ne 0) { throw "chmod failed ($LASTEXITCODE)" }
     }
 
-    Write-Host '==> Starting the e2e stack'
-    & docker compose -f $composeFile up -d
-    if ($LASTEXITCODE -ne 0) { throw "docker compose up failed ($LASTEXITCODE)" }
-
-    Write-Host "==> Waiting for $env:E2E_BASE_URL/health/ready"
-    $deadline = [DateTime]::UtcNow.AddSeconds(120)
-    $ready = $false
-    while (-not $ready -and [DateTime]::UtcNow -lt $deadline) {
-        try {
-            $ready = (Invoke-WebRequest "$env:E2E_BASE_URL/health/ready" -TimeoutSec 3 -SkipHttpErrorCheck).StatusCode -eq 200
-        } catch { }
-        if (-not $ready) { Start-Sleep -Seconds 2 }
+    foreach ($stack in $stacks) {
+        Write-Host "==> Starting e2e stack $($stack.Project) on port $($stack.Port)"
+        $env:E2E_PORT = $stack.Port
+        $env:E2E_INGEST = $stack.Ingest
+        $env:E2E_CACHE = $stack.Cache
+        & docker compose -p $stack.Project -f $composeFile up -d
+        if ($LASTEXITCODE -ne 0) { throw "docker compose up failed ($LASTEXITCODE)" }
     }
-    if (-not $ready) { throw 'The app did not become ready within 120 s.' }
+    # Back to stack A for the specs (the Nintendo DS test copies into its ingest folder).
+    $env:E2E_PORT = $port
+    $env:E2E_INGEST = $stacks[0].Ingest
+    $env:E2E_CACHE = $stacks[0].Cache
+
+    foreach ($stack in $stacks) {
+        $url = "http://localhost:$($stack.Port)"
+        Write-Host "==> Waiting for $url/health/ready"
+        $deadline = [DateTime]::UtcNow.AddSeconds(120)
+        $ready = $false
+        while (-not $ready -and [DateTime]::UtcNow -lt $deadline) {
+            try {
+                $ready = (Invoke-WebRequest "$url/health/ready" -TimeoutSec 3 -SkipHttpErrorCheck).StatusCode -eq 200
+            } catch { }
+            if (-not $ready) { Start-Sleep -Seconds 2 }
+        }
+        if (-not $ready) { throw "$url did not become ready within 120 s." }
+    }
 
     Write-Host '==> Playwright'
     Push-Location $e2eRoot
@@ -86,7 +117,7 @@ try {
             $env:E2E_SCREENSHOTS = '1'
             $testArgs += '--project=screenshots'
         } else {
-            $testArgs += '--project=chromium'
+            $testArgs += @('--project=chromium', '--project=chromium-b')
         }
         if ($Headed) { $testArgs += '--headed' }
         & npx @testArgs
@@ -95,12 +126,14 @@ try {
         Pop-Location
     }
     if ($exitCode -ne 0) {
-        Write-Host '==> App log (last 200 lines)'
-        & docker compose -f $composeFile logs --no-color --tail 200 app
+        foreach ($stack in $stacks) {
+            Write-Host "==> App log of $($stack.Project) (last 200 lines)"
+            & docker compose -p $stack.Project -f $composeFile logs --no-color --tail 200 app
+        }
     }
 } finally {
     Write-Host '==> Tearing down'
-    & docker compose -f $composeFile down -v --remove-orphans
+    foreach ($stack in $stacks) { & docker compose -p $stack.Project -f $composeFile down -v --remove-orphans }
     $tempRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
     $resolvedWork = [IO.Path]::GetFullPath($work)
     if ([IO.Path]::GetDirectoryName($resolvedWork) -eq [IO.Path]::TrimEndingDirectorySeparator($tempRoot) -and

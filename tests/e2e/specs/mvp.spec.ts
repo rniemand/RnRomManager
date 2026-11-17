@@ -16,6 +16,10 @@ import { expectRomDownloadProgress, stageRomDownload } from "./rom-progress";
  * login + forced password change → ingest → browse/search/filter → game detail + downloads → global search +
  * ratings → collections → review resolve/delete → images → Admin edit/move/delete → users and logs, with axe on every page and
  * modal visited. The seeded admin has both roles (`admin` + `rom-manager`).
+ *
+ * scripts/test-e2e.ps1 runs it on two stacks at once (playwright.config.ts): `@both` tests sign in and ingest on each,
+ * `@shard-b` tests run only on the second, the rest only on the first. A `@shard-b` test may only rely on `@both`
+ * state, and must leave nothing a later untagged test sees.
  */
 
 const adminPassword = process.env.E2E_ADMIN_PASSWORD;
@@ -109,7 +113,7 @@ async function openGame(title: string): Promise<void> {
   ).toBeVisible();
 }
 
-test("login + forced password change", async () => {
+test("login + forced password change", { tag: "@both" }, async () => {
   await page.goto("/");
   await expect(page).toHaveURL(/\/login\?returnUrl=/);
   await expectAccessible(page, "login");
@@ -135,7 +139,7 @@ test("login + forced password change", async () => {
   await expectAccessible(page, "empty library");
 });
 
-test("ingestion of the seeded Basic set", async () => {
+test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   await page.getByRole("link", { name: "Go to Ingestion" }).click();
   await expect(
     page.getByRole("cell", { name: "91-unmatched.gb", exact: true }),
@@ -146,7 +150,8 @@ test("ingestion of the seeded Basic set", async () => {
   await expect(
     page.getByRole("tab", { name: /^Pending files \(\d+\)$/ }),
   ).toHaveAttribute("aria-selected", "true");
-  const ingest = process.env.E2E_INGEST;
+  // Each stack has its own seeded folder (playwright.config.ts).
+  const ingest = test.info().project.metadata.ingest as string | undefined;
   if (!ingest)
     throw new Error("E2E_INGEST is not set (run scripts/test-e2e.ps1).");
   switchBase = await readFile(
@@ -1006,7 +1011,7 @@ async function closeEmulator(): Promise<void> {
   await expect(page.locator("iframe")).toHaveCount(0);
 }
 
-test("Play: NES Quick Play from the library uses the local FCEUmm core", async () => {
+test("Play: NES Quick Play from the library uses the local FCEUmm core", { tag: "@shard-b" }, async () => {
   await openLibrary();
   await page
     .getByRole("searchbox", { name: "Search", exact: true })
@@ -1029,7 +1034,7 @@ test("Play: NES Quick Play from the library uses the local FCEUmm core", async (
   await closeEmulator();
 });
 
-test("Play: a PlayStation set streams its disc ZIP from the detail page and the library", async () => {
+test("Play: a PlayStation set streams its disc ZIP from the detail page and the library", { tag: "@shard-b" }, async () => {
   await openGame("Disc Runner");
   const bios = page.waitForResponse((r) =>
     r.url().endsWith("/api/emulator/bios/scph5501.bin"),
@@ -1084,7 +1089,7 @@ test("Play: a PlayStation set streams its disc ZIP from the detail page and the 
   await closeEmulator();
 });
 
-test("Play: a Saturn set asks for saturn_bios.bin, streams its disc and fetches the vendored Yabause core", async () => {
+test("Play: a Saturn set asks for saturn_bios.bin, streams its disc and fetches the vendored Yabause core", { tag: "@shard-b" }, async () => {
   // Saturn B6/B7: no firmware in the e2e image (HLE), then play-disc, then the loader. The synthetic disc isn't a real
   // Saturn game, so the case stops once the core payload has arrived instead of waiting for the game to run.
   const order: string[] = [];
@@ -1142,7 +1147,7 @@ async function pspBrowser(psp: Page) {
   }));
 }
 
-test("Play: a PSP UMD image opens the isolated player in a new tab from the detail page and the library", async () => {
+test("Play: a PSP UMD image opens the isolated player in a new tab from the detail page and the library", { tag: "@shard-b" }, async () => {
   const tab =
     /\/emulator\/play-psp\.html\?.*core=ppsspp&name=Pocket%20Ninja%20\(USA\)\.iso&disc=1$/;
   await openGame("Pocket Ninja");
@@ -1239,7 +1244,7 @@ async function playWithSmsPlus(
   await closeEmulator();
 }
 
-test("Play: Genesis explains its missing core; Master System and Game Gear start with SMS Plus GX", async () => {
+test("Play: Genesis explains its missing core; Master System and Game Gear start with SMS Plus GX", { tag: "@shard-b" }, async () => {
   // Genesis B4: the e2e image has no Emulator:GenesisCorePath, so the HEAD check stops before the ROM or loader.
   const genesisRequests: string[] = [];
   const track = (r: { url: () => string }) => {
@@ -1290,7 +1295,7 @@ test("Play: Genesis explains its missing core; Master System and Game Gear start
   expect(genesisRequests).toEqual([]);
 });
 
-test("Play: 32X explains its missing PicoDrive core", async () => {
+test("Play: 32X explains its missing PicoDrive core", { tag: "@shard-b" }, async () => {
   // 32X B3: the e2e image has no Emulator:PicodriveCorePath, so the HEAD check stops before the ROM or loader.
   const later: string[] = [];
   let checked = false;
@@ -1333,7 +1338,7 @@ test("Play: 32X explains its missing PicoDrive core", async () => {
   await closeEmulator();
 });
 
-test("Play: SNES explains its missing Snes9x core from the detail page", async () => {
+test("Play: SNES explains its missing Snes9x core from the detail page", { tag: "@shard-b" }, async () => {
   // SNES B3: the e2e image has no Emulator:Snes9xCorePath, so the HEAD check stops before the ROM or loader.
   const later: string[] = [];
   let checked = false;
@@ -1376,7 +1381,7 @@ test("Play: SNES explains its missing Snes9x core from the detail page", async (
   await closeEmulator();
 });
 
-test("Play: SNES Quick Play from the library loads the release and the player once the core check passes", async () => {
+test("Play: SNES Quick Play from the library loads the release and the player once the core check passes", { tag: "@shard-b" }, async () => {
   // SNES B1/B3: only the Snes9x HEAD is stubbed; the ROM and the loader are the real ones. Stops before Start Game,
   // since the stock image has no Snes9x payload to serve.
   const coreCheck = "**/api/emulator/cores/snes9x";
@@ -1479,7 +1484,7 @@ async function launchBundled(
   await closeEmulator();
 }
 
-test("Play: Atari 7800, Jaguar and Lynx launch with their bundled cores", async () => {
+test("Play: Atari 7800, Jaguar and Lynx launch with their bundled cores", { tag: "@shard-b" }, async () => {
   await launchBundled("Canyon Glide", "Canyon Glide (USA).a78", "prosystem");
   await launchBundled(
     "Cobalt Drift",
@@ -1489,7 +1494,7 @@ test("Play: Atari 7800, Jaguar and Lynx launch with their bundled cores", async 
   await launchBundled("Prism Racer", "Prism Racer (USA, Europe).lnx", "handy");
 });
 
-test("global search, ratings and favourites", async () => {
+test("global search, ratings and favourites", { tag: "@shard-b" }, async () => {
   // Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
   await openLibrary();
   await expect(page.getByText("29 games")).toBeVisible();
@@ -1545,7 +1550,7 @@ test("global search, ratings and favourites", async () => {
   await expect(heart).toHaveAttribute("aria-pressed", "false");
 });
 
-test("collections: create, add from game page and bulk select, search, remove, delete", async () => {
+test("collections: create, add from game page and bulk select, search, remove, delete", { tag: "@shard-b" }, async () => {
   await page.goto("/collections");
   await expect(page.getByText("You have no collections yet.")).toBeVisible();
   await expectAccessible(page, "collections page (empty)");
@@ -1664,7 +1669,7 @@ test("collections: create, add from game page and bulk select, search, remove, d
   await expect(page.getByText("29 games")).toBeVisible();
 });
 
-test("collections discovery: browse publishers and genres across systems, share a selection", async () => {
+test("collections discovery: browse publishers and genres across systems, share a selection", { tag: "@shard-b" }, async () => {
   // Discovery B1: link tabs; a bare URL is User collections.
   await page.goto("/collections");
   const tabs = page.getByRole("navigation", { name: "Collections views" });
@@ -1742,7 +1747,7 @@ test("collections discovery: browse publishers and genres across systems, share 
   await expect(page).toHaveURL(/\/collections\?tab=genres$/);
 });
 
-test("collections systems: browse a system's games and its emulator links", async () => {
+test("collections systems: browse a system's games and its emulator links", { tag: "@shard-b" }, async () => {
   // Systems tab B1/B4: a link tab that asks for a system.
   await page.goto("/collections");
   const tabs = page.getByRole("navigation", { name: "Collections views" });
@@ -1782,7 +1787,7 @@ test("collections systems: browse a system's games and its emulator links", asyn
   await expect(emulators).toBeFocused();
 });
 
-test("collections discovery: two signed-in users share, replace and remove a publisher logo", async () => {
+test("collections discovery: two signed-in users share, replace and remove a publisher logo", { tag: "@shard-b" }, async () => {
   // A plain user (no roles) next to the admin, in a browser of their own.
   const curatorPassword = `${newPassword}-curator`;
   await page.goto("/admin/users");
@@ -2560,7 +2565,7 @@ test("Nintendo DS: the staged cartridge imports by DAT match and plays in DeSmuM
   await ds.close();
 });
 
-test("Admin: roles and the create-user modal", async () => {
+test("Admin: roles and the create-user modal", { tag: "@shard-b" }, async () => {
   await page.goto("/admin/users");
   await expect(page.getByLabel("admin role of admin")).toBeChecked();
   await expect(page.getByLabel("rom-manager role of admin")).toBeChecked();
@@ -2577,7 +2582,7 @@ test("Admin: roles and the create-user modal", async () => {
   await expect(page.getByLabel("admin role of editor")).not.toBeChecked();
 });
 
-test("Admin: live logs", async () => {
+test("Admin: live logs", { tag: "@shard-b" }, async () => {
   await page.goto("/admin/logs");
   await expect(
     page.getByRole("link", { name: "Logs", exact: true }),
@@ -2589,7 +2594,7 @@ test("Admin: live logs", async () => {
   await expectAccessible(page, "logs");
 });
 
-test("keyboard shortcuts: use, rebind and use again", async () => {
+test("keyboard shortcuts: use, rebind and use again", { tag: "@shard-b" }, async () => {
   await openLibrary();
   await expect(page.locator("nav.navbar")).toHaveClass(/sticky-top/);
   await expect(
@@ -2636,7 +2641,7 @@ test("keyboard shortcuts: use, rebind and use again", async () => {
   await expect(dialog()).toBeHidden();
 });
 
-test("Admin: database backups", async () => {
+test("Admin: database backups", { tag: "@shard-b" }, async () => {
   await page.goto("/admin/backups");
   await expect(
     page.getByRole("link", { name: "Backups", exact: true }),
@@ -2657,7 +2662,7 @@ test("Admin: database backups", async () => {
   await expectAccessible(page, "backups with a backup");
 });
 
-test("Admin and Integrity pages are accessible", async () => {
+test("Admin and Integrity pages are accessible", { tag: "@shard-b" }, async () => {
   for (const [path, heading] of [
     ["/integrity", "Integrity"],
     ["/admin/users", "Admin"],
