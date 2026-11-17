@@ -67,6 +67,8 @@ public static class AppHost
         builder.Services.AddHostedService(sp => sp.GetRequiredService<BackupScheduler>());
         // S4: waits for ApplicationStarted itself, so its position doesn't delay startup.
         builder.Services.AddHostedService<StorageMigrationStarter>();
+        // B29: the type form (not a factory), so tests can remove it by ImplementationType.
+        builder.Services.AddHostedService<DatRefreshScheduler>();
         var app = builder.Build();
         app.UseSecurityHeaders();
 
@@ -135,6 +137,16 @@ public static class AppHost
         builder.Services.AddSingleton<BackupRestorer>();
         builder.Services.AddSingleton<ISettingsRepository, SettingsRepository>();
         builder.Services.AddSingleton<BackupScheduler>();
+        builder.Services.AddSingleton<DatRefreshSettingsService>();
+        builder.Services.AddSingleton<DatRefreshJobFactory>(sp => () => new DatRefreshJob(
+            sp.GetRequiredService<IHttpClientFactory>().CreateClient(HttpClients.Dats),
+            sp.GetRequiredService<IOptions<SourcesOptions>>().Value,
+            sp.GetRequiredService<IOptions<PathsOptions>>().Value,
+            sp.GetRequiredService<DatCache>(),
+            sp.GetRequiredService<ISystemRegistry>(),
+            sp.GetRequiredService<IAuditLog>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<DatRefreshJob>>()));
         builder.Services.AddSingleton<IAuditRepository, AuditRepository>();
         builder.Services.AddSingleton<AuditLog>();
         builder.Services.AddSingleton<IAuditLog>(sp => sp.GetRequiredService<AuditLog>());

@@ -190,8 +190,62 @@ public class DatEndpointsTests
         }
     }
 
+    [Test]
+    public void DefaultFactory_HostsNoDatRefreshScheduler()
+    {
+        Assert.That(_factory.Services.GetServices<Microsoft.Extensions.Hosting.IHostedService>().OfType<DatRefreshScheduler>(), Is.Empty);
+    }
+
+    [Test]
+    public async Task Settings_DefaultToOnAt0400_ThenSaveAndReturnTheNextRun()
+    {
+        using (var response = await _admin.GetAsync("/api/admin/dats/settings"))
+        {
+            var body = await AuthClient.JsonAsync(response);
+            Assert.That((body.GetProperty("enabled").GetBoolean(), body.GetProperty("time").GetString()), Is.EqualTo((true, "04:00")));
+            Assert.That(body.GetProperty("timeZone").GetString(), Is.Not.Empty);
+            Assert.That(body.GetProperty("nextRunAt").ValueKind, Is.EqualTo(System.Text.Json.JsonValueKind.String));
+        }
+
+        using (var saved = await _admin.SendAsync(HttpMethod.Put, "/api/admin/dats/settings", new { enabled = true, time = "05:30" }, sendXsrf: true))
+        {
+            Assert.That(saved.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            var body = await AuthClient.JsonAsync(saved);
+            Assert.That(body.GetProperty("time").GetString(), Is.EqualTo("05:30"));
+            var next = body.GetProperty("nextRunAt").GetDateTimeOffset();
+            Assert.That(TimeZoneInfo.ConvertTime(next, TimeZoneInfo.Local).TimeOfDay, Is.EqualTo(new TimeSpan(5, 30, 0)));
+        }
+
+        using (var disabled = await _admin.SendAsync(HttpMethod.Put, "/api/admin/dats/settings", new { enabled = false, time = "05:30" }, sendXsrf: true))
+            Assert.That((await AuthClient.JsonAsync(disabled)).GetProperty("nextRunAt").ValueKind, Is.EqualTo(System.Text.Json.JsonValueKind.Null));
+        using var reread = await _admin.GetAsync("/api/admin/dats/settings");
+        Assert.That((await AuthClient.JsonAsync(reread)).GetProperty("enabled").GetBoolean(), Is.False);
+    }
+
+    private static IEnumerable<TestCaseData> InvalidSettings()
+    {
+        yield return new TestCaseData((object)"text", "").SetName("DatSettings non-object body");
+        yield return new TestCaseData(new { time = "04:00" }, "enabled").SetName("DatSettings missing enabled");
+        yield return new TestCaseData(new { enabled = "yes", time = "04:00" }, "enabled").SetName("DatSettings non-boolean enabled");
+        yield return new TestCaseData(new { enabled = true, time = "24:00" }, "time").SetName("DatSettings invalid time");
+        yield return new TestCaseData(new { enabled = true }, "time").SetName("DatSettings missing time");
+    }
+
+    [TestCaseSource(nameof(InvalidSettings))]
+    public async Task Settings_Invalid_Is400OnTheField_AndSavesNothing(object body, string field)
+    {
+        using var response = await _admin.SendAsync(HttpMethod.Put, "/api/admin/dats/settings", body, sendXsrf: true);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").TryGetProperty(field, out _), Is.True);
+        using var reread = await _admin.GetAsync("/api/admin/dats/settings");
+        Assert.That((await AuthClient.JsonAsync(reread)).GetProperty("time").GetString(), Is.EqualTo("04:00"));
+    }
+
     [TestCase("POST", "/api/jobs/dat-refresh")]
     [TestCase("GET", "/api/admin/dats")]
+    [TestCase("GET", "/api/admin/dats/settings")]
+    [TestCase("PUT", "/api/admin/dats/settings")]
     public async Task RoleMatrix_AnonymousIs401_UserIs403(string method, string url)
     {
         using var anonymous = await AuthClient.CreateAsync(_factory);
@@ -199,8 +253,9 @@ public class DatEndpointsTests
         await TestUsers.CreateAsync(_factory, "plain");
         (await user.LoginAsync("plain", TestUsers.Password)).Dispose();
 
-        using var anonymousResponse = await anonymous.SendAsync(new HttpMethod(method), url, null, sendXsrf: true);
-        using var userResponse = await user.SendAsync(new HttpMethod(method), url, null, sendXsrf: true);
+        var body = method == "PUT" ? new { } : null;
+        using var anonymousResponse = await anonymous.SendAsync(new HttpMethod(method), url, body, sendXsrf: true);
+        using var userResponse = await user.SendAsync(new HttpMethod(method), url, body, sendXsrf: true);
 
         Assert.That(anonymousResponse.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
         Assert.That(userResponse.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
