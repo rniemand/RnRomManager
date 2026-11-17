@@ -156,7 +156,7 @@ describe('game detail admin actions', () => {
 		expect(modal().getByRole('heading', { name: 'Move release', hidden: true })).toBeTruthy();
 	});
 
-	it('a User sees no admin actions', async () => {
+	it('a Site user sees no admin actions and a read-only rating', async () => {
 		auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
 		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
 		render(GamePage);
@@ -164,6 +164,7 @@ describe('game detail admin actions', () => {
 		await screen.findByText('Releases');
 		expect(screen.queryByRole('button', { name: /Edit metadata/ })).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Delete Tetris 1.gb' })).toBeNull();
+		expect(screen.queryByRole('button', { name: /Rate 1 of 5/ })).toBeNull();
 	});
 
 	it('deleting a release calls the API and reloads', async () => {

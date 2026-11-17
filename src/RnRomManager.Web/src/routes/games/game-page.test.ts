@@ -4,6 +4,7 @@ import { resetClient } from '#lib/api/client.js';
 import type { GameDetail, ReleaseFile } from '#lib/api/types.js';
 import { formatDateTime, formatSize } from '#lib/format.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
+import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 
 const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
@@ -144,6 +145,7 @@ describe('game detail page', () => {
 	const assign = vi.fn();
 
 	beforeEach(() => {
+		auth.set({ id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false });
 		resetClient();
 		assign.mockClear();
 		goto.mockClear();
@@ -170,7 +172,10 @@ describe('game detail page', () => {
 		});
 		vi.stubGlobal('location', { ...window.location, assign });
 	});
-	afterEach(() => vi.unstubAllGlobals());
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		auth.set(null);
+	});
 
 	it('an external release has an External badge whose tooltip is its file name; an embedded one has none (G7)', async () => {
 		tooltips.length = 0;
@@ -376,7 +381,8 @@ describe('game detail page', () => {
 			'Hide details for Tetris 1.gb',
 			'Add note for Tetris 1.gb',
 			'Download Tetris 1.gb',
-			'Add Tetris 1.gb to the bundle'
+			'Add Tetris 1.gb to the bundle',
+			'Delete Tetris 1.gb'
 		]);
 		expect(document.getElementById('releases-panel')!.querySelector('table')).toBeNull();
 	});
@@ -892,7 +898,7 @@ describe('game detail page', () => {
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);
 
-		await fireEvent.click(await screen.findByRole('button', { name: /Retry/ }));
+		await fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
 		expect(await (await folders()).findByRole('button', { name: 'Tetris.zip' })).toBeTruthy();
 		expect(zipFetches).toBe(2);
 	});

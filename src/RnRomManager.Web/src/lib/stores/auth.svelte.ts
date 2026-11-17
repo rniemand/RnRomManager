@@ -11,11 +11,6 @@ class Auth {
 		return this.me?.roles.includes('admin') ?? false;
 	}
 
-	/** Library edits and image management: admin-only (U3). Removed in favour of `isAdmin` in Step 2. */
-	get canEditLibrary(): boolean {
-		return this.isAdmin;
-	}
-
 	/** Loads `me`; a 401 just means signed out. Other errors propagate. */
 	async load(): Promise<Me | null> {
 		try {

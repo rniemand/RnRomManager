@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
+import { auth } from '#lib/stores/auth.svelte.js';
 import { navigateTo, testUrl as url } from '#lib/testing/url.svelte.js';
 
 const goto = vi.fn();
@@ -85,6 +86,7 @@ describe('library page', () => {
 	let store: Map<string, string>;
 
 	beforeEach(() => {
+		auth.set({ id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false });
 		resetClient();
 		goto.mockClear();
 		url.current = new URL('http://localhost/?system=gb&letter=%23');
@@ -109,7 +111,10 @@ describe('library page', () => {
 			return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
 		});
 	});
-	afterEach(() => vi.unstubAllGlobals());
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		auth.set(null);
+	});
 
 	it('loads games for the URL filters and shows box art with alt text', async () => {
 		render(LibraryPage);

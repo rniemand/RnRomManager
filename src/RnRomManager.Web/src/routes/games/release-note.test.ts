@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import type { GameDetail } from '#lib/api/types.js';
+import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 
@@ -87,6 +88,7 @@ describe('release notes (B11)', () => {
 	const note = '/api/games/g1/roms/1/note';
 
 	beforeEach(() => {
+		auth.set({ id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false });
 		resetClient();
 		navigateTo('/games/g1');
 		toasts.items.length = 0;
@@ -104,7 +106,10 @@ describe('release notes (B11)', () => {
 			return Promise.resolve(new Response(payload, { status: answer.status }));
 		});
 	});
-	afterEach(() => vi.unstubAllGlobals());
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		auth.set(null);
+	});
 
 	const noteModal = () => {
 		const title = [...document.querySelectorAll('.modal-title')].find((t) =>
@@ -130,6 +135,38 @@ describe('release notes (B11)', () => {
 		expect(withNote.querySelector('i')!.className).toContain('bi-sticky-fill');
 		expect(without.querySelector('i')!.className).toMatch(/bi-sticky(?!-fill)/);
 		expect(withNote.classList.contains('btn-sm')).toBe(true);
+	});
+
+	describe('as a Site user (U3)', () => {
+		beforeEach(() => auth.set({ id: 2, username: 'site', roles: [], mustChangePassword: false }));
+
+		it('shows the note button only on a release with a note', async () => {
+			render(GamePage);
+			expect(await screen.findByRole('button', { name: 'Note for Tetris 1.gb' })).toBeTruthy();
+			expect(screen.queryByRole('button', { name: /note for Tetris 2\.gb/i })).toBeNull();
+		});
+
+		it('opens the note view-only: no mode switch, Save or Delete', async () => {
+			render(GamePage);
+			await open('Note for Tetris 1.gb');
+
+			expect((await noteModal().findByTestId('note-rendered')).textContent).toContain('Saved tips');
+			expect(noteModal().queryByRole('radio', { hidden: true })).toBeNull();
+			expect(noteModal().queryByRole('button', { name: 'Save', hidden: true })).toBeNull();
+			expect(noteModal().queryByRole('button', { name: 'Delete note', hidden: true })).toBeNull();
+			expect(
+				noteModal().getAllByRole('button', { name: 'Close', hidden: true }).length
+			).toBeGreaterThan(0);
+		});
+
+		it('a note deleted meanwhile says the release has no note', async () => {
+			answers[`GET ${note}`] = [{ status: 404, body: { code: 'NotFound', title: 'x' } }];
+			render(GamePage);
+			await open('Note for Tetris 1.gb');
+
+			expect(await noteModal().findByText('This release has no note.')).toBeTruthy();
+			expect(noteModal().queryByLabelText('Note (Markdown)')).toBeNull();
+		});
 	});
 
 	it('opens in View with the rendered note when one exists', async () => {

@@ -8,6 +8,7 @@
 	import EmulatorModal from './EmulatorModal.svelte';
 	import FileSize from './FileSize.svelte';
 	import Icon from './Icon.svelte';
+	import { auth } from '../stores/auth.svelte';
 	import RatingControl from './RatingControl.svelte';
 	import SystemBadge from './SystemBadge.svelte';
 	import { systemColour } from '../systemColours';
@@ -175,6 +176,7 @@
 								title={game.displayTitle}
 								bind:rating={game.rating}
 								bind:favourite={game.favourite}
+								readonly={!auth.isAdmin}
 							/>
 							{#if action}{@render action(game)}{/if}
 						</div>
@@ -227,6 +229,7 @@
 								title={game.displayTitle}
 								bind:rating={game.rating}
 								bind:favourite={game.favourite}
+								readonly={!auth.isAdmin}
 							/>
 						</td>
 						<td class="text-end">{game.romCount}</td>

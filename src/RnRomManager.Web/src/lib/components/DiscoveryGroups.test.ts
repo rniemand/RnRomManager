@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
 import type { DiscoveryGroup } from '../api/types';
 import type { DiscoveryState } from '../discovery';
+import { auth } from '../stores/auth.svelte';
 
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
 
@@ -48,11 +49,28 @@ beforeEach(() => {
 		return new Response(payload, { status: answer.status });
 	});
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+	vi.unstubAllGlobals();
+	auth.set(null);
+});
 
 const list = (name: string) => within(screen.getByRole('list', { name }));
 
 describe('DiscoveryGroups (discovery B2)', () => {
+	it.each([
+		[['admin'] as 'admin'[], 1],
+		[[] as 'admin'[], 0]
+	])('Change logo shows only for an Admin (roles %j)', async (roles, count) => {
+		auth.set({ id: 1, username: 'u', roles, mustChangePassword: false });
+		answers['/api/discovery/publishers?pageSize=20'] = [
+			{ status: 200, body: pageOf([group(1, 'Capcom')]) }
+		];
+		render(DiscoveryGroups, { view: state(), onpage: vi.fn() });
+
+		await screen.findByRole('link', { name: /Capcom/ });
+		expect(screen.queryAllByRole('button', { name: /Change logo/ })).toHaveLength(count);
+	});
+
 	it('lists each group with its count, linking to its selection', async () => {
 		answers['/api/discovery/publishers?pageSize=20'] = [
 			{ status: 200, body: pageOf([group(1, 'Capcom', 1), group(2, 'Nintendo', 12)]) }

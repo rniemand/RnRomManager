@@ -344,6 +344,7 @@
 					title={game.displayTitle}
 					bind:rating={game.rating}
 					bind:favourite={game.favourite}
+					readonly={!auth.isAdmin}
 					onsaved={(detail) => (game = detail)}
 				/>
 			</div>
@@ -470,7 +471,7 @@
 					<Icon name="collections" /> Collections
 				</button>
 			</div>
-			{#if auth.canEditLibrary}
+			{#if auth.isAdmin}
 				<div class="d-flex flex-wrap gap-2 mt-3" role="group" aria-label="Admin actions">
 					<button
 						type="button"
@@ -582,16 +583,16 @@
 								<span class="badge text-bg-secondary">{region}</span>
 							{/each}
 							<div class="ms-auto d-flex flex-wrap gap-1">
-								<!-- R4: a filled button when the release has a note. -->
-								<button
-									type="button"
-									class="btn btn-sm {rom.hasNote ? 'btn-warning' : 'btn-outline-secondary'}"
-									aria-label="{rom.hasNote ? 'Note for' : 'Add note for'} {rom.fileName}"
-									use:tooltip={rom.hasNote ? 'View note' : 'Add note'}
-									onclick={() => showNote(rom)}
-								>
-									<Icon name={rom.hasNote ? 'note-filled' : 'note'} />
-								</button>
+								<!-- R4: a filled button when the release has a note; Site users only view notes (U3). -->
+								{#if auth.isAdmin || rom.hasNote}<button
+										type="button"
+										class="btn btn-sm {rom.hasNote ? 'btn-warning' : 'btn-outline-secondary'}"
+										aria-label="{rom.hasNote ? 'Note for' : 'Add note for'} {rom.fileName}"
+										use:tooltip={rom.hasNote ? 'View note' : 'Add note'}
+										onclick={() => showNote(rom)}
+									>
+										<Icon name={rom.hasNote ? 'note-filled' : 'note'} />
+									</button>{/if}
 								{#if canPlay(game, rom) && game.browserCore && opensInNewTab(game.browserCore)}
 									<!-- PSP B3: the isolated player runs in its own tab; a static page outside the SPA router. -->
 									<!-- eslint-disable svelte/no-navigation-without-resolve -->
@@ -631,7 +632,7 @@
 									<Icon name="download" />
 								</button>
 								{@render bundleButton(bundleEntry(game, rom))}
-								{#if auth.canEditLibrary}
+								{#if auth.isAdmin}
 									<button
 										type="button"
 										class="btn btn-sm btn-outline-danger"
@@ -690,7 +691,7 @@
 							<dt class="col-sm-3 col-lg-2 text-body-secondary">Date added</dt>
 							<dd class="col-sm-9 col-lg-4">{formatDateTime(rom.dateAdded)}</dd>
 						</dl>
-						{#if rom.header || auth.canEditLibrary}
+						{#if rom.header || auth.isAdmin}
 							<div class="d-flex flex-wrap gap-2 mt-2">
 								{#if rom.header}
 									<button
@@ -701,7 +702,7 @@
 										<Icon name="info" /> Header details
 									</button>
 								{/if}
-								{#if auth.canEditLibrary}
+								{#if auth.isAdmin}
 									<button
 										type="button"
 										class="btn btn-sm btn-outline-secondary"
@@ -777,7 +778,7 @@
 
 	<!-- Outside both panels (a hidden ancestor would hide it) and before the Images panel: game-admin.test.ts takes
 	     the first .modal. -->
-	{#if auth.canEditLibrary}
+	{#if auth.isAdmin}
 		<GameAdminModal {game} bind:action ondone={onAdminDone} />
 	{/if}
 
