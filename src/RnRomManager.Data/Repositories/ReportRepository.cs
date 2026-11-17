@@ -65,7 +65,8 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         SELECT g.id, g.system_id, g.display_title,
                CAST(g.zip_size_bytes + COALESCE((SELECT SUM(r.size_bytes) FROM roms r
                    WHERE r.game_id = g.id AND r.external_file_name IS NOT NULL), 0)
-                   + COALESCE((SELECT SUM(f.size_bytes) FROM rom_files f WHERE f.game_id = g.id), 0) AS SIGNED) AS Bytes
+                   + COALESCE((SELECT SUM(f.size_bytes) FROM rom_files f WHERE f.game_id = g.id), 0) AS SIGNED) AS Bytes,
+               (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id AND JSON_CONTAINS(r.flags, '"Update"')) AS UpdateCount
         FROM games g
         """;
 
@@ -73,22 +74,22 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
     {
         await using var connection = connections.Create();
         var rows = await connection.QueryAsync<SystemSizeRow>(new CommandDefinition($"""
-            SELECT s.system_id AS SystemId, SUM(s.Bytes) AS Bytes, COUNT(*) AS GameCount
+            SELECT s.system_id AS SystemId, SUM(s.Bytes) AS Bytes, COUNT(*) AS GameCount, SUM(s.UpdateCount) AS UpdateCount
             FROM ({GameBytes}) s GROUP BY s.system_id ORDER BY Bytes DESC, s.system_id
             """, cancellationToken: cancellationToken));
-        return rows.Select(r => new SystemSize(r.SystemId, (long)r.Bytes, (int)r.GameCount)).ToList();
+        return rows.Select(r => new SystemSize(r.SystemId, (long)r.Bytes, (int)r.GameCount, (int)r.UpdateCount)).ToList();
     }
 
     public async Task<IReadOnlyList<GameSize>> ListGameSizesAsync(string systemId, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
         var rows = await connection.QueryAsync<GameSizeRow>(new CommandDefinition($"""
-            SELECT g.id AS Id, g.display_title AS DisplayTitle, g.Bytes,
+            SELECT g.id AS Id, g.display_title AS DisplayTitle, g.Bytes, g.UpdateCount,
                    (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id) AS RomCount
             FROM ({GameBytes}) g WHERE g.system_id = @systemId
             ORDER BY g.Bytes DESC, g.display_title, g.id
             """, new { systemId }, cancellationToken: cancellationToken));
-        return rows.Select(r => new GameSize(r.Id, r.DisplayTitle, r.Bytes, (int)r.RomCount)).ToList();
+        return rows.Select(r => new GameSize(r.Id, r.DisplayTitle, r.Bytes, (int)r.RomCount, (int)r.UpdateCount)).ToList();
     }
 
     /// <summary>
@@ -175,6 +176,7 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         public string SystemId { get; init; } = "";
         public decimal Bytes { get; init; }
         public long GameCount { get; init; }
+        public decimal UpdateCount { get; init; }
     }
 
     private sealed class GameSizeRow
@@ -183,5 +185,6 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         public string DisplayTitle { get; init; } = "";
         public long Bytes { get; init; }
         public long RomCount { get; init; }
+        public long UpdateCount { get; init; }
     }
 }
