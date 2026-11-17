@@ -17,6 +17,7 @@ namespace RnRomManager.Api.Tests.Integration;
 public class LibraryEditorSaveTests
 {
     private static readonly AuditActor Alice = new(null, "alice", null);
+    private static readonly SaveViewer AliceViewer = new("alice", false);
 
     private ApiFactory _factory = null!;
     private int _seed;
@@ -129,16 +130,16 @@ public class LibraryEditorSaveTests
             Is.EqualTo(("Before boss", "", "Tetris (World).gb", ".state", 3L, (string?)"alice")));
         Assert.That(Entry(game.Zip, save.Entry), Is.EqualTo(new byte[] { 1, 2, 3 }));
 
-        var updated = await Editor.UpdateSaveAsync(game.Id, save.Id, "After boss", "line 1\nline 2", Alice, default);
+        var updated = await Editor.UpdateSaveAsync(game.Id, save.Id, "After boss", "line 1\nline 2", Alice, AliceViewer, default);
         Assert.That((updated.Code, updated.Save!.Name, updated.Save.Description), Is.EqualTo(((string?)null, "After boss", "line 1\nline 2")));
 
-        var replaced = await Editor.ReplaceSaveFileAsync(game.Id, save.Id, Upload([9, 9], ".srm"), Alice, default);
+        var replaced = await Editor.ReplaceSaveFileAsync(game.Id, save.Id, Upload([9, 9], ".srm"), Alice, AliceViewer, default);
         Assert.That(replaced.Code, Is.Null, replaced.Details);
         Assert.That(SavesEntries(game.Zip), Is.EqualTo(new[] { LibraryZip.SaveEntry(save.Id + ".srm"), LibraryZip.SavesIndexEntry }));
         Assert.That(Entry(game.Zip, replaced.Save!.Entry), Is.EqualTo(new byte[] { 9, 9 }));
         Assert.That((replaced.Save.Name, replaced.Save.SizeBytes), Is.EqualTo(("After boss", 2L)));
 
-        Assert.That((await Editor.DeleteSaveAsync(game.Id, save.Id, Alice, default)).Code, Is.Null);
+        Assert.That((await Editor.DeleteSaveAsync(game.Id, save.Id, Alice, AliceViewer, default)).Code, Is.Null);
         Assert.That(SavesEntries(game.Zip), Is.Empty, "the last delete removes saves.json too");
 
         var details = $"state \"{{0}}\" ({save.Id})";
@@ -158,7 +159,7 @@ public class LibraryEditorSaveTests
         var save = (await Editor.AddSaveAsync(game.Id, game.RomIds[0], "state", "Same", "Text", Upload([1]), Alice, default)).Save!;
         var before = File.ReadAllBytes(game.Zip);
 
-        var result = await Editor.UpdateSaveAsync(game.Id, save.Id, " Same ", "Text", Alice, default);
+        var result = await Editor.UpdateSaveAsync(game.Id, save.Id, " Same ", "Text", Alice, AliceViewer, default);
 
         Assert.That((result.Code, result.Save), Is.EqualTo(((string?)null, save)));
         Assert.That(File.ReadAllBytes(game.Zip), Is.EqualTo(before));
@@ -175,9 +176,9 @@ public class LibraryEditorSaveTests
         Assert.That(new[]
         {
             (await Editor.AddSaveAsync(game.Id, game.RomIds[0], "state", "S", null, Upload([1]), Alice, default)).Code,
-            (await Editor.UpdateSaveAsync(game.Id, save.Id, "T", null, Alice, default)).Code,
-            (await Editor.ReplaceSaveFileAsync(game.Id, save.Id, Upload([2]), Alice, default)).Code,
-            (await Editor.DeleteSaveAsync(game.Id, save.Id, Alice, default)).Code,
+            (await Editor.UpdateSaveAsync(game.Id, save.Id, "T", null, Alice, AliceViewer, default)).Code,
+            (await Editor.ReplaceSaveFileAsync(game.Id, save.Id, Upload([2]), Alice, AliceViewer, default)).Code,
+            (await Editor.DeleteSaveAsync(game.Id, save.Id, Alice, AliceViewer, default)).Code,
         }, Is.All.EqualTo(JobRunning));
     }
 
@@ -191,8 +192,8 @@ public class LibraryEditorSaveTests
         {
             (await Editor.AddSaveAsync(Guid.NewGuid(), game.RomIds[0], "state", "S", null, Upload([1]), Alice, default)).Code,
             (await Editor.AddSaveAsync(game.Id, other.RomIds[0], "state", "S", null, Upload([1]), Alice, default)).Code,
-            (await Editor.UpdateSaveAsync(game.Id, GameSaves.NewId(), "T", null, Alice, default)).Code,
-            (await Editor.DeleteSaveAsync(game.Id, GameSaves.NewId(), Alice, default)).Code,
+            (await Editor.UpdateSaveAsync(game.Id, GameSaves.NewId(), "T", null, Alice, AliceViewer, default)).Code,
+            (await Editor.DeleteSaveAsync(game.Id, GameSaves.NewId(), Alice, AliceViewer, default)).Code,
         }, Is.All.EqualTo(NotFound));
     }
 
@@ -200,7 +201,7 @@ public class LibraryEditorSaveTests
     public async Task Add_25SavesNamingTheRelease_InAnyCase_IsSaveLimitReached_AnOrphanCountsForNone()
     {
         var game = await WriteGame("Tetris", "Tetris (World).gb");
-        AddSaves(game.Zip, [.. Enumerable.Range(0, 25).Select(_ => Record("TETRIS (WORLD).GB")), Record("Gone (World).gb")]);
+        AddSaves(game.Zip, [.. Enumerable.Range(0, 25).Select(_ => Record("TETRIS (WORLD).GB") with { UploadedBy = "ALICE" }), Record("Gone (World).gb")]);
 
         var full = await Editor.AddSaveAsync(game.Id, game.RomIds[0], "state", "S", null, Upload([1]), Alice, default);
 
@@ -236,9 +237,9 @@ public class LibraryEditorSaveTests
         Assert.That(new[]
         {
             (await Editor.AddSaveAsync(game.Id, game.RomIds[0], "state", "S", null, Upload([1]), Alice, default)).Code,
-            (await Editor.UpdateSaveAsync(game.Id, anyId, "T", null, Alice, default)).Code,
-            (await Editor.ReplaceSaveFileAsync(game.Id, anyId, Upload([2]), Alice, default)).Code,
-            (await Editor.DeleteSaveAsync(game.Id, anyId, Alice, default)).Code,
+            (await Editor.UpdateSaveAsync(game.Id, anyId, "T", null, Alice, AliceViewer, default)).Code,
+            (await Editor.ReplaceSaveFileAsync(game.Id, anyId, Upload([2]), Alice, AliceViewer, default)).Code,
+            (await Editor.DeleteSaveAsync(game.Id, anyId, Alice, AliceViewer, default)).Code,
         }, Is.All.EqualTo(SavesUnreadable));
     }
 
@@ -277,11 +278,99 @@ public class LibraryEditorSaveTests
     {
         var target = await WriteGame("Tetris", "Tetris (World).gb");
         var source = await WriteGame("Other", "Other (World).gb", "Tetris (Japan).gb");
-        AddSaves(target.Zip, [.. Enumerable.Range(0, 25).Select(_ => Record("TETRIS (JAPAN).GB"))]);
+        AddSaves(target.Zip, [.. Enumerable.Range(0, 25).Select(_ => Record("TETRIS (JAPAN).GB") with { UploadedBy = "alice" })]);
 
         Assert.That((await Editor.MoveReleaseAsync(source.Id, source.RomIds[1], target.Id, null, Alice, default)).Code, Is.Null);
 
         var full = await Editor.AddSaveAsync(target.Id, await RomId(target.Id, "Tetris (Japan).gb"), "state", "S", null, Upload([1]), Alice, default);
         Assert.That(full.Code, Is.EqualTo(SaveLimitReached), "the 25 orphans now count toward the release that joined");
+    }
+
+    // --- User Management S1–S4: private saves ---
+
+    private static readonly AuditActor Bob = new(null, "bob", null);
+    private static readonly SaveViewer BobViewer = new("bob", false);
+    private static readonly SaveViewer AdminViewer = new("boss", true);
+
+    [Test]
+    public async Task ASiteUser_ActsOnTheirOwnSave_AnotherUsersOrAnUnownedSaveIsNotFound()
+    {
+        var game = await WriteGame("Tetris", "Tetris (World).gb");
+        var bobs = (await Editor.AddSaveAsync(game.Id, game.RomIds[0], "state", "Bob's", null, Upload([1]), Bob, default)).Save!;
+        var unowned = Record("Tetris (World).gb");
+        var ownedByAlice = (await Editor.AddSaveAsync(game.Id, game.RomIds[0], "state", "Mine", null, Upload([1]), Alice, default)).Save!;
+        AddSavesToIndex(game, unowned);
+
+        foreach (var id in new[] { bobs.Id, unowned.Id })
+        {
+            Assert.That(await Editor.PrecheckSaveAsync(game.Id, null, id, AliceViewer, default), Is.EqualTo(new LibraryEditResult(NotFound)));
+            Assert.That(new[]
+            {
+                (await Editor.UpdateSaveAsync(game.Id, id, "T", null, Alice, AliceViewer, default)).Code,
+                (await Editor.ReplaceSaveFileAsync(game.Id, id, Upload([2]), Alice, AliceViewer, default)).Code,
+                (await Editor.DeleteSaveAsync(game.Id, id, Alice, AliceViewer, default)).Code,
+            }, Is.All.EqualTo(NotFound));
+        }
+        Assert.That(await Editor.PrecheckSaveAsync(game.Id, null, ownedByAlice.Id, new SaveViewer("ALICE", false), default), Is.Null);
+        Assert.That((await Editor.UpdateSaveAsync(game.Id, ownedByAlice.Id, "Renamed", null, Alice, AliceViewer, default)).Code, Is.Null);
+        Assert.That(ReadSaves(game.Zip).Index!.Saves.Select(s => s.Name), Is.EquivalentTo(new[] { "Bob's", "Renamed", "Old" }));
+    }
+
+    [Test]
+    public async Task ANonOwnedId_AnswersExactlyLikeAnUnknownId_WhileAJobRuns_AndWithUnreadableSaves()
+    {
+        var game = await WriteGame("Tetris", "Tetris (World).gb");
+        var bobs = (await Editor.AddSaveAsync(game.Id, game.RomIds[0], "state", "Bob's", null, Upload([1]), Bob, default)).Save!;
+        var unknown = GameSaves.NewId();
+
+        async Task<(LibraryEditResult?, string?, string?)> Outcome(string id) => (
+            await Editor.PrecheckSaveAsync(game.Id, null, id, AliceViewer, default),
+            (await Editor.UpdateSaveAsync(game.Id, id, "T", null, Alice, AliceViewer, default)).Code,
+            (await Editor.DeleteSaveAsync(game.Id, id, Alice, AliceViewer, default)).Code);
+
+        Assert.That(await Outcome(bobs.Id), Is.EqualTo(await Outcome(unknown)));
+        using (Service<JobLock>().TryAcquire())
+            Assert.That(await Outcome(bobs.Id), Is.EqualTo(await Outcome(unknown)));
+        using (var archive = ZipFile.Open(game.Zip, ZipArchiveMode.Update))
+            archive.GetEntry(LibraryZip.SavesIndexEntry)!.Delete();
+        AddSaves(game.Zip, null, (LibraryZip.SavesIndexEntry, "{ no"u8.ToArray()));
+        Assert.That(await Outcome(bobs.Id), Is.EqualTo(await Outcome(unknown)));
+        Assert.That((await Outcome(bobs.Id)).Item2, Is.EqualTo(SavesUnreadable));
+    }
+
+    [Test]
+    public async Task AnAdmin_EditsAnotherUsersSave_KeepingItsOwner()
+    {
+        var game = await WriteGame("Tetris", "Tetris (World).gb");
+        var bobs = (await Editor.AddSaveAsync(game.Id, game.RomIds[0], "state", "Bob's", null, Upload([1]), Bob, default)).Save!;
+        var boss = new AuditActor(null, "boss", null);
+
+        var updated = await Editor.UpdateSaveAsync(game.Id, bobs.Id, "Checked", null, boss, AdminViewer, default);
+
+        Assert.That((updated.Code, updated.Save!.UploadedBy, updated.Save.UpdatedBy), Is.EqualTo(((string?)null, (string?)"bob", (string?)"boss")));
+        Assert.That((await Editor.DeleteSaveAsync(game.Id, bobs.Id, boss, AdminViewer, default)).Code, Is.Null);
+    }
+
+    [Test]
+    public async Task TheLimit_CountsOnlyTheUploadersOwnSaves_ForAdminsToo()
+    {
+        var game = await WriteGame("Tetris", "Tetris (World).gb");
+        AddSaves(game.Zip, [.. Enumerable.Range(0, 25).Select(_ => Record("Tetris (World).gb") with { UploadedBy = "bob" })]);
+
+        Assert.That(await Editor.PrecheckSaveAsync(game.Id, game.RomIds[0], null, AliceViewer, default), Is.Null);
+        Assert.That((await Editor.AddSaveAsync(game.Id, game.RomIds[0], "state", "S", null, Upload([1]), Alice, default)).Code, Is.Null);
+        var romId = await RomId(game.Id, "Tetris (World).gb");
+        Assert.That((await Editor.PrecheckSaveAsync(game.Id, romId, null, new SaveViewer("bob", true), default))!.Code, Is.EqualTo(SaveLimitReached));
+        var bobFull = await Editor.AddSaveAsync(game.Id, romId, "state", "S", null, Upload([1]), Bob, default);
+        Assert.That((bobFull.Code, bobFull.Details), Is.EqualTo((SaveLimitReached, "You already have 25 saves for this release. Delete one first.")));
+    }
+
+    /// <summary>Adds records (one-byte entries) to a ZIP that the editor already gave a <c>saves.json</c>.</summary>
+    private void AddSavesToIndex(TestGame game, params GameSave[] records)
+    {
+        var current = ReadSaves(game.Zip).Index!.Saves;
+        using (var archive = ZipFile.Open(game.Zip, ZipArchiveMode.Update))
+            archive.GetEntry(LibraryZip.SavesIndexEntry)!.Delete();
+        AddSaves(game.Zip, null, [(LibraryZip.SavesIndexEntry, GameSaves.Serialize([.. current, .. records])!), .. records.Select(r => (r.Entry, new byte[] { 7 }))]);
     }
 }

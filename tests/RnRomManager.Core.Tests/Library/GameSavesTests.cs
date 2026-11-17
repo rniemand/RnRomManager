@@ -188,4 +188,19 @@ public class GameSavesTests
         using var tooBig = Zip((LibraryZip.SavesIndexEntry, new byte[GameSaves.MaxIndexBytes + 1]));
         Assert.That(GameSaves.Read(tooBig).State, Is.EqualTo(SavesState.Unreadable));
     }
+
+    [TestCase("alice", "alice", true)]
+    [TestCase("Alice", "ALICE", true)]
+    [TestCase("alice", "bob", false)]
+    [TestCase(null, "alice", false)]
+    [TestCase("alice", null, false)]
+    [TestCase(null, null, false)]
+    public void IsOwner_MatchesUploadedByIgnoringCase_NullOwnsNothing(string? uploadedBy, string? username, bool owner)
+    {
+        var save = Save() with { UploadedBy = uploadedBy };
+
+        Assert.That(GameSaves.IsOwner(save, username), Is.EqualTo(owner));
+        Assert.That(new SaveViewer(username, IsAdmin: false).CanSee(save), Is.EqualTo(owner));
+        Assert.That(new SaveViewer(username, IsAdmin: true).CanSee(save), Is.True);
+    }
 }

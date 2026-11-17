@@ -19,9 +19,10 @@ public partial class SaveEndpointsTests
         "This game's ROMs are being moved out of its ZIP. Try again when the storage migration job has finished.";
     private const string UnreadableTitle = "This game's saves folder can't be read. An Admin must repair it.";
     private const string IndexFullTitle = "This game has too many saves. Delete some first.";
-    private const string LimitTitle = "This release already has 25 saves. Delete one first.";
+    private const string LimitTitle = "You already have 25 saves for this release. Delete one first.";
 
-    private static readonly AuditActor Alice = new(null, "alice", null);
+    // The signed-in Site user, so the saves the tests add are theirs (S3).
+    private static readonly AuditActor Plain = new(null, "plain", null);
 
     private ApiFactory _factory = null!;
     private AuthClient _user = null!;
@@ -76,7 +77,7 @@ public partial class SaveEndpointsTests
         var path = Path.Combine(_factory.Root, $"upload-{Guid.NewGuid():N}.tmp");
         File.WriteAllBytes(path, bytes);
         var result = await Service<LibraryEditor>().AddSaveAsync(game.Id, await RomId(game.Id, fileName), "state", name, null,
-            new SaveUpload(path, extension, bytes.Length, Convert.ToHexStringLower(SHA1.HashData(bytes))), Alice, default);
+            new SaveUpload(path, extension, bytes.Length, Convert.ToHexStringLower(SHA1.HashData(bytes))), Plain, default);
         Assert.That(result.Code, Is.Null, result.Details);
         return result.Save!;
     }
@@ -116,7 +117,7 @@ public partial class SaveEndpointsTests
         Assert.That(await List(game.Id), Is.Empty);
         var old = await AddSave(game, "Tetris (World).gb", "Old", [1]);
         var orphan = await AddSave(game, "Tetris (Japan).gb", "Orphan", [2, 3]);
-        Assert.That((await Service<LibraryEditor>().DeleteReleaseAsync(game.Id, await RomId(game.Id, "Tetris (Japan).gb"), Alice, default)).Code, Is.Null);
+        Assert.That((await Service<LibraryEditor>().DeleteReleaseAsync(game.Id, await RomId(game.Id, "Tetris (Japan).gb"), Plain, default)).Code, Is.Null);
         var newest = await AddSave(game, "Tetris (World).gb", "Newest", [4]);
 
         var items = await List(game.Id);
@@ -126,7 +127,7 @@ public partial class SaveEndpointsTests
         Assert.That((first.GetProperty("name").GetString(), first.GetProperty("kind").GetString(), first.GetProperty("releaseFileName").GetString(),
                 first.GetProperty("romId").GetInt64(), first.GetProperty("sizeBytes").GetInt64(), first.GetProperty("extension").GetString(),
                 first.GetProperty("uploadedBy").GetString(), first.GetProperty("updatedBy").GetString()),
-            Is.EqualTo(("Newest", "state", "Tetris (World).gb", await RomId(game.Id, "Tetris (World).gb"), 1L, ".state", "alice", "alice")));
+            Is.EqualTo(("Newest", "state", "Tetris (World).gb", await RomId(game.Id, "Tetris (World).gb"), 1L, ".state", "plain", "plain")));
         Assert.That(items[1].GetProperty("romId").ValueKind, Is.EqualTo(JsonValueKind.Null), "the release is gone");
         Assert.That(items[1].GetProperty("releaseFileName").GetString(), Is.EqualTo("Tetris (Japan).gb"));
     }
@@ -285,5 +286,74 @@ public partial class SaveEndpointsTests
 
         Assert.That((patch.StatusCode, delete.StatusCode), Is.EqualTo((HttpStatusCode.BadRequest, HttpStatusCode.BadRequest)));
         Assert.That(SavesEntries(game.Zip), Has.Length.EqualTo(2), "nothing changed");
+    }
+
+    // --- User Management S2/S3: private saves ---
+
+    private async Task<GameSave> AddSaveAs(TestGame game, string username, string name)
+    {
+        var path = Path.Combine(_factory.Root, $"upload-{Guid.NewGuid():N}.tmp");
+        File.WriteAllBytes(path, [5]);
+        var result = await Service<LibraryEditor>().AddSaveAsync(game.Id, await RomId(game.Id, "Tetris (World).gb"), "state", name, null,
+            new SaveUpload(path, ".state", 1, Convert.ToHexStringLower(SHA1.HashData(new byte[] { 5 }))), new AuditActor(null, username, null), default);
+        Assert.That(result.Code, Is.Null, result.Details);
+        return result.Save!;
+    }
+
+    [Test]
+    public async Task List_ASiteUserSeesOnlyTheirOwn_AnAdminSeesAll()
+    {
+        var game = await WriteGame("Tetris", "Tetris (World).gb");
+        var mine = await AddSaveAs(game, "PLAIN", "Mine");
+        var bobs = await AddSaveAs(game, "bob", "Bob's");
+        using var admin = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
+        (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
+
+        Assert.That((await List(game.Id)).Select(i => i.GetProperty("id").GetString()), Is.EqualTo(new[] { mine.Id }));
+        using var all = await admin.GetAsync($"/api/games/{game.Id}/saves");
+        Assert.That((await AuthClient.JsonAsync(all)).GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetString()),
+            Is.EquivalentTo(new[] { mine.Id, bobs.Id }));
+    }
+
+    [Test]
+    public async Task AnotherUsersSave_Is404ForASiteUser_OnEveryRoute_AndUntouched()
+    {
+        var game = await WriteGame("Tetris", "Tetris (World).gb");
+        var bobs = await AddSaveAs(game, "bob", "Bob's");
+        var before = File.ReadAllBytes(game.Zip);
+        var url = $"/api/games/{game.Id}/saves/{bobs.Id}";
+
+        using var download = await _user.GetAsync(url + "/download");
+        using var patch = await _user.PatchAsync(url, new { name = "Mine now" });
+        using var delete = await _user.SendAsync(HttpMethod.Delete, url, null, sendXsrf: true);
+        var file = new MultipartFormDataContent { { new ByteArrayContent([1]), "file", "x.state" } };
+        using var replace = await _user.SendContentAsync(HttpMethod.Put, url + "/file", file);
+
+        foreach (var response in new[] { download, patch, delete, replace })
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound), response.RequestMessage!.Method.ToString());
+            Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo("NotFound"));
+        }
+        Assert.That(File.ReadAllBytes(game.Zip), Is.EqualTo(before));
+    }
+
+    [Test]
+    public async Task AnAdmin_DownloadsEditsAndDeletesAnotherUsersSave()
+    {
+        var game = await WriteGame("Tetris", "Tetris (World).gb");
+        var bobs = await AddSaveAs(game, "bob", "Bob's");
+        using var admin = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
+        (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
+        var url = $"/api/games/{game.Id}/saves/{bobs.Id}";
+
+        using var download = await admin.GetAsync(url + "/download");
+        using var patch = await admin.PatchAsync(url, new { name = "Checked" });
+        var patched = await AuthClient.JsonAsync(patch);
+        using var delete = await admin.SendAsync(HttpMethod.Delete, url, null, sendXsrf: true);
+
+        Assert.That((download.StatusCode, patch.StatusCode, delete.StatusCode), Is.EqualTo((HttpStatusCode.OK, HttpStatusCode.OK, HttpStatusCode.NoContent)));
+        Assert.That((patched.GetProperty("uploadedBy").GetString(), patched.GetProperty("updatedBy").GetString()), Is.EqualTo(("bob", "boss")));
     }
 }
