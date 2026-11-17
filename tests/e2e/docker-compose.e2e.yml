@@ -5,7 +5,14 @@ name: rnrommanager-e2e
 services:
   mariadb:
     image: mariadb:11.4
-    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    # Throwaway data in memory (tmpfs below): skip the durability work too, as the .NET tests' MariaDbServer does.
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-flush-log-at-trx-commit=0
+      - --innodb-doublewrite=0
+      - --sync-binlog=0
+      - --skip-log-bin
     environment:
       MARIADB_DATABASE: rnrommanager
       MARIADB_USER: rnrommanager
