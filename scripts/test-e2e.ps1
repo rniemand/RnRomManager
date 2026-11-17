@@ -76,13 +76,20 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "chmod failed ($LASTEXITCODE)" }
     }
 
-    foreach ($stack in $stacks) {
+    # All stacks start at once (each `up` waits for its MariaDB health check); a started process keeps the
+    # environment it was launched with, so each gets its own port and folders.
+    $ups = foreach ($stack in $stacks) {
         Write-Host "==> Starting e2e stack $($stack.Project) on port $($stack.Port)"
         $env:E2E_PORT = $stack.Port
         $env:E2E_INGEST = $stack.Ingest
         $env:E2E_CACHE = $stack.Cache
-        & docker compose -p $stack.Project -f $composeFile up -d
-        if ($LASTEXITCODE -ne 0) { throw "docker compose up failed ($LASTEXITCODE)" }
+        $p = Start-Process docker -ArgumentList @('compose', '-p', $stack.Project, '-f', "`"$composeFile`"", 'up', '-d') -NoNewWindow -PassThru
+        $null = $p.Handle # keeps ExitCode readable after the process exits
+        $p
+    }
+    foreach ($p in $ups) {
+        $p.WaitForExit()
+        if ($p.ExitCode -ne 0) { throw "docker compose up failed ($($p.ExitCode))" }
     }
     # Back to stack A for the specs (the Nintendo DS test copies into its ingest folder).
     $env:E2E_PORT = $port
