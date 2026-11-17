@@ -57,7 +57,7 @@ public static class PublisherLogoEndpoints
             await logos.UpsertAsync(new PublisherLogo(key!, mediaType!, bytes!, actor.UserId, time.GetUtcNow().UtcDateTime), ctx.RequestAborted);
             audit.Record(new AuditEvent(AuditActions.PublisherLogoReplaced, actor, Details: Details(publisher.Name, key!)));
             return Results.NoContent();
-        }).WithMetadata(new RequestSizeLimitAttribute(RequestLimit));
+        }).RequireAuthorization(AuthSetup.AdminOnly).WithMetadata(new RequestSizeLimitAttribute(RequestLimit));
 
         api.MapDelete(Route, async (string? key, HttpContext ctx, IPublisherLogoRepository logos, IDiscoveryRepository discovery,
             IAuditLog audit) =>
@@ -70,7 +70,7 @@ public static class PublisherLogoEndpoints
                 return Problems.NotFound(ctx);
             audit.Record(new AuditEvent(AuditActions.PublisherLogoRemoved, AuditActor.From(ctx.User), Details: Details(label, key!)));
             return Results.NoContent();
-        });
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         return api;
     }

@@ -44,11 +44,11 @@ public class UserAdminServiceTests
     {
         _users.InsertAsync(Arg.Any<User>(), Arg.Any<CancellationToken>()).Returns(42);
 
-        var result = await _service.CreateAsync("newbie", ["rom-manager", "admin"], NewPassword, CancellationToken.None);
+        var result = await _service.CreateAsync("newbie", ["admin"], NewPassword, CancellationToken.None);
 
         Assert.That(result.Error, Is.EqualTo(UserAdminResult.Failure.None));
         Assert.That(result.User!.Id, Is.EqualTo(42));
-        Assert.That(result.User.Roles, Is.EqualTo(new[] { Roles.Admin, Roles.RomManager }), "sorted");
+        Assert.That(result.User.Roles, Is.EqualTo(new[] { Roles.Admin }));
         Assert.That(result.User.MustChangePassword, Is.True);
         Assert.That(_hasher.VerifyHashedPassword(result.User, result.User.PasswordHash, NewPassword), Is.Not.EqualTo(PasswordVerificationResult.Failed));
     }
@@ -57,6 +57,7 @@ public class UserAdminServiceTests
     [TestCase("newbie", "Admin", NewPassword, "roles")]
     [TestCase("newbie", "admin,admin", NewPassword, "roles")]
     [TestCase("newbie", "root", NewPassword, "roles")]
+    [TestCase("newbie", "rom-manager", NewPassword, "roles")]
     [TestCase("newbie", "", "short", "password")]
     public async Task Create_Invalid_NamesTheField(string? username, string roles, string? password, string field)
     {
@@ -89,9 +90,9 @@ public class UserAdminServiceTests
     [Test]
     public async Task Update_ChangesRolesAndRotatesTheStamp()
     {
-        var result = await _service.UpdateAsync(7, ["rom-manager"], null, CancellationToken.None);
+        var result = await _service.UpdateAsync(7, ["admin"], null, CancellationToken.None);
 
-        Assert.That(result.User!.Roles, Is.EqualTo(new[] { Roles.RomManager }));
+        Assert.That(result.User!.Roles, Is.EqualTo(new[] { Roles.Admin }));
         Assert.That(result.User.SecurityStamp, Is.Not.EqualTo(_plain.SecurityStamp));
         Assert.That(result.User.UpdatedAt, Is.EqualTo(Now.UtcDateTime));
         await _users.Received(1).UpdateUnlessLastAdminAsync(result.User, Arg.Any<CancellationToken>());
@@ -170,10 +171,10 @@ public class UserAdminServiceTests
     public async Task Recover_PromotesWhenNoOtherAdminIsEnabled()
     {
         _users.ListAsync(Arg.Any<CancellationToken>()).Returns([_plain, NewUser(1, "admin", Roles.Of(Roles.Admin), disabled: true),
-            NewUser(2, "manager", Roles.Of(Roles.RomManager))]);
+            NewUser(2, "site", Roles.None)]);
 
         var (user, _) = (await _service.RecoverAsync("plain", CancellationToken.None))!.Value;
 
-        Assert.That(user.Roles, Is.EqualTo(new[] { Roles.Admin, Roles.RomManager }), "a rom-manager isn't an admin");
+        Assert.That(user.Roles, Is.EqualTo(new[] { Roles.Admin }), "a Site user isn't an admin");
     }
 }

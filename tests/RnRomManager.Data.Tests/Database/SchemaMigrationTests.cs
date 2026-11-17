@@ -43,6 +43,7 @@ public class SchemaMigrationTests
             "0010_game_rating", "0011_user_roles", "0012_image_cover", "0013_duplicate_dismissals", "0014_audit_events",
             "0015_app_settings", "0016_user_hotkeys", "0017_collections", "0018_external_roms",
             "0019_release_versions", "0020_rom_files", "0021_publisher_logos", "0022_bundle_queues", "0023_game_save_count",
+            "0024_fold_rom_manager",
         }));
     }
 
@@ -329,6 +330,27 @@ public class SchemaMigrationTests
         Assert.That(await ColumnAsync<long>(cs,
             "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'"),
             Is.EqualTo(new[] { 0L }));
+    }
+
+    [Test]
+    public async Task FoldRomManager_DropsItAndRotatesOnlyTheStampsOfUsersWhoHadIt()
+    {
+        var cs = await MariaDbServer.CreateDatabaseAsync();
+        foreach (var script in MigrationScripts().TakeWhile(s => !s.Name.Contains("0024_", StringComparison.Ordinal)))
+            await ExecuteAsync(cs, script.Sql);
+        foreach (var name in new[] { "both", "manager", "adminonly" })
+            await InsertUserAsync(cs, name);
+        await ExecuteAsync(cs, "INSERT INTO user_roles (user_id, role) " +
+            "SELECT id, 'admin' FROM users WHERE username IN ('both', 'adminonly') UNION ALL " +
+            "SELECT id, 'rom-manager' FROM users WHERE username IN ('both', 'manager')");
+
+        await ExecuteAsync(cs, MigrationScripts().Single(s => s.Name.Contains("0024_", StringComparison.Ordinal)).Sql);
+
+        Assert.That(await ColumnAsync<string>(cs,
+                "SELECT CONCAT(u.username, ' ', r.role) FROM user_roles r JOIN users u ON u.id = r.user_id ORDER BY u.username, r.role"),
+            Is.EqualTo(new[] { "adminonly admin", "both admin" }), "manager becomes a Site user");
+        var stamps = await ColumnAsync<string>(cs, "SELECT CONCAT(username, ' ', security_stamp = REPEAT('a', 32)) FROM users ORDER BY username");
+        Assert.That(stamps, Is.EqualTo(new[] { "adminonly 1", "both 0", "manager 0" }));
     }
 
     [Test]

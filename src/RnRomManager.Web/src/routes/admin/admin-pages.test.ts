@@ -22,7 +22,7 @@ const { default: AboutPage } = await import('./about/+page.svelte');
 const admin = {
 	id: 1,
 	username: 'admin',
-	roles: ['admin', 'rom-manager'],
+	roles: ['admin'],
 	isDisabled: false,
 	lastLoginAt: null
 };
@@ -39,7 +39,7 @@ describe('admin pages', () => {
 		auth.set({
 			id: 1,
 			username: 'admin',
-			roles: ['admin', 'rom-manager'],
+			roles: ['admin'],
 			mustChangePassword: false
 		});
 		calls = [];
@@ -81,7 +81,7 @@ describe('admin pages', () => {
 		);
 		const badges = [...document.querySelectorAll('td label.badge')].map((b) => b.className);
 		expect(badges.every((c) => c.includes('text-bg-primary'))).toBe(true);
-		expect(badges).toHaveLength(2);
+		expect(badges).toHaveLength(1);
 	});
 
 	it('create user validates username and password before sending', async () => {
@@ -101,20 +101,20 @@ describe('admin pages', () => {
 		const password = fakePassword('new');
 		answers['POST /api/users'] = {
 			status: 201,
-			body: { id: 2, username: 'bob', roles: ['rom-manager'], isDisabled: false, lastLoginAt: null }
+			body: { id: 2, username: 'bob', roles: ['admin'], isDisabled: false, lastLoginAt: null }
 		};
 		render(UsersPage);
 		await openCreate();
 
 		await type('Username', 'bob');
 		await type('Initial password', password);
-		await fireEvent.click(screen.getByRole('checkbox', { name: 'rom-manager', hidden: true }));
+		await fireEvent.click(screen.getByRole('checkbox', { name: 'admin', hidden: true }));
 		await submitCreate();
 
 		await vi.waitFor(() => expect(calls.filter((c) => c.key === 'GET /api/users')).toHaveLength(2));
 		expect(calls).toContainEqual({
 			key: 'POST /api/users',
-			body: { username: 'bob', roles: ['rom-manager'], password }
+			body: { username: 'bob', roles: ['admin'], password }
 		});
 		expect(toasts.items.map((t) => t.text)[0]).toMatch(/^bob created/);
 	});
@@ -135,21 +135,12 @@ describe('admin pages', () => {
 			body: {
 				code: 'ValidationFailed',
 				title: 'x',
-				errors: { roles: ['Roles must be any of: admin, rom-manager.'] }
+				errors: { roles: ['Roles must be any of: admin.'] }
 			}
 		};
 		await submitCreate();
-		expect(await screen.findByText('Roles must be any of: admin, rom-manager.')).toBeTruthy();
+		expect(await screen.findByText('Roles must be any of: admin.')).toBeTruthy();
 		expect(calls.filter((c) => c.key === 'GET /api/users')).toHaveLength(1);
-	});
-
-	it('a role checkbox PATCHes the full roles array', async () => {
-		answers['PATCH /api/users/1'] = { status: 200, body: { ...admin, roles: ['admin'] } };
-		render(UsersPage);
-
-		await fireEvent.click(await screen.findByLabelText('rom-manager role of admin'));
-
-		expect(calls).toContainEqual({ key: 'PATCH /api/users/1', body: { roles: ['admin'] } });
 	});
 
 	it('demoting the last admin shows the LastAdmin toast and reloads', async () => {
@@ -157,7 +148,7 @@ describe('admin pages', () => {
 		render(UsersPage);
 
 		await fireEvent.click(await screen.findByLabelText('admin role of admin'));
-		expect(calls).toContainEqual({ key: 'PATCH /api/users/1', body: { roles: ['rom-manager'] } });
+		expect(calls).toContainEqual({ key: 'PATCH /api/users/1', body: { roles: [] } });
 
 		await vi.waitFor(() =>
 			expect(toasts.items.map((t) => t.text)).toContain(

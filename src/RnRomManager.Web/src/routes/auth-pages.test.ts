@@ -82,7 +82,7 @@ describe('login page', () => {
 				body: {
 					id: 1,
 					username: 'boss',
-					roles: ['admin', 'rom-manager'],
+					roles: ['admin'],
 					mustChangePassword: false
 				}
 			}
@@ -109,7 +109,7 @@ describe('login page', () => {
 				body: {
 					id: 1,
 					username: 'admin',
-					roles: ['admin', 'rom-manager'],
+					roles: ['admin'],
 					mustChangePassword: true
 				}
 			}
@@ -133,7 +133,7 @@ describe('change password page', () => {
 		auth.set({
 			id: 1,
 			username: 'boss',
-			roles: ['admin', 'rom-manager'],
+			roles: ['admin'],
 			mustChangePassword: true
 		});
 	});
@@ -192,7 +192,7 @@ describe('change password page', () => {
 				body: {
 					id: 1,
 					username: 'boss',
-					roles: ['admin', 'rom-manager'],
+					roles: ['admin'],
 					mustChangePassword: false
 				}
 			}

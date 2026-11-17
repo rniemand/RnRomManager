@@ -11,9 +11,9 @@ class Auth {
 		return this.me?.roles.includes('admin') ?? false;
 	}
 
-	/** Library edits and image management (`rom-manager`); independent of `admin`. */
+	/** Library edits and image management: admin-only (U3). Removed in favour of `isAdmin` in Step 2. */
 	get canEditLibrary(): boolean {
-		return this.me?.roles.includes('rom-manager') ?? false;
+		return this.isAdmin;
 	}
 
 	/** Loads `me`; a 401 just means signed out. Other errors propagate. */

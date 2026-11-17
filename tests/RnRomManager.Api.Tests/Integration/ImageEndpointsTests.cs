@@ -58,7 +58,7 @@ public class ImageEndpointsTests
         _lockBeforeGameCheck = false;
         await _factory.ResetAsync();
         _manager = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "manager", Roles.Of(Roles.RomManager));
+        await TestUsers.CreateAsync(_factory, "manager", Roles.Of(Roles.Admin));
         (await _manager.LoginAsync("manager", TestUsers.Password)).Dispose();
         var cache = Service<DatCache>();
         FixtureDatWriter.Write(cache.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>

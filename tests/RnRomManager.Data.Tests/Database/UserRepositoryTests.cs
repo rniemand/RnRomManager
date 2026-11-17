@@ -33,7 +33,7 @@ public class UserRepositoryTests
     {
         var user = NewUser() with
         {
-            Roles = Roles.Of(Roles.RomManager, Roles.Admin),
+            Roles = Roles.Of(Roles.Admin),
             IsDisabled = true,
             MustChangePassword = true,
             FailedLoginCount = 3,
@@ -46,7 +46,7 @@ public class UserRepositoryTests
 
         Assert.That(id, Is.GreaterThan(0));
         Assert.That(loaded! with { Roles = user.Roles }, Is.EqualTo(user with { Id = id }));
-        Assert.That(loaded.Roles, Is.EqualTo(new[] { Roles.Admin, Roles.RomManager }));
+        Assert.That(loaded.Roles, Is.EqualTo(new[] { Roles.Admin }));
         Assert.That(loaded!.CreatedAt.Kind, Is.EqualTo(DateTimeKind.Utc));
     }
 
@@ -120,11 +120,11 @@ public class UserRepositoryTests
 
         await _repository.UpdateAsync(changed, CancellationToken.None);
         var loaded = (await _repository.GetByIdAsync(id, CancellationToken.None))!;
-        await _repository.UpdateAsync(changed with { Roles = Roles.Of(Roles.RomManager) }, CancellationToken.None);
+        await _repository.UpdateAsync(changed with { Roles = Roles.None }, CancellationToken.None);
 
         Assert.That(loaded with { Roles = changed.Roles }, Is.EqualTo(changed));
         Assert.That(loaded.Roles, Is.EqualTo(new[] { Roles.Admin }));
-        Assert.That((await _repository.ListAsync(CancellationToken.None)).Single().Roles, Is.EqualTo(new[] { Roles.RomManager }), "roles are replaced");
+        Assert.That((await _repository.ListAsync(CancellationToken.None)).Single().Roles, Is.Empty, "roles are replaced");
     }
 
     [Test]
@@ -167,7 +167,7 @@ public class UserRepositoryTests
         two = two with { Id = await _repository.InsertAsync(two, CancellationToken.None) };
 
         Assert.That(await _repository.UpdateUnlessLastAdminAsync(one with { IsDisabled = true }, CancellationToken.None), Is.True);
-        Assert.That(await _repository.UpdateUnlessLastAdminAsync(two with { Roles = Roles.Of(Roles.RomManager) }, CancellationToken.None), Is.False);
+        Assert.That(await _repository.UpdateUnlessLastAdminAsync(two with { Roles = Roles.None }, CancellationToken.None), Is.False);
         Assert.That(await _repository.UpdateUnlessLastAdminAsync(two with { IsDisabled = true }, CancellationToken.None), Is.False);
         Assert.That(await _repository.UpdateUnlessLastAdminAsync(two with { PasswordHash = "changed" }, CancellationToken.None), Is.True);
 
@@ -184,8 +184,8 @@ public class UserRepositoryTests
         two = two with { Id = await _repository.InsertAsync(two, CancellationToken.None) };
 
         var results = await Task.WhenAll(
-            _repository.UpdateUnlessLastAdminAsync(one with { Roles = Roles.Of(Roles.RomManager) }, CancellationToken.None),
-            _repository.UpdateUnlessLastAdminAsync(two with { Roles = Roles.Of(Roles.RomManager) }, CancellationToken.None));
+            _repository.UpdateUnlessLastAdminAsync(one with { Roles = Roles.None }, CancellationToken.None),
+            _repository.UpdateUnlessLastAdminAsync(two with { Roles = Roles.None }, CancellationToken.None));
 
         Assert.That(results.Count(r => r), Is.EqualTo(1));
         Assert.That((await _repository.ListAsync(CancellationToken.None)).Count(u => u.Roles.Contains(Roles.Admin)), Is.EqualTo(1));

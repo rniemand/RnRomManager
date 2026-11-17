@@ -79,7 +79,7 @@ describe('game images', () => {
 	beforeEach(() => {
 		resetClient();
 		toasts.items = [];
-		auth.set({ id: 1, username: 'm', roles: ['rom-manager'], mustChangePassword: false });
+		auth.set({ id: 1, username: 'm', roles: ['admin'], mustChangePassword: false });
 		calls = [];
 		answers = {};
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {

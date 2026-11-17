@@ -38,15 +38,15 @@ public class AuthTests
         TestUsers.CreateAsync(_factory, username, mustChangePassword: mustChangePassword);
 
     [Test]
-    public async Task Me_ListsTheRolesSorted()
+    public async Task Me_ListsTheRoles()
     {
-        await TestUsers.CreateAsync(_factory, "richard", Roles.Of(Roles.RomManager, Roles.Admin));
+        await TestUsers.CreateAsync(_factory, "richard", Roles.Of(Roles.Admin));
         (await _client.LoginAsync("richard", Password)).Dispose();
 
         using var me = await _client.GetAsync("/api/auth/me");
         var body = await AuthClient.JsonAsync(me);
 
-        Assert.That(body.GetProperty("roles").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "admin", "rom-manager" }));
+        Assert.That(body.GetProperty("roles").EnumerateArray().Select(r => r.GetString()), Is.EqualTo(new[] { "admin" }));
     }
 
     [Test]

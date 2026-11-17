@@ -1,10 +1,10 @@
 import type { Bindings, EditableHotkeyId } from '../hotkeys';
 
-/** A user role; a user has any subset (sorted in API responses). */
-export type Role = 'admin' | 'rom-manager';
+/** A user role: an Admin has `admin`, a Site user none. */
+export type Role = 'admin';
 
 /** Every role, in display order. */
-export const roles: readonly Role[] = ['admin', 'rom-manager'];
+export const roles: readonly Role[] = ['admin'];
 
 /** `GET /api/auth/me` (spec §23). */
 export interface Me {

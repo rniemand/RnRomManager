@@ -33,7 +33,7 @@ describe('Navbar', () => {
 
 	it('ROM Tools is a plain link to Ingestion for admins, with no dropdown', () => {
 		render(Navbar, {
-			me: { id: 1, username: 'boss', roles: ['admin', 'rom-manager'], mustChangePassword: false },
+			me: { id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false },
 			reviewCount: null,
 			onlogout: () => {}
 		});

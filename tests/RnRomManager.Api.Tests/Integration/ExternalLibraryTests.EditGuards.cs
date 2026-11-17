@@ -100,12 +100,19 @@ public partial class ExternalLibraryTests
     }
 
     [Test]
-    public async Task PlainUser_CanRateAndNote_AnExternalGameWithAMissingFile()
+    public async Task Admin_CanRateAndNote_AnExternalGameWithAMissingFile_ASiteUserCannot()
     {
         var gameId = await FirstReleaseAsync();
         File.Delete(Sidecar);
+        using var site = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "site-user");
+        (await site.LoginAsync("site-user", TestUsers.Password)).Dispose();
+        using (var forbidden = await site.PatchAsync($"/api/games/{gameId}/rating", new { rating = 4 }))
+            Assert.That(forbidden.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+        using (var forbidden = await site.SendAsync(HttpMethod.Put, $"/api/games/{gameId}/roms/{await RomIdAsync(gameId)}/note", new { text = "x" }, true))
+            Assert.That(forbidden.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
         using var client = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "someone", Roles.Of());
+        await TestUsers.CreateAsync(_factory, "someone", Roles.Of(Roles.Admin));
         (await client.LoginAsync("someone", TestUsers.Password)).Dispose();
 
         using (var rated = await client.PatchAsync($"/api/games/{gameId}/rating", new { rating = 4, favourite = true }))

@@ -86,8 +86,8 @@ public partial class ResetPasswordCommandTests
 
         Assert.That(await RunAsync("plain"), Is.EqualTo(0), _stderr.ToString());
 
-        Assert.That((await Users.GetByIdAsync(plain.Id, CancellationToken.None))!.Roles, Is.EquivalentTo(new[] { Roles.Admin, Roles.RomManager }));
-        Assert.That(_stdout.ToString(), Does.Contain("roles admin, rom-manager"));
+        Assert.That((await Users.GetByIdAsync(plain.Id, CancellationToken.None))!.Roles, Is.EquivalentTo(new[] { Roles.Admin }));
+        Assert.That(_stdout.ToString(), Does.Contain("roles admin)"));
     }
 
     [Test]

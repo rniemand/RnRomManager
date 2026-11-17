@@ -103,7 +103,7 @@ public static partial class ReportEndpoints
             await repository.DismissDuplicateAsync(request.System!, request.BaseTitle!, request.GamesKey!, DatEndpoints.UserId(ctx.User),
                 time.GetUtcNow().UtcDateTime, ctx.RequestAborted);
             return Results.NoContent();
-        }).RequireAuthorization(AuthSetup.LibraryEditor);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         reports.MapPost("/duplicates/merge", async (MergeDuplicatesRequest request, HttpContext ctx, LibraryEditor editor) =>
         {
@@ -136,7 +136,7 @@ public static partial class ReportEndpoints
                 return LibraryEndpoints.ToProblem(ctx, result, new Dictionary<string, object?> { ["merged"] = merged });
             }
             return Results.Ok(new { targetGameId = request.TargetGameId });
-        }).RequireAuthorization(AuthSetup.LibraryEditor);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         return api;
     }
