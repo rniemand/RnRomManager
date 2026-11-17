@@ -29,6 +29,26 @@ public class UserRepositoryTests
     };
 
     [Test]
+    public async Task RotateAllSecurityStamps_GivesEveryUserANewDistinct32HexStamp()
+    {
+        var names = new[] { "a", "b", "c" };
+        foreach (var name in names)
+            await _repository.InsertAsync(NewUser(name), CancellationToken.None);
+        var before = new List<string>();
+        foreach (var name in names)
+            before.Add((await _repository.GetByUsernameAsync(name, CancellationToken.None))!.SecurityStamp);
+
+        await _repository.RotateAllSecurityStampsAsync(CancellationToken.None);
+
+        var after = new List<string>();
+        foreach (var name in names)
+            after.Add((await _repository.GetByUsernameAsync(name, CancellationToken.None))!.SecurityStamp);
+        Assert.That(after, Is.Unique);
+        Assert.That(after.Zip(before).All(p => p.First != p.Second), Is.True);
+        Assert.That(after.All(s => System.Text.RegularExpressions.Regex.IsMatch(s, "^[0-9a-f]{32}$")), Is.True, "32 lowercase hex");
+    }
+
+    [Test]
     public async Task Insert_ThenGet_RoundTripsEveryField()
     {
         var user = NewUser() with

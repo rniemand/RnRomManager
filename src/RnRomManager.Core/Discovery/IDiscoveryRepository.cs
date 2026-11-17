@@ -32,4 +32,7 @@ public interface IDiscoveryRepository
     /// the group doesn't exist. Games deleted since the index was computed are left out of their page.
     /// </summary>
     Task<Page<GameListItem>?> ListGamesAsync(DiscoveryKind kind, string key, int page, int pageSize, CancellationToken cancellationToken);
+
+    /// <summary>B27.6: forgets every cached index and any in-flight build, so the next read builds from the database.</summary>
+    void Invalidate();
 }

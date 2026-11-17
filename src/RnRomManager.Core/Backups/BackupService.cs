@@ -88,7 +88,8 @@ public sealed class BackupService(
             .ToList();
     }
 
-    private async Task<BackupFile> RunAsync(int retention, CancellationToken cancellationToken)
+    /// <param name="keep">B27.5: a backup that is neither deleted nor counted by this run's retention (the one being restored).</param>
+    private async Task<BackupFile> RunAsync(int retention, CancellationToken cancellationToken, string? keep = null)
     {
         var startedAt = time.GetUtcNow();
         var backupId = Guid.NewGuid();
@@ -115,7 +116,7 @@ public sealed class BackupService(
             _lastResult = new BackupResult(time.GetUtcNow(), true, name, null);
             logger.LogInformation("Backup {FileName} written: {Bytes} bytes, {Tables} tables, {Rows} rows, id {BackupId}",
                 name, file.SizeBytes, manifest.Tables.Count, manifest.Tables.Sum(t => t.Rows), backupId);
-            ApplyRetention(retention);
+            ApplyRetention(retention, keep);
             return file;
         }
         catch (Exception ex)
@@ -158,14 +159,15 @@ public sealed class BackupService(
 
     /// <summary>
     /// B14: deletes the oldest backups beyond <paramref name="retention"/>. A backup with a <c>.restored</c> marker or
-    /// named by <c>Backup:RestoreFrom</c> is never deleted and doesn't count. Failures are logged, not thrown: the new
-    /// backup is already safe.
+    /// named by <c>Backup:RestoreFrom</c> or <paramref name="keep"/> is never deleted and doesn't count. Failures are
+    /// logged, not thrown: the new backup is already safe.
     /// </summary>
-    private void ApplyRetention(int retention)
+    internal void ApplyRetention(int retention, string? keep = null)
     {
         var restoreFrom = options.Value.RestoreFrom?.Trim();
         var counted = List()
             .Where(b => !string.Equals(b.FileName, restoreFrom, StringComparison.Ordinal))
+            .Where(b => !string.Equals(b.FileName, keep, StringComparison.Ordinal))
             .Where(b => !File.Exists(Path.Combine(Folder, BackupNames.MarkerFor(b.FileName))));
         foreach (var old in counted.Skip(retention))
         {

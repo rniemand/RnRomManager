@@ -125,6 +125,17 @@ public class BackupServiceTests
     }
 
     [Test]
+    public void Retention_NeverDeletesTheKeptBackup_WhichDoesntCount()
+    {
+        ExistingBackups(4);
+        var oldest = BackupNames.For(T0.AddDays(-4));
+
+        _service.ApplyRetention(2, keep: oldest);
+
+        Assert.That(Files(), Is.EqualTo(new[] { oldest, BackupNames.For(T0.AddDays(-2)), BackupNames.For(T0.AddDays(-1)) }));
+    }
+
+    [Test]
     public async Task Retention_IgnoresFilesNotNamedLikeABackup()
     {
         ExistingBackups(2);

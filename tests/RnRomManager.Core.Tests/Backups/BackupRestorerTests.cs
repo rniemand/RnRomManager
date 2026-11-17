@@ -40,9 +40,15 @@ public class BackupRestorerTests
     [TearDown]
     public void TearDown() => _dir.Dispose();
 
-    private void WriteBackup(int formatVersion = 1, params string[] migrations)
+    private void WriteBackup(int formatVersion = 1, params string[] migrations) => WriteBackup(formatVersion, null, migrations);
+
+    /// <summary>A backup with its manifest, schema and the users data entry, less <paramref name="omit"/>.</summary>
+    private void WriteBackup(int formatVersion, string? omit, params string[] migrations)
     {
         using var zip = ZipFile.Open(Path.Combine(Folder, Name), ZipArchiveMode.Create);
+        foreach (var entry in new[] { BackupManifest.SchemaFileName, BackupManifest.DataEntry("users") }.Where(e => e != omit))
+            using (var content = new StreamWriter(zip.CreateEntry(entry).Open()))
+                content.Write("x");
         using var writer = new StreamWriter(zip.CreateEntry("manifest.json").Open());
         writer.Write(JsonSerializer.Serialize(new
         {
@@ -139,6 +145,88 @@ public class BackupRestorerTests
         var ex = await Assert.ThrowsAsync<BackupRestoreException>(() => _restorer.RestoreIfConfiguredAsync(default));
 
         Assert.That(ex!.Message, Is.EqualTo("The backup has no manifest.json."));
+    }
+
+    [TestCase("schema.sql")]
+    [TestCase("data/users.jsonl")]
+    public async Task MissingSchemaOrDataEntry_ThrowsBeforeDroppingAnything(string entry)
+    {
+        WriteBackup(1, entry);
+
+        var ex = await Assert.ThrowsAsync<BackupRestoreException>(() => _restorer.RestoreIfConfiguredAsync(default));
+
+        Assert.That(ex!.Message, Is.EqualTo($"The backup has no {entry}."));
+        await _store.DidNotReceiveWithAnyArgs().RestoreAsync(default!, default!, default);
+    }
+
+    [TestCase("rnrommanager-20261106-033000.zip", true)]
+    [TestCase("rnrommanager-20261106-033000 (2).zip", true)]
+    [TestCase("../x.zip", false)]
+    [TestCase("a/b.zip", false)]
+    [TestCase(@"a\b.zip", false)]
+    [TestCase("..", false)]
+    [TestCase("/abs.zip", false)]
+    public void IsBareName_IsRule1(string name, bool bare)
+    {
+        Assert.That(BackupCheck.IsBareName(name), Is.EqualTo(bare));
+    }
+
+    private BackupInspection Inspect()
+    {
+        using var stream = File.OpenRead(Path.Combine(Folder, Name));
+        var inspection = BackupCheck.Open(stream, Name, _store.KnownMigrations);
+        inspection.Zip?.Dispose();
+        return inspection;
+    }
+
+    [Test]
+    public void Check_ValidBackup_ReturnsTheOpenZipAndManifest()
+    {
+        WriteBackup();
+
+        var inspection = Inspect();
+
+        Assert.That((inspection.Failure, inspection.Message, inspection.Zip is null), Is.EqualTo(((BackupCheckFailure?)null, (string?)null, false)));
+        Assert.That(inspection.Manifest!.Tables, Is.EqualTo(new[] { new BackupTable("users", 2) }));
+    }
+
+    [Test]
+    public void Check_TooNew_IsTooNew()
+    {
+        WriteBackup(1, Known, "RnRomManager.Data.Migrations.0099_future.sql");
+        Assert.That(Inspect().Failure, Is.EqualTo(BackupCheckFailure.TooNew));
+
+        WriteBackupFresh(2);
+        Assert.That(Inspect().Failure, Is.EqualTo(BackupCheckFailure.TooNew));
+    }
+
+    private void WriteBackupFresh(int formatVersion)
+    {
+        File.Delete(Path.Combine(Folder, Name));
+        WriteBackup(formatVersion);
+    }
+
+    [Test]
+    public void Check_NotAZip_NoManifest_BadManifest_OrMissingEntry_IsInvalid()
+    {
+        File.WriteAllText(Path.Combine(Folder, Name), "not a zip");
+        var notZip = Inspect();
+        Assert.That((notZip.Failure, notZip.Zip), Is.EqualTo(((BackupCheckFailure?)BackupCheckFailure.Invalid, (ZipArchive?)null)));
+        Assert.That(notZip.Message, Does.StartWith($"Backup {Name} isn't a readable ZIP"));
+
+        File.Delete(Path.Combine(Folder, Name));
+        using (ZipFile.Open(Path.Combine(Folder, Name), ZipArchiveMode.Create)) { }
+        Assert.That((Inspect().Failure, Inspect().Message), Is.EqualTo(((BackupCheckFailure?)BackupCheckFailure.Invalid, "The backup has no manifest.json.")));
+
+        File.Delete(Path.Combine(Folder, Name));
+        using (var zip = ZipFile.Open(Path.Combine(Folder, Name), ZipArchiveMode.Create))
+        using (var writer = new StreamWriter(zip.CreateEntry("manifest.json").Open()))
+            writer.Write("{ not json");
+        Assert.That(Inspect().Failure, Is.EqualTo(BackupCheckFailure.Invalid));
+
+        File.Delete(Path.Combine(Folder, Name));
+        WriteBackup(1, "schema.sql");
+        Assert.That((Inspect().Failure, Inspect().Message), Is.EqualTo(((BackupCheckFailure?)BackupCheckFailure.Invalid, "The backup has no schema.sql.")));
     }
 
     [Test]

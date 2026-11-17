@@ -55,6 +55,13 @@ public sealed class DiscoveryRepository(IDbConnectionFactory connections, IGameR
         return new Page<GameListItem>(items, page, pageSize, group.GameIds.Length);
     }
 
+    public void Invalidate()
+    {
+        // A build already running finishes for its own waiters, but its result is no longer kept for anyone else.
+        lock (_lock)
+            _indexes.Clear();
+    }
+
     /// <summary>The kind's index: the cached one while fresh, else one shared rebuild (a failed build isn't kept).</summary>
     private Task<Index> IndexAsync(DiscoveryKind kind, CancellationToken cancellationToken)
     {
