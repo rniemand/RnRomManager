@@ -12,6 +12,7 @@ using RnRomManager.Core.Audit;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Library;
+using RnRomManager.Core.Systems;
 using RnRomManager.Data.Repositories;
 using RnRomManager.Core.Users;
 using RnRomManager.TestData;
@@ -19,9 +20,9 @@ using static RnRomManager.TestData.TestLibrary;
 
 namespace RnRomManager.Api.Tests.Integration;
 
-/// <summary>Collections discovery B5–B6: <c>/api/discovery/publishers/logo</c> against MariaDB, with two admins (writes are admin-only, U3).</summary>
+/// <summary>Collections discovery B5–B6, B13–B15: <c>/api/discovery/{kind}/logo</c> against MariaDB, with two admins (writes are admin-only, U3).</summary>
 [Category("Integration")]
-public class PublisherLogoEndpointsTests
+public class DiscoveryLogoEndpointsTests
 {
     // The discovery index's own clock: moved past its lifetime before each test and after library changes.
     private readonly FakeTimeProvider _indexClock = new();
@@ -77,9 +78,9 @@ public class PublisherLogoEndpointsTests
         return client;
     }
 
-    private async Task<Guid> AddGameAsync(string title, string[] publishers)
+    private async Task<Guid> AddGameAsync(string title, string[] publishers, string[]? genres = null)
     {
-        var game = Game(title, Rom($"{title}.gb", RomBytes(++_seed))) with { Publishers = publishers };
+        var game = Game(title, Rom($"{title}.gb", RomBytes(++_seed))) with { Publishers = publishers, Genres = genres ?? [] };
         await _factory.Services.GetRequiredService<ILibraryMirror>()
             .ReplaceAsync(new MirrorEntry(game, $"gb/{title[0]}/{title}.zip", 100, When.UtcDateTime), default);
         return game.GameId;
@@ -140,9 +141,17 @@ public class PublisherLogoEndpointsTests
         await using var db = _factory.Services.GetRequiredService<IDbConnectionFactory>().Create();
         return (await db.QueryAsync<AuditRow>("""
             SELECT action AS Action, username AS Username, details AS Details FROM audit_events
-            WHERE action LIKE 'PublisherLogo%' ORDER BY id
+            WHERE action LIKE '%Logo%' ORDER BY id
             """)).AsList();
     }
+
+    private async Task<List<string?>> AuditSystemIdsAsync()
+    {
+        await using var db = _factory.Services.GetRequiredService<IDbConnectionFactory>().Create();
+        return (await db.QueryAsync<string?>("SELECT system_id FROM audit_events WHERE action LIKE '%Logo%' ORDER BY id")).AsList();
+    }
+
+    private string SystemName(string id) => _factory.Services.GetRequiredService<ISystemRegistry>().ById(id)!.DisplayName;
 
     [Test]
     public async Task Put_Serve_ReplaceByAnotherUser_AndRemove()
@@ -164,7 +173,7 @@ public class PublisherLogoEndpointsTests
         }
 
         var jpeg = Jpeg(64, 64);
-        Assert.That(await StatusAsync(PutAsync(_bob, Nintendo, jpeg)), Is.EqualTo(HttpStatusCode.NoContent), "shared: any user replaces it");
+        Assert.That(await StatusAsync(PutAsync(_bob, Nintendo, jpeg)), Is.EqualTo(HttpStatusCode.NoContent), "shared: another Admin replaces it");
         var secondUrl = (await PublisherAsync(_alice, Nintendo)).GetProperty("logoUrl").GetString();
         Assert.That(secondUrl, Is.Not.EqualTo(firstUrl), "a new version in the URL");
         using (var served = await _alice.GetAsync(Url(Nintendo)))
@@ -227,11 +236,103 @@ public class PublisherLogoEndpointsTests
         Assert.That(await AuditRowsAsync(), Is.Empty);
     }
 
-    [Test]
-    public async Task GenreGroups_HaveNoLogoUrl()
+    [TestCase("genres")]
+    [TestCase("systems")]
+    public async Task OtherKinds_RoundTrip_AndAreAuditedWithTheirName(string kind)
     {
-        using var response = await _alice.GetAsync("/api/discovery/genres");
-        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("items").EnumerateArray().All(i => !i.TryGetProperty("logoUrl", out _)));
+        await AddGameAsync("Tetris", ["Nintendo"], ["Puzzle"]);
+        ExpireIndex();
+        var key = kind == "genres" ? Key("puzzle") : "gb";
+        var url = $"/api/discovery/{kind}/logo?key={key}";
+        var png = Png(30, 30);
+
+        Assert.That(await StatusAsync(_alice.SendContentAsync(HttpMethod.Put, url, Form(("file", png)))), Is.EqualTo(HttpStatusCode.NoContent));
+        using (var served = await _bob.GetAsync(url))
+            Assert.That(await served.Content.ReadAsByteArrayAsync(), Is.EqualTo(png));
+        Assert.That(await StatusAsync(_alice.GetAsync(kind == "genres" ? Url(key) : Url(DiscoveryKey.ForSystem(key)))), Is.EqualTo(HttpStatusCode.NotFound),
+            "the publishers kind holds its own logos");
+        Assert.That(await StatusAsync(_alice.SendAsync(HttpMethod.Delete, url, null, sendXsrf: true)), Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(await StatusAsync(_alice.GetAsync(url)), Is.EqualTo(HttpStatusCode.NotFound));
+
+        var (replaced, removed, details, systemId) = kind == "genres"
+            ? (AuditActions.GenreLogoReplaced, AuditActions.GenreLogoRemoved, $"Puzzle (key {key})", (string?)null)
+            : (AuditActions.SystemLogoReplaced, AuditActions.SystemLogoRemoved, $"{SystemName("gb")} (system gb)", "gb");
+        Assert.That(await AuditRowsAsync(), Is.EqualTo(new[]
+        {
+            new AuditRow(replaced, "alice", details),
+            new AuditRow(removed, "alice", details),
+        }));
+        Assert.That(await AuditSystemIdsAsync(), Is.EqualTo(new[] { systemId, systemId }));
+    }
+
+    [Test]
+    public async Task GenreLogo_OutlivesTheGenre_AndIsAuditedByKey()
+    {
+        await AddGameAsync("Tetris", ["Nintendo"], ["Puzzle"]);
+        ExpireIndex();
+        var url = $"/api/discovery/genres/logo?key={Key("puzzle")}";
+        await StatusAsync(_alice.SendContentAsync(HttpMethod.Put, url, Form(("file", Png(5, 5)))));
+        await AddGameAsync("Tetris", ["Nintendo"]);
+        ExpireIndex();
+
+        Assert.That(await StatusAsync(_alice.GetAsync(url)), Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await StatusAsync(_alice.SendContentAsync(HttpMethod.Put, url, Form(("file", Png(5, 5))))), Is.EqualTo(HttpStatusCode.NotFound));
+        Assert.That(await StatusAsync(_alice.SendAsync(HttpMethod.Delete, url, null, sendXsrf: true)), Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That((await AuditRowsAsync()).Last(), Is.EqualTo(new AuditRow(AuditActions.GenreLogoRemoved, "alice", $"key {Key("puzzle")}")));
+    }
+
+    [Test]
+    public async Task UnregisteredSystem_Is404OnPut_AndRemovalIsAuditedById()
+    {
+        const string url = "/api/discovery/systems/logo?key=zx81";
+        Assert.That(await StatusAsync(_alice.SendContentAsync(HttpMethod.Put, url, Form(("file", Png(5, 5))))), Is.EqualTo(HttpStatusCode.NotFound));
+
+        // A logo stored while the system was registered (B14: GET and DELETE work for any stored key).
+        await _factory.Services.GetRequiredService<IDiscoveryLogoRepository>().UpsertAsync(
+            new DiscoveryLogo(LogoKind.Systems, DiscoveryKey.ForSystem("zx81"), "image/png", Png(5, 5), null, When.UtcDateTime), default);
+        Assert.That(await StatusAsync(_alice.GetAsync(url)), Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await StatusAsync(_alice.SendAsync(HttpMethod.Delete, url, null, sendXsrf: true)), Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(await AuditRowsAsync(), Is.EqualTo(new[] { new AuditRow(AuditActions.SystemLogoRemoved, "alice", "system zx81") }));
+    }
+
+    [TestCase("developers")]
+    [TestCase("Publishers")]
+    [TestCase("system")]
+    public async Task UnknownKind_Is404(string kind)
+    {
+        var url = $"/api/discovery/{kind}/logo?key={Nintendo}";
+        Assert.That(await StatusAsync(_alice.GetAsync(url)), Is.EqualTo(HttpStatusCode.NotFound));
+        Assert.That(await StatusAsync(_alice.SendContentAsync(HttpMethod.Put, url, Form(("file", Png(1, 1))))), Is.EqualTo(HttpStatusCode.NotFound));
+        Assert.That(await StatusAsync(_alice.SendAsync(HttpMethod.Delete, url, null, sendXsrf: true)), Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [TestCase("genres", "")]
+    [TestCase("genres", "?key=puzzle")]
+    [TestCase("systems", "")]
+    [TestCase("systems", "?key=")]
+    [TestCase("systems", "?key=GB")]
+    [TestCase("systems", "?key=g-b")]
+    [TestCase("systems", "?key=abcdefghijklmnopqrstuvwxyz0123456")]
+    public async Task InvalidKeyForKind_Is400(string kind, string query)
+    {
+        var url = $"/api/discovery/{kind}/logo{query}";
+        foreach (var request in new[]
+        {
+            _alice.GetAsync(url),
+            _alice.SendContentAsync(HttpMethod.Put, url, Form(("file", Png(1, 1)))),
+            _alice.SendAsync(HttpMethod.Delete, url, null, sendXsrf: true),
+        })
+        {
+            using var response = await request;
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").TryGetProperty("key", out _), Is.True);
+        }
+    }
+
+    [Test]
+    public async Task SystemKey_Of32Characters_IsWellFormed()
+    {
+        Assert.That(await StatusAsync(_alice.GetAsync($"/api/discovery/systems/logo?key={new string('a', 32)}")), Is.EqualTo(HttpStatusCode.NotFound));
     }
 
     [TestCase("")]
@@ -257,7 +358,7 @@ public class PublisherLogoEndpointsTests
         yield return new TestCaseData((Func<HttpContent>)(() => Form(("file", []))), "Choose an image file.").SetName("Empty file");
         yield return new TestCaseData((Func<HttpContent>)(() => Form(("file", "<svg/>"u8.ToArray()))), "The logo must be a PNG or JPEG image.")
             .SetName("Not a PNG or JPEG");
-        yield return new TestCaseData((Func<HttpContent>)(() => Form(("file", Png(10, 10, PublisherLogoEndpoints.MaxBytes + 1)))),
+        yield return new TestCaseData((Func<HttpContent>)(() => Form(("file", Png(10, 10, DiscoveryLogoEndpoints.MaxBytes + 1)))),
             "The logo must be at most 512 KiB.").SetName("Over 512 KiB within the request limit");
         yield return new TestCaseData((Func<HttpContent>)(() => Form(("file", Png(2049, 10)))), "The logo must be at most 2048 pixels wide and high.")
             .SetName("Too wide");
@@ -284,14 +385,14 @@ public class PublisherLogoEndpointsTests
     [Test]
     public async Task MaximumLogo_IsAccepted()
     {
-        Assert.That(await StatusAsync(PutAsync(_alice, Nintendo, Png(2048, 2048, PublisherLogoEndpoints.MaxBytes))), Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(await StatusAsync(PutAsync(_alice, Nintendo, Png(2048, 2048, DiscoveryLogoEndpoints.MaxBytes))), Is.EqualTo(HttpStatusCode.NoContent));
     }
 
     [TestCase(false, TestName = "Oversized with Content-Length → 413")]
     [TestCase(true, TestName = "Oversized chunked → 413")]
     public async Task OversizedRequest_Is413(bool chunked)
     {
-        HttpContent form = Form(("file", Png(10, 10, PublisherLogoEndpoints.RequestLimit + 1)));
+        HttpContent form = Form(("file", Png(10, 10, DiscoveryLogoEndpoints.RequestLimit + 1)));
         if (chunked)
             form = new UnknownLengthContent(form);
 

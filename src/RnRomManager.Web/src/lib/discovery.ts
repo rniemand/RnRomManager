@@ -207,7 +207,7 @@ export function logoFileError(file: File | null | undefined): string | null {
 
 const logoUrl = (key: string) => `/api/discovery/publishers/logo?key=${encodeURIComponent(key)}`;
 
-/** B5: the shared logo override any signed-in user may replace or remove. */
+/** B5: the shared logo override; only Admins may replace or remove it. */
 export const publisherLogoApi = {
 	replace: (key: string, file: File) => {
 		const form = new FormData();

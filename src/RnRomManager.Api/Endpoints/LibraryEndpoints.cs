@@ -6,6 +6,7 @@ using RnRomManager.Api.Http;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Collections;
 using RnRomManager.Core.Database;
+using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
@@ -34,12 +35,18 @@ public static class LibraryEndpoints
 
     public static RouteGroupBuilder MapLibraryEndpoints(this RouteGroupBuilder api)
     {
-        api.MapGet("/systems", async (HttpContext ctx, ISystemRegistry systems, IGameRepository games) =>
+        api.MapGet("/systems", async (HttpContext ctx, ISystemRegistry systems, IGameRepository games, IDiscoveryLogoRepository logos) =>
         {
             var stats = (await games.ListSystemStatsAsync(ctx.RequestAborted)).ToDictionary(s => s.SystemId);
-            return Results.Ok(systems.All.OrderBy(h => h.DisplayName, StringComparer.OrdinalIgnoreCase).Select(handler => stats.TryGetValue(handler.Id, out var s)
-                ? new { id = handler.Id, displayName = handler.DisplayName, shortName = handler.ShortName, embedRoms = handler.EmbedRomsInZip, gameCount = s.GameCount, romCount = s.RomCount, regions = s.Regions }
-                : new { id = handler.Id, displayName = handler.DisplayName, shortName = handler.ShortName, embedRoms = handler.EmbedRomsInZip, gameCount = 0, romCount = 0, regions = (IReadOnlyList<string>)[] }));
+            // B15: the shared logo's URL, keyed by the system id; stored under its digest.
+            var updated = await logos.ListUpdatedAtAsync(LogoKind.Systems, systems.All.Select(h => DiscoveryKey.ForSystem(h.Id)).ToList(), ctx.RequestAborted);
+            return Results.Ok(systems.All.OrderBy(h => h.DisplayName, StringComparer.OrdinalIgnoreCase).Select(handler =>
+            {
+                var logoUrl = updated.TryGetValue(DiscoveryKey.ForSystem(handler.Id), out var at) ? DiscoveryLogoEndpoints.LogoUrl(LogoKind.Systems, handler.Id, at) : null;
+                return stats.TryGetValue(handler.Id, out var s)
+                    ? new { id = handler.Id, displayName = handler.DisplayName, shortName = handler.ShortName, embedRoms = handler.EmbedRomsInZip, gameCount = s.GameCount, romCount = s.RomCount, regions = s.Regions, logoUrl }
+                    : new { id = handler.Id, displayName = handler.DisplayName, shortName = handler.ShortName, embedRoms = handler.EmbedRomsInZip, gameCount = 0, romCount = 0, regions = (IReadOnlyList<string>)[], logoUrl };
+            }));
         });
 
         var games = api.MapGroup("/games");
