@@ -4,6 +4,8 @@
     End-to-end tests (spec §15.3): builds the image for the local arch, seeds Basic into temp ingest/cache dirs, starts
     tests/e2e/docker-compose.e2e.yml, waits for /health/ready, runs Playwright, and always tears down. The specs run on
     two stacks at once (ports E2E_PORT and E2E_PORT + 1), split by tag (see tests/e2e/specs/mvp.spec.ts).
+.PARAMETER Shard
+    All (default) runs both halves on two stacks; A or B runs one half on one stack (CI runs each in its own job).
 .PARAMETER SkipBuild
     Use the existing niemandr/rnrommanager:e2e image.
 .PARAMETER Headed
@@ -12,7 +14,8 @@
     Regenerate the README screenshots with the screenshot project.
 #>
 [CmdletBinding()]
-param([switch]$SkipBuild, [switch]$Headed, [switch]$Screenshots)
+param([ValidateSet('All', 'A', 'B')][string]$Shard = 'All', [switch]$SkipBuild, [switch]$Headed, [switch]$Screenshots)
+$twoStacks = $Shard -eq 'All' -and -not $Screenshots
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $e2eRoot = Join-Path $repoRoot 'tests/e2e'
@@ -37,9 +40,9 @@ $env:E2E_PORT = $port
 $env:E2E_DB_PASSWORD = New-Secret
 $env:E2E_ADMIN_PASSWORD = New-Secret
 $env:E2E_BASE_URL = "http://localhost:$port"
-# Stack A runs the screenshots or the untagged and @both specs; stack B (not for screenshots) the @both and @shard-b ones.
+# Stack A runs the screenshots or the untagged and @both specs; stack B (two-stack runs only) the @both and @shard-b ones.
 $stacks = @([pscustomobject]@{ Project = 'rnrommanager-e2e'; Port = $port; Ingest = $env:E2E_INGEST; Cache = $env:E2E_CACHE })
-if (-not $Screenshots) {
+if ($twoStacks) {
     $portB = [string]([int]$port + 1)
     $env:E2E_INGEST_B = Join-Path $work 'ingest-b'
     $cacheB = Join-Path $work 'cache-b'
@@ -63,7 +66,7 @@ try {
         $seedArgs.NdsDat = @($env:E2E_STAGED_NDS)
     }
     & (Join-Path $PSScriptRoot 'seed-ingest.ps1') @seedArgs
-    if (-not $Screenshots) {
+    if ($twoStacks) {
         # Stack B gets its own identical seed; it shares the passwords and the image.
         $seedB = $seedArgs.Clone()
         $seedB.Path = $env:E2E_INGEST_B
@@ -116,8 +119,12 @@ try {
         if ($Screenshots) {
             $env:E2E_SCREENSHOTS = '1'
             $testArgs += '--project=screenshots'
-        } else {
+        } elseif ($twoStacks) {
             $testArgs += @('--project=chromium', '--project=chromium-b')
+        } else {
+            # One half on the one stack: the same tag split as chromium / chromium-b in playwright.config.ts.
+            $testArgs += '--project=chromium'
+            $testArgs += if ($Shard -eq 'A') { @('--grep-invert', '@shard-b') } else { @('--grep', '@both|@shard-b') }
         }
         if ($Headed) { $testArgs += '--headed' }
         & npx @testArgs

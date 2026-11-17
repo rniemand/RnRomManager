@@ -84,8 +84,15 @@ jobs:
       - run: npm run build
 
   # Independent of the other jobs (it builds its own image), so it runs alongside them.
+  # The Playwright specs in two halves, one job each (test-e2e.ps1 -Shard; the tags are in tests/e2e/specs/mvp.spec.ts):
+  # one 4-vCPU runner is too slow for both stacks at once.
   e2e:
+    name: e2e (${{ matrix.shard }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [A, B]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -110,12 +117,12 @@ jobs:
             type=gha
           cache-to: type=gha,scope=e2e,mode=max
       # Seeds Basic, runs Playwright + axe against docker-compose.e2e.yml, tears down.
-      - run: pwsh scripts/test-e2e.ps1 -SkipBuild
+      - run: pwsh scripts/test-e2e.ps1 -SkipBuild -Shard ${{ matrix.shard }}
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             tests/e2e/playwright-report
             tests/e2e/test-results
