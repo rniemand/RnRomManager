@@ -84,15 +84,8 @@ jobs:
       - run: npm run build
 
   # Independent of the other jobs (it builds its own image), so it runs alongside them.
-  # The Playwright specs in two halves, one job each (test-e2e.ps1 -Shard; the tags are in tests/e2e/specs/mvp.spec.ts):
-  # one 4-vCPU runner is too slow for both stacks at once.
   e2e:
-    name: e2e (${{ matrix.shard }})
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [A, B]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
@@ -103,6 +96,13 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: tests/e2e/package-lock.json
+      # The browser download for test-e2e.ps1's `playwright install` (its version follows the lock file).
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('tests/e2e/package-lock.json') }}
+      # Compiles the seeding tool while the image builds; waited for below. A failed build shows up when seeding runs it.
+      - run: dotnet build tests/RnRomManager.TestData > "$RUNNER_TEMP/seed-build.log" 2>&1 & echo $! > "$RUNNER_TEMP/seed-build.pid"
       - uses: docker/setup-buildx-action@v4
       # The amd64 image, reusing cached layers (npm ci, dotnet restore) from earlier e2e and release builds. The version
       # is the Dockerfile default; nothing in e2e reads it.
@@ -115,14 +115,18 @@ jobs:
           cache-from: |
             type=gha,scope=e2e
             type=gha
-          cache-to: type=gha,scope=e2e,mode=max
+          # PRs only read the cache (exporting it takes 15-30 s); release runs on main refresh it.
+          cache-to: ${{ github.event_name != 'pull_request' && 'type=gha,scope=e2e,mode=max' || '' }}
+      - run: |
+          while kill -0 "$(cat "$RUNNER_TEMP/seed-build.pid")" 2>/dev/null; do sleep 1; done
+          tail -n 3 "$RUNNER_TEMP/seed-build.log"
       # Seeds Basic, runs Playwright + axe against docker-compose.e2e.yml, tears down.
-      - run: pwsh scripts/test-e2e.ps1 -SkipBuild -Shard ${{ matrix.shard }}
+      - run: pwsh scripts/test-e2e.ps1 -SkipBuild
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report-${{ matrix.shard }}
+          name: playwright-report
           path: |
             tests/e2e/playwright-report
             tests/e2e/test-results
