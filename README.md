@@ -47,6 +47,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | GameCube | `gc` | Next to ZIP | `.iso` | Redump | — |
 | Master System | `sms` | In ZIP | `.sms` | No-Intro | `smsplus` |
 | Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen` | No-Intro | `genesis_plus_gx` |
+| Nintendo 3DS | `3ds` | Next to ZIP | `.3ds`, `.cci`, `.cia` | No-Intro | — |
 | Nintendo 64 | `n64` | In ZIP | `.z64`, `.v64`, `.n64` | No-Intro | — |
 | Nintendo DS | `nds` | Next to ZIP | `.nds` | No-Intro | `desmume` |
 | Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | `fceumm` |
