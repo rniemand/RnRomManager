@@ -2661,15 +2661,25 @@ test("Admin: database backups", { tag: "@shard-b" }, async () => {
   await expect(page.getByLabel(/^Daily at \(server time, /)).toHaveValue(
     "03:30",
   );
-  await expect(page.getByText("No backups yet.")).toBeVisible();
+  // The default daily backup (03:30 server time) has already run when the suite straddles 03:30, so the list may
+  // start with one file; "Back up now" must add a new one either way.
+  const backupFiles = page.getByRole("cell", {
+    name: /^rnrommanager-\d{8}-\d{6}\.zip$/,
+  });
+  const empty = page.getByText("No backups yet.");
+  await expect(empty.or(backupFiles.first())).toBeVisible();
+  const before = await backupFiles.allTextContents();
+  if (before.length === 0) await expect(empty).toBeVisible();
   await expectAccessible(page, "backups");
 
   await page.getByRole("button", { name: /Back up now/ }).click();
-  await expect(
-    page.getByRole("cell", { name: /^rnrommanager-\d{8}-\d{6}\.zip$/ }),
-  ).toBeVisible({
-    timeout: 30_000,
-  });
+  await expect
+    .poll(
+      async () =>
+        (await backupFiles.allTextContents()).some((n) => !before.includes(n)),
+      { timeout: 30_000 },
+    )
+    .toBe(true);
   await expect(page.getByTestId("last-result")).toContainText("rnrommanager-");
   await expectAccessible(page, "backups with a backup");
 });

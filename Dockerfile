@@ -12,7 +12,6 @@ RUN npm run build
 # --- API ----------------------------------------------------------------------------------------
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS publish
 ARG TARGETARCH
-ARG VERSION=0.0.0-dev
 WORKDIR /src
 COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY src/RnRomManager.Api/RnRomManager.Api.csproj src/RnRomManager.Api/
@@ -38,6 +37,9 @@ COPY src/RnRomManager.Systems.Commodore/RnRomManager.Systems.Commodore.csproj sr
 RUN case "$TARGETARCH" in amd64) echo x64 ;; arm64) echo arm64 ;; *) echo "unsupported TARGETARCH '$TARGETARCH'" >&2; exit 1 ;; esac > /tmp/arch \
  && dotnet restore src/RnRomManager.Api -a "$(cat /tmp/arch)"
 COPY src/ src/
+# Declared here, not at the top: a build arg changes the cache key of every RUN after it, and the e2e image (no version)
+# should share the restore layer with release builds.
+ARG VERSION=0.0.0-dev
 RUN dotnet publish src/RnRomManager.Api -c Release -a "$(cat /tmp/arch)" --no-restore -p:Version="$VERSION" -o /app \
  && mkdir -p /volumes/roms /volumes/ingest /volumes/logs /volumes/cache /volumes/backups /volumes/collections /volumes/bios
 
