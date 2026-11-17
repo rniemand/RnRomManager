@@ -397,13 +397,13 @@ public class ImageUrlEndpointsTests
     }
 
     [Test]
-    public async Task UserWithoutRomManager_Is403()
+    public async Task SiteUser_Is403()
     {
-        using var admin = await AuthClient.CreateAsync(_factory);
-        await TestUsers.CreateAsync(_factory, "admin-only", Roles.Of(Roles.Admin));
-        (await admin.LoginAsync("admin-only", TestUsers.Password)).Dispose();
+        using var site = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "site-user");
+        (await site.LoginAsync("site-user", TestUsers.Password)).Dispose();
 
-        using var response = await admin.PostAsync($"/api/games/{_game}/images/from-url", new { url = _stub.Url("/a.png").ToString(), type = "BoxArt" });
+        using var response = await site.PostAsync($"/api/games/{_game}/images/from-url", new { url = _stub.Url("/a.png").ToString(), type = "BoxArt" });
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
         Assert.That(_stub.Requests, Is.Empty);
