@@ -409,7 +409,8 @@
 				{#if uploadError}<div class="invalid-feedback">{uploadError}</div>{/if}
 				{#if dropNote}<div class="form-text" role="status">{dropNote}</div>{/if}
 				<div id="image-file-help" class="form-text">
-					PNG, JPEG or WebP (saved as PNG/JPEG), at most <FileSize bytes={maxUploadBytes} />, or drop it here
+					PNG, JPEG or WebP (saved as PNG/JPEG), at most <FileSize bytes={maxUploadBytes} />, or
+					drop it here
 				</div>
 			</div>
 			<div class="btn-group" role="group" aria-label="Image type">
