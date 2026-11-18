@@ -7,11 +7,13 @@
 		/** The header `<h2>`'s id; the body is `aria-labelledby` it. */
 		headingId: string;
 		open?: boolean;
+		/** No body padding, for a table or card body that brings its own. */
+		flush?: boolean;
 		header: Snippet;
 		children: Snippet;
 	}
 
-	let { id, headingId, open = $bindable(false), header, children }: Props = $props();
+	let { id, headingId, open = $bindable(false), flush = false, header, children }: Props = $props();
 </script>
 
 <!-- Its own .accordion wrapper: Bootstrap defines the --bs-accordion-* variables there. Open state lives in Svelte (no
@@ -31,7 +33,7 @@
 			</button>
 		</h2>
 		<div {id} class="accordion-collapse collapse" class:show={open} aria-labelledby={headingId}>
-			<div class="accordion-body">
+			<div class="accordion-body" class:p-0={flush}>
 				{@render children()}
 			</div>
 		</div>

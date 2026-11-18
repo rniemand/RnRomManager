@@ -211,11 +211,11 @@ describe('ingestion page', () => {
 	});
 
 	for (const [query, open] of [
-		['?tab=failed', ['true', 'true', 'false']],
-		['?tab=runs', ['true', 'false', 'true']],
+		['?tab=failed', ['false', 'true', 'false']],
+		['?tab=runs', ['false', 'false', 'true']],
 		['?tab=bogus', ['true', 'false', 'false']]
 	] as const) {
-		it(`${query} opens its panel, keeps Pending open and is removed from the URL (B23)`, async () => {
+		it(`${query} opens its panel instead of Pending and is removed from the URL (B23)`, async () => {
 			navigateTo(`/ingestion${query}`);
 			render(IngestionPage);
 			await screen.findByText('Tetris.gb');
@@ -236,8 +236,9 @@ describe('ingestion page', () => {
 
 		await fireEvent.click(screen.getByRole('button', { name: 'Failed files (0)' }));
 		await fireEvent.click(screen.getByRole('button', { name: 'Last runs' }));
+		expect(expanded()).toEqual(['false', 'false', 'true']);
 		await fireEvent.click(screen.getByRole('button', { name: 'Pending files (1)' }));
-		expect(expanded()).toEqual(['false', 'true', 'true']);
+		expect(expanded()).toEqual(['true', 'false', 'false']);
 		await fireEvent.click(screen.getByRole('button', { name: 'Pending files (1)' }));
 
 		expect(goto).not.toHaveBeenCalled();

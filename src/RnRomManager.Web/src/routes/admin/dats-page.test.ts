@@ -110,13 +110,16 @@ describe('DATs tab: automatic refresh (B28)', () => {
 		expect(input.classList.contains('is-invalid')).toBe(true);
 	});
 
-	it('Automatic refresh and DAT files are independent panels, both open (B28)', async () => {
+	it('Automatic refresh and DAT files are accordion panels, one open at a time, Automatic refresh open (B28)', async () => {
 		render(DatsPage);
 		await time();
 
 		const schedule = screen.getByRole('button', { name: 'Automatic refresh' });
 		const files = screen.getByRole('button', { name: 'DAT files' });
-		expect([schedule, files].map((b) => b.getAttribute('aria-expanded'))).toEqual(['true', 'true']);
+		expect([schedule, files].map((b) => b.getAttribute('aria-expanded'))).toEqual([
+			'true',
+			'false'
+		]);
 		const heading = screen.getByRole('heading', { level: 2, name: 'Automatic refresh' });
 		expect(heading.id).toBe('dat-schedule');
 		const form = document.querySelector('form[aria-labelledby="dat-schedule"]')!;
@@ -125,8 +128,13 @@ describe('DATs tab: automatic refresh (B28)', () => {
 		expect(screen.getByRole('heading', { level: 2, name: 'DAT files' }).id).toBe('dat-files');
 
 		await fireEvent.click(files);
-		expect(files.getAttribute('aria-expanded')).toBe('false');
-		expect(schedule.getAttribute('aria-expanded')).toBe('true');
+		expect(files.getAttribute('aria-expanded')).toBe('true');
+		expect(schedule.getAttribute('aria-expanded')).toBe('false');
+		await fireEvent.click(files);
+		expect([schedule, files].map((b) => b.getAttribute('aria-expanded'))).toEqual([
+			'false',
+			'false'
+		]);
 		expect(screen.getByRole('button', { name: /Refresh DATs/ }).closest('.accordion')).toBeNull();
 	});
 
