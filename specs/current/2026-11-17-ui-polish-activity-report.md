@@ -1,6 +1,6 @@
 ---
 title: UI polish and Activity report
-status: ready
+status: in-progress
 created: 2026-11-17
 ---
 
