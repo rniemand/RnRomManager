@@ -264,7 +264,7 @@ describe('hotkeys store (B24)', () => {
 			expect(press()).toBe(true);
 
 			await vi.waitFor(() =>
-				expect(goto).toHaveBeenCalledWith(`/games/${gameA}?tab=images&upload=1`)
+				expect(goto).toHaveBeenCalledWith(`/games/${gameA}?tab=images`)
 			);
 			expect(calls).toContain(next());
 		});
@@ -277,7 +277,7 @@ describe('hotkeys store (B24)', () => {
 			press();
 
 			await vi.waitFor(() =>
-				expect(goto).toHaveBeenCalledWith(`/games/${gameB}?tab=images&upload=1`)
+				expect(goto).toHaveBeenCalledWith(`/games/${gameB}?tab=images`)
 			);
 		});
 
@@ -289,7 +289,7 @@ describe('hotkeys store (B24)', () => {
 			press();
 
 			await vi.waitFor(() =>
-				expect(goto).toHaveBeenCalledWith(`/games/${gameA}?tab=images&upload=1`)
+				expect(goto).toHaveBeenCalledWith(`/games/${gameA}?tab=images`)
 			);
 		});
 
@@ -350,7 +350,7 @@ describe('hotkeys store (B24)', () => {
 				release();
 
 				await vi.waitFor(() =>
-					expect(goto).toHaveBeenCalledWith(`/games/${gameB}?tab=images&upload=1`)
+					expect(goto).toHaveBeenCalledWith(`/games/${gameB}?tab=images`)
 				);
 				expect(calls.filter((c) => c === next())).toHaveLength(1);
 				expect(goto).toHaveBeenCalledTimes(1);
