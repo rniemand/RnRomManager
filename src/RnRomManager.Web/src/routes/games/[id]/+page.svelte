@@ -32,7 +32,7 @@
 	import RatingControl from '#lib/components/RatingControl.svelte';
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
 	import EmulatorModal from '#lib/components/EmulatorModal.svelte';
-	import { canPlay, opensInNewTab, playUrl, usesPlayDisc } from '#lib/emulator.js';
+	import { canPlay, opensInNewTab, playLinkEvents, playUrl, usesPlayDisc } from '#lib/emulator.js';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
 	import { formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
@@ -687,6 +687,7 @@
 										target="_blank"
 										rel="noopener"
 										aria-label="Play {rom.fileName} (opens in a new tab)"
+										{...playLinkEvents(game.id, rom.id)}
 										><!-- eslint-enable svelte/no-navigation-without-resolve -->
 										<Icon name="play" />
 									</a>

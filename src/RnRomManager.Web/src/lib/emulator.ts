@@ -1,3 +1,4 @@
+import { api } from './api/client';
 import type { GameDetail, RomDetail } from './api/types';
 
 /**
@@ -76,4 +77,29 @@ export function playUrl(
 export interface PlaySave {
 	saveId: string;
 	saveKind: 'state' | 'battery';
+}
+
+/**
+ * UI polish B22: records a browser play for the Activity report. Fire-and-forget: errors are ignored, and an expired
+ * session's 401 doesn't send the player to the login page mid-game.
+ */
+export function recordPlay(gameId: string, romId: number): void {
+	api
+		.post(`/api/games/${encodeURIComponent(gameId)}/roms/${romId}/played`, undefined, {
+			noRedirect: true
+		})
+		.catch(() => {});
+}
+
+/**
+ * B22: a PSP `target="_blank"` play link records on click and on a middle-button click; "Open in new tab" from the
+ * context menu fires neither, so it isn't counted.
+ */
+export function playLinkEvents(gameId: string, romId: number) {
+	return {
+		onclick: () => recordPlay(gameId, romId),
+		onauxclick: (event: MouseEvent) => {
+			if (event.button === 1) recordPlay(gameId, romId);
+		}
+	};
 }

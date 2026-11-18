@@ -1,5 +1,13 @@
-import { describe, expect, it } from 'vitest';
-import { canPlay, opensInNewTab, playUrl, usesPlayDisc } from './emulator';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { configureClient, resetClient } from './api/client';
+import {
+	canPlay,
+	opensInNewTab,
+	playLinkEvents,
+	playUrl,
+	recordPlay,
+	usesPlayDisc
+} from './emulator';
 
 describe('canPlay', () => {
 	it('is false without a browser core', () => {
@@ -156,5 +164,53 @@ describe('opensInNewTab', () => {
 		expect(opensInNewTab('ppsspp')).toBe(true);
 		for (const core of ['pcsx_rearmed', 'gambatte', 'smsplus', null])
 			expect(opensInNewTab(core)).toBe(false);
+	});
+});
+
+describe('recordPlay (B22)', () => {
+	let calls: string[];
+	let status: number;
+	const navigate = vi.fn();
+
+	beforeEach(() => {
+		resetClient();
+		configureClient({ navigate });
+		navigate.mockClear();
+		calls = [];
+		status = 204;
+		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+			calls.push(`${init?.method ?? 'GET'} ${url}`);
+			if (url === '/api/auth/antiforgery')
+				return Promise.resolve(new Response(null, { status: 204 }));
+			return Promise.resolve(new Response(null, { status }));
+		});
+	});
+	afterEach(() => vi.unstubAllGlobals());
+
+	const played = () => calls.filter((c) => c.startsWith('POST'));
+
+	it('POSTs played for the release', async () => {
+		recordPlay('g 1', 7);
+		await vi.waitFor(() => expect(played()).toEqual(['POST /api/games/g%201/roms/7/played']));
+	});
+
+	it('swallows errors, and a 401 does not navigate to the login page', async () => {
+		status = 401;
+		recordPlay('g1', 7);
+		await vi.waitFor(() => expect(played()).toHaveLength(1));
+		await new Promise((done) => setTimeout(done, 10));
+		expect(navigate).not.toHaveBeenCalled();
+
+		status = 500;
+		expect(() => recordPlay('g1', 7)).not.toThrow();
+		await vi.waitFor(() => expect(played()).toHaveLength(2));
+	});
+
+	it('a PSP link records on click and on a middle-button click only', async () => {
+		const events = playLinkEvents('g1', 7);
+		events.onclick();
+		events.onauxclick(new MouseEvent('auxclick', { button: 2 }));
+		events.onauxclick(new MouseEvent('auxclick', { button: 1 }));
+		await vi.waitFor(() => expect(played()).toHaveLength(2));
 	});
 });

@@ -1,7 +1,8 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { isApiError } from '../api/errors';
 	import type { RomDetail, SaveKind } from '../api/types';
-	import { playUrl, type PlaySave } from '../emulator';
+	import { playUrl, recordPlay, type PlaySave } from '../emulator';
 	import { kindLabels, maxSaveBytes, savesApi } from '../saves';
 	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';
@@ -27,6 +28,19 @@
 	}
 
 	let { open = $bindable(), gameId, core, rom, disc, save = null, onsaved }: Props = $props();
+
+	/**
+	 * B22: one play per opening (false → true, a mount already open included) while the player shows; a prop changing
+	 * while open (a fresh `rom` literal, a refetch) records nothing more.
+	 */
+	let wasOpen = false;
+	$effect(() => {
+		const isOpen = open;
+		untrack(() => {
+			if (isOpen && !wasOpen && rom && core && gameId) recordPlay(gameId, rom.id);
+			wasOpen = isOpen;
+		});
+	});
 
 	/** Saves B18: neither DeSmuME's nor Opera's battery save goes through EmulatorJS's save file. */
 	const batteryExport = $derived(core !== 'desmume' && core !== 'opera');

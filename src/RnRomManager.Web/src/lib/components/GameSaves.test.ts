@@ -373,6 +373,10 @@ describe('GameSaves Play (B16, B19)', () => {
 
 		// The first list, the overwrite lookup, then the reload.
 		await vi.waitFor(() => expect(calls.filter((c) => c.key === list)).toHaveLength(3));
-		expect(writes().map((c) => c.key)).toEqual([`PUT /api/games/g1/saves/${save().id}/file`]);
+		// B22: opening the Play dialog also recorded one play.
+		expect(writes().map((c) => c.key)).toEqual([
+			expect.stringMatching(/^POST \/api\/games\/g1\/roms\/\d+\/played$/),
+			`PUT /api/games/g1/saves/${save().id}/file`
+		]);
 	});
 });

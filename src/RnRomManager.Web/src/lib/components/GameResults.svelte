@@ -4,7 +4,7 @@
 	import type { GameListItem } from '../api/types';
 	import { formatCount } from '../format';
 	import { tooltip } from '../tooltip';
-	import { opensInNewTab, playUrl } from '../emulator';
+	import { opensInNewTab, playLinkEvents, playUrl } from '../emulator';
 	import EmulatorModal from './EmulatorModal.svelte';
 	import FileSize from './FileSize.svelte';
 	import Icon from './Icon.svelte';
@@ -63,6 +63,7 @@
 			target="_blank"
 			rel="noopener"
 			aria-label="Play {game.displayTitle} (opens in a new tab)"
+			{...playLinkEvents(game.id, game.playRomId!)}
 			><!-- eslint-enable svelte/no-navigation-without-resolve --><Icon name="play" /></a
 		>
 	{:else}

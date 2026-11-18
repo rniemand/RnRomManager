@@ -138,6 +138,7 @@ function game(romIds: number[]): GameDetail {
 }
 
 describe('game detail page', () => {
+	let played: string[] = [];
 	let answers: { status: number; body?: unknown }[];
 	let fetches: number;
 	let zipAnswers: { status: number; body?: unknown }[];
@@ -154,9 +155,15 @@ describe('game detail page', () => {
 		fetches = 0;
 		zipAnswers = [];
 		zipFetches = 0;
+		played = [];
 		vi.stubGlobal('fetch', (url: string) => {
 			// B16: the game's collections (the badges); answered here so the queued answers stay as they were.
 			if (url.endsWith('/collections')) return Promise.resolve(new Response('[]', { status: 200 }));
+			// B22: the fire-and-forget play records stay out of the queue too.
+			if (url.endsWith('/played')) {
+				played.push(url);
+				return Promise.resolve(new Response(null, { status: 204 }));
+			}
 			if (url.includes('/zip-entries')) {
 				zipFetches++;
 				const zip = zipAnswers.shift() ?? { status: 200, body: listing() };
@@ -281,6 +288,30 @@ describe('game detail page', () => {
 		}
 		expect(screen.queryByRole('button', { name: /^Play / })).toBeNull();
 		expect(document.querySelector('iframe')).toBeNull();
+	});
+
+	it('a PSP Play link records the play on click and middle-click, not on a right click (B22)', async () => {
+		const psp = game([1]);
+		psp.browserCore = 'ppsspp';
+		psp.roms[0].externalFileName = psp.roms[0].fileName;
+		// The game, then the antiforgery GET before the first played POST (other tests queue it too).
+		answers.push({ status: 200, body: psp }, { status: 204 });
+		render(GamePage);
+		const link = await screen.findByRole('link', {
+			name: `Play ${psp.roms[0].fileName} (opens in a new tab)`
+		});
+		link.addEventListener('click', (e) => e.preventDefault());
+
+		await fireEvent.click(link);
+		await fireEvent(link, new MouseEvent('auxclick', { bubbles: true, button: 2 }));
+		await fireEvent(link, new MouseEvent('auxclick', { bubbles: true, button: 1 }));
+
+		await vi.waitFor(() =>
+			expect(played).toEqual([
+				`/api/games/${psp.id}/roms/${psp.roms[0].id}/played`,
+				`/api/games/${psp.id}/roms/${psp.roms[0].id}/played`
+			])
+		);
 	});
 
 	it('the ZIP button explains per-release downloads only when a release is external (G5)', async () => {

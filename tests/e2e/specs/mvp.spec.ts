@@ -1412,7 +1412,8 @@ test("Play: 32X explains its missing PicoDrive core", { tag: "@shard-b" }, async
     if (
       checked &&
       (r.url().includes("/api/emulator/cores/") ||
-        r.url().includes("/roms/") ||
+        // B22: the played record is sent on open and may land after the HEAD; it loads nothing.
+        (r.url().includes("/roms/") && !r.url().endsWith("/played")) ||
         r.url().includes("loader.js"))
     )
       later.push(r.url());
@@ -1455,7 +1456,8 @@ test("Play: SNES explains its missing Snes9x core from the detail page", { tag: 
     if (
       checked &&
       (r.url().includes("/api/emulator/") ||
-        r.url().includes("/roms/") ||
+        // B22: the played record is sent on open and may land after the HEAD; it loads nothing.
+        (r.url().includes("/roms/") && !r.url().endsWith("/played")) ||
         r.url().includes("loader.js"))
     )
       later.push(r.url());
