@@ -23,6 +23,8 @@
 		 * rejection closes too. Omitted → those close at once.
 		 */
 		beforeclose?: () => Promise<void>;
+		/** Review QoL B6: called each time the modal has finished opening (`shown.bs.modal`). */
+		onshown?: () => void;
 		children?: Snippet;
 	}
 
@@ -36,6 +38,7 @@
 		size,
 		onconfirm,
 		beforeclose,
+		onshown,
 		children
 	}: Props = $props();
 
@@ -65,6 +68,7 @@
 		// closes a modal; Escape, × and the footer button do.
 		modal = new Modal(element, { backdrop: 'static', keyboard: true });
 		element.addEventListener('hidden.bs.modal', () => (open = false));
+		element.addEventListener('shown.bs.modal', () => onshown?.());
 		// 3DO B11: Escape goes through Bootstrap's hide; hold it while beforeclose runs (a hide from `open = false`
 		// passes, since open is already false then).
 		element.addEventListener('hide.bs.modal', (event) => {

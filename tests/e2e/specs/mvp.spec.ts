@@ -2230,8 +2230,8 @@ test("images: upload, set cover, delete", async () => {
   await expect(images.getByText("Placeholder")).toBeVisible();
 
   // A box art upload replaces the placeholder and takes over as cover.
-  await images.getByRole("button", { name: "Upload image" }).click();
-  await expect(dialog()).toHaveAccessibleName("Upload image");
+  await images.getByRole("button", { name: "Upload Image" }).click();
+  await expect(dialog()).toHaveAccessibleName("Upload Image");
   await expectAccessible(page, "upload image modal");
   // U6/I2: URL is the default source; a loopback URL is refused by the server; the fallback switches to the file input.
   await expect(
@@ -2258,7 +2258,7 @@ test("images: upload, set cover, delete", async () => {
   await expect(images.getByText("Placeholder")).toHaveCount(0);
   await expect(card("boxart-01.png")).toContainText("64×64");
 
-  await images.getByRole("button", { name: "Upload image" }).click();
+  await images.getByRole("button", { name: "Upload Image" }).click();
   await dialog().getByText("File", { exact: true }).click();
   await dialog()
     .getByLabel("Upload an image")

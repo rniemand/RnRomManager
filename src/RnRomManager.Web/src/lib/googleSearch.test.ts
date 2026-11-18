@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { gameSearchQuery, googleSearchUrl, reviewSearchQuery } from './googleSearch';
+import {
+	gameSearchQuery,
+	googleImagesUrl,
+	googleSearchUrl,
+	reviewSearchQuery
+} from './googleSearch';
 
 const item = (originalFileName: string, title?: unknown) => ({
 	originalFileName,
@@ -33,6 +38,14 @@ describe('reviewSearchQuery', () => {
 	it('builds an encoded Google URL', () => {
 		expect(googleSearchUrl(reviewSearchQuery(item('a & b.gb'), 'Game Boy'))).toBe(
 			'https://www.google.com/search?q=%22a%20%26%20b%22%20Game%20Boy%20rom'
+		);
+	});
+});
+
+describe('googleImagesUrl', () => {
+	it('uses udm=2 and encodes the query (B8)', () => {
+		expect(googleImagesUrl('"a & b" Game Boy')).toBe(
+			'https://www.google.com/search?udm=2&q=%22a%20%26%20b%22%20Game%20Boy'
 		);
 	});
 });
