@@ -169,6 +169,18 @@ public sealed class BackupService(
         {
             logger.LogError(ex, "Restoring backup {FileName} failed after the tables were dropped; the database may be partial. Restore the safety backup {Safety}",
                 fileName, safety);
+            // Later scheduled backups dump the partial database; retention must not prune the good copies away.
+            foreach (var name in new[] { safety, fileName })
+            {
+                try
+                {
+                    File.WriteAllText(Path.Combine(Folder, BackupNames.KeepFor(name)), "kept after a failed restore; delete this file to let retention prune it");
+                }
+                catch (Exception keepEx) when (keepEx is IOException or UnauthorizedAccessException)
+                {
+                    logger.LogError("Couldn't pin {FileName} against retention ({Error}); copy it somewhere safe", name, keepEx.Message);
+                }
+            }
             return new(BackupRestoreStatus.RestoreFailed, fileName, safety,
                 $"The restore failed and the database may be incomplete. Restore the safety backup {safety}.");
         }
@@ -273,7 +285,8 @@ public sealed class BackupService(
         var counted = List()
             .Where(b => !string.Equals(b.FileName, restoreFrom, StringComparison.Ordinal))
             .Where(b => !string.Equals(b.FileName, keep, StringComparison.Ordinal))
-            .Where(b => !File.Exists(Path.Combine(Folder, BackupNames.MarkerFor(b.FileName))));
+            .Where(b => !File.Exists(Path.Combine(Folder, BackupNames.MarkerFor(b.FileName))))
+            .Where(b => !File.Exists(Path.Combine(Folder, BackupNames.KeepFor(b.FileName))));
         foreach (var old in counted.Skip(retention))
         {
             try

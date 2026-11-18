@@ -22,9 +22,14 @@ public static partial class BackupNames
     {
         var match = BackupPattern().Match(fileName);
         if (!match.Success) return null;
-        var createdAt = DateTime.ParseExact(match.Groups["stamp"].Value, StampFormat, CultureInfo.InvariantCulture,
-            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
-        var n = match.Groups["n"].Success ? int.Parse(match.Groups["n"].Value, CultureInfo.InvariantCulture) : 1;
+        // The pattern only checks digits: an impossible date or an overflowing (n) is "not a backup", never a throw
+        // that would break the list, retention and every scheduled run.
+        if (!DateTime.TryParseExact(match.Groups["stamp"].Value, StampFormat, CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var createdAt))
+            return null;
+        var n = 1;
+        if (match.Groups["n"].Success && !int.TryParse(match.Groups["n"].Value, NumberStyles.None, CultureInfo.InvariantCulture, out n))
+            return null;
         return (new DateTimeOffset(createdAt, TimeSpan.Zero), n);
     }
 
@@ -35,6 +40,12 @@ public static partial class BackupNames
         fileName.EndsWith(TempSuffix, StringComparison.Ordinal) && IsBackup(fileName[..^TempSuffix.Length]);
 
     public static string MarkerFor(string fileName) => fileName + RestoredSuffix;
+
+    /// <summary>
+    /// <c>&lt;backup&gt;.keep</c>: retention never deletes or counts that backup. Written for both backups of a failed live
+    /// restore; not the <c>.restored</c> marker, which would block restoring the safety backup at startup.
+    /// </summary>
+    public static string KeepFor(string fileName) => fileName + ".keep";
 
     [GeneratedRegex(@"^rnrommanager-(?<stamp>\d{8}-\d{6})(?: \((?<n>[2-9]|[1-9]\d+)\))?\.zip$", RegexOptions.CultureInvariant)]
     private static partial Regex BackupPattern();

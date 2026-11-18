@@ -152,7 +152,7 @@ Every day at **03:30** (container time, `TZ`) the app writes `rnrommanager-<yyyy
 
 - A backup is a ZIP with `manifest.json` (format version, backup id, time, app version, the migrations applied and each table's row count), `schema.sql` (`SHOW CREATE TABLE` for every table) and `data/<table>.jsonl` (one JSON object per row). It's read inside one consistent snapshot, so jobs and edits keep running.
 - It's written to `<name>.zip.tmp` and renamed only when complete; leftover `.tmp` files from a crash are deleted before the next run. Two backups in the same second get ` (2)`, ` (3)`… before `.zip`.
-- Only files named `rnrommanager-*.zip` are ever deleted. A backup that was restored at startup (it has a `.restored` file next to it) or is named by `Backup__RestoreFrom` is never deleted and doesn't count toward the number kept; neither does the backup a live restore is restoring while its safety backup is written.
+- Only files named `rnrommanager-*.zip` are ever deleted. A backup that was restored at startup (it has a `.restored` file next to it) or is named by `Backup__RestoreFrom` is never deleted and doesn't count toward the number kept; neither does the backup a live restore is restoring while its safety backup is written. When a live restore fails, both that backup and its safety backup get a `.keep` file and are kept the same way until you delete the `.keep` file.
 - **Backups contain password hashes and the Data Protection keys.** Keep the folder private; the app never serves backup files over HTTP.
 
 `mariadb-dump rnrommanager` still works as an extra backup; it isn't needed for a restore.

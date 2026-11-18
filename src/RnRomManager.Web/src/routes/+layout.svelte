@@ -33,7 +33,7 @@
 	let searchOpen = $state(false);
 	let hotkeysOpen = $state(false);
 
-	configureClient({ navigate });
+	configureClient({ navigate, onUnauthorized: () => auth.set(null) });
 
 	async function boot(): Promise<void> {
 		bootError = null;

@@ -56,7 +56,8 @@ public class ArchiveExtractorTests
         b[0] = 1;
         var archive = Zip(("Tetris.GB", a), ("sub/dir/Zelda.gbc", b), ("readme.txt", [1]), ("inner.zip", [1, 2]), ("other/Tetris.gb", b));
 
-        var entries = _extractor.Extract(archive, Work, RomLimit);
+        var skipped = new List<string>();
+        var entries = _extractor.Extract(archive, Work, RomLimit, skipped);
 
         Assert.That(entries.Select(e => (e.EntryPath, e.FileName, e.SizeBytes)), Is.EqualTo(new[]
         {
@@ -64,6 +65,7 @@ public class ArchiveExtractorTests
             ("sub/dir/Zelda.gbc", "Zelda.gbc", 2000L),
             ("other/Tetris.gb", "Tetris.gb", 2000L),
         }));
+        Assert.That(skipped, Is.EqualTo(new[] { "readme.txt", "inner.zip" }));
         Assert.That(File.ReadAllBytes(entries[1].ExtractedPath), Is.EqualTo(b));
         Assert.That(entries[0].ExtractedPath, Is.Not.EqualTo(entries[2].ExtractedPath), "same file name, separate folders");
         Assert.That(entries.All(e => e.ExtractedPath.StartsWith(Work, StringComparison.Ordinal)), Is.True);

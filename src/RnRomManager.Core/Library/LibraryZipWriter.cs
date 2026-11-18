@@ -102,7 +102,10 @@ public sealed class LibraryZipWriter(InfoJsonReader reader)
         try
         {
             await using (var file = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
                 await WriteTmpAsync(file, existing, changes, entries, notes, saves, FastCompressionAboveBytes, ct).ConfigureAwait(false);
+                file.Flush(flushToDisk: true); // on disk before it replaces the old ZIP and callers delete the source
+            }
             using (var zip = LibraryZip.Open(tmp, reader))
                 await VerifyAsync(zip, changes.Info, saves, ct).ConfigureAwait(false);
             existing?.Dispose();
@@ -167,6 +170,7 @@ public sealed class LibraryZipWriter(InfoJsonReader reader)
                 tmpIdentity = ExternalRomPath.SnapshotOf(file)?.Identity
                     ?? throw new IOException($"'{tmp}' was created but can't be identified.");
                 await WriteTmpAsync(file, existing, changes, entries, notes, saves, FastCompressionAboveBytes, ct).ConfigureAwait(false);
+                file.Flush(flushToDisk: true);
             }
             hooks?.AfterTempClosed?.Invoke();
 

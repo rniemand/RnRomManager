@@ -23,11 +23,19 @@ export interface RequestOptions {
 const mutations = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 let navigate: Navigate = (url) => window.location.assign(url);
+let onUnauthorized: () => void = () => {};
 let antiforgery: Promise<void> | null = null;
 
-/** Set by the root layout to SvelteKit's `goto`; tests pass a spy. */
-export function configureClient(options: { navigate: Navigate }): void {
+/**
+ * Set by the root layout to SvelteKit's `goto` and a callback that forgets the signed-in user (else the login page,
+ * still seeing a user, sends a dead session straight back: a redirect loop); tests pass spies.
+ */
+export function configureClient(options: {
+	navigate: Navigate;
+	onUnauthorized?: () => void;
+}): void {
 	navigate = options.navigate;
+	onUnauthorized = options.onUnauthorized ?? (() => {});
 }
 
 /** Forget the antiforgery call (tests). */
@@ -109,6 +117,7 @@ export async function request<T>(
 
 	const error = new ApiError(response.status, await problemOf(response));
 	if (response.status === 401 && !options.noRedirect) {
+		onUnauthorized();
 		await navigate(`/login?returnUrl=${encodeURIComponent(currentLocation())}`);
 	} else if (
 		response.status === 403 &&

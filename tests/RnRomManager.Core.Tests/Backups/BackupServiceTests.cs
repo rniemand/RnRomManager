@@ -479,6 +479,11 @@ public class BackupServiceTests
         Assert.That(result.Message, Does.Contain(BackupNames.For(T0)));
         _audit.DidNotReceiveWithAnyArgs().Record(default!);
         Assert.That(_windowClosed, Is.EqualTo(1));
+
+        // Later scheduled backups (of the partial database) must not prune the two good copies.
+        File.WriteAllText(Path.Combine(Folder, BackupNames.For(T0.AddDays(1))), "");
+        _service.ApplyRetention(1);
+        Assert.That(File.Exists(Path.Combine(Folder, name)) && File.Exists(Path.Combine(Folder, BackupNames.For(T0))), Is.True);
     }
 
     [Test]

@@ -243,10 +243,11 @@ public sealed class IngestJob(
     {
         var family = systems.ByFamily(systems.ById(archive.SystemId)!.Family);
         IReadOnlyList<ExtractedEntry> entries;
+        var skipped = new List<string>();
         try
         {
             entries = extractor.Extract(archive.FullPath, workDir, ext =>
-                family.FirstOrDefault(h => h.RomExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))?.MaxRomSizeBytes);
+                family.FirstOrDefault(h => h.RomExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))?.MaxRomSizeBytes, skipped);
         }
         catch (ArchiveRejectedException ex)
         {
@@ -260,7 +261,7 @@ public sealed class IngestJob(
             return;
         }
 
-        ApplyFate(archive, run.Context.Actor, await EntriesAsync(run, archive, entries).ConfigureAwait(false));
+        ApplyFate(archive, run.Context.Actor, await EntriesAsync(run, archive, entries).ConfigureAwait(false), Unhandled(skipped));
     }
 
     /// <summary>§3.1: an archive counts as one file, so every entry finishes even after a cancel.</summary>
@@ -302,6 +303,7 @@ public sealed class IngestJob(
         }
 
         IReadOnlyList<ExtractedEntry> entries = [];
+        var skipped = new List<string>();
         ArchiveRejectedException? rejected = null;
         var snapshot = opened.Snapshot!;
         using (var stream = opened.Stream!)
@@ -322,7 +324,7 @@ public sealed class IngestJob(
             try
             {
                 entries = extractor.Extract(stream, archive.Name, workCheck.Path, ext =>
-                    family.FirstOrDefault(h => h.RomExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))?.MaxRomSizeBytes);
+                    family.FirstOrDefault(h => h.RomExtensions.Contains(ext, StringComparer.OrdinalIgnoreCase))?.MaxRomSizeBytes, skipped);
             }
             catch (ArchiveRejectedException ex)
             {
@@ -372,7 +374,8 @@ public sealed class IngestJob(
         }
 
         var outcomes = await EntriesAsync(run, archive, entries, snapshot).ConfigureAwait(false);
-        var fate = FateOf([.. outcomes.Select(o => o.Result)]);
+        var unhandled = Unhandled(skipped);
+        var fate = FateOf([.. outcomes.Select(o => o.Result)], unhandled.Count > 0);
         if (fate == ArchiveFate.Keep)
         {
             logger.LogInformation("{Path}: kept in ingest (an entry needs review, was skipped or hit an error)", archive.FullPath);
@@ -383,7 +386,7 @@ public sealed class IngestJob(
 
         IngestItemResult? error = null;
         if (fate == ArchiveFate.Failed)
-            error = pipeline.MoveToFailed(archive, actor, "EntriesFailed", EntryDetails(outcomes), run.Context.Progress);
+            error = pipeline.MoveToFailed(archive, actor, "EntriesFailed", EntryDetails(outcomes, unhandled), run.Context.Progress);
         else if (fate == ArchiveFate.Duplicates)
             error = pipeline.MoveToDuplicates(archive, actor, run.Context.Progress);
         else
@@ -408,9 +411,10 @@ public sealed class IngestJob(
     /// <c>_failed/</c> with every entry's outcome in the <c>.error.txt</c>; else all <c>Duplicate</c> → <c>_duplicates/</c>;
     /// else deleted (<c>Repaired</c> counts as <c>Ingested</c>).
     /// </summary>
-    private void ApplyFate(IngestFile archive, AuditActor actor, IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes)
+    private void ApplyFate(IngestFile archive, AuditActor actor, IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes,
+        IReadOnlyList<string> unhandled)
     {
-        var fate = FateOf([.. outcomes.Select(o => o.Result)]);
+        var fate = FateOf([.. outcomes.Select(o => o.Result)], unhandled.Count > 0);
         if (fate == ArchiveFate.Keep)
         {
             logger.LogInformation("{Path}: kept in ingest (an entry needs review or hit an error)", archive.FullPath);
@@ -418,7 +422,7 @@ public sealed class IngestJob(
         }
         if (fate == ArchiveFate.Failed)
         {
-            pipeline.MoveToFailed(archive, actor, "EntriesFailed", EntryDetails(outcomes));
+            pipeline.MoveToFailed(archive, actor, "EntriesFailed", EntryDetails(outcomes, unhandled));
             return;
         }
         if (fate == ArchiveFate.Duplicates)
@@ -450,18 +454,28 @@ public sealed class IngestJob(
     /// §7.3 as a decision. An entry that was <c>Skipped</c> (an external entry that was <c>TooRecent</c>, I1) keeps
     /// the archive like <c>Review</c> or <c>Error</c> does, even when other entries committed.
     /// </summary>
-    public static ArchiveFate FateOf(IReadOnlyList<IngestItemResult?> results)
+    /// <param name="holdsUnhandled">The archive also holds another system's ROM or a nested archive, which this run
+    /// never ingested: it goes to <c>_failed/</c> instead of being deleted, so nothing is lost.</param>
+    public static ArchiveFate FateOf(IReadOnlyList<IngestItemResult?> results, bool holdsUnhandled = false)
     {
         var kinds = results.Select(r => r is { ResolvedArchiveDuplicate: true } ? IngestOutcome.Ingested : r?.Outcome).ToList();
         if (kinds.Any(k => k is null or IngestOutcome.Review or IngestOutcome.Error or IngestOutcome.Skipped))
             return ArchiveFate.Keep;
         if (kinds.Contains(IngestOutcome.Failed))
             return ArchiveFate.Failed;
-        return kinds.All(k => k == IngestOutcome.Duplicate) ? ArchiveFate.Duplicates : ArchiveFate.Delete;
+        if (kinds.All(k => k == IngestOutcome.Duplicate))
+            return ArchiveFate.Duplicates;
+        return holdsUnhandled ? ArchiveFate.Failed : ArchiveFate.Delete;
     }
 
-    private static string EntryDetails(IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes) =>
-        "entries:\n" + string.Join("\n", outcomes.Select(o => $"  {o.Entry}: {o.Result!.Outcome} {o.Result.Reason}".TrimEnd()));
+    /// <summary>Skipped entries worth keeping: nested archives and files any registered system takes as a ROM (not readmes).</summary>
+    private List<string> Unhandled(IEnumerable<string> skipped) =>
+        [.. skipped.Where(e => ArchiveExtractor.IsArchive(e) || systems.ByExtension(Path.GetExtension(e)).Count > 0)];
+
+    private static string EntryDetails(IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes, IReadOnlyList<string> unhandled) =>
+        "entries:\n" + string.Join("\n", outcomes.Select(o => $"  {o.Entry}: {o.Result!.Outcome} {o.Result.Reason}".TrimEnd()))
+        + (unhandled.Count == 0 ? "" : "\nnot ingested (another system's ROM or a nested archive; drop it in the right folder):\n"
+            + string.Join("\n", unhandled.Select(e => $"  {e}")));
 
     private async Task<IngestItemResult?> ProcessAsync(IngestFile file, Guid jobId, AuditActor actor, CircuitBreaker breaker,
         CancellationToken cancellationToken, JobProgress progress)

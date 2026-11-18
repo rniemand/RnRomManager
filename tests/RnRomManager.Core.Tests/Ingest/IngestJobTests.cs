@@ -107,6 +107,9 @@ public class IngestJobTests
         Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Failed), R(IngestOutcome.Duplicate)]), Is.EqualTo(IngestJob.ArchiveFate.Failed));
         Assert.That(IngestJob.FateOf([R(IngestOutcome.Duplicate), R(IngestOutcome.Duplicate)]), Is.EqualTo(IngestJob.ArchiveFate.Duplicates));
         Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Duplicate), R(IngestOutcome.Repaired)]), Is.EqualTo(IngestJob.ArchiveFate.Delete));
+        // Another system's ROM or a nested archive was never ingested: the archive is kept aside, not deleted.
+        Assert.That(IngestJob.FateOf([ingested], holdsUnhandled: true), Is.EqualTo(IngestJob.ArchiveFate.Failed));
+        Assert.That(IngestJob.FateOf([R(IngestOutcome.Duplicate)], holdsUnhandled: true), Is.EqualTo(IngestJob.ArchiveFate.Duplicates));
     }
 
     private IngestJob Job(ExternalIngestHooks? hooks = null)

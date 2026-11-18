@@ -1630,7 +1630,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
                     try
                     {
                         if (failure is null)
-                            file.Flush();
+                            file.Flush(flushToDisk: true); // on disk before the original is deleted
                         file.Dispose();
                     }
                     catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { failure ??= WriteFailed(entry, ex); }

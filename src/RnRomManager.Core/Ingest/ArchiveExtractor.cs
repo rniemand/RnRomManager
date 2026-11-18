@@ -64,17 +64,19 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
     public static bool IsArchive(string fileName) => Extensions.Contains(Path.GetExtension(fileName), StringComparer.OrdinalIgnoreCase);
 
     /// <param name="maxRomBytes">For an entry's extension: the ROM size limit, or null when it isn't a ROM extension.</param>
+    /// <param name="skipped">When given, receives the path of every entry that wasn't extracted (not a ROM here, or a nested archive).</param>
     /// <exception cref="ArchiveRejectedException">The whole archive is refused; the work dir may hold partial output.</exception>
-    public IReadOnlyList<ExtractedEntry> Extract(string archivePath, string workDir, Func<string, long?> maxRomBytes) =>
+    public IReadOnlyList<ExtractedEntry> Extract(string archivePath, string workDir, Func<string, long?> maxRomBytes,
+        ICollection<string>? skipped = null) =>
         Guarded(() =>
         {
             if (Path.GetExtension(archivePath).Equals(".7z", StringComparison.OrdinalIgnoreCase))
             {
                 using var archive = SevenZipArchive.OpenArchive(archivePath, new ReaderOptions());
-                return ExtractAll(SevenZipEntries(archive), archivePath, workDir, maxRomBytes, external: false);
+                return ExtractAll(SevenZipEntries(archive), archivePath, workDir, maxRomBytes, external: false, skipped);
             }
             using var zip = ZipFile.OpenRead(archivePath);
-            return ExtractAll(ZipEntries(zip), archivePath, workDir, maxRomBytes, external: false);
+            return ExtractAll(ZipEntries(zip), archivePath, workDir, maxRomBytes, external: false, skipped);
         });
 
     /// <summary>
@@ -89,16 +91,17 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
     /// <param name="archiveName">The archive's file name: its extension picks the reader, and it names the archive in logs.</param>
     /// <exception cref="ArchiveRejectedException">The whole archive is refused; the work dir may hold partial output.</exception>
     /// <exception cref="ArchiveOutputException">An extracted copy couldn't be written.</exception>
-    public IReadOnlyList<ExtractedEntry> Extract(Stream archive, string archiveName, string workDir, Func<string, long?> maxRomBytes) =>
+    public IReadOnlyList<ExtractedEntry> Extract(Stream archive, string archiveName, string workDir, Func<string, long?> maxRomBytes,
+        ICollection<string>? skipped = null) =>
         Guarded(() =>
         {
             if (Path.GetExtension(archiveName).Equals(".7z", StringComparison.OrdinalIgnoreCase))
             {
                 using var sevenZip = SevenZipArchive.OpenArchive(archive, new ReaderOptions { LeaveStreamOpen = true });
-                return ExtractAll(SevenZipEntries(sevenZip), archiveName, workDir, maxRomBytes, external: true);
+                return ExtractAll(SevenZipEntries(sevenZip), archiveName, workDir, maxRomBytes, external: true, skipped);
             }
             using var zip = new ZipArchive(archive, ZipArchiveMode.Read, leaveOpen: true);
-            return ExtractAll(ZipEntries(zip), archiveName, workDir, maxRomBytes, external: true);
+            return ExtractAll(ZipEntries(zip), archiveName, workDir, maxRomBytes, external: true, skipped);
         });
 
     private static IReadOnlyList<ExtractedEntry> Guarded(Func<IReadOnlyList<ExtractedEntry>> extract)
@@ -126,7 +129,7 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
     private sealed record Entry(string Name, bool IsDirectory, bool IsEncrypted, bool IsLink, Func<Stream> Open);
 
     private IReadOnlyList<ExtractedEntry> ExtractAll(IEnumerable<Entry> entries, string archivePath, string workDir, Func<string, long?> maxRomBytes,
-        bool external)
+        bool external, ICollection<string>? skipped)
     {
         var files = entries.Where(e => !e.IsDirectory).ToList();
         if (files.Count > MaxEntries)
@@ -184,6 +187,7 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
             if (IsArchive(fileName) || maxRomBytes(Path.GetExtension(fileName)) is not { } maxRom)
             {
                 logger.LogInformation("{Archive} › {Entry}: not a ROM (or a nested archive); skipped", archivePath, entryPath);
+                skipped?.Add(entryPath);
                 continue;
             }
 

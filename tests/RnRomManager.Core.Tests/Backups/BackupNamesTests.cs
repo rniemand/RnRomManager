@@ -25,6 +25,8 @@ public class BackupNamesTests
     [TestCase("RNROMMANAGER-20261106-033007.zip")]
     [TestCase("rnrommanager-2026116-033007.zip")]
     [TestCase("x-rnrommanager-20261106-033007.zip")]
+    [TestCase("rnrommanager-20261399-000000.zip")]
+    [TestCase("rnrommanager-20261106-033007 (99999999999).zip")]
     public void Parse_RejectsOtherNames(string name) => Assert.That(BackupNames.Parse(name), Is.Null);
 
     [Test]
