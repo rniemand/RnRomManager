@@ -197,10 +197,10 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   ).toBeVisible();
   await expectAccessible(page, "ingestion");
 
-  // I1: Pending / Failed / Last runs are tabs under the always-visible Run section.
+  // B23: Pending / Failed / Last runs are accordion panels, Pending open.
   await expect(
-    page.getByRole("tab", { name: /^Pending files \(\d+\)$/ }),
-  ).toHaveAttribute("aria-selected", "true");
+    page.getByRole("button", { name: /^Pending files \(\d+\)$/ }),
+  ).toHaveAttribute("aria-expanded", "true");
   // Each stack has its own seeded folder (playwright.config.ts).
   const ingest = test.info().project.metadata.ingest as string | undefined;
   if (!ingest)
@@ -220,8 +220,7 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   );
   await page.getByRole("button", { name: "Import all" }).click();
 
-  await page.getByRole("tab", { name: "Last runs" }).click();
-  await expect(page).toHaveURL(/\/ingestion\?tab=runs$/);
+  await page.getByRole("button", { name: "Last runs" }).click();
   await expect(page.getByRole("button", { name: "Import all" })).toBeVisible();
   const run = page.getByRole("row").filter({ hasText: "Completed" });
   await expect(run).toContainText(
@@ -238,11 +237,13 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   ).toBeVisible();
   await expectAccessible(page, "job detail");
 
+  // B23: an old ?tab= link opens its panel, then leaves the URL.
   await page.goto("/ingestion?tab=runs");
-  await expect(page.getByRole("tab", { name: "Last runs" })).toHaveAttribute(
-    "aria-selected",
+  await expect(page.getByRole("button", { name: "Last runs" })).toHaveAttribute(
+    "aria-expanded",
     "true",
   );
+  await expect(page).toHaveURL(/\/ingestion$/);
   await expect(
     page.getByRole("row").filter({ hasText: "Completed" }),
   ).toBeVisible();
@@ -250,8 +251,7 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
 
   // D4/D5: the invalid file is listed under Failed files with its reason, and deleting it goes through the modal.
   await page.goto("/ingestion");
-  await page.getByRole("tab", { name: "Failed files (1)" }).click();
-  await expect(page).toHaveURL(/\/ingestion\?tab=failed$/);
+  await page.getByRole("button", { name: "Failed files (1)" }).click();
   await expect(page.getByRole("button", { name: "Import all" })).toBeVisible();
   const failed = page.locator("#failed-panel");
   const invalid = failed.getByRole("row").filter({ hasText: "92-invalid.gb" });
