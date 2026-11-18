@@ -943,7 +943,10 @@ test("PlayStation: a disc set lists its files and downloads a track byte-exact",
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
-  const rows = page.locator("#releases-panel table tbody tr");
+  // B8: the release body has its own key/value table, so scope to the files list.
+  const rows = page.locator(
+    '#releases-panel [id^="release-"][id$="-files"] table tbody tr',
+  );
   await expect(rows).toHaveCount(3);
   await expect(rows.first()).toContainText("Disc Runner (USA) (Track 1).bin");
   await expectAccessible(page, "disc set file list");

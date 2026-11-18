@@ -57,4 +57,12 @@ describe('GroupLogo (B16)', () => {
 		const banner = container.querySelector('.group-logo-banner');
 		if (banner) expect(banner.classList).not.toContain('border');
 	});
+
+	it('the banner text keeps the body colour, since a selected row would make it white on the light frame', () => {
+		const { container } = render(GroupLogo, {
+			kind: 'systems',
+			item: { key: 'zz', name: 'Unknown', logoUrl: null }
+		});
+		expect(container.querySelector('.group-logo-banner')!.classList).toContain('text-body');
+	});
 });

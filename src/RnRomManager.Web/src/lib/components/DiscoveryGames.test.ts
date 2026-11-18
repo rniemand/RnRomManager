@@ -98,6 +98,21 @@ describe('DiscoveryGames (discovery B2)', () => {
 		expect(screen.getByRole('heading', { name: /Nintendo/ }).textContent).toContain('2 games');
 	});
 
+	it('uses the narrow grid, since it sits in a two-thirds pane (B17)', async () => {
+		answers[url('publishers')] = [
+			{ status: 200, body: pageOf([game('g1', 'Mario', 'nes', 'NES')], 1) }
+		];
+		const { container } = render(DiscoveryGames, {
+			view: view(),
+			name: 'Nintendo',
+			onpage: vi.fn()
+		});
+
+		await screen.findByRole('link', { name: 'Mario' });
+		expect(container.querySelector('.row')!.classList).toContain('row-cols-xl-4');
+		expect(container.querySelector('.row')!.classList).not.toContain('row-cols-xl-6');
+	});
+
 	it('without the group name, the heading names the kind', async () => {
 		answers[url('genres')] = [{ status: 200, body: pageOf([game('g1', 'Tetris', 'gb', 'GB')]) }];
 		render(DiscoveryGames, { view: view({ kind: 'genres' }), name: null, onpage: vi.fn() });

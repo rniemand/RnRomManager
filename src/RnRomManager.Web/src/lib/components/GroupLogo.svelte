@@ -29,7 +29,10 @@
 	{#if source}
 		<img src={source} alt="" {width} {height} loading="lazy" onerror={() => failed.add(source)} />
 	{:else}
-		<span class="group-logo-banner small text-truncate" title={item.name}>{item.name}</span>
+		<!-- text-body: the frame is light even in a selected (white-text) row. -->
+		<span class="group-logo-banner small text-truncate text-body" title={item.name}
+			>{item.name}</span
+		>
 	{/if}
 </span>
 
