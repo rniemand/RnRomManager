@@ -143,7 +143,7 @@ public sealed class DatRefreshJob(
                 throw new LimitExceededException(TitleDbByteLimit);
             await using var body = new LimitStream(await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false), TitleDbByteLimit);
             await using var file = new FileStream(source, FileMode.CreateNew, FileAccess.Write, FileShare.None);
-            await body.CopyToAsync(file, cancellationToken).ConfigureAwait(false);
+            await CopyBodyAsync(body, file, cancellationToken).ConfigureAwait(false);
         }
         var downloadedAt = time.GetUtcNow();
         var version = downloadedAt.UtcDateTime.ToString("yyyy.MM.dd", CultureInfo.InvariantCulture);
@@ -177,8 +177,37 @@ public sealed class DatRefreshJob(
 
         await using var body = new LimitStream(await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false), MaxFileBytes);
         using var buffer = new MemoryStream();
-        await body.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
+        await CopyBodyAsync(body, buffer, cancellationToken).ConfigureAwait(false);
         return buffer.ToArray();
+    }
+
+    /// <summary>How long a response body may send nothing before the download fails.</summary>
+    public static readonly TimeSpan BodyInactivity = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// The client's timeouts end with the headers: a body that stalls (a dropped connection with no reset) would
+    /// otherwise hold the job lock until an Admin cancels.
+    /// </summary>
+    private async Task CopyBodyAsync(Stream source, Stream target, CancellationToken cancellationToken)
+    {
+        using var idle = new CancellationTokenSource(Timeout.InfiniteTimeSpan, time);
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, idle.Token);
+        var buffer = new byte[81920];
+        try
+        {
+            while (true)
+            {
+                idle.CancelAfter(BodyInactivity);
+                var read = await source.ReadAsync(buffer, linked.Token).ConfigureAwait(false);
+                if (read == 0)
+                    return;
+                await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException) when (idle.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            throw new TimeoutException($"The download sent nothing for {BodyInactivity}.");
+        }
     }
 
     private static (string DatName, string? Version) Parse(string text, string kind, ISystemHandler handler, string relative)

@@ -607,7 +607,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             logger.LogError(ex, "Review {Id}: DB write failed", id);
             return new("DbWriteFailed");
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArchiveOutputException)
         {
             logger.LogError(ex, "Review {Id}: IO failure", id);
             return new("IoError");

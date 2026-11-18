@@ -263,6 +263,14 @@ public class ArchiveExtractorTests
     }
 
     [Test]
+    public void Embedded_FailedOutputWrite_IsAnOutputError_NotACorruptArchive()
+    {
+        var failing = new ArchiveExtractor(NullLogger<ArchiveExtractor>.Instance) { CreateOutput = _ => throw new IOException("disk full") };
+
+        Assert.Throws<ArchiveOutputException>(() => failing.Extract(Zip(("Tetris.gb", [1])), Work, RomLimit));
+    }
+
+    [Test]
     public void External_NeverOverwritesAnExtractedCopy()
     {
         Directory.CreateDirectory(Path.Combine(Work, "0"));
@@ -294,6 +302,24 @@ public class ArchiveExtractorTests
         Assert.That(entries.Single().EntryPath, Is.EqualTo(TestFixtures.Basic7zEntry));
         Assert.That(File.ReadAllBytes(entries[0].ExtractedPath), Is.EqualTo(TestFixtures.Basic7zRom()));
         Assert.That(stream.CanRead, Is.True, "the caller's stream stays open");
+    }
+
+    [Test]
+    public void SevenZip_ReadForward_PastASkippedEntry_EmbeddedAndExternal()
+    {
+        long? Nds(string ext) => ext == ".nds" ? 1024 * 1024 : null;
+        var skipped = new List<string>();
+
+        var embedded = _extractor.Extract(TestFixtures.Nds7zPath, Work, Nds, skipped);
+        using var stream = File.OpenRead(TestFixtures.Nds7zPath);
+        var external = _extractor.Extract(stream, "nds.7z", Path.Combine(Work, "ext"), Nds);
+
+        foreach (var entries in new[] { embedded, external })
+        {
+            Assert.That(entries.Single().EntryPath, Is.EqualTo(TestFixtures.Nds7zEntry));
+            Assert.That(File.ReadAllBytes(entries[0].ExtractedPath), Is.EqualTo(TestFixtures.Nds7zRom()));
+        }
+        Assert.That(skipped, Is.EqualTo(new[] { TestFixtures.Nds7zCompanion }));
     }
 
     // --- the checked work directory the extraction goes into ---

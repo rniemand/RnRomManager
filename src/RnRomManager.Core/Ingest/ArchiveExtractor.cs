@@ -58,7 +58,7 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
     public const int MaxEntryPathScalars = 512;
     public const int MaxEntryNameScalars = 255;
 
-    /// <summary>Creates one extracted copy for an external system; the file must not exist. A test seam.</summary>
+    /// <summary>Creates one extracted copy; the file must not exist. A test seam.</summary>
     public Func<string, Stream> CreateOutput { get; init; } = path => new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
 
     public static bool IsArchive(string fileName) => Extensions.Contains(Path.GetExtension(fileName), StringComparer.OrdinalIgnoreCase);
@@ -73,7 +73,8 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
             if (Path.GetExtension(archivePath).Equals(".7z", StringComparison.OrdinalIgnoreCase))
             {
                 using var archive = SevenZipArchive.OpenArchive(archivePath, new ReaderOptions());
-                return ExtractAll(SevenZipEntries(archive), archivePath, workDir, maxRomBytes, external: false, skipped);
+                using var reader = archive.ExtractAllEntries();
+                return ExtractAll(SevenZipEntries(archive, reader), archivePath, workDir, maxRomBytes, external: false, skipped);
             }
             using var zip = ZipFile.OpenRead(archivePath);
             return ExtractAll(ZipEntries(zip), archivePath, workDir, maxRomBytes, external: false, skipped);
@@ -98,7 +99,8 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
             if (Path.GetExtension(archiveName).Equals(".7z", StringComparison.OrdinalIgnoreCase))
             {
                 using var sevenZip = SevenZipArchive.OpenArchive(archive, new ReaderOptions { LeaveStreamOpen = true });
-                return ExtractAll(SevenZipEntries(sevenZip), archiveName, workDir, maxRomBytes, external: true, skipped);
+                using var reader = sevenZip.ExtractAllEntries();
+                return ExtractAll(SevenZipEntries(sevenZip, reader), archiveName, workDir, maxRomBytes, external: true, skipped);
             }
             using var zip = new ZipArchive(archive, ZipArchiveMode.Read, leaveOpen: true);
             return ExtractAll(ZipEntries(zip), archiveName, workDir, maxRomBytes, external: true, skipped);
@@ -201,16 +203,7 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
             try
             {
                 using var source = new LimitStream(files[i].Open(), limit);
-                if (external)
-                {
-                    CopyToNewFile(source, target);
-                }
-                else
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                    using var output = File.Create(target);
-                    source.CopyTo(output);
-                }
+                CopyToNewFile(source, target);
                 written = source.BytesRead;
             }
             catch (LimitExceededException)
@@ -271,7 +264,12 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
         }
     }
 
-    private static IEnumerable<Entry> SevenZipEntries(IArchive archive)
+    /// <summary>
+    /// Entries are checked from the archive's headers but read through one forward <paramref name="reader"/>: opening a
+    /// solid 7z entry on its own decompresses its block from the start each time (quadratic for a big pack).
+    /// <see cref="ExtractAll"/> opens entries in archive order, at most once each.
+    /// </summary>
+    private static IEnumerable<Entry> SevenZipEntries(IArchive archive, IReader reader)
     {
         foreach (var e in archive.Entries)
         {
@@ -279,7 +277,18 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
             var attrib = e.Attrib ?? 0;
             var isLink = !string.IsNullOrEmpty(e.LinkTarget) || (attrib & 0x400) != 0
                 || ((attrib & 0x8000) != 0 && ((attrib >> 16) & 0xF000) == 0xA000);
-            yield return new Entry(e.Key ?? "", e.IsDirectory, e.IsEncrypted, isLink, e.OpenEntryStream);
+            var key = e.Key;
+            yield return new Entry(key ?? "", e.IsDirectory, e.IsEncrypted, isLink, () => ForwardTo(reader, key));
         }
+    }
+
+    private static Stream ForwardTo(IReader reader, string? key)
+    {
+        while (reader.MoveToNextEntry())
+        {
+            if (!reader.Entry.IsDirectory && reader.Entry.Key == key)
+                return reader.OpenEntryStream();
+        }
+        throw new InvalidDataException($"entry '{key}' wasn't found reading the archive forward");
     }
 }

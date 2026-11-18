@@ -254,6 +254,12 @@ public sealed class IngestJob(
             await ItemAsync(run, archive, pipeline.FailFile(archive, run.Context.Actor, ex.Reason, ex.Message)).ConfigureAwait(false);
             return;
         }
+        catch (ArchiveOutputException ex)
+        {
+            // The cache couldn't be written (disk full, permissions): not the archive's fault, so it stays for the next run.
+            await ItemAsync(run, archive, IngestItemResult.Error(IngestErrors.IoError, ex.Message, archive.SystemId)).ConfigureAwait(false);
+            return;
+        }
         if (entries.Count == 0)
         {
             // shortcut: §7.3 doesn't say; an archive with no ROM entries is treated as unsupported rather than deleted.
@@ -261,7 +267,7 @@ public sealed class IngestJob(
             return;
         }
 
-        ApplyFate(archive, run.Context.Actor, await EntriesAsync(run, archive, entries).ConfigureAwait(false), Unhandled(skipped));
+        await ApplyFateAsync(run, archive, await EntriesAsync(run, archive, entries).ConfigureAwait(false), Unhandled(skipped)).ConfigureAwait(false);
     }
 
     /// <summary>§3.1: an archive counts as one file, so every entry finishes even after a cancel.</summary>
@@ -374,14 +380,27 @@ public sealed class IngestJob(
         }
 
         var outcomes = await EntriesAsync(run, archive, entries, snapshot).ConfigureAwait(false);
-        var unhandled = Unhandled(skipped);
+        await ApplyFateAsync(run, archive, outcomes, Unhandled(skipped), StillTheArchiveAsync).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// §7.3: any entry <c>Review</c>/<c>Error</c> (or still waiting) → the archive stays; else any <c>Failed</c> →
+    /// <c>_failed/</c> with every entry's outcome in the <c>.error.txt</c>; else all <c>Duplicate</c> → <c>_duplicates/</c>;
+    /// else deleted (<c>Repaired</c> counts as <c>Ingested</c>). A move or delete that fails is one more item for the
+    /// archive, which stays for the next run.
+    /// </summary>
+    /// <param name="stillTheArchive">External systems (I1): the archive is only moved or deleted while its path still names the extracted file.</param>
+    private async Task ApplyFateAsync(Run run, IngestFile archive, IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes,
+        IReadOnlyList<string> unhandled, Func<Task<bool>>? stillTheArchive = null)
+    {
+        var actor = run.Context.Actor;
         var fate = FateOf([.. outcomes.Select(o => o.Result)], unhandled.Count > 0);
         if (fate == ArchiveFate.Keep)
         {
             logger.LogInformation("{Path}: kept in ingest (an entry needs review, was skipped or hit an error)", archive.FullPath);
             return;
         }
-        if (!await StillTheArchiveAsync().ConfigureAwait(false))
+        if (stillTheArchive is not null && !await stillTheArchive().ConfigureAwait(false))
             return;
 
         IngestItemResult? error = null;
@@ -399,47 +418,11 @@ public sealed class IngestJob(
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                error = Io($"couldn't delete the archive: {ex.Message}");
+                error = IngestItemResult.Error(IngestErrors.IoError, $"couldn't delete the archive: {ex.Message}", archive.SystemId);
             }
         }
         if (error is not null)
-            await One(error).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// §7.3: any entry <c>Review</c>/<c>Error</c> (or still waiting) → the archive stays; else any <c>Failed</c> →
-    /// <c>_failed/</c> with every entry's outcome in the <c>.error.txt</c>; else all <c>Duplicate</c> → <c>_duplicates/</c>;
-    /// else deleted (<c>Repaired</c> counts as <c>Ingested</c>).
-    /// </summary>
-    private void ApplyFate(IngestFile archive, AuditActor actor, IReadOnlyList<(string Entry, IngestItemResult? Result)> outcomes,
-        IReadOnlyList<string> unhandled)
-    {
-        var fate = FateOf([.. outcomes.Select(o => o.Result)], unhandled.Count > 0);
-        if (fate == ArchiveFate.Keep)
-        {
-            logger.LogInformation("{Path}: kept in ingest (an entry needs review or hit an error)", archive.FullPath);
-            return;
-        }
-        if (fate == ArchiveFate.Failed)
-        {
-            pipeline.MoveToFailed(archive, actor, "EntriesFailed", EntryDetails(outcomes, unhandled));
-            return;
-        }
-        if (fate == ArchiveFate.Duplicates)
-        {
-            pipeline.MoveToDuplicates(archive, actor);
-            return;
-        }
-        try
-        {
-            File.Delete(archive.FullPath);
-            pipeline.RecordArchiveDeleted(archive, actor);
-            logger.LogInformation("{Path}: every entry ingested; archive deleted", archive.FullPath);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            logger.LogWarning("{Path}: couldn't delete the archive ({Error}); the next run sees duplicates", archive.FullPath, ex.Message);
-        }
+            await ItemAsync(run, archive, error).ConfigureAwait(false);
     }
 
     public enum ArchiveFate

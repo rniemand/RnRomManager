@@ -213,6 +213,39 @@ public partial class DatRefreshJobTests
     }
 
     [Test]
+    public async Task StalledBody_FailsAfterTheInactivityTimeout_KeepingTheOldSet()
+    {
+        WriteLiveV1();
+        _cache.Load();
+        var reading = new TaskCompletionSource();
+        _override = _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new StalledStream(reading)) };
+        var time = new Microsoft.Extensions.Time.Testing.FakeTimeProvider();
+        var job = new DatRefreshJob(new HttpClient(Server()), new SourcesOptions { DatBaseUrl = BaseUrl + "/" }, _paths, _cache, _systems,
+            _audit, time, NullLogger<DatRefreshJob>.Instance);
+
+        var run = job.RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None);
+        await reading.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        time.Advance(DatRefreshJob.BodyInactivity);
+
+        await Assert.ThrowsAsync<TimeoutException>(() => run.WaitAsync(TimeSpan.FromSeconds(10)));
+        AssertStillV1();
+    }
+
+    /// <summary>A body that never sends a byte, like a connection dropped without a reset.</summary>
+    private sealed class StalledStream(TaskCompletionSource reading) : MemoryStream
+    {
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            reading.TrySetResult();
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            return 0;
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+    }
+
+    [Test]
     public async Task Success_PublishesTheStoresBuiltFromStaging_WithoutReloading()
     {
         var logger = Substitute.For<Microsoft.Extensions.Logging.ILogger<DatCache>>();

@@ -61,6 +61,8 @@
 	}
 
 	function connect(): void {
+		// The first load can finish after the admin left: a stream opened then would never be closed.
+		if (destroyed) return;
 		source?.close();
 		status = 'connecting';
 		const es = new EventSource('/api/admin/logs/stream');
@@ -98,7 +100,11 @@
 		if (auth.isAdmin) void loadRecent().then(connect);
 	});
 
-	onDestroy(() => source?.close());
+	let destroyed = false;
+	onDestroy(() => {
+		destroyed = true;
+		source?.close();
+	});
 </script>
 
 <svelte:head><title>Logs · Admin · RnRomManager</title></svelte:head>
