@@ -7,12 +7,13 @@
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import Pagination from '#lib/components/Pagination.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { pageCount } from '#lib/pageSize.js';
 
-	/** Multiple Releases B14, B18–B20. The threshold and page are URL state (`?min=&page=`). */
+	/** Multiple Releases B14, B18–B20. The threshold, sort and page are URL state (`?min=&sort=&dir=&page=`). */
 	interface MultipleRelease {
 		id: string;
 		displayTitle: string;
@@ -23,8 +24,29 @@
 		bytes: number;
 	}
 
+	type Sort = 'name' | 'system' | 'releases' | 'updates' | 'size';
+	type Dir = 'asc' | 'desc';
+	interface View {
+		min: number;
+		sort: Sort;
+		dir: Dir;
+		page: number;
+	}
+
 	const pageSize = 50;
 	const defaultMin = 2;
+	const defaultSort: Sort = 'releases';
+	/** B16: text columns start ascending, numbers descending. */
+	const defaultDir = (sort: Sort): Dir => (sort === 'name' || sort === 'system' ? 'asc' : 'desc');
+
+	/** B19: the headers, each a sort button. */
+	const columns: { sort: Sort; label: string; numeric: boolean }[] = [
+		{ sort: 'name', label: 'Game', numeric: false },
+		{ sort: 'system', label: 'System', numeric: false },
+		{ sort: 'releases', label: 'Releases', numeric: true },
+		{ sort: 'updates', label: 'Updates', numeric: true },
+		{ sort: 'size', label: 'Size', numeric: true }
+	];
 
 	/** A whole number in [lo, hi], else null (B18: bad URL values fall back to the default). */
 	function whole(value: string | null, lo: number, hi: number): number | null {
@@ -37,6 +59,14 @@
 	const pageNumber = $derived(
 		whole(page.url.searchParams.get('page'), 1, Number.MAX_SAFE_INTEGER) ?? 1
 	);
+	// B18: exact lowercase matches only, as libraryQuery.ts.
+	const sort = $derived(
+		columns.find((c) => c.sort === page.url.searchParams.get('sort'))?.sort ?? defaultSort
+	);
+	const dir = $derived.by<Dir>(() => {
+		const value = page.url.searchParams.get('dir');
+		return value === 'asc' || value === 'desc' ? value : defaultDir(sort);
+	});
 
 	/** The last response's `maxReleases`; null until the first one arrives. */
 	let maxReleases = $state<number | null>(null);
@@ -53,9 +83,11 @@
 	});
 
 	/** Writes the state to the URL, leaving out defaults. */
-	function show(next: { min: number; page: number }): void {
+	function show(next: View): void {
 		const query = [
 			next.min !== defaultMin && `min=${next.min}`,
+			next.sort !== defaultSort && `sort=${next.sort}`,
+			next.dir !== defaultDir(next.sort) && `dir=${next.dir}`,
 			next.page !== 1 && `page=${next.page}`
 		]
 			.filter(Boolean)
@@ -67,9 +99,21 @@
 		});
 	}
 
+	const view = $derived<View>({ min, sort, dir, page: pageNumber });
+
+	/** B19: the active header flips its direction; another sorts in its default direction, from page 1. */
+	function sortBy(key: Sort): void {
+		show({
+			...view,
+			sort: key,
+			dir: key === sort ? (dir === 'asc' ? 'desc' : 'asc') : defaultDir(key),
+			page: 1
+		});
+	}
+
 	$effect(() => {
-		const url = `/api/reports/multiple-releases?min=${min}&sort=releases&dir=desc&page=${pageNumber}&pageSize=${pageSize}`;
-		const current = { min, page: pageNumber };
+		const url = `/api/reports/multiple-releases?min=${min}&sort=${sort}&dir=${dir}&page=${pageNumber}&pageSize=${pageSize}`;
+		const current = view;
 		void reload;
 		const controller = new AbortController();
 		error = null;
@@ -102,7 +146,7 @@
 			class="form-select"
 			value={String(min)}
 			disabled={maxReleases === null}
-			onchange={(e) => show({ min: Number(e.currentTarget.value), page: 1 })}
+			onchange={(e) => show({ ...view, min: Number(e.currentTarget.value), page: 1 })}
 		>
 			{#each options as option (option)}
 				<option value={String(option)}>{option}</option>
@@ -124,11 +168,27 @@
 				<table class="table table-sm table-striped table-hover align-middle mb-0">
 					<thead class="table-dark">
 						<tr>
-							<th scope="col">Game</th>
-							<th scope="col">System</th>
-							<th scope="col" class="text-end">Releases</th>
-							<th scope="col" class="text-end">Updates</th>
-							<th scope="col" class="text-end">Size</th>
+							{#each columns as column (column.sort)}
+								<th
+									scope="col"
+									class={column.numeric ? 'text-end' : undefined}
+									aria-sort={column.sort === sort
+										? dir === 'asc'
+											? 'ascending'
+											: 'descending'
+										: undefined}
+								>
+									<button
+										type="button"
+										class="btn btn-link p-0 text-reset text-decoration-none fw-semibold"
+										onclick={() => sortBy(column.sort)}
+										>{column.label}
+										{#if column.sort === sort}<Icon
+												name={dir === 'asc' ? 'sort-asc' : 'sort-desc'}
+											/>{/if}</button
+									>
+								</th>
+							{/each}
 						</tr>
 					</thead>
 					<tbody>
@@ -149,6 +209,6 @@
 	<Pagination
 		page={pageNumber}
 		pages={pageCount(result.total, pageSize)}
-		onpage={(p) => show({ min, page: p })}
+		onpage={(p) => show({ ...view, page: p })}
 	/>
 {/if}
