@@ -1622,6 +1622,23 @@ test("global search, ratings and favourites", { tag: "@shard-b" }, async () => {
     page.getByRole("heading", { level: 1, name: "Orbit Blocks" }),
   ).toBeVisible();
 
+  // B27: Shift+Enter plays the result: the game page opens with its Play modal, and ?play= leaves the URL.
+  await page.keyboard.press("Control+k");
+  await dialog().getByRole("combobox").fill("orbit");
+  await expect(dialog().getByRole("option").first()).toContainText(
+    "Orbit Blocks",
+  );
+  await page.keyboard.press("Shift+Enter");
+  await expect(dialog()).toHaveAccessibleName(/^Play Orbit Blocks/);
+  await expect(dialog().locator("iframe")).toHaveCount(1);
+  await expect(page).not.toHaveURL(/play=/);
+  await expect(page.locator("body")).toHaveClass(/modal-open/);
+  await dialog()
+    .locator(".modal-footer")
+    .getByRole("button", { name: "Close" })
+    .click();
+  await expect(page.locator("iframe")).toHaveCount(0);
+
   // Rate and favourite it from its library card; both survive a reload.
   await openLibrary();
   const card = page.getByRole("group", {

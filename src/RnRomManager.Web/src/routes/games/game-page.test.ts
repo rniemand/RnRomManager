@@ -1299,4 +1299,66 @@ describe('game detail page', () => {
 
 		expect(await screen.findByText("This game doesn't exist any more.")).toBeTruthy();
 	});
+
+	describe('?play= from Global Search (B27)', () => {
+		const playableGame = () => {
+			const detail = game([1, 2]);
+			detail.browserCore = 'gambatte';
+			return detail;
+		};
+		const frame = () => document.querySelector('iframe');
+
+		it('opens the Play modal for that release and removes only play, keeping tab', async () => {
+			navigateTo('/games/g1?tab=images&play=2');
+			answers.push({ status: 200, body: playableGame() });
+			render(GamePage);
+
+			await vi.waitFor(() => expect(frame()).not.toBeNull());
+			expect(frame()!.getAttribute('src')).toContain('&rom=2&');
+			expect(goto).toHaveBeenCalledWith('/games/g1?tab=images', { replace: true, reset: false });
+		});
+
+		it('works on the already-open game, with no reload', async () => {
+			answers.push({ status: 200, body: playableGame() });
+			render(GamePage);
+			await screen.findByRole('article', { name: 'Tetris 1.gb' });
+			const before = fetches;
+
+			navigateTo('/games/g1?play=1');
+
+			await vi.waitFor(() => expect(frame()).not.toBeNull());
+			expect(frame()!.getAttribute('src')).toContain('&rom=1&');
+			expect(goto).toHaveBeenCalledWith('/games/g1', { replace: true, reset: false });
+			// No game refetch: at most the antiforgery GET before the played POST.
+			expect(fetches - before).toBeLessThanOrEqual(1);
+		});
+
+		it.each([
+			['a release not in the game', '99', playableGame],
+			[
+				'a release that cannot play',
+				'1',
+				() => game([1, 2]) // no browser core
+			],
+			[
+				'a PSP release (it opens in a new tab)',
+				'1',
+				() => {
+					const psp = game([1]);
+					psp.browserCore = 'ppsspp';
+					psp.roms[0].externalFileName = psp.roms[0].fileName;
+					return psp;
+				}
+			]
+		] as const)('ignores %s and removes it', async (_, playId, detail) => {
+			navigateTo(`/games/g1?play=${playId}`);
+			answers.push({ status: 200, body: detail() });
+			render(GamePage);
+
+			await vi.waitFor(() =>
+				expect(goto).toHaveBeenCalledWith('/games/g1', { replace: true, reset: false })
+			);
+			expect(frame()).toBeNull();
+		});
+	});
 });

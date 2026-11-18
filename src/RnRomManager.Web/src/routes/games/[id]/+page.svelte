@@ -171,6 +171,33 @@
 		toasts.show(text.replace('{file}', entry.fileName), kind);
 	}
 
+	/**
+	 * B27: `?play=<romId>` (from Global Search) opens the Play modal for that release once the game is loaded, also on
+	 * the already-open game; then only `play` leaves the URL (`tab` stays). A release not in the game, one that can't
+	 * play, or a PSP one (it opens in a new tab) is ignored and removed all the same.
+	 */
+	$effect(() => {
+		const playId = page.url.searchParams.get('play');
+		const current = game;
+		if (playId === null || !current || current.id !== id) return;
+		untrack(() => {
+			const rom = current.roms.find((r) => String(r.id) === playId);
+			if (
+				rom &&
+				canPlay(current, rom) &&
+				current.browserCore &&
+				!opensInNewTab(current.browserCore)
+			) {
+				playRom = rom;
+				playOpen = true;
+			}
+			const next = new URL(page.url.href);
+			next.searchParams.delete('play');
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
+			void goto(`${next.pathname}${next.search}`, { replace: true, reset: false });
+		});
+	});
+
 	function showHeader(rom: RomDetail): void {
 		headerRom = rom;
 		headerOpen = true;
