@@ -544,3 +544,41 @@ export interface BundleTicketStatus {
 	state: BundleTicketState;
 	errorCode: string | null;
 }
+
+/** UI polish B21: one audit row in the Activity report (the `/api/admin/audit` item plus `gameTitle`). */
+export interface ActivityAuditItem {
+	id: number;
+	occurredAt: string;
+	action: string;
+	system: string | null;
+	gameId: string | null;
+	user: string | null;
+	jobId: string | null;
+	path: string | null;
+	targetPath: string | null;
+	details: string | null;
+	/** Null when the game is gone. */
+	gameTitle: string | null;
+}
+
+/** B21: a recently added release; `sizeBytes` is the release total. */
+export interface ActivityRom {
+	romId: number;
+	gameId: string;
+	gameTitle: string;
+	fileName: string;
+	system: string;
+	sizeBytes: number;
+	addedAt: string;
+}
+
+/** `GET /api/reports/activity` (Admin, B21); each list is newest first, at most 20. */
+export interface ActivityReport {
+	lastSignIn: { username: string; at: string } | null;
+	addedRoms: ActivityRom[];
+	signIns: ActivityAuditItem[];
+	plays: ActivityAuditItem[];
+	saves: ActivityAuditItem[];
+	edits: ActivityAuditItem[];
+	deletions: ActivityAuditItem[];
+}

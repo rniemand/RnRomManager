@@ -284,6 +284,15 @@ test("reports and the ingest audit trail", async () => {
   await page.getByRole("link", { name: "Duplicates", exact: true }).click();
   await expect(page.getByText("No duplicate games found.")).toBeVisible();
   await expectAccessible(page, "duplicates report");
+  // B20: the Admin-only Activity report lists the ingested releases.
+  await page.getByRole("link", { name: "Activity", exact: true }).click();
+  await expect(
+    page
+      .getByRole("region", { name: "Added ROMs" })
+      .getByRole("row")
+      .nth(1),
+  ).toBeVisible();
+  await expectAccessible(page, "activity report");
 
   await openAdmin();
   await page.getByRole("link", { name: "Auditing", exact: true }).click();
