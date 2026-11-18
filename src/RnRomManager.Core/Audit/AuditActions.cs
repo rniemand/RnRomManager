@@ -61,6 +61,9 @@ public static class AuditActions
     public const string SignInFailed = "SignInFailed";
     public const string LockedOut = "LockedOut";
 
+    /// <summary>UI polish B22: a browser play started (details: the release's file name).</summary>
+    public const string GamePlayed = "GamePlayed";
+
     public static readonly IReadOnlyList<string> All =
     [
         Ingested, ZipRepaired, ExtensionRenamed, MovedToFailed, MovedToDuplicates, ArchiveDeleted, ReviewDeleted, GameUpdated,
@@ -68,6 +71,6 @@ public static class AuditActions
         IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved, GenreLogoReplaced, GenreLogoRemoved,
         SystemLogoReplaced, SystemLogoRemoved, BackupRestored, RomsExternalized,
         SaveAdded, SaveUpdated, SaveDeleted, UserCreated, UserTypeChanged, UserDisabled, UserEnabled, PasswordReset,
-        PasswordChanged, SignedIn, SignInFailed, LockedOut,
+        PasswordChanged, SignedIn, SignInFailed, LockedOut, GamePlayed,
     ];
 }

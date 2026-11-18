@@ -190,7 +190,19 @@ public static class LibraryEndpoints
                 : Results.Bytes(bytes!, "text/markdown; charset=utf-8");
         });
 
-        games.MapPut("/{id:guid}/roms/{romId:long}/note", async (Guid id, long romId, JsonElement body, HttpContext ctx, LibraryEditor editor) =>
+        // B22: a browser play started (modal or PSP tab); audited for the Activity report, nothing else.
+        games.MapPost("/{id:guid}/roms/{romId:long}/played", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,
+            IRomRepository roms, IAuditLog audit) =>
+        {
+            if (await roms.GetAsync(id, romId, ctx.RequestAborted) is not { } rom
+                || await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
+                return Problems.NotFound(ctx);
+            audit.Record(new AuditEvent(AuditActions.GamePlayed, AuditActor.From(ctx.User), game.SystemId, game.Id,
+                AuditPaths.Library(game.ZipPath), Details: rom.FileName));
+            return Results.NoContent();
+        });
+
+        games.MapPut("/{id:guid}/roms/{romId:long}/note",async (Guid id, long romId, JsonElement body, HttpContext ctx, LibraryEditor editor) =>
         {
             var (text, errors) = ParseNote(body);
             if (errors.Count > 0)
