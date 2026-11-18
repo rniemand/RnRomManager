@@ -286,6 +286,14 @@ test("reports and the ingest audit trail", async () => {
   await page.getByRole("link", { name: "Duplicates", exact: true }).click();
   await expect(page.getByText("No duplicate games found.")).toBeVisible();
   await expectAccessible(page, "duplicates report");
+  // Multiple Releases: the Switch game has a base and a DLC release (its updates don't count).
+  await page.getByRole("link", { name: "Multiple Releases", exact: true }).click();
+  await expect(page).toHaveURL(/\/reports\/multiple-releases$/);
+  await expect(page.getByLabel("Minimum releases")).toBeVisible();
+  await expect(
+    page.getByRole("table").getByRole("link", { name: "Orbit Expedition", exact: true }),
+  ).toBeVisible();
+  await expectAccessible(page, "multiple releases report");
   // B20: the Admin-only Activity report lists the ingested releases.
   await page.getByRole("link", { name: "Activity", exact: true }).click();
   await expect(

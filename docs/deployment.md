@@ -125,7 +125,7 @@ Use `ASPNETCORE_HTTP_PORTS` to change the listen port, not `ASPNETCORE_URLS`: th
 
 ## Outbound HTTP
 
-Besides the DAT downloads (libretro-database and the [titledb](https://github.com/blawar/titledb) file for Switch, `Sources:TitleDbUrl`, about 90 MB and capped at 256 MiB) and the thumbnail downloads (libretro-thumbnails, and for Switch images from `img-eshop.cdn.nintendo.net` only, with redirects refused), **Upload image → URL** makes the server fetch an image from an address a ROM manager types. That download connects directly (it ignores `HTTP_PROXY`/`HTTPS_PROXY`), only to public internet addresses (private, loopback, link-local and similar ranges are refused on every redirect hop), with a 15-second limit and at most 8 MiB. On a host that can only reach the internet through a mandatory egress proxy, the URL option fails with "couldn't connect"; uploading a file still works.
+Besides the DAT downloads (libretro-database and the [titledb](https://github.com/blawar/titledb) file for Switch, `Sources:TitleDbUrl`, about 90 MB and capped at 256 MiB) and the thumbnail downloads (libretro-thumbnails, and for Switch images from `img-eshop.cdn.nintendo.net` only, with redirects refused), **Upload Image → URL** makes the server fetch an image from an address a ROM manager types. That download connects directly (it ignores `HTTP_PROXY`/`HTTPS_PROXY`), only to public internet addresses (private, loopback, link-local and similar ranges are refused on every redirect hop), with a 15-second limit and at most 8 MiB. On a host that can only reach the internet through a mandatory egress proxy, the URL option fails with "couldn't connect"; uploading a file still works.
 
 ## Health checks
 

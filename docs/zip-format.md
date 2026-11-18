@@ -245,7 +245,7 @@ Nintendo Switch `header`, from the first MiB of the file: `container` (`PFS0` fo
 | `fileName` | string | ✓ | entry name under `images/` |
 | `type` | `BoxArt` \| `Snap` \| `TitleScreen` \| `Other` | ✓ | only BoxArt and Snap are fetched |
 | `source` | `libretro-thumbnails` \| `titledb` \| `default` \| `upload` | ✓ | `upload` from v3, `titledb` from v4 |
-| `sourceUrl` | string? | | the URL a `libretro-thumbnails` or `titledb` image came from (titledb images come from `img-eshop.cdn.nintendo.net`), or the URL an `upload` was downloaded from (Upload image → URL); null for a file upload and the placeholder |
+| `sourceUrl` | string? | | the URL a `libretro-thumbnails` or `titledb` image came from (titledb images come from `img-eshop.cdn.nintendo.net`), or the URL an `upload` was downloaded from (Upload Image → URL); null for a file upload and the placeholder |
 | `isDefault` | bool | ✓ | the system placeholder; at most one, and it must be a `BoxArt` |
 | `isCover` | bool | ✓ | v3; exactly one per game with images |
 | `sizeBytes` | long | ✓ | entry size |
