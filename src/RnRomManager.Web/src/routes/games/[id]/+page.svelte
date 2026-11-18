@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -37,6 +37,7 @@
 	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
 	import { formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
+	import { renderMarkdown } from '#lib/markdown.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { bundle, maxBundleEntries, type AddResult } from '#lib/stores/bundle.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
@@ -57,6 +58,7 @@
 	let infoJsonOpen = $state(false);
 	let noteRom = $state<RomDetail | null>(null);
 	let noteOpen = $state(false);
+	let noteMode = $state<'edit' | undefined>();
 	let playRom = $state<RomDetail | null>(null);
 	let playOpen = $state(false);
 	/** B16/B25: the caller's collections holding this game. */
@@ -174,23 +176,68 @@
 		headerOpen = true;
 	}
 
-	function showNote(rom: RomDetail): void {
+	function showNote(rom: RomDetail, mode?: 'edit'): void {
 		noteRom = rom;
+		noteMode = mode;
 		noteOpen = true;
 	}
 
 	/**
+	 * B7: each open card's rendered note, by file name (ROM ids change on every ZIP rewrite), loaded on first expand.
+	 * `pendingNotes` holds file names whose note was just saved: their ids are stale until the refetch lands.
+	 */
+	type NoteState = { loading: true } | { text: string } | { error: unknown };
+	const notes = new SvelteMap<string, NoteState>();
+	const pendingNotes = new SvelteSet<string>();
+
+	async function loadNote(rom: RomDetail): Promise<void> {
+		const fileName = rom.fileName;
+		notes.set(fileName, { loading: true });
+		try {
+			const text = await api.getText(`/api/games/${encodeURIComponent(id)}/roms/${rom.id}/note`);
+			notes.set(fileName, { text });
+		} catch (e) {
+			if (isApiError(e) && e.status === 404) {
+				// Deleted meanwhile, as the modal treats it: the block goes and the game is refetched.
+				notes.delete(fileName);
+				rom.hasNote = false;
+				await refreshGame();
+			} else notes.set(fileName, { error: e });
+		}
+	}
+
+	$effect(() => {
+		for (const rom of shownRoms)
+			if (
+				rom.hasNote &&
+				openReleases.has(rom.fileName) &&
+				!notes.has(rom.fileName) &&
+				!pendingNotes.has(rom.fileName)
+			)
+				untrack(() => void loadNote(rom));
+	});
+
+	/**
 	 * A note write rewrites the ZIP, and the mirror gives every ROM a new id (§11): flip the icon now, then quietly
-	 * refetch so the next note/download/edit uses current ids.
+	 * refetch so the next note/download/edit uses current ids. B7: the cached note goes (open or not), and an open
+	 * card reloads it with the new id once the refetch lands.
 	 */
 	async function onNoteSaved(romId: number, hasNote: boolean): Promise<void> {
 		const rom = game?.roms.find((r) => r.id === romId);
-		if (rom) rom.hasNote = hasNote;
+		if (rom) {
+			rom.hasNote = hasNote;
+			pendingNotes.add(rom.fileName);
+		}
 		try {
 			const fresh = await fetchGame(id);
 			if (fresh) game = fresh;
 		} catch {
 			// The flipped icon stands; a stale id later reloads and asks for a retry as usual.
+		} finally {
+			if (rom) {
+				notes.delete(rom.fileName);
+				pendingNotes.delete(rom.fileName);
+			}
 		}
 	}
 
@@ -248,6 +295,7 @@
 		untrack(() => {
 			openReleases.clear();
 			openFiles.clear();
+			notes.clear();
 			zipSelected = '';
 			zipExpanded.clear();
 		});
@@ -668,6 +716,34 @@
 						</div>
 					</div>
 					<div class="card-body small" id="release-{rom.id}-details" hidden={!open}>
+						{#if rom.hasNote}
+							{@const note = notes.get(rom.fileName)}
+							<!-- B7: the note comes first; a non-interactive block (its Markdown links work) beside an Edit/View button. -->
+							<div class="border rounded p-2 mb-3" data-testid="release-note">
+								<div class="d-flex align-items-center gap-2 mb-2">
+									<h4 class="h6 mb-0">Release note</h4>
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-secondary ms-auto"
+										aria-label="{auth.isAdmin ? 'Edit' : 'View'} note for {rom.fileName}"
+										onclick={() => showNote(rom, auth.isAdmin ? 'edit' : undefined)}
+									>
+										<Icon name={auth.isAdmin ? 'edit' : 'note-filled'} />
+										{auth.isAdmin ? 'Edit note' : 'View note'}
+									</button>
+								</div>
+								{#if note && 'error' in note}
+									<ErrorAlert error={note.error} onretry={() => loadNote(rom)} />
+								{:else if note && 'text' in note}
+									<div class="note-markdown">
+										<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by DOMPurify in renderMarkdown -->
+										{@html renderMarkdown(note.text)}
+									</div>
+								{:else}
+									<Loading label="Loading note…" />
+								{/if}
+							</div>
+						{/if}
 						<!-- B8: a key/value table (T1–T4), one pair per row, each row only when it has a value. Values
 						     keep wrapping (G2: never truncated), an exception to the T-rule's text-truncate. -->
 						<div class="card">
@@ -878,7 +954,13 @@
 
 	<InfoJsonModal bind:open={infoJsonOpen} gameId={game.id} />
 
-	<ReleaseNoteModal bind:open={noteOpen} gameId={game.id} rom={noteRom} onsaved={onNoteSaved} />
+	<ReleaseNoteModal
+		bind:open={noteOpen}
+		gameId={game.id}
+		rom={noteRom}
+		initialMode={noteMode}
+		onsaved={onNoteSaved}
+	/>
 	<EmulatorModal
 		bind:open={playOpen}
 		gameId={game.id}

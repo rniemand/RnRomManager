@@ -380,3 +380,11 @@ body:has(.app-footer) .toast-container {
 .clickable-rows > tbody > tr {
 	cursor: pointer;
 }
+
+/* B7: rendered release notes, in the note modal and the release card. */
+.note-markdown :last-child {
+	margin-bottom: 0;
+}
+.note-markdown img {
+	max-width: 100%;
+}
