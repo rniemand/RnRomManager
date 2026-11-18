@@ -289,19 +289,35 @@ test("reports and the ingest audit trail", async () => {
   await page.getByRole("link", { name: "Auditing", exact: true }).click();
   const ingested = page
     .getByRole("row")
-    .filter({ has: page.getByRole("cell", { name: "Ingested", exact: true }) });
+    // B30: the Action cell also holds the system badge, so match its action line.
+    .filter({ has: page.getByRole("cell").getByText("Ingested", { exact: true }) });
   // One Ingested event per release: a bin/cue set is one event (B7a).
   await expect(ingested).toHaveCount(34);
   await expect(
     page
       .getByRole("row")
       .filter({
-        has: page.getByRole("cell", { name: "IngestFileDeleted", exact: true }),
+        has: page
+          .getByRole("cell")
+          .getByText("IngestFileDeleted", { exact: true }),
       }),
   ).toContainText("ingest/gb/_failed/92-invalid.gb");
   await expect(ingested.first()).toContainText("admin");
   await expect(ingested.first()).toContainText("ingest/");
   await expectAccessible(page, "audit trail");
+
+  // B28/B29: the DATs page's two panels, and a DAT row's download.
+  await page.getByRole("link", { name: "DATs", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "DAT files" }),
+  ).toHaveAttribute("aria-expanded", "true");
+  const datDownload = page.getByRole("link", { name: /^Download / }).first();
+  const datFile = await page.request.get(
+    (await datDownload.getAttribute("href"))!,
+  );
+  expect(datFile.status()).toBe(200);
+  expect(datFile.headers()["content-disposition"]).toContain("attachment");
+  await expectAccessible(page, "admin DATs");
 });
 
 test("browse, search and filter the library", async () => {
@@ -837,7 +853,7 @@ test("saves: upload, rename, save state from Play, play it, delete, audit", asyn
     await expect(
       page
         .getByRole("row")
-        .filter({ has: page.getByRole("cell", { name: action, exact: true }) })
+        .filter({ has: page.getByRole("cell").getByText(action, { exact: true }) })
         .first(),
     ).toContainText("Orbit Blocks");
 });
@@ -2073,8 +2089,8 @@ test("user management: a Site user's account, private saves and audit trail", { 
     await expect(user).toHaveURL(/\/login/);
 
     // U9/U10: the audit trail lists the account events (the User filter is the actor; `user=<name>` finds actions on them).
-    const actions = (p: Page) =>
-      p.getByRole("row").getByRole("cell", { exact: true });
+    // B30: the action is the first line of its cell (the system badge sits under it).
+    const actions = (p: Page) => p.getByRole("row").getByRole("cell").locator("div");
     await expect(async () => {
       await page.goto(`/admin/audit?user=${visitor}`);
       for (const action of ["SignedIn", "SignInFailed", "PasswordChanged"])

@@ -46,7 +46,8 @@ describe('Auditing', () => {
 				user: null,
 				path: 'ingest/a.gb',
 				targetPath: 'roms/a.zip',
-				details: 'release a.gb'
+				details: 'release a.gb',
+				gameTitle: 'Tetris'
 			}
 		];
 		vi.spyOn(api, 'get').mockImplementation(async (url) => {
@@ -90,11 +91,15 @@ describe('Auditing', () => {
 
 	it('loads 100 unfiltered rows, shows System for a null user, paths and the game link', async () => {
 		render(AuditPage);
-		const link = await screen.findByRole('link', { name: game });
+		const link = await screen.findByRole('link', { name: 'Tetris' });
 		expect(link.getAttribute('href')).toBe(`/games/${game}`);
 		expect(latest().toString()).toBe('page=1&pageSize=100');
 		expect(screen.getByText('System', { selector: 'em' })).toBeTruthy();
-		expect(screen.getByText('ingest/a.gb').getAttribute('title')).toBe('ingest/a.gb');
+		const change = document.querySelector('tbody tr td:last-child')!;
+		expect(
+			[...change.children].map((line) => line.textContent!.replace(/\s+/g, ' ').trim())
+		).toEqual(['ingest/a.gb → roms/a.zip', 'release a.gb']);
+		expect(change.querySelector('[title]')).toBeNull();
 		expect(
 			within(document.querySelector('tbody')!).getByText('Game Boy', { selector: '.badge' })
 		).toBeTruthy();
@@ -120,7 +125,7 @@ describe('Auditing', () => {
 	])('maps %s to the API and URL, resetting the page', async (label, key, value) => {
 		navigateTo('/admin/audit?page=2');
 		render(AuditPage);
-		await screen.findByRole('link', { name: game });
+		await screen.findByRole('link', { name: 'Tetris' });
 		if (label === 'Action') await fireEvent.click(menuItem('Action', 'GameUpdated'));
 		else if (label === 'System') await fireEvent.click(menuItem('System', 'Game Boy'));
 		else
@@ -133,7 +138,7 @@ describe('Auditing', () => {
 
 	it('sends local midnights, with To exclusive on the next local day', async () => {
 		render(AuditPage);
-		await screen.findByRole('link', { name: game });
+		await screen.findByRole('link', { name: 'Tetris' });
 		await fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-11-01' } });
 		await vi.waitFor(() => expect(latest().get('from')).toBe(new Date(2026, 10, 1).toISOString()));
 		await fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-11-01' } });
@@ -145,7 +150,7 @@ describe('Auditing', () => {
 	it('scheduled only clears and disables User, including a pending debounce', async () => {
 		navigateTo('/admin/audit?user=boss');
 		render(AuditPage);
-		await screen.findByRole('link', { name: game });
+		await screen.findByRole('link', { name: 'Tetris' });
 		await fireEvent.input(screen.getByLabelText('User', { exact: true }), {
 			target: { value: 'other' }
 		});
@@ -164,9 +169,10 @@ describe('Auditing', () => {
 		total = 201;
 		navigateTo('/admin/audit?action=Ingested&system=gb&q=zip&from=2026-11-01&to=2026-11-02&page=2');
 		render(AuditPage);
-		await screen.findByRole('link', { name: game });
+		await screen.findByRole('link', { name: 'Tetris' });
 		expect((screen.getByLabelText('Search') as HTMLInputElement).value).toBe('zip');
-		await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+		const top = screen.getByRole('navigation', { name: 'Pages, top' });
+		await fireEvent.click(within(top).getByRole('button', { name: 'Next' }));
 		await vi.waitFor(() => expect(latest().get('page')).toBe('3'));
 		expect(testUrl.current.searchParams.get('page')).toBe('3');
 		await fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
@@ -178,7 +184,7 @@ describe('Auditing', () => {
 	it('the filters are one toolbar of dropdowns, each toggle showing its value (B25)', async () => {
 		navigateTo('/admin/audit?action=Ingested&system=gb&user=boss&from=2026-11-01&to=2026-11-02');
 		render(AuditPage);
-		await screen.findByRole('link', { name: game });
+		await screen.findByRole('link', { name: 'Tetris' });
 
 		const form = screen.getByRole('search');
 		expect(form.classList.contains('flex-wrap')).toBe(true);
@@ -197,7 +203,7 @@ describe('Auditing', () => {
 
 	it('an unfiltered toolbar shows the bare field names; Scheduled only names the User toggle', async () => {
 		render(AuditPage);
-		await screen.findByRole('link', { name: game });
+		await screen.findByRole('link', { name: 'Tetris' });
 		expect(toggle('User').textContent!.trim()).toBe('User');
 		expect(toggle('Date').textContent!.trim()).toBe('Date');
 		expect(toggle('Action').classList.contains('btn-outline-secondary')).toBe(true);
@@ -212,7 +218,7 @@ describe('Auditing', () => {
 	it('choosing All actions clears the action', async () => {
 		navigateTo('/admin/audit?action=Ingested');
 		render(AuditPage);
-		await screen.findByRole('link', { name: game });
+		await screen.findByRole('link', { name: 'Tetris' });
 
 		await fireEvent.click(menuItem('Action', 'All actions'));
 
@@ -220,15 +226,92 @@ describe('Auditing', () => {
 		expect(testUrl.current.searchParams.has('action')).toBe(false);
 	});
 
-	it('truncates a long Details value and keeps the full text as its title (B24)', async () => {
+	it('wraps a long Details value instead of truncating it (B30)', async () => {
 		const long = Array.from({ length: 40 }, (_, i) => `Nintendo - System ${i}.dat`).join(', ');
 		items = [{ ...(items[0] as object), details: long }];
 		render(AuditPage);
 
-		const cell = await screen.findByText(long);
-		expect(cell.classList.contains('text-truncate')).toBe(true);
-		expect(cell.getAttribute('title')).toBe(long);
-		expect((cell as HTMLElement).style.maxWidth).toBe('32rem');
+		const line = await screen.findByText(long);
+		const cell = line.closest('td')!;
+		expect(cell.classList.contains('text-break')).toBe(true);
+		expect(cell.classList.contains('text-truncate')).toBe(false);
+		expect(line.getAttribute('title')).toBeNull();
+	});
+
+	it('has five columns, the system badge under the action (B30)', async () => {
+		render(AuditPage);
+		await screen.findByRole('link', { name: 'Tetris' });
+
+		expect(screen.getAllByRole('columnheader').map((th) => th.textContent!.trim())).toEqual([
+			'Time',
+			'Action',
+			'User',
+			'Game',
+			'Change'
+		]);
+		const action = document.querySelector('tbody tr td:nth-child(2)')!;
+		expect(action.firstElementChild!.textContent).toBe('Ingested');
+		expect(
+			within(action as HTMLElement).getByText('Game Boy', { selector: '.badge' })
+		).toBeTruthy();
+	});
+
+	it('a gone game shows its short id as plain text with the full id as title (B30)', async () => {
+		items = [{ ...(items[0] as object), gameTitle: null }];
+		render(AuditPage);
+
+		const short = await screen.findByText(game.slice(0, 8));
+		expect(short.tagName).toBe('SPAN');
+		expect(short.getAttribute('title')).toBe(game);
+		expect(screen.queryByRole('link', { name: /0000/ })).toBeNull();
+	});
+
+	it('the Change cell shows → target alone, and — when path, target and details are null (B30)', async () => {
+		items = [
+			{ ...(items[0] as object), id: 1, path: null, targetPath: 'roms/b.zip', details: null },
+			{ ...(items[0] as object), id: 2, gameId: null, path: null, targetPath: null, details: null }
+		];
+		render(AuditPage);
+		await screen.findByRole('link', { name: 'Tetris' });
+
+		const cells = [...document.querySelectorAll('tbody tr')].map((row) =>
+			[...row.querySelectorAll('td')]
+				.slice(3)
+				.map((td) => td.textContent!.replace(/\s+/g, ' ').trim())
+		);
+		expect(cells).toEqual([
+			['Tetris', '→ roms/b.zip'],
+			['—', '—']
+		]);
+	});
+
+	it('paginates above and below with distinct labels, only with more than one page (B30)', async () => {
+		total = 201;
+		const { unmount } = render(AuditPage);
+		await screen.findByRole('link', { name: 'Tetris' });
+		expect(screen.getAllByRole('navigation').map((n) => n.getAttribute('aria-label'))).toEqual([
+			'Pages, top',
+			'Pages, bottom'
+		]);
+		const top = screen.getByRole('navigation', { name: 'Pages, top' });
+		expect(
+			top.compareDocumentPosition(document.querySelector('table')!) &
+				Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+		unmount();
+
+		total = 1;
+		render(AuditPage);
+		await screen.findByRole('link', { name: 'Tetris' });
+		expect(screen.queryByRole('navigation')).toBeNull();
+	});
+
+	it('no pagination when the list is empty (B30)', async () => {
+		items = [];
+		total = 0;
+		render(AuditPage);
+		await screen.findByText('No audit events found.');
+		expect(screen.queryByRole('navigation')).toBeNull();
 	});
 
 	it('shows an empty state', async () => {
@@ -243,7 +326,7 @@ describe('Auditing', () => {
 		await screen.findByRole('alert');
 		fail = false;
 		await fireEvent.click(screen.getByRole('button', { name: /Retry/ }));
-		expect(await screen.findByRole('link', { name: game })).toBeTruthy();
+		expect(await screen.findByRole('link', { name: 'Tetris' })).toBeTruthy();
 	});
 	it('requires admin and makes no requests for a plain user', async () => {
 		auth.set({ id: 2, username: 'plain', roles: [], mustChangePassword: false });

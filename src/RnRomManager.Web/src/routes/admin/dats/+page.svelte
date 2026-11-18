@@ -3,6 +3,7 @@
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { DatRefreshSettings, DatVersion } from '#lib/api/types.js';
+	import AccordionItem from '#lib/components/AccordionItem.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
@@ -13,6 +14,9 @@
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
+	/** B28: independent panels, both open by default. */
+	let scheduleOpen = $state(true);
+	let filesOpen = $state(true);
 	let dats = $state<DatVersion[] | null>(null);
 	let error = $state<unknown>(null);
 	let busy = $state(false);
@@ -121,76 +125,92 @@
 	{/if}
 </div>
 
-<form class="card card-body mb-3" novalidate onsubmit={saveSchedule} aria-labelledby="dat-schedule">
-	<h2 class="h5" id="dat-schedule">Automatic refresh</h2>
-	{#if scheduleError}
-		<ErrorAlert error={scheduleError} onretry={loadSchedule} />
-	{:else if !schedule}
+<AccordionItem id="dat-schedule-panel" headingId="dat-schedule" bind:open={scheduleOpen}>
+	{#snippet header()}Automatic refresh{/snippet}
+	<form novalidate onsubmit={saveSchedule} aria-labelledby="dat-schedule">
+		{#if scheduleError}
+			<ErrorAlert error={scheduleError} onretry={loadSchedule} />
+		{:else if !schedule}
+			<Loading />
+		{:else}
+			<div class="form-check form-switch mb-3">
+				<input
+					id="dat-enabled"
+					class="form-check-input"
+					type="checkbox"
+					role="switch"
+					bind:checked={form.enabled}
+				/>
+				<label class="form-check-label" for="dat-enabled">Enabled</label>
+			</div>
+			<div class="mb-3 dat-time">
+				<label class="form-label" for="dat-time">Time (server time, {schedule.timeZone})</label>
+				<input
+					id="dat-time"
+					class="form-control"
+					class:is-invalid={timeError}
+					type="time"
+					bind:value={form.time}
+				/>
+				{#if timeError}<div class="invalid-feedback">{timeError}</div>{/if}
+			</div>
+			<p class="small text-body-secondary" data-testid="dat-next-run">
+				Next run: {schedule.nextRunAt ? formatDateTime(schedule.nextRunAt) : 'Disabled'}
+			</p>
+			<div>
+				<button type="submit" class="btn btn-primary" disabled={saving}>
+					{#if saving}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
+					Save
+				</button>
+			</div>
+		{/if}
+	</form>
+</AccordionItem>
+
+<AccordionItem id="dat-files-panel" headingId="dat-files" bind:open={filesOpen}>
+	{#snippet header()}DAT files{/snippet}
+	{#if error}
+		<ErrorAlert {error} onretry={load} />
+	{:else if !dats}
 		<Loading />
+	{:else if dats.length === 0}
+		<EmptyState message="No DATs downloaded yet. Refresh to download them." />
 	{:else}
-		<div class="form-check form-switch mb-3">
-			<input
-				id="dat-enabled"
-				class="form-check-input"
-				type="checkbox"
-				role="switch"
-				bind:checked={form.enabled}
-			/>
-			<label class="form-check-label" for="dat-enabled">Enabled</label>
-		</div>
-		<div class="mb-3 dat-time">
-			<label class="form-label" for="dat-time">Time (server time, {schedule.timeZone})</label>
-			<input
-				id="dat-time"
-				class="form-control"
-				class:is-invalid={timeError}
-				type="time"
-				bind:value={form.time}
-			/>
-			{#if timeError}<div class="invalid-feedback">{timeError}</div>{/if}
-		</div>
-		<p class="small text-body-secondary" data-testid="dat-next-run">
-			Next run: {schedule.nextRunAt ? formatDateTime(schedule.nextRunAt) : 'Disabled'}
-		</p>
-		<div>
-			<button type="submit" class="btn btn-primary" disabled={saving}>
-				{#if saving}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
-				Save
-			</button>
+		<div class="card">
+			<div class="table-responsive">
+				<table class="table table-sm table-striped table-hover align-middle mb-0">
+					<thead class="table-dark">
+						<tr class="small text-uppercase text-body-secondary">
+							<th scope="col">DAT</th>
+							<th scope="col">Version</th>
+							<th scope="col">Downloaded</th>
+							<th scope="col"><span class="visually-hidden">Actions</span></th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each dats as dat (dat.datName)}
+							<tr>
+								<td>{dat.datName}</td>
+								<td>{dat.version}</td>
+								<td class="text-nowrap">{formatDateTime(dat.downloadedAt)}</td>
+								<td class="text-end">
+									<!-- eslint-disable svelte/no-navigation-without-resolve -- an API download, not a page -->
+									<a
+										class="btn btn-sm btn-outline-secondary"
+										href="/api/admin/dats/{encodeURIComponent(dat.datName)}/download"
+										download
+										aria-label="Download {dat.datName}"><Icon name="download" /></a
+									>
+									<!-- eslint-enable svelte/no-navigation-without-resolve -->
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
 		</div>
 	{/if}
-</form>
-
-{#if error}
-	<ErrorAlert {error} onretry={load} />
-{:else if !dats}
-	<Loading />
-{:else if dats.length === 0}
-	<EmptyState message="No DATs downloaded yet. Refresh to download them." />
-{:else}
-	<div class="card">
-		<div class="table-responsive">
-			<table class="table table-sm table-striped table-hover align-middle mb-0">
-				<thead class="table-dark">
-					<tr class="small text-uppercase text-body-secondary">
-						<th scope="col">DAT</th>
-						<th scope="col">Version</th>
-						<th scope="col">Downloaded</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each dats as dat (dat.datName)}
-						<tr>
-							<td>{dat.datName}</td>
-							<td>{dat.version}</td>
-							<td class="text-nowrap">{formatDateTime(dat.downloadedAt)}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-	</div>
-{/if}
+</AccordionItem>
 
 <style>
 	.dat-time {
