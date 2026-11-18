@@ -364,7 +364,7 @@ describe('game images', () => {
 		expect(screen.getByText('URL').className).toBe('btn btn-outline-secondary btn-sm');
 		expect(urlInput().type).toBe('url');
 		expect(
-			screen.getByText('The server downloads the image. PNG or JPEG, at most 8 MiB.')
+			screen.getByText('The server downloads the image. PNG, JPEG or WebP (saved as PNG/JPEG), at most 8 MiB.')
 		).toBeTruthy();
 		expect(fileGroup().hidden).toBe(true);
 

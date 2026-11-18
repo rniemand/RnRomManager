@@ -39,6 +39,7 @@ public sealed class ImageUrlDownloader(HttpClient client, ImageUrlPolicy policy)
             using var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("image/png"));
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("image/jpeg"));
+            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("image/webp"));
             using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, linked.Token);
             var status = (int)response.StatusCode;
             // The handler follows up to 3 redirects; a 3xx left over is one too many (or an https→http hop).
@@ -58,7 +59,7 @@ public sealed class ImageUrlDownloader(HttpClient client, ImageUrlPolicy policy)
                     break;
                 buffer.Write(chunk, 0, read);
             }
-            return new(buffer.ToArray());
+            return new(ImageFormats.ConvertWebp(buffer.ToArray()));
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested && !aborted.IsCancellationRequested)
         {

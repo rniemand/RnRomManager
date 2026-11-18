@@ -1,4 +1,5 @@
 using RnRomManager.Core.Library;
+using SkiaSharp;
 
 namespace RnRomManager.Core.Tests.Library;
 
@@ -70,5 +71,33 @@ public class ImageFormatTests
     {
         Assert.That(PngInfo.MaxBytes, Is.EqualTo(8 * 1024 * 1024));
         Assert.That(RnRomManager.Core.Media.MediaService.MaxThumbnailBytes, Is.EqualTo(5 * 1024 * 1024));
+    }
+
+    private static byte[] Webp(int width, int height)
+    {
+        using var bitmap = new SKBitmap(width, height);
+        bitmap.Erase(SKColors.Red);
+        using var data = bitmap.Encode(SKEncodedImageFormat.Webp, 80);
+        return data.ToArray();
+    }
+
+    [Test]
+    public void ConvertWebp_ReencodesAsPng()
+    {
+        var converted = ImageFormats.ConvertWebp(Webp(40, 30));
+
+        Assert.That(ImageFormats.Read(converted), Is.EqualTo((ImageFormat.Png, 40, 30)));
+    }
+
+    [Test]
+    public void ConvertWebp_LeavesOtherBytesAlone()
+    {
+        var png = Png(4, 4);
+        byte[] brokenWebp = [.. "RIFF"u8, 0, 0, 0, 0, .. "WEBP"u8, 1, 2, 3];
+        var huge = Webp(ImageFormats.MaxWebpSide + 1, 1);
+
+        Assert.That(ImageFormats.ConvertWebp(png), Is.SameAs(png));
+        Assert.That(ImageFormats.ConvertWebp(brokenWebp), Is.SameAs(brokenWebp));
+        Assert.That(ImageFormats.ConvertWebp(huge), Is.SameAs(huge));
     }
 }

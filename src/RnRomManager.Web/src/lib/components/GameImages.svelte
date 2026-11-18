@@ -390,7 +390,7 @@
 						</div>
 					{/if}
 					<div id="image-url-help" class="form-text">
-						The server downloads the image. PNG or JPEG, at most 8 MiB.
+						The server downloads the image. PNG, JPEG or WebP (saved as PNG/JPEG), at most 8 MiB.
 					</div>
 				</div>
 			{/if}
@@ -402,14 +402,14 @@
 					class="form-control"
 					class:is-invalid={uploadError}
 					type="file"
-					accept="image/png,image/jpeg"
+					accept="image/png,image/jpeg,image/webp"
 					aria-describedby="image-file-help"
 					onchange={() => (dropNote = undefined)}
 				/>
 				{#if uploadError}<div class="invalid-feedback">{uploadError}</div>{/if}
 				{#if dropNote}<div class="form-text" role="status">{dropNote}</div>{/if}
 				<div id="image-file-help" class="form-text">
-					PNG or JPEG, at most <FileSize bytes={maxUploadBytes} />, or drop it here
+					PNG, JPEG or WebP (saved as PNG/JPEG), at most <FileSize bytes={maxUploadBytes} />, or drop it here
 				</div>
 			</div>
 			<div class="btn-group" role="group" aria-label="Image type">
