@@ -344,10 +344,6 @@
 		height: 48px;
 	}
 
-	.min-w-0 {
-		min-width: 0;
-	}
-
 	/* S2: thumbnail, title, badge; meta and rating join from md. */
 	.game-row {
 		grid-template-columns: 48px 1fr auto;

@@ -277,4 +277,11 @@ describe('GameResults cards (C1, C2)', () => {
 			expect(iframe.title).toBe('Emulator: Game (World).gb');
 		}
 	);
+
+	it('the grid is one column below sm (B17)', () => {
+		const { container } = render(GameResults, { games: [game('a')], view: 'grid' });
+		expect(container.querySelector('.row')!.className).toBe(
+			'row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6 g-3'
+		);
+	});
 });

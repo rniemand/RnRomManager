@@ -19,8 +19,9 @@
 	const source = $derived(logoSources(kind, item, failed)[0]);
 </script>
 
+<!-- B14: one fixed frame for every source, so shared logos, starter art and the banner line up. -->
 <span
-	class="group-logo flex-shrink-0"
+	class="group-logo flex-shrink-0 border rounded bg-body-tertiary"
 	aria-hidden="true"
 	style:width="{width}px"
 	style:height="{height}px"
@@ -28,9 +29,7 @@
 	{#if source}
 		<img src={source} alt="" {width} {height} loading="lazy" onerror={() => failed.add(source)} />
 	{:else}
-		<span class="group-logo-banner border rounded small text-truncate" title={item.name}
-			>{item.name}</span
-		>
+		<span class="group-logo-banner small text-truncate" title={item.name}>{item.name}</span>
 	{/if}
 </span>
 

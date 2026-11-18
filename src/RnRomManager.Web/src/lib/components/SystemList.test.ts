@@ -93,4 +93,27 @@ describe('SystemList (Systems tab B3)', () => {
 			expect(onedit).toHaveBeenCalledWith(systems[1]);
 		}
 	});
+
+	it('names truncate on one line with the full name as title; the link can shrink (B13)', () => {
+		render(SystemList, { systems, selected: null });
+		const name = screen
+			.getAllByTitle('Nintendo Entertainment System')
+			.find((el) => !el.classList.contains('group-logo-banner'))!;
+		expect(name.className).toBe('text-truncate');
+		expect(name.parentElement!.classList).toContain('min-w-0');
+		expect(name.closest('a')!.classList).toContain('min-w-0');
+	});
+
+	it('the selected row is active with a light badge; others get primary count badges (B15)', () => {
+		render(SystemList, { systems, selected: 'gb' });
+		const [atari, gb] = within(screen.getByRole('list', { name: 'Systems' })).getAllByRole('link');
+		expect(gb.classList).toContain('active');
+		expect(gb.querySelector('.count-badge')!.className).toBe(
+			'badge rounded-pill count-badge text-bg-light'
+		);
+		expect(atari.classList).not.toContain('active');
+		expect(atari.querySelector('.count-badge')!.className).toBe(
+			'badge rounded-pill count-badge text-bg-primary'
+		);
+	});
 });

@@ -97,7 +97,10 @@
 						<GroupLogo kind={view.kind} item={group} />
 						<span class="text-truncate" title={group.name}>{group.name}</span>
 					</span>
-					<span class="badge text-bg-secondary rounded-pill"
+					<span
+						class="badge rounded-pill count-badge {group.key === view.key
+							? 'text-bg-light'
+							: 'text-bg-primary'}"
 						>{formatCount(group.gameCount)} {group.gameCount === 1 ? 'game' : 'games'}</span
 					>
 				</a>
@@ -131,9 +134,3 @@
 {/if}
 
 <LogoModal bind:open={logoOpen} kind={view.kind} item={editing} onchanged={() => reload++} />
-
-<style>
-	.min-w-0 {
-		min-width: 0;
-	}
-</style>

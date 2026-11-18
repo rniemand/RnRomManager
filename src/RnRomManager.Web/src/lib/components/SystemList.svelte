@@ -37,7 +37,10 @@
 					/>
 					<span class="text-truncate" title={system.displayName}>{system.displayName}</span>
 				</span>
-				<span class="badge text-bg-secondary rounded-pill"
+				<span
+					class="badge rounded-pill count-badge {system.id === selected
+						? 'text-bg-light'
+						: 'text-bg-primary'}"
 					>{formatCount(system.gameCount)} {system.gameCount === 1 ? 'game' : 'games'}</span
 				>
 			</a>

@@ -394,9 +394,6 @@
 	.cover {
 		width: 8rem;
 	}
-	.min-w-0 {
-		min-width: 0;
-	}
 	.collection-notes :global(:last-child) {
 		margin-bottom: 0;
 	}

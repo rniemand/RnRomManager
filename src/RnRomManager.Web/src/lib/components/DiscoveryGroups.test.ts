@@ -246,4 +246,26 @@ describe('DiscoveryGroups (discovery B2)', () => {
 			'/api/discovery/genres?page=2&pageSize=20'
 		]);
 	});
+
+	it('truncates names with a title, and highlights the active row with a light badge (B13, B15)', async () => {
+		answers['/api/discovery/publishers?pageSize=20'] = [
+			{ status: 200, body: pageOf([group(1, 'Capcom', 1), group(2, 'Nintendo', 1250)]) }
+		];
+		render(DiscoveryGroups, { view: state({ key: keyOf(2) }), onpage: vi.fn() });
+
+		const nintendo = await screen.findByRole('link', { name: /Nintendo/ });
+		const name = within(nintendo)
+			.getAllByTitle('Nintendo')
+			.find((el) => !el.classList.contains('group-logo-banner'))!;
+		expect(name.className).toBe('text-truncate');
+		expect(name.parentElement!.classList).toContain('min-w-0');
+		expect(nintendo.classList).toContain('active');
+		expect(nintendo.querySelector('.count-badge')!.className).toBe(
+			'badge rounded-pill count-badge text-bg-light'
+		);
+		const capcom = list('Publishers').getByRole('link', { name: /Capcom/ });
+		expect(capcom.querySelector('.count-badge')!.className).toBe(
+			'badge rounded-pill count-badge text-bg-primary'
+		);
+	});
 });

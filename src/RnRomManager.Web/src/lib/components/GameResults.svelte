@@ -99,7 +99,7 @@
 {/snippet}
 
 {#if view === 'grid'}
-	<div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6 g-3">
+	<div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6 g-3">
 		{#each games as game (game.id)}
 			<div class="col">
 				<div class="card h-100 game-card">
