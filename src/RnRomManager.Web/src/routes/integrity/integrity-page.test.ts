@@ -115,6 +115,45 @@ describe('integrity page', () => {
 		);
 	});
 
+	it('Issues and History are independent accordion panels, Issues open (B24)', async () => {
+		render(IntegrityPage);
+		await screen.findByText('No issues.');
+
+		const issues = screen.getByRole('button', { name: 'Issues' });
+		const history = screen.getByRole('button', { name: 'History' });
+		expect(issues.getAttribute('aria-expanded')).toBe('true');
+		expect(history.getAttribute('aria-expanded')).toBe('false');
+		expect(screen.getByRole('heading', { level: 2, name: 'Issues' }).id).toBe('issues-heading');
+		expect(screen.getByRole('heading', { level: 2, name: 'History' }).id).toBe('history-heading');
+
+		await fireEvent.click(history);
+		expect(history.getAttribute('aria-expanded')).toBe('true');
+		expect(issues.getAttribute('aria-expanded')).toBe('true');
+		await fireEvent.click(issues);
+		expect(issues.getAttribute('aria-expanded')).toBe('false');
+		expect(history.getAttribute('aria-expanded')).toBe('true');
+	});
+
+	it('empty panels use EmptyState (B24)', async () => {
+		fixed['GET /api/jobs?type=Integrity&pageSize=10'] = empty;
+		fixed['GET /api/jobs?type=MediaRetry&pageSize=10'] = empty;
+		render(IntegrityPage);
+
+		expect((await screen.findByText('No issues.')).closest('.text-center.py-5')).not.toBeNull();
+		expect(screen.getByText('No checks have run yet.').closest('.text-center.py-5')).not.toBeNull();
+	});
+
+	it('history table is in a card (B24)', async () => {
+		const { container } = render(IntegrityPage);
+		await screen.findByText('Never');
+
+		const table = container.querySelector('#history-panel table')!;
+		expect(table.className).toBe('table table-sm table-striped table-hover align-middle mb-0');
+		expect(table.closest('.table-responsive')?.parentElement?.classList.contains('card')).toBe(
+			true
+		);
+	});
+
 	it('issue filters go into the query and reset the page', async () => {
 		render(IntegrityPage);
 		await screen.findByText('No issues.');
