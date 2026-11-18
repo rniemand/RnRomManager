@@ -874,7 +874,7 @@
 											<button
 												type="button"
 												class="btn btn-sm btn-outline-secondary"
-												aria-label="Make {rom.fileName} the primary release"
+												aria-label="Make primary {rom.fileName}"
 												onclick={() => (action = { kind: 'primary', rom })}
 											>
 												<Icon name="star" /> Make primary
