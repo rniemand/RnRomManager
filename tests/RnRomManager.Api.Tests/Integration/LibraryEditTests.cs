@@ -325,6 +325,27 @@ public class LibraryEditTests
     }
 
     [Test]
+    public async Task SetPrimary_SticksWhenABetterRankedReleaseIsAdded()
+    {
+        var id = await Ingest("t2.gb", TetrisJapan);
+        await Ingest("t1.gb", TetrisWorld); // World outranks Japan
+        var zipPath = (await Row(id))!.ZipPath;
+        Assert.That(ReadZip(zipPath).Roms.Single(r => r.IsPrimary).FileName, Is.EqualTo("Tetris (World).gb"));
+        var world = await RomId(id, "Tetris (World).gb");
+        using (var deleted = await _admin.SendAsync(HttpMethod.Delete, $"/api/games/{id}/roms/{world}", null, sendXsrf: true))
+            Assert.That(deleted.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        using (var set = await _admin.SendAsync(HttpMethod.Post, $"/api/games/{id}/roms/{await RomId(id, "Tetris (Japan).gb")}/primary", null, sendXsrf: true))
+            Assert.That(set.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        Assert.That(await Ingest("t1-again.gb", TetrisWorld), Is.EqualTo(id));
+
+        var game = ReadZip(zipPath);
+        Assert.That(game.Roms.Select(r => (r.FileName, r.IsPrimary)), Is.EquivalentTo(new[] { ("Tetris (Japan).gb", true), ("Tetris (World).gb", false) }));
+        var roms = await Service<IRomRepository>().ListByGameAsync(id, default);
+        Assert.That(roms.Single(r => r.IsPrimary).FileName, Is.EqualTo("Tetris (Japan).gb"));
+    }
+
+    [Test]
     public async Task DeleteLastRelease_DeletesTheGame()
     {
         var id = await Ingest("z.gb", Zelda);

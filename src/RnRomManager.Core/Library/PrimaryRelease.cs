@@ -16,10 +16,14 @@ public static class PrimaryRelease
         ? releases.OrderBy(IsAddOn).ThenBy(Rank, PrimaryReleaseRanker.Instance)
         : releases.OrderBy(Rank, PrimaryReleaseRanker.Instance);
 
-    /// <summary><paramref name="releases"/> (non-empty) with <c>isPrimary</c> set on the first of <see cref="Order"/> only.</summary>
-    public static IReadOnlyList<InfoJsonRom> Apply(IReadOnlyList<InfoJsonRom> releases, DatSource source)
+    /// <summary>
+    /// <paramref name="releases"/> (non-empty) with <c>isPrimary</c> set on one only: the release whose SHA1 is
+    /// <paramref name="chosenSha1"/> (<see cref="InfoJsonGame.ChosenPrimarySha1"/>) when listed, else the first of <see cref="Order"/>.
+    /// </summary>
+    public static IReadOnlyList<InfoJsonRom> Apply(IReadOnlyList<InfoJsonRom> releases, DatSource source, string? chosenSha1 = null)
     {
-        var primary = Order(releases, source).First();
+        var primary = releases.FirstOrDefault(r => chosenSha1 is not null && r.Metadata.Sha1 == chosenSha1)
+            ?? Order(releases, source).First();
         return releases.Select(r => r with { IsPrimary = ReferenceEquals(r, primary) }).ToList();
     }
 

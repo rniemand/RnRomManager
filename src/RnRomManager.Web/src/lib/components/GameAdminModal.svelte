@@ -362,8 +362,8 @@
 		</p>
 	{:else if action?.kind === 'primary'}
 		<p class="mb-0">
-			Make {action.rom.fileName} the primary release of {game.displayTitle}? Adding or removing a
-			release later picks the primary automatically again.
+			Make {action.rom.fileName} the primary release of {game.displayTitle}? It stays primary when
+			other releases are added or removed.
 		</p>
 	{:else if action?.kind === 'move'}
 		<p>Move {action.rom.fileName} to:</p>

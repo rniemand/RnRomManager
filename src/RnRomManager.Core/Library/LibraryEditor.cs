@@ -343,7 +343,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         var remaining = current.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
         if (remaining.Count == 0)
             return await RemoveGameAsync(existing, row, current, actor).ConfigureAwait(false); // the last release removes the game
-        var rebuilt = current with { Roms = PrimaryRelease.Apply(remaining, DatSourceOf(row.SystemId)), Metadata = Touched(current) };
+        var rebuilt = current with { Roms = PrimaryRelease.Apply(remaining, DatSourceOf(row.SystemId), current.ChosenPrimarySha1), Metadata = Touched(current) };
         if (IsExternal(row))
         {
             var external = await RemoveExternalAsync(existing, row, [rom], rebuilt, actor).ConfigureAwait(false);
@@ -361,8 +361,8 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
     }
 
     /// <summary>
-    /// Makes the release the game's primary (an Admin override of the ranker); a no-op when it already is. A later write that
-    /// adds or removes a release re-ranks (§6.1).
+    /// Makes the release the game's primary (an Admin override of the ranker) and records it as
+    /// <see cref="InfoJsonGame.ChosenPrimarySha1"/>, so it stays primary as releases come and go; a no-op when it already is.
     /// </summary>
     public async Task<LibraryEditResult> SetPrimaryReleaseAsync(Guid gameId, long romId, AuditActor actor, CancellationToken ct)
     {
@@ -382,11 +382,12 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         var current = target.Game!;
         if (current.Roms.FirstOrDefault(r => r.Metadata.Sha1 == romRow.Sha1) is not { } rom)
             return new(NotFound, $"{row.ZipPath} no longer lists SHA1 {romRow.Sha1}");
-        if (rom.IsPrimary)
+        if (rom.IsPrimary && current.ChosenPrimarySha1 == rom.Metadata.Sha1)
             return Ok;
 
         var game = current with
         {
+            ChosenPrimarySha1 = rom.Metadata.Sha1,
             Roms = current.Roms.Select(r => r with { IsPrimary = ReferenceEquals(r, rom) }).ToList(),
             Metadata = Touched(current),
         };
@@ -685,12 +686,12 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         }
         else
         {
-            targetGame = target.Game! with { Roms = PrimaryRelease.Apply([.. target.Game.Roms, moved], DatSourceOf(row.SystemId)), Metadata = Touched(target.Game) };
+            targetGame = target.Game! with { Roms = PrimaryRelease.Apply([.. target.Game.Roms, moved], DatSourceOf(row.SystemId), target.Game.ChosenPrimarySha1), Metadata = Touched(target.Game) };
             targetPath = targetRow!.ZipPath;
         }
 
         var remaining = source.Game.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
-        var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining, DatSourceOf(row.SystemId)), Metadata = Touched(source.Game) };
+        var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining, DatSourceOf(row.SystemId), source.Game.ChosenPrimarySha1), Metadata = Touched(source.Game) };
         // B5: the last release deletes the source game, so its saves go with it into the target.
         var (savesError, saves) = sourceGame is null ? CarrySaves(sourceZip, targetZip, Renames((rom.FileName, moved.FileName))) : (null, null);
         if (savesError is not null)
@@ -830,9 +831,9 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
             pointer = ExternalRomName.Allocate(Path.GetFileNameWithoutExtension(targetPath), moved.FileName, reservations);
         }
         moved = moved with { ExternalFileName = pointer };
-        targetGame = targetGame with { Roms = PrimaryRelease.Apply([.. targetGame.Roms, moved], DatSourceOf(row.SystemId)), Metadata = target is null ? targetGame.Metadata : Touched(targetGame) };
+        targetGame = targetGame with { Roms = PrimaryRelease.Apply([.. targetGame.Roms, moved], DatSourceOf(row.SystemId), targetGame.ChosenPrimarySha1), Metadata = target is null ? targetGame.Metadata : Touched(targetGame) };
         var remaining = source.Game.Roms.Where(r => !ReferenceEquals(r, rom)).ToList();
-        var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining, DatSourceOf(row.SystemId)), Metadata = Touched(source.Game) };
+        var sourceGame = remaining.Count == 0 ? null : source.Game with { Roms = PrimaryRelease.Apply(remaining, DatSourceOf(row.SystemId), source.Game.ChosenPrimarySha1), Metadata = Touched(source.Game) };
         // B5: the last release deletes the source game, so its saves go with it into the target.
         var (savesError, saves) = sourceGame is null ? CarrySaves(sourceZip, targetZip, Renames((rom.FileName, moved.FileName))) : (null, null);
         if (savesError is not null)
@@ -1289,7 +1290,8 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         Description = string.IsNullOrEmpty(into.Description) ? from.Description : into.Description,
         Rating = into.Rating ?? from.Rating,
         Favourite = into.Favourite || from.Favourite,
-        Roms = PrimaryRelease.Apply(roms, DatSourceOf(into.System)),
+        ChosenPrimarySha1 = into.ChosenPrimarySha1 ?? from.ChosenPrimarySha1,
+        Roms = PrimaryRelease.Apply(roms, DatSourceOf(into.System), into.ChosenPrimarySha1 ?? from.ChosenPrimarySha1),
         Images = images,
         Metadata = Touched(into),
     };

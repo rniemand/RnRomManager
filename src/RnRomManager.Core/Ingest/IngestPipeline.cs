@@ -923,7 +923,7 @@ public sealed class IngestPipeline(
                 rom = rom with { ExternalFileName = name };
                 placement = new ExternalPlacement(source, name);
             }
-            var allRoms = PrimaryRelease.Apply([.. current.Roms, rom], system.DatSource);
+            var allRoms = PrimaryRelease.Apply([.. current.Roms, rom], system.DatSource, current.ChosenPrimarySha1);
 
             // Step 7: only fields that are still empty.
             var game = current with
