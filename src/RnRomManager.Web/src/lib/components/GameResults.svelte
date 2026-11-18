@@ -44,6 +44,7 @@
 
 	/** C1: `1 update`, `2 updates`. */
 	const updatesText = (n: number) => `${formatCount(n)} ${n === 1 ? 'update' : 'updates'}`;
+	const releasesText = (n: number) => `${formatCount(n)} releases`;
 
 	// C2: one modal for every card; the list item carries what the emulator needs, so nothing is fetched.
 	let playing = $state<GameListItem | null>(null);
@@ -142,7 +143,17 @@
 								<FileSize bytes={game.primarySizeBytes} />
 							</span>
 						{/if}
-						{@render updatesBadge(game, 'position-absolute bottom-0 start-0 m-1')}
+						<div class="position-absolute bottom-0 start-0 m-1 d-flex gap-1">
+							{#if game.romCount > 1}
+								<span class="badge text-bg-secondary" use:tooltip={releasesText(game.romCount)}>
+									<span aria-hidden="true"
+										><Icon name="releases" /> {formatCount(game.romCount)}</span
+									>
+									<span class="visually-hidden">{releasesText(game.romCount)}</span>
+								</span>
+							{/if}
+							{@render updatesBadge(game, '')}
+						</div>
 						{@render savesLink(
 							game,
 							'btn btn-sm btn-secondary rounded-circle position-absolute end-0 m-1 z-2',

@@ -100,10 +100,27 @@ describe('GameResults cards (C1, C2)', () => {
 			expect(tooltips.filter((t) => t.includes('update'))).toEqual(['1 update', '1,250 updates']);
 			expect(badges[0].querySelector('.bi-arrow-up-circle')).toBeTruthy();
 			if (view === 'grid')
-				expect(badges[0].className).toContain('position-absolute bottom-0 start-0 m-1');
+				expect(badges[0].parentElement!.className).toContain(
+					'position-absolute bottom-0 start-0 m-1'
+				);
 			else expect(badges[0].closest('td')!.querySelector('a')!.textContent).toBe('Game a');
 		}
 	);
+
+	it('grid: the releases badge shows only when romCount > 1', () => {
+		tooltips.length = 0;
+		render(GameResults, {
+			games: [game('a', { romCount: 3 }), game('b'), game('c', { romCount: 0 })],
+			view: 'grid'
+		});
+
+		const badges = [...document.querySelectorAll('.badge.text-bg-secondary')];
+		expect(badges.map((b) => b.querySelector('.visually-hidden')!.textContent)).toEqual([
+			'3 releases'
+		]);
+		expect(tooltips).toContain('3 releases');
+		expect(badges[0].querySelector('.bi-stack')).toBeTruthy();
+	});
 
 	it('grid: Play shows only for a playable game, round, over the box art and above the link', () => {
 		render(GameResults, { games: [playable('a'), game('b')], view: 'grid' });
