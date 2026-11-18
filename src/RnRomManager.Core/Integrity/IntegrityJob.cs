@@ -286,7 +286,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
             IntegrityFinding Finding(string type, string? entry = null, string? details = null) =>
                 new(type, zipPath, entry, game.System, game.GameId, details);
             // S7: its roms/ entries are checked below as for any embedded game.
-            if (systems.ById(game.System) is { } handler && RomStorage.IsLegacy(handler, game))
+            if (systems.ById(game.System) is { } handler && RomStorage.IsPending(handler, game))
                 add(Finding(LegacyEmbeddedStorage));
 
             // G1: an external ROM has no roms/ entry; its file is checked by StatExternal.

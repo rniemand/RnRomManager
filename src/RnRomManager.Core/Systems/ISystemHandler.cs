@@ -51,6 +51,16 @@ public interface ISystemHandler
     /// </summary>
     bool LegacyEmbeddedRoms => false;
 
+    /// <summary>
+    /// ROM Zip Config B1: true when an Admin may switch <see cref="EmbedRomsInZip"/> (stored as
+    /// <c>storage.embedRoms.&lt;id&gt;</c>, see <c>IRomStorageSettings</c>). Requires <see cref="LegacyEmbeddedRoms"/>
+    /// and a <see cref="Family"/> of its own.
+    /// </summary>
+    bool RomStorageConfigurable => false;
+
+    /// <summary>B1: <see cref="EmbedRomsInZip"/> with no stored setting; the registry checks its storage rules on this value.</summary>
+    bool DefaultEmbedRomsInZip => EmbedRomsInZip;
+
     /// <summary>true: the extension names the file's format, so Review keeps the source file's extension.</summary>
     bool KeepsSourceExtension => false;
 

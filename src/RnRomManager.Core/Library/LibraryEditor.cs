@@ -790,7 +790,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
             return null;
         var target = OpenForEdit(row);
         using var zip = target.Zip;
-        return target.Game is { } game && RomStorage.IsLegacy(handler, game) ? new(StorageMigrationPending, StorageMigrationPendingTitle) : null;
+        return target.Game is { } game && RomStorage.IsPending(handler, game) ? new(StorageMigrationPending, StorageMigrationPendingTitle) : null;
     }
 
     /// <summary>The game's ZIP; an external game's through a checked handle that must be the mirrored game (G4, I4).</summary>

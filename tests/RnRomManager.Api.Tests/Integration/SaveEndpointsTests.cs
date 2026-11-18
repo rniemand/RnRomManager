@@ -16,7 +16,7 @@ namespace RnRomManager.Api.Tests.Integration;
 public partial class SaveEndpointsTests
 {
     private const string StorageMigrationTitle =
-        "This game's ROMs are being moved out of its ZIP. Try again when the storage migration job has finished.";
+        "This game's ROMs are being moved by the storage job. Try again when it has finished.";
     private const string UnreadableTitle = "This game's saves folder can't be read. An Admin must repair it.";
     private const string IndexFullTitle = "This game has too many saves. Delete some first.";
     private const string LimitTitle = "You already have 25 saves for this release. Delete one first.";

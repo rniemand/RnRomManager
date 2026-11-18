@@ -141,6 +141,8 @@ public static class AppHost
         builder.Services.AddSingleton<ISettingsRepository, SettingsRepository>();
         builder.Services.AddSingleton<BackupScheduler>();
         builder.Services.AddSingleton<DatRefreshSettingsService>();
+        builder.Services.AddSingleton<IRomStorageSettings>(sp => new RomStorageSettings(sp.GetRequiredService<ISettingsRepository>(),
+            sp.GetRequiredService<ISystemRegistry>, sp.GetRequiredService<ILogger<RomStorageSettings>>()));
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddSingleton<MaintenanceGate>();
         builder.Services.AddSingleton<IMaintenanceWindow>(sp => sp.GetRequiredService<MaintenanceGate>());

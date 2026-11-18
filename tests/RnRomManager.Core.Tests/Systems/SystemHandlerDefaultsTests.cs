@@ -12,6 +12,13 @@ public class SystemHandlerDefaultsTests
         Assert.That(handler.ShortName, Is.EqualTo("Plain System"));
     }
 
+    [Test]
+    public void RomStorage_WithoutOverride_IsFixedAtEmbedRomsInZip()
+    {
+        ISystemHandler handler = new Plain();
+        Assert.That((handler.RomStorageConfigurable, handler.DefaultEmbedRomsInZip), Is.EqualTo((false, true)));
+    }
+
     private sealed class Plain : ISystemHandler
     {
         public string Id => "plain";

@@ -8,11 +8,18 @@ public class SystemRegistryTests
     private static ISystemHandler Handler(string id, string family, params string[] extensions)
     {
         var handler = Substitute.For<ISystemHandler>();
-        handler.EmbedRomsInZip.Returns(true);
+        Embed(handler, true);
         handler.Id.Returns(id);
         handler.Family.Returns(family);
         handler.RomExtensions.Returns(extensions);
         return handler;
+    }
+
+    /// <summary>The registry checks <c>DefaultEmbedRomsInZip</c>, which a substitute doesn't derive from <c>EmbedRomsInZip</c>.</summary>
+    private static void Embed(ISystemHandler handler, bool embed)
+    {
+        handler.EmbedRomsInZip.Returns(embed);
+        handler.DefaultEmbedRomsInZip.Returns(embed);
     }
 
     private readonly ISystemHandler _gb = Handler("gb", "gameboy", ".gb");
@@ -54,7 +61,7 @@ public class SystemRegistryTests
     public void MixedStorageFamily_Throws_NamingTheFamily()
     {
         var external = Handler("gbx", "gameboy", ".gbx");
-        external.EmbedRomsInZip.Returns(false);
+        Embed(external, false);
 
         var ex = Assert.Throws<InvalidOperationException>(() => new SystemRegistry([_gb, _gba, external]));
 
@@ -66,8 +73,8 @@ public class SystemRegistryTests
     {
         var a = Handler("xa", "ext", ".xa");
         var b = Handler("xb", "ext", ".xb");
-        a.EmbedRomsInZip.Returns(false);
-        b.EmbedRomsInZip.Returns(false);
+        Embed(a, false);
+        Embed(b, false);
 
         Assert.That(new SystemRegistry([_gb, a, b]).ByFamily("ext"), Is.EqualTo(new[] { a, b }));
     }
@@ -88,7 +95,7 @@ public class SystemRegistryTests
     public void LegacyEmbeddedRoms_OnlyOnExternalWithoutFileSets(bool embedded, bool fileSets)
     {
         var legacy = Handler("nds", "nds", ".nds");
-        legacy.EmbedRomsInZip.Returns(embedded);
+        Embed(legacy, embedded);
         legacy.FileSets.Returns(fileSets);
         legacy.LegacyEmbeddedRoms.Returns(true);
 
@@ -101,7 +108,7 @@ public class SystemRegistryTests
     public void LegacyEmbeddedRoms_OnExternal_IsAccepted()
     {
         var legacy = Handler("nds", "nds", ".nds");
-        legacy.EmbedRomsInZip.Returns(false);
+        Embed(legacy, false);
         legacy.LegacyEmbeddedRoms.Returns(true);
 
         Assert.That(new SystemRegistry([_gb, legacy]).ById("nds"), Is.SameAs(legacy));
@@ -112,8 +119,8 @@ public class SystemRegistryTests
     {
         var a = Handler("xa", "disc", ".xa");
         var b = Handler("xb", "disc", ".xb");
-        a.EmbedRomsInZip.Returns(false);
-        b.EmbedRomsInZip.Returns(false);
+        Embed(a, false);
+        Embed(b, false);
         a.FileSets.Returns(true);
 
         var ex = Assert.Throws<InvalidOperationException>(() => new SystemRegistry([a, b]));
@@ -127,5 +134,45 @@ public class SystemRegistryTests
         var ex = Assert.Throws<InvalidOperationException>(() => new SystemRegistry([_gb, Handler("gb", "other", ".x")]));
 
         Assert.That(ex!.Message, Does.Contain("'gb'"));
+    }
+
+    [Test]
+    public void Rules_UseTheDefault_NotTheCurrentSetting()
+    {
+        var legacy = Handler("nds", "nds", ".nds");
+        legacy.EmbedRomsInZip.Returns(true);
+        legacy.DefaultEmbedRomsInZip.Returns(false);
+        legacy.LegacyEmbeddedRoms.Returns(true);
+        legacy.RomStorageConfigurable.Returns(true);
+
+        Assert.That(new SystemRegistry([_gb, legacy]).ById("nds"), Is.SameAs(legacy));
+    }
+
+    [Test]
+    public void RomStorageConfigurable_WithoutLegacyEmbeddedRoms_Throws()
+    {
+        var plain = Handler("xa", "xa", ".xa");
+        plain.RomStorageConfigurable.Returns(true);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => new SystemRegistry([_gb, plain]));
+
+        Assert.That(ex!.Message, Does.Contain("'xa'").And.Contain("RomStorageConfigurable"));
+    }
+
+    [Test]
+    public void RomStorageConfigurable_SharingItsFamily_Throws()
+    {
+        var a = Handler("xa", "ext", ".xa");
+        var b = Handler("xb", "ext", ".xb");
+        foreach (var h in new[] { a, b })
+        {
+            Embed(h, false);
+            h.LegacyEmbeddedRoms.Returns(true);
+        }
+        a.RomStorageConfigurable.Returns(true);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => new SystemRegistry([a, b]));
+
+        Assert.That(ex!.Message, Does.Contain("'xa'").And.Contain("RomStorageConfigurable"));
     }
 }

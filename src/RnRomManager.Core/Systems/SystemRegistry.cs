@@ -7,7 +7,8 @@ public sealed class SystemRegistry : ISystemRegistry
     /// <exception cref="InvalidOperationException">
     /// Two handlers share an <c>Id</c>, a family mixes embedded and external ROM storage or <c>FileSets</c> values, or a
     /// handler has <c>FileSets</c> with embedded storage (B5), or a <c>LegacyEmbeddedRoms</c> handler is embedded or has
-    /// <c>FileSets</c> (S2).
+    /// <c>FileSets</c> (S2), or a <c>RomStorageConfigurable</c> handler isn't <c>LegacyEmbeddedRoms</c> or shares its family
+    /// (ROM Zip Config B1). Storage rules use <c>DefaultEmbedRomsInZip</c>, so a stored setting never fails startup.
     /// </exception>
     public SystemRegistry(IEnumerable<ISystemHandler> handlers)
     {
@@ -15,14 +16,16 @@ public sealed class SystemRegistry : ISystemRegistry
         var duplicate = All.GroupBy(h => h.Id).FirstOrDefault(g => g.Count() > 1);
         if (duplicate is not null)
             throw new InvalidOperationException($"System handler id '{duplicate.Key}' is registered more than once.");
-        var mixed = All.GroupBy(h => h.Family).FirstOrDefault(g => g.Select(h => h.EmbedRomsInZip).Distinct().Count() > 1);
+        var mixed = All.GroupBy(h => h.Family).FirstOrDefault(g => g.Select(h => h.DefaultEmbedRomsInZip).Distinct().Count() > 1);
         if (mixed is not null)
             throw new InvalidOperationException($"System family '{mixed.Key}' mixes handlers with embedded and external ROM storage.");
-        if (All.FirstOrDefault(h => h.FileSets && h.EmbedRomsInZip) is { } embeddedSets)
+        if (All.FirstOrDefault(h => h.FileSets && h.DefaultEmbedRomsInZip) is { } embeddedSets)
             throw new InvalidOperationException($"System '{embeddedSets.Id}' has FileSets with embedded ROM storage; file sets need external storage.");
-        if (All.FirstOrDefault(h => h.LegacyEmbeddedRoms && (h.EmbedRomsInZip || h.FileSets)) is { } legacy)
+        if (All.FirstOrDefault(h => h.LegacyEmbeddedRoms && (h.DefaultEmbedRomsInZip || h.FileSets)) is { } legacy)
             throw new InvalidOperationException($"System '{legacy.Id}' has LegacyEmbeddedRoms but isn't external without FileSets.");
-        var mixedSets =All.GroupBy(h => h.Family).FirstOrDefault(g => g.Select(h => h.FileSets).Distinct().Count() > 1);
+        if (All.FirstOrDefault(h => h.RomStorageConfigurable && (!h.LegacyEmbeddedRoms || All.Count(o => o.Family == h.Family) > 1)) is { } configurable)
+            throw new InvalidOperationException($"System '{configurable.Id}' has RomStorageConfigurable but isn't LegacyEmbeddedRoms alone in its family.");
+        var mixedSets = All.GroupBy(h => h.Family).FirstOrDefault(g => g.Select(h => h.FileSets).Distinct().Count() > 1);
         if (mixedSets is not null)
             throw new InvalidOperationException($"System family '{mixedSets.Key}' mixes handlers with and without FileSets.");
         _byId = All.ToDictionary(h => h.Id);

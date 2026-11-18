@@ -102,7 +102,7 @@ public class LegacyStorageTests
         var body = await AuthClient.JsonAsync(response);
         Assert.That(body.GetProperty("code").GetString(), Is.EqualTo("StorageMigrationPending"));
         Assert.That(body.GetProperty("title").GetString(),
-            Is.EqualTo("This game's ROMs are being moved out of its ZIP. Try again when the storage migration job has finished."));
+            Is.EqualTo("This game's ROMs are being moved by the storage job. Try again when it has finished."));
     }
 
     public static IEnumerable<TestCaseData> Writes()

@@ -108,7 +108,7 @@ public sealed class StorageMigrationJob(IGameRepository games, IRomRepository ro
             return new("ZipUnreadable", target.Details);
         using var existing = target.Zip!;
         var game = target.Game!;
-        if (systems.ById(game.System) is not { } handler || !RomStorage.IsLegacy(handler, game))
+        if (systems.ById(game.System) is not { } handler || !RomStorage.IsPending(handler, game))
             return new(Skipped: true);
 
         var folder = ExternalRomPath.ClassifyDirectory(library, Path.GetDirectoryName(existing.Path)!);

@@ -880,7 +880,7 @@ public sealed class IngestPipeline(
         using (existing)
         {
             // S3: before any other conflict check; a legacy game is read-only until the storage migration.
-            if (RomStorage.IsLegacy(system, current))
+            if (RomStorage.IsPending(system, current))
                 return IngestItemResult.Error(IngestErrors.StorageMigrationPending, $"{row.ZipPath} still holds its ROMs; waiting for the storage migration",
                     system.Id, result.Sha1);
             ExternalPlacement? placement = null;

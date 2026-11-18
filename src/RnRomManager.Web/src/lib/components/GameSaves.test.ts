@@ -236,7 +236,7 @@ describe('GameSaves', () => {
 				body: {
 					code: 'StorageMigrationPending',
 					title:
-						"This game's ROMs are being moved out of its ZIP. Try again when the storage migration job has finished."
+						"This game's ROMs are being moved by the storage job. Try again when it has finished."
 				}
 			}
 		];
@@ -250,7 +250,7 @@ describe('GameSaves', () => {
 		await fireEvent.click(screen.getByRole('button', { name: 'Delete Before boss' }));
 		await fireEvent.click(modal().getByRole('button', { name: 'Delete save', hidden: true }));
 		expect((await modal().findByRole('alert', { hidden: true })).textContent).toContain(
-			'being moved out of its ZIP'
+			'being moved by the storage job'
 		);
 	});
 
