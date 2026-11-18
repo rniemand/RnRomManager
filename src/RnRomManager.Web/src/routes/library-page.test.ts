@@ -330,7 +330,7 @@ describe('library page', () => {
 	}
 
 	describe('toolbar (L1)', () => {
-		it('search, System, Region, Letter, Sort, direction, Favourites, then Grid/List', async () => {
+		it('search, System, Region, Letter, Sort, direction, Favourites, Clear all, Select, then Grid/List', async () => {
 			navigateTo('/');
 			render(LibraryPage);
 			await screen.findByAltText('4-in-1 Fun Pak box art');
@@ -341,11 +341,10 @@ describe('library page', () => {
 				(c) =>
 					c.getAttribute('aria-label') ??
 					c.querySelector('.dropdown-toggle')?.getAttribute('aria-label') ??
-					c.id ??
-					c.textContent
+					(c.id || c.textContent!.trim())
 			);
 			expect(labels).toEqual([
-				'',
+				'Search',
 				'q',
 				'System: All',
 				'Region: All',
@@ -353,8 +352,12 @@ describe('library page', () => {
 				'Sort: Title',
 				'Ascending, switch to descending',
 				'Favourites',
+				'Clear all',
+				'Select',
 				'View'
 			]);
+			for (const name of ['Clear all', 'Select'])
+				expect(screen.getByRole('button', { name }).className).toContain('btn-sm');
 			const search = screen.getByLabelText('Search') as HTMLInputElement;
 			expect(search.id).toBe('q');
 			expect(search.placeholder).toBe('At least 2 characters');
@@ -475,50 +478,106 @@ describe('library page', () => {
 			expect(goto).toHaveBeenCalledWith(expected, { reset: false });
 		});
 
-		it('Reset filters clears every filter, sort, direction and page, and the saved filter', async () => {
-			navigateTo('/?system=gb&sort=year&dir=desc&page=2');
+		const clearAll = () => screen.getByRole('button', { name: 'Clear all' }) as HTMLButtonElement;
+		const lastGoto = () =>
+			new URL(goto.mock.lastCall![0] as string, 'http://localhost').searchParams;
+
+		it('Clear all clears every filter and the page, keeps sort and direction (B2)', async () => {
+			navigateTo(
+				'/?system=gb&region=USA&letter=A&q=zelda&favourite=true&sort=year&dir=desc&page=2'
+			);
 			render(LibraryPage);
-			await vi.waitFor(() => expect(store.get('rnrm.library.filter')).toBeTruthy());
+			await screen.findByAltText('4-in-1 Fun Pak box art');
 
-			await fireEvent.click(screen.getByRole('button', { name: 'Reset filters' }));
+			await fireEvent.click(clearAll());
 
-			expect(goto).toHaveBeenCalledWith('/', { reset: false });
-			expect(store.has('rnrm.library.filter')).toBe(false);
+			expect([...lastGoto()].sort()).toEqual([
+				['dir', 'desc'],
+				['sort', 'year']
+			]);
+			expect((screen.getByLabelText('Search') as HTMLInputElement).value).toBe('');
 		});
 
-		it('is hidden at the defaults', async () => {
+		it('the saved filter then holds just sort and dir, and the view is untouched (B2)', async () => {
+			store.set('libraryView', 'list');
+			navigateTo('/?system=gb&sort=year&dir=desc');
+			render(LibraryPage);
+			await vi.waitFor(() => expect(store.get('rnrm.library.filter')).toContain('system=gb'));
+
+			await fireEvent.click(clearAll());
+			navigateTo(goto.mock.lastCall![0] as string);
+
+			await vi.waitFor(() => {
+				const saved = new URLSearchParams(store.get('rnrm.library.filter')!);
+				expect([...saved].sort()).toEqual([
+					['dir', 'desc'],
+					['sort', 'year']
+				]);
+			});
+			expect(store.get('libraryView')).toBe('list');
+		});
+
+		it('is disabled at the defaults and with only a non-default sort (B2)', async () => {
+			navigateTo('/?sort=rating&dir=asc');
+			render(LibraryPage);
+			await screen.findByAltText('4-in-1 Fun Pak box art');
+
+			expect(row()).toBeNull();
+			expect(clearAll().disabled).toBe(true);
+		});
+
+		it.each([['/?system=gb'], ['/?page=2'], ['/?favourite=true']])(
+			'is enabled for %s (B2)',
+			async (url) => {
+				navigateTo(url);
+				render(LibraryPage);
+				await screen.findByAltText('4-in-1 Fun Pak box art');
+				expect(clearAll().disabled).toBe(false);
+			}
+		);
+
+		it('a search draft enables it, and Clear all cancels the pending search (B2)', async () => {
 			navigateTo('/');
 			render(LibraryPage);
 			await screen.findByAltText('4-in-1 Fun Pak box art');
+			const search = screen.getByLabelText('Search') as HTMLInputElement;
 
-			expect(row()).toBeNull();
-			expect(screen.queryByRole('button', { name: 'Reset filters' })).toBeNull();
+			await fireEvent.input(search, { target: { value: '   ' } });
+			expect(clearAll().disabled).toBe(true);
+			await fireEvent.input(search, { target: { value: 'zel' } });
+			expect(clearAll().disabled).toBe(false);
+			await fireEvent.click(clearAll());
+			expect(search.value).toBe('');
+			await new Promise((done) => setTimeout(done, 350));
+			expect(goto.mock.calls.some(([url]) => String(url).includes('q='))).toBe(false);
 		});
 
-		it('a non-default sort alone shows Reset without chips', async () => {
-			navigateTo('/?sort=rating');
-			render(LibraryPage);
-			await screen.findByAltText('4-in-1 Fun Pak box art');
-
-			expect(row()).toBeNull();
-			expect(screen.getByRole('button', { name: 'Reset filters' })).toBeTruthy();
+		it('the empty state Clear filters runs the same clear (B2)', async () => {
+			const loaded = games.items;
+			games.items = [];
+			try {
+				navigateTo('/?system=gb&sort=year');
+				render(LibraryPage);
+				await fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }));
+				expect([...lastGoto()]).toEqual([['sort', 'year']]);
+			} finally {
+				games.items = loaded;
+			}
 		});
 
-		it('Reset sits in the filter row, after the filters and before the view toggle (B1)', async () => {
+		it('Clear all and Select sit in the filter row before the view toggle; chips stay in their own row (B1)', async () => {
 			navigateTo('/?system=gb&page=2');
 			render(LibraryPage);
 			await screen.findByAltText('4-in-1 Fun Pak box art');
 
-			const reset = screen.getByRole('button', { name: 'Reset filters' });
 			const form = screen.getByRole('search');
-			expect(reset.parentElement).toBe(form);
 			const order = [...form.children].map(
 				(el) => el.getAttribute('aria-label') ?? el.textContent!.trim()
 			);
-			expect(order.indexOf('Reset filters')).toBe(order.indexOf('Favourites') + 1);
-			expect(order.indexOf('View')).toBe(order.indexOf('Reset filters') + 1);
-			expect(row()!.contains(reset)).toBe(false);
+			expect(order.slice(-4)).toEqual(['Favourites', 'Clear all', 'Select', 'View']);
+			expect(row()!.contains(clearAll())).toBe(false);
 			expect(chipTexts()).toEqual([expect.stringMatching(/^System: Game Boy/)]);
+			expect(screen.queryByRole('button', { name: 'Reset filters' })).toBeNull();
 		});
 	});
 

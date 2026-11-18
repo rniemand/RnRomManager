@@ -5,6 +5,7 @@
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import { formatCount, formatSize } from '#lib/format.js';
 	import { systemColour } from '#lib/systemColours.js';
@@ -215,7 +216,17 @@
 						{#each library.systems as s (s.system)}
 							<!-- B22: a pointer shortcut; the link in the first cell is the keyboard route. -->
 							<tr onclick={followRow}>
-								<td><a href={systemHref(s.system)}>{s.systemName}</a></td>
+								<!-- B19: the Library link comes after the system link, so followRow still opens the system. -->
+								<td>
+									<div class="d-flex align-items-center gap-2">
+										<a href={systemHref(s.system)}>{s.systemName}</a>
+										<a
+											class="btn btn-sm btn-outline-secondary ms-auto"
+											href="{resolve('/')}?system={encodeURIComponent(s.system)}"
+											aria-label="Open {s.systemName} in Library"><Icon name="library" /></a
+										>
+									</div>
+								</td>
 								<td class="text-end">{formatCount(s.gameCount)}</td>
 								<td class="text-end">{formatCount(s.updateCount)}</td>
 								<td class="text-end text-nowrap"><FileSize bytes={s.bytes} /></td>

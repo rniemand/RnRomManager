@@ -514,18 +514,18 @@ test("browse, search and filter the library", async () => {
   await page.getByRole("link", { name: "← Library" }).click();
   await expect(page).toHaveURL(/system=gb/);
   await expect(page.getByText("3 games", { exact: true })).toBeVisible();
-  // B1 (library-reset-missing-images): Reset is in the filter row, usable on a 320px phone and on a desktop.
+  // B2: Clear all is in the filter row, usable on a 320px phone and on a desktop.
   const filterRow = page.getByRole("search");
   await expect(
-    filterRow.getByRole("button", { name: "Reset filters" }),
-  ).toBeVisible();
+    filterRow.getByRole("button", { name: "Clear all" }),
+  ).toBeEnabled();
   const viewport = page.viewportSize()!;
   for (const width of [320, 1280]) {
     await page.setViewportSize({ width, height: 800 });
-    for (const name of ["System: Game Boy", "Reset filters"]) {
+    for (const name of ["System: Game Boy", "Clear all"]) {
       const control = filterRow.getByRole("button", {
         name,
-        exact: name === "Reset filters",
+        exact: name === "Clear all",
       });
       await expect(control).toBeInViewport({ ratio: 1 });
       await control.focus();
@@ -541,11 +541,9 @@ test("browse, search and filter the library", async () => {
     ).toBe(true);
   }
   await page.setViewportSize(viewport);
-  await page.getByRole("button", { name: "Reset filters" }).click();
+  await page.getByRole("button", { name: "Clear all" }).click();
   await expect(page.getByText("29 games")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Reset filters" })).toHaveCount(
-    0,
-  );
+  await expect(page.getByRole("button", { name: "Clear all" })).toBeDisabled();
 
   // The card grid fits a 320px phone: no sideways page scroll, and each card's Favourite button is on screen.
   await expect(page.getByRole("button", { name: "Grid view" })).toHaveAttribute(

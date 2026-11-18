@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Icon from '#lib/components/Icon.svelte';
 	import PageTitle from '#lib/components/PageTitle.svelte';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
@@ -8,9 +9,13 @@
 
 	// RP1: every signed-in user; the actions inside keep their own roles.
 	const tabs = [
-		{ href: resolve('/reports/library-size'), label: 'Library Size' },
-		{ href: resolve('/reports/missing-images'), label: 'Missing Images' },
-		{ href: resolve('/reports/duplicates'), label: 'Duplicates' }
+		{ href: resolve('/reports/library-size'), label: 'Library Size', icon: 'report-size' },
+		{
+			href: resolve('/reports/missing-images'),
+			label: 'Missing Images',
+			icon: 'report-missing-images'
+		},
+		{ href: resolve('/reports/duplicates'), label: 'Duplicates', icon: 'report-duplicates' }
 	];
 </script>
 
@@ -22,7 +27,7 @@
 				class="nav-link"
 				class:active={page.url.pathname === tab.href}
 				aria-current={page.url.pathname === tab.href ? 'page' : undefined}
-				href={tab.href}>{tab.label}</a
+				href={tab.href}><Icon name={tab.icon} /> {tab.label}</a
 			>
 		</li>
 	{/each}

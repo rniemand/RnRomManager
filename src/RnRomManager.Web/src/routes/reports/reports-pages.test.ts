@@ -137,6 +137,18 @@ describe('reports pages', () => {
 			expect(row.getAttribute('tabindex')).toBeNull();
 		});
 
+		it('each system row has an Open in Library link after the system link (B19)', async () => {
+			answers['GET /api/reports/library-size'] = { status: 200, body: library };
+			render(LibrarySize);
+
+			const open = await screen.findByRole('link', { name: 'Open Game Boy in Library' });
+			expect(open.getAttribute('href')).toBe('/?system=gb');
+			expect(open.className).toContain('btn-sm');
+			const cell = open.closest('td')!;
+			expect(cell.querySelector('a')!.textContent).toBe('Game Boy');
+			expect(open.closest('tr')!.querySelectorAll('td')[0]).toBe(cell);
+		});
+
 		it('a system rectangle or row drills in with ?system=', async () => {
 			answers['GET /api/reports/library-size'] = { status: 200, body: library };
 			render(LibrarySize);
@@ -397,6 +409,21 @@ describe('reports pages', () => {
 
 			expect(await screen.findByText('Every game has a cover image.')).toBeTruthy();
 		});
+	});
+
+	it('report tabs carry icons (B18)', () => {
+		render(ReportsLayout, {
+			children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))
+		});
+		expect(
+			screen
+				.getAllByRole('link')
+				.map((a) => [a.textContent!.trim(), a.querySelector('i')?.className.trim()])
+		).toEqual([
+			['Library Size', 'bi bi-pie-chart'],
+			['Missing Images', 'bi bi-image-alt'],
+			['Duplicates', 'bi bi-files']
+		]);
 	});
 
 	it('the Reports layout has one page-title h1 (B1)', () => {
