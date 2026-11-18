@@ -251,6 +251,13 @@ public static class LibraryEndpoints
         games.MapDelete("/{id:guid}/roms/{romId:long}", async (Guid id, long romId, HttpContext ctx, LibraryEditor editor) =>
             ToResult(ctx, await editor.DeleteReleaseAsync(id, romId, AuditActor.From(ctx.User), ctx.RequestAborted))).RequireAuthorization(AuthSetup.AdminOnly);
 
+        games.MapPost("/{id:guid}/roms/{romId:long}/primary", async (Guid id, long romId, HttpContext ctx, LibraryEditor editor,
+            IGameRepository repository, IRomRepository roms, IImageRepository images) =>
+        {
+            var result = await editor.SetPrimaryReleaseAsync(id, romId, AuditActor.From(ctx.User), ctx.RequestAborted);
+            return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
         games.MapPost("/{id:guid}/roms/{romId:long}/move", async (Guid id, long romId, MoveReleaseRequest request, HttpContext ctx,
             LibraryEditor editor) =>
         {

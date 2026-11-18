@@ -16,6 +16,7 @@ public static class AuditActions
     public const string ImageAdded = "ImageAdded";
     public const string ImageDeleted = "ImageDeleted";
     public const string CoverSet = "CoverSet";
+    public const string PrimarySet = "PrimarySet";
     public const string MediaFetched = "MediaFetched";
     public const string ReleaseMoved = "ReleaseMoved";
     public const string GamesMerged = "GamesMerged";
@@ -67,7 +68,7 @@ public static class AuditActions
     public static readonly IReadOnlyList<string> All =
     [
         Ingested, ZipRepaired, ExtensionRenamed, MovedToFailed, MovedToDuplicates, ArchiveDeleted, ReviewDeleted, GameUpdated,
-        ReleaseDeleted, GameDeleted, ImageAdded, ImageDeleted, CoverSet, MediaFetched, ReleaseMoved, GamesMerged, DatsRefreshed,
+        ReleaseDeleted, GameDeleted, ImageAdded, ImageDeleted, CoverSet, PrimarySet, MediaFetched, ReleaseMoved, GamesMerged, DatsRefreshed,
         IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved, GenreLogoReplaced, GenreLogoRemoved,
         SystemLogoReplaced, SystemLogoRemoved, BackupRestored, RomsExternalized,
         SaveAdded, SaveUpdated, SaveDeleted, UserCreated, UserTypeChanged, UserDisabled, UserEnabled, PasswordReset,

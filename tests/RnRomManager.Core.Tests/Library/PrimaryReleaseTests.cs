@@ -47,6 +47,21 @@ public class PrimaryReleaseTests
         Assert.That(applied.Single(r => r.IsPrimary).FileName, Is.EqualTo(PrimaryReleaseRanker.Primary([Dlc, Update], PrimaryRelease.Rank).FileName));
     }
 
+    private static InfoJsonRom WithSha1(InfoJsonRom rom, char c) => rom with { Metadata = rom.Metadata with { Sha1 = new string(c, 40) } };
+
+    [Test]
+    public void ChosenSha1_WinsWhileListed_ElseTheRankerPicks()
+    {
+        var japan = WithSha1(Rom("Tetris (Japan).gb", ["Japan"]), 'j');
+        var world = WithSha1(Rom("Tetris (World).gb", ["World"]), 'w');
+
+        Assert.That(PrimaryRelease.Apply([world, japan], DatSource.Libretro, japan.Metadata.Sha1).Where(r => r.IsPrimary).Select(r => r.FileName),
+            Is.EqualTo(new[] { japan.FileName }));
+        Assert.That(PrimaryRelease.Apply([world, japan], DatSource.Libretro).Single(r => r.IsPrimary).FileName, Is.EqualTo(world.FileName));
+        Assert.That(PrimaryRelease.Apply([world], DatSource.Libretro, japan.Metadata.Sha1).Single(r => r.IsPrimary).FileName, Is.EqualTo(world.FileName),
+            "a chosen release that left the game falls back to the ranker");
+    }
+
     [Test]
     public void TitleDb_Order_PutsTheBaseFirst()
     {

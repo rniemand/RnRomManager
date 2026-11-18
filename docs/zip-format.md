@@ -165,6 +165,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 | `description` | string? | | Admin-edited only |
 | `rating` | int? | ✓ | shared 1–5 star rating; `null` = not rated (the key must be present) |
 | `favourite` | bool | ✓ | shared favourite flag |
+| `chosenPrimarySha1` | string? | | SHA1 of the release an Admin made primary (**Make primary**); it stays `isPrimary` while `roms` lists it, otherwise the ranker picks. Left out when not set, so it needs no schema version |
 | `roms` | Rom[] | ✓ | at least one |
 | `images` | Image[] | ✓ | at most 20; exactly one `isCover` when not empty |
 | `metadata.createdAt` / `updatedAt` | string | ✓ | first / latest write of the ZIP |

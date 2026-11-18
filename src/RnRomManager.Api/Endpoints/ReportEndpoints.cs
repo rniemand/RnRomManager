@@ -63,7 +63,7 @@ public static partial class ReportEndpoints
                 signIns = await Recent(AuditActions.SignedIn, AuditActions.SignInFailed, AuditActions.LockedOut),
                 plays = await Recent(AuditActions.GamePlayed),
                 saves = await Recent(AuditActions.SaveAdded, AuditActions.SaveUpdated, AuditActions.SaveDeleted),
-                edits = await Recent(AuditActions.GameUpdated, AuditActions.ReleaseMoved, AuditActions.GamesMerged, AuditActions.CoverSet,
+                edits = await Recent(AuditActions.GameUpdated, AuditActions.ReleaseMoved, AuditActions.GamesMerged, AuditActions.CoverSet, AuditActions.PrimarySet,
                     AuditActions.ImageAdded, AuditActions.ImageDeleted),
                 deletions = await Recent(AuditActions.GameDeleted, AuditActions.ReleaseDeleted),
             });

@@ -129,6 +129,7 @@ public class LibraryEditTests
         yield return new TestCaseData("PATCH", $"/api/games/{id}").SetName("RoleMatrix PATCH game");
         yield return new TestCaseData("DELETE", $"/api/games/{id}").SetName("RoleMatrix DELETE game");
         yield return new TestCaseData("DELETE", $"/api/games/{id}/roms/1").SetName("RoleMatrix DELETE rom");
+        yield return new TestCaseData("POST", $"/api/games/{id}/roms/1/primary").SetName("RoleMatrix POST rom primary");
     }
 
     [TestCaseSource(nameof(Endpoints))]
@@ -304,6 +305,44 @@ public class LibraryEditTests
             Assert.That(zip.HasEntry("roms/Tetris (World).gb"), Is.False);
         var roms = await Service<IRomRepository>().ListByGameAsync(id, default);
         Assert.That(roms.Select(r => (r.FileName, r.IsPrimary)), Is.EqualTo(new[] { ("Tetris (Japan).gb", true) }));
+    }
+
+    [Test]
+    public async Task SetPrimary_RewritesZipAndDb_ReturnsDetail()
+    {
+        var id = await Tetris();
+        var zipPath = (await Row(id))!.ZipPath;
+        var japan = await RomId(id, "Tetris (Japan).gb");
+
+        using var response = await _admin.SendAsync(HttpMethod.Post, $"/api/games/{id}/roms/{japan}/primary", null, sendXsrf: true);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var primary = (await AuthClient.JsonAsync(response)).GetProperty("roms").EnumerateArray().Single(r => r.GetProperty("isPrimary").GetBoolean());
+        Assert.That(primary.GetProperty("id").GetInt64(), Is.EqualTo(japan));
+        Assert.That(ReadZip(zipPath).Roms.Where(r => r.IsPrimary).Select(r => r.FileName), Is.EqualTo(new[] { "Tetris (Japan).gb" }));
+        var roms = await Service<IRomRepository>().ListByGameAsync(id, default);
+        Assert.That(roms.Where(r => r.IsPrimary).Select(r => r.FileName), Is.EqualTo(new[] { "Tetris (Japan).gb" }));
+    }
+
+    [Test]
+    public async Task SetPrimary_SticksWhenABetterRankedReleaseIsAdded()
+    {
+        var id = await Ingest("t2.gb", TetrisJapan);
+        await Ingest("t1.gb", TetrisWorld); // World outranks Japan
+        var zipPath = (await Row(id))!.ZipPath;
+        Assert.That(ReadZip(zipPath).Roms.Single(r => r.IsPrimary).FileName, Is.EqualTo("Tetris (World).gb"));
+        var world = await RomId(id, "Tetris (World).gb");
+        using (var deleted = await _admin.SendAsync(HttpMethod.Delete, $"/api/games/{id}/roms/{world}", null, sendXsrf: true))
+            Assert.That(deleted.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        using (var set = await _admin.SendAsync(HttpMethod.Post, $"/api/games/{id}/roms/{await RomId(id, "Tetris (Japan).gb")}/primary", null, sendXsrf: true))
+            Assert.That(set.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+
+        Assert.That(await Ingest("t1-again.gb", TetrisWorld), Is.EqualTo(id));
+
+        var game = ReadZip(zipPath);
+        Assert.That(game.Roms.Select(r => (r.FileName, r.IsPrimary)), Is.EquivalentTo(new[] { ("Tetris (Japan).gb", true), ("Tetris (World).gb", false) }));
+        var roms = await Service<IRomRepository>().ListByGameAsync(id, default);
+        Assert.That(roms.Single(r => r.IsPrimary).FileName, Is.EqualTo("Tetris (Japan).gb"));
     }
 
     [Test]

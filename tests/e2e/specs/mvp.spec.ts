@@ -585,7 +585,7 @@ test("browse, search and filter the library", async () => {
 
 test("game detail + downloads + ROM playback progress", async () => {
   await openGame("Orbit Blocks");
-  await expect(page.getByText("Primary")).toBeVisible();
+  await expect(page.getByText("Primary", { exact: true })).toBeVisible();
   await expectAccessible(page, "game detail");
 
   // R1/R2: release cards start collapsed; Header details is in the body.
