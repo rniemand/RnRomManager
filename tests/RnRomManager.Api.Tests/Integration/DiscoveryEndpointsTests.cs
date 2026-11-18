@@ -92,6 +92,24 @@ public class DiscoveryEndpointsTests
         Assert.That(genres.GetProperty("items")[0].GetProperty("name").GetString(), Is.EqualTo("Puzzle"));
     }
 
+    /// <summary>B16: <c>q</c> filters by label before paging; exactly 100 chars (after trim) is allowed, blank is absent.</summary>
+    [Test]
+    public async Task Groups_Q_FiltersByName_BeforePaging()
+    {
+        await AddGameAsync("Tetris", "gb", ["Nintendo"], ["Puzzle"]);
+        await AddGameAsync("Sonic", "megadrive", ["Sega", "Sega Toys"], ["Platform"]);
+
+        var (status, body) = await GetAsync(_user, "/api/discovery/publishers?q=%20sEgA%20&pageSize=1&page=2");
+        var (_, blank) = await GetAsync(_user, "/api/discovery/publishers?q=%20%20");
+        var (atLimit, _) = await GetAsync(_user, "/api/discovery/publishers?q=" + new string('a', 100));
+
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(body.GetProperty("total").GetInt64(), Is.EqualTo(2));
+        Assert.That(body.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("name").GetString()), Is.EqualTo(new[] { "Sega Toys" }));
+        Assert.That(blank.GetProperty("total").GetInt64(), Is.EqualTo(3));
+        Assert.That(atLimit, Is.EqualTo(HttpStatusCode.OK));
+    }
+
     [Test]
     public async Task GenreGroups_CarryTheirOwnLogoUrl()
     {
@@ -191,6 +209,7 @@ public class DiscoveryEndpointsTests
     [TestCase("/api/discovery/genres?pageSize=0", "pageSize")]
     [TestCase("/api/discovery/publishers/games?key=c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516&page=0", "page")]
     [TestCase("/api/discovery/publishers/games?key=c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516&pageSize=201", "pageSize")]
+    [TestCase("/api/discovery/publishers?q=%20aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "q")]
     public async Task InvalidPaging_Is400(string url, string field)
     {
         var (status, body) = await GetAsync(_user, url);

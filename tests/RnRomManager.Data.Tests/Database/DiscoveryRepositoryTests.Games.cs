@@ -209,8 +209,8 @@ public partial class DiscoveryRepositoryTests
         using var cancelled = new CancellationTokenSource();
         await cancelled.CancelAsync();
 
-        var first = _repository.ListGroupsAsync(DiscoveryKind.Publishers, 1, 48, cancelled.Token);
-        var others = Enumerable.Range(0, 5).Select(_ => _repository.ListGroupsAsync(DiscoveryKind.Publishers, 1, 48, default)).ToList();
+        var first = _repository.ListGroupsAsync(DiscoveryKind.Publishers, 1, 48, null, cancelled.Token);
+        var others = Enumerable.Range(0, 5).Select(_ => _repository.ListGroupsAsync(DiscoveryKind.Publishers, 1, 48, null, default)).ToList();
 
         Assert.That(async () => await first, Throws.InstanceOf<OperationCanceledException>());
         foreach (var other in others)
@@ -224,7 +224,7 @@ public partial class DiscoveryRepositoryTests
         await MirrorAsync("B", publishers: ["SQUARE"]);
         await MirrorAsync("C", publishers: ["Enix"]);
 
-        var listed = (await _repository.ListGroupsAsync(DiscoveryKind.Publishers, 1, 48, default)).Items;
+        var listed = (await _repository.ListGroupsAsync(DiscoveryKind.Publishers, 1, 48, null, default)).Items;
 
         foreach (var group in listed)
             Assert.That(await _repository.GetGroupAsync(DiscoveryKind.Publishers, group.Key, default), Is.EqualTo(group));
@@ -277,12 +277,12 @@ public partial class DiscoveryRepositoryTests
         }
 
         var cold = Stopwatch.StartNew();
-        await _repository.ListGroupsAsync(DiscoveryKind.Publishers, 1, 48, default);
+        await _repository.ListGroupsAsync(DiscoveryKind.Publishers, 1, 48, null, default);
         var build = cold.Elapsed.TotalMilliseconds;
 
-        var groups = await MedianMs(() => _repository.ListGroupsAsync(DiscoveryKind.Publishers, 1, 48, default));
-        var deepGroups = await MedianMs(() => _repository.ListGroupsAsync(DiscoveryKind.Publishers, 40, 48, default));
-        var genres = await MedianMs(() => _repository.ListGroupsAsync(DiscoveryKind.Genres, 1, 48, default));
+        var groups = await MedianMs(() => _repository.ListGroupsAsync(DiscoveryKind.Publishers, 1, 48, null, default));
+        var deepGroups = await MedianMs(() => _repository.ListGroupsAsync(DiscoveryKind.Publishers, 40, 48, null, default));
+        var genres = await MedianMs(() => _repository.ListGroupsAsync(DiscoveryKind.Genres, 1, 48, null, default));
         var games = await MedianMs(() => SelectAsync(DiscoveryKind.Publishers, Key("publisher 7")));
         var bigGames = await MedianMs(() => SelectAsync(DiscoveryKind.Publishers, Key("shared publisher name"), 500));
 
