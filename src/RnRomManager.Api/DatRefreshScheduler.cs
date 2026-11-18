@@ -20,47 +20,24 @@ public sealed class DatRefreshScheduler(
     /// <summary>How long to wait before retrying a busy lock, or re-reading the settings after the database failed.</summary>
     public static readonly TimeSpan RetryDelay = TimeSpan.FromMinutes(1);
 
-    private readonly Lock _gate = new();
-    private CancellationTokenSource _wake = new();
+    private readonly WakeSignal _signal = new(time);
 
     public override Task StartAsync(CancellationToken cancellationToken)
     {
-        settings.SettingsChanged += Wake;
+        settings.SettingsChanged += _signal.Wake;
         return base.StartAsync(cancellationToken);
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        settings.SettingsChanged -= Wake;
+        settings.SettingsChanged -= _signal.Wake;
         await base.StopAsync(cancellationToken);
     }
 
     public override void Dispose()
     {
-        lock (_gate)
-            _wake.Dispose();
+        _signal.Dispose();
         base.Dispose();
-    }
-
-    private void Wake()
-    {
-        lock (_gate)
-            _wake.Cancel();
-    }
-
-    /// <summary>A fresh wake token: a change signalled before this point was already seen by the caller.</summary>
-    private CancellationToken WakeToken()
-    {
-        lock (_gate)
-        {
-            if (_wake.IsCancellationRequested)
-            {
-                _wake.Dispose();
-                _wake = new CancellationTokenSource();
-            }
-
-            return _wake.Token;
-        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -69,7 +46,7 @@ public sealed class DatRefreshScheduler(
         DateTimeOffset? lastDue = null;
         while (!stoppingToken.IsCancellationRequested)
         {
-            var wake = WakeToken();
+            var wake = _signal.Token();
             DatRefreshSettings current;
             DateTimeOffset? due;
             try
@@ -86,14 +63,14 @@ public sealed class DatRefreshScheduler(
             catch (Exception ex)
             {
                 logger.LogError(ex, "DAT refresh schedule couldn't be read; retrying in {Delay}", RetryDelay);
-                if (!await WaitAsync(RetryDelay, wake, stoppingToken).ConfigureAwait(false) && stoppingToken.IsCancellationRequested)
+                if (!await _signal.WaitAsync(RetryDelay, wake, stoppingToken).ConfigureAwait(false) && stoppingToken.IsCancellationRequested)
                     return;
                 continue;
             }
 
             logger.LogInformation("Next scheduled DAT refresh: {Next}", due?.ToString("O") ?? "disabled");
             var wait = due is { } d ? d - time.GetUtcNow() : Timeout.InfiniteTimeSpan;
-            if (!await WaitAsync(wait, wake, stoppingToken).ConfigureAwait(false))
+            if (!await _signal.WaitAsync(wait, wake, stoppingToken).ConfigureAwait(false))
             {
                 if (stoppingToken.IsCancellationRequested) return;
                 continue; // settings changed: reschedule
@@ -104,7 +81,7 @@ public sealed class DatRefreshScheduler(
             {
                 var next = ScheduleCalculator.NextDaily(ran, current.TimeOfDay, zone);
                 var retry = next - time.GetUtcNow();
-                if (!await WaitAsync(retry < RetryDelay ? retry : RetryDelay, wake, stoppingToken).ConfigureAwait(false))
+                if (!await _signal.WaitAsync(retry < RetryDelay ? retry : RetryDelay, wake, stoppingToken).ConfigureAwait(false))
                     break; // stopping or settings changed: the outer loop decides
                 if (time.GetUtcNow() >= next)
                 {
@@ -137,19 +114,4 @@ public sealed class DatRefreshScheduler(
         }
     }
 
-    /// <summary>True when the wait elapsed; false when woken by a settings change or stopping.</summary>
-    private async Task<bool> WaitAsync(TimeSpan wait, CancellationToken wake, CancellationToken stoppingToken)
-    {
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(wake, stoppingToken);
-        try
-        {
-            if (wait != Timeout.InfiniteTimeSpan && wait < TimeSpan.Zero) wait = TimeSpan.Zero;
-            await Task.Delay(wait, time, linked.Token).ConfigureAwait(false);
-            return true;
-        }
-        catch (OperationCanceledException)
-        {
-            return false;
-        }
-    }
 }

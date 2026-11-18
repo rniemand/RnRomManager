@@ -1,3 +1,5 @@
+import { remembered } from './remembered';
+
 /** RV4: the review queue's filter and page, kept in the URL query and remembered in `localStorage`. */
 export interface ReviewFilter {
 	q: string;
@@ -38,23 +40,10 @@ export function reviewApiUrl(f: ReviewFilter, pageSize: number): string {
 	return url;
 }
 
-const storageKey = 'rnrm.review.filter';
+const filter = remembered('rnrm.review.filter');
 
 /** The saved query string, or '' when none or storage is unavailable. */
-export function readSavedReviewFilter(): string {
-	try {
-		return localStorage.getItem(storageKey) ?? '';
-	} catch {
-		return '';
-	}
-}
+export const readSavedReviewFilter = filter.read;
 
 /** Saves `search` (removes the key when empty); ignored when storage is unavailable. */
-export function saveReviewFilter(search: string): void {
-	try {
-		if (search) localStorage.setItem(storageKey, search);
-		else localStorage.removeItem(storageKey);
-	} catch {
-		// remembering the filter is a convenience
-	}
-}
+export const saveReviewFilter = filter.save;

@@ -308,7 +308,6 @@ export function logoSources(
 
 /** B5: a logo override's limits, as the server checks them (it also checks the type and 2048 px per side). */
 export const maxLogoBytes = 512 * 1024;
-export const maxLogoDimension = 2048;
 
 /** B5's checks the browser can make before uploading; null when the file may be sent. */
 export function logoFileError(file: File | null | undefined): string | null {

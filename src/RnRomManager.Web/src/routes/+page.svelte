@@ -30,33 +30,22 @@
 	} from '#lib/libraryQuery.js';
 	import {
 		libraryFilterParams,
+		readLibraryView,
 		readSavedLibraryFilter,
-		saveLibraryFilter
+		saveLibraryFilter,
+		saveLibraryView,
+		type LibraryView
 	} from '#lib/libraryFilter.js';
 	import { formatCount } from '#lib/format.js';
+	import { pageCount } from '#lib/pageSize.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 
-	type View = 'grid' | 'list';
-	const viewKey = 'libraryView';
-
-	function readView(): View {
-		try {
-			return localStorage.getItem(viewKey) === 'list' ? 'list' : 'grid';
-		} catch {
-			return 'grid';
-		}
-	}
-
-	function setView(value: View): void {
+	function setView(value: LibraryView): void {
 		view = value;
-		try {
-			localStorage.setItem(viewKey, value);
-		} catch {
-			// remembering the view is a convenience
-		}
+		saveLibraryView(value);
 	}
 
-	let view = $state<View>(readView());
+	let view = $state<LibraryView>(readLibraryView());
 	let systems = $state<SystemInfo[]>([]);
 	let result = $state<Page<GameListItem> | null>(null);
 	let error = $state<unknown>(null);
@@ -153,7 +142,7 @@
 		go({ ...parseFilters(new URLSearchParams()), sort: filters.sort, dir: filters.dir });
 	}
 
-	const pages = $derived(result ? Math.max(1, Math.ceil(result.total / libraryPageSize)) : 1);
+	const pages = $derived(result ? pageCount(result.total, libraryPageSize) : 1);
 	const dir = $derived(filters.dir ?? defaultDir(filters.sort));
 
 	function go(next: LibraryFilters): void {

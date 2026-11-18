@@ -235,12 +235,7 @@ public sealed class DatRefreshJob(
     /// <exception cref="IOException">The work folder can't be made safely.</exception>
     private string CreateWork(Guid jobId)
     {
-        var baseFolder = ExternalRomPath.ClassifyDirectory(paths.Cache, Path.Combine(paths.Cache, CrashRecovery.WorkFolder));
-        if (baseFolder.Status == ExternalPathStatus.Missing)
-        {
-            Directory.CreateDirectory(baseFolder.Path);
-            baseFolder = ExternalRomPath.ClassifyDirectory(paths.Cache, baseFolder.Path);
-        }
+        var baseFolder = ExternalRomPath.EnsureDirectory(paths.Cache, Path.Combine(paths.Cache, CrashRecovery.WorkFolder));
         if (baseFolder.Status != ExternalPathStatus.Found)
             throw new IOException($"The work folder can't be used: {baseFolder.Details}");
 

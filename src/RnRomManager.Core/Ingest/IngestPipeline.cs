@@ -820,19 +820,7 @@ public sealed class IngestPipeline(
         {
             // E2: the ZIP and its ROM file get budgeted names, free on disk and against every mirrored claim.
             var library = paths.Value.Roms;
-            var bucket = ExternalRomPath.ClassifyDirectory(library, Path.Combine(library, system.Id, Bucket.For(ExternalRomName.ZipName(title))));
-            try
-            {
-                if (bucket.Status == ExternalPathStatus.Missing)
-                {
-                    Directory.CreateDirectory(bucket.Path);
-                    bucket = ExternalRomPath.ClassifyDirectory(library, bucket.Path);
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                return IngestItemResult.Error(IngestErrors.IoError, $"{bucket.Path} can't be created: {ex.Message}", system.Id, result.Sha1);
-            }
+            var bucket = ExternalRomPath.EnsureDirectory(library, Path.Combine(library, system.Id, Bucket.For(ExternalRomName.ZipName(title))));
             if (bucket.Status != ExternalPathStatus.Found)
                 return IngestItemResult.Error(IngestErrors.IoError, bucket.Details, system.Id, result.Sha1);
 
@@ -1194,12 +1182,7 @@ public sealed class IngestPipeline(
         var root = paths.Value.Ingest;
         try
         {
-            var target = ExternalRomPath.ClassifyDirectory(root, directory);
-            if (target.Status == ExternalPathStatus.Missing)
-            {
-                Directory.CreateDirectory(target.Path);
-                target = ExternalRomPath.ClassifyDirectory(root, directory);
-            }
+            var target = ExternalRomPath.EnsureDirectory(root, directory);
             if (target.Status != ExternalPathStatus.Found)
                 return Fail(target.Details);
             var source = ExternalRomPath.ClassifyFile(root, file.FullPath);

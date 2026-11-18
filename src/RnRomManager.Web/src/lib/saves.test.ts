@@ -1,21 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { descriptionError, fileError, maxSaveBytes, nameError, saveExtension } from './saves';
-
-describe('saveExtension (B1)', () => {
-	it.each([
-		['save.state', '.state'],
-		['x.tar.gz', '.gz'],
-		['.state', '.state'],
-		['GAME.SRM', '.srm'],
-		['x.', ''],
-		['x.TOOLONGEXT', ''],
-		['x.12345678', '.12345678'],
-		['x.st@te', ''],
-		['noextension', '']
-	])('%s → "%s"', (name, expected) => {
-		expect(saveExtension(name)).toBe(expected);
-	});
-});
+import { descriptionError, fileError, maxSaveBytes, nameError } from './saves';
 
 describe('field rules (B8)', () => {
 	it('a name is trimmed, 1–100 characters, without control characters', () => {

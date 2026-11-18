@@ -26,32 +26,18 @@
 		type LibraryFilters,
 		type LibrarySort
 	} from '#lib/libraryQuery.js';
+	import { readLibraryView, saveLibraryView, type LibraryView } from '#lib/libraryFilter.js';
 	import { pageCount } from '#lib/pageSize.js';
 	import { renderMarkdown } from '#lib/markdown.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
 	/** B24: one collection — its header, then its games with the Library's view, filters, sort and paging. */
-	type View = 'grid' | 'list';
-	const viewKey = 'libraryView'; // shared with the Library: one remembered choice
-
-	function readView(): View {
-		try {
-			return localStorage.getItem(viewKey) === 'list' ? 'list' : 'grid';
-		} catch {
-			return 'grid';
-		}
-	}
-
-	function setView(value: View): void {
+	function setView(value: LibraryView): void {
 		view = value;
-		try {
-			localStorage.setItem(viewKey, value);
-		} catch {
-			// remembering the view is a convenience
-		}
+		saveLibraryView(value);
 	}
 
-	let view = $state<View>(readView());
+	let view = $state<LibraryView>(readLibraryView());
 	let collection = $state<CollectionDetail | null>(null);
 	let notFound = $state(false);
 	let error = $state<unknown>(null);

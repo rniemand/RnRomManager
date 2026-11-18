@@ -63,6 +63,31 @@ describe('bundle cart store (B1–B3, B5)', () => {
 	/** Lets the client's antiforgery fetch and the POST start. */
 	const settle = () => new Promise((r) => setTimeout(r, 0));
 
+	it('takes the cart another tab wrote, so the next add keeps both tabs’ entries', () => {
+		bundle.follow(alice);
+		bundle.add(main(1));
+		// The other tab adds game 2 to its copy and stores it.
+		store.set(
+			cartStorageKey(alice.id),
+			JSON.stringify({ version: 1, entries: [main(1), main(2)] })
+		);
+		window.dispatchEvent(new StorageEvent('storage', { key: cartStorageKey(alice.id) }));
+
+		bundle.add(main(3));
+
+		expect(bundle.entries.map((e) => e.fileName)).toEqual(['game 1.gb', 'game 2.gb', 'game 3.gb']);
+		expect(JSON.parse(store.get(cartStorageKey(alice.id))!).entries).toHaveLength(3);
+	});
+
+	it('ignores storage events for another account’s cart', () => {
+		bundle.follow(alice);
+		bundle.add(main(1));
+		store.set(cartStorageKey(bob.id), JSON.stringify({ version: 1, entries: [main(9)] }));
+		window.dispatchEvent(new StorageEvent('storage', { key: cartStorageKey(bob.id) }));
+
+		expect(bundle.entries.map((e) => e.fileName)).toEqual(['game 1.gb']);
+	});
+
 	it('keeps insertion order and rejects duplicate identities', () => {
 		bundle.follow(alice);
 
