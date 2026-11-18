@@ -116,4 +116,51 @@ describe('SystemList (Systems tab B3)', () => {
 			'badge rounded-pill count-badge text-bg-primary'
 		);
 	});
+
+	describe('search (B16)', () => {
+		const names = () =>
+			[...document.querySelectorAll('ul[aria-label="Systems"] a')].map((l) =>
+				shownText(l)!.replace(/ [\d,]+ games?$/, '')
+			);
+
+		it('filters by id, case-insensitive, keeping find in the links', () => {
+			render(SystemList, { systems, selected: null, find: 'NES' });
+			expect(names()).toEqual(['Nintendo Entertainment System']);
+			expect(screen.getByRole('link', { name: /Nintendo/ }).getAttribute('href')).toBe(
+				'/collections?tab=systems&system=nes&find=NES'
+			);
+		});
+
+		it('filters by display name too', () => {
+			render(SystemList, { systems, selected: null, find: 'atari' });
+			expect(names()).toEqual(['Atari 2600']);
+		});
+
+		it('no match shows its own empty state', () => {
+			render(SystemList, { systems, selected: null, find: 'zzz' });
+			expect(screen.getByText('No systems match “zzz”.')).toBeTruthy();
+			expect(names()).toEqual([]);
+		});
+
+		it('typing calls onfind after a pause', async () => {
+			const onfind = vi.fn();
+			render(SystemList, { systems, selected: null, onfind });
+			const box = screen.getByLabelText('Search systems') as HTMLInputElement;
+			expect(box.maxLength).toBe(100);
+
+			await fireEvent.input(box, { target: { value: ' gb ' } });
+			await new Promise((done) => setTimeout(done, 350));
+			expect(onfind).toHaveBeenCalledWith('gb');
+		});
+
+		it('a pending search is dropped on unmount', async () => {
+			const onfind = vi.fn();
+			const { unmount } = render(SystemList, { systems, selected: null, onfind });
+
+			await fireEvent.input(screen.getByLabelText('Search systems'), { target: { value: 'nes' } });
+			unmount();
+			await new Promise((done) => setTimeout(done, 350));
+			expect(onfind).not.toHaveBeenCalled();
+		});
+	});
 });

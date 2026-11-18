@@ -300,3 +300,37 @@ describe('logo URL check (B19)', () => {
 		expect(logoUrlError(url)).toBe(error);
 	});
 });
+
+describe('collections search URL state (B16)', () => {
+	const url = (search: string) => new URL(`http://x/collections${search}`);
+
+	it('reads find trimmed and capped at 100; whitespace-only is none (absent)', () => {
+		expect(discoveryState(url('?tab=publishers&find=%20nin%20'))!.find).toBe('nin');
+		expect(discoveryState(url('?tab=publishers&find=%20%20'))).not.toHaveProperty('find');
+		expect(discoveryState(url(`?tab=genres&find=${'a'.repeat(150)}`))!.find).toHaveLength(100);
+		expect(systemsState(url('?tab=systems&find=%20gb'))).toEqual({
+			system: null,
+			gamePage: 1,
+			find: 'gb'
+		});
+		expect(systemsState(url('?tab=systems'))).not.toHaveProperty('find');
+	});
+
+	it('keeps find when selecting or paging, drops it on a tab change, omits it when empty', () => {
+		const state = { kind: 'publishers' as const, key, groupPage: 2, gamePage: 3, find: 'nin' };
+		expect(discoverySearch(state)).toBe(
+			`?tab=publishers&key=${key}&groupPage=2&gamePage=3&find=nin`
+		);
+		expect(discoverySearch({ ...state, key: null, find: '' })).toBe('?tab=publishers&groupPage=2');
+		expect(systemsSearch({ system: 'gb', gamePage: 1, find: 'game' })).toBe(
+			'?tab=systems&system=gb&find=game'
+		);
+		expect(tabSearch('publishers')).toBe('?tab=publishers');
+		expect(tabSearch('systems')).toBe('?tab=systems');
+	});
+
+	it('a state with find reads back the same', () => {
+		const state = { kind: 'genres' as const, key: null, groupPage: 1, gamePage: 1, find: 'rpg' };
+		expect(discoveryState(url(discoverySearch(state)))).toEqual(state);
+	});
+});

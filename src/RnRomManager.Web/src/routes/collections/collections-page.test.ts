@@ -566,3 +566,103 @@ describe('CollectionModal (B23)', () => {
 		});
 	});
 });
+
+describe('collections search (B16)', () => {
+	const key = 'c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516';
+	const groups = (items: { key: string; name: string }[]) => ({
+		status: 200,
+		body: {
+			items: items.map((g) => ({ ...g, gameCount: 1, logoUrl: null })),
+			page: 1,
+			pageSize: 20,
+			total: items.length
+		}
+	});
+	const wait = () => new Promise((done) => setTimeout(done, 350));
+
+	it('typing writes find with replace, keeps the selection and goes back to group page 1', async () => {
+		navigateTo(`/collections?tab=publishers&key=${key}&groupPage=2`);
+		answers['GET /api/discovery/publishers?page=2&pageSize=20'] = [
+			groups([{ key, name: 'Nintendo' }])
+		];
+		answers['GET /api/discovery/publishers?pageSize=20&q=nin'] = [
+			groups([{ key, name: 'Nintendo' }])
+		];
+		render(CollectionsPage);
+		await screen.findByRole('link', { name: /Nintendo/ });
+
+		await fireEvent.input(screen.getByLabelText('Search publishers'), {
+			target: { value: 'nin' }
+		});
+		await wait();
+
+		expect(goto).toHaveBeenLastCalledWith(`/collections?tab=publishers&key=${key}&find=nin`, {
+			replace: true,
+			reset: false
+		});
+		await vi.waitFor(() =>
+			expect(keys()).toContain('GET /api/discovery/publishers?pageSize=20&q=nin')
+		);
+	});
+
+	it('the box follows the URL on Back/Forward, and a tab change drops find', async () => {
+		navigateTo('/collections?tab=genres&find=rpg');
+		answers['GET /api/discovery/genres?pageSize=20&q=rpg'] = [groups([])];
+		answers['GET /api/discovery/genres?pageSize=20'] = [groups([])];
+		render(CollectionsPage);
+		const box = screen.getByLabelText('Search genres') as HTMLInputElement;
+		expect(box.value).toBe('rpg');
+
+		navigateTo('/collections?tab=genres');
+		await vi.waitFor(() => expect(box.value).toBe(''));
+		expect(
+			within(screen.getByRole('navigation', { name: 'Collections views' }))
+				.getByRole('link', { name: 'Publishers' })
+				.getAttribute('href')
+		).toBe('/collections?tab=publishers');
+	});
+
+	it('Systems: typing filters through the URL', async () => {
+		navigateTo('/collections?tab=systems');
+		answers['GET /api/systems'] = [
+			{
+				status: 200,
+				body: [
+					{
+						id: 'gb',
+						displayName: 'Game Boy',
+						shortName: 'GB',
+						gameCount: 1,
+						romCount: 1,
+						regions: []
+					},
+					{
+						id: 'nes',
+						displayName: 'NES',
+						shortName: 'NES',
+						gameCount: 0,
+						romCount: 0,
+						regions: []
+					}
+				]
+			}
+		];
+		render(CollectionsPage);
+		await screen.findByRole('list', { name: 'Systems' });
+
+		await fireEvent.input(screen.getByLabelText('Search systems'), { target: { value: 'game' } });
+		await wait();
+
+		expect(goto).toHaveBeenLastCalledWith('/collections?tab=systems&find=game', {
+			replace: true,
+			reset: false
+		});
+		await vi.waitFor(() =>
+			expect(
+				within(screen.getByRole('list', { name: 'Systems' }))
+					.getAllByRole('link')
+					.map((l) => l.getAttribute('href'))
+			).toEqual(['/collections?tab=systems&system=gb&find=game'])
+		);
+	});
+});
