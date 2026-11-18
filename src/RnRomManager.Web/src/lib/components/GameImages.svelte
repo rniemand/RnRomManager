@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { tick, untrack } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
 	import { gameSearchQuery, googleImagesUrl } from '../googleSearch';
@@ -96,6 +99,27 @@
 		if (fileInput) fileInput.value = '';
 		uploadOpen = true;
 	}
+
+	/**
+	 * Review QoL B4: `?upload=1` (Next missing image) opens the dialog for an Admin once the route's game is loaded. `upload`
+	 * leaves the URL first and `tab` becomes `images`, so the panel is visible before the dialog opens and a reload or Back
+	 * doesn't reopen it. Other values, and Site users, only drop `upload`.
+	 */
+	$effect(() => {
+		const upload = page.url.searchParams.get('upload');
+		if (upload === null || game.id !== page.params.id) return;
+		untrack(async () => {
+			const open = upload === '1' && auth.isAdmin;
+			const next = new URL(page.url.href);
+			next.searchParams.delete('upload');
+			if (open) next.searchParams.set('tab', 'images');
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
+			await goto(`${next.pathname}${next.search}`, { replace: true, reset: false });
+			if (!open) return;
+			await tick();
+			openUpload();
+		});
+	});
 
 	function useFileInstead(): void {
 		uploadMode = 'file';

@@ -5,12 +5,24 @@ import type { GameDetail, ImageInfo } from '#lib/api/types.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 
-// The page reads `?tab=` from the URL (GP1).
+// The page reads `?tab=` from the URL (GP1); B4 reads `?upload=`.
+const nav = vi.hoisted(() => ({
+	url: new URL('http://localhost/games/g1?tab=images'),
+	params: { id: 'g1' },
+	goto: vi.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve())
+}));
 vi.mock('$app/state', () => ({
-	page: { params: { id: 'g1' }, url: new URL('http://localhost/games/g1?tab=images') }
+	page: {
+		get params() {
+			return nav.params;
+		},
+		get url() {
+			return nav.url;
+		}
+	}
 }));
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => nav.goto(...args) }));
 // Bootstrap's Modal needs layout/transitions jsdom lacks.
 vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
@@ -98,6 +110,76 @@ describe('game images', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		auth.set(null);
+		nav.url = new URL('http://localhost/games/g1?tab=images');
+		nav.params = { id: 'g1' };
+		nav.goto.mockClear();
+	});
+
+	describe('?upload= (B4)', () => {
+		const dialogShown = () =>
+			screen.getByLabelText('Upload an image').closest('.modal')!.classList.contains('show');
+		const show = (query: string) => {
+			nav.url = new URL(`http://localhost/games/g1${query}`);
+			render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		};
+
+		it.each([
+			['?tab=images&upload=1', '/games/g1?tab=images'],
+			['?upload=1', '/games/g1?tab=images'],
+			['?tab=saves&upload=1', '/games/g1?tab=images']
+		])('%s opens the dialog for an Admin and replaces the URL with %s', async (query, url) => {
+			show(query);
+
+			await vi.waitFor(() => expect(dialogShown()).toBe(true));
+			expect(nav.goto).toHaveBeenCalledExactlyOnceWith(url, { replace: true, reset: false });
+		});
+
+		it('opens the dialog only after the URL is replaced, reset as a button click', async () => {
+			let release!: () => void;
+			nav.goto.mockImplementationOnce(() => new Promise<void>((r) => (release = r)));
+			show('?upload=1');
+			await vi.waitFor(() => expect(nav.goto).toHaveBeenCalled());
+			expect(dialogShown()).toBe(false);
+
+			release();
+			await vi.waitFor(() => expect(dialogShown()).toBe(true));
+			expect((screen.getByLabelText('Image URL') as HTMLInputElement).value).toBe('');
+		});
+
+		it('does nothing while the loaded game is not the route’s game', async () => {
+			nav.params = { id: 'g2' };
+			show('?upload=1');
+			await new Promise((r) => setTimeout(r, 10));
+
+			expect(nav.goto).not.toHaveBeenCalled();
+			expect(dialogShown()).toBe(false);
+		});
+
+		it('another value is removed without opening the dialog', async () => {
+			show('?tab=releases&upload=0');
+
+			await vi.waitFor(() =>
+				expect(nav.goto).toHaveBeenCalledWith('/games/g1?tab=releases', {
+					replace: true,
+					reset: false
+				})
+			);
+			await new Promise((r) => setTimeout(r, 10));
+			expect(dialogShown()).toBe(false);
+		});
+
+		it('a Site user only has upload removed, tab left as it was', async () => {
+			auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
+			show('?tab=saves&upload=1');
+
+			await vi.waitFor(() =>
+				expect(nav.goto).toHaveBeenCalledExactlyOnceWith('/games/g1?tab=saves', {
+					replace: true,
+					reset: false
+				})
+			);
+			expect(screen.queryByLabelText('Upload an image')).toBeNull();
+		});
 	});
 
 	it('the top image on the page is the cover, even when it is a screenshot', async () => {

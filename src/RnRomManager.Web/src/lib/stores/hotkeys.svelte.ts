@@ -140,7 +140,9 @@ class HotkeyStore {
 			return;
 		}
 		if (stale()) return;
-		if (next.id) return goto(resolve('/games/[id]', { id: next.id }));
+		// Review QoL B3: the Images tab, with the Upload Image dialog for Admins (GameImages handles `upload`).
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
+		if (next.id) return goto(`${resolve('/games/[id]', { id: next.id })}?tab=images&upload=1`);
 		toasts.show(next.currentIsOnly ? missingImageMessages.onlyCurrent : missingImageMessages.none);
 	}
 }
