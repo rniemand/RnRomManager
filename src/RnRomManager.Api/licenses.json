@@ -18,6 +18,8 @@
   { "name": "NUnit", "license": "MIT", "url": "https://www.nuget.org/packages/NUnit" },
   { "name": "NUnit3TestAdapter", "license": "MIT", "url": "https://www.nuget.org/packages/NUnit3TestAdapter" },
   { "name": "SharpCompress", "license": "MIT", "url": "https://www.nuget.org/packages/SharpCompress" },
+  { "name": "SkiaSharp", "license": "MIT", "url": "https://www.nuget.org/packages/SkiaSharp" },
+  { "name": "SkiaSharp.NativeAssets.Linux.NoDependencies", "license": "MIT AND BSD-3-Clause", "url": "https://www.nuget.org/packages/SkiaSharp.NativeAssets.Linux.NoDependencies" },
   { "name": "Testcontainers.MariaDb", "license": "MIT", "url": "https://www.nuget.org/packages/Testcontainers.MariaDb" },
   { "name": "@emulatorjs/core-a5200", "license": "GPL-2.0", "url": "https://github.com/EmulatorJS/a5200" },
   { "name": "@emulatorjs/core-beetle_vb", "license": "GPL-2.0", "url": "https://github.com/EmulatorJS/beetle-vb-libretro" },
