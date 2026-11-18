@@ -263,9 +263,7 @@ describe('hotkeys store (B24)', () => {
 
 			expect(press()).toBe(true);
 
-			await vi.waitFor(() =>
-				expect(goto).toHaveBeenCalledWith(`/games/${gameA}?tab=images`)
-			);
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(`/games/${gameA}?tab=images`));
 			expect(calls).toContain(next());
 		});
 
@@ -276,9 +274,7 @@ describe('hotkeys store (B24)', () => {
 
 			press();
 
-			await vi.waitFor(() =>
-				expect(goto).toHaveBeenCalledWith(`/games/${gameB}?tab=images`)
-			);
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(`/games/${gameB}?tab=images`));
 		});
 
 		it('wraps: whatever the server picks is opened, even an earlier game', async () => {
@@ -288,9 +284,7 @@ describe('hotkeys store (B24)', () => {
 
 			press();
 
-			await vi.waitFor(() =>
-				expect(goto).toHaveBeenCalledWith(`/games/${gameA}?tab=images`)
-			);
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(`/games/${gameA}?tab=images`));
 		});
 
 		it('stays on the only remaining game with a message', async () => {
@@ -349,9 +343,7 @@ describe('hotkeys store (B24)', () => {
 				press();
 				release();
 
-				await vi.waitFor(() =>
-					expect(goto).toHaveBeenCalledWith(`/games/${gameB}?tab=images`)
-				);
+				await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(`/games/${gameB}?tab=images`));
 				expect(calls.filter((c) => c === next())).toHaveLength(1);
 				expect(goto).toHaveBeenCalledTimes(1);
 			});
