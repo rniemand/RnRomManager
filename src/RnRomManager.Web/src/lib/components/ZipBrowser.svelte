@@ -119,10 +119,10 @@
 	<Loading label="Loading ZIP contents…" />
 {:else}
 	<div class="row g-3">
-		<div class="col-12 col-md-4">
+		<div class="col-12 col-md-3">
 			<ul class="list-unstyled mb-0" aria-label="Folders">{@render node(tree.root)}</ul>
 		</div>
-		<div class="col-12 col-md-8">
+		<div class="col-12 col-md-9">
 			<nav aria-label="Folder path">
 				<ol class="breadcrumb mb-2">
 					{#each ancestors(folder.path) as path (path)}
@@ -141,64 +141,69 @@
 			{#if folder.folders.length + folder.files.length === 0}
 				<EmptyState message="This folder is empty." />
 			{:else}
-				<div class="table-responsive">
-					<table class="table table-sm table-striped table-hover align-middle">
-						<caption class="visually-hidden">Contents of {label(folder)}</caption>
-						<thead class="table-dark">
-							<tr>
-								<th scope="col">Name</th>
-								<th scope="col" class="text-end">Size</th>
-								<th scope="col" class="text-end">Compressed</th>
-								<th scope="col">Modified</th>
-								<th scope="col"><span class="visually-hidden">Download</span></th>
-							</tr>
-						</thead>
-						<tbody>
-							{#each folder.folders as child (child.path)}
+				<!-- B12: the table sits in a card (T1). -->
+				<div class="card mb-2">
+					<div class="table-responsive">
+						<table class="table table-sm table-striped table-hover align-middle mb-0">
+							<caption class="visually-hidden">Contents of {label(folder)}</caption>
+							<thead class="table-dark">
 								<tr>
-									<td class="text-truncate name-cell" title={child.name}>
-										<button
-											type="button"
-											class="btn btn-link btn-sm p-0 text-start text-decoration-none"
-											onclick={() => select(child.path)}><Icon name="folder" /> {child.name}</button
-										>
-									</td>
-									<td class="text-end text-nowrap">—</td>
-									<td class="text-end text-nowrap">—</td>
-									<td class="text-nowrap">—</td>
-									<td></td>
+									<th scope="col">Name</th>
+									<th scope="col" class="text-end">Size</th>
+									<th scope="col" class="text-end">Compressed</th>
+									<th scope="col">Modified</th>
+									<th scope="col"><span class="visually-hidden">Download</span></th>
 								</tr>
-							{/each}
-							{#each folder.files as file (file.entry.path)}
-								<tr>
-									<td class="text-truncate name-cell" title={file.name}>{file.name}</td>
-									<!-- Z2: sizes as the Library card's size badge. -->
-									<td class="text-end text-nowrap"
-										><span class="badge text-bg-light border"
-											><FileSize bytes={file.entry.sizeBytes} /></span
-										></td
-									>
-									<td class="text-end text-nowrap"
-										><span class="badge text-bg-light border"
-											><FileSize bytes={file.entry.compressedSizeBytes} /></span
-										></td
-									>
-									<td class="text-nowrap">{formatDateTime(file.entry.modifiedUtc)}</td>
-									<td class="text-end">
-										<!-- An API download, not an app route. -->
-										<!-- eslint-disable svelte/no-navigation-without-resolve -->
-										<a
-											class="btn btn-sm btn-outline-primary"
-											href={downloadUrl(file.entry.path)}
-											download
-											aria-label="Download {file.name}"><Icon name="download" /></a
+							</thead>
+							<tbody>
+								{#each folder.folders as child (child.path)}
+									<tr>
+										<td class="text-truncate name-cell" title={child.name}>
+											<button
+												type="button"
+												class="btn btn-link btn-sm p-0 text-start text-decoration-none"
+												onclick={() => select(child.path)}
+												><Icon name="folder" /> {child.name}</button
+											>
+										</td>
+										<!-- B12: a folder has no size, compressed size or date: empty cells, no dash. -->
+										<td></td>
+										<td></td>
+										<td></td>
+										<td></td>
+									</tr>
+								{/each}
+								{#each folder.files as file (file.entry.path)}
+									<tr>
+										<td class="text-truncate name-cell" title={file.name}>{file.name}</td>
+										<!-- Z2: sizes as the Library card's size badge. -->
+										<td class="text-end text-nowrap"
+											><span class="badge text-bg-light border"
+												><FileSize bytes={file.entry.sizeBytes} /></span
+											></td
 										>
-										<!-- eslint-enable svelte/no-navigation-without-resolve -->
-									</td>
-								</tr>
-							{/each}
-						</tbody>
-					</table>
+										<td class="text-end text-nowrap"
+											><span class="badge text-bg-light border"
+												><FileSize bytes={file.entry.compressedSizeBytes} /></span
+											></td
+										>
+										<td class="text-nowrap">{formatDateTime(file.entry.modifiedUtc)}</td>
+										<td class="text-end">
+											<!-- An API download, not an app route. -->
+											<!-- eslint-disable svelte/no-navigation-without-resolve -->
+											<a
+												class="btn btn-sm btn-outline-primary"
+												href={downloadUrl(file.entry.path)}
+												download
+												aria-label="Download {file.name}"><Icon name="download" /></a
+											>
+											<!-- eslint-enable svelte/no-navigation-without-resolve -->
+										</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
 				</div>
 			{/if}
 			<p class="small text-body-secondary mb-0">

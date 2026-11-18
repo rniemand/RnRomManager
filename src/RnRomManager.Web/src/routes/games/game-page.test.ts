@@ -857,12 +857,12 @@ describe('game detail page', () => {
 			'a b',
 			'Tetris (World).gb'
 		]);
-		// Z2: a folder row fills the columns with dashes; sizes are badges.
+		// B12: a folder row leaves its other cells empty; sizes are badges.
 		expect([...rows[0].querySelectorAll('td')].map((td) => td.textContent!.trim())).toEqual([
 			'a b',
-			'—',
-			'—',
-			'—',
+			'',
+			'',
+			'',
 			''
 		]);
 		expect(rows[1].querySelectorAll('.badge.text-bg-light.border .file-size')).toHaveLength(2);

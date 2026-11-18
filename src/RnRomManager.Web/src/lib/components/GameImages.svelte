@@ -222,32 +222,46 @@
 	<div class="row row-cols-2 row-cols-sm-3 row-cols-lg-5 g-3 mb-3">
 		{#each game.images as image (image.id)}
 			<div class="col">
-				<div class="card h-100">
-					<button
-						type="button"
-						class="btn p-0 border-0"
-						aria-label="View {image.fileName} full size"
-						onclick={() => view(image)}
-					>
-						<img
-							class="card-img-top object-fit-contain bg-body-tertiary"
-							style="height: 8rem"
-							src={image.url}
-							alt="{game.displayTitle} {typeLabels[image.type].toLowerCase()}"
-							loading="lazy"
-						/>
-					</button>
+				<!-- B10: the tile lifts on hover or keyboard focus. -->
+				<div class="card h-100 image-tile">
+					<!-- B10: the size badge sits over the thumbnail, outside its button. -->
+					<div class="position-relative">
+						<button
+							type="button"
+							class="btn p-0 border-0 w-100"
+							aria-label="View {image.fileName} full size"
+							onclick={() => view(image)}
+						>
+							<img
+								class="card-img-top object-fit-contain bg-body-tertiary"
+								style="height: 8rem"
+								src={image.url}
+								alt="{game.displayTitle} {typeLabels[image.type].toLowerCase()}"
+								loading="lazy"
+							/>
+						</button>
+						<span class="badge text-bg-light border position-absolute top-0 end-0 m-1"
+							><FileSize bytes={image.sizeBytes} /></span
+						>
+					</div>
 					<div class="card-body p-2 small">
 						<div class="d-flex flex-wrap gap-1 mb-1">
 							<span class="badge text-bg-secondary">{typeLabels[image.type]}</span>
 							{#if image.isCover}<span class="badge text-bg-primary">Cover</span>{/if}
 							{#if image.isDefault}<span class="badge text-bg-light border">Placeholder</span>{/if}
 						</div>
-						<div class="text-body-secondary text-nowrap">
-							<FileSize bytes={image.sizeBytes} /> · {image.width}×{image.height}
-						</div>
-						{#if auth.isAdmin}
-							<div class="d-flex flex-wrap gap-1 mt-2">
+						<div class="text-body-secondary text-nowrap">{image.width}×{image.height}</div>
+						<!-- B10: Download for every user, then the Admin's Use as cover and Delete. -->
+						<div class="d-flex flex-wrap gap-1 mt-2">
+							<!-- eslint-disable svelte/no-navigation-without-resolve -- an API download, not a page -->
+							<a
+								class="btn btn-sm btn-outline-secondary"
+								href="/api/games/{encodeURIComponent(game.id)}/images/{image.id}?download=true"
+								download
+								aria-label="Download {image.fileName}"><Icon name="download" /></a
+							>
+							<!-- eslint-enable svelte/no-navigation-without-resolve -->
+							{#if auth.isAdmin}
 								{#if !image.isCover}
 									<button
 										type="button"
@@ -273,8 +287,8 @@
 										<Icon name="delete" />
 									</button>
 								{/if}
-							</div>
-						{/if}
+							{/if}
+						</div>
 					</div>
 				</div>
 			</div>
@@ -428,3 +442,25 @@
 		Delete <code>{deleting?.fileName}</code> from {game.displayTitle}? This can't be undone.
 	</p>
 </ConfirmModal>
+
+<style>
+	.image-tile {
+		transition:
+			transform 0.15s ease,
+			box-shadow 0.15s ease;
+	}
+	.image-tile:hover,
+	.image-tile:focus-within {
+		transform: translateY(-2px);
+		box-shadow: var(--bs-box-shadow);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.image-tile {
+			transition: none;
+		}
+		.image-tile:hover,
+		.image-tile:focus-within {
+			transform: none;
+		}
+	}
+</style>
