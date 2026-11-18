@@ -52,9 +52,8 @@
 			<button
 				type="button"
 				class="btn btn-link btn-sm p-0 ms-auto link-body-emphasis"
-				aria-label="Keyboard shortcuts"
 				title="Keyboard shortcuts"
-				onclick={onhotkeys}><Icon name="help" /></button
+				onclick={onhotkeys}><Icon name="help" /> Shortcuts</button
 			>
 		{/if}
 	</div>

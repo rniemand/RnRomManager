@@ -62,4 +62,44 @@ describe('AboutModal (B12)', () => {
 		await fireEvent.click(screen.getByRole('button', { name: /Retry/, ...hidden }));
 		expect(onretry).toHaveBeenCalledOnce();
 	});
+
+	describe('licences search and scroll (B25)', () => {
+		const many = {
+			version: '1.0',
+			licenses: [
+				{ name: 'Svelte', license: 'MIT', url: 'https://x' },
+				{ name: 'Bootstrap', license: 'MIT', url: 'https://y' },
+				{ name: 'Dapper', license: 'Apache-2.0', url: 'https://z' }
+			]
+		};
+		const names = () =>
+			[...document.querySelectorAll('tbody tr td:first-child')].map((td) => td.textContent!.trim());
+		const box = () => screen.getByLabelText('Search licences') as HTMLInputElement;
+
+		it('filters by name or licence, case-insensitive', async () => {
+			render(AboutModal, { open: true, about: many });
+
+			await fireEvent.input(box(), { target: { value: 'boot' } });
+			expect(names()).toEqual(['Bootstrap']);
+			await fireEvent.input(box(), { target: { value: 'apache' } });
+			expect(names()).toEqual(['Dapper']);
+			expect(box().type).toBe('search');
+		});
+
+		it('no match shows an empty state', async () => {
+			render(AboutModal, { open: true, about: many });
+
+			await fireEvent.input(box(), { target: { value: 'zzz' } });
+			expect(screen.getByText('No licences match')).toBeTruthy();
+		});
+
+		it('scrolls inside the table wrapper; the thead keeps its exact class', () => {
+			render(AboutModal, { open: true, about: many });
+
+			const table = document.querySelector('table')!;
+			expect(table.parentElement!.classList).toContain('table-responsive');
+			expect(table.parentElement!.classList).toContain('licence-scroll');
+			expect(table.querySelector('thead')!.className).toBe('table-dark');
+		});
+	});
 });

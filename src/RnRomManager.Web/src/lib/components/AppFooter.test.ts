@@ -74,19 +74,23 @@ describe('AppFooter (B10–B12)', () => {
 		expect(screen.getByRole('link', { name: 'Svelte', hidden: true })).toBeTruthy();
 	});
 
-	it('the Keyboard shortcuts button opens the shortcuts', async () => {
+	it('the Shortcuts button opens the shortcuts; its visible text names it, title stays (B26)', async () => {
 		const onhotkeys = vi.fn();
 		render(AppFooter, { me: me(), onhotkeys });
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Keyboard shortcuts' }));
+		const button = screen.getByRole('button', { name: 'Shortcuts' });
+		expect(button.hasAttribute('aria-label')).toBe(false);
+		expect(button.getAttribute('title')).toBe('Keyboard shortcuts');
+		expect(button.querySelector('.bi-question-circle')).not.toBeNull();
+		await fireEvent.click(button);
 
 		expect(onhotkeys).toHaveBeenCalledOnce();
 	});
 
-	it('hides the Keyboard shortcuts button while the password must be changed, keeping About', () => {
+	it('hides the Shortcuts button while the password must be changed, keeping About', () => {
 		render(AppFooter, { me: me(true), onhotkeys: vi.fn() });
 
-		expect(screen.queryByRole('button', { name: 'Keyboard shortcuts' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Shortcuts' })).toBeNull();
 		expect(screen.getByRole('button', { name: 'About' })).toBeTruthy();
 	});
 });

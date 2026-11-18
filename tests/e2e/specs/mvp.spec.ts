@@ -2854,7 +2854,7 @@ test("keyboard shortcuts: use, rebind and use again", { tag: "@shard-b" }, async
   await openLibrary();
   await expect(page.locator("nav.navbar")).toHaveClass(/sticky-top/);
   await expect(
-    page.getByRole("button", { name: "Keyboard shortcuts" }),
+    page.getByRole("button", { name: "Shortcuts", exact: true }),
   ).toBeVisible();
 
   // The default Alt+Shift+I goes to Ingestion (bindings load after sign-in, so retry until they have).
@@ -2863,7 +2863,7 @@ test("keyboard shortcuts: use, rebind and use again", { tag: "@shard-b" }, async
     await expect(page).toHaveURL(/\/ingestion$/, { timeout: 1_000 });
   }).toPass();
 
-  await page.getByRole("button", { name: "Keyboard shortcuts" }).click();
+  await page.getByRole("button", { name: "Shortcuts", exact: true }).click();
   await expect(dialog()).toHaveAccessibleName("Keyboard shortcuts");
   await expect(
     dialog().getByRole("row", { name: /Go to Library/ }),
@@ -2891,7 +2891,7 @@ test("keyboard shortcuts: use, rebind and use again", { tag: "@shard-b" }, async
   }).toPass();
 
   // Back to the defaults for anything after this.
-  await page.getByRole("button", { name: "Keyboard shortcuts" }).click();
+  await page.getByRole("button", { name: "Shortcuts", exact: true }).click();
   await dialog().getByRole("button", { name: "Reset to defaults" }).click();
   await dialog().getByRole("button", { name: "Save" }).click();
   await expect(dialog()).toBeHidden();
