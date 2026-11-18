@@ -156,7 +156,15 @@ describe('game detail admin actions', () => {
 			[...menu.querySelectorAll('li')].map((li) =>
 				li.querySelector('.dropdown-divider') ? '---' : li.textContent!.trim()
 			)
-		).toEqual(['Edit metadata', 'Retry media', 'Merge into…', '---', 'Delete game']);
+		).toEqual([
+			'View info.json',
+			'---',
+			'Edit metadata',
+			'Retry media',
+			'Merge into…',
+			'---',
+			'Delete game'
+		]);
 		expect(
 			within(menu as HTMLElement).getByRole('button', { name: 'Delete game' }).className
 		).toContain('text-danger-emphasis');
@@ -211,8 +219,13 @@ describe('game detail admin actions', () => {
 		render(GamePage);
 
 		await screen.findByText('Releases');
-		expect(screen.queryByRole('button', { name: 'Manage' })).toBeNull();
+		// Manage holds only View info.json for a Site user; no quick edit either.
+		const manage = screen.getByRole('button', { name: 'Manage' });
+		expect(
+			[...manage.nextElementSibling!.querySelectorAll('li')].map((li) => li.textContent!.trim())
+		).toEqual(['View info.json']);
 		expect(screen.queryByRole('button', { name: /Edit metadata/ })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Quick edit' })).toBeNull();
 		expect(
 			screen.queryByRole('button', { name: 'Delete release Tetris 1.gb', hidden: true })
 		).toBeNull();
@@ -312,6 +325,20 @@ describe('game detail admin actions', () => {
 
 		expect(await screen.findByText('This game changed, please retry.')).toBeTruthy();
 		expect(await releaseDelete('Tetris 3.gb')).toBeTruthy();
+	});
+
+	it('the quick edit button in the information table opens Edit metadata', async () => {
+		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
+		render(GamePage);
+
+		const quick = await screen.findByRole('button', { name: 'Quick edit' });
+		expect(
+			within(screen.getByRole('table', { name: 'Game information' })).getByRole('button', {
+				name: 'Quick edit'
+			})
+		).toBe(quick);
+		await fireEvent.click(quick);
+		expect(modal().getByRole('heading', { name: 'Edit metadata', hidden: true })).toBeTruthy();
 	});
 
 	it('edit metadata validates before sending', async () => {

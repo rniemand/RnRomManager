@@ -115,8 +115,9 @@ describe('ZipBrowser (Z1, Z2)', () => {
 		expect(table.className).toBe(
 			'table table-sm table-striped table-hover table-bordered align-middle mb-0 zip-table'
 		);
-		expect(table.parentElement!.className).toBe('table-responsive');
-		expect(table.parentElement!.parentElement!.classList).toContain('card');
+		// No .table-responsive: names truncate, so the table never scrolls sideways.
+		expect(table.closest('.table-responsive')).toBeNull();
+		expect(table.parentElement!.className).toBe('card mb-2 overflow-hidden');
 		const [folderRow, fileRow] = within(table).getAllByRole('row').slice(1);
 		const folderCells = [...folderRow.querySelectorAll('td')];
 		expect(folderCells.map((td) => td.textContent!.trim())).toEqual(['a', '', '', '', '']);
@@ -128,8 +129,12 @@ describe('ZipBrowser (Z1, Z2)', () => {
 		expect(cells[0].className).toContain('text-truncate');
 		expect(cells[0].className).not.toContain('text-break');
 		expect(cells[0].title).toBe('b.gb');
+		expect(cells[1].className).toBe('text-end text-nowrap');
+		// Compressed and Modified hide on a phone.
+		expect(cells[2].className).toBe('text-end text-nowrap d-none d-md-table-cell');
+		expect(cells[3].className).toContain('d-none d-md-table-cell');
+		expect(folderCells[2].className).toBe('d-none d-md-table-cell');
 		for (const cell of [cells[1], cells[2]]) {
-			expect(cell.className).toBe('text-end text-nowrap');
 			expect(cell.querySelector('.badge')!.className).toBe('badge text-bg-light border');
 		}
 		expect(cells[1].textContent!.trim()).toBe('2.0 KiB');

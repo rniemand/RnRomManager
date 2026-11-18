@@ -1168,7 +1168,7 @@ describe('game detail page', () => {
 		expect([...document.querySelectorAll('dl')].every((dl) => dl.closest('article'))).toBe(true);
 	});
 
-	it('the action row: ZIP, ROM, Google, info.json, Collections, then Manage; all btn-sm (B3)', async () => {
+	it('the action row: ZIP, ROM, Google, Collections, then Manage; all btn-sm (B3)', async () => {
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);
 
@@ -1182,7 +1182,6 @@ describe('game detail page', () => {
 			'Download ZIP',
 			'Download ROM',
 			'Google',
-			'View info.json',
 			'Collections',
 			'Manage'
 		]);

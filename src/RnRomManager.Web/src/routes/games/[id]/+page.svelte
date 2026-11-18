@@ -450,9 +450,21 @@
 					<tbody>
 						<tr>
 							<th scope="row" class="fw-normal text-body-secondary">System</th>
-							<td class="text-break"
-								><SystemBadge system={game.system} name={game.systemName} class="text-wrap" /></td
-							>
+							<td class="text-break">
+								<div class="d-flex align-items-center gap-2">
+									<SystemBadge system={game.system} name={game.systemName} class="text-wrap" />
+									{#if auth.isAdmin}
+										<!-- Quick edit: opens the same Edit metadata modal as the Manage menu. -->
+										<button
+											type="button"
+											class="btn btn-sm btn-link text-body-secondary p-0 ms-auto quick-edit"
+											aria-label="Quick edit"
+											use:tooltip={'Edit metadata'}
+											onclick={() => (action = { kind: 'edit' })}><Icon name="edit" /></button
+										>
+									{/if}
+								</div>
+							</td>
 						</tr>
 						<tr>
 							<th scope="row" class="fw-normal text-body-secondary">Year</th>
@@ -541,29 +553,28 @@
 				<button
 					type="button"
 					class="btn btn-sm btn-outline-secondary"
-					onclick={() => (infoJsonOpen = true)}
-				>
-					<Icon name="code" /> View info.json
-				</button>
-				<button
-					type="button"
-					class="btn btn-sm btn-outline-secondary"
 					onclick={() => (collectionsOpen = true)}
 				>
 					<Icon name="collections" /> Collections
 				</button>
-				{#if auth.isAdmin}
-					<!-- B3: the Admin actions in one Manage menu, last in the row. -->
-					<div class="dropdown">
-						<button
-							type="button"
-							class="btn btn-sm btn-outline-secondary dropdown-toggle"
-							data-bs-toggle="dropdown"
-							aria-expanded="false"
-						>
-							<Icon name="admin" /> Manage
-						</button>
-						<ul class="dropdown-menu dropdown-menu-end">
+				<!-- B3: Manage, last in the row: View info.json for everyone, then the Admin actions. -->
+				<div class="dropdown">
+					<button
+						type="button"
+						class="btn btn-sm btn-outline-secondary dropdown-toggle"
+						data-bs-toggle="dropdown"
+						aria-expanded="false"
+					>
+						<Icon name="admin" /> Manage
+					</button>
+					<ul class="dropdown-menu dropdown-menu-end">
+						<li>
+							<button type="button" class="dropdown-item" onclick={() => (infoJsonOpen = true)}>
+								<Icon name="code" /> View info.json
+							</button>
+						</li>
+						{#if auth.isAdmin}
+							<li><hr class="dropdown-divider" /></li>
 							<li>
 								<button
 									type="button"
@@ -602,9 +613,9 @@
 									<Icon name="delete" /> Delete game
 								</button>
 							</li>
-						</ul>
-					</div>
-				{/if}
+						{/if}
+					</ul>
+				</div>
 			</div>
 		</div>
 	</div>

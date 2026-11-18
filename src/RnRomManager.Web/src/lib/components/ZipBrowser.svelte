@@ -141,71 +141,71 @@
 			{#if folder.folders.length + folder.files.length === 0}
 				<EmptyState message="This folder is empty." />
 			{:else}
-				<!-- B12: the table sits in a card (T1); cell borders tell the cells apart, the card draws the outer edge. -->
-				<div class="card mb-2">
-					<div class="table-responsive">
-						<table
-							class="table table-sm table-striped table-hover table-bordered align-middle mb-0 zip-table"
-						>
-							<caption class="visually-hidden">Contents of {label(folder)}</caption>
-							<thead class="table-dark">
+				<!-- B12: the table sits in a card (T1); cell borders tell the cells apart, the card draws the outer edge.
+				     No .table-responsive: long names truncate instead, so the table never scrolls sideways. -->
+				<div class="card mb-2 overflow-hidden">
+					<table
+						class="table table-sm table-striped table-hover table-bordered align-middle mb-0 zip-table"
+					>
+						<caption class="visually-hidden">Contents of {label(folder)}</caption>
+						<thead class="table-dark">
+							<tr>
+								<th scope="col">Name</th>
+								<th scope="col" class="text-end">Size</th>
+								<th scope="col" class="text-end d-none d-md-table-cell">Compressed</th>
+								<th scope="col" class="d-none d-md-table-cell">Modified</th>
+								<th scope="col"><span class="visually-hidden">Download</span></th>
+							</tr>
+						</thead>
+						<tbody>
+							{#each folder.folders as child (child.path)}
 								<tr>
-									<th scope="col">Name</th>
-									<th scope="col" class="text-end">Size</th>
-									<th scope="col" class="text-end">Compressed</th>
-									<th scope="col">Modified</th>
-									<th scope="col"><span class="visually-hidden">Download</span></th>
+									<td class="text-truncate name-cell" title={child.name}>
+										<button
+											type="button"
+											class="btn btn-link btn-sm p-0 text-start text-decoration-none text-truncate mw-100"
+											onclick={() => select(child.path)}><Icon name="folder" /> {child.name}</button
+										>
+									</td>
+									<!-- B12: a folder has no size, compressed size or date: empty cells, no dash. Compressed and Modified hide below md so a phone needs no sideways scroll. -->
+									<td></td>
+									<td class="d-none d-md-table-cell"></td>
+									<td class="d-none d-md-table-cell"></td>
+									<td></td>
 								</tr>
-							</thead>
-							<tbody>
-								{#each folder.folders as child (child.path)}
-									<tr>
-										<td class="text-truncate name-cell" title={child.name}>
-											<button
-												type="button"
-												class="btn btn-link btn-sm p-0 text-start text-decoration-none"
-												onclick={() => select(child.path)}
-												><Icon name="folder" /> {child.name}</button
-											>
-										</td>
-										<!-- B12: a folder has no size, compressed size or date: empty cells, no dash. -->
-										<td></td>
-										<td></td>
-										<td></td>
-										<td></td>
-									</tr>
-								{/each}
-								{#each folder.files as file (file.entry.path)}
-									<tr>
-										<td class="text-truncate name-cell" title={file.name}>{file.name}</td>
-										<!-- Z2: sizes as the Library card's size badge. -->
-										<td class="text-end text-nowrap"
-											><span class="badge text-bg-light border"
-												><FileSize bytes={file.entry.sizeBytes} /></span
-											></td
+							{/each}
+							{#each folder.files as file (file.entry.path)}
+								<tr>
+									<td class="text-truncate name-cell" title={file.name}>{file.name}</td>
+									<!-- Z2: sizes as the Library card's size badge. -->
+									<td class="text-end text-nowrap"
+										><span class="badge text-bg-light border"
+											><FileSize bytes={file.entry.sizeBytes} /></span
+										></td
+									>
+									<td class="text-end text-nowrap d-none d-md-table-cell"
+										><span class="badge text-bg-light border"
+											><FileSize bytes={file.entry.compressedSizeBytes} /></span
+										></td
+									>
+									<td class="text-nowrap d-none d-md-table-cell"
+										>{formatDateTime(file.entry.modifiedUtc)}</td
+									>
+									<td class="text-end">
+										<!-- An API download, not an app route. -->
+										<!-- eslint-disable svelte/no-navigation-without-resolve -->
+										<a
+											class="btn btn-sm btn-outline-primary"
+											href={downloadUrl(file.entry.path)}
+											download
+											aria-label="Download {file.name}"><Icon name="download" /></a
 										>
-										<td class="text-end text-nowrap"
-											><span class="badge text-bg-light border"
-												><FileSize bytes={file.entry.compressedSizeBytes} /></span
-											></td
-										>
-										<td class="text-nowrap">{formatDateTime(file.entry.modifiedUtc)}</td>
-										<td class="text-end">
-											<!-- An API download, not an app route. -->
-											<!-- eslint-disable svelte/no-navigation-without-resolve -->
-											<a
-												class="btn btn-sm btn-outline-primary"
-												href={downloadUrl(file.entry.path)}
-												download
-												aria-label="Download {file.name}"><Icon name="download" /></a
-											>
-											<!-- eslint-enable svelte/no-navigation-without-resolve -->
-										</td>
-									</tr>
-								{/each}
-							</tbody>
-						</table>
-					</div>
+										<!-- eslint-enable svelte/no-navigation-without-resolve -->
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
 				</div>
 			{/if}
 			<p class="small text-body-secondary mb-0">
@@ -219,8 +219,14 @@
 {/if}
 
 <style>
+	/* The name column takes the spare width; max-width 0 lets text-truncate clip it instead of widening the table. */
 	.name-cell {
-		max-width: 32rem;
+		width: 100%;
+		max-width: 0;
+	}
+	/* A touch stronger than the default table border, so the cells stand apart without shouting. */
+	:global(.table.zip-table) {
+		--bs-table-border-color: var(--bs-secondary-border-subtle);
 	}
 	/* No outer cell borders: the card already draws them. Global: Svelte can't see the rows inside {#each}. */
 	:global(.zip-table > :not(caption) > * > :first-child) {

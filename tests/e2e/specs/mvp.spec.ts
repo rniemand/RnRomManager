@@ -2072,9 +2072,12 @@ test("user management: a Site user's account, private saves and audit trail", { 
     await expect(
       user.getByRole("heading", { level: 1, name: "Orbit Blocks" }),
     ).toBeVisible();
-    // B3: a Site user has no Manage menu.
-    await expect(user.getByRole("button", { name: "Manage" })).toHaveCount(0);
+    // B3: a Site user's Manage menu holds only View info.json; no quick edit.
+    await user.getByRole("button", { name: "Manage" }).click();
+    await expect(user.getByRole("button", { name: "View info.json" })).toBeVisible();
     await expect(user.getByRole("button", { name: "Edit metadata" })).toHaveCount(0);
+    await expect(user.getByRole("button", { name: "Quick edit" })).toHaveCount(0);
+    await user.keyboard.press("Escape");
     await expect(user.getByRole("button", { name: /^Add note for / })).toHaveCount(0);
     await expectAccessible(user, "game detail as a site user");
 
@@ -2194,6 +2197,7 @@ test("images: upload, set cover, delete", async () => {
   await openGame("Star Courier");
   const viewport = page.viewportSize()!;
   await page.setViewportSize({ width: 1280, height: 800 });
+  await page.getByRole("button", { name: "Manage" }).click();
   await page.getByRole("button", { name: "View info.json" }).click();
   await expect(dialog()).toHaveAccessibleName("info.json");
   await expect(
