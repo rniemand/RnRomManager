@@ -3,6 +3,9 @@
     <PackageReference Include="Microsoft.Extensions.Identity.Core" />
     <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="SharpCompress" />
+    <PackageReference Include="SkiaSharp" />
+    <!-- The Docker image (glibc, chiseled) has no fontconfig. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="RnRomManager.Core.Tests" />

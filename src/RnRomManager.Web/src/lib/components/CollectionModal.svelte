@@ -297,7 +297,7 @@
 						type="file"
 						class="form-control form-control-sm"
 						class:is-invalid={coverError}
-						accept="image/png,image/jpeg"
+						accept="image/png,image/jpeg,image/webp"
 						bind:this={fileInput}
 						onchange={() => (coverError = undefined)}
 					/>
@@ -333,7 +333,7 @@
 						{/if}
 					</div>
 				{:else}
-					<div class="form-text">Optional; PNG or JPEG, at most 8 MiB.</div>
+					<div class="form-text">Optional; PNG, JPEG or WebP, at most 8 MiB.</div>
 				{/if}
 			</div>
 		</div>

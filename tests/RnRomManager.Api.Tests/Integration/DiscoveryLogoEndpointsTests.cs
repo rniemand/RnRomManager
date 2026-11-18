@@ -200,6 +200,18 @@ public class DiscoveryLogoEndpointsTests
     }
 
     [Test]
+    public async Task Put_Webp_IsStoredAsPng()
+    {
+        using var bitmap = new SkiaSharp.SKBitmap(50, 20);
+        using var webp = bitmap.Encode(SkiaSharp.SKEncodedImageFormat.Webp, 80);
+
+        Assert.That(await StatusAsync(PutAsync(_alice, Nintendo, webp.ToArray())), Is.EqualTo(HttpStatusCode.NoContent));
+        using var served = await _alice.GetAsync(Url(Nintendo));
+        Assert.That(served.Content.Headers.ContentType!.MediaType, Is.EqualTo("image/png"));
+        Assert.That(ImageFormats.Read(await served.Content.ReadAsByteArrayAsync()), Is.EqualTo((ImageFormat.Png, 50, 20)));
+    }
+
+    [Test]
     public async Task EverySuccessfulChange_IsAudited()
     {
         await StatusAsync(PutAsync(_alice, Nintendo, Png(10, 10)));

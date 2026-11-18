@@ -415,7 +415,7 @@ public static class LibraryEndpoints
 
         using var buffer = new MemoryStream((int)file!.Length);
         await file.CopyToAsync(buffer, cancellationToken);
-        return buffer.ToArray();
+        return ImageFormats.ConvertWebp(buffer.ToArray());
     }
 
     /// <summary>U2/B9: at most 1024 characters (<c>images.source_url</c>), absolute http(s), no user info; else null.</summary>

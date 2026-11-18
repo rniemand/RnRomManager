@@ -204,7 +204,7 @@ public static partial class DiscoveryLogoEndpoints
         }
     }
 
-    /// <summary>Exactly one PNG or JPEG in <c>file</c>, within the byte and pixel limits; else an error message.</summary>
+    /// <summary>Exactly one PNG or JPEG (or WebP, stored as PNG) in <c>file</c>, within the byte and pixel limits; else an error message.</summary>
     private static async Task<(byte[]? Bytes, string? MediaType, string? Error)> ReadLogoAsync(IFormCollection form, CancellationToken cancellationToken)
     {
         var files = form.Files.GetFiles("file");
@@ -218,7 +218,7 @@ public static partial class DiscoveryLogoEndpoints
 
         using var copy = new MemoryStream((int)file.Length);
         await file.CopyToAsync(copy, cancellationToken);
-        var bytes = copy.ToArray();
+        var bytes = ImageFormats.ConvertWebp(copy.ToArray());
         var (mediaType, error) = CheckLogo(bytes);
         return error is null ? (bytes, mediaType, null) : (null, null, error);
     }
