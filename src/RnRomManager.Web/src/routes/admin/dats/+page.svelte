@@ -14,9 +14,8 @@
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
-	/** B28: independent panels, both open by default. */
-	let scheduleOpen = $state(true);
-	let filesOpen = $state(true);
+	/** One accordion panel open at a time; Automatic refresh starts open. */
+	let openPanel = $state<'schedule' | 'files' | null>('schedule');
 	let dats = $state<DatVersion[] | null>(null);
 	let error = $state<unknown>(null);
 	let busy = $state(false);
@@ -125,7 +124,11 @@
 	{/if}
 </div>
 
-<AccordionItem id="dat-schedule-panel" headingId="dat-schedule" bind:open={scheduleOpen}>
+<AccordionItem
+	id="dat-schedule-panel"
+	headingId="dat-schedule"
+	bind:open={() => openPanel === 'schedule', (v) => (openPanel = v ? 'schedule' : null)}
+>
 	{#snippet header()}Automatic refresh{/snippet}
 	<form novalidate onsubmit={saveSchedule} aria-labelledby="dat-schedule">
 		{#if scheduleError}
@@ -167,7 +170,11 @@
 	</form>
 </AccordionItem>
 
-<AccordionItem id="dat-files-panel" headingId="dat-files" bind:open={filesOpen}>
+<AccordionItem
+	id="dat-files-panel"
+	headingId="dat-files"
+	bind:open={() => openPanel === 'files', (v) => (openPanel = v ? 'files' : null)}
+>
 	{#snippet header()}DAT files{/snippet}
 	{#if error}
 		<ErrorAlert {error} onretry={load} />

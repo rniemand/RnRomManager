@@ -44,8 +44,8 @@
 	let issuePage = $state(1);
 	let reloadIssues = $state(0);
 	/** B24: independent panels, Issues open by default. */
-	let issuesOpen = $state(true);
-	let historyOpen = $state(false);
+	/** One accordion panel open at a time; Issues starts open. */
+	let openPanel = $state<'issues' | 'history' | null>('issues');
 
 	const job = $derived(jobs.current);
 	const pages = $derived(issues ? Math.max(1, Math.ceil(issues.total / pageSize)) : 1);
@@ -240,7 +240,11 @@
 			</div>
 		</section>
 	{/if}
-	<AccordionItem id="issues-panel" headingId="issues-heading" bind:open={issuesOpen}>
+	<AccordionItem
+		id="issues-panel"
+		headingId="issues-heading"
+		bind:open={() => openPanel === 'issues', (v) => (openPanel = v ? 'issues' : null)}
+	>
 		{#snippet header()}Issues{/snippet}
 		<div class="row g-2 mb-2">
 			<div class="col-6 col-md-3">
@@ -334,7 +338,11 @@
 			{/if}
 		{/if}
 	</AccordionItem>
-	<AccordionItem id="history-panel" headingId="history-heading" bind:open={historyOpen}>
+	<AccordionItem
+		id="history-panel"
+		headingId="history-heading"
+		bind:open={() => openPanel === 'history', (v) => (openPanel = v ? 'history' : null)}
+	>
 		{#snippet header()}History{/snippet}
 		{#if history.length === 0}
 			<EmptyState message="No checks have run yet." />

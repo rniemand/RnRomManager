@@ -141,10 +141,12 @@
 			{#if folder.folders.length + folder.files.length === 0}
 				<EmptyState message="This folder is empty." />
 			{:else}
-				<!-- B12: the table sits in a card (T1). -->
+				<!-- B12: the table sits in a card (T1); cell borders tell the cells apart, the card draws the outer edge. -->
 				<div class="card mb-2">
 					<div class="table-responsive">
-						<table class="table table-sm table-striped table-hover align-middle mb-0">
+						<table
+							class="table table-sm table-striped table-hover table-bordered align-middle mb-0 zip-table"
+						>
 							<caption class="visually-hidden">Contents of {label(folder)}</caption>
 							<thead class="table-dark">
 								<tr>
@@ -219,5 +221,20 @@
 <style>
 	.name-cell {
 		max-width: 32rem;
+	}
+	/* No outer cell borders: the card already draws them. Global: Svelte can't see the rows inside {#each}. */
+	:global(.zip-table > :not(caption) > * > :first-child) {
+		border-left-width: 0;
+	}
+	:global(.zip-table > :not(caption) > * > :last-child) {
+		border-right-width: 0;
+	}
+	:global(.zip-table > thead > tr:first-child),
+	:global(.zip-table > thead > tr:first-child > *) {
+		border-top-width: 0;
+	}
+	:global(.zip-table > tbody > tr:last-child),
+	:global(.zip-table > tbody > tr:last-child > *) {
+		border-bottom-width: 0;
 	}
 </style>

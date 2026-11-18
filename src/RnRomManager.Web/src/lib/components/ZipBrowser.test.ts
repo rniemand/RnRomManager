@@ -112,7 +112,9 @@ describe('ZipBrowser (Z1, Z2)', () => {
 		await fireEvent.click(tree().getByRole('button', { name: 'roms' }));
 
 		const table = screen.getByRole('table', { name: 'Contents of roms' });
-		expect(table.className).toBe('table table-sm table-striped table-hover align-middle mb-0');
+		expect(table.className).toBe(
+			'table table-sm table-striped table-hover table-bordered align-middle mb-0 zip-table'
+		);
 		expect(table.parentElement!.className).toBe('table-responsive');
 		expect(table.parentElement!.parentElement!.classList).toContain('card');
 		const [folderRow, fileRow] = within(table).getAllByRole('row').slice(1);

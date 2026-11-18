@@ -115,7 +115,7 @@ describe('integrity page', () => {
 		);
 	});
 
-	it('Issues and History are independent accordion panels, Issues open (B24)', async () => {
+	it('Issues and History are accordion panels, one open at a time, Issues open (B24)', async () => {
 		render(IntegrityPage);
 		await screen.findByText('No issues.');
 
@@ -128,10 +128,10 @@ describe('integrity page', () => {
 
 		await fireEvent.click(history);
 		expect(history.getAttribute('aria-expanded')).toBe('true');
-		expect(issues.getAttribute('aria-expanded')).toBe('true');
-		await fireEvent.click(issues);
 		expect(issues.getAttribute('aria-expanded')).toBe('false');
-		expect(history.getAttribute('aria-expanded')).toBe('true');
+		await fireEvent.click(history);
+		expect(history.getAttribute('aria-expanded')).toBe('false');
+		expect(issues.getAttribute('aria-expanded')).toBe('false');
 	});
 
 	it('empty panels use EmptyState (B24)', async () => {

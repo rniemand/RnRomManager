@@ -104,31 +104,47 @@ describe('Activity report (B20)', () => {
 	});
 
 	const sectionOf = (name: string) =>
-		screen.getByRole('heading', { level: 2, name }).closest('section') as HTMLElement;
+		screen.getByRole('heading', { level: 2, name }).closest('.accordion-item') as HTMLElement;
 	const cells = (name: string) =>
 		[...sectionOf(name).querySelectorAll('tbody tr')].map((tr) =>
 			[...tr.querySelectorAll('td')].map((td) => td.textContent!.replace(/\s+/g, ' ').trim())
 		);
 
-	it('renders sections 1–6 as cards with their headings, and the 30-day note', async () => {
+	const sections = [
+		['Added ROMs', 'activity-added'],
+		['Sign-ins', 'activity-sign-ins'],
+		['Plays', 'activity-plays'],
+		['Saves', 'activity-saves'],
+		['Edits', 'activity-edits'],
+		['Deletions', 'activity-deletions'],
+		['Recent jobs', 'activity-jobs'],
+		['Last backup', 'activity-backup']
+	] as const;
+	const expanded = () =>
+		sections.map(([name]) => screen.getByRole('button', { name }).getAttribute('aria-expanded'));
+
+	it('renders the sections as accordion panels with their headings, and the 30-day note', async () => {
 		render(ActivityPage);
 		await screen.findAllByText(/in the last 30 days\./);
 
-		for (const [name, id] of [
-			['Added ROMs', 'activity-added'],
-			['Sign-ins', 'activity-sign-ins'],
-			['Plays', 'activity-plays'],
-			['Saves', 'activity-saves'],
-			['Edits', 'activity-edits'],
-			['Deletions', 'activity-deletions']
-		]) {
+		for (const [name, id] of sections) {
 			const heading = screen.getByRole('heading', { level: 2, name });
 			expect(heading.id).toBe(id);
-			expect(heading.className).toBe('h5 mb-0');
-			expect(heading.parentElement!.classList.contains('card-header')).toBe(true);
-			expect(heading.closest('section')!.classList.contains('card')).toBe(true);
+			expect(heading.className).toBe('accordion-header');
+			expect(document.getElementById(`${id}-panel`)!.getAttribute('aria-labelledby')).toBe(id);
 		}
 		expect(screen.getByText(/keeps the last 30 days/)).toBeTruthy();
+	});
+
+	it('one section is open at a time, Added ROMs first', async () => {
+		render(ActivityPage);
+		await screen.findAllByText(/in the last 30 days\./);
+
+		expect(expanded()).toEqual(['true', ...Array(7).fill('false')]);
+		await fireEvent.click(screen.getByRole('button', { name: 'Plays' }));
+		expect(expanded()).toEqual(['false', 'false', 'true', ...Array(5).fill('false')]);
+		await fireEvent.click(screen.getByRole('button', { name: 'Plays' }));
+		expect(expanded()).toEqual(Array(8).fill('false'));
 	});
 
 	it('empty lists show empty states and no last sign-in line', async () => {

@@ -10,6 +10,7 @@
 		Page,
 		SystemInfo
 	} from '#lib/api/types.js';
+	import AccordionItem from '#lib/components/AccordionItem.svelte';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
@@ -64,6 +65,9 @@
 		);
 	});
 
+	/** One section open at a time; Added ROMs starts open. Closed sections stay mounted. */
+	let openSection = $state<string | null>('added');
+
 	const systemName = (id: string) => systems.find((s) => s.id === id)?.displayName;
 	/** B21: a gone game's name is the file name of its audit `path` (the server builds no fallback). */
 	const fileName = (path: string | null) => path?.split('/').at(-1) || null;
@@ -72,12 +76,15 @@
 <svelte:head><title>Activity · Reports · RnRomManager</title></svelte:head>
 
 {#snippet section(key: string, title: string, body: Snippet)}
-	<section class="card mb-3" aria-labelledby="activity-{key}">
-		<div class="card-header">
-			<h2 class="h5 mb-0" id="activity-{key}">{title}</h2>
-		</div>
+	<AccordionItem
+		id="activity-{key}-panel"
+		headingId="activity-{key}"
+		flush
+		bind:open={() => openSection === key, (v) => (openSection = v ? key : null)}
+	>
+		{#snippet header()}{title}{/snippet}
 		{@render body()}
-	</section>
+	</AccordionItem>
 {/snippet}
 
 {#snippet sourceState(

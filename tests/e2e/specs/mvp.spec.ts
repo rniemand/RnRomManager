@@ -221,7 +221,10 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   await page.getByRole("button", { name: "Import all" }).click();
 
   await page.getByRole("button", { name: "Last runs" }).click();
-  await expect(page.getByRole("button", { name: "Import all" })).toBeVisible();
+  // One panel open at a time: opening Last runs closes Pending.
+  await expect(
+    page.getByRole("button", { name: /^Pending files \(\d+\)$/ }),
+  ).toHaveAttribute("aria-expanded", "false");
   const run = page.getByRole("row").filter({ hasText: "Completed" });
   await expect(run).toContainText(
     "Ingested 38 · Duplicate 1 · Review 2 · Failed 1",
@@ -252,7 +255,6 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   // D4/D5: the invalid file is listed under Failed files with its reason, and deleting it goes through the modal.
   await page.goto("/ingestion");
   await page.getByRole("button", { name: "Failed files (1)" }).click();
-  await expect(page.getByRole("button", { name: "Import all" })).toBeVisible();
   const failed = page.locator("#failed-panel");
   const invalid = failed.getByRole("row").filter({ hasText: "92-invalid.gb" });
   await expect(invalid).toContainText("InvalidHeader");
@@ -288,7 +290,7 @@ test("reports and the ingest audit trail", async () => {
   await page.getByRole("link", { name: "Activity", exact: true }).click();
   await expect(
     page
-      .getByRole("region", { name: "Added ROMs" })
+      .locator("#activity-added-panel")
       .getByRole("row")
       .nth(1),
   ).toBeVisible();
@@ -315,8 +317,9 @@ test("reports and the ingest audit trail", async () => {
   await expect(ingested.first()).toContainText("ingest/");
   await expectAccessible(page, "audit trail");
 
-  // B28/B29: the DATs page's two panels, and a DAT row's download.
+  // B28/B29: the DATs page's two panels (one open at a time), and a DAT row's download.
   await page.getByRole("link", { name: "DATs", exact: true }).click();
+  await page.getByRole("button", { name: "DAT files" }).click();
   await expect(
     page.getByRole("button", { name: "DAT files" }),
   ).toHaveAttribute("aria-expanded", "true");

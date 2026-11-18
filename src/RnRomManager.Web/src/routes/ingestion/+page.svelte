@@ -66,19 +66,16 @@
 	);
 	const failedCount = $derived(failedKeys.filter((k) => failedSelected.has(k)).length);
 
-	// B23: Pending / Failed / Last runs are independent accordion panels; Pending starts open. An old `?tab=failed|runs`
-	// link opens that panel too, then leaves the URL; toggling never writes it.
-	let pendingOpen = $state(true);
-	let failedOpen = $state(false);
-	let runsOpen = $state(false);
+	// B23: Pending / Failed / Last runs are accordion panels, one open at a time; Pending starts open. An old
+	// `?tab=failed|runs` link opens that panel instead, then leaves the URL; toggling never writes it.
+	let openPanel = $state<'pending' | 'failed' | 'runs' | null>('pending');
 	const pendingFileCount = $derived(withFiles.reduce((n, s) => n + s.files.length, 0));
 	const failedFileCount = $derived(failedWithFiles.reduce((n, s) => n + s.files.length, 0));
 
 	$effect(() => {
 		const tab = page.url.searchParams.get('tab');
 		if (tab === null) return;
-		if (tab === 'failed') failedOpen = true;
-		if (tab === 'runs') runsOpen = true;
+		if (tab === 'failed' || tab === 'runs') openPanel = tab;
 		void goto(resolve('/ingestion'), { replace: true, reset: false });
 	});
 
@@ -270,7 +267,11 @@
 		{/if}
 
 		<!-- Closed panels stay mounted, so selections survive. -->
-		<AccordionItem id="pending-panel" headingId="pending-heading" bind:open={pendingOpen}>
+		<AccordionItem
+			id="pending-panel"
+			headingId="pending-heading"
+			bind:open={() => openPanel === 'pending', (v) => (openPanel = v ? 'pending' : null)}
+		>
 			{#snippet header()}Pending files ({pendingFileCount}){/snippet}
 			{#if !job && !datsMissing}
 				<div class="d-flex flex-wrap gap-2 mb-3">
@@ -324,7 +325,11 @@
 			{/if}
 		</AccordionItem>
 
-		<AccordionItem id="failed-panel" headingId="failed-heading" bind:open={failedOpen}>
+		<AccordionItem
+			id="failed-panel"
+			headingId="failed-heading"
+			bind:open={() => openPanel === 'failed', (v) => (openPanel = v ? 'failed' : null)}
+		>
 			{#snippet header()}Failed files ({failedFileCount}){/snippet}
 			{#if failedWithFiles.length === 0}
 				<div class="card"><EmptyState message="No failed imports." /></div>
@@ -363,7 +368,11 @@
 			{/if}
 		</AccordionItem>
 
-		<AccordionItem id="runs-panel" headingId="runs-heading" bind:open={runsOpen}>
+		<AccordionItem
+			id="runs-panel"
+			headingId="runs-heading"
+			bind:open={() => openPanel === 'runs', (v) => (openPanel = v ? 'runs' : null)}
+		>
 			{#snippet header()}Last runs{/snippet}
 			{#if !runs || runs.items.length === 0}
 				<div class="card"><EmptyState message="No ingestion has run yet." /></div>
