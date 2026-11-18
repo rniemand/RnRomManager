@@ -155,7 +155,7 @@
 				type="file"
 				class="form-control"
 				class:is-invalid={error}
-				accept="image/png,image/jpeg"
+				accept="image/png,image/jpeg,image/webp"
 				aria-describedby="logo-help-{uid}"
 				bind:this={fileInput}
 				onchange={() => (error = null)}
@@ -163,7 +163,8 @@
 		{/if}
 		{#if error}<div class="invalid-feedback d-block" role="alert">{error}</div>{/if}
 		<div class="form-text" id="logo-help-{uid}">
-			PNG or JPEG, at most 512 KiB and 2048 pixels per side. It replaces the logo for everyone.
+			PNG, JPEG or WebP (saved as PNG), at most 512 KiB and 2048 pixels per side. It replaces the
+			logo for everyone.
 		</div>
 
 		{#if item.logoUrl}
