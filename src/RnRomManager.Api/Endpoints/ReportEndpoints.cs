@@ -119,6 +119,49 @@ public static partial class ReportEndpoints
             }));
         });
 
+        // Multiple Releases B16: games with min or more releases, sorted and paged on the server.
+        reports.MapGet("/multiple-releases", async (int? min, string? sort, string? dir, int? page, int? pageSize, HttpContext ctx,
+            IReportRepository repository, ISystemRegistry systems) =>
+        {
+            var errors = Paging.Validate(page, pageSize);
+            if (min is < 2 or > 10000)
+                errors["min"] = ["Must be 2–10000."];
+            MultipleReleaseSort? sortKey = sort?.ToLowerInvariant() switch
+            {
+                null or "releases" => MultipleReleaseSort.Releases,
+                "name" => MultipleReleaseSort.Name,
+                "system" => MultipleReleaseSort.System,
+                "updates" => MultipleReleaseSort.Updates,
+                "size" => MultipleReleaseSort.Size,
+                _ => null,
+            };
+            if (sortKey is null)
+                errors["sort"] = ["Must be name, system, releases, updates or size."];
+            bool? descending = dir?.ToLowerInvariant() switch { null => null, "asc" => false, "desc" => true, _ => null };
+            if (dir is not null && descending is null)
+                errors["dir"] = ["Must be asc or desc."];
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+
+            descending ??= sortKey is not (MultipleReleaseSort.Name or MultipleReleaseSort.System);
+            var result = await repository.ListMultipleReleasesAsync(min ?? 2, sortKey!.Value, descending.Value, page ?? 1, pageSize ?? 50,
+                ctx.RequestAborted);
+            var maxReleases = await repository.MaxReleaseCountAsync(ctx.RequestAborted);
+            return Results.Ok(new
+            {
+                maxReleases,
+                items = result.Items.Select(item => new
+                {
+                    id = item.Id, displayTitle = item.DisplayTitle, system = item.SystemId,
+                    systemName = SystemName(systems, item.SystemId), releaseCount = item.ReleaseCount,
+                    updateCount = item.UpdateCount, bytes = item.Bytes,
+                }),
+                page = result.PageNumber,
+                pageSize = result.PageSize,
+                total = result.Total,
+            });
+        });
+
         reports.MapPost("/duplicates/dismiss", async (DismissDuplicateRequest request, HttpContext ctx, IReportRepository repository,
             ISystemRegistry systems, TimeProvider time) =>
         {
