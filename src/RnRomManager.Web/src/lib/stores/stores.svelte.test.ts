@@ -275,7 +275,7 @@ describe('review resolve jobs', () => {
 describe('toast links', () => {
 	afterEach(() => vi.useRealTimers());
 
-	it('renders the link, and a toast with one stays until closed', async () => {
+	it('renders the link, and a toast with one closes itself like any other (B1)', async () => {
 		vi.useFakeTimers();
 		toasts.items = [];
 		toasts.show('plain');
@@ -283,7 +283,37 @@ describe('toast links', () => {
 		render(ToastHost);
 
 		expect(screen.getByRole('link', { name: 'Open game' }).getAttribute('href')).toBe('/games/g1');
-		vi.advanceTimersByTime(toastDurationMs);
-		expect(toasts.items.map((t) => t.text)).toEqual(['linked']);
+		vi.advanceTimersByTime(toastDurationMs - 1);
+		expect(toasts.items.map((t) => t.text)).toEqual(['plain', 'linked']);
+		vi.advanceTimersByTime(1);
+		expect(toasts.items).toEqual([]);
+	});
+
+	it('a paused toast outlives its timer and closes 5 s after resume; others are unaffected (B2)', () => {
+		vi.useFakeTimers();
+		toasts.items = [];
+		const paused = toasts.show('paused', 'info', { href: '/games/g1', text: 'Open game' });
+		toasts.show('other');
+		toasts.pause(paused);
+
+		vi.advanceTimersByTime(toastDurationMs * 3);
+		expect(toasts.items.map((t) => t.text)).toEqual(['paused']);
+
+		toasts.resume(paused);
+		vi.advanceTimersByTime(toastDurationMs - 1);
+		expect(toasts.items.map((t) => t.text)).toEqual(['paused']);
+		vi.advanceTimersByTime(1);
+		expect(toasts.items).toEqual([]);
+	});
+
+	it('resuming a dismissed toast does nothing (B2)', () => {
+		vi.useFakeTimers();
+		toasts.items = [];
+		const id = toasts.show('gone');
+		toasts.dismiss(id);
+		toasts.resume(id);
+		toasts.show('kept');
+		vi.advanceTimersByTime(toastDurationMs - 1);
+		expect(toasts.items.map((t) => t.text)).toEqual(['kept']);
 	});
 });

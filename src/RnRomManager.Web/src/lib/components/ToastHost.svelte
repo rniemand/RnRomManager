@@ -7,6 +7,26 @@
 		danger: 'text-bg-danger',
 		success: 'text-bg-success'
 	};
+
+	// B2: hover and focus hold a toast separately; it resumes only once neither does.
+	const held = new Map<number, { hover: boolean; focus: boolean }>();
+
+	function hold(id: number, key: 'hover' | 'focus', on: boolean) {
+		const state = held.get(id) ?? { hover: false, focus: false };
+		state[key] = on;
+		if (state.hover || state.focus) {
+			held.set(id, state);
+			toasts.pause(id);
+		} else if (held.delete(id)) {
+			toasts.resume(id);
+		}
+	}
+
+	function focusOut(id: number, event: FocusEvent) {
+		const toast = event.currentTarget as HTMLElement;
+		// Moving from the link to the close button stays inside the toast.
+		if (!toast.contains(event.relatedTarget as Node | null)) hold(id, 'focus', false);
+	}
 </script>
 
 <div
@@ -15,7 +35,14 @@
 	aria-atomic="false"
 >
 	{#each toasts.items as toast (toast.id)}
-		<div class="toast show align-items-center border-0 {background[toast.kind]}" role="status">
+		<div
+			class="toast show align-items-center border-0 {background[toast.kind]}"
+			role="status"
+			onmouseenter={() => hold(toast.id, 'hover', true)}
+			onmouseleave={() => hold(toast.id, 'hover', false)}
+			onfocusin={() => hold(toast.id, 'focus', true)}
+			onfocusout={(event) => focusOut(toast.id, event)}
+		>
 			<div class="d-flex">
 				<div class="toast-body">
 					{toast.text}
