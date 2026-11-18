@@ -12,6 +12,12 @@ public static class RomStorage
     public static bool IsEmbedded(ISystemHandler handler, InfoJsonGame game) =>
         handler.LegacyEmbeddedRoms ? game.Roms.All(r => r.ExternalFileName is null) : handler.EmbedRomsInZip;
 
+    /// <summary>
+    /// B5a (G4): may the system's folders hold external ROM files? A <see cref="ISystemHandler.LegacyEmbeddedRoms"/> system's
+    /// can in either setting (pending games, leftovers), so path safety never depends on the setting.
+    /// </summary>
+    public static bool MayHoldExternalFiles(ISystemHandler handler) => !handler.EmbedRomsInZip || handler.LegacyEmbeddedRoms;
+
     /// <summary>S3, B4: a game whose layout differs from its system's effective storage, waiting for the storage job; refused by every write.</summary>
     public static bool IsPending(ISystemHandler handler, InfoJsonGame game) =>
         handler.LegacyEmbeddedRoms && IsEmbedded(handler, game) != handler.EmbedRomsInZip;

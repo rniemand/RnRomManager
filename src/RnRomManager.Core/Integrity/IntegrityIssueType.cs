@@ -21,7 +21,7 @@ public static class IntegrityIssueType
     public const string DbRowUpdated = "DbRowUpdated";
     public const string DbRowDeleted = "DbRowDeleted";
 
-    /// <summary>S7: a game whose ROMs are still inside the ZIP of a system that now stores them next to it.</summary>
+    /// <summary>S7, ROM Zip Config B14: a game whose ROM layout (in or beside its ZIP) differs from its system's setting, waiting for the storage job.</summary>
     public const string LegacyEmbeddedStorage = "LegacyEmbeddedStorage";
 
     /// <summary>Every type, in §12.2 table order.</summary>

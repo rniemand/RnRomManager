@@ -185,7 +185,7 @@ public sealed class DbSync(
     private async Task GuardEquivalentPathsAsync(IReadOnlyList<GameSyncState> state, List<CheckedFile> zips, List<Found> found, HashSet<Guid> kept,
         List<DbSyncSkipItem> skipped, ILookup<Guid, string> dbSha1s, CancellationToken cancellationToken)
     {
-        var external = systems.All.Where(h => !h.EmbedRomsInZip).Select(h => h.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var external = systems.All.Where(RomStorage.MayHoldExternalFiles).Select(h => h.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
         bool InExternalFolder(string path) => path.IndexOf('/') is var slash and > 0 && external.Contains(path[..slash]);
         if (external.Count == 0
             || !(zips.Any(z => InExternalFolder(z.RelativePath)) || state.Any(s => external.Contains(s.SystemId))
