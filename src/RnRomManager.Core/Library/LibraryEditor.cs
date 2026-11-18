@@ -360,6 +360,44 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         return result;
     }
 
+    /// <summary>
+    /// Makes the release the game's primary (an Admin override of the ranker); a no-op when it already is. A later write that
+    /// adds or removes a release re-ranks (§6.1).
+    /// </summary>
+    public async Task<LibraryEditResult> SetPrimaryReleaseAsync(Guid gameId, long romId, AuditActor actor, CancellationToken ct)
+    {
+        using var held = jobLock.TryAcquire();
+        if (held is null)
+            return new(JobRunning);
+        if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
+            || await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
+            return new(NotFound);
+        if (LegacyRefusal(row) is { } legacy)
+            return legacy;
+        var target = OpenForEdit(row);
+        if (target.Code is not null)
+            return new(target.Code, target.Details);
+
+        using var existing = target.Zip!;
+        var current = target.Game!;
+        if (current.Roms.FirstOrDefault(r => r.Metadata.Sha1 == romRow.Sha1) is not { } rom)
+            return new(NotFound, $"{row.ZipPath} no longer lists SHA1 {romRow.Sha1}");
+        if (rom.IsPrimary)
+            return Ok;
+
+        var game = current with
+        {
+            Roms = current.Roms.Select(r => r with { IsPrimary = ReferenceEquals(r, rom) }).ToList(),
+            Metadata = Touched(current),
+        };
+        var result = await WriteAsync(existing, row.ZipPath, game).ConfigureAwait(false);
+        if (FilesChanged(result))
+            audit.Record(new AuditEvent(AuditActions.PrimarySet, actor, row.SystemId, gameId, AuditPaths.Library(row.ZipPath), Details: rom.FileName));
+        if (result.Code is null)
+            logger.LogInformation("Release {FileName} is now the primary of game {GameId}", rom.FileName, gameId);
+        return result;
+    }
+
     public async Task<LibraryEditResult> DeleteGameAsync(Guid gameId, AuditActor actor, CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();

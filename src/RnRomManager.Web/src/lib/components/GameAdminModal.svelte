@@ -7,6 +7,7 @@
 		| { kind: 'merge' }
 		| { kind: 'deleteGame' }
 		| { kind: 'move'; rom: RomDetail }
+		| { kind: 'primary'; rom: RomDetail }
 		| { kind: 'deleteRom'; rom: RomDetail };
 
 	/** What the detail page does next: show this game, go to another game (null = Library), or reload. */
@@ -127,6 +128,7 @@
 			merge: 'Merge into…',
 			deleteGame: 'Delete game',
 			move: 'Move release',
+			primary: 'Make primary',
 			deleteRom: 'Delete release'
 		}[action?.kind ?? 'edit']
 	);
@@ -165,6 +167,11 @@
 				return lastRom
 					? { goTo: null, message: `${game.displayTitle} deleted.` }
 					: { reload: true, message: `${a.rom.fileName} deleted.` };
+			case 'primary':
+				return {
+					game: await api.post<GameDetail>(`${base}/roms/${a.rom.id}/primary`),
+					message: `${a.rom.fileName} is now the primary release.`
+				};
 			case 'move': {
 				let body: { targetGameId: string } | { newGameTitle: string };
 				if (moveTo === 'existing') {
@@ -352,6 +359,11 @@
 				? ` and its ${action.rom.files.length} other files move`
 				: ' moves'} to the system's <code>_removed</code> ingest folder.{#if lastRom}
 				It's the only release, so the game is deleted too.{/if}
+		</p>
+	{:else if action?.kind === 'primary'}
+		<p class="mb-0">
+			Make {action.rom.fileName} the primary release of {game.displayTitle}? Adding or removing a release
+			later picks the primary automatically again.
 		</p>
 	{:else if action?.kind === 'move'}
 		<p>Move {action.rom.fileName} to:</p>

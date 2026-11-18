@@ -65,6 +65,7 @@ public partial class EndpointRoleMatrixTests
         ["DELETE /api/games/{id:guid}"] = Role.Admin,
         ["DELETE /api/games/{id:guid}/roms/{romId:long}"] = Role.Admin,
         ["POST /api/games/{id:guid}/roms/{romId:long}/move"] = Role.Admin,
+        ["POST /api/games/{id:guid}/roms/{romId:long}/primary"] = Role.Admin,
         ["POST /api/games/{id:guid}/merge"] = Role.Admin,
         ["POST /api/games/{id:guid}/media/retry"] = Role.Admin,
         ["POST /api/games/{id:guid}/images"] = Role.Admin,

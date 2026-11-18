@@ -870,6 +870,16 @@
 								{#if auth.isAdmin}
 									<!-- B9: Header details stays left; Move and Delete release sit right. -->
 									<div class="ms-auto d-flex flex-wrap gap-2">
+										{#if !rom.isPrimary}
+											<button
+												type="button"
+												class="btn btn-sm btn-outline-secondary"
+												aria-label="Make {rom.fileName} the primary release"
+												onclick={() => (action = { kind: 'primary', rom })}
+											>
+												<Icon name="star" /> Make primary
+											</button>
+										{/if}
 										<button
 											type="button"
 											class="btn btn-sm btn-outline-secondary"
