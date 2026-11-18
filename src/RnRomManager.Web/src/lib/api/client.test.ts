@@ -100,6 +100,18 @@ describe('api client', () => {
 		expect(navigate).toHaveBeenCalledWith('/login?returnUrl=%2Fgames%2Fabc%3Ftab%3Droms');
 	});
 
+	it('401 forgets the signed-in user before redirecting, so the login page shows its form', async () => {
+		const order: string[] = [];
+		configureClient({
+			navigate: (url) => void order.push(`navigate ${url.split('?')[0]}`),
+			onUnauthorized: () => void order.push('forget')
+		});
+		responses.push(json(401, { status: 401, code: 'Unauthorized', title: 'Not signed in' }));
+
+		await expect(api.get('/api/games')).rejects.toMatchObject({ status: 401 });
+		expect(order).toEqual(['forget', 'navigate /login']);
+	});
+
 	it('401 with noRedirect just throws', async () => {
 		responses.push(
 			json(401, { code: 'InvalidCredentials', title: 'Invalid username or password' })

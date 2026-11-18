@@ -14,47 +14,24 @@ public sealed class BackupScheduler(BackupService backups, TimeZoneInfo zone, Ti
     /// <summary>How long to wait before re-reading the settings after the database failed.</summary>
     public static readonly TimeSpan RetryDelay = TimeSpan.FromMinutes(1);
 
-    private readonly Lock _gate = new();
-    private CancellationTokenSource _wake = new();
+    private readonly WakeSignal _signal = new(time);
 
     public override Task StartAsync(CancellationToken cancellationToken)
     {
-        backups.SettingsChanged += Wake;
+        backups.SettingsChanged += _signal.Wake;
         return base.StartAsync(cancellationToken);
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        backups.SettingsChanged -= Wake;
+        backups.SettingsChanged -= _signal.Wake;
         await base.StopAsync(cancellationToken);
     }
 
     public override void Dispose()
     {
-        lock (_gate)
-            _wake.Dispose();
+        _signal.Dispose();
         base.Dispose();
-    }
-
-    private void Wake()
-    {
-        lock (_gate)
-            _wake.Cancel();
-    }
-
-    /// <summary>A fresh wake token: a change signalled before this point was already seen by the caller.</summary>
-    private CancellationToken WakeToken()
-    {
-        lock (_gate)
-        {
-            if (_wake.IsCancellationRequested)
-            {
-                _wake.Dispose();
-                _wake = new CancellationTokenSource();
-            }
-
-            return _wake.Token;
-        }
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -64,7 +41,7 @@ public sealed class BackupScheduler(BackupService backups, TimeZoneInfo zone, Ti
         while (!stoppingToken.IsCancellationRequested)
         {
             // Taken before reading the settings, so a save during the read still wakes the wait below.
-            var wake = WakeToken();
+            var wake = _signal.Token();
             BackupSettings settings;
             DateTimeOffset? due;
             try
@@ -77,7 +54,7 @@ public sealed class BackupScheduler(BackupService backups, TimeZoneInfo zone, Ti
             catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
             {
                 logger.LogError(ex, "Backup schedule couldn't be read; retrying in {Delay}", RetryDelay);
-                if (!await WaitAsync(RetryDelay, wake, stoppingToken).ConfigureAwait(false) && stoppingToken.IsCancellationRequested)
+                if (!await _signal.WaitAsync(RetryDelay, wake, stoppingToken).ConfigureAwait(false) && stoppingToken.IsCancellationRequested)
                     return;
                 continue;
             }
@@ -88,7 +65,7 @@ public sealed class BackupScheduler(BackupService backups, TimeZoneInfo zone, Ti
 
             logger.LogInformation("Next scheduled backup: {Next}", due?.ToString("O") ?? "disabled");
             var wait = due is { } d ? d - time.GetUtcNow() : Timeout.InfiniteTimeSpan;
-            if (!await WaitAsync(wait, wake, stoppingToken).ConfigureAwait(false))
+            if (!await _signal.WaitAsync(wait, wake, stoppingToken).ConfigureAwait(false))
             {
                 if (stoppingToken.IsCancellationRequested) return;
                 continue; // settings changed: reschedule
@@ -96,22 +73,6 @@ public sealed class BackupScheduler(BackupService backups, TimeZoneInfo zone, Ti
 
             lastDue = due;
             await RunAsync(settings.Retention, stoppingToken).ConfigureAwait(false);
-        }
-    }
-
-    /// <summary>True when the wait elapsed; false when woken by a settings change or stopping.</summary>
-    private async Task<bool> WaitAsync(TimeSpan wait, CancellationToken wake, CancellationToken stoppingToken)
-    {
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(wake, stoppingToken);
-        try
-        {
-            if (wait != Timeout.InfiniteTimeSpan && wait < TimeSpan.Zero) wait = TimeSpan.Zero;
-            await Task.Delay(wait, time, linked.Token).ConfigureAwait(false);
-            return true;
-        }
-        catch (OperationCanceledException)
-        {
-            return false;
         }
     }
 

@@ -96,6 +96,24 @@ public class IngestJobTests
     }
 
     [Test]
+    public async Task Archive_FailedMoveToFailedFolder_IsRecorded_AndTheArchiveStays()
+    {
+        var archive = Path.Combine(_paths.Ingest, "gb", "pack.zip");
+        Directory.CreateDirectory(Path.GetDirectoryName(archive)!);
+        using (var zip = System.IO.Compression.ZipFile.Open(archive, System.IO.Compression.ZipArchiveMode.Create))
+        using (var entry = zip.CreateEntry("tiny.gb").Open())
+            entry.Write([1, 2, 3]); // too small: the entry is Failed, so the archive goes to _failed/
+        File.SetLastWriteTimeUtc(archive, DateTime.UtcNow - TimeSpan.FromMinutes(5));
+        File.WriteAllText(Path.Combine(_paths.Ingest, "gb", "_failed"), "a file where the folder should be");
+
+        await Job().RunAsync(new JobContext(Guid.NewGuid(), new JobProgress()), CancellationToken.None);
+
+        await _items.Received(1).InsertAsync(Arg.Is<JobItem>(i => i.SourcePath == archive && i.ArchiveEntry == null && i.Outcome == IngestOutcome.Error),
+            Arg.Any<CancellationToken>());
+        Assert.That(File.Exists(archive), Is.True);
+    }
+
+    [Test]
     public void ArchiveFate_ASkippedEntryKeepsTheArchive_EvenWhenOthersCommitted()
     {
         static IngestItemResult R(string outcome) => new(outcome, null);
@@ -107,6 +125,9 @@ public class IngestJobTests
         Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Failed), R(IngestOutcome.Duplicate)]), Is.EqualTo(IngestJob.ArchiveFate.Failed));
         Assert.That(IngestJob.FateOf([R(IngestOutcome.Duplicate), R(IngestOutcome.Duplicate)]), Is.EqualTo(IngestJob.ArchiveFate.Duplicates));
         Assert.That(IngestJob.FateOf([ingested, R(IngestOutcome.Duplicate), R(IngestOutcome.Repaired)]), Is.EqualTo(IngestJob.ArchiveFate.Delete));
+        // Another system's ROM or a nested archive was never ingested: the archive is kept aside, not deleted.
+        Assert.That(IngestJob.FateOf([ingested], holdsUnhandled: true), Is.EqualTo(IngestJob.ArchiveFate.Failed));
+        Assert.That(IngestJob.FateOf([R(IngestOutcome.Duplicate)], holdsUnhandled: true), Is.EqualTo(IngestJob.ArchiveFate.Duplicates));
     }
 
     private IngestJob Job(ExternalIngestHooks? hooks = null)

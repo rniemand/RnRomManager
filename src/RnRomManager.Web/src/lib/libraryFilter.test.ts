@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearLibraryFilter, readSavedLibraryFilter, saveLibraryFilter } from './libraryFilter';
+import { readSavedLibraryFilter, saveLibraryFilter } from './libraryFilter';
 
 describe('libraryFilter (L7)', () => {
 	let store: Map<string, string>;
@@ -21,7 +21,7 @@ describe('libraryFilter (L7)', () => {
 		expect(store.get('rnrm.library.filter')).toBe('?system=gb&page=2');
 		expect(readSavedLibraryFilter()).toBe('?system=gb&page=2');
 
-		clearLibraryFilter();
+		saveLibraryFilter('');
 		expect(store.has('rnrm.library.filter')).toBe(false);
 	});
 
@@ -39,6 +39,5 @@ describe('libraryFilter (L7)', () => {
 
 		expect(readSavedLibraryFilter()).toBe('');
 		expect(() => saveLibraryFilter('?system=gb')).not.toThrow();
-		expect(() => clearLibraryFilter()).not.toThrow();
 	});
 });

@@ -44,9 +44,7 @@ public sealed class MaintenanceGate(IHttpContextAccessor accessor, AuditWriter a
 
         if (_open && !ReferenceEquals(ctx, _owner))
         {
-            ctx.Response.Headers.RetryAfter = "5";
-            await Problems.Create(ctx, StatusCodes.Status503ServiceUnavailable, "Maintenance",
-                "A backup is being restored. Try again in a moment.").ExecuteAsync(ctx);
+            await RefuseAsync(ctx);
             return;
         }
 
@@ -56,8 +54,20 @@ public sealed class MaintenanceGate(IHttpContextAccessor accessor, AuditWriter a
             return;
         }
 
+        // Checked again under the lock: a window that opened after the check above has already drained without
+        // counting this request, so it must not run against the tables being replaced.
+        bool refused;
         lock (_lock)
-            _inFlight++;
+        {
+            refused = _open && !ReferenceEquals(ctx, _owner);
+            if (!refused)
+                _inFlight++;
+        }
+        if (refused)
+        {
+            await RefuseAsync(ctx);
+            return;
+        }
         ctx.Items[CountedKey] = true;
         try
         {
@@ -74,6 +84,13 @@ public sealed class MaintenanceGate(IHttpContextAccessor accessor, AuditWriter a
             }
             changed.TrySetResult();
         }
+    }
+
+    private static Task RefuseAsync(HttpContext ctx)
+    {
+        ctx.Response.Headers.RetryAfter = "5";
+        return Problems.Create(ctx, StatusCodes.Status503ServiceUnavailable, "Maintenance",
+            "A backup is being restored. Try again in a moment.").ExecuteAsync(ctx);
     }
 
     public async Task<IAsyncDisposable?> TryEnterAsync(CancellationToken cancellationToken)

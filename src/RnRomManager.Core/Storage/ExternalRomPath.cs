@@ -94,6 +94,28 @@ public static class ExternalRomPath
     public static ExternalPathCheck ClassifyDirectory(string root, string fullPath) => Classify(root, fullPath, expectFile: false);
 
     /// <summary>
+    /// A library or side folder that may already exist: the checked directory, created first when missing.
+    /// <see cref="ExternalPathStatus.Found"/> or why not (a failed create is <see cref="ExternalPathStatus.Unreadable"/>).
+    /// </summary>
+    public static ExternalPathCheck EnsureDirectory(string root, string fullPath)
+    {
+        var folder = ClassifyDirectory(root, fullPath);
+        try
+        {
+            if (folder.Status == ExternalPathStatus.Missing)
+            {
+                Directory.CreateDirectory(folder.Path);
+                folder = ClassifyDirectory(root, folder.Path);
+            }
+            return folder;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new ExternalPathCheck(ExternalPathStatus.Unreadable, folder.Path, Details: $"{folder.Path} can't be created: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// Creates a new directory for this caller's own work files (an archive's extraction folder, a DAT refresh's
     /// staging folder). Every ancestor below <paramref name="root"/> must be a real directory (missing ones are
     /// created), and nothing may already be at <paramref name="fullPath"/>: an occupant is never adopted or changed.

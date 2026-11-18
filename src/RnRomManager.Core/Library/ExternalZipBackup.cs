@@ -17,6 +17,9 @@ public sealed class ExternalZipBackupHooks
 
     /// <summary>Runs with the backup path right after the rename that published it, before it is checked there.</summary>
     public Action<string>? AfterPromotion { get; init; }
+
+    /// <summary>Replaces the no-replace rename that publishes the backup and its record (e.g. to report <c>Unsupported</c>).</summary>
+    public Func<string, string, NoReplaceRenameResult>? Rename { get; init; }
 }
 
 /// <summary>
@@ -70,7 +73,8 @@ public static class ExternalZipBackup
                 if (ExternalRomPath.SnapshotOf(input) != source || ExternalRomPath.ClassifyFile(libraryRoot, zipPath).Snapshot != source)
                     throw new IOException($"{zipPath} changed while it was backed up");
 
-                var renamed = NoReplaceRename.Move(partial, backup);
+                // Falls back to a hard link where the filesystem has no no-replace rename (e.g. NFS), like every other publish.
+                var renamed = NoReplaceRename.PublishStaged(partial, backup, verified, hooks?.Rename);
                 if (!renamed.Renamed)
                     throw new IOException($"{backup} can't be published: {renamed.Details ?? renamed.Status.ToString()}");
                 hooks?.AfterPromotion?.Invoke(backup);

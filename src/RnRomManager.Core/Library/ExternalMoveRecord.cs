@@ -103,7 +103,7 @@ public static class ExternalMoveRecord
 
             if (ExternalRomPath.ClassifyFile(libraryRoot, partial).Snapshot != verified)
                 throw new IOException($"{partial} is no longer the verified record");
-            var renamed = NoReplaceRename.Move(partial, final);
+            var renamed = NoReplaceRename.PublishStaged(partial, final, verified, hooks?.Rename);
             if (!renamed.Renamed)
                 throw new IOException($"{final} can't be published: {renamed.Details ?? renamed.Status.ToString()}");
             owned = null; // published: nothing at the staging name is ours any more

@@ -125,6 +125,18 @@ class BundleCart {
 	/** Bumped on every account change and every content change, so stale refresh answers are dropped. */
 	#generation = 0;
 
+	constructor() {
+		// Another tab changed this account's cart: take its copy, or the next change here would write over it.
+		if (typeof window !== 'undefined')
+			window.addEventListener('storage', (event) => {
+				if (this.#userId !== null && event.key === cartStorageKey(this.#userId)) {
+					this.#generation++;
+					this.refreshing = false;
+					this.entries = this.#read(this.#userId);
+				}
+			});
+	}
+
 	get userId(): number | null {
 		return this.#userId;
 	}

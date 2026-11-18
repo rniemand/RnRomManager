@@ -1,3 +1,5 @@
+import { remembered } from './remembered';
+
 /** L7: the Library's filter, sort and page, remembered in `localStorage` as `toSearch`'s query string. */
 
 /** A URL with none of these is "bare" and restores the saved filter; other parameters don't count. */
@@ -12,27 +14,19 @@ export const libraryFilterParams = [
 	'page'
 ] as const;
 
-const storageKey = 'rnrm.library.filter';
+const filter = remembered('rnrm.library.filter');
 
 /** The saved query string, or '' when none or storage is unavailable. */
-export function readSavedLibraryFilter(): string {
-	try {
-		return localStorage.getItem(storageKey) ?? '';
-	} catch {
-		return '';
-	}
-}
+export const readSavedLibraryFilter = filter.read;
 
 /** Saves `search` (removes the key when empty); ignored when storage is unavailable. */
-export function saveLibraryFilter(search: string): void {
-	try {
-		if (search) localStorage.setItem(storageKey, search);
-		else localStorage.removeItem(storageKey);
-	} catch {
-		// remembering the filter is a convenience
-	}
-}
+export const saveLibraryFilter = filter.save;
 
-export function clearLibraryFilter(): void {
-	saveLibraryFilter('');
-}
+export type LibraryView = 'grid' | 'list';
+
+const view = remembered('libraryView');
+
+/** Grid or list: one remembered choice shared by the Library and every collection page. */
+export const readLibraryView = (): LibraryView => (view.read() === 'list' ? 'list' : 'grid');
+
+export const saveLibraryView = (value: LibraryView): void => view.save(value);

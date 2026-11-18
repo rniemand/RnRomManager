@@ -14,14 +14,6 @@ const control = /[\u0000-\u001f\u007f-\u009f]/;
 // eslint-disable-next-line no-control-regex
 const controlButLineBreak = /[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/;
 
-/** B1: the text after the last `.`, lowercased, when it is 1–8 of `[a-z0-9]`; else empty. */
-export function saveExtension(fileName: string): string {
-	const dot = fileName.lastIndexOf('.');
-	if (dot < 0) return '';
-	const extension = fileName.slice(dot + 1).toLowerCase();
-	return /^[a-z0-9]{1,8}$/.test(extension) ? `.${extension}` : '';
-}
-
 /** B8: trimmed, 1–100 characters, no control characters. */
 export function nameError(name: string): string | null {
 	const trimmed = name.trim();

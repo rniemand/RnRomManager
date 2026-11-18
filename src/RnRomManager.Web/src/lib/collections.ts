@@ -6,8 +6,6 @@ import { maxNoteBytes, noteBytes } from './markdown';
 export const maxNameLength = 100;
 /** B2: notes share the release-note cap and byte counting. */
 export const maxNotesBytes = maxNoteBytes;
-/** B13: ids per add request. */
-export const maxGameIds = 500;
 
 /** B2's name rule, as the server words it; null when valid. */
 export function nameError(name: string): string | null {
