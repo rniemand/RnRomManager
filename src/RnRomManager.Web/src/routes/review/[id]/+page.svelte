@@ -575,7 +575,7 @@
 													<tr>
 														<td class="text-break">{suggestion.romName}</td>
 														<td class="text-end text-nowrap">{percent(suggestion.score)}</td>
-														<td class="text-end">
+														<td class="text-end text-nowrap">
 															<button
 																type="button"
 																class="btn btn-sm btn-primary"
