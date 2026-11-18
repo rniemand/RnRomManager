@@ -137,6 +137,23 @@ describe('game detail admin actions', () => {
 		expect(screen.getByRole('button', { name: 'Delete Tetris 1.gb' })).toBeTruthy();
 	});
 
+	it('the admin actions are in the Manage menu, Delete game last after a divider (B3)', async () => {
+		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
+		render(GamePage);
+
+		const manage = await screen.findByRole('button', { name: 'Manage' });
+		const menu = manage.nextElementSibling!;
+		expect(menu.classList).toContain('dropdown-menu');
+		expect(
+			[...menu.querySelectorAll('li')].map((li) =>
+				li.querySelector('.dropdown-divider') ? '---' : li.textContent!.trim()
+			)
+		).toEqual(['Edit metadata', 'Retry media', 'Merge into…', '---', 'Delete game']);
+		expect(
+			within(menu as HTMLElement).getByRole('button', { name: 'Delete game' }).className
+		).toContain('text-danger-emphasis');
+	});
+
 	it('Move release sits in the release body and opens the move dialog (R2)', async () => {
 		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
 		render(GamePage);
@@ -162,6 +179,7 @@ describe('game detail admin actions', () => {
 		render(GamePage);
 
 		await screen.findByText('Releases');
+		expect(screen.queryByRole('button', { name: 'Manage' })).toBeNull();
 		expect(screen.queryByRole('button', { name: /Edit metadata/ })).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Delete Tetris 1.gb' })).toBeNull();
 		expect(screen.queryByRole('button', { name: /Rate 1 of 5/ })).toBeNull();

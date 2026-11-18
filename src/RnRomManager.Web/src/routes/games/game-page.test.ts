@@ -1121,23 +1121,58 @@ describe('game detail page', () => {
 		expect([...document.querySelectorAll('dl')].every((dl) => dl.closest('article'))).toBe(true);
 	});
 
-	it('the action row: ZIP, ROM, Google, info.json, Collections, all default size (B1, B25)', async () => {
+	it('the action row: ZIP, ROM, Google, info.json, Collections, then Manage; all btn-sm (B3)', async () => {
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);
 
 		const zip = await screen.findByRole('button', { name: 'Download ZIP' });
-		const row = [...zip.parentElement!.children].filter((e) => e.matches('a, button'));
+		const rowEl = zip.parentElement!;
+		expect(rowEl.className).toBe('d-flex flex-wrap gap-2');
+		const row = [...rowEl.children].map((e) =>
+			e.matches('a, button') ? e : e.querySelector(':scope > button')!
+		);
 		expect(row.map((e) => e.textContent?.trim())).toEqual([
 			'Download ZIP',
 			'Download ROM',
 			'Google',
 			'View info.json',
-			'Collections'
+			'Collections',
+			'Manage'
 		]);
-		for (const e of row) {
-			expect(e.classList).not.toContain('btn-sm');
-			expect(e.classList).not.toContain('align-self-center');
-		}
+		for (const e of row) expect(e.classList).toContain('btn-sm');
+		expect(zip.classList).toContain('btn-primary');
+		expect(screen.getByRole('button', { name: 'Download ROM' }).classList).toContain(
+			'btn-outline-primary'
+		);
+		expect(row.at(-1)!.getAttribute('data-bs-toggle')).toBe('dropdown');
+		expect(screen.queryByRole('group', { name: 'Admin actions' })).toBeNull();
+	});
+
+	it('tabs carry icons before their labels (B4)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		await screen.findByRole('tab', { name: /^Releases/ });
+		expect(
+			screen
+				.getAllByRole('tab')
+				.map((t) => [t.textContent!.trim(), t.querySelector('i')!.className.trim()])
+		).toEqual([
+			['Releases (1)', 'bi bi-stack'],
+			['Images (1)', 'bi bi-images'],
+			['Saves (0)', 'bi bi-floppy-fill'],
+			['Zip Contents', 'bi bi-file-zip']
+		]);
+	});
+
+	it('Back to Library is a small outline button to / (B5)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		const back = await screen.findByRole('link', { name: 'Back to Library' });
+		expect(back.getAttribute('href')).toBe('/');
+		expect(back.className).toBe('btn btn-sm btn-outline-primary');
+		expect(back.querySelector('.bi-arrow-left')).not.toBeNull();
 	});
 
 	it('one ROM gets a Download ROM button', async () => {

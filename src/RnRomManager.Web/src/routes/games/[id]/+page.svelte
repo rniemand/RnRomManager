@@ -283,12 +283,15 @@
 	);
 	// B10: one panel lists either tab's cards.
 	const shownRoms = $derived(tab === 'updates' ? updates : releases);
-	const tabs = $derived<[Tab, string][]>([
-		['releases', `Releases (${releases.length})`],
-		...(updates.length ? [['updates', `Updates (${updates.length})`] as [Tab, string]] : []),
-		['images', `Images (${game?.images.length ?? 0})`],
-		['saves', `Saves (${game?.saveCount ?? 0})`],
-		['zip', 'Zip Contents']
+	/** B4: each tab's value, label and icon. */
+	const tabs = $derived<[Tab, string, string][]>([
+		['releases', `Releases (${releases.length})`, 'releases'],
+		...(updates.length
+			? [['updates', `Updates (${updates.length})`, 'update'] as [Tab, string, string]]
+			: []),
+		['images', `Images (${game?.images.length ?? 0})`, 'images'],
+		['saves', `Saves (${game?.saveCount ?? 0})`, 'save'],
+		['zip', 'Zip Contents', 'zip']
 	]);
 
 	/** B19: bumped after the Play dialog saved to the library, so the Saves tab reloads. */
@@ -303,7 +306,11 @@
 
 <svelte:head><title>{game?.displayTitle ?? 'Game'} · RnRomManager</title></svelte:head>
 
-<p><a href={resolve('/')}>← Library</a></p>
+<p>
+	<a class="btn btn-sm btn-outline-primary" href={resolve('/')}
+		><Icon name="back" /> Back to Library</a
+	>
+</p>
 
 {#if error}
 	<ErrorAlert {error} onretry={() => reload++} />
@@ -399,7 +406,7 @@
 					<!-- G5: an external system's ZIP holds no ROMs; they download per release. -->
 					<button
 						type="button"
-						class="btn btn-primary"
+						class="btn btn-sm btn-primary"
 						use:tooltip={'ROM files are downloaded per release'}
 						onclick={() => download(`/api/games/${encodeURIComponent(id)}/download`)}
 					>
@@ -408,7 +415,7 @@
 				{:else}
 					<button
 						type="button"
-						class="btn btn-primary"
+						class="btn btn-sm btn-primary"
 						onclick={() => download(`/api/games/${encodeURIComponent(id)}/download`)}
 					>
 						<Icon name="download" /> Download ZIP
@@ -417,7 +424,7 @@
 				{#if downloadRoms.length === 1}
 					<button
 						type="button"
-						class="btn btn-outline-primary"
+						class="btn btn-sm btn-outline-primary"
 						onclick={() => download(downloadRoms[0].downloadUrl, downloadRoms[0])}
 					>
 						<Icon name="download" /> Download ROM
@@ -426,7 +433,7 @@
 					<div class="dropdown">
 						<button
 							type="button"
-							class="btn btn-outline-primary dropdown-toggle"
+							class="btn btn-sm btn-outline-primary dropdown-toggle"
 							data-bs-toggle="dropdown"
 							aria-expanded="false"
 						>
@@ -450,7 +457,7 @@
 				<!-- External link: resolve() is for app routes. -->
 				<!-- eslint-disable svelte/no-navigation-without-resolve -->
 				<a
-					class="btn btn-outline-secondary"
+					class="btn btn-sm btn-outline-secondary"
 					href={googleSearchUrl(gameSearchQuery(game))}
 					target="_blank"
 					rel="noopener noreferrer"><Icon name="google" /> Google</a
@@ -458,56 +465,77 @@
 				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 				<button
 					type="button"
-					class="btn btn-outline-secondary"
+					class="btn btn-sm btn-outline-secondary"
 					onclick={() => (infoJsonOpen = true)}
 				>
 					<Icon name="code" /> View info.json
 				</button>
 				<button
 					type="button"
-					class="btn btn-outline-secondary"
+					class="btn btn-sm btn-outline-secondary"
 					onclick={() => (collectionsOpen = true)}
 				>
 					<Icon name="collections" /> Collections
 				</button>
+				{#if auth.isAdmin}
+					<!-- B3: the Admin actions in one Manage menu, last in the row. -->
+					<div class="dropdown">
+						<button
+							type="button"
+							class="btn btn-sm btn-outline-secondary dropdown-toggle"
+							data-bs-toggle="dropdown"
+							aria-expanded="false"
+						>
+							<Icon name="admin" /> Manage
+						</button>
+						<ul class="dropdown-menu dropdown-menu-end">
+							<li>
+								<button
+									type="button"
+									class="dropdown-item"
+									onclick={() => (action = { kind: 'edit' })}
+								>
+									<Icon name="edit" /> Edit metadata
+								</button>
+							</li>
+							<li>
+								<button
+									type="button"
+									class="dropdown-item"
+									onclick={() => (action = { kind: 'retry' })}
+								>
+									<Icon name="retry" /> Retry media
+								</button>
+							</li>
+							<li>
+								<button
+									type="button"
+									class="dropdown-item"
+									onclick={() => (action = { kind: 'merge' })}
+								>
+									<Icon name="merge" /> Merge into…
+								</button>
+							</li>
+							<li><hr class="dropdown-divider" /></li>
+							<li>
+								<!-- text-danger-emphasis: plain text-danger fails AA on the dark dropdown. -->
+								<button
+									type="button"
+									class="dropdown-item text-danger-emphasis"
+									onclick={() => (action = { kind: 'deleteGame' })}
+								>
+									<Icon name="delete" /> Delete game
+								</button>
+							</li>
+						</ul>
+					</div>
+				{/if}
 			</div>
-			{#if auth.isAdmin}
-				<div class="d-flex flex-wrap gap-2 mt-3" role="group" aria-label="Admin actions">
-					<button
-						type="button"
-						class="btn btn-outline-secondary"
-						onclick={() => (action = { kind: 'edit' })}
-					>
-						<Icon name="edit" /> Edit metadata
-					</button>
-					<button
-						type="button"
-						class="btn btn-outline-secondary"
-						onclick={() => (action = { kind: 'retry' })}
-					>
-						<Icon name="retry" /> Retry media
-					</button>
-					<button
-						type="button"
-						class="btn btn-outline-secondary"
-						onclick={() => (action = { kind: 'merge' })}
-					>
-						<Icon name="merge" /> Merge into…
-					</button>
-					<button
-						type="button"
-						class="btn btn-outline-danger"
-						onclick={() => (action = { kind: 'deleteGame' })}
-					>
-						<Icon name="delete" /> Delete game
-					</button>
-				</div>
-			{/if}
 		</div>
 	</div>
 
 	<ul class="nav nav-tabs mb-3" role="tablist">
-		{#each tabs as [value, label] (value)}
+		{#each tabs as [value, label, icon] (value)}
 			<li class="nav-item" role="presentation">
 				<button
 					type="button"
@@ -517,7 +545,7 @@
 					role="tab"
 					aria-selected={tab === value}
 					aria-controls={value === 'updates' ? 'releases-panel' : `${value}-panel`}
-					onclick={() => selectTab(value)}>{label}</button
+					onclick={() => selectTab(value)}><Icon name={icon} /> {label}</button
 				>
 			</li>
 		{/each}

@@ -520,7 +520,7 @@ test("browse, search and filter the library", async () => {
   await expect(
     page.getByRole("heading", { level: 1, name: "Orbit Blocks" }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "← Library" }).click();
+  await page.getByRole("link", { name: "Back to Library" }).click();
   await expect(page).toHaveURL(/system=gb/);
   await expect(page.getByText("3 games", { exact: true })).toBeVisible();
   // B2: Clear all is in the filter row, usable on a 320px phone and on a desktop.
@@ -2047,6 +2047,8 @@ test("user management: a Site user's account, private saves and audit trail", { 
     await expect(
       user.getByRole("heading", { level: 1, name: "Orbit Blocks" }),
     ).toBeVisible();
+    // B3: a Site user has no Manage menu.
+    await expect(user.getByRole("button", { name: "Manage" })).toHaveCount(0);
     await expect(user.getByRole("button", { name: "Edit metadata" })).toHaveCount(0);
     await expect(user.getByRole("button", { name: /^Add note for / })).toHaveCount(0);
     await expectAccessible(user, "game detail as a site user");
@@ -2333,6 +2335,8 @@ test("release notes: add, edit and delete", async () => {
 test("Admin: edit metadata, move a release, delete a release and a game", async () => {
   await openGame("Orbit Blocks");
 
+  // B3: the Admin actions sit in the Manage menu.
+  await page.getByRole("button", { name: "Manage" }).click();
   await page.getByRole("button", { name: "Edit metadata" }).click();
   await expect(dialog()).toBeVisible();
   await expectAccessible(page, "edit metadata modal");
@@ -2385,6 +2389,7 @@ test("Admin: edit metadata, move a release, delete a release and a game", async 
   await page.setViewportSize(viewport);
 
   await openGame("Color Racer");
+  await page.getByRole("button", { name: "Manage" }).click();
   await page.getByRole("button", { name: "Delete game" }).click();
   await dialog().getByRole("button", { name: "Delete" }).click();
   await expect(page).toHaveURL(/\/(\?[^/]*)?$/);
