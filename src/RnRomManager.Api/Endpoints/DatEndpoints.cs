@@ -36,27 +36,55 @@ public static class DatEndpoints
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         api.MapGet("/admin/dats", (DatCache cache, IOptions<PathsOptions> paths) =>
+            Results.Ok(ListedDats(cache, paths.Value.Cache)
+                .OrderBy(e => e.DatName, StringComparer.Ordinal)
+                .Select(e => new { datName = e.DatName, version = e.Version, downloadedAt = e.DownloadedAt })))
+            .RequireAuthorization(AuthSetup.AdminOnly);
+
+        // B29: one listed DAT as an attachment. The name is only a lookup key into the checked manifest; no client path is used.
+        api.MapGet("/admin/dats/{datName}/download", (string datName, HttpContext ctx, DatCache cache, IOptions<PathsOptions> paths) =>
         {
-            // T3: only the live set, and only while it is a real directory below the cache root; the manifest is read
-            // through the same checked, capped reader as startup. Never cache/dats.previous/, even mid-swap.
-            IReadOnlyList<DatManifestEntry> manifest = [];
+            if (ListedDats(cache, paths.Value.Cache).FirstOrDefault(e => e.DatName == datName) is not { } entry)
+                return Problems.NotFound(ctx);
+            ExternalOpenResult opened;
             try
             {
-                if (ExternalRomPath.ClassifyDirectory(paths.Value.Cache, cache.Directory).Status == ExternalPathStatus.Found)
-                    manifest = DatManifest.ReadChecked(paths.Value.Cache, Path.Combine(cache.Directory, DatManifest.FileName));
+                // Delete sharing, as DatManifest reads: a refresh may still swap cache/dats mid-download.
+                opened = ExternalRomPath.OpenRead(paths.Value.Cache, Path.Combine(cache.Directory, entry.File), FileShare.Read | FileShare.Delete);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                manifest = []; // no usable DATs; the page offers Refresh
+                return Problems.NotFound(ctx);
             }
-            // One row per system: a no-intro or redump DAT (its metadat files share the name and have no version) or a titledb file.
-            return Results.Ok(manifest
-                .Where(e => DatKind.IsMainDat(e.File) || e.File.StartsWith(TitleDb.Folder + "/", StringComparison.Ordinal))
-                .OrderBy(e => e.DatName, StringComparer.Ordinal)
-                .Select(e => new { datName = e.DatName, version = e.Version, downloadedAt = e.DownloadedAt }));
-        }).RequireAuthorization(AuthSetup.AdminOnly);
+            if (opened.Status != ExternalPathStatus.Found)
+            {
+                opened.Stream?.Dispose();
+                return Problems.NotFound(ctx);
+            }
+            return Results.Stream(opened.Stream!, "application/octet-stream", Path.GetFileName(entry.File));
+        }).RequireAuthorization(AuthSetup.AdminOnly).WithMetadata(MaintenanceExempt.Instance);
 
         return api;
+    }
+
+    /// <summary>
+    /// The live manifest's listed entries, in manifest order: one per system, a no-intro or redump DAT (its metadat files share
+    /// the name and have no version) or a titledb file. T3: only the live set, and only while it is a real directory below the
+    /// cache root; the manifest is read through the same checked, capped reader as startup. Never cache/dats.previous/, even mid-swap.
+    /// </summary>
+    private static IEnumerable<DatManifestEntry> ListedDats(DatCache cache, string cacheRoot)
+    {
+        IReadOnlyList<DatManifestEntry> manifest = [];
+        try
+        {
+            if (ExternalRomPath.ClassifyDirectory(cacheRoot, cache.Directory).Status == ExternalPathStatus.Found)
+                manifest = DatManifest.ReadChecked(cacheRoot, Path.Combine(cache.Directory, DatManifest.FileName));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            manifest = []; // no usable DATs; the page offers Refresh
+        }
+        return manifest.Where(e => DatKind.IsMainDat(e.File) || e.File.StartsWith(TitleDb.Folder + "/", StringComparison.Ordinal));
     }
 
     private static async Task<object> SettingsAsync(DatRefreshSettingsService settings, CancellationToken ct)
