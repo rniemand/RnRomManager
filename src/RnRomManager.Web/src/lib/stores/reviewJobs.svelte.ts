@@ -4,6 +4,7 @@ import { page } from '$app/state';
 import { api } from '../api/client';
 import { ApiError } from '../api/errors';
 import type { Job, ReviewResolveSummary } from '../api/types';
+import { nextReviewItem } from '../review';
 import { pollIntervalMs } from './jobs.svelte';
 import { toasts } from './toasts.svelte';
 
@@ -80,19 +81,24 @@ class ReviewJobs {
 			this.#schedule(job);
 			return;
 		}
-		this.running = null;
-		this.#finish(job, row);
+		void this.#finish(job, row);
 	}
 
-	#finish(job: ReviewJob, row: Job): void {
+	async #finish(job: ReviewJob, row: Job): Promise<void> {
 		const item = resolve('/review/[id]', { id: String(job.reviewId) });
-		const here = page.url.pathname === item;
 		const summary = row.summary as ReviewResolveSummary | null;
 		if (summary && !summary.code && summary.gameId) {
 			const game = resolve('/games/[id]', { id: summary.gameId });
-			if (here) {
+			let target = game;
+			if (job.next && page.url.pathname === item) {
+				// Review QoL B13: look the next item up again (the queue may have changed); `running` stays set meanwhile.
+				const next = await nextReviewItem(job.reviewId).catch(() => null);
+				if (next !== null) target = resolve('/review/[id]', { id: String(next) });
+			}
+			this.running = null;
+			if (page.url.pathname === item) {
 				toasts.show(job.done, 'success');
-				void goto(game);
+				void goto(target);
 			} else
 				toasts.show(`${job.fileName} added to the library.`, 'success', {
 					href: game,
@@ -100,6 +106,8 @@ class ReviewJobs {
 				});
 			return;
 		}
+		this.running = null;
+		const here = page.url.pathname === item;
 		if (summary?.code === 'SourceMissing') {
 			// §7.5: the row is deleted, so there is no item to link to.
 			if (here) {

@@ -270,6 +270,122 @@ describe('review resolve jobs', () => {
 		]).toEqual([400, 404, 409, 500]);
 		expect(summaryError(summary({ code: 'NotFound' })).title).toBe('Not found');
 	});
+
+	describe('Use and Next (B13)', () => {
+		const lookupUrl = '/api/review?status=Pending&page=1&pageSize=2';
+		const success = () => jobRow('Completed', summary({ gameId: 'g1' }));
+		const queue = (...ids: number[]) =>
+			ok({ items: ids.map((id) => ({ id })), page: 1, pageSize: 2, total: ids.length });
+
+		/** Starts a `next` job that succeeds at its first poll; `lookup` answers the next-item request. */
+		function start(lookup: () => Response | Promise<Response>): string[] {
+			const urls: string[] = [];
+			vi.stubGlobal('fetch', (url: string) => {
+				urls.push(url);
+				return Promise.resolve(url === lookupUrl ? lookup() : success());
+			});
+			reviewJobs.start({ ...started, next: true });
+			return urls;
+		}
+
+		it('on the item page looks the next item up again and opens it', async () => {
+			app.url = new URL('http://localhost/review/7');
+			const urls = start(() => queue(7, 9));
+
+			await vi.advanceTimersByTimeAsync(pollIntervalMs);
+
+			expect(urls).toEqual(['/api/jobs/j9', lookupUrl]);
+			expect(app.goto).toHaveBeenCalledExactlyOnceWith('/review/9');
+			expect(toasts.items.map((t) => [t.text, t.link])).toEqual([['Added as Game.', undefined]]);
+			expect(reviewJobs.running).toBeNull();
+		});
+
+		it.each([
+			['none is left', () => queue(7)],
+			['the lookup fails', () => new Response(null, { status: 500 })]
+		])('opens the game when %s', async (_case, lookup) => {
+			app.url = new URL('http://localhost/review/7');
+			start(lookup);
+
+			await vi.advanceTimersByTimeAsync(pollIntervalMs);
+
+			expect(app.goto).toHaveBeenCalledExactlyOnceWith('/games/g1');
+			expect(toasts.items.map((t) => t.text)).toEqual(['Added as Game.']);
+		});
+
+		it('stays running until the lookup settles', async () => {
+			app.url = new URL('http://localhost/review/7');
+			let answer!: (r: Response) => void;
+			start(() => new Promise<Response>((r) => (answer = r)));
+
+			await vi.advanceTimersByTimeAsync(pollIntervalMs);
+			expect(reviewJobs.running?.jobId).toBe('j9');
+			expect(app.goto).not.toHaveBeenCalled();
+
+			answer(queue(9));
+			await vi.advanceTimersByTimeAsync(0);
+			expect(reviewJobs.running).toBeNull();
+			expect(app.goto).toHaveBeenCalledWith('/review/9');
+		});
+
+		it('leaving the page during the lookup shows the off-page toast and does not navigate', async () => {
+			app.url = new URL('http://localhost/review/7');
+			let answer!: (r: Response) => void;
+			start(() => new Promise<Response>((r) => (answer = r)));
+			await vi.advanceTimersByTimeAsync(pollIntervalMs);
+
+			app.url = new URL('http://localhost/library');
+			answer(queue(9));
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(app.goto).not.toHaveBeenCalled();
+			expect(reviewJobs.running).toBeNull();
+			expect(toasts.items.map((t) => [t.text, t.link])).toEqual([
+				['disc2.iso added to the library.', { href: '/games/g1', text: 'Open game' }]
+			]);
+		});
+
+		it('off the page at the end: the usual toast, no lookup', async () => {
+			app.url = new URL('http://localhost/library');
+			const urls = start(() => queue(9));
+
+			await vi.advanceTimersByTimeAsync(pollIntervalMs);
+
+			expect(urls).toEqual(['/api/jobs/j9']);
+			expect(app.goto).not.toHaveBeenCalled();
+			expect(toasts.items.map((t) => t.text)).toEqual(['disc2.iso added to the library.']);
+		});
+
+		it('a failure is handled as Use, with no lookup', async () => {
+			app.url = new URL('http://localhost/review/7');
+			const failures: unknown[] = [];
+			const stop = reviewJobs.onFailure((e) => failures.push(e));
+			const urls: string[] = [];
+			vi.stubGlobal('fetch', (url: string) => {
+				urls.push(url);
+				return Promise.resolve(jobRow('Completed', summary({ code: 'VerifyFailed' })));
+			});
+			reviewJobs.start({ ...started, next: true });
+
+			await vi.advanceTimersByTimeAsync(pollIntervalMs);
+			stop();
+
+			expect(urls).toEqual(['/api/jobs/j9']);
+			expect(failures).toEqual([expect.objectContaining({ code: 'VerifyFailed' })]);
+			expect(app.goto).not.toHaveBeenCalled();
+		});
+
+		it('a job without next makes no lookup', async () => {
+			app.url = new URL('http://localhost/review/7');
+			const urls = stubFetch(success);
+			reviewJobs.start(started);
+
+			await vi.advanceTimersByTimeAsync(pollIntervalMs);
+
+			expect(urls).toEqual(['/api/jobs/j9']);
+			expect(app.goto).toHaveBeenCalledExactlyOnceWith('/games/g1');
+		});
+	});
 });
 
 describe('toast links', () => {

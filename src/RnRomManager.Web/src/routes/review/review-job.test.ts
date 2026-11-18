@@ -56,12 +56,18 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 describe('review item page: resolving as a job', () => {
 	let jobAnswer: () => Response;
+	/** The Pending queue the next-item lookups see (B11, B13). */
+	let queue: number[];
+	/** Every item's suggestions (none by default, so the page opens on Manual). */
+	let suggestions: unknown[];
 
 	beforeEach(() => {
 		vi.useFakeTimers();
 		resetClient();
 		app.goto.mockClear();
 		app.id = '7';
+		queue = [7, 8];
+		suggestions = [];
 		toasts.items = [];
 		auth.set({ id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false });
 		jobAnswer = () =>
@@ -74,8 +80,12 @@ describe('review item page: resolving as a job', () => {
 			if (input === '/api/jobs/current')
 				return Promise.resolve(new Response(null, { status: 204 }));
 			if (input === '/api/jobs/j1') return Promise.resolve(jobAnswer());
+			if (input === '/api/review?status=Pending&page=1&pageSize=2')
+				return Promise.resolve(
+					json({ items: queue.map((id) => ({ id })), page: 1, pageSize: 2, total: 2 })
+				);
 			const match = /^\/api\/review\/(\d+)$/.exec(input);
-			if (match) return Promise.resolve(json(detail(Number(match[1]))));
+			if (match) return Promise.resolve(json({ ...detail(Number(match[1])), suggestions }));
 			return Promise.resolve(new Response(null, { status: 404 }));
 		});
 	});
@@ -128,6 +138,21 @@ describe('review item page: resolving as a job', () => {
 
 		expect(app.goto).toHaveBeenCalledWith('/games/g1');
 		expect(toasts.items.map((t) => t.text)).toEqual(['Added as My Game.']);
+	});
+
+	it('Use and Next opens the next review item when the job succeeds (B13)', async () => {
+		suggestions = [{ datGameName: 'Tetris', romName: 'Tetris.gb', score: 0.9 }];
+		render(ReviewPage);
+		await vi.advanceTimersByTimeAsync(0);
+		const next = screen.getByRole('button', { name: 'Use and Next' }) as HTMLButtonElement;
+		await vi.waitFor(() => expect(next.disabled).toBe(false));
+		await fireEvent.click(next);
+		await vi.advanceTimersByTimeAsync(0);
+		queue = [7, 9]; // the queue changed while the job ran
+		await finish({ reviewId: 7, fileName: 'item7.gb', gameId: 'g1', code: null, errors: null });
+
+		expect(app.goto).toHaveBeenCalledWith('/review/9');
+		expect(toasts.items.map((t) => t.text)).toEqual(['Added as an unverified release of Tetris.']);
 	});
 
 	it("shows a failed summary's field errors on the form", async () => {
