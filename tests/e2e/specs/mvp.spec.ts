@@ -197,10 +197,10 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   ).toBeVisible();
   await expectAccessible(page, "ingestion");
 
-  // I1: Pending / Failed / Last runs are tabs under the always-visible Run section.
+  // B23: Pending / Failed / Last runs are accordion panels, Pending open.
   await expect(
-    page.getByRole("tab", { name: /^Pending files \(\d+\)$/ }),
-  ).toHaveAttribute("aria-selected", "true");
+    page.getByRole("button", { name: /^Pending files \(\d+\)$/ }),
+  ).toHaveAttribute("aria-expanded", "true");
   // Each stack has its own seeded folder (playwright.config.ts).
   const ingest = test.info().project.metadata.ingest as string | undefined;
   if (!ingest)
@@ -220,8 +220,7 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   );
   await page.getByRole("button", { name: "Import all" }).click();
 
-  await page.getByRole("tab", { name: "Last runs" }).click();
-  await expect(page).toHaveURL(/\/ingestion\?tab=runs$/);
+  await page.getByRole("button", { name: "Last runs" }).click();
   await expect(page.getByRole("button", { name: "Import all" })).toBeVisible();
   const run = page.getByRole("row").filter({ hasText: "Completed" });
   await expect(run).toContainText(
@@ -238,11 +237,13 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   ).toBeVisible();
   await expectAccessible(page, "job detail");
 
+  // B23: an old ?tab= link opens its panel, then leaves the URL.
   await page.goto("/ingestion?tab=runs");
-  await expect(page.getByRole("tab", { name: "Last runs" })).toHaveAttribute(
-    "aria-selected",
+  await expect(page.getByRole("button", { name: "Last runs" })).toHaveAttribute(
+    "aria-expanded",
     "true",
   );
+  await expect(page).toHaveURL(/\/ingestion$/);
   await expect(
     page.getByRole("row").filter({ hasText: "Completed" }),
   ).toBeVisible();
@@ -250,8 +251,7 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
 
   // D4/D5: the invalid file is listed under Failed files with its reason, and deleting it goes through the modal.
   await page.goto("/ingestion");
-  await page.getByRole("tab", { name: "Failed files (1)" }).click();
-  await expect(page).toHaveURL(/\/ingestion\?tab=failed$/);
+  await page.getByRole("button", { name: "Failed files (1)" }).click();
   await expect(page.getByRole("button", { name: "Import all" })).toBeVisible();
   const failed = page.locator("#failed-panel");
   const invalid = failed.getByRole("row").filter({ hasText: "92-invalid.gb" });
@@ -284,24 +284,49 @@ test("reports and the ingest audit trail", async () => {
   await page.getByRole("link", { name: "Duplicates", exact: true }).click();
   await expect(page.getByText("No duplicate games found.")).toBeVisible();
   await expectAccessible(page, "duplicates report");
+  // B20: the Admin-only Activity report lists the ingested releases.
+  await page.getByRole("link", { name: "Activity", exact: true }).click();
+  await expect(
+    page
+      .getByRole("region", { name: "Added ROMs" })
+      .getByRole("row")
+      .nth(1),
+  ).toBeVisible();
+  await expectAccessible(page, "activity report");
 
   await openAdmin();
   await page.getByRole("link", { name: "Auditing", exact: true }).click();
   const ingested = page
     .getByRole("row")
-    .filter({ has: page.getByRole("cell", { name: "Ingested", exact: true }) });
+    // B30: the Action cell also holds the system badge, so match its action line.
+    .filter({ has: page.getByRole("cell").getByText("Ingested", { exact: true }) });
   // One Ingested event per release: a bin/cue set is one event (B7a).
   await expect(ingested).toHaveCount(34);
   await expect(
     page
       .getByRole("row")
       .filter({
-        has: page.getByRole("cell", { name: "IngestFileDeleted", exact: true }),
+        has: page
+          .getByRole("cell")
+          .getByText("IngestFileDeleted", { exact: true }),
       }),
   ).toContainText("ingest/gb/_failed/92-invalid.gb");
   await expect(ingested.first()).toContainText("admin");
   await expect(ingested.first()).toContainText("ingest/");
   await expectAccessible(page, "audit trail");
+
+  // B28/B29: the DATs page's two panels, and a DAT row's download.
+  await page.getByRole("link", { name: "DATs", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "DAT files" }),
+  ).toHaveAttribute("aria-expanded", "true");
+  const datDownload = page.getByRole("link", { name: /^Download / }).first();
+  const datFile = await page.request.get(
+    (await datDownload.getAttribute("href"))!,
+  );
+  expect(datFile.status()).toBe(200);
+  expect(datFile.headers()["content-disposition"]).toContain("attachment");
+  await expectAccessible(page, "admin DATs");
 });
 
 test("browse, search and filter the library", async () => {
@@ -495,21 +520,21 @@ test("browse, search and filter the library", async () => {
   await expect(
     page.getByRole("heading", { level: 1, name: "Orbit Blocks" }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "← Library" }).click();
+  await page.getByRole("link", { name: "Back to Library" }).click();
   await expect(page).toHaveURL(/system=gb/);
   await expect(page.getByText("3 games", { exact: true })).toBeVisible();
-  // B1 (library-reset-missing-images): Reset is in the filter row, usable on a 320px phone and on a desktop.
+  // B2: Clear all is in the filter row, usable on a 320px phone and on a desktop.
   const filterRow = page.getByRole("search");
   await expect(
-    filterRow.getByRole("button", { name: "Reset filters" }),
-  ).toBeVisible();
+    filterRow.getByRole("button", { name: "Clear all" }),
+  ).toBeEnabled();
   const viewport = page.viewportSize()!;
   for (const width of [320, 1280]) {
     await page.setViewportSize({ width, height: 800 });
-    for (const name of ["System: Game Boy", "Reset filters"]) {
+    for (const name of ["System: Game Boy", "Clear all"]) {
       const control = filterRow.getByRole("button", {
         name,
-        exact: name === "Reset filters",
+        exact: name === "Clear all",
       });
       await expect(control).toBeInViewport({ ratio: 1 });
       await control.focus();
@@ -525,11 +550,9 @@ test("browse, search and filter the library", async () => {
     ).toBe(true);
   }
   await page.setViewportSize(viewport);
-  await page.getByRole("button", { name: "Reset filters" }).click();
+  await page.getByRole("button", { name: "Clear all" }).click();
   await expect(page.getByText("29 games")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Reset filters" })).toHaveCount(
-    0,
-  );
+  await expect(page.getByRole("button", { name: "Clear all" })).toBeDisabled();
 
   // The card grid fits a 320px phone: no sideways page scroll, and each card's Favourite button is on screen.
   await expect(page.getByRole("button", { name: "Grid view" })).toHaveAttribute(
@@ -837,7 +860,7 @@ test("saves: upload, rename, save state from Play, play it, delete, audit", asyn
     await expect(
       page
         .getByRole("row")
-        .filter({ has: page.getByRole("cell", { name: action, exact: true }) })
+        .filter({ has: page.getByRole("cell").getByText(action, { exact: true }) })
         .first(),
     ).toContainText("Orbit Blocks");
 });
@@ -920,7 +943,10 @@ test("PlayStation: a disc set lists its files and downloads a track byte-exact",
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
-  const rows = page.locator("#releases-panel table tbody tr");
+  // B8: the release body has its own key/value table, so scope to the files list.
+  const rows = page.locator(
+    '#releases-panel [id^="release-"][id$="-files"] table tbody tr',
+  );
   await expect(rows).toHaveCount(3);
   await expect(rows.first()).toContainText("Disc Runner (USA) (Track 1).bin");
   await expectAccessible(page, "disc set file list");
@@ -1389,7 +1415,8 @@ test("Play: 32X explains its missing PicoDrive core", { tag: "@shard-b" }, async
     if (
       checked &&
       (r.url().includes("/api/emulator/cores/") ||
-        r.url().includes("/roms/") ||
+        // B22: the played record is sent on open and may land after the HEAD; it loads nothing.
+        (r.url().includes("/roms/") && !r.url().endsWith("/played")) ||
         r.url().includes("loader.js"))
     )
       later.push(r.url());
@@ -1432,7 +1459,8 @@ test("Play: SNES explains its missing Snes9x core from the detail page", { tag: 
     if (
       checked &&
       (r.url().includes("/api/emulator/") ||
-        r.url().includes("/roms/") ||
+        // B22: the played record is sent on open and may land after the HEAD; it loads nothing.
+        (r.url().includes("/roms/") && !r.url().endsWith("/played")) ||
         r.url().includes("loader.js"))
     )
       later.push(r.url());
@@ -1596,6 +1624,23 @@ test("global search, ratings and favourites", { tag: "@shard-b" }, async () => {
   await expect(
     page.getByRole("heading", { level: 1, name: "Orbit Blocks" }),
   ).toBeVisible();
+
+  // B27: Shift+Enter plays the result: the game page opens with its Play modal, and ?play= leaves the URL.
+  await page.keyboard.press("Control+k");
+  await dialog().getByRole("combobox").fill("orbit");
+  await expect(dialog().getByRole("option").first()).toContainText(
+    "Orbit Blocks",
+  );
+  await page.keyboard.press("Shift+Enter");
+  await expect(dialog()).toHaveAccessibleName(/^Play Orbit Blocks/);
+  await expect(dialog().locator("iframe")).toHaveCount(1);
+  await expect(page).not.toHaveURL(/play=/);
+  await expect(page.locator("body")).toHaveClass(/modal-open/);
+  await dialog()
+    .locator(".modal-footer")
+    .getByRole("button", { name: "Close" })
+    .click();
+  await expect(page.locator("iframe")).toHaveCount(0);
 
   // Rate and favourite it from its library card; both survive a reload.
   await openLibrary();
@@ -2024,6 +2069,8 @@ test("user management: a Site user's account, private saves and audit trail", { 
     await expect(
       user.getByRole("heading", { level: 1, name: "Orbit Blocks" }),
     ).toBeVisible();
+    // B3: a Site user has no Manage menu.
+    await expect(user.getByRole("button", { name: "Manage" })).toHaveCount(0);
     await expect(user.getByRole("button", { name: "Edit metadata" })).toHaveCount(0);
     await expect(user.getByRole("button", { name: /^Add note for / })).toHaveCount(0);
     await expectAccessible(user, "game detail as a site user");
@@ -2073,8 +2120,8 @@ test("user management: a Site user's account, private saves and audit trail", { 
     await expect(user).toHaveURL(/\/login/);
 
     // U9/U10: the audit trail lists the account events (the User filter is the actor; `user=<name>` finds actions on them).
-    const actions = (p: Page) =>
-      p.getByRole("row").getByRole("cell", { exact: true });
+    // B30: the action is the first line of its cell (the system badge sits under it).
+    const actions = (p: Page) => p.getByRole("row").getByRole("cell").locator("div");
     await expect(async () => {
       await page.goto(`/admin/audit?user=${visitor}`);
       for (const action of ["SignedIn", "SignInFailed", "PasswordChanged"])
@@ -2310,6 +2357,8 @@ test("release notes: add, edit and delete", async () => {
 test("Admin: edit metadata, move a release, delete a release and a game", async () => {
   await openGame("Orbit Blocks");
 
+  // B3: the Admin actions sit in the Manage menu.
+  await page.getByRole("button", { name: "Manage" }).click();
   await page.getByRole("button", { name: "Edit metadata" }).click();
   await expect(dialog()).toBeVisible();
   await expectAccessible(page, "edit metadata modal");
@@ -2341,9 +2390,13 @@ test("Admin: edit metadata, move a release, delete a release and a game", async 
 
   // Its only release goes to _removed/, so the game goes too and we land on the Library.
   await openGame("Orbit Blocks Japan");
+  // B9: Delete release sits in the expanded release body.
+  await page
+    .getByRole("button", { name: "Show details for Orbit Blocks (Japan).gb" })
+    .click();
   await page
     .getByRole("button", {
-      name: "Delete Orbit Blocks (Japan).gb",
+      name: "Delete release Orbit Blocks (Japan).gb",
       exact: true,
     })
     .click();
@@ -2362,6 +2415,7 @@ test("Admin: edit metadata, move a release, delete a release and a game", async 
   await page.setViewportSize(viewport);
 
   await openGame("Color Racer");
+  await page.getByRole("button", { name: "Manage" }).click();
   await page.getByRole("button", { name: "Delete game" }).click();
   await dialog().getByRole("button", { name: "Delete" }).click();
   await expect(page).toHaveURL(/\/(\?[^/]*)?$/);
@@ -2803,7 +2857,7 @@ test("keyboard shortcuts: use, rebind and use again", { tag: "@shard-b" }, async
   await openLibrary();
   await expect(page.locator("nav.navbar")).toHaveClass(/sticky-top/);
   await expect(
-    page.getByRole("button", { name: "Keyboard shortcuts" }),
+    page.getByRole("button", { name: "Shortcuts", exact: true }),
   ).toBeVisible();
 
   // The default Alt+Shift+I goes to Ingestion (bindings load after sign-in, so retry until they have).
@@ -2812,7 +2866,7 @@ test("keyboard shortcuts: use, rebind and use again", { tag: "@shard-b" }, async
     await expect(page).toHaveURL(/\/ingestion$/, { timeout: 1_000 });
   }).toPass();
 
-  await page.getByRole("button", { name: "Keyboard shortcuts" }).click();
+  await page.getByRole("button", { name: "Shortcuts", exact: true }).click();
   await expect(dialog()).toHaveAccessibleName("Keyboard shortcuts");
   await expect(
     dialog().getByRole("row", { name: /Go to Library/ }),
@@ -2840,7 +2894,7 @@ test("keyboard shortcuts: use, rebind and use again", { tag: "@shard-b" }, async
   }).toPass();
 
   // Back to the defaults for anything after this.
-  await page.getByRole("button", { name: "Keyboard shortcuts" }).click();
+  await page.getByRole("button", { name: "Shortcuts", exact: true }).click();
   await dialog().getByRole("button", { name: "Reset to defaults" }).click();
   await dialog().getByRole("button", { name: "Save" }).click();
   await expect(dialog()).toBeHidden();

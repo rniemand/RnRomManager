@@ -51,6 +51,7 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/games/{id:guid}/roms/{romId:long}/files/{fileId:long}/download"] = Role.User,
         ["GET /api/games/{id:guid}/roms/{romId:long}/play-disc"] = Role.User,
         ["GET /api/games/{id:guid}/roms/{romId:long}/note"] = Role.User,
+        ["POST /api/games/{id:guid}/roms/{romId:long}/played"] = Role.User,
         ["PUT /api/games/{id:guid}/roms/{romId:long}/note"] = Role.Admin,
         ["DELETE /api/games/{id:guid}/roms/{romId:long}/note"] = Role.Admin,
         ["GET /api/games/{id:guid}/saves"] = Role.User,
@@ -135,6 +136,7 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/integrity/issues"] = Role.Admin,
 
         ["GET /api/admin/dats"] = Role.Admin,
+        ["GET /api/admin/dats/{datName}/download"] = Role.Admin,
         ["GET /api/admin/dats/settings"] = Role.Admin,
         ["PUT /api/admin/dats/settings"] = Role.Admin,
         ["GET /api/admin/settings"] = Role.Admin,
@@ -151,6 +153,7 @@ public partial class EndpointRoleMatrixTests
 
         ["GET /api/reports/missing-images"] = Role.User,
         ["GET /api/reports/missing-images/next"] = Role.User,
+        ["GET /api/reports/activity"] = Role.Admin,
         ["GET /api/reports/library-size"] = Role.User,
         ["GET /api/reports/library-size/{system}"] = Role.User,
         ["GET /api/reports/duplicates"] = Role.User,

@@ -261,6 +261,7 @@
 				view={discovery}
 				onpage={(groupPage) => goDiscovery({ ...discovery, groupPage })}
 				onselected={(group) => (groupNames[group.key] = group.name)}
+				onfind={(find) => goDiscovery({ ...discovery, groupPage: 1, find: find || undefined })}
 			/>
 		</div>
 		<div class="col-12 col-lg-8">
@@ -292,7 +293,13 @@
 			{:else if systems.length === 0}
 				<EmptyState message="No systems are supported." />
 			{:else}
-				<SystemList {systems} selected={systemsView.system} onedit={editSystemLogo} />
+				<SystemList
+					{systems}
+					selected={systemsView.system}
+					onedit={editSystemLogo}
+					find={systemsView.find}
+					onfind={(find) => goSystems({ ...systemsView, find: find || undefined })}
+				/>
 			{/if}
 		</div>
 		<div class="col-12 col-lg-8">

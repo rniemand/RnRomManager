@@ -11,6 +11,7 @@ using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
+using RnRomManager.Core.Naming;
 using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
@@ -224,6 +225,59 @@ public class ImageEndpointsTests
         Assert.That(_held, Is.Not.Null, "the lock was free, and taken just before the check");
         Assert.That(await GameChecksAsync(), Is.Empty);
         Assert.That(await OpenTypesAsync(), Is.EqualTo(new[] { IntegrityIssueType.DefaultBoxArt }), "cleared by the next Quick or Deep run");
+    }
+
+    private async Task SetTitle(string title)
+    {
+        await using var db = Service<IDbConnectionFactory>().Create();
+        await db.ExecuteAsync("UPDATE games SET display_title = @title WHERE id = @_game", new { title, _game });
+    }
+
+    private async Task<JsonElement> UploadedSnap()
+    {
+        using var response = await Upload(_manager, Jpeg, "Snap");
+        return (await Images(response)).Single(i => i.GetProperty("type").GetString() == "Snap");
+    }
+
+    /// <summary>B10: <c>?download=true</c> names the attachment after the sanitized title plus the image id and extension.</summary>
+    [TestCase("Tetris: DX?", "Tetris_ DX_")]
+    [TestCase("...", "image")]
+    public async Task Download_IsAnAttachmentNamedAfterTheTitle(string title, string stem)
+    {
+        var snap = await UploadedSnap();
+        await SetTitle(title);
+        var id = snap.GetProperty("id").GetInt64();
+
+        using var served = await _manager.GetAsync($"/api/games/{_game}/images/{id}?download=true");
+
+        Assert.That(served.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(served.Content.Headers.ContentDisposition!.DispositionType, Is.EqualTo("attachment"));
+        Assert.That(served.Content.Headers.ContentDisposition.FileNameStar, Is.EqualTo($"{stem}-{id}.jpg"));
+        Assert.That(served.Content.Headers.ContentType?.MediaType, Is.EqualTo("image/jpeg"));
+    }
+
+    [Test]
+    public async Task Download_ALongTitle_KeepsItsIdSuffix()
+    {
+        var snap = await UploadedSnap();
+        await SetTitle(new string('A', 255));
+        var id = snap.GetProperty("id").GetInt64();
+
+        using var served = await _manager.GetAsync($"/api/games/{_game}/images/{id}?download=true");
+
+        Assert.That(served.Content.Headers.ContentDisposition!.FileNameStar, Is.EqualTo($"{new string('A', FileNameSanitizer.MaxLength)}-{id}.jpg"));
+    }
+
+    [Test]
+    public async Task WithoutTheFlag_IsServedInline()
+    {
+        var snap = await UploadedSnap();
+
+        using var served = await _manager.GetAsync(snap.GetProperty("url").GetString()!);
+        using var falseFlag = await _manager.GetAsync($"/api/games/{_game}/images/{snap.GetProperty("id").GetInt64()}?download=false");
+
+        Assert.That(served.Content.Headers.ContentDisposition, Is.Null);
+        Assert.That(falseFlag.Content.Headers.ContentDisposition, Is.Null);
     }
 
     [Test]

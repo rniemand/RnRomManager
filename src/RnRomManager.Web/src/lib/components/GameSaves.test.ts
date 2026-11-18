@@ -128,7 +128,26 @@ describe('GameSaves', () => {
 		listed([]);
 		render(GameSaves, { game });
 
-		expect(await screen.findByText('No saves yet')).toBeTruthy();
+		const empty = await screen.findByText('No saves yet');
+		expect(empty.closest('.card-body')!.parentElement!.classList).toContain('card');
+	});
+
+	it('is one card: Saves heading and Add save in its header, the table its direct child (B11)', async () => {
+		listed([save()]);
+		render(GameSaves, { game });
+
+		const table = (await screen.findByRole('table')) as HTMLElement;
+		const card = screen
+			.getByRole('heading', { level: 2, name: 'Saves' })
+			.closest('.card-header')!.parentElement!;
+		expect(card.tagName).toBe('SECTION');
+		expect(card.className).toBe('card');
+		expect(card.getAttribute('aria-labelledby')).toBe('saves-heading');
+		const add = screen.getByRole('button', { name: 'Add save' });
+		expect(add.parentElement!.classList).toContain('card-header');
+		expect(add.className).toBe('btn btn-sm btn-primary');
+		expect(table.parentElement!.className).toBe('table-responsive');
+		expect(table.parentElement!.parentElement).toBe(card);
 	});
 
 	it('adds a save with the text fields before the file, then reloads the list', async () => {
@@ -354,6 +373,10 @@ describe('GameSaves Play (B16, B19)', () => {
 
 		// The first list, the overwrite lookup, then the reload.
 		await vi.waitFor(() => expect(calls.filter((c) => c.key === list)).toHaveLength(3));
-		expect(writes().map((c) => c.key)).toEqual([`PUT /api/games/g1/saves/${save().id}/file`]);
+		// B22: opening the Play dialog also recorded one play.
+		expect(writes().map((c) => c.key)).toEqual([
+			expect.stringMatching(/^POST \/api\/games\/g1\/roms\/\d+\/played$/),
+			`PUT /api/games/g1/saves/${save().id}/file`
+		]);
 	});
 });

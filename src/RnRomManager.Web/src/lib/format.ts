@@ -31,6 +31,23 @@ export function formatSize(bytes: number | null | undefined): string {
 	return `${number.format(bytes / GiB)} GiB`;
 }
 
+/** B20: a duration in its largest two units, `12s`, `3m 4s`, `1h 2m`; `<1s` under a second (a zero second unit is dropped). */
+export function formatDuration(ms: number): string {
+	const total = Math.floor(ms / 1000);
+	if (total < 1) return '<1s';
+	const units: [number, string][] = [
+		[Math.floor(total / 3600), 'h'],
+		[Math.floor(total / 60) % 60, 'm'],
+		[total % 60, 's']
+	];
+	const first = units.findIndex(([n]) => n > 0);
+	return units
+		.slice(first, first + 2)
+		.filter(([n], i) => i === 0 || n > 0)
+		.map(([n, unit]) => `${n}${unit}`)
+		.join(' ');
+}
+
 /** `logoValid` → `Logo valid` (the generic header table, §11). */
 export function formatKey(key: string): string {
 	const words = key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();

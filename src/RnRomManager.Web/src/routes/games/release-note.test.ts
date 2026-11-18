@@ -340,4 +340,164 @@ describe('release notes (B11)', () => {
 			document.querySelector('[data-testid="note-rendered"] img')!.hasAttribute('onerror')
 		).toBe(false);
 	});
+
+	describe('the note in the release card (B7)', () => {
+		const card = (name: string) => screen.getByRole('article', { name });
+		const expand = async (name: string) =>
+			fireEvent.click(await screen.findByRole('button', { name: `Show details for ${name}` }));
+		const block = (name: string) =>
+			card(name).querySelector<HTMLElement>('[data-testid="release-note"]');
+		const noteGets = () => calls.filter((c) => c.key.endsWith('/note') && c.key.startsWith('GET'));
+
+		it('loads once on first expand and renders first in the body, above the info table', async () => {
+			render(GamePage);
+			await screen.findByRole('article', { name: 'Tetris 1.gb' });
+			expect(noteGets()).toHaveLength(0);
+
+			await expand('Tetris 1.gb');
+			const rendered = await within(block('Tetris 1.gb')!).findByRole('heading', {
+				name: 'Saved tips'
+			});
+			expect(rendered.closest('.note-markdown')).toBeTruthy();
+			const body = card('Tetris 1.gb').querySelector('.card-body')!;
+			expect(body.firstElementChild).toBe(block('Tetris 1.gb'));
+			expect(
+				within(block('Tetris 1.gb')!).getByRole('heading', { level: 4, name: 'Release note' })
+					.className
+			).toBe('h6 mb-0');
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Hide details for Tetris 1.gb' }));
+			await expand('Tetris 1.gb');
+			expect(noteGets()).toHaveLength(1);
+			expect(block('Tetris 2.gb')).toBeNull();
+		});
+
+		it('an Admin opens the modal in Edit with the note loaded', async () => {
+			answers[`GET ${note}`].push({ status: 200, text: '# Saved tips' });
+			render(GamePage);
+			await expand('Tetris 1.gb');
+
+			await fireEvent.click(
+				await screen.findByRole('button', { name: 'Edit note for Tetris 1.gb' })
+			);
+
+			await vi.waitFor(() => expect(textarea().value).toBe('# Saved tips'));
+			expect(radio('Edit').checked).toBe(true);
+		});
+
+		it('a Site user gets View note, which opens in View', async () => {
+			auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
+			answers[`GET ${note}`].push({ status: 200, text: '# Saved tips' });
+			render(GamePage);
+			await expand('Tetris 1.gb');
+
+			await fireEvent.click(
+				await screen.findByRole('button', { name: 'View note for Tetris 1.gb' })
+			);
+
+			await vi.waitFor(() =>
+				expect(noteModal().getByRole('heading', { name: 'Saved tips', hidden: true })).toBeTruthy()
+			);
+			expect(noteModal().queryByLabelText('Note (Markdown)')).toBeNull();
+		});
+
+		it('the header Note button still opens an existing note in View for an Admin', async () => {
+			render(GamePage);
+			await open('Note for Tetris 1.gb');
+			await vi.waitFor(() => expect(radio('View').checked).toBe(true));
+		});
+
+		it('a save drops the cached note even while collapsed; an open card reloads it with the new id', async () => {
+			const rewritten = game();
+			rewritten.roms = [
+				{ ...rom(11, true), fileName: 'Tetris 1.gb' },
+				{ ...rom(12, false), fileName: 'Tetris 2.gb' }
+			];
+			answers['GET /api/games/g1'].push({ status: 200, body: rewritten });
+			answers['GET /api/games/g1/roms/11/note'] = [{ status: 200, text: '# Changed' }];
+			answers[`GET ${note}`].push({ status: 200, text: '# Saved tips' });
+			answers[`PUT ${note}`] = [{ status: 204 }];
+			render(GamePage);
+			await expand('Tetris 1.gb');
+			await within(block('Tetris 1.gb')!).findByRole('heading', { name: 'Saved tips' });
+
+			// Save from the header Note button while the card is open.
+			await open('Note for Tetris 1.gb');
+			await vi.waitFor(() => expect(radio('View').checked).toBe(true));
+			await fireEvent.click(radio('Edit'));
+			await fireEvent.input(textarea(), { target: { value: '# Changed' } });
+			await fireEvent.click(button('Save'));
+
+			// The card is re-rendered for its new id, so look the block up again each time.
+			await vi.waitFor(() =>
+				expect(within(block('Tetris 1.gb')!).getByRole('heading', { name: 'Changed' })).toBeTruthy()
+			);
+			expect(noteGets().map((c) => c.key)).toContain('GET /api/games/g1/roms/11/note');
+			expect(noteGets().map((c) => c.key)).not.toContain('GET /api/games/g1/roms/12/note');
+		});
+
+		it('a save while collapsed reloads on the next expand', async () => {
+			const rewritten = game();
+			rewritten.roms = [
+				{ ...rom(11, true), fileName: 'Tetris 1.gb' },
+				{ ...rom(12, false), fileName: 'Tetris 2.gb' }
+			];
+			answers['GET /api/games/g1'].push({ status: 200, body: rewritten });
+			answers['GET /api/games/g1/roms/11/note'] = [{ status: 200, text: '# Changed' }];
+			answers[`GET ${note}`].push(
+				{ status: 200, text: '# Saved tips' },
+				{ status: 200, text: '# Saved tips' }
+			);
+			answers[`PUT ${note}`] = [{ status: 204 }];
+			render(GamePage);
+			await expand('Tetris 1.gb');
+			await within(block('Tetris 1.gb')!).findByRole('heading', { name: 'Saved tips' });
+			await fireEvent.click(screen.getByRole('button', { name: 'Hide details for Tetris 1.gb' }));
+
+			await open('Note for Tetris 1.gb');
+			await vi.waitFor(() => expect(radio('View').checked).toBe(true));
+			await fireEvent.click(radio('Edit'));
+			await fireEvent.input(textarea(), { target: { value: '# Changed' } });
+			await fireEvent.click(button('Save'));
+			await vi.waitFor(() =>
+				expect(calls.filter((c) => c.key === 'GET /api/games/g1')).toHaveLength(2)
+			);
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			expect(noteGets().map((c) => c.key)).not.toContain('GET /api/games/g1/roms/11/note');
+
+			await expand('Tetris 1.gb');
+			expect(
+				await within(block('Tetris 1.gb')!).findByRole('heading', { name: 'Changed' })
+			).toBeTruthy();
+		});
+
+		it('a 404 (deleted meanwhile) hides the block and refetches the game', async () => {
+			const gone = game();
+			gone.roms = [rom(1, false), rom(2, false)];
+			answers[`GET ${note}`] = [{ status: 404, body: { title: 'Not found' } }];
+			answers['GET /api/games/g1'].push({ status: 200, body: gone });
+			render(GamePage);
+			await expand('Tetris 1.gb');
+
+			await vi.waitFor(() => expect(block('Tetris 1.gb')).toBeNull());
+			await vi.waitFor(() =>
+				expect(calls.filter((c) => c.key === 'GET /api/games/g1')).toHaveLength(2)
+			);
+		});
+
+		it('a load error shows an alert with retry inside the block', async () => {
+			answers[`GET ${note}`] = [
+				{ status: 500, body: { title: 'Boom' } },
+				{ status: 200, text: '# Saved tips' }
+			];
+			render(GamePage);
+			await expand('Tetris 1.gb');
+
+			const alert = await within(block('Tetris 1.gb')!).findByRole('alert');
+			await fireEvent.click(within(alert).getByRole('button', { name: /Retry/ }));
+			expect(
+				await within(block('Tetris 1.gb')!).findByRole('heading', { name: 'Saved tips' })
+			).toBeTruthy();
+		});
+	});
 });

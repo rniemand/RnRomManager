@@ -146,4 +146,13 @@ describe('RatingControl', () => {
 		expect(container.textContent?.trim()).toBe('');
 		expect(container.querySelector('i')).toBeNull();
 	});
+
+	it('keeps the stars on one line: no wrap, stars without px-1, the heart keeps ms-1 (B17)', () => {
+		render(RatingControl, props(null));
+		const star = screen.getByRole('button', { name: /Rate 1 of 5/ });
+		expect(star.parentElement!.className).toContain('flex-nowrap');
+		expect(star.parentElement!.className).not.toContain('flex-wrap ');
+		expect(star.classList).not.toContain('px-1');
+		expect(heart().classList).toContain('ms-1');
+	});
 });

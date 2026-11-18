@@ -56,12 +56,12 @@ public partial class DiscoveryRepositoryTests
     private static string Key(string normalized) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
 
     private async Task<List<DiscoveryGroup>> AllAsync(DiscoveryKind kind) =>
-        (await _repository.ListGroupsAsync(kind, 1, 200, default)).Items.ToList();
+        (await _repository.ListGroupsAsync(kind, 1, 200, null, default)).Items.ToList();
 
     [Test]
     public async Task NoGames_IsAnEmptyPage()
     {
-        var page = await _repository.ListGroupsAsync(DiscoveryKind.Publishers, 1, 48, default);
+        var page = await _repository.ListGroupsAsync(DiscoveryKind.Publishers, 1, 48, null, default);
 
         Assert.That(page.Items, Is.Empty);
         Assert.That((page.PageNumber, page.PageSize, page.Total), Is.EqualTo((1, 48, 0L)));
@@ -192,10 +192,10 @@ public partial class DiscoveryRepositoryTests
         var seen = new List<DiscoveryGroup>();
         for (var page = 1; page <= 3; page++)
         {
-            var result = await _repository.ListGroupsAsync(kind, page, 10, default);
+            var result = await _repository.ListGroupsAsync(kind, page, 10, null, default);
             Assert.That(result.Total, Is.EqualTo(23));
             Assert.That(result.Items, Has.Count.EqualTo(page < 3 ? 10 : 3));
-            Assert.That((await _repository.ListGroupsAsync(kind, page, 10, default)).Items, Is.EqualTo(result.Items), "repeatable");
+            Assert.That((await _repository.ListGroupsAsync(kind, page, 10, null, default)).Items, Is.EqualTo(result.Items), "repeatable");
             seen.AddRange(result.Items);
         }
 
@@ -204,11 +204,35 @@ public partial class DiscoveryRepositoryTests
     }
 
     [Test]
+    public async Task Q_FiltersByNameIgnoringCase_BeforePaging_KeysUnchanged()
+    {
+        await InsertGameAsync("gb", "A", publishers: Json("Nintendo", "Sega"));
+        await InsertGameAsync("nes", "B", publishers: Json("SEGA Toys", "Konami"));
+
+        var first = await _repository.ListGroupsAsync(DiscoveryKind.Publishers, 1, 1, " sega ", default);
+        var second = await _repository.ListGroupsAsync(DiscoveryKind.Publishers, 2, 1, "sega", default);
+
+        Assert.That(first.Total, Is.EqualTo(2));
+        Assert.That(first.Items.Concat(second.Items).Select(g => g.Name), Is.EqualTo(new[] { "Sega", "SEGA Toys" }));
+        Assert.That(first.Items[0].Key, Is.EqualTo(Key("sega")));
+    }
+
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
+    public async Task Q_Blank_IsAbsent(string? q)
+    {
+        await InsertGameAsync("gb", "A", publishers: Json("Nintendo", "Sega"));
+
+        Assert.That((await _repository.ListGroupsAsync(DiscoveryKind.Publishers, 1, 48, q, default)).Total, Is.EqualTo(2));
+    }
+
+    [Test]
     public async Task PagePastTheEnd_IsEmpty_WithTheTotal()
     {
         await InsertGameAsync("gb", "A", publishers: Json("Nintendo", "Sega"));
 
-        var page = await _repository.ListGroupsAsync(DiscoveryKind.Publishers, 5, 10, default);
+        var page = await _repository.ListGroupsAsync(DiscoveryKind.Publishers, 5, 10, null, default);
 
         Assert.That(page.Items, Is.Empty);
         Assert.That(page.Total, Is.EqualTo(2));

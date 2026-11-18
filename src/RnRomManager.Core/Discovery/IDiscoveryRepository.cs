@@ -21,8 +21,12 @@ public interface IDiscoveryRepository
     /// <summary>How long a computed index is reused (the Risks fallback: a live scan misses the 500 ms budget).</summary>
     static readonly TimeSpan IndexLifetime = TimeSpan.FromSeconds(60);
 
-    /// <summary>One page of <paramref name="kind"/>'s groups across every system, sorted by normalized name bytes.</summary>
-    Task<Page<DiscoveryGroup>> ListGroupsAsync(DiscoveryKind kind, int page, int pageSize, CancellationToken cancellationToken);
+    /// <summary>
+    /// One page of <paramref name="kind"/>'s groups across every system, sorted by normalized name bytes. A non-blank
+    /// <paramref name="q"/> (trimmed) keeps only groups whose <see cref="DiscoveryGroup.Name"/> contains it, ordinal ignore-case,
+    /// before paging (UI polish B16: a display filter; grouping and keys are untouched).
+    /// </summary>
+    Task<Page<DiscoveryGroup>> ListGroupsAsync(DiscoveryKind kind, int page, int pageSize, string? q, CancellationToken cancellationToken);
 
     /// <summary>The group with <paramref name="key"/>, or null when no game has that value.</summary>
     Task<DiscoveryGroup?> GetGroupAsync(DiscoveryKind kind, string key, CancellationToken cancellationToken);

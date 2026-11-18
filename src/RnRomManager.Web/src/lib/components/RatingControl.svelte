@@ -67,14 +67,14 @@
 	{/if}
 {:else}
 	<div
-		class="d-inline-flex flex-wrap align-items-center"
+		class="d-inline-flex flex-nowrap align-items-center"
 		role="group"
 		aria-label="Rating for {title}"
 	>
 		{#each stars as n (n)}
 			<button
 				type="button"
-				class="btn btn-link btn-sm p-0 px-1 text-warning target"
+				class="btn btn-link btn-sm p-0 text-warning target"
 				aria-label="Rate {n} of 5"
 				aria-pressed={rating === n}
 				disabled={busy}

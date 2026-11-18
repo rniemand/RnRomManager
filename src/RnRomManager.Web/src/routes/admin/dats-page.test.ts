@@ -109,4 +109,39 @@ describe('DATs tab: automatic refresh (B28)', () => {
 		expect(await screen.findByText('Server says no.')).toBeTruthy();
 		expect(input.classList.contains('is-invalid')).toBe(true);
 	});
+
+	it('Automatic refresh and DAT files are independent panels, both open (B28)', async () => {
+		render(DatsPage);
+		await time();
+
+		const schedule = screen.getByRole('button', { name: 'Automatic refresh' });
+		const files = screen.getByRole('button', { name: 'DAT files' });
+		expect([schedule, files].map((b) => b.getAttribute('aria-expanded'))).toEqual(['true', 'true']);
+		const heading = screen.getByRole('heading', { level: 2, name: 'Automatic refresh' });
+		expect(heading.id).toBe('dat-schedule');
+		const form = document.querySelector('form[aria-labelledby="dat-schedule"]')!;
+		expect(form.closest('#dat-schedule-panel')).not.toBeNull();
+		expect(form.className).toBe('');
+		expect(screen.getByRole('heading', { level: 2, name: 'DAT files' }).id).toBe('dat-files');
+
+		await fireEvent.click(files);
+		expect(files.getAttribute('aria-expanded')).toBe('false');
+		expect(schedule.getAttribute('aria-expanded')).toBe('true');
+		expect(screen.getByRole('button', { name: /Refresh DATs/ }).closest('.accordion')).toBeNull();
+	});
+
+	it('each DAT row links to its download, name encoded (B29)', async () => {
+		answers['GET /api/admin/dats'] = {
+			status: 200,
+			body: [{ datName: 'Nintendo - Game Boy', version: '1', downloadedAt: '2026-11-06T10:00:00Z' }]
+		};
+		render(DatsPage);
+
+		const link = (await screen.findByRole('link', {
+			name: 'Download Nintendo - Game Boy'
+		})) as HTMLAnchorElement;
+		expect(link.getAttribute('href')).toBe('/api/admin/dats/Nintendo%20-%20Game%20Boy/download');
+		expect(link.hasAttribute('download')).toBe(true);
+		expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeTruthy();
+	});
 });

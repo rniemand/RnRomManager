@@ -33,6 +33,13 @@ public static class LibraryEndpoints
     /// <summary>S8: the cores whose external releases play through <c>play-disc</c>; any other (DS) loads from <c>/download</c>.</summary>
     public static readonly IReadOnlySet<string> PlayDiscCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera" };
 
+    /// <summary>B10: <c>&lt;title&gt;-&lt;imageId&gt;.&lt;ext&gt;</c>; the suffix is added after sanitizing (which cuts to 180), so it is never lost.</summary>
+    public static string ImageDownloadName(string displayTitle, ImageRow image)
+    {
+        var title = FileNameSanitizer.Sanitize(displayTitle);
+        return $"{(title.Length == 0 ? "image" : title)}-{image.Id}{Path.GetExtension(image.FileName)}";
+    }
+
     public static RouteGroupBuilder MapLibraryEndpoints(this RouteGroupBuilder api)
     {
         api.MapGet("/systems", async (HttpContext ctx, ISystemRegistry systems, IGameRepository games, IDiscoveryLogoRepository logos) =>
@@ -85,7 +92,8 @@ public static class LibraryEndpoints
         games.MapGet("/{id:guid}", (Guid id, HttpContext ctx, IGameRepository repository, IRomRepository roms, IImageRepository images) =>
             DetailAsync(id, ctx, repository, roms, images));
 
-        games.MapGet("/{id:guid}/images/{imageId:long}", async (Guid id, long imageId, HttpContext ctx, IGameRepository repository,
+        // B10: ?download=true sends it as an attachment named after the game.
+        games.MapGet("/{id:guid}/images/{imageId:long}", async (Guid id, long imageId, bool? download, HttpContext ctx, IGameRepository repository,
             IImageRepository images, LibraryFiles files) =>
         {
             if (await images.GetAsync(id, imageId, ctx.RequestAborted) is not { } image
@@ -96,7 +104,8 @@ public static class LibraryEndpoints
             // A 304 for a matching If-None-Match is answered by the stream result itself.
             return files.OpenEntry(ctx, game, LibraryZip.ImageEntry(image.FileName), ImageFormats.MaxBytes, out var stream) is { } problem
                 ? problem
-                : Results.Stream(stream!, ImageFormats.ContentType(image.FileName), entityTag: new EntityTagHeaderValue($"\"{image.Sha1}\""));
+                : Results.Stream(stream!, ImageFormats.ContentType(image.FileName), download == true ? ImageDownloadName(game.DisplayTitle, image) : null,
+                    entityTag: new EntityTagHeaderValue($"\"{image.Sha1}\""));
         });
 
         games.MapGet("/{id:guid}/download", async (Guid id, HttpContext ctx, IGameRepository repository, LibraryFiles files) =>
@@ -190,7 +199,19 @@ public static class LibraryEndpoints
                 : Results.Bytes(bytes!, "text/markdown; charset=utf-8");
         });
 
-        games.MapPut("/{id:guid}/roms/{romId:long}/note", async (Guid id, long romId, JsonElement body, HttpContext ctx, LibraryEditor editor) =>
+        // B22: a browser play started (modal or PSP tab); audited for the Activity report, nothing else.
+        games.MapPost("/{id:guid}/roms/{romId:long}/played", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,
+            IRomRepository roms, IAuditLog audit) =>
+        {
+            if (await roms.GetAsync(id, romId, ctx.RequestAborted) is not { } rom
+                || await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
+                return Problems.NotFound(ctx);
+            audit.Record(new AuditEvent(AuditActions.GamePlayed, AuditActor.From(ctx.User), game.SystemId, game.Id,
+                AuditPaths.Library(game.ZipPath), Details: rom.FileName));
+            return Results.NoContent();
+        });
+
+        games.MapPut("/{id:guid}/roms/{romId:long}/note",async (Guid id, long romId, JsonElement body, HttpContext ctx, LibraryEditor editor) =>
         {
             var (text, errors) = ParseNote(body);
             if (errors.Count > 0)

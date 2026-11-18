@@ -16,16 +16,20 @@ public static class DiscoveryEndpoints
     {
         var discovery = api.MapGroup("/discovery");
 
-        discovery.MapGet("/{kind}", async (string kind, int? page, int? pageSize, HttpContext ctx, IDiscoveryRepository repository,
+        discovery.MapGet("/{kind}", async (string kind, int? page, int? pageSize, string? q, HttpContext ctx, IDiscoveryRepository repository,
             IDiscoveryLogoRepository logos) =>
         {
             if (!DiscoveryKinds.TryParse(kind, out var parsed))
                 return Problems.NotFound(ctx);
             var errors = Paging.Validate(page, pageSize);
+            // B16: a label filter, trimmed and capped like Review's q.
+            q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
+            if (q?.Length > 100)
+                errors["q"] = ["Must be at most 100 characters."];
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
 
-            var result = await repository.ListGroupsAsync(parsed, page ?? 1, pageSize ?? Page<DiscoveryGroup>.DefaultSize, ctx.RequestAborted);
+            var result = await repository.ListGroupsAsync(parsed, page ?? 1, pageSize ?? Page<DiscoveryGroup>.DefaultSize, q, ctx.RequestAborted);
             // B6, B15: only the shared logo's URL; the SPA falls back to its starter art, then a text banner.
             var logoKind = parsed == DiscoveryKind.Publishers ? LogoKind.Publishers : LogoKind.Genres;
             var updated = await logos.ListUpdatedAtAsync(logoKind, result.Items.Select(g => g.Key).ToList(), ctx.RequestAborted);

@@ -3,6 +3,7 @@ import {
 	flattenSettings,
 	formatCount,
 	formatDateTime,
+	formatDuration,
 	formatKey,
 	formatSize,
 	formatValue
@@ -108,4 +109,19 @@ describe('formatCount (L5)', () => {
 		[1250, '1,250'],
 		[1234567, '1,234,567']
 	])('%d -> %s', (n, expected) => expect(formatCount(n)).toBe(expected));
+});
+
+describe('formatDuration (B20)', () => {
+	it.each([
+		[0, '<1s'],
+		[999, '<1s'],
+		[1000, '1s'],
+		[12_400, '12s'],
+		[184_000, '3m 4s'],
+		[180_000, '3m'],
+		[3_720_000, '1h 2m'],
+		[3_725_000, '1h 2m'],
+		[3_600_000, '1h'],
+		[3_605_000, '1h']
+	])('%i ms → %s', (ms, text) => expect(formatDuration(ms)).toBe(text));
 });

@@ -407,4 +407,48 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 			new RegExp(`&save=${'a'.repeat(32)}&saveKind=state$`)
 		);
 	});
+
+	describe('records a play (B22)', () => {
+		let posts: string[];
+		beforeEach(() => {
+			resetClient();
+			posts = [];
+			vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+				if (init?.method === 'POST') posts.push(url);
+				return Promise.resolve(new Response(null, { status: url.endsWith('/played') ? 500 : 204 }));
+			});
+		});
+		afterEach(() => vi.unstubAllGlobals());
+		const settle = () => new Promise((done) => setTimeout(done, 10));
+		const props = { gameId: 'g-1', core: 'gambatte', rom, disc: false };
+
+		it('once when mounted open, not again on a prop update, again on the next opening; errors ignored', async () => {
+			const { rerender } = render(EmulatorModal, { ...props, open: true });
+			await vi.waitFor(() => expect(posts).toEqual(['/api/games/g-1/roms/13/played']));
+
+			await rerender({ ...props, open: true, rom: { ...rom } });
+			await settle();
+			expect(posts).toHaveLength(1);
+
+			await rerender({ ...props, open: false });
+			await rerender({ ...props, open: true });
+			await vi.waitFor(() => expect(posts).toHaveLength(2));
+		});
+
+		it.each([
+			['no release', { rom: null }],
+			['no core', { core: null }],
+			['no game id', { gameId: '' }]
+		] as const)('records nothing with %s', async (_, missing) => {
+			render(EmulatorModal, { ...props, ...missing, open: true });
+			await settle();
+			expect(posts).toEqual([]);
+		});
+
+		it('records nothing while closed', async () => {
+			render(EmulatorModal, { ...props, open: false });
+			await settle();
+			expect(posts).toEqual([]);
+		});
+	});
 });

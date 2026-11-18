@@ -44,4 +44,25 @@ describe('GroupLogo (B16)', () => {
 		const box = container.querySelector<HTMLElement>('.group-logo')!;
 		expect([box.style.width, box.style.height]).toEqual(['120px', '34px']);
 	});
+
+	it.each([
+		['a shared logo', { key: 'gb', name: 'Game Boy', logoUrl: '/x.png' }],
+		['the text banner', { key: 'zz', name: 'Unknown', logoUrl: null }]
+	] as const)('%s sits in the same fixed frame, with no double border (B14)', (_, item) => {
+		const { container } = render(GroupLogo, { kind: 'systems', item: { ...item } });
+		const frame = container.querySelector<HTMLElement>('.group-logo')!;
+		expect(frame.className).toContain('border rounded bg-body-tertiary');
+		expect(frame.style.width).toBe('100px');
+		expect(frame.style.height).toBe('28px');
+		const banner = container.querySelector('.group-logo-banner');
+		if (banner) expect(banner.classList).not.toContain('border');
+	});
+
+	it('the banner text keeps the body colour, since a selected row would make it white on the light frame', () => {
+		const { container } = render(GroupLogo, {
+			kind: 'systems',
+			item: { key: 'zz', name: 'Unknown', logoUrl: null }
+		});
+		expect(container.querySelector('.group-logo-banner')!.classList).toContain('text-body');
+	});
 });

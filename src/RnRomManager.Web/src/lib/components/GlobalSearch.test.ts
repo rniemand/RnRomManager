@@ -456,4 +456,106 @@ describe('GlobalSearch', () => {
 			expect(screen.queryByText('No games match')).toBeNull();
 		});
 	});
+
+	describe('play from search (B27)', () => {
+		const playable = (id: string, extra = {}) =>
+			item(id, `Game ${id}`, {
+				playRomId: 7,
+				playRomFileName: 'Game (World).gb',
+				playDisc: false,
+				browserCore: 'gambatte',
+				...extra
+			});
+		const hidden = () =>
+			document.querySelector('.global-search')!.dispatchEvent(new Event('hidden.bs.modal'));
+
+		it('Shift+Enter plays the active result, navigating only after the modal hid', async () => {
+			items = [playable('g1')];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('game');
+
+			await fireEvent.keyDown(input(), { key: 'Enter', shiftKey: true });
+			expect(shown.hidden).toBeGreaterThan(0);
+			expect(goto).not.toHaveBeenCalled();
+			hidden();
+			expect(goto).toHaveBeenCalledWith('/games/g1?play=7');
+		});
+
+		it('plain Enter still opens the game', async () => {
+			items = [playable('g1')];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('game');
+
+			await fireEvent.keyDown(input(), { key: 'Enter' });
+			expect(goto).toHaveBeenLastCalledWith('/games/g1');
+		});
+
+		it('Shift+Enter on a game without playRomId, or on a collection, does nothing', async () => {
+			collections = [{ id: 'c1', name: 'Faves', gameCount: 2, coverUrl: null, updatedAt: '' }];
+			items = [item('g2', 'Not playable', { playRomId: null })];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('game');
+			const before = shown.hidden;
+
+			await fireEvent.keyDown(input(), { key: 'Enter', shiftKey: true });
+			await fireEvent.keyDown(input(), { key: 'ArrowDown' });
+			await fireEvent.keyDown(input(), { key: 'Enter', shiftKey: true });
+			hidden();
+
+			expect(shown.hidden).toBe(before);
+			expect(goto).not.toHaveBeenCalled();
+		});
+
+		it('only playable rows get the Play icon, its grid column and the shared Shift+Enter hint', async () => {
+			items = [playable('g1'), item('g2', 'Not playable', { playRomId: null })];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('game');
+
+			const [first, second] = screen.getAllByRole('option', { hidden: true });
+			expect(first.classList).toContain('game-row-play');
+			expect(first.children).toHaveLength(6);
+			const icon = first.lastElementChild!;
+			expect(icon.getAttribute('aria-hidden')).toBe('true');
+			expect(icon.tagName).toBe('SPAN');
+			expect(icon.hasAttribute('tabindex')).toBe(false);
+			const hint = document.getElementById(first.getAttribute('aria-describedby')!)!;
+			expect(hint.textContent).toBe('Shift+Enter to play');
+			expect(hint.closest('[role="listbox"]')).toBeNull();
+			expect(second.classList).not.toContain('game-row-play');
+			expect(second.children).toHaveLength(5);
+			expect(second.hasAttribute('aria-describedby')).toBe(false);
+		});
+
+		it('a click on the Play icon plays without opening the game first', async () => {
+			items = [playable('g1')];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('game');
+
+			await fireEvent.click(screen.getAllByRole('option', { hidden: true })[0].lastElementChild!);
+			expect(goto).not.toHaveBeenCalled();
+			hidden();
+			expect(goto).toHaveBeenCalledTimes(1);
+			expect(goto).toHaveBeenCalledWith('/games/g1?play=7');
+		});
+
+		it('PSP opens its tab at once, records the play and opens the game without ?play=', async () => {
+			const open = vi.fn();
+			vi.stubGlobal('open', open);
+			items = [
+				playable('u', { browserCore: 'ppsspp', playDisc: true, playRomFileName: 'Umd.iso' })
+			];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('umd');
+
+			await fireEvent.keyDown(input(), { key: 'Enter', shiftKey: true });
+
+			expect(open).toHaveBeenCalledWith(
+				'/emulator/play-psp.html?game=u&rom=7&core=ppsspp&name=Umd.iso&disc=1',
+				'_blank',
+				'noopener'
+			);
+			expect(goto).toHaveBeenCalledWith('/games/u');
+			await vi.waitFor(() => expect(requested).toContain('/api/games/u/roms/7/played'));
+		});
+	});
 });

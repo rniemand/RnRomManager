@@ -111,7 +111,7 @@
 	{:else if result.items.length === 0}
 		<EmptyState message="There are no games on this page." />
 	{:else}
-		<GameResults bind:games={result.items} view="grid" />
+		<GameResults bind:games={result.items} view="grid" narrow />
 	{/if}
 
 	{#if result && result.total > 0}

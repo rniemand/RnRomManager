@@ -15,6 +15,7 @@
 		Page,
 		PendingSystem
 	} from '#lib/api/types.js';
+	import AccordionItem from '#lib/components/AccordionItem.svelte';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
@@ -65,19 +66,21 @@
 	);
 	const failedCount = $derived(failedKeys.filter((k) => failedSelected.has(k)).length);
 
-	// I1/I2: Pending / Failed / Last runs are tabs under the Run section; the tab is URL state (`?tab=failed|runs`).
-	type Tab = 'pending' | 'failed' | 'runs';
-	const tab = $derived<Tab>(
-		(['failed', 'runs'] as const).find((t) => t === page.url.searchParams.get('tab')) ?? 'pending'
-	);
+	// B23: Pending / Failed / Last runs are independent accordion panels; Pending starts open. An old `?tab=failed|runs`
+	// link opens that panel too, then leaves the URL; toggling never writes it.
+	let pendingOpen = $state(true);
+	let failedOpen = $state(false);
+	let runsOpen = $state(false);
 	const pendingFileCount = $derived(withFiles.reduce((n, s) => n + s.files.length, 0));
 	const failedFileCount = $derived(failedWithFiles.reduce((n, s) => n + s.files.length, 0));
 
-	function selectTab(next: Tab): void {
-		const path = resolve('/ingestion');
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
-		void goto(next === 'pending' ? path : `${path}?tab=${next}`, { replace: true, reset: false });
-	}
+	$effect(() => {
+		const tab = page.url.searchParams.get('tab');
+		if (tab === null) return;
+		if (tab === 'failed') failedOpen = true;
+		if (tab === 'runs') runsOpen = true;
+		void goto(resolve('/ingestion'), { replace: true, reset: false });
+	});
 
 	function selectAll(set: SvelteSet<string>, keys: string[], next: boolean): void {
 		set.clear();
@@ -218,94 +221,74 @@
 	{:else if pending === null}
 		<Loading />
 	{:else}
-		<section class="mb-4" aria-labelledby="run-heading">
-			<h2 class="h5" id="run-heading">Run</h2>
-			<div>
-				{#if job}
-					<div class="card card-body">
-						<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-							<strong>{job.type}{job.mode ? ` (${job.mode})` : ''} running</strong>
-							<span class="text-body-secondary small">since {formatDateTime(job.startedAt)}</span>
-							{#if isCancellable(job.type)}
-								<button
-									type="button"
-									class="btn btn-sm btn-outline-danger ms-auto"
-									onclick={() => cancel(job.id)}>Cancel</button
-								>
-							{/if}
+		<!-- B23: the Run section only shows a running job or missing DATs; the Import buttons live in Pending. -->
+		{#if job || datsMissing}
+			<section class="mb-4" aria-labelledby="run-heading">
+				<h2 class="h5" id="run-heading">Run</h2>
+				<div>
+					{#if job}
+						<div class="card card-body">
+							<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+								<strong>{job.type}{job.mode ? ` (${job.mode})` : ''} running</strong>
+								<span class="text-body-secondary small">since {formatDateTime(job.startedAt)}</span>
+								{#if isCancellable(job.type)}
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-danger ms-auto"
+										onclick={() => cancel(job.id)}>Cancel</button
+									>
+								{/if}
+							</div>
+							<div
+								class="progress mb-1"
+								role="progressbar"
+								aria-label="Job progress"
+								aria-valuenow={percent(job.current, job.total)}
+								aria-valuemin="0"
+								aria-valuemax="100"
+							>
+								<div class="progress-bar" style="width: {percent(job.current, job.total)}%"></div>
+							</div>
+							<div class="small text-body-secondary text-break" aria-live="polite">
+								{job.current} / {job.total}{job.currentItem ? ` · ${job.currentItem}` : ''}
+							</div>
+							<JobStepProgress step={job.step} />
 						</div>
-						<div
-							class="progress mb-1"
-							role="progressbar"
-							aria-label="Job progress"
-							aria-valuenow={percent(job.current, job.total)}
-							aria-valuemin="0"
-							aria-valuemax="100"
+					{:else if datsMissing}
+						<EmptyState
+							icon="warning"
+							message="DATs aren't loaded yet, so files can't be identified."
 						>
-							<div class="progress-bar" style="width: {percent(job.current, job.total)}%"></div>
-						</div>
-						<div class="small text-body-secondary text-break" aria-live="polite">
-							{job.current} / {job.total}{job.currentItem ? ` · ${job.currentItem}` : ''}
-						</div>
-						<JobStepProgress step={job.step} />
-					</div>
-				{:else if datsMissing}
-					<EmptyState
-						icon="warning"
-						message="DATs aren't loaded yet, so files can't be identified."
-					>
-						{#snippet action()}
-							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- route arrives in S47 -->
-							<a class="btn btn-primary" href="/admin/dats">Go to Admin → DATs</a>
-						{/snippet}
-					</EmptyState>
-				{:else}
-					<div class="d-flex flex-wrap gap-2">
-						<button type="button" class="btn btn-primary" disabled={busy} onclick={() => start()}>
-							{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"
-								></span>{/if}
-							<Icon name="ingest" /> Import all
-						</button>
-						<!-- Disabled at none (nothing to do) and at all (Import all does the same). -->
-						<button
-							type="button"
-							class="btn btn-outline-primary"
-							disabled={busy || selectedCount === 0 || selectedCount === allKeys.length}
-							onclick={importSelected}
-						>
-							Import selected ({selectedCount})
-						</button>
-					</div>
-				{/if}
-			</div>
-		</section>
+							{#snippet action()}
+								<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- route arrives in S47 -->
+								<a class="btn btn-primary" href="/admin/dats">Go to Admin → DATs</a>
+							{/snippet}
+						</EmptyState>
+					{/if}
+				</div>
+			</section>
+		{/if}
 
-		<ul class="nav nav-tabs mb-3" role="tablist">
-			{#each [['pending', `Pending files (${pendingFileCount})`], ['failed', `Failed files (${failedFileCount})`], ['runs', 'Last runs']] as [value, label] (value)}
-				<li class="nav-item" role="presentation">
+		<!-- Closed panels stay mounted, so selections survive. -->
+		<AccordionItem id="pending-panel" headingId="pending-heading" bind:open={pendingOpen}>
+			{#snippet header()}Pending files ({pendingFileCount}){/snippet}
+			{#if !job && !datsMissing}
+				<div class="d-flex flex-wrap gap-2 mb-3">
+					<button type="button" class="btn btn-primary" disabled={busy} onclick={() => start()}>
+						{#if busy}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
+						<Icon name="ingest" /> Import all
+					</button>
+					<!-- Disabled at none (nothing to do) and at all (Import all does the same). -->
 					<button
 						type="button"
-						class="nav-link"
-						class:active={tab === value}
-						id="{value}-tab"
-						role="tab"
-						aria-selected={tab === value}
-						aria-controls="{value}-panel"
-						onclick={() => selectTab(value as Tab)}>{label}</button
+						class="btn btn-outline-primary"
+						disabled={busy || selectedCount === 0 || selectedCount === allKeys.length}
+						onclick={importSelected}
 					>
-				</li>
-			{/each}
-		</ul>
-
-		<!-- Panels stay mounted (hidden, not removed), so selections survive a tab switch. -->
-		<div
-			class="mb-4"
-			id="pending-panel"
-			role="tabpanel"
-			aria-labelledby="pending-tab"
-			hidden={tab !== 'pending'}
-		>
-			<h2 class="h5 visually-hidden">Pending files</h2>
+						Import selected ({selectedCount})
+					</button>
+				</div>
+			{/if}
 			{#if withFiles.length === 0}
 				<div class="card"><EmptyState message="No files waiting in the ingest folders." /></div>
 			{:else}
@@ -339,16 +322,10 @@
 					/>
 				{/each}
 			{/if}
-		</div>
+		</AccordionItem>
 
-		<div
-			class="mb-4"
-			id="failed-panel"
-			role="tabpanel"
-			aria-labelledby="failed-tab"
-			hidden={tab !== 'failed'}
-		>
-			<h2 class="h5 visually-hidden">Failed files</h2>
+		<AccordionItem id="failed-panel" headingId="failed-heading" bind:open={failedOpen}>
+			{#snippet header()}Failed files ({failedFileCount}){/snippet}
 			{#if failedWithFiles.length === 0}
 				<div class="card"><EmptyState message="No failed imports." /></div>
 			{:else}
@@ -384,10 +361,10 @@
 					/>
 				{/each}
 			{/if}
-		</div>
+		</AccordionItem>
 
-		<div id="runs-panel" role="tabpanel" aria-labelledby="runs-tab" hidden={tab !== 'runs'}>
-			<h2 class="h5 visually-hidden">Last runs</h2>
+		<AccordionItem id="runs-panel" headingId="runs-heading" bind:open={runsOpen}>
+			{#snippet header()}Last runs{/snippet}
 			{#if !runs || runs.items.length === 0}
 				<div class="card"><EmptyState message="No ingestion has run yet." /></div>
 			{:else}
@@ -426,7 +403,7 @@
 					label="Pages of runs"
 				/>
 			{/if}
-		</div>
+		</AccordionItem>
 	{/if}
 
 	<ConfirmModal

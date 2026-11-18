@@ -28,14 +28,17 @@ public static partial class AuditEndpoints
             if (errors.Count > 0) return Problems.Validation(ctx, errors);
             var result = await repository.ListAsync(new AuditQuery(action, system, user, scheduled == true, q, start, end),
                 page ?? 1, pageSize ?? 100, ctx.RequestAborted);
-            return Results.Ok(Paging.ToDto(result, item => new
-            {
-                item.Id, occurredAt = DateTime.SpecifyKind(item.OccurredAt, DateTimeKind.Utc), item.Action, item.System,
-                item.GameId, item.User, item.JobId, item.Path, item.TargetPath, item.Details,
-            }));
+            return Results.Ok(Paging.ToDto(result, ToDto));
         });
         return api;
     }
+
+    /// <summary>The <c>/api/admin/audit</c> item, shared with the Activity report (B21).</summary>
+    internal static object ToDto(AuditItem item) => new
+    {
+        item.Id, occurredAt = DateTime.SpecifyKind(item.OccurredAt, DateTimeKind.Utc), item.Action, item.System,
+        item.GameId, item.User, item.JobId, item.Path, item.TargetPath, item.Details, item.GameTitle,
+    };
 
     private static DateTime? ParseDate(string? value, string field, Dictionary<string, string[]> errors)
     {

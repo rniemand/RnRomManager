@@ -246,4 +246,111 @@ describe('DiscoveryGroups (discovery B2)', () => {
 			'/api/discovery/genres?page=2&pageSize=20'
 		]);
 	});
+
+	it('truncates names with a title, and highlights the active row with a light badge (B13, B15)', async () => {
+		answers['/api/discovery/publishers?pageSize=20'] = [
+			{ status: 200, body: pageOf([group(1, 'Capcom', 1), group(2, 'Nintendo', 1250)]) }
+		];
+		render(DiscoveryGroups, { view: state({ key: keyOf(2) }), onpage: vi.fn() });
+
+		const nintendo = await screen.findByRole('link', { name: /Nintendo/ });
+		const name = within(nintendo)
+			.getAllByTitle('Nintendo')
+			.find((el) => !el.classList.contains('group-logo-banner'))!;
+		expect(name.className).toBe('text-truncate');
+		expect(name.parentElement!.classList).toContain('min-w-0');
+		expect(nintendo.classList).toContain('active');
+		expect(nintendo.querySelector('.count-badge')!.className).toBe(
+			'badge rounded-pill count-badge text-bg-light'
+		);
+		const capcom = list('Publishers').getByRole('link', { name: /Capcom/ });
+		expect(capcom.querySelector('.count-badge')!.className).toBe(
+			'badge rounded-pill count-badge text-bg-primary'
+		);
+	});
+
+	describe('search (B16)', () => {
+		const box = () => screen.getByLabelText('Search publishers') as HTMLInputElement;
+		const wait = () => new Promise((done) => setTimeout(done, 350));
+
+		it('sends find as q, shows it in the box, and keeps it in selection links', async () => {
+			answers['/api/discovery/publishers?pageSize=20&q=nin'] = [
+				{ status: 200, body: pageOf([group(2, 'Nintendo')]) }
+			];
+			render(DiscoveryGroups, { view: state({ find: 'nin' }), onpage: vi.fn() });
+
+			const link = await screen.findByRole('link', { name: /Nintendo/ });
+			expect(link.getAttribute('href')).toBe(
+				`/collections?tab=publishers&key=${keyOf(2)}&find=nin`
+			);
+			expect(box().value).toBe('nin');
+			expect(box().type).toBe('search');
+			expect(box().maxLength).toBe(100);
+			expect(document.querySelector('label[for="find-publishers"]')!.className).toBe(
+				'visually-hidden'
+			);
+		});
+
+		it('typing calls onfind with the trimmed text after a pause', async () => {
+			answers['/api/discovery/publishers?pageSize=20'] = [{ status: 200, body: pageOf([]) }];
+			const onfind = vi.fn();
+			render(DiscoveryGroups, { view: state(), onpage: vi.fn(), onfind });
+
+			await fireEvent.input(box(), { target: { value: '  sega ' } });
+			expect(onfind).not.toHaveBeenCalled();
+			await wait();
+			expect(onfind).toHaveBeenCalledWith('sega');
+		});
+
+		it('no match shows its own empty state', async () => {
+			answers['/api/discovery/publishers?pageSize=20&q=zzz'] = [{ status: 200, body: pageOf([]) }];
+			render(DiscoveryGroups, { view: state({ find: 'zzz' }), onpage: vi.fn() });
+
+			expect(await screen.findByText('No publishers match “zzz”.')).toBeTruthy();
+			expect(screen.queryByText(/No games have/)).toBeNull();
+		});
+
+		it('the box keeps focus and its element while results reload', async () => {
+			answers['/api/discovery/publishers?pageSize=20'] = [{ status: 200, body: pageOf([]) }];
+			let resolve!: (a: { status: number; body?: unknown }) => void;
+			answers['/api/discovery/publishers?pageSize=20&q=se'] = [new Promise((r) => (resolve = r))];
+			const { rerender } = render(DiscoveryGroups, { view: state(), onpage: vi.fn() });
+			await screen.findByText(/No games have publishers yet/);
+			const input = box();
+			input.focus();
+
+			await rerender({ view: state({ find: 'se' }), onpage: vi.fn() });
+			expect(screen.getByText(/Loading publishers/)).toBeTruthy();
+			expect(box()).toBe(input);
+			expect(document.activeElement).toBe(input);
+			resolve({ status: 200, body: pageOf([group(1, 'Sega')]) });
+			await screen.findByRole('link', { name: /Sega/ });
+			expect(document.activeElement).toBe(input);
+		});
+
+		it('a selected group filtered out stays the selection; other links keep find', async () => {
+			answers['/api/discovery/publishers?pageSize=20&q=sega'] = [
+				{ status: 200, body: pageOf([group(1, 'Sega')]) }
+			];
+			render(DiscoveryGroups, { view: state({ key: keyOf(2), find: 'sega' }), onpage: vi.fn() });
+
+			const sega = await screen.findByRole('link', { name: /Sega/ });
+			expect(sega.getAttribute('aria-current')).toBeNull();
+			expect(sega.getAttribute('href')).toBe(
+				`/collections?tab=publishers&key=${keyOf(1)}&find=sega`
+			);
+		});
+
+		it('a pending search is dropped when the kind changes', async () => {
+			answers['/api/discovery/publishers?pageSize=20'] = [{ status: 200, body: pageOf([]) }];
+			answers['/api/discovery/genres?pageSize=20'] = [{ status: 200, body: pageOf([]) }];
+			const onfind = vi.fn();
+			const { rerender } = render(DiscoveryGroups, { view: state(), onpage: vi.fn(), onfind });
+
+			await fireEvent.input(box(), { target: { value: 'nin' } });
+			await rerender({ view: state({ kind: 'genres' }), onpage: vi.fn(), onfind });
+			await wait();
+			expect(onfind).not.toHaveBeenCalled();
+		});
+	});
 });

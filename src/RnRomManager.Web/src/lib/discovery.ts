@@ -22,7 +22,12 @@ export interface DiscoveryState {
 	key: string | null;
 	groupPage: number;
 	gamePage: number;
+	/** B16: the list's search text (URL `find`, since `q` is User collections'); absent = none. */
+	find?: string;
 }
+
+/** B16: the longest search the API accepts. */
+export const maxFind = 100;
 
 /** What the helpers read of a URL (SvelteKit's `page.url` has read-only search params). */
 type UrlLike = { readonly searchParams: { get(name: string): string | null } };
@@ -30,6 +35,12 @@ type UrlLike = { readonly searchParams: { get(name: string): string | null } };
 /** B3: a group key is exactly 64 lowercase hexadecimal characters. */
 export const isDiscoveryKey = (value: string | null): value is string =>
 	value !== null && /^[0-9a-f]{64}$/.test(value);
+
+/** B16: `find` trimmed and cut to {@link maxFind}; whitespace-only is none, so a hand-edited URL never gets a 400. */
+function findParam(params: UrlLike['searchParams']): string | undefined {
+	const find = params.get('find')?.trim().slice(0, maxFind).trim();
+	return find || undefined;
+}
 
 function pageParam(params: UrlLike['searchParams'], name: string): number {
 	return Math.max(1, Math.floor(Number(params.get(name))) || 1);
@@ -50,9 +61,13 @@ export function discoveryState(url: UrlLike): DiscoveryState | null {
 		kind,
 		key: isDiscoveryKey(key) ? key : null,
 		groupPage: pageParam(url.searchParams, 'groupPage'),
-		gamePage: pageParam(url.searchParams, 'gamePage')
+		gamePage: pageParam(url.searchParams, 'gamePage'),
+		...withFind(findParam(url.searchParams))
 	};
 }
+
+/** Adds `find` only when set, so states without a search keep their exact shape. */
+const withFind = (find: string | undefined) => (find ? { find } : {});
 
 /** The query for a discovery state, page 1 and no selection omitted (`?tab=publishers&key=…&gamePage=2`). */
 export function discoverySearch(state: DiscoveryState): string {
@@ -60,6 +75,7 @@ export function discoverySearch(state: DiscoveryState): string {
 	if (state.key) params.set('key', state.key);
 	if (state.groupPage > 1) params.set('groupPage', String(state.groupPage));
 	if (state.key && state.gamePage > 1) params.set('gamePage', String(state.gamePage));
+	if (state.find) params.set('find', state.find);
 	return `?${params}`;
 }
 
@@ -74,6 +90,8 @@ export function tabSearch(tab: CollectionsTab): string {
 export interface SystemsState {
 	system: string | null;
 	gamePage: number;
+	/** B16: the list's search text; absent = none. */
+	find?: string;
 }
 
 /** The Systems tab's state from its URL; an empty or whitespace-only `system` selects nothing. */
@@ -81,7 +99,8 @@ export function systemsState(url: UrlLike): SystemsState {
 	const system = url.searchParams.get('system');
 	return {
 		system: system?.trim() ? system : null,
-		gamePage: pageParam(url.searchParams, 'gamePage')
+		gamePage: pageParam(url.searchParams, 'gamePage'),
+		...withFind(findParam(url.searchParams))
 	};
 }
 
@@ -90,15 +109,17 @@ export function systemsSearch(state: SystemsState): string {
 	const params = new URLSearchParams({ tab: 'systems' });
 	if (state.system) params.set('system', state.system);
 	if (state.system && state.gamePage > 1) params.set('gamePage', String(state.gamePage));
+	if (state.find) params.set('find', state.find);
 	return `?${params}`;
 }
 
 /** B3: `/api/discovery/{kind}` reads. */
 export const discoveryApi = {
-	groups: (kind: DiscoveryKind, params: { page: number; pageSize: number }) => {
+	groups: (kind: DiscoveryKind, params: { page: number; pageSize: number; q?: string }) => {
 		const search = new URLSearchParams();
 		if (params.page > 1) search.set('page', String(params.page));
 		search.set('pageSize', String(params.pageSize));
+		if (params.q) search.set('q', params.q);
 		return api.get<Page<DiscoveryGroup>>(`/api/discovery/${kind}?${search}`);
 	},
 	/** The group's games across systems; 404 when no game has that value any more. */

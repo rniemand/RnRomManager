@@ -29,11 +29,13 @@ public sealed class DiscoveryRepository(IDbConnectionFactory connections, IGameR
     private readonly Dictionary<DiscoveryKind, (Task<Index> Build, DateTimeOffset StartedAt)> _indexes = [];
 
     public async Task<Page<DiscoveryGroup>> ListGroupsAsync(
-        DiscoveryKind kind, int page, int pageSize, CancellationToken cancellationToken)
+        DiscoveryKind kind, int page, int pageSize, string? q, CancellationToken cancellationToken)
     {
-        var index = await IndexAsync(kind, cancellationToken);
-        var items = index.Groups.Skip(Page<object>.Offset(page, pageSize)).Take(pageSize).Select(g => g.Info).ToList();
-        return new Page<DiscoveryGroup>(items, page, pageSize, index.Groups.Count);
+        var groups = (await IndexAsync(kind, cancellationToken)).Groups.Select(g => g.Info).ToList();
+        if (!string.IsNullOrWhiteSpace(q))
+            groups = groups.FindAll(g => g.Name.Contains(q.Trim(), StringComparison.OrdinalIgnoreCase));
+        var items = groups.Skip(Page<object>.Offset(page, pageSize)).Take(pageSize).ToList();
+        return new Page<DiscoveryGroup>(items, page, pageSize, groups.Count);
     }
 
     public async Task<DiscoveryGroup?> GetGroupAsync(DiscoveryKind kind, string key, CancellationToken cancellationToken) =>

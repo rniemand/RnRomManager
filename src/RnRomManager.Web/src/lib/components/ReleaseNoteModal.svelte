@@ -17,9 +17,11 @@
 		rom: RomDetail | null;
 		/** After a save or delete: whether the release now has a note. */
 		onsaved: (romId: number, hasNote: boolean) => void;
+		/** B7: `edit` keeps an Admin in Edit once an existing note loads; without it an existing note opens in View. */
+		initialMode?: 'edit';
 	}
 
-	let { open = $bindable(), gameId, rom, onsaved }: Props = $props();
+	let { open = $bindable(), gameId, rom, onsaved, initialMode }: Props = $props();
 
 	type Mode = 'view' | 'edit' | 'preview';
 
@@ -59,7 +61,7 @@
 			original = note;
 			text = note;
 			exists = true;
-			mode = 'view';
+			mode = initialMode === 'edit' && editable ? 'edit' : 'view';
 		} catch (e) {
 			if (current.signal.aborted) return;
 			if (isApiError(e) && e.status === 404) {
@@ -219,12 +221,3 @@
 		{/if}
 	{/if}
 </ConfirmModal>
-
-<style>
-	.note-markdown :global(:last-child) {
-		margin-bottom: 0;
-	}
-	.note-markdown :global(img) {
-		max-width: 100%;
-	}
-</style>

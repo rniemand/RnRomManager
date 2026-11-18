@@ -122,11 +122,45 @@ describe('game images', () => {
 		expect(within(cards[1] as HTMLElement).getByText('Cover').className).toContain(
 			'text-bg-primary'
 		);
-		expect(cards[1]!.textContent).toMatch(/2\.0 KiB · 160×144/);
+		// B10: the caption keeps the dimensions; the size is a badge over the thumbnail.
+		const caption = cards[1]!.querySelector('.card-body .text-body-secondary')!;
+		expect(caption.textContent!.trim()).toBe('160×144');
+		const size = cards[1]!.querySelector('.position-relative > .badge')!;
+		expect(size.textContent!.trim()).toBe('2.0 KiB');
+		expect(size.className).toBe('badge text-bg-light border position-absolute top-0 end-0 m-1');
+		expect(size.closest('button')).toBeNull();
 		expect(screen.queryByLabelText('Upload an image')).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Upload image' })).toBeNull();
 		expect(screen.queryByRole('button', { name: /Use as cover/ })).toBeNull();
 		expect(screen.queryByRole('button', { name: /^Delete / })).toBeNull();
+	});
+
+	it('every user gets a Download link per image, first in its actions row (B10)', () => {
+		auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
+		const detail = game(placeholderAndSnap());
+		render(GameImages, { game: detail, onchanged: () => {} });
+
+		const links = screen.getAllByRole('link', { name: /^Download / });
+		expect(links.map((a) => a.getAttribute('aria-label'))).toEqual(
+			detail.images.map((i) => `Download ${i.fileName}`)
+		);
+		expect(links[0].getAttribute('href')).toBe(
+			`/api/games/g1/images/${detail.images[0].id}?download=true`
+		);
+		expect(links[0].hasAttribute('download')).toBe(true);
+	});
+
+	it('an Admin’s actions follow Download; tiles carry the hover class (B10)', () => {
+		const detail = game(placeholderAndSnap());
+		render(GameImages, { game: detail, onchanged: () => {} });
+
+		const download = screen.getByRole('link', { name: `Download ${detail.images[1].fileName}` });
+		const row = download.parentElement!;
+		expect(row.firstElementChild).toBe(download);
+		expect(
+			within(row).getByRole('button', { name: `Delete ${detail.images[1].fileName}` })
+		).toBeTruthy();
+		expect(download.closest('.card')!.classList).toContain('image-tile');
 	});
 
 	it('Upload image sits right-aligned on its own row before the grid; the heading is visually hidden (G3, I1)', () => {

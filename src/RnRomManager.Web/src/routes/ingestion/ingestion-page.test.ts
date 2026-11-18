@@ -151,12 +151,13 @@ describe('ingestion page', () => {
 		expect(screen.getByText('1 / 4 · Tetris.gb').closest('[aria-live]')).not.toBeNull();
 	});
 
-	const tabs = () =>
-		screen.getAllByRole('tab').map((t) => [t.textContent!.trim(), t.getAttribute('aria-selected')]);
-	const panels = () =>
-		['pending', 'failed', 'runs'].map((id) => document.getElementById(`${id}-panel`)!.hidden);
+	const headers = ['Pending files', 'Failed files', 'Last runs'];
+	const expanded = () =>
+		headers.map((name) =>
+			screen.getByRole('button', { name: new RegExp(`^${name}`) }).getAttribute('aria-expanded')
+		);
 
-	it('Pending files is the default tab; labels count files across systems; Run stays outside the tabs (I1)', async () => {
+	it('Pending, Failed and Last runs are accordion panels, Pending open; headers count files (B23)', async () => {
 		fixed['GET /api/ingest/failed'] = {
 			status: 200,
 			body: [
@@ -167,52 +168,79 @@ describe('ingestion page', () => {
 		render(IngestionPage);
 		await screen.findByText('Tetris.gb');
 
-		expect(tabs()).toEqual([
-			['Pending files (1)', 'true'],
-			['Failed files (2)', 'false'],
-			['Last runs', 'false']
+		expect(
+			screen.getAllByRole('heading', { level: 2 }).map((h) => [h.textContent!.trim(), h.id])
+		).toEqual([
+			['Pending files (1)', 'pending-heading'],
+			['Failed files (2)', 'failed-heading'],
+			['Last runs', 'runs-heading']
 		]);
-		expect(panels()).toEqual([false, true, true]);
-		const run = document.querySelector('section[aria-labelledby="run-heading"]')!;
-		expect(run.closest('[role="tabpanel"]')).toBeNull();
-		expect(screen.getByRole('heading', { name: 'Run' })).toBeTruthy();
-		expect(document.querySelector('#pending-panel h2')!.className).toContain('visually-hidden');
+		expect(expanded()).toEqual(['true', 'false', 'false']);
+		expect(screen.queryByRole('tab')).toBeNull();
+		expect(document.querySelector('h2.visually-hidden')).toBeNull();
+		for (const id of ['pending', 'failed', 'runs'])
+			expect(document.getElementById(`${id}-panel`)!.getAttribute('aria-labelledby')).toBe(
+				`${id}-heading`
+			);
 	});
 
-	for (const [query, selected] of [
-		['?tab=failed', 1],
-		['?tab=runs', 2],
-		['?tab=bogus', 0]
+	it('idle with DATs: no Run section, the Import buttons sit at the top of Pending (B23)', async () => {
+		render(IngestionPage);
+		await screen.findByText('Tetris.gb');
+
+		expect(screen.queryByRole('heading', { name: 'Run' })).toBeNull();
+		const importAll = screen.getByRole('button', { name: /Import all/ });
+		const panel = document.getElementById('pending-panel')!;
+		expect(panel.contains(importAll)).toBe(true);
+		expect(panel.contains(screen.getByRole('button', { name: /Import selected/ }))).toBe(true);
+		expect(
+			importAll.compareDocumentPosition(screen.getByRole('button', { name: 'Select all' })) &
+				Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
+
+	it('the Import buttons show above the empty state too (B23)', async () => {
+		fixed['GET /api/ingest/pending'] = { status: 200, body: [] };
+		render(IngestionPage);
+
+		const empty = await screen.findByText('No files waiting in the ingest folders.');
+		expect(
+			screen.getByRole('button', { name: /Import all/ }).compareDocumentPosition(empty) &
+				Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
+
+	for (const [query, open] of [
+		['?tab=failed', ['true', 'true', 'false']],
+		['?tab=runs', ['true', 'false', 'true']],
+		['?tab=bogus', ['true', 'false', 'false']]
 	] as const) {
-		it(`${query} opens tab ${selected}, Run still visible (I2)`, async () => {
+		it(`${query} opens its panel, keeps Pending open and is removed from the URL (B23)`, async () => {
 			navigateTo(`/ingestion${query}`);
 			render(IngestionPage);
-			await screen.findByRole('tab', { name: 'Last runs' });
+			await screen.findByText('Tetris.gb');
 
-			expect(tabs().map(([, s]) => s)).toEqual([0, 1, 2].map((i) => String(i === selected)));
-			expect(panels()).toEqual([0, 1, 2].map((i) => i !== selected));
-			expect(screen.getByRole('button', { name: /Import all/ })).toBeTruthy();
+			expect(expanded()).toEqual(open);
+			expect(goto).toHaveBeenCalledWith('/ingestion', { replace: true, reset: false });
+			expect(testUrl.current.search).toBe('');
 		});
 	}
 
-	it('switching tabs updates the URL without reloading, and keeps selections (I2, I3)', async () => {
+	it('toggling panels never writes the URL or refetches, and keeps selections (B23, I3)', async () => {
 		render(IngestionPage);
 		const checkbox = (await screen.findByRole('checkbox', {
 			name: 'Select Tetris.gb'
 		})) as HTMLInputElement;
 		await fireEvent.click(checkbox);
-		expect(checkbox.checked).toBe(false);
 		const before = calls.length;
 
-		await fireEvent.click(screen.getByRole('tab', { name: 'Failed files (0)' }));
-		expect(goto).toHaveBeenLastCalledWith('/ingestion?tab=failed', { replace: true, reset: false });
-		await vi.waitFor(() => expect(panels()).toEqual([true, false, true]));
-		await fireEvent.click(screen.getByRole('tab', { name: 'Last runs' }));
-		expect(goto).toHaveBeenLastCalledWith('/ingestion?tab=runs', { replace: true, reset: false });
-		await fireEvent.click(screen.getByRole('tab', { name: 'Pending files (1)' }));
-		expect(goto).toHaveBeenLastCalledWith('/ingestion', { replace: true, reset: false });
-		await vi.waitFor(() => expect(panels()).toEqual([false, true, true]));
+		await fireEvent.click(screen.getByRole('button', { name: 'Failed files (0)' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Last runs' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Pending files (1)' }));
+		expect(expanded()).toEqual(['false', 'true', 'true']);
+		await fireEvent.click(screen.getByRole('button', { name: 'Pending files (1)' }));
 
+		expect(goto).not.toHaveBeenCalled();
 		expect(calls.slice(before)).toEqual([]);
 		expect(
 			(screen.getByRole('checkbox', { name: 'Select Tetris.gb' }) as HTMLInputElement).checked

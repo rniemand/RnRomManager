@@ -23,6 +23,15 @@ public sealed class UserRepository(IDbConnectionFactory connections) : IUserRepo
         return await connection.ExecuteScalarAsync<int>(new CommandDefinition("SELECT COUNT(*) FROM users", cancellationToken: cancellationToken));
     }
 
+    public async Task<LastSignIn?> GetLastSignInAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return await connection.QuerySingleOrDefaultAsync<LastSignIn>(new CommandDefinition("""
+            SELECT username AS Username, last_login_at AS At FROM users
+            WHERE last_login_at IS NOT NULL ORDER BY last_login_at DESC, id DESC LIMIT 1
+            """, cancellationToken: cancellationToken));
+    }
+
     public async Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();

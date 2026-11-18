@@ -256,6 +256,31 @@ describe('GameResults cards (C1, C2)', () => {
 		}
 	);
 
+	it.each(['grid', 'list'] as const)(
+		'%s: the PSP Play link records the play on click and middle-click (B22)',
+		async (view) => {
+			const posts: string[] = [];
+			vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+				if (init?.method === 'POST') posts.push(url);
+				return Promise.resolve(new Response(null, { status: 204 }));
+			});
+			try {
+				render(GameResults, { games: [psp()], view });
+				const link = screen.getByRole('link', { name: 'Play Game u (opens in a new tab)' });
+				link.addEventListener('click', (e) => e.preventDefault());
+
+				await fireEvent.click(link);
+				await fireEvent(link, new MouseEvent('auxclick', { bubbles: true, button: 1 }));
+
+				await vi.waitFor(() =>
+					expect(posts).toEqual(['/api/games/u/roms/5/played', '/api/games/u/roms/5/played'])
+				);
+			} finally {
+				vi.unstubAllGlobals();
+			}
+		}
+	);
+
 	it.each(['grid', 'list'] as const)('%s: PSP Play is hidden in select mode', (view) => {
 		render(GameResults, { games: [psp()], view, selected: new SvelteSet<string>() });
 
@@ -277,4 +302,18 @@ describe('GameResults cards (C1, C2)', () => {
 			expect(iframe.title).toBe('Emulator: Game (World).gb');
 		}
 	);
+
+	it('the grid is one column below sm (B17)', () => {
+		const { container } = render(GameResults, { games: [game('a')], view: 'grid' });
+		expect(container.querySelector('.row')!.className).toBe(
+			'row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6 g-3'
+		);
+	});
+
+	it('a narrow grid (a two-thirds pane) stops at four columns, so the one-line rating fits (B17)', () => {
+		const { container } = render(GameResults, { games: [game('a')], view: 'grid', narrow: true });
+		expect(container.querySelector('.row')!.className).toBe(
+			'row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-4 g-3'
+		);
+	});
 });

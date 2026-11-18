@@ -80,6 +80,20 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         return rows.Select(r => new SystemSize(r.SystemId, (long)r.Bytes, (int)r.GameCount, (int)r.UpdateCount)).ToList();
     }
 
+    public async Task<IReadOnlyList<RecentRom>> ListRecentlyAddedRomsAsync(int limit, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        // SUM is DECIMAL in MariaDB; CAST so Dapper maps it to the record's long.
+        var rows = await connection.QueryAsync<RecentRom>(new CommandDefinition("""
+            SELECT r.id AS RomId, r.game_id AS GameId, g.display_title AS GameTitle, r.file_name AS FileName, r.system_id AS System,
+                   CAST(r.size_bytes + COALESCE((SELECT SUM(f.size_bytes) FROM rom_files f WHERE f.rom_id = r.id), 0) AS SIGNED) AS SizeBytes,
+                   r.date_added AS AddedAt
+            FROM roms r JOIN games g ON g.id = r.game_id
+            ORDER BY r.date_added DESC, r.id DESC LIMIT @limit
+            """, new { limit }, cancellationToken: cancellationToken));
+        return rows.AsList();
+    }
+
     public async Task<IReadOnlyList<GameSize>> ListGameSizesAsync(string systemId, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();

@@ -29,7 +29,6 @@
 		type LibrarySort
 	} from '#lib/libraryQuery.js';
 	import {
-		clearLibraryFilter,
 		libraryFilterParams,
 		readSavedLibraryFilter,
 		saveLibraryFilter
@@ -143,12 +142,15 @@
 			list.push({ field: 'Favourites', text: 'Favourites', clear: { favourite: false } });
 		return list;
 	});
-	/** Reset filters is shown when any filter, a non-default sort or direction, or a later page is in the URL. */
-	const showChipRow = $derived(toSearch(filters) !== '');
+	/** B2: Clear all is enabled by a search draft, any filter or a later page; sort and direction don't count. */
+	const canClear = $derived(search.trim() !== '' || hasFilters(filters) || filters.page > 1);
 
+	/** B2: clears the search box (and its pending debounce), every filter and the page; keeps sort and direction. The
+	 * saved filter is then re-saved by the normal save path, holding just sort/dir. */
 	function resetFilters(): void {
-		clearLibraryFilter();
-		go(parseFilters(new URLSearchParams()));
+		clearTimeout(searchTimer);
+		search = '';
+		go({ ...parseFilters(new URLSearchParams()), sort: filters.sort, dir: filters.dir });
 	}
 
 	const pages = $derived(result ? Math.max(1, Math.ceil(result.total / libraryPageSize)) : 1);
@@ -314,12 +316,20 @@
 		onclick={() => update({ favourite: !filters.favourite })}
 		><Icon name={filters.favourite ? 'favourite-fill' : 'favourite'} /></button
 	>
-	<!-- B1 (library-reset-missing-images): Reset sits in the filter row, shown under the same condition as before. -->
-	{#if showChipRow}
-		<button type="button" class="btn btn-sm btn-outline-secondary" onclick={resetFilters}
-			>Reset filters</button
-		>
-	{/if}
+	<!-- B1/B2: Clear all, then Select, then the View toggle last. -->
+	<button
+		type="button"
+		class="btn btn-sm btn-outline-secondary"
+		disabled={!canClear}
+		onclick={resetFilters}><Icon name="clear" /> Clear all</button
+	>
+	<button
+		type="button"
+		class="btn btn-sm btn-outline-secondary"
+		class:active={selecting}
+		aria-pressed={selecting}
+		onclick={toggleSelecting}><Icon name="select" /> Select</button
+	>
 	<div class="btn-group" role="group" aria-label="View">
 		<button
 			type="button"
@@ -356,15 +366,8 @@
 	</div>
 {/if}
 
-<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-	<button
-		type="button"
-		class="btn btn-sm btn-outline-secondary"
-		class:active={selecting}
-		aria-pressed={selecting}
-		onclick={toggleSelecting}><Icon name="select" /> Select</button
-	>
-	{#if selecting}
+{#if selecting}
+	<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
 		<button
 			type="button"
 			class="btn btn-sm btn-outline-secondary"
@@ -379,8 +382,8 @@
 			onclick={() => (picking = true)}><Icon name="collections" /> Add to collection…</button
 		>
 		<span class="small text-body-secondary" aria-live="polite">{selected.size} selected</span>
-	{/if}
-</div>
+	</div>
+{/if}
 
 {#if error}
 	<ErrorAlert {error} onretry={() => reload++} />
@@ -390,11 +393,7 @@
 	{#if hasFilters(filters) || filters.page > 1}
 		<EmptyState message="No games match these filters.">
 			{#snippet action()}
-				<button
-					type="button"
-					class="btn btn-outline-primary"
-					onclick={() => go(parseFilters(new URLSearchParams()))}
-				>
+				<button type="button" class="btn btn-outline-primary" onclick={resetFilters}>
 					Clear filters
 				</button>
 			{/snippet}

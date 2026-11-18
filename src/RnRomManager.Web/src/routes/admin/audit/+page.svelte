@@ -27,6 +27,8 @@
 		path: string | null;
 		targetPath: string | null;
 		details: string | null;
+		/** B30: null when the game is gone. */
+		gameTitle: string | null;
 	}
 	const keys = ['action', 'system', 'user', 'scheduled', 'q', 'from', 'to', 'page'] as const;
 	type Key = (typeof keys)[number];
@@ -245,6 +247,8 @@
 		>
 	</form>
 	{#if optionsError}<ErrorAlert error={optionsError} onretry={() => reload++} />{/if}
+	<!-- B30: pagination above and below the table, with distinct landmark labels. -->
+	<div class="mb-3">{@render pager('Pages, top')}</div>
 	{#if error}
 		<ErrorAlert {error} onretry={() => reload++} />
 	{:else if !result}
@@ -252,6 +256,7 @@
 	{:else if result.items.length === 0}
 		<div class="card"><EmptyState message="No audit events found." /></div>
 	{:else}
+		<!-- B30: five wrapping columns, no sideways scroll at ≥ 992 px (the wrapper stays for rule T1). -->
 		<div class="card">
 			<div class="table-responsive">
 				<table class="table table-sm table-striped table-hover align-middle mb-0">
@@ -259,43 +264,38 @@
 						<tr>
 							<th scope="col">Time</th>
 							<th scope="col">Action</th>
-							<th scope="col">System</th>
 							<th scope="col">User</th>
 							<th scope="col">Game</th>
-							<th scope="col">Path</th>
-							<th scope="col">Target</th>
-							<th scope="col">Details</th>
+							<th scope="col">Change</th>
 						</tr>
 					</thead>
 					<tbody
 						>{#each result.items as item (item.id)}<tr>
 								<td class="text-nowrap">{formatDateTime(item.occurredAt)}</td>
-								<td>{item.action}</td>
 								<td
-									>{#if item.system}<SystemBadge
+									><div>{item.action}</div>
+									{#if item.system}<SystemBadge
 											system={item.system}
 											name={systems.find((s) => s.id === item.system)?.displayName}
-										/>{:else}—{/if}</td
+										/>{/if}</td
 								>
 								<td
 									>{#if item.user}{item.user}{:else}<em>System</em>{/if}</td
 								>
-								<td
-									>{#if item.gameId}<a href={resolve('/games/[id]', { id: item.gameId })}
-											>{item.gameId}</a
+								<td class="text-break"
+									>{#if item.gameId && item.gameTitle}<a
+											href={resolve('/games/[id]', { id: item.gameId })}>{item.gameTitle}</a
+										>{:else if item.gameId}<span title={item.gameId}>{item.gameId.slice(0, 8)}</span
 										>{:else}—{/if}</td
 								>
-								<td class="text-truncate" style="max-width: 32rem" title={item.path ?? undefined}
-									>{item.path ?? '—'}</td
-								>
-								<td
-									class="text-truncate"
-									style="max-width: 32rem"
-									title={item.targetPath ?? undefined}>{item.targetPath ?? '—'}</td
-								>
-								<!-- B24: a long Details (e.g. DatsRefreshed's list) no longer widens the table. -->
-								<td class="text-truncate" style="max-width: 32rem" title={item.details ?? undefined}
-									>{item.details ?? '—'}</td
+								<td class="text-break small"
+									>{#if item.path || item.targetPath || item.details}{#if item.path}<div>
+												{item.path}{#if item.targetPath}{` → ${item.targetPath}`}{/if}
+											</div>{:else if item.targetPath}<div>
+												→ {item.targetPath}
+											</div>{/if}{#if item.details}<div class="text-body-secondary">
+												{item.details}
+											</div>{/if}{:else}—{/if}</td
 								>
 							</tr>{/each}</tbody
 					>
@@ -303,12 +303,17 @@
 			</div>
 		</div>
 	{/if}
-	{#if result}<Pagination
+	{@render pager('Pages, bottom')}
+</AdminOnly>
+
+{#snippet pager(label: string)}
+	{#if result && result.total > 0}<Pagination
 			page={currentPage}
 			pages={pageCount(result.total, 100)}
 			onpage={(p) => update({ page: String(p) })}
+			{label}
 		/>{/if}
-</AdminOnly>
+{/snippet}
 
 <style>
 	.audit-search {

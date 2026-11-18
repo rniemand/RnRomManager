@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { SvelteSet } from 'svelte/reactivity';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -32,11 +32,12 @@
 	import RatingControl from '#lib/components/RatingControl.svelte';
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
 	import EmulatorModal from '#lib/components/EmulatorModal.svelte';
-	import { canPlay, opensInNewTab, playUrl, usesPlayDisc } from '#lib/emulator.js';
+	import { canPlay, opensInNewTab, playLinkEvents, playUrl, usesPlayDisc } from '#lib/emulator.js';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
 	import { formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
 	import { gameSearchQuery, googleSearchUrl } from '#lib/googleSearch.js';
+	import { renderMarkdown } from '#lib/markdown.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { bundle, maxBundleEntries, type AddResult } from '#lib/stores/bundle.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
@@ -57,6 +58,7 @@
 	let infoJsonOpen = $state(false);
 	let noteRom = $state<RomDetail | null>(null);
 	let noteOpen = $state(false);
+	let noteMode = $state<'edit' | undefined>();
 	let playRom = $state<RomDetail | null>(null);
 	let playOpen = $state(false);
 	/** B16/B25: the caller's collections holding this game. */
@@ -169,28 +171,100 @@
 		toasts.show(text.replace('{file}', entry.fileName), kind);
 	}
 
+	/**
+	 * B27: `?play=<romId>` (from Global Search) opens the Play modal for that release once the game is loaded, also on
+	 * the already-open game; then only `play` leaves the URL (`tab` stays). A release not in the game, one that can't
+	 * play, or a PSP one (it opens in a new tab) is ignored and removed all the same.
+	 */
+	$effect(() => {
+		const playId = page.url.searchParams.get('play');
+		const current = game;
+		if (playId === null || !current || current.id !== id) return;
+		untrack(() => {
+			const rom = current.roms.find((r) => String(r.id) === playId);
+			if (
+				rom &&
+				canPlay(current, rom) &&
+				current.browserCore &&
+				!opensInNewTab(current.browserCore)
+			) {
+				playRom = rom;
+				playOpen = true;
+			}
+			const next = new URL(page.url.href);
+			next.searchParams.delete('play');
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
+			void goto(`${next.pathname}${next.search}`, { replace: true, reset: false });
+		});
+	});
+
 	function showHeader(rom: RomDetail): void {
 		headerRom = rom;
 		headerOpen = true;
 	}
 
-	function showNote(rom: RomDetail): void {
+	function showNote(rom: RomDetail, mode?: 'edit'): void {
 		noteRom = rom;
+		noteMode = mode;
 		noteOpen = true;
 	}
 
 	/**
+	 * B7: each open card's rendered note, by file name (ROM ids change on every ZIP rewrite), loaded on first expand.
+	 * `pendingNotes` holds file names whose note was just saved: their ids are stale until the refetch lands.
+	 */
+	type NoteState = { loading: true } | { text: string } | { error: unknown };
+	const notes = new SvelteMap<string, NoteState>();
+	const pendingNotes = new SvelteSet<string>();
+
+	async function loadNote(rom: RomDetail): Promise<void> {
+		const fileName = rom.fileName;
+		notes.set(fileName, { loading: true });
+		try {
+			const text = await api.getText(`/api/games/${encodeURIComponent(id)}/roms/${rom.id}/note`);
+			notes.set(fileName, { text });
+		} catch (e) {
+			if (isApiError(e) && e.status === 404) {
+				// Deleted meanwhile, as the modal treats it: the block goes and the game is refetched.
+				notes.delete(fileName);
+				rom.hasNote = false;
+				await refreshGame();
+			} else notes.set(fileName, { error: e });
+		}
+	}
+
+	$effect(() => {
+		for (const rom of shownRoms)
+			if (
+				rom.hasNote &&
+				openReleases.has(rom.fileName) &&
+				!notes.has(rom.fileName) &&
+				!pendingNotes.has(rom.fileName)
+			)
+				untrack(() => void loadNote(rom));
+	});
+
+	/**
 	 * A note write rewrites the ZIP, and the mirror gives every ROM a new id (§11): flip the icon now, then quietly
-	 * refetch so the next note/download/edit uses current ids.
+	 * refetch so the next note/download/edit uses current ids. B7: the cached note goes (open or not), and an open
+	 * card reloads it with the new id once the refetch lands.
 	 */
 	async function onNoteSaved(romId: number, hasNote: boolean): Promise<void> {
 		const rom = game?.roms.find((r) => r.id === romId);
-		if (rom) rom.hasNote = hasNote;
+		if (rom) {
+			rom.hasNote = hasNote;
+			pendingNotes.add(rom.fileName);
+		}
 		try {
 			const fresh = await fetchGame(id);
 			if (fresh) game = fresh;
 		} catch {
 			// The flipped icon stands; a stale id later reloads and asks for a retry as usual.
+		} finally {
+			if (rom) {
+				notes.delete(rom.fileName);
+				pendingNotes.delete(rom.fileName);
+			}
 		}
 	}
 
@@ -248,6 +322,7 @@
 		untrack(() => {
 			openReleases.clear();
 			openFiles.clear();
+			notes.clear();
 			zipSelected = '';
 			zipExpanded.clear();
 		});
@@ -283,12 +358,15 @@
 	);
 	// B10: one panel lists either tab's cards.
 	const shownRoms = $derived(tab === 'updates' ? updates : releases);
-	const tabs = $derived<[Tab, string][]>([
-		['releases', `Releases (${releases.length})`],
-		...(updates.length ? [['updates', `Updates (${updates.length})`] as [Tab, string]] : []),
-		['images', `Images (${game?.images.length ?? 0})`],
-		['saves', `Saves (${game?.saveCount ?? 0})`],
-		['zip', 'Zip Contents']
+	/** B4: each tab's value, label and icon. */
+	const tabs = $derived<[Tab, string, string][]>([
+		['releases', `Releases (${releases.length})`, 'releases'],
+		...(updates.length
+			? [['updates', `Updates (${updates.length})`, 'update'] as [Tab, string, string]]
+			: []),
+		['images', `Images (${game?.images.length ?? 0})`, 'images'],
+		['saves', `Saves (${game?.saveCount ?? 0})`, 'save'],
+		['zip', 'Zip Contents', 'zip']
 	]);
 
 	/** B19: bumped after the Play dialog saved to the library, so the Saves tab reloads. */
@@ -303,7 +381,11 @@
 
 <svelte:head><title>{game?.displayTitle ?? 'Game'} · RnRomManager</title></svelte:head>
 
-<p><a href={resolve('/')}>← Library</a></p>
+<p>
+	<a class="btn btn-sm btn-outline-primary" href={resolve('/')}
+		><Icon name="back" /> Back to Library</a
+	>
+</p>
 
 {#if error}
 	<ErrorAlert {error} onretry={() => reload++} />
@@ -399,7 +481,7 @@
 					<!-- G5: an external system's ZIP holds no ROMs; they download per release. -->
 					<button
 						type="button"
-						class="btn btn-primary"
+						class="btn btn-sm btn-primary"
 						use:tooltip={'ROM files are downloaded per release'}
 						onclick={() => download(`/api/games/${encodeURIComponent(id)}/download`)}
 					>
@@ -408,7 +490,7 @@
 				{:else}
 					<button
 						type="button"
-						class="btn btn-primary"
+						class="btn btn-sm btn-primary"
 						onclick={() => download(`/api/games/${encodeURIComponent(id)}/download`)}
 					>
 						<Icon name="download" /> Download ZIP
@@ -417,7 +499,7 @@
 				{#if downloadRoms.length === 1}
 					<button
 						type="button"
-						class="btn btn-outline-primary"
+						class="btn btn-sm btn-outline-primary"
 						onclick={() => download(downloadRoms[0].downloadUrl, downloadRoms[0])}
 					>
 						<Icon name="download" /> Download ROM
@@ -426,7 +508,7 @@
 					<div class="dropdown">
 						<button
 							type="button"
-							class="btn btn-outline-primary dropdown-toggle"
+							class="btn btn-sm btn-outline-primary dropdown-toggle"
 							data-bs-toggle="dropdown"
 							aria-expanded="false"
 						>
@@ -450,7 +532,7 @@
 				<!-- External link: resolve() is for app routes. -->
 				<!-- eslint-disable svelte/no-navigation-without-resolve -->
 				<a
-					class="btn btn-outline-secondary"
+					class="btn btn-sm btn-outline-secondary"
 					href={googleSearchUrl(gameSearchQuery(game))}
 					target="_blank"
 					rel="noopener noreferrer"><Icon name="google" /> Google</a
@@ -458,56 +540,77 @@
 				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 				<button
 					type="button"
-					class="btn btn-outline-secondary"
+					class="btn btn-sm btn-outline-secondary"
 					onclick={() => (infoJsonOpen = true)}
 				>
 					<Icon name="code" /> View info.json
 				</button>
 				<button
 					type="button"
-					class="btn btn-outline-secondary"
+					class="btn btn-sm btn-outline-secondary"
 					onclick={() => (collectionsOpen = true)}
 				>
 					<Icon name="collections" /> Collections
 				</button>
+				{#if auth.isAdmin}
+					<!-- B3: the Admin actions in one Manage menu, last in the row. -->
+					<div class="dropdown">
+						<button
+							type="button"
+							class="btn btn-sm btn-outline-secondary dropdown-toggle"
+							data-bs-toggle="dropdown"
+							aria-expanded="false"
+						>
+							<Icon name="admin" /> Manage
+						</button>
+						<ul class="dropdown-menu dropdown-menu-end">
+							<li>
+								<button
+									type="button"
+									class="dropdown-item"
+									onclick={() => (action = { kind: 'edit' })}
+								>
+									<Icon name="edit" /> Edit metadata
+								</button>
+							</li>
+							<li>
+								<button
+									type="button"
+									class="dropdown-item"
+									onclick={() => (action = { kind: 'retry' })}
+								>
+									<Icon name="retry" /> Retry media
+								</button>
+							</li>
+							<li>
+								<button
+									type="button"
+									class="dropdown-item"
+									onclick={() => (action = { kind: 'merge' })}
+								>
+									<Icon name="merge" /> Merge into…
+								</button>
+							</li>
+							<li><hr class="dropdown-divider" /></li>
+							<li>
+								<!-- text-danger-emphasis: plain text-danger fails AA on the dark dropdown. -->
+								<button
+									type="button"
+									class="dropdown-item text-danger-emphasis"
+									onclick={() => (action = { kind: 'deleteGame' })}
+								>
+									<Icon name="delete" /> Delete game
+								</button>
+							</li>
+						</ul>
+					</div>
+				{/if}
 			</div>
-			{#if auth.isAdmin}
-				<div class="d-flex flex-wrap gap-2 mt-3" role="group" aria-label="Admin actions">
-					<button
-						type="button"
-						class="btn btn-outline-secondary"
-						onclick={() => (action = { kind: 'edit' })}
-					>
-						<Icon name="edit" /> Edit metadata
-					</button>
-					<button
-						type="button"
-						class="btn btn-outline-secondary"
-						onclick={() => (action = { kind: 'retry' })}
-					>
-						<Icon name="retry" /> Retry media
-					</button>
-					<button
-						type="button"
-						class="btn btn-outline-secondary"
-						onclick={() => (action = { kind: 'merge' })}
-					>
-						<Icon name="merge" /> Merge into…
-					</button>
-					<button
-						type="button"
-						class="btn btn-outline-danger"
-						onclick={() => (action = { kind: 'deleteGame' })}
-					>
-						<Icon name="delete" /> Delete game
-					</button>
-				</div>
-			{/if}
 		</div>
 	</div>
 
 	<ul class="nav nav-tabs mb-3" role="tablist">
-		{#each tabs as [value, label] (value)}
+		{#each tabs as [value, label, icon] (value)}
 			<li class="nav-item" role="presentation">
 				<button
 					type="button"
@@ -517,7 +620,7 @@
 					role="tab"
 					aria-selected={tab === value}
 					aria-controls={value === 'updates' ? 'releases-panel' : `${value}-panel`}
-					onclick={() => selectTab(value)}>{label}</button
+					onclick={() => selectTab(value)}><Icon name={icon} /> {label}</button
 				>
 			</li>
 		{/each}
@@ -558,31 +661,35 @@
 						onclick={(e) => onReleaseHeaderClick(e, rom.fileName)}
 					>
 						<div class="d-flex flex-wrap align-items-center gap-2">
-							<button
-								type="button"
-								class="btn btn-sm btn-link p-0 text-body chevron-toggle"
-								aria-expanded={open}
-								aria-controls="release-{rom.id}-details"
-								aria-label="{open ? 'Hide' : 'Show'} details for {rom.fileName}"
-								onclick={() => toggleRelease(rom.fileName)}><Icon name="chevron" /></button
-							>
-							<h3 class="h6 mb-0 text-break" id="release-{rom.id}-name">{rom.fileName}</h3>
-							{#if rom.isPrimary}<span class="badge text-bg-primary">Primary</span>{/if}
-							{#if rom.version}<span class="badge text-bg-info">Version {rom.version}</span>{/if}
-							{#if discNumber(rom) !== null}<span class="badge text-bg-info"
-									>Disc {discNumber(rom)}</span
-								>{/if}
-							{#if rom.externalFileName}
-								<!-- G7: stored next to the ZIP under this name. -->
-								<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-								<span class="badge text-bg-dark" tabindex="0" use:tooltip={rom.externalFileName}
-									>External</span
+							<!-- B6: chevron and name on the left; min-width 0 lets a long name wrap. -->
+							<div class="d-flex align-items-center gap-2" style="min-width: 0">
+								<button
+									type="button"
+									class="btn btn-sm btn-link p-0 text-body chevron-toggle"
+									aria-expanded={open}
+									aria-controls="release-{rom.id}-details"
+									aria-label="{open ? 'Hide' : 'Show'} details for {rom.fileName}"
+									onclick={() => toggleRelease(rom.fileName)}><Icon name="chevron" /></button
 								>
-							{/if}
-							{#each rom.regions as region (region)}
-								<span class="badge text-bg-secondary">{region}</span>
-							{/each}
-							<div class="ms-auto d-flex flex-wrap gap-1">
+								<h3 class="h6 mb-0 text-break" id="release-{rom.id}-name">{rom.fileName}</h3>
+							</div>
+							<!-- B6: badges, then buttons, on the right. -->
+							<div class="ms-auto d-flex flex-wrap gap-2 align-items-center justify-content-end">
+								{#if rom.isPrimary}<span class="badge text-bg-primary">Primary</span>{/if}
+								{#if rom.version}<span class="badge text-bg-info">Version {rom.version}</span>{/if}
+								{#if discNumber(rom) !== null}<span class="badge text-bg-info"
+										>Disc {discNumber(rom)}</span
+									>{/if}
+								{#if rom.externalFileName}
+									<!-- G7: stored next to the ZIP under this name. -->
+									<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+									<span class="badge text-bg-dark" tabindex="0" use:tooltip={rom.externalFileName}
+										>External</span
+									>
+								{/if}
+								{#each rom.regions as region (region)}
+									<span class="badge text-bg-secondary">{region}</span>
+								{/each}
 								<!-- R4: a filled button when the release has a note; Site users only view notes (U3). -->
 								{#if auth.isAdmin || rom.hasNote}<button
 										type="button"
@@ -607,6 +714,7 @@
 										target="_blank"
 										rel="noopener"
 										aria-label="Play {rom.fileName} (opens in a new tab)"
+										{...playLinkEvents(game.id, rom.id)}
 										><!-- eslint-enable svelte/no-navigation-without-resolve -->
 										<Icon name="play" />
 									</a>
@@ -632,65 +740,111 @@
 									<Icon name="download" />
 								</button>
 								{@render bundleButton(bundleEntry(game, rom))}
-								{#if auth.isAdmin}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-danger"
-										aria-label="Delete {rom.fileName}"
-										onclick={() => (action = { kind: 'deleteRom', rom })}
-									>
-										<Icon name="delete" />
-									</button>
-								{/if}
 							</div>
 						</div>
 					</div>
 					<div class="card-body small" id="release-{rom.id}-details" hidden={!open}>
-						<!-- R2: label/value pairs, two per row from lg; each row only when it has a value. -->
-						<dl class="row mb-0">
-							{#if rom.originalFileName !== rom.fileName}
-								<dt class="col-sm-3 col-lg-2 text-body-secondary">Original file name</dt>
-								<dd class="col-sm-9 col-lg-4">
-									<span class="text-break">{rom.originalFileName}</span>
-									<CopyButton value={rom.originalFileName} label="original file name" />
-								</dd>
-							{/if}
-							<dt class="col-sm-3 col-lg-2 text-body-secondary">Size</dt>
-							<dd class="col-sm-9 col-lg-4"><FileSize bytes={rom.totalSizeBytes} /></dd>
-							{#each [['SHA1', rom.sha1], ['CRC32', rom.crc32], ['MD5', rom.md5]] as [name, hash] (name)}
-								<dt class="col-sm-3 col-lg-2 text-body-secondary">{name}</dt>
-								<dd class="col-sm-9 col-lg-4">
-									<span class="font-monospace text-break">{hash}</span>
-									<CopyButton value={hash} label={name} />
-								</dd>
-							{/each}
-							{#if rom.revision}
-								<dt class="col-sm-3 col-lg-2 text-body-secondary">Revision</dt>
-								<dd class="col-sm-9 col-lg-4">{rom.revision}</dd>
-							{/if}
-							{#if rom.languages.length}
-								<dt class="col-sm-3 col-lg-2 text-body-secondary">Languages</dt>
-								<dd class="col-sm-9 col-lg-4">{list(rom.languages)}</dd>
-							{/if}
-							{#if rom.flags.length}
-								<dt class="col-sm-3 col-lg-2 text-body-secondary">Flags</dt>
-								<dd class="col-sm-9 col-lg-4">{list(rom.flags)}</dd>
-							{/if}
-							<dt class="col-sm-3 col-lg-2 text-body-secondary">Identified by</dt>
-							<dd class="col-sm-9 col-lg-4">{identifiedBy[rom.identificationMethod]}</dd>
-							{#if rom.datName}
-								<dt class="col-sm-3 col-lg-2 text-body-secondary">DAT</dt>
-								<dd class="col-sm-9 col-lg-4 text-break">
-									{[rom.datName, rom.datVersion].filter(Boolean).join(' ')}
-								</dd>
-							{/if}
-							{#if rom.datGameName}
-								<dt class="col-sm-3 col-lg-2 text-body-secondary">DAT entry</dt>
-								<dd class="col-sm-9 col-lg-4 text-break">{rom.datGameName}</dd>
-							{/if}
-							<dt class="col-sm-3 col-lg-2 text-body-secondary">Date added</dt>
-							<dd class="col-sm-9 col-lg-4">{formatDateTime(rom.dateAdded)}</dd>
-						</dl>
+						{#if rom.hasNote}
+							{@const note = notes.get(rom.fileName)}
+							<!-- B7: the note comes first; a non-interactive block (its Markdown links work) beside an Edit/View button. -->
+							<div class="border rounded p-2 mb-3" data-testid="release-note">
+								<div class="d-flex align-items-center gap-2 mb-2">
+									<h4 class="h6 mb-0">Release note</h4>
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-secondary ms-auto"
+										aria-label="{auth.isAdmin ? 'Edit' : 'View'} note for {rom.fileName}"
+										onclick={() => showNote(rom, auth.isAdmin ? 'edit' : undefined)}
+									>
+										<Icon name={auth.isAdmin ? 'edit' : 'note-filled'} />
+										{auth.isAdmin ? 'Edit note' : 'View note'}
+									</button>
+								</div>
+								{#if note && 'error' in note}
+									<ErrorAlert error={note.error} onretry={() => loadNote(rom)} />
+								{:else if note && 'text' in note}
+									<div class="note-markdown">
+										<!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitised by DOMPurify in renderMarkdown -->
+										{@html renderMarkdown(note.text)}
+									</div>
+								{:else}
+									<Loading label="Loading note…" />
+								{/if}
+							</div>
+						{/if}
+						<!-- B8: a key/value table (T1–T4), one pair per row, each row only when it has a value. Values
+						     keep wrapping (G2: never truncated), an exception to the T-rule's text-truncate. -->
+						<div class="card">
+							<div class="table-responsive">
+								<table class="table table-sm table-striped table-hover mb-0">
+									<tbody>
+										{#if rom.originalFileName !== rom.fileName}
+											<tr>
+												<th scope="row" class="fw-normal text-body-secondary">Original file name</th
+												>
+												<td class="text-break">
+													<span class="text-break">{rom.originalFileName}</span>
+													<CopyButton value={rom.originalFileName} label="original file name" />
+												</td>
+											</tr>
+										{/if}
+										<tr>
+											<th scope="row" class="fw-normal text-body-secondary">Size</th>
+											<td class="text-break"><FileSize bytes={rom.totalSizeBytes} /></td>
+										</tr>
+										{#each [['SHA1', rom.sha1], ['CRC32', rom.crc32], ['MD5', rom.md5]] as [name, hash] (name)}
+											<tr>
+												<th scope="row" class="fw-normal text-body-secondary">{name}</th>
+												<td class="text-break">
+													<span class="font-monospace text-break">{hash}</span>
+													<CopyButton value={hash} label={name} />
+												</td>
+											</tr>
+										{/each}
+										{#if rom.revision}
+											<tr>
+												<th scope="row" class="fw-normal text-body-secondary">Revision</th>
+												<td class="text-break">{rom.revision}</td>
+											</tr>
+										{/if}
+										{#if rom.languages.length}
+											<tr>
+												<th scope="row" class="fw-normal text-body-secondary">Languages</th>
+												<td class="text-break">{list(rom.languages)}</td>
+											</tr>
+										{/if}
+										{#if rom.flags.length}
+											<tr>
+												<th scope="row" class="fw-normal text-body-secondary">Flags</th>
+												<td class="text-break">{list(rom.flags)}</td>
+											</tr>
+										{/if}
+										<tr>
+											<th scope="row" class="fw-normal text-body-secondary">Identified by</th>
+											<td class="text-break">{identifiedBy[rom.identificationMethod]}</td>
+										</tr>
+										{#if rom.datName}
+											<tr>
+												<th scope="row" class="fw-normal text-body-secondary">DAT</th>
+												<td class="text-break">
+													{[rom.datName, rom.datVersion].filter(Boolean).join(' ')}
+												</td>
+											</tr>
+										{/if}
+										{#if rom.datGameName}
+											<tr>
+												<th scope="row" class="fw-normal text-body-secondary">DAT entry</th>
+												<td class="text-break">{rom.datGameName}</td>
+											</tr>
+										{/if}
+										<tr>
+											<th scope="row" class="fw-normal text-body-secondary">Date added</th>
+											<td class="text-break">{formatDateTime(rom.dateAdded)}</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
 						{#if rom.header || auth.isAdmin}
 							<div class="d-flex flex-wrap gap-2 mt-2">
 								{#if rom.header}
@@ -703,14 +857,25 @@
 									</button>
 								{/if}
 								{#if auth.isAdmin}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-secondary"
-										aria-label="Move release {rom.fileName}"
-										onclick={() => (action = { kind: 'move', rom })}
-									>
-										<Icon name="move" /> Move release
-									</button>
+									<!-- B9: Header details stays left; Move and Delete release sit right. -->
+									<div class="ms-auto d-flex flex-wrap gap-2">
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-secondary"
+											aria-label="Move release {rom.fileName}"
+											onclick={() => (action = { kind: 'move', rom })}
+										>
+											<Icon name="move" /> Move release
+										</button>
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-danger"
+											aria-label="Delete release {rom.fileName}"
+											onclick={() => (action = { kind: 'deleteRom', rom })}
+										>
+											<Icon name="delete" /> Delete release
+										</button>
+									</div>
 								{/if}
 							</div>
 						{/if}
@@ -817,7 +982,13 @@
 
 	<InfoJsonModal bind:open={infoJsonOpen} gameId={game.id} />
 
-	<ReleaseNoteModal bind:open={noteOpen} gameId={game.id} rom={noteRom} onsaved={onNoteSaved} />
+	<ReleaseNoteModal
+		bind:open={noteOpen}
+		gameId={game.id}
+		rom={noteRom}
+		initialMode={noteMode}
+		onsaved={onNoteSaved}
+	/>
 	<EmulatorModal
 		bind:open={playOpen}
 		gameId={game.id}

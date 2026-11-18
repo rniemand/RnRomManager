@@ -245,6 +245,7 @@ public class DatEndpointsTests
     [TestCase("POST", "/api/jobs/dat-refresh")]
     [TestCase("GET", "/api/admin/dats")]
     [TestCase("GET", "/api/admin/dats/settings")]
+    [TestCase("GET", "/api/admin/dats/Nintendo%20-%20Game%20Boy/download")]
     [TestCase("PUT", "/api/admin/dats/settings")]
     public async Task RoleMatrix_AnonymousIs401_UserIs403(string method, string url)
     {
@@ -286,6 +287,47 @@ public class DatEndpointsTests
 
         var row = rows.Single(r => r.GetProperty("datName").GetString() == psx);
         Assert.That(row.GetProperty("version").GetString(), Is.EqualTo("2026.01.01"));
+    }
+
+    private DatManifestEntry ManifestEntry(string datName) =>
+        DatManifest.Read(Path.Combine(_factory.Services.GetRequiredService<DatCache>().Directory, DatManifest.FileName))
+            .First(e => e.DatName == datName && (DatKind.IsMainDat(e.File) || e.File.StartsWith(TitleDb.Folder + "/", StringComparison.Ordinal)));
+
+    /// <summary>B29: a main DAT and a titledb file, streamed as attachments with their file names.</summary>
+    [TestCase(Gb)]
+    [TestCase(IngestSeeder.SwitchDat)]
+    public async Task DownloadDat_StreamsTheListedFile_AsAnAttachment(string datName)
+    {
+        var entry = ManifestEntry(datName);
+        var expected = await File.ReadAllBytesAsync(Path.Combine(_factory.Services.GetRequiredService<DatCache>().Directory, entry.File));
+
+        using var response = await _admin.GetAsync($"/api/admin/dats/{Uri.EscapeDataString(datName)}/download");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentDisposition!.DispositionType, Is.EqualTo("attachment"));
+        Assert.That(response.Content.Headers.ContentDisposition.FileNameStar, Is.EqualTo(Path.GetFileName(entry.File)));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(expected));
+    }
+
+    [TestCase("Nope")]
+    [TestCase("..")]
+    public async Task DownloadDat_UnknownName_Is404(string datName)
+    {
+        using var response = await _admin.GetAsync($"/api/admin/dats/{Uri.EscapeDataString(datName)}/download");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task DownloadDat_MissingFileOrCache_Is404()
+    {
+        var directory = _factory.Services.GetRequiredService<DatCache>().Directory;
+        File.Delete(Path.Combine(directory, ManifestEntry(Gb).File));
+        using (var missingFile = await _admin.GetAsync($"/api/admin/dats/{Uri.EscapeDataString(Gb)}/download"))
+            Assert.That(missingFile.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        Directory.Delete(directory, recursive: true);
+        using var noCache = await _admin.GetAsync($"/api/admin/dats/{Uri.EscapeDataString(Gbc)}/download");
+        Assert.That(noCache.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 
     [Test]

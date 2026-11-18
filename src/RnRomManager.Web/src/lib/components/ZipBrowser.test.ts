@@ -107,15 +107,17 @@ describe('ZipBrowser (Z1, Z2)', () => {
 		expect(root.classList.contains('bg-primary-subtle')).toBe(false);
 	});
 
-	it('table: size badges, dashed folder rows, truncated names with a title, download button', async () => {
+	it('table in a card: size badges, empty folder cells, truncated names with a title, download button (B12)', async () => {
 		await setup();
 		await fireEvent.click(tree().getByRole('button', { name: 'roms' }));
 
 		const table = screen.getByRole('table', { name: 'Contents of roms' });
-		expect(table.className).toBe('table table-sm table-striped table-hover align-middle');
+		expect(table.className).toBe('table table-sm table-striped table-hover align-middle mb-0');
+		expect(table.parentElement!.className).toBe('table-responsive');
+		expect(table.parentElement!.parentElement!.classList).toContain('card');
 		const [folderRow, fileRow] = within(table).getAllByRole('row').slice(1);
 		const folderCells = [...folderRow.querySelectorAll('td')];
-		expect(folderCells.map((td) => td.textContent!.trim())).toEqual(['a', '—', '—', '—', '']);
+		expect(folderCells.map((td) => td.textContent!.trim())).toEqual(['a', '', '', '', '']);
 		expect(folderRow.querySelector('[colspan]')).toBeNull();
 		expect(folderCells[0].className).toContain('text-truncate');
 		expect(folderCells[0].title).toBe('a');
@@ -132,5 +134,12 @@ describe('ZipBrowser (Z1, Z2)', () => {
 		const download = within(fileRow).getByRole('link', { name: 'Download b.gb' });
 		expect(download.className).toBe('btn btn-sm btn-outline-primary');
 		expect(download.closest('td')!.className).toBe('text-end');
+	});
+
+	it('the folder panel is col-md-3 and the detail col-md-9 (B12)', async () => {
+		await setup();
+		const table = screen.getByRole('table');
+		expect(table.closest('.col-md-9')).not.toBeNull();
+		expect(tree().getByRole('button', { name: 'roms' }).closest('.col-md-3')).not.toBeNull();
 	});
 });

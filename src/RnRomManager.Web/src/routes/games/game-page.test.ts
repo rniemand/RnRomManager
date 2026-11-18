@@ -138,6 +138,7 @@ function game(romIds: number[]): GameDetail {
 }
 
 describe('game detail page', () => {
+	let played: string[] = [];
 	let answers: { status: number; body?: unknown }[];
 	let fetches: number;
 	let zipAnswers: { status: number; body?: unknown }[];
@@ -154,9 +155,15 @@ describe('game detail page', () => {
 		fetches = 0;
 		zipAnswers = [];
 		zipFetches = 0;
+		played = [];
 		vi.stubGlobal('fetch', (url: string) => {
 			// B16: the game's collections (the badges); answered here so the queued answers stay as they were.
 			if (url.endsWith('/collections')) return Promise.resolve(new Response('[]', { status: 200 }));
+			// B22: the fire-and-forget play records stay out of the queue too.
+			if (url.endsWith('/played')) {
+				played.push(url);
+				return Promise.resolve(new Response(null, { status: 204 }));
+			}
 			if (url.includes('/zip-entries')) {
 				zipFetches++;
 				const zip = zipAnswers.shift() ?? { status: 200, body: listing() };
@@ -283,6 +290,30 @@ describe('game detail page', () => {
 		expect(document.querySelector('iframe')).toBeNull();
 	});
 
+	it('a PSP Play link records the play on click and middle-click, not on a right click (B22)', async () => {
+		const psp = game([1]);
+		psp.browserCore = 'ppsspp';
+		psp.roms[0].externalFileName = psp.roms[0].fileName;
+		// The game, then the antiforgery GET before the first played POST (other tests queue it too).
+		answers.push({ status: 200, body: psp }, { status: 204 });
+		render(GamePage);
+		const link = await screen.findByRole('link', {
+			name: `Play ${psp.roms[0].fileName} (opens in a new tab)`
+		});
+		link.addEventListener('click', (e) => e.preventDefault());
+
+		await fireEvent.click(link);
+		await fireEvent(link, new MouseEvent('auxclick', { bubbles: true, button: 2 }));
+		await fireEvent(link, new MouseEvent('auxclick', { bubbles: true, button: 1 }));
+
+		await vi.waitFor(() =>
+			expect(played).toEqual([
+				`/api/games/${psp.id}/roms/${psp.roms[0].id}/played`,
+				`/api/games/${psp.id}/roms/${psp.roms[0].id}/played`
+			])
+		);
+	});
+
 	it('the ZIP button explains per-release downloads only when a release is external (G5)', async () => {
 		tooltips.length = 0;
 		const detail = game([1]);
@@ -316,7 +347,7 @@ describe('game detail page', () => {
 		expect(original.closest('.card-body')).toBeTruthy();
 		expect(original.closest('article')!.getAttribute('aria-labelledby')).toBe('release-2-name');
 		expect(
-			original.closest('dd')!.querySelector('[aria-label="Copy original file name"]')
+			original.closest('td')!.querySelector('[aria-label="Copy original file name"]')
 		).not.toBeNull();
 		expect(screen.getAllByText('Original file name')).toHaveLength(1);
 	});
@@ -343,7 +374,7 @@ describe('game detail page', () => {
 		expect(screen.getByText('Yes')).toBeTruthy();
 	});
 
-	it('one card per release with name, badges, details, copy buttons and actions; no table (G2)', async () => {
+	it('one card per release with name, badges, details, copy buttons and actions (G2, B6)', async () => {
 		const detail = game([1, 2]);
 		detail.roms[0].revision = 'Rev 1';
 		detail.roms[0].flags = ['Beta', 'Proto'];
@@ -373,7 +404,7 @@ describe('game detail page', () => {
 		expect(second.querySelector('.badge.text-bg-primary')).toBeNull();
 		expect(second.querySelector('.card-body')!.textContent).not.toContain('Revision');
 
-		// R1: the header keeps only the chevron, Note, Play, Download, Add to bundle (Bundle Creator B1) and Delete.
+		// B6: the header keeps the chevron, Note, Play, Download and Add to bundle; Delete moved to the body (B9).
 		const labels = [...card.querySelectorAll('.card-header button')].map(
 			(b) => b.getAttribute('aria-label') ?? b.textContent?.trim()
 		);
@@ -381,10 +412,20 @@ describe('game detail page', () => {
 			'Hide details for Tetris 1.gb',
 			'Add note for Tetris 1.gb',
 			'Download Tetris 1.gb',
-			'Add Tetris 1.gb to the bundle',
-			'Delete Tetris 1.gb'
+			'Add Tetris 1.gb to the bundle'
 		]);
-		expect(document.getElementById('releases-panel')!.querySelector('table')).toBeNull();
+		// B6: chevron + name on the left (min-width 0); badges then buttons on the right.
+		const left = heading.parentElement!;
+		expect(left.style.minWidth).toBe('0px');
+		expect(left.contains(card.querySelector('.chevron-toggle'))).toBe(true);
+		const right = left.nextElementSibling!;
+		expect(right.className).toBe(
+			'ms-auto d-flex flex-wrap gap-2 align-items-center justify-content-end'
+		);
+		const kinds = [...right.children].map((c) =>
+			c.classList.contains('badge') ? 'badge' : 'button'
+		);
+		expect(kinds.indexOf('button')).toBe(kinds.lastIndexOf('badge') + 1);
 	});
 
 	const details = (name: string) =>
@@ -482,12 +523,12 @@ describe('game detail page', () => {
 
 	describe('release body (R2–R4)', () => {
 		const rows = (name: string) =>
-			[...details(name).querySelectorAll('dl > dt')].map((dt) => [
-				dt.textContent!.trim(),
-				(dt.nextElementSibling as HTMLElement).textContent!.replace(/\s+/g, ' ').trim()
+			[...details(name).querySelectorAll('th[scope="row"]')].map((th) => [
+				th.textContent!.trim(),
+				(th.nextElementSibling as HTMLElement).textContent!.replace(/\s+/g, ' ').trim()
 			]);
 
-		it('lists every value in order, two pairs per row from lg; empty ones are left out', async () => {
+		it('lists every value in order in a key/value table, one pair per row; empty ones are left out (B8)', async () => {
 			const detail = game([1]);
 			Object.assign(detail.roms[0], {
 				originalFileName: 'tetris.gb',
@@ -523,10 +564,16 @@ describe('game detail page', () => {
 			expect(values['DAT']).toBe('Nintendo - Game Boy 20260101');
 			expect(values['DAT entry']).toBe('Tetris (World) (Rev 1)');
 			expect(values['Date added']).toBe(formatDateTime('2026-11-01T00:00:00Z'));
-			const dl = details('Tetris 1.gb').querySelector('dl')!;
-			expect(dl.className).toBe('row mb-0');
-			expect(dl.querySelector('dt')!.className).toBe('col-sm-3 col-lg-2 text-body-secondary');
-			expect(dl.querySelector('dd')!.className).toBe('col-sm-9 col-lg-4');
+			const table = details('Tetris 1.gb').querySelector('table')!;
+			expect(table.className).toBe('table table-sm table-striped table-hover mb-0');
+			expect(table.parentElement!.className).toBe('table-responsive');
+			expect(table.parentElement!.parentElement!.className).toBe('card');
+			for (const tr of table.querySelectorAll('tbody tr')) {
+				expect(tr.querySelectorAll('th[scope="row"]')).toHaveLength(1);
+				expect(tr.querySelectorAll('td')).toHaveLength(1);
+				expect(tr.querySelector('td')!.classList).toContain('text-break');
+			}
+			expect(details('Tetris 1.gb').querySelector('dl')).toBeNull();
 		});
 
 		it.each([
@@ -559,7 +606,7 @@ describe('game detail page', () => {
 			render(GamePage);
 			await screen.findByRole('article', { name: 'Tetris 1.gb' });
 
-			const actions = details('Tetris 1.gb').querySelector('dl + .d-flex')!;
+			const actions = details('Tetris 1.gb').querySelector('.card + .d-flex')!;
 			expect(actions.className).toBe('d-flex flex-wrap gap-2 mt-2');
 			const header = within(actions as HTMLElement).getByRole('button', {
 				name: 'Header details',
@@ -841,12 +888,12 @@ describe('game detail page', () => {
 			'a b',
 			'Tetris (World).gb'
 		]);
-		// Z2: a folder row fills the columns with dashes; sizes are badges.
+		// B12: a folder row leaves its other cells empty; sizes are badges.
 		expect([...rows[0].querySelectorAll('td')].map((td) => td.textContent!.trim())).toEqual([
 			'a b',
-			'—',
-			'—',
-			'—',
+			'',
+			'',
+			'',
 			''
 		]);
 		expect(rows[1].querySelectorAll('.badge.text-bg-light.border .file-size')).toHaveLength(2);
@@ -1121,23 +1168,58 @@ describe('game detail page', () => {
 		expect([...document.querySelectorAll('dl')].every((dl) => dl.closest('article'))).toBe(true);
 	});
 
-	it('the action row: ZIP, ROM, Google, info.json, Collections, all default size (B1, B25)', async () => {
+	it('the action row: ZIP, ROM, Google, info.json, Collections, then Manage; all btn-sm (B3)', async () => {
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);
 
 		const zip = await screen.findByRole('button', { name: 'Download ZIP' });
-		const row = [...zip.parentElement!.children].filter((e) => e.matches('a, button'));
+		const rowEl = zip.parentElement!;
+		expect(rowEl.className).toBe('d-flex flex-wrap gap-2');
+		const row = [...rowEl.children].map((e) =>
+			e.matches('a, button') ? e : e.querySelector(':scope > button')!
+		);
 		expect(row.map((e) => e.textContent?.trim())).toEqual([
 			'Download ZIP',
 			'Download ROM',
 			'Google',
 			'View info.json',
-			'Collections'
+			'Collections',
+			'Manage'
 		]);
-		for (const e of row) {
-			expect(e.classList).not.toContain('btn-sm');
-			expect(e.classList).not.toContain('align-self-center');
-		}
+		for (const e of row) expect(e.classList).toContain('btn-sm');
+		expect(zip.classList).toContain('btn-primary');
+		expect(screen.getByRole('button', { name: 'Download ROM' }).classList).toContain(
+			'btn-outline-primary'
+		);
+		expect(row.at(-1)!.getAttribute('data-bs-toggle')).toBe('dropdown');
+		expect(screen.queryByRole('group', { name: 'Admin actions' })).toBeNull();
+	});
+
+	it('tabs carry icons before their labels (B4)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		await screen.findByRole('tab', { name: /^Releases/ });
+		expect(
+			screen
+				.getAllByRole('tab')
+				.map((t) => [t.textContent!.trim(), t.querySelector('i')!.className.trim()])
+		).toEqual([
+			['Releases (1)', 'bi bi-stack'],
+			['Images (1)', 'bi bi-images'],
+			['Saves (0)', 'bi bi-floppy-fill'],
+			['Zip Contents', 'bi bi-file-zip']
+		]);
+	});
+
+	it('Back to Library is a small outline button to / (B5)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+
+		const back = await screen.findByRole('link', { name: 'Back to Library' });
+		expect(back.getAttribute('href')).toBe('/');
+		expect(back.className).toBe('btn btn-sm btn-outline-primary');
+		expect(back.querySelector('.bi-arrow-left')).not.toBeNull();
 	});
 
 	it('one ROM gets a Download ROM button', async () => {
@@ -1216,5 +1298,67 @@ describe('game detail page', () => {
 		render(GamePage);
 
 		expect(await screen.findByText("This game doesn't exist any more.")).toBeTruthy();
+	});
+
+	describe('?play= from Global Search (B27)', () => {
+		const playableGame = () => {
+			const detail = game([1, 2]);
+			detail.browserCore = 'gambatte';
+			return detail;
+		};
+		const frame = () => document.querySelector('iframe');
+
+		it('opens the Play modal for that release and removes only play, keeping tab', async () => {
+			navigateTo('/games/g1?tab=images&play=2');
+			answers.push({ status: 200, body: playableGame() });
+			render(GamePage);
+
+			await vi.waitFor(() => expect(frame()).not.toBeNull());
+			expect(frame()!.getAttribute('src')).toContain('&rom=2&');
+			expect(goto).toHaveBeenCalledWith('/games/g1?tab=images', { replace: true, reset: false });
+		});
+
+		it('works on the already-open game, with no reload', async () => {
+			answers.push({ status: 200, body: playableGame() });
+			render(GamePage);
+			await screen.findByRole('article', { name: 'Tetris 1.gb' });
+			const before = fetches;
+
+			navigateTo('/games/g1?play=1');
+
+			await vi.waitFor(() => expect(frame()).not.toBeNull());
+			expect(frame()!.getAttribute('src')).toContain('&rom=1&');
+			expect(goto).toHaveBeenCalledWith('/games/g1', { replace: true, reset: false });
+			// No game refetch: at most the antiforgery GET before the played POST.
+			expect(fetches - before).toBeLessThanOrEqual(1);
+		});
+
+		it.each([
+			['a release not in the game', '99', playableGame],
+			[
+				'a release that cannot play',
+				'1',
+				() => game([1, 2]) // no browser core
+			],
+			[
+				'a PSP release (it opens in a new tab)',
+				'1',
+				() => {
+					const psp = game([1]);
+					psp.browserCore = 'ppsspp';
+					psp.roms[0].externalFileName = psp.roms[0].fileName;
+					return psp;
+				}
+			]
+		] as const)('ignores %s and removes it', async (_, playId, detail) => {
+			navigateTo(`/games/g1?play=${playId}`);
+			answers.push({ status: 200, body: detail() });
+			render(GamePage);
+
+			await vi.waitFor(() =>
+				expect(goto).toHaveBeenCalledWith('/games/g1', { replace: true, reset: false })
+			);
+			expect(frame()).toBeNull();
+		});
 	});
 });

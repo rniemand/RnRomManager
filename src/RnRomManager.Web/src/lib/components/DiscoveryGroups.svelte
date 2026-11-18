@@ -1,8 +1,9 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { auth } from '../stores/auth.svelte';
 	import { resolve } from '$app/paths';
 	import type { DiscoveryGroup, Page } from '../api/types';
-	import { discoveryApi, discoverySearch, type DiscoveryState } from '../discovery';
+	import { discoveryApi, discoverySearch, maxFind, type DiscoveryState } from '../discovery';
 	import { formatCount } from '../format';
 	import { pageCount, readPageSize, writePageSize } from '../pageSize';
 	import EmptyState from './EmptyState.svelte';
@@ -23,9 +24,32 @@
 		onpage: (groupPage: number) => void;
 		/** Called with the selected group whenever a loaded page holds it (for the games heading). */
 		onselected?: (group: DiscoveryGroup) => void;
+		/** B16: a new search (trimmed, '' for none); the page writes it to the URL with group page 1. */
+		onfind?: (find: string) => void;
 	}
 
-	let { view, onpage, onselected }: Props = $props();
+	let { view, onpage, onselected, onfind }: Props = $props();
+
+	/** B16: the search box; typing is debounced, and the URL is the source of truth (Back/Forward). */
+	let findText = $state(untrack(() => view.find ?? ''));
+	let findTimer: ReturnType<typeof setTimeout> | undefined;
+	function onFindInput(): void {
+		clearTimeout(findTimer);
+		findTimer = setTimeout(() => {
+			if (findText.trim() !== (view.find ?? '')) onfind?.(findText.trim());
+		}, 300);
+	}
+	// A pending search is dropped on unmount and when the kind changes (the list stays mounted between tabs).
+	$effect(() => {
+		void view.kind;
+		return () => clearTimeout(findTimer);
+	});
+	$effect(() => {
+		const current = view.find ?? '';
+		untrack(() => {
+			if (findText.trim() !== current) findText = current;
+		});
+	});
 
 	$effect(() => {
 		const selected = result?.items.find((g) => g.key === view.key);
@@ -55,7 +79,7 @@
 
 	$effect(() => {
 		const kind = view.kind;
-		const params = { page: view.groupPage, pageSize };
+		const params = { page: view.groupPage, pageSize, q: view.find };
 		void reload;
 		// A response for an earlier kind or page never replaces the current one.
 		let stale = false;
@@ -73,12 +97,28 @@
 	});
 </script>
 
+<!-- B16: outside the loading branch, so it keeps focus while results reload. -->
+<div class="mb-2">
+	<label class="visually-hidden" for="find-{view.kind}">Search {noun}</label>
+	<input
+		id="find-{view.kind}"
+		type="search"
+		class="form-control form-control-sm"
+		placeholder="Search {noun}"
+		maxlength={maxFind}
+		bind:value={findText}
+		oninput={onFindInput}
+	/>
+</div>
+
 {#if error}
 	<ErrorAlert {error} onretry={() => reload++} />
 {:else if !result}
 	<Loading label="Loading {noun}…" />
 {:else if result.items.length === 0}
-	{#if result.total === 0}
+	{#if view.find && result.total === 0}
+		<EmptyState message="No {noun} match “{view.find}”." />
+	{:else if result.total === 0}
 		<EmptyState message="No games have {noun} yet." icon="collections" />
 	{:else}
 		<EmptyState message="There are no {noun} on this page." />
@@ -97,7 +137,10 @@
 						<GroupLogo kind={view.kind} item={group} />
 						<span class="text-truncate" title={group.name}>{group.name}</span>
 					</span>
-					<span class="badge text-bg-secondary rounded-pill"
+					<span
+						class="badge rounded-pill count-badge {group.key === view.key
+							? 'text-bg-light'
+							: 'text-bg-primary'}"
 						>{formatCount(group.gameCount)} {group.gameCount === 1 ? 'game' : 'games'}</span
 					>
 				</a>
@@ -131,9 +174,3 @@
 {/if}
 
 <LogoModal bind:open={logoOpen} kind={view.kind} item={editing} onchanged={() => reload++} />
-
-<style>
-	.min-w-0 {
-		min-width: 0;
-	}
-</style>

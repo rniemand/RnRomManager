@@ -5,7 +5,9 @@
 	import { api } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { IntegrityIssue, IntegrityStatus, Job, Page } from '#lib/api/types.js';
+	import AccordionItem from '#lib/components/AccordionItem.svelte';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
+	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import RomToolsTabs from '#lib/components/RomToolsTabs.svelte';
@@ -41,6 +43,9 @@
 	let issueType = $state('');
 	let issuePage = $state(1);
 	let reloadIssues = $state(0);
+	/** B24: independent panels, Issues open by default. */
+	let issuesOpen = $state(true);
+	let historyOpen = $state(false);
 
 	const job = $derived(jobs.current);
 	const pages = $derived(issues ? Math.max(1, Math.ceil(issues.total / pageSize)) : 1);
@@ -235,9 +240,8 @@
 			</div>
 		</section>
 	{/if}
-
-	<section class="mb-4" aria-labelledby="issues-heading">
-		<h2 class="h5" id="issues-heading">Issues</h2>
+	<AccordionItem id="issues-panel" headingId="issues-heading" bind:open={issuesOpen}>
+		{#snippet header()}Issues{/snippet}
 		<div class="row g-2 mb-2">
 			<div class="col-6 col-md-3">
 				<label class="form-label" for="issue-status">Status</label>
@@ -265,44 +269,48 @@
 		{:else if !issues}
 			<Loading />
 		{:else if issues.items.length === 0}
-			<p class="text-body-secondary">No issues.</p>
+			<EmptyState message="No issues." />
 		{:else}
-			<div class="table-responsive">
-				<table class="table table-sm table-striped table-hover">
-					<thead class="table-dark">
-						<tr>
-							<th scope="col">Severity</th>
-							<th scope="col">Type</th>
-							<th scope="col">Path</th>
-							<th scope="col">Details</th>
-							<th scope="col">Status</th>
-							<th scope="col">Detected</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each issues.items as issue (issue.id)}
+			<div class="card mb-2">
+				<div class="table-responsive">
+					<table class="table table-sm table-striped table-hover align-middle mb-0">
+						<thead class="table-dark">
 							<tr>
-								<td><span class="badge {severityClass(issue.severity)}">{issue.severity}</span></td>
-								<td>{issue.type}</td>
-								<td class="text-break">
-									{#if issue.gameId}
-										<a href={resolve('/games/[id]', { id: issue.gameId })}
-											>{issue.zipPath ?? 'Game'}</a
-										>
-									{:else}
-										{issue.zipPath ?? '—'}
-									{/if}
-									{#if issue.entryName}<span class="text-body-secondary">
-											› {issue.entryName}</span
-										>{/if}
-								</td>
-								<td class="small text-break">{issue.details ?? ''}</td>
-								<td>{issue.status}</td>
-								<td class="text-nowrap">{formatDateTime(issue.detectedAt)}</td>
+								<th scope="col">Severity</th>
+								<th scope="col">Type</th>
+								<th scope="col">Path</th>
+								<th scope="col">Details</th>
+								<th scope="col">Status</th>
+								<th scope="col">Detected</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
+						</thead>
+						<tbody>
+							{#each issues.items as issue (issue.id)}
+								<tr>
+									<td
+										><span class="badge {severityClass(issue.severity)}">{issue.severity}</span></td
+									>
+									<td>{issue.type}</td>
+									<td class="text-break">
+										{#if issue.gameId}
+											<a href={resolve('/games/[id]', { id: issue.gameId })}
+												>{issue.zipPath ?? 'Game'}</a
+											>
+										{:else}
+											{issue.zipPath ?? '—'}
+										{/if}
+										{#if issue.entryName}<span class="text-body-secondary">
+												› {issue.entryName}</span
+											>{/if}
+									</td>
+									<td class="small text-break">{issue.details ?? ''}</td>
+									<td>{issue.status}</td>
+									<td class="text-nowrap">{formatDateTime(issue.detectedAt)}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			</div>
 			{#if pages > 1}
 				<nav
@@ -325,40 +333,42 @@
 				</nav>
 			{/if}
 		{/if}
-	</section>
-
-	<section aria-labelledby="history-heading">
-		<h2 class="h5" id="history-heading">History</h2>
+	</AccordionItem>
+	<AccordionItem id="history-panel" headingId="history-heading" bind:open={historyOpen}>
+		{#snippet header()}History{/snippet}
 		{#if history.length === 0}
-			<p class="text-body-secondary">No checks have run yet.</p>
+			<EmptyState message="No checks have run yet." />
 		{:else}
-			<div class="table-responsive">
-				<table class="table table-sm table-striped table-hover">
-					<thead class="table-dark">
-						<tr>
-							<th scope="col">Started</th>
-							<th scope="col">Job</th>
-							<th scope="col">Status</th>
-							<th scope="col">Trigger</th>
-							<th scope="col">Summary</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each history as run (run.id)}
+			<div class="card">
+				<div class="table-responsive">
+					<table class="table table-sm table-striped table-hover align-middle mb-0">
+						<thead class="table-dark">
 							<tr>
-								<td class="text-nowrap">
-									<a href={resolve('/jobs/[id]', { id: run.id })}>{formatDateTime(run.startedAt)}</a
-									>
-								</td>
-								<td>{run.type}{run.mode ? ` (${run.mode})` : ''}</td>
-								<td><span class="badge {statusClass(run.status)}">{run.status}</span></td>
-								<td>{run.triggerSource}</td>
-								<td class="small">{formatSummary(run.summary)}</td>
+								<th scope="col">Started</th>
+								<th scope="col">Job</th>
+								<th scope="col">Status</th>
+								<th scope="col">Trigger</th>
+								<th scope="col">Summary</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
+						</thead>
+						<tbody>
+							{#each history as run (run.id)}
+								<tr>
+									<td class="text-nowrap">
+										<a href={resolve('/jobs/[id]', { id: run.id })}
+											>{formatDateTime(run.startedAt)}</a
+										>
+									</td>
+									<td>{run.type}{run.mode ? ` (${run.mode})` : ''}</td>
+									<td><span class="badge {statusClass(run.status)}">{run.status}</span></td>
+									<td>{run.triggerSource}</td>
+									<td class="small">{formatSummary(run.summary)}</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			</div>
 		{/if}
-	</section>
+	</AccordionItem>
 </AdminOnly>

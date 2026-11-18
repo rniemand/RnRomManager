@@ -98,6 +98,21 @@ describe('DiscoveryGames (discovery B2)', () => {
 		expect(screen.getByRole('heading', { name: /Nintendo/ }).textContent).toContain('2 games');
 	});
 
+	it('uses the narrow grid, since it sits in a two-thirds pane (B17)', async () => {
+		answers[url('publishers')] = [
+			{ status: 200, body: pageOf([game('g1', 'Mario', 'nes', 'NES')], 1) }
+		];
+		const { container } = render(DiscoveryGames, {
+			view: view(),
+			name: 'Nintendo',
+			onpage: vi.fn()
+		});
+
+		await screen.findByRole('link', { name: 'Mario' });
+		expect(container.querySelector('.row')!.classList).toContain('row-cols-xl-4');
+		expect(container.querySelector('.row')!.classList).not.toContain('row-cols-xl-6');
+	});
+
 	it('without the group name, the heading names the kind', async () => {
 		answers[url('genres')] = [{ status: 200, body: pageOf([game('g1', 'Tetris', 'gb', 'GB')]) }];
 		render(DiscoveryGames, { view: view({ kind: 'genres' }), name: null, onpage: vi.fn() });
@@ -123,14 +138,14 @@ describe('DiscoveryGames (discovery B2)', () => {
 	it('a selection no game has any more offers the way back, keeping the group page', async () => {
 		answers[url('genres')] = [{ status: 404, body: { status: 404, code: 'NotFound' } }];
 		render(DiscoveryGames, {
-			view: view({ kind: 'genres', groupPage: 3 }),
+			view: view({ kind: 'genres', groupPage: 3, find: 'rpg' }),
 			name: null,
 			onpage: vi.fn()
 		});
 
 		expect(await screen.findByText('No games have this genre any more.')).toBeTruthy();
 		expect(screen.getByRole('link', { name: 'Back to all genres' }).getAttribute('href')).toBe(
-			'/collections?tab=genres&groupPage=3'
+			'/collections?tab=genres&groupPage=3&find=rpg'
 		);
 		expect(screen.queryByRole('alert')).toBeNull();
 	});

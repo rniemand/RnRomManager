@@ -4,7 +4,7 @@
 	import type { GameListItem } from '../api/types';
 	import { formatCount } from '../format';
 	import { tooltip } from '../tooltip';
-	import { opensInNewTab, playUrl } from '../emulator';
+	import { opensInNewTab, playLinkEvents, playUrl } from '../emulator';
 	import EmulatorModal from './EmulatorModal.svelte';
 	import FileSize from './FileSize.svelte';
 	import Icon from './Icon.svelte';
@@ -22,9 +22,20 @@
 		action?: Snippet<[GameListItem]>;
 		/** B26: given → a checkbox per game, ticking toggles its id in this set. */
 		selected?: Set<string>;
+		/**
+		 * B17: the grid sits in a two-thirds-wide pane (Collections' Publishers, Genres and Systems tabs), so it uses fewer
+		 * columns and every card keeps room for the one-line rating.
+		 */
+		narrow?: boolean;
 	}
 
-	let { games = $bindable(), view, action, selected }: Props = $props();
+	let { games = $bindable(), view, action, selected, narrow = false }: Props = $props();
+
+	const gridColumns = $derived(
+		narrow
+			? 'row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-4'
+			: 'row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6'
+	);
 
 	function toggle(id: string, on: boolean): void {
 		if (on) selected?.add(id);
@@ -63,6 +74,7 @@
 			target="_blank"
 			rel="noopener"
 			aria-label="Play {game.displayTitle} (opens in a new tab)"
+			{...playLinkEvents(game.id, game.playRomId!)}
 			><!-- eslint-enable svelte/no-navigation-without-resolve --><Icon name="play" /></a
 		>
 	{:else}
@@ -99,7 +111,7 @@
 {/snippet}
 
 {#if view === 'grid'}
-	<div class="row row-cols-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6 g-3">
+	<div class="row {gridColumns} g-3">
 		{#each games as game (game.id)}
 			<div class="col">
 				<div class="card h-100 game-card">

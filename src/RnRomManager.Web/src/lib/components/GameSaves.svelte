@@ -170,8 +170,9 @@
 	};
 </script>
 
-<section aria-labelledby="saves-heading">
-	<div class="d-flex align-items-center gap-2 mb-3">
+<!-- B11: one card (T1): the heading and Add save in its header, the table its direct child. -->
+<section class="card" aria-labelledby="saves-heading">
+	<div class="card-header d-flex align-items-center gap-2">
 		<h2 class="h5 mb-0 me-auto" id="saves-heading">Saves</h2>
 		<button
 			type="button"
@@ -184,11 +185,11 @@
 	</div>
 
 	{#if loadError}
-		<ErrorAlert error={loadError} onretry={load} />
+		<div class="card-body"><ErrorAlert error={loadError} onretry={load} /></div>
 	{:else if !items}
-		<Loading />
+		<div class="card-body"><Loading /></div>
 	{:else if items.length === 0}
-		<EmptyState message="No saves yet" />
+		<div class="card-body"><EmptyState message="No saves yet" /></div>
 	{:else}
 		<div class="table-responsive">
 			<table class="table table-sm table-striped table-hover align-middle mb-0">

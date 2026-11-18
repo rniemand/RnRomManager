@@ -6,6 +6,7 @@
 	import { isApiError } from '../api/errors';
 	import type { CollectionListItem, GameListItem, Page } from '../api/types';
 	import { Modal } from '../bootstrap';
+	import { opensInNewTab, playUrl, recordPlay } from '../emulator';
 	import { releaseModal } from '../modal';
 	import { auth } from '../stores/auth.svelte';
 	import FileSize from './FileSize.svelte';
@@ -48,6 +49,9 @@
 	let controller: AbortController | undefined;
 	let previous: HTMLElement | null = null;
 	let navigated = false;
+	/** B27: the game page to open with `?play=` once the search modal has fully hidden. */
+	let pendingPlay: string | null = null;
+	const playHintId = 'global-search-play-hint';
 
 	const matchLabels = { developer: 'Developer', publisher: 'Publisher', genre: 'Genre' } as const;
 
@@ -56,7 +60,16 @@
 	onMount(() => {
 		modal = new Modal(element, { backdrop: 'static', keyboard: true }); // M1
 		element.addEventListener('shown.bs.modal', () => input?.focus());
-		element.addEventListener('hidden.bs.modal', () => (open = false));
+		element.addEventListener('hidden.bs.modal', () => {
+			open = false;
+			// B27: only now, or Bootstrap's hide drops modal-open and the scroll lock under the Play modal.
+			if (pendingPlay) {
+				const url = pendingPlay;
+				pendingPlay = null;
+				// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
+				void goto(url);
+			}
+		});
 	});
 
 	onDestroy(() => {
@@ -156,6 +169,33 @@
 		);
 	}
 
+	function reset(): void {
+		navigated = true;
+		cancel();
+		query = '';
+		collections = [];
+		games = [];
+		status = 'hint';
+	}
+
+	/**
+	 * B27: plays a result's release. PSP opens its own tab right here (before any await, so popup blockers allow it),
+	 * records the play and opens the game page; any other core opens the game page with `?play=` once hidden.
+	 */
+	function play(game: GameListItem): void {
+		if (game.playRomId == null) return;
+		const rom = { id: game.playRomId, fileName: game.playRomFileName ?? '' };
+		if (game.browserCore && opensInNewTab(game.browserCore)) {
+			window.open(playUrl(game.id, rom, game.browserCore, game.playDisc), '_blank', 'noopener');
+			recordPlay(game.id, rom.id);
+			void choose({ kind: 'game', item: game });
+			return;
+		}
+		reset();
+		pendingPlay = `${resolve('/games/[id]', { id: game.id })}?play=${rom.id}`;
+		open = false;
+	}
+
 	function onInputKeydown(e: KeyboardEvent): void {
 		if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
 			if (!results.length) return;
@@ -164,7 +204,12 @@
 			active = (active + step + results.length) % results.length;
 		} else if (e.key === 'Enter') {
 			e.preventDefault();
-			if (results[active]) void choose(results[active]);
+			const entry = results[active];
+			if (!entry) return;
+			// B27: Shift+Enter plays a playable game; on anything else it does nothing.
+			if (e.shiftKey) {
+				if (entry.kind === 'game' && entry.item.playRomId != null) play(entry.item);
+			} else void choose(entry);
 		}
 	}
 </script>
@@ -208,6 +253,9 @@
 						onkeydown={onInputKeydown}
 					/>
 				</div>
+
+				<!-- B27: one shared description, outside the listbox (a non-option child there fails axe). -->
+				<span class="visually-hidden" id={playHintId}>Shift+Enter to play</span>
 
 				<div class="mt-3" aria-live="polite">
 					{#if status === 'hint'}
@@ -273,9 +321,11 @@
 						<li
 							id="{listId}-{i}"
 							class="list-group-item list-group-item-action d-grid align-items-center gap-3 game-row"
+							class:game-row-play={game.playRomId != null}
 							class:active={i === active}
 							role="option"
 							aria-selected={i === active}
+							aria-describedby={game.playRomId != null ? playHintId : undefined}
 							onclick={() => void choose({ kind: 'game', item: game })}
 							onkeydown={() => {}}
 							onmousemove={() => (active = i)}
@@ -325,6 +375,18 @@
 									readonly
 								/>
 							</div>
+							{#if game.playRomId != null}
+								<!-- B27: a pointer shortcut (keyboard: Shift+Enter), so not focusable inside the option. -->
+								<span
+									class="btn btn-sm btn-outline-success"
+									aria-hidden="true"
+									title="Play"
+									onclick={(e) => {
+										e.stopPropagation();
+										play(game);
+									}}><Icon name="play" /></span
+								>
+							{/if}
 						</li>
 					{/each}
 				</ul>
@@ -344,18 +406,21 @@
 		height: 48px;
 	}
 
-	.min-w-0 {
-		min-width: 0;
-	}
-
 	/* S2: thumbnail, title, badge; meta and rating join from md. */
 	.game-row {
 		grid-template-columns: 48px 1fr auto;
+	}
+	/* B27: a playable row adds a trailing column for its Play icon. */
+	.game-row-play {
+		grid-template-columns: 48px 1fr auto auto;
 	}
 
 	@media (min-width: 768px) {
 		.game-row {
 			grid-template-columns: 48px 1fr auto auto auto;
+		}
+		.game-row-play {
+			grid-template-columns: 48px 1fr auto auto auto auto;
 		}
 	}
 </style>

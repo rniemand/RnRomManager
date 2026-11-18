@@ -3,6 +3,7 @@
 	import ConfirmModal from './ConfirmModal.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
 	import Icon from './Icon.svelte';
+	import EmptyState from './EmptyState.svelte';
 	import Loading from './Loading.svelte';
 
 	/** B12: the version, GitHub link, attribution and licences (what the Admin About tab used to show), for everyone. */
@@ -17,6 +18,18 @@
 	let { open = $bindable(), about, error = null, onretry }: Props = $props();
 
 	const repoUrl = 'https://github.com/rniemand/RnRomManager';
+
+	/** B25: filters the licences by name or licence (case-insensitive contains). */
+	let search = $state('');
+	const licenses = $derived.by(() => {
+		const needle = search.trim().toLowerCase();
+		const all = about?.licenses ?? [];
+		return needle
+			? all.filter(
+					(l) => l.name.toLowerCase().includes(needle) || l.license.toLowerCase().includes(needle)
+				)
+			: all;
+	});
 </script>
 
 <ConfirmModal bind:open title="About RnRomManager" size="lg">
@@ -49,8 +62,20 @@
 		</p>
 
 		<h2 class="h5 mt-4">Licences</h2>
-		<div class="card">
-			<div class="table-responsive">
+		<label class="visually-hidden" for="about-licence-search">Search licences</label>
+		<input
+			id="about-licence-search"
+			type="search"
+			class="form-control form-control-sm mb-2"
+			placeholder="Search licences"
+			bind:value={search}
+		/>
+		{#if licenses.length === 0}
+			<EmptyState message="No licences match" />
+		{/if}
+		<div class="card" hidden={licenses.length === 0}>
+			<!-- B25: the table scrolls inside this wrapper, so its header can stick. -->
+			<div class="table-responsive licence-scroll">
 				<table class="table table-sm table-striped table-hover align-middle mb-0">
 					<thead class="table-dark">
 						<tr class="small text-uppercase text-body-secondary">
@@ -59,7 +84,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each about.licenses as license (license.name)}
+						{#each licenses as license (license.name)}
 							<tr>
 								<td>
 									<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external licence URL -->
@@ -74,3 +99,16 @@
 		</div>
 	{/if}
 </ConfirmModal>
+
+<style>
+	.licence-scroll {
+		max-height: 40vh;
+		overflow-y: auto;
+	}
+	/* :global keeps the table head class exactly `table-dark` (table-style.test.ts). */
+	.licence-scroll :global(thead th) {
+		position: sticky;
+		top: 0;
+		z-index: 1;
+	}
+</style>
