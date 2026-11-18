@@ -1,10 +1,27 @@
 import { api } from './api/client';
 import { isApiError } from './api/errors';
+import type { Page, ReviewListItem } from './api/types';
+import { parseReviewFilter, readSavedReviewFilter, reviewApiUrl } from './reviewFilter';
 import { toasts } from './stores/toasts.svelte';
 
 /** RV1: deletes a review item's source file (the modal and both Shift+click shortcuts). */
 export function deleteReviewItem(id: number): Promise<unknown> {
 	return api.delete(`/api/review/${id}`);
+}
+
+/**
+ * Review QoL B11: the first Pending item, in the queue's default order and within the saved Review filter (its page
+ * ignored), that isn't `currentId`; null when there is none. Rejects when the lookup fails.
+ */
+export async function nextReviewItem(
+	currentId: number,
+	signal?: AbortSignal
+): Promise<number | null> {
+	const filter = parseReviewFilter(new URLSearchParams(readSavedReviewFilter()));
+	const list = await api.get<Page<ReviewListItem>>(reviewApiUrl({ ...filter, page: 1 }, 2), {
+		signal
+	});
+	return list.items.find((i) => i.id !== currentId)?.id ?? null;
 }
 
 /** RV1: a failed Shift+click delete toasts the error and changes nothing else. */

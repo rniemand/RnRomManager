@@ -13,6 +13,8 @@ export interface ReviewJob {
 	reviewId: number;
 	fileName: string;
 	done: string;
+	/** Review QoL B10: started by Use and Next. */
+	next?: true;
 }
 
 // The codes the resolve endpoint answered 409 for before it ran as a job.

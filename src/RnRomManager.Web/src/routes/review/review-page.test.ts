@@ -9,10 +9,16 @@ import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 import { expectOnePageTitle } from '#lib/testing/pageTitle.js';
 
 const goto = vi.fn();
+let lastId = '7';
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => goto(...args) }));
 vi.mock('$app/state', () => ({
 	page: {
-		params: { id: '7' },
+		// B21: the id follows the test URL while it is an item page, so a test can move between items.
+		get params() {
+			const id = /^\/review\/(\d+)/.exec(testUrl.current.pathname)?.[1];
+			if (id) lastId = id;
+			return { id: lastId };
+		},
 		get url() {
 			return testUrl.current;
 		}
@@ -694,6 +700,235 @@ describe('review detail page', () => {
 		await poll();
 
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/review'));
+	});
+
+	describe('back button, Use and Next and moving between items (B9–B12, B21)', () => {
+		const nextUrl = '/api/review?status=Pending&page=1&pageSize=2';
+		const queue = (...ids: number[]) => ({
+			status: 200,
+			body: { items: ids.map((id) => ({ id })), page: 1, pageSize: 2, total: ids.length }
+		});
+		const useAndNext = () => screen.getByRole('button', { name: 'Use and Next' });
+
+		/** Holds every GET whose url starts with `prefix` until `release(url)`; the rest answer as usual. */
+		function hold(prefix: string) {
+			const waiting = new Map<string, (() => void)[]>();
+			const answer = globalThis.fetch;
+			vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+				if (!url.startsWith(prefix) || (init?.method ?? 'GET') !== 'GET') return answer(url, init);
+				return new Promise<Response>((resolve) => {
+					const queued = waiting.get(url) ?? [];
+					queued.push(() => resolve(answer(url, init) as unknown as Response));
+					waiting.set(url, queued);
+				});
+			});
+			return {
+				/** Answers the oldest held request for `url`. */
+				release: async (url: string) => {
+					await vi.waitFor(() => expect(waiting.get(url)?.length).toBeGreaterThan(0));
+					waiting.get(url)!.shift()!();
+				}
+			};
+		}
+
+		it('the back link is a small outline button with the back icon (B9)', async () => {
+			answers['GET /api/review/7'] = { status: 200, body: noMatch };
+			render(ReviewPage);
+
+			const back = await screen.findByRole('link', { name: 'Review queue' });
+			expect(back.getAttribute('href')).toBe('/review');
+			expect(back.className).toBe('btn btn-sm btn-outline-primary');
+			expect(back.querySelector('i')!.className).toContain('bi-arrow-left');
+		});
+
+		it('each suggestion gets Use and Next right after Use, enabled once another item is found (B10–B12)', async () => {
+			answers['GET /api/review/7'] = {
+				status: 200,
+				body: {
+					...noMatch,
+					suggestions: [
+						...noMatch.suggestions,
+						{ datGameName: 'Tetris DX (World)', romName: 'Tetris DX (World).gbc', score: 0.5 }
+					]
+				}
+			};
+			answers[`GET ${nextUrl}`] = queue(7, 8);
+			const lookup = hold('/api/review?');
+			render(ReviewPage);
+			await screen.findByText('Tetris (World) (Rev 1).gb');
+
+			const rows = [...document.querySelectorAll('tbody tr')].filter((r) =>
+				r.querySelector('button')
+			);
+			expect(rows).toHaveLength(2);
+			for (const row of rows) {
+				const buttons = within(row as HTMLElement).getAllByRole('button');
+				expect(buttons.map((b) => b.textContent!.trim())).toEqual(['Use', 'Use and Next']);
+				expect(buttons[1].className).toBe('btn btn-sm btn-outline-primary ms-1');
+				expect(buttons[0].parentElement).toBe(buttons[1].parentElement);
+			}
+			const next = within(rows[0] as HTMLElement).getByRole('button', { name: 'Use and Next' });
+			expect((next as HTMLButtonElement).disabled).toBe(true);
+			expect(next.hasAttribute('title')).toBe(false);
+
+			await lookup.release(nextUrl);
+			await vi.waitFor(() => expect((next as HTMLButtonElement).disabled).toBe(false));
+		});
+
+		it('is disabled with a title when no other item is left (B12)', async () => {
+			answers['GET /api/review/7'] = { status: 200, body: noMatch };
+			answers[`GET ${nextUrl}`] = queue(7);
+			render(ReviewPage);
+			await screen.findByText('Tetris (World) (Rev 1).gb');
+
+			await vi.waitFor(() =>
+				expect(useAndNext().getAttribute('title')).toBe('No more items in the review queue.')
+			);
+			expect((useAndNext() as HTMLButtonElement).disabled).toBe(true);
+		});
+
+		it('is disabled without a title when the lookup fails (B12)', async () => {
+			answers['GET /api/review/7'] = { status: 200, body: noMatch };
+			answers[`GET ${nextUrl}`] = { status: 500, body: { title: 'Boom' } };
+			render(ReviewPage);
+			await screen.findByText('Tetris (World) (Rev 1).gb');
+			await vi.advanceTimersByTimeAsync(10);
+
+			expect((useAndNext() as HTMLButtonElement).disabled).toBe(true);
+			expect(useAndNext().hasAttribute('title')).toBe(false);
+		});
+
+		it('the lookup honours the saved Review filter, page ignored (B11)', async () => {
+			const store = new Map([['rnrm.review.filter', '?q=tet&system=gb&reason=NoDatMatch&page=3']]);
+			vi.stubGlobal('localStorage', {
+				getItem: (k: string) => store.get(k) ?? null,
+				setItem: () => {},
+				removeItem: () => {}
+			});
+			const filtered = `${nextUrl}&q=tet&system=gb&reason=NoDatMatch`;
+			answers['GET /api/review/7'] = { status: 200, body: noMatch };
+			answers[`GET ${filtered}`] = queue(8);
+			render(ReviewPage);
+			await screen.findByText('Tetris (World) (Rev 1).gb');
+
+			await vi.waitFor(() => expect((useAndNext() as HTMLButtonElement).disabled).toBe(false));
+		});
+
+		it('starts the same resolution as Use, marked next (B10)', async () => {
+			answers['GET /api/review/7'] = { status: 200, body: noMatch };
+			answers[`GET ${nextUrl}`] = queue(8);
+			render(ReviewPage);
+			await screen.findByText('Tetris (World) (Rev 1).gb');
+			await vi.waitFor(() => expect((useAndNext() as HTMLButtonElement).disabled).toBe(false));
+
+			await fireEvent.click(useAndNext());
+
+			await vi.waitFor(() => expect(reviewJobs.running).not.toBeNull());
+			expect(posts.find((p) => p.url === '/api/review/7/resolve')!.body).toEqual({
+				action: 'Dat',
+				datSystem: 'gb',
+				datGameName: 'Tetris (World)'
+			});
+			expect(reviewJobs.running).toMatchObject({
+				jobId: 'j1',
+				reviewId: 7,
+				done: 'Added as an unverified release of Tetris (World).',
+				next: true
+			});
+		});
+
+		it('Use does not mark the job next', async () => {
+			answers['GET /api/review/7'] = { status: 200, body: noMatch };
+			render(ReviewPage);
+			await fireEvent.click(await screen.findByRole('button', { name: 'Use' }));
+
+			await vi.waitFor(() => expect(reviewJobs.running).not.toBeNull());
+			expect(reviewJobs.running!.next).toBeUndefined();
+		});
+
+		it('a lookup for the previous item is ignored after the item changes (B12)', async () => {
+			answers['GET /api/review/7'] = { status: 200, body: noMatch };
+			answers['GET /api/review/8'] = { status: 200, body: { ...noMatch, id: 8 } };
+			answers[`GET ${nextUrl}`] = queue(9);
+			const lookup = hold('/api/review?');
+			render(ReviewPage);
+			await screen.findByText('Tetris (World) (Rev 1).gb');
+			await vi.waitFor(() => expect(posts).toEqual([]));
+
+			navigateTo('/review/8');
+			await vi.advanceTimersByTimeAsync(10);
+			await screen.findByText('Tetris (World) (Rev 1).gb');
+			// The first (aborted) lookup answers late; the second hasn't answered yet.
+			await lookup.release(nextUrl);
+			await vi.advanceTimersByTimeAsync(10);
+
+			expect((useAndNext() as HTMLButtonElement).disabled).toBe(true);
+			await lookup.release(nextUrl);
+			await vi.waitFor(() => expect((useAndNext() as HTMLButtonElement).disabled).toBe(false));
+		});
+
+		it('moving to another item in place starts every per-item value afresh (B21)', async () => {
+			answers['GET /api/review/7'] = { status: 200, body: switchItem };
+			answers['GET /api/review/8'] = {
+				status: 200,
+				body: { ...switchItem, id: 8, originalFileName: 'orbit2.nsp' }
+			};
+			answers['GET /api/dat/search?system=switch&q=orbit&limit=20'] = {
+				status: 200,
+				body: [{ gameName: 'Orbit X [01]', romName: 'Orbit X.nsp', sizeBytes: 0, crc32: '' }]
+			};
+			render(ReviewPage);
+			const update = (await screen.findByLabelText('This file is an update')) as HTMLInputElement;
+			await fireEvent.click(update);
+			expect(update.checked).toBe(true);
+			await fireEvent.input(screen.getByLabelText(/Search the .* DAT/), {
+				target: { value: 'orbit' }
+			});
+			await fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+			await screen.findByText('Orbit X.nsp');
+			await fireEvent.click(screen.getByRole('tab', { name: 'Manual' }));
+			await fireEvent.input(screen.getByLabelText('Title'), { target: { value: 'Typed' } });
+
+			navigateTo('/review/8');
+			await vi.waitFor(() => expect(screen.queryByLabelText('Title')).toBeNull());
+
+			expect(screen.getByRole('tab', { name: 'Suggestions' }).getAttribute('aria-selected')).toBe(
+				'true'
+			);
+			expect((screen.getByLabelText('This file is an update') as HTMLInputElement).checked).toBe(
+				false
+			);
+			expect(screen.queryByText('Orbit X.nsp')).toBeNull();
+			expect((screen.getByLabelText(/Search the .* DAT/) as HTMLInputElement).value).toBe('');
+			await fireEvent.click(screen.getByRole('tab', { name: 'Manual' }));
+			expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('');
+		});
+
+		it('a DAT search answer for the previous item is ignored (B21)', async () => {
+			answers['GET /api/review/7'] = { status: 200, body: switchItem };
+			answers['GET /api/review/8'] = { status: 200, body: { ...switchItem, id: 8 } };
+			answers['GET /api/dat/search?system=switch&q=orbit&limit=20'] = {
+				status: 200,
+				body: [{ gameName: 'Orbit X [01]', romName: 'Orbit X.nsp', sizeBytes: 0, crc32: '' }]
+			};
+			const search = hold('/api/dat/search');
+			render(ReviewPage);
+			await fireEvent.input(await screen.findByLabelText(/Search the .* DAT/), {
+				target: { value: 'orbit' }
+			});
+			await fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+
+			navigateTo('/review/8');
+			await vi.advanceTimersByTimeAsync(10);
+			await screen.findByLabelText(/Search the .* DAT/);
+			await search.release('/api/dat/search?system=switch&q=orbit&limit=20');
+			await vi.advanceTimersByTimeAsync(10);
+
+			expect(screen.queryByText('Orbit X.nsp')).toBeNull();
+			expect((screen.getByRole('button', { name: 'Search' }) as HTMLButtonElement).disabled).toBe(
+				false
+			);
+		});
 	});
 });
 
