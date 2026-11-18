@@ -19,6 +19,11 @@
 			icon: 'report-missing-images'
 		},
 		{ href: resolve('/reports/duplicates'), label: 'Duplicates', icon: 'report-duplicates' },
+		{
+			href: resolve('/reports/multiple-releases'),
+			label: 'Multiple Releases',
+			icon: 'report-multiple-releases'
+		},
 		...(auth.isAdmin ? [{ href: activity, label: 'Activity', icon: 'activity' }] : [])
 	]);
 </script>

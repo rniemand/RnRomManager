@@ -425,7 +425,8 @@ describe('Activity report (B20)', () => {
 			expect(screen.getAllByRole('link').map((a) => a.textContent!.trim())).toEqual([
 				'Library Size',
 				'Missing Images',
-				'Duplicates'
+				'Duplicates',
+				'Multiple Releases'
 			]);
 		});
 
