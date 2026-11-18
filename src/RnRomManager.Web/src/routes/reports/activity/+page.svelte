@@ -2,14 +2,22 @@
 	import { onMount, type Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { api } from '#lib/api/client.js';
-	import type { ActivityAuditItem, ActivityReport, SystemInfo } from '#lib/api/types.js';
+	import type {
+		ActivityAuditItem,
+		ActivityReport,
+		BackupStatus,
+		Job,
+		Page,
+		SystemInfo
+	} from '#lib/api/types.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
-	import { formatDateTime } from '#lib/format.js';
+	import { formatDateTime, formatDuration } from '#lib/format.js';
+	import { statusClass } from '#lib/jobs.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 
 	/** B20: the extra columns of an audit section, after Time and User. */
@@ -21,23 +29,34 @@
 		outcome: 'Outcome'
 	};
 
-	let report = $state<ActivityReport | null>(null);
-	let reportError = $state<unknown>(null);
-	let systems = $state<SystemInfo[]>([]);
-
-	async function loadReport(): Promise<void> {
-		reportError = null;
-		report = null;
-		try {
-			report = await api.get<ActivityReport>('/api/reports/activity');
-		} catch (e) {
-			reportError = e;
+	/** B20: one API call behind some sections; each shows its own Loading or ErrorAlert, so one failure spares the rest. */
+	class Source<T> {
+		data = $state<T | null>(null);
+		error = $state<unknown>(null);
+		readonly url: string;
+		constructor(url: string) {
+			this.url = url;
 		}
+		load = async (): Promise<void> => {
+			this.error = null;
+			this.data = null;
+			try {
+				this.data = await api.get<T>(this.url);
+			} catch (e) {
+				this.error = e;
+			}
+		};
 	}
+
+	const reportSource = new Source<ActivityReport>('/api/reports/activity');
+	const jobsSource = new Source<Page<Job>>('/api/jobs?pageSize=10');
+	const backupSource = new Source<BackupStatus>('/api/admin/backups');
+	const report = $derived(reportSource.data);
+	let systems = $state<SystemInfo[]>([]);
 
 	onMount(() => {
 		if (!auth.isAdmin) return;
-		void loadReport();
+		for (const source of [reportSource, jobsSource, backupSource]) void source.load();
 		// Names for the system badges only; without them SystemBadge falls back to the id.
 		api.get<SystemInfo[]>('/api/systems').then(
 			(list) => (systems = list),
@@ -61,10 +80,15 @@
 	</section>
 {/snippet}
 
-{#snippet reportState(empty: boolean, message: string, table: Snippet)}
-	{#if reportError}
-		<div class="card-body"><ErrorAlert error={reportError} onretry={loadReport} /></div>
-	{:else if !report}
+{#snippet sourceState(
+	source: { data: unknown; error: unknown; load: () => Promise<void> },
+	empty: boolean,
+	message: string,
+	table: Snippet
+)}
+	{#if source.error}
+		<div class="card-body"><ErrorAlert error={source.error} onretry={source.load} /></div>
+	{:else if !source.data}
 		<div class="card-body"><Loading /></div>
 	{:else if empty}
 		<EmptyState {message} />
@@ -123,7 +147,7 @@
 )}
 	{#snippet body()}
 		{#snippet table()}{@render auditTable(items ?? [], columns)}{/snippet}
-		{@render reportState(!items?.length, message, table)}
+		{@render sourceState(reportSource, !items?.length, message, table)}
 	{/snippet}
 	{@render section(key, title, body)}
 {/snippet}
@@ -155,7 +179,7 @@
 			</tbody>
 		</table>
 	{/snippet}
-	{@render reportState(!report?.addedRoms.length, 'No ROMs added yet.', table)}
+	{@render sourceState(reportSource, !report?.addedRoms.length, 'No ROMs added yet.', table)}
 {/snippet}
 
 {#snippet signInsBody()}
@@ -166,7 +190,91 @@
 		</p>
 	{/if}
 	{#snippet table()}{@render auditTable(report?.signIns ?? [], ['outcome'])}{/snippet}
-	{@render reportState(!report?.signIns.length, 'No sign-ins in the last 30 days.', table)}
+	{@render sourceState(
+		reportSource,
+		!report?.signIns.length,
+		'No sign-ins in the last 30 days.',
+		table
+	)}
+{/snippet}
+
+{#snippet jobsBody()}
+	{#snippet table()}
+		<table class="table table-sm table-striped table-hover align-middle mb-0">
+			<thead class="table-dark">
+				<tr>
+					<th scope="col">Type</th>
+					<th scope="col">Status</th>
+					<th scope="col">Started</th>
+					<th scope="col">Duration</th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each jobsSource.data?.items ?? [] as job (job.id)}
+					<tr>
+						<td>{job.type}</td>
+						<td><span class="badge {statusClass(job.status)}">{job.status}</span></td>
+						<td class="text-nowrap">
+							<a href={resolve('/jobs/[id]', { id: job.id })}>{formatDateTime(job.startedAt)}</a>
+						</td>
+						<td class="text-nowrap">
+							{job.finishedAt
+								? formatDuration(Date.parse(job.finishedAt) - Date.parse(job.startedAt))
+								: 'running'}
+						</td>
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	{/snippet}
+	{@render sourceState(jobsSource, !jobsSource.data?.items.length, 'No jobs have run yet.', table)}
+{/snippet}
+
+{#snippet backupBody()}
+	{#snippet table()}
+		{@const status = backupSource.data!}
+		<table class="table table-sm table-striped table-hover align-middle mb-0">
+			<tbody>
+				{#if status.lastResult}
+					<tr>
+						<th scope="row">Last run</th>
+						<td class="text-nowrap">{formatDateTime(status.lastResult.at)}</td>
+					</tr>
+					<tr>
+						<th scope="row">Result</th>
+						<td>
+							{#if status.lastResult.ok}
+								<span class="badge text-bg-success">OK</span>
+								{status.lastResult.fileName ?? ''}
+							{:else}
+								<span class="badge text-bg-danger">Failed</span>
+								<span class="text-break">{status.lastResult.error ?? ''}</span>
+							{/if}
+						</td>
+					</tr>
+				{:else}
+					<!-- After a restart the last result is gone; the newest file still says when a backup was made. -->
+					<tr>
+						<th scope="row">Newest file</th>
+						<td class="text-break">{status.backups[0].fileName}</td>
+					</tr>
+					<tr>
+						<th scope="row">Created</th>
+						<td class="text-nowrap">
+							{formatDateTime(status.backups[0].createdAt)}
+							<span class="text-body-secondary small">(since restart: no backup run)</span>
+						</td>
+					</tr>
+				{/if}
+			</tbody>
+		</table>
+	{/snippet}
+	{@render sourceState(
+		backupSource,
+		!backupSource.data?.lastResult && !backupSource.data?.backups.length,
+		'No backups yet.',
+		table
+	)}
 {/snippet}
 
 <AdminOnly>
@@ -207,4 +315,7 @@
 		['game', 'action'],
 		'No deletions in the last 30 days.'
 	)}
+
+	{@render section('jobs', 'Recent jobs', jobsBody)}
+	{@render section('backup', 'Last backup', backupBody)}
 </AdminOnly>

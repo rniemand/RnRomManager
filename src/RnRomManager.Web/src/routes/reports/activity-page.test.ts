@@ -46,6 +46,30 @@ const empty: ActivityReport = {
 	deletions: []
 };
 
+const job = (id: string, startedAt: string, finishedAt: string | null, status = 'Completed') => ({
+	id,
+	type: 'Ingest',
+	mode: null,
+	triggerSource: 'Manual',
+	status,
+	requestedBy: 1,
+	startedAt,
+	finishedAt,
+	summary: null,
+	error: null
+});
+const backups = (overrides: Record<string, unknown>) => ({
+	enabled: true,
+	time: '03:00',
+	retention: 7,
+	timeZone: 'UTC',
+	nextRunAt: null,
+	running: false,
+	lastResult: null,
+	backups: [],
+	...overrides
+});
+
 describe('Activity report (B20)', () => {
 	let answers: Record<string, { status: number; body?: unknown }>;
 	let calls: string[];
@@ -57,7 +81,12 @@ describe('Activity report (B20)', () => {
 		calls = [];
 		answers = {
 			'/api/reports/activity': { status: 200, body: empty },
-			'/api/systems': { status: 200, body: [{ id: 'gb', displayName: 'Game Boy' }] }
+			'/api/systems': { status: 200, body: [{ id: 'gb', displayName: 'Game Boy' }] },
+			'/api/jobs?pageSize=10': {
+				status: 200,
+				body: { items: [], page: 1, pageSize: 10, total: 0 }
+			},
+			'/api/admin/backups': { status: 200, body: backups({}) }
 		};
 		vi.stubGlobal('fetch', (url: string) => {
 			calls.push(url);
@@ -247,6 +276,109 @@ describe('Activity report (B20)', () => {
 		await screen.findByRole('link', { name: 'Tetris' });
 		expect(within(sectionOf('Added ROMs')).getByText('GB')).toBeTruthy();
 		expect(screen.queryByRole('alert')).toBeNull();
+	});
+
+	it('Recent jobs: raw type, status badge, started linked to the job, duration or running', async () => {
+		answers['/api/jobs?pageSize=10'] = {
+			status: 200,
+			body: {
+				items: [
+					job('j2', '2026-11-17T10:00:00Z', null, 'Running'),
+					job('j1', '2026-11-17T09:00:00Z', '2026-11-17T09:03:04Z')
+				],
+				page: 1,
+				pageSize: 10,
+				total: 2
+			}
+		};
+		render(ActivityPage);
+
+		const link = await screen.findByRole('link', { name: formatDateTime('2026-11-17T09:00:00Z') });
+		expect(link.getAttribute('href')).toBe('/jobs/j1');
+		expect(cells('Recent jobs')).toEqual([
+			['Ingest', 'Running', formatDateTime('2026-11-17T10:00:00Z'), 'running'],
+			['Ingest', 'Completed', formatDateTime('2026-11-17T09:00:00Z'), '3m 4s']
+		]);
+		expect(within(sectionOf('Recent jobs')).getByText('Completed').className).toContain('badge');
+	});
+
+	it('Last backup: an OK last result', async () => {
+		answers['/api/admin/backups'] = {
+			status: 200,
+			body: backups({
+				lastResult: { at: '2026-11-17T03:00:00Z', ok: true, fileName: 'b1.sql.gz', error: null }
+			})
+		};
+		render(ActivityPage);
+
+		await vi.waitFor(() =>
+			expect(cells('Last backup')).toEqual([
+				[formatDateTime('2026-11-17T03:00:00Z')],
+				['OK b1.sql.gz']
+			])
+		);
+	});
+
+	it('Last backup: a failed last result shows its error', async () => {
+		answers['/api/admin/backups'] = {
+			status: 200,
+			body: backups({
+				lastResult: { at: '2026-11-17T03:00:00Z', ok: false, fileName: null, error: 'disk full' }
+			})
+		};
+		render(ActivityPage);
+
+		await vi.waitFor(() => expect(cells('Last backup')[1]).toEqual(['Failed disk full']));
+	});
+
+	it('Last backup: after a restart the newest file, labelled since restart', async () => {
+		answers['/api/admin/backups'] = {
+			status: 200,
+			body: backups({
+				backups: [
+					{ fileName: 'new.sql.gz', sizeBytes: 1, createdAt: '2026-11-16T03:00:00Z' },
+					{ fileName: 'old.sql.gz', sizeBytes: 1, createdAt: '2026-11-15T03:00:00Z' }
+				]
+			})
+		};
+		render(ActivityPage);
+
+		await vi.waitFor(() =>
+			expect(cells('Last backup')).toEqual([
+				['new.sql.gz'],
+				[`${formatDateTime('2026-11-16T03:00:00Z')} (since restart: no backup run)`]
+			])
+		);
+	});
+
+	it('Last backup and Recent jobs: empty states', async () => {
+		render(ActivityPage);
+		expect(await screen.findByText('No backups yet.')).toBeTruthy();
+		expect(screen.getByText('No jobs have run yet.')).toBeTruthy();
+	});
+
+	it('loads the three sources in parallel; one failing shows its error while the others render', async () => {
+		answers['/api/jobs?pageSize=10'] = { status: 500, body: { title: 'Boom' } };
+		render(ActivityPage);
+
+		expect(calls.filter((u) => u !== '/api/systems')).toEqual([
+			'/api/reports/activity',
+			'/api/jobs?pageSize=10',
+			'/api/admin/backups'
+		]);
+		await vi.waitFor(() =>
+			expect(within(sectionOf('Recent jobs')).getByRole('alert')).toBeTruthy()
+		);
+		expect(within(sectionOf('Plays')).queryByRole('alert')).toBeNull();
+		expect(within(sectionOf('Plays')).getByText('No plays in the last 30 days.')).toBeTruthy();
+		expect(within(sectionOf('Last backup')).getByText('No backups yet.')).toBeTruthy();
+
+		answers['/api/jobs?pageSize=10'] = {
+			status: 200,
+			body: { items: [], page: 1, pageSize: 10, total: 0 }
+		};
+		await fireEvent.click(within(sectionOf('Recent jobs')).getByRole('button', { name: /Retry/ }));
+		expect(await screen.findByText('No jobs have run yet.')).toBeTruthy();
 	});
 
 	describe('layout', () => {
