@@ -124,6 +124,14 @@
 	});
 
 	/**
+	 * Shows a refetched or edited game only while the route still shows it: a response for game A that lands after a
+	 * hotkey or link moved the page to game B must not replace B.
+	 */
+	function setGame(detail: GameDetail): void {
+		if (detail.id.toLowerCase() === id.toLowerCase()) game = detail;
+	}
+
+	/**
 	 * §11: ROM ids change on every rewrite, so check the release still exists before handing the URL to the browser;
 	 * a stale one reloads the detail and asks for a retry instead of downloading a 404 body.
 	 */
@@ -140,7 +148,7 @@
 			game = null;
 			notFound = true;
 		} else if (rom && !fresh.roms.some((r) => r.id === rom.id)) {
-			game = fresh;
+			setGame(fresh);
 			notice = changedMessage;
 		} else {
 			window.location.assign(url);
@@ -257,7 +265,7 @@
 		}
 		try {
 			const fresh = await fetchGame(id);
-			if (fresh) game = fresh;
+			if (fresh) setGame(fresh);
 		} catch {
 			// The flipped icon stands; a stale id later reloads and asks for a retry as usual.
 		} finally {
@@ -272,7 +280,7 @@
 	async function refreshGame(): Promise<void> {
 		try {
 			const fresh = await fetchGame(id);
-			if (fresh) game = fresh;
+			if (fresh) setGame(fresh);
 		} catch {
 			// A stale id later reloads and asks for a retry as usual.
 		}
@@ -427,7 +435,7 @@
 					bind:rating={game.rating}
 					bind:favourite={game.favourite}
 					readonly={!auth.isAdmin}
-					onsaved={(detail) => (game = detail)}
+					onsaved={setGame}
 				/>
 			</div>
 			{#if memberOf.length}
@@ -969,7 +977,7 @@
 	{/if}
 
 	<div id="images-panel" role="tabpanel" aria-labelledby="images-tab" hidden={tab !== 'images'}>
-		<GameImages {game} onchanged={(detail) => (game = detail)} />
+		<GameImages {game} onchanged={setGame} />
 	</div>
 
 	<div id="saves-panel" role="tabpanel" aria-labelledby="saves-tab" hidden={tab !== 'saves'}>

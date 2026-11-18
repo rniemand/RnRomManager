@@ -26,6 +26,7 @@
 		type LibraryFilters,
 		type LibrarySort
 	} from '#lib/libraryQuery.js';
+	import { pageCount } from '#lib/pageSize.js';
 	import { renderMarkdown } from '#lib/markdown.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
@@ -72,7 +73,7 @@
 	const scope = $derived({ collection: id });
 	const filters = $derived(parseFilters(page.url.searchParams, scope));
 	const dir = $derived(filters.dir ?? defaultDir(filters.sort));
-	const pages = $derived(result ? Math.max(1, Math.ceil(result.total / libraryPageSize)) : 1);
+	const pages = $derived(result ? pageCount(result.total, libraryPageSize) : 1);
 
 	function go(next: LibraryFilters): void {
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
@@ -133,7 +134,12 @@
 		gamesError = null;
 		result = null;
 		api.get<Page<GameListItem>>(url, { signal: controller.signal }).then(
-			(list) => (result = list),
+			(list) => {
+				// Removing the last game of the last page leaves an empty page with no pager: go to the new last page.
+				if (list.items.length === 0 && list.total > 0 && filters.page > 1)
+					go({ ...filters, page: pageCount(list.total, libraryPageSize) });
+				else result = list;
+			},
 			(e) => {
 				// A 404 here means the collection is gone; the detail call shows that.
 				if (!controller.signal.aborted && !(isApiError(e) && e.status === 404)) gamesError = e;

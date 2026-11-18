@@ -93,6 +93,23 @@ public class ExternalMoveRecordTests
         Assert.That(File.Exists(final + ExternalRomName.PartialSuffix), Is.False);
     }
 
+    [Test]
+    public async Task WithoutNoReplaceRename_BackupAndRecordArePublishedThroughAHardLink()
+    {
+        // A filesystem without RENAME_NOREPLACE (e.g. NFS): every publish falls back to a hard link.
+        var hooks = new ExternalZipBackupHooks { Rename = (_, _) => new NoReplaceRenameResult(NoReplaceRenameStatus.Unsupported) };
+        var zip = Path.Combine(_roms, "ext", "S", "Space Game.zip");
+        File.Delete(_backup.Path);
+
+        var backup = await ExternalZipBackup.CreateAsync(_roms, zip, ExternalRomPath.ClassifyFile(_roms, zip).Snapshot!, hooks);
+        var record = Record() with { BackupSha256 = backup.Sha256 };
+        await ExternalMoveRecord.WriteAsync(_roms, backup, record, _reader, hooks);
+
+        Assert.That(await ExternalMoveRecord.ReadAsync(_roms, backup.Path, _reader), Is.EqualTo(record));
+        Assert.That(File.Exists(backup.Path + ExternalRomName.PartialSuffix), Is.False, "the staging alias is removed");
+        Assert.That(File.Exists(ExternalMoveRecord.PathOf(backup) + ExternalRomName.PartialSuffix), Is.False);
+    }
+
     // --- B18: v2 records for releases with set files ---
 
     /// <summary>A FileSets game whose one release has <paramref name="files"/>, written and backed up; with its reader.</summary>
