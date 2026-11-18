@@ -21,6 +21,16 @@ public interface IReportRepository
     /// <summary>RP2: every game of one system with its ZIP size, release and update-release counts, largest first (ties by title).</summary>
     Task<IReadOnlyList<GameSize>> ListGameSizesAsync(string systemId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Multiple Releases B15/B17: games with at least <paramref name="min"/> releases (rows not flagged <c>Update</c>), with their update count
+    /// and Library Size bytes. Only the primary key follows <paramref name="descending"/>; tie-breakers are ascending.
+    /// </summary>
+    Task<Page<MultipleReleaseItem>> ListMultipleReleasesAsync(int min, MultipleReleaseSort sort, bool descending, int page, int pageSize,
+        CancellationToken cancellationToken);
+
+    /// <summary>Multiple Releases B16: the highest release count of any game, 0 for an empty library.</summary>
+    Task<int> MaxReleaseCountAsync(CancellationToken cancellationToken);
+
     /// <summary>RP6–RP8: undismissed duplicate groups, sorted by system then base title; paging and total exclude dismissed ones.</summary>
     Task<Page<DuplicateGroup>> ListDuplicatesAsync(string? systemId, int page, int pageSize, CancellationToken cancellationToken);
 
@@ -40,6 +50,14 @@ public sealed record SystemSize(string SystemId, long Bytes, int GameCount, int 
 
 /// <param name="UpdateCount">B21: releases whose flags contain <c>Update</c>.</param>
 public sealed record GameSize(Guid Id, string DisplayTitle, long Bytes, int RomCount, int UpdateCount);
+
+/// <param name="ReleaseCount">B15: releases whose flags don't contain <c>Update</c> (DLC counts).</param>
+/// <param name="UpdateCount">B15: releases whose flags contain <c>Update</c>.</param>
+/// <param name="Bytes">B15: the Library Size report's game bytes.</param>
+public sealed record MultipleReleaseItem(Guid Id, string DisplayTitle, string SystemId, int ReleaseCount, int UpdateCount, long Bytes);
+
+/// <summary>Multiple Releases B16/B17: the report's sort keys.</summary>
+public enum MultipleReleaseSort { Name, System, Releases, Updates, Size }
 
 /// <param name="Reason">A <see cref="MissingImageReasons"/> value.</param>
 public sealed record MissingImageItem(Guid Id, string DisplayTitle, string SystemId, string Reason);
