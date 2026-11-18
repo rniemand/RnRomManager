@@ -1,6 +1,6 @@
 ---
 title: Review QoL and Multiple Releases report
-status: ready
+status: in-progress
 created: 2026-11-18
 ---
 
