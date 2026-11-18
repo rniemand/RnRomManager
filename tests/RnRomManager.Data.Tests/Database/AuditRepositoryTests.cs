@@ -104,4 +104,36 @@ public class AuditRepositoryTests
         Assert.That(deleted, Is.EqualTo(1));
         Assert.That((await Rows()).Select(r => r.Action), Is.EqualTo(new[] { "Edge", "New" }));
     }
+
+    private async Task<Guid> InsertGameAsync(string title)
+    {
+        var id = Guid.NewGuid();
+        await using var connection = _factory.Create();
+        await connection.ExecuteAsync("""
+            INSERT INTO games (id, system_id, title, display_title, zip_path, bucket, developers, publishers, genres,
+                               zip_size_bytes, zip_mtime_utc, info_schema_version, created_at, updated_at)
+            VALUES (@id, 'gb', @title, @title, @zip, 'T', '[]', '[]', '[]', 1, @T0, 2, @T0, @T0)
+            """, new { id, title, zip = $"gb/T/{id}.zip", T0 });
+        return id;
+    }
+
+    [Test]
+    public async Task List_CarriesTheGameTitle_NullWhenTheGameIsGone_AndFiltersStillApply()
+    {
+        var game = await InsertGameAsync("Tetris");
+        var actor = new AuditActor(7, "boss", null);
+        await _audit.InsertAsync(new AuditEvent(AuditActions.GameUpdated, actor, "gb", game) { OccurredAt = T0 }, default);
+        await _audit.InsertAsync(new AuditEvent(AuditActions.GameDeleted, actor, "gb", Guid.NewGuid()) { OccurredAt = T0.AddMinutes(1) }, default);
+        await _audit.InsertAsync(new AuditEvent(AuditActions.DatsRefreshed, actor, "nes") { OccurredAt = T0.AddMinutes(2) }, default);
+
+        var all = await _audit.ListAsync(new AuditQuery(), 1, 50, default);
+        var gb = await _audit.ListAsync(new AuditQuery(System: "gb", User: "boss"), 1, 50, default);
+
+        Assert.That(all.Items.Select(i => (i.Action, i.GameTitle)), Is.EqualTo(new (string, string?)[]
+        {
+            (AuditActions.DatsRefreshed, null), (AuditActions.GameDeleted, null), (AuditActions.GameUpdated, "Tetris"),
+        }));
+        Assert.That(gb.Total, Is.EqualTo(2));
+        Assert.That(gb.Items.Select(i => i.Action), Is.EqualTo(new[] { AuditActions.GameDeleted, AuditActions.GameUpdated }));
+    }
 }

@@ -1,7 +1,9 @@
 using System.Net;
 using System.Text.Json;
+using Dapper;
 using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Core.Audit;
+using RnRomManager.Core.Database;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
@@ -65,6 +67,26 @@ public class AuditEndpointsTests
         Assert.That(item.GetProperty("gameId").GetGuid(), Is.EqualTo(_game));
         Assert.That(item.GetProperty("user").GetString(), Is.EqualTo("André"));
         Assert.That(item.GetProperty("occurredAt").GetString(), Does.EndWith("Z"));
+    }
+
+    [Test]
+    public async Task Items_CarryGameTitle_NullForAGoneGame()
+    {
+        var game = Guid.NewGuid();
+        await using (var db = _factory.Services.GetRequiredService<IDbConnectionFactory>().Create())
+            await db.ExecuteAsync("""
+                INSERT INTO games (id, system_id, title, display_title, zip_path, bucket, developers, publishers, genres,
+                                   zip_size_bytes, zip_mtime_utc, info_schema_version, created_at, updated_at)
+                VALUES (@game, 'gb', 'Tetris', 'Tetris', 'gb/T/t.zip', 'T', '[]', '[]', '[]', 1, @Start, 2, @Start, @Start)
+                """, new { game, Start });
+        await _factory.Services.GetRequiredService<IAuditRepository>().InsertAsync(new AuditEvent(AuditActions.CoverSet,
+            new AuditActor(1, "André", null), "gb", game) { OccurredAt = Start.AddHours(2) }, default);
+
+        var items = (await Get()).GetProperty("items");
+
+        Assert.That(items[0].GetProperty("gameTitle").GetString(), Is.EqualTo("Tetris"));
+        Assert.That(items.EnumerateArray().Single(i => i.GetProperty("action").GetString() == "Ingested").GetProperty("gameTitle").ValueKind,
+            Is.EqualTo(JsonValueKind.Null), "the fixture's game id has no games row");
     }
 
     [TestCase("action=Ingested", "Ingested")]

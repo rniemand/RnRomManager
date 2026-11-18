@@ -10,23 +10,25 @@ public sealed class AuditRepository(IDbConnectionFactory connections) : IAuditRe
     public async Task<Page<AuditItem>> ListAsync(AuditQuery query, int page, int pageSize, CancellationToken cancellationToken)
     {
         var clauses = new List<string>();
-        if (query.Action is not null) clauses.Add("action = @Action");
-        if (query.System is not null) clauses.Add("system_id = @System");
-        if (query.User is not null) clauses.Add("username = @User");
-        if (query.Scheduled) clauses.Add("user_id IS NULL AND username IS NULL");
-        if (query.Q is not null) clauses.Add("(path LIKE @pattern OR target_path LIKE @pattern OR details LIKE @pattern)");
-        if (query.From is not null) clauses.Add("occurred_at >= @From");
-        if (query.To is not null) clauses.Add("occurred_at < @To");
+        if (query.Action is not null) clauses.Add("a.action = @Action");
+        if (query.System is not null) clauses.Add("a.system_id = @System");
+        if (query.User is not null) clauses.Add("a.username = @User");
+        if (query.Scheduled) clauses.Add("a.user_id IS NULL AND a.username IS NULL");
+        if (query.Q is not null) clauses.Add("(a.path LIKE @pattern OR a.target_path LIKE @pattern OR a.details LIKE @pattern)");
+        if (query.From is not null) clauses.Add("a.occurred_at >= @From");
+        if (query.To is not null) clauses.Add("a.occurred_at < @To");
         var where = clauses.Count == 0 ? "" : "WHERE " + string.Join(" AND ", clauses);
         var args = new { query.Action, query.System, query.User, query.From, query.To,
             pattern = query.Q is null ? null : SqlLike.Contains(query.Q), pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
         await using var connection = connections.Create();
         var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM audit_events {where}", args, cancellationToken: cancellationToken));
+            $"SELECT COUNT(*) FROM audit_events a {where}", args, cancellationToken: cancellationToken));
         var rows = await connection.QueryAsync<AuditItem>(new CommandDefinition($"""
-            SELECT id AS Id, occurred_at AS OccurredAt, action AS Action, system_id AS System, game_id AS GameId,
-                   username AS User, job_id AS JobId, path AS Path, target_path AS TargetPath, details AS Details
-            FROM audit_events {where} ORDER BY occurred_at DESC, id DESC LIMIT @pageSize OFFSET @offset
+            SELECT a.id AS Id, a.occurred_at AS OccurredAt, a.action AS Action, a.system_id AS System, a.game_id AS GameId,
+                   a.username AS User, a.job_id AS JobId, a.path AS Path, a.target_path AS TargetPath, a.details AS Details,
+                   g.display_title AS GameTitle
+            FROM audit_events a LEFT JOIN games g ON g.id = a.game_id
+            {where} ORDER BY a.occurred_at DESC, a.id DESC LIMIT @pageSize OFFSET @offset
             """, args, cancellationToken: cancellationToken));
         return new Page<AuditItem>(rows.AsList(), page, pageSize, total);
     }

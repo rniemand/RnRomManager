@@ -31,7 +31,7 @@ public static partial class AuditEndpoints
             return Results.Ok(Paging.ToDto(result, item => new
             {
                 item.Id, occurredAt = DateTime.SpecifyKind(item.OccurredAt, DateTimeKind.Utc), item.Action, item.System,
-                item.GameId, item.User, item.JobId, item.Path, item.TargetPath, item.Details,
+                item.GameId, item.User, item.JobId, item.Path, item.TargetPath, item.Details, item.GameTitle,
             }));
         });
         return api;
