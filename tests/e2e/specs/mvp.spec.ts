@@ -2368,9 +2368,13 @@ test("Admin: edit metadata, move a release, delete a release and a game", async 
 
   // Its only release goes to _removed/, so the game goes too and we land on the Library.
   await openGame("Orbit Blocks Japan");
+  // B9: Delete release sits in the expanded release body.
+  await page
+    .getByRole("button", { name: "Show details for Orbit Blocks (Japan).gb" })
+    .click();
   await page
     .getByRole("button", {
-      name: "Delete Orbit Blocks (Japan).gb",
+      name: "Delete release Orbit Blocks (Japan).gb",
       exact: true,
     })
     .click();

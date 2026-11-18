@@ -127,6 +127,14 @@ describe('game detail admin actions', () => {
 	});
 
 	const modal = () => within(document.querySelector<HTMLElement>('.modal')!);
+	/** B9: Delete release sits in the release body; expand the card first. */
+	const releaseDelete = async (name: string) => {
+		const toggle = await screen.findByRole('button', {
+			name: new RegExp(`^(Show|Hide) details for ${name.replace('.', '\\.')}$`)
+		});
+		if (toggle.getAttribute('aria-expanded') !== 'true') await fireEvent.click(toggle);
+		return screen.getByRole('button', { name: `Delete release ${name}` });
+	};
 
 	it('an admin sees the actions', async () => {
 		auth.set({ id: 3, username: 'm', roles: ['admin'], mustChangePassword: false });
@@ -134,7 +142,7 @@ describe('game detail admin actions', () => {
 		render(GamePage);
 
 		expect(await screen.findByRole('button', { name: /Edit metadata/ })).toBeTruthy();
-		expect(screen.getByRole('button', { name: 'Delete Tetris 1.gb' })).toBeTruthy();
+		expect(await releaseDelete('Tetris 1.gb')).toBeTruthy();
 	});
 
 	it('the admin actions are in the Manage menu, Delete game last after a divider (B3)', async () => {
@@ -152,6 +160,30 @@ describe('game detail admin actions', () => {
 		expect(
 			within(menu as HTMLElement).getByRole('button', { name: 'Delete game' }).className
 		).toContain('text-danger-emphasis');
+	});
+
+	it('Delete release sits right in the body actions row after Move release, Header details left (B9)', async () => {
+		const detail = game([1]);
+		detail.roms[0].header = { title: 'TETRIS', logoValid: true, romSizeBytes: null } as never;
+		answers['GET /api/games/g1'] = [{ status: 200, body: detail }];
+		render(GamePage);
+
+		const del = await releaseDelete('Tetris 1.gb');
+		expect(del.className).toBe('btn btn-sm btn-outline-danger');
+		expect(del.textContent!.trim()).toBe('Delete release');
+		const right = del.parentElement!;
+		expect(right.className).toBe('ms-auto d-flex flex-wrap gap-2');
+		expect([...right.children].map((b) => b.textContent!.trim())).toEqual([
+			'Move release',
+			'Delete release'
+		]);
+		const row = right.parentElement!;
+		expect(row.firstElementChild!.textContent!.trim()).toBe('Header details');
+		expect(
+			screen
+				.getByRole('article', { name: 'Tetris 1.gb' })
+				.querySelector('.card-header .btn-outline-danger')
+		).toBeNull();
 	});
 
 	it('Move release sits in the release body and opens the move dialog (R2)', async () => {
@@ -181,7 +213,9 @@ describe('game detail admin actions', () => {
 		await screen.findByText('Releases');
 		expect(screen.queryByRole('button', { name: 'Manage' })).toBeNull();
 		expect(screen.queryByRole('button', { name: /Edit metadata/ })).toBeNull();
-		expect(screen.queryByRole('button', { name: 'Delete Tetris 1.gb' })).toBeNull();
+		expect(
+			screen.queryByRole('button', { name: 'Delete release Tetris 1.gb', hidden: true })
+		).toBeNull();
 		expect(screen.queryByRole('button', { name: /Rate 1 of 5/ })).toBeNull();
 	});
 
@@ -192,7 +226,7 @@ describe('game detail admin actions', () => {
 		];
 		render(GamePage);
 
-		await fireEvent.click(await screen.findByRole('button', { name: 'Delete Tetris 2.gb' }));
+		await fireEvent.click(await releaseDelete('Tetris 2.gb'));
 		await fireEvent.click(modal().getByRole('button', { name: 'Delete', hidden: true }));
 
 		await vi.waitFor(() => expect(calls).toContain('DELETE /api/games/g1/roms/2'));
@@ -205,11 +239,11 @@ describe('game detail admin actions', () => {
 		answers['GET /api/games/g1'] = [{ status: 200, body: detail }];
 		render(GamePage);
 
-		await fireEvent.click(await screen.findByRole('button', { name: 'Delete Tetris 2.gb' }));
+		await fireEvent.click(await releaseDelete('Tetris 2.gb'));
 		expect(modal().getByText(/Delete Tetris 2\.gb and its note\?/)).toBeTruthy();
 
 		await fireEvent.click(modal().getByRole('button', { name: 'Cancel', hidden: true }));
-		await fireEvent.click(screen.getByRole('button', { name: 'Delete Tetris 1.gb' }));
+		await fireEvent.click(await releaseDelete('Tetris 1.gb'));
 		await vi.waitFor(() => expect(modal().getByText(/Delete Tetris 1\.gb\?/)).toBeTruthy());
 		expect(modal().queryByText(/and its note/)).toBeNull();
 	});
@@ -239,11 +273,11 @@ describe('game detail admin actions', () => {
 		answers['GET /api/games/g1'] = [{ status: 200, body: detail }];
 		render(GamePage);
 
-		await fireEvent.click(await screen.findByRole('button', { name: 'Delete Tetris 2.gb' }));
+		await fireEvent.click(await releaseDelete('Tetris 2.gb'));
 		expect(modal().getByText(/The ROM and its 2 other files move to the system's/)).toBeTruthy();
 
 		await fireEvent.click(modal().getByRole('button', { name: 'Cancel', hidden: true }));
-		await fireEvent.click(screen.getByRole('button', { name: 'Delete Tetris 1.gb' }));
+		await fireEvent.click(await releaseDelete('Tetris 1.gb'));
 		await vi.waitFor(() => expect(modal().getByText(/The ROM moves to the system's/)).toBeTruthy());
 		expect(modal().queryByText(/other files/)).toBeNull();
 	});
@@ -273,11 +307,11 @@ describe('game detail admin actions', () => {
 		answers['DELETE /api/games/g1/roms/2'] = [{ status: 404, body: { code: 'NotFound' } }];
 		render(GamePage);
 
-		await fireEvent.click(await screen.findByRole('button', { name: 'Delete Tetris 2.gb' }));
+		await fireEvent.click(await releaseDelete('Tetris 2.gb'));
 		await fireEvent.click(modal().getByRole('button', { name: 'Delete', hidden: true }));
 
 		expect(await screen.findByText('This game changed, please retry.')).toBeTruthy();
-		expect(await screen.findByRole('button', { name: 'Delete Tetris 3.gb' })).toBeTruthy();
+		expect(await releaseDelete('Tetris 3.gb')).toBeTruthy();
 	});
 
 	it('edit metadata validates before sending', async () => {

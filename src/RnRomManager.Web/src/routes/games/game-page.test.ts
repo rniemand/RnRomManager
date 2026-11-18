@@ -316,7 +316,7 @@ describe('game detail page', () => {
 		expect(original.closest('.card-body')).toBeTruthy();
 		expect(original.closest('article')!.getAttribute('aria-labelledby')).toBe('release-2-name');
 		expect(
-			original.closest('dd')!.querySelector('[aria-label="Copy original file name"]')
+			original.closest('td')!.querySelector('[aria-label="Copy original file name"]')
 		).not.toBeNull();
 		expect(screen.getAllByText('Original file name')).toHaveLength(1);
 	});
@@ -343,7 +343,7 @@ describe('game detail page', () => {
 		expect(screen.getByText('Yes')).toBeTruthy();
 	});
 
-	it('one card per release with name, badges, details, copy buttons and actions; no table (G2)', async () => {
+	it('one card per release with name, badges, details, copy buttons and actions (G2, B6)', async () => {
 		const detail = game([1, 2]);
 		detail.roms[0].revision = 'Rev 1';
 		detail.roms[0].flags = ['Beta', 'Proto'];
@@ -373,7 +373,7 @@ describe('game detail page', () => {
 		expect(second.querySelector('.badge.text-bg-primary')).toBeNull();
 		expect(second.querySelector('.card-body')!.textContent).not.toContain('Revision');
 
-		// R1: the header keeps only the chevron, Note, Play, Download, Add to bundle (Bundle Creator B1) and Delete.
+		// B6: the header keeps the chevron, Note, Play, Download and Add to bundle; Delete moved to the body (B9).
 		const labels = [...card.querySelectorAll('.card-header button')].map(
 			(b) => b.getAttribute('aria-label') ?? b.textContent?.trim()
 		);
@@ -381,10 +381,20 @@ describe('game detail page', () => {
 			'Hide details for Tetris 1.gb',
 			'Add note for Tetris 1.gb',
 			'Download Tetris 1.gb',
-			'Add Tetris 1.gb to the bundle',
-			'Delete Tetris 1.gb'
+			'Add Tetris 1.gb to the bundle'
 		]);
-		expect(document.getElementById('releases-panel')!.querySelector('table')).toBeNull();
+		// B6: chevron + name on the left (min-width 0); badges then buttons on the right.
+		const left = heading.parentElement!;
+		expect(left.style.minWidth).toBe('0px');
+		expect(left.contains(card.querySelector('.chevron-toggle'))).toBe(true);
+		const right = left.nextElementSibling!;
+		expect(right.className).toBe(
+			'ms-auto d-flex flex-wrap gap-2 align-items-center justify-content-end'
+		);
+		const kinds = [...right.children].map((c) =>
+			c.classList.contains('badge') ? 'badge' : 'button'
+		);
+		expect(kinds.indexOf('button')).toBe(kinds.lastIndexOf('badge') + 1);
 	});
 
 	const details = (name: string) =>
@@ -482,12 +492,12 @@ describe('game detail page', () => {
 
 	describe('release body (R2–R4)', () => {
 		const rows = (name: string) =>
-			[...details(name).querySelectorAll('dl > dt')].map((dt) => [
-				dt.textContent!.trim(),
-				(dt.nextElementSibling as HTMLElement).textContent!.replace(/\s+/g, ' ').trim()
+			[...details(name).querySelectorAll('th[scope="row"]')].map((th) => [
+				th.textContent!.trim(),
+				(th.nextElementSibling as HTMLElement).textContent!.replace(/\s+/g, ' ').trim()
 			]);
 
-		it('lists every value in order, two pairs per row from lg; empty ones are left out', async () => {
+		it('lists every value in order in a key/value table, one pair per row; empty ones are left out (B8)', async () => {
 			const detail = game([1]);
 			Object.assign(detail.roms[0], {
 				originalFileName: 'tetris.gb',
@@ -523,10 +533,16 @@ describe('game detail page', () => {
 			expect(values['DAT']).toBe('Nintendo - Game Boy 20260101');
 			expect(values['DAT entry']).toBe('Tetris (World) (Rev 1)');
 			expect(values['Date added']).toBe(formatDateTime('2026-11-01T00:00:00Z'));
-			const dl = details('Tetris 1.gb').querySelector('dl')!;
-			expect(dl.className).toBe('row mb-0');
-			expect(dl.querySelector('dt')!.className).toBe('col-sm-3 col-lg-2 text-body-secondary');
-			expect(dl.querySelector('dd')!.className).toBe('col-sm-9 col-lg-4');
+			const table = details('Tetris 1.gb').querySelector('table')!;
+			expect(table.className).toBe('table table-sm table-striped table-hover mb-0');
+			expect(table.parentElement!.className).toBe('table-responsive');
+			expect(table.parentElement!.parentElement!.className).toBe('card');
+			for (const tr of table.querySelectorAll('tbody tr')) {
+				expect(tr.querySelectorAll('th[scope="row"]')).toHaveLength(1);
+				expect(tr.querySelectorAll('td')).toHaveLength(1);
+				expect(tr.querySelector('td')!.classList).toContain('text-break');
+			}
+			expect(details('Tetris 1.gb').querySelector('dl')).toBeNull();
 		});
 
 		it.each([
@@ -559,7 +575,7 @@ describe('game detail page', () => {
 			render(GamePage);
 			await screen.findByRole('article', { name: 'Tetris 1.gb' });
 
-			const actions = details('Tetris 1.gb').querySelector('dl + .d-flex')!;
+			const actions = details('Tetris 1.gb').querySelector('.card + .d-flex')!;
 			expect(actions.className).toBe('d-flex flex-wrap gap-2 mt-2');
 			const header = within(actions as HTMLElement).getByRole('button', {
 				name: 'Header details',

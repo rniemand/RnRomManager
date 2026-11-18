@@ -586,31 +586,35 @@
 						onclick={(e) => onReleaseHeaderClick(e, rom.fileName)}
 					>
 						<div class="d-flex flex-wrap align-items-center gap-2">
-							<button
-								type="button"
-								class="btn btn-sm btn-link p-0 text-body chevron-toggle"
-								aria-expanded={open}
-								aria-controls="release-{rom.id}-details"
-								aria-label="{open ? 'Hide' : 'Show'} details for {rom.fileName}"
-								onclick={() => toggleRelease(rom.fileName)}><Icon name="chevron" /></button
-							>
-							<h3 class="h6 mb-0 text-break" id="release-{rom.id}-name">{rom.fileName}</h3>
-							{#if rom.isPrimary}<span class="badge text-bg-primary">Primary</span>{/if}
-							{#if rom.version}<span class="badge text-bg-info">Version {rom.version}</span>{/if}
-							{#if discNumber(rom) !== null}<span class="badge text-bg-info"
-									>Disc {discNumber(rom)}</span
-								>{/if}
-							{#if rom.externalFileName}
-								<!-- G7: stored next to the ZIP under this name. -->
-								<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-								<span class="badge text-bg-dark" tabindex="0" use:tooltip={rom.externalFileName}
-									>External</span
+							<!-- B6: chevron and name on the left; min-width 0 lets a long name wrap. -->
+							<div class="d-flex align-items-center gap-2" style="min-width: 0">
+								<button
+									type="button"
+									class="btn btn-sm btn-link p-0 text-body chevron-toggle"
+									aria-expanded={open}
+									aria-controls="release-{rom.id}-details"
+									aria-label="{open ? 'Hide' : 'Show'} details for {rom.fileName}"
+									onclick={() => toggleRelease(rom.fileName)}><Icon name="chevron" /></button
 								>
-							{/if}
-							{#each rom.regions as region (region)}
-								<span class="badge text-bg-secondary">{region}</span>
-							{/each}
-							<div class="ms-auto d-flex flex-wrap gap-1">
+								<h3 class="h6 mb-0 text-break" id="release-{rom.id}-name">{rom.fileName}</h3>
+							</div>
+							<!-- B6: badges, then buttons, on the right. -->
+							<div class="ms-auto d-flex flex-wrap gap-2 align-items-center justify-content-end">
+								{#if rom.isPrimary}<span class="badge text-bg-primary">Primary</span>{/if}
+								{#if rom.version}<span class="badge text-bg-info">Version {rom.version}</span>{/if}
+								{#if discNumber(rom) !== null}<span class="badge text-bg-info"
+										>Disc {discNumber(rom)}</span
+									>{/if}
+								{#if rom.externalFileName}
+									<!-- G7: stored next to the ZIP under this name. -->
+									<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+									<span class="badge text-bg-dark" tabindex="0" use:tooltip={rom.externalFileName}
+										>External</span
+									>
+								{/if}
+								{#each rom.regions as region (region)}
+									<span class="badge text-bg-secondary">{region}</span>
+								{/each}
 								<!-- R4: a filled button when the release has a note; Site users only view notes (U3). -->
 								{#if auth.isAdmin || rom.hasNote}<button
 										type="button"
@@ -660,65 +664,83 @@
 									<Icon name="download" />
 								</button>
 								{@render bundleButton(bundleEntry(game, rom))}
-								{#if auth.isAdmin}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-danger"
-										aria-label="Delete {rom.fileName}"
-										onclick={() => (action = { kind: 'deleteRom', rom })}
-									>
-										<Icon name="delete" />
-									</button>
-								{/if}
 							</div>
 						</div>
 					</div>
 					<div class="card-body small" id="release-{rom.id}-details" hidden={!open}>
-						<!-- R2: label/value pairs, two per row from lg; each row only when it has a value. -->
-						<dl class="row mb-0">
-							{#if rom.originalFileName !== rom.fileName}
-								<dt class="col-sm-3 col-lg-2 text-body-secondary">Original file name</dt>
-								<dd class="col-sm-9 col-lg-4">
-									<span class="text-break">{rom.originalFileName}</span>
-									<CopyButton value={rom.originalFileName} label="original file name" />
-								</dd>
-							{/if}
-							<dt class="col-sm-3 col-lg-2 text-body-secondary">Size</dt>
-							<dd class="col-sm-9 col-lg-4"><FileSize bytes={rom.totalSizeBytes} /></dd>
-							{#each [['SHA1', rom.sha1], ['CRC32', rom.crc32], ['MD5', rom.md5]] as [name, hash] (name)}
-								<dt class="col-sm-3 col-lg-2 text-body-secondary">{name}</dt>
-								<dd class="col-sm-9 col-lg-4">
-									<span class="font-monospace text-break">{hash}</span>
-									<CopyButton value={hash} label={name} />
-								</dd>
-							{/each}
-							{#if rom.revision}
-								<dt class="col-sm-3 col-lg-2 text-body-secondary">Revision</dt>
-								<dd class="col-sm-9 col-lg-4">{rom.revision}</dd>
-							{/if}
-							{#if rom.languages.length}
-								<dt class="col-sm-3 col-lg-2 text-body-secondary">Languages</dt>
-								<dd class="col-sm-9 col-lg-4">{list(rom.languages)}</dd>
-							{/if}
-							{#if rom.flags.length}
-								<dt class="col-sm-3 col-lg-2 text-body-secondary">Flags</dt>
-								<dd class="col-sm-9 col-lg-4">{list(rom.flags)}</dd>
-							{/if}
-							<dt class="col-sm-3 col-lg-2 text-body-secondary">Identified by</dt>
-							<dd class="col-sm-9 col-lg-4">{identifiedBy[rom.identificationMethod]}</dd>
-							{#if rom.datName}
-								<dt class="col-sm-3 col-lg-2 text-body-secondary">DAT</dt>
-								<dd class="col-sm-9 col-lg-4 text-break">
-									{[rom.datName, rom.datVersion].filter(Boolean).join(' ')}
-								</dd>
-							{/if}
-							{#if rom.datGameName}
-								<dt class="col-sm-3 col-lg-2 text-body-secondary">DAT entry</dt>
-								<dd class="col-sm-9 col-lg-4 text-break">{rom.datGameName}</dd>
-							{/if}
-							<dt class="col-sm-3 col-lg-2 text-body-secondary">Date added</dt>
-							<dd class="col-sm-9 col-lg-4">{formatDateTime(rom.dateAdded)}</dd>
-						</dl>
+						<!-- B8: a key/value table (T1–T4), one pair per row, each row only when it has a value. Values
+						     keep wrapping (G2: never truncated), an exception to the T-rule's text-truncate. -->
+						<div class="card">
+							<div class="table-responsive">
+								<table class="table table-sm table-striped table-hover mb-0">
+									<tbody>
+										{#if rom.originalFileName !== rom.fileName}
+											<tr>
+												<th scope="row" class="fw-normal text-body-secondary">Original file name</th
+												>
+												<td class="text-break">
+													<span class="text-break">{rom.originalFileName}</span>
+													<CopyButton value={rom.originalFileName} label="original file name" />
+												</td>
+											</tr>
+										{/if}
+										<tr>
+											<th scope="row" class="fw-normal text-body-secondary">Size</th>
+											<td class="text-break"><FileSize bytes={rom.totalSizeBytes} /></td>
+										</tr>
+										{#each [['SHA1', rom.sha1], ['CRC32', rom.crc32], ['MD5', rom.md5]] as [name, hash] (name)}
+											<tr>
+												<th scope="row" class="fw-normal text-body-secondary">{name}</th>
+												<td class="text-break">
+													<span class="font-monospace text-break">{hash}</span>
+													<CopyButton value={hash} label={name} />
+												</td>
+											</tr>
+										{/each}
+										{#if rom.revision}
+											<tr>
+												<th scope="row" class="fw-normal text-body-secondary">Revision</th>
+												<td class="text-break">{rom.revision}</td>
+											</tr>
+										{/if}
+										{#if rom.languages.length}
+											<tr>
+												<th scope="row" class="fw-normal text-body-secondary">Languages</th>
+												<td class="text-break">{list(rom.languages)}</td>
+											</tr>
+										{/if}
+										{#if rom.flags.length}
+											<tr>
+												<th scope="row" class="fw-normal text-body-secondary">Flags</th>
+												<td class="text-break">{list(rom.flags)}</td>
+											</tr>
+										{/if}
+										<tr>
+											<th scope="row" class="fw-normal text-body-secondary">Identified by</th>
+											<td class="text-break">{identifiedBy[rom.identificationMethod]}</td>
+										</tr>
+										{#if rom.datName}
+											<tr>
+												<th scope="row" class="fw-normal text-body-secondary">DAT</th>
+												<td class="text-break">
+													{[rom.datName, rom.datVersion].filter(Boolean).join(' ')}
+												</td>
+											</tr>
+										{/if}
+										{#if rom.datGameName}
+											<tr>
+												<th scope="row" class="fw-normal text-body-secondary">DAT entry</th>
+												<td class="text-break">{rom.datGameName}</td>
+											</tr>
+										{/if}
+										<tr>
+											<th scope="row" class="fw-normal text-body-secondary">Date added</th>
+											<td class="text-break">{formatDateTime(rom.dateAdded)}</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
 						{#if rom.header || auth.isAdmin}
 							<div class="d-flex flex-wrap gap-2 mt-2">
 								{#if rom.header}
@@ -731,14 +753,25 @@
 									</button>
 								{/if}
 								{#if auth.isAdmin}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-secondary"
-										aria-label="Move release {rom.fileName}"
-										onclick={() => (action = { kind: 'move', rom })}
-									>
-										<Icon name="move" /> Move release
-									</button>
+									<!-- B9: Header details stays left; Move and Delete release sit right. -->
+									<div class="ms-auto d-flex flex-wrap gap-2">
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-secondary"
+											aria-label="Move release {rom.fileName}"
+											onclick={() => (action = { kind: 'move', rom })}
+										>
+											<Icon name="move" /> Move release
+										</button>
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-danger"
+											aria-label="Delete release {rom.fileName}"
+											onclick={() => (action = { kind: 'deleteRom', rom })}
+										>
+											<Icon name="delete" /> Delete release
+										</button>
+									</div>
 								{/if}
 							</div>
 						{/if}
