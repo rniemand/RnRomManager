@@ -152,6 +152,7 @@ public partial class EndpointRoleMatrixTests
 
         ["GET /api/reports/missing-images"] = Role.User,
         ["GET /api/reports/missing-images/next"] = Role.User,
+        ["GET /api/reports/activity"] = Role.Admin,
         ["GET /api/reports/library-size"] = Role.User,
         ["GET /api/reports/library-size/{system}"] = Role.User,
         ["GET /api/reports/duplicates"] = Role.User,

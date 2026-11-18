@@ -41,8 +41,9 @@ public sealed class AuditRepository(IDbConnectionFactory connections) : IAuditRe
     {
         await using var connection = connections.Create();
         var rows = await connection.QueryAsync<AuditItem>(new CommandDefinition(
+            // An array, not the IReadOnlyList: that type has a JSON handler, which would stop Dapper expanding IN.
             $"{Select} WHERE a.action IN @actions ORDER BY a.occurred_at DESC, a.id DESC LIMIT @limit",
-            new { actions, limit }, cancellationToken: cancellationToken));
+            new { actions = actions.ToArray(), limit }, cancellationToken: cancellationToken));
         return rows.AsList();
     }
 

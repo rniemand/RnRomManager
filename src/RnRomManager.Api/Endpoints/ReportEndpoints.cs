@@ -5,6 +5,7 @@ using RnRomManager.Core.Database;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Reports;
 using RnRomManager.Core.Systems;
+using RnRomManager.Core.Users;
 
 namespace RnRomManager.Api.Endpoints;
 
@@ -41,6 +42,32 @@ public static partial class ReportEndpoints
             var next = await repository.NextMissingImageAsync(after, ctx.RequestAborted);
             return Results.Ok(new { id = next.Id, currentIsOnly = next.CurrentIsOnly });
         });
+
+        // B21: the Admin-only Activity report (the group itself is any signed-in user). Audit lists cover the 30-day retention.
+        reports.MapGet("/activity", async (HttpContext ctx, IReportRepository repository, IAuditRepository audit, IUserRepository users) =>
+        {
+            const int limit = 20;
+            var token = ctx.RequestAborted;
+            var lastSignIn = await users.GetLastSignInAsync(token);
+            var added = await repository.ListRecentlyAddedRomsAsync(limit, token);
+            async Task<IEnumerable<object>> Recent(params string[] actions) =>
+                (await audit.ListRecentAsync(actions, limit, token)).Select(AuditEndpoints.ToDto);
+            return Results.Ok(new
+            {
+                lastSignIn = lastSignIn is null ? null : new { username = lastSignIn.Username, at = DateTime.SpecifyKind(lastSignIn.At, DateTimeKind.Utc) },
+                addedRoms = added.Select(r => new
+                {
+                    romId = r.RomId, gameId = r.GameId, gameTitle = r.GameTitle, fileName = r.FileName, system = r.System,
+                    sizeBytes = r.SizeBytes, addedAt = DateTime.SpecifyKind(r.AddedAt, DateTimeKind.Utc),
+                }),
+                signIns = await Recent(AuditActions.SignedIn, AuditActions.SignInFailed, AuditActions.LockedOut),
+                plays = await Recent(AuditActions.GamePlayed),
+                saves = await Recent(AuditActions.SaveAdded, AuditActions.SaveUpdated, AuditActions.SaveDeleted),
+                edits = await Recent(AuditActions.GameUpdated, AuditActions.ReleaseMoved, AuditActions.GamesMerged, AuditActions.CoverSet,
+                    AuditActions.ImageAdded, AuditActions.ImageDeleted),
+                deletions = await Recent(AuditActions.GameDeleted, AuditActions.ReleaseDeleted),
+            });
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         reports.MapGet("/library-size", async (IReportRepository repository, ISystemRegistry systems, CancellationToken cancellationToken) =>
         {
