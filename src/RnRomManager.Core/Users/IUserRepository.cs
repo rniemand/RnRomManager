@@ -41,6 +41,11 @@ public interface IUserRepository
     /// <summary>B23: replaces the hotkey overrides; null resets to the defaults. Not a profile edit: no stamp change.</summary>
     Task SetHotkeysAsync(int id, string? hotkeys, CancellationToken cancellationToken);
 
+    /// <summary>UI polish B21: the user with the latest <c>last_login_at</c>, or null when nobody has signed in.</summary>
+    Task<LastSignIn?> GetLastSignInAsync(CancellationToken cancellationToken);
+
     /// <summary>B27.6: gives every user a new security stamp (each its own), so every session ends at its next request.</summary>
     Task RotateAllSecurityStampsAsync(CancellationToken cancellationToken);
 }
+
+public sealed record LastSignIn(string Username, DateTime At);

@@ -231,4 +231,19 @@ public class UserRepositoryTests
     [Test]
     public async Task Hotkeys_OfAnUnknownUser_AreNull() =>
         Assert.That(await _repository.GetHotkeysAsync(999_999, CancellationToken.None), Is.Null);
+
+    [Test]
+    public async Task GetLastSignIn_IsNullWhenNobodySignedIn_ElseTheLatest()
+    {
+        var a = await _repository.InsertAsync(NewUser("a"), CancellationToken.None);
+        var b = await _repository.InsertAsync(NewUser("b"), CancellationToken.None);
+        await _repository.InsertAsync(NewUser("c"), CancellationToken.None);
+        Assert.That(await _repository.GetLastSignInAsync(CancellationToken.None), Is.Null);
+
+        var at = new DateTime(2026, 11, 17, 9, 0, 0, DateTimeKind.Utc);
+        await _repository.RecordSuccessfulLoginAsync(a, at.AddHours(1), CancellationToken.None);
+        await _repository.RecordSuccessfulLoginAsync(b, at, CancellationToken.None);
+
+        Assert.That(await _repository.GetLastSignInAsync(CancellationToken.None), Is.EqualTo(new LastSignIn("a", at.AddHours(1))));
+    }
 }

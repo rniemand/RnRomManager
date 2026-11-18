@@ -7,6 +7,14 @@ namespace RnRomManager.Data.Repositories;
 /// <summary><c>audit_events</c> (AU1, AU5).</summary>
 public sealed class AuditRepository(IDbConnectionFactory connections) : IAuditRepository
 {
+    // GameTitle is AuditItem's last parameter, so it is the last column (Dapper maps the record by constructor).
+    private const string Select = """
+        SELECT a.id AS Id, a.occurred_at AS OccurredAt, a.action AS Action, a.system_id AS System, a.game_id AS GameId,
+               a.username AS User, a.job_id AS JobId, a.path AS Path, a.target_path AS TargetPath, a.details AS Details,
+               g.display_title AS GameTitle
+        FROM audit_events a LEFT JOIN games g ON g.id = a.game_id
+        """;
+
     public async Task<Page<AuditItem>> ListAsync(AuditQuery query, int page, int pageSize, CancellationToken cancellationToken)
     {
         var clauses = new List<string>();
@@ -24,13 +32,18 @@ public sealed class AuditRepository(IDbConnectionFactory connections) : IAuditRe
         var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             $"SELECT COUNT(*) FROM audit_events a {where}", args, cancellationToken: cancellationToken));
         var rows = await connection.QueryAsync<AuditItem>(new CommandDefinition($"""
-            SELECT a.id AS Id, a.occurred_at AS OccurredAt, a.action AS Action, a.system_id AS System, a.game_id AS GameId,
-                   a.username AS User, a.job_id AS JobId, a.path AS Path, a.target_path AS TargetPath, a.details AS Details,
-                   g.display_title AS GameTitle
-            FROM audit_events a LEFT JOIN games g ON g.id = a.game_id
-            {where} ORDER BY a.occurred_at DESC, a.id DESC LIMIT @pageSize OFFSET @offset
+            {Select} {where} ORDER BY a.occurred_at DESC, a.id DESC LIMIT @pageSize OFFSET @offset
             """, args, cancellationToken: cancellationToken));
         return new Page<AuditItem>(rows.AsList(), page, pageSize, total);
+    }
+
+    public async Task<IReadOnlyList<AuditItem>> ListRecentAsync(IReadOnlyList<string> actions, int limit, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        var rows = await connection.QueryAsync<AuditItem>(new CommandDefinition(
+            $"{Select} WHERE a.action IN @actions ORDER BY a.occurred_at DESC, a.id DESC LIMIT @limit",
+            new { actions, limit }, cancellationToken: cancellationToken));
+        return rows.AsList();
     }
 
     public async Task InsertAsync(AuditEvent e, CancellationToken cancellationToken)

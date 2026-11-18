@@ -136,4 +136,26 @@ public class AuditRepositoryTests
         Assert.That(gb.Total, Is.EqualTo(2));
         Assert.That(gb.Items.Select(i => i.Action), Is.EqualTo(new[] { AuditActions.GameDeleted, AuditActions.GameUpdated }));
     }
+
+    [Test]
+    public async Task ListRecent_FiltersByAction_NewestFirstTiesById_CappedAtTheLimit_NullTitleForAGoneGame()
+    {
+        var game = await InsertGameAsync("Zelda");
+        var actor = new AuditActor(7, "boss", null);
+        await _audit.InsertAsync(new AuditEvent(AuditActions.SaveAdded, actor, "gb", game, Details: "old") { OccurredAt = T0 }, default);
+        await _audit.InsertAsync(new AuditEvent(AuditActions.SaveDeleted, actor, "gb", Guid.NewGuid(), Details: "tie a") { OccurredAt = T0.AddMinutes(1) }, default);
+        await _audit.InsertAsync(new AuditEvent(AuditActions.SaveUpdated, actor, "gb", game, Details: "tie b") { OccurredAt = T0.AddMinutes(1) }, default);
+        await _audit.InsertAsync(new AuditEvent(AuditActions.GameUpdated, actor, "gb", game, Details: "other") { OccurredAt = T0.AddMinutes(9) }, default);
+
+        var saves = new[] { AuditActions.SaveAdded, AuditActions.SaveUpdated, AuditActions.SaveDeleted };
+        var all = await _audit.ListRecentAsync(saves, 20, default);
+        var two = await _audit.ListRecentAsync(saves, 2, default);
+
+        Assert.That(all.Select(i => (i.Details, i.GameTitle)), Is.EqualTo(new (string?, string?)[]
+        {
+            ("tie b", "Zelda"), ("tie a", null), ("old", "Zelda"),
+        }));
+        Assert.That(two.Select(i => i.Details), Is.EqualTo(new[] { "tie b", "tie a" }));
+        Assert.That(all[0].User, Is.EqualTo("boss"));
+    }
 }

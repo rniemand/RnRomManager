@@ -24,10 +24,16 @@ public interface IReportRepository
     /// <summary>RP6–RP8: undismissed duplicate groups, sorted by system then base title; paging and total exclude dismissed ones.</summary>
     Task<Page<DuplicateGroup>> ListDuplicatesAsync(string? systemId, int page, int pageSize, CancellationToken cancellationToken);
 
+    /// <summary>UI polish B21: the newest <paramref name="limit"/> releases by <c>date_added</c> (ties by id), with the release total size.</summary>
+    Task<IReadOnlyList<RecentRom>> ListRecentlyAddedRomsAsync(int limit, CancellationToken cancellationToken);
+
     /// <summary>RP7: stores the dismissal; repeating it is a no-op.</summary>
     Task DismissDuplicateAsync(string systemId, string baseTitle, string gamesKey, int? userId, DateTime now,
         CancellationToken cancellationToken);
 }
+
+/// <param name="SizeBytes">The release total: <c>roms.size_bytes</c> plus its set files, as the game page's <c>totalSizeBytes</c>.</param>
+public sealed record RecentRom(long RomId, Guid GameId, string GameTitle, string FileName, string System, long SizeBytes, DateTime AddedAt);
 
 /// <param name="UpdateCount">B21: releases whose flags contain <c>Update</c>.</param>
 public sealed record SystemSize(string SystemId, long Bytes, int GameCount, int UpdateCount);
