@@ -4,7 +4,7 @@ export interface ToastMessage {
 	id: number;
 	text: string;
 	kind: 'info' | 'warning' | 'danger' | 'success';
-	/** A link (an app path, already `resolve()`d); a toast with one stays until closed (B8). */
+	/** A link (an app path, already `resolve()`d); clicking it dismisses the toast (B8). */
 	link?: ToastLink;
 }
 
@@ -19,16 +19,38 @@ export const toastDurationMs = 5000;
 class Toasts {
 	items = $state<ToastMessage[]>([]);
 	#next = 1;
+	#timers = new Map<number, ReturnType<typeof setTimeout>>();
 
+	/** B1: every toast, links included, closes itself `toastDurationMs` after it appears. */
 	show(text: string, kind: ToastMessage['kind'] = 'info', link?: ToastLink): number {
 		const id = this.#next++;
 		this.items.push({ id, text, kind, link });
-		if (!link) setTimeout(() => this.dismiss(id), toastDurationMs);
+		this.#schedule(id);
 		return id;
 	}
 
 	dismiss(id: number): void {
+		this.pause(id);
 		this.items = this.items.filter((t) => t.id !== id);
+	}
+
+	/** B2: stops a toast's timer while it is hovered or holds focus. */
+	pause(id: number): void {
+		clearTimeout(this.#timers.get(id));
+		this.#timers.delete(id);
+	}
+
+	/** B2: gives a still-shown toast a fresh `toastDurationMs`. */
+	resume(id: number): void {
+		if (this.items.some((t) => t.id === id)) this.#schedule(id);
+	}
+
+	#schedule(id: number): void {
+		clearTimeout(this.#timers.get(id));
+		this.#timers.set(
+			id,
+			setTimeout(() => this.dismiss(id), toastDurationMs)
+		);
 	}
 
 	/** Shows the standard toast for `409 JobRunning`; returns whether `error` was one. */

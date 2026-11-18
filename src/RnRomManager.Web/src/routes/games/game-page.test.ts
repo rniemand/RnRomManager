@@ -1133,7 +1133,7 @@ describe('game detail page', () => {
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);
 
-		const link = await screen.findByRole('link', { name: /Google/ });
+		const link = await screen.findByRole('link', { name: 'Google' });
 		expect(link.getAttribute('href')).toBe(
 			'https://www.google.com/search?q=%22Tetris%22%20Game%20Boy'
 		);

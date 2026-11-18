@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -32,7 +32,7 @@
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { reviewJobs } from '#lib/stores/reviewJobs.svelte.js';
 	import { googleSearchUrl, reviewSearchQuery } from '#lib/googleSearch.js';
-	import { deleteReviewItem, toastDeleteFailed } from '#lib/review.js';
+	import { deleteReviewItem, nextReviewItem, toastDeleteFailed } from '#lib/review.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import { tooltip } from '#lib/tooltip.js';
 
@@ -60,6 +60,8 @@
 	let searchText = $state('');
 	let searchResults = $state<DatSearchResult[] | null>(null);
 	let searching = $state(false);
+	/** B21: bumped on every item change, so a DAT search for the previous item is ignored. */
+	let searchSession = 0;
 
 	let attachTarget = $state<GameListItem | null>(null);
 	let attachTargetError = $state<string | undefined>();
@@ -122,14 +124,62 @@
 		return () => controller.abort();
 	});
 
-	/** B7: starts a resolution job; the store reports how it ended. */
-	async function resolveWith(body: object, done: string): Promise<void> {
+	/** B21: moving to another item in place starts every per-item value as on a fresh load. */
+	$effect(() => {
+		void id;
+		untrack(() => {
+			updateChoice = null;
+			chosenTab = null;
+			searchText = '';
+			searchResults = null;
+			searching = false;
+			searchSession++;
+			attachTarget = null;
+			attachTargetError = undefined;
+			attachFlag = 'Hack';
+			attachDisc = null;
+			attachDiscError = undefined;
+			manual = emptyManualForm();
+			manualErrors = {};
+			actionError = null;
+			confirmDismiss = false;
+			confirmDelete = false;
+		});
+	});
+
+	/** B11/B12: the next queue item for Use and Next: `loading`, its id, `none` or `failed`. */
+	let next = $state<number | 'loading' | 'none' | 'failed'>('loading');
+
+	$effect(() => {
+		if (!auth.isAdmin) return;
+		const current = Number(id);
+		const controller = new AbortController();
+		next = 'loading';
+		nextReviewItem(current, controller.signal).then(
+			(found) => {
+				if (!controller.signal.aborted) next = found ?? 'none';
+			},
+			() => {
+				if (!controller.signal.aborted) next = 'failed';
+			}
+		);
+		return () => controller.abort();
+	});
+
+	/** B7: starts a resolution job; the store reports how it ended. B10: `andNext` marks a Use and Next job. */
+	async function resolveWith(body: object, done: string, andNext = false): Promise<void> {
 		if (disabled || !item) return;
 		busy = true;
 		actionError = null;
 		try {
 			const { jobId } = await api.post<{ jobId: string }>(`${base}/resolve`, body);
-			reviewJobs.start({ jobId, reviewId: item.id, fileName: item.originalFileName, done });
+			reviewJobs.start({
+				jobId,
+				reviewId: item.id,
+				fileName: item.originalFileName,
+				done,
+				...(andNext ? { next: true as const } : {})
+			});
 			void jobs.refresh();
 		} catch (e) {
 			handle(e);
@@ -173,7 +223,7 @@
 	let updateChoice = $state<boolean | null>(null);
 	const asUpdate = $derived(updateChoice ?? /\[upd\]/i.test(item?.originalFileName ?? ''));
 
-	function useDat(datGameName: string): Promise<void> {
+	function useDat(datGameName: string, andNext = false): Promise<void> {
 		const update = titleDb && asUpdate;
 		return resolveWith(
 			titleDb
@@ -183,7 +233,8 @@
 				? `Added update of ${datGameName}.`
 				: titleDb
 					? `Added release of ${datGameName}.`
-					: `Added as an unverified release of ${datGameName}.`
+					: `Added as an unverified release of ${datGameName}.`,
+			andNext
 		);
 	}
 
@@ -191,14 +242,16 @@
 		event.preventDefault();
 		const q = searchText.trim();
 		if (!q || !item) return;
+		const session = searchSession;
 		searching = true;
 		try {
 			const params = new URLSearchParams({ system: item.system, q, limit: '20' });
-			searchResults = await api.get<DatSearchResult[]>(`/api/dat/search?${params}`);
+			const results = await api.get<DatSearchResult[]>(`/api/dat/search?${params}`);
+			if (session === searchSession) searchResults = results;
 		} catch (e) {
-			handle(e);
+			if (session === searchSession) handle(e);
 		} finally {
-			searching = false;
+			if (session === searchSession) searching = false;
 		}
 	}
 
@@ -268,7 +321,11 @@
 <svelte:head><title>Review · RnRomManager</title></svelte:head>
 
 <AdminOnly>
-	<p><a href={resolve('/review')}>← Review queue</a></p>
+	<p>
+		<a class="btn btn-sm btn-outline-primary" href={resolve('/review')}
+			><Icon name="back" /> Review queue</a
+		>
+	</p>
 
 	{#if error}
 		<ErrorAlert {error} onretry={() => reload++} />
@@ -525,6 +582,16 @@
 																{disabled}
 																onclick={() => useDat(suggestion.datGameName)}>Use</button
 															>
+															<button
+																type="button"
+																class="btn btn-sm btn-outline-primary ms-1"
+																disabled={disabled || typeof next !== 'number'}
+																title={next === 'none'
+																	? 'No more items in the review queue.'
+																	: undefined}
+																onclick={() => useDat(suggestion.datGameName, true)}
+																>Use and Next</button
+															>
 														</td>
 													</tr>
 												{/each}
@@ -585,13 +652,16 @@
 							</p>
 							<form onsubmit={attach} novalidate>
 								<div class="mb-2">
-									<GameTypeahead
-										id="attach-target"
-										label="Game"
-										system={item.system}
-										bind:selected={attachTarget}
-										invalid={attachTargetError}
-									/>
+									<!-- B21: a fresh typeahead (its typed text too) per item. -->
+									{#key item.id}
+										<GameTypeahead
+											id="attach-target"
+											label="Game"
+											system={item.system}
+											bind:selected={attachTarget}
+											invalid={attachTargetError}
+										/>
+									{/key}
 								</div>
 								<fieldset class="mb-2">
 									<legend class="form-label fs-6">Flag</legend>

@@ -626,4 +626,102 @@ public class ReportEndpointsTests
         Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo("ValidationFailed"));
         Assert.That(problem.GetProperty("errors").TryGetProperty(field, out _), Is.True);
     }
+
+    // Multiple Releases B16: GET /api/reports/multiple-releases.
+
+    /// <summary>Alpha gets Bravo's release and Charlie's as an update (2 releases, 1 update); Delta gets Echo's (2 releases).</summary>
+    private async Task<(Guid Alpha, Guid Delta)> SeedMultipleReleases()
+    {
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        var charlie = await Ingest("gb", "c.gb", Charlie);
+        var delta = await Ingest("gb", "d.gb", Delta);
+        var echo = await Ingest("gbc", "e.gbc", Echo);
+        await Sql("UPDATE roms SET game_id = @alpha WHERE game_id IN (@bravo, @charlie)", new { alpha, bravo, charlie });
+        await Sql("UPDATE roms SET flags = '[\"Update\"]' WHERE file_name LIKE 'Charlie%'", new { });
+        await Sql("UPDATE roms SET game_id = @delta WHERE game_id = @echo", new { delta, echo });
+        return (alpha, delta);
+    }
+
+    private async Task<Guid[]> MultipleReleaseIds(string query) =>
+        (await GetJson("/api/reports/multiple-releases" + query)).GetProperty("items").EnumerateArray()
+            .Select(i => i.GetProperty("id").GetGuid()).ToArray();
+
+    [Test]
+    public async Task MultipleReleases_Defaults_AndResponseShape()
+    {
+        var (alpha, delta) = await SeedMultipleReleases();
+
+        var page = await GetJson("/api/reports/multiple-releases");
+        var sizes = await GetJson("/api/reports/library-size/gb");
+
+        Assert.That(page.GetProperty("maxReleases").GetInt32(), Is.EqualTo(2));
+        Assert.That((page.GetProperty("page").GetInt32(), page.GetProperty("pageSize").GetInt32(), page.GetProperty("total").GetInt64()),
+            Is.EqualTo((1, 50, 2L)));
+        var first = page.GetProperty("items")[0];
+        var alphaSize = sizes.GetProperty("games").EnumerateArray().Single(g => g.GetProperty("id").GetGuid() == alpha);
+        var alphaBytes = alphaSize.GetProperty("bytes").GetInt64();
+        Assert.That(first.GetProperty("id").GetGuid(), Is.EqualTo(alpha));
+        Assert.That(first.GetProperty("displayTitle").GetString(), Is.EqualTo(alphaSize.GetProperty("displayTitle").GetString()));
+        Assert.That(first.GetProperty("system").GetString(), Is.EqualTo("gb"));
+        Assert.That(first.GetProperty("systemName").GetString(),
+            Is.EqualTo(Service<RnRomManager.Core.Systems.ISystemRegistry>().ById("gb")!.DisplayName));
+        Assert.That((first.GetProperty("releaseCount").GetInt32(), first.GetProperty("updateCount").GetInt32(), first.GetProperty("bytes").GetInt64()),
+            Is.EqualTo((2, 1, alphaBytes)));
+        // Releases ties break on title, so Alpha before Delta.
+        Assert.That(await MultipleReleaseIds(""), Is.EqualTo(new[] { alpha, delta }));
+    }
+
+    [Test]
+    public async Task MultipleReleases_DirDefaultsPerKey_AndSortDirAreCaseInsensitive()
+    {
+        var (alpha, delta) = await SeedMultipleReleases();
+
+        Assert.Multiple(async () =>
+        {
+            Assert.That(await MultipleReleaseIds("?sort=updates"), Is.EqualTo(new[] { alpha, delta }), "updates defaults to desc");
+            Assert.That(await MultipleReleaseIds("?sort=updates&dir=asc"), Is.EqualTo(new[] { delta, alpha }));
+            Assert.That(await MultipleReleaseIds("?sort=name"), Is.EqualTo(new[] { alpha, delta }), "name defaults to asc");
+            Assert.That(await MultipleReleaseIds("?sort=NAME&dir=DESC"), Is.EqualTo(new[] { delta, alpha }));
+            Assert.That(await MultipleReleaseIds("?sort=Size&dir=Asc"), Has.Length.EqualTo(2));
+        });
+    }
+
+    [Test]
+    public async Task MultipleReleases_MinFilters_MaxReleasesIgnoresMin()
+    {
+        await SeedMultipleReleases();
+
+        var page = await GetJson("/api/reports/multiple-releases?min=3");
+
+        Assert.That((page.GetProperty("total").GetInt64(), page.GetProperty("maxReleases").GetInt32()), Is.EqualTo((0L, 2)));
+    }
+
+    [TestCase("min=1", "min", "Must be 2–10000.")]
+    [TestCase("min=10001", "min", "Must be 2–10000.")]
+    [TestCase("sort=title", "sort", "Must be name, system, releases, updates or size.")]
+    [TestCase("sort=1", "sort", "Must be name, system, releases, updates or size.")]
+    [TestCase("dir=up", "dir", "Must be asc or desc.")]
+    [TestCase("page=0", "page", "Must be 1 or more.")]
+    [TestCase("pageSize=201", "pageSize", "Must be 1–200.")]
+    [TestCase("pageSize=0", "pageSize", "Must be 1–200.")]
+    public async Task MultipleReleases_InvalidQuery_IsValidationFailed(string query, string field, string message)
+    {
+        using var response = await _user.GetAsync("/api/reports/multiple-releases?" + query);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var problem = await AuthClient.JsonAsync(response);
+        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo("ValidationFailed"));
+        Assert.That(problem.GetProperty("errors").GetProperty(field)[0].GetString(), Is.EqualTo(message));
+    }
+
+    [Test]
+    public async Task MultipleReleases_NonNumberMin_IsAPlain400()
+    {
+        using var response = await _user.GetAsync("/api/reports/multiple-releases?min=abc");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.That(body, Does.Not.Contain("ValidationFailed"));
+    }
 }

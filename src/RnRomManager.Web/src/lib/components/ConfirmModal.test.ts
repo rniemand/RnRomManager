@@ -72,6 +72,16 @@ describe('ConfirmModal', () => {
 		expect(calls).toEqual(['releaseModal', 'dispose']);
 	});
 
+	it('calls onshown each time Bootstrap reports the modal shown (B6)', () => {
+		const onshown = vi.fn();
+		const { container } = render(ConfirmModal, { open: false, title: 'T', onshown });
+		const modal = container.querySelector('.modal')!;
+		expect(onshown).not.toHaveBeenCalled();
+		modal.dispatchEvent(new Event('shown.bs.modal'));
+		modal.dispatchEvent(new Event('shown.bs.modal'));
+		expect(onshown).toHaveBeenCalledTimes(2);
+	});
+
 	it('size xl adds modal-xl', () => {
 		const { container } = render(ConfirmModal, { open: false, title: 'T', size: 'xl' });
 		const dialog = container.querySelector('.modal-dialog')!;

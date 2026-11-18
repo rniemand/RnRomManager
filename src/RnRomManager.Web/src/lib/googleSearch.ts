@@ -2,6 +2,10 @@
 export const googleSearchUrl = (query: string): string =>
 	`https://www.google.com/search?q=${encodeURIComponent(query)}`;
 
+/** Review QoL B8: Google Images (`udm=2`) for the same query. */
+export const googleImagesUrl = (query: string): string =>
+	`https://www.google.com/search?udm=2&q=${encodeURIComponent(query)}`;
+
 /** Drops every `(…)`/`[…]` group, turns `_` and `.` into spaces, collapses spaces. */
 export function cleanName(name: string): string {
 	return name

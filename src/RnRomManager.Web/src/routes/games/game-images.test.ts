@@ -5,12 +5,24 @@ import type { GameDetail, ImageInfo } from '#lib/api/types.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 
-// The page reads `?tab=` from the URL (GP1).
+// The page reads `?tab=` from the URL (GP1); B4 reads `?upload=`.
+const nav = vi.hoisted(() => ({
+	url: new URL('http://localhost/games/g1?tab=images'),
+	params: { id: 'g1' },
+	goto: vi.fn<(...args: unknown[]) => Promise<void>>(() => Promise.resolve())
+}));
 vi.mock('$app/state', () => ({
-	page: { params: { id: 'g1' }, url: new URL('http://localhost/games/g1?tab=images') }
+	page: {
+		get params() {
+			return nav.params;
+		},
+		get url() {
+			return nav.url;
+		}
+	}
 }));
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => nav.goto(...args) }));
 // Bootstrap's Modal needs layout/transitions jsdom lacks.
 vi.mock('#lib/bootstrap.js', () => ({
 	Modal: class {
@@ -98,6 +110,76 @@ describe('game images', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
 		auth.set(null);
+		nav.url = new URL('http://localhost/games/g1?tab=images');
+		nav.params = { id: 'g1' };
+		nav.goto.mockClear();
+	});
+
+	describe('?upload= (B4)', () => {
+		const dialogShown = () =>
+			screen.getByLabelText('Upload an image').closest('.modal')!.classList.contains('show');
+		const show = (query: string) => {
+			nav.url = new URL(`http://localhost/games/g1${query}`);
+			render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		};
+
+		it.each([
+			['?tab=images&upload=1', '/games/g1?tab=images'],
+			['?upload=1', '/games/g1?tab=images'],
+			['?tab=saves&upload=1', '/games/g1?tab=images']
+		])('%s opens the dialog for an Admin and replaces the URL with %s', async (query, url) => {
+			show(query);
+
+			await vi.waitFor(() => expect(dialogShown()).toBe(true));
+			expect(nav.goto).toHaveBeenCalledExactlyOnceWith(url, { replace: true, reset: false });
+		});
+
+		it('opens the dialog only after the URL is replaced, reset as a button click', async () => {
+			let release!: () => void;
+			nav.goto.mockImplementationOnce(() => new Promise<void>((r) => (release = r)));
+			show('?upload=1');
+			await vi.waitFor(() => expect(nav.goto).toHaveBeenCalled());
+			expect(dialogShown()).toBe(false);
+
+			release();
+			await vi.waitFor(() => expect(dialogShown()).toBe(true));
+			expect((screen.getByLabelText('Image URL') as HTMLInputElement).value).toBe('');
+		});
+
+		it('does nothing while the loaded game is not the route’s game', async () => {
+			nav.params = { id: 'g2' };
+			show('?upload=1');
+			await new Promise((r) => setTimeout(r, 10));
+
+			expect(nav.goto).not.toHaveBeenCalled();
+			expect(dialogShown()).toBe(false);
+		});
+
+		it('another value is removed without opening the dialog', async () => {
+			show('?tab=releases&upload=0');
+
+			await vi.waitFor(() =>
+				expect(nav.goto).toHaveBeenCalledWith('/games/g1?tab=releases', {
+					replace: true,
+					reset: false
+				})
+			);
+			await new Promise((r) => setTimeout(r, 10));
+			expect(dialogShown()).toBe(false);
+		});
+
+		it('a Site user only has upload removed, tab left as it was', async () => {
+			auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
+			show('?tab=saves&upload=1');
+
+			await vi.waitFor(() =>
+				expect(nav.goto).toHaveBeenCalledExactlyOnceWith('/games/g1?tab=saves', {
+					replace: true,
+					reset: false
+				})
+			);
+			expect(screen.queryByLabelText('Upload an image')).toBeNull();
+		});
 	});
 
 	it('the top image on the page is the cover, even when it is a screenshot', async () => {
@@ -130,7 +212,7 @@ describe('game images', () => {
 		expect(size.className).toBe('badge text-bg-light border position-absolute top-0 end-0 m-1');
 		expect(size.closest('button')).toBeNull();
 		expect(screen.queryByLabelText('Upload an image')).toBeNull();
-		expect(screen.queryByRole('button', { name: 'Upload image' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Upload Image' })).toBeNull();
 		expect(screen.queryByRole('button', { name: /Use as cover/ })).toBeNull();
 		expect(screen.queryByRole('button', { name: /^Delete / })).toBeNull();
 	});
@@ -163,14 +245,16 @@ describe('game images', () => {
 		expect(download.closest('.card')!.classList).toContain('image-tile');
 	});
 
-	it('Upload image sits right-aligned on its own row before the grid; the heading is visually hidden (G3, I1)', () => {
+	it('Google Images and Upload Image sit right-aligned on their own row before the grid; the heading is visually hidden (G3, I1, B8)', () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 
-		const upload = screen.getByRole('button', { name: 'Upload image' });
+		const upload = screen.getByRole('button', { name: 'Upload Image' });
+		const google = screen.getByRole('link', { name: 'Google Images' });
 		const heading = screen.getByRole('heading', { name: 'Images' });
 		expect(heading.className).toBe('visually-hidden');
-		expect(upload.classList.contains('ms-auto')).toBe(true);
-		expect(upload.parentElement!.children).toHaveLength(1);
+		expect([...upload.parentElement!.children]).toEqual([google, upload]);
+		expect(google.classList.contains('ms-auto')).toBe(true);
+		expect(upload.classList.contains('ms-auto')).toBe(false);
 		const grid = screen.getAllByRole('button', { name: /full size/ })[0].closest('.row')!;
 		expect(upload.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		expect(grid.nextElementSibling).toBeNull();
@@ -210,13 +294,76 @@ describe('game images', () => {
 		screen.getByLabelText(label) as HTMLInputElement;
 	const png = () => new File([new Uint8Array([1, 2, 3])], 'art.png', { type: 'image/png' });
 
-	it('the upload form lives in a modal opened by the Upload image button', async () => {
+	it('the upload form lives in a modal opened by the Upload Image button', async () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 
 		expect(uploadModal().classList.contains('show')).toBe(false);
-		expect(uploadModal().querySelector('.modal-title')!.textContent).toBe('Upload image');
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		expect(uploadModal().querySelector('.modal-title')!.textContent).toBe('Upload Image');
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
 		expect(uploadModal().classList.contains('show')).toBe(true);
+	});
+
+	it('Google Images opens Google Images for the header query in a new tab (B8)', () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+		const google = screen.getByRole('link', { name: 'Google Images' });
+		expect(google.getAttribute('href')).toBe(
+			`https://www.google.com/search?udm=2&q=${encodeURIComponent('"Tetris" Game Boy')}`
+		);
+		expect(google.getAttribute('target')).toBe('_blank');
+		expect(google.getAttribute('rel')).toBe('noopener noreferrer');
+		expect(google.className).toBe('btn btn-outline-secondary btn-sm ms-auto');
+		expect(google.querySelector('i')!.className).toContain('bi-google');
+	});
+
+	it('a Site user gets no Google Images button (B8)', () => {
+		auth.set({ id: 2, username: 'u', roles: [], mustChangePassword: false });
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+		expect(screen.queryByRole('link', { name: 'Google Images' })).toBeNull();
+	});
+
+	it('the Image URL input gets focus each time the dialog has opened (B6)', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		uploadModal().dispatchEvent(new Event('shown.bs.modal'));
+		expect(document.activeElement).toBe(screen.getByLabelText('Image URL'));
+	});
+
+	it('Enter in the Image URL input submits once, and not while busy (B7)', async () => {
+		let posts = 0;
+		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+			if (url.endsWith('/from-url') && init?.method === 'POST') {
+				posts++;
+				return new Promise<Response>(() => {}); // stays busy
+			}
+			return Promise.resolve(new Response(null, { status: 204 }));
+		});
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+		const input = screen.getByLabelText('Image URL');
+		await fireEvent.input(input, { target: { value: 'https://example.com/a.png' } });
+
+		const first = new KeyboardEvent('keydown', { key: 'Enter', cancelable: true, bubbles: true });
+		input.dispatchEvent(first);
+		await vi.waitFor(() => expect(posts).toBe(1));
+		await fireEvent.keyDown(input, { key: 'Enter' });
+		await new Promise((r) => setTimeout(r, 10));
+
+		expect(first.defaultPrevented).toBe(true);
+		expect(posts).toBe(1);
+	});
+
+	it('Enter on the source radios does not submit (B7)', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
+
+		await fireEvent.keyDown(screen.getByLabelText('URL'), { key: 'Enter' });
+		await new Promise((r) => setTimeout(r, 10));
+
+		expect(calls.filter((c) => c.key.startsWith('POST'))).toEqual([]);
+		expect(screen.queryByText('Enter an http or https image URL.')).toBeNull();
 	});
 
 	it('upload posts FormData, closes the modal, resets the fields and hands back the fresh detail', async () => {
@@ -225,7 +372,7 @@ describe('game images', () => {
 		const onchanged = vi.fn();
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged });
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
 		await choose(png());
 		await fireEvent.click(typeRadio('Screenshot'));
 		await confirmUpload();
@@ -243,7 +390,7 @@ describe('game images', () => {
 	it('an empty submit shows the file error, keeps the modal open, and reopening clears it', async () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
 		await fireEvent.click(screen.getByLabelText('File'));
 		await confirmUpload();
 
@@ -254,7 +401,7 @@ describe('game images', () => {
 		await fireEvent.click(
 			within(uploadModal() as HTMLElement).getByRole('button', { name: 'Cancel', hidden: true })
 		);
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
 		expect(screen.queryByText('Choose an image file.')).toBeNull();
 	});
 
@@ -265,14 +412,14 @@ describe('game images', () => {
 	const fallback = 'Download the image and upload the file instead.';
 
 	async function openUrlMode(url: string): Promise<void> {
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
 		await fireEvent.click(urlRadio());
 		await fireEvent.input(urlInput(), { target: { value: url } });
 	}
 
 	it('opens on URL, listed before File; File mode shows the file input and hides the URL field (U6, I2)', async () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
 
 		const source = screen.getByRole('group', { name: 'Image source', hidden: true });
 		expect([...source.querySelectorAll('label')].map((l) => l.textContent)).toEqual([
@@ -296,7 +443,7 @@ describe('game images', () => {
 
 	it('Type is a Box art / Screenshot radio group after the inputs, Box art by default (I2)', async () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
 
 		const group = screen.getByRole('group', { name: 'Image type', hidden: true });
 		expect(group.className).toBe('btn-group');
@@ -436,13 +583,13 @@ describe('game images', () => {
 		await fireEvent.click(
 			within(uploadModal() as HTMLElement).getByRole('button', { name: 'Cancel', hidden: true })
 		);
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
 
 		await fireEvent.click(fileRadio());
 		await fireEvent.click(
 			within(uploadModal() as HTMLElement).getByRole('button', { name: 'Cancel', hidden: true })
 		);
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
 
 		expect(urlRadio().checked).toBe(true);
 		expect(typeRadio('Box art').checked).toBe(true);
@@ -470,7 +617,7 @@ describe('game images', () => {
 		async function openWithFileInput(): Promise<HTMLInputElement> {
 			vi.stubGlobal('DataTransfer', FakeDataTransfer);
 			render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
-			await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+			await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
 			const input = screen.getByLabelText('Upload an image') as HTMLInputElement;
 			picked = undefined;
 			Object.defineProperty(input, 'files', {
@@ -528,7 +675,7 @@ describe('game images', () => {
 			await fireEvent.click(
 				within(uploadModal() as HTMLElement).getByRole('button', { name: 'Cancel', hidden: true })
 			);
-			await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+			await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
 			expect(screen.queryByText(/Only one image/)).toBeNull();
 		});
 
@@ -553,7 +700,7 @@ describe('game images', () => {
 		const big = new File(['x'], 'big.png', { type: 'image/png' });
 		Object.defineProperty(big, 'size', { value: 8 * 1024 * 1024 + 1 });
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
 		await choose(big);
 		await confirmUpload();
 
@@ -569,7 +716,7 @@ describe('game images', () => {
 		const onchanged = vi.fn();
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged });
 
-		await fireEvent.click(screen.getByRole('button', { name: 'Upload image' }));
+		await fireEvent.click(screen.getByRole('button', { name: 'Upload Image' }));
 		await choose(png());
 		await confirmUpload();
 

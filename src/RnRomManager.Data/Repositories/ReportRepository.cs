@@ -80,6 +80,48 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         return rows.Select(r => new SystemSize(r.SystemId, (long)r.Bytes, (int)r.GameCount, (int)r.UpdateCount)).ToList();
     }
 
+    /// <summary>B15: <see cref="GameBytes"/> plus each game's release count (rows not flagged <c>Update</c>).</summary>
+    private const string GameReleases = $"""
+        SELECT g.*, (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id AND NOT JSON_CONTAINS(r.flags, '"Update"')) AS ReleaseCount
+        FROM ({GameBytes}) g
+        """;
+
+    public async Task<Page<MultipleReleaseItem>> ListMultipleReleasesAsync(int min, MultipleReleaseSort sort, bool descending, int page,
+        int pageSize, CancellationToken cancellationToken)
+    {
+        // B17: the key and direction come only from the enum and bool, never from input text.
+        var dir = descending ? "DESC" : "";
+        var order = sort switch
+        {
+            MultipleReleaseSort.Name => $"m.display_title {dir}, m.system_id, m.id",
+            MultipleReleaseSort.System => $"m.system_id {dir}, m.display_title, m.id",
+            MultipleReleaseSort.Releases => $"m.ReleaseCount {dir}, m.display_title, m.id",
+            MultipleReleaseSort.Updates => $"m.UpdateCount {dir}, m.display_title, m.id",
+            MultipleReleaseSort.Size => $"m.Bytes {dir}, m.display_title, m.id",
+            _ => throw new ArgumentOutOfRangeException(nameof(sort)),
+        };
+        var args = new { min, pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
+        await using var connection = connections.Create();
+        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            $"SELECT COUNT(*) FROM ({GameReleases}) m WHERE m.ReleaseCount >= @min", args, cancellationToken: cancellationToken));
+        var rows = await connection.QueryAsync<MultipleReleaseRow>(new CommandDefinition($"""
+            SELECT m.id AS Id, m.display_title AS DisplayTitle, m.system_id AS SystemId, m.ReleaseCount, m.UpdateCount, m.Bytes
+            FROM ({GameReleases}) m WHERE m.ReleaseCount >= @min
+            ORDER BY {order}
+            LIMIT @pageSize OFFSET @offset
+            """, args, cancellationToken: cancellationToken));
+        var items = rows.Select(r => new MultipleReleaseItem(r.Id, r.DisplayTitle, r.SystemId, (int)r.ReleaseCount, (int)r.UpdateCount,
+            r.Bytes)).ToList();
+        return new Page<MultipleReleaseItem>(items, page, pageSize, total);
+    }
+
+    public async Task<int> MaxReleaseCountAsync(CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return (int)await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            $"SELECT COALESCE(MAX(m.ReleaseCount), 0) FROM ({GameReleases}) m", cancellationToken: cancellationToken));
+    }
+
     public async Task<IReadOnlyList<RecentRom>> ListRecentlyAddedRomsAsync(int limit, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
@@ -191,6 +233,16 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         public decimal Bytes { get; init; }
         public long GameCount { get; init; }
         public decimal UpdateCount { get; init; }
+    }
+
+    private sealed class MultipleReleaseRow
+    {
+        public Guid Id { get; init; }
+        public string DisplayTitle { get; init; } = "";
+        public string SystemId { get; init; } = "";
+        public long ReleaseCount { get; init; }
+        public long UpdateCount { get; init; }
+        public long Bytes { get; init; }
     }
 
     private sealed class GameSizeRow

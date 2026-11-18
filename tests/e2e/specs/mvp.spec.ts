@@ -286,6 +286,14 @@ test("reports and the ingest audit trail", async () => {
   await page.getByRole("link", { name: "Duplicates", exact: true }).click();
   await expect(page.getByText("No duplicate games found.")).toBeVisible();
   await expectAccessible(page, "duplicates report");
+  // Multiple Releases: the Switch game has a base and a DLC release (its updates don't count).
+  await page.getByRole("link", { name: "Multiple Releases", exact: true }).click();
+  await expect(page).toHaveURL(/\/reports\/multiple-releases$/);
+  await expect(page.getByLabel("Minimum releases")).toBeVisible();
+  await expect(
+    page.getByRole("table").getByRole("link", { name: "Orbit Expedition", exact: true }),
+  ).toBeVisible();
+  await expectAccessible(page, "multiple releases report");
   // B20: the Admin-only Activity report lists the ingested releases.
   await page.getByRole("link", { name: "Activity", exact: true }).click();
   await expect(
@@ -2230,8 +2238,8 @@ test("images: upload, set cover, delete", async () => {
   await expect(images.getByText("Placeholder")).toBeVisible();
 
   // A box art upload replaces the placeholder and takes over as cover.
-  await images.getByRole("button", { name: "Upload image" }).click();
-  await expect(dialog()).toHaveAccessibleName("Upload image");
+  await images.getByRole("button", { name: "Upload Image" }).click();
+  await expect(dialog()).toHaveAccessibleName("Upload Image");
   await expectAccessible(page, "upload image modal");
   // U6/I2: URL is the default source; a loopback URL is refused by the server; the fallback switches to the file input.
   await expect(
@@ -2258,7 +2266,7 @@ test("images: upload, set cover, delete", async () => {
   await expect(images.getByText("Placeholder")).toHaveCount(0);
   await expect(card("boxart-01.png")).toContainText("64×64");
 
-  await images.getByRole("button", { name: "Upload image" }).click();
+  await images.getByRole("button", { name: "Upload Image" }).click();
   await dialog().getByText("File", { exact: true }).click();
   await dialog()
     .getByLabel("Upload an image")

@@ -1,6 +1,10 @@
 <script lang="ts">
+	import { tick, untrack } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
+	import { gameSearchQuery, googleImagesUrl } from '../googleSearch';
 	import type { GameDetail, ImageInfo } from '../api/types';
 	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';
@@ -40,6 +44,7 @@
 	/** U6: upload a file, or have the server download a URL. */
 	let uploadMode = $state<'file' | 'url'>('url');
 	let imageUrl = $state('');
+	let urlInput = $state<HTMLInputElement>();
 	let urlError = $state<string | undefined>();
 	/** The server couldn't use the URL: offer the file upload instead. */
 	let urlFallback = $state(false);
@@ -95,6 +100,27 @@
 		uploadOpen = true;
 	}
 
+	/**
+	 * Review QoL B4: `?upload=1` (Next missing image) opens the dialog for an Admin once the route's game is loaded. `upload`
+	 * leaves the URL first and `tab` becomes `images`, so the panel is visible before the dialog opens and a reload or Back
+	 * doesn't reopen it. Other values, and Site users, only drop `upload`.
+	 */
+	$effect(() => {
+		const upload = page.url.searchParams.get('upload');
+		if (upload === null || game.id !== page.params.id) return;
+		untrack(async () => {
+			const open = upload === '1' && auth.isAdmin;
+			const next = new URL(page.url.href);
+			next.searchParams.delete('upload');
+			if (open) next.searchParams.set('tab', 'images');
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
+			await goto(`${next.pathname}${next.search}`, { replace: true, reset: false });
+			if (!open) return;
+			await tick();
+			openUpload();
+		});
+	});
+
 	function useFileInstead(): void {
 		uploadMode = 'file';
 		urlError = undefined;
@@ -130,6 +156,13 @@
 			files.length > 1
 				? `Only one image can be uploaded at a time; using ${files[0].name}.`
 				: undefined;
+	}
+
+	/** B7: Enter in the URL input submits as Upload does. */
+	function onUrlKeydown(e: KeyboardEvent): void {
+		if (e.key !== 'Enter') return;
+		e.preventDefault();
+		if (!busy) void upload();
 	}
 
 	async function upload(): Promise<void> {
@@ -214,8 +247,17 @@
 	<h2 class="visually-hidden" id="images-heading">Images</h2>
 	<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
 		{#if auth.isAdmin}
-			<button type="button" class="btn btn-outline-primary btn-sm ms-auto" onclick={openUpload}>
-				<Icon name="upload" /> Upload image
+			<!-- B8: an external search, not an app page. -->
+			<!-- eslint-disable svelte/no-navigation-without-resolve -->
+			<a
+				class="btn btn-outline-secondary btn-sm ms-auto"
+				href={googleImagesUrl(gameSearchQuery(game))}
+				target="_blank"
+				rel="noopener noreferrer"><Icon name="google" /> Google Images</a
+			>
+			<!-- eslint-enable svelte/no-navigation-without-resolve -->
+			<button type="button" class="btn btn-outline-primary btn-sm" onclick={openUpload}>
+				<Icon name="upload" /> Upload Image
 			</button>
 		{/if}
 	</div>
@@ -299,10 +341,11 @@
 {#if auth.isAdmin}
 	<ConfirmModal
 		bind:open={uploadOpen}
-		title="Upload image"
+		title="Upload Image"
 		confirmLabel="Upload"
 		{busy}
 		onconfirm={upload}
+		onshown={() => urlInput?.focus()}
 	>
 		<!-- I3: the whole body takes a dropped image file. -->
 		<div
@@ -352,7 +395,9 @@
 						class="form-control"
 						class:is-invalid={urlError}
 						type="url"
+						bind:this={urlInput}
 						bind:value={imageUrl}
+						onkeydown={onUrlKeydown}
 						aria-describedby="image-url-help"
 					/>
 					{#if urlError}

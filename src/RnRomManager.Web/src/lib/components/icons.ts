@@ -21,6 +21,7 @@ export const icons: Record<string, string> = {
 	'report-size': 'bi bi-pie-chart',
 	'report-missing-images': 'bi bi-image-alt',
 	'report-duplicates': 'bi bi-files',
+	'report-multiple-releases': 'bi bi-layers',
 	activity: 'bi bi-activity',
 	'add-user': 'bi bi-person-plus',
 	enable: 'bi bi-person-check',

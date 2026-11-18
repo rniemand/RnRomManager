@@ -33,6 +33,7 @@ const { default: ReportsLayout } = await import('./+layout.svelte');
 const { default: MissingImages } = await import('./missing-images/+page.svelte');
 const { default: LibrarySize } = await import('./library-size/+page.svelte');
 const { default: Duplicates } = await import('./duplicates/+page.svelte');
+const { default: MultipleReleases } = await import('./multiple-releases/+page.svelte');
 
 type Answer = { status: number; body?: unknown };
 
@@ -411,6 +412,288 @@ describe('reports pages', () => {
 		});
 	});
 
+	describe('Multiple Releases (B18–B20)', () => {
+		const list = (min = 2, page = 1) =>
+			`GET /api/reports/multiple-releases?min=${min}&sort=releases&dir=desc&page=${page}&pageSize=50`;
+		const item = (id: string, extra: Record<string, unknown> = {}) => ({
+			id,
+			displayTitle: `Game ${id}`,
+			system: 'gb',
+			systemName: 'Game Boy',
+			releaseCount: 3,
+			updateCount: 1,
+			bytes: 2048,
+			...extra
+		});
+		const body = (items: unknown[], total = items.length, maxReleases = 4, page = 1) => ({
+			maxReleases,
+			items,
+			page,
+			pageSize: 50,
+			total
+		});
+		const select = () => screen.getByLabelText('Minimum releases') as HTMLSelectElement;
+		const optionTexts = () => [...select().options].map((o) => o.textContent!.trim());
+		const replaced = (path: string) => [path, { replace: true, reset: false }];
+
+		beforeEach(() => navigateTo('/reports/multiple-releases'));
+
+		it('lists game, system badge, releases, updates and size; numbers right-aligned (B19)', async () => {
+			answers[list()] = {
+				status: 200,
+				body: body([item('g1', { systemName: 'Nintendo Game Boy' })])
+			};
+			render(MultipleReleases);
+
+			const link = await screen.findByRole('link', { name: 'Game g1' });
+			expect(link.getAttribute('href')).toBe('/games/g1');
+			expect(
+				[...document.querySelectorAll('thead th')].map((th) => [
+					th.textContent!.trim(),
+					th.className,
+					th.getAttribute('scope')
+				])
+			).toEqual([
+				['Game', '', 'col'],
+				['System', '', 'col'],
+				['Releases', 'text-end', 'col'],
+				['Updates', 'text-end', 'col'],
+				['Size', 'text-end', 'col']
+			]);
+			const cells = [...document.querySelectorAll('tbody td')];
+			expect(cells.map((td) => td.textContent!.trim())).toEqual([
+				'Game g1',
+				'Nintendo Game Boy',
+				'3',
+				'1',
+				'2.0 KiB'
+			]);
+			expect(cells.slice(2).every((td) => td.className === 'text-end text-nowrap')).toBe(true);
+			expect(document.querySelector('thead')!.className).toBe('table-dark');
+		});
+
+		it('the threshold is disabled with only the current min until the first response, then offers 2…max', async () => {
+			let release!: () => void;
+			const pending = new Promise<void>((r) => (release = r));
+			const answer = globalThis.fetch;
+			vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+				if (url.startsWith('/api/reports/multiple-releases')) await pending;
+				return answer(url, init);
+			});
+			answers[list()] = { status: 200, body: body([item('g1')], 1, 4) };
+			render(MultipleReleases);
+
+			expect(select().disabled).toBe(true);
+			expect(optionTexts()).toEqual(['2']);
+			release();
+			await screen.findByRole('link', { name: 'Game g1' });
+			expect(select().disabled).toBe(false);
+			expect(optionTexts()).toEqual(['2', '3', '4']);
+			expect([...select().options].map((o) => o.value)).toEqual(['2', '3', '4']);
+		});
+
+		it('stays enabled with the last options while a later load runs', async () => {
+			answers[list()] = { status: 200, body: body([item('g1')], 1, 4) };
+			render(MultipleReleases);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			vi.stubGlobal('fetch', () => new Promise<Response>(() => {}));
+			await fireEvent.change(select(), { target: { value: '3' } });
+
+			await vi.waitFor(() => expect(screen.queryByRole('link', { name: 'Game g1' })).toBeNull());
+			expect(select().disabled).toBe(false);
+			expect(optionTexts()).toEqual(['2', '3', '4']);
+		});
+
+		it('adds a URL min above the max as an extra option and shows the empty state (B20)', async () => {
+			navigateTo('/reports/multiple-releases?min=9');
+			answers[list(9)] = { status: 200, body: body([], 0, 4) };
+			render(MultipleReleases);
+
+			expect(await screen.findByText('No games have 9 or more releases.')).toBeTruthy();
+			expect(optionTexts()).toEqual(['2', '3', '4', '9']);
+			expect(select().value).toBe('9');
+		});
+
+		it('an empty library still offers 2', async () => {
+			answers[list()] = { status: 200, body: body([], 0, 0) };
+			render(MultipleReleases);
+
+			expect(await screen.findByText('No games have 2 or more releases.')).toBeTruthy();
+			expect(optionTexts()).toEqual(['2']);
+		});
+
+		it('changing the threshold writes min, drops page and requests it', async () => {
+			navigateTo('/reports/multiple-releases?page=2');
+			answers[list(2, 2)] = { status: 200, body: body([item('g1')], 60, 4, 2) };
+			answers[list(3)] = { status: 200, body: body([item('g3')], 1, 4) };
+			render(MultipleReleases);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			await fireEvent.change(select(), { target: { value: '3' } });
+
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/multiple-releases?min=3'));
+			await screen.findByRole('link', { name: 'Game g3' });
+			expect(calls).toContain(list(3));
+		});
+
+		it('choosing the default min leaves it out of the URL', async () => {
+			navigateTo('/reports/multiple-releases?min=3');
+			answers[list(3)] = { status: 200, body: body([item('g1')], 1, 4) };
+			answers[list()] = { status: 200, body: body([item('g2')], 1, 4) };
+			render(MultipleReleases);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			await fireEvent.change(select(), { target: { value: '2' } });
+			await screen.findByRole('link', { name: 'Game g2' });
+
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/multiple-releases'));
+		});
+
+		it.each(['?min=abc&page=x', '?min=1&page=0', '?min=10001&page=-1', '?min=2.5&page=1.5'])(
+			'bad URL values %s fall back to the defaults',
+			async (query) => {
+				navigateTo(`/reports/multiple-releases${query}`);
+				answers[list()] = { status: 200, body: body([item('g1')]) };
+				render(MultipleReleases);
+
+				await screen.findByRole('link', { name: 'Game g1' });
+				expect(calls).toContain(list());
+			}
+		);
+
+		it('reads min and page from the URL; paging writes page', async () => {
+			navigateTo('/reports/multiple-releases?min=3&page=2');
+			answers[list(3, 2)] = { status: 200, body: body([item('g1')], 120, 4, 2) };
+			answers[list(3, 3)] = { status: 200, body: body([item('g9')], 120, 4, 3) };
+			render(MultipleReleases);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/multiple-releases?min=3&page=3'));
+			await screen.findByRole('link', { name: 'Game g9' });
+		});
+
+		it('a page past the last goes to the last page (B20)', async () => {
+			navigateTo('/reports/multiple-releases?page=9');
+			answers[list(2, 9)] = { status: 200, body: body([], 60, 4, 9) };
+			answers[list(2, 2)] = { status: 200, body: body([item('g1')], 60, 4, 2) };
+			render(MultipleReleases);
+
+			await screen.findByRole('link', { name: 'Game g1' });
+			expect(goto).toHaveBeenCalledWith(...replaced('/reports/multiple-releases?page=2'));
+			expect(screen.queryByText(/No games have/)).toBeNull();
+		});
+
+		describe('sortable columns (B18, B19)', () => {
+			const sorted = (sort: string, dir: string, min = 2, page = 1) =>
+				`GET /api/reports/multiple-releases?min=${min}&sort=${sort}&dir=${dir}&page=${page}&pageSize=50`;
+			const header = (label: string) => screen.getByRole('button', { name: label }).closest('th')!;
+			const iconOf = (label: string) =>
+				screen.getByRole('button', { name: label }).querySelector('i')?.className.trim();
+
+			it('every header is a sort button in its th; the active one has aria-sort and the icon', async () => {
+				answers[list()] = { status: 200, body: body([item('g1')]) };
+				render(MultipleReleases);
+				await screen.findByRole('link', { name: 'Game g1' });
+
+				for (const label of ['Game', 'System', 'Releases', 'Updates', 'Size']) {
+					const button = screen.getByRole('button', { name: label });
+					expect(button.className).toBe(
+						'btn btn-link p-0 text-reset text-decoration-none fw-semibold'
+					);
+					expect(button.getAttribute('type')).toBe('button');
+					expect(button.parentElement!.tagName).toBe('TH');
+				}
+				expect(header('Releases').getAttribute('aria-sort')).toBe('descending');
+				expect(iconOf('Releases')).toBe('bi bi-sort-down');
+				for (const label of ['Game', 'System', 'Updates', 'Size']) {
+					expect(header(label).hasAttribute('aria-sort')).toBe(false);
+					expect(iconOf(label)).toBeUndefined();
+				}
+			});
+
+			it('clicking the active header flips the direction and resets the page', async () => {
+				navigateTo('/reports/multiple-releases?page=2');
+				answers[list(2, 2)] = { status: 200, body: body([item('g1')], 60, 4, 2) };
+				answers[sorted('releases', 'asc')] = { status: 200, body: body([item('g2')], 60) };
+				render(MultipleReleases);
+				await screen.findByRole('link', { name: 'Game g1' });
+
+				await fireEvent.click(screen.getByRole('button', { name: 'Releases' }));
+
+				expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/multiple-releases?dir=asc'));
+				await screen.findByRole('link', { name: 'Game g2' });
+				expect(header('Releases').getAttribute('aria-sort')).toBe('ascending');
+				expect(iconOf('Releases')).toBe('bi bi-sort-up-alt');
+			});
+
+			it('another header sorts in its default direction from page 1', async () => {
+				navigateTo('/reports/multiple-releases?min=3&page=2');
+				answers[list(3, 2)] = { status: 200, body: body([item('g1')], 60, 4, 2) };
+				answers[sorted('name', 'asc', 3)] = { status: 200, body: body([item('g2')], 60) };
+				answers[sorted('size', 'desc', 3)] = { status: 200, body: body([item('g3')], 60) };
+				render(MultipleReleases);
+				await screen.findByRole('link', { name: 'Game g1' });
+
+				await fireEvent.click(screen.getByRole('button', { name: 'Game' }));
+				expect(goto).toHaveBeenLastCalledWith(
+					...replaced('/reports/multiple-releases?min=3&sort=name')
+				);
+				await screen.findByRole('link', { name: 'Game g2' });
+				expect(header('Game').getAttribute('aria-sort')).toBe('ascending');
+				expect(header('Releases').hasAttribute('aria-sort')).toBe(false);
+
+				await fireEvent.click(screen.getByRole('button', { name: 'Size' }));
+				expect(goto).toHaveBeenLastCalledWith(
+					...replaced('/reports/multiple-releases?min=3&sort=size')
+				);
+				await screen.findByRole('link', { name: 'Game g3' });
+			});
+
+			it('a non-default direction for a text column is written', async () => {
+				navigateTo('/reports/multiple-releases?sort=system');
+				answers[sorted('system', 'asc')] = { status: 200, body: body([item('g1')]) };
+				answers[sorted('system', 'desc')] = { status: 200, body: body([item('g2')]) };
+				render(MultipleReleases);
+				await screen.findByRole('link', { name: 'Game g1' });
+
+				await fireEvent.click(screen.getByRole('button', { name: 'System' }));
+
+				expect(goto).toHaveBeenLastCalledWith(
+					...replaced('/reports/multiple-releases?sort=system&dir=desc')
+				);
+				await screen.findByRole('link', { name: 'Game g2' });
+			});
+
+			it.each([
+				['?sort=updates&dir=asc', sorted('updates', 'asc')],
+				['?sort=name', sorted('name', 'asc')],
+				['?sort=Name&dir=ASC', sorted('releases', 'desc')],
+				['?sort=title&dir=up', sorted('releases', 'desc')],
+				['?sort=size&dir=sideways', sorted('size', 'desc')]
+			])('URL %s requests %s', async (query, request) => {
+				navigateTo(`/reports/multiple-releases${query}`);
+				answers[request] = { status: 200, body: body([item('g1')]) };
+				render(MultipleReleases);
+
+				await screen.findByRole('link', { name: 'Game g1' });
+				expect(calls.filter((c) => c.includes('multiple-releases'))).toEqual([request]);
+			});
+		});
+
+		it('the Multiple Releases tab is there for a Site user (B14)', () => {
+			auth.set({ id: 2, username: 'site', roles: [], mustChangePassword: false });
+			render(ReportsLayout, {
+				children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))
+			});
+			const tab = screen.getByRole('link', { name: 'Multiple Releases' });
+			expect(tab.getAttribute('href')).toBe('/reports/multiple-releases');
+			expect(tab.querySelector('i')!.className.trim()).toBe('bi bi-layers');
+		});
+	});
+
 	it('report tabs carry icons (B18)', () => {
 		render(ReportsLayout, {
 			children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))
@@ -422,7 +705,8 @@ describe('reports pages', () => {
 		).toEqual([
 			['Library Size', 'bi bi-pie-chart'],
 			['Missing Images', 'bi bi-image-alt'],
-			['Duplicates', 'bi bi-files']
+			['Duplicates', 'bi bi-files'],
+			['Multiple Releases', 'bi bi-layers']
 		]);
 	});
 
