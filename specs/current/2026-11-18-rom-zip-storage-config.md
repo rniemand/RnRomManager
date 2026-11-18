@@ -1,6 +1,6 @@
 ---
 title: ROM Zip Storage Config
-status: ready
+status: in-progress
 created: 2026-11-18
 ---
 
