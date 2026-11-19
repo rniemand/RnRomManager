@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using RnRomManager.Core.Configuration;
+using RnRomManager.Core.Library;
 using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 using RnRomManager.TestData;
@@ -93,5 +94,45 @@ public class RomStorageSettingsTests
         await _settings.SetAsync(handler.Id, true, CancellationToken.None);
 
         Assert.That((handler.EmbedRomsInZip, handler.DefaultEmbedRomsInZip), Is.EqualTo((true, false)));
+    }
+
+    [Test]
+    public async Task LoadCompression_ReadsEverySystem_NoKeyOrInvalidIsMed()
+    {
+        _stored["storage.zipCompression.gb"] = "Store";
+        _stored["storage.zipCompression.legacy"] = "High";
+        await _settings.LoadAsync(CancellationToken.None);
+
+        await _repo.Received(1).GetAsync(Arg.Is<IReadOnlyCollection<string>>(n => n.Order().SequenceEqual(new[] { "storage.zipCompression.gb", "storage.zipCompression.legacy" })),
+            Arg.Any<CancellationToken>());
+        Assert.That((_settings.Compression("gb"), _settings.Compression("legacy"), _settings.Compression("nes")),
+            Is.EqualTo((ZipCompression.Store, ZipCompression.High, ZipCompression.Med)));
+
+        foreach (var bad in new[] { "med", "2", "store", "" })
+        {
+            _stored["storage.zipCompression.gb"] = bad;
+            await _settings.LoadAsync(CancellationToken.None); // no throw
+            Assert.That(_settings.Compression("gb"), Is.EqualTo(ZipCompression.Med), bad);
+        }
+    }
+
+    [Test]
+    public async Task SetCompression_WritesTheDatabase_ThenMemory()
+    {
+        await _settings.SetCompressionAsync("gb", ZipCompression.Store, CancellationToken.None);
+
+        await _repo.Received(1).SetAsync(Arg.Is<IReadOnlyDictionary<string, string>>(v => v.Count == 1 && v["storage.zipCompression.gb"] == "Store"),
+            Arg.Any<CancellationToken>());
+        Assert.That(_settings.Compression("gb"), Is.EqualTo(ZipCompression.Store));
+    }
+
+    [Test]
+    public void SetCompression_DatabaseFailure_LeavesMemory()
+    {
+        _repo.SetAsync(Arg.Any<IReadOnlyDictionary<string, string>>(), Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("db"));
+
+        Assert.ThrowsAsync<InvalidOperationException>(() => _settings.SetCompressionAsync("gb", ZipCompression.High, CancellationToken.None));
+
+        Assert.That(_settings.Compression("gb"), Is.EqualTo(ZipCompression.Med));
     }
 }

@@ -39,7 +39,7 @@ public sealed partial class StorageMigrationJob
         ExternalFileSnapshot published;
         try
         {
-            published = await new LibraryZipWriter(reader).WriteCheckedAsync(library, existing.Path, existing,
+            published = await Writer(embedded.System).WriteCheckedAsync(library, existing.Path, existing,
                 new LibraryZipChanges(embedded, entries), ct, WriterHooks).ConfigureAwait(false);
         }
         catch (LibraryZipVerifyException ex)

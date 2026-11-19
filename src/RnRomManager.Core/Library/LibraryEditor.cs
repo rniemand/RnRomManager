@@ -43,8 +43,10 @@ public sealed class ExternalEditHooks
 public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games, IRomRepository roms, IImageRepository images, ILibraryMirror mirror,
     InfoJsonReader reader, DatCache dats, ISystemRegistry systems, MediaService media, GameMediaRetry mediaRetry,
     IOptions<PathsOptions> paths, IAuditLog audit, AuditPaths auditPaths, ICollectionRepository collections, TimeProvider time,
-    ILogger<LibraryEditor> logger)
+    ILogger<LibraryEditor> logger, IRomStorageSettings? zipSettings = null)
 {
+    /// <summary>Z4: a writer at the game's system ZIP compression level.</summary>
+    private LibraryZipWriter Writer(string systemId) => new(reader, zipSettings?.Compression(systemId) ?? ZipCompression.Med);
     /// <summary>The ZIP was written (or deleted), so an audit row is due even when the DB mirror then failed (AU4).</summary>
     private static bool FilesChanged(LibraryEditResult result) => result.Code is null or DbWriteFailed;
 
@@ -717,7 +719,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
                 return;
             }
             // The written target still has every entry it had before, so it can be rewritten from itself.
-            await new LibraryZipWriter(reader).WriteAsync(path, LibraryZip.Open(path, reader),
+            await Writer(before.System).WriteAsync(path, LibraryZip.Open(path, reader),
                 new LibraryZipChanges(before, new Dictionary<string, Func<Stream>>())).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -941,9 +943,9 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
             var changes = new LibraryZipChanges(game, newEntries, removedEntries, Saves: saves);
             // G4: a ZIP opened through a checked handle is replaced only through the checked write.
             if (LibraryTarget.NeedsCheck(systems, zipPath, game.System))
-                await new LibraryZipWriter(reader).WriteCheckedAsync(paths.Value.Roms, path, existing, changes).ConfigureAwait(false);
+                await Writer(game.System).WriteCheckedAsync(paths.Value.Roms, path, existing, changes).ConfigureAwait(false);
             else
-                await new LibraryZipWriter(reader).WriteAsync(path, existing, changes).ConfigureAwait(false);
+                await Writer(game.System).WriteAsync(path, existing, changes).ConfigureAwait(false);
             return null;
         }
         catch (LibraryZipVerifyException ex)

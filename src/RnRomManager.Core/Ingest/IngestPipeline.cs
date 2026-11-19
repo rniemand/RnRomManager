@@ -103,8 +103,11 @@ public sealed class IngestPipeline(
     IAuditLog audit,
     AuditPaths auditPaths,
     TimeProvider time,
-    ILogger<IngestPipeline> logger)
+    ILogger<IngestPipeline> logger,
+    IRomStorageSettings? zipSettings = null)
 {
+    /// <summary>Z4: a writer at the game's system ZIP compression level.</summary>
+    private LibraryZipWriter Writer(string systemId) => new(reader, zipSettings?.Compression(systemId) ?? ZipCompression.Med);
     /// <summary>Test seams of the external ingest path.</summary>
     public ExternalIngestHooks? ExternalHooks { get; set; }
 
@@ -1342,9 +1345,9 @@ public sealed class IngestPipeline(
                 : new Dictionary<string, ExternalFileSnapshot>(StringComparer.OrdinalIgnoreCase) { [placement!.ExternalFileName] = moved.Snapshot! };
             var changes = new LibraryZipChanges(game, entries, removedEntries, placed);
             if (placement is null)
-                await new LibraryZipWriter(reader).WriteAsync(target, existing, changes, cancellationToken).ConfigureAwait(false);
+                await Writer(game.System).WriteAsync(target, existing, changes, cancellationToken).ConfigureAwait(false);
             else
-                published = await new LibraryZipWriter(reader).WriteCheckedAsync(library, target, existing, changes, cancellationToken, ExternalHooks?.Writer).ConfigureAwait(false);
+                published = await Writer(game.System).WriteCheckedAsync(library, target, existing, changes, cancellationToken, ExternalHooks?.Writer).ConfigureAwait(false);
         }
         catch (Exception ex) when (placement is not null || ex is LibraryZipVerifyException or IOException or UnauthorizedAccessException)
         {
