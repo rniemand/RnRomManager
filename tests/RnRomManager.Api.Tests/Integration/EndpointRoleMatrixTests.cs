@@ -143,6 +143,8 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/admin/settings"] = Role.Admin,
         ["GET /api/admin/rom-storage"] = Role.Admin,
         ["PUT /api/admin/rom-storage/{systemId}"] = Role.Admin,
+        ["PUT /api/admin/zip-compression/{systemId}"] = Role.Admin,
+        ["POST /api/admin/zip-compression/{systemId}/repack"] = Role.Admin,
         ["GET /api/admin/backups"] = Role.Admin,
         ["PUT /api/admin/backups/settings"] = Role.Admin,
         ["POST /api/admin/backups"] = Role.Admin,
@@ -156,6 +158,8 @@ public partial class EndpointRoleMatrixTests
 
         ["GET /api/reports/missing-images"] = Role.User,
         ["GET /api/reports/missing-images/next"] = Role.User,
+        ["GET /api/reports/missing-metadata"] = Role.Admin,
+        ["GET /api/reports/missing-metadata/next"] = Role.Admin,
         ["GET /api/reports/activity"] = Role.Admin,
         ["GET /api/reports/library-size"] = Role.User,
         ["GET /api/reports/library-size/{system}"] = Role.User,

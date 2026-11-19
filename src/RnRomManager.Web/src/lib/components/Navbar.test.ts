@@ -1,9 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
+import type { Me } from '../api/types';
 
 const page = vi.hoisted(() => ({ url: new URL('http://localhost/review') }));
 vi.mock('$app/state', () => ({ page }));
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
+const nav = vi.hoisted(() => ({
+	after: [] as (() => void)[],
+	hides: [] as Element[]
+}));
+vi.mock('$app/navigation', () => ({ afterNavigate: (fn: () => void) => nav.after.push(fn) }));
+vi.mock('../bootstrap', () => ({
+	Collapse: {
+		getOrCreateInstance: (el: Element, options: unknown) => {
+			expect(options).toEqual({ toggle: false });
+			return { hide: () => nav.hides.push(el) };
+		}
+	}
+}));
 
 const { default: Navbar } = await import('./Navbar.svelte');
 
@@ -147,7 +161,7 @@ describe('Navbar', () => {
 			onlogout: () => {},
 			onsearch: () => {}
 		});
-		expect(screen.queryByRole('button', { name: 'Keyboard shortcuts' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Keyboard Shortcuts' })).toBeNull();
 		expect(screen.queryByRole('button', { name: /^Theme/ })).toBeNull();
 		const outside = [...document.querySelectorAll('#main-nav a, #main-nav button')].filter(
 			(el) => !el.closest('.dropdown-menu')
@@ -281,6 +295,43 @@ describe('Navbar', () => {
 				a.textContent?.trim()
 			);
 			expect(main).toEqual(['Library', 'Collections', 'Reports']);
+		});
+	});
+
+	describe('the phone menu closes after a navigation (U1)', () => {
+		const admin: Me = { id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false };
+		beforeEach(() => {
+			nav.after.length = 0;
+			nav.hides.length = 0;
+		});
+		const menu = () => document.getElementById('main-nav')!;
+
+		it('a link click hides the open collapse, dropdown items included', async () => {
+			render(Navbar, { me: admin, reviewCount: null, onlogout: () => {} });
+			menu().classList.add('show');
+
+			await fireEvent.click(screen.getByRole('link', { name: 'Reports' }));
+			expect(nav.hides).toEqual([menu()]);
+			await fireEvent.click(screen.getByRole('link', { name: /Admin/ }));
+			expect(nav.hides).toHaveLength(2);
+		});
+
+		it('the user menu toggle and a closed collapse leave it alone', async () => {
+			render(Navbar, { me: admin, reviewCount: null, onlogout: () => {} });
+			menu().classList.add('show');
+			await fireEvent.click(screen.getByRole('button', { name: 'boss' }));
+			expect(nav.hides).toEqual([]);
+
+			menu().classList.remove('show');
+			await fireEvent.click(screen.getByRole('link', { name: 'Reports' }));
+			expect(nav.hides).toEqual([]);
+		});
+
+		it('afterNavigate hides it too', () => {
+			render(Navbar, { me: admin, reviewCount: null, onlogout: () => {} });
+			menu().classList.add('show');
+			nav.after.forEach((fn) => fn());
+			expect(nav.hides).toEqual([menu()]);
 		});
 	});
 });

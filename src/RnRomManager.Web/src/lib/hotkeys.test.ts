@@ -43,8 +43,15 @@ describe('hotkey actions (B21)', () => {
 			['nav.integrity', 'Alt+Shift+T', true, 'admin'],
 			['nav.admin', 'Alt+Shift+A', true, 'admin'],
 			['nav.deleted', 'Alt+Shift+D', true, 'admin'],
-			['reports.missingImage.next', 'Alt+Shift+M', true, null]
+			['reports.missingImage.next', 'Alt+Shift+M', true, null],
+			['reports.missingMetadata.next', '', true, 'admin']
 		]);
+	});
+
+	it('an action with no default is unbound in defaultBindings (Missing Metadata M5)', () => {
+		const defaults = defaultBindings();
+		expect(defaults['reports.missingMetadata.next']).toBeNull();
+		expect('reports.missingMetadata.next' in JSON.parse(JSON.stringify(defaults))).toBe(true);
 	});
 });
 

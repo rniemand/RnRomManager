@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { navCounts } from '#lib/stores/navCounts.svelte.js';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
@@ -456,6 +457,67 @@ describe('review detail page', () => {
 		expect(tabNames()).toEqual(['Suggestions', 'Attach', 'Manual']);
 		expect(screen.getByRole('button', { name: 'Dismiss' })).toBeTruthy();
 		expect(screen.queryByText(/Disc track files/)).toBeNull();
+	});
+
+	describe('pending counter (U3)', () => {
+		afterEach(() => (navCounts.review = null));
+		const counter = () => document.querySelector('h1')!.closest('div')!.nextElementSibling;
+
+		it.each([
+			[1234, '1,234 items to go'],
+			[1, '1 item to go'],
+			[0, 'No items left']
+		])('%i pending reads "%s", right under the title row', async (count, text) => {
+			navCounts.review = count;
+			answers['GET /api/review/7'] = { status: 200, body: noMatch };
+			render(ReviewPage);
+			await screen.findByRole('heading', { level: 1 });
+
+			const p = counter()!;
+			expect(p.tagName).toBe('P');
+			expect(p.className).toBe('small text-body-secondary mb-3');
+			expect(p.textContent!.trim()).toBe(text);
+		});
+
+		it('is hidden while the count is null', async () => {
+			navCounts.review = null;
+			answers['GET /api/review/7'] = { status: 200, body: noMatch };
+			render(ReviewPage);
+			await screen.findByRole('heading', { level: 1 });
+
+			expect(screen.queryByText(/to go|No items left/)).toBeNull();
+		});
+	});
+
+	it('each tab has its icon before the label (U5)', async () => {
+		answers['GET /api/review/7'] = { status: 200, body: noMatch };
+		const { unmount } = render(ReviewPage);
+		await screen.findByRole('button', { name: 'Use' });
+		const icons = () =>
+			screen
+				.getAllByRole('tab')
+				.map((t) => [t.textContent!.trim(), t.firstElementChild?.className.trim()]);
+		expect(icons()).toEqual([
+			['Suggestions', 'bi bi-lightbulb'],
+			['Attach', 'bi bi-paperclip'],
+			['Manual', 'bi bi-pencil']
+		]);
+		unmount();
+
+		answers['GET /api/review/7'] = { status: 200, body: ambiguous };
+		render(ReviewPage);
+		await screen.findByRole('heading', { level: 1 });
+		expect(icons()).toEqual([['Matched DAT entry', 'bi bi-bullseye']]);
+	});
+
+	it('header numbers show thousands separators (U4)', async () => {
+		answers['GET /api/review/7'] = {
+			status: 200,
+			body: { ...noMatch, header: { title: 'TETRIS', romSizeBytes: 1048576 } }
+		};
+		render(ReviewPage);
+
+		expect((await screen.findByText('1,048,576')).tagName).toBe('TD');
 	});
 
 	it('the header row has the system and reason badges and the header uses the standard table', async () => {

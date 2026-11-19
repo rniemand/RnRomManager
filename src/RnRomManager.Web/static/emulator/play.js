@@ -8,7 +8,8 @@
 // 3DO B8: Opera does the same with the five 3DO BIOS files, and always loads from play-disc. 3DO B11: Opera writes its
 // NVRAM only on reset, so the modal asks the page to reset and sync /data/saves before it closes. Saves B17/B18: a
 // library save is fetched before the loader and applied once at game start; the modal asks the page to export the
-// running game's state or battery save, which it sends back for upload.
+// running game's state or battery save, which it sends back for upload. E1: on a touch-first device the virtual gamepad
+// is enabled and shown at game start. E2: the modal can also ask for a PNG screenshot of the running game.
 import {
 	biosError,
 	biosFor,
@@ -284,6 +285,37 @@ function exportSave(kind, busy) {
 }
 
 /**
+ * E2: a PNG of the running game at upscale 1 from the canvas, answered from EmulatorJS's callback (asynchronously).
+ * `not-started` and `busy` are checked first, exactly as `exportSave` does.
+ * @param {boolean} busy the 3DO close sync is running
+ * @param {(result: { ok: true, bytes: ArrayBuffer, extension: string } | { ok: false, reason: string }) => void} reply
+ */
+function exportScreenshot(busy, reply) {
+	if (!gameStarted || !gameManager()) return reply({ ok: false, reason: 'not-started' });
+	if (busy) return reply({ ok: false, reason: 'busy' });
+	const emulator = /** @type {{ screenshot: (done: (blob: Blob) => void, source: string, format: string, upscale: number) => void }} */ (
+		/** @type {Record<string, unknown>} */ (/** @type {unknown} */ (window)).EJS_emulator
+	);
+	try {
+		// Source and upscale pinned: a saved `retroarch` source with upscale 1 never calls back, and a saved upscale could
+		// push the PNG past the image-upload limit; a saved format (maybe webp) is ignored too.
+		emulator.screenshot(
+			(blob) => {
+				blob.arrayBuffer().then(
+					(bytes) => reply({ ok: true, bytes, extension: '.png' }),
+					() => reply({ ok: false, reason: 'error' })
+				);
+			},
+			'canvas',
+			'png',
+			1
+		);
+	} catch {
+		reply({ ok: false, reason: 'error' });
+	}
+}
+
+/**
  * Saves B17: puts a library save into the started game, as EmulatorJS 4.2.3's own import does for a battery save,
  * then restarts and syncs so the in-browser save for this release is replaced at once.
  * @param {'state' | 'battery'} kind
@@ -338,8 +370,10 @@ const saveSyncDelayMs = 250;
 /**
  * The page's one message listener, from the modal (window.parent, same origin) only. 3DO B11: answers the close
  * request on Opera; its reset writes the NVRAM file, and the sync then persists /data/saves (EmulatorJS's IDBFS mount)
- * before the reply lets the modal remove the iframe. Saves B18: answers an export request on every core; an export is
- * synchronous, so a close request never interleaves with one.
+ * before the reply lets the modal remove the iframe. Saves B18: answers an export request on every core; a save export
+ * is synchronous, so a close request never interleaves with one. E2: a screenshot export is asynchronous: a 3DO close
+ * request that arrives while one is pending runs as usual (no waiting), the screenshot still replies, and the closed
+ * modal ignores that reply.
  * @param {boolean} isThreeDo
  */
 function listenForMessages(isThreeDo) {
@@ -354,7 +388,14 @@ function listenForMessages(isThreeDo) {
 		const isExport =
 			keys.length === 2 &&
 			data.type === 'rnrm-emulator-export' &&
-			(data.kind === 'state' || data.kind === 'battery');
+			(data.kind === 'state' || data.kind === 'battery' || data.kind === 'screenshot');
+		if (isExport && data.kind === 'screenshot') {
+			exportScreenshot(saving !== null, (result) => {
+				const message = { type: 'rnrm-emulator-export-result', kind: 'screenshot', ...result };
+				window.parent.postMessage(message, location.origin, result.ok ? [result.bytes] : []);
+			});
+			return;
+		}
 		if (isExport) {
 			const result = exportSave(data.kind, saving !== null);
 			const message = { type: 'rnrm-emulator-export-result', kind: data.kind, ...result };
@@ -528,8 +569,12 @@ async function start() {
 		// Nintendo DS B4: the save-file export and import use RetroArch's SRAM path, which DeSmuME never writes.
 		...(isDs ? { saveSavFiles: false, loadSavFiles: false } : {})
 	};
+	// E1: EmulatorJS shows its virtual gamepad at start only when its Start button saw a touch, and defaults the setting
+	// to enabled only for a mobile user agent; a touch-first device (not a touchscreen laptop with a mouse) gets it.
+	const touchFirst = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 	ejs.EJS_defaultOptions = {
 		'save-save-interval': '30',
+		...(touchFirst ? { 'virtual-gamepad': 'enabled' } : {}),
 		// Nintendo DS B4: both screens, lower below; a pointer press is a stylus press; no pointer lock on click.
 		// Saved per-game settings override these, as for every core.
 		...(isDs
@@ -551,6 +596,14 @@ async function start() {
 	ejs.EJS_onGameStart = () => {
 		earlier?.();
 		gameStarted = true;
+		// E1: an arrow property built with EmulatorJS's UI (not a method), hence the optional call; a user who turned the
+		// gamepad off in EmulatorJS's own settings menu keeps it off.
+		const emulator =
+			/** @type {{ toggleVirtualGamepad?: (show: boolean) => void, getSettingValue?: (id: string) => unknown } | undefined} */ (
+				ejs.EJS_emulator
+			);
+		if (touchFirst && emulator?.getSettingValue?.('virtual-gamepad') !== 'disabled')
+			emulator?.toggleVirtualGamepad?.(true);
 		if (!params.save || !saveBytes || saveApplied) return;
 		saveApplied = true;
 		const { kind } = params.save;

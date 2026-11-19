@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { afterNavigate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { Collapse } from '../bootstrap';
 	import type { PageRouteId } from '$app/types';
 	import type { Me } from '../api/types';
 	import { formatCount } from '../format';
@@ -57,6 +59,20 @@
 	const visibleNavigation = $derived(navigation.filter((item) => !item.admin || isAdmin));
 	const adminActive = $derived(isActive('/admin/users'));
 
+	/** U1: the phone menu closes after a navigation; on desktop the collapse is never `.show`. */
+	let collapse = $state<HTMLDivElement | null>(null);
+	function hideMenu(): void {
+		if (collapse?.classList.contains('show'))
+			Collapse.getOrCreateInstance(collapse, { toggle: false }).hide();
+	}
+	afterNavigate(hideMenu);
+
+	/** Any link but a dropdown toggle (dropdown items included) closes the menu. */
+	function onMenuClick(e: MouseEvent): void {
+		const link = (e.target as Element).closest('a');
+		if (link && !link.matches('[data-bs-toggle="dropdown"]')) hideMenu();
+	}
+
 	function isActive(href: string): boolean {
 		const path = page.url.pathname;
 		if (href === '/') return path === '/' || path.startsWith('/games/');
@@ -85,7 +101,8 @@
 		>
 			<span class="navbar-toggler-icon"></span>
 		</button>
-		<div class="collapse navbar-collapse" id="main-nav">
+		<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions (delegated from its links) -->
+		<div class="collapse navbar-collapse" id="main-nav" bind:this={collapse} onclick={onMenuClick}>
 			<ul class="navbar-nav me-auto">
 				{#each visibleNavigation as item (item.label)}
 					<li class="nav-item">{@render navigationLink(item)}</li>

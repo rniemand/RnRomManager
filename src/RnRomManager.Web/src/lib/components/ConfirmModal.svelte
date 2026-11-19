@@ -16,6 +16,8 @@
 		confirmDisabled?: boolean;
 		/** `lg` for a wide form (Edit metadata), `xl` for the emulator; default width otherwise. */
 		size?: 'lg' | 'xl';
+		/** U2: `modal-dialog-scrollable`, so the header and footer stay and only the body scrolls. */
+		scrollable?: boolean;
 		/** Omitted → info mode: the footer shows only "Close". */
 		onconfirm?: () => void;
 		/**
@@ -36,6 +38,7 @@
 		busy = false,
 		confirmDisabled = false,
 		size,
+		scrollable = false,
 		onconfirm,
 		beforeclose,
 		onshown,
@@ -101,6 +104,7 @@
 		class="modal-dialog modal-dialog-centered"
 		class:modal-lg={size === 'lg'}
 		class:modal-xl={size === 'xl'}
+		class:modal-dialog-scrollable={scrollable}
 	>
 		<div class="modal-content">
 			<div class="modal-header">
@@ -113,7 +117,15 @@
 					disabled={closing}
 				></button>
 			</div>
-			<div class="modal-body">{@render children?.()}</div>
+			{#if scrollable}
+				<!-- U2: a scrolling body needs keyboard access (axe scrollable-region-focusable): it takes focus itself. -->
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex (a focusable scroll region is the WCAG-recommended fix) -->
+				<div class="modal-body" role="region" aria-label={title} tabindex="0">
+					{@render children?.()}
+				</div>
+			{:else}
+				<div class="modal-body">{@render children?.()}</div>
+			{/if}
 			<div class="modal-footer">
 				<button
 					type="button"

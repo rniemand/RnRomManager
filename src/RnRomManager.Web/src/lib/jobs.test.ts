@@ -22,10 +22,19 @@ describe('job display helpers', () => {
 					'DatRefresh',
 					'MediaRetry',
 					'ReviewResolve',
-					'StorageMigration'
+					'StorageMigration',
+					'ZipRepack'
 				] as const
 			).map(jobLabel)
-		).toEqual(['Ingest', 'Integrity check', 'DAT refresh', 'Media retry', 'Review', 'Moving ROMs']);
+		).toEqual([
+			'Ingest',
+			'Integrity check',
+			'DAT refresh',
+			'Media retry',
+			'Review',
+			'Moving ROMs',
+			'Repacking ZIPs'
+		]);
 		expect(jobLabel('Other')).toBe('Other');
 	});
 
@@ -44,6 +53,7 @@ describe('job display helpers', () => {
 		expect(statusClass('Failed')).toBe('text-bg-danger');
 		expect(statusClass('Weird')).toBe('text-bg-secondary');
 		expect(outcomeClass('Error')).toBe('text-bg-danger');
+		expect(outcomeClass('Repacked')).toBe('text-bg-success');
 		expect(outcomeClass('Weird')).toBe('text-bg-secondary');
 	});
 });

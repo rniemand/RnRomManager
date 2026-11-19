@@ -12,7 +12,7 @@ vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
 
-const { hotkeys, missingImageMessages } = await import('./hotkeys.svelte');
+const { hotkeys, missingImageMessages, missingMetadataMessages } = await import('./hotkeys.svelte');
 
 const admin: Me = { id: 1, username: 'a', roles: ['admin'], mustChangePassword: false };
 const user: Me = { id: 2, username: 'u', roles: [], mustChangePassword: false };
@@ -245,6 +245,124 @@ describe('hotkeys store (B24)', () => {
 			hotkeys.handle(altShift('KeyG'));
 
 			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/review'));
+		});
+	});
+
+	describe('reports.missingMetadata.next (Missing Metadata M5)', () => {
+		const gameA = '11111111-1111-1111-1111-111111111111';
+		const gameB = '22222222-2222-2222-2222-222222222222';
+		const next = (after?: string) =>
+			`GET /api/reports/missing-metadata/next${after ? `?afterGameId=${after}` : ''}`;
+		const toastTexts = () => toasts.items.map((t) => [t.text, t.kind]);
+
+		it('off a game page opens the first row with from=missing-metadata', async () => {
+			window.history.replaceState({}, '', '/reports/missing-metadata');
+			answers[next()] = { status: 200, body: { id: gameA, currentIsOnly: false } };
+			await signIn(admin);
+
+			await hotkeys.run('reports.missingMetadata.next');
+
+			expect(goto).toHaveBeenCalledWith(`/games/${gameA}?from=missing-metadata`);
+		});
+
+		it('on a game page asks for the game after it', async () => {
+			window.history.replaceState({}, '', `/games/${gameA}`);
+			answers[next(gameA)] = { status: 200, body: { id: gameB, currentIsOnly: false } };
+			await signIn(admin);
+
+			await hotkeys.nextMissingMetadata();
+
+			expect(calls).toContain(next(gameA));
+			expect(goto).toHaveBeenCalledWith(`/games/${gameB}?from=missing-metadata`);
+		});
+
+		it('a bound key runs it', async () => {
+			answers['GET /api/auth/me/hotkeys'] = {
+				status: 200,
+				body: { bindings: { ...defaultBindings(), 'reports.missingMetadata.next': 'Alt+Shift+N' } }
+			};
+			answers[next()] = { status: 200, body: { id: gameA, currentIsOnly: false } };
+			await signIn(admin);
+
+			expect(hotkeys.handle(altShift('KeyN'))).toBe(true);
+			await vi.waitFor(() =>
+				expect(goto).toHaveBeenCalledWith(`/games/${gameA}?from=missing-metadata`)
+			);
+		});
+
+		it('shows the three toasts', async () => {
+			expect(missingMetadataMessages).toEqual({
+				onlyCurrent: 'This game is the only one still missing metadata.',
+				none: 'No more games are missing metadata.',
+				failed: "Couldn't find the next game missing metadata."
+			});
+			window.history.replaceState({}, '', `/games/${gameA}`);
+			answers[next(gameA)] = { status: 200, body: { id: null, currentIsOnly: true } };
+			await signIn(admin);
+			await hotkeys.nextMissingMetadata();
+
+			window.history.replaceState({}, '', '/');
+			answers[next()] = { status: 200, body: { id: null, currentIsOnly: false } };
+			await hotkeys.nextMissingMetadata();
+
+			answers[next()] = { status: 500 };
+			await hotkeys.nextMissingMetadata();
+
+			expect(goto).not.toHaveBeenCalled();
+			expect(toastTexts()).toEqual([
+				[missingMetadataMessages.onlyCurrent, 'info'],
+				[missingMetadataMessages.none, 'info'],
+				[missingMetadataMessages.failed, 'danger']
+			]);
+		});
+
+		it('overlapping presses share one request', async () => {
+			let release!: () => void;
+			const real = globalThis.fetch;
+			await signIn(admin);
+			vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+				if (!url.startsWith('/api/reports/missing-metadata/next')) return real(url, init);
+				calls.push(`GET ${url}`);
+				return new Promise<Response>((resolve) => {
+					release = () =>
+						resolve(
+							new Response(JSON.stringify({ id: gameA, currentIsOnly: false }), { status: 200 })
+						);
+				});
+			});
+
+			const first = hotkeys.nextMissingMetadata();
+			const second = hotkeys.nextMissingMetadata();
+			expect(second).toBe(first);
+			await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+			release();
+			await first;
+
+			expect(calls.filter((c) => c.startsWith(next()))).toHaveLength(1);
+			expect(goto).toHaveBeenCalledTimes(1);
+		});
+
+		it('a stale answer is dropped', async () => {
+			let release!: () => void;
+			const real = globalThis.fetch;
+			await signIn(admin);
+			vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+				if (!url.startsWith('/api/reports/missing-metadata/next')) return real(url, init);
+				return new Promise<Response>((resolve) => {
+					release = () =>
+						resolve(
+							new Response(JSON.stringify({ id: gameA, currentIsOnly: false }), { status: 200 })
+						);
+				});
+			});
+
+			const pending = hotkeys.nextMissingMetadata();
+			await vi.waitFor(() => expect(release).toBeTypeOf('function'));
+			window.history.replaceState({}, '', '/elsewhere');
+			release();
+			await pending;
+
+			expect(goto).not.toHaveBeenCalled();
 		});
 	});
 

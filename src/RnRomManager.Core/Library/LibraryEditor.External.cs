@@ -100,7 +100,7 @@ public sealed partial class LibraryEditor
         try
         {
             var touched = placed.ToDictionary(m => Path.GetFileName(m.To), m => m.Snapshot, StringComparer.OrdinalIgnoreCase);
-            published = await new LibraryZipWriter(reader).WriteCheckedAsync(library, SafePath.Resolve(library, zipPath), existing,
+            published = await Writer(game.System).WriteCheckedAsync(library, SafePath.Resolve(library, zipPath), existing,
                 new LibraryZipChanges(game, new Dictionary<string, Func<Stream>>(), ExternalFiles: touched), ct, ExternalHooks?.Writer).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -288,7 +288,7 @@ public sealed partial class LibraryEditor
         ExternalFileSnapshot publishedTarget;
         try
         {
-            publishedTarget = await new LibraryZipWriter(reader).WriteCheckedAsync(library, targetFull, targetZip,
+            publishedTarget = await Writer(targetGame.System).WriteCheckedAsync(library, targetFull, targetZip,
                 new LibraryZipChanges(targetGame, entries, removed, touched, saves), ct, ExternalHooks?.Writer).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -312,7 +312,7 @@ public sealed partial class LibraryEditor
             }
             try
             {
-                publishedSource = await new LibraryZipWriter(reader).WriteCheckedAsync(library, sourceFull, sourceZip,
+                publishedSource = await Writer(sourceGame.System).WriteCheckedAsync(library, sourceFull, sourceZip,
                     new LibraryZipChanges(sourceGame, new Dictionary<string, Func<Stream>>()), ct, ExternalHooks?.Writer).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -433,7 +433,7 @@ public sealed partial class LibraryEditor
                 return false;
             }
             // The written target still has every entry it had before, so it can be rewritten from itself.
-            await new LibraryZipWriter(reader).WriteCheckedAsync(library, path, opened.Zip,
+            await Writer(before.System).WriteCheckedAsync(library, path, opened.Zip,
                 new LibraryZipChanges(before, new Dictionary<string, Func<Stream>>()), CancellationToken.None, ExternalHooks?.Writer).ConfigureAwait(false);
             return true;
         }
@@ -550,7 +550,7 @@ public sealed partial class LibraryEditor
         ExternalFileSnapshot published;
         try
         {
-            published = await new LibraryZipWriter(reader).WriteCheckedAsync(library, targetFull, targetZip,
+            published = await Writer(targetGame.System).WriteCheckedAsync(library, targetFull, targetZip,
                 new LibraryZipChanges(targetGame, entries, removed, touched, saves), ct, ExternalHooks?.Writer).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -645,7 +645,7 @@ public sealed partial class LibraryEditor
             ExternalFileSnapshot published;
             try
             {
-                published = await new LibraryZipWriter(reader).WriteCheckedAsync(library, zipFull, existing,
+                published = await Writer(rebuilt.System).WriteCheckedAsync(library, zipFull, existing,
                     new LibraryZipChanges(rebuilt, new Dictionary<string, Func<Stream>>()), ct, ExternalHooks?.Writer).ConfigureAwait(false);
             }
             catch (Exception ex)

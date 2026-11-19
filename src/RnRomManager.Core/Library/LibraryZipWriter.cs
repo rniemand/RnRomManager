@@ -65,7 +65,8 @@ public sealed class LibraryZipWriterHooks
 /// <c>existing</c> is closed before the move: Windows can't replace a file that's open, even with
 /// <c>FileShare.Delete</c> (D44).
 /// </summary>
-public sealed class LibraryZipWriter(InfoJsonReader reader)
+/// <param name="compression">Z2: the level of every entry this writer writes (the game's system level).</param>
+public sealed class LibraryZipWriter(InfoJsonReader reader, ZipCompression compression = ZipCompression.Med)
 {
     public const int MoveRetries = 3;
     public static readonly TimeSpan MoveRetryDelay = TimeSpan.FromMilliseconds(500);
@@ -80,14 +81,21 @@ public sealed class LibraryZipWriter(InfoJsonReader reader)
     public long FastCompressionAboveBytes { get; init; } = DefaultFastCompressionAboveBytes;
 
     /// <summary>
-    /// <see cref="CompressionLevel.Fastest"/> for a <c>roms/</c> or <c>saves/</c> entry larger than <paramref name="fastAbove"/>;
-    /// <see cref="CompressionLevel.Optimal"/> for everything else (<c>info.json</c>, images, notes, smaller ROMs).
+    /// Z2: <see cref="ZipCompression.Store"/> → <see cref="CompressionLevel.NoCompression"/> and
+    /// <see cref="ZipCompression.High"/> → <see cref="CompressionLevel.SmallestSize"/> for every entry;
+    /// <see cref="ZipCompression.Med"/> → <see cref="CompressionLevel.Fastest"/> for a <c>roms/</c> or <c>saves/</c>
+    /// entry larger than <paramref name="fastAbove"/>, <see cref="CompressionLevel.Optimal"/> for everything else
+    /// (<c>info.json</c>, images, notes, smaller ROMs).
     /// </summary>
-    public static CompressionLevel CompressionFor(string entryName, long sizeBytes, long fastAbove) =>
-        (entryName.StartsWith(LibraryZip.RomsFolder, StringComparison.Ordinal) || entryName.StartsWith(LibraryZip.SavesFolder, StringComparison.Ordinal))
-        && sizeBytes > fastAbove
+    public static CompressionLevel CompressionFor(string entryName, long sizeBytes, long fastAbove, ZipCompression compression) => compression switch
+    {
+        ZipCompression.Store => CompressionLevel.NoCompression,
+        ZipCompression.High => CompressionLevel.SmallestSize,
+        _ => (entryName.StartsWith(LibraryZip.RomsFolder, StringComparison.Ordinal) || entryName.StartsWith(LibraryZip.SavesFolder, StringComparison.Ordinal))
+             && sizeBytes > fastAbove
             ? CompressionLevel.Fastest
-            : CompressionLevel.Optimal;
+            : CompressionLevel.Optimal,
+    };
 
     /// <summary>The plain write, for a game whose ROMs are all in its ZIP.</summary>
     /// <param name="target">Final ZIP path; its folder must exist.</param>
@@ -103,7 +111,7 @@ public sealed class LibraryZipWriter(InfoJsonReader reader)
         {
             await using (var file = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                await WriteTmpAsync(file, existing, changes, entries, notes, saves, FastCompressionAboveBytes, ct).ConfigureAwait(false);
+                await WriteTmpAsync(file, existing, changes, entries, notes, saves, FastCompressionAboveBytes, compression, ct).ConfigureAwait(false);
                 file.Flush(flushToDisk: true); // on disk before it replaces the old ZIP and callers delete the source
             }
             using (var zip = LibraryZip.Open(tmp, reader))
@@ -169,7 +177,7 @@ public sealed class LibraryZipWriter(InfoJsonReader reader)
             {
                 tmpIdentity = ExternalRomPath.SnapshotOf(file)?.Identity
                     ?? throw new IOException($"'{tmp}' was created but can't be identified.");
-                await WriteTmpAsync(file, existing, changes, entries, notes, saves, FastCompressionAboveBytes, ct).ConfigureAwait(false);
+                await WriteTmpAsync(file, existing, changes, entries, notes, saves, FastCompressionAboveBytes, compression, ct).ConfigureAwait(false);
                 file.Flush(flushToDisk: true);
             }
             hooks?.AfterTempClosed?.Invoke();
@@ -396,11 +404,11 @@ public sealed class LibraryZipWriter(InfoJsonReader reader)
 
     private static async Task WriteTmpAsync(
         FileStream file, LibraryZip? existing, LibraryZipChanges changes, Dictionary<string, long> entries, List<string> notes,
-        List<SaveEntryPlan> saves, long fastAbove, CancellationToken ct)
+        List<SaveEntryPlan> saves, long fastAbove, ZipCompression compression, CancellationToken ct)
     {
         await using var archive = new ZipArchive(file, ZipArchiveMode.Create, leaveOpen: true);
 
-        await using (var info = archive.CreateEntry(LibraryZip.InfoJsonEntry, CompressionLevel.Optimal).Open())
+        await using (var info = archive.CreateEntry(LibraryZip.InfoJsonEntry, CompressionFor(LibraryZip.InfoJsonEntry, 0, fastAbove, compression)).Open())
             await info.WriteAsync(InfoJsonSerializer.Serialize(changes.Info), ct).ConfigureAwait(false);
 
         foreach (var (name, size) in entries)
@@ -412,7 +420,7 @@ public sealed class LibraryZipWriter(InfoJsonReader reader)
                 source = existing.OpenEntry(name, size);
             else
                 throw new ArgumentException($"No content for entry '{name}': not new and not in the existing ZIP.", nameof(changes));
-            await CopyEntryAsync(archive, name, source, CompressionFor(name, size, fastAbove), ct).ConfigureAwait(false);
+            await CopyEntryAsync(archive, name, source, CompressionFor(name, size, fastAbove, compression), ct).ConfigureAwait(false);
         }
 
         // Notes are optional: a missing one is simply not written (B8).
@@ -420,16 +428,16 @@ public sealed class LibraryZipWriter(InfoJsonReader reader)
         {
             if (changes.NewEntries.TryGetValue(name, out var open))
                 await CopyEntryAsync(archive, name, new LimitStream(open(), LibraryZip.MaxNoteBytes),
-                    CompressionFor(name, LibraryZip.MaxNoteBytes, fastAbove), ct).ConfigureAwait(false);
+                    CompressionFor(name, LibraryZip.MaxNoteBytes, fastAbove, compression), ct).ConfigureAwait(false);
             else if (changes.RemovedEntries?.Contains(name) != true && existing is not null && existing.HasEntry(name))
                 await CopyEntryAsync(archive, name, existing.OpenEntry(name, LibraryZip.MaxNoteBytes),
-                    CompressionFor(name, LibraryZip.MaxNoteBytes, fastAbove), ct).ConfigureAwait(false);
+                    CompressionFor(name, LibraryZip.MaxNoteBytes, fastAbove, compression), ct).ConfigureAwait(false);
         }
 
         foreach (var save in saves)
         {
             var source = save.New is { } open ? new LimitStream(open(), save.Size) : existing!.OpenEntry(save.Name, save.Size);
-            await CopyEntryAsync(archive, save.Name, source, CompressionFor(save.Name, save.Size, fastAbove), ct).ConfigureAwait(false);
+            await CopyEntryAsync(archive, save.Name, source, CompressionFor(save.Name, save.Size, fastAbove, compression), ct).ConfigureAwait(false);
         }
     }
 

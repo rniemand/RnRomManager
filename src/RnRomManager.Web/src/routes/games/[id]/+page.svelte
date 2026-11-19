@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
 	import { untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
@@ -27,6 +28,7 @@
 	import FileSize from '#lib/components/FileSize.svelte';
 	import GameCollectionsModal from '#lib/components/GameCollectionsModal.svelte';
 	import Icon from '#lib/components/Icon.svelte';
+	import { hotkeys } from '#lib/stores/hotkeys.svelte.js';
 	import InfoJsonModal from '#lib/components/InfoJsonModal.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import RatingControl from '#lib/components/RatingControl.svelte';
@@ -380,10 +382,19 @@
 	/** B19: bumped after the Play dialog saved to the library, so the Saves tab reloads. */
 	let savesVersion = $state(0);
 
+	/** Missing Metadata M7: opened from that report; kept across tab switches. */
+	const fromMissingMetadata = $derived(page.url.searchParams.get('from') === 'missing-metadata');
+
 	function selectTab(next: Tab): void {
 		const path = resolve('/games/[id]', { id });
+		const query = [
+			fromMissingMetadata && 'from=missing-metadata',
+			next !== 'releases' && `tab=${next}`
+		]
+			.filter(Boolean)
+			.join('&');
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
-		void goto(next === 'releases' ? path : `${path}?tab=${next}`, { replace: true, reset: false });
+		void goto(query ? `${path}?${query}` : path, { replace: true, reset: false });
 	}
 </script>
 
@@ -565,6 +576,15 @@
 				>
 					<Icon name="collections" /> Collections
 				</button>
+				{#if fromMissingMetadata && auth.isAdmin}
+					<button
+						type="button"
+						class="btn btn-sm btn-outline-primary"
+						onclick={() => void hotkeys.run('reports.missingMetadata.next')}
+					>
+						<Icon name="report-missing-metadata" /> Next missing metadata
+					</button>
+				{/if}
 				<!-- B3: Manage, last in the row: View info.json for everyone, then the Admin actions. -->
 				<div class="dropdown">
 					<button
@@ -628,7 +648,7 @@
 		</div>
 	</div>
 
-	<ul class="nav nav-tabs mb-3" role="tablist">
+	<ul class="nav nav-tabs mb-3" use:scrollActiveTab role="tablist">
 		{#each tabs as [value, label, icon] (value)}
 			<li class="nav-item" role="presentation">
 				<button
@@ -1028,6 +1048,7 @@
 			savesVersion++;
 			void refreshGame();
 		}}
+		onimagesaved={() => void refreshGame()}
 	/>
 	<GameCollectionsModal
 		bind:open={collectionsOpen}

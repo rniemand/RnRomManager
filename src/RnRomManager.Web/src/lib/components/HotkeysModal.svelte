@@ -20,14 +20,17 @@
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
+	import Icon from './Icon.svelte';
 
 	/** B25: the user's global hotkeys; edits are pending until Save. */
 	interface Props {
 		open: boolean;
 		me: Me;
+		/** U7: opens global search, for the non-editable `search` row's Run button. */
+		onsearch?: () => void;
 	}
 
-	let { open = $bindable(), me }: Props = $props();
+	let { open = $bindable(), me, onsearch }: Props = $props();
 
 	let pending = $state<Bindings | null>(null);
 	let capturing = $state<EditableHotkeyId | null>(null);
@@ -161,6 +164,17 @@
 		}
 	}
 
+	/** U7: no edit is silently lost, so Run waits while a key is captured or bindings are unsaved. */
+	const runBlocked = $derived(capturing !== null || changed);
+
+	/** U7: closes the modal, then runs the action through the same path as its key. */
+	async function run(action: HotkeyAction): Promise<void> {
+		open = false;
+		await tick();
+		if (action.editable) void hotkeys.run(action.id as EditableHotkeyId);
+		else onsearch?.();
+	}
+
 	const keys = (binding: string) => binding.split('+');
 	const errorFor = (id: string) =>
 		(captureError?.id === id ? captureError.message : null) ??
@@ -171,7 +185,7 @@
 
 <ConfirmModal
 	bind:open
-	title="Keyboard shortcuts"
+	title="Keyboard Shortcuts"
 	size="lg"
 	confirmLabel="Save"
 	{busy}
@@ -185,13 +199,16 @@
 			>Retry</button
 		>
 	{:else}
+		{#if runBlocked}
+			<p class="small text-body-secondary">Save or cancel your changes to run a shortcut</p>
+		{/if}
 		<table class="table table-sm table-striped table-hover align-middle mb-3">
-			<caption class="visually-hidden">Keyboard shortcuts</caption>
+			<caption class="visually-hidden">Keyboard Shortcuts</caption>
 			<thead class="table-dark">
 				<tr class="small text-uppercase text-body-secondary">
 					<th scope="col">Action</th>
 					<th scope="col">Shortcut</th>
-					<th scope="col"><span class="visually-hidden">Edit</span></th>
+					<th scope="col"><span class="visually-hidden">Actions</span></th>
 				</tr>
 			</thead>
 			<tbody>
@@ -220,7 +237,16 @@
 							{/if}
 							{#if error}<div class="small text-danger" role="alert">{error}</div>{/if}
 						</td>
+						<!-- At 320px Run and Edit stack instead of overflowing; each stays on one line. -->
 						<td class="text-end">
+							<button
+								type="button"
+								class="btn btn-sm btn-outline-primary text-nowrap"
+								class:me-1={action.editable}
+								aria-label="Run {action.name}"
+								disabled={runBlocked}
+								onclick={() => run(action)}><Icon name="play" /> Run</button
+							>
 							{#if action.editable}
 								<button
 									type="button"

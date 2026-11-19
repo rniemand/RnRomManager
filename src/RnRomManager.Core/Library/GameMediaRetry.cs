@@ -17,8 +17,10 @@ namespace RnRomManager.Core.Library;
 /// something. The caller holds the job lock.
 /// </summary>
 public sealed class GameMediaRetry(ILibraryMirror mirror, InfoJsonReader reader, ISystemRegistry systems, MediaService media,
-    IOptions<PathsOptions> paths, IAuditLog audit, TimeProvider time, ILogger<GameMediaRetry> logger)
+    IOptions<PathsOptions> paths, IAuditLog audit, TimeProvider time, ILogger<GameMediaRetry> logger, IRomStorageSettings? zipSettings = null)
 {
+    /// <summary>Z4: a writer at the game's system ZIP compression level.</summary>
+    private LibraryZipWriter Writer(string systemId) => new(reader, zipSettings?.Compression(systemId) ?? ZipCompression.Med);
     /// <param name="skipManualOnly">The <c>MediaRetry</c> job skips games where every release is <c>Manual</c> (D38).</param>
     /// <param name="actor">AU4: <c>MediaFetched</c> is recorded once the ZIP is written (also when the DB update then fails).</param>
     public async Task<MediaRetryResult> RetryAsync(GameRow row, CircuitBreaker breaker, bool skipManualOnly, AuditActor actor, CancellationToken ct)
@@ -60,9 +62,9 @@ public sealed class GameMediaRetry(ILibraryMirror mirror, InfoJsonReader reader,
             var changes = new LibraryZipChanges(game, entries);
             // G4: a checked ZIP is replaced only through the checked write.
             if (LibraryTarget.NeedsCheck(systems, row.ZipPath, game.System))
-                await new LibraryZipWriter(reader).WriteCheckedAsync(paths.Value.Roms, path, existing, changes).ConfigureAwait(false);
+                await Writer(game.System).WriteCheckedAsync(paths.Value.Roms, path, existing, changes).ConfigureAwait(false);
             else
-                await new LibraryZipWriter(reader).WriteAsync(path, existing, changes).ConfigureAwait(false);
+                await Writer(game.System).WriteAsync(path, existing, changes).ConfigureAwait(false);
         }
         catch (LibraryZipVerifyException ex)
         {

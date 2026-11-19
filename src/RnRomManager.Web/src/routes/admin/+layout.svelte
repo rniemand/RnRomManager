@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
 	import PageTitle from '#lib/components/PageTitle.svelte';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
@@ -20,7 +21,7 @@
 
 <AdminOnly>
 	<PageTitle icon="admin" text="Admin" />
-	<ul class="nav nav-tabs mb-3">
+	<ul class="nav nav-tabs mb-3" use:scrollActiveTab>
 		{#each tabs as tab (tab.href)}
 			<li class="nav-item">
 				<a

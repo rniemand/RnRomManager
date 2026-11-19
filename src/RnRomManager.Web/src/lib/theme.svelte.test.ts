@@ -3,6 +3,8 @@ import { render, screen, fireEvent } from '@testing-library/svelte';
 
 vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/') } }));
 vi.mock('$app/paths', () => ({ resolve: (path: string) => path }));
+vi.mock('$app/navigation', () => ({ afterNavigate: () => {} }));
+vi.mock('./bootstrap', () => ({ Collapse: { getOrCreateInstance: () => ({ hide() {} }) } }));
 const { default: Navbar } = await import('./components/Navbar.svelte');
 import { theme } from './theme.svelte';
 

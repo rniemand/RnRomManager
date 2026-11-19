@@ -63,8 +63,21 @@ public class HotkeyEndpointsTests
     {
         ["nav.library"] = "Alt+Shift+L", ["nav.collections"] = "Alt+Shift+C", ["nav.ingestion"] = "Alt+Shift+I", ["nav.review"] = "Alt+Shift+F", ["review.next"] = "Alt+Shift+G",
         ["nav.reports"] = "Alt+Shift+R", ["nav.integrity"] = "Alt+Shift+T", ["nav.admin"] = "Alt+Shift+A", ["nav.deleted"] = "Alt+Shift+D",
-        ["reports.missingImage.next"] = "Alt+Shift+M",
+        ["reports.missingImage.next"] = "Alt+Shift+M", ["reports.missingMetadata.next"] = null,
     };
+
+    [Test]
+    public async Task MissingMetadataNext_ABindingRoundTrips()
+    {
+        await SignInAsync(TestUsers.AllRoles);
+
+        using (var response = await PutAsync(new Dictionary<string, string?> { ["reports.missingMetadata.next"] = "Alt+Shift+N" }))
+        {
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+            Assert.That((await BindingsAsync(response))["reports.missingMetadata.next"], Is.EqualTo("Alt+Shift+N"));
+        }
+        Assert.That((await GetAsync())["reports.missingMetadata.next"], Is.EqualTo("Alt+Shift+N"));
+    }
 
     [Test]
     public async Task Get_ReturnsTheDefaultsForEveryEditableAction_EvenForAUser()

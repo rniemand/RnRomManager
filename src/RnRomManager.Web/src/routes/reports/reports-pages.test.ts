@@ -34,6 +34,7 @@ const { default: MissingImages } = await import('./missing-images/+page.svelte')
 const { default: LibrarySize } = await import('./library-size/+page.svelte');
 const { default: Duplicates } = await import('./duplicates/+page.svelte');
 const { default: MultipleReleases } = await import('./multiple-releases/+page.svelte');
+const { default: MissingMetadata } = await import('./missing-metadata/+page.svelte');
 
 type Answer = { status: number; body?: unknown };
 
@@ -691,6 +692,210 @@ describe('reports pages', () => {
 			const tab = screen.getByRole('link', { name: 'Multiple Releases' });
 			expect(tab.getAttribute('href')).toBe('/reports/multiple-releases');
 			expect(tab.querySelector('i')!.className.trim()).toBe('bi bi-layers');
+		});
+	});
+
+	describe('Missing Metadata (M4, M6)', () => {
+		const admin = () =>
+			auth.set({ id: 1, username: 'admin', roles: ['admin'], mustChangePassword: false });
+		const list = (query = '') =>
+			`GET /api/reports/missing-metadata?missing=any&sort=name&dir=asc&page=1&pageSize=50${query}`;
+		const item = (id: string, extra: Record<string, unknown> = {}) => ({
+			id,
+			displayTitle: `Game ${id}`,
+			system: 'gb',
+			systemName: 'Game Boy',
+			releaseYear: 1990,
+			developers: ['Dev A', 'Dev B'],
+			publishers: ['Pub'],
+			...extra
+		});
+		const body = (items: unknown[], total = items.length) => ({
+			items,
+			page: 1,
+			pageSize: 50,
+			total
+		});
+		const replaced = (path: string) => [path, { replace: true, reset: false }];
+		const layout = () =>
+			render(ReportsLayout, {
+				children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))
+			});
+
+		beforeEach(() => navigateTo('/reports/missing-metadata'));
+
+		it('the tab shows for Admins only, between Multiple Releases and Activity', () => {
+			admin();
+			layout();
+			expect(
+				screen
+					.getAllByRole('link')
+					.map((a) => [a.textContent!.trim(), a.querySelector('i')?.className.trim()])
+			).toEqual([
+				['Library Size', 'bi bi-pie-chart'],
+				['Missing Images', 'bi bi-image-alt'],
+				['Duplicates', 'bi bi-files'],
+				['Multiple Releases', 'bi bi-layers'],
+				['Missing Metadata', 'bi bi-card-checklist'],
+				['Activity', 'bi bi-activity']
+			]);
+			expect(screen.getByRole('link', { name: 'Missing Metadata' }).getAttribute('href')).toBe(
+				'/reports/missing-metadata'
+			);
+		});
+
+		it('a Site user on the page gets NotAllowed, one h1 and no tabs', () => {
+			auth.set({ id: 2, username: 'site', roles: [], mustChangePassword: false });
+			layout();
+			expect(screen.queryByRole('link', { name: 'Missing Metadata' })).toBeNull();
+			expect(screen.queryByRole('list')).toBeNull();
+			expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+			expect(screen.queryByText('Content')).toBeNull();
+		});
+
+		it('lists the columns with Missing badges, joined lists and links carrying from', async () => {
+			admin();
+			answers[list()] = {
+				status: 200,
+				body: body([
+					item('g1', { releaseYear: null }),
+					item('g2', { developers: [], publishers: [] })
+				])
+			};
+			render(MissingMetadata);
+
+			const link = await screen.findByRole('link', { name: 'Game g1' });
+			expect(link.getAttribute('href')).toBe('/games/g1?from=missing-metadata');
+			expect(
+				[...document.querySelectorAll('thead th')].map((th) => th.textContent!.trim())
+			).toEqual(['Game', 'System', 'Year', 'Developer', 'Publisher']);
+			expect(document.querySelector('thead')!.className).toBe('table-dark');
+			const cells = (id: string) =>
+				[...screen.getByRole('link', { name: `Game ${id}` }).closest('tr')!.children].map((c) =>
+					c.textContent!.trim()
+				);
+			expect(cells('g1')).toEqual(['Game g1', 'Game Boy', 'Missing', 'Dev A, Dev B', 'Pub']);
+			expect(cells('g2')).toEqual(['Game g2', 'Game Boy', '1990', 'Missing', 'Missing']);
+			expect(document.querySelector('tbody .badge.text-bg-warning')!.textContent).toBe('Missing');
+			expect(screen.getByText('2 games')).toBeTruthy();
+		});
+
+		it('the total line reads "1,234 games" and "1 game"', async () => {
+			admin();
+			answers[list()] = { status: 200, body: body([item('g1')], 1234) };
+			const { unmount } = render(MissingMetadata);
+			expect(await screen.findByText('1,234 games')).toBeTruthy();
+			expect(screen.getByText('1,234 games').className).toBe('small text-body-secondary mb-2');
+			unmount();
+
+			answers[list()] = { status: 200, body: body([item('g1')]) };
+			render(MissingMetadata);
+			expect(await screen.findByText('1 game')).toBeTruthy();
+		});
+
+		it('empty: the unfiltered text, no total line', async () => {
+			admin();
+			answers[list()] = { status: 200, body: body([]) };
+			render(MissingMetadata);
+
+			expect(
+				await screen.findByText('Every game has its year, developer and publisher.')
+			).toBeTruthy();
+			expect(screen.queryByText(/\d games?$/)).toBeNull();
+		});
+
+		it('empty with a filter: the filtered text', async () => {
+			admin();
+			navigateTo('/reports/missing-metadata?missing=year');
+			answers[
+				'GET /api/reports/missing-metadata?missing=year&sort=name&dir=asc&page=1&pageSize=50'
+			] = { status: 200, body: body([]) };
+			render(MissingMetadata);
+
+			expect(await screen.findByText('No games match these filters.')).toBeTruthy();
+		});
+
+		it('URL state reaches the API; filters write the URL from page 1', async () => {
+			admin();
+			navigateTo(
+				'/reports/missing-metadata?system=gb&missing=developer&q=zel&sort=year&dir=desc&page=2'
+			);
+			const request =
+				'GET /api/reports/missing-metadata?missing=developer&sort=year&dir=desc&page=2&pageSize=50&system=gb&q=zel';
+			answers[request] = { status: 200, body: { ...body([item('g1')], 60), page: 2 } };
+			render(MissingMetadata);
+
+			await screen.findByRole('link', { name: 'Game g1' });
+			expect(calls).toContain(request);
+			expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('zel');
+
+			await fireEvent.change(screen.getByLabelText('Missing'), { target: { value: 'publisher' } });
+			expect(goto).toHaveBeenLastCalledWith(
+				...replaced(
+					'/reports/missing-metadata?system=gb&missing=publisher&q=zel&sort=year&dir=desc'
+				)
+			);
+		});
+
+		it('sortable headers: Game, System and Year; the active one flips', async () => {
+			admin();
+			answers[list()] = { status: 200, body: body([item('g1')]) };
+			render(MissingMetadata);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			expect(screen.queryByRole('button', { name: 'Developer' })).toBeNull();
+			expect(screen.getByRole('button', { name: 'System' })).toBeTruthy();
+			expect(screen.getByRole('columnheader', { name: /Game/ }).getAttribute('aria-sort')).toBe(
+				'ascending'
+			);
+			await fireEvent.click(screen.getByRole('button', { name: 'Year' }));
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/missing-metadata?sort=year'));
+		});
+
+		it('clicking the active header flips its direction, from page 1', async () => {
+			admin();
+			navigateTo('/reports/missing-metadata?page=2');
+			answers[
+				'GET /api/reports/missing-metadata?missing=any&sort=name&dir=asc&page=2&pageSize=50'
+			] = {
+				status: 200,
+				body: { ...body([item('g1')], 60), page: 2 }
+			};
+			render(MissingMetadata);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			await fireEvent.click(screen.getByRole('button', { name: /Game/ }));
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/missing-metadata?dir=desc'));
+		});
+
+		it('the title search is debounced and Clear resets every filter', async () => {
+			admin();
+			answers[list()] = { status: 200, body: body([item('g1')]) };
+			render(MissingMetadata);
+			await screen.findByRole('link', { name: 'Game g1' });
+			const clear = screen.getByRole('button', { name: 'Clear' }) as HTMLButtonElement;
+			expect(clear.disabled).toBe(true);
+
+			await fireEvent.input(screen.getByLabelText('Title'), { target: { value: ' mario ' } });
+			expect(goto).not.toHaveBeenCalled();
+			await vi.waitFor(() =>
+				expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/missing-metadata?q=mario'))
+			);
+
+			navigateTo('/reports/missing-metadata?system=gb&missing=year&q=mario&sort=year');
+			await vi.waitFor(() => expect(clear.disabled).toBe(false));
+			await fireEvent.click(clear);
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/missing-metadata?sort=year'));
+		});
+
+		it('pagination writes the page', async () => {
+			admin();
+			answers[list()] = { status: 200, body: body([item('g1')], 120) };
+			render(MissingMetadata);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/missing-metadata?page=2'));
 		});
 	});
 

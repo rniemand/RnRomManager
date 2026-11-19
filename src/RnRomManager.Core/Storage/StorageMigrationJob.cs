@@ -27,6 +27,9 @@ public sealed partial class StorageMigrationJob(IGameRepository games, IRomRepos
     /// <summary>S6: room kept free on the library volume on top of the game's ROMs and its ZIP.</summary>
     public const long SpaceMarginBytes = 64L * 1024 * 1024;
 
+    /// <summary>Z4: a writer at the game's system ZIP compression level.</summary>
+    private LibraryZipWriter Writer(string systemId) => new(reader, romStorage.Compression(systemId));
+
     public const string WorkFolder = "storage-migration";
     public const string Migrated = "Migrated";
     public const string Error = "Error";
@@ -207,7 +210,7 @@ public sealed partial class StorageMigrationJob(IGameRepository games, IRomRepos
             try
             {
                 var touched = placed.ToDictionary(p => Path.GetFileName(p.Path), p => p.Snapshot, StringComparer.OrdinalIgnoreCase);
-                published = await new LibraryZipWriter(reader).WriteCheckedAsync(library, existing.Path, existing,
+                published = await Writer(migrated.System).WriteCheckedAsync(library, existing.Path, existing,
                     new LibraryZipChanges(migrated, new Dictionary<string, Func<Stream>>(), ExternalFiles: touched), ct, WriterHooks).ConfigureAwait(false);
             }
             catch (LibraryZipVerifyException ex)

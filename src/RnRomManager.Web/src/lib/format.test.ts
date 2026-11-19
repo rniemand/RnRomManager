@@ -82,6 +82,16 @@ describe('header formatting', () => {
 		expect(formatValue('0x80')).toBe('0x80');
 		expect(formatValue({ a: 1 })).toBe('{"a":1}');
 	});
+
+	it('counts: numbers get thousands separators, nothing else changes (U4)', () => {
+		expect(formatValue(1048576)).toBe('1048576');
+		expect(formatValue(1048576, { counts: true })).toBe('1,048,576');
+		expect(formatValue(8080, { counts: true })).toBe('8,080');
+		expect(formatValue('0x80', { counts: true })).toBe('0x80');
+		expect(formatValue('1048576', { counts: true })).toBe('1048576');
+		expect(formatValue(true, { counts: true })).toBe('Yes');
+		expect(formatValue(null, { counts: true })).toBe('—');
+	});
 });
 
 describe('flattenSettings', () => {

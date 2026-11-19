@@ -11,7 +11,7 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api.Endpoints;
 
-/// <summary><c>GET /api/admin/settings</c>, <c>GET /api/admin/logs</c>, <c>GET /api/admin/logs/recent</c>, <c>GET /api/admin/logs/stream</c>, the backup endpoints (B17), <c>/api/admin/rom-storage</c> (ROM Zip Config B6, B12) (Admin) and <c>GET /api/about</c> (any user) — spec §23, §13, §10.4.</summary>
+/// <summary><c>GET /api/admin/settings</c>, <c>GET /api/admin/logs</c>, <c>GET /api/admin/logs/recent</c>, <c>GET /api/admin/logs/stream</c>, the backup endpoints (B17), <c>/api/admin/rom-storage</c> (ROM Zip Config B6, B12), <c>/api/admin/zip-compression</c> (Z7, Z8) (Admin) and <c>GET /api/about</c> (any user) — spec §23, §13, §10.4.</summary>
 public static class AdminEndpoints
 {
     public static RouteGroupBuilder MapAdminEndpoints(this RouteGroupBuilder api)
@@ -32,7 +32,7 @@ public static class AdminEndpoints
         admin.MapGet("/logs/stream", LogStream.RunAsync).WithMetadata(MaintenanceExempt.Instance);
 
         // ROM Zip Config B12: every system's default and effective ROM storage, ordered as /api/systems.
-        admin.MapGet("/rom-storage", async (HttpContext ctx, ISystemRegistry systems, IGameRepository games) =>
+        admin.MapGet("/rom-storage", async (HttpContext ctx, ISystemRegistry systems, IGameRepository games, IRomStorageSettings romStorage) =>
         {
             var pending = (await StorageMigrationJob.ListMovesAsync(games, systems, ctx.RequestAborted))
                 .GroupBy(g => g.SystemId, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
@@ -40,6 +40,7 @@ public static class AdminEndpoints
             {
                 id = h.Id, displayName = h.DisplayName, defaultEmbedRoms = h.DefaultEmbedRomsInZip, embedRoms = h.EmbedRomsInZip,
                 configurable = h.RomStorageConfigurable, pendingGames = h.RomStorageConfigurable ? pending.GetValueOrDefault(h.Id) : 0,
+                zipCompression = romStorage.Compression(h.Id).ToString(), compressionConfigurable = h.EmbedRomsInZip,
             }));
         });
 
@@ -69,6 +70,42 @@ public static class AdminEndpoints
             var started = await runner.StartAsync(createJob(new RomStorageChange(handler.Id, embed)), JobTrigger.Manual,
                 DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
             return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+        });
+
+        // ZIP Compression Z7: the change is applied by the repack job under the job lock, so a busy lock saves nothing.
+        admin.MapPut("/zip-compression/{systemId}", async (string systemId, HttpContext ctx, ISystemRegistry systems, JobRunner runner,
+            IRomStorageSettings romStorage, ZipRepackJobFactory createJob) =>
+        {
+            if (systems.ById(systemId) is not { } handler)
+                return Problems.NotFound(ctx);
+            JsonElement body;
+            try
+            {
+                body = await JsonSerializer.DeserializeAsync<JsonElement>(ctx.Request.Body, cancellationToken: ctx.RequestAborted);
+            }
+            catch (JsonException)
+            {
+                body = default; // missing or malformed body
+            }
+            if (body.ValueKind != JsonValueKind.Object || !body.TryGetProperty("level", out var value) || value.ValueKind != JsonValueKind.String
+                || RomStorageSettings.ParseCompression(value.GetString()) is not { } level)
+                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["level"] = ["Must be Store, Med or High."] });
+            if (!handler.EmbedRomsInZip)
+                return ZipCompressionNotConfigurable(ctx);
+            if (level == romStorage.Compression(handler.Id))
+                return Results.NoContent();
+            return await StartRepackAsync(ctx, runner, createJob(handler.Id, level));
+        });
+
+        // Z8: rewrites every ZIP of the system at its current level.
+        admin.MapPost("/zip-compression/{systemId}/repack", async (string systemId, HttpContext ctx, ISystemRegistry systems, JobRunner runner,
+            ZipRepackJobFactory createJob) =>
+        {
+            if (systems.ById(systemId) is not { } handler)
+                return Problems.NotFound(ctx);
+            if (!handler.EmbedRomsInZip)
+                return ZipCompressionNotConfigurable(ctx);
+            return await StartRepackAsync(ctx, runner, createJob(handler.Id, null));
         });
 
         // B17: database backups.
@@ -157,6 +194,15 @@ public static class AdminEndpoints
     }
 
     /// <summary><c>{enabled: bool, time: "HH:mm", retention: 1–365}</c>, all required (B15, B17).</summary>
+    private static IResult ZipCompressionNotConfigurable(HttpContext ctx) =>
+        Problems.Create(ctx, StatusCodes.Status400BadRequest, "NotConfigurable", "This system's ZIP compression can't be changed.");
+
+    private static async Task<IResult> StartRepackAsync(HttpContext ctx, JobRunner runner, IJob job)
+    {
+        var started = await runner.StartAsync(job, JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
+        return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+    }
+
     public static (BackupSettings? Settings, Dictionary<string, string[]> Errors) ParseBackupSettings(JsonElement body)
     {
         var errors = new Dictionary<string, string[]>();

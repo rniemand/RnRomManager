@@ -9,7 +9,7 @@ using RnRomManager.Core.Users;
 
 namespace RnRomManager.Api.Endpoints;
 
-/// <summary><c>/api/reports</c>: the Reporting page (RP1–RP8). Any signed-in user can read.</summary>
+/// <summary><c>/api/reports</c>: the Reporting page (RP1–RP8). Any signed-in user can read, except Activity and Missing Metadata (Admin).</summary>
 public static partial class ReportEndpoints
 {
     public static RouteGroupBuilder MapReportEndpoints(this RouteGroupBuilder api)
@@ -42,6 +42,62 @@ public static partial class ReportEndpoints
             var next = await repository.NextMissingImageAsync(after, ctx.RequestAborted);
             return Results.Ok(new { id = next.Id, currentIsOnly = next.CurrentIsOnly });
         });
+
+        // Missing Metadata M2: Admin only (the group itself is any signed-in user).
+        reports.MapGet("/missing-metadata", async (string? system, string? missing, string? q, string? sort, string? dir, int? page, int? pageSize,
+            HttpContext ctx, IReportRepository repository, ISystemRegistry systems) =>
+        {
+            var errors = Validate(system, page, pageSize, systems);
+            MissingMetadataField? field = missing?.ToLowerInvariant() switch
+            {
+                null or "any" => MissingMetadataField.Any,
+                "year" => MissingMetadataField.Year,
+                "developer" => MissingMetadataField.Developer,
+                "publisher" => MissingMetadataField.Publisher,
+                _ => null,
+            };
+            if (field is null)
+                errors["missing"] = ["Must be any, year, developer or publisher."];
+            q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
+            if (q?.Length > 100)
+                errors["q"] = ["Must be at most 100 characters."];
+            MissingMetadataSort? sortKey = sort?.ToLowerInvariant() switch
+            {
+                null or "name" => MissingMetadataSort.Name,
+                "system" => MissingMetadataSort.System,
+                "year" => MissingMetadataSort.Year,
+                _ => null,
+            };
+            if (sortKey is null)
+                errors["sort"] = ["Must be name, system or year."];
+            bool? descending = dir?.ToLowerInvariant() switch { null or "asc" => false, "desc" => true, _ => null };
+            if (descending is null)
+                errors["dir"] = ["Must be asc or desc."];
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+
+            var result = await repository.ListMissingMetadataAsync(system, field!.Value, q, sortKey!.Value, descending!.Value, page ?? 1,
+                pageSize ?? 50, ctx.RequestAborted);
+            return Results.Ok(Paging.ToDto(result, item => new
+            {
+                id = item.Id, displayTitle = item.DisplayTitle, system = item.SystemId, systemName = SystemName(systems, item.SystemId),
+                releaseYear = item.ReleaseYear, developers = item.Developers, publishers = item.Publishers,
+            }));
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
+        // M3: the next game for the Next missing metadata shortcut, in the unfiltered default order.
+        reports.MapGet("/missing-metadata/next", async (string? afterGameId, HttpContext ctx, IReportRepository repository) =>
+        {
+            Guid? after = null;
+            if (afterGameId is not null)
+            {
+                if (!Guid.TryParse(afterGameId, out var parsed))
+                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["afterGameId"] = ["Must be a game ID."] });
+                after = parsed;
+            }
+            var next = await repository.NextMissingMetadataAsync(after, ctx.RequestAborted);
+            return Results.Ok(new { id = next.Id, currentIsOnly = next.CurrentIsOnly });
+        }).RequireAuthorization(AuthSetup.AdminOnly);
 
         // B21: the Admin-only Activity report (the group itself is any signed-in user). Audit lists cover the 30-day retention.
         reports.MapGet("/activity", async (HttpContext ctx, IReportRepository repository, IAuditRepository audit, IUserRepository users) =>

@@ -724,4 +724,72 @@ public class ReportEndpointsTests
         var body = await response.Content.ReadAsStringAsync();
         Assert.That(body, Does.Not.Contain("ValidationFailed"));
     }
+
+    // Missing Metadata M2–M3: GET /api/reports/missing-metadata and /next (Admin only).
+
+    [Test]
+    public async Task MissingMetadata_UserIs403()
+    {
+        using var list = await _user.GetAsync("/api/reports/missing-metadata");
+        using var next = await _user.GetAsync("/api/reports/missing-metadata/next");
+
+        Assert.That((list.StatusCode, next.StatusCode), Is.EqualTo((HttpStatusCode.Forbidden, HttpStatusCode.Forbidden)));
+    }
+
+    [Test]
+    public async Task MissingMetadata_Shape_AndNext()
+    {
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        await Sql("""
+            UPDATE games SET release_year = 1990, developers = '["Dev Co"]', publishers = '[]' WHERE id = @alpha;
+            UPDATE games SET release_year = 1991, developers = '["Dev Co"]', publishers = '["Pub Co"]' WHERE id = @bravo
+            """, new { alpha, bravo });
+        using var admin = await Editor();
+
+        using var response = await admin.GetAsync("/api/reports/missing-metadata?missing=PUBLISHER&sort=Year&dir=DESC");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var page = await AuthClient.JsonAsync(response);
+        Assert.That(page.GetProperty("total").GetInt64(), Is.EqualTo(1));
+        var item = page.GetProperty("items").EnumerateArray().Single();
+        Assert.That((item.GetProperty("id").GetGuid(), item.GetProperty("displayTitle").GetString(), item.GetProperty("system").GetString(),
+                item.GetProperty("systemName").GetString(), item.GetProperty("releaseYear").GetInt32()),
+            Is.EqualTo((alpha, "Alpha", "gb", "Game Boy", 1990)));
+        Assert.That(item.GetProperty("developers").EnumerateArray().Select(d => d.GetString()), Is.EqualTo(new[] { "Dev Co" }));
+        Assert.That(item.GetProperty("publishers").GetArrayLength(), Is.Zero);
+
+        using var next = await admin.GetAsync($"/api/reports/missing-metadata/next?afterGameId={alpha}");
+        var successor = await AuthClient.JsonAsync(next);
+        Assert.That((successor.GetProperty("id").ValueKind, successor.GetProperty("currentIsOnly").GetBoolean()),
+            Is.EqualTo((JsonValueKind.Null, true)));
+    }
+
+    [TestCase("system=sg1000", "system", "Choose a registered system.")]
+    [TestCase("missing=title", "missing", "Must be any, year, developer or publisher.")]
+    [TestCase("sort=releases", "sort", "Must be name, system or year.")]
+    [TestCase("dir=up", "dir", "Must be asc or desc.")]
+    [TestCase("pageSize=201", "pageSize", null)]
+    [TestCase("page=0", "page", null)]
+    public async Task MissingMetadata_InvalidQuery_Is400(string query, string field, string? message)
+    {
+        using var admin = await Editor();
+        using var response = await admin.GetAsync("/api/reports/missing-metadata?" + query);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var errors = (await AuthClient.JsonAsync(response)).GetProperty("errors");
+        Assert.That(errors.TryGetProperty(field, out var value), Is.True);
+        if (message is not null)
+            Assert.That(value[0].GetString(), Is.EqualTo(message));
+    }
+
+    [Test]
+    public async Task MissingMetadata_LongQuery_AndBadNextId_Are400()
+    {
+        using var admin = await Editor();
+        using var longQ = await admin.GetAsync("/api/reports/missing-metadata?q=" + new string('x', 101));
+        using var badId = await admin.GetAsync("/api/reports/missing-metadata/next?afterGameId=not-a-guid");
+
+        Assert.That((await AuthClient.JsonAsync(longQ)).GetProperty("errors").GetProperty("q")[0].GetString(), Is.EqualTo("Must be at most 100 characters."));
+        Assert.That((await AuthClient.JsonAsync(badId)).GetProperty("errors").TryGetProperty("afterGameId", out _), Is.True);
+    }
 }

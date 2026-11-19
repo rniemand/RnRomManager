@@ -85,6 +85,13 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  # docs/codemap.md must match the code (scripts/codemap.ps1 regenerates it; every change commits it).
+  codemap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - run: pwsh scripts/codemap.ps1 -Check
+
   # Independent of the other jobs (it builds its own image), so it runs alongside them.
   e2e:
     runs-on: ubuntu-latest

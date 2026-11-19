@@ -1712,6 +1712,205 @@ describe('play page library saves (Saves B17, B18)', () => {
 
 			expect(posted).not.toHaveBeenCalled();
 		});
+
+		describe('screenshot (E2)', () => {
+			const png = new Uint8Array([137, 80, 78, 71]);
+			/** EmulatorJS 4.2.3's `screenshot(callback, source, format, upscale)`; the callback is held until `answer`. */
+			function camera() {
+				let callback: ((blob: Blob, format: string) => void) | null = null;
+				const screenshot = vi.fn((done: (blob: Blob, format: string) => void) => {
+					callback = done;
+				});
+				(win.EJS_emulator as Record<string, unknown>).screenshot = screenshot;
+				return {
+					screenshot,
+					answer: (blob: Blob = new Blob([png], { type: 'image/png' })) => callback!(blob, 'png')
+				};
+			}
+
+			it('asks EmulatorJS for a canvas PNG at upscale 1 and answers with its bytes, transferred', async () => {
+				await ready();
+				const { screenshot, answer } = camera();
+
+				send({ type: 'rnrm-emulator-export', kind: 'screenshot' });
+				expect(screenshot).toHaveBeenCalledWith(expect.any(Function), 'canvas', 'png', 1);
+				expect(posted).not.toHaveBeenCalled();
+				answer();
+
+				await vi.waitFor(() => expect(posted).toHaveBeenCalledTimes(1));
+				const [message, origin, transfer] = posted.mock.calls[0];
+				expect(origin).toBe(location.origin);
+				expect(Object.keys(message as object).sort()).toEqual([
+					'bytes',
+					'extension',
+					'kind',
+					'ok',
+					'type'
+				]);
+				expect(message).toMatchObject({
+					type: 'rnrm-emulator-export-result',
+					kind: 'screenshot',
+					ok: true,
+					extension: '.png'
+				});
+				expect([...new Uint8Array((message as { bytes: ArrayBuffer }).bytes)]).toEqual([...png]);
+				expect(transfer).toEqual([(message as { bytes: ArrayBuffer }).bytes]);
+			});
+
+			it('answers not-started before the game starts, without calling screenshot', async () => {
+				await ready('gambatte', {}, false);
+				const { screenshot } = camera();
+
+				send({ type: 'rnrm-emulator-export', kind: 'screenshot' });
+
+				expect(screenshot).not.toHaveBeenCalled();
+				expect(result()).toEqual({
+					type: 'rnrm-emulator-export-result',
+					kind: 'screenshot',
+					ok: false,
+					reason: 'not-started'
+				});
+			});
+
+			it('answers error when screenshot throws or the blob cannot be read', async () => {
+				await ready();
+				const { screenshot, answer } = camera();
+				screenshot.mockImplementationOnce(() => {
+					throw new Error('boom');
+				});
+				send({ type: 'rnrm-emulator-export', kind: 'screenshot' });
+				expect(result()).toMatchObject({ kind: 'screenshot', ok: false, reason: 'error' });
+
+				send({ type: 'rnrm-emulator-export', kind: 'screenshot' });
+				const broken = new Blob([png]);
+				broken.arrayBuffer = () => Promise.reject(new Error('unreadable'));
+				answer(broken);
+				await vi.waitFor(() => expect(posted).toHaveBeenCalledTimes(2));
+				expect(posted.mock.calls[1][0]).toMatchObject({
+					kind: 'screenshot',
+					ok: false,
+					reason: 'error'
+				});
+			});
+
+			it('a 3DO close request during a pending screenshot runs as usual, and the screenshot still replies', async () => {
+				const firmware = new Uint8Array(1048576);
+				serve({
+					'/api/emulator/cores/opera': async () => response(204),
+					'/api/emulator/bios/panafz10.bin': async () =>
+						({
+							ok: true,
+							status: 200,
+							body: new ReadableStream<Uint8Array>({
+								start(controller) {
+									controller.enqueue(firmware);
+									controller.close();
+								}
+							})
+						}) as unknown as FakeResponse,
+					'/api/emulator/bios/panafz1.bin': async () => response(404),
+					'/api/emulator/bios/panafz1j.bin': async () => response(404),
+					'/api/emulator/bios/goldstar.bin': async () => response(404),
+					'/api/emulator/bios/sanyotry.bin': async () => response(404),
+					[`/api/games/${game}/roms/12/play-disc`]: async () => response(200)
+				});
+				await play('opera', 'Opal Rally (USA).cue', true);
+				const fake = manager();
+				gameStart();
+				const { answer } = camera();
+				posted = vi.spyOn(window, 'postMessage').mockImplementation(() => {});
+
+				send({ type: 'rnrm-emulator-export', kind: 'screenshot' });
+				send({ type: 'rnrm-emulator-close' });
+				expect(fake.restart).toHaveBeenCalledTimes(1);
+				answer();
+
+				await vi.waitFor(() =>
+					expect(
+						posted.mock.calls.map((c: unknown[]) => (c[0] as { type: string }).type)
+					).toContain('rnrm-emulator-export-result')
+				);
+			});
+		});
+	});
+});
+
+describe('play page touch controls (E1)', () => {
+	function touch(coarse: boolean) {
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn((query: string) => ({ matches: coarse && query === '(pointer: coarse)' }))
+		);
+	}
+
+	async function start(setting?: string) {
+		serve({ [romUrl]: async () => response(200) });
+		await play('gambatte', 'Orbit Blocks (World).gb');
+		const toggleVirtualGamepad = vi.fn();
+		win.EJS_emulator = {
+			gameManager: {},
+			toggleVirtualGamepad,
+			getSettingValue: vi.fn((id: string) => (id === 'virtual-gamepad' ? setting : undefined))
+		};
+		(atLoader?.EJS_onGameStart as () => void)();
+		return toggleVirtualGamepad;
+	}
+
+	it('a touch-first device enables the gamepad by default and shows it at start', async () => {
+		touch(true);
+		const toggle = await start();
+
+		expect(atLoader?.EJS_defaultOptions).toEqual({
+			'save-save-interval': '30',
+			'virtual-gamepad': 'enabled'
+		});
+		expect(toggle).toHaveBeenCalledWith(true);
+	});
+
+	it('also for a game started with a library save to apply', async () => {
+		touch(true);
+		const saveId = 'a'.repeat(32);
+		serve({
+			[romUrl]: async () => response(200),
+			[`/api/games/${game}/saves/${saveId}/download`]: async () =>
+				({
+					ok: true,
+					status: 200,
+					arrayBuffer: async () => new ArrayBuffer(1)
+				}) as unknown as FakeResponse
+		});
+		const query = new URLSearchParams({
+			game,
+			rom: '12',
+			core: 'gambatte',
+			name: 'Orbit Blocks (World).gb',
+			save: saveId,
+			saveKind: 'state'
+		});
+		history.replaceState(null, '', `/emulator/play.html?${query}`);
+		await (
+			await import('../../static/emulator/play.js')
+		).started;
+		const toggleVirtualGamepad = vi.fn();
+		win.EJS_emulator = { gameManager: {}, toggleVirtualGamepad, getSettingValue: () => undefined };
+		vi.useFakeTimers();
+		(atLoader?.EJS_onGameStart as () => void)();
+		vi.useRealTimers();
+
+		expect(toggleVirtualGamepad).toHaveBeenCalledWith(true);
+	});
+
+	it("keeps it off when the user disabled it in EmulatorJS's settings", async () => {
+		touch(true);
+		expect(await start('disabled')).not.toHaveBeenCalled();
+	});
+
+	it('a mouse or trackpad device changes nothing', async () => {
+		touch(false);
+		const toggle = await start();
+
+		expect(atLoader?.EJS_defaultOptions).toEqual({ 'save-save-interval': '30' });
+		expect(toggle).not.toHaveBeenCalled();
 	});
 });
 

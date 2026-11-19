@@ -15,6 +15,16 @@ public interface IReportRepository
     /// </summary>
     Task<MissingImageSuccessor> NextMissingImageAsync(Guid? afterGameId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Missing Metadata M1–M2: games with no year, no developer or no publisher, filtered by <paramref name="missing"/>, system and a
+    /// display-title search. Only the primary key follows <paramref name="descending"/>; tie-breakers are ascending; a null year sorts last.
+    /// </summary>
+    Task<Page<MissingMetadataItem>> ListMissingMetadataAsync(string? systemId, MissingMetadataField missing, string? q, MissingMetadataSort sort,
+        bool descending, int page, int pageSize, CancellationToken cancellationToken);
+
+    /// <summary>M3: as <see cref="NextMissingImageAsync"/>, in the unfiltered default order (display title, id).</summary>
+    Task<MissingImageSuccessor> NextMissingMetadataAsync(Guid? afterGameId, CancellationToken cancellationToken);
+
     /// <summary>RP2: per system with at least one game, <c>SUM(games.zip_size_bytes)</c>, the game and update-release counts, largest first.</summary>
     Task<IReadOnlyList<SystemSize>> ListSystemSizesAsync(CancellationToken cancellationToken);
 
@@ -61,6 +71,16 @@ public enum MultipleReleaseSort { Name, System, Releases, Updates, Size }
 
 /// <param name="Reason">A <see cref="MissingImageReasons"/> value.</param>
 public sealed record MissingImageItem(Guid Id, string DisplayTitle, string SystemId, string Reason);
+
+/// <param name="Developers">As stored; empty when unknown.</param>
+public sealed record MissingMetadataItem(Guid Id, string DisplayTitle, string SystemId, int? ReleaseYear, IReadOnlyList<string> Developers,
+    IReadOnlyList<string> Publishers);
+
+/// <summary>Missing Metadata M2: which missing field the report lists.</summary>
+public enum MissingMetadataField { Any, Year, Developer, Publisher }
+
+/// <summary>Missing Metadata M2: the report's sort keys.</summary>
+public enum MissingMetadataSort { Name, System, Year }
 
 /// <param name="Id">The game to open, or null when no other game is missing images.</param>
 /// <param name="CurrentIsOnly">True when <c>Id</c> is null because the anchor itself is the only game still missing images.</param>

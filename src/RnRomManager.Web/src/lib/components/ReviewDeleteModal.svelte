@@ -70,6 +70,7 @@
 	confirmLabel="Delete file"
 	confirmClass="btn-danger"
 	size="lg"
+	scrollable
 	busy={busy || !item}
 	onconfirm={confirm}
 >
@@ -109,7 +110,10 @@
 				{/if}
 				{#if item.header}
 					{#each Object.entries(item.header) as [key, value] (key)}
-						<tr><th scope="row">{formatKey(key)}</th><td>{formatValue(value)}</td></tr>
+						<tr
+							><th scope="row">{formatKey(key)}</th><td>{formatValue(value, { counts: true })}</td
+							></tr
+						>
 					{/each}
 				{/if}
 				<tr><th scope="row">Added</th><td>{formatDateTime(item.createdAt)}</td></tr>

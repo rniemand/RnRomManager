@@ -20,7 +20,14 @@ export interface HotkeysResponse {
 /** `GET /api/jobs/current` (spec §23, §3.1); 204 when idle. */
 export interface CurrentJob {
 	id: string;
-	type: 'Ingest' | 'Integrity' | 'DatRefresh' | 'MediaRetry' | 'ReviewResolve' | 'StorageMigration';
+	type:
+		| 'Ingest'
+		| 'Integrity'
+		| 'DatRefresh'
+		| 'MediaRetry'
+		| 'ReviewResolve'
+		| 'StorageMigration'
+		| 'ZipRepack';
 	mode: 'Quick' | 'Deep' | 'Game' | null;
 	status: string;
 	current: number;
@@ -583,6 +590,17 @@ export interface ActivityReport {
 	deletions: ActivityAuditItem[];
 }
 
+/** Missing Metadata M2: one row of `GET /api/reports/missing-metadata`. */
+export interface MissingMetadataItem {
+	id: string;
+	displayTitle: string;
+	system: string;
+	systemName: string;
+	releaseYear: number | null;
+	developers: string[];
+	publishers: string[];
+}
+
 /** ROM Zip Config B12: `GET /api/admin/rom-storage`, one row per system. */
 export interface RomStorageRow {
 	id: string;
@@ -594,4 +612,8 @@ export interface RomStorageRow {
 	configurable: boolean;
 	/** Games still waiting to be moved to the effective storage. */
 	pendingGames: number;
+	/** ZIP Compression Z6: the system's level (Med when none is stored). */
+	zipCompression: 'Store' | 'Med' | 'High';
+	/** Z5: true while the system's ROMs are stored in the ZIP. */
+	compressionConfigurable: boolean;
 }

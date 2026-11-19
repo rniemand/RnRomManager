@@ -25,6 +25,15 @@ declare module 'bootstrap/dist/js/bootstrap.bundle.min.js' {
 		static getOrCreateInstance(element: Element): Dropdown;
 		hide(): void;
 	}
-	const bootstrap: { Modal: typeof Modal; Tooltip: typeof Tooltip; Dropdown: typeof Dropdown };
+	export class Collapse {
+		static getOrCreateInstance(element: Element, options?: { toggle?: boolean }): Collapse;
+		hide(): void;
+	}
+	const bootstrap: {
+		Modal: typeof Modal;
+		Tooltip: typeof Tooltip;
+		Dropdown: typeof Dropdown;
+		Collapse: typeof Collapse;
+	};
 	export default bootstrap;
 }

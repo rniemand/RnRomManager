@@ -41,6 +41,7 @@ vi.mock('#lib/tooltip.js', () => ({
 }));
 
 const { default: GamePage } = await import('./[id]/+page.svelte');
+const { hotkeys } = await import('#lib/stores/hotkeys.svelte.js');
 
 const rom = (id: number, fileName: string, isPrimary: boolean) => ({
 	id,
@@ -1168,6 +1169,58 @@ describe('game detail page', () => {
 		expect([...document.querySelectorAll('dl')].every((dl) => dl.closest('article'))).toBe(true);
 	});
 
+	describe('Next missing metadata (Missing Metadata M7)', () => {
+		it('with from=missing-metadata an Admin gets the button just before Manage; it runs the shortcut', async () => {
+			const run = vi.spyOn(hotkeys, 'run').mockResolvedValue();
+			navigateTo('/games/g1?from=missing-metadata');
+			answers.push({ status: 200, body: game([1]) });
+			render(GamePage);
+
+			const next = await screen.findByRole('button', { name: 'Next missing metadata' });
+			expect(next.className).toBe('btn btn-sm btn-outline-primary');
+			expect(next.querySelector('i')!.className.trim()).toBe('bi bi-card-checklist');
+			expect(next.nextElementSibling!.querySelector(':scope > button')!.textContent?.trim()).toBe(
+				'Manage'
+			);
+			await fireEvent.click(next);
+			expect(run).toHaveBeenCalledWith('reports.missingMetadata.next');
+			run.mockRestore();
+		});
+
+		it('no button without from, or for a Site user', async () => {
+			answers.push({ status: 200, body: game([1]) });
+			const { unmount } = render(GamePage);
+			await screen.findByRole('button', { name: 'Download ZIP' });
+			expect(screen.queryByRole('button', { name: 'Next missing metadata' })).toBeNull();
+			unmount();
+
+			auth.set({ id: 2, username: 'site', roles: [], mustChangePassword: false });
+			navigateTo('/games/g1?from=missing-metadata');
+			answers.push({ status: 200, body: game([1]) });
+			render(GamePage);
+			await screen.findByRole('button', { name: 'Download ZIP' });
+			expect(screen.queryByRole('button', { name: 'Next missing metadata' })).toBeNull();
+		});
+
+		it('switching tabs keeps from', async () => {
+			navigateTo('/games/g1?from=missing-metadata');
+			answers.push({ status: 200, body: game([1]) });
+			render(GamePage);
+
+			await fireEvent.click(await screen.findByRole('tab', { name: 'Zip Contents' }));
+			expect(goto).toHaveBeenLastCalledWith('/games/g1?from=missing-metadata&tab=zip', {
+				replace: true,
+				reset: false
+			});
+			await fireEvent.click(screen.getByRole('tab', { name: 'Releases (1)' }));
+			expect(goto).toHaveBeenLastCalledWith('/games/g1?from=missing-metadata', {
+				replace: true,
+				reset: false
+			});
+			expect(screen.getByRole('button', { name: 'Next missing metadata' })).toBeTruthy();
+		});
+	});
+
 	it('the action row: ZIP, ROM, Google, Collections, then Manage; all btn-sm (B3)', async () => {
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);
@@ -1315,6 +1368,53 @@ describe('game detail page', () => {
 			await vi.waitFor(() => expect(frame()).not.toBeNull());
 			expect(frame()!.getAttribute('src')).toContain('&rom=2&');
 			expect(goto).toHaveBeenCalledWith('/games/g1?tab=images', { replace: true, reset: false });
+		});
+
+		it('a screenshot saved as a Snap refetches the game (E2 onimagesaved)', async () => {
+			vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:shot');
+			vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+			navigateTo('/games/g1?play=1');
+			answers.push({ status: 200, body: playableGame() });
+			render(GamePage);
+			await vi.waitFor(() => expect(frame()).not.toBeNull());
+			const target = frame()!.contentWindow!;
+			vi.spyOn(target, 'postMessage').mockImplementation(() => {});
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Screenshot', hidden: true }));
+			window.dispatchEvent(
+				new MessageEvent('message', {
+					data: {
+						type: 'rnrm-emulator-export-result',
+						kind: 'screenshot',
+						ok: true,
+						bytes: new Uint8Array([1]).buffer,
+						extension: '.png'
+					},
+					origin: location.origin,
+					source: target
+				})
+			);
+			const saveSnap = await screen.findByRole('button', { name: 'Save as Snap', hidden: true });
+			const seen: string[] = [];
+			const inner = globalThis.fetch;
+			vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+				seen.push(`${init?.method ?? 'GET'} ${url}`);
+				return inner(url, init);
+			});
+			const before = fetches;
+			const refetched = { ...playableGame(), displayTitle: 'Tetris Refetched' };
+			answers.push({ status: 200, body: {} }, { status: 200, body: refetched });
+			await fireEvent.click(saveSnap);
+
+			await vi.waitFor(() => expect(fetches - before).toBeGreaterThanOrEqual(2));
+			await vi.waitFor(() =>
+				expect(seen).toEqual(
+					expect.arrayContaining(['POST /api/games/g1/images', 'GET /api/games/g1'])
+				)
+			);
+			expect(seen.indexOf('GET /api/games/g1')).toBeGreaterThan(
+				seen.indexOf('POST /api/games/g1/images')
+			);
 		});
 
 		it('works on the already-open game, with no reload', async () => {

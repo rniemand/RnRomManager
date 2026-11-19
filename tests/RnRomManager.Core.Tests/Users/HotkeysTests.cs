@@ -27,6 +27,7 @@ public class HotkeysTests
             ("nav.admin", "Alt+Shift+A", true, Roles.Admin),
             ("nav.deleted", "Alt+Shift+D", true, Roles.Admin),
             ("reports.missingImage.next", "Alt+Shift+M", true, null),
+            ("reports.missingMetadata.next", "", true, Roles.Admin),
         }));
         Assert.That(Hotkeys.Actions.Skip(1).SelectMany(a => a.Defaults), Has.None.AnyOf(Hotkeys.Reserved.ToArray()));
         Assert.That(Hotkeys.Actions.Skip(1).SelectMany(a => a.Defaults), Is.Unique);
@@ -165,7 +166,7 @@ public class HotkeysTests
         Assert.That(Hotkeys.ImplicitUnassigned(disabled!, User), Is.Empty);
 
         // Reset all sends every default, the older one included.
-        var defaults = Hotkeys.Editable.ToDictionary(a => a.Id, a => (string?)a.Defaults[0]);
+        var defaults = Hotkeys.Editable.ToDictionary(a => a.Id, a => (string?)a.Defaults.FirstOrDefault());
         var (reset, errors) = Hotkeys.Apply(stored, defaults, User);
         Assert.That(errors, Is.Empty);
         Assert.That(reset, Is.Empty);
@@ -246,7 +247,22 @@ public class HotkeysTests
         Assert.That(merged, Is.EqualTo(Map(
             ("nav.library", "Alt+Shift+L"), ("nav.collections", "Alt+Shift+C"), ("nav.ingestion", "Alt+Shift+I"), ("nav.review", "Alt+Shift+L"),
             ("review.next", "Alt+Shift+G"), ("nav.reports", "Alt+Shift+R"), ("nav.integrity", "Alt+Shift+T"), ("nav.admin", "Alt+Shift+A"),
-            ("nav.deleted", "Alt+Shift+D"), ("reports.missingImage.next", "Alt+Shift+M"))));
+            ("nav.deleted", "Alt+Shift+D"), ("reports.missingImage.next", "Alt+Shift+M"), ("reports.missingMetadata.next", null))));
+    }
+
+    [Test]
+    public void MissingMetadataNext_HasNoDefault_IsUnbound_AndAcceptsABinding()
+    {
+        Assert.That(Hotkeys.Merge(Map(), Admin)[Hotkeys.MissingMetadataNext], Is.Null);
+        Assert.That(Hotkeys.ImplicitUnassigned(Map(("nav.library", "Alt+Shift+M")), Admin), Is.EqualTo(new[] { Hotkeys.MissingImageNext }));
+
+        var (empty, noErrors) = Hotkeys.Apply(Map(), Map((Hotkeys.MissingMetadataNext, null)), Admin);
+        Assert.That((noErrors, empty![Hotkeys.MissingMetadataNext]), Is.EqualTo((new Dictionary<string, string[]>(), (string?)null)));
+
+        var (overrides, errors) = Hotkeys.Apply(Map(), Map((Hotkeys.MissingMetadataNext, "alt+shift+n")), Admin);
+        Assert.That(errors, Is.Empty);
+        Assert.That(overrides![Hotkeys.MissingMetadataNext], Is.EqualTo("Alt+Shift+N"));
+        Assert.That(Hotkeys.Merge(overrides, Admin)[Hotkeys.MissingMetadataNext], Is.EqualTo("Alt+Shift+N"));
     }
 
     [TestCase(null)]

@@ -558,7 +558,7 @@ test("browse, search and filter the library", async () => {
   await expect(page.getByText("29 games")).toBeVisible();
   await expect(page.getByRole("button", { name: "Clear all" })).toBeDisabled();
 
-  // The card grid fits a 320px phone: no sideways page scroll, and each card's Favourite button is on screen.
+  // The card grid fits a 320px phone: no sideways page scroll, and (U6) no card shows its rating row there.
   await expect(page.getByRole("button", { name: "Grid view" })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -569,18 +569,9 @@ test("browse, search and filter the library", async () => {
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-  const favouritesOffScreen = await page.evaluate(
-    () =>
-      [
-        ...document.querySelectorAll(
-          '.game-card button[aria-label="Favourite"]',
-        ),
-      ].filter((b) => {
-        const box = b.getBoundingClientRect();
-        return box.left < 0 || box.right > window.innerWidth;
-      }).length,
-  );
-  expect(favouritesOffScreen).toBe(0);
+  await expect(
+    page.locator('.game-card button[aria-label="Favourite"]').filter({ visible: true }),
+  ).toHaveCount(0);
   await page.setViewportSize(viewport);
 });
 
@@ -2856,7 +2847,9 @@ test("ROM Zip Config: DS moves into its ZIP and back, the ROM downloading byte-e
     await page.goto("/admin/rom-storage");
     const row = (name: string) =>
       page.getByRole("row").filter({ hasText: name });
-    await expect(row("Game Boy Advance").getByRole("button")).toHaveCount(0);
+    await expect(
+      row("Game Boy Advance").getByRole("button", { name: /^Store (in|beside) ZIP$/ }),
+    ).toHaveCount(0);
     await row("Nintendo DS").getByRole("button", { name: button }).click();
     await dialog().getByRole("button", { name: "Start moving" }).click();
     await expect(page.getByText("The storage job has started.")).toBeVisible();
@@ -2887,6 +2880,88 @@ test("ROM Zip Config: DS moves into its ZIP and back, the ROM downloading byte-e
   // Back beside its ZIP, as later tests expect.
   await toggle("Store beside ZIP", "Beside ZIP");
   expect(await downloadsExact()).not.toBeNull();
+});
+
+test("ZIP compression: GBA repacks to Store and back, its ROM downloading byte-exact", async () => {
+  test.setTimeout(120_000);
+  await waitForIdleJobs();
+
+  const romBytes = async () => {
+    await openGame("Star Courier");
+    const download = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download ROM" }).click();
+    return readFile(await (await download).path());
+  };
+  const before = await romBytes();
+
+  const row = (name: string) => page.getByRole("row").filter({ hasText: name });
+  const setLevel = async (value: string, label: string) => {
+    await page.goto("/admin/rom-storage");
+    await expect(
+      page.getByRole("columnheader", { name: "ZIP Compression" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "ZIP compression levels" }),
+    ).toBeVisible();
+    await row("Game Boy Advance")
+      .getByRole("button", { name: "Edit ZIP compression of Game Boy Advance" })
+      .click();
+    await dialog().getByLabel("Compression level").selectOption(value);
+    await dialog().getByRole("button", { name: "Change and repack" }).click();
+    await expect(page.getByText("Repacking Game Boy Advance ZIPs")).toBeVisible();
+    await waitForIdleJobs(90);
+
+    const jobs = await (
+      await page.request.get("/api/jobs?type=ZipRepack&pageSize=1")
+    ).json();
+    const job = jobs.items[0];
+    expect(job.status).toBe("Completed");
+    const items = await (
+      await page.request.get(`/api/jobs/${job.id}/items?pageSize=200`)
+    ).json();
+    expect(items.items.length).toBeGreaterThan(0);
+    expect(
+      new Set(items.items.map((i: { outcome: string }) => i.outcome)),
+    ).toEqual(new Set(["Repacked"]));
+    await page.goto("/jobs");
+    await expect(
+      page.getByRole("row").filter({ hasText: "Repacking ZIPs" }).first(),
+    ).toContainText("Completed");
+    await page.goto("/admin/rom-storage");
+    await expect(row("Game Boy Advance")).toContainText(label);
+  };
+
+  await setLevel("Store", "Store");
+  expect(Buffer.compare(await romBytes(), before)).toBe(0);
+
+  // Back to the default, as later tests expect.
+  await setLevel("Med", "Medium");
+});
+
+test("Missing Metadata report, and the phone navbar closes after a link", async () => {
+  await page.goto("/reports/missing-metadata");
+  await expect(page.getByRole("link", { name: "Missing Metadata" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  const red = page.getByRole("row").filter({ hasText: "Red Horizon" });
+  await expect(red).toBeVisible();
+  await expect(red.getByText("Missing", { exact: true })).toHaveCount(3);
+  await expect(red.getByRole("link")).toHaveAttribute(
+    "href",
+    /\/games\/[0-9a-f-]+\?from=missing-metadata$/,
+  );
+  await expectAccessible(page, "missing metadata report");
+
+  const viewport = page.viewportSize()!;
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.getByRole("button", { name: "Toggle navigation" }).click();
+  const menu = page.locator("#main-nav");
+  await expect(menu).toHaveClass(/\bshow\b/);
+  await menu.getByRole("link", { name: "Collections" }).click();
+  await expect(page).toHaveURL(/\/collections$/);
+  await expect(menu).not.toHaveClass(/\bshow\b/);
+  await page.setViewportSize(viewport);
 });
 
 test("Admin: account types and the create-user modal", { tag: "@shard-b" }, async () => {
@@ -2934,7 +3009,7 @@ test("keyboard shortcuts: use, rebind and use again", { tag: "@shard-b" }, async
   }).toPass();
 
   await page.getByRole("button", { name: "Shortcuts", exact: true }).click();
-  await expect(dialog()).toHaveAccessibleName("Keyboard shortcuts");
+  await expect(dialog()).toHaveAccessibleName("Keyboard Shortcuts");
   await expect(
     dialog().getByRole("row", { name: /Go to Library/ }),
   ).toContainText("Alt+Shift+L");

@@ -9,7 +9,7 @@ using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Library;
 
-/// <summary>Large ROM entries are written with <see cref="CompressionLevel.Fastest"/>, everything else with <see cref="CompressionLevel.Optimal"/>.</summary>
+/// <summary>Z2: per-system levels. Med: large ROM entries Fastest, everything else Optimal; Store and High apply to every entry.</summary>
 public class LibraryZipCompressionTests
 {
     private const long MiB = 1024 * 1024;
@@ -42,10 +42,50 @@ public class LibraryZipCompressionTests
     {
         const long limit = LibraryZipWriter.DefaultFastCompressionAboveBytes;
         Assert.That(limit, Is.EqualTo(128 * MiB));
-        Assert.That(LibraryZipWriter.CompressionFor(RomEntry, 128 * MiB, limit), Is.EqualTo(CompressionLevel.Optimal));
-        Assert.That(LibraryZipWriter.CompressionFor(RomEntry, 128 * MiB + 1, limit), Is.EqualTo(CompressionLevel.Fastest));
-        Assert.That(LibraryZipWriter.CompressionFor("images/boxart-01.png", 1024 * MiB, limit), Is.EqualTo(CompressionLevel.Optimal));
-        Assert.That(LibraryZipWriter.CompressionFor(LibraryZip.InfoJsonEntry, 1024 * MiB, limit), Is.EqualTo(CompressionLevel.Optimal));
+        Assert.That(LibraryZipWriter.CompressionFor(RomEntry, 128 * MiB, limit, ZipCompression.Med), Is.EqualTo(CompressionLevel.Optimal));
+        Assert.That(LibraryZipWriter.CompressionFor(RomEntry, 128 * MiB + 1, limit, ZipCompression.Med), Is.EqualTo(CompressionLevel.Fastest));
+        Assert.That(LibraryZipWriter.CompressionFor("images/boxart-01.png", 1024 * MiB, limit, ZipCompression.Med), Is.EqualTo(CompressionLevel.Optimal));
+        Assert.That(LibraryZipWriter.CompressionFor(LibraryZip.InfoJsonEntry, 1024 * MiB, limit, ZipCompression.Med), Is.EqualTo(CompressionLevel.Optimal));
+    }
+
+    [Test]
+    public void DefaultLevel_IsMed() => Assert.That(default(ZipCompression), Is.EqualTo(ZipCompression.Med));
+
+    [TestCase(ZipCompression.Store, CompressionLevel.NoCompression)]
+    [TestCase(ZipCompression.High, CompressionLevel.SmallestSize)]
+    public void CompressionFor_StoreAndHigh_ApplyToEveryEntry(ZipCompression level, CompressionLevel expected)
+    {
+        const long limit = LibraryZipWriter.DefaultFastCompressionAboveBytes;
+        foreach (var (name, size) in new[] { (RomEntry, 1L), (RomEntry, 1024 * MiB), ("saves/state-01.state", 1024 * MiB),
+                     ("images/boxart-01.png", 1L), (LibraryZip.InfoJsonEntry, 1L), (LibraryZip.NoteEntry("Big (World).gb"), 1L) })
+            Assert.That(LibraryZipWriter.CompressionFor(name, size, limit, level), Is.EqualTo(expected), name);
+    }
+
+    [Test]
+    public async Task Store_WritesEveryEntryStored_AndRoundTrips()
+    {
+        var path = _dir.Combine("store.zip");
+        await new LibraryZipWriter(_reader, ZipCompression.Store).WriteAsync(path, null, new LibraryZipChanges(Game([BoxArt()]), new Dictionary<string, Func<Stream>>
+        {
+            [RomEntry] = () => new MemoryStream(Rom),
+            ["images/boxart-01.png"] = () => new MemoryStream(Png),
+        }));
+
+        Assert.That(Read(path), Is.EqualTo(Rom));
+        using var archive = ZipFile.OpenRead(path);
+        Assert.That(archive.Entries.Select(e => e.FullName), Is.SupersetOf(new[] { LibraryZip.InfoJsonEntry, RomEntry, "images/boxart-01.png" }));
+        foreach (var entry in archive.Entries)
+            Assert.That(entry.CompressedLength, Is.EqualTo(entry.Length), $"{entry.FullName} is stored");
+    }
+
+    [Test]
+    public async Task High_RoundTrips_AndIsNoLargerThanMed()
+    {
+        var high = await WriteAsync("high.zip", new LibraryZipWriter(_reader, ZipCompression.High));
+        var med = await WriteAsync("med.zip", new LibraryZipWriter(_reader));
+
+        Assert.That(Read(high), Is.EqualTo(Rom));
+        Assert.That(CompressedLength(high), Is.LessThanOrEqualTo(CompressedLength(med)));
     }
 
     [Test]
