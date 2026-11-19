@@ -298,6 +298,27 @@ describe('library page', () => {
 		expect(row.querySelector('.file-size')!.textContent).toBe('128.0 KiB');
 	});
 
+	it('the System filter lists only systems with ROMs, plus the selected one', async () => {
+		const empty = (id: string, displayName: string, shortName: string) => ({
+			id,
+			displayName,
+			shortName,
+			gameCount: 0,
+			romCount: 0,
+			regions: []
+		});
+		systems.push(empty('nes', 'NES', 'NES'), empty('snes', 'SNES', 'SNES'));
+		url.current = new URL('http://localhost/?system=snes');
+		try {
+			render(LibraryPage);
+			await vi.waitFor(() =>
+				expect(optionTexts('System')).toEqual(['All systems 12', 'GBGame Boy 12', 'SNESSNES 0'])
+			);
+		} finally {
+			systems.length = 1;
+		}
+	});
+
 	it('filter options show their counts once the facets load (F3)', async () => {
 		render(LibraryPage);
 
