@@ -309,6 +309,14 @@ DS dumps reach 512 MiB. They are stored as files next to the game's ZIP (see [Ex
 - **Disk.** Every ZIP write builds the new ZIP beside the old one, so the library volume needs free space at least the size of the game's new ZIP, here about 540 MiB per 512 MiB release (random data doesn't compress). Deleting a release or game also needs space for its `_removed/` copy on the ingest volume.
 - **Time.** A ZIP write re-compresses every entry and re-reads each ROM inside it to verify it, and holds the job lock while it does. For a migrated DS game that is only the metadata ZIP; the migration itself copies each ROM out once and rewrites the ZIP once. ROM entries above 128 MiB are written at Deflate's fastest level to keep this down ([ZIP format](zip-format.md)).
 
+## ZIP compression repack
+
+Changing a system's ZIP compression on **Admin → ROM Zip Config** (or **Repack again**) starts the `ZipRepack` job, which rewrites every game ZIP of that system, one at a time: each ROM is read, re-compressed, verified (size and SHA-1) and the ZIP replaced atomically. Plan for it like a storage move:
+
+- **Time:** it's bound by disk speed and CPU; a DS library of several hundred games at **High** can take hours, **Store** is the fastest. The job holds the job lock throughout, so ingest, integrity, DAT refresh, edits and save uploads wait (or get "Another job is running") until it ends; cancel it from the Jobs page if needed, and use **Repack again** later.
+- **Disk:** each game needs free space on the library volume of about its uncompressed ROMs plus its current ZIP plus 64 MiB while it's rewritten (a game without it is skipped with `InsufficientSpace`). Going to **Store** also grows the library by roughly what compression saved.
+- **Interrupted runs:** a cancel, crash or restart leaves some ZIPs at the old level; all stay readable. A leftover `*.zip.tmp` is removed at the next start.
+
 ## External ROM storage (Nintendo Switch, Nintendo DS, Nintendo 3DS and disc systems)
 
 Switch ROMs, Nintendo DS ROMs, Nintendo 3DS ROMs and disc images (PlayStation, PSP, GameCube, Wii, Xbox 360, Saturn, Sega CD and 3DO) are files next to their game's ZIP in `/app/roms/<system>/<letter>/` (see [ZIP format](zip-format.md#external-rom-files)); a disc set's cue and tracks sit there under their exact names. The app never overwrites a file it didn't create and never follows a link: every path is checked below its configured root, and a linked or special file or folder is reported and left alone.
