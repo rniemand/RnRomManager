@@ -14,7 +14,7 @@ public sealed class MasterSystemHandler : ISystemHandler
     public string DisplayName => "Master System";
     public string ShortName => "SMS";
     public string Family => "mastersystem";
-    public IReadOnlyList<string> RomExtensions { get; } = [".sms"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".sms", ".sg"];
     public long MinRomSizeBytes => 2048;
     public long MaxRomSizeBytes => 4 * 1024 * 1024;
     public string DatName => "Sega - Master System - Mark III";
