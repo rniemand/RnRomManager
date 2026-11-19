@@ -191,6 +191,14 @@ public static class AppHost
             job.Change = change;
             return job;
         });
+        builder.Services.AddTransient<RnRomManager.Core.Storage.ZipRepackJob>();
+        builder.Services.AddSingleton<ZipRepackJobFactory>(sp => (systemId, level) =>
+        {
+            var job = sp.GetRequiredService<RnRomManager.Core.Storage.ZipRepackJob>();
+            job.SystemId = systemId;
+            job.Level = level;
+            return job;
+        });
         builder.Services.AddSingleton<RnRomManager.Core.Storage.IFreeSpace, RnRomManager.Core.Storage.DriveFreeSpace>();
         // The ZIP path is set afterwards: ActivatorUtilities can't match a null string? argument.
         builder.Services.AddSingleton<IntegrityJobFactory>(sp => (mode, zipPath) =>

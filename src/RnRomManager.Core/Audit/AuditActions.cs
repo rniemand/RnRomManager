@@ -48,6 +48,9 @@ public static class AuditActions
     /// <summary>ROM Zip Config B7: an Admin's change of a system's ROM storage, applied by the storage job.</summary>
     public const string RomStorageChanged = "RomStorageChanged";
 
+    /// <summary>ZIP Compression Z9: an Admin's change of a system's ZIP compression level, applied by the repack job.</summary>
+    public const string ZipCompressionChanged = "ZipCompressionChanged";
+
     /// <summary>B13: a save was added, renamed/re-described or replaced, or deleted.</summary>
     public const string SaveAdded = "SaveAdded";
     public const string SaveUpdated = "SaveUpdated";
@@ -76,7 +79,7 @@ public static class AuditActions
         Ingested, ZipRepaired, ExtensionRenamed, MovedToFailed, MovedToDuplicates, ArchiveDeleted, ReviewDeleted, GameUpdated,
         ReleaseDeleted, GameDeleted, ImageAdded, ImageDeleted, CoverSet, PrimarySet, MediaFetched, ReleaseMoved, GamesMerged, DatsRefreshed,
         IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved, GenreLogoReplaced, GenreLogoRemoved,
-        SystemLogoReplaced, SystemLogoRemoved, BackupRestored, RomsExternalized, RomsEmbedded, RomStorageChanged,
+        SystemLogoReplaced, SystemLogoRemoved, BackupRestored, RomsExternalized, RomsEmbedded, RomStorageChanged, ZipCompressionChanged,
         SaveAdded, SaveUpdated, SaveDeleted, UserCreated, UserTypeChanged, UserDisabled, UserEnabled, PasswordReset,
         PasswordChanged, SignedIn, SignInFailed, LockedOut, GamePlayed,
     ];

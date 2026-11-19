@@ -10,6 +10,9 @@ public enum JobType
 
     /// <summary>S4: moves legacy games' embedded ROMs next to their ZIPs.</summary>
     StorageMigration,
+
+    /// <summary>ZIP Compression Z9: rewrites every game ZIP of one system at its compression level.</summary>
+    ZipRepack,
 }
 
 public enum JobMode
