@@ -24,7 +24,7 @@
 		selected?: Set<string>;
 		/**
 		 * B17: the grid sits in a two-thirds-wide pane (Collections' Publishers, Genres and Systems tabs), so it uses fewer
-		 * columns and every card keeps room for the one-line rating.
+		 * columns and, from `sm` up, every card keeps room for the one-line rating (U6: below `sm` cards have no rating row).
 		 */
 		narrow?: boolean;
 	}
@@ -33,8 +33,8 @@
 
 	const gridColumns = $derived(
 		narrow
-			? 'row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-4'
-			: 'row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6'
+			? 'row-cols-2 game-grid-xs row-cols-sm-2 row-cols-md-3 row-cols-xl-4'
+			: 'row-cols-2 game-grid-xs row-cols-sm-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6'
 	);
 
 	function toggle(id: string, on: boolean): void {
@@ -187,20 +187,25 @@
 						<div class="small text-body-secondary text-truncate">
 							{[game.releaseYear, game.regions.join(', ')].filter(Boolean).join(' · ')}
 						</div>
+						<!-- U6: below sm a card is too narrow for the rating (about 148px); rating stays in list view and on the game page. -->
 						<div
 							class="position-relative z-2 mt-1"
+							class:d-none={!action}
+							class:d-sm-block={!action}
 							class:d-flex={action}
 							class:flex-wrap={action}
 							class:align-items-center={action}
 							class:justify-content-between={action}
 						>
-							<RatingControl
-								gameId={game.id}
-								title={game.displayTitle}
-								bind:rating={game.rating}
-								bind:favourite={game.favourite}
-								readonly={!auth.isAdmin}
-							/>
+							<span class="d-none d-sm-inline"
+								><RatingControl
+									gameId={game.id}
+									title={game.displayTitle}
+									bind:rating={game.rating}
+									bind:favourite={game.favourite}
+									readonly={!auth.isAdmin}
+								/></span
+							>
 							{#if action}{@render action(game)}{/if}
 						</div>
 					</div>

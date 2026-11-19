@@ -422,3 +422,12 @@ body:has(.app-footer) .toast-container {
 	white-space: nowrap;
 	margin-bottom: 0;
 }
+
+/* U6: library grids show 2 cards per row below 360px and 3 from 360px up to sm (after Bootstrap, so it wins over
+   .row-cols-2 > * at equal specificity). */
+@media (min-width: 360px) and (max-width: 575.98px) {
+	.game-grid-xs > * {
+		flex: 0 0 auto;
+		width: 33.3333%;
+	}
+}

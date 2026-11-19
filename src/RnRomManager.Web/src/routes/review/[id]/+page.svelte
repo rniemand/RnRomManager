@@ -19,7 +19,8 @@
 	import Loading from '#lib/components/Loading.svelte';
 	import ReviewDeleteModal from '#lib/components/ReviewDeleteModal.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
-	import { formatDateTime, formatKey, formatValue } from '#lib/format.js';
+	import { formatCount, formatDateTime, formatKey, formatValue } from '#lib/format.js';
+	import { navCounts } from '#lib/stores/navCounts.svelte.js';
 	import {
 		discError,
 		emptyManualForm,
@@ -81,6 +82,13 @@
 	let confirmDelete = $state(false);
 
 	type Tab = 'suggestions' | 'matched' | 'attach' | 'manual';
+	/** U5: each tab's icon, before its label. */
+	const tabIcons: Record<Tab, string> = {
+		suggestions: 'review-suggestions',
+		matched: 'review-matched',
+		attach: 'review-attach',
+		manual: 'edit'
+	};
 	const tabLabels: Record<Tab, string> = {
 		suggestions: 'Suggestions',
 		matched: 'Matched DAT entry',
@@ -374,6 +382,14 @@
 				>
 			</div>
 		</div>
+		{#if navCounts.review !== null}
+			<!-- U3: the pending count; the layout refreshes it on every navigation and job end. -->
+			<p class="small text-body-secondary mb-3">
+				{navCounts.review === 0
+					? 'No items left'
+					: `${formatCount(navCounts.review)} ${navCounts.review === 1 ? 'item' : 'items'} to go`}
+			</p>
+		{/if}
 
 		{#if resolving}
 			<div class="alert alert-info" role="status">
@@ -464,7 +480,7 @@
 									{#each Object.entries(item.header) as [key, value] (key)}
 										<tr>
 											<th scope="row" class="fw-normal text-body-secondary">{formatKey(key)}</th>
-											<td>{formatValue(value)}</td>
+											<td>{formatValue(value, { counts: true })}</td>
 										</tr>
 									{/each}
 								</tbody>
@@ -496,7 +512,7 @@
 									role="tab"
 									aria-selected={tab === t}
 									aria-controls="panel-{t}"
-									onclick={() => (chosenTab = t)}>{tabLabels[t]}</button
+									onclick={() => (chosenTab = t)}><Icon name={tabIcons[t]} /> {tabLabels[t]}</button
 								>
 							</li>
 						{/each}

@@ -54,10 +54,14 @@ export function formatKey(key: string): string {
 	return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/** A header value for display: booleans Yes/No, null `—`, arrays/objects as JSON. */
-export function formatValue(value: unknown): string {
+/**
+ * A header value for display: booleans Yes/No, null `—`, arrays/objects as JSON. U4: `counts` formats a number with
+ * thousands separators (opt-in, so ports and years elsewhere keep plain digits).
+ */
+export function formatValue(value: unknown, options: { counts?: boolean } = {}): string {
 	if (value === null || value === undefined) return '—';
 	if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+	if (options.counts && typeof value === 'number') return formatCount(value);
 	if (typeof value === 'object') return JSON.stringify(value);
 	return String(value);
 }

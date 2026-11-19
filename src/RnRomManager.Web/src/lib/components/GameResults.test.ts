@@ -320,17 +320,36 @@ describe('GameResults cards (C1, C2)', () => {
 		}
 	);
 
-	it('the grid is one column below sm (B17)', () => {
+	it('the grid is two columns below sm, three from 360px through game-grid-xs (U6)', () => {
 		const { container } = render(GameResults, { games: [game('a')], view: 'grid' });
 		expect(container.querySelector('.row')!.className).toBe(
-			'row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6 g-3'
+			'row row-cols-2 game-grid-xs row-cols-sm-2 row-cols-md-3 row-cols-lg-4 row-cols-xl-6 g-3'
 		);
+	});
+
+	it('below sm a card has no rating row; a card with an action keeps the action (U6)', () => {
+		const { container, unmount } = render(GameResults, { games: [game('a')], view: 'grid' });
+		const rating = container.querySelector('.card .z-2')!;
+		expect(rating.classList.contains('d-none')).toBe(true);
+		expect(rating.classList.contains('d-sm-block')).toBe(true);
+		expect(rating.querySelector(':scope > span')!.className).toBe('d-none d-sm-inline');
+		unmount();
+
+		const action = createRawSnippet((g: () => GameListItem) => ({
+			render: () => `<button type="button">Remove ${g().displayTitle}</button>`
+		}));
+		const withAction = render(GameResults, { games: [game('a')], view: 'grid', action });
+		const row = withAction.container.querySelector('.card .z-2')!;
+		expect(row.classList.contains('d-none')).toBe(false);
+		expect(row.classList.contains('d-flex')).toBe(true);
+		expect(row.querySelector(':scope > span')!.className).toBe('d-none d-sm-inline');
+		expect(row.querySelector('button')!.textContent).toBe('Remove Game a');
 	});
 
 	it('a narrow grid (a two-thirds pane) stops at four columns, so the one-line rating fits (B17)', () => {
 		const { container } = render(GameResults, { games: [game('a')], view: 'grid', narrow: true });
 		expect(container.querySelector('.row')!.className).toBe(
-			'row row-cols-1 row-cols-sm-2 row-cols-md-3 row-cols-xl-4 g-3'
+			'row row-cols-2 game-grid-xs row-cols-sm-2 row-cols-md-3 row-cols-xl-4 g-3'
 		);
 	});
 });

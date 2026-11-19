@@ -28,6 +28,18 @@ describe('ConfirmModal', () => {
 		expect(options.at(-1)).toEqual({ backdrop: 'static', keyboard: true });
 	});
 
+	it('scrollable adds modal-dialog-scrollable; it is off by default (U2)', () => {
+		const { unmount } = render(ConfirmModal, { open: false, title: 'T', onconfirm: () => {} });
+		expect(
+			document.querySelector('.modal-dialog')!.classList.contains('modal-dialog-scrollable')
+		).toBe(false);
+		unmount();
+		render(ConfirmModal, { open: false, title: 'T', scrollable: true, onconfirm: () => {} });
+		expect(
+			document.querySelector('.modal-dialog')!.classList.contains('modal-dialog-scrollable')
+		).toBe(true);
+	});
+
 	it('shows Cancel and the confirm button when onconfirm is given', () => {
 		render(ConfirmModal, { open: false, title: 'T', confirmLabel: 'Delete', onconfirm: () => {} });
 		expect(screen.getByRole('button', { name: 'Cancel', hidden: true })).toBeTruthy();
