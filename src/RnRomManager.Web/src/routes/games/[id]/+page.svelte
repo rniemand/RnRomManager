@@ -1048,6 +1048,7 @@
 			savesVersion++;
 			void refreshGame();
 		}}
+		onimagesaved={() => void refreshGame()}
 	/>
 	<GameCollectionsModal
 		bind:open={collectionsOpen}

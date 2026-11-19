@@ -26,6 +26,7 @@ export const icons: Record<string, string> = {
 	'review-suggestions': 'bi bi-lightbulb',
 	'review-matched': 'bi bi-bullseye',
 	'review-attach': 'bi bi-paperclip',
+	screenshot: 'bi bi-camera',
 	activity: 'bi bi-activity',
 	'add-user': 'bi bi-person-plus',
 	enable: 'bi bi-person-check',

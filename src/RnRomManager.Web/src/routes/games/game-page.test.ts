@@ -1370,6 +1370,53 @@ describe('game detail page', () => {
 			expect(goto).toHaveBeenCalledWith('/games/g1?tab=images', { replace: true, reset: false });
 		});
 
+		it('a screenshot saved as a Snap refetches the game (E2 onimagesaved)', async () => {
+			vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:shot');
+			vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+			navigateTo('/games/g1?play=1');
+			answers.push({ status: 200, body: playableGame() });
+			render(GamePage);
+			await vi.waitFor(() => expect(frame()).not.toBeNull());
+			const target = frame()!.contentWindow!;
+			vi.spyOn(target, 'postMessage').mockImplementation(() => {});
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Screenshot', hidden: true }));
+			window.dispatchEvent(
+				new MessageEvent('message', {
+					data: {
+						type: 'rnrm-emulator-export-result',
+						kind: 'screenshot',
+						ok: true,
+						bytes: new Uint8Array([1]).buffer,
+						extension: '.png'
+					},
+					origin: location.origin,
+					source: target
+				})
+			);
+			const saveSnap = await screen.findByRole('button', { name: 'Save as Snap', hidden: true });
+			const seen: string[] = [];
+			const inner = globalThis.fetch;
+			vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+				seen.push(`${init?.method ?? 'GET'} ${url}`);
+				return inner(url, init);
+			});
+			const before = fetches;
+			const refetched = { ...playableGame(), displayTitle: 'Tetris Refetched' };
+			answers.push({ status: 200, body: {} }, { status: 200, body: refetched });
+			await fireEvent.click(saveSnap);
+
+			await vi.waitFor(() => expect(fetches - before).toBeGreaterThanOrEqual(2));
+			await vi.waitFor(() =>
+				expect(seen).toEqual(
+					expect.arrayContaining(['POST /api/games/g1/images', 'GET /api/games/g1'])
+				)
+			);
+			expect(seen.indexOf('GET /api/games/g1')).toBeGreaterThan(
+				seen.indexOf('POST /api/games/g1/images')
+			);
+		});
+
 		it('works on the already-open game, with no reload', async () => {
 			answers.push({ status: 200, body: playableGame() });
 			render(GamePage);

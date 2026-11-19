@@ -452,3 +452,221 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 		});
 	});
 });
+
+describe('EmulatorModal screenshot (E2)', () => {
+	type Reply = { status: number; body?: unknown };
+	let calls: { key: string; body: unknown }[];
+	let answers: Record<string, Reply>;
+	let urls: number;
+
+	beforeEach(() => {
+		resetClient();
+		toasts.items.length = 0;
+		calls = [];
+		answers = {};
+		urls = 0;
+		auth.set({ id: 1, username: 'alice', roles: ['admin'], mustChangePassword: false });
+		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+			const key = `${init?.method ?? 'GET'} ${url}`;
+			calls.push({ key, body: init?.body });
+			const answer = answers[key] ?? { status: 204 };
+			return Promise.resolve(
+				new Response(answer.body === undefined ? null : JSON.stringify(answer.body), {
+					status: answer.status
+				})
+			);
+		});
+		vi.spyOn(URL, 'createObjectURL').mockImplementation(() => `blob:shot-${++urls}`);
+		vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.restoreAllMocks();
+		auth.set(null);
+	});
+
+	function openFor(onimagesaved?: () => void) {
+		const view = render(EmulatorModal, {
+			open: true,
+			gameId: 'g-1',
+			core: 'gambatte',
+			rom,
+			disc: false,
+			onimagesaved
+		});
+		const iframe = view.container.querySelector('iframe')!;
+		const posted = vi.spyOn(iframe.contentWindow!, 'postMessage').mockImplementation(() => {});
+		return { ...view, iframe, posted };
+	}
+
+	const button = (container: HTMLElement, name: string) =>
+		within(container).queryByRole('button', { name, hidden: true }) as HTMLButtonElement | null;
+
+	function shot(
+		source: Window | null,
+		result: Record<string, unknown> = {
+			ok: true,
+			bytes: new Uint8Array([137, 80]).buffer,
+			extension: '.png'
+		}
+	) {
+		window.dispatchEvent(
+			new MessageEvent('message', {
+				data: { type: 'rnrm-emulator-export-result', kind: 'screenshot', ...result },
+				origin: location.origin,
+				source
+			})
+		);
+	}
+
+	const preview = (container: HTMLElement) =>
+		container.querySelector('img[alt="Screenshot preview"]') as HTMLImageElement | null;
+
+	it('only Admins get the button, after the save buttons, with the camera icon', () => {
+		const { container, unmount } = openFor();
+		const shotButton = button(container, 'Screenshot')!;
+		expect(shotButton.className).toBe('btn btn-sm btn-outline-primary');
+		expect(shotButton.querySelector('i')!.className.trim()).toBe('bi bi-camera');
+		expect(shotButton.previousElementSibling!.textContent!.trim()).toBe('Save battery to library');
+		unmount();
+
+		auth.set({ id: 2, username: 'bob', roles: [], mustChangePassword: false });
+		const user = openFor();
+		expect(button(user.container, 'Screenshot')).toBeNull();
+	});
+
+	it('asks the player and shows the preview over the game; disabled while exporting', async () => {
+		const { container, iframe, posted } = openFor();
+		await fireEvent.click(button(container, 'Screenshot')!);
+
+		expect(posted).toHaveBeenCalledWith(
+			{ type: 'rnrm-emulator-export', kind: 'screenshot' },
+			location.origin
+		);
+		expect(button(container, 'Screenshot')!.disabled).toBe(true);
+		expect(button(container, 'Save state to library')!.disabled).toBe(true);
+
+		shot(iframe.contentWindow);
+		await vi.waitFor(() => expect(preview(container)).not.toBeNull());
+		const overlay = preview(container)!.parentElement!;
+		expect(overlay.parentElement!.classList).toContain('ratio');
+		expect(overlay.className).toBe(
+			'bg-body d-flex flex-column align-items-center justify-content-center gap-2 p-2'
+		);
+		expect(preview(container)!.getAttribute('src')).toBe('blob:shot-1');
+		expect(button(container, 'Screenshot')!.disabled).toBe(false);
+		expect(posted).toHaveBeenCalledTimes(1);
+	});
+
+	it('a second screenshot replaces the preview', async () => {
+		const { container, iframe } = openFor();
+		await fireEvent.click(button(container, 'Screenshot')!);
+		shot(iframe.contentWindow);
+		await vi.waitFor(() => expect(preview(container)).not.toBeNull());
+
+		await fireEvent.click(button(container, 'Screenshot')!);
+		shot(iframe.contentWindow);
+		await vi.waitFor(() => expect(preview(container)!.getAttribute('src')).toBe('blob:shot-2'));
+		expect(container.querySelectorAll('img[alt="Screenshot preview"]')).toHaveLength(1);
+	});
+
+	it('Save as Snap uploads screenshot.png as a Snap, toasts, closes the preview and calls onimagesaved', async () => {
+		const onimagesaved = vi.fn();
+		answers['POST /api/games/g-1/images'] = { status: 200, body: {} };
+		const { container, iframe } = openFor(onimagesaved);
+		await fireEvent.click(button(container, 'Screenshot')!);
+		shot(iframe.contentWindow);
+		await vi.waitFor(() => expect(preview(container)).not.toBeNull());
+
+		await fireEvent.click(button(container, 'Save as Snap')!);
+
+		await vi.waitFor(() => expect(onimagesaved).toHaveBeenCalledTimes(1));
+		const form = calls.find((c) => c.key === 'POST /api/games/g-1/images')!.body as FormData;
+		const file = form.get('file') as File;
+		expect([file.name, file.type, file.size, form.get('type')]).toEqual([
+			'screenshot.png',
+			'image/png',
+			2,
+			'Snap'
+		]);
+		expect(toasts.items.at(-1)).toMatchObject({
+			text: "Screenshot saved to the game's images",
+			kind: 'success'
+		});
+		expect(preview(container)).toBeNull();
+	});
+
+	it('Discard closes the preview', async () => {
+		const { container, iframe } = openFor();
+		await fireEvent.click(button(container, 'Screenshot')!);
+		shot(iframe.contentWindow);
+		await vi.waitFor(() => expect(preview(container)).not.toBeNull());
+
+		await fireEvent.click(button(container, 'Discard')!);
+		expect(preview(container)).toBeNull();
+	});
+
+	it('a 409 shows the job-running toast and other errors their title; the preview stays', async () => {
+		const { container, iframe } = openFor();
+		await fireEvent.click(button(container, 'Screenshot')!);
+		shot(iframe.contentWindow);
+		await vi.waitFor(() => expect(preview(container)).not.toBeNull());
+
+		answers['POST /api/games/g-1/images'] = {
+			status: 409,
+			body: { status: 409, code: 'JobRunning', title: 'A job is running' }
+		};
+		await fireEvent.click(button(container, 'Save as Snap')!);
+		await vi.waitFor(() =>
+			expect(toasts.items.at(-1)?.text).toBe(
+				'Another job is running. Try again when it has finished.'
+			)
+		);
+
+		answers['POST /api/games/g-1/images'] = {
+			status: 400,
+			body: { status: 400, code: 'InvalidImage', title: 'The image could not be read' }
+		};
+		await fireEvent.click(button(container, 'Save as Snap')!);
+		await vi.waitFor(() =>
+			expect(toasts.items.at(-1)).toMatchObject({
+				text: 'The image could not be read',
+				kind: 'danger'
+			})
+		);
+		expect(preview(container)).not.toBeNull();
+	});
+
+	it.each([
+		['not-started', 'Start the game first.'],
+		['busy', 'The emulator is saving. Try again in a moment.'],
+		['error', "Couldn't take a screenshot."]
+	])('a %s failure shows a warning toast', async (reason, text) => {
+		const { container, iframe } = openFor();
+		await fireEvent.click(button(container, 'Screenshot')!);
+		shot(iframe.contentWindow, { ok: false, reason });
+
+		await vi.waitFor(() => expect(toasts.items.at(-1)).toMatchObject({ text, kind: 'warning' }));
+		expect(preview(container)).toBeNull();
+	});
+
+	it('closing discards the preview, and a result after the close is ignored', async () => {
+		const { container, iframe, rerender } = openFor();
+		await fireEvent.click(button(container, 'Screenshot')!);
+		shot(iframe.contentWindow);
+		await vi.waitFor(() => expect(preview(container)).not.toBeNull());
+		await rerender({ open: false });
+		await rerender({ open: true });
+		expect(preview(container)).toBeNull();
+
+		const late = container.querySelector('iframe')!;
+		vi.spyOn(late.contentWindow!, 'postMessage').mockImplementation(() => {});
+		await fireEvent.click(button(container, 'Screenshot')!);
+		await rerender({ open: false });
+		await rerender({ open: true });
+		shot(late.contentWindow);
+		await new Promise((r) => setTimeout(r, 0));
+		expect(preview(container)).toBeNull();
+		expect(toasts.items).toHaveLength(0);
+	});
+});

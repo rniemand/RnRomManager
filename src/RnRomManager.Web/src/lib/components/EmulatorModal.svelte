@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
 	import type { RomDetail, SaveKind } from '../api/types';
 	import { playUrl, recordPlay, type PlaySave } from '../emulator';
@@ -25,9 +26,20 @@
 		save?: PlaySave | null;
 		/** Saves B19: called after each successful "save to library". */
 		onsaved?: () => void;
+		/** E2: called after a screenshot was saved as a Snap. */
+		onimagesaved?: () => void;
 	}
 
-	let { open = $bindable(), gameId, core, rom, disc, save = null, onsaved }: Props = $props();
+	let {
+		open = $bindable(),
+		gameId,
+		core,
+		rom,
+		disc,
+		save = null,
+		onsaved,
+		onimagesaved
+	}: Props = $props();
 
 	/**
 	 * B22: one play per opening (false → true, a mount already open included) while the player shows; a prop changing
@@ -62,8 +74,8 @@
 
 	let exporting = $state(false);
 
-	/** Saves B18: asks the play page for the running game's state or battery save. */
-	function requestExport(target: Window, kind: SaveKind): Promise<ExportResult> {
+	/** Saves B18: asks the play page for the running game's state or battery save; E2: or a screenshot. */
+	function requestExport(target: Window, kind: SaveKind | 'screenshot'): Promise<ExportResult> {
 		return new Promise((resolve) => {
 			const onMessage = (event: MessageEvent) => {
 				if (event.source !== target || event.origin !== location.origin) return;
@@ -141,6 +153,71 @@
 
 	let frame = $state<HTMLIFrameElement | null>(null);
 
+	/** E2: the screenshot waiting for Save as Snap or Discard; dropped when the modal closes. */
+	let preview = $state<{ url: string; bytes: ArrayBuffer } | null>(null);
+	let uploading = $state(false);
+	/** Bumped on every close, so a screenshot answered after it is ignored. */
+	let session = 0;
+
+	function discard(): void {
+		if (preview) URL.revokeObjectURL(preview.url);
+		preview = null;
+	}
+
+	$effect(() => {
+		if (open) return;
+		untrack(() => {
+			session++;
+			discard();
+		});
+	});
+
+	/** E2: asks the play page for a PNG and shows it over the game; a new one replaces the last. */
+	async function screenshot(): Promise<void> {
+		const target = frame?.contentWindow;
+		if (!target || exporting) return;
+		const current = session;
+		exporting = true;
+		try {
+			const result = await requestExport(target, 'screenshot');
+			if (current !== session) return;
+			if (!result.ok) {
+				toasts.show(
+					result.reason === 'error' ? "Couldn't take a screenshot." : reasons[result.reason],
+					'warning'
+				);
+				return;
+			}
+			discard();
+			preview = {
+				url: URL.createObjectURL(new Blob([result.bytes], { type: 'image/png' })),
+				bytes: result.bytes
+			};
+		} finally {
+			exporting = false;
+		}
+	}
+
+	/** E2: uploads the preview as a Snap, as GameImages' upload builds its form. */
+	async function saveSnap(): Promise<void> {
+		if (!preview || uploading) return;
+		const form = new FormData();
+		form.append('file', new File([preview.bytes], 'screenshot.png', { type: 'image/png' }));
+		form.append('type', 'Snap');
+		uploading = true;
+		try {
+			await api.post(`/api/games/${encodeURIComponent(gameId)}/images`, form);
+			toasts.show("Screenshot saved to the game's images", 'success');
+			discard();
+			onimagesaved?.();
+		} catch (e) {
+			if (!toasts.jobRunning(e))
+				toasts.show(isApiError(e) ? e.title : "Couldn't save the screenshot.", 'danger');
+		} finally {
+			uploading = false;
+		}
+	}
+
 	/** 3DO B11: how long the modal waits for the player's reply before closing anyway. */
 	const saveTimeoutMs = 3000;
 
@@ -194,6 +271,16 @@
 					<Icon name="download" /> Save battery to library
 				</button>
 			{/if}
+			{#if auth.isAdmin}
+				<button
+					type="button"
+					class="btn btn-sm btn-outline-primary"
+					disabled={exporting}
+					onclick={screenshot}
+				>
+					<Icon name="screenshot" /> Screenshot
+				</button>
+			{/if}
 		</div>
 	{/if}
 	<!-- Cap the width so the 4:3 frame fits the viewport height (dialog chrome ≈ 14rem): Start Game needs no scrolling. -->
@@ -205,6 +292,28 @@
 				allow="fullscreen; gamepad; autoplay"
 				src={playUrl(gameId, rom, core, disc, save)}
 			></iframe>
+			{#if preview}
+				<!-- E2: over the game, inside the emulator modal (not a second Bootstrap modal). -->
+				<div class="bg-body d-flex flex-column align-items-center justify-content-center gap-2 p-2">
+					<img
+						src={preview.url}
+						alt="Screenshot preview"
+						class="img-fluid"
+						style="max-height: 85%"
+					/>
+					<div class="d-flex gap-2">
+						<button
+							type="button"
+							class="btn btn-sm btn-primary"
+							disabled={uploading}
+							onclick={saveSnap}>Save as Snap</button
+						>
+						<button type="button" class="btn btn-sm btn-outline-secondary" onclick={discard}
+							>Discard</button
+						>
+					</div>
+				</div>
+			{/if}
 		{/if}
 	</div>
 </ConfirmModal>
