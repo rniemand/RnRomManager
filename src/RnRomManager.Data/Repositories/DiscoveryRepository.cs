@@ -79,7 +79,10 @@ public sealed class DiscoveryRepository(IDbConnectionFactory connections, IGameR
                 _indexes[kind] = cached;
             }
 
-            return cached.Build.WaitAsync(cancellationToken);
+            // WaitAsync returns an already-finished build even for a cancelled token.
+            return cancellationToken.IsCancellationRequested
+                ? Task.FromCanceled<Index>(cancellationToken)
+                : cached.Build.WaitAsync(cancellationToken);
         }
     }
 
