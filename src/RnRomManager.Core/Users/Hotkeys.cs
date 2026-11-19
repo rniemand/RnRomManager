@@ -28,6 +28,9 @@ public static class Hotkeys
     public const string NavDeleted = "nav.deleted";
     public const string MissingImageNext = "reports.missingImage.next";
 
+    /// <summary>Missing Metadata M5: no default key (an empty <c>Defaults</c> is unbound).</summary>
+    public const string MissingMetadataNext = "reports.missingMetadata.next";
+
     public const string FormatError = "Use Ctrl, Alt, Shift or Meta plus one key: A–Z, 0–9 or F1–F12.";
     public const string ModifierError = "Include Ctrl, Alt or Meta.";
     public const string AltGrError = "Ctrl+Alt also needs Shift or Meta: on many keyboards it types characters.";
@@ -54,6 +57,7 @@ public static class Hotkeys
         new(NavAdmin, "Go to Admin", ["Alt+Shift+A"], true, Roles.Admin),
         new(NavDeleted, "Go to Deleted ROMs", ["Alt+Shift+D"], true, Roles.Admin),
         new(MissingImageNext, "Next missing image", ["Alt+Shift+M"], true, null),
+        new(MissingMetadataNext, "Next missing metadata", [], true, Roles.Admin),
     ];
 
     /// <summary>
@@ -155,7 +159,7 @@ public static class Hotkeys
     {
         var unassigned = ImplicitUnassigned(overrides, roles);
         return Editable.ToDictionary(a => a.Id,
-            a => overrides.TryGetValue(a.Id, out var value) ? value : unassigned.Contains(a.Id) ? null : a.Defaults[0]);
+            a => overrides.TryGetValue(a.Id, out var value) ? value : unassigned.Contains(a.Id) ? null : a.Defaults.FirstOrDefault());
     }
 
     /// <summary>
@@ -169,7 +173,7 @@ public static class Hotkeys
         var taken = overrides.Where(o => o.Value is not null && Find(o.Key) is { } a && a.AllowedFor(roles))
             .Select(o => (o.Key, o.Value!)).ToList();
         return Editable.Where(a => YieldingDefaults.Contains(a.Id) && a.AllowedFor(roles) && !overrides.ContainsKey(a.Id)
-                && !named.Contains(a.Id) && taken.Any(t => t.Key != a.Id && t.Item2 == a.Defaults[0]))
+                && !named.Contains(a.Id) && taken.Any(t => t.Key != a.Id && t.Item2 == a.Defaults.FirstOrDefault()))
             .Select(a => a.Id).ToList();
     }
 
@@ -224,14 +228,14 @@ public static class Hotkeys
                 continue;
             }
 
-            if (canonical != action.Defaults[0])
+            if (canonical != action.Defaults.FirstOrDefault())
                 overrides[id] = canonical;
         }
 
         // Duplicates among the actions this user can use; the later one in table order gets the error.
         var unassigned = ImplicitUnassigned(overrides, roles, requested.Keys);
         var merged = Editable.ToDictionary(a => a.Id,
-            a => overrides.TryGetValue(a.Id, out var value) ? value : unassigned.Contains(a.Id) ? null : a.Defaults[0]);
+            a => overrides.TryGetValue(a.Id, out var value) ? value : unassigned.Contains(a.Id) ? null : a.Defaults.FirstOrDefault());
         var taken = new Dictionary<string, HotkeyAction>(StringComparer.Ordinal);
         foreach (var action in Editable.Where(a => a.AllowedFor(roles)))
         {

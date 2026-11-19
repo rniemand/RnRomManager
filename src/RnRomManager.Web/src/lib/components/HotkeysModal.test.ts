@@ -84,8 +84,11 @@ describe('HotkeysModal (B25)', () => {
 	it('an admin sees every action; unassigned shows Not assigned', () => {
 		open(admin, { 'review.next': null });
 
-		expect(document.querySelectorAll('tbody tr')).toHaveLength(11);
+		expect(document.querySelectorAll('tbody tr')).toHaveLength(12);
 		expect(row('review.next').getByText('Not assigned')).toBeTruthy();
+		// Missing Metadata M5: no default, so Not assigned and no "Its default" hint.
+		expect(row('reports.missingMetadata.next').getByText('Not assigned')).toBeTruthy();
+		expect(row('reports.missingMetadata.next').queryByText(/Its default/)).toBeNull();
 	});
 
 	it('capture sets the binding from the next non-modifier key', async () => {

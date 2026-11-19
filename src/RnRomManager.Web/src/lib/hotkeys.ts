@@ -17,7 +17,8 @@ export type HotkeyId =
 	| 'nav.integrity'
 	| 'nav.admin'
 	| 'nav.deleted'
-	| 'reports.missingImage.next';
+	| 'reports.missingImage.next'
+	| 'reports.missingMetadata.next';
 export type EditableHotkeyId = Exclude<HotkeyId, 'search'>;
 export type Bindings = Record<EditableHotkeyId, string | null>;
 
@@ -108,6 +109,14 @@ export const actions: readonly HotkeyAction[] = [
 		defaults: ['Alt+Shift+M'],
 		editable: true,
 		role: null
+	},
+	{
+		// Missing Metadata M5: no default key.
+		id: 'reports.missingMetadata.next',
+		name: 'Next missing metadata',
+		defaults: [],
+		editable: true,
+		role: 'admin'
 	}
 ];
 
@@ -129,7 +138,7 @@ export const errors = {
 const modifierOrder = ['Ctrl', 'Alt', 'Shift', 'Meta'] as const;
 
 export function defaultBindings(): Bindings {
-	return Object.fromEntries(editableActions.map((a) => [a.id, a.defaults[0]])) as Bindings;
+	return Object.fromEntries(editableActions.map((a) => [a.id, a.defaults[0] ?? null])) as Bindings;
 }
 
 export function allowedFor(action: HotkeyAction, roles: readonly string[]): boolean {

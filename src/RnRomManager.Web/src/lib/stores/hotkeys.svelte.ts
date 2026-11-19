@@ -18,6 +18,12 @@ export const missingImageMessages = {
 	failed: "Couldn't find the next game missing images."
 } as const;
 
+export const missingMetadataMessages = {
+	onlyCurrent: 'This game is the only one still missing metadata.',
+	none: 'No more games are missing metadata.',
+	failed: "Couldn't find the next game missing metadata."
+} as const;
+
 /** The game id when the current page is a game page (`/games/<id>`, under any base path). */
 function currentGameId(): string | null {
 	const m = /\/games\/([0-9a-fA-F-]{36})\/?$/.exec(window.location.pathname);
@@ -32,6 +38,7 @@ class HotkeyStore {
 	#loadedFor: string | null = null;
 	/** The in-flight Next missing image request: further presses join it instead of starting another (B3). */
 	#nextMissing: Promise<void> | null = null;
+	#nextMissingMetadata: Promise<void> | null = null;
 
 	/**
 	 * Called whenever `me` changes: loads the bindings once a user is signed in and `mustChangePassword` is false (the
@@ -102,6 +109,8 @@ class HotkeyStore {
 				return goto(resolve('/deleted'));
 			case 'reports.missingImage.next':
 				return this.nextMissingImage();
+			case 'reports.missingMetadata.next':
+				return this.nextMissingMetadata();
 			case 'review.next': {
 				let first: ReviewListItem | undefined;
 				try {
@@ -144,6 +153,38 @@ class HotkeyStore {
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
 		if (next.id) return goto(`${resolve('/games/[id]', { id: next.id })}?tab=images`);
 		toasts.show(next.currentIsOnly ? missingImageMessages.onlyCurrent : missingImageMessages.none);
+	}
+
+	/**
+	 * Missing Metadata M5: opens the next game in the Missing Metadata report's unfiltered order, after the current game on
+	 * a game page, as `nextMissingImage` does (shared overlapping presses, a stale answer dropped).
+	 */
+	nextMissingMetadata(): Promise<void> {
+		this.#nextMissingMetadata ??= this.#fetchNextMissingMetadata().finally(
+			() => (this.#nextMissingMetadata = null)
+		);
+		return this.#nextMissingMetadata;
+	}
+
+	async #fetchNextMissingMetadata(): Promise<void> {
+		const session = this.#loadedFor;
+		const href = window.location.href;
+		const current = currentGameId();
+		const stale = () => this.#loadedFor !== session || window.location.href !== href;
+		let next: NextMissingImage;
+		try {
+			const query = current ? `?afterGameId=${encodeURIComponent(current)}` : '';
+			next = await api.get<NextMissingImage>(`/api/reports/missing-metadata/next${query}`);
+		} catch {
+			if (!stale()) toasts.show(missingMetadataMessages.failed, 'danger');
+			return;
+		}
+		if (stale()) return;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
+		if (next.id) return goto(`${resolve('/games/[id]', { id: next.id })}?from=missing-metadata`);
+		toasts.show(
+			next.currentIsOnly ? missingMetadataMessages.onlyCurrent : missingMetadataMessages.none
+		);
 	}
 }
 

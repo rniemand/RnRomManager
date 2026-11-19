@@ -41,6 +41,7 @@ vi.mock('#lib/tooltip.js', () => ({
 }));
 
 const { default: GamePage } = await import('./[id]/+page.svelte');
+const { hotkeys } = await import('#lib/stores/hotkeys.svelte.js');
 
 const rom = (id: number, fileName: string, isPrimary: boolean) => ({
 	id,
@@ -1166,6 +1167,58 @@ describe('game detail page', () => {
 		expect(table.querySelector('td .badge')).not.toBeNull();
 		// The only definition lists are the release bodies (R2).
 		expect([...document.querySelectorAll('dl')].every((dl) => dl.closest('article'))).toBe(true);
+	});
+
+	describe('Next missing metadata (Missing Metadata M7)', () => {
+		it('with from=missing-metadata an Admin gets the button just before Manage; it runs the shortcut', async () => {
+			const run = vi.spyOn(hotkeys, 'run').mockResolvedValue();
+			navigateTo('/games/g1?from=missing-metadata');
+			answers.push({ status: 200, body: game([1]) });
+			render(GamePage);
+
+			const next = await screen.findByRole('button', { name: 'Next missing metadata' });
+			expect(next.className).toBe('btn btn-sm btn-outline-primary');
+			expect(next.querySelector('i')!.className.trim()).toBe('bi bi-card-checklist');
+			expect(next.nextElementSibling!.querySelector(':scope > button')!.textContent?.trim()).toBe(
+				'Manage'
+			);
+			await fireEvent.click(next);
+			expect(run).toHaveBeenCalledWith('reports.missingMetadata.next');
+			run.mockRestore();
+		});
+
+		it('no button without from, or for a Site user', async () => {
+			answers.push({ status: 200, body: game([1]) });
+			const { unmount } = render(GamePage);
+			await screen.findByRole('button', { name: 'Download ZIP' });
+			expect(screen.queryByRole('button', { name: 'Next missing metadata' })).toBeNull();
+			unmount();
+
+			auth.set({ id: 2, username: 'site', roles: [], mustChangePassword: false });
+			navigateTo('/games/g1?from=missing-metadata');
+			answers.push({ status: 200, body: game([1]) });
+			render(GamePage);
+			await screen.findByRole('button', { name: 'Download ZIP' });
+			expect(screen.queryByRole('button', { name: 'Next missing metadata' })).toBeNull();
+		});
+
+		it('switching tabs keeps from', async () => {
+			navigateTo('/games/g1?from=missing-metadata');
+			answers.push({ status: 200, body: game([1]) });
+			render(GamePage);
+
+			await fireEvent.click(await screen.findByRole('tab', { name: 'Zip Contents' }));
+			expect(goto).toHaveBeenLastCalledWith('/games/g1?from=missing-metadata&tab=zip', {
+				replace: true,
+				reset: false
+			});
+			await fireEvent.click(screen.getByRole('tab', { name: 'Releases (1)' }));
+			expect(goto).toHaveBeenLastCalledWith('/games/g1?from=missing-metadata', {
+				replace: true,
+				reset: false
+			});
+			expect(screen.getByRole('button', { name: 'Next missing metadata' })).toBeTruthy();
+		});
 	});
 
 	it('the action row: ZIP, ROM, Google, Collections, then Manage; all btn-sm (B3)', async () => {
