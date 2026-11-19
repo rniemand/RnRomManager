@@ -202,6 +202,7 @@ Route — file under `src/RnRomManager.Web/src/routes/`.
 - `/reports/duplicates` — reports/duplicates/+page.svelte
 - `/reports/library-size` — reports/library-size/+page.svelte
 - `/reports/missing-images` — reports/missing-images/+page.svelte
+- `/reports/missing-metadata` — reports/missing-metadata/+page.svelte
 - `/reports/multiple-releases` — reports/multiple-releases/+page.svelte
 - `/reports` (layout) — reports/+layout.svelte
 - `/reports` — reports/+page.svelte

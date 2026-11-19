@@ -10,7 +10,10 @@
 	let { children }: { children: Snippet } = $props();
 
 	// RP1: every signed-in user; the actions inside keep their own roles. B20: Activity is Admin-only, its tab hidden.
+	// Missing Metadata M4: Admin-only too.
 	const activity = resolve('/reports/activity');
+	const missingMetadata = resolve('/reports/missing-metadata');
+	const adminOnly: string[] = [activity, missingMetadata];
 	const tabs = $derived([
 		{ href: resolve('/reports/library-size'), label: 'Library Size', icon: 'report-size' },
 		{
@@ -24,11 +27,20 @@
 			label: 'Multiple Releases',
 			icon: 'report-multiple-releases'
 		},
-		...(auth.isAdmin ? [{ href: activity, label: 'Activity', icon: 'activity' }] : [])
+		...(auth.isAdmin
+			? [
+					{
+						href: missingMetadata,
+						label: 'Missing Metadata',
+						icon: 'report-missing-metadata'
+					},
+					{ href: activity, label: 'Activity', icon: 'activity' }
+				]
+			: [])
 	]);
 </script>
 
-{#if page.url.pathname === activity && !auth.isAdmin}
+{#if adminOnly.includes(page.url.pathname) && !auth.isAdmin}
 	<!-- B20: one h1 for a Site user on the Admin-only route. -->
 	<NotAllowed />
 {:else}
