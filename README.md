@@ -45,7 +45,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Game Boy Color | `gbc` | In ZIP | `.gbc` | No-Intro | `gambatte` |
 | Game Gear | `gg` | In ZIP | `.gg`, `.sms` | No-Intro | `smsplus` |
 | GameCube | `gc` | Next to ZIP | `.iso` | Redump | — |
-| Master System | `sms` | In ZIP | `.sms` | No-Intro | `smsplus` |
+| Master System | `sms` | In ZIP | `.sms`, `.sg` | No-Intro | `smsplus` |
 | Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen` | No-Intro | `genesis_plus_gx` |
 | Nintendo 3DS | `3ds` | Next to ZIP | `.3ds`, `.cci`, `.cia` | No-Intro | — |
 | Nintendo 64 | `n64` | In ZIP | `.z64`, `.v64`, `.n64` | No-Intro | — |
