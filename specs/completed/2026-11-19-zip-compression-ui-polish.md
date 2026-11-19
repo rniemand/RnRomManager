@@ -1,6 +1,6 @@
 ---
 title: ZIP Compression, Missing Metadata Report and UI Polish
-status: in-progress
+status: completed
 created: 2026-11-19
 ---
 
