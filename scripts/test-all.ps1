@@ -50,6 +50,8 @@ try {
         }
     }
 
+    Invoke-Step 'codemap check' { & (Join-Path $PSScriptRoot 'codemap.ps1') -Check }
+
     Invoke-Step 'dotnet test' { & (Join-Path $PSScriptRoot 'test-dotnet.ps1') @testArgs }
 
     if ($Coverage) {

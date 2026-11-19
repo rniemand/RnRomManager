@@ -1,13 +1,13 @@
 # Change recipes
 
-Short playbooks for the changes this repo gets most often: where each change must reach, and the existing example to copy. Use them with [codemap.md](codemap.md), which has file paths and line numbers. Full detail is in [development.md](development.md) (read by section; see the codemap's Doc sections). The rules in [CONTRIBUTING.md](../CONTRIBUTING.md) still apply: every behaviour gets tests, and docs change in the same PR.
+Short playbooks for the changes this repo gets most often: where each change must reach, and the existing example to copy. Use them with [codemap.md](codemap.md), which has file paths and doc heading line numbers. Full detail is in [development.md](development.md) (read by section; see the codemap's Doc sections). The rules in [CONTRIBUTING.md](../CONTRIBUTING.md) still apply: every behaviour gets tests, and docs change in the same PR.
 
 ## Finding code cheaply
-1. Look the thing up in `docs/codemap.md`: route, page, job, handler, file, test or doc section.
+1. Grep `docs/codemap.md` (don't read it whole) for the thing: route, page, job, handler, file, test or doc section.
 2. Grep for the symbol, then read only the line range you need.
 3. Read docs by section (the codemap gives heading line numbers). Don't read `features.md` or `development.md` whole.
 4. Use an `explore-haiku` subagent only for sweeps the codemap can't answer, such as "every caller of X".
-5. After adding or moving routes, pages, jobs, files or doc headings, run `pwsh scripts/codemap.ps1` and commit `docs/codemap.md` with the change.
+5. At the end of every change, run `pwsh scripts/codemap.ps1` and commit `docs/codemap.md` with it. CI (`codemap` job) and `scripts/test-all.ps1` run `pwsh scripts/codemap.ps1 -Check` and fail on a stale map. A merge conflict in it is resolved by regenerating.
 
 ## API endpoint
 - Add it to `src/RnRomManager.Api/Endpoints/<Area>Endpoints.cs`, on the area's `MapGroup`. Admin-only routes use `.RequireAuthorization(AuthSetup.AdminOnly)`, on the group or on the route.
