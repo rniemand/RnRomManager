@@ -344,7 +344,7 @@ test("browse, search and filter the library", async () => {
   await openLibrary();
   await expect(page.getByText("29 games")).toBeVisible();
   await expectAccessible(page, "library grid");
-  // S1/L3: systems in display-name order after "All systems"; F3/L2: each with its game count, right-aligned.
+  // S1/L3: systems with ROMs in display-name order after "All systems"; F3/L2: each with its game count, right-aligned.
   await page.getByRole("button", { name: "System: All" }).click();
   const systemMenu = page.locator(".dropdown-menu.show");
   await expect(systemMenu.getByPlaceholder("Filter systems…")).toBeFocused();
@@ -360,7 +360,6 @@ test("browse, search and filter the library", async () => {
       .evaluateAll((rows) => rows.map((r) => (r as HTMLElement).dataset.value)),
   ).toEqual([
     "s32x",
-    "3do",
     "a2600",
     "a5200",
     "a7800",
@@ -368,9 +367,6 @@ test("browse, search and filter the library", async () => {
     "lynx",
     "coleco",
     "c64",
-    "amiga",
-    "pet",
-    "vic20",
     "gb",
     "gba",
     "gbc",
@@ -378,15 +374,12 @@ test("browse, search and filter the library", async () => {
     "gc",
     "sms",
     "md",
-    "3ds",
     "n64",
-    "nds",
     "nes",
     "switch",
     "psx",
     "psp",
     "saturn",
-    "segacd",
     "snes",
     "tg16",
     "vb",
