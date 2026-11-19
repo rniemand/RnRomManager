@@ -42,6 +42,9 @@ public static class AuditActions
     /// <summary>S6: the storage migration moved a legacy game's ROMs out of its ZIP.</summary>
     public const string RomsExternalized = "RomsExternalized";
 
+    /// <summary>ROM Zip Config B8: the storage job moved a game's ROMs from beside its ZIP into it.</summary>
+    public const string RomsEmbedded = "RomsEmbedded";
+
     /// <summary>B13: a save was added, renamed/re-described or replaced, or deleted.</summary>
     public const string SaveAdded = "SaveAdded";
     public const string SaveUpdated = "SaveUpdated";
@@ -70,7 +73,7 @@ public static class AuditActions
         Ingested, ZipRepaired, ExtensionRenamed, MovedToFailed, MovedToDuplicates, ArchiveDeleted, ReviewDeleted, GameUpdated,
         ReleaseDeleted, GameDeleted, ImageAdded, ImageDeleted, CoverSet, PrimarySet, MediaFetched, ReleaseMoved, GamesMerged, DatsRefreshed,
         IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved, GenreLogoReplaced, GenreLogoRemoved,
-        SystemLogoReplaced, SystemLogoRemoved, BackupRestored, RomsExternalized,
+        SystemLogoReplaced, SystemLogoRemoved, BackupRestored, RomsExternalized, RomsEmbedded,
         SaveAdded, SaveUpdated, SaveDeleted, UserCreated, UserTypeChanged, UserDisabled, UserEnabled, PasswordReset,
         PasswordChanged, SignedIn, SignInFailed, LockedOut, GamePlayed,
     ];

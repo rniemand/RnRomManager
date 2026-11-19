@@ -41,6 +41,7 @@ public class StorageMigrationStarterTests
     private JobLock _lock = null!;
     private IJobRepository _jobs = null!;
     private IGameRepository _games = null!;
+    private RnRomManager.Core.Storage.IRomStorageSettings _romStorage = null!;
     private StorageMigrationStarter _starter = null!;
     private int _created;
 
@@ -52,6 +53,7 @@ public class StorageMigrationStarterTests
         _lock = new JobLock();
         _jobs = Substitute.For<IJobRepository>();
         _games = Substitute.For<IGameRepository>();
+        _romStorage = Substitute.For<RnRomManager.Core.Storage.IRomStorageSettings>();
         var lifetime = Substitute.For<IHostApplicationLifetime>();
         lifetime.ApplicationStarted.Returns(_appStarted.Token);
         var runner = new JobRunner(_jobs, _lock, Substitute.For<IUserRepository>(), _time, NullLogger<JobRunner>.Instance);
@@ -62,7 +64,7 @@ public class StorageMigrationStarterTests
                 var job = new NoopTestJob();
                 job.Release.SetResult();
                 return job;
-            }, _games, new SystemRegistry([new LegacyExternalTestHandler(), new ExternalTestHandler()]), _time,
+            }, _games, new SystemRegistry([new LegacyExternalTestHandler(_romStorage), new ExternalTestHandler()]), _time,
             NullLogger<StorageMigrationStarter>.Instance);
     }
 
@@ -76,7 +78,7 @@ public class StorageMigrationStarterTests
 
     private Task<int> Starts() => Task.FromResult(_jobs.ReceivedCalls().Count(c => c.GetMethodInfo().Name == nameof(IJobRepository.InsertAsync)));
 
-    private int Checks => _games.ReceivedCalls().Count(c => c.GetMethodInfo().Name == nameof(IGameRepository.ListLegacyEmbeddedAsync));
+    private int Checks => _games.ReceivedCalls().Count(c => c.GetMethodInfo().Name == nameof(IGameRepository.ListStorageMovesAsync));
 
     private static async Task Until(Func<bool> condition)
     {
@@ -86,7 +88,7 @@ public class StorageMigrationStarterTests
     }
 
     private void Returns(params GameRow[] rows) =>
-        _games.ListLegacyEmbeddedAsync(Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>()).Returns(rows);
+        _games.ListStorageMovesAsync(Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>()).Returns(rows);
 
     [Test]
     public async Task NeverBlocksStartup_AndChecksOnlyAfterApplicationStarted()
@@ -114,9 +116,12 @@ public class StorageMigrationStarterTests
         Assert.That((Checks, await Starts(), _created), Is.EqualTo((1, 0, 0)));
     }
 
-    [Test]
-    public async Task LegacyGames_StartTheJobOnce_ForTheLegacySystemsOnly()
+    /// <summary>B11: resumes moves in either direction; the system goes to the list of its current storage.</summary>
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task PendingGames_StartTheJobOnce_ForTheMovableSystemsOnly(bool embed)
     {
+        _romStorage.Override(LegacyExternalTestHandler.SystemId).Returns(embed);
         Returns(Legacy);
         _appStarted.Cancel();
 
@@ -124,8 +129,10 @@ public class StorageMigrationStarterTests
         await _starter.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(5));
 
         Assert.That(await Starts(), Is.EqualTo(1));
-        await _games.Received(1).ListLegacyEmbeddedAsync(
-            Arg.Is<IReadOnlyCollection<string>>(ids => ids.SequenceEqual(new[] { LegacyExternalTestHandler.SystemId })), Arg.Any<CancellationToken>());
+        string[] movable = [LegacyExternalTestHandler.SystemId], none = [];
+        await _games.Received(1).ListStorageMovesAsync(
+            Arg.Is<IReadOnlyCollection<string>>(ids => ids.SequenceEqual(embed ? movable : none)),
+            Arg.Is<IReadOnlyCollection<string>>(ids => ids.SequenceEqual(embed ? none : movable)), Arg.Any<CancellationToken>());
         await _jobs.Received(1).InsertAsync(Arg.Is<Job>(j => j.Trigger == JobTrigger.Startup && j.RequestedBy == null), Arg.Any<CancellationToken>());
     }
 
@@ -152,7 +159,7 @@ public class StorageMigrationStarterTests
     [Test]
     public async Task AFailedCheck_IsRetried()
     {
-        _games.ListLegacyEmbeddedAsync(Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
+        _games.ListStorageMovesAsync(Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<IReadOnlyCollection<string>>(), Arg.Any<CancellationToken>())
             .Returns(_ => throw new InvalidOperationException("db down"), _ => Task.FromResult<IReadOnlyList<GameRow>>([Legacy]));
         _appStarted.Cancel();
         await _starter.StartAsync(CancellationToken.None);

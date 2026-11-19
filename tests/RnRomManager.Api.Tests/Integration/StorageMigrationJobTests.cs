@@ -123,7 +123,7 @@ public class StorageMigrationJobTests
 
         var mirrored = (await Service<IRomRepository>().ListExternalAsync(default)).Where(r => r.GameId == legacy.Game.GameId).ToList();
         Assert.That(mirrored.Select(r => r.ExternalFileName), Is.EquivalentTo(game.Roms.Select(r => r.ExternalFileName)));
-        Assert.That(await Service<IGameRepository>().ListLegacyEmbeddedAsync([LegacyExternalTestHandler.SystemId], default), Is.Empty);
+        Assert.That(await MovesLeft(), Is.Empty);
 
         var row = (await Service<IJobRepository>().GetAsync(started.Id, default))!;
         Assert.That((row.Type, row.Trigger, row.Status, row.Mode, row.RequestedBy),
@@ -305,8 +305,9 @@ public class StorageMigrationJobTests
         Assert.That((await Items(jobId)).Select(i => i.GameId), Is.EqualTo(new Guid?[] { alpha.Game.GameId }));
     }
 
+    /// <summary>B8: a published but unmirrored out-of-ZIP move (stale embedded rows) is re-mirrored and leaves the query.</summary>
     [Test]
-    public async Task ACandidateWhoseZipIsNoLongerLegacy_IsSkipped_WithNoItem()
+    public async Task ACandidateWhoseZipIsAlreadyMoved_IsReMirrored()
     {
         var legacy = await WriteLegacy("Alpha");
         await RunAsync(Job(), Guid.NewGuid());
@@ -317,8 +318,143 @@ public class StorageMigrationJobTests
 
         var summary = await RunAsync(Job(), jobId);
 
-        Assert.That((summary.GetProperty("migrated").GetInt32(), summary.GetProperty("error").GetInt32()), Is.EqualTo((0, 0)));
-        Assert.That(await Items(jobId), Is.Empty);
+        Assert.That((summary.GetProperty("migrated").GetInt32(), summary.GetProperty("error").GetInt32()), Is.EqualTo((1, 0)));
+        var item = (await Items(jobId)).Single();
+        Assert.That((item.Outcome, item.Details), Is.EqualTo(("Migrated", (string?)"already moved; database updated")));
         Assert.That(File.ReadAllBytes(legacy.Zip), Is.EqualTo(migrated));
+        Assert.That(await DbEmbedded(legacy.Game.GameId), Is.False);
+        Assert.That(await MovesLeft(), Is.Empty);
+    }
+
+    // --- into the ZIP (ROM Zip Config B8) ---
+
+    private Task<IReadOnlyList<GameRow>> MovesLeft() =>
+        StorageMigrationJob.ListMovesAsync(Service<IGameRepository>(), Service<ISystemRegistry>(), default);
+
+    private async Task<bool> DbEmbedded(Guid gameId) =>
+        (await Service<IRomRepository>().ListByGameAsync(gameId, default)).All(r => r.ExternalFileName is null);
+
+    /// <summary>A legacy game moved beside its ZIP by a first run, then its system switched to embed.</summary>
+    private async Task<(Legacy Game, string[] Files)> WriteExternalThenEmbed(string title, int romCount = 1)
+    {
+        var legacy = await WriteLegacy(title, romCount);
+        await RunAsync(Job(), Guid.NewGuid());
+        var files = ReadZip(legacy.Zip).Roms.Select(r => Path.Combine(legacy.Folder, r.ExternalFileName!)).ToArray();
+        Assert.That(files.Select(File.Exists), Is.All.True);
+        await Service<IRomStorageSettings>().SetAsync(LegacyExternalTestHandler.SystemId, true, default);
+        return (legacy, files);
+    }
+
+    [Test]
+    public async Task ExternalGame_UnderEmbed_IsMovedIntoTheZip_FilesDeleted_EntriesKept_Mirrored_Audited()
+    {
+        var (legacy, files) = await WriteExternalThenEmbed("Alpha", romCount: 2);
+        var jobId = Guid.NewGuid();
+
+        var summary = await RunAsync(Job(), jobId);
+
+        Assert.That((summary.GetProperty("migrated").GetInt32(), summary.GetProperty("error").GetInt32()), Is.EqualTo((1, 0)));
+        Assert.That(InfoJsonSerializer.Serialize(ReadZip(legacy.Zip)), Is.EqualTo(InfoJsonSerializer.Serialize(legacy.Game)), "every ROM inside again");
+        Assert.That(EntryNames(legacy.Zip), Is.EqualTo(new[]
+        {
+            "images/boxart-01.png", LibraryZip.InfoJsonEntry, LibraryZip.NoteEntry("Alpha (0).nds"),
+            LibraryZip.RomEntry("Alpha (0).nds"), LibraryZip.RomEntry("Alpha (1).nds"),
+        }.Order(StringComparer.Ordinal)));
+        using (var archive = ZipFile.OpenRead(legacy.Zip))
+        {
+            for (var i = 0; i < legacy.Roms.Length; i++)
+            {
+                using var entry = archive.GetEntry(LibraryZip.RomEntry($"Alpha ({i}).nds"))!.Open();
+                using var copy = new MemoryStream();
+                entry.CopyTo(copy);
+                Assert.That(copy.ToArray(), Is.EqualTo(legacy.Roms[i]));
+            }
+        }
+        Assert.That(files.Select(File.Exists), Is.All.False);
+        Assert.That(await DbEmbedded(legacy.Game.GameId), Is.True);
+        Assert.That(await MovesLeft(), Is.Empty);
+        var item = (await Items(jobId)).Single();
+        Assert.That((item.GameId, item.Outcome, item.Reason), Is.EqualTo(((Guid?)legacy.Game.GameId, "Migrated", (string?)null)));
+
+        await Service<RnRomManager.Api.AuditWriter>().FlushAsync();
+        await using var db = Service<IDbConnectionFactory>().Create();
+        var audit = (await db.QueryAsync<(string Action, string Path, string Details)>(
+            "SELECT action, path, details FROM audit_events WHERE action = 'RomsEmbedded'")).Single();
+        Assert.That(audit, Is.EqualTo((AuditActions.RomsEmbedded, "roms/legacy/A/Alpha.zip", $"2 ROM(s), {legacy.Roms.Sum(r => (long)r.Length)} bytes")));
+    }
+
+    [TestCase(true, "VerifyFailed", TestName = "IntoZip_BadFile_LeavesZipAndFiles changed bytes")]
+    [TestCase(false, "IoError", TestName = "IntoZip_BadFile_LeavesZipAndFiles missing file")]
+    public async Task IntoZip_BadFile_LeavesZipAndFiles(bool changed, string reason)
+    {
+        var (legacy, files) = await WriteExternalThenEmbed("Alpha", romCount: 2);
+        if (changed)
+        {
+            var bytes = File.ReadAllBytes(files[1]);
+            bytes[0] ^= 0xFF;
+            File.WriteAllBytes(files[1], bytes);
+        }
+        else
+        {
+            File.Delete(files[1]);
+        }
+        var zipBytes = File.ReadAllBytes(legacy.Zip);
+        var before = Directory.GetFiles(legacy.Folder).ToDictionary(f => f, File.ReadAllBytes);
+        var jobId = Guid.NewGuid();
+
+        await RunAsync(Job(), jobId);
+
+        var item = (await Items(jobId)).Single();
+        Assert.That((item.Outcome, item.Reason), Is.EqualTo(("Error", (string?)reason)));
+        Assert.That(File.ReadAllBytes(legacy.Zip), Is.EqualTo(zipBytes));
+        Assert.That(Directory.GetFiles(legacy.Folder).ToDictionary(f => f, File.ReadAllBytes), Is.EqualTo(before));
+    }
+
+    [Test]
+    public async Task IntoZip_ShortSpace_IsInsufficientSpace()
+    {
+        var (legacy, files) = await WriteExternalThenEmbed("Alpha");
+        var zipBytes = File.ReadAllBytes(legacy.Zip);
+        var needed = legacy.Roms[0].Length + zipBytes.Length + StorageMigrationJob.SpaceMarginBytes;
+        var jobId = Guid.NewGuid();
+
+        await RunAsync(Job(free: new FakeFreeSpace(_ => needed - 1)), jobId);
+
+        var item = (await Items(jobId)).Single();
+        Assert.That((item.Outcome, item.Reason), Is.EqualTo(("Error", (string?)"InsufficientSpace")));
+        Assert.That(File.ReadAllBytes(legacy.Zip), Is.EqualTo(zipBytes));
+        Assert.That(File.Exists(files[0]), Is.True);
+    }
+
+    private sealed class FailingMirror(ILibraryMirror inner) : ILibraryMirror
+    {
+        public Task ApplyAsync(IReadOnlyList<MirrorEntry> replace, IReadOnlyCollection<Guid> delete, CancellationToken cancellationToken) =>
+            replace.Count > 0 ? throw new InvalidOperationException("db down") : inner.ApplyAsync(replace, delete, cancellationToken);
+    }
+
+    /// <summary>B8: a mirror failure after the publish deletes no file; the resume re-mirrors the game and it leaves the query.</summary>
+    [Test]
+    public async Task IntoZip_MirrorFailure_KeepsTheFiles_AndTheResumeReMirrors()
+    {
+        var (legacy, files) = await WriteExternalThenEmbed("Alpha");
+        var failing = ActivatorUtilities.CreateInstance<StorageMigrationJob>(_factory.Services,
+            (ILibraryMirror)new FailingMirror(Service<ILibraryMirror>()));
+        var first = Guid.NewGuid();
+
+        await RunAsync(failing, first);
+
+        Assert.That((await Items(first)).Single().Reason, Is.EqualTo("DbWriteFailed"));
+        Assert.That(ReadZip(legacy.Zip).Roms.Single().ExternalFileName, Is.Null, "the ZIP was published");
+        Assert.That(File.Exists(files[0]), Is.True, "the DB rows still name it");
+        Assert.That(await DbEmbedded(legacy.Game.GameId), Is.False);
+
+        var resume = Guid.NewGuid();
+        var summary = await RunAsync(Job(), resume);
+
+        Assert.That(summary.GetProperty("migrated").GetInt32(), Is.EqualTo(1));
+        Assert.That((await Items(resume)).Single().Details, Is.EqualTo("already moved; database updated"));
+        Assert.That(await DbEmbedded(legacy.Game.GameId), Is.True);
+        Assert.That(await MovesLeft(), Is.Empty);
+        Assert.That(File.Exists(files[0]), Is.True, "left for Integrity to report as OrphanFile (B14)");
     }
 }

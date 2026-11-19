@@ -10,7 +10,8 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Core.Storage;
 
 /// <summary>
-/// S4–S6: moves every legacy game's embedded ROMs (a <see cref="ISystemHandler.LegacyEmbeddedRoms"/> system's ZIP
+/// ROM Zip Config B7–B8: moves every game whose layout differs from its system's storage, in either direction. Into the
+/// ZIP: see <c>StorageMigrationJob.Embed.cs</c>. Out of the ZIP, S4–S6: moves every legacy game's embedded ROMs (a <see cref="ISystemHandler.LegacyEmbeddedRoms"/> system's ZIP
 /// with all ROMs inside) next to its ZIP. Per game: each ROM entry is streamed to <c>cache/work/storage-migration/</c>
 /// while hashed and checked against <c>info.json</c>, moved next to the ZIP under its external name, then the ZIP is
 /// rewritten without <c>roms/</c> entries (notes, images and other entries carried) and mirrored. A failure before
@@ -19,7 +20,7 @@ namespace RnRomManager.Core.Storage;
 /// free on the library volume and its largest ROM free on the cache volume. One job item per
 /// game; cancel and shutdown stop between games.
 /// </summary>
-public sealed class StorageMigrationJob(IGameRepository games, IRomRepository roms, ILibraryMirror mirror, InfoJsonReader reader,
+public sealed partial class StorageMigrationJob(IGameRepository games, IRomRepository roms, ILibraryMirror mirror, InfoJsonReader reader,
     ISystemRegistry systems, IJobItemRepository items, IOptions<PathsOptions> paths, IAuditLog audit, IFreeSpace freeSpace, TimeProvider time,
     ILogger<StorageMigrationJob> logger) : IJob
 {
@@ -36,10 +37,23 @@ public sealed class StorageMigrationJob(IGameRepository games, IRomRepository ro
     /// <summary>Test seams: the writer's hooks for the ZIP rewrite.</summary>
     public LibraryZipWriterHooks? WriterHooks { get; set; }
 
+    /// <summary>B7: the ids of the <see cref="ISystemHandler.LegacyEmbeddedRoms"/> systems, split by their current storage.</summary>
+    public static (IReadOnlyList<string> Embed, IReadOnlyList<string> External) MoveSystems(ISystemRegistry systems)
+    {
+        var movable = systems.All.Where(h => h.LegacyEmbeddedRoms).ToList();
+        return ([.. movable.Where(h => h.EmbedRomsInZip).Select(h => h.Id)], [.. movable.Where(h => !h.EmbedRomsInZip).Select(h => h.Id)]);
+    }
+
+    /// <summary>B7: the games the job would move (candidates; each ZIP is re-opened to decide).</summary>
+    public static Task<IReadOnlyList<GameRow>> ListMovesAsync(IGameRepository games, ISystemRegistry systems, CancellationToken cancellationToken)
+    {
+        var (embed, external) = MoveSystems(systems);
+        return games.ListStorageMovesAsync(embed, external, cancellationToken);
+    }
+
     public async Task<object?> RunAsync(JobContext context, CancellationToken cancellationToken)
     {
-        var legacySystems = systems.All.Where(h => h.LegacyEmbeddedRoms).Select(h => h.Id).ToList();
-        var candidates = await games.ListLegacyEmbeddedAsync(legacySystems, cancellationToken).ConfigureAwait(false);
+        var candidates = await ListMovesAsync(games, systems, cancellationToken).ConfigureAwait(false);
         context.Progress.SetTotal(candidates.Count);
         int migrated = 0, error = 0;
 
@@ -62,16 +76,18 @@ public sealed class StorageMigrationJob(IGameRepository games, IRomRepository ro
 
             if (outcome.Skipped)
             {
-                logger.LogInformation("Storage migration: {ZipPath} no longer holds its ROMs; skipped", row.ZipPath);
+                logger.LogInformation("Storage migration: {ZipPath} is already in its system's layout; skipped", row.ZipPath);
             }
             else
             {
                 if (outcome.Code is null)
                 {
                     migrated++;
-                    audit.Record(new AuditEvent(AuditActions.RomsExternalized, context.Actor, row.SystemId, row.Id, AuditPaths.Library(row.ZipPath),
-                        Details: $"{outcome.Roms} ROM(s), {outcome.Bytes} bytes"));
-                    logger.LogInformation("Storage migration: {ZipPath} now keeps {Roms} ROM(s) next to it", row.ZipPath, outcome.Roms);
+                    if (outcome.Action is { } action)
+                        audit.Record(new AuditEvent(action, context.Actor, row.SystemId, row.Id, AuditPaths.Library(row.ZipPath),
+                            Details: $"{outcome.Roms} ROM(s), {outcome.Bytes} bytes"));
+                    logger.LogInformation("Storage migration: {ZipPath}: {Roms} ROM(s) moved {Direction}", row.ZipPath, outcome.Roms,
+                        outcome.Action == AuditActions.RomsEmbedded ? "into it" : outcome.Action is null ? "earlier; re-mirrored" : "next to it");
                 }
                 else
                 {
@@ -87,7 +103,7 @@ public sealed class StorageMigrationJob(IGameRepository games, IRomRepository ro
                     SourcePath = AuditPaths.Library(row.ZipPath),
                     Outcome = outcome.Code is null ? Migrated : Error,
                     Reason = outcome.Code,
-                    Details = outcome.Details,
+                    Details = outcome.Code is null && outcome.Action is null ? "already moved; database updated" : outcome.Details,
                     CreatedAt = time.GetUtcNow().UtcDateTime,
                 }, CancellationToken.None).ConfigureAwait(false);
             }
@@ -96,7 +112,8 @@ public sealed class StorageMigrationJob(IGameRepository games, IRomRepository ro
         return new { migrated, error };
     }
 
-    private sealed record Outcome(string? Code = null, string? Details = null, int Roms = 0, long Bytes = 0, bool Skipped = false);
+    /// <param name="Action">The audit action of a move; null for a success that only re-mirrored (B8).</param>
+    private sealed record Outcome(string? Code = null, string? Details = null, int Roms = 0, long Bytes = 0, bool Skipped = false, string? Action = null);
 
     private async Task<Outcome> MigrateAsync(GameRow row)
     {
@@ -108,8 +125,12 @@ public sealed class StorageMigrationJob(IGameRepository games, IRomRepository ro
             return new("ZipUnreadable", target.Details);
         using var existing = target.Zip!;
         var game = target.Game!;
-        if (systems.ById(game.System) is not { } handler || !RomStorage.IsPending(handler, game))
+        if (systems.ById(game.System) is not { } handler)
             return new(Skipped: true);
+        if (!RomStorage.IsPending(handler, game))
+            return await RemirrorIfStaleAsync(row, game, existing.Path).ConfigureAwait(false);
+        if (handler.EmbedRomsInZip)
+            return await EmbedAsync(row, game, existing).ConfigureAwait(false);
 
         var folder = ExternalRomPath.ClassifyDirectory(library, Path.GetDirectoryName(existing.Path)!);
         if (folder.Status != ExternalPathStatus.Found)
@@ -197,7 +218,7 @@ public sealed class StorageMigrationJob(IGameRepository games, IRomRepository ro
             {
                 return new("DbWriteFailed", ex.Message);
             }
-            return new(Roms: game.Roms.Count, Bytes: game.Roms.Sum(r => r.Metadata.SizeBytes));
+            return new(Roms: game.Roms.Count, Bytes: game.Roms.Sum(r => r.Metadata.SizeBytes), Action: AuditActions.RomsExternalized);
         }
         finally
         {

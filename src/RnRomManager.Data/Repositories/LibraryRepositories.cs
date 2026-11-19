@@ -334,17 +334,21 @@ public sealed class GameRepository : IGameRepository
             """, cancellationToken: cancellationToken))).AsList();
     }
 
-    public async Task<IReadOnlyList<GameRow>> ListLegacyEmbeddedAsync(IReadOnlyCollection<string> systemIds, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<GameRow>> ListStorageMovesAsync(IReadOnlyCollection<string> embedSystemIds,
+        IReadOnlyCollection<string> externalSystemIds, CancellationToken cancellationToken)
     {
-        if (systemIds.Count == 0)
+        if (embedSystemIds.Count == 0 && externalSystemIds.Count == 0)
             return [];
         await using var connection = _connections.Create();
+        // Dapper expands an empty list to a never-true IN.
         return (await connection.QueryAsync<GameRow>(new CommandDefinition($"""
             {Select} g
-            WHERE g.system_id IN @systemIds
-              AND EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND r.external_file_name IS NULL)
+            WHERE (g.system_id IN @embedSystemIds
+                   AND EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND r.external_file_name IS NOT NULL))
+               OR (g.system_id IN @externalSystemIds
+                   AND EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND r.external_file_name IS NULL))
             ORDER BY g.zip_path
-            """, new { systemIds }, cancellationToken: cancellationToken))).AsList();
+            """, new { embedSystemIds, externalSystemIds }, cancellationToken: cancellationToken))).AsList();
     }
 
     /// <summary>Concatenated <c>region_key</c>s (<c>|USA||Europe|</c>) → distinct regions, sorted ordinally.</summary>

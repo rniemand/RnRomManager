@@ -3,6 +3,7 @@ using RnRomManager.Core.Database;
 using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api.Endpoints;
@@ -30,12 +31,12 @@ public static class IntegrityEndpoints
         api.MapGet("/jobs/storage-migration", async (HttpContext ctx, IGameRepository games, ISystemRegistry systems) =>
             Results.Ok(new
             {
-                legacyGames = (await games.ListLegacyEmbeddedAsync(StorageMigrationStarter.LegacySystems(systems), ctx.RequestAborted)).Count,
+                legacyGames = (await StorageMigrationJob.ListMovesAsync(games, systems, ctx.RequestAborted)).Count,
             })).RequireAuthorization(AuthSetup.AdminOnly);
         api.MapPost("/jobs/storage-migration", async (HttpContext ctx, JobRunner runner, StorageMigrationJobFactory createJob, IGameRepository games,
             ISystemRegistry systems) =>
         {
-            if ((await games.ListLegacyEmbeddedAsync(StorageMigrationStarter.LegacySystems(systems), ctx.RequestAborted)).Count == 0)
+            if ((await StorageMigrationJob.ListMovesAsync(games, systems, ctx.RequestAborted)).Count == 0)
                 return Results.NoContent();
             var started = await runner.StartAsync(createJob(), JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
             return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });

@@ -5,7 +5,7 @@ using RnRomManager.TestData;
 
 namespace RnRomManager.Data.Tests.Database;
 
-/// <summary>S4: <c>ListLegacyEmbeddedAsync</c> selects candidates of the given systems that still hold a ROM inside the ZIP.</summary>
+/// <summary>S4, ROM Zip Config B7: <c>ListStorageMovesAsync</c> selects candidates of the given systems whose layout differs from their storage.</summary>
 [Category("Integration")]
 public class GameRepositoryLegacyTests
 {
@@ -32,7 +32,7 @@ public class GameRepositoryLegacyTests
     }
 
     [Test]
-    public async Task ListsOnlyLegacyCandidatesOfTheGivenSystems_ByZipPath()
+    public async Task ExternalSystems_ListGamesWithARomInsideTheZip_ByZipPath()
     {
         var zeta = await Mirror("nds", "nds/Z/Zeta.zip", (string?)null);
         var alpha = await Mirror("nds", "nds/A/Alpha.zip", null, null);
@@ -40,9 +40,24 @@ public class GameRepositoryLegacyTests
         await Mirror("nds", "nds/E/External.zip", "External.R0.nds");
         await Mirror("gb", "gb/T/Tetris.zip", (string?)null);
 
-        var listed = await _games.ListLegacyEmbeddedAsync(["nds"], default);
+        var listed = await _games.ListStorageMovesAsync([], ["nds"], default);
 
         Assert.That(listed.Select(g => g.Id), Is.EqualTo(new[] { alpha, mixed, zeta }));
-        Assert.That(await _games.ListLegacyEmbeddedAsync([], default), Is.Empty);
+        Assert.That(await _games.ListStorageMovesAsync([], [], default), Is.Empty);
+    }
+
+    [Test]
+    public async Task EmbedSystems_ListGamesWithARomBesideTheZip_BothDirectionsTogether()
+    {
+        await Mirror("nds", "nds/Z/Zeta.zip", (string?)null);
+        var mixed = await Mirror("nds", "nds/M/Mixed.zip", "Mixed.R0.nds", null);
+        var external = await Mirror("nds", "nds/E/External.zip", "External.R0.nds");
+        var legacy = await Mirror("legacy", "legacy/L/Legacy.zip", (string?)null);
+        await Mirror("legacy", "legacy/X/Ext.zip", "Ext.R0.nds");
+        await Mirror("ext", "ext/O/Other.zip", "Other.R0.nds");
+
+        var listed = await _games.ListStorageMovesAsync(["nds"], ["legacy"], default);
+
+        Assert.That(listed.Select(g => g.Id), Is.EqualTo(new[] { legacy, external, mixed }), "only the given systems, by ZIP path");
     }
 }
