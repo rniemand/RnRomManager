@@ -137,6 +137,24 @@ describe('jobs polling', () => {
 		});
 	});
 
+	it('keeps one poll chain when watched from effects and refreshed while a refresh is in flight', async () => {
+		const urls = stubFetch(() => ok({ ...job('j3'), current: urls.length }));
+		const cleanup = $effect.root(() => {
+			$effect(() => jobs.watch());
+			$effect(() => jobs.watch());
+		});
+		void jobs.refresh(); // overlaps the effects' refresh, as starting a job does
+		await vi.advanceTimersByTimeAsync(0);
+		const start = urls.length;
+
+		await vi.advanceTimersByTimeAsync(pollIntervalMs * 4);
+
+		expect(urls.length - start).toBe(4);
+		cleanup();
+		await vi.advanceTimersByTimeAsync(pollIntervalMs * 3);
+		expect(urls.length - start).toBe(4);
+	});
+
 	it('stops polling when the last watcher leaves', async () => {
 		const urls = stubFetch(() => ok(job('j2')));
 

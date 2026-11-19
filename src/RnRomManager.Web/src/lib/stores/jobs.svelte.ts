@@ -1,3 +1,4 @@
+import { untrack } from 'svelte';
 import { api } from '../api/client';
 import type { CurrentJob } from '../api/types';
 
@@ -25,7 +26,8 @@ class Jobs {
 	watch(): () => void {
 		if (this.#watchers++ === 0)
 			document.addEventListener('visibilitychange', this.#visibilityChanged);
-		void this.refresh();
+		// Untracked: refresh reads `current`, which would make a calling $effect re-run (and re-watch) on every poll.
+		untrack(() => void this.refresh());
 		return () => {
 			this.#watchers--;
 			if (this.#watchers === 0) {
@@ -52,6 +54,7 @@ class Jobs {
 		this.current = next;
 		if (previous && (!next || next.id !== previous.id))
 			for (const listener of this.#ended) listener(previous);
+		this.#stop(); // an overlapping refresh may have scheduled one meanwhile; keep a single poll chain
 		if (this.#watchers === 0) return;
 		if (next) this.#timer = setTimeout(() => void this.refresh(), pollIntervalMs);
 		else if (document.visibilityState === 'visible')
