@@ -196,6 +196,33 @@ public class IngestJobTests
         await _reviews.Received(1).DeleteAsync(Arg.Is<IReadOnlyCollection<long>>(ids => ids.SequenceEqual(new long[] { 2, 4 })), Arg.Any<CancellationToken>());
     }
 
+    /// <summary>
+    /// ROM Zip Config B3: Pending rows of a configurable system created under the other storage mode are cleaned up and
+    /// their files processed again under the current one.
+    /// </summary>
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task PendingRows_OfAConfigurableSystem_FromTheOtherMode_AreRetried(bool embed)
+    {
+        var settings = Substitute.For<RnRomManager.Core.Storage.IRomStorageSettings>();
+        settings.Override(LegacyExternalTestHandler.SystemId).Returns(embed);
+        ISystemHandler[] handlers = [.. _systems.All, new LegacyExternalTestHandler(settings)];
+        _systems.All.Returns(handlers);
+        _systems.ById(Arg.Any<string>()).Returns(c => handlers.FirstOrDefault(h => h.Id == c.Arg<string>()));
+        _systems.ByFamily(LegacyExternalTestHandler.SystemId).Returns([handlers[^1]]);
+        LoadDats(Gb, Gbc, LegacyExternalTestHandler.DatNameValue);
+        var kept = Drop(LegacyExternalTestHandler.SystemId, "kept.nds", TimeSpan.FromHours(1));
+        _reviews.ListPendingSourcesAsync(default).ReturnsForAnyArgs([
+            new PendingReviewSource(1, LegacyExternalTestHandler.SystemId, kept, null),
+            new PendingReviewSource(2, LegacyExternalTestHandler.SystemId, _dir.Combine("ingest", LegacyExternalTestHandler.SystemId, "gone.nds"), null),
+        ]);
+
+        await RunAsync();
+
+        await _reviews.Received(1).DeleteAsync(Arg.Is<IReadOnlyCollection<long>>(ids => ids.SequenceEqual(new long[] { 2 })), Arg.Any<CancellationToken>());
+        Assert.That(Recorded().Select(i => i.SourcePath), Is.EqualTo(new[] { kept }), "the kept source is processed again");
+    }
+
     [Test]
     public async Task TooRecentFiles_AreSkipped_OlderOnesProcessed()
     {
