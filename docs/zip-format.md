@@ -17,8 +17,8 @@ roms/
   gba/                  Game Boy Advance
   n64/                  Nintendo 64 (always stored big-endian, as .z64)
   3ds/                  Nintendo 3DS (external: .3ds, .cci, .cia files next to the ZIP)
-  nds/                  Nintendo DS (external: .nds files next to the ZIP; games stored before then keep them
-                        inside until the storage migration job moves them out)
+  nds/                  Nintendo DS (external by default: .nds files next to the ZIP; an Admin can store them
+                        inside instead, and the storage job moves games between the two)
   nes/                  Nintendo Entertainment System (headered .nes, header included)
   snes/                 Super Nintendo Entertainment System (stored as .sfc, copier header stripped)
   vb/                   Virtual Boy (.vb)
