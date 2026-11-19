@@ -117,7 +117,15 @@
 					disabled={closing}
 				></button>
 			</div>
-			<div class="modal-body">{@render children?.()}</div>
+			{#if scrollable}
+				<!-- U2: a scrolling body needs keyboard access (axe scrollable-region-focusable): it takes focus itself. -->
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex (a focusable scroll region is the WCAG-recommended fix) -->
+				<div class="modal-body" role="region" aria-label={title} tabindex="0">
+					{@render children?.()}
+				</div>
+			{:else}
+				<div class="modal-body">{@render children?.()}</div>
+			{/if}
 			<div class="modal-footer">
 				<button
 					type="button"

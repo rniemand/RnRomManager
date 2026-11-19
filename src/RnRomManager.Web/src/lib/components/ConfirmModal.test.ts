@@ -37,7 +37,13 @@ describe('ConfirmModal', () => {
 		render(ConfirmModal, { open: false, title: 'T', scrollable: true, onconfirm: () => {} });
 		expect(
 			document.querySelector('.modal-dialog')!.classList.contains('modal-dialog-scrollable')
-		).toBe(true);
+		).toBe(true); // The scrolling body is reachable and scrollable with the keyboard (axe scrollable-region-focusable).
+		const body = document.querySelector('.modal-body')!;
+		expect(['tabindex', 'role', 'aria-label'].map((n) => body.getAttribute(n))).toEqual([
+			'0',
+			'region',
+			'T'
+		]);
 	});
 
 	it('shows Cancel and the confirm button when onconfirm is given', () => {
