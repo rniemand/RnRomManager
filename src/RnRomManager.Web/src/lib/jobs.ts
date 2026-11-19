@@ -1,5 +1,5 @@
 /** Display helpers for jobs (spec §3.1 statuses, §7.2 outcomes). */
-import type { JobStatus, JobStep } from './api/types';
+import type { CurrentJob, JobStatus, JobStep } from './api/types';
 import { formatSize } from './format';
 
 export const outcomes = [
@@ -36,6 +36,20 @@ export function statusClass(status: string): string {
 
 export function outcomeClass(outcome: string): string {
 	return outcomeClasses[outcome] ?? 'text-bg-secondary';
+}
+
+const jobLabels: Record<CurrentJob['type'], string> = {
+	Ingest: 'Ingest',
+	Integrity: 'Integrity check',
+	DatRefresh: 'DAT refresh',
+	MediaRetry: 'Media retry',
+	ReviewResolve: 'Review',
+	StorageMigration: 'Moving ROMs'
+};
+
+/** ROM Zip Config B17: a job type's short label (footer, Jobs page); an unknown type shows as is. */
+export function jobLabel(type: string): string {
+	return jobLabels[type as CurrentJob['type']] ?? type;
 }
 
 /** B4: a Review resolution runs to its end, so it has no Cancel button. */

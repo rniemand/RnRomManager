@@ -3,12 +3,17 @@ import type { CurrentJob } from '../api/types';
 
 export const pollIntervalMs = 1500;
 
+/** ROM Zip Config B17: the idle poll while watched and the tab is visible, so a job started elsewhere appears. */
+export const idlePollIntervalMs = 15_000;
+
 type JobEnded = (job: CurrentJob) => void;
 
 /**
  * `GET /api/jobs/current` (spec §11 polling): every 1.5 s while a job runs, stopped when idle. Pages that show job
  * progress (Ingestion, Integrity, Admin → DATs) call {@link watch} on mount and the returned function on destroy;
- * {@link refresh} checks once (e.g. right after starting a job). Listeners hear when a running job ends.
+ * {@link refresh} checks once (e.g. right after starting a job). Listeners hear when a running job ends. While watched
+ * and idle it polls every 15 s, only while the tab is visible (a hidden tab's poll would keep renewing the sliding
+ * session cookie), and checks once when the tab becomes visible again.
  */
 class Jobs {
 	current = $state<CurrentJob | null>(null);
@@ -18,11 +23,15 @@ class Jobs {
 
 	/** Polls while anything watches and a job is running. */
 	watch(): () => void {
-		this.#watchers++;
+		if (this.#watchers++ === 0)
+			document.addEventListener('visibilitychange', this.#visibilityChanged);
 		void this.refresh();
 		return () => {
 			this.#watchers--;
-			if (this.#watchers === 0) this.#stop();
+			if (this.#watchers === 0) {
+				document.removeEventListener('visibilitychange', this.#visibilityChanged);
+				this.#stop();
+			}
 		};
 	}
 
@@ -43,9 +52,16 @@ class Jobs {
 		this.current = next;
 		if (previous && (!next || next.id !== previous.id))
 			for (const listener of this.#ended) listener(previous);
-		if (next && this.#watchers > 0)
-			this.#timer = setTimeout(() => void this.refresh(), pollIntervalMs);
+		if (this.#watchers === 0) return;
+		if (next) this.#timer = setTimeout(() => void this.refresh(), pollIntervalMs);
+		else if (document.visibilityState === 'visible')
+			this.#timer = setTimeout(() => void this.refresh(), idlePollIntervalMs);
 	}
+
+	#visibilityChanged = (): void => {
+		if (document.visibilityState === 'visible') void this.refresh();
+		else if (!this.current) this.#stop();
+	};
 
 	#stop(): void {
 		if (this.#timer !== null) clearTimeout(this.#timer);
