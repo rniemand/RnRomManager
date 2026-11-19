@@ -73,7 +73,7 @@ describe('integrity page', () => {
 	});
 
 	it('hides the storage migration button when no legacy games remain (S4)', async () => {
-		fixed['GET /api/jobs/storage-migration'] = { legacyGames: 0 };
+		fixed['GET /api/jobs/storage-migration'] = { pendingGames: 0 };
 		render(IntegrityPage);
 
 		await screen.findByRole('button', { name: 'Run quick' });
@@ -81,7 +81,7 @@ describe('integrity page', () => {
 	});
 
 	it('starts the storage migration while legacy games remain (S4)', async () => {
-		fixed['GET /api/jobs/storage-migration'] = { legacyGames: 3 };
+		fixed['GET /api/jobs/storage-migration'] = { pendingGames: 3 };
 		render(IntegrityPage);
 
 		await fireEvent.click(

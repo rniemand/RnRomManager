@@ -2,6 +2,8 @@ using System.IO.Compression;
 using System.Text.Json;
 using Dapper;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Jobs;
@@ -424,6 +426,59 @@ public class StorageMigrationJobTests
         Assert.That((item.Outcome, item.Reason), Is.EqualTo(("Error", (string?)"InsufficientSpace")));
         Assert.That(File.ReadAllBytes(legacy.Zip), Is.EqualTo(zipBytes));
         Assert.That(File.Exists(files[0]), Is.True);
+    }
+
+    // --- the setting change (ROM Zip Config B7) ---
+
+    [Test]
+    public async Task AChange_IsSavedAndAudited_BeforeTheMoves()
+    {
+        var legacy = await WriteLegacy("Alpha");
+        await RunAsync(Job(), Guid.NewGuid()); // beside the ZIP now
+        var job = Job();
+        job.Change = new RomStorageChange(LegacyExternalTestHandler.SystemId, true);
+
+        var summary = await RunAsync(job, Guid.NewGuid());
+
+        Assert.That(summary.GetProperty("migrated").GetInt32(), Is.EqualTo(1), "the moves follow the new setting in the same run");
+        Assert.That(ReadZip(legacy.Zip).Roms.Single().ExternalFileName, Is.Null);
+        Assert.That(Service<IRomStorageSettings>().Override(LegacyExternalTestHandler.SystemId), Is.True);
+        await Service<RnRomManager.Api.AuditWriter>().FlushAsync();
+        await using var db = Service<IDbConnectionFactory>().Create();
+        Assert.That(await db.QueryAsync<(string SystemId, string Details)>("SELECT system_id, details FROM audit_events WHERE action = 'RomStorageChanged'"),
+            Is.EqualTo(new[] { (LegacyExternalTestHandler.SystemId, "in ZIP") }));
+    }
+
+    [Test]
+    public async Task AFailedSave_FailsTheJob_WithNoMoves()
+    {
+        var legacy = await WriteLegacy("Alpha");
+        await RunAsync(Job(), Guid.NewGuid());
+        var zipBytes = File.ReadAllBytes(legacy.Zip);
+        var settings = Substitute.For<IRomStorageSettings>();
+        settings.SetAsync(Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>()).ThrowsAsync(new InvalidOperationException("db down"));
+        var job = ActivatorUtilities.CreateInstance<StorageMigrationJob>(_factory.Services, settings);
+        job.Change = new RomStorageChange(LegacyExternalTestHandler.SystemId, true);
+
+        Assert.That(async () => await RunAsync(job, Guid.NewGuid()), Throws.InvalidOperationException);
+
+        Assert.That(File.ReadAllBytes(legacy.Zip), Is.EqualTo(zipBytes));
+        Assert.That(Service<IRomStorageSettings>().Override(LegacyExternalTestHandler.SystemId), Is.Null);
+    }
+
+    [Test]
+    public async Task AChangeAlreadyInEffect_SavesAndAuditsNothing()
+    {
+        var settings = Substitute.For<IRomStorageSettings>();
+        var job = ActivatorUtilities.CreateInstance<StorageMigrationJob>(_factory.Services, settings);
+        job.Change = new RomStorageChange(LegacyExternalTestHandler.SystemId, false);
+
+        await RunAsync(job, Guid.NewGuid());
+
+        await settings.DidNotReceiveWithAnyArgs().SetAsync(default!, default, default);
+        await Service<RnRomManager.Api.AuditWriter>().FlushAsync();
+        await using var db = Service<IDbConnectionFactory>().Create();
+        Assert.That(await db.ExecuteScalarAsync<int>("SELECT COUNT(*) FROM audit_events WHERE action = 'RomStorageChanged'"), Is.Zero);
     }
 
     private sealed class FailingMirror(ILibraryMirror inner) : ILibraryMirror

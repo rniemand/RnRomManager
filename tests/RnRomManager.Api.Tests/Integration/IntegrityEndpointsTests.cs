@@ -82,24 +82,24 @@ public class IntegrityEndpointsTests
             new RnRomManager.Core.Library.MirrorEntry(game, $"nds/{title[..1]}/{title}.zip", 100, DateTime.UtcNow), default);
     }
 
-    private async Task<int> LegacyGames()
+    private async Task<int> PendingGames()
     {
         using var response = await _admin.GetAsync("/api/jobs/storage-migration");
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
-        return (await AuthClient.JsonAsync(response)).GetProperty("legacyGames").GetInt32();
+        return (await AuthClient.JsonAsync(response)).GetProperty("pendingGames").GetInt32();
     }
 
     [Test]
     public async Task StorageMigration_CountsLegacyGames_StartsWith202_NoneLeftIs204()
     {
         await Start();
-        Assert.That(await LegacyGames(), Is.Zero);
+        Assert.That(await PendingGames(), Is.Zero);
         using (var none = await _admin.PostAsync("/api/jobs/storage-migration"))
             Assert.That(none.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
 
         await MirrorLegacyDs("Alpha");
         await MirrorLegacyDs("Beta");
-        Assert.That(await LegacyGames(), Is.EqualTo(2));
+        Assert.That(await PendingGames(), Is.EqualTo(2));
 
         using var started = await _admin.PostAsync("/api/jobs/storage-migration");
         Assert.That(started.StatusCode, Is.EqualTo(HttpStatusCode.Accepted));

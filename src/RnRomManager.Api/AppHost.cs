@@ -185,7 +185,12 @@ public static class AppHost
         builder.Services.AddTransient<GameMediaRetry>();
         builder.Services.AddTransient<MediaRetryJob>();
         builder.Services.AddTransient<RnRomManager.Core.Storage.StorageMigrationJob>();
-        builder.Services.AddSingleton<StorageMigrationJobFactory>(sp => () => sp.GetRequiredService<RnRomManager.Core.Storage.StorageMigrationJob>());
+        builder.Services.AddSingleton<StorageMigrationJobFactory>(sp => change =>
+        {
+            var job = sp.GetRequiredService<RnRomManager.Core.Storage.StorageMigrationJob>();
+            job.Change = change;
+            return job;
+        });
         builder.Services.AddSingleton<RnRomManager.Core.Storage.IFreeSpace, RnRomManager.Core.Storage.DriveFreeSpace>();
         // The ZIP path is set afterwards: ActivatorUtilities can't match a null string? argument.
         builder.Services.AddSingleton<IntegrityJobFactory>(sp => (mode, zipPath) =>

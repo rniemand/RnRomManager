@@ -22,7 +22,7 @@ namespace RnRomManager.Core.Storage;
 /// </summary>
 public sealed partial class StorageMigrationJob(IGameRepository games, IRomRepository roms, ILibraryMirror mirror, InfoJsonReader reader,
     ISystemRegistry systems, IJobItemRepository items, IOptions<PathsOptions> paths, IAuditLog audit, IFreeSpace freeSpace, TimeProvider time,
-    ILogger<StorageMigrationJob> logger) : IJob
+    IRomStorageSettings romStorage, ILogger<StorageMigrationJob> logger) : IJob
 {
     /// <summary>S6: room kept free on the library volume on top of the game's ROMs and its ZIP.</summary>
     public const long SpaceMarginBytes = 64L * 1024 * 1024;
@@ -33,6 +33,9 @@ public sealed partial class StorageMigrationJob(IGameRepository games, IRomRepos
 
     public JobType Type => JobType.StorageMigration;
     public JobMode? Mode => null;
+
+    /// <summary>B7: the Admin's storage change this run applies first, under the job lock; null for a resume.</summary>
+    public RomStorageChange? Change { get; set; }
 
     /// <summary>Test seams: the writer's hooks for the ZIP rewrite.</summary>
     public LibraryZipWriterHooks? WriterHooks { get; set; }
@@ -53,6 +56,14 @@ public sealed partial class StorageMigrationJob(IGameRepository games, IRomRepos
 
     public async Task<object?> RunAsync(JobContext context, CancellationToken cancellationToken)
     {
+        // B7: a failed save fails the job before anything moves; a change already in effect saves and audits nothing.
+        if (Change is { } change && systems.ById(change.SystemId) is { RomStorageConfigurable: true } changed && changed.EmbedRomsInZip != change.Embed)
+        {
+            await romStorage.SetAsync(change.SystemId, change.Embed, cancellationToken).ConfigureAwait(false);
+            audit.Record(new AuditEvent(AuditActions.RomStorageChanged, context.Actor, change.SystemId,
+                Details: change.Embed ? "in ZIP" : "beside ZIP"));
+            logger.LogInformation("ROM storage of {SystemId} set to {Storage}", change.SystemId, change.Embed ? "in ZIP" : "beside ZIP");
+        }
         var candidates = await ListMovesAsync(games, systems, cancellationToken).ConfigureAwait(false);
         context.Progress.SetTotal(candidates.Count);
         int migrated = 0, error = 0;

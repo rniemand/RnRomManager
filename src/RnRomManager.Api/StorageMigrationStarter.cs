@@ -5,8 +5,8 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api;
 
-/// <summary>A new storage migration job (S4); a fresh one per start.</summary>
-public delegate IJob StorageMigrationJobFactory();
+/// <summary>A new storage migration job (S4); a fresh one per start, applying <paramref name="change"/> first (B7).</summary>
+public delegate IJob StorageMigrationJobFactory(RomStorageChange? change = null);
 
 /// <summary>
 /// S4, B11: once the app has started (so it never delays startup or readiness), starts the storage job when games still

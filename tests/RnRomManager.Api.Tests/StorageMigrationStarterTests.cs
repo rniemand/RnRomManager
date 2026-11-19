@@ -58,7 +58,7 @@ public class StorageMigrationStarterTests
         lifetime.ApplicationStarted.Returns(_appStarted.Token);
         var runner = new JobRunner(_jobs, _lock, Substitute.For<IUserRepository>(), _time, NullLogger<JobRunner>.Instance);
         _created = 0;
-        _starter = new StorageMigrationStarter(lifetime, runner, () =>
+        _starter = new StorageMigrationStarter(lifetime, runner, _ =>
             {
                 _created++;
                 var job = new NoopTestJob();
