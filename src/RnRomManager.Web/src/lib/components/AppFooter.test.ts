@@ -100,7 +100,7 @@ describe('AppFooter (B10–B12)', () => {
 
 		const button = screen.getByRole('button', { name: 'Shortcuts' });
 		expect(button.hasAttribute('aria-label')).toBe(false);
-		expect(button.getAttribute('title')).toBe('Keyboard shortcuts');
+		expect(button.getAttribute('title')).toBe('Keyboard Shortcuts');
 		expect(button.querySelector('.bi-question-circle')).not.toBeNull();
 		await fireEvent.click(button);
 

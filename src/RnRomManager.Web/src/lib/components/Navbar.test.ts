@@ -161,7 +161,7 @@ describe('Navbar', () => {
 			onlogout: () => {},
 			onsearch: () => {}
 		});
-		expect(screen.queryByRole('button', { name: 'Keyboard shortcuts' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Keyboard Shortcuts' })).toBeNull();
 		expect(screen.queryByRole('button', { name: /^Theme/ })).toBeNull();
 		const outside = [...document.querySelectorAll('#main-nav a, #main-nav button')].filter(
 			(el) => !el.closest('.dropdown-menu')

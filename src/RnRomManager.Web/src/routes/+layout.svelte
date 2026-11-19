@@ -105,7 +105,7 @@
 			onsearch={() => (searchOpen = true)}
 		/>
 		<GlobalSearch bind:open={searchOpen} />
-		<HotkeysModal bind:open={hotkeysOpen} me={auth.me} />
+		<HotkeysModal bind:open={hotkeysOpen} me={auth.me} onsearch={() => (searchOpen = true)} />
 	{/if}
 	<!-- B10: room below the content for the fixed footer. -->
 	<main class="container py-4" class:above-footer={auth.me}>

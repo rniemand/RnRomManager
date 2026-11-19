@@ -5,10 +5,13 @@ import type { Me } from '../api/types';
 import { defaultBindings, type Bindings } from '../hotkeys';
 import { toasts } from '../stores/toasts.svelte';
 
+const modal = vi.hoisted(() => ({ hides: 0 }));
 vi.mock('../bootstrap', () => ({
 	Modal: class {
 		show() {}
-		hide() {}
+		hide() {
+			modal.hides++;
+		}
 		dispose() {}
 	}
 }));
@@ -77,7 +80,12 @@ describe('HotkeysModal (B25)', () => {
 		]);
 		expect(shown('nav.collections')).toBe('Alt+Shift+C');
 		expect(shown('nav.library')).toBe('Alt+Shift+L');
-		expect(row('search').queryByRole('button', { hidden: true })).toBeNull();
+		// U7: search isn't editable; its only button is Run.
+		expect(
+			row('search')
+				.queryAllByRole('button', { hidden: true })
+				.map((b) => b.getAttribute('aria-label'))
+		).toEqual(['Run Open global search']);
 		expect(document.querySelector('.modal-dialog')!.classList.contains('modal-lg')).toBe(true);
 	});
 
@@ -328,6 +336,81 @@ describe('HotkeysModal (B25)', () => {
 			expect(putBody()![next]).toBe('Alt+Shift+M');
 			expect(putBody()!['nav.library']).toBe('Alt+Shift+L');
 			await vi.waitFor(() => expect(hotkeys.implicitUnassigned).toEqual([]));
+		});
+	});
+
+	describe('Keyboard Shortcuts title and Run buttons (U7)', () => {
+		it('the title and hidden caption read Keyboard Shortcuts; the last column is Actions', () => {
+			open(user);
+			expect(
+				screen.getByRole('heading', { name: 'Keyboard Shortcuts', hidden: true })
+			).toBeTruthy();
+			expect(document.querySelector('caption')!.textContent).toBe('Keyboard Shortcuts');
+			expect(document.querySelector('thead th:last-child')!.textContent!.trim()).toBe('Actions');
+		});
+
+		it('every row has Run before Edit, with the play icon', () => {
+			open(admin);
+			for (const tr of document.querySelectorAll('tbody tr')) {
+				const buttons = [...tr.querySelectorAll('td:last-child button')];
+				const name = tr.querySelector('th')!.textContent;
+				expect(buttons[0].getAttribute('aria-label')).toBe(`Run ${name}`);
+				expect(buttons[0].className).toContain('btn btn-sm btn-outline-primary');
+				expect(buttons[0].textContent!.trim()).toBe('Run');
+				expect(buttons[0].querySelector('i')!.className.trim()).toBe('bi bi-play-fill');
+				const editable = tr.getAttribute('data-action') !== 'search';
+				expect(buttons.length).toBe(editable ? 2 : 1);
+				expect(buttons[0].classList.contains('me-1')).toBe(editable);
+				if (editable) expect(buttons[1].getAttribute('aria-label')).toBe(`Edit ${name}`);
+			}
+		});
+
+		it('Run closes the modal and runs the action', async () => {
+			const run = vi.spyOn(hotkeys, 'run').mockResolvedValue();
+			render(HotkeysModal, { open: true, me: admin });
+			modal.hides = 0;
+			await fireEvent.click(button('Run Go to Reports'));
+
+			await vi.waitFor(() => expect(run).toHaveBeenCalledWith('nav.reports'));
+			expect(modal.hides).toBeGreaterThan(0);
+			run.mockRestore();
+		});
+
+		it('Run on search closes the modal and calls onsearch', async () => {
+			const onsearch = vi.fn();
+			const run = vi.spyOn(hotkeys, 'run').mockResolvedValue();
+			render(HotkeysModal, { open: true, me: user, onsearch });
+			modal.hides = 0;
+			await fireEvent.click(button('Run Open global search'));
+
+			await vi.waitFor(() => expect(onsearch).toHaveBeenCalledOnce());
+			expect(modal.hides).toBeGreaterThan(0);
+			expect(run).not.toHaveBeenCalled();
+			run.mockRestore();
+		});
+
+		it('Run is disabled with the hint while capturing or with unsaved changes', async () => {
+			const hint = () => screen.queryByText('Save or cancel your changes to run a shortcut');
+			open(user);
+			expect(button('Run Go to Library').disabled).toBe(false);
+			expect(hint()).toBeNull();
+
+			await fireEvent.click(button('Edit Go to Library'));
+			expect(button('Run Go to Library').disabled).toBe(true);
+			expect(hint()!.className).toBe('small text-body-secondary');
+
+			await fireEvent.keyDown(button(/Cancel editing Go to Library/), {
+				code: 'KeyQ',
+				key: 'q',
+				altKey: true,
+				shiftKey: true
+			});
+			expect(button('Run Go to Collections').disabled).toBe(true);
+			expect(hint()).not.toBeNull();
+
+			await fireEvent.click(button('Reset to defaults'));
+			expect(button('Run Go to Collections').disabled).toBe(false);
+			expect(hint()).toBeNull();
 		});
 	});
 });
