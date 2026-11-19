@@ -109,6 +109,10 @@ public class RomStorageEndpointsTests
         Assert.That(Values(rows.Single(r => r.GetProperty("id").GetString() == "gba")), Is.EqualTo((true, true, false, 0)));
         Assert.That(Values(rows.Single(r => r.GetProperty("id").GetString() == "switch")), Is.EqualTo((false, false, false, 0)));
         Assert.That(Values(rows.Single(r => r.GetProperty("id").GetString() == LegacyExternalTestHandler.SystemId)), Is.EqualTo((false, false, true, 1)));
+        static (string?, bool) Compression(JsonElement r) => (r.GetProperty("zipCompression").GetString(), r.GetProperty("compressionConfigurable").GetBoolean());
+        Assert.That(Compression(rows.Single(r => r.GetProperty("id").GetString() == "gba")), Is.EqualTo(("Med", true)), "ZIP Compression Z6");
+        Assert.That(Compression(rows.Single(r => r.GetProperty("id").GetString() == "nds")), Is.EqualTo(("Med", false)));
+        Assert.That(Compression(rows.Single(r => r.GetProperty("id").GetString() == "switch")), Is.EqualTo(("Med", false)));
     }
 
     [Test]
