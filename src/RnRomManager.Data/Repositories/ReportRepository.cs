@@ -7,6 +7,9 @@ namespace RnRomManager.Data.Repositories;
 /// <summary>Reporting queries over <c>games</c>, <c>roms</c> and <c>images</c> (RP2–RP8).</summary>
 public sealed class ReportRepository(IDbConnectionFactory connections) : IReportRepository
 {
+    // MissingMetadataItem's developers/publishers are JSON columns; this class may be the only repository a test builds.
+    static ReportRepository() => JsonStringListHandler.Register();
+
     private const string NoCover = "NOT EXISTS (SELECT 1 FROM images i WHERE i.game_id = g.id AND i.is_cover = 1)";
 
     /// <summary>RP4's predicate and order, shared by the report and <see cref="NextMissingImageAsync"/>.</summary>
@@ -53,6 +56,70 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
             return new MissingImageSuccessor(null, false);
         var currentMissing = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
             $"SELECT COUNT(*) FROM games g WHERE g.id = @afterGameId AND {MissingImage}", new { afterGameId },
+            cancellationToken: cancellationToken));
+        return new MissingImageSuccessor(null, currentMissing > 0);
+    }
+
+    /// <summary>M1: <c>developers</c> and <c>publishers</c> are <c>JSON NOT NULL</c>, unknown written as <c>[]</c>.</summary>
+    private const string MissingYear = "g.release_year IS NULL";
+    private const string MissingDeveloper = "JSON_LENGTH(g.developers) = 0";
+    private const string MissingPublisher = "JSON_LENGTH(g.publishers) = 0";
+    private const string MissingMetadata = $"({MissingYear} OR {MissingDeveloper} OR {MissingPublisher})";
+    private const string MissingMetadataOrder = "g.display_title, g.id";
+
+    public async Task<Page<MissingMetadataItem>> ListMissingMetadataAsync(string? systemId, MissingMetadataField missing, string? q,
+        MissingMetadataSort sort, bool descending, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        // M2: the predicate, key and direction come only from the enums and bool, never from input text.
+        var where = "WHERE " + missing switch
+        {
+            MissingMetadataField.Any => MissingMetadata,
+            MissingMetadataField.Year => MissingYear,
+            MissingMetadataField.Developer => MissingDeveloper,
+            MissingMetadataField.Publisher => MissingPublisher,
+            _ => throw new ArgumentOutOfRangeException(nameof(missing)),
+        } + (systemId is null ? "" : " AND g.system_id = @systemId") + (q is null ? "" : " AND g.display_title LIKE @q");
+        var dir = descending ? "DESC" : "";
+        var order = sort switch
+        {
+            MissingMetadataSort.Name => $"g.display_title {dir}, g.id",
+            MissingMetadataSort.System => $"g.system_id {dir}, g.display_title, g.id",
+            MissingMetadataSort.Year => $"g.release_year IS NULL, g.release_year {dir}, g.display_title, g.id",
+            _ => throw new ArgumentOutOfRangeException(nameof(sort)),
+        };
+        var args = new { systemId, q = q is null ? null : SqlLike.Contains(q), pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
+        await using var connection = connections.Create();
+        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            $"SELECT COUNT(*) FROM games g {where}", args, cancellationToken: cancellationToken));
+        var rows = await connection.QueryAsync<MissingMetadataRow>(new CommandDefinition($"""
+            SELECT g.id AS Id, g.display_title AS DisplayTitle, g.system_id AS SystemId, g.release_year AS ReleaseYear,
+                   g.developers AS Developers, g.publishers AS Publishers
+            FROM games g {where}
+            ORDER BY {order}
+            LIMIT @pageSize OFFSET @offset
+            """, args, cancellationToken: cancellationToken));
+        var items = rows.Select(r => new MissingMetadataItem(r.Id, r.DisplayTitle, r.SystemId, r.ReleaseYear, r.Developers, r.Publishers)).ToList();
+        return new Page<MissingMetadataItem>(items, page, pageSize, total);
+    }
+
+    public async Task<MissingImageSuccessor> NextMissingMetadataAsync(Guid? afterGameId, CancellationToken cancellationToken)
+    {
+        // As NextMissingImageAsync: the anchor keeps its place even once fixed; rows after it first, then the wrap.
+        await using var connection = connections.Create();
+        var next = await connection.ExecuteScalarAsync<Guid?>(new CommandDefinition($"""
+            SELECT g.id FROM games g
+            LEFT JOIN games a ON a.id = @afterGameId
+            WHERE {MissingMetadata} AND (a.id IS NULL OR g.id <> a.id)
+            ORDER BY CASE WHEN a.id IS NULL OR (g.display_title, g.id) > (a.display_title, a.id) THEN 0 ELSE 1 END,
+                     {MissingMetadataOrder}
+            LIMIT 1
+            """, new { afterGameId }, cancellationToken: cancellationToken));
+        if (next is not null)
+            return new MissingImageSuccessor(next, false);
+        if (afterGameId is null)
+            return new MissingImageSuccessor(null, false);
+        var currentMissing = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            $"SELECT COUNT(*) FROM games g WHERE g.id = @afterGameId AND {MissingMetadata}", new { afterGameId },
             cancellationToken: cancellationToken));
         return new MissingImageSuccessor(null, currentMissing > 0);
     }
@@ -206,6 +273,16 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
             INSERT IGNORE INTO duplicate_dismissals (system_id, base_title, games_key, dismissed_by, dismissed_at)
             VALUES (@systemId, @baseTitle, @gamesKey, @userId, @now)
             """, new { systemId, baseTitle, gamesKey, userId, now }, cancellationToken: cancellationToken));
+    }
+
+    private sealed class MissingMetadataRow
+    {
+        public Guid Id { get; init; }
+        public string DisplayTitle { get; init; } = "";
+        public string SystemId { get; init; } = "";
+        public int? ReleaseYear { get; init; }
+        public IReadOnlyList<string> Developers { get; init; } = [];
+        public IReadOnlyList<string> Publishers { get; init; } = [];
     }
 
     private sealed class DuplicateGameRow
