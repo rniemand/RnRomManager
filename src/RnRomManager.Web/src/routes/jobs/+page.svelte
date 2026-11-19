@@ -110,31 +110,33 @@
 	{:else if list.items.length === 0}
 		<EmptyState icon="list" message="No jobs yet." />
 	{:else}
-		<div class="table-responsive">
-			<table class="table table-sm align-middle">
-				<thead>
-					<tr>
-						<th scope="col">Job</th>
-						<th scope="col">Trigger</th>
-						<th scope="col">Status</th>
-						<th scope="col">Started</th>
-						<th scope="col">Ended</th>
-						<th scope="col"><span class="visually-hidden">Details</span></th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each list.items as job (job.id)}
+		<div class="card">
+			<div class="table-responsive">
+				<table class="table table-sm table-striped table-hover align-middle mb-0">
+					<thead class="table-dark">
 						<tr>
-							<td>{jobLabel(job.type)}{job.mode ? ` (${job.mode})` : ''}</td>
-							<td>{job.triggerSource}</td>
-							<td><span class="badge {statusClass(job.status)}">{job.status}</span></td>
-							<td>{formatDateTime(job.startedAt)}</td>
-							<td>{job.finishedAt ? formatDateTime(job.finishedAt) : '—'}</td>
-							<td><a href={resolve('/jobs/[id]', { id: job.id })}>Details</a></td>
+							<th scope="col">Job</th>
+							<th scope="col">Trigger</th>
+							<th scope="col">Status</th>
+							<th scope="col">Started</th>
+							<th scope="col">Ended</th>
+							<th scope="col"><span class="visually-hidden">Details</span></th>
 						</tr>
-					{/each}
-				</tbody>
-			</table>
+					</thead>
+					<tbody>
+						{#each list.items as job (job.id)}
+							<tr>
+								<td>{jobLabel(job.type)}{job.mode ? ` (${job.mode})` : ''}</td>
+								<td>{job.triggerSource}</td>
+								<td><span class="badge {statusClass(job.status)}">{job.status}</span></td>
+								<td>{formatDateTime(job.startedAt)}</td>
+								<td>{job.finishedAt ? formatDateTime(job.finishedAt) : '—'}</td>
+								<td><a href={resolve('/jobs/[id]', { id: job.id })}>Details</a></td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
 		</div>
 		<Pagination page={listPage} {pages} onpage={(p) => (listPage = p)} label="Job pages" />
 	{/if}

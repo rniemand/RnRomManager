@@ -110,7 +110,7 @@
 	<div class="card">
 		<div class="table-responsive">
 			<table class="table table-sm table-striped table-hover align-middle mb-0">
-				<thead>
+				<thead class="table-dark">
 					<tr>
 						<th scope="col">System</th>
 						<th scope="col">Default Behaviour</th>
