@@ -27,6 +27,7 @@ public sealed class StartupRunner(
     CrashRecovery crashRecovery,
     AdminSeeder adminSeeder,
     DatCache datCache,
+    IRomStorageSettings romStorage,
     BackupRestorer backupRestorer) : IHostedService
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
@@ -50,6 +51,8 @@ public sealed class StartupRunner(
         // B19: between 5 and 6, so migrations then apply anything newer than the backup.
         await backupRestorer.RestoreIfConfiguredAsync(cancellationToken);
         database.Migrate();
+        // ROM Zip Config B2: before crash recovery, the starter and any job; step 4 doesn't depend on it (B5a).
+        await romStorage.LoadAsync(cancellationToken);
 
         // Step 7
         await crashRecovery.RunAsync(cancellationToken);

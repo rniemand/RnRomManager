@@ -50,6 +50,7 @@ public class BackupSchedulerTests
             Substitute.For<RnRomManager.Core.Discovery.IDiscoveryRepository>(),
             new RnRomManager.Core.Dats.DatRefreshSettingsService(new InMemorySettings(), TimeZoneInfo.Utc, _time,
                 NullLogger<RnRomManager.Core.Dats.DatRefreshSettingsService>.Instance),
+            Substitute.For<RnRomManager.Core.Storage.IRomStorageSettings>(),
             Substitute.For<RnRomManager.Core.Audit.IAuditLog>());
     }
 

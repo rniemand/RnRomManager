@@ -3,6 +3,7 @@ import {
 	formatStep,
 	formatSummary,
 	isCancellable,
+	jobLabel,
 	latestJobs,
 	outcomeClass,
 	percent,
@@ -12,6 +13,22 @@ import {
 } from './jobs';
 
 describe('job display helpers', () => {
+	it('labels every job type (ROM Zip Config B17); an unknown type shows as is', () => {
+		expect(
+			(
+				[
+					'Ingest',
+					'Integrity',
+					'DatRefresh',
+					'MediaRetry',
+					'ReviewResolve',
+					'StorageMigration'
+				] as const
+			).map(jobLabel)
+		).toEqual(['Ingest', 'Integrity check', 'DAT refresh', 'Media retry', 'Review', 'Moving ROMs']);
+		expect(jobLabel('Other')).toBe('Other');
+	});
+
 	it('summarises non-zero counts', () => {
 		expect(formatSummary({ Ingested: 3, Duplicate: 0, Review: 1 })).toBe('Ingested 3 · Review 1');
 		expect(formatSummary(null)).toBe('');

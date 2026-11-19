@@ -297,6 +297,17 @@ describe('admin pages', () => {
 		expectT1();
 	});
 
+	it('the Admin layout has a ROM Zip Config tab after Settings (ROM Zip Config B15)', () => {
+		render(AdminLayout, {
+			children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))
+		});
+		const tabs = screen.getAllByRole('link').map((l) => l.textContent?.trim());
+		expect(tabs.indexOf('ROM Zip Config')).toBe(tabs.indexOf('Settings') + 1);
+		expect(screen.getByRole('link', { name: 'ROM Zip Config' }).getAttribute('href')).toBe(
+			'/admin/rom-storage'
+		);
+	});
+
 	it('the Admin layout has one page-title h1 (B1)', () => {
 		render(AdminLayout, {
 			children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))

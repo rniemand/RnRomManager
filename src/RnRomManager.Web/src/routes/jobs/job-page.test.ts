@@ -73,4 +73,12 @@ describe('job detail page', () => {
 			expect(calls).toContain('/api/jobs/j1/items?page=1&pageSize=50&outcome=Failed')
 		);
 	});
+
+	it('links back to all jobs (ROM Zip Config B18)', async () => {
+		render(JobPage);
+
+		expect((await screen.findByRole('link', { name: 'All jobs' })).getAttribute('href')).toBe(
+			'/jobs'
+		);
+	});
 });

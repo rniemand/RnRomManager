@@ -4,10 +4,14 @@ using RnRomManager.Api.Configuration;
 using RnRomManager.Api.Logging;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Backups;
+using RnRomManager.Core.Jobs;
+using RnRomManager.Core.Library;
+using RnRomManager.Core.Storage;
+using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api.Endpoints;
 
-/// <summary><c>GET /api/admin/settings</c>, <c>GET /api/admin/logs</c>, <c>GET /api/admin/logs/recent</c>, <c>GET /api/admin/logs/stream</c>, the backup endpoints (B17) (Admin) and <c>GET /api/about</c> (any user) — spec §23, §13, §10.4.</summary>
+/// <summary><c>GET /api/admin/settings</c>, <c>GET /api/admin/logs</c>, <c>GET /api/admin/logs/recent</c>, <c>GET /api/admin/logs/stream</c>, the backup endpoints (B17), <c>/api/admin/rom-storage</c> (ROM Zip Config B6, B12) (Admin) and <c>GET /api/about</c> (any user) — spec §23, §13, §10.4.</summary>
 public static class AdminEndpoints
 {
     public static RouteGroupBuilder MapAdminEndpoints(this RouteGroupBuilder api)
@@ -26,6 +30,46 @@ public static class AdminEndpoints
         admin.MapGet("/logs/recent", (LogBuffer buffer) => Results.Ok(buffer.Recent(20)));
 
         admin.MapGet("/logs/stream", LogStream.RunAsync).WithMetadata(MaintenanceExempt.Instance);
+
+        // ROM Zip Config B12: every system's default and effective ROM storage, ordered as /api/systems.
+        admin.MapGet("/rom-storage", async (HttpContext ctx, ISystemRegistry systems, IGameRepository games) =>
+        {
+            var pending = (await StorageMigrationJob.ListMovesAsync(games, systems, ctx.RequestAborted))
+                .GroupBy(g => g.SystemId, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+            return Results.Ok(systems.All.OrderBy(h => h.DisplayName, StringComparer.OrdinalIgnoreCase).Select(h => new
+            {
+                id = h.Id, displayName = h.DisplayName, defaultEmbedRoms = h.DefaultEmbedRomsInZip, embedRoms = h.EmbedRomsInZip,
+                configurable = h.RomStorageConfigurable, pendingGames = h.RomStorageConfigurable ? pending.GetValueOrDefault(h.Id) : 0,
+            }));
+        });
+
+        // B6: the change is applied by the storage job under the job lock, so a busy lock saves nothing.
+        admin.MapPut("/rom-storage/{systemId}", async (string systemId, HttpContext ctx, ISystemRegistry systems, JobRunner runner,
+            StorageMigrationJobFactory createJob) =>
+        {
+            if (systems.ById(systemId) is not { } handler)
+                return Problems.NotFound(ctx);
+            JsonElement body;
+            try
+            {
+                body = await JsonSerializer.DeserializeAsync<JsonElement>(ctx.Request.Body, cancellationToken: ctx.RequestAborted);
+            }
+            catch (JsonException)
+            {
+                body = default; // missing or malformed body
+            }
+            if (body.ValueKind != JsonValueKind.Object || !body.TryGetProperty("embedRoms", out var value)
+                || value.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["embedRoms"] = ["Must be true or false."] });
+            if (!handler.RomStorageConfigurable)
+                return Problems.Create(ctx, StatusCodes.Status400BadRequest, "NotConfigurable", "This system's ROM storage can't be changed.");
+            var embed = value.GetBoolean();
+            if (embed == handler.EmbedRomsInZip)
+                return Results.NoContent();
+            var started = await runner.StartAsync(createJob(new RomStorageChange(handler.Id, embed)), JobTrigger.Manual,
+                DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
+            return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
+        });
 
         // B17: database backups.
         admin.MapGet("/backups", async (BackupService backups, CancellationToken ct) =>

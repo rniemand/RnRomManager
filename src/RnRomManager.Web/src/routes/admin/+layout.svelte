@@ -11,6 +11,7 @@
 		{ href: resolve('/admin/users'), label: 'Users' },
 		{ href: resolve('/admin/dats'), label: 'DATs' },
 		{ href: resolve('/admin/settings'), label: 'Settings' },
+		{ href: resolve('/admin/rom-storage'), label: 'ROM Zip Config' },
 		{ href: resolve('/admin/backups'), label: 'Backups' },
 		{ href: resolve('/admin/logs'), label: 'Logs' },
 		{ href: resolve('/admin/audit'), label: 'Auditing' }

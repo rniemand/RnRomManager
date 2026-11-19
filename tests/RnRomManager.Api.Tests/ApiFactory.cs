@@ -16,6 +16,7 @@ using RnRomManager.Core.Database;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Dats;
 using RnRomManager.Api.Tests.Integration;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
@@ -124,6 +125,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         await MariaDbServer.RestoreAsync(ConnectionString);
         _folders.Restore();
         Services.GetRequiredService<DatCache>().Load();
+        await Services.GetRequiredService<IRomStorageSettings>().LoadAsync(CancellationToken.None);
     }
 
     private string ConnectionString => Settings["ConnectionStrings:Default"]!;

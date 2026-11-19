@@ -40,10 +40,12 @@ public interface IGameRepository
     Task<IReadOnlyList<GameRow>> ListMediaRetryCandidatesAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// S4: games of <paramref name="systemIds"/> with at least one ROM whose <c>external_file_name</c> is null, by ZIP path.
-    /// Candidates only: the storage migration re-opens each ZIP to decide.
+    /// S4, ROM Zip Config B7: games whose ROM layout differs from their system's storage, by ZIP path: games of
+    /// <paramref name="embedSystemIds"/> with any ROM beside the ZIP (<c>external_file_name</c> set), and of
+    /// <paramref name="externalSystemIds"/> with any ROM inside it. Candidates only: the storage job re-opens each ZIP to decide.
     /// </summary>
-    Task<IReadOnlyList<GameRow>> ListLegacyEmbeddedAsync(IReadOnlyCollection<string> systemIds, CancellationToken cancellationToken);
+    Task<IReadOnlyList<GameRow>> ListStorageMovesAsync(IReadOnlyCollection<string> embedSystemIds, IReadOnlyCollection<string> externalSystemIds,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>Input paths the database treats as one <c>zip_path</c>, and the games already stored under it.</summary>

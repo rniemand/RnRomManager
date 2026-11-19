@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 using RnRomManager.TestData;
 
@@ -102,7 +103,7 @@ public class LegacyStorageTests
         var body = await AuthClient.JsonAsync(response);
         Assert.That(body.GetProperty("code").GetString(), Is.EqualTo("StorageMigrationPending"));
         Assert.That(body.GetProperty("title").GetString(),
-            Is.EqualTo("This game's ROMs are being moved out of its ZIP. Try again when the storage migration job has finished."));
+            Is.EqualTo("This game's ROMs are being moved by the storage job. Try again when it has finished."));
     }
 
     public static IEnumerable<TestCaseData> Writes()
@@ -136,6 +137,26 @@ public class LegacyStorageTests
         await AssertRefused(response);
         Assert.That(File.ReadAllBytes(game.ZipPath), Is.EqualTo(game.Bytes));
         Assert.That(Directory.GetFiles(Path.GetDirectoryName(game.ZipPath)!), Is.EqualTo(new[] { game.ZipPath }));
+    }
+
+    /// <summary>ROM Zip Config B10: with the system set to embed, a game still beside its ZIP is pending and refused.</summary>
+    [Test]
+    public async Task ExternalGame_UnderEmbeddedSetting_IsStorageMigrationPending()
+    {
+        var bytes = TestLibrary.RomBytes(++_seed);
+        var rom = TestLibrary.Rom("Gamma (USA).nds", bytes) with { ExternalFileName = "Gamma.Gamma (USA).nds" };
+        var game = TestLibrary.Game("Gamma", rom) with { System = LegacyExternalTestHandler.SystemId };
+        var zip = Path.GetFullPath(Path.Combine(_factory.Root, "roms", "legacy/G/Gamma.zip"));
+        await TestLibrary.WriteZipAsync(Service<InfoJsonReader>(), zip, game);
+        File.WriteAllBytes(Path.Combine(Path.GetDirectoryName(zip)!, "Gamma.Gamma (USA).nds"), bytes);
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, "legacy/G/Gamma.zip", new FileInfo(zip).Length, DateTime.UtcNow), default);
+        var before = File.ReadAllBytes(zip);
+        await Service<IRomStorageSettings>().SetAsync(LegacyExternalTestHandler.SystemId, true, default);
+
+        using var response = await _admin.PatchAsync($"/api/games/{game.GameId}", new { title = "Renamed" });
+
+        await AssertRefused(response);
+        Assert.That(File.ReadAllBytes(zip), Is.EqualTo(before));
     }
 
     [Test]

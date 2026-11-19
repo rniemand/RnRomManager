@@ -3,6 +3,7 @@ using RnRomManager.Core.Database;
 using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api.Endpoints;
@@ -26,16 +27,16 @@ public static class IntegrityEndpoints
             return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
-        // S4: how many legacy games remain, and a manual start of the storage migration.
+        // S4, B11: how many games still wait to be moved (either direction), and a manual start (resume) of the storage job.
         api.MapGet("/jobs/storage-migration", async (HttpContext ctx, IGameRepository games, ISystemRegistry systems) =>
             Results.Ok(new
             {
-                legacyGames = (await games.ListLegacyEmbeddedAsync(StorageMigrationStarter.LegacySystems(systems), ctx.RequestAborted)).Count,
+                pendingGames = (await StorageMigrationJob.ListMovesAsync(games, systems, ctx.RequestAborted)).Count,
             })).RequireAuthorization(AuthSetup.AdminOnly);
         api.MapPost("/jobs/storage-migration", async (HttpContext ctx, JobRunner runner, StorageMigrationJobFactory createJob, IGameRepository games,
             ISystemRegistry systems) =>
         {
-            if ((await games.ListLegacyEmbeddedAsync(StorageMigrationStarter.LegacySystems(systems), ctx.RequestAborted)).Count == 0)
+            if ((await StorageMigrationJob.ListMovesAsync(games, systems, ctx.RequestAborted)).Count == 0)
                 return Results.NoContent();
             var started = await runner.StartAsync(createJob(), JobTrigger.Manual, DatEndpoints.UserId(ctx.User), ctx.RequestAborted);
             return started is null ? DatEndpoints.JobRunning(ctx) : Results.Accepted(value: new { jobId = started.Id });

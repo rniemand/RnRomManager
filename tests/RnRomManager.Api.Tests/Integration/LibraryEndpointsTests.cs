@@ -10,6 +10,7 @@ using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 using RnRomManager.Core.Users;
 using RnRomManager.TestData;
@@ -720,6 +721,26 @@ public partial class LibraryEndpointsTests
         Assert.That((item.GetProperty("browserCore").GetString(), item.GetProperty("playDisc").GetBoolean()), Is.EqualTo(("desmume", false)));
         Assert.That(item.GetProperty("playRomId").GetInt64(), Is.EqualTo(rom.GetProperty("id").GetInt64()));
         Assert.That(rom.GetProperty("externalFileName").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        Assert.That(download.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await download.Content.ReadAsByteArrayAsync(), Is.EqualTo(DsQuest));
+    }
+
+    /// <summary>ROM Zip Config B5: with DS set to embed, a DS game still beside its ZIP lists, plays and downloads from its file.</summary>
+    [Test]
+    public async Task Ds_ExternalGame_UnderEmbeddedSetting_ListsDownloadsAndPlays()
+    {
+        var (id, romId) = await IngestDs();
+        await Service<IRomStorageSettings>().SetAsync("nds", true, default);
+
+        var item = (await GetJson("/api/games?system=nds")).GetProperty("items").EnumerateArray().Single();
+        var rom = (await GetJson($"/api/games/{id}")).GetProperty("roms")[0];
+        using var info = await _user.GetAsync($"/api/games/{id}/info-json");
+        using var download = await _user.GetAsync(rom.GetProperty("downloadUrl").GetString()!);
+
+        Assert.That((item.GetProperty("browserCore").GetString(), item.GetProperty("playDisc").GetBoolean()), Is.EqualTo(("desmume", false)));
+        Assert.That(item.GetProperty("playRomId").GetInt64(), Is.EqualTo(romId));
+        Assert.That(rom.GetProperty("externalFileName").GetString(), Is.Not.Null);
+        Assert.That(info.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(download.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(await download.Content.ReadAsByteArrayAsync(), Is.EqualTo(DsQuest));
     }

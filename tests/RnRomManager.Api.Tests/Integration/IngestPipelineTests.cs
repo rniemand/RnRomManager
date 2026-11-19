@@ -13,6 +13,7 @@ using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Media;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
@@ -378,6 +379,64 @@ public class IngestPipelineTests
 
         Assert.That(again!.Outcome, Is.EqualTo(IngestOutcome.Duplicate));
         Assert.That(ReadZip("nds/B/Bad Crc Hero.zip").Roms, Has.Count.EqualTo(1));
+    }
+
+    /// <summary>ROM Zip Config B13: with DS set to embed, a new DS release is stored as a <c>roms/</c> entry.</summary>
+    [Test]
+    public async Task Ds_UnderEmbedSetting_NewRom_IsStoredInsideTheZip()
+    {
+        await Service<IRomStorageSettings>().SetAsync("nds", true, default);
+
+        var result = await IngestAsync(Drop("nds", "hero.nds", BadCrcHero));
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Ingested), result.Details);
+        Assert.That(ReadZip("nds/B/Bad Crc Hero.zip").Roms.Single().ExternalFileName, Is.Null);
+        var zip = Path.Combine(Roms, "nds", "B", "Bad Crc Hero.zip");
+        using (var archive = ZipFile.OpenRead(zip))
+        using (var entry = archive.GetEntry(LibraryZip.RomEntry("Bad Crc Hero (USA).nds"))!.Open())
+        using (var copy = new MemoryStream())
+        {
+            entry.CopyTo(copy);
+            Assert.That(copy.ToArray(), Is.EqualTo(BadCrcHero));
+        }
+        Assert.That(Directory.GetFiles(Path.GetDirectoryName(zip)!), Is.EqualTo(new[] { zip }), "nothing beside the ZIP");
+    }
+
+    /// <summary>B5, B13: an embedded copy of a DS ROM stored beside its ZIP is a Duplicate and repairs nothing.</summary>
+    [Test]
+    public async Task Ds_UnderEmbedSetting_CopyOfAnExternalOwner_IsADuplicate_WithNoRepair()
+    {
+        Assert.That((await IngestAsync(Drop("nds", "hero.nds", BadCrcHero)))!.Outcome, Is.EqualTo(IngestOutcome.Ingested));
+        var folder = Path.Combine(Roms, "nds", "B");
+        var before = Directory.GetFiles(folder).ToDictionary(f => f, File.ReadAllBytes);
+        await Service<IRomStorageSettings>().SetAsync("nds", true, default);
+
+        var again = await IngestAsync(Drop("nds", "hero copy.nds", BadCrcHero));
+
+        Assert.That(again!.Outcome, Is.EqualTo(IngestOutcome.Duplicate), again.Details);
+        Assert.That(Directory.GetFiles(folder).ToDictionary(f => f, File.ReadAllBytes), Is.EqualTo(before));
+    }
+
+    /// <summary>B10: with the system set to embed, a release for a game still beside its ZIP is refused and stays in ingest.</summary>
+    [Test]
+    public async Task ExternalGame_UnderEmbedSetting_NewRelease_IsStorageMigrationPending()
+    {
+        var bytes = Atari(4096, 623);
+        var rom = TestLibrary.Rom("Old Ds (USA).nds", bytes) with { BaseTitle = "Old Ds", ExternalFileName = "Old Ds.Old Ds (USA).nds" };
+        var game = TestLibrary.Game("Old Ds", rom) with { System = LegacyExternalTestHandler.SystemId };
+        var zip = Path.Combine(Roms, "legacy", "O", "Old Ds.zip");
+        await TestLibrary.WriteZipAsync(Service<InfoJsonReader>(), zip, game);
+        File.WriteAllBytes(Path.Combine(Path.GetDirectoryName(zip)!, rom.ExternalFileName!), bytes);
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, "legacy/O/Old Ds.zip", new FileInfo(zip).Length, DateTime.UtcNow), default);
+        var zipBytes = File.ReadAllBytes(zip);
+        await Service<IRomStorageSettings>().SetAsync(LegacyExternalTestHandler.SystemId, true, default);
+        var file = DropAged(Path.Combine(_factory.Root, "ingest", LegacyExternalTestHandler.SystemId, "europe.nds"), OldDsEurope);
+
+        var result = await IngestAsync(file);
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Error, IngestErrors.StorageMigrationPending)), result.Details);
+        Assert.That(File.Exists(file.FullPath), Is.True, "left in ingest for the next import");
+        Assert.That(File.ReadAllBytes(zip), Is.EqualTo(zipBytes));
     }
 
     [Test]

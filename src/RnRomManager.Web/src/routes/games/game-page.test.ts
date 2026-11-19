@@ -752,7 +752,7 @@ describe('game detail page', () => {
 
 	it('a 409 StorageMigrationPending from an edit shows its title (S3)', async () => {
 		const title =
-			"This game's ROMs are being moved out of its ZIP. Try again when the storage migration job has finished.";
+			"This game's ROMs are being moved by the storage job. Try again when it has finished.";
 		toasts.items = [];
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);

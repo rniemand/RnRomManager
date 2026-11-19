@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Api.Tests;
@@ -21,5 +22,18 @@ public class SystemStartupTests
             Assert.That(Directory.Exists(Path.Combine(factory.Settings["Paths:Roms"]!, id)), Is.False);
             Assert.That(Directory.Exists(Path.Combine(factory.Settings["Paths:Ingest"]!, id, "_removed")), Is.True);
         }
+    }
+
+    [Test]
+    public void Startup_LoadsTheRomStorageSettings_OfConfigurableSystems()
+    {
+        using var factory = new ApiFactory();
+        factory.AppSettings.GetAsync(Arg.Is<IReadOnlyCollection<string>>(n => n.Contains("storage.embedRoms.nds")), Arg.Any<CancellationToken>())
+            .Returns((IReadOnlyDictionary<string, string>)new Dictionary<string, string> { ["storage.embedRoms.nds"] = "true" });
+        using var _ = factory.CreateClient();
+
+        var nds = factory.Services.GetRequiredService<ISystemRegistry>().ById("nds")!;
+
+        Assert.That((nds.EmbedRomsInZip, nds.DefaultEmbedRomsInZip), Is.EqualTo((true, false)));
     }
 }

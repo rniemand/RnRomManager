@@ -72,7 +72,7 @@ public sealed record LibraryTarget(LibraryZip? Zip, InfoJsonGame? Game, string? 
         IsExternal(systems, systemId) || (zipPath.IndexOf('/') is var slash and > 0 && IsExternal(systems, zipPath[..slash]));
 
     private static bool IsExternal(ISystemRegistry systems, string systemId) =>
-        systems.All.Any(h => !h.EmbedRomsInZip && string.Equals(h.Id, systemId, StringComparison.OrdinalIgnoreCase));
+        systems.All.Any(h => RomStorage.MayHoldExternalFiles(h) && string.Equals(h.Id, systemId, StringComparison.OrdinalIgnoreCase));
 
     private static LibraryTarget Mismatch(LibraryTarget target, string zipPath, Guid gameId, string systemId)
     {

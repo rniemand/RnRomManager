@@ -10,6 +10,7 @@ using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Jobs;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Users;
 using RnRomManager.TestData;
 
@@ -34,6 +35,7 @@ public class BackupServiceTests
     private IDiscoveryRepository _discovery = null!;
     private DatRefreshSettingsService _datRefresh = null!;
     private IAuditLog _audit = null!;
+    private IRomStorageSettings _romStorage = null!;
 
     private string Folder => _dir.Combine("backups");
 
@@ -69,9 +71,10 @@ public class BackupServiceTests
         _discovery = Substitute.For<IDiscoveryRepository>();
         _datRefresh = new DatRefreshSettingsService(_settings, TimeZoneInfo.Utc, _time, NullLogger<DatRefreshSettingsService>.Instance);
         _audit = Substitute.For<IAuditLog>();
+        _romStorage = Substitute.For<IRomStorageSettings>();
         _service = new BackupService(_store, _settings, Options.Create(new PathsOptions { Backups = Folder }), Options.Create(_options),
             TimeZoneInfo.Utc, _time, NullLogger<BackupService>.Instance, _jobLock, _maintenance, _database, _jobs, _users, _discovery,
-            _datRefresh, _audit);
+            _datRefresh, _romStorage, _audit);
     }
 
     [TearDown]
@@ -456,6 +459,7 @@ public class BackupServiceTests
             _jobs.AbortRunningAsync(T0.UtcDateTime, CancellationToken.None);
             _users.RotateAllSecurityStampsAsync(CancellationToken.None);
             _discovery.Invalidate();
+            _romStorage.LoadAsync(CancellationToken.None);
             _audit.Record(Arg.Is<AuditEvent>(e => e.Action == AuditActions.BackupRestored && e.Actor == Boss
                 && e.Details == $"{name}; safety backup {BackupNames.For(T0)}"));
         });

@@ -258,8 +258,8 @@ public sealed class LibraryFiles(IOptions<PathsOptions> paths, InfoJsonReader re
     {
         path = SafePath.Resolve(paths.Value.Roms, game.ZipPath);
         var folder = game.ZipPath.Split('/')[0];
-        var isExternal = systems.ById(game.SystemId) is { EmbedRomsInZip: false }
-            || systems.All.Any(h => !h.EmbedRomsInZip && string.Equals(h.Id, folder, StringComparison.OrdinalIgnoreCase));
+        var isExternal = systems.ById(game.SystemId) is { } handler && RomStorage.MayHoldExternalFiles(handler)
+            || systems.All.Any(h => RomStorage.MayHoldExternalFiles(h) && string.Equals(h.Id, folder, StringComparison.OrdinalIgnoreCase));
         if (!isExternal)
             return new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
 

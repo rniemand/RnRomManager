@@ -4,7 +4,7 @@ import { ApiError } from '../api/errors';
 import type { CurrentJob } from '../api/types';
 import { iconClass } from '../components/icons';
 import { auth } from './auth.svelte';
-import { jobs, pollIntervalMs } from './jobs.svelte';
+import { idlePollIntervalMs, jobs, pollIntervalMs } from './jobs.svelte';
 import { toasts, toastDurationMs } from './toasts.svelte';
 import { reviewJobs, summaryError } from './reviewJobs.svelte';
 import { render, screen } from '@testing-library/svelte';
@@ -79,6 +79,62 @@ describe('jobs polling', () => {
 
 		unwatch();
 		stopListening();
+	});
+
+	describe('idle poll (ROM Zip Config B17)', () => {
+		let visibility: DocumentVisibilityState;
+		beforeEach(() => {
+			visibility = 'visible';
+			vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibility);
+		});
+		afterEach(() => vi.restoreAllMocks());
+		const idle = () => stubFetch(() => new Response(null, { status: 204 }));
+		const setVisibility = (state: DocumentVisibilityState) => {
+			visibility = state;
+			document.dispatchEvent(new Event('visibilitychange'));
+		};
+
+		it('polls every 15 s while watched, idle and visible, and stops when unwatched', async () => {
+			const urls = idle();
+			const unwatch = jobs.watch();
+			await vi.advanceTimersByTimeAsync(0);
+			await vi.advanceTimersByTimeAsync(idlePollIntervalMs * 2);
+			expect(urls).toHaveLength(3);
+
+			unwatch();
+			await vi.advanceTimersByTimeAsync(idlePollIntervalMs * 2);
+			expect(urls).toHaveLength(3);
+		});
+
+		it('a hidden tab stops the idle poll, and becoming visible refreshes once', async () => {
+			const urls = idle();
+			const unwatch = jobs.watch();
+			await vi.advanceTimersByTimeAsync(0);
+
+			setVisibility('hidden');
+			await vi.advanceTimersByTimeAsync(idlePollIntervalMs * 3);
+			expect(urls).toHaveLength(1);
+
+			setVisibility('visible');
+			await vi.advanceTimersByTimeAsync(0);
+			expect(urls).toHaveLength(2);
+			unwatch();
+		});
+
+		it('a job started elsewhere appears on the next idle poll', async () => {
+			let running: CurrentJob | null = null;
+			stubFetch(() => (running ? ok(running) : new Response(null, { status: 204 })));
+			const unwatch = jobs.watch();
+			await vi.advanceTimersByTimeAsync(0);
+			running = job('j9');
+
+			await vi.advanceTimersByTimeAsync(idlePollIntervalMs);
+
+			expect(jobs.current?.id).toBe('j9');
+			running = null;
+			await vi.advanceTimersByTimeAsync(pollIntervalMs);
+			unwatch();
+		});
 	});
 
 	it('stops polling when the last watcher leaves', async () => {

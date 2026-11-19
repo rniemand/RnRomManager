@@ -29,6 +29,7 @@ public partial class IntegrityJobTests
     private JobRepository _jobs = null!;
     private InfoJsonReader _reader = null!;
     private ISystemRegistry _systems = null!;
+    private IRomStorageSettings _romStorage = null!;
     private DbSync _sync = null!;
     private TempDir _dir = null!;
     private Action? _onScan;
@@ -49,7 +50,7 @@ public partial class IntegrityJobTests
             handler.EmbedRomsInZip.Returns(true);
             handler.Id.Returns(id);
             return handler;
-        }).Append(new ExternalTestHandler()).Append(new ExternalSetTestHandler()).Append(new LegacyExternalTestHandler()).ToArray();
+        }).Append(new ExternalTestHandler()).Append(new ExternalSetTestHandler()).Append(new LegacyExternalTestHandler(_romStorage = Substitute.For<IRomStorageSettings>())).ToArray();
         _systems = Substitute.For<ISystemRegistry>();
         _systems.All.Returns(handlers);
         _systems.ById(Arg.Any<string>()).Returns(call =>
@@ -701,10 +702,13 @@ public partial class IntegrityJobTests
         Assert.That((await Open()).Select(i => i.Type), Does.Not.Contain(LegacyEmbeddedStorage));
     }
 
-    [TestCase(true, TestName = "Legacy_ZipUnderEitherNameRule_IsNotWrongLocation legacy game, embedded name")]
-    [TestCase(false, TestName = "Legacy_ZipUnderEitherNameRule_IsNotWrongLocation migrated game, external name")]
-    public async Task Legacy_ZipUnderEitherNameRule_IsNotWrongLocation(bool legacy)
+    [TestCase(true, false, TestName = "Legacy_ZipUnderEitherNameRule_IsNotWrongLocation legacy game, embedded name")]
+    [TestCase(false, false, TestName = "Legacy_ZipUnderEitherNameRule_IsNotWrongLocation migrated game, external name")]
+    [TestCase(true, true, TestName = "Legacy_ZipUnderEitherNameRule_IsNotWrongLocation embed setting, embedded game, embedded name")]
+    [TestCase(false, true, TestName = "Legacy_ZipUnderEitherNameRule_IsNotWrongLocation embed setting, external game, external name")]
+    public async Task Legacy_ZipUnderEitherNameRule_IsNotWrongLocation(bool legacy, bool embedSetting)
     {
+        _romStorage.Override(LegacyExternalTestHandler.SystemId).Returns(embedSetting);
         // 180 characters, 250 UTF-8 bytes: the rules give different names (254 vs 250 bytes), both within Linux's 255.
         var title = new string('é', 70) + new string('a', 110);
         var name = legacy ? Core.Naming.FileNameSanitizer.Sanitize(title) + ".zip" : ExternalRomName.ZipName(title);
@@ -727,6 +731,28 @@ public partial class IntegrityJobTests
         await Run();
 
         Assert.That((await Open()).Select(i => i.Type), Does.Not.Contain(WrongLocation));
+    }
+
+    /// <summary>B14: with the system set to embed, a game still beside its ZIP is pending; its file is checked as external.</summary>
+    [Test]
+    public async Task Legacy_ExternalGame_UnderEmbedSetting_IsOneWarning_AndItsFileIsChecked()
+    {
+        var bytes = RomBytes(++_seed);
+        var game = Game("Alpha", Rom("Alpha 0.nds", bytes) with { ExternalFileName = "Alpha.Alpha 0.nds" }) with { System = LegacyExternalTestHandler.SystemId };
+        var zip = Abs("legacy/A/Alpha.zip");
+        Directory.CreateDirectory(Path.GetDirectoryName(zip)!);
+        await new LibraryZipWriter(_reader).WriteAsync(zip, null, new LibraryZipChanges(game, new Dictionary<string, Func<Stream>>()));
+        Touch("legacy/A/Alpha.zip");
+        WriteLegacy("legacy/B/Beta.zip", "Beta");
+        _romStorage.Override(LegacyExternalTestHandler.SystemId).Returns(true);
+
+        await Run(JobMode.Deep);
+
+        Assert.That(await OpenExternal(), Is.EquivalentTo(new[]
+        {
+            (LegacyEmbeddedStorage, (string?)"legacy/A/Alpha.zip", (string?)null),
+            (EntryMissing, (string?)"legacy/A/Alpha.zip", (string?)"Alpha.Alpha 0.nds"),
+        }), "the embedded game Beta is in the setting's layout: no warning");
     }
 
     /// <summary>Open issues other than the cover codes these image-less games always get.</summary>

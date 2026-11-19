@@ -1,3 +1,4 @@
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Systems.NintendoDs;
@@ -6,9 +7,10 @@ namespace RnRomManager.Systems.NintendoDs;
 /// Nintendo DS cartridge dumps (<c>.nds</c>), stored next to the game's ZIP (S1); games from older versions keep them
 /// inside it until the storage migration job moves them out (<see cref="LegacyEmbeddedRoms"/>). Sizes cover the libretro No-Intro
 /// <c>Nintendo - Nintendo DS</c> DAT (128 KiB–512 MiB), with the minimum left lower for homebrew. An unmatched ROM
-/// with a bad header CRC is <c>InvalidHeader</c>; one with a valid CRC goes to Review.
+/// with a bad header CRC is <c>InvalidHeader</c>; one with a valid CRC goes to Review. An Admin may store them inside the
+/// ZIP instead (ROM Zip Config, <see cref="RomStorageConfigurable"/>).
 /// </summary>
-public sealed class NintendoDsHandler : ISystemHandler
+public sealed class NintendoDsHandler(IRomStorageSettings? settings = null) : ISystemHandler
 {
     private readonly Lazy<ReadOnlyMemory<byte>> _boxArt = new(() => EmbeddedResources.Load("boxart.nds.png"));
 
@@ -30,8 +32,14 @@ public sealed class NintendoDsHandler : ISystemHandler
     /// </summary>
     public string BrowserCore => "desmume";
 
+    /// <summary>B3: the Admin's setting; beside the ZIP by default (and with no settings, in tests).</summary>
+    public bool EmbedRomsInZip => settings?.Override(Id) ?? DefaultEmbedRomsInZip;
+
     /// <inheritdoc />
-    public bool EmbedRomsInZip => false;
+    public bool DefaultEmbedRomsInZip => false;
+
+    /// <inheritdoc />
+    public bool RomStorageConfigurable => true;
 
     /// <inheritdoc />
     public bool LegacyEmbeddedRoms => true;

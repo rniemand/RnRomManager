@@ -26,7 +26,7 @@ public sealed record LibraryEditResult(string? Code = null, string? Details = nu
 
     /// <summary>S3: the ProblemDetails title of <see cref="StorageMigrationPending"/>.</summary>
     public const string StorageMigrationPendingTitle =
-        "This game's ROMs are being moved out of its ZIP. Try again when the storage migration job has finished.";
+        "This game's ROMs are being moved by the storage job. Try again when it has finished.";
 
     /// <summary>B8, S4: the uploader already has 25 saves on the release (409).</summary>
     public const string SaveLimitReached = "SaveLimitReached";

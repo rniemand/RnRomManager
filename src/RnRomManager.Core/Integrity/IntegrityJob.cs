@@ -286,7 +286,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
             IntegrityFinding Finding(string type, string? entry = null, string? details = null) =>
                 new(type, zipPath, entry, game.System, game.GameId, details);
             // S7: its roms/ entries are checked below as for any embedded game.
-            if (systems.ById(game.System) is { } handler && RomStorage.IsLegacy(handler, game))
+            if (systems.ById(game.System) is { } handler && RomStorage.IsPending(handler, game))
                 add(Finding(LegacyEmbeddedStorage));
 
             // G1: an external ROM has no roms/ entry; its file is checked by StatExternal.
@@ -451,7 +451,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
     /// <summary>
     /// §12.2 <c>WrongLocation</c>: system/bucket/name ≠ §6.1 (case-insensitive, §5); a clash suffix ` (N)` is accepted.
     /// An external game's name is the budgeted one its builder gives the title (E2), suffixed or not; a
-    /// <c>LegacyEmbeddedRoms</c> system also accepts the embedded name (S7a).
+    /// <c>LegacyEmbeddedRoms</c> system accepts either name in either setting (S7a, B5).
     /// </summary>
     private void CheckLocation(string zipPath, string systemId, string title, Guid gameId, Action<IntegrityFinding> add)
     {
@@ -462,10 +462,9 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
         var stem = external ? Path.GetFileNameWithoutExtension(ExternalRomName.ZipName(title)) : FileNameSanitizer.Sanitize(title);
         var embeddedStem = FileNameSanitizer.Sanitize(title);
         var embeddedOk = name.Equals(embeddedStem + ".zip", StringComparison.OrdinalIgnoreCase) || IsClashSuffixed(name, embeddedStem);
-        // S7a: the storage migration keeps each ZIP's path, so a legacy system's ZIP may carry either name rule.
-        var nameOk = external
-            ? ExternalRomName.IsZipNameFor(title, name) || (handler!.LegacyEmbeddedRoms && embeddedOk)
-            : embeddedOk;
+        // S7a, B5: the storage job keeps each ZIP's path, so a legacy system's ZIP may carry either name rule, whatever the setting.
+        var externalOk = ExternalRomName.IsZipNameFor(title, name);
+        var nameOk = handler is { LegacyEmbeddedRoms: true } ? externalOk || embeddedOk : external ? externalOk : embeddedOk;
         var ok = parts.Length == 3 && nameOk
             && parts[0].Equals(systemId, StringComparison.OrdinalIgnoreCase)
             && parts[1].Equals(Bucket.For(name), StringComparison.OrdinalIgnoreCase);
@@ -532,7 +531,7 @@ public sealed class IntegrityJob(JobMode mode, IGameRepository games, IRomReposi
             return true;
         // G2a: an external file's issue (the game row may be gone, so the issue's own system decides).
         if (IntegrityFinding.IsPointerIssue(issue.Type, issue.EntryName)
-            && issue.SystemId is { } systemId && systems.ById(systemId) is { EmbedRomsInZip: false })
+            && issue.SystemId is { } systemId && systems.ById(systemId) is { } pointerSystem && RomStorage.MayHoldExternalFiles(pointerSystem))
             return PointerWasChecked(issue, onDisk, checks);
         if (!onDisk.Contains(issue.ZipPath))
             return true; // the ZIP is gone (its DB rows were repaired)

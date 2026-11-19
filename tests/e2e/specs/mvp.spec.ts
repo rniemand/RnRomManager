@@ -2837,6 +2837,65 @@ test("Nintendo DS: the staged cartridge imports by DAT match and plays in DeSmuM
   await ds.close();
 });
 
+test("ROM Zip Config: DS moves into its ZIP and back, the ROM downloading byte-exact each time", async () => {
+  test.setTimeout(120_000);
+  const staged = process.env.E2E_STAGED_NDS;
+  if (!staged)
+    throw new Error("E2E_STAGED_NDS is not set (run scripts/test-e2e.ps1).");
+  const bytes = await readFile(staged);
+  await waitForIdleJobs();
+
+  const games = await (
+    await page.request.get("/api/games?system=nds&q=Marker")
+  ).json();
+  const gameId: string = games.items[0].id;
+  const downloadsExact = async () => {
+    const detail = await (
+      await page.request.get(`/api/games/${gameId}`)
+    ).json();
+    const download = await page.request.get(detail.roms[0].downloadUrl);
+    expect(download.status()).toBe(200);
+    expect(Buffer.compare(await download.body(), bytes)).toBe(0);
+    return detail.roms[0].externalFileName as string | null;
+  };
+
+  const toggle = async (button: string, configured: string) => {
+    await page.goto("/admin/rom-storage");
+    const row = (name: string) =>
+      page.getByRole("row").filter({ hasText: name });
+    await expect(row("Game Boy Advance").getByRole("button")).toHaveCount(0);
+    await row("Nintendo DS").getByRole("button", { name: button }).click();
+    await dialog().getByRole("button", { name: "Start moving" }).click();
+    await expect(page.getByText("The storage job has started.")).toBeVisible();
+    await waitForIdleJobs(90);
+
+    const jobs = await (
+      await page.request.get("/api/jobs?type=StorageMigration&pageSize=1")
+    ).json();
+    const job = jobs.items[0];
+    expect(job.status).toBe("Completed");
+    const items = await (
+      await page.request.get(`/api/jobs/${job.id}/items`)
+    ).json();
+    expect(items.items.map((i: { outcome: string }) => i.outcome)).toEqual([
+      "Migrated",
+    ]);
+    await page.goto("/jobs");
+    await expect(
+      page.getByRole("row").filter({ hasText: "Moving ROMs" }).first(),
+    ).toContainText("Completed");
+    await page.goto("/admin/rom-storage");
+    await expect(row("Nintendo DS")).toContainText(configured);
+  };
+
+  await toggle("Store in ZIP", "Stored in ZIP");
+  expect(await downloadsExact()).toBeNull();
+
+  // Back beside its ZIP, as later tests expect.
+  await toggle("Store beside ZIP", "Beside ZIP");
+  expect(await downloadsExact()).not.toBeNull();
+});
+
 test("Admin: account types and the create-user modal", { tag: "@shard-b" }, async () => {
   await page.goto("/admin/users");
   // U6: the signed-in admin can't change their own type or disable themselves.

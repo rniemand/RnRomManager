@@ -34,8 +34,8 @@
 	let history = $state<Job[]>([]);
 	let error = $state<unknown>(null);
 	let busy = $state(false);
-	/** S4: legacy games whose ROMs are still inside their ZIPs; the migration button shows while any remain. */
-	let legacyGames = $state(0);
+	/** S4, ROM Zip Config B19: games still waiting for the storage job (either direction); the button shows while any remain. */
+	let pendingGames = $state(0);
 
 	let issues = $state<Page<IntegrityIssue> | null>(null);
 	let issuesError = $state<unknown>(null);
@@ -57,10 +57,10 @@
 				api.get<IntegrityStatus>('/api/integrity/status'),
 				api.get<Page<Job>>('/api/jobs?type=Integrity&pageSize=10'),
 				api.get<Page<Job>>('/api/jobs?type=MediaRetry&pageSize=10'),
-				api.get<{ legacyGames: number } | undefined>('/api/jobs/storage-migration')
+				api.get<{ pendingGames: number } | undefined>('/api/jobs/storage-migration')
 			]);
 			status = s;
-			legacyGames = migration?.legacyGames ?? 0;
+			pendingGames = migration?.pendingGames ?? 0;
 			history = latestJobs([integrity.items, media.items], 10);
 		} catch (e) {
 			error = e;
@@ -225,14 +225,14 @@
 						>
 							<Icon name="retry" /> Retry missing media
 						</button>
-						{#if legacyGames > 0}
+						{#if pendingGames > 0}
 							<button
 								type="button"
 								class="btn btn-outline-warning"
 								disabled={busy}
 								onclick={() => start('/api/jobs/storage-migration')}
 							>
-								Move DS ROMs out of ZIPs ({legacyGames})
+								Resume ROM storage moves ({pendingGames})
 							</button>
 						{/if}
 					</div>

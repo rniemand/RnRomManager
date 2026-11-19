@@ -72,20 +72,20 @@ describe('integrity page', () => {
 		auth.set(null);
 	});
 
-	it('hides the storage migration button when no legacy games remain (S4)', async () => {
-		fixed['GET /api/jobs/storage-migration'] = { legacyGames: 0 };
+	it('hides the storage moves button when no games wait (S4, B19)', async () => {
+		fixed['GET /api/jobs/storage-migration'] = { pendingGames: 0 };
 		render(IntegrityPage);
 
 		await screen.findByRole('button', { name: 'Run quick' });
-		expect(screen.queryByRole('button', { name: /Move DS ROMs out of ZIPs/ })).toBeNull();
+		expect(screen.queryByRole('button', { name: /Resume ROM storage moves/ })).toBeNull();
 	});
 
-	it('starts the storage migration while legacy games remain (S4)', async () => {
-		fixed['GET /api/jobs/storage-migration'] = { legacyGames: 3 };
+	it('resumes the storage moves while games wait (S4, B19)', async () => {
+		fixed['GET /api/jobs/storage-migration'] = { pendingGames: 3 };
 		render(IntegrityPage);
 
 		await fireEvent.click(
-			await screen.findByRole('button', { name: 'Move DS ROMs out of ZIPs (3)' })
+			await screen.findByRole('button', { name: 'Resume ROM storage moves (3)' })
 		);
 
 		expect(calls.map((c) => c.key)).toContain('POST /api/jobs/storage-migration');

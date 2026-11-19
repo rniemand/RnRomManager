@@ -6,6 +6,7 @@ using RnRomManager.Core.Database;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Jobs;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Users;
 
 namespace RnRomManager.Core.Backups;
@@ -36,6 +37,7 @@ public sealed class BackupService(
     IUserRepository users,
     IDiscoveryRepository discovery,
     DatRefreshSettingsService datRefresh,
+    IRomStorageSettings romStorage,
     IAuditLog audit)
 {
     private readonly SemaphoreSlim _lock = new(1, 1);
@@ -164,6 +166,8 @@ public sealed class BackupService(
             discovery.Invalidate();
             SettingsChanged?.Invoke();
             datRefresh.NotifySettingsChanged();
+            // ROM Zip Config B2: a restored value that disagrees with the ZIPs just makes those games pending.
+            await romStorage.LoadAsync(none);
         }
         catch (Exception ex)
         {

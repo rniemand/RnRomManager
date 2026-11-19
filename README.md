@@ -1,6 +1,6 @@
 # RnRomManager
 
-A self-hosted web app for managing a personal backup collection of ROMs across [supported systems](#supported-systems). Switch dumps, Nintendo DS dumps, Nintendo 3DS dumps and disc images are stored as files next to each game's ZIP, since they're too large to pack; a PlayStation, Saturn, Sega CD or 3DO bin/cue set is kept together as one release. PlayStation, Saturn and Sega CD also take MAME `.chd` images, which never match the Redump DAT and always go to Review.
+A self-hosted web app for managing a personal backup collection of ROMs across [supported systems](#supported-systems). Switch dumps, Nintendo 3DS dumps and disc images are stored as files next to each game's ZIP, since they're too large to pack; Nintendo DS dumps are stored next to the ZIP by default, and an Admin can move them inside it instead (Admin → ROM Zip Config); a PlayStation, Saturn, Sega CD or 3DO bin/cue set is kept together as one release. PlayStation, Saturn and Sega CD also take MAME `.chd` images, which never match the Redump DAT and always go to Review.
 
 Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder. RnRomManager identifies each one against the [No-Intro](https://no-intro.org/) DATs (cartridge systems) or the [Redump](http://redump.org/) DATs (disc systems), names it consistently, groups every region and revision of a game together, fetches box art and screenshots, and stores each game as one self-describing ZIP in a tidy `roms/<system>/<letter>/` layout. A MariaDB database mirrors the library for fast browsing, and a scheduled integrity checker keeps the two in sync.
 
@@ -49,7 +49,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen` | No-Intro | `genesis_plus_gx` |
 | Nintendo 3DS | `3ds` | Next to ZIP | `.3ds`, `.cci`, `.cia` | No-Intro | — |
 | Nintendo 64 | `n64` | In ZIP | `.z64`, `.v64`, `.n64` | No-Intro | — |
-| Nintendo DS | `nds` | Next to ZIP | `.nds` | No-Intro | `desmume` |
+| Nintendo DS | `nds` | Next to ZIP (configurable) | `.nds` | No-Intro | `desmume` |
 | Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | `fceumm` |
 | Nintendo Switch | `switch` | Next to ZIP | `.nsp`, `.xci`, `.nsz`, `.xcz` | titledb | — |
 | PlayStation | `psx` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd` | Redump | `pcsx_rearmed` |

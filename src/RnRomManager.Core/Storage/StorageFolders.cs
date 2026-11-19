@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using RnRomManager.Core.Configuration;
+using RnRomManager.Core.Library;
 using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Core.Storage;
@@ -51,7 +52,7 @@ public static class StorageFolders
             var root = paths.Ingest;
             var system = SafePath.Resolve(root, handler.Id);
             var folders = IngestSubfolders.Select(c => SafePath.Resolve(root, Path.Combine(handler.Id, c)));
-            if (!handler.EmbedRomsInZip)
+            if (RomStorage.MayHoldExternalFiles(handler)) // B5a: never depends on the setting (loaded after this step)
             {
                 if (!SafeToCreate(root, system, logger))
                     continue;

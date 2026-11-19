@@ -157,10 +157,14 @@ public class StorageFoldersTests
         return outside;
     }
 
-    [TestCase("ext", TestName = "EnsureSystemFolders_LinkedExternalFolder_IsSkipped ingest system folder")]
-    [TestCase("ext/_failed", TestName = "EnsureSystemFolders_LinkedExternalFolder_IsSkipped side folder")]
-    public void EnsureSystemFolders_LinkedExternalFolder_IsSkipped(string linked)
+    [TestCase("ext", false, TestName = "EnsureSystemFolders_LinkedExternalFolder_IsSkipped ingest system folder")]
+    [TestCase("ext/_failed", false, TestName = "EnsureSystemFolders_LinkedExternalFolder_IsSkipped side folder")]
+    [TestCase("ext", true, TestName = "EnsureSystemFolders_LinkedExternalFolder_IsSkipped LegacyEmbeddedRoms set to embed")]
+    public void EnsureSystemFolders_LinkedExternalFolder_IsSkipped(string linked, bool legacyEmbedded)
     {
+        // B5a: a LegacyEmbeddedRoms system's folders get the checked creation whatever its EmbedRomsInZip.
+        var handler = Handler("ext", embed: legacyEmbedded);
+        handler.LegacyEmbeddedRoms.Returns(legacyEmbedded);
         var paths = Paths();
         var root = paths.Ingest;
         var link = Path.Combine(root, linked);
@@ -168,7 +172,7 @@ public class StorageFoldersTests
         var logger = Substitute.For<ILogger>();
         try
         {
-            StorageFolders.EnsureSystemFolders(paths, [Handler("ext", embed: false)], logger);
+            StorageFolders.EnsureSystemFolders(paths, [handler], logger);
 
             Assert.That(Directory.GetFileSystemEntries(outside), Is.Empty, "nothing is created through the link");
             Assert.That(logger.ReceivedCalls().Count(c => c.GetArguments()[0] is LogLevel.Warning), Is.EqualTo(1));

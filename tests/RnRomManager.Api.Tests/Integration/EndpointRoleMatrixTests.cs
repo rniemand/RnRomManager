@@ -141,6 +141,8 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/admin/dats/settings"] = Role.Admin,
         ["PUT /api/admin/dats/settings"] = Role.Admin,
         ["GET /api/admin/settings"] = Role.Admin,
+        ["GET /api/admin/rom-storage"] = Role.Admin,
+        ["PUT /api/admin/rom-storage/{systemId}"] = Role.Admin,
         ["GET /api/admin/backups"] = Role.Admin,
         ["PUT /api/admin/backups/settings"] = Role.Admin,
         ["POST /api/admin/backups"] = Role.Admin,

@@ -792,6 +792,68 @@ public class ReviewEndpointsTests
         await AssertStoredExternal(response.GameId.Value, item.Sha1, DsUnknown);
     }
 
+    /// <summary>ROM Zip Config B3, B13: an item queued while DS was beside the ZIP resolves into the ZIP after the toggle.</summary>
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task Ds_ItemQueuedBeforeTheEmbedToggle_ResolvesIntoTheZip(bool archive)
+    {
+        var item = await QueueDs("pen pals.nds", DsOther, archive);
+        await Service<IRomStorageSettings>().SetAsync("nds", true, default);
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "Pen Pals", regions = new[] { "USA" }, languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+
+        Assert.That(response.Code, Is.Null);
+        var row = (await Service<IGameRepository>().GetAsync(response.GameId!.Value, default))!;
+        var zipPath = Path.GetFullPath(Path.Combine(_factory.Root, "roms", row.ZipPath));
+        using (var zip = LibraryZip.Open(zipPath, Service<InfoJsonReader>()))
+        {
+            var rom = zip.InfoJson!.Game!.Roms.Single();
+            Assert.That(rom.ExternalFileName, Is.Null);
+            Assert.That(zip.EntryNames, Does.Contain(LibraryZip.RomEntry(rom.FileName)));
+        }
+        Assert.That(Directory.GetFiles(Path.GetDirectoryName(zipPath)!), Is.EqualTo(new[] { zipPath }), "nothing beside the ZIP");
+        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Resolved"));
+        Assert.That(File.Exists(item.ArchivePath ?? item.SourcePath), Is.EqualTo(archive), "an embedded system keeps a resolved archive until the next ingest");
+        if (archive)
+        {
+            await RunIngest();
+            Assert.That(File.Exists(item.ArchivePath), Is.False);
+        }
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task Ds_ItemQueuedBeforeTheEmbedToggle_IsDeleted(bool archive)
+    {
+        var item = await QueueDs("pen pals.nds", DsOther, archive);
+        await Service<IRomStorageSettings>().SetAsync("nds", true, default);
+
+        using var response = await _admin.SendAsync(HttpMethod.Delete, $"/api/review/{item.Id}", null, true);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NoContent));
+        Assert.That(File.Exists(item.ArchivePath ?? item.SourcePath), Is.False);
+        Assert.That(await Reviews.GetAsync(item.Id, default), Is.Null);
+    }
+
+    /// <summary>
+    /// B5 (T9 retry): an archived DS item queued beside the ZIP whose SHA-1 a DS game inside its ZIP already holds is a
+    /// Duplicate; the owner row's own layout decides. (An embedded-mode resolve never reaches this check: see § Decisions.)
+    /// </summary>
+    [Test]
+    public async Task Ds_ArchivedItem_WithAnOwnerInsideItsZip_IsDuplicate()
+    {
+        var item = await QueueDs("quest-eu.nds", DsUnknown, archive: true);
+        var owner = TestLibrary.Game("Quest", TestLibrary.Rom("Quest (Europe).nds", DsUnknown)) with { System = "nds" };
+        var zip = Path.Combine(_factory.Root, "roms", "nds", "Q", "Quest.zip");
+        LegacyZipWriter.Write(zip, owner, DsUnknown); // the retry syncs the library first, so the owner's ZIP must exist
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(owner, "nds/Q/Quest.zip", new FileInfo(zip).Length, DateTime.UtcNow), default);
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "Quest 2", regions = new[] { "USA" }, languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+
+        Assert.That(response.Code, Is.EqualTo("Duplicate"));
+        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
+    }
+
     [Test]
     public async Task Ds_SameLengthChangedSource_IsVerifyFailed_AndStaysPending()
     {

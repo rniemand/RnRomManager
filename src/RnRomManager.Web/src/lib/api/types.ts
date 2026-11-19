@@ -582,3 +582,16 @@ export interface ActivityReport {
 	edits: ActivityAuditItem[];
 	deletions: ActivityAuditItem[];
 }
+
+/** ROM Zip Config B12: `GET /api/admin/rom-storage`, one row per system. */
+export interface RomStorageRow {
+	id: string;
+	displayName: string;
+	/** true: ROMs inside the game ZIP when nothing is configured. */
+	defaultEmbedRoms: boolean;
+	/** The effective storage. */
+	embedRoms: boolean;
+	configurable: boolean;
+	/** Games still waiting to be moved to the effective storage. */
+	pendingGames: number;
+}

@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using NSubstitute;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Storage;
@@ -26,6 +27,19 @@ public class NintendoDsHandlerTests
         Assert.That(Handler.MetadatKinds, Is.EqualTo(DatKind.Metadat));
         Assert.That(Handler.MetadatKinds, Has.Count.EqualTo(4));
         Assert.That(Handler.BrowserCore, Is.EqualTo("desmume"));
+    }
+
+    [Test]
+    public void RomStorage_IsConfigurable_DefaultBesideTheZip_FollowsTheOverride()
+    {
+        Assert.That((Handler.RomStorageConfigurable, Handler.DefaultEmbedRomsInZip), Is.EqualTo((true, false)));
+        var settings = Substitute.For<IRomStorageSettings>();
+        ISystemHandler handler = new NintendoDsHandler(settings);
+        Assert.That(handler.EmbedRomsInZip, Is.False, "no stored value");
+        settings.Override("nds").Returns(true);
+        Assert.That((handler.EmbedRomsInZip, handler.DefaultEmbedRomsInZip), Is.EqualTo((true, false)));
+        settings.Override("nds").Returns(false);
+        Assert.That(handler.EmbedRomsInZip, Is.False);
     }
 
     [Test]
