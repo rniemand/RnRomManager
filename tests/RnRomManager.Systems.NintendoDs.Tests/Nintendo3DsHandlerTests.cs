@@ -1,5 +1,7 @@
 using System.Buffers.Binary;
+using NSubstitute;
 using RnRomManager.Core.Dats;
+using RnRomManager.Core.Storage;
 using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Systems.NintendoDs.Tests;
@@ -16,10 +18,21 @@ public class Nintendo3DsHandlerTests
         Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".3ds", ".cci", ".cia" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((16_384L, 4_294_967_296L)));
         Assert.That((Handler.EmbedRomsInZip, Handler.LegacyEmbeddedRoms, Handler.FileSets, Handler.KeepsSourceExtension),
-            Is.EqualTo((false, false, false, false)));
+            Is.EqualTo((false, true, false, false)));
         Assert.That((Handler.DatSource, Handler.DatFolder), Is.EqualTo((DatSource.Libretro, DatKind.NoIntro)));
         Assert.That(Handler.MetadatKinds, Is.EqualTo(new[] { DatKind.Developer, DatKind.Publisher, DatKind.Genre }));
         Assert.That(Handler.BrowserCore, Is.Null);
+    }
+
+    [Test]
+    public void RomStorage_IsConfigurable_DefaultBesideTheZip_FollowsTheOverride()
+    {
+        Assert.That((Handler.RomStorageConfigurable, Handler.DefaultEmbedRomsInZip), Is.EqualTo((true, false)));
+        var settings = Substitute.For<IRomStorageSettings>();
+        ISystemHandler handler = new Nintendo3DsHandler(settings);
+        Assert.That(handler.EmbedRomsInZip, Is.False, "no stored value");
+        settings.Override("3ds").Returns(true);
+        Assert.That((handler.EmbedRomsInZip, handler.DefaultEmbedRomsInZip), Is.EqualTo((true, false)));
     }
 
     [Test]
