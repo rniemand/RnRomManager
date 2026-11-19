@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
 	import Icon from '#lib/components/Icon.svelte';
 	import NotAllowed from '#lib/components/NotAllowed.svelte';
 	import PageTitle from '#lib/components/PageTitle.svelte';
@@ -45,7 +46,7 @@
 	<NotAllowed />
 {:else}
 	<PageTitle icon="reports" text="Reports" />
-	<ul class="nav nav-tabs mb-3">
+	<ul class="nav nav-tabs mb-3" use:scrollActiveTab>
 		{#each tabs as tab (tab.href)}
 			<li class="nav-item">
 				<a

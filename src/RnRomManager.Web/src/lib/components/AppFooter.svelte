@@ -57,7 +57,10 @@
 			class="link-body-emphasis text-decoration-none"
 			href={releasesUrl}
 			target="_blank"
-			rel="noopener noreferrer">RnRomManager{about ? ` ${about.version}` : ''}</a
+			rel="noopener noreferrer"
+			><!-- U9: the name hides below sm; until /api/about loads it stays, so the link is never empty. -->{#if about}<span
+					class="d-none d-sm-inline">RnRomManager&#32;</span
+				>{about.version}{:else}RnRomManager{/if}</a
 		>
 		{#if job}
 			<a

@@ -9,6 +9,7 @@
 </script>
 
 <script lang="ts">
+	import { scrollActiveTab } from '../scrollActiveTab';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { formatCount } from '../format';
@@ -16,7 +17,7 @@
 </script>
 
 <nav class="mb-3" aria-label="ROM Tools">
-	<ul class="nav nav-tabs">
+	<ul class="nav nav-tabs" use:scrollActiveTab>
 		{#each romTools as tool (tool.href)}
 			{@const active = page.url.pathname === resolve(tool.href)}
 			<li class="nav-item">

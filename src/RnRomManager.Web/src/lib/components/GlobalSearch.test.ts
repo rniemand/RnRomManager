@@ -5,7 +5,10 @@ import { auth } from '../stores/auth.svelte';
 import type { Role } from '../api/types';
 
 const goto = vi.fn();
-vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => goto(...args) }));
+vi.mock('$app/navigation', () => ({
+	goto: (...args: unknown[]) => goto(...args),
+	afterNavigate: () => {}
+}));
 vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/') } }));
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')

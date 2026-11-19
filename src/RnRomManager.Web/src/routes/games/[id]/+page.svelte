@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
 	import { untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { goto } from '$app/navigation';
@@ -647,7 +648,7 @@
 		</div>
 	</div>
 
-	<ul class="nav nav-tabs mb-3" role="tablist">
+	<ul class="nav nav-tabs mb-3" use:scrollActiveTab role="tablist">
 		{#each tabs as [value, label, icon] (value)}
 			<li class="nav-item" role="presentation">
 				<button

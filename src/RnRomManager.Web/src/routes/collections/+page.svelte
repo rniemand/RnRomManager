@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
 	import PageTitle from '#lib/components/PageTitle.svelte';
 	import { onDestroy, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
@@ -159,7 +160,7 @@
 </div>
 
 <nav class="mb-3" aria-label="Collections views">
-	<ul class="nav nav-tabs">
+	<ul class="nav nav-tabs" use:scrollActiveTab>
 		{#each collectionsTabs as item (item.tab)}
 			<li class="nav-item">
 				<a

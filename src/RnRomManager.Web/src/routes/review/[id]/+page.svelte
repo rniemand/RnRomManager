@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
 	import { onMount, untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -484,7 +485,7 @@
 						Disc track files must match the Redump DAT to be imported.
 					</p>
 				{:else}
-					<ul class="nav nav-tabs mb-3" role="tablist">
+					<ul class="nav nav-tabs mb-3" use:scrollActiveTab role="tablist">
 						{#each tabs as t (t)}
 							<li class="nav-item" role="presentation">
 								<button

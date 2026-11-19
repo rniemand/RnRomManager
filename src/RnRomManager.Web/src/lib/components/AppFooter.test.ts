@@ -55,12 +55,22 @@ describe('AppFooter (B10–B12)', () => {
 	it('is fixed to the bottom and links the version to the releases page, loaded once', async () => {
 		render(AppFooter, { me: me(), onhotkeys: vi.fn() });
 
-		const version = await screen.findByRole('link', { name: 'RnRomManager 1.4.2' });
+		const version = await screen.findByRole('link', { name: /^RnRomManager ?1.4.2$/ });
 		expect(version.getAttribute('href')).toBe('https://github.com/rniemand/RnRomManager/releases');
 		expect(version.getAttribute('target')).toBe('_blank');
 		expect(version.getAttribute('rel')).toBe('noopener noreferrer');
 		expect(document.querySelector('footer')!.classList.contains('fixed-bottom')).toBe(true);
 		expect(calls).toEqual(['/api/about']);
+	});
+
+	it('below sm only the version shows: the name sits in a d-none d-sm-inline span inside the link (U9)', async () => {
+		render(AppFooter, { me: me(), onhotkeys: vi.fn() });
+
+		const version = await screen.findByRole('link', { name: /^RnRomManager ?1.4.2$/ });
+		const name = version.querySelector('span')!;
+		expect(name.className).toBe('d-none d-sm-inline');
+		expect(name.textContent).toBe('RnRomManager ');
+		expect(version.textContent?.replace(name.textContent!, '')).toBe('1.4.2');
 	});
 
 	it('without a version (loading or failed) the link reads RnRomManager alone', async () => {
@@ -71,11 +81,12 @@ describe('AppFooter (B10–B12)', () => {
 		expect(screen.getByRole('link', { name: 'RnRomManager' }).textContent?.trim()).toBe(
 			'RnRomManager'
 		);
+		expect(screen.getByRole('link', { name: 'RnRomManager' }).querySelector('span')).toBeNull();
 	});
 
 	it('About opens the About modal with the version and licences', async () => {
 		render(AppFooter, { me: me(), onhotkeys: vi.fn() });
-		await screen.findByRole('link', { name: 'RnRomManager 1.4.2' });
+		await screen.findByRole('link', { name: /^RnRomManager ?1.4.2$/ });
 
 		await fireEvent.click(screen.getByRole('button', { name: 'About' }));
 

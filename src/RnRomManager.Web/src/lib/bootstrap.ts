@@ -5,3 +5,5 @@ import bootstrap from 'bootstrap/dist/js/bootstrap.bundle.min.js';
 export const Modal = bootstrap.Modal;
 export const Tooltip = bootstrap.Tooltip;
 export const Dropdown = bootstrap.Dropdown;
+/** U1: hides the mobile navbar after a navigation. */
+export const Collapse = bootstrap.Collapse;
