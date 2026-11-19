@@ -13,7 +13,7 @@ created: <YYYY-MM-DD>
 - <What this spec deliberately doesn't do.>
 
 ## Behaviour
-<What the user/API/job does after the change. Concrete: inputs, outputs, error codes (ProblemDetails `code`), permissions (Admin/User), edge cases. Number the rules (B1, B2…) so steps and tests can cite them.>
+<What the user/API/job does after the change. Concrete: inputs, outputs, error codes (ProblemDetails `code`), permissions (Admin/User), edge cases, and exact user-visible text, icons and placement. Number the rules (B1, B2…) so steps and tests can cite them.>
 
 ## Changes
 | Area | File(s) | Change |
@@ -26,7 +26,7 @@ Migrations, config keys and API contract changes are listed here explicitly, inc
 - <Breaking change, data risk, performance, security — and how the spec handles it.>
 
 ## Steps
-- [ ] **1. <title>**: <deliverables>. Files: `<paths>`. Tests: <what proves it>. Done when: <checkable list>.
+- [ ] **1. <title>**: <deliverables>. Files: `<paths>`. Tests: <test classes / *.test.ts paths that prove it, `(new)` when new>. Done when: <checkable list>.
 - [ ] **2. <title>**: …
 
 ## Decisions
