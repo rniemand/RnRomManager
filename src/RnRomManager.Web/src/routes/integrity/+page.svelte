@@ -34,7 +34,7 @@
 	let history = $state<Job[]>([]);
 	let error = $state<unknown>(null);
 	let busy = $state(false);
-	/** S4: legacy games whose ROMs are still inside their ZIPs; the migration button shows while any remain. */
+	/** S4, ROM Zip Config B19: games still waiting for the storage job (either direction); the button shows while any remain. */
 	let pendingGames = $state(0);
 
 	let issues = $state<Page<IntegrityIssue> | null>(null);
@@ -232,7 +232,7 @@
 								disabled={busy}
 								onclick={() => start('/api/jobs/storage-migration')}
 							>
-								Move DS ROMs out of ZIPs ({pendingGames})
+								Resume ROM storage moves ({pendingGames})
 							</button>
 						{/if}
 					</div>
