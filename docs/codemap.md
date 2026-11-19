@@ -339,4 +339,4 @@ Read a section with offset/limit instead of the whole doc (`features.md` alone i
 
 - `README.md` (166 lines): Supported systems :26; Quick start :66; Documentation :130; Disclaimer :139; Attribution :143; License :164
 
-- `CONTRIBUTING.md` (20 lines): Specs, branches and PRs :7; Test rule :16; Doc rule :19
+- `CONTRIBUTING.md` (21 lines): Specs, branches and PRs :7; Test rule :17; Doc rule :20
