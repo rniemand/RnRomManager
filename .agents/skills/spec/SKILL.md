@@ -19,7 +19,7 @@ Specs:
 - **Unique slug:** `git fetch --prune`, then add `-2`, `-3`… (part of the slug) while the slug is used by a file in any `specs/` folder on the current branch or `origin/main`, or by a `dev/<slug>` branch locally or on `origin`.
 - **Branch:** `dev/<slug>`. The spec lives there from creation to its single PR: it reaches `main` only with its finished implementation, so an abandoned branch leaves `main` untouched.
 
-Repo rules that apply to both modes are in `CONTRIBUTING.md` (test rule, doc rule) and `docs/development.md` (architecture, conventions). Read them once per session, not per step. Never commit secrets or dev passwords; GitGuardian scans every PR.
+Repo rules that apply to both modes are in `CONTRIBUTING.md` (test rule, doc rule). Find code through `docs/codemap.md` (routes, pages, jobs, files, tests, doc section line numbers) and follow `docs/recipes.md` (where each common change must reach). Read those three once per session, not per step; read `docs/development.md` and other docs only by the section you need. Never commit secrets or dev passwords; GitGuardian scans every PR.
 
 ## Create
 
@@ -59,6 +59,6 @@ Keep the user's time and the token count low: read only what the request touches
 4. **Spec turns out wrong or unclear:** don't guess and don't silently match the spec to the code. Ask the user, update the spec section and § Decisions in the same commit as the code.
 5. **Finish**, after the last step:
    1. `git merge origin/main` (resolve conflicts on the branch, asking the user when the right resolution isn't clear), then `pwsh scripts/test-all.ps1` and `pwsh scripts/test-e2e.ps1` must both pass (Docker running). If one fails, fix it on the branch and rerun; never open the PR with failing tests.
-   2. Check the doc rule: every changed behaviour is in its doc (`docs/`, `README.md`, spec). Changes to system storage, formats, DAT or browser play update the README supported-systems table.
+   2. Check the doc rule: every changed behaviour is in its doc (`docs/`, `README.md`, spec). Changes to system storage, formats, DAT or browser play update the README supported-systems table. Run `pwsh scripts/codemap.ps1` and commit `docs/codemap.md` if it changed.
    3. `git mv` the spec to `specs/completed/`, set `status: completed`, commit `Complete spec: <title>`.
    4. Push and open a PR from `dev/<slug>` to `main` titled `<title>` — the branch's first and only PR, carrying the spec and its implementation together. The body is the spec's summary, the steps done, test results and anything deferred or risky. Stop there: merging is the maintainer's call.
