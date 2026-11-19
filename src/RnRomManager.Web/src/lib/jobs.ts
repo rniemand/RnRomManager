@@ -5,6 +5,7 @@ import { formatSize } from './format';
 export const outcomes = [
 	'Ingested',
 	'Repaired',
+	'Repacked',
 	'Duplicate',
 	'Review',
 	'Failed',
@@ -23,6 +24,7 @@ const statusClasses: Record<JobStatus, string> = {
 const outcomeClasses: Record<string, string> = {
 	Ingested: 'text-bg-success',
 	Repaired: 'text-bg-success',
+	Repacked: 'text-bg-success',
 	Duplicate: 'text-bg-secondary',
 	Review: 'text-bg-info',
 	Failed: 'text-bg-warning',
@@ -44,7 +46,8 @@ const jobLabels: Record<CurrentJob['type'], string> = {
 	DatRefresh: 'DAT refresh',
 	MediaRetry: 'Media retry',
 	ReviewResolve: 'Review',
-	StorageMigration: 'Moving ROMs'
+	StorageMigration: 'Moving ROMs',
+	ZipRepack: 'Repacking ZIPs'
 };
 
 /** ROM Zip Config B17: a job type's short label (footer, Jobs page); an unknown type shows as is. */
