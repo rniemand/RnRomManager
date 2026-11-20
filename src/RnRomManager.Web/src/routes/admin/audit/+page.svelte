@@ -256,8 +256,29 @@
 	{:else if result.items.length === 0}
 		<div class="card"><EmptyState message="No audit events found." /></div>
 	{:else}
+		<!-- Release editing B35: below md, one card per event instead of the table. -->
+		<div class="d-md-none">
+			{#each result.items as item (item.id)}
+				<div class="card mb-2">
+					<div class="card-body py-2">
+						<div class="d-flex align-items-center gap-2">
+							<strong>{item.action}</strong>
+							{#if item.system}<SystemBadge
+									system={item.system}
+									name={systems.find((s) => s.id === item.system)?.displayName}
+								/>{/if}
+							<span class="ms-auto small text-body-secondary text-nowrap"
+								>{formatDateTime(item.occurredAt)}</span
+							>
+						</div>
+						<div>{@render who(item)} · {@render gameCell(item)}</div>
+						<div class="small text-break">{@render changeText(item)}</div>
+					</div>
+				</div>
+			{/each}
+		</div>
 		<!-- B30: five wrapping columns, no sideways scroll at ≥ 992 px (the wrapper stays for rule T1). -->
-		<div class="card">
+		<div class="card d-none d-md-block">
 			<div class="table-responsive">
 				<table class="table table-sm table-striped table-hover align-middle mb-0">
 					<thead class="table-dark">
@@ -279,24 +300,9 @@
 											name={systems.find((s) => s.id === item.system)?.displayName}
 										/>{/if}</td
 								>
-								<td
-									>{#if item.user}{item.user}{:else}<em>System</em>{/if}</td
-								>
-								<td class="text-break"
-									>{#if item.gameId && item.gameTitle}<a
-											href={resolve('/games/[id]', { id: item.gameId })}>{item.gameTitle}</a
-										>{:else if item.gameId}<span title={item.gameId}>{item.gameId.slice(0, 8)}</span
-										>{:else}—{/if}</td
-								>
-								<td class="text-break small"
-									>{#if item.path || item.targetPath || item.details}{#if item.path}<div>
-												{item.path}{#if item.targetPath}{` → ${item.targetPath}`}{/if}
-											</div>{:else if item.targetPath}<div>
-												→ {item.targetPath}
-											</div>{/if}{#if item.details}<div class="text-body-secondary">
-												{item.details}
-											</div>{/if}{:else}—{/if}</td
-								>
+								<td>{@render who(item)}</td>
+								<td class="text-break">{@render gameCell(item)}</td>
+								<td class="text-break small">{@render changeText(item)}</td>
 							</tr>{/each}</tbody
 					>
 				</table>
@@ -305,6 +311,24 @@
 	{/if}
 	{@render pager('Pages, bottom')}
 </AdminOnly>
+
+<!-- Release editing B35: the cells the table and the phone cards share. -->
+{#snippet who(item: AuditItem)}{#if item.user}{item.user}{:else}<em>System</em>{/if}{/snippet}
+
+{#snippet gameCell(item: AuditItem)}{#if item.gameId && item.gameTitle}<a
+			href={resolve('/games/[id]', { id: item.gameId })}>{item.gameTitle}</a
+		>{:else if item.gameId}<span title={item.gameId}>{item.gameId.slice(0, 8)}</span
+		>{:else}—{/if}{/snippet}
+
+{#snippet changeText(
+	item: AuditItem
+)}{#if item.path || item.targetPath || item.details}{#if item.path}<div>
+				{item.path}{#if item.targetPath}{` → ${item.targetPath}`}{/if}
+			</div>{:else if item.targetPath}<div>
+				→ {item.targetPath}
+			</div>{/if}{#if item.details}<div class="text-body-secondary">
+				{item.details}
+			</div>{/if}{:else}—{/if}{/snippet}
 
 {#snippet pager(label: string)}
 	{#if result && result.total > 0}<Pagination
@@ -322,5 +346,12 @@
 	}
 	.filter-panel {
 		min-width: 14rem;
+	}
+	/* Release editing B35: below md the search takes the toolbar's first row. */
+	@media (max-width: 767.98px) {
+		.audit-search {
+			flex-basis: 100%;
+			max-width: none;
+		}
 	}
 </style>

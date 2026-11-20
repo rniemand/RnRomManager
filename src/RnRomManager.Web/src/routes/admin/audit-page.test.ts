@@ -92,10 +92,12 @@ describe('Auditing', () => {
 
 	it('loads 100 unfiltered rows, shows System for a null user, paths and the game link', async () => {
 		render(AuditPage);
-		const link = await screen.findByRole('link', { name: 'Tetris' });
+		const [link] = await screen.findAllByRole('link', { name: 'Tetris' });
 		expect(link.getAttribute('href')).toBe(`/games/${game}`);
 		expect(latest().toString()).toBe('page=1&pageSize=100');
-		expect(screen.getByText('System', { selector: 'em' })).toBeTruthy();
+		expect(
+			within(document.querySelector('tbody')!).getByText('System', { selector: 'em' })
+		).toBeTruthy();
 		const change = document.querySelector('tbody tr td:last-child')!;
 		expect(
 			[...change.children].map((line) => line.textContent!.replace(/\s+/g, ' ').trim())
@@ -126,7 +128,7 @@ describe('Auditing', () => {
 	])('maps %s to the API and URL, resetting the page', async (label, key, value) => {
 		navigateTo('/admin/audit?page=2');
 		render(AuditPage);
-		await screen.findByRole('link', { name: 'Tetris' });
+		await screen.findAllByRole('link', { name: 'Tetris' });
 		if (label === 'Action') await fireEvent.click(menuItem('Action', 'GameUpdated'));
 		else if (label === 'System') await fireEvent.click(menuItem('System', 'Game Boy'));
 		else
@@ -139,7 +141,7 @@ describe('Auditing', () => {
 
 	it('sends local midnights, with To exclusive on the next local day', async () => {
 		render(AuditPage);
-		await screen.findByRole('link', { name: 'Tetris' });
+		await screen.findAllByRole('link', { name: 'Tetris' });
 		await fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-11-01' } });
 		await vi.waitFor(() => expect(latest().get('from')).toBe(new Date(2026, 10, 1).toISOString()));
 		await fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-11-01' } });
@@ -151,7 +153,7 @@ describe('Auditing', () => {
 	it('scheduled only clears and disables User, including a pending debounce', async () => {
 		navigateTo('/admin/audit?user=boss');
 		render(AuditPage);
-		await screen.findByRole('link', { name: 'Tetris' });
+		await screen.findAllByRole('link', { name: 'Tetris' });
 		await fireEvent.input(screen.getByLabelText('User', { exact: true }), {
 			target: { value: 'other' }
 		});
@@ -170,7 +172,7 @@ describe('Auditing', () => {
 		total = 201;
 		navigateTo('/admin/audit?action=Ingested&system=gb&q=zip&from=2026-11-01&to=2026-11-02&page=2');
 		render(AuditPage);
-		await screen.findByRole('link', { name: 'Tetris' });
+		await screen.findAllByRole('link', { name: 'Tetris' });
 		expect((screen.getByLabelText('Search') as HTMLInputElement).value).toBe('zip');
 		const top = screen.getByRole('navigation', { name: 'Pages, top' });
 		await fireEvent.click(within(top).getByRole('button', { name: 'Next' }));
@@ -185,7 +187,7 @@ describe('Auditing', () => {
 	it('the filters are one toolbar of dropdowns, each toggle showing its value (B25)', async () => {
 		navigateTo('/admin/audit?action=Ingested&system=gb&user=boss&from=2026-11-01&to=2026-11-02');
 		render(AuditPage);
-		await screen.findByRole('link', { name: 'Tetris' });
+		await screen.findAllByRole('link', { name: 'Tetris' });
 
 		const form = screen.getByRole('search');
 		expect(form.classList.contains('flex-wrap')).toBe(true);
@@ -204,7 +206,7 @@ describe('Auditing', () => {
 
 	it('an unfiltered toolbar shows the bare field names; Scheduled only names the User toggle', async () => {
 		render(AuditPage);
-		await screen.findByRole('link', { name: 'Tetris' });
+		await screen.findAllByRole('link', { name: 'Tetris' });
 		expect(toggle('User').textContent!.trim()).toBe('User');
 		expect(toggle('Date').textContent!.trim()).toBe('Date');
 		expect(toggle('Action').classList.contains('btn-outline-secondary')).toBe(true);
@@ -219,7 +221,7 @@ describe('Auditing', () => {
 	it('choosing All actions clears the action', async () => {
 		navigateTo('/admin/audit?action=Ingested');
 		render(AuditPage);
-		await screen.findByRole('link', { name: 'Tetris' });
+		await screen.findAllByRole('link', { name: 'Tetris' });
 
 		await fireEvent.click(menuItem('Action', 'All actions'));
 
@@ -232,16 +234,39 @@ describe('Auditing', () => {
 		items = [{ ...(items[0] as object), details: long }];
 		render(AuditPage);
 
-		const line = await screen.findByText(long);
+		const line = (await screen.findAllByText(long)).find((e) => e.closest('td'))!;
 		const cell = line.closest('td')!;
 		expect(cell.classList.contains('text-break')).toBe(true);
 		expect(cell.classList.contains('text-truncate')).toBe(false);
 		expect(line.getAttribute('title')).toBeNull();
 	});
 
+	it('below md shows one card per event with the same fields; the table is md-up (release editing B35)', async () => {
+		render(AuditPage);
+		await screen.findAllByRole('link', { name: 'Tetris' });
+
+		expect(document.querySelector('table')!.closest('.card')!.className).toBe(
+			'card d-none d-md-block'
+		);
+		const list = document.querySelector('.d-md-none')!;
+		const card = list.querySelector('.card.mb-2 > .card-body.py-2')!;
+		const [first, second, third] = [...card.children] as HTMLElement[];
+		expect(first.querySelector('strong')!.textContent).toBe('Ingested');
+		expect(within(first).getByText('Game Boy', { selector: '.badge' })).toBeTruthy();
+		const time = first.querySelector('.ms-auto')!;
+		expect(time.className).toContain('small text-body-secondary');
+		expect(time.textContent).toBe(document.querySelector('tbody td')!.textContent);
+		expect(within(second).getByText('System', { selector: 'em' })).toBeTruthy();
+		expect(within(second).getByRole('link', { name: 'Tetris' }).getAttribute('href')).toBe(
+			`/games/${game}`
+		);
+		expect(third.className).toBe('small text-break');
+		expect(third.textContent).toBe(document.querySelector('tbody tr td:last-child')!.textContent);
+	});
+
 	it('has five columns, the system badge under the action (B30)', async () => {
 		render(AuditPage);
-		await screen.findByRole('link', { name: 'Tetris' });
+		await screen.findAllByRole('link', { name: 'Tetris' });
 
 		expect(screen.getAllByRole('columnheader').map((th) => th.textContent!.trim())).toEqual([
 			'Time',
@@ -261,7 +286,7 @@ describe('Auditing', () => {
 		items = [{ ...(items[0] as object), gameTitle: null }];
 		render(AuditPage);
 
-		const short = await screen.findByText(game.slice(0, 8));
+		const short = (await screen.findAllByText(game.slice(0, 8))).find((e) => e.closest('td'))!;
 		expect(short.tagName).toBe('SPAN');
 		expect(short.getAttribute('title')).toBe(game);
 		expect(screen.queryByRole('link', { name: /0000/ })).toBeNull();
@@ -273,7 +298,7 @@ describe('Auditing', () => {
 			{ ...(items[0] as object), id: 2, gameId: null, path: null, targetPath: null, details: null }
 		];
 		render(AuditPage);
-		await screen.findByRole('link', { name: 'Tetris' });
+		await screen.findAllByRole('link', { name: 'Tetris' });
 
 		const cells = [...document.querySelectorAll('tbody tr')].map((row) =>
 			[...row.querySelectorAll('td')]
@@ -289,7 +314,7 @@ describe('Auditing', () => {
 	it('paginates above and below with distinct labels, only with more than one page (B30)', async () => {
 		total = 201;
 		const { unmount } = render(AuditPage);
-		await screen.findByRole('link', { name: 'Tetris' });
+		await screen.findAllByRole('link', { name: 'Tetris' });
 		expect(screen.getAllByRole('navigation').map((n) => n.getAttribute('aria-label'))).toEqual([
 			'Pages, top',
 			'Pages, bottom'
@@ -303,7 +328,7 @@ describe('Auditing', () => {
 
 		total = 1;
 		render(AuditPage);
-		await screen.findByRole('link', { name: 'Tetris' });
+		await screen.findAllByRole('link', { name: 'Tetris' });
 		expect(screen.queryByRole('navigation')).toBeNull();
 	});
 
@@ -327,7 +352,7 @@ describe('Auditing', () => {
 		await screen.findByRole('alert');
 		fail = false;
 		await fireEvent.click(screen.getByRole('button', { name: /Retry/ }));
-		expect(await screen.findByRole('link', { name: 'Tetris' })).toBeTruthy();
+		expect(await screen.findAllByRole('link', { name: 'Tetris' })).toHaveLength(2);
 	});
 	it('requires admin and makes no requests for a plain user', async () => {
 		auth.set({ id: 2, username: 'plain', roles: [], mustChangePassword: false });
