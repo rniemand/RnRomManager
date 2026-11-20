@@ -898,4 +898,67 @@ public class ReportEndpointsTests
         Assert.That((await AuthClient.JsonAsync(longQ)).GetProperty("errors").GetProperty("q")[0].GetString(), Is.EqualTo("Must be at most 100 characters."));
         Assert.That((await AuthClient.JsonAsync(badId)).GetProperty("errors").TryGetProperty("afterGameId", out _), Is.True);
     }
+
+    /// <summary>Image Resolutions: ingested games only have placeholder art, so give some of their image rows real values.</summary>
+    private async Task<(Guid Alpha, Guid Bravo, Guid Echo)> SeedImageResolutions()
+    {
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        await Ingest("gb", "c.gb", Charlie);
+        var echo = await Ingest("gbc", "e.gbc", Echo);
+        const string real = "UPDATE images SET is_default = 0, type = @type, width = @w, height = @h WHERE game_id = @id";
+        await Sql(real, new { id = alpha, type = "BoxArt", w = 100, h = 100 });
+        await Sql(real, new { id = bravo, type = "Snap", w = 300, h = 50 });
+        await Sql(real, new { id = echo, type = "BoxArt", w = 64, h = 64 });
+        return (alpha, bravo, echo);
+    }
+
+    private static List<Guid> ImageGameIds(JsonElement page) => [.. page.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("gameId").GetGuid())];
+
+    [Test]
+    public async Task ImageResolutions_ListsRealImages_SmallestFirst_WithEveryField()
+    {
+        var (alpha, bravo, echo) = await SeedImageResolutions();
+
+        var page = await GetJson("/api/reports/image-resolutions");
+
+        Assert.That((page.GetProperty("page").GetInt32(), page.GetProperty("pageSize").GetInt32(), page.GetProperty("total").GetInt64()),
+            Is.EqualTo((1, 50, 3L)));
+        Assert.That(ImageGameIds(page), Is.EqualTo(new[] { echo, alpha, bravo }), "Charlie keeps placeholder art");
+        var first = page.GetProperty("items")[0];
+        Assert.That(first.GetProperty("imageId").GetInt64(), Is.GreaterThan(0));
+        Assert.That(first.GetProperty("sizeBytes").GetInt64(), Is.GreaterThan(0));
+        Assert.That((first.GetProperty("displayTitle").GetString(), first.GetProperty("system").GetString(), first.GetProperty("systemName").GetString(),
+                first.GetProperty("type").GetString(), first.GetProperty("width").GetInt32(), first.GetProperty("height").GetInt32()),
+            Is.EqualTo(("Echo", "gbc", "Game Boy Color", "BoxArt", 64, 64)));
+    }
+
+    [Test]
+    public async Task ImageResolutions_Filters()
+    {
+        var (alpha, bravo, echo) = await SeedImageResolutions();
+
+        Assert.That(ImageGameIds(await GetJson("/api/reports/image-resolutions?system=gb")), Is.EqualTo(new[] { alpha, bravo }));
+        Assert.That(ImageGameIds(await GetJson("/api/reports/image-resolutions?type=boxart")), Is.EqualTo(new[] { echo, alpha }));
+        Assert.That(ImageGameIds(await GetJson("/api/reports/image-resolutions?type=Snap")), Is.EqualTo(new[] { bravo }));
+        Assert.That(ImageGameIds(await GetJson("/api/reports/image-resolutions?maxWidth=100")), Is.EqualTo(new[] { echo, alpha }));
+        Assert.That(ImageGameIds(await GetJson("/api/reports/image-resolutions?maxHeight=50")), Is.EqualTo(new[] { bravo }));
+        Assert.That(ImageGameIds(await GetJson("/api/reports/image-resolutions?maxWidth=64&maxHeight=50")), Is.EqualTo(new[] { echo, bravo }));
+        var second = await GetJson("/api/reports/image-resolutions?page=2&pageSize=1");
+        Assert.That((second.GetProperty("total").GetInt64(), ImageGameIds(second)), Is.EqualTo((3L, new List<Guid> { alpha })));
+    }
+
+    [TestCase("system=nope", "system", "Choose a registered system.")]
+    [TestCase("type=Cover", "type", "Must be BoxArt, Snap, TitleScreen or Other.")]
+    [TestCase("type=1", "type", "Must be BoxArt, Snap, TitleScreen or Other.")]
+    [TestCase("maxWidth=0", "maxWidth", "Must be 1–100000.")]
+    [TestCase("maxWidth=100001", "maxWidth", "Must be 1–100000.")]
+    [TestCase("maxHeight=0", "maxHeight", "Must be 1–100000.")]
+    public async Task ImageResolutions_RejectsInvalidQuery(string query, string field, string message)
+    {
+        using var response = await _user.GetAsync($"/api/reports/image-resolutions?{query}");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").GetProperty(field)[0].GetString(), Is.EqualTo(message));
+    }
 }

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
-import { createRawSnippet } from 'svelte';
+import { createRawSnippet, flushSync } from 'svelte';
 import { resetClient } from '#lib/api/client.js';
 import type { ActivityAuditItem, ActivityReport } from '#lib/api/types.js';
 import { formatDateTime } from '#lib/format.js';
@@ -103,8 +103,13 @@ describe('Activity report (B20)', () => {
 		auth.set(null);
 	});
 
-	const sectionOf = (name: string) =>
-		screen.getByRole('heading', { level: 2, name }).closest('.accordion-item') as HTMLElement;
+	/** L6: selects the section's tab (hidden panels are out of reach of role queries), then returns its panel. */
+	const sectionOf = (name: string) => {
+		const tab = screen.getByRole('tab', { name });
+		tab.click();
+		flushSync();
+		return document.getElementById(tab.getAttribute('aria-controls')!)!;
+	};
 	const cells = (name: string) =>
 		[...sectionOf(name).querySelectorAll('tbody tr')].map((tr) =>
 			[...tr.querySelectorAll('td')].map((td) => td.textContent!.replace(/\s+/g, ' ').trim())
@@ -120,31 +125,39 @@ describe('Activity report (B20)', () => {
 		['Recent jobs', 'activity-jobs'],
 		['Last backup', 'activity-backup']
 	] as const;
-	const expanded = () =>
-		sections.map(([name]) => screen.getByRole('button', { name }).getAttribute('aria-expanded'));
+	const selected = () =>
+		sections.map(([name]) => screen.getByRole('tab', { name }).getAttribute('aria-selected'));
 
-	it('renders the sections as accordion panels with their headings, and the 30-day note', async () => {
+	it('renders the sections as tabs with panels and hidden headings, and the 30-day note', async () => {
 		render(ActivityPage);
 		await screen.findAllByText(/in the last 30 days\./);
 
+		expect(screen.getAllByRole('tab').map((t) => t.textContent!.trim())).toEqual(
+			sections.map(([name]) => name)
+		);
 		for (const [name, id] of sections) {
-			const heading = screen.getByRole('heading', { level: 2, name });
-			expect(heading.id).toBe(id);
-			expect(heading.className).toBe('accordion-header');
-			expect(document.getElementById(`${id}-panel`)!.getAttribute('aria-labelledby')).toBe(id);
+			const tab = screen.getByRole('tab', { name });
+			expect(tab.id).toBe(id);
+			expect(tab.getAttribute('aria-controls')).toBe(`${id}-panel`);
+			const panel = document.getElementById(`${id}-panel`)!;
+			expect([panel.getAttribute('role'), panel.getAttribute('aria-labelledby')]).toEqual([
+				'tabpanel',
+				id
+			]);
+			expect(panel.querySelector('h2.visually-hidden')!.textContent!.trim()).toBe(name);
 		}
 		expect(screen.getByText(/keeps the last 30 days/)).toBeTruthy();
 	});
 
-	it('one section is open at a time, Added ROMs first', async () => {
+	it('one tab is selected at a time, Added ROMs first; other panels are hidden', async () => {
 		render(ActivityPage);
 		await screen.findAllByText(/in the last 30 days\./);
 
-		expect(expanded()).toEqual(['true', ...Array(7).fill('false')]);
-		await fireEvent.click(screen.getByRole('button', { name: 'Plays' }));
-		expect(expanded()).toEqual(['false', 'false', 'true', ...Array(5).fill('false')]);
-		await fireEvent.click(screen.getByRole('button', { name: 'Plays' }));
-		expect(expanded()).toEqual(Array(8).fill('false'));
+		expect(selected()).toEqual(['true', ...Array(7).fill('false')]);
+		await fireEvent.click(screen.getByRole('tab', { name: 'Plays' }));
+		expect(selected()).toEqual(['false', 'false', 'true', ...Array(5).fill('false')]);
+		expect(document.getElementById('activity-added-panel')!.hidden).toBe(true);
+		expect(document.getElementById('activity-plays-panel')!.hidden).toBe(false);
 	});
 
 	it('empty lists show empty states and no last sign-in line', async () => {
@@ -247,7 +260,7 @@ describe('Activity report (B20)', () => {
 			}
 		};
 		render(ActivityPage);
-		await screen.findAllByRole('link', { name: 'Tetris' });
+		await screen.findAllByText('Tetris'); // the tables sit in hidden tab panels until selected
 
 		const time = formatDateTime('2026-11-17T10:00:00Z');
 		expect(cells('Plays')).toEqual([[time, 'boss', 'Tetris', 'Tetris (World).gb']]);
@@ -294,13 +307,13 @@ describe('Activity report (B20)', () => {
 		expect(screen.queryByRole('alert')).toBeNull();
 	});
 
-	it('Recent jobs: raw type, status badge, started linked to the job, duration or running', async () => {
+	it('Recent jobs: job label, status badge, started linked to the job, duration or running', async () => {
 		answers['/api/jobs?pageSize=10'] = {
 			status: 200,
 			body: {
 				items: [
 					job('j2', '2026-11-17T10:00:00Z', null, 'Running'),
-					job('j1', '2026-11-17T09:00:00Z', '2026-11-17T09:03:04Z')
+					{ ...job('j1', '2026-11-17T09:00:00Z', '2026-11-17T09:03:04Z'), type: 'DatRefresh' }
 				],
 				page: 1,
 				pageSize: 10,
@@ -309,11 +322,14 @@ describe('Activity report (B20)', () => {
 		};
 		render(ActivityPage);
 
-		const link = await screen.findByRole('link', { name: formatDateTime('2026-11-17T09:00:00Z') });
+		await screen.findByText(formatDateTime('2026-11-17T09:00:00Z'));
+		const link = within(sectionOf('Recent jobs')).getByRole('link', {
+			name: formatDateTime('2026-11-17T09:00:00Z')
+		});
 		expect(link.getAttribute('href')).toBe('/jobs/j1');
 		expect(cells('Recent jobs')).toEqual([
 			['Ingest', 'Running', formatDateTime('2026-11-17T10:00:00Z'), 'running'],
-			['Ingest', 'Completed', formatDateTime('2026-11-17T09:00:00Z'), '3m 4s']
+			['DAT Refresh', 'Completed', formatDateTime('2026-11-17T09:00:00Z'), '3m 4s']
 		]);
 		expect(within(sectionOf('Recent jobs')).getByText('Completed').className).toContain('badge');
 	});
@@ -428,7 +444,8 @@ describe('Activity report (B20)', () => {
 				'Missing Images',
 				'Duplicates',
 				'Multiple Releases',
-				'Games With Hacks'
+				'Games With Hacks',
+				'Image Resolutions'
 			]);
 		});
 

@@ -38,6 +38,7 @@ const { default: MultipleReleases } = await import('./multiple-releases/+page.sv
 const { default: Hacks } = await import('./hacks/+page.svelte');
 const { default: NewlyAdded } = await import('./newly-added/+page.svelte');
 const { default: MissingMetadata } = await import('./missing-metadata/+page.svelte');
+const { default: ImageResolutions } = await import('./image-resolutions/+page.svelte');
 
 type Answer = { status: number; body?: unknown };
 
@@ -488,6 +489,20 @@ describe('reports pages', () => {
 
 		beforeEach(() => navigateTo('/reports/multiple-releases'));
 
+		it('the toolbar is compact: System, then Minimum releases in a small input group (L1–L2)', async () => {
+			answers[list()] = { status: 200, body: body([item('g1')]) };
+			render(MultipleReleases);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			expect(select().className).toContain('form-select');
+			const group = select().closest('.input-group')!;
+			expect(group.classList).toContain('input-group-sm');
+			expect(group.querySelector('label.input-group-text')!.textContent).toBe('Minimum releases');
+			const bar = group.parentElement!;
+			expect(bar.className).toBe('d-flex flex-wrap align-items-center gap-2 mb-3');
+			expect(bar.firstElementChild!.contains(systemToggle())).toBe(true);
+		});
+
 		it('lists game, system badge, releases, updates and size; numbers right-aligned (B19)', async () => {
 			answers[list()] = {
 				status: 200,
@@ -763,72 +778,86 @@ describe('reports pages', () => {
 		});
 	});
 
-	describe('Newly Added (release editing B14)', () => {
-		beforeEach(() => navigateTo('/reports/newly-added'));
-
-		it('shows one card per system with game, added time and releases', async () => {
-			answers['GET /api/reports/newly-added'] = {
-				status: 200,
-				body: {
-					systems: [
-						{
-							system: 'gb',
-							systemName: 'Game Boy',
-							games: [
-								{
-									id: 'g1',
-									displayTitle: 'Tetris',
-									addedAt: '2026-01-02T03:04:00Z',
-									releaseCount: 2
-								}
-							]
-						},
-						{
-							system: 'gbc',
-							systemName: 'Game Boy Color',
-							games: [
-								{
-									id: 'g2',
-									displayTitle: 'Zelda',
-									addedAt: '2026-01-01T00:00:00Z',
-									releaseCount: 1
-								}
-							]
-						}
+	describe('Newly Added (release editing B14, Report Polish L4–L5)', () => {
+		const report = {
+			systems: [
+				{
+					system: 'gb',
+					systemName: 'Game Boy',
+					games: [
+						{ id: 'g1', displayTitle: 'Tetris', addedAt: '2026-01-02T03:04:00Z', releaseCount: 2 }
+					]
+				},
+				{
+					system: 'gbc',
+					systemName: 'Game Boy Color',
+					games: [
+						{ id: 'g2', displayTitle: 'Zelda', addedAt: '2026-01-01T00:00:00Z', releaseCount: 1 }
 					]
 				}
-			};
+			]
+		};
+		const tabs = () => screen.getAllByRole('tab');
+		const panel = () => document.getElementById('newly-added-panel')!;
+
+		beforeEach(() => {
+			navigateTo('/reports/newly-added');
+			answers['GET /api/reports/newly-added'] = { status: 200, body: report };
+		});
+
+		it('shows one tab per system, the first selected, and its games in one panel', async () => {
+			answers['GET /api/systems'] = { status: 500 };
 			render(NewlyAdded);
 
 			const link = await screen.findByRole('link', { name: 'Tetris' });
 			expect(link.getAttribute('href')).toBe('/games/g1');
-			const cards = [...document.querySelectorAll('.card')];
-			expect(
-				cards.map((c) => c.querySelector('.card-header')!.textContent!.replace(/\s+/g, ' ').trim())
-			).toEqual(['GB Game Boy', 'GBC Game Boy Color']);
-			expect([...cards[0].querySelectorAll('th')].map((th) => th.textContent!.trim())).toEqual([
+			expect(tabs().map((t) => t.textContent!.trim())).toEqual(['GB', 'GBC']);
+			expect(tabs().map((t) => [t.id, t.title, t.getAttribute('aria-selected')])).toEqual([
+				['newly-added-gb', 'Game Boy', 'true'],
+				['newly-added-gbc', 'Game Boy Color', 'false']
+			]);
+			expect(tabs()[0].getAttribute('aria-controls')).toBe('newly-added-panel');
+			expect(panel().getAttribute('role')).toBe('tabpanel');
+			expect(panel().getAttribute('aria-labelledby')).toBe('newly-added-gb');
+			expect(panel().querySelector('.card-header')).toBeNull();
+			expect([...panel().querySelectorAll('th')].map((th) => th.textContent!.trim())).toEqual([
 				'Game',
 				'Added',
 				'Releases'
 			]);
-			const cells = [...cards[0].querySelectorAll('tbody td')];
+			const cells = [...panel().querySelectorAll('tbody td')];
 			expect(cells[2].textContent!.trim()).toBe('2');
 			expect(cells[2].className).toBe('text-end');
 			expect(cells[1].textContent!.trim()).not.toBe('');
+			expect(screen.queryByRole('link', { name: 'Zelda' })).toBeNull();
 		});
 
-		it('the System menu writes system= and requests it (F2)', async () => {
-			answers['GET /api/reports/newly-added'] = { status: 200, body: { systems: [] } };
-			answers['GET /api/reports/newly-added?system=gbc'] = { status: 200, body: { systems: [] } };
+		it('?system= selects its tab; an unknown id selects the first', async () => {
+			navigateTo('/reports/newly-added?system=gbc');
 			render(NewlyAdded);
+			expect(await screen.findByRole('link', { name: 'Zelda' })).toBeTruthy();
+			expect(tabs()[1].getAttribute('aria-selected')).toBe('true');
+			expect(panel().getAttribute('aria-labelledby')).toBe('newly-added-gbc');
 
-			await pickSystem('gbc');
+			navigateTo('/reports/newly-added?system=nope');
+			expect(await screen.findByRole('link', { name: 'Tetris' })).toBeTruthy();
+			expect(goto).not.toHaveBeenCalled();
+		});
+
+		it('a tab click writes system= without refetching', async () => {
+			render(NewlyAdded);
+			await screen.findByRole('link', { name: 'Tetris' });
+
+			await fireEvent.click(tabs()[1]);
 
 			expect(goto).toHaveBeenLastCalledWith('/reports/newly-added?system=gbc', {
 				replace: true,
 				reset: false
 			});
-			await vi.waitFor(() => expect(calls).toContain('GET /api/reports/newly-added?system=gbc'));
+			expect(await screen.findByRole('link', { name: 'Zelda' })).toBeTruthy();
+			expect(calls.filter((c) => c.startsWith('GET /api/reports/newly-added'))).toEqual([
+				'GET /api/reports/newly-added'
+			]);
 		});
 
 		it('an empty library shows "No games yet."', async () => {
@@ -894,6 +923,162 @@ describe('reports pages', () => {
 		});
 	});
 
+	describe('Image Resolutions (R5–R9)', () => {
+		const list = (query = '', page = 1) =>
+			`GET /api/reports/image-resolutions?page=${page}&pageSize=50${query}`;
+		const item = (imageId: number, extra: Record<string, unknown> = {}) => ({
+			imageId,
+			gameId: `g${imageId}`,
+			displayTitle: `Game ${imageId}`,
+			system: 'gb',
+			systemName: 'Game Boy',
+			type: 'BoxArt',
+			width: 64,
+			height: 48,
+			sizeBytes: 2048,
+			...extra
+		});
+		const body = (items: unknown[], total = items.length, page = 1) => ({
+			items,
+			page,
+			pageSize: 50,
+			total
+		});
+		const replaced = (path: string) => [path, { replace: true, reset: false }];
+		const empty = body([]);
+
+		let store: Map<string, string>;
+		beforeEach(() => {
+			// Node 25's localStorage global shadows jsdom's; stub it (as in review-page.test.ts).
+			store = new Map();
+			vi.stubGlobal('localStorage', {
+				getItem: (k: string) => store.get(k) ?? null,
+				setItem: (k: string, v: string) => void store.set(k, v),
+				removeItem: (k: string) => void store.delete(k)
+			});
+			navigateTo('/reports/image-resolutions');
+			// Every URL the tests navigate to answers empty unless a test sets it.
+			for (const query of [
+				'',
+				'&type=Snap',
+				'&type=Snap&maxWidth=100',
+				'&type=Snap&maxWidth=100&maxHeight=50',
+				'&system=gbc&type=Snap&maxWidth=100&maxHeight=50',
+				'&maxWidth=100'
+			])
+				answers[list(query)] = { status: 200, body: empty };
+			answers[list('', 2)] = { status: 200, body: body([item(1)], 60, 2) };
+		});
+
+		it('lists preview, game link to its Images tab, system, type, resolution and size', async () => {
+			answers[list()] = { status: 200, body: body([item(7, { type: 'TitleScreen' })]) };
+			render(ImageResolutions);
+
+			const link = await screen.findByRole('link', { name: 'Game 7' });
+			expect(link.getAttribute('href')).toBe('/games/g7?tab=images');
+			expect(screen.getByText('1 image')).toBeTruthy();
+			const img = document.querySelector('tbody img')!;
+			expect(img.getAttribute('src')).toBe('/api/games/g7/images/7');
+			expect([img.getAttribute('loading'), img.getAttribute('alt')]).toEqual(['lazy', '']);
+			expect(
+				[...document.querySelectorAll('tbody td')].slice(1).map((td) => td.textContent!.trim())
+			).toEqual(['Game 7', 'Game Boy', 'Title screen', '64 × 48', '2.0 KiB']);
+		});
+
+		it('filters write the URL and go back to page 1', async () => {
+			navigateTo('/reports/image-resolutions?page=2');
+			answers[list('', 2)] = { status: 200, body: body([item(1)], 60, 2) };
+			render(ImageResolutions);
+			await screen.findByRole('link', { name: 'Game 1' });
+
+			await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'Snap' } });
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/image-resolutions?type=Snap'));
+
+			const width = screen.getByLabelText('Max width') as HTMLInputElement;
+			await fireEvent.change(width, { target: { value: '100' } });
+			expect(goto).toHaveBeenLastCalledWith(
+				...replaced('/reports/image-resolutions?type=Snap&maxWidth=100')
+			);
+			await vi.waitFor(() => expect(calls).toContain(list('&type=Snap&maxWidth=100')));
+
+			await fireEvent.change(screen.getByLabelText('Max height'), { target: { value: '50' } });
+			expect(goto).toHaveBeenLastCalledWith(
+				...replaced('/reports/image-resolutions?type=Snap&maxWidth=100&maxHeight=50')
+			);
+			await pickSystem('gbc');
+			expect(goto).toHaveBeenLastCalledWith(
+				...replaced('/reports/image-resolutions?system=gbc&type=Snap&maxWidth=100&maxHeight=50')
+			);
+		});
+
+		it('an out-of-range width means no limit and empties the input', async () => {
+			navigateTo('/reports/image-resolutions?maxWidth=100');
+			answers[list('&maxWidth=100')] = { status: 200, body: body([item(1)]) };
+			render(ImageResolutions);
+			await screen.findByRole('link', { name: 'Game 1' });
+
+			const width = screen.getByLabelText('Max width') as HTMLInputElement;
+			await fireEvent.change(width, { target: { value: '100001' } });
+
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/image-resolutions'));
+			expect(width.value).toBe('');
+		});
+
+		it('Clear resets every filter and is disabled when none is set', async () => {
+			navigateTo('/reports/image-resolutions?system=nope&type=Other&maxHeight=10');
+			answers[list('&system=nope&type=Other&maxHeight=10')] = {
+				status: 400,
+				body: { title: 'Validation failed.', errors: { system: ['Choose a registered system.'] } }
+			};
+			render(ImageResolutions);
+			await screen.findByRole('alert');
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/image-resolutions'));
+			await vi.waitFor(() =>
+				expect((screen.getByRole('button', { name: 'Clear' }) as HTMLButtonElement).disabled).toBe(
+					true
+				)
+			);
+		});
+
+		it('a bare URL restores the saved query; later states are saved', async () => {
+			store.set('rnrm.reports.image-resolutions', '?maxWidth=100');
+			answers[list()] = { status: 200, body: empty };
+			answers[list('&maxWidth=100')] = { status: 200, body: empty };
+			render(ImageResolutions);
+
+			expect(goto).toHaveBeenCalledWith(...replaced('/reports/image-resolutions?maxWidth=100'));
+			navigateTo('/reports/image-resolutions?type=Snap');
+			await vi.waitFor(() =>
+				expect(store.get('rnrm.reports.image-resolutions')).toBe('?type=Snap')
+			);
+		});
+
+		it('a page past the last one goes to the last page', async () => {
+			navigateTo('/reports/image-resolutions?page=9');
+			answers[list('', 9)] = { status: 200, body: body([], 60, 9) };
+			render(ImageResolutions);
+
+			await vi.waitFor(() =>
+				expect(goto).toHaveBeenCalledWith(...replaced('/reports/image-resolutions?page=2'))
+			);
+		});
+
+		it('shows "No images yet." without filters', async () => {
+			answers[list()] = { status: 200, body: empty };
+			render(ImageResolutions);
+			expect(await screen.findByText('No images yet.')).toBeTruthy();
+		});
+
+		it('shows "No images match these filters." with a filter', async () => {
+			navigateTo('/reports/image-resolutions?type=Snap');
+			answers[list('&type=Snap')] = { status: 200, body: empty };
+			render(ImageResolutions);
+			expect(await screen.findByText('No images match these filters.')).toBeTruthy();
+		});
+	});
+
 	describe('Missing Metadata (M4, M6)', () => {
 		const admin = () =>
 			auth.set({ id: 1, username: 'admin', roles: ['admin'], mustChangePassword: false });
@@ -923,6 +1108,27 @@ describe('reports pages', () => {
 
 		beforeEach(() => navigateTo('/reports/missing-metadata'));
 
+		it('the toolbar is compact: Title, System, Missing and Clear (L1, L3)', async () => {
+			admin();
+			answers[list()] = { status: 200, body: body([item('g1')]) };
+			render(MissingMetadata);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			const title = screen.getByLabelText('Title').closest('.input-group')!;
+			expect(title.className).toBe(
+				'input-group input-group-sm flex-grow-1 flex-md-grow-0 missing-metadata-title'
+			);
+			const missing = screen.getByLabelText('Missing');
+			expect(missing.closest('.input-group')!.classList).toContain('input-group-sm');
+			expect(missing.className).toContain('form-select');
+			expect(screen.getByRole('button', { name: 'Clear' }).className).toBe(
+				'btn btn-sm btn-outline-secondary'
+			);
+			expect(screen.getByRole('search').className).toBe(
+				'd-flex flex-wrap align-items-center gap-2 mb-3'
+			);
+		});
+
 		it('the tab shows for Admins only, between Multiple Releases and Activity', () => {
 			admin();
 			layout();
@@ -937,6 +1143,7 @@ describe('reports pages', () => {
 				['Duplicates', 'bi bi-files'],
 				['Multiple Releases', 'bi bi-layers'],
 				['Games With Hacks', 'bi bi-bandaid'],
+				['Image Resolutions', 'bi bi-aspect-ratio'],
 				['Missing Metadata', 'bi bi-card-checklist'],
 				['Activity', 'bi bi-activity']
 			]);
@@ -1130,7 +1337,8 @@ describe('reports pages', () => {
 			['Missing Images', 'bi bi-image-alt'],
 			['Duplicates', 'bi bi-files'],
 			['Multiple Releases', 'bi bi-layers'],
-			['Games With Hacks', 'bi bi-bandaid']
+			['Games With Hacks', 'bi bi-bandaid'],
+			['Image Resolutions', 'bi bi-aspect-ratio']
 		]);
 	});
 

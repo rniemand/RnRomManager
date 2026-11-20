@@ -1,5 +1,6 @@
 using Dapper;
 using RnRomManager.Core.Database;
+using RnRomManager.Core.Library;
 using RnRomManager.Core.Reports;
 
 namespace RnRomManager.Data.Repositories;
@@ -33,6 +34,33 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
             LIMIT @pageSize OFFSET @offset
             """, args, cancellationToken: cancellationToken));
         return new Page<MissingImageItem>(rows.AsList(), page, pageSize, total);
+    }
+
+    public async Task<Page<ImageResolutionItem>> ListImageResolutionsAsync(string? systemId, ImageType? type, int? maxWidth, int? maxHeight,
+        int page, int pageSize, CancellationToken cancellationToken)
+    {
+        var limits = (maxWidth, maxHeight) switch
+        {
+            (null, null) => "",
+            (not null, null) => " AND i.width <= @maxWidth",
+            (null, not null) => " AND i.height <= @maxHeight",
+            _ => " AND (i.width <= @maxWidth OR i.height <= @maxHeight)",
+        };
+        var where = "WHERE i.is_default = 0" + (systemId is null ? "" : " AND g.system_id = @systemId")
+            + (type is null ? "" : " AND i.type = @type") + limits;
+        // R3: images.type is a VARCHAR, so the enum goes in by name (Dapper would send its number).
+        var args = new { systemId, type = type?.ToString(), maxWidth, maxHeight, pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
+        await using var connection = connections.Create();
+        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            $"SELECT COUNT(*) FROM images i JOIN games g ON g.id = i.game_id {where}", args, cancellationToken: cancellationToken));
+        var rows = await connection.QueryAsync<ImageResolutionItem>(new CommandDefinition($"""
+            SELECT i.id AS ImageId, g.id AS GameId, g.display_title AS DisplayTitle, g.system_id AS SystemId, i.type AS Type,
+                   i.width AS Width, i.height AS Height, i.size_bytes AS SizeBytes
+            FROM images i JOIN games g ON g.id = i.game_id {where}
+            ORDER BY CAST(i.width AS SIGNED) * i.height, g.system_id, g.display_title, i.id
+            LIMIT @pageSize OFFSET @offset
+            """, args, cancellationToken: cancellationToken));
+        return new Page<ImageResolutionItem>(rows.AsList(), page, pageSize, total);
     }
 
     public async Task<MissingImageSuccessor> NextMissingImageAsync(Guid? afterGameId, CancellationToken cancellationToken)

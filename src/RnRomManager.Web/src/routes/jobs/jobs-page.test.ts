@@ -87,6 +87,9 @@ describe('jobs page (ROM Zip Config B18)', () => {
 		render(JobsPage);
 
 		const progress = await screen.findByText('2 / 5 · nds/A/Alpha.zip');
+		expect(progress.className).toContain('text-truncate');
+		expect(progress.getAttribute('title')).toBe('2 / 5 · nds/A/Alpha.zip');
+		expect(progress.closest('table')!.className).toContain('job-fixed-table');
 		const row = progress.closest('tr')!;
 		const cells = row.querySelectorAll('td');
 		expect(cells[2].textContent?.trim()).toBe(formatDateTime(current.startedAt));

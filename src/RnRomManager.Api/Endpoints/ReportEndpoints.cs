@@ -277,7 +277,38 @@ public static partial class ReportEndpoints
             });
         });
 
-        reports.MapPost("/duplicates/dismiss", async (DismissDuplicateRequest request, HttpContext ctx, IReportRepository repository,
+        // Image Resolutions R1–R4: non-placeholder images, smallest first.
+        reports.MapGet("/image-resolutions", async (string? system, string? type, int? maxWidth, int? maxHeight, int? page, int? pageSize,
+            HttpContext ctx, IReportRepository repository, ISystemRegistry systems) =>
+        {
+            var errors = Validate(system, page, pageSize, systems);
+            ImageType? imageType = null;
+            if (type is not null)
+            {
+                // Enum.TryParse accepts numbers, so all-digit values are rejected first (R1).
+                if (!type.All(char.IsAsciiDigit) && Enum.TryParse<ImageType>(type, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed))
+                    imageType = parsed;
+                else
+                    errors["type"] = ["Must be BoxArt, Snap, TitleScreen or Other."];
+            }
+            if (maxWidth is < 1 or > 100000)
+                errors["maxWidth"] = ["Must be 1–100000."];
+            if (maxHeight is < 1 or > 100000)
+                errors["maxHeight"] = ["Must be 1–100000."];
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+
+            var result = await repository.ListImageResolutionsAsync(system, imageType, maxWidth, maxHeight, page ?? 1, pageSize ?? 50,
+                ctx.RequestAborted);
+            return Results.Ok(Paging.ToDto(result, item => new
+            {
+                imageId = item.ImageId, gameId = item.GameId, displayTitle = item.DisplayTitle, system = item.SystemId,
+                systemName = SystemName(systems, item.SystemId), type = item.Type.ToString(), width = item.Width, height = item.Height,
+                sizeBytes = item.SizeBytes,
+            }));
+        });
+
+        reports.MapPost("/duplicates/dismiss",async (DismissDuplicateRequest request, HttpContext ctx, IReportRepository repository,
             ISystemRegistry systems, TimeProvider time) =>
         {
             var errors = new Dictionary<string, string[]>();

@@ -23,7 +23,12 @@ function stubJob(fields: Record<string, unknown>): void {
 		error: null,
 		...fields
 	};
-	vi.stubGlobal('fetch', () => Promise.resolve(new Response(JSON.stringify(job), { status: 200 })));
+	const empty = { items: [], page: 1, pageSize: 50, total: 0 };
+	vi.stubGlobal('fetch', (url: string) =>
+		Promise.resolve(
+			new Response(JSON.stringify(url.includes('/items') ? empty : job), { status: 200 })
+		)
+	);
 }
 
 const { default: JobPage } = await import('./jobs/[id]/+page.svelte');
@@ -76,5 +81,21 @@ describe('job page', () => {
 		expect(await screen.findByRole('columnheader', { name: 'Trigger' })).toBeTruthy();
 		expect(screen.getByRole('columnheader', { name: 'Started' })).toBeTruthy();
 		expect(screen.getByRole('cell', { name: 'Manual' })).toBeTruthy();
+	});
+
+	it('heads the page with the job label and "Job", the mode in brackets (J3)', async () => {
+		stubJob({ type: 'Ingest', summary: null });
+		render(JobPage);
+		expect((await screen.findByRole('heading', { level: 1 })).textContent).toMatch(
+			/^\s*Ingest Job\s/
+		);
+	});
+
+	it('heads a job with a mode as "Ingest (Quick) Job"', async () => {
+		stubJob({ type: 'Ingest', mode: 'Quick', summary: null });
+		render(JobPage);
+		expect((await screen.findByRole('heading', { level: 1 })).textContent).toMatch(
+			/^\s*Ingest \(Quick\) Job\s/
+		);
 	});
 });

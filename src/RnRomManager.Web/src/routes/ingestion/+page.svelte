@@ -34,7 +34,7 @@
 		isArchive,
 		modalListSize
 	} from '#lib/ingestDelete.js';
-	import { formatSummary, isCancellable, percent, statusClass } from '#lib/jobs.js';
+	import { formatSummary, isCancellable, jobLabel, percent, statusClass } from '#lib/jobs.js';
 	import { pageCount } from '#lib/pageSize.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
@@ -226,7 +226,7 @@
 					{#if job}
 						<div class="card card-body">
 							<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-								<strong>{job.type}{job.mode ? ` (${job.mode})` : ''} running</strong>
+								<strong>{jobLabel(job.type)}{job.mode ? ` (${job.mode})` : ''} running</strong>
 								<span class="text-body-secondary small">since {formatDateTime(job.startedAt)}</span>
 								{#if isCancellable(job.type)}
 									<button

@@ -50,7 +50,7 @@ describe('integrity page: running job card', () => {
 		stubApi('ReviewResolve');
 		render(Page);
 
-		expect(await screen.findByText('ReviewResolve running')).toBeTruthy();
+		expect(await screen.findByText('Review running')).toBeTruthy();
 		expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
 	});
 

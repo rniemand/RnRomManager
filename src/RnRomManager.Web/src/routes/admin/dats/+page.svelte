@@ -9,7 +9,7 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import { formatDateTime } from '#lib/format.js';
-	import { percent } from '#lib/jobs.js';
+	import { jobLabel, percent } from '#lib/jobs.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
@@ -102,7 +102,7 @@
 <div class="mb-3" aria-live="polite">
 	{#if job}
 		<div class="card card-body">
-			<strong class="mb-2">{job.type} running</strong>
+			<strong class="mb-2">{jobLabel(job.type)} running</strong>
 			<div
 				class="progress mb-1"
 				role="progressbar"

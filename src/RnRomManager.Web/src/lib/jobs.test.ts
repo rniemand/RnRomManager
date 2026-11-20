@@ -30,13 +30,13 @@ describe('job display helpers', () => {
 			).map(jobLabel)
 		).toEqual([
 			'Ingest',
-			'Integrity check',
-			'DAT refresh',
-			'Media retry',
+			'Integrity Check',
+			'DAT Refresh',
+			'Media Retry',
 			'Review',
 			'Moving ROMs',
 			'Repacking ZIPs',
-			'Moving saves to user folders'
+			'Moving Saves to User Folders'
 		]);
 		expect(jobLabel('Other')).toBe('Other');
 	});
