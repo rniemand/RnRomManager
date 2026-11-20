@@ -697,6 +697,23 @@ public class ReportEndpointsTests
         Assert.That((page.GetProperty("total").GetInt64(), page.GetProperty("maxReleases").GetInt32()), Is.EqualTo((0L, 2)));
     }
 
+    [Test]
+    public async Task MultipleReleases_DlcIsNotARelease()
+    {
+        var (alpha, delta) = await SeedMultipleReleases();
+        // Delta's second release (Echo's) becomes DLC: Delta drops out, and Alpha (2 releases) stays.
+        await Sql("UPDATE roms SET flags = '[\"DLC\"]' WHERE file_name LIKE 'Echo%'", new { });
+
+        var page = await GetJson("/api/reports/multiple-releases");
+
+        Assert.That(page.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()), Is.EqualTo(new[] { alpha }));
+        Assert.That(page.GetProperty("maxReleases").GetInt32(), Is.EqualTo(2));
+
+        await Sql("UPDATE roms SET game_id = @delta WHERE game_id = @alpha", new { alpha, delta });
+        page = await GetJson("/api/reports/multiple-releases");
+        Assert.That(page.GetProperty("items")[0].GetProperty("releaseCount").GetInt32(), Is.EqualTo(3), "Delta: Delta, Alpha, Bravo; not Charlie (update) or Echo (DLC)");
+    }
+
     [TestCase("min=1", "min", "Must be 2–10000.")]
     [TestCase("min=10001", "min", "Must be 2–10000.")]
     [TestCase("sort=title", "sort", "Must be name, system, releases, updates or size.")]

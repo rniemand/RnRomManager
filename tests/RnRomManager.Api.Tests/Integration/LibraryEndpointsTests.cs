@@ -247,6 +247,17 @@ public partial class LibraryEndpointsTests
         Assert.That(item.GetProperty("romCount").GetInt32(), Is.EqualTo(2), "romCount still counts every rom");
     }
 
+    [Test]
+    public async Task Games_DlcCount_CountsRomsFlaggedDlcButNotUpdate()
+    {
+        var id = await Tetris();
+        Assert.That((await GetJson("/api/games")).GetProperty("items")[0].GetProperty("dlcCount").GetInt32(), Is.EqualTo(0));
+        await using (var connection = Service<IDbConnectionFactory>().Create())
+            await connection.ExecuteAsync("UPDATE roms SET flags = '[\"DLC\"]' WHERE game_id = @id AND is_primary = 0", new { id });
+
+        Assert.That((await GetJson("/api/games")).GetProperty("items")[0].GetProperty("dlcCount").GetInt32(), Is.EqualTo(1));
+    }
+
     // C2: playable only with a browser core and an embedded primary release; Play B1: PlayStation's external primary too.
     // Sega CD B5: eligibility is per core, so a (hand-made, registry-impossible) external md primary plays like a Sega CD disc.
     [TestCase("gb", false, true, "gambatte")]

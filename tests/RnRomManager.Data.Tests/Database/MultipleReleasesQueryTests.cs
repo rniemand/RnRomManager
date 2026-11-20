@@ -45,9 +45,10 @@ public class MultipleReleasesQueryTests
         _reports.ListMultipleReleasesAsync(min, sort, descending, page, pageSize, default);
 
     [Test]
-    public async Task UpdatesAreCountedApart_DlcIsARelease_AndTheThresholdApplies()
+    public async Task UpdatesAndDlcAreCountedApart_AndTheThresholdApplies()
     {
-        var mixed = await Add("Mixed", "gb", 100, Plain, Dlc, Update, Update);
+        var mixed = await Add("Mixed", "gb", 100, Plain, Plain, Dlc, Update, Update);
+        await Add("Base With Dlc", "gb", 100, Plain, Dlc);
         await Add("Single With Updates", "gb", 100, Plain, Update, Update);
         var three = await Add("Three", "gb", 100, Plain, Plain, Plain);
 
@@ -138,8 +139,17 @@ public class MultipleReleasesQueryTests
         Assert.That(await _reports.MaxReleaseCountAsync(default), Is.Zero);
 
         await Add("One", "gb", 100, Plain, Update, Update, Update);
-        await Add("Two", "gb", 100, Plain, Dlc);
+        await Add("Two", "gb", 100, Plain, Plain, Dlc);
 
         Assert.That(await _reports.MaxReleaseCountAsync(default), Is.EqualTo(2));
+    }
+
+    [Test]
+    public async Task BaseWithDlc_IsNotAMultipleReleaseGame()
+    {
+        await Add("Base With Dlc", "gb", 100, Plain, Dlc);
+
+        Assert.That((await List(min: 2)).Total, Is.Zero);
+        Assert.That(await _reports.MaxReleaseCountAsync(default), Is.EqualTo(1));
     }
 }

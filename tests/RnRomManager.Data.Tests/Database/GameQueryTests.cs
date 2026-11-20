@@ -451,4 +451,16 @@ public class GameQueryTests
         Assert.That((await Facets(new GameQuery { Search = "star pack" })).Systems,
             Is.EqualTo(new Dictionary<string, int> { ["switch"] = 1 }));
     }
+
+    [Test]
+    public async Task ListItem_DlcCount_ExcludesUpdates_ARomFlaggedBothIsAnUpdate()
+    {
+        await Add("Orbit", addOns: [("Orbit - Pack [01][v0].nsp", Dlc), ("Orbit [02][v65536].nsp", Update)]);
+        await Add("Comet", addOns: [("Comet - Both [03][v0].nsp", ["DLC", "Update"])]);
+
+        var items = (await _games.ListAsync(new GameQuery(), default)).Items.ToDictionary(i => i.DisplayTitle);
+
+        Assert.That((items["Orbit"].DlcCount, items["Orbit"].UpdateCount), Is.EqualTo((1, 1)));
+        Assert.That((items["Comet"].DlcCount, items["Comet"].UpdateCount), Is.EqualTo((0, 1)));
+    }
 }

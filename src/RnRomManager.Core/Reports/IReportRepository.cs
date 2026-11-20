@@ -32,7 +32,7 @@ public interface IReportRepository
     Task<IReadOnlyList<GameSize>> ListGameSizesAsync(string systemId, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Multiple Releases B15/B17: games with at least <paramref name="min"/> releases (rows not flagged <c>Update</c>), with their update count
+    /// Multiple Releases B15/B17: games with at least <paramref name="min"/> releases (rows flagged neither <c>Update</c> nor <c>DLC</c>, DLC B14), with their update count
     /// and Library Size bytes. Only the primary key follows <paramref name="descending"/>; tie-breakers are ascending.
     /// </summary>
     Task<Page<MultipleReleaseItem>> ListMultipleReleasesAsync(int min, MultipleReleaseSort sort, bool descending, int page, int pageSize,
@@ -61,7 +61,7 @@ public sealed record SystemSize(string SystemId, long Bytes, int GameCount, int 
 /// <param name="UpdateCount">B21: releases whose flags contain <c>Update</c>.</param>
 public sealed record GameSize(Guid Id, string DisplayTitle, long Bytes, int RomCount, int UpdateCount);
 
-/// <param name="ReleaseCount">B15: releases whose flags don't contain <c>Update</c> (DLC counts).</param>
+/// <param name="ReleaseCount">B15: releases whose flags contain neither <c>Update</c> nor <c>DLC</c> (DLC B14).</param>
 /// <param name="UpdateCount">B15: releases whose flags contain <c>Update</c>.</param>
 /// <param name="Bytes">B15: the Library Size report's game bytes.</param>
 public sealed record MultipleReleaseItem(Guid Id, string DisplayTitle, string SystemId, int ReleaseCount, int UpdateCount, long Bytes);

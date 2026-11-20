@@ -748,6 +748,7 @@ public static class LibraryEndpoints
             favourite = game.Favourite,
             matchedOn = game.MatchedOn is { } match ? new { field = match.Field, value = match.Value } : null,
             updateCount = game.UpdateCount,
+            dlcCount = game.DlcCount,
             saveCount = game.SaveCount,
             playRomId = playable ? game.PrimaryRomId : null,
             playRomFileName = playable ? game.PrimaryRomFileName : null,
