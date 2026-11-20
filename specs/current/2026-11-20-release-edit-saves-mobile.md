@@ -216,6 +216,7 @@ No SQL migration. New setting key `saves.folders.migrated` (`app_settings`). API
 - 2026-11-20 Step 15: `AccordionItem` keeps closed bodies mounted, so the existing Backups schedule/status/restore unit tests needed no "open the item first"; only e2e clicks do (code)
 - 2026-11-20 Step 16: the duplicated audit markup also broke `audit-page.test.ts`'s `findByRole(link Tetris)` waits and the long-details / short-id lookups; they use `findAll…` (the table cell where it matters); table and cards share `who`/`gameCell`/`changeText` snippets (code)
 - 2026-11-20 Step 17: icons rendered once in Chromium (the e2e Playwright install) from `favicon.svg` on `#212529`: glyph 80% of the side, 60% for the maskable one; `pwa.test.ts` also checks the B38 head tags (code)
+- 2026-11-20 Finish: `ReviewEndpointsTests.InvalidGeneratedEntryName_IsValidationFailed_StaysPending` asserted the old `..` refusal; it becomes `GeneratedEntryNameWithDotsInside_Resolves_B1` (code)
 - 2026-11-20 Review pass 2: region order on re-check, empty language entries, broken `EmulatorModal.test.ts` cases, e2e Play flows that now store on close, Jobs/Activity docs (reviewer)
 
 ## Kickoff prompt

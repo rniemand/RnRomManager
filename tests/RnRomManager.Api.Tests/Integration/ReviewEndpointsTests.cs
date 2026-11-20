@@ -1154,14 +1154,15 @@ public class ReviewEndpointsTests
         Assert.That(File.Exists(Path.Combine(_factory.Root, "ingest", "gb", "_failed", "mystery.gbc")), Is.True);
     }
 
+    /// <summary>Release editing B1: a generated name holding <c>..</c> is valid on every system (a name that is exactly <c>..</c> is refused; ReviewResolverTests).</summary>
     [Test]
-    public async Task InvalidGeneratedEntryName_IsValidationFailed_StaysPending()
+    public async Task GeneratedEntryNameWithDotsInside_Resolves_B1()
     {
         var item = await Queue();
         var response = await _admin.ResolveAsync(item.Id, Manual("My..Game"));
         Assert.That(response.Status, Is.EqualTo(HttpStatusCode.Accepted));
-        Assert.That(response.Code, Is.EqualTo("ValidationFailed"));
-        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
+        Assert.That(response.Code, Is.Null);
+        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Resolved"));
     }
 
     [Test]
