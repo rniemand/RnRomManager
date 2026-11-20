@@ -493,7 +493,7 @@ describe('SNES (SNES B3)', () => {
 	);
 
 	it('needs no BIOS and hides the core chooser', () => {
-		expect(biosFor('snes9x')).toBeNull();
+		expect(biosFor('snes9x', 'X (USA).sfc')).toBeNull();
 		expect(hidesCoreChooser('snes9x')).toBe(true);
 	});
 
@@ -715,7 +715,7 @@ describe('Nintendo DS (Nintendo DS B4)', () => {
 	});
 
 	it('needs no BIOS, is vendored and hides the core chooser', () => {
-		expect(biosFor('desmume')).toBeNull();
+		expect(biosFor('desmume', 'X (USA).nds')).toBeNull();
 		expect(isOperatorCore('desmume')).toBe(false);
 		expect(hidesCoreChooser('desmume')).toBe(true);
 	});
