@@ -59,7 +59,7 @@ Switch DLC is already ingested as a release of its base game flagged `DLC` (titl
 | Web | `src/RnRomManager.Web/src/lib/components/GameResults.svelte` | B7 badge. |
 | Web | `src/RnRomManager.Web/src/lib/components/GlobalSearch.svelte` | B13 labels and tab navigation. |
 | Web | `src/RnRomManager.Web/src/lib/api/types.ts` | B7 `dlcCount`, B12 `matchedOn.field` union. |
-| Docs | `docs/features.md` | Global Search (≈ line 26: DLC/update names match, the `DLC:`/`Update:` label, opening the tab), Library search box (≈ 68), library list badge (≈ 63), Game page tabs (≈ 125–129), titledb matching (≈ 210: DLC shown on its own tab), Multiple Releases (≈ 298: releases are ROMs flagged neither `Update` nor `DLC`). |
+| Docs | `docs/features.md` | Global Search (≈ line 26: DLC/update names match, the `DLC:`/`Update:` label, opening the tab), Library search box (≈ 68), library list badge (≈ 67), Game page tabs (≈ 129–133: add a **DLC** bullet beside **Updates**), Play (≈ 135: "release card on the Releases, Updates and DLC tabs"), titledb matching (≈ 216: DLC shown on its own tab), Multiple Releases (≈ 298: releases are ROMs flagged neither `Update` nor `DLC`). |
 | Docs | `docs/adding-a-system.md` | ≈ line 70: the DLC tab rule beside the Updates tab rule. |
 | E2E | `tests/e2e/specs/mvp.spec.ts` | ≈ 289: the Switch game no longer counts its DLC as a release in Multiple Releases; ≈ 884: DLC on its own tab. |
 
@@ -89,6 +89,7 @@ No migration, config key or info.json change. The `/api/games` item gains `dlcCo
 - 2026-11-20 Quick play from a DLC/update match? → still opens the plain game page; only row selection opens the tab (reviewer R4).
 - 2026-11-20 A rom flagged both `Update` and `DLC`? → counts and lists as an update only (reviewer R2).
 - 2026-11-20 Spec review fact fixes: `DlcCount` appended last in `GameListItem`; Orbit Blocks keeps the e2e Multiple Releases table non-empty; `choose(entry, tab?)` and `dlcBadge` placement pinned; doc line refs added (code).
+- 2026-11-20 Fourth review pass: `docs/features.md` line refs corrected and the Play bullet added (code).
 - 2026-11-20 Second review pass: `ReleaseName` strips only trailing `[…]` tags, not `(…)`; existing SPA tests/fixtures the steps must update named (code).
 - 2026-11-20 Third review pass: badge test text matches B7 (no plural); `ToListItemDto` named (code).
 - 2026-11-20 Storage / ingest change needed? → none: DLC already follows each system's embed/beside-ZIP rule and titledb identification (code).
