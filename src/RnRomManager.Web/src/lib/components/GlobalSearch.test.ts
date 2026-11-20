@@ -239,7 +239,8 @@ describe('GlobalSearch', () => {
 			onsearch
 		});
 
-		await fireEvent.click(screen.getByRole('button', { name: /Search/ }));
+		// Release editing B30: two Search buttons (phone and desktop); either opens it.
+		await fireEvent.click(screen.getAllByRole('button', { name: /Search/ })[0]);
 
 		expect(onsearch).toHaveBeenCalledOnce();
 	});

@@ -114,13 +114,44 @@ describe('Navbar', () => {
 			onlogout: () => {},
 			onsearch
 		});
-		const search = screen.getByRole('button', { name: 'Search' });
-		expect(search.textContent?.trim()).toBe('');
-		expect(search.getAttribute('title')).toBe('Search (Ctrl+K)');
-		expect(search.querySelector('i')!.className).toContain('bi-search');
+		// Release editing B30: one outside the menu (below lg), one inside it (lg up); CSS picks, jsdom renders both.
+		const searches = screen.getAllByRole('button', { name: 'Search' });
+		expect(searches).toHaveLength(2);
+		for (const search of searches) {
+			expect(search.textContent?.trim()).toBe('');
+			expect(search.getAttribute('title')).toBe('Search (Ctrl+K)');
+			expect(search.querySelector('i')!.className).toContain('bi-search');
+			search.click();
+		}
 		expect(document.querySelector('kbd')).toBeNull();
-		search.click();
-		expect(onsearch).toHaveBeenCalledOnce();
+		expect(onsearch).toHaveBeenCalledTimes(2);
+	});
+
+	it('the phone search sits between the brand and the toggler; the menu one is lg-only (release editing B30)', () => {
+		render(Navbar, {
+			me: { id: 1, username: 'u', roles: [], mustChangePassword: false },
+			reviewCount: null,
+			onlogout: () => {},
+			onsearch: vi.fn()
+		});
+		const [outside, inside] = screen.getAllByRole('button', { name: 'Search' });
+		expect(outside.className).toContain('ms-auto me-2 d-lg-none');
+		expect(outside.previousElementSibling!.classList).toContain('navbar-brand');
+		expect(outside.nextElementSibling!.classList).toContain('navbar-toggler');
+		expect(inside.closest('li')!.className).toBe('nav-item d-none d-lg-block');
+	});
+
+	it('the user menu is li.user-menu with a phone-only username header (release editing B31)', () => {
+		render(Navbar, {
+			me: { id: 1, username: 'boss', roles: [], mustChangePassword: false },
+			reviewCount: null,
+			onlogout: () => {}
+		});
+		const menu = document.querySelector('li.user-menu')!;
+		expect(menu.classList).toContain('dropdown');
+		const header = menu.querySelector('.dropdown-menu > li.d-lg-none .dropdown-header')!;
+		expect(header.textContent!.trim()).toBe('boss');
+		expect(header.querySelector('i')!.className).toContain('bi-person');
 	});
 
 	it('ROM Tools uses the adjustable wrench icon (B8)', () => {
@@ -171,7 +202,8 @@ describe('Navbar', () => {
 
 	describe('user menu (B6, B7)', () => {
 		const menuItems = () =>
-			[...document.querySelectorAll('.dropdown-menu > li')].map((li) =>
+			// The phone-only username header (release editing B31) isn't a menu item.
+			[...document.querySelectorAll('.dropdown-menu > li:not(.d-lg-none)')].map((li) =>
 				li.querySelector('hr') ? '---' : li.textContent?.trim()
 			);
 
