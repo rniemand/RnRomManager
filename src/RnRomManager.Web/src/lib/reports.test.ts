@@ -13,7 +13,8 @@ describe('reportTabs (S1)', () => {
 		['/reports/missing-images', 'Missing Images', 'report-missing-images'],
 		['/reports/duplicates', 'Duplicates', 'report-duplicates'],
 		['/reports/multiple-releases', 'Multiple Releases', 'report-multiple-releases'],
-		['/reports/hacks', 'Games With Hacks', 'report-hacks']
+		['/reports/hacks', 'Games With Hacks', 'report-hacks'],
+		['/reports/image-resolutions', 'Image Resolutions', 'report-image-resolutions']
 	].map(([href, label, icon]) => ({ href, label, icon }));
 
 	it('lists the Site reports in tab order', () => {

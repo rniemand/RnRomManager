@@ -20,6 +20,11 @@ export function reportTabs(isAdmin: boolean): ReportTab[] {
 			icon: 'report-multiple-releases'
 		},
 		{ href: resolve('/reports/hacks'), label: 'Games With Hacks', icon: 'report-hacks' },
+		{
+			href: resolve('/reports/image-resolutions'),
+			label: 'Image Resolutions',
+			icon: 'report-image-resolutions'
+		},
 		...(isAdmin
 			? [
 					{

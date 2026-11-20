@@ -38,6 +38,7 @@ const { default: MultipleReleases } = await import('./multiple-releases/+page.sv
 const { default: Hacks } = await import('./hacks/+page.svelte');
 const { default: NewlyAdded } = await import('./newly-added/+page.svelte');
 const { default: MissingMetadata } = await import('./missing-metadata/+page.svelte');
+const { default: ImageResolutions } = await import('./image-resolutions/+page.svelte');
 
 type Answer = { status: number; body?: unknown };
 
@@ -894,6 +895,162 @@ describe('reports pages', () => {
 		});
 	});
 
+	describe('Image Resolutions (R5–R9)', () => {
+		const list = (query = '', page = 1) =>
+			`GET /api/reports/image-resolutions?page=${page}&pageSize=50${query}`;
+		const item = (imageId: number, extra: Record<string, unknown> = {}) => ({
+			imageId,
+			gameId: `g${imageId}`,
+			displayTitle: `Game ${imageId}`,
+			system: 'gb',
+			systemName: 'Game Boy',
+			type: 'BoxArt',
+			width: 64,
+			height: 48,
+			sizeBytes: 2048,
+			...extra
+		});
+		const body = (items: unknown[], total = items.length, page = 1) => ({
+			items,
+			page,
+			pageSize: 50,
+			total
+		});
+		const replaced = (path: string) => [path, { replace: true, reset: false }];
+		const empty = body([]);
+
+		let store: Map<string, string>;
+		beforeEach(() => {
+			// Node 25's localStorage global shadows jsdom's; stub it (as in review-page.test.ts).
+			store = new Map();
+			vi.stubGlobal('localStorage', {
+				getItem: (k: string) => store.get(k) ?? null,
+				setItem: (k: string, v: string) => void store.set(k, v),
+				removeItem: (k: string) => void store.delete(k)
+			});
+			navigateTo('/reports/image-resolutions');
+			// Every URL the tests navigate to answers empty unless a test sets it.
+			for (const query of [
+				'',
+				'&type=Snap',
+				'&type=Snap&maxWidth=100',
+				'&type=Snap&maxWidth=100&maxHeight=50',
+				'&system=gbc&type=Snap&maxWidth=100&maxHeight=50',
+				'&maxWidth=100'
+			])
+				answers[list(query)] = { status: 200, body: empty };
+			answers[list('', 2)] = { status: 200, body: body([item(1)], 60, 2) };
+		});
+
+		it('lists preview, game link to its Images tab, system, type, resolution and size', async () => {
+			answers[list()] = { status: 200, body: body([item(7, { type: 'TitleScreen' })]) };
+			render(ImageResolutions);
+
+			const link = await screen.findByRole('link', { name: 'Game 7' });
+			expect(link.getAttribute('href')).toBe('/games/g7?tab=images');
+			expect(screen.getByText('1 image')).toBeTruthy();
+			const img = document.querySelector('tbody img')!;
+			expect(img.getAttribute('src')).toBe('/api/games/g7/images/7');
+			expect([img.getAttribute('loading'), img.getAttribute('alt')]).toEqual(['lazy', '']);
+			expect(
+				[...document.querySelectorAll('tbody td')].slice(1).map((td) => td.textContent!.trim())
+			).toEqual(['Game 7', 'Game Boy', 'Title screen', '64 × 48', '2.0 KiB']);
+		});
+
+		it('filters write the URL and go back to page 1', async () => {
+			navigateTo('/reports/image-resolutions?page=2');
+			answers[list('', 2)] = { status: 200, body: body([item(1)], 60, 2) };
+			render(ImageResolutions);
+			await screen.findByRole('link', { name: 'Game 1' });
+
+			await fireEvent.change(screen.getByLabelText('Type'), { target: { value: 'Snap' } });
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/image-resolutions?type=Snap'));
+
+			const width = screen.getByLabelText('Max width') as HTMLInputElement;
+			await fireEvent.change(width, { target: { value: '100' } });
+			expect(goto).toHaveBeenLastCalledWith(
+				...replaced('/reports/image-resolutions?type=Snap&maxWidth=100')
+			);
+			await vi.waitFor(() => expect(calls).toContain(list('&type=Snap&maxWidth=100')));
+
+			await fireEvent.change(screen.getByLabelText('Max height'), { target: { value: '50' } });
+			expect(goto).toHaveBeenLastCalledWith(
+				...replaced('/reports/image-resolutions?type=Snap&maxWidth=100&maxHeight=50')
+			);
+			await pickSystem('gbc');
+			expect(goto).toHaveBeenLastCalledWith(
+				...replaced('/reports/image-resolutions?system=gbc&type=Snap&maxWidth=100&maxHeight=50')
+			);
+		});
+
+		it('an out-of-range width means no limit and empties the input', async () => {
+			navigateTo('/reports/image-resolutions?maxWidth=100');
+			answers[list('&maxWidth=100')] = { status: 200, body: body([item(1)]) };
+			render(ImageResolutions);
+			await screen.findByRole('link', { name: 'Game 1' });
+
+			const width = screen.getByLabelText('Max width') as HTMLInputElement;
+			await fireEvent.change(width, { target: { value: '100001' } });
+
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/image-resolutions'));
+			expect(width.value).toBe('');
+		});
+
+		it('Clear resets every filter and is disabled when none is set', async () => {
+			navigateTo('/reports/image-resolutions?system=nope&type=Other&maxHeight=10');
+			answers[list('&system=nope&type=Other&maxHeight=10')] = {
+				status: 400,
+				body: { title: 'Validation failed.', errors: { system: ['Choose a registered system.'] } }
+			};
+			render(ImageResolutions);
+			await screen.findByRole('alert');
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/image-resolutions'));
+			await vi.waitFor(() =>
+				expect((screen.getByRole('button', { name: 'Clear' }) as HTMLButtonElement).disabled).toBe(
+					true
+				)
+			);
+		});
+
+		it('a bare URL restores the saved query; later states are saved', async () => {
+			store.set('rnrm.reports.image-resolutions', '?maxWidth=100');
+			answers[list()] = { status: 200, body: empty };
+			answers[list('&maxWidth=100')] = { status: 200, body: empty };
+			render(ImageResolutions);
+
+			expect(goto).toHaveBeenCalledWith(...replaced('/reports/image-resolutions?maxWidth=100'));
+			navigateTo('/reports/image-resolutions?type=Snap');
+			await vi.waitFor(() =>
+				expect(store.get('rnrm.reports.image-resolutions')).toBe('?type=Snap')
+			);
+		});
+
+		it('a page past the last one goes to the last page', async () => {
+			navigateTo('/reports/image-resolutions?page=9');
+			answers[list('', 9)] = { status: 200, body: body([], 60, 9) };
+			render(ImageResolutions);
+
+			await vi.waitFor(() =>
+				expect(goto).toHaveBeenCalledWith(...replaced('/reports/image-resolutions?page=2'))
+			);
+		});
+
+		it('shows "No images yet." without filters', async () => {
+			answers[list()] = { status: 200, body: empty };
+			render(ImageResolutions);
+			expect(await screen.findByText('No images yet.')).toBeTruthy();
+		});
+
+		it('shows "No images match these filters." with a filter', async () => {
+			navigateTo('/reports/image-resolutions?type=Snap');
+			answers[list('&type=Snap')] = { status: 200, body: empty };
+			render(ImageResolutions);
+			expect(await screen.findByText('No images match these filters.')).toBeTruthy();
+		});
+	});
+
 	describe('Missing Metadata (M4, M6)', () => {
 		const admin = () =>
 			auth.set({ id: 1, username: 'admin', roles: ['admin'], mustChangePassword: false });
@@ -937,6 +1094,7 @@ describe('reports pages', () => {
 				['Duplicates', 'bi bi-files'],
 				['Multiple Releases', 'bi bi-layers'],
 				['Games With Hacks', 'bi bi-bandaid'],
+				['Image Resolutions', 'bi bi-aspect-ratio'],
 				['Missing Metadata', 'bi bi-card-checklist'],
 				['Activity', 'bi bi-activity']
 			]);
@@ -1130,7 +1288,8 @@ describe('reports pages', () => {
 			['Missing Images', 'bi bi-image-alt'],
 			['Duplicates', 'bi bi-files'],
 			['Multiple Releases', 'bi bi-layers'],
-			['Games With Hacks', 'bi bi-bandaid']
+			['Games With Hacks', 'bi bi-bandaid'],
+			['Image Resolutions', 'bi bi-aspect-ratio']
 		]);
 	});
 

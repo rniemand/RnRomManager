@@ -31,6 +31,7 @@ export const icons: Record<string, string> = {
 	'report-duplicates': 'bi bi-files',
 	'report-multiple-releases': 'bi bi-layers',
 	'report-hacks': 'bi bi-bandaid',
+	'report-image-resolutions': 'bi bi-aspect-ratio',
 	'report-new-games': 'bi bi-stars',
 	'report-missing-metadata': 'bi bi-card-checklist',
 	'review-suggestions': 'bi bi-lightbulb',
