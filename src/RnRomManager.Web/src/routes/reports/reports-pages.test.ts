@@ -35,6 +35,7 @@ const { default: LibrarySize } = await import('./library-size/+page.svelte');
 const { default: Duplicates } = await import('./duplicates/+page.svelte');
 const { default: MultipleReleases } = await import('./multiple-releases/+page.svelte');
 const { default: Hacks } = await import('./hacks/+page.svelte');
+const { default: NewlyAdded } = await import('./newly-added/+page.svelte');
 const { default: MissingMetadata } = await import('./missing-metadata/+page.svelte');
 
 type Answer = { status: number; body?: unknown };
@@ -75,9 +76,9 @@ describe('reports pages', () => {
 		auth.set(null);
 	});
 
-	it('/reports redirects to Library Size, replacing the history entry (RP1)', () => {
+	it('/reports redirects to Newly Added, replacing the history entry (RP1, release editing B15)', () => {
 		render(ReportsIndex);
-		expect(goto).toHaveBeenCalledWith('/reports/library-size', { replace: true });
+		expect(goto).toHaveBeenCalledWith('/reports/newly-added', { replace: true });
 	});
 
 	describe('Library Size (RP3)', () => {
@@ -718,6 +719,85 @@ describe('reports pages', () => {
 		});
 	});
 
+	describe('Newly Added (release editing B14)', () => {
+		beforeEach(() => navigateTo('/reports/newly-added'));
+
+		it('shows one card per system with game, added time and releases', async () => {
+			answers['GET /api/reports/newly-added'] = {
+				status: 200,
+				body: {
+					systems: [
+						{
+							system: 'gb',
+							systemName: 'Game Boy',
+							games: [
+								{
+									id: 'g1',
+									displayTitle: 'Tetris',
+									addedAt: '2026-01-02T03:04:00Z',
+									releaseCount: 2
+								}
+							]
+						},
+						{
+							system: 'gbc',
+							systemName: 'Game Boy Color',
+							games: [
+								{
+									id: 'g2',
+									displayTitle: 'Zelda',
+									addedAt: '2026-01-01T00:00:00Z',
+									releaseCount: 1
+								}
+							]
+						}
+					]
+				}
+			};
+			render(NewlyAdded);
+
+			const link = await screen.findByRole('link', { name: 'Tetris' });
+			expect(link.getAttribute('href')).toBe('/games/g1');
+			const cards = [...document.querySelectorAll('.card')];
+			expect(
+				cards.map((c) => c.querySelector('.card-header')!.textContent!.replace(/\s+/g, ' ').trim())
+			).toEqual(['GB Game Boy', 'GBC Game Boy Color']);
+			expect([...cards[0].querySelectorAll('th')].map((th) => th.textContent!.trim())).toEqual([
+				'Game',
+				'Added',
+				'Releases'
+			]);
+			const cells = [...cards[0].querySelectorAll('tbody td')];
+			expect(cells[2].textContent!.trim()).toBe('2');
+			expect(cells[2].className).toBe('text-end');
+			expect(cells[1].textContent!.trim()).not.toBe('');
+		});
+
+		it('the System select writes system= and requests it', async () => {
+			answers['GET /api/reports/newly-added'] = { status: 200, body: { systems: [] } };
+			answers['GET /api/reports/newly-added?system=gbc'] = { status: 200, body: { systems: [] } };
+			render(NewlyAdded);
+			const select = screen.getByLabelText('System') as HTMLSelectElement;
+			await vi.waitFor(() => expect(select.options).toHaveLength(3));
+			expect(select.id).toBe('newly-added-system');
+
+			await fireEvent.change(select, { target: { value: 'gbc' } });
+
+			expect(goto).toHaveBeenLastCalledWith('/reports/newly-added?system=gbc', {
+				replace: true,
+				reset: false
+			});
+			await vi.waitFor(() => expect(calls).toContain('GET /api/reports/newly-added?system=gbc'));
+		});
+
+		it('an empty library shows "No games yet."', async () => {
+			answers['GET /api/reports/newly-added'] = { status: 200, body: { systems: [] } };
+			render(NewlyAdded);
+
+			expect(await screen.findByText('No games yet.')).toBeTruthy();
+		});
+	});
+
 	describe('Games With Hacks (release editing B13)', () => {
 		const list = (query = 'sort=hacks&dir=desc') =>
 			`GET /api/reports/hacks?${query}&page=1&pageSize=50`;
@@ -809,6 +889,7 @@ describe('reports pages', () => {
 					.getAllByRole('link')
 					.map((a) => [a.textContent!.trim(), a.querySelector('i')?.className.trim()])
 			).toEqual([
+				['Newly Added', 'bi bi-stars'],
 				['Library Size', 'bi bi-pie-chart'],
 				['Missing Images', 'bi bi-image-alt'],
 				['Duplicates', 'bi bi-files'],
@@ -986,6 +1067,7 @@ describe('reports pages', () => {
 				.getAllByRole('link')
 				.map((a) => [a.textContent!.trim(), a.querySelector('i')?.className.trim()])
 		).toEqual([
+			['Newly Added', 'bi bi-stars'],
 			['Library Size', 'bi bi-pie-chart'],
 			['Missing Images', 'bi bi-image-alt'],
 			['Duplicates', 'bi bi-files'],

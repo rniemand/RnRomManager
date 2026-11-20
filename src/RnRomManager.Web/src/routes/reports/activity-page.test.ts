@@ -423,6 +423,7 @@ describe('Activity report (B20)', () => {
 			navigateTo('/reports/library-size');
 			render(ReportsLayout, { children });
 			expect(screen.getAllByRole('link').map((a) => a.textContent!.trim())).toEqual([
+				'Newly Added',
 				'Library Size',
 				'Missing Images',
 				'Duplicates',

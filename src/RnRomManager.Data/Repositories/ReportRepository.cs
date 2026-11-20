@@ -217,6 +217,24 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         return new Page<HackedGameItem>(items, page, pageSize, total);
     }
 
+    public async Task<IReadOnlyList<NewGameItem>> ListNewlyAddedGamesAsync(string? systemId, int perSystem, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        var rows = await connection.QueryAsync<NewGameRow>(new CommandDefinition("""
+            SELECT n.id AS Id, n.display_title AS DisplayTitle, n.system_id AS SystemId, n.created_at AS AddedAt,
+                   (SELECT COUNT(*) FROM roms r WHERE r.game_id = n.id AND NOT JSON_CONTAINS(r.flags, '"Update"') AND NOT JSON_CONTAINS(r.flags, '"DLC"')) AS ReleaseCount
+            FROM (
+                SELECT g.id, g.display_title, g.system_id, g.created_at,
+                       ROW_NUMBER() OVER (PARTITION BY g.system_id ORDER BY g.created_at DESC, g.id DESC) AS rn
+                FROM games g WHERE @systemId IS NULL OR g.system_id = @systemId
+            ) n
+            WHERE n.rn <= @perSystem
+            ORDER BY n.system_id, n.rn
+            """, new { systemId, perSystem }, cancellationToken: cancellationToken));
+        return rows.Select(r => new NewGameItem(r.Id, r.DisplayTitle, r.SystemId, DateTime.SpecifyKind(r.AddedAt, DateTimeKind.Utc), (int)r.ReleaseCount))
+            .ToList();
+    }
+
     public async Task<int> MaxReleaseCountAsync(string? systemId, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
@@ -366,6 +384,15 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         public long HackCount { get; init; }
         public long ReleaseCount { get; init; }
         public long Bytes { get; init; }
+    }
+
+    private sealed class NewGameRow
+    {
+        public Guid Id { get; init; }
+        public string DisplayTitle { get; init; } = "";
+        public string SystemId { get; init; } = "";
+        public DateTime AddedAt { get; init; }
+        public long ReleaseCount { get; init; }
     }
 
     private sealed class GameSizeRow

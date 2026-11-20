@@ -218,6 +218,26 @@ public static partial class ReportEndpoints
             });
         });
 
+        // Release editing B14: the 10 newest games per system, systems by name.
+        reports.MapGet("/newly-added", async (string? system, HttpContext ctx, IReportRepository repository, ISystemRegistry systems) =>
+        {
+            if (Validate(system, null, null, systems) is { Count: > 0 } errors)
+                return Problems.Validation(ctx, errors);
+            var games = await repository.ListNewlyAddedGamesAsync(system, 10, ctx.RequestAborted);
+            return Results.Ok(new
+            {
+                systems = games.GroupBy(g => g.SystemId)
+                    .Select(group => (Id: group.Key, Name: SystemName(systems, group.Key), Games: group))
+                    .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+                    .Select(s => new
+                    {
+                        system = s.Id,
+                        systemName = s.Name,
+                        games = s.Games.Select(g => new { id = g.Id, displayTitle = g.DisplayTitle, addedAt = g.AddedAt, releaseCount = g.ReleaseCount }),
+                    }),
+            });
+        });
+
         // Release editing B13: Games With Hacks.
         reports.MapGet("/hacks", async (string? system, string? sort, string? dir, int? page, int? pageSize, HttpContext ctx,
             IReportRepository repository, ISystemRegistry systems) =>

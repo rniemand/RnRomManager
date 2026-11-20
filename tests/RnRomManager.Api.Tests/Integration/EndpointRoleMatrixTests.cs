@@ -168,6 +168,7 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/reports/duplicates"] = Role.User,
         ["GET /api/reports/multiple-releases"] = Role.User,
         ["GET /api/reports/hacks"] = Role.User,
+        ["GET /api/reports/newly-added"] = Role.User,
         ["POST /api/reports/duplicates/dismiss"] = Role.Admin,
         ["POST /api/reports/duplicates/merge"] = Role.Admin,
     };

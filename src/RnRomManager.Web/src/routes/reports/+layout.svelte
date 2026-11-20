@@ -15,7 +15,9 @@
 	const activity = resolve('/reports/activity');
 	const missingMetadata = resolve('/reports/missing-metadata');
 	const adminOnly: string[] = [activity, missingMetadata];
+	// Release editing B15: Newly Added first.
 	const tabs = $derived([
+		{ href: resolve('/reports/newly-added'), label: 'Newly Added', icon: 'report-new-games' },
 		{ href: resolve('/reports/library-size'), label: 'Library Size', icon: 'report-size' },
 		{
 			href: resolve('/reports/missing-images'),

@@ -49,6 +49,12 @@ public interface IReportRepository
     Task<Page<HackedGameItem>> ListHackedGamesAsync(string? systemId, HackedGameSort sort, bool descending, int page, int pageSize,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Release editing B14: per system (or only <paramref name="systemId"/>), its <paramref name="perSystem"/> newest games by
+    /// <c>created_at</c> then id, both descending; rows ordered by system id, then that order.
+    /// </summary>
+    Task<IReadOnlyList<NewGameItem>> ListNewlyAddedGamesAsync(string? systemId, int perSystem, CancellationToken cancellationToken);
+
     /// <summary>RP6–RP8: undismissed duplicate groups, sorted by system then base title; paging and total exclude dismissed ones.</summary>
     Task<Page<DuplicateGroup>> ListDuplicatesAsync(string? systemId, int page, int pageSize, CancellationToken cancellationToken);
 
@@ -78,6 +84,9 @@ public sealed record MultipleReleaseItem(Guid Id, string DisplayTitle, string Sy
 /// <param name="ReleaseCount">B13: releases flagged neither <c>Update</c> nor <c>DLC</c>, as <see cref="MultipleReleaseItem"/>.</param>
 /// <param name="Bytes">B13: the Library Size report's game bytes.</param>
 public sealed record HackedGameItem(Guid Id, string DisplayTitle, string SystemId, int HackCount, int ReleaseCount, long Bytes);
+
+/// <param name="ReleaseCount">B14: releases flagged neither <c>Update</c> nor <c>DLC</c>, as <see cref="HackedGameItem"/>.</param>
+public sealed record NewGameItem(Guid Id, string DisplayTitle, string SystemId, DateTime AddedAt, int ReleaseCount);
 
 /// <summary>Release editing B13: the Games With Hacks sort keys.</summary>
 public enum HackedGameSort { Name, System, Hacks, Releases, Size }

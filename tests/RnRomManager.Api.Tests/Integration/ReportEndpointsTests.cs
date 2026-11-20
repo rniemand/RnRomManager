@@ -760,6 +760,42 @@ public class ReportEndpointsTests
         Assert.That(body, Does.Not.Contain("ValidationFailed"));
     }
 
+    // Release editing B14: GET /api/reports/newly-added.
+
+    [Test]
+    public async Task NewlyAdded_GroupsBySystem_SystemsByName_NewestFirst()
+    {
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        var echo = await Ingest("gbc", "e.gbc", Echo);
+        await Sql("UPDATE games SET created_at = '2026-01-01 00:00:00' WHERE id = @alpha", new { alpha });
+
+        var body = await GetJson("/api/reports/newly-added");
+        var gbc = await GetJson("/api/reports/newly-added?system=gbc");
+
+        var systems = body.GetProperty("systems").EnumerateArray().ToList();
+        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EqualTo(new[] { "gb", "gbc" }));
+        var registry = Service<RnRomManager.Core.Systems.ISystemRegistry>();
+        Assert.That(systems[0].GetProperty("systemName").GetString(), Is.EqualTo(registry.ById("gb")!.DisplayName));
+        var games = systems[0].GetProperty("games").EnumerateArray().ToList();
+        Assert.That(games.Select(g => g.GetProperty("id").GetGuid()), Is.EqualTo(new[] { bravo, alpha }));
+        Assert.That(games[0].EnumerateObject().Select(p => p.Name), Is.EqualTo(new[] { "id", "displayTitle", "addedAt", "releaseCount" }));
+        Assert.That((games[1].GetProperty("addedAt").GetString(), games[1].GetProperty("releaseCount").GetInt32()),
+            Is.EqualTo(("2026-01-01T00:00:00Z", 1)));
+        Assert.That(gbc.GetProperty("systems").EnumerateArray().Select(s => s.GetProperty("games")[0].GetProperty("id").GetGuid()),
+            Is.EqualTo(new[] { echo }));
+    }
+
+    [Test]
+    public async Task NewlyAdded_UnknownSystem_Is400()
+    {
+        using var response = await _user.GetAsync("/api/reports/newly-added?system=nope");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").GetProperty("system")[0].GetString(),
+            Is.EqualTo("Choose a registered system."));
+    }
+
     // Release editing B13: GET /api/reports/hacks.
 
     [Test]
