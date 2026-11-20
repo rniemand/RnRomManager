@@ -69,8 +69,10 @@ public class LibraryEditorSaveTests
         return new(path, extension, bytes.Length, Convert.ToHexStringLower(SHA1.HashData(bytes)));
     }
 
+    /// <summary>A version 1 record (release editing B16): no owner, its entry directly in saves/.</summary>
     private static GameSave Record(string release, int descriptionLength = 0) => new()
     {
+        Legacy = true,
         Id = GameSaves.NewId(), Name = "Old", Description = new string('d', descriptionLength), Kind = GameSaves.KindBattery, Release = release,
         Extension = ".srm", SizeBytes = 1, Sha1 = Convert.ToHexStringLower(SHA1.HashData(new byte[] { 7 })), UploadedBy = null,
         UploadedAt = TestLibrary.When, UpdatedBy = null, UpdatedAt = TestLibrary.When,
@@ -82,7 +84,8 @@ public class LibraryEditorSaveTests
         using var archive = ZipFile.Open(zip, ZipArchiveMode.Update);
         var entries = raw.ToList();
         if (saves is not null)
-            entries.AddRange([(LibraryZip.SavesIndexEntry, GameSaves.Serialize(saves)!), .. saves.Select(s => (s.Entry, new byte[] { 7 }))]);
+            entries.AddRange([(LibraryZip.SavesIndexEntry, saves.Any(s => s.Legacy) ? TestSaves.V1Index([.. saves]) : GameSaves.Serialize(saves)!),
+                .. saves.Select(s => (s.Entry, new byte[] { 7 }))]);
         foreach (var (name, bytes) in entries)
         {
             using var entry = archive.CreateEntry(name).Open();
@@ -135,7 +138,7 @@ public class LibraryEditorSaveTests
 
         var replaced = await Editor.ReplaceSaveFileAsync(game.Id, save.Id, Upload([9, 9], ".srm"), Alice, AliceViewer, default);
         Assert.That(replaced.Code, Is.Null, replaced.Details);
-        Assert.That(SavesEntries(game.Zip), Is.EqualTo(new[] { LibraryZip.SaveEntry(save.Id + ".srm"), LibraryZip.SavesIndexEntry }));
+        Assert.That(SavesEntries(game.Zip), Is.EqualTo(new[] { LibraryZip.SaveEntry($"alice/{save.Id}.srm"), LibraryZip.SavesIndexEntry }));
         Assert.That(Entry(game.Zip, replaced.Save!.Entry), Is.EqualTo(new byte[] { 9, 9 }));
         Assert.That((replaced.Save.Name, replaced.Save.SizeBytes), Is.EqualTo(("After boss", 2L)));
 
@@ -215,7 +218,7 @@ public class LibraryEditorSaveTests
         // Same-sized orphan records until the index would pass 1 MiB; one fewer is on disk.
         var saves = new List<GameSave>();
         while (GameSaves.Serialize(saves) is not null)
-            saves.Add(Record("Gone (World).gb", GameSaves.MaxDescriptionLength) with { Name = "SSSS" });
+            saves.Add(Record("Gone (World).gb", GameSaves.MaxDescriptionLength) with { Name = "SSSS", Legacy = false, UploadedBy = "alice" });
         saves.RemoveAt(saves.Count - 1);
         AddSaves(game.Zip, saves);
         var before = File.ReadAllBytes(game.Zip);
@@ -365,12 +368,72 @@ public class LibraryEditorSaveTests
         Assert.That((bobFull.Code, bobFull.Details), Is.EqualTo((SaveLimitReached, "You already have 25 saves for this release. Delete one first.")));
     }
 
-    /// <summary>Adds records (one-byte entries) to a ZIP that the editor already gave a <c>saves.json</c>.</summary>
+    /// <summary>
+    /// Adds legacy records (one-byte entries) to a ZIP that the editor already gave a <c>saves.json</c>: the index becomes a
+    /// version 1 one (B16: only it can hold an unowned save), with the current saves' bytes copied to their flat entries.
+    /// </summary>
     private void AddSavesToIndex(TestGame game, params GameSave[] records)
     {
         var current = ReadSaves(game.Zip).Index!.Saves;
+        var copies = current.Select(c => ((c with { Legacy = true }).Entry, Entry(game.Zip, c.Entry))).ToList();
         using (var archive = ZipFile.Open(game.Zip, ZipArchiveMode.Update))
             archive.GetEntry(LibraryZip.SavesIndexEntry)!.Delete();
-        AddSaves(game.Zip, null, [(LibraryZip.SavesIndexEntry, GameSaves.Serialize([.. current, .. records])!), .. records.Select(r => (r.Entry, new byte[] { 7 }))]);
+        AddSaves(game.Zip, null, [(LibraryZip.SavesIndexEntry, TestSaves.V1Index([.. current, .. records])), .. copies,
+            .. records.Select(r => (r.Entry, new byte[] { 7 }))]);
+    }
+
+    /// <summary>Release editing B18: every save write on a version 1 ZIP leaves a version 2 one, each save in its owner's folder.</summary>
+    [Test]
+    public async Task EverySaveWrite_OnAVersion1Zip_UpgradesIt()
+    {
+        var game = await WriteGame("Tetris", "Tetris (World).gb");
+        async Task<(GameSave Unowned, GameSave Alices)> Reset()
+        {
+            using (var archive = ZipFile.Open(game.Zip, ZipArchiveMode.Update))
+                foreach (var entry in archive.Entries.Where(e => e.FullName.StartsWith(LibraryZip.SavesFolder, StringComparison.Ordinal)).ToList())
+                    entry.Delete();
+            var unowned = Record("Tetris (World).gb");
+            var alices = Record("Tetris (World).gb") with { UploadedBy = "Alice", Name = "Mine" };
+            AddSaves(game.Zip, [unowned, alices]);
+            var file = new FileInfo(game.Zip);
+            using var zip = LibraryZip.Open(game.Zip, Service<InfoJsonReader>());
+            await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(zip.InfoJson!.Game!, game.ZipPath, file.Length, file.LastWriteTimeUtc), default);
+            return (unowned, alices);
+        }
+        void AssertVersion2(GameSave unowned, byte[] alicesBytes, string alicesExtension = ".srm", bool unownedKept = true)
+        {
+            var read = ReadSaves(game.Zip);
+            Assert.That(read.State, Is.EqualTo(SavesState.Valid), read.Problem);
+            using (var archive = ZipFile.OpenRead(game.Zip))
+            using (var index = archive.GetEntry(LibraryZip.SavesIndexEntry)!.Open())
+                Assert.That(System.Text.Json.JsonDocument.Parse(index).RootElement.GetProperty("version").GetInt32(), Is.EqualTo(2));
+            Assert.That(read.Index!.Saves.All(s => !s.Legacy && s.Entry.StartsWith($"saves/{s.UploadedBy!.ToLowerInvariant()}/", StringComparison.Ordinal)));
+            if (unownedKept)
+            {
+                var upgraded = read.Index.Saves.Single(s => s.Id == unowned.Id);
+                Assert.That((upgraded.UploadedBy, upgraded.Entry), Is.EqualTo(((string?)"admin", $"saves/admin/{unowned.Id}.srm")));
+                Assert.That(Entry(game.Zip, upgraded.Entry), Is.EqualTo(new byte[] { 7 }));
+            }
+            var mine = read.Index.Saves.Single(s => s.Name is "Mine" or "Renamed");
+            Assert.That((mine.UploadedBy, mine.Entry), Is.EqualTo(((string?)"Alice", $"saves/alice/{mine.Id}{alicesExtension}")));
+            Assert.That(Entry(game.Zip, mine.Entry), Is.EqualTo(alicesBytes));
+            Assert.That(SavesEntries(game.Zip).Where(e => e.Count(c => c == '/') == 1 && e != LibraryZip.SavesIndexEntry), Is.Empty, "no flat entry left");
+        }
+
+        var (unowned, alices) = await Reset();
+        Assert.That((await Editor.AddSaveAsync(game.Id, game.RomIds[0], "state", "New", null, Upload([5]), Alice, default)).Code, Is.Null);
+        AssertVersion2(unowned, [7]);
+
+        (unowned, alices) = await Reset();
+        Assert.That((await Editor.UpdateSaveAsync(game.Id, alices.Id, "Renamed", null, Alice, AliceViewer, default)).Code, Is.Null);
+        AssertVersion2(unowned, [7]);
+
+        (unowned, alices) = await Reset();
+        Assert.That((await Editor.ReplaceSaveFileAsync(game.Id, alices.Id, Upload([8, 8], ".sav"), Alice, AliceViewer, default)).Code, Is.Null);
+        AssertVersion2(unowned, [8, 8], ".sav");
+
+        (unowned, alices) = await Reset();
+        Assert.That((await Editor.DeleteSaveAsync(game.Id, unowned.Id, Alice, AdminViewer, default)).Code, Is.Null);
+        AssertVersion2(unowned, [7], unownedKept: false);
     }
 }

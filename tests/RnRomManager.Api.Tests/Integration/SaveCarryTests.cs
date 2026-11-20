@@ -168,6 +168,69 @@ public class SaveCarryTests(bool external)
         Assert.That((Entry(target.Zip, saves[1].Entry), Entry(target.Zip, saves[2].Entry)), Is.EqualTo((new byte[] { 1 }, new byte[] { 2 })));
     }
 
+    /// <summary>Release editing B16: turns the ZIP's saves into a version 1 folder by hand (flat entries, the same records).</summary>
+    private void ToVersion1(string zip)
+    {
+        var (_, saves) = Read(zip);
+        var legacy = saves.Select(s => s with { Legacy = true }).ToArray();
+        var bytes = saves.Select(s => Entry(zip, s.Entry)).ToArray();
+        using var archive = ZipFile.Open(zip, ZipArchiveMode.Update);
+        foreach (var entry in archive.Entries.Where(e => e.FullName.StartsWith(LibraryZip.SavesFolder, StringComparison.Ordinal)).ToList())
+            entry.Delete();
+        using (var index = archive.CreateEntry(LibraryZip.SavesIndexEntry).Open())
+            index.Write(TestSaves.V1Index(legacy));
+        for (var i = 0; i < legacy.Length; i++)
+        {
+            using var entry = archive.CreateEntry(legacy[i].Entry).Open();
+            entry.Write(bytes[i]);
+        }
+    }
+
+    /// <summary>The ZIP's saves.json is version 2 and every save's bytes are in its owner's folder.</summary>
+    private void AssertVersion2(string zip, params (string Id, byte[] Bytes)[] expected)
+    {
+        using (var archive = ZipFile.OpenRead(zip))
+        using (var index = archive.GetEntry(LibraryZip.SavesIndexEntry)!.Open())
+            Assert.That(global::System.Text.Json.JsonDocument.Parse(index).RootElement.GetProperty("version").GetInt32(), Is.EqualTo(2));
+        var (_, saves) = Read(zip);
+        foreach (var (id, bytes) in expected)
+        {
+            var save = saves.Single(s => s.Id == id);
+            Assert.That(save.Entry, Does.StartWith("saves/alice/"));
+            Assert.That(Entry(zip, save.Entry), Is.EqualTo(bytes));
+        }
+    }
+
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task Merge_OfAVersion1Source_IntoVersion1OrVersion2_WritesVersion2(bool targetV1)
+    {
+        var source = await WriteGame("Alpha", "Shared (World)");
+        var target = await WriteGame("Beta", "Other (World)");
+        var carried = await AddSave(source, "Shared (World)", "Carried", [1, 2]);
+        var own = await AddSave(target, "Other (World)", "Own", [3]);
+        ToVersion1(source.Zip);
+        if (targetV1)
+            ToVersion1(target.Zip);
+
+        Assert.That((await Editor.MergeAsync(source.Id, target.Id, Alice, default)).Code, Is.Null);
+
+        AssertVersion2(target.Zip, (own.Id, [3]), (carried.Id, [1, 2]));
+    }
+
+    [Test]
+    public async Task LastReleaseMove_OfAVersion1Source_WritesVersion2()
+    {
+        var source = await WriteGame("Alpha", "Shared (World)");
+        var target = await WriteGame("Beta", "Other (World)");
+        var carried = await AddSave(source, "Shared (World)", "Carried", [4]);
+        ToVersion1(source.Zip);
+
+        Assert.That((await Editor.MoveReleaseAsync(source.Id, await RomId(source.Id, "Shared (World)"), target.Id, null, Alice, default)).Code, Is.Null);
+
+        AssertVersion2(target.Zip, (carried.Id, [4]));
+    }
+
     /// <summary>Rewrites a save's id (and its entry name) in the ZIP by hand.</summary>
     private void SetSaveId(string zip, string from, string to)
     {

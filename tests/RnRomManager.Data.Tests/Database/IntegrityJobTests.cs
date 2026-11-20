@@ -307,8 +307,10 @@ public partial class IntegrityJobTests
         Assert.That((await Open()).Select(i => i.Type), Does.Contain(ZipUnreadable));
     }
 
+    /// <summary>A version 1 record (release editing B16): no owner, its entry directly in saves/.</summary>
     private static GameSave Save(byte[] bytes) => new()
     {
+        Legacy = true,
         Id = GameSaves.NewId(), Name = "S", Description = "", Kind = GameSaves.KindState, Release = "x.gb", Extension = ".state",
         SizeBytes = bytes.Length, Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(bytes)), UploadedBy = null,
         UploadedAt = When, UpdatedBy = null, UpdatedAt = When,
@@ -324,7 +326,7 @@ public partial class IntegrityJobTests
         var save = Save([1, 2, 3]);
         Damage("gb/A/Alpha.zip", zip =>
         {
-            Replace(zip, LibraryZip.SavesIndexEntry, GameSaves.Serialize([save])!);
+            Replace(zip, LibraryZip.SavesIndexEntry, TestSaves.V1Index(save));
             Replace(zip, save.Entry, [1, 2, 3]);
             Replace(zip, "saves/stray.bin", [9]);
         });
@@ -332,6 +334,23 @@ public partial class IntegrityJobTests
         await Run();
 
         Assert.That(await Unlisted(), Is.EqualTo(new[] { "saves/stray.bin" }));
+    }
+
+    /// <summary>Release editing B16: a version 2 index's entries in the owners' folders are expected.</summary>
+    [Test]
+    public async Task Saves_AVersion2IndexListsItsFolderEntries()
+    {
+        await Write("gb/A/Alpha.zip", "Alpha");
+        var save = Save([1, 2, 3]) with { Legacy = false, UploadedBy = "Alice" };
+        Damage("gb/A/Alpha.zip", zip =>
+        {
+            Replace(zip, LibraryZip.SavesIndexEntry, GameSaves.Serialize([save])!);
+            Replace(zip, "saves/alice/" + save.Id + ".state", [1, 2, 3]);
+        });
+
+        await Run();
+
+        Assert.That(await Unlisted(), Is.Empty);
     }
 
     [Test]
@@ -345,7 +364,7 @@ public partial class IntegrityJobTests
             Replace(zip, LibraryZip.SavesIndexEntry, "{ no"u8.ToArray());
             Replace(zip, "saves/a.state", [1]);
         });
-        Damage("gb/B/Beta.zip", zip => Replace(zip, LibraryZip.SavesIndexEntry, GameSaves.Serialize([save])!));
+        Damage("gb/B/Beta.zip", zip => Replace(zip, LibraryZip.SavesIndexEntry, TestSaves.V1Index(save)));
 
         await Run();
 

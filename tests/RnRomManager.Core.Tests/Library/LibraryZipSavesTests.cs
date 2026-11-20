@@ -113,6 +113,23 @@ public class LibraryZipSavesTests(bool useCheckedWrite)
         Assert.That(saves[save.Entry], Is.EqualTo(bytes));
     }
 
+    /// <summary>Release editing B16: a write that isn't about saves leaves a version 1 index and its flat entries as they are.</summary>
+    [Test]
+    public async Task UnrelatedWrite_CopiesAVersion1IndexAndItsEntriesUnchanged()
+    {
+        var bytes = new byte[] { 1, 2, 3 };
+        var save = Save(bytes) with { Legacy = true, UploadedBy = null };
+        var index = TestSaves.V1Index(save);
+        AddEntries((LibraryZip.SavesIndexEntry, index), (save.Entry, bytes));
+
+        await Unrelated(this);
+
+        var saves = SavesEntries();
+        Assert.That(saves.Keys.Order(), Is.EqualTo(new[] { $"saves/{save.Id}.state", LibraryZip.SavesIndexEntry }.Order()));
+        Assert.That(saves[LibraryZip.SavesIndexEntry], Is.EqualTo(index));
+        Assert.That(saves[save.Entry], Is.EqualTo(bytes));
+    }
+
     [Test]
     public async Task UnrelatedWrite_InvalidIndex_CopiesEverySavesEntryByteForByte()
     {
