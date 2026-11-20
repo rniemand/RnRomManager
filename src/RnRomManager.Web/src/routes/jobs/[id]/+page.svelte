@@ -10,7 +10,14 @@
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import { formatDateTime } from '#lib/format.js';
-	import { formatSummaryValue, outcomeClass, outcomes, statusClass } from '#lib/jobs.js';
+	import {
+		formatSummaryValue,
+		outcomeClass,
+		outcomes,
+		percent,
+		splitSummary,
+		statusClass
+	} from '#lib/jobs.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 
@@ -82,6 +89,7 @@
 	});
 
 	const live = $derived(job && jobs.current?.id === job.id ? jobs.current : null);
+	const summary = $derived(splitSummary(job?.summary ?? null));
 	const source = (item: JobItem) =>
 		item.archiveEntry ? `${item.sourcePath} › ${item.archiveEntry}` : item.sourcePath;
 </script>
@@ -110,24 +118,48 @@
 			<span class="badge {statusClass(job.status)} align-middle fs-6">{job.status}</span>
 		</h1>
 
-		<dl class="row">
-			<dt class="col-sm-3">Started</dt>
-			<dd class="col-sm-9">{formatDateTime(job.startedAt)}</dd>
-			<dt class="col-sm-3">Finished</dt>
-			<dd class="col-sm-9">{job.finishedAt ? formatDateTime(job.finishedAt) : '—'}</dd>
-			<dt class="col-sm-3">Trigger</dt>
-			<dd class="col-sm-9">{job.triggerSource}</dd>
-			{#if live}
-				<dt class="col-sm-3">Progress</dt>
-				<dd class="col-sm-9" aria-live="polite">
-					{live.current} / {live.total}{live.currentItem ? ` · ${live.currentItem}` : ''}
-				</dd>
-				{#if live.step}
-					<dt class="col-sm-3">Current file</dt>
-					<dd class="col-sm-9"><JobStepProgress step={live.step} /></dd>
-				{/if}
-			{/if}
-		</dl>
+		<div class="card mb-4">
+			<div class="table-responsive">
+				<table class="table table-sm table-striped table-hover align-middle mb-0">
+					<thead class="table-dark">
+						<tr>
+							<th scope="col">Started</th>
+							<th scope="col">Finished</th>
+							<th scope="col">Trigger</th>
+							{#if live}<th scope="col">Progress</th>{/if}
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="text-nowrap">{formatDateTime(job.startedAt)}</td>
+							<td class="text-nowrap">{job.finishedAt ? formatDateTime(job.finishedAt) : '—'}</td>
+							<td>{job.triggerSource}</td>
+							{#if live}
+								<td style="min-width: 14rem">
+									<div
+										class="progress mb-1"
+										role="progressbar"
+										aria-label="Job progress"
+										aria-valuenow={percent(live.current, live.total)}
+										aria-valuemin="0"
+										aria-valuemax="100"
+									>
+										<div
+											class="progress-bar"
+											style="width: {percent(live.current, live.total)}%"
+										></div>
+									</div>
+									<div class="small text-body-secondary text-break" aria-live="polite">
+										{live.current} / {live.total}{live.currentItem ? ` · ${live.currentItem}` : ''}
+									</div>
+									<JobStepProgress step={live.step} />
+								</td>
+							{/if}
+						</tr>
+					</tbody>
+				</table>
+			</div>
+		</div>
 
 		{#if job.error}
 			<div class="alert alert-danger" role="alert">{job.error}</div>
@@ -135,13 +167,38 @@
 
 		{#if job.summary}
 			<h2 class="h5">Summary</h2>
-			<ul class="list-inline mb-4">
-				{#each Object.entries(job.summary) as [key, count] (key)}
-					<li class="list-inline-item">
-						<span class="badge {outcomeClass(key)}">{key} {formatSummaryValue(count)}</span>
-					</li>
-				{/each}
-			</ul>
+			{#if summary.badges.length}
+				<ul class="list-inline mb-4">
+					{#each summary.badges as [key, value] (key)}
+						<li class="list-inline-item">
+							<span class="badge {outcomeClass(key)}">{key} {formatSummaryValue(value)}</span>
+						</li>
+					{/each}
+				</ul>
+			{/if}
+			{#each summary.tables as t (t.key)}
+				<h3 class="h6">{t.title}</h3>
+				<div class="card mb-4">
+					<div class="table-responsive">
+						<table class="table table-sm table-striped table-hover align-middle mb-0">
+							<thead class="table-dark">
+								<tr>
+									<th scope="col">{t.columns[0]}</th>
+									<th scope="col">{t.columns[1]}</th>
+								</tr>
+							</thead>
+							<tbody>
+								{#each t.rows as [name, value] (name)}
+									<tr>
+										<td>{name}</td>
+										<td>{value}</td>
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			{/each}
 		{/if}
 
 		{#if job.type === 'Ingest'}

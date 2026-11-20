@@ -11,37 +11,37 @@ vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
 
+function stubJob(fields: Record<string, unknown>): void {
+	const job = {
+		id: 'j1',
+		mode: null,
+		triggerSource: 'Manual',
+		status: 'Completed',
+		requestedBy: 1,
+		startedAt: '2026-11-13T12:00:00Z',
+		finishedAt: '2026-11-13T12:00:05Z',
+		error: null,
+		...fields
+	};
+	vi.stubGlobal('fetch', () => Promise.resolve(new Response(JSON.stringify(job), { status: 200 })));
+}
+
 const { default: JobPage } = await import('./jobs/[id]/+page.svelte');
 
 describe('job page', () => {
 	beforeEach(() => {
 		resetClient();
 		auth.set({ id: 1, username: 'boss', roles: ['admin'], mustChangePassword: false });
-		vi.stubGlobal('fetch', () =>
-			Promise.resolve(
-				new Response(
-					JSON.stringify({
-						id: 'j1',
-						type: 'ReviewResolve',
-						mode: null,
-						triggerSource: 'Manual',
-						status: 'Completed',
-						requestedBy: 1,
-						startedAt: '2026-11-13T12:00:00Z',
-						finishedAt: '2026-11-13T12:00:05Z',
-						summary: {
-							reviewId: 7,
-							fileName: 'disc2.iso',
-							gameId: null,
-							code: 'ValidationFailed',
-							errors: { title: ['Bad.'] }
-						},
-						error: null
-					}),
-					{ status: 200 }
-				)
-			)
-		);
+		stubJob({
+			type: 'ReviewResolve',
+			summary: {
+				reviewId: 7,
+				fileName: 'disc2.iso',
+				gameId: null,
+				code: 'ValidationFailed',
+				errors: { title: ['Bad.'] }
+			}
+		});
 	});
 
 	afterEach(() => vi.unstubAllGlobals());
@@ -53,5 +53,28 @@ describe('job page', () => {
 		expect(screen.getByText('gameId null')).toBeTruthy();
 		expect(screen.getByText('fileName disc2.iso')).toBeTruthy();
 		expect(screen.queryByText(/\[object Object\]/)).toBeNull();
+	});
+
+	it("shows a DatRefresh job's versions as a table, not a JSON badge", async () => {
+		stubJob({
+			type: 'DatRefresh',
+			summary: { files: 2, versions: { 'Nintendo - Game Boy': '2026.11.14' } }
+		});
+		render(JobPage);
+
+		expect(await screen.findByText('files 2')).toBeTruthy();
+		expect(screen.getByRole('columnheader', { name: 'DAT' })).toBeTruthy();
+		expect(screen.getByRole('cell', { name: 'Nintendo - Game Boy' })).toBeTruthy();
+		expect(screen.getByRole('cell', { name: '2026.11.14' })).toBeTruthy();
+		expect(screen.queryByText(/versions \{/)).toBeNull();
+	});
+
+	it('shows Started, Finished and Trigger as a table', async () => {
+		stubJob({ type: 'Integrity', summary: null });
+		render(JobPage);
+
+		expect(await screen.findByRole('columnheader', { name: 'Trigger' })).toBeTruthy();
+		expect(screen.getByRole('columnheader', { name: 'Started' })).toBeTruthy();
+		expect(screen.getByRole('cell', { name: 'Manual' })).toBeTruthy();
 	});
 });
