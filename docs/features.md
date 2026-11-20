@@ -237,7 +237,7 @@ PlayStation, PSP, GameCube, Wii, Xbox 360, Saturn, Sega CD and 3DO are identifie
 
 ## Jobs
 
-`/jobs` (Admin, from the footer's job indicator or a job page's **All jobs** link) shows the running job (its label, progress, current item, **Cancel** when it can be cancelled and a link to its page) or "No job running", then every recent job, newest first and paged: label, trigger, status, start and end time and a link to its page. The list reloads when the running job ends.
+`/jobs` (Admin, from the footer's job indicator or a job page's **All jobs** link) shows the running job in a table like the recent jobs (label, progress with current item, start time, a link to its page and **Cancel** when it can be cancelled) or a "No job running." row, then every recent job, newest first and paged: label, trigger, status, start and end time and a link to its page. The list reloads when the running job ends.
 
 ## Job detail
 
