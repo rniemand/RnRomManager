@@ -464,7 +464,7 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 					"Large ROMs that don't compress well (DS), or when fewer files on disk is the goal"
 				],
 				[
-					'Medium (default)',
+					'MediumDefault',
 					'About 40–90% of the ROM size, depending on the ROM',
 					'Fast',
 					"Most systems; today's behaviour"
@@ -475,6 +475,28 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 					'Writes several times slower, reads like Medium',
 					'Small cartridge ROMs where space matters most'
 				]
+			]);
+			const levelCells = within(legend)
+				.getAllByRole('row')
+				.slice(1)
+				.map((r) => r.children[0]);
+			expect(levelCells.map((c) => c.querySelector('.badge')!.className)).toEqual([
+				'badge text-bg-secondary',
+				'badge text-bg-primary',
+				'badge text-bg-success'
+			]);
+			expect(levelCells[1].querySelectorAll('.badge')[1].className).toBe(
+				'badge rounded-pill text-bg-light border ms-1'
+			);
+			expect(
+				within(legend)
+					.getAllByRole('row')
+					.slice(1)
+					.map((r) => r.children[2].querySelector('i')!.className)
+			).toEqual([
+				'bi bi-lightning-charge me-1',
+				'bi bi-lightning me-1',
+				'bi bi-hourglass-split me-1'
 			]);
 			expect(screen.getByText('These numbers are typical estimates, not guarantees.')).toBeTruthy();
 		});

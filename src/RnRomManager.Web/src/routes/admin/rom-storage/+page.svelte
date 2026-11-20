@@ -17,7 +17,8 @@
 	 * confirmation that starts the storage job. Buttons are disabled while any job runs. ZIP Compression Z11–Z12: in-ZIP
 	 * systems change their compression level, or repack again, through a confirmation that starts the repack job.
 	 * ROM Zip Config and Jobs Restyle R1–R11: storage as icons with tooltips, levels as coloured badges, a Folder column,
-	 * system badges linking to the Library, one column per action and grouped headers.
+	 * system badges linking to the Library, one column per action and grouped headers. L1–L3: the legend shows the same
+	 * badges and a speed icon per level.
 	 */
 	type Level = RomStorageRow['zipCompression'];
 
@@ -251,9 +252,7 @@
 							</td>
 							<td class="text-center text-nowrap">
 								{#if row.compressionConfigurable}
-									<span class="badge {level(row.zipCompression).badge}"
-										>{level(row.zipCompression).label}</span
-									>
+									{@render levelBadge(row.zipCompression)}
 									<button
 										type="button"
 										class="btn btn-sm btn-outline-primary ms-2"
@@ -299,23 +298,29 @@
 				</thead>
 				<tbody>
 					<tr>
-						<th scope="row">Store</th>
+						<th scope="row">{@render levelBadge('Store')}</th>
 						<td>~100% of the ROM size (no compression)</td>
-						<td>Fastest to read and write, almost no CPU</td>
+						<td><Icon name="speed-fast" class="me-1" />Fastest to read and write, almost no CPU</td>
 						<td
 							>Large ROMs that don't compress well (DS), or when fewer files on disk is the goal</td
 						>
 					</tr>
 					<tr>
-						<th scope="row">Medium (default)</th>
+						<th scope="row">
+							{@render levelBadge('Med')}<span class="badge rounded-pill text-bg-light border ms-1"
+								>Default</span
+							>
+						</th>
 						<td>About 40–90% of the ROM size, depending on the ROM</td>
-						<td>Fast</td>
+						<td><Icon name="speed-medium" class="me-1" />Fast</td>
 						<td>Most systems; today's behaviour</td>
 					</tr>
 					<tr>
-						<th scope="row">High</th>
+						<th scope="row">{@render levelBadge('High')}</th>
 						<td>A few percent smaller than Medium</td>
-						<td>Writes several times slower, reads like Medium</td>
+						<td
+							><Icon name="speed-slow" class="me-1" />Writes several times slower, reads like Medium</td
+						>
 						<td>Small cartridge ROMs where space matters most</td>
 					</tr>
 				</tbody>
@@ -356,6 +361,10 @@
 		{/if}
 	{/if}
 </ConfirmModal>
+
+{#snippet levelBadge(value: Level)}
+	<span class="badge {level(value).badge}">{level(value).label}</span>
+{/snippet}
 
 {#snippet storageIcon(embed: boolean)}
 	{@const s = storage(embed)}
