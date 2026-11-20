@@ -117,7 +117,8 @@ describe('play page loading indicator', () => {
 			const downloaded = document.getElementById('downloaded')!;
 
 			await writer.write(new Uint8Array([1, 2]));
-			expect(progress.hidden).toBe(!knownLength);
+			expect(progress.hidden).toBe(false);
+			expect(progress.hasAttribute('value')).toBe(knownLength);
 			expect(downloaded.hidden).toBe(false);
 			if (knownLength) {
 				expect(progress.max).toBe(4);
@@ -144,6 +145,39 @@ describe('play page loading indicator', () => {
 			expect(document.getElementById('status')!.textContent).toBe(message);
 		}
 	);
+
+	async function playWithTotalHeader(chunks: number[][]) {
+		const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+		const writer = writable.getWriter();
+		serve({
+			[romUrl]: async () => new Response(readable, { headers: { 'X-Content-Bytes': '4' } })
+		});
+		const finished = play('gambatte', 'Game.gb');
+		for (const chunk of chunks) await writer.write(new Uint8Array(chunk));
+		return { writer, finished };
+	}
+
+	it('uses X-Content-Bytes as the total when there is no Content-Length (P3)', async () => {
+		const { writer, finished } = await playWithTotalHeader([[1, 2]]);
+		const progress = document.querySelector('progress')!;
+		expect(progress.hidden).toBe(false);
+		expect(progress.max).toBe(4);
+		expect(progress.value).toBe(2);
+		expect(document.getElementById('downloaded')!.textContent).toBe('50%');
+		await writer.close();
+		await finished;
+	});
+
+	it('caps the percent at 100% when more bytes than X-Content-Bytes arrive (P3)', async () => {
+		const { writer, finished } = await playWithTotalHeader([
+			[1, 2, 3],
+			[4, 5, 6]
+		]);
+		expect(document.querySelector('progress')!.value).toBe(4);
+		expect(document.getElementById('downloaded')!.textContent).toBe('100%');
+		await writer.close();
+		expect(await finished).toBe('Starting emulator…');
+	});
 
 	it('hides the indicator if the ROM transfer fails', async () => {
 		const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
