@@ -1,6 +1,6 @@
 ---
 title: Play progress, Emulators button, report search and system filters
-status: ready
+status: in-progress
 created: 2026-11-20
 ---
 
