@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { compareUpdates, discNumber, isUpdate, orderByDisc } from './releases.js';
+import {
+	compareDlc,
+	compareUpdates,
+	discNumber,
+	isDlc,
+	isUpdate,
+	orderByDisc
+} from './releases.js';
 
 const rom = (fileName: string, over: Partial<Parameters<typeof compareUpdates>[0]> = {}) => ({
 	fileName,
@@ -88,5 +95,29 @@ describe('disc numbers (B18)', () => {
 	it('keeps the order with a single disc release', () => {
 		const roms = [disc('d3', 'Disc 3'), disc('none')];
 		expect(orderByDisc(roms).map((r) => r.name)).toEqual(['d3', 'none']);
+	});
+});
+
+describe('isDlc (DLC B1)', () => {
+	it('is a release flagged DLC and not Update', () => {
+		expect(isDlc({ flags: ['DLC'] })).toBe(true);
+		expect(isDlc({ flags: ['Update', 'DLC'] })).toBe(false);
+		expect(isDlc({ flags: [] })).toBe(false);
+	});
+});
+
+describe('compareDlc (DLC B3)', () => {
+	const sorted = (...names: string[]) =>
+		names
+			.map((fileName) => ({ fileName }))
+			.sort(compareDlc)
+			.map((r) => r.fileName);
+
+	it('orders by name, numerically and case-insensitively', () => {
+		expect(sorted('Pack 10', 'Pack 2', 'bonus')).toEqual(['bonus', 'Pack 2', 'Pack 10']);
+	});
+
+	it('breaks ties by ordinal file name', () => {
+		expect(sorted('pack', 'Pack')).toEqual(['Pack', 'pack']);
 	});
 });

@@ -1097,10 +1097,93 @@ describe('game detail page', () => {
 		render(GamePage);
 
 		await screen.findByRole('tab', { name: 'Releases (0)' });
-		expect(screen.getByText('No releases other than updates.')).toBeTruthy();
+		expect(screen.getByText('No releases other than updates and DLC.')).toBeTruthy();
 		expect(cardNames()).toEqual([]);
 		const toggle = screen.getByRole('button', { name: 'Download ROM' });
 		expect(toggle.classList).toContain('dropdown-toggle');
+	});
+
+	/** Game 1 with base rom 1, DLC 2 (`Pack 10`) and 3 (`pack 2`), and rom 4 flagged both (an update, DLC B1). */
+	function withDlc(): GameDetail {
+		const detail = game([1, 2, 3, 4]);
+		detail.roms[1] = { ...detail.roms[1], fileName: 'Tetris - Pack 10.nsp', flags: ['DLC'] };
+		detail.roms[2] = { ...detail.roms[2], fileName: 'Tetris - pack 2.nsp', flags: ['DLC'] };
+		detail.roms[3].flags = ['Update', 'DLC'];
+		return detail;
+	}
+
+	it('no DLC: no DLC tab, and ?tab=dlc shows Releases (DLC B2)', async () => {
+		navigateTo('/games/g1?tab=dlc');
+		answers.push({ status: 200, body: game([1, 2]) });
+		render(GamePage);
+
+		const releases = await screen.findByRole('tab', { name: 'Releases (2)' });
+		expect(screen.queryByRole('tab', { name: /DLC/ })).toBeNull();
+		expect(releases.getAttribute('aria-selected')).toBe('true');
+	});
+
+	it('DLC gets its own tab after Updates, with an icon; a rom flagged both is an update only (DLC B1, B2, B4)', async () => {
+		answers.push({ status: 200, body: withDlc() });
+		render(GamePage);
+
+		await screen.findByRole('tab', { name: 'Releases (1)' });
+		const dlc = screen.getByRole('tab', { name: 'DLC (2)' });
+		expect(screen.getAllByRole('tab').map((t) => t.textContent?.trim())).toEqual([
+			'Releases (1)',
+			'Updates (1)',
+			'DLC (2)',
+			'Images (1)',
+			'Saves (0)',
+			'Zip Contents'
+		]);
+		expect(dlc.querySelector('i')?.className.trim()).toBe('bi bi-puzzle');
+		expect(dlc.getAttribute('aria-controls')).toBe('releases-panel');
+		expect(cardNames()).toEqual(['Tetris 1.gb']);
+
+		await fireEvent.click(dlc);
+		expect(goto).toHaveBeenLastCalledWith('/games/g1?tab=dlc', { replace: true, reset: false });
+	});
+
+	it('?tab=dlc lists DLC by name, numeric and case-insensitive, with Expand all (DLC B3, B4)', async () => {
+		navigateTo('/games/g1?tab=dlc');
+		answers.push({ status: 200, body: withDlc() });
+		render(GamePage);
+
+		const dlc = await screen.findByRole('tab', { name: 'DLC (2)' });
+		expect(dlc.getAttribute('aria-selected')).toBe('true');
+		const panel = document.getElementById('releases-panel')!;
+		expect(panel.getAttribute('aria-labelledby')).toBe('dlc-tab');
+		expect(panel.hidden).toBe(false);
+		expect(within(panel).getByRole('heading', { level: 2 }).textContent?.trim()).toBe('DLC');
+		expect(cardNames()).toEqual(['Tetris - pack 2.nsp', 'Tetris - Pack 10.nsp']);
+		await fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
+		expect(screen.getAllByRole('button', { name: /^Hide details for/ })).toHaveLength(2);
+	});
+
+	it('the header Download ROM falls back from releases to updates to DLC (DLC B5)', async () => {
+		const updateAndDlc = game([1, 2]);
+		updateAndDlc.roms[0].flags = ['DLC'];
+		updateAndDlc.roms[1].flags = ['Update'];
+		answers.push({ status: 200, body: updateAndDlc }, { status: 200, body: updateAndDlc });
+		render(GamePage);
+
+		const button = await screen.findByRole('button', { name: 'Download ROM' });
+		expect(button.classList).not.toContain('dropdown-toggle');
+		expect(screen.getByText('No releases other than updates and DLC.')).toBeTruthy();
+		await fireEvent.click(button);
+		await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('/api/games/g1/roms/2/download'));
+	});
+
+	it('a game with only DLC downloads its DLC from the header (DLC B5)', async () => {
+		const detail = game([1, 2]);
+		for (const rom of detail.roms) rom.flags = ['DLC'];
+		answers.push({ status: 200, body: detail });
+		render(GamePage);
+
+		await screen.findByRole('tab', { name: 'Releases (0)' });
+		expect(screen.getByRole('button', { name: 'Download ROM' }).classList).toContain(
+			'dropdown-toggle'
+		);
 	});
 
 	it('?tab=images opens Images', async () => {
