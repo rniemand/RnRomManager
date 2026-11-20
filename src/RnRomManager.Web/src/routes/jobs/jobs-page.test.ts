@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
+import { formatDateTime } from '#lib/format.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { jobs, pollIntervalMs } from '#lib/stores/jobs.svelte.js';
 
@@ -67,7 +68,13 @@ describe('jobs page (ROM Zip Config B18)', () => {
 	it('shows "No job running" and the recent jobs with label, trigger, status and a details link', async () => {
 		render(JobsPage);
 
-		expect(await screen.findByText('No job running.')).toBeTruthy();
+		const idle = await screen.findByText('No job running.');
+		expect(idle.tagName).toBe('TD');
+		expect(idle.getAttribute('colspan')).toBe('5');
+		const [runningTable] = screen.getAllByRole('table');
+		expect(
+			[...runningTable.querySelectorAll('thead th')].map((h) => h.textContent?.trim())
+		).toEqual(['Job', 'Progress', 'Started', 'Details', 'Cancel']);
 		const row = (await screen.findByText('Moving ROMs')).closest('tr')!;
 		expect(row.textContent).toContain('Manual');
 		expect(row.textContent).toContain('Completed');
@@ -79,12 +86,25 @@ describe('jobs page (ROM Zip Config B18)', () => {
 		running = current;
 		render(JobsPage);
 
-		expect(await screen.findByText('2 / 5 · nds/A/Alpha.zip')).toBeTruthy();
+		const progress = await screen.findByText('2 / 5 · nds/A/Alpha.zip');
+		const row = progress.closest('tr')!;
+		const cells = row.querySelectorAll('td');
+		expect(cells[2].textContent?.trim()).toBe(formatDateTime(current.startedAt));
+		expect(cells[2].className).toBe('text-nowrap');
+		expect(cells[3].querySelector('a')!.getAttribute('href')).toBe('/jobs/run');
 		await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
 		await vi.waitFor(() =>
 			expect(calls).toContainEqual({ url: '/api/jobs/run/cancel', method: 'POST' })
 		);
+	});
+
+	it('a running job that cannot be cancelled has no Cancel button', async () => {
+		running = { ...current, type: 'ReviewResolve' };
+		render(JobsPage);
+
+		await screen.findByText('2 / 5 · nds/A/Alpha.zip');
+		expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
 	});
 
 	it('pages through the list', async () => {

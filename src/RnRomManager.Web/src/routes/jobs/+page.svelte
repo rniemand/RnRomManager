@@ -16,7 +16,10 @@
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
-	/** ROM Zip Config B18: the running job (with Cancel) and the recent jobs, reached from the footer. */
+	/**
+	 * ROM Zip Config B18: the running job (with Cancel) and the recent jobs, reached from the footer. ROM Zip Config and
+	 * Jobs Restyle J1–J4: the running job is a table styled like the recent jobs, with a "No job running." row when idle.
+	 */
 	const pageSize = 25;
 
 	let list = $state<Page<Job> | null>(null);
@@ -70,37 +73,64 @@
 	<PageTitle icon="activity" text="Jobs" />
 
 	<h2 class="h5">Running</h2>
-	{#if running}
-		<div class="card card-body mb-4">
-			<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-				<strong>{jobLabel(running.type)}{running.mode ? ` (${running.mode})` : ''}</strong>
-				<a href={resolve('/jobs/[id]', { id: running.id })}>Details</a>
-				{#if isCancellable(running.type)}
-					<button
-						type="button"
-						class="btn btn-sm btn-outline-danger ms-auto"
-						onclick={() => cancel(running.id)}>Cancel</button
-					>
-				{/if}
-			</div>
-			<div
-				class="progress mb-1"
-				role="progressbar"
-				aria-label="Job progress"
-				aria-valuenow={percent(running.current, running.total)}
-				aria-valuemin="0"
-				aria-valuemax="100"
-			>
-				<div class="progress-bar" style="width: {percent(running.current, running.total)}%"></div>
-			</div>
-			<div class="small text-body-secondary text-break" aria-live="polite">
-				{running.current} / {running.total}{running.currentItem ? ` · ${running.currentItem}` : ''}
-			</div>
-			<JobStepProgress step={running.step} />
+	<div class="card mb-4">
+		<div class="table-responsive">
+			<table class="table table-sm table-striped table-hover align-middle mb-0">
+				<thead class="table-dark">
+					<tr>
+						<th scope="col">Job</th>
+						<th scope="col">Progress</th>
+						<th scope="col">Started</th>
+						<th scope="col"><span class="visually-hidden">Details</span></th>
+						<th scope="col"><span class="visually-hidden">Cancel</span></th>
+					</tr>
+				</thead>
+				<tbody>
+					{#if running}
+						<tr>
+							<td>{jobLabel(running.type)}{running.mode ? ` (${running.mode})` : ''}</td>
+							<td style="min-width: 14rem">
+								<div
+									class="progress mb-1"
+									role="progressbar"
+									aria-label="Job progress"
+									aria-valuenow={percent(running.current, running.total)}
+									aria-valuemin="0"
+									aria-valuemax="100"
+								>
+									<div
+										class="progress-bar"
+										style="width: {percent(running.current, running.total)}%"
+									></div>
+								</div>
+								<div class="small text-body-secondary text-break" aria-live="polite">
+									{running.current} / {running.total}{running.currentItem
+										? ` · ${running.currentItem}`
+										: ''}
+								</div>
+								<JobStepProgress step={running.step} />
+							</td>
+							<td class="text-nowrap">{formatDateTime(running.startedAt)}</td>
+							<td><a href={resolve('/jobs/[id]', { id: running.id })}>Details</a></td>
+							<td class="text-end">
+								{#if isCancellable(running.type)}
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-danger"
+										onclick={() => cancel(running.id)}>Cancel</button
+									>
+								{/if}
+							</td>
+						</tr>
+					{:else}
+						<tr>
+							<td colspan="5" class="text-body-secondary">No job running.</td>
+						</tr>
+					{/if}
+				</tbody>
+			</table>
 		</div>
-	{:else}
-		<p class="text-body-secondary mb-4">No job running.</p>
-	{/if}
+	</div>
 
 	<h2 class="h5">Recent jobs</h2>
 	{#if error}

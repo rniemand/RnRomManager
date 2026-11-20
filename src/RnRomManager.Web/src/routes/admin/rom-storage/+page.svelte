@@ -5,15 +5,20 @@
 	import type { RomStorageRow } from '#lib/api/types.js';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
+	import { tooltip } from '#lib/tooltip.js';
 
 	/**
 	 * ROM Zip Config B15–B16: each system's default and configured ROM storage; configurable systems switch through a
 	 * confirmation that starts the storage job. Buttons are disabled while any job runs. ZIP Compression Z11–Z12: in-ZIP
 	 * systems change their compression level, or repack again, through a confirmation that starts the repack job.
+	 * ROM Zip Config and Jobs Restyle R1–R11: storage as icons with tooltips, levels as coloured badges, a Folder column,
+	 * system badges linking to the Library, one column per action and grouped headers. L1–L3: the legend shows the same
+	 * badges and a speed icon per level.
 	 */
 	type Level = RomStorageRow['zipCompression'];
 
@@ -28,14 +33,26 @@
 	let zipOpen = $state(false);
 	let repackOpen = $state(false);
 
-	const levels: { value: Level; label: string }[] = [
-		{ value: 'Store', label: 'Store' },
-		{ value: 'Med', label: 'Medium' },
-		{ value: 'High', label: 'High' }
+	const levels: { value: Level; label: string; badge: string }[] = [
+		{ value: 'Store', label: 'Store', badge: 'text-bg-secondary' },
+		{ value: 'Med', label: 'Medium', badge: 'text-bg-primary' },
+		{ value: 'High', label: 'High', badge: 'text-bg-success' }
 	];
-	const levelLabel = (level: Level) => levels.find((l) => l.value === level)?.label ?? level;
+	const level = (value: Level) => levels.find((l) => l.value === value) ?? levels[1];
 
-	const storage = (embed: boolean) => (embed ? 'Stored in ZIP' : 'Beside ZIP');
+	/** R6: the storage icon, its accessible label and its tooltip. */
+	const storage = (embed: boolean) =>
+		embed
+			? {
+					icon: 'storage-in-zip',
+					label: 'Stored in ZIP',
+					tip: "Stored in ZIP: ROMs are inside each game's ZIP"
+				}
+			: {
+					icon: 'storage-beside-zip',
+					label: 'Beside ZIP',
+					tip: "Beside ZIP: ROMs are separate files next to each game's ZIP"
+				};
 	const pending = $derived(rows?.filter((r) => r.configurable && r.pendingGames > 0) ?? []);
 	const blocked = $derived(busy || jobs.current !== null);
 
@@ -151,11 +168,17 @@
 
 <svelte:head><title>ROM Zip Config · Admin · RnRomManager</title></svelte:head>
 
+<!-- eslint-disable svelte/no-navigation-without-resolve -- resolved paths plus a ?system= query -->
+
 {#if error}
 	<ErrorAlert {error} onretry={load} />
 {:else if !rows}
 	<Loading />
 {:else}
+	<p class="text-body-secondary">
+		Where each system keeps its ROMs and how its game ZIPs are compressed. Changing either rewrites
+		every game of that system in a long-running job.
+	</p>
 	{#if actionError}
 		<ErrorAlert error={actionError} />
 	{/if}
@@ -174,45 +197,46 @@
 			<table class="table table-sm table-striped table-hover align-middle mb-0">
 				<thead class="table-dark">
 					<tr>
+						<th scope="colgroup" colspan="2"><span class="visually-hidden">System</span></th>
+						<th scope="colgroup" colspan="3" class="text-center">ROM storage</th>
+						<th scope="colgroup" colspan="2" class="text-center">ZIP compression</th>
+					</tr>
+					<tr>
 						<th scope="col">System</th>
-						<th scope="col">Default Behaviour</th>
-						<th scope="col">Configured Behaviour</th>
-						<th scope="col">ZIP Compression</th>
-						<th scope="col"><span class="visually-hidden">Change</span></th>
+						<th scope="col">Folder</th>
+						<th scope="col" class="text-center">Default</th>
+						<th scope="col" class="text-center">Configured</th>
+						<th scope="col" class="text-end">Change</th>
+						<th scope="col" class="text-center">Level</th>
+						<th scope="col" class="text-end">Repack</th>
 					</tr>
 				</thead>
 				<tbody>
 					{#each rows as row (row.id)}
 						<tr>
-							<td><SystemBadge system={row.id} name={row.displayName} /></td>
-							<td>{storage(row.defaultEmbedRoms)}</td>
 							<td>
-								{storage(row.embedRoms)}
+								<a
+									class="text-decoration-none"
+									href="{resolve('/')}?system={encodeURIComponent(row.id)}"
+									use:tooltip={`Show ${row.displayName} in the Library`}
+									><SystemBadge system={row.id} name={row.displayName} /></a
+								>
+							</td>
+							<td>
+								<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+								<code
+									tabindex="0"
+									use:tooltip={`Put ROMs in ingest/${row.id}; stored in roms/${row.id}`}
+									>{row.id}</code
+								>
+							</td>
+							<td class="text-center">{@render storageIcon(row.defaultEmbedRoms)}</td>
+							<td class="text-center">
+								{@render storageIcon(row.embedRoms)}
 								{#if row.pendingGames > 0}
 									<span class="badge text-bg-warning ms-1"
 										>{row.pendingGames} game{row.pendingGames === 1 ? '' : 's'} still to move</span
 									>
-								{/if}
-							</td>
-							<td>
-								{#if row.compressionConfigurable}
-									{levelLabel(row.zipCompression)}
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-primary ms-2"
-										aria-label="Edit ZIP compression of {row.displayName}"
-										disabled={blocked}
-										onclick={() => askZip(row, false)}>Edit</button
-									>
-									<button
-										type="button"
-										class="btn btn-sm btn-outline-primary ms-2"
-										aria-label="Repack {row.displayName} ZIPs again"
-										disabled={blocked}
-										onclick={() => askZip(row, true)}>Repack again</button
-									>
-								{:else}
-									—<span class="small text-body-secondary ms-1">ROMs beside ZIP</span>
 								{/if}
 							</td>
 							<td class="text-end">
@@ -223,6 +247,35 @@
 										disabled={blocked}
 										onclick={() => ask(row)}
 										>{row.embedRoms ? 'Store beside ZIP' : 'Store in ZIP'}</button
+									>
+								{/if}
+							</td>
+							<td class="text-center text-nowrap">
+								{#if row.compressionConfigurable}
+									{@render levelBadge(row.zipCompression)}
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-primary ms-2"
+										aria-label="Edit ZIP compression of {row.displayName}"
+										use:tooltip={'Edit compression level'}
+										disabled={blocked}
+										onclick={() => askZip(row, false)}><Icon name="edit" /></button
+									>
+								{:else}
+									<span class="text-body-secondary" aria-hidden="true">—</span><span
+										class="visually-hidden">Not applicable: ROMs are beside the ZIP</span
+									>
+								{/if}
+							</td>
+							<td class="text-end">
+								{#if row.compressionConfigurable}
+									<button
+										type="button"
+										class="btn btn-sm btn-outline-primary"
+										disabled={blocked}
+										onclick={() => askZip(row, true)}
+										>Repack again&#32;<span class="visually-hidden">{row.displayName} ZIPs</span
+										></button
 									>
 								{/if}
 							</td>
@@ -246,23 +299,29 @@
 				</thead>
 				<tbody>
 					<tr>
-						<th scope="row">Store</th>
+						<th scope="row">{@render levelBadge('Store')}</th>
 						<td>~100% of the ROM size (no compression)</td>
-						<td>Fastest to read and write, almost no CPU</td>
+						<td><Icon name="speed-fast" class="me-1" />Fastest to read and write, almost no CPU</td>
 						<td
 							>Large ROMs that don't compress well (DS), or when fewer files on disk is the goal</td
 						>
 					</tr>
 					<tr>
-						<th scope="row">Medium (default)</th>
+						<th scope="row">
+							{@render levelBadge('Med')}<span class="badge rounded-pill text-bg-light border ms-1"
+								>Default</span
+							>
+						</th>
 						<td>About 40–90% of the ROM size, depending on the ROM</td>
-						<td>Fast</td>
+						<td><Icon name="speed-medium" class="me-1" />Fast</td>
 						<td>Most systems; today's behaviour</td>
 					</tr>
 					<tr>
-						<th scope="row">High</th>
+						<th scope="row">{@render levelBadge('High')}</th>
 						<td>A few percent smaller than Medium</td>
-						<td>Writes several times slower, reads like Medium</td>
+						<td
+							><Icon name="speed-slow" class="me-1" />Writes several times slower, reads like Medium</td
+						>
 						<td>Small cartridge ROMs where space matters most</td>
 					</tr>
 				</tbody>
@@ -303,6 +362,18 @@
 		{/if}
 	{/if}
 </ConfirmModal>
+
+{#snippet levelBadge(value: Level)}
+	<span class="badge {level(value).badge}">{level(value).label}</span>
+{/snippet}
+
+{#snippet storageIcon(embed: boolean)}
+	{@const s = storage(embed)}
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+	<span class="d-inline-block fs-5" tabindex="0" use:tooltip={s.tip}
+		><Icon name={s.icon} label={s.label} /></span
+	>
+{/snippet}
 
 {#snippet repackWarning(name: string)}
 	<p>
