@@ -6,6 +6,7 @@ import {
 	playLinkEvents,
 	playUrl,
 	recordPlay,
+	trimBounds,
 	usesPlayDisc
 } from './emulator';
 
@@ -212,5 +213,59 @@ describe('recordPlay (B22)', () => {
 		events.onauxclick(new MouseEvent('auxclick', { button: 2 }));
 		events.onauxclick(new MouseEvent('auxclick', { button: 1 }));
 		await vi.waitFor(() => expect(played()).toHaveLength(2));
+	});
+});
+
+describe('trimBounds (release editing B25)', () => {
+	/** A width x height RGBA image of `bg`, with the given pixels set to `fg`. */
+	function image(width: number, height: number, lit: [number, number][], fg = 255, bg = 0) {
+		const data = new Uint8ClampedArray(width * height * 4).fill(bg);
+		for (let i = 3; i < data.length; i += 4) data[i] = 255;
+		for (const [x, y] of lit) data.set([fg, 0, 0], (y * width + x) * 4);
+		return data;
+	}
+
+	it('cuts black rows and columns on each side', () => {
+		expect(
+			trimBounds(
+				image(6, 5, [
+					[2, 1],
+					[3, 3]
+				]),
+				6,
+				5
+			)
+		).toEqual({ x: 2, y: 1, width: 2, height: 3 });
+		expect(trimBounds(image(4, 4, [[0, 3]]), 4, 4)).toEqual({ x: 0, y: 3, width: 1, height: 1 });
+	});
+
+	it('treats a channel of 16 as border and 17 as content', () => {
+		expect(trimBounds(image(3, 3, [[1, 1]], 16), 3, 3)).toEqual({
+			x: 0,
+			y: 0,
+			width: 3,
+			height: 3
+		});
+		expect(trimBounds(image(3, 3, [[1, 1]], 17), 3, 3)).toEqual({
+			x: 1,
+			y: 1,
+			width: 1,
+			height: 1
+		});
+	});
+
+	it('keeps an all-black image, and an image without border, whole', () => {
+		expect(trimBounds(image(4, 2, []), 4, 2)).toEqual({ x: 0, y: 0, width: 4, height: 2 });
+		expect(trimBounds(image(2, 2, [], 0, 200), 2, 2)).toEqual({ x: 0, y: 0, width: 2, height: 2 });
+	});
+
+	it('trims columns only within the rows left', () => {
+		// A lit pixel in a trimmed-away row doesn't keep its column.
+		const data = image(5, 5, [
+			[2, 2],
+			[4, 4]
+		]);
+		data.set([0, 0, 0], (4 * 5 + 4) * 4);
+		expect(trimBounds(data, 5, 5)).toEqual({ x: 2, y: 2, width: 1, height: 1 });
 	});
 });

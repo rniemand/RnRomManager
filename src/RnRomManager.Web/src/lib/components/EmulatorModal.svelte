@@ -3,7 +3,7 @@
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
 	import type { RomDetail, SaveItem, SaveKind } from '../api/types';
-	import { playUrl, recordPlay, type PlaySave } from '../emulator';
+	import { playUrl, recordPlay, trimScreenshot, type PlaySave } from '../emulator';
 	import { kindLabels, maxSaveBytes, savesApi } from '../saves';
 	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';
@@ -257,15 +257,31 @@
 	let frame = $state<HTMLIFrameElement | null>(null);
 
 	/** E2: the screenshot waiting for Save as Snap or Discard; dropped when the modal closes. */
-	let preview = $state<{ url: string; bytes: ArrayBuffer } | null>(null);
+	type Shot = { url: string; bytes: ArrayBuffer };
+	/** Release editing B25, B26: the screenshot as taken and without its border (null when nothing was trimmed). */
+	let preview = $state<{ original: Shot; trimmed: Shot | null } | null>(null);
+	let keepBorder = $state(false);
+	/** B26: what the preview shows and Save as Snap uploads. */
+	const shown = $derived(
+		preview && (keepBorder || !preview.trimmed) ? preview.original : (preview?.trimmed ?? null)
+	);
 	let uploading = $state(false);
 	/** Bumped on every close, so a screenshot answered after it is ignored. */
 	let session = 0;
 
 	function discard(): void {
-		if (preview) URL.revokeObjectURL(preview.url);
+		if (preview) {
+			URL.revokeObjectURL(preview.original.url);
+			if (preview.trimmed) URL.revokeObjectURL(preview.trimmed.url);
+		}
 		preview = null;
+		keepBorder = false;
 	}
+
+	const shot = (bytes: ArrayBuffer): Shot => ({
+		url: URL.createObjectURL(new Blob([bytes], { type: 'image/png' })),
+		bytes
+	});
 
 	$effect(() => {
 		if (open) return;
@@ -293,11 +309,10 @@
 				);
 				return;
 			}
+			const trimmed = await trimScreenshot(result.bytes);
+			if (current !== session) return;
 			discard();
-			preview = {
-				url: URL.createObjectURL(new Blob([result.bytes], { type: 'image/png' })),
-				bytes: result.bytes
-			};
+			preview = { original: shot(result.bytes), trimmed: trimmed ? shot(trimmed) : null };
 		} finally {
 			exporting = false;
 		}
@@ -305,9 +320,9 @@
 
 	/** E2: uploads the preview as a Snap, as GameImages' upload builds its form. */
 	async function saveSnap(): Promise<void> {
-		if (!preview || uploading) return;
+		if (!shown || uploading) return;
 		const form = new FormData();
-		form.append('file', new File([preview.bytes], 'screenshot.png', { type: 'image/png' }));
+		form.append('file', new File([shown.bytes], 'screenshot.png', { type: 'image/png' }));
 		form.append('type', 'Snap');
 		uploading = true;
 		try {
@@ -399,15 +414,22 @@
 				allow="fullscreen; gamepad; autoplay"
 				src={playUrl(gameId, rom, core, disc, playSave)}
 			></iframe>
-			{#if preview}
+			{#if preview && shown}
 				<!-- E2: over the game, inside the emulator modal (not a second Bootstrap modal). -->
 				<div class="bg-body d-flex flex-column align-items-center justify-content-center gap-2 p-2">
-					<img
-						src={preview.url}
-						alt="Screenshot preview"
-						class="img-fluid"
-						style="max-height: 85%"
-					/>
+					<img src={shown.url} alt="Screenshot preview" class="img-fluid" style="max-height: 85%" />
+					{#if preview.trimmed}
+						<!-- Release editing B26: only when the border was trimmed. -->
+						<div class="form-check">
+							<input
+								class="form-check-input"
+								type="checkbox"
+								id="screenshot-keep-border"
+								bind:checked={keepBorder}
+							/>
+							<label class="form-check-label" for="screenshot-keep-border">Keep border</label>
+						</div>
+					{/if}
 					<div class="d-flex gap-2">
 						<button
 							type="button"

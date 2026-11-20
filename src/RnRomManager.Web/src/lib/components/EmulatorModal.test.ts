@@ -13,6 +13,13 @@ vi.mock('../bootstrap', () => ({
 	}
 }));
 vi.mock('../modal', () => ({ releaseModal: () => {} }));
+// Release editing B25: jsdom has no canvas, so the trim is stubbed; by default nothing is trimmed (B27's fallback).
+const trimScreenshot = vi.fn<(png: ArrayBuffer) => Promise<ArrayBuffer | null>>();
+vi.mock('../emulator', async (original) => ({
+	...(await original<typeof import('../emulator')>()),
+	trimScreenshot: (png: ArrayBuffer) => trimScreenshot(png)
+}));
+beforeEach(() => trimScreenshot.mockReset().mockResolvedValue(null));
 
 const { default: EmulatorModal } = await import('./EmulatorModal.svelte');
 
@@ -675,6 +682,63 @@ describe('EmulatorModal screenshot (E2)', () => {
 
 		await vi.waitFor(() => expect(toasts.items.at(-1)).toMatchObject({ text, kind: 'warning' }));
 		expect(preview(container)).toBeNull();
+	});
+
+	it('shows Keep border only when the border was trimmed; Save as Snap uploads the shown image (B25, B26)', async () => {
+		trimScreenshot.mockResolvedValue(new Uint8Array([1, 2, 3]).buffer);
+		answers['POST /api/games/g-1/images'] = { status: 200, body: {} };
+		const { container, iframe } = await openFor();
+		await fireEvent.click(button(container, 'Screenshot')!);
+		shot(iframe.contentWindow);
+		await vi.waitFor(() => expect(preview(container)).not.toBeNull());
+
+		const keep = container.querySelector<HTMLInputElement>('#screenshot-keep-border')!;
+		expect(keep.checked).toBe(false);
+		expect(within(container).getByLabelText('Keep border', { selector: 'input' })).toBe(keep);
+		expect(keep.closest('.form-check')!.nextElementSibling!.textContent).toContain('Save as Snap');
+		expect(preview(container)!.getAttribute('src')).toBe('blob:shot-2');
+
+		await fireEvent.click(keep);
+		expect(preview(container)!.getAttribute('src')).toBe('blob:shot-1');
+		await fireEvent.click(button(container, 'Save as Snap')!);
+		await vi.waitFor(() =>
+			expect(calls.some((c) => c.key === 'POST /api/games/g-1/images')).toBe(true)
+		);
+		const file = (calls.find((c) => c.key === 'POST /api/games/g-1/images')!.body as FormData).get(
+			'file'
+		) as File;
+		expect(file.size).toBe(2);
+	});
+
+	it('uploads the trimmed image by default', async () => {
+		trimScreenshot.mockResolvedValue(new Uint8Array([1, 2, 3]).buffer);
+		answers['POST /api/games/g-1/images'] = { status: 200, body: {} };
+		const { container, iframe } = await openFor();
+		await fireEvent.click(button(container, 'Screenshot')!);
+		shot(iframe.contentWindow);
+		await vi.waitFor(() => expect(preview(container)).not.toBeNull());
+
+		await fireEvent.click(button(container, 'Save as Snap')!);
+		await vi.waitFor(() =>
+			expect(calls.some((c) => c.key === 'POST /api/games/g-1/images')).toBe(true)
+		);
+		const form = calls.find((c) => c.key === 'POST /api/games/g-1/images')!.body as FormData;
+		expect([(form.get('file') as File).size, (form.get('file') as File).name]).toEqual([
+			3,
+			'screenshot.png'
+		]);
+	});
+
+	it('nothing trimmed, or a decode failure, keeps the original without the checkbox (B27)', async () => {
+		const { container, iframe } = await openFor();
+		await fireEvent.click(button(container, 'Screenshot')!);
+		shot(iframe.contentWindow);
+		await vi.waitFor(() => expect(preview(container)).not.toBeNull());
+
+		expect(trimScreenshot).toHaveBeenCalledTimes(1);
+		expect(container.querySelector('#screenshot-keep-border')).toBeNull();
+		expect(preview(container)!.getAttribute('src')).toBe('blob:shot-1');
+		expect(toasts.items).toEqual([]);
 	});
 
 	it('closing discards the preview, and a result after the close is ignored', async () => {

@@ -103,3 +103,80 @@ export function playLinkEvents(gameId: string, romId: number) {
 		}
 	};
 }
+
+/** Release editing B25: a pixel is border when none of its channels is above this. */
+const borderMax = 16;
+
+/**
+ * Release editing B25: the smallest rectangle outside which every row and column is border (`max(r, g, b) <= 16`). Rows
+ * are trimmed from the top and bottom, then columns of the rows left. An all-border image keeps its full size.
+ */
+export function trimBounds(
+	data: Uint8ClampedArray,
+	width: number,
+	height: number
+): { x: number; y: number; width: number; height: number } {
+	const border = (x: number, y: number) => {
+		const i = (y * width + x) * 4;
+		return Math.max(data[i], data[i + 1], data[i + 2]) <= borderMax;
+	};
+	const rowIsBorder = (y: number) => {
+		for (let x = 0; x < width; x++) if (!border(x, y)) return false;
+		return true;
+	};
+	let top = 0;
+	while (top < height && rowIsBorder(top)) top++;
+	if (top === height) return { x: 0, y: 0, width, height };
+	let bottom = height - 1;
+	while (rowIsBorder(bottom)) bottom--;
+	const columnIsBorder = (x: number) => {
+		for (let y = top; y <= bottom; y++) if (!border(x, y)) return false;
+		return true;
+	};
+	let left = 0;
+	while (columnIsBorder(left)) left++;
+	let right = width - 1;
+	while (columnIsBorder(right)) right--;
+	return { x: left, y: top, width: right - left + 1, height: bottom - top + 1 };
+}
+
+/**
+ * Release editing B25, B27: the PNG with its black border cut off, or null when nothing was trimmed or the image couldn't
+ * be decoded or encoded.
+ */
+export async function trimScreenshot(png: ArrayBuffer): Promise<ArrayBuffer | null> {
+	try {
+		const bitmap = await createImageBitmap(new Blob([png], { type: 'image/png' }));
+		const canvas = document.createElement('canvas');
+		canvas.width = bitmap.width;
+		canvas.height = bitmap.height;
+		const context = canvas.getContext('2d')!;
+		context.drawImage(bitmap, 0, 0);
+		const bounds = trimBounds(
+			context.getImageData(0, 0, bitmap.width, bitmap.height).data,
+			bitmap.width,
+			bitmap.height
+		);
+		if (bounds.width === bitmap.width && bounds.height === bitmap.height) return null;
+		const out = document.createElement('canvas');
+		out.width = bounds.width;
+		out.height = bounds.height;
+		out
+			.getContext('2d')!
+			.drawImage(
+				bitmap,
+				bounds.x,
+				bounds.y,
+				bounds.width,
+				bounds.height,
+				0,
+				0,
+				bounds.width,
+				bounds.height
+			);
+		const blob = await new Promise<Blob | null>((done) => out.toBlob(done, 'image/png'));
+		return blob ? await blob.arrayBuffer() : null;
+	} catch {
+		return null;
+	}
+}
