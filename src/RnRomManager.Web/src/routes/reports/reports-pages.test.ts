@@ -832,6 +832,9 @@ describe('reports pages', () => {
 
 		it('sorting by a header writes sort= and the system select writes system=', async () => {
 			answers[list()] = { status: 200, body: body([item('g1')]) };
+			// The page refetches after each change; answer those too.
+			answers[list('sort=name&dir=asc')] = { status: 200, body: body([item('g1')]) };
+			answers[`${list('sort=name&dir=asc')}&system=gb`] = { status: 200, body: body([item('g1')]) };
 			render(Hacks);
 			await screen.findByRole('link', { name: 'Game g1' });
 
