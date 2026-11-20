@@ -108,9 +108,14 @@ export interface GameListItem {
 	rating: number | null;
 	favourite: boolean;
 	/** With `q`: the metadata value that matched when no word was in a title (S3); null otherwise. */
-	matchedOn: { field: 'developer' | 'publisher' | 'genre'; value: string } | null;
+	matchedOn: {
+		field: 'developer' | 'publisher' | 'genre' | 'dlc' | 'update';
+		value: string;
+	} | null;
 	/** Roms flagged `Update` (C1). */
 	updateCount: number;
+	/** DLC B7: releases flagged `DLC` and not `Update`. */
+	dlcCount: number;
 	/** Saves in the game's ZIP. */
 	saveCount: number;
 	/** Primary release to quick play (C2); null when the system has no browser core or the release is external. */

@@ -42,6 +42,7 @@ function game(id: string, extra: Partial<GameListItem> = {}): GameListItem {
 		favourite: false,
 		matchedOn: null,
 		updateCount: 0,
+		dlcCount: 0,
 		saveCount: 0,
 		playRomId: null,
 		playRomFileName: null,
@@ -104,6 +105,28 @@ describe('GameResults cards (C1, C2)', () => {
 					'position-absolute bottom-0 start-0 m-1'
 				);
 			else expect(badges[0].closest('td')!.querySelector('a')!.textContent).toBe('Game a');
+		}
+	);
+
+	it.each(['grid', 'list'] as const)(
+		'%s: the DLC badge shows only when dlcCount > 0 (DLC B7)',
+		(view) => {
+			tooltips.length = 0;
+			render(GameResults, {
+				games: [game('a', { dlcCount: 1, updateCount: 2 }), game('b', { dlcCount: 3 }), game('c')],
+				view
+			});
+
+			const badges = [...document.querySelectorAll('.badge.text-bg-info')].filter((b) =>
+				b.querySelector('.bi-puzzle')
+			);
+			expect(badges.map((b) => b.querySelector('.visually-hidden')!.textContent)).toEqual([
+				'1 DLC',
+				'3 DLC'
+			]);
+			expect(tooltips.filter((t) => t.includes('DLC'))).toEqual(['1 DLC', '3 DLC']);
+			// Right after the updates badge.
+			expect(badges[0].previousElementSibling!.querySelector('.bi-arrow-up-circle')).toBeTruthy();
 		}
 	);
 

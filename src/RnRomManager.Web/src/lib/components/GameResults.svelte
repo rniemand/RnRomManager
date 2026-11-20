@@ -111,6 +111,16 @@
 	{/if}
 {/snippet}
 
+<!-- DLC B7: as updatesBadge. -->
+{#snippet dlcBadge(game: GameListItem, extra: string)}
+	{#if game.dlcCount > 0}
+		<span class="badge text-bg-info {extra}" use:tooltip={`${formatCount(game.dlcCount)} DLC`}>
+			<span aria-hidden="true"><Icon name="dlc" /> {formatCount(game.dlcCount)}</span>
+			<span class="visually-hidden">{formatCount(game.dlcCount)} DLC</span>
+		</span>
+	{/if}
+{/snippet}
+
 {#if view === 'grid'}
 	<div class="row {gridColumns} g-3">
 		{#each games as game (game.id)}
@@ -153,6 +163,7 @@
 								</span>
 							{/if}
 							{@render updatesBadge(game, '')}
+							{@render dlcBadge(game, '')}
 						</div>
 						{@render savesLink(
 							game,
@@ -246,6 +257,7 @@
 						<td>
 							<a href={resolve('/games/[id]', { id: game.id })}>{game.displayTitle}</a>
 							{@render updatesBadge(game, 'ms-1')}
+							{@render dlcBadge(game, 'ms-1')}
 							{@render savesLink(game, 'ms-1 link-secondary')}
 						</td>
 						<td><SystemBadge system={game.system} name={game.systemName} /></td>

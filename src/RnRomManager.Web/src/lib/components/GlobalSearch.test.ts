@@ -144,6 +144,47 @@ describe('GlobalSearch', () => {
 		expect(options[0].textContent).not.toMatch(/Developer:|Publisher:|Genre:/);
 	});
 
+	describe('DLC and update matches (DLC B13)', () => {
+		beforeEach(() => {
+			items = [
+				item('g1', 'Orbit', { matchedOn: { field: 'dlc', value: 'Orbit - Star Pack' } }),
+				item('g2', 'Comet', { matchedOn: { field: 'update', value: 'Comet - Patch' } }),
+				item('g3', 'Pinball', { matchedOn: { field: 'developer', value: 'Star Co' } })
+			];
+		});
+
+		it('labels them DLC: and Update:', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('star');
+
+			const options = screen.getAllByRole('option', { hidden: true });
+			expect(options[0].textContent).toContain('DLC: Orbit - Star Pack');
+			expect(options[1].textContent).toContain('Update: Comet - Patch');
+		});
+
+		it('Enter opens the DLC or Updates tab; a developer match opens the plain page', async () => {
+			for (const [down, url] of [
+				[0, '/games/g1?tab=dlc'],
+				[1, '/games/g2?tab=updates'],
+				[2, '/games/g3']
+			] as const) {
+				const { unmount } = render(GlobalSearch, { open: true });
+				await typeAndWait('star');
+				for (let i = 0; i < down; i++) await fireEvent.keyDown(input(), { key: 'ArrowDown' });
+				await fireEvent.keyDown(input(), { key: 'Enter' });
+				expect(goto).toHaveBeenLastCalledWith(url);
+				unmount();
+			}
+		});
+
+		it('a click on a DLC match opens the DLC tab', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('star');
+			await fireEvent.click(screen.getAllByRole('option', { hidden: true })[0]);
+			expect(goto).toHaveBeenLastCalledWith('/games/g1?tab=dlc');
+		});
+	});
+
 	it('uses a static backdrop with Escape enabled (M1)', () => {
 		render(GlobalSearch);
 		expect(shown.options.at(-1)).toEqual({ backdrop: 'static', keyboard: true });
