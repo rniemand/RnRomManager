@@ -2,6 +2,7 @@
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
 	import { gameSearchQuery, googleImagesUrl } from '../googleSearch';
+	import { imageTypeLabels } from '../imageResolutions';
 	import type { GameDetail, ImageInfo } from '../api/types';
 	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';
@@ -19,13 +20,6 @@
 
 	/** Same limit as the API (I1a); checked here so a big file isn't sent at all. */
 	const maxUploadBytes = 8 * 1024 * 1024;
-
-	const typeLabels: Record<ImageInfo['type'], string> = {
-		BoxArt: 'Box art',
-		Snap: 'Screenshot',
-		TitleScreen: 'Title screen',
-		Other: 'Other'
-	};
 
 	let viewing = $state<ImageInfo | null>(null);
 	let viewOpen = $state(false);
@@ -254,7 +248,7 @@
 								class="card-img-top object-fit-contain bg-body-tertiary"
 								style="height: 8rem"
 								src={image.url}
-								alt="{game.displayTitle} {typeLabels[image.type].toLowerCase()}"
+								alt="{game.displayTitle} {imageTypeLabels[image.type].toLowerCase()}"
 								loading="lazy"
 							/>
 						</button>
@@ -264,7 +258,7 @@
 					</div>
 					<div class="card-body p-2 small">
 						<div class="d-flex flex-wrap gap-1 mb-1">
-							<span class="badge text-bg-secondary">{typeLabels[image.type]}</span>
+							<span class="badge text-bg-secondary">{imageTypeLabels[image.type]}</span>
 							{#if image.isCover}<span class="badge text-bg-primary">Cover</span>{/if}
 							{#if image.isDefault}<span class="badge text-bg-light border">Placeholder</span>{/if}
 						</div>
@@ -447,7 +441,7 @@
 			src={viewing.url}
 			width={viewing.width}
 			height={viewing.height}
-			alt="{game.displayTitle} {typeLabels[viewing.type].toLowerCase()}, full size"
+			alt="{game.displayTitle} {imageTypeLabels[viewing.type].toLowerCase()}, full size"
 		/>
 	{/if}
 </ConfirmModal>
