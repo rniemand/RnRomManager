@@ -39,6 +39,7 @@ public class IngestPipelineTests
 
     private static readonly byte[] Lanes = Atari(4096, 120);
     private static readonly byte[] Pursuit = Coleco(8192, 130, 0xAA, 0x55);
+    private static readonly byte[] AmigaDisk = Atari(901_120, 2401);
     private static readonly byte[] Drift = GameGear(32768, 140, header: true);
     /// <summary>An SMS-mode Game Gear game: the DAT names it <c>.sms</c> (G4).</summary>
     private static readonly byte[] Tide = GameGear(32768, 141, header: false);
@@ -168,7 +169,7 @@ public class IngestPipelineTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [new FixtureGame("Disk Quest (Japan)", "Disk Quest (Japan).fds", DiskQuest)],
-            [IngestSeeder.AmigaDat] = [],
+            [IngestSeeder.AmigaDat] = [new FixtureGame("Disk Orbit (1990)(Synth)", "Disk Orbit (1990)(Synth).adf", AmigaDisk)],
             [IngestSeeder.ThreeDsDat] =
             [
                 new FixtureGame("Cart Quest (USA)", "Cart Quest (USA).3ds", CartQuest),
@@ -1618,6 +1619,24 @@ public class IngestPipelineTests
         using var bytes = new MemoryStream();
         stored.CopyTo(bytes);
         Assert.That(bytes.ToArray(), Is.EqualTo(DiskQuest));
+    }
+
+    [Test]
+    public async Task Amiga_Adz_IsInflated_AndStoredAsTheDatsAdf()
+    {
+        using var adz = new MemoryStream();
+        using (var gzip = new GZipStream(adz, CompressionLevel.Optimal, leaveOpen: true))
+            gzip.Write(AmigaDisk);
+
+        var result = await IngestAsync(DropAged("amiga", "orbit.adz", adz.ToArray()));
+
+        Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, "amiga")), result.Details);
+        using var library = LibraryZip.Open(Path.Combine(Roms, "amiga", "D", "Disk Orbit.zip"), Service<InfoJsonReader>());
+        Assert.That(library.InfoJson!.Game!.Roms.Single().FileName, Is.EqualTo("Disk Orbit (1990)(Synth).adf"));
+        using var stored = library.OpenEntry(LibraryZip.RomEntry("Disk Orbit (1990)(Synth).adf"), AmigaDisk.Length);
+        using var bytes = new MemoryStream();
+        stored.CopyTo(bytes);
+        Assert.That(bytes.ToArray(), Is.EqualTo(AmigaDisk));
     }
 
     [Test]
