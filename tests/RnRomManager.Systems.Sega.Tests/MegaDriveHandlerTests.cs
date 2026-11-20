@@ -15,8 +15,8 @@ public class MegaDriveHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("md", "Mega Drive / Genesis", "MD", "megadrive", "Sega - Mega Drive - Genesis")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".md", ".bin", ".gen" }));
-        Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((8192L, 16777216L)));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".md", ".bin", ".gen", ".smd" }));
+        Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((8192L, 16777216L + 512)));
     }
 
     [Test]
@@ -76,6 +76,20 @@ public class MegaDriveHandlerTests
     public void NormalizeForHashing_ReturnsTheInputUnchanged()
     {
         var rom = Builder.Build();
+        Assert.That(Handler.NormalizeForHashing(rom).ToArray(), Is.EqualTo(rom));
+    }
+
+    [Test]
+    public void NormalizeForHashing_DeinterleavesAnSmdDump()
+    {
+        var rom = Builder.Build();
+        Assert.That(Handler.NormalizeForHashing(SyntheticMegaDriveRomBuilder.ToSmd(rom)).ToArray(), Is.EqualTo(rom));
+    }
+
+    [Test]
+    public void NormalizeForHashing_HeaderSizedWithoutSmdMarker_IsUnchanged()
+    {
+        var rom = new byte[512 + 16384];
         Assert.That(Handler.NormalizeForHashing(rom).ToArray(), Is.EqualTo(rom));
     }
 

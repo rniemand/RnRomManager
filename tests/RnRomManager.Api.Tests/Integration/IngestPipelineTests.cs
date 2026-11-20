@@ -825,7 +825,6 @@ public class IngestPipelineTests
 
     [TestCase("nes", "harbor.sms")]
     [TestCase("sms", "comet.md")]
-    [TestCase("md", "comet.smd")]
     [TestCase("md", "relay.32x")]
     [TestCase("s32x", "comet.md")]
     [TestCase("s32x", "comet.bin")]
@@ -850,7 +849,7 @@ public class IngestPipelineTests
     [TestCase("sms", "odd.sms", 2047, "TooSmall")]
     [TestCase("sms", "odd.sms", 4194305, "TooLarge")]
     [TestCase("md", "odd.md", 8191, "TooSmall")]
-    [TestCase("md", "odd.md", 16777217, "TooLarge")]
+    [TestCase("md", "odd.md", 16777729, "TooLarge")]
     [TestCase("s32x", "odd.32x", 16383, "TooSmall")]
     [TestCase("s32x", "odd.32x", 4194305, "TooLarge")]
     public async Task Sega_OutsideTheSizeLimits_Fails(string system, string name, int size, string reason)
@@ -925,6 +924,16 @@ public class IngestPipelineTests
         var game = ReadZip(Path.Combine("md", "T", "Turbo Comet.zip"));
         Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("md", "Turbo Comet (USA, Europe).md")));
         Assert.That(game.Roms.Single().Header!["serial"]!.GetValue<string>(), Is.EqualTo("GM 00001234-00"));
+    }
+
+    [Test]
+    public async Task MegaDrive_InterleavedSmd_IsDeinterleaved_AndStoredAsMd()
+    {
+        var result = await IngestAsync(Drop("md", "comet.smd", SyntheticMegaDriveRomBuilder.ToSmd(Comet)));
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Ingested));
+        var game = ReadZip(Path.Combine("md", "T", "Turbo Comet.zip"));
+        Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("md", "Turbo Comet (USA, Europe).md")));
     }
 
     [Test]
