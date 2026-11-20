@@ -1,6 +1,6 @@
 ---
 title: Image Resolutions report, job names and report polish
-status: in-progress
+status: completed
 created: 2026-11-20
 ---
 
