@@ -18,7 +18,7 @@ public class SwitchHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("switch", "Nintendo Switch", "Switch", "switch", "Nintendo - Nintendo Switch")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".nsp", ".xci", ".nsz", ".xcz" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".nsp", ".xci", ".nsz", ".xcz", ".hdf" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((1024L, 68_719_476_736L)));
         Assert.That((Handler.EmbedRomsInZip, Handler.DatSource), Is.EqualTo((false, DatSource.TitleDb)));
     }
