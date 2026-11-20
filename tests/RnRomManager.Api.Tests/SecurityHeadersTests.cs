@@ -33,7 +33,7 @@ public class SecurityHeadersTests
     public void Policy_WithIndexHtml_ListsTheHashes()
     {
         Assert.That(SecurityHeaders.ContentSecurityPolicy(IndexHtml.ReplaceLineEndings("\n")), Is.EqualTo(
-            $"default-src 'self'; script-src 'self' {HashOne} {HashTwo}; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"));
+            $"default-src 'self'; script-src 'self' {HashOne} {HashTwo}; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"));
     }
 
     [Test]
