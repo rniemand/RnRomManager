@@ -83,6 +83,12 @@ export const icons: Record<string, string> = {
 	'os-linux': 'bi bi-tux',
 	'os-android': 'bi bi-android2',
 	'os-ios': 'bi bi-apple',
+	// ROM Zip Config and Jobs Restyle R6, L3: storage icons and the legend's speed icons.
+	'storage-in-zip': 'bi bi-file-zip',
+	'storage-beside-zip': 'bi bi-files',
+	'speed-fast': 'bi bi-lightning-charge',
+	'speed-medium': 'bi bi-lightning',
+	'speed-slow': 'bi bi-hourglass-split',
 	// Disc systems B22: the brand marks Bootstrap Icons has, a disc for the rest.
 	'system-psx': 'bi bi-playstation',
 	'system-psp': 'bi bi-playstation',
