@@ -760,6 +760,41 @@ public class ReportEndpointsTests
         Assert.That(body, Does.Not.Contain("ValidationFailed"));
     }
 
+    // Release editing B13: GET /api/reports/hacks.
+
+    [Test]
+    public async Task Hacks_ResponseShape_DefaultSort_AndSystemFilter()
+    {
+        var (alpha, delta) = await SeedMultipleReleases();
+        await Sql("UPDATE roms SET flags = '[\"Hack\"]' WHERE file_name LIKE 'Bravo%' OR file_name LIKE 'Echo%' OR file_name LIKE 'Delta%'", new { });
+
+        var page = await GetJson("/api/reports/hacks");
+        var none = await GetJson("/api/reports/hacks?system=gbc");
+
+        Assert.That((page.GetProperty("page").GetInt32(), page.GetProperty("pageSize").GetInt32(), page.GetProperty("total").GetInt64()),
+            Is.EqualTo((1, 50, 2L)));
+        var first = page.GetProperty("items")[0];
+        Assert.That(first.EnumerateObject().Select(p => p.Name),
+            Is.EqualTo(new[] { "id", "displayTitle", "system", "systemName", "hackCount", "releaseCount", "bytes" }));
+        Assert.That((first.GetProperty("id").GetGuid(), first.GetProperty("hackCount").GetInt32(), first.GetProperty("releaseCount").GetInt32()),
+            Is.EqualTo((delta, 2, 2)), "hacks descending by default");
+        Assert.That(page.GetProperty("items")[1].GetProperty("id").GetGuid(), Is.EqualTo(alpha));
+        Assert.That(none.GetProperty("total").GetInt64(), Is.Zero);
+    }
+
+    [TestCase("system=nope", "system", "Choose a registered system.")]
+    [TestCase("sort=updates", "sort", "Must be name, system, hacks, releases or size.")]
+    [TestCase("dir=up", "dir", "Must be asc or desc.")]
+    [TestCase("page=0", "page", "Must be 1 or more.")]
+    [TestCase("pageSize=201", "pageSize", "Must be 1–200.")]
+    public async Task Hacks_InvalidQuery_IsValidationFailed(string query, string field, string message)
+    {
+        using var response = await _user.GetAsync("/api/reports/hacks?" + query);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").GetProperty(field)[0].GetString(), Is.EqualTo(message));
+    }
+
     // Missing Metadata M2–M3: GET /api/reports/missing-metadata and /next (Admin only).
 
     [Test]

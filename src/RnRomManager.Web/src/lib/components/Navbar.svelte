@@ -3,7 +3,6 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { Collapse } from '../bootstrap';
-	import type { PageRouteId } from '$app/types';
 	import type { Me } from '../api/types';
 	import { formatCount } from '../format';
 	import Icon from './Icon.svelte';
@@ -36,7 +35,8 @@
 	];
 
 	type NavLink = {
-		href: Exclude<PageRouteId, `${string}[${string}`>;
+		// The links this bar has: a union of every page route is too wide for resolve()'s overloads.
+		href: '/' | '/collections' | '/reports' | '/ingestion';
 		label: string;
 		icon: string;
 		admin?: boolean;

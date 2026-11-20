@@ -34,6 +34,7 @@ const { default: MissingImages } = await import('./missing-images/+page.svelte')
 const { default: LibrarySize } = await import('./library-size/+page.svelte');
 const { default: Duplicates } = await import('./duplicates/+page.svelte');
 const { default: MultipleReleases } = await import('./multiple-releases/+page.svelte');
+const { default: Hacks } = await import('./hacks/+page.svelte');
 const { default: MissingMetadata } = await import('./missing-metadata/+page.svelte');
 
 type Answer = { status: number; body?: unknown };
@@ -717,6 +718,60 @@ describe('reports pages', () => {
 		});
 	});
 
+	describe('Games With Hacks (release editing B13)', () => {
+		const list = (query = 'sort=hacks&dir=desc') =>
+			`GET /api/reports/hacks?${query}&page=1&pageSize=50`;
+		const item = (id: string) => ({
+			id,
+			displayTitle: `Game ${id}`,
+			system: 'gb',
+			systemName: 'Game Boy',
+			hackCount: 2,
+			releaseCount: 3,
+			bytes: 2048
+		});
+		const body = (items: unknown[]) => ({ items, page: 1, pageSize: 50, total: items.length });
+		const replaced = (path: string) => [path, { replace: true, reset: false }];
+
+		beforeEach(() => navigateTo('/reports/hacks'));
+
+		it('lists game (to its Releases tab), system, hacks, releases and size', async () => {
+			answers[list()] = { status: 200, body: body([item('g1')]) };
+			render(Hacks);
+
+			const link = await screen.findByRole('link', { name: 'Game g1' });
+			expect(link.getAttribute('href')).toBe('/games/g1?tab=releases');
+			expect(
+				[...document.querySelectorAll('thead th')].map((th) => th.textContent!.trim())
+			).toEqual(['Game', 'System', 'Hacks', 'Releases', 'Size']);
+			expect(
+				[...document.querySelectorAll('tbody td')].map((td) => td.textContent!.trim())
+			).toEqual(['Game g1', 'Game Boy', '2', '3', '2.0 KiB']);
+			expect(document.querySelector('th[aria-sort]')!.textContent!.trim()).toBe('Hacks');
+		});
+
+		it('sorting by a header writes sort= and the system select writes system=', async () => {
+			answers[list()] = { status: 200, body: body([item('g1')]) };
+			render(Hacks);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Game' }));
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/hacks?sort=name'));
+
+			const system = screen.getByLabelText('System') as HTMLSelectElement;
+			await vi.waitFor(() => expect(system.options).toHaveLength(3));
+			await fireEvent.change(system, { target: { value: 'gb' } });
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/hacks?system=gb&sort=name'));
+		});
+
+		it('shows the empty state', async () => {
+			answers[list()] = { status: 200, body: body([]) };
+			render(Hacks);
+
+			expect(await screen.findByText('No games have hacked releases.')).toBeTruthy();
+		});
+	});
+
 	describe('Missing Metadata (M4, M6)', () => {
 		const admin = () =>
 			auth.set({ id: 1, username: 'admin', roles: ['admin'], mustChangePassword: false });
@@ -758,6 +813,7 @@ describe('reports pages', () => {
 				['Missing Images', 'bi bi-image-alt'],
 				['Duplicates', 'bi bi-files'],
 				['Multiple Releases', 'bi bi-layers'],
+				['Games With Hacks', 'bi bi-bandaid'],
 				['Missing Metadata', 'bi bi-card-checklist'],
 				['Activity', 'bi bi-activity']
 			]);
@@ -933,7 +989,8 @@ describe('reports pages', () => {
 			['Library Size', 'bi bi-pie-chart'],
 			['Missing Images', 'bi bi-image-alt'],
 			['Duplicates', 'bi bi-files'],
-			['Multiple Releases', 'bi bi-layers']
+			['Multiple Releases', 'bi bi-layers'],
+			['Games With Hacks', 'bi bi-bandaid']
 		]);
 	});
 

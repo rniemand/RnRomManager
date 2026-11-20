@@ -218,6 +218,45 @@ public static partial class ReportEndpoints
             });
         });
 
+        // Release editing B13: Games With Hacks.
+        reports.MapGet("/hacks", async (string? system, string? sort, string? dir, int? page, int? pageSize, HttpContext ctx,
+            IReportRepository repository, ISystemRegistry systems) =>
+        {
+            var errors = Validate(system, page, pageSize, systems);
+            HackedGameSort? sortKey = sort?.ToLowerInvariant() switch
+            {
+                null or "hacks" => HackedGameSort.Hacks,
+                "name" => HackedGameSort.Name,
+                "system" => HackedGameSort.System,
+                "releases" => HackedGameSort.Releases,
+                "size" => HackedGameSort.Size,
+                _ => null,
+            };
+            if (sortKey is null)
+                errors["sort"] = ["Must be name, system, hacks, releases or size."];
+            bool? descending = dir?.ToLowerInvariant() switch { null => null, "asc" => false, "desc" => true, _ => null };
+            if (dir is not null && descending is null)
+                errors["dir"] = ["Must be asc or desc."];
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+
+            descending ??= sortKey is not (HackedGameSort.Name or HackedGameSort.System);
+            var result = await repository.ListHackedGamesAsync(system, sortKey!.Value, descending.Value, page ?? 1, pageSize ?? 50,
+                ctx.RequestAborted);
+            return Results.Ok(new
+            {
+                items = result.Items.Select(item => new
+                {
+                    id = item.Id, displayTitle = item.DisplayTitle, system = item.SystemId,
+                    systemName = SystemName(systems, item.SystemId), hackCount = item.HackCount,
+                    releaseCount = item.ReleaseCount, bytes = item.Bytes,
+                }),
+                page = result.PageNumber,
+                pageSize = result.PageSize,
+                total = result.Total,
+            });
+        });
+
         reports.MapPost("/duplicates/dismiss", async (DismissDuplicateRequest request, HttpContext ctx, IReportRepository repository,
             ISystemRegistry systems, TimeProvider time) =>
         {

@@ -28,6 +28,7 @@
 			label: 'Multiple Releases',
 			icon: 'report-multiple-releases'
 		},
+		{ href: resolve('/reports/hacks'), label: 'Games With Hacks', icon: 'report-hacks' },
 		...(auth.isAdmin
 			? [
 					{

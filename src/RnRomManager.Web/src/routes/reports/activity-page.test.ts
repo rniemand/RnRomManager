@@ -426,7 +426,8 @@ describe('Activity report (B20)', () => {
 				'Library Size',
 				'Missing Images',
 				'Duplicates',
-				'Multiple Releases'
+				'Multiple Releases',
+				'Games With Hacks'
 			]);
 		});
 
