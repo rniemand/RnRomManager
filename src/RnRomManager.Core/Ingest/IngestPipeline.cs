@@ -150,6 +150,10 @@ public sealed class IngestPipeline(
             return FailFile(file, actor, IngestFailures.TooSmall, $"{file.SizeBytes} bytes; {byExtension.Id} ROMs are at least {byExtension.MinRomSizeBytes}");
         if (file.SizeBytes > byExtension.MaxRomSizeBytes)
             return FailFile(file, actor, IngestFailures.TooLarge, $"{file.SizeBytes} bytes; {byExtension.Id} ROMs are at most {byExtension.MaxRomSizeBytes}");
+        // Stored inside the ZIP, the ROM is read into one array; beside the ZIP it streams up to MaxRomSizeBytes.
+        if (file.SizeBytes > Array.MaxLength)
+            return FailFile(file, actor, IngestFailures.TooLarge,
+                $"{file.SizeBytes} bytes; ROMs stored inside the ZIP are at most {Array.MaxLength}. Store {byExtension.Id} ROMs beside the ZIP (Admin → ROM Zip Config) to import it");
 
         // Step 2: hash the normalised bytes (what gets stored).
         BoundedReadResult read;
