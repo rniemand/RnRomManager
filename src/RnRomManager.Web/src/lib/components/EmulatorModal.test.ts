@@ -19,8 +19,33 @@ const { default: EmulatorModal } = await import('./EmulatorModal.svelte');
 // C2: only id and file name, as a Library card passes them.
 const rom = { id: 13, fileName: 'Orbit Blocks (World) (Rev 1).gb' };
 
+/** Release editing B22: a battery-export core shows the iframe once its saves lookup has settled. */
+async function frameOf(container: HTMLElement): Promise<HTMLIFrameElement> {
+	await vi.waitFor(() => expect(container.querySelector('iframe')).not.toBeNull());
+	return container.querySelector('iframe')!;
+}
+
+/** Answers the player's export request for `kind` from the iframe. */
+function answerExport(iframe: HTMLIFrameElement, kind: string, result: Record<string, unknown>) {
+	window.dispatchEvent(
+		new MessageEvent('message', {
+			data: { type: 'rnrm-emulator-export-result', kind, ...result },
+			origin: location.origin,
+			source: iframe.contentWindow
+		})
+	);
+}
+
 describe('EmulatorModal', () => {
-	it('frames the play page for the release', () => {
+	beforeEach(() => {
+		resetClient();
+		vi.stubGlobal('fetch', () =>
+			Promise.resolve(new Response(JSON.stringify({ items: [] }), { status: 200 }))
+		);
+	});
+	afterEach(() => vi.unstubAllGlobals());
+
+	it('frames the play page for the release', async () => {
 		const { container } = render(EmulatorModal, {
 			open: true,
 			gameId: 'g-1',
@@ -29,7 +54,7 @@ describe('EmulatorModal', () => {
 			disc: false
 		});
 
-		const iframe = container.querySelector('iframe')!;
+		const iframe = await frameOf(container);
 		expect(iframe.getAttribute('src')).toBe(
 			'/emulator/play.html?game=g-1&rom=13&core=gambatte&name=Orbit%20Blocks%20(World)%20(Rev%201).gb'
 		);
@@ -46,14 +71,15 @@ describe('EmulatorModal', () => {
 			rom,
 			disc: false
 		});
-		expect(container.querySelector('iframe')).not.toBeNull();
+		const iframe = await frameOf(container);
 
 		(container.querySelector('.btn-close') as HTMLButtonElement).click();
-		flushSync();
-		expect(container.querySelector('iframe')).toBeNull();
+		// B23: the close asks for the battery save first; a game that never started has none.
+		answerExport(iframe, 'battery', { ok: false, reason: 'not-started' });
+		await vi.waitFor(() => expect(container.querySelector('iframe')).toBeNull());
 
 		await rerender({ open: true });
-		expect(container.querySelector('iframe')).not.toBeNull();
+		await frameOf(container);
 	});
 
 	it('renders no iframe without a core', () => {
@@ -67,7 +93,7 @@ describe('EmulatorModal', () => {
 		expect(container.querySelector('iframe')).toBeNull();
 	});
 
-	it('adds disc=1 for a disc release (Sega CD B6)', () => {
+	it('adds disc=1 for a disc release (Sega CD B6)', async () => {
 		const { container } = render(EmulatorModal, {
 			open: true,
 			gameId: 'g-2',
@@ -76,7 +102,7 @@ describe('EmulatorModal', () => {
 			disc: true
 		});
 
-		expect(container.querySelector('iframe')!.getAttribute('src')).toMatch(/&disc=1$/);
+		expect((await frameOf(container)).getAttribute('src')).toMatch(/&disc=1$/);
 	});
 });
 
@@ -139,7 +165,8 @@ describe('EmulatorModal 3DO saves (3DO B11)', () => {
 	});
 
 	it('closes at once and posts nothing for another core', async () => {
-		const { container, posted } = openFor('snes9x');
+		// DeSmuME has neither Opera's close nor a battery export (release editing B23).
+		const { container, posted } = openFor('desmume');
 
 		await closeButton(container);
 
@@ -172,7 +199,7 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 	});
 	afterEach(() => vi.unstubAllGlobals());
 
-	function openFor(core: string, onsaved?: () => void) {
+	async function openFor(core: string, onsaved?: () => void) {
 		const { container } = render(EmulatorModal, {
 			open: true,
 			gameId: 'g-1',
@@ -181,7 +208,7 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 			disc: false,
 			onsaved
 		});
-		const iframe = container.querySelector('iframe')!;
+		const iframe = await frameOf(container);
 		const posted = vi.spyOn(iframe.contentWindow!, 'postMessage').mockImplementation(() => {});
 		return { container, iframe, posted };
 	}
@@ -197,15 +224,15 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 
 	it.each(['gambatte', 'mgba', 'fceumm', 'snes9x', 'pcsx_rearmed', 'genesis_plus_gx', 'yabause'])(
 		'%s offers both buttons',
-		(core) => {
-			const { container } = openFor(core);
+		async (core) => {
+			const { container } = await openFor(core);
 			expect(button(container, 'Save state to library')).not.toBeNull();
 			expect(button(container, 'Save battery to library')).not.toBeNull();
 		}
 	);
 
-	it.each(['desmume', 'opera'])('%s offers only the state button', (core) => {
-		const { container } = openFor(core);
+	it.each(['desmume', 'opera'])('%s offers only the state button', async (core) => {
+		const { container } = await openFor(core);
 		expect(button(container, 'Save state to library')).not.toBeNull();
 		expect(button(container, 'Save battery to library')).toBeNull();
 	});
@@ -213,7 +240,7 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 	it('asks the player, uploads the bytes with a dated name, toasts and calls onsaved', async () => {
 		const onsaved = vi.fn();
 		answers['POST /api/games/g-1/saves'] = { status: 201, body: {} };
-		const { container, iframe, posted } = openFor('gambatte', onsaved);
+		const { container, iframe, posted } = await openFor('gambatte', onsaved);
 
 		await fireEvent.click(button(container, 'Save battery to library')!);
 		expect(posted).toHaveBeenCalledWith(
@@ -263,7 +290,7 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 			}
 		};
 		answers['PUT /api/games/g-1/saves/newest/file'] = { status: 200, body: {} };
-		const { container, iframe } = openFor('gambatte', onsaved);
+		const { container, iframe } = await openFor('gambatte', onsaved);
 
 		await fireEvent.click(button(container, 'Save state to library')!);
 		reply(iframe.contentWindow, {
@@ -292,7 +319,7 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 			}
 		};
 		answers['POST /api/games/g-1/saves'] = { status: 201, body: {} };
-		const { container, iframe } = openFor('gambatte', onsaved);
+		const { container, iframe } = await openFor('gambatte', onsaved);
 
 		await fireEvent.click(button(container, 'Save state to library')!);
 		reply(iframe.contentWindow, {
@@ -309,7 +336,7 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 	});
 
 	it('refuses a save over 256 MiB without uploading', async () => {
-		const { container, iframe } = openFor('gambatte');
+		const { container, iframe } = await openFor('gambatte');
 		const huge = Object.create(ArrayBuffer.prototype, {
 			byteLength: { value: 256 * 1024 * 1024 + 1 }
 		});
@@ -336,7 +363,7 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 		['empty', 'There is no save to copy yet.'],
 		['error', "Couldn't read the save from the emulator."]
 	])('toasts the reason %s and uploads nothing', async (reason, text) => {
-		const { container, iframe } = openFor('gambatte');
+		const { container, iframe } = await openFor('gambatte');
 
 		await fireEvent.click(button(container, 'Save state to library')!);
 		reply(iframe.contentWindow, {
@@ -358,7 +385,7 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 			body: { code: 'JobRunning', title: 'Another job is running' }
 		};
 		const onsaved = vi.fn();
-		const { container, iframe } = openFor('gambatte', onsaved);
+		const { container, iframe } = await openFor('gambatte', onsaved);
 
 		await fireEvent.click(button(container, 'Save state to library')!);
 		reply(iframe.contentWindow, {
@@ -378,7 +405,7 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 	});
 
 	it('ignores a result from another source', async () => {
-		const { container } = openFor('gambatte');
+		const { container } = await openFor('gambatte');
 
 		await fireEvent.click(button(container, 'Save state to library')!);
 		reply(window, {
@@ -485,7 +512,7 @@ describe('EmulatorModal screenshot (E2)', () => {
 		auth.set(null);
 	});
 
-	function openFor(onimagesaved?: () => void) {
+	async function openFor(onimagesaved?: () => void) {
 		const view = render(EmulatorModal, {
 			open: true,
 			gameId: 'g-1',
@@ -494,7 +521,7 @@ describe('EmulatorModal screenshot (E2)', () => {
 			disc: false,
 			onimagesaved
 		});
-		const iframe = view.container.querySelector('iframe')!;
+		const iframe = await frameOf(view.container);
 		const posted = vi.spyOn(iframe.contentWindow!, 'postMessage').mockImplementation(() => {});
 		return { ...view, iframe, posted };
 	}
@@ -522,8 +549,8 @@ describe('EmulatorModal screenshot (E2)', () => {
 	const preview = (container: HTMLElement) =>
 		container.querySelector('img[alt="Screenshot preview"]') as HTMLImageElement | null;
 
-	it('only Admins get the button, after the save buttons, with the camera icon', () => {
-		const { container, unmount } = openFor();
+	it('only Admins get the button, after the save buttons, with the camera icon', async () => {
+		const { container, unmount } = await openFor();
 		const shotButton = button(container, 'Screenshot')!;
 		expect(shotButton.className).toBe('btn btn-sm btn-outline-primary');
 		expect(shotButton.querySelector('i')!.className.trim()).toBe('bi bi-camera');
@@ -531,12 +558,12 @@ describe('EmulatorModal screenshot (E2)', () => {
 		unmount();
 
 		auth.set({ id: 2, username: 'bob', roles: [], mustChangePassword: false });
-		const user = openFor();
+		const user = await openFor();
 		expect(button(user.container, 'Screenshot')).toBeNull();
 	});
 
 	it('asks the player and shows the preview over the game; disabled while exporting', async () => {
-		const { container, iframe, posted } = openFor();
+		const { container, iframe, posted } = await openFor();
 		await fireEvent.click(button(container, 'Screenshot')!);
 
 		expect(posted).toHaveBeenCalledWith(
@@ -559,7 +586,7 @@ describe('EmulatorModal screenshot (E2)', () => {
 	});
 
 	it('a second screenshot replaces the preview', async () => {
-		const { container, iframe } = openFor();
+		const { container, iframe } = await openFor();
 		await fireEvent.click(button(container, 'Screenshot')!);
 		shot(iframe.contentWindow);
 		await vi.waitFor(() => expect(preview(container)).not.toBeNull());
@@ -573,7 +600,7 @@ describe('EmulatorModal screenshot (E2)', () => {
 	it('Save as Snap uploads screenshot.png as a Snap, toasts, closes the preview and calls onimagesaved', async () => {
 		const onimagesaved = vi.fn();
 		answers['POST /api/games/g-1/images'] = { status: 200, body: {} };
-		const { container, iframe } = openFor(onimagesaved);
+		const { container, iframe } = await openFor(onimagesaved);
 		await fireEvent.click(button(container, 'Screenshot')!);
 		shot(iframe.contentWindow);
 		await vi.waitFor(() => expect(preview(container)).not.toBeNull());
@@ -597,7 +624,7 @@ describe('EmulatorModal screenshot (E2)', () => {
 	});
 
 	it('Discard closes the preview', async () => {
-		const { container, iframe } = openFor();
+		const { container, iframe } = await openFor();
 		await fireEvent.click(button(container, 'Screenshot')!);
 		shot(iframe.contentWindow);
 		await vi.waitFor(() => expect(preview(container)).not.toBeNull());
@@ -607,7 +634,7 @@ describe('EmulatorModal screenshot (E2)', () => {
 	});
 
 	it('a 409 shows the job-running toast and other errors their title; the preview stays', async () => {
-		const { container, iframe } = openFor();
+		const { container, iframe } = await openFor();
 		await fireEvent.click(button(container, 'Screenshot')!);
 		shot(iframe.contentWindow);
 		await vi.waitFor(() => expect(preview(container)).not.toBeNull());
@@ -642,7 +669,7 @@ describe('EmulatorModal screenshot (E2)', () => {
 		['busy', 'The emulator is saving. Try again in a moment.'],
 		['error', "Couldn't take a screenshot."]
 	])('a %s failure shows a warning toast', async (reason, text) => {
-		const { container, iframe } = openFor();
+		const { container, iframe } = await openFor();
 		await fireEvent.click(button(container, 'Screenshot')!);
 		shot(iframe.contentWindow, { ok: false, reason });
 
@@ -651,7 +678,7 @@ describe('EmulatorModal screenshot (E2)', () => {
 	});
 
 	it('closing discards the preview, and a result after the close is ignored', async () => {
-		const { container, iframe, rerender } = openFor();
+		const { container, iframe, rerender } = await openFor();
 		await fireEvent.click(button(container, 'Screenshot')!);
 		shot(iframe.contentWindow);
 		await vi.waitFor(() => expect(preview(container)).not.toBeNull());
@@ -659,7 +686,7 @@ describe('EmulatorModal screenshot (E2)', () => {
 		await rerender({ open: true });
 		expect(preview(container)).toBeNull();
 
-		const late = container.querySelector('iframe')!;
+		const late = await frameOf(container);
 		vi.spyOn(late.contentWindow!, 'postMessage').mockImplementation(() => {});
 		await fireEvent.click(button(container, 'Screenshot')!);
 		await rerender({ open: false });
@@ -668,5 +695,269 @@ describe('EmulatorModal screenshot (E2)', () => {
 		await new Promise((r) => setTimeout(r, 0));
 		expect(preview(container)).toBeNull();
 		expect(toasts.items).toHaveLength(0);
+	});
+});
+
+describe('EmulatorModal battery saves (release editing B22–B24)', () => {
+	type Reply = { status: number; body?: unknown };
+	let calls: { key: string; body: unknown }[];
+	let answers: Record<string, Reply>;
+
+	const listKey = 'GET /api/games/g-1/saves';
+	const battery = (id: string, uploadedBy: string | null, releaseFileName = rom.fileName) => ({
+		id,
+		kind: 'battery',
+		releaseFileName,
+		uploadedBy
+	});
+
+	beforeEach(() => {
+		resetClient();
+		toasts.items.length = 0;
+		calls = [];
+		answers = { [listKey]: { status: 200, body: { items: [] } } };
+		auth.set({ id: 1, username: 'alice', roles: ['admin'], mustChangePassword: false });
+		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+			const key = `${init?.method ?? 'GET'} ${url}`;
+			calls.push({ key, body: init?.body });
+			const answer = answers[key] ?? { status: 204 };
+			return Promise.resolve(
+				new Response(answer.body === undefined ? null : JSON.stringify(answer.body), {
+					status: answer.status
+				})
+			);
+		});
+	});
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.unstubAllGlobals();
+		auth.set(null);
+	});
+
+	async function openFor(
+		props: Record<string, unknown> = {},
+		onsaved?: () => void
+	): Promise<{
+		container: HTMLElement;
+		iframe: HTMLIFrameElement;
+		posted: ReturnType<typeof vi.spyOn>;
+	}> {
+		const { container } = render(EmulatorModal, {
+			open: true,
+			gameId: 'g-1',
+			core: 'gambatte',
+			rom,
+			disc: false,
+			onsaved,
+			...props
+		});
+		const iframe = await frameOf(container);
+		const posted = vi.spyOn(iframe.contentWindow!, 'postMessage').mockImplementation(() => {});
+		return { container, iframe, posted };
+	}
+
+	const close = (container: HTMLElement) =>
+		(container.querySelector('.btn-close') as HTMLButtonElement).click();
+	const closed = (container: HTMLElement) =>
+		vi.waitFor(() => expect(container.querySelector('iframe')).toBeNull());
+	const writes = () => calls.filter((c) => /^(POST|PUT) \/api\/games\/g-1\/saves/.test(c.key));
+	const ok = { ok: true, bytes: new Uint8Array([4, 5]).buffer, extension: '.srm' };
+
+	it("auto-loads the user's newest battery save of the release (B22)", async () => {
+		answers[listKey] = {
+			status: 200,
+			body: {
+				items: [
+					battery('bobs', 'bob'),
+					{ ...battery('state', 'alice'), kind: 'state' },
+					battery('other-release', 'alice', 'Other.gb'),
+					battery('mine-new', 'ALICE', rom.fileName.toUpperCase()),
+					battery('mine-old', 'alice')
+				]
+			}
+		};
+		const { iframe } = await openFor();
+
+		expect(iframe.getAttribute('src')).toMatch(/&save=mine-new&saveKind=battery$/);
+	});
+
+	it('shows a spinner, not the player, until the lookup settles', async () => {
+		let release!: () => void;
+		const pending = new Promise<void>((r) => (release = r));
+		const answer = globalThis.fetch;
+		vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+			await pending;
+			return answer(url, init);
+		});
+		const { container } = render(EmulatorModal, {
+			open: true,
+			gameId: 'g-1',
+			core: 'gambatte',
+			rom,
+			disc: false
+		});
+		await new Promise((r) => setTimeout(r, 10));
+		expect(container.querySelector('iframe')).toBeNull();
+		expect(container.querySelector('.ratio .spinner-border')).not.toBeNull();
+
+		release();
+		await frameOf(container);
+	});
+
+	it('an explicit save wins, without a lookup; a failed lookup plays without a save', async () => {
+		const explicit = await openFor({ save: { saveId: 'given', saveKind: 'state' } });
+		expect(explicit.iframe.getAttribute('src')).toMatch(/&save=given&saveKind=state$/);
+		expect(calls.filter((c) => c.key === listKey)).toEqual([]);
+
+		answers[listKey] = { status: 500, body: { status: 500, title: 'Boom' } };
+		const failed = await openFor();
+		expect(failed.iframe.getAttribute('src')).not.toMatch(/&save=/);
+		expect(toasts.items).toEqual([]);
+	});
+
+	it('on close, replaces the auto-loaded save, toasts and calls onsaved (B23)', async () => {
+		answers[listKey] = { status: 200, body: { items: [battery('mine', 'alice')] } };
+		answers['PUT /api/games/g-1/saves/mine/file'] = { status: 200, body: {} };
+		const onsaved = vi.fn();
+		const { container, iframe, posted } = await openFor({}, onsaved);
+
+		close(container);
+		expect(posted).toHaveBeenCalledWith(
+			{ type: 'rnrm-emulator-export', kind: 'battery' },
+			location.origin
+		);
+		expect(container.querySelector('iframe')).not.toBeNull();
+		answerExport(iframe, 'battery', ok);
+		await closed(container);
+
+		expect(writes().map((c) => c.key)).toEqual(['PUT /api/games/g-1/saves/mine/file']);
+		expect(onsaved).toHaveBeenCalledTimes(1);
+		expect(toasts.items.map((t) => [t.text, t.kind])).toEqual([
+			['Battery save stored in the library', 'success']
+		]);
+	});
+
+	it('without a played save, overwrites the newest own one, else adds one', async () => {
+		answers['POST /api/games/g-1/saves'] = { status: 201, body: {} };
+		const first = await openFor({ save: { saveId: 'a-state', saveKind: 'state' } });
+		answers[listKey] = {
+			status: 200,
+			body: { items: [battery('newest', 'alice'), battery('older', 'alice')] }
+		};
+		close(first.container);
+		answerExport(first.iframe, 'battery', ok);
+		await closed(first.container);
+		expect(writes().map((c) => c.key)).toEqual(['PUT /api/games/g-1/saves/newest/file']);
+
+		calls.length = 0;
+		answers[listKey] = { status: 200, body: { items: [] } };
+		const second = await openFor();
+		close(second.container);
+		answerExport(second.iframe, 'battery', ok);
+		await closed(second.container);
+		const form = writes()[0].body as FormData;
+		expect(writes().map((c) => c.key)).toEqual(['POST /api/games/g-1/saves']);
+		expect([form.get('kind'), form.get('romId')]).toEqual(['battery', '13']);
+		expect(form.get('name')).toMatch(/^Battery \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+	});
+
+	it("an Admin playing another user's save adds their own instead of overwriting it", async () => {
+		answers[listKey] = { status: 200, body: { items: [battery('bobs', 'bob')] } };
+		answers['POST /api/games/g-1/saves'] = { status: 201, body: {} };
+		const { container, iframe } = await openFor({ save: { saveId: 'bobs', saveKind: 'battery' } });
+
+		close(container);
+		answerExport(iframe, 'battery', ok);
+		await closed(container);
+
+		expect(writes().map((c) => c.key)).toEqual(['POST /api/games/g-1/saves']);
+	});
+
+	it.each(['not-started', 'empty', 'unsupported'])(
+		'%s stores nothing and says nothing',
+		async (reason) => {
+			const { container, iframe } = await openFor();
+			close(container);
+			answerExport(iframe, 'battery', { ok: false, reason });
+			await closed(container);
+
+			expect(writes()).toEqual([]);
+			expect(toasts.items).toEqual([]);
+		}
+	);
+
+	it('no answer within 5 s closes silently', async () => {
+		const { container } = await openFor();
+		vi.useFakeTimers();
+		close(container);
+		await vi.advanceTimersByTimeAsync(4999);
+		flushSync();
+		expect(container.querySelector('iframe')).not.toBeNull();
+		await vi.advanceTimersByTimeAsync(1);
+		flushSync();
+
+		expect(container.querySelector('iframe')).toBeNull();
+		expect([writes(), toasts.items]).toEqual([[], []]);
+	});
+
+	it('a busy player or a failed upload warns, and the modal still closes', async () => {
+		const busy = await openFor();
+		close(busy.container);
+		answerExport(busy.iframe, 'battery', { ok: false, reason: 'busy' });
+		await closed(busy.container);
+		expect(toasts.items.map((t) => [t.text, t.kind])).toEqual([
+			["Couldn't store the battery save", 'warning']
+		]);
+
+		toasts.items.length = 0;
+		answers['POST /api/games/g-1/saves'] = {
+			status: 409,
+			body: { status: 409, code: 'JobRunning', title: 'A job is running' }
+		};
+		const failed = await openFor();
+		close(failed.container);
+		answerExport(failed.iframe, 'battery', ok);
+		await closed(failed.container);
+		expect(toasts.items.map((t) => [t.text, t.kind])).toEqual([
+			["Couldn't store the battery save", 'warning']
+		]);
+	});
+
+	it('a close during a running "Save battery to library" waits for it, then stores', async () => {
+		answers['POST /api/games/g-1/saves'] = { status: 201, body: {} };
+		const { container, iframe, posted } = await openFor();
+		await fireEvent.click(
+			within(container).getByRole('button', { name: 'Save battery to library', hidden: true })
+		);
+		close(container);
+		await new Promise((r) => setTimeout(r, 10));
+		expect(posted).toHaveBeenCalledTimes(1);
+
+		answerExport(iframe, 'battery', ok);
+		await vi.waitFor(() => expect(posted).toHaveBeenCalledTimes(2));
+		expect(container.querySelector('iframe')).not.toBeNull();
+		expect(writes()).toHaveLength(1);
+		answerExport(iframe, 'battery', ok);
+		await closed(container);
+
+		expect(writes()).toHaveLength(2);
+		expect(toasts.items.map((t) => t.text)).toEqual([
+			'Saved to library',
+			'Battery save stored in the library'
+		]);
+	});
+
+	it('a screenshot nobody answers within 30 s reads as an error', async () => {
+		const { container } = await openFor();
+		vi.useFakeTimers();
+		await fireEvent.click(
+			within(container).getByRole('button', { name: 'Screenshot', hidden: true })
+		);
+		await vi.advanceTimersByTimeAsync(30000);
+
+		expect(toasts.items.at(-1)).toMatchObject({
+			text: "Couldn't take a screenshot.",
+			kind: 'warning'
+		});
 	});
 });

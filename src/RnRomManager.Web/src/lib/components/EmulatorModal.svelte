@@ -2,13 +2,14 @@
 	import { untrack } from 'svelte';
 	import { api } from '../api/client';
 	import { isApiError } from '../api/errors';
-	import type { RomDetail, SaveKind } from '../api/types';
+	import type { RomDetail, SaveItem, SaveKind } from '../api/types';
 	import { playUrl, recordPlay, type PlaySave } from '../emulator';
 	import { kindLabels, maxSaveBytes, savesApi } from '../saves';
 	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import Icon from './Icon.svelte';
+	import Loading from './Loading.svelte';
 
 	/**
 	 * Browser emulators B4: the play page in a same-origin iframe. The iframe exists only while open, so closing
@@ -59,14 +60,16 @@
 
 	type ExportResult =
 		| { ok: true; bytes: ArrayBuffer; extension: string }
-		| { ok: false; reason: 'not-started' | 'busy' | 'unsupported' | 'empty' | 'error' };
+		| { ok: false; reason: 'not-started' | 'busy' | 'unsupported' | 'empty' | 'error' | 'timeout' };
 
 	const reasons: Record<string, string> = {
 		'not-started': 'Start the game first.',
 		busy: 'The emulator is saving. Try again in a moment.',
 		unsupported: "This emulator can't save states.",
 		empty: 'There is no save to copy yet.',
-		error: "Couldn't read the save from the emulator."
+		error: "Couldn't read the save from the emulator.",
+		// Release editing B23: the player never answered.
+		timeout: "Couldn't read the save from the emulator."
 	};
 
 	/** How long an export may take before it is given up (a 256 MiB state is copied once). */
@@ -75,7 +78,11 @@
 	let exporting = $state(false);
 
 	/** Saves B18: asks the play page for the running game's state or battery save; E2: or a screenshot. */
-	function requestExport(target: Window, kind: SaveKind | 'screenshot'): Promise<ExportResult> {
+	function requestExport(
+		target: Window,
+		kind: SaveKind | 'screenshot',
+		timeoutMs = exportTimeoutMs
+	): Promise<ExportResult> {
 		return new Promise((resolve) => {
 			const onMessage = (event: MessageEvent) => {
 				if (event.source !== target || event.origin !== location.origin) return;
@@ -93,7 +100,7 @@
 				resolve(result);
 			};
 			window.addEventListener('message', onMessage);
-			const timer = setTimeout(() => done({ ok: false, reason: 'error' }), exportTimeoutMs);
+			const timer = setTimeout(() => done({ ok: false, reason: 'timeout' }), timeoutMs);
 			target.postMessage({ type: 'rnrm-emulator-export', kind }, location.origin);
 		});
 	}
@@ -105,10 +112,53 @@
 		return `${kindLabels[kind]} ${date} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
 	}
 
+	const isMine = (s: SaveItem) => {
+		const me = auth.me?.username.toLowerCase();
+		return me !== undefined && s.uploadedBy?.toLowerCase() === me;
+	};
+
+	/**
+	 * Saves B19: stores exported bytes. Replaces `replaceId` when given, else overwrites the signed-in user's newest save of
+	 * this kind for this release (the list is newest first; S5: an admin lists everyone's saves, so ownership is checked
+	 * too); adds one when there is none.
+	 */
+	async function store(
+		kind: SaveKind,
+		bytes: ArrayBuffer,
+		extension: string,
+		list: SaveItem[],
+		replaceId?: string
+	): Promise<void> {
+		if (!rom) return;
+		const file = new File([bytes], `save${extension}`);
+		const existing =
+			replaceId ??
+			list.find((s) => s.kind === kind && s.releaseFileName === rom.fileName && isMine(s))?.id;
+		if (existing) await savesApi.replace(gameId, existing, file);
+		else
+			await savesApi.add(gameId, {
+				romId: rom.id,
+				kind,
+				name: saveName(kind),
+				description: '',
+				file,
+				fileName: file.name
+			});
+	}
+
+	/** Release editing B23: the running "save to library", which a close waits for. */
+	let saving: Promise<void> | null = null;
+
+	function saveToLibrary(kind: SaveKind): Promise<void> {
+		if (exporting) return saving ?? Promise.resolve();
+		saving = copyToLibrary(kind).finally(() => (saving = null));
+		return saving;
+	}
+
 	/** Saves B19: copies the running game's save into the library through the upload route. */
-	async function saveToLibrary(kind: SaveKind): Promise<void> {
+	async function copyToLibrary(kind: SaveKind): Promise<void> {
 		const target = frame?.contentWindow;
-		if (!target || !rom || exporting) return;
+		if (!target || !rom) return;
 		exporting = true;
 		try {
 			const result = await requestExport(target, kind);
@@ -120,27 +170,7 @@
 				toasts.show('This save is larger than 256 MiB', 'danger');
 				return;
 			}
-			const file = new File([result.bytes], `save${result.extension}`);
-			// Overwrites the signed-in user's newest save of this kind for this release (the list is newest first; S5: an
-			// admin lists everyone's saves, so ownership is checked too); adds one when there is none.
-			const me = auth.me?.username.toLowerCase();
-			const existing = (await savesApi.list(gameId)).find(
-				(s) =>
-					s.kind === kind &&
-					s.releaseFileName === rom.fileName &&
-					me !== undefined &&
-					s.uploadedBy?.toLowerCase() === me
-			);
-			if (existing) await savesApi.replace(gameId, existing.id, file);
-			else
-				await savesApi.add(gameId, {
-					romId: rom.id,
-					kind,
-					name: saveName(kind),
-					description: '',
-					file,
-					fileName: file.name
-				});
+			await store(kind, result.bytes, result.extension, await savesApi.list(gameId));
 			toasts.show('Saved to library', 'success');
 			onsaved?.();
 		} catch (e) {
@@ -150,6 +180,79 @@
 			exporting = false;
 		}
 	}
+
+	/** Release editing B22: the battery save the player was opened with when there's no explicit `save`. */
+	let autoSave = $state<PlaySave | null>(null);
+	/** B22: the iframe waits for the auto-load lookup. */
+	let lookingUp = $state(false);
+	const playSave = $derived(save ?? autoSave);
+
+	$effect(() => {
+		// Once per opening: a fresh `rom` literal while open must not reload the player.
+		if (!open) return;
+		untrack(() => {
+			const target = rom;
+			autoSave = null;
+			if (!target || !core) return;
+			if (save || !batteryExport) {
+				lookingUp = false;
+				return;
+			}
+			const current = session;
+			lookingUp = true;
+			savesApi
+				.list(gameId)
+				.then(
+					(list) => {
+						if (current !== session) return;
+						// B22: the user's newest battery save of this release (the list is newest first).
+						const found = list.find(
+							(s) =>
+								s.kind === 'battery' &&
+								s.releaseFileName.toLowerCase() === target.fileName.toLowerCase() &&
+								isMine(s)
+						);
+						if (found) autoSave = { saveId: found.id, saveKind: 'battery' };
+					},
+					() => {} // B22: plays without a save
+				)
+				.finally(() => {
+					if (current === session) lookingUp = false;
+				});
+		});
+	});
+
+	/** Release editing B23: copies the battery save into the library before the player goes. */
+	async function storeBeforeClose(): Promise<void> {
+		if (saving) await saving;
+		const target = frame?.contentWindow;
+		if (!target || !rom) return;
+		const result = await requestExport(target, 'battery', closeExportTimeoutMs);
+		if (!result.ok) {
+			// Not started, no battery RAM, no support or no answer: nothing to keep.
+			if (result.reason === 'busy' || result.reason === 'error')
+				toasts.show("Couldn't store the battery save", 'warning');
+			return;
+		}
+		if (result.bytes.byteLength === 0) return;
+		try {
+			if (result.bytes.byteLength > maxSaveBytes) throw new Error('too large');
+			const list = await savesApi.list(gameId);
+			// The played save is replaced only when it's the user's own battery save (an Admin may play another user's).
+			const played =
+				playSave?.saveKind === 'battery'
+					? list.find((s) => s.id === playSave.saveId && isMine(s))?.id
+					: undefined;
+			await store('battery', result.bytes, result.extension, list, played);
+			toasts.show('Battery save stored in the library', 'success');
+			onsaved?.();
+		} catch {
+			toasts.show("Couldn't store the battery save", 'warning');
+		}
+	}
+
+	/** Release editing B23: how long a close waits for the battery save. */
+	const closeExportTimeoutMs = 5000;
 
 	let frame = $state<HTMLIFrameElement | null>(null);
 
@@ -183,7 +286,9 @@
 			if (current !== session) return;
 			if (!result.ok) {
 				toasts.show(
-					result.reason === 'error' ? "Couldn't take a screenshot." : reasons[result.reason],
+					result.reason === 'error' || result.reason === 'timeout'
+						? "Couldn't take a screenshot."
+						: reasons[result.reason],
 					'warning'
 				);
 				return;
@@ -249,7 +354,7 @@
 	bind:open
 	title="Play {rom?.fileName ?? ''}"
 	size="xl"
-	beforeclose={core === 'opera' ? saveBeforeClose : undefined}
+	beforeclose={core === 'opera' ? saveBeforeClose : batteryExport ? storeBeforeClose : undefined}
 >
 	{#if open && rom && core}
 		<div class="d-flex flex-wrap gap-2 mb-2">
@@ -285,12 +390,14 @@
 	{/if}
 	<!-- Cap the width so the 4:3 frame fits the viewport height (dialog chrome ≈ 14rem): Start Game needs no scrolling. -->
 	<div class="ratio ratio-4x3 mx-auto" style="max-width: calc((100vh - 14rem) * 4 / 3)">
-		{#if open && rom && core}
+		{#if open && rom && core && lookingUp}
+			<div class="d-flex align-items-center justify-content-center"><Loading /></div>
+		{:else if open && rom && core}
 			<iframe
 				bind:this={frame}
 				title="Emulator: {rom.fileName}"
 				allow="fullscreen; gamepad; autoplay"
-				src={playUrl(gameId, rom, core, disc, save)}
+				src={playUrl(gameId, rom, core, disc, playSave)}
 			></iframe>
 			{#if preview}
 				<!-- E2: over the game, inside the emulator modal (not a second Bootstrap modal). -->

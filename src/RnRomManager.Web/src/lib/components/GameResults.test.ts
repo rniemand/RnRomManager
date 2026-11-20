@@ -212,6 +212,7 @@ describe('GameResults cards (C1, C2)', () => {
 
 			await fireEvent.click(screen.getByRole('button', { name: 'Play Game p' }));
 
+			await vi.waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
 			expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
 				'/emulator/play.html?game=p&rom=4&core=pcsx_rearmed&name=Disc%20(USA)%20(Track%201).bin&disc=1'
 			);
@@ -236,6 +237,7 @@ describe('GameResults cards (C1, C2)', () => {
 
 			await fireEvent.click(screen.getByRole('button', { name: 'Play Game d' }));
 
+			await vi.waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
 			expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
 				'/emulator/play.html?game=d&rom=8&core=desmume&name=Quest%20(USA).nds'
 			);
@@ -259,6 +261,7 @@ describe('GameResults cards (C1, C2)', () => {
 
 			await fireEvent.click(screen.getByRole('button', { name: 'Play Game t' }));
 
+			await vi.waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
 			expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
 				'/emulator/play.html?game=t&rom=6&core=opera&name=Opal%20Rally%20(USA).cue&disc=1'
 			);
@@ -335,6 +338,7 @@ describe('GameResults cards (C1, C2)', () => {
 
 			await fireEvent.click(screen.getByRole('button', { name: 'Play Game a' }));
 
+			await vi.waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
 			const iframe = document.querySelector('iframe')!;
 			expect(iframe.getAttribute('src')).toBe(
 				'/emulator/play.html?game=a&rom=7&core=gambatte&name=Game%20(World).gb'
