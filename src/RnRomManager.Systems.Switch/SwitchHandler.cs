@@ -26,8 +26,8 @@ public sealed class SwitchHandler : ISystemHandler
     public string ShortName => "Switch";
     public string Family => SystemId;
 
-    /// <summary><c>.nsz</c>/<c>.xcz</c> are compressed but keep the PFS0/XCI outer container.</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".nsp", ".xci", ".nsz", ".xcz"];
+    /// <summary><c>.nsz</c>/<c>.xcz</c> are compressed but keep the PFS0/XCI outer container; <c>.hdf</c> is a renamed PFS0.</summary>
+    public IReadOnlyList<string> RomExtensions { get; } = [".nsp", ".xci", ".nsz", ".xcz", ".hdf"];
 
     public long MinRomSizeBytes => 1024;
     public long MaxRomSizeBytes => 64L * 1024 * 1024 * 1024;

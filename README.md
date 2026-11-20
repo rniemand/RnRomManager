@@ -51,7 +51,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Nintendo 64 | `n64` | In ZIP | `.z64`, `.v64`, `.n64` | No-Intro | — |
 | Nintendo DS | `nds` | Next to ZIP (configurable) | `.nds` | No-Intro | `desmume` |
 | Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | `fceumm` |
-| Nintendo Switch | `switch` | Next to ZIP | `.nsp`, `.xci`, `.nsz`, `.xcz` | titledb | — |
+| Nintendo Switch | `switch` | Next to ZIP | `.nsp`, `.xci`, `.nsz`, `.xcz`, `.hdf` | titledb | — |
 | PlayStation | `psx` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd` | Redump | `pcsx_rearmed` |
 | PlayStation Portable | `psp` | Next to ZIP | `.iso` | Redump | `ppsspp` |
 | Saturn | `saturn` | Next to ZIP | `.bin`, `.cue`, `.nrg`, `.chd` | Redump | `yabause` |
