@@ -22,6 +22,7 @@ describe('scrollActiveTab (U8)', () => {
 		};
 		let scrollLeft = 0;
 		Object.defineProperty(list, 'scrollLeft', {
+			configurable: true,
 			get: () => scrollLeft,
 			set: (v: number) => {
 				scrollLeft = v;
@@ -61,6 +62,31 @@ describe('scrollActiveTab (U8)', () => {
 		links[0].classList.add('active');
 		await vi.waitFor(() => expect(list.scrollLeft).toBe(0));
 		expect(scrollIntoView).not.toHaveBeenCalled();
+		action?.destroy?.();
+	});
+
+	it('scrolls sideways on a vertical wheel, letting the page scroll once the strip hits an end', () => {
+		const { list } = setup(0);
+		const action = scrollActiveTab(list);
+		// Like a real element, scrollLeft clamps to 0..(scrollWidth - clientWidth) = 0..200.
+		let pos = 0;
+		Object.defineProperty(list, 'scrollLeft', {
+			get: () => pos,
+			set: (v: number) => (pos = Math.max(0, Math.min(200, v)))
+		});
+		const spin = (deltaY: number) => {
+			const e = new WheelEvent('wheel', { deltaY, cancelable: true });
+			list.dispatchEvent(e);
+			return e.defaultPrevented;
+		};
+
+		expect(spin(150)).toBe(true);
+		expect(list.scrollLeft).toBe(150);
+		expect(spin(150)).toBe(true);
+		expect(list.scrollLeft).toBe(200);
+		expect(spin(100)).toBe(false); // already at the end: page scrolls
+		expect(spin(-300)).toBe(true);
+		expect(list.scrollLeft).toBe(0);
 		action?.destroy?.();
 	});
 });
