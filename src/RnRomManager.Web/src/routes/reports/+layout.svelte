@@ -3,6 +3,7 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import NotAllowed from '#lib/components/NotAllowed.svelte';
 	import PageTitle from '#lib/components/PageTitle.svelte';
+	import { reportTabs } from '#lib/reports.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import type { Snippet } from 'svelte';
 	import { resolve } from '$app/paths';
@@ -15,33 +16,7 @@
 	const activity = resolve('/reports/activity');
 	const missingMetadata = resolve('/reports/missing-metadata');
 	const adminOnly: string[] = [activity, missingMetadata];
-	// Release editing B15: Newly Added first.
-	const tabs = $derived([
-		{ href: resolve('/reports/newly-added'), label: 'Newly Added', icon: 'report-new-games' },
-		{ href: resolve('/reports/library-size'), label: 'Library Size', icon: 'report-size' },
-		{
-			href: resolve('/reports/missing-images'),
-			label: 'Missing Images',
-			icon: 'report-missing-images'
-		},
-		{ href: resolve('/reports/duplicates'), label: 'Duplicates', icon: 'report-duplicates' },
-		{
-			href: resolve('/reports/multiple-releases'),
-			label: 'Multiple Releases',
-			icon: 'report-multiple-releases'
-		},
-		{ href: resolve('/reports/hacks'), label: 'Games With Hacks', icon: 'report-hacks' },
-		...(auth.isAdmin
-			? [
-					{
-						href: missingMetadata,
-						label: 'Missing Metadata',
-						icon: 'report-missing-metadata'
-					},
-					{ href: activity, label: 'Activity', icon: 'activity' }
-				]
-			: [])
-	]);
+	const tabs = $derived(reportTabs(auth.isAdmin));
 </script>
 
 {#if adminOnly.includes(page.url.pathname) && !auth.isAdmin}
@@ -52,12 +27,14 @@
 	<ul class="nav nav-tabs mb-3" use:scrollActiveTab>
 		{#each tabs as tab (tab.href)}
 			<li class="nav-item">
+				<!-- eslint-disable svelte/no-navigation-without-resolve -- reportTabs' hrefs are resolved -->
 				<a
 					class="nav-link"
 					class:active={page.url.pathname === tab.href}
 					aria-current={page.url.pathname === tab.href ? 'page' : undefined}
 					href={tab.href}><Icon name={tab.icon} /> {tab.label}</a
 				>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 			</li>
 		{/each}
 	</ul>

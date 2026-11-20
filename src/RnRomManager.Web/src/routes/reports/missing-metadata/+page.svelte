@@ -6,6 +6,7 @@
 	import { api } from '#lib/api/client.js';
 	import type { MissingMetadataItem, Page, SystemInfo } from '#lib/api/types.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
+	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Icon from '#lib/components/Icon.svelte';
@@ -14,6 +15,7 @@
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { formatCount } from '#lib/format.js';
 	import { pageCount } from '#lib/pageSize.js';
+	import { systemFilterOptions } from '#lib/systemFilter.js';
 
 	/**
 	 * Missing Metadata M4, M6: games with no year, developer or publisher. Filters, sort and page are URL state under the
@@ -170,18 +172,14 @@
 			/>
 		</div>
 		<div class="col-6 col-md-3">
-			<label class="form-label" for="missing-metadata-system">System</label>
-			<select
-				id="missing-metadata-system"
-				class="form-select"
-				value={view.system}
-				onchange={(e) => show({ ...view, system: e.currentTarget.value, page: 1 })}
-			>
-				<option value="">All systems</option>
-				{#each systems as s (s.id)}
-					<option value={s.id}>{s.displayName}</option>
-				{/each}
-			</select>
+			<FilterDropdown
+				label="System"
+				options={systemFilterOptions(systems, view.system || null)}
+				value={view.system || null}
+				all={{ label: 'All systems', sum: false }}
+				filterPlaceholder="Filter systems…"
+				onselect={(v) => show({ ...view, system: v ?? '', page: 1 })}
+			/>
 		</div>
 		<div class="col-6 col-md-3">
 			<label class="form-label" for="missing-metadata-missing">Missing</label>

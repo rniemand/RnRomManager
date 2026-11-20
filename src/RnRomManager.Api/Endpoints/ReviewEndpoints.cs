@@ -135,7 +135,7 @@ public static class ReviewEndpoints
                 break;
             case "Attach":
                 if (request.TargetGameId is null || request.TargetGameId == Guid.Empty) errors["targetGameId"] = ["A target game is required."];
-                if (request.Flag is not ("Hack" or "Translated" or "None" or "Disc")) errors["flag"] = ["Must be Hack, Translated, None or Disc."];
+                if (request.Flag is not ("Hack" or "Translated" or "None" or "Disc" or "Release")) errors["flag"] = ["Must be Hack, Translated, None, Disc or Release."];
                 break;
             case "Manual":
                 if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length > 255 || FileNameSanitizer.Sanitize(request.Title).Length == 0)

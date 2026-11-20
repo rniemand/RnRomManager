@@ -328,20 +328,20 @@ public class ReviewResolverTests
     }
 
     /// <summary>Rebuilds with a <c>KeepsSourceExtension</c> handler (<c>.aaa</c> first) and a pending <c>test.bbb</c> holding <paramref name="bytes"/>.</summary>
-    private void KeepsSourceExtensionItem(byte[] bytes, string reason = "NoDatMatch", bool rebuild = true)
+    private void KeepsSourceExtensionItem(byte[] bytes, string reason = "NoDatMatch", bool rebuild = true, string name = "test.bbb")
     {
         if (rebuild)
         {
             _dir.Dispose();
             Build(new Headerless(".aaa", ".bbb") { KeepsSourceExtension = true });
         }
-        var path = Path.Combine(_paths.Ingest, "test.bbb");
+        var path = Path.Combine(_paths.Ingest, name);
         if (File.Exists(_item.SourcePath))
             File.Delete(_item.SourcePath);
         File.WriteAllBytes(path, bytes);
         _item = _item with
         {
-            Status = "Pending", SourcePath = path, OriginalFileName = "test.bbb", Reason = reason, SizeBytes = bytes.Length,
+            Status = "Pending", SourcePath = path, OriginalFileName = name, Reason = reason, SizeBytes = bytes.Length,
             Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(bytes)),
             Crc32 = RnRomManager.Core.Storage.Crc32.ToHex(bytes), Md5 = Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(bytes)),
         };
@@ -431,6 +431,72 @@ public class ReviewResolverTests
 
         Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
         Assert.That(StoredEntryNames(), Does.Contain("test (Beta).bbb"));
+    }
+
+    /// <summary>A2: a Manual game on the default <c>.gb</c> system, stubbed as the Attach target.</summary>
+    private async Task<(Guid GameId, string ZipPath)> ReleaseTargetAsync()
+    {
+        KeepsSourceExtensionItem([1, 2, 3], rebuild: false, name: "seed.gb");
+        Assert.That((await _resolver.ResolveInJobAsync(1, Manual(), Actor, default)).Code, Is.Null);
+        var zip = Directory.GetFiles(_paths.Roms, "*.zip", SearchOption.AllDirectories).Single();
+        var gameId = Guid.NewGuid();
+        _games.GetAsync(gameId, Arg.Any<CancellationToken>()).Returns(_ => new GameRow
+        {
+            Id = gameId, SystemId = "gb", Title = "My Game", DisplayTitle = "My Game", Bucket = "M",
+            ZipPath = Path.GetRelativePath(_paths.Roms, zip).Replace('\\', '/'), Developers = [], Publishers = [], Genres = [],
+            ZipSizeBytes = new FileInfo(zip).Length, ZipMtimeUtc = DateTime.UtcNow, InfoSchemaVersion = 1, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow,
+        });
+        return (gameId, zip);
+    }
+
+    private async Task<ReviewResolutionResult> AttachReleaseAsync(Guid gameId, string name, byte[] bytes)
+    {
+        KeepsSourceExtensionItem(bytes, "Unidentified", rebuild: false, name: name);
+        return await _resolver.ResolveInJobAsync(1,
+            new ReviewResolutionRequest { Action = "Attach", TargetGameId = gameId, Flag = "Release" }, Actor, default);
+    }
+
+    private static InfoJsonRom StoredRom(string zip, string fileName)
+    {
+        using var archive = LibraryZip.Open(zip, new InfoJsonReader([], new SystemRegistry([new Headerless()])));
+        return archive.InfoJson!.Game!.Roms.Single(r => r.FileName == fileName);
+    }
+
+    [Test]
+    public async Task AttachRelease_TagsFromTheFileName_MarkedUnverified_A2()
+    {
+        var (gameId, zip) = await ReleaseTargetAsync();
+
+        var result = await AttachReleaseAsync(gameId, "Game (Europe) (Rev 1).gb", [4, 5, 6]);
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        var rom = StoredRom(zip, "Game (Europe) (Rev 1) (Unverified).gb");
+        Assert.That((rom.Regions, rom.Revision, rom.Flags), Is.EqualTo((new[] { "Europe" }, "Rev 1", new[] { "Unverified" })));
+    }
+
+    [Test]
+    public async Task AttachRelease_AStemAlreadyUnverified_GetsItOnce_A2()
+    {
+        var (gameId, zip) = await ReleaseTargetAsync();
+
+        var result = await AttachReleaseAsync(gameId, "Game (Europe) (Unverified).gb", [4, 5, 6]);
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        Assert.That(StoredRom(zip, "Game (Europe) (Unverified).gb").Flags, Is.EqualTo(new[] { "Unverified" }));
+    }
+
+    [Test]
+    public async Task AttachRelease_ASecondFileWithTheSameStem_IsSuffixed_A2()
+    {
+        var (gameId, zip) = await ReleaseTargetAsync();
+        Assert.That((await AttachReleaseAsync(gameId, "Game (Europe) (Rev 1).gb", [4, 5, 6])).Code, Is.Null);
+
+        var result = await AttachReleaseAsync(gameId, "Game (Europe) (Rev 1).gb", [7, 8, 9]);
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        Assert.That(StoredEntryNames(), Does.Contain("Game (Europe) (Rev 1) (Unverified).gb")
+            .And.Contain("Game (Europe) (Rev 1) (Unverified) (2).gb"));
+        Assert.That(StoredRom(zip, "Game (Europe) (Rev 1) (Unverified) (2).gb").Flags, Is.EqualTo(new[] { "Unverified" }));
     }
 
     [Test]

@@ -5,6 +5,7 @@
 	import type { Page, SystemInfo } from '#lib/api/types.js';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
+	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
 	import Loading from '#lib/components/Loading.svelte';
@@ -12,6 +13,7 @@
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { formatDateTime } from '#lib/format.js';
 	import { pageCount } from '#lib/pageSize.js';
+	import { systemFilterOptions } from '#lib/systemFilter.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
@@ -120,21 +122,17 @@
 
 <div class="row g-2 align-items-end mb-3">
 	<div class="col-12 col-sm-6 col-md-4">
-		<label class="form-label" for="duplicates-system">System</label>
-		<select
-			id="duplicates-system"
-			class="form-select"
-			value={system}
-			onchange={(e) => {
-				system = e.currentTarget.value;
+		<FilterDropdown
+			label="System"
+			options={systemFilterOptions(systems, system || null)}
+			value={system || null}
+			all={{ label: 'All systems', sum: false }}
+			filterPlaceholder="Filter systems…"
+			onselect={(v) => {
+				system = v ?? '';
 				pageNumber = 1;
 			}}
-		>
-			<option value="">All systems</option>
-			{#each systems as s (s.id)}
-				<option value={s.id}>{s.displayName}</option>
-			{/each}
-		</select>
+		/>
 	</div>
 </div>
 

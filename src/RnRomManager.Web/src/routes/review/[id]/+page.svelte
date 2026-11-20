@@ -67,12 +67,14 @@
 
 	let attachTarget = $state<GameListItem | null>(null);
 	let attachTargetError = $state<string | undefined>();
-	let attachFlag = $state<'Hack' | 'Translated' | 'Disc'>('Hack');
+	let attachFlag = $state<'Release' | 'Hack' | 'Translated' | 'Disc'>('Release');
 	let attachDisc = $state<number | null>(null);
 	let attachDiscError = $state<string | undefined>();
 	// B16: Disc only on a disc system.
 	const attachFlags = $derived(
-		item?.fileSets ? (['Hack', 'Translated', 'Disc'] as const) : (['Hack', 'Translated'] as const)
+		item?.fileSets
+			? (['Release', 'Hack', 'Translated', 'Disc'] as const)
+			: (['Release', 'Hack', 'Translated'] as const)
 	);
 
 	let manual = $state<ManualForm>(emptyManualForm());
@@ -145,7 +147,7 @@
 			searchSession++;
 			attachTarget = null;
 			attachTargetError = undefined;
-			attachFlag = 'Hack';
+			attachFlag = 'Release';
 			attachDisc = null;
 			attachDiscError = undefined;
 			manual = emptyManualForm();
@@ -664,8 +666,8 @@
 						{:else if tab === 'attach'}
 							<p class="small text-body-secondary">
 								{item.fileSets
-									? 'Attach to a game as a hack, a translation or another disc.'
-									: 'Attach to a game as a hack or translation.'}
+									? 'Attach to a game as a new release, a hack, a translation or another disc.'
+									: 'Attach to a game as a new release, a hack or a translation.'}
 							</p>
 							<form onsubmit={attach} novalidate>
 								<div class="mb-2">
@@ -681,7 +683,7 @@
 									{/key}
 								</div>
 								<fieldset class="mb-2">
-									<legend class="form-label fs-6">Flag</legend>
+									<legend class="form-label fs-6">Attach as</legend>
 									{#each attachFlags as flag (flag)}
 										<div class="form-check form-check-inline">
 											<input

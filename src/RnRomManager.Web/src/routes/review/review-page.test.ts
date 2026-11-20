@@ -401,7 +401,9 @@ describe('review detail page', () => {
 
 		await fireEvent.click(screen.getByRole('tab', { name: 'Attach' }));
 		expect(selected()).toBe('Attach');
-		expect(screen.getByText('Attach to a game as a hack or translation.')).toBeTruthy();
+		expect(
+			screen.getByText('Attach to a game as a new release, a hack or a translation.')
+		).toBeTruthy();
 		expect(screen.queryByRole('button', { name: 'Use' })).toBeNull();
 	});
 
@@ -699,6 +701,40 @@ describe('review detail page', () => {
 		);
 	});
 
+	it('Attach lists Release first and checked, with the disc hint on a disc system; it sends flag Release (A3)', async () => {
+		answers['GET /api/review/7'] = { status: 200, body: discItem };
+		answers['GET /api/games?q=Myst&system=psx&pageSize=10'] = {
+			status: 200,
+			body: {
+				items: [{ id: 'g1', displayTitle: 'Mystery', system: 'psx' }],
+				page: 1,
+				pageSize: 10,
+				total: 1
+			}
+		};
+		render(ReviewPage);
+
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Attach' }));
+		const radios = screen.getAllByRole('radio') as HTMLInputElement[];
+		expect(radios.map((r) => r.labels![0].textContent)).toEqual([
+			'Release',
+			'Hack',
+			'Translated',
+			'Disc'
+		]);
+		expect(radios[0].checked).toBe(true);
+		expect(screen.getByRole('group', { name: 'Attach as' })).toBeTruthy();
+		expect(
+			screen.getByText('Attach to a game as a new release, a hack, a translation or another disc.')
+		).toBeTruthy();
+
+		await chooseGame('Myst', 'Mystery');
+		await fireEvent.click(screen.getByRole('button', { name: 'Attach' }));
+		await vi.waitFor(() =>
+			expect(posts[0].body).toEqual({ action: 'Attach', targetGameId: 'g1', flag: 'Release' })
+		);
+	});
+
 	it('Manual sends the disc number on a disc system (B17)', async () => {
 		answers['GET /api/review/7'] = { status: 200, body: discItem };
 		render(ReviewPage);
@@ -722,6 +758,9 @@ describe('review detail page', () => {
 		await fireEvent.click(screen.getByRole('tab', { name: 'Attach' }));
 		expect(screen.queryByLabelText('Disc')).toBeNull();
 		expect(screen.queryByText(/another disc/)).toBeNull();
+		expect(
+			(screen.getAllByRole('radio') as HTMLInputElement[]).map((r) => r.labels![0].textContent)
+		).toEqual(['Release', 'Hack', 'Translated']);
 	});
 
 	it.each([

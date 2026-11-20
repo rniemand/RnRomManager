@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Net;
 using System.Net.Http.Headers;
@@ -73,11 +74,14 @@ public partial class LibraryEndpointsTests
     {
         var (id, folder, romId) = await PsxUsaSet();
 
-        using var response = await _user.GetAsync(PlayDiscUrl(id, romId));
+        // Headers only, so HttpClient doesn't fill ContentLength in from a buffered body.
+        using var response = await _user.SendAsync(HttpMethod.Get, PlayDiscUrl(id, romId), null, sendXsrf: false,
+            completion: HttpCompletionOption.ResponseHeadersRead);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/zip"));
         Assert.That(response.Headers.CacheControl?.NoStore, Is.True);
+        Assert.That(response.Content.Headers.ContentLength, Is.Null, "checked before the body is buffered");
         await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
         using var zip = new ZipArchive(body, ZipArchiveMode.Read);
         Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Disc (USA).cue", "track-01.bin", "track-02.bin" }));
@@ -87,6 +91,9 @@ public partial class LibraryEndpointsTests
             "FILE \"track-02.bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:00:01\n")));
         Assert.That(ReadEntry(zip, "track-01.bin"), Is.EqualTo(PsxTrack1));
         Assert.That(ReadEntry(zip, "track-02.bin"), Is.EqualTo(PsxTrack2));
+        var payload = ReadEntry(zip, "Disc (USA).cue").Length + PsxTrack1.Length + PsxTrack2.Length;
+        Assert.That(response.Headers.GetValues("X-Content-Bytes"), Is.EqualTo(new[] { payload.ToString(CultureInfo.InvariantCulture) }));
+        Assert.That(payload, Is.LessThan(body.Length), "an estimate below the ZIP's size");
         Assert.That(await File.ReadAllBytesAsync(Path.Combine(folder, "Disc (USA).cue")),
             Is.EqualTo(PsxCue("Disc (USA) (Track 1).bin", "Disc (USA) (Track 2).bin")), "the stored cue is unchanged");
         foreach (var name in new[] { "Disc (USA) (Track 1).bin", "Disc (USA).cue", "Disc (USA) (Track 2).bin" })
@@ -114,6 +121,7 @@ public partial class LibraryEndpointsTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"));
         Assert.That(response.Content.Headers.ContentLength, Is.EqualTo(PsxTrack1.Length));
+        Assert.That(response.Headers.Contains("X-Content-Bytes"), Is.False);
         Assert.That(response.Headers.CacheControl?.NoStore, Is.True);
         Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(PsxTrack1));
         AssertNotOpen(Path.Combine(folder, name));

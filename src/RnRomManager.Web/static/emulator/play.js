@@ -59,13 +59,21 @@ function show(text) {
 function readContent(response) {
 	if (!response.body) return response.blob();
 	const encoding = response.headers.get('Content-Encoding');
-	const total = Number(response.headers.get('Content-Length'));
-	const hasTotal = (!encoding || encoding === 'identity') && Number.isSafeInteger(total) && total > 0;
+	/** @param {string} name */
+	const size = (name) => {
+		const value = Number(response.headers.get(name));
+		return Number.isSafeInteger(value) && value > 0 ? value : 0;
+	};
+	// A compressed body's Content-Length isn't the payload; X-Content-Bytes (the play-disc ZIP's estimate) always is.
+	const total = (!encoding || encoding === 'identity' ? size('Content-Length') : 0) || size('X-Content-Bytes');
+	const hasTotal = total > 0;
 	if (hasTotal) {
 		progress.max = total;
 		progress.value = 0;
-		progress.hidden = false;
+	} else {
+		progress.removeAttribute('value');
 	}
+	progress.hidden = false;
 	downloaded.textContent = hasTotal ? formatPercent.format(0) : formatBytes.format(0);
 	downloaded.hidden = false;
 	let bytes = 0;
@@ -74,8 +82,8 @@ function readContent(response) {
 			transform(chunk, controller) {
 				bytes += chunk.byteLength;
 				if (hasTotal) {
-					progress.value = bytes;
-					const percent = Math.floor((progress.value * 100) / total);
+					progress.value = Math.min(bytes, total);
+					const percent = Math.floor((Math.min(bytes, total) * 100) / total);
 					const label = formatPercent.format(percent / 100);
 					if (downloaded.textContent !== label) downloaded.textContent = label;
 				} else {

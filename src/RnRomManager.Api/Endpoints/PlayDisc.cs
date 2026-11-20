@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO.Compression;
 using System.Text;
 using Microsoft.Net.Http.Headers;
@@ -209,6 +210,8 @@ public static class PlayDisc
                 }
                 else
                 {
+                    // The ZIP's own length isn't known up front; the payload size lets the player show progress.
+                    response.Headers["X-Content-Bytes"] = (cue.Length + entries.Sum(e => e.Length)).ToString(CultureInfo.InvariantCulture);
                     // .NET 10 still writes an entry's data descriptor synchronously when the async entry stream is
                     // disposed on an unseekable target, so small synchronous writes are held and sent asynchronously.
                     await using var body = new AsyncOnlyWriteStream(response.Body);

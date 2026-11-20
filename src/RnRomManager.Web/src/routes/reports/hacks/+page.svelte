@@ -5,6 +5,7 @@
 	import { api } from '#lib/api/client.js';
 	import type { Page, SystemInfo } from '#lib/api/types.js';
 	import EmptyState from '#lib/components/EmptyState.svelte';
+	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
 	import Icon from '#lib/components/Icon.svelte';
@@ -12,6 +13,7 @@
 	import Pagination from '#lib/components/Pagination.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { pageCount } from '#lib/pageSize.js';
+	import { systemFilterOptions } from '#lib/systemFilter.js';
 
 	/** Release editing B13: Games With Hacks. The system, sort and page are URL state (`?system=&sort=&dir=&page=`). */
 	interface HackedGame {
@@ -127,18 +129,14 @@
 
 <div class="row g-2 align-items-end mb-3">
 	<div class="col-12 col-sm-6 col-md-4">
-		<label class="form-label" for="hacks-system">System</label>
-		<select
-			id="hacks-system"
-			class="form-select"
-			value={system}
-			onchange={(e) => show({ ...view, system: e.currentTarget.value, page: 1 })}
-		>
-			<option value="">All systems</option>
-			{#each systems as s (s.id)}
-				<option value={s.id}>{s.displayName}</option>
-			{/each}
-		</select>
+		<FilterDropdown
+			label="System"
+			options={systemFilterOptions(systems, view.system || null)}
+			value={view.system || null}
+			all={{ label: 'All systems', sum: false }}
+			filterPlaceholder="Filter systems…"
+			onselect={(v) => show({ ...view, system: v ?? '', page: 1 })}
+		/>
 	</div>
 </div>
 

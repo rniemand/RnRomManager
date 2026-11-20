@@ -627,6 +627,14 @@ test("game detail + downloads + ROM playback progress", async () => {
     "Orbit Blocks (World) (Rev 1).gb",
   );
 
+  // E2: the game page's Emulators button opens its system's emulators; focus returns to it on close.
+  const emulatorsButton = page.getByRole("button", { name: "Emulators" });
+  await emulatorsButton.click();
+  await expect(dialog()).toHaveAccessibleName("Game Boy Emulators");
+  await dialog().getByRole("button", { name: "Close" }).last().click();
+  await expect(dialog()).toBeHidden();
+  await expect(emulatorsButton).toBeFocused();
+
   await expect(page.getByRole("button", { name: "Expand all" })).toBeVisible();
   await page.getByRole("button", { name: "Expand all" }).click();
   await expect(
@@ -1685,6 +1693,13 @@ test("global search, ratings and favourites", { tag: "@shard-b" }, async () => {
     .click();
   await expect(page.locator("iframe")).toHaveCount(0);
 
+  // S2–S4: reports are found too, first; Enter opens the report.
+  await page.keyboard.press("Control+k");
+  await dialog().getByRole("combobox").fill("duplic");
+  await expect(dialog().getByRole("option").first()).toContainText("Duplicates");
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/reports\/duplicates$/);
+
   // Rate and favourite it from its library card; both survive a reload.
   await openLibrary();
   const card = page.getByRole("group", {
@@ -1949,7 +1964,7 @@ test("collections systems: browse a system's games and its emulator links", { ta
   // B7: the Emulators modal links to project sites in a new tab.
   const emulators = page.getByRole("button", { name: "Emulators" });
   await emulators.click();
-  await expect(dialog()).toHaveAccessibleName("Game Boy emulators");
+  await expect(dialog()).toHaveAccessibleName("Game Boy Emulators");
   const mgba = dialog()
     .getByRole("list", { name: "Windows" })
     .getByRole("link", { name: "mGBA (opens in a new tab)" });
@@ -3042,6 +3057,10 @@ test("release editing, Games With Hacks, Newly Added and the phone shell", async
   const hacked = page.getByRole("table").getByRole("link", { name: "Orbit Blocks", exact: true });
   await expect(hacked).toHaveAttribute("href", /\/games\/[0-9a-f-]+\?tab=releases$/);
   await expectAccessible(page, "games with hacks report");
+  // F2: the report's System filter is the Games page's dropdown.
+  await chooseFilter("System", "gb");
+  await expect(page).toHaveURL(/\/reports\/hacks\?system=gb$/);
+  await expect(hacked).toBeVisible();
 
   // B14: Newly Added shows the seeded games, one card per system.
   await page.getByRole("link", { name: "Newly Added", exact: true }).click();

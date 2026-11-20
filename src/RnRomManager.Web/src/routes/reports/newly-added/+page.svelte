@@ -5,10 +5,12 @@
 	import { api } from '#lib/api/client.js';
 	import type { SystemInfo } from '#lib/api/types.js';
 	import EmptyState from '#lib/components/EmptyState.svelte';
+	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { formatDateTime } from '#lib/format.js';
+	import { systemFilterOptions } from '#lib/systemFilter.js';
 
 	/** Release editing B14: the 10 newest games per system. The system is URL state (`?system=`). */
 	interface NewlyAdded {
@@ -59,18 +61,14 @@
 
 <div class="row g-2 align-items-end mb-3">
 	<div class="col-12 col-sm-6 col-md-4">
-		<label class="form-label" for="newly-added-system">System</label>
-		<select
-			id="newly-added-system"
-			class="form-select"
-			value={system}
-			onchange={(e) => choose(e.currentTarget.value)}
-		>
-			<option value="">All systems</option>
-			{#each systems as s (s.id)}
-				<option value={s.id}>{s.displayName}</option>
-			{/each}
-		</select>
+		<FilterDropdown
+			label="System"
+			options={systemFilterOptions(systems, system || null)}
+			value={system || null}
+			all={{ label: 'All systems', sum: false }}
+			filterPlaceholder="Filter systems…"
+			onselect={(v) => choose(v ?? '')}
+		/>
 	</div>
 </div>
 

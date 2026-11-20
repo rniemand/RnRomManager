@@ -73,6 +73,9 @@ public static class LibraryDownload
     public static IResult Send(HttpContext ctx, LibraryAttachment attachment)
     {
         ctx.Response.RegisterForDisposeAsync(attachment);
+        // A ZIP entry stream can't seek, so Results.Stream sends no length; the recorded size lets clients show progress.
+        if (!attachment.Ranges)
+            ctx.Response.ContentLength = attachment.Length;
         return Results.Stream(attachment.Stream, "application/octet-stream", attachment.FileName, enableRangeProcessing: attachment.Ranges);
     }
 }

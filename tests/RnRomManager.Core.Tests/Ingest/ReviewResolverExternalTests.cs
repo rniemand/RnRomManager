@@ -286,6 +286,20 @@ public class ReviewResolverExternalTests
     }
 
     [Test]
+    public async Task AttachRelease_OnASet_TagsFromTheCue_DropsDiscAndTrack_A2()
+    {
+        var (gameId, zipPath) = await DiscSetAsync();
+
+        var result = await _resolver.ResolveInJobAsync(2, new ReviewResolutionRequest { Action = "Attach", Flag = "Release", TargetGameId = gameId },
+            Actor, new JobProgress());
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        var rom = StoredRelease(zipPath, SetTrack1);
+        Assert.That((rom.Regions, rom.Languages, rom.Revision, rom.Flags),
+            Is.EqualTo((Array.Empty<string>(), Array.Empty<string>(), (string?)null, new[] { "Unverified" })));
+    }
+
+    [Test]
     public async Task AMemberChangedSinceReview_IsVerifyFailed_AndEveryRowStaysPending_B14()
     {
         await DiscSetAsync();

@@ -10,6 +10,7 @@
 	import CollectionPickerModal from '#lib/components/CollectionPickerModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import FilterDropdown, { type FilterOption } from '#lib/components/FilterDropdown.svelte';
+	import { systemFilterOptions } from '#lib/systemFilter.js';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import GameResults from '#lib/components/GameResults.svelte';
 	import Icon from '#lib/components/Icon.svelte';
@@ -77,16 +78,7 @@
 			: [...new Set(systems.flatMap((s) => s.regions))].sort()
 	);
 	// Only systems with ROMs; a selected one from the URL stays listed so it can be seen and changed.
-	const systemOptions = $derived<FilterOption[]>(
-		systems
-			.filter((s) => s.romCount > 0 || s.id === filters.system)
-			.map((s) => ({
-				value: s.id,
-				label: s.displayName,
-				badge: { system: s.id, name: s.shortName },
-				search: [s.shortName]
-			}))
-	);
+	const systemOptions = $derived(systemFilterOptions(systems, filters.system));
 	// A region from the URL that the list doesn't have stays listed, so it can be seen and changed.
 	const regionOptions = $derived<FilterOption[]>(
 		[

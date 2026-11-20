@@ -7,7 +7,7 @@
 	/** Systems tab B7/B8: links to the known emulators for a system, grouped by OS. Links only; nothing is hosted. */
 	interface Props {
 		open: boolean;
-		system: SystemInfo;
+		system: Pick<SystemInfo, 'id' | 'displayName'>;
 	}
 
 	let { open = $bindable(), system }: Props = $props();
@@ -15,7 +15,7 @@
 	const groups = $derived(emulatorGroups(system.id));
 </script>
 
-<ConfirmModal bind:open title="{system.displayName} emulators" size="lg">
+<ConfirmModal bind:open title="{system.displayName} Emulators" size="lg">
 	{#if groups.length === 0}
 		<div class="alert alert-info">There are no known emulators for {system.displayName}.</div>
 	{:else}
