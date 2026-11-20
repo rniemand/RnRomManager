@@ -69,6 +69,9 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>S4: keep the storage migration starter; off by default, so tests that seed legacy games keep them legacy.</summary>
     public bool RunStorageMigrationStarter { get; init; }
 
+    /// <summary>Release editing B19: off by default, so other tests never race the save folder job for the lock.</summary>
+    public bool RunSaveFoldersStarter { get; init; }
+
     /// <summary>B29: hosts the daily DAT refresh only when set; otherwise a real-database test could start a refresh at 04:00.</summary>
     public bool RunDatRefreshScheduler { get; init; }
 
@@ -165,6 +168,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             builder.ConfigureTestServices(services =>
             {
                 foreach (var starter in services.Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService) && d.ImplementationType == typeof(StorageMigrationStarter)).ToList())
+                    services.Remove(starter);
+            });
+        if (!RunSaveFoldersStarter)
+            builder.ConfigureTestServices(services =>
+            {
+                foreach (var starter in services.Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService) && d.ImplementationType == typeof(SaveFoldersStarter)).ToList())
                     services.Remove(starter);
             });
         if (!RunDatRefreshScheduler)

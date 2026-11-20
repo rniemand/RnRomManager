@@ -27,7 +27,8 @@ export interface CurrentJob {
 		| 'MediaRetry'
 		| 'ReviewResolve'
 		| 'StorageMigration'
-		| 'ZipRepack';
+		| 'ZipRepack'
+		| 'SaveFolders';
 	mode: 'Quick' | 'Deep' | 'Game' | null;
 	status: string;
 	current: number;

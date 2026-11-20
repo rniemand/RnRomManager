@@ -13,6 +13,9 @@ public enum JobType
 
     /// <summary>ZIP Compression Z9: rewrites every game ZIP of one system at its compression level.</summary>
     ZipRepack,
+
+    /// <summary>Release editing B19: moves version 1 saves into per-user folders, once.</summary>
+    SaveFolders,
 }
 
 public enum JobMode

@@ -67,6 +67,8 @@ public static class AppHost
         builder.Services.AddHostedService(sp => sp.GetRequiredService<BackupScheduler>());
         // S4: waits for ApplicationStarted itself, so its position doesn't delay startup.
         builder.Services.AddHostedService<StorageMigrationStarter>();
+        // Release editing B19: the same way, for the one-off save folder move.
+        builder.Services.AddHostedService<SaveFoldersStarter>();
         // B29: the type form (not a factory), so tests can remove it by ImplementationType.
         builder.Services.AddHostedService<DatRefreshScheduler>();
         var app = builder.Build();
@@ -191,6 +193,8 @@ public static class AppHost
             job.Change = change;
             return job;
         });
+        builder.Services.AddTransient<SaveFoldersJob>();
+        builder.Services.AddSingleton<SaveFoldersJobFactory>(sp => () => sp.GetRequiredService<SaveFoldersJob>());
         builder.Services.AddTransient<RnRomManager.Core.Storage.ZipRepackJob>();
         builder.Services.AddSingleton<ZipRepackJobFactory>(sp => (systemId, level) =>
         {
