@@ -446,6 +446,13 @@ body:has(.app-footer) .toast-container {
 	min-width: 50rem;
 }
 
+/* Report Polish L3: Missing Metadata's Title fills the toolbar row on phones and is 16rem from md. */
+@media (min-width: 768px) {
+	.missing-metadata-title {
+		width: 16rem;
+	}
+}
+
 /* U6: library grids show 2 cards per row below 360px and 3 from 360px up to sm (after Bootstrap, so it wins over
    .row-cols-2 > * at equal specificity). */
 @media (min-width: 360px) and (max-width: 575.98px) {

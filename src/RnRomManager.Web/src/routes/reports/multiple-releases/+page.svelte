@@ -155,22 +155,20 @@
 
 <svelte:head><title>Multiple Releases · RnRomManager</title></svelte:head>
 
-<div class="row g-2 align-items-end mb-3">
-	<div class="col-12 col-sm-6 col-md-4">
-		<FilterDropdown
-			label="System"
-			options={systemFilterOptions(systems, view.system || null)}
-			value={view.system || null}
-			all={{ label: 'All systems', sum: false }}
-			filterPlaceholder="Filter systems…"
-			onselect={(v) => show({ ...view, system: v ?? '', page: 1 })}
-		/>
-	</div>
-	<div class="col-12 col-sm-6 col-md-4">
-		<label class="form-label" for="multiple-releases-min">Minimum releases</label>
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+	<FilterDropdown
+		label="System"
+		options={systemFilterOptions(systems, view.system || null)}
+		value={view.system || null}
+		all={{ label: 'All systems', sum: false }}
+		filterPlaceholder="Filter systems…"
+		onselect={(v) => show({ ...view, system: v ?? '', page: 1 })}
+	/>
+	<div class="input-group input-group-sm w-auto">
+		<label class="input-group-text" for="multiple-releases-min">Minimum releases</label>
 		<select
 			id="multiple-releases-min"
-			class="form-select"
+			class="form-select w-auto"
 			value={String(min)}
 			disabled={maxReleases === null}
 			onchange={(e) => show({ ...view, min: Number(e.currentTarget.value), page: 1 })}

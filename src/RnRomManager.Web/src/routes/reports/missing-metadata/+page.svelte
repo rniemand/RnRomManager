@@ -159,9 +159,13 @@
 {/snippet}
 
 <AdminOnly>
-	<form class="row g-2 align-items-end mb-3" role="search" onsubmit={(e) => e.preventDefault()}>
-		<div class="col-12 col-md-4">
-			<label class="form-label" for="missing-metadata-q">Title</label>
+	<form
+		class="d-flex flex-wrap align-items-center gap-2 mb-3"
+		role="search"
+		onsubmit={(e) => e.preventDefault()}
+	>
+		<div class="input-group input-group-sm flex-grow-1 flex-md-grow-0 missing-metadata-title">
+			<label class="input-group-text" for="missing-metadata-q">Title</label>
 			<input
 				id="missing-metadata-q"
 				type="search"
@@ -171,21 +175,19 @@
 				oninput={onSearchInput}
 			/>
 		</div>
-		<div class="col-6 col-md-3">
-			<FilterDropdown
-				label="System"
-				options={systemFilterOptions(systems, view.system || null)}
-				value={view.system || null}
-				all={{ label: 'All systems', sum: false }}
-				filterPlaceholder="Filter systems…"
-				onselect={(v) => show({ ...view, system: v ?? '', page: 1 })}
-			/>
-		</div>
-		<div class="col-6 col-md-3">
-			<label class="form-label" for="missing-metadata-missing">Missing</label>
+		<FilterDropdown
+			label="System"
+			options={systemFilterOptions(systems, view.system || null)}
+			value={view.system || null}
+			all={{ label: 'All systems', sum: false }}
+			filterPlaceholder="Filter systems…"
+			onselect={(v) => show({ ...view, system: v ?? '', page: 1 })}
+		/>
+		<div class="input-group input-group-sm w-auto">
+			<label class="input-group-text" for="missing-metadata-missing">Missing</label>
 			<select
 				id="missing-metadata-missing"
-				class="form-select"
+				class="form-select w-auto"
 				value={view.missing}
 				onchange={(e) => show({ ...view, missing: e.currentTarget.value as Missing, page: 1 })}
 			>
@@ -194,14 +196,12 @@
 				{/each}
 			</select>
 		</div>
-		<div class="col-12 col-md-2">
-			<button
-				type="button"
-				class="btn btn-outline-secondary w-100"
-				disabled={!filtered}
-				onclick={clear}>Clear</button
-			>
-		</div>
+		<button
+			type="button"
+			class="btn btn-sm btn-outline-secondary"
+			disabled={!filtered}
+			onclick={clear}>Clear</button
+		>
 	</form>
 
 	{#if error}

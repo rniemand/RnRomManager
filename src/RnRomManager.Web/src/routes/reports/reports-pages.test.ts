@@ -489,6 +489,20 @@ describe('reports pages', () => {
 
 		beforeEach(() => navigateTo('/reports/multiple-releases'));
 
+		it('the toolbar is compact: System, then Minimum releases in a small input group (L1–L2)', async () => {
+			answers[list()] = { status: 200, body: body([item('g1')]) };
+			render(MultipleReleases);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			expect(select().className).toContain('form-select');
+			const group = select().closest('.input-group')!;
+			expect(group.classList).toContain('input-group-sm');
+			expect(group.querySelector('label.input-group-text')!.textContent).toBe('Minimum releases');
+			const bar = group.parentElement!;
+			expect(bar.className).toBe('d-flex flex-wrap align-items-center gap-2 mb-3');
+			expect(bar.firstElementChild!.contains(systemToggle())).toBe(true);
+		});
+
 		it('lists game, system badge, releases, updates and size; numbers right-aligned (B19)', async () => {
 			answers[list()] = {
 				status: 200,
@@ -1093,6 +1107,27 @@ describe('reports pages', () => {
 			});
 
 		beforeEach(() => navigateTo('/reports/missing-metadata'));
+
+		it('the toolbar is compact: Title, System, Missing and Clear (L1, L3)', async () => {
+			admin();
+			answers[list()] = { status: 200, body: body([item('g1')]) };
+			render(MissingMetadata);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			const title = screen.getByLabelText('Title').closest('.input-group')!;
+			expect(title.className).toBe(
+				'input-group input-group-sm flex-grow-1 flex-md-grow-0 missing-metadata-title'
+			);
+			const missing = screen.getByLabelText('Missing');
+			expect(missing.closest('.input-group')!.classList).toContain('input-group-sm');
+			expect(missing.className).toContain('form-select');
+			expect(screen.getByRole('button', { name: 'Clear' }).className).toBe(
+				'btn btn-sm btn-outline-secondary'
+			);
+			expect(screen.getByRole('search').className).toBe(
+				'd-flex flex-wrap align-items-center gap-2 mb-3'
+			);
+		});
 
 		it('the tab shows for Admins only, between Multiple Releases and Activity', () => {
 			admin();
