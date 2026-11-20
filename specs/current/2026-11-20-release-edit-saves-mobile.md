@@ -1,6 +1,6 @@
 ---
 title: Release editing, new reports, per-user saves and mobile polish
-status: ready # draft | ready | in-progress | completed
+status: in-progress # draft | ready | in-progress | completed
 created: 2026-11-20
 ---
 
