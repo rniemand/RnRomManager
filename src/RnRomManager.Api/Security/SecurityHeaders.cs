@@ -59,11 +59,12 @@ public static partial class SecurityHeaders
         return app;
     }
 
+    /// <summary>The SPA policy. <c>img-src blob:</c> is for the emulator modal's screenshot previews (object URLs).</summary>
     /// <param name="indexHtml">null when there's no built SPA (API-only dev): <c>script-src 'self'</c>.</param>
     public static string ContentSecurityPolicy(string? indexHtml)
     {
         var scriptSrc = string.Join(' ', ["'self'", .. InlineScriptHashes(indexHtml ?? "")]);
-        return $"default-src 'self'; script-src {scriptSrc}; img-src 'self' data:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'";
+        return $"default-src 'self'; script-src {scriptSrc}; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'";
     }
 
     /// <summary>CSP source for each inline <c>&lt;script&gt;</c> body, hashed exactly as served (whitespace included).</summary>
