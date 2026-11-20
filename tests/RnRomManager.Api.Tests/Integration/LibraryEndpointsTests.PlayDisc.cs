@@ -111,6 +111,7 @@ public partial class LibraryEndpointsTests
 
     [TestCase("Solo (USA).bin")]
     [TestCase("Solo (USA).iso")]
+    [TestCase("Solo (USA).img")]
     public async Task PlayDisc_AStandaloneImage_StreamsUnchanged_EvenForARangeRequest(string name)
     {
         var (id, folder, ids) = await PsxGame("Solo", [PsxSolo(name, PsxTrack1)], (name, PsxTrack1));
@@ -641,7 +642,7 @@ public partial class LibraryEndpointsTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
         var problem = await AuthClient.JsonAsync(response);
         Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.InvalidPlayDisc));
-        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("a single-file disc must be a .bin, .iso or .chd"));
+        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("a single-file disc must be a .bin, .iso, .chd or .img"));
     }
 
     [Test]
