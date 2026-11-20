@@ -879,6 +879,22 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
+    public async Task Games_MatchedOn_DlcName()
+    {
+        var id = await Tetris();
+        await using (var connection = Service<IDbConnectionFactory>().Create())
+            await connection.ExecuteAsync("""
+                UPDATE roms SET flags = '["DLC"]', file_name = 'Tetris - Star Pack [0100000000003002][v0].nsp'
+                WHERE game_id = @id AND is_primary = 0 LIMIT 1
+                """, new { id });
+
+        var matchedOn = (await GetJson("/api/games?q=star")).GetProperty("items")[0].GetProperty("matchedOn");
+
+        Assert.That((matchedOn.GetProperty("field").GetString(), matchedOn.GetProperty("value").GetString()),
+            Is.EqualTo(("dlc", "Tetris - Star Pack")));
+    }
+
+    [Test]
     public async Task Images_CoverDrivesBoxArtUrl_AndJpegIsServedAsJpeg()
     {
         var id = await Tetris();

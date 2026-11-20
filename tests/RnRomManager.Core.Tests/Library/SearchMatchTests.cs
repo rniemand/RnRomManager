@@ -5,8 +5,8 @@ namespace RnRomManager.Core.Tests.Library;
 public class SearchMatchTests
 {
     private static SearchMatch? Find(string[] words, string title = "Tetris", string[]? developers = null,
-        string[]? publishers = null, string[]? genres = null) =>
-        SearchMatch.Find(words, title, title, developers ?? [], publishers ?? [], genres ?? []);
+        string[]? publishers = null, string[]? genres = null, AddOnName[]? addOns = null) =>
+        SearchMatch.Find(words, title, title, developers ?? [], publishers ?? [], genres ?? [], addOns ?? []);
 
     [Test]
     public void NoWordsOrATitleMatch_IsNull()
@@ -31,5 +31,16 @@ public class SearchMatchTests
         Assert.That(Find(["NINTENDO"], publishers: ["Nintendo"]), Is.EqualTo(new SearchMatch("publisher", "Nintendo")));
         Assert.That(Find(["pokemon"], publishers: ["Pokémon Co"]), Is.EqualTo(new SearchMatch("publisher", "Pokémon Co")));
         Assert.That(Find(["zzz"], publishers: ["Nintendo"]), Is.Null);
+    }
+
+    [Test]
+    public void AddOns_AfterGenres_InTheGivenOrder()
+    {
+        AddOnName[] addOns = [new("dlc", "Tetris - Star Pack"), new("update", "Tetris - Star Update")];
+        Assert.That(Find(["star"], addOns: addOns), Is.EqualTo(new SearchMatch("dlc", "Tetris - Star Pack")), "DLC before update");
+        Assert.That(Find(["update"], addOns: addOns), Is.EqualTo(new SearchMatch("update", "Tetris - Star Update")));
+        Assert.That(Find(["star"], developers: ["Star Co"], addOns: addOns), Is.EqualTo(new SearchMatch("developer", "Star Co")));
+        Assert.That(Find(["tetris", "star"], addOns: addOns), Is.Null, "title still wins");
+        Assert.That(Find(["0100"], addOns: addOns), Is.Null, "a word only in a stripped tag");
     }
 }

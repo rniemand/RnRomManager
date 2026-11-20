@@ -7,6 +7,7 @@ using RnRomManager.Core.Bundles;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Library;
+using RnRomManager.Core.Naming;
 using RnRomManager.Core.Storage;
 using RnRomManager.Core.Users;
 
@@ -205,7 +206,8 @@ public sealed class GameRepository : IGameRepository
                    (SELECT r.file_name FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryRomFileName,
                    (SELECT r.external_file_name IS NOT NULL FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryIsExternal,
                    g.rating AS Rating, g.favourite AS Favourite, g.save_count AS SaveCount, g.title AS Title,
-                   g.developers AS Developers, g.publishers AS Publishers, g.genres AS Genres
+                   g.developers AS Developers, g.publishers AS Publishers, g.genres AS Genres,
+                   {(words.Count == 0 ? "NULL" : AddOnNamesJson)} AS AddOns
             FROM {from} {filter}
             ORDER BY {order}
             LIMIT @pageSize OFFSET @offset
@@ -213,7 +215,7 @@ public sealed class GameRepository : IGameRepository
 
         var items = rows.Select(r => new GameListItem(
             r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId,
-            r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres),
+            r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres, AddOnNames(r.AddOns)),
             (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true, r.SaveCount)).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, total);
     }
@@ -257,10 +259,10 @@ public sealed class GameRepository : IGameRepository
         if (query.Region is not null)
             where.Add("EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND r.region_key LIKE @region)");
         var words = query.Words;
-        // shortcut: LIKE '%word%' over five columns is a full scan, and list values are matched in their JSON text
-        // (escaped characters may not match literally); move to FULLTEXT if search gets slow.
+        // shortcut: LIKE '%word%' over five columns and the DLC/update file names is a full scan, and list values are
+        // matched in their JSON text (escaped characters may not match literally); move to FULLTEXT if search gets slow.
         for (var i = 0; i < words.Count; i++)
-            where.Add($"({TitleLike(i)} OR {JsonLike("developers", i)} OR {JsonLike("publishers", i)} OR {JsonLike("genres", i)})");
+            where.Add($"({TitleLike(i)} OR {JsonLike("developers", i)} OR {JsonLike("publishers", i)} OR {JsonLike("genres", i)} OR {AddOnLike(i)})");
         if (query.Favourite is not null)
             where.Add("g.favourite = @favourite");
         if (query.NotInCollectionId is not null)
@@ -287,7 +289,33 @@ public sealed class GameRepository : IGameRepository
     // JSON columns are utf8mb4_bin; compare them like the titles (case- and accent-insensitive).
     private static string JsonLike(string column, int i) => $"CAST(g.{column} AS CHAR) COLLATE utf8mb4_unicode_ci LIKE @w{i}";
 
-    /// <summary>S2: 100 exact title + 60 title prefix + per word 40 title, 20 developers, 20 publishers, 10 genres.</summary>
+    private const string IsAddOn = """(JSON_CONTAINS(r.flags, '"DLC"') OR JSON_CONTAINS(r.flags, '"Update"'))""";
+
+    // DLC B8: roms.file_name is utf8mb4_unicode_ci, so it compares like the titles.
+    private static string AddOnLike(int i) =>
+        $"EXISTS (SELECT 1 FROM roms r WHERE r.game_id = g.id AND {IsAddOn} AND r.file_name LIKE @w{i})";
+
+    // DLC B11: a rom flagged both counts as an update (B1).
+    private const string AddOnNamesJson = $"""
+        (SELECT JSON_ARRAYAGG(JSON_OBJECT('f', IF(JSON_CONTAINS(r.flags, '"Update"'), 'update', 'dlc'), 'n', r.file_name))
+         FROM roms r WHERE r.game_id = g.id AND {IsAddOn})
+        """;
+
+    private sealed record AddOnRow(string F, string N);
+
+    private static readonly JsonSerializerOptions AddOnJson = new() { PropertyNameCaseInsensitive = true };
+
+    /// <returns>DLC B10: the add-on names, DLC before updates, each by ordinal file name.</returns>
+    private static IReadOnlyList<AddOnName> AddOnNames(string? json) => json is null
+        ? []
+        : JsonSerializer.Deserialize<List<AddOnRow>>(json, AddOnJson)!
+            .OrderBy(a => a.F == "dlc" ? 0 : 1).ThenBy(a => a.N, StringComparer.Ordinal)
+            .Select(a => new AddOnName(a.F, ReleaseName.Of(a.N))).ToList();
+
+    /// <summary>
+    /// S2: 100 exact title + 60 title prefix + per word 40 title, 20 developers, 20 publishers, 15 DLC/update file names
+    /// (DLC B9), 10 genres.
+    /// </summary>
     private static string RelevanceScore(int words)
     {
         var parts = new List<string>
@@ -300,6 +328,7 @@ public sealed class GameRepository : IGameRepository
             parts.Add($"(CASE WHEN {TitleLike(i)} THEN 40 ELSE 0 END)");
             parts.Add($"(CASE WHEN {JsonLike("developers", i)} THEN 20 ELSE 0 END)");
             parts.Add($"(CASE WHEN {JsonLike("publishers", i)} THEN 20 ELSE 0 END)");
+            parts.Add($"(CASE WHEN {AddOnLike(i)} THEN 15 ELSE 0 END)");
             parts.Add($"(CASE WHEN {JsonLike("genres", i)} THEN 10 ELSE 0 END)");
         }
         return "(" + string.Join(" + ", parts) + ")";
@@ -376,6 +405,7 @@ public sealed class GameRepository : IGameRepository
         public IReadOnlyList<string> Developers { get; init; } = [];
         public IReadOnlyList<string> Publishers { get; init; } = [];
         public IReadOnlyList<string> Genres { get; init; } = [];
+        public string? AddOns { get; init; }
     }
 }
 
