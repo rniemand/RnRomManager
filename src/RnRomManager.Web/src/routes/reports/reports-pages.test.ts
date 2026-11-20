@@ -22,7 +22,8 @@ vi.mock('#lib/bootstrap.js', () => ({
 		show() {}
 		hide() {}
 		dispose() {}
-	}
+	},
+	Dropdown: { getOrCreateInstance: () => ({ hide() {} }) }
 }));
 vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
@@ -41,9 +42,39 @@ const { default: MissingMetadata } = await import('./missing-metadata/+page.svel
 type Answer = { status: number; body?: unknown };
 
 const systems = [
-	{ id: 'gb', displayName: 'Game Boy', gameCount: 2, romCount: 2, regions: [] },
-	{ id: 'gbc', displayName: 'Game Boy Color', gameCount: 1, romCount: 1, regions: [] }
+	{
+		id: 'gb',
+		displayName: 'Game Boy',
+		shortName: 'GB',
+		logoUrl: null,
+		gameCount: 2,
+		romCount: 2,
+		regions: []
+	},
+	{
+		id: 'gbc',
+		displayName: 'Game Boy Color',
+		shortName: 'GBC',
+		logoUrl: null,
+		gameCount: 1,
+		romCount: 1,
+		regions: []
+	}
 ];
+
+/** F2: the System menu toggle, named after the chosen system (FilterDropdown's aria-label). */
+const systemToggle = () => screen.getByRole('button', { name: /^System: / });
+/** F2: clicks a System menu row by its value, once `/api/systems` has filled the menu. */
+async function pickSystem(value: string): Promise<void> {
+	const row = await vi.waitFor(() => {
+		const found = systemToggle()
+			.closest('.dropdown')!
+			.querySelector<HTMLButtonElement>(`.dropdown-item[data-value="${value}"]`);
+		if (!found) throw new Error(`no System row ${value}`);
+		return found;
+	});
+	await fireEvent.click(row);
+}
 
 describe('reports pages', () => {
 	let calls: string[];
@@ -257,6 +288,20 @@ describe('reports pages', () => {
 		const radio = (title: string) =>
 			screen.getByRole('radio', { name: `Merge into ${title}` }) as HTMLInputElement;
 
+		it('the System menu filters the request and goes back to page 1 (F2)', async () => {
+			signIn(['admin']);
+			answers[list] = { status: 200, body: page };
+			answers[`${list}&system=gbc`] = { status: 200, body: { ...page, items: [] } };
+			render(Duplicates);
+			await screen.findByRole('heading', { name: 'Quest' });
+			expect(document.getElementById('duplicates-system')).toBeNull();
+
+			await pickSystem('gbc');
+
+			await vi.waitFor(() => expect(calls).toContain(`${list}&system=gbc`));
+			expect(systemToggle().getAttribute('aria-label')).toBe('System: Game Boy Color');
+		});
+
 		it('renders a card per group; the first game is pre-selected and labelled', async () => {
 			signIn(['admin']);
 			answers[list] = { status: 200, body: page };
@@ -400,11 +445,13 @@ describe('reports pages', () => {
 		it('the System filter sends system and goes back to page 1', async () => {
 			answers[list()] = { status: 200, body: { items: [], page: 1, pageSize: 50, total: 0 } };
 			render(MissingImages);
-			await screen.findByRole('option', { name: 'Game Boy Color' });
+			expect(systemToggle().getAttribute('aria-label')).toBe('System: All');
 
-			await fireEvent.change(screen.getByLabelText('System'), { target: { value: 'gbc' } });
+			await pickSystem('gbc');
 
 			await vi.waitFor(() => expect(calls).toContain(list('&system=gbc')));
+			expect(systemToggle().getAttribute('aria-label')).toBe('System: Game Boy Color');
+			expect(systemToggle().classList).toContain('btn-secondary');
 		});
 
 		it('shows the empty state', async () => {
@@ -526,26 +573,23 @@ describe('reports pages', () => {
 			expect(optionTexts()).toEqual(['2']);
 		});
 
-		it('the System select writes system=, resets the page and filters the request (release editing B12)', async () => {
+		it('the System menu writes system=, resets the page and filters the request (release editing B12, F2)', async () => {
 			navigateTo('/reports/multiple-releases?page=2');
 			answers[list(2, 2)] = { status: 200, body: body([item('g1')], 60, 4, 2) };
 			answers[`${list()}&system=gbc`] = { status: 200, body: body([item('g5')], 1, 2) };
 			render(MultipleReleases);
 			await screen.findByRole('link', { name: 'Game g1' });
-			const system = screen.getByLabelText('System') as HTMLSelectElement;
-			await vi.waitFor(() => expect(system.options).toHaveLength(3));
-			expect([...system.options].map((o) => o.textContent!.trim())).toEqual([
-				'All systems',
-				'Game Boy',
-				'Game Boy Color'
-			]);
-			expect(system.id).toBe('multiple-releases-system');
+			expect(document.getElementById('multiple-releases-system')).toBeNull();
 
-			await fireEvent.change(system, { target: { value: 'gbc' } });
+			await pickSystem('gbc');
+			const rows = [...systemToggle().closest('.dropdown')!.querySelectorAll('.dropdown-item')].map(
+				(b) => b.textContent!.replace(/\s+/g, ' ').trim()
+			);
+			expect(rows).toEqual(['All systems', 'GBGame Boy', 'GBCGame Boy Color']);
 
 			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/multiple-releases?system=gbc'));
 			await screen.findByRole('link', { name: 'Game g5' });
-			expect((screen.getByLabelText('System') as HTMLSelectElement).value).toBe('gbc');
+			expect(systemToggle().getAttribute('aria-label')).toBe('System: Game Boy Color');
 		});
 
 		it('changing the threshold writes min, drops page and requests it', async () => {
@@ -773,15 +817,12 @@ describe('reports pages', () => {
 			expect(cells[1].textContent!.trim()).not.toBe('');
 		});
 
-		it('the System select writes system= and requests it', async () => {
+		it('the System menu writes system= and requests it (F2)', async () => {
 			answers['GET /api/reports/newly-added'] = { status: 200, body: { systems: [] } };
 			answers['GET /api/reports/newly-added?system=gbc'] = { status: 200, body: { systems: [] } };
 			render(NewlyAdded);
-			const select = screen.getByLabelText('System') as HTMLSelectElement;
-			await vi.waitFor(() => expect(select.options).toHaveLength(3));
-			expect(select.id).toBe('newly-added-system');
 
-			await fireEvent.change(select, { target: { value: 'gbc' } });
+			await pickSystem('gbc');
 
 			expect(goto).toHaveBeenLastCalledWith('/reports/newly-added?system=gbc', {
 				replace: true,
@@ -841,9 +882,7 @@ describe('reports pages', () => {
 			await fireEvent.click(screen.getByRole('button', { name: 'Game' }));
 			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/hacks?sort=name'));
 
-			const system = screen.getByLabelText('System') as HTMLSelectElement;
-			await vi.waitFor(() => expect(system.options).toHaveLength(3));
-			await fireEvent.change(system, { target: { value: 'gb' } });
+			await pickSystem('gb');
 			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/hacks?system=gb&sort=name'));
 		});
 
@@ -977,6 +1016,22 @@ describe('reports pages', () => {
 			expect(await screen.findByText('No games match these filters.')).toBeTruthy();
 		});
 
+		it('the System menu writes system= from page 1 (F2)', async () => {
+			admin();
+			navigateTo('/reports/missing-metadata?page=2');
+			answers[list().replace('page=1', 'page=2')] = {
+				status: 200,
+				body: { ...body([item('g1')], 60), page: 2 }
+			};
+			render(MissingMetadata);
+			await screen.findByRole('link', { name: 'Game g1' });
+			expect(document.getElementById('missing-metadata-system')).toBeNull();
+
+			await pickSystem('gbc');
+
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/missing-metadata?system=gbc'));
+		});
+
 		it('URL state reaches the API; filters write the URL from page 1', async () => {
 			admin();
 			navigateTo(
@@ -1026,7 +1081,7 @@ describe('reports pages', () => {
 			render(MissingMetadata);
 			await screen.findByRole('link', { name: 'Game g1' });
 
-			await fireEvent.click(screen.getByRole('button', { name: /Game/ }));
+			await fireEvent.click(screen.getByRole('button', { name: /^Game/ }));
 			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/missing-metadata?dir=desc'));
 		});
 
