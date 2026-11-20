@@ -162,6 +162,27 @@ describe('play page loading indicator', () => {
 	});
 });
 
+describe('play page WebGL drawing buffer (E2)', () => {
+	it('creates WebGL contexts with preserveDrawingBuffer so canvas screenshots are not black', async () => {
+		const getContext = vi
+			.spyOn(HTMLCanvasElement.prototype, 'getContext')
+			.mockImplementation((() => ({}) as RenderingContext) as never);
+		serve({ [romUrl]: async () => response(200) });
+		await play('gambatte', 'Game');
+		const canvas = document.createElement('canvas');
+
+		canvas.getContext('webgl2', { alpha: false });
+		canvas.getContext('webgl');
+		canvas.getContext('2d', { alpha: false });
+
+		expect(getContext.mock.calls).toEqual([
+			['webgl2', { alpha: false, preserveDrawingBuffer: true }],
+			['webgl', { preserveDrawingBuffer: true }],
+			['2d', { alpha: false }]
+		]);
+	});
+});
+
 describe('play page BIOS check', () => {
 	it('checks the BIOS with credentials before fetching the ROM, then sets EJS_biosUrl', async () => {
 		const cancel = vi.fn(async () => {});
