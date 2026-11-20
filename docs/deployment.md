@@ -212,6 +212,11 @@ docker compose up -d
 
 Migrations run automatically on start. `info.json` files in older formats are upgraded in memory and rewritten in the new format the next time each game is written. There is no downgrade path: an older app refuses to touch ZIPs written in a newer format.
 
+Upgrading to the release that keeps saves in per-user folders:
+
+- **Saves move once, in the background.** After the first start the **Moving saves to user folders** job rewrites every game ZIP that has saves (each user's saves go to `saves/<username>/`; saves without an owner become `admin`'s). It holds the job lock, so edits, ingest and save uploads answer "Another job is running" until it ends; on embedded systems each rewrite copies the whole ZIP, so plan the time and the free space (one ZIP's size at a time). Games it couldn't move (see the job's `Error` items) keep the old layout and move on their next save write.
+- **Downgrading** after the move: an older app reads the new `saves.json` as unreadable, keeps the files byte for byte and refuses the save routes; nothing is lost. Restore the pre-upgrade backup and `roms/` snapshot to go back fully.
+
 Upgrading to 0.3.0:
 
 - **Everyone is signed out once.** Roles change from a single Admin/User to the `admin` and `rom-manager` roles; every Admin gets both and every User none, and every session ends so the new roles take effect. Sign in again.

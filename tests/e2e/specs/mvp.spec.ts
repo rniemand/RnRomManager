@@ -270,6 +270,9 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
 
 test("reports and the ingest audit trail", async () => {
   await page.getByRole("link", { name: "Reports", exact: true }).click();
+  // Release editing B15: Reports opens Newly Added.
+  await expect(page).toHaveURL(/\/reports\/newly-added$/);
+  await page.getByRole("link", { name: "Library Size", exact: true }).click();
   await expect(page).toHaveURL(/\/reports\/library-size$/);
   await expect(page.getByRole("table")).toContainText("Game Boy");
   await expectAccessible(page, "library size report");
@@ -669,12 +672,21 @@ test("game detail + downloads + ROM playback progress", async () => {
   await frame.locator("#game").click();
   await page.keyboard.press("Escape");
   await expect(dialog()).toBeVisible();
+  // Release editing B23: Close asks the player for the battery save first; this ROM-only game has none.
+  const saveWrites: string[] = [];
+  const onRequest = (r: { url(): string; method(): string }) => {
+    if (/\/api\/games\/[^/]+\/saves/.test(r.url()) && ["POST", "PUT"].includes(r.method()))
+      saveWrites.push(`${r.method()} ${r.url()}`);
+  };
+  page.on("request", onRequest);
   await dialog()
     .locator(".modal-footer")
     .getByRole("button", { name: "Close" })
     .click();
-  await expect(dialog()).toBeHidden();
+  await expect(dialog()).toBeHidden({ timeout: 15_000 });
   await expect(page.locator("iframe")).toHaveCount(0);
+  page.off("request", onRequest);
+  expect(saveWrites).toEqual([]);
 
   // Z1–Z4: the Zip Contents tab lists the ZIP and downloads one entry.
   await page.getByRole("tab", { name: "Zip Contents" }).click();
@@ -783,6 +795,11 @@ test("saves: upload, rename, save state from Play, play it, delete, audit", asyn
   await page
     .getByRole("button", { name: "Play Orbit Blocks (World) (Rev 1).gb" })
     .click();
+  // Release editing B22: the player starts with the user's own uploaded battery save of the release.
+  await expect(dialog().locator("iframe")).toHaveAttribute(
+    "src",
+    /&save=[0-9a-f]{32}&saveKind=battery$/,
+  );
   const frame = page.frameLocator("iframe");
   // The ROM download of this release is gated by the staging script installed for the game detail test.
   await expectRomDownloadProgress(frame);
@@ -805,7 +822,8 @@ test("saves: upload, rename, save state from Play, play it, delete, audit", asyn
     .locator(".modal-footer")
     .getByRole("button", { name: "Close" })
     .click();
-  await expect(page.locator("iframe")).toHaveCount(0);
+  // B23: the close may store the battery save back over the uploaded one; the rows stay two.
+  await expect(page.locator("iframe")).toHaveCount(0, { timeout: 15_000 });
 
   await savesTab().click();
   await expect(rows()).toHaveCount(2);
@@ -840,6 +858,8 @@ test("saves: upload, rename, save state from Play, play it, delete, audit", asyn
     .locator(".modal-footer")
     .getByRole("button", { name: "Close" })
     .click();
+  await expect(page.locator("iframe")).toHaveCount(0, { timeout: 15_000 });
+  await expect(rows()).toHaveCount(2);
 
   // B15: delete the renamed save after a confirmation that names it.
   await page.getByRole("button", { name: "Delete Renamed save" }).click();
@@ -1108,7 +1128,8 @@ async function closeEmulator(): Promise<void> {
     .locator(".modal-footer")
     .getByRole("button", { name: "Close" })
     .click();
-  await expect(dialog()).toBeHidden();
+  // Release editing B23: a battery-export core stores the battery save before the dialog goes.
+  await expect(dialog()).toBeHidden({ timeout: 15_000 });
   await expect(page.locator("iframe")).toHaveCount(0);
 }
 
@@ -2998,6 +3019,49 @@ test("Missing Metadata report, and the phone navbar closes after a link", async 
   await page.setViewportSize(viewport);
 });
 
+test("release editing, Games With Hacks, Newly Added and the phone shell", async () => {
+  // B2–B8: Hack on a release no other flow names renames it to match.
+  await openGame("Orbit Blocks");
+  const name = "Orbit Blocks (World).gb";
+  await page.getByRole("button", { name: `Show details for ${name}` }).click();
+  await page.getByRole("button", { name: `Edit release ${name}`, exact: true }).click();
+  await expect(dialog()).toHaveAccessibleName("Edit release");
+  await expect(dialog().getByText("File name unchanged")).toBeVisible();
+  await dialog().getByLabel("Hack", { exact: true }).check();
+  await expect(dialog().getByText("Orbit Blocks (World) (Hack).gb", { exact: true })).toBeVisible();
+  await expectAccessible(page, "edit release modal");
+  await dialog().locator(".modal-footer").getByRole("button", { name: "Save" }).click();
+  await expect(dialog()).toBeHidden();
+  await expect(page.getByText("Release updated: Orbit Blocks (World) (Hack).gb")).toBeVisible();
+  await expect(
+    page.getByRole("article", { name: "Orbit Blocks (World) (Hack).gb" }),
+  ).toBeVisible();
+
+  // B13: the game is now in Games With Hacks.
+  await page.goto("/reports/hacks");
+  const hacked = page.getByRole("table").getByRole("link", { name: "Orbit Blocks", exact: true });
+  await expect(hacked).toHaveAttribute("href", /\/games\/[0-9a-f-]+\?tab=releases$/);
+  await expectAccessible(page, "games with hacks report");
+
+  // B14: Newly Added shows the seeded games, one card per system.
+  await page.getByRole("link", { name: "Newly Added", exact: true }).click();
+  await expect(page).toHaveURL(/\/reports\/newly-added$/);
+  await expect(page.locator(".card").filter({ hasText: "Game Boy" }).first()).toBeVisible();
+  await expect(page.getByRole("table").first().getByRole("link").first()).toBeVisible();
+  await expectAccessible(page, "newly added report");
+
+  // B29, B30: on a phone the footer's Admin buttons and the navbar search show without opening the menu.
+  const viewport = page.viewportSize()!;
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(page.getByRole("button", { name: "Next missing image" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open the first review item" })).toBeVisible();
+  await expect(page.locator("#main-nav")).not.toHaveClass(/\bshow\b/);
+  await expect(
+    page.locator("nav.navbar > .container > button[aria-label='Search']"),
+  ).toBeVisible();
+  await page.setViewportSize(viewport);
+});
+
 test("Admin: account types and the create-user modal", { tag: "@shard-b" }, async () => {
   await page.goto("/admin/users");
   // U6: the signed-in admin can't change their own type or disable themselves.
@@ -3081,6 +3145,9 @@ test("Admin: database backups", { tag: "@shard-b" }, async () => {
   await expect(
     page.getByRole("link", { name: "Backups", exact: true }),
   ).toHaveAttribute("aria-current", "page");
+  // Release editing B34: Schedule and Status are closed accordion items; the list starts open.
+  await page.getByRole("button", { name: "Schedule", exact: true }).click();
+  await page.getByRole("button", { name: "Status", exact: true }).click();
   await expect(page.getByLabel(/^Daily at \(server time, /)).toHaveValue(
     "03:30",
   );
@@ -3147,6 +3214,8 @@ test("Admin: restore a backup from the Backups page", { tag: "@shard-b" }, async
     name: /^rnrommanager-\d{8}-\d{6}( \(\d+\))?\.zip$/,
   });
   const before = await backupFiles.allTextContents();
+  // Release editing B34: Back up now is in the closed Status item.
+  await page.getByRole("button", { name: "Status", exact: true }).click();
   await page.getByRole("button", { name: /Back up now/ }).click();
   await expect
     .poll(
