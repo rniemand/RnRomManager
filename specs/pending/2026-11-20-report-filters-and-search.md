@@ -7,7 +7,7 @@ created: 2026-11-20
 # Play progress, Emulators button, report search and system filters
 
 ## Summary
-Polish for every signed-in user: the browser player always shows a progress bar while it downloads a ROM or disc (the server now says how big the download is), the game page gets an **Emulators** button for its system (and the modal title becomes "… Emulators"), Global Search also finds reports, and six reports use the Games page's System dropdown instead of a plain `<select>`.
+Polish for every signed-in user: the browser player always shows a progress bar while it downloads a ROM or disc (the server now says how big the download is), the game page gets an **Emulators** button for its system (and the modal title becomes "… Emulators"), Global Search also finds reports, and six reports use the Games page's System dropdown instead of a plain `<select>`. For Admins, the review queue's Attach tab can also attach a file to an existing game as a new **Release** (tagged from its file name, marked Unverified).
 
 ## Out of scope
 - Progress for the BIOS and library-save downloads in the player, and for EmulatorJS's own core download.
@@ -15,6 +15,8 @@ Polish for every signed-in user: the browser player always shows a progress bar 
 - Library Size and Activity reports (they have no System select).
 - Changing the "No games match" text in Global Search.
 - Exact `Content-Length` for the on-the-fly cue/bin ZIP (an estimate header is sent instead, P2).
+- Attach as **Disc** on systems without file sets: it stays a disc-system option, as today (review B16).
+- Changing the `AmbiguousGroup` attach (`flag: "None"`).
 
 ## Behaviour
 
@@ -42,6 +44,11 @@ Polish for every signed-in user: the browser player always shows a progress bar 
   The column keeps no separate `<label>`: the toggle's own text ("System" / "System: Game Boy") is the caption, and its `aria-label` names it. The row's `align-items-end` keeps the button bottom-aligned with labelled siblings (Minimum releases, Missing, Title); the `btn-sm` toggle being shorter than a `form-select` is accepted.
 - **F3** The `<select>` ids `newly-added-system`, `missing-system`, `duplicates-system`, `multiple-releases-system`, `hacks-system`, `missing-metadata-system` go away. The toggle button is named `System: All` / `System: <displayName>` (FilterDropdown's `aria-label`), filled (`btn-secondary`) while a system is chosen.
 
+### Attach as a new release (A)
+- **A1** `POST /api/review/{id}/resolve` (Admin, unchanged access) accepts `action: "Attach"` with `flag: "Release"` (new) and a `targetGameId`. `ReviewEndpoints.Validate`'s flag check becomes `"Hack" or "Translated" or "None" or "Disc" or "Release"`, with the message `Must be Hack, Translated, None, Disc or Release.` A `disc` with `Release` stays `400` (`A disc number needs Manual or Attach as a disc.`), as for Hack/Translated today.
+- **A2** In `ReviewResolver`, `Release` goes through the existing `Attach` branch (target lookup, same-system check, `OpenTarget`, title = the game's title), with these differences from Hack/Translated: the regions, languages, revision and flags come from `NoIntroName.Parse(<name stem>)` (as the `None` branch parses a name), where `<name stem>` is the original file name without extension, or, for a set item (`set` from `ReviewSets.FindAsync` is not null), the stem of the set member whose `IngestFile.Name` ends in `.cue` (case-insensitive), whichever member was opened. Parsed flags matching `^(Disc|Track) \d+$` (case-insensitive) are dropped; another disc is Attach as Disc's job. Then the flag `Unverified` is appended (as the Dat action's manual pick does, ReviewResolver ~472), so `PrimaryReleaseRanker` keeps DAT-verified releases primary; it is not added twice when the parsed flags already have it. The file name is the sanitized original stem plus ` (Unverified)` (not added twice when the stem already contains `(Unverified)`), plus the same extension rule (`external || system.KeepsSourceExtension ? originalExtension : system.RomExtensions[0]`); a set keeps its members' source names as today (B14). Everything after (name checks, `NameTaken` / `Duplicate` 409s, unmatched sets, external storage, primary release recompute) is the shared code path, unchanged. The release is identified as Manual, as other Attach releases are today.
+- **A3** The Attach tab (`routes/review/[id]/+page.svelte`) lists `Release`, `Hack`, `Translated` (plus `Disc` on a disc system), in that order, with **Release** preselected for every item (`attachFlag` default and the per-item reset at line ~148 become `'Release'`). The radio label is `Release`. The hint text becomes `Attach to a game as a new release, a hack or a translation.` and, on a disc system, `Attach to a game as a new release, a hack, a translation or another disc.` The success toast stays `Attached to <title>.`
+
 ## Changes
 | Area | File(s) | Change |
 |---|---|---|
@@ -54,6 +61,10 @@ Polish for every signed-in user: the browser player always shows a progress bar 
 | Web | `src/RnRomManager.Web/src/lib/components/GlobalSearch.svelte` | S2–S5. |
 | Web | `src/RnRomManager.Web/src/lib/systemFilter.ts` (new), `src/routes/+page.svelte` | F1. |
 | Web | `src/routes/reports/{newly-added,missing-images,duplicates,multiple-releases,hacks,missing-metadata}/+page.svelte` | F2. |
+| Api | `src/RnRomManager.Api/Endpoints/ReviewEndpoints.cs` | A1 flag validation. |
+| Core | `src/RnRomManager.Core/Ingest/ReviewResolver.cs` | A2 `Release` in the Attach branch. |
+| Web | `src/RnRomManager.Web/src/routes/review/[id]/+page.svelte` | A3 radios, default, hint. |
+| Docs | `docs/features.md` | Review queue (:267 Attach bullet; :372 resolve API flags) for A1–A3. |
 | Docs | `docs/features.md` | Global search (:26), Systems (:108, modal title), Game detail (:126 action row; :138 Play progress), Reports (:298, System dropdown), Browse the library through the API (:410 `Content-Length`, :413 `X-Content-Bytes`). |
 | Docs | `docs/development.md` | Browser emulators (:122): `readContent` total sources and the indeterminate bar. |
 
@@ -70,7 +81,8 @@ No migrations, settings or DB changes. API contract: two response headers added 
 - [ ] **3. Emulators button on the game page**: E1–E3, docs `features.md` :108 and Game detail. Files: `SystemEmulatorsModal.svelte`, `routes/games/[id]/+page.svelte`, docs. Tests: `SystemEmulatorsModal.test.ts` (title `Game Boy Emulators`, line 32), `SystemGames.test.ts` (line 213 heading name), `routes/games/game-page.test.ts` (new case: the Emulators button sits after Collections, opens the `<system> Emulators` modal, focus returns to it on close). Done when: those vitest files, lint and check pass.
 - [ ] **4. Reports in Global Search**: S1–S5, docs `features.md` Global search. Files: `src/lib/reports.ts` (new), `routes/reports/+layout.svelte`, `GlobalSearch.svelte`, docs. Tests: `src/lib/reports.test.ts` (new: Site vs Admin list, order), `GlobalSearch.test.ts` (new `describe('reports group (S)')`: "dup" shows a Duplicates chip first, Enter navigates to `/reports/duplicates`; a Site user searching "missing metadata" gets no Missing Metadata chip; arrow order Reports → Collections → Games; label/placeholder text; the existing `describe('play from search (B27)')` cases (~lines 517–580) type `'game'`, which now also matches "Games With Hacks" and puts a report chip at option 0 — switch their query to `'tetris'` so the playable game stays option 0), `routes/reports/reports-pages.test.ts` (tabs still render in order). Done when: those vitest files, lint and check pass.
 - [ ] **5. System dropdown on six reports**: F1–F3, docs `features.md` Reports (each "System filter" mention says it's the Games page's System dropdown). Files: `src/lib/systemFilter.ts` (new), `routes/+page.svelte`, the six report pages, docs. Tests: `src/lib/systemFilter.test.ts` (new: hides systems without ROMs, keeps the selected one, badge/search fields), `routes/reports/reports-pages.test.ts` (rewrite every select-based case — Missing Images ~400–407, Multiple Releases ~529–548, Newly Added ~776–790 (drop the `newly-added-system` id check), Games With Hacks ~844–847 — to open the `System: All` button and click a menu row, as `routes/library-select.test.ts` does; add one such case for Duplicates and one for Missing Metadata asserting the request/URL; add `shortName` and `logoUrl: null` to the `systems` fixture (~lines 43–46); the `bootstrap` mock gains `Dropdown` if missing), `routes/library-select.test.ts` (unchanged, must pass). Done when: no `-system"` select ids remain in those pages, the vitest files, lint and check pass.
-- [ ] **6. End-to-end**: `tests/e2e/specs/mvp.spec.ts` — line 1952 expects `Game Boy Emulators`; the game-detail flow clicks **Emulators** and sees `<system> Emulators`; the global search flow (~1654) types "duplic" and Enter opens `/reports/duplicates`; the Games With Hacks flow (~3041) picks a system from the `System: All` dropdown and the URL gets `?system=`. Done when: `pwsh scripts/test-e2e.ps1` passes in Finish.
+- [ ] **6. Attach as a new release**: A1–A3, docs `features.md` :267 and :372. Files: `ReviewEndpoints.cs`, `ReviewResolver.cs`, `routes/review/[id]/+page.svelte`, docs. Tests: `ReviewRequestValidationTests` (line 45 message becomes `Must be Hack, Translated, None, Disc or Release.`; `Release` valid; `Release` + `disc` is 400), `ReviewResolverTests` (new: `Release` on `Game (Europe) (Rev 1).gb` attaches to the target with regions Europe, revision `Rev 1`, flags `[Unverified]`, file name `Game (Europe) (Rev 1) (Unverified).gb`; a `(World)` Release attached to a game whose DAT-verified primary is `(Europe)` does not become primary; a disc set opened from its track `Game (Europe) (Disc 2) (Track 1).bin` takes its tags from the cue and gets no `Disc`/`Track` flags; a name clash returns `NameTaken`), `ReviewEndpointsTests` (one `Release` resolve end to end), `routes/review/review-page.test.ts` (line 404 hint text; Release is first and checked; submitting sends `flag: 'Release'`; Disc still only on a disc system). Done when: those .NET classes (Docker for the endpoint class) and the vitest file, lint and check pass.
+- [ ] **7. End-to-end**: `tests/e2e/specs/mvp.spec.ts` — line 1952 expects `Game Boy Emulators`; the game-detail flow clicks **Emulators** and sees `<system> Emulators`; the global search flow (~1654) types "duplic" and Enter opens `/reports/duplicates`; the Games With Hacks flow (~3041) picks a system from the `System: All` dropdown and the URL gets `?system=`. Done when: `pwsh scripts/test-e2e.ps1` passes in Finish.
 
 ## Decisions
 - 2026-11-20 Progress when the size is unknown → server sends the size: `Content-Length` for in-ZIP ROMs, an `X-Content-Bytes` estimate for the cue ZIP (user)
@@ -79,6 +91,11 @@ No migrations, settings or DB changes. API contract: two response headers added 
 - 2026-11-20 Report System dropdowns → same FilterDropdown, no counts (user)
 - 2026-11-20 Report System column caption → none; the toggle text is the caption, bottom-aligned, `btn-sm` height accepted (reviewer)
 - 2026-11-20 Review pass 1 fact fixes: `'game'` search tests collide with "Games With Hacks"; full list of report select tests; fixture `shortName`; report matches cleared with the other groups; `X-Content-Bytes` precedence; development.md Browser emulators is at :122 (reviewer)
+- 2026-11-20 Attach as a new release: tags from the file name, Release first and default, file keeps its own name (user)
+- 2026-11-20 May an attached Release become primary? → no: it gets `Unverified` (flag and file name) so verified releases stay primary (user)
+- 2026-11-20 Release on a disc set → parse the cue's name, drop `Disc <n>`/`Track <n>` groups (user)
+- 2026-11-20 E2E for Attach as Release → none; the seed's only unmatched item is used by the suggestion flow, so vitest and .NET tests cover A (code)
+- 2026-11-20 A new `Release` flag instead of reusing `None`, which only resolves `AmbiguousGroup` items from their DAT identity (code)
 - 2026-11-20 A total-less response (old server, compression) → indeterminate bar plus byte count, so the bar always shows (code)
 
 ## Kickoff prompt
