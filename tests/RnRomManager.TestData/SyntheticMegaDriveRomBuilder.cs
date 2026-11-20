@@ -40,6 +40,23 @@ public sealed record SyntheticMegaDriveRomBuilder
         return image;
     }
 
+    /// <summary>
+    /// <paramref name="rom"/> as a Super Magic Drive copier dump: a 512-byte header (<c>AA BB</c> at 8–9), then each
+    /// 16 KiB block with its odd bytes first and its even bytes second. The length must be a multiple of 16 KiB.
+    /// </summary>
+    public static byte[] ToSmd(byte[] rom)
+    {
+        var smd = new byte[512 + rom.Length];
+        smd[1] = 3; smd[8] = 0xAA; smd[9] = 0xBB;
+        for (var block = 0; block < rom.Length; block += 16384)
+            for (var i = 0; i < 8192; i++)
+            {
+                smd[512 + block + i] = rom[block + 2 * i + 1];
+                smd[512 + block + 8192 + i] = rom[block + 2 * i];
+            }
+        return smd;
+    }
+
     private static void Write(byte[] image, int offset, int width, string value)
     {
         if (value.Length > width)
