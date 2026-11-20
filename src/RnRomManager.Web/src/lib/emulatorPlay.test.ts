@@ -235,6 +235,24 @@ describe('play page BIOS check', () => {
 		expect(document.querySelector('script[src="/emulator/vendor/data/loader.js"]')).not.toBeNull();
 	});
 
+	it('checks disksys.rom for a Famicom Disk System release', async () => {
+		const disksys = '/api/emulator/bios/disksys.rom';
+		serve({ [disksys]: async () => response(200), [romUrl]: async () => response(200) });
+
+		await play('fceumm', 'Disk Quest (Japan).fds');
+
+		expect(urls()).toEqual([disksys, romUrl]);
+		expect(atLoader).toMatchObject({ EJS_biosUrl: disksys, EJS_core: 'fceumm' });
+	});
+
+	it('checks no BIOS for an NES release on the same core', async () => {
+		serve({ [romUrl]: async () => response(200) });
+
+		await play('fceumm', 'Cart Quest (USA).nes');
+
+		expect(urls()).toEqual([romUrl]);
+	});
+
 	it('goes on when cancelling the BIOS body fails', async () => {
 		const cancel = vi.fn(async () => {
 			throw new Error('cancel failed');

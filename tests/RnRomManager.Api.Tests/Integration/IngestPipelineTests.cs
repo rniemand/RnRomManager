@@ -34,6 +34,7 @@ public class IngestPipelineTests
     private static readonly byte[] Pioneer = new SyntheticNesRomBuilder { Seed = 70, Mapper = 1 }.Build();
     /// <summary>The same dump without its 16-byte header: what the DAT's <c>.unh</c> entry hashes.</summary>
     private static readonly byte[] PioneerHeaderless = Pioneer[16..];
+    private static readonly byte[] DiskQuest = FdsDisk();
     private static readonly SyntheticSnesRomBuilder Rally = new() { Seed = 80, SizeKiB = 64, Title = "MODE SEVEN RALLY" };
 
     private static readonly byte[] Lanes = Atari(4096, 120);
@@ -166,7 +167,7 @@ public class IngestPipelineTests
             [IngestSeeder.ThreeDoDat] = [new FixtureGame("Opal Orbit (USA)", "Opal Orbit (USA) (Track 1).bin", OpalData)],
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
-            [IngestSeeder.Vic20Dat] = [],
+            [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [new FixtureGame("Disk Quest (Japan)", "Disk Quest (Japan).fds", DiskQuest)],
             [IngestSeeder.AmigaDat] = [],
             [IngestSeeder.ThreeDsDat] =
             [
@@ -229,6 +230,15 @@ public class IngestPipelineTests
     }
 
     private T Service<T>() where T : notnull => _factory.Services.GetRequiredService<T>();
+
+    /// <summary>A headerless one-sided FDS image that starts with a disk info block.</summary>
+    private static byte[] FdsDisk()
+    {
+        var disk = Atari(65_500, 2501);
+        disk[0] = 0x01;
+        "*NINTENDO-HVC*"u8.CopyTo(disk.AsSpan(1));
+        return disk;
+    }
 
     private static byte[] Atari(int size, int seed)
     {
@@ -1592,6 +1602,22 @@ public class IngestPipelineTests
         Assert.That(File.Exists(path), Is.False, "fully ingested archive is deleted");
         var game = ReadZip(Path.Combine("coleco", "P", "Pixel Pursuit.zip"));
         Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("coleco", "Pixel Pursuit (USA).col")));
+    }
+
+    [Test]
+    public async Task Fds_AHeaderedDump_IsStoredHeaderless_UnderTheDatsName()
+    {
+        byte[] headered = [(byte)'F', (byte)'D', (byte)'S', 0x1A, 1, .. new byte[11], .. DiskQuest];
+
+        var result = await IngestAsync(DropAged("fds", "quest.fds", headered));
+
+        Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, "fds")), result.Details);
+        using var library = LibraryZip.Open(Path.Combine(Roms, "fds", "D", "Disk Quest.zip"), Service<InfoJsonReader>());
+        Assert.That(library.InfoJson!.Game!.Roms.Single().FileName, Is.EqualTo("Disk Quest (Japan).fds"));
+        using var stored = library.OpenEntry(LibraryZip.RomEntry("Disk Quest (Japan).fds"), DiskQuest.Length);
+        using var bytes = new MemoryStream();
+        stored.CopyTo(bytes);
+        Assert.That(bytes.ToArray(), Is.EqualTo(DiskQuest));
     }
 
     [Test]

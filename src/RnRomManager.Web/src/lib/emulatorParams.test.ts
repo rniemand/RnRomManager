@@ -147,13 +147,20 @@ describe('parsePlayParams', () => {
 
 describe('biosFor', () => {
 	it('names the ColecoVision BIOS for gearcoleco', () => {
-		expect(biosFor('gearcoleco')).toBe('colecovision.rom');
+		expect(biosFor('gearcoleco', 'X (USA).col')).toBe('colecovision.rom');
 	});
+
+	it.each(['X (Japan).fds', 'X (Japan).FDS'])(
+		'names disksys.rom for an FCEUmm %s release',
+		(name) => {
+			expect(biosFor('fceumm', name)).toBe('disksys.rom');
+		}
+	);
 
 	it.each(['gambatte', 'stella2014', 'smsplus', 'prosystem', 'fceumm', 'pcsx_rearmed'])(
 		'needs none for %s',
 		(core) => {
-			expect(biosFor(core)).toBeNull();
+			expect(biosFor(core, 'X (USA).nes')).toBeNull();
 		}
 	);
 });

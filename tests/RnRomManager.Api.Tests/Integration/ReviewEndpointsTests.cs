@@ -96,7 +96,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.ThreeDoDat] = [],
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
-            [IngestSeeder.Vic20Dat] = [],
+            [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [],
             [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [],
             [IngestSeeder.NintendoDsDat] = [new FixtureGame("Stylus Quest (USA)", "Stylus Quest (USA).nds", StylusQuest) { ReleaseYear = 2006 }],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)
@@ -1074,7 +1074,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.ThreeDoDat] = [],
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
-            [IngestSeeder.Vic20Dat] = [],
+            [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [],
             [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] = Enumerable.Range(1, 25).Select(i => new FixtureGame($"Demo {i} (World)", $"Demo {i} (World).gb", new SyntheticRomBuilder { Seed = 1000 + i }.Build())).ToArray(),
@@ -1120,7 +1120,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.ThreeDoDat] = [],
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
-            [IngestSeeder.Vic20Dat] = [],
+            [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [],
             [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] =

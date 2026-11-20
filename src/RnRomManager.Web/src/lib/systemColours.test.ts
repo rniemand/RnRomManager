@@ -49,6 +49,7 @@ describe('systemColour', () => {
 		expect(systemColour('pet')).toEqual({ name: 'pet', foreground: '#fff' });
 		expect(systemColour('vic20')).toEqual({ name: 'vic20', foreground: '#fff' });
 		expect(systemColour('amiga')).toEqual({ name: 'amiga', foreground: '#fff' });
+		expect(systemColour('fds')).toEqual({ name: 'fds', foreground: '#fff' });
 		expect(systemColour('3ds')).toEqual({ name: '3ds', foreground: '#000' });
 	});
 

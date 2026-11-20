@@ -92,6 +92,19 @@
 			"note": "RetroArch core: Gearcoleco"
 		}
 	],
+	"fds": [
+		{
+			"name": "Mesen",
+			"url": "https://www.mesen.ca/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Mesen or FCEUmm (needs disksys.rom)"
+		}
+	],
 	"gb": [
 		{
 			"name": "mGBA",
