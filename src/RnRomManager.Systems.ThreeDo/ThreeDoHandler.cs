@@ -18,8 +18,8 @@ public sealed class ThreeDoHandler : ISystemHandler
     public string ShortName => "3DO";
     public string Family => "3do";
 
-    /// <summary><c>[0]</c> is what a file resolved through Review without a DAT entry is stored as.</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".bin", ".cue", ".iso"];
+    /// <summary><c>[0]</c> is what a file resolved through Review without a DAT entry is stored as. A <c>.chd</c> is a lone file that never matches the DAT, as for Sega CD.</summary>
+    public IReadOnlyList<string> RomExtensions { get; } = [".bin", ".cue", ".iso", ".chd"];
 
     public long MinRomSizeBytes => 16;
 

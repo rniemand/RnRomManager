@@ -53,9 +53,9 @@ roms/
   gc/                   GameCube (external, exact names: .iso, .gcm)
   wii/                  Wii (external, exact names: .iso)
   x360/                 Xbox 360 (external, exact names: .iso)
-  saturn/               Saturn (external, exact names: a .cue with its .bin tracks, or a .nrg/.chd)
+  saturn/               Saturn (external, exact names: a .cue with its .bin tracks, or a .nrg/.chd/.iso)
   segacd/               Sega CD (external, exact names: a .cue with its .bin tracks, or a .bin, .iso or .chd)
-  3do/                  3DO (external, exact names: a .cue with its .bin tracks, or a .bin or .iso)
+  3do/                  3DO (external, exact names: a .cue with its .bin tracks, or a .bin/.iso/.chd)
 ```
 
 Inside a game's ZIP:
