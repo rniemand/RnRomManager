@@ -1,0 +1,96 @@
+---
+title: Image Resolutions report, job names and report polish
+status: ready
+created: 2026-11-20
+---
+
+# Image Resolutions report, job names and report polish
+
+## Summary
+Admins and users get a new **Image Resolutions** report to find low-resolution box art, screenshots and other images stored in game ZIPs, with System / Type / Max width / Max height filters remembered in the browser. Job names are Title Case everywhere, and the running-job progress cell no longer resizes its table as file names change. Newly Added and Activity switch to tabs, and the Multiple Releases and Missing Metadata filter bars get compact, evenly sized controls.
+
+## Out of scope
+- Fixing images from the report (replacing or re-downloading): the row links to the game's Images tab, which keeps its own Admin rules.
+- A "next low-resolution image" button, column sorting or a page-size choice on the new report.
+- The other reports' filter bars (Missing Images, Duplicates, Games With Hacks), the server-side job types and the `GET /api/reports/newly-added` contract.
+- Placeholder art (`images.is_default = 1`): Missing Images already reports it.
+
+## Behaviour
+
+### Job names (J)
+- **J1** `jobLabels` in `lib/jobs.ts` become Title Case: `Ingest`, `Integrity Check`, `DAT Refresh`, `Media Retry`, `Review`, `Moving ROMs`, `Repacking ZIPs`, `Moving Saves to User Folders`. Unknown types still show as is.
+- **J2** Every place that shows a job type uses `jobLabel(type)` (plus ` (<mode>)` where it does today): the job detail heading, the Activity report's Recent jobs table (`routes/reports/activity/+page.svelte:222`), the Integrity page's run table (`routes/integrity/+page.svelte:370`) and the "running" banners on Ingestion (`routes/ingestion/+page.svelte:229`), Integrity (`:182`) and DATs (`routes/admin/dats/+page.svelte:105`). The footer and `/jobs` already use it.
+- **J3** The job detail heading is `{jobLabel(job.type)}{job.mode ? ` (${job.mode})` : ''} Job`, e.g. "Ingest Job", "Ingest (Quick) Job", "DAT Refresh Job".
+
+### Running-job progress (P)
+- **P1** The `/jobs` Running table and the `/jobs/[id]` header table get `table-layout: fixed` through a new `job-fixed-table` class in `src/RnRomManager.Web/src/app.css` (`table-layout: fixed; min-width: 40rem;`), so on a phone the existing `table-responsive` wrapper scrolls instead of squeezing Progress.
+- **P2** Fixed column widths via a `<colgroup>`: `/jobs` Running — Job `14rem`, Progress (no width, takes the rest), Started `11rem`, Details `5rem`, Cancel `6rem`. `/jobs/[id]` while live — Started `11rem`, Finished `11rem`, Trigger `8rem`, Progress (rest). When not live, the detail table has no `job-fixed-table` class and no `<colgroup>` (as today).
+- **P3** The progress text line (`current / total · currentItem`) and `JobStepProgress`'s `formatStep` line use `text-truncate` instead of `text-break`, with `title` set to the full text, so long names end in "…". The inline `style="min-width: 14rem"` on the Progress cells is removed.
+
+### Image Resolutions report (R)
+- **R1** API `GET /api/reports/image-resolutions` (every signed-in user, like Missing Images). Query: `system` (registered id), `type` (`BoxArt`, `Snap`, `TitleScreen` or `Other`, case-insensitive), `maxWidth`, `maxHeight` (whole numbers 1–100000), `page`, `pageSize` (the shared `Paging.Validate` rules, default 50).
+- **R2** Validation is a 400 ProblemDetails from `Problems.Validation`, keyed by field: `system` "Choose a registered system." (existing `Validate` helper), `type` "Must be BoxArt, Snap, TitleScreen or Other.", `maxWidth` / `maxHeight` "Must be 1–100000.".
+- **R3** Rows: every `images` row with `is_default = 0` of a game, filtered by system and type when set. With `maxWidth` and/or `maxHeight` set, a row is listed when `width <= maxWidth` **or** `height <= maxHeight` (an unset limit is ignored; none set lists every image). Order: `width * height` ascending, then system id, display title, image id.
+- **R4** Response: `{ items: [{ imageId, gameId, displayTitle, system, systemName, type, width, height, sizeBytes }], page, pageSize, total }`, `systemName` as other reports (`SystemName`).
+- **R5** Page `/reports/image-resolutions`, tab **Image Resolutions** with icon `report-image-resolutions` → `bi bi-aspect-ratio`, placed after **Games With Hacks** (before the Admin-only tabs). `<svelte:head>` title "Image Resolutions · RnRomManager".
+- **R6** Filter bar (the toolbar of L1): System `FilterDropdown` (as other reports, `systemFilterOptions`, "All systems"), **Type** select (All types / Box art / Screenshot / Title screen / Other), **Max width** and **Max height** number inputs (`min=1`, `max=100000`, `step=1`, empty = no limit, applied on `change`, each an input group with a trailing `<span class="input-group-text">px</span>`), and a **Clear** button (disabled when nothing is set) that resets all four. Any filter change goes to page 1. A typed value that isn't a whole number in 1–100000 is treated as empty (no limit) and the input is reset to empty.
+- **R7** Columns: preview (`<img>` from `/api/games/{gameId}/images/{imageId}`, `loading="lazy"`, `alt=""`, max 4rem × 4rem, `object-fit: contain`), **Game** (link to `/games/{id}?tab=images`), **System** (`SystemBadge`), **Type** (the labels of R6), **Resolution** (`<width> × <height>`), **Size** (`FileSize`). A count line above the table as Missing Metadata's ("1,234 images" / "1 image"), 50 per page with `Pagination`.
+- **R8** Empty states: no filter set → "No images yet."; a filter set → "No images match these filters.".
+- **R9** State lives in the URL (`?system=&type=&maxWidth=&maxHeight=&page=`, defaults left out). `type` uses the API spelling, matched exactly (`BoxArt`, `Snap`, `TitleScreen`, `Other`); `maxWidth`/`maxHeight` must be whole numbers in 1–100000 and `page` a whole number ≥ 1; any other value falls back to its default. `system` is passed as is: an unknown one (from the URL or a restored query) gets the API's 400 shown in `ErrorAlert`, and **Clear** still works. A page past the last one goes to the last page (replace), as Multiple Releases B20. The state is remembered in `localStorage` under `rnrm.reports.image-resolutions` (the query string, via `remembered`). Opening the page with none of those params restores the saved query (replace navigation), exactly as `routes/review/+page.svelte` does with `reviewFilter.ts`; after that every URL state is saved. Storage failures are ignored.
+- **R10** The image type labels (`Box art`, `Screenshot`, `Title screen`, `Other`) move from `GameImages.svelte`'s local `typeLabels` to an exported `imageTypeLabels` in the new `lib/imageResolutions.ts`, used by both.
+
+### Report layout (L)
+- **L1** Toolbar convention for report filter bars this spec touches: a `d-flex flex-wrap align-items-center gap-2 mb-3` container (as the Library and Audit pages), every control small: `FilterDropdown` as is, selects and inputs inside `input-group input-group-sm w-auto` with the visible label as `<label class="input-group-text" for=…>`, buttons `btn-sm`. All controls then share `btn-sm` height.
+- **L2** Multiple Releases: System dropdown then the **Minimum releases** input group (label text unchanged, still `for="multiple-releases-min"`), side by side with a `gap-2` gap.
+- **L3** Missing Metadata: the toolbar holds **Title** (input group with classes `input-group input-group-sm flex-grow-1 flex-md-grow-0 missing-metadata-title`; new `app.css` rule `@media (min-width: 768px) { .missing-metadata-title { width: 16rem; } }`, so it fills the row on phones and is 16rem from `md`), System, **Missing** (input group) and **Clear** (`btn-sm btn-outline-secondary`). The `<form role="search">` and the ids `missing-metadata-q` / `missing-metadata-missing` stay.
+- **L4** Newly Added: the System dropdown is replaced by tabs, one per system in the response order (systems A–Z), using the game-page tab markup (`ul.nav.nav-tabs` with `use:scrollActiveTab` and `role="tablist"`, `button.nav-link` with `id="newly-added-<system>"`, `role="tab"`, `aria-selected`, `aria-controls="newly-added-panel"`, and `title` the system's full name on the button). Each tab's content is `<SystemBadge system name={shortName} />` (short name from `/api/systems`, the upper-cased id when unknown). One panel (`role="tabpanel"`, `id="newly-added-panel"`, `aria-labelledby="newly-added-<selected system>"`, inside one `card`) shows the chosen system's table (Game, Added, Releases as today), without the card header.
+- **L5** Newly Added tab state is `?system=` (replace navigation, `reset: false`); a missing or unknown id selects the first tab without changing the URL. The page fetches `GET /api/reports/newly-added` once, unfiltered; switching tabs does not refetch. Empty: "No games yet." (unchanged).
+- **L6** Activity: the accordion becomes tabs in the same order (Added ROMs, Sign-ins, Plays, Saves, Edits, Deletions, Recent jobs, Last backup), same markup as L4 with text labels, Added ROMs selected first. Tab buttons `id="activity-<key>"`, panels keep `id="activity-<key>-panel"` (`role="tabpanel"`, `aria-labelledby="activity-<key>"`), each its own `card`, all mounted and `hidden` when not selected. Each panel starts with `<h2 class="h5 visually-hidden">` holding the section title (as the game page's releases panel). Tab state is page state (not URL), as today's open section. The note above stays above the tabs.
+
+## Changes
+| Area | File(s) | Change |
+|---|---|---|
+| Core | `src/RnRomManager.Core/Reports/IReportRepository.cs` | `ListImageResolutionsAsync(string? systemId, ImageType? type, int? maxWidth, int? maxHeight, int page, int pageSize, CancellationToken)` and record `ImageResolutionItem(long ImageId, Guid GameId, string DisplayTitle, string SystemId, ImageType Type, int Width, int Height, long SizeBytes)` (new) |
+| Data | `src/RnRomManager.Data/Repositories/ReportRepository.cs` | Dapper query per R3 (count + page), copying `ListMissingImagesAsync`. No migration: `images.width`/`height` exist (0004). |
+| Api | `src/RnRomManager.Api/Endpoints/ReportEndpoints.cs` | `GET /image-resolutions` per R1–R4 |
+| Web | `src/RnRomManager.Web/src/lib/jobs.ts`, `routes/jobs/+page.svelte`, `routes/jobs/[id]/+page.svelte`, `lib/components/JobStepProgress.svelte`, `app.css`, `routes/reports/activity/+page.svelte`, `routes/integrity/+page.svelte`, `routes/ingestion/+page.svelte`, `routes/admin/dats/+page.svelte` | J1–J3, P1–P3 |
+| Web | `lib/imageResolutions.ts` (new), `routes/reports/image-resolutions/+page.svelte` (new), `lib/reports.ts`, `lib/components/icons.ts`, `lib/components/GameImages.svelte`, `lib/api/types.ts` | R5–R10 (`ImageResolutionItem` type in `types.ts`) |
+| Web | `routes/reports/newly-added/+page.svelte`, `multiple-releases/+page.svelte`, `missing-metadata/+page.svelte`, `activity/+page.svelte` | L1–L6 |
+| Docs | `docs/features.md` (Jobs :243, Job detail :247, Reports :298, Report APIs :482), `docs/codemap.md` | Behaviour as above |
+| e2e | `tests/e2e/specs/mvp.spec.ts` | See step 7 |
+
+## Risks
+- **Performance:** the report scans `images` joined to `games` with no index on width/height and sorts on `width * height`. A home library (tens of thousands of images) stays well under a second; no index is added. Revisit if it grows to millions.
+- **Bandwidth:** previews load the full image; `loading="lazy"` and 50 rows per page keep it bounded, and low-resolution images are small by definition.
+- **Renamed labels:** J1 changes visible text that tests assert (listed per step). No API or stored value changes.
+- **AccordionItem** stays: still used by Backups, DATs, Ingestion and Integrity.
+
+Every step runs `pwsh scripts/codemap.ps1` and commits `docs/codemap.md` (it lists endpoints, routes and lib files).
+
+## Steps
+- [ ] **1. Job names and fixed progress column**: J1–J3, P1–P3. Files: `lib/jobs.ts`, `routes/jobs/+page.svelte`, `routes/jobs/[id]/+page.svelte`, `lib/components/JobStepProgress.svelte`, `app.css`, `routes/reports/activity/+page.svelte` (line 222 only), `routes/integrity/+page.svelte`, `routes/ingestion/+page.svelte`, `routes/admin/dats/+page.svelte`, `docs/features.md` (Jobs, Job detail). Tests: `lib/jobs.test.ts` (label list → J1 values), `routes/jobs/jobs-page.test.ts` (`Moving ROMs` unchanged; add: progress text has `text-truncate` and a `title` with the full text), `routes/jobs/job-page.test.ts` (add: heading reads "Ingest Job", and "Ingest (Quick) Job" with a mode), `lib/components/JobStepProgress.test.ts` (add: truncate + title), `lib/components/AppFooter.test.ts` (unchanged labels still pass), `routes/ingestion-page.test.ts:53` and `routes/integrity-page.test.ts:53` (`'ReviewResolve running'` → `'Review running'`), `routes/ingestion/ingestion-page.test.ts`, `routes/integrity/integrity-page.test.ts`, `routes/admin/dats-page.test.ts`, `routes/reports/activity-page.test.ts` (run; update any raw-type text they assert). Done when: all listed vitest files, `npm run lint` and `npm run check` pass; no `{job.type}`/`{run.type}` text render remains in those pages.
+- [ ] **2. Image resolutions query**: `IReportRepository.ListImageResolutionsAsync`, `ImageResolutionItem`, `ReportRepository` SQL (R3). Tests: `tests/RnRomManager.Data.Tests/Database/ImageResolutionsQueryTests.cs` (new, as `NewlyAddedGamesQueryTests`): excludes `is_default`; system and type filters; maxWidth only, maxHeight only, both = OR, `<=` boundary; order by area then system, title, id; paging and total. Done when: the class passes (Integration, Docker).
+- [ ] **3. Image resolutions endpoint**: R1, R2, R4 in `ReportEndpoints.cs`; `docs/features.md` Report APIs; `docs/codemap.md` regenerated (gains the route). Tests: `ReportEndpointsTests` (shape, filters passed through, each 400 key and message, type case-insensitive), `EndpointRoleMatrixTests` row `["GET /api/reports/image-resolutions"] = Role.User`. Done when: both classes pass.
+- [ ] **4a. Image Resolutions filter helpers**: `lib/imageResolutions.ts` (new: `ImageResolutionFilter`, `imageResolutionParams`, `parseImageResolutionFilter`, `imageResolutionSearch`, `imageResolutionApiUrl`, `readSavedImageResolutionFilter`/`saveImageResolutionFilter`, `imageTypeLabels`, modelled on `reviewFilter.ts`), R10 move in `lib/components/GameImages.svelte`, `ImageResolutionItem` in `lib/api/types.ts`. Tests: `lib/imageResolutions.test.ts` (new: parse with bad values per R9, search drops defaults, API URL); the R10 move is covered by `npm run check` and `routes/games/game-images.test.ts`. Done when: those files, lint and check pass.
+- [ ] **4b. Image Resolutions page**: R5–R9. Files: `routes/reports/image-resolutions/+page.svelte` (new), `lib/reports.ts`, `lib/components/icons.ts`, `docs/features.md` (Reports: tab list, "the first six" → "the first seven", new bullet after Games With Hacks, URL-state paragraph). Tests: `lib/reports.test.ts` (Site list gains Image Resolutions after Games With Hacks), `routes/reports/reports-pages.test.ts` (new describe: rows and link `?tab=images`, filters write the URL and reset page, out-of-range width ignored, Clear, restore from `localStorage` when the URL is bare, past-last-page redirect, both empty states; the tab-order assertions at ~939 and ~1133 gain the new tab), `routes/reports/activity-page.test.ts:424-431` (Site tab list gains 'Image Resolutions' after 'Games With Hacks'). Done when: those files, lint and check pass.
+- [ ] **5. Newly Added and Activity tabs**: L4–L6, `docs/features.md` (Newly Added bullet: tabs instead of cards and filter; drop Newly Added from "Every report's System filter (…)"; Activity bullet: tabs instead of accordion; URL-state paragraph keeps Newly Added `?system=`). Tests: `routes/reports/reports-pages.test.ts` Newly Added describe (~766: tabs per system, first selected, `?system=` selects, unknown id → first tab, tab click calls `goto('/reports/newly-added?system=<id>', …)` without a refetch; the dropdown test at ~821–831 is replaced), `routes/reports/activity-page.test.ts` (`sectionOf` rewritten to return `#activity-<key>-panel`, found via the tab's `aria-controls`; every test using it keeps its assertions; the section list at ~114 checks tabs `activity-<key>`; add: only the selected panel is visible, clicking a tab switches). Done when: those files, lint and check pass.
+- [ ] **6. Compact filter bars**: L1–L3 on Multiple Releases and Missing Metadata, and the Image Resolutions bar already built to L1 (check only). Tests: `routes/reports/reports-pages.test.ts` (Multiple Releases: "Minimum releases" still found by label, select has `form-select` inside `.input-group-sm`; Missing Metadata: Title, Missing and Clear still found by label/role). Done when: the file, lint and check pass.
+- [ ] **7. End-to-end**: `tests/e2e/specs/mvp.spec.ts`: line ~237 heading `/Ingest job/` → `/Ingest Job/`; Activity (~304): click the **Added ROMs** tab is not needed (default), `#activity-added-panel` row assertion unchanged; Newly Added (~3065): replace the `.card` filter with `getByRole("tab", { name: "GB" })` (selected) and the panel's first link; in "reports and the ingest audit trail" (~271) seeded games only have placeholder art, so nothing there changes. In "release editing, Games With Hacks, Newly Added and the phone shell" (~3037), after Games With Hacks: open **Image Resolutions**, expect the Star Courier row (its 64 × 64 box art from "images: upload, set cover, delete"), set Max width to 100, go to `/reports/image-resolutions` with no query and expect the URL to come back with `maxWidth=100`, `expectAccessible(page, "image resolutions report")`. Done when: `pwsh scripts/test-e2e.ps1` passes in Finish.
+
+## Decisions
+- 2026-11-20 Job name capitalisation → Title Case labels everywhere; detail heading "<label> Job" (user)
+- 2026-11-20 Image types in the report → all four (BoxArt, Snap, TitleScreen, Other), filterable (user)
+- 2026-11-20 Width/height filter → Max width OR max height, `<=`, sorted smallest area first (user)
+- 2026-11-20 Report access → every signed-in user (user)
+- 2026-11-20 Newly Added → tabs replace the System dropdown, `?system=` kept (user)
+- 2026-11-20 Report rows → preview thumbnail + link to the game's Images tab (user)
+- 2026-11-20 Placeholder art excluded from the report → yes, Missing Images covers it (code)
+- 2026-11-20 Filter persistence → URL state plus `localStorage`, as the review queue's filter (code)
+- 2026-11-20 Review round 1: e2e moved to the ~3037 test (placeholder-only seeds); missing test files and `sectionOf` rewrite listed; panel headings, tab ids, invalid width input, URL `type` spelling, unknown system and last-page rules pinned; step 4 split; codemap/doc edits assigned (reviewer)
+- 2026-11-20 Review round 2: JobStepProgress.test.ts is existing (add), GameImages has no test file (covered by game-images.test.ts and check) (reviewer)
+
+## Kickoff prompt
+```text
+/spec implement 2026-11-20-image-resolutions-report-polish.md
+```
+Starts the spec, or resumes it at the first unticked step.
