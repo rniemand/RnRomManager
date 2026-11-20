@@ -764,72 +764,86 @@ describe('reports pages', () => {
 		});
 	});
 
-	describe('Newly Added (release editing B14)', () => {
-		beforeEach(() => navigateTo('/reports/newly-added'));
-
-		it('shows one card per system with game, added time and releases', async () => {
-			answers['GET /api/reports/newly-added'] = {
-				status: 200,
-				body: {
-					systems: [
-						{
-							system: 'gb',
-							systemName: 'Game Boy',
-							games: [
-								{
-									id: 'g1',
-									displayTitle: 'Tetris',
-									addedAt: '2026-01-02T03:04:00Z',
-									releaseCount: 2
-								}
-							]
-						},
-						{
-							system: 'gbc',
-							systemName: 'Game Boy Color',
-							games: [
-								{
-									id: 'g2',
-									displayTitle: 'Zelda',
-									addedAt: '2026-01-01T00:00:00Z',
-									releaseCount: 1
-								}
-							]
-						}
+	describe('Newly Added (release editing B14, Report Polish L4–L5)', () => {
+		const report = {
+			systems: [
+				{
+					system: 'gb',
+					systemName: 'Game Boy',
+					games: [
+						{ id: 'g1', displayTitle: 'Tetris', addedAt: '2026-01-02T03:04:00Z', releaseCount: 2 }
+					]
+				},
+				{
+					system: 'gbc',
+					systemName: 'Game Boy Color',
+					games: [
+						{ id: 'g2', displayTitle: 'Zelda', addedAt: '2026-01-01T00:00:00Z', releaseCount: 1 }
 					]
 				}
-			};
+			]
+		};
+		const tabs = () => screen.getAllByRole('tab');
+		const panel = () => document.getElementById('newly-added-panel')!;
+
+		beforeEach(() => {
+			navigateTo('/reports/newly-added');
+			answers['GET /api/reports/newly-added'] = { status: 200, body: report };
+		});
+
+		it('shows one tab per system, the first selected, and its games in one panel', async () => {
+			answers['GET /api/systems'] = { status: 500 };
 			render(NewlyAdded);
 
 			const link = await screen.findByRole('link', { name: 'Tetris' });
 			expect(link.getAttribute('href')).toBe('/games/g1');
-			const cards = [...document.querySelectorAll('.card')];
-			expect(
-				cards.map((c) => c.querySelector('.card-header')!.textContent!.replace(/\s+/g, ' ').trim())
-			).toEqual(['GB Game Boy', 'GBC Game Boy Color']);
-			expect([...cards[0].querySelectorAll('th')].map((th) => th.textContent!.trim())).toEqual([
+			expect(tabs().map((t) => t.textContent!.trim())).toEqual(['GB', 'GBC']);
+			expect(tabs().map((t) => [t.id, t.title, t.getAttribute('aria-selected')])).toEqual([
+				['newly-added-gb', 'Game Boy', 'true'],
+				['newly-added-gbc', 'Game Boy Color', 'false']
+			]);
+			expect(tabs()[0].getAttribute('aria-controls')).toBe('newly-added-panel');
+			expect(panel().getAttribute('role')).toBe('tabpanel');
+			expect(panel().getAttribute('aria-labelledby')).toBe('newly-added-gb');
+			expect(panel().querySelector('.card-header')).toBeNull();
+			expect([...panel().querySelectorAll('th')].map((th) => th.textContent!.trim())).toEqual([
 				'Game',
 				'Added',
 				'Releases'
 			]);
-			const cells = [...cards[0].querySelectorAll('tbody td')];
+			const cells = [...panel().querySelectorAll('tbody td')];
 			expect(cells[2].textContent!.trim()).toBe('2');
 			expect(cells[2].className).toBe('text-end');
 			expect(cells[1].textContent!.trim()).not.toBe('');
+			expect(screen.queryByRole('link', { name: 'Zelda' })).toBeNull();
 		});
 
-		it('the System menu writes system= and requests it (F2)', async () => {
-			answers['GET /api/reports/newly-added'] = { status: 200, body: { systems: [] } };
-			answers['GET /api/reports/newly-added?system=gbc'] = { status: 200, body: { systems: [] } };
+		it('?system= selects its tab; an unknown id selects the first', async () => {
+			navigateTo('/reports/newly-added?system=gbc');
 			render(NewlyAdded);
+			expect(await screen.findByRole('link', { name: 'Zelda' })).toBeTruthy();
+			expect(tabs()[1].getAttribute('aria-selected')).toBe('true');
+			expect(panel().getAttribute('aria-labelledby')).toBe('newly-added-gbc');
 
-			await pickSystem('gbc');
+			navigateTo('/reports/newly-added?system=nope');
+			expect(await screen.findByRole('link', { name: 'Tetris' })).toBeTruthy();
+			expect(goto).not.toHaveBeenCalled();
+		});
+
+		it('a tab click writes system= without refetching', async () => {
+			render(NewlyAdded);
+			await screen.findByRole('link', { name: 'Tetris' });
+
+			await fireEvent.click(tabs()[1]);
 
 			expect(goto).toHaveBeenLastCalledWith('/reports/newly-added?system=gbc', {
 				replace: true,
 				reset: false
 			});
-			await vi.waitFor(() => expect(calls).toContain('GET /api/reports/newly-added?system=gbc'));
+			expect(await screen.findByRole('link', { name: 'Zelda' })).toBeTruthy();
+			expect(calls.filter((c) => c.startsWith('GET /api/reports/newly-added'))).toEqual([
+				'GET /api/reports/newly-added'
+			]);
 		});
 
 		it('an empty library shows "No games yet."', async () => {

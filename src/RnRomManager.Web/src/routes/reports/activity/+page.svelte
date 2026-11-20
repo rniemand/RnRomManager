@@ -10,7 +10,6 @@
 		Page,
 		SystemInfo
 	} from '#lib/api/types.js';
-	import AccordionItem from '#lib/components/AccordionItem.svelte';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
@@ -19,6 +18,7 @@
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { formatDateTime, formatDuration } from '#lib/format.js';
 	import { jobLabel, statusClass } from '#lib/jobs.js';
+	import { scrollActiveTab } from '#lib/scrollActiveTab.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 
 	/** B20: the extra columns of an audit section, after Time and User. */
@@ -65,8 +65,18 @@
 		);
 	});
 
-	/** One section open at a time; Added ROMs starts open. Closed sections stay mounted. */
-	let openSection = $state<string | null>('added');
+	/** Report Polish L6: one tab per section, Added ROMs first; hidden panels stay mounted. */
+	const tabs: [key: string, title: string][] = [
+		['added', 'Added ROMs'],
+		['sign-ins', 'Sign-ins'],
+		['plays', 'Plays'],
+		['saves', 'Saves'],
+		['edits', 'Edits'],
+		['deletions', 'Deletions'],
+		['jobs', 'Recent jobs'],
+		['backup', 'Last backup']
+	];
+	let selected = $state('added');
 
 	const systemName = (id: string) => systems.find((s) => s.id === id)?.displayName;
 	/** B21: a gone game's name is the file name of its audit `path` (the server builds no fallback). */
@@ -76,15 +86,16 @@
 <svelte:head><title>Activity · Reports · RnRomManager</title></svelte:head>
 
 {#snippet section(key: string, title: string, body: Snippet)}
-	<AccordionItem
+	<div
+		class="card"
 		id="activity-{key}-panel"
-		headingId="activity-{key}"
-		flush
-		bind:open={() => openSection === key, (v) => (openSection = v ? key : null)}
+		role="tabpanel"
+		aria-labelledby="activity-{key}"
+		hidden={selected !== key}
 	>
-		{#snippet header()}{title}{/snippet}
+		<h2 class="h5 visually-hidden">{title}</h2>
 		{@render body()}
-	</AccordionItem>
+	</div>
 {/snippet}
 
 {#snippet sourceState(
@@ -289,6 +300,23 @@
 		Sign-ins, plays, saves, edits and deletions come from the audit log, which keeps the last 30
 		days.
 	</p>
+
+	<ul class="nav nav-tabs mb-3" use:scrollActiveTab role="tablist">
+		{#each tabs as [key, title] (key)}
+			<li class="nav-item" role="presentation">
+				<button
+					type="button"
+					class="nav-link"
+					class:active={selected === key}
+					id="activity-{key}"
+					role="tab"
+					aria-selected={selected === key}
+					aria-controls="activity-{key}-panel"
+					onclick={() => (selected = key)}>{title}</button
+				>
+			</li>
+		{/each}
+	</ul>
 
 	{@render section('added', 'Added ROMs', addedBody)}
 
