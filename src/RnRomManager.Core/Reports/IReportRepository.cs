@@ -1,4 +1,5 @@
 using RnRomManager.Core.Database;
+using RnRomManager.Core.Library;
 
 namespace RnRomManager.Core.Reports;
 
@@ -55,6 +56,14 @@ public interface IReportRepository
     /// </summary>
     Task<IReadOnlyList<NewGameItem>> ListNewlyAddedGamesAsync(string? systemId, int perSystem, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Image Resolutions R3: every non-placeholder image of a game, of <paramref name="systemId"/> and <paramref name="type"/> when set,
+    /// listed when <c>width &lt;= maxWidth</c> or <c>height &lt;= maxHeight</c> (an unset limit is ignored; none set lists all), ordered
+    /// by area, then system id, display title and image id.
+    /// </summary>
+    Task<Page<ImageResolutionItem>> ListImageResolutionsAsync(string? systemId, ImageType? type, int? maxWidth, int? maxHeight, int page,
+        int pageSize, CancellationToken cancellationToken);
+
     /// <summary>RP6–RP8: undismissed duplicate groups, sorted by system then base title; paging and total exclude dismissed ones.</summary>
     Task<Page<DuplicateGroup>> ListDuplicatesAsync(string? systemId, int page, int pageSize, CancellationToken cancellationToken);
 
@@ -93,6 +102,10 @@ public enum HackedGameSort { Name, System, Hacks, Releases, Size }
 
 /// <summary>Multiple Releases B16/B17: the report's sort keys.</summary>
 public enum MultipleReleaseSort { Name, System, Releases, Updates, Size }
+
+/// <summary>Image Resolutions R4: one stored image with its pixel size.</summary>
+public sealed record ImageResolutionItem(long ImageId, Guid GameId, string DisplayTitle, string SystemId, ImageType Type, int Width, int Height,
+    long SizeBytes);
 
 /// <param name="Reason">A <see cref="MissingImageReasons"/> value.</param>
 public sealed record MissingImageItem(Guid Id, string DisplayTitle, string SystemId, string Reason);
