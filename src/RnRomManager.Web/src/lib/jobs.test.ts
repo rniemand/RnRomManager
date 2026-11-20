@@ -8,6 +8,7 @@ import {
 	outcomeClass,
 	percent,
 	severityClass,
+	splitSummary,
 	statusClass,
 	stepPercent
 } from './jobs';
@@ -129,5 +130,33 @@ describe('isCancellable', () => {
 		expect(
 			['Ingest', 'Integrity', 'DatRefresh', 'MediaRetry', 'ReviewResolve'].map(isCancellable)
 		).toEqual([true, true, true, true, false]);
+	});
+
+	it('splits a summary: flat name maps become tables, everything else a badge', () => {
+		const { badges, tables } = splitSummary({
+			files: 2,
+			versions: { 'Nintendo - Game Boy': '2026.11.14', 'Sega - 32X': '2026.10.07' },
+			errors: { title: ['Bad.'] },
+			gameId: null,
+			empty: {}
+		});
+		expect(badges).toEqual([
+			['files', 2],
+			['errors', { title: ['Bad.'] }],
+			['gameId', null],
+			['empty', {}]
+		]);
+		expect(tables).toEqual([
+			{
+				key: 'versions',
+				title: 'DAT versions',
+				columns: ['DAT', 'Version'],
+				rows: [
+					['Nintendo - Game Boy', '2026.11.14'],
+					['Sega - 32X', '2026.10.07']
+				]
+			}
+		]);
+		expect(splitSummary(null)).toEqual({ badges: [], tables: [] });
 	});
 });

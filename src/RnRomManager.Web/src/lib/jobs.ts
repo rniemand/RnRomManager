@@ -67,6 +67,48 @@ export function formatSummaryValue(value: unknown): string {
 		: JSON.stringify(value);
 }
 
+/** A summary entry shown as a two-column table rather than a badge. */
+export interface SummaryTable {
+	key: string;
+	title: string;
+	columns: [string, string];
+	rows: [string, string][];
+}
+
+const summaryTableLabels: Record<string, { title: string; columns: [string, string] }> = {
+	versions: { title: 'DAT versions', columns: ['DAT', 'Version'] }
+};
+
+/** A non-empty plain object whose values are all strings or numbers (e.g. DatRefresh's `versions`). */
+function isFlatMap(value: unknown): value is Record<string, string | number> {
+	if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+	const values = Object.values(value);
+	return values.length > 0 && values.every((v) => typeof v === 'string' || typeof v === 'number');
+}
+
+/**
+ * Splits a job summary for display: flat name → value maps become tables, everything else a badge (B6). Nested
+ * values (a ReviewResolve job's `errors`) stay badges with JSON.
+ */
+export function splitSummary(summary: Record<string, unknown> | null): {
+	badges: [string, unknown][];
+	tables: SummaryTable[];
+} {
+	const badges: [string, unknown][] = [];
+	const tables: SummaryTable[] = [];
+	for (const [key, value] of Object.entries(summary ?? {})) {
+		if (isFlatMap(value)) {
+			const label = summaryTableLabels[key] ?? { title: key, columns: ['Name', 'Value'] };
+			tables.push({
+				key,
+				...label,
+				rows: Object.entries(value).map(([name, v]) => [name, String(v)])
+			});
+		} else badges.push([key, value]);
+	}
+	return { badges, tables };
+}
+
 /** `Ingested 3 · Review 1`; zero counts left out. */
 export function formatSummary(summary: Record<string, unknown> | null): string {
 	if (!summary) return '';
