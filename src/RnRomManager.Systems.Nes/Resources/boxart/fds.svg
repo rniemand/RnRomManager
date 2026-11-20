@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Famicom Disk System). Made for this project; MIT licensed like the rest of the
+       repo. A generic two-sided 3-inch floppy card: no logo or trade dress. Exported to fds.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#fdf1d6"/>
+  <!-- disk card, slightly tilted -->
+  <g transform="rotate(-5 256 240)">
+    <path d="M136 72 L364 72 L392 100 L392 412 Q392 420 384 420 L128 420 Q120 420 120 412 L120 88 Q120 72 136 72 Z"
+          fill="#e0b52c" stroke="#7a5c10" stroke-width="5" stroke-linejoin="round"/>
+    <!-- label -->
+    <rect x="152" y="98" width="208" height="128" rx="6" fill="#fffaf0" stroke="#7a5c10" stroke-width="3"/>
+    <rect x="172" y="122" width="120" height="12" rx="3" fill="#c0392b"/>
+    <rect x="172" y="146" width="168" height="8" rx="3" fill="#b9a77a"/>
+    <rect x="172" y="164" width="150" height="8" rx="3" fill="#b9a77a"/>
+    <rect x="172" y="182" width="160" height="8" rx="3" fill="#b9a77a"/>
+    <!-- side marker -->
+    <circle cx="336" cy="128" r="14" fill="#c0392b"/>
+    <text x="336" y="134" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+          font-size="17" font-weight="700" fill="#fff">A</text>
+    <!-- metal shutter over the head window -->
+    <rect x="184" y="276" width="144" height="128" rx="4" fill="#b8bcc2" stroke="#5b6068" stroke-width="4"/>
+    <rect x="236" y="300" width="40" height="80" rx="4" fill="#3a3d42"/>
+    <!-- write-protect notches -->
+    <rect x="132" y="372" width="18" height="30" rx="2" fill="#7a5c10"/>
+    <rect x="362" y="372" width="18" height="30" rx="2" fill="#7a5c10"/>
+  </g>
+  <text x="256" y="484" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="34" font-weight="700" letter-spacing="4" fill="#7a5c10">DISK SYSTEM</text>
+</svg>

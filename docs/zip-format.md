@@ -20,6 +20,7 @@ roms/
   nds/                  Nintendo DS (external by default: .nds files next to the ZIP; an Admin can store them
                         inside instead, and the storage job moves games between the two)
   nes/                  Nintendo Entertainment System (headered .nes, header included)
+  fds/                  Famicom Disk System (headerless .fds, fwNES header stripped)
   snes/                 Super Nintendo Entertainment System (stored as .sfc, copier header stripped)
   vb/                   Virtual Boy (.vb)
   a2600/                Atari 2600 (.a26 or .bin, as the DAT names it)

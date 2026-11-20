@@ -147,13 +147,20 @@ describe('parsePlayParams', () => {
 
 describe('biosFor', () => {
 	it('names the ColecoVision BIOS for gearcoleco', () => {
-		expect(biosFor('gearcoleco')).toBe('colecovision.rom');
+		expect(biosFor('gearcoleco', 'X (USA).col')).toBe('colecovision.rom');
 	});
+
+	it.each(['X (Japan).fds', 'X (Japan).FDS'])(
+		'names disksys.rom for an FCEUmm %s release',
+		(name) => {
+			expect(biosFor('fceumm', name)).toBe('disksys.rom');
+		}
+	);
 
 	it.each(['gambatte', 'stella2014', 'smsplus', 'prosystem', 'fceumm', 'pcsx_rearmed'])(
 		'needs none for %s',
 		(core) => {
-			expect(biosFor(core)).toBeNull();
+			expect(biosFor(core, 'X (USA).nes')).toBeNull();
 		}
 	);
 });
@@ -486,7 +493,7 @@ describe('SNES (SNES B3)', () => {
 	);
 
 	it('needs no BIOS and hides the core chooser', () => {
-		expect(biosFor('snes9x')).toBeNull();
+		expect(biosFor('snes9x', 'X (USA).sfc')).toBeNull();
 		expect(hidesCoreChooser('snes9x')).toBe(true);
 	});
 
@@ -708,7 +715,7 @@ describe('Nintendo DS (Nintendo DS B4)', () => {
 	});
 
 	it('needs no BIOS, is vendored and hides the core chooser', () => {
-		expect(biosFor('desmume')).toBeNull();
+		expect(biosFor('desmume', 'X (USA).nds')).toBeNull();
 		expect(isOperatorCore('desmume')).toBe(false);
 		expect(hidesCoreChooser('desmume')).toBe(true);
 	});

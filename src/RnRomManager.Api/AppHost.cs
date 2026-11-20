@@ -253,6 +253,7 @@ public static class AppHost
         services.AddSystemHandler<GameBoyAdvanceHandler>();
         services.AddSystemHandler<Nintendo64Handler>();
         services.AddSystemHandler<NesHandler>();
+        services.AddSystemHandler<FdsHandler>();
         services.AddSystemHandler<SnesHandler>();
         services.AddSystemHandler<VirtualBoyHandler>();
         services.AddSystemHandler<Atari2600Handler>();

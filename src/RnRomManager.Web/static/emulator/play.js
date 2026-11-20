@@ -481,7 +481,7 @@ async function start() {
 		const problem = await checkOperatorCore(params.core);
 		if (problem) return show(problem);
 	}
-	const bios = biosFor(params.core);
+	const bios = biosFor(params.core, params.name);
 	if (bios) {
 		const problem = await checkBios(bios);
 		if (problem) return show(problem);

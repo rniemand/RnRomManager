@@ -294,6 +294,15 @@
 	background-color: var(--bs-amiga) !important;
 }
 
+/* Famicom Disk System colour: a dark disk-card ochre, same in both themes; white on it is AAA (~7.6:1). */
+:root {
+	--bs-fds: #6b4f0a;
+}
+.text-bg-fds {
+	color: #fff !important;
+	background-color: var(--bs-fds) !important;
+}
+
 /* Nintendo 3DS system colour: a light pink no other system uses, same in both themes; black on it is AAA (~8.8:1). */
 :root {
 	--bs-3ds: #f783ac;

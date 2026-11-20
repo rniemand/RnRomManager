@@ -37,6 +37,7 @@ export interface SystemColour {
 		| 'pet'
 		| 'vic20'
 		| 'amiga'
+		| 'fds'
 		| '3ds';
 	foreground: '#fff' | '#000';
 }
@@ -74,6 +75,7 @@ export const systemColours: Record<string, SystemColour> = {
 	pet: { name: 'pet', foreground: '#fff' },
 	vic20: { name: 'vic20', foreground: '#fff' },
 	amiga: { name: 'amiga', foreground: '#fff' },
+	fds: { name: 'fds', foreground: '#fff' },
 	'3ds': { name: '3ds', foreground: '#000' }
 };
 

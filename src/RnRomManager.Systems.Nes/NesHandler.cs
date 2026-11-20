@@ -34,7 +34,7 @@ public sealed class NesHandler : ISystemHandler
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => NesHeaderReader.Read(rom);
 
-    private static byte[] LoadResource(string name)
+    internal static byte[] LoadResource(string name)
     {
         using var stream = typeof(NesHandler).Assembly.GetManifestResourceStream($"RnRomManager.Systems.Nes.Resources.{name}")
             ?? throw new InvalidOperationException($"Embedded resource {name} is missing.");

@@ -1,6 +1,6 @@
 # Default box art
 
-`nes.svg` is the source (made for this project, MIT). The embedded `nes.png` is a
+`nes.svg` and `fds.svg` are the sources (made for this project, MIT). The embedded PNG is a
 512×512 render of it (spec §6.1). After editing an SVG, re-export it with headless Edge or Chrome:
 
 ```bash
