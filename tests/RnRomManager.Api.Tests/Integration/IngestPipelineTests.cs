@@ -643,6 +643,7 @@ public class IngestPipelineTests
     [TestCase("psx")]
     [TestCase("saturn")]
     [TestCase("segacd")]
+    [TestCase("3do")]
     public async Task Chd_Lone_GoesToReviewAsNoDatMatch_WithItsFoldersSystem(string system)
     {
         var result = await IngestAsync(DropAged(system, "Mystery Disc.chd", FakeChd(2301)));
@@ -650,6 +651,14 @@ public class IngestPipelineTests
         Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", system)));
         Assert.That(Directory.Exists(Path.Combine(Roms, system)) ? Directory.GetFiles(Path.Combine(Roms, system), "*", SearchOption.AllDirectories) : [],
             Is.Empty);
+    }
+
+    [Test]
+    public async Task SaturnIso_Lone_GoesToReviewAsNoDatMatch()
+    {
+        var result = await IngestAsync(DropAged("saturn", "Mystery Disc.iso", FakeChd(2303)));
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "saturn")));
     }
 
     [Test]

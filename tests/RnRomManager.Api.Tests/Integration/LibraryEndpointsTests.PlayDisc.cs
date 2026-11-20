@@ -569,7 +569,8 @@ public partial class LibraryEndpointsTests
         AssertNotOpen(Path.Combine(overFolder, "Wider (USA).iso"));
     }
 
-    // CHD B4: a standalone .chd streams unchanged on PlayStation, Saturn and Sega CD; never in a set, never on PSP.
+    // CHD B4: a standalone .chd streams unchanged on PlayStation, Saturn, Sega CD and 3DO; never in a set, never on PSP.
+    // A Saturn .iso is the same lone-image shape.
 
     [TestCase("psx", "Chd Solo (USA).chd")]
     [TestCase("psx", "Chd Solo (USA).CHD")]
@@ -577,6 +578,8 @@ public partial class LibraryEndpointsTests
     [TestCase("saturn", "Chd Solo (USA).CHD")]
     [TestCase("segacd", "Chd Solo (USA).chd")]
     [TestCase("segacd", "Chd Solo (USA).CHD")]
+    [TestCase("3do", "Chd Solo (USA).chd")]
+    [TestCase("saturn", "Chd Solo (USA).iso")]
     public async Task PlayDisc_AStandaloneChd_StreamsUnchanged(string system, string name)
     {
         var (id, folder, ids) = await DiscGame(system, "Chd Solo", [PsxSolo(name, PsxTrack1)], (name, PsxTrack1));
