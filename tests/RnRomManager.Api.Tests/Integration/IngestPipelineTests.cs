@@ -664,6 +664,15 @@ public class IngestPipelineTests
             Is.Empty);
     }
 
+    [TestCase("Mystery Umd.cso")]
+    [TestCase("Mystery Umd.pbp")]
+    public async Task PspCsoOrPbp_Lone_GoesToReviewAsNoDatMatch(string name)
+    {
+        var result = await IngestAsync(DropAged("psp", name, FakeChd(2305)));
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "psp")));
+    }
+
     [Test]
     public async Task SaturnIso_Lone_GoesToReviewAsNoDatMatch()
     {

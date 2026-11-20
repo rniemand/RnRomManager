@@ -323,6 +323,19 @@ public partial class LibraryEndpointsTests
         AssertNotOpen(Path.Combine(folder, "Umd (USA).iso"));
     }
 
+    [TestCase("Packed (USA).cso")]
+    [TestCase("Packed (USA).PBP")]
+    public async Task PlayDisc_APspCsoOrPbp_StreamsUnchanged(string name)
+    {
+        var bytes = Umd(30);
+        var (id, _, ids) = await PspGame("Packed", [PsxSolo(name, bytes)], (name, bytes));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(bytes));
+    }
+
     [Test]
     public async Task PlayDisc_APspIsoOfExactlyTwoGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
     {
