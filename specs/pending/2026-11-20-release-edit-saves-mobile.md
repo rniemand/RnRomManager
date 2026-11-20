@@ -89,7 +89,7 @@ A batch of fixes and features for the maintainer, mostly from using the app on a
 
 ### Navbar on mobile (below `lg`, 992px)
 - **B30 Search outside the menu.** A second search button (same icon, `aria-label="Search"`, `onclick={onsearch}`) sits between the brand and the toggler, `ms-auto me-2 d-lg-none`, shown under the same conditions as today's (`onsearch && !me.mustChangePassword`); the in-menu search item becomes `d-none d-lg-block`.
-- **B31 User menu expanded.** Below `lg`, the user dropdown's toggle is hidden and its menu is always shown inline (CSS in `Navbar.svelte`: `.user-menu > .dropdown-toggle { display: none }` and `.user-menu > .dropdown-menu { display: block; position: static; border: 0; background: transparent; }` inside the existing `max-width: 991.98px` block), preceded by a `dropdown-header` (`d-lg-none`) reading the username with the `user` icon. The `li` gets class `user-menu`. From `lg` up nothing changes. Item clicks still close the collapsed menu (existing `onMenuClick`).
+- **B31 User menu expanded.** Below `lg`, the user dropdown's toggle is hidden and its menu is always shown inline (CSS in `Navbar.svelte`: `.user-menu > .dropdown-toggle { display: none }` and `.user-menu > .dropdown-menu { display: block; position: static; border: 0; background: transparent; }` inside the existing `max-width: 991.98px` block), preceded by a `dropdown-header` (`d-lg-none`) reading the username with the `user` icon. The `li` gets class `user-menu`. From `lg` up nothing changes. Clicks behave as today (existing `onMenuClick`, which reacts only to `<a>`): link items such as Change password close the collapsed menu; the theme and Logout buttons don't (Logout navigates away anyway).
 
 ### Tabs and Admin pages
 - **B32 ROM Tools icons.** `romTools` entries gain `icon`: Ingestion `ingest`, Review `review`, Deleted ROMs `deleted` (new: `bi bi-trash3`), Integrity `integrity`; rendered as `<Icon name={tool.icon} />` before the label (the link is already `d-flex … gap-1`).
@@ -202,6 +202,7 @@ No SQL migration. New setting key `saves.folders.migrated` (`app_settings`). API
 - 2026-11-20 Close during a running manual save → waits for it, then stores; screenshot `timeout` reads as `error` (reviewer)
 - 2026-11-20 Review pass 5: B21 help text placement and `aria-describedby`, "newest" save = server's `updatedAt` order, `hotkeys` store path, Backups list loses its `.card` in the flush item, the other e2e flow that closes Orbit Blocks (code)
 - 2026-11-20 Review pass 6: B7 sanitizes the stem only, with `FileNameSanitizer`'s existing 180-character cut; the SPA preview skips sanitizing (code)
+- 2026-11-20 Review pass 7: B31 menu-close wording matches `onMenuClick` (links close, theme and Logout buttons don't) (code)
 - 2026-11-20 Review pass 2: region order on re-check, empty language entries, broken `EmulatorModal.test.ts` cases, e2e Play flows that now store on close, Jobs/Activity docs (reviewer)
 
 ## Kickoff prompt
