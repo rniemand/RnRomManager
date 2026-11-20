@@ -517,7 +517,7 @@ describe('GlobalSearch', () => {
 		it('Shift+Enter plays the active result, navigating only after the modal hid', async () => {
 			items = [playable('g1')];
 			render(GlobalSearch, { open: true });
-			await typeAndWait('game');
+			await typeAndWait('tetris');
 
 			await fireEvent.keyDown(input(), { key: 'Enter', shiftKey: true });
 			expect(shown.hidden).toBeGreaterThan(0);
@@ -529,7 +529,7 @@ describe('GlobalSearch', () => {
 		it('plain Enter still opens the game', async () => {
 			items = [playable('g1')];
 			render(GlobalSearch, { open: true });
-			await typeAndWait('game');
+			await typeAndWait('tetris');
 
 			await fireEvent.keyDown(input(), { key: 'Enter' });
 			expect(goto).toHaveBeenLastCalledWith('/games/g1');
@@ -539,7 +539,7 @@ describe('GlobalSearch', () => {
 			collections = [{ id: 'c1', name: 'Faves', gameCount: 2, coverUrl: null, updatedAt: '' }];
 			items = [item('g2', 'Not playable', { playRomId: null })];
 			render(GlobalSearch, { open: true });
-			await typeAndWait('game');
+			await typeAndWait('tetris');
 			const before = shown.hidden;
 
 			await fireEvent.keyDown(input(), { key: 'Enter', shiftKey: true });
@@ -554,7 +554,7 @@ describe('GlobalSearch', () => {
 		it('only playable rows get the Play icon, its grid column and the shared Shift+Enter hint', async () => {
 			items = [playable('g1'), item('g2', 'Not playable', { playRomId: null })];
 			render(GlobalSearch, { open: true });
-			await typeAndWait('game');
+			await typeAndWait('tetris');
 
 			const [first, second] = screen.getAllByRole('option', { hidden: true });
 			expect(first.classList).toContain('game-row-play');
@@ -574,7 +574,7 @@ describe('GlobalSearch', () => {
 		it('a click on the Play icon plays without opening the game first', async () => {
 			items = [playable('g1')];
 			render(GlobalSearch, { open: true });
-			await typeAndWait('game');
+			await typeAndWait('tetris');
 
 			await fireEvent.click(screen.getAllByRole('option', { hidden: true })[0].lastElementChild!);
 			expect(goto).not.toHaveBeenCalled();
@@ -601,6 +601,91 @@ describe('GlobalSearch', () => {
 			);
 			expect(goto).toHaveBeenCalledWith('/games/u');
 			await vi.waitFor(() => expect(requested).toContain('/api/games/u/roms/7/played'));
+		});
+	});
+
+	describe('reports group (S)', () => {
+		const options = () => screen.getAllByRole('option', { hidden: true });
+		const admin = () =>
+			auth.set({ id: 1, username: 'admin', roles: ['admin'] as Role[], mustChangePassword: false });
+
+		it('"dup" shows a Duplicates chip first; Enter closes and opens the report', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('dup');
+
+			const first = options()[0];
+			expect(first.textContent!.trim()).toBe('Duplicates');
+			expect(first.id).toBe('global-search-results-0');
+			expect(first.closest('[role="group"]')!.getAttribute('aria-label')).toBe('Reports');
+			expect(first.querySelector('.bi')).toBeTruthy();
+			await fireEvent.keyDown(input(), { key: 'Enter' });
+			expect(shown.hidden).toBeGreaterThan(0);
+			expect(goto).toHaveBeenLastCalledWith('/reports/duplicates');
+		});
+
+		it('matches every word, ignoring case; Admin-only reports only for Admins', async () => {
+			items = [item('g1', 'Tetris')];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('MISSING metadata');
+			expect(options().map((o) => o.textContent!.trim())).not.toContain('Missing Metadata');
+
+			admin();
+			await typeAndWait('metadata missing');
+			expect(options()[0].textContent!.trim()).toBe('Missing Metadata');
+			expect(options()).toHaveLength(2);
+		});
+
+		it('Up/Down walk Reports, then Collections, then Games, with matching option ids', async () => {
+			collections = [{ id: 'c1', name: 'Faves', gameCount: 2, coverUrl: null, updatedAt: '' }];
+			items = [item('g1', 'Tetris')];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('dup');
+
+			const texts = options().map((o) => o.textContent!.replace(/\s+/g, ' ').trim());
+			expect(texts[0]).toBe('Duplicates');
+			expect(texts[1]).toContain('Faves');
+			expect(texts[2]).toContain('Tetris');
+			expect(options().map((o) => o.id)).toEqual(
+				[0, 1, 2].map((i) => `global-search-results-${i}`)
+			);
+			const headers = screen
+				.getAllByRole('presentation', { hidden: true })
+				.map((h) => h.textContent!.trim());
+			expect(headers).toEqual(['Reports', 'Collections', 'Games']);
+			for (const i of [1, 2, 0]) {
+				await fireEvent.keyDown(input(), { key: 'ArrowDown' });
+				expect(input().getAttribute('aria-activedescendant')).toBe(`global-search-results-${i}`);
+				expect(options()[i].getAttribute('aria-selected')).toBe('true');
+			}
+		});
+
+		it('Shift+Enter on a report does nothing; a click opens it', async () => {
+			render(GlobalSearch, { open: true });
+			await typeAndWait('hacks');
+			const before = shown.hidden;
+
+			await fireEvent.keyDown(input(), { key: 'Enter', shiftKey: true });
+			expect(shown.hidden).toBe(before);
+			expect(goto).not.toHaveBeenCalled();
+			await fireEvent.click(options()[0]);
+			expect(goto).toHaveBeenLastCalledWith('/reports/hacks');
+		});
+
+		it('report matches still show when both searches fail', async () => {
+			fail = true;
+			failCollections = true;
+			render(GlobalSearch, { open: true });
+			await typeAndWait('duplicates');
+
+			expect(options().map((o) => o.textContent!.trim())).toEqual(['Duplicates']);
+			expect(screen.getByText('Search is down')).toBeTruthy();
+			expect(screen.queryByText('No games match')).toBeNull();
+		});
+
+		it('labels the input and placeholder for reports too', () => {
+			render(GlobalSearch, { open: true });
+			expect(screen.getByLabelText('Search games, collections and reports')).toBe(input());
+			expect(input().placeholder).toBe('Search games, collections and reports');
 		});
 	});
 });

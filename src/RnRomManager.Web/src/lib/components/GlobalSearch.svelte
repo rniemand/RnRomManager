@@ -8,6 +8,7 @@
 	import { Modal } from '../bootstrap';
 	import { opensInNewTab, playUrl, recordPlay } from '../emulator';
 	import { releaseModal } from '../modal';
+	import { reportTabs, type ReportTab } from '../reports';
 	import { auth } from '../stores/auth.svelte';
 	import FileSize from './FileSize.svelte';
 	import Icon from './Icon.svelte';
@@ -15,9 +16,9 @@
 	import SystemBadge from './SystemBadge.svelte';
 
 	/**
-	 * Global search (spec B12–B16, B27): Ctrl+Space, Ctrl+K, Cmd+K or the navbar button open it. Up to 5 of the
-	 * caller's collections (S2: chips), then the top 20 games by relevance (rich rows), in one keyboard-navigable
-	 * combobox list.
+	 * Global search (spec B12–B16, B27): Ctrl+Space, Ctrl+K, Cmd+K or the navbar button open it. The matching reports
+	 * (chips, S3), up to 5 of the caller's collections (S2: chips), then the top 20 games by relevance (rich rows), in
+	 * one keyboard-navigable combobox list.
 	 */
 	interface Props {
 		/** Shown while true; set back to false when closed. */
@@ -33,12 +34,16 @@
 	let modal = $state<InstanceType<typeof Modal> | null>(null);
 	let query = $state('');
 	type Entry =
-		{ kind: 'collection'; item: CollectionListItem } | { kind: 'game'; item: GameListItem };
+		| { kind: 'report'; item: ReportTab }
+		| { kind: 'collection'; item: CollectionListItem }
+		| { kind: 'game'; item: GameListItem };
 
+	let reports = $state<ReportTab[]>([]);
 	let collections = $state<CollectionListItem[]>([]);
 	let games = $state<GameListItem[]>([]);
-	/** Collections first, then games: what the arrow keys walk through. */
+	/** Reports, then collections, then games: what the arrow keys walk through. */
 	const results = $derived<Entry[]>([
+		...reports.map((item) => ({ kind: 'report' as const, item })),
 		...collections.map((item) => ({ kind: 'collection' as const, item })),
 		...games.map((item) => ({ kind: 'game' as const, item }))
 	]);
@@ -131,6 +136,7 @@
 	function oninput(): void {
 		cancel();
 		const q = query.trim();
+		reports = [];
 		collections = [];
 		games = [];
 		active = 0;
@@ -153,6 +159,11 @@
 			api.get<Page<CollectionListItem>>(`/api/collections?${collectionParams}`, { signal })
 		]);
 		if (signal.aborted) return;
+		// S2: every word of the query in the label; Site users never see the Admin-only reports.
+		const words = q.toLowerCase().split(/\s+/);
+		reports = reportTabs(auth.isAdmin).filter((tab) =>
+			words.every((word) => tab.label.toLowerCase().includes(word))
+		);
 		games = gamePage.status === 'fulfilled' ? gamePage.value.items : [];
 		collections = collectionPage.status === 'fulfilled' ? collectionPage.value.items : [];
 		const failure = [gamePage, collectionPage].find((r) => r.status === 'rejected');
@@ -170,10 +181,17 @@
 		navigated = true;
 		cancel();
 		query = '';
+		reports = [];
 		collections = [];
 		games = [];
+		active = 0;
 		status = 'hint';
 		open = false;
+		if (entry.kind === 'report') {
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- reportTabs' hrefs are resolved
+			await goto(entry.item.href);
+			return;
+		}
 		const path =
 			entry.kind === 'game'
 				? resolve('/games/[id]', { id: entry.item.id })
@@ -186,8 +204,10 @@
 		navigated = true;
 		cancel();
 		query = '';
+		reports = [];
 		collections = [];
 		games = [];
+		active = 0;
 		status = 'hint';
 	}
 
@@ -244,7 +264,8 @@
 				></button>
 			</div>
 			<div class="modal-body">
-				<label class="visually-hidden" for="global-search-input">Search games and collections</label
+				<label class="visually-hidden" for="global-search-input"
+					>Search games, collections and reports</label
 				>
 				<div class="input-group">
 					<span class="input-group-text"><Icon name="search" /></span>
@@ -253,7 +274,7 @@
 						id="global-search-input"
 						type="search"
 						class="form-control"
-						placeholder="Search games and collections"
+						placeholder="Search games, collections and reports"
 						autocomplete="off"
 						maxlength="255"
 						role="combobox"
@@ -285,6 +306,30 @@
 				</div>
 
 				<ul id={listId} class="list-group mt-2" role="listbox" aria-label="Search results">
+					{#if reports.length}
+						<li class="list-group-item small fw-semibold text-body-secondary" role="presentation">
+							Reports
+						</li>
+						<!-- S3: the matching reports as chips, first, each an option of the one listbox. -->
+						<li class="list-group-item d-flex flex-wrap gap-2" role="group" aria-label="Reports">
+							{#each reports as tab, r (tab.href)}
+								<div
+									id="{listId}-{r}"
+									class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
+									class:active={r === active}
+									role="option"
+									aria-selected={r === active}
+									tabindex="-1"
+									onclick={() => void choose({ kind: 'report', item: tab })}
+									onkeydown={() => {}}
+									onmousemove={() => (active = r)}
+								>
+									<Icon name={tab.icon} />
+									<span>{tab.label}</span>
+								</div>
+							{/each}
+						</li>
+					{/if}
 					{#if collections.length}
 						<li class="list-group-item small fw-semibold text-body-secondary" role="presentation">
 							Collections
@@ -295,7 +340,8 @@
 							role="group"
 							aria-label="Collections"
 						>
-							{#each collections as collection, i (collection.id)}
+							{#each collections as collection, c (collection.id)}
+								{@const i = reports.length + c}
 								<div
 									id="{listId}-{i}"
 									class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1"
@@ -329,7 +375,7 @@
 						</li>
 					{/if}
 					{#each games as game, g (game.id)}
-						{@const i = collections.length + g}
+						{@const i = reports.length + collections.length + g}
 						{@const meta = [game.releaseYear, game.regions.join(', ')].filter(Boolean).join(' · ')}
 						<li
 							id="{listId}-{i}"
