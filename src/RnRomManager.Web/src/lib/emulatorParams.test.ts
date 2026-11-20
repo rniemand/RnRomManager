@@ -642,7 +642,8 @@ describe('Nintendo 64', () => {
 		expect(hidesCoreChooser('mupen64plus_next')).toBe(true);
 		expect(controlSchemeFor('mupen64plus_next', 'X (USA).z64')).toBeNull();
 		expect(operatorCorePaths('mupen64plus_next')).toEqual({
-			'mupen64plus_next-wasm.data': '/api/emulator/cores/mupen64plus_next/mupen64plus_next-wasm.data',
+			'mupen64plus_next-wasm.data':
+				'/api/emulator/cores/mupen64plus_next/mupen64plus_next-wasm.data',
 			'mupen64plus_next-legacy-wasm.data':
 				'/api/emulator/cores/mupen64plus_next/mupen64plus_next-legacy-wasm.data',
 			'mupen64plus_next.json': '/api/emulator/cores/mupen64plus_next/mupen64plus_next.json'
