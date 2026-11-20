@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
+import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 
 const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
@@ -39,7 +40,7 @@ const rom = (id: number) => ({
 	regions: [],
 	languages: [],
 	revision: null,
-	flags: [],
+	flags: [] as string[],
 	isPrimary: id === 1,
 	identificationMethod: 'Dat',
 	datName: null,
@@ -95,6 +96,7 @@ type Answer = { status: number; body?: unknown };
 describe('game detail admin actions', () => {
 	let calls: string[];
 	let answers: Record<string, Answer[]>;
+	let bodies: Record<string, unknown>;
 
 	beforeEach(() => {
 		resetClient();
@@ -108,11 +110,13 @@ describe('game detail admin actions', () => {
 		});
 		calls = [];
 		answers = {};
+		bodies = {};
 		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
 			// B16: the game's collections (the badges); answered here so the queued answers stay as they were.
 			if (url.endsWith('/collections')) return Promise.resolve(new Response('[]', { status: 200 }));
 			const key = `${init?.method ?? 'GET'} ${url}`;
 			calls.push(key);
+			if (typeof init?.body === 'string') bodies[key] = JSON.parse(init.body);
 			const answer = answers[key]?.shift() ?? { status: 204 };
 			return Promise.resolve(
 				new Response(answer.body === undefined ? null : JSON.stringify(answer.body), {
@@ -182,6 +186,7 @@ describe('game detail admin actions', () => {
 		const right = del.parentElement!;
 		expect(right.className).toBe('ms-auto d-flex flex-wrap gap-2');
 		expect([...right.children].map((b) => b.textContent!.trim())).toEqual([
+			'Edit release',
 			'Move release',
 			'Delete release'
 		]);
@@ -229,7 +234,160 @@ describe('game detail admin actions', () => {
 		expect(
 			screen.queryByRole('button', { name: 'Delete release Tetris 1.gb', hidden: true })
 		).toBeNull();
+		expect(
+			screen.queryByRole('button', { name: 'Edit release Tetris 1.gb', hidden: true })
+		).toBeNull();
 		expect(screen.queryByRole('button', { name: /Rate 1 of 5/ })).toBeNull();
+	});
+
+	describe('Edit release (release editing B2, B3)', () => {
+		const tagged = (overrides: Partial<ReturnType<typeof rom>> = {}) => ({
+			...rom(1),
+			regions: ['Mars', 'USA'],
+			languages: ['En', 'Fr'],
+			revision: 'Rev 1',
+			flags: ['Hack'],
+			...overrides
+		});
+		const editModal = () =>
+			within(
+				screen
+					.getByRole('heading', { name: 'Edit release', hidden: true })
+					.closest<HTMLElement>('.modal')!
+			);
+		const open = async (detail: object, name = 'Tetris 1.gb') => {
+			answers['GET /api/games/g1'] = [
+				{ status: 200, body: detail },
+				{ status: 200, body: detail }
+			];
+			answers['GET /api/systems/regions'] = [{ status: 200, body: ['World', 'USA', 'Europe'] }];
+			render(GamePage);
+			await fireEvent.click(
+				await screen.findByRole('button', { name: `Show details for ${name}` })
+			);
+			await fireEvent.click(screen.getByRole('button', { name: `Edit release ${name}` }));
+			await editModal().findByLabelText('Languages');
+		};
+		const save = () =>
+			fireEvent.click(editModal().getByRole('button', { name: 'Save', hidden: true }));
+
+		it.each([
+			['releases', [] as string[]],
+			['updates', ['Update']],
+			['dlc', ['DLC']]
+		])('is the first Admin button on the %s tab', async (tab, flags) => {
+			navigateTo(`/games/g1?tab=${tab}`);
+			const detail = {
+				...game([1]),
+				fileSets: false,
+				roms: [rom(9), { ...rom(1), flags, isPrimary: false }]
+			};
+			answers['GET /api/games/g1'] = [{ status: 200, body: detail }];
+			render(GamePage);
+			await fireEvent.click(
+				await screen.findByRole('button', { name: 'Show details for Tetris 1.gb' })
+			);
+			const edit = screen.getByRole('button', { name: 'Edit release Tetris 1.gb' });
+			expect(edit.className).toBe('btn btn-sm btn-outline-secondary');
+			expect(edit.parentElement!.firstElementChild).toBe(edit);
+		});
+
+		it('prefills the form, keeps an unknown stored region, and has no Disc or Version field', async () => {
+			await open({ ...game([1]), fileSets: false, roms: [tagged()] });
+			const m = editModal();
+
+			expect(m.getByText('Tetris 1.gb', { selector: 'p' }).className).toContain('font-monospace');
+			expect((m.getByLabelText('Release') as HTMLInputElement).checked).toBe(true);
+			expect(
+				['World', 'USA', 'Europe', 'Mars'].map(
+					(r) => (m.getByLabelText(r) as HTMLInputElement).checked
+				)
+			).toEqual([false, true, false, true]);
+			expect((m.getByLabelText('Languages') as HTMLInputElement).value).toBe('En,Fr');
+			expect((m.getByLabelText('Revision') as HTMLInputElement).value).toBe('Rev 1');
+			expect((m.getByLabelText('Hack') as HTMLInputElement).checked).toBe(true);
+			expect((m.getByLabelText('Translated') as HTMLInputElement).checked).toBe(false);
+			expect(m.queryByLabelText('Disc')).toBeNull();
+			expect(m.queryByLabelText('Version')).toBeNull();
+			expect(m.getByText('File name unchanged')).toBeTruthy();
+		});
+
+		it('shows Version only for Update, and the new name preview', async () => {
+			await open({ ...game([1]), fileSets: false });
+			const m = editModal();
+
+			await fireEvent.click(m.getByLabelText('Update'));
+			expect(m.getByLabelText('Version')).toBeTruthy();
+			await fireEvent.click(m.getByLabelText('Hack'));
+			expect(m.getByText('Tetris 1 (Hack).gb', { selector: 'code' })).toBeTruthy();
+		});
+
+		it('on a disc system shows Disc and the keep-name hint instead of the preview', async () => {
+			await open({ ...game([1]), fileSets: true, roms: [tagged({ flags: ['Disc 2'] })] });
+			const m = editModal();
+
+			expect((m.getByLabelText('Disc') as HTMLInputElement).value).toBe('2');
+			expect(m.getByText('Disc releases keep their file name; only the tags change.')).toBeTruthy();
+			expect(m.queryByText(/New file name/)).toBeNull();
+		});
+
+		it('sends only the changed fields; none closes without a request', async () => {
+			await open({ ...game([1]), fileSets: false, roms: [tagged()] });
+			await save();
+			expect(calls.filter((c) => c.startsWith('PATCH'))).toEqual([]);
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Edit release Tetris 1.gb' }));
+			await editModal().findByLabelText('Languages');
+			answers['PATCH /api/games/g1/roms/1'] = [{ status: 200, body: { fileName: 'x.gb' } }];
+			await fireEvent.click(editModal().getByLabelText('Mars'));
+			await fireEvent.click(editModal().getByLabelText('World'));
+			await fireEvent.input(editModal().getByLabelText('Languages'), {
+				target: { value: 'En,,Fr ' }
+			});
+			await fireEvent.click(editModal().getByLabelText('Translated'));
+			await save();
+
+			await vi.waitFor(() =>
+				expect(bodies['PATCH /api/games/g1/roms/1']).toEqual({
+					regions: ['USA', 'World'],
+					translated: true
+				})
+			);
+		});
+
+		it('shows field errors from a 400 under their fields', async () => {
+			await open({ ...game([1]), fileSets: false });
+			const message = "Must be 1–16 letters or '-' each.";
+			answers['PATCH /api/games/g1/roms/1'] = [
+				{
+					status: 400,
+					body: { status: 400, code: 'ValidationFailed', errors: { languages: [message] } }
+				}
+			];
+			await fireEvent.input(editModal().getByLabelText('Languages'), { target: { value: 'E n' } });
+			await save();
+
+			expect((await editModal().findByText(message)).className).toBe('invalid-feedback');
+		});
+
+		it("on success toasts the server's name, reloads and switches to the release's new tab", async () => {
+			toasts.items.length = 0;
+			await open({ ...game([1]), fileSets: false });
+			answers['PATCH /api/games/g1/roms/1'] = [
+				{ status: 200, body: { fileName: 'Tetris 1 (2).gb' } }
+			];
+			await fireEvent.click(editModal().getByLabelText('DLC'));
+			await save();
+
+			await vi.waitFor(() =>
+				expect(toasts.items.at(-1)?.text).toBe('Release updated: Tetris 1 (2).gb')
+			);
+			expect(bodies['PATCH /api/games/g1/roms/1']).toEqual({ kind: 'dlc' });
+			await vi.waitFor(() =>
+				expect(goto).toHaveBeenCalledWith('/games/g1?tab=dlc', expect.anything())
+			);
+			expect(calls.filter((c) => c === 'GET /api/games/g1')).toHaveLength(2);
+		});
 	});
 
 	it('deleting a release calls the API and reloads', async () => {

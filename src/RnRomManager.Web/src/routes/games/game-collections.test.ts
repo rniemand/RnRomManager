@@ -34,6 +34,7 @@ const game = (): GameDetail => ({
 	system: 'gb',
 	systemName: 'Game Boy',
 	browserCore: null,
+	fileSets: false,
 	title: 'Tetris',
 	displayTitle: 'Tetris',
 	releaseYear: null,

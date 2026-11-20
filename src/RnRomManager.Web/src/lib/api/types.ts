@@ -216,6 +216,8 @@ export interface GameDetail {
 	systemName: string;
 	/** Browser emulators B2: the EmulatorJS core that plays this system, or null. */
 	browserCore: string | null;
+	/** Release editing B11: a disc (FileSets) system, whose releases keep their file names. */
+	fileSets: boolean;
 	title: string;
 	displayTitle: string;
 	releaseYear: number | null;
