@@ -71,7 +71,12 @@
 		// closes a modal; Escape, × and the footer button do.
 		modal = new Modal(element, { backdrop: 'static', keyboard: true });
 		element.addEventListener('hidden.bs.modal', () => (open = false));
-		element.addEventListener('shown.bs.modal', () => onshown?.());
+		// Bootstrap ignores hide() while the show transition runs, so a close during the fade-in (open already false)
+		// is finished here instead of leaving an empty modal on screen.
+		element.addEventListener('shown.bs.modal', () => {
+			if (!open) modal?.hide();
+			else onshown?.();
+		});
 		// 3DO B11: Escape goes through Bootstrap's hide; hold it while beforeclose runs (a hide from `open = false`
 		// passes, since open is already false then).
 		element.addEventListener('hide.bs.modal', (event) => {
