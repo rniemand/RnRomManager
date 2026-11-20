@@ -242,6 +242,147 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         return result;
     }
 
+    /// <summary>
+    /// B5–B10: changes a release's tags and renames it to match (B7), except on a <c>FileSets</c> system. The checks that
+    /// need the game (disc on a non-disc system, unknown regions, a version on a non-update) come back as <c>ValidationFailed</c>.
+    /// </summary>
+    public async Task<LibraryEditResult> EditReleaseAsync(Guid gameId, long romId, ReleaseEdit patch, AuditActor actor, CancellationToken ct)
+    {
+        using var held = jobLock.TryAcquire();
+        if (held is null)
+            return new(JobRunning);
+        if (await roms.GetAsync(gameId, romId, ct).ConfigureAwait(false) is not { } romRow
+            || await games.GetAsync(gameId, ct).ConfigureAwait(false) is not { } row)
+            return new(NotFound);
+        if (LegacyRefusal(row) is { } legacy)
+            return legacy;
+        var target = OpenForEdit(row);
+        if (target.Code is not null)
+            return new(target.Code, target.Details);
+
+        using var existing = target.Zip!;
+        var current = target.Game!;
+        if (current.Roms.FirstOrDefault(r => r.Metadata.Sha1 == romRow.Sha1) is not { } rom)
+            return new(NotFound, $"{row.ZipPath} no longer lists SHA1 {romRow.Sha1}");
+        var fileSets = systems.ById(row.SystemId) is { FileSets: true };
+
+        if (patch.SetDisc && patch.Disc is not null && !fileSets)
+            return Invalid("disc", "Disc numbers are for disc systems.");
+        if (patch.Regions?.Any(r => !NoIntroRegions.All.Contains(r) && !rom.Regions.Contains(r, StringComparer.Ordinal)) == true)
+            return Invalid("regions", "Must be known No-Intro regions.");
+        var kind = patch.Kind ?? KindOf(rom.Flags);
+        var version = patch.SetVersion ? patch.Version : rom.Version;
+        if (patch.SetVersion && version is not null && kind != ReleaseEdit.KindUpdate)
+            return Invalid("version", "Only an update has a version.");
+
+        var edited = rom with
+        {
+            Regions = patch.Regions ?? rom.Regions,
+            Languages = patch.Languages ?? rom.Languages,
+            Revision = patch.SetRevision ? patch.Revision : rom.Revision,
+            Version = kind == ReleaseEdit.KindUpdate ? version : null,
+            Flags = EditedFlags(rom.Flags, patch, kind),
+        };
+        if (edited.Regions.SequenceEqual(rom.Regions, StringComparer.Ordinal) && edited.Languages.SequenceEqual(rom.Languages, StringComparer.Ordinal)
+            && edited.Flags.SequenceEqual(rom.Flags, StringComparer.Ordinal) && edited.Revision == rom.Revision && edited.Version == rom.Version)
+            return Ok with { FileName = rom.FileName }; // B6
+
+        var others = current.Roms.Where(r => !ReferenceEquals(r, rom)).Select(r => r.FileName).ToList();
+        var name = fileSets ? rom.FileName : ReleaseFileName.Edit(rom.FileName, rom.BaseTitle, Tags(rom), Tags(edited));
+        if (string.Equals(name, rom.FileName, StringComparison.OrdinalIgnoreCase))
+            name = rom.FileName;
+        else
+            name = IsExternal(row)
+                ? ExternalRomName.AllocateLogicalName(name, new ExternalNameReservations(others))
+                : FreeName(name, others);
+        edited = edited with { FileName = name };
+
+        var entries = new Dictionary<string, Func<Stream>>();
+        var removed = new HashSet<string>(StringComparer.Ordinal);
+        SavesChange? saves = null;
+        if (name != rom.FileName)
+        {
+            // B9: saves are rewritten only when one names the release; an unreadable index can't tell, so it refuses.
+            var read = GameSaves.Read(existing);
+            if (read.State == SavesState.Unreadable)
+                return new(SavesUnreadable, SavesUnreadableTitle);
+            if (read.Index?.Saves.Any(s => GameSaves.Names(s, rom.FileName)) == true)
+            {
+                var (savesError, change) = CarrySaves(existing, null, Renames((rom.FileName, name)));
+                if (savesError is not null)
+                    return savesError;
+                saves = change;
+            }
+            if (!IsExternal(row))
+            {
+                entries[LibraryZip.RomEntry(name)] = () => existing.OpenEntry(LibraryZip.RomEntry(rom.FileName), rom.Metadata.SizeBytes);
+                removed.Add(LibraryZip.RomEntry(rom.FileName));
+            }
+            CarryNote(existing, rom.FileName, name, entries, removed);
+        }
+
+        // An add-on is never kept as an Admin-chosen primary.
+        var chosen = current.ChosenPrimarySha1 == rom.Metadata.Sha1 && kind != ReleaseEdit.KindRelease ? null : current.ChosenPrimarySha1;
+        var game = current with
+        {
+            ChosenPrimarySha1 = chosen,
+            Roms = PrimaryRelease.Apply([.. current.Roms.Select(r => ReferenceEquals(r, rom) ? edited : r)], DatSourceOf(row.SystemId), chosen),
+            Metadata = Touched(current),
+        };
+        var result = await WriteAsync(existing, row.ZipPath, game, entries, removed, saves).ConfigureAwait(false);
+        if (FilesChanged(result))
+            audit.Record(new AuditEvent(AuditActions.ReleaseEdited, actor, row.SystemId, gameId, AuditPaths.Library(row.ZipPath),
+                Details: name == rom.FileName ? rom.FileName : $"{rom.FileName} → {name}"));
+        if (result.Code is null)
+            logger.LogInformation("Release {FileName} of game {GameId} edited", rom.FileName, gameId);
+        return result with { FileName = name };
+    }
+
+    /// <summary>DLC B1: <c>Update</c> wins over <c>DLC</c>.</summary>
+    private static string KindOf(IReadOnlyList<string> flags) =>
+        HasFlag(flags, ReleaseVersion.UpdateFlag) ? ReleaseEdit.KindUpdate : HasFlag(flags, "DLC") ? ReleaseEdit.KindDlc : ReleaseEdit.KindRelease;
+
+    private static bool HasFlag(IReadOnlyList<string> flags, string flag) => flags.Contains(flag, StringComparer.OrdinalIgnoreCase);
+
+    private static ReleaseTags Tags(InfoJsonRom rom) =>
+        new(rom.Regions, rom.Languages, rom.Revision, HasFlag(rom.Flags, "Hack"), HasFlag(rom.Flags, "Translated"), rom.Version);
+
+    /// <summary>B5: flags keep their order; a flag turned on is appended, a changed disc replaces its flag in place.</summary>
+    private static List<string> EditedFlags(IReadOnlyList<string> flags, ReleaseEdit patch, string kind)
+    {
+        var result = flags.ToList();
+        void Set(string flag, bool on)
+        {
+            if (!on)
+                result.RemoveAll(f => string.Equals(f, flag, StringComparison.OrdinalIgnoreCase));
+            else if (!HasFlag(result, flag))
+                result.Add(flag);
+        }
+        if (patch.Translated is { } translated)
+            Set("Translated", translated);
+        if (patch.Hack is { } hack)
+            Set("Hack", hack);
+        if (patch.Kind is not null)
+        {
+            Set(ReleaseVersion.UpdateFlag, kind == ReleaseEdit.KindUpdate);
+            Set("DLC", kind == ReleaseEdit.KindDlc);
+        }
+        if (patch.SetDisc)
+        {
+            var at = result.FindIndex(f => System.Text.RegularExpressions.Regex.IsMatch(f, @"^Disc \d+$", System.Text.RegularExpressions.RegexOptions.IgnoreCase));
+            if (patch.Disc is not { } disc)
+            {
+                if (at >= 0)
+                    result.RemoveAt(at);
+            }
+            else if (at >= 0)
+                result[at] = $"Disc {disc}";
+            else
+                result.Add($"Disc {disc}");
+        }
+        return result;
+    }
+
     public async Task<LibraryEditResult> DeleteGameAsync(Guid gameId, AuditActor actor, CancellationToken ct)
     {
         using var held = jobLock.TryAcquire();

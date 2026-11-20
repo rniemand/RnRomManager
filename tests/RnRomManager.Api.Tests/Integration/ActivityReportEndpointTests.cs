@@ -75,6 +75,7 @@ public class ActivityReportEndpointTests
             await Audit(AuditActions.GamePlayed, tetris, T0.AddMinutes(i), $"play {i:00}");
         await Audit(AuditActions.SaveDeleted, tetris, T0, "save");
         await Audit(AuditActions.CoverSet, tetris, T0, "edit");
+        await Audit(AuditActions.ReleaseEdited, tetris, T0.AddMinutes(1), "release edit");
         await Audit(AuditActions.ReleaseDeleted, Guid.NewGuid(), T0, "gone.gb");
         await Audit(AuditActions.SignInFailed, null, T0, "bad");
         await Audit(AuditActions.DatsRefreshed, null, T0, "not listed");
@@ -104,7 +105,7 @@ public class ActivityReportEndpointTests
         Assert.That(plays[0].GetProperty("occurredAt").GetString(), Does.EndWith("Z"));
 
         Assert.That(Details(body.GetProperty("saves")), Is.EqualTo(new[] { "save" }));
-        Assert.That(Details(body.GetProperty("edits")), Is.EqualTo(new[] { "edit" }));
+        Assert.That(Details(body.GetProperty("edits")), Is.EqualTo(new[] { "release edit", "edit" }));
         Assert.That(Details(body.GetProperty("signIns")), Is.EqualTo(new[] { "bad" }));
         var deletion = body.GetProperty("deletions").EnumerateArray().Single();
         Assert.That(deletion.GetProperty("gameTitle").ValueKind, Is.EqualTo(JsonValueKind.Null), "the game is gone");
