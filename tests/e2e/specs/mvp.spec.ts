@@ -234,7 +234,7 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   );
 
   await run.getByRole("link").click();
-  await expect(page.getByRole("heading", { name: /Ingest job/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Ingest Job/ })).toBeVisible();
   await expect(
     page.getByRole("cell", { name: /92-invalid\.gb/ }),
   ).toBeVisible();
@@ -3062,11 +3062,27 @@ test("release editing, Games With Hacks, Newly Added and the phone shell", async
   await expect(page).toHaveURL(/\/reports\/hacks\?system=gb$/);
   await expect(hacked).toBeVisible();
 
-  // B14: Newly Added shows the seeded games, one card per system.
+  // Image Resolutions R5–R9: Star Courier's 64 × 64 box art (uploaded in "images: upload, set cover, delete") is listed,
+  // and the Max width filter is remembered when the report is opened again without a query.
+  await page.getByRole("link", { name: "Image Resolutions", exact: true }).click();
+  await expect(page).toHaveURL(/\/reports\/image-resolutions$/);
+  const courier = page.getByRole("table").getByRole("row").filter({ hasText: "Star Courier" });
+  await expect(courier.first()).toContainText("64 × 64");
+  await page.getByLabel("Max width").fill("100");
+  await page.getByLabel("Max width").press("Enter");
+  await expect(page).toHaveURL(/\/reports\/image-resolutions\?maxWidth=100$/);
+  await expect(courier.first()).toBeVisible();
+  await page.goto("/reports/image-resolutions");
+  await expect(page).toHaveURL(/\/reports\/image-resolutions\?maxWidth=100$/);
+  await expect(page.getByLabel("Max width")).toHaveValue("100");
+  await expectAccessible(page, "image resolutions report");
+
+  // B14, L4: Newly Added shows the seeded games, one tab per system.
   await page.getByRole("link", { name: "Newly Added", exact: true }).click();
   await expect(page).toHaveURL(/\/reports\/newly-added$/);
-  await expect(page.locator(".card").filter({ hasText: "Game Boy" }).first()).toBeVisible();
-  await expect(page.getByRole("table").first().getByRole("link").first()).toBeVisible();
+  await page.getByRole("tab", { name: "GB", exact: true }).click();
+  await expect(page).toHaveURL(/\/reports\/newly-added\?system=gb$/);
+  await expect(page.locator("#newly-added-panel").getByRole("link").first()).toBeVisible();
   await expectAccessible(page, "newly added report");
 
   // B29, B30: on a phone the footer's Admin buttons and the navbar search show without opening the menu.
