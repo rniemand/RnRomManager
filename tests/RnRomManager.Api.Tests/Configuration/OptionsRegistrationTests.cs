@@ -47,6 +47,7 @@ public class OptionsRegistrationTests
         Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.Snes9xCorePath, Is.Empty, "SNES is off by default");
         Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.OperaCorePath, Is.Empty, "3DO is off by default");
         Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.ViceCorePath, Is.Empty, "C64 is off by default");
+        Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.Mupen64PlusCorePath, Is.Empty, "N64 is off by default");
     }
 
     [Test]
@@ -125,6 +126,7 @@ public class OptionsRegistrationTests
     [TestCase("Emulator:Snes9xCorePath", "relative/snes9x")]
     [TestCase("Emulator:OperaCorePath", "relative/opera")]
     [TestCase("Emulator:ViceCorePath", "relative/vice")]
+    [TestCase("Emulator:Mupen64PlusCorePath", "relative/n64")]
     public void InvalidSetting_FailsStartupValidationNamingTheKey(string key, string value)
     {
         var settings = ValidSettings();

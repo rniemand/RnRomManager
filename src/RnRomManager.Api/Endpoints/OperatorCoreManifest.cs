@@ -29,6 +29,7 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
     public const string Vice = "vice_x64sc";
     public const string VicePet = "vice_xpet";
     public const string ViceVic = "vice_xvic";
+    public const string Mupen64PlusNext = "mupen64plus_next";
 
     /// <summary>The pinned 4.2.3 files of each core (each report is its package's <c>reports/</c> copy).</summary>
     public static OperatorCoreManifest Pinned { get; } = new(
@@ -108,6 +109,18 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
                 "42067705c2fd9c3861247f0d251a1481a85b5c00fb7ba93798ed0fe65b9fdd70", "application/octet-stream"),
             new("vice_xvic.json", 123,
                 "9c3439164e63320da512deded61cdbfa37ce018eedb3995e9eb0af616a0198fe", "application/json"),
+        ]),
+        // N64: https://registry.npmjs.org/@emulatorjs/core-mupen64plus_next/-/core-mupen64plus_next-4.2.3.tgz (payloads at
+        // the package root, the report from reports/). Its GLideN64 renderer is GPL-2.0-only, linked with GPL-3.0 code,
+        // so it's never bundled.
+        new(Mupen64PlusNext, "Mupen64Plus-Next", o => o.Mupen64PlusCorePath, EmulatorEndpoints.Mupen64PlusCoreMismatch,
+        [
+            new("mupen64plus_next-wasm.data", 1_451_795,
+                "2da1cbce9fda395e3ae83ca5787353baa159142d45ef3ea90f108b92524f76cc", "application/octet-stream"),
+            new("mupen64plus_next-legacy-wasm.data", 1_451_870,
+                "425072f4bf94eec02633cbe9b84f47d6803dc0ec1b3c3b8de3ebbd2eb5617c3f", "application/octet-stream"),
+            new("mupen64plus_next.json", 153,
+                "270105553cec57fd1058c50e0541b8b89dbd30b2323fd70682036f6919b805cc", "application/json"),
         ]),
     ]);
 

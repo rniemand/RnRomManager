@@ -171,4 +171,17 @@ public class OptionsValidatorTests
         Assert.That(relative.FailureMessage, Does.Not.Contain("Emulator:Snes9xCorePath"));
         Assert.That(new EmulatorOptionsValidator().Validate(null, new() { ViceCorePath = " " }).Succeeded, Is.False, "whitespace isn't blank");
     }
+
+    [Test]
+    public void Mupen64PlusCorePath_EmptyOrAbsolute()
+    {
+        var absolute = Path.Combine(Path.GetTempPath(), "n64");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { Mupen64PlusCorePath = "" }).Succeeded, Is.True, "blank disables");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { Mupen64PlusCorePath = absolute, ViceCorePath = absolute }).Succeeded,
+            Is.True, "may share the other operator cores' folder");
+        var relative = new EmulatorOptionsValidator().Validate(null, new() { Mupen64PlusCorePath = "n64" });
+        Assert.That(relative.Succeeded, Is.False);
+        Assert.That(relative.FailureMessage, Does.Contain("Emulator:Mupen64PlusCorePath"));
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { Mupen64PlusCorePath = " " }).Succeeded, Is.False, "whitespace isn't blank");
+    }
 }

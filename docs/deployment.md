@@ -281,6 +281,10 @@ Upgrading to the release that adds Nintendo 3DS:
 - **Refresh DATs after upgrading.** Nintendo 3DS is identified against libretro's No-Intro `Nintendo - Nintendo 3DS` DAT and its developer, publisher and genre metadat (libretro has no 3DS release-year file). Until **Admin → DATs → Refresh DATs** has downloaded all four, every import is refused with `DatsMissing`. `ingest/3ds/` is created at startup; dumps are stored next to the ZIP.
 - There is no browser play: EmulatorJS has no 3DS core.
 
+Upgrading to the release that adds Nintendo 64 browser play:
+
+- **For Nintendo 64 browser play,** set up the [Mupen64Plus-Next core](#mupen64plus-next-core) (`Emulator:Mupen64PlusCorePath`). Without it, N64 games show Play, which explains that the core needs setting up.
+
 Upgrading to the release that adds the footer, group logos, live restore and the DAT schedule:
 
 - **DATs refresh daily.** A new **Automatic refresh** (on by default, 04:00 container time) downloads the DATs from GitHub every day. On a host without outbound access each run fails and logs a failed job; turn it off on **Admin → DATs**.
@@ -486,6 +490,38 @@ Then mount the folder read-only and point the setting at it:
 ```
 
 The same advice as for Genesis Plus GX applies: the app's UID 1654 needs read access (e.g. `chmod -R a+rX /srv/rnrommanager/vice`), and the folder must stay outside anything the app or its users can write to (not under `data/`'s library, ingest, cache or backup folders), since EmulatorJS runs the JavaScript inside these files in the app's origin. You may also put the VICE files in another operator core's folder and point the settings at it. No BIOS is needed. Without the setting, Play on a Commodore 64 game explains that the core needs setting up.
+
+## Mupen64Plus-Next core
+
+Nintendo 64 play needs three Mupen64Plus-Next files you supply ([configuration](configuration.md#mupen64plus-next-core) lists their sizes and SHA-256 and why the image doesn't include them). Each payload carries its `license.txt` (GPL-2.0). Get the exact archive in a scratch folder outside the app and the repository:
+
+```bash
+mkdir -p ~/n64-core && cd ~/n64-core
+npm pack @emulatorjs/core-mupen64plus_next@4.2.3
+tar -xzf emulatorjs-core-mupen64plus_next-4.2.3.tgz
+mkdir -p /srv/rnrommanager/n64
+cp package/mupen64plus_next-wasm.data package/mupen64plus_next-legacy-wasm.data package/reports/mupen64plus_next.json /srv/rnrommanager/n64/
+cd /srv/rnrommanager/n64 && sha256sum mupen64plus_next-wasm.data mupen64plus_next-legacy-wasm.data mupen64plus_next.json
+```
+
+The output must be exactly:
+
+```
+2da1cbce9fda395e3ae83ca5787353baa159142d45ef3ea90f108b92524f76cc  mupen64plus_next-wasm.data
+425072f4bf94eec02633cbe9b84f47d6803dc0ec1b3c3b8de3ebbd2eb5617c3f  mupen64plus_next-legacy-wasm.data
+270105553cec57fd1058c50e0541b8b89dbd30b2323fd70682036f6919b805cc  mupen64plus_next.json
+```
+
+Then mount the folder read-only and point the setting at it:
+
+```yaml
+    volumes:
+      - /srv/rnrommanager/n64:/app/n64:ro
+    environment:
+      Emulator__Mupen64PlusCorePath: /app/n64
+```
+
+The same advice as for Genesis Plus GX applies (read access for UID 1654, a folder nobody can write to). You may also put the files in another operator core's folder. No BIOS is needed.
 
 ## Admin password recovery
 

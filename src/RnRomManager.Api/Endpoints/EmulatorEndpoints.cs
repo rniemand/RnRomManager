@@ -79,6 +79,7 @@ public static partial class EmulatorEndpoints
     public const string Snes9xCoreMismatch = "Snes9xCoreMismatch";
     public const string OperaCoreMismatch = "OperaCoreMismatch";
     public const string ViceCoreMismatch = "ViceCoreMismatch";
+    public const string Mupen64PlusCoreMismatch = "Mupen64PlusCoreMismatch";
 
     private enum CoreOutcome { Verified, Unavailable, Mismatch, Unreadable }
 

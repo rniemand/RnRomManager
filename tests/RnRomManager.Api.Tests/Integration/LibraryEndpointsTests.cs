@@ -284,6 +284,7 @@ public partial class LibraryEndpointsTests
     [TestCase("vic20", false, true, "vice_xvic")]
     [TestCase("amiga", false, true, "puae")]
     [TestCase("tg16", false, true, "mednafen_pce")]
+    [TestCase("n64", false, true, "mupen64plus_next")]
     [TestCase("switch", false, false, null)]
     [TestCase("switch", true, false, null)]
     public Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(string system, bool external, bool playable, string? core) =>
@@ -462,6 +463,7 @@ public partial class LibraryEndpointsTests
     [TestCase("vic20", "vice_xvic")]
     [TestCase("amiga", "puae")]
     [TestCase("tg16", "mednafen_pce")]
+    [TestCase("n64", "mupen64plus_next")]
     [TestCase("nosuch", null)]
     public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)
     {
