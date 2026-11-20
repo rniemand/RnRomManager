@@ -286,13 +286,16 @@ test("reports and the ingest audit trail", async () => {
   await page.getByRole("link", { name: "Duplicates", exact: true }).click();
   await expect(page.getByText("No duplicate games found.")).toBeVisible();
   await expectAccessible(page, "duplicates report");
-  // Multiple Releases: the Switch game has a base and a DLC release (its updates don't count).
+  // Multiple Releases: Orbit Blocks has three releases; the Switch game's base + DLC is one release (DLC B14).
   await page.getByRole("link", { name: "Multiple Releases", exact: true }).click();
   await expect(page).toHaveURL(/\/reports\/multiple-releases$/);
   await expect(page.getByLabel("Minimum releases")).toBeVisible();
   await expect(
-    page.getByRole("table").getByRole("link", { name: "Orbit Expedition", exact: true }),
+    page.getByRole("table").getByRole("link", { name: "Orbit Blocks", exact: true }),
   ).toBeVisible();
+  await expect(
+    page.getByRole("table").getByRole("link", { name: "Orbit Expedition", exact: true }),
+  ).toHaveCount(0);
   await expectAccessible(page, "multiple releases report");
   // B20: the Admin-only Activity report lists the ingested releases.
   await page.getByRole("link", { name: "Activity", exact: true }).click();
@@ -872,20 +875,20 @@ test("Switch: external releases and a per-release download", async () => {
     page.getByRole("heading", { level: 1, name: "Orbit Expedition" }),
   ).toBeVisible();
 
-  // G7: base and DLC are each stored next to the ZIP; the two updates have their own tab (game updates B9).
-  await expect(page.getByRole("tab", { name: "Releases (2)" })).toHaveAttribute(
+  // G7: base and DLC are each stored next to the ZIP; updates and DLC have their own tabs (game updates B9, DLC B2).
+  await expect(page.getByRole("tab", { name: "Releases (1)" })).toHaveAttribute(
     "aria-selected",
     "true",
   );
-  await expect(page.getByText("External", { exact: true })).toHaveCount(2);
+  await expect(page.getByRole("tab", { name: "DLC (1)" })).toBeVisible();
+  await expect(page.getByText("External", { exact: true })).toHaveCount(1);
   await expectAccessible(page, "Switch game detail");
 
-  // G4: the primary (base) release first; the download is the original file, byte for byte. No updates (B10).
-  await page.getByRole("button", { name: "Download ROM" }).click();
-  const items = page.locator(".dropdown-menu.show .dropdown-item");
-  await expect(items).toHaveCount(2);
+  // G4: the base release; the download is the original file, byte for byte. No updates or DLC (B10, DLC B5).
+  const downloadRom = page.getByRole("button", { name: "Download ROM" });
+  await expect(downloadRom).not.toHaveClass(/dropdown-toggle/);
   const download = page.waitForEvent("download");
-  await items.first().click();
+  await downloadRom.click();
   const file = await download;
   expect(file.suggestedFilename()).toBe(
     "Orbit Expedition [0100000000010000][v0].nsp",
@@ -917,6 +920,30 @@ test("Switch: external releases and a per-release download", async () => {
   expect(
     (await readFile((await updateFile.path())!)).equals(switchUpdate),
   ).toBe(true);
+
+  // DLC B2–B4: the DLC tab lists the one DLC.
+  await page.getByRole("tab", { name: "DLC (1)" }).click();
+  await expect(page).toHaveURL(/tab=dlc/);
+  const dlc = page.locator("#releases-panel article");
+  await expect(dlc).toHaveCount(1);
+  await expect(dlc.first()).toContainText(
+    "Orbit Expedition - Bonus Tracks [0100000000011001][v0].nsp",
+  );
+  await expectAccessible(page, "Switch game DLC");
+
+  // DLC B10/B13: Global Search finds the game by its DLC name, labelled, and Enter opens the DLC tab.
+  await page.keyboard.press("Control+k");
+  const search = page.getByRole("dialog");
+  await search.getByRole("combobox").fill("Bonus Tracks");
+  await expect(search.getByRole("option").first()).toContainText(
+    "DLC: Orbit Expedition - Bonus Tracks",
+  );
+  await page.keyboard.press("Enter");
+  await expect(page).toHaveURL(/\/games\/[^/?]+\?tab=dlc$/);
+  await expect(page.getByRole("tab", { name: "DLC (1)" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
 });
 
 test("PlayStation: a disc set lists its files and downloads a track byte-exact", async () => {
