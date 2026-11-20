@@ -142,7 +142,7 @@ public static class PlayDisc
     private static bool IsBin(string name) => name.EndsWith(".bin", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// B2: a standalone <c>.bin</c>/<c>.iso</c> (CHD B4: or <c>.chd</c>; or a PlayStation <c>.img</c>), or one cue with 1–99 BINs (the main file among
+    /// B2: a standalone <c>.bin</c>/<c>.iso</c> (CHD B4: or <c>.chd</c>; or a PlayStation <c>.img</c> or <c>.pbp</c>), or one cue with 1–99 BINs (the main file among
     /// them), all portable names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>, <c>.cso</c> or <c>.pbp</c>.
     /// </summary>
     private static string? ShapeProblem(List<Member> members, bool psp)
@@ -158,7 +158,8 @@ public static class PlayDisc
             return IsBin(members[0].Name) || members[0].Name.EndsWith(".iso", StringComparison.OrdinalIgnoreCase)
                 || members[0].Name.EndsWith(".chd", StringComparison.OrdinalIgnoreCase)
                 || members[0].Name.EndsWith(".img", StringComparison.OrdinalIgnoreCase)
-                ? null : "a single-file disc must be a .bin, .iso, .chd or .img";
+                || members[0].Name.EndsWith(".pbp", StringComparison.OrdinalIgnoreCase)
+                ? null : "a single-file disc must be a .bin, .iso, .chd, .img or .pbp";
         var cues = members.Count(m => IsCue(m.Name));
         var bins = members.Count(m => IsBin(m.Name));
         if (cues != 1 || bins != members.Count - 1 || !IsBin(members[0].Name))

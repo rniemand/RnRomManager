@@ -16,8 +16,8 @@ public sealed class PlayStationHandler : ISystemHandler
     public string ShortName => "PSX";
     public string Family => "psx";
 
-    /// <summary><c>[0]</c> is what a file resolved through Review without a DAT entry is stored as. A <c>.chd</c> is a lone file that never matches the DAT (CHD B1–B2); an <c>.img</c> is a lone raw image like an <c>.iso</c>.</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".bin", ".cue", ".iso", ".chd", ".img"];
+    /// <summary><c>[0]</c> is what a file resolved through Review without a DAT entry is stored as. A <c>.chd</c> is a lone file that never matches the DAT (CHD B1–B2); an <c>.img</c> is a lone raw image like an <c>.iso</c>, and a <c>.pbp</c> (PS1 Classics EBOOT) a lone file like a <c>.chd</c>.</summary>
+    public IReadOnlyList<string> RomExtensions { get; } = [".bin", ".cue", ".iso", ".chd", ".img", ".pbp"];
 
     public long MinRomSizeBytes => 16;
 
