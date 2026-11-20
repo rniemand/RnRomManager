@@ -423,6 +423,16 @@ public class GameQueryTests
     }
 
     [Test]
+    public async Task Sort_Relevance_AddOnNamesRepeatingTheTitle_AddNothing()
+    {
+        await Add("Orbit Blocks");
+        await Add("Orbit Expedition", addOns: [("Orbit Expedition - Pack [01][v0].nsp", Dlc), ("Orbit Expedition [02][v65536].nsp", Update)]);
+
+        Assert.That(await Titles(new GameQuery { Search = "orbit", Sort = GameSort.Relevance }),
+            Is.EqualTo(new[] { "Orbit Blocks", "Orbit Expedition" }), "equal title scores, by title");
+    }
+
+    [Test]
     public async Task ListItem_MatchedOn_DlcBeforeUpdate_WithTheStrippedName()
     {
         await Add("Orbit", developers: ["Pack Studio"], addOns:

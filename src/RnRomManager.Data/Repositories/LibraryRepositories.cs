@@ -315,7 +315,7 @@ public sealed class GameRepository : IGameRepository
 
     /// <summary>
     /// S2: 100 exact title + 60 title prefix + per word 40 title, 20 developers, 20 publishers, 15 DLC/update file names
-    /// (DLC B9), 10 genres.
+    /// (DLC B9; only for a word not in the title), 10 genres.
     /// </summary>
     private static string RelevanceScore(int words)
     {
@@ -329,7 +329,8 @@ public sealed class GameRepository : IGameRepository
             parts.Add($"(CASE WHEN {TitleLike(i)} THEN 40 ELSE 0 END)");
             parts.Add($"(CASE WHEN {JsonLike("developers", i)} THEN 20 ELSE 0 END)");
             parts.Add($"(CASE WHEN {JsonLike("publishers", i)} THEN 20 ELSE 0 END)");
-            parts.Add($"(CASE WHEN {AddOnLike(i)} THEN 15 ELSE 0 END)");
+            // DLC B9: add-on names repeat the title, so they score only for a word the title lacks.
+            parts.Add($"(CASE WHEN NOT {TitleLike(i)} AND {AddOnLike(i)} THEN 15 ELSE 0 END)");
             parts.Add($"(CASE WHEN {JsonLike("genres", i)} THEN 10 ELSE 0 END)");
         }
         return "(" + string.Join(" + ", parts) + ")";
