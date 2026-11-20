@@ -13,7 +13,7 @@ namespace RnRomManager.Api.Endpoints;
 /// copy of the cue (<see cref="CueSheet.ForPlayback"/>) and the tracks as <c>track-NN.bin</c>. CHD B4: a standalone
 /// <c>.chd</c> (or a PlayStation <c>.img</c>) streams unchanged like an <c>.iso</c>. Every member is opened
 /// and checked before the response starts; nothing is written to disk and nothing is audited. PSP B2: a PlayStation
-/// Portable release streams its standalone <c>.iso</c> the same way. Saturn, Sega CD and 3DO take PlayStation's disc
+/// Portable release streams its standalone <c>.iso</c>, <c>.cso</c> or <c>.pbp</c> the same way. Saturn, Sega CD and 3DO take PlayStation's disc
 /// shapes. All these systems share the same cap (<see cref="MaxBytes"/>).
 /// </summary>
 public static class PlayDisc
@@ -143,15 +143,15 @@ public static class PlayDisc
 
     /// <summary>
     /// B2: a standalone <c>.bin</c>/<c>.iso</c> (CHD B4: or <c>.chd</c>; or a PlayStation <c>.img</c>), or one cue with 1–99 BINs (the main file among
-    /// them), all portable names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>.
+    /// them), all portable names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>, <c>.cso</c> or <c>.pbp</c>.
     /// </summary>
     private static string? ShapeProblem(List<Member> members, bool psp)
     {
         if (members.FirstOrDefault(m => CueSheet.NameProblem(m.Name) is not null) is { } bad)
             return $"'{bad.Name}' is not a portable file name";
         if (psp)
-            return members is [var iso] && iso.Name.EndsWith(".iso", StringComparison.OrdinalIgnoreCase)
-                ? null : "a PSP disc must be a single .iso";
+            return members is [var umd] && Path.GetExtension(umd.Name).ToLowerInvariant() is ".iso" or ".cso" or ".pbp"
+                ? null : "a PSP disc must be a single .iso, .cso or .pbp";
         if (members.Select(m => m.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != members.Count)
             return "two disc files have the same name ignoring case";
         if (members.Count == 1)

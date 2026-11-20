@@ -50,7 +50,7 @@ roms/
       Disc Runner (USA) (Track 1).bin     the release's main file (the data track the DAT lists)
       Disc Runner (USA).cue               its files: the cue, then the other tracks
       Disc Runner (USA) (Track 2).bin
-  psp/                  PlayStation Portable (external, exact names: .iso)
+  psp/                  PlayStation Portable (external, exact names: .iso, .cso, .pbp)
   gc/                   GameCube (external, exact names: .iso, .gcm)
   wii/                  Wii (external, exact names: .iso)
   x360/                 Xbox 360 (external, exact names: .iso)
