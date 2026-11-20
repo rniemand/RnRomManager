@@ -92,12 +92,22 @@ describe('ConfirmModal', () => {
 
 	it('calls onshown each time Bootstrap reports the modal shown (B6)', () => {
 		const onshown = vi.fn();
-		const { container } = render(ConfirmModal, { open: false, title: 'T', onshown });
+		const { container } = render(ConfirmModal, { open: true, title: 'T', onshown });
 		const modal = container.querySelector('.modal')!;
 		expect(onshown).not.toHaveBeenCalled();
 		modal.dispatchEvent(new Event('shown.bs.modal'));
 		modal.dispatchEvent(new Event('shown.bs.modal'));
 		expect(onshown).toHaveBeenCalledTimes(2);
+	});
+
+	it('hides once shown when closed during the fade-in (Bootstrap drops that hide)', async () => {
+		const onshown = vi.fn();
+		const { container, rerender } = render(ConfirmModal, { open: true, title: 'T', onshown });
+		await rerender({ open: false, title: 'T', onshown });
+		calls.length = 0;
+		container.querySelector('.modal')!.dispatchEvent(new Event('shown.bs.modal'));
+		expect(calls).toEqual(['hide']);
+		expect(onshown).not.toHaveBeenCalled();
 	});
 
 	it('size xl adds modal-xl', () => {
