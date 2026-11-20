@@ -38,7 +38,7 @@ UI-only polish for Admins. The Jobs page shows the running job in a table styled
 - **R7** Configured keeps the pending badge after the icon, unchanged: `badge text-bg-warning ms-1`, "N game(s) still to move".
 - **R8** Change (`text-end`): today's `btn btn-sm btn-outline-primary` **Store in ZIP** / **Store beside ZIP** button (same text, same `onclick`, same `disabled={blocked}`) for configurable rows; empty cell otherwise.
 - **R9** Level: for `compressionConfigurable` rows, a badge `<span class="badge {levelBadge}">{label}</span>` where Store → `text-bg-secondary` "Store", Med → `text-bg-primary` "Medium", High → `text-bg-success` "High" (one `levels` array entry each gains a `badge` class), followed by an icon-only Edit button: `<button class="btn btn-sm btn-outline-primary ms-2" aria-label="Edit ZIP compression of {displayName}" use:tooltip={'Edit compression level'} disabled={blocked}><Icon name="edit" /></button>` (same `onclick`). For other rows: `<span class="text-body-secondary" aria-hidden="true">—</span><span class="visually-hidden">Not applicable: ROMs are beside the ZIP</span>` (replaces "— ROMs beside ZIP").
-- **R10** Repack (`text-end`): today's **Repack again** button (same classes minus `ms-2`, same `aria-label="Repack {displayName} ZIPs again"`, `disabled`, `onclick`) for `compressionConfigurable` rows; empty cell otherwise.
+- **R10** Repack (`text-end`): today's **Repack again** button (same classes minus `ms-2`, no `aria-label`: the visible text "Repack again" plus `&#32;<span class="visually-hidden">{displayName} ZIPs</span>`, so the name is "Repack again {displayName} ZIPs"; same `disabled`, `onclick`) for `compressionConfigurable` rows; empty cell otherwise.
 - **R11** All buttons stay disabled while any job runs or an action is busy (`blocked`), as today.
 
 ### ZIP compression levels legend
@@ -83,6 +83,7 @@ No migrations, config keys or API changes. README systems table unaffected (no s
 - 2026-11-19 Edit button → stays beside the level badge, as an icon-only pencil; Repack and Store in/beside ZIP get their own columns with visible headers (user)
 - 2026-11-19 Restyle → grouped headers, legend with badges and speed icons, an intro line (user)
 - 2026-11-19 Roomier rows (dropping `table-sm`/`table-striped`) conflict with house rule T1–T4 → keep the house table classes; no exception (user)
+- 2026-11-20 axe `label-content-name-mismatch` on the old Repack aria-label ("Repack X ZIPs again" lacks the visible "Repack again") → drop the aria-label, visible text plus a visually hidden system name (user)
 - 2026-11-19 Review round 1: colgroup headers documented in T1; Started `text-nowrap`; intro only when loaded; test queries use `getAllByRole`; axe checks added; Jobs doc comment cites J1–J4 (reviewer)
 - 2026-11-19 Column order → the storage button column (Change) sits inside the ROM storage group, before the ZIP compression group, so groups stay contiguous (code)
 

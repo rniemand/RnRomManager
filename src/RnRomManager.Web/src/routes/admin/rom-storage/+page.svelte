@@ -272,9 +272,10 @@
 									<button
 										type="button"
 										class="btn btn-sm btn-outline-primary"
-										aria-label="Repack {row.displayName} ZIPs again"
 										disabled={blocked}
-										onclick={() => askZip(row, true)}>Repack again</button
+										onclick={() => askZip(row, true)}
+										>Repack again&#32;<span class="visually-hidden">{row.displayName} ZIPs</span
+										></button
 									>
 								{/if}
 							</td>

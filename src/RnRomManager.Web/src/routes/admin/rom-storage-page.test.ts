@@ -255,7 +255,7 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 		const dialog = (title: string) =>
 			screen.getByRole('heading', { name: title, hidden: true }).closest('.modal') as HTMLElement;
 		const edit = 'Edit ZIP compression of Game Boy Advance';
-		const repack = 'Repack Game Boy Advance ZIPs again';
+		const repack = 'Repack again Game Boy Advance ZIPs';
 
 		async function chooseLevel(level: string): Promise<HTMLElement> {
 			await fireEvent.click(await screen.findByRole('button', { name: edit }));
@@ -278,7 +278,8 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 			expect(editButton.querySelector('i.bi-pencil')).toBeTruthy();
 			expect(tooltips.get(editButton)).toBe('Edit compression level');
 			const repackButton = within(gba).getByRole('button', { name: repack });
-			expect(repackButton.textContent?.trim()).toBe('Repack again');
+			expect(repackButton.hasAttribute('aria-label')).toBe(false);
+			expect(repackButton.firstChild?.textContent?.trim()).toBe('Repack again');
 			expect(repackButton.closest('td')).not.toBe(badge.closest('td'));
 			const nds = await row('Nintendo DS');
 			const cell = within(nds).getByText('Not applicable: ROMs are beside the ZIP').closest('td')!;
