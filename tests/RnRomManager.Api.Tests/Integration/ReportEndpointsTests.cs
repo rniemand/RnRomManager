@@ -714,6 +714,24 @@ public class ReportEndpointsTests
         Assert.That(page.GetProperty("items")[0].GetProperty("releaseCount").GetInt32(), Is.EqualTo(3), "Delta: Delta, Alpha, Bravo; not Charlie (update) or Echo (DLC)");
     }
 
+    /// <summary>Release editing B12: <c>system</c> filters the list and <c>maxReleases</c>.</summary>
+    [Test]
+    public async Task MultipleReleases_SystemFilter_AlsoFiltersMaxReleases()
+    {
+        var (alpha, delta) = await SeedMultipleReleases();
+        await Sql("UPDATE games SET system_id = 'gbc' WHERE id = @delta", new { delta });
+        await Sql("UPDATE roms SET system_id = 'gbc' WHERE game_id = @delta", new { delta });
+        await Sql("UPDATE roms SET game_id = @alpha WHERE file_name LIKE 'Delta%'", new { alpha });
+
+        var gb = await GetJson("/api/reports/multiple-releases?system=gb");
+        var gbc = await GetJson("/api/reports/multiple-releases?system=gbc&min=2");
+
+        Assert.That((gb.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()), gb.GetProperty("maxReleases").GetInt32()),
+            Is.EqualTo((new[] { alpha }, 3)));
+        Assert.That((gbc.GetProperty("total").GetInt64(), gbc.GetProperty("maxReleases").GetInt32()), Is.EqualTo((0L, 1)));
+    }
+
+    [TestCase("system=nope", "system", "Choose a registered system.")]
     [TestCase("min=1", "min", "Must be 2–10000.")]
     [TestCase("min=10001", "min", "Must be 2–10000.")]
     [TestCase("sort=title", "sort", "Must be name, system, releases, updates or size.")]
@@ -740,6 +758,77 @@ public class ReportEndpointsTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
         var body = await response.Content.ReadAsStringAsync();
         Assert.That(body, Does.Not.Contain("ValidationFailed"));
+    }
+
+    // Release editing B14: GET /api/reports/newly-added.
+
+    [Test]
+    public async Task NewlyAdded_GroupsBySystem_SystemsByName_NewestFirst()
+    {
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        var echo = await Ingest("gbc", "e.gbc", Echo);
+        await Sql("UPDATE games SET created_at = '2026-01-01 00:00:00' WHERE id = @alpha", new { alpha });
+
+        var body = await GetJson("/api/reports/newly-added");
+        var gbc = await GetJson("/api/reports/newly-added?system=gbc");
+
+        var systems = body.GetProperty("systems").EnumerateArray().ToList();
+        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EqualTo(new[] { "gb", "gbc" }));
+        var registry = Service<RnRomManager.Core.Systems.ISystemRegistry>();
+        Assert.That(systems[0].GetProperty("systemName").GetString(), Is.EqualTo(registry.ById("gb")!.DisplayName));
+        var games = systems[0].GetProperty("games").EnumerateArray().ToList();
+        Assert.That(games.Select(g => g.GetProperty("id").GetGuid()), Is.EqualTo(new[] { bravo, alpha }));
+        Assert.That(games[0].EnumerateObject().Select(p => p.Name), Is.EqualTo(new[] { "id", "displayTitle", "addedAt", "releaseCount" }));
+        Assert.That((games[1].GetProperty("addedAt").GetString(), games[1].GetProperty("releaseCount").GetInt32()),
+            Is.EqualTo(("2026-01-01T00:00:00Z", 1)));
+        Assert.That(gbc.GetProperty("systems").EnumerateArray().Select(s => s.GetProperty("games")[0].GetProperty("id").GetGuid()),
+            Is.EqualTo(new[] { echo }));
+    }
+
+    [Test]
+    public async Task NewlyAdded_UnknownSystem_Is400()
+    {
+        using var response = await _user.GetAsync("/api/reports/newly-added?system=nope");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").GetProperty("system")[0].GetString(),
+            Is.EqualTo("Choose a registered system."));
+    }
+
+    // Release editing B13: GET /api/reports/hacks.
+
+    [Test]
+    public async Task Hacks_ResponseShape_DefaultSort_AndSystemFilter()
+    {
+        var (alpha, delta) = await SeedMultipleReleases();
+        await Sql("UPDATE roms SET flags = '[\"Hack\"]' WHERE file_name LIKE 'Bravo%' OR file_name LIKE 'Echo%' OR file_name LIKE 'Delta%'", new { });
+
+        var page = await GetJson("/api/reports/hacks");
+        var none = await GetJson("/api/reports/hacks?system=gbc");
+
+        Assert.That((page.GetProperty("page").GetInt32(), page.GetProperty("pageSize").GetInt32(), page.GetProperty("total").GetInt64()),
+            Is.EqualTo((1, 50, 2L)));
+        var first = page.GetProperty("items")[0];
+        Assert.That(first.EnumerateObject().Select(p => p.Name),
+            Is.EqualTo(new[] { "id", "displayTitle", "system", "systemName", "hackCount", "releaseCount", "bytes" }));
+        Assert.That((first.GetProperty("id").GetGuid(), first.GetProperty("hackCount").GetInt32(), first.GetProperty("releaseCount").GetInt32()),
+            Is.EqualTo((delta, 2, 2)), "hacks descending by default");
+        Assert.That(page.GetProperty("items")[1].GetProperty("id").GetGuid(), Is.EqualTo(alpha));
+        Assert.That(none.GetProperty("total").GetInt64(), Is.Zero);
+    }
+
+    [TestCase("system=nope", "system", "Choose a registered system.")]
+    [TestCase("sort=updates", "sort", "Must be name, system, hacks, releases or size.")]
+    [TestCase("dir=up", "dir", "Must be asc or desc.")]
+    [TestCase("page=0", "page", "Must be 1 or more.")]
+    [TestCase("pageSize=201", "pageSize", "Must be 1–200.")]
+    public async Task Hacks_InvalidQuery_IsValidationFailed(string query, string field, string message)
+    {
+        using var response = await _user.GetAsync("/api/reports/hacks?" + query);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("errors").GetProperty(field)[0].GetString(), Is.EqualTo(message));
     }
 
     // Missing Metadata M2–M3: GET /api/reports/missing-metadata and /next (Admin only).

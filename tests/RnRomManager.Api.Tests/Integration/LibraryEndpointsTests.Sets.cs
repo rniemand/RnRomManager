@@ -69,8 +69,20 @@ public partial class LibraryEndpointsTests
         Assert.That(items.Single(i => i.GetProperty("id").GetGuid() == game.GameId).GetProperty("primarySizeBytes").GetInt64(),
             Is.EqualTo(DiscTrack1.Length + DiscCue.Length + DiscTrack2.Length), "the primary release with its files, not the Europe one");
         var tetrisRelease = (await GetJson($"/api/games/{tetris.GetProperty("id").GetGuid()}")).GetProperty("roms")[0];
+        Assert.That((await GetJson($"/api/games/{tetris.GetProperty("id").GetGuid()}")).GetProperty("fileSets").GetBoolean(), Is.False, "release editing B11");
         Assert.That(tetrisRelease.GetProperty("files").ValueKind, Is.EqualTo(JsonValueKind.Null));
         Assert.That(tetrisRelease.GetProperty("totalSizeBytes").GetInt64(), Is.EqualTo(TetrisWorld.Length));
+    }
+
+    /// <summary>Release editing B11: the form's regions, the 8 common ones first, then A–Z.</summary>
+    [Test]
+    public async Task Regions_ListsTheCommonOnesFirst_ThenAToZ()
+    {
+        var regions = (await GetJson("/api/systems/regions")).EnumerateArray().Select(r => r.GetString()!).ToList();
+
+        Assert.That(regions.Take(8), Is.EqualTo(new[] { "World", "USA", "Europe", "Japan", "Asia", "Australia", "Korea", "Brazil" }));
+        Assert.That(regions.Skip(8), Is.Ordered.Using((IComparer<string>)StringComparer.OrdinalIgnoreCase));
+        Assert.That(regions, Is.EquivalentTo(RnRomManager.Core.Naming.NoIntroRegions.All));
     }
 
     [Test]

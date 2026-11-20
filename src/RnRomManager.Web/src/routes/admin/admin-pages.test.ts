@@ -308,6 +308,27 @@ describe('admin pages', () => {
 		);
 	});
 
+	it('each Admin tab has its icon (release editing B33)', () => {
+		render(AdminLayout, {
+			children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))
+		});
+		const links = screen.getAllByRole('link');
+		expect(
+			links.map((a) => [a.textContent?.trim(), a.querySelector('i')?.className.trim()])
+		).toEqual([
+			['Users', 'bi bi-people'],
+			['DATs', 'bi bi-database'],
+			['Settings', 'bi bi-gear'],
+			['ROM Zip Config', 'bi bi-file-zip'],
+			['Backups', 'bi bi-archive'],
+			['Logs', 'bi bi-journal-text'],
+			['Auditing', 'bi bi-clock-history']
+		]);
+		expect(
+			links.every((a) => a.className.includes('nav-link d-flex align-items-center gap-1'))
+		).toBe(true);
+	});
+
 	it('the Admin layout has one page-title h1 (B1)', () => {
 		render(AdminLayout, {
 			children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))

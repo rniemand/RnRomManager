@@ -119,7 +119,7 @@ public static partial class ReportEndpoints
                 signIns = await Recent(AuditActions.SignedIn, AuditActions.SignInFailed, AuditActions.LockedOut),
                 plays = await Recent(AuditActions.GamePlayed),
                 saves = await Recent(AuditActions.SaveAdded, AuditActions.SaveUpdated, AuditActions.SaveDeleted),
-                edits = await Recent(AuditActions.GameUpdated, AuditActions.ReleaseMoved, AuditActions.GamesMerged, AuditActions.CoverSet, AuditActions.PrimarySet,
+                edits = await Recent(AuditActions.GameUpdated, AuditActions.ReleaseMoved, AuditActions.GamesMerged, AuditActions.CoverSet, AuditActions.PrimarySet, AuditActions.ReleaseEdited,
                     AuditActions.ImageAdded, AuditActions.ImageDeleted),
                 deletions = await Recent(AuditActions.GameDeleted, AuditActions.ReleaseDeleted),
             });
@@ -176,10 +176,10 @@ public static partial class ReportEndpoints
         });
 
         // Multiple Releases B16: games with min or more releases, sorted and paged on the server.
-        reports.MapGet("/multiple-releases", async (int? min, string? sort, string? dir, int? page, int? pageSize, HttpContext ctx,
+        reports.MapGet("/multiple-releases", async (string? system, int? min, string? sort, string? dir, int? page, int? pageSize, HttpContext ctx,
             IReportRepository repository, ISystemRegistry systems) =>
         {
-            var errors = Paging.Validate(page, pageSize);
+            var errors = Validate(system, page, pageSize, systems);
             if (min is < 2 or > 10000)
                 errors["min"] = ["Must be 2–10000."];
             MultipleReleaseSort? sortKey = sort?.ToLowerInvariant() switch
@@ -200,9 +200,9 @@ public static partial class ReportEndpoints
                 return Problems.Validation(ctx, errors);
 
             descending ??= sortKey is not (MultipleReleaseSort.Name or MultipleReleaseSort.System);
-            var result = await repository.ListMultipleReleasesAsync(min ?? 2, sortKey!.Value, descending.Value, page ?? 1, pageSize ?? 50,
+            var result = await repository.ListMultipleReleasesAsync(system, min ?? 2, sortKey!.Value, descending.Value, page ?? 1, pageSize ?? 50,
                 ctx.RequestAborted);
-            var maxReleases = await repository.MaxReleaseCountAsync(ctx.RequestAborted);
+            var maxReleases = await repository.MaxReleaseCountAsync(system, ctx.RequestAborted);
             return Results.Ok(new
             {
                 maxReleases,
@@ -211,6 +211,65 @@ public static partial class ReportEndpoints
                     id = item.Id, displayTitle = item.DisplayTitle, system = item.SystemId,
                     systemName = SystemName(systems, item.SystemId), releaseCount = item.ReleaseCount,
                     updateCount = item.UpdateCount, bytes = item.Bytes,
+                }),
+                page = result.PageNumber,
+                pageSize = result.PageSize,
+                total = result.Total,
+            });
+        });
+
+        // Release editing B14: the 10 newest games per system, systems by name.
+        reports.MapGet("/newly-added", async (string? system, HttpContext ctx, IReportRepository repository, ISystemRegistry systems) =>
+        {
+            if (Validate(system, null, null, systems) is { Count: > 0 } errors)
+                return Problems.Validation(ctx, errors);
+            var games = await repository.ListNewlyAddedGamesAsync(system, 10, ctx.RequestAborted);
+            return Results.Ok(new
+            {
+                systems = games.GroupBy(g => g.SystemId)
+                    .Select(group => (Id: group.Key, Name: SystemName(systems, group.Key), Games: group))
+                    .OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+                    .Select(s => new
+                    {
+                        system = s.Id,
+                        systemName = s.Name,
+                        games = s.Games.Select(g => new { id = g.Id, displayTitle = g.DisplayTitle, addedAt = g.AddedAt, releaseCount = g.ReleaseCount }),
+                    }),
+            });
+        });
+
+        // Release editing B13: Games With Hacks.
+        reports.MapGet("/hacks", async (string? system, string? sort, string? dir, int? page, int? pageSize, HttpContext ctx,
+            IReportRepository repository, ISystemRegistry systems) =>
+        {
+            var errors = Validate(system, page, pageSize, systems);
+            HackedGameSort? sortKey = sort?.ToLowerInvariant() switch
+            {
+                null or "hacks" => HackedGameSort.Hacks,
+                "name" => HackedGameSort.Name,
+                "system" => HackedGameSort.System,
+                "releases" => HackedGameSort.Releases,
+                "size" => HackedGameSort.Size,
+                _ => null,
+            };
+            if (sortKey is null)
+                errors["sort"] = ["Must be name, system, hacks, releases or size."];
+            bool? descending = dir?.ToLowerInvariant() switch { null => null, "asc" => false, "desc" => true, _ => null };
+            if (dir is not null && descending is null)
+                errors["dir"] = ["Must be asc or desc."];
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+
+            descending ??= sortKey is not (HackedGameSort.Name or HackedGameSort.System);
+            var result = await repository.ListHackedGamesAsync(system, sortKey!.Value, descending.Value, page ?? 1, pageSize ?? 50,
+                ctx.RequestAborted);
+            return Results.Ok(new
+            {
+                items = result.Items.Select(item => new
+                {
+                    id = item.Id, displayTitle = item.DisplayTitle, system = item.SystemId,
+                    systemName = SystemName(systems, item.SystemId), hackCount = item.HackCount,
+                    releaseCount = item.ReleaseCount, bytes = item.Bytes,
                 }),
                 page = result.PageNumber,
                 pageSize = result.PageSize,

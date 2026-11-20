@@ -34,6 +34,8 @@ const { default: MissingImages } = await import('./missing-images/+page.svelte')
 const { default: LibrarySize } = await import('./library-size/+page.svelte');
 const { default: Duplicates } = await import('./duplicates/+page.svelte');
 const { default: MultipleReleases } = await import('./multiple-releases/+page.svelte');
+const { default: Hacks } = await import('./hacks/+page.svelte');
+const { default: NewlyAdded } = await import('./newly-added/+page.svelte');
 const { default: MissingMetadata } = await import('./missing-metadata/+page.svelte');
 
 type Answer = { status: number; body?: unknown };
@@ -74,9 +76,9 @@ describe('reports pages', () => {
 		auth.set(null);
 	});
 
-	it('/reports redirects to Library Size, replacing the history entry (RP1)', () => {
+	it('/reports redirects to Newly Added, replacing the history entry (RP1, release editing B15)', () => {
 		render(ReportsIndex);
-		expect(goto).toHaveBeenCalledWith('/reports/library-size', { replace: true });
+		expect(goto).toHaveBeenCalledWith('/reports/newly-added', { replace: true });
 	});
 
 	describe('Library Size (RP3)', () => {
@@ -524,6 +526,28 @@ describe('reports pages', () => {
 			expect(optionTexts()).toEqual(['2']);
 		});
 
+		it('the System select writes system=, resets the page and filters the request (release editing B12)', async () => {
+			navigateTo('/reports/multiple-releases?page=2');
+			answers[list(2, 2)] = { status: 200, body: body([item('g1')], 60, 4, 2) };
+			answers[`${list()}&system=gbc`] = { status: 200, body: body([item('g5')], 1, 2) };
+			render(MultipleReleases);
+			await screen.findByRole('link', { name: 'Game g1' });
+			const system = screen.getByLabelText('System') as HTMLSelectElement;
+			await vi.waitFor(() => expect(system.options).toHaveLength(3));
+			expect([...system.options].map((o) => o.textContent!.trim())).toEqual([
+				'All systems',
+				'Game Boy',
+				'Game Boy Color'
+			]);
+			expect(system.id).toBe('multiple-releases-system');
+
+			await fireEvent.change(system, { target: { value: 'gbc' } });
+
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/multiple-releases?system=gbc'));
+			await screen.findByRole('link', { name: 'Game g5' });
+			expect((screen.getByLabelText('System') as HTMLSelectElement).value).toBe('gbc');
+		});
+
 		it('changing the threshold writes min, drops page and requests it', async () => {
 			navigateTo('/reports/multiple-releases?page=2');
 			answers[list(2, 2)] = { status: 200, body: body([item('g1')], 60, 4, 2) };
@@ -695,6 +719,142 @@ describe('reports pages', () => {
 		});
 	});
 
+	describe('Newly Added (release editing B14)', () => {
+		beforeEach(() => navigateTo('/reports/newly-added'));
+
+		it('shows one card per system with game, added time and releases', async () => {
+			answers['GET /api/reports/newly-added'] = {
+				status: 200,
+				body: {
+					systems: [
+						{
+							system: 'gb',
+							systemName: 'Game Boy',
+							games: [
+								{
+									id: 'g1',
+									displayTitle: 'Tetris',
+									addedAt: '2026-01-02T03:04:00Z',
+									releaseCount: 2
+								}
+							]
+						},
+						{
+							system: 'gbc',
+							systemName: 'Game Boy Color',
+							games: [
+								{
+									id: 'g2',
+									displayTitle: 'Zelda',
+									addedAt: '2026-01-01T00:00:00Z',
+									releaseCount: 1
+								}
+							]
+						}
+					]
+				}
+			};
+			render(NewlyAdded);
+
+			const link = await screen.findByRole('link', { name: 'Tetris' });
+			expect(link.getAttribute('href')).toBe('/games/g1');
+			const cards = [...document.querySelectorAll('.card')];
+			expect(
+				cards.map((c) => c.querySelector('.card-header')!.textContent!.replace(/\s+/g, ' ').trim())
+			).toEqual(['GB Game Boy', 'GBC Game Boy Color']);
+			expect([...cards[0].querySelectorAll('th')].map((th) => th.textContent!.trim())).toEqual([
+				'Game',
+				'Added',
+				'Releases'
+			]);
+			const cells = [...cards[0].querySelectorAll('tbody td')];
+			expect(cells[2].textContent!.trim()).toBe('2');
+			expect(cells[2].className).toBe('text-end');
+			expect(cells[1].textContent!.trim()).not.toBe('');
+		});
+
+		it('the System select writes system= and requests it', async () => {
+			answers['GET /api/reports/newly-added'] = { status: 200, body: { systems: [] } };
+			answers['GET /api/reports/newly-added?system=gbc'] = { status: 200, body: { systems: [] } };
+			render(NewlyAdded);
+			const select = screen.getByLabelText('System') as HTMLSelectElement;
+			await vi.waitFor(() => expect(select.options).toHaveLength(3));
+			expect(select.id).toBe('newly-added-system');
+
+			await fireEvent.change(select, { target: { value: 'gbc' } });
+
+			expect(goto).toHaveBeenLastCalledWith('/reports/newly-added?system=gbc', {
+				replace: true,
+				reset: false
+			});
+			await vi.waitFor(() => expect(calls).toContain('GET /api/reports/newly-added?system=gbc'));
+		});
+
+		it('an empty library shows "No games yet."', async () => {
+			answers['GET /api/reports/newly-added'] = { status: 200, body: { systems: [] } };
+			render(NewlyAdded);
+
+			expect(await screen.findByText('No games yet.')).toBeTruthy();
+		});
+	});
+
+	describe('Games With Hacks (release editing B13)', () => {
+		const list = (query = 'sort=hacks&dir=desc') =>
+			`GET /api/reports/hacks?${query}&page=1&pageSize=50`;
+		const item = (id: string) => ({
+			id,
+			displayTitle: `Game ${id}`,
+			system: 'gb',
+			systemName: 'Game Boy',
+			hackCount: 2,
+			releaseCount: 3,
+			bytes: 2048
+		});
+		const body = (items: unknown[]) => ({ items, page: 1, pageSize: 50, total: items.length });
+		const replaced = (path: string) => [path, { replace: true, reset: false }];
+
+		beforeEach(() => navigateTo('/reports/hacks'));
+
+		it('lists game (to its Releases tab), system, hacks, releases and size', async () => {
+			answers[list()] = { status: 200, body: body([item('g1')]) };
+			render(Hacks);
+
+			const link = await screen.findByRole('link', { name: 'Game g1' });
+			expect(link.getAttribute('href')).toBe('/games/g1?tab=releases');
+			expect(
+				[...document.querySelectorAll('thead th')].map((th) => th.textContent!.trim())
+			).toEqual(['Game', 'System', 'Hacks', 'Releases', 'Size']);
+			expect(
+				[...document.querySelectorAll('tbody td')].map((td) => td.textContent!.trim())
+			).toEqual(['Game g1', 'Game Boy', '2', '3', '2.0 KiB']);
+			expect(document.querySelector('th[aria-sort]')!.textContent!.trim()).toBe('Hacks');
+		});
+
+		it('sorting by a header writes sort= and the system select writes system=', async () => {
+			answers[list()] = { status: 200, body: body([item('g1')]) };
+			// The page refetches after each change; answer those too.
+			answers[list('sort=name&dir=asc')] = { status: 200, body: body([item('g1')]) };
+			answers[`${list('sort=name&dir=asc')}&system=gb`] = { status: 200, body: body([item('g1')]) };
+			render(Hacks);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Game' }));
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/hacks?sort=name'));
+
+			const system = screen.getByLabelText('System') as HTMLSelectElement;
+			await vi.waitFor(() => expect(system.options).toHaveLength(3));
+			await fireEvent.change(system, { target: { value: 'gb' } });
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/hacks?system=gb&sort=name'));
+		});
+
+		it('shows the empty state', async () => {
+			answers[list()] = { status: 200, body: body([]) };
+			render(Hacks);
+
+			expect(await screen.findByText('No games have hacked releases.')).toBeTruthy();
+		});
+	});
+
 	describe('Missing Metadata (M4, M6)', () => {
 		const admin = () =>
 			auth.set({ id: 1, username: 'admin', roles: ['admin'], mustChangePassword: false });
@@ -732,10 +892,12 @@ describe('reports pages', () => {
 					.getAllByRole('link')
 					.map((a) => [a.textContent!.trim(), a.querySelector('i')?.className.trim()])
 			).toEqual([
+				['Newly Added', 'bi bi-stars'],
 				['Library Size', 'bi bi-pie-chart'],
 				['Missing Images', 'bi bi-image-alt'],
 				['Duplicates', 'bi bi-files'],
 				['Multiple Releases', 'bi bi-layers'],
+				['Games With Hacks', 'bi bi-bandaid'],
 				['Missing Metadata', 'bi bi-card-checklist'],
 				['Activity', 'bi bi-activity']
 			]);
@@ -908,10 +1070,12 @@ describe('reports pages', () => {
 				.getAllByRole('link')
 				.map((a) => [a.textContent!.trim(), a.querySelector('i')?.className.trim()])
 		).toEqual([
+			['Newly Added', 'bi bi-stars'],
 			['Library Size', 'bi bi-pie-chart'],
 			['Missing Images', 'bi bi-image-alt'],
 			['Duplicates', 'bi bi-files'],
-			['Multiple Releases', 'bi bi-layers']
+			['Multiple Releases', 'bi bi-layers'],
+			['Games With Hacks', 'bi bi-bandaid']
 		]);
 	});
 

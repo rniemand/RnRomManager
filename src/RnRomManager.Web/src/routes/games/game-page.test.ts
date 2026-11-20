@@ -108,6 +108,7 @@ function game(romIds: number[]): GameDetail {
 		system: 'gb',
 		systemName: 'Game Boy',
 		browserCore: null,
+		fileSets: false,
 		title: 'Tetris',
 		displayTitle: 'Tetris',
 		releaseYear: 1989,
@@ -160,6 +161,9 @@ describe('game detail page', () => {
 		vi.stubGlobal('fetch', (url: string) => {
 			// B16: the game's collections (the badges); answered here so the queued answers stay as they were.
 			if (url.endsWith('/collections')) return Promise.resolve(new Response('[]', { status: 200 }));
+			// Release editing B22: the player's battery-save lookup (and the Saves tab's list) stays out of the queue too.
+			if (url.endsWith('/saves'))
+				return Promise.resolve(new Response(JSON.stringify({ items: [] }), { status: 200 }));
 			// B22: the fire-and-forget play records stay out of the queue too.
 			if (url.endsWith('/played')) {
 				played.push(url);
@@ -206,6 +210,7 @@ describe('game detail page', () => {
 		const { unmount } = render(GamePage);
 
 		await fireEvent.click(await screen.findByRole('button', { name: 'Play Tetris 1.gb' }));
+		await vi.waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
 		expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
 			`/emulator/play.html?game=${psx.id}&rom=1&core=pcsx_rearmed&name=Tetris%201.gb&disc=1`
 		);
@@ -232,6 +237,7 @@ describe('game detail page', () => {
 		await fireEvent.click(
 			await screen.findByRole('button', { name: 'Play Disc Runner (USA).cue' })
 		);
+		await vi.waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
 		const src = document.querySelector('iframe')!.getAttribute('src')!;
 		expect(src).toContain('core=genesis_plus_gx');
 		expect(src).toBe(

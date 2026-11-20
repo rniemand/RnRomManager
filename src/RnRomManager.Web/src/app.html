@@ -2,11 +2,16 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<meta name="text-scale" content="scale" />
 		<title>RnRomManager</title>
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+		<!-- Release editing B37, B38: installable as an app (no service worker, B41). -->
+		<link rel="manifest" href="/manifest.webmanifest" />
+		<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+		<meta name="theme-color" content="#212529" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
 		<!-- Blocking on purpose: sets data-bs-theme before first paint (spec §11). -->
 		<script src="/theme.js"></script>
 		%sveltekit.head%

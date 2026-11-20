@@ -752,6 +752,19 @@ public class InfoJsonTests
         Assert.That(RuleOf(ReadGame(SetGame(SetRom(main, SetFile(".."))))), Does.Contain("must be a plain, portable file name"));
     }
 
+    /// <summary>B1: a rom name holding <c>..</c> is valid on every system; <c>..</c> alone or a separator isn't, and images still refuse any <c>..</c>.</summary>
+    [Test]
+    public void DotsInsideRomNames_AreValid_OnEverySystem_B1()
+    {
+        var result = ReadGame(Game() with { Roms = [Rom("Hello... World (USA).gb")] });
+        Assert.That(result.Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok), result.Rule);
+
+        Assert.That(RuleOf(ReadGame(Game() with { Roms = [Rom("..")] })), Does.Contain("roms fileName '..' must be a plain name"));
+        Assert.That(RuleOf(ReadGame(Game() with { Roms = [Rom("a/b.gb")] })), Does.Contain("roms fileName 'a/b.gb' must be a plain name"));
+        Assert.That(RuleOf(ReadGame(Game() with { Images = [Image("box...art.png", ImageType.BoxArt)] })),
+            Does.Contain("images fileName 'box...art.png' must be a plain name"));
+    }
+
     [Test]
     public void V5Upgrade_AddsNullFiles()
     {

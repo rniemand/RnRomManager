@@ -41,8 +41,24 @@ public class MultipleReleasesQueryTests
     private static readonly string[] Dlc = ["DLC"];
 
     private Task<Core.Database.Page<MultipleReleaseItem>> List(int min = 2, MultipleReleaseSort sort = MultipleReleaseSort.Releases,
-        bool descending = true, int page = 1, int pageSize = 50) =>
-        _reports.ListMultipleReleasesAsync(min, sort, descending, page, pageSize, default);
+        bool descending = true, int page = 1, int pageSize = 50, string? system = null) =>
+        _reports.ListMultipleReleasesAsync(system, min, sort, descending, page, pageSize, default);
+
+    /// <summary>Release editing B12: the System filter narrows the list, its total and the max release count.</summary>
+    [Test]
+    public async Task SystemFilter_NarrowsTheListAndTheMax()
+    {
+        var gb = await Add("Gb Game", "gb", 100, Plain, Plain);
+        await Add("Nes Game", "nes", 100, Plain, Plain, Plain);
+
+        var filtered = await List(system: "gb");
+
+        Assert.That((filtered.Items.Select(i => i.Id), filtered.Total), Is.EqualTo((new[] { gb }, 1L)));
+        Assert.That(await _reports.MaxReleaseCountAsync("gb", default), Is.EqualTo(2));
+        Assert.That(await _reports.MaxReleaseCountAsync("nes", default), Is.EqualTo(3));
+        Assert.That(await _reports.MaxReleaseCountAsync("snes", default), Is.Zero);
+        Assert.That((await List()).Total, Is.EqualTo(2));
+    }
 
     [Test]
     public async Task UpdatesAndDlcAreCountedApart_AndTheThresholdApplies()
@@ -136,12 +152,12 @@ public class MultipleReleasesQueryTests
     [Test]
     public async Task MaxReleaseCount_IsZeroWhenEmpty_ElseTheHighestReleaseCount()
     {
-        Assert.That(await _reports.MaxReleaseCountAsync(default), Is.Zero);
+        Assert.That(await _reports.MaxReleaseCountAsync(null, default), Is.Zero);
 
         await Add("One", "gb", 100, Plain, Update, Update, Update);
         await Add("Two", "gb", 100, Plain, Plain, Dlc);
 
-        Assert.That(await _reports.MaxReleaseCountAsync(default), Is.EqualTo(2));
+        Assert.That(await _reports.MaxReleaseCountAsync(null, default), Is.EqualTo(2));
     }
 
     [Test]
@@ -150,6 +166,6 @@ public class MultipleReleasesQueryTests
         await Add("Base With Dlc", "gb", 100, Plain, Dlc);
 
         Assert.That((await List(min: 2)).Total, Is.Zero);
-        Assert.That(await _reports.MaxReleaseCountAsync(default), Is.EqualTo(1));
+        Assert.That(await _reports.MaxReleaseCountAsync(null, default), Is.EqualTo(1));
     }
 }

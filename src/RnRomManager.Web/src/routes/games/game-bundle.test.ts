@@ -61,6 +61,7 @@ function game(): GameDetail {
 		system: 'psx',
 		systemName: 'PlayStation',
 		browserCore: null,
+		fileSets: false,
 		title: 'Disc Runner',
 		displayTitle: 'Disc Runner',
 		releaseYear: null,

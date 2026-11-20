@@ -354,6 +354,52 @@ public class ReviewResolverTests
         return archive.Entries.Select(e => e.Name).ToList();
     }
 
+    /// <summary>B1: a name holding <c>..</c> resolves on a non-FileSets system, in Manual and Dat.</summary>
+    [Test]
+    public async Task Manual_NameWithDotsInside_Resolves_B1()
+    {
+        KeepsSourceExtensionItem([1, 2, 3], rebuild: false);
+        var result = await _resolver.ResolveInJobAsync(1, Manual() with { Title = "Hello... World", Regions = ["USA"] }, Actor, default);
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        Assert.That(StoredEntryNames(), Does.Contain("Hello... World (USA).gb"));
+    }
+
+    [Test]
+    public async Task Dat_NameWithDotsInside_Resolves_B1()
+    {
+        KeepsSourceExtensionItem([1, 2, 3], rebuild: false);
+        FixtureDatWriter.Write(_dats.Directory, new Dictionary<string, IReadOnlyList<FixtureGame>>
+        {
+            ["GB"] = [new FixtureGame("Hello... World (USA)", "Hello... World (USA).gb", [9, 9, 9, 9])],
+        });
+        _dats.Load();
+
+        var result = await _resolver.ResolveInJobAsync(1,
+            new ReviewResolutionRequest { Action = "Dat", DatSystem = "gb", DatGameName = "Hello... World (USA)" }, Actor, default);
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        Assert.That(StoredEntryNames(), Does.Contain("Hello... World (USA) (Unverified).gb"));
+    }
+
+    /// <summary>B1: a generated name that is exactly <c>..</c> is still refused (an Attach None of a queued DAT rom named <c>..</c>).</summary>
+    [Test]
+    public async Task GeneratedName_DotDot_IsRefused_B1()
+    {
+        var gameId = Guid.NewGuid();
+        _item = _item with
+        {
+            Reason = "AmbiguousGroup", CandidateGameIds = $"[\"{gameId}\"]",
+            DatIdentification = """{"datName":"Fixture DAT","datVersion":"1","datGameName":"X (USA)","romName":"x/.."}""",
+        };
+
+        var result = await _resolver.ResolveInJobAsync(1,
+            new ReviewResolutionRequest { Action = "Attach", Flag = "None", TargetGameId = gameId }, Actor, default);
+
+        Assert.That(result.Errors!["title"], Is.EqualTo(new[]
+            { "The generated ROM filename must not be '.' or '..' or contain '/' or '\\'; use Manual with another title." }));
+    }
+
     [Test]
     public async Task Manual_KeepsSourceExtension_WhenTheHandlerAsks()
     {

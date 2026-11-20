@@ -439,6 +439,13 @@
 		width: auto;
 	}
 
+	/* Release editing B36: below md the search takes the toolbar's first row; the controls wrap after it. */
+	@media (max-width: 767.98px) {
+		.search-input {
+			flex-basis: 100%;
+		}
+	}
+
 	.chip-close {
 		font-size: 0.6em;
 	}

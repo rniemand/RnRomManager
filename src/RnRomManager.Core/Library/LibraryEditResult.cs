@@ -47,6 +47,9 @@ public sealed record LibraryEditResult(string? Code = null, string? Details = nu
 
     public Guid? GameId { get; init; }
 
+    /// <summary>B4: an edited release's file name after the edit.</summary>
+    public string? FileName { get; init; }
+
     public Dictionary<string, string[]>? Errors { get; init; }
 
     /// <summary>

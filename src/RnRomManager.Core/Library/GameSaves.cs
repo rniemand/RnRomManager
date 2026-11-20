@@ -1,10 +1,14 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using RnRomManager.Core.Storage;
+using RnRomManager.Core.Users;
 
 namespace RnRomManager.Core.Library;
 
-/// <summary>B2: one record of <c>saves/saves.json</c>; its bytes are the entry <c>saves/&lt;id&gt;&lt;extension&gt;</c>.</summary>
+/// <summary>
+/// B2: one record of <c>saves/saves.json</c>. Its bytes are the entry <c>saves/&lt;owner&gt;/&lt;id&gt;&lt;extension&gt;</c>
+/// (release editing B16, version 2), or <c>saves/&lt;id&gt;&lt;extension&gt;</c> for a record of a version 1 index.
+/// </summary>
 public sealed record GameSave
 {
     public required string Id { get; init; }
@@ -27,9 +31,13 @@ public sealed record GameSave
     public required string? UpdatedBy { get; init; }
     public required DateTimeOffset UpdatedAt { get; init; }
 
-    /// <summary>The ZIP entry holding the bytes.</summary>
+    /// <summary>B17: read from a version 1 <c>saves.json</c>, whose entries sit directly in <c>saves/</c>.</summary>
     [JsonIgnore]
-    public string Entry => LibraryZip.SaveEntry(Id + Extension);
+    public bool Legacy { get; init; }
+
+    /// <summary>The ZIP entry holding the bytes (B16: in the owner's folder, <c>uploadedBy</c> lowercased).</summary>
+    [JsonIgnore]
+    public string Entry => LibraryZip.SaveEntry(Legacy ? Id + Extension : $"{UploadedBy?.ToLowerInvariant()}/{Id}{Extension}");
 }
 
 /// <summary>B2: the whole <c>saves/saves.json</c>.</summary>
@@ -66,7 +74,8 @@ public sealed record SaveViewer(string? Username, bool IsAdmin)
 /// <summary>B1, B2, B8: the <c>saves.json</c> rules, limits, reader and writer.</summary>
 public static class GameSaves
 {
-    public const int Version = 1;
+    /// <summary>B16: written by <see cref="Serialize"/>; <see cref="Parse"/> also reads version 1.</summary>
+    public const int CurrentVersion = 2;
     public const int MaxIndexBytes = 1024 * 1024;
     public const long MaxSaveBytes = 256L * 1024 * 1024;
     public const int MaxPerRelease = 25;
@@ -162,6 +171,9 @@ public static class GameSaves
         {
             return new(SavesState.Unreadable, Problem: $"saves.json is not valid: {ex.Message}");
         }
+        // B17: a version 1 record's entry has no owner folder.
+        if (index is { Version: 1, Saves: { } legacy } && legacy.All(s => s is not null))
+            index = index with { Saves = [.. legacy.Select(s => s with { Legacy = true })] };
         return Problem(index, entryLength) is { } problem
             ? new(SavesState.Unreadable, Problem: problem)
             : new(SavesState.Valid, index);
@@ -171,8 +183,8 @@ public static class GameSaves
     {
         if (index is null || index.Saves is null || index.Saves.Any(s => s is null))
             return "saves.json is empty or lists null";
-        if (index.Version != Version)
-            return $"saves.json version {index.Version} is not {Version}";
+        if (index.Version is not (1 or CurrentVersion))
+            return $"saves.json version {index.Version} is not 1 or 2";
         var ids = new HashSet<string>(StringComparer.Ordinal);
         foreach (var save in index.Saves)
         {
@@ -184,6 +196,8 @@ public static class GameSaves
                 return $"save {save.Id} extension '{save.Extension}' is not valid";
             if (NameProblem(save.Name, out var trimmed) is not null || trimmed != save.Name || DescriptionProblem(save.Description) is not null)
                 return $"save {save.Id} name or description is not valid";
+            if (!save.Legacy && UsernamePolicy.Validate(save.UploadedBy) is not null)
+                return $"save {save.Id} uploadedBy '{save.UploadedBy}' can't name its folder";
             if (save.SizeBytes < 0 || save.Sha1.Length != 40 || !save.Sha1.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f'))
                 return $"save {save.Id} size or sha1 is not valid";
             if (entryLength(save.Entry) != save.SizeBytes)
@@ -206,11 +220,41 @@ public static class GameSaves
         }
     }
 
-    /// <returns>The UTF-8 <c>saves.json</c>, or null when it would be over 1 MiB (<c>SavesIndexFull</c>).</returns>
+    /// <returns>The UTF-8 version 2 <c>saves.json</c>, or null when it would be over 1 MiB (<c>SavesIndexFull</c>).</returns>
+    /// <exception cref="ArgumentException">B17: a record is legacy or its owner can't name a folder (<see cref="Upgrade"/> first).</exception>
     public static byte[]? Serialize(IReadOnlyList<GameSave> saves)
     {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(new GameSavesIndex { Version = Version, Saves = saves }, Options);
+        if (saves.FirstOrDefault(s => s.Legacy || UsernamePolicy.Validate(s.UploadedBy) is not null) is { } bad)
+            throw new ArgumentException($"Save {bad.Id} is legacy or its uploadedBy '{bad.UploadedBy}' can't name a folder.", nameof(saves));
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(new GameSavesIndex { Version = CurrentVersion, Saves = saves }, Options);
         return bytes.Length > MaxIndexBytes ? null : bytes;
+    }
+
+    /// <summary>
+    /// B18: the records as version 2 ones: not legacy, and owned by <c>admin</c> when <c>uploadedBy</c> is null or can't name a
+    /// folder. A legacy record's bytes move to its new entry: the stream <paramref name="added"/> already holds under the old
+    /// name is re-keyed, else <paramref name="openLegacy"/> reads it; the old name is added to <paramref name="removed"/>.
+    /// </summary>
+    /// <param name="openLegacy">The bytes of a legacy record, from the ZIP that holds it.</param>
+    public static IReadOnlyList<GameSave> Upgrade(IReadOnlyList<GameSave> saves, Func<GameSave, Func<Stream>> openLegacy,
+        Dictionary<string, Func<Stream>> added, HashSet<string> removed)
+    {
+        var result = new List<GameSave>(saves.Count);
+        foreach (var save in saves)
+        {
+            var upgraded = save with
+            {
+                Legacy = false,
+                UploadedBy = UsernamePolicy.Validate(save.UploadedBy) is null ? save.UploadedBy : AdminSeeder.AdminUsername,
+            };
+            if (save.Legacy)
+            {
+                added[upgraded.Entry] = added.Remove(save.Entry, out var open) ? open : openLegacy(save);
+                removed.Add(save.Entry);
+            }
+            result.Add(upgraded);
+        }
+        return result;
     }
 
     /// <summary>B2, B4: whether a save names <paramref name="releaseFileName"/> (ignoring case).</summary>

@@ -203,6 +203,10 @@ public sealed partial class LibraryEditor
         var records = new List<GameSave>(into.Index?.Saves ?? []);
         var ids = records.Select(s => s.Id).ToHashSet(StringComparer.Ordinal);
         var added = new Dictionary<string, Func<Stream>>();
+        var removed = new HashSet<string>(StringComparer.Ordinal);
+        // B18: the target's own records are upgraded from the target ZIP (for a B9 rename the source is the target).
+        records = [.. GameSaves.Upgrade(records, s => () => (target ?? source).OpenEntry(s.Entry, s.SizeBytes), added, removed)];
+        var carriedRecords = new List<GameSave>();
         foreach (var save in from.Index!.Saves)
         {
             var carried = ids.Add(save.Id) ? save : save with { Id = GameSaves.NewId() };
@@ -210,10 +214,14 @@ public sealed partial class LibraryEditor
             if (renames.TryGetValue(save.Release, out var renamed))
                 carried = carried with { Release = renamed };
             added[carried.Entry] = () => source.OpenEntry(save.Entry, save.SizeBytes);
-            records.Add(carried);
+            carriedRecords.Add(carried);
         }
+        // A carried legacy record's bytes are already in `added` under its legacy name, so Upgrade re-keys them.
+        records.AddRange(GameSaves.Upgrade(carriedRecords, s => () => source.OpenEntry(s.Entry, s.SizeBytes), added, removed));
+        // Only the target's own entries can be removed; a carried one never was in it.
+        removed.IntersectWith((target ?? source).EntryNames);
         return GameSaves.Serialize(records) is { } index
-            ? (null, new SavesChange(index, added, new HashSet<string>()))
+            ? (null, new SavesChange(index, added, removed))
             : (new(SavesIndexFull, SavesIndexFullTitle), null);
     }
 
@@ -221,6 +229,10 @@ public sealed partial class LibraryEditor
     private async Task<LibraryEditResult> WriteSavesAsync(LibraryZip zip, GameRow row, InfoJsonGame game, IReadOnlyList<GameSave> saves, GameSave save,
         string action, AuditActor actor, Dictionary<string, Func<Stream>> added, HashSet<string> removed)
     {
+        // B18: every save write leaves a version 2 index.
+        saves = GameSaves.Upgrade(saves, s => () => zip.OpenEntry(s.Entry, s.SizeBytes), added, removed);
+        if (save.Legacy)
+            save = saves.FirstOrDefault(s => s.Id == save.Id) ?? save with { Legacy = false };
         byte[]? index = null;
         if (saves.Count > 0 && (index = GameSaves.Serialize(saves)) is null)
             return new(SavesIndexFull, SavesIndexFullTitle);

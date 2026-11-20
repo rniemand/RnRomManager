@@ -3,13 +3,14 @@
 	import { api, resetClient } from '#lib/api/client.js';
 	import { isApiError } from '#lib/api/errors.js';
 	import type { BackupFile, BackupRestoreResult, BackupStatus } from '#lib/api/types.js';
+	import AccordionItem from '#lib/components/AccordionItem.svelte';
 	import ConfirmModal from '#lib/components/ConfirmModal.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
-	import { formatDateTime } from '#lib/format.js';
+	import { formatCount, formatDateTime } from '#lib/format.js';
 	import { navigate } from '#lib/navigation.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { navCounts } from '#lib/stores/navCounts.svelte.js';
@@ -166,108 +167,100 @@
 {:else if !status}
 	<Loading />
 {:else}
-	<div class="row g-3 mb-3">
-		<div class="col-12 col-lg-6">
-			<form
-				class="card card-body h-100"
-				novalidate
-				onsubmit={save}
-				aria-labelledby="backup-schedule"
-			>
-				<h2 class="h5" id="backup-schedule">Schedule</h2>
-				{#if saveError}<ErrorAlert error={saveError} ondismiss={() => (saveError = null)} />{/if}
-				<div class="form-check form-switch mb-3">
-					<input
-						id="backup-enabled"
-						class="form-check-input"
-						type="checkbox"
-						role="switch"
-						bind:checked={form.enabled}
-					/>
-					<label class="form-check-label" for="backup-enabled">Daily backups enabled</label>
-				</div>
-				<div class="row g-3 mb-3">
-					<div class="col-12 col-sm-7">
-						<label class="form-label" for="backup-time"
-							>Daily at (server time, {status.timeZone})</label
-						>
-						<input
-							id="backup-time"
-							class="form-control"
-							class:is-invalid={errors.time}
-							type="time"
-							bind:value={form.time}
-						/>
-						{#if errors.time}<div class="invalid-feedback">{errors.time}</div>{/if}
-					</div>
-					<div class="col-12 col-sm-5">
-						<label class="form-label" for="backup-retention">Backups to keep</label>
-						<input
-							id="backup-retention"
-							class="form-control"
-							class:is-invalid={errors.retention}
-							type="number"
-							min="1"
-							max="365"
-							step="1"
-							bind:value={form.retention}
-						/>
-						{#if errors.retention}<div class="invalid-feedback">{errors.retention}</div>{/if}
-					</div>
-				</div>
-				<div>
-					<button type="submit" class="btn btn-primary" disabled={saving}>
-						{#if saving}<span class="spinner-border spinner-border-sm" aria-hidden="true"
-							></span>{/if}
-						Save
-					</button>
-				</div>
-			</form>
-		</div>
-		<div class="col-12 col-lg-6">
-			<div class="card card-body h-100">
-				<h2 class="h5">Status</h2>
-				<dl class="row mb-3">
-					<dt class="col-sm-4">Next run</dt>
-					<dd class="col-sm-8" data-testid="next-run">
-						{status.nextRunAt ? formatDateTime(status.nextRunAt) : 'Disabled'}
-					</dd>
-					<dt class="col-sm-4">Last result</dt>
-					<dd class="col-sm-8" data-testid="last-result">
-						{#if !status.lastResult}
-							—
-						{:else if status.lastResult.ok}
-							<Icon name="success" class="text-success" />
-							{formatDateTime(status.lastResult.at)} · {status.lastResult.fileName}
-						{:else}
-							<Icon name="error" class="text-danger" />
-							{formatDateTime(status.lastResult.at)} · {status.lastResult.error}
-						{/if}
-					</dd>
-				</dl>
-				<div>
-					<button
-						type="button"
-						class="btn btn-outline-primary"
-						disabled={backingUp || status.running}
-						onclick={backUpNow}
+	{@const backupCount = status.backups.length}
+	<!-- Release editing B34: one accordion item each; only the list opens on load. -->
+	<AccordionItem id="backups-schedule-body" headingId="backup-schedule">
+		{#snippet header()}Schedule{/snippet}
+		<form novalidate onsubmit={save} aria-labelledby="backup-schedule">
+			{#if saveError}<ErrorAlert error={saveError} ondismiss={() => (saveError = null)} />{/if}
+			<div class="form-check form-switch mb-3">
+				<input
+					id="backup-enabled"
+					class="form-check-input"
+					type="checkbox"
+					role="switch"
+					bind:checked={form.enabled}
+				/>
+				<label class="form-check-label" for="backup-enabled">Daily backups enabled</label>
+			</div>
+			<div class="row g-3 mb-3">
+				<div class="col-12 col-sm-7">
+					<label class="form-label" for="backup-time"
+						>Daily at (server time, {status.timeZone})</label
 					>
-						{#if backingUp || status.running}
-							<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-							Backing up…
-						{:else}
-							<Icon name="download" /> Back up now
-						{/if}
-					</button>
+					<input
+						id="backup-time"
+						class="form-control"
+						class:is-invalid={errors.time}
+						type="time"
+						bind:value={form.time}
+					/>
+					{#if errors.time}<div class="invalid-feedback">{errors.time}</div>{/if}
+				</div>
+				<div class="col-12 col-sm-5">
+					<label class="form-label" for="backup-retention">Backups to keep</label>
+					<input
+						id="backup-retention"
+						class="form-control"
+						class:is-invalid={errors.retention}
+						type="number"
+						min="1"
+						max="365"
+						step="1"
+						bind:value={form.retention}
+					/>
+					{#if errors.retention}<div class="invalid-feedback">{errors.retention}</div>{/if}
 				</div>
 			</div>
+			<div>
+				<button type="submit" class="btn btn-primary" disabled={saving}>
+					{#if saving}<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>{/if}
+					Save
+				</button>
+			</div>
+		</form>
+	</AccordionItem>
+	<AccordionItem id="backups-status-body" headingId="backups-status">
+		{#snippet header()}Status{/snippet}
+		<dl class="row mb-3">
+			<dt class="col-sm-4">Next run</dt>
+			<dd class="col-sm-8" data-testid="next-run">
+				{status.nextRunAt ? formatDateTime(status.nextRunAt) : 'Disabled'}
+			</dd>
+			<dt class="col-sm-4">Last result</dt>
+			<dd class="col-sm-8" data-testid="last-result">
+				{#if !status.lastResult}
+					—
+				{:else if status.lastResult.ok}
+					<Icon name="success" class="text-success" />
+					{formatDateTime(status.lastResult.at)} · {status.lastResult.fileName}
+				{:else}
+					<Icon name="error" class="text-danger" />
+					{formatDateTime(status.lastResult.at)} · {status.lastResult.error}
+				{/if}
+			</dd>
+		</dl>
+		<div>
+			<button
+				type="button"
+				class="btn btn-outline-primary"
+				disabled={backingUp || status.running}
+				onclick={backUpNow}
+			>
+				{#if backingUp || status.running}
+					<span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+					Backing up…
+				{:else}
+					<Icon name="download" /> Back up now
+				{/if}
+			</button>
 		</div>
-	</div>
-
-	{#if status.backups.length === 0}
-		<EmptyState message="No backups yet." />
-	{:else}
-		<div class="card">
+	</AccordionItem>
+	<AccordionItem id="backups-list-body" headingId="backups-list" open flush>
+		{#snippet header()}Backups ({formatCount(backupCount)}){/snippet}
+		{#if status.backups.length === 0}
+			<EmptyState message="No backups yet." />
+		{:else}
 			<div class="table-responsive">
 				<table class="table table-sm table-striped table-hover align-middle mb-0">
 					<caption class="visually-hidden">Backups, newest first</caption>
@@ -298,8 +291,8 @@
 					</tbody>
 				</table>
 			</div>
-		</div>
-	{/if}
+		{/if}
+	</AccordionItem>
 {/if}
 
 <ConfirmModal

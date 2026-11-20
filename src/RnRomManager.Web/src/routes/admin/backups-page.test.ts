@@ -120,13 +120,41 @@ describe('admin backups page (B18)', () => {
 		).toContain('docs/deployment.md#backup-and-restore');
 	});
 
+	it('is three accordion items, Schedule, Status and Backups (n), only Backups open (release editing B34)', async () => {
+		answers['GET /api/admin/backups'] = [{ status: 200, body: status() }];
+		render(BackupsPage);
+		await screen.findByLabelText('Backups to keep');
+
+		const items = [...document.querySelectorAll('.accordion-item')];
+		expect(
+			items.map((item) => [
+				item.querySelector('.accordion-header')!.id,
+				item.querySelector('.accordion-button')!.textContent!.trim(),
+				item.querySelector('.accordion-collapse')!.id,
+				item.querySelector('.accordion-collapse')!.classList.contains('show')
+			])
+		).toEqual([
+			['backup-schedule', 'Schedule', 'backups-schedule-body', false],
+			['backups-status', 'Status', 'backups-status-body', false],
+			['backups-list', 'Backups (2)', 'backups-list-body', true]
+		]);
+		expect(document.querySelector('form')!.getAttribute('aria-labelledby')).toBe('backup-schedule');
+		expect(document.querySelectorAll('h2.h5')).toHaveLength(0);
+		expect(items[2].querySelector('.accordion-body')!.classList).toContain('p-0');
+		expect(document.querySelector('table')!.closest('.card')).toBeNull();
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Schedule' }));
+		expect(items[0].querySelector('.accordion-collapse')!.classList).toContain('show');
+	});
+
 	it('shows Disabled and an empty state when there is nothing', async () => {
 		answers['GET /api/admin/backups'] = [
 			{ status: 200, body: status({ enabled: false, nextRunAt: null, backups: [] }) }
 		];
 		render(BackupsPage);
 
-		expect(await screen.findByText('No backups yet.')).toBeTruthy();
+		const empty = await screen.findByText('No backups yet.');
+		expect(empty.closest('#backups-list-body')).not.toBeNull();
 		expect(screen.getByTestId('next-run').textContent!.trim()).toBe('Disabled');
 		expect(document.querySelector('table')).toBeNull();
 	});

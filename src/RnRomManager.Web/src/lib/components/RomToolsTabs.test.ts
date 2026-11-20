@@ -28,6 +28,21 @@ describe('RomToolsTabs', () => {
 		expect(screen.getByRole('navigation', { name: 'ROM Tools' })).toBeTruthy();
 	});
 
+	it('each tab has its icon before the label (release editing B32)', () => {
+		render(RomToolsTabs);
+
+		expect(
+			screen
+				.getAllByRole('link')
+				.map((a) => [a.firstElementChild!.className.trim(), a.textContent?.trim()])
+		).toEqual([
+			['bi bi-box-arrow-in-down', 'Ingestion'],
+			['bi bi-clipboard-check', 'Review'],
+			['bi bi-trash3', 'Deleted ROMs'],
+			['bi bi-shield-check', 'Integrity']
+		]);
+	});
+
 	it('badges show only when the count is > 0, both formatted (D6)', () => {
 		navCounts.review = 1250;
 		navCounts.deleted = 3400;

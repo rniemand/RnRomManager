@@ -545,10 +545,10 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 filename = FileNameSanitizer.Sanitize(stem) + (external || system.KeepsSourceExtension ? originalExtension : system.RomExtensions[0]);
             }
 
-            // B12: a FileSets name may hold "..", as Redump names do ("...Iru!"); only "." or ".." or a separator is refused.
+            // B12, and B1 for every system: a name may hold "..", as Redump and No-Intro names do ("...Iru!"); only "." or ".." or a separator is refused.
             // B14: a set keeps its members' source names, so the generated name isn't used.
-            if (set is null && (system.FileSets ? filename is "." or ".." || filename.IndexOfAny(['/', '\\']) >= 0 : filename.Contains("..", StringComparison.Ordinal)))
-                return ReviewResolutionResult.Invalid("title", "The generated ROM filename must not contain '..'; use Manual with another title.");
+            if (set is null && (filename is "." or ".." || filename.IndexOfAny(['/', '\\']) >= 0))
+                return ReviewResolutionResult.Invalid("title", "The generated ROM filename must not be '.' or '..' or contain '/' or '\\'; use Manual with another title.");
             if (external && !system.FileSets)
                 filename = ExternalRomName.AllocateLogicalName(filename, new ExternalNameReservations([])); // E3: portable and within budget
             if (target is { } targetId)

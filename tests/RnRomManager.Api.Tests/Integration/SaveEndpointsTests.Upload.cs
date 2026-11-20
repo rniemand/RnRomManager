@@ -62,7 +62,7 @@ public partial class SaveEndpointsTests
         var id = item.GetProperty("id").GetString()!;
         Assert.That(response.Headers.Location?.ToString(), Is.EqualTo($"/api/games/{game.Id}/saves/{id}"));
         using (var archive = System.IO.Compression.ZipFile.OpenRead(game.Zip))
-        using (var entry = archive.GetEntry(LibraryZip.SaveEntry(id + ".srm"))!.Open())
+        using (var entry = archive.GetEntry(LibraryZip.SaveEntry($"plain/{id}.srm"))!.Open())
         using (var copy = new MemoryStream())
         {
             entry.CopyTo(copy);
@@ -231,7 +231,7 @@ public partial class SaveEndpointsTests
         var item = await AuthClient.JsonAsync(response);
         Assert.That((item.GetProperty("extension").GetString(), item.GetProperty("sizeBytes").GetInt64(), item.GetProperty("updatedBy").GetString()),
             Is.EqualTo((".srm", 2L, "plain")));
-        Assert.That(SavesEntries(game.Zip).Order(), Is.EqualTo(new[] { LibraryZip.SaveEntry(save.Id + ".srm"), LibraryZip.SavesIndexEntry }.Order()));
+        Assert.That(SavesEntries(game.Zip).Order(), Is.EqualTo(new[] { LibraryZip.SaveEntry($"plain/{save.Id}.srm"), LibraryZip.SavesIndexEntry }.Order()));
     }
 
     [Test]

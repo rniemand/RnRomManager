@@ -307,7 +307,7 @@
 						{#each game.roms as rom (rom.id)}<option value={rom.id}>{rom.fileName}</option>{/each}
 					</select>
 				</div>
-				<fieldset class="mb-3">
+				<fieldset class="mb-3" aria-describedby="{formId}-kind-help">
 					<legend class="form-label fs-6">Kind</legend>
 					{#each ['state', 'battery'] as const as value (value)}
 						<div class="form-check form-check-inline">
@@ -321,6 +321,10 @@
 							<label class="form-check-label" for="{formId}-{value}">{kindLabels[value]}</label>
 						</div>
 					{/each}
+					<!-- Release editing B21 -->
+					<div id="{formId}-kind-help" class="form-text">
+						Battery saves from other emulators (.sav, .srm) can be uploaded as Battery.
+					</div>
 				</fieldset>
 			{/if}
 			{#if mode === 'add' || mode === 'edit'}

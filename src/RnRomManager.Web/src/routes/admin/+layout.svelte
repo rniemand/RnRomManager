@@ -5,17 +5,19 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 
 	let { children }: { children: Snippet } = $props();
 
 	const tabs = [
-		{ href: resolve('/admin/users'), label: 'Users' },
-		{ href: resolve('/admin/dats'), label: 'DATs' },
-		{ href: resolve('/admin/settings'), label: 'Settings' },
-		{ href: resolve('/admin/rom-storage'), label: 'ROM Zip Config' },
-		{ href: resolve('/admin/backups'), label: 'Backups' },
-		{ href: resolve('/admin/logs'), label: 'Logs' },
-		{ href: resolve('/admin/audit'), label: 'Auditing' }
+		// Release editing B33: an icon per tab.
+		{ href: resolve('/admin/users'), label: 'Users', icon: 'admin-users' },
+		{ href: resolve('/admin/dats'), label: 'DATs', icon: 'admin-dats' },
+		{ href: resolve('/admin/settings'), label: 'Settings', icon: 'admin-settings' },
+		{ href: resolve('/admin/rom-storage'), label: 'ROM Zip Config', icon: 'storage-in-zip' },
+		{ href: resolve('/admin/backups'), label: 'Backups', icon: 'admin-backups' },
+		{ href: resolve('/admin/logs'), label: 'Logs', icon: 'admin-logs' },
+		{ href: resolve('/admin/audit'), label: 'Auditing', icon: 'admin-audit' }
 	];
 </script>
 
@@ -25,10 +27,10 @@
 		{#each tabs as tab (tab.href)}
 			<li class="nav-item">
 				<a
-					class="nav-link"
+					class="nav-link d-flex align-items-center gap-1"
 					class:active={page.url.pathname === tab.href}
 					aria-current={page.url.pathname === tab.href ? 'page' : undefined}
-					href={tab.href}>{tab.label}</a
+					href={tab.href}><Icon name={tab.icon} /> {tab.label}</a
 				>
 			</li>
 		{/each}

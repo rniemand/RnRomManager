@@ -74,6 +74,9 @@ public static class AuditActions
     /// <summary>UI polish B22: a browser play started (details: the release's file name).</summary>
     public const string GamePlayed = "GamePlayed";
 
+    /// <summary>Release editing B10: an Admin changed a release's tags (details <c>&lt;old&gt; → &lt;new&gt;</c> when renamed).</summary>
+    public const string ReleaseEdited = "ReleaseEdited";
+
     public static readonly IReadOnlyList<string> All =
     [
         Ingested, ZipRepaired, ExtensionRenamed, MovedToFailed, MovedToDuplicates, ArchiveDeleted, ReviewDeleted, GameUpdated,
@@ -81,6 +84,6 @@ public static class AuditActions
         IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved, GenreLogoReplaced, GenreLogoRemoved,
         SystemLogoReplaced, SystemLogoRemoved, BackupRestored, RomsExternalized, RomsEmbedded, RomStorageChanged, ZipCompressionChanged,
         SaveAdded, SaveUpdated, SaveDeleted, UserCreated, UserTypeChanged, UserDisabled, UserEnabled, PasswordReset,
-        PasswordChanged, SignedIn, SignInFailed, LockedOut, GamePlayed,
+        PasswordChanged, SignedIn, SignInFailed, LockedOut, GamePlayed, ReleaseEdited,
     ];
 }

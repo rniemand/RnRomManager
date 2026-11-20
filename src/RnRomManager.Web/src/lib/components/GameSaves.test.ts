@@ -175,6 +175,23 @@ describe('GameSaves', () => {
 		expect((body.get('file') as File).name).toBe('GOLD.SRM');
 	});
 
+	it('explains under the Kind radios that .sav/.srm files upload as Battery (release editing B21)', async () => {
+		listed([]);
+		render(GameSaves, { game });
+		await screen.findByText('No saves yet');
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Add save' }));
+
+		const help = modal().getByText(
+			'Battery saves from other emulators (.sav, .srm) can be uploaded as Battery.'
+		);
+		const fieldset = help.closest('fieldset')!;
+		expect(help.className).toBe('form-text');
+		expect(fieldset.lastElementChild).toBe(help);
+		expect(fieldset.getAttribute('aria-describedby')).toBe(help.id);
+		expect(help.id).toMatch(/-kind-help$/);
+	});
+
 	it('checks the form before sending: a name and a file are required', async () => {
 		listed([]);
 		render(GameSaves, { game });

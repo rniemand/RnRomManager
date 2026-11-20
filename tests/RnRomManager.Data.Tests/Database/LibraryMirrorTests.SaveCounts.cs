@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Library;
 using RnRomManager.Data.Repositories;
+using RnRomManager.TestData;
 using static RnRomManager.TestData.TestLibrary;
 
 namespace RnRomManager.Data.Tests.Database;
@@ -13,8 +14,10 @@ public partial class LibraryMirrorTests
 {
     private ILibraryMirror CountingMirror() => new LibraryMirror(_factory, Options.Create(new PathsOptions { Roms = _dir.Path }));
 
+    /// <summary>A version 1 record (release editing B16): only that version holds unowned or invalid owners.</summary>
     private static GameSave Save(int n, string? owner) => new()
     {
+        Legacy = true,
         Id = n.ToString("x32"), Name = $"Save {n}", Description = "", Kind = GameSaves.KindBattery, Release = "a.gb", Extension = ".srm",
         SizeBytes = 1, Sha1 = new string('0', 40), UploadedBy = owner, UploadedAt = DateTimeOffset.UnixEpoch, UpdatedBy = owner,
         UpdatedAt = DateTimeOffset.UnixEpoch,
@@ -48,7 +51,7 @@ public partial class LibraryMirrorTests
     public async Task SaveCounts_OnePerOwner_GroupedIgnoringCase_UnownedAndInvalidOwnersOnlyInTheTotal()
     {
         var saves = new[] { Save(1, "Bob"), Save(2, "bob"), Save(3, "alice"), Save(4, null), Save(5, "x"), Save(6, "has space") };
-        WriteSavesZip(saves, GameSaves.Serialize(saves));
+        WriteSavesZip(saves, TestSaves.V1Index([.. saves]));
         var game = Game("Tetris", Rom("a.gb", RomBytes(1)));
 
         await CountingMirror().ReplaceAsync(Entry(game), CancellationToken.None);
@@ -86,11 +89,11 @@ public partial class LibraryMirrorTests
         var mirror = CountingMirror();
         var game = Game("Tetris", Rom("a.gb", RomBytes(1)));
         var first = new[] { Save(1, "bob"), Save(2, "bob") };
-        WriteSavesZip(first, GameSaves.Serialize(first));
+        WriteSavesZip(first, TestSaves.V1Index([.. first]));
         await mirror.ReplaceAsync(Entry(game), CancellationToken.None);
 
         var second = new[] { Save(3, "alice") };
-        WriteSavesZip(second, GameSaves.Serialize(second));
+        WriteSavesZip(second, TestSaves.V1Index([.. second]));
         await mirror.ReplaceAsync(Entry(game), CancellationToken.None);
         Assert.That(await OwnerCountsAsync(game.GameId), Is.EqualTo(new Dictionary<string, int> { ["alice"] = 1 }));
 
@@ -102,7 +105,7 @@ public partial class LibraryMirrorTests
     public async Task GetUserSaveCounts_OwnCountAfterAMirrorWrite_MissingIsAbsent()
     {
         var saves = new[] { Save(1, "bob"), Save(2, "bob") };
-        WriteSavesZip(saves, GameSaves.Serialize(saves));
+        WriteSavesZip(saves, TestSaves.V1Index([.. saves]));
         var game = Game("Tetris", Rom("a.gb", RomBytes(1)));
         await CountingMirror().ReplaceAsync(Entry(game), CancellationToken.None);
         var other = Guid.NewGuid();

@@ -42,10 +42,10 @@ public class GameSavesTests
         var result = GameSaves.Parse(GameSaves.Serialize(saves)!, AllPresent);
 
         Assert.That(result.State, Is.EqualTo(SavesState.Valid), result.Problem);
-        Assert.That(result.Index!.Version, Is.EqualTo(1));
+        Assert.That(result.Index!.Version, Is.EqualTo(2));
         Assert.That(result.Index.Saves, Is.EqualTo(saves));
-        Assert.That(result.Index.Saves[0].Entry, Is.EqualTo($"saves/{saves[0].Id}.state"));
-        Assert.That(result.Index.Saves[1].Entry, Is.EqualTo($"saves/{saves[1].Id}"));
+        Assert.That(result.Index.Saves[0].Entry, Is.EqualTo($"saves/alice/{saves[0].Id}.state"));
+        Assert.That(result.Index.Saves[1].Entry, Is.EqualTo($"saves/alice/{saves[1].Id}"));
     }
 
     [Test]
@@ -53,13 +53,74 @@ public class GameSavesTests
     {
         var json = JsonNode.Parse(GameSaves.Serialize([Save("0123456789abcdef0123456789abcdef")])!)!;
 
-        Assert.That(json["version"]!.GetValue<int>(), Is.EqualTo(1));
+        Assert.That(json["version"]!.GetValue<int>(), Is.EqualTo(2));
         var save = json["saves"]![0]!.AsObject();
         Assert.That(save.Select(p => p.Key), Is.EqualTo(new[]
         {
             "id", "name", "description", "kind", "release", "extension", "sizeBytes", "sha1", "uploadedBy", "uploadedAt", "updatedBy", "updatedAt",
         }));
         Assert.That(save["updatedBy"], Is.Null);
+    }
+
+    /// <summary>Release editing B16, B17: a version 1 index is still read, its records legacy with entries directly in saves/.</summary>
+    [Test]
+    public void Parse_Version1_MarksEveryRecordLegacy_WithTheFlatEntry()
+    {
+        var save = Save() with { UploadedBy = null };
+        var v1 = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(GameSaves.Serialize([save with { UploadedBy = "alice" }])!)
+            .Replace("\"version\": 2", "\"version\": 1").Replace("\"uploadedBy\": \"alice\"", "\"uploadedBy\": null"));
+
+        var result = GameSaves.Parse(v1, AllPresent);
+
+        Assert.That(result.State, Is.EqualTo(SavesState.Valid), result.Problem);
+        Assert.That(result.Index!.Saves.Single().Legacy, Is.True);
+        Assert.That(result.Index.Saves.Single().Entry, Is.EqualTo($"saves/{save.Id}.state"));
+        Assert.That(Parse(Save()).Index!.Saves.Single().Legacy, Is.False, "version 2 records aren't legacy");
+    }
+
+    [TestCase(null)]
+    [TestCase("a/b")]
+    [TestCase("..")]
+    public void Version2_NeedsAnOwnerThatCanNameAFolder(string? owner)
+    {
+        Assert.That(() => GameSaves.Serialize([Save() with { UploadedBy = owner }]), Throws.ArgumentException);
+        var bytes = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(GameSaves.Serialize([Save()])!)
+            .Replace("\"uploadedBy\": \"alice\"", owner is null ? "\"uploadedBy\": null" : $"\"uploadedBy\": \"{owner}\""));
+        Assert.That(GameSaves.Parse(bytes, AllPresent).State, Is.EqualTo(SavesState.Unreadable));
+    }
+
+    [Test]
+    public void Serialize_RefusesALegacyRecord() =>
+        Assert.That(() => GameSaves.Serialize([Save() with { Legacy = true }]), Throws.ArgumentException);
+
+    [Test]
+    public void Entry_UsesTheOwnerLowercased() =>
+        Assert.That(Save("0123456789abcdef0123456789abcdef") with { UploadedBy = "Alice.B" } is var s ? s.Entry : null,
+            Is.EqualTo("saves/alice.b/0123456789abcdef0123456789abcdef.state"));
+
+    /// <summary>B18: legacy records become version 2 ones; bytes are re-keyed when already added, else read; owners kept or admin.</summary>
+    [Test]
+    public void Upgrade_ReKeysOrReadsLegacyBytes_AndFixesOwners()
+    {
+        var kept = Save() with { Legacy = true };
+        var replaced = Save() with { Legacy = true, UploadedBy = null };
+        var bad = Save() with { Legacy = true, UploadedBy = "x" };
+        var current = Save() with { UploadedBy = "bob" };
+        Func<Stream> newBytes = () => new MemoryStream([9]);
+        var added = new Dictionary<string, Func<Stream>> { [replaced.Entry] = newBytes };
+        var removed = new HashSet<string>();
+        var read = new List<string>();
+
+        var result = GameSaves.Upgrade([kept, replaced, bad, current], s => { read.Add(s.Id); return () => new MemoryStream([1]); }, added, removed);
+
+        Assert.That(result.Select(s => (s.Legacy, s.UploadedBy)),
+            Is.EqualTo(new[] { (false, (string?)"alice"), (false, "admin"), (false, "admin"), (false, "bob") }));
+        Assert.That(result[1].UpdatedBy, Is.EqualTo(replaced.UpdatedBy), "updatedBy is left as it is");
+        Assert.That(read, Is.EqualTo(new[] { kept.Id, bad.Id }), "a replaced file's new bytes aren't read from the ZIP");
+        Assert.That(ReferenceEquals(added[$"saves/admin/{replaced.Id}.state"], newBytes), Is.True, "re-keyed");
+        Assert.That(added.Keys, Is.EquivalentTo(new[] { $"saves/alice/{kept.Id}.state", $"saves/admin/{replaced.Id}.state", $"saves/admin/{bad.Id}.state" }));
+        Assert.That(removed, Is.EquivalentTo(new[] { kept.Entry, replaced.Entry, bad.Entry }));
+        Assert.That(GameSaves.Serialize(result), Is.Not.Null);
     }
 
     [Test]
@@ -100,10 +161,10 @@ public class GameSavesTests
     {
         var save = Save();
         var duplicate = GameSaves.Serialize([save, save with { Name = "Other" }])!;
-        var version = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(GameSaves.Serialize([save])!).Replace("\"version\": 1", "\"version\": 2"));
+        var version = Encoding.UTF8.GetBytes(Encoding.UTF8.GetString(GameSaves.Serialize([save])!).Replace("\"version\": 2", "\"version\": 3"));
 
         Assert.That(GameSaves.Parse(duplicate, AllPresent).State, Is.EqualTo(SavesState.Unreadable));
-        Assert.That(GameSaves.Parse(version, AllPresent).State, Is.EqualTo(SavesState.Unreadable));
+        Assert.That(GameSaves.Parse(version, AllPresent).Problem, Is.EqualTo("saves.json version 3 is not 1 or 2"));
         Assert.That(GameSaves.Parse("{"u8.ToArray(), AllPresent).State, Is.EqualTo(SavesState.Unreadable));
         Assert.That(GameSaves.Parse("""{"version":1}"""u8.ToArray(), AllPresent).State, Is.EqualTo(SavesState.Unreadable));
     }

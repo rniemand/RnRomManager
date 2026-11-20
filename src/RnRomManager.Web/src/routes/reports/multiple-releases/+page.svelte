@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { Page } from '#lib/api/types.js';
+	import type { Page, SystemInfo } from '#lib/api/types.js';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
@@ -13,7 +13,10 @@
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { pageCount } from '#lib/pageSize.js';
 
-	/** Multiple Releases B14, B18–B20. The threshold, sort and page are URL state (`?min=&sort=&dir=&page=`). */
+	/**
+	 * Multiple Releases B14, B18–B20. The system (release editing B12), threshold, sort and page are URL state
+	 * (`?system=&min=&sort=&dir=&page=`).
+	 */
 	interface MultipleRelease {
 		id: string;
 		displayTitle: string;
@@ -27,6 +30,7 @@
 	type Sort = 'name' | 'system' | 'releases' | 'updates' | 'size';
 	type Dir = 'asc' | 'desc';
 	interface View {
+		system: string;
 		min: number;
 		sort: Sort;
 		dir: Dir;
@@ -55,6 +59,7 @@
 		return n >= lo && n <= hi ? n : null;
 	}
 
+	const system = $derived(page.url.searchParams.get('system') ?? '');
 	const min = $derived(whole(page.url.searchParams.get('min'), 2, 10000) ?? defaultMin);
 	const pageNumber = $derived(
 		whole(page.url.searchParams.get('page'), 1, Number.MAX_SAFE_INTEGER) ?? 1
@@ -73,6 +78,14 @@
 	let result = $state<(Page<MultipleRelease> & { maxReleases: number }) | null>(null);
 	let error = $state<unknown>(null);
 	let reload = $state(0);
+	let systems = $state<SystemInfo[]>([]);
+
+	$effect(() => {
+		api.get<SystemInfo[]>('/api/systems').then(
+			(list) => (systems = list),
+			() => {} // only feeds the filter
+		);
+	});
 
 	/** 2…max(maxReleases, 2), plus a URL `min` above that; just the current `min` before the first response. */
 	const options = $derived.by(() => {
@@ -85,6 +98,7 @@
 	/** Writes the state to the URL, leaving out defaults. */
 	function show(next: View): void {
 		const query = [
+			next.system && `system=${encodeURIComponent(next.system)}`,
 			next.min !== defaultMin && `min=${next.min}`,
 			next.sort !== defaultSort && `sort=${next.sort}`,
 			next.dir !== defaultDir(next.sort) && `dir=${next.dir}`,
@@ -99,7 +113,7 @@
 		});
 	}
 
-	const view = $derived<View>({ min, sort, dir, page: pageNumber });
+	const view = $derived<View>({ system, min, sort, dir, page: pageNumber });
 
 	/** B19: the active header flips its direction; another sorts in its default direction, from page 1. */
 	function sortBy(key: Sort): void {
@@ -112,7 +126,8 @@
 	}
 
 	$effect(() => {
-		const url = `/api/reports/multiple-releases?min=${min}&sort=${sort}&dir=${dir}&page=${pageNumber}&pageSize=${pageSize}`;
+		let url = `/api/reports/multiple-releases?min=${min}&sort=${sort}&dir=${dir}&page=${pageNumber}&pageSize=${pageSize}`;
+		if (system) url += `&system=${encodeURIComponent(system)}`;
 		const current = view;
 		void reload;
 		const controller = new AbortController();
@@ -139,6 +154,20 @@
 <svelte:head><title>Multiple Releases · RnRomManager</title></svelte:head>
 
 <div class="row g-2 align-items-end mb-3">
+	<div class="col-12 col-sm-6 col-md-4">
+		<label class="form-label" for="multiple-releases-system">System</label>
+		<select
+			id="multiple-releases-system"
+			class="form-select"
+			value={system}
+			onchange={(e) => show({ ...view, system: e.currentTarget.value, page: 1 })}
+		>
+			<option value="">All systems</option>
+			{#each systems as s (s.id)}
+				<option value={s.id}>{s.displayName}</option>
+			{/each}
+		</select>
+	</div>
 	<div class="col-12 col-sm-6 col-md-4">
 		<label class="form-label" for="multiple-releases-min">Minimum releases</label>
 		<select

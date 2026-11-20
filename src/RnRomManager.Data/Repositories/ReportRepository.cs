@@ -153,7 +153,7 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         FROM ({GameBytes}) g
         """;
 
-    public async Task<Page<MultipleReleaseItem>> ListMultipleReleasesAsync(int min, MultipleReleaseSort sort, bool descending, int page,
+    public async Task<Page<MultipleReleaseItem>> ListMultipleReleasesAsync(string? systemId, int min, MultipleReleaseSort sort, bool descending, int page,
         int pageSize, CancellationToken cancellationToken)
     {
         // B17: the key and direction come only from the enum and bool, never from input text.
@@ -167,13 +167,14 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
             MultipleReleaseSort.Size => $"m.Bytes {dir}, m.display_title, m.id",
             _ => throw new ArgumentOutOfRangeException(nameof(sort)),
         };
-        var args = new { min, pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
+        var args = new { min, systemId, pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
+        const string where = "m.ReleaseCount >= @min AND (@systemId IS NULL OR m.system_id = @systemId)";
         await using var connection = connections.Create();
         var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM ({GameReleases}) m WHERE m.ReleaseCount >= @min", args, cancellationToken: cancellationToken));
+            $"SELECT COUNT(*) FROM ({GameReleases}) m WHERE {where}", args, cancellationToken: cancellationToken));
         var rows = await connection.QueryAsync<MultipleReleaseRow>(new CommandDefinition($"""
             SELECT m.id AS Id, m.display_title AS DisplayTitle, m.system_id AS SystemId, m.ReleaseCount, m.UpdateCount, m.Bytes
-            FROM ({GameReleases}) m WHERE m.ReleaseCount >= @min
+            FROM ({GameReleases}) m WHERE {where}
             ORDER BY {order}
             LIMIT @pageSize OFFSET @offset
             """, args, cancellationToken: cancellationToken));
@@ -182,11 +183,64 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         return new Page<MultipleReleaseItem>(items, page, pageSize, total);
     }
 
-    public async Task<int> MaxReleaseCountAsync(CancellationToken cancellationToken)
+    public async Task<Page<HackedGameItem>> ListHackedGamesAsync(string? systemId, HackedGameSort sort, bool descending, int page, int pageSize,
+        CancellationToken cancellationToken)
+    {
+        // The key and direction come only from the enum and bool, never from input text.
+        var dir = descending ? "DESC" : "";
+        var order = sort switch
+        {
+            HackedGameSort.Name => $"m.display_title {dir}, m.id",
+            HackedGameSort.System => $"m.system_id {dir}, m.display_title, m.id",
+            HackedGameSort.Hacks => $"m.HackCount {dir}, m.display_title, m.id",
+            HackedGameSort.Releases => $"m.ReleaseCount {dir}, m.display_title, m.id",
+            HackedGameSort.Size => $"m.Bytes {dir}, m.display_title, m.id",
+            _ => throw new ArgumentOutOfRangeException(nameof(sort)),
+        };
+        var args = new { systemId, pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
+        var hacked = $"""
+            SELECT h.* FROM (
+                SELECT g.*, (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id AND JSON_CONTAINS(r.flags, '"Hack"')) AS HackCount
+                FROM ({GameReleases}) g WHERE @systemId IS NULL OR g.system_id = @systemId
+            ) h WHERE h.HackCount > 0
+            """;
+        await using var connection = connections.Create();
+        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            $"SELECT COUNT(*) FROM ({hacked}) m", args, cancellationToken: cancellationToken));
+        var rows = await connection.QueryAsync<HackedGameRow>(new CommandDefinition($"""
+            SELECT m.id AS Id, m.display_title AS DisplayTitle, m.system_id AS SystemId, m.HackCount, m.ReleaseCount, m.Bytes
+            FROM ({hacked}) m
+            ORDER BY {order}
+            LIMIT @pageSize OFFSET @offset
+            """, args, cancellationToken: cancellationToken));
+        var items = rows.Select(r => new HackedGameItem(r.Id, r.DisplayTitle, r.SystemId, (int)r.HackCount, (int)r.ReleaseCount, r.Bytes)).ToList();
+        return new Page<HackedGameItem>(items, page, pageSize, total);
+    }
+
+    public async Task<IReadOnlyList<NewGameItem>> ListNewlyAddedGamesAsync(string? systemId, int perSystem, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        var rows = await connection.QueryAsync<NewGameRow>(new CommandDefinition("""
+            SELECT n.id AS Id, n.display_title AS DisplayTitle, n.system_id AS SystemId, n.created_at AS AddedAt,
+                   (SELECT COUNT(*) FROM roms r WHERE r.game_id = n.id AND NOT JSON_CONTAINS(r.flags, '"Update"') AND NOT JSON_CONTAINS(r.flags, '"DLC"')) AS ReleaseCount
+            FROM (
+                SELECT g.id, g.display_title, g.system_id, g.created_at,
+                       ROW_NUMBER() OVER (PARTITION BY g.system_id ORDER BY g.created_at DESC, g.id DESC) AS rn
+                FROM games g WHERE @systemId IS NULL OR g.system_id = @systemId
+            ) n
+            WHERE n.rn <= @perSystem
+            ORDER BY n.system_id, n.rn
+            """, new { systemId, perSystem }, cancellationToken: cancellationToken));
+        return rows.Select(r => new NewGameItem(r.Id, r.DisplayTitle, r.SystemId, DateTime.SpecifyKind(r.AddedAt, DateTimeKind.Utc), (int)r.ReleaseCount))
+            .ToList();
+    }
+
+    public async Task<int> MaxReleaseCountAsync(string? systemId, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
         return (int)await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COALESCE(MAX(m.ReleaseCount), 0) FROM ({GameReleases}) m", cancellationToken: cancellationToken));
+            $"SELECT COALESCE(MAX(m.ReleaseCount), 0) FROM ({GameReleases}) m WHERE @systemId IS NULL OR m.system_id = @systemId",
+            new { systemId }, cancellationToken: cancellationToken));
     }
 
     public async Task<IReadOnlyList<RecentRom>> ListRecentlyAddedRomsAsync(int limit, CancellationToken cancellationToken)
@@ -320,6 +374,25 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         public long ReleaseCount { get; init; }
         public long UpdateCount { get; init; }
         public long Bytes { get; init; }
+    }
+
+    private sealed class HackedGameRow
+    {
+        public Guid Id { get; init; }
+        public string DisplayTitle { get; init; } = "";
+        public string SystemId { get; init; } = "";
+        public long HackCount { get; init; }
+        public long ReleaseCount { get; init; }
+        public long Bytes { get; init; }
+    }
+
+    private sealed class NewGameRow
+    {
+        public Guid Id { get; init; }
+        public string DisplayTitle { get; init; } = "";
+        public string SystemId { get; init; } = "";
+        public DateTime AddedAt { get; init; }
+        public long ReleaseCount { get; init; }
     }
 
     private sealed class GameSizeRow

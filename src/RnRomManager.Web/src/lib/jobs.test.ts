@@ -24,7 +24,8 @@ describe('job display helpers', () => {
 					'MediaRetry',
 					'ReviewResolve',
 					'StorageMigration',
-					'ZipRepack'
+					'ZipRepack',
+					'SaveFolders'
 				] as const
 			).map(jobLabel)
 		).toEqual([
@@ -34,7 +35,8 @@ describe('job display helpers', () => {
 			'Media retry',
 			'Review',
 			'Moving ROMs',
-			'Repacking ZIPs'
+			'Repacking ZIPs',
+			'Moving saves to user folders'
 		]);
 		expect(jobLabel('Other')).toBe('Other');
 	});
@@ -55,6 +57,7 @@ describe('job display helpers', () => {
 		expect(statusClass('Weird')).toBe('text-bg-secondary');
 		expect(outcomeClass('Error')).toBe('text-bg-danger');
 		expect(outcomeClass('Repacked')).toBe('text-bg-success');
+		expect(outcomeClass('Moved')).toBe('text-bg-success');
 		expect(outcomeClass('Weird')).toBe('text-bg-secondary');
 	});
 });

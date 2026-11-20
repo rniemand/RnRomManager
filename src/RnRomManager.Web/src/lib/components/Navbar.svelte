@@ -3,7 +3,6 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { Collapse } from '../bootstrap';
-	import type { PageRouteId } from '$app/types';
 	import type { Me } from '../api/types';
 	import { formatCount } from '../format';
 	import Icon from './Icon.svelte';
@@ -36,7 +35,8 @@
 	];
 
 	type NavLink = {
-		href: Exclude<PageRouteId, `${string}[${string}`>;
+		// The links this bar has: a union of every page route is too wide for resolve()'s overloads.
+		href: '/' | '/collections' | '/reports' | '/ingestion';
 		label: string;
 		icon: string;
 		admin?: boolean;
@@ -90,6 +90,18 @@
 		>
 			<Icon name="system-gb" />
 		</a>
+		{#if onsearch && !me.mustChangePassword}
+			<!-- Release editing B30: below lg, search sits outside the collapsed menu. -->
+			<button
+				type="button"
+				class="btn btn-link nav-link ms-auto me-2 d-lg-none"
+				aria-label="Search"
+				title="Search (Ctrl+K)"
+				onclick={onsearch}
+			>
+				<Icon name="search" />
+			</button>
+		{/if}
 		<button
 			class="navbar-toggler"
 			type="button"
@@ -127,7 +139,7 @@
 					</li>
 				{/if}
 				{#if onsearch && !me.mustChangePassword}
-					<li class="nav-item">
+					<li class="nav-item d-none d-lg-block">
 						<!-- B4: Ctrl+K is reserved for search (hotkeys.ts), so the hint names it. -->
 						<button
 							type="button"
@@ -140,7 +152,7 @@
 						</button>
 					</li>
 				{/if}
-				<li class="nav-item dropdown">
+				<li class="nav-item dropdown user-menu">
 					<button
 						type="button"
 						class="btn btn-link nav-link dropdown-toggle d-flex align-items-center gap-1"
@@ -151,6 +163,13 @@
 						{me.username}
 					</button>
 					<ul class="dropdown-menu dropdown-menu-end">
+						<!-- Release editing B31: below lg the menu shows inline, under the username. -->
+						<li class="d-lg-none">
+							<h6 class="dropdown-header d-flex align-items-center gap-2">
+								<Icon name="user" />
+								{me.username}
+							</h6>
+						</li>
 						{#if isAdmin}
 							<li>
 								<a
@@ -234,6 +253,18 @@
 			margin-top: 0.5rem;
 			padding-top: 0.5rem;
 			border-top: 1px solid var(--bs-border-color);
+		}
+
+		/* Release editing B31: the user menu is always open inline; its toggle goes. */
+		.user-menu > :global(.dropdown-toggle) {
+			display: none;
+		}
+
+		.user-menu > :global(.dropdown-menu) {
+			display: block;
+			position: static;
+			border: 0;
+			background: transparent;
 		}
 	}
 </style>

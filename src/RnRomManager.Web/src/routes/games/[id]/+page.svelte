@@ -33,6 +33,7 @@
 	import Loading from '#lib/components/Loading.svelte';
 	import RatingControl from '#lib/components/RatingControl.svelte';
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
+	import EditReleaseModal, { type ReleaseKind } from '#lib/components/EditReleaseModal.svelte';
 	import EmulatorModal from '#lib/components/EmulatorModal.svelte';
 	import { canPlay, opensInNewTab, playLinkEvents, playUrl, usesPlayDisc } from '#lib/emulator.js';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
@@ -66,6 +67,9 @@
 	let action = $state<AdminAction | null>(null);
 	let infoJsonOpen = $state(false);
 	let noteRom = $state<RomDetail | null>(null);
+	/** Release editing B2: the release the Edit release modal edits. */
+	let editRom = $state<RomDetail | null>(null);
+	let editOpen = $state(false);
 	let noteOpen = $state(false);
 	let noteMode = $state<'edit' | undefined>();
 	let playRom = $state<RomDetail | null>(null);
@@ -215,6 +219,12 @@
 			void goto(`${next.pathname}${next.search}`, { replace: true, reset: false });
 		});
 	});
+
+	/** Release editing B3: reload the renamed release, then show the tab it now belongs to. */
+	async function onReleaseEdited(kind: ReleaseKind): Promise<void> {
+		await refreshGame();
+		selectTab(kind === 'release' ? 'releases' : kind === 'update' ? 'updates' : 'dlc');
+	}
 
 	function showHeader(rom: RomDetail): void {
 		headerRom = rom;
@@ -913,6 +923,17 @@
 								{#if auth.isAdmin}
 									<!-- B9: Header details stays left; Move and Delete release sit right. -->
 									<div class="ms-auto d-flex flex-wrap gap-2">
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-secondary"
+											aria-label="Edit release {rom.fileName}"
+											onclick={() => {
+												editRom = rom;
+												editOpen = true;
+											}}
+										>
+											<Icon name="edit" /> Edit release
+										</button>
 										{#if !rom.isPrimary}
 											<button
 												type="button"
@@ -1052,6 +1073,13 @@
 		rom={noteRom}
 		initialMode={noteMode}
 		onsaved={onNoteSaved}
+	/>
+	<EditReleaseModal
+		bind:open={editOpen}
+		gameId={game.id}
+		rom={editRom}
+		fileSets={game.fileSets}
+		onsaved={(_, kind) => void onReleaseEdited(kind)}
 	/>
 	<EmulatorModal
 		bind:open={playOpen}

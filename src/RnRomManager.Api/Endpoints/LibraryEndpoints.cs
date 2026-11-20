@@ -42,6 +42,9 @@ public static class LibraryEndpoints
 
     public static RouteGroupBuilder MapLibraryEndpoints(this RouteGroupBuilder api)
     {
+        // Release editing B11: the Edit release form's region list.
+        api.MapGet("/systems/regions", () => Results.Ok(NoIntroRegions.FormOrder));
+
         api.MapGet("/systems", async (HttpContext ctx, ISystemRegistry systems, IGameRepository games, IDiscoveryLogoRepository logos) =>
         {
             var stats = (await games.ListSystemStatsAsync(ctx.RequestAborted)).ToDictionary(s => s.SystemId);
@@ -258,6 +261,16 @@ public static class LibraryEndpoints
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
+        // Release editing B4.
+        games.MapPatch("/{id:guid}/roms/{romId:long}", async (Guid id, long romId, JsonElement body, HttpContext ctx, LibraryEditor editor) =>
+        {
+            var (patch, errors) = ParseReleasePatch(body);
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+            var result = await editor.EditReleaseAsync(id, romId, patch, AuditActor.From(ctx.User), ctx.RequestAborted);
+            return result.Code is null ? Results.Ok(new { fileName = result.FileName }) : ToProblem(ctx, result);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
         games.MapPost("/{id:guid}/roms/{romId:long}/move", async (Guid id, long romId, MoveReleaseRequest request, HttpContext ctx,
             LibraryEditor editor) =>
         {
@@ -446,7 +459,7 @@ public static class LibraryEndpoints
         var systemName = handler?.DisplayName ?? game.SystemId;
         var notes = ctx.RequestServices.GetRequiredService<LibraryFiles>().NoteEntries(game);
         var fileRows = (await roms.ListFilesByGameAsync(id, ctx.RequestAborted)).ToLookup(f => f.RomId);
-        return Results.Ok(ToDetail(game, systemName, handler?.BrowserCore, romRows, fileRows, imageRows, notes));
+        return Results.Ok(ToDetail(game, systemName, handler?.BrowserCore, handler?.FileSets ?? false, romRows, fileRows, imageRows, notes));
     }
 
     private static IResult ToResult(HttpContext ctx, LibraryEditResult result) =>
@@ -578,6 +591,97 @@ public static class LibraryEndpoints
                 errors["description"] = ["Must be null or at most 4000 characters."];
         }
         return (patch, errors);
+    }
+
+    private static readonly HashSet<string> ReleasePatchFields =
+        ["kind", "regions", "languages", "revision", "disc", "hack", "translated", "version"];
+
+    /// <summary>
+    /// Release editing B4: <c>PATCH /api/games/{id}/roms/{romId}</c> body. Every property is optional (absent = unchanged);
+    /// <c>revision</c>, <c>disc</c> and <c>version</c> may be null to clear them. The checks that need the game run in
+    /// <see cref="LibraryEditor.EditReleaseAsync"/>.
+    /// </summary>
+    public static (ReleaseEdit Patch, Dictionary<string, string[]> Errors) ParseReleasePatch(JsonElement body)
+    {
+        var errors = new Dictionary<string, string[]>();
+        var patch = new ReleaseEdit();
+        if (body.ValueKind != JsonValueKind.Object)
+        {
+            errors[""] = ["A JSON object is required."];
+            return (patch, errors);
+        }
+        foreach (var property in body.EnumerateObject().Where(p => !ReleasePatchFields.Contains(p.Name)))
+            errors[property.Name] = ["Unknown field."];
+
+        if (body.TryGetProperty("kind", out var kind))
+        {
+            var value = kind.ValueKind == JsonValueKind.String ? kind.GetString() : null;
+            if (value is ReleaseEdit.KindRelease or ReleaseEdit.KindUpdate or ReleaseEdit.KindDlc)
+                patch = patch with { Kind = value };
+            else
+                errors["kind"] = ["Must be release, update or dlc."];
+        }
+        if (body.TryGetProperty("regions", out var regions))
+        {
+            var items = Strings(regions)?.Distinct(StringComparer.Ordinal).ToList();
+            if (items is null || items.Count > 10 || items.Any(i => i.Length == 0))
+                errors["regions"] = ["Must be known No-Intro regions."];
+            else
+                patch = patch with { Regions = items };
+        }
+        if (body.TryGetProperty("languages", out var languages))
+        {
+            var items = Strings(languages)?.Select(l => l.Trim()).Distinct(StringComparer.Ordinal).ToList();
+            if (items is null || items.Count > 20 || items.Any(l => l.Length is < 1 or > 16 || !l.All(c => char.IsAsciiLetter(c) || c == '-')))
+                errors["languages"] = ["Must be 1–16 letters or '-' each."];
+            else
+                patch = patch with { Languages = items };
+        }
+        if (body.TryGetProperty("revision", out var revision))
+        {
+            var value = revision.ValueKind == JsonValueKind.String ? revision.GetString()!.Trim() : null;
+            if (revision.ValueKind == JsonValueKind.Null || value?.Length == 0)
+                patch = patch with { SetRevision = true };
+            else if (value is { Length: <= 32 } && value.IndexOfAny(['(', ')']) < 0)
+                patch = patch with { SetRevision = true, Revision = value };
+            else
+                errors["revision"] = ["Must be at most 32 characters without parentheses."];
+        }
+        if (body.TryGetProperty("disc", out var disc))
+        {
+            if (disc.ValueKind == JsonValueKind.Null)
+                patch = patch with { SetDisc = true };
+            else if (disc.ValueKind == JsonValueKind.Number && disc.TryGetInt32(out var value) && value is >= 1 and <= 99)
+                patch = patch with { SetDisc = true, Disc = value };
+            else
+                errors["disc"] = ["Must be 1–99."];
+        }
+        patch = patch with { Hack = Bool(body, "hack", errors), Translated = Bool(body, "translated", errors) };
+        if (body.TryGetProperty("version", out var version))
+        {
+            if (version.ValueKind == JsonValueKind.Null)
+                patch = patch with { SetVersion = true };
+            else if (version.ValueKind == JsonValueKind.String && ReleaseVersion.Valid().IsMatch(version.GetString()!))
+                patch = patch with { SetVersion = true, Version = version.GetString() };
+            else
+                errors["version"] = ["Must be like 1.0.1."];
+        }
+        return (patch, errors);
+
+        static List<string>? Strings(JsonElement list) =>
+            list.ValueKind == JsonValueKind.Array && list.EnumerateArray().All(i => i.ValueKind == JsonValueKind.String)
+                ? [.. list.EnumerateArray().Select(i => i.GetString()!)]
+                : null;
+
+        static bool? Bool(JsonElement body, string field, Dictionary<string, string[]> errors)
+        {
+            if (!body.TryGetProperty(field, out var value))
+                return null;
+            if (value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                return value.GetBoolean();
+            errors[field] = ["Must be true or false."];
+            return null;
+        }
     }
 
     /// <summary>
@@ -758,13 +862,14 @@ public static class LibraryEndpoints
         };
     }
 
-    private static object ToDetail(GameRow game, string systemName, string? browserCore, IReadOnlyList<RomRow> roms, ILookup<long, RomFileRow> files,
+    private static object ToDetail(GameRow game, string systemName, string? browserCore, bool fileSets, IReadOnlyList<RomRow> roms, ILookup<long, RomFileRow> files,
         IReadOnlyList<ImageRow> images, IReadOnlySet<string> notes) => new
     {
         id = game.Id,
         system = game.SystemId,
         systemName,
         browserCore,
+        fileSets,
         title = game.Title,
         displayTitle = game.DisplayTitle,
         releaseYear = game.ReleaseYear,

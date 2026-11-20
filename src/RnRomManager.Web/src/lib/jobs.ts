@@ -6,6 +6,7 @@ export const outcomes = [
 	'Ingested',
 	'Repaired',
 	'Repacked',
+	'Moved',
 	'Duplicate',
 	'Review',
 	'Failed',
@@ -25,6 +26,7 @@ const outcomeClasses: Record<string, string> = {
 	Ingested: 'text-bg-success',
 	Repaired: 'text-bg-success',
 	Repacked: 'text-bg-success',
+	Moved: 'text-bg-success',
 	Duplicate: 'text-bg-secondary',
 	Review: 'text-bg-info',
 	Failed: 'text-bg-warning',
@@ -47,7 +49,8 @@ const jobLabels: Record<CurrentJob['type'], string> = {
 	MediaRetry: 'Media retry',
 	ReviewResolve: 'Review',
 	StorageMigration: 'Moving ROMs',
-	ZipRepack: 'Repacking ZIPs'
+	ZipRepack: 'Repacking ZIPs',
+	SaveFolders: 'Moving saves to user folders'
 };
 
 /** ROM Zip Config B17: a job type's short label (footer, Jobs page); an unknown type shows as is. */

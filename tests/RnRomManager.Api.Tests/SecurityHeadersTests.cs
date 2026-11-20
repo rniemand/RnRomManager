@@ -36,6 +36,15 @@ public class SecurityHeadersTests
             $"default-src 'self'; script-src 'self' {HashOne} {HashTwo}; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"));
     }
 
+    /// <summary>Release editing B40: the PWA manifest loads through manifest-src's fallback, default-src 'self'.</summary>
+    [Test]
+    public void SpaPolicy_KeepsDefaultSrcSelf_ForTheManifest()
+    {
+        var policy = SecurityHeaders.ContentSecurityPolicy(IndexHtml.ReplaceLineEndings("\n"));
+
+        Assert.That(policy, Does.StartWith("default-src 'self';").And.Not.Contain("manifest-src"));
+    }
+
     [Test]
     public void Policy_WithoutIndexHtml_IsSelfOnly()
     {
