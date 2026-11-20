@@ -37,14 +37,15 @@ const cores = [
 // explicit pinned core returns itself before the saved setting is read. Saturn B4: yabause is listed too, defensively
 // only: its segaSaturn group holds just yabause, so no other saved core could be chosen. SNES B3: snes9x likewise, as
 // the only member of the snes group. 3DO B6: opera likewise, as the only member of the 3do group. C64 B7: vice_x64sc likewise, as the only member of the
-// c64 group, vice_xpet of the pet group and vice_xvic of the vic20 group.
+// c64 group, vice_xpet of the pet group and vice_xvic of the vic20 group. N64: mupen64plus_next is pinned for real, since
+// the n64 group also holds parallel_n64 (EmulatorJS's default on mobile Safari), which isn't delivered.
 //
 // PSP B3 (PPSSPP only): the core needs threads, so a saved "ejs_threads: disabled" must not select a payload that
 // isn't vendored; and a failed ppsspp-assets.zip request or a rejected File read must show a startup error instead of
 // leaving the loader's promises pending.
 //
-// Genesis B5, 32X B3, SNES B3, 3DO B6, C64 B7, PET, VIC-20: the operator supplies only the non-threaded payloads, so Genesis Plus GX,
-// PicoDrive, Snes9x, Opera and VICE (x64sc, xpet and xvic) never select a "-thread" one, and a payload that can't be fetched shows a local error instead of falling back to the
+// Genesis B5, 32X B3, SNES B3, 3DO B6, C64 B7, PET, VIC-20, N64: the operator supplies only the non-threaded payloads, so Genesis Plus GX,
+// PicoDrive, Snes9x, Opera, VICE (x64sc, xpet and xvic) and Mupen64Plus-Next never select a "-thread" one, and a payload that can't be fetched shows a local error instead of falling back to the
 // EmulatorJS CDN. Saturn B9: only Yabause's non-threaded payloads are vendored, so it never selects a "-thread" one
 // either (its missing payloads still take upstream's path).
 //
@@ -60,7 +61,7 @@ const edits = [
 			'        const gen = this.getCore(true);\n' +
 			'        if (cores[gen] && cores[gen].includes(this.preGetSetting("retroarch_core"))) {',
 		insertBefore:
-			'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc", "vice_xpet", "vice_xvic"].includes(core)) {\n' +
+			'        if (["smsplus", "fceumm", "pcsx_rearmed", "genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc", "vice_xpet", "vice_xvic", "mupen64plus_next"].includes(core)) {\n' +
 			'            return core;\n' +
 			'        }\n'
 	},
@@ -71,7 +72,7 @@ const edits = [
 			'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
 			'                threads = true;\n' +
 			'            }\n' +
-			'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc", "vice_xpet", "vice_xvic"].includes(this.getCore())) {\n' +
+			'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc", "vice_xpet", "vice_xvic", "mupen64plus_next"].includes(this.getCore())) {\n' +
 			'                threads = false;\n' +
 			'            }\n'
 	},
@@ -81,7 +82,7 @@ const edits = [
 			'            if (res === -1) {\n' +
 			'                console.log("File not found, attemping to fetch from emulatorjs cdn.");\n',
 		insertAfter:
-			'                if (["genesis_plus_gx", "picodrive", "snes9x", "desmume", "opera", "vice_x64sc", "vice_xpet", "vice_xvic"].includes(this.getCore())) {\n' +
+			'                if (["genesis_plus_gx", "picodrive", "snes9x", "desmume", "opera", "vice_x64sc", "vice_xpet", "vice_xvic", "mupen64plus_next"].includes(this.getCore())) {\n' +
 			'                    this.startGameError(this.localization("Error downloading core") + " (" + filename + ")");\n' +
 			'                    return;\n' +
 			'                }\n'

@@ -117,7 +117,8 @@ describe('parsePlayParams', () => {
 		'vice_xpet',
 		'vice_xvic',
 		'puae',
-		'mednafen_pce'
+		'mednafen_pce',
+		'mupen64plus_next'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});
@@ -631,6 +632,26 @@ describe('Commodore VIC-20', () => {
 		});
 		expect(operatorCoreError('vice_xvic', 404)).toBe(
 			'Commodore VIC-20 games need the VICE (VIC-20) core files: ask an Admin to set them up (Emulator:ViceCorePath).'
+		);
+	});
+});
+
+describe('Nintendo 64', () => {
+	it('is an operator core with its own folder', () => {
+		expect(isOperatorCore('mupen64plus_next')).toBe(true);
+		expect(hidesCoreChooser('mupen64plus_next')).toBe(true);
+		expect(controlSchemeFor('mupen64plus_next', 'X (USA).z64')).toBeNull();
+		expect(operatorCorePaths('mupen64plus_next')).toEqual({
+			'mupen64plus_next-wasm.data': '/api/emulator/cores/mupen64plus_next/mupen64plus_next-wasm.data',
+			'mupen64plus_next-legacy-wasm.data':
+				'/api/emulator/cores/mupen64plus_next/mupen64plus_next-legacy-wasm.data',
+			'mupen64plus_next.json': '/api/emulator/cores/mupen64plus_next/mupen64plus_next.json'
+		});
+		expect(operatorCoreError('mupen64plus_next', 404)).toBe(
+			'Nintendo 64 games need the Mupen64Plus-Next core files: ask an Admin to set them up (Emulator:Mupen64PlusCorePath).'
+		);
+		expect(operatorCoreError('mupen64plus_next', 409)).toBe(
+			"The Mupen64Plus-Next core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:Mupen64PlusCorePath)."
 		);
 	});
 });

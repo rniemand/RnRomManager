@@ -1,6 +1,6 @@
 namespace RnRomManager.Core.Configuration;
 
-/// <summary>Optional browser-play assets the deployment operator supplies (Genesis B4, 32X B1, SNES B2, 3DO B5, C64 B7).</summary>
+/// <summary>Optional browser-play assets the deployment operator supplies (Genesis B4, 32X B1, SNES B2, 3DO B5, C64 B7, N64).</summary>
 public sealed class EmulatorOptions
 {
     public const string Section = "Emulator";
@@ -37,4 +37,12 @@ public sealed class EmulatorOptions
     /// Commodore 64 play; a missing directory behaves as unavailable without failing startup.
     /// </summary>
     public string ViceCorePath { get; set; } = "";
+
+    /// <summary>
+    /// N64: a fully qualified, read-only directory holding the EmulatorJS 4.2.3 Mupen64Plus-Next files at its root (it may
+    /// be shared with the other operator cores). Never bundled: its GLideN64 renderer is GPL-2.0-only, which can't be
+    /// combined with the GPL-3.0 RetroArch frontend it's linked with. Empty disables Nintendo 64 play; a missing directory
+    /// behaves as unavailable without failing startup.
+    /// </summary>
+    public string Mupen64PlusCorePath { get; set; } = "";
 }

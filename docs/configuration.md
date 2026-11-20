@@ -24,6 +24,7 @@ All settings come from `appsettings.json` and can be overridden with environment
 | `Emulator:Snes9xCorePath` | `Emulator__Snes9xCorePath` | *(empty)* | empty (SNES play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Snes9x files ([below](#snes9x-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.snes9xCorePath`). |
 | `Emulator:OperaCorePath` | `Emulator__OperaCorePath` | *(empty)* | empty (3DO play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Opera files ([below](#opera-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.operaCorePath`). |
 | `Emulator:ViceCorePath` | `Emulator__ViceCorePath` | *(empty)* | empty (Commodore 64, PET and VIC-20 play off), or an absolute path to a read-only folder holding the EmulatorJS 4.2.3 VICE files ([below](#vice-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.viceCorePath`). |
+| `Emulator:Mupen64PlusCorePath` | `Emulator__Mupen64PlusCorePath` | *(empty)* | empty (Nintendo 64 play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Mupen64Plus-Next files ([below](#mupen64plus-next-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.mupen64PlusCorePath`). |
 | `Backup:RestoreFrom` | `Backup__RestoreFrom` | *(empty)* | empty, or the bare file name of a backup in `Paths:Backups` to restore at startup (no `/`, `\` or `..`). See [restoring a backup](deployment.md#restoring-a-backup). Remove it once the restore is done. |
 
 ## Paths
@@ -100,6 +101,18 @@ Commodore VIC-20 plays with VICE (xvic), which embeds the VIC-20's ROMs for the 
 | `vice_xvic.json` | 123 | `9c3439164e63320da512deded61cdbfa37ce018eedb3995e9eb0af616a0198fe` |
 
 The archive's two `-thread` payloads aren't used. The checks are the same as for Genesis Plus GX (`GET /api/emulator/cores/vice_x64sc/<file>`); a file that doesn't match is refused with `409 ViceCoreMismatch`, and the play page says *The VICE core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:ViceCorePath).* Without the files it says *Commodore 64 games need the VICE core files: ask an Admin to set them up (Emulator:ViceCorePath).* No BIOS is needed in `Paths:Bios`.
+
+## Mupen64Plus-Next core
+
+Nintendo 64 plays with Mupen64Plus-Next. Its EmulatorJS build compiles in the GLideN64 renderer, whose licence is GPL version 2 only, linked with the GPL-3.0-or-later RetroArch frontend and GPL-3.0 code (xBRZ); those terms can't be combined, so the image doesn't contain it. To turn Nintendo 64 play on, put these three files from the [`@emulatorjs/core-mupen64plus_next@4.2.3`](https://registry.npmjs.org/@emulatorjs/core-mupen64plus_next/-/core-mupen64plus_next-4.2.3.tgz) npm archive at the root of a folder and set `Emulator:Mupen64PlusCorePath` to it ([deployment](deployment.md#mupen64plus-next-core) shows how to get them and mount the folder):
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `mupen64plus_next-wasm.data` | 1,451,795 | `2da1cbce9fda395e3ae83ca5787353baa159142d45ef3ea90f108b92524f76cc` |
+| `mupen64plus_next-legacy-wasm.data` | 1,451,870 | `425072f4bf94eec02633cbe9b84f47d6803dc0ec1b3c3b8de3ebbd2eb5617c3f` |
+| `mupen64plus_next.json` | 153 | `270105553cec57fd1058c50e0541b8b89dbd30b2323fd70682036f6919b805cc` |
+
+The archive's two `-thread` payloads aren't used. The checks are the same as for Genesis Plus GX (`GET /api/emulator/cores/mupen64plus_next/<file>`); a file that doesn't match is refused with `409 Mupen64PlusCoreMismatch`, and the play page says *The Mupen64Plus-Next core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:Mupen64PlusCorePath).* Without the files it says *Nintendo 64 games need the Mupen64Plus-Next core files: ask an Admin to set them up (Emulator:Mupen64PlusCorePath).* No BIOS is needed in `Paths:Bios`. A browser with WebGL 2 gets the GLES3 payload, any other the legacy GLES2 one.
 
 ## Other settings
 - **Port:** the standard `ASPNETCORE_HTTP_PORTS` (image default `8080`). The container health check reads the first port from it, so don't use `ASPNETCORE_URLS` instead.

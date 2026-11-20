@@ -98,11 +98,11 @@ public partial class EmulatorEndpointsTests
         var options = new EmulatorOptions
         {
             GenesisCorePath = "/cores/genesis", PicodriveCorePath = "/cores/picodrive", Snes9xCorePath = "/cores/snes9x",
-            OperaCorePath = "/cores/opera", ViceCorePath = "/cores/vice",
+            OperaCorePath = "/cores/opera", ViceCorePath = "/cores/vice", Mupen64PlusCorePath = "/cores/n64",
         };
 
         Assert.That(OperatorCoreManifest.Pinned.Cores.Select(c => c.Id),
-            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x", "opera", "vice_x64sc", "vice_xpet", "vice_xvic" }));
+            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x", "opera", "vice_x64sc", "vice_xpet", "vice_xvic", "mupen64plus_next" }));
         Assert.That((genesis.DisplayName, genesis.MismatchCode), Is.EqualTo(("Genesis Plus GX", "GenesisCoreMismatch")));
         Assert.That((picodrive.DisplayName, picodrive.MismatchCode), Is.EqualTo(("PicoDrive", "PicodriveCoreMismatch")));
         Assert.That((snes9x.DisplayName, snes9x.MismatchCode), Is.EqualTo(("Snes9x", "Snes9xCoreMismatch")));
@@ -113,6 +113,9 @@ public partial class EmulatorEndpointsTests
         Assert.That((pet.DisplayName, pet.MismatchCode, pet.PathOf(options)), Is.EqualTo(("VICE (PET)", "ViceCoreMismatch", "/cores/vice")), "shares the C64 folder");
         var vic = OperatorCoreManifest.Pinned.Find("vice_xvic")!;
         Assert.That((vic.DisplayName, vic.MismatchCode, vic.PathOf(options)), Is.EqualTo(("VICE (VIC-20)", "ViceCoreMismatch", "/cores/vice")), "shares the C64 folder");
+        var n64 = OperatorCoreManifest.Pinned.Find("mupen64plus_next")!;
+        Assert.That((n64.DisplayName, n64.MismatchCode, n64.PathOf(options)),
+            Is.EqualTo(("Mupen64Plus-Next", "Mupen64PlusCoreMismatch", "/cores/n64")));
         Assert.That((genesis.PathOf(options), picodrive.PathOf(options), snes9x.PathOf(options)),
             Is.EqualTo(("/cores/genesis", "/cores/picodrive", "/cores/snes9x")));
         Assert.That(OperatorCoreManifest.Pinned.Find("GENESIS_PLUS_GX"), Is.Null);
@@ -621,6 +624,22 @@ public partial class EmulatorEndpointsTests
                 "42067705c2fd9c3861247f0d251a1481a85b5c00fb7ba93798ed0fe65b9fdd70", "application/octet-stream"),
             new OperatorCoreFile("vice_xvic.json", 123,
                 "9c3439164e63320da512deded61cdbfa37ce018eedb3995e9eb0af616a0198fe", "application/json"),
+        }));
+    }
+
+    // N64: served by the same verifier as every other operator core; only its pins are its own.
+
+    [Test]
+    public void PinnedManifest_HoldsExactlyTheMupen64PlusNext4_2_3Files()
+    {
+        Assert.That(OperatorCoreManifest.Pinned.Find(OperatorCoreManifest.Mupen64PlusNext)!.Files, Is.EqualTo(new[]
+        {
+            new OperatorCoreFile("mupen64plus_next-wasm.data", 1_451_795,
+                "2da1cbce9fda395e3ae83ca5787353baa159142d45ef3ea90f108b92524f76cc", "application/octet-stream"),
+            new OperatorCoreFile("mupen64plus_next-legacy-wasm.data", 1_451_870,
+                "425072f4bf94eec02633cbe9b84f47d6803dc0ec1b3c3b8de3ebbd2eb5617c3f", "application/octet-stream"),
+            new OperatorCoreFile("mupen64plus_next.json", 153,
+                "270105553cec57fd1058c50e0541b8b89dbd30b2323fd70682036f6919b805cc", "application/json"),
         }));
     }
 

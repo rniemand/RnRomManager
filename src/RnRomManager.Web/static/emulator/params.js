@@ -32,7 +32,8 @@ const cores = [
 	'vice_xpet',
 	'vice_xvic',
 	'puae',
-	'mednafen_pce'
+	'mednafen_pce',
+	'mupen64plus_next'
 ];
 
 /** PSP B3: the core that runs only on the isolated play-psp.html page (and never in the modal's play.html). */
@@ -113,7 +114,7 @@ export function controlSchemeFor(core, name) {
 }
 
 /**
- * B3/B8 (SNES B3 adds Snes9x, 3DO B6 Opera, C64 B7 VICE, PET VICE xpet, VIC-20 VICE xvic): the cores whose files the operator supplies, served by the API after a length and hash check, with the
+ * B3/B8 (SNES B3 adds Snes9x, 3DO B6 Opera, C64 B7 VICE, PET VICE xpet, VIC-20 VICE xvic, N64 Mupen64Plus-Next): the cores whose files the operator supplies, served by the API after a length and hash check, with the
  * wording of their messages: the system label, the core's display name, the short name of the fallback message and
  * the option holding the folder.
  * @type {Record<string, { system: string, display: string, short: string, option: string }>}
@@ -160,6 +161,12 @@ const operatorCores = {
 		display: 'VICE (VIC-20)',
 		short: 'VICE',
 		option: 'Emulator:ViceCorePath'
+	},
+	mupen64plus_next: {
+		system: 'Nintendo 64 games',
+		display: 'Mupen64Plus-Next',
+		short: 'Mupen64Plus',
+		option: 'Emulator:Mupen64PlusCorePath'
 	}
 };
 
@@ -230,7 +237,8 @@ export function hidesCoreChooser(core) {
 		'opera',
 		'vice_x64sc',
 		'vice_xpet',
-		'vice_xvic'
+		'vice_xvic',
+		'mupen64plus_next'
 	].includes(core);
 }
 

@@ -31,6 +31,9 @@ public sealed class Nintendo64Handler : ISystemHandler
 
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
+    /// <summary>Mupen64Plus-Next, whose files the operator supplies (<c>Emulator:Mupen64PlusCorePath</c>); no BIOS.</summary>
+    public string BrowserCore => "mupen64plus_next";
+
     /// <summary>Called after <see cref="NormalizeForHashing"/>, so the bytes are big-endian.</summary>
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => Nintendo64HeaderReader.Read(rom);
 
