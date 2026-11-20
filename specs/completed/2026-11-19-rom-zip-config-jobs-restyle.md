@@ -1,6 +1,6 @@
 ---
 title: ROM Zip Config and Jobs Restyle
-status: in-progress
+status: completed
 created: 2026-11-19
 ---
 
