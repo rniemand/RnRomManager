@@ -284,6 +284,29 @@ function exportSave(kind, busy) {
 	}
 }
 
+/** The wrapper `keepDrawingBuffer` installed, kept on the prototype so a second call doesn't wrap it again. */
+const keepsDrawingBuffer = Symbol.for('rnrm-keeps-drawing-buffer');
+
+/**
+ * E2: the core's WebGL context is created with `preserveDrawingBuffer: true`. EmulatorJS's `canvas` screenshot copies
+ * the game canvas in a requestAnimationFrame callback, which runs after the browser has presented and cleared the last
+ * frame, so without this the PNG is black. Wraps `getContext` once per page; 2D contexts pass through unchanged.
+ */
+function keepDrawingBuffer() {
+	const proto = HTMLCanvasElement.prototype;
+	const marked = /** @type {Record<symbol, unknown>} */ (/** @type {unknown} */ (proto));
+	if (marked[keepsDrawingBuffer] === proto.getContext) return;
+	const getContext = proto.getContext;
+	/** @type {(this: HTMLCanvasElement, kind: string, options?: Record<string, unknown>) => RenderingContext | null} */
+	const wrapped = function (kind, options) {
+		const webgl = kind === 'webgl' || kind === 'webgl2' || kind === 'experimental-webgl';
+		const attributes = webgl ? { ...(options ?? {}), preserveDrawingBuffer: true } : options;
+		return /** @type {(kind: string, options?: unknown) => RenderingContext | null} */ (getContext).call(this, kind, attributes);
+	};
+	marked[keepsDrawingBuffer] = wrapped;
+	proto.getContext = /** @type {typeof proto.getContext} */ (/** @type {unknown} */ (wrapped));
+}
+
 /**
  * E2: a PNG of the running game at upscale 1 from the canvas, answered from EmulatorJS's callback (asynchronously).
  * `not-started` and `busy` are checked first, exactly as `exportSave` does.
@@ -611,6 +634,7 @@ async function start() {
 		setTimeout(() => applySave(kind, bytes), 10);
 	};
 
+	keepDrawingBuffer();
 	const loader = document.createElement('script');
 	loader.src = '/emulator/vendor/data/loader.js';
 	loader.addEventListener('error', () => show("Couldn't load the emulator."));
