@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { api } from '../api/client';
 	import { jobLabel, percent } from '../jobs';
+	import { hotkeys } from '../stores/hotkeys.svelte';
 	import { jobs } from '../stores/jobs.svelte';
 	import type { About, Me } from '../api/types';
 	import AboutModal from './AboutModal.svelte';
@@ -44,14 +45,18 @@
 		if (showJobs) return jobs.watch();
 	});
 	const job = $derived(showJobs ? jobs.current : null);
+	/** Release editing B29: the Admin quick actions, run as their hotkeys. */
+	const showAdmin = $derived(showJobs);
 </script>
 
 <footer class="app-footer fixed-bottom bg-body-tertiary border-top small">
-	<div class="container d-flex align-items-center gap-3 py-1">
+	<!-- Release editing B28: one row that never wraps; below sm the labels are visually hidden, the icons stay. -->
+	<div class="container d-flex flex-nowrap align-items-center gap-3 py-1 overflow-hidden">
 		<button
 			type="button"
 			class="btn btn-link btn-sm p-0 link-body-emphasis text-decoration-none"
-			onclick={() => (aboutOpen = true)}><Icon name="info" /> About</button
+			onclick={() => (aboutOpen = true)}
+			><Icon name="info" /> <span class="footer-label">About</span></button
 		>
 		<a
 			class="link-body-emphasis text-decoration-none"
@@ -68,7 +73,7 @@
 				href={resolve('/jobs')}
 				title="Jobs"
 			>
-				<span>{jobLabel(job.type)} {job.current}/{job.total}</span>
+				<span class="footer-label">{jobLabel(job.type)} {job.current}/{job.total}</span>
 				<span
 					class="progress"
 					role="progressbar"
@@ -85,12 +90,29 @@
 				</span>
 			</a>
 		{/if}
-		{#if !me.mustChangePassword}
+		{#if showAdmin}
 			<button
 				type="button"
 				class="btn btn-link btn-sm p-0 {job ? '' : 'ms-auto'} link-body-emphasis"
+				aria-label="Next missing image"
+				title="Next missing image"
+				onclick={() => void hotkeys.run('reports.missingImage.next')}
+				><Icon name="report-missing-images" /></button
+			>
+			<button
+				type="button"
+				class="btn btn-link btn-sm p-0 link-body-emphasis"
+				aria-label="Open the first review item"
+				title="Open the first review item"
+				onclick={() => void hotkeys.run('review.next')}><Icon name="review" /></button
+			>
+		{/if}
+		{#if !me.mustChangePassword}
+			<button
+				type="button"
+				class="btn btn-link btn-sm p-0 {job || showAdmin ? '' : 'ms-auto'} link-body-emphasis"
 				title="Keyboard Shortcuts"
-				onclick={onhotkeys}><Icon name="help" /> Shortcuts</button
+				onclick={onhotkeys}><Icon name="help" /> <span class="footer-label">Shortcuts</span></button
 			>
 		{/if}
 	</div>

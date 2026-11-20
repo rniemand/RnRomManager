@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { resetClient } from '../api/client';
 import type { Me } from '../api/types';
+import { hotkeys } from '../stores/hotkeys.svelte';
 import { jobs } from '../stores/jobs.svelte';
 
 vi.mock('../bootstrap', () => ({
@@ -164,6 +165,67 @@ describe('AppFooter (B10–B12)', () => {
 			await vi.waitFor(() => expect(calls.filter((c) => c === '/api/about')).toHaveLength(2));
 			expect(calls).not.toContain('/api/jobs/current');
 			expect(screen.queryByRole('progressbar')).toBeNull();
+		});
+	});
+
+	describe('mobile and Admin quick actions (release editing B28, B29)', () => {
+		const admin = (mustChangePassword = false): Me => ({
+			...me(mustChangePassword),
+			roles: ['admin']
+		});
+
+		it('keeps one unwrapped row whose labels are footer-label spans, the names unchanged', async () => {
+			current = {
+				id: 'j1',
+				type: 'StorageMigration',
+				mode: null,
+				status: 'Running',
+				current: 1,
+				total: 2,
+				currentItem: null,
+				startedAt: '2026-11-18T10:00:00Z'
+			};
+			const { container } = render(AppFooter, { me: admin(), onhotkeys: vi.fn() });
+
+			const link = await screen.findByRole('link', { name: /Moving ROMs 1\/2/ });
+			expect(link.querySelector('.footer-label')!.textContent).toBe('Moving ROMs 1/2');
+			const row = container.querySelector('footer > div')!;
+			expect(row.classList).toContain('flex-nowrap');
+			expect(row.classList).toContain('overflow-hidden');
+			for (const name of ['About', 'Shortcuts']) {
+				const button = screen.getByRole('button', { name });
+				expect(button.querySelector('.footer-label')!.textContent).toBe(name);
+			}
+		});
+
+		it('an Admin gets both buttons before Shortcuts, each running its hotkey', async () => {
+			const run = vi.spyOn(hotkeys, 'run').mockResolvedValue();
+			render(AppFooter, { me: admin(), onhotkeys: vi.fn() });
+
+			const next = screen.getByRole('button', { name: 'Next missing image' });
+			const review = screen.getByRole('button', { name: 'Open the first review item' });
+			expect([next.title, review.title]).toEqual([
+				'Next missing image',
+				'Open the first review item'
+			]);
+			expect(next.querySelector('i')!.className.trim()).toBe('bi bi-image-alt');
+			expect(next.classList).toContain('ms-auto');
+			expect(screen.getByRole('button', { name: 'Shortcuts' }).classList).not.toContain('ms-auto');
+			expect(review.nextElementSibling).toBe(screen.getByRole('button', { name: 'Shortcuts' }));
+
+			await fireEvent.click(next);
+			await fireEvent.click(review);
+			expect(run.mock.calls).toEqual([['reports.missingImage.next'], ['review.next']]);
+			run.mockRestore();
+		});
+
+		it('a Site user, or an Admin who must change the password, gets neither', () => {
+			render(AppFooter, { me: me(), onhotkeys: vi.fn() });
+			render(AppFooter, { me: admin(true), onhotkeys: vi.fn() });
+
+			expect(screen.queryByRole('button', { name: 'Next missing image' })).toBeNull();
+			expect(screen.queryByRole('button', { name: 'Open the first review item' })).toBeNull();
+			expect(screen.getByRole('button', { name: 'Shortcuts' }).classList).toContain('ms-auto');
 		});
 	});
 });

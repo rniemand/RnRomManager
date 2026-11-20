@@ -350,12 +350,28 @@
 }
 .app-footer {
 	min-height: var(--rnrm-footer-height);
+	/* Release editing B28: clear of the phone's home indicator (viewport-fit=cover). */
+	padding-bottom: env(safe-area-inset-bottom);
 }
 main.above-footer {
-	padding-bottom: calc(var(--rnrm-footer-height) + 1.5rem) !important;
+	padding-bottom: calc(var(--rnrm-footer-height) + env(safe-area-inset-bottom) + 1.5rem) !important;
 }
 body:has(.app-footer) .toast-container {
-	bottom: var(--rnrm-footer-height) !important;
+	bottom: calc(var(--rnrm-footer-height) + env(safe-area-inset-bottom)) !important;
+}
+/* B28: below sm the footer's labels stay the accessible names but take no room (Bootstrap's .visually-hidden). */
+@media (max-width: 575.98px) {
+	.footer-label {
+		width: 1px !important;
+		height: 1px !important;
+		padding: 0 !important;
+		margin: -1px !important;
+		overflow: hidden !important;
+		clip: rect(0, 0, 0, 0) !important;
+		white-space: nowrap !important;
+		border: 0 !important;
+		position: absolute !important;
+	}
 }
 
 /* B1: the section title shows only while the navbar is collapsed; from lg up it stays for screen readers (visually-hidden). */
