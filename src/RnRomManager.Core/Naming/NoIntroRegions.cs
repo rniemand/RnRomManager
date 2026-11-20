@@ -19,6 +19,12 @@ public static class NoIntroRegions
         "UK", "United Arab Emirates",
     };
 
+    private static readonly string[] Common = ["World", "USA", "Europe", "Japan", "Asia", "Australia", "Korea", "Brazil"];
+
+    /// <summary>Release editing B3: the 8 common regions first, then the rest A–Z (ordinal, ignoring case).</summary>
+    public static IReadOnlyList<string> FormOrder { get; } =
+        [.. Common, .. All.Except(Common).Order(StringComparer.OrdinalIgnoreCase)];
+
     /// <summary>True when every <c>", "</c>-separated part of a group's content is a known region.</summary>
     public static bool IsRegionGroup(string content) =>
         content.Length > 0 && content.Split(", ").All(All.Contains);

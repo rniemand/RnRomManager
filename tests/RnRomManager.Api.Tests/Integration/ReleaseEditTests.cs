@@ -282,6 +282,20 @@ public class ReleaseEditTests(string system)
             { (AuditActions.ReleaseEdited, (string?)$"roms/{game.ZipPath}", (string?)("Tetris (World)" + Ext)) }));
     }
 
+    /// <summary>B11: the game DTO says whether the system is a disc (FileSets) system.</summary>
+    [Test]
+    public async Task GameDetail_CarriesFileSets()
+    {
+        var game = await WriteGame(null, Rom("Tetris (World)"));
+        using var client = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "viewer");
+        (await client.LoginAsync("viewer", TestUsers.Password)).Dispose();
+
+        using var response = await client.GetAsync($"/api/games/{game.Id}");
+
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("fileSets").GetBoolean(), Is.EqualTo(FileSets));
+    }
+
     [Test]
     public async Task GameChecks_AreValidationErrors()
     {

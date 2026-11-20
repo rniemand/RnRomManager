@@ -423,6 +423,64 @@ public class LibraryEditTests
         Assert.That((await Row(id))!.Title, Is.EqualTo("Tetris"));
     }
 
+    /// <summary>Release editing B4: the PATCH answers the new file name.</summary>
+    [Test]
+    public async Task ReleasePatch_Renames_AndAnswersTheName()
+    {
+        var id = await Tetris();
+
+        using var response = await _admin.PatchAsync($"/api/games/{id}/roms/{await RomId(id, "Tetris (World).gb")}", new { hack = true });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That((await AuthClient.JsonAsync(response)).GetProperty("fileName").GetString(), Is.EqualTo("Tetris (World) (Hack).gb"));
+        Assert.That(ReadZip((await Row(id))!.ZipPath).Roms.Select(r => r.FileName), Does.Contain("Tetris (World) (Hack).gb"));
+    }
+
+    [TestCase("""{"kind":"game"}""", "kind", "Must be release, update or dlc.")]
+    [TestCase("""{"regions":["Mars"]}""", "regions", "Must be known No-Intro regions.")]
+    [TestCase("""{"regions":[""]}""", "regions", "Must be known No-Intro regions.")]
+    [TestCase("""{"languages":["E n"]}""", "languages", "Must be 1–16 letters or '-' each.")]
+    [TestCase("""{"revision":"(Rev 1)"}""", "revision", "Must be at most 32 characters without parentheses.")]
+    [TestCase("""{"disc":0}""", "disc", "Must be 1–99.")]
+    [TestCase("""{"disc":2}""", "disc", "Disc numbers are for disc systems.")]
+    [TestCase("""{"hack":"yes"}""", "hack", "Must be true or false.")]
+    [TestCase("""{"version":"v1"}""", "version", "Must be like 1.0.1.")]
+    [TestCase("""{"version":"1.0.1"}""", "version", "Only an update has a version.")]
+    [TestCase("""{"title":"x"}""", "title", "Unknown field.")]
+    [TestCase("""[]""", "", "A JSON object is required.")]
+    public async Task ReleasePatch_InvalidField_Is400_AndNothingChanges(string json, string field, string message)
+    {
+        var id = await Tetris();
+        var before = await File.ReadAllBytesAsync(Abs((await Row(id))!.ZipPath));
+
+        using var response = await _admin.SendAsync(HttpMethod.Patch, $"/api/games/{id}/roms/{await RomId(id, "Tetris (World).gb")}",
+            System.Text.Json.JsonDocument.Parse(json).RootElement, sendXsrf: true);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var errors = (await AuthClient.JsonAsync(response)).GetProperty("errors");
+        Assert.That(errors.GetProperty(field)[0].GetString(), Is.EqualTo(message));
+        Assert.That(await File.ReadAllBytesAsync(Abs((await Row(id))!.ZipPath)), Is.EqualTo(before));
+    }
+
+    [Test]
+    public async Task ReleasePatch_ValidatesOnlyPresentFields_UpdateGetsAVersion_And404s_And409WhileAJobRuns()
+    {
+        var id = await Tetris();
+        var world = await RomId(id, "Tetris (World).gb");
+
+        using (var empty = await _admin.PatchAsync($"/api/games/{id}/roms/{world}", new { }))
+            Assert.That((await AuthClient.JsonAsync(empty)).GetProperty("fileName").GetString(), Is.EqualTo("Tetris (World).gb"));
+        using (var update = await _admin.PatchAsync($"/api/games/{id}/roms/{world}", new { kind = "update", version = "1.0.1" }))
+            Assert.That((await AuthClient.JsonAsync(update)).GetProperty("fileName").GetString(), Is.EqualTo("Tetris (World)[1.0.1].gb"));
+        using (var missing = await _admin.PatchAsync($"/api/games/{id}/roms/999999", new { hack = true }))
+            Assert.That(missing.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        using (Service<JobLock>().TryAcquire())
+        {
+            using var busy = await _admin.PatchAsync($"/api/games/{id}/roms/{world}", new { hack = true });
+            Assert.That(await AuthClient.CodeAsync(busy), Is.EqualTo("JobRunning"));
+        }
+    }
+
     [TestCase(true, "InfoJsonNewerSchema")]
     [TestCase(false, "TargetZipUnreadable")]
     public async Task UnwritableZip_Is409_AndNothingMoves(bool newerSchema, string code)

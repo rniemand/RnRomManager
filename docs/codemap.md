@@ -108,6 +108,7 @@ To find a route in its file, grep the quoted route string, e.g. `MapPut("/rom-st
 - `POST /api/jobs/{id:guid}/cancel` Admin
 
 `src/RnRomManager.Api/Endpoints/LibraryEndpoints.cs`:
+- `GET /api/systems/regions`
 - `GET /api/systems`
 - `GET /api/games`
 - `GET /api/games/facets`
@@ -130,6 +131,7 @@ To find a route in its file, grep the quoted route string, e.g. `MapPut("/rom-st
 - `DELETE /api/games/{id:guid}` Admin
 - `DELETE /api/games/{id:guid}/roms/{romId:long}` Admin
 - `POST /api/games/{id:guid}/roms/{romId:long}/primary` Admin
+- `PATCH /api/games/{id:guid}/roms/{romId:long}` Admin
 - `POST /api/games/{id:guid}/roms/{romId:long}/move` Admin
 - `POST /api/games/{id:guid}/media/retry` Admin
 - `POST /api/games/{id:guid}/images` Admin

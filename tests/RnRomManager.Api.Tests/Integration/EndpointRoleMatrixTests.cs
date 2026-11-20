@@ -38,6 +38,7 @@ public partial class EndpointRoleMatrixTests
         ["POST /api/users/{id:int}/reset-password"] = Role.Admin,
 
         ["GET /api/systems"] = Role.User,
+        ["GET /api/systems/regions"] = Role.User,
         ["GET /api/games"] = Role.User,
         ["GET /api/games/facets"] = Role.User,
         ["GET /api/games/{id:guid}/zip-entries"] = Role.User,
@@ -66,6 +67,7 @@ public partial class EndpointRoleMatrixTests
         ["DELETE /api/games/{id:guid}/roms/{romId:long}"] = Role.Admin,
         ["POST /api/games/{id:guid}/roms/{romId:long}/move"] = Role.Admin,
         ["POST /api/games/{id:guid}/roms/{romId:long}/primary"] = Role.Admin,
+        ["PATCH /api/games/{id:guid}/roms/{romId:long}"] = Role.Admin,
         ["POST /api/games/{id:guid}/merge"] = Role.Admin,
         ["POST /api/games/{id:guid}/media/retry"] = Role.Admin,
         ["POST /api/games/{id:guid}/images"] = Role.Admin,
