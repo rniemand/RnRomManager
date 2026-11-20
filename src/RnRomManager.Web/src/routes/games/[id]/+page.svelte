@@ -43,7 +43,14 @@
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { bundle, maxBundleEntries, type AddResult } from '#lib/stores/bundle.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
-	import { compareUpdates, discNumber, isUpdate, orderByDisc } from '#lib/releases.js';
+	import {
+		compareDlc,
+		compareUpdates,
+		discNumber,
+		isDlc,
+		isUpdate,
+		orderByDisc
+	} from '#lib/releases.js';
 	import { systemColour } from '#lib/systemColours.js';
 	import { tooltip } from '#lib/tooltip.js';
 
@@ -73,11 +80,12 @@
 	// P1: primary first, then the Releases order.
 	// G5: a release pointer means the game's ROMs are stored next to its ZIP.
 	const external = $derived(game?.roms.some((r) => r.externalFileName !== null) ?? false);
-	// B9/B11: updates have their own tab, newest first; the rest are the releases.
-	const releases = $derived(orderByDisc(game?.roms.filter((r) => !isUpdate(r)) ?? []));
+	// B9/B11 (DLC B1–B3): updates and DLC have their own tabs; the rest are the releases.
+	const releases = $derived(orderByDisc(game?.roms.filter((r) => !isUpdate(r) && !isDlc(r)) ?? []));
 	const updates = $derived(game ? game.roms.filter(isUpdate).sort(compareUpdates) : []);
-	// B10: the header download lists releases only; a game with only updates offers those.
-	const downloadable = $derived(releases.length ? releases : updates);
+	const dlc = $derived(game ? game.roms.filter(isDlc).sort(compareDlc) : []);
+	// B10 (DLC B5): the header download lists releases only; else updates, else DLC.
+	const downloadable = $derived(releases.length ? releases : updates.length ? updates : dlc);
 	const downloadRoms = $derived([
 		...downloadable.filter((r) => r.isPrimary),
 		...downloadable.filter((r) => !r.isPrimary)
@@ -359,21 +367,29 @@
 	}
 
 	// GP1: the tab is URL state (`?tab=images`); switching never reloads the game (the load effect keys on the id).
-	type Tab = 'releases' | 'updates' | 'images' | 'saves' | 'zip';
-	// B9: ?tab=updates on a game without updates shows Releases, as an unknown tab does.
+	type Tab = 'releases' | 'updates' | 'dlc' | 'images' | 'saves' | 'zip';
+	// B9 (DLC B2): ?tab=updates or ?tab=dlc on a game without any shows Releases, as an unknown tab does.
 	const tab = $derived<Tab>(
-		(['images', 'saves', 'zip', ...(updates.length ? ['updates' as const] : [])] as const).find(
-			(t) => t === page.url.searchParams.get('tab')
-		) ?? 'releases'
+		(
+			[
+				'images',
+				'saves',
+				'zip',
+				...(updates.length ? ['updates' as const] : []),
+				...(dlc.length ? ['dlc' as const] : [])
+			] as const
+		).find((t) => t === page.url.searchParams.get('tab')) ?? 'releases'
 	);
-	// B10: one panel lists either tab's cards.
-	const shownRoms = $derived(tab === 'updates' ? updates : releases);
+	// B10 (DLC B4): one panel lists the Releases, Updates or DLC cards.
+	const shownRoms = $derived(tab === 'updates' ? updates : tab === 'dlc' ? dlc : releases);
+	const romTab = $derived(tab === 'updates' || tab === 'dlc' ? tab : 'releases');
 	/** B4: each tab's value, label and icon. */
 	const tabs = $derived<[Tab, string, string][]>([
 		['releases', `Releases (${releases.length})`, 'releases'],
 		...(updates.length
 			? [['updates', `Updates (${updates.length})`, 'update'] as [Tab, string, string]]
 			: []),
+		...(dlc.length ? [['dlc', `DLC (${dlc.length})`, 'dlc'] as [Tab, string, string]] : []),
 		['images', `Images (${game?.images.length ?? 0})`, 'images'],
 		['saves', `Saves (${game?.saveCount ?? 0})`, 'save'],
 		['zip', 'Zip Contents', 'zip']
@@ -658,7 +674,9 @@
 					id="{value}-tab"
 					role="tab"
 					aria-selected={tab === value}
-					aria-controls={value === 'updates' ? 'releases-panel' : `${value}-panel`}
+					aria-controls={value === 'updates' || value === 'dlc'
+						? 'releases-panel'
+						: `${value}-panel`}
 					onclick={() => selectTab(value)}><Icon name={icon} /> {label}</button
 				>
 			</li>
@@ -666,15 +684,12 @@
 	</ul>
 
 	<!-- Both panels stay mounted (hidden, not removed) so nothing unmounts on a tab switch. -->
-	<div
-		id="releases-panel"
-		role="tabpanel"
-		aria-labelledby="{tab === 'updates' ? 'updates' : 'releases'}-tab"
-		hidden={tab !== 'releases' && tab !== 'updates'}
-	>
-		<h2 class="h5 visually-hidden">{tab === 'updates' ? 'Updates' : 'Releases'}</h2>
+	<div id="releases-panel" role="tabpanel" aria-labelledby="{romTab}-tab" hidden={tab !== romTab}>
+		<h2 class="h5 visually-hidden">
+			{tab === 'updates' ? 'Updates' : tab === 'dlc' ? 'DLC' : 'Releases'}
+		</h2>
 		{#if tab === 'releases' && !releases.length}
-			<p class="text-body-secondary">No releases other than updates.</p>
+			<p class="text-body-secondary">No releases other than updates and DLC.</p>
 		{/if}
 		{#if shownRoms.length >= 2}
 			<button

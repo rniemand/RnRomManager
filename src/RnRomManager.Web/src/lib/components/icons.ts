@@ -42,6 +42,7 @@ export const icons: Record<string, string> = {
 	play: 'bi bi-play-fill',
 	save: 'bi bi-floppy-fill',
 	update: 'bi bi-arrow-up-circle',
+	dlc: 'bi bi-puzzle',
 	restore: 'bi bi-arrow-counterclockwise',
 	upload: 'bi bi-upload',
 	copy: 'bi bi-clipboard',

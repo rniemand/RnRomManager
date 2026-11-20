@@ -32,11 +32,14 @@ public class GameQueryTests
     /// <summary>Inserts a game whose releases have the given region lists; <paramref name="addedMinutes"/> orders <c>created_at</c>.</summary>
     private async Task<Guid> Add(string title, int? year = null, int addedMinutes = 0, string system = "gb", bool boxArt = true,
         string? displayTitle = null, int? rating = null, bool favourite = false, string[]? developers = null,
-        string[]? publishers = null, string[]? genres = null, params string[][] releases)
+        string[]? publishers = null, string[]? genres = null, (string FileName, string[] Flags)[]? addOns = null,
+        params string[][] releases)
     {
         if (releases.Length == 0)
             releases = [["World"]];
-        var roms = releases.Select((regions, i) => Rom($"{title} {i}.gb", RomBytes(++_seed), isPrimary: i == 0, regions: regions)).ToArray();
+        var roms = releases.Select((regions, i) => Rom($"{title} {i}.gb", RomBytes(++_seed), isPrimary: i == 0, regions: regions))
+            .Concat((addOns ?? []).Select(a => Rom(a.FileName, RomBytes(++_seed), isPrimary: false) with { Flags = a.Flags }))
+            .ToArray();
         var created = When.AddMinutes(addedMinutes);
         var game = Game(title, roms) with
         {
@@ -390,5 +393,84 @@ public class GameQueryTests
             Is.EqualTo(new SearchMatch("publisher", "Nintendo")));
         Assert.That((await _games.ListAsync(new GameQuery { Search = "tetris nintendo" }, default)).Items.Single().MatchedOn, Is.Null);
         Assert.That((await _games.ListAsync(new GameQuery(), default)).Items.Single().MatchedOn, Is.Null);
+    }
+
+    private static readonly string[] Dlc = ["DLC"];
+    private static readonly string[] Update = ["Update"];
+
+    [Test]
+    public async Task Search_MatchesDlcAndUpdateFileNames_NotBaseReleases()
+    {
+        await Add("Orbit", addOns: [("Orbit - Star Pack [0100000000003002][v0].nsp", Dlc)]);
+        await Add("Comet", addOns: [("Comet - Patchwork [0100000000004800][v65536].nsp", Update)]);
+        await Add("Nova", releases: [["World"]]); // base release file "Nova 0.gb"
+        await Add("Nebula");
+
+        Assert.That(await Titles(new GameQuery { Search = "star pack" }), Is.EqualTo(new[] { "Orbit" }), "a DLC name");
+        Assert.That(await Titles(new GameQuery { Search = "patchwork" }), Is.EqualTo(new[] { "Comet" }), "an update name");
+        Assert.That(await Titles(new GameQuery { Search = "orbit star" }), Is.EqualTo(new[] { "Orbit" }), "words split between title and DLC");
+        Assert.That(await Titles(new GameQuery { Search = "0.gb" }), Is.Empty, "a base release's file name doesn't match");
+    }
+
+    [Test]
+    public async Task Sort_Relevance_TitleHitAboveDlcHit()
+    {
+        await Add("Alpha", addOns: [("Alpha - Star Pack [01][v0].nsp", Dlc)]);
+        await Add("Star Fighter");
+
+        Assert.That(await Titles(new GameQuery { Search = "star", Sort = GameSort.Relevance }),
+            Is.EqualTo(new[] { "Star Fighter", "Alpha" }));
+    }
+
+    [Test]
+    public async Task Sort_Relevance_AddOnNamesRepeatingTheTitle_AddNothing()
+    {
+        await Add("Orbit Blocks");
+        await Add("Orbit Expedition", addOns: [("Orbit Expedition - Pack [01][v0].nsp", Dlc), ("Orbit Expedition [02][v65536].nsp", Update)]);
+
+        Assert.That(await Titles(new GameQuery { Search = "orbit", Sort = GameSort.Relevance }),
+            Is.EqualTo(new[] { "Orbit Blocks", "Orbit Expedition" }), "equal title scores, by title");
+    }
+
+    [Test]
+    public async Task ListItem_MatchedOn_DlcBeforeUpdate_WithTheStrippedName()
+    {
+        await Add("Orbit", developers: ["Pack Studio"], addOns:
+        [
+            ("Orbit - Pack Update [0100000000003800][v65536].nsp", Update),
+            ("Orbit - Star Pack [0100000000003002][v0].nsp", Dlc),
+        ]);
+        await Add("Comet", addOns: [("Comet - Patchwork [0100000000004800][v65536].nsp", Update)]);
+
+        async Task<SearchMatch?> MatchedOn(string search) =>
+            (await _games.ListAsync(new GameQuery { Search = search }, default)).Items.Single().MatchedOn;
+
+        Assert.That(await MatchedOn("star"), Is.EqualTo(new SearchMatch("dlc", "Orbit - Star Pack")));
+        Assert.That(await MatchedOn("pack"), Is.EqualTo(new SearchMatch("developer", "Pack Studio")), "developer first");
+        Assert.That(await MatchedOn("patchwork"), Is.EqualTo(new SearchMatch("update", "Comet - Patchwork")));
+        Assert.That(await MatchedOn("0100000000004800"), Is.Null, "a word only in a tag filters in without a label");
+        Assert.That((await _games.ListAsync(new GameQuery(), default)).Items.Select(i => i.MatchedOn), Is.All.Null, "no search");
+    }
+
+    [Test]
+    public async Task Facets_FollowDlcMatching()
+    {
+        await Add("Orbit", system: "switch", addOns: [("Orbit - Star Pack [01][v0].nsp", Dlc)]);
+        await Add("Comet", system: "gb");
+
+        Assert.That((await Facets(new GameQuery { Search = "star pack" })).Systems,
+            Is.EqualTo(new Dictionary<string, int> { ["switch"] = 1 }));
+    }
+
+    [Test]
+    public async Task ListItem_DlcCount_ExcludesUpdates_ARomFlaggedBothIsAnUpdate()
+    {
+        await Add("Orbit", addOns: [("Orbit - Pack [01][v0].nsp", Dlc), ("Orbit [02][v65536].nsp", Update)]);
+        await Add("Comet", addOns: [("Comet - Both [03][v0].nsp", ["DLC", "Update"])]);
+
+        var items = (await _games.ListAsync(new GameQuery(), default)).Items.ToDictionary(i => i.DisplayTitle);
+
+        Assert.That((items["Orbit"].DlcCount, items["Orbit"].UpdateCount), Is.EqualTo((1, 1)));
+        Assert.That((items["Comet"].DlcCount, items["Comet"].UpdateCount), Is.EqualTo((0, 1)));
     }
 }

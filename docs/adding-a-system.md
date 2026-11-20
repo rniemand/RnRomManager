@@ -69,6 +69,8 @@ See the README's [supported systems](../README.md#supported-systems) table for s
 
 **Updates tab.** There is no handler property for it: any system whose identification flags a release `Update` (titledb does, for title IDs ending in `800` and for `[UPD]` files) gets the Game page's **Updates** tab for those releases, ordered by the `version` read from a `[x.y.z]` tag in the file name. A libretro system's DAT flags never include `Update`, so its games show only Releases.
 
+**DLC tab.** Likewise, any system whose identification flags a release `DLC` (titledb does, for DLC title IDs) gets the **DLC** tab for those releases, ordered by file name; a release flagged both `Update` and `DLC` is an update. DLC and update file names are also searchable (Global Search and the Library search).
+
 **Limits of the contract:**
 
 - A release is one file unless the system sets `FileSets`, and then only bin/cue sets (a `.cue` naming `.bin` tracks) are grouped. Other multi-file formats (`.gdi`, `.ccd`, `.mds`, audio tracks as `.wav`/`.ape`) aren't supported. PlayStation, Saturn and Sega CD also list `.chd` as a single-file format: it's never part of a set and never matches the Redump DAT, so it always goes to Review. Multi-disc games are one release per disc, grouped by title.

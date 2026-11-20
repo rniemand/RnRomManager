@@ -5,6 +5,20 @@ type UpdateFields = Pick<RomDetail, 'version' | 'revision' | 'dateAdded' | 'file
 /** B9: an update is a release flagged `Update`. */
 export const isUpdate = (rom: Pick<RomDetail, 'flags'>): boolean => rom.flags.includes('Update');
 
+/** DLC B1: a DLC is a release flagged `DLC`; one also flagged `Update` is an update only. */
+export const isDlc = (rom: Pick<RomDetail, 'flags'>): boolean =>
+	rom.flags.includes('DLC') && !isUpdate(rom);
+
+/** DLC B3: by file name (numeric, case- and accent-insensitive), ties by ordinal file name. */
+export function compareDlc(a: Pick<RomDetail, 'fileName'>, b: Pick<RomDetail, 'fileName'>): number {
+	const byName = a.fileName.localeCompare(b.fileName, undefined, {
+		sensitivity: 'base',
+		numeric: true
+	});
+	if (byName !== 0) return byName;
+	return a.fileName < b.fileName ? -1 : a.fileName > b.fileName ? 1 : 0;
+}
+
 /** B10: the flag a disc number becomes (`Disc 2`); the case and leading zeros don't matter. */
 const discFlag = /^disc (\d+)$/i;
 

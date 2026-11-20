@@ -53,7 +53,19 @@
 	let pendingPlay: string | null = null;
 	const playHintId = 'global-search-play-hint';
 
-	const matchLabels = { developer: 'Developer', publisher: 'Publisher', genre: 'Genre' } as const;
+	const matchLabels = {
+		developer: 'Developer',
+		publisher: 'Publisher',
+		genre: 'Genre',
+		dlc: 'DLC',
+		update: 'Update'
+	} as const;
+	/** DLC B13: a DLC or update match opens that tab of the game page. */
+	const matchTab = (entry: Entry): 'dlc' | 'updates' | undefined => {
+		if (entry.kind !== 'game') return undefined;
+		const field = entry.item.matchedOn?.field;
+		return field === 'dlc' ? 'dlc' : field === 'update' ? 'updates' : undefined;
+	};
 
 	const enabled = $derived(!!auth.me && !auth.me.mustChangePassword);
 
@@ -154,7 +166,7 @@
 			gamePage.status === 'rejected' && collectionPage.status === 'rejected' ? 'error' : 'done';
 	}
 
-	async function choose(entry: Entry): Promise<void> {
+	async function choose(entry: Entry, tab?: 'dlc' | 'updates'): Promise<void> {
 		navigated = true;
 		cancel();
 		query = '';
@@ -162,11 +174,12 @@
 		games = [];
 		status = 'hint';
 		open = false;
-		await goto(
+		const path =
 			entry.kind === 'game'
 				? resolve('/games/[id]', { id: entry.item.id })
-				: resolve('/collections/[id]', { id: entry.item.id })
-		);
+				: resolve('/collections/[id]', { id: entry.item.id });
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
+		await goto(tab ? `${path}?tab=${tab}` : path);
 	}
 
 	function reset(): void {
@@ -209,7 +222,7 @@
 			// B27: Shift+Enter plays a playable game; on anything else it does nothing.
 			if (e.shiftKey) {
 				if (entry.kind === 'game' && entry.item.playRomId != null) play(entry.item);
-			} else void choose(entry);
+			} else void choose(entry, matchTab(entry));
 		}
 	}
 </script>
@@ -326,7 +339,10 @@
 							role="option"
 							aria-selected={i === active}
 							aria-describedby={game.playRomId != null ? playHintId : undefined}
-							onclick={() => void choose({ kind: 'game', item: game })}
+							onclick={() => {
+								const entry = { kind: 'game', item: game } as const;
+								void choose(entry, matchTab(entry));
+							}}
 							onkeydown={() => {}}
 							onmousemove={() => (active = i)}
 						>

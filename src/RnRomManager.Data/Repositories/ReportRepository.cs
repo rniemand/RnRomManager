@@ -147,9 +147,9 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         return rows.Select(r => new SystemSize(r.SystemId, (long)r.Bytes, (int)r.GameCount, (int)r.UpdateCount)).ToList();
     }
 
-    /// <summary>B15: <see cref="GameBytes"/> plus each game's release count (rows not flagged <c>Update</c>).</summary>
+    /// <summary>B15: <see cref="GameBytes"/> plus each game's release count (rows flagged neither <c>Update</c> nor <c>DLC</c>, DLC B14).</summary>
     private const string GameReleases = $"""
-        SELECT g.*, (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id AND NOT JSON_CONTAINS(r.flags, '"Update"')) AS ReleaseCount
+        SELECT g.*, (SELECT COUNT(*) FROM roms r WHERE r.game_id = g.id AND NOT JSON_CONTAINS(r.flags, '"Update"') AND NOT JSON_CONTAINS(r.flags, '"DLC"')) AS ReleaseCount
         FROM ({GameBytes}) g
         """;
 
