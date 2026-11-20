@@ -528,10 +528,27 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                     }
                 }
                 var flag = discFlag ?? request.Flag!;
-                flags = [flag];
                 var stem = FileNameSanitizer.Sanitize(Path.GetFileNameWithoutExtension(item.OriginalFileName));
-                if (discFlag is null || !stem.Contains($"({discFlag})", StringComparison.OrdinalIgnoreCase))
-                    stem += $" ({flag})";
+                if (flag == "Release")
+                {
+                    // A2: tags from the file's own name (a set's cue); another disc is Attach as Disc's job. Unverified
+                    // keeps DAT-verified releases primary, as the Dat action's manual pick does.
+                    var named = set?.FirstOrDefault(m => m.File.Name.EndsWith(".cue", StringComparison.OrdinalIgnoreCase)).File?.Name
+                        ?? item.OriginalFileName;
+                    var tags = NoIntroName.Parse(Path.GetFileNameWithoutExtension(named));
+                    regions = tags.Regions; languages = tags.Languages; revision = tags.Revision;
+                    flags = [.. tags.Flags.Where(f => !Regex.IsMatch(f, @"^(Disc|Track) \d+$", RegexOptions.IgnoreCase))];
+                    if (!flags.Contains("Unverified", StringComparer.OrdinalIgnoreCase))
+                        flags = [.. flags, "Unverified"];
+                    if (!stem.Contains("(Unverified)", StringComparison.OrdinalIgnoreCase))
+                        stem += " (Unverified)";
+                }
+                else
+                {
+                    flags = [flag];
+                    if (discFlag is null || !stem.Contains($"({discFlag})", StringComparison.OrdinalIgnoreCase))
+                        stem += $" ({flag})";
+                }
                 filename = stem + (external || system.KeepsSourceExtension ? originalExtension : system.RomExtensions[0]);
             }
             else

@@ -222,6 +222,24 @@ public class ReviewEndpointsTests
     }
 
     [Test]
+    public async Task AttachRelease_TagsFromTheFileName_Unverified_NotPrimary_A2()
+    {
+        var target = await KnownGame();
+        var item = await Queue(false, "mystery (World) (Rev 1).gb");
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Attach", targetGameId = target, flag = "Release" });
+        Assert.That(response.Code, Is.Null);
+        var game = await ReadGame(target);
+        var rom = game.Roms.Single(r => r.Metadata.Sha1 == item.Sha1);
+        Assert.That((rom.BaseTitle, rom.FileName, rom.Revision),
+            Is.EqualTo(("Tetris", "mystery (World) (Rev 1) (Unverified).gb", "Rev 1")));
+        Assert.That(rom.Regions, Is.EqualTo(new[] { "World" }));
+        Assert.That(rom.Flags, Is.EqualTo(new[] { "Unverified" }));
+        Assert.That(rom.IsPrimary, Is.False);
+        Assert.That(rom.Identification.Method, Is.EqualTo(IdentificationMethod.Manual));
+        Assert.That(game.Roms.Single(r => r.IsPrimary).Identification.Method, Is.EqualTo(IdentificationMethod.Dat));
+    }
+
+    [Test]
     public async Task Attach_ToALegacyGame_IsStorageMigrationPending_AndStaysPending()
     {
         var legacyRom = new SyntheticRomBuilder { Seed = 950 }.Build();
