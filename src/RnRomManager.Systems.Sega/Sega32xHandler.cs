@@ -14,7 +14,7 @@ public sealed class Sega32xHandler : ISystemHandler
     public string DisplayName => "32X";
     public string ShortName => "32X";
     public string Family => "sega32x";
-    public IReadOnlyList<string> RomExtensions { get; } = [".32x"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".32x", ".bin"];
     public long MinRomSizeBytes => 16384;
     public long MaxRomSizeBytes => 4 * 1024 * 1024;
     public string DatName => "Sega - 32X";

@@ -15,7 +15,7 @@ public class Sega32xHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("s32x", "32X", "32X", "sega32x", "Sega - 32X")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".32x" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".32x", ".bin" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((16384L, 4194304L)));
     }
 

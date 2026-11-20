@@ -36,7 +36,7 @@ roms/
   gg/                   Game Gear (.gg, or .sms for SMS-mode games, as the DAT names it)
   sms/                  Master System (.sms)
   md/                   Mega Drive / Genesis (.md, or .bin for the one lock-on entry, as the DAT names it)
-  s32x/                 32X (.32x)
+  s32x/                 32X (.32x, .bin)
   tg16/                 TurboGrafx-16 / PC Engine (.pce)
   switch/               Nintendo Switch (external: .nsp, .xci, .nsz, .xcz, .hdf files next to the ZIP)
     O/

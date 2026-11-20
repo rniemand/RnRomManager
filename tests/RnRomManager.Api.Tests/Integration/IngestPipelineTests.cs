@@ -847,7 +847,6 @@ public class IngestPipelineTests
     [TestCase("sms", "comet.md")]
     [TestCase("md", "relay.32x")]
     [TestCase("s32x", "comet.md")]
-    [TestCase("s32x", "comet.bin")]
     [TestCase("s32x", "comet.gen")]
     public async Task SegaFile_InTheWrongFolderOrUnsupported_IsUnsupportedType(string folder, string name)
     {
@@ -933,6 +932,16 @@ public class IngestPipelineTests
         var game = ReadZip(Path.Combine("s32x", "S", "Star Relay.zip"));
         Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("s32x", "Star Relay (USA).32x")));
         Assert.That(game.Roms.Single().Header!["systemType"]!.GetValue<string>(), Is.EqualTo("SEGA 32X"));
+    }
+
+    [Test]
+    public async Task Sega32x_DatMatchedBin_IsStoredAs32x()
+    {
+        var result = await IngestAsync(Drop("s32x", "relay.bin", Relay));
+
+        Assert.That(result!.Outcome, Is.EqualTo(IngestOutcome.Ingested));
+        var game = ReadZip(Path.Combine("s32x", "S", "Star Relay.zip"));
+        Assert.That((game.System, game.Roms.Single().FileName), Is.EqualTo(("s32x", "Star Relay (USA).32x")));
     }
 
     [Test]
