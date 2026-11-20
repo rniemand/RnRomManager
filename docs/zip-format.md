@@ -43,7 +43,7 @@ roms/
       Orbit Expedition.[0100000000010000][v0].nsp
       Orbit Expedition.[0100000000010800][v65536].nsp
       Orbit Expedition.[0100000000010800][v0][1.1.0].nsp
-  psx/                  PlayStation (external, exact names: a .cue with its .bin tracks, or a .bin/.iso/.chd)
+  psx/                  PlayStation (external, exact names: a .cue with its .bin tracks, or a .bin/.iso/.chd/.img)
     D/
       Disc Runner.zip
       Disc Runner (USA) (Track 1).bin     the release's main file (the data track the DAT lists)

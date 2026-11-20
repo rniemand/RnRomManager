@@ -52,7 +52,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Nintendo DS | `nds` | Next to ZIP (configurable) | `.nds` | No-Intro | `desmume` |
 | Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | `fceumm` |
 | Nintendo Switch | `switch` | Next to ZIP | `.nsp`, `.xci`, `.nsz`, `.xcz`, `.hdf` | titledb | — |
-| PlayStation | `psx` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd` | Redump | `pcsx_rearmed` |
+| PlayStation | `psx` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd`, `.img` | Redump | `pcsx_rearmed` |
 | PlayStation Portable | `psp` | Next to ZIP | `.iso` | Redump | `ppsspp` |
 | Saturn | `saturn` | Next to ZIP | `.bin`, `.cue`, `.nrg`, `.chd` | Redump | `yabause` |
 | Sega CD | `segacd` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd` | Redump | `genesis_plus_gx` |
