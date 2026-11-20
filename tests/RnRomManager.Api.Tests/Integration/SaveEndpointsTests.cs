@@ -242,13 +242,15 @@ public partial class SaveEndpointsTests
         var game = await WriteGame("Pokémon: Gold?", "Gold (World).gb");
         var save = await AddSave(game, "Gold (World).gb", "Gym 8 / Elite", [5, 6, 7], ".srm");
 
-        using var response = await _user.GetAsync($"/api/games/{game.Id}/saves/{save.Id}/download");
+        using var response = await _user.SendAsync(HttpMethod.Get, $"/api/games/{game.Id}/saves/{save.Id}/download", null,
+            sendXsrf: false, completion: HttpCompletionOption.ResponseHeadersRead);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/octet-stream"));
         var disposition = response.Content.Headers.ContentDisposition!;
         Assert.That(disposition.FileNameStar, Is.EqualTo("Pokémon_ Gold_ - Gym 8 _ Elite.srm"));
         Assert.That(disposition.FileName, Is.Not.Null, "an ASCII fallback too");
+        Assert.That(response.Content.Headers.ContentLength, Is.EqualTo(3));
         Assert.That(await response.Content.ReadAsByteArrayAsync(), Is.EqualTo(new byte[] { 5, 6, 7 }));
     }
 

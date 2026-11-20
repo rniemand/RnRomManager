@@ -68,10 +68,12 @@ public partial class LibraryEndpointsTests
         var id = await Ingest("p.gb", Pinball);
         var url = (await GetJson($"/api/games/{id}")).GetProperty("roms")[0].GetProperty("downloadUrl").GetString()!;
 
-        using var ranged = await _user.SendAsync(HttpMethod.Get, url, null, sendXsrf: false, headers => headers.Range = new RangeHeaderValue(0, 1));
+        using var ranged = await _user.SendAsync(HttpMethod.Get, url, null, sendXsrf: false, headers => headers.Range = new RangeHeaderValue(0, 1),
+            HttpCompletionOption.ResponseHeadersRead);
 
         Assert.That(ranged.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(ranged.Content.Headers.ContentDisposition?.FileNameStar, Is.EqualTo("Pokémon Pinball (Europe).gb"));
+        Assert.That(ranged.Content.Headers.ContentLength, Is.EqualTo(Pinball.Length), "the recorded size, so players can show progress");
         Assert.That(await ranged.Content.ReadAsByteArrayAsync(), Is.EqualTo(Pinball));
     }
 
