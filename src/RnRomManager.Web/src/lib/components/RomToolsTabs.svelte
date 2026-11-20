@@ -1,10 +1,10 @@
 <script lang="ts" module>
 	/** The ROM Tools pages, in tab order; the navbar's ROM Tools link opens the first. */
 	export const romTools = [
-		{ href: '/ingestion', label: 'Ingestion' },
-		{ href: '/review', label: 'Review' },
-		{ href: '/deleted', label: 'Deleted ROMs' },
-		{ href: '/integrity', label: 'Integrity' }
+		{ href: '/ingestion', label: 'Ingestion', icon: 'ingest' },
+		{ href: '/review', label: 'Review', icon: 'review' },
+		{ href: '/deleted', label: 'Deleted ROMs', icon: 'deleted' },
+		{ href: '/integrity', label: 'Integrity', icon: 'integrity' }
 	] as const;
 </script>
 
@@ -14,6 +14,7 @@
 	import { page } from '$app/state';
 	import { formatCount } from '../format';
 	import { navCounts } from '../stores/navCounts.svelte';
+	import Icon from './Icon.svelte';
 </script>
 
 <nav class="mb-3" aria-label="ROM Tools">
@@ -27,6 +28,7 @@
 					aria-current={active ? 'page' : undefined}
 					href={resolve(tool.href)}
 				>
+					<Icon name={tool.icon} />
 					{tool.label}
 					{#if tool.href === '/review' && navCounts.review}
 						<span class="badge rounded-pill text-bg-danger">
