@@ -4,7 +4,7 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Systems.NintendoDisc;
 
 /// <summary>
-/// Nintendo GameCube: one <c>.iso</c> per disc.
+/// Nintendo GameCube: one <c>.iso</c> or <c>.gcm</c> (the same raw image) per disc.
 /// Stored outside the ZIP under exact names (disc systems B4, B5); the redump DAT has no metadat. The disc header (B6) tells GameCube and Wii apart.
 /// </summary>
 public sealed class GameCubeHandler : ISystemHandler
@@ -17,7 +17,7 @@ public sealed class GameCubeHandler : ISystemHandler
     public string Family => "nintendo-disc";
 
     /// <summary><c>[0]</c> is what a file resolved through Review without a DAT entry is stored as.</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".iso"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".iso", ".gcm"];
 
     public long MinRomSizeBytes => 32 * 1024;
 

@@ -50,7 +50,7 @@ roms/
       Disc Runner (USA).cue               its files: the cue, then the other tracks
       Disc Runner (USA) (Track 2).bin
   psp/                  PlayStation Portable (external, exact names: .iso)
-  gc/                   GameCube (external, exact names: .iso)
+  gc/                   GameCube (external, exact names: .iso, .gcm)
   wii/                  Wii (external, exact names: .iso)
   x360/                 Xbox 360 (external, exact names: .iso)
   saturn/               Saturn (external, exact names: a .cue with its .bin tracks, or a .nrg/.chd)
