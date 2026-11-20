@@ -37,7 +37,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Atari Lynx | `lynx` | In ZIP | `.lnx`, `.lyx` | No-Intro | `handy` |
 | ColecoVision | `coleco` | In ZIP | `.col`, `.rom`, `.bin` | No-Intro | `gearcoleco` |
 | Commodore 64 | `c64` | In ZIP | `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.t64`, `.prg`, `.bin` | No-Intro | `vice_x64sc` |
-| Commodore Amiga | `amiga` | In ZIP | `.adf` | TOSEC | `puae` |
+| Commodore Amiga | `amiga` | In ZIP | `.adf`, `.adz` | TOSEC | `puae` |
 | Commodore PET | `pet` | In ZIP | `.prg`, `.d64` | TOSEC | `vice_xpet` |
 | Commodore VIC-20 | `vic20` | In ZIP | `.a0`, `.20`, `.40`, `.60`, `.bin` | No-Intro | `vice_xvic` |
 | Game Boy | `gb` | In ZIP | `.gb` | No-Intro | `gambatte` |
