@@ -29,7 +29,7 @@ describe('SystemEmulatorsModal (Systems tab B7, B8)', () => {
 			open: true,
 			system: system('gb', 'Game Boy')
 		});
-		const title = screen.getByRole('heading', { name: 'Game Boy emulators', ...hidden });
+		const title = screen.getByRole('heading', { name: 'Game Boy Emulators', ...hidden });
 		expect(container.querySelector('.modal')?.getAttribute('aria-labelledby')).toBe(title.id);
 		expect(container.querySelector('.modal-dialog')?.classList.contains('modal-lg')).toBe(true);
 	});

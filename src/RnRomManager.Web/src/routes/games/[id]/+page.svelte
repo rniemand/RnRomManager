@@ -27,6 +27,7 @@
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FileSize from '#lib/components/FileSize.svelte';
 	import GameCollectionsModal from '#lib/components/GameCollectionsModal.svelte';
+	import SystemEmulatorsModal from '#lib/components/SystemEmulatorsModal.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import { hotkeys } from '#lib/stores/hotkeys.svelte.js';
 	import InfoJsonModal from '#lib/components/InfoJsonModal.svelte';
@@ -77,6 +78,14 @@
 	/** B16/B25: the caller's collections holding this game. */
 	let memberOf = $state<CollectionRef[]>([]);
 	let collectionsOpen = $state(false);
+	let emulatorsOpen = $state(false);
+	let emulatorsButton = $state<HTMLButtonElement>();
+	// E2: Bootstrap doesn't restore focus for a modal opened with show(), so return it to the button.
+	let emulatorsWasOpen = false;
+	$effect(() => {
+		if (emulatorsWasOpen && !emulatorsOpen) emulatorsButton?.focus();
+		emulatorsWasOpen = emulatorsOpen;
+	});
 
 	const id = $derived(page.params.id ?? '');
 	// P3: the cover (any type); screenshots are in the Images gallery.
@@ -602,6 +611,12 @@
 				>
 					<Icon name="collections" /> Collections
 				</button>
+				<button
+					type="button"
+					class="btn btn-sm btn-outline-secondary"
+					bind:this={emulatorsButton}
+					onclick={() => (emulatorsOpen = true)}><Icon name="emulators" /> Emulators</button
+				>
 				{#if fromMissingMetadata && auth.isAdmin}
 					<button
 						type="button"
@@ -1098,6 +1113,10 @@
 		gameId={game.id}
 		title={game.displayTitle}
 		bind:memberOf
+	/>
+	<SystemEmulatorsModal
+		bind:open={emulatorsOpen}
+		system={{ id: game.system, displayName: game.systemName }}
 	/>
 {/if}
 

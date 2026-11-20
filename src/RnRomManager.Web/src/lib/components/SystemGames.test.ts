@@ -210,7 +210,7 @@ describe('SystemGames (Systems tab B5)', () => {
 
 		await fireEvent.click(button);
 		const close = screen.getAllByRole('button', { name: 'Close', ...hidden }).at(-1)!;
-		expect(screen.getByRole('heading', { name: 'Game Boy emulators', ...hidden })).toBeTruthy();
+		expect(screen.getByRole('heading', { name: 'Game Boy Emulators', ...hidden })).toBeTruthy();
 		close.focus();
 		await fireEvent.click(close);
 		await tick();

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { resetClient } from '#lib/api/client.js';
 import type { GameDetail, ReleaseFile } from '#lib/api/types.js';
 import { formatDateTime, formatSize } from '#lib/format.js';
@@ -1310,7 +1311,7 @@ describe('game detail page', () => {
 		});
 	});
 
-	it('the action row: ZIP, ROM, Google, Collections, then Manage; all btn-sm (B3)', async () => {
+	it('the action row: ZIP, ROM, Google, Collections, Emulators, then Manage; all btn-sm (B3)', async () => {
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);
 
@@ -1325,6 +1326,7 @@ describe('game detail page', () => {
 			'Download ROM',
 			'Google',
 			'Collections',
+			'Emulators',
 			'Manage'
 		]);
 		for (const e of row) expect(e.classList).toContain('btn-sm');
@@ -1334,6 +1336,21 @@ describe('game detail page', () => {
 		);
 		expect(row.at(-1)!.getAttribute('data-bs-toggle')).toBe('dropdown');
 		expect(screen.queryByRole('group', { name: 'Admin actions' })).toBeNull();
+	});
+
+	it('Emulators opens the system emulators modal and returns focus to the button on close (E2)', async () => {
+		answers.push({ status: 200, body: game([1]) });
+		render(GamePage);
+		const button = await screen.findByRole('button', { name: 'Emulators' });
+
+		await fireEvent.click(button);
+		expect(screen.getByRole('heading', { name: 'Game Boy Emulators', hidden: true })).toBeTruthy();
+		const close = screen.getAllByRole('button', { name: 'Close', hidden: true }).at(-1)!;
+		close.focus();
+		await fireEvent.click(close);
+		await tick();
+
+		expect(document.activeElement).toBe(button);
 	});
 
 	it('tabs carry icons before their labels (B4)', async () => {
