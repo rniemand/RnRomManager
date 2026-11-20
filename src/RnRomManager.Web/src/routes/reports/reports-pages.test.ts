@@ -524,6 +524,28 @@ describe('reports pages', () => {
 			expect(optionTexts()).toEqual(['2']);
 		});
 
+		it('the System select writes system=, resets the page and filters the request (release editing B12)', async () => {
+			navigateTo('/reports/multiple-releases?page=2');
+			answers[list(2, 2)] = { status: 200, body: body([item('g1')], 60, 4, 2) };
+			answers[`${list()}&system=gbc`] = { status: 200, body: body([item('g5')], 1, 2) };
+			render(MultipleReleases);
+			await screen.findByRole('link', { name: 'Game g1' });
+			const system = screen.getByLabelText('System') as HTMLSelectElement;
+			await vi.waitFor(() => expect(system.options).toHaveLength(3));
+			expect([...system.options].map((o) => o.textContent!.trim())).toEqual([
+				'All systems',
+				'Game Boy',
+				'Game Boy Color'
+			]);
+			expect(system.id).toBe('multiple-releases-system');
+
+			await fireEvent.change(system, { target: { value: 'gbc' } });
+
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/multiple-releases?system=gbc'));
+			await screen.findByRole('link', { name: 'Game g5' });
+			expect((screen.getByLabelText('System') as HTMLSelectElement).value).toBe('gbc');
+		});
+
 		it('changing the threshold writes min, drops page and requests it', async () => {
 			navigateTo('/reports/multiple-releases?page=2');
 			answers[list(2, 2)] = { status: 200, body: body([item('g1')], 60, 4, 2) };

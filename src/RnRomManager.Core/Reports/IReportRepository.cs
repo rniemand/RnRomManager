@@ -35,11 +35,12 @@ public interface IReportRepository
     /// Multiple Releases B15/B17: games with at least <paramref name="min"/> releases (rows flagged neither <c>Update</c> nor <c>DLC</c>, DLC B14), with their update count
     /// and Library Size bytes. Only the primary key follows <paramref name="descending"/>; tie-breakers are ascending.
     /// </summary>
-    Task<Page<MultipleReleaseItem>> ListMultipleReleasesAsync(int min, MultipleReleaseSort sort, bool descending, int page, int pageSize,
+    /// <param name="systemId">Release editing B12: only that system's games when set.</param>
+    Task<Page<MultipleReleaseItem>> ListMultipleReleasesAsync(string? systemId, int min, MultipleReleaseSort sort, bool descending, int page, int pageSize,
         CancellationToken cancellationToken);
 
-    /// <summary>Multiple Releases B16: the highest release count of any game, 0 for an empty library.</summary>
-    Task<int> MaxReleaseCountAsync(CancellationToken cancellationToken);
+    /// <summary>Multiple Releases B16: the highest release count of any game (of <paramref name="systemId"/> when set, B12), 0 for none.</summary>
+    Task<int> MaxReleaseCountAsync(string? systemId, CancellationToken cancellationToken);
 
     /// <summary>RP6–RP8: undismissed duplicate groups, sorted by system then base title; paging and total exclude dismissed ones.</summary>
     Task<Page<DuplicateGroup>> ListDuplicatesAsync(string? systemId, int page, int pageSize, CancellationToken cancellationToken);

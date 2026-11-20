@@ -714,6 +714,24 @@ public class ReportEndpointsTests
         Assert.That(page.GetProperty("items")[0].GetProperty("releaseCount").GetInt32(), Is.EqualTo(3), "Delta: Delta, Alpha, Bravo; not Charlie (update) or Echo (DLC)");
     }
 
+    /// <summary>Release editing B12: <c>system</c> filters the list and <c>maxReleases</c>.</summary>
+    [Test]
+    public async Task MultipleReleases_SystemFilter_AlsoFiltersMaxReleases()
+    {
+        var (alpha, delta) = await SeedMultipleReleases();
+        await Sql("UPDATE games SET system_id = 'gbc' WHERE id = @delta", new { delta });
+        await Sql("UPDATE roms SET system_id = 'gbc' WHERE game_id = @delta", new { delta });
+        await Sql("UPDATE roms SET game_id = @alpha WHERE file_name LIKE 'Delta%'", new { alpha });
+
+        var gb = await GetJson("/api/reports/multiple-releases?system=gb");
+        var gbc = await GetJson("/api/reports/multiple-releases?system=gbc&min=2");
+
+        Assert.That((gb.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("id").GetGuid()), gb.GetProperty("maxReleases").GetInt32()),
+            Is.EqualTo((new[] { alpha }, 3)));
+        Assert.That((gbc.GetProperty("total").GetInt64(), gbc.GetProperty("maxReleases").GetInt32()), Is.EqualTo((0L, 1)));
+    }
+
+    [TestCase("system=nope", "system", "Choose a registered system.")]
     [TestCase("min=1", "min", "Must be 2–10000.")]
     [TestCase("min=10001", "min", "Must be 2–10000.")]
     [TestCase("sort=title", "sort", "Must be name, system, releases, updates or size.")]

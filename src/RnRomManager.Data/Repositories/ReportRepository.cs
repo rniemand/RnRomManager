@@ -153,7 +153,7 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         FROM ({GameBytes}) g
         """;
 
-    public async Task<Page<MultipleReleaseItem>> ListMultipleReleasesAsync(int min, MultipleReleaseSort sort, bool descending, int page,
+    public async Task<Page<MultipleReleaseItem>> ListMultipleReleasesAsync(string? systemId, int min, MultipleReleaseSort sort, bool descending, int page,
         int pageSize, CancellationToken cancellationToken)
     {
         // B17: the key and direction come only from the enum and bool, never from input text.
@@ -167,13 +167,14 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
             MultipleReleaseSort.Size => $"m.Bytes {dir}, m.display_title, m.id",
             _ => throw new ArgumentOutOfRangeException(nameof(sort)),
         };
-        var args = new { min, pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
+        var args = new { min, systemId, pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
+        const string where = "m.ReleaseCount >= @min AND (@systemId IS NULL OR m.system_id = @systemId)";
         await using var connection = connections.Create();
         var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM ({GameReleases}) m WHERE m.ReleaseCount >= @min", args, cancellationToken: cancellationToken));
+            $"SELECT COUNT(*) FROM ({GameReleases}) m WHERE {where}", args, cancellationToken: cancellationToken));
         var rows = await connection.QueryAsync<MultipleReleaseRow>(new CommandDefinition($"""
             SELECT m.id AS Id, m.display_title AS DisplayTitle, m.system_id AS SystemId, m.ReleaseCount, m.UpdateCount, m.Bytes
-            FROM ({GameReleases}) m WHERE m.ReleaseCount >= @min
+            FROM ({GameReleases}) m WHERE {where}
             ORDER BY {order}
             LIMIT @pageSize OFFSET @offset
             """, args, cancellationToken: cancellationToken));
@@ -182,11 +183,12 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         return new Page<MultipleReleaseItem>(items, page, pageSize, total);
     }
 
-    public async Task<int> MaxReleaseCountAsync(CancellationToken cancellationToken)
+    public async Task<int> MaxReleaseCountAsync(string? systemId, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();
         return (int)await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COALESCE(MAX(m.ReleaseCount), 0) FROM ({GameReleases}) m", cancellationToken: cancellationToken));
+            $"SELECT COALESCE(MAX(m.ReleaseCount), 0) FROM ({GameReleases}) m WHERE @systemId IS NULL OR m.system_id = @systemId",
+            new { systemId }, cancellationToken: cancellationToken));
     }
 
     public async Task<IReadOnlyList<RecentRom>> ListRecentlyAddedRomsAsync(int limit, CancellationToken cancellationToken)

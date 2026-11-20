@@ -176,10 +176,10 @@ public static partial class ReportEndpoints
         });
 
         // Multiple Releases B16: games with min or more releases, sorted and paged on the server.
-        reports.MapGet("/multiple-releases", async (int? min, string? sort, string? dir, int? page, int? pageSize, HttpContext ctx,
+        reports.MapGet("/multiple-releases", async (string? system, int? min, string? sort, string? dir, int? page, int? pageSize, HttpContext ctx,
             IReportRepository repository, ISystemRegistry systems) =>
         {
-            var errors = Paging.Validate(page, pageSize);
+            var errors = Validate(system, page, pageSize, systems);
             if (min is < 2 or > 10000)
                 errors["min"] = ["Must be 2–10000."];
             MultipleReleaseSort? sortKey = sort?.ToLowerInvariant() switch
@@ -200,9 +200,9 @@ public static partial class ReportEndpoints
                 return Problems.Validation(ctx, errors);
 
             descending ??= sortKey is not (MultipleReleaseSort.Name or MultipleReleaseSort.System);
-            var result = await repository.ListMultipleReleasesAsync(min ?? 2, sortKey!.Value, descending.Value, page ?? 1, pageSize ?? 50,
+            var result = await repository.ListMultipleReleasesAsync(system, min ?? 2, sortKey!.Value, descending.Value, page ?? 1, pageSize ?? 50,
                 ctx.RequestAborted);
-            var maxReleases = await repository.MaxReleaseCountAsync(ctx.RequestAborted);
+            var maxReleases = await repository.MaxReleaseCountAsync(system, ctx.RequestAborted);
             return Results.Ok(new
             {
                 maxReleases,
