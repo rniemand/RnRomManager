@@ -44,7 +44,9 @@ try {
             $ErrorActionPreference = 'Stop'
             foreach ($arguments in @(@('run', 'lint'), @('run', 'check'), @('test'))) {
                 Write-Host "==> npm $arguments" -ForegroundColor Cyan
-                & npm @arguments
+                # stderr as plain text: under 'Stop', a warning on stderr (e.g. Node's ExperimentalWarning) would
+                # otherwise become an error record that aborts the whole run when received. The exit code decides.
+                & npm @arguments 2>&1 | ForEach-Object { "$_" }
                 if ($LASTEXITCODE -ne 0) { throw "npm $arguments failed (exit $LASTEXITCODE)" }
             }
         }
