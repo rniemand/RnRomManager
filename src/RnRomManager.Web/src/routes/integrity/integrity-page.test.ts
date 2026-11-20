@@ -97,8 +97,8 @@ describe('integrity page', () => {
 		expect(await screen.findByText('Never')).toBeTruthy();
 		expect(screen.getByText('Not scheduled')).toBeTruthy();
 		const jobsColumn = screen.getAllByRole('row').map((r) => r.textContent ?? '');
-		expect(jobsColumn.findIndex((t) => t.includes('MediaRetry'))).toBeLessThan(
-			jobsColumn.findIndex((t) => t.includes('Integrity (Quick)'))
+		expect(jobsColumn.findIndex((t) => t.includes('Media Retry'))).toBeLessThan(
+			jobsColumn.findIndex((t) => t.includes('Integrity Check (Quick)'))
 		);
 		expect(calls.map((c) => c.key)).toContain(
 			'GET /api/integrity/issues?page=1&pageSize=50&status=Open'

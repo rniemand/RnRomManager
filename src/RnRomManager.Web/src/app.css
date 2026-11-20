@@ -439,6 +439,13 @@ body:has(.app-footer) .toast-container {
 	margin-bottom: 0;
 }
 
+/* Report Polish P1: the running-job tables keep fixed columns, so long file names truncate instead of resizing the
+   table; below the min width the table-responsive wrapper scrolls. */
+.job-fixed-table {
+	table-layout: fixed;
+	min-width: 50rem;
+}
+
 /* U6: library grids show 2 cards per row below 360px and 3 from 360px up to sm (after Bootstrap, so it wins over
    .row-cols-2 > * at equal specificity). */
 @media (min-width: 360px) and (max-width: 575.98px) {

@@ -18,7 +18,7 @@
 	import Loading from '#lib/components/Loading.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { formatDateTime, formatDuration } from '#lib/format.js';
-	import { statusClass } from '#lib/jobs.js';
+	import { jobLabel, statusClass } from '#lib/jobs.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 
 	/** B20: the extra columns of an audit section, after Time and User. */
@@ -219,7 +219,7 @@
 			<tbody>
 				{#each jobsSource.data?.items ?? [] as job (job.id)}
 					<tr>
-						<td>{job.type}</td>
+						<td>{jobLabel(job.type)}</td>
 						<td><span class="badge {statusClass(job.status)}">{job.status}</span></td>
 						<td class="text-nowrap">
 							<a href={resolve('/jobs/[id]', { id: job.id })}>{formatDateTime(job.startedAt)}</a>

@@ -14,6 +14,7 @@
 		formatSummaryValue,
 		outcomeClass,
 		outcomes,
+		jobLabel,
 		percent,
 		splitSummary,
 		statusClass
@@ -89,6 +90,9 @@
 	});
 
 	const live = $derived(job && jobs.current?.id === job.id ? jobs.current : null);
+	const liveText = $derived(
+		live ? `${live.current} / ${live.total}${live.currentItem ? ` · ${live.currentItem}` : ''}` : ''
+	);
 	const summary = $derived(splitSummary(job?.summary ?? null));
 	const source = (item: JobItem) =>
 		item.archiveEntry ? `${item.sourcePath} › ${item.archiveEntry}` : item.sourcePath;
@@ -114,13 +118,24 @@
 		<Loading />
 	{:else}
 		<h1 class="h3 mb-3">
-			{job.type}{job.mode ? ` (${job.mode})` : ''} job
+			{jobLabel(job.type)}{job.mode ? ` (${job.mode})` : ''} Job
 			<span class="badge {statusClass(job.status)} align-middle fs-6">{job.status}</span>
 		</h1>
 
 		<div class="card mb-4">
 			<div class="table-responsive">
-				<table class="table table-sm table-striped table-hover align-middle mb-0">
+				<table
+					class="table table-sm table-striped table-hover align-middle mb-0"
+					class:job-fixed-table={live}
+				>
+					{#if live}
+						<colgroup>
+							<col style="width: 11rem" />
+							<col style="width: 11rem" />
+							<col style="width: 8rem" />
+							<col />
+						</colgroup>
+					{/if}
 					<thead class="table-dark">
 						<tr>
 							<th scope="col">Started</th>
@@ -135,7 +150,7 @@
 							<td class="text-nowrap">{job.finishedAt ? formatDateTime(job.finishedAt) : '—'}</td>
 							<td>{job.triggerSource}</td>
 							{#if live}
-								<td style="min-width: 14rem">
+								<td>
 									<div
 										class="progress mb-1"
 										role="progressbar"
@@ -149,8 +164,12 @@
 											style="width: {percent(live.current, live.total)}%"
 										></div>
 									</div>
-									<div class="small text-body-secondary text-break" aria-live="polite">
-										{live.current} / {live.total}{live.currentItem ? ` · ${live.currentItem}` : ''}
+									<div
+										class="small text-body-secondary text-truncate"
+										title={liveText}
+										aria-live="polite"
+									>
+										{liveText}
 									</div>
 									<JobStepProgress step={live.step} />
 								</td>

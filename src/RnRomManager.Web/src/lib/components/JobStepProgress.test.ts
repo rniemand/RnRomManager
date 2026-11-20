@@ -16,6 +16,8 @@ describe('JobStepProgress', () => {
 		});
 		const bar = screen.getByRole('progressbar', { name: 'Current file progress' });
 		expect(bar.getAttribute('aria-valuenow')).toBe('30');
-		expect(screen.getByText('Copying to library · 300 B / 1000 B')).toBeTruthy();
+		const line = screen.getByText('Copying to library · 300 B / 1000 B');
+		expect(line.className).toContain('text-truncate');
+		expect(line.getAttribute('title')).toBe('Copying to library · 300 B / 1000 B');
 	});
 });

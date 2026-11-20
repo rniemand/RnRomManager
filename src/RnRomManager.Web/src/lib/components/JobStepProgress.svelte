@@ -24,6 +24,8 @@
 		>
 			<div class="progress-bar bg-info" style="width: {stepPercent(step)}%"></div>
 		</div>
-		<div class="small text-body-secondary text-break">{formatStep(step)}</div>
+		<div class="small text-body-secondary text-truncate" title={formatStep(step)}>
+			{formatStep(step)}
+		</div>
 	</div>
 {/if}

@@ -19,6 +19,7 @@
 		isCancellable,
 		issueStatuses,
 		issueTypes,
+		jobLabel,
 		latestJobs,
 		percent,
 		severityClass,
@@ -179,7 +180,7 @@
 				{#if job}
 					<div class="card card-body">
 						<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-							<strong>{job.type}{job.mode ? ` (${job.mode})` : ''} running</strong>
+							<strong>{jobLabel(job.type)}{job.mode ? ` (${job.mode})` : ''} running</strong>
 							{#if isCancellable(job.type)}
 								<button
 									type="button"
@@ -367,7 +368,7 @@
 											>{formatDateTime(run.startedAt)}</a
 										>
 									</td>
-									<td>{run.type}{run.mode ? ` (${run.mode})` : ''}</td>
+									<td>{jobLabel(run.type)}{run.mode ? ` (${run.mode})` : ''}</td>
 									<td><span class="badge {statusClass(run.status)}">{run.status}</span></td>
 									<td>{run.triggerSource}</td>
 									<td class="small">{formatSummary(run.summary)}</td>

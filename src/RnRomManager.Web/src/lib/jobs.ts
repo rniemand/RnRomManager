@@ -44,13 +44,13 @@ export function outcomeClass(outcome: string): string {
 
 const jobLabels: Record<CurrentJob['type'], string> = {
 	Ingest: 'Ingest',
-	Integrity: 'Integrity check',
-	DatRefresh: 'DAT refresh',
-	MediaRetry: 'Media retry',
+	Integrity: 'Integrity Check',
+	DatRefresh: 'DAT Refresh',
+	MediaRetry: 'Media Retry',
 	ReviewResolve: 'Review',
 	StorageMigration: 'Moving ROMs',
 	ZipRepack: 'Repacking ZIPs',
-	SaveFolders: 'Moving saves to user folders'
+	SaveFolders: 'Moving Saves to User Folders'
 };
 
 /** ROM Zip Config B17: a job type's short label (footer, Jobs page); an unknown type shows as is. */

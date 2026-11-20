@@ -294,13 +294,13 @@ describe('Activity report (B20)', () => {
 		expect(screen.queryByRole('alert')).toBeNull();
 	});
 
-	it('Recent jobs: raw type, status badge, started linked to the job, duration or running', async () => {
+	it('Recent jobs: job label, status badge, started linked to the job, duration or running', async () => {
 		answers['/api/jobs?pageSize=10'] = {
 			status: 200,
 			body: {
 				items: [
 					job('j2', '2026-11-17T10:00:00Z', null, 'Running'),
-					job('j1', '2026-11-17T09:00:00Z', '2026-11-17T09:03:04Z')
+					{ ...job('j1', '2026-11-17T09:00:00Z', '2026-11-17T09:03:04Z'), type: 'DatRefresh' }
 				],
 				page: 1,
 				pageSize: 10,
@@ -313,7 +313,7 @@ describe('Activity report (B20)', () => {
 		expect(link.getAttribute('href')).toBe('/jobs/j1');
 		expect(cells('Recent jobs')).toEqual([
 			['Ingest', 'Running', formatDateTime('2026-11-17T10:00:00Z'), 'running'],
-			['Ingest', 'Completed', formatDateTime('2026-11-17T09:00:00Z'), '3m 4s']
+			['DAT Refresh', 'Completed', formatDateTime('2026-11-17T09:00:00Z'), '3m 4s']
 		]);
 		expect(within(sectionOf('Recent jobs')).getByText('Completed').className).toContain('badge');
 	});

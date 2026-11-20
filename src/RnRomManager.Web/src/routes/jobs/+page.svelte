@@ -29,6 +29,11 @@
 
 	const pages = $derived(list ? Math.max(1, Math.ceil(list.total / pageSize)) : 1);
 	const running = $derived(jobs.current);
+	const progressText = $derived(
+		running
+			? `${running.current} / ${running.total}${running.currentItem ? ` · ${running.currentItem}` : ''}`
+			: ''
+	);
 
 	$effect(() => {
 		if (!auth.isAdmin) return;
@@ -75,7 +80,14 @@
 	<h2 class="h5">Running</h2>
 	<div class="card mb-4">
 		<div class="table-responsive">
-			<table class="table table-sm table-striped table-hover align-middle mb-0">
+			<table class="table table-sm table-striped table-hover align-middle mb-0 job-fixed-table">
+				<colgroup>
+					<col style="width: 14rem" />
+					<col />
+					<col style="width: 11rem" />
+					<col style="width: 5rem" />
+					<col style="width: 6rem" />
+				</colgroup>
 				<thead class="table-dark">
 					<tr>
 						<th scope="col">Job</th>
@@ -89,7 +101,7 @@
 					{#if running}
 						<tr>
 							<td>{jobLabel(running.type)}{running.mode ? ` (${running.mode})` : ''}</td>
-							<td style="min-width: 14rem">
+							<td>
 								<div
 									class="progress mb-1"
 									role="progressbar"
@@ -103,10 +115,12 @@
 										style="width: {percent(running.current, running.total)}%"
 									></div>
 								</div>
-								<div class="small text-body-secondary text-break" aria-live="polite">
-									{running.current} / {running.total}{running.currentItem
-										? ` · ${running.currentItem}`
-										: ''}
+								<div
+									class="small text-body-secondary text-truncate"
+									title={progressText}
+									aria-live="polite"
+								>
+									{progressText}
 								</div>
 								<JobStepProgress step={running.step} />
 							</td>
