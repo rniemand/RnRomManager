@@ -2850,6 +2850,7 @@ test("ROM Zip Config: DS moves into its ZIP and back, the ROM downloading byte-e
     await expect(
       row("Game Boy Advance").getByRole("button", { name: /^Store (in|beside) ZIP$/ }),
     ).toHaveCount(0);
+    await expectAccessible(page, "ROM Zip Config");
     await row("Nintendo DS").getByRole("button", { name: button }).click();
     await dialog().getByRole("button", { name: "Start moving" }).click();
     await expect(page.getByText("The storage job has started.")).toBeVisible();
@@ -2870,8 +2871,14 @@ test("ROM Zip Config: DS moves into its ZIP and back, the ROM downloading byte-e
     await expect(
       page.getByRole("row").filter({ hasText: "Moving ROMs" }).first(),
     ).toContainText("Completed");
+    await expectAccessible(page, "jobs");
     await page.goto("/admin/rom-storage");
-    await expect(row("Nintendo DS")).toContainText(configured);
+    await expect(
+      row("Nintendo DS")
+        .getByRole("cell")
+        .nth(3)
+        .getByRole("img", { name: configured }),
+    ).toBeVisible();
   };
 
   await toggle("Store in ZIP", "Stored in ZIP");
@@ -2898,7 +2905,7 @@ test("ZIP compression: GBA repacks to Store and back, its ROM downloading byte-e
   const setLevel = async (value: string, label: string) => {
     await page.goto("/admin/rom-storage");
     await expect(
-      page.getByRole("columnheader", { name: "ZIP Compression" }),
+      page.getByRole("columnheader", { name: "ZIP compression" }),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "ZIP compression levels" }),
