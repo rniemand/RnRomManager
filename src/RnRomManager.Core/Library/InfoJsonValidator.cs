@@ -36,7 +36,7 @@ public static class InfoJsonValidator
             return "roms must not be empty";
         if (game.Roms.Count(r => r.IsPrimary) != 1)
             return "exactly one rom must be isPrimary";
-        if (FileNameProblem(game.Roms.Select(r => r.FileName), "roms", handler.FileSets) is { } romNames)
+        if (FileNameProblem(game.Roms.Select(r => r.FileName), "roms", dotsInside: true) is { } romNames)
             return romNames;
         if (FileNameProblem(game.Images.Select(i => i.FileName), "images", dotsInside: false) is { } imageNames)
             return imageNames;
@@ -176,8 +176,8 @@ public static class InfoJsonValidator
         handler.RomExtensions.Any(e => name.EndsWith(e, StringComparison.OrdinalIgnoreCase));
 
     /// <param name="dotsInside">
-    /// B12: on a <c>FileSets</c> system only a name equal to <c>.</c> or <c>..</c> is refused, since Redump names hold
-    /// <c>..</c> (<c>...Iru!</c>); elsewhere any <c>..</c> is.
+    /// B1: rom names refuse only a name equal to <c>.</c> or <c>..</c>, since Redump and No-Intro names hold
+    /// <c>..</c> (<c>...Iru!</c>); image names refuse any <c>..</c>.
     /// </param>
     private static string? FileNameProblem(IEnumerable<string> names, string list, bool dotsInside)
     {
