@@ -210,6 +210,7 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
 - 2026-11-20 B10 IGDB id → 150 kept but unconfirmed: IGDB's public pages refuse automated reads (403) and no IGDB credentials were used without the user's say-so; the maintainer checks it (code)
 - 2026-11-20 B10 hiding → verified: EmulatorJS 4.2.3 builds each core option's menu entry with `addToMenu(…, name.split("|")[0], …)`, the option key, so `EJS_hideSettings = ['pce_cdbios']` hides it (code)
 - 2026-11-20 B10 BIOS location → verified: Beetle PCE's `MDFN_GetSettingS("filesys.path_firmware")` (`mednafen/settings.cpp` at `e1ac90d`) returns `retro_base_directory`, the system directory with trailing slashes stripped; with EmulatorJS's RetroArch giving the content root `/`, that's `""`, and `pce.cpp` opens `"" + "/" + "syscard3.pce"`, where `EJS_externalFiles` writes it (code)
+- 2026-11-20 `BrowserCoreExtensionsTests` was already on `main`, so the merge in Finish was a no-op; the `("tgcd", ".bin")` exception (Risks) went in its own commit after Step 9 (code)
 - 2026-11-20 Review round 2 → `HandleAsync`/`HandleSetAsync` pass the system id through `OpenDiscAsync` to `ShapeProblem`; round 3 clean (reviewer)
 
 ## Kickoff prompt
