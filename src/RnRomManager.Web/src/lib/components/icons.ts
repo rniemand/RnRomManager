@@ -82,6 +82,8 @@ export const icons: Record<string, string> = {
 	folder: 'bi bi-folder',
 	info: 'bi bi-info-circle',
 	help: 'bi bi-question-circle',
+	/** U1: the footer's icon-only Shortcuts button. */
+	keyboard: 'bi bi-keyboard',
 	warning: 'bi bi-exclamation-triangle',
 	error: 'bi bi-x-octagon',
 	success: 'bi bi-check-circle',

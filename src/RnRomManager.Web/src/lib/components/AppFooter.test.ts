@@ -85,6 +85,16 @@ describe('AppFooter (B10–B12)', () => {
 		expect(screen.getByRole('link', { name: 'RnRomManager' }).querySelector('span')).toBeNull();
 	});
 
+	it('About shows only the app logo; its aria-label names it (U2)', () => {
+		render(AppFooter, { me: me(), onhotkeys: vi.fn() });
+
+		const button = screen.getByRole('button', { name: 'About' });
+		expect(button.getAttribute('title')).toBe('About');
+		expect(button.querySelector('img[src="/favicon.svg"][alt=""]')).not.toBeNull();
+		expect(button.querySelector('.footer-label')).toBeNull();
+		expect(button.textContent!.trim()).toBe('');
+	});
+
 	it('About opens the About modal with the version and licences', async () => {
 		render(AppFooter, { me: me(), onhotkeys: vi.fn() });
 		await screen.findByRole('link', { name: /^RnRomManager ?1.4.2$/ });
@@ -95,14 +105,16 @@ describe('AppFooter (B10–B12)', () => {
 		expect(screen.getByRole('link', { name: 'Svelte', hidden: true })).toBeTruthy();
 	});
 
-	it('the Shortcuts button opens the shortcuts; its visible text names it, title stays (B26)', async () => {
+	it('the Shortcuts button opens the shortcuts; its aria-label names it, title stays (B26, U1)', async () => {
 		const onhotkeys = vi.fn();
 		render(AppFooter, { me: me(), onhotkeys });
 
 		const button = screen.getByRole('button', { name: 'Shortcuts' });
-		expect(button.hasAttribute('aria-label')).toBe(false);
+		expect(button.getAttribute('aria-label')).toBe('Shortcuts');
 		expect(button.getAttribute('title')).toBe('Keyboard Shortcuts');
-		expect(button.querySelector('.bi-question-circle')).not.toBeNull();
+		expect(button.querySelector('i.bi.bi-keyboard')).not.toBeNull();
+		expect(button.querySelector('.footer-label')).toBeNull();
+		expect(button.textContent!.trim()).toBe('');
 		await fireEvent.click(button);
 
 		expect(onhotkeys).toHaveBeenCalledOnce();
@@ -174,7 +186,7 @@ describe('AppFooter (B10–B12)', () => {
 			roles: ['admin']
 		});
 
-		it('keeps one unwrapped row whose labels are footer-label spans, the names unchanged', async () => {
+		it('keeps one unwrapped row; only the job link has a footer-label', async () => {
 			current = {
 				id: 'j1',
 				type: 'StorageMigration',
@@ -192,10 +204,7 @@ describe('AppFooter (B10–B12)', () => {
 			const row = container.querySelector('footer > div')!;
 			expect(row.classList).toContain('flex-nowrap');
 			expect(row.classList).toContain('overflow-hidden');
-			for (const name of ['About', 'Shortcuts']) {
-				const button = screen.getByRole('button', { name });
-				expect(button.querySelector('.footer-label')!.textContent).toBe(name);
-			}
+			expect(row.querySelectorAll('.footer-label')).toHaveLength(1);
 		});
 
 		it('an Admin gets both buttons before Shortcuts, each running its hotkey', async () => {

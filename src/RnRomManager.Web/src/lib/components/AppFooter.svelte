@@ -10,8 +10,8 @@
 	import Icon from './Icon.svelte';
 
 	/**
-	 * B10–B12: the signed-in footer, fixed to the bottom: About, the version (a link to the releases) and the keyboard
-	 * shortcuts button (hidden while the password must be changed, like the rest of the app). ROM Zip Config B17: for
+	 * B10–B12: the signed-in footer, fixed to the bottom: About (U2: the app logo), the version (a link to the releases) and the keyboard
+	 * shortcuts button (U1: a keyboard icon; hidden while the password must be changed, like the rest of the app). ROM Zip Config B17: for
 	 * Admins, the running job's progress, linking to the Jobs page (not while the password must be changed: the API
 	 * answers 403 then).
 	 */
@@ -55,8 +55,16 @@
 		<button
 			type="button"
 			class="btn btn-link btn-sm p-0 link-body-emphasis text-decoration-none"
+			aria-label="About"
+			title="About"
 			onclick={() => (aboutOpen = true)}
-			><Icon name="info" /> <span class="footer-label">About</span></button
+			><!-- U2: the app logo, the same file as the browser tab icon. --><img
+				src="/favicon.svg"
+				alt=""
+				width="16"
+				height="16"
+				class="footer-logo"
+			/></button
 		>
 		<a
 			class="link-body-emphasis text-decoration-none"
@@ -111,8 +119,9 @@
 			<button
 				type="button"
 				class="btn btn-link btn-sm p-0 {job || showAdmin ? '' : 'ms-auto'} link-body-emphasis"
+				aria-label="Shortcuts"
 				title="Keyboard Shortcuts"
-				onclick={onhotkeys}><Icon name="help" /> <span class="footer-label">Shortcuts</span></button
+				onclick={onhotkeys}><Icon name="keyboard" /></button
 			>
 		{/if}
 	</div>
@@ -121,6 +130,11 @@
 <AboutModal bind:open={aboutOpen} {about} {error} onretry={load} />
 
 <style>
+	/* U2: Bootstrap Icons' baseline, so the logo doesn't change the row's height. */
+	.footer-logo {
+		vertical-align: -0.125em;
+	}
+
 	.footer-job .progress {
 		width: 6rem;
 		height: 0.5rem;

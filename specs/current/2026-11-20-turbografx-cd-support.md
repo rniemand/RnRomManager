@@ -162,7 +162,7 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
     - `emulator.test.ts`: `canPlay` for `mednafen_pce`: external `.cue`-set main `.bin` with `files` → true; external `.chd` → true; external `.BIN` with `files` null or `[]` → false; an embedded `.pce` (TurboGrafx-16) → true.
     - `game-page.test.ts`: for a `tgcd` game with `browserCore: 'mednafen_pce'` and an external set release, the release's Play opens the modal and its iframe `src` has `core=mednafen_pce` and `&disc=1`; a lone `.bin` release shows no Play button.
   - Done when: those tests pass, and `npm run lint` and `npm run check` pass.
-- [ ] **7. Icon-only footer buttons** (U1, U2): independent of the TurboGrafx-CD steps.
+- [x] **7. Icon-only footer buttons** (U1, U2): independent of the TurboGrafx-CD steps.
   - Files: `AppFooter.svelte`, `icons.ts`, `AppFooter.test.ts`, `stores.svelte.test.ts`.
   - Tests:
     - `AppFooter.test.ts`: the Shortcuts button is found by name `Shortcuts`, has title `Keyboard Shortcuts`, contains an `i.bi.bi-keyboard` and no text content or `.footer-label`; the About button is found by name `About`, has title `About`, contains `img[src="/favicon.svg"][alt=""]` and no `.footer-label`. The existing "keeps one unwrapped row whose labels are footer-label spans" case keeps its job-link `.footer-label` check and drops the About/Shortcuts loop (renamed "keeps one unwrapped row; only the job link has a footer-label"). "the Shortcuts button opens the shortcuts; its visible text names it, title stays (B26)" becomes "…; its aria-label names it, title stays", asserting `aria-label="Shortcuts"`. The hide-while-password-change and Admin-order cases pass unchanged.

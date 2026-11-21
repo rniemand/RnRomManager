@@ -200,6 +200,7 @@ describe('icons', () => {
 	it('maps semantic names, and unmapped systems fall back to a controller', () => {
 		expect(iconClass('download')).toBe('bi bi-download');
 		expect(iconClass('github')).toBe('fa-brands fa-github');
+		expect(iconClass('keyboard')).toBe('bi bi-keyboard');
 		expect(iconClass('system-snes')).toBe('bi bi-controller');
 	});
 
