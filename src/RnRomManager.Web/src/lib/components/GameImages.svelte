@@ -549,10 +549,10 @@
 			<div aria-live="polite">
 				{#if suggestNotConfigured}
 					<div class="alert alert-info mb-0">
-						Image suggestions need an IGDB Client ID and secret. Set <code
+						Image suggestions need an IGDB Client ID and secret. Set <code class="text-reset"
 							>Sources:IgdbClientId</code
 						>
-						and <code>Sources:IgdbClientSecret</code> and restart.
+						and <code class="text-reset">Sources:IgdbClientSecret</code> and restart.
 					</div>
 				{:else if suggestError}
 					<ErrorAlert error={suggestError} onretry={loadSuggestions} />
