@@ -99,7 +99,7 @@ No migration, config key, stored data or API contract change beyond `discSet` no
   - `src/routes/games/game-page.test.ts`: an Amiga Disk 1 with `discSet` shows `All disks` with its `aria-label` and tooltip and opens the modal with a `&disc=1&set=1` URL; the PlayStation `All discs` case is unchanged.
 
   Done when: those files, `npm run lint` and `npm run check` pass.
-- [ ] **5. Docs**: as in the Changes Docs row; regenerate the codemap. Done when: each listed doc section is updated, "one disk per launch" is gone from README, and `docs/codemap.md` is regenerated and committed. Finish also plays a real two-disk Amiga set once, swapping to Disk 2 from the Disks menu, and notes the result in the PR.
+- [x] **5. Docs**: as in the Changes Docs row; regenerate the codemap. Done when: each listed doc section is updated, "one disk per launch" is gone from README, and `docs/codemap.md` is regenerated and committed. Finish also plays a real two-disk Amiga set once, swapping to Disk 2 from the Disks menu, and notes the result in the PR.
 
 ## Decisions
 - 2026-11-20 Which systems? → Amiga only; C64 sides are a follow-up (user)
