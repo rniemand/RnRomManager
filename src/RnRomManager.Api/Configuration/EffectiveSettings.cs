@@ -24,9 +24,19 @@ public sealed record EffectiveSettings(
         services.GetRequiredService<IOptions<AdminOptions>>().Value.InitialPassword.Length == 0 ? "" : Masked,
         services.GetRequiredService<IOptions<IntegrityOptions>>().Value,
         services.GetRequiredService<IOptions<LoggingOptions>>().Value,
-        services.GetRequiredService<IOptions<SourcesOptions>>().Value,
+        MaskSources(services.GetRequiredService<IOptions<SourcesOptions>>().Value),
         services.GetRequiredService<IOptions<EmulatorOptions>>().Value,
         services.GetRequiredService<IOptions<BackupOptions>>().Value);
+
+    /// <summary>IGDB suggestions S2: a copy with the IGDB secret as <see cref="Masked"/> (or empty), never the value.</summary>
+    public static SourcesOptions MaskSources(SourcesOptions sources) => new()
+    {
+        DatBaseUrl = sources.DatBaseUrl,
+        TitleDbUrl = sources.TitleDbUrl,
+        ThumbnailBaseUrl = sources.ThumbnailBaseUrl,
+        IgdbClientId = sources.IgdbClientId,
+        IgdbClientSecret = SourcesOptions.IsSet(sources.IgdbClientSecret) ? Masked : "",
+    };
 
     /// <summary>Only via <see cref="MySqlConnectionStringBuilder"/> with <c>Password</c> removed (spec §13).</summary>
     public static string RedactConnectionString(string connectionString)

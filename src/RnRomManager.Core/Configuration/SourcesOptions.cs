@@ -12,4 +12,16 @@ public sealed class SourcesOptions
 
     /// <summary>Empty = media fetch disabled (default box art only).</summary>
     public string ThumbnailBaseUrl { get; set; } = "https://thumbnails.libretro.com";
+
+    /// <summary>IGDB suggestions S1: the Twitch app's Client ID; with <see cref="IgdbClientSecret"/>, both set or both empty.</summary>
+    public string IgdbClientId { get; set; } = "";
+
+    /// <summary>IGDB suggestions S1, S2: the Twitch app's secret; masked wherever settings are shown or logged.</summary>
+    public string IgdbClientSecret { get; set; } = "";
+
+    /// <summary>IGDB suggestions S1: a key counts as set when it is non-empty after trimming.</summary>
+    public static bool IsSet(string? value) => !string.IsNullOrWhiteSpace(value);
+
+    /// <summary>IGDB suggestions S1: both IGDB keys are set.</summary>
+    public static bool IgdbConfigured(SourcesOptions options) => IsSet(options.IgdbClientId) && IsSet(options.IgdbClientSecret);
 }
