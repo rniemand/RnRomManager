@@ -40,6 +40,8 @@ public class IngestPipelineTests
     private static readonly byte[] Lanes = Atari(4096, 120);
     private static readonly byte[] Pursuit = Coleco(8192, 130, 0xAA, 0x55);
     private static readonly byte[] AmigaDisk = Atari(901_120, 2401);
+    private static readonly byte[] TwinOrbitOne = Atari(901_120, 2402);
+    private static readonly byte[] TwinOrbitTwo = Atari(901_120, 2403);
     private static readonly byte[] Drift = GameGear(32768, 140, header: true);
     /// <summary>An SMS-mode Game Gear game: the DAT names it <c>.sms</c> (G4).</summary>
     private static readonly byte[] Tide = GameGear(32768, 141, header: false);
@@ -173,7 +175,13 @@ public class IngestPipelineTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [new FixtureGame("Disk Quest (Japan)", "Disk Quest (Japan).fds", DiskQuest)],
-            [IngestSeeder.AmigaDat] = [new FixtureGame("Disk Orbit (1990)(Synth)", "Disk Orbit (1990)(Synth).adf", AmigaDisk)],
+            // Amiga F4: libretro's TOSEC game names are "Title (Disk n)[tags]"; the ROM names carry the full TOSEC name.
+            [IngestSeeder.AmigaDat] =
+            [
+                new FixtureGame("Disk Orbit (1990)(Synth)", "Disk Orbit (1990)(Synth).adf", AmigaDisk),
+                new FixtureGame("Twin Orbit (Disk 1)", "Twin Orbit (1990)(Synth)(Disk 1 of 2).adf", TwinOrbitOne),
+                new FixtureGame("Twin Orbit (Disk 2)", "Twin Orbit (1990)(Synth)(Disk 2 of 2).adf", TwinOrbitTwo),
+            ],
             // TurboGrafx-CD B3: libretro's DAT lists one track per disc, usually the data track (Track 02).
             [IngestSeeder.TurboGrafxCdDat] = [new FixtureGame("Disc Ninja (Japan)", "Disc Ninja (Japan) (Track 02).bin", NinjaData)],
             [IngestSeeder.ThreeDsDat] =
@@ -1710,6 +1718,21 @@ public class IngestPipelineTests
         using var bytes = new MemoryStream();
         stored.CopyTo(bytes);
         Assert.That(bytes.ToArray(), Is.EqualTo(DiskQuest));
+    }
+
+    [Test]
+    public async Task Amiga_TwoDisksOfOneTosecGame_AreTwoReleasesOfOneGame()
+    {
+        var one = await IngestAsync(DropAged("amiga", "twin1.adf", TwinOrbitOne));
+        var two = await IngestAsync(DropAged("amiga", "twin2.adf", TwinOrbitTwo));
+
+        Assert.That((one!.Outcome, two!.Outcome), Is.EqualTo((IngestOutcome.Ingested, IngestOutcome.Ingested)), one.Details + two.Details);
+        Assert.That(two.GameId, Is.EqualTo(one.GameId));
+        using var library = LibraryZip.Open(Path.Combine(Roms, "amiga", "T", "Twin Orbit.zip"), Service<InfoJsonReader>());
+        Assert.That(library.InfoJson!.Game!.Roms.Select(r => r.FileName), Is.EquivalentTo(new[]
+        {
+            "Twin Orbit (1990)(Synth)(Disk 1 of 2).adf", "Twin Orbit (1990)(Synth)(Disk 2 of 2).adf",
+        }));
     }
 
     [Test]

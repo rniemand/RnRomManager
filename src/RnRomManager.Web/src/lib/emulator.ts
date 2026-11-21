@@ -32,6 +32,11 @@ export function usesPlayDisc(core: string, rom: Pick<RomDetail, 'externalFileNam
 	return rom.externalFileName !== null && playDiscCores.includes(core);
 }
 
+/** Amiga F8: what a set's All button plays: floppy disks for PUAE, discs for every other core. */
+export function setMedia(core: string | null): 'disks' | 'discs' {
+	return core === 'puae' ? 'disks' : 'discs';
+}
+
 /** PSP B3: the core that plays only in the dedicated, cross-origin isolated tab. */
 export const isolatedBrowserCore = 'ppsspp';
 

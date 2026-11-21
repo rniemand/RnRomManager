@@ -6,6 +6,7 @@ import {
 	playLinkEvents,
 	playUrl,
 	recordPlay,
+	setMedia,
 	trimBounds,
 	usesPlayDisc
 } from './emulator';
@@ -138,6 +139,14 @@ describe('S8 Nintendo DS', () => {
 	it('usesPlayDisc is false for DeSmuME and for an embedded release', () => {
 		expect(usesPlayDisc('desmume', { externalFileName: 'Quest.(USA).nds' })).toBe(false);
 		expect(usesPlayDisc('pcsx_rearmed', { externalFileName: null })).toBe(false);
+	});
+});
+
+describe('setMedia (Amiga F8)', () => {
+	it('is disks for PUAE and discs for every other core', () => {
+		expect(setMedia('puae')).toBe('disks');
+		expect(setMedia('pcsx_rearmed')).toBe('discs');
+		expect(setMedia(null)).toBe('discs');
 	});
 });
 

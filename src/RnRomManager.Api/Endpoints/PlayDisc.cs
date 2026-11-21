@@ -30,6 +30,9 @@ public static class PlayDisc
 
     public const string TurboGrafxCdSystemId = "tgcd";
 
+    /// <summary>Amiga F5: the system whose floppy disk sets <c>play-disc-set</c> serves from inside the game's ZIP.</summary>
+    public const string AmigaSystemId = "amiga";
+
     /// <summary>The inclusive cap on the combined opened lengths a launch may stream.</summary>
     public const long MaxBytes = 2L * 1024 * 1024 * 1024;
 
@@ -88,13 +91,18 @@ public static class PlayDisc
     /// Multi-disc M4: <c>GET /api/games/{id}/roms/{romId}/play-disc-set</c>, every disc of the PlayStation (Saturn/Sega CD S3: or Saturn or Sega CD) set whose Disc 1
     /// is <paramref name="romId"/> as one uncompressed ZIP: the generated <c>.m3u</c> first, then each disc as
     /// <c>play-disc</c> would send it (cue tracks aliased <c>disc&lt;n&gt;-track-NN.bin</c>). One 2 GiB cap covers the set.
+    /// Amiga F5: an Amiga floppy set is served by <see cref="FloppySetAsync"/> instead.
     /// </summary>
     public static async Task<IResult> HandleSetAsync(Guid id, long romId, HttpContext ctx, IGameRepository repository,
         IRomRepository roms, LibraryFiles files, ILoggerFactory loggers)
     {
         ctx.Response.Headers.CacheControl = "no-store";
         var cancellationToken = ctx.RequestAborted;
-        if (await repository.GetAsync(id, cancellationToken) is not { } game || !FirmwareNames.TryGetValue(game.SystemId, out var firmware))
+        if (await repository.GetAsync(id, cancellationToken) is not { } game)
+            return Problems.NotFound(ctx);
+        if (game.SystemId == AmigaSystemId)
+            return await FloppySetAsync(game, romId, ctx, roms, files);
+        if (!FirmwareNames.TryGetValue(game.SystemId, out var firmware))
             return Problems.NotFound(ctx);
         var romRows = await roms.ListByGameAsync(id, cancellationToken);
         var lookup = (await roms.ListFilesByGameAsync(id, cancellationToken)).ToLookup(f => f.RomId);
@@ -160,8 +168,39 @@ public static class PlayDisc
     }
 
     /// <summary>
-    /// Multi-disc M4 (Saturn/Sega CD S3): the systems with disc sets, and the firmware files the player writes to the
-    /// content root, which a standalone disc of that name would overwrite.
+    /// Amiga F5: the floppy set whose Disk 1 is <paramref name="romId"/>: the playlist (<c>Disk 1.adf</c>… one per line,
+    /// LF-terminated), then each disk's stored bytes as <c>Disk &lt;n&gt;.adf</c>. Each disk is read in full first
+    /// (<see cref="LibraryFiles.ReadEntry"/>, bounded by its size), so a failure is a problem, never a cut-off 200.
+    /// </summary>
+    private static async Task<IResult> FloppySetAsync(GameRow game, long romId, HttpContext ctx, IRomRepository roms, LibraryFiles files)
+    {
+        var romRows = await roms.ListByGameAsync(game.Id, ctx.RequestAborted);
+        var lookup = Array.Empty<RomFileRow>().ToLookup(f => f.RomId);
+        if (DiscSets.Find(game.SystemId, romRows, lookup).FirstOrDefault(s => s.Discs[0].Id == romId) is not { } set
+            || set.Discs.Any(d => d.SystemId != AmigaSystemId || d.ExternalFileName is not null))
+            return Problems.NotFound(ctx);
+
+        var entries = new List<Entry>();
+        var playlist = new StringBuilder();
+        for (var i = 0; i < set.Discs.Count; i++)
+        {
+            var number = i + 1;
+            var rom = set.Discs[i];
+            if (files.ReadEntry(ctx, game, LibraryZip.RomEntry(rom.FileName), rom.SizeBytes, out var bytes) is { } problem)
+                return problem;
+            if (bytes!.Length == 0)
+                return Invalid(ctx, $"Disk {number}: '{rom.FileName}' is empty");
+            var name = FormattableString.Invariant($"Disk {number}.adf");
+            playlist.Append(name).Append('\n');
+            entries.Add(new Entry(name, new MemoryStream(bytes), bytes.Length));
+        }
+        var list = new UTF8Encoding(false).GetBytes(playlist.ToString());
+        return new DiscResult("application/zip", new Entry(set.Name, new MemoryStream(list), list.Length), entries);
+    }
+
+    /// <summary>
+    /// Multi-disc M4 (Saturn/Sega CD S3): the disc systems with sets, and the firmware files the player writes to the
+    /// content root, which a standalone disc of that name would overwrite. Amiga floppies (F5) are aliased, so need none.
     /// </summary>
     private static readonly Dictionary<string, string[]> FirmwareNames = new(StringComparer.Ordinal)
     {

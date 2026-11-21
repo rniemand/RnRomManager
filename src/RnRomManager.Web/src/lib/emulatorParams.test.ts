@@ -129,6 +129,11 @@ describe('parsePlayParams', () => {
 		expect(parsePlayParams(query({ core: 'genesis_plus_gx', set: '1' }))).toBeNull();
 	});
 
+	it('reads set=1 for PUAE only with disc=1 (Amiga F6)', () => {
+		expect(parsePlayParams(query({ core: 'puae', disc: '1', set: '1' }))?.set).toBe(true);
+		expect(parsePlayParams(query({ core: 'puae', set: '1' }))).toBeNull();
+	});
+
 	it('names saturn_bios.bin when a Saturn set has no BIOS (Saturn and Sega CD S6)', () => {
 		expect(saturnSetBiosMissing).toBe(
 			'Playing all Saturn discs needs a BIOS: ask an Admin to put saturn_bios.bin in the BIOS folder (Paths:Bios).'
@@ -301,6 +306,21 @@ describe('discError', () => {
 			'Your session has expired. Sign in again.'
 		);
 		expect(discError(null, null, 'pcsx_rearmed', true)).toBe("Couldn't load the disc.");
+	});
+
+	it('has disk wording for PUAE, after the session check (Amiga F7)', () => {
+		expect(discError(401, 'Unauthorized', 'puae', true)).toBe(
+			'Your session has expired. Sign in again.'
+		);
+		expect(discError(409, 'InvalidPlayDisc', 'puae', true)).toBe(
+			"These disks can't be played in the browser: one of them is empty."
+		);
+		expect(discError(409, 'PlayDiscTooLarge', 'puae', true)).toBe(
+			"Couldn't load the disks (HTTP 409)."
+		);
+		expect(discError(404, 'NotFound', 'puae', true)).toBe("Couldn't load the disks (HTTP 404).");
+		expect(discError(500, 'IoError', 'puae', true)).toBe("Couldn't load the disks (HTTP 500).");
+		expect(discError(null, null, 'puae', true)).toBe("Couldn't load the disks.");
 	});
 
 	it('shows a disc-loading message otherwise', () => {

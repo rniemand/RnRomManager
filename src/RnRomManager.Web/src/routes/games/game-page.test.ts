@@ -264,6 +264,29 @@ describe('game detail page', () => {
 		);
 	});
 
+	it('Disk 1 of an Amiga disk set has All disks, which plays the set (Amiga F8)', async () => {
+		tooltips.length = 0;
+		const amiga = game([1, 2]);
+		amiga.system = 'amiga';
+		amiga.browserCore = 'puae';
+		amiga.roms[0].discSet = { name: 'Twin Disk (1990)(Synth).m3u', romIds: [1, 2] };
+		answers.push({ status: 200, body: amiga });
+		render(GamePage);
+
+		const all = await screen.findByRole('button', {
+			name: 'Play all disks of Twin Disk (1990)(Synth).m3u'
+		});
+		expect(all.textContent?.trim()).toBe('All disks');
+		expect(tooltips.find((t) => t.node === all)?.text).toBe('Play all disks in one session');
+		expect(screen.queryByRole('button', { name: /^Play all discs/ })).toBeNull();
+
+		await fireEvent.click(all);
+		await vi.waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
+		expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
+			`/emulator/play.html?game=${amiga.id}&rom=1&core=puae&name=Twin%20Disk%20(1990)(Synth).m3u&disc=1&set=1`
+		);
+	});
+
 	it('All discs is hidden without a discSet and when Play is hidden (multi-disc M7)', async () => {
 		const plain = psxSet();
 		plain.roms[0].discSet = null;
