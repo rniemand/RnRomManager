@@ -9,7 +9,13 @@ import { expect, type Page } from '@playwright/test';
 export async function expectAccessible(page: Page, what: string, exclude?: string): Promise<void> {
 	// A hover transition caught half-way reads as a contrast failure: park the mouse and freeze transitions first.
 	await page.mouse.move(0, 0);
-	await page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });
+	// Not page.addStyleTag: it fails on any "Content Security Policy" console error meanwhile, and the emulator iframe's
+	// blocked EmulatorJS update check logs one at a random moment. style-src allows inline styles.
+	await page.evaluate(() => {
+		const style = document.createElement('style');
+		style.textContent = '*, *::before, *::after { transition: none !important; }';
+		document.head.append(style);
+	});
 	// The navbar is sticky (B26): scrolled content passes under it, which axe's target-size rule reports as
 	// "obscured". Scan from the top, where nothing sits under the navbar (modals are fixed, so unaffected).
 	await page.evaluate(() => window.scrollTo(0, 0));
