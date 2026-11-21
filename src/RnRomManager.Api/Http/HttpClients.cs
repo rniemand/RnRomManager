@@ -18,6 +18,7 @@ public static class HttpClients
     public const string Thumbnails = "thumbnails";
     public const string ImageUrls = "imageUrls";
     public const string TitleDbImages = "titledbImages";
+    public const string Igdb = "igdb";
 
     public static IServiceCollection AddExternalHttpClients(this IServiceCollection services)
     {
@@ -28,6 +29,11 @@ public static class HttpClients
         // T8: titledb's CDN, with the thumbnail retry policy and no redirects, so every request stays on the allowlisted host.
         Configure(services.AddHttpClient<TitleDbImageClient>(TitleDbImages, client => client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent))
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false }));
+        // IGDB suggestions S7: Twitch's token endpoint and the IGDB API (fixed hosts), retried like the thumbnails, no redirects.
+        services.AddSingleton<IgdbTokenCache>();
+        Configure(services.AddHttpClient<IgdbClient>(Igdb, client => client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent))
+            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false }));
+        services.AddTransient<IImageSuggestions>(sp => sp.GetRequiredService<IgdbClient>());
         services.AddSingleton(ImageUrlPolicy.Default);
         services.AddHttpClient<ImageUrlDownloader>(ImageUrls, client =>
             {

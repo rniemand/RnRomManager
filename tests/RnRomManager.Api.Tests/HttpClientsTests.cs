@@ -173,9 +173,13 @@ public class HttpClientsTests
         Assert.That(thumbnails.Requests, Is.Empty);
     }
 
-    /// <summary>Spec T8: the CDN client's own primary handler doesn't follow redirects; a loopback 302 comes back as it is.</summary>
-    [Test]
-    public async Task TitleDbImagesClient_ReturnsA302_WithoutASecondRequest()
+    /// <summary>
+    /// Spec T8, IGDB suggestions S7: these clients' own primary handlers don't follow redirects; a loopback 302 comes back
+    /// as it is.
+    /// </summary>
+    [TestCase(HttpClients.TitleDbImages)]
+    [TestCase(HttpClients.Igdb)]
+    public async Task Client_ReturnsA302_WithoutASecondRequest(string name)
     {
         using var listener = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -198,7 +202,7 @@ public class HttpClientsTests
             .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
             .AddLogging()
             .AddExternalHttpClients();
-        var client = services.BuildServiceProvider().GetRequiredService<IHttpClientFactory>().CreateClient(HttpClients.TitleDbImages);
+        var client = services.BuildServiceProvider().GetRequiredService<IHttpClientFactory>().CreateClient(name);
 
         using var response = await client.GetAsync($"http://127.0.0.1:{port}/first");
 
@@ -207,5 +211,22 @@ public class HttpClientsTests
         Assert.That(Volatile.Read(ref requests), Is.EqualTo(1));
         listener.Stop();
         Assert.That(serving.IsFaulted || !serving.IsCompleted, Is.True);
+    }
+
+    /// <summary>IGDB suggestions S7: the suggestions service resolves to the typed IGDB client.</summary>
+    [Test]
+    public void ImageSuggestions_ResolveToTheIgdbClient()
+    {
+        var services = new ServiceCollection()
+            .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
+            .AddLogging()
+            .AddSingleton(TimeProvider.System)
+            .AddSingleton(Microsoft.Extensions.Options.Options.Create(new RnRomManager.Core.Configuration.SourcesOptions()))
+            .AddExternalHttpClients();
+
+        var suggestions = services.BuildServiceProvider().GetRequiredService<RnRomManager.Core.Media.IImageSuggestions>();
+
+        Assert.That(suggestions, Is.TypeOf<RnRomManager.Core.Media.IgdbClient>());
+        Assert.That(suggestions.Configured, Is.False);
     }
 }
