@@ -592,6 +592,8 @@ public partial class LibraryEndpointsTests
     [TestCase("segacd", "Chd Solo (USA).chd")]
     [TestCase("segacd", "Chd Solo (USA).CHD")]
     [TestCase("3do", "Chd Solo (USA).chd")]
+    [TestCase("tgcd", "Chd Solo (Japan).chd")]
+    [TestCase("tgcd", "Chd Solo (Japan).CHD")]
     [TestCase("saturn", "Chd Solo (USA).iso")]
     [TestCase("psx", "Chd Solo (USA).pbp")]
     [TestCase("psx", "Chd Solo (USA).PBP")]
@@ -755,6 +757,70 @@ public partial class LibraryEndpointsTests
             }],
             ("Opal Twin (USA) (Track 1).bin", PsxTrack1), ("Opal Twin (USA).cue", cue), ("Opal Twin (USA) (Alt).cue", cue),
             ("Opal Twin (USA) (Track 2).bin", PsxTrack2));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(await ProblemCode(response, HttpStatusCode.Conflict), Is.EqualTo(PlayDisc.InvalidPlayDisc));
+    }
+
+    // TurboGrafx-CD B4: cue sets and a standalone .chd only; Beetle PCE would run a bare .bin as a HuCard.
+
+    private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> TurboGrafxCdGame(string title, InfoJsonRom[] roms,
+        params (string Name, byte[] Bytes)[] onDisk) => DiscGame(PlayDisc.TurboGrafxCdSystemId, title, roms, onDisk);
+
+    [Test]
+    public async Task PlayDisc_ATurboGrafxCdCueSet_IsAStoredZip_WithThePlaybackCue()
+    {
+        var cue = PsxCue("Ninja Run (Japan) (Track 01).bin", "Ninja Run (Japan) (Track 02).bin");
+        // As Redump lays it out: audio Track 01, then the data Track 02, which the DAT names and is the release's main file.
+        var (id, _, ids) = await TurboGrafxCdGame("Ninja Run",
+            [PsxSolo("Ninja Run (Japan) (Track 02).bin", PsxTrack2) with
+            {
+                Files = [SetFile("Ninja Run (Japan).cue", cue), SetFile("Ninja Run (Japan) (Track 01).bin", PsxTrack1)],
+            }],
+            ("Ninja Run (Japan) (Track 02).bin", PsxTrack2), ("Ninja Run (Japan).cue", cue), ("Ninja Run (Japan) (Track 01).bin", PsxTrack1));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/zip"));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Ninja Run (Japan).cue", "track-01.bin", "track-02.bin" }));
+        Assert.That(zip.Entries.Select(e => e.CompressedLength == e.Length), Has.All.True, "stored, not deflated");
+        Assert.That(ReadEntry(zip, "track-01.bin"), Is.EqualTo(PsxTrack1));
+        Assert.That(ReadEntry(zip, "track-02.bin"), Is.EqualTo(PsxTrack2));
+    }
+
+    [TestCase("Ninja Solo (Japan).bin")]
+    [TestCase("Ninja Solo (Japan).BIN")]
+    [TestCase("Ninja Solo (Japan).iso")]
+    [TestCase("Ninja Solo (Japan).img")]
+    public async Task PlayDisc_ATurboGrafxCdSingleFileThatIsNotAChd_Is409InvalidPlayDisc(string name)
+    {
+        var (id, folder, ids) = await TurboGrafxCdGame("Ninja Solo", [PsxSolo(name, PsxTrack1)], (name, PsxTrack1));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        var problem = await AuthClient.JsonAsync(response);
+        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.InvalidPlayDisc));
+        Assert.That(problem.GetProperty("title").GetString(),
+            Is.EqualTo("The disc can't be played: a TurboGrafx-CD disc must be a .cue with its .bin tracks, or a .chd."));
+        AssertNotOpen(Path.Combine(folder, name));
+    }
+
+    [Test]
+    public async Task PlayDisc_ATurboGrafxCdSetWithTwoCues_Is409InvalidPlayDisc()
+    {
+        var cue = PsxCue("Ninja Twin (Japan) (Track 01).bin", "Ninja Twin (Japan) (Track 02).bin");
+        var (id, _, ids) = await TurboGrafxCdGame("Ninja Twin",
+            [PsxSolo("Ninja Twin (Japan) (Track 01).bin", PsxTrack1) with
+            {
+                Files = [SetFile("Ninja Twin (Japan).cue", cue), SetFile("Ninja Twin (Japan) (Alt).cue", cue), SetFile("Ninja Twin (Japan) (Track 02).bin", PsxTrack2)],
+            }],
+            ("Ninja Twin (Japan) (Track 01).bin", PsxTrack1), ("Ninja Twin (Japan).cue", cue), ("Ninja Twin (Japan) (Alt).cue", cue),
+            ("Ninja Twin (Japan) (Track 02).bin", PsxTrack2));
 
         using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
 

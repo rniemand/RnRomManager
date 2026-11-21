@@ -125,7 +125,7 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
   - a `.pce` dropped in `ingest/tgcd/` fails `UnsupportedType`: it's moved to `ingest/tgcd/_failed/` with its `.error.txt`, and nothing is stored under `roms/tgcd/`;
   - a file over 1 GiB is `TooLarge` (the existing size-stub pattern).
   - Done when: those cases and the existing ingest suites pass.
-- [ ] **4. TurboGrafx-CD play-disc** (B4): `BrowserCore` stays null.
+- [x] **4. TurboGrafx-CD play-disc** (B4): `BrowserCore` stays null.
   - Files: `PlayDisc.cs`, `LibraryEndpointsTests.PlayDisc.cs`.
   - Tests: `LibraryEndpointsTests.PlayDisc`: tgcd cue set → 200 stored ZIP with the rewritten cue; single `.chd` → 200 streamed as-is; single `.bin` → 409 `InvalidPlayDisc` whose `title` is B4's exact text (as `PlayDisc_ALoneNrg_NamesTheSingleFileShapes` asserts on `title`); two cues → 409 `InvalidPlayDisc`; psx, psp, saturn, segacd and 3do cases unchanged. `PlayDiscCopyTests`.
   - Done when: those pass.
