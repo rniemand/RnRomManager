@@ -1,6 +1,6 @@
 ---
 title: Amiga multi-disk play
-status: ready
+status: in-progress
 created: 2026-11-20
 ---
 
