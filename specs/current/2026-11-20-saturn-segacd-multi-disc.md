@@ -1,6 +1,6 @@
 ---
 title: Saturn and Sega CD multi-disc play
-status: ready
+status: in-progress
 created: 2026-11-20
 ---
 
