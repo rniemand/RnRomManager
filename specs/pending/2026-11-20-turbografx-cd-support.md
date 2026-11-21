@@ -9,6 +9,8 @@ created: 2026-11-20
 ## Summary
 Adds TurboGrafx-CD / PC Engine CD (`tgcd`) as a disc system. Its Redump bin/cue sets and standalone `.chd` images are imported against the Redump DAT and stored next to the game's ZIP, as Sega CD discs are. Releases play in the browser on the already-vendored Beetle PCE core (`mednafen_pce`, shared with `tg16` HuCards) through play-disc, with a System Card BIOS the operator supplies.
 
+It also tidies two UI spots (rules U1–U4, added at the user's request): the signed-in footer's About and Shortcuts buttons become icon-only, the Play dialog's save and screenshot buttons move to its footer, and the play page's loading label shows the file size.
+
 ## Out of scope
 - CloneCD (`.ccd`/`.img`/`.sub`), `.iso`, `.toc`, and audio as `.wav`/`.ogg`: ingest and play-disc group only `.cue` with `.bin` tracks.
 - SuperGrafx (`.sgx`) and Arcade Card firmware (Beetle PCE emulates the Arcade Card itself; `pce_arcadecard` stays at its `enabled` default).
@@ -56,6 +58,17 @@ Adds TurboGrafx-CD / PC Engine CD (`tgcd`) as a disc system. Its Redump bin/cue 
 
   In Step 2, confirm the IGDB platform id 150 with an authenticated `POST /v4/platforms` query (`fields id,name,slug; where slug = "turbografx-16-slash-pc-engine-cd";`) if credentials are configured, else from IGDB's platform page. If it isn't 150, use the confirmed id and record it.
 
+### UI changes (U)
+- **U1 Footer Shortcuts button.** In `AppFooter.svelte` the Shortcuts button shows only an icon: `keyboard` (new in `icons.ts`: `'bi bi-keyboard'`) in place of `help`, and the `<span class="footer-label">Shortcuts</span>` goes. It gains `aria-label="Shortcuts"` (so its accessible name stays `Shortcuts`, which `mvp.spec.ts` and `AppFooter.test.ts` find it by) and keeps `title="Keyboard Shortcuts"`. Its placement, `ms-auto` rules and hiding while the password must be changed are unchanged. The `help` icon mapping stays (other code may use it).
+- **U2 Footer About button.** The About button shows only the app logo, `<img src="/favicon.svg" alt="" width="16" height="16" class="footer-logo">` (the same file as the browser tab icon; `alt=""` because the button names itself), in place of `<Icon name="info" />`, and its `footer-label` span goes. It gains `aria-label="About"` and `title="About"`. `.footer-logo` (new, in the component's `<style>`) is `vertical-align: -0.125em`, matching Bootstrap Icons' baseline, so the row's height doesn't change.
+- **U3 Play dialog footer.** `ConfirmModal` gains an optional `footer?: Snippet` prop. When given, it renders first in `.modal-footer`, inside `<div class="d-flex flex-wrap gap-2 me-auto">`, before the Close/Cancel button in both modes, so it sits on the left with Close/Cancel (and the confirm button when `onconfirm` is set) on the right. Without it the footer is unchanged. `EmulatorModal` moves its whole button row (**Save state to library**, **Save battery to library**, **Screenshot**, with their current conditions, classes, icons, labels and `disabled={exporting}`) from the `d-flex flex-wrap gap-2 mb-2` div above the game into that `footer` snippet, still rendered only while `open && rom && core`. The div above the game goes, so the 4:3 frame starts at the top of the body. The screenshot preview's **Save as Snap** and **Discard** stay over the game. The frame's `max-width: calc((100vh - 14rem) * 4 / 3)` is unchanged: the footer was already part of the 14 rem chrome.
+- **U4 Loading size.** `play.js`'s `readContent` label (`#downloaded`) shows the size:
+  - with a known total, `<percent> of <total size>`, e.g. `50% of 512.0 MiB` (the percent as today, floored and capped at 100%);
+  - with no total, the running amount as a size, e.g. `12.5 MiB`, in place of `13,107,200 bytes`;
+  - before the first chunk, `0% of <total size>` with a known total, and `0 B` without one.
+
+  Sizes use `contentSize(bytes)` (new, exported from `params.js`), which copies `formatSize` in `src/lib/format.ts` (`512 B`, `1.5 KiB`, `16.0 MiB`, `8.0 GiB`, one decimal): the static play page can't import from `src/lib`. A comment on each names the other so they stay in step. Both `play.html` and `play-psp.html` show it; the label is recomputed per chunk only when its text changes, as today.
+
 ## Changes
 | Area | File(s) | Change |
 |---|---|---|
@@ -69,7 +82,10 @@ Adds TurboGrafx-CD / PC Engine CD (`tgcd`) as a disc system. Its Redump bin/cue 
 | Web | `static/emulator/params.js`, `static/emulator/play.js` | B7–B9 constants, messages, guard; the launch path and `loadOptionalBios`'s `exact`. |
 | Web | `src/lib/emulator.ts` | Core lists and `canPlay` (B5). |
 | Web | `src/lib/systemColours.ts`, `src/app.css`, `src/lib/components/icons.ts`, `src/lib/systemEmulators.json` | Colour, icon, emulator links (B2). |
-| Docs | `README.md`, `docs/adding-a-system.md`, `docs/zip-format.md`, `docs/deployment.md`, `docs/features.md`, `docs/development.md` | See Step 7. |
+| Web | `src/lib/components/AppFooter.svelte`, `src/lib/components/icons.ts` | Icon-only About and Shortcuts buttons (U1, U2). |
+| Web | `src/lib/components/ConfirmModal.svelte`, `src/lib/components/EmulatorModal.svelte` | `footer` snippet; the Play dialog's buttons move into it (U3). |
+| Web | `static/emulator/params.js`, `static/emulator/play.js` | `contentSize` and the sized loading label (U4). |
+| Docs | `README.md`, `docs/adding-a-system.md`, `docs/zip-format.md`, `docs/deployment.md`, `docs/features.md`, `docs/development.md` | See Step 9. |
 
 No migration (`system_id` is a `VARCHAR`; `PrimaryHasFiles` is a computed column of the list query). No new config key. API contract: additive. `/api/systems` gains a row, and `browserCore`/`playRomId`/`playDisc` are set for TurboGrafx-CD games. `GameListItem` gains a defaulted parameter, so existing constructor calls compile unchanged.
 
@@ -146,7 +162,23 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
     - `emulator.test.ts`: `canPlay` for `mednafen_pce`: external `.cue`-set main `.bin` with `files` → true; external `.chd` → true; external `.BIN` with `files` null or `[]` → false; an embedded `.pce` (TurboGrafx-16) → true.
     - `game-page.test.ts`: for a `tgcd` game with `browserCore: 'mednafen_pce'` and an external set release, the release's Play opens the modal and its iframe `src` has `core=mednafen_pce` and `&disc=1`; a lone `.bin` release shows no Play button.
   - Done when: those tests pass, and `npm run lint` and `npm run check` pass.
-- [ ] **7. Docs**:
+- [ ] **7. Icon-only footer buttons** (U1, U2): independent of the TurboGrafx-CD steps.
+  - Files: `AppFooter.svelte`, `icons.ts`, `AppFooter.test.ts`, `stores.svelte.test.ts`.
+  - Tests:
+    - `AppFooter.test.ts`: the Shortcuts button is found by name `Shortcuts`, has title `Keyboard Shortcuts`, contains an `i.bi.bi-keyboard` and no text content or `.footer-label`; the About button is found by name `About`, has title `About`, contains `img[src="/favicon.svg"][alt=""]` and no `.footer-label`. The existing "keeps one unwrapped row whose labels are footer-label spans" case keeps its job-link `.footer-label` check and drops the About/Shortcuts loop (renamed "keeps one unwrapped row; only the job link has a footer-label"). "the Shortcuts button opens the shortcuts; its visible text names it, title stays (B26)" becomes "…; its aria-label names it, title stays", asserting `aria-label="Shortcuts"`. The hide-while-password-change and Admin-order cases pass unchanged.
+    - `stores.svelte.test.ts`: `iconClass('keyboard')` is `bi bi-keyboard`.
+    - `mvp.spec.ts` (runs in Finish): the `Shortcuts` and `About` role lookups pass unchanged.
+  - Done when: `npm run lint`, `npm run check` and those vitest files pass.
+- [ ] **8. Play dialog footer and loading size** (U3, U4): independent of the TurboGrafx-CD steps.
+  - Files: `ConfirmModal.svelte`, `EmulatorModal.svelte`, `params.js`, `play.js`, `ConfirmModal.test.ts`, `EmulatorModal.test.ts`, `emulatorParams.test.ts`, `emulatorPlay.test.ts`, `tests/e2e/specs/rom-progress.ts`.
+  - Tests:
+    - `ConfirmModal.test.ts`: with a `footer` snippet, its content is inside `.modal-footer` in a `.me-auto` wrapper before the Close button (info mode) and before the Cancel button (with `onconfirm`); without one the footer holds only the Close/Cancel button (and the confirm button when `onconfirm` is set).
+    - `EmulatorModal.test.ts`: **Save state to library**, **Save battery to library** (when offered) and **Screenshot** (Admin) are inside `.modal-footer`, and nothing but the frame (and the screenshot preview) is in `.modal-body`; the existing visibility and `disabled` cases pass with only their container lookups changed.
+    - `emulatorParams.test.ts`: `contentSize` gives `512 B`, `1.5 KiB` (1536), `16.0 MiB`, `8.0 GiB`, matching `formatSize` for the same inputs (import both and compare over a list of sizes).
+    - `emulatorPlay.test.ts`: the known-length progress cases expect `50% of 4 B` and `100% of 4 B` in place of `50%`/`100%`; the X-Content-Bytes and over-100% cases likewise; the unknown-length case expects `2 B` (and a 1,572,864-byte body ends at `1.5 MiB`) in place of the long byte count; the label before the first chunk is `0% of 4 B` with a total and `0 B` without.
+    - `tests/e2e/specs/rom-progress.ts` (`expectRomDownloadProgress`, used by `mvp.spec.ts` at its three ROM-progress flows; runs in Finish): the expected texts become the regexes `/^0% of \d+(\.\d)? (B|KiB|MiB|GiB)$/`, and the same with `25%` and `75%` (no import from the web app, which the e2e package doesn't reach; `emulatorParams.test.ts` already pins `contentSize`'s exact output).
+  - Done when: `npm run lint`, `npm run check` and those vitest files pass.
+- [ ] **9. Docs**:
   - `README.md`: intro list of disc systems, the Play bullet (TurboGrafx-CD: one disc per launch, a cue with its tracks or a `.chd`, needs a System Card such as `syscard3.pce` in `data/bios/`), and the upgrade/Refresh DATs list. The Beetle PCE attribution line already says "No PC Engine CD System Card BIOS is included": keep it, adding "(TurboGrafx-16 / PC Engine and TurboGrafx-CD / PC Engine CD)" to the systems in its parentheses.
   - `docs/features.md`: TurboGrafx-CD ingest and play rules, the System Card order and renaming, the hidden `pce_cdbios` setting, Games Express discs, and the lone `.bin` rule. Fix the statements that become false: the TurboGrafx-16 Play bullet's "PC Engine CD and SuperGrafx aren't supported" becomes "SuperGrafx isn't supported; PC Engine CD discs are the TurboGrafx-CD system"; the `tg16` ingest paragraph's "SuperGrafx, TurboGrafx-CD / PC Engine CD and bit-reversed (undecrypted) US dumps aren't supported" drops TurboGrafx-CD / PC Engine CD and points to `ingest/tgcd/`; the drop-files paragraph gains TurboGrafx-CD discs (a `.cue` with its `.bin` tracks, or a `.chd`) into `ingest/tgcd/`, and its size list gains "16 bytes–1 GiB for TurboGrafx-CD".
   - `docs/deployment.md`: the DAT refresh after upgrade and the BIOS files.
@@ -154,6 +186,7 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
   - `docs/adding-a-system.md`: TurboGrafx-CD in the disc-systems text, the `BrowserCore` row (`tgcd` returns `mednafen_pce`, shared with `tg16`; the lone `.bin` rule), and the box-art list.
   - `docs/development.md` (Browser emulators): the TurboGrafx-CD launch path, `loadOptionalBios`'s `exact`, and `mednafen_pce` in the external and play-disc core lists.
   - Tests: `SupportedSystemsTableTests`.
+  - U1–U4 in `docs/features.md`: the Footer bullet's **About** and **Shortcuts** become icon-only (About: the app logo; Shortcuts: a keyboard icon, tooltip "Keyboard Shortcuts"; drop "a help icon with the text "Shortcuts""); the Play bullet's progress sentence gives the new label ("50% of 512.0 MiB", or the size received so far); the **Screenshot** bullet's "the Play dialog's toolbar has a **Screenshot** button after the save buttons" and the **Play dialog** saves bullet place those buttons in the dialog's footer, left of **Close**. `docs/development.md`: `AppFooter`'s icon-only buttons, `ConfirmModal`'s `footer` snippet, and `readContent`'s label with `contentSize`.
   - Done when: every file above has the stated content and the README row reads `| TurboGrafx-CD / PC Engine CD | `tgcd` | Next to ZIP | `.bin`, `.cue`, `.chd` | Redump | `mednafen_pce` |`.
 
 ## Decisions
@@ -169,6 +202,11 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
 - 2026-11-20 Seeded games and e2e → empty catalog in Basic/Full, no e2e play case, as for Sega CD (code)
 - 2026-11-20 Which track the DAT lists → one `rom` per game, usually `(Track 02)` (the data track; Track 01 is usually an audio track), no `.cue`; no cross-game SHA-1 repeats seen, so the existing one-listed-member set rule names sets correctly (code: libretro `metadat/redump` DAT read 2026-11-20)
 - 2026-11-20 Review round 1 → manifests chosen by `ThreeDsDat` (adds `IngestPipelineTests`); `InvalidPlayDisc` text is the `title`; `ShapeProblem`/`OpenDiscAsync` take the system id; `canPlay`'s `files` optional; `PrimaryHasFiles` row property and mapping named; a new HuCard play-page test, quick-play test with `rom_files`, and `gexpress.pce` error cases; `.pce` in `ingest/tgcd/` is `UnsupportedType`; docs statements that become false listed; RetroArch note pinned (reviewer)
+- 2026-11-20 Add the footer and Play dialog changes to this spec → yes, as rules U1–U4 and Steps 7–8, independent of the TurboGrafx-CD steps (user)
+- 2026-11-20 About icon → the app logo (`favicon.svg`); Shortcuts → `bi-keyboard`; both keep their accessible names via `aria-label` (user; names: code, so `mvp.spec.ts` lookups stay)
+- 2026-11-20 Which Play dialog buttons move → all three (state, battery, screenshot), to the footer's left (user)
+- 2026-11-20 Loading label → `50% of 512.0 MiB`; with no total, the size received so far (user)
+- 2026-11-20 U review → `rom-progress.ts` e2e helper updated (regex, no cross-package import); the starting label pinned; Close/Cancel wording (reviewer)
 - 2026-11-20 Review round 2 → `HandleAsync`/`HandleSetAsync` pass the system id through `OpenDiscAsync` to `ShapeProblem`; round 3 clean (reviewer)
 
 ## Kickoff prompt
