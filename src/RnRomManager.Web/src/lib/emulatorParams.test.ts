@@ -352,7 +352,7 @@ describe('PSP page (PSP B3)', () => {
 			'This UMD image is larger than 2 GiB, too large to play in the browser.'
 		);
 		expect(discError(409, 'InvalidPlayDisc', 'ppsspp')).toBe(
-			"This UMD image can't be played in the browser: it must be one non-empty .iso, .cso or .pbp whose name matches the release."
+			"This UMD image can't be played in the browser: it must be one non-empty .iso, .cso, .pbp or .chd whose name matches the release."
 		);
 		expect(discError(401, 'PlayDiscTooLarge', 'ppsspp')).toBe(
 			'Your session has expired. Sign in again.'

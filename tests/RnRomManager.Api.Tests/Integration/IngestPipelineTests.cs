@@ -738,7 +738,8 @@ public class IngestPipelineTests
 
     [TestCase("Mystery Umd.cso")]
     [TestCase("Mystery Umd.pbp")]
-    public async Task PspCsoOrPbp_Lone_GoesToReviewAsNoDatMatch(string name)
+    [TestCase("Mystery Umd.chd")]
+    public async Task PspCsoPbpOrChd_Lone_GoesToReviewAsNoDatMatch(string name)
     {
         var result = await IngestAsync(DropAged("psp", name, FakeChd(2305)));
 
