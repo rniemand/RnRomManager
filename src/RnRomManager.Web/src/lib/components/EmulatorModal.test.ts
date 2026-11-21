@@ -901,6 +901,29 @@ describe('EmulatorModal battery saves (release editing B22–B24)', () => {
 		]);
 	});
 
+	it("a disc set plays from Disc 1's release: its titles, set URL, auto-loaded battery save and close store (multi-disc M8)", async () => {
+		answers[listKey] = { status: 200, body: { items: [battery('disc-one', 'alice')] } };
+		answers['PUT /api/games/g-1/saves/disc-one/file'] = { status: 200, body: {} };
+		const { container, iframe } = await openFor({
+			core: 'pcsx_rearmed',
+			discSet: 'Orbit Blocks (World).m3u'
+		});
+
+		expect(iframe.getAttribute('src')).toBe(
+			'/emulator/play.html?game=g-1&rom=13&core=pcsx_rearmed&name=Orbit%20Blocks%20(World).m3u&disc=1&set=1&save=disc-one&saveKind=battery'
+		);
+		expect(iframe.getAttribute('title')).toBe('Emulator: Orbit Blocks (World).m3u');
+		expect(document.body.textContent).toContain('Play Orbit Blocks (World).m3u');
+		const buttons = [...container.querySelectorAll('button')].map((b) => b.textContent?.trim());
+		expect(buttons).not.toContain('Save state to library');
+		expect(buttons).toContain('Save battery to library');
+
+		close(container);
+		answerExport(iframe, 'battery', ok);
+		await closed(container);
+		expect(writes().map((c) => c.key)).toEqual(['PUT /api/games/g-1/saves/disc-one/file']);
+	});
+
 	it('without a played save, overwrites the newest own one, else adds one', async () => {
 		answers['POST /api/games/g-1/saves'] = { status: 201, body: {} };
 		const first = await openFor({ save: { saveId: 'a-state', saveKind: 'state' } });

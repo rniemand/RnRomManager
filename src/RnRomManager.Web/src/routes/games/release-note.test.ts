@@ -56,7 +56,8 @@ const rom = (id: number, hasNote: boolean) => ({
 	externalFileName: null as string | null,
 	version: null as string | null,
 	files: null,
-	totalSizeBytes: 1
+	totalSizeBytes: 1,
+	discSet: null
 });
 
 const game = (): GameDetail => ({

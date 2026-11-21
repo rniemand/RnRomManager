@@ -74,6 +74,8 @@
 	let noteOpen = $state(false);
 	let noteMode = $state<'edit' | undefined>();
 	let playRom = $state<RomDetail | null>(null);
+	/** Multi-disc M7: the disc set's playlist name while All discs is playing; null for a single release. */
+	let playSet = $state<string | null>(null);
 	let playOpen = $state(false);
 	/** B16/B25: the caller's collections holding this game. */
 	let memberOf = $state<CollectionRef[]>([]);
@@ -220,6 +222,7 @@
 				!opensInNewTab(current.browserCore)
 			) {
 				playRom = rom;
+				playSet = null;
 				playOpen = true;
 			}
 			const next = new URL(page.url.href);
@@ -804,11 +807,29 @@
 										aria-label="Play {rom.fileName}"
 										onclick={() => {
 											playRom = rom;
+											playSet = null;
 											playOpen = true;
 										}}
 									>
 										<Icon name="play" />
 									</button>
+									{#if rom.discSet}
+										{@const discSet = rom.discSet}
+										<!-- Multi-disc M7: every disc of the set in one session, from Disc 1's card. -->
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-success"
+											aria-label="Play all discs of {discSet.name}"
+											use:tooltip={'Play all discs in one session'}
+											onclick={() => {
+												playRom = rom;
+												playSet = discSet.name;
+												playOpen = true;
+											}}
+										>
+											<Icon name="play" /> All discs
+										</button>
+									{/if}
 								{/if}
 								<button
 									type="button"
@@ -1102,6 +1123,7 @@
 		core={game.browserCore}
 		rom={playRom}
 		disc={playRom != null && game.browserCore != null && usesPlayDisc(game.browserCore, playRom)}
+		discSet={playSet}
 		onsaved={() => {
 			savesVersion++;
 			void refreshGame();

@@ -180,6 +180,8 @@ export interface RomDetail {
 	files: ReleaseFile[] | null;
 	/** B20: `sizeBytes` plus every `files` entry. */
 	totalSizeBytes: number;
+	/** Multi-disc M3: on a PlayStation disc set's Disc 1, its playlist name and release ids in disc order; null otherwise. */
+	discSet: { name: string; romIds: number[] } | null;
 }
 
 /** B20: one file of a disc set, besides the release's main file. */

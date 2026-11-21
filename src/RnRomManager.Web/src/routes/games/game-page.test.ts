@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { resetClient } from '#lib/api/client.js';
-import type { GameDetail, ReleaseFile } from '#lib/api/types.js';
+import type { GameDetail, ReleaseFile, RomDetail } from '#lib/api/types.js';
 import { formatDateTime, formatSize } from '#lib/format.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
 import { auth } from '#lib/stores/auth.svelte.js';
@@ -70,7 +70,8 @@ const rom = (id: number, fileName: string, isPrimary: boolean) => ({
 	externalFileName: null as string | null,
 	version: null as string | null,
 	files: null as ReleaseFile[] | null,
-	totalSizeBytes: 32768
+	totalSizeBytes: 32768,
+	discSet: null as RomDetail['discSet']
 });
 const setFiles = [
 	{
@@ -224,6 +225,60 @@ describe('game detail page', () => {
 		render(GamePage);
 		await screen.findByRole('article', { name: 'Tetris 1.gb' });
 		expect(screen.queryByRole('button', { name: 'Play Tetris 1.gb' })).toBeNull();
+	});
+
+	/** Multi-disc M7: a PlayStation game whose first two releases are a disc set headed by release 1. */
+	function psxSet(): GameDetail {
+		const psx = game([1, 2]);
+		psx.system = 'psx';
+		psx.browserCore = 'pcsx_rearmed';
+		for (const r of psx.roms) r.externalFileName = r.fileName;
+		psx.roms[0].discSet = { name: 'Tetris (World).m3u', romIds: [1, 2] };
+		return psx;
+	}
+
+	it('Disc 1 of a PlayStation disc set has All discs after Play, which plays the set (multi-disc M7)', async () => {
+		tooltips.length = 0;
+		const psx = psxSet();
+		answers.push({ status: 200, body: psx });
+		render(GamePage);
+
+		const all = await screen.findByRole('button', { name: 'Play all discs of Tetris (World).m3u' });
+		expect(all.textContent?.trim()).toBe('All discs');
+		expect(all.previousElementSibling?.getAttribute('aria-label')).toBe('Play Tetris 1.gb');
+		expect(tooltips.find((t) => t.node === all)?.text).toBe('Play all discs in one session');
+		expect(screen.getAllByRole('button', { name: /^Play all discs/ })).toHaveLength(1);
+
+		await fireEvent.click(all);
+		await vi.waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
+		expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
+			`/emulator/play.html?game=${psx.id}&rom=1&core=pcsx_rearmed&name=Tetris%20(World).m3u&disc=1&set=1`
+		);
+
+		// A single-release Play afterwards drops the set.
+		await fireEvent.click(screen.getByRole('button', { name: 'Play Tetris 1.gb' }));
+		await vi.waitFor(() =>
+			expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
+				`/emulator/play.html?game=${psx.id}&rom=1&core=pcsx_rearmed&name=Tetris%201.gb&disc=1`
+			)
+		);
+	});
+
+	it('All discs is hidden without a discSet and when Play is hidden (multi-disc M7)', async () => {
+		const plain = psxSet();
+		plain.roms[0].discSet = null;
+		answers.push({ status: 200, body: plain });
+		const { unmount } = render(GamePage);
+		await screen.findByRole('button', { name: 'Play Tetris 1.gb' });
+		expect(screen.queryByRole('button', { name: /^Play all discs/ })).toBeNull();
+		unmount();
+
+		const noCore = psxSet();
+		noCore.browserCore = null;
+		answers.push({ status: 200, body: noCore });
+		render(GamePage);
+		await screen.findByRole('article', { name: 'Tetris 1.gb' });
+		expect(screen.queryByRole('button', { name: /^Play / })).toBeNull();
 	});
 
 	it('an external Sega CD cue release plays on Genesis Plus GX from play-disc (Sega CD B5, B6)', async () => {
