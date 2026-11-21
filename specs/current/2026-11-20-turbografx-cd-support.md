@@ -169,7 +169,7 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
     - `stores.svelte.test.ts`: `iconClass('keyboard')` is `bi bi-keyboard`.
     - `mvp.spec.ts` (runs in Finish): the `Shortcuts` and `About` role lookups pass unchanged.
   - Done when: `npm run lint`, `npm run check` and those vitest files pass.
-- [ ] **8. Play dialog footer and loading size** (U3, U4): independent of the TurboGrafx-CD steps.
+- [x] **8. Play dialog footer and loading size** (U3, U4): independent of the TurboGrafx-CD steps.
   - Files: `ConfirmModal.svelte`, `EmulatorModal.svelte`, `params.js`, `play.js`, `ConfirmModal.test.ts`, `EmulatorModal.test.ts`, `emulatorParams.test.ts`, `emulatorPlay.test.ts`, `tests/e2e/specs/rom-progress.ts`.
   - Tests:
     - `ConfirmModal.test.ts`: with a `footer` snippet, its content is inside `.modal-footer` in a `.me-auto` wrapper before the Close button (info mode) and before the Cancel button (with `onconfirm`); without one the footer holds only the Close/Cancel button (and the confirm button when `onconfirm` is set).

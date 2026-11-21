@@ -116,6 +116,9 @@ describe('play page loading indicator', () => {
 			const progress = document.querySelector('progress')!;
 			const downloaded = document.getElementById('downloaded')!;
 
+			// U4: before the first chunk.
+			await vi.waitFor(() => expect(downloaded.hidden).toBe(false));
+			expect(downloaded.textContent).toBe(knownLength ? '0% of 4 B' : '0 B');
 			await writer.write(new Uint8Array([1, 2]));
 			expect(progress.hidden).toBe(false);
 			expect(progress.hasAttribute('value')).toBe(knownLength);
@@ -123,15 +126,9 @@ describe('play page loading indicator', () => {
 			if (knownLength) {
 				expect(progress.max).toBe(4);
 				expect(progress.value).toBe(2);
-				expect(downloaded.textContent).toBe('50%');
+				expect(downloaded.textContent).toBe('50% of 4 B');
 			} else {
-				expect(downloaded.textContent).toBe(
-					new Intl.NumberFormat(undefined, {
-						style: 'unit',
-						unit: 'byte',
-						unitDisplay: 'long'
-					}).format(2)
-				);
+				expect(downloaded.textContent).toBe('2 B');
 			}
 			expect(atLoader).toBeNull();
 
@@ -163,7 +160,7 @@ describe('play page loading indicator', () => {
 		expect(progress.hidden).toBe(false);
 		expect(progress.max).toBe(4);
 		expect(progress.value).toBe(2);
-		expect(document.getElementById('downloaded')!.textContent).toBe('50%');
+		expect(document.getElementById('downloaded')!.textContent).toBe('50% of 4 B');
 		await writer.close();
 		await finished;
 	});
@@ -174,7 +171,23 @@ describe('play page loading indicator', () => {
 			[4, 5, 6]
 		]);
 		expect(document.querySelector('progress')!.value).toBe(4);
-		expect(document.getElementById('downloaded')!.textContent).toBe('100%');
+		expect(document.getElementById('downloaded')!.textContent).toBe('100% of 4 B');
+		await writer.close();
+		expect(await finished).toBe('Starting emulator…');
+	});
+
+	it('without a total, the label is the size received so far (U4)', async () => {
+		const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+		const writer = writable.getWriter();
+		const url = `/api/games/${game}/roms/12/play-disc`;
+		serve({
+			'/api/emulator/bios/scph5501.bin': async () => response(404),
+			[url]: async () => new Response(readable)
+		});
+		const finished = play('pcsx_rearmed', 'Game');
+		await writer.write(new Uint8Array(1024 * 1024));
+		await writer.write(new Uint8Array(512 * 1024));
+		expect(document.getElementById('downloaded')!.textContent).toBe('1.5 MiB');
 		await writer.close();
 		expect(await finished).toBe('Starting emulator…');
 	});

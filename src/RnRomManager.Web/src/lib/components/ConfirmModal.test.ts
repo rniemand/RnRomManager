@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/svelte';
-import { flushSync, tick } from 'svelte';
+import { createRawSnippet, flushSync, tick } from 'svelte';
 
 const options: unknown[] = [];
 const calls: string[] = [];
@@ -81,6 +81,44 @@ describe('ConfirmModal', () => {
 		expect([...footer.querySelectorAll('button')].map((b) => b.textContent?.trim())).toEqual([
 			'Close'
 		]);
+	});
+
+	describe('footer snippet (U3)', () => {
+		const footer = createRawSnippet(() => ({
+			render: () => '<button type="button">Extra</button>'
+		}));
+		const footerButtons = () =>
+			[...document.querySelectorAll('.modal-footer button')].map((b) => b.textContent?.trim());
+
+		it('renders first in the footer, in a me-auto wrapper before Close (info mode)', () => {
+			render(ConfirmModal, { open: false, title: 'T', footer });
+			const extra = screen.getByRole('button', { name: 'Extra', hidden: true });
+			const wrapper = extra.parentElement!;
+			expect(wrapper.className).toBe('d-flex flex-wrap gap-2 me-auto');
+			expect(wrapper.parentElement!.classList).toContain('modal-footer');
+			expect(wrapper.nextElementSibling!.textContent!.trim()).toBe('Close');
+			expect(footerButtons()).toEqual(['Extra', 'Close']);
+		});
+
+		it('sits before Cancel and the confirm button with onconfirm', () => {
+			render(ConfirmModal, {
+				open: false,
+				title: 'T',
+				confirmLabel: 'Go',
+				onconfirm: () => {},
+				footer
+			});
+			expect(footerButtons()).toEqual(['Extra', 'Cancel', 'Go']);
+			expect(
+				document.querySelector('.modal-footer > .me-auto')!.nextElementSibling!.textContent!.trim()
+			).toBe('Cancel');
+		});
+
+		it('without it the footer holds only its own buttons', () => {
+			render(ConfirmModal, { open: false, title: 'T', confirmLabel: 'Go', onconfirm: () => {} });
+			expect(document.querySelector('.modal-footer .me-auto')).toBeNull();
+			expect(footerButtons()).toEqual(['Cancel', 'Go']);
+		});
 	});
 
 	it('releases <body> before disposing on unmount (G1)', () => {

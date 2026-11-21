@@ -431,3 +431,18 @@ export function contentFileName(core, game, name) {
 		(core === 'mednafen_pce' && turboGrafxCdBiosNames.includes(lower));
 	return clashes ? `${game}-${safe}` : safe;
 }
+
+const sizeNumber = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+
+/**
+ * U4: a size for the loading label, `512 B`, `1.5 KiB`, `16.0 MiB`, `8.0 GiB`. A copy of `formatSize` in
+ * `src/lib/format.ts` (the static play page can't import from `src/lib`): keep the two in step.
+ * @param {number} bytes
+ * @returns {string}
+ */
+export function contentSize(bytes) {
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${sizeNumber.format(bytes / 1024)} KiB`;
+	if (bytes < 1024 * 1024 * 1024) return `${sizeNumber.format(bytes / (1024 * 1024))} MiB`;
+	return `${sizeNumber.format(bytes / (1024 * 1024 * 1024))} GiB`;
+}

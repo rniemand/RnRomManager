@@ -16,6 +16,7 @@ import {
 	biosError,
 	biosFor,
 	contentFileName,
+	contentSize,
 	controlSchemeFor,
 	discError,
 	isOperatorCore,
@@ -53,7 +54,6 @@ import {
 const status = /** @type {HTMLElement} */ (document.getElementById('status'));
 const progress = /** @type {HTMLProgressElement} */ (document.getElementById('loading'));
 const downloaded = /** @type {HTMLElement} */ (document.getElementById('downloaded'));
-const formatBytes = new Intl.NumberFormat(undefined, { style: 'unit', unit: 'byte', unitDisplay: 'long' });
 const formatPercent = new Intl.NumberFormat(undefined, { style: 'percent' });
 
 /** @param {string} text */
@@ -63,7 +63,10 @@ function show(text) {
 	downloaded.hidden = true;
 }
 
-/** @param {Response} response */
+/**
+ * U4: the loading label shows `<percent> of <total size>` with a known total, else the size received so far.
+ * @param {Response} response
+ */
 function readContent(response) {
 	if (!response.body) return response.blob();
 	const encoding = response.headers.get('Content-Encoding');
@@ -82,7 +85,8 @@ function readContent(response) {
 		progress.removeAttribute('value');
 	}
 	progress.hidden = false;
-	downloaded.textContent = hasTotal ? formatPercent.format(0) : formatBytes.format(0);
+	const totalSize = hasTotal ? contentSize(total) : '';
+	downloaded.textContent = hasTotal ? `${formatPercent.format(0)} of ${totalSize}` : contentSize(0);
 	downloaded.hidden = false;
 	let bytes = 0;
 	const body = response.body.pipeThrough(
@@ -92,10 +96,11 @@ function readContent(response) {
 				if (hasTotal) {
 					progress.value = Math.min(bytes, total);
 					const percent = Math.floor((Math.min(bytes, total) * 100) / total);
-					const label = formatPercent.format(percent / 100);
+					const label = `${formatPercent.format(percent / 100)} of ${totalSize}`;
 					if (downloaded.textContent !== label) downloaded.textContent = label;
 				} else {
-					downloaded.textContent = formatBytes.format(bytes);
+					const label = contentSize(bytes);
+					if (downloaded.textContent !== label) downloaded.textContent = label;
 				}
 				controller.enqueue(chunk);
 			}

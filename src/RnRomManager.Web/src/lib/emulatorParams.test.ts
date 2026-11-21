@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { formatSize } from './format';
 import {
+	contentSize,
 	biosError,
 	biosFor,
 	contentFileName,
@@ -866,5 +868,23 @@ describe('TurboGrafx-CD (B7, B9)', () => {
 		expect(turboGrafxCdBiosMissing).toBe(
 			'TurboGrafx-CD games need a System Card BIOS: ask an Admin to put syscard3.pce in the BIOS folder (Paths:Bios).'
 		);
+	});
+});
+
+describe('contentSize (U4)', () => {
+	it.each([
+		[512, '512 B'],
+		[1536, '1.5 KiB'],
+		[16 * 1024 * 1024, '16.0 MiB'],
+		[8 * 1024 * 1024 * 1024, '8.0 GiB']
+	])('%i bytes is %s', (bytes, text) => {
+		expect(contentSize(bytes)).toBe(text);
+	});
+
+	it('matches formatSize', () => {
+		for (const bytes of [
+			0, 1, 1023, 1024, 1536, 1048575, 1048576, 1572864, 536870912, 1073741824, 8589934592
+		])
+			expect(contentSize(bytes)).toBe(formatSize(bytes));
 	});
 });
