@@ -1524,6 +1524,61 @@ describe('play page Commodore 64 (C64 B7)', () => {
 	});
 });
 
+describe('play page Amiga disk sets (Amiga F7)', () => {
+	const setUrl = `/api/games/${game}/roms/12/play-disc-set`;
+	const disks = new Uint8Array([0x50, 0x4b, 3, 4, 2, 2]);
+
+	async function playDisks(name: string): Promise<string> {
+		const query = new URLSearchParams({ game, rom: '12', core: 'puae', name, disc: '1', set: '1' });
+		history.replaceState(null, '', `/emulator/play.html?${query}`);
+		const { started } = await import('../../static/emulator/play.js');
+		await started;
+		return document.getElementById('status')!.textContent ?? '';
+	}
+
+	it('loads the set from play-disc-set, saying it downloads disks, named after its playlist', async () => {
+		let status = '';
+		serve({
+			[setUrl]: async () => {
+				status = document.getElementById('status')!.textContent ?? '';
+				return {
+					ok: true,
+					status: 200,
+					headers: new Headers(),
+					body: null,
+					blob: async () => new Blob([disks])
+				} as FakeResponse;
+			}
+		});
+
+		await playDisks('Twin Disk (1990)(Synth).m3u');
+
+		expect(urls()).toEqual([setUrl]);
+		expect(status).toBe('Downloading disks…');
+		expect(atLoader).toMatchObject({
+			EJS_core: 'puae',
+			EJS_gameName: 'Twin Disk (1990)(Synth).m3u'
+		});
+		const file = atLoader?.EJS_gameUrl as File;
+		expect(file.name).toBe('Twin Disk (1990)(Synth).m3u');
+		expect(new Uint8Array(await file.arrayBuffer())).toEqual(disks);
+	});
+
+	it('shows the disk message for a 409 InvalidPlayDisc before the loader', async () => {
+		serve({
+			[setUrl]: async () =>
+				new Response(JSON.stringify({ code: 'InvalidPlayDisc' }), {
+					status: 409
+				}) as unknown as FakeResponse
+		});
+
+		expect(await playDisks('Twin Disk (1990)(Synth).m3u')).toBe(
+			"These disks can't be played in the browser: one of them is empty."
+		);
+		expect(atLoader).toBeNull();
+	});
+});
+
 describe('play page 3DO (3DO B8)', () => {
 	const check = '/api/emulator/cores/opera';
 	const names = ['panafz10.bin', 'panafz1.bin', 'panafz1j.bin', 'goldstar.bin', 'sanyotry.bin'];

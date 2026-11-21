@@ -36,7 +36,14 @@
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
 	import EditReleaseModal, { type ReleaseKind } from '#lib/components/EditReleaseModal.svelte';
 	import EmulatorModal from '#lib/components/EmulatorModal.svelte';
-	import { canPlay, opensInNewTab, playLinkEvents, playUrl, usesPlayDisc } from '#lib/emulator.js';
+	import {
+		canPlay,
+		opensInNewTab,
+		playLinkEvents,
+		playUrl,
+		setMedia,
+		usesPlayDisc
+	} from '#lib/emulator.js';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import ZipBrowser from '#lib/components/ZipBrowser.svelte';
 	import { formatDateTime, formatKey, formatSize, formatValue } from '#lib/format.js';
@@ -815,19 +822,20 @@
 									</button>
 									{#if rom.discSet}
 										{@const discSet = rom.discSet}
-										<!-- Multi-disc M7: every disc of the set in one session, from Disc 1's card. -->
+										{@const media = setMedia(game.browserCore)}
+										<!-- Multi-disc M7 (Amiga F8: disks): every disc of the set in one session, from Disc 1's card. -->
 										<button
 											type="button"
 											class="btn btn-sm btn-outline-success"
-											aria-label="Play all discs of {discSet.name}"
-											use:tooltip={'Play all discs in one session'}
+											aria-label="Play all {media} of {discSet.name}"
+											use:tooltip={`Play all ${media} in one session`}
 											onclick={() => {
 												playRom = rom;
 												playSet = discSet.name;
 												playOpen = true;
 											}}
 										>
-											<Icon name="play" /> All discs
+											<Icon name="play" /> All {media}
 										</button>
 									{/if}
 								{/if}

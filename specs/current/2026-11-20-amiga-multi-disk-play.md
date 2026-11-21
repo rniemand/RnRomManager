@@ -92,7 +92,7 @@ No migration, config key, stored data or API contract change beyond `discSet` no
   - 401 when signed out, 403 for a forced password change.
 
   The existing PlayStation/Saturn/Sega CD set tests pass unchanged, and `EndpointRoleMatrixTests` is unchanged (same route). Done when: those classes pass.
-- [ ] **4. Player and game page (Web)**: F6–F9. Files: `params.js`, `play.js`, `emulator.ts`, `routes/games/[id]/+page.svelte`. Tests:
+- [x] **4. Player and game page (Web)**: F6–F9. Files: `params.js`, `play.js`, `emulator.ts`, `routes/games/[id]/+page.svelte`. Tests:
   - `src/lib/emulatorParams.test.ts`: `set=1` accepted with `puae` + `disc=1`, refused without `disc`; PUAE `discError` texts; other cores' texts unchanged;
   - `src/lib/emulatorPlay.test.ts`: a `puae` set URL fetches `play-disc-set`, shows `Downloading disks…`, and a 409 shows the PUAE text;
   - `src/lib/emulator.test.ts`: `setMedia`;

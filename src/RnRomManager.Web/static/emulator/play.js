@@ -571,7 +571,7 @@ async function start() {
 	// Sega CD B6: `disc=1` also loads from play-disc, for a core (Genesis Plus GX) that plays cartridges too.
 	// 3DO B7: Opera plays only discs, so it loads from play-disc with or without `disc=1`, like Yabause.
 	if (isPsx || isPsp || isSaturn || isThreeDo || params.disc) {
-		show('Downloading disc…');
+		show(params.core === 'puae' ? 'Downloading disks…' : 'Downloading disc…');
 		// Multi-disc M6: a set loads every disc and its .m3u in one ZIP.
 		const endpoint = params.set ? 'play-disc-set' : 'play-disc';
 		const disc = await loadDisc(`/api/games/${params.game}/roms/${params.rom}/${endpoint}`, params.core, params.set);

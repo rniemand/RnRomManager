@@ -63,10 +63,12 @@ export function parsePlayParams(search, pspPage = false) {
 	if (save.length === 1 && (!/^[0-9a-f]{32}$/.test(save[0]) || !['state', 'battery'].includes(saveKind[0])))
 		return null;
 	// Multi-disc M5 (Saturn and Sega CD S5): `set` is absent or exactly `1`, given once, for PCSX ReARMed, Yabause, or
-	// Genesis Plus GX with `disc=1` (it also plays cartridges).
+	// Genesis Plus GX with `disc=1` (it also plays cartridges). Amiga F6: PUAE too, with `disc=1`.
 	const set = query.getAll('set');
 	const setCore =
-		core === 'pcsx_rearmed' || core === 'yabause' || (core === 'genesis_plus_gx' && disc.length === 1);
+		core === 'pcsx_rearmed' ||
+		core === 'yabause' ||
+		((core === 'genesis_plus_gx' || core === 'puae') && disc.length === 1);
 	if (set.length > 1 || (set.length === 1 && (set[0] !== '1' || !setCore))) return null;
 	return {
 		game,
@@ -378,6 +380,11 @@ export const turboGrafxCdBiosNames = [...turboGrafxCdCards, turboGrafxCdGamesExp
 export function discError(status, code, core = 'pcsx_rearmed', set = false) {
 	const psp = core === pspCore;
 	if (status === 401) return sessionExpired;
+	// Amiga F7: a PUAE floppy set (play-disc-set) has disk wording for every other outcome.
+	if (core === 'puae') {
+		if (code === 'InvalidPlayDisc') return "These disks can't be played in the browser: one of them is empty.";
+		return status === null ? "Couldn't load the disks." : `Couldn't load the disks (HTTP ${status}).`;
+	}
 	if (code === 'PlayDiscTooLarge' && set)
 		return 'This disc set is larger than 2 GiB, too large to play in the browser. CHD images are much smaller.';
 	if (code === 'PlayDiscTooLarge')
