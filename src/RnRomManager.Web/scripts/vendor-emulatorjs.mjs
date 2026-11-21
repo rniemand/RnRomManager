@@ -54,6 +54,11 @@ const cores = [
 // the CDN, and shows "Error reading the game file" for a rejected ROM read. DeSmuME writes its own open .dsv into
 // /data/saves, which EmulatorJS 4.2.3's IDBFS persists only when a file closes, and saveSaveFiles() never syncs (the
 // call is commented out), so for desmume only it syncs, and the 30-second save interval persists the battery save.
+//
+// Saturn and Sega CD multi-disc S4: downloadRom() prefers an .m3u only for the psx group; for Yabause and Genesis Plus
+// GX an .iso/.chd or a .cue among the unpacked files would win. A play-disc-set ZIP carries the set's .m3u, so for those
+// two cores an unpacked .m3u is the content and the image/cue choice is skipped. Single-disc ZIPs hold no .m3u, so they
+// (and every other core) take upstream's choice.
 const edits = [
 	{
 		file: 'emulator.js',
@@ -100,6 +105,15 @@ const edits = [
 			'                    return;\n' +
 			'                }\n' +
 			'                resolve(new Uint8Array(bytes));\n'
+	},
+	{
+		file: 'emulator.js',
+		find: '                    if (isoFile !== null && (supportsExt("iso") || supportsExt("cso") || supportsExt("chd") || supportsExt("elf"))) {\n',
+		replace:
+			'                    const m3uFile = fileNames.find((name) => name.split(".").pop().toLowerCase() === "m3u");\n' +
+			'                    if (m3uFile !== undefined && ["yabause", "genesis_plus_gx"].includes(this.getCore())) {\n' +
+			'                        this.fileName = m3uFile;\n' +
+			'                    } else if (isoFile !== null && (supportsExt("iso") || supportsExt("cso") || supportsExt("chd") || supportsExt("elf"))) {\n'
 	},
 	{
 		file: 'GameManager.js',

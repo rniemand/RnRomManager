@@ -37,7 +37,7 @@ public class DiscSetsTests
         var three = Disc(3);
         var files = new[] { File(one, 0, "Game (USA) (Disc 1).cue"), File(one, 1, "Game (USA) (Disc 1) (Track 2).bin") }.ToLookup(f => f.RomId);
 
-        var sets = DiscSets.Find([three, one, two], files);
+        var sets = DiscSets.Find("psx", [three, one, two], files);
 
         Assert.That(sets, Has.Count.EqualTo(1));
         Assert.That(sets[0].Discs, Is.EqualTo(new[] { one, two, three }));
@@ -49,7 +49,7 @@ public class DiscSetsTests
     {
         var one = Rom("Game (USA) (DISC 1).iso", ["disc 01"]);
 
-        var sets = DiscSets.Find([one, Disc(2, ".img")], NoFiles);
+        var sets = DiscSets.Find("psx", [one, Disc(2, ".img")], NoFiles);
 
         Assert.That(sets.Single().Name, Is.EqualTo("Game (USA).m3u"));
     }
@@ -59,23 +59,23 @@ public class DiscSetsTests
     {
         var one = Rom("Mystery Disc A.chd", ["Disc 1"]);
 
-        Assert.That(DiscSets.Find([one, Disc(2)], NoFiles).Single().Name, Is.EqualTo("Mystery Disc A.m3u"));
+        Assert.That(DiscSets.Find("psx", [one, Disc(2)], NoFiles).Single().Name, Is.EqualTo("Mystery Disc A.m3u"));
     }
 
     [Test]
     public void EightDiscs_AreASet_AndNineAreNot()
     {
-        Assert.That(DiscSets.Find([.. Enumerable.Range(1, 8).Select(n => Disc(n))], NoFiles).Single().Discs, Has.Count.EqualTo(8));
-        Assert.That(DiscSets.Find([.. Enumerable.Range(1, 9).Select(n => Disc(n))], NoFiles), Is.Empty);
+        Assert.That(DiscSets.Find("psx", [.. Enumerable.Range(1, 8).Select(n => Disc(n))], NoFiles).Single().Discs, Has.Count.EqualTo(8));
+        Assert.That(DiscSets.Find("psx", [.. Enumerable.Range(1, 9).Select(n => Disc(n))], NoFiles), Is.Empty);
     }
 
     [Test]
     public void AGap_ADuplicate_OrASingleDisc_IsNoSet()
     {
-        Assert.That(DiscSets.Find([Disc(1), Disc(3)], NoFiles), Is.Empty);
-        Assert.That(DiscSets.Find([Disc(1), Disc(2), Disc(2, ".bin")], NoFiles), Is.Empty);
-        Assert.That(DiscSets.Find([Disc(1)], NoFiles), Is.Empty);
-        Assert.That(DiscSets.Find([Disc(2), Disc(3)], NoFiles), Is.Empty);
+        Assert.That(DiscSets.Find("psx", [Disc(1), Disc(3)], NoFiles), Is.Empty);
+        Assert.That(DiscSets.Find("psx", [Disc(1), Disc(2), Disc(2, ".bin")], NoFiles), Is.Empty);
+        Assert.That(DiscSets.Find("psx", [Disc(1)], NoFiles), Is.Empty);
+        Assert.That(DiscSets.Find("psx", [Disc(2), Disc(3)], NoFiles), Is.Empty);
     }
 
     [TestCase(".pbp")]
@@ -83,13 +83,13 @@ public class DiscSetsTests
     [TestCase(".cue")]
     public void AMemberWhoseMainFileIsNotABinIsoChdOrImg_SpoilsTheSet(string ext)
     {
-        Assert.That(DiscSets.Find([Disc(1), Disc(2, ext)], NoFiles), Is.Empty);
+        Assert.That(DiscSets.Find("psx", [Disc(1), Disc(2, ext)], NoFiles), Is.Empty);
     }
 
     [Test]
     public void TwoRegions_AreTwoSets()
     {
-        var sets = DiscSets.Find([Disc(1), Disc(2), Disc(1, region: "Europe"), Disc(2, region: "Europe")], NoFiles);
+        var sets = DiscSets.Find("psx", [Disc(1), Disc(2), Disc(1, region: "Europe"), Disc(2, region: "Europe")], NoFiles);
 
         Assert.That(sets.Select(s => s.Name), Is.EquivalentTo(new[] { "Game (USA).m3u", "Game (Europe).m3u" }));
     }
@@ -98,23 +98,23 @@ public class DiscSetsTests
     public void DifferingLanguages_Revision_Version_OtherFlagsOrTitle_SplitTheGroup()
     {
         var one = Disc(1);
-        Assert.That(DiscSets.Find([one, Rom("b.chd", ["Disc 2"], languages: ["En"])], NoFiles), Is.Empty);
-        Assert.That(DiscSets.Find([one, Rom("b.chd", ["Disc 2"], revision: "1")], NoFiles), Is.Empty);
-        Assert.That(DiscSets.Find([one, Rom("b.chd", ["Disc 2"], version: "1.1")], NoFiles), Is.Empty);
-        Assert.That(DiscSets.Find([one, Disc(2, extra: ["Demo"])], NoFiles), Is.Empty);
-        Assert.That(DiscSets.Find([one, Rom("b.chd", ["Disc 2"], baseTitle: "Other")], NoFiles), Is.Empty);
+        Assert.That(DiscSets.Find("psx", [one, Rom("b.chd", ["Disc 2"], languages: ["En"])], NoFiles), Is.Empty);
+        Assert.That(DiscSets.Find("psx", [one, Rom("b.chd", ["Disc 2"], revision: "1")], NoFiles), Is.Empty);
+        Assert.That(DiscSets.Find("psx", [one, Rom("b.chd", ["Disc 2"], version: "1.1")], NoFiles), Is.Empty);
+        Assert.That(DiscSets.Find("psx", [one, Disc(2, extra: ["Demo"])], NoFiles), Is.Empty);
+        Assert.That(DiscSets.Find("psx", [one, Rom("b.chd", ["Disc 2"], baseTitle: "Other")], NoFiles), Is.Empty);
     }
 
     [Test]
     public void OtherFlags_AreKeptInTheKey_WhenBothDiscsHaveThem()
     {
-        Assert.That(DiscSets.Find([Disc(1, extra: ["Demo"]), Disc(2, extra: ["Demo"])], NoFiles), Has.Count.EqualTo(1));
+        Assert.That(DiscSets.Find("psx", [Disc(1, extra: ["Demo"]), Disc(2, extra: ["Demo"])], NoFiles), Has.Count.EqualTo(1));
     }
 
     [Test]
     public void AReleaseWithTwoDiscFlags_IsNoMember()
     {
-        Assert.That(DiscSets.Find([Disc(1), Rom("b.chd", ["Disc 2", "Disc 3"])], NoFiles), Is.Empty);
+        Assert.That(DiscSets.Find("psx", [Disc(1), Rom("b.chd", ["Disc 2", "Disc 3"])], NoFiles), Is.Empty);
     }
 
     [TestCase(new[] { "Disc 2" }, 2)]
@@ -125,5 +125,50 @@ public class DiscSetsTests
     public void DiscNumber_FollowsTheFlagRule(string[] flags, int? expected)
     {
         Assert.That(DiscSets.DiscNumber(flags), Is.EqualTo(expected));
+    }
+
+    // Saturn and Sega CD S1: each system's limit and main-file extensions.
+
+    [TestCase("psx", 8)]
+    [TestCase("saturn", 5)]
+    [TestCase("segacd", 4)]
+    [TestCase("3do", 0)]
+    [TestCase("gb", 0)]
+    public void MaxDiscs_IsPerSystem(string systemId, int expected)
+    {
+        Assert.That(DiscSets.MaxDiscs(systemId), Is.EqualTo(expected));
+    }
+
+    [TestCase("saturn", 5)]
+    [TestCase("segacd", 4)]
+    public void SaturnAndSegaCd_TakeUpToTheirLimit_AndNoMore(string systemId, int limit)
+    {
+        Assert.That(DiscSets.Find(systemId, [.. Enumerable.Range(1, limit).Select(n => Disc(n))], NoFiles).Single().Discs, Has.Count.EqualTo(limit));
+        Assert.That(DiscSets.Find(systemId, [.. Enumerable.Range(1, limit + 1).Select(n => Disc(n))], NoFiles), Is.Empty);
+    }
+
+    [TestCase("saturn", ".bin")]
+    [TestCase("saturn", ".iso")]
+    [TestCase("segacd", ".bin")]
+    [TestCase("segacd", ".chd")]
+    public void SaturnAndSegaCd_AcceptBinIsoAndChdDiscs(string systemId, string ext)
+    {
+        Assert.That(DiscSets.Find(systemId, [Disc(1, ext), Disc(2)], NoFiles), Has.Count.EqualTo(1));
+    }
+
+    [TestCase("saturn", ".img")]
+    [TestCase("saturn", ".nrg")]
+    [TestCase("segacd", ".img")]
+    [TestCase("segacd", ".nrg")]
+    public void AnImgOrNrgDisc_SpoilsASaturnOrSegaCdSet(string systemId, string ext)
+    {
+        Assert.That(DiscSets.Find(systemId, [Disc(1), Disc(2, ext)], NoFiles), Is.Empty);
+    }
+
+    [TestCase("3do")]
+    [TestCase("gb")]
+    public void AnotherSystem_HasNoSets(string systemId)
+    {
+        Assert.That(DiscSets.Find(systemId, [Disc(1), Disc(2)], NoFiles), Is.Empty);
     }
 }

@@ -62,9 +62,12 @@ export function parsePlayParams(search, pspPage = false) {
 	if (save.length > 1 || saveKind.length > 1 || save.length !== saveKind.length) return null;
 	if (save.length === 1 && (!/^[0-9a-f]{32}$/.test(save[0]) || !['state', 'battery'].includes(saveKind[0])))
 		return null;
-	// Multi-disc M5: `set` is absent or exactly `1`, given once, and only for PCSX ReARMed.
+	// Multi-disc M5 (Saturn and Sega CD S5): `set` is absent or exactly `1`, given once, for PCSX ReARMed, Yabause, or
+	// Genesis Plus GX with `disc=1` (it also plays cartridges).
 	const set = query.getAll('set');
-	if (set.length > 1 || (set.length === 1 && (set[0] !== '1' || core !== 'pcsx_rearmed'))) return null;
+	const setCore =
+		core === 'pcsx_rearmed' || core === 'yabause' || (core === 'genesis_plus_gx' && disc.length === 1);
+	if (set.length > 1 || (set.length === 1 && (set[0] !== '1' || !setCore))) return null;
 	return {
 		game,
 		rom: Number(rom),
@@ -279,7 +282,11 @@ export const saturnBios = 'saturn_bios.bin';
 export const saturnBiosBytes = 512 * 1024;
 
 /** Saturn B7: shown when the BIOS folder's saturn_bios.bin isn't exactly 512 KiB. */
-export const saturnBiosSizeError = `The Saturn BIOS in the BIOS folder (Paths:Bios) must be the 512 KiB ${saturnBios}: ask an Admin to replace it.`;
+/** Saturn and Sega CD S6: Yabause aborts a playlist without a real BIOS, so a Saturn disc set needs one. */
+export const saturnSetBiosMissing =
+	'Playing all Saturn discs needs a BIOS: ask an Admin to put saturn_bios.bin in the BIOS folder (Paths:Bios).';
+
+export const saturnBiosSizeError =`The Saturn BIOS in the BIOS folder (Paths:Bios) must be the 512 KiB ${saturnBios}: ask an Admin to replace it.`;
 
 /** Saturn B7: every name Yabause looks for its firmware under, in the content root. */
 const saturnBiosNames = [saturnBios, 'sega_101.bin', 'mpr-17933.bin'];

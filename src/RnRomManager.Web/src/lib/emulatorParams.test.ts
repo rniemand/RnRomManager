@@ -16,6 +16,7 @@ import {
 	saturnBios,
 	saturnBiosBytes,
 	saturnBiosSizeError,
+	saturnSetBiosMissing,
 	segaCdBios,
 	segaCdBiosBytes,
 	segaCdBiosMissing,
@@ -106,12 +107,25 @@ describe('parsePlayParams', () => {
 		expect(parsePlayParams(query({ core: 'pcsx_rearmed', set }))).toBeNull();
 	});
 
-	it.each(['yabause', 'genesis_plus_gx', 'opera', 'mgba'])(
-		'rejects set=1 with %s (multi-disc M5)',
-		(core) => {
-			expect(parsePlayParams(query({ core, set: '1' }))).toBeNull();
-		}
-	);
+	it.each(['opera', 'mgba', 'smsplus'])('rejects set=1 with %s (multi-disc M5)', (core) => {
+		expect(parsePlayParams(query({ core, set: '1' }))).toBeNull();
+		expect(parsePlayParams(query({ core, disc: '1', set: '1' }))).toBeNull();
+	});
+
+	it('reads set=1 for Yabause, and for Genesis Plus GX only with disc=1 (Saturn and Sega CD S5)', () => {
+		expect(parsePlayParams(query({ core: 'yabause', set: '1' }))?.set).toBe(true);
+		expect(parsePlayParams(query({ core: 'yabause', disc: '1', set: '1' }))?.set).toBe(true);
+		expect(parsePlayParams(query({ core: 'genesis_plus_gx', disc: '1', set: '1' }))?.set).toBe(
+			true
+		);
+		expect(parsePlayParams(query({ core: 'genesis_plus_gx', set: '1' }))).toBeNull();
+	});
+
+	it('names saturn_bios.bin when a Saturn set has no BIOS (Saturn and Sega CD S6)', () => {
+		expect(saturnSetBiosMissing).toBe(
+			'Playing all Saturn discs needs a BIOS: ask an Admin to put saturn_bios.bin in the BIOS folder (Paths:Bios).'
+		);
+	});
 
 	it('rejects a repeated set (multi-disc M5)', () => {
 		expect(parsePlayParams(`${query({ core: 'pcsx_rearmed' })}&set=1&set=1`)).toBeNull();
