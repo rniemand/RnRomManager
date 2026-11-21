@@ -6,13 +6,24 @@ namespace RnRomManager.Core.Library;
 /// <summary>Multi-disc M1: a game's discs that play together, in disc order, and (M2) the name of their playlist.</summary>
 public sealed record DiscSet(string Name, IReadOnlyList<RomRow> Discs);
 
-/// <summary>Multi-disc M1–M2: finds a PlayStation game's disc sets from its releases at request time; nothing is stored.</summary>
+/// <summary>Multi-disc M1–M2 (Saturn/Sega CD S1): finds a game's disc sets from its releases at request time; nothing is stored.</summary>
 public static partial class DiscSets
 {
-    /// <summary>M1: PCSX ReARMed's libretro disk table (<c>disks[8]</c>) ignores further playlist lines.</summary>
-    public const int MaxDiscs = 8;
+    /// <summary>
+    /// S1: the most discs a set may have, from each pinned core's playlist reader: PCSX ReARMed's <c>disks[8]</c>,
+    /// Yabause's <c>M3U_MAX_FILE</c> (5) and Genesis Plus GX's <c>MAX_DISKS</c> (4); 0 (no sets) for any other system.
+    /// </summary>
+    public static int MaxDiscs(string systemId) => systemId switch
+    {
+        "psx" => 8,
+        "saturn" => 5,
+        "segacd" => 4,
+        _ => 0,
+    };
 
-    private static readonly string[] MainExtensions = [".bin", ".iso", ".chd", ".img"];
+    // S1: the main-file extensions a set's discs may have; the Saturn and Sega CD handlers accept no .img.
+    private static string[] MainExtensions(string systemId) =>
+        systemId == "psx" ? [".bin", ".iso", ".chd", ".img"] : [".bin", ".iso", ".chd"];
 
     [GeneratedRegex(@"^Disc ([0-9]+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DiscFlag();
@@ -28,16 +39,18 @@ public static partial class DiscSets
             : null;
 
     /// <summary>M1: the sets among <paramref name="roms"/> (one game's releases), each ordered by disc; <paramref name="files"/> gives a cue set's cue (ordinal 0) for M2.</summary>
-    public static IReadOnlyList<DiscSet> Find(IReadOnlyList<RomRow> roms, ILookup<long, RomFileRow> files)
+    public static IReadOnlyList<DiscSet> Find(string systemId, IReadOnlyList<RomRow> roms, ILookup<long, RomFileRow> files)
     {
         var sets = new List<DiscSet>();
+        var maxDiscs = MaxDiscs(systemId);
+        var extensions = MainExtensions(systemId);
         var candidates = roms.Where(r => r.Flags.Count(f => DiscFlag().IsMatch(f)) == 1);
         foreach (var group in candidates.GroupBy(GroupKey))
         {
             var discs = group.OrderBy(r => DiscNumber(r.Flags)).ToList();
-            if (discs.Count is < 2 or > MaxDiscs
+            if (discs.Count < 2 || discs.Count > maxDiscs
                 || !discs.Select(r => DiscNumber(r.Flags)).SequenceEqual(Enumerable.Range(1, discs.Count).Select(n => (int?)n))
-                || !discs.All(r => MainExtensions.Any(e => r.FileName.EndsWith(e, StringComparison.OrdinalIgnoreCase))))
+                || !discs.All(r => extensions.Any(e => r.FileName.EndsWith(e, StringComparison.OrdinalIgnoreCase))))
                 continue;
             sets.Add(new DiscSet(Name(discs[0], files), discs));
         }

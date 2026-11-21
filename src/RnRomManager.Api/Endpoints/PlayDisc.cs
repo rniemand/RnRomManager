@@ -97,7 +97,7 @@ public static class PlayDisc
             return Problems.NotFound(ctx);
         var romRows = await roms.ListByGameAsync(id, cancellationToken);
         var lookup = (await roms.ListFilesByGameAsync(id, cancellationToken)).ToLookup(f => f.RomId);
-        if (DiscSets.Find(romRows, lookup).FirstOrDefault(s => s.Discs[0].Id == romId) is not { } set
+        if (DiscSets.Find(SystemId, romRows, lookup).FirstOrDefault(s => s.Discs[0].Id == romId) is not { } set
             || set.Discs.Any(d => d.SystemId != game.SystemId || d.ExternalFileName is null))
             return Problems.NotFound(ctx);
         var claims = await roms.ListExternalAsync(cancellationToken);

@@ -462,7 +462,7 @@ public static class LibraryEndpoints
         var fileRows = (await roms.ListFilesByGameAsync(id, ctx.RequestAborted)).ToLookup(f => f.RomId);
         // Multi-disc M3: PlayStation only; keyed by each set's Disc 1.
         var discSets = game.SystemId == PlayDisc.SystemId
-            ? DiscSets.Find(romRows, fileRows).ToDictionary(s => s.Discs[0].Id)
+            ? DiscSets.Find(PlayDisc.SystemId, romRows, fileRows).ToDictionary(s => s.Discs[0].Id)
             : [];
         return Results.Ok(ToDetail(game, systemName, handler?.BrowserCore, handler?.FileSets ?? false, romRows, fileRows, imageRows, notes, discSets));
     }
