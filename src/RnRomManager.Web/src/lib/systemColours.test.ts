@@ -38,6 +38,7 @@ describe('systemColour', () => {
 
 	it('gives Sega CD its own maroon with white text (Sega CD B2)', () => {
 		expect(systemColour('segacd')).toEqual({ name: 'segacd', foreground: '#fff' });
+		expect(systemColour('tgcd')).toEqual({ name: 'tgcd', foreground: '#fff' });
 	});
 
 	it('gives 3DO its own olive with black text (3DO B2)', () => {

@@ -170,6 +170,7 @@ public class IngestPipelineTests
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [new FixtureGame("Disk Quest (Japan)", "Disk Quest (Japan).fds", DiskQuest)],
             [IngestSeeder.AmigaDat] = [new FixtureGame("Disk Orbit (1990)(Synth)", "Disk Orbit (1990)(Synth).adf", AmigaDisk)],
+            [IngestSeeder.TurboGrafxCdDat] = [],
             [IngestSeeder.ThreeDsDat] =
             [
                 new FixtureGame("Cart Quest (USA)", "Cart Quest (USA).3ds", CartQuest),

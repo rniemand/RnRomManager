@@ -212,6 +212,7 @@ describe('icons', () => {
 		expect(iconClass('system-saturn')).toBe('bi bi-disc');
 		expect(iconClass('system-segacd')).toBe('bi bi-disc');
 		expect(iconClass('system-3do')).toBe('bi bi-disc');
+		expect(iconClass('system-tgcd')).toBe('bi bi-disc');
 	});
 });
 

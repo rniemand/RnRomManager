@@ -59,6 +59,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Sega CD | `segacd` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd` | Redump | `genesis_plus_gx` |
 | Super Nintendo Entertainment System | `snes` | In ZIP | `.sfc`, `.smc` | No-Intro | `snes9x` |
 | TurboGrafx-16 / PC Engine | `tg16` | In ZIP | `.pce` | No-Intro | `mednafen_pce` |
+| TurboGrafx-CD / PC Engine CD | `tgcd` | Next to ZIP | `.bin`, `.cue`, `.chd` | Redump | — |
 | Virtual Boy | `vb` | In ZIP | `.vb` | No-Intro | `beetle_vb` |
 | Wii | `wii` | Next to ZIP | `.iso`, `.wbfs` | Redump | — |
 | Xbox 360 | `x360` | Next to ZIP | `.iso` | Redump | — |

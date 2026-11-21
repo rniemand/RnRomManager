@@ -38,6 +38,7 @@ public static class IgdbPlatforms
         ["snes"] = 19,
         ["switch"] = 130,
         ["tg16"] = 86,
+        ["tgcd"] = 150,
         ["vb"] = 87,
         ["vic20"] = 71,
         ["wii"] = 5,

@@ -168,6 +168,15 @@
 	background-color: var(--bs-tg16) !important;
 }
 
+/* TurboGrafx-CD system colour (TurboGrafx-CD B2): indigo, same in both themes; white on it is AA (~8.9:1). */
+:root {
+	--bs-tgcd: #4c3a99;
+}
+.text-bg-tgcd {
+	color: #fff !important;
+	background-color: var(--bs-tgcd) !important;
+}
+
 /* Nintendo Switch system colour (N3): near-black, same in both themes; white on it is AA (~13:1). */
 :root {
 	--bs-switch: #2d2d2d;

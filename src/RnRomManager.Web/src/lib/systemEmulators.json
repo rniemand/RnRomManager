@@ -458,6 +458,24 @@
 			"note": "RetroArch core: Beetle PCE FAST"
 		}
 	],
+	"tgcd": [
+		{
+			"name": "Mednafen",
+			"url": "https://mednafen.github.io/releases/",
+			"os": ["windows"]
+		},
+		{
+			"name": "ares",
+			"url": "https://ares-emu.net/",
+			"os": ["windows", "macos"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Beetle PCE"
+		}
+	],
 	"vb": [
 		{
 			"name": "Mednafen",

@@ -83,7 +83,7 @@ public partial class LibraryEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [],
             [IngestSeeder.NintendoDsDat] = [new FixtureGame("Download Quest (USA)", "Download Quest (USA).nds", DsQuest)],
             [Gb] =
             [
@@ -162,7 +162,7 @@ public partial class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "s32x", "3do", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "c64", "amiga", "pet", "vic20", "fds", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "3ds", "n64", "nds", "nes", "switch", "psx", "psp", "saturn", "segacd", "snes", "tg16", "vb", "wii", "x360" }));
+            Is.EqualTo(new[] { "s32x", "3do", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "c64", "amiga", "pet", "vic20", "fds", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "3ds", "n64", "nds", "nes", "switch", "psx", "psp", "saturn", "segacd", "snes", "tg16", "tgcd", "vb", "wii", "x360" }));
         Assert.That(systems.Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(23).True);
         Assert.That(Find("switch").GetProperty("embedRoms").GetBoolean(), Is.False, "Switch stores its ROMs outside the ZIP");
         JsonElement Find(string id) => systems.Single(s => s.GetProperty("id").GetString() == id);
@@ -171,6 +171,7 @@ public partial class LibraryEndpointsTests
         Assert.That(gb.GetProperty("shortName").GetString(), Is.EqualTo("GB"), "L3");
         Assert.That((Find("nds").GetProperty("displayName").GetString(), Find("nds").GetProperty("shortName").GetString()), Is.EqualTo(("Nintendo DS", "DS")));
         Assert.That((Find("segacd").GetProperty("displayName").GetString(), Find("segacd").GetProperty("shortName").GetString()), Is.EqualTo(("Sega CD", "SCD")));
+        Assert.That((Find("tgcd").GetProperty("displayName").GetString(), Find("tgcd").GetProperty("shortName").GetString()), Is.EqualTo(("TurboGrafx-CD / PC Engine CD", "TGCD")));
         Assert.That((Find("3do").GetProperty("displayName").GetString(), Find("3do").GetProperty("shortName").GetString()), Is.EqualTo(("3DO", "3DO")));
         Assert.That((Find("c64").GetProperty("displayName").GetString(), Find("c64").GetProperty("shortName").GetString()), Is.EqualTo(("Commodore 64", "C64")));
         Assert.That((Find("pet").GetProperty("displayName").GetString(), Find("pet").GetProperty("shortName").GetString()), Is.EqualTo(("Commodore PET", "PET")));
@@ -184,7 +185,7 @@ public partial class LibraryEndpointsTests
         Assert.That(systems.Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
             "32X", "3DO", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Commodore 64", "Commodore Amiga", "Commodore PET", "Commodore VIC-20", "Famicom Disk System", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 3DS", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
-            "PlayStation", "PlayStation Portable", "Saturn", "Sega CD", "Super Nintendo Entertainment System", "TurboGrafx-16 / PC Engine", "Virtual Boy", "Wii", "Xbox 360"
+            "PlayStation", "PlayStation Portable", "Saturn", "Sega CD", "Super Nintendo Entertainment System", "TurboGrafx-16 / PC Engine", "TurboGrafx-CD / PC Engine CD", "Virtual Boy", "Wii", "Xbox 360"
         }));
     }
 

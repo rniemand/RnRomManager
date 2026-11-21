@@ -103,7 +103,7 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
   - Files: `TurboGrafxCdHandler.cs`, `Resources/boxart/tgcd.svg`, `tgcd.png`, `Resources/boxart/README.md`, `tests/RnRomManager.Systems.Nec.Tests/TurboGrafxCdHandlerTests.cs` (new), `IngestSeeder.cs`.
   - Tests: `TurboGrafxCdHandlerTests` (new), copying `SegaCdHandlerTests`: every B1 value, `ReadHeader` null for any bytes, `NormalizeForHashing` unchanged, PNG valid and 512×512; with a registry holding only this handler, `DatCache` loads a `FixtureDatWriter` Redump catalog with one synthetic cue/bin game and finds its `.bin` by SHA-1, and loads an empty catalog.
   - Done when: those tests pass and the solution builds with warnings as errors.
-- [ ] **2. Register TurboGrafx-CD and update fixtures** (B2, B10 IGDB):
+- [x] **2. Register TurboGrafx-CD and update fixtures** (B2, B10 IGDB):
   - Registration after `Nintendo3DsHandler`. README row `| TurboGrafx-CD / PC Engine CD | `tgcd` | Next to ZIP | `.bin`, `.cue`, `.chd` | Redump | — |` between TurboGrafx-16 / PC Engine and Virtual Boy.
   - `IgdbPlatforms.ById["tgcd"]` (after checking B10's id); `systemEmulators.json` `"tgcd"` entry; colour (`systemColours.ts` union and map, `app.css` block with the contrast comment); icon (`icons.ts`).
   - `IngestSeeder`: `tgcd` in the disc-folder loop and `[TurboGrafxCdDat] = []` in the Basic/Full `FixtureDatWriter.Write` call.
@@ -207,6 +207,7 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
 - 2026-11-20 Which Play dialog buttons move → all three (state, battery, screenshot), to the footer's left (user)
 - 2026-11-20 Loading label → `50% of 512.0 MiB`; with no total, the size received so far (user)
 - 2026-11-20 U review → `rom-progress.ts` e2e helper updated (regex, no cross-package import); the starting label pinned; Close/Cancel wording (reviewer)
+- 2026-11-20 B10 IGDB id → 150 kept but unconfirmed: IGDB's public pages refuse automated reads (403) and no IGDB credentials were used without the user's say-so; the maintainer checks it (code)
 - 2026-11-20 Review round 2 → `HandleAsync`/`HandleSetAsync` pass the system id through `OpenDiscAsync` to `ShapeProblem`; round 3 clean (reviewer)
 
 ## Kickoff prompt
