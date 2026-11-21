@@ -83,7 +83,7 @@ public partial class LibraryEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [],
             [IngestSeeder.NintendoDsDat] = [new FixtureGame("Download Quest (USA)", "Download Quest (USA).nds", DsQuest)],
             [Gb] =
             [
@@ -162,7 +162,7 @@ public partial class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "s32x", "3do", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "c64", "amiga", "pet", "vic20", "fds", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "3ds", "n64", "nds", "nes", "switch", "psx", "psp", "saturn", "segacd", "snes", "tg16", "vb", "wii", "x360" }));
+            Is.EqualTo(new[] { "s32x", "3do", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "c64", "amiga", "pet", "vic20", "fds", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "3ds", "n64", "nds", "nes", "switch", "psx", "psp", "saturn", "segacd", "snes", "tg16", "tgcd", "vb", "wii", "x360" }));
         Assert.That(systems.Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(23).True);
         Assert.That(Find("switch").GetProperty("embedRoms").GetBoolean(), Is.False, "Switch stores its ROMs outside the ZIP");
         JsonElement Find(string id) => systems.Single(s => s.GetProperty("id").GetString() == id);
@@ -171,6 +171,7 @@ public partial class LibraryEndpointsTests
         Assert.That(gb.GetProperty("shortName").GetString(), Is.EqualTo("GB"), "L3");
         Assert.That((Find("nds").GetProperty("displayName").GetString(), Find("nds").GetProperty("shortName").GetString()), Is.EqualTo(("Nintendo DS", "DS")));
         Assert.That((Find("segacd").GetProperty("displayName").GetString(), Find("segacd").GetProperty("shortName").GetString()), Is.EqualTo(("Sega CD", "SCD")));
+        Assert.That((Find("tgcd").GetProperty("displayName").GetString(), Find("tgcd").GetProperty("shortName").GetString()), Is.EqualTo(("TurboGrafx-CD / PC Engine CD", "TGCD")));
         Assert.That((Find("3do").GetProperty("displayName").GetString(), Find("3do").GetProperty("shortName").GetString()), Is.EqualTo(("3DO", "3DO")));
         Assert.That((Find("c64").GetProperty("displayName").GetString(), Find("c64").GetProperty("shortName").GetString()), Is.EqualTo(("Commodore 64", "C64")));
         Assert.That((Find("pet").GetProperty("displayName").GetString(), Find("pet").GetProperty("shortName").GetString()), Is.EqualTo(("Commodore PET", "PET")));
@@ -184,7 +185,7 @@ public partial class LibraryEndpointsTests
         Assert.That(systems.Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
             "32X", "3DO", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Commodore 64", "Commodore Amiga", "Commodore PET", "Commodore VIC-20", "Famicom Disk System", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 3DS", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
-            "PlayStation", "PlayStation Portable", "Saturn", "Sega CD", "Super Nintendo Entertainment System", "TurboGrafx-16 / PC Engine", "Virtual Boy", "Wii", "Xbox 360"
+            "PlayStation", "PlayStation Portable", "Saturn", "Sega CD", "Super Nintendo Entertainment System", "TurboGrafx-16 / PC Engine", "TurboGrafx-CD / PC Engine CD", "Virtual Boy", "Wii", "Xbox 360"
         }));
     }
 
@@ -279,6 +280,7 @@ public partial class LibraryEndpointsTests
     [TestCase("saturn", true, true, "yabause")]
     [TestCase("segacd", true, true, "genesis_plus_gx")]
     [TestCase("3do", true, true, "opera")]
+    [TestCase("tgcd", true, true, "mednafen_pce")]
     [TestCase("c64", false, true, "vice_x64sc")]
     [TestCase("pet", false, true, "vice_xpet")]
     [TestCase("vic20", false, true, "vice_xvic")]
@@ -306,8 +308,16 @@ public partial class LibraryEndpointsTests
     public Task Games_QuickPlay_AChdPrimary_IsPlayable(string system, string core) =>
         AssertQuickPlayAsync(system, true, true, core, "x.chd", "x.chd");
 
+    // TurboGrafx-CD B5: Beetle PCE plays a .bin only as a cue set's data track; a lone .chd plays.
+    [TestCase("x.bin", "x.cue", true)]
+    [TestCase("x.bin", null, false)]
+    [TestCase("x.BIN", null, false)]
+    [TestCase("x.chd", null, true)]
+    public Task Games_QuickPlay_TurboGrafxCd_ALoneBinIsNotPlayable(string fileName, string? setFile, bool playable) =>
+        AssertQuickPlayAsync("tgcd", true, playable, "mednafen_pce", fileName, fileName, setFile);
+
     private async Task AssertQuickPlayAsync(string system, bool external, bool playable, string? core,
-        string? fileName = null, string externalName = "x.gb")
+        string? fileName = null, string externalName = "x.gb", string? setFile = null)
     {
         var id = await Tetris();
         long primaryId;
@@ -321,6 +331,11 @@ public partial class LibraryEndpointsTests
                 await connection.ExecuteAsync("UPDATE roms SET file_name = @fileName WHERE game_id = @id AND is_primary = 1", new { id, fileName });
             (primaryId, primaryName) = await connection.QuerySingleAsync<(long, string)>(
                 "SELECT id, file_name FROM roms WHERE game_id = @id AND is_primary = 1 ORDER BY id LIMIT 1", new { id });
+            if (setFile is not null)
+                await connection.ExecuteAsync("""
+                    INSERT INTO rom_files (rom_id, game_id, ordinal, file_name, external_file_name, original_file_name, size_bytes, crc32, md5, sha1)
+                    VALUES (@primaryId, @id, 1, @setFile, @setFile, @setFile, 100, '00000000', REPEAT('0', 32), REPEAT('0', 40))
+                    """, new { primaryId, id, setFile });
         }
 
         var item = (await GetJson("/api/games")).GetProperty("items")[0];
@@ -463,6 +478,7 @@ public partial class LibraryEndpointsTests
     [TestCase("vic20", "vice_xvic")]
     [TestCase("amiga", "puae")]
     [TestCase("tg16", "mednafen_pce")]
+    [TestCase("tgcd", "mednafen_pce")]
     [TestCase("n64", "mupen64plus_next")]
     [TestCase("nosuch", null)]
     public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)

@@ -301,6 +301,38 @@ describe('game detail page', () => {
 		);
 	});
 
+	function tgcd(files: ReleaseFile[] | null): GameDetail {
+		const disc = game([1]);
+		disc.system = 'tgcd';
+		disc.browserCore = 'mednafen_pce';
+		disc.roms[0].fileName = 'Star Lancer (USA) (Track 02).bin';
+		disc.roms[0].externalFileName = 'Star Lancer (USA) (Track 02).bin';
+		disc.roms[0].files = files;
+		return disc;
+	}
+
+	it('an external TurboGrafx-CD cue set plays on Beetle PCE from play-disc (TurboGrafx-CD B5, B6)', async () => {
+		const disc = tgcd(setFiles);
+		answers.push({ status: 200, body: disc });
+		render(GamePage);
+
+		await fireEvent.click(
+			await screen.findByRole('button', { name: 'Play Star Lancer (USA) (Track 02).bin' })
+		);
+		await vi.waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
+		const src = document.querySelector('iframe')!.getAttribute('src')!;
+		expect(src).toContain('core=mednafen_pce');
+		expect(src).toContain('&disc=1');
+	});
+
+	it('a lone TurboGrafx-CD .bin release has no Play button (TurboGrafx-CD B5)', async () => {
+		answers.push({ status: 200, body: tgcd(null) });
+		render(GamePage);
+
+		await screen.findByRole('article', { name: 'Star Lancer (USA) (Track 02).bin' });
+		expect(screen.queryByRole('button', { name: /^Play / })).toBeNull();
+	});
+
 	it('an external DS release plays on DeSmuME from /download, without disc=1 (S8)', async () => {
 		const ds = game([1]);
 		ds.system = 'nds';

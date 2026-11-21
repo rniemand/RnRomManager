@@ -82,6 +82,8 @@ export const icons: Record<string, string> = {
 	folder: 'bi bi-folder',
 	info: 'bi bi-info-circle',
 	help: 'bi bi-question-circle',
+	/** U1: the footer's icon-only Shortcuts button. */
+	keyboard: 'bi bi-keyboard',
 	warning: 'bi bi-exclamation-triangle',
 	error: 'bi bi-x-octagon',
 	success: 'bi bi-check-circle',
@@ -111,7 +113,8 @@ export const icons: Record<string, string> = {
 	'system-wii': 'bi bi-disc',
 	'system-saturn': 'bi bi-disc',
 	'system-segacd': 'bi bi-disc',
-	'system-3do': 'bi bi-disc'
+	'system-3do': 'bi bi-disc',
+	'system-tgcd': 'bi bi-disc'
 };
 
 /** An unmapped `system-<id>` falls back to a controller, so a new system needs no UI change. */

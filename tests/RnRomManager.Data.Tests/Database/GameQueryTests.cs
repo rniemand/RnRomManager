@@ -1,3 +1,4 @@
+using Dapper;
 using Microsoft.Extensions.Logging.Abstractions;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Naming;
@@ -15,12 +16,13 @@ public class GameQueryTests
     private GameRepository _games = null!;
     private RomRepository _roms = null!;
     private ImageRepository _images = null!;
+    private MySqlConnectionFactory _factory = null!;
     private int _seed;
 
     [SetUp]
     public async Task SetUp()
     {
-        var factory = new MySqlConnectionFactory(await MariaDbServer.CreateDatabaseAsync());
+        var factory = _factory = new MySqlConnectionFactory(await MariaDbServer.CreateDatabaseAsync());
         new MySqlDatabaseLifecycle(factory, NullLogger<MySqlDatabaseLifecycle>.Instance, TimeProvider.System).Migrate();
         _mirror = new LibraryMirror(factory);
         _games = new GameRepository(factory);
@@ -472,5 +474,25 @@ public class GameQueryTests
 
         Assert.That((items["Orbit"].DlcCount, items["Orbit"].UpdateCount), Is.EqualTo((1, 1)));
         Assert.That((items["Comet"].DlcCount, items["Comet"].UpdateCount), Is.EqualTo((0, 1)));
+    }
+
+    [Test]
+    public async Task ListItem_PrimaryHasFiles_IsTrueOnlyWhenThePrimaryHasSetFiles()
+    {
+        var withFiles = await Add("Cue Set", releases: [["World"], ["Japan"]]);
+        await Add("Lone Disc");
+        await using (var connection = _factory.Create())
+        {
+            var rom = await connection.ExecuteScalarAsync<long>(
+                "SELECT id FROM roms WHERE game_id = @withFiles AND is_primary = 1", new { withFiles });
+            await connection.ExecuteAsync("""
+                INSERT INTO rom_files (rom_id, game_id, ordinal, file_name, external_file_name, original_file_name, size_bytes, crc32, md5, sha1)
+                VALUES (@rom, @withFiles, 1, 'x.cue', 'x.cue', 'x.cue', 100, '00000000', REPEAT('0', 32), REPEAT('0', 40))
+                """, new { rom, withFiles });
+        }
+
+        var items = (await _games.ListAsync(new GameQuery(), default)).Items.ToDictionary(i => i.DisplayTitle);
+
+        Assert.That((items["Cue Set"].PrimaryHasFiles, items["Lone Disc"].PrimaryHasFiles), Is.EqualTo((true, false)));
     }
 }

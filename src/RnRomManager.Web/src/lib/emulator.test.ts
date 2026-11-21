@@ -9,6 +9,7 @@ import {
 	trimBounds,
 	usesPlayDisc
 } from './emulator';
+import type { ReleaseFile } from './api/types';
 
 describe('canPlay', () => {
 	it('is false without a browser core', () => {
@@ -90,6 +91,35 @@ describe('canPlay', () => {
 		expect(canPlay({ browserCore: 'pcsx_rearmed' }, { externalFileName: 'Disc (USA).bin' })).toBe(
 			true
 		);
+	});
+});
+
+describe('canPlay on mednafen_pce (TurboGrafx-CD B5)', () => {
+	const file = { id: 1, fileName: 'Disc (USA).cue', sizeBytes: 100 } as ReleaseFile;
+
+	it('plays a cue set whose main file is a .bin', () => {
+		expect(
+			canPlay(
+				{ browserCore: 'mednafen_pce' },
+				{ externalFileName: 'Disc (USA) (Track 02).bin', files: [file] }
+			)
+		).toBe(true);
+	});
+
+	it('plays an external .chd', () => {
+		expect(canPlay({ browserCore: 'mednafen_pce' }, { externalFileName: 'Disc (USA).chd' })).toBe(
+			true
+		);
+	});
+
+	it.each([null, []])('refuses a lone external .BIN (files %j)', (files) => {
+		expect(
+			canPlay({ browserCore: 'mednafen_pce' }, { externalFileName: 'Disc (USA).BIN', files })
+		).toBe(false);
+	});
+
+	it('plays an embedded TurboGrafx-16 .pce', () => {
+		expect(canPlay({ browserCore: 'mednafen_pce' }, { externalFileName: null })).toBe(true);
 	});
 });
 

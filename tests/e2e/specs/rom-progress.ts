@@ -45,6 +45,10 @@ export async function stageRomDownload(page: Page, name: string): Promise<void> 
 	}, name);
 }
 
+/** U4: `<percent> of <size>`; contentSize's exact output is pinned in emulatorParams.test.ts. */
+const sized = (percent: number) =>
+	new RegExp(String.raw`^${percent}% of \d+(\.\d)? (B|KiB|MiB|GiB)$`);
+
 export async function expectRomDownloadProgress(frame: FrameLocator): Promise<void> {
 	const bar = frame.locator('progress');
 	const label = frame.locator('#downloaded');
@@ -55,13 +59,13 @@ export async function expectRomDownloadProgress(frame: FrameLocator): Promise<vo
 		);
 	await expect(bar).toBeVisible();
 	await expect(bar).toHaveJSProperty('position', 0);
-	await expect(label).toHaveText('0%');
+	await expect(label).toHaveText(sized(0));
 	await expect(label).toBeVisible();
 	for (const fraction of [0.25, 0.75]) {
 		await advance(fraction);
 		await expect.poll(() => bar.evaluate((el: HTMLProgressElement) => el.position)).toBe(fraction);
 		await expect(bar).toBeVisible();
-		await expect(label).toHaveText(`${fraction * 100}%`);
+		await expect(label).toHaveText(sized(fraction * 100));
 	}
 	await advance(1);
 	await expect(bar).toBeHidden();

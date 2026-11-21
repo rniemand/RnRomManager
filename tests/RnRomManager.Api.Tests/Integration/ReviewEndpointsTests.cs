@@ -97,7 +97,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [],
             [IngestSeeder.NintendoDsDat] = [new FixtureGame("Stylus Quest (USA)", "Stylus Quest (USA).nds", StylusQuest) { ReleaseYear = 2006 }],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Known)
             { ReleaseYear = 1989, Developers = ["Nintendo"], Publishers = ["Nintendo"], Genres = ["Puzzle"] }],
@@ -1075,7 +1075,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] = Enumerable.Range(1, 25).Select(i => new FixtureGame($"Demo {i} (World)", $"Demo {i} (World).gb", new SyntheticRomBuilder { Seed = 1000 + i }.Build())).ToArray(),
             ["Nintendo - Game Boy Color"] = [],
@@ -1121,7 +1121,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] =
             [
@@ -1310,6 +1310,23 @@ public class ReviewEndpointsTests
         Assert.That((rom.FileName, rom.ExternalFileName, rom.Identification.Method),
             Is.EqualTo(("Sonic CD (USA).chd", "Sonic CD (USA).chd", IdentificationMethod.Manual)));
         Assert.That(File.Exists(Path.Combine(_factory.Root, "roms", "segacd", "S", "Sonic CD (USA).chd")), Is.True);
+        Assert.That(File.Exists(item.SourcePath), Is.False);
+    }
+
+    [Test]
+    public async Task TurboGrafxCd_UnmatchedChd_WaitsInReview_AndManualStoresItAsChdNextToTheZip()
+    {
+        var item = await QueueChd("tgcd", "mystery.chd", 2605);
+        Assert.That(item.SystemId, Is.EqualTo("tgcd"));
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "Mystery Disc", regions = new[] { "Japan" }, languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+
+        Assert.That(response.Code, Is.Null);
+        var game = await ReadGame(response.GameId!.Value);
+        var rom = game.Roms.Single();
+        Assert.That((game.System, rom.FileName, rom.ExternalFileName, rom.Identification.Method),
+            Is.EqualTo(("tgcd", "Mystery Disc (Japan).chd", "Mystery Disc (Japan).chd", IdentificationMethod.Manual)));
+        Assert.That(File.Exists(Path.Combine(_factory.Root, "roms", "tgcd", "M", "Mystery Disc (Japan).chd")), Is.True);
         Assert.That(File.Exists(item.SourcePath), Is.False);
     }
 

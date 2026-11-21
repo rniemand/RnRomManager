@@ -14,7 +14,7 @@ namespace RnRomManager.Api.Endpoints;
 /// <c>.chd</c> (or a PlayStation <c>.img</c>) streams unchanged like an <c>.iso</c>. Every member is opened
 /// and checked before the response starts; nothing is written to disk and nothing is audited. PSP B2: a PlayStation
 /// Portable release streams its standalone <c>.iso</c>, <c>.cso</c> or <c>.pbp</c> the same way. Saturn, Sega CD and 3DO take PlayStation's disc
-/// shapes. All these systems share the same cap (<see cref="MaxBytes"/>).
+/// shapes; TurboGrafx-CD takes its cue sets and a standalone <c>.chd</c> only. All these systems share the same cap (<see cref="MaxBytes"/>).
 /// </summary>
 public static class PlayDisc
 {
@@ -28,12 +28,14 @@ public static class PlayDisc
 
     public const string ThreeDoSystemId = "3do";
 
+    public const string TurboGrafxCdSystemId = "tgcd";
+
     /// <summary>The inclusive cap on the combined opened lengths a launch may stream.</summary>
     public const long MaxBytes = 2L * 1024 * 1024 * 1024;
 
     private static readonly HashSet<string> SupportedSystems = new(StringComparer.Ordinal)
     {
-        SystemId, PspSystemId, SaturnSystemId, SegaCdSystemId, ThreeDoSystemId,
+        SystemId, PspSystemId, SaturnSystemId, SegaCdSystemId, ThreeDoSystemId, TurboGrafxCdSystemId,
     };
 
     public const string InvalidPlayDisc = "InvalidPlayDisc";
@@ -51,7 +53,6 @@ public static class PlayDisc
             || !SupportedSystems.Contains(game.SystemId) || rom.SystemId != game.SystemId
             || rom.ExternalFileName is not { } mainName)
             return Problems.NotFound(ctx);
-        var psp = game.SystemId == PspSystemId;
 
         var setFiles = (await roms.ListFilesByGameAsync(id, cancellationToken)).Where(f => f.RomId == romId).OrderBy(f => f.Ordinal).ToList();
         var claims = await roms.ListExternalAsync(cancellationToken);
@@ -60,7 +61,7 @@ public static class PlayDisc
         try
         {
             var budget = new Budget($"The disc is larger than {MaxBytes / (1024 * 1024 * 1024)} GiB.");
-            var (problem, disc) = await OpenDiscAsync(ctx, game, rom, mainName, setFiles, claims, files, psp, "track-", "", opened, budget);
+            var (problem, disc) = await OpenDiscAsync(ctx, game, rom, mainName, setFiles, claims, files, game.SystemId, "track-", "", opened, budget);
             if (problem is not null)
             {
                 DisposeAll(opened);
@@ -113,7 +114,7 @@ public static class PlayDisc
                 var number = i + 1;
                 var rom = set.Discs[i];
                 var setFiles = lookup[rom.Id].OrderBy(f => f.Ordinal).ToList();
-                var (problem, disc) = await OpenDiscAsync(ctx, game, rom, rom.ExternalFileName!, setFiles, claims, files, psp: false,
+                var (problem, disc) = await OpenDiscAsync(ctx, game, rom, rom.ExternalFileName!, setFiles, claims, files, game.SystemId,
                     $"disc{number}-track-", $"Disc {number}: ", opened, budget);
                 if (problem is null && disc!.Cue is null
                     && firmware.FirstOrDefault(f => f.Equals(disc.Entries[0].Name, StringComparison.OrdinalIgnoreCase)) is { } clash)
@@ -186,7 +187,7 @@ public static class PlayDisc
     /// <paramref name="detailPrefix"/>, and cue tracks are aliased with <paramref name="trackPrefix"/>.
     /// </summary>
     private static async Task<(IResult? Problem, Disc? Disc)> OpenDiscAsync(HttpContext ctx, GameRow game, RomRow rom, string mainName,
-        List<RomFileRow> setFiles, IReadOnlyList<ExternalRomRow> claims, LibraryFiles files, bool psp, string trackPrefix,
+        List<RomFileRow> setFiles, IReadOnlyList<ExternalRomRow> claims, LibraryFiles files, string systemId, string trackPrefix,
         string detailPrefix, List<Stream> opened, Budget budget)
     {
         // B2: a FileSets member keeps its exact name, so info.json's fileName equals its externalFileName.
@@ -195,7 +196,7 @@ public static class PlayDisc
 
         var members = new List<Member> { new(mainName, null) };
         members.AddRange(setFiles.Select(f => new Member(f.ExternalFileName, f.Id)));
-        if (ShapeProblem(members, psp) is { } shape)
+        if (ShapeProblem(members, systemId) is { } shape)
             return (Invalid(ctx, detailPrefix + shape), null);
         if (members.Any(m => !IsSoleClaim(game, m, claims)))
             return (Problems.NotFound(ctx), null);
@@ -247,9 +248,12 @@ public static class PlayDisc
     /// <summary>
     /// B2: a standalone <c>.bin</c>/<c>.iso</c> (CHD B4: or <c>.chd</c>; or a PlayStation <c>.img</c> or <c>.pbp</c>), or one cue with 1–99 BINs (the main file among
     /// them), all portable names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>, <c>.cso</c> or <c>.pbp</c>.
+    /// TurboGrafx-CD B4: Beetle PCE boots only a cue or a <c>.chd</c> as a CD (a bare <c>.bin</c> would run as a HuCard), so
+    /// a single file must be a <c>.chd</c>.
     /// </summary>
-    private static string? ShapeProblem(List<Member> members, bool psp)
+    private static string? ShapeProblem(List<Member> members, string systemId)
     {
+        var psp = systemId == PspSystemId;
         if (members.FirstOrDefault(m => CueSheet.NameProblem(m.Name) is not null) is { } bad)
             return $"'{bad.Name}' is not a portable file name";
         if (psp)
@@ -257,6 +261,9 @@ public static class PlayDisc
                 ? null : "a PSP disc must be a single .iso, .cso or .pbp";
         if (members.Select(m => m.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != members.Count)
             return "two disc files have the same name ignoring case";
+        if (members.Count == 1 && systemId == TurboGrafxCdSystemId)
+            return members[0].Name.EndsWith(".chd", StringComparison.OrdinalIgnoreCase)
+                ? null : "a TurboGrafx-CD disc must be a .cue with its .bin tracks, or a .chd";
         if (members.Count == 1)
             return IsBin(members[0].Name) || members[0].Name.EndsWith(".iso", StringComparison.OrdinalIgnoreCase)
                 || members[0].Name.EndsWith(".chd", StringComparison.OrdinalIgnoreCase)

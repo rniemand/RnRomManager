@@ -22,7 +22,7 @@ export function formatCount(n: number): string {
 	return n.toLocaleString('en-US');
 }
 
-/** `512 B`, `1.5 KiB`, `16.0 MiB`, `8.0 GiB`. */
+/** `512 B`, `1.5 KiB`, `16.0 MiB`, `8.0 GiB`. U4: `contentSize` in `static/emulator/params.js` copies it: keep the two in step. */
 export function formatSize(bytes: number | null | undefined): string {
 	if (bytes === null || bytes === undefined || !Number.isFinite(bytes) || bytes < 0) return '';
 	if (bytes < KiB) return `${bytes} B`;

@@ -238,6 +238,15 @@ describe('EmulatorModal save to library (Saves B18, B19)', () => {
 		}
 	);
 
+	it("the save and screenshot buttons sit in the dialog's footer; the body holds only the frame (U3)", async () => {
+		const { container } = await openFor('gambatte');
+		for (const name of ['Save state to library', 'Save battery to library', 'Screenshot'])
+			expect(button(container, name)!.closest('.modal-footer')).not.toBeNull();
+		const body = container.querySelector('.modal-body')!;
+		expect(body.querySelectorAll('button')).toHaveLength(0);
+		expect([...body.children].map((c) => c.className)).toEqual(['ratio ratio-4x3 mx-auto']);
+	});
+
 	it.each(['desmume', 'opera'])('%s offers only the state button', async (core) => {
 		const { container } = await openFor(core);
 		expect(button(container, 'Save state to library')).not.toBeNull();

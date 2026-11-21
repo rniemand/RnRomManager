@@ -249,6 +249,7 @@ Route — file under `src/RnRomManager.Web/src/routes/`.
 - GameBoyHandlerBase — src/RnRomManager.Systems.GameBoy/GameBoyHandlerBase.cs
 - Xbox360Handler `x360` — src/RnRomManager.Systems.Microsoft/Xbox360Handler.cs
 - TurboGrafx16Handler `tg16` — src/RnRomManager.Systems.Nec/TurboGrafx16Handler.cs
+- TurboGrafxCdHandler `tgcd` — src/RnRomManager.Systems.Nec/TurboGrafxCdHandler.cs
 - FdsHandler `fds` — src/RnRomManager.Systems.Nes/FdsHandler.cs
 - NesHandler — src/RnRomManager.Systems.Nes/NesHandler.cs
 - Nintendo64Handler — src/RnRomManager.Systems.Nintendo64/Nintendo64Handler.cs
@@ -325,7 +326,7 @@ File names without extension. System projects (`src/RnRomManager.Systems.*`) are
 - `RnRomManager.Systems.Commodore.Tests`: AmigaHandlerTests, C64HandlerTests, C64HeaderTests, PetHandlerTests, Vic20HandlerTests
 - `RnRomManager.Systems.GameBoy.Tests`: GameBoyAdvanceHeaderReaderTests, GameBoyHandlerTests, GameBoyHeaderReaderTests, SyntheticGbaRomBuilderTests, SyntheticRomBuilderTests
 - `RnRomManager.Systems.Microsoft.Tests`: Xbox360HandlerTests
-- `RnRomManager.Systems.Nec.Tests`: TurboGrafx16HandlerTests
+- `RnRomManager.Systems.Nec.Tests`: TurboGrafx16HandlerTests, TurboGrafxCdHandlerTests
 - `RnRomManager.Systems.Nes.Tests`: FdsHandlerTests, NesHandlerTests, NesHeaderReaderTests, SyntheticNesRomBuilderTests
 - `RnRomManager.Systems.Nintendo64.Tests`: Nintendo64ByteOrderTests, Nintendo64HandlerTests, Nintendo64HeaderReaderTests, SyntheticN64RomBuilderTests
 - `RnRomManager.Systems.NintendoDisc.Tests`: GameCubeHandlerTests, NintendoDiscHeaderTests, WiiHandlerTests
@@ -347,14 +348,14 @@ Read a section with offset/limit instead of the whole doc (`features.md` alone i
 
 - `docs/configuration.md` (127 lines): Paths :32; Genesis Plus GX core :36; PicoDrive core :47; Snes9x core :58; Opera core :69; VICE core :80; Mupen64Plus-Next core :107; Other settings :119; Backups :123; Logs :126
 
-- `docs/deployment.md` (539 lines): Docker Compose :7; Using an existing MariaDB server :69; Volumes and permissions :83; Time zone :104; Reverse proxy :108; Outbound HTTP :126; Health checks :130; Backup and restore :137; What to back up :139; Database backups :149; Restoring a backup :160; Outbound connections :199; Upgrades :204; Nintendo DS: memory, disk and time :307; ZIP compression repack :328; External ROM storage (Nintendo Switch, Nintendo DS, Nintendo 3DS and disc systems) :336; Genesis Plus GX core :358; PicoDrive core :371; Snes9x core :384; Opera core :421; VICE core :458; Mupen64Plus-Next core :499; Admin password recovery :531
+- `docs/deployment.md` (544 lines): Docker Compose :7; Using an existing MariaDB server :69; Volumes and permissions :83; Time zone :104; Reverse proxy :108; Outbound HTTP :126; Health checks :130; Backup and restore :137; What to back up :139; Database backups :149; Restoring a backup :160; Outbound connections :199; Upgrades :204; Nintendo DS: memory, disk and time :312; ZIP compression repack :333; External ROM storage (Nintendo Switch, Nintendo DS, Nintendo 3DS and disc systems) :341; Genesis Plus GX core :363; PicoDrive core :376; Snes9x core :389; Opera core :426; VICE core :463; Mupen64Plus-Next core :504; Admin password recovery :536
 
-- `docs/development.md` (187 lines): Architecture :3; Getting started :55; Synthetic ingestion data :69; End-to-end tests :92; Web app structure :100; Browser emulators :120; Reports and curation helpers :140; Backups, notes and hotkeys :148; File action auditing :159; Collections discovery :169; Bundle Creator :180
+- `docs/development.md` (188 lines): Architecture :3; Getting started :55; Synthetic ingestion data :69; End-to-end tests :92; Web app structure :100; Browser emulators :120; Reports and curation helpers :141; Backups, notes and hotkeys :149; File action auditing :160; Collections discovery :170; Bundle Creator :181
 
-- `docs/features.md` (644 lines): Account types :5; Navigation bar, footer and page titles :16; Global search :26; Keyboard shortcuts :30; Sign in and change password :59; Library :64; Collections :81; Publishers and genres :92; Systems :104; Bundle Creator :111; Game detail :126; Ingestion :195; External storage (Nintendo Switch, Nintendo DS, Nintendo 3DS and disc systems) :219; Disc sets :231; Jobs :246; Job detail :250; Review queue :258; Deleted ROMs :292; Reports :301; Integrity :326; Admin :339; Reference: behaviour and API :351; Ingestion review queue :355; Resolve reviews through the API :365; Browse the library through the API :395; Collections through the API :427; Bundle Creator through the API :440; Publishers and genres through the API :449; Rate games through the API :463; Select ingestion files through the API :469; Delete ingestion files through the API :475; Deleted ROMs through the API :481; Report APIs :487; File action auditing :506; Edit the library through the API :530; Retry missing media :555; Integrity checker :563; Saves through the API :581; Release notes through the API :592; Keyboard shortcuts through the API :601; Database backups through the API :608; DAT refresh schedule through the API :619; ROM Zip Config :625; Admin settings, logs and About :636
+- `docs/features.md` (645 lines): Account types :5; Navigation bar, footer and page titles :16; Global search :26; Keyboard shortcuts :30; Sign in and change password :59; Library :64; Collections :81; Publishers and genres :92; Systems :104; Bundle Creator :111; Game detail :126; Ingestion :196; External storage (Nintendo Switch, Nintendo DS, Nintendo 3DS and disc systems) :220; Disc sets :232; Jobs :247; Job detail :251; Review queue :259; Deleted ROMs :293; Reports :302; Integrity :327; Admin :340; Reference: behaviour and API :352; Ingestion review queue :356; Resolve reviews through the API :366; Browse the library through the API :396; Collections through the API :428; Bundle Creator through the API :441; Publishers and genres through the API :450; Rate games through the API :464; Select ingestion files through the API :470; Delete ingestion files through the API :476; Deleted ROMs through the API :482; Report APIs :488; File action auditing :507; Edit the library through the API :531; Retry missing media :556; Integrity checker :564; Saves through the API :582; Release notes through the API :593; Keyboard shortcuts through the API :602; Database backups through the API :609; DAT refresh schedule through the API :620; ROM Zip Config :626; Admin settings, logs and About :637
 
-- `docs/zip-format.md` (277 lines): Layout :7; Naming :86; External ROM files :109; Release notes :120; Saves :129; Writes :143; `info.json` (schema version 6) :151; Game :155; Rom :177; Image :244; Validation :259; Versions :263
+- `docs/zip-format.md` (278 lines): Layout :7; Naming :87; External ROM files :110; Release notes :121; Saves :130; Writes :144; `info.json` (schema version 6) :152; Game :156; Rom :178; Image :245; Validation :260; Versions :264
 
-- `README.md` (167 lines): Supported systems :26; Quick start :67; Documentation :131; Disclaimer :140; Attribution :144; License :165
+- `README.md` (168 lines): Supported systems :26; Quick start :68; Documentation :132; Disclaimer :141; Attribution :145; License :166
 
 - `CONTRIBUTING.md` (21 lines): Specs, branches and PRs :7; Test rule :17; Doc rule :20

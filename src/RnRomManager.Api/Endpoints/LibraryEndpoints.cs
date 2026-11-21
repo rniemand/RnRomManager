@@ -26,13 +26,13 @@ public static class LibraryEndpoints
     /// <summary>
     /// Play B1: the browser cores that play a release stored outside the ZIP: through play-disc (<see cref="PlayDiscCores"/>) PCSX ReARMed for
     /// PlayStation, (PSP B1) PPSSPP for PlayStation Portable, (Saturn B6) Yabause for Saturn and (Sega CD B5) Genesis Plus GX
-    /// for Sega CD. Eligibility is per core, so Genesis Plus GX also accepts an external primary of Mega Drive, a family that
+    /// for Sega CD, (TurboGrafx-CD B5) Beetle PCE for TurboGrafx-CD. Eligibility is per core, so Genesis Plus GX also accepts an external primary of Mega Drive, a family that
     /// the registry keeps embedded. S8: DeSmuME plays an external DS release from <c>/download</c>.
     /// </summary>
-    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "desmume" };
+    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "desmume", "mednafen_pce" };
 
     /// <summary>S8: the cores whose external releases play through <c>play-disc</c>; any other (DS) loads from <c>/download</c>.</summary>
-    public static readonly IReadOnlySet<string> PlayDiscCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera" };
+    public static readonly IReadOnlySet<string> PlayDiscCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "mednafen_pce" };
 
     /// <summary>B10: <c>&lt;title&gt;-&lt;imageId&gt;.&lt;ext&gt;</c>; the suffix is added after sanitizing (which cuts to 180), so it is never lost.</summary>
     public static string ImageDownloadName(string displayTitle, ImageRow image)
@@ -862,7 +862,10 @@ public static class LibraryEndpoints
         var core = systems.ById(game.SystemId)?.BrowserCore;
         var playable = core is not null && game.PrimaryRomId is not null
             && (!game.PrimaryIsExternal || ExternalBrowserCores.Contains(core))
-            && game.PrimaryRomFileName?.EndsWith(".nrg", StringComparison.OrdinalIgnoreCase) != true;
+            && game.PrimaryRomFileName?.EndsWith(".nrg", StringComparison.OrdinalIgnoreCase) != true
+            // TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, so only a cue set's .bin plays.
+            && !(core == "mednafen_pce" && game.PrimaryIsExternal && !game.PrimaryHasFiles
+                 && game.PrimaryRomFileName?.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) == true);
         return new
         {
             id = game.Id,

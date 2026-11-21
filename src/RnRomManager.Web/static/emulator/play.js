@@ -10,10 +10,13 @@
 // library save is fetched before the loader and applied once at game start; the modal asks the page to export the
 // running game's state or battery save, which it sends back for upload. E1: on a touch-first device the virtual gamepad
 // is enabled and shown at game start. E2: the modal can also ask for a PNG screenshot of the running game.
+// TurboGrafx-CD B7: Beetle PCE with `disc=1` needs a System Card (the first found, handed over as syscard3.pce) and
+// takes gexpress.pce when present, then loads from play-disc.
 import {
 	biosError,
 	biosFor,
 	contentFileName,
+	contentSize,
 	controlSchemeFor,
 	discError,
 	isOperatorCore,
@@ -40,13 +43,17 @@ import {
 	threeDoBios,
 	threeDoBiosBytes,
 	threeDoBiosMissing,
-	threeDoBiosSizeError
+	threeDoBiosSizeError,
+	turboGrafxCdBiosMaxBytes,
+	turboGrafxCdBiosMissing,
+	turboGrafxCdBiosSizeError,
+	turboGrafxCdCards,
+	turboGrafxCdGamesExpress
 } from './params.js';
 
 const status = /** @type {HTMLElement} */ (document.getElementById('status'));
 const progress = /** @type {HTMLProgressElement} */ (document.getElementById('loading'));
 const downloaded = /** @type {HTMLElement} */ (document.getElementById('downloaded'));
-const formatBytes = new Intl.NumberFormat(undefined, { style: 'unit', unit: 'byte', unitDisplay: 'long' });
 const formatPercent = new Intl.NumberFormat(undefined, { style: 'percent' });
 
 /** @param {string} text */
@@ -56,7 +63,10 @@ function show(text) {
 	downloaded.hidden = true;
 }
 
-/** @param {Response} response */
+/**
+ * U4: the loading label shows `<percent> of <total size>` with a known total, else the size received so far.
+ * @param {Response} response
+ */
 function readContent(response) {
 	if (!response.body) return response.blob();
 	const encoding = response.headers.get('Content-Encoding');
@@ -75,7 +85,8 @@ function readContent(response) {
 		progress.removeAttribute('value');
 	}
 	progress.hidden = false;
-	downloaded.textContent = hasTotal ? formatPercent.format(0) : formatBytes.format(0);
+	const totalSize = hasTotal ? contentSize(total) : '';
+	downloaded.textContent = hasTotal ? `${formatPercent.format(0)} of ${totalSize}` : contentSize(0);
 	downloaded.hidden = false;
 	let bytes = 0;
 	const body = response.body.pipeThrough(
@@ -85,10 +96,11 @@ function readContent(response) {
 				if (hasTotal) {
 					progress.value = Math.min(bytes, total);
 					const percent = Math.floor((Math.min(bytes, total) * 100) / total);
-					const label = formatPercent.format(percent / 100);
+					const label = `${formatPercent.format(percent / 100)} of ${totalSize}`;
 					if (downloaded.textContent !== label) downloaded.textContent = label;
 				} else {
-					downloaded.textContent = formatBytes.format(bytes);
+					const label = contentSize(bytes);
+					if (downloaded.textContent !== label) downloaded.textContent = label;
 				}
 				controller.enqueue(chunk);
 			}
@@ -120,13 +132,15 @@ async function checkBios(name) {
 
 /**
  * Play B4, Saturn B7: one GET of an optional BIOS (scph5501.bin, saturn_bios.bin), read with a bound of its exact
- * size (cancelled as soon as it's exceeded).
+ * size (cancelled as soon as it's exceeded). TurboGrafx-CD B8: with `exact` false, `size` is only the maximum, and an
+ * empty file is refused too.
  * @param {string} name the BIOS file name in Paths:Bios
- * @param {number} size the only accepted length
+ * @param {number} size the only accepted length, or with `exact` false the largest
  * @param {string} sizeError the message for a file of any other length
+ * @param {boolean} [exact]
  * @returns {Promise<{ bios: ArrayBuffer | null } | { error: string }>} the firmware, null for HLE (404), or why to stop
  */
-async function loadOptionalBios(name, size, sizeError) {
+async function loadOptionalBios(name, size, sizeError, exact = true) {
 	let response;
 	try {
 		response = await fetch(`/api/emulator/bios/${name}`, { credentials: 'same-origin' });
@@ -161,6 +175,7 @@ async function loadOptionalBios(name, size, sizeError) {
 	} catch {
 		return { error: /** @type {string} */ (optionalBiosError(null)) };
 	}
+	if (!exact) return length > 0 ? { bios: bytes.slice(0, length).buffer } : { error: sizeError };
 	return length === size ? { bios: bytes.buffer } : { error: sizeError };
 }
 
@@ -471,6 +486,7 @@ async function start() {
 	const isDs = params.core === 'desmume';
 	const isSegaCd = params.core === 'genesis_plus_gx' && params.disc;
 	const isThreeDo = params.core === 'opera';
+	const isTurboGrafxCd = params.core === 'mednafen_pce' && params.disc;
 	// PSP B3: play-psp.html is its own tab, with no modal to talk to.
 	if (!pspPage) listenForMessages(isThreeDo);
 	if (isPsp) {
@@ -524,6 +540,30 @@ async function start() {
 			if (result.bios) threeDoFirmware[`/${name}`] = result.bios;
 		}
 		if (Object.keys(threeDoFirmware).length === 0) return show(threeDoBiosMissing);
+	}
+	// TurboGrafx-CD B7: the System Cards in order, stopping at the first found; then the optional Games Express card. A 404
+	// skips a file; an empty or oversized one, or any other problem, stops the launch there.
+	/** @type {Record<string, ArrayBuffer>} */
+	const turboGrafxCdFirmware = {};
+	if (isTurboGrafxCd) {
+		for (const name of turboGrafxCdCards) {
+			const result = await loadOptionalBios(name, turboGrafxCdBiosMaxBytes, turboGrafxCdBiosSizeError(name), false);
+			if ('error' in result) return show(result.error);
+			if (result.bios) {
+				// Beetle PCE opens syscard3.pce for its default pce_cdbios; it treats every card's bytes the same way.
+				turboGrafxCdFirmware['/syscard3.pce'] = result.bios;
+				break;
+			}
+		}
+		if (!turboGrafxCdFirmware['/syscard3.pce']) return show(turboGrafxCdBiosMissing);
+		const gamesExpress = await loadOptionalBios(
+			turboGrafxCdGamesExpress,
+			turboGrafxCdBiosMaxBytes,
+			turboGrafxCdBiosSizeError(turboGrafxCdGamesExpress),
+			false
+		);
+		if ('error' in gamesExpress) return show(gamesExpress.error);
+		if (gamesExpress.bios) turboGrafxCdFirmware[`/${turboGrafxCdGamesExpress}`] = gamesExpress.bios;
 	}
 
 	/** @type {Blob} */
@@ -584,6 +624,13 @@ async function start() {
 	// 3DO B8: Opera reads its BIOS from the content root too, and keeps cue handling on by itself; it boots the first
 	// BIOS present in its own order, so no core option is set.
 	if (isThreeDo) ejs.EJS_externalFiles = threeDoFirmware;
+	// TurboGrafx-CD B7: Beetle PCE reads its cards from the system directory, the content root here. No core option is
+	// set (EmulatorJS stores options per game, and a stored one would outlive a card swap); pce_cdbios is hidden so no
+	// one picks a card file that isn't there.
+	if (isTurboGrafxCd) {
+		ejs.EJS_externalFiles = turboGrafxCdFirmware;
+		ejs.EJS_hideSettings = ['pce_cdbios'];
+	}
 	// B3/B8: an operator-supplied core loads its payloads and report by name from the API; the vendored loader keeps
 	// them non-threaded.
 	if (isOperator) ejs.EJS_paths = operatorCorePaths(params.core);

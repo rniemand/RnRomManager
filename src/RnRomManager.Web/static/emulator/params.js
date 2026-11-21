@@ -340,6 +340,34 @@ export const threeDoBiosMissing =
 const threeDoBiosNames = threeDoBios.map((name) => name.toLowerCase());
 
 /**
+ * TurboGrafx-CD B7: the System Cards looked for, one at a time in this order; the first one found is the only one used,
+ * handed to Beetle PCE as `syscard3.pce` (the file its default `pce_cdbios` value opens).
+ */
+export const turboGrafxCdCards = ['syscard3.pce', 'syscard3u.pce', 'syscard2.pce', 'syscard2u.pce', 'syscard1.pce'];
+
+/** TurboGrafx-CD B7: the Games Express card, optional; Beetle PCE opens it by itself for a Games Express disc. */
+export const turboGrafxCdGamesExpress = 'gexpress.pce';
+
+/** TurboGrafx-CD B8: the largest BIOS file accepted (1 MiB); Beetle PCE takes any size and strips a copier header. */
+export const turboGrafxCdBiosMaxBytes = 1048576;
+
+/**
+ * TurboGrafx-CD B7: shown when a TurboGrafx-CD BIOS file in the BIOS folder is empty or over 1 MiB.
+ * @param {string} name the BIOS file name
+ * @returns {string}
+ */
+export function turboGrafxCdBiosSizeError(name) {
+	return `The TurboGrafx-CD BIOS ${name} in the BIOS folder (Paths:Bios) is empty or larger than 1 MiB: ask an Admin to replace it.`;
+}
+
+/** TurboGrafx-CD B7: shown when no System Card is in the BIOS folder. */
+export const turboGrafxCdBiosMissing =
+	'TurboGrafx-CD games need a System Card BIOS: ask an Admin to put syscard3.pce in the BIOS folder (Paths:Bios).';
+
+/** TurboGrafx-CD B9: every BIOS name the player may write to the content root. */
+export const turboGrafxCdBiosNames = [...turboGrafxCdCards, turboGrafxCdGamesExpress];
+
+/**
  * The play page's message for a failed play-disc request.
  * @param {number | null} status the HTTP status, or null for a network or body-read failure
  * @param {string | null} code the problem's `code`, when the body had one
@@ -385,7 +413,8 @@ export function pspBrowserError(browser) {
  * written at /scph5501.bin can't overwrite it. Saturn B7: the same for a Saturn image named like any of Yabause's
  * three BIOS names, so the firmware can't overwrite it and Yabause never takes the disc for its BIOS. Sega CD B7: the
  * same for any Genesis Plus GX content named like a Sega CD BIOS, disc or cartridge alike (harmless for a cartridge).
- * 3DO B8: the same for an Opera disc named like any of the five 3DO BIOS files.
+ * 3DO B8: the same for an Opera disc named like any of the five 3DO BIOS files. TurboGrafx-CD B9: the same for any
+ * Beetle PCE content named like a System Card or the Games Express card, disc or HuCard alike.
  * @param {string} core
  * @param {string} game the game id
  * @param {string} name the release's file name
@@ -398,6 +427,22 @@ export function contentFileName(core, game, name) {
 		(core === 'pcsx_rearmed' && lower === psxBios) ||
 		(core === 'yabause' && saturnBiosNames.includes(lower)) ||
 		(core === 'genesis_plus_gx' && segaCdBiosNames.includes(lower)) ||
-		(core === 'opera' && threeDoBiosNames.includes(lower));
+		(core === 'opera' && threeDoBiosNames.includes(lower)) ||
+		(core === 'mednafen_pce' && turboGrafxCdBiosNames.includes(lower));
 	return clashes ? `${game}-${safe}` : safe;
+}
+
+const sizeNumber = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+
+/**
+ * U4: a size for the loading label, `512 B`, `1.5 KiB`, `16.0 MiB`, `8.0 GiB`. A copy of `formatSize` in
+ * `src/lib/format.ts` (the static play page can't import from `src/lib`): keep the two in step.
+ * @param {number} bytes
+ * @returns {string}
+ */
+export function contentSize(bytes) {
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${sizeNumber.format(bytes / 1024)} KiB`;
+	if (bytes < 1024 * 1024 * 1024) return `${sizeNumber.format(bytes / (1024 * 1024))} MiB`;
+	return `${sizeNumber.format(bytes / (1024 * 1024 * 1024))} GiB`;
 }

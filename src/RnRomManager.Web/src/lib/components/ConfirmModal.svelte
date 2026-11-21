@@ -28,6 +28,8 @@
 		/** Review QoL B6: called each time the modal has finished opening (`shown.bs.modal`). */
 		onshown?: () => void;
 		children?: Snippet;
+		/** U3: extra footer content, first in the footer and pushed left (`me-auto`) of Close/Cancel. */
+		footer?: Snippet;
 	}
 
 	let {
@@ -42,7 +44,8 @@
 		onconfirm,
 		beforeclose,
 		onshown,
-		children
+		children,
+		footer
 	}: Props = $props();
 
 	let closing = $state(false);
@@ -132,6 +135,9 @@
 				<div class="modal-body">{@render children?.()}</div>
 			{/if}
 			<div class="modal-footer">
+				{#if footer}
+					<div class="d-flex flex-wrap gap-2 me-auto">{@render footer()}</div>
+				{/if}
 				<button
 					type="button"
 					class="btn btn-secondary"

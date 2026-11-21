@@ -43,7 +43,8 @@ public sealed class TurboGrafx16Handler : ISystemHandler
     public ReadOnlyMemory<byte> NormalizeForHashing(ReadOnlyMemory<byte> rom) =>
         rom.Length % 8192 == CopierHeaderBytes ? rom[CopierHeaderBytes..] : rom;
 
-    private static byte[] LoadResource(string name)
+    /// <summary>An embedded resource of this assembly by its path under <c>Resources/</c>, e.g. <c>boxart.tg16.png</c>.</summary>
+    internal static byte[] LoadResource(string name)
     {
         using var stream = typeof(TurboGrafx16Handler).Assembly.GetManifestResourceStream($"RnRomManager.Systems.Nec.Resources.{name}")
             ?? throw new InvalidOperationException($"Embedded resource {name} is missing.");

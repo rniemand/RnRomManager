@@ -77,6 +77,7 @@ public class BrowserCoreExtensionsTests
     {
         [("saturn", ".bin")] = "play-disc adds a MODE1/2352 cue to a lone .bin, and Yabause opens the cue",
         [("saturn", ".nrg")] = "never plays: canPlay and the games list's playRomId refuse an .nrg release",
+        [("tgcd", ".bin")] = "a cue set's data track; a lone .bin never plays (canPlay, play-disc)",
         [("jaguar", ".rom")] = "VirtualJaguar picks the format from the file's content (unverified with a real dump)",
         [("jaguar", ".abs")] = "VirtualJaguar picks the format from the file's content (unverified with a real dump)",
         [("jaguar", ".cof")] = "VirtualJaguar picks the format from the file's content (unverified with a real dump)",
@@ -107,6 +108,7 @@ public class BrowserCoreExtensionsTests
             "jaguar .rom: stale exception (no such system)",
             "jaguar .abs: stale exception (no such system)",
             "jaguar .cof: stale exception (no such system)",
+            "tgcd .bin: stale exception (no such system)",
         }));
     }
 

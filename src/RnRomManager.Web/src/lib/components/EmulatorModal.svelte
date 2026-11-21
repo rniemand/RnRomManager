@@ -377,8 +377,9 @@
 	size="xl"
 	beforeclose={core === 'opera' ? saveBeforeClose : batteryExport ? storeBeforeClose : undefined}
 >
-	{#if open && rom && core}
-		<div class="d-flex flex-wrap gap-2 mb-2">
+	<!-- U3: the save and screenshot buttons sit in the dialog's footer, left of Close. -->
+	{#snippet footer()}
+		{#if open && rom && core}
 			{#if !discSet}
 				<button
 					type="button"
@@ -409,8 +410,8 @@
 					<Icon name="screenshot" /> Screenshot
 				</button>
 			{/if}
-		</div>
-	{/if}
+		{/if}
+	{/snippet}
 	<!-- Cap the width so the 4:3 frame fits the viewport height (dialog chrome ≈ 14rem): Start Game needs no scrolling. -->
 	<div class="ratio ratio-4x3 mx-auto" style="max-width: calc((100vh - 14rem) * 4 / 3)">
 		{#if open && rom && core && lookingUp}
