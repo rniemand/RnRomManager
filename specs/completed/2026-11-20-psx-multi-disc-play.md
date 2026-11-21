@@ -1,6 +1,6 @@
 ---
 title: PlayStation multi-disc play
-status: in-progress
+status: completed
 created: 2026-11-20
 ---
 
