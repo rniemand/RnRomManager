@@ -66,7 +66,7 @@ No migration, config key, stored data or API contract change beyond `discSet` no
 - **Unverified with real dumps:** that PUAE's playlist boots Disk 1 and swaps disks through EmulatorJS's menu is read from the code (`libretro-dc.c`'s `dc_parse_m3u`, EmulatorJS `downloadRom()`), not run. Finish includes one manual check with a real two-disk set.
 
 ## Steps
-- [ ] **1. Amiga disk sets (Core)**: F1, F2. Files: `DiscSets.cs`. Tests: `tests/RnRomManager.Core.Tests/Library/DiscSetsTests.cs`, with new cases:
+- [x] **1. Amiga disk sets (Core)**: F1, F2. Files: `DiscSets.cs`. Tests: `tests/RnRomManager.Core.Tests/Library/DiscSetsTests.cs`, with new cases:
   - a 2-disk set whose Disk 1 has a `[cr CSL]` tag and Disk 2 none forms one set named from Disk 1 (F2 example);
   - a 3-disk set listed out of order comes back in disk order;
   - each of these gives no set: a missing disk; two candidates for Disk 1; a single disk; `n` above `m`; two tokens in one name; a non-`.adf` member;

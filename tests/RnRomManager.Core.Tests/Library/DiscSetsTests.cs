@@ -132,6 +132,7 @@ public class DiscSetsTests
     [TestCase("psx", 8)]
     [TestCase("saturn", 5)]
     [TestCase("segacd", 4)]
+    [TestCase("amiga", 20)]
     [TestCase("3do", 0)]
     [TestCase("gb", 0)]
     public void MaxDiscs_IsPerSystem(string systemId, int expected)
@@ -170,5 +171,99 @@ public class DiscSetsTests
     public void AnotherSystem_HasNoSets(string systemId)
     {
         Assert.That(DiscSets.Find(systemId, [Disc(1), Disc(2)], NoFiles), Is.Empty);
+    }
+
+    // Amiga F1–F2: floppy disk sets from TOSEC file names.
+
+    private static RomRow Disk(string fileName) => Rom(fileName, [], [], baseTitle: "Allo");
+
+    private static string Tosec(int n, int m, string tags = "", string ext = ".adf") =>
+        $"'Allo 'Allo! Cartoon Fun! (1993)(Alternative)(Disk {n} of {m}){tags}{ext}";
+
+    [Test]
+    public void Amiga_TwoDisks_DifferingOnlyInTags_AreOneSet_NamedFromDiskOne()
+    {
+        var one = Disk(Tosec(1, 2, "[cr CSL]"));
+        var two = Disk(Tosec(2, 2));
+
+        var sets = DiscSets.Find("amiga", [two, one], NoFiles);
+
+        Assert.That(sets, Has.Count.EqualTo(1));
+        Assert.That(sets[0].Discs, Is.EqualTo(new[] { one, two }));
+        Assert.That(sets[0].Name, Is.EqualTo("'Allo 'Allo! Cartoon Fun! (1993)(Alternative)[cr CSL].m3u"));
+    }
+
+    [Test]
+    public void Amiga_ThreeDisksOutOfOrder_ComeBackInDiskOrder()
+    {
+        var one = Disk(Tosec(1, 3));
+        var two = Disk(Tosec(2, 3));
+        var three = Disk(Tosec(3, 3));
+
+        Assert.That(DiscSets.Find("amiga", [three, one, two], NoFiles).Single().Discs, Is.EqualTo(new[] { one, two, three }));
+    }
+
+    private static IEnumerable<TestCaseData> AmigaNonSets()
+    {
+        yield return new TestCaseData((object)new[] { Tosec(1, 3), Tosec(2, 3) }).SetName("Amiga_AMissingDisk_IsNoSet");
+        yield return new TestCaseData((object)new[] { Tosec(1, 2, "[cr CSL]"), Tosec(1, 2, "[cr QTX]"), Tosec(2, 2) })
+            .SetName("Amiga_TwoCandidatesForOneDisk_AreNoSet");
+        yield return new TestCaseData((object)new[] { Tosec(1, 2) }).SetName("Amiga_ASingleDisk_IsNoSet");
+        yield return new TestCaseData((object)new[] { Tosec(1, 2), Tosec(3, 2) }).SetName("Amiga_ANumberAboveTheTotal_IsNoSet");
+        yield return new TestCaseData((object)new[] { Tosec(1, 2) + " (Disk 1 of 2).adf", Tosec(2, 2) }).SetName("Amiga_TwoTokensInOneName_AreNoSet");
+        yield return new TestCaseData((object)new[] { Tosec(1, 2), Tosec(2, 2, ext: ".adz") }).SetName("Amiga_ANonAdfMember_IsNoSet");
+    }
+
+    [TestCaseSource(nameof(AmigaNonSets))]
+    public void Amiga_GroupsThatAreNotSets(string[] fileNames)
+    {
+        Assert.That(DiscSets.Find("amiga", fileNames.Select(Disk).ToList(), NoFiles), Is.Empty);
+    }
+
+    [TestCase(20, true)]
+    [TestCase(21, false)]
+    public void Amiga_TakesUpToTwentyDisks(int total, bool isSet)
+    {
+        var disks = Enumerable.Range(1, total).Select(n => Disk(Tosec(n, total))).ToList();
+
+        Assert.That(DiscSets.Find("amiga", disks, NoFiles), Has.Count.EqualTo(isSet ? 1 : 0));
+    }
+
+    [Test]
+    public void Amiga_ZeroPaddedNumbers_AndTheTokensCase_AreIgnored()
+    {
+        var one = Disk("Game (1990)(Synth)(DISK 01 of 02).adf");
+        var two = Disk("Game (1990)(Synth)(disk 2 OF 2).adf");
+
+        Assert.That(DiscSets.Find("amiga", [one, two], NoFiles).Single().Name, Is.EqualTo("Game (1990)(Synth).m3u"));
+    }
+
+    [Test]
+    public void Amiga_TwoPublishersInOneGame_AreTwoSets()
+    {
+        var a = new[] { Disk("Game (1990)(Synth)(Disk 1 of 2).adf"), Disk("Game (1990)(Synth)(Disk 2 of 2).adf") };
+        var b = new[] { Disk("Game (1991)(Other)(Disk 1 of 2).adf"), Disk("Game (1991)(Other)(Disk 2 of 2).adf") };
+
+        Assert.That(DiscSets.Find("amiga", [.. a, .. b], NoFiles).Select(s => s.Name),
+            Is.EquivalentTo(new[] { "Game (1990)(Synth).m3u", "Game (1991)(Other).m3u" }));
+    }
+
+    [Test]
+    public void Amiga_DiscFlagsAndOtherSystemsTokens_DontCross()
+    {
+        // A "(Disk n of m)" name on another system, or Disc flags on Amiga, makes no set.
+        Assert.That(DiscSets.Find("psx", [Disk(Tosec(1, 2)), Disk(Tosec(2, 2))], NoFiles), Is.Empty);
+        Assert.That(DiscSets.Find("amiga", [Disc(1, ".adf"), Disc(2, ".adf")], NoFiles), Is.Empty);
+    }
+
+    [TestCase("Game (1990)(Synth)(Disk 3 of 4).adf", 3)]
+    [TestCase("Game (1990)(Synth)(disk 01 of 02)[cr].adf", 1)]
+    [TestCase("Game (1990)(Synth)(Disk 3 of 2).adf", null)]
+    [TestCase("Game (1990)(Synth)(Disk 0 of 2).adf", null)]
+    [TestCase("Game (1990)(Synth).adf", null)]
+    [TestCase("Game (Disk 1 of 2)(Disk 2 of 2).adf", null)]
+    public void DiskNumber_FollowsTheTokenRule(string fileName, int? expected)
+    {
+        Assert.That(DiscSets.DiskNumber(fileName), Is.EqualTo(expected));
     }
 }
