@@ -84,7 +84,7 @@ public static class PlayDisc
     }
 
     /// <summary>
-    /// Multi-disc M4: <c>GET /api/games/{id}/roms/{romId}/play-disc-set</c>, every disc of the PlayStation set whose Disc 1
+    /// Multi-disc M4: <c>GET /api/games/{id}/roms/{romId}/play-disc-set</c>, every disc of the PlayStation (Saturn/Sega CD S3: or Saturn or Sega CD) set whose Disc 1
     /// is <paramref name="romId"/> as one uncompressed ZIP: the generated <c>.m3u</c> first, then each disc as
     /// <c>play-disc</c> would send it (cue tracks aliased <c>disc&lt;n&gt;-track-NN.bin</c>). One 2 GiB cap covers the set.
     /// </summary>
@@ -93,11 +93,11 @@ public static class PlayDisc
     {
         ctx.Response.Headers.CacheControl = "no-store";
         var cancellationToken = ctx.RequestAborted;
-        if (await repository.GetAsync(id, cancellationToken) is not { } game || game.SystemId != SystemId)
+        if (await repository.GetAsync(id, cancellationToken) is not { } game || !FirmwareNames.TryGetValue(game.SystemId, out var firmware))
             return Problems.NotFound(ctx);
         var romRows = await roms.ListByGameAsync(id, cancellationToken);
         var lookup = (await roms.ListFilesByGameAsync(id, cancellationToken)).ToLookup(f => f.RomId);
-        if (DiscSets.Find(SystemId, romRows, lookup).FirstOrDefault(s => s.Discs[0].Id == romId) is not { } set
+        if (DiscSets.Find(game.SystemId, romRows, lookup).FirstOrDefault(s => s.Discs[0].Id == romId) is not { } set
             || set.Discs.Any(d => d.SystemId != game.SystemId || d.ExternalFileName is null))
             return Problems.NotFound(ctx);
         var claims = await roms.ListExternalAsync(cancellationToken);
@@ -115,15 +115,25 @@ public static class PlayDisc
                 var setFiles = lookup[rom.Id].OrderBy(f => f.Ordinal).ToList();
                 var (problem, disc) = await OpenDiscAsync(ctx, game, rom, rom.ExternalFileName!, setFiles, claims, files, psp: false,
                     $"disc{number}-track-", $"Disc {number}: ", opened, budget);
-                if (problem is null && disc!.Cue is null && disc.Entries[0].Name.Equals(PsxBiosName, StringComparison.OrdinalIgnoreCase))
-                    problem = Invalid(ctx, $"Disc {number}: a disc file can't be named {PsxBiosName}");
+                if (problem is null && disc!.Cue is null
+                    && firmware.FirstOrDefault(f => f.Equals(disc.Entries[0].Name, StringComparison.OrdinalIgnoreCase)) is { } clash)
+                    problem = Invalid(ctx, $"Disc {number}: a disc file can't be named {clash}");
                 if (problem is not null)
                 {
                     DisposeAll(opened);
                     return problem;
                 }
-                playlist.Append((disc!.Cue ?? disc.Entries[0]).Name).Append('\n');
-                entries.AddRange(disc.Cue is null ? disc.Entries : [disc.Cue, .. disc.Entries]);
+                // S3: Yabause and Genesis Plus GX open a playlist entry as named, so a lone .bin gets the cue EmulatorJS
+                // would generate for it alone (createCueFile).
+                var cue = disc!.Cue;
+                if (cue is null && game.SystemId != SystemId && IsBin(disc.Entries[0].Name))
+                {
+                    var name = disc.Entries[0].Name;
+                    var cueBytes = new UTF8Encoding(false).GetBytes($"FILE \"{name}\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n");
+                    cue = new Entry(Path.GetFileNameWithoutExtension(name) + ".cue", new MemoryStream(cueBytes), cueBytes.Length);
+                }
+                playlist.Append((cue ?? disc.Entries[0]).Name).Append('\n');
+                entries.AddRange(cue is null ? disc.Entries : [cue, .. disc.Entries]);
             }
 
             var bytes = new UTF8Encoding(false).GetBytes(playlist.ToString());
@@ -148,8 +158,16 @@ public static class PlayDisc
         }
     }
 
-    /// <summary>Multi-disc M4: the firmware the player writes to the content root as <c>/scph5501.bin</c>.</summary>
-    private const string PsxBiosName = "scph5501.bin";
+    /// <summary>
+    /// Multi-disc M4 (Saturn/Sega CD S3): the systems with disc sets, and the firmware files the player writes to the
+    /// content root, which a standalone disc of that name would overwrite.
+    /// </summary>
+    private static readonly Dictionary<string, string[]> FirmwareNames = new(StringComparer.Ordinal)
+    {
+        [SystemId] = ["scph5501.bin"],
+        [SaturnSystemId] = ["saturn_bios.bin", "sega_101.bin", "mpr-17933.bin"],
+        [SegaCdSystemId] = ["bios_CD_U.bin", "bios_CD_E.bin", "bios_CD_J.bin"],
+    };
 
     /// <summary>The running total of opened lengths against <see cref="MaxBytes"/>, and the 409 title once it's passed.</summary>
     private sealed class Budget(string tooLargeTitle)
