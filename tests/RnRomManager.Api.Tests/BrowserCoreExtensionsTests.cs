@@ -108,6 +108,7 @@ public class BrowserCoreExtensionsTests
             "jaguar .rom: stale exception (no such system)",
             "jaguar .abs: stale exception (no such system)",
             "jaguar .cof: stale exception (no such system)",
+            "tgcd .bin: stale exception (no such system)",
         }));
     }
 
