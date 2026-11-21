@@ -1314,6 +1314,23 @@ public class ReviewEndpointsTests
     }
 
     [Test]
+    public async Task TurboGrafxCd_UnmatchedChd_WaitsInReview_AndManualStoresItAsChdNextToTheZip()
+    {
+        var item = await QueueChd("tgcd", "mystery.chd", 2605);
+        Assert.That(item.SystemId, Is.EqualTo("tgcd"));
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "Mystery Disc", regions = new[] { "Japan" }, languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+
+        Assert.That(response.Code, Is.Null);
+        var game = await ReadGame(response.GameId!.Value);
+        var rom = game.Roms.Single();
+        Assert.That((game.System, rom.FileName, rom.ExternalFileName, rom.Identification.Method),
+            Is.EqualTo(("tgcd", "Mystery Disc (Japan).chd", "Mystery Disc (Japan).chd", IdentificationMethod.Manual)));
+        Assert.That(File.Exists(Path.Combine(_factory.Root, "roms", "tgcd", "M", "Mystery Disc (Japan).chd")), Is.True);
+        Assert.That(File.Exists(item.SourcePath), Is.False);
+    }
+
+    [Test]
     public async Task Chd_DatPick_IsStoredAsTheDatGameUnverified()
     {
         var item = await QueueChd("saturn", "quest.chd", 2403);

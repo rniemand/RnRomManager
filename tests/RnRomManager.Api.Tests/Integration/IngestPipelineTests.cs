@@ -61,6 +61,10 @@ public class IngestPipelineTests
     /// <summary>3DO B3: the DAT-matched data track of a cue + 2 bins set, and its audio track.</summary>
     private static readonly byte[] OpalData = new SyntheticDiscBuilder { Seed = 2501 }.Build();
     private static readonly byte[] OpalAudio = new SyntheticDiscBuilder { Seed = 2502, Size = 32 * 1024 }.Build();
+    /// <summary>TurboGrafx-CD B3: a Redump-style disc, audio Track 01, the DAT-matched data Track 02, audio Track 03.</summary>
+    private static readonly byte[] NinjaAudio1 = new SyntheticDiscBuilder { Seed = 2601, Size = 32 * 1024 }.Build();
+    private static readonly byte[] NinjaData = new SyntheticDiscBuilder { Seed = 2602 }.Build();
+    private static readonly byte[] NinjaAudio3 = new SyntheticDiscBuilder { Seed = 2603, Size = 32 * 1024 }.Build();
     /// <summary>3DS B2: two DAT-matched NCSD dumps.</summary>
     private static readonly byte[] CartQuest = Ncsd(3001, "CTR-P-CQST");
     private static readonly byte[] CartRally = Ncsd(3002, "CTR-P-CRLY");
@@ -170,7 +174,8 @@ public class IngestPipelineTests
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [new FixtureGame("Disk Quest (Japan)", "Disk Quest (Japan).fds", DiskQuest)],
             [IngestSeeder.AmigaDat] = [new FixtureGame("Disk Orbit (1990)(Synth)", "Disk Orbit (1990)(Synth).adf", AmigaDisk)],
-            [IngestSeeder.TurboGrafxCdDat] = [],
+            // TurboGrafx-CD B3: libretro's DAT lists one track per disc, usually the data track (Track 02).
+            [IngestSeeder.TurboGrafxCdDat] = [new FixtureGame("Disc Ninja (Japan)", "Disc Ninja (Japan) (Track 02).bin", NinjaData)],
             [IngestSeeder.ThreeDsDat] =
             [
                 new FixtureGame("Cart Quest (USA)", "Cart Quest (USA).3ds", CartQuest),
@@ -636,6 +641,63 @@ public class IngestPipelineTests
         Assert.That(File.Exists(path), Is.False, "moved to _failed/");
     }
 
+    [Test]
+    public async Task TurboGrafxCd_DatMatchedCueWithThreeBins_IsOneRelease_NamedByItsDataTrack()
+    {
+        const string cue = "Disc Ninja (Japan).cue";
+        const string track1 = "Disc Ninja (Japan) (Track 01).bin", track2 = "Disc Ninja (Japan) (Track 02).bin", track3 = "Disc Ninja (Japan) (Track 03).bin";
+        var cueText = $"FILE \"{track1}\" BINARY\n  TRACK 01 AUDIO\n    INDEX 01 00:00:00\n"
+            + $"FILE \"{track2}\" BINARY\n  TRACK 02 MODE1/2352\n    INDEX 01 00:00:00\n"
+            + $"FILE \"{track3}\" BINARY\n  TRACK 03 AUDIO\n    INDEX 01 00:00:00\n";
+        foreach (var (name, bytes) in new[] { (cue, System.Text.Encoding.UTF8.GetBytes(cueText)), (track1, NinjaAudio1), (track2, NinjaData), (track3, NinjaAudio3) })
+            File.SetLastWriteTimeUtc(Drop("tgcd", name, bytes).FullPath, DateTime.UtcNow.AddMinutes(-1));
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "tgcd").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome)),
+            Is.EquivalentTo(new[] { (cue, IngestOutcome.Ingested), (track1, IngestOutcome.Ingested), (track2, IngestOutcome.Ingested), (track3, IngestOutcome.Ingested) }));
+        var folder = Path.Combine(Roms, "tgcd", "D");
+        Assert.That(Directory.GetFiles(folder).Select(Path.GetFileName).Order(StringComparer.Ordinal),
+            Is.EqualTo(new[] { track1, track2, track3, cue, "Disc Ninja.zip" }));
+        Assert.That(File.ReadAllBytes(Path.Combine(folder, track1)), Is.EqualTo(NinjaAudio1));
+        Assert.That(File.ReadAllBytes(Path.Combine(folder, track3)), Is.EqualTo(NinjaAudio3));
+        var game = ReadZip("tgcd/D/Disc Ninja.zip");
+        var rom = game.Roms.Single();
+        Assert.That((game.System, rom.FileName, rom.ExternalFileName, rom.Identification.Method), Is.EqualTo(("tgcd", track2, track2, IdentificationMethod.Dat)));
+        Assert.That(rom.Header, Is.Null);
+        Assert.That(rom.Files!.Select(f => f.ExternalFileName), Is.EquivalentTo(new[] { cue, track1, track3 }));
+        Assert.That(Directory.GetFiles(Ingest("tgcd")), Is.Empty);
+    }
+
+    [Test]
+    public async Task TurboGrafxCd_HuCardInItsFolder_IsUnsupportedType_AndMovedToFailed()
+    {
+        var file = DropAged("tgcd", "card.pce", new SyntheticDiscBuilder { Seed = 2604, Size = 256 * 1024 }.Build());
+
+        var result = await IngestAsync(file);
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+        Assert.That(File.Exists(file.FullPath), Is.False);
+        Assert.That(File.Exists(Path.Combine(Ingest("tgcd"), "_failed", "card.pce")), Is.True);
+        Assert.That(File.Exists(Path.Combine(Ingest("tgcd"), "_failed", "card.pce.error.txt")), Is.True);
+        Assert.That(Directory.Exists(Path.Combine(Roms, "tgcd")) ? Directory.GetFiles(Path.Combine(Roms, "tgcd"), "*", SearchOption.AllDirectories) : [],
+            Is.Empty);
+    }
+
+    [Test]
+    public async Task TurboGrafxCd_LooseOverTheMaximum_IsTooLarge_WithoutReadingIt()
+    {
+        var path = Path.Combine(Ingest("tgcd"), "huge.chd");
+        using (var file = File.Create(path))
+            file.SetLength((1L << 30) + 1); // sparse where the file system allows
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-1));
+
+        var result = await IngestAsync(new IngestFile("tgcd", path, "huge.chd", (1L << 30) + 1, File.GetLastWriteTimeUtc(path)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooLarge)));
+        Assert.That(File.Exists(path), Is.False, "moved to _failed/");
+    }
+
     /// <summary>CHD B2: synthetic bytes standing in for a CHD (never a real image); the MAME magic only for realism.</summary>
     private static byte[] FakeChd(int seed)
     {
@@ -656,6 +718,7 @@ public class IngestPipelineTests
     [TestCase("saturn")]
     [TestCase("segacd")]
     [TestCase("3do")]
+    [TestCase("tgcd")]
     public async Task Chd_Lone_GoesToReviewAsNoDatMatch_WithItsFoldersSystem(string system)
     {
         var result = await IngestAsync(DropAged(system, "Mystery Disc.chd", FakeChd(2301)));

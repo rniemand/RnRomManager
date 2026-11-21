@@ -119,7 +119,7 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
   - Before committing, grep `tests/` for `IngestSeeder.ThreeDsDat` and check every hit also lists `TurboGrafxCdDat`.
   - Tests: the updated integration files (`IngestPipelineTests` included), `IngestSeederTests`, `SeedIngestTests` (Basic/Full counts unchanged), `SystemStartupTests`, `SupportedSystemsTableTests`, `IgdbPlatformsTests`, `SystemEmulatorsCatalogTests`, `systemColours.test.ts`, `stores.svelte.test.ts`; web `npm run lint` and `npm run check`.
   - Done when: those pass and `pwsh scripts/build-docker.ps1` builds.
-- [ ] **3. Verify TurboGrafx-CD ingest** (B3): Testcontainers cases in `IngestPipelineTests.cs` and `ReviewEndpointsTests.cs` with synthetic files (never real images):
+- [x] **3. Verify TurboGrafx-CD ingest** (B3): Testcontainers cases in `IngestPipelineTests.cs` and `ReviewEndpointsTests.cs` with synthetic files (never real images):
   - a cue + 3 bins (`(Track 01)` audio, `(Track 02)` data, `(Track 03)` audio) where the fixture DAT lists only Track 02, as libretro's TurboGrafx-CD DAT lists one track per game, usually Track 02 → one release named after that DAT entry, its main file Track 02, files next to the ZIP under their exact names, info.json `files` lists the cue and the other tracks;
   - an unmatched standalone `.chd` → Review `NoDatMatch` with system `tgcd`, resolvable with **Manual**, stored as `.chd`;
   - a `.pce` dropped in `ingest/tgcd/` fails `UnsupportedType`: it's moved to `ingest/tgcd/_failed/` with its `.error.txt`, and nothing is stored under `roms/tgcd/`;
