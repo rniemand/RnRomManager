@@ -5,10 +5,11 @@ using System.Text;
 using System.Text.Json;
 using RnRomManager.Api.Endpoints;
 using RnRomManager.Core.Library;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Api.Tests.Integration;
 
-/// <summary>Multi-disc M3–M4: a PlayStation game's disc sets in the detail, and <c>/play-disc-set</c>.</summary>
+/// <summary>Multi-disc M3–M4 (Amiga F3, F5): a game's disc or disk sets in the detail, and <c>/play-disc-set</c>.</summary>
 public partial class LibraryEndpointsTests
 {
     /// <summary>Disc <paramref name="n"/> of <c>Odyssey (USA)</c> as a standalone image (M1's identifying fields shared).</summary>
@@ -64,6 +65,56 @@ public partial class LibraryEndpointsTests
         var set = DiscSetOf(await GetJson($"/api/games/{id}"), $"{title} (USA) (Disc 1).bin");
         Assert.That(set.GetProperty("name").GetString(), Is.EqualTo($"{title} (USA).m3u"));
         Assert.That(set.GetProperty("romIds").EnumerateArray().Select(e => e.GetInt64()), Is.EqualTo(ids));
+    }
+
+    // Amiga F3: floppy disk sets of releases stored inside the game's ZIP.
+
+    private static string TwinDisk(int n, int m = 2, string tags = "") => $"Twin Disk (1990)(Synth)(Disk {n} of {m}){tags}.adf";
+
+    /// <summary>
+    /// Mirrors an Amiga game at <c>amiga/&lt;letter&gt;/&lt;title&gt;.zip</c> with one embedded release per name, each holding
+    /// <c>TestLibrary.RomBytes(seed)</c>, as <c>LibraryEditorSaveTests</c> writes its games.
+    /// </summary>
+    private async Task<(Guid Id, string Zip, IReadOnlyList<long> RomIds, IReadOnlyList<byte[]> Bytes)> AmigaGame(string title,
+        int seed, params string[] fileNames)
+    {
+        var seeds = fileNames.Select((_, i) => seed + i).ToArray();
+        var game = TestLibrary.Game(title, [.. fileNames.Select((f, i) => TestLibrary.Rom(f, TestLibrary.RomBytes(seeds[i]), isPrimary: i == 0))])
+            with { System = "amiga" };
+        var zipPath = $"amiga/{title[..1]}/{title}.zip";
+        var zip = Path.Combine(_factory.Root, "roms", zipPath);
+        await TestLibrary.WriteZipAsync(Service<InfoJsonReader>(), zip, game, seeds);
+        var file = new FileInfo(zip);
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, zipPath, file.Length, file.LastWriteTimeUtc), default);
+        var detail = await GetJson($"/api/games/{game.GameId}");
+        return (game.GameId, zip, [.. fileNames.Select(f => Release(detail, f).GetProperty("id").GetInt64())],
+            [.. seeds.Select(TestLibrary.RomBytes)]);
+    }
+
+    [Test]
+    public async Task Detail_DiscSet_IsOnAmigaDiskOne_WithTheNameAndOrderedIds_AndNullElsewhere()
+    {
+        var (id, _, ids, _) = await AmigaGame("Twin Disk", 9101, TwinDisk(2), TwinDisk(1, tags: "[cr CSL]"));
+
+        var detail = await GetJson($"/api/games/{id}");
+
+        var set = DiscSetOf(detail, TwinDisk(1, tags: "[cr CSL]"));
+        Assert.That(set.GetProperty("name").GetString(), Is.EqualTo("Twin Disk (1990)(Synth)[cr CSL].m3u"));
+        Assert.That(set.GetProperty("romIds").EnumerateArray().Select(e => e.GetInt64()), Is.EqualTo(new[] { ids[1], ids[0] }));
+        Assert.That(DiscSetOf(detail, TwinDisk(2)).ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    [Test]
+    public async Task Detail_DiscSet_IsNullForAnAmigaGameWithTwoCandidatesForOneDisk()
+    {
+        var (id, _, _, _) = await AmigaGame("Tangle Disk", 9111,
+            "Tangle Disk (1990)(Synth)(Disk 1 of 2)[cr CSL].adf", "Tangle Disk (1990)(Synth)(Disk 1 of 2)[cr QTX].adf",
+            "Tangle Disk (1990)(Synth)(Disk 2 of 2).adf");
+
+        var detail = await GetJson($"/api/games/{id}");
+
+        foreach (var release in detail.GetProperty("roms").EnumerateArray())
+            Assert.That(release.GetProperty("discSet").ValueKind, Is.EqualTo(JsonValueKind.Null), release.GetProperty("fileName").GetString());
     }
 
     private static string PlayDiscSetUrl(Guid id, long romId) => $"/api/games/{id}/roms/{romId}/play-disc-set";

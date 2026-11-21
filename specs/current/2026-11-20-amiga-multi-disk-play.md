@@ -77,7 +77,7 @@ No migration, config key, stored data or API contract change beyond `discSet` no
   - `MaxDiscs_IsPerSystem` gains `[TestCase("amiga", 20)]`;
   - the existing PlayStation/Saturn/Sega CD cases pass unchanged.
   Done when: `DiscSetsTests` passes.
-- [ ] **2. Ingest pin and detail (API)**: F3, F4. Files: `LibraryEndpoints.cs` (comment only; fix code only if a test shows a gap). Tests:
+- [x] **2. Ingest pin and detail (API)**: F3, F4. Files: `LibraryEndpoints.cs` (comment only; fix code only if a test shows a gap). Tests:
   - `tests/RnRomManager.Api.Tests/Integration/IngestPipelineTests.cs`: the F4 two-disk game lands as two releases of one game under their DAT ROM names. Add the two `Twin Orbit` `FixtureGame`s to the `[IngestSeeder.AmigaDat]` list in the local fixture dictionary at line 176, each with its own bytes (a new `Atari(901_120, <seed>)` array per disk, as `AmigaDisk` is built). If that shifts an existing count assertion, use a test-local DAT instead and say so in the commit.
   - `LibraryEndpointsTests.PlayDiscSet.cs`: an Amiga game written with `TestLibrary.WriteZipAsync` and mirrored through `ILibraryMirror.ReplaceAsync`, as `LibraryEditorSaveTests.cs` lines 55–57 do (a new `AmigaGame` helper in that file). It has `discSet` on Disk 1 with the F2 name and ordered ids, and `null` on Disk 2 and on an ambiguous game.
 
