@@ -664,6 +664,14 @@ public class IngestPipelineTests
             Is.Empty);
     }
 
+    [Test]
+    public async Task PsxPbp_Lone_GoesToReviewAsNoDatMatch()
+    {
+        var result = await IngestAsync(DropAged("psx", "Mystery Disc.pbp", FakeChd(2307)));
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "psx")));
+    }
+
     [TestCase("Mystery Umd.cso")]
     [TestCase("Mystery Umd.pbp")]
     public async Task PspCsoOrPbp_Lone_GoesToReviewAsNoDatMatch(string name)
