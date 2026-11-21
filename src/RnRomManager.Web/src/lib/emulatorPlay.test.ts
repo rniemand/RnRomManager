@@ -908,6 +908,48 @@ describe('play page Saturn (B6, B7)', () => {
 		expect(atLoader?.EJS_core).toBe('yabause');
 	});
 
+	const setUrl = `/api/games/${game}/roms/12/play-disc-set`;
+
+	async function playSaturnSet(): Promise<string> {
+		const query = new URLSearchParams({
+			game,
+			rom: '12',
+			core: 'yabause',
+			name: 'Ark (USA).m3u',
+			disc: '1',
+			set: '1'
+		});
+		history.replaceState(null, '', `/emulator/play.html?${query}`);
+		const { started } = await import('../../static/emulator/play.js');
+		await started;
+		return document.getElementById('status')!.textContent ?? '';
+	}
+
+	it('stops a disc set without saturn_bios.bin before the set is requested (Saturn and Sega CD S6)', async () => {
+		serve({ [saturnBiosUrl]: async () => response(404), [setUrl]: async () => discResponse(200) });
+
+		expect(await playSaturnSet()).toBe(
+			'Playing all Saturn discs needs a BIOS: ask an Admin to put saturn_bios.bin in the BIOS folder (Paths:Bios).'
+		);
+		expect(urls()).toEqual([saturnBiosUrl]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('loads a disc set from play-disc-set with the BIOS (Saturn and Sega CD S6)', async () => {
+		const bytes = new Uint8Array(512 * 1024).map((_, i) => i % 241);
+		serve({
+			[saturnBiosUrl]: async () => body(bytes).response,
+			[setUrl]: async () => discResponse(200)
+		});
+
+		await playSaturnSet();
+
+		expect(urls()).toEqual([saturnBiosUrl, setUrl]);
+		expect(atLoader).toMatchObject({ EJS_core: 'yabause', EJS_gameName: 'Ark (USA).m3u' });
+		expect(Object.keys(atLoader?.EJS_externalFiles as object)).toEqual(['/saturn_bios.bin']);
+		expect((atLoader?.EJS_gameUrl as File).name).toBe('Ark (USA).m3u');
+	});
+
 	it.each([512 * 1024 - 1, 512 * 1024 + 1])(
 		'stops on a %i-byte saturn_bios.bin before the disc is requested',
 		async (size) => {
@@ -1011,6 +1053,27 @@ describe('play page Sega CD (Sega CD B7)', () => {
 			[romUrl]: async () => response(200)
 		});
 	}
+
+	it('loads a disc set from play-disc-set after the core and BIOS checks (Saturn and Sega CD S6)', async () => {
+		const setUrl = `/api/games/${game}/roms/12/play-disc-set`;
+		const u = firmware(2);
+		serveSegaCd({ [biosU]: async () => body(u), [setUrl]: async () => discResponse() });
+		const query = new URLSearchParams({
+			game,
+			rom: '12',
+			core: 'genesis_plus_gx',
+			name: 'Bay (USA).m3u',
+			disc: '1',
+			set: '1'
+		});
+		history.replaceState(null, '', `/emulator/play.html?${query}`);
+		const { started } = await import('../../static/emulator/play.js');
+		await started;
+
+		expect(urls()).toEqual([check, biosU, biosE, biosJ, setUrl]);
+		expect(Object.keys(atLoader?.EJS_externalFiles as object)).toEqual(['/bios_CD_U.bin']);
+		expect(atLoader).toMatchObject({ EJS_core: 'genesis_plus_gx', EJS_gameName: 'Bay (USA).m3u' });
+	});
 
 	it('checks the core, then asks for U, E and J one after another, then the disc', async () => {
 		const u = firmware(1);

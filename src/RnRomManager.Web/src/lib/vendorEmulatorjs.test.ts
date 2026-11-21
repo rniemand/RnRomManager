@@ -117,11 +117,20 @@ const syncfsEdit =
 	'        if (this.EJS.getCore() === "desmume") {\n' +
 	'            this.FS.syncfs(false, (err) => { if (err) console.warn(err); });\n' +
 	'        }\n';
+// Saturn and Sega CD multi-disc S4: Yabause and Genesis Plus GX boot an unpacked .m3u before the image/cue choice.
+const isoAnchor =
+	'                    if (isoFile !== null && (supportsExt("iso") || supportsExt("cso") || supportsExt("chd") || supportsExt("elf"))) {\n';
+const m3uFirst =
+	'                    const m3uFile = fileNames.find((name) => name.split(".").pop().toLowerCase() === "m3u");\n' +
+	'                    if (m3uFile !== undefined && ["yabause", "genesis_plus_gx"].includes(this.getCore())) {\n' +
+	'                        this.fileName = m3uFile;\n' +
+	'                    } else if (isoFile !== null && (supportsExt("iso") || supportsExt("cso") || supportsExt("chd") || supportsExt("elf"))) {\n';
 const guardedEdits: Record<string, [string, string][]> = {
 	'emulator.js': [
 		[getCoreAnchor, pinGuard + getCoreAnchor],
 		[legacyAnchor, threadOverride + legacyAnchor],
 		[cdnAnchor, cdnAnchor + cdnSkip],
+		[isoAnchor, m3uFirst],
 		[
 			'                resolve(new Uint8Array(await data.arrayBuffer()));\n',
 			'                let bytes;\n' +
@@ -343,6 +352,80 @@ describe('vendor-emulatorjs', () => {
 				source.lastIndexOf('const opt = this.preGetSetting("ejs_threads");', select)
 			);
 			expect(override + threadOverride.length).toBe(select);
+		}
+	);
+
+	/** Saturn and Sega CD S4: the content file downloadRom() picks from unpacked `names` for `core`. */
+	async function pickedContent(
+		file: string,
+		core: string,
+		names: string[],
+		extensions: string[]
+	): Promise<string> {
+		const source = readFileSync(join(out, 'data', file), 'utf8');
+		const end = source.indexOf('window.EmulatorJS = EmulatorJS;');
+		expect(end).toBeGreaterThan(0);
+		const proto = runInNewContext(`${source.slice(0, end)}EmulatorJS.prototype`, {
+			File,
+			Blob,
+			Uint8Array,
+			ArrayBuffer,
+			console: { log: () => {}, warn: () => {}, error: () => {} }
+		}) as Record<string, (this: object, ...args: unknown[]) => unknown>;
+		// The prototype's other methods (toData) stay; the stubs below replace what needs a browser.
+		const ejs = Object.assign(Object.create(proto) as Record<string, unknown>, {
+			debug: true,
+			config: { gameUrl: 'game.zip' },
+			extensions,
+			textElem: { innerText: '' },
+			fileName: '',
+			getCore: (generic?: boolean) => (generic ? 'generic' : core),
+			getBaseFileName: () => 'game',
+			localization: (t: string) => t,
+			saveInBrowserSupported: () => false,
+			downloadFile: async () => ({ data: new ArrayBuffer(4), headers: {} }),
+			checkCompression: async (
+				_: unknown,
+				__: string,
+				add: (name: string, data: Uint8Array) => void
+			) => {
+				for (const name of names) add(name, new Uint8Array(1));
+			},
+			gameManager: {
+				FS: { writeFile: () => {}, analyzePath: () => ({ exists: true }), mkdir: () => {} },
+				createCueFile: () => 'generated.cue'
+			}
+		});
+		await proto.downloadRom.call(ejs);
+		return ejs.fileName as string;
+	}
+
+	const setNames = [
+		'Game (USA).m3u',
+		'Game (USA) (Disc 1).cue',
+		'disc1-track-01.bin',
+		'Game (USA) (Disc 2).chd'
+	];
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s boots the .m3u of a ZIP for Yabause and Genesis Plus GX only (Saturn and Sega CD S4)',
+		async (file) => {
+			const yabause = ['cue', 'iso', 'ccd', 'mds', 'chd', 'zip', 'm3u'];
+			const genesis = ['m3u', 'md', 'bin', 'cue', 'iso', 'chd'];
+			expect(await pickedContent(file, 'yabause', setNames, yabause)).toBe('Game (USA).m3u');
+			expect(await pickedContent(file, 'genesis_plus_gx', setNames, genesis)).toBe(
+				'Game (USA).m3u'
+			);
+			// Upstream's choice: an image the core lists beats the cue, for another core or without an .m3u.
+			expect(await pickedContent(file, 'opera', setNames, ['iso', 'chd', 'cue', 'bin'])).toBe(
+				'Game (USA) (Disc 2).chd'
+			);
+			expect(await pickedContent(file, 'yabause', setNames.slice(1), yabause)).toBe(
+				'Game (USA) (Disc 2).chd'
+			);
+			expect(
+				await pickedContent(file, 'genesis_plus_gx', ['Game (USA).cue', 'track-01.bin'], genesis)
+			).toBe('Game (USA).cue');
 		}
 	);
 

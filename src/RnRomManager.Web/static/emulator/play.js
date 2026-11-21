@@ -31,6 +31,7 @@ import {
 	saturnBios,
 	saturnBiosBytes,
 	saturnBiosSizeError,
+	saturnSetBiosMissing,
 	segaCdBios,
 	segaCdBiosBytes,
 	segaCdBiosMissing,
@@ -499,6 +500,8 @@ async function start() {
 		const result = await loadOptionalBios(optional.name, optional.bytes, optional.sizeError);
 		if ('error' in result) return show(result.error);
 		firmware = result.bios;
+		// Saturn and Sega CD S6: Yabause won't start a playlist on its HLE BIOS.
+		if (isSaturn && params.set && !firmware) return show(saturnSetBiosMissing);
 	}
 	// Sega CD B7: U, E, then J, one at a time; a 404 skips a file, any other problem stops the launch there.
 	/** @type {Record<string, ArrayBuffer>} */
