@@ -75,8 +75,12 @@ public partial class LibraryEndpointsTests
     /// Mirrors an Amiga game at <c>amiga/&lt;letter&gt;/&lt;title&gt;.zip</c> with one embedded release per name, each holding
     /// <c>TestLibrary.RomBytes(seed)</c>, as <c>LibraryEditorSaveTests</c> writes its games.
     /// </summary>
+    private Task<(Guid Id, string Zip, IReadOnlyList<long> RomIds, IReadOnlyList<byte[]> Bytes)> AmigaGame(string title,
+        int seed, params string[] fileNames) => AmigaGame(title, seed, null, fileNames);
+
+    /// <param name="shape">Changes release <c>i</c>'s row in the mirrored database only (the ZIP is written as given).</param>
     private async Task<(Guid Id, string Zip, IReadOnlyList<long> RomIds, IReadOnlyList<byte[]> Bytes)> AmigaGame(string title,
-        int seed, params string[] fileNames)
+        int seed, Func<InfoJsonRom, int, InfoJsonRom>? shape, params string[] fileNames)
     {
         var seeds = fileNames.Select((_, i) => seed + i).ToArray();
         var game = TestLibrary.Game(title, [.. fileNames.Select((f, i) => TestLibrary.Rom(f, TestLibrary.RomBytes(seeds[i]), isPrimary: i == 0))])
@@ -85,7 +89,8 @@ public partial class LibraryEndpointsTests
         var zip = Path.Combine(_factory.Root, "roms", zipPath);
         await TestLibrary.WriteZipAsync(Service<InfoJsonReader>(), zip, game, seeds);
         var file = new FileInfo(zip);
-        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(game, zipPath, file.Length, file.LastWriteTimeUtc), default);
+        var mirrored = shape is null ? game : game with { Roms = [.. game.Roms.Select((r, i) => shape(r, i))] };
+        await Service<ILibraryMirror>().ReplaceAsync(new MirrorEntry(mirrored, zipPath, file.Length, file.LastWriteTimeUtc), default);
         var detail = await GetJson($"/api/games/{game.GameId}");
         return (game.GameId, zip, [.. fileNames.Select(f => Release(detail, f).GetProperty("id").GetInt64())],
             [.. seeds.Select(TestLibrary.RomBytes)]);
@@ -115,6 +120,105 @@ public partial class LibraryEndpointsTests
 
         foreach (var release in detail.GetProperty("roms").EnumerateArray())
             Assert.That(release.GetProperty("discSet").ValueKind, Is.EqualTo(JsonValueKind.Null), release.GetProperty("fileName").GetString());
+    }
+
+    // Amiga F5: play-disc-set for a floppy set inside the game's ZIP.
+
+    private static string Twin(string title, int n) => TwinDisk(n).Replace("Twin Disk", title);
+
+    [Test]
+    public async Task PlayDiscSet_AnAmigaSet_IsThePlaylist_ThenEachDiskAliased()
+    {
+        var (id, _, ids, bytes) = await AmigaGame("Twin Stream", 9201, Twin("Twin Stream", 1), Twin("Twin Stream", 2));
+
+        using var response = await _user.SendAsync(HttpMethod.Get, PlayDiscSetUrl(id, ids[0]), null, sendXsrf: false,
+            completion: HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/zip"));
+        Assert.That(response.Headers.CacheControl?.NoStore, Is.True);
+        Assert.That(response.Content.Headers.ContentLength, Is.Null);
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Twin Stream (1990)(Synth).m3u", "Disk 1.adf", "Disk 2.adf" }));
+        Assert.That(zip.Entries.Select(e => e.CompressedLength == e.Length), Has.All.True, "stored, not deflated");
+        Assert.That(ReadEntry(zip, "Twin Stream (1990)(Synth).m3u"), Is.EqualTo(Encoding.UTF8.GetBytes("Disk 1.adf\nDisk 2.adf\n")));
+        Assert.That(ReadEntry(zip, "Disk 1.adf"), Is.EqualTo(bytes[0]));
+        Assert.That(ReadEntry(zip, "Disk 2.adf"), Is.EqualTo(bytes[1]));
+        var payload = zip.Entries.Sum(e => e.Length);
+        Assert.That(response.Headers.GetValues("X-Content-Bytes"), Is.EqualTo(new[] { payload.ToString(CultureInfo.InvariantCulture) }));
+    }
+
+    [Test]
+    public async Task PlayDiscSet_AmigaDiskTwo_AnAmbiguousGame_OrAnExternalDisk_Is404()
+    {
+        var (set, _, setIds, _) = await AmigaGame("Twin Gate", 9211, Twin("Twin Gate", 1), Twin("Twin Gate", 2));
+        var (tangle, _, tangleIds, _) = await AmigaGame("Twin Knot", 9221, "Twin Knot (1990)(Synth)(Disk 1 of 2)[a].adf",
+            "Twin Knot (1990)(Synth)(Disk 1 of 2)[b].adf", "Twin Knot (1990)(Synth)(Disk 2 of 2).adf");
+        var (external, _, externalIds, _) = await AmigaGame("Twin Away", 9231,
+            (rom, i) => i == 1 ? rom with { ExternalFileName = rom.FileName } : rom, Twin("Twin Away", 1), Twin("Twin Away", 2));
+
+        foreach (var url in new[] { PlayDiscSetUrl(set, setIds[1]), PlayDiscSetUrl(tangle, tangleIds[0]), PlayDiscSetUrl(external, externalIds[0]) })
+        {
+            using var response = await _user.GetAsync(url);
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound), url);
+        }
+    }
+
+    /// <summary>Rewrites (or, with null bytes, deletes) a disk's ZIP entry after the ZIP is written.</summary>
+    private static void ReplaceDisk(string zip, string fileName, byte[]? bytes)
+    {
+        using var archive = ZipFile.Open(zip, ZipArchiveMode.Update);
+        archive.GetEntry(LibraryZip.RomEntry(fileName))!.Delete();
+        if (bytes is null)
+            return;
+        using var target = archive.CreateEntry(LibraryZip.RomEntry(fileName)).Open();
+        target.Write(bytes);
+    }
+
+    [Test]
+    public async Task PlayDiscSet_AnEmptyAmigaDisk_Is409InvalidPlayDisc()
+    {
+        var (id, zip, ids, _) = await AmigaGame("Twin Hollow", 9241, Twin("Twin Hollow", 1), Twin("Twin Hollow", 2));
+        ReplaceDisk(zip, Twin("Twin Hollow", 2), []);
+
+        using var response = await _user.GetAsync(PlayDiscSetUrl(id, ids[0]));
+
+        Assert.That(await ProblemTitle(response, HttpStatusCode.Conflict, PlayDisc.InvalidPlayDisc),
+            Is.EqualTo($"The disc can't be played: Disk 2: '{Twin("Twin Hollow", 2)}' is empty."));
+    }
+
+    [Test]
+    public async Task PlayDiscSet_AMissingAmigaDisk_Is404_AndAnOversizedOne_Is500IoError()
+    {
+        var (goneId, goneZip, goneIds, _) = await AmigaGame("Twin Gone", 9251, Twin("Twin Gone", 1), Twin("Twin Gone", 2));
+        ReplaceDisk(goneZip, Twin("Twin Gone", 2), null);
+        var (bigId, bigZip, bigIds, bigBytes) = await AmigaGame("Twin Grown", 9261, Twin("Twin Grown", 1), Twin("Twin Grown", 2));
+        ReplaceDisk(bigZip, Twin("Twin Grown", 2), [.. bigBytes[1], 0]);
+
+        using var gone = await _user.GetAsync(PlayDiscSetUrl(goneId, goneIds[0]));
+        using var grown = await _user.GetAsync(PlayDiscSetUrl(bigId, bigIds[0]));
+
+        Assert.That(gone.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        Assert.That(grown.StatusCode, Is.EqualTo(HttpStatusCode.InternalServerError));
+        Assert.That(await AuthClient.CodeAsync(grown), Is.EqualTo("IoError"));
+    }
+
+    [Test]
+    public async Task PlayDiscSet_AnAmigaSet_AnonymousIs401_AndAForcedPasswordChangeIs403()
+    {
+        var (id, _, ids, _) = await AmigaGame("Twin Lock", 9271, Twin("Twin Lock", 1), Twin("Twin Lock", 2));
+        using var anonymous = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "forced-floppy", mustChangePassword: true);
+        using var forced = await AuthClient.CreateAsync(_factory);
+        (await forced.LoginAsync("forced-floppy", TestUsers.Password)).Dispose();
+
+        using var asAnonymous = await anonymous.GetAsync(PlayDiscSetUrl(id, ids[0]));
+        using var asForced = await forced.GetAsync(PlayDiscSetUrl(id, ids[0]));
+
+        Assert.That(asAnonymous.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+        Assert.That(asForced.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+        Assert.That(await AuthClient.CodeAsync(asForced), Is.EqualTo("PasswordChangeRequired"));
     }
 
     private static string PlayDiscSetUrl(Guid id, long romId) => $"/api/games/{id}/roms/{romId}/play-disc-set";

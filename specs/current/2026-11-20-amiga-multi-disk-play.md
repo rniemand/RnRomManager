@@ -82,7 +82,7 @@ No migration, config key, stored data or API contract change beyond `discSet` no
   - `LibraryEndpointsTests.PlayDiscSet.cs`: an Amiga game written with `TestLibrary.WriteZipAsync` and mirrored through `ILibraryMirror.ReplaceAsync`, as `LibraryEditorSaveTests.cs` lines 55–57 do (a new `AmigaGame` helper in that file). It has `discSet` on Disk 1 with the F2 name and ordered ids, and `null` on Disk 2 and on an ambiguous game.
 
   Done when: those tests pass and the existing `LibraryEndpointsTests` cases pass unchanged.
-- [ ] **3. Floppy `play-disc-set` (API)**: F5. Files: `PlayDisc.cs`. Tests in `LibraryEndpointsTests.PlayDiscSet.cs` (new cases):
+- [x] **3. Floppy `play-disc-set` (API)**: F5. Files: `PlayDisc.cs`. Tests in `LibraryEndpointsTests.PlayDiscSet.cs` (new cases):
   - a 2-disk Amiga set streams the exact playlist bytes, then `Disk 1.adf` and `Disk 2.adf` byte-exact, with `X-Content-Bytes`;
   - a `romId` that is Disk 2, or a release of an ambiguous game, is 404;
   - a disk with a non-null `ExternalFileName` is 404 (the F5 guard);
