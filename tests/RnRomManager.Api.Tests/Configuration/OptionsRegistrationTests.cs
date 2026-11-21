@@ -121,6 +121,8 @@ public class OptionsRegistrationTests
     [TestCase("Sources:TitleDbUrl", "")]
     [TestCase("Sources:TitleDbUrl", "ftp://x")]
     [TestCase("Sources:ThumbnailBaseUrl", "nope")]
+    [TestCase("Sources:IgdbClientId", "abc")]
+    [TestCase("Sources:IgdbClientSecret", "abc")]
     [TestCase("Emulator:GenesisCorePath", "relative/genesis")]
     [TestCase("Emulator:PicodriveCorePath", "relative/picodrive")]
     [TestCase("Emulator:Snes9xCorePath", "relative/snes9x")]

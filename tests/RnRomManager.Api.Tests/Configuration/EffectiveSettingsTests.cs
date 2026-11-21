@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using RnRomManager.Api.Configuration;
+using RnRomManager.Core.Configuration;
 
 namespace RnRomManager.Api.Tests.Configuration;
 
@@ -69,5 +71,55 @@ public class EffectiveSettingsTests
             + $"\"viceCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "vice"))},"
             + $"\"mupen64PlusCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "n64"))}}}"));
         Assert.That(json, Does.Not.Contain("hunter2"));
+    }
+
+    [Test]
+    public void MaskSources_MasksTheIgdbSecret_KeepsTheRest()
+    {
+        var masked = EffectiveSettings.MaskSources(new()
+        {
+            DatBaseUrl = "https://dats.example",
+            TitleDbUrl = "https://titledb.example",
+            ThumbnailBaseUrl = "",
+            IgdbClientId = "client-id",
+            IgdbClientSecret = "s3cret",
+        });
+
+        Assert.That(masked.IgdbClientSecret, Is.EqualTo("***"));
+        Assert.That(masked.IgdbClientId, Is.EqualTo("client-id"));
+        Assert.That(masked.DatBaseUrl, Is.EqualTo("https://dats.example"));
+        Assert.That(masked.TitleDbUrl, Is.EqualTo("https://titledb.example"));
+        Assert.That(masked.ThumbnailBaseUrl, Is.Empty);
+    }
+
+    [TestCase("")]
+    [TestCase("  ")]
+    public void MaskSources_UnsetSecret_IsEmpty(string secret) =>
+        Assert.That(EffectiveSettings.MaskSources(new() { IgdbClientSecret = secret }).IgdbClientSecret, Is.Empty);
+
+    [Test]
+    public void From_MasksTheIgdbSecret_WithoutChangingTheLiveOptions()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "rnrm-effective-igdb");
+        var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Default"] = "Server=db",
+            ["Paths:Roms"] = Path.Combine(root, "roms"),
+            ["Paths:Ingest"] = Path.Combine(root, "ingest"),
+            ["Paths:Logs"] = Path.Combine(root, "logs"),
+            ["Paths:Cache"] = Path.Combine(root, "cache"),
+            ["Paths:Backups"] = Path.Combine(root, "backups"),
+            ["Paths:Collections"] = Path.Combine(root, "collections"),
+            ["Paths:Bios"] = Path.Combine(root, "bios"),
+            ["Sources:IgdbClientId"] = "client-id",
+            ["Sources:IgdbClientSecret"] = "s3cret",
+        }).Build();
+        using var services = new ServiceCollection().AddAppOptions(config).BuildServiceProvider();
+
+        var json = JsonSerializer.Serialize(EffectiveSettings.From(services), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.That(json, Does.Not.Contain("s3cret"));
+        Assert.That(json, Does.Contain("\"igdbClientId\":\"client-id\",\"igdbClientSecret\":\"***\""));
+        Assert.That(services.GetRequiredService<IOptions<SourcesOptions>>().Value.IgdbClientSecret, Is.EqualTo("s3cret"));
     }
 }

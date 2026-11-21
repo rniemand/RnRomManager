@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
-import type { GameDetail, ImageInfo } from '#lib/api/types.js';
+import type { GameDetail, ImageInfo, ImageSuggestion } from '#lib/api/types.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 
@@ -179,15 +179,18 @@ describe('game images', () => {
 		expect(download.closest('.card')!.classList).toContain('image-tile');
 	});
 
-	it('Google Images and Upload Image sit right-aligned on their own row before the grid; the heading is visually hidden (G3, I1, B8)', () => {
+	it('Suggest Images, Google Images and Upload Image sit right-aligned on their own row before the grid; the heading is visually hidden (G3, I1, B8, S11)', () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 
 		const upload = screen.getByRole('button', { name: 'Upload Image' });
 		const google = screen.getByRole('link', { name: 'Google Images' });
+		const suggest = screen.getByRole('button', { name: 'Suggest Images' });
 		const heading = screen.getByRole('heading', { name: 'Images' });
 		expect(heading.className).toBe('visually-hidden');
-		expect([...upload.parentElement!.children]).toEqual([google, upload]);
-		expect(google.classList.contains('ms-auto')).toBe(true);
+		expect([...upload.parentElement!.children]).toEqual([suggest, google, upload]);
+		expect(suggest.classList.contains('ms-auto')).toBe(true);
+		expect(suggest.querySelector('i')!.classList.contains('bi-magic')).toBe(true);
+		expect(google.classList.contains('ms-auto')).toBe(false);
 		expect(upload.classList.contains('ms-auto')).toBe(false);
 		const grid = screen.getAllByRole('button', { name: /full size/ })[0].closest('.row')!;
 		expect(upload.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -246,7 +249,7 @@ describe('game images', () => {
 		);
 		expect(google.getAttribute('target')).toBe('_blank');
 		expect(google.getAttribute('rel')).toBe('noopener noreferrer');
-		expect(google.className).toBe('btn btn-outline-secondary btn-sm ms-auto');
+		expect(google.className).toBe('btn btn-outline-secondary btn-sm');
 		expect(google.querySelector('i')!.className).toContain('bi-google');
 	});
 
@@ -255,6 +258,7 @@ describe('game images', () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 
 		expect(screen.queryByRole('link', { name: 'Google Images' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Suggest Images' })).toBeNull();
 	});
 
 	it('the Image URL input gets focus each time the dialog has opened (B6)', async () => {
@@ -683,5 +687,269 @@ describe('game images', () => {
 			expect(calls.map((c) => c.key)).toContain('DELETE /api/games/g1/images/2')
 		);
 		await vi.waitFor(() => expect(onchanged).toHaveBeenCalledTimes(2));
+	});
+});
+
+describe('Suggest Images (IGDB suggestions S11–S13)', () => {
+	type Pending = { url: string; init?: RequestInit; resolve: (r: Response) => void };
+	let pending: Pending[];
+
+	const suggestion = (n: number, extra: Partial<ImageSuggestion> = {}): ImageSuggestion => ({
+		previewUrl: `https://images.igdb.com/igdb/image/upload/t_cover_big/co${n}.jpg`,
+		imageUrl: `https://images.igdb.com/igdb/image/upload/t_1080p/co${n}.jpg`,
+		gameName: `Tetris ${n}`,
+		width: 600,
+		height: 800,
+		...extra
+	});
+	const json = (body: unknown, status = 200) =>
+		new Response(JSON.stringify(body), {
+			status,
+			headers: { 'content-type': 'application/json' }
+		});
+	const problem = (status: number, code: string, title: string) =>
+		json({ status, code, title }, status);
+
+	/** The first unanswered request whose URL contains `part`. */
+	const take = async (part: string): Promise<Pending> => {
+		let found: Pending | undefined;
+		await vi.waitFor(() => {
+			found = pending.find((p) => p.url.includes(part));
+			expect(found).toBeTruthy();
+		});
+		pending.splice(pending.indexOf(found!), 1);
+		return found!;
+	};
+	const dialog = () =>
+		screen
+			.getByRole('heading', { name: 'Suggest Images', hidden: true })
+			.closest('.modal') as HTMLElement;
+	const inDialog = () => within(dialog());
+	const results = () => dialog().querySelector('[aria-live="polite"]') as HTMLElement;
+	const tile = (name: string) => inDialog().getByRole('button', { name, hidden: true });
+	const open = () => fireEvent.click(screen.getByRole('button', { name: 'Suggest Images' }));
+	const close = () =>
+		fireEvent.click(
+			inDialog()
+				.getAllByRole('button', { name: 'Close', hidden: true })
+				.find((b) => b.textContent === 'Close')!
+		);
+	const settle = () => new Promise((r) => setTimeout(r, 10));
+
+	beforeEach(() => {
+		resetClient();
+		toasts.items = [];
+		auth.set({ id: 1, username: 'm', roles: ['admin'], mustChangePassword: false });
+		pending = [];
+		vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+			if (url === '/api/auth/antiforgery')
+				return Promise.resolve(new Response(null, { status: 204 }));
+			return new Promise<Response>((resolve) => pending.push({ url, init, resolve }));
+		});
+	});
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		auth.set(null);
+	});
+
+	it('opening loads Box art and shows each tile with its name and size, in a live region', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await open();
+
+		const load = await take('/image-suggestions');
+		expect(load.url).toBe('/api/games/g1/image-suggestions?type=BoxArt');
+		expect(load.init?.signal).toBeInstanceOf(AbortSignal);
+		expect(results().getAttribute('aria-live')).toBe('polite');
+		expect(within(results()).getByRole('status', { hidden: true })).toBeTruthy();
+		expect((inDialog().getByLabelText('Box art') as HTMLInputElement).checked).toBe(true);
+		load.resolve(
+			json({ suggestions: [suggestion(1), suggestion(2, { width: null, height: null })] })
+		);
+
+		const first = await vi.waitFor(() => tile('Add Tetris 1 box art 1'));
+		expect(first.parentElement!.classList.contains('col')).toBe(true);
+		expect(first.querySelector('img')!.getAttribute('src')).toBe(suggestion(1).previewUrl);
+		expect(first.querySelector('img')!.getAttribute('alt')).toBe('');
+		expect(within(first).getByText('Tetris 1').getAttribute('title')).toBe('Tetris 1');
+		expect(within(first).getByText('600×800')).toBeTruthy();
+		expect(tile('Add Tetris 2 box art 2').textContent).not.toContain('×');
+		expect(
+			inDialog().getByText('Suggestions from IGDB.com. Click one to add it to the game.')
+		).toBeTruthy();
+	});
+
+	it('switching to Screenshot loads Snap and ignores the late Box art answer', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await open();
+		const boxArt = await take('type=BoxArt');
+
+		await fireEvent.click(inDialog().getByLabelText('Screenshot'));
+		const snap = await take('type=Snap');
+		expect(boxArt.init?.signal?.aborted).toBe(true);
+		snap.resolve(json({ suggestions: [suggestion(5)] }));
+		boxArt.resolve(json({ suggestions: [suggestion(9)] }));
+
+		await vi.waitFor(() => tile('Add Tetris 5 screenshot 1'));
+		await settle();
+		expect(inDialog().queryByRole('button', { name: /Tetris 9/, hidden: true })).toBeNull();
+	});
+
+	it('closing aborts the load, and a late answer is ignored after reopening', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await open();
+		const first = await take('type=BoxArt');
+
+		await close();
+		expect(first.init?.signal?.aborted).toBe(true);
+		await open();
+		const second = await take('type=BoxArt');
+		first.resolve(json({ suggestions: [suggestion(9)] }));
+		await settle();
+		expect(inDialog().queryByRole('button', { name: /Tetris 9/, hidden: true })).toBeNull();
+
+		second.resolve(json({ suggestions: [suggestion(1)] }));
+		await vi.waitFor(() => tile('Add Tetris 1 box art 1'));
+	});
+
+	it('empty answers say so per type', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await open();
+		(await take('type=BoxArt')).resolve(json({ suggestions: [] }));
+		await vi.waitFor(() => inDialog().getByText('IGDB has no box art for this game.'));
+
+		await fireEvent.click(inDialog().getByLabelText('Screenshot'));
+		(await take('type=Snap')).resolve(json({ suggestions: [] }));
+		await vi.waitFor(() => inDialog().getByText('IGDB has no screenshots for this game.'));
+	});
+
+	it('IgdbNotConfigured shows the setup alert', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await open();
+		(await take('type=BoxArt')).resolve(
+			problem(
+				409,
+				'IgdbNotConfigured',
+				'Image suggestions need Sources:IgdbClientId and Sources:IgdbClientSecret.'
+			)
+		);
+
+		const alert = await vi.waitFor(() => {
+			const found = results().querySelector('.alert-info');
+			expect(found).toBeTruthy();
+			return found!;
+		});
+		expect(alert.textContent!.replace(/\s+/g, ' ').trim()).toBe(
+			'Image suggestions need an IGDB Client ID and secret. Set Sources:IgdbClientId and Sources:IgdbClientSecret and restart.'
+		);
+	});
+
+	it('other errors show an ErrorAlert whose Retry reloads the current type', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await open();
+		(await take('type=BoxArt')).resolve(
+			problem(502, 'IgdbFailed', 'IGDB is busy; try again in a moment.')
+		);
+
+		await vi.waitFor(() => inDialog().getByText('IGDB is busy; try again in a moment.'));
+		await fireEvent.click(inDialog().getByRole('button', { name: /Retry/, hidden: true }));
+		(await take('type=BoxArt')).resolve(json({ suggestions: [suggestion(1)] }));
+		await vi.waitFor(() => tile('Add Tetris 1 box art 1'));
+	});
+
+	it('a tile adds itself with the dialog type, refreshes, toasts and shows Added; the dialog stays open', async () => {
+		const onchanged = vi.fn();
+		const after = game([image(7, 'BoxArt', { isCover: true })]);
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged });
+		await open();
+		(await take('type=BoxArt')).resolve(json({ suggestions: [suggestion(1), suggestion(2)] }));
+		await fireEvent.click(await vi.waitFor(() => tile('Add Tetris 1 box art 1')));
+
+		const add = await take('/from-url');
+		expect(add.url).toBe('/api/games/g1/images/from-url');
+		expect(add.init?.method).toBe('POST');
+		expect(JSON.parse(add.init!.body as string)).toEqual({
+			url: suggestion(1).imageUrl,
+			type: 'BoxArt'
+		});
+		// S13: tiles and radios are disabled while adding; Close is not.
+		expect((tile('Add Tetris 2 box art 2') as HTMLButtonElement).disabled).toBe(true);
+		expect((inDialog().getByLabelText('Screenshot') as HTMLInputElement).disabled).toBe(true);
+		expect(tile('Add Tetris 1 box art 1').querySelector('.spinner-border')).toBeTruthy();
+		for (const button of inDialog().getAllByRole('button', { name: 'Close', hidden: true }))
+			expect((button as HTMLButtonElement).disabled).toBe(false);
+		add.resolve(json(after));
+
+		const done = await vi.waitFor(() => tile('Added Tetris 1 box art 1'));
+		expect(onchanged).toHaveBeenCalledWith(after);
+		expect(toasts.items.map((t) => t.text)).toContain('Image added from IGDB.');
+		expect((done as HTMLButtonElement).disabled).toBe(true);
+		expect(within(done).getByText('Added').className).toContain('text-bg-success');
+		expect((tile('Add Tetris 2 box art 2') as HTMLButtonElement).disabled).toBe(false);
+		expect(dialog().classList.contains('show')).toBe(true);
+	});
+
+	it('Added marks reset on a type change and on reopening', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await open();
+		(await take('type=BoxArt')).resolve(json({ suggestions: [suggestion(1)] }));
+		await fireEvent.click(await vi.waitFor(() => tile('Add Tetris 1 box art 1')));
+		(await take('/from-url')).resolve(json(game([])));
+		await vi.waitFor(() => tile('Added Tetris 1 box art 1'));
+
+		await fireEvent.click(inDialog().getByLabelText('Screenshot'));
+		(await take('type=Snap')).resolve(json({ suggestions: [] }));
+		await fireEvent.click(inDialog().getByLabelText('Box art'));
+		(await take('type=BoxArt')).resolve(json({ suggestions: [suggestion(1)] }));
+		await vi.waitFor(() => tile('Add Tetris 1 box art 1'));
+
+		await fireEvent.click(tile('Add Tetris 1 box art 1'));
+		(await take('/from-url')).resolve(json(game([])));
+		await vi.waitFor(() => tile('Added Tetris 1 box art 1'));
+		await close();
+		await open();
+		(await take('type=BoxArt')).resolve(json({ suggestions: [suggestion(1)] }));
+		await vi.waitFor(() => tile('Add Tetris 1 box art 1'));
+	});
+
+	it('an add that finishes after close and reopen still refreshes and toasts, but marks no tile', async () => {
+		const onchanged = vi.fn();
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged });
+		await open();
+		(await take('type=BoxArt')).resolve(json({ suggestions: [suggestion(1)] }));
+		await fireEvent.click(await vi.waitFor(() => tile('Add Tetris 1 box art 1')));
+		const add = await take('/from-url');
+
+		await close();
+		await open();
+		(await take('type=BoxArt')).resolve(json({ suggestions: [suggestion(1)] }));
+		await vi.waitFor(() => tile('Add Tetris 1 box art 1'));
+		add.resolve(json(game([])));
+
+		await vi.waitFor(() => expect(onchanged).toHaveBeenCalledTimes(1));
+		expect(toasts.items.map((t) => t.text)).toContain('Image added from IGDB.');
+		expect(inDialog().queryByRole('button', { name: /^Added/, hidden: true })).toBeNull();
+	});
+
+	it('a duplicate is toasted with the existing message and marks nothing', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await open();
+		(await take('type=BoxArt')).resolve(json({ suggestions: [suggestion(1)] }));
+		await fireEvent.click(await vi.waitFor(() => tile('Add Tetris 1 box art 1')));
+		(await take('/from-url')).resolve(problem(409, 'DuplicateImage', 'Duplicate'));
+
+		await vi.waitFor(() =>
+			expect(toasts.items.map((t) => t.text)).toContain('The game already has this image.')
+		);
+		expect((tile('Add Tetris 1 box art 1') as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	it('a failed download is toasted with its title', async () => {
+		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
+		await open();
+		(await take('type=BoxArt')).resolve(json({ suggestions: [suggestion(1)] }));
+		await fireEvent.click(await vi.waitFor(() => tile('Add Tetris 1 box art 1')));
+		(await take('/from-url')).resolve(problem(502, 'ImageDownloadFailed', 'HTTP 404.'));
+
+		await vi.waitFor(() => expect(toasts.items.map((t) => t.text)).toContain('HTTP 404.'));
 	});
 });

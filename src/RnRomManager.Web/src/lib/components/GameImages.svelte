@@ -3,12 +3,14 @@
 	import { isApiError } from '../api/errors';
 	import { gameSearchQuery, googleImagesUrl } from '../googleSearch';
 	import { imageTypeLabels } from '../imageResolutions';
-	import type { GameDetail, ImageInfo } from '../api/types';
+	import type { GameDetail, ImageInfo, ImageSuggestion, ImageSuggestions } from '../api/types';
 	import { auth } from '../stores/auth.svelte';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
+	import ErrorAlert from './ErrorAlert.svelte';
 	import FileSize from './FileSize.svelte';
 	import Icon from './Icon.svelte';
+	import Loading from './Loading.svelte';
 
 	interface Props {
 		game: GameDetail;
@@ -45,6 +47,81 @@
 	let dropNote = $state<string | undefined>();
 
 	const base = $derived(`/api/games/${encodeURIComponent(game.id)}/images`);
+
+	// IGDB suggestions S12, S13: the Suggest Images dialog.
+	let suggestOpen = $state(false);
+	let suggestType = $state<'BoxArt' | 'Snap'>('BoxArt');
+	let suggestions = $state<ImageSuggestion[] | null>(null);
+	let suggestError = $state<unknown>(null);
+	let suggestNotConfigured = $state(false);
+	/** The tile whose add is running. */
+	let adding = $state<number | null>(null);
+	/** Tiles added in this load (reset on a type change or reopen). */
+	let added = $state<number[]>([]);
+	/** Bumped by each load and each close: a response from an older one is ignored. */
+	let loadSeq = 0;
+	let loadAbort: AbortController | null = null;
+	const suggestLabel = $derived(suggestType === 'BoxArt' ? 'box art' : 'screenshot');
+
+	function openSuggest(): void {
+		suggestType = 'BoxArt';
+		suggestOpen = true;
+		void loadSuggestions();
+	}
+
+	async function loadSuggestions(): Promise<void> {
+		loadAbort?.abort();
+		const controller = new AbortController();
+		loadAbort = controller;
+		const seq = ++loadSeq;
+		suggestions = null;
+		suggestError = null;
+		suggestNotConfigured = false;
+		added = [];
+		try {
+			const result = await api.get<ImageSuggestions>(
+				`/api/games/${encodeURIComponent(game.id)}/image-suggestions?type=${suggestType}`,
+				{ signal: controller.signal }
+			);
+			if (seq === loadSeq) suggestions = result.suggestions;
+		} catch (e) {
+			if (seq !== loadSeq) return;
+			if (isApiError(e, 'IgdbNotConfigured')) suggestNotConfigured = true;
+			else suggestError = e;
+		}
+	}
+
+	// S12: closing the dialog aborts its load and makes any late answer stale.
+	$effect(() => {
+		if (suggestOpen) return;
+		loadAbort?.abort();
+		loadAbort = null;
+		loadSeq++;
+	});
+
+	async function addSuggestion(suggestion: ImageSuggestion, index: number): Promise<void> {
+		const seq = loadSeq;
+		adding = index;
+		try {
+			onchanged(
+				await api.post<GameDetail>(`${base}/from-url`, {
+					url: suggestion.imageUrl,
+					type: suggestType
+				})
+			);
+			toasts.show('Image added from IGDB.', 'success');
+			// S13: only marks a tile of the same opening and type.
+			if (seq === loadSeq) added = [...added, index];
+		} catch (e) {
+			if (isApiError(e, 'ImageDownloadFailed') || isApiError(e, 'ImageUrlBlocked'))
+				toasts.show(e.title, 'danger');
+			else if (isApiError(e, 'ValidationFailed'))
+				toasts.show(e.errors.url?.[0] ?? e.errors.type?.[0] ?? e.title, 'danger');
+			else failed(e);
+		} finally {
+			adding = null;
+		}
+	}
 
 	function view(image: ImageInfo): void {
 		viewing = image;
@@ -217,10 +294,14 @@
 	<h2 class="visually-hidden" id="images-heading">Images</h2>
 	<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
 		{#if auth.isAdmin}
+			<!-- IGDB suggestions S11: before Google Images, and the start of the right-aligned group. -->
+			<button type="button" class="btn btn-outline-secondary btn-sm ms-auto" onclick={openSuggest}>
+				<Icon name="suggest-images" /> Suggest Images
+			</button>
 			<!-- B8: an external search, not an app page. -->
 			<!-- eslint-disable svelte/no-navigation-without-resolve -->
 			<a
-				class="btn btn-outline-secondary btn-sm ms-auto"
+				class="btn btn-outline-secondary btn-sm"
 				href={googleImagesUrl(gameSearchQuery(game))}
 				target="_blank"
 				rel="noopener noreferrer"><Icon name="google" /> Google Images</a
@@ -431,6 +512,107 @@
 			</div>
 			{#if typeError}<div class="invalid-feedback d-block">{typeError}</div>{/if}
 		</div>
+	</ConfirmModal>
+{/if}
+
+{#if auth.isAdmin}
+	<!-- IGDB suggestions S12: info mode (Close only); Close stays enabled while an add runs (S13). -->
+	<ConfirmModal bind:open={suggestOpen} title="Suggest Images" size="lg">
+		<!-- Only while open, so its controls never sit next to the Upload Image dialog's in the page. -->
+		{#if suggestOpen}
+			<div class="btn-group mb-3" role="group" aria-label="Image type">
+				<input
+					type="radio"
+					class="btn-check"
+					name="suggest-type"
+					id="suggest-type-boxart"
+					value="BoxArt"
+					autocomplete="off"
+					disabled={adding !== null}
+					bind:group={suggestType}
+					onchange={loadSuggestions}
+				/>
+				<label class="btn btn-outline-secondary btn-sm" for="suggest-type-boxart">Box art</label>
+				<input
+					type="radio"
+					class="btn-check"
+					name="suggest-type"
+					id="suggest-type-snap"
+					value="Snap"
+					autocomplete="off"
+					disabled={adding !== null}
+					bind:group={suggestType}
+					onchange={loadSuggestions}
+				/>
+				<label class="btn btn-outline-secondary btn-sm" for="suggest-type-snap">Screenshot</label>
+			</div>
+			<div aria-live="polite">
+				{#if suggestNotConfigured}
+					<div class="alert alert-info mb-0">
+						Image suggestions need an IGDB Client ID and secret. Set <code class="text-reset"
+							>Sources:IgdbClientId</code
+						>
+						and <code class="text-reset">Sources:IgdbClientSecret</code> and restart.
+					</div>
+				{:else if suggestError}
+					<ErrorAlert error={suggestError} onretry={loadSuggestions} />
+				{:else if !suggestions}
+					<Loading />
+				{:else if suggestions.length === 0}
+					<p class="mb-0">
+						{suggestType === 'BoxArt'
+							? 'IGDB has no box art for this game.'
+							: 'IGDB has no screenshots for this game.'}
+					</p>
+				{:else}
+					<div class="row row-cols-2 row-cols-md-5 g-2">
+						{#each suggestions as suggestion, i (suggestion.imageUrl)}
+							{@const isAdded = added.includes(i)}
+							<div class="col">
+								<button
+									type="button"
+									class="btn p-0 border card h-100 w-100 position-relative overflow-hidden"
+									aria-label="{isAdded ? 'Added' : 'Add'} {suggestion.gameName} {suggestLabel} {i +
+										1}"
+									disabled={adding !== null || isAdded}
+									onclick={() => addSuggestion(suggestion, i)}
+								>
+									<img
+										class="card-img-top object-fit-contain bg-body-tertiary"
+										style="height: 8rem"
+										src={suggestion.previewUrl}
+										alt=""
+										loading="lazy"
+									/>
+									{#if adding === i}
+										<span
+											class="spinner-border spinner-border-sm position-absolute top-0 start-0 m-1"
+											aria-hidden="true"
+										></span>
+									{/if}
+									{#if isAdded}
+										<span class="badge text-bg-success position-absolute top-0 end-0 m-1"
+											>Added</span
+										>
+									{/if}
+									<span class="d-block w-100 p-1 small text-start">
+										<span class="d-block text-truncate" title={suggestion.gameName}
+											>{suggestion.gameName}</span
+										>
+										{#if suggestion.width && suggestion.height}
+											<span class="d-block text-body-secondary"
+												>{suggestion.width}×{suggestion.height}</span
+											>
+										{/if}
+									</span>
+								</button>
+							</div>
+						{/each}
+					</div>
+				{/if}
+			</div>
+			<div class="form-text">Suggestions from IGDB.com. Click one to add it to the game.</div>
+		{/if}
 	</ConfirmModal>
 {/if}
 

@@ -13,6 +13,8 @@ public sealed class SourcesOptionsValidator : IValidateOptions<SourcesOptions>
             failures.Add($"Sources:TitleDbUrl must be an absolute http(s) URL (got '{options.TitleDbUrl}').");
         if (options.ThumbnailBaseUrl.Length > 0 && !IsHttpUrl(options.ThumbnailBaseUrl))
             failures.Add($"Sources:ThumbnailBaseUrl must be an absolute http(s) URL or empty (got '{options.ThumbnailBaseUrl}').");
+        if (SourcesOptions.IsSet(options.IgdbClientId) != SourcesOptions.IsSet(options.IgdbClientSecret))
+            failures.Add("Sources:IgdbClientId and Sources:IgdbClientSecret must both be set or both be empty.");
         return failures.Count == 0 ? ValidateOptionsResult.Success : ValidateOptionsResult.Fail(failures);
     }
 

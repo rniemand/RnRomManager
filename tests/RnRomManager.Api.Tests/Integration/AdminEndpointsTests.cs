@@ -14,6 +14,7 @@ namespace RnRomManager.Api.Tests.Integration;
 public class AdminEndpointsTests
 {
     private const string InitialPassword = "initial-admin-pass-123";
+    private const string IgdbSecret = "igdb-test-secret-456";
 
     private ApiFactory _factory = null!;
     private AuthClient _admin = null!;
@@ -24,6 +25,8 @@ public class AdminEndpointsTests
         var connectionString = await MariaDbServer.CreateDatabaseAsync();
         _factory = new ApiFactory(connectionString);
         _factory.Settings["Admin:InitialPassword"] = InitialPassword;
+        _factory.Settings["Sources:IgdbClientId"] = "igdb-client-id";
+        _factory.Settings["Sources:IgdbClientSecret"] = IgdbSecret;
         _admin = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
         (await _admin.LoginAsync("boss", TestUsers.Password)).Dispose();
@@ -45,10 +48,12 @@ public class AdminEndpointsTests
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         var text = await response.Content.ReadAsStringAsync();
-        Assert.That(text, Does.Not.Contain(RealDbPassword).And.Not.Contain(InitialPassword));
+        Assert.That(text, Does.Not.Contain(RealDbPassword).And.Not.Contain(InitialPassword).And.Not.Contain(IgdbSecret));
         var settings = JsonDocument.Parse(text).RootElement;
         Assert.That(settings.GetProperty("connectionString").GetString(), Does.Not.Contain("password").IgnoreCase.And.Contain("Database="));
         Assert.That(settings.GetProperty("adminInitialPassword").GetString(), Is.EqualTo("***"));
+        Assert.That(settings.GetProperty("sources").GetProperty("igdbClientSecret").GetString(), Is.EqualTo("***"));
+        Assert.That(settings.GetProperty("sources").GetProperty("igdbClientId").GetString(), Is.EqualTo("igdb-client-id"));
         Assert.That(settings.GetProperty("paths").GetProperty("logs").GetString(), Is.EqualTo(Path.Combine(_factory.Root, "logs")));
         Assert.That(settings.GetProperty("integrity").GetProperty("quickCheckTime").GetString(), Is.Empty);
         Assert.That(settings.GetProperty("logging").GetProperty("retentionDays").GetInt32(), Is.EqualTo(14));
@@ -102,7 +107,8 @@ public class AdminEndpointsTests
         Assert.That(Read("rnrommanager-held.log"), Is.EqualTo("still being written\n"));
         Assert.That(Read("rnrommanager-2026-11-01.log"), Is.EqualTo("old day\n"));
         var settings = Read("settings.json");
-        Assert.That(settings, Does.Not.Contain(RealDbPassword).And.Not.Contain(InitialPassword).And.Contain("\"adminInitialPassword\": \"***\""));
+        Assert.That(settings, Does.Not.Contain(RealDbPassword).And.Not.Contain(InitialPassword).And.Not.Contain(IgdbSecret)
+            .And.Contain("\"adminInitialPassword\": \"***\"").And.Contain("\"igdbClientSecret\": \"***\""));
         Assert.That(Read("version.txt").Trim(), Is.EqualTo(StartupRunner.Version));
         Assert.That(Directory.EnumerateFiles(Path.Combine(_factory.Root, "cache", "work")), Is.Empty, "the temp ZIP is deleted");
     }

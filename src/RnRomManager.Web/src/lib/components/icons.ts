@@ -24,6 +24,8 @@ export const icons: Record<string, string> = {
 	clear: 'bi bi-x-circle',
 	releases: 'bi bi-stack',
 	images: 'bi bi-images',
+	// IGDB suggestions S11.
+	'suggest-images': 'bi bi-magic',
 	zip: 'bi bi-file-zip',
 	back: 'bi bi-arrow-left',
 	'report-size': 'bi bi-pie-chart',

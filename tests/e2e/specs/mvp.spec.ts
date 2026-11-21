@@ -2284,6 +2284,18 @@ test("images: upload, set cover, delete", async () => {
       });
   await expect(images.getByText("Placeholder")).toBeVisible();
 
+  // IGDB suggestions S17: the e2e stack has no IGDB keys, so the dialog explains what to set.
+  await images.getByRole("button", { name: "Suggest Images" }).click();
+  await expect(dialog()).toHaveAccessibleName("Suggest Images");
+  await expect(
+    dialog().getByText(
+      "Image suggestions need an IGDB Client ID and secret. Set Sources:IgdbClientId and Sources:IgdbClientSecret and restart.",
+    ),
+  ).toBeVisible();
+  await expectAccessible(page, "suggest images modal");
+  await dialog().getByRole("button", { name: "Close", exact: true }).last().click();
+  await expect(dialog()).toBeHidden();
+
   // A box art upload replaces the placeholder and takes over as cover.
   await images.getByRole("button", { name: "Upload Image" }).click();
   await expect(dialog()).toHaveAccessibleName("Upload Image");

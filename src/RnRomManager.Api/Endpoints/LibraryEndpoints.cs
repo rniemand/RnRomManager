@@ -10,6 +10,7 @@ using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
+using RnRomManager.Core.Media;
 using RnRomManager.Core.Naming;
 using RnRomManager.Core.Systems;
 using RnRomManager.Core.Users;
@@ -331,6 +332,24 @@ public static class LibraryEndpoints
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
+        // IGDB suggestions S8: read-only candidates for the Suggest Images dialog; adding one is the from-url route above.
+        games.MapGet("/{id:guid}/image-suggestions", async (Guid id, string? type, HttpContext ctx, IGameRepository repository,
+            IImageSuggestions suggestions) =>
+        {
+            ImageType? parsed = type switch { "BoxArt" => ImageType.BoxArt, "Snap" => ImageType.Snap, _ => null };
+            if (parsed is null)
+                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["type"] = ["Choose BoxArt or Snap."] });
+            if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
+                return Problems.NotFound(ctx);
+            if (!suggestions.Configured)
+                return Problems.Create(ctx, StatusCodes.Status409Conflict, IgdbNotConfigured,
+                    "Image suggestions need Sources:IgdbClientId and Sources:IgdbClientSecret.");
+            var result = await suggestions.SuggestAsync(game.DisplayTitle, game.SystemId, parsed.Value, ctx.RequestAborted);
+            return result.Suggestions is { } list
+                ? Results.Ok(new { suggestions = list })
+                : Problems.Create(ctx, StatusCodes.Status502BadGateway, IgdbFailed, result.FailedTitle!);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
         games.MapDelete("/{id:guid}/images/{imageId:long}", async (Guid id, long imageId, HttpContext ctx, LibraryEditor editor,
             IGameRepository repository, IRomRepository roms, IImageRepository images) =>
         {
@@ -361,6 +380,11 @@ public static class LibraryEndpoints
 
         return api;
     }
+
+    /// <summary>IGDB suggestions S8: the ProblemDetails codes.</summary>
+    public const string IgdbNotConfigured = "IgdbNotConfigured";
+
+    public const string IgdbFailed = "IgdbFailed";
 
     /// <summary>The upload's whole request: the 8 MiB image plus room for the multipart framing and the <c>type</c> field.</summary>
     public const long UploadRequestLimit = ImageFormats.MaxBytes + 64 * 1024;

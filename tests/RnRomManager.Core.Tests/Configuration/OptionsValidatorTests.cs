@@ -88,6 +88,31 @@ public class OptionsValidatorTests
     public void ThumbnailBaseUrl_IsAbsoluteHttpUrlOrEmpty(string value, bool valid) =>
         Assert.That(new SourcesOptionsValidator().Validate(null, new() { ThumbnailBaseUrl = value }).Succeeded, Is.EqualTo(valid));
 
+    [TestCase("", "", true)]
+    [TestCase("id", "secret", true)]
+    [TestCase("id", "", false)]
+    [TestCase("", "secret", false)]
+    [TestCase("id", "  ", false)]
+    [TestCase(" ", "secret", false)]
+    [TestCase(" ", "\t", true)]
+    public void IgdbKeys_BothSetOrBothEmpty(string id, string secret, bool valid)
+    {
+        var result = new SourcesOptionsValidator().Validate(null, new() { IgdbClientId = id, IgdbClientSecret = secret });
+
+        Assert.That(result.Succeeded, Is.EqualTo(valid));
+        if (!valid)
+            Assert.That(result.FailureMessage,
+                Does.Contain("Sources:IgdbClientId and Sources:IgdbClientSecret must both be set or both be empty."));
+    }
+
+    [Test]
+    public void IgdbConfigured_NeedsBothKeysNonBlank()
+    {
+        Assert.That(SourcesOptions.IgdbConfigured(new()), Is.False);
+        Assert.That(SourcesOptions.IgdbConfigured(new() { IgdbClientId = "id", IgdbClientSecret = " " }), Is.False);
+        Assert.That(SourcesOptions.IgdbConfigured(new() { IgdbClientId = "id", IgdbClientSecret = "secret" }), Is.True);
+    }
+
     [Test]
     public void Defaults_AreValid()
     {
