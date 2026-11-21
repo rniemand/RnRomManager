@@ -24,7 +24,13 @@ import {
 	threeDoBios,
 	threeDoBiosBytes,
 	threeDoBiosMissing,
-	threeDoBiosSizeError
+	threeDoBiosSizeError,
+	turboGrafxCdBiosMaxBytes,
+	turboGrafxCdBiosMissing,
+	turboGrafxCdBiosNames,
+	turboGrafxCdBiosSizeError,
+	turboGrafxCdCards,
+	turboGrafxCdGamesExpress
 } from '../../static/emulator/params.js';
 
 const game = '0f8fad5b-d9cb-469f-a165-70867728950e';
@@ -811,6 +817,54 @@ describe('Sega CD (B7, B8)', () => {
 	it('labels the shared core for both systems (B8)', () => {
 		expect(operatorCoreError('genesis_plus_gx', 404)).toBe(
 			'Genesis and Sega CD games need the Genesis Plus GX core files: ask an Admin to set them up (Emulator:GenesisCorePath).'
+		);
+	});
+});
+
+describe('TurboGrafx-CD (B7, B9)', () => {
+	it('looks for the System Cards in order, then the optional Games Express card, each up to 1 MiB', () => {
+		expect(turboGrafxCdCards).toEqual([
+			'syscard3.pce',
+			'syscard3u.pce',
+			'syscard2.pce',
+			'syscard2u.pce',
+			'syscard1.pce'
+		]);
+		expect(turboGrafxCdGamesExpress).toBe('gexpress.pce');
+		expect(turboGrafxCdBiosNames).toEqual([...turboGrafxCdCards, 'gexpress.pce']);
+		expect(turboGrafxCdBiosMaxBytes).toBe(1048576);
+	});
+
+	it.each([
+		'syscard3.pce',
+		'SYSCARD3U.PCE',
+		'syscard2.pce',
+		'SysCard2U.pce',
+		'syscard1.pce',
+		'GEXPRESS.PCE'
+	])(
+		'renames Beetle PCE content called %s after the game, for a disc and a HuCard alike',
+		(name) => {
+			expect(parsePlayParams(query({ core: 'mednafen_pce', name, disc: '1' }))?.disc).toBe(true);
+			expect(parsePlayParams(query({ core: 'mednafen_pce', name }))?.disc).toBe(false);
+			expect(contentFileName('mednafen_pce', game, name)).toBe(`${game}-${name}`);
+		}
+	);
+
+	it('leaves other Beetle PCE names and other cores alone', () => {
+		expect(contentFileName('mednafen_pce', game, 'Disc Ninja (Japan).cue')).toBe(
+			'Disc Ninja (Japan).cue'
+		);
+		expect(contentFileName('mednafen_pce', game, 'syscard4.pce')).toBe('syscard4.pce');
+		expect(contentFileName('opera', game, 'syscard3.pce')).toBe('syscard3.pce');
+	});
+
+	it('names the file in the size message, and syscard3.pce in the missing message', () => {
+		expect(turboGrafxCdBiosSizeError('syscard2.pce')).toBe(
+			'The TurboGrafx-CD BIOS syscard2.pce in the BIOS folder (Paths:Bios) is empty or larger than 1 MiB: ask an Admin to replace it.'
+		);
+		expect(turboGrafxCdBiosMissing).toBe(
+			'TurboGrafx-CD games need a System Card BIOS: ask an Admin to put syscard3.pce in the BIOS folder (Paths:Bios).'
 		);
 	});
 });

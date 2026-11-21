@@ -1192,6 +1192,191 @@ describe('play page Sega CD (Sega CD B7)', () => {
 	});
 });
 
+describe('play page TurboGrafx-16', () => {
+	it('loads a HuCard from /download with no BIOS request, external files or hidden settings', async () => {
+		serve({ [romUrl]: async () => response(200) });
+
+		expect(await play('mednafen_pce', 'Neon Circuit (USA).pce')).toBe('Starting emulator…');
+
+		expect(urls()).toEqual([romUrl]);
+		expect(atLoader?.EJS_core).toBe('mednafen_pce');
+		expect((atLoader?.EJS_gameUrl as File).name).toBe('Neon Circuit (USA).pce');
+		expect(atLoader?.EJS_hideSettings).toBeUndefined();
+		expect(atLoader?.EJS_externalFiles).toBeUndefined();
+		expect(atLoader?.EJS_biosUrl).toBeUndefined();
+	});
+});
+
+describe('play page TurboGrafx-CD (TurboGrafx-CD B7, B8)', () => {
+	const bios = (name: string) => `/api/emulator/bios/${name}`;
+	const cards = ['syscard3.pce', 'syscard3u.pce', 'syscard2.pce', 'syscard2u.pce', 'syscard1.pce'];
+	const cardUrls = cards.map(bios);
+	const gexpress = bios('gexpress.pce');
+	const discUrl = `/api/games/${game}/roms/12/play-disc`;
+	const disc = new Uint8Array([0x50, 0x4b, 3, 4, 9, 9]);
+	const name = 'Disc Ninja (Japan).cue';
+	const firmware = (seed: number, size = 262144) =>
+		new Uint8Array(size).map((_, i) => (i + seed) % 241);
+
+	function body(bytes: Uint8Array): FakeResponse {
+		const chunks = [bytes];
+		const stream = new ReadableStream<Uint8Array>({
+			pull(controller) {
+				const next = chunks.shift();
+				if (next) controller.enqueue(next);
+				else controller.close();
+			}
+		});
+		return { ok: true, status: 200, body: stream } as unknown as FakeResponse;
+	}
+
+	function discResponse(): FakeResponse {
+		return {
+			ok: true,
+			status: 200,
+			body: null,
+			blob: async () => new Blob([disc])
+		} as unknown as FakeResponse;
+	}
+
+	/** Serves every card and gexpress.pce as 404 unless given, and the disc. */
+	function serveCd(found: Record<string, () => Promise<FakeResponse>>) {
+		serve({
+			...Object.fromEntries([...cardUrls, gexpress].map((url) => [url, async () => response(404)])),
+			...found,
+			[discUrl]: async () => discResponse()
+		});
+	}
+
+	it('with only syscard3.pce: asks for it, then gexpress.pce, then the disc, and hands the card over', async () => {
+		serveCd({ [cardUrls[0]]: async () => body(firmware(1)) });
+
+		expect(await play('mednafen_pce', name, true)).toBe('Starting emulator…');
+
+		expect(urls()).toEqual([cardUrls[0], gexpress, discUrl]);
+		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
+		expect(Object.keys(files)).toEqual(['/syscard3.pce']);
+		expect(new Uint8Array(files['/syscard3.pce'])).toEqual(firmware(1));
+		const file = atLoader?.EJS_gameUrl as File;
+		expect(file.name).toBe(name);
+		expect(new Uint8Array(await file.arrayBuffer())).toEqual(disc);
+	});
+
+	it('stops at the first card found, and hands any card over as syscard3.pce', async () => {
+		serveCd({
+			[bios('syscard2u.pce')]: async () => body(firmware(4)),
+			[bios('syscard1.pce')]: async () => body(firmware(5))
+		});
+
+		await play('mednafen_pce', name, true);
+
+		expect(urls()).toEqual([...cardUrls.slice(0, 4), gexpress, discUrl]);
+		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
+		expect(Object.keys(files)).toEqual(['/syscard3.pce']);
+		expect(new Uint8Array(files['/syscard3.pce'])).toEqual(firmware(4));
+	});
+
+	it('hands over gexpress.pce too when it is there', async () => {
+		serveCd({
+			[cardUrls[0]]: async () => body(firmware(1)),
+			[gexpress]: async () => body(firmware(9, 32768))
+		});
+
+		await play('mednafen_pce', name, true);
+
+		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
+		expect(Object.keys(files)).toEqual(['/syscard3.pce', '/gexpress.pce']);
+		expect(new Uint8Array(files['/gexpress.pce'])).toEqual(firmware(9, 32768));
+	});
+
+	it('accepts a card with a 512-byte copier header (256 KiB + 512) and passes it whole (B8)', async () => {
+		serveCd({ [cardUrls[0]]: async () => body(firmware(2, 262656)) });
+
+		await play('mednafen_pce', name, true);
+
+		const card = (atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>)['/syscard3.pce'];
+		expect(card.byteLength).toBe(262656);
+		expect(new Uint8Array(card)).toEqual(firmware(2, 262656));
+	});
+
+	it('stops with the missing message when no card is there, before gexpress.pce, the disc or the loader', async () => {
+		serveCd({ [gexpress]: async () => body(firmware(9, 32768)) });
+
+		expect(await play('mednafen_pce', name, true)).toBe(
+			'TurboGrafx-CD games need a System Card BIOS: ask an Admin to put syscard3.pce in the BIOS folder (Paths:Bios).'
+		);
+		expect(urls()).toEqual(cardUrls);
+		expect(atLoader).toBeNull();
+	});
+
+	it.each([
+		['empty', 0],
+		['over 1 MiB', 1048577]
+	])('stops on a card that is %s, naming it, with no later request', async (_, size) => {
+		serveCd({ [cardUrls[1]]: async () => body(firmware(3, size)) });
+
+		expect(await play('mednafen_pce', name, true)).toBe(
+			'The TurboGrafx-CD BIOS syscard3u.pce in the BIOS folder (Paths:Bios) is empty or larger than 1 MiB: ask an Admin to replace it.'
+		);
+		expect(urls()).toEqual(cardUrls.slice(0, 2));
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops on a card HTTP 500 with the BIOS message', async () => {
+		serveCd({ [cardUrls[0]]: async () => response(500) });
+
+		expect(await play('mednafen_pce', name, true)).toBe("Couldn't load the BIOS (HTTP 500).");
+		expect(urls()).toEqual([cardUrls[0]]);
+		expect(atLoader).toBeNull();
+	});
+
+	it.each([
+		['empty', 0],
+		['over 1 MiB', 1048577]
+	])('stops on a gexpress.pce that is %s before the disc', async (_, size) => {
+		serveCd({
+			[cardUrls[0]]: async () => body(firmware(1)),
+			[gexpress]: async () => body(firmware(9, size))
+		});
+
+		expect(await play('mednafen_pce', name, true)).toBe(
+			'The TurboGrafx-CD BIOS gexpress.pce in the BIOS folder (Paths:Bios) is empty or larger than 1 MiB: ask an Admin to replace it.'
+		);
+		expect(urls()).toEqual([cardUrls[0], gexpress]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('stops on a gexpress.pce HTTP 500 before the disc', async () => {
+		serveCd({
+			[cardUrls[0]]: async () => body(firmware(1)),
+			[gexpress]: async () => response(500)
+		});
+
+		expect(await play('mednafen_pce', name, true)).toBe("Couldn't load the BIOS (HTTP 500).");
+		expect(urls()).toEqual([cardUrls[0], gexpress]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('hides pce_cdbios, sets no core option and leaves cue handling as upstream', async () => {
+		serveCd({ [cardUrls[0]]: async () => body(firmware(1)) });
+
+		await play('mednafen_pce', 'Disc Ninja (Japan).chd', true);
+
+		expect(atLoader?.EJS_hideSettings).toEqual(['pce_cdbios']);
+		expect(atLoader?.EJS_disableCue).toBeUndefined();
+		expect(atLoader?.EJS_defaultOptions).not.toHaveProperty('pce_cdbios');
+		expect(atLoader?.EJS_biosUrl).toBeUndefined();
+	});
+
+	it('names a disc called like a System Card after the game', async () => {
+		serveCd({ [cardUrls[0]]: async () => body(firmware(1)) });
+
+		await play('mednafen_pce', 'SYSCARD3.PCE', true);
+
+		expect((atLoader?.EJS_gameUrl as File).name).toBe(`${game}-SYSCARD3.PCE`);
+	});
+});
+
 describe('play page SNES (SNES B3)', () => {
 	const check = '/api/emulator/cores/snes9x';
 

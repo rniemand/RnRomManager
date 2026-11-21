@@ -129,7 +129,7 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
   - Files: `PlayDisc.cs`, `LibraryEndpointsTests.PlayDisc.cs`.
   - Tests: `LibraryEndpointsTests.PlayDisc`: tgcd cue set → 200 stored ZIP with the rewritten cue; single `.chd` → 200 streamed as-is; single `.bin` → 409 `InvalidPlayDisc` whose `title` is B4's exact text (as `PlayDisc_ALoneNrg_NamesTheSingleFileShapes` asserts on `title`); two cues → 409 `InvalidPlayDisc`; psx, psp, saturn, segacd and 3do cases unchanged. `PlayDiscCopyTests`.
   - Done when: those pass.
-- [ ] **5. TurboGrafx-CD player** (B7–B10): first check B10's two EmulatorJS assumptions and record them in § Decisions (stop and ask if either fails). Then:
+- [x] **5. TurboGrafx-CD player** (B7–B10): first check B10's two EmulatorJS assumptions and record them in § Decisions (stop and ask if either fails). Then:
   - `params.js`: `turboGrafxCdCards`, `turboGrafxCdBiosNames`, `turboGrafxCdBiosMaxBytes`, `turboGrafxCdBiosSizeError(name)`, `turboGrafxCdBiosMissing`, and the `contentFileName` guard.
   - `play.js`: `loadOptionalBios`'s `exact` (B8), `isTurboGrafxCd`, the B7 order and `EJS_externalFiles`/`EJS_hideSettings` for that path only.
   - Nothing produces a TurboGrafx-CD play link yet, since `BrowserCore` is null.
@@ -208,6 +208,8 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
 - 2026-11-20 Loading label → `50% of 512.0 MiB`; with no total, the size received so far (user)
 - 2026-11-20 U review → `rom-progress.ts` e2e helper updated (regex, no cross-package import); the starting label pinned; Close/Cancel wording (reviewer)
 - 2026-11-20 B10 IGDB id → 150 kept but unconfirmed: IGDB's public pages refuse automated reads (403) and no IGDB credentials were used without the user's say-so; the maintainer checks it (code)
+- 2026-11-20 B10 hiding → verified: EmulatorJS 4.2.3 builds each core option's menu entry with `addToMenu(…, name.split("|")[0], …)`, the option key, so `EJS_hideSettings = ['pce_cdbios']` hides it (code)
+- 2026-11-20 B10 BIOS location → verified: Beetle PCE's `MDFN_GetSettingS("filesys.path_firmware")` (`mednafen/settings.cpp` at `e1ac90d`) returns `retro_base_directory`, the system directory with trailing slashes stripped; with EmulatorJS's RetroArch giving the content root `/`, that's `""`, and `pce.cpp` opens `"" + "/" + "syscard3.pce"`, where `EJS_externalFiles` writes it (code)
 - 2026-11-20 Review round 2 → `HandleAsync`/`HandleSetAsync` pass the system id through `OpenDiscAsync` to `ShapeProblem`; round 3 clean (reviewer)
 
 ## Kickoff prompt
