@@ -149,7 +149,7 @@ Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need D
     - `emulatorPlay.test.ts`: a new `play page TurboGrafx-16` (no such case exists yet): `mednafen_pce` without `disc` makes no BIOS request, loads the ROM from `/download`, and sets no `EJS_hideSettings` and no `EJS_externalFiles`.
     - The existing PlayStation, Saturn, Sega CD and 3DO cases pass unchanged (they call `loadOptionalBios` with `exact` defaulted).
   - Done when: `npm run lint`, `npm run check` and those vitest files pass.
-- [ ] **6. Enable TurboGrafx-CD Play** (B5): `TurboGrafxCdHandler.BrowserCore = "mednafen_pce"`; `mednafen_pce` in the API's and SPA's external and play-disc core sets; `PrimaryHasFiles`; the lone `.bin` rule in `playable` and `canPlay`; README Play cell → `` `mednafen_pce` ``.
+- [x] **6. Enable TurboGrafx-CD Play** (B5): `TurboGrafxCdHandler.BrowserCore = "mednafen_pce"`; `mednafen_pce` in the API's and SPA's external and play-disc core sets; `PrimaryHasFiles`; the lone `.bin` rule in `playable` and `canPlay`; README Play cell → `` `mednafen_pce` ``.
   - Files: `TurboGrafxCdHandler.cs`, `GameListItem.cs`, `LibraryRepositories.cs`, `LibraryEndpoints.cs`, `emulator.ts`, `README.md` (cell only), and the tests below.
   - Tests:
     - `TurboGrafxCdHandlerTests` and `SupportedSystemsTableTests`.

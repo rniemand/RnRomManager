@@ -280,6 +280,7 @@ public partial class LibraryEndpointsTests
     [TestCase("saturn", true, true, "yabause")]
     [TestCase("segacd", true, true, "genesis_plus_gx")]
     [TestCase("3do", true, true, "opera")]
+    [TestCase("tgcd", true, true, "mednafen_pce")]
     [TestCase("c64", false, true, "vice_x64sc")]
     [TestCase("pet", false, true, "vice_xpet")]
     [TestCase("vic20", false, true, "vice_xvic")]
@@ -307,8 +308,16 @@ public partial class LibraryEndpointsTests
     public Task Games_QuickPlay_AChdPrimary_IsPlayable(string system, string core) =>
         AssertQuickPlayAsync(system, true, true, core, "x.chd", "x.chd");
 
+    // TurboGrafx-CD B5: Beetle PCE plays a .bin only as a cue set's data track; a lone .chd plays.
+    [TestCase("x.bin", "x.cue", true)]
+    [TestCase("x.bin", null, false)]
+    [TestCase("x.BIN", null, false)]
+    [TestCase("x.chd", null, true)]
+    public Task Games_QuickPlay_TurboGrafxCd_ALoneBinIsNotPlayable(string fileName, string? setFile, bool playable) =>
+        AssertQuickPlayAsync("tgcd", true, playable, "mednafen_pce", fileName, fileName, setFile);
+
     private async Task AssertQuickPlayAsync(string system, bool external, bool playable, string? core,
-        string? fileName = null, string externalName = "x.gb")
+        string? fileName = null, string externalName = "x.gb", string? setFile = null)
     {
         var id = await Tetris();
         long primaryId;
@@ -322,6 +331,11 @@ public partial class LibraryEndpointsTests
                 await connection.ExecuteAsync("UPDATE roms SET file_name = @fileName WHERE game_id = @id AND is_primary = 1", new { id, fileName });
             (primaryId, primaryName) = await connection.QuerySingleAsync<(long, string)>(
                 "SELECT id, file_name FROM roms WHERE game_id = @id AND is_primary = 1 ORDER BY id LIMIT 1", new { id });
+            if (setFile is not null)
+                await connection.ExecuteAsync("""
+                    INSERT INTO rom_files (rom_id, game_id, ordinal, file_name, external_file_name, original_file_name, size_bytes, crc32, md5, sha1)
+                    VALUES (@primaryId, @id, 1, @setFile, @setFile, @setFile, 100, '00000000', REPEAT('0', 32), REPEAT('0', 40))
+                    """, new { primaryId, id, setFile });
         }
 
         var item = (await GetJson("/api/games")).GetProperty("items")[0];
@@ -464,6 +478,7 @@ public partial class LibraryEndpointsTests
     [TestCase("vic20", "vice_xvic")]
     [TestCase("amiga", "puae")]
     [TestCase("tg16", "mednafen_pce")]
+    [TestCase("tgcd", "mednafen_pce")]
     [TestCase("n64", "mupen64plus_next")]
     [TestCase("nosuch", null)]
     public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)

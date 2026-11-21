@@ -33,7 +33,8 @@ public class TurboGrafxCdHandlerTests
         Assert.That(Handler.Family, Is.Not.EqualTo(new TurboGrafx16Handler().Family));
 
     [Test]
-    public void BrowserCore_IsNullUntilPlayIsEnabled() => Assert.That(Handler.BrowserCore, Is.Null);
+    public void BrowserCore_IsBeetlePce_SharedWithTurboGrafx16() =>
+        Assert.That(Handler.BrowserCore, Is.EqualTo("mednafen_pce").And.EqualTo(new TurboGrafx16Handler().BrowserCore));
 
     [TestCase(16)]
     [TestCase(4096)]

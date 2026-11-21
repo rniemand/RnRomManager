@@ -5,7 +5,7 @@ import type { GameDetail, RomDetail } from './api/types';
  * Play B1: the cores that play a release stored outside the ZIP through play-disc: a PlayStation disc, (PSP B2) a
  * PlayStation Portable UMD image, (Saturn B6) a Saturn disc and (Sega CD B5) a Sega CD disc on Genesis Plus GX, which
  * also plays Mega Drive cartridges from the ZIP: the play URL's `disc` flag tells the two apart. 3DO B7: Opera plays
- * only discs.
+ * only discs. TurboGrafx-CD B5: Beetle PCE plays TurboGrafx-CD discs and, from the ZIP, TurboGrafx-16 HuCards.
  */
 export const externalBrowserCores: readonly string[] = [
 	'pcsx_rearmed',
@@ -13,7 +13,8 @@ export const externalBrowserCores: readonly string[] = [
 	'yabause',
 	'genesis_plus_gx',
 	'opera',
-	'desmume'
+	'desmume',
+	'mednafen_pce'
 ];
 
 /** S8: the cores whose external releases load through play-disc; DeSmuME loads an external DS ROM from `/download`. */
@@ -22,7 +23,8 @@ export const playDiscCores: readonly string[] = [
 	'ppsspp',
 	'yabause',
 	'genesis_plus_gx',
-	'opera'
+	'opera',
+	'mednafen_pce'
 ];
 
 /** S8: whether the play URL carries `disc=1`: an external release of a play-disc core. */
@@ -42,16 +44,24 @@ export function opensInNewTab(core: string | null): boolean {
  * Browser emulators B3: the system has an EmulatorJS core and the release is inside the ZIP. Play B1: a PlayStation
  * or PSP release is external and plays anyway, and (Saturn B6) a Saturn bin/cue disc; other external releases (Switch,
  * GameCube…) don't, nor does an .nrg image. CHD B5: a standalone .chd plays like an .iso (PlayStation, Saturn, Sega CD).
+ * TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, so on `mednafen_pce` an external .bin plays only with its
+ * set files (the cue); the API's quick play applies the same rule.
  */
 export function canPlay(
 	game: Pick<GameDetail, 'browserCore'>,
-	rom: Pick<RomDetail, 'externalFileName'>
+	rom: Pick<RomDetail, 'externalFileName'> & Partial<Pick<RomDetail, 'files'>>
 ): boolean {
+	const external = rom.externalFileName?.toLowerCase() ?? null;
 	return (
 		game.browserCore !== null &&
-		(rom.externalFileName === null || externalBrowserCores.includes(game.browserCore)) &&
+		(external === null || externalBrowserCores.includes(game.browserCore)) &&
 		// Saturn B6: an .nrg image never plays, whatever the core.
-		!(rom.externalFileName?.toLowerCase().endsWith('.nrg') ?? false)
+		!(external?.endsWith('.nrg') ?? false) &&
+		!(
+			game.browserCore === 'mednafen_pce' &&
+			(external?.endsWith('.bin') ?? false) &&
+			!rom.files?.length
+		)
 	);
 }
 

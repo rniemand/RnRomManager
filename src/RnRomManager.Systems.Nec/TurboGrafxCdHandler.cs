@@ -41,5 +41,8 @@ public sealed class TurboGrafxCdHandler : ISystemHandler
 
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
+    /// <summary>TurboGrafx-CD B5: Beetle PCE, shared with TurboGrafx-16; the play URL's <c>disc</c> flag tells the two apart.</summary>
+    public string? BrowserCore => "mednafen_pce";
+
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
 }
