@@ -33,7 +33,7 @@ public class SecurityHeadersTests
     public void Policy_WithIndexHtml_ListsTheHashes()
     {
         Assert.That(SecurityHeaders.ContentSecurityPolicy(IndexHtml.ReplaceLineEndings("\n")), Is.EqualTo(
-            $"default-src 'self'; script-src 'self' {HashOne} {HashTwo}; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"));
+            $"default-src 'self'; script-src 'self' {HashOne} {HashTwo}; img-src 'self' data: blob: https://images.igdb.com; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"));
     }
 
     /// <summary>Release editing B40: the PWA manifest loads through manifest-src's fallback, default-src 'self'.</summary>
