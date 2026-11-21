@@ -13,7 +13,7 @@ namespace RnRomManager.Api.Endpoints;
 /// copy of the cue (<see cref="CueSheet.ForPlayback"/>) and the tracks as <c>track-NN.bin</c>. CHD B4: a standalone
 /// <c>.chd</c> (or a PlayStation <c>.img</c>) streams unchanged like an <c>.iso</c>. Every member is opened
 /// and checked before the response starts; nothing is written to disk and nothing is audited. PSP B2: a PlayStation
-/// Portable release streams its standalone <c>.iso</c>, <c>.cso</c> or <c>.pbp</c> the same way. Saturn, Sega CD and 3DO take PlayStation's disc
+/// Portable release streams its standalone <c>.iso</c>, <c>.cso</c>, <c>.pbp</c> or <c>.chd</c> the same way. Saturn, Sega CD and 3DO take PlayStation's disc
 /// shapes; TurboGrafx-CD takes its cue sets and a standalone <c>.chd</c> only. All these systems share the same cap (<see cref="MaxBytes"/>).
 /// </summary>
 public static class PlayDisc
@@ -286,7 +286,7 @@ public static class PlayDisc
 
     /// <summary>
     /// B2: a standalone <c>.bin</c>/<c>.iso</c> (CHD B4: or <c>.chd</c>; or a PlayStation <c>.img</c> or <c>.pbp</c>), or one cue with 1–99 BINs (the main file among
-    /// them), all portable names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>, <c>.cso</c> or <c>.pbp</c>.
+    /// them), all portable names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>, <c>.cso</c>, <c>.pbp</c> or <c>.chd</c>.
     /// TurboGrafx-CD B4: Beetle PCE boots only a cue or a <c>.chd</c> as a CD (a bare <c>.bin</c> would run as a HuCard), so
     /// a single file must be a <c>.chd</c>.
     /// </summary>
@@ -296,8 +296,8 @@ public static class PlayDisc
         if (members.FirstOrDefault(m => CueSheet.NameProblem(m.Name) is not null) is { } bad)
             return $"'{bad.Name}' is not a portable file name";
         if (psp)
-            return members is [var umd] && Path.GetExtension(umd.Name).ToLowerInvariant() is ".iso" or ".cso" or ".pbp"
-                ? null : "a PSP disc must be a single .iso, .cso or .pbp";
+            return members is [var umd] && Path.GetExtension(umd.Name).ToLowerInvariant() is ".iso" or ".cso" or ".pbp" or ".chd"
+                ? null : "a PSP disc must be a single .iso, .cso, .pbp or .chd";
         if (members.Select(m => m.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != members.Count)
             return "two disc files have the same name ignoring case";
         if (members.Count == 1 && systemId == TurboGrafxCdSystemId)

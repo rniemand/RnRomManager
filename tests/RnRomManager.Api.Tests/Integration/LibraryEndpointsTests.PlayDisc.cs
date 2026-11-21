@@ -325,7 +325,8 @@ public partial class LibraryEndpointsTests
 
     [TestCase("Packed (USA).cso")]
     [TestCase("Packed (USA).PBP")]
-    public async Task PlayDisc_APspCsoOrPbp_StreamsUnchanged(string name)
+    [TestCase("Packed (USA).chd")]
+    public async Task PlayDisc_APspCsoPbpOrChd_StreamsUnchanged(string name)
     {
         var bytes = Umd(30);
         var (id, _, ids) = await PspGame("Packed", [PsxSolo(name, bytes)], (name, bytes));
@@ -634,22 +635,33 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
-    public async Task PlayDisc_AChdInACueSet_OrOnPsp_Is409InvalidPlayDisc()
+    public async Task PlayDisc_AChdInACueSet_Is409InvalidPlayDisc()
     {
         var cue = PsxCue("Mixed Chd (USA) (Track 1).bin", "Mixed Chd (USA) (Track 2).bin");
-        var set = await SegaCdGame("Mixed Chd",
+        var (id, _, ids) = await SegaCdGame("Mixed Chd",
             [PsxSolo("Mixed Chd (USA) (Track 1).bin", PsxTrack1) with
             {
                 Files = [SetFile("Mixed Chd (USA).cue", cue), SetFile("Mixed Chd (USA).chd", Umd(52))],
             }],
             ("Mixed Chd (USA) (Track 1).bin", PsxTrack1), ("Mixed Chd (USA).cue", cue), ("Mixed Chd (USA).chd", Umd(52)));
-        var psp = await PspGame("Umd Chd", [PsxSolo("Umd Chd (USA).chd", Umd(53))], ("Umd Chd (USA).chd", Umd(53)));
 
-        foreach (var (id, _, ids) in new[] { set, psp })
-        {
-            using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
-            Assert.That(await ProblemCode(response, HttpStatusCode.Conflict), Is.EqualTo(PlayDisc.InvalidPlayDisc), id.ToString());
-        }
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(await ProblemCode(response, HttpStatusCode.Conflict), Is.EqualTo(PlayDisc.InvalidPlayDisc));
+    }
+
+    [Test]
+    public async Task PlayDisc_APspPair_Is409InvalidPlayDisc()
+    {
+        var (id, _, ids) = await PspGame("Umd Pair", [PsxSolo("Umd Pair (USA).chd", Umd(53)) with
+            {
+                Files = [SetFile("Umd Pair (USA).iso", Umd(52))],
+            }],
+            ("Umd Pair (USA).chd", Umd(53)), ("Umd Pair (USA).iso", Umd(52)));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(await ProblemCode(response, HttpStatusCode.Conflict), Is.EqualTo(PlayDisc.InvalidPlayDisc));
     }
 
     [Test]
