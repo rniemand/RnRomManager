@@ -4,7 +4,7 @@
  * Sega CD B6: `disc` is true for an external release (`disc=1`), which loads from play-disc whatever the core.
  * Saves B17: `save` is the library save to load at game start (`save` + `saveKind`), or null.
  * @typedef {{ id: string, kind: 'state' | 'battery' }} PlaySave
- * @typedef {{ game: string, rom: number, core: string, name: string, disc: boolean, save: PlaySave | null }} PlayParams
+ * @typedef {{ game: string, rom: number, core: string, name: string, disc: boolean, set: boolean, save: PlaySave | null }} PlayParams
  */
 
 const guid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -62,12 +62,16 @@ export function parsePlayParams(search, pspPage = false) {
 	if (save.length > 1 || saveKind.length > 1 || save.length !== saveKind.length) return null;
 	if (save.length === 1 && (!/^[0-9a-f]{32}$/.test(save[0]) || !['state', 'battery'].includes(saveKind[0])))
 		return null;
+	// Multi-disc M5: `set` is absent or exactly `1`, given once, and only for PCSX ReARMed.
+	const set = query.getAll('set');
+	if (set.length > 1 || (set.length === 1 && (set[0] !== '1' || core !== 'pcsx_rearmed'))) return null;
 	return {
 		game,
 		rom: Number(rom),
 		core,
 		name,
 		disc: disc.length === 1,
+		set: set.length === 1,
 		save: save.length === 1 ? { id: save[0], kind: /** @type {'state' | 'battery'} */ (saveKind[0]) } : null
 	};
 }
@@ -333,11 +337,14 @@ const threeDoBiosNames = threeDoBios.map((name) => name.toLowerCase());
  * @param {number | null} status the HTTP status, or null for a network or body-read failure
  * @param {string | null} code the problem's `code`, when the body had one
  * @param {string} [core] PSP B3: `ppsspp` gets the UMD wording
+ * @param {boolean} [set] Multi-disc M6: a PlayStation disc set (play-disc-set) gets its own too-large wording
  * @returns {string}
  */
-export function discError(status, code, core = 'pcsx_rearmed') {
+export function discError(status, code, core = 'pcsx_rearmed', set = false) {
 	const psp = core === pspCore;
 	if (status === 401) return sessionExpired;
+	if (code === 'PlayDiscTooLarge' && set)
+		return 'This disc set is larger than 2 GiB, too large to play in the browser. CHD images are much smaller.';
 	if (code === 'PlayDiscTooLarge')
 		return psp
 			? 'This UMD image is larger than 2 GiB, too large to play in the browser.'

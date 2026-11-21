@@ -201,14 +201,15 @@ function pspBrowser() {
  * image).
  * @param {string} url
  * @param {string} core
+ * @param {boolean} [set] Multi-disc M6: the URL is play-disc-set
  * @returns {Promise<{ data: Blob } | { error: string }>}
  */
-async function loadDisc(url, core) {
+async function loadDisc(url, core, set = false) {
 	let response;
 	try {
 		response = await fetch(url, { credentials: 'same-origin' });
 	} catch {
-		return { error: discError(null, null, core) };
+		return { error: discError(null, null, core, set) };
 	}
 	if (!response.ok) {
 		let code = null;
@@ -218,12 +219,12 @@ async function loadDisc(url, core) {
 		} catch {
 			// No problem body: the status decides.
 		}
-		return { error: discError(response.status, code, core) };
+		return { error: discError(response.status, code, core, set) };
 	}
 	try {
 		return { data: await readContent(response) };
 	} catch {
-		return { error: discError(null, null, core) };
+		return { error: discError(null, null, core, set) };
 	}
 }
 
@@ -528,7 +529,9 @@ async function start() {
 	// 3DO B7: Opera plays only discs, so it loads from play-disc with or without `disc=1`, like Yabause.
 	if (isPsx || isPsp || isSaturn || isThreeDo || params.disc) {
 		show('Downloading disc…');
-		const disc = await loadDisc(`/api/games/${params.game}/roms/${params.rom}/play-disc`, params.core);
+		// Multi-disc M6: a set loads every disc and its .m3u in one ZIP.
+		const endpoint = params.set ? 'play-disc-set' : 'play-disc';
+		const disc = await loadDisc(`/api/games/${params.game}/roms/${params.rom}/${endpoint}`, params.core, params.set);
 		if ('error' in disc) return show(disc.error);
 		content = disc.data;
 	} else {

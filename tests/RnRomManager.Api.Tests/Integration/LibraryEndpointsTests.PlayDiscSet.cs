@@ -1,0 +1,218 @@
+using System.Globalization;
+using System.IO.Compression;
+using System.Net;
+using System.Text;
+using System.Text.Json;
+using RnRomManager.Api.Endpoints;
+using RnRomManager.Core.Library;
+
+namespace RnRomManager.Api.Tests.Integration;
+
+/// <summary>Multi-disc M3–M4: a PlayStation game's disc sets in the detail, and <c>/play-disc-set</c>.</summary>
+public partial class LibraryEndpointsTests
+{
+    /// <summary>Disc <paramref name="n"/> of <c>Odyssey (USA)</c> as a standalone image (M1's identifying fields shared).</summary>
+    private static InfoJsonRom OdysseyDisc(int n, byte[] bytes, string ext = ".chd", string title = "Odyssey") =>
+        PsxSolo($"{title} (USA) (Disc {n}){ext}", bytes, isPrimary: n == 1) with { BaseTitle = title, Regions = ["USA"], Flags = [$"Disc {n}"] };
+
+    /// <summary>Disc <paramref name="n"/> of <c>Odyssey (USA)</c> as a two-track cue set.</summary>
+    private static InfoJsonRom OdysseyCueDisc(int n, byte[] track1, byte[] track2, string title = "Odyssey")
+    {
+        var disc = $"{title} (USA) (Disc {n})";
+        return PsxSet(disc, track1, OdysseyCue(disc), track2, isPrimary: n == 1)
+            with { BaseTitle = title, Regions = ["USA"], Flags = [$"Disc {n}"] };
+    }
+
+    private static byte[] OdysseyCue(string disc) => PsxCue($"{disc} (Track 1).bin", $"{disc} (Track 2).bin");
+
+    private static JsonElement DiscSetOf(JsonElement detail, string fileName) => Release(detail, fileName).GetProperty("discSet");
+
+    [Test]
+    public async Task Detail_DiscSet_IsOnDiscOne_WithTheNameAndOrderedIds_AndNullElsewhere()
+    {
+        var (id, _, ids) = await PsxGame("Odyssey",
+            [OdysseyDisc(2, Umd(41)), OdysseyCueDisc(1, PsxTrack1, PsxTrack2), OdysseyDisc(3, Umd(42)), PsxSolo("Bonus (USA).chd", Umd(43), isPrimary: false)]);
+
+        var detail = await GetJson($"/api/games/{id}");
+
+        var set = DiscSetOf(detail, "Odyssey (USA) (Disc 1) (Track 1).bin");
+        Assert.That(set.GetProperty("name").GetString(), Is.EqualTo("Odyssey (USA).m3u"));
+        Assert.That(set.GetProperty("romIds").EnumerateArray().Select(e => e.GetInt64()), Is.EqualTo(new[] { ids[1], ids[0], ids[2] }));
+        foreach (var other in new[] { "Odyssey (USA) (Disc 2).chd", "Odyssey (USA) (Disc 3).chd", "Bonus (USA).chd" })
+            Assert.That(DiscSetOf(detail, other).ValueKind, Is.EqualTo(JsonValueKind.Null), other);
+    }
+
+    [Test]
+    public async Task Detail_DiscSet_IsNullForALoneDisc_AndOnAnotherSystem()
+    {
+        var (lone, _, _) = await PsxGame("Lonely", [OdysseyDisc(1, Umd(44))]);
+        var (saturn, _, _) = await SaturnGame("Odyssey Saturn", [OdysseyDisc(1, Umd(45)), OdysseyDisc(2, Umd(46))]);
+
+        Assert.That(DiscSetOf(await GetJson($"/api/games/{lone}"), "Odyssey (USA) (Disc 1).chd").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        var saturnDetail = await GetJson($"/api/games/{saturn}");
+        Assert.That(DiscSetOf(saturnDetail, "Odyssey (USA) (Disc 1).chd").ValueKind, Is.EqualTo(JsonValueKind.Null));
+        Assert.That(DiscSetOf(saturnDetail, "Odyssey (USA) (Disc 2).chd").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
+    private static string PlayDiscSetUrl(Guid id, long romId) => $"/api/games/{id}/roms/{romId}/play-disc-set";
+
+    /// <summary>A three-disc set of <paramref name="title"/> on disk: Disc 1 a cue set, Disc 2 a <c>.chd</c>, Disc 3 an <c>.iso</c>.</summary>
+    private async Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> ThreeDiscSet(string title, int seed)
+    {
+        var one = $"{title} (USA) (Disc 1)";
+        return await PsxGame(title,
+            [OdysseyCueDisc(1, SetTrack1(seed), PsxTrack2, title), OdysseyDisc(2, Umd(seed), title: title), OdysseyDisc(3, Umd(seed + 1), ".iso", title)],
+            ($"{one} (Track 1).bin", SetTrack1(seed)), ($"{one}.cue", OdysseyCue(one)), ($"{one} (Track 2).bin", PsxTrack2),
+            ($"{title} (USA) (Disc 2).chd", Umd(seed)), ($"{title} (USA) (Disc 3).iso", Umd(seed + 1)));
+    }
+
+    private static async Task<string> ProblemTitle(HttpResponseMessage response, HttpStatusCode status, string code)
+    {
+        Assert.That(response.StatusCode, Is.EqualTo(status));
+        Assert.That(response.Headers.CacheControl?.NoStore, Is.True, "endpoint errors are not cached");
+        var problem = await AuthClient.JsonAsync(response);
+        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(code));
+        return problem.GetProperty("title").GetString()!;
+    }
+
+    /// <summary>A distinct Track 1 per seed, so two sets in one test never share a main file's sha1.</summary>
+    private static byte[] SetTrack1(int seed) => [.. PsxTrack1.Select((b, i) => i == 0 ? (byte)seed : b)];
+
+    [Test]
+    public async Task PlayDiscSet_IsAnUncompressedZip_ThePlaylistFirst_ThenEachDisc()
+    {
+        var (id, folder, ids) = await ThreeDiscSet("Voyage", 50);
+
+        using var response = await _user.SendAsync(HttpMethod.Get, PlayDiscSetUrl(id, ids[0]), null, sendXsrf: false,
+            completion: HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/zip"));
+        Assert.That(response.Headers.CacheControl?.NoStore, Is.True);
+        Assert.That(response.Content.Headers.ContentLength, Is.Null);
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[]
+        {
+            "Voyage (USA).m3u", "Voyage (USA) (Disc 1).cue", "disc1-track-01.bin", "disc1-track-02.bin",
+            "Voyage (USA) (Disc 2).chd", "Voyage (USA) (Disc 3).iso",
+        }));
+        Assert.That(zip.Entries.Select(e => e.CompressedLength == e.Length), Has.All.True, "stored, not deflated");
+        Assert.That(ReadEntry(zip, "Voyage (USA).m3u"),
+            Is.EqualTo(Encoding.UTF8.GetBytes("Voyage (USA) (Disc 1).cue\nVoyage (USA) (Disc 2).chd\nVoyage (USA) (Disc 3).iso\n")));
+        Assert.That(Encoding.UTF8.GetString(ReadEntry(zip, "Voyage (USA) (Disc 1).cue")), Does.StartWith("FILE \"disc1-track-01.bin\" BINARY\n"));
+        Assert.That(ReadEntry(zip, "disc1-track-01.bin"), Is.EqualTo(SetTrack1(50)));
+        Assert.That(ReadEntry(zip, "disc1-track-02.bin"), Is.EqualTo(PsxTrack2));
+        Assert.That(ReadEntry(zip, "Voyage (USA) (Disc 2).chd"), Is.EqualTo(Umd(50)));
+        Assert.That(ReadEntry(zip, "Voyage (USA) (Disc 3).iso"), Is.EqualTo(Umd(51)));
+        var payload = zip.Entries.Sum(e => e.Length);
+        Assert.That(response.Headers.GetValues("X-Content-Bytes"), Is.EqualTo(new[] { payload.ToString(CultureInfo.InvariantCulture) }));
+        foreach (var name in Directory.GetFiles(folder, "Voyage*"))
+            AssertNotOpen(name);
+    }
+
+    [Test]
+    public async Task PlayDiscSet_NotDiscOne_ALoneDisc_AnotherSystem_OrAMissingFile_Is404()
+    {
+        var (id, folder, ids) = await ThreeDiscSet("Atlas", 52);
+        var (lone, _, loneIds) = await PsxGame("Single", [OdysseyDisc(1, Umd(54), title: "Single")], ("Single (USA) (Disc 1).chd", Umd(54)));
+        var (saturn, _, saturnIds) = await SaturnGame("Ringed", [OdysseyDisc(1, Umd(55), title: "Ringed"), OdysseyDisc(2, Umd(56), title: "Ringed")],
+            ("Ringed (USA) (Disc 1).chd", Umd(55)), ("Ringed (USA) (Disc 2).chd", Umd(56)));
+        var (gone, goneFolder, goneIds) = await ThreeDiscSet("Gone Set", 57);
+        File.Delete(Path.Combine(goneFolder, "Gone Set (USA) (Disc 3).iso"));
+
+        foreach (var url in new[]
+        {
+            PlayDiscSetUrl(id, ids[1]), PlayDiscSetUrl(lone, loneIds[0]), PlayDiscSetUrl(saturn, saturnIds[0]),
+            PlayDiscSetUrl(gone, goneIds[0]), PlayDiscSetUrl(Guid.NewGuid(), ids[0]),
+        })
+        {
+            using var response = await _user.GetAsync(url);
+            Assert.That(await ProblemCode(response, HttpStatusCode.NotFound), Is.EqualTo("NotFound"), url);
+        }
+        foreach (var name in Directory.GetFiles(folder, "Atlas*").Concat(Directory.GetFiles(goneFolder, "Gone Set*")))
+            AssertNotOpen(name);
+    }
+
+    [Test]
+    public async Task PlayDiscSet_AnEmptyDisc_IsInvalid_NamingTheDisc()
+    {
+        var (id, folder, ids) = await ThreeDiscSet("Hollow Set", 58);
+        await File.WriteAllBytesAsync(Path.Combine(folder, "Hollow Set (USA) (Disc 2).chd"), []);
+
+        using var response = await _user.GetAsync(PlayDiscSetUrl(id, ids[0]));
+
+        Assert.That(await ProblemTitle(response, HttpStatusCode.Conflict, PlayDisc.InvalidPlayDisc),
+            Is.EqualTo("The disc can't be played: Disc 2: 'Hollow Set (USA) (Disc 2).chd' is empty."));
+        foreach (var name in Directory.GetFiles(folder, "Hollow Set*"))
+            AssertNotOpen(name);
+    }
+
+    [Test]
+    public async Task PlayDiscSet_AStandaloneDiscNamedLikeTheFirmware_IsInvalid()
+    {
+        var bios = OdysseyDisc(1, Umd(60), ".bin", "Firmware") with { FileName = "SCPH5501.BIN", OriginalFileName = "SCPH5501.BIN", ExternalFileName = "SCPH5501.BIN" };
+        var (id, _, ids) = await PsxGame("Firmware", [bios, OdysseyDisc(2, Umd(61), title: "Firmware")],
+            ("SCPH5501.BIN", Umd(60)), ("Firmware (USA) (Disc 2).chd", Umd(61)));
+
+        using var response = await _user.GetAsync(PlayDiscSetUrl(id, ids[0]));
+
+        Assert.That(await ProblemTitle(response, HttpStatusCode.Conflict, PlayDisc.InvalidPlayDisc),
+            Is.EqualTo("The disc can't be played: Disc 1: a disc file can't be named scph5501.bin."));
+    }
+
+    [Test]
+    public async Task PlayDiscSet_EntriesWhoseNamesClashIgnoringCase_AreInvalid()
+    {
+        // Disc 1's stored name equals Disc 2's first track alias (ignoring case).
+        var first = OdysseyDisc(1, Umd(62), ".bin", "Clash") with { FileName = "DISC2-TRACK-01.bin", OriginalFileName = "DISC2-TRACK-01.bin", ExternalFileName = "DISC2-TRACK-01.bin" };
+        var two = "Clash (USA) (Disc 2)";
+        var (id, _, ids) = await PsxGame("Clash", [first, OdysseyCueDisc(2, PsxTrack1, PsxTrack2, "Clash")],
+            ("DISC2-TRACK-01.bin", Umd(62)), ($"{two} (Track 1).bin", PsxTrack1), ($"{two}.cue", OdysseyCue(two)), ($"{two} (Track 2).bin", PsxTrack2));
+
+        using var response = await _user.GetAsync(PlayDiscSetUrl(id, ids[0]));
+
+        Assert.That(await ProblemTitle(response, HttpStatusCode.Conflict, PlayDisc.InvalidPlayDisc),
+            Is.EqualTo("The disc can't be played: two entries of the disc set have the same name ignoring case."));
+    }
+
+    [Test]
+    public async Task PlayDiscSet_OfExactlyTwoGiB_Streams_AndOneByteMoreIs409PlayDiscTooLarge()
+    {
+        var (atId, atFolder, atIds) = await ThreeDiscSet("Wide Set", 63);
+        var (overId, overFolder, overIds) = await ThreeDiscSet("Wider Set", 65);
+        var rest = PsxTrack1.Length + PsxTrack2.Length + OdysseyCue("Wide Set (USA) (Disc 1)").Length + Umd(63).Length;
+        // Disc 3 grows on disk so the set's opened lengths total the cap, then one byte more.
+        await using (var grown = new FileStream(Path.Combine(atFolder, "Wide Set (USA) (Disc 3).iso"), FileMode.Open, FileAccess.Write))
+            grown.SetLength(PlayDisc.MaxBytes - rest);
+        var overRest = PsxTrack1.Length + PsxTrack2.Length + OdysseyCue("Wider Set (USA) (Disc 1)").Length + Umd(65).Length;
+        await using (var grown = new FileStream(Path.Combine(overFolder, "Wider Set (USA) (Disc 3).iso"), FileMode.Open, FileAccess.Write))
+            grown.SetLength(PlayDisc.MaxBytes - overRest + 1);
+
+        using (var atLimit = await _user.SendAsync(HttpMethod.Get, PlayDiscSetUrl(atId, atIds[0]), null, sendXsrf: false,
+            completion: HttpCompletionOption.ResponseHeadersRead))
+            Assert.That(atLimit.StatusCode, Is.EqualTo(HttpStatusCode.OK)); // disposed with the body unread
+
+        using var over = await _user.GetAsync(PlayDiscSetUrl(overId, overIds[0]));
+        Assert.That(await ProblemTitle(over, HttpStatusCode.Conflict, PlayDisc.PlayDiscTooLarge), Is.EqualTo("The disc set is larger than 2 GiB."));
+        foreach (var name in Directory.GetFiles(overFolder, "Wider Set*"))
+            AssertNotOpen(name);
+    }
+
+    [Test]
+    public async Task PlayDiscSet_AnonymousIs401_AndAForcedPasswordChangeIs403()
+    {
+        var (id, _, ids) = await ThreeDiscSet("Locked Set", 67);
+        using var anonymous = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "forced-set", mustChangePassword: true);
+        using var forced = await AuthClient.CreateAsync(_factory);
+        (await forced.LoginAsync("forced-set", TestUsers.Password)).Dispose();
+
+        using var asAnonymous = await anonymous.GetAsync(PlayDiscSetUrl(id, ids[0]));
+        using var asForced = await forced.GetAsync(PlayDiscSetUrl(id, ids[0]));
+
+        Assert.That(asAnonymous.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
+        Assert.That(asForced.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+        Assert.That(await AuthClient.CodeAsync(asForced), Is.EqualTo("PasswordChangeRequired"));
+    }
+}

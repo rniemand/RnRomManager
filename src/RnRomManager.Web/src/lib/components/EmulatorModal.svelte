@@ -25,6 +25,11 @@
 		disc: boolean;
 		/** Saves B17: a library save the play page loads when the game starts. */
 		save?: PlaySave | null;
+		/**
+		 * Multi-disc M8: a PlayStation disc set's playlist name; `rom` is then the set's Disc 1, whose release the battery
+		 * saves use. The page never passes `save` with it, and state saves aren't offered.
+		 */
+		discSet?: string | null;
 		/** Saves B19: called after each successful "save to library". */
 		onsaved?: () => void;
 		/** E2: called after a screenshot was saved as a Snap. */
@@ -38,6 +43,7 @@
 		rom,
 		disc,
 		save = null,
+		discSet = null,
 		onsaved,
 		onimagesaved
 	}: Props = $props();
@@ -367,20 +373,22 @@
 
 <ConfirmModal
 	bind:open
-	title="Play {rom?.fileName ?? ''}"
+	title="Play {discSet ?? rom?.fileName ?? ''}"
 	size="xl"
 	beforeclose={core === 'opera' ? saveBeforeClose : batteryExport ? storeBeforeClose : undefined}
 >
 	{#if open && rom && core}
 		<div class="d-flex flex-wrap gap-2 mb-2">
-			<button
-				type="button"
-				class="btn btn-sm btn-outline-primary"
-				disabled={exporting}
-				onclick={() => saveToLibrary('state')}
-			>
-				<Icon name="download" /> Save state to library
-			</button>
+			{#if !discSet}
+				<button
+					type="button"
+					class="btn btn-sm btn-outline-primary"
+					disabled={exporting}
+					onclick={() => saveToLibrary('state')}
+				>
+					<Icon name="download" /> Save state to library
+				</button>
+			{/if}
 			{#if batteryExport}
 				<button
 					type="button"
@@ -410,9 +418,9 @@
 		{:else if open && rom && core}
 			<iframe
 				bind:this={frame}
-				title="Emulator: {rom.fileName}"
+				title="Emulator: {discSet ?? rom.fileName}"
 				allow="fullscreen; gamepad; autoplay"
-				src={playUrl(gameId, rom, core, disc, playSave)}
+				src={playUrl(gameId, rom, core, disc || discSet !== null, playSave, discSet)}
 			></iframe>
 			{#if preview && shown}
 				<!-- E2: over the game, inside the emulator modal (not a second Bootstrap modal). -->

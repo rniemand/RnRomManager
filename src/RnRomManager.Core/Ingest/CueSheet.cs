@@ -65,7 +65,9 @@ public sealed record CueSheet(IReadOnlyList<string> Files, string? Error)
     /// <param name="bytes">The stored cue, at most <see cref="IngestSetPlanner.MaxCueBytes"/>.</param>
     /// <param name="cueFileName">The stored cue's file name, ending in <c>.cue</c> (any case).</param>
     /// <param name="storedTracks">The release's stored track file names (the cue excluded).</param>
-    public static PlaybackCue ForPlayback(ReadOnlySpan<byte> bytes, string cueFileName, IReadOnlyCollection<string> storedTracks)
+    /// <param name="trackPrefix">Multi-disc M4: what each track alias starts with (<c>disc2-track-</c> gives <c>disc2-track-01.bin</c>).</param>
+    public static PlaybackCue ForPlayback(ReadOnlySpan<byte> bytes, string cueFileName, IReadOnlyCollection<string> storedTracks,
+        string trackPrefix = "track-")
     {
         if (bytes.Length > IngestSetPlanner.MaxCueBytes)
             return PlaybackCue.Fail($"the cue is larger than {IngestSetPlanner.MaxCueBytes} bytes");
@@ -110,7 +112,7 @@ public sealed record CueSheet(IReadOnlyList<string> Files, string? Error)
                         return PlaybackCue.Fail($"FILE '{name}' is repeated");
                     if (tracks.Count == MaxFiles)
                         return PlaybackCue.Fail($"more than {MaxFiles} FILE blocks");
-                    var alias = $"track-{tracks.Count + 1:00}.bin";
+                    var alias = $"{trackPrefix}{tracks.Count + 1:00}.bin";
                     tracks.Add(new PlaybackTrack(storedName, alias));
                     output.Add($"FILE \"{alias}\" BINARY");
                     fileTracks = 0;

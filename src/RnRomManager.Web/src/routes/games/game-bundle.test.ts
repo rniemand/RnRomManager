@@ -101,7 +101,8 @@ function game(): GameDetail {
 				externalFileName: 'Disc (USA) (Track 1).bin',
 				version: null,
 				files,
-				totalSizeBytes: 5148
+				totalSizeBytes: 5148,
+				discSet: null
 			}
 		],
 		images: []

@@ -189,6 +189,7 @@ public static class LibraryEndpoints
 
         // Play B2–B3: one PlayStation disc for the browser emulator (a standalone image, or its cue set as a ZIP).
         games.MapGet("/{id:guid}/roms/{romId:long}/play-disc", PlayDisc.HandleAsync).WithMetadata(MaintenanceExempt.Instance);
+        games.MapGet("/{id:guid}/roms/{romId:long}/play-disc-set", PlayDisc.HandleSetAsync).WithMetadata(MaintenanceExempt.Instance);
 
         // B4–B7 release notes: any signed-in user reads them; writes are admin-only (U3), not audited.
         games.MapGet("/{id:guid}/roms/{romId:long}/note", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,
@@ -459,7 +460,11 @@ public static class LibraryEndpoints
         var systemName = handler?.DisplayName ?? game.SystemId;
         var notes = ctx.RequestServices.GetRequiredService<LibraryFiles>().NoteEntries(game);
         var fileRows = (await roms.ListFilesByGameAsync(id, ctx.RequestAborted)).ToLookup(f => f.RomId);
-        return Results.Ok(ToDetail(game, systemName, handler?.BrowserCore, handler?.FileSets ?? false, romRows, fileRows, imageRows, notes));
+        // Multi-disc M3: PlayStation only; keyed by each set's Disc 1.
+        var discSets = game.SystemId == PlayDisc.SystemId
+            ? DiscSets.Find(romRows, fileRows).ToDictionary(s => s.Discs[0].Id)
+            : [];
+        return Results.Ok(ToDetail(game, systemName, handler?.BrowserCore, handler?.FileSets ?? false, romRows, fileRows, imageRows, notes, discSets));
     }
 
     private static IResult ToResult(HttpContext ctx, LibraryEditResult result) =>
@@ -863,7 +868,7 @@ public static class LibraryEndpoints
     }
 
     private static object ToDetail(GameRow game, string systemName, string? browserCore, bool fileSets, IReadOnlyList<RomRow> roms, ILookup<long, RomFileRow> files,
-        IReadOnlyList<ImageRow> images, IReadOnlySet<string> notes) => new
+        IReadOnlyList<ImageRow> images, IReadOnlySet<string> notes, IReadOnlyDictionary<long, DiscSet> discSets) => new
     {
         id = game.Id,
         system = game.SystemId,
@@ -922,6 +927,7 @@ public static class LibraryEndpoints
                 : null,
             totalSizeBytes = r.SizeBytes + files[r.Id].Sum(f => f.SizeBytes),
             hasNote = notes.Contains(LibraryZip.NoteEntry(r.FileName)),
+            discSet = discSets.GetValueOrDefault(r.Id) is { } set ? new { name = set.Name, romIds = set.Discs.Select(d => d.Id).ToList() } : null,
         }),
         images = images.Select(i => new
         {

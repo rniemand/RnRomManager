@@ -158,6 +158,26 @@ describe('playUrl', () => {
 			'/emulator/play-psp.html?game=g-4&rom=5&core=ppsspp&name=Umd%20(USA).iso&disc=1'
 		);
 	});
+
+	it('names a disc set after its playlist and adds &set=1, keeping Disc 1 and a save (multi-disc M5)', () => {
+		const discOne = { id: 6, fileName: 'Odyssey (USA) (Disc 1) (Track 1).bin' };
+		expect(playUrl('g-5', discOne, 'pcsx_rearmed', true, null, 'Odyssey & Co (USA).m3u')).toBe(
+			'/emulator/play.html?game=g-5&rom=6&core=pcsx_rearmed&name=Odyssey%20%26%20Co%20(USA).m3u&disc=1&set=1'
+		);
+		expect(
+			playUrl(
+				'g-5',
+				discOne,
+				'pcsx_rearmed',
+				true,
+				{ saveId: 'a1', saveKind: 'battery' },
+				'Odyssey (USA).m3u'
+			)
+		).toBe(
+			'/emulator/play.html?game=g-5&rom=6&core=pcsx_rearmed&name=Odyssey%20(USA).m3u&disc=1&set=1&save=a1&saveKind=battery'
+		);
+		expect(playUrl('g-5', discOne, 'pcsx_rearmed', true)).not.toContain('set=');
+	});
 });
 
 describe('opensInNewTab', () => {

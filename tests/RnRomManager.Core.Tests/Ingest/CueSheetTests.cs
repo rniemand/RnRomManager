@@ -166,6 +166,17 @@ public class CueSheetTests
     }
 
     [Test]
+    public void Playback_WithATrackPrefix_AliasesTracksWithIt_InTheCueAndTheTrackList()
+    {
+        var cue = CueSheet.ForPlayback(Encoding.UTF8.GetBytes(TwoTrackCue), "Game (USA).cue", TwoTracks, "disc2-track-");
+
+        Assert.That(cue.Error, Is.Null);
+        Assert.That(Text(cue), Does.StartWith("FILE \"disc2-track-01.bin\" BINARY\n"));
+        Assert.That(Text(cue), Does.Contain("FILE \"disc2-track-02.bin\" BINARY\n"));
+        Assert.That(cue.Tracks.Select(t => t.Alias), Is.EqualTo(new[] { "disc2-track-01.bin", "disc2-track-02.bin" }));
+    }
+
+    [Test]
     public void Playback_HasNoBom_NoCrOrTabs_AndShortLines()
     {
         var cue = Playable("﻿\tfile\t\"a.bin\"\tbinary\r\n\ttrack\t1\tmode1/2352\r\n\t\tindex\t1\t0:0:0\r\n", ["a.bin"]);

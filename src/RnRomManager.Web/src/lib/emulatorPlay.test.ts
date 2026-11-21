@@ -515,6 +515,60 @@ describe('play page PlayStation', () => {
 		expect(file.name).toBe('Game.chd');
 		expect(new Uint8Array(await file.arrayBuffer())).toEqual(disc);
 	});
+
+	const setUrl = `/api/games/${game}/roms/12/play-disc-set`;
+
+	async function playSet(name: string): Promise<string> {
+		const query = new URLSearchParams({
+			game,
+			rom: '12',
+			core: 'pcsx_rearmed',
+			name,
+			disc: '1',
+			set: '1'
+		});
+		history.replaceState(null, '', `/emulator/play.html?${query}`);
+		const { started } = await import('../../static/emulator/play.js');
+		await started;
+		return document.getElementById('status')!.textContent ?? '';
+	}
+
+	it('loads a disc set from play-disc-set after the BIOS check, named after its playlist (multi-disc M6)', async () => {
+		serve({ [psxBiosUrl]: async () => response(404), [setUrl]: async () => discResponse(200) });
+
+		await playSet('Odyssey #1 (USA).m3u');
+
+		expect(urls()).toEqual([psxBiosUrl, setUrl]);
+		expect(atLoader).toMatchObject({
+			EJS_core: 'pcsx_rearmed',
+			EJS_gameName: 'Odyssey #1 (USA).m3u'
+		});
+		const file = atLoader?.EJS_gameUrl as File;
+		expect(file.name).toBe('Odyssey _1 (USA).m3u');
+		expect(new Uint8Array(await file.arrayBuffer())).toEqual(disc);
+	});
+
+	it.each([
+		[
+			'PlayDiscTooLarge',
+			'This disc set is larger than 2 GiB, too large to play in the browser. CHD images are much smaller.'
+		],
+		[
+			'InvalidPlayDisc',
+			"This disc can't be played in the browser: its cue sheet or files are invalid or don't match."
+		]
+	])(
+		'shows the set message for a 409 %s before the loader (multi-disc M6)',
+		async (code, message) => {
+			serve({
+				[psxBiosUrl]: async () => response(404),
+				[setUrl]: async () => new Response(JSON.stringify({ code }), { status: 409 })
+			});
+
+			expect(await playSet('Odyssey (USA).m3u')).toBe(message);
+			expect(atLoader).toBeNull();
+		}
+	);
 });
 
 describe('play page NES', () => {
