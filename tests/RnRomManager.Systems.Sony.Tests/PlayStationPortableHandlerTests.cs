@@ -14,7 +14,7 @@ public class PlayStationPortableHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("psp", "PlayStation Portable", "PSP", "psp", "Sony - PlayStation Portable")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".iso", ".cso", ".pbp" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".iso", ".cso", ".pbp", ".chd" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((16L, 8L * 1024L * 1024 * 1024)));
         Assert.That((Handler.EmbedRomsInZip, Handler.FileSets, Handler.DatSource, Handler.DatFolder),
             Is.EqualTo((false, true, DatSource.Libretro, DatKind.Redump)));
