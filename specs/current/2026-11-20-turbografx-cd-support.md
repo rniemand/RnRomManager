@@ -1,6 +1,6 @@
 ---
 title: TurboGrafx-CD support
-status: ready
+status: in-progress
 created: 2026-11-20
 ---
 
