@@ -40,10 +40,11 @@ public static class IngestSeeder
     public const string FdsDat = "Nintendo - Family Computer Disk System";
     public const string AmigaDat = "Commodore - Amiga";
     public const string ThreeDsDat = "Nintendo - Nintendo 3DS";
+    public const string TurboGrafxCdDat = "NEC - PC Engine CD - TurboGrafx-CD";
 
-    /// <summary>The eight disc systems' DATs (disc systems B1/B2): each in <c>redump/</c>, with no metadat; and Commodore PET's and Amiga's in <c>tosec/</c>.</summary>
+    /// <summary>The nine disc systems' DATs (disc systems B1/B2): each in <c>redump/</c>, with no metadat; and Commodore PET's and Amiga's in <c>tosec/</c>.</summary>
     public static IReadOnlyDictionary<string, FixtureDatLayout> RedumpLayouts { get; } =
-        new[] { PsxDat, PspDat, GameCubeDat, WiiDat, Xbox360Dat, SaturnDat, SegaCdDat, ThreeDoDat }.ToDictionary(n => n, _ => FixtureDatLayout.Redump)
+        new[] { PsxDat, PspDat, GameCubeDat, WiiDat, Xbox360Dat, SaturnDat, SegaCdDat, ThreeDoDat, TurboGrafxCdDat }.ToDictionary(n => n, _ => FixtureDatLayout.Redump)
             .Append(new(PetDat, FixtureDatLayout.Tosec)).Append(new(AmigaDat, FixtureDatLayout.Tosec)).ToDictionary();
 
     /// <summary>An empty titledb compact file for Switch: enough for the DAT preflight of a fixture cache.</summary>

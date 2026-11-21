@@ -99,7 +99,7 @@ No migration (`system_id` is a `VARCHAR`; `PrimaryHasFiles` is a computed column
 ## Steps
 Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need Docker. Playwright (`mvp.spec.ts`) runs only in Finish.
 
-- [ ] **1. TurboGrafx-CD handler** (B1): `TurboGrafxCdHandler` with `BrowserCore` null, and its box art (SVG + 512×512 PNG rendered as the Nec boxart README says). `IngestSeeder.TurboGrafxCdDat` constant, added to `RedumpLayouts`; the seeder doesn't write it yet, so its output is unchanged.
+- [x] **1. TurboGrafx-CD handler** (B1): `TurboGrafxCdHandler` with `BrowserCore` null, and its box art (SVG + 512×512 PNG rendered as the Nec boxart README says). `IngestSeeder.TurboGrafxCdDat` constant, added to `RedumpLayouts`; the seeder doesn't write it yet, so its output is unchanged.
   - Files: `TurboGrafxCdHandler.cs`, `Resources/boxart/tgcd.svg`, `tgcd.png`, `Resources/boxart/README.md`, `tests/RnRomManager.Systems.Nec.Tests/TurboGrafxCdHandlerTests.cs` (new), `IngestSeeder.cs`.
   - Tests: `TurboGrafxCdHandlerTests` (new), copying `SegaCdHandlerTests`: every B1 value, `ReadHeader` null for any bytes, `NormalizeForHashing` unchanged, PNG valid and 512×512; with a registry holding only this handler, `DatCache` loads a `FixtureDatWriter` Redump catalog with one synthetic cue/bin game and finds its `.bin` by SHA-1, and loads an empty catalog.
   - Done when: those tests pass and the solution builds with warnings as errors.

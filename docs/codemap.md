@@ -249,6 +249,7 @@ Route — file under `src/RnRomManager.Web/src/routes/`.
 - GameBoyHandlerBase — src/RnRomManager.Systems.GameBoy/GameBoyHandlerBase.cs
 - Xbox360Handler `x360` — src/RnRomManager.Systems.Microsoft/Xbox360Handler.cs
 - TurboGrafx16Handler `tg16` — src/RnRomManager.Systems.Nec/TurboGrafx16Handler.cs
+- TurboGrafxCdHandler `tgcd` — src/RnRomManager.Systems.Nec/TurboGrafxCdHandler.cs
 - FdsHandler `fds` — src/RnRomManager.Systems.Nes/FdsHandler.cs
 - NesHandler — src/RnRomManager.Systems.Nes/NesHandler.cs
 - Nintendo64Handler — src/RnRomManager.Systems.Nintendo64/Nintendo64Handler.cs
@@ -325,7 +326,7 @@ File names without extension. System projects (`src/RnRomManager.Systems.*`) are
 - `RnRomManager.Systems.Commodore.Tests`: AmigaHandlerTests, C64HandlerTests, C64HeaderTests, PetHandlerTests, Vic20HandlerTests
 - `RnRomManager.Systems.GameBoy.Tests`: GameBoyAdvanceHeaderReaderTests, GameBoyHandlerTests, GameBoyHeaderReaderTests, SyntheticGbaRomBuilderTests, SyntheticRomBuilderTests
 - `RnRomManager.Systems.Microsoft.Tests`: Xbox360HandlerTests
-- `RnRomManager.Systems.Nec.Tests`: TurboGrafx16HandlerTests
+- `RnRomManager.Systems.Nec.Tests`: TurboGrafx16HandlerTests, TurboGrafxCdHandlerTests
 - `RnRomManager.Systems.Nes.Tests`: FdsHandlerTests, NesHandlerTests, NesHeaderReaderTests, SyntheticNesRomBuilderTests
 - `RnRomManager.Systems.Nintendo64.Tests`: Nintendo64ByteOrderTests, Nintendo64HandlerTests, Nintendo64HeaderReaderTests, SyntheticN64RomBuilderTests
 - `RnRomManager.Systems.NintendoDisc.Tests`: GameCubeHandlerTests, NintendoDiscHeaderTests, WiiHandlerTests
