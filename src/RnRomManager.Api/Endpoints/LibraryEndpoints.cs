@@ -189,6 +189,7 @@ public static class LibraryEndpoints
 
         // Play B2–B3: one PlayStation disc for the browser emulator (a standalone image, or its cue set as a ZIP).
         games.MapGet("/{id:guid}/roms/{romId:long}/play-disc", PlayDisc.HandleAsync).WithMetadata(MaintenanceExempt.Instance);
+        games.MapGet("/{id:guid}/roms/{romId:long}/play-disc-set", PlayDisc.HandleSetAsync).WithMetadata(MaintenanceExempt.Instance);
 
         // B4–B7 release notes: any signed-in user reads them; writes are admin-only (U3), not audited.
         games.MapGet("/{id:guid}/roms/{romId:long}/note", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,

@@ -122,6 +122,7 @@ To find a route in its file, grep the quoted route string, e.g. `MapPut("/rom-st
 - `GET /api/games/{id:guid}/roms/{romId:long}/download`
 - `GET /api/games/{id:guid}/roms/{romId:long}/files/{fileId:long}/download`
 - `GET /api/games/{id:guid}/roms/{romId:long}/play-disc`
+- `GET /api/games/{id:guid}/roms/{romId:long}/play-disc-set`
 - `GET /api/games/{id:guid}/roms/{romId:long}/note`
 - `POST /api/games/{id:guid}/roms/{romId:long}/played`
 - `PUT /api/games/{id:guid}/roms/{romId:long}/note` Admin
