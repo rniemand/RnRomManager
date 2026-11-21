@@ -58,17 +58,21 @@ export function canPlay(
 /**
  * B4: the play page's URL (PSP B3: the isolated PSP page for PPSSPP); params.js validates it on the other side.
  * Sega CD B6: `disc` (an external release) adds `&disc=1`, so a core shared by cartridges and discs loads from play-disc.
+ * Multi-disc M5: `setName` (a PlayStation disc set's playlist) becomes the `name` and adds `&set=1`; `rom` stays Disc 1.
  */
 export function playUrl(
 	gameId: string,
 	rom: Pick<RomDetail, 'id' | 'fileName'>,
 	core: string,
 	disc: boolean,
-	save: PlaySave | null = null
+	save: PlaySave | null = null,
+	setName: string | null = null
 ): string {
 	const page = opensInNewTab(core) ? 'play-psp.html' : 'play.html';
-	let url = `/emulator/${page}?game=${gameId}&rom=${rom.id}&core=${core}&name=${encodeURIComponent(rom.fileName)}`;
+	const name = setName ?? rom.fileName;
+	let url = `/emulator/${page}?game=${gameId}&rom=${rom.id}&core=${core}&name=${encodeURIComponent(name)}`;
 	if (disc) url += '&disc=1';
+	if (setName !== null) url += '&set=1';
 	// Saves B17: the library save the play page loads at game start.
 	return save ? `${url}&save=${save.saveId}&saveKind=${save.saveKind}` : url;
 }

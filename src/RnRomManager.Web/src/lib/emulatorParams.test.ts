@@ -78,6 +78,7 @@ describe('parsePlayParams', () => {
 			core: 'mgba',
 			name: 'A #1 & B.gba',
 			disc: false,
+			set: false,
 			save: null
 		});
 	});
@@ -94,6 +95,26 @@ describe('parsePlayParams', () => {
 
 	it('rejects a repeated disc (Sega CD B6)', () => {
 		expect(parsePlayParams(`${query({})}&disc=1&disc=1`)).toBeNull();
+	});
+
+	it('reads set=1 for PCSX ReARMed (multi-disc M5)', () => {
+		expect(parsePlayParams(query({ core: 'pcsx_rearmed', disc: '1', set: '1' }))?.set).toBe(true);
+		expect(parsePlayParams(query({ core: 'pcsx_rearmed', disc: '1' }))?.set).toBe(false);
+	});
+
+	it.each(['0', 'true', '', '01'])('rejects set=%s (multi-disc M5)', (set) => {
+		expect(parsePlayParams(query({ core: 'pcsx_rearmed', set }))).toBeNull();
+	});
+
+	it.each(['yabause', 'genesis_plus_gx', 'opera', 'mgba'])(
+		'rejects set=1 with %s (multi-disc M5)',
+		(core) => {
+			expect(parsePlayParams(query({ core, set: '1' }))).toBeNull();
+		}
+	);
+
+	it('rejects a repeated set (multi-disc M5)', () => {
+		expect(parsePlayParams(`${query({ core: 'pcsx_rearmed' })}&set=1&set=1`)).toBeNull();
 	});
 
 	it.each([
@@ -247,6 +268,19 @@ describe('discError', () => {
 		);
 	});
 
+	it('names a disc set that is too large, and keeps the other messages (multi-disc M6)', () => {
+		expect(discError(409, 'PlayDiscTooLarge', 'pcsx_rearmed', true)).toBe(
+			'This disc set is larger than 2 GiB, too large to play in the browser. CHD images are much smaller.'
+		);
+		expect(discError(409, 'InvalidPlayDisc', 'pcsx_rearmed', true)).toBe(
+			discError(409, 'InvalidPlayDisc')
+		);
+		expect(discError(401, 'PlayDiscTooLarge', 'pcsx_rearmed', true)).toBe(
+			'Your session has expired. Sign in again.'
+		);
+		expect(discError(null, null, 'pcsx_rearmed', true)).toBe("Couldn't load the disc.");
+	});
+
 	it('shows a disc-loading message otherwise', () => {
 		expect(discError(404, 'NotFound')).toBe("Couldn't load the disc (HTTP 404).");
 		expect(discError(500, null)).toBe("Couldn't load the disc (HTTP 500).");
@@ -282,6 +316,7 @@ describe('PSP page (PSP B3)', () => {
 			core: 'ppsspp',
 			name: 'Umd (USA).iso',
 			disc: false,
+			set: false,
 			save: null
 		});
 		expect(parsePlayParams(query({ core: 'ppsspp' }))).toBeNull();
@@ -709,6 +744,7 @@ describe('Nintendo DS (Nintendo DS B4)', () => {
 			core: 'desmume',
 			name: 'Marker Test (World).nds',
 			disc: false,
+			set: false,
 			save: null
 		});
 		expect(parsePlayParams(query({ core: 'desmume' }), true)).toBeNull();
