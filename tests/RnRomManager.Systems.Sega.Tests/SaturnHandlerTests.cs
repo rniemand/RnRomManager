@@ -14,7 +14,7 @@ public class SaturnHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("saturn", "Saturn", "Saturn", "saturn", "Sega - Saturn")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".bin", ".cue", ".nrg", ".chd", ".iso" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".bin", ".cue", ".nrg", ".chd", ".iso", ".ccd", ".img", ".sub" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((16L, 1024L * 1024 * 1024)));
         Assert.That((Handler.EmbedRomsInZip, Handler.FileSets, Handler.DatSource, Handler.DatFolder),
             Is.EqualTo((false, true, DatSource.Libretro, DatKind.Redump)));

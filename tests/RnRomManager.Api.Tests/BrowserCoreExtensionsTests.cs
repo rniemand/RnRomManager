@@ -73,6 +73,8 @@ public class BrowserCoreExtensionsTests
     /// A system's extension its core doesn't list, and why it's still right. An entry that no longer applies (the
     /// handler dropped the extension, the core now lists it, or the system has another core) fails the test.
     /// </summary>
+    private const string CloneCdMember = "CloneCD set member: play-disc sends a generated cue (B8), never this file as the content";
+
     private static readonly Dictionary<(string System, string Extension), string> Exceptions = new()
     {
         [("saturn", ".bin")] = "play-disc adds a MODE1/2352 cue to a lone .bin, and Yabause opens the cue",
@@ -82,6 +84,18 @@ public class BrowserCoreExtensionsTests
         [("jaguar", ".rom")] = "VirtualJaguar sizes a header-less .rom as an Alpine image (checked 2026-11-23: SkyFire68k's .j64 minus its 8 KiB header boots); canPlay and playRomId refuse other sizes",
         [("jaguar", ".abs")] = "library only: VirtualJaguar loads an ABS into RAM, which this build's reset wipes (checked 2026-11-23 with the DAT's Blackhole .abs); canPlay and playRomId refuse it",
         [("jaguar", ".cof")] = "library only: VirtualJaguar loads a COFF into RAM, which this build's reset wipes; canPlay and playRomId refuse it",
+        [("psx", ".ccd")] = CloneCdMember,
+        [("psx", ".sub")] = CloneCdMember,
+        [("saturn", ".img")] = CloneCdMember,
+        [("saturn", ".sub")] = CloneCdMember,
+        [("segacd", ".ccd")] = CloneCdMember,
+        [("segacd", ".img")] = CloneCdMember,
+        [("segacd", ".sub")] = CloneCdMember,
+        [("3do", ".ccd")] = CloneCdMember,
+        [("3do", ".img")] = CloneCdMember,
+        [("3do", ".sub")] = CloneCdMember,
+        [("tgcd", ".img")] = CloneCdMember,
+        [("tgcd", ".sub")] = CloneCdMember,
     };
 
     [Test]
@@ -111,6 +125,18 @@ public class BrowserCoreExtensionsTests
             "jaguar .abs: stale exception (no such system)",
             "jaguar .cof: stale exception (no such system)",
             "tgcd .bin: stale exception (no such system)",
+            "psx .ccd: stale exception (no such system)",
+            "psx .sub: stale exception (no such system)",
+            "saturn .img: stale exception (not one of the system's extensions)",
+            "saturn .sub: stale exception (not one of the system's extensions)",
+            "segacd .ccd: stale exception (no such system)",
+            "segacd .img: stale exception (no such system)",
+            "segacd .sub: stale exception (no such system)",
+            "3do .ccd: stale exception (no such system)",
+            "3do .img: stale exception (no such system)",
+            "3do .sub: stale exception (no such system)",
+            "tgcd .img: stale exception (no such system)",
+            "tgcd .sub: stale exception (no such system)",
         }));
     }
 

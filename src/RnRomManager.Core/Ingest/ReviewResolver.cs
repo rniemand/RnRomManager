@@ -35,7 +35,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         if (item is not { Status: "Pending" })
             return new("NotFound");
         // B14 step 1: a set member's set is found again with the lock held.
-        var set = IsDismissible(item, systems) ? null : await sets.FindAsync(item, CancellationToken.None).ConfigureAwait(false);
+        var set = IsSetMemberCandidate(item, systems) ? await sets.FindAsync(item, CancellationToken.None).ConfigureAwait(false) : null;
         var items = set?.Select(m => m.Row).ToList() ?? [item];
         progress?.SetTotal(items.Count);
         if (set is null)
@@ -54,23 +54,34 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         var item = await reviews.GetAsync(id, ct).ConfigureAwait(false);
         if (item is not { Status: "Pending" })
             return new("NotFound");
-        return await ActCoreAsync(id, item, null, actor, ct, null).ConfigureAwait(false);
+        var set = IsSetMemberCandidate(item, systems) ? await sets.FindAsync(item, ct).ConfigureAwait(false) : null;
+        return await ActCoreAsync(id, item, null, actor, ct, null, set).ConfigureAwait(false);
     }
 
-    /// <summary>B12/B15: a <c>.cue</c>/<c>.bin</c> item on a <c>FileSets</c> system whose set isn't found can't be resolved; no set member can be dismissed.</summary>
+    /// <summary>B12/B15, CloneCD B7: a set member candidate on a <c>FileSets</c> system that isn't dismissible and whose set isn't found can't be resolved; no set member can be dismissed.</summary>
     public const string SetFileNotResolvable = "SetFileNotResolvable";
 
     /// <summary>
-    /// B12: true for every item but a <c>.cue</c> or <c>.bin</c> (by its <c>originalFileName</c>, ignoring case) on a
-    /// <c>FileSets</c> system, which is resolvable exactly when <see cref="ReviewSets.FindAsync"/> finds its set.
+    /// B12, CloneCD B7: true for every dismissible item, and for a set member candidate whose set
+    /// <see cref="ReviewSets.FindAsync"/> finds.
     /// </summary>
     public async Task<bool> IsResolvableAsync(ReviewItem item, CancellationToken cancellationToken = default) =>
-        IsDismissible(item, systems) || await sets.FindAsync(item, cancellationToken).ConfigureAwait(false) is not null;
+        (IsSetMemberCandidate(item, systems) && await sets.FindAsync(item, cancellationToken).ConfigureAwait(false) is not null)
+        || IsDismissible(item, systems, inSet: false);
 
-    /// <summary>B15: false for every <c>.cue</c>/<c>.bin</c> item on a <c>FileSets</c> system, so a set is never half dismissed.</summary>
-    public static bool IsDismissible(ReviewItem item, ISystemRegistry systems) =>
-        !(systems.ById(item.SystemId) is { FileSets: true }
-            && Path.GetExtension(item.OriginalFileName).ToLowerInvariant() is ".cue" or ".bin");
+    /// <summary>CloneCD B7: a <c>.cue</c>, <c>.bin</c>, <c>.ccd</c>, <c>.img</c> or <c>.sub</c> item (by its <c>originalFileName</c>, ignoring case) on a <c>FileSets</c> system.</summary>
+    public static bool IsSetMemberCandidate(ReviewItem item, ISystemRegistry systems) =>
+        systems.ById(item.SystemId) is { FileSets: true }
+        && Path.GetExtension(item.OriginalFileName).ToLowerInvariant() is ".cue" or ".bin" or ".ccd" or ".img" or ".sub";
+
+    /// <summary>
+    /// B15, CloneCD B7: false for every set member candidate but a lone PlayStation <c>.img</c>, so a set is never half
+    /// dismissed.
+    /// </summary>
+    /// <param name="inSet">Whether <see cref="ReviewSets.FindAsync"/> found the item's set.</param>
+    public static bool IsDismissible(ReviewItem item, ISystemRegistry systems, bool inSet) =>
+        !IsSetMemberCandidate(item, systems)
+        || (item.SystemId == "psx" && !inSet && Path.GetExtension(item.OriginalFileName).Equals(".img", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Hard delete (D2–D4): removes the source file from the ingest folder (the whole archive for an archive entry) and
@@ -346,7 +357,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         CancellationToken ct, JobProgress? progress, IReadOnlyList<(IngestFile File, ReviewItem Row)>? set = null)
     {
         var userId = actor.UserId!.Value; // review actions always have a user: the signed-in one, or the job's requester
-        if (!IsDismissible(item, systems) && (request is null || set is null))
+        if (!IsDismissible(item, systems, set is not null) && (request is null || set is null))
             return new(SetFileNotResolvable);
         var external = IsExternal(item);
         string source;
@@ -531,9 +542,10 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 var stem = FileNameSanitizer.Sanitize(Path.GetFileNameWithoutExtension(item.OriginalFileName));
                 if (flag == "Release")
                 {
-                    // A2: tags from the file's own name (a set's cue); another disc is Attach as Disc's job. Unverified
+                    // A2: tags from the file's own name (a set's cue or .ccd); another disc is Attach as Disc's job. Unverified
                     // keeps DAT-verified releases primary, as the Dat action's manual pick does.
-                    var named = set?.FirstOrDefault(m => m.File.Name.EndsWith(".cue", StringComparison.OrdinalIgnoreCase)).File?.Name
+                    var named = set?.FirstOrDefault(m => m.File.Name.EndsWith(".cue", StringComparison.OrdinalIgnoreCase)
+                            || m.File.Name.EndsWith(".ccd", StringComparison.OrdinalIgnoreCase)).File?.Name
                         ?? item.OriginalFileName;
                     var tags = NoIntroName.Parse(Path.GetFileNameWithoutExtension(named));
                     regions = tags.Regions; languages = tags.Languages; revision = tags.Revision;

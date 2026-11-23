@@ -245,6 +245,67 @@ public class ReviewResolverExternalTests
         return (gameId, zipPath);
     }
 
+    /// <summary>
+    /// CloneCD B5: writes <c>Mystery (Disc 2).ccd/.img/.sub</c> next to <see cref="_item"/>, rows 1–3 Pending
+    /// <c>NoDatMatch</c>; the item is the <c>.ccd</c> (row 1).
+    /// </summary>
+    private void CloneCdRows()
+    {
+        var folder = Path.GetDirectoryName(_item.SourcePath)!;
+        var files = new (string Name, byte[] Bytes)[]
+        {
+            ("Mystery (Disc 2).ccd", System.Text.Encoding.UTF8.GetBytes("[Disc]\nSessions=1\n[TRACK 1]\nMODE=2\nINDEX 1=0\n")),
+            ("Mystery (Disc 2).img", TestLibrary.RomBytes(3)),
+            ("Mystery (Disc 2).sub", TestLibrary.RomBytes(4)),
+        };
+        _rows = [];
+        for (var i = 0; i < files.Length; i++)
+        {
+            var (name, bytes) = files[i];
+            var path = Path.Combine(folder, name);
+            File.WriteAllBytes(path, bytes);
+            _rows[i + 1] = _item with
+            {
+                Id = i + 1, SourcePath = path, OriginalFileName = name, SizeBytes = bytes.Length,
+                Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(bytes)),
+            };
+        }
+        _item = _rows[1];
+        _reviews.GetAsync(Arg.Any<long>(), Arg.Any<CancellationToken>()).Returns(c => _rows.GetValueOrDefault(c.Arg<long>()));
+        _reviews.ListPendingByPathsAsync(default!, default).ReturnsForAnyArgs(c =>
+            _rows.Values.Where(r => c.Arg<IReadOnlyCollection<string>>().Contains(r.SourcePath)).ToList());
+    }
+
+    [Test]
+    public async Task DismissingAPsxImgOfACloneCdSet_IsSetFileNotResolvable_CloneCdB7()
+    {
+        Build(new PsxSetTestHandler());
+        var folder = Directory.CreateDirectory(Path.Combine(_paths.Ingest, PsxSetTestHandler.SystemId)).FullName;
+        _item = _item with { SystemId = PsxSetTestHandler.SystemId, SourcePath = Path.Combine(folder, "Mystery (Disc 2).ccd") };
+        CloneCdRows();
+
+        var result = await _resolver.DismissAsync(2, Actor, default);
+
+        Assert.That(result.Code, Is.EqualTo(ReviewResolver.SetFileNotResolvable));
+        Assert.That(_rows.Values.All(r => File.Exists(r.SourcePath)), Is.True);
+        await AssertPendingKeptAsync();
+    }
+
+    [Test]
+    public async Task ACloneCdSet_ResolvesAsOneRelease_ImgMain_CcdAndSubInFiles_CloneCdB7()
+    {
+        var (gameId, zipPath) = await DiscGameAsync("Mystery (Disc 2).ccd");
+        CloneCdRows();
+
+        var result = await _resolver.ResolveInJobAsync(3, Manual with { Regions = ["Europe"], Disc = 2 }, Actor, new JobProgress());
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        Assert.That(result.GameId, Is.EqualTo(gameId));
+        Assert.That(result.Items.Select(r => r.Id), Is.EqualTo(new long[] { 1, 2, 3 }));
+        var rom = StoredRelease(zipPath, "Mystery (Disc 2).img");
+        Assert.That(rom.Files!.Select(f => f.ExternalFileName), Is.EqualTo(new[] { "Mystery (Disc 2).ccd", "Mystery (Disc 2).sub" }));
+    }
+
     private static readonly ReviewResolutionRequest AttachDisc2 = new() { Action = "Attach", Flag = "Disc", Disc = 2 };
 
     private void AssertSetStaysInIngest()

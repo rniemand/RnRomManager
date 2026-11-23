@@ -1272,6 +1272,33 @@ public class ReviewEndpointsTests
         }
     }
 
+    [Test]
+    public async Task Detail_OfACloneCdCcd_ListsTheSet_AndItsImgCantBeDismissed_CloneCdB7()
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(_factory.Root, "ingest", "psx")).FullName;
+        var ccd = System.Text.Encoding.UTF8.GetBytes("[Disc]\nSessions=1\n[TRACK 1]\nMODE=2\nINDEX 1=0\n");
+        foreach (var (name, bytes) in new[] { ("Clone.ccd", ccd), ("Clone.img", RandomNumberGenerator.GetBytes(2352)), ("Clone.sub", RandomNumberGenerator.GetBytes(96)) })
+        {
+            File.WriteAllBytes(Path.Combine(folder, name), bytes);
+            File.SetLastWriteTimeUtc(Path.Combine(folder, name), DateTime.UtcNow.AddMinutes(-5));
+        }
+        await RunIngest();
+        var rows = (await Reviews.ListAsync("Pending", 1, 50, default)).Items.Where(r => r.SystemId == "psx").ToList();
+
+        using (var detail = await _admin.GetAsync($"/api/review/{rows.Single(r => r.OriginalFileName == "Clone.ccd").Id}"))
+        {
+            var json = await AuthClient.JsonAsync(detail);
+            Assert.That((json.GetProperty("resolvable").GetBoolean(), json.GetProperty("dismissible").GetBoolean()), Is.EqualTo((true, false)));
+            Assert.That(json.GetProperty("setMembers").EnumerateArray().Select(m => m.GetProperty("fileName").GetString()),
+                Is.EqualTo(new[] { "Clone.ccd", "Clone.img", "Clone.sub" }));
+        }
+        using (var dismiss = await _admin.PostAsync($"/api/review/{rows.Single(r => r.OriginalFileName == "Clone.img").Id}/dismiss"))
+        {
+            Assert.That(dismiss.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+            Assert.That(await AuthClient.CodeAsync(dismiss), Is.EqualTo(ReviewResolver.SetFileNotResolvable));
+        }
+    }
+
     /// <summary>CHD B3: synthetic bytes standing in for a CHD (never a real image).</summary>
     private static byte[] FakeChd(int seed)
     {

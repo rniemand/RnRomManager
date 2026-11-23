@@ -279,6 +279,33 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
+    public async Task PlayDiscSet_ATwoDiscPsxCloneCdSet_NamesEachGeneratedCue_AndAliasesEachImg()
+    {
+        static InfoJsonRom Disc(int n, byte[] img) =>
+            CloneCdRom($"Mirror (USA) (Disc {n})", img, CloneCcd(), CloneSub, isPrimary: n == 1) with
+            {
+                BaseTitle = "Mirror", Regions = ["USA"], Flags = [$"Disc {n}"],
+            };
+        var (id, _, ids) = await PsxGame("Mirror", [Disc(1, SetTrack1(70)), Disc(2, SetTrack1(71))],
+            ("Mirror (USA) (Disc 1).img", SetTrack1(70)), ("Mirror (USA) (Disc 1).ccd", CloneCcd()), ("Mirror (USA) (Disc 1).sub", CloneSub),
+            ("Mirror (USA) (Disc 2).img", SetTrack1(71)), ("Mirror (USA) (Disc 2).ccd", CloneCcd()), ("Mirror (USA) (Disc 2).sub", CloneSub));
+
+        using var response = await _user.GetAsync(PlayDiscSetUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[]
+        {
+            "Mirror (USA).m3u", "Mirror (USA) (Disc 1).cue", "disc1-track-01.img", "Mirror (USA) (Disc 1).sub",
+            "Mirror (USA) (Disc 2).cue", "disc2-track-01.img", "Mirror (USA) (Disc 2).sub",
+        }));
+        Assert.That(Encoding.UTF8.GetString(ReadEntry(zip, "Mirror (USA).m3u")), Is.EqualTo("Mirror (USA) (Disc 1).cue\nMirror (USA) (Disc 2).cue\n"));
+        Assert.That(Encoding.UTF8.GetString(ReadEntry(zip, "Mirror (USA) (Disc 2).cue")), Does.StartWith("FILE \"disc2-track-01.img\" BINARY\n"));
+        Assert.That(ReadEntry(zip, "disc2-track-01.img"), Is.EqualTo(SetTrack1(71)));
+    }
+
+    [Test]
     public async Task PlayDiscSet_NotDiscOne_ALoneDisc_AnotherSystem_OrAMissingFile_Is404()
     {
         var (id, folder, ids) = await ThreeDiscSet("Atlas", 52);

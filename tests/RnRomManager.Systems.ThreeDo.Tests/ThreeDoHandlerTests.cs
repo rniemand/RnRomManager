@@ -20,7 +20,7 @@ public class ThreeDoHandlerTests
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("3do", "3DO", "3DO", "3do", "The 3DO Company - 3DO")));
         Assert.That(Handler.DatName, Is.EqualTo(IngestSeeder.ThreeDoDat));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".bin", ".cue", ".iso", ".chd" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".bin", ".cue", ".iso", ".chd", ".ccd", ".img", ".sub" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((16L, 1024L * 1024 * 1024)));
         Assert.That((Handler.EmbedRomsInZip, Handler.FileSets, Handler.DatSource, Handler.DatFolder),
             Is.EqualTo((false, true, DatSource.Libretro, DatKind.Redump)));

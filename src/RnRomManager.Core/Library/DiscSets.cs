@@ -50,9 +50,8 @@ public static partial class DiscSets
                 : null;
     }
 
-    // S1: the main-file extensions a set's discs may have; the Saturn and Sega CD handlers accept no .img.
-    private static string[] MainExtensions(string systemId) =>
-        systemId == "psx" ? [".bin", ".iso", ".chd", ".img"] : [".bin", ".iso", ".chd"];
+    // S1, CloneCD B10: the main-file extensions a set's discs may have; an .img is a CloneCD disc (or a lone PlayStation image).
+    private static readonly string[] MainExtensions = [".bin", ".iso", ".chd", ".img"];
 
     [GeneratedRegex(@"^Disc ([0-9]+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DiscFlag();
@@ -74,24 +73,24 @@ public static partial class DiscSets
             return FindDisks(roms);
         var sets = new List<DiscSet>();
         var maxDiscs = MaxDiscs(systemId);
-        var extensions = MainExtensions(systemId);
         var candidates = roms.Where(r => r.Flags.Count(f => DiscFlag().IsMatch(f)) == 1);
         foreach (var group in candidates.GroupBy(GroupKey))
         {
             var discs = group.OrderBy(r => DiscNumber(r.Flags)).ToList();
             if (discs.Count < 2 || discs.Count > maxDiscs
                 || !discs.Select(r => DiscNumber(r.Flags)).SequenceEqual(Enumerable.Range(1, discs.Count).Select(n => (int?)n))
-                || !discs.All(r => extensions.Any(e => r.FileName.EndsWith(e, StringComparison.OrdinalIgnoreCase))))
+                || !discs.All(r => MainExtensions.Any(e => r.FileName.EndsWith(e, StringComparison.OrdinalIgnoreCase))))
                 continue;
             sets.Add(new DiscSet(Name(discs[0], files), discs));
         }
         return sets;
     }
 
-    /// <summary>M2: Disc 1's cue name (else its file name) without its first " (Disc 1)", as <c>.m3u</c>.</summary>
+    /// <summary>M2, CloneCD B10: Disc 1's cue or <c>.ccd</c> name (else its file name) without its first " (Disc 1)", as <c>.m3u</c>.</summary>
     public static string Name(RomRow discOne, ILookup<long, RomFileRow> files)
     {
-        var cue = files[discOne.Id].FirstOrDefault(f => f.Ordinal == 0 && f.FileName.EndsWith(".cue", StringComparison.OrdinalIgnoreCase));
+        var cue = files[discOne.Id].FirstOrDefault(f => f.Ordinal == 0
+            && (f.FileName.EndsWith(".cue", StringComparison.OrdinalIgnoreCase) || f.FileName.EndsWith(".ccd", StringComparison.OrdinalIgnoreCase)));
         var stem = Path.GetFileNameWithoutExtension(cue?.FileName ?? discOne.FileName);
         return DiscOneToken().Replace(stem, "", 1) + ".m3u";
     }
