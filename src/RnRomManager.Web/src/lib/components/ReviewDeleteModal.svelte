@@ -79,45 +79,50 @@
 	{:else if !item}
 		<Loading />
 	{:else}
-		<p>This permanently deletes the file from the ingest folder. It can't be undone.</p>
-		{#if item.archivePath}
-			<div class="alert alert-warning d-flex gap-2" role="alert">
-				<Icon name="warning" />
-				<span
-					>This deletes the whole archive <code>{item.archivePath}</code>, including every other
-					file in it.</span
-				>
-			</div>
-		{/if}
-		<table class="table table-sm table-striped table-hover small mb-0">
-			<caption class="visually-hidden">Details of {item.originalFileName}</caption>
-			<tbody>
-				<tr
-					><th scope="row" class="w-25">File name</th><td class="text-break"
-						>{item.originalFileName}</td
-					></tr
-				>
-				<tr><th scope="row">System</th><td><SystemBadge system={item.system} /></td></tr>
-				<tr><th scope="row">Reason</th><td>{item.reason}</td></tr>
-				<tr><th scope="row">Size</th><td><FileSize bytes={item.sizeBytes} /></td></tr>
-				{#each hashes as [label, value] (label)}
-					<tr><th scope="row">{label}</th><td class="font-monospace text-break">{value}</td></tr>
-				{/each}
-				<tr><th scope="row">Source path</th><td class="text-break">{item.sourcePath}</td></tr>
-				{#if item.archivePath}
-					<tr><th scope="row">Archive</th><td class="text-break">{item.archivePath}</td></tr>
-					<tr><th scope="row">Archive entry</th><td class="text-break">{item.archiveEntry}</td></tr>
-				{/if}
-				{#if item.header}
-					{#each Object.entries(item.header) as [key, value] (key)}
-						<tr
-							><th scope="row">{formatKey(key)}</th><td>{formatValue(value, { counts: true })}</td
-							></tr
-						>
+		<!-- Long unspaced paths and header values wrap, so the modal never widens the page on mobile. -->
+		<div class="text-break">
+			<p>This permanently deletes the file from the ingest folder. It can't be undone.</p>
+			{#if item.archivePath}
+				<div class="alert alert-warning d-flex gap-2" role="alert">
+					<Icon name="warning" />
+					<span
+						>This deletes the whole archive <code>{item.archivePath}</code>, including every other
+						file in it.</span
+					>
+				</div>
+			{/if}
+			<table class="table table-sm table-striped table-hover small mb-0">
+				<caption class="visually-hidden">Details of {item.originalFileName}</caption>
+				<tbody>
+					<tr
+						><th scope="row" class="w-25">File name</th><td class="text-break"
+							>{item.originalFileName}</td
+						></tr
+					>
+					<tr><th scope="row">System</th><td><SystemBadge system={item.system} /></td></tr>
+					<tr><th scope="row">Reason</th><td>{item.reason}</td></tr>
+					<tr><th scope="row">Size</th><td><FileSize bytes={item.sizeBytes} /></td></tr>
+					{#each hashes as [label, value] (label)}
+						<tr><th scope="row">{label}</th><td class="font-monospace text-break">{value}</td></tr>
 					{/each}
-				{/if}
-				<tr><th scope="row">Added</th><td>{formatDateTime(item.createdAt)}</td></tr>
-			</tbody>
-		</table>
+					<tr><th scope="row">Source path</th><td class="text-break">{item.sourcePath}</td></tr>
+					{#if item.archivePath}
+						<tr><th scope="row">Archive</th><td class="text-break">{item.archivePath}</td></tr>
+						<tr
+							><th scope="row">Archive entry</th><td class="text-break">{item.archiveEntry}</td></tr
+						>
+					{/if}
+					{#if item.header}
+						{#each Object.entries(item.header) as [key, value] (key)}
+							<tr
+								><th scope="row">{formatKey(key)}</th><td>{formatValue(value, { counts: true })}</td
+								></tr
+							>
+						{/each}
+					{/if}
+					<tr><th scope="row">Added</th><td>{formatDateTime(item.createdAt)}</td></tr>
+				</tbody>
+			</table>
+		</div>
 	{/if}
 </ConfirmModal>

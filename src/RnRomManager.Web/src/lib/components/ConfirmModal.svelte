@@ -116,7 +116,7 @@
 	>
 		<div class="modal-content">
 			<div class="modal-header">
-				<h2 class="modal-title fs-5" id="{id}-title">{title}</h2>
+				<h2 class="modal-title fs-5 text-break" id="{id}-title">{title}</h2>
 				<button
 					type="button"
 					class="btn-close"
