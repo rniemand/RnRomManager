@@ -261,7 +261,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   - a two-file toc (`DATAFILE` + `FILE`) giving two `FILE` lines;
   - a `DATAFILE` continuing after a sized track;
   - every D6 error text, including the no-length track that isn't last in its file and an unreferenced stored track.
-- [ ] **4. MDS sheet**: D7, D8a. Files: `MdsSheet.cs` (new), `MdsSheetTests.cs` (new; builds `.mds` bytes in the test). `MdsSheet` is far smaller than `TocSheet`, so parse and playback are one step. Done when `MdsSheetTests` covers:
+- [x] **4. MDS sheet**: D7, D8a. Files: `MdsSheet.cs` (new), `MdsSheetTests.cs` (new; builds `.mds` bytes in the test). `MdsSheet` is far smaller than `TocSheet`, so parse and playback are one step. Done when `MdsSheetTests` covers:
   - a one-track MODE2 disc, and a data + two-audio disc with a point-0 block, 0xA0–0xA2 lead-in blocks and track 2's extra-block `pregap` of 150 written as `PREGAP 00:02:00` (track 1's 150 not written), both giving the exact cue text;
   - a track with `extra_offset` 0 (no `PREGAP`);
   - every D7 and D8a error text.
