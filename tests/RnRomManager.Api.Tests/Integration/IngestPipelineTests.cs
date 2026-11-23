@@ -41,6 +41,7 @@ public class IngestPipelineTests
     private static readonly byte[] Lanes = Atari(4096, 120);
     private static readonly byte[] Pursuit = Coleco(8192, 130, 0xAA, 0x55);
     private static readonly byte[] AmigaDisk = Atari(901_120, 2401);
+    private static readonly byte[] C64Disk = Atari(174_848, 6401);
     private static readonly byte[] TwinOrbitOne = Atari(901_120, 2402);
     private static readonly byte[] TwinOrbitTwo = Atari(901_120, 2403);
     private static readonly byte[] Drift = GameGear(32768, 140, header: true);
@@ -176,7 +177,7 @@ public class IngestPipelineTests
                 new FixtureGame("Cart Twin (USA)", "Cart Twin (USA) (Track 1).bin", CartTwin),
             ],
             [IngestSeeder.ThreeDoDat] = [new FixtureGame("Opal Orbit (USA)", "Opal Orbit (USA) (Track 1).bin", OpalData)],
-            [IngestSeeder.C64Dat] = [],
+            [IngestSeeder.C64Dat] = [new FixtureGame("Gzip Orbit (Europe)", "Gzip Orbit (Europe).d64", C64Disk)],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [new FixtureGame("Star Duel (Japan)", "Star Duel (Japan).st", StarDuel)], [IngestSeeder.FdsDat] = [new FixtureGame("Disk Quest (Japan)", "Disk Quest (Japan).fds", DiskQuest)],
             // Amiga F4: libretro's TOSEC game names are "Title (Disk n)[tags]"; the ROM names carry the full TOSEC name.
@@ -1875,6 +1876,33 @@ public class IngestPipelineTests
         {
             "Twin Orbit (1990)(Synth)(Disk 1 of 2).adf", "Twin Orbit (1990)(Synth)(Disk 2 of 2).adf",
         }));
+    }
+
+    [Test]
+    public async Task C64_D6z_IsInflated_AndStoredAsTheDatsD64()
+    {
+        using var d6z = new MemoryStream();
+        using (var gzip = new GZipStream(d6z, CompressionLevel.Optimal, leaveOpen: true))
+            gzip.Write(C64Disk);
+
+        var result = await IngestAsync(DropAged("c64", "orbit.d6z", d6z.ToArray()));
+
+        Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, "c64")), result.Details);
+        using var library = LibraryZip.Open(Path.Combine(Roms, "c64", "G", "Gzip Orbit.zip"), Service<InfoJsonReader>());
+        Assert.That(library.InfoJson!.Game!.Roms.Single().FileName, Is.EqualTo("Gzip Orbit (Europe).d64"));
+        using var stored = library.OpenEntry(LibraryZip.RomEntry("Gzip Orbit (Europe).d64"), C64Disk.Length);
+        using var bytes = new MemoryStream();
+        stored.CopyTo(bytes);
+        Assert.That(bytes.ToArray(), Is.EqualTo(C64Disk));
+    }
+
+    [Test]
+    public async Task C64_BareGz_FailsUnsupportedType()
+    {
+        var result = await IngestAsync(DropAged("c64", "orbit.gz", C64Disk));
+
+        Assert.That((result!.Outcome, result.Reason, result.Details), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType,
+            "'orbit.gz' doesn't say its image type (name it like 'Game.d64.gz')")));
     }
 
     [Test]

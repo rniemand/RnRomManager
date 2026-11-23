@@ -18,7 +18,7 @@ public sealed class PetHandler : ISystemHandler
     public string DisplayName => "Commodore PET";
     public string ShortName => "PET";
     public string Family => Id;
-    public IReadOnlyList<string> RomExtensions { get; } = [".prg", ".d64", ".tap", ".t64", ".g64", ".d80", ".d82", ".d71", ".d81", ".x64", ".p00"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".prg", ".d64", ".tap", ".t64", ".g64", ".d80", ".d82", ".d71", ".d81", ".x64", ".p00", ".d6z", ".d7z", ".d8z", ".g6z", ".x6z", ".gz"];
     public long MinRomSizeBytes => 256;
     public long MaxRomSizeBytes => 8 * 1024 * 1024;
     public string DatName => "Commodore - PET";
@@ -40,4 +40,9 @@ public sealed class PetHandler : ISystemHandler
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
+    /// <summary>V2: a gzipped image is inflated, so it's hashed, header-read and stored as the image it holds.</summary>
+    public ReadOnlyMemory<byte> NormalizeForHashing(ReadOnlyMemory<byte> rom) => GzipImage.Inflate(rom, MaxRomSizeBytes);
+
+    /// <summary>V3: a gzipped image is stored under the type it holds (<c>.d6z</c> → <c>.d64</c>, <c>Game.d64.gz</c> → <c>.d64</c>).</summary>
+    public string? SourceExtension(string fileName) => ViceImages.SourceExtension(fileName, RomExtensions);
 }

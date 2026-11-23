@@ -31,7 +31,7 @@ roms/
   lynx/                 Atari Lynx (.lnx, .lyx or .bll, as the DAT names it)
   jaguar/               Atari Jaguar (.j64, .jag, .rom, .abs or .cof, as the DAT names it)
   coleco/               ColecoVision (.col)
-  c64/                  Commodore 64 (.crt, .tap, .nib, .d64, .g64, .t64, .prg, .bin, .d71, .d81, .x64, .p00)
+  c64/                  Commodore 64 (.crt, .tap, .nib, .d64, .g64, .t64, .prg, .bin, .d71, .d81, .x64, .p00, .d80, .d82, .nbz, .d2m, .d4m, .tcrt)
   pet/                  Commodore PET (.prg, .d64, .tap, .t64, .g64, .d80, .d82)
   vic20/                Commodore VIC-20 (.a0, .20, .40, .60, .bin, .prg, .d64, .tap, .t64, .crt)
   amiga/                Commodore Amiga (.adf, or .ipf as the DAT names it)
