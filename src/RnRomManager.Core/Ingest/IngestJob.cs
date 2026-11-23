@@ -90,7 +90,7 @@ public sealed class IngestJob(
                 logger.LogInformation("Review item {Id} removed: {Path} no longer exists", row.Id, row.ArchivePath ?? row.SourcePath);
         }
 
-        // Step 6. B7, CloneCD B5: a FileSets system that takes .cue files is planned into cue and CloneCD sets from all of its loose files, whatever the selection.
+        // Step 6. B7, CloneCD B5, D8: a FileSets system that takes .cue files is planned into cue, TOC, CloneCD and MDS sets from all of its loose files, whatever the selection.
         var scanned = scanner.Scan().SelectMany(s => s.Files).ToList();
         var units = new List<WorkUnit>();
         foreach (var folder in scanned.GroupBy(f => f.SystemId))

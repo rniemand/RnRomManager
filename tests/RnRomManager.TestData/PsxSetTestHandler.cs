@@ -14,7 +14,7 @@ public sealed class PsxSetTestHandler : ISystemHandler
     public string Id => SystemId;
     public string DisplayName => "PlayStation Set Test";
     public string Family => SystemId;
-    public IReadOnlyList<string> RomExtensions => [".bin", ".cue", ".iso", ".nrg", ".ccd", ".img", ".sub"];
+    public IReadOnlyList<string> RomExtensions => [".bin", ".cue", ".iso", ".nrg", ".ccd", ".img", ".sub", ".mds", ".mdf", ".toc"];
     public long MinRomSizeBytes => 1;
     public long MaxRomSizeBytes => 64L * 1024 * 1024;
     public string DatName => ExternalSetTestHandler.DatNameValue;

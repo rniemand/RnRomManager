@@ -1,5 +1,6 @@
 using System.Text;
 using RnRomManager.Core.Ingest;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Ingest;
 
@@ -222,5 +223,98 @@ public class IngestSetPlannerTests
     {
         AssertUnits(IngestSetPlanner.Plan([File("Game.img")], loneImage: loneImage),
             loneImage ? Lone("Game.img") : Skipped(IngestReason.IncompleteSet, "Game.img"));
+    }
+
+    // D8: a .toc is planned exactly as a cue.
+
+    private static PlannerFile Toc(string name, params string[] files) =>
+        CueText(name, string.Concat(files.Select(f => $"TRACK MODE2_RAW\nFILE \"{f}\" 0\n")));
+
+    [Test]
+    public void Toc_AndItsBins_AreOneSet_TocFirst()
+    {
+        var units = Plan(File("Game (Track 2).bin"), Toc("Game.toc", "Game (Track 1).bin", "Game (Track 2).bin"), File("Game (Track 1).bin"));
+
+        AssertUnits(units, Set("Game.toc", "Game (Track 1).bin", "Game (Track 2).bin"));
+    }
+
+    [Test]
+    public void Toc_MissingBin_IsIncompleteSet()
+    {
+        AssertUnits(Plan(Toc("Game.toc", "Game (Track 1).bin", "Game (Track 2).bin"), File("Game (Track 1).bin")),
+            Skipped(IngestReason.IncompleteSet, "Game.toc", "Game (Track 1).bin"));
+    }
+
+    [TestCase("Game (Track 2).wav")]
+    [TestCase("Game?.bin")]
+    public void Toc_NamingANonBinOrNonPortableFile_IsUnsupportedSetMember(string member)
+    {
+        AssertUnits(Plan(Toc("Game.toc", "Game (Track 1).bin", member), File("Game (Track 1).bin"), File(member)),
+            Skipped(IngestReason.UnsupportedSetMember, "Game.toc", "Game (Track 1).bin", member));
+    }
+
+    [Test]
+    public void Toc_Invalid_IsIncompleteSet_WithBinsStartingWithItsStem()
+    {
+        AssertUnits(Plan(CueText("Game.toc", "CD_ROM\n"), File("Game (Track 1).bin")),
+            Skipped(IngestReason.IncompleteSet, "Game (Track 1).bin", "Game.toc"));
+    }
+
+    [Test]
+    public void Toc_Over64KiB_IsALoneFile()
+    {
+        AssertUnits(Plan(new PlannerFile("Big.toc", IngestSetPlanner.MaxCueBytes + 1), File("Big.bin")), Lone("Big.bin"), Lone("Big.toc"));
+    }
+
+    [Test]
+    public void BinNamedByACueAndAToc_IsSetConflictForBoth()
+    {
+        AssertUnits(Plan(Cue("A.cue", "Shared.bin"), Toc("B.toc", "Shared.bin"), File("Shared.bin")),
+            Skipped(IngestReason.SetConflict, "A.cue", "Shared.bin"), Skipped(IngestReason.SetConflict, "B.toc"));
+    }
+
+    // D8: <stem>.mds and <stem>.mdf.
+
+    private static PlannerFile Mds(string name, byte[]? bytes = null)
+    {
+        bytes ??= SyntheticMdsBuilder.OneTrack();
+        return new PlannerFile(name, bytes.Length, bytes);
+    }
+
+    [Test]
+    public void Mds_AndItsMdf_AreOneSet_MdsFirst()
+    {
+        AssertUnits(Plan(File("game.MDF"), Mds("Game.mds")), Set("Game.mds", "game.MDF"));
+    }
+
+    [Test]
+    public void Mds_WithoutMdf_IsIncompleteSet()
+    {
+        AssertUnits(Plan(Mds("Game.mds")), Skipped(IngestReason.IncompleteSet, "Game.mds"));
+    }
+
+    [Test]
+    public void Mds_Invalid_IsIncompleteSet_WithItsMdf()
+    {
+        AssertUnits(Plan(Mds("Game.mds", [1, 2, 3]), File("Game.mdf")), Skipped(IngestReason.IncompleteSet, "Game.mds", "Game.mdf"));
+        AssertUnits(Plan(new PlannerFile("Game.mds", 100), File("Game.mdf")), Skipped(IngestReason.IncompleteSet, "Game.mds", "Game.mdf"));
+    }
+
+    [Test]
+    public void Mds_NonPortableMemberName_IsUnsupportedSetMember()
+    {
+        AssertUnits(Plan(Mds("Game?.mds"), File("Game?.mdf")), Skipped(IngestReason.UnsupportedSetMember, "Game?.mds", "Game?.mdf"));
+    }
+
+    [Test]
+    public void Mds_CaseFoldedDuplicate_IsSetConflict()
+    {
+        AssertUnits(Plan(Mds("Game.mds"), File("Game.mdf"), File("GAME.mdf")), Skipped(IngestReason.SetConflict, "Game.mds", "GAME.mdf", "Game.mdf"));
+    }
+
+    [Test]
+    public void LoneMdf_IsIncompleteSet()
+    {
+        AssertUnits(Plan(File("Game.mdf")), Skipped(IngestReason.IncompleteSet, "Game.mdf"));
     }
 }

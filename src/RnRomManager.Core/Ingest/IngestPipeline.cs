@@ -406,7 +406,7 @@ public sealed class IngestPipeline(
     }
 
     /// <summary>
-    /// B7/B7a: one planned cue or CloneCD set (the cue first, then its <c>FILE</c> names; or the <c>.ccd</c>, <c>.img</c>, <c>.sub</c>), processed as one unit to the end:
+    /// B7/B7a: one planned cue, TOC, CloneCD or MDS set (the cue or <c>.toc</c> first, then the files it names; the <c>.ccd</c>, <c>.img</c>, <c>.sub</c>; or the <c>.mds</c>, <c>.mdf</c>), processed as one unit to the end:
     /// every member is hashed once, the member whose SHA1 the DAT lists is the data track, and the set is stored as one
     /// release (the other members in its <c>files</c>), queued for Review member by member, or left alone. Each member's
     /// own Pending review row is completed by its result, as <see cref="ProcessAsync"/> does for one file.
@@ -584,9 +584,9 @@ public sealed class IngestPipeline(
         hashed.Select(m => new SetPlacement(m.File, new ExternalPlacement(m.Source, m.File.Name), m.Hashes.Sha1)).ToList();
 
     /// <summary>
-    /// B14: stores an unmatched cue or CloneCD set resolved in Review as one release, all or nothing. <paramref name="members"/>
-    /// are in set order (the cue or <c>.ccd</c>, then its <c>FILE</c>s or <c>.img</c> and <c>.sub</c>), each with its review row's SHA1;
-    /// the cue's first <c>FILE</c> or the <c>.img</c> (<c>members[1]</c>) is the main file. <paramref name="rom"/> carries what the action decided (title, tags,
+    /// B14: stores an unmatched cue, TOC, CloneCD or MDS set resolved in Review as one release, all or nothing. <paramref name="members"/>
+    /// are in set order (the cue, <c>.toc</c>, <c>.ccd</c> or <c>.mds</c>, then the files it names, or <c>.img</c> and <c>.sub</c>, or the <c>.mdf</c>), each with its review row's SHA1;
+    /// the first file named, the <c>.img</c> or the <c>.mdf</c> (<c>members[1]</c>) is the main file. <paramref name="rom"/> carries what the action decided (title, tags,
     /// identification); its names, version, header, metadata and <c>files</c> come from the hashed members. Nothing is
     /// moved to <c>_failed/</c>: a refusal leaves every file where it is.
     /// </summary>

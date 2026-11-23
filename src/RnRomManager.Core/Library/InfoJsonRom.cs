@@ -35,7 +35,7 @@ public sealed record InfoJsonRom
     public required InfoJsonRomMetadata Metadata { get; init; }
 
     /// <summary>
-    /// v6 (B12): null for a one-file release; otherwise the cue or <c>.ccd</c> first, then the cue's other <c>FILE</c> names in
+    /// v6 (B12): null for a one-file release; otherwise the cue, <c>.toc</c>, <c>.ccd</c> or <c>.mds</c> first, then the other files it names in
     /// order (or the CloneCD <c>.sub</c>), without the data track (this rom's own file). Only <c>FileSets</c> systems may have it.
     /// </summary>
     public IReadOnlyList<InfoJsonRomFile>? Files { get; init; }

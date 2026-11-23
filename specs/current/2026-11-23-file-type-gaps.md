@@ -265,7 +265,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   - a one-track MODE2 disc, and a data + two-audio disc with a point-0 block, 0xA0–0xA2 lead-in blocks and track 2's extra-block `pregap` of 150 written as `PREGAP 00:02:00` (track 1's 150 not written), both giving the exact cue text;
   - a track with `extra_offset` 0 (no `PREGAP`);
   - every D7 and D8a error text.
-- [ ] **5. Planning**: D8, before any handler accepts the new extensions. Files:
+- [x] **5. Planning**: D8, before any handler accepts the new extensions. Files:
   - `IngestSetPlanner.cs`, `IngestOutcome.cs`, `ReviewSets.cs`;
   - both TestData handlers;
   - the comment-only Core files, `IngestJob.cs` included.

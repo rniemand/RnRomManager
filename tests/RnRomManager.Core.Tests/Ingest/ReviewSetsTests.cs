@@ -9,7 +9,7 @@ using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Ingest;
 
-/// <summary>Spec B12, CloneCD B5: a Review item's unmatched cue or CloneCD set, planned from the system's ingest folder as ingest plans it.</summary>
+/// <summary>Spec B12, CloneCD B5, D8: a Review item's unmatched cue, TOC, CloneCD or MDS set, planned from the system's ingest folder as ingest plans it.</summary>
 public class ReviewSetsTests
 {
     private const string Cue = "Game (Disc 2).cue";
@@ -164,5 +164,34 @@ public class ReviewSetsTests
         var set = await _sets.FindAsync(_rows[Path.Combine(_folder, from)]);
 
         Assert.That(set!.Select(m => (m.File.Name, m.Row.Id)), Is.EqualTo(new[] { ("Game.ccd", 1L), ("Game.img", 2L), ("Game.sub", 3L) }));
+    }
+
+    [TestCase("Game.toc")]
+    [TestCase("Game (Track 2).bin")]
+    public async Task TocSet_IsFound_InSetOrder_FromAnyMember(string from)
+    {
+        Write("Game.toc", Encoding.UTF8.GetBytes("TRACK MODE2_RAW\nFILE \"Game (Track 1).bin\" 0 00:00:01\nTRACK AUDIO\nFILE \"Game (Track 2).bin\" 0\n"));
+        Write("Game (Track 1).bin", new byte[2352]);
+        Write("Game (Track 2).bin", new byte[2352]);
+        foreach (var (name, id) in new[] { ("Game.toc", 1L), ("Game (Track 1).bin", 2L), ("Game (Track 2).bin", 3L) })
+            Row(name, id);
+
+        var set = await _sets.FindAsync(_rows[Path.Combine(_folder, from)]);
+
+        Assert.That(set!.Select(m => (m.File.Name, m.Row.Id)), Is.EqualTo(new[] { ("Game.toc", 1L), ("Game (Track 1).bin", 2L), ("Game (Track 2).bin", 3L) }));
+    }
+
+    [TestCase("Game.mds")]
+    [TestCase("Game.mdf")]
+    public async Task MdsSet_IsFound_InSetOrder_FromAnyMember(string from)
+    {
+        Write("Game.mds", SyntheticMdsBuilder.OneTrack());
+        Write("Game.mdf", new byte[2352]);
+        Row("Game.mds", 1);
+        Row("Game.mdf", 2);
+
+        var set = await _sets.FindAsync(_rows[Path.Combine(_folder, from)]);
+
+        Assert.That(set!.Select(m => (m.File.Name, m.Row.Id)), Is.EqualTo(new[] { ("Game.mds", 1L), ("Game.mdf", 2L) }));
     }
 }
