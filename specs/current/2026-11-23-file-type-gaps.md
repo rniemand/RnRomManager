@@ -285,7 +285,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
     - each set's Release flag takes its tags from the `.toc`/`.mds` stem (lines 545–548).
 
   Done when they pass, and `npm run lint` and `npm run check` pass in `src/RnRomManager.Web`.
-- [ ] **7. Accept the disc files**: D1, D2, D9, and the README rows. Files:
+- [x] **7. Accept the disc files**: D1, D2, D9, and the README rows. Files:
   - the five disc handlers and their tests;
   - `BrowserCoreExtensionsTests.cs`, `README.md`;
   - `IngestPipelineTests.cs`, `ReviewEndpointsTests.cs`.

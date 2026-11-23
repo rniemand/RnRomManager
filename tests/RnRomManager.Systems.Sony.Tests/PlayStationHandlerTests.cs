@@ -21,7 +21,7 @@ public class PlayStationHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("psx", "PlayStation", "PSX", "psx", "Sony - PlayStation")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".bin", ".cue", ".iso", ".chd", ".img", ".pbp", ".ccd", ".sub", ".cbn" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".bin", ".cue", ".iso", ".chd", ".img", ".pbp", ".ccd", ".sub", ".mds", ".mdf", ".toc", ".cbn" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((16L, 1024L * 1024 * 1024)));
         Assert.That((Handler.EmbedRomsInZip, Handler.FileSets, Handler.DatSource, Handler.DatFolder),
             Is.EqualTo((false, true, DatSource.Libretro, DatKind.Redump)));

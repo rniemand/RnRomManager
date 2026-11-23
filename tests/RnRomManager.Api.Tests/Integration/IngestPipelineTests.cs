@@ -841,6 +841,66 @@ public class IngestPipelineTests
     }
 
     [Test]
+    public async Task Mds_UnmatchedSaturnSet_GoesToReviewAsTwoNoDatMatchItems()
+    {
+        foreach (var (name, bytes) in new[] { ("Mystery.mds", SyntheticMdsBuilder.OneTrack()), ("Mystery.mdf", FakeChd(2706)) })
+            File.SetLastWriteTimeUtc(Drop("saturn", name, bytes).FullPath, DateTime.UtcNow.AddMinutes(-1));
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "saturn").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome, i.Reason)), Is.EquivalentTo(new[]
+        {
+            ("Mystery.mds", IngestOutcome.Review, (string?)"NoDatMatch"), ("Mystery.mdf", IngestOutcome.Review, "NoDatMatch"),
+        }));
+    }
+
+    [Test]
+    public async Task Mds_OneTrackPsxMdfInTheDat_IsOneRelease_MdsInFiles()
+    {
+        const string mds = "Clone Star (USA).mds", mdf = "Clone Star (USA).mdf";
+        foreach (var (name, bytes) in new[] { (mds, SyntheticMdsBuilder.OneTrack()), (mdf, CloneStarImage) })
+            File.SetLastWriteTimeUtc(Drop("psx", name, bytes).FullPath, DateTime.UtcNow.AddMinutes(-1));
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "psx").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome)),
+            Is.EquivalentTo(new[] { (mds, IngestOutcome.Ingested), (mdf, IngestOutcome.Ingested) }));
+        var rom = ReadZip("psx/C/Clone Star.zip").Roms.Single();
+        Assert.That((rom.ExternalFileName, rom.Identification.Method), Is.EqualTo((mdf, IdentificationMethod.Dat)));
+        Assert.That(rom.Files!.Select(f => f.ExternalFileName), Is.EqualTo(new[] { mds }));
+        Assert.That(Directory.GetFiles(Ingest("psx")), Is.Empty);
+    }
+
+    [Test]
+    public async Task Toc_PsxSetWhoseBinIsInTheDat_IsOneRelease_TocInFiles()
+    {
+        const string toc = "Clone Star (USA).toc", bin = "Clone Star (USA).bin";
+        var tocBytes = System.Text.Encoding.UTF8.GetBytes($"CD_ROM_XA\nTRACK MODE2_RAW\nFILE \"{bin}\" 0\n");
+        foreach (var (name, bytes) in new[] { (toc, tocBytes), (bin, CloneStarImage) })
+            File.SetLastWriteTimeUtc(Drop("psx", name, bytes).FullPath, DateTime.UtcNow.AddMinutes(-1));
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "psx").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome)),
+            Is.EquivalentTo(new[] { (toc, IngestOutcome.Ingested), (bin, IngestOutcome.Ingested) }));
+        var rom = ReadZip("psx/C/Clone Star.zip").Roms.Single();
+        Assert.That((rom.ExternalFileName, rom.Identification.Method), Is.EqualTo((bin, IdentificationMethod.Dat)));
+        Assert.That(rom.Files!.Select(f => f.ExternalFileName), Is.EqualTo(new[] { toc }));
+    }
+
+    [Test]
+    public async Task Mds_LoneSegaCdMdf_IsSkippedAsIncompleteSet()
+    {
+        File.SetLastWriteTimeUtc(Drop("segacd", "Lonely.mdf", FakeChd(2707)).FullPath, DateTime.UtcNow.AddMinutes(-1));
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "segacd").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome, i.Reason)),
+            Is.EquivalentTo(new[] { ("Lonely.mdf", IngestOutcome.Skipped, (string?)IngestReason.IncompleteSet) }));
+        Assert.That(File.Exists(Path.Combine(Ingest("segacd"), "Lonely.mdf")), Is.True);
+    }
+
+    [Test]
     public async Task Chd_InTheMegaDriveFolder_IsUnsupportedType()
     {
         var result = await IngestAsync(DropAged("md", "disc.chd", FakeChd(2303)));
