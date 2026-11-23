@@ -34,7 +34,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Atari 5200 | `a5200` | In ZIP | `.a52`, `.bin` | No-Intro | `a5200` |
 | Atari 7800 | `a7800` | In ZIP | `.a78`, `.bin` | No-Intro | `prosystem` |
 | Atari Jaguar | `jaguar` | In ZIP | `.j64`, `.jag`, `.rom`, `.abs`, `.cof` | No-Intro | `virtualjaguar` |
-| Atari Lynx | `lynx` | In ZIP | `.lnx`, `.lyx` | No-Intro | `handy` |
+| Atari Lynx | `lynx` | In ZIP | `.lnx`, `.lyx`, `.bll` | No-Intro | `handy` |
 | ColecoVision | `coleco` | In ZIP | `.col`, `.rom`, `.bin` | No-Intro | `gearcoleco` |
 | Commodore 64 | `c64` | In ZIP | `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.t64`, `.prg`, `.bin` | No-Intro | `vice_x64sc` |
 | Commodore Amiga | `amiga` | In ZIP | `.adf`, `.adz` | TOSEC | `puae` |
@@ -50,7 +50,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen`, `.smd` | No-Intro | `genesis_plus_gx` |
 | Nintendo 3DS | `3ds` | Next to ZIP (configurable) | `.3ds`, `.cci`, `.cia` | No-Intro | — |
 | Nintendo 64 | `n64` | In ZIP | `.z64`, `.v64`, `.n64` | No-Intro | `mupen64plus_next` |
-| Nintendo DS | `nds` | Next to ZIP (configurable) | `.nds` | No-Intro | `desmume` |
+| Nintendo DS | `nds` | Next to ZIP (configurable) | `.nds`, `.ids` | No-Intro | `desmume` |
 | Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | `fceumm` |
 | Nintendo Switch | `switch` | Next to ZIP | `.nsp`, `.xci`, `.nsz`, `.xcz`, `.hdf` | titledb | — |
 | PlayStation | `psx` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd`, `.img`, `.pbp` | Redump | `pcsx_rearmed` |

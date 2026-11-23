@@ -17,7 +17,7 @@ roms/
   gba/                  Game Boy Advance
   n64/                  Nintendo 64 (always stored big-endian, as .z64)
   3ds/                  Nintendo 3DS (external: .3ds, .cci, .cia files next to the ZIP)
-  nds/                  Nintendo DS (external by default: .nds files next to the ZIP; an Admin can store them
+  nds/                  Nintendo DS (external by default: .nds or iQue .ids files next to the ZIP; an Admin can store them
                         inside instead, and the storage job moves games between the two)
   nes/                  Nintendo Entertainment System (headered .nes, header included)
   fds/                  Famicom Disk System (headerless .fds, fwNES header stripped)
@@ -26,7 +26,7 @@ roms/
   a2600/                Atari 2600 (.a26 or .bin, as the DAT names it)
   a5200/                Atari 5200 (.a52)
   a7800/                Atari 7800 (.a78 or .bin, as the DAT names it)
-  lynx/                 Atari Lynx (.lnx or .lyx, as the DAT names it)
+  lynx/                 Atari Lynx (.lnx, .lyx or .bll, as the DAT names it)
   jaguar/               Atari Jaguar (.j64, .jag, .rom, .abs or .cof, as the DAT names it)
   coleco/               ColecoVision (.col)
   c64/                  Commodore 64 (.crt, .tap, .nib, .d64, .g64, .t64, .prg, .bin)

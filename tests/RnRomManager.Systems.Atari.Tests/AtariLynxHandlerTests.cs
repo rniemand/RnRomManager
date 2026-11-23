@@ -13,7 +13,7 @@ public class AtariLynxHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("lynx", "Atari Lynx", "Lynx", "lynx", "Atari - Lynx")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".lnx", ".lyx" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".lnx", ".lyx", ".bll" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((1024L, 1048576L)));
         Assert.That(Handler.EmbedRomsInZip, Is.True);
         Assert.That(Handler.BrowserCore, Is.EqualTo("handy"));

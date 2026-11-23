@@ -10,7 +10,7 @@ public sealed class AtariLynxHandler : ISystemHandler
     public string DisplayName => "Atari Lynx";
     public string ShortName => "Lynx";
     public string Family => Id;
-    public IReadOnlyList<string> RomExtensions { get; } = [".lnx", ".lyx"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".lnx", ".lyx", ".bll"];
     public long MinRomSizeBytes => 1024;
     public long MaxRomSizeBytes => 1024 * 1024;
     public string DatName => "Atari - Lynx";

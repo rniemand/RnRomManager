@@ -4,7 +4,7 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Systems.NintendoDs;
 
 /// <summary>
-/// Nintendo DS cartridge dumps (<c>.nds</c>), stored next to the game's ZIP (S1); games from older versions keep them
+/// Nintendo DS cartridge dumps (<c>.nds</c>, and iQue DS <c>.ids</c>), stored next to the game's ZIP (S1); games from older versions keep them
 /// inside it until the storage migration job moves them out (<see cref="LegacyEmbeddedRoms"/>). Sizes cover the libretro No-Intro
 /// <c>Nintendo - Nintendo DS</c> DAT (128 KiB–512 MiB), with the minimum left lower for homebrew. An unmatched ROM
 /// with a bad header CRC is <c>InvalidHeader</c>; one with a valid CRC goes to Review. An Admin may store them inside the
@@ -18,7 +18,7 @@ public sealed class NintendoDsHandler(IRomStorageSettings? settings = null) : IS
     public string DisplayName => "Nintendo DS";
     public string ShortName => "DS";
     public string Family => Id;
-    public IReadOnlyList<string> RomExtensions { get; } = [".nds"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".nds", ".ids"];
     public long MinRomSizeBytes => 512;
 
     /// <summary>512 MiB, inclusive: the largest DS cartridge in the DAT.</summary>
