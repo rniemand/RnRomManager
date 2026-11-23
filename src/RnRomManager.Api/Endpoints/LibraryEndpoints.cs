@@ -883,12 +883,10 @@ public static class LibraryEndpoints
     internal static object ToListItemDto(GameListItem game, ISystemRegistry systems)
     {
         // C2: quick play needs a browser core and a primary release stored in the zip; Play B1 / PSP B1:
-        // PlayStation and PSP play their external primary disc through play-disc. Saturn B6: an .nrg primary
-        // never plays, whatever the system (its file name equals its external name for a FileSets system).
+        // PlayStation and PSP play their external primary disc through play-disc (a Saturn .nrg too, N5).
         var core = systems.ById(game.SystemId)?.BrowserCore;
         var playable = core is not null && game.PrimaryRomId is not null
             && (!game.PrimaryIsExternal || ExternalBrowserCores.Contains(core))
-            && game.PrimaryRomFileName?.EndsWith(".nrg", StringComparison.OrdinalIgnoreCase) != true
             // TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, so only a cue set's .bin plays.
             && !(core == "mednafen_pce" && game.PrimaryIsExternal && !game.PrimaryHasFiles
                  && game.PrimaryRomFileName?.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) == true)

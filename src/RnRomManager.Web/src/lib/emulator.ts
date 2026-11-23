@@ -48,7 +48,7 @@ export function opensInNewTab(core: string | null): boolean {
 /**
  * Browser emulators B3: the system has an EmulatorJS core and the release is inside the ZIP. Play B1: a PlayStation
  * or PSP release is external and plays anyway, and (Saturn B6) a Saturn bin/cue disc; other external releases (Switch,
- * GameCube…) don't, nor does an .nrg image. CHD B5: a standalone .chd plays like an .iso (PlayStation, Saturn, Sega CD).
+ * GameCube…) don't. Browser play format gaps N5: a Saturn .nrg plays (play-disc sends a generated cue). CHD B5: a standalone .chd plays like an .iso (PlayStation, Saturn, Sega CD).
  * TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, so on `mednafen_pce` an external .bin plays only with its
  * set files (the cue); the API's quick play applies the same rule. Jaguar: see `jaguarRomLoads`. Amiga: PUAE's
  * WebAssembly build has no capsimg, so an .ipf never plays (the API's quick play agrees).
@@ -62,8 +62,6 @@ export function canPlay(
 	return (
 		game.browserCore !== null &&
 		(external === null || externalBrowserCores.includes(game.browserCore)) &&
-		// Saturn B6: an .nrg image never plays, whatever the core.
-		!(external?.endsWith('.nrg') ?? false) &&
 		!(
 			game.browserCore === 'mednafen_pce' &&
 			(external?.endsWith('.bin') ?? false) &&

@@ -425,7 +425,7 @@ public partial class LibraryEndpointsTests
         Assert.That(await AuthClient.CodeAsync(asForced), Is.EqualTo("PasswordChangeRequired"));
     }
 
-    // Saturn B5: PlayStation's shapes and its 2 GiB inclusive cap; .nrg never plays.
+    // Saturn B5: PlayStation's shapes and its 2 GiB inclusive cap. Browser play format gaps N1: a lone .nrg plays as a generated cue.
 
     private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> SaturnGame(string title, InfoJsonRom[] roms,
         params (string Name, byte[] Bytes)[] onDisk) => DiscGame(PlayDisc.SaturnSystemId, title, roms, onDisk);
@@ -488,8 +488,40 @@ public partial class LibraryEndpointsTests
         AssertNotOpen(Path.Combine(overFolder, "Wider (USA).bin"));
     }
 
+    // A data track whose index 0 is past the image's start, then an audio track; the chunks and footer follow the 30 sectors of data.
+    private static readonly byte[] NeroImage = SyntheticNrgBuilder.Build(
+        [new NrgBlock(2 * 2352, 4 * 2352, 20 * 2352, Mode: 0x05), new NrgBlock(20 * 2352, 22 * 2352, 30 * 2352)]);
+
+    [TestCase("Nero Play (USA).nrg")]
+    [TestCase("Nero Play (USA).NRG")]
+    public async Task PlayDisc_ASaturnNrg_StreamsACueAndTrack01WithoutTheFooter(string name)
+    {
+        var (id, folder, ids) = await SaturnGame("Nero Play", [PsxSolo(name, NeroImage)], (name, NeroImage));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/zip"));
+        var bytes = await response.Content.ReadAsByteArrayAsync();
+        await using var body = new MemoryStream(bytes);
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Nero Play (USA).cue", "track-01.bin" }));
+        Assert.That(Encoding.UTF8.GetString(ReadEntry(zip, "Nero Play (USA).cue")), Is.EqualTo(
+            "FILE \"track-01.bin\" BINARY\n"
+            + "  TRACK 01 MODE1/2352\n"
+            + "    INDEX 00 00:00:02\n"
+            + "    INDEX 01 00:00:04\n"
+            + "  TRACK 02 AUDIO\n"
+            + "    INDEX 00 00:00:20\n"
+            + "    INDEX 01 00:00:22\n"));
+        Assert.That(ReadEntry(zip, "track-01.bin"), Is.EqualTo(NeroImage[..(30 * 2352)]));
+        Assert.That(response.Headers.GetValues("X-Content-Bytes").Single(),
+            Is.EqualTo((30 * 2352 + zip.GetEntry("Nero Play (USA).cue")!.Length).ToString(CultureInfo.InvariantCulture)));
+        AssertNotOpen(Path.Combine(folder, name));
+    }
+
     [Test]
-    public async Task PlayDisc_ASaturnNrg_AloneOrInASet_Is409InvalidPlayDisc()
+    public async Task PlayDisc_ASaturnNrg_WithoutAFooterOrInACueSet_Is409InvalidPlayDisc()
     {
         var lone = await SaturnGame("Nero", [PsxSolo("Nero (USA).nrg", Umd(32))], ("Nero (USA).nrg", Umd(32)));
         var cue = PsxCue("Mixed Nero (USA) (Track 1).bin", "Mixed Nero (USA) (Track 2).bin");
@@ -503,7 +535,11 @@ public partial class LibraryEndpointsTests
         foreach (var (id, _, ids) in new[] { lone, set })
         {
             using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
-            Assert.That(await ProblemCode(response, HttpStatusCode.Conflict), Is.EqualTo(PlayDisc.InvalidPlayDisc), id.ToString());
+            Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict), id.ToString());
+            var problem = await AuthClient.JsonAsync(response);
+            Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.InvalidPlayDisc), id.ToString());
+            if (id == lone.Id)
+                Assert.That(problem.GetProperty("title").GetString(), Is.EqualTo("The disc can't be played: the .nrg has no Nero footer."));
         }
     }
 
@@ -667,16 +703,16 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
-    public async Task PlayDisc_ALoneNrg_NamesTheSingleFileShapes()
+    public async Task PlayDisc_ALoneMdf_NamesTheSingleFileShapes()
     {
-        var (id, _, ids) = await SaturnGame("Lone Nero", [PsxSolo("Lone Nero (USA).nrg", Umd(54))], ("Lone Nero (USA).nrg", Umd(54)));
+        var (id, _, ids) = await SaturnGame("Lone Mdf", [PsxSolo("Lone Mdf (USA).mdf", Umd(54))], ("Lone Mdf (USA).mdf", Umd(54)));
 
         using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
         var problem = await AuthClient.JsonAsync(response);
         Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.InvalidPlayDisc));
-        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("a single-file disc must be a .bin, .iso, .chd, .img, .pbp or .cbn"));
+        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("a single-file disc must be a .bin, .iso, .chd, .img, .pbp, .cbn or .nrg"));
     }
 
     [Test]

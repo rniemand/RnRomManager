@@ -40,7 +40,7 @@ public sealed class SaturnHandler : ISystemHandler
     public IReadOnlyList<string> MetadatKinds => [];
 
     /// <summary>
-    /// Saturn B6: Yabause plays a bin/cue disc from play-disc, one per launch; an <c>.nrg</c> release never plays.
+    /// Saturn B6: Yabause plays a bin/cue disc from play-disc, one per launch; a standalone <c>.nrg</c> plays as a cue play-disc generates from its Nero footer (browser play format gaps N1).
     /// </summary>
     public string BrowserCore => "yabause";
 

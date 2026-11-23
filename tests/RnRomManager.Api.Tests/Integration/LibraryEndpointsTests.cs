@@ -296,13 +296,13 @@ public partial class LibraryEndpointsTests
     public Task Games_QuickPlay_IsThePrimaryReleaseWhenPlayable(string system, bool external, bool playable, string? core) =>
         AssertQuickPlayAsync(system, external, playable, core);
 
-    // Saturn B6: an .nrg primary (read from roms.file_name, any case) never plays, whatever the system.
-    [TestCase("psx", "x.NRG", "x.bin", false)]
-    [TestCase("psx", "x.nrg", "x.bin", false)]
+    // Browser play format gaps N5: an .nrg primary (read from roms.file_name, any case) plays; play-disc sends a generated cue.
+    [TestCase("psx", "x.NRG", "x.bin", true)]
+    [TestCase("psx", "x.nrg", "x.bin", true)]
     [TestCase("psx", "x.bin", "x.nrg", true)]
-    [TestCase("saturn", "x.NRG", "x.bin", false)]
+    [TestCase("saturn", "x.NRG", "x.bin", true)]
     [TestCase("saturn", "x.bin", "x.nrg", true)]
-    public Task Games_QuickPlay_AnNrgPrimary_IsNotPlayable(string system, string fileName, string externalName, bool playable) =>
+    public Task Games_QuickPlay_AnNrgPrimary_IsPlayable(string system, string fileName, string externalName, bool playable) =>
         AssertQuickPlayAsync(system, true, playable, system == "saturn" ? "yabause" : "pcsx_rearmed", fileName, externalName);
 
     // CHD B5: a .chd primary plays on all three disc cores, with playDisc true.

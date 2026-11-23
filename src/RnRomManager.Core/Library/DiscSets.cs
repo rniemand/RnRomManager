@@ -51,6 +51,7 @@ public static partial class DiscSets
     }
 
     // S1, CloneCD B10: the main-file extensions a set's discs may have; an .img is a CloneCD disc (or a lone PlayStation image).
+    // Browser play format gaps N6: a Saturn disc may also be an .nrg (play-disc-set sends its generated cue).
     private static readonly string[] MainExtensions = [".bin", ".iso", ".chd", ".img", ".mdf"];
 
     [GeneratedRegex(@"^Disc ([0-9]+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
@@ -79,7 +80,8 @@ public static partial class DiscSets
             var discs = group.OrderBy(r => DiscNumber(r.Flags)).ToList();
             if (discs.Count < 2 || discs.Count > maxDiscs
                 || !discs.Select(r => DiscNumber(r.Flags)).SequenceEqual(Enumerable.Range(1, discs.Count).Select(n => (int?)n))
-                || !discs.All(r => MainExtensions.Any(e => r.FileName.EndsWith(e, StringComparison.OrdinalIgnoreCase))))
+                || !discs.All(r => MainExtensions.Any(e => r.FileName.EndsWith(e, StringComparison.OrdinalIgnoreCase))
+                    || (systemId == "saturn" && r.FileName.EndsWith(".nrg", StringComparison.OrdinalIgnoreCase))))
                 continue;
             sets.Add(new DiscSet(Name(discs[0], files), discs));
         }
