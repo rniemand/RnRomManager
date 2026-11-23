@@ -635,6 +635,19 @@ describe('GlobalSearch', () => {
 			expect(options()).toHaveLength(2);
 		});
 
+		it('Missing IGDB IDs is in the Reports group for Admins only', async () => {
+			items = [item('g1', 'Tetris')];
+			render(GlobalSearch, { open: true });
+			await typeAndWait('igdb');
+			expect(options().map((o) => o.textContent!.trim())).not.toContain('Missing IGDB IDs');
+
+			admin();
+			await typeAndWait('missing igdb');
+			expect(options()[0].textContent!.trim()).toBe('Missing IGDB IDs');
+			await fireEvent.keyDown(input(), { key: 'Enter' });
+			expect(goto).toHaveBeenLastCalledWith('/reports/missing-igdb-ids');
+		});
+
 		it('Up/Down walk Reports, then Collections, then Games, with matching option ids', async () => {
 			collections = [{ id: 'c1', name: 'Faves', gameCount: 2, coverUrl: null, updatedAt: '' }];
 			items = [item('g1', 'Tetris')];

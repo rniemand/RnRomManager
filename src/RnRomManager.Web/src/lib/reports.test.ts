@@ -21,13 +21,18 @@ describe('reportTabs (S1)', () => {
 		expect(reportTabs(false)).toEqual(site);
 	});
 
-	it('adds Missing Metadata and Activity, last, for Admins', () => {
+	it('adds Missing Metadata, Missing IGDB IDs and Activity, last, for Admins', () => {
 		expect(reportTabs(true)).toEqual([
 			...site,
 			{
 				href: '/reports/missing-metadata',
 				label: 'Missing Metadata',
 				icon: 'report-missing-metadata'
+			},
+			{
+				href: '/reports/missing-igdb-ids',
+				label: 'Missing IGDB IDs',
+				icon: 'report-missing-igdb'
 			},
 			{ href: '/reports/activity', label: 'Activity', icon: 'activity' }
 		]);

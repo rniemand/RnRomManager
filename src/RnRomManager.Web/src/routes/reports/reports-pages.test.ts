@@ -38,6 +38,7 @@ const { default: MultipleReleases } = await import('./multiple-releases/+page.sv
 const { default: Hacks } = await import('./hacks/+page.svelte');
 const { default: NewlyAdded } = await import('./newly-added/+page.svelte');
 const { default: MissingMetadata } = await import('./missing-metadata/+page.svelte');
+const { default: MissingIgdbIds } = await import('./missing-igdb-ids/+page.svelte');
 const { default: ImageResolutions } = await import('./image-resolutions/+page.svelte');
 
 type Answer = { status: number; body?: unknown };
@@ -1145,6 +1146,7 @@ describe('reports pages', () => {
 				['Games With Hacks', 'bi bi-bandaid'],
 				['Image Resolutions', 'bi bi-aspect-ratio'],
 				['Missing Metadata', 'bi bi-card-checklist'],
+				['Missing IGDB IDs', 'bi bi-link-45deg'],
 				['Activity', 'bi bi-activity']
 			]);
 			expect(screen.getByRole('link', { name: 'Missing Metadata' }).getAttribute('href')).toBe(
@@ -1320,6 +1322,128 @@ describe('reports pages', () => {
 
 			await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/missing-metadata?page=2'));
+		});
+	});
+
+	describe('Missing IGDB IDs (R2, R3)', () => {
+		const admin = () =>
+			auth.set({ id: 1, username: 'admin', roles: ['admin'], mustChangePassword: false });
+		const list = (status = 'missing', p = 1) =>
+			`GET /api/reports/missing-igdb-ids?status=${status}&page=${p}&pageSize=50`;
+		const item = (id: string, extra: Record<string, unknown> = {}) => ({
+			id,
+			displayTitle: `Game ${id}`,
+			system: 'gb',
+			systemName: 'Game Boy',
+			releaseYear: 1990,
+			...extra
+		});
+		const body = (items: unknown[], total = items.length, p = 1) => ({
+			items,
+			page: p,
+			pageSize: 50,
+			total
+		});
+		const replaced = (path: string) => [path, { replace: true, reset: false }];
+
+		beforeEach(() => navigateTo('/reports/missing-igdb-ids'));
+
+		it('a Site user gets NotAllowed from the layout, with no tab', () => {
+			auth.set({ id: 2, username: 'site', roles: [], mustChangePassword: false });
+			render(ReportsLayout, {
+				children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))
+			});
+			expect(screen.queryByRole('link', { name: 'Missing IGDB IDs' })).toBeNull();
+			expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+			expect(screen.queryByText('Content')).toBeNull();
+		});
+
+		it('the Admin tab links to the page', () => {
+			admin();
+			render(ReportsLayout, {
+				children: createRawSnippet(() => ({ render: () => '<div>Content</div>' }))
+			});
+			expect(screen.getByRole('link', { name: 'Missing IGDB IDs' }).getAttribute('href')).toBe(
+				'/reports/missing-igdb-ids'
+			);
+		});
+
+		it('lists Game, System and Year, with links to the game and — for no year', async () => {
+			admin();
+			answers[list()] = {
+				status: 200,
+				body: body([item('g1'), item('g2', { releaseYear: null })])
+			};
+			render(MissingIgdbIds);
+
+			const link = await screen.findByRole('link', { name: 'Game g1' });
+			expect(link.getAttribute('href')).toBe('/games/g1');
+			expect(
+				[...document.querySelectorAll('thead th')].map((th) => th.textContent!.trim())
+			).toEqual(['Game', 'System', 'Year']);
+			const cells = (id: string) =>
+				[...screen.getByRole('link', { name: `Game ${id}` }).closest('tr')!.children].map((c) =>
+					c.textContent!.trim()
+				);
+			expect(cells('g1')).toEqual(['Game g1', 'Game Boy', '1990']);
+			expect(cells('g2')).toEqual(['Game g2', 'Game Boy', '—']);
+			expect(screen.getByText('2 games')).toBeTruthy();
+		});
+
+		it('the Show filter offers Not linked and Not on IGDB and writes status= from page 1', async () => {
+			admin();
+			navigateTo('/reports/missing-igdb-ids?page=2');
+			answers[list('missing', 2)] = { status: 200, body: body([item('g1')], 60, 2) };
+			render(MissingIgdbIds);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			const show = screen.getByLabelText('Show') as HTMLSelectElement;
+			expect([...show.options].map((o) => [o.value, o.text])).toEqual([
+				['missing', 'Not linked'],
+				['not-on-igdb', 'Not on IGDB']
+			]);
+			await fireEvent.change(show, { target: { value: 'not-on-igdb' } });
+			expect(goto).toHaveBeenLastCalledWith(
+				...replaced('/reports/missing-igdb-ids?status=not-on-igdb')
+			);
+		});
+
+		it('status and page come from the URL', async () => {
+			admin();
+			navigateTo('/reports/missing-igdb-ids?status=not-on-igdb&page=2');
+			answers[list('not-on-igdb', 2)] = { status: 200, body: body([item('g1')], 60, 2) };
+			render(MissingIgdbIds);
+
+			await screen.findByRole('link', { name: 'Game g1' });
+			expect(calls).toContain(list('not-on-igdb', 2));
+			expect((screen.getByLabelText('Show') as HTMLSelectElement).value).toBe('not-on-igdb');
+		});
+
+		it('pagination writes the page, keeping status', async () => {
+			admin();
+			navigateTo('/reports/missing-igdb-ids?status=not-on-igdb');
+			answers[list('not-on-igdb')] = { status: 200, body: body([item('g1')], 120) };
+			render(MissingIgdbIds);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+			expect(goto).toHaveBeenLastCalledWith(
+				...replaced('/reports/missing-igdb-ids?status=not-on-igdb&page=2')
+			);
+		});
+
+		it('empty states per status, without a total line', async () => {
+			admin();
+			answers[list()] = { status: 200, body: body([]) };
+			const { unmount } = render(MissingIgdbIds);
+			expect(await screen.findByText('Every game is linked to IGDB.')).toBeTruthy();
+			expect(screen.queryByText(/\d games?$/)).toBeNull();
+			unmount();
+
+			navigateTo('/reports/missing-igdb-ids?status=not-on-igdb');
+			answers[list('not-on-igdb')] = { status: 200, body: body([]) };
+			render(MissingIgdbIds);
+			expect(await screen.findByText('No games are marked as not on IGDB.')).toBeTruthy();
 		});
 	});
 
