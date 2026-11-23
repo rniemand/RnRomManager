@@ -354,6 +354,28 @@ public static class LibraryEndpoints
                 : Problems.Create(ctx, StatusCodes.Status502BadGateway, IgdbFailed, result.FailedTitle!);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
+        // L1/L2: read-only, so no job lock and no audit row.
+        games.MapGet("/{id:guid}/igdb-matches", async (Guid id, HttpContext ctx, IGameRepository repository, IGameInfoLookup lookup) =>
+        {
+            string? q = null;
+            if (ctx.Request.Query.TryGetValue("q", out var values))
+            {
+                q = values.ToString().Trim();
+                if (q.Length is 0 or > MaxLookupQuery || IgdbClient.SearchTitle(q).Length == 0)
+                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["q"] = ["Must be 1–100 characters."] });
+            }
+            if (await repository.GetAsync(id, ctx.RequestAborted) is not { } game)
+                return Problems.NotFound(ctx);
+            if (!lookup.Configured)
+                return Problems.Create(ctx, StatusCodes.Status409Conflict, IgdbNotConfigured,
+                    "Metadata lookup needs Sources:IgdbClientId and Sources:IgdbClientSecret.");
+            q ??= game.DisplayTitle.Length > MaxLookupQuery ? game.DisplayTitle[..MaxLookupQuery] : game.DisplayTitle;
+            var result = await lookup.LookupAsync(q, game.SystemId, ctx.RequestAborted);
+            return result.Matches is { } matches
+                ? Results.Ok(new { matches })
+                : Problems.Create(ctx, StatusCodes.Status502BadGateway, IgdbFailed, result.FailedTitle!);
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
         games.MapDelete("/{id:guid}/images/{imageId:long}", async (Guid id, long imageId, HttpContext ctx, LibraryEditor editor,
             IGameRepository repository, IRomRepository roms, IImageRepository images) =>
         {
@@ -389,6 +411,9 @@ public static class LibraryEndpoints
     public const string IgdbNotConfigured = "IgdbNotConfigured";
 
     public const string IgdbFailed = "IgdbFailed";
+
+    /// <summary>L1: the longest <c>q</c> (and the cut of the default display title).</summary>
+    private const int MaxLookupQuery = 100;
 
     /// <summary>The upload's whole request: the 8 MiB image plus room for the multipart framing and the <c>type</c> field.</summary>
     public const long UploadRequestLimit = ImageFormats.MaxBytes + 64 * 1024;
