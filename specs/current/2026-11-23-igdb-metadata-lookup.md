@@ -146,7 +146,7 @@ API contract changes are additive (new optional PATCH field, new detail fields, 
   - `routes/games/game-admin.test.ts`: Use this match fills Details and shows the note; Enter on a compare checkbox doesn't save; Save then sends the copied fields and `igdbId`.
 
   Done when: those pass with lint and check.
-- [ ] **9. Game page banner**: N1. Files: `routes/games/[id]/+page.svelte`, `docs/features.md` (Game detail). Tests: `routes/games/game-page.test.ts` (banner shown/hidden per N1; Find on IGDB opens the modal on Lookup Info). Done when: those pass with lint and check.
+- [x] **9. Game page banner**: N1. Files: `routes/games/[id]/+page.svelte`, `docs/features.md` (Game detail). Tests: `routes/games/game-page.test.ts` (banner shown/hidden per N1; Find on IGDB opens the modal on Lookup Info). Done when: those pass with lint and check.
 - [ ] **10. Report tab and list**: R2, plus R3's list without the System/Title filters and sorting: the **Show** filter, the table, paging, `?status=&page=` in the URL, and the empty states. Files: `reports.ts`, `icons.ts`, `routes/reports/+layout.svelte`, `routes/reports/missing-igdb-ids/+page.svelte` (new), `docs/features.md` (Reports line ~305, the new bullet, and Global search line ~28), `docs/development.md` (Reports and curation helpers). Tests:
   - `lib/reports.test.ts`: the Admin tab order now ends Missing Metadata, Missing IGDB IDs, Activity; the existing "adds Missing Metadata and Activity, last" expectation is updated.
   - `routes/reports/reports-pages.test.ts`: a new `describe('Missing IGDB IDs')` covering the Show filter, paging, empty states and Site user NotAllowed; the tab-icon table at line ~1147 gains `['Missing IGDB IDs', 'bi bi-link-45deg']`.

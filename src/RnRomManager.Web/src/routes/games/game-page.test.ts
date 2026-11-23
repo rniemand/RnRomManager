@@ -193,6 +193,72 @@ describe('game detail page', () => {
 		auth.set(null);
 	});
 
+	describe('IGDB banner (IGDB lookup N1)', () => {
+		const text = "This game isn't linked to IGDB.";
+		const banner = () => screen.queryByText(text);
+		const show = async (changes: Partial<GameDetail>) => {
+			answers.push({ status: 200, body: { ...game([1]), igdbConfigured: true, ...changes } });
+			const view = render(GamePage);
+			await screen.findByRole('button', { name: 'Download ZIP' });
+			return view;
+		};
+
+		it('shows below the Game information card for an unlinked game', async () => {
+			await show({ igdbId: null });
+
+			const alert = banner()!;
+			expect(alert.className).toBe(
+				'alert alert-info d-flex flex-wrap align-items-center gap-2 mb-3'
+			);
+			expect(alert.getAttribute('role')).toBe('status');
+			const card = screen.getByRole('table', { name: 'Game information' }).closest('.card')!;
+			expect(card.nextElementSibling).toBe(alert);
+			const find = within(alert).getByRole('button', { name: 'Find on IGDB' });
+			expect(find.className).toBe('btn btn-sm btn-outline-primary ms-auto');
+			expect(find.querySelector('i')!.className.trim()).toBe('bi bi-search');
+		});
+
+		it('is hidden for linked games, Not on IGDB, IGDB not configured and Site users', async () => {
+			for (const changes of [
+				{ igdbId: 1234 },
+				{ igdbId: 0 },
+				{ igdbId: null, igdbConfigured: false }
+			]) {
+				const { unmount } = await show(changes);
+				expect(banner()).toBeNull();
+				unmount();
+			}
+			auth.set({ id: 2, username: 'site', roles: [], mustChangePassword: false });
+			await show({ igdbId: null });
+			expect(banner()).toBeNull();
+		});
+
+		it('Find on IGDB opens Edit Metadata on Lookup Info and searches', async () => {
+			await show({ igdbId: null });
+			answers.push({ status: 200, body: { matches: [] } });
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Find on IGDB' }));
+
+			const modal = within(document.querySelector<HTMLElement>('.modal')!);
+			expect(
+				modal.getByRole('tab', { name: 'Lookup Info', hidden: true }).getAttribute('aria-selected')
+			).toBe('true');
+			expect(await modal.findByText('No IGDB matches for “Tetris”.')).toBeTruthy();
+		});
+
+		it('goes away once a save returns the linked detail', async () => {
+			await show({ igdbId: null });
+			await fireEvent.click(screen.getByRole('button', { name: 'Find on IGDB' }));
+			answers.push({ status: 200, body: { matches: [] } });
+			const modal = within(document.querySelector<HTMLElement>('.modal')!);
+			await fireEvent.click(modal.getByRole('button', { name: 'Not on IGDB', hidden: true }));
+			answers.push({ status: 200, body: { ...game([1]), igdbConfigured: true, igdbId: 0 } });
+			await fireEvent.click(modal.getByRole('button', { name: 'Edit Metadata', hidden: true }));
+
+			await vi.waitFor(() => expect(banner()).toBeNull());
+		});
+	});
+
 	it('an external release has an External badge whose tooltip is its file name; an embedded one has none (G7)', async () => {
 		tooltips.length = 0;
 		const detail = game([1, 2]);
