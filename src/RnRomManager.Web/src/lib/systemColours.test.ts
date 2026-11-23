@@ -52,6 +52,8 @@ describe('systemColour', () => {
 		expect(systemColour('amiga')).toEqual({ name: 'amiga', foreground: '#fff' });
 		expect(systemColour('fds')).toEqual({ name: 'fds', foreground: '#fff' });
 		expect(systemColour('3ds')).toEqual({ name: '3ds', foreground: '#000' });
+		expect(systemColour('satellaview')).toEqual({ name: 'satellaview', foreground: '#fff' });
+		expect(systemColour('sufami')).toEqual({ name: 'sufami', foreground: '#fff' });
 	});
 
 	it('gives Virtual Boy, Atari 5200 and Atari 7800 their own colours (B5)', () => {

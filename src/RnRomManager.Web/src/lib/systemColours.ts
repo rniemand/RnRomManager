@@ -39,7 +39,9 @@ export interface SystemColour {
 		| 'vic20'
 		| 'amiga'
 		| 'fds'
-		| '3ds';
+		| '3ds'
+		| 'satellaview'
+		| 'sufami';
 	foreground: '#fff' | '#000';
 }
 
@@ -78,7 +80,9 @@ export const systemColours: Record<string, SystemColour> = {
 	vic20: { name: 'vic20', foreground: '#fff' },
 	amiga: { name: 'amiga', foreground: '#fff' },
 	fds: { name: 'fds', foreground: '#fff' },
-	'3ds': { name: '3ds', foreground: '#000' }
+	'3ds': { name: '3ds', foreground: '#000' },
+	satellaview: { name: 'satellaview', foreground: '#fff' },
+	sufami: { name: 'sufami', foreground: '#fff' }
 };
 
 /** Unknown systems stay neutral. */

@@ -55,8 +55,10 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Nintendo Switch | `switch` | Next to ZIP | `.nsp`, `.xci`, `.nsz`, `.xcz`, `.hdf` | titledb | — |
 | PlayStation | `psx` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd`, `.img`, `.pbp` | Redump | `pcsx_rearmed` |
 | PlayStation Portable | `psp` | Next to ZIP | `.iso`, `.cso`, `.pbp`, `.chd` | Redump | `ppsspp` |
+| Satellaview | `satellaview` | In ZIP | `.bs` | No-Intro | `snes9x` |
 | Saturn | `saturn` | Next to ZIP | `.bin`, `.cue`, `.nrg`, `.chd`, `.iso` | Redump | `yabause` |
 | Sega CD | `segacd` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd` | Redump | `genesis_plus_gx` |
+| Sufami Turbo | `sufami` | In ZIP | `.st` | No-Intro | `snes9x` |
 | Super Nintendo Entertainment System | `snes` | In ZIP | `.sfc`, `.smc` | No-Intro | `snes9x` |
 | TurboGrafx-16 / PC Engine | `tg16` | In ZIP | `.pce` | No-Intro | `mednafen_pce` |
 | TurboGrafx-CD / PC Engine CD | `tgcd` | Next to ZIP | `.bin`, `.cue`, `.chd` | Redump | `mednafen_pce` |

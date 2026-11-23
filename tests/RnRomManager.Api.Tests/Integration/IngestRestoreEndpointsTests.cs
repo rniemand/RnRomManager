@@ -74,7 +74,7 @@ public class IngestRestoreEndpointsTests
             [IngestSeeder.ThreeDoDat] = [],
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
-            [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [],
+            [IngestSeeder.Vic20Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [], [IngestSeeder.FdsDat] = [],
             [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             ["Nintendo - Game Boy"] = [],
