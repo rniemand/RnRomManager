@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
@@ -1328,8 +1328,8 @@ describe('reports pages', () => {
 	describe('Missing IGDB IDs (R2, R3)', () => {
 		const admin = () =>
 			auth.set({ id: 1, username: 'admin', roles: ['admin'], mustChangePassword: false });
-		const list = (status = 'missing', p = 1) =>
-			`GET /api/reports/missing-igdb-ids?status=${status}&page=${p}&pageSize=50`;
+		const list = (status = 'missing', p = 1, query = '') =>
+			`GET /api/reports/missing-igdb-ids?status=${status}&sort=name&dir=asc&page=${p}&pageSize=50${query}`;
 		const item = (id: string, extra: Record<string, unknown> = {}) => ({
 			id,
 			displayTitle: `Game ${id}`,
@@ -1430,6 +1430,130 @@ describe('reports pages', () => {
 			expect(goto).toHaveBeenLastCalledWith(
 				...replaced('/reports/missing-igdb-ids?status=not-on-igdb&page=2')
 			);
+		});
+
+		it('the toolbar has Title, System, Show and Clear (Clear disabled with nothing set)', async () => {
+			admin();
+			answers[list()] = { status: 200, body: body([item('g1')]) };
+			render(MissingIgdbIds);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			const toolbar = screen.getByRole('search');
+			expect(
+				[...toolbar.children].map(
+					(c) =>
+						c.querySelector('label')?.textContent?.trim() ?? c.textContent!.trim().split(/\s+/)[0]
+				)
+			).toEqual(['Title', 'System', 'Show', 'Clear']);
+			expect(systemToggle()).toBeTruthy();
+			expect((screen.getByRole('button', { name: 'Clear' }) as HTMLButtonElement).disabled).toBe(
+				true
+			);
+		});
+
+		it('the System menu writes system= from page 1 (F2)', async () => {
+			admin();
+			navigateTo('/reports/missing-igdb-ids?page=2');
+			answers[list('missing', 2)] = { status: 200, body: body([item('g1')], 60, 2) };
+			render(MissingIgdbIds);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			await pickSystem('gbc');
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/missing-igdb-ids?system=gbc'));
+		});
+
+		it('the title search is debounced 300 ms and Clear resets System, Show and Title', async () => {
+			vi.useFakeTimers({ shouldAdvanceTime: true });
+			try {
+				admin();
+				answers[list()] = { status: 200, body: body([item('g1')]) };
+				render(MissingIgdbIds);
+				await screen.findByRole('link', { name: 'Game g1' });
+
+				await fireEvent.input(screen.getByLabelText('Title'), { target: { value: ' mario ' } });
+				vi.advanceTimersByTime(299);
+				expect(goto).not.toHaveBeenCalled();
+				vi.advanceTimersByTime(1);
+				expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/missing-igdb-ids?q=mario'));
+			} finally {
+				vi.useRealTimers();
+			}
+
+			navigateTo('/reports/missing-igdb-ids?system=gb&status=not-on-igdb&q=mario&sort=year');
+			const clear = screen.getByRole('button', { name: 'Clear' }) as HTMLButtonElement;
+			await vi.waitFor(() => expect(clear.disabled).toBe(false));
+			await fireEvent.click(clear);
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/missing-igdb-ids?sort=year'));
+		});
+
+		it('every column sorts: another key ascending from page 1, the active one flips', async () => {
+			admin();
+			navigateTo('/reports/missing-igdb-ids?page=2');
+			const sorted = (sort: string, dir: string) =>
+				`GET /api/reports/missing-igdb-ids?status=missing&sort=${sort}&dir=${dir}&page=1&pageSize=50`;
+			answers[list('missing', 2)] = { status: 200, body: body([item('g1')], 60, 2) };
+			for (const [sort, dir] of [
+				['name', 'desc'],
+				['system', 'asc'],
+				['year', 'asc']
+			])
+				answers[sorted(sort, dir)] = { status: 200, body: body([item('g1')]) };
+			render(MissingIgdbIds);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			const header = (name: RegExp) =>
+				within(document.querySelector<HTMLElement>('thead')!)
+					.getByRole('button', { name })
+					.closest('th')!;
+			expect(header(/^Game/).getAttribute('aria-sort')).toBe('ascending');
+			await fireEvent.click(screen.getByRole('button', { name: /^Game/ }));
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/missing-igdb-ids?dir=desc'));
+			await vi.waitFor(() => expect(header(/^Game/).getAttribute('aria-sort')).toBe('descending'));
+
+			await fireEvent.click(
+				within(document.querySelector<HTMLElement>('thead')!).getByRole('button', {
+					name: /^System/
+				})
+			);
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/missing-igdb-ids?sort=system'));
+			await vi.waitFor(() => expect(header(/^System/).getAttribute('aria-sort')).toBe('ascending'));
+
+			await fireEvent.click(screen.getByRole('button', { name: /^Year/ }));
+			expect(goto).toHaveBeenLastCalledWith(...replaced('/reports/missing-igdb-ids?sort=year'));
+			await vi.waitFor(() => expect(calls).toContain(sorted('year', 'asc')));
+		});
+
+		it('the whole state round-trips through the URL into the request', async () => {
+			admin();
+			const query = '?system=gb&status=not-on-igdb&q=zel&sort=year&dir=desc&page=2';
+			navigateTo(`/reports/missing-igdb-ids${query}`);
+			const request =
+				'GET /api/reports/missing-igdb-ids?status=not-on-igdb&sort=year&dir=desc&page=2&pageSize=50&system=gb&q=zel';
+			answers[request] = { status: 200, body: body([item('g1')], 60, 2) };
+			render(MissingIgdbIds);
+			await screen.findByRole('link', { name: 'Game g1' });
+
+			expect(calls).toContain(request);
+			expect(
+				screen.getByRole('button', { name: /^Year/ }).closest('th')!.getAttribute('aria-sort')
+			).toBe('descending');
+			expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('zel');
+			expect(systemToggle().textContent).toContain('Game Boy');
+			await fireEvent.click(screen.getByRole('button', { name: 'Previous' }));
+			expect(goto).toHaveBeenLastCalledWith(
+				...replaced(
+					'/reports/missing-igdb-ids?system=gb&status=not-on-igdb&q=zel&sort=year&dir=desc'
+				)
+			);
+		});
+
+		it('empty with System or Title set: the filtered text', async () => {
+			admin();
+			navigateTo('/reports/missing-igdb-ids?status=not-on-igdb&system=gb');
+			answers[list('not-on-igdb', 1, '&system=gb')] = { status: 200, body: body([]) };
+			render(MissingIgdbIds);
+
+			expect(await screen.findByText('No games match these filters.')).toBeTruthy();
 		});
 
 		it('empty states per status, without a total line', async () => {

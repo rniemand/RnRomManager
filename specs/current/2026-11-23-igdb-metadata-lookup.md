@@ -153,7 +153,7 @@ API contract changes are additive (new optional PATCH field, new detail fields, 
   - `lib/components/GlobalSearch.test.ts`: the Admin Reports-group expectations around line 630 gain Missing IGDB IDs, and the Site-user case doesn't list it.
 
   Done when: those pass with lint and check.
-- [ ] **11. Report filters and sorting**: the rest of R3: **System** and **Title** filters, **Clear**, sortable columns, and the full `?system=&status=&q=&sort=&dir=&page=` URL state. Files: `routes/reports/missing-igdb-ids/+page.svelte`. Tests: `routes/reports/reports-pages.test.ts` (filters, the 300 ms title debounce, Clear, each sort, URL state round trip, `No games match these filters.`). Done when: those pass with lint and check.
+- [x] **11. Report filters and sorting**: the rest of R3: **System** and **Title** filters, **Clear**, sortable columns, and the full `?system=&status=&q=&sort=&dir=&page=` URL state. Files: `routes/reports/missing-igdb-ids/+page.svelte`. Tests: `routes/reports/reports-pages.test.ts` (filters, the 300 ms title debounce, Clear, each sort, URL state round trip, `No games match these filters.`). Done when: those pass with lint and check.
 - [ ] **12. e2e**: `tests/e2e/specs/mvp.spec.ts`.
   - In the existing Edit Metadata flow (~line 2453): assert the **Details** and **Lookup Info** tabs; click Lookup Info and see the not-configured alert straight away (e2e has no IGDB keys, so no search is needed); go back to Details and save as before.
   - A new block after the Missing Metadata one (~line 3042): open `/reports/missing-igdb-ids`, check the tab is current and a seeded game links to its page, and run `expectAccessible`.

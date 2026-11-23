@@ -1,25 +1,35 @@
 <script lang="ts">
+	import { onDestroy, untrack } from 'svelte';
 	import { resolve } from '$app/paths';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { MissingIgdbItem, Page } from '#lib/api/types.js';
+	import type { MissingIgdbItem, Page, SystemInfo } from '#lib/api/types.js';
 	import AdminOnly from '#lib/components/AdminOnly.svelte';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
+	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
+	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import Pagination from '#lib/components/Pagination.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { formatCount } from '#lib/format.js';
 	import { pageCount } from '#lib/pageSize.js';
+	import { systemFilterOptions } from '#lib/systemFilter.js';
 
 	/**
-	 * Missing IGDB IDs R3: games not linked to IGDB (or marked Not on IGDB). The filter and page are URL state under the
-	 * API's names (`?status=&page=`), defaults left out.
+	 * Missing IGDB IDs R3: games not linked to IGDB (or marked Not on IGDB), copying Missing Metadata's page. Filters, sort
+	 * and page are URL state under the API's names (`?system=&status=&q=&sort=&dir=&page=`), defaults left out.
 	 */
 	type Status = 'missing' | 'not-on-igdb';
+	type Sort = 'name' | 'system' | 'year';
+	type Dir = 'asc' | 'desc';
 	interface View {
+		system: string;
 		status: Status;
+		q: string;
+		sort: Sort;
+		dir: Dir;
 		page: number;
 	}
 
@@ -28,20 +38,38 @@
 		{ value: 'missing', label: 'Not linked' },
 		{ value: 'not-on-igdb', label: 'Not on IGDB' }
 	];
+	const columns: { sort: Sort; label: string }[] = [
+		{ sort: 'name', label: 'Game' },
+		{ sort: 'system', label: 'System' },
+		{ sort: 'year', label: 'Year' }
+	];
 
 	const params = $derived(page.url.searchParams);
 	const view = $derived.by<View>(() => {
+		const sort = params.get('sort');
 		const p = params.get('page');
 		return {
+			system: params.get('system') ?? '',
 			status: params.get('status') === 'not-on-igdb' ? 'not-on-igdb' : 'missing',
+			q: (params.get('q') ?? '').trim(),
+			sort: sort === 'system' || sort === 'year' ? sort : 'name',
+			dir: params.get('dir') === 'desc' ? 'desc' : 'asc',
 			page: p !== null && /^\d+$/.test(p) && Number(p) >= 1 ? Number(p) : 1
 		};
 	});
+	/** System or Title set; Show isn't counted for the empty text, since each status has its own unfiltered text. */
+	const filtered = $derived(!!(view.system || view.q));
+	/** Clear resets Show too, as Missing Metadata's Clear resets Missing. */
+	const clearable = $derived(filtered || view.status !== 'missing');
 
 	/** Writes the state to the URL, leaving out defaults. */
 	function show(next: View): void {
 		const query = [
+			next.system && `system=${encodeURIComponent(next.system)}`,
 			next.status !== 'missing' && `status=${next.status}`,
+			next.q && `q=${encodeURIComponent(next.q)}`,
+			next.sort !== 'name' && `sort=${next.sort}`,
+			next.dir !== 'asc' && `dir=${next.dir}`,
 			next.page !== 1 && `page=${next.page}`
 		]
 			.filter(Boolean)
@@ -53,12 +81,58 @@
 		});
 	}
 
+	/** The active header flips its direction; another sorts ascending, from page 1. */
+	function sortBy(key: Sort): void {
+		show({
+			...view,
+			sort: key,
+			dir: key === view.sort && view.dir === 'asc' ? 'desc' : 'asc',
+			page: 1
+		});
+	}
+
+	let search = $state('');
+	let searchTimer: ReturnType<typeof setTimeout> | undefined;
+	onDestroy(() => clearTimeout(searchTimer));
+
+	function onSearchInput(): void {
+		clearTimeout(searchTimer);
+		searchTimer = setTimeout(() => {
+			const q = search.trim();
+			if (q !== view.q) show({ ...view, q, page: 1 });
+		}, 300);
+	}
+
+	// URL → search box (restore, Clear).
+	$effect(() => {
+		const q = view.q;
+		untrack(() => {
+			if (search.trim() !== q) search = q;
+		});
+	});
+
+	function clear(): void {
+		clearTimeout(searchTimer);
+		search = '';
+		show({ ...view, system: '', status: 'missing', q: '', page: 1 });
+	}
+
+	let systems = $state<SystemInfo[]>([]);
 	let result = $state<Page<MissingIgdbItem> | null>(null);
 	let error = $state<unknown>(null);
 	let reload = $state(0);
 
 	$effect(() => {
-		const url = `/api/reports/missing-igdb-ids?status=${view.status}&page=${view.page}&pageSize=${pageSize}`;
+		api.get<SystemInfo[]>('/api/systems').then(
+			(list) => (systems = list),
+			() => {} // only feeds the filter
+		);
+	});
+
+	$effect(() => {
+		let url = `/api/reports/missing-igdb-ids?status=${view.status}&sort=${view.sort}&dir=${view.dir}&page=${view.page}&pageSize=${pageSize}`;
+		if (view.system) url += `&system=${encodeURIComponent(view.system)}`;
+		if (view.q) url += `&q=${encodeURIComponent(view.q)}`;
 		void reload;
 		const controller = new AbortController();
 		error = null;
@@ -81,6 +155,25 @@
 		role="search"
 		onsubmit={(e) => e.preventDefault()}
 	>
+		<div class="input-group input-group-sm flex-grow-1 flex-md-grow-0 missing-metadata-title">
+			<label class="input-group-text" for="missing-igdb-q">Title</label>
+			<input
+				id="missing-igdb-q"
+				type="search"
+				class="form-control"
+				maxlength="100"
+				bind:value={search}
+				oninput={onSearchInput}
+			/>
+		</div>
+		<FilterDropdown
+			label="System"
+			options={systemFilterOptions(systems, view.system || null)}
+			value={view.system || null}
+			all={{ label: 'All systems', sum: false }}
+			filterPlaceholder="Filter systems…"
+			onselect={(v) => show({ ...view, system: v ?? '', page: 1 })}
+		/>
 		<div class="input-group input-group-sm w-auto">
 			<label class="input-group-text" for="missing-igdb-status">Show</label>
 			<select
@@ -94,6 +187,12 @@
 				{/each}
 			</select>
 		</div>
+		<button
+			type="button"
+			class="btn btn-sm btn-outline-secondary"
+			disabled={!clearable}
+			onclick={clear}>Clear</button
+		>
 	</form>
 
 	{#if error}
@@ -111,17 +210,37 @@
 			<div class="table-responsive">
 				{#if result.total === 0}
 					<EmptyState
-						message={view.status === 'missing'
-							? 'Every game is linked to IGDB.'
-							: 'No games are marked as not on IGDB.'}
+						message={filtered
+							? 'No games match these filters.'
+							: view.status === 'missing'
+								? 'Every game is linked to IGDB.'
+								: 'No games are marked as not on IGDB.'}
 					/>
 				{:else}
 					<table class="table table-sm table-striped table-hover align-middle mb-0">
 						<thead class="table-dark">
 							<tr>
-								<th scope="col">Game</th>
-								<th scope="col">System</th>
-								<th scope="col">Year</th>
+								{#each columns as column (column.label)}
+									{@const key = column.sort}
+									<th
+										scope="col"
+										aria-sort={key === view.sort
+											? view.dir === 'asc'
+												? 'ascending'
+												: 'descending'
+											: undefined}
+									>
+										<button
+											type="button"
+											class="btn btn-link p-0 text-reset text-decoration-none fw-semibold"
+											onclick={() => sortBy(key)}
+											>{column.label}
+											{#if key === view.sort}<Icon
+													name={view.dir === 'asc' ? 'sort-asc' : 'sort-desc'}
+												/>{/if}</button
+										>
+									</th>
+								{/each}
 							</tr>
 						</thead>
 						<tbody>
