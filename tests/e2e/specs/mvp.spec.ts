@@ -2132,7 +2132,7 @@ test("user management: a Site user's account, private saves and audit trail", { 
     // B3: a Site user's Manage menu holds only View info.json; no quick edit.
     await user.getByRole("button", { name: "Manage" }).click();
     await expect(user.getByRole("button", { name: "View info.json" })).toBeVisible();
-    await expect(user.getByRole("button", { name: "Edit metadata" })).toHaveCount(0);
+    await expect(user.getByRole("button", { name: "Edit Metadata" })).toHaveCount(0);
     await expect(user.getByRole("button", { name: "Quick edit" })).toHaveCount(0);
     await user.keyboard.press("Escape");
     await expect(user.getByRole("button", { name: /^Add note for / })).toHaveCount(0);
@@ -2433,13 +2433,29 @@ test("release notes: add, edit and delete", async () => {
 test("Admin: edit metadata, move a release, delete a release and a game", async () => {
   await openGame("Orbit Blocks");
 
+  // T3–T6: the title is click-to-edit; Enter saves, and so does leaving the box (renamed back so later names hold).
+  await page.getByRole("button", { name: "Orbit Blocks", exact: true }).click();
+  await page.getByLabel("Title", { exact: true }).fill("Orbit Blocks Deluxe");
+  await page.getByLabel("Title", { exact: true }).press("Enter");
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Orbit Blocks Deluxe" }),
+  ).toBeVisible();
+  await expect(page.getByText("Saved.").first()).toBeVisible();
+  await page.getByRole("button", { name: "Orbit Blocks Deluxe", exact: true }).click();
+  await page.getByLabel("Title", { exact: true }).fill("Orbit Blocks");
+  await page.getByLabel("Title", { exact: true }).blur();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Orbit Blocks", exact: true }),
+  ).toBeVisible();
+
   // B3: the Admin actions sit in the Manage menu.
   await page.getByRole("button", { name: "Manage" }).click();
-  await page.getByRole("button", { name: "Edit metadata" }).click();
+  await page.getByRole("button", { name: "Edit Metadata" }).click();
   await expect(dialog()).toBeVisible();
   await expectAccessible(page, "edit metadata modal");
+  // M2: Enter in an input saves.
   await dialog().getByLabel("Release year").fill("1995");
-  await dialog().getByRole("button", { name: "Edit metadata" }).click();
+  await dialog().getByLabel("Release year").press("Enter");
   await expect(dialog()).toBeHidden();
   await expect(page.getByText("1995")).toBeVisible();
 

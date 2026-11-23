@@ -14,7 +14,7 @@
 		busy?: boolean;
 		/** Disables only the confirm button (e.g. nothing changed yet); `busy` disables both. */
 		confirmDisabled?: boolean;
-		/** `lg` for a wide form (Edit metadata), `xl` for the emulator; default width otherwise. */
+		/** `lg` for a wide form (Edit Metadata), `xl` for the emulator; default width otherwise. */
 		size?: 'lg' | 'xl';
 		/** U2: `modal-dialog-scrollable`, so the header and footer stay and only the body scrolls. */
 		scrollable?: boolean;

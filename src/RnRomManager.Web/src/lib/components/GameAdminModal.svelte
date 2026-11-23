@@ -123,7 +123,7 @@
 	const lastRom = $derived(game.roms.length === 1);
 	const title = $derived(
 		{
-			edit: 'Edit metadata',
+			edit: 'Edit Metadata',
 			retry: 'Retry media',
 			merge: 'Merge into…',
 			deleteGame: 'Delete game',
@@ -249,11 +249,22 @@
 	{#if error}<div class="alert alert-danger py-2" role="alert">{error}</div>{/if}
 
 	{#if action?.kind === 'edit'}
+		<!-- The keydown only handles Enter bubbling up from the form's own fields. -->
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 		<form
 			novalidate
 			onsubmit={(e) => {
 				e.preventDefault();
 				void confirm();
+			}}
+			onkeydown={(e) => {
+				// M2: Enter saves from an input; a textarea keeps Enter for newlines and saves on Ctrl/⌘+Enter.
+				if (e.key !== 'Enter' || e.isComposing) return;
+				const tag = (e.target as HTMLElement).tagName;
+				if (tag === 'INPUT' || (tag === 'TEXTAREA' && (e.ctrlKey || e.metaKey))) {
+					e.preventDefault();
+					void confirm();
+				}
 			}}
 		>
 			<div class="row g-3">
@@ -307,6 +318,7 @@
 						bind:value={form.description}></textarea>
 					{#if errors.description}<div class="invalid-feedback">{errors.description}</div>{/if}
 				</div>
+				<div class="col-12 form-text">Press Enter to save (Ctrl+Enter in a multi-line field).</div>
 			</div>
 		</form>
 	{:else if action?.kind === 'retry'}

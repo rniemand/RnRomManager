@@ -33,6 +33,7 @@
 	import InfoJsonModal from '#lib/components/InfoJsonModal.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import RatingControl from '#lib/components/RatingControl.svelte';
+	import GameTitle from '#lib/components/GameTitle.svelte';
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
 	import EditReleaseModal, { type ReleaseKind } from '#lib/components/EditReleaseModal.svelte';
 	import EmulatorModal from '#lib/components/EmulatorModal.svelte';
@@ -484,7 +485,15 @@
 		</div>
 		<div class="col-12 col-md-8 col-lg-9">
 			<div class="d-flex flex-wrap align-items-center gap-3 mb-2">
-				<h1 class="h3 mb-0">{game.displayTitle}</h1>
+				{#if auth.isAdmin}
+					<GameTitle
+						{game}
+						onsaved={setGame}
+						onstale={() => onAdminDone({ reload: true, message: changedMessage, warning: true })}
+					/>
+				{:else}
+					<h1 class="h3 mb-0">{game.displayTitle}</h1>
+				{/if}
 				<RatingControl
 					gameId={game.id}
 					title={game.displayTitle}
@@ -518,12 +527,12 @@
 								<div class="d-flex align-items-center gap-2">
 									<SystemBadge system={game.system} name={game.systemName} class="text-wrap" />
 									{#if auth.isAdmin}
-										<!-- Quick edit: opens the same Edit metadata modal as the Manage menu. -->
+										<!-- Quick edit: opens the same Edit Metadata modal as the Manage menu. -->
 										<button
 											type="button"
 											class="btn btn-sm btn-link text-body-secondary p-0 ms-auto quick-edit"
 											aria-label="Quick edit"
-											use:tooltip={'Edit metadata'}
+											use:tooltip={'Edit Metadata'}
 											onclick={() => (action = { kind: 'edit' })}><Icon name="edit" /></button
 										>
 									{/if}
@@ -660,7 +669,7 @@
 									class="dropdown-item"
 									onclick={() => (action = { kind: 'edit' })}
 								>
-									<Icon name="edit" /> Edit metadata
+									<Icon name="edit" /> Edit Metadata
 								</button>
 							</li>
 							<li>

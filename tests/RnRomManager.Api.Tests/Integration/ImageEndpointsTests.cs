@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Dapper;
@@ -28,6 +30,7 @@ public class ImageEndpointsTests
     private AuthClient _manager = null!;
     private Guid _game;
     private bool _lockBeforeGameCheck;
+    private bool _lockBeforeResolve;
     private IDisposable? _held;
     private T Service<T>() where T : notnull => _factory.Services.GetRequiredService<T>();
 
@@ -37,14 +40,26 @@ public class ImageEndpointsTests
         _factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync())
         {
             // B14: the factory runs after the editor released the lock; grabbing it here plays another job starting first.
-            TestServices = s => s.AddSingleton<IntegrityJobFactory>(sp => (mode, zipPath) =>
+            TestServices = s =>
             {
-                if (_lockBeforeGameCheck && mode == JobMode.Game)
-                    _held = sp.GetRequiredService<JobLock>().TryAcquire();
-                var job = ActivatorUtilities.CreateInstance<IntegrityJob>(sp, mode);
-                job.ZipPath = zipPath;
-                return job;
-            }),
+                s.AddSingleton<IntegrityJobFactory>(sp => (mode, zipPath) =>
+                {
+                    if (_lockBeforeGameCheck && mode == JobMode.Game)
+                        _held = sp.GetRequiredService<JobLock>().TryAcquire();
+                    var job = ActivatorUtilities.CreateInstance<IntegrityJob>(sp, mode);
+                    job.ZipPath = zipPath;
+                    return job;
+                });
+                RnRomManager.Core.Systems.SystemHandlerRegistration.AddSystemHandler<ExternalTestHandler>(s);
+                // G2: the editor's own GetAsync runs under the lock (the try fails); the next one, right before the
+                // external resolve, takes it: another job starting first.
+                s.AddSingleton<IGameRepository>(sp => LockingGames.Wrap(
+                    ActivatorUtilities.CreateInstance<RnRomManager.Data.Repositories.GameRepository>(sp), () =>
+                    {
+                        if (_lockBeforeResolve && _held is null)
+                            _held = sp.GetRequiredService<JobLock>().TryAcquire();
+                    }));
+            },
         };
         _factory.Settings["Sources:ThumbnailBaseUrl"] = "";
         await _factory.StartSharedAsync();
@@ -57,6 +72,7 @@ public class ImageEndpointsTests
     public async Task SetUp()
     {
         _lockBeforeGameCheck = false;
+        _lockBeforeResolve = false;
         await _factory.ResetAsync();
         _manager = await AuthClient.CreateAsync(_factory);
         await TestUsers.CreateAsync(_factory, "manager", Roles.Of(Roles.Admin));
@@ -94,6 +110,7 @@ public class ImageEndpointsTests
             [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Tetris)],
+            [ExternalTestHandler.DatNameValue] = [new FixtureGame("Space Game (USA)", "Space Game (USA).nsp", SpaceGame)],
         }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
         var path = Path.Combine(_factory.Root, "ingest", "gb", "t.gb");
@@ -106,6 +123,7 @@ public class ImageEndpointsTests
     public void TearDown()
     {
         _held?.Dispose();
+        _held = null;
         _manager.Dispose();
     }
 
@@ -225,6 +243,65 @@ public class ImageEndpointsTests
         Assert.That(_held, Is.Not.Null, "the lock was free, and taken just before the check");
         Assert.That(await GameChecksAsync(), Is.Empty);
         Assert.That(await OpenTypesAsync(), Is.EqualTo(new[] { IntegrityIssueType.DefaultBoxArt }), "cleared by the next Quick or Deep run");
+    }
+
+    /// <summary>Forwards every call; runs <c>beforeGet</c> first on each <see cref="IGameRepository.GetAsync"/>.</summary>
+    public class LockingGames : DispatchProxy
+    {
+        private IGameRepository _inner = null!;
+        private Action _beforeGet = null!;
+
+        public static IGameRepository Wrap(IGameRepository inner, Action beforeGet)
+        {
+            var proxy = Create<IGameRepository, LockingGames>();
+            ((LockingGames)(object)proxy)._inner = inner;
+            ((LockingGames)(object)proxy)._beforeGet = beforeGet;
+            return proxy;
+        }
+
+        protected override object? Invoke(MethodInfo? method, object?[]? args)
+        {
+            if (method!.Name == nameof(IGameRepository.GetAsync))
+                _beforeGet();
+            try
+            {
+                return method.Invoke(_inner, args);
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException is not null)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(ex.InnerException);
+                throw;
+            }
+        }
+    }
+
+    private static readonly byte[] SpaceGame = RandomNumberGenerator.GetBytes(4096);
+
+    [Test]
+    public async Task ExternalGame_BusyLock_ResolvesNothing_G2()
+    {
+        var path = Path.Combine(_factory.Root, "ingest", ExternalTestHandler.SystemId, "dump.xci");
+        await File.WriteAllBytesAsync(path, SpaceGame);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+        var file = new IngestFile(ExternalTestHandler.SystemId, path, "dump.xci", SpaceGame.Length, new FileInfo(path).LastWriteTimeUtc);
+        var ingested = await Service<IngestPipeline>().ProcessAsync(file, Guid.NewGuid(), new CircuitBreaker(), default);
+        Assert.That(ingested?.GameId, Is.Not.Null, $"{ingested?.Outcome} {ingested?.Reason} {ingested?.Details}");
+        _game = ingested!.GameId!.Value;
+        await Service<IIntegrityIssueRepository>().InsertAsync(new IntegrityIssue
+        {
+            Type = IntegrityIssueType.DefaultBoxArt, Severity = IssueSeverity.Info, ZipPath = "ext/S/Space Game.zip", Status = IntegrityIssue.Open,
+            FirstSeenJobId = Guid.NewGuid(), LastSeenJobId = Guid.NewGuid(), DetectedAt = DateTime.UtcNow,
+        }, default);
+        _lockBeforeResolve = true;
+
+        using var response = await Upload(_manager, Png(300, 400), "BoxArt");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That((await Images(response)).Single(i => i.GetProperty("type").GetString() == "BoxArt").GetProperty("source").GetString(),
+            Is.EqualTo("upload"));
+        Assert.That(_held, Is.Not.Null, "the lock was free, and taken just before the resolve");
+        Assert.That(await GameChecksAsync(), Is.Empty);
+        Assert.That(await OpenTypesAsync(), Is.EqualTo(new[] { IntegrityIssueType.DefaultBoxArt }));
     }
 
     private async Task SetTitle(string title)
