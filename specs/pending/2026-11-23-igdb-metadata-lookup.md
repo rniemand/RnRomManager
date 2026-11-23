@@ -105,7 +105,7 @@ Admins can look a game up on IGDB from the **Edit Metadata** modal (a new **Look
 | Web | `src/RnRomManager.Web/src/routes/games/[id]/+page.svelte` | banner (N1) |
 | Web | `src/RnRomManager.Web/src/lib/reports.ts`, `lib/components/icons.ts`, `routes/reports/+layout.svelte`, `routes/reports/missing-igdb-ids/+page.svelte` (new) | R2, R3 |
 | Docs | `docs/zip-format.md` | Heading becomes `schema version 8`. The Game table's `schemaVersion` note becomes `8`, and it gains an `igdbId` row (int?, ✓: "`null` not linked, `0` Not on IGDB, else the IGDB game id; always written"). The Validation sentence adds "`igdbId` null or ≥ 0". The Versions table gets row `\| 8 \| 0.4.0 \| Adds igdbId (int?) to the game: the linked IGDB game id, 0 for Not on IGDB, null otherwise. The v7→v8 upgrader adds igdbId: null; migration 0027 adds games.igdb_id, filled on each game's next mirror. A v8 file is InfoJsonNewerSchema (read-only) for an app that only knows v7. \|` (field names in backticks) |
-| Docs | `docs/features.md` | Game detail (banner, Lookup Info). Reports: line ~305's tab list and Admin sentence, and a **Missing IGDB IDs** bullet. Global search (line ~28: "Missing Metadata, Missing IGDB IDs and Activity for Admins only"). Report APIs (line ~491's Admin-only list gains `/missing-igdb-ids`). Edit the library through the API (`igdbId`, `igdb-matches`, detail fields) |
+| Docs | `docs/features.md` | Game detail (banner, Lookup Info). Reports: every list in line ~305's paragraph gains Missing IGDB IDs (the tab order, the "first seven… Admins only" sentence, the per-tab icon list and the "every report's System filter" list), plus a **Missing IGDB IDs** bullet. Global search (line ~28: "Missing Metadata, Missing IGDB IDs and Activity for Admins only"). Report APIs (line ~491's Admin-only list gains `/missing-igdb-ids`). Edit the library through the API (`igdbId`, `igdb-matches`, detail fields) |
 | Docs | `docs/codemap.md` | regenerated each step |
 
 API contract changes are additive (new optional PATCH field, new detail fields, new routes). No config keys. No README systems-table change (no storage, format, DAT or browser-play change per system).
@@ -178,6 +178,7 @@ API contract changes are additive (new optional PATCH field, new detail fields, 
 - 2026-11-23 Deep review 2: Merge fills a `null` target `igdbId` from the source like its other empty fields; the validator message follows house style; the applied note moves to step 7 with Not on IGDB; step 6's panel is empty (code)
 - 2026-11-23 Deep review 3: `igdbConfigured` comes from `SourcesOptions.IgdbConfigured` so step 2 doesn't need step 3's interface; the 409 uses `IGameInfoLookup.Configured`; the test setup for both is pinned (code)
 - 2026-11-23 Deep review 4: `game-admin.test.ts`'s untyped fixture gains the two fields; confirmed one `games` insert path and no exact PATCH-body assertion (code)
+- 2026-11-23 Deep review 5: features.md Reports paragraph has four lists to update, not two; the other doc lines and callers were checked (code)
 - 2026-11-23 Review round 2: the `IgdbClient` Changes row now matches L3; `lookup: true` doesn't search when IGDB isn't configured (reviewer)
 
 ## Kickoff prompt
