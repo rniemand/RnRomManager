@@ -151,6 +151,16 @@ describe('canPlay on virtualjaguar', () => {
 	});
 });
 
+describe('canPlay on puae', () => {
+	it.each(['x.ipf', 'x.IPF'])('refuses %s (no capsimg in the browser)', (fileName) => {
+		expect(canPlay({ browserCore: 'puae' }, { externalFileName: null, fileName })).toBe(false);
+	});
+
+	it('plays an .adf', () => {
+		expect(canPlay({ browserCore: 'puae' }, { externalFileName: null, fileName: 'x.adf' })).toBe(true);
+	});
+});
+
 describe('S8 Nintendo DS', () => {
 	it('plays an external DS release on DeSmuME', () => {
 		expect(canPlay({ browserCore: 'desmume' }, { externalFileName: 'Quest.(USA).nds' })).toBe(true);

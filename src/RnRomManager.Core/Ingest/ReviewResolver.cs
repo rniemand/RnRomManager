@@ -469,7 +469,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                     // G4: the DAT name's own extension (DAT entries are filtered to RomExtensions), e.g. an SMS-mode Game Gear .sms.
                     filename = chosen.FileSets
                         ? datRom.GameName + " (Unverified)" + originalExtension
-                        : Path.GetFileNameWithoutExtension(datRom.RomName) + " (Unverified)" + (external || chosen.KeepsSourceExtension ? originalExtension : Path.GetExtension(datRom.RomName));
+                        : Path.GetFileNameWithoutExtension(datRom.RomName) + " (Unverified)" + (external || chosen.KeepsExtension(originalExtension) ? originalExtension : Path.GetExtension(datRom.RomName));
                     identification = new(IdentificationMethod.Manual, store.DatName, store.Version, datRom.GameName);
                     metadata = store.MetadataFor(datRom.Crc32);
                 }
@@ -549,7 +549,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                     if (discFlag is null || !stem.Contains($"({discFlag})", StringComparison.OrdinalIgnoreCase))
                         stem += $" ({flag})";
                 }
-                filename = stem + (external || system.KeepsSourceExtension ? originalExtension : system.RomExtensions[0]);
+                filename = stem + (external || system.KeepsExtension(originalExtension) ? originalExtension : system.RomExtensions[0]);
             }
             else
             {
@@ -559,7 +559,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                     flags = [.. flags.Where(f => !Regex.IsMatch(f, @"^Disc \d+$", RegexOptions.IgnoreCase)), discFlag];
                 var stem = title + (regions.Count == 0 ? "" : $" ({string.Join(", ", regions)})") +
                     (string.IsNullOrEmpty(revision) ? "" : $" ({revision})") + string.Concat(flags.Select(f => $" ({f})"));
-                filename = FileNameSanitizer.Sanitize(stem) + (external || system.KeepsSourceExtension ? originalExtension : system.RomExtensions[0]);
+                filename = FileNameSanitizer.Sanitize(stem) + (external || system.KeepsExtension(originalExtension) ? originalExtension : system.RomExtensions[0]);
             }
 
             // B12, and B1 for every system: a name may hold "..", as Redump and No-Intro names do ("...Iru!"); only "." or ".." or a separator is refused.

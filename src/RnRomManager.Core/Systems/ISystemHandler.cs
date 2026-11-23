@@ -64,6 +64,9 @@ public interface ISystemHandler
     /// <summary>true: the extension names the file's format, so Review keeps the source file's extension.</summary>
     bool KeepsSourceExtension => false;
 
+    /// <summary>Whether Review keeps a source file's <paramref name="extension"/>; <see cref="KeepsSourceExtension"/> unless a handler decides per extension.</summary>
+    bool KeepsExtension(string extension) => KeepsSourceExtension;
+
     /// <summary>Spec T1: libretro's DAT files, or blawar/titledb.</summary>
     DatSource DatSource => DatSource.Libretro;
 

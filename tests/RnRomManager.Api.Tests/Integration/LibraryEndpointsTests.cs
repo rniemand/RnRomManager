@@ -316,6 +316,13 @@ public partial class LibraryEndpointsTests
     public Task Games_QuickPlay_TurboGrafxCd_ALoneBinIsNotPlayable(string fileName, string? setFile, bool playable) =>
         AssertQuickPlayAsync("tgcd", true, playable, "mednafen_pce", fileName, fileName, setFile);
 
+    // Amiga: PUAE's WebAssembly build has no capsimg, so an .ipf primary never plays.
+    [TestCase("x.ipf", false)]
+    [TestCase("x.IPF", false)]
+    [TestCase("x.adf", true)]
+    public Task Games_QuickPlay_AmigaIpf_IsNotPlayable(string fileName, bool playable) =>
+        AssertQuickPlayAsync("amiga", false, playable, "puae", fileName, fileName);
+
     private async Task AssertQuickPlayAsync(string system, bool external, bool playable, string? core,
         string? fileName = null, string externalName = "x.gb", string? setFile = null)
     {

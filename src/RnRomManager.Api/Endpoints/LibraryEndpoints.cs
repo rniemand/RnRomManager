@@ -878,6 +878,8 @@ public static class LibraryEndpoints
             // TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, so only a cue set's .bin plays.
             && !(core == "mednafen_pce" && game.PrimaryIsExternal && !game.PrimaryHasFiles
                  && game.PrimaryRomFileName?.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) == true)
+            // Amiga: PUAE's WebAssembly build has no capsimg, so an .ipf never plays.
+            && !(core == "puae" && game.PrimaryRomFileName?.EndsWith(".ipf", StringComparison.OrdinalIgnoreCase) == true)
             && !(core == "virtualjaguar" && game.PrimaryRomFileName is { } name && game.PrimarySizeBytes is { } size
                  && !JaguarRomLoads(name, size));
         return new

@@ -6,8 +6,9 @@ namespace RnRomManager.Systems.Commodore;
 
 /// <summary>
 /// Commodore Amiga. Matched against libretro's TOSEC DAT (<c>metadat/tosec/Commodore - Amiga.dat</c>: about 40,000
-/// <c>.adf</c> floppy images of 462 KiB–2.2 MiB); its No-Intro DAT lists only <c>.ipf</c>, which the browser core can't
-/// read (PUAE loads IPF through capsimg, a native library the WebAssembly build doesn't have), so only ADF is taken, with its gzipped form <c>.adz</c>, inflated to the ADF before hashing.
+/// <c>.adf</c> floppy images of 462 KiB–2.2 MiB, and about 3,800 <c>.ipf</c> images of 66 KiB–1.9 MiB). An <c>.adz</c> (gzipped
+/// ADF) is inflated to the ADF before hashing. IPF is kept for the library only: PUAE reads it through capsimg, a native
+/// library the WebAssembly build doesn't have, so an <c>.ipf</c> never plays (<c>canPlay</c>, the games list's <c>playRomId</c>).
 /// ADF has no header (a custom boot block is common), so <see cref="ReadHeader"/> always returns null and an unmatched
 /// file goes to Review. Each disk of a multi-disk game is its own release.
 /// </summary>
@@ -19,7 +20,10 @@ public sealed class AmigaHandler : ISystemHandler
     public string DisplayName => "Commodore Amiga";
     public string ShortName => "Amiga";
     public string Family => Id;
-    public IReadOnlyList<string> RomExtensions { get; } = [".adf", ".adz"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".adf", ".adz", ".ipf"];
+
+    /// <summary>Review stores an <c>.ipf</c> as <c>.ipf</c>; an <c>.adf</c> or (inflated) <c>.adz</c> becomes <c>.adf</c>.</summary>
+    public bool KeepsExtension(string extension) => extension.Equals(".ipf", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>1 KiB, since an <c>.adz</c> of a mostly empty disk is tiny; the TOSEC ADFs themselves are 462 KiB–2.2 MiB.</summary>
     public long MinRomSizeBytes => 1024;

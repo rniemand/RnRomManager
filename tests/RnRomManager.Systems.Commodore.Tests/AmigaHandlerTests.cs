@@ -15,13 +15,20 @@ public class AmigaHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("amiga", "Commodore Amiga", "Amiga", "amiga", "Commodore - Amiga")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".adf", ".adz" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".adf", ".adz", ".ipf" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((1024L, 4L * 1024 * 1024)));
         Assert.That((Handler.EmbedRomsInZip, Handler.DatSource, Handler.DatFolder), Is.EqualTo((true, DatSource.Libretro, DatKind.Tosec)));
         Assert.That(Handler.MetadatKinds, Is.Empty);
         Assert.That((Handler.FileSets, Handler.LegacyEmbeddedRoms, Handler.KeepsSourceExtension), Is.EqualTo((false, false, false)));
         Assert.That(Handler.BrowserCore, Is.EqualTo("puae"));
     }
+
+    [TestCase(".ipf", true)]
+    [TestCase(".IPF", true)]
+    [TestCase(".adf", false)]
+    [TestCase(".adz", false)]
+    public void Review_KeepsOnlyAnIpfsExtension(string extension, bool keeps) =>
+        Assert.That(Handler.KeepsExtension(extension), Is.EqualTo(keeps));
 
     [Test]
     public void ReadHeader_IsAlwaysNull()
