@@ -8,6 +8,7 @@ namespace RnRomManager.Systems.Sega;
 /// and a standalone <c>.iso</c> is a release of its own. Stored outside the ZIP under exact names, as Saturn and PlayStation;
 /// the redump DAT has no metadat, and there is no header (Sega CD B1). Its own family keeps a <c>.bin</c> from ever being tried
 /// against the Mega Drive DAT, and the other way round.
+/// A CloneCD <c>.ccd</c> with its <c>.img</c> and optional <c>.sub</c> is a set too (CloneCD B1), played through a cue built from the <c>.ccd</c>.
 /// </summary>
 public sealed class SegaCdHandler : ISystemHandler
 {
@@ -19,7 +20,7 @@ public sealed class SegaCdHandler : ISystemHandler
     public string Family => "segacd";
 
     /// <summary><c>[0]</c> is what a file resolved through Review without a DAT entry is stored as. A <c>.chd</c> is a lone file that never matches the DAT (CHD B1–B2).</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".bin", ".cue", ".iso", ".chd"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".bin", ".cue", ".iso", ".chd", ".ccd", ".img", ".sub"];
 
     public long MinRomSizeBytes => 16;
 

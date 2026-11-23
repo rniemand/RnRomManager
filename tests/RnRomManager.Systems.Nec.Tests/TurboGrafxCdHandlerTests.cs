@@ -20,7 +20,7 @@ public class TurboGrafxCdHandlerTests
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("tgcd", "TurboGrafx-CD / PC Engine CD", "TGCD", "tgcd", "NEC - PC Engine CD - TurboGrafx-CD")));
         Assert.That(Handler.DatName, Is.EqualTo(IngestSeeder.TurboGrafxCdDat));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".bin", ".cue", ".chd" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".bin", ".cue", ".chd", ".ccd", ".img", ".sub" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((16L, 1024L * 1024 * 1024)));
         Assert.That((Handler.EmbedRomsInZip, Handler.FileSets, Handler.DatSource, Handler.DatFolder),
             Is.EqualTo((false, true, DatSource.Libretro, DatKind.Redump)));

@@ -129,7 +129,7 @@ No migration (`files` rows already hold any set member), no config key, no API s
   - `ReviewResolverExternalTests`: `DismissAsync` refuses a set's `psx` `.img` with `SetFileNotResolvable`; a CloneCD set resolves as one release with main `.img` and `files` `[.ccd, .sub]`.
 
   Done when they pass. These are unit tests over synthetic folders, as the existing ones are.
-- [ ] **3. Accept the files**: B1, B2, B6, and the README table rows (`SupportedSystemsTableTests`). Files: the five handlers and their tests, `BrowserCoreExtensionsTests.cs`, `README.md`, `IngestPipelineTests.cs`, `ReviewEndpointsTests.cs`. Tests:
+- [x] **3. Accept the files**: B1, B2, B6, and the README table rows (`SupportedSystemsTableTests`). Files: the five handlers and their tests, `BrowserCoreExtensionsTests.cs`, `README.md`, `IngestPipelineTests.cs`, `ReviewEndpointsTests.cs`. Tests:
   - handler tests, `BrowserCoreExtensionsTests`, `SupportedSystemsTableTests`;
   - `IngestPipelineTests`: a synthetic Saturn CloneCD set goes to Review as three `NoDatMatch` items; a one-track PlayStation `.img` listed in the fixture DAT ingests with `files` `[.ccd, .sub]`; a lone Sega CD `.img` is `Skipped`/`IncompleteSet`;
   - `ReviewEndpointsTests`: GET on a set's `.ccd` shows `resolvable` true, `dismissible` false and three `setMembers`; dismissing its `.img` is refused with `SetFileNotResolvable`.

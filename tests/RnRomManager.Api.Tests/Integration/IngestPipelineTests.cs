@@ -68,6 +68,9 @@ public class IngestPipelineTests
     private static readonly byte[] NinjaAudio1 = new SyntheticDiscBuilder { Seed = 2601, Size = 32 * 1024 }.Build();
     private static readonly byte[] NinjaData = new SyntheticDiscBuilder { Seed = 2602 }.Build();
     private static readonly byte[] NinjaAudio3 = new SyntheticDiscBuilder { Seed = 2603, Size = 32 * 1024 }.Build();
+    /// <summary>CloneCD B6: a one-track PlayStation disc whose whole <c>.img</c> is the DAT's data track.</summary>
+    private static readonly byte[] CloneStarImage = new SyntheticDiscBuilder { Seed = 2701, Size = 2352 * 28 }.Build();
+    private static readonly byte[] CloneCcd = System.Text.Encoding.UTF8.GetBytes("[CloneCD]\nVersion=3\n[Disc]\nSessions=1\nDataTracksScrambled=0\n[TRACK 1]\nMODE=2\nINDEX 1=0\n");
     /// <summary>3DS B2: two DAT-matched NCSD dumps.</summary>
     private static readonly byte[] CartQuest = Ncsd(3001, "CTR-P-CQST");
     private static readonly byte[] CartRally = Ncsd(3002, "CTR-P-CRLY");
@@ -160,7 +163,7 @@ public class IngestPipelineTests
             [IngestSeeder.MegaDriveDat] = [new FixtureGame("Turbo Comet (USA, Europe)", "Turbo Comet (USA, Europe).md", Comet)],
             [IngestSeeder.Sega32xDat] = [new FixtureGame("Star Relay (USA)", "Star Relay (USA).32x", Relay)],
             [IngestSeeder.TurboGrafx16Dat] = [new FixtureGame("Neon Circuit (USA)", "Neon Circuit (USA).pce", Circuit)],
-            [IngestSeeder.PsxDat] = [],
+            [IngestSeeder.PsxDat] = [new FixtureGame("Clone Star (USA)", "Clone Star (USA).bin", CloneStarImage)],
             [IngestSeeder.PspDat] = [],
             [IngestSeeder.GameCubeDat] = [],
             [IngestSeeder.WiiDat] =
@@ -791,6 +794,50 @@ public class IngestPipelineTests
         var rom = ReadZip("segacd/D/Disc Comet.zip").Roms.Single();
         Assert.That(rom.Files!.Select(f => f.ExternalFileName), Is.EqualTo(new[] { cue, track2 }));
         Assert.That(File.Exists(Path.Combine(Roms, "segacd", "D", chd)), Is.False);
+    }
+
+    [Test]
+    public async Task CloneCd_UnmatchedSaturnSet_GoesToReviewAsThreeNoDatMatchItems()
+    {
+        foreach (var (name, bytes) in new[] { ("Mystery.ccd", CloneCcd), ("Mystery.img", FakeChd(2702)), ("Mystery.sub", FakeChd(2703)) })
+            File.SetLastWriteTimeUtc(Drop("saturn", name, bytes).FullPath, DateTime.UtcNow.AddMinutes(-1));
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "saturn").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome, i.Reason)), Is.EquivalentTo(new[]
+        {
+            ("Mystery.ccd", IngestOutcome.Review, (string?)"NoDatMatch"), ("Mystery.img", IngestOutcome.Review, "NoDatMatch"),
+            ("Mystery.sub", IngestOutcome.Review, "NoDatMatch"),
+        }));
+    }
+
+    [Test]
+    public async Task CloneCd_OneTrackPsxImgInTheDat_IsOneRelease_CcdAndSubInFiles()
+    {
+        const string ccd = "Clone Star (USA).ccd", img = "Clone Star (USA).img", sub = "Clone Star (USA).sub";
+        foreach (var (name, bytes) in new[] { (ccd, CloneCcd), (img, CloneStarImage), (sub, FakeChd(2704)) })
+            File.SetLastWriteTimeUtc(Drop("psx", name, bytes).FullPath, DateTime.UtcNow.AddMinutes(-1));
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "psx").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome)),
+            Is.EquivalentTo(new[] { (ccd, IngestOutcome.Ingested), (img, IngestOutcome.Ingested), (sub, IngestOutcome.Ingested) }));
+        var rom = ReadZip("psx/C/Clone Star.zip").Roms.Single();
+        Assert.That((rom.ExternalFileName, rom.Identification.Method), Is.EqualTo((img, IdentificationMethod.Dat)));
+        Assert.That(rom.Files!.Select(f => f.ExternalFileName), Is.EqualTo(new[] { ccd, sub }));
+        Assert.That(Directory.GetFiles(Ingest("psx")), Is.Empty);
+    }
+
+    [Test]
+    public async Task CloneCd_LoneSegaCdImg_IsSkippedAsIncompleteSet()
+    {
+        File.SetLastWriteTimeUtc(Drop("segacd", "Lonely.img", FakeChd(2705)).FullPath, DateTime.UtcNow.AddMinutes(-1));
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "segacd").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome, i.Reason)),
+            Is.EquivalentTo(new[] { ("Lonely.img", IngestOutcome.Skipped, (string?)IngestReason.IncompleteSet) }));
+        Assert.That(File.Exists(Path.Combine(Ingest("segacd"), "Lonely.img")), Is.True);
     }
 
     [Test]
