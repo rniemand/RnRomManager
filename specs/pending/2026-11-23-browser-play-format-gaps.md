@@ -57,7 +57,7 @@ Audit gaps left as they are (each already refused by `canPlay`/`playRomId` or th
 | Systems | `src/RnRomManager.Systems.Sega/SaturnHandler.cs` | `BrowserCore` doc comment no longer says an `.nrg` release never plays |
 | Web | `src/RnRomManager.Web/src/lib/emulator.ts` | N5: drop the `.nrg` clause from `canPlay` and its doc comment |
 | Tests | `tests/RnRomManager.Api.Tests/BrowserCoreExtensionsTests.cs` | `("saturn", ".nrg")` reason becomes `play-disc sends a cue built from the Nero footer and the image as track-01.bin (N1), never the .nrg as the content` |
-| Docs | `README.md` line 15; `docs/features.md` (Saturn Play bullet, `play-disc` and `play-disc-set` API lines); `docs/development.md` (TestData row at line 42; § Browser emulators: Saturn and Multi-disc sets bullets) | Drop "never `.nrg`"/"an .nrg never plays", describe N1/N6, add the builder |
+| Docs | `README.md` line 15; `docs/features.md` (Saturn Play bullet; the `GET /api/games` line's `playRomId`, which says the release "isn't an `.nrg` image"; `play-disc` and `play-disc-set` API lines); `docs/development.md` (TestData row at line 42; § Browser emulators: Saturn and Multi-disc sets bullets) | Drop "never `.nrg`"/"an .nrg never plays", describe N1/N6, add the builder |
 
 No migration, config key or API contract change: `play-disc` keeps its responses, a valid `.nrg` now gets 200 instead of 409, and a Saturn set with `.nrg` discs now gets a `discSet`. The README systems table is unchanged (formats and cores don't change).
 
@@ -92,6 +92,7 @@ Finish runs the full suite and e2e unchanged (no Playwright change: e2e doesn't 
 - 2026-11-23 Spec review pass 4: N2 checked against libmirage's NRG parser (footer version picks DAOX/ETN2 or DAOI/ETNF; `END!` not required; the header's first 4 bytes are ignored); T1 checked against Beetle PCE `e1ac90d` (no playlist limit; 4 is the app's cap) (reviewer)
 - 2026-11-23 Spec review pass 5: Beetle PCE `e1ac90d` can't swap discs (`PCE_LoadCD` inserts only the first; no disk-control interface) → TurboGrafx-CD sets dropped, T1–T6 and Step 3 removed (user); `Footer` returns the version so `Parse`/`ForPlayback` pick the chunk ids, and DAOI offsets read unsigned (reviewer)
 - 2026-11-23 Spec review pass 6: Step 1 tests `Footer`'s `V2` flag (reviewer)
+- 2026-11-23 Spec review pass 7: `docs/features.md`'s `GET /api/games` line also excludes `.nrg` from `playRomId`, so Step 2 updates it (reviewer)
 
 ## Kickoff prompt
 ```text
