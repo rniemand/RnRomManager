@@ -69,24 +69,26 @@ The disc sets are stored as they are and play the way CloneCD discs do: `play-di
 - **D3** `TocSheet` (new, `src/RnRomManager.Core/Ingest/TocSheet.cs`, next to `CloneCdSheet`) parses a cdrdao `.toc`. `Parse(ReadOnlySpan<byte>)` returns a sheet with:
   - `IsValid` and `Error`;
   - `Files`: the distinct file names, in first-use order, matched ignoring case. This is the shape of `CueSheet.Files`, so the planner can treat it like a cue (D8).
-  - `Tracks`: per track, its number, mode token, subchannel token or null, `Pregap` (sectors) or null, `Start` (sectors) or null, a `HasSilence` flag, and its data items. Each data item has a file name, a kind (`File` for `FILE`/`AUDIOFILE`, `Data` for `DATAFILE`), a byte offset or null, a start in sectors or null, and a length in sectors or null.
+  - `Tracks`: per track, its number, mode token, subchannel token or null, `Pregap` (sectors) or null, `Start` (sectors) or null, a `HasSilence` flag, and its data items. Each data item has a file name, a kind (`File` for `FILE`/`AUDIOFILE`, `Data` for `DATAFILE`), a `Swap` flag, a byte offset or null, a start in sectors or null, and a length in sectors or null.
 
-  It is decoded and split into lines as `CueSheet` does: a leading UTF-8 BOM is dropped, and LF, CRLF or a lone CR ends a line. More than `IngestSetPlanner.MaxCueBytes` bytes is the error `the .toc is larger than 65536 bytes`. Within a line, `//` outside a string starts a comment. Tokens are split on spaces and tabs. A string is `"…"`, ends at the next `"`, and is taken literally (no escapes). Keywords match ignoring case.
+  It is decoded and split into lines as `CueSheet` does: a leading UTF-8 BOM is dropped, and LF, CRLF or a lone CR ends a line. More than `IngestSetPlanner.MaxCueBytes` bytes is the error `the .toc is larger than 65536 bytes`. Within a line, `//` outside a string starts a comment. Tokens are split on spaces and tabs, and each statement is on one line (cdrdao itself writes them so). A string is `"…"` and can't span lines. Inside it, as in cdrdao's `TocParser.cc`, `\"` is `"`, `\\` is `\`, and `\` plus exactly three octal digits (000–377) is that character code; any other `\` is an error. Keywords match ignoring case (cdrdao is case-sensitive; accepting more costs nothing).
 - **D4** Accepted statements:
   - **Before the first `TRACK`:** `CD_DA`, `CD_ROM`, `CD_ROM_XA`, `CD_I`, `CATALOG "<s>"` and a `CD_TEXT { … }` block, all ignored.
-  - **Block skipping:** a `CD_TEXT { … }` block is skipped by counting braces outside strings, across lines.
-  - **`TRACK <mode> [<sub>]`.** `<mode>` is one of `AUDIO`, `MODE0`, `MODE1`, `MODE1_RAW`, `MODE2`, `MODE2_FORM1`, `MODE2_FORM2`, `MODE2_FORM_MIX`, `MODE2_RAW`. `<sub>` is `RW` or `RW_RAW`.
+  - **Block skipping:** everything from `CD_TEXT` to the `}` that closes its first `{` is skipped, across lines, counting braces outside strings (so nested `LANGUAGE_MAP { … }`, `LANGUAGE n { … }` and binary `{ 0, 10 }` blocks are skipped too).
+  - **`TRACK <mode> [<sub>]`.** `<mode>` is one of `AUDIO`, `MODE1`, `MODE1_RAW`, `MODE2`, `MODE2_FORM1`, `MODE2_FORM2`, `MODE2_FORM_MIX`, `MODE2_RAW` (cdrdao's `trackMode`; `MODE0` is only a `ZERO` mode). `<sub>` is `RW` or `RW_RAW`.
   - **Inside a track, ignored:** `COPY`, `NO COPY`, `PRE_EMPHASIS`, `NO PRE_EMPHASIS`, `TWO_CHANNEL_AUDIO`, `FOUR_CHANNEL_AUDIO`, `ISRC "<s>"`, `INDEX <time>` and a `CD_TEXT { … }` block.
   - **Inside a track, recorded:**
     - `PREGAP <time>`;
-    - `START <time>`;
-    - `SILENCE <time>`, and `ZERO [<mode>] [<sub>] <time>` (both set `HasSilence`);
-    - `FILE "<name>" [#<bytes>] <start> [<length>]`, with `AUDIOFILE` as a synonym;
+    - `START [<time>]`. A bare `START` (cdrdao: "the current track length") sets `Start` to the summed lengths of the track's earlier `SILENCE`, `ZERO`, `FILE` and `DATAFILE` items;
+    - `SILENCE <time>`, and `ZERO [<mode>] [<sub>] <time>` (both set `HasSilence`). A `ZERO` `<mode>` is any `TRACK` mode or `MODE0`; a token is read as the mode, then the subchannel, when it is one;
+    - `FILE "<name>" [SWAP] [#<bytes>] <start> [<length>]`, with `AUDIOFILE` as a synonym. `SWAP` sets the item's `Swap` flag. A `<length>` of 0 means "to the end of the file", so it's recorded as null;
     - `DATAFILE "<name>" [#<bytes>] [<length>]`.
-  - **A `<time>`** is `mm:ss:ff` (`ss` < 60, `ff` < 75; read as `(mm*60 + ss)*75 + ff` sectors) or `0`. A FILE `<start>` is a `<time>`. `#<bytes>` is `#` followed by decimal digits.
+  - **A `<time>`** is `mm:ss:ff` (`ss` < 60, `ff` < 75; read as `(mm*60 + ss)*75 + ff` sectors) or `0`. cdrdao also takes a plain sample or byte count; any number but `0` is the error below (see § Risks). A FILE `<start>` is a `<time>`. `#<bytes>` is `#` followed by decimal digits.
+  - Not accepted, so an unknown statement: `FIRST_TRACK_NO`, `END`, `FIFO` (see § Risks).
 - **D5** Parse error texts, in the order they're met while reading (`n` is the 1-based line number, `t` the track number):
   - `the .toc is larger than 65536 bytes`;
   - `line <n>: a string isn't closed`;
+  - `line <n>: a string has an unknown escape`, for a `\` not followed by `"`, `\` or three octal digits of at most 377;
   - `line <n>: unknown statement '<word>'`;
   - `line <n>: <WORD> must come after a TRACK`, for a track statement before the first `TRACK` (`<WORD>` as written, upper-cased);
   - `line <n>: <WORD> must come before the first TRACK`, for `CD_DA`, `CD_ROM`, `CD_ROM_XA`, `CD_I` or `CATALOG` after it;
@@ -94,9 +96,10 @@ The disc sets are stored as they are and play the way CloneCD discs do: `play-di
   - `line <n>: unknown subchannel mode '<token>'`;
   - `line <n>: '<token>' isn't a time`;
   - `line <n>: '<token>' isn't a byte offset`;
-  - `line <n>: <WORD> needs a file name`, when `FILE`, `AUDIOFILE` or `DATAFILE` has no string;
-  - `line <n>: START needs a time`;
-  - `line <n>: unexpected '<token>'`, for an extra token after a complete statement;
+  - `line <n>: <WORD> needs a string`, when the token where `FILE`, `AUDIOFILE`, `DATAFILE`, `ISRC` or `CATALOG` needs its string isn't one;
+  - `line <n>: <WORD> is incomplete`, when the line ends before a required token (`TRACK` with no mode, `PREGAP`/`SILENCE`/`ZERO`/`INDEX` with no time, `FILE` with no start, `NO` alone, a string-taking statement with no string);
+  - `line <n>: START without a time needs data of known length before it`, for a bare `START` after an item with no length;
+  - `line <n>: unexpected '<token>'`, for an extra token after a complete statement, or `NO` followed by anything but `COPY`/`PRE_EMPHASIS`;
   - `the .toc ends inside a CD_TEXT block`;
   - `the .toc has no TRACK`;
   - `the .toc has more than 99 tracks`;
@@ -105,11 +108,12 @@ The disc sets are stored as they are and play the way CloneCD discs do: `play-di
   - `the .toc names more than 99 files`.
 
   A name that fails `CueSheet.NameProblem` isn't a parse error. The planner makes such a set `UnsupportedSetMember` (D8), and `play-disc`'s existing member-name check refuses it.
-- **D6** `TocSheet.ForPlayback(ReadOnlySpan<byte> toc, string tocFileName, IReadOnlyCollection<string> storedTracks, string trackPrefix)` returns a `PlaybackCue`, or `PlaybackCue.Fail(error)` on a D5 error. `storedTracks` are the set's other members, matched to `Files` ignoring case, as `CueSheet.ForPlayback` matches. A missing one is `'<name>' isn't part of the release`. A stored track the `.toc` doesn't name is `the .toc doesn't reference stored track(s): <names>` (comma-separated, as `CueSheet.ForPlayback`'s text). Then it fails, checked per track in order, with:
+- **D6** `TocSheet.ForPlayback(ReadOnlySpan<byte> toc, string tocFileName, IReadOnlyCollection<string> storedTracks, string trackPrefix)` returns a `PlaybackCue`, or `PlaybackCue.Fail(error)` on a D5 error. `storedTracks` are the set's other members, matched to `Files` ignoring case, as `CueSheet.ForPlayback` matches. A missing one is `'<name>' isn't part of the release`. A stored track the `.toc` doesn't name is `the .toc doesn't reference stored track(s): <names>` (ordinal-sorted, joined with `, `, as `CueSheet.ForPlayback`'s text). Then it fails, checked per track in order, with:
   - `track <t>: <MODE> can't be played; only AUDIO, MODE1_RAW and MODE2_RAW can`;
   - `track <t> stores subchannel data`, when `<sub>` is set;
   - `track <t> uses SILENCE or ZERO`;
-  - `track <t> has more than one file`;
+  - `track <t> has more than one FILE or DATAFILE`, counting items, not distinct names;
+  - `track <t> byte-swaps its audio (SWAP)`;
   - `'<name>' is used again after another file`, when a file's tracks aren't consecutive;
   - `track <t> has no length but isn't the last track of '<name>'`, checked on the track before the current one in the same file, so every later check knows the previous length;
   - `track <t>: #<bytes> isn't a whole number of 2352-byte sectors`;
@@ -133,12 +137,14 @@ The disc sets are stored as they are and play the way CloneCD discs do: `play-di
 - **D7** `MdsSheet` (new, `src/RnRomManager.Core/Ingest/MdsSheet.cs`) parses an `.mds`'s bytes, all little-endian. The offsets follow libmirage's `image-mds.h` and PCSX ReARMed's `parsemds`.
   - **Header:** bytes 0–15 are `MEDIA DESCRIPTOR`, byte 16 is the major version, `num_sessions` is a u16 at 0x14, and the session-blocks offset is a u32 at 0x50.
   - **Session 1's block (24 bytes):** `num_all_blocks` is a u8 at +10 and the track-blocks offset is a u32 at +20.
-  - **Track blocks:** `num_all_blocks` blocks of 80 bytes. A block whose `point` (+4) is 0xA0 or more is lead-in and skipped. Each other block gives:
+  - **Track blocks:** `num_all_blocks` blocks of 80 bytes, from the track-blocks offset. `point` is the u8 at +4. Each track block gives:
     - the track number (`point`);
     - `mode` (+0) and `subchannel` (+1);
     - `extra_offset` (u32 +12) and `sector_size` (u16 +16);
     - `start_sector` (u32 +36) and `start_offset` (u64 +40);
-    - the extra block at `extra_offset`: `pregap` (u32) and `length` (u32).
+    - the extra block at `extra_offset`: `pregap` (u32 +0) and `length` (u32 +4), both in sectors. An `extra_offset` of 0 means no extra block: `pregap` and `length` are 0 (libmirage would dereference null there).
+
+  A block is a track when its `point` is 1–99. Every other block (0, 100–159 and the 0xA0+ lead-in points) is skipped. The version is byte 16 alone (libmirage compares the 16-byte signature plus 0x01; byte 17 is ignored).
 
   `Parse(ReadOnlySpan<byte>)` returns a sheet with `IsValid`, `Error`, `Sessions` and `Tracks` (those fields), or the first of these errors:
   - `the .mds is larger than 65536 bytes`;
@@ -146,9 +152,8 @@ The disc sets are stored as they are and play the way CloneCD discs do: `play-di
   - `only version 1 .mds files are supported`;
   - `the .mds has no session`, when `num_sessions` is 0;
   - `the .mds is truncated`, when any block it reads would end past the file;
-  - `the .mds has no track 1`;
-  - `the .mds has more than 99 tracks`;
-  - `track <m> follows track <n>` (or `track <m> follows the start`), when the track numbers aren't 1, 2, … in block order.
+  - `the .mds has no track 1`, when no block is a track;
+  - `track <m> follows track <n>` (or `track <m> follows the start`), when the track numbers aren't 1, 2, … in block order. Track numbers are 1–99, so there's no separate track-count error.
 
   Parse doesn't check sessions beyond the count, subchannel, sector size or mode. A set with any of them ingests, and fails only at play (D10).
 - **D8a** `MdsSheet.ForPlayback(ReadOnlySpan<byte> mds, string mdsFileName, string mdfName, long mdfLength, string trackPrefix)` returns a `PlaybackCue`, or fails with a D7 error or, in this order:
@@ -159,13 +164,12 @@ The disc sets are stored as they are and play the way CloneCD discs do: `play-di
   - `the .mdf isn't a whole number of 2352-byte sectors`;
   - `track <t> doesn't start on a 2352-byte sector`;
   - `track <t> doesn't start after track <t-1>`, for a `start_offset` that isn't greater than the previous one;
-  - `track <t> starts past the end of the .mdf`, when the last track's `start_offset` is at or past `mdfLength`;
-  - `track <t>: the .mds positions don't agree`, when the gap below is negative.
+  - `track <t> starts past the end of the .mdf`, when the last track's `start_offset` is at or past `mdfLength`.
 
   On success:
   - `CueName` is `<mds base name>.cue`.
   - `Tracks` holds `(mdfName, "<trackPrefix>01.bin")`.
-  - `Content` has `FILE "<trackPrefix>01.bin" BINARY`, then per track `  TRACK TT <type>` (`AUDIO`, `MODE1/2352` or `MODE2/2352`). For track 2 onward, a `    PREGAP mm:ss:ff` follows when its gap is above 0, where the gap is `start_sector[t] − start_sector[t−1] − (start_offset[t] − start_offset[t−1]) / 2352`. Alcohol doesn't store pregaps in the `.mdf`, so the player inserts them. Then comes `    INDEX 01 <start_offset / 2352>`.
+  - `Content` has `FILE "<trackPrefix>01.bin" BINARY`, then per track `  TRACK TT <type>` (`AUDIO`, `MODE1/2352` or `MODE2/2352`). For track 2 onward, a `    PREGAP mm:ss:ff` follows when the extra block's `pregap` is above 0. Track 1's `pregap` (normally 150) is the cue's implicit two seconds and is never written. Alcohol doesn't store pregaps in the `.mdf` (libmirage: "MDS format doesn't seem to store pregap data in its data file"), so the player inserts them. Then comes `    INDEX 01 <start_offset / 2352>`. `start_sector` and `length` are parsed but not used: neither libmirage nor PCSX ReARMed lays out tracks from them.
 
   The text is UTF-8, no BOM, LF, formatted as D6.
 
@@ -187,12 +191,12 @@ The disc sets are stored as they are and play the way CloneCD discs do: `play-di
   - An MDS set matches only when its `.mdf` equals a listed track (a one-track disc). Then it ingests with the `.mdf` as the main file and `files` `[.mds]`. Otherwise both members go to Review as `NoDatMatch`.
 
 ### Review
-- **D10** `ReviewResolver.IsSetMemberCandidate` adds `.toc`, `.mds` and `.mdf` to its extensions, so they are never dismissible (`IsDismissible` itself is unchanged). A set of any kind resolves as one release through `ResolveSetAsync` → `StoreSetReleaseAsync`. The A2 tag source (`ReviewResolver` line 545) also takes the `.toc` or `.mds` name. A dismiss of one of these members is refused with `SetFileNotResolvable`.
+- **D10** `ReviewResolver.IsSetMemberCandidate` adds `.toc`, `.mds` and `.mdf` to its extensions, so they are never dismissible (`IsDismissible` itself is unchanged). A set of any kind resolves as one release through `ResolveSetAsync` → `StoreSetReleaseAsync`. The A2 tag source (the Release flag's `named` lookup, `ReviewResolver` lines 545–548) also takes the `.toc` or `.mds` name. A dismiss of one of these members is refused with `SetFileNotResolvable`.
 
 ### Play
 - **D11** `PlayDisc.ShapeProblem` accepts, on all five disc systems:
   - **A TOC set:** exactly one `.toc` plus 1–99 `.bin` members, the main file among them, the shape a cue set has. The rule becomes "exactly one `.cue` or `.toc`".
-  - **An MDS disc:** the main member is an `.mdf`, with exactly one `.mds` of the same stem, ignoring case.
+  - **An MDS disc:** exactly two members: the main member is an `.mdf`, and the other an `.mds` of the same stem, ignoring case. Checked next to `IsCloneCd`, before the cue rule.
 
   TurboGrafx-CD's single-file rule and PSP's rules are unchanged. The error for another multi-file shape becomes `a disc set must be one .cue or .toc and its .bin tracks, the main file among them`.
 - **D12** `OpenDiscAsync` reads a TOC set's `.toc` or an MDS disc's `.mds` in full. One over `MaxCueBytes` is `the .toc is larger than 65536 bytes` or `the .mds is larger than 65536 bytes`. It then calls `TocSheet.ForPlayback` (with the bins and `trackPrefix`) or `MdsSheet.ForPlayback` (with the `.mdf`'s opened length), as `CloneCdDiscAsync` does.
@@ -221,15 +225,15 @@ The disc sets are stored as they are and play the way CloneCD discs do: `play-di
 | Api | `src/RnRomManager.Api/Endpoints/PlayDisc.cs` (`ShapeProblem`, `OpenDiscAsync`, new TOC and MDS branches next to `CloneCdDiscAsync`, the class and method XML docs) | A3, D11–D13 |
 | Web (comments only) | `src/RnRomManager.Web/src/lib/api/types.ts` (lines 386, 392) | Set members list `.toc`/`.mds`/`.mdf` |
 | TestData | `tests/RnRomManager.TestData/ExternalSetTestHandler.cs`, `PsxSetTestHandler.cs` | `RomExtensions` gain `.mds`, `.mdf`, `.toc` |
-| Tests | `TocSheetTests` (new), `MdsSheetTests` (new) in `tests/RnRomManager.Core.Tests/Ingest/`; `IngestSetPlannerTests`, `ReviewSetsTests`, `ReviewResolverTests`, `DiscSetsTests`; each changed handler's tests; `BrowserCoreExtensionsTests`, `SupportedSystemsTableTests`, `IngestPipelineTests`, `ReviewEndpointsTests`, `LibraryEndpointsTests.PlayDisc.cs`, `LibraryEndpointsTests.PlayDiscSet.cs` | Per step. The assertion at `LibraryEndpointsTests.PlayDisc.cs:677` changes to A3's new single-file error text. Any assertion on `a disc set must be one .cue and its .bin tracks…` changes to D11's text. |
+| Tests | `TocSheetTests` (new), `MdsSheetTests` (new) in `tests/RnRomManager.Core.Tests/Ingest/`; `IngestSetPlannerTests`, `ReviewSetsTests`, `ReviewResolverTests`, `DiscSetsTests`; each changed handler's tests; `BrowserCoreExtensionsTests`, `SupportedSystemsTableTests`, `IngestPipelineTests`, `ReviewEndpointsTests`, `LibraryEndpointsTests.PlayDisc.cs`, `LibraryEndpointsTests.PlayDiscSet.cs` | Per step. The assertion at `LibraryEndpointsTests.PlayDisc.cs:677` changes to A3's new single-file error text. No test asserts `a disc set must be one .cue and its .bin tracks…` today; step 8 adds one for D11's text. |
 | Docs | `README.md` (table rows), `docs/features.md`, `docs/development.md`, `docs/adding-a-system.md`, `docs/zip-format.md` | Steps 1, 7, 9 |
 
 No migration (`files` rows hold any member), no config key and no API shape change (`setMembers` already lists any set's members).
 
 ## Risks
 - **Unverified on real dumps:** no MDS or TOC rip is in the repo, so the tests use synthetic files and check the archive, not that a core boots it. The MDS offsets come from libmirage and PCSX ReARMed, not from Alcohol's documentation. Step 8's "Done when" asks the implementer to play one MDS and one TOC disc per core they own a rip for, and to record each result in § Decisions. The PR names the cores that weren't checked.
-- **MDS pregap inference (D8a)** assumes Alcohol leaves pregaps out of the `.mdf` (libmirage's comment). If a rip stores them, the derived gap is 0 and no `PREGAP` is written, which is still correct.
-- **cdrdao subset (D4–D6):** a `.toc` with sample-count times doesn't parse, so its set waits in ingest as `IncompleteSet`. `SILENCE`/`ZERO`, cooked modes and subchannel tracks parse but don't play. Most PlayStation/Saturn TOC rips use `MODE2_RAW`/`AUDIO` with `#` offsets into one `.bin`.
+- **MDS pregaps (D8a)** come from the extra block, as libmirage reads them, on its comment that Alcohol leaves pregaps out of the `.mdf`. If a rip did store them, the cue would add a second gap of silence before that track.
+- **cdrdao subset (D4–D6):** a `.toc` with sample- or byte-count times, a statement split over lines, or `FIRST_TRACK_NO`, `END` or `FIFO` doesn't parse, so its set waits in ingest as `IncompleteSet`. `SILENCE`/`ZERO`, `SWAP`, cooked modes and subchannel tracks parse but don't play. Most PlayStation/Saturn TOC rips use `MODE2_RAW`/`AUDIO` with `#` offsets into one `.bin`. The grammar was checked against cdrdao's current `trackdb/TocParser.cc`.
 - **Commodore Review volume:** the new PET/VIC-20/C64 types never DAT-match, so each file needs manual resolution. That's the existing behaviour for those systems' non-DAT types.
 
 ## Steps
@@ -249,7 +253,8 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   Done when they pass.
 - [ ] **2. TOC parsing**: D3–D5. Files: `TocSheet.cs` (new, `Parse` and the records), `TocSheetTests.cs` (new). Done when `TocSheetTests` covers:
   - a one-file and a two-file toc giving the expected `Files` and `Tracks` (byte offsets, starts, lengths, `PREGAP`, `START`; positions are step 3's);
-  - comments, `CD_TEXT` blocks at disc and track level, a BOM, LF/CRLF/CR and mixed-case keywords;
+  - comments, `CD_TEXT` blocks at disc and track level (one with a nested `LANGUAGE_MAP` and a `{` inside a string), a BOM, LF/CRLF/CR and mixed-case keywords;
+  - string escapes (`\"`, `\\`, `\101`), `FILE … SWAP`, a `FILE` length of 0 recorded as null, a `ZERO MODE0` item, and a bare `START` after a sized `FILE`;
   - every D5 error text.
 - [ ] **3. TOC playback**: D6. Files: `TocSheet.cs` (`ForPlayback`), `TocSheetTests.cs`. Done when `TocSheetTests` covers:
   - a one-file `MODE2_RAW` + two `AUDIO` toc with `#` offsets, `START` and `PREGAP`, giving the exact cue text;
@@ -257,7 +262,8 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   - a `DATAFILE` continuing after a sized track;
   - every D6 error text, including the no-length track that isn't last in its file and an unreferenced stored track.
 - [ ] **4. MDS sheet**: D7, D8a. Files: `MdsSheet.cs` (new), `MdsSheetTests.cs` (new; builds `.mds` bytes in the test). `MdsSheet` is far smaller than `TocSheet`, so parse and playback are one step. Done when `MdsSheetTests` covers:
-  - a one-track MODE2 disc, and a data + two-audio disc with a lead-in block and a derived `PREGAP`, both giving the exact cue text;
+  - a one-track MODE2 disc, and a data + two-audio disc with a point-0 block, 0xA0–0xA2 lead-in blocks and track 2's extra-block `pregap` of 150 written as `PREGAP 00:02:00` (track 1's 150 not written), both giving the exact cue text;
+  - a track with `extra_offset` 0 (no `PREGAP`);
   - every D7 and D8a error text.
 - [ ] **5. Planning**: D8, before any handler accepts the new extensions. Files:
   - `IngestSetPlanner.cs`, `IngestOutcome.cs`, `ReviewSets.cs`;
@@ -303,7 +309,8 @@ No migration (`files` rows hold any member), no config key and no API shape chan
     - a TurboGrafx-CD TOC set plays;
     - an `.mdf` with subchannel gives `409 InvalidPlayDisc` with D8a's text;
     - a cooked-mode `.toc` gives `409 InvalidPlayDisc` with D6's text;
-    - D11's new multi-file shape error text.
+    - D11's new multi-file shape error text, for an `.mdf` with an `.mds` of another stem;
+    - D12's `the .toc is larger than 65536 bytes` and `the .mds is larger than 65536 bytes`.
   - `LibraryEndpointsTests.PlayDiscSet.cs`: a two-disc Saturn set of MDS discs (playlist lines, `disc1-track-01.bin`, `disc2-track-01.bin`).
   - `DiscSetsTests`: `.mdf` mains group into a set, and the `.toc`/`.mds` set names.
 
@@ -337,6 +344,14 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   - the TOC work split into parse and playback steps, with Review its own step (reviewer)
 - 2026-11-23 Review round 2 → step 2 asserts D3's fields, not positions (reviewer)
 - 2026-11-23 Audit list corrections → C64 `.vsf` (snapshot) and PET `.crt` (no cartridge port) dropped from the proposed list; no libretro DAT lists any added type except where the bytes equal an existing entry (code)
+
+- 2026-11-23 Review round 3, checked against libmirage `image-mds`, PCSX ReARMed `cdriso.c` and cdrdao `TocParser.cc`:
+  - MDS offsets, the mode table and the version byte confirmed;
+  - a track block is `point` 1–99 (point 0 skipped too), and `extra_offset` 0 means no extra block;
+  - MDS pregaps come from the extra block, not `start_sector` (which neither reader uses), so the "positions don't agree" and unreachable "more than 99 tracks" errors are dropped;
+  - TOC: `MODE0` isn't a track mode, a bare `START` and `FILE … SWAP` are accepted, a `FILE` length of 0 means to the end, strings take cdrdao's escapes, and `FIRST_TRACK_NO`/`END`/`FIFO` stay unknown (Risks);
+  - new pinned errors: unknown string escape, `<WORD> needs a string`, `<WORD> is incomplete`, bare `START` after unsized data, `SWAP` at play; "more than one file" counts items;
+  - MDS play shape is exactly two members; tests added for D12's size errors (reviewer)
 
 ## Kickoff prompt
 ```text
