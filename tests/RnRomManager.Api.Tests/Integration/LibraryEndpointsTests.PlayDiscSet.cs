@@ -483,4 +483,30 @@ public partial class LibraryEndpointsTests
         Assert.That(await ProblemTitle(response, HttpStatusCode.Conflict, PlayDisc.InvalidPlayDisc),
             Is.EqualTo($"The disc can't be played: Disc 1: a disc file can't be named {listed}."));
     }
+
+    [Test]
+    public async Task PlayDiscSet_ATwoDiscSaturnMdsSet_NamesEachGeneratedCue_AndAliasesEachMdf()
+    {
+        static InfoJsonRom Disc(int n, byte[] mdf) =>
+            PsxSolo($"Prism (USA) (Disc {n}).mdf", mdf, isPrimary: n == 1) with
+            {
+                BaseTitle = "Prism", Regions = ["USA"], Flags = [$"Disc {n}"], Files = [SetFile($"Prism (USA) (Disc {n}).mds", SyntheticMdsBuilder.OneTrack())],
+            };
+        var (id, _, ids) = await DiscGame(PlayDisc.SaturnSystemId, "Prism", [Disc(1, SetTrack1(80)), Disc(2, SetTrack1(81))],
+            ("Prism (USA) (Disc 1).mdf", SetTrack1(80)), ("Prism (USA) (Disc 1).mds", SyntheticMdsBuilder.OneTrack()),
+            ("Prism (USA) (Disc 2).mdf", SetTrack1(81)), ("Prism (USA) (Disc 2).mds", SyntheticMdsBuilder.OneTrack()));
+
+        using var response = await _user.GetAsync(PlayDiscSetUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[]
+        {
+            "Prism (USA).m3u", "Prism (USA) (Disc 1).cue", "disc1-track-01.bin", "Prism (USA) (Disc 2).cue", "disc2-track-01.bin",
+        }));
+        Assert.That(Encoding.UTF8.GetString(ReadEntry(zip, "Prism (USA).m3u")), Is.EqualTo("Prism (USA) (Disc 1).cue\nPrism (USA) (Disc 2).cue\n"));
+        Assert.That(Encoding.UTF8.GetString(ReadEntry(zip, "Prism (USA) (Disc 2).cue")), Does.StartWith("FILE \"disc2-track-01.bin\" BINARY\n"));
+        Assert.That(ReadEntry(zip, "disc2-track-01.bin"), Is.EqualTo(SetTrack1(81)));
+    }
 }

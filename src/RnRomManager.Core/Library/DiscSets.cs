@@ -51,7 +51,7 @@ public static partial class DiscSets
     }
 
     // S1, CloneCD B10: the main-file extensions a set's discs may have; an .img is a CloneCD disc (or a lone PlayStation image).
-    private static readonly string[] MainExtensions = [".bin", ".iso", ".chd", ".img"];
+    private static readonly string[] MainExtensions = [".bin", ".iso", ".chd", ".img", ".mdf"];
 
     [GeneratedRegex(@"^Disc ([0-9]+)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DiscFlag();
@@ -86,11 +86,11 @@ public static partial class DiscSets
         return sets;
     }
 
-    /// <summary>M2, CloneCD B10: Disc 1's cue or <c>.ccd</c> name (else its file name) without its first " (Disc 1)", as <c>.m3u</c>.</summary>
+    /// <summary>M2, CloneCD B10, D13: Disc 1's cue, <c>.toc</c>, <c>.ccd</c> or <c>.mds</c> name (else its file name) without its first " (Disc 1)", as <c>.m3u</c>.</summary>
     public static string Name(RomRow discOne, ILookup<long, RomFileRow> files)
     {
         var cue = files[discOne.Id].FirstOrDefault(f => f.Ordinal == 0
-            && (f.FileName.EndsWith(".cue", StringComparison.OrdinalIgnoreCase) || f.FileName.EndsWith(".ccd", StringComparison.OrdinalIgnoreCase)));
+            && Path.GetExtension(f.FileName).ToLowerInvariant() is ".cue" or ".toc" or ".ccd" or ".mds");
         var stem = Path.GetFileNameWithoutExtension(cue?.FileName ?? discOne.FileName);
         return DiscOneToken().Replace(stem, "", 1) + ".m3u";
     }

@@ -276,4 +276,23 @@ public class DiscSetsTests
     {
         Assert.That(DiscSets.DiskNumber(fileName), Is.EqualTo(expected));
     }
+
+    [TestCase("saturn")]
+    [TestCase("psx")]
+    public void MdfDiscs_AreASet_NamedFromDiscOnesMds(string systemId)
+    {
+        var one = Rom("Game (USA) (Disc 1) (Image).mdf", ["Disc 1"]);
+        var files = new[] { File(one, 0, "Game (USA) (Disc 1).mds") }.ToLookup(f => f.RomId);
+
+        Assert.That(DiscSets.Find(systemId, [one, Disc(2, ".mdf")], files).Single().Name, Is.EqualTo("Game (USA).m3u"));
+    }
+
+    [Test]
+    public void ATocSet_IsNamedFromDiscOnesToc()
+    {
+        var one = Rom("Game (USA) (Disc 1) (Track 1).bin", ["Disc 1"]);
+        var files = new[] { File(one, 0, "Game (USA) (Disc 1).toc"), File(one, 1, "Game (USA) (Disc 1) (Track 2).bin") }.ToLookup(f => f.RomId);
+
+        Assert.That(DiscSets.Find("psx", [one, Disc(2)], files).Single().Name, Is.EqualTo("Game (USA).m3u"));
+    }
 }

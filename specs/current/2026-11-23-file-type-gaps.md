@@ -302,7 +302,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
     - dismissing an MDS set's `.mdf` is refused with `SetFileNotResolvable`.
 
   Done when they pass, with the integration classes run on Docker.
-- [ ] **8. Play**: D11–D14. Files: `PlayDisc.cs`, `DiscSets.cs`. Tests:
+- [x] **8. Play**: D11–D14. Files: `PlayDisc.cs`, `DiscSets.cs`. Tests:
   - `LibraryEndpointsTests.PlayDisc.cs`:
     - an MDS Saturn disc streams a ZIP with exactly the generated cue and `track-01.bin`, and no `.mds`;
     - a TOC PlayStation set streams the generated cue and `track-01.bin`…, and no `.toc`;
@@ -356,6 +356,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
 - 2026-11-23 Review round 5 → § Changes names `ReviewResolverExternalTests` and the same `ReviewResolver` lines as D10 (reviewer)
 - 2026-11-23 Review round 6 → step 5 tests an MDS member failing `NameProblem`; step 6 names lines 545–548 (reviewer)
 - 2026-11-23 Review round 7 → step 9 updates the VIC-20 Play bullet, which lists the cartridge extensions (reviewer)
+- 2026-11-23 Real-dump check (step 8) → not done: no MDS or TOC rip was available, so no core (PCSX ReARMed, Yabause, Genesis Plus GX, Opera, Beetle PCE) was booted with one; the PR names all five as unverified (code)
 
 ## Kickoff prompt
 ```text
