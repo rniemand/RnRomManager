@@ -78,7 +78,7 @@ public class BrowserCoreExtensionsTests
         [("saturn", ".bin")] = "play-disc adds a MODE1/2352 cue to a lone .bin, and Yabause opens the cue",
         [("saturn", ".nrg")] = "never plays: canPlay and the games list's playRomId refuse an .nrg release",
         [("tgcd", ".bin")] = "a cue set's data track; a lone .bin never plays (canPlay, play-disc)",
-        [("lynx", ".bll")] = "Handy loads BLL homebrew by its BS93 header (unverified with a real dump)",
+        [("lynx", ".bll")] = "Handy loads BLL homebrew by its BS93 header (checked 2026-11-23 with the DAT's Blasting Robots .bll, CRC 06428D44)",
         [("jaguar", ".rom")] = "VirtualJaguar sizes a header-less .rom as an Alpine image; canPlay and playRomId refuse other sizes",
         [("jaguar", ".abs")] = "VirtualJaguar knows an ABS by its 0x601B header, whatever the extension",
         [("jaguar", ".cof")] = "VirtualJaguar knows a COFF by its 0x0150 header, whatever the extension",
