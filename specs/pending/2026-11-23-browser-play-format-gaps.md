@@ -46,7 +46,6 @@ Audit gaps left as they are (each already refused by `canPlay`/`playRomId` or th
 - **N5** The `.nrg` refusal goes: `canPlay` (`emulator.ts`) and `LibraryEndpoints`' quick-play `playable` no longer reject `.nrg`. A malformed `.nrg` shows the play page's existing `InvalidPlayDisc` message.
 - **N6** `DiscSets` takes `.nrg` as a disc's main file on `saturn` only, so a Saturn set may mix `.nrg` discs; its playlist names the generated cue (`DiscSets.Name` falls back to the file name, unchanged).
 
-
 ## Changes
 | Area | File(s) | Change |
 |---|---|---|
@@ -69,7 +68,7 @@ No migration, config key or API contract change: `play-disc` keeps its responses
 - **Saturn sets with `.nrg`:** a 5-disc set counts all images against the 2 GiB `MaxBytes` budget as today.
 
 ## Steps
-- [ ] **1. NRG parser**: `SyntheticNrgBuilder`, `NrgSheet` and `NrgTrack` (N2–N4), following N2. Files: `tests/RnRomManager.TestData/SyntheticNrgBuilder.cs` (new), `src/RnRomManager.Core/Ingest/NrgSheet.cs` (new). Tests: `tests/RnRomManager.Core.Tests/Ingest/NrgSheetTests.cs` (new, images from `SyntheticNrgBuilder`). Done when: tests cover `Footer` for v2, v1 (region end = length − 8), no footer, a file shorter than 8 bytes and a chunk start ≤ 0 or ≥ the region end; each N3 error 2–12 with its exact text, including skipped unknown and other-version chunks; a region without `END!` parsing to its end; a mode 0x0F block (sector size 2448) failing N3.8; a three-track DAOX image (data with a 150-sector index 0, two audio) gives the exact N4 cue with `INDEX 00`/`INDEX 01` and `DataLength` = last end; a DAOI image gives the same cue; `dotnet test tests/RnRomManager.Core.Tests --filter "FullyQualifiedName~NrgSheetTests"` passes.
+- [ ] **1. NRG parser**: `SyntheticNrgBuilder`, `NrgSheet` and `NrgTrack` (N2–N4), following N2. Files: `tests/RnRomManager.TestData/SyntheticNrgBuilder.cs` (new), `src/RnRomManager.Core/Ingest/NrgSheet.cs` (new). Tests: `tests/RnRomManager.Core.Tests/Ingest/NrgSheetTests.cs` (new, images from `SyntheticNrgBuilder`). Done when: tests cover `Footer` for v2 (`V2` true) and v1 (`V2` false, region end = length − 8), no footer, a file shorter than 8 bytes and a chunk start ≤ 0 or ≥ the region end; each N3 error 2–12 with its exact text, including skipped unknown and other-version chunks; a region without `END!` parsing to its end; a mode 0x0F block (sector size 2448) failing N3.8; a three-track DAOX image (data with a 150-sector index 0, two audio) gives the exact N4 cue with `INDEX 00`/`INDEX 01` and `DataLength` = last end; a DAOI image gives the same cue; `dotnet test tests/RnRomManager.Core.Tests --filter "FullyQualifiedName~NrgSheetTests"` passes.
 - [ ] **2. Play Saturn .nrg**: N1, N5, N6 in `PlayDisc`, `LibraryEndpoints`, `DiscSets`, `emulator.ts`; `SaturnHandler` comment; `BrowserCoreExtensionsTests` reason; docs for N. Files: `src/RnRomManager.Api/Endpoints/PlayDisc.cs`, `src/RnRomManager.Api/Endpoints/LibraryEndpoints.cs`, `src/RnRomManager.Core/Library/DiscSets.cs`, `src/RnRomManager.Systems.Sega/SaturnHandler.cs`, `src/RnRomManager.Web/src/lib/emulator.ts`, `tests/RnRomManager.Api.Tests/BrowserCoreExtensionsTests.cs`, `README.md`, `docs/features.md`, `docs/development.md`. Tests:
   - `LibraryEndpointsTests.PlayDisc`: new `PlayDisc_ASaturnNrg_StreamsACueAndTrack01WithoutTheFooter` (a `SyntheticNrgBuilder` image; the ZIP holds `<stem>.cue` with the N4 text and `track-01.bin` of exactly the data length); `PlayDisc_ASaturnNrg_AloneOrInASet_Is409InvalidPlayDisc` renamed `PlayDisc_ASaturnNrg_WithoutAFooterOrInACueSet_Is409InvalidPlayDisc`, and for the lone case it also asserts the title `The disc can't be played: the .nrg has no Nero footer.`; `PlayDisc_ALoneNrg_NamesTheSingleFileShapes` becomes `PlayDisc_ALoneMdf_NamesTheSingleFileShapes` (a lone `.mdf`, new message text).
   - `LibraryEndpointsTests.PlayDiscSet`: new `PlayDiscSet_ASaturnSetWithAnNrgDisc_NamesItsGeneratedCue` (`disc2-track-01.bin`, the playlist line names its cue).
@@ -92,6 +91,7 @@ Finish runs the full suite and e2e unchanged (no Playwright change: e2e doesn't 
 - 2026-11-23 Spec review pass 3: N3.7's reason no longer claims `MdsSheet` requires track 1 (it doesn't); decisions put in order (reviewer)
 - 2026-11-23 Spec review pass 4: N2 checked against libmirage's NRG parser (footer version picks DAOX/ETN2 or DAOI/ETNF; `END!` not required; the header's first 4 bytes are ignored); T1 checked against Beetle PCE `e1ac90d` (no playlist limit; 4 is the app's cap) (reviewer)
 - 2026-11-23 Spec review pass 5: Beetle PCE `e1ac90d` can't swap discs (`PCE_LoadCD` inserts only the first; no disk-control interface) → TurboGrafx-CD sets dropped, T1–T6 and Step 3 removed (user); `Footer` returns the version so `Parse`/`ForPlayback` pick the chunk ids, and DAOI offsets read unsigned (reviewer)
+- 2026-11-23 Spec review pass 6: Step 1 tests `Footer`'s `V2` flag (reviewer)
 
 ## Kickoff prompt
 ```text
