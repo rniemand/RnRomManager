@@ -4,7 +4,7 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.TestData;
 
 /// <summary>
-/// A test-only disc system with file sets (B5): external storage, exact names, bin/cue sets, and the <c>redump</c>
+/// A test-only disc system with file sets (B5): external storage, exact names, cue and CloneCD sets, and the <c>redump</c>
 /// layout with no metadat like the six real disc handlers. Registered only by the test hosts that use it, each
 /// writing a <see cref="DatNameValue"/> fixture DAT with <see cref="FixtureDatLayout.Redump"/>.
 /// </summary>
@@ -16,7 +16,7 @@ public sealed class ExternalSetTestHandler : ISystemHandler
     public string Id => SystemId;
     public string DisplayName => "External Set Test";
     public string Family => SystemId;
-    public IReadOnlyList<string> RomExtensions => [".bin", ".cue", ".iso", ".nrg"];
+    public IReadOnlyList<string> RomExtensions => [".bin", ".cue", ".iso", ".nrg", ".ccd", ".img", ".sub"];
     public long MinRomSizeBytes => 1;
     public long MaxRomSizeBytes => 64L * 1024 * 1024;
     public string DatName => DatNameValue;

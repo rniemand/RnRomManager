@@ -60,8 +60,8 @@ public static class ReviewEndpoints
                 header = Parse(item.Header), suggestions = Parse(item.Suggestions), datIdentification = Parse(item.DatIdentification),
                 candidateGames = candidates, status = item.Status, gameId = item.GameId, createdAt = item.CreatedAt,
                 lastSeenJobId = item.LastSeenJobId, resolvedAt = item.ResolvedAt, resolvedBy = item.ResolvedBy,
-                resolvable = ReviewResolver.IsDismissible(item, systems) || set is not null, // B12, from the set already found
-                dismissible = ReviewResolver.IsDismissible(item, systems),
+                resolvable = ReviewResolver.IsDismissible(item, systems, set is not null) || set is not null, // B12, from the set already found
+                dismissible = ReviewResolver.IsDismissible(item, systems, set is not null),
                 fileSets = systems.ById(item.SystemId)?.FileSets ?? false,
                 setMembers = set?.Select(m => new { reviewId = m.Row.Id, fileName = m.Row.OriginalFileName, sizeBytes = m.Row.SizeBytes }),
             });

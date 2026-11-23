@@ -9,7 +9,7 @@ using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Ingest;
 
-/// <summary>Spec B12: a Review item's unmatched bin/cue set, planned from the system's ingest folder as ingest plans it.</summary>
+/// <summary>Spec B12, CloneCD B5: a Review item's unmatched cue or CloneCD set, planned from the system's ingest folder as ingest plans it.</summary>
 public class ReviewSetsTests
 {
     private const string Cue = "Game (Disc 2).cue";
@@ -148,5 +148,21 @@ public class ReviewSetsTests
         };
 
         Assert.That(await _sets.FindAsync(item), Is.Null);
+    }
+
+    [TestCase("Game.ccd")]
+    [TestCase("Game.img")]
+    [TestCase("Game.sub")]
+    public async Task CloneCdSet_IsFound_InSetOrder_FromAnyMember(string from)
+    {
+        Write("Game.ccd", Encoding.UTF8.GetBytes("[Disc]\nSessions=1\n[TRACK 1]\nMODE=2\nINDEX 1=0\n"));
+        Write("Game.img", new byte[2352]);
+        Write("Game.sub", new byte[96]);
+        foreach (var (name, id) in new[] { ("Game.ccd", 1L), ("Game.img", 2L), ("Game.sub", 3L) })
+            Row(name, id);
+
+        var set = await _sets.FindAsync(_rows[Path.Combine(_folder, from)]);
+
+        Assert.That(set!.Select(m => (m.File.Name, m.Row.Id)), Is.EqualTo(new[] { ("Game.ccd", 1L), ("Game.img", 2L), ("Game.sub", 3L) }));
     }
 }

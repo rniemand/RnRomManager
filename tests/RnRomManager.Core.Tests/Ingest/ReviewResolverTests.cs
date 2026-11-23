@@ -180,6 +180,27 @@ public class ReviewResolverTests
         await AssertVerifyFailedAndPending(await _resolver.ResolveInJobAsync(1, Manual(), Actor, default));
     }
 
+    [TestCase("extset", "Game.ccd", false, false)]
+    [TestCase("extset", "Game.ccd", true, false)]
+    [TestCase("extset", "Game.SUB", false, false)]
+    [TestCase("psx", "Game.sub", false, false)]
+    [TestCase("psx", "Game.ccd", true, false)]
+    [TestCase("extset", "Game.img", false, false)]
+    [TestCase("extset", "Game.img", true, false)]
+    [TestCase("psx", "Game.img", true, false)]
+    [TestCase("psx", "Game.IMG", false, true)]
+    [TestCase("psx", "Game.cue", false, false)]
+    [TestCase("psx", "Game.bin", false, false)]
+    [TestCase("psx", "Game.iso", false, true)]
+    [TestCase("gb", "Game.img", false, true)]
+    public void IsDismissible_CloneCdB7(string systemId, string fileName, bool inSet, bool expected)
+    {
+        var systems = new SystemRegistry([new ExternalSetTestHandler(), new PsxSetTestHandler(), new Headerless(".img")]);
+        var item = new ReviewItem { Id = 1, SystemId = systemId, Status = "Pending", SourcePath = fileName, OriginalFileName = fileName };
+
+        Assert.That(ReviewResolver.IsDismissible(item, systems, inSet), Is.EqualTo(expected));
+    }
+
     private sealed class Headerless(params string[] extensions) : ISystemHandler
     {
         public string Id => "gb";

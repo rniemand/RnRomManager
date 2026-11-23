@@ -23,13 +23,13 @@ public static class IngestReason
     /// <summary>B9: a <c>.zip</c>/<c>.7z</c> for a <c>FileSets</c> system stays in ingest; nothing is extracted.</summary>
     public const string ArchiveNotSupported = "ArchiveNotSupported";
 
-    /// <summary>B7: a set member waits in ingest: a file its cue names is missing, its cue is broken, or a lone data track of a multi-track disc.</summary>
+    /// <summary>B7, CloneCD B5: a member of a cue or CloneCD set waits in ingest: a file its <c>.cue</c> or <c>.ccd</c> names is missing, the <c>.cue</c> or <c>.ccd</c> is broken, an <c>.img</c>/<c>.sub</c> has no <c>.ccd</c>, or a lone data track of a multi-track disc.</summary>
     public const string IncompleteSet = "IncompleteSet";
 
-    /// <summary>B7: the cue names a file that isn't a <c>.bin</c>, names itself, or has a name that can't be stored.</summary>
+    /// <summary>B7, CloneCD B5: a <c>.cue</c> names a file that isn't a <c>.bin</c> or names itself, or a member of a cue or CloneCD set has a name that can't be stored.</summary>
     public const string UnsupportedSetMember = "UnsupportedSetMember";
 
-    /// <summary>B7: a file is named by two cues, or a cue's name matches two files that differ only by case.</summary>
+    /// <summary>B7, CloneCD B5: a file is named by two cues, a <c>.cue</c> or <c>.ccd</c> member name matches two files that differ only by case, or a CloneCD <c>.img</c>/<c>.sub</c> is already a cue's.</summary>
     public const string SetConflict = "SetConflict";
 
     /// <summary>B7a: two or more games own the data track's base title; the set stays until the Admin merges or moves them.</summary>

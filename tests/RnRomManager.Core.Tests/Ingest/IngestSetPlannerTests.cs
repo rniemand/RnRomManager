@@ -150,4 +150,77 @@ public class IngestSetPlannerTests
 
         AssertUnits(units, Set("Game.cue", "Game (Track 1).bin", "Game (Track 2).bin"));
     }
+
+    private const string ValidCcd = "[Disc]\nSessions=1\n[TRACK 1]\nMODE=2\nINDEX 1=0\n";
+
+    private static PlannerFile Ccd(string name, string text = ValidCcd) => CueText(name, text);
+
+    [Test]
+    public void CloneCd_CcdImgSub_IsOneSet_CcdThenImgThenSub()
+    {
+        var units = IngestSetPlanner.Plan([File("Game.sub"), File("game.IMG"), Ccd("Game.ccd")], loneImage: false);
+
+        AssertUnits(units, Set("Game.ccd", "game.IMG", "Game.sub"));
+    }
+
+    [Test]
+    public void CloneCd_WithoutSub_IsASet()
+    {
+        AssertUnits(IngestSetPlanner.Plan([Ccd("Game.ccd"), File("Game.img")], loneImage: false), Set("Game.ccd", "Game.img"));
+    }
+
+    [Test]
+    public void CloneCd_MissingImg_CcdAndSubAreIncompleteSet()
+    {
+        AssertUnits(IngestSetPlanner.Plan([Ccd("Game.ccd"), File("Game.sub")], loneImage: true),
+            Skipped(IngestReason.IncompleteSet, "Game.ccd", "Game.sub"));
+    }
+
+    [Test]
+    public void CloneCd_InvalidOrUnreadableCcd_IsIncompleteSet_WithItsImgAndSub()
+    {
+        AssertUnits(IngestSetPlanner.Plan([Ccd("Game.ccd", "[Disc]\nSessions=2\n[TRACK 1]\nMODE=2\nINDEX 1=0"), File("Game.img"), File("Game.sub")], loneImage: true),
+            Skipped(IngestReason.IncompleteSet, "Game.ccd", "Game.img", "Game.sub"));
+        AssertUnits(IngestSetPlanner.Plan([new PlannerFile("Game.ccd", 100), File("Game.img")], loneImage: true),
+            Skipped(IngestReason.IncompleteSet, "Game.ccd", "Game.img"));
+        AssertUnits(IngestSetPlanner.Plan([new PlannerFile("Game.ccd", IngestSetPlanner.MaxCueBytes + 1), File("Game.img")], loneImage: true),
+            Skipped(IngestReason.IncompleteSet, "Game.ccd", "Game.img"));
+    }
+
+    [Test]
+    public void CloneCd_NonPortableMemberName_IsUnsupportedSetMember()
+    {
+        AssertUnits(IngestSetPlanner.Plan([Ccd("Game?.ccd"), File("Game?.img")], loneImage: false),
+            Skipped(IngestReason.UnsupportedSetMember, "Game?.ccd", "Game?.img"));
+    }
+
+    [Test]
+    public void CloneCd_CaseFoldedDuplicate_IsSetConflict()
+    {
+        AssertUnits(IngestSetPlanner.Plan([Ccd("Game.ccd"), File("Game.img"), File("GAME.img")], loneImage: false),
+            Skipped(IngestReason.SetConflict, "Game.ccd", "GAME.img", "Game.img"));
+    }
+
+    [Test]
+    public void CloneCd_ImgClaimedByACue_IsSetConflict()
+    {
+        // The cue names a non-.bin file, so it and the .img are its UnsupportedSetMember unit; the .ccd and .sub conflict.
+        var units = IngestSetPlanner.Plan([Cue("Game.cue", "Game.img"), Ccd("Game.ccd"), File("Game.img"), File("Game.sub")], loneImage: false);
+
+        AssertUnits(units, Skipped(IngestReason.SetConflict, "Game.ccd", "Game.sub"), Skipped(IngestReason.UnsupportedSetMember, "Game.cue", "Game.img"));
+    }
+
+    [Test]
+    public void LoneSub_IsIncompleteSet()
+    {
+        AssertUnits(IngestSetPlanner.Plan([File("Game.sub")], loneImage: true), Skipped(IngestReason.IncompleteSet, "Game.sub"));
+    }
+
+    [TestCase(true)]
+    [TestCase(false)]
+    public void LoneImg_IsLoneOnlyWithLoneImage(bool loneImage)
+    {
+        AssertUnits(IngestSetPlanner.Plan([File("Game.img")], loneImage: loneImage),
+            loneImage ? Lone("Game.img") : Skipped(IngestReason.IncompleteSet, "Game.img"));
+    }
 }

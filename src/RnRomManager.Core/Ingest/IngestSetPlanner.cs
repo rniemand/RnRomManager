@@ -5,14 +5,14 @@ namespace RnRomManager.Core.Ingest;
 
 /// <summary>One loose file of an ingest folder, as the planner sees it.</summary>
 /// <param name="CueBytes">
-/// For a <c>.cue</c> of at most <see cref="IngestSetPlanner.MaxCueBytes"/>: its bytes, or null when it couldn't be read.
+/// For a <c>.cue</c> or <c>.ccd</c> of at most <see cref="IngestSetPlanner.MaxCueBytes"/>: its bytes, or null when it couldn't be read.
 /// Ignored for other files.
 /// </param>
 public sealed record PlannerFile(string Name, long Size, byte[]? CueBytes = null);
 
 public enum PlannedKind
 {
-    /// <summary>A complete bin/cue set: processed as one unit.</summary>
+    /// <summary>A complete cue or CloneCD set: processed as one unit.</summary>
     Set,
 
     /// <summary>A file no cue names: processed on its own as today.</summary>
@@ -22,13 +22,16 @@ public enum PlannedKind
     Skipped,
 }
 
-/// <param name="Members">File names as on disk. For a set: the cue first, then its <c>FILE</c> names in order.</param>
+/// <param name="Members">
+/// File names as on disk. For a set: the cue first, then its <c>FILE</c> names in order; or the <c>.ccd</c>, its
+/// <c>.img</c> and its <c>.sub</c> when there is one.
+/// </param>
 /// <param name="Reason">An <see cref="IngestReason"/> for <see cref="PlannedKind.Skipped"/>; null otherwise.</param>
 public sealed record PlannedUnit(PlannedKind Kind, IReadOnlyList<string> Members, string? Reason = null);
 
 /// <summary>
-/// B7: groups one <c>FileSets</c> folder's loose files into bin/cue sets, lone files and skipped members. Pure: the
-/// caller reads each small cue and passes its bytes. Units come in the scanner's ordinal name order, each at the
+/// B7, CloneCD B5: groups one <c>FileSets</c> folder's loose files into cue and CloneCD sets, lone files and skipped members. Pure: the
+/// caller reads each small cue or <c>.ccd</c> and passes its bytes. Units come in the scanner's ordinal name order, each at the
 /// position of its first member; every file appears in exactly one unit.
 /// </summary>
 public static class IngestSetPlanner
@@ -38,7 +41,8 @@ public static class IngestSetPlanner
 
     /// <param name="files">Every loose file of the folder, whatever the selection (B7 plans from all of them).</param>
     /// <param name="selected">The selected names (exact spelling), or null for the whole folder.</param>
-    public static IReadOnlyList<PlannedUnit> Plan(IReadOnlyList<PlannerFile> files, IReadOnlySet<string>? selected = null)
+    /// <param name="loneImage">CloneCD B5: an <c>.img</c> without a <c>.ccd</c> is a lone file (PlayStation) instead of waiting.</param>
+    public static IReadOnlyList<PlannedUnit> Plan(IReadOnlyList<PlannerFile> files, IReadOnlySet<string>? selected = null, bool loneImage = false)
     {
         var ordered = files.Select(f => f.Name).Order(StringComparer.Ordinal).ToList();
         var position = ordered.Select((name, i) => (name, i)).ToDictionary(x => x.name, x => x.i, StringComparer.Ordinal);
@@ -98,6 +102,31 @@ public static class IngestSetPlanner
                 && n.StartsWith(stem, StringComparison.OrdinalIgnoreCase))), IngestReason.IncompleteSet);
         }
 
+        // CloneCD B5: <stem>.ccd, <stem>.img and an optional <stem>.sub, matched ignoring case.
+        var sizes = files.ToDictionary(f => f.Name, StringComparer.Ordinal);
+        foreach (var ccd in ordered.Where(n => IsExtension(n, ".ccd") && !claimed.Contains(n)))
+        {
+            var stem = Path.GetFileNameWithoutExtension(ccd);
+            var ccds = byFolded[ccd].ToList();
+            var images = byFolded[stem + ".img"].ToList();
+            var subs = byFolded[stem + ".sub"].ToList();
+            List<string> members = [.. ccds, .. images, .. subs];
+            var file = sizes[ccd];
+            if (members.Any(m => CueSheet.NameProblem(m) is not null))
+                Add(PlannedKind.Skipped, members, IngestReason.UnsupportedSetMember);
+            else if (file.Size > MaxCueBytes || file.CueBytes is null || !CloneCdSheet.Parse(file.CueBytes).IsValid)
+                Add(PlannedKind.Skipped, [ccd, .. images, .. subs], IngestReason.IncompleteSet);
+            else if (images.Count == 0)
+                Add(PlannedKind.Skipped, [ccd, .. subs], IngestReason.IncompleteSet);
+            else if (ccds.Count > 1 || images.Count > 1 || subs.Count > 1 || members.Any(claimed.Contains))
+                Add(PlannedKind.Skipped, members, IngestReason.SetConflict);
+            else
+                Add(PlannedKind.Set, [ccd, .. images, .. subs]);
+        }
+
+        foreach (var name in ordered.Where(n => IsExtension(n, ".sub") || (!loneImage && IsExtension(n, ".img"))))
+            Add(PlannedKind.Skipped, [name], IngestReason.IncompleteSet);
+
         foreach (var name in ordered)
             Add(PlannedKind.Lone, [name]);
 
@@ -110,14 +139,15 @@ public static class IngestSetPlanner
     private static bool IsExtension(string name, string extension) => name.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
 }
 
-/// <summary>B7/B12: the checked read of a small cue for <see cref="IngestSetPlanner"/>, shared by ingest and Review.</summary>
+/// <summary>B7/B12, CloneCD B5: the checked read of a small cue or <c>.ccd</c> for <see cref="IngestSetPlanner"/>, shared by ingest and Review.</summary>
 internal static class IngestCueReader
 {
-    /// <returns>The cue's bytes, through the same checked open as other ingest reads; null for a non-cue, a cue over
+    /// <returns>The cue's or <c>.ccd</c>'s bytes, through the same checked open as other ingest reads; null for any other file, one over
     /// <see cref="IngestSetPlanner.MaxCueBytes"/>, or one that can't be read.</returns>
     public static byte[]? Read(string ingestRoot, IngestFile file, ILogger logger)
     {
-        if (!file.Name.EndsWith(".cue", StringComparison.OrdinalIgnoreCase) || file.SizeBytes > IngestSetPlanner.MaxCueBytes)
+        if (!(file.Name.EndsWith(".cue", StringComparison.OrdinalIgnoreCase) || file.Name.EndsWith(".ccd", StringComparison.OrdinalIgnoreCase))
+            || file.SizeBytes > IngestSetPlanner.MaxCueBytes)
             return null;
         var opened = ExternalRomPath.OpenRead(ingestRoot, file.FullPath, FileShare.Read);
         if (opened.Status != ExternalPathStatus.Found)
@@ -131,7 +161,7 @@ internal static class IngestCueReader
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or LimitExceededException)
         {
-            logger.LogWarning("{Path}: the cue couldn't be read: {Error}", file.FullPath, ex.Message);
+            logger.LogWarning("{Path}: the cue or .ccd couldn't be read: {Error}", file.FullPath, ex.Message);
             return null;
         }
     }

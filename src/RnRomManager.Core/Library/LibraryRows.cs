@@ -90,7 +90,7 @@ public sealed record RomFileRow
     public required Guid GameId { get; init; }
     public required string RomSha1 { get; init; }
 
-    /// <summary>The entry's 0-based index in <c>files</c>; 0 is the cue.</summary>
+    /// <summary>The entry's 0-based index in <c>files</c>; 0 is the cue or <c>.ccd</c>.</summary>
     public required int Ordinal { get; init; }
 
     public required string FileName { get; init; }

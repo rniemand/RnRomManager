@@ -90,7 +90,7 @@ public sealed class IngestJob(
                 logger.LogInformation("Review item {Id} removed: {Path} no longer exists", row.Id, row.ArchivePath ?? row.SourcePath);
         }
 
-        // Step 6. B7: a FileSets system that takes .cue files is planned into sets from all of its loose files, whatever the selection.
+        // Step 6. B7, CloneCD B5: a FileSets system that takes .cue files is planned into cue and CloneCD sets from all of its loose files, whatever the selection.
         var scanned = scanner.Scan().SelectMany(s => s.Files).ToList();
         var units = new List<WorkUnit>();
         foreach (var folder in scanned.GroupBy(f => f.SystemId))
@@ -99,7 +99,8 @@ public sealed class IngestJob(
             {
                 var byName = folder.ToDictionary(f => f.Name, StringComparer.Ordinal);
                 var selected = Selection?.Where(s => s.SystemId == folder.Key).Select(s => s.Name).ToHashSet(StringComparer.Ordinal);
-                foreach (var unit in IngestSetPlanner.Plan(folder.Select(f => new PlannerFile(f.Name, f.SizeBytes, IngestCueReader.Read(paths.Value.Ingest, f, logger))).ToList(), selected))
+                foreach (var unit in IngestSetPlanner.Plan(folder.Select(f => new PlannerFile(f.Name, f.SizeBytes, IngestCueReader.Read(paths.Value.Ingest, f, logger))).ToList(), selected,
+                    loneImage: handler.Id == "psx"))
                     units.Add(new WorkUnit(unit.Kind, [.. unit.Members.Select(m => byName[m])], unit.Reason));
             }
             else

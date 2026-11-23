@@ -116,7 +116,7 @@ No migration (`files` rows already hold any set member), no config key, no API s
   - LF, CRLF, lone CR, a leading BOM, mixed-case keys, ignored sections and ignored keys (`TocEntries`, `FLAGS`);
   - every B3 error text;
   - B4's two image-length errors, the `.sub` alias with and without a sub, and the trackPrefix (`disc2-track-01.img`).
-- [ ] **2. Planning and Review**: B5 and B7, before any handler accepts the new extensions, so no `.ccd`/`.sub` item exists without the new rules. Files:
+- [x] **2. Planning and Review**: B5 and B7, before any handler accepts the new extensions, so no `.ccd`/`.sub` item exists without the new rules. Files:
   - `IngestSetPlanner.cs`, `IngestJob.cs`, `ReviewSets.cs`, `IngestOutcome.cs`;
   - `ReviewResolver.cs`, `ReviewEndpoints.cs`;
   - `ExternalSetTestHandler.cs` and `PsxSetTestHandler.cs` (new) in TestData;
@@ -167,7 +167,6 @@ No migration (`files` rows already hold any set member), no config key, no API s
 - 2026-11-23 How do the cores take the files? → EmulatorJS 4.2.3 `downloadRom()` boots the first `.cue`/`.ccd` in the ZIP (so only the generated cue is sent); PCSX ReARMed `f29871d` `cdriso.c` opens `<content stem>.sub` after any image or cue, and parses a `.ccd` itself (not relied on) (code)
 - 2026-11-23 Lone `.img`/`.sub` → wait as `IncompleteSet` for their `.ccd`, except a PlayStation lone `.img`, which stays a lone release as today; multi-disc sets accept CloneCD discs on every system (defaults, stated)
 - 2026-11-23 Review rounds 1–2 → `DismissAsync` among B7's callers; `.img` dismissible only as a lone `psx` file; `NameProblem` check in B5; unknown `.ccd` keys, BOM and CR handled; every error text pinned with canonical key spelling; lone-`.img` case kept in the planner tests only (round 3); changed docs, comments and the `DiscSetsTests` case named; `.ccd` counted in the budget; `Plan`'s signature pinned; Review moved into step 2 ahead of the new extensions, with CloneCD-capable and `psx` test handlers; real-dump check widened to every core (reviewer)
-
 - 2026-11-23 First track not 1 → `track <m> follows the start`, naming the track found (code)
 
 ## Kickoff prompt
