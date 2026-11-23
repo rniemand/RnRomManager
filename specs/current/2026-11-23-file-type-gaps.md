@@ -251,7 +251,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   - `LibraryEndpointsTests.PlayDisc.cs`: a standalone PlayStation `.cbn` streams unchanged as `application/octet-stream`, and line 677's text is updated.
 
   Done when they pass.
-- [ ] **2. TOC parsing**: D3–D5. Files: `TocSheet.cs` (new, `Parse` and the records), `TocSheetTests.cs` (new). Done when `TocSheetTests` covers:
+- [x] **2. TOC parsing**: D3–D5. Files: `TocSheet.cs` (new, `Parse` and the records), `TocSheetTests.cs` (new). Done when `TocSheetTests` covers:
   - a one-file and a two-file toc giving the expected `Files` and `Tracks` (byte offsets, starts, lengths, `PREGAP`, `START`; positions are step 3's);
   - comments, `CD_TEXT` blocks at disc and track level (one with a nested `LANGUAGE_MAP` and a `{` inside a string), a BOM, LF/CRLF/CR and mixed-case keywords;
   - string escapes (`\"`, `\\`, `\101`), `FILE … SWAP`, a `FILE` length of 0 recorded as null, a `ZERO MODE0` item, and a bare `START` after a sized `FILE`;
