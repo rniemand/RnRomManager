@@ -79,12 +79,13 @@ export function canPlay(
 }
 
 /**
- * Virtual Jaguar picks a header-less .j64/.rom's format by size alone: a cart (a whole number of MiB, or 128 KiB) or an
- * Alpine image (8 KiB short of one). Any other size loads nothing, a black screen. Other extensions are told apart by
- * their header. The API's quick play applies the same rule (`LibraryEndpoints.JaguarRomLoads`).
+ * Virtual Jaguar plays a file only from cart space. An .abs, .cof or .jag program loads into RAM, which this EmulatorJS
+ * build's reset wipes after loading (a black screen). A .j64/.rom is placed by size alone: a cart (a whole number of
+ * MiB, or 128 KiB) or an Alpine image (8 KiB short of one); any other size loads nothing. The API's quick play applies
+ * the same rule (`LibraryEndpoints.JaguarRomLoads`).
  */
 export function jaguarRomLoads(fileName: string, sizeBytes: number): boolean {
-	if (!/\.(j64|rom)$/i.test(fileName)) return true;
+	if (/\.(abs|cof|jag)$/i.test(fileName)) return false;
 	const mib = 1048576;
 	return sizeBytes % mib === 0 || sizeBytes === 131072 || (sizeBytes + 8192) % mib === 0;
 }

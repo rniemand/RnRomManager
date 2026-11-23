@@ -146,8 +146,16 @@ describe('canPlay on virtualjaguar', () => {
 		expect(jaguar(name, size)).toBe(false);
 	});
 
-	it.each(['x.abs', 'x.cof', 'x.jag'])('plays %s of any size (told apart by its header)', (name) => {
-		expect(jaguar(name, 1832003)).toBe(true);
+	it.each([
+		['x.abs', 1559144],
+		['x.cof', 1006649],
+		['x.jag', 106258]
+	])('refuses %s of %i bytes (loaded into RAM, which the core wipes)', (name, size) => {
+		expect(jaguar(name, size)).toBe(false);
+	});
+
+	it('refuses a .COF even at a whole cart size (the header wins)', () => {
+		expect(jaguar('Gem Race.COF', 2097152)).toBe(false);
 	});
 });
 

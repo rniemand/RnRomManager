@@ -79,9 +79,9 @@ public class BrowserCoreExtensionsTests
         [("saturn", ".nrg")] = "never plays: canPlay and the games list's playRomId refuse an .nrg release",
         [("tgcd", ".bin")] = "a cue set's data track; a lone .bin never plays (canPlay, play-disc)",
         [("lynx", ".bll")] = "Handy loads BLL homebrew by its BS93 header (checked 2026-11-23 with the DAT's Blasting Robots .bll, CRC 06428D44)",
-        [("jaguar", ".rom")] = "VirtualJaguar sizes a header-less .rom as an Alpine image; canPlay and playRomId refuse other sizes",
-        [("jaguar", ".abs")] = "VirtualJaguar knows an ABS by its 0x601B header, whatever the extension",
-        [("jaguar", ".cof")] = "VirtualJaguar knows a COFF by its 0x0150 header, whatever the extension",
+        [("jaguar", ".rom")] = "VirtualJaguar sizes a header-less .rom as an Alpine image (checked 2026-11-23: SkyFire68k's .j64 minus its 8 KiB header boots); canPlay and playRomId refuse other sizes",
+        [("jaguar", ".abs")] = "library only: VirtualJaguar loads an ABS into RAM, which this build's reset wipes (checked 2026-11-23 with the DAT's Blackhole .abs); canPlay and playRomId refuse it",
+        [("jaguar", ".cof")] = "library only: VirtualJaguar loads a COFF into RAM, which this build's reset wipes; canPlay and playRomId refuse it",
     };
 
     [Test]

@@ -855,13 +855,14 @@ public static class LibraryEndpoints
     }
 
     /// <summary>
-    /// Virtual Jaguar picks a header-less .j64/.rom's format by size alone: a cart (a whole number of MiB, or 128 KiB)
-    /// or an Alpine image (8 KiB short of one); any other size loads nothing. Mirrors the SPA's <c>jaguarRomLoads</c>.
+    /// Virtual Jaguar plays a file only from cart space. An .abs, .cof or .jag program loads into RAM, which the EmulatorJS
+    /// build's reset wipes after loading; a .j64/.rom is placed by size alone: a cart (a whole number of MiB, or 128 KiB)
+    /// or an Alpine image (8 KiB short of one). Mirrors the SPA's <c>jaguarRomLoads</c>.
     /// </summary>
     public static bool JaguarRomLoads(string fileName, long sizeBytes)
     {
-        if (!fileName.EndsWith(".j64", StringComparison.OrdinalIgnoreCase) && !fileName.EndsWith(".rom", StringComparison.OrdinalIgnoreCase))
-            return true;
+        if (Path.GetExtension(fileName).ToLowerInvariant() is ".abs" or ".cof" or ".jag")
+            return false;
         const long mib = 1048576;
         return sizeBytes % mib == 0 || sizeBytes == 131072 || (sizeBytes + 8192) % mib == 0;
     }
