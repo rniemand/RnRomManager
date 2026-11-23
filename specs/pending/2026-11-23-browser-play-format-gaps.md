@@ -35,7 +35,7 @@ Audit gaps left as they are (each already refused by `canPlay`/`playRomId` or th
   4. `TAO .nrg images aren't supported` (no `DAOX`/`DAOI`, but an `ETNF`/`ETN2`)
   5. `the .nrg has no track list` (none of those chunks)
   6. `multi-session .nrg images aren't supported` (more than one `DAOX`/`DAOI`)
-  7. `the .nrg's first track isn't track 1` (`first ≠ 1`, as `MdsSheet` requires track 1)
+  7. `the .nrg's first track isn't track 1` (`first ≠ 1`: the cue's first track must be `TRACK 01`)
   8. `track <n> has <size>-byte sectors; only 2352 can be played`
   9. `track <n> has an unknown mode 0x<MM>` (mode not 0x05, 0x06 or 0x07)
   10. `track <n> doesn't start on a 2352-byte sector` (index 0, index 1 or end offset not a multiple of 2352, or index 0 > index 1, or index 1 ≥ end)
@@ -92,12 +92,13 @@ Finish runs the full suite and e2e unchanged (no Playwright change: e2e doesn't 
 
 ## Decisions
 - 2026-11-23 Which audit gaps to fix? → Saturn `.nrg` playback and TurboGrafx-CD disc sets; the rest stay out of scope (user)
-- 2026-11-23 Which `.nrg` shapes? → DAO, single session, first track 1, contiguous 2352-byte tracks, as `MdsSheet` limits MDS (code)
+- 2026-11-23 Which `.nrg` shapes? → DAO, single session, first track 1, contiguous 2352-byte tracks; the sector-size and mode limits match `MdsSheet`'s (code)
 - 2026-11-23 How to keep the footer out of the stream? → entry length = last track end; `CopyMeasuredAsync` copies exactly that (code)
 - 2026-11-23 Review round 1: README line 15 needs updating; NRG fixtures go in a shared `SyntheticNrgBuilder`; `Footer` returns the region end (v1 footers are 8 bytes); the tgcd firmware-clash test can't be built (dropped); a tgcd set with a lone `.bin` disc isn't a set (T6); doc comments and test names pinned (reviewer)
-- 2026-11-23 Spec review pass 2: Step 3's detail and params tests named after their siblings; the TurboGrafx-CD detail test uses `.chd` discs because of T6 (reviewer)
-- 2026-11-23 Spec review: `vendorEmulatorjs.test.ts` pins the `.m3u` replace string, so Step 3 updates and extends it; N4's track-1 index 0 wording made exact (reviewer)
 - 2026-11-23 Review round 2: T6 covers any lone non-`.chd` disc, not only `.bin` (reviewer)
+- 2026-11-23 Spec review pass 1: `vendorEmulatorjs.test.ts` pins the `.m3u` replace string, so Step 3 updates and extends it; N4's track-1 index 0 wording made exact (reviewer)
+- 2026-11-23 Spec review pass 2: Step 3's detail and params tests named after their siblings; the TurboGrafx-CD detail test uses `.chd` discs because of T6 (reviewer)
+- 2026-11-23 Spec review pass 3: N3.7's reason no longer claims `MdsSheet` requires track 1 (it doesn't); decisions put in order (reviewer)
 
 ## Kickoff prompt
 ```text
