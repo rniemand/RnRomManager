@@ -838,4 +838,93 @@ public partial class LibraryEndpointsTests
 
         Assert.That(await ProblemCode(response, HttpStatusCode.Conflict), Is.EqualTo(PlayDisc.InvalidPlayDisc));
     }
+
+    // CloneCD B8: a generated cue, the aliased .img and .sub; the stored .ccd is never sent.
+
+    private static readonly byte[] CloneSub = [.. Enumerable.Range(0, 96 * 3).Select(i => (byte)(i * 5 + 2))];
+
+    private static byte[] CloneCcd(string sessions = "1") =>
+        Encoding.UTF8.GetBytes($"[Disc]\nSessions={sessions}\n[TRACK 1]\nMODE=2\nINDEX 1=0\n");
+
+    /// <summary>A CloneCD release: <c>&lt;stem&gt;.img</c> the main file, its <c>.ccd</c> and (unless null) its <c>.sub</c>.</summary>
+    private static InfoJsonRom CloneCdRom(string stem, byte[] img, byte[] ccd, byte[]? sub, bool isPrimary = true) =>
+        PsxSolo($"{stem}.img", img, isPrimary) with
+        {
+            Files = [SetFile($"{stem}.ccd", ccd), .. sub is null ? Array.Empty<InfoJsonRomFile>() : [SetFile($"{stem}.sub", sub)]],
+        };
+
+    private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> CloneCdGame(string system, string title, byte[] img, byte[] ccd, byte[]? sub)
+    {
+        var stem = $"{title} (USA)";
+        (string, byte[])[] onDisk = [($"{stem}.img", img), ($"{stem}.ccd", ccd), .. sub is null ? Array.Empty<(string, byte[])>() : [($"{stem}.sub", sub)]];
+        return DiscGame(system, title, [CloneCdRom(stem, img, ccd, sub)], onDisk);
+    }
+
+    [Test]
+    public async Task PlayDisc_ASaturnCloneCdDisc_IsAStoredZip_WithTheGeneratedCue_TheImgAndTheSub_AndNoCcd()
+    {
+        var (id, folder, ids) = await CloneCdGame(PlayDisc.SaturnSystemId, "Clone Sky", PsxTrack1, CloneCcd(), CloneSub);
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/zip"));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Clone Sky (USA).cue", "track-01.img", "Clone Sky (USA).sub" }));
+        Assert.That(zip.Entries.Select(e => e.CompressedLength == e.Length), Has.All.True, "stored, not deflated");
+        Assert.That(Encoding.UTF8.GetString(ReadEntry(zip, "Clone Sky (USA).cue")),
+            Is.EqualTo("FILE \"track-01.img\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n"));
+        Assert.That(ReadEntry(zip, "track-01.img"), Is.EqualTo(PsxTrack1));
+        Assert.That(ReadEntry(zip, "Clone Sky (USA).sub"), Is.EqualTo(CloneSub));
+        foreach (var name in Directory.GetFiles(folder, "Clone Sky*"))
+            AssertNotOpen(name);
+    }
+
+    [Test]
+    public async Task PlayDisc_ACloneCdDiscWithoutSub_HoldsTheCueAndTheImg()
+    {
+        var (id, _, ids) = await CloneCdGame(PlayDisc.SystemId, "Clone Bare", PsxTrack1, CloneCcd(), null);
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Clone Bare (USA).cue", "track-01.img" }));
+    }
+
+    [TestCase("Bad", "track 1 has no MODE")]
+    [TestCase("Multi", "multi-session CloneCD images aren't supported")]
+    [TestCase("Partial", "the .img isn't a whole number of 2352-byte sectors")]
+    public async Task PlayDisc_ACloneCdDiscThatCantPlay_Is409InvalidPlayDisc(string kind, string error)
+    {
+        var ccd = kind switch
+        {
+            "Bad" => Encoding.UTF8.GetBytes("[TRACK 1]\nINDEX 1=0\n"),
+            "Multi" => CloneCcd("2"),
+            _ => CloneCcd(),
+        };
+        var img = kind == "Partial" ? PsxTrack1[..^1] : PsxTrack1;
+        var (id, folder, ids) = await CloneCdGame(PlayDisc.SegaCdSystemId, "Clone " + kind, img, ccd, CloneSub);
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(await ProblemTitle(response, HttpStatusCode.Conflict, PlayDisc.InvalidPlayDisc), Is.EqualTo($"The disc can't be played: {error}."));
+        foreach (var name in Directory.GetFiles(folder, "Clone*"))
+            AssertNotOpen(name);
+    }
+
+    [Test]
+    public async Task PlayDisc_ATurboGrafxCdCloneCdDisc_Plays()
+    {
+        var (id, _, ids) = await CloneCdGame(PlayDisc.TurboGrafxCdSystemId, "Clone Ninja", PsxTrack1, CloneCcd(), CloneSub);
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Clone Ninja (USA).cue", "track-01.img", "Clone Ninja (USA).sub" }));
+    }
 }

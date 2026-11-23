@@ -157,9 +157,19 @@ public class DiscSetsTests
         Assert.That(DiscSets.Find(systemId, [Disc(1, ext), Disc(2)], NoFiles), Has.Count.EqualTo(1));
     }
 
-    [TestCase("saturn", ".img")]
+    [TestCase("saturn")]
+    [TestCase("segacd")]
+    public void CloneCdImgDiscs_AreASaturnOrSegaCdSet_NamedFromDiscOnesCcd(string systemId)
+    {
+        var one = Disc(1, ".img");
+        var files = new[] { File(one, 0, "Game (USA) (Disc 1).ccd"), File(one, 1, "Game (USA) (Disc 1).sub") }.ToLookup(f => f.RomId);
+
+        var sets = DiscSets.Find(systemId, [one, Disc(2, ".img")], files);
+
+        Assert.That(sets.Single().Name, Is.EqualTo("Game (USA).m3u"));
+    }
+
     [TestCase("saturn", ".nrg")]
-    [TestCase("segacd", ".img")]
     [TestCase("segacd", ".nrg")]
     public void AnImgOrNrgDisc_SpoilsASaturnOrSegaCdSet(string systemId, string ext)
     {

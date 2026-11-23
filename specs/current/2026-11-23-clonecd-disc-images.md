@@ -135,7 +135,7 @@ No migration (`files` rows already hold any set member), no config key, no API s
   - `ReviewEndpointsTests`: GET on a set's `.ccd` shows `resolvable` true, `dismissible` false and three `setMembers`; dismissing its `.img` is refused with `SetFileNotResolvable`.
 
   Done when they pass, with the integration classes run on Docker.
-- [ ] **4. Play**: B8–B10. Files: `PlayDisc.cs`, `DiscSets.cs`. Tests:
+- [x] **4. Play**: B8–B10. Files: `PlayDisc.cs`, `DiscSets.cs`. Tests:
   - `LibraryEndpointsTests.PlayDisc.cs`:
     - a CloneCD Saturn disc streams a ZIP with exactly the generated cue, `track-01.img` and `<stem>.sub`, and no `.ccd`;
     - a disc without `.sub`;

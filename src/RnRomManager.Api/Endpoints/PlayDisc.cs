@@ -15,6 +15,9 @@ namespace RnRomManager.Api.Endpoints;
 /// and checked before the response starts; nothing is written to disk and nothing is audited. PSP B2: a PlayStation
 /// Portable release streams its standalone <c>.iso</c>, <c>.cso</c>, <c>.pbp</c> or <c>.chd</c> the same way. Saturn, Sega CD and 3DO take PlayStation's disc
 /// shapes; TurboGrafx-CD takes its cue sets and a standalone <c>.chd</c> only. All these systems share the same cap (<see cref="MaxBytes"/>).
+/// CloneCD B8: a CloneCD disc (<c>.img</c>, <c>.ccd</c>, optional <c>.sub</c>) on any of the five disc systems streams as a ZIP
+/// holding a cue generated from the <c>.ccd</c> (<see cref="CloneCdSheet.ForPlayback"/>), the <c>.img</c> and the <c>.sub</c>;
+/// the stored <c>.ccd</c> is never sent, since EmulatorJS would boot it instead of the cue.
 /// </summary>
 public static class PlayDisc
 {
@@ -90,7 +93,7 @@ public static class PlayDisc
     /// <summary>
     /// Multi-disc M4: <c>GET /api/games/{id}/roms/{romId}/play-disc-set</c>, every disc of the PlayStation (Saturn/Sega CD S3: or Saturn or Sega CD) set whose Disc 1
     /// is <paramref name="romId"/> as one uncompressed ZIP: the generated <c>.m3u</c> first, then each disc as
-    /// <c>play-disc</c> would send it (cue tracks aliased <c>disc&lt;n&gt;-track-NN.bin</c>). One 2 GiB cap covers the set.
+    /// <c>play-disc</c> would send it (cue tracks aliased <c>disc&lt;n&gt;-track-NN.bin</c>, a CloneCD image <c>disc&lt;n&gt;-track-01.img</c>). One 2 GiB cap covers the set.
     /// Amiga F5: an Amiga floppy set is served by <see cref="FloppySetAsync"/> instead.
     /// </summary>
     public static async Task<IResult> HandleSetAsync(Guid id, long romId, HttpContext ctx, IGameRepository repository,
@@ -259,6 +262,9 @@ public static class PlayDisc
         if (members.Count == 1)
             return (null, new Disc(null, [new Entry(mainName, streams[0], streams[0].Length)]));
 
+        if (IsCloneCd(members))
+            return await CloneCdDiscAsync(ctx, members, streams, trackPrefix, detailPrefix);
+
         var cueIndex = members.FindIndex(m => IsCue(m.Name));
         var cue = streams[cueIndex];
         if (cue.Length > IngestSetPlanner.MaxCueBytes)
@@ -276,6 +282,39 @@ public static class PlayDisc
         return (null, new Disc(new Entry(playback.CueName, new MemoryStream(playback.Content), playback.Content.Length), entries));
     }
 
+    /// <summary>CloneCD B8: reads the <c>.ccd</c> in full and builds the playback cue; the archive holds the aliased <c>.img</c> and <c>.sub</c>.</summary>
+    private static async Task<(IResult? Problem, Disc? Disc)> CloneCdDiscAsync(HttpContext ctx, List<Member> members, List<Stream> streams,
+        string trackPrefix, string detailPrefix)
+    {
+        var ccdIndex = members.FindIndex(m => HasExtension(m.Name, ".ccd"));
+        var ccd = streams[ccdIndex];
+        if (ccd.Length > IngestSetPlanner.MaxCueBytes)
+            return (Invalid(ctx, $"{detailPrefix}the .ccd is larger than {IngestSetPlanner.MaxCueBytes} bytes"), null);
+        var ccdBytes = new byte[ccd.Length];
+        await ccd.ReadExactlyAsync(ccdBytes, ctx.RequestAborted);
+        var sub = members.FirstOrDefault(m => HasExtension(m.Name, ".sub"))?.Name;
+        var playback = CloneCdSheet.ForPlayback(ccdBytes, members[ccdIndex].Name, members[0].Name, streams[0].Length, sub, trackPrefix);
+        if (!playback.IsValid)
+            return (Invalid(ctx, detailPrefix + playback.Error!), null);
+
+        var byName = members.Select((m, i) => (m.Name, Stream: streams[i])).ToDictionary(m => m.Name, m => m.Stream, StringComparer.Ordinal);
+        List<Entry> entries = [.. playback.Tracks.Select(t => new Entry(t.Alias, byName[t.StoredName], byName[t.StoredName].Length))];
+        DisposeAll([ccd]); // read in full; never sent
+        return (null, new Disc(new Entry(playback.CueName, new MemoryStream(playback.Content), playback.Content.Length), entries));
+    }
+
+    /// <summary>CloneCD B8: the main file is an <c>.img</c>, beside exactly one <c>.ccd</c> and at most one <c>.sub</c>, all one stem ignoring case.</summary>
+    private static bool IsCloneCd(List<Member> members)
+    {
+        var rest = members.Skip(1).ToList();
+        var stem = Path.GetFileNameWithoutExtension(members[0].Name);
+        return HasExtension(members[0].Name, ".img") && rest.Count is 1 or 2
+            && rest.Count(m => HasExtension(m.Name, ".ccd")) == 1 && rest.Count(m => HasExtension(m.Name, ".sub")) == rest.Count - 1
+            && rest.All(m => Path.GetFileNameWithoutExtension(m.Name).Equals(stem, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasExtension(string name, string extension) => name.EndsWith(extension, StringComparison.OrdinalIgnoreCase);
+
     private sealed record Member(string Name, long? FileId);
 
     private sealed record Entry(string Name, Stream Source, long Length);
@@ -288,7 +327,7 @@ public static class PlayDisc
     /// B2: a standalone <c>.bin</c>/<c>.iso</c> (CHD B4: or <c>.chd</c>; or a PlayStation <c>.img</c> or <c>.pbp</c>), or one cue with 1–99 BINs (the main file among
     /// them), all portable names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>, <c>.cso</c>, <c>.pbp</c> or <c>.chd</c>.
     /// TurboGrafx-CD B4: Beetle PCE boots only a cue or a <c>.chd</c> as a CD (a bare <c>.bin</c> would run as a HuCard), so
-    /// a single file must be a <c>.chd</c>.
+    /// a single file must be a <c>.chd</c>. CloneCD B8: or a CloneCD disc on any of the five disc systems (<see cref="IsCloneCd"/>).
     /// </summary>
     private static string? ShapeProblem(List<Member> members, string systemId)
     {
@@ -309,6 +348,8 @@ public static class PlayDisc
                 || members[0].Name.EndsWith(".img", StringComparison.OrdinalIgnoreCase)
                 || members[0].Name.EndsWith(".pbp", StringComparison.OrdinalIgnoreCase)
                 ? null : "a single-file disc must be a .bin, .iso, .chd, .img or .pbp";
+        if (IsCloneCd(members))
+            return null;
         var cues = members.Count(m => IsCue(m.Name));
         var bins = members.Count(m => IsBin(m.Name));
         if (cues != 1 || bins != members.Count - 1 || !IsBin(members[0].Name))
