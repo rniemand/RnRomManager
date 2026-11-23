@@ -263,7 +263,9 @@ Route — file under `src/RnRomManager.Web/src/routes/`.
 - SaturnHandler `saturn` — src/RnRomManager.Systems.Sega/SaturnHandler.cs
 - Sega32xHandler `s32x` — src/RnRomManager.Systems.Sega/Sega32xHandler.cs
 - SegaCdHandler `segacd` — src/RnRomManager.Systems.Sega/SegaCdHandler.cs
+- SatellaviewHandler `satellaview` — src/RnRomManager.Systems.Snes/SatellaviewHandler.cs
 - SnesHandler — src/RnRomManager.Systems.Snes/SnesHandler.cs
+- SufamiTurboHandler `sufami` — src/RnRomManager.Systems.Snes/SufamiTurboHandler.cs
 - PlayStationHandler `psx` — src/RnRomManager.Systems.Sony/PlayStationHandler.cs
 - PlayStationPortableHandler `psp` — src/RnRomManager.Systems.Sony/PlayStationPortableHandler.cs
 - SwitchHandler — src/RnRomManager.Systems.Switch/SwitchHandler.cs
@@ -332,7 +334,7 @@ File names without extension. System projects (`src/RnRomManager.Systems.*`) are
 - `RnRomManager.Systems.NintendoDisc.Tests`: GameCubeHandlerTests, NintendoDiscHeaderTests, WiiHandlerTests
 - `RnRomManager.Systems.NintendoDs.Tests`: NdsMarkerFixtureTests, Nintendo3DsHandlerTests, Nintendo3DsHeaderReaderTests, NintendoDsHandlerTests
 - `RnRomManager.Systems.Sega.Tests`: GameGearHandlerTests, MasterSystemHandlerTests, MegaDriveHandlerTests, SaturnHandlerTests, Sega32xHandlerTests, SegaCdHandlerTests
-- `RnRomManager.Systems.Snes.Tests`: SnesCopierHeaderTests, SnesHandlerTests, SnesHeaderReaderTests, SyntheticSnesRomBuilderTests
+- `RnRomManager.Systems.Snes.Tests`: SatellaviewHandlerTests, SnesCopierHeaderTests, SnesHandlerTests, SnesHeaderReaderTests, SufamiTurboHandlerTests, SyntheticSnesRomBuilderTests
 - `RnRomManager.Systems.Sony.Tests`: PlayStationHandlerTests, PlayStationPortableHandlerTests
 - `RnRomManager.Systems.Switch.Tests`: SwitchHandlerTests
 - `RnRomManager.Systems.ThreeDo.Tests`: ThreeDoHandlerTests
