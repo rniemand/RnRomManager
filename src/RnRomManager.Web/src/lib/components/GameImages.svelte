@@ -56,8 +56,6 @@
 	let suggestNotConfigured = $state(false);
 	/** The tile whose add is running. */
 	let adding = $state<number | null>(null);
-	/** Tiles added in this load (reset on a type change or reopen). */
-	let added = $state<number[]>([]);
 	/** Bumped by each load and each close: a response from an older one is ignored. */
 	let loadSeq = 0;
 	let loadAbort: AbortController | null = null;
@@ -77,7 +75,6 @@
 		suggestions = null;
 		suggestError = null;
 		suggestNotConfigured = false;
-		added = [];
 		try {
 			const result = await api.get<ImageSuggestions>(
 				`/api/games/${encodeURIComponent(game.id)}/image-suggestions?type=${suggestType}`,
@@ -110,8 +107,8 @@
 				})
 			);
 			toasts.show('Image added from IGDB.', 'success');
-			// S13: only marks a tile of the same opening and type.
-			if (seq === loadSeq) added = [...added, index];
+			// S1: closes only the same opening and type, never a dialog reopened meanwhile.
+			if (seq === loadSeq) suggestOpen = false;
 		} catch (e) {
 			if (isApiError(e, 'ImageDownloadFailed') || isApiError(e, 'ImageUrlBlocked'))
 				toasts.show(e.title, 'danger');
@@ -567,14 +564,12 @@
 				{:else}
 					<div class="row row-cols-2 row-cols-md-5 g-2">
 						{#each suggestions as suggestion, i (suggestion.imageUrl)}
-							{@const isAdded = added.includes(i)}
 							<div class="col">
 								<button
 									type="button"
 									class="btn p-0 border card h-100 w-100 position-relative overflow-hidden"
-									aria-label="{isAdded ? 'Added' : 'Add'} {suggestion.gameName} {suggestLabel} {i +
-										1}"
-									disabled={adding !== null || isAdded}
+									aria-label="Add {suggestion.gameName} {suggestLabel} {i + 1}"
+									disabled={adding !== null}
 									onclick={() => addSuggestion(suggestion, i)}
 								>
 									<img
@@ -589,11 +584,6 @@
 											class="spinner-border spinner-border-sm position-absolute top-0 start-0 m-1"
 											aria-hidden="true"
 										></span>
-									{/if}
-									{#if isAdded}
-										<span class="badge text-bg-success position-absolute top-0 end-0 m-1"
-											>Added</span
-										>
 									{/if}
 									<span class="d-block w-100 p-1 small text-start">
 										<span class="d-block text-truncate" title={suggestion.gameName}

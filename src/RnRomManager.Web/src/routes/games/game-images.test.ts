@@ -856,7 +856,7 @@ describe('Suggest Images (IGDB suggestions S11–S13)', () => {
 		await vi.waitFor(() => tile('Add Tetris 1 box art 1'));
 	});
 
-	it('a tile adds itself with the dialog type, refreshes, toasts and shows Added; the dialog stays open', async () => {
+	it('a tile adds itself with the dialog type, refreshes, toasts and closes the dialog (S1)', async () => {
 		const onchanged = vi.fn();
 		const after = game([image(7, 'BoxArt', { isCover: true })]);
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged });
@@ -879,39 +879,12 @@ describe('Suggest Images (IGDB suggestions S11–S13)', () => {
 			expect((button as HTMLButtonElement).disabled).toBe(false);
 		add.resolve(json(after));
 
-		const done = await vi.waitFor(() => tile('Added Tetris 1 box art 1'));
-		expect(onchanged).toHaveBeenCalledWith(after);
+		await vi.waitFor(() => expect(onchanged).toHaveBeenCalledWith(after));
 		expect(toasts.items.map((t) => t.text)).toContain('Image added from IGDB.');
-		expect((done as HTMLButtonElement).disabled).toBe(true);
-		expect(within(done).getByText('Added').className).toContain('text-bg-success');
-		expect((tile('Add Tetris 2 box art 2') as HTMLButtonElement).disabled).toBe(false);
-		expect(dialog().classList.contains('show')).toBe(true);
+		await vi.waitFor(() => expect(dialog().classList.contains('show')).toBe(false));
 	});
 
-	it('Added marks reset on a type change and on reopening', async () => {
-		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
-		await open();
-		(await take('type=BoxArt')).resolve(json({ suggestions: [suggestion(1)] }));
-		await fireEvent.click(await vi.waitFor(() => tile('Add Tetris 1 box art 1')));
-		(await take('/from-url')).resolve(json(game([])));
-		await vi.waitFor(() => tile('Added Tetris 1 box art 1'));
-
-		await fireEvent.click(inDialog().getByLabelText('Screenshot'));
-		(await take('type=Snap')).resolve(json({ suggestions: [] }));
-		await fireEvent.click(inDialog().getByLabelText('Box art'));
-		(await take('type=BoxArt')).resolve(json({ suggestions: [suggestion(1)] }));
-		await vi.waitFor(() => tile('Add Tetris 1 box art 1'));
-
-		await fireEvent.click(tile('Add Tetris 1 box art 1'));
-		(await take('/from-url')).resolve(json(game([])));
-		await vi.waitFor(() => tile('Added Tetris 1 box art 1'));
-		await close();
-		await open();
-		(await take('type=BoxArt')).resolve(json({ suggestions: [suggestion(1)] }));
-		await vi.waitFor(() => tile('Add Tetris 1 box art 1'));
-	});
-
-	it('an add that finishes after close and reopen still refreshes and toasts, but marks no tile', async () => {
+	it('an add that finishes after close and reopen still refreshes and toasts, but never closes the reopened dialog', async () => {
 		const onchanged = vi.fn();
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged });
 		await open();
@@ -927,10 +900,10 @@ describe('Suggest Images (IGDB suggestions S11–S13)', () => {
 
 		await vi.waitFor(() => expect(onchanged).toHaveBeenCalledTimes(1));
 		expect(toasts.items.map((t) => t.text)).toContain('Image added from IGDB.');
-		expect(inDialog().queryByRole('button', { name: /^Added/, hidden: true })).toBeNull();
+		expect(dialog().classList.contains('show')).toBe(true);
 	});
 
-	it('a duplicate is toasted with the existing message and marks nothing', async () => {
+	it('a duplicate is toasted with the existing message and keeps the dialog open', async () => {
 		render(GameImages, { game: game(placeholderAndSnap()), onchanged: () => {} });
 		await open();
 		(await take('type=BoxArt')).resolve(json({ suggestions: [suggestion(1)] }));
@@ -941,6 +914,7 @@ describe('Suggest Images (IGDB suggestions S11–S13)', () => {
 			expect(toasts.items.map((t) => t.text)).toContain('The game already has this image.')
 		);
 		expect((tile('Add Tetris 1 box art 1') as HTMLButtonElement).disabled).toBe(false);
+		expect(dialog().classList.contains('show')).toBe(true);
 	});
 
 	it('a failed download is toasted with its title', async () => {
