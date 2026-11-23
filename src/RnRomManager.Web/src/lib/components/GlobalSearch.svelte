@@ -122,7 +122,7 @@
 			input?.focus();
 			return;
 		}
-		// Another dialog (Edit metadata, a confirm) owns the keyboard.
+		// Another dialog (Edit Metadata, a confirm) owns the keyboard.
 		if (document.querySelector('.modal.show')) return;
 		e.preventDefault();
 		open = true;

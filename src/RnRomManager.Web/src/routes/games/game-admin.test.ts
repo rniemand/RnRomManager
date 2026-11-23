@@ -145,7 +145,7 @@ describe('game detail admin actions', () => {
 		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
 		render(GamePage);
 
-		expect(await screen.findByRole('button', { name: /Edit metadata/ })).toBeTruthy();
+		expect(await screen.findByRole('button', { name: /Edit Metadata/ })).toBeTruthy();
 		expect(await releaseDelete('Tetris 1.gb')).toBeTruthy();
 	});
 
@@ -163,7 +163,7 @@ describe('game detail admin actions', () => {
 		).toEqual([
 			'View info.json',
 			'---',
-			'Edit metadata',
+			'Edit Metadata',
 			'Retry media',
 			'Merge into…',
 			'---',
@@ -229,7 +229,7 @@ describe('game detail admin actions', () => {
 		expect(
 			[...manage.nextElementSibling!.querySelectorAll('li')].map((li) => li.textContent!.trim())
 		).toEqual(['View info.json']);
-		expect(screen.queryByRole('button', { name: /Edit metadata/ })).toBeNull();
+		expect(screen.queryByRole('button', { name: /Edit Metadata/ })).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Quick edit' })).toBeNull();
 		expect(
 			screen.queryByRole('button', { name: 'Delete release Tetris 1.gb', hidden: true })
@@ -485,7 +485,7 @@ describe('game detail admin actions', () => {
 		expect(await releaseDelete('Tetris 3.gb')).toBeTruthy();
 	});
 
-	it('the quick edit button in the information table opens Edit metadata', async () => {
+	it('the quick edit button in the information table opens Edit Metadata', async () => {
 		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
 		render(GamePage);
 
@@ -496,16 +496,16 @@ describe('game detail admin actions', () => {
 			})
 		).toBe(quick);
 		await fireEvent.click(quick);
-		expect(modal().getByRole('heading', { name: 'Edit metadata', hidden: true })).toBeTruthy();
+		expect(modal().getByRole('heading', { name: 'Edit Metadata', hidden: true })).toBeTruthy();
 	});
 
 	it('edit metadata validates before sending', async () => {
 		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
 		render(GamePage);
 
-		await fireEvent.click(await screen.findByRole('button', { name: /Edit metadata/ }));
+		await fireEvent.click(await screen.findByRole('button', { name: /Edit Metadata/ }));
 		await fireEvent.input(modal().getByLabelText('Release year'), { target: { value: '1800' } });
-		await fireEvent.click(modal().getByRole('button', { name: 'Edit metadata', hidden: true }));
+		await fireEvent.click(modal().getByRole('button', { name: 'Edit Metadata', hidden: true }));
 
 		expect(modal().getByText('Leave empty or enter a year 1970–2100.')).toBeTruthy();
 		expect(calls.some((c) => c.startsWith('PATCH'))).toBe(false);
@@ -516,7 +516,7 @@ describe('game detail admin actions', () => {
 		answers['PATCH /api/games/g1'] = [{ status: 200, body: { ...game([1]), title: 'Tetris DX' } }];
 		render(GamePage);
 
-		await fireEvent.click(await screen.findByRole('button', { name: /Edit metadata/ }));
+		await fireEvent.click(await screen.findByRole('button', { name: /Edit Metadata/ }));
 
 		expect(document.querySelector('.modal-dialog')!.classList.contains('modal-lg')).toBe(true);
 		const title = modal().getByLabelText('Title');
@@ -529,7 +529,34 @@ describe('game detail admin actions', () => {
 			expect(field.getAttribute('aria-describedby')).toBe('edit-lists-help');
 		}
 		await fireEvent.input(title, { target: { value: 'Tetris DX' } });
-		await fireEvent.click(modal().getByRole('button', { name: 'Edit metadata', hidden: true }));
+		await fireEvent.click(modal().getByRole('button', { name: 'Edit Metadata', hidden: true }));
+
+		await vi.waitFor(() => expect(calls).toContain('PATCH /api/games/g1'));
+	});
+
+	it('edit metadata: Enter in an input saves; a textarea needs Ctrl+Enter (M2, M3)', async () => {
+		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
+		answers['PATCH /api/games/g1'] = [{ status: 200, body: game([1]) }];
+		render(GamePage);
+		const patches = () => calls.filter((c) => c === 'PATCH /api/games/g1').length;
+
+		await fireEvent.click(await screen.findByRole('button', { name: /Edit Metadata/ }));
+		expect(
+			modal().getByText('Press Enter to save (Ctrl+Enter in a multi-line field).')
+		).toBeTruthy();
+		await fireEvent.keyDown(modal().getByLabelText('Genres'), { key: 'Enter' });
+		expect(patches()).toBe(0);
+		await fireEvent.keyDown(modal().getByLabelText('Genres'), { key: 'Enter', ctrlKey: true });
+		await vi.waitFor(() => expect(patches()).toBe(1));
+	});
+
+	it('edit metadata: Enter in Title saves (M2)', async () => {
+		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
+		answers['PATCH /api/games/g1'] = [{ status: 200, body: game([1]) }];
+		render(GamePage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: /Edit Metadata/ }));
+		await fireEvent.keyDown(modal().getByLabelText('Title'), { key: 'Enter' });
 
 		await vi.waitFor(() => expect(calls).toContain('PATCH /api/games/g1'));
 	});

@@ -518,12 +518,12 @@
 								<div class="d-flex align-items-center gap-2">
 									<SystemBadge system={game.system} name={game.systemName} class="text-wrap" />
 									{#if auth.isAdmin}
-										<!-- Quick edit: opens the same Edit metadata modal as the Manage menu. -->
+										<!-- Quick edit: opens the same Edit Metadata modal as the Manage menu. -->
 										<button
 											type="button"
 											class="btn btn-sm btn-link text-body-secondary p-0 ms-auto quick-edit"
 											aria-label="Quick edit"
-											use:tooltip={'Edit metadata'}
+											use:tooltip={'Edit Metadata'}
 											onclick={() => (action = { kind: 'edit' })}><Icon name="edit" /></button
 										>
 									{/if}
@@ -660,7 +660,7 @@
 									class="dropdown-item"
 									onclick={() => (action = { kind: 'edit' })}
 								>
-									<Icon name="edit" /> Edit metadata
+									<Icon name="edit" /> Edit Metadata
 								</button>
 							</li>
 							<li>
