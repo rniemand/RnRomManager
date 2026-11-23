@@ -69,22 +69,22 @@ describe('canPlay', () => {
 		expect(canPlay({ browserCore: null }, { externalFileName: 'Disc (Track 1).bin' })).toBe(false);
 	});
 
-	it('is true for an external Saturn bin, and false for its .nrg (Saturn B6)', () => {
+	it('is true for an external Saturn bin and its .nrg (N5)', () => {
 		expect(
 			canPlay({ browserCore: 'yabause' }, { externalFileName: 'Sky Rally (USA) (Track 1).bin' })
 		).toBe(true);
 		expect(canPlay({ browserCore: 'yabause' }, { externalFileName: 'Sky Rally (USA).nrg' })).toBe(
-			false
+			true
 		);
 		expect(canPlay({ browserCore: 'yabause' }, { externalFileName: 'Sky Rally (USA).NRG' })).toBe(
-			false
+			true
 		);
 	});
 
 	it.each(['Disc (USA).nrg', 'Disc (USA).NRG'])(
-		'is false for an external %s image, whatever the core (Saturn B6)',
+		'is true for an external %s image (N5)',
 		(externalFileName) => {
-			expect(canPlay({ browserCore: 'pcsx_rearmed' }, { externalFileName })).toBe(false);
+			expect(canPlay({ browserCore: 'pcsx_rearmed' }, { externalFileName })).toBe(true);
 		}
 	);
 

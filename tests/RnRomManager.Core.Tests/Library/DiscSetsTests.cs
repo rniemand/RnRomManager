@@ -169,11 +169,21 @@ public class DiscSetsTests
         Assert.That(sets.Single().Name, Is.EqualTo("Game (USA).m3u"));
     }
 
-    [TestCase("saturn", ".nrg")]
     [TestCase("segacd", ".nrg")]
     public void AnImgOrNrgDisc_SpoilsASaturnOrSegaCdSet(string systemId, string ext)
     {
         Assert.That(DiscSets.Find(systemId, [Disc(1), Disc(2, ext)], NoFiles), Is.Empty);
+    }
+
+    // Browser play format gaps N6: a Saturn set may mix .nrg discs, named from Disc 1's file name.
+    [TestCase(".nrg")]
+    [TestCase(".NRG")]
+    public void ANrgDisc_JoinsASaturnSet(string ext)
+    {
+        var sets = DiscSets.Find("saturn", [Disc(1, ext), Disc(2)], NoFiles);
+
+        Assert.That(sets.Single().Discs, Has.Count.EqualTo(2));
+        Assert.That(sets.Single().Name, Is.EqualTo("Game (USA).m3u"));
     }
 
     [TestCase("3do")]

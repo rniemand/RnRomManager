@@ -19,7 +19,9 @@ namespace RnRomManager.Api.Endpoints;
 /// holding a cue generated from the <c>.ccd</c> (<see cref="CloneCdSheet.ForPlayback"/>), the <c>.img</c> and the <c>.sub</c>;
 /// the stored <c>.ccd</c> is never sent, since EmulatorJS would boot it instead of the cue. File type gaps D11–D12: a cdrdao TOC
 /// set (<see cref="TocSheet.ForPlayback"/>) or an Alcohol 120% MDS disc (<see cref="MdsSheet.ForPlayback"/>) streams the same
-/// way, with a cue generated from its <c>.toc</c> or <c>.mds</c>, which is never sent either.
+/// way, with a cue generated from its <c>.toc</c> or <c>.mds</c>, which is never sent either. Browser play format gaps N1: a
+/// standalone Nero <c>.nrg</c> streams as a ZIP of a cue generated from its footer and chunks (<see cref="NrgSheet.ForPlayback"/>)
+/// and the image's track data as <c>track-01.bin</c>, without the chunks and footer.
 /// </summary>
 public static class PlayDisc
 {
@@ -261,6 +263,8 @@ public static class PlayDisc
                 return (Problems.Create(ctx, StatusCodes.Status409Conflict, PlayDiscTooLarge, budget.TooLargeTitle), null);
         }
 
+        if (members.Count == 1 && HasExtension(mainName, ".nrg"))
+            return await NrgDiscAsync(ctx, mainName, streams[0], trackPrefix, detailPrefix);
         if (members.Count == 1)
             return (null, new Disc(null, [new Entry(mainName, streams[0], streams[0].Length)]));
 
@@ -307,6 +311,35 @@ public static class PlayDisc
         return (null, new Disc(new Entry(playback.CueName, new MemoryStream(playback.Content), playback.Content.Length), entries));
     }
 
+    /// <summary>
+    /// Browser play format gaps N1–N3: reads a standalone <c>.nrg</c>'s footer and chunk region (bounded by
+    /// <see cref="IngestSetPlanner.MaxCueBytes"/>) and sends a generated cue and the image's track data as
+    /// <c>&lt;trackPrefix&gt;01.bin</c>, cut at the last track's end so the chunks and footer are never sent.
+    /// </summary>
+    private static async Task<(IResult? Problem, Disc? Disc)> NrgDiscAsync(HttpContext ctx, string name, Stream image,
+        string trackPrefix, string detailPrefix)
+    {
+        var length = image.Length;
+        var tail = new byte[Math.Min(12, length)];
+        image.Seek(length - tail.Length, SeekOrigin.Begin);
+        await image.ReadExactlyAsync(tail, ctx.RequestAborted);
+        if (NrgSheet.Footer(tail, length) is not { } footer)
+            return (Invalid(ctx, detailPrefix + "the .nrg has no Nero footer"), null);
+        var (chunkStart, regionEnd, v2) = footer;
+        if (regionEnd - chunkStart > IngestSetPlanner.MaxCueBytes)
+            return (Invalid(ctx, $"{detailPrefix}the .nrg's track list is larger than {IngestSetPlanner.MaxCueBytes} bytes"), null);
+
+        var region = new byte[regionEnd - chunkStart];
+        image.Seek(chunkStart, SeekOrigin.Begin);
+        await image.ReadExactlyAsync(region, ctx.RequestAborted);
+        image.Seek(0, SeekOrigin.Begin);
+        var (cue, dataLength) = NrgSheet.ForPlayback(region, chunkStart, v2, name, trackPrefix);
+        if (!cue.IsValid)
+            return (Invalid(ctx, detailPrefix + cue.Error!), null);
+        return (null, new Disc(new Entry(cue.CueName, new MemoryStream(cue.Content), cue.Content.Length),
+            [new Entry(cue.Tracks[0].Alias, image, dataLength)]));
+    }
+
     /// <summary>D11: exactly an <c>.mdf</c> (the main file) and an <c>.mds</c> of the same stem, ignoring case.</summary>
     private static bool IsMds(List<Member> members) =>
         members is [var mdf, var mds] && HasExtension(mdf.Name, ".mdf") && HasExtension(mds.Name, ".mds")
@@ -337,7 +370,8 @@ public static class PlayDisc
     /// them), all portable names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>, <c>.cso</c>, <c>.pbp</c> or <c>.chd</c>.
     /// TurboGrafx-CD B4: Beetle PCE boots only a cue or a <c>.chd</c> as a CD (a bare <c>.bin</c> would run as a HuCard), so
     /// a single file must be a <c>.chd</c>. CloneCD B8: or a CloneCD disc on any of the five disc systems (<see cref="IsCloneCd"/>).
-    /// D11: or an MDS disc (<see cref="IsMds"/>), and a <c>.toc</c> takes the cue's place in a set.
+    /// D11: or an MDS disc (<see cref="IsMds"/>), and a <c>.toc</c> takes the cue's place in a set. Browser play format gaps
+    /// N1: or a standalone <c>.nrg</c> (<see cref="NrgDiscAsync"/>).
     /// </summary>
     private static string? ShapeProblem(List<Member> members, string systemId)
     {
@@ -358,7 +392,8 @@ public static class PlayDisc
                 || members[0].Name.EndsWith(".img", StringComparison.OrdinalIgnoreCase)
                 || members[0].Name.EndsWith(".pbp", StringComparison.OrdinalIgnoreCase)
                 || members[0].Name.EndsWith(".cbn", StringComparison.OrdinalIgnoreCase)
-                ? null : "a single-file disc must be a .bin, .iso, .chd, .img, .pbp or .cbn";
+                || HasExtension(members[0].Name, ".nrg")
+                ? null : "a single-file disc must be a .bin, .iso, .chd, .img, .pbp, .cbn or .nrg";
         if (IsCloneCd(members) || IsMds(members))
             return null;
         var cues = members.Count(m => IsCue(m.Name) || HasExtension(m.Name, ".toc"));

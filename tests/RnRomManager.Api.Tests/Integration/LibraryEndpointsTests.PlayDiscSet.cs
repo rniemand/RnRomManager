@@ -509,4 +509,28 @@ public partial class LibraryEndpointsTests
         Assert.That(Encoding.UTF8.GetString(ReadEntry(zip, "Prism (USA) (Disc 2).cue")), Does.StartWith("FILE \"disc2-track-01.bin\" BINARY\n"));
         Assert.That(ReadEntry(zip, "disc2-track-01.bin"), Is.EqualTo(SetTrack1(81)));
     }
+
+    [Test]
+    public async Task PlayDiscSet_ASaturnSetWithAnNrgDisc_NamesItsGeneratedCue()
+    {
+        const string title = "Nero Sea";
+        var nrg = SyntheticNrgBuilder.Build([new NrgBlock(0, 0, 10 * 2352, Mode: 0x06)]);
+        var (id, _, ids) = await DiscGame(PlayDisc.SaturnSystemId, title,
+            [OdysseyDisc(1, Umd(82), ".iso", title), OdysseyDisc(2, nrg, ".nrg", title)],
+            ($"{title} (USA) (Disc 1).iso", Umd(82)), ($"{title} (USA) (Disc 2).nrg", nrg));
+
+        using var response = await _user.GetAsync(PlayDiscSetUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[]
+        {
+            "Nero Sea (USA).m3u", "Nero Sea (USA) (Disc 1).iso", "Nero Sea (USA) (Disc 2).cue", "disc2-track-01.bin",
+        }));
+        Assert.That(Encoding.UTF8.GetString(ReadEntry(zip, "Nero Sea (USA).m3u")), Is.EqualTo("Nero Sea (USA) (Disc 1).iso\nNero Sea (USA) (Disc 2).cue\n"));
+        Assert.That(Encoding.UTF8.GetString(ReadEntry(zip, "Nero Sea (USA) (Disc 2).cue")),
+            Is.EqualTo("FILE \"disc2-track-01.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n"));
+        Assert.That(ReadEntry(zip, "disc2-track-01.bin"), Is.EqualTo(nrg[..(10 * 2352)]));
+    }
 }
