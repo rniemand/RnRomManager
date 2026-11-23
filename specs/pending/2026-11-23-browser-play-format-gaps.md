@@ -7,7 +7,7 @@ created: 2026-11-23
 # Browser play format gaps
 
 ## Summary
-An audit of every system's stored formats against its browser core's compiled-in `valid_extensions` (`BrowserCoreExtensionsTests`) found no unexplained mismatch; what's left are formats the library stores but Play refuses. This spec closes the two that are fixable without rebuilding a core: a Saturn `.nrg` disc plays (play-disc converts it, as MDS/TOC discs already are), and TurboGrafx-CD multi-disc games get **All discs** like PlayStation, Saturn and Sega CD.
+An audit of every system's stored formats against its browser core's compiled-in `valid_extensions` (`BrowserCoreExtensionsTests`) found no unexplained mismatch; what's left are formats the library stores but Play refuses. This spec closes the one that is fixable without rebuilding a core: a Saturn `.nrg` disc plays (play-disc converts it, as MDS/TOC discs already are).
 
 ## Out of scope
 Audit gaps left as they are (each already refused by `canPlay`/`playRomId` or the system has no `BrowserCore`):
@@ -15,6 +15,7 @@ Audit gaps left as they are (each already refused by `canPlay`/`playRomId` or th
 - Jaguar `.abs`, `.cof`, `.jag` and `.rom`/`.j64` of a non-cart size: Virtual Jaguar's reset wipes RAM-loaded programs.
 - TurboGrafx-CD lone `.bin`: a data track without its cue; Beetle PCE would boot it as a HuCard.
 - 3DO disc sets: Opera has no `.m3u` support.
+- TurboGrafx-CD disc sets: the pinned Beetle PCE (`EmulatorJS/beetle-pce-libretro` `e1ac90d`) reads every `.m3u` entry but `PCE_LoadCD` (`mednafen/pce/pce.cpp`) only ever inserts the first disc, and `libretro.cpp` registers no disk-control interface, so **All discs** couldn't change discs.
 - GameCube, Wii, Xbox 360, Switch, 3DS: no EmulatorJS core exists.
 - TAO and multi-session `.nrg` images, and `.nrg` tracks that aren't 2352-byte sectors (N3).
 - A `.nrg` inside a cue set (still `InvalidPlayDisc`, as today).
@@ -24,9 +25,9 @@ Audit gaps left as they are (each already refused by `canPlay`/`playRomId` or th
 ### Saturn `.nrg` (N)
 - **N1** `play-disc` accepts a standalone `.nrg` (any case) on every system it serves except PSP and TurboGrafx-CD (only Saturn stores `.nrg`). It reads the Nero footer and track list from the image and streams, like an MDS disc, an uncompressed ZIP of a generated cue `<nrg stem>.cue` and the image as `track-01.bin` (`disc<n>-track-01.bin` in a set). The entry's length is the last track's end offset, so the footer is never sent (`CopyMeasuredAsync` copies exactly the entry length). `X-Content-Bytes` follows from the entries as today.
 - **N2** Parsing follows libmirage's `image-nrg` (`nrg.h`), big-endian:
-  - Footer: if the last 12 bytes start `NER5`, a v2 footer (12 bytes) with a u64 chunk start; else if the last 8 bytes start `NERO`, a v1 footer (8 bytes) with a u32 chunk start; else none. `NrgSheet.Footer` returns the chunk start and the region end (file length − footer length), or null when there's no footer, the file is shorter than the footer, or the chunk start is ≤ 0 or ≥ the region end.
+  - Footer: if the last 12 bytes start `NER5`, a v2 footer (12 bytes) with a u64 chunk start; else if the last 8 bytes start `NERO`, a v1 footer (8 bytes) with a u32 chunk start; else none. `NrgSheet.Footer` returns the chunk start, the region end (file length − footer length) and whether it's v2, or null when there's no footer, the file is shorter than the footer, or the chunk start is ≤ 0 or ≥ the region end.
   - The chunk region is `[chunk start, region end)`. Chunks: 4-byte id, u32 size, `size` data bytes. Walk to the region end, stopping early at `END!` (as libmirage, which walks the whole region and doesn't require `END!`); a chunk running past the region is truncated. The footer version picks the chunk ids, as libmirage's `old_format` flag does: a v2 file reads `DAOX` and `ETN2`, a v1 file `DAOI` and `ETNF`. Every other chunk (`CUEX`, `CUES`, `SINF`, `MTYP`, `CDTX`, the other version's ids, …) is skipped.
-  - Each `DAOX`/`DAOI` chunk: a 22-byte header (4 bytes ignored, 13-byte MCN, 1 pad, session type, 1 byte ignored, first track u8, last track u8), then `last − first + 1` blocks of 42 (`DAOX`, u64 offsets) or 30 (`DAOI`, u32 offsets) bytes: 12-byte ISRC, u16 sector size, u8 mode, 3 pad, index 0 offset, index 1 offset, end offset. The chunk size must be exactly 22 + blocks × block size. Track numbers run `first..last`.
+  - Each `DAOX`/`DAOI` chunk: a 22-byte header (4 bytes ignored, 13-byte MCN, 1 pad, session type, 1 byte ignored, first track u8, last track u8), then `last − first + 1` blocks of 42 (`DAOX`, u64 offsets) or 30 (`DAOI`, u32 offsets, read unsigned) bytes: 12-byte ISRC, u16 sector size, u8 mode, 3 pad, index 0 offset, index 1 offset, end offset. The chunk size must be exactly 22 + blocks × block size. Track numbers run `first..last`.
   - Checked against libmirage (`cdemu/cdemu` `libmirage/images/image-nrg/image-nrg.h` and `parser.c`) in the spec review; `NrgSheet`'s doc comment cites those files, as `MdsSheet` cites `image-mds.h`. Mode codes 0x0F, 0x10 and 0x11 are 2352 + 96 subchannel bytes (sector size 2448), so N3.8 refuses them.
 - **N3** Errors are `409 InvalidPlayDisc` (as every play-disc shape error; title `The disc can't be played: <detail>.`), with these exact details (`<n>` a track number), each check run over every track before the next starts, in this order:
   1. `the .nrg has no Nero footer` (`Footer` returned null) — emitted by `PlayDisc.OpenDiscAsync`
@@ -45,35 +46,26 @@ Audit gaps left as they are (each already refused by `canPlay`/`playRomId` or th
 - **N5** The `.nrg` refusal goes: `canPlay` (`emulator.ts`) and `LibraryEndpoints`' quick-play `playable` no longer reject `.nrg`. A malformed `.nrg` shows the play page's existing `InvalidPlayDisc` message.
 - **N6** `DiscSets` takes `.nrg` as a disc's main file on `saturn` only, so a Saturn set may mix `.nrg` discs; its playlist names the generated cue (`DiscSets.Name` falls back to the file name, unchanged).
 
-### TurboGrafx-CD disc sets (T)
-- **T1** `DiscSets.MaxDiscs("tgcd")` is 4. The pinned Beetle PCE (`EmulatorJS/beetle-pce-libretro` `e1ac90d`, the README's attribution) has no fixed limit: `libretro.cpp`'s `ReadM3U` pushes every line into a vector and resolves it beside the playlist, and `MDFNI_LoadCD` opens each entry with `CDIF_Open` into the `CDInterfaces` vector. 4 is this app's cap, as for Sega CD; the doc comment cites that source. Step 3 also checks that `PCE_LoadCD` (another file) adds no lower limit.
-- **T2** `play-disc-set` serves `tgcd`: `PlayDisc.FirmwareNames["tgcd"]` = `syscard3.pce`, `syscard3u.pce`, `syscard2.pce`, `syscard2u.pce`, `syscard1.pce`, `gexpress.pce` (`turboGrafxCdBiosNames` in `params.js`). Each disc may be any shape `play-disc` accepts for `tgcd` (cue/TOC set, CloneCD, MDS or `.chd`). The firmware-name clash check can't fire for `tgcd` (it applies only to a cue-less disc, which on `tgcd` is a `.chd`), but the entry is kept so `HandleSetAsync` serves the system; the S3 lone-`.bin` cue never applies.
-- **T3** `parsePlayParams` accepts `set=1` for `mednafen_pce` with `disc=1` (like `genesis_plus_gx`/`puae`). `play.js` needs no new branch: the System Card load runs as for one disc, then `play-disc-set` loads.
-- **T4** The vendored `downloadRom()` edit takes an unpacked `.m3u` first for `mednafen_pce` too (`["yabause", "genesis_plus_gx", "mednafen_pce"]`); single-disc ZIPs hold none.
-- **T5** The game page shows **All discs** on Disc 1's card for a TurboGrafx-CD set, unchanged code (`rom.discSet`, `setMedia` gives `discs`).
-- **T6** `DiscSets.Find` skips a `tgcd` group when any disc has no set files and isn't a `.chd` (a lone `.bin`, `.img` or `.mdf`, which `play-disc` refuses), so no **All discs** button appears for a set that can't play.
 
 ## Changes
 | Area | File(s) | Change |
 |---|---|---|
 | Tests | `tests/RnRomManager.TestData/SyntheticNrgBuilder.cs` (new) | Builds v1/v2 DAO `.nrg` images (tracks, modes, sector sizes, offsets, footer) for Core and Api tests, as `SyntheticMdsBuilder` does for MDS |
-| Core | `src/RnRomManager.Core/Ingest/NrgSheet.cs` (new) | `NrgTrack(int Number, int Mode, int SectorSize, ulong Index0, ulong Index1, ulong End)`; `NrgSheet(IReadOnlyList<NrgTrack> Tracks, string? Error)` with `static (long ChunkStart, long RegionEnd)? Footer(ReadOnlySpan<byte> tail, long length)` (`tail` = the file's last 12 bytes or fewer), `static NrgSheet Parse(ReadOnlySpan<byte> region, long chunkStart)` (N3.2–N3.12) and `static (PlaybackCue Cue, long DataLength) ForPlayback(ReadOnlySpan<byte> region, long chunkStart, string nrgFileName, string trackPrefix)`, shaped like `MdsSheet` |
-| Core | `src/RnRomManager.Core/Library/DiscSets.cs` | N6: `.nrg` main file on `saturn`; T1: `MaxDiscs` `"tgcd" => 4` and its doc comment; T6 |
-| Api | `src/RnRomManager.Api/Endpoints/PlayDisc.cs` | N1/N3: `ShapeProblem` accepts a lone `.nrg` (message becomes `a single-file disc must be a .bin, .iso, .chd, .img, .pbp, .cbn or .nrg`); `OpenDiscAsync` reads the tail, calls `Footer` (N3.1), checks the region size (N3.2), reads the region, seeks back to 0 and returns a `Disc` with the cue and one `Entry(alias, stream, DataLength)`; T2: `FirmwareNames` `tgcd` entry; the class, `HandleSetAsync` and `FirmwareNames` doc comments name the new shapes and set systems |
+| Core | `src/RnRomManager.Core/Ingest/NrgSheet.cs` (new) | `NrgTrack(int Number, int Mode, int SectorSize, ulong Index0, ulong Index1, ulong End)`; `NrgSheet(IReadOnlyList<NrgTrack> Tracks, string? Error)` with `static (long ChunkStart, long RegionEnd, bool V2)? Footer(ReadOnlySpan<byte> tail, long length)` (`tail` = the file's last 12 bytes or fewer), `static NrgSheet Parse(ReadOnlySpan<byte> region, long chunkStart, bool v2)` (N3.2–N3.12) and `static (PlaybackCue Cue, long DataLength) ForPlayback(ReadOnlySpan<byte> region, long chunkStart, bool v2, string nrgFileName, string trackPrefix)`, shaped like `MdsSheet` |
+| Core | `src/RnRomManager.Core/Library/DiscSets.cs` | N6: `.nrg` main file on `saturn`, and the `MainExtensions` comment |
+| Api | `src/RnRomManager.Api/Endpoints/PlayDisc.cs` | N1/N3: `ShapeProblem` accepts a lone `.nrg` (message becomes `a single-file disc must be a .bin, .iso, .chd, .img, .pbp, .cbn or .nrg`); `OpenDiscAsync` reads the tail, calls `Footer` (N3.1), checks the region size (N3.2), reads the region, seeks back to 0 and returns a `Disc` with the cue and one `Entry(alias, stream, DataLength)`; the class and `ShapeProblem` doc comments name the `.nrg` shape |
 | Api | `src/RnRomManager.Api/Endpoints/LibraryEndpoints.cs` | N5: drop the `.nrg` condition and its comment in the quick-play `playable` |
 | Systems | `src/RnRomManager.Systems.Sega/SaturnHandler.cs` | `BrowserCore` doc comment no longer says an `.nrg` release never plays |
 | Web | `src/RnRomManager.Web/src/lib/emulator.ts` | N5: drop the `.nrg` clause from `canPlay` and its doc comment |
-| Web | `src/RnRomManager.Web/static/emulator/params.js` | T3: `setCore` includes `mednafen_pce` with `disc`; comment |
-| Web | `src/RnRomManager.Web/scripts/vendor-emulatorjs.mjs`, `src/RnRomManager.Web/src/lib/vendorEmulatorjs.test.ts` | T4: add `mednafen_pce` to the `.m3u` core list in the replace string (the `find` anchor is unchanged) and its comment; the test's copy of the replace string (line 125) changes to match |
 | Tests | `tests/RnRomManager.Api.Tests/BrowserCoreExtensionsTests.cs` | `("saturn", ".nrg")` reason becomes `play-disc sends a cue built from the Nero footer and the image as track-01.bin (N1), never the .nrg as the content` |
-| Docs | `README.md` line 15; `docs/features.md` (Saturn and TurboGrafx-CD Play bullets, `play-disc` and `play-disc-set` API lines); `docs/development.md` (TestData row at line 42; § Browser emulators: Saturn, Multi-disc sets, TurboGrafx-CD bullets) | Step 2: drop "never `.nrg`"/"an .nrg never plays", add the builder. Step 3: add TurboGrafx-CD to the **All discs** systems and limits ("…, 4 Sega CD or 4 TurboGrafx-CD") |
+| Docs | `README.md` line 15; `docs/features.md` (Saturn Play bullet, `play-disc` and `play-disc-set` API lines); `docs/development.md` (TestData row at line 42; § Browser emulators: Saturn and Multi-disc sets bullets) | Drop "never `.nrg`"/"an .nrg never plays", describe N1/N6, add the builder |
 
-No migration, config key or API contract change: `play-disc` keeps its responses, a valid `.nrg` now gets 200 instead of 409, and `discSet` starts appearing on TurboGrafx-CD game details. The README systems table is unchanged (formats and cores don't change).
+No migration, config key or API contract change: `play-disc` keeps its responses, a valid `.nrg` now gets 200 instead of 409, and a Saturn set with `.nrg` discs now gets a `discSet`. The README systems table is unchanged (formats and cores don't change).
 
 ## Risks
 - **Memory:** the chunk region is bounded by `MaxCueBytes` (64 KiB) before it is read; the image itself streams.
 - **Untrusted offsets:** every offset is checked against the region or the footer (N3), so a crafted `.nrg` can't make play-disc read past the file or send the footer.
-- **Wrong layout assumptions:** N2 now follows libmirage's parser, but synthetic tests only prove self-consistency. Manual check in Finish: boot one real Saturn `.nrg` (DAO) in the browser, and one TurboGrafx-CD two-disc set; record the result in the PR.
+- **Wrong layout assumptions:** N2 now follows libmirage's parser, but synthetic tests only prove self-consistency. Manual check in Finish: boot one real Saturn `.nrg` (DAO) in the browser, alone and in a set; record the result in the PR.
 - **Saturn sets with `.nrg`:** a 5-disc set counts all images against the 2 GiB `MaxBytes` budget as today.
 
 ## Steps
@@ -86,12 +78,11 @@ No migration, config key or API contract change: `play-disc` keeps its responses
   - `src/RnRomManager.Web/src/lib/emulator.test.ts`: the two `.nrg` tests (lines 72–89) expect `true` and are retitled `is true for an external Saturn bin and its .nrg (N5)` and `is true for an external %s image (N5)`.
   - `BrowserCoreExtensionsTests` passes.
   Done when: those classes and `emulator.test.ts` pass; `npm run lint` and `npm run check` pass; README, features and development docs no longer say `.nrg` never plays, and the TestData row names `SyntheticNrgBuilder`.
-- [ ] **3. TurboGrafx-CD disc sets**: T1–T6 and their docs. Files: `src/RnRomManager.Core/Library/DiscSets.cs`, `src/RnRomManager.Api/Endpoints/PlayDisc.cs`, `src/RnRomManager.Web/static/emulator/params.js`, `src/RnRomManager.Web/scripts/vendor-emulatorjs.mjs`, `src/RnRomManager.Web/src/lib/vendorEmulatorjs.test.ts`, `README.md`, `docs/features.md`, `docs/development.md`. Tests: `vendorEmulatorjs.test.ts`: the expected replace string includes `mednafen_pce`, and the `.m3u` test is retitled `%s boots the .m3u of a ZIP for Yabause, Genesis Plus GX and Beetle PCE only (Saturn and Sega CD S4, T4)` with a `mednafen_pce` case (extensions `['pce', 'sgx', 'cue', 'ccd', 'chd', 'toc', 'm3u']`: `setNames` picks `Game (USA).m3u`, `setNames.slice(1)` keeps upstream's `.chd`); `DiscSetsTests.MaxDiscs_IsPerSystem` gains `("tgcd", 4)`; new `DiscSetsTests.ATurboGrafxCdSetWithALoneNonChdDisc_IsNotASet` (T6; cases `.bin`, `.img`, `.mdf`); `LibraryEndpointsTests.PlayDiscSet` new `PlayDiscSet_ATurboGrafxCdSet_StreamsEachDiscAndThePlaylist` (two cue-set discs; before this step the same request was 404) and `Detail_DiscSet_IsOnDiscOne_ForTurboGrafxCd` (two `.chd` discs: the lone `.bin` Disc 1 that `Detail_DiscSet_IsOnDiscOne_ForSaturnAndSegaCd` uses is not a `tgcd` set under T6); `PlayDiscSet_NotDiscOne_ALoneDisc_AnotherSystem_OrAMissingFile_Is404` and `Detail_DiscSet_IsNullForALoneDisc_AndOnAnotherSystem` keep 3DO as their other system, unchanged; `src/RnRomManager.Web/src/lib/emulatorParams.test.ts` new `reads set=1 for Beetle PCE only with disc=1 (TurboGrafx-CD T3)`, beside the PUAE one. Done when: those pass, `npm run predev` (vendoring) succeeds with the edited replace string, and README, features and development docs list TurboGrafx-CD among the set systems with its limit.
 
-Finish runs the full suite and e2e unchanged (no Playwright change: e2e doesn't boot the TurboGrafx-CD or Saturn cores with real discs), plus the manual check in § Risks.
+Finish runs the full suite and e2e unchanged (no Playwright change: e2e doesn't boot the Saturn core with real discs), plus the manual check in § Risks.
 
 ## Decisions
-- 2026-11-23 Which audit gaps to fix? → Saturn `.nrg` playback and TurboGrafx-CD disc sets; the rest stay out of scope (user)
+- 2026-11-23 Which audit gaps to fix? → Saturn `.nrg` playback and TurboGrafx-CD disc sets; the rest stay out of scope (user; TurboGrafx-CD superseded in pass 5)
 - 2026-11-23 Which `.nrg` shapes? → DAO, single session, first track 1, contiguous 2352-byte tracks; the sector-size and mode limits match `MdsSheet`'s (code)
 - 2026-11-23 How to keep the footer out of the stream? → entry length = last track end; `CopyMeasuredAsync` copies exactly that (code)
 - 2026-11-23 Review round 1: README line 15 needs updating; NRG fixtures go in a shared `SyntheticNrgBuilder`; `Footer` returns the region end (v1 footers are 8 bytes); the tgcd firmware-clash test can't be built (dropped); a tgcd set with a lone `.bin` disc isn't a set (T6); doc comments and test names pinned (reviewer)
@@ -100,6 +91,7 @@ Finish runs the full suite and e2e unchanged (no Playwright change: e2e doesn't 
 - 2026-11-23 Spec review pass 2: Step 3's detail and params tests named after their siblings; the TurboGrafx-CD detail test uses `.chd` discs because of T6 (reviewer)
 - 2026-11-23 Spec review pass 3: N3.7's reason no longer claims `MdsSheet` requires track 1 (it doesn't); decisions put in order (reviewer)
 - 2026-11-23 Spec review pass 4: N2 checked against libmirage's NRG parser (footer version picks DAOX/ETN2 or DAOI/ETNF; `END!` not required; the header's first 4 bytes are ignored); T1 checked against Beetle PCE `e1ac90d` (no playlist limit; 4 is the app's cap) (reviewer)
+- 2026-11-23 Spec review pass 5: Beetle PCE `e1ac90d` can't swap discs (`PCE_LoadCD` inserts only the first; no disk-control interface) → TurboGrafx-CD sets dropped, T1–T6 and Step 3 removed (user); `Footer` returns the version so `Parse`/`ForPlayback` pick the chunk ids, and DAOI offsets read unsigned (reviewer)
 
 ## Kickoff prompt
 ```text
