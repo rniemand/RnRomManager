@@ -14,7 +14,7 @@ public class Vic20HandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("vic20", "Commodore VIC-20", "VIC-20", "vic20", "Commodore - VIC-20")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".a0", ".20", ".40", ".60", ".bin", ".prg", ".d64", ".tap", ".t64", ".crt" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".a0", ".20", ".40", ".60", ".bin", ".prg", ".d64", ".tap", ".t64", ".crt", ".b0", ".rom", ".d71", ".d81", ".g64", ".x64", ".p00" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((256L, 8L * 1024 * 1024)));
         Assert.That((Handler.EmbedRomsInZip, Handler.DatSource, Handler.DatFolder), Is.EqualTo((true, DatSource.Libretro, DatKind.NoIntro)));
         Assert.That(Handler.MetadatKinds, Is.Empty);

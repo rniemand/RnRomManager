@@ -237,7 +237,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
 - **Commodore Review volume:** the new PET/VIC-20/C64 types never DAT-match, so each file needs manual resolution. That's the existing behaviour for those systems' non-DAT types.
 
 ## Steps
-- [ ] **1. Alias, Commodore and `.cbn` types**: A1–A3. Files:
+- [x] **1. Alias, Commodore and `.cbn` types**: A1–A3. Files:
   - the seven A1/A2 handlers and their tests (`SnesHandlerTests`, `VirtualBoyHandlerTests`, `ColecoVisionHandlerTests`, `GameBoyHandlerTests`, `PetHandlerTests`, `Vic20HandlerTests`, `C64HandlerTests`);
   - `PlayStationHandler` (`.cbn` only) and `PlayStationHandlerTests`;
   - `PlayDisc.cs` (single-file rule only);

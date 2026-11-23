@@ -598,6 +598,7 @@ public partial class LibraryEndpointsTests
     [TestCase("saturn", "Chd Solo (USA).iso")]
     [TestCase("psx", "Chd Solo (USA).pbp")]
     [TestCase("psx", "Chd Solo (USA).PBP")]
+    [TestCase("psx", "Chd Solo (USA).cbn")]
     public async Task PlayDisc_AStandaloneChd_StreamsUnchanged(string system, string name)
     {
         var (id, folder, ids) = await DiscGame(system, "Chd Solo", [PsxSolo(name, PsxTrack1)], (name, PsxTrack1));
@@ -674,7 +675,7 @@ public partial class LibraryEndpointsTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
         var problem = await AuthClient.JsonAsync(response);
         Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.InvalidPlayDisc));
-        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("a single-file disc must be a .bin, .iso, .chd, .img or .pbp"));
+        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("a single-file disc must be a .bin, .iso, .chd, .img, .pbp or .cbn"));
     }
 
     [Test]

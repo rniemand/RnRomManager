@@ -16,7 +16,7 @@ public class SnesHandlerTests
         Assert.That(Handler.ShortName, Is.EqualTo("SNES"));
         Assert.That((Handler.Id, Handler.DisplayName, Handler.Family, Handler.DatName),
             Is.EqualTo(("snes", "Super Nintendo Entertainment System", "snes", "Nintendo - Super Nintendo Entertainment System")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".sfc", ".smc" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".sfc", ".smc", ".swc", ".fig" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((8192L, 8388608L + 512)));
     }
 
@@ -48,6 +48,7 @@ public class SnesHandlerTests
     [Test]
     public void NormalizeForHashing_StripsTheCopierHeader()
     {
+        // The strip goes by size alone, so a headered .swc or .fig normalises like a .smc (A1).
         var plain = new SyntheticSnesRomBuilder { Seed = 3 };
         var headered = (plain with { CopierHeader = true }).Build();
 

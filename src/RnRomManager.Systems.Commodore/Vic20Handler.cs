@@ -7,7 +7,8 @@ namespace RnRomManager.Systems.Commodore;
 /// whose extension names the load address (<c>.20</c>, <c>.40</c>, <c>.60</c>, <c>.a0</c>; one <c>.bin</c>), so Review keeps
 /// the source extension, which VICE needs to map the cartridge. The dumps have no header, so <see cref="ReadHeader"/>
 /// always returns null and an unmatched file goes to Review. Programs, disk images, tapes and VICE <c>.crt</c> cartridges
-/// (<c>.prg</c>, <c>.d64</c>, <c>.tap</c>, <c>.t64</c>, <c>.crt</c>) aren't in the DAT, so they come in through Review; hence
+/// (<c>.prg</c>, <c>.d64</c>, <c>.tap</c>, <c>.t64</c>, <c>.crt</c>, <c>.d71</c>, <c>.d81</c>, <c>.g64</c>, <c>.x64</c>,
+/// <c>.p00</c>) and <c>.b0</c>/<c>.rom</c> cartridges aren't in the DAT, so they come in through Review; hence
 /// the 256 B floor (small programs) and 8 MiB cap (tapes).
 /// </summary>
 public sealed class Vic20Handler : ISystemHandler
@@ -18,7 +19,7 @@ public sealed class Vic20Handler : ISystemHandler
     public string DisplayName => "Commodore VIC-20";
     public string ShortName => "VIC-20";
     public string Family => Id;
-    public IReadOnlyList<string> RomExtensions { get; } = [".a0", ".20", ".40", ".60", ".bin", ".prg", ".d64", ".tap", ".t64", ".crt"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".a0", ".20", ".40", ".60", ".bin", ".prg", ".d64", ".tap", ".t64", ".crt", ".b0", ".rom", ".d71", ".d81", ".g64", ".x64", ".p00"];
     public long MinRomSizeBytes => 256;
     public long MaxRomSizeBytes => 8 * 1024 * 1024;
     public string DatName => "Commodore - VIC-20";

@@ -324,7 +324,7 @@ public static class PlayDisc
     private static bool IsBin(string name) => name.EndsWith(".bin", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// B2: a standalone <c>.bin</c>/<c>.iso</c> (CHD B4: or <c>.chd</c>; or a PlayStation <c>.img</c> or <c>.pbp</c>), or one cue with 1–99 BINs (the main file among
+    /// B2: a standalone <c>.bin</c>/<c>.iso</c> (CHD B4: or <c>.chd</c>; or a PlayStation <c>.img</c>, <c>.pbp</c> or <c>.cbn</c>), or one cue with 1–99 BINs (the main file among
     /// them), all portable names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>, <c>.cso</c>, <c>.pbp</c> or <c>.chd</c>.
     /// TurboGrafx-CD B4: Beetle PCE boots only a cue or a <c>.chd</c> as a CD (a bare <c>.bin</c> would run as a HuCard), so
     /// a single file must be a <c>.chd</c>. CloneCD B8: or a CloneCD disc on any of the five disc systems (<see cref="IsCloneCd"/>).
@@ -347,7 +347,8 @@ public static class PlayDisc
                 || members[0].Name.EndsWith(".chd", StringComparison.OrdinalIgnoreCase)
                 || members[0].Name.EndsWith(".img", StringComparison.OrdinalIgnoreCase)
                 || members[0].Name.EndsWith(".pbp", StringComparison.OrdinalIgnoreCase)
-                ? null : "a single-file disc must be a .bin, .iso, .chd, .img or .pbp";
+                || members[0].Name.EndsWith(".cbn", StringComparison.OrdinalIgnoreCase)
+                ? null : "a single-file disc must be a .bin, .iso, .chd, .img, .pbp or .cbn";
         if (IsCloneCd(members))
             return null;
         var cues = members.Count(m => IsCue(m.Name));
