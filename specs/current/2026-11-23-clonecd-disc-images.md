@@ -147,7 +147,7 @@ No migration (`files` rows already hold any set member), no config key, no API s
   - `DiscSetsTests`: `.img` mains on Saturn and Sega CD, and the `.ccd` set name; `AnImgOrNrgDisc_SpoilsASaturnOrSegaCdSet` keeps only `.nrg`.
 
   Done when they pass; the real-dump check from § Risks is done for the cores available, or noted for the PR.
-- [ ] **5. Docs**: the doc rule. Tests: `SupportedSystemsTableTests`. Done when it passes and `docs/codemap.md` is regenerated. No Playwright change. Files:
+- [x] **5. Docs**: the doc rule. Tests: `SupportedSystemsTableTests`. Done when it passes and `docs/codemap.md` is regenerated. No Playwright change. Files:
   - `docs/features.md`:
     - the ingest paragraph's disc-system sentences (CloneCD accepted; `.img`/`.sub` wait for their `.ccd` except a PlayStation `.img`; a one-track `.img` can DAT-match);
     - the TurboGrafx-CD sentence "CloneCD `.ccd`/`.img` and `.iso` aren't supported" becomes "`.iso` isn't supported";

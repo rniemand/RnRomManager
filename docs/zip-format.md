@@ -46,7 +46,7 @@ roms/
       Orbit Expedition.[0100000000010000][v0].nsp
       Orbit Expedition.[0100000000010800][v65536].nsp
       Orbit Expedition.[0100000000010800][v0][1.1.0].nsp
-  psx/                  PlayStation (external, exact names: a .cue with its .bin tracks, or a .bin/.iso/.chd/.img)
+  psx/                  PlayStation (external, exact names: a .cue with its .bin tracks, a CloneCD .ccd/.img/.sub, or a .bin/.iso/.chd/.img)
     D/
       Disc Runner.zip
       Disc Runner (USA) (Track 1).bin     the release's main file (the data track the DAT lists)
@@ -56,10 +56,10 @@ roms/
   gc/                   GameCube (external, exact names: .iso, .gcm)
   wii/                  Wii (external, exact names: .iso)
   x360/                 Xbox 360 (external, exact names: .iso)
-  saturn/               Saturn (external, exact names: a .cue with its .bin tracks, or a .nrg/.chd/.iso)
-  segacd/               Sega CD (external, exact names: a .cue with its .bin tracks, or a .bin, .iso or .chd)
-  3do/                  3DO (external, exact names: a .cue with its .bin tracks, or a .bin/.iso/.chd)
-  tgcd/                 TurboGrafx-CD / PC Engine CD (external, exact names: a .cue with its .bin tracks, or a .chd)
+  saturn/               Saturn (external, exact names: a .cue with its .bin tracks, a CloneCD .ccd/.img/.sub, or a .nrg/.chd/.iso)
+  segacd/               Sega CD (external, exact names: a .cue with its .bin tracks, a CloneCD .ccd/.img/.sub, or a .bin, .iso or .chd)
+  3do/                  3DO (external, exact names: a .cue with its .bin tracks, a CloneCD .ccd/.img/.sub, or a .bin/.iso/.chd)
+  tgcd/                 TurboGrafx-CD / PC Engine CD (external, exact names: a .cue with its .bin tracks, a CloneCD .ccd/.img/.sub, or a .chd)
 ```
 
 Inside a game's ZIP:
@@ -200,7 +200,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 | `metadata.crc32` / `md5` / `sha1` | string | ✓ | |
 | `metadata.dateAdded` / `dateModified` | string | ✓ | `dateModified` = the last time the entry's bytes were (re)written |
 | `metadata.sourcePath` | string | ✓ | ingest path at ingestion (the archive's path for an archive entry) |
-| `files` | File[]? | ✓ | v6. A disc set's other files in order (the cue, then the tracks it names, leaving out the main file); `null` for a release that is one file. Only disc systems may set it, and never as an empty list. |
+| `files` | File[]? | ✓ | v6. A disc set's other files in order (the cue, then the tracks it names, leaving out the main file; for a CloneCD set, the `.ccd` then the `.sub` when there is one, the `.img` being the main file); `null` for a release that is one file. Only disc systems may set it, and never as an empty list. |
 
 A **File** has `fileName` and `externalFileName` (equal; plain, portable names of at most 255 UTF-8 bytes ending in one of the system's ROM extensions, unique across the game's main files and files ignoring case), `originalFileName`, `sizeBytes` (at most the system's maximum ROM size) and `crc32` / `md5` / `sha1` (lowercase hex).
 
