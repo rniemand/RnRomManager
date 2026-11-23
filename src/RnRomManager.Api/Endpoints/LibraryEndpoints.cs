@@ -1,10 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 using RnRomManager.Api.Auth;
 using RnRomManager.Api.Http;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Collections;
+using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
 using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Integrity;
@@ -499,7 +501,9 @@ public static class LibraryEndpoints
         var fileRows = (await roms.ListFilesByGameAsync(id, ctx.RequestAborted)).ToLookup(f => f.RomId);
         // Multi-disc M3 (Saturn/Sega CD S2, Amiga F3): PlayStation, Saturn, Sega CD and Amiga; other systems have none. Keyed by each set's Disc 1.
         var discSets = DiscSets.Find(game.SystemId, romRows, fileRows).ToDictionary(s => s.Discs[0].Id);
-        return Results.Ok(ToDetail(game, systemName, handler?.BrowserCore, handler?.FileSets ?? false, romRows, fileRows, imageRows, notes, discSets));
+        var igdbConfigured = SourcesOptions.IgdbConfigured(ctx.RequestServices.GetRequiredService<IOptions<SourcesOptions>>().Value);
+        return Results.Ok(ToDetail(game, systemName, handler?.BrowserCore, handler?.FileSets ?? false, romRows, fileRows, imageRows, notes, discSets,
+            igdbConfigured));
     }
 
     private static IResult ToResult(HttpContext ctx, LibraryEditResult result) =>
@@ -629,6 +633,16 @@ public static class LibraryEndpoints
                 patch = patch with { SetDescription = true, Description = description.GetString() };
             else
                 errors["description"] = ["Must be null or at most 4000 characters."];
+        }
+
+        if (body.TryGetProperty("igdbId", out var igdbId))
+        {
+            if (igdbId.ValueKind == JsonValueKind.Null)
+                patch = patch with { SetIgdbId = true };
+            else if (igdbId.ValueKind == JsonValueKind.Number && igdbId.TryGetInt32(out var value) && value >= 0)
+                patch = patch with { SetIgdbId = true, IgdbId = value };
+            else
+                errors["igdbId"] = ["Must be null, 0 or a positive whole number."];
         }
         return (patch, errors);
     }
@@ -921,7 +935,7 @@ public static class LibraryEndpoints
     }
 
     private static object ToDetail(GameRow game, string systemName, string? browserCore, bool fileSets, IReadOnlyList<RomRow> roms, ILookup<long, RomFileRow> files,
-        IReadOnlyList<ImageRow> images, IReadOnlySet<string> notes, IReadOnlyDictionary<long, DiscSet> discSets) => new
+        IReadOnlyList<ImageRow> images, IReadOnlySet<string> notes, IReadOnlyDictionary<long, DiscSet> discSets, bool igdbConfigured) => new
     {
         id = game.Id,
         system = game.SystemId,
@@ -939,6 +953,8 @@ public static class LibraryEndpoints
         rating = game.Rating,
         favourite = game.Favourite,
         saveCount = game.SaveCount,
+        igdbId = game.IgdbId,
+        igdbConfigured,
         metadata = new { createdAt = game.CreatedAt, updatedAt = game.UpdatedAt },
         roms = roms.OrderByDescending(r => r.IsPrimary).ThenBy(r => r.FileName, StringComparer.Ordinal).Select(r => new
         {

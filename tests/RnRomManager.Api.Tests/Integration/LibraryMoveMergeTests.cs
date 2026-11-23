@@ -337,6 +337,37 @@ public class LibraryMoveMergeTests
         Assert.That((game.Rating, game.Favourite, row.Rating, row.Favourite), Is.EqualTo((rating, favourite, rating, favourite)));
     }
 
+    private async Task LinkIgdb(Guid id, int? igdbId) =>
+        Assert.That((await Service<LibraryEditor>().PatchAsync(id, new GamePatch { SetIgdbId = true, IgdbId = igdbId }, null, default)).Code, Is.Null);
+
+    [TestCase(77, 12, 77, TestName = "Merge igdbId: target keeps its own")]
+    [TestCase(null, 12, 12, TestName = "Merge igdbId: unlinked target takes the source's")]
+    [TestCase(null, 0, 0, TestName = "Merge igdbId: unlinked target takes Not on IGDB")]
+    [TestCase(0, 12, 0, TestName = "Merge igdbId: Not on IGDB target keeps it")]
+    public async Task Merge_IgdbId(int? target, int? source, int? expected)
+    {
+        var tetris = await Game(("t1.gb", TetrisWorld));
+        var zelda = await Game(("z.gb", Zelda));
+        await LinkIgdb(zelda, target);
+        await LinkIgdb(tetris, source);
+
+        using var response = await Merge(tetris, zelda);
+
+        Assert.That(await TargetId(response), Is.EqualTo(zelda));
+        Assert.That(((await ReadGame(zelda)).IgdbId, (await Row(zelda))!.IgdbId), Is.EqualTo((expected, expected)));
+    }
+
+    [Test]
+    public async Task MoveToNewGame_StartsUnlinked_SourceKeepsItsIgdbId()
+    {
+        var tetris = await Game(("t1.gb", TetrisWorld), ("t2.gb", TetrisJapan));
+        await LinkIgdb(tetris, 1234);
+
+        using var response = await Move(tetris, await RomId(tetris, "Tetris (Japan).gb"), new { newGameTitle = "Tetris JP" });
+
+        Assert.That(((await ReadGame(await TargetId(response))).IgdbId, (await ReadGame(tetris)).IgdbId), Is.EqualTo(((int?)null, (int?)1234)));
+    }
+
     [Test]
     public async Task MoveToNewGame_StartsUnratedNotFavourite_SourceKeepsItsValues()
     {

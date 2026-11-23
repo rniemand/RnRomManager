@@ -56,8 +56,27 @@ public class GamePatchParsingTests
     [TestCase("""{"publishers":[" "]}""", "publishers")]
     [TestCase("""{"genres":[1]}""", "genres")]
     [TestCase("""{"description":7}""", "description")]
+    [TestCase("""{"igdbId":-1}""", "igdbId")]
+    [TestCase("""{"igdbId":"12"}""", "igdbId")]
+    [TestCase("""{"igdbId":1.5}""", "igdbId")]
+    [TestCase("""{"igdbId":2147483648}""", "igdbId")]
     public void RejectsInvalidField(string json, string field) =>
         Assert.That(Parse(json).Errors, Does.ContainKey(field));
+
+    [TestCase("""{"igdbId":null}""", null)]
+    [TestCase("""{"igdbId":0}""", 0)]
+    [TestCase("""{"igdbId":2147483647}""", 2147483647)]
+    public void IgdbId_NullZeroOrPositive_IsSet(string json, int? expected)
+    {
+        var (patch, errors) = Parse(json);
+
+        Assert.That(errors, Is.Empty);
+        Assert.That((patch.SetIgdbId, patch.IgdbId), Is.EqualTo((true, expected)));
+    }
+
+    [Test]
+    public void IgdbId_Error_HasTheMessage() =>
+        Assert.That(Parse("""{"igdbId":-1}""").Errors["igdbId"], Is.EqualTo(new[] { "Must be null, 0 or a positive whole number." }));
 
     [Test]
     public void Limits_TitleLength_ListSize_ItemLength_DescriptionLength()
