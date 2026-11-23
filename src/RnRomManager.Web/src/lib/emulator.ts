@@ -50,11 +50,11 @@ export function opensInNewTab(core: string | null): boolean {
  * or PSP release is external and plays anyway, and (Saturn B6) a Saturn bin/cue disc; other external releases (Switch,
  * GameCube…) don't, nor does an .nrg image. CHD B5: a standalone .chd plays like an .iso (PlayStation, Saturn, Sega CD).
  * TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, so on `mednafen_pce` an external .bin plays only with its
- * set files (the cue); the API's quick play applies the same rule.
+ * set files (the cue); the API's quick play applies the same rule. Jaguar: see `jaguarRomLoads`.
  */
 export function canPlay(
 	game: Pick<GameDetail, 'browserCore'>,
-	rom: Pick<RomDetail, 'externalFileName'> & Partial<Pick<RomDetail, 'files'>>
+	rom: Pick<RomDetail, 'externalFileName'> & Partial<Pick<RomDetail, 'files' | 'fileName' | 'sizeBytes'>>
 ): boolean {
 	const external = rom.externalFileName?.toLowerCase() ?? null;
 	return (
@@ -66,8 +66,25 @@ export function canPlay(
 			game.browserCore === 'mednafen_pce' &&
 			(external?.endsWith('.bin') ?? false) &&
 			!rom.files?.length
+		) &&
+		!(
+			game.browserCore === 'virtualjaguar' &&
+			rom.fileName !== undefined &&
+			rom.sizeBytes !== undefined &&
+			!jaguarRomLoads(rom.fileName, rom.sizeBytes)
 		)
 	);
+}
+
+/**
+ * Virtual Jaguar picks a header-less .j64/.rom's format by size alone: a cart (a whole number of MiB, or 128 KiB) or an
+ * Alpine image (8 KiB short of one). Any other size loads nothing, a black screen. Other extensions are told apart by
+ * their header. The API's quick play applies the same rule (`LibraryEndpoints.JaguarRomLoads`).
+ */
+export function jaguarRomLoads(fileName: string, sizeBytes: number): boolean {
+	if (!/\.(j64|rom)$/i.test(fileName)) return true;
+	const mib = 1048576;
+	return sizeBytes % mib === 0 || sizeBytes === 131072 || (sizeBytes + 8192) % mib === 0;
 }
 
 /**

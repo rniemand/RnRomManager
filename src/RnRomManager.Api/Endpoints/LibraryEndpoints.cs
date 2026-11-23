@@ -854,6 +854,18 @@ public static class LibraryEndpoints
         return page with { Items = page.Items.Select(g => g with { SaveCount = counts.GetValueOrDefault(g.Id) }).ToList() };
     }
 
+    /// <summary>
+    /// Virtual Jaguar picks a header-less .j64/.rom's format by size alone: a cart (a whole number of MiB, or 128 KiB)
+    /// or an Alpine image (8 KiB short of one); any other size loads nothing. Mirrors the SPA's <c>jaguarRomLoads</c>.
+    /// </summary>
+    public static bool JaguarRomLoads(string fileName, long sizeBytes)
+    {
+        if (!fileName.EndsWith(".j64", StringComparison.OrdinalIgnoreCase) && !fileName.EndsWith(".rom", StringComparison.OrdinalIgnoreCase))
+            return true;
+        const long mib = 1048576;
+        return sizeBytes % mib == 0 || sizeBytes == 131072 || (sizeBytes + 8192) % mib == 0;
+    }
+
     internal static object ToListItemDto(GameListItem game, ISystemRegistry systems)
     {
         // C2: quick play needs a browser core and a primary release stored in the zip; Play B1 / PSP B1:
@@ -865,7 +877,9 @@ public static class LibraryEndpoints
             && game.PrimaryRomFileName?.EndsWith(".nrg", StringComparison.OrdinalIgnoreCase) != true
             // TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, so only a cue set's .bin plays.
             && !(core == "mednafen_pce" && game.PrimaryIsExternal && !game.PrimaryHasFiles
-                 && game.PrimaryRomFileName?.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) == true);
+                 && game.PrimaryRomFileName?.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) == true)
+            && !(core == "virtualjaguar" && game.PrimaryRomFileName is { } name && game.PrimarySizeBytes is { } size
+                 && !JaguarRomLoads(name, size));
         return new
         {
             id = game.Id,

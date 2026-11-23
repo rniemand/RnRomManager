@@ -124,6 +124,33 @@ describe('canPlay on mednafen_pce (TurboGrafx-CD B5)', () => {
 	});
 });
 
+describe('canPlay on virtualjaguar', () => {
+	const jaguar = (fileName: string, sizeBytes: number) =>
+		canPlay({ browserCore: 'virtualjaguar' }, { externalFileName: null, fileName, sizeBytes });
+
+	it.each([
+		['x.j64', 2097152],
+		['x.J64', 131072],
+		['x.rom', 2088960],
+		['x.ROM', 16769024]
+	])('plays %s of %i bytes (a cart or an Alpine image)', (name, size) => {
+		expect(jaguar(name, size)).toBe(true);
+	});
+
+	it.each([
+		['Jalaga.j64', 902176],
+		['Jalaga.rom', 893984],
+		['SuperFly DX.j64', 1572864],
+		['SuperFly DX.ROM', 1564672]
+	])('refuses %s of %i bytes, which Virtual Jaguar loads as nothing', (name, size) => {
+		expect(jaguar(name, size)).toBe(false);
+	});
+
+	it.each(['x.abs', 'x.cof', 'x.jag'])('plays %s of any size (told apart by its header)', (name) => {
+		expect(jaguar(name, 1832003)).toBe(true);
+	});
+});
+
 describe('S8 Nintendo DS', () => {
 	it('plays an external DS release on DeSmuME', () => {
 		expect(canPlay({ browserCore: 'desmume' }, { externalFileName: 'Quest.(USA).nds' })).toBe(true);

@@ -78,9 +78,9 @@ public class BrowserCoreExtensionsTests
         [("saturn", ".bin")] = "play-disc adds a MODE1/2352 cue to a lone .bin, and Yabause opens the cue",
         [("saturn", ".nrg")] = "never plays: canPlay and the games list's playRomId refuse an .nrg release",
         [("tgcd", ".bin")] = "a cue set's data track; a lone .bin never plays (canPlay, play-disc)",
-        [("jaguar", ".rom")] = "VirtualJaguar picks the format from the file's content (unverified with a real dump)",
-        [("jaguar", ".abs")] = "VirtualJaguar picks the format from the file's content (unverified with a real dump)",
-        [("jaguar", ".cof")] = "VirtualJaguar picks the format from the file's content (unverified with a real dump)",
+        [("jaguar", ".rom")] = "VirtualJaguar sizes a header-less .rom as an Alpine image; canPlay and playRomId refuse other sizes",
+        [("jaguar", ".abs")] = "VirtualJaguar knows an ABS by its 0x601B header, whatever the extension",
+        [("jaguar", ".cof")] = "VirtualJaguar knows a COFF by its 0x0150 header, whatever the extension",
     };
 
     [Test]
