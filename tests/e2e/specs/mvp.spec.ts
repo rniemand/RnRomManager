@@ -2123,6 +2123,8 @@ test("user management: a Site user's account, private saves and audit trail", { 
     await user
       .getByRole("searchbox", { name: "Search", exact: true })
       .fill("Orbit Blocks");
+    // Wait for the debounced search to reach the URL, or its late navigation undoes the click.
+    await expect(user).toHaveURL(/[?&]q=/);
     await user.getByRole("link", { name: "Orbit Blocks", exact: true }).click();
     await expect(
       user.getByRole("heading", { level: 1, name: "Orbit Blocks" }),
