@@ -33,6 +33,7 @@
 	import InfoJsonModal from '#lib/components/InfoJsonModal.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import RatingControl from '#lib/components/RatingControl.svelte';
+	import GameTitle from '#lib/components/GameTitle.svelte';
 	import ReleaseNoteModal from '#lib/components/ReleaseNoteModal.svelte';
 	import EditReleaseModal, { type ReleaseKind } from '#lib/components/EditReleaseModal.svelte';
 	import EmulatorModal from '#lib/components/EmulatorModal.svelte';
@@ -484,7 +485,15 @@
 		</div>
 		<div class="col-12 col-md-8 col-lg-9">
 			<div class="d-flex flex-wrap align-items-center gap-3 mb-2">
-				<h1 class="h3 mb-0">{game.displayTitle}</h1>
+				{#if auth.isAdmin}
+					<GameTitle
+						{game}
+						onsaved={setGame}
+						onstale={() => onAdminDone({ reload: true, message: changedMessage, warning: true })}
+					/>
+				{:else}
+					<h1 class="h3 mb-0">{game.displayTitle}</h1>
+				{/if}
 				<RatingControl
 					gameId={game.id}
 					title={game.displayTitle}
