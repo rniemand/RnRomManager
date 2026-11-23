@@ -86,6 +86,15 @@ public sealed class IntegrityIssueRepository(IDbConnectionFactory connections) :
             new { ids, resolvedAt }, cancellationToken: cancellationToken));
     }
 
+    public async Task<int> ResolveOpenAsync(string zipPath, string type, DateTime resolvedAt, CancellationToken cancellationToken)
+    {
+        await using var connection = connections.Create();
+        return await connection.ExecuteAsync(new CommandDefinition(
+            "UPDATE integrity_issues SET status = 'Resolved', resolved_at = @resolvedAt " +
+            "WHERE status = 'Open' AND zip_path = @zipPath AND type = @type AND entry_name IS NULL",
+            new { zipPath, type, resolvedAt }, cancellationToken: cancellationToken));
+    }
+
     public async Task<int> PurgeAsync(DateTime cutoff, CancellationToken cancellationToken)
     {
         await using var connection = connections.Create();

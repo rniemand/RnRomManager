@@ -294,7 +294,8 @@ public static class LibraryEndpoints
         // I5–I7: image management. The upload reads the form itself (no IFormFile binding), so the group's own
         // X-XSRF-TOKEN filter is the antiforgery check, as for every other mutation.
         games.MapPost("/{id:guid}/images", async (Guid id, HttpContext ctx, LibraryEditor editor, IGameRepository repository,
-            IRomRepository roms, IImageRepository images, JobRunner runner, IntegrityJobFactory integrity, ILoggerFactory loggers) =>
+            IRomRepository roms, IImageRepository images, JobRunner runner, IntegrityJobFactory integrity, ILoggerFactory loggers,
+            ISystemRegistry systems, JobLock jobLock, IIntegrityIssueRepository issues, TimeProvider time) =>
         {
             var (form, problem) = await ReadImageFormAsync(ctx);
             if (problem is not null)
@@ -308,14 +309,15 @@ public static class LibraryEndpoints
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             var result = await editor.AddImageAsync(id, type!.Value, bytes!, AuditActor.From(ctx.User), ctx.RequestAborted);
-            await StartGameCheckAsync(result, id, ctx, repository, runner, integrity, loggers);
+            await StartGameCheckAsync(result, id, ctx, repository, runner, integrity, loggers, systems, jobLock, issues, time);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.AdminOnly).WithMetadata(new Microsoft.AspNetCore.Mvc.RequestSizeLimitAttribute(UploadRequestLimit));
 
         // U1–U5: the server downloads the image (public addresses only), then stores it exactly like an upload.
         games.MapPost("/{id:guid}/images/from-url", async (Guid id, ImageUrlRequest request, HttpContext ctx, ImageUrlDownloader downloader,
             LibraryEditor editor, IGameRepository repository, IRomRepository roms, IImageRepository images, JobRunner runner,
-            IntegrityJobFactory integrity, ILoggerFactory loggers) =>
+            IntegrityJobFactory integrity, ILoggerFactory loggers, ISystemRegistry systems, JobLock jobLock, IIntegrityIssueRepository issues,
+            TimeProvider time) =>
         {
             var errors = Validate(request, out var url, out var type);
             if (errors.Count > 0)
@@ -328,7 +330,7 @@ public static class LibraryEndpoints
             if (DownloadedImageError(bytes) is { } bytesError)
                 return Problems.Validation(ctx, new Dictionary<string, string[]> { ["url"] = [bytesError] });
             var result = await editor.AddImageAsync(id, type, bytes, AuditActor.From(ctx.User), ctx.RequestAborted, request.Url);
-            await StartGameCheckAsync(result, id, ctx, repository, runner, integrity, loggers);
+            await StartGameCheckAsync(result, id, ctx, repository, runner, integrity, loggers, systems, jobLock, issues, time);
             return result.Code is null ? await DetailAsync(id, ctx, repository, roms, images) : ToProblem(ctx, result);
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
@@ -391,11 +393,13 @@ public static class LibraryEndpoints
 
     /// <summary>
     /// B14: once the first real box art replaced the placeholder cover (and the editor released the job lock), a deep
-    /// check of that game clears its <c>DefaultBoxArt</c> issue. Skipped, never queued, when another job holds the lock;
-    /// the response is the game detail whatever happens here.
+    /// check of that game clears its <c>DefaultBoxArt</c> issue. G1: an external game's check would re-hash every external
+    /// file, so its issue is resolved directly under the job lock instead. Skipped, never queued, when another job holds
+    /// the lock; the response is the game detail whatever happens here.
     /// </summary>
     private static async Task StartGameCheckAsync(LibraryEditResult result, Guid id, HttpContext ctx, IGameRepository repository,
-        JobRunner runner, IntegrityJobFactory integrity, ILoggerFactory loggers)
+        JobRunner runner, IntegrityJobFactory integrity, ILoggerFactory loggers, ISystemRegistry systems, JobLock jobLock,
+        IIntegrityIssueRepository issues, TimeProvider time)
     {
         if (result.Code is not null || !result.ReplacedDefaultCover)
             return;
@@ -404,6 +408,15 @@ public static class LibraryEndpoints
         {
             if (await repository.GetAsync(id, CancellationToken.None) is not { } row)
                 return;
+            if (systems.ById(row.SystemId) is { EmbedRomsInZip: false })
+            {
+                using var held = jobLock.TryAcquire();
+                if (held is null)
+                    logger.LogInformation("Resolving DefaultBoxArt of {ZipPath} skipped: another job is running", row.ZipPath);
+                else
+                    await issues.ResolveOpenAsync(row.ZipPath, IntegrityIssueType.DefaultBoxArt, time.GetUtcNow().UtcDateTime, CancellationToken.None);
+                return;
+            }
             var started = await runner.StartAsync(integrity(JobMode.Game, row.ZipPath), JobTrigger.Manual, DatEndpoints.UserId(ctx.User),
                 CancellationToken.None);
             if (started is null)

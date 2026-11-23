@@ -28,6 +28,11 @@ public interface IIntegrityIssueRepository
 
     Task ResolveAsync(IReadOnlyCollection<long> ids, DateTime resolvedAt, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// G4: resolves the open issues of one type on a ZIP itself (no entry name, as <c>DefaultBoxArt</c>); returns how many.
+    /// </summary>
+    Task<int> ResolveOpenAsync(string zipPath, string type, DateTime resolvedAt, CancellationToken cancellationToken);
+
     /// <summary>Retention (§12.2): deletes non-<c>Open</c> issues resolved (or, if never resolved, detected) before <paramref name="cutoff"/>.</summary>
     Task<int> PurgeAsync(DateTime cutoff, CancellationToken cancellationToken);
 }
