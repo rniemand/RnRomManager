@@ -277,7 +277,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   - `ReviewSetsTests`: finds a TOC set and an MDS set from each member.
 
   Done when they pass.
-- [ ] **6. Review**: D10. Files: `ReviewResolver.cs`, `types.ts` (comments). Tests:
+- [x] **6. Review**: D10. Files: `ReviewResolver.cs`, `types.ts` (comments). Tests:
   - `ReviewResolverTests`: `IsDismissible` is false for `.toc`/`.mds`/`.mdf` and true for a `.cbn`;
   - `ReviewResolverExternalTests`:
     - a TOC set resolves as one release, with main the first `.bin` and `files` `[.toc, other bins]`;

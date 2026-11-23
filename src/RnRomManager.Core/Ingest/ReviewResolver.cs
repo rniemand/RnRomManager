@@ -69,10 +69,10 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
         (IsSetMemberCandidate(item, systems) && await sets.FindAsync(item, cancellationToken).ConfigureAwait(false) is not null)
         || IsDismissible(item, systems, inSet: false);
 
-    /// <summary>CloneCD B7: a <c>.cue</c>, <c>.bin</c>, <c>.ccd</c>, <c>.img</c> or <c>.sub</c> item (by its <c>originalFileName</c>, ignoring case) on a <c>FileSets</c> system.</summary>
+    /// <summary>CloneCD B7, D10: a <c>.cue</c>, <c>.bin</c>, <c>.ccd</c>, <c>.img</c>, <c>.sub</c>, <c>.toc</c>, <c>.mds</c> or <c>.mdf</c> item (by its <c>originalFileName</c>, ignoring case) on a <c>FileSets</c> system.</summary>
     public static bool IsSetMemberCandidate(ReviewItem item, ISystemRegistry systems) =>
         systems.ById(item.SystemId) is { FileSets: true }
-        && Path.GetExtension(item.OriginalFileName).ToLowerInvariant() is ".cue" or ".bin" or ".ccd" or ".img" or ".sub";
+        && Path.GetExtension(item.OriginalFileName).ToLowerInvariant() is ".cue" or ".bin" or ".ccd" or ".img" or ".sub" or ".toc" or ".mds" or ".mdf";
 
     /// <summary>
     /// B15, CloneCD B7: false for every set member candidate but a lone PlayStation <c>.img</c>, so a set is never half
@@ -542,10 +542,9 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 var stem = FileNameSanitizer.Sanitize(Path.GetFileNameWithoutExtension(item.OriginalFileName));
                 if (flag == "Release")
                 {
-                    // A2: tags from the file's own name (a set's cue or .ccd); another disc is Attach as Disc's job. Unverified
+                    // A2: tags from the file's own name (a set's cue, .toc, .ccd or .mds); another disc is Attach as Disc's job. Unverified
                     // keeps DAT-verified releases primary, as the Dat action's manual pick does.
-                    var named = set?.FirstOrDefault(m => m.File.Name.EndsWith(".cue", StringComparison.OrdinalIgnoreCase)
-                            || m.File.Name.EndsWith(".ccd", StringComparison.OrdinalIgnoreCase)).File?.Name
+                    var named = set?.FirstOrDefault(m => Path.GetExtension(m.File.Name).ToLowerInvariant() is ".cue" or ".toc" or ".ccd" or ".mds").File?.Name
                         ?? item.OriginalFileName;
                     var tags = NoIntroName.Parse(Path.GetFileNameWithoutExtension(named));
                     regions = tags.Regions; languages = tags.Languages; revision = tags.Revision;

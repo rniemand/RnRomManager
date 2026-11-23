@@ -249,15 +249,15 @@ public class ReviewResolverExternalTests
     /// CloneCD B5: writes <c>Mystery (Disc 2).ccd/.img/.sub</c> next to <see cref="_item"/>, rows 1–3 Pending
     /// <c>NoDatMatch</c>; the item is the <c>.ccd</c> (row 1).
     /// </summary>
-    private void CloneCdRows()
+    private void CloneCdRows() => SetRows(
+        ("Mystery (Disc 2).ccd", System.Text.Encoding.UTF8.GetBytes("[Disc]\nSessions=1\n[TRACK 1]\nMODE=2\nINDEX 1=0\n")),
+        ("Mystery (Disc 2).img", TestLibrary.RomBytes(3)),
+        ("Mystery (Disc 2).sub", TestLibrary.RomBytes(4)));
+
+    /// <summary>Writes <paramref name="files"/> next to <see cref="_item"/> as rows 1… Pending <c>NoDatMatch</c>; the item is row 1.</summary>
+    private void SetRows(params (string Name, byte[] Bytes)[] files)
     {
         var folder = Path.GetDirectoryName(_item.SourcePath)!;
-        var files = new (string Name, byte[] Bytes)[]
-        {
-            ("Mystery (Disc 2).ccd", System.Text.Encoding.UTF8.GetBytes("[Disc]\nSessions=1\n[TRACK 1]\nMODE=2\nINDEX 1=0\n")),
-            ("Mystery (Disc 2).img", TestLibrary.RomBytes(3)),
-            ("Mystery (Disc 2).sub", TestLibrary.RomBytes(4)),
-        };
         _rows = [];
         for (var i = 0; i < files.Length; i++)
         {
@@ -304,6 +304,56 @@ public class ReviewResolverExternalTests
         Assert.That(result.Items.Select(r => r.Id), Is.EqualTo(new long[] { 1, 2, 3 }));
         var rom = StoredRelease(zipPath, "Mystery (Disc 2).img");
         Assert.That(rom.Files!.Select(f => f.ExternalFileName), Is.EqualTo(new[] { "Mystery (Disc 2).ccd", "Mystery (Disc 2).sub" }));
+    }
+
+    private static byte[] TocBytes(string track1, string track2) => System.Text.Encoding.UTF8.GetBytes(
+        $"TRACK MODE1_RAW\nFILE \"{track1}\" 0 00:00:01\nTRACK AUDIO\nFILE \"{track2}\" 0\n");
+
+    [Test]
+    public async Task ATocSet_ResolvesAsOneRelease_FirstBinMain_TocAndOtherBinsInFiles_D10()
+    {
+        var (gameId, zipPath) = await DiscGameAsync("Mystery (Disc 2).toc");
+        SetRows(("Mystery (Disc 2).toc", TocBytes(SetTrack1, SetTrack2)), (SetTrack1, TestLibrary.RomBytes(3)), (SetTrack2, TestLibrary.RomBytes(4)));
+
+        var result = await _resolver.ResolveInJobAsync(3, Manual with { Regions = ["Europe"], Disc = 2 }, Actor, new JobProgress());
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        Assert.That(result.GameId, Is.EqualTo(gameId));
+        Assert.That(result.Items.Select(r => r.Id), Is.EqualTo(new long[] { 1, 2, 3 }));
+        Assert.That(StoredRelease(zipPath, SetTrack1).Files!.Select(f => f.ExternalFileName), Is.EqualTo(new[] { "Mystery (Disc 2).toc", SetTrack2 }));
+    }
+
+    [Test]
+    public async Task AnMdsSet_ResolvesAsOneRelease_MdfMain_MdsInFiles_D10()
+    {
+        var (gameId, zipPath) = await DiscGameAsync("Mystery (Disc 2).mds");
+        SetRows(("Mystery (Disc 2).mds", SyntheticMdsBuilder.OneTrack()), ("Mystery (Disc 2).mdf", TestLibrary.RomBytes(3)));
+
+        var result = await _resolver.ResolveInJobAsync(2, Manual with { Regions = ["Europe"], Disc = 2 }, Actor, new JobProgress());
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        Assert.That(result.GameId, Is.EqualTo(gameId));
+        Assert.That(result.Items.Select(r => r.Id), Is.EqualTo(new long[] { 1, 2 }));
+        Assert.That(StoredRelease(zipPath, "Mystery (Disc 2).mdf").Files!.Select(f => f.ExternalFileName), Is.EqualTo(new[] { "Mystery (Disc 2).mds" }));
+    }
+
+    [TestCase(".toc")]
+    [TestCase(".mds")]
+    public async Task AttachRelease_OnATocOrMdsSet_TagsFromTheSheetsStem_D10(string sheet)
+    {
+        var (gameId, zipPath) = await DiscGameAsync("Mystery (Japan) (Disc 2)" + sheet);
+        var main = sheet == ".toc" ? SetTrack1 : "Mystery (Japan) (Disc 2).mdf";
+        if (sheet == ".toc")
+            SetRows(("Mystery (Japan) (Disc 2).toc", TocBytes(SetTrack1, SetTrack2)), (SetTrack1, TestLibrary.RomBytes(3)), (SetTrack2, TestLibrary.RomBytes(4)));
+        else
+            SetRows(("Mystery (Japan) (Disc 2).mds", SyntheticMdsBuilder.OneTrack()), (main, TestLibrary.RomBytes(3)));
+
+        var result = await _resolver.ResolveInJobAsync(2, new ReviewResolutionRequest { Action = "Attach", Flag = "Release", TargetGameId = gameId },
+            Actor, new JobProgress());
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        var rom = StoredRelease(zipPath, main);
+        Assert.That((rom.Regions, rom.Flags), Is.EqualTo((new[] { "Japan" }, new[] { "Unverified" })));
     }
 
     private static readonly ReviewResolutionRequest AttachDisc2 = new() { Action = "Attach", Flag = "Disc", Disc = 2 };
