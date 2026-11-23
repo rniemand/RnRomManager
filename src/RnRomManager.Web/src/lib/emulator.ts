@@ -55,7 +55,8 @@ export function opensInNewTab(core: string | null): boolean {
  */
 export function canPlay(
 	game: Pick<GameDetail, 'browserCore'>,
-	rom: Pick<RomDetail, 'externalFileName'> & Partial<Pick<RomDetail, 'files' | 'fileName' | 'sizeBytes'>>
+	rom: Pick<RomDetail, 'externalFileName'> &
+		Partial<Pick<RomDetail, 'files' | 'fileName' | 'sizeBytes'>>
 ): boolean {
 	const external = rom.externalFileName?.toLowerCase() ?? null;
 	return (

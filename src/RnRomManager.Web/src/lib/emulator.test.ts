@@ -165,7 +165,9 @@ describe('canPlay on puae', () => {
 	});
 
 	it('plays an .adf', () => {
-		expect(canPlay({ browserCore: 'puae' }, { externalFileName: null, fileName: 'x.adf' })).toBe(true);
+		expect(canPlay({ browserCore: 'puae' }, { externalFileName: null, fileName: 'x.adf' })).toBe(
+			true
+		);
 	});
 });
 
