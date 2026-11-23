@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Satellaview). Made for this project; MIT licensed like the rest of the repo.
+       Exported to satellaview.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#e6eef5"/>
+  <!-- satellite dish -->
+  <g transform="translate(256 168)">
+    <path d="M-110 -40 A120 120 0 0 0 30 100 Z" fill="#a9a8b0" stroke="#3a3a46" stroke-width="4"/>
+    <line x1="-40" y1="30" x2="40" y2="-50" stroke="#3a3a46" stroke-width="6" stroke-linecap="round"/>
+    <circle cx="44" cy="-54" r="10" fill="#1f5f8b"/>
+    <path d="M70 -80 A40 40 0 0 1 70 -28" fill="none" stroke="#1f5f8b" stroke-width="6" stroke-linecap="round"/>
+    <path d="M92 -102 A70 70 0 0 1 92 -6" fill="none" stroke="#1f5f8b" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+  </g>
+  <!-- memory pack -->
+  <rect x="146" y="290" width="220" height="140" rx="10" fill="#fffaf0" stroke="#3a3a46" stroke-width="4"/>
+  <rect x="146" y="290" width="220" height="40" rx="10" fill="#1f5f8b"/>
+  <text x="256" y="388" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="44" font-weight="800" fill="#1f5f8b">BS-X</text>
+  <text x="256" y="416" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="16" font-weight="600" fill="#3a3a46">MEMORY PACK</text>
+</svg>

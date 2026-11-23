@@ -255,6 +255,8 @@ public static class AppHost
         services.AddSystemHandler<NesHandler>();
         services.AddSystemHandler<FdsHandler>();
         services.AddSystemHandler<SnesHandler>();
+        services.AddSystemHandler<SatellaviewHandler>();
+        services.AddSystemHandler<SufamiTurboHandler>();
         services.AddSystemHandler<VirtualBoyHandler>();
         services.AddSystemHandler<Atari2600Handler>();
         services.AddSystemHandler<Atari5200Handler>();

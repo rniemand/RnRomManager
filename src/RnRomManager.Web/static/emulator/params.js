@@ -84,13 +84,17 @@ export function parsePlayParams(search, pspPage = false) {
 /**
  * The BIOS file a core needs from `Paths:Bios` (served by `/api/emulator/bios/<name>`), or null when it needs none.
  * Gearcoleco looks for the file by this exact name next to the ROM. FCEUmm needs `disksys.rom` for a Famicom Disk
- * System release (named `.fds`, any case) and nothing for an NES cartridge.
+ * System release (named `.fds`, any case) and nothing for an NES cartridge. Snes9x needs `STBIOS.bin` for a Sufami Turbo
+ * release (`.st`) and `BS-X.bin` for a Satellaview one (`.bs`), any case, and nothing for a SNES cartridge; it looks
+ * for them next to the ROM first.
  * @param {string} core
  * @param {string} name the release name
  * @returns {string | null}
  */
 export function biosFor(core, name) {
 	if (core === 'gearcoleco') return 'colecovision.rom';
+	if (core === 'snes9x' && /\.st$/i.test(name)) return 'STBIOS.bin';
+	if (core === 'snes9x' && /\.bs$/i.test(name)) return 'BS-X.bin';
 	return core === 'fceumm' && /\.fds$/i.test(name) ? 'disksys.rom' : null;
 }
 

@@ -1393,6 +1393,37 @@ describe('play page TurboGrafx-CD (TurboGrafx-CD B7, B8)', () => {
 describe('play page SNES (SNES B3)', () => {
 	const check = '/api/emulator/cores/snes9x';
 
+	it('checks the core, then STBIOS.bin, then loads a Sufami Turbo release with it as EJS_biosUrl', async () => {
+		const stbios = '/api/emulator/bios/STBIOS.bin';
+		serve({
+			[check]: async () => response(204),
+			[stbios]: async () => response(200),
+			[romUrl]: async () => response(200)
+		});
+
+		await play('snes9x', 'Star Duel (Japan).st');
+
+		expect(urls()).toEqual([check, stbios, romUrl]);
+		expect(atLoader).toMatchObject({ EJS_biosUrl: stbios, EJS_core: 'snes9x' });
+	});
+
+	it('stops before the ROM when BS-X.bin is missing for a Satellaview release', async () => {
+		const bsx = '/api/emulator/bios/BS-X.bin';
+		serve({
+			[check]: async () => response(204),
+			[bsx]: async () => response(404),
+			[romUrl]: async () => response(200)
+		});
+
+		const status = await play('snes9x', 'Town Pack (Japan).bs');
+
+		expect(status).toBe(
+			'This system needs its BIOS: ask an Admin to put BS-X.bin in the BIOS folder (Paths:Bios).'
+		);
+		expect(urls()).toEqual([check, bsx]);
+		expect(atLoader).toBeNull();
+	});
+
 	it.each(['Mode Seven Rally (USA).sfc', 'Legacy Cart (USA).smc'])(
 		'checks the core files with one HEAD, then loads %s with the API paths and upstream controls',
 		async (name) => {

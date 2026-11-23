@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Sufami Turbo). Made for this project; MIT licensed like the rest of the repo.
+       Exported to sufami.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#f3e9ef"/>
+  <!-- adapter with two cart slots -->
+  <path d="M80 250 Q80 230 100 230 L412 230 Q432 230 432 250 L432 420 Q432 440 412 440 L100 440 Q80 440 80 420 Z"
+        fill="#a9a8b0" stroke="#3a3a46" stroke-width="4"/>
+  <rect x="112" y="226" width="128" height="16" rx="3" fill="#3a3a46" opacity="0.5"/>
+  <rect x="272" y="226" width="128" height="16" rx="3" fill="#3a3a46" opacity="0.5"/>
+  <!-- two mini-carts -->
+  <g stroke="#3a3a46" stroke-width="4">
+    <rect x="120" y="96" width="112" height="140" rx="8" fill="#fffaf0"/>
+    <rect x="280" y="76" width="112" height="160" rx="8" fill="#fffaf0"/>
+  </g>
+  <rect x="120" y="96" width="112" height="30" rx="8" fill="#7a2e5a"/>
+  <rect x="280" y="76" width="112" height="30" rx="8" fill="#7a2e5a"/>
+  <text x="256" y="350" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="60" font-weight="800" fill="#7a2e5a">ST</text>
+  <text x="256" y="392" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="20" font-weight="600" fill="#3a3a46">SUFAMI TURBO</text>
+</svg>

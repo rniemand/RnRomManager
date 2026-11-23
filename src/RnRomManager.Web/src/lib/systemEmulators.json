@@ -356,6 +356,24 @@
 			"note": "RetroArch core: PicoDrive"
 		}
 	],
+	"satellaview": [
+		{
+			"name": "Snes9x",
+			"url": "https://www.snes9x.com/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "bsnes",
+			"url": "https://github.com/bsnes-emu/bsnes",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Snes9x or bsnes (needs BS-X.bin)"
+		}
+	],
 	"saturn": [
 		{
 			"name": "Ymir",
@@ -426,6 +444,24 @@
 			"url": "https://www.retroarch.com/?page=platforms",
 			"os": ["windows", "macos", "linux", "android", "ios"],
 			"note": "RetroArch core: Snes9x"
+		}
+	],
+	"sufami": [
+		{
+			"name": "Snes9x",
+			"url": "https://www.snes9x.com/",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "bsnes",
+			"url": "https://github.com/bsnes-emu/bsnes",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "RetroArch",
+			"url": "https://www.retroarch.com/?page=platforms",
+			"os": ["windows", "macos", "linux", "android", "ios"],
+			"note": "RetroArch core: Snes9x or bsnes (needs STBIOS.bin)"
 		}
 	],
 	"switch": [

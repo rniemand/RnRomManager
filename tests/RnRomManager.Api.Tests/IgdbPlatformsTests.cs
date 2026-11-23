@@ -21,7 +21,10 @@ public class IgdbPlatformsTests
     [Test]
     public void PlatformIds_AreDistinctAndPositive()
     {
-        Assert.That(IgdbPlatforms.ById.Values, Is.Unique);
+        // Satellaview and Sufami Turbo search as SNES (19): their own IGDB platforms weren't looked up (no credentials).
+        string[] snesFallbacks = ["satellaview", "sufami"];
+        Assert.That(snesFallbacks.Select(id => IgdbPlatforms.ById[id]), Is.All.EqualTo(IgdbPlatforms.ById["snes"]));
+        Assert.That(IgdbPlatforms.ById.Where(p => !snesFallbacks.Contains(p.Key)).Select(p => p.Value), Is.Unique);
         Assert.That(IgdbPlatforms.ById.Values, Is.All.Positive);
     }
 }

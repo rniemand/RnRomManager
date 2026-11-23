@@ -35,6 +35,7 @@ public class IngestPipelineTests
     /// <summary>The same dump without its 16-byte header: what the DAT's <c>.unh</c> entry hashes.</summary>
     private static readonly byte[] PioneerHeaderless = Pioneer[16..];
     private static readonly byte[] DiskQuest = FdsDisk();
+    private static readonly byte[] StarDuel = SufamiCart(2601);
     private static readonly SyntheticSnesRomBuilder Rally = new() { Seed = 80, SizeKiB = 64, Title = "MODE SEVEN RALLY" };
 
     private static readonly byte[] Lanes = Atari(4096, 120);
@@ -174,7 +175,7 @@ public class IngestPipelineTests
             [IngestSeeder.ThreeDoDat] = [new FixtureGame("Opal Orbit (USA)", "Opal Orbit (USA) (Track 1).bin", OpalData)],
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
-            [IngestSeeder.Vic20Dat] = [], [IngestSeeder.FdsDat] = [new FixtureGame("Disk Quest (Japan)", "Disk Quest (Japan).fds", DiskQuest)],
+            [IngestSeeder.Vic20Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [new FixtureGame("Star Duel (Japan)", "Star Duel (Japan).st", StarDuel)], [IngestSeeder.FdsDat] = [new FixtureGame("Disk Quest (Japan)", "Disk Quest (Japan).fds", DiskQuest)],
             // Amiga F4: libretro's TOSEC game names are "Title (Disk n)[tags]"; the ROM names carry the full TOSEC name.
             [IngestSeeder.AmigaDat] =
             [
@@ -253,6 +254,14 @@ public class IngestPipelineTests
         disk[0] = 0x01;
         "*NINTENDO-HVC*"u8.CopyTo(disk.AsSpan(1));
         return disk;
+    }
+
+    /// <summary>A synthetic 512 KiB Sufami Turbo cart: random bytes after the <c>BANDAI SFC-ADX</c> magic.</summary>
+    private static byte[] SufamiCart(int seed)
+    {
+        var cart = Atari(512 * 1024, seed);
+        "BANDAI SFC-ADX"u8.CopyTo(cart);
+        return cart;
     }
 
     private static byte[] Atari(int size, int seed)
@@ -1718,6 +1727,32 @@ public class IngestPipelineTests
         using var bytes = new MemoryStream();
         stored.CopyTo(bytes);
         Assert.That(bytes.ToArray(), Is.EqualTo(DiskQuest));
+    }
+
+    [Test]
+    public async Task Sufami_ADatMatchedCart_IsStoredUnderTheDatsName()
+    {
+        var result = await IngestAsync(DropAged("sufami", "duel.st", StarDuel));
+
+        Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, "sufami")), result.Details);
+        using var library = LibraryZip.Open(Path.Combine(Roms, "sufami", "S", "Star Duel.zip"), Service<InfoJsonReader>());
+        Assert.That(library.InfoJson!.Game!.Roms.Single().FileName, Is.EqualTo("Star Duel (Japan).st"));
+    }
+
+    [Test]
+    public async Task Sufami_UnmatchedWithoutTheMagic_IsInvalidHeader()
+    {
+        var result = await IngestAsync(DropAged("sufami", "junk.st", Atari(512 * 1024, 2602)));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.InvalidHeader)));
+    }
+
+    [Test]
+    public async Task Satellaview_Unmatched_GoesToReview()
+    {
+        var result = await IngestAsync(DropAged("satellaview", "pack.bs", Atari(128 * 1024, 2603)));
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "satellaview")));
     }
 
     [Test]

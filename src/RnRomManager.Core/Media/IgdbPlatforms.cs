@@ -35,6 +35,10 @@ public static class IgdbPlatforms
         ["saturn"] = 32,
         ["segacd"] = 78,
         ["sms"] = 64,
+        // Satellaview and Sufami Turbo: the SNES platform (spec B7), the fallback for a system whose own IGDB platform
+        // wasn't looked up; IgdbPlatformsTests names them as the only repeated ids.
+        ["satellaview"] = 19,
+        ["sufami"] = 19,
         ["snes"] = 19,
         ["switch"] = 130,
         ["tg16"] = 86,

@@ -312,6 +312,24 @@
 	background-color: var(--bs-fds) !important;
 }
 
+/* Satellaview colour: a satellite-dish blue, same in both themes; white on it is AA (~6.9:1). */
+:root {
+	--bs-satellaview: #1f5f8b;
+}
+.text-bg-satellaview {
+	color: #fff !important;
+	background-color: var(--bs-satellaview) !important;
+}
+
+/* Sufami Turbo colour: a cartridge plum, same in both themes; white on it is AAA (~8.6:1). */
+:root {
+	--bs-sufami: #7a2e5a;
+}
+.text-bg-sufami {
+	color: #fff !important;
+	background-color: var(--bs-sufami) !important;
+}
+
 /* Nintendo 3DS system colour: a light pink no other system uses, same in both themes; black on it is AAA (~8.8:1). */
 :root {
 	--bs-3ds: #f783ac;

@@ -42,7 +42,7 @@ public sealed class SnesHandler : ISystemHandler
 
     public ReadOnlyMemory<byte> NormalizeForHashing(ReadOnlyMemory<byte> rom) => SnesCopierHeader.Strip(rom);
 
-    private static byte[] LoadResource(string name)
+    internal static byte[] LoadResource(string name)
     {
         using var stream = typeof(SnesHandler).Assembly.GetManifestResourceStream($"RnRomManager.Systems.Snes.Resources.{name}")
             ?? throw new InvalidOperationException($"Embedded resource {name} is missing.");
