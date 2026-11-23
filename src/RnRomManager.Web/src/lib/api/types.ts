@@ -383,13 +383,13 @@ export interface ReviewDetail {
 	} | null;
 	candidateGames: { id: string; displayTitle: string }[];
 	status: 'Pending' | 'Resolved' | 'Dismissed';
-	/** B12: false for a set member (`.cue`/`.bin`/`.ccd`/`.img`/`.sub`) on a disc system that isn't dismissible and whose set isn't found; it can only be deleted. */
+	/** B12: false for a set member (`.cue`/`.bin`/`.ccd`/`.img`/`.sub`/`.toc`/`.mds`/`.mdf`) on a disc system that isn't dismissible and whose set isn't found; it can only be deleted. */
 	resolvable: boolean;
 	/** B16: a disc system (bin/cue sets, disc numbers). */
 	fileSets: boolean;
-	/** B13: the unmatched set this item belongs to, cue first; null when there is none. */
+	/** B13: the unmatched set this item belongs to, cue/`.toc`/`.ccd`/`.mds` first; null when there is none. */
 	setMembers: { reviewId: number; fileName: string; sizeBytes: number }[] | null;
-	/** B15: false for every set member (`.cue`/`.bin`/`.ccd`/`.img`/`.sub`) on a disc system but a lone PlayStation `.img`; Dismiss is hidden then. */
+	/** B15: false for every set member (`.cue`/`.bin`/`.ccd`/`.img`/`.sub`/`.toc`/`.mds`/`.mdf`) on a disc system but a lone PlayStation `.img`; Dismiss is hidden then. */
 	dismissible: boolean;
 	gameId: string | null;
 	createdAt: string;

@@ -9,6 +9,7 @@ namespace RnRomManager.Systems.ThreeDo;
 /// metadat, and there is no header. Its own family keeps a <c>.bin</c> from ever being tried against another disc system's DAT.
 /// The id starts with a digit, so the project, namespace and class are spelled <c>ThreeDo</c>.
 /// A CloneCD <c>.ccd</c> with its <c>.img</c> and optional <c>.sub</c> is a set too (CloneCD B1), played through a cue built from the <c>.ccd</c>.
+/// So are an Alcohol 120% <c>.mds</c> with its <c>.mdf</c> and a cdrdao <c>.toc</c> with its <c>.bin</c> tracks (file type gaps D1), played through a cue built from the <c>.mds</c> or <c>.toc</c>.
 /// </summary>
 public sealed class ThreeDoHandler : ISystemHandler
 {
@@ -20,7 +21,7 @@ public sealed class ThreeDoHandler : ISystemHandler
     public string Family => "3do";
 
     /// <summary><c>[0]</c> is what a file resolved through Review without a DAT entry is stored as. A <c>.chd</c> is a lone file that never matches the DAT, as for Sega CD.</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".bin", ".cue", ".iso", ".chd", ".ccd", ".img", ".sub"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".bin", ".cue", ".iso", ".chd", ".ccd", ".img", ".sub", ".mds", ".mdf", ".toc"];
 
     public long MinRomSizeBytes => 16;
 

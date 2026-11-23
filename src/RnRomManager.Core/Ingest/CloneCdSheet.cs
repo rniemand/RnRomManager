@@ -135,7 +135,7 @@ public sealed record CloneCdSheet(IReadOnlyList<CloneCdTrack> Tracks, string? Er
         return new PlaybackCue(stem + ".cue", Encoding.UTF8.GetBytes(cue.ToString()), tracks, null);
     }
 
-    private static string Time(int lba) => $"{lba / 75 / 60:00}:{lba / 75 % 60:00}:{lba % 75:00}";
+    internal static string Time(int lba) => $"{lba / 75 / 60:00}:{lba / 75 % 60:00}:{lba % 75:00}";
 
     /// <summary>The key store of a section header: <c>[Disc]</c>, a new <c>[TRACK n]</c>, or null for one that isn't read.</summary>
     private static Dictionary<string, string>? SectionKeys(string name, Dictionary<string, string> disc,

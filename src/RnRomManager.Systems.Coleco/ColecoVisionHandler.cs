@@ -5,7 +5,7 @@ namespace RnRomManager.Systems.Coleco;
 /// <summary>
 /// ColecoVision (spec C2, C3). Cartridges start with the BIOS magic <c>AA 55</c> (title screen) or <c>55 AA</c> (skip it);
 /// anything else is not plausible, so an unmatched file goes to <c>InvalidHeader</c>. Extensions and sizes follow the
-/// libretro <c>Coleco - ColecoVision</c> DAT (8–32 KiB, <c>.col</c>).
+/// libretro <c>Coleco - ColecoVision</c> DAT (8–32 KiB, <c>.col</c>; <c>.rom</c>, <c>.bin</c> and <c>.cv</c> are aliases).
 /// </summary>
 public sealed class ColecoVisionHandler : ISystemHandler
 {
@@ -17,7 +17,7 @@ public sealed class ColecoVisionHandler : ISystemHandler
     public string Family => "coleco";
 
     /// <summary><c>[0]</c> (<c>.col</c>) is what a file resolved through Review is stored as.</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".col", ".rom", ".bin"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".col", ".rom", ".bin", ".cv"];
 
     public long MinRomSizeBytes => 8192;
 

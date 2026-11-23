@@ -7,6 +7,7 @@ namespace RnRomManager.Systems.Sega;
 /// Sega Saturn. The redump DAT lists each disc's data track as <c>.bin</c>; a cue and its other tracks form the set, and a <c>.nrg</c> image always goes to Review.
 /// Stored outside the ZIP under exact names (disc systems B4, B5); the redump DAT has no metadat, and there is no header.
 /// A CloneCD <c>.ccd</c> with its <c>.img</c> and optional <c>.sub</c> is a set too (CloneCD B1), played through a cue built from the <c>.ccd</c>.
+/// So are an Alcohol 120% <c>.mds</c> with its <c>.mdf</c> and a cdrdao <c>.toc</c> with its <c>.bin</c> tracks (file type gaps D1), played through a cue built from the <c>.mds</c> or <c>.toc</c>.
 /// </summary>
 public sealed class SaturnHandler : ISystemHandler
 {
@@ -18,7 +19,7 @@ public sealed class SaturnHandler : ISystemHandler
     public string Family => "saturn";
 
     /// <summary><c>[0]</c> is what a file resolved through Review without a DAT entry is stored as. A <c>.chd</c> is a lone file that never matches the DAT (CHD B1–B2); an <c>.iso</c> is a lone image like Sega CD's.</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".bin", ".cue", ".nrg", ".chd", ".iso", ".ccd", ".img", ".sub"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".bin", ".cue", ".nrg", ".chd", ".iso", ".ccd", ".img", ".sub", ".mds", ".mdf", ".toc"];
 
     public long MinRomSizeBytes => 16;
 

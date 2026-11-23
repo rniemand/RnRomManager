@@ -3,8 +3,8 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Systems.Snes;
 
 /// <summary>
-/// Super Nintendo Entertainment System (SNES spec S2). <c>.sfc</c> and <c>.smc</c> dumps; a copier header is stripped
-/// before hashing (S3), so headered dumps match the No-Intro DAT and are stored as <c>.sfc</c>.
+/// Super Nintendo Entertainment System (SNES spec S2). <c>.sfc</c>, <c>.smc</c>, <c>.swc</c> and <c>.fig</c> dumps; a copier header is stripped
+/// before hashing (S3), so headered dumps (<c>.swc</c>/<c>.fig</c> like <c>.smc</c>) match the No-Intro DAT and are stored as <c>.sfc</c>.
 /// </summary>
 public sealed class SnesHandler : ISystemHandler
 {
@@ -16,7 +16,7 @@ public sealed class SnesHandler : ISystemHandler
     public string Family => SnesHeaderReader.SnesId;
 
     /// <summary><c>.sfc</c> first: renamed and resolved files are stored with it.</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".sfc", ".smc"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".sfc", ".smc", ".swc", ".fig"];
 
     /// <summary>The smallest <c>.sfc</c> in the DAT.</summary>
     public long MinRomSizeBytes => 8192;

@@ -5,6 +5,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Api.Endpoints;
+using RnRomManager.Core.Ingest;
 using RnRomManager.Core.Library;
 using RnRomManager.TestData;
 
@@ -598,6 +599,7 @@ public partial class LibraryEndpointsTests
     [TestCase("saturn", "Chd Solo (USA).iso")]
     [TestCase("psx", "Chd Solo (USA).pbp")]
     [TestCase("psx", "Chd Solo (USA).PBP")]
+    [TestCase("psx", "Chd Solo (USA).cbn")]
     public async Task PlayDisc_AStandaloneChd_StreamsUnchanged(string system, string name)
     {
         var (id, folder, ids) = await DiscGame(system, "Chd Solo", [PsxSolo(name, PsxTrack1)], (name, PsxTrack1));
@@ -674,7 +676,7 @@ public partial class LibraryEndpointsTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
         var problem = await AuthClient.JsonAsync(response);
         Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.InvalidPlayDisc));
-        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("a single-file disc must be a .bin, .iso, .chd, .img or .pbp"));
+        Assert.That(problem.GetProperty("title").GetString(), Does.Contain("a single-file disc must be a .bin, .iso, .chd, .img, .pbp or .cbn"));
     }
 
     [Test]
@@ -926,5 +928,93 @@ public partial class LibraryEndpointsTests
         await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
         using var zip = new ZipArchive(body, ZipArchiveMode.Read);
         Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Clone Ninja (USA).cue", "track-01.img", "Clone Ninja (USA).sub" }));
+    }
+
+    // File type gaps D11–D12: a cue generated from the .toc or .mds and the aliased tracks; the stored sheet is never sent.
+
+    private static readonly byte[] MdsOneTrack = SyntheticMdsBuilder.OneTrack();
+
+    /// <summary>An MDS release: <c>&lt;stem&gt;.mdf</c> the main file and <c>&lt;mdsStem&gt;.mds</c> beside it.</summary>
+    private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> MdsGame(string system, string title, byte[] mdf, byte[] mds,
+        string? mdsStem = null)
+    {
+        var stem = $"{title} (USA)";
+        var mdsName = $"{mdsStem ?? stem}.mds";
+        return DiscGame(system, title, [PsxSolo($"{stem}.mdf", mdf) with { Files = [SetFile(mdsName, mds)] }], ($"{stem}.mdf", mdf), (mdsName, mds));
+    }
+
+    private static byte[] TocOf(string track1, string track2, string mode = "MODE2_RAW") => Encoding.UTF8.GetBytes(
+        $"CD_ROM_XA\nTRACK {mode}\nDATAFILE \"{track1}\" 00:00:03\nTRACK AUDIO\nFILE \"{track2}\" 0\nSTART 00:00:01\n");
+
+    /// <summary>A TOC release: <c>&lt;stem&gt; (Track 1).bin</c> the main file, its <c>.toc</c> and <c>(Track 2).bin</c>.</summary>
+    private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> TocGame(string system, string title, byte[] toc)
+    {
+        var stem = $"{title} (USA)";
+        var (one, two) = ($"{stem} (Track 1).bin", $"{stem} (Track 2).bin");
+        return DiscGame(system, title, [PsxSolo(one, PsxTrack1) with { Files = [SetFile($"{stem}.toc", toc), SetFile(two, PsxTrack2)] }],
+            (one, PsxTrack1), ($"{stem}.toc", toc), (two, PsxTrack2));
+    }
+
+    private async Task<ZipArchive> PlayZipAsync(Guid id, long romId)
+    {
+        using var response = await _user.GetAsync(PlayDiscUrl(id, romId));
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/zip"));
+        return new ZipArchive(new MemoryStream(await response.Content.ReadAsByteArrayAsync()), ZipArchiveMode.Read);
+    }
+
+    [Test]
+    public async Task PlayDisc_ASaturnMdsDisc_IsTheGeneratedCueAndTheMdf_AndNoMds()
+    {
+        var (id, folder, ids) = await MdsGame(PlayDisc.SaturnSystemId, "Mds Sky", PsxTrack1, MdsOneTrack);
+
+        using var zip = await PlayZipAsync(id, ids[0]);
+
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Mds Sky (USA).cue", "track-01.bin" }));
+        Assert.That(Encoding.UTF8.GetString(ReadEntry(zip, "Mds Sky (USA).cue")),
+            Is.EqualTo("FILE \"track-01.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n"));
+        Assert.That(ReadEntry(zip, "track-01.bin"), Is.EqualTo(PsxTrack1));
+        foreach (var name in Directory.GetFiles(folder, "Mds Sky*"))
+            AssertNotOpen(name);
+    }
+
+    [TestCase("psx")]
+    [TestCase("tgcd")]
+    public async Task PlayDisc_ATocSet_IsTheGeneratedCueAndTheAliasedBins_AndNoToc(string system)
+    {
+        var (id, _, ids) = await TocGame(system, "Toc Star", TocOf("Toc Star (USA) (Track 1).bin", "Toc Star (USA) (Track 2).bin"));
+
+        using var zip = await PlayZipAsync(id, ids[0]);
+
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Toc Star (USA).cue", "track-01.bin", "track-02.bin" }));
+        Assert.That(Encoding.UTF8.GetString(ReadEntry(zip, "Toc Star (USA).cue")), Is.EqualTo(
+            "FILE \"track-01.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n"
+            + "FILE \"track-02.bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 00 00:00:00\n    INDEX 01 00:00:01\n"));
+        Assert.That(ReadEntry(zip, "track-02.bin"), Is.EqualTo(PsxTrack2));
+    }
+
+    [TestCase("SubMdf", "the .mdf stores subchannel data, which can't be played")]
+    [TestCase("Cooked", "track 1: MODE1 can't be played; only AUDIO, MODE1_RAW and MODE2_RAW can")]
+    [TestCase("Stems", "a disc set must be one .cue or .toc and its .bin tracks, the main file among them")]
+    [TestCase("BigToc", "the .toc is larger than 65536 bytes")]
+    [TestCase("BigMds", "the .mds is larger than 65536 bytes")]
+    public async Task PlayDisc_AnMdsOrTocDiscThatCantPlay_Is409InvalidPlayDisc(string kind, string error)
+    {
+        var big = new byte[IngestSetPlanner.MaxCueBytes + 1];
+        var (id, folder, ids) = kind switch
+        {
+            "SubMdf" => await MdsGame(PlayDisc.SystemId, "Bad " + kind, PsxTrack1,
+                SyntheticMdsBuilder.Build([new MdsBlock(1, Sub: 8, SectorSize: 2448)])),
+            "Stems" => await MdsGame(PlayDisc.SegaCdSystemId, "Bad " + kind, PsxTrack1, MdsOneTrack, mdsStem: "Other (USA)"),
+            "BigMds" => await MdsGame(PlayDisc.ThreeDoSystemId, "Bad " + kind, PsxTrack1, big),
+            "BigToc" => await TocGame(PlayDisc.SystemId, "Bad " + kind, big),
+            _ => await TocGame(PlayDisc.SystemId, "Bad " + kind, TocOf("Bad Cooked (USA) (Track 1).bin", "Bad Cooked (USA) (Track 2).bin", "MODE1")),
+        };
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(await ProblemTitle(response, HttpStatusCode.Conflict, PlayDisc.InvalidPlayDisc), Is.EqualTo($"The disc can't be played: {error}."));
+        foreach (var name in Directory.GetFiles(folder, "Bad*"))
+            AssertNotOpen(name);
     }
 }

@@ -74,6 +74,7 @@ public class BrowserCoreExtensionsTests
     /// handler dropped the extension, the core now lists it, or the system has another core) fails the test.
     /// </summary>
     private const string CloneCdMember = "CloneCD set member: play-disc sends a generated cue (B8), never this file as the content";
+    private const string MdsTocMember = "MDS or TOC set member: play-disc sends a generated cue (D12), never this file as the content";
 
     private static readonly Dictionary<(string System, string Extension), string> Exceptions = new()
     {
@@ -96,6 +97,17 @@ public class BrowserCoreExtensionsTests
         [("3do", ".sub")] = CloneCdMember,
         [("tgcd", ".img")] = CloneCdMember,
         [("tgcd", ".sub")] = CloneCdMember,
+        [("psx", ".mds")] = MdsTocMember,
+        [("saturn", ".mdf")] = MdsTocMember,
+        [("saturn", ".toc")] = MdsTocMember,
+        [("segacd", ".mds")] = MdsTocMember,
+        [("segacd", ".mdf")] = MdsTocMember,
+        [("segacd", ".toc")] = MdsTocMember,
+        [("3do", ".mds")] = MdsTocMember,
+        [("3do", ".mdf")] = MdsTocMember,
+        [("3do", ".toc")] = MdsTocMember,
+        [("tgcd", ".mds")] = MdsTocMember,
+        [("tgcd", ".mdf")] = MdsTocMember,
     };
 
     [Test]
@@ -137,6 +149,17 @@ public class BrowserCoreExtensionsTests
             "3do .sub: stale exception (no such system)",
             "tgcd .img: stale exception (no such system)",
             "tgcd .sub: stale exception (no such system)",
+            "psx .mds: stale exception (no such system)",
+            "saturn .mdf: stale exception (not one of the system's extensions)",
+            "saturn .toc: stale exception (not one of the system's extensions)",
+            "segacd .mds: stale exception (no such system)",
+            "segacd .mdf: stale exception (no such system)",
+            "segacd .toc: stale exception (no such system)",
+            "3do .mds: stale exception (no such system)",
+            "3do .mdf: stale exception (no such system)",
+            "3do .toc: stale exception (no such system)",
+            "tgcd .mds: stale exception (no such system)",
+            "tgcd .mdf: stale exception (no such system)",
         }));
     }
 

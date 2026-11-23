@@ -1299,6 +1299,43 @@ public class ReviewEndpointsTests
         }
     }
 
+    /// <summary>File type gaps D10: drops <paramref name="files"/> in the PlayStation ingest folder, ingests, and returns the pending psx rows.</summary>
+    private async Task<List<ReviewItem>> DropPsxSetAsync(params (string Name, byte[] Bytes)[] files)
+    {
+        var folder = Directory.CreateDirectory(Path.Combine(_factory.Root, "ingest", "psx")).FullName;
+        foreach (var (name, bytes) in files)
+        {
+            File.WriteAllBytes(Path.Combine(folder, name), bytes);
+            File.SetLastWriteTimeUtc(Path.Combine(folder, name), DateTime.UtcNow.AddMinutes(-5));
+        }
+        await RunIngest();
+        return (await Reviews.ListAsync("Pending", 1, 50, default)).Items.Where(r => r.SystemId == "psx").ToList();
+    }
+
+    [Test]
+    public async Task Detail_OfATocSetsToc_IsResolvable_NotDismissible_AndListsTheSet_D10()
+    {
+        var toc = System.Text.Encoding.UTF8.GetBytes("TRACK MODE2_RAW\nFILE \"Toc (Track 1).bin\" 0 00:00:01\nTRACK AUDIO\nFILE \"Toc (Track 2).bin\" 0\n");
+        var rows = await DropPsxSetAsync(("Toc.toc", toc), ("Toc (Track 1).bin", RandomNumberGenerator.GetBytes(2352)),
+            ("Toc (Track 2).bin", RandomNumberGenerator.GetBytes(2352)));
+
+        using var detail = await _admin.GetAsync($"/api/review/{rows.Single(r => r.OriginalFileName == "Toc.toc").Id}");
+        var json = await AuthClient.JsonAsync(detail);
+        Assert.That((json.GetProperty("resolvable").GetBoolean(), json.GetProperty("dismissible").GetBoolean()), Is.EqualTo((true, false)));
+        Assert.That(json.GetProperty("setMembers").EnumerateArray().Select(m => m.GetProperty("fileName").GetString()),
+            Is.EqualTo(new[] { "Toc.toc", "Toc (Track 1).bin", "Toc (Track 2).bin" }));
+    }
+
+    [Test]
+    public async Task Dismiss_OfAnMdsSetsMdf_IsSetFileNotResolvable_D10()
+    {
+        var rows = await DropPsxSetAsync(("Mds.mds", SyntheticMdsBuilder.OneTrack()), ("Mds.mdf", RandomNumberGenerator.GetBytes(2352)));
+
+        using var dismiss = await _admin.PostAsync($"/api/review/{rows.Single(r => r.OriginalFileName == "Mds.mdf").Id}/dismiss");
+        Assert.That(dismiss.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(await AuthClient.CodeAsync(dismiss), Is.EqualTo(ReviewResolver.SetFileNotResolvable));
+    }
+
     /// <summary>CHD B3: synthetic bytes standing in for a CHD (never a real image).</summary>
     private static byte[] FakeChd(int seed)
     {

@@ -17,7 +17,9 @@ namespace RnRomManager.Api.Endpoints;
 /// shapes; TurboGrafx-CD takes its cue sets and a standalone <c>.chd</c> only. All these systems share the same cap (<see cref="MaxBytes"/>).
 /// CloneCD B8: a CloneCD disc (<c>.img</c>, <c>.ccd</c>, optional <c>.sub</c>) on any of the five disc systems streams as a ZIP
 /// holding a cue generated from the <c>.ccd</c> (<see cref="CloneCdSheet.ForPlayback"/>), the <c>.img</c> and the <c>.sub</c>;
-/// the stored <c>.ccd</c> is never sent, since EmulatorJS would boot it instead of the cue.
+/// the stored <c>.ccd</c> is never sent, since EmulatorJS would boot it instead of the cue. File type gaps D11–D12: a cdrdao TOC
+/// set (<see cref="TocSheet.ForPlayback"/>) or an Alcohol 120% MDS disc (<see cref="MdsSheet.ForPlayback"/>) streams the same
+/// way, with a cue generated from its <c>.toc</c> or <c>.mds</c>, which is never sent either.
 /// </summary>
 public static class PlayDisc
 {
@@ -93,7 +95,7 @@ public static class PlayDisc
     /// <summary>
     /// Multi-disc M4: <c>GET /api/games/{id}/roms/{romId}/play-disc-set</c>, every disc of the PlayStation (Saturn/Sega CD S3: or Saturn or Sega CD) set whose Disc 1
     /// is <paramref name="romId"/> as one uncompressed ZIP: the generated <c>.m3u</c> first, then each disc as
-    /// <c>play-disc</c> would send it (cue tracks aliased <c>disc&lt;n&gt;-track-NN.bin</c>, a CloneCD image <c>disc&lt;n&gt;-track-01.img</c>). One 2 GiB cap covers the set.
+    /// <c>play-disc</c> would send it (cue and TOC tracks and an MDS <c>.mdf</c> aliased <c>disc&lt;n&gt;-track-NN.bin</c>, a CloneCD image <c>disc&lt;n&gt;-track-01.img</c>). One 2 GiB cap covers the set.
     /// Amiga F5: an Amiga floppy set is served by <see cref="FloppySetAsync"/> instead.
     /// </summary>
     public static async Task<IResult> HandleSetAsync(Guid id, long romId, HttpContext ctx, IGameRepository repository,
@@ -263,45 +265,52 @@ public static class PlayDisc
             return (null, new Disc(null, [new Entry(mainName, streams[0], streams[0].Length)]));
 
         if (IsCloneCd(members))
-            return await CloneCdDiscAsync(ctx, members, streams, trackPrefix, detailPrefix);
+        {
+            var sub = members.FirstOrDefault(m => HasExtension(m.Name, ".sub"))?.Name;
+            return await SheetDiscAsync(ctx, members, streams, members.FindIndex(m => HasExtension(m.Name, ".ccd")), "the .ccd", detailPrefix,
+                (bytes, name) => CloneCdSheet.ForPlayback(bytes, name, members[0].Name, streams[0].Length, sub, trackPrefix));
+        }
 
-        var cueIndex = members.FindIndex(m => IsCue(m.Name));
-        var cue = streams[cueIndex];
-        if (cue.Length > IngestSetPlanner.MaxCueBytes)
-            return (Invalid(ctx, $"{detailPrefix}the cue is larger than {IngestSetPlanner.MaxCueBytes} bytes"), null);
-        var cueBytes = new byte[cue.Length];
-        await cue.ReadExactlyAsync(cueBytes, ctx.RequestAborted);
-        var bins = members.Where((_, i) => i != cueIndex).ToList();
-        var playback = CueSheet.ForPlayback(cueBytes, members[cueIndex].Name, bins.Select(b => b.Name).ToList(), trackPrefix);
-        if (!playback.IsValid)
-            return (Invalid(ctx, detailPrefix + playback.Error!), null);
+        // D12: an MDS disc's .mds is members[1], its .mdf the main file.
+        if (IsMds(members))
+            return await SheetDiscAsync(ctx, members, streams, 1, "the .mds", detailPrefix,
+                (bytes, name) => MdsSheet.ForPlayback(bytes, name, members[0].Name, streams[0].Length, trackPrefix));
 
-        var byName = members.Select((m, i) => (m.Name, Stream: streams[i])).ToDictionary(m => m.Name, m => m.Stream, StringComparer.Ordinal);
-        List<Entry> entries = [.. playback.Tracks.Select(t => new Entry(t.Alias, byName[t.StoredName], byName[t.StoredName].Length))];
-        DisposeAll([cue]); // read in full; the archive carries the playback copy instead
-        return (null, new Disc(new Entry(playback.CueName, new MemoryStream(playback.Content), playback.Content.Length), entries));
+        var sheetIndex = members.FindIndex(m => IsCue(m.Name) || HasExtension(m.Name, ".toc"));
+        var bins = members.Where((_, i) => i != sheetIndex).Select(b => b.Name).ToList();
+        return HasExtension(members[sheetIndex].Name, ".toc")
+            ? await SheetDiscAsync(ctx, members, streams, sheetIndex, "the .toc", detailPrefix,
+                (bytes, name) => TocSheet.ForPlayback(bytes, name, bins, trackPrefix))
+            : await SheetDiscAsync(ctx, members, streams, sheetIndex, "the cue", detailPrefix,
+                (bytes, name) => CueSheet.ForPlayback(bytes, name, bins, trackPrefix));
     }
 
-    /// <summary>CloneCD B8: reads the <c>.ccd</c> in full and builds the playback cue; the archive holds the aliased <c>.img</c> and <c>.sub</c>.</summary>
-    private static async Task<(IResult? Problem, Disc? Disc)> CloneCdDiscAsync(HttpContext ctx, List<Member> members, List<Stream> streams,
-        string trackPrefix, string detailPrefix)
+    /// <summary>
+    /// Play B2, CloneCD B8, D12: reads the set's sheet (cue, <c>.toc</c>, <c>.ccd</c> or <c>.mds</c>) in full and builds the
+    /// playback cue; the archive holds that cue and the aliased tracks, never the stored sheet.
+    /// </summary>
+    private static async Task<(IResult? Problem, Disc? Disc)> SheetDiscAsync(HttpContext ctx, List<Member> members, List<Stream> streams,
+        int sheetIndex, string sheetLabel, string detailPrefix, Func<byte[], string, PlaybackCue> build)
     {
-        var ccdIndex = members.FindIndex(m => HasExtension(m.Name, ".ccd"));
-        var ccd = streams[ccdIndex];
-        if (ccd.Length > IngestSetPlanner.MaxCueBytes)
-            return (Invalid(ctx, $"{detailPrefix}the .ccd is larger than {IngestSetPlanner.MaxCueBytes} bytes"), null);
-        var ccdBytes = new byte[ccd.Length];
-        await ccd.ReadExactlyAsync(ccdBytes, ctx.RequestAborted);
-        var sub = members.FirstOrDefault(m => HasExtension(m.Name, ".sub"))?.Name;
-        var playback = CloneCdSheet.ForPlayback(ccdBytes, members[ccdIndex].Name, members[0].Name, streams[0].Length, sub, trackPrefix);
+        var sheet = streams[sheetIndex];
+        if (sheet.Length > IngestSetPlanner.MaxCueBytes)
+            return (Invalid(ctx, $"{detailPrefix}{sheetLabel} is larger than {IngestSetPlanner.MaxCueBytes} bytes"), null);
+        var bytes = new byte[sheet.Length];
+        await sheet.ReadExactlyAsync(bytes, ctx.RequestAborted);
+        var playback = build(bytes, members[sheetIndex].Name);
         if (!playback.IsValid)
             return (Invalid(ctx, detailPrefix + playback.Error!), null);
 
         var byName = members.Select((m, i) => (m.Name, Stream: streams[i])).ToDictionary(m => m.Name, m => m.Stream, StringComparer.Ordinal);
         List<Entry> entries = [.. playback.Tracks.Select(t => new Entry(t.Alias, byName[t.StoredName], byName[t.StoredName].Length))];
-        DisposeAll([ccd]); // read in full; never sent
+        DisposeAll([sheet]); // read in full; the archive carries the playback cue instead
         return (null, new Disc(new Entry(playback.CueName, new MemoryStream(playback.Content), playback.Content.Length), entries));
     }
+
+    /// <summary>D11: exactly an <c>.mdf</c> (the main file) and an <c>.mds</c> of the same stem, ignoring case.</summary>
+    private static bool IsMds(List<Member> members) =>
+        members is [var mdf, var mds] && HasExtension(mdf.Name, ".mdf") && HasExtension(mds.Name, ".mds")
+        && Path.GetFileNameWithoutExtension(mdf.Name).Equals(Path.GetFileNameWithoutExtension(mds.Name), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>CloneCD B8: the main file is an <c>.img</c>, beside exactly one <c>.ccd</c> and at most one <c>.sub</c>, all one stem ignoring case.</summary>
     private static bool IsCloneCd(List<Member> members)
@@ -324,10 +333,11 @@ public static class PlayDisc
     private static bool IsBin(string name) => name.EndsWith(".bin", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// B2: a standalone <c>.bin</c>/<c>.iso</c> (CHD B4: or <c>.chd</c>; or a PlayStation <c>.img</c> or <c>.pbp</c>), or one cue with 1–99 BINs (the main file among
+    /// B2: a standalone <c>.bin</c>/<c>.iso</c> (CHD B4: or <c>.chd</c>; or a PlayStation <c>.img</c>, <c>.pbp</c> or <c>.cbn</c>), or one cue with 1–99 BINs (the main file among
     /// them), all portable names that are unique ignoring case. PSP B2: exactly one standalone <c>.iso</c>, <c>.cso</c>, <c>.pbp</c> or <c>.chd</c>.
     /// TurboGrafx-CD B4: Beetle PCE boots only a cue or a <c>.chd</c> as a CD (a bare <c>.bin</c> would run as a HuCard), so
     /// a single file must be a <c>.chd</c>. CloneCD B8: or a CloneCD disc on any of the five disc systems (<see cref="IsCloneCd"/>).
+    /// D11: or an MDS disc (<see cref="IsMds"/>), and a <c>.toc</c> takes the cue's place in a set.
     /// </summary>
     private static string? ShapeProblem(List<Member> members, string systemId)
     {
@@ -347,13 +357,14 @@ public static class PlayDisc
                 || members[0].Name.EndsWith(".chd", StringComparison.OrdinalIgnoreCase)
                 || members[0].Name.EndsWith(".img", StringComparison.OrdinalIgnoreCase)
                 || members[0].Name.EndsWith(".pbp", StringComparison.OrdinalIgnoreCase)
-                ? null : "a single-file disc must be a .bin, .iso, .chd, .img or .pbp";
-        if (IsCloneCd(members))
+                || members[0].Name.EndsWith(".cbn", StringComparison.OrdinalIgnoreCase)
+                ? null : "a single-file disc must be a .bin, .iso, .chd, .img, .pbp or .cbn";
+        if (IsCloneCd(members) || IsMds(members))
             return null;
-        var cues = members.Count(m => IsCue(m.Name));
+        var cues = members.Count(m => IsCue(m.Name) || HasExtension(m.Name, ".toc"));
         var bins = members.Count(m => IsBin(m.Name));
         if (cues != 1 || bins != members.Count - 1 || !IsBin(members[0].Name))
-            return "a disc set must be one .cue and its .bin tracks, the main file among them";
+            return "a disc set must be one .cue or .toc and its .bin tracks, the main file among them";
         return bins > MaxBins ? $"a disc set has more than {MaxBins} tracks" : null;
     }
 

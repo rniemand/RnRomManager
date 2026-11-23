@@ -16,7 +16,7 @@ public class GameBoyHandlerTests
 
         Assert.That(gb.ShortName, Is.EqualTo("GB"));
         Assert.That((gb.Id, gb.DisplayName, gb.Family, gb.DatName), Is.EqualTo(("gb", "Game Boy", "gameboy", "Nintendo - Game Boy")));
-        Assert.That(gb.RomExtensions, Is.EqualTo(new[] { ".gb" }));
+        Assert.That(gb.RomExtensions, Is.EqualTo(new[] { ".gb", ".dmg" }));
     }
 
     [Test]

@@ -9,6 +9,7 @@ namespace RnRomManager.Systems.Nec;
 /// its own. Stored outside the ZIP under exact names, as Sega CD; the Redump DAT has no metadat, and there is no header.
 /// Its own family keeps it apart from TurboGrafx-16 HuCards.
 /// A CloneCD <c>.ccd</c> with its <c>.img</c> and optional <c>.sub</c> is a set too (CloneCD B1), played through a cue built from the <c>.ccd</c>.
+/// So are an Alcohol 120% <c>.mds</c> with its <c>.mdf</c> and a cdrdao <c>.toc</c> with its <c>.bin</c> tracks (file type gaps D1), played through a cue built from the <c>.mds</c> or <c>.toc</c>.
 /// </summary>
 public sealed class TurboGrafxCdHandler : ISystemHandler
 {
@@ -20,7 +21,7 @@ public sealed class TurboGrafxCdHandler : ISystemHandler
     public string Family => "tgcd";
 
     /// <summary><c>[0]</c> is what a file resolved through Review without a DAT entry is stored as. A <c>.chd</c> never matches the DAT.</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".bin", ".cue", ".chd", ".ccd", ".img", ".sub"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".bin", ".cue", ".chd", ".ccd", ".img", ".sub", ".mds", ".mdf", ".toc"];
 
     public long MinRomSizeBytes => 16;
 

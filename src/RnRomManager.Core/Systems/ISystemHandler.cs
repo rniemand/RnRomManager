@@ -39,7 +39,7 @@ public interface ISystemHandler
 
     /// <summary>
     /// B5: true for disc systems whose release can be a file set (a data track, its <c>.cue</c> and the other tracks).
-    /// External files then keep their exact names (B10), ingest groups cue and CloneCD sets (B7) and Review restricts set
+    /// External files then keep their exact names (B10), ingest groups cue, TOC, CloneCD and MDS sets (B7) and Review restricts set
     /// files (B15). Requires <see cref="EmbedRomsInZip"/> false; handlers sharing a <see cref="Family"/> must agree.
     /// </summary>
     bool FileSets => false;

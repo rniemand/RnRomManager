@@ -193,6 +193,11 @@ public class ReviewResolverTests
     [TestCase("psx", "Game.bin", false, false)]
     [TestCase("psx", "Game.iso", false, true)]
     [TestCase("gb", "Game.img", false, true)]
+    [TestCase("psx", "Game.toc", false, false)]
+    [TestCase("psx", "Game.MDS", false, false)]
+    [TestCase("extset", "Game.mdf", false, false)]
+    [TestCase("psx", "Game.mdf", true, false)]
+    [TestCase("psx", "Game.cbn", false, true)]
     public void IsDismissible_CloneCdB7(string systemId, string fileName, bool inSet, bool expected)
     {
         var systems = new SystemRegistry([new ExternalSetTestHandler(), new PsxSetTestHandler(), new Headerless(".img")]);
