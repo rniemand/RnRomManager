@@ -273,7 +273,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   Tests:
   - `IngestSetPlannerTests`:
     - TOC sets: a valid set; a missing `.bin`; a non-`.bin` member; a member failing `NameProblem` (`UnsupportedSetMember`); an invalid `.toc`; an oversized `.toc` (`Lone`); a `.bin` named by a cue and a toc (both `SetConflict`).
-    - MDS sets: a full set; a missing `.mdf`; an invalid `.mds`; a case-folded duplicate; a lone `.mdf` (`IncompleteSet`).
+    - MDS sets: a full set; a missing `.mdf`; an invalid `.mds`; a member failing `NameProblem` (`UnsupportedSetMember`); a case-folded duplicate (`SetConflict`); a lone `.mdf` (`IncompleteSet`).
   - `ReviewSetsTests`: finds a TOC set and an MDS set from each member.
 
   Done when they pass.
@@ -282,7 +282,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   - `ReviewResolverExternalTests`:
     - a TOC set resolves as one release, with main the first `.bin` and `files` `[.toc, other bins]`;
     - an MDS set resolves as one release, with main `.mdf` and `files` `[.mds]`;
-    - each set's Release flag takes its tags from the `.toc`/`.mds` stem (line 545).
+    - each set's Release flag takes its tags from the `.toc`/`.mds` stem (lines 545–548).
 
   Done when they pass, and `npm run lint` and `npm run check` pass in `src/RnRomManager.Web`.
 - [ ] **7. Accept the disc files**: D1, D2, D9, and the README rows. Files:
@@ -354,6 +354,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   - MDS play shape is exactly two members; tests added for D12's size errors (reviewer)
 - 2026-11-23 Review round 4 → D5 `<WORD>`/`<token>` casing and left-to-right order pinned, `CD_TEXT` exempt from "must come after a TRACK"; D6 runs all checks per track, track by track, and checks no names; D8a runs each check over all tracks before the next; step 2's error tests are `[TestCase]` rows (reviewer)
 - 2026-11-23 Review round 5 → § Changes names `ReviewResolverExternalTests` and the same `ReviewResolver` lines as D10 (reviewer)
+- 2026-11-23 Review round 6 → step 5 tests an MDS member failing `NameProblem`; step 6 names lines 545–548 (reviewer)
 
 ## Kickoff prompt
 ```text
