@@ -31,7 +31,7 @@ public class LibraryZipCompressionTests
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns([handler]);
         _reader = new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), new InfoJsonUpgraderV4(),
-            new InfoJsonUpgraderV5(), new InfoJsonUpgraderV6()], registry);
+            new InfoJsonUpgraderV5(), new InfoJsonUpgraderV6(), new InfoJsonUpgraderV7()], registry);
     }
 
     [TearDown]

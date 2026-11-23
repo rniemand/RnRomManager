@@ -179,6 +179,7 @@ public static class AppHost
         builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV4>();
         builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV5>();
         builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV6>();
+        builder.Services.AddSingleton<IInfoJsonUpgrader, InfoJsonUpgraderV7>();
         builder.Services.AddSingleton<InfoJsonReader>();
         builder.Services.AddSingleton<DbSync>();
         builder.Services.AddSingleton<LibraryFiles>();

@@ -39,7 +39,7 @@ public sealed class GameRepository : IGameRepository
         SELECT id AS Id, system_id AS SystemId, title AS Title, display_title AS DisplayTitle, zip_path AS ZipPath,
                bucket AS Bucket, release_year AS ReleaseYear, developers AS Developers, publishers AS Publishers,
                genres AS Genres, description AS Description, has_default_boxart AS HasDefaultBoxArt,
-               rating AS Rating, favourite AS Favourite, save_count AS SaveCount,
+               rating AS Rating, favourite AS Favourite, igdb_id AS IgdbId, save_count AS SaveCount,
                zip_size_bytes AS ZipSizeBytes, zip_mtime_utc AS ZipMtimeUtc, info_schema_version AS InfoSchemaVersion,
                created_at AS CreatedAt, updated_at AS UpdatedAt
         FROM games
@@ -639,10 +639,10 @@ public sealed class LibraryMirror : ILibraryMirror
         {
             await connection.ExecuteAsync(new CommandDefinition("""
                 INSERT INTO games (id, system_id, title, display_title, zip_path, bucket, release_year, developers, publishers,
-                                   genres, description, has_default_boxart, rating, favourite, save_count, zip_size_bytes, zip_mtime_utc, info_schema_version,
+                                   genres, description, has_default_boxart, rating, favourite, igdb_id, save_count, zip_size_bytes, zip_mtime_utc, info_schema_version,
                                    created_at, updated_at)
                 VALUES (@Id, @SystemId, @Title, @DisplayTitle, @ZipPath, @Bucket, @ReleaseYear, @Developers, @Publishers,
-                        @Genres, @Description, @HasDefaultBoxArt, @Rating, @Favourite, @SaveCount, @ZipSizeBytes, @ZipMtimeUtc, @InfoSchemaVersion,
+                        @Genres, @Description, @HasDefaultBoxArt, @Rating, @Favourite, @IgdbId, @SaveCount, @ZipSizeBytes, @ZipMtimeUtc, @InfoSchemaVersion,
                         @CreatedAt, @UpdatedAt)
                 """, game, transaction, cancellationToken: cancellationToken));
 

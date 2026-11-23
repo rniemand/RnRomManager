@@ -27,6 +27,9 @@ public sealed record InfoJsonGame
     /// <summary>Shared favourite flag (v2).</summary>
     public required bool Favourite { get; init; }
 
+    /// <summary>The linked IGDB game id (v8): null = not linked, 0 = marked Not on IGDB. Always written.</summary>
+    public int? IgdbId { get; init; }
+
     /// <summary>
     /// The SHA1 of the release an Admin made primary; it stays primary while the game lists it, whatever the ranker says.
     /// Optional and left out when null, so older files need no upgrade.

@@ -84,7 +84,7 @@ public partial class LibraryMirrorTests
             FileName = "boxart-01.png", Type = ImageType.BoxArt, Source = InfoJsonImage.SourceDefault, SourceUrl = null, IsDefault = true, IsCover = true,
             SizeBytes = 99, Sha1 = new string('c', 40), Width = 512, Height = 512, DateAdded = When,
         };
-        var game = Game("Tetris", rom) with { ReleaseYear = 1989, Developers = ["Nintendo"], Genres = ["Puzzle"], Images = [image], Rating = 3, Favourite = true };
+        var game = Game("Tetris", rom) with { ReleaseYear = 1989, Developers = ["Nintendo"], Genres = ["Puzzle"], Images = [image], Rating = 3, Favourite = true, IgdbId = 1234 };
 
         await _mirror.ReplaceAsync(Entry(game, "gb/T/Tetris.zip"), CancellationToken.None);
 
@@ -92,7 +92,7 @@ public partial class LibraryMirrorTests
         Assert.That(row with { Developers = [], Publishers = [], Genres = [] }, Is.EqualTo(new GameRow
         {
             Id = game.GameId, SystemId = "gb", Title = "Tetris", DisplayTitle = "Tetris", ZipPath = "gb/T/Tetris.zip", Bucket = "T",
-            ReleaseYear = 1989, Developers = [], Publishers = [], Genres = [], Description = null, HasDefaultBoxArt = true, Rating = 3, Favourite = true,
+            ReleaseYear = 1989, Developers = [], Publishers = [], Genres = [], Description = null, HasDefaultBoxArt = true, Rating = 3, Favourite = true, IgdbId = 1234,
             ZipSizeBytes = 1234, ZipMtimeUtc = Mtime, InfoSchemaVersion = InfoJsonReader.CurrentVersion, CreatedAt = When.UtcDateTime, UpdatedAt = When.UtcDateTime,
         }));
         Assert.That(row.Developers, Is.EqualTo(new[] { "Nintendo" }));

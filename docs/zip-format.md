@@ -151,7 +151,7 @@ A game's saves live in its ZIP. Each save belongs to the user in its `uploadedBy
 - Entry modified times are stored as ZIP (DOS) times: the writer's local time at 2-second precision, with no time zone. The Zip Contents tab and `GET /api/games/{id}/zip-entries` read them as server local time, so they're exact only while the server's time zone is unchanged.
 - Compression: per system, set by an Admin on ROM Zip Config (`storage.zipCompression.<systemId>`): **Store** writes every entry with the Stored method (no compression); **Med** (the default, and the only level before it was configurable) writes Deflate at the optimal level, except a `roms/` or `saves/` entry larger than 128 MiB, which is written at the fastest level so rewrites of games with large releases stay quick; **High** writes every entry with Deflate's smallest size. `info.json`, images, notes and saves follow the level too. Every ZIP write re-deflates (or re-stores) every entry at the game's system level, so a changed level reaches each game on its next write or a repack. Readers need not care: every entry is plain Deflate or Stored. `info.json` is UTF-8 without a BOM, indented, camelCase, with nulls written.
 
-## `info.json` (schema version 6)
+## `info.json` (schema version 8)
 
 Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 
@@ -159,7 +159,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `schemaVersion` | int | ✓ | `7` |
+| `schemaVersion` | int | ✓ | `8` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
 | `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c64`, `tgcd`) |
 | `title` | string | ✓ | see Naming |
@@ -171,6 +171,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 | `description` | string? | | Admin-edited only |
 | `rating` | int? | ✓ | shared 1–5 star rating; `null` = not rated (the key must be present) |
 | `favourite` | bool | ✓ | shared favourite flag |
+| `igdbId` | int? | ✓ | `null` not linked, `0` Not on IGDB, else the IGDB game id; always written |
 | `chosenPrimarySha1` | string? | | SHA1 of the release an Admin made primary (**Make primary**); it stays `isPrimary` while `roms` lists it, otherwise the ranker picks. Left out when not set, so it needs no schema version |
 | `roms` | Rom[] | ✓ | at least one |
 | `images` | Image[] | ✓ | at most 20; exactly one `isCover` when not empty |
@@ -263,7 +264,7 @@ Nintendo Switch `header`, from the first MiB of the file: `container` (`PFS0` fo
 
 ### Validation
 
-Checked on every read (after upgrading an older version): valid UTF-8 JSON of at most 1 MiB; every required field present with the right type; `gameId` a GUID; `system` a registered system; `rating` null or 1–5; at least one ROM and exactly one `isPrimary`; file names unique (case-insensitively) within `roms` and within `images`, and free of `/` and `\`; a ROM name may contain `..` (real names such as `...Iru!` or `Hello... World` do) but may not be `.` or `..`, and an image name may not contain `..` at all; hashes lowercase hex of the right length; `source` one of the four values; at most 20 images, exactly one of them `isCover` (a game with no images is valid and reported as `MissingBoxArt`); at most one `isDefault` image, and it is a `BoxArt`; `version` null or a dotted version of 2–4 parts of 1–9 ASCII digits; `externalFileName` set exactly for a system that stores its ROMs outside the ZIP, following the rules in the Rom table, and an external release's recorded size within the system's maximum; `files` null except on a disc system, following the rules for a File, and on a disc system `fileName` equal to `externalFileName`. Unknown properties are ignored on read and dropped on the next write. A failing file is reported by the integrity checker as `InfoJsonInvalid`, naming the first rule it breaks, and is left alone.
+Checked on every read (after upgrading an older version): valid UTF-8 JSON of at most 1 MiB; every required field present with the right type; `gameId` a GUID; `system` a registered system; `rating` null or 1–5; `igdbId` null or ≥ 0; at least one ROM and exactly one `isPrimary`; file names unique (case-insensitively) within `roms` and within `images`, and free of `/` and `\`; a ROM name may contain `..` (real names such as `...Iru!` or `Hello... World` do) but may not be `.` or `..`, and an image name may not contain `..` at all; hashes lowercase hex of the right length; `source` one of the four values; at most 20 images, exactly one of them `isCover` (a game with no images is valid and reported as `MissingBoxArt`); at most one `isDefault` image, and it is a `BoxArt`; `version` null or a dotted version of 2–4 parts of 1–9 ASCII digits; `externalFileName` set exactly for a system that stores its ROMs outside the ZIP, following the rules in the Rom table, and an external release's recorded size within the system's maximum; `files` null except on a disc system, following the rules for a File, and on a disc system `fileName` equal to `externalFileName`. Unknown properties are ignored on read and dropped on the next write. A failing file is reported by the integrity checker as `InfoJsonInvalid`, naming the first rule it breaks, and is left alone.
 
 ## Versions
 
@@ -280,3 +281,4 @@ A schema change bumps `schemaVersion`, adds an upgrader and adds a row here.
 | 5 | 0.4.0 | Adds `version` (string?) to every ROM: an update's dotted version from its file name, `null` otherwise. The v4→v5 upgrader sets it from `originalFileName` for releases flagged `Update` (else `null`); migration 0019 fills `roms.version` the same way for games already mirrored. A v5 file is `InfoJsonNewerSchema` (read-only) for an app that only knows v4. |
 | 6 | 0.4.0 | Adds `files` (File[]?) to every ROM: a disc set's other files, `null` otherwise. The v5→v6 upgrader adds `files: null`; migration 0020 adds the `rom_files` table, filled on each game's next mirror. A v6 file is `InfoJsonNewerSchema` (read-only) for an app that only knows v5. |
 | 7 | 0.4.0 | Adds `Serial` as an `identification.method`. The v6→v7 upgrader changes nothing. A v7 file is `InfoJsonNewerSchema` (read-only) for an app that only knows v6. |
+| 8 | 0.4.0 | Adds `igdbId` (int?) to the game: the linked IGDB game id, 0 for Not on IGDB, null otherwise. The v7→v8 upgrader adds `igdbId: null`; migration 0027 adds `games.igdb_id`, filled on each game's next mirror. A v8 file is `InfoJsonNewerSchema` (read-only) for an app that only knows v7. |
