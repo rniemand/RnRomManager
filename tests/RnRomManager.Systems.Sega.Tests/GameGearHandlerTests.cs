@@ -35,7 +35,7 @@ public class GameGearHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("gg", "Game Gear", "GG", "gamegear", "Sega - Game Gear")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".gg", ".sms" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".gg", ".sms", ".bin", ".rom" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((8192L, 1048576L)));
     }
 

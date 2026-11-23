@@ -15,7 +15,7 @@ roms/
       Legend of Zelda, The - Link's Awakening.zip     (in L/)
   gbc/                  GBC-only and dual-mode carts
   gba/                  Game Boy Advance
-  n64/                  Nintendo 64 (always stored big-endian, as .z64)
+  n64/                  Nintendo 64 (always stored big-endian, as .z64; a matched cheat-cartridge .bin keeps its DAT name)
   3ds/                  Nintendo 3DS (external: .3ds, .cci, .cia files next to the ZIP)
   nds/                  Nintendo DS (external by default: .nds or iQue .ids files next to the ZIP; an Admin can store them
                         inside instead, and the storage job moves games between the two)
