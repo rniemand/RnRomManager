@@ -4,6 +4,8 @@ import { resetClient } from '#lib/api/client.js';
 import { auth } from '#lib/stores/auth.svelte.js';
 import { toasts } from '#lib/stores/toasts.svelte.js';
 import { navigateTo, testUrl } from '#lib/testing/url.svelte.js';
+import GameAdminModal from '#lib/components/GameAdminModal.svelte';
+import type { GameDetail } from '#lib/api/types.js';
 
 const goto = vi.fn((...args: [string, unknown?]) => navigateTo(args[0]));
 vi.mock('$app/navigation', () => ({ goto: (...args: [string, unknown?]) => goto(...args) }));
@@ -86,6 +88,8 @@ const game = (romIds: number[]) => ({
 	hasDefaultBoxArt: false,
 	rating: null,
 	favourite: false,
+	igdbId: null as number | null,
+	igdbConfigured: false,
 	metadata: { createdAt: '', updatedAt: '' },
 	roms: romIds.map(rom),
 	images: []
@@ -561,6 +565,136 @@ describe('game detail admin actions', () => {
 		await vi.waitFor(() => expect(calls).toContain('PATCH /api/games/g1'));
 	});
 
+	describe('Edit Metadata tabs and the IGDB id (IGDB lookup M1, M2, M4)', () => {
+		const openEdit = async (detail = game([1])) => {
+			answers['GET /api/games/g1'] = [{ status: 200, body: detail }];
+			render(GamePage);
+			await fireEvent.click(await screen.findByRole('button', { name: /Edit Metadata/ }));
+		};
+		const tab = (name: string) => modal().getByRole('tab', { name, hidden: true });
+		const panel = (id: string) => document.getElementById(id)!;
+
+		it('has Details (selected) and Lookup Info tabs; the form wraps only Details', async () => {
+			await openEdit();
+
+			const tabs = modal().getAllByRole('tab', { hidden: true });
+			expect(tabs.map((t) => t.textContent!.trim())).toEqual(['Details', 'Lookup Info']);
+			expect(tab('Details').getAttribute('aria-selected')).toBe('true');
+			expect(tab('Details').getAttribute('aria-controls')).toBe('edit-details-panel');
+			expect(tab('Lookup Info').getAttribute('aria-selected')).toBe('false');
+			expect(panel('edit-details-panel').hidden).toBe(false);
+			expect(panel('edit-lookup-panel').hidden).toBe(true);
+			expect(panel('edit-details-panel').querySelector('form')).toBeTruthy();
+			expect(panel('edit-lookup-panel').closest('form')).toBeNull();
+
+			await fireEvent.click(tab('Lookup Info'));
+			expect(panel('edit-details-panel').hidden).toBe(true);
+			expect(panel('edit-lookup-panel').hidden).toBe(false);
+			expect(calls.filter((c) => c.includes('igdb-matches'))).toEqual([]);
+		});
+
+		it('lookup: true opens on Lookup Info', async () => {
+			render(GameAdminModal, {
+				props: {
+					game: game([1]) as unknown as GameDetail,
+					action: { kind: 'edit', lookup: true },
+					ondone: vi.fn()
+				}
+			});
+
+			expect(tab('Lookup Info').getAttribute('aria-selected')).toBe('true');
+			expect(panel('edit-lookup-panel').hidden).toBe(false);
+			expect(panel('edit-details-panel').hidden).toBe(true);
+		});
+
+		it('switching tabs keeps the values; Save from Lookup Info sends the whole form with igdbId', async () => {
+			answers['PATCH /api/games/g1'] = [{ status: 200, body: game([1]) }];
+			await openEdit({ ...game([1]), igdbId: 1234 });
+
+			await fireEvent.input(modal().getByLabelText('Title'), { target: { value: 'Tetris DX' } });
+			await fireEvent.click(tab('Lookup Info'));
+			await fireEvent.click(tab('Details'));
+			expect((modal().getByLabelText('Title') as HTMLInputElement).value).toBe('Tetris DX');
+			await fireEvent.click(tab('Lookup Info'));
+			await fireEvent.click(modal().getByRole('button', { name: 'Edit Metadata', hidden: true }));
+
+			await vi.waitFor(() => expect(calls).toContain('PATCH /api/games/g1'));
+			expect(bodies['PATCH /api/games/g1']).toMatchObject({ title: 'Tetris DX', igdbId: 1234 });
+		});
+
+		it('shows the IGDB line; Unlink clears the id and the save sends null', async () => {
+			answers['PATCH /api/games/g1'] = [{ status: 200, body: game([1]) }];
+			await openEdit({ ...game([1]), igdbId: 1234 });
+
+			expect(modal().getByText('IGDB: linked (#1234)')).toBeTruthy();
+			const hint = modal().getByText('Press Enter to save (Ctrl+Enter in a multi-line field).');
+			expect(
+				modal().getByText('IGDB: linked (#1234)').compareDocumentPosition(hint) &
+					Node.DOCUMENT_POSITION_FOLLOWING
+			).toBeTruthy();
+			const unlink = modal().getByRole('button', { name: 'Unlink', hidden: true });
+			expect(unlink.getAttribute('type')).toBe('button');
+			await fireEvent.click(unlink);
+
+			expect(modal().getByText('IGDB: not linked')).toBeTruthy();
+			expect(modal().queryByRole('button', { name: 'Unlink', hidden: true })).toBeNull();
+			expect(calls.some((c) => c.startsWith('PATCH'))).toBe(false);
+			await fireEvent.click(modal().getByRole('button', { name: 'Edit Metadata', hidden: true }));
+			await vi.waitFor(() => expect(calls).toContain('PATCH /api/games/g1'));
+			expect(bodies['PATCH /api/games/g1']).toMatchObject({ igdbId: null });
+		});
+
+		it('a game marked Not on IGDB says so and can be unlinked', async () => {
+			await openEdit({ ...game([1]), igdbId: 0 });
+
+			expect(modal().getByText('IGDB: marked as not on IGDB')).toBeTruthy();
+			expect(modal().getByRole('button', { name: 'Unlink', hidden: true })).toBeTruthy();
+		});
+
+		it('a client-side error while on Lookup Info switches to Details', async () => {
+			await openEdit();
+
+			await fireEvent.input(modal().getByLabelText('Release year'), { target: { value: '1800' } });
+			await fireEvent.click(tab('Lookup Info'));
+			await fireEvent.click(modal().getByRole('button', { name: 'Edit Metadata', hidden: true }));
+
+			expect(tab('Details').getAttribute('aria-selected')).toBe('true');
+			expect(panel('edit-details-panel').hidden).toBe(false);
+			expect(modal().getByText('Leave empty or enter a year 1970–2100.')).toBeTruthy();
+			expect(calls.some((c) => c.startsWith('PATCH'))).toBe(false);
+		});
+
+		it('a 400 on igdbId switches to Details and shows the error under the IGDB line', async () => {
+			answers['PATCH /api/games/g1'] = [
+				{
+					status: 400,
+					body: {
+						code: 'ValidationFailed',
+						title: 'One or more validation errors occurred.',
+						errors: { igdbId: ['Must be null, 0 or a positive whole number.'] }
+					}
+				}
+			];
+			await openEdit({ ...game([1]), igdbId: 1234 });
+
+			await fireEvent.click(tab('Lookup Info'));
+			await fireEvent.click(modal().getByRole('button', { name: 'Edit Metadata', hidden: true }));
+
+			const error = await modal().findByText('Must be null, 0 or a positive whole number.');
+			expect(error.className).toContain('invalid-feedback');
+			expect(tab('Details').getAttribute('aria-selected')).toBe('true');
+		});
+
+		it('reopening resets to Details', async () => {
+			await openEdit();
+			await fireEvent.click(tab('Lookup Info'));
+			await fireEvent.click(modal().getByRole('button', { name: 'Cancel', hidden: true }));
+			await fireEvent.click(await screen.findByRole('button', { name: /Edit Metadata/ }));
+
+			expect(tab('Details').getAttribute('aria-selected')).toBe('true');
+		});
+	});
+
 	it('the admin modal opens from the Images tab, outside the hidden Releases panel (GP1)', async () => {
 		navigateTo('/games/g1?tab=images');
 		answers['GET /api/games/g1'] = [{ status: 200, body: game([1]) }];
@@ -608,6 +742,8 @@ describe('game detail admin actions', () => {
 			boxArtUrl: null,
 			rating: null,
 			favourite: false,
+			igdbId: null as number | null,
+			igdbConfigured: false,
 			matchedOn: null
 		});
 		const pageOf = (...items: ReturnType<typeof listItem>[]) => ({

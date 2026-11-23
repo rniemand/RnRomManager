@@ -2,7 +2,7 @@
 	import type { GameDetail, RomDetail } from '../api/types';
 
 	export type AdminAction =
-		| { kind: 'edit' }
+		| { kind: 'edit'; lookup?: boolean }
 		| { kind: 'retry' }
 		| { kind: 'merge' }
 		| { kind: 'deleteGame' }
@@ -58,6 +58,8 @@
 	let typeahead = $state<{ select: (game: GameListItem) => void }>();
 	let suggestions = $state<GameListItem[]>([]);
 	let suggestionController: AbortController | undefined;
+	/** M1: Edit Metadata's tab; M2 opens it on Lookup Info with `lookup: true`. */
+	let editTab = $state<'details' | 'lookup'>('details');
 
 	/** GP5: the display title without `(…)`/`[…]` tags, cut to `GameQuery.MaxWords` (8) words. */
 	function mergeTerm(title: string): string {
@@ -111,6 +113,7 @@
 		newTitle = '';
 		newTitleError = undefined;
 		form = untrack(() => toForm(game));
+		editTab = action.kind === 'edit' && action.lookup ? 'lookup' : 'details';
 		suggestionController?.abort();
 		suggestions = [];
 		if (action.kind === 'merge') void untrack(loadSuggestions);
@@ -141,7 +144,10 @@
 		switch (a.kind) {
 			case 'edit': {
 				errors = validateGameEdit(form);
-				if (Object.keys(errors).length) return null;
+				if (Object.keys(errors).length) {
+					editTab = 'details';
+					return null;
+				}
 				return { game: await api.patch<GameDetail>(base, toPatch(form)), message: 'Saved.' };
 			}
 			case 'retry':
@@ -201,10 +207,22 @@
 		const first = (field: string) => e.errors[field]?.[0];
 		if (action?.kind === 'edit') {
 			errors = Object.fromEntries(
-				(['title', 'releaseYear', 'developers', 'publishers', 'genres', 'description'] as const)
+				(
+					[
+						'title',
+						'releaseYear',
+						'developers',
+						'publishers',
+						'genres',
+						'description',
+						'igdbId'
+					] as const
+				)
 					.filter((f) => first(f))
 					.map((f) => [f, first(f)])
 			);
+			// M1: show the errors, which are all on Details.
+			if (Object.keys(errors).length) editTab = 'details';
 			return Object.keys(errors).length > 0;
 		}
 		targetError = first('targetGameId');
@@ -249,78 +267,127 @@
 	{#if error}<div class="alert alert-danger py-2" role="alert">{error}</div>{/if}
 
 	{#if action?.kind === 'edit'}
-		<!-- The keydown only handles Enter bubbling up from the form's own fields. -->
-		<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-		<form
-			novalidate
-			onsubmit={(e) => {
-				e.preventDefault();
-				void confirm();
-			}}
-			onkeydown={(e) => {
-				// M2: Enter saves from an input; a textarea keeps Enter for newlines and saves on Ctrl/⌘+Enter.
-				if (e.key !== 'Enter' || e.isComposing) return;
-				const tag = (e.target as HTMLElement).tagName;
-				if (tag === 'INPUT' || (tag === 'TEXTAREA' && (e.ctrlKey || e.metaKey))) {
+		<ul class="nav nav-tabs mb-3" role="tablist">
+			{#each [['details', 'Details'], ['lookup', 'Lookup Info']] as const as [value, label] (value)}
+				<li class="nav-item" role="presentation">
+					<button
+						type="button"
+						class="nav-link"
+						class:active={editTab === value}
+						id="edit-{value}-tab"
+						role="tab"
+						aria-selected={editTab === value}
+						aria-controls="edit-{value}-panel"
+						onclick={() => (editTab = value)}>{label}</button
+					>
+				</li>
+			{/each}
+		</ul>
+		<!-- Both panels stay mounted (hidden) so switching tabs keeps every value. Lookup Info sits outside the form (M1). -->
+		<div
+			id="edit-details-panel"
+			role="tabpanel"
+			aria-labelledby="edit-details-tab"
+			hidden={editTab !== 'details'}
+		>
+			<!-- The keydown only handles Enter bubbling up from the form's own fields. -->
+			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+			<form
+				novalidate
+				onsubmit={(e) => {
 					e.preventDefault();
 					void confirm();
-				}
-			}}
-		>
-			<div class="row g-3">
-				<div class="col-12 col-md-9">
-					<label class="form-label" for="edit-title">Title</label>
-					<input
-						id="edit-title"
-						class="form-control"
-						class:is-invalid={errors.title}
-						maxlength="255"
-						bind:value={form.title}
-					/>
-					{#if errors.title}<div class="invalid-feedback">{errors.title}</div>{/if}
-					<div class="form-text">Renaming also renames the ZIP.</div>
-				</div>
-				<div class="col-12 col-md-3">
-					<label class="form-label" for="edit-year">Release year</label>
-					<input
-						id="edit-year"
-						class="form-control"
-						class:is-invalid={errors.releaseYear}
-						inputmode="numeric"
-						bind:value={form.releaseYear}
-					/>
-					{#if errors.releaseYear}<div class="invalid-feedback">{errors.releaseYear}</div>{/if}
-				</div>
-				{#each [['developers', 'Developers'], ['publishers', 'Publishers'], ['genres', 'Genres']] as const as [field, label] (field)}
-					<div class="col-12 col-md-4">
-						<label class="form-label" for="edit-{field}">{label}</label>
-						<textarea
-							id="edit-{field}"
+				}}
+				onkeydown={(e) => {
+					// M2: Enter saves from an input; a textarea keeps Enter for newlines and saves on Ctrl/⌘+Enter.
+					if (e.key !== 'Enter' || e.isComposing) return;
+					const tag = (e.target as HTMLElement).tagName;
+					if (tag === 'INPUT' || (tag === 'TEXTAREA' && (e.ctrlKey || e.metaKey))) {
+						e.preventDefault();
+						void confirm();
+					}
+				}}
+			>
+				<div class="row g-3">
+					<div class="col-12 col-md-9">
+						<label class="form-label" for="edit-title">Title</label>
+						<input
+							id="edit-title"
 							class="form-control"
-							class:is-invalid={errors[field]}
-							rows="3"
-							aria-describedby="edit-lists-help"
-							bind:value={form[field]}></textarea>
-						{#if errors[field]}<div class="invalid-feedback">{errors[field]}</div>{/if}
+							class:is-invalid={errors.title}
+							maxlength="255"
+							bind:value={form.title}
+						/>
+						{#if errors.title}<div class="invalid-feedback">{errors.title}</div>{/if}
+						<div class="form-text">Renaming also renames the ZIP.</div>
 					</div>
-				{/each}
-				<div id="edit-lists-help" class="col-12 form-text mt-1">
-					Developers, publishers and genres: one per line.
+					<div class="col-12 col-md-3">
+						<label class="form-label" for="edit-year">Release year</label>
+						<input
+							id="edit-year"
+							class="form-control"
+							class:is-invalid={errors.releaseYear}
+							inputmode="numeric"
+							bind:value={form.releaseYear}
+						/>
+						{#if errors.releaseYear}<div class="invalid-feedback">{errors.releaseYear}</div>{/if}
+					</div>
+					{#each [['developers', 'Developers'], ['publishers', 'Publishers'], ['genres', 'Genres']] as const as [field, label] (field)}
+						<div class="col-12 col-md-4">
+							<label class="form-label" for="edit-{field}">{label}</label>
+							<textarea
+								id="edit-{field}"
+								class="form-control"
+								class:is-invalid={errors[field]}
+								rows="3"
+								aria-describedby="edit-lists-help"
+								bind:value={form[field]}></textarea>
+							{#if errors[field]}<div class="invalid-feedback">{errors[field]}</div>{/if}
+						</div>
+					{/each}
+					<div id="edit-lists-help" class="col-12 form-text mt-1">
+						Developers, publishers and genres: one per line.
+					</div>
+					<div class="col-12">
+						<label class="form-label" for="edit-description">Description</label>
+						<textarea
+							id="edit-description"
+							class="form-control"
+							class:is-invalid={errors.description}
+							rows="4"
+							maxlength="4000"
+							bind:value={form.description}></textarea>
+						{#if errors.description}<div class="invalid-feedback">{errors.description}</div>{/if}
+					</div>
+					<div class="col-12">
+						<span class="form-text"
+							>IGDB: {form.igdbId === null
+								? 'not linked'
+								: form.igdbId === 0
+									? 'marked as not on IGDB'
+									: `linked (#${form.igdbId})`}</span
+						>
+						{#if form.igdbId !== null}
+							<button
+								type="button"
+								class="btn btn-link btn-sm p-0 ms-1 align-baseline"
+								onclick={() => (form.igdbId = null)}>Unlink</button
+							>
+						{/if}
+						{#if errors.igdbId}<div class="invalid-feedback d-block">{errors.igdbId}</div>{/if}
+					</div>
+					<div class="col-12 form-text">
+						Press Enter to save (Ctrl+Enter in a multi-line field).
+					</div>
 				</div>
-				<div class="col-12">
-					<label class="form-label" for="edit-description">Description</label>
-					<textarea
-						id="edit-description"
-						class="form-control"
-						class:is-invalid={errors.description}
-						rows="4"
-						maxlength="4000"
-						bind:value={form.description}></textarea>
-					{#if errors.description}<div class="invalid-feedback">{errors.description}</div>{/if}
-				</div>
-				<div class="col-12 form-text">Press Enter to save (Ctrl+Enter in a multi-line field).</div>
-			</div>
-		</form>
+			</form>
+		</div>
+		<div
+			id="edit-lookup-panel"
+			role="tabpanel"
+			aria-labelledby="edit-lookup-tab"
+			hidden={editTab !== 'lookup'}
+		></div>
 	{:else if action?.kind === 'retry'}
 		<p class="mb-0">Look up box art and a snap for {game.displayTitle} again?</p>
 	{:else if action?.kind === 'merge'}

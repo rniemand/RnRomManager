@@ -1,5 +1,5 @@
 /** Edit-metadata form (spec §11 Admin, §23 `PATCH /api/games/{id}` rules), checked client-side; the API checks again. */
-import type { GameDetail } from './api/types';
+import type { GameDetail, IgdbMatch } from './api/types';
 
 export interface GameEditForm {
 	title: string;
@@ -9,6 +9,8 @@ export interface GameEditForm {
 	publishers: string;
 	genres: string;
 	description: string;
+	/** null = not linked, 0 = Not on IGDB, else the IGDB game id. */
+	igdbId: number | null;
 }
 
 export type GameEditErrors = Partial<Record<keyof GameEditForm, string>>;
@@ -20,6 +22,7 @@ export interface GamePatch {
 	publishers: string[];
 	genres: string[];
 	description: string | null;
+	igdbId: number | null;
 }
 
 const listRule = 'At most 20 items of 1–255 characters each.';
@@ -31,7 +34,8 @@ export function toForm(game: GameDetail): GameEditForm {
 		developers: game.developers.join('\n'),
 		publishers: game.publishers.join('\n'),
 		genres: game.genres.join('\n'),
-		description: game.description ?? ''
+		description: game.description ?? '',
+		igdbId: game.igdbId
 	};
 }
 
@@ -71,6 +75,71 @@ export function toPatch(form: GameEditForm): GamePatch {
 		developers: toList(form.developers),
 		publishers: toList(form.publishers),
 		genres: toList(form.genres),
-		description: form.description.trim() ? form.description : null
+		description: form.description.trim() ? form.description : null,
+		igdbId: form.igdbId
 	};
+}
+
+/** M3: the fields Lookup Info can copy from an IGDB match, in the compare table's order. */
+export const copyFields = [
+	'title',
+	'releaseYear',
+	'developers',
+	'publishers',
+	'genres',
+	'description'
+] as const;
+
+export type CopyField = (typeof copyFields)[number];
+
+export type CopyState = Record<CopyField, { disabled: boolean; checked: boolean }>;
+
+const listFields = ['developers', 'publishers', 'genres'] as const;
+
+function isListField(field: CopyField): field is (typeof listFields)[number] {
+	return (listFields as readonly string[]).includes(field);
+}
+
+/** M3's comparison: each side as the form would hold it (trimmed text, or the form's list). */
+function sides(form: GameEditForm, match: IgdbMatch, field: CopyField): [string[], string[]] {
+	if (isListField(field)) return [toList(form[field]), match[field]];
+	const current = form[field].trim();
+	const igdb =
+		field === 'title'
+			? match.name.trim()
+			: field === 'releaseYear'
+				? (match.releaseYear?.toString() ?? '')
+				: (match.description ?? '').trim();
+	return [current ? [current] : [], igdb ? [igdb] : []];
+}
+
+/**
+ * M3: a row is disabled when the IGDB value is empty or equals the form's; otherwise it starts ticked when the form's value is
+ * empty, except Title (renaming also renames the ZIP).
+ */
+export function defaultCopyFields(form: GameEditForm, match: IgdbMatch): CopyState {
+	return Object.fromEntries(
+		copyFields.map((field) => {
+			const [current, igdb] = sides(form, match, field);
+			const equal = current.length === igdb.length && current.every((v, i) => v === igdb[i]);
+			const disabled = !igdb.length || equal;
+			return [field, { disabled, checked: !disabled && !current.length && field !== 'title' }];
+		})
+	) as CopyState;
+}
+
+/** M3 Use this match: copies the given fields (lists one per line) and links the match. */
+export function applyMatch(
+	form: GameEditForm,
+	match: IgdbMatch,
+	fields: readonly CopyField[]
+): GameEditForm {
+	const next = { ...form, igdbId: match.igdbId };
+	for (const field of fields) {
+		if (isListField(field)) next[field] = match[field].join('\n');
+		else if (field === 'title') next.title = match.name;
+		else if (field === 'releaseYear') next.releaseYear = match.releaseYear?.toString() ?? '';
+		else next.description = match.description ?? '';
+	}
+	return next;
 }

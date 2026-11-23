@@ -122,6 +122,8 @@ function game(romIds: number[]): GameDetail {
 		rating: null,
 		favourite: false,
 		saveCount: 0,
+		igdbId: null,
+		igdbConfigured: false,
 		metadata: { createdAt: '', updatedAt: '' },
 		roms: romIds.map((id, i) => rom(id, `Tetris ${id}.gb`, i === 0)),
 		images: [
