@@ -315,7 +315,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   - `DiscSetsTests`: `.mdf` mains group into a set, and the `.toc`/`.mds` set names.
 
   Done when they pass, and the real-dump check from § Risks is done for the cores available or noted for the PR.
-- [ ] **9. Docs**: the doc rule. Tests: `SupportedSystemsTableTests`. No Playwright change. Done when it passes and `docs/codemap.md` is regenerated. Files:
+- [x] **9. Docs**: the doc rule. Tests: `SupportedSystemsTableTests`. No Playwright change. Done when it passes and `docs/codemap.md` is regenerated. Files:
   - `docs/features.md`:
     - Ingestion (:197): the alias and Commodore types;
     - Disc sets (:233): the **Sets**, **Waiting sets** and **No match** bullets (TOC like cue, MDS by stem, a lone `.mdf` waits);
