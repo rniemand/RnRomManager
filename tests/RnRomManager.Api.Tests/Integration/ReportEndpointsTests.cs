@@ -899,6 +899,66 @@ public class ReportEndpointsTests
         Assert.That((await AuthClient.JsonAsync(badId)).GetProperty("errors").TryGetProperty("afterGameId", out _), Is.True);
     }
 
+    // Missing IGDB IDs R1: GET /api/reports/missing-igdb-ids (Admin only).
+
+    [Test]
+    public async Task MissingIgdbIds_UserIs403()
+    {
+        using var list = await _user.GetAsync("/api/reports/missing-igdb-ids");
+
+        Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+    }
+
+    [Test]
+    public async Task MissingIgdbIds_Shape_AndStatus()
+    {
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        await Sql("UPDATE games SET release_year = 1990 WHERE id = @alpha; UPDATE games SET igdb_id = 0 WHERE id = @bravo", new { alpha, bravo });
+        using var admin = await Editor();
+
+        using var response = await admin.GetAsync("/api/reports/missing-igdb-ids?sort=Year&dir=DESC");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        var page = await AuthClient.JsonAsync(response);
+        Assert.That(page.GetProperty("total").GetInt64(), Is.EqualTo(1));
+        var item = page.GetProperty("items").EnumerateArray().Single();
+        Assert.That(item.EnumerateObject().Select(p => p.Name), Is.EqualTo(new[] { "id", "displayTitle", "system", "systemName", "releaseYear" }));
+        Assert.That((item.GetProperty("id").GetGuid(), item.GetProperty("displayTitle").GetString(), item.GetProperty("system").GetString(),
+                item.GetProperty("systemName").GetString(), item.GetProperty("releaseYear").GetInt32()),
+            Is.EqualTo((alpha, "Alpha", "gb", "Game Boy", 1990)));
+
+        using var notOn = await admin.GetAsync("/api/reports/missing-igdb-ids?status=NOT-ON-IGDB");
+        var notOnItems = (await AuthClient.JsonAsync(notOn)).GetProperty("items");
+        Assert.That(notOnItems.EnumerateArray().Select(i => i.GetProperty("id").GetGuid()), Is.EqualTo(new[] { bravo }));
+    }
+
+    [TestCase("system=sg1000", "system", "Choose a registered system.")]
+    [TestCase("status=linked", "status", "Must be missing or not-on-igdb.")]
+    [TestCase("sort=releases", "sort", "Must be name, system or year.")]
+    [TestCase("dir=up", "dir", "Must be asc or desc.")]
+    [TestCase("pageSize=201", "pageSize", null)]
+    [TestCase("page=0", "page", null)]
+    public async Task MissingIgdbIds_InvalidQuery_Is400(string query, string field, string? message)
+    {
+        using var admin = await Editor();
+        using var response = await admin.GetAsync("/api/reports/missing-igdb-ids?" + query);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+        var errors = (await AuthClient.JsonAsync(response)).GetProperty("errors");
+        Assert.That(errors.TryGetProperty(field, out var value), Is.True);
+        if (message is not null)
+            Assert.That(value[0].GetString(), Is.EqualTo(message));
+    }
+
+    [Test]
+    public async Task MissingIgdbIds_LongQuery_Is400()
+    {
+        using var admin = await Editor();
+        using var longQ = await admin.GetAsync("/api/reports/missing-igdb-ids?q=" + new string('x', 101));
+
+        Assert.That((await AuthClient.JsonAsync(longQ)).GetProperty("errors").GetProperty("q")[0].GetString(), Is.EqualTo("Must be at most 100 characters."));
+    }
+
     /// <summary>Image Resolutions: ingested games only have placeholder art, so give some of their image rows real values.</summary>
     private async Task<(Guid Alpha, Guid Bravo, Guid Echo)> SeedImageResolutions()
     {

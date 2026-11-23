@@ -130,6 +130,39 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         return new Page<MissingMetadataItem>(items, page, pageSize, total);
     }
 
+    public async Task<Page<MissingIgdbItem>> ListMissingIgdbIdsAsync(string? systemId, MissingIgdbStatus status, string? q,
+        MissingMetadataSort sort, bool descending, int page, int pageSize, CancellationToken cancellationToken)
+    {
+        // As ListMissingMetadataAsync: the predicate, key and direction come only from the enums and bool.
+        var where = "WHERE " + status switch
+        {
+            MissingIgdbStatus.Missing => "g.igdb_id IS NULL",
+            MissingIgdbStatus.NotOnIgdb => "g.igdb_id = 0",
+            _ => throw new ArgumentOutOfRangeException(nameof(status)),
+        } + (systemId is null ? "" : " AND g.system_id = @systemId") + (q is null ? "" : " AND g.display_title LIKE @q");
+        var dir = descending ? "DESC" : "";
+        var order = sort switch
+        {
+            MissingMetadataSort.Name => $"g.display_title {dir}, g.id",
+            MissingMetadataSort.System => $"g.system_id {dir}, g.display_title, g.id",
+            MissingMetadataSort.Year => $"g.release_year IS NULL, g.release_year {dir}, g.display_title, g.id",
+            _ => throw new ArgumentOutOfRangeException(nameof(sort)),
+        };
+        var args = new { systemId, q = q is null ? null : SqlLike.Contains(q), pageSize, offset = (long)Page<object>.Offset(page, pageSize) };
+        await using var connection = connections.Create();
+        var total = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
+            $"SELECT COUNT(*) FROM games g {where}", args, cancellationToken: cancellationToken));
+        // MissingMetadataRow: release_year is a SMALLINT, which Dapper only maps onto a settable int? (not a record parameter).
+        var rows = await connection.QueryAsync<MissingMetadataRow>(new CommandDefinition($"""
+            SELECT g.id AS Id, g.display_title AS DisplayTitle, g.system_id AS SystemId, g.release_year AS ReleaseYear
+            FROM games g {where}
+            ORDER BY {order}
+            LIMIT @pageSize OFFSET @offset
+            """, args, cancellationToken: cancellationToken));
+        var items = rows.Select(r => new MissingIgdbItem(r.Id, r.DisplayTitle, r.SystemId, r.ReleaseYear)).ToList();
+        return new Page<MissingIgdbItem>(items, page, pageSize, total);
+    }
+
     public async Task<MissingImageSuccessor> NextMissingMetadataAsync(Guid? afterGameId, CancellationToken cancellationToken)
     {
         // As NextMissingImageAsync: the anchor keeps its place even once fixed; rows after it first, then the wrap.

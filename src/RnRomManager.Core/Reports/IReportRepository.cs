@@ -23,6 +23,13 @@ public interface IReportRepository
     Task<Page<MissingMetadataItem>> ListMissingMetadataAsync(string? systemId, MissingMetadataField missing, string? q, MissingMetadataSort sort,
         bool descending, int page, int pageSize, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Missing IGDB IDs R1: games not linked to IGDB (<see cref="MissingIgdbStatus.Missing"/>, <c>igdb_id IS NULL</c>) or marked Not on
+    /// IGDB (<c>igdb_id = 0</c>), filtered and sorted as <see cref="ListMissingMetadataAsync"/>.
+    /// </summary>
+    Task<Page<MissingIgdbItem>> ListMissingIgdbIdsAsync(string? systemId, MissingIgdbStatus status, string? q, MissingMetadataSort sort,
+        bool descending, int page, int pageSize, CancellationToken cancellationToken);
+
     /// <summary>M3: as <see cref="NextMissingImageAsync"/>, in the unfiltered default order (display title, id).</summary>
     Task<MissingImageSuccessor> NextMissingMetadataAsync(Guid? afterGameId, CancellationToken cancellationToken);
 
@@ -116,6 +123,11 @@ public sealed record MissingMetadataItem(Guid Id, string DisplayTitle, string Sy
 
 /// <summary>Missing Metadata M2: which missing field the report lists.</summary>
 public enum MissingMetadataField { Any, Year, Developer, Publisher }
+
+public sealed record MissingIgdbItem(Guid Id, string DisplayTitle, string SystemId, int? ReleaseYear);
+
+/// <summary>Missing IGDB IDs R1: which games the report lists.</summary>
+public enum MissingIgdbStatus { Missing, NotOnIgdb }
 
 /// <summary>Missing Metadata M2: the report's sort keys.</summary>
 public enum MissingMetadataSort { Name, System, Year }
