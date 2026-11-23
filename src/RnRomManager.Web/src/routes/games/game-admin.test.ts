@@ -732,6 +732,63 @@ describe('game detail admin actions', () => {
 			expect(bodies['PATCH /api/games/g1']).toMatchObject({ igdbId: 0 });
 		});
 
+		it('Use this match fills Details with the note; Enter on a checkbox does not save; Save sends the copied fields', async () => {
+			answers['GET /api/games/g1/igdb-matches?q=Tetris'] = [
+				{
+					status: 200,
+					body: {
+						matches: [
+							{
+								igdbId: 1234,
+								name: 'Tetris DX',
+								releaseYear: 1998,
+								developers: ['Nintendo'],
+								publishers: ['Nintendo', 'Capcom'],
+								genres: ['Puzzle'],
+								description: 'Falling blocks.',
+								coverUrl: null,
+								url: null
+							}
+						]
+					}
+				}
+			];
+			answers['PATCH /api/games/g1'] = [{ status: 200, body: game([1]) }];
+			await openEdit(configured());
+
+			await fireEvent.click(tab('Lookup Info'));
+			await fireEvent.submit(modal().getByLabelText('Search IGDB for').closest('form')!);
+			await fireEvent.click(
+				await modal().findByRole('button', { name: /Tetris DX/, hidden: true })
+			);
+			const title = modal().getByRole('checkbox', { name: 'Copy Title', hidden: true });
+			await fireEvent.keyDown(title, { key: 'Enter' });
+			expect(calls.some((c) => c.startsWith('PATCH'))).toBe(false);
+			await fireEvent.click(title);
+			await fireEvent.click(modal().getByRole('button', { name: 'Use this match', hidden: true }));
+
+			expect(tab('Details').getAttribute('aria-selected')).toBe('true');
+			expect(modal().getByText('IGDB values applied. Save to keep them.')).toBeTruthy();
+			expect(modal().getByText('IGDB: linked (#1234)')).toBeTruthy();
+			expect((modal().getByLabelText('Title') as HTMLInputElement).value).toBe('Tetris DX');
+			expect((modal().getByLabelText('Publishers') as HTMLTextAreaElement).value).toBe(
+				'Nintendo\nCapcom'
+			);
+			expect(calls.some((c) => c.startsWith('PATCH'))).toBe(false);
+
+			await fireEvent.click(modal().getByRole('button', { name: 'Edit Metadata', hidden: true }));
+			await vi.waitFor(() => expect(calls).toContain('PATCH /api/games/g1'));
+			expect(bodies['PATCH /api/games/g1']).toEqual({
+				title: 'Tetris DX',
+				releaseYear: 1989,
+				developers: ['Nintendo'],
+				publishers: ['Nintendo', 'Capcom'],
+				genres: ['Puzzle'],
+				description: 'Falling blocks.',
+				igdbId: 1234
+			});
+		});
+
 		it('the applied note clears when the modal reopens', async () => {
 			await openEdit(configured());
 			await fireEvent.click(tab('Lookup Info'));

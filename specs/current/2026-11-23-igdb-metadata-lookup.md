@@ -141,7 +141,7 @@ API contract changes are additive (new optional PATCH field, new detail fields, 
   - `routes/games/game-admin.test.ts`: `lookup: true` searches at once; Enter in the search input doesn't save; Not on IGDB switches to Details with the note and `IGDB: marked as not on IGDB`.
 
   Done when: those pass with lint and check.
-- [ ] **8. Compare table and Use this match**: the rest of M3 (compare table, View on IGDB, Use this match). Files: `IgdbLookup.svelte`, `docs/features.md` (Game detail: Lookup Info, all of M1–M4). Tests:
+- [x] **8. Compare table and Use this match**: the rest of M3 (compare table, View on IGDB, Use this match). Files: `IgdbLookup.svelte`, `docs/features.md` (Game detail: Lookup Info, all of M1–M4). Tests:
   - `lib/components/IgdbLookup.test.ts`: the table rows, starting ticks and disabled rows (via `defaultCopyFields`); the View on IGDB link only when `url` is set; Use this match with nothing ticked only links.
   - `routes/games/game-admin.test.ts`: Use this match fills Details and shows the note; Enter on a compare checkbox doesn't save; Save then sends the copied fields and `igdbId`.
 

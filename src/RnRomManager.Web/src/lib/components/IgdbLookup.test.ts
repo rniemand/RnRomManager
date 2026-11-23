@@ -219,4 +219,113 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 		expect(onapply).toHaveBeenCalledWith(form({ igdbId: 0, title: 'Mine' }));
 		expect(calls).toEqual([]);
 	});
+	describe('compare table and Use this match (M3)', () => {
+		const full = match(9, {
+			name: 'Tetris DX',
+			releaseYear: 1998,
+			developers: ['Nintendo'],
+			publishers: ['Nintendo', 'Capcom'],
+			genres: [],
+			description: 'd'.repeat(250),
+			url: 'https://www.igdb.com/games/tetris-dx'
+		});
+		const pick = async (props: Parameters<typeof setup>[0] = {}, m: IgdbMatch = full) => {
+			answers = [{ status: 200, body: { matches: [m] } }];
+			const onapply = setup({ autostart: true, ...props });
+			await fireEvent.click(await screen.findByRole('button', { name: new RegExp(m.name) }));
+			return onapply;
+		};
+		const box = (field: string) =>
+			screen.getByRole('checkbox', { name: `Copy ${field}` }) as HTMLInputElement;
+		const rows = () =>
+			[...document.querySelectorAll('tbody tr')].map((tr) =>
+				[...tr.querySelectorAll('th, td')].slice(1).map((c) => c.textContent!.trim())
+			);
+
+		it('no table until a match is selected', async () => {
+			answers = [{ status: 200, body: { matches: [full] } }];
+			setup({ autostart: true });
+			await screen.findByRole('button', { name: /Tetris DX/ });
+
+			expect(document.querySelector('table')).toBeNull();
+			expect(screen.queryByRole('button', { name: 'Use this match' })).toBeNull();
+		});
+
+		it('shows Field, Current and IGDB per row, inside table-responsive, with a hidden caption', async () => {
+			await pick({ form: form({ developers: 'Nintendo\n Nintendo ', description: '' }) });
+
+			const table = document.querySelector('table')!;
+			expect(table.parentElement!.className).toContain('table-responsive');
+			expect(table.querySelector('caption')!.className).toContain('visually-hidden');
+			expect(table.querySelector('caption')!.textContent).toBe('Fields to copy from IGDB');
+			expect([...table.querySelectorAll('thead th')].map((th) => th.textContent!.trim())).toEqual([
+				'Copy',
+				'Field',
+				'Current',
+				'IGDB'
+			]);
+			expect(rows()).toEqual([
+				['Title', 'Tetris', 'Tetris DX'],
+				['Release year', '—', '1998'],
+				['Developers', 'Nintendo', 'Nintendo'],
+				['Publishers', '—', 'Nintendo, Capcom'],
+				['Genres', '—', '—'],
+				['Description', '—', `${'d'.repeat(200)}…`]
+			]);
+		});
+
+		it('starting ticks and disabled rows follow defaultCopyFields', async () => {
+			await pick({ form: form({ developers: 'Nintendo', description: 'Mine.' }) });
+
+			expect([box('Title').checked, box('Title').disabled]).toEqual([false, false]);
+			expect([box('Release year').checked, box('Release year').disabled]).toEqual([true, false]);
+			expect(box('Developers').disabled).toBe(true);
+			expect(box('Publishers').checked).toBe(true);
+			expect(box('Genres').disabled).toBe(true);
+			expect([box('Description').checked, box('Description').disabled]).toEqual([false, false]);
+		});
+
+		it('View on IGDB shows only when the match has a url', async () => {
+			await pick();
+			const link = screen.getByRole('link', { name: 'View on IGDB' });
+			expect(link.getAttribute('href')).toBe('https://www.igdb.com/games/tetris-dx');
+			expect(link.getAttribute('target')).toBe('_blank');
+			expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+		});
+
+		it('no View on IGDB without a url', async () => {
+			await pick({}, { ...full, url: null });
+			expect(screen.queryByRole('link', { name: 'View on IGDB' })).toBeNull();
+		});
+
+		it('Use this match copies the ticked fields and links the id', async () => {
+			const onapply = await pick();
+			await fireEvent.click(box('Title'));
+			await fireEvent.click(box('Description'));
+
+			const use = screen.getByRole('button', { name: 'Use this match' });
+			expect(use.getAttribute('type')).toBe('button');
+			await fireEvent.click(use);
+
+			expect(onapply).toHaveBeenCalledWith(
+				form({
+					title: 'Tetris DX',
+					releaseYear: '1998',
+					developers: 'Nintendo',
+					publishers: 'Nintendo\nCapcom',
+					igdbId: 9
+				})
+			);
+		});
+
+		it('Use this match with nothing ticked only links', async () => {
+			const onapply = await pick();
+			for (const field of ['Release year', 'Developers', 'Publishers', 'Description'])
+				if (box(field).checked) await fireEvent.click(box(field));
+
+			await fireEvent.click(screen.getByRole('button', { name: 'Use this match' }));
+
+			expect(onapply).toHaveBeenCalledWith(form({ igdbId: 9 }));
+		});
+	});
 });
