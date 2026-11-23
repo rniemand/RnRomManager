@@ -219,13 +219,13 @@ The disc sets are stored as they are and play the way CloneCD discs do: `play-di
 | Core | `src/RnRomManager.Core/Ingest/TocSheet.cs` (new) | D3–D6 |
 | Core | `src/RnRomManager.Core/Ingest/MdsSheet.cs` (new) | D7, D8a |
 | Core | `src/RnRomManager.Core/Ingest/IngestSetPlanner.cs` (`IngestSetPlanner`, `PlannerFile`, `PlannedUnit`, `IngestCueReader`), `IngestOutcome.cs` (reason comments), `ReviewSets.cs` (summary) | D8 |
-| Core | `src/RnRomManager.Core/Ingest/ReviewResolver.cs` (`IsSetMemberCandidate` and its summary, line 545) | D10 |
+| Core | `src/RnRomManager.Core/Ingest/ReviewResolver.cs` (`IsSetMemberCandidate` and its summary, the `named` lookup at lines 545–548) | D10 |
 | Core | `src/RnRomManager.Core/Library/DiscSets.cs` (`MainExtensions`, `Name`) | D13 |
 | Core (comments only) | `IngestJob.cs` (line 93), `IngestPipeline.cs` (lines 409, 588), `InfoJsonRom.cs` (line 38), `InfoJsonRomFile.cs` (line 4), `LibraryRows.cs` (line 93), `ISystemHandler.FileSets` | Say "a cue, TOC, CloneCD or MDS set" / "the cue, `.toc`, `.ccd` or `.mds`" |
 | Api | `src/RnRomManager.Api/Endpoints/PlayDisc.cs` (`ShapeProblem`, `OpenDiscAsync`, new TOC and MDS branches next to `CloneCdDiscAsync`, the class and method XML docs) | A3, D11–D13 |
 | Web (comments only) | `src/RnRomManager.Web/src/lib/api/types.ts` (lines 386, 392) | Set members list `.toc`/`.mds`/`.mdf` |
 | TestData | `tests/RnRomManager.TestData/ExternalSetTestHandler.cs`, `PsxSetTestHandler.cs` | `RomExtensions` gain `.mds`, `.mdf`, `.toc` |
-| Tests | `TocSheetTests` (new), `MdsSheetTests` (new) in `tests/RnRomManager.Core.Tests/Ingest/`; `IngestSetPlannerTests`, `ReviewSetsTests`, `ReviewResolverTests`, `DiscSetsTests`; each changed handler's tests; `BrowserCoreExtensionsTests`, `SupportedSystemsTableTests`, `IngestPipelineTests`, `ReviewEndpointsTests`, `LibraryEndpointsTests.PlayDisc.cs`, `LibraryEndpointsTests.PlayDiscSet.cs` | Per step. The assertion at `LibraryEndpointsTests.PlayDisc.cs:677` changes to A3's new single-file error text. No test asserts `a disc set must be one .cue and its .bin tracks…` today; step 8 adds one for D11's text. |
+| Tests | `TocSheetTests` (new), `MdsSheetTests` (new) in `tests/RnRomManager.Core.Tests/Ingest/`; `IngestSetPlannerTests`, `ReviewSetsTests`, `ReviewResolverTests`, `ReviewResolverExternalTests`, `DiscSetsTests`; each changed handler's tests; `BrowserCoreExtensionsTests`, `SupportedSystemsTableTests`, `IngestPipelineTests`, `ReviewEndpointsTests`, `LibraryEndpointsTests.PlayDisc.cs`, `LibraryEndpointsTests.PlayDiscSet.cs` | Per step. The assertion at `LibraryEndpointsTests.PlayDisc.cs:677` changes to A3's new single-file error text. No test asserts `a disc set must be one .cue and its .bin tracks…` today; step 8 adds one for D11's text. |
 | Docs | `README.md` (table rows), `docs/features.md`, `docs/development.md`, `docs/adding-a-system.md`, `docs/zip-format.md` | Steps 1, 7, 9 |
 
 No migration (`files` rows hold any member), no config key and no API shape change (`setMembers` already lists any set's members).
@@ -353,6 +353,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   - new pinned errors: unknown string escape, `<WORD> needs a string`, `<WORD> is incomplete`, bare `START` after unsized data, `SWAP` at play; "more than one file" counts items;
   - MDS play shape is exactly two members; tests added for D12's size errors (reviewer)
 - 2026-11-23 Review round 4 → D5 `<WORD>`/`<token>` casing and left-to-right order pinned, `CD_TEXT` exempt from "must come after a TRACK"; D6 runs all checks per track, track by track, and checks no names; D8a runs each check over all tracks before the next; step 2's error tests are `[TestCase]` rows (reviewer)
+- 2026-11-23 Review round 5 → § Changes names `ReviewResolverExternalTests` and the same `ReviewResolver` lines as D10 (reviewer)
 
 ## Kickoff prompt
 ```text
