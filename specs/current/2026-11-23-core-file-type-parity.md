@@ -112,7 +112,7 @@ No migration, config key or API contract change. Existing library files are unto
   - `IngestPipelineTests` (integration). The class's `[IngestSeeder.C64Dat]` is empty today; it gains `new FixtureGame("Gzip Orbit (Europe)", "Gzip Orbit (Europe).d64", C64Disk)` with a new `C64Disk = Atari(174_848, 6401)` (a 35-track D64; no other test reads this DAT). New `C64_D6z_IsInflated_AndStoredAsTheDatsD64` (modelled on `Amiga_Adz_IsInflated_AndStoredAsTheDatsAdf`: `orbit.d6z` holding the gzipped disk is `Ingested` as `c64`, stored as `Gzip Orbit (Europe).d64` with the plain bytes) and `C64_BareGz_FailsUnsupportedType` (`orbit.gz` fails `UnsupportedType` with V4's details).
 
   Done when: all of these pass, and features.md names the new types, the inflate, the `.gz` naming rule and the Attach stem limit (Risks); zip-format.md and deployment.md match § Changes.
-- [ ] **4. Parity guard**: P1, P2. Files: `BrowserCoreExtensionsTests.cs`. Tests: `BrowserCoreExtensionsTests` (all, including the new `EveryCoreExtension_IsIngestedOrListed` and `UningestedProblemsAreNamed`). Done when: both new tests pass and `NotIngested` matches P2.
+- [x] **4. Parity guard**: P1, P2. Files: `BrowserCoreExtensionsTests.cs`. Tests: `BrowserCoreExtensionsTests` (all, including the new `EveryCoreExtension_IsIngestedOrListed` and `UningestedProblemsAreNamed`). Done when: both new tests pass and `NotIngested` matches P2.
 
 ## Decisions
 - 2026-11-23 Which reverse gaps to close? → VICE compressed and extra types, and cartridge `.bin`/`.rom` aliases. Not Amiga CD32 (user)
