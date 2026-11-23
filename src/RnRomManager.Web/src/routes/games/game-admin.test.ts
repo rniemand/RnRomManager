@@ -685,6 +685,64 @@ describe('game detail admin actions', () => {
 			expect(tab('Details').getAttribute('aria-selected')).toBe('true');
 		});
 
+		const configured = (changes = {}) => ({ ...game([1]), igdbConfigured: true, ...changes });
+
+		it('lookup: true searches at once when IGDB is configured', async () => {
+			render(GameAdminModal, {
+				props: {
+					game: configured() as unknown as GameDetail,
+					action: { kind: 'edit', lookup: true },
+					ondone: vi.fn()
+				}
+			});
+
+			await vi.waitFor(() => expect(calls).toContain('GET /api/games/g1/igdb-matches?q=Tetris'));
+		});
+
+		it('choosing Lookup Info by hand does not search; Enter in the search input searches, never saves', async () => {
+			answers['GET /api/games/g1/igdb-matches?q=Tetris'] = [{ status: 200, body: { matches: [] } }];
+			await openEdit(configured());
+
+			await fireEvent.click(tab('Lookup Info'));
+			expect(calls.some((c) => c.includes('igdb-matches'))).toBe(false);
+			const search = modal().getByLabelText('Search IGDB for');
+			await fireEvent.keyDown(search, { key: 'Enter' });
+			await fireEvent.submit(search.closest('form')!);
+
+			await vi.waitFor(() => expect(calls).toContain('GET /api/games/g1/igdb-matches?q=Tetris'));
+			expect(calls.some((c) => c.startsWith('PATCH'))).toBe(false);
+			expect(search.closest('#edit-details-panel')).toBeNull();
+		});
+
+		it('Not on IGDB switches to Details with the note and the line; Save sends igdbId 0', async () => {
+			answers['PATCH /api/games/g1'] = [{ status: 200, body: game([1]) }];
+			await openEdit(configured({ igdbId: 77 }));
+
+			await fireEvent.click(tab('Lookup Info'));
+			await fireEvent.click(modal().getByRole('button', { name: 'Not on IGDB', hidden: true }));
+
+			expect(tab('Details').getAttribute('aria-selected')).toBe('true');
+			const note = modal().getByText('IGDB values applied. Save to keep them.');
+			expect(note.className).toContain('alert-info');
+			expect(note.closest('#edit-details-panel')).toBeTruthy();
+			expect(modal().getByText('IGDB: marked as not on IGDB')).toBeTruthy();
+			expect(calls.some((c) => c.startsWith('PATCH'))).toBe(false);
+			await fireEvent.click(modal().getByRole('button', { name: 'Edit Metadata', hidden: true }));
+			await vi.waitFor(() => expect(calls).toContain('PATCH /api/games/g1'));
+			expect(bodies['PATCH /api/games/g1']).toMatchObject({ igdbId: 0 });
+		});
+
+		it('the applied note clears when the modal reopens', async () => {
+			await openEdit(configured());
+			await fireEvent.click(tab('Lookup Info'));
+			await fireEvent.click(modal().getByRole('button', { name: 'Not on IGDB', hidden: true }));
+			await fireEvent.click(modal().getByRole('button', { name: 'Cancel', hidden: true }));
+			await fireEvent.click(await screen.findByRole('button', { name: /Edit Metadata/ }));
+
+			expect(modal().queryByText('IGDB values applied. Save to keep them.')).toBeNull();
+			expect(modal().getByText('IGDB: not linked')).toBeTruthy();
+		});
+
 		it('reopening resets to Details', async () => {
 			await openEdit();
 			await fireEvent.click(tab('Lookup Info'));

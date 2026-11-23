@@ -33,6 +33,7 @@
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import GameTypeahead from './GameTypeahead.svelte';
+	import IgdbLookup from './IgdbLookup.svelte';
 
 	interface Props {
 		game: GameDetail;
@@ -60,6 +61,8 @@
 	let suggestionController: AbortController | undefined;
 	/** M1: Edit Metadata's tab; M2 opens it on Lookup Info with `lookup: true`. */
 	let editTab = $state<'details' | 'lookup'>('details');
+	/** M4: Lookup Info changed the form; cleared when the modal reopens. */
+	let igdbApplied = $state(false);
 
 	/** GP5: the display title without `(…)`/`[…]` tags, cut to `GameQuery.MaxWords` (8) words. */
 	function mergeTerm(title: string): string {
@@ -114,6 +117,7 @@
 		newTitleError = undefined;
 		form = untrack(() => toForm(game));
 		editTab = action.kind === 'edit' && action.lookup ? 'lookup' : 'details';
+		igdbApplied = false;
 		suggestionController?.abort();
 		suggestions = [];
 		if (action.kind === 'merge') void untrack(loadSuggestions);
@@ -290,6 +294,11 @@
 			aria-labelledby="edit-details-tab"
 			hidden={editTab !== 'details'}
 		>
+			{#if igdbApplied}
+				<div class="alert alert-info py-2" role="status">
+					IGDB values applied. Save to keep them.
+				</div>
+			{/if}
 			<!-- The keydown only handles Enter bubbling up from the form's own fields. -->
 			<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 			<form
@@ -387,7 +396,18 @@
 			role="tabpanel"
 			aria-labelledby="edit-lookup-tab"
 			hidden={editTab !== 'lookup'}
-		></div>
+		>
+			<IgdbLookup
+				{game}
+				{form}
+				autostart={action.lookup}
+				onapply={(next) => {
+					form = next;
+					editTab = 'details';
+					igdbApplied = true;
+				}}
+			/>
+		</div>
 	{:else if action?.kind === 'retry'}
 		<p class="mb-0">Look up box art and a snap for {game.displayTitle} again?</p>
 	{:else if action?.kind === 'merge'}

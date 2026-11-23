@@ -136,7 +136,7 @@ API contract changes are additive (new optional PATCH field, new detail fields, 
   - `routes/games/game-admin.test.ts`: tabs present and labelled; `lookup: true` selects Lookup Info; Save sends `igdbId`; the IGDB line and Unlink; a client-side error while on Lookup Info switches to Details. The existing Edit Metadata tests pass unchanged, since Details is the default tab.
 
   Done when: those pass with `npm run lint` and `npm run check`.
-- [ ] **7. Lookup Info search and matches**: M2 (auto-search), M3 up to and including the match list (selecting a match only marks it `aria-pressed`), **Not on IGDB**, and M4's `IGDB values applied…` note. Files: `IgdbLookup.svelte` (new), `GameAdminModal.svelte` (mount it in the Lookup Info panel; the note). Tests:
+- [x] **7. Lookup Info search and matches**: M2 (auto-search), M3 up to and including the match list (selecting a match only marks it `aria-pressed`), **Not on IGDB**, and M4's `IGDB values applied…` note. Files: `IgdbLookup.svelte` (new), `GameAdminModal.svelte` (mount it in the Lookup Info panel; the note). Tests:
   - `lib/components/IgdbLookup.test.ts` (new): the not-configured alert without a request, also with `autostart`; the prefill cut to 100 characters; the button disabled when blank; Enter searches; a new search aborts the old one; the loading text; a 409 alert; an error with Retry; the empty text; the list with the Linked badge; Not on IGDB.
   - `routes/games/game-admin.test.ts`: `lookup: true` searches at once; Enter in the search input doesn't save; Not on IGDB switches to Details with the note and `IGDB: marked as not on IGDB`.
 
