@@ -205,6 +205,19 @@ describe('biosFor', () => {
 		}
 	);
 
+	it.each([
+		['X (Japan).st', 'STBIOS.bin'],
+		['X (Japan).ST', 'STBIOS.bin'],
+		['X (Japan).bs', 'BS-X.bin'],
+		['X (Japan).BS', 'BS-X.bin']
+	])('names the Snes9x BIOS for a %s release', (name, bios) => {
+		expect(biosFor('snes9x', name)).toBe(bios);
+	});
+
+	it.each(['X (USA).sfc', 'X (USA).smc'])('needs none for a Snes9x %s release', (name) => {
+		expect(biosFor('snes9x', name)).toBeNull();
+	});
+
 	it.each(['gambatte', 'stella2014', 'smsplus', 'prosystem', 'fceumm', 'pcsx_rearmed'])(
 		'needs none for %s',
 		(core) => {
