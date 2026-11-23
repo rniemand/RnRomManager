@@ -144,6 +144,8 @@ public sealed class IngestPipeline(
         var byExtension = family.FirstOrDefault(h => h.RomExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase));
         if (byExtension is null)
             return FailFile(file, actor, IngestFailures.UnsupportedType, $"'{extension}' isn't a ROM extension of the {folder.Family} family");
+        if (byExtension.SourceExtension(file.Name) is null)
+            return FailFile(file, actor, IngestFailures.UnsupportedType, $"'{file.Name}' doesn't say its image type (name it like 'Game.d64.gz')");
         if (!folder.EmbedRomsInZip)
             return await ProcessExternalAsync(file, folder, family, byExtension, jobId, actor, breaker, cancellationToken, progress).ConfigureAwait(false);
         if (file.SizeBytes < byExtension.MinRomSizeBytes)

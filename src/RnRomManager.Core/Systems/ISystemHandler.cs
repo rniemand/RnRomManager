@@ -67,6 +67,9 @@ public interface ISystemHandler
     /// <summary>Whether Review keeps a source file's <paramref name="extension"/>; <see cref="KeepsSourceExtension"/> unless a handler decides per extension.</summary>
     bool KeepsExtension(string extension) => KeepsSourceExtension;
 
+    /// <summary>The extension the stored bytes of a source named <paramref name="fileName"/> have; null when the handler can't tell, and ingest fails the file <c>UnsupportedType</c>.</summary>
+    string? SourceExtension(string fileName) => Path.GetExtension(fileName).ToLowerInvariant();
+
     /// <summary>Spec T1: libretro's DAT files, or blawar/titledb.</summary>
     DatSource DatSource => DatSource.Libretro;
 

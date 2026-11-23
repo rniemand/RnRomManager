@@ -346,7 +346,7 @@ File names without extension. System projects (`src/RnRomManager.Systems.*`) are
 
 Read a section with offset/limit instead of the whole doc (`features.md` alone is ~45k tokens).
 
-- `docs/adding-a-system.md` (105 lines): The contract :5; Step by step :79; Operator-supplied cores :97
+- `docs/adding-a-system.md` (107 lines): The contract :5; Step by step :81; Operator-supplied cores :99
 
 - `docs/configuration.md` (127 lines): Paths :32; Genesis Plus GX core :36; PicoDrive core :47; Snes9x core :58; Opera core :69; VICE core :80; Mupen64Plus-Next core :107; Other settings :119; Backups :123; Logs :126
 

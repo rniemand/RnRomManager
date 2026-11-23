@@ -217,6 +217,8 @@ public class ReviewResolverTests
         public string DatName => "GB";
         public bool EmbedRomsInZip => true;
         public bool KeepsSourceExtension { get; init; }
+        public Func<string, string?>? MapSourceExtension { get; init; }
+        public string? SourceExtension(string fileName) => MapSourceExtension?.Invoke(fileName) ?? Path.GetExtension(fileName).ToLowerInvariant();
         // A 512×512 PNG header: enough for MediaService's default-art check when a resolve stores a new game.
         public ReadOnlyMemory<byte> DefaultBoxArtPng { get; } = new byte[]
         {
@@ -435,6 +437,20 @@ public class ReviewResolverTests
 
         Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
         Assert.That(StoredEntryNames(), Does.Contain("My Game.bbb").And.Not.Contain("My Game.aaa"));
+    }
+
+    /// <summary>V5: the stored extension comes from <c>SourceExtension</c>, not the file name.</summary>
+    [Test]
+    public async Task Manual_StoresTheExtensionSourceExtensionNames()
+    {
+        _dir.Dispose();
+        Build(new Headerless(".aaa", ".bbb", ".bbz") { KeepsSourceExtension = true, MapSourceExtension = _ => ".bbb" });
+        KeepsSourceExtensionItem([1, 2, 3], rebuild: false, name: "test.bbz");
+
+        var result = await _resolver.ResolveInJobAsync(1, Manual(), Actor, default);
+
+        Assert.That(result.Code, Is.Null, string.Join("; ", result.Errors?.SelectMany(e => e.Value) ?? []));
+        Assert.That(StoredEntryNames(), Does.Contain("My Game.bbb"));
     }
 
     [Test]
