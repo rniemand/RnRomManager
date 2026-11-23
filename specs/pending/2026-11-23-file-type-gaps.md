@@ -321,7 +321,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
     - Disc sets (:233): the **Sets**, **Waiting sets** and **No match** bullets (TOC like cue, MDS by stem, a lone `.mdf` waits);
     - Review queue (:260): the unmatched disc sets and track files without a set bullets;
     - Resolve reviews through the API (:367): set members and `dismissible`;
-    - Game detail Play (:144–157): MDS/TOC discs play through a generated cue, plus the D14 limits; the PlayStation bullet (:144) names a standalone `.cbn`.
+    - Game detail Play (:144–157): MDS/TOC discs play through a generated cue, plus the D14 limits; the PlayStation bullet (:144) names a standalone `.cbn`; the VIC-20 bullet (:154) adds `.b0` to the cartridge extensions ingest keeps (VICE maps it at $B000), and `.rom`.
   - `docs/development.md` Browser emulators: the play-disc and Multi-disc paragraphs, and `.cbn`.
   - `docs/adding-a-system.md`: the `FileSets` row and "Limits of the contract" (`.toc` and `.mds` are now grouped; `.gdi` still isn't).
   - `docs/zip-format.md`: lines 49–62 and the `files` row (:203): `files` may hold a `.toc` or `.mds`.
@@ -355,6 +355,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
 - 2026-11-23 Review round 4 → D5 `<WORD>`/`<token>` casing and left-to-right order pinned, `CD_TEXT` exempt from "must come after a TRACK"; D6 runs all checks per track, track by track, and checks no names; D8a runs each check over all tracks before the next; step 2's error tests are `[TestCase]` rows (reviewer)
 - 2026-11-23 Review round 5 → § Changes names `ReviewResolverExternalTests` and the same `ReviewResolver` lines as D10 (reviewer)
 - 2026-11-23 Review round 6 → step 5 tests an MDS member failing `NameProblem`; step 6 names lines 545–548 (reviewer)
+- 2026-11-23 Review round 7 → step 9 updates the VIC-20 Play bullet, which lists the cartridge extensions (reviewer)
 
 ## Kickoff prompt
 ```text
