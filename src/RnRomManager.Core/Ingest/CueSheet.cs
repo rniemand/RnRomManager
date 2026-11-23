@@ -185,7 +185,7 @@ public sealed record CueSheet(IReadOnlyList<string> Files, string? Error)
         return new PlaybackCue(cueFileName[..^4] + ".cue", content, tracks, null);
     }
 
-    private static IEnumerable<string> Lines(string text) => text.Split(["\r\n", "\n", "\r"], StringSplitOptions.None);
+    internal static IEnumerable<string> Lines(string text) => text.Split(["\r\n", "\n", "\r"], StringSplitOptions.None);
 
     private static bool IsFileLine(string line)
     {
@@ -236,7 +236,7 @@ public sealed record CueSheet(IReadOnlyList<string> Files, string? Error)
         return true;
     }
 
-    private static string Decode(ReadOnlySpan<byte> bytes)
+    internal static string Decode(ReadOnlySpan<byte> bytes)
     {
         if (bytes.StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]))
             bytes = bytes[3..];

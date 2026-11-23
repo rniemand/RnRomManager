@@ -39,7 +39,7 @@ The five cue-taking disc systems (PlayStation, Saturn, Sega CD, 3DO, TurboGrafx-
     - `DataTracksScrambled` other than `0`: `scrambled CloneCD images aren't supported`;
     - no `[TRACK n]` section: `the .ccd has no [TRACK 1]`;
     - more than 99 tracks: `the .ccd has more than 99 tracks`;
-    - track numbers that aren't 1, 2, … in file order: `track <m> follows track <n>` (`track 1 follows the start` when the first isn't 1);
+    - track numbers that aren't 1, 2, … in file order: `track <m> follows track <n>` (`track <m> follows the start` when the first isn't 1);
     - no `MODE`: `track <n> has no MODE`;
     - `MODE` not 0, 1 or 2: `track <n> has an unknown MODE <value>`;
     - no `INDEX 1`: `track <n> has no INDEX 1`;
@@ -111,7 +111,7 @@ No migration (`files` rows already hold any set member), no config key, no API s
 - **Review dismiss rule changes (B7):** a PlayStation `.img` that belongs to a CloneCD set stops being dismissible on its own, so a set can't be half dismissed. A lone PlayStation `.img` behaves as before.
 
 ## Steps
-- [ ] **1. CloneCD sheet**: B3, B4. Files: `src/RnRomManager.Core/Ingest/CloneCdSheet.cs` (new), `tests/RnRomManager.Core.Tests/Ingest/CloneCdSheetTests.cs` (new). Tests: `CloneCdSheetTests`. Done when the tests cover:
+- [x] **1. CloneCD sheet**: B3, B4. Files: `src/RnRomManager.Core/Ingest/CloneCdSheet.cs` (new), `tests/RnRomManager.Core.Tests/Ingest/CloneCdSheetTests.cs` (new). Tests: `CloneCdSheetTests`. Done when the tests cover:
   - a one-track MODE2 sheet and a data + two-audio-track sheet with `INDEX 0`, both giving the exact cue text;
   - LF, CRLF, lone CR, a leading BOM, mixed-case keys, ignored sections and ignored keys (`TocEntries`, `FLAGS`);
   - every B3 error text;
@@ -167,6 +167,8 @@ No migration (`files` rows already hold any set member), no config key, no API s
 - 2026-11-23 How do the cores take the files? → EmulatorJS 4.2.3 `downloadRom()` boots the first `.cue`/`.ccd` in the ZIP (so only the generated cue is sent); PCSX ReARMed `f29871d` `cdriso.c` opens `<content stem>.sub` after any image or cue, and parses a `.ccd` itself (not relied on) (code)
 - 2026-11-23 Lone `.img`/`.sub` → wait as `IncompleteSet` for their `.ccd`, except a PlayStation lone `.img`, which stays a lone release as today; multi-disc sets accept CloneCD discs on every system (defaults, stated)
 - 2026-11-23 Review rounds 1–2 → `DismissAsync` among B7's callers; `.img` dismissible only as a lone `psx` file; `NameProblem` check in B5; unknown `.ccd` keys, BOM and CR handled; every error text pinned with canonical key spelling; lone-`.img` case kept in the planner tests only (round 3); changed docs, comments and the `DiscSetsTests` case named; `.ccd` counted in the budget; `Plan`'s signature pinned; Review moved into step 2 ahead of the new extensions, with CloneCD-capable and `psx` test handlers; real-dump check widened to every core (reviewer)
+
+- 2026-11-23 First track not 1 → `track <m> follows the start`, naming the track found (code)
 
 ## Kickoff prompt
 ```text
