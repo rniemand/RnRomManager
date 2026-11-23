@@ -61,6 +61,86 @@ public sealed record TocSheet(IReadOnlyList<string> Files, IReadOnlyList<TocTrac
         return new TocSheet(files, tracks.Select(t => t.Build()).ToList(), null);
     }
 
+    /// <summary>
+    /// File type gaps D6: a playback cue for a stored TOC set. Each file the <c>.toc</c> names becomes
+    /// <c>&lt;trackPrefix&gt;NN.bin</c>; only raw AUDIO/MODE1/MODE2 tracks with one unswapped data item each can be played.
+    /// </summary>
+    /// <param name="storedTracks">The set's other members, matched to <see cref="Files"/> ignoring case.</param>
+    public static PlaybackCue ForPlayback(ReadOnlySpan<byte> toc, string tocFileName, IReadOnlyCollection<string> storedTracks,
+        string trackPrefix)
+    {
+        var sheet = Parse(toc);
+        if (sheet.Error is { } error)
+            return PlaybackCue.Fail(error);
+        var stored = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var track in storedTracks)
+            stored.TryAdd(track, track);
+        if (sheet.Files.FirstOrDefault(f => !stored.ContainsKey(f)) is { } missing)
+            return PlaybackCue.Fail($"'{missing}' isn't part of the release");
+        var unreferenced = stored.Values.Where(s => !sheet.Files.Contains(s, StringComparer.OrdinalIgnoreCase)).Order(StringComparer.Ordinal).ToList();
+        if (unreferenced.Count > 0)
+            return PlaybackCue.Fail($"the .toc doesn't reference stored track(s): {string.Join(", ", unreferenced)}");
+
+        var cue = new StringBuilder();
+        var tracks = new List<PlaybackTrack>();
+        var finished = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        string? file = null;
+        (TocTrack Track, int Position)? previous = null; // the previous track in the current file
+        foreach (var track in sheet.Tracks)
+        {
+            var t = track.Number;
+            if (track.Mode is not ("AUDIO" or "MODE1_RAW" or "MODE2_RAW"))
+                return PlaybackCue.Fail($"track {t}: {track.Mode} can't be played; only AUDIO, MODE1_RAW and MODE2_RAW can");
+            if (track.Subchannel is not null)
+                return PlaybackCue.Fail($"track {t} stores subchannel data");
+            if (track.HasSilence)
+                return PlaybackCue.Fail($"track {t} uses SILENCE or ZERO");
+            if (track.Items.Count > 1)
+                return PlaybackCue.Fail($"track {t} has more than one FILE or DATAFILE");
+            var item = track.Items[0];
+            if (item.Swap)
+                return PlaybackCue.Fail($"track {t} byte-swaps its audio (SWAP)");
+            if (!item.FileName.Equals(file, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!finished.Add(item.FileName))
+                    return PlaybackCue.Fail($"'{item.FileName}' is used again after another file");
+                file = item.FileName;
+                previous = null;
+                var alias = $"{trackPrefix}{tracks.Count + 1:00}.bin";
+                tracks.Add(new PlaybackTrack(stored[file], alias));
+                cue.Append($"FILE \"{alias}\" BINARY\n");
+            }
+
+            int? previousEnd = null;
+            if (previous is var (before, at))
+            {
+                if (before.Items[0].Length is not { } length)
+                    return PlaybackCue.Fail($"track {before.Number} has no length but isn't the last track of '{item.FileName}'");
+                previousEnd = at + length;
+            }
+
+            if (item.Offset % SectorBytes is > 0)
+                return PlaybackCue.Fail($"track {t}: #{item.Offset} isn't a whole number of {SectorBytes}-byte sectors");
+            var sectors = (int?)(item.Offset / SectorBytes);
+            var position = item.Kind == TocItemKind.File ? (sectors ?? 0) + item.Start!.Value : sectors ?? previousEnd ?? 0;
+            if (position < previousEnd)
+                return PlaybackCue.Fail($"track {t} starts before track {previous!.Value.Track.Number} ends in '{item.FileName}'");
+
+            cue.Append($"  TRACK {t:00} {track.Mode switch { "AUDIO" => "AUDIO", "MODE1_RAW" => "MODE1/2352", _ => "MODE2/2352" }}\n");
+            if (track.Pregap is { } pregap)
+                cue.Append($"    PREGAP {CloneCdSheet.Time(pregap)}\n");
+            if (track.Start is { } start)
+                cue.Append($"    INDEX 00 {CloneCdSheet.Time(position)}\n    INDEX 01 {CloneCdSheet.Time(position + start)}\n");
+            else
+                cue.Append($"    INDEX 01 {CloneCdSheet.Time(position)}\n");
+            previous = (track, position);
+        }
+
+        return new PlaybackCue(Path.GetFileNameWithoutExtension(tocFileName) + ".cue", Encoding.UTF8.GetBytes(cue.ToString()), tracks, null);
+    }
+
+    private const int SectorBytes = 2352;
+
     private static TocSheet Fail(string error) => new([], [], error);
 
     private enum Kind

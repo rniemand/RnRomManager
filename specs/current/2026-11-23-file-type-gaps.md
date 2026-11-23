@@ -256,7 +256,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   - comments, `CD_TEXT` blocks at disc and track level (one with a nested `LANGUAGE_MAP` and a `{` inside a string), a BOM, LF/CRLF/CR and mixed-case keywords;
   - string escapes (`\"`, `\\`, `\101`), `FILE … SWAP`, a `FILE` length of 0 recorded as null, a `ZERO MODE0` item, and a bare `START` after a sized `FILE`;
   - every D5 error text, as one `[TestCase(toc, error)]` row each (as `CloneCdSheetTests` does for line ends), which keeps the step near 300 lines.
-- [ ] **3. TOC playback**: D6. Files: `TocSheet.cs` (`ForPlayback`), `TocSheetTests.cs`. Done when `TocSheetTests` covers:
+- [x] **3. TOC playback**: D6. Files: `TocSheet.cs` (`ForPlayback`), `TocSheetTests.cs`. Done when `TocSheetTests` covers:
   - a one-file `MODE2_RAW` + two `AUDIO` toc with `#` offsets, `START` and `PREGAP`, giving the exact cue text;
   - a two-file toc (`DATAFILE` + `FILE`) giving two `FILE` lines;
   - a `DATAFILE` continuing after a sized track;

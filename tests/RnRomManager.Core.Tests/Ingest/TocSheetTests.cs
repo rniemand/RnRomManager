@@ -116,6 +116,92 @@ public class TocSheetTests
         Assert.That(Parse(string.Concat(Enumerable.Repeat("TRACK AUDIO\nFILE \"a.bin\" 0\n", 100))).Error,
             Is.EqualTo("the .toc has more than 99 tracks"));
 
+    private static PlaybackCue Play(string toc, string[] stored, string prefix = "track-") =>
+        TocSheet.ForPlayback(Encoding.UTF8.GetBytes(toc), "Game (USA).toc", stored, prefix);
+
+    private static string Text(PlaybackCue cue) => Encoding.UTF8.GetString(cue.Content);
+
+    [Test]
+    public void ForPlayback_OneFileWithOffsetsStartAndPregap_GivesTheCue()
+    {
+        var cue = Play("""
+            CD_ROM_XA
+            TRACK MODE2_RAW
+            FILE "Game (USA).bin" #0 0 10:00:00
+            TRACK AUDIO
+            FILE "Game (USA).bin" #105840000 0 03:00:00
+            START 00:02:00
+            TRACK AUDIO
+            PREGAP 00:02:00
+            FILE "game (usa).bin" #137592000 0
+            """, ["Game (USA).bin"]);
+
+        Assert.That(cue.Error, Is.Null);
+        Assert.That(cue.CueName, Is.EqualTo("Game (USA).cue"));
+        Assert.That(cue.Tracks, Is.EqualTo(new[] { new PlaybackTrack("Game (USA).bin", "track-01.bin") }));
+        Assert.That(Text(cue), Is.EqualTo(
+            "FILE \"track-01.bin\" BINARY\n"
+            + "  TRACK 01 MODE2/2352\n"
+            + "    INDEX 01 00:00:00\n"
+            + "  TRACK 02 AUDIO\n"
+            + "    INDEX 00 10:00:00\n"
+            + "    INDEX 01 10:02:00\n"
+            + "  TRACK 03 AUDIO\n"
+            + "    PREGAP 00:02:00\n"
+            + "    INDEX 01 13:00:00\n"));
+    }
+
+    [Test]
+    public void ForPlayback_TwoFiles_GiveTwoFileLines()
+    {
+        var cue = Play("""
+            TRACK MODE1_RAW
+            DATAFILE "Data.bin"
+            TRACK AUDIO
+            FILE "Audio.bin" 0
+            """, ["audio.bin", "Data.bin"], "disc2-track-");
+
+        Assert.That(cue.Error, Is.Null);
+        Assert.That(cue.Tracks, Is.EqualTo(new[]
+        {
+            new PlaybackTrack("Data.bin", "disc2-track-01.bin"), new PlaybackTrack("audio.bin", "disc2-track-02.bin"),
+        }));
+        Assert.That(Text(cue), Is.EqualTo(
+            "FILE \"disc2-track-01.bin\" BINARY\n  TRACK 01 MODE1/2352\n    INDEX 01 00:00:00\n"
+            + "FILE \"disc2-track-02.bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n"));
+    }
+
+    [Test]
+    public void ForPlayback_ADataFileWithoutOffset_ContinuesAfterTheSizedTrack()
+    {
+        var cue = Play("TRACK MODE2_RAW\nDATAFILE \"a.bin\" 00:10:00\nTRACK MODE2_RAW\nDATAFILE \"a.bin\"\n", ["a.bin"]);
+
+        Assert.That(Text(cue), Is.EqualTo(
+            "FILE \"track-01.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n  TRACK 02 MODE2/2352\n    INDEX 01 00:10:00\n"));
+    }
+
+    [TestCase("CD_ROM", "a.bin", "the .toc has no TRACK")]
+    [TestCase("TRACK AUDIO\nFILE \"b.bin\" 0", "a.bin", "'b.bin' isn't part of the release")]
+    [TestCase("TRACK AUDIO\nFILE \"a.bin\" 0", "x.bin|a.bin|c.bin", "the .toc doesn't reference stored track(s): c.bin, x.bin")]
+    [TestCase("TRACK mode1\nFILE \"a.bin\" 0", "a.bin", "track 1: MODE1 can't be played; only AUDIO, MODE1_RAW and MODE2_RAW can")]
+    [TestCase("TRACK AUDIO RW\nFILE \"a.bin\" 0", "a.bin", "track 1 stores subchannel data")]
+    [TestCase("TRACK AUDIO\nSILENCE 00:00:10\nFILE \"a.bin\" 0", "a.bin", "track 1 uses SILENCE or ZERO")]
+    [TestCase("TRACK AUDIO\nFILE \"a.bin\" 0 00:00:10\nFILE \"a.bin\" 00:00:10", "a.bin", "track 1 has more than one FILE or DATAFILE")]
+    [TestCase("TRACK AUDIO\nFILE \"a.bin\" SWAP 0", "a.bin", "track 1 byte-swaps its audio (SWAP)")]
+    [TestCase("TRACK AUDIO\nFILE \"a.bin\" 0 1:0:0\nTRACK AUDIO\nFILE \"b.bin\" 0\nTRACK AUDIO\nFILE \"A.bin\" 0", "a.bin|b.bin",
+        "'A.bin' is used again after another file")]
+    [TestCase("TRACK AUDIO\nFILE \"a.bin\" 0\nTRACK AUDIO\nFILE \"a.bin\" 00:01:00", "a.bin", "track 1 has no length but isn't the last track of 'a.bin'")]
+    [TestCase("TRACK AUDIO\nFILE \"a.bin\" #100 0", "a.bin", "track 1: #100 isn't a whole number of 2352-byte sectors")]
+    [TestCase("TRACK AUDIO\nFILE \"a.bin\" 0 00:01:00\nTRACK AUDIO\nFILE \"a.bin\" 00:00:10", "a.bin", "track 2 starts before track 1 ends in 'a.bin'")]
+    [TestCase("TRACK AUDIO\nFILE \"a.bin\" SWAP 0 1:0:0\nTRACK MODE1\nFILE \"a.bin\" 1:0:0", "a.bin", "track 1 byte-swaps its audio (SWAP)")]
+    public void ForPlayback_Errors(string toc, string stored, string error)
+    {
+        var cue = Play(toc, stored.Split('|'));
+
+        Assert.That(cue.Error, Is.EqualTo(error));
+        Assert.That(cue.Tracks, Is.Empty);
+    }
+
     [Test]
     public void Parse_A100thFile_IsAnError() =>
         Assert.That(Parse("TRACK AUDIO\n" + string.Concat(Enumerable.Range(1, 100).Select(i => $"FILE \"{i}.bin\" 0 0\n"))).Error,
