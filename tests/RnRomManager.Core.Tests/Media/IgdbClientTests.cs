@@ -349,4 +349,176 @@ public class IgdbClientTests
     [Test]
     public void OtherImageTypes_AreRejected() =>
         Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => Client().SuggestAsync("Orbit", "snes", ImageType.TitleScreen, CancellationToken.None));
+
+    // --- Metadata lookup (L3, L4) ---
+
+    private const string Lookup = "name,url,summary,first_release_date,release_dates.y,release_dates.platform,genres.name,"
+        + "involved_companies.developer,involved_companies.publisher,involved_companies.company.name,cover.image_id";
+
+    private async Task<GameInfoMatch> LookupOne(string gameJson, string system = "snes")
+    {
+        Games(gameJson);
+        var result = await Client().LookupAsync("Orbit", system, CancellationToken.None);
+        Assert.That(result.FailedTitle, Is.Null);
+        return result.Matches!.Single();
+    }
+
+    [Test]
+    public void SearchBody_Lookup_ExcludesVersions_WithAndWithoutThePlatform()
+    {
+        Assert.That(IgdbClient.SearchBody("Orbit", 19, IgdbClient.LookupFields, true),
+            Is.EqualTo($"search \"Orbit\"; fields {Lookup}; where version_parent = null & platforms = (19); limit 5;"));
+        Assert.That(IgdbClient.SearchBody("Orbit", null, IgdbClient.LookupFields, true),
+            Is.EqualTo($"search \"Orbit\"; fields {Lookup}; where version_parent = null; limit 5;"));
+    }
+
+    [Test]
+    public void SearchBody_Images_IsUnchanged()
+    {
+        const string fields = "name,cover.image_id,cover.width,cover.height,screenshots.image_id,screenshots.width,screenshots.height";
+        Assert.That(IgdbClient.SearchBody("Orbit", 19), Is.EqualTo($"search \"Orbit\"; fields {fields}; where platforms = (19); limit 5;"));
+        Assert.That(IgdbClient.SearchBody("Orbit", null), Is.EqualTo($"search \"Orbit\"; fields {fields}; limit 5;"));
+    }
+
+    [Test]
+    public async Task Lookup_SendsTheLookupBody_ThenFallsBackToEveryPlatform()
+    {
+        var calls = 0;
+        _igdb.Games = (_, _) => Task.FromResult(Json(++calls == 1 ? "[]" : """[{"id":7,"name":"Orbit"}]"""));
+
+        var result = await Client().LookupAsync("Say \"Hi\"", "snes", CancellationToken.None);
+
+        var bodies = _igdb.GameRequests.Select(r => r.Body).ToList();
+        Assert.That(bodies, Is.EqualTo(new[]
+        {
+            $"search \"Say Hi\"; fields {Lookup}; where version_parent = null & platforms = (19); limit 5;",
+            $"search \"Say Hi\"; fields {Lookup}; where version_parent = null; limit 5;",
+        }));
+        Assert.That(result.Matches!.Select(m => (m.IgdbId, m.Name)), Is.EqualTo(new[] { (7, "Orbit") }));
+    }
+
+    [Test]
+    public async Task Lookup_KeepsIgdbOrder_SkipsGamesWithoutIdOrName()
+    {
+        Games("""{"id":3,"name":"B"}""", """{"name":"NoId"}""", """{"id":0,"name":"Zero"}""", """{"id":4,"name":"  "}""",
+            """{"id":5,"name":" A "}""", "7");
+
+        var result = await Client().LookupAsync("Orbit", "snes", CancellationToken.None);
+
+        Assert.That(result.Matches!.Select(m => (m.IgdbId, m.Name)), Is.EqualTo(new[] { (3, "B"), (5, "A") }));
+        var first = result.Matches![0];
+        Assert.That((first.ReleaseYear, first.Description, first.CoverUrl, first.Url), Is.EqualTo(((int?)null, (string?)null, (string?)null, (string?)null)));
+        Assert.That(first.Developers.Concat(first.Publishers).Concat(first.Genres), Is.Empty);
+    }
+
+    [Test]
+    public async Task Lookup_Year_IsTheEarliestOnThePlatform_IgnoringDatesWithoutY()
+    {
+        var match = await LookupOne("""
+            {"id":1,"name":"A","first_release_date":0,"release_dates":[
+              {"y":1993,"platform":19},{"platform":19},{"y":1991,"platform":33},{"y":1992,"platform":19}]}
+            """);
+
+        Assert.That(match.ReleaseYear, Is.EqualTo(1992));
+    }
+
+    [Test]
+    public async Task Lookup_Year_FallsBackToFirstReleaseDate()
+    {
+        // 1990-06-15 on the Game Boy only; the SNES has no dated release.
+        var match = await LookupOne("""{"id":1,"name":"A","first_release_date":645408000,"release_dates":[{"y":1989,"platform":33},{"platform":19}]}""");
+
+        Assert.That(match.ReleaseYear, Is.EqualTo(1990));
+    }
+
+    [Test]
+    public async Task Lookup_Year_UnmappedSystemUsesFirstReleaseDate()
+    {
+        var match = await LookupOne("""{"id":1,"name":"A","first_release_date":645408000,"release_dates":[{"y":1989,"platform":19}]}""", "nope");
+
+        Assert.That(match.ReleaseYear, Is.EqualTo(1990));
+    }
+
+    [TestCase("""{"id":1,"name":"A","release_dates":[{"y":1969,"platform":19}]}""")]
+    [TestCase("""{"id":1,"name":"A","release_dates":[{"y":2101,"platform":19}]}""")]
+    [TestCase("""{"id":1,"name":"A","first_release_date":-31536000}""")]
+    [TestCase("""{"id":1,"name":"A","first_release_date":"1990"}""")]
+    public async Task Lookup_Year_OutOfRangeOrUnreadable_IsNull(string game) =>
+        Assert.That((await LookupOne(game)).ReleaseYear, Is.Null);
+
+    [Test]
+    public async Task Lookup_SplitsDevelopersAndPublishers_TrimmedDistinctInOrder()
+    {
+        var match = await LookupOne("""
+            {"id":1,"name":"A","involved_companies":[
+              {"developer":true,"publisher":false,"company":{"name":" Nintendo "}},
+              {"developer":false,"publisher":true,"company":{"name":"Capcom"}},
+              {"developer":true,"publisher":true,"company":{"name":"Flagship"}},
+              {"developer":true,"publisher":false,"company":{"name":"Nintendo"}},
+              {"developer":true,"publisher":false,"company":{"name":" "}},
+              {"developer":true,"publisher":false},
+              {"developer":"yes","publisher":false,"company":{"name":"Stringly"}}],
+             "genres":[{"name":"Puzzle"},{"name":" Puzzle "},{"name":"Arcade"},{}]}
+            """);
+
+        Assert.That(match.Developers, Is.EqualTo(new[] { "Nintendo", "Flagship" }));
+        Assert.That(match.Publishers, Is.EqualTo(new[] { "Capcom", "Flagship" }));
+        Assert.That(match.Genres, Is.EqualTo(new[] { "Puzzle", "Arcade" }));
+    }
+
+    [Test]
+    public async Task Lookup_Lists_DropOverLongNames_AndStopAtTwenty()
+    {
+        var genres = Enumerable.Range(1, 25).Select(i => $"{{\"name\":\"G{i}\"}}").Prepend($"{{\"name\":\"{new string('x', 256)}\"}}");
+        var match = await LookupOne($$"""{"id":1,"name":"A","genres":[{{string.Join(',', genres)}}]}""");
+
+        Assert.That(match.Genres, Is.EqualTo(Enumerable.Range(1, 20).Select(i => $"G{i}")));
+    }
+
+    [Test]
+    public async Task Lookup_Description_IsTrimmedAndCutTo4000_EmptyIsNull()
+    {
+        var long_ = new string('d', 4100);
+        Assert.That((await LookupOne($$"""{"id":1,"name":"A","summary":"  {{long_}}  "}""")).Description, Is.EqualTo(long_[..4000]));
+        Assert.That((await LookupOne("""{"id":1,"name":"A","summary":" Falls. "}""")).Description, Is.EqualTo("Falls."));
+        Assert.That((await LookupOne("""{"id":1,"name":"A","summary":"   "}""")).Description, Is.Null);
+    }
+
+    [TestCase("co1abc", "https://images.igdb.com/igdb/image/upload/t_cover_small/co1abc.jpg")]
+    [TestCase("../x", null)]
+    [TestCase("", null)]
+    public async Task Lookup_CoverUrl_OnlyForSafeImageIds(string imageId, string? expected) =>
+        Assert.That((await LookupOne($$$"""{"id":1,"name":"A","cover":{"image_id":"{{{imageId}}}"}}""")).CoverUrl, Is.EqualTo(expected));
+
+    [TestCase("https://www.igdb.com/games/orbit", "https://www.igdb.com/games/orbit")]
+    [TestCase("https://evil.example/games/orbit", null)]
+    [TestCase("http://www.igdb.com/games/orbit", null)]
+    [TestCase("https://www.igdb.com.evil.example/x", null)]
+    public async Task Lookup_Url_OnlyIgdbPages(string url, string? expected) =>
+        Assert.That((await LookupOne($$"""{"id":1,"name":"A","url":"{{url}}"}""")).Url, Is.EqualTo(expected));
+
+    [TestCase(HttpStatusCode.TooManyRequests, "IGDB is busy; try again in a moment.")]
+    [TestCase(HttpStatusCode.BadGateway, "IGDB returned HTTP 502.")]
+    public async Task Lookup_SearchFailures_HaveTheirTitles(HttpStatusCode status, string title)
+    {
+        _igdb.Games = (_, _) => Task.FromResult(Status(status));
+
+        var result = await Client().LookupAsync("Orbit", "snes", CancellationToken.None);
+
+        Assert.That((result.Matches, result.FailedTitle), Is.EqualTo(((IReadOnlyList<GameInfoMatch>?)null, title)));
+    }
+
+    [Test]
+    public async Task Lookup_RefusedToken_Unreadable_AndThrown_HaveTheirTitles()
+    {
+        _igdb.Token = (_, _) => Task.FromResult(Status(HttpStatusCode.Unauthorized));
+        Assert.That((await Client().LookupAsync("Orbit", "snes", CancellationToken.None)).FailedTitle, Is.EqualTo("IGDB refused the Client ID or secret."));
+
+        _igdb.Token = (_, _) => Task.FromResult(Json(TokenJson));
+        _igdb.Games = (_, _) => Task.FromResult(Json("""{"id":1}"""));
+        Assert.That((await Client().LookupAsync("Orbit", "snes", CancellationToken.None)).FailedTitle, Is.EqualTo("IGDB returned an unreadable response."));
+
+        _igdb.Games = (_, _) => throw new HttpRequestException("down");
+        Assert.That((await Client().LookupAsync("Orbit", "snes", CancellationToken.None)).FailedTitle, Is.EqualTo("IGDB couldn't be reached."));
+    }
 }

@@ -32,6 +32,23 @@ public interface IImageSuggestions
     Task<ImageSuggestionResult> SuggestAsync(string title, string systemId, ImageType type, CancellationToken cancellationToken);
 }
 
+/// <summary>L4: one IGDB game for <b>Lookup Info</b>, already mapped to the Edit Metadata form's rules.</summary>
+public sealed record GameInfoMatch(int IgdbId, string Name, int? ReleaseYear, IReadOnlyList<string> Developers,
+    IReadOnlyList<string> Publishers, IReadOnlyList<string> Genres, string? Description, string? CoverUrl, string? Url);
+
+/// <summary>The matches, or the failure title (the image suggestions' titles) when IGDB couldn't be used.</summary>
+public sealed record GameInfoLookupResult(IReadOnlyList<GameInfoMatch>? Matches, string? FailedTitle);
+
+/// <summary>IGDB metadata lookup (L3): up to five games matching a title, for the Edit Metadata modal.</summary>
+public interface IGameInfoLookup
+{
+    /// <summary>Both <c>Sources:Igdb*</c> keys are set.</summary>
+    bool Configured { get; }
+
+    /// <summary><paramref name="title"/> goes through <see cref="IgdbClient.SearchTitle"/>. Cancellation propagates.</summary>
+    Task<GameInfoLookupResult> LookupAsync(string title, string systemId, CancellationToken cancellationToken);
+}
+
 /// <summary>
 /// S3: the Twitch app access token, shared by every (transient) <see cref="IgdbClient"/>. Cached until <c>expires_in</c>
 /// minus an hour (minus half the lifetime for a token that lives an hour or less); one token request at a time.
@@ -80,7 +97,7 @@ public sealed class IgdbTokenCache(TimeProvider time)
 /// and no redirects.
 /// </summary>
 public sealed partial class IgdbClient(HttpClient http, IgdbTokenCache tokens, IOptions<SourcesOptions> options, ILogger<IgdbClient> logger)
-    : IImageSuggestions
+    : IImageSuggestions, IGameInfoLookup
 {
     public const string TokenUrl = "https://id.twitch.tv/oauth2/token";
     public const string GamesUrl = "https://api.igdb.com/v4/games";
@@ -94,6 +111,15 @@ public sealed partial class IgdbClient(HttpClient http, IgdbTokenCache tokens, I
 
     private const string Fields =
         "name,cover.image_id,cover.width,cover.height,screenshots.image_id,screenshots.width,screenshots.height";
+
+    /// <summary>L3: the lookup's fields.</summary>
+    public const string LookupFields =
+        "name,url,summary,first_release_date,release_dates.y,release_dates.platform,genres.name,involved_companies.developer," +
+        "involved_companies.publisher,involved_companies.company.name,cover.image_id";
+
+    private const int MaxListItems = 20;
+    private const int MaxListItemLength = 255;
+    private const int MaxDescriptionLength = 4000;
 
     private sealed class IgdbFailure(string title) : Exception(title);
 
@@ -109,27 +135,46 @@ public sealed partial class IgdbClient(HttpClient http, IgdbTokenCache tokens, I
     {
         if (type is not (ImageType.BoxArt or ImageType.Snap))
             throw new ArgumentOutOfRangeException(nameof(type), type, "Only BoxArt and Snap are suggested.");
+        var (games, failed) = await SearchOnPlatformAsync("suggestions", title, systemId, Fields, false,
+            (root, _) => ParseGames(root), cancellationToken).ConfigureAwait(false);
+        return failed is null ? ImageSuggestionResult.Ok(Build(games!, type)) : ImageSuggestionResult.Failed(failed);
+    }
+
+    public async Task<GameInfoLookupResult> LookupAsync(string title, string systemId, CancellationToken cancellationToken)
+    {
+        var (matches, failed) = await SearchOnPlatformAsync("lookup", title, systemId, LookupFields, true, ParseMatches, cancellationToken)
+            .ConfigureAwait(false);
+        return new GameInfoLookupResult(matches, failed);
+    }
+
+    /// <summary>
+    /// S4/L3: searches the system's IGDB platform, then once more on every platform when that finds nothing; failures become
+    /// their S8 title. <paramref name="parse"/> gets the response array and the system's platform.
+    /// </summary>
+    private async Task<(List<T>? Items, string? FailedTitle)> SearchOnPlatformAsync<T>(string what, string title, string systemId,
+        string fields, bool excludeVersions, Func<JsonElement, int?, List<T>> parse, CancellationToken cancellationToken)
+    {
         if (!Configured)
             throw new InvalidOperationException("IGDB isn't configured.");
         try
         {
             var search = SearchTitle(title);
             int? platform = IgdbPlatforms.ById.TryGetValue(systemId, out var id) ? id : null;
-            var games = await SearchAsync(search, platform, cancellationToken).ConfigureAwait(false);
-            if (games.Count == 0 && platform is not null)
-                games = await SearchAsync(search, null, cancellationToken).ConfigureAwait(false);
-            return ImageSuggestionResult.Ok(Build(games, type));
+            var items = parse(await SearchAsync(SearchBody(search, platform, fields, excludeVersions), cancellationToken).ConfigureAwait(false), platform);
+            if (items.Count == 0 && platform is not null)
+                items = parse(await SearchAsync(SearchBody(search, null, fields, excludeVersions), cancellationToken).ConfigureAwait(false), platform);
+            return (items, null);
         }
         catch (IgdbFailure failure)
         {
-            logger.LogWarning("IGDB suggestions for {Title} failed: {Reason}", title, failure.Message);
-            return ImageSuggestionResult.Failed(failure.Message);
+            logger.LogWarning("IGDB {What} for {Title} failed: {Reason}", what, title, failure.Message);
+            return (null, failure.Message);
         }
         catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
         {
             // S3a: connection errors and the shared policy's timeout (Core can't name Polly's exception).
-            logger.LogWarning("IGDB suggestions for {Title} failed: {Type}: {Message}", title, ex.GetType().Name, ex.Message);
-            return ImageSuggestionResult.Failed(Unreachable);
+            logger.LogWarning("IGDB {What} for {Title} failed: {Type}: {Message}", what, title, ex.GetType().Name, ex.Message);
+            return (null, Unreachable);
         }
     }
 
@@ -137,10 +182,18 @@ public sealed partial class IgdbClient(HttpClient http, IgdbTokenCache tokens, I
     public static string SearchTitle(string title) => title.Replace("\"", "", StringComparison.Ordinal).Replace("\\", "", StringComparison.Ordinal).Trim();
 
     /// <summary>S4: the Apicalypse body; <paramref name="platform"/> null searches every platform.</summary>
-    public static string SearchBody(string title, int? platform)
+    public static string SearchBody(string title, int? platform) => SearchBody(title, platform, Fields, false);
+
+    /// <summary>L3: <paramref name="excludeVersions"/> adds <c>version_parent = null</c>, dropping editions such as "Gold Edition".</summary>
+    public static string SearchBody(string title, int? platform, string fields, bool excludeVersions)
     {
-        var where = platform is { } p ? $" where platforms = ({p.ToString(CultureInfo.InvariantCulture)});" : "";
-        return $"search \"{title}\"; fields {Fields};{where} limit {MaxSuggestions};";
+        var conditions = new List<string>();
+        if (excludeVersions)
+            conditions.Add("version_parent = null");
+        if (platform is { } p)
+            conditions.Add($"platforms = ({p.ToString(CultureInfo.InvariantCulture)})");
+        var where = conditions.Count > 0 ? $" where {string.Join(" & ", conditions)};" : "";
+        return $"search \"{title}\"; fields {fields};{where} limit {MaxSuggestions};";
     }
 
     /// <summary>S6: <c>t_1080p</c> fits the original into 1920×1080 and never scales up.</summary>
@@ -167,27 +220,38 @@ public sealed partial class IgdbClient(HttpClient http, IgdbTokenCache tokens, I
             game.Name, width, height);
     }
 
-    private async Task<IReadOnlyList<IgdbGame>> SearchAsync(string title, int? platform, CancellationToken cancellationToken)
+    /// <summary>One <c>/v4/games</c> POST (with the S3 401 retry): the response's root array, cloned.</summary>
+    private async Task<JsonElement> SearchAsync(string searchBody, CancellationToken cancellationToken)
     {
         var token = await tokens.GetAsync(FetchTokenAsync, cancellationToken).ConfigureAwait(false);
-        var (status, body) = await PostSearchAsync(token, title, platform, cancellationToken).ConfigureAwait(false);
+        var (status, body) = await PostSearchAsync(token, searchBody, cancellationToken).ConfigureAwait(false);
         if (status == HttpStatusCode.Unauthorized)
         {
             tokens.Invalidate(token);
             token = await tokens.GetAsync(FetchTokenAsync, cancellationToken).ConfigureAwait(false);
-            (status, body) = await PostSearchAsync(token, title, platform, cancellationToken).ConfigureAwait(false);
+            (status, body) = await PostSearchAsync(token, searchBody, cancellationToken).ConfigureAwait(false);
             if (status == HttpStatusCode.Unauthorized)
                 throw new IgdbFailure(Refused);
         }
         ThrowOnStatus(status);
-        return ParseGames(body);
+        try
+        {
+            using var json = JsonDocument.Parse(body);
+            if (json.RootElement.ValueKind != JsonValueKind.Array)
+                throw new IgdbFailure(Unreadable);
+            return json.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            throw new IgdbFailure(Unreadable);
+        }
     }
 
-    private async Task<(HttpStatusCode Status, string Body)> PostSearchAsync(string token, string title, int? platform, CancellationToken cancellationToken)
+    private async Task<(HttpStatusCode Status, string Body)> PostSearchAsync(string token, string searchBody, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, GamesUrl)
         {
-            Content = new StringContent(SearchBody(title, platform), Encoding.UTF8, "text/plain"),
+            Content = new StringContent(searchBody, Encoding.UTF8, "text/plain"),
         };
         request.Headers.Add("Client-ID", Sources.IgdbClientId.Trim());
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -238,32 +302,76 @@ public sealed partial class IgdbClient(HttpClient http, IgdbTokenCache tokens, I
             throw new IgdbFailure($"IGDB returned HTTP {(int)status}.");
     }
 
-    private static List<IgdbGame> ParseGames(string body)
+    private static List<IgdbGame> ParseGames(JsonElement root)
     {
-        try
+        var games = new List<IgdbGame>();
+        foreach (var game in root.EnumerateArray())
         {
-            using var json = JsonDocument.Parse(body);
-            if (json.RootElement.ValueKind != JsonValueKind.Array)
-                throw new IgdbFailure(Unreadable);
-            var games = new List<IgdbGame>();
-            foreach (var game in json.RootElement.EnumerateArray())
-            {
-                if (game.ValueKind != JsonValueKind.Object)
-                    continue;
-                var name = game.TryGetProperty("name", out var n) && n.ValueKind == JsonValueKind.String ? n.GetString()! : "";
-                var cover = game.TryGetProperty("cover", out var c) ? Image(c) : null;
-                var screenshots = game.TryGetProperty("screenshots", out var s) && s.ValueKind == JsonValueKind.Array
-                    ? s.EnumerateArray().Select(Image).OfType<IgdbImage>().ToList()
-                    : [];
-                games.Add(new IgdbGame(name, cover, screenshots));
-            }
-            return games;
+            if (game.ValueKind != JsonValueKind.Object)
+                continue;
+            var name = Text(game, "name") ?? "";
+            var cover = game.TryGetProperty("cover", out var c) ? Image(c) : null;
+            var screenshots = game.TryGetProperty("screenshots", out var s) && s.ValueKind == JsonValueKind.Array
+                ? s.EnumerateArray().Select(Image).OfType<IgdbImage>().ToList()
+                : [];
+            games.Add(new IgdbGame(name, cover, screenshots));
         }
-        catch (JsonException)
-        {
-            throw new IgdbFailure(Unreadable);
-        }
+        return games;
     }
+
+    /// <summary>L4: each IGDB game with a positive <c>id</c> and a name, mapped to the form's rules.</summary>
+    private static List<GameInfoMatch> ParseMatches(JsonElement root, int? platform)
+    {
+        var matches = new List<GameInfoMatch>();
+        foreach (var game in root.EnumerateArray())
+        {
+            if (game.ValueKind != JsonValueKind.Object || Dimension(game, "id") is not { } id || id <= 0
+                || Text(game, "name")?.Trim() is not { Length: > 0 } name)
+                continue;
+            var companies = Objects(game, "involved_companies").ToList();
+            var summary = Text(game, "summary")?.Trim();
+            var imageId = game.TryGetProperty("cover", out var cover) ? Image(cover)?.ImageId : null;
+            var url = Text(game, "url");
+            matches.Add(new GameInfoMatch(id, name, ReleaseYear(game, platform),
+                Names(companies.Where(c => IsTrue(c, "developer")).Select(CompanyName)),
+                Names(companies.Where(c => IsTrue(c, "publisher")).Select(CompanyName)),
+                Names(Objects(game, "genres").Select(g => Text(g, "name"))),
+                string.IsNullOrEmpty(summary) ? null : summary.Length > MaxDescriptionLength ? summary[..MaxDescriptionLength] : summary,
+                imageId is null ? null : $"{ImageBaseUrl}t_cover_small/{imageId}.jpg",
+                url is not null && url.StartsWith("https://www.igdb.com/", StringComparison.Ordinal) ? url : null));
+        }
+        return matches;
+    }
+
+    /// <summary>L4: the earliest release year on the system's platform, else the year of <c>first_release_date</c>; 1970–2100 only.</summary>
+    private static int? ReleaseYear(JsonElement game, int? platform)
+    {
+        var year = platform is null ? null
+            : Objects(game, "release_dates").Where(d => Dimension(d, "platform") == platform).Select(d => Dimension(d, "y")).Min();
+        if (year is null && game.TryGetProperty("first_release_date", out var date) && date.ValueKind == JsonValueKind.Number
+            && date.TryGetInt64(out var seconds) && seconds is >= -62135596800 and <= 253402300799)
+            year = DateTimeOffset.FromUnixTimeSeconds(seconds).UtcDateTime.Year;
+        return year is >= 1970 and <= 2100 ? year : null;
+    }
+
+    private static string? CompanyName(JsonElement involved) =>
+        involved.TryGetProperty("company", out var company) && company.ValueKind == JsonValueKind.Object ? Text(company, "name") : null;
+
+    /// <summary>L4: trimmed, empty and over-long names dropped, distinct (ordinal), in IGDB order, at most 20.</summary>
+    private static List<string> Names(IEnumerable<string?> names) =>
+        names.Select(n => n?.Trim()).OfType<string>().Where(n => n.Length is > 0 and <= MaxListItemLength)
+            .Distinct(StringComparer.Ordinal).Take(MaxListItems).ToList();
+
+    private static IEnumerable<JsonElement> Objects(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Array
+            ? value.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.Object)
+            : [];
+
+    private static string? Text(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    private static bool IsTrue(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
 
     /// <summary>S6: an image whose <c>image_id</c> isn't plain alphanumerics is skipped.</summary>
     private static IgdbImage? Image(JsonElement element)

@@ -228,5 +228,8 @@ public class HttpClientsTests
 
         Assert.That(suggestions, Is.TypeOf<RnRomManager.Core.Media.IgdbClient>());
         Assert.That(suggestions.Configured, Is.False);
+        var lookup = services.BuildServiceProvider().GetRequiredService<RnRomManager.Core.Media.IGameInfoLookup>();
+        Assert.That(lookup, Is.TypeOf<RnRomManager.Core.Media.IgdbClient>());
+        Assert.That(lookup.Configured, Is.False);
     }
 }

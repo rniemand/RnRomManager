@@ -34,6 +34,7 @@ public static class HttpClients
         Configure(services.AddHttpClient<IgdbClient>(Igdb, client => client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent))
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false }));
         services.AddTransient<IImageSuggestions>(sp => sp.GetRequiredService<IgdbClient>());
+        services.AddTransient<IGameInfoLookup>(sp => sp.GetRequiredService<IgdbClient>());
         services.AddSingleton(ImageUrlPolicy.Default);
         services.AddHttpClient<ImageUrlDownloader>(ImageUrls, client =>
             {
