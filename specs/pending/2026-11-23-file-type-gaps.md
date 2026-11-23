@@ -85,12 +85,12 @@ The disc sets are stored as they are and play the way CloneCD discs do: `play-di
     - `DATAFILE "<name>" [#<bytes>] [<length>]`.
   - **A `<time>`** is `mm:ss:ff` (`ss` < 60, `ff` < 75; read as `(mm*60 + ss)*75 + ff` sectors) or `0`. cdrdao also takes a plain sample or byte count; any number but `0` is the error below (see § Risks). A FILE `<start>` is a `<time>`. `#<bytes>` is `#` followed by decimal digits.
   - Not accepted, so an unknown statement: `FIRST_TRACK_NO`, `END`, `FIFO` (see § Risks).
-- **D5** Parse error texts, in the order they're met while reading (`n` is the 1-based line number, `t` the track number):
+- **D5** Parse error texts, in the order they're met while reading, left to right within a line (`n` is the 1-based line number, `t` the track number, `<WORD>` the statement's keyword upper-cased, `<token>`/`<word>` as written):
   - `the .toc is larger than 65536 bytes`;
   - `line <n>: a string isn't closed`;
   - `line <n>: a string has an unknown escape`, for a `\` not followed by `"`, `\` or three octal digits of at most 377;
   - `line <n>: unknown statement '<word>'`;
-  - `line <n>: <WORD> must come after a TRACK`, for a track statement before the first `TRACK` (`<WORD>` as written, upper-cased);
+  - `line <n>: <WORD> must come after a TRACK`, for a D4 inside-track statement other than `CD_TEXT` before the first `TRACK`;
   - `line <n>: <WORD> must come before the first TRACK`, for `CD_DA`, `CD_ROM`, `CD_ROM_XA`, `CD_I` or `CATALOG` after it;
   - `line <n>: unknown track mode '<token>'`;
   - `line <n>: unknown subchannel mode '<token>'`;
@@ -108,8 +108,8 @@ The disc sets are stored as they are and play the way CloneCD discs do: `play-di
   - `the .toc names more than 99 files`.
 
   A name that fails `CueSheet.NameProblem` isn't a parse error. The planner makes such a set `UnsupportedSetMember` (D8), and `play-disc`'s existing member-name check refuses it.
-- **D6** `TocSheet.ForPlayback(ReadOnlySpan<byte> toc, string tocFileName, IReadOnlyCollection<string> storedTracks, string trackPrefix)` returns a `PlaybackCue`, or `PlaybackCue.Fail(error)` on a D5 error. `storedTracks` are the set's other members, matched to `Files` ignoring case, as `CueSheet.ForPlayback` matches. A missing one is `'<name>' isn't part of the release`. A stored track the `.toc` doesn't name is `the .toc doesn't reference stored track(s): <names>` (ordinal-sorted, joined with `, `, as `CueSheet.ForPlayback`'s text). Then it fails, checked per track in order, with:
-  - `track <t>: <MODE> can't be played; only AUDIO, MODE1_RAW and MODE2_RAW can`;
+- **D6** `TocSheet.ForPlayback(ReadOnlySpan<byte> toc, string tocFileName, IReadOnlyCollection<string> storedTracks, string trackPrefix)` returns a `PlaybackCue`, or `PlaybackCue.Fail(error)` on a D5 error. `storedTracks` are the set's other members, matched to `Files` ignoring case, as `CueSheet.ForPlayback` matches. A missing one is `'<name>' isn't part of the release`. A stored track the `.toc` doesn't name is `the .toc doesn't reference stored track(s): <names>` (ordinal-sorted, joined with `, `, as `CueSheet.ForPlayback`'s text). It checks no file names: `ShapeProblem` already has. Then the tracks are checked one at a time, in order, each running these checks in this order before the next track:
+  - `track <t>: <MODE> can't be played; only AUDIO, MODE1_RAW and MODE2_RAW can` (`<MODE>` upper-cased);
   - `track <t> stores subchannel data`, when `<sub>` is set;
   - `track <t> uses SILENCE or ZERO`;
   - `track <t> has more than one FILE or DATAFILE`, counting items, not distinct names;
@@ -156,7 +156,7 @@ The disc sets are stored as they are and play the way CloneCD discs do: `play-di
   - `track <m> follows track <n>` (or `track <m> follows the start`), when the track numbers aren't 1, 2, … in block order. Track numbers are 1–99, so there's no separate track-count error.
 
   Parse doesn't check sessions beyond the count, subchannel, sector size or mode. A set with any of them ingests, and fails only at play (D10).
-- **D8a** `MdsSheet.ForPlayback(ReadOnlySpan<byte> mds, string mdsFileName, string mdfName, long mdfLength, string trackPrefix)` returns a `PlaybackCue`, or fails with a D7 error or, in this order:
+- **D8a** `MdsSheet.ForPlayback(ReadOnlySpan<byte> mds, string mdsFileName, string mdfName, long mdfLength, string trackPrefix)` returns a `PlaybackCue`, or fails with a D7 error or one of these. Each check runs over every track, in track order, before the next check starts:
   - `multi-session .mds images aren't supported`, when `Sessions` > 1;
   - `the .mdf stores subchannel data, which can't be played`, when any track's `subchannel` isn't 0;
   - `track <t> has <s>-byte sectors; only 2352 can be played`;
@@ -255,7 +255,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   - a one-file and a two-file toc giving the expected `Files` and `Tracks` (byte offsets, starts, lengths, `PREGAP`, `START`; positions are step 3's);
   - comments, `CD_TEXT` blocks at disc and track level (one with a nested `LANGUAGE_MAP` and a `{` inside a string), a BOM, LF/CRLF/CR and mixed-case keywords;
   - string escapes (`\"`, `\\`, `\101`), `FILE … SWAP`, a `FILE` length of 0 recorded as null, a `ZERO MODE0` item, and a bare `START` after a sized `FILE`;
-  - every D5 error text.
+  - every D5 error text, as one `[TestCase(toc, error)]` row each (as `CloneCdSheetTests` does for line ends), which keeps the step near 300 lines.
 - [ ] **3. TOC playback**: D6. Files: `TocSheet.cs` (`ForPlayback`), `TocSheetTests.cs`. Done when `TocSheetTests` covers:
   - a one-file `MODE2_RAW` + two `AUDIO` toc with `#` offsets, `START` and `PREGAP`, giving the exact cue text;
   - a two-file toc (`DATAFILE` + `FILE`) giving two `FILE` lines;
@@ -352,6 +352,7 @@ No migration (`files` rows hold any member), no config key and no API shape chan
   - TOC: `MODE0` isn't a track mode, a bare `START` and `FILE … SWAP` are accepted, a `FILE` length of 0 means to the end, strings take cdrdao's escapes, and `FIRST_TRACK_NO`/`END`/`FIFO` stay unknown (Risks);
   - new pinned errors: unknown string escape, `<WORD> needs a string`, `<WORD> is incomplete`, bare `START` after unsized data, `SWAP` at play; "more than one file" counts items;
   - MDS play shape is exactly two members; tests added for D12's size errors (reviewer)
+- 2026-11-23 Review round 4 → D5 `<WORD>`/`<token>` casing and left-to-right order pinned, `CD_TEXT` exempt from "must come after a TRACK"; D6 runs all checks per track, track by track, and checks no names; D8a runs each check over all tracks before the next; step 2's error tests are `[TestCase]` rows (reviewer)
 
 ## Kickoff prompt
 ```text
