@@ -14,8 +14,8 @@ public class PetHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("pet", "Commodore PET", "PET", "pet", "Commodore - PET")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".prg", ".d64" }));
-        Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((256L, 1024L * 1024)));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".prg", ".d64", ".tap", ".t64", ".g64", ".d80", ".d82" }));
+        Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((256L, 8L * 1024 * 1024)));
         Assert.That((Handler.EmbedRomsInZip, Handler.DatSource, Handler.DatFolder), Is.EqualTo((true, DatSource.Libretro, DatKind.Tosec)));
         Assert.That(Handler.MetadatKinds, Is.Empty);
         Assert.That((Handler.FileSets, Handler.LegacyEmbeddedRoms, Handler.KeepsSourceExtension), Is.EqualTo((false, false, true)));

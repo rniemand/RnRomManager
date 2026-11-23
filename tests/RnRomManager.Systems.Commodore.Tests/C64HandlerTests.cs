@@ -14,7 +14,7 @@ public class C64HandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("c64", "Commodore 64", "C64", "c64", "Commodore - 64")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".crt", ".tap", ".nib", ".d64", ".g64", ".t64", ".prg", ".bin" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".crt", ".tap", ".nib", ".d64", ".g64", ".t64", ".prg", ".bin", ".d71", ".d81", ".x64", ".p00" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((1024L, 8L * 1024 * 1024)));
         Assert.That((Handler.EmbedRomsInZip, Handler.DatSource, Handler.DatFolder), Is.EqualTo((true, DatSource.Libretro, DatKind.NoIntro)));
         Assert.That(Handler.MetadatKinds, Is.Empty);

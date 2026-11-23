@@ -36,10 +36,10 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Atari Jaguar | `jaguar` | In ZIP | `.j64`, `.jag`, `.rom`, `.abs`, `.cof` | No-Intro | `virtualjaguar` |
 | Atari Lynx | `lynx` | In ZIP | `.lnx`, `.lyx`, `.bll` | No-Intro | `handy` |
 | ColecoVision | `coleco` | In ZIP | `.col`, `.rom`, `.bin` | No-Intro | `gearcoleco` |
-| Commodore 64 | `c64` | In ZIP | `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.t64`, `.prg`, `.bin` | No-Intro | `vice_x64sc` |
+| Commodore 64 | `c64` | In ZIP | `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.t64`, `.prg`, `.bin`, `.d71`, `.d81`, `.x64`, `.p00` | No-Intro | `vice_x64sc` |
 | Commodore Amiga | `amiga` | In ZIP | `.adf`, `.adz`, `.ipf` | TOSEC | `puae` |
-| Commodore PET | `pet` | In ZIP | `.prg`, `.d64` | TOSEC | `vice_xpet` |
-| Commodore VIC-20 | `vic20` | In ZIP | `.a0`, `.20`, `.40`, `.60`, `.bin` | No-Intro | `vice_xvic` |
+| Commodore PET | `pet` | In ZIP | `.prg`, `.d64`, `.tap`, `.t64`, `.g64`, `.d80`, `.d82` | TOSEC | `vice_xpet` |
+| Commodore VIC-20 | `vic20` | In ZIP | `.a0`, `.20`, `.40`, `.60`, `.bin`, `.prg`, `.d64`, `.tap`, `.t64`, `.crt` | No-Intro | `vice_xvic` |
 | Famicom Disk System | `fds` | In ZIP | `.fds` | No-Intro | `fceumm` |
 | Game Boy | `gb` | In ZIP | `.gb` | No-Intro | `gambatte` |
 | Game Boy Advance | `gba` | In ZIP | `.gba` | No-Intro | `mgba` |
