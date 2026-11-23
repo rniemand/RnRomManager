@@ -403,7 +403,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
 
             var system = systems.ById(item.SystemId)!;
             // T9: an external release keeps its original extension, as does a KeepsSourceExtension system's; an embedded one takes the handler's first (its bytes may be normalised).
-            var originalExtension = Path.GetExtension(item.OriginalFileName).ToLowerInvariant();
+            var originalExtension = system.SourceExtension(item.OriginalFileName) ?? Path.GetExtension(item.OriginalFileName).ToLowerInvariant();
             ExternalFileSnapshot? preparedSnapshot = null;
             if (external)
             {

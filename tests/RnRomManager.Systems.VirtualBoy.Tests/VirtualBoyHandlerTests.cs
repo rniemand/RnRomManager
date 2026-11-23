@@ -13,7 +13,7 @@ public class VirtualBoyHandlerTests
     {
         Assert.That((Handler.Id, Handler.DisplayName, Handler.ShortName, Handler.Family, Handler.DatName),
             Is.EqualTo(("vb", "Virtual Boy", "VB", "vb", "Nintendo - Virtual Boy")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".vb", ".vboy" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".vb", ".vboy", ".bin" }));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((65536L, 4194304L)));
         Assert.That(Handler.EmbedRomsInZip, Is.True);
         Assert.That(Handler.FileSets, Is.False);

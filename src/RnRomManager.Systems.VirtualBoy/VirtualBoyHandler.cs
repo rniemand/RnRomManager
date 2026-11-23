@@ -4,7 +4,7 @@ namespace RnRomManager.Systems.VirtualBoy;
 
 /// <summary>
 /// Nintendo Virtual Boy. Its footer header has no magic bytes, so <see cref="ReadHeader"/> is always null and an unmatched
-/// file goes to Review. Sizes follow the libretro <c>Nintendo - Virtual Boy</c> DAT (256 KiB–4 MiB <c>.vb</c>; <c>.vboy</c> is an alias), with the
+/// file goes to Review. Sizes follow the libretro <c>Nintendo - Virtual Boy</c> DAT (256 KiB–4 MiB <c>.vb</c>; <c>.vboy</c> and <c>.bin</c> are aliases), with the
 /// minimum left lower for homebrew and prototypes.
 /// </summary>
 public sealed class VirtualBoyHandler : ISystemHandler
@@ -15,7 +15,7 @@ public sealed class VirtualBoyHandler : ISystemHandler
     public string DisplayName => "Virtual Boy";
     public string ShortName => "VB";
     public string Family => Id;
-    public IReadOnlyList<string> RomExtensions { get; } = [".vb", ".vboy"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".vb", ".vboy", ".bin"];
     public long MinRomSizeBytes => 64 * 1024;
     public long MaxRomSizeBytes => 4 * 1024 * 1024;
     public string DatName => "Nintendo - Virtual Boy";

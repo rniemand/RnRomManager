@@ -19,6 +19,13 @@ public class SystemHandlerDefaultsTests
         Assert.That((handler.RomStorageConfigurable, handler.DefaultEmbedRomsInZip), Is.EqualTo((false, true)));
     }
 
+    [Test]
+    public void SourceExtension_WithoutOverride_IsTheLowerCasedExtension()
+    {
+        ISystemHandler handler = new Plain();
+        Assert.That(handler.SourceExtension("Game.D64.GZ"), Is.EqualTo(".gz"));
+    }
+
     private sealed class Plain : ISystemHandler
     {
         public string Id => "plain";

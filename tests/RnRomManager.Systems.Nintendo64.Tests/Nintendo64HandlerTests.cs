@@ -15,7 +15,7 @@ public class Nintendo64HandlerTests
     {
         Assert.That(Handler.ShortName, Is.EqualTo("N64"));
         Assert.That((Handler.Id, Handler.DisplayName, Handler.Family, Handler.DatName), Is.EqualTo(("n64", "Nintendo 64", "n64", "Nintendo - Nintendo 64")));
-        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".z64", ".v64", ".n64" }));
+        Assert.That(Handler.RomExtensions, Is.EqualTo(new[] { ".z64", ".v64", ".n64", ".bin", ".u1" }));
         Assert.That(Handler.BrowserCore, Is.EqualTo("mupen64plus_next"));
         Assert.That((Handler.MinRomSizeBytes, Handler.MaxRomSizeBytes), Is.EqualTo((4096L, 64L * 1024 * 1024)));
     }

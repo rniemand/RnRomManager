@@ -342,6 +342,21 @@ public class IngestJobTests
         }
     }
 
+    /// <summary>V4: a handler that can't name the stored bytes' extension fails the file.</summary>
+    [Test]
+    public async Task NullSourceExtension_FailsUnsupportedType()
+    {
+        LoadDats(Gb, Gbc);
+        _systems.ById("gb")!.SourceExtension(Arg.Any<string>()).Returns((string?)null);
+        Drop("gb", "orbit.gb", TimeSpan.FromMinutes(5));
+
+        await RunAsync();
+
+        var item = Recorded().Single();
+        Assert.That((item.Outcome, item.Reason, item.Details), Is.EqualTo((IngestOutcome.Failed, (string?)IngestFailures.UnsupportedType,
+            (string?)"'orbit.gb' doesn't say its image type (name it like 'Game.d64.gz')")));
+    }
+
     private List<JobItem> Recorded() =>
         [.. _items.ReceivedCalls().Where(c => c.GetMethodInfo().Name == nameof(IJobItemRepository.InsertAsync)).Select(c => (JobItem)c.GetArguments()[0]!)];
 

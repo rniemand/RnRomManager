@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using RnRomManager.Core.Dats;
 using RnRomManager.Core.Systems;
 
@@ -51,27 +50,5 @@ public sealed class AmigaHandler : ISystemHandler
     /// stored. A corrupt one, or one inflating past <see cref="MaxRomSizeBytes"/>, is kept as it is: it matches nothing
     /// and goes to Review (PUAE still recognises gzip by its magic when it's played).
     /// </summary>
-    public ReadOnlyMemory<byte> NormalizeForHashing(ReadOnlyMemory<byte> rom)
-    {
-        if (rom.Length < 2 || rom.Span[0] != 0x1F || rom.Span[1] != 0x8B)
-            return rom;
-        try
-        {
-            using var gzip = new GZipStream(new MemoryStream(rom.ToArray(), writable: false), CompressionMode.Decompress);
-            using var adf = new MemoryStream();
-            var buffer = new byte[81920];
-            int read;
-            while ((read = gzip.Read(buffer)) > 0)
-            {
-                if (adf.Length + read > MaxRomSizeBytes)
-                    return rom;
-                adf.Write(buffer, 0, read);
-            }
-            return adf.ToArray();
-        }
-        catch (InvalidDataException)
-        {
-            return rom;
-        }
-    }
+    public ReadOnlyMemory<byte> NormalizeForHashing(ReadOnlyMemory<byte> rom) => GzipImage.Inflate(rom, MaxRomSizeBytes);
 }

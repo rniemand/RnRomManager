@@ -19,7 +19,7 @@ public sealed class Vic20Handler : ISystemHandler
     public string DisplayName => "Commodore VIC-20";
     public string ShortName => "VIC-20";
     public string Family => Id;
-    public IReadOnlyList<string> RomExtensions { get; } = [".a0", ".20", ".40", ".60", ".bin", ".prg", ".d64", ".tap", ".t64", ".crt", ".b0", ".rom", ".d71", ".d81", ".g64", ".x64", ".p00"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".a0", ".20", ".40", ".60", ".bin", ".prg", ".d64", ".tap", ".t64", ".crt", ".b0", ".rom", ".d71", ".d81", ".g64", ".x64", ".p00", ".d6z", ".d7z", ".d8z", ".g6z", ".x6z", ".gz"];
     public long MinRomSizeBytes => 256;
     public long MaxRomSizeBytes => 8 * 1024 * 1024;
     public string DatName => "Commodore - VIC-20";
@@ -39,4 +39,9 @@ public sealed class Vic20Handler : ISystemHandler
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
+    /// <summary>V2: a gzipped image is inflated, so it's hashed, header-read and stored as the image it holds.</summary>
+    public ReadOnlyMemory<byte> NormalizeForHashing(ReadOnlyMemory<byte> rom) => GzipImage.Inflate(rom, MaxRomSizeBytes);
+
+    /// <summary>V3: a gzipped image is stored under the type it holds (<c>.d6z</c> → <c>.d64</c>, <c>Game.d64.gz</c> → <c>.d64</c>).</summary>
+    public string? SourceExtension(string fileName) => ViceImages.SourceExtension(fileName, RomExtensions);
 }

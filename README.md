@@ -36,20 +36,20 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Atari Jaguar | `jaguar` | In ZIP | `.j64`, `.jag`, `.rom`, `.abs`, `.cof` | No-Intro | `virtualjaguar` |
 | Atari Lynx | `lynx` | In ZIP | `.lnx`, `.lyx`, `.bll` | No-Intro | `handy` |
 | ColecoVision | `coleco` | In ZIP | `.col`, `.rom`, `.bin`, `.cv` | No-Intro | `gearcoleco` |
-| Commodore 64 | `c64` | In ZIP | `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.t64`, `.prg`, `.bin`, `.d71`, `.d81`, `.x64`, `.p00`, `.d80`, `.d82` | No-Intro | `vice_x64sc` |
+| Commodore 64 | `c64` | In ZIP | `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.t64`, `.prg`, `.bin`, `.d71`, `.d81`, `.x64`, `.p00`, `.d80`, `.d82`, `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z`, `.gz`, `.nbz`, `.d2m`, `.d4m`, `.tcrt` | No-Intro | `vice_x64sc` |
 | Commodore Amiga | `amiga` | In ZIP | `.adf`, `.adz`, `.ipf` | TOSEC | `puae` |
-| Commodore PET | `pet` | In ZIP | `.prg`, `.d64`, `.tap`, `.t64`, `.g64`, `.d80`, `.d82`, `.d71`, `.d81`, `.x64`, `.p00` | TOSEC | `vice_xpet` |
-| Commodore VIC-20 | `vic20` | In ZIP | `.a0`, `.20`, `.40`, `.60`, `.bin`, `.prg`, `.d64`, `.tap`, `.t64`, `.crt`, `.b0`, `.rom`, `.d71`, `.d81`, `.g64`, `.x64`, `.p00` | No-Intro | `vice_xvic` |
+| Commodore PET | `pet` | In ZIP | `.prg`, `.d64`, `.tap`, `.t64`, `.g64`, `.d80`, `.d82`, `.d71`, `.d81`, `.x64`, `.p00`, `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z`, `.gz` | TOSEC | `vice_xpet` |
+| Commodore VIC-20 | `vic20` | In ZIP | `.a0`, `.20`, `.40`, `.60`, `.bin`, `.prg`, `.d64`, `.tap`, `.t64`, `.crt`, `.b0`, `.rom`, `.d71`, `.d81`, `.g64`, `.x64`, `.p00`, `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z`, `.gz` | No-Intro | `vice_xvic` |
 | Famicom Disk System | `fds` | In ZIP | `.fds` | No-Intro | `fceumm` |
 | Game Boy | `gb` | In ZIP | `.gb`, `.dmg` | No-Intro | `gambatte` |
 | Game Boy Advance | `gba` | In ZIP | `.gba` | No-Intro | `mgba` |
 | Game Boy Color | `gbc` | In ZIP | `.gbc` | No-Intro | `gambatte` |
-| Game Gear | `gg` | In ZIP | `.gg`, `.sms` | No-Intro | `smsplus` |
+| Game Gear | `gg` | In ZIP | `.gg`, `.sms`, `.bin`, `.rom` | No-Intro | `smsplus` |
 | GameCube | `gc` | Next to ZIP | `.iso`, `.gcm` | Redump | — |
-| Master System | `sms` | In ZIP | `.sms`, `.sg` | No-Intro | `smsplus` |
+| Master System | `sms` | In ZIP | `.sms`, `.sg`, `.bin`, `.rom` | No-Intro | `smsplus` |
 | Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen`, `.smd` | No-Intro | `genesis_plus_gx` |
 | Nintendo 3DS | `3ds` | Next to ZIP (configurable) | `.3ds`, `.cci`, `.cia` | No-Intro | — |
-| Nintendo 64 | `n64` | In ZIP | `.z64`, `.v64`, `.n64` | No-Intro | `mupen64plus_next` |
+| Nintendo 64 | `n64` | In ZIP | `.z64`, `.v64`, `.n64`, `.bin`, `.u1` | No-Intro | `mupen64plus_next` |
 | Nintendo DS | `nds` | Next to ZIP (configurable) | `.nds`, `.ids` | No-Intro | `desmume` |
 | Nintendo Entertainment System | `nes` | In ZIP | `.nes` | No-Intro | `fceumm` |
 | Nintendo Switch | `switch` | Next to ZIP | `.nsp`, `.xci`, `.nsz`, `.xcz`, `.hdf` | titledb | — |
@@ -62,7 +62,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Super Nintendo Entertainment System | `snes` | In ZIP | `.sfc`, `.smc`, `.swc`, `.fig` | No-Intro | `snes9x` |
 | TurboGrafx-16 / PC Engine | `tg16` | In ZIP | `.pce` | No-Intro | `mednafen_pce` |
 | TurboGrafx-CD / PC Engine CD | `tgcd` | Next to ZIP | `.bin`, `.cue`, `.chd`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | `mednafen_pce` |
-| Virtual Boy | `vb` | In ZIP | `.vb`, `.vboy` | No-Intro | `beetle_vb` |
+| Virtual Boy | `vb` | In ZIP | `.vb`, `.vboy`, `.bin` | No-Intro | `beetle_vb` |
 | Wii | `wii` | Next to ZIP | `.iso`, `.wbfs` | Redump | — |
 | Xbox 360 | `x360` | Next to ZIP | `.iso` | Redump | — |
 <!-- systems:end -->

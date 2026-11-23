@@ -110,6 +110,78 @@ public class BrowserCoreExtensionsTests
         [("tgcd", ".mdf")] = MdsTocMember,
     };
 
+    private const string Archive = "ingest unpacks .zip and .7z; the core never gets one";
+    private const string Playlist = "the play page builds its own .m3u for a disc or disk set";
+    private const string OtherSystem = "another system's type, ingested on that system's core";
+    private const string NewSystem = "would be a new system";
+    private const string NotAGame = "not a game image (a snapshot, config, command, fliplist or icon file)";
+    private const string NoDat = "homebrew or unusual type no DAT lists; left out by the 2026-11-23 audit";
+    private const string OtherCommodore = "ingested only on another Commodore system here (the PET has no cartridge port; NIB, D2M/D4M and 8050/8250 images aren't taken for this system)";
+    private static readonly string[] Vice = ["vice_x64sc", "vice_xpet", "vice_xvic"];
+
+    /// <summary>
+    /// P2: a type a core opens that no system on that core ingests, and why. An entry the core no longer lists, or that a
+    /// handler on that core now ingests, fails the test.
+    /// </summary>
+    private static readonly Dictionary<(string Core, string Extension), string> NotIngested = Entries(
+        (Archive, ["puae", .. Vice], [".zip", ".7z"]),
+        (Archive, ["yabause"], [".zip"]),
+        (Playlist, ["mednafen_pce", "pcsx_rearmed", "yabause", "puae", "genesis_plus_gx", "picodrive", .. Vice], [".m3u"]),
+        (OtherSystem, ["mgba"], [".gb", ".gbc"]),
+        (OtherSystem, ["genesis_plus_gx"], [".sms", ".gg", ".sg"]),
+        (OtherSystem, ["picodrive"], [".gen", ".smd", ".md", ".cue", ".iso", ".chd", ".sms", ".gg", ".sg"]),
+        (OtherSystem, ["smsplus"], [".col"]),
+        (NewSystem, ["mednafen_pce"], [".sgx"]),
+        (NewSystem, ["picodrive"], [".sc", ".pco"]),
+        (NewSystem, ["puae"], [".cue", ".ccd", ".nrg", ".mds", ".iso", ".chd"]),
+        (NotAGame, Vice, [".vsf", ".cmd", ".vfl"]),
+        (NotAGame, ["puae"], [".uae", ".info", ".slave"]),
+        (NoDat, ["fceumm"], [".unf", ".unif"]),
+        (NoDat, ["pcsx_rearmed"], [".exe"]),
+        (NoDat, ["puae"], [".hdf", ".hdz", ".lha", ".fdi", ".raw", ".dms"]),
+        (NoDat, ["handy"], [".o"]),
+        (NoDat, ["ppsspp"], [".elf", ".prx"]),
+        (NoDat, ["prosystem"], [".cdf"]),
+        (NoDat, ["mgba"], [".sgb"]),
+        (NoDat, ["genesis_plus_gx"], [".mdx", ".bms", ".68k", ".sgd"]),
+        (NoDat, ["picodrive"], [".68k", ".sgd"]),
+        (NoDat, Vice, [".g41", ".g4z"]),
+        ("the DS DAT's .bin entries are save data and seminar demos, which DatStore would match (D1)", ["desmume"], [".bin"]),
+        (OtherCommodore, ["vice_xpet"], [".crt", ".bin", ".tcrt", ".nib", ".nbz", ".d2m", ".d4m"]),
+        (OtherCommodore, ["vice_xvic"], [".nib", ".nbz", ".d2m", ".d4m", ".d80", ".d82"]));
+
+    private static Dictionary<(string Core, string Extension), string> Entries(params (string Reason, string[] Cores, string[] Extensions)[] groups)
+    {
+        var entries = new Dictionary<(string Core, string Extension), string>();
+        foreach (var (reason, cores, extensions) in groups)
+            foreach (var core in cores)
+                foreach (var extension in extensions)
+                    entries.Add((core, extension), reason); // Add: a repeated entry throws
+        return entries;
+    }
+
+    [Test]
+    public void EveryCoreExtension_IsIngestedOrListed()
+    {
+        Assert.That(UningestedProblems(Handlers()), Is.Empty);
+    }
+
+    [Test]
+    public void UningestedProblemsAreNamed()
+    {
+        var cores = new Dictionary<string, string> { ["gambatte"] = "gb|gbc|dmg", ["yabause"] = "cue|zip" };
+        var handlers = new[] { Handler("gb", "gambatte", ".gb", ".gbc"), Handler("saturn", "yabause", ".cue") };
+        var notIngested = new Dictionary<(string Core, string Extension), string> { [("gambatte", ".gbc")] = "x", [("yabause", ".iso")] = "x" };
+
+        Assert.That(UningestedProblems(handlers, cores, notIngested), Is.EquivalentTo(new[]
+        {
+            "gambatte: no system ingests .dmg",
+            "gambatte .gbc: stale entry (gb ingests it)",
+            "yabause: no system ingests .zip",
+            "yabause .iso: stale entry (yabause doesn't list it)",
+        }));
+    }
+
     [Test]
     public void EveryHandlerExtension_IsOpenedByItsBrowserCore()
     {
@@ -246,6 +318,29 @@ public class BrowserCoreExtensionsTests
                 yield return $"{system} {extension}: stale exception (no browser core)";
             else if (extensions.Split('|').Contains(extension[1..]))
                 yield return $"{system} {extension}: stale exception ({core} now opens it)";
+        }
+    }
+
+    /// <summary>P1: every type a core opens is ingested by a system on that core, or listed in <paramref name="notIngested"/>.</summary>
+    private static IEnumerable<string> UningestedProblems(IEnumerable<ISystemHandler> handlers, IReadOnlyDictionary<string, string>? cores = null,
+        IReadOnlyDictionary<(string Core, string Extension), string>? notIngested = null)
+    {
+        cores ??= CoreExtensions;
+        notIngested ??= NotIngested;
+        var list = handlers.ToList();
+        string? IngestedBy(string core, string extension) =>
+            list.FirstOrDefault(h => h.BrowserCore == core && h.RomExtensions.Contains(extension))?.Id;
+
+        foreach (var (core, extensions) in cores)
+            foreach (var extension in extensions.Split('|').Select(e => "." + e))
+                if (IngestedBy(core, extension) is null && !notIngested.ContainsKey((core, extension)))
+                    yield return $"{core}: no system ingests {extension}";
+        foreach (var ((core, extension), _) in notIngested)
+        {
+            if (!cores.TryGetValue(core, out var extensions) || !extensions.Split('|').Contains(extension[1..]))
+                yield return $"{core} {extension}: stale entry ({core} doesn't list it)";
+            else if (IngestedBy(core, extension) is { } system)
+                yield return $"{core} {extension}: stale entry ({system} ingests it)";
         }
     }
 

@@ -5,7 +5,7 @@ namespace RnRomManager.Systems.Sega;
 /// <summary>
 /// Sega Game Gear (spec G2, G3). The <c>TMR SEGA</c> header is optional (many Japanese carts have none), so a missing
 /// header is not invalid: an unmatched file goes to Review. <c>.sms</c> covers the SMS-mode games in the libretro
-/// <c>Sega - Game Gear</c> DAT (8 KiB–1 MiB).
+/// <c>Sega - Game Gear</c> DAT (8 KiB–1 MiB); <c>.bin</c> and <c>.rom</c> are aliases.
 /// </summary>
 public sealed class GameGearHandler : ISystemHandler
 {
@@ -17,7 +17,7 @@ public sealed class GameGearHandler : ISystemHandler
     public string Family => "gamegear";
 
     /// <summary><c>[0]</c> (<c>.gg</c>) is what a file resolved through Review without a DAT entry is stored as.</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".gg", ".sms"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".gg", ".sms", ".bin", ".rom"];
 
     public long MinRomSizeBytes => 8192;
 

@@ -4,7 +4,7 @@ namespace RnRomManager.Systems.Sega;
 
 /// <summary>
 /// Sega Master System (spec M1–M3). Same optional <c>TMR SEGA</c> header as Game Gear; a missing header is not invalid,
-/// so an unmatched file goes to Review. Sizes come from the libretro <c>Sega - Master System - Mark III</c> DAT.
+/// so an unmatched file goes to Review. Sizes come from the libretro <c>Sega - Master System - Mark III</c> DAT; <c>.bin</c> and <c>.rom</c> are aliases.
 /// </summary>
 public sealed class MasterSystemHandler : ISystemHandler
 {
@@ -14,7 +14,7 @@ public sealed class MasterSystemHandler : ISystemHandler
     public string DisplayName => "Master System";
     public string ShortName => "SMS";
     public string Family => "mastersystem";
-    public IReadOnlyList<string> RomExtensions { get; } = [".sms", ".sg"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".sms", ".sg", ".bin", ".rom"];
     public long MinRomSizeBytes => 2048;
     public long MaxRomSizeBytes => 4 * 1024 * 1024;
     public string DatName => "Sega - Master System - Mark III";

@@ -15,7 +15,7 @@ roms/
       Legend of Zelda, The - Link's Awakening.zip     (in L/)
   gbc/                  GBC-only and dual-mode carts
   gba/                  Game Boy Advance
-  n64/                  Nintendo 64 (always stored big-endian, as .z64)
+  n64/                  Nintendo 64 (always stored big-endian, as .z64; a matched cheat-cartridge .bin keeps its DAT name)
   3ds/                  Nintendo 3DS (external: .3ds, .cci, .cia files next to the ZIP)
   nds/                  Nintendo DS (external by default: .nds or iQue .ids files next to the ZIP; an Admin can store them
                         inside instead, and the storage job moves games between the two)
@@ -31,7 +31,7 @@ roms/
   lynx/                 Atari Lynx (.lnx, .lyx or .bll, as the DAT names it)
   jaguar/               Atari Jaguar (.j64, .jag, .rom, .abs or .cof, as the DAT names it)
   coleco/               ColecoVision (.col)
-  c64/                  Commodore 64 (.crt, .tap, .nib, .d64, .g64, .t64, .prg, .bin, .d71, .d81, .x64, .p00)
+  c64/                  Commodore 64 (.crt, .tap, .nib, .d64, .g64, .t64, .prg, .bin, .d71, .d81, .x64, .p00, .d80, .d82, .nbz, .d2m, .d4m, .tcrt)
   pet/                  Commodore PET (.prg, .d64, .tap, .t64, .g64, .d80, .d82)
   vic20/                Commodore VIC-20 (.a0, .20, .40, .60, .bin, .prg, .d64, .tap, .t64, .crt)
   amiga/                Commodore Amiga (.adf, or .ipf as the DAT names it)

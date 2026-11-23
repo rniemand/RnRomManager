@@ -16,7 +16,7 @@ public sealed class Nintendo64Handler : ISystemHandler
     public string Family => Nintendo64HeaderReader.Nintendo64Id;
 
     /// <summary><c>.z64</c> first: renamed and resolved files are stored with it.</summary>
-    public IReadOnlyList<string> RomExtensions { get; } = [".z64", ".v64", ".n64"];
+    public IReadOnlyList<string> RomExtensions { get; } = [".z64", ".v64", ".n64", ".bin", ".u1"];
 
     /// <summary>The header plus the boot code.</summary>
     public long MinRomSizeBytes => 0x1000;
