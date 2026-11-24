@@ -92,8 +92,55 @@ public partial class LibraryEndpointsTests
                 new FixtureGame("Pokémon Pinball (Europe)", "Pokémon Pinball (Europe).gb", Pinball) { Publishers = ["Nintendo"] },
                 new FixtureGame("3 Choume no Tama (Japan)", "3 Choume no Tama (Japan).gb", Arcade),
             ],
-        }, titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
+        }, titleDb: IngestSeeder.EmptySwitch, mame: new Dictionary<string, string> { ["MAME"] = MameDat }, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
+    }
+
+    // Arcade P2: a BIOS, a parent that needs it, a split clone of the parent, and a set with no dependencies.
+    private static string MameCrc(string content) => Crc32.ToHex(System.Text.Encoding.ASCII.GetBytes(content));
+
+    private static readonly string MameDat = $"""
+        <?xml version="1.0"?>
+        <mame build="0.78">
+        	<game name="rnbios" runnable="no"><description>Rn BIOS</description><rom name="bios.rom" size="4" crc="{MameCrc("BIOS")}"/></game>
+        	<game name="rnfight" romof="rnbios"><description>Rn Fight (World)</description><rom name="f.bin" size="4" crc="{MameCrc("FGHT")}"/></game>
+        	<game name="rnfightu" cloneof="rnfight" romof="rnfight"><description>Rn Fight (US)</description>
+        		<rom name="u.bin" size="4" crc="{MameCrc("FGTU")}"/><rom name="f.bin" merge="f.bin" size="4" crc="{MameCrc("FGHT")}"/></game>
+        	<game name="rnsolo"><description>Rn Solo (World)</description><rom name="s.bin" size="4" crc="{MameCrc("SOLO")}"/></game>
+        </mame>
+        """;
+
+    private static byte[] MameZip(params string[] contents)
+    {
+        using var buffer = new MemoryStream();
+        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+            for (var i = 0; i < contents.Length; i++)
+            {
+                using var entry = zip.CreateEntry($"f{i}.bin").Open();
+                entry.Write(System.Text.Encoding.ASCII.GetBytes(contents[i]));
+            }
+        return buffer.ToArray();
+    }
+
+    private async Task<(Guid GameId, long RomId)> IngestMame(string name, params string[] contents)
+    {
+        var bytes = MameZip(contents);
+        var path = Path.Combine(_factory.Root, "ingest", "mame2003", name);
+        await File.WriteAllBytesAsync(path, bytes);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+        var result = (await Service<IngestPipeline>().ProcessAsync(new IngestFile("mame2003", path, name, bytes.Length, File.GetLastWriteTimeUtc(path)),
+            Guid.NewGuid(), new CircuitBreaker(), default))!;
+        Assert.That(result.Outcome, Is.EqualTo(IngestOutcome.Ingested), result.Details);
+        var rom = (await Service<IRomRepository>().GetBySha1Async(result.Sha1!, default))!;
+        return (rom.GameId, rom.Id);
+    }
+
+    private async Task<(string SetName, (string SetName, Guid GameId, long RomId)[] Deps, string[] Missing)> Romset((Guid GameId, long RomId) release)
+    {
+        var json = await GetJson($"/api/games/{release.GameId}/roms/{release.RomId}/romset");
+        return (json.GetProperty("setName").GetString()!,
+            [.. json.GetProperty("deps").EnumerateArray().Select(d => (d.GetProperty("setName").GetString()!, d.GetProperty("gameId").GetGuid(), d.GetProperty("romId").GetInt64()))],
+            [.. json.GetProperty("missing").EnumerateArray().Select(m => m.GetString()!)]);
     }
 
     [TearDown]
@@ -125,6 +172,82 @@ public partial class LibraryEndpointsTests
 
     private async Task<string> ZipPath(Guid id) =>
         Path.Combine(_factory.Root, "roms", (await Service<IGameRepository>().GetAsync(id, default))!.ZipPath);
+
+    [Test]
+    public async Task Romset_SplitClone_ListsItsParentAndBios_InChainOrder()
+    {
+        var bios = await IngestMame("rnbios.zip", "BIOS");
+        var parent = await IngestMame("rnfight.zip", "FGHT");
+        var clone = await IngestMame("rnfightu.zip", "FGTU");
+
+        var (setName, deps, missing) = await Romset(clone);
+
+        Assert.That(setName, Is.EqualTo("rnfightu"));
+        Assert.That(deps, Is.EqualTo(new[] { ("rnfight", parent.GameId, parent.RomId), ("rnbios", bios.GameId, bios.RomId) }));
+        Assert.That(missing, Is.Empty);
+        var ofParent = await Romset(parent);
+        Assert.That((ofParent.SetName, ofParent.Deps.Single(), ofParent.Missing.Length), Is.EqualTo(("rnfight", ("rnbios", bios.GameId, bios.RomId), 0)));
+    }
+
+    [Test]
+    public async Task Romset_MissingParentAndBios_AreListed_UnlessTheSetIsSelfContained()
+    {
+        var split = await IngestMame("rnfightu.zip", "FGTU");
+        var solo = await IngestMame("rnsolo.zip", "SOLO");
+
+        Assert.That((await Romset(split)).Missing, Is.EqualTo(new[] { "rnfight", "rnbios" }));
+        var ofSolo = await Romset(solo);
+        Assert.That((ofSolo.Deps.Length, ofSolo.Missing.Length), Is.EqualTo((0, 0)));
+
+        // Non-merged: the clone's ZIP also holds the parent's ROM.
+        await using (var db = Service<IDbConnectionFactory>().Create())
+            await db.ExecuteAsync("UPDATE roms SET header = JSON_SET(header, '$.selfContained', true) WHERE id = @id", new { id = split.RomId });
+        var selfContained = await Romset(split);
+        Assert.That((selfContained.Deps.Length, selfContained.Missing.Length), Is.EqualTo((0, 0)));
+    }
+
+    [Test]
+    public async Task Romset_AMixedCaseSource_PlaysAsTheDatSpelling_AndAHeaderlessReleaseUsesItsFileStem()
+    {
+        var parent = await IngestMame("RNFIGHT.ZIP", "FGHT");
+        var clone = await IngestMame("RnFightU.zip", "FGTU");
+
+        Assert.That((await Romset(parent)).SetName, Is.EqualTo("rnfight"));
+        Assert.That((await Romset(clone)).Deps.Select(d => d.SetName), Is.EqualTo(new[] { "rnfight" }), "found ignoring case");
+
+        // A Manual release (R3) has no header: its original file name's stem is the set name.
+        await using (var db = Service<IDbConnectionFactory>().Create())
+            await db.ExecuteAsync("UPDATE roms SET header = NULL WHERE id = @id", new { id = clone.RomId });
+        var manual = await Romset(clone);
+        Assert.That((manual.SetName, manual.Deps.Select(d => d.SetName).Single(), manual.Missing.Single()), Is.EqualTo(("RnFightU", "rnfight", "rnbios")));
+    }
+
+    [Test]
+    public async Task Romset_AnotherSystemIs404_AndWithoutADatTheListsAreEmpty()
+    {
+        var tetris = await Tetris();
+        var tetrisRom = (await Service<IRomRepository>().ListByGameAsync(tetris, default))[0].Id;
+        using (var other = await _user.GetAsync($"/api/games/{tetris}/roms/{tetrisRom}/romset"))
+            Assert.That(other.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+        using (var missing = await _user.GetAsync($"/api/games/{Guid.NewGuid()}/roms/1/romset"))
+            Assert.That(missing.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
+
+        var clone = await IngestMame("rnfightu.zip", "FGTU");
+        File.Delete(Path.Combine(Service<DatCache>().Directory, "mame", "MAME.xml"));
+        Service<DatCache>().Load();
+
+        var (setName, deps, missingSets) = await Romset(clone);
+        Assert.That((setName, deps.Length, missingSets.Length), Is.EqualTo(("rnfightu", 0, 0)));
+    }
+
+    [Test]
+    public void Romset_IsMaintenanceExempt()
+    {
+        var endpoint = Service<Microsoft.AspNetCore.Routing.EndpointDataSource>().Endpoints.OfType<Microsoft.AspNetCore.Routing.RouteEndpoint>()
+            .Single(e => e.RoutePattern.RawText?.EndsWith("/roms/{romId:long}/romset", StringComparison.Ordinal) == true);
+
+        Assert.That(endpoint.Metadata.GetMetadata<RnRomManager.Api.MaintenanceExempt>(), Is.Not.Null);
+    }
 
     private static IEnumerable<TestCaseData> Endpoints()
     {

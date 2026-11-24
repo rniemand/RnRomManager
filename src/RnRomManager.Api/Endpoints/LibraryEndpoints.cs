@@ -8,6 +8,7 @@ using RnRomManager.Core.Audit;
 using RnRomManager.Core.Collections;
 using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Database;
+using RnRomManager.Core.Dats;
 using RnRomManager.Core.Discovery;
 using RnRomManager.Core.Integrity;
 using RnRomManager.Core.Jobs;
@@ -181,6 +182,17 @@ public static class LibraryEndpoints
         {
             var (attachment, problem) = await LibraryDownload.OpenReleaseAsync(ctx, id, romId, repository, roms, files);
             return problem ?? LibraryDownload.Send(ctx, attachment!);
+        }).WithMetadata(MaintenanceExempt.Instance);
+
+        // Arcade P2: the parent and BIOS romsets a MAME release needs beside it, from the library.
+        games.MapGet("/{id:guid}/roms/{romId:long}/romset", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,
+            IRomRepository roms, ISystemRegistry systems, DatCache dats) =>
+        {
+            if (await roms.GetAsync(id, romId, ctx.RequestAborted) is not { } rom
+                || await repository.GetAsync(id, ctx.RequestAborted) is null
+                || systems.ById(rom.SystemId) is not { DatSource: DatSource.Mame })
+                return Problems.NotFound(ctx);
+            return Results.Ok(await MameRomset.ResolveAsync(rom, dats.For(rom.SystemId), roms, ctx.RequestAborted));
         }).WithMetadata(MaintenanceExempt.Instance);
 
         // B20: one file of a set, found by the release it belongs to (another release's file id is a 404).

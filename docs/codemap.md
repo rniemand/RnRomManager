@@ -120,6 +120,7 @@ To find a route in its file, grep the quoted route string, e.g. `MapPut("/rom-st
 - `GET /api/games/{id:guid}/collections`
 - `GET /api/games/{id:guid}/info-json`
 - `GET /api/games/{id:guid}/roms/{romId:long}/download`
+- `GET /api/games/{id:guid}/roms/{romId:long}/romset`
 - `GET /api/games/{id:guid}/roms/{romId:long}/files/{fileId:long}/download`
 - `GET /api/games/{id:guid}/roms/{romId:long}/play-disc`
 - `GET /api/games/{id:guid}/roms/{romId:long}/play-disc-set`
@@ -291,7 +292,7 @@ File names without extension. System projects (`src/RnRomManager.Systems.*`) are
 - `src/RnRomManager.Api/Auth/`: AuditActorExtensions, AuthSetup, Session
 - `src/RnRomManager.Api/Cli/`: CliDispatcher, HealthCheckCommand, ResetPasswordCommand
 - `src/RnRomManager.Api/Configuration/`: EffectiveSettings, LicenseInfo, OptionsRegistration
-- `src/RnRomManager.Api/Endpoints/`: AdminEndpoints, AsyncOnlyWriteStream, AuditEndpoints, AuthEndpoints, BundleDownloadEndpoints, BundleFileEndpoints, BundleQueueEndpoints, CollectionEndpoints, DatEndpoints, DiscoveryEndpoints, DiscoveryLogoEndpoints, EmulatorEndpoints, FallbackEndpoints, HealthEndpoints, IngestEndpoints, IntegrityEndpoints, JobEndpoints, LibraryDownload, LibraryEndpoints, LibraryFiles, OperatorCoreManifest, PlayDisc, ReportEndpoints, ReviewEndpoints, SaveEndpoints, SaveUploads, UserEndpoints
+- `src/RnRomManager.Api/Endpoints/`: AdminEndpoints, AsyncOnlyWriteStream, AuditEndpoints, AuthEndpoints, BundleDownloadEndpoints, BundleFileEndpoints, BundleQueueEndpoints, CollectionEndpoints, DatEndpoints, DiscoveryEndpoints, DiscoveryLogoEndpoints, EmulatorEndpoints, FallbackEndpoints, HealthEndpoints, IngestEndpoints, IntegrityEndpoints, JobEndpoints, LibraryDownload, LibraryEndpoints, LibraryFiles, MameRomset, OperatorCoreManifest, PlayDisc, ReportEndpoints, ReviewEndpoints, SaveEndpoints, SaveUploads, UserEndpoints
 - `src/RnRomManager.Api/Http/`: HttpClients, ImageUrlDownloader
 - `src/RnRomManager.Api/Logging/`: LogArchive, LogBuffer, LogStream, MemoryLogTarget, NLogSetup
 - `src/RnRomManager.Api/Security/`: SecurityHeaders
