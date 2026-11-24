@@ -6,7 +6,8 @@ import type { GameDetail, RomDetail } from './api/types';
  * PlayStation Portable UMD image, (Saturn B6) a Saturn disc and (Sega CD B5) a Sega CD disc on Genesis Plus GX, which
  * also plays Mega Drive cartridges from the ZIP: the play URL's `disc` flag tells the two apart. 3DO B7: Opera plays
  * only discs. TurboGrafx-CD B5: Beetle PCE plays TurboGrafx-CD discs and, from the ZIP, TurboGrafx-16 HuCards. MS-DOS
- * P3: DOSBox Pure plays an external game ZIP (`.dosz`), fetched from `/download`.
+ * P3: DOSBox Pure plays an external game ZIP (`.dosz`), fetched from `/download`. 3DS P5: azahar plays an external
+ * `.3ds`/`.cci` from `/download`.
  */
 export const externalBrowserCores: readonly string[] = [
 	'pcsx_rearmed',
@@ -16,7 +17,8 @@ export const externalBrowserCores: readonly string[] = [
 	'opera',
 	'desmume',
 	'mednafen_pce',
-	'dosbox_pure'
+	'dosbox_pure',
+	'azahar'
 ];
 
 /** S8: the cores whose external releases load through play-disc; DeSmuME loads an external DS ROM from `/download`. */
@@ -39,10 +41,11 @@ export function setMedia(core: string | null): 'disks' | 'discs' {
 	return core === 'puae' ? 'disks' : 'discs';
 }
 
-/** PSP B3, MS-DOS P5: the cores that play only in their own cross-origin isolated tab, and that tab's page. */
+/** PSP B3, MS-DOS P5, 3DS G1: the cores that play only in their own cross-origin isolated tab, and that tab's page. */
 export const isolatedPages: Readonly<Record<string, string>> = {
 	ppsspp: 'play-psp.html',
-	dosbox_pure: 'play-dos.html'
+	dosbox_pure: 'play-dos.html',
+	azahar: 'play-3ds.html'
 };
 
 /** PSP B3, MS-DOS P5: whether Play opens the core in its own tab instead of the modal. */
@@ -56,12 +59,12 @@ export function opensInNewTab(core: string | null): boolean {
  * GameCube…) don't. Browser play format gaps N5: a Saturn .nrg plays (play-disc sends a generated cue). CHD B5: a standalone .chd plays like an .iso (PlayStation, Saturn, Sega CD).
  * TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, so on `mednafen_pce` an external .bin plays only with its
  * set files (the cue); the API's quick play applies the same rule. Jaguar: see `jaguarRomLoads`. Amiga: PUAE's
- * WebAssembly build has no capsimg, so an .ipf never plays (the API's quick play agrees).
+ * WebAssembly build has no capsimg, so an .ipf never plays (the API's quick play agrees). 3DS P3: see `azaharRomLoads`.
  */
 export function canPlay(
 	game: Pick<GameDetail, 'browserCore'>,
 	rom: Pick<RomDetail, 'externalFileName'> &
-		Partial<Pick<RomDetail, 'files' | 'fileName' | 'sizeBytes'>>
+		Partial<Pick<RomDetail, 'files' | 'fileName' | 'sizeBytes' | 'header'>>
 ): boolean {
 	const external = rom.externalFileName?.toLowerCase() ?? null;
 	return (
@@ -78,6 +81,11 @@ export function canPlay(
 			rom.fileName !== undefined &&
 			rom.sizeBytes !== undefined &&
 			!jaguarRomLoads(rom.fileName, rom.sizeBytes)
+		) &&
+		!(
+			game.browserCore === 'azahar' &&
+			rom.fileName !== undefined &&
+			!azaharRomLoads(rom.fileName, rom.header ?? null)
 		)
 	);
 }
@@ -92,6 +100,15 @@ export function jaguarRomLoads(fileName: string, sizeBytes: number): boolean {
 	if (/\.(abs|cof|jag)$/i.test(fileName)) return false;
 	const mib = 1048576;
 	return sizeBytes % mib === 0 || sizeBytes === 131072 || (sizeBytes + 8192) % mib === 0;
+}
+
+/**
+ * 3DS P2: azahar plays a `.3ds` or `.cci` whose header doesn't say it's encrypted (a missing header or field counts as
+ * playable); its libretro build can't load a `.cia`. The API's quick play applies the same rule
+ * (`LibraryEndpoints.AzaharRomLoads`).
+ */
+export function azaharRomLoads(fileName: string, header: Record<string, unknown> | null): boolean {
+	return /\.(3ds|cci)$/i.test(fileName) && header?.encrypted !== true;
 }
 
 /**

@@ -319,7 +319,7 @@ File names without extension. System projects (`src/RnRomManager.Systems.*`) are
 - `src/RnRomManager.Web/src/lib/components/`: AboutModal, AccordionItem, AdminOnly, AppFooter, BundleDownload, CollectionChooser, CollectionModal, CollectionPickerModal, ConfirmModal, CopyButton, DiscoveryGames, DiscoveryGroups, EditReleaseModal, EmptyState, EmulatorModal, ErrorAlert, FileSize, FilterDropdown, GameAdminModal, GameCollectionsModal, GameImages, GameResults, GameSaves, GameTitle, GameTypeahead, GlobalSearch, GroupLogo, HotkeysModal, Icon, icons, IgdbLookup, InfoJsonModal, IngestFileTable, JobStepProgress, JsonTree, Loading, LogoModal, Navbar, NotAllowed, PageTitle, Pagination, RatingControl, ReleaseNoteModal, ReviewDeleteModal, RomToolsTabs, SavedBundleQueues, SystemBadge, SystemEmulatorsModal, SystemGames, SystemList, ToastHost, ZipBrowser
 - `src/RnRomManager.Web/src/lib/stores/`: auth.svelte, bundle.svelte, hotkeys.svelte, jobs.svelte, navCounts.svelte, reviewJobs.svelte, toasts.svelte
 - `src/RnRomManager.Web/src/lib/testing/`: fakePassword, pageTitle, url.svelte
-- `src/RnRomManager.Web/static/emulator/`: params, play-dos.html, play-psp.html, play.css, play.html, play
+- `src/RnRomManager.Web/static/emulator/`: params, play-3ds.html, play-dos.html, play-psp.html, play.css, play.html, play
 
 ## Tests
 

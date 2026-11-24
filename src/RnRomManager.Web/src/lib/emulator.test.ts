@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { configureClient, resetClient } from './api/client';
 import {
+	azaharRomLoads,
 	canPlay,
 	opensInNewTab,
 	playLinkEvents,
@@ -276,10 +277,48 @@ describe('playUrl', () => {
 	});
 });
 
+describe('Nintendo 3DS (3DS P2, P3, P5, P6)', () => {
+	it('points azahar at the isolated 3DS page, without play-disc', () => {
+		expect(playUrl('g-7', { id: 8, fileName: 'Zephyr Gate (Europe).3ds' }, 'azahar', false)).toBe(
+			'/emulator/play-3ds.html?game=g-7&rom=8&core=azahar&name=Zephyr%20Gate%20(Europe).3ds'
+		);
+		expect(usesPlayDisc('azahar', { externalFileName: 'Zephyr Gate (Europe).3ds' })).toBe(false);
+	});
+
+	it.each([
+		['x.3ds', null, true],
+		['x.CCI', null, true],
+		['x.3ds', { format: 'NCSD' }, true],
+		['x.3ds', { encrypted: null }, true],
+		['x.cci', { encrypted: false }, true],
+		['x.3ds', { encrypted: true }, false],
+		['x.cia', null, false],
+		['x.cia', { encrypted: false }, false]
+	])('azaharRomLoads(%s, %o) is %s, and canPlay agrees', (fileName, header, loads) => {
+		expect(azaharRomLoads(fileName, header)).toBe(loads);
+		expect(
+			canPlay({ browserCore: 'azahar' }, { externalFileName: fileName, fileName, header })
+		).toBe(loads);
+	});
+
+	it('plays an embedded release too, and ignores the rule on other cores', () => {
+		expect(canPlay({ browserCore: 'azahar' }, { externalFileName: null, fileName: 'x.3ds' })).toBe(
+			true
+		);
+		expect(
+			canPlay(
+				{ browserCore: 'gambatte' },
+				{ externalFileName: null, fileName: 'x.cia', header: { encrypted: true } }
+			)
+		).toBe(true);
+	});
+});
+
 describe('opensInNewTab', () => {
-	it('is true only for PPSSPP and DOSBox Pure', () => {
+	it('is true only for PPSSPP, DOSBox Pure and azahar', () => {
 		expect(opensInNewTab('ppsspp')).toBe(true);
 		expect(opensInNewTab('dosbox_pure')).toBe(true);
+		expect(opensInNewTab('azahar')).toBe(true);
 		for (const core of ['pcsx_rearmed', 'gambatte', 'smsplus', null])
 			expect(opensInNewTab(core)).toBe(false);
 	});
