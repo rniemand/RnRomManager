@@ -80,9 +80,9 @@ Adds an MS-DOS system (`dos`) for Admins who keep DOS games as one ZIP per game 
 | Web | `src/lib/systemEmulators.json`, `src/lib/components/icons.ts`, `src/lib/systemColours.ts`, `src/app.css` | S4 |
 | Web | `emulator-licenses/dosbox_pure-*.txt` (new) | P1 |
 | Tests | `tests/RnRomManager.TestData/IngestSeeder.cs` | one DOS ZIP in the Basic set (step 6) |
-| Docs | `README.md` | systems table row, Game detail play sentence (DOS opens in its own tab, needs HTTPS or `localhost`), quick-start formats, upgrade note's system list, vendored-core attribution |
+| Docs | `README.md` | systems table row, the intro's "`.zip`/`.7z` archives … identifies each one against the DATs" sentence (MS-DOS games are one `.zip`/`.dosz` each, not unpacked, and go to Review), Game detail play sentence (DOS opens in its own tab, needs HTTPS or `localhost`), quick-start step 3 (DOS games as one ZIP each), upgrade note's system list, vendored-core attribution |
 | Docs | `docs/adding-a-system.md` | `DatSource.None`, `dosbox_pure` in the `BrowserCore` row, isolated pages list, DatsMissing note (N3), the `.zip`-as-ROM rule (I1) |
-| Docs | `docs/features.md` | Play (DOS tab, messages, saves P8), Review (N6–N7, N9), External storage list |
+| Docs | `docs/features.md` | Ingestion (the drop-files bullet: a `.zip`/`.dosz` in `ingest/dos/` is the game and isn't unpacked, a `.7z` there yields only its `.dosz` entries, and every DOS file goes to Review; the Pending-row Delete of a DOS `.zip` still asks to confirm), Play (DOS tab, messages, saves P8), Review (N6–N7, N9), External storage list |
 | Docs | `docs/development.md`, `docs/deployment.md` | isolated pages (both paths), local isolated-page development, `dosbox_pure` in the Browser emulators section's vendored cores and patches |
 | Docs | `docs/zip-format.md` | `dos` in the `system` id list; DOS stores `.dosz` |
 
@@ -114,6 +114,7 @@ No migration: `system_id` is a `VARCHAR`. No config keys. API: `GET /api/review/
 - 2026-11-24 Reviewer pass 1: `EJS_threads` is needed for `dosbox_pure`; Manual had no Use and Next; prefill timing; licence files; save persistence unverified; `IngestEndpointsTests` (not `RomStorageEndpointsTests`) lists ids; step 5 split; the type is `ReviewDetail`; `discError` uses `pspCore`; the `./` NotIngested key; per-game save names (round 2: via `contentFileName`, not `EJS_gameName`); `BrowserCore` set in 5a; validator `.zip` names; system colour → fixed in the spec (reviewer)
 - 2026-11-24 Review pass 2: N2's message uses the id; the deleter change fixes an orphaned review row; prefill via `prefilledFor`; `parsePlayParams` callers in tests; `beforeunload` save path and an ask-first fallback; NOTICE/README commit form; core chooser default; icon test; e2e seeded through `IngestSeeder`, untagged and before the review tests, with the seed-count tests it changes → fixed in the spec (reviewer)
 - 2026-11-24 Review pass 3: hide `saveSavFiles`/`loadSavFiles` for DOSBox Pure; touch-only devices out of scope; box-art README and ThreeDo template; the `vendorEmulatorjs.test.ts` and `SecurityHeadersTests` assertions that change → fixed in the spec (reviewer)
+- 2026-11-24 Review pass 4: README intro/quick start and the features Ingestion bullet describe `.zip` unpacking and DAT matching that DOS doesn't follow → added to the Docs rows (reviewer)
 - 2026-11-24 Add and Next on the Manual tab? → Yes, for no-DAT systems only (user)
 - 2026-11-24 Embedded or external? → External: CD-era ZIPs reach hundreds of MB, and embedded ROMs are read whole into memory at ingest (code)
 
