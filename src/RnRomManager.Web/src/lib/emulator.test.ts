@@ -245,6 +245,7 @@ describe('playUrl', () => {
 
 	it('plays an external MAME set in the modal from /download (Arcade P5)', () => {
 		expect(externalBrowserCores).toContain('mame2003_plus');
+		expect(externalBrowserCores).toContain('fbneo');
 		expect(playUrl('g-7', { id: 5, fileName: 'sf2.mamez' }, 'mame2003_plus', false)).toBe(
 			'/emulator/play.html?game=g-7&rom=5&core=mame2003_plus&name=sf2.mamez'
 		);

@@ -108,4 +108,14 @@ public class PrimaryReleaseTests
         Assert.That(PrimaryRelease.Apply([pacman, puckman], DatSource.Mame, pacman.Metadata.Sha1).Single(r => r.IsPrimary).FileName,
             Is.EqualTo("pacman.mamez"), "an Admin's choice still wins");
     }
+
+    // FBNeo D1: an Fbneo system orders parents first, as Mame.
+    [Test]
+    public void Fbneo_ParentsRankAheadOfClones()
+    {
+        var puckman = Set("puckman", null);
+        var pacman = Set("pacman", "puckman", "World");
+
+        Assert.That(PrimaryOf([pacman, puckman], DatSource.Fbneo).FileName, Is.EqualTo("puckman.mamez"));
+    }
 }

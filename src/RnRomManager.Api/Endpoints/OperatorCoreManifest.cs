@@ -31,6 +31,7 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
     public const string ViceVic = "vice_xvic";
     public const string Mupen64PlusNext = "mupen64plus_next";
     public const string Mame2003Plus = "mame2003_plus";
+    public const string Fbneo = "fbneo";
 
     /// <summary>The pinned 4.2.3 files of each core (each report is its package's <c>reports/</c> copy).</summary>
     public static OperatorCoreManifest Pinned { get; } = new(
@@ -134,6 +135,18 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
                 "a01286082b7b2b83cc10e702afaf730f5effedb49e583a6ca73f59bc28b0c12a", "application/octet-stream"),
             new("mame2003_plus.json", 127,
                 "bda548626942b8878beb6de3487043eea80e633bd53dd69e7bae7457373a48a1", "application/json"),
+        ]),
+        // Arcade (FinalBurn Neo) P1: https://registry.npmjs.org/@emulatorjs/core-fbneo/-/core-fbneo-4.2.3.tgz (payloads at the
+        // package root, the report from reports/). Its licence forbids commercial use, so it's never bundled. The -thread-
+        // payloads aren't used: the core plays in the modal.
+        new(Fbneo, "FinalBurn Neo", o => o.FbneoCorePath, EmulatorEndpoints.FbneoCoreMismatch,
+        [
+            new("fbneo-wasm.data", 8_273_551,
+                "315a25e0bcd61d58ee0d9e8b1dbf3740b9e0ca4b7d0726f848ce1068de73437c", "application/octet-stream"),
+            new("fbneo-legacy-wasm.data", 8_272_960,
+                "9dbb6242c028f4179549f324688b654353881beb552292f939bc6171a0828b5f", "application/octet-stream"),
+            new("fbneo.json", 119,
+                "d2c5e07c2afc2b53937f14b721d7d025ad599d111e9627fc77e9b3fd17450e70", "application/json"),
         ]),
     ]);
 

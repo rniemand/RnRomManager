@@ -423,7 +423,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             string? revision = null;
             // Arcade R3: a MAME item's header (I5's missingRoms) describes the review, not the release; only the queued
             // DAT identity of an AmbiguousGroup item (G5) keeps it.
-            var keepHeader = system.DatSource != DatSource.Mame;
+            var keepHeader = !system.DatSource.IsRomset();
             if (request.Update == true && request.Action != "Dat")
                 return ReviewResolutionResult.Invalid("update", ReviewResolutionRequest.UpdateNeedsDat);
             if (request.Disc is not null && !system.FileSets)
@@ -434,7 +434,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             if (request.Action == "Dat")
             {
                 // Arcade R2: a set is identified only by its name and CRCs; a pick would name it after a set it doesn't hold.
-                if (system.DatSource == DatSource.Mame)
+                if (system.DatSource.IsRomset())
                     return ReviewResolutionResult.Invalid("action", "Arcade sets can't be resolved from a DAT pick; use Manual or Attach.");
                 if (item.Reason != "NoDatMatch")
                     return ReviewResolutionResult.Invalid("action", "DAT selection requires a NoDatMatch item.");
@@ -502,7 +502,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 var datGameName = dat["datGameName"]!.GetValue<string>();
                 filename = Path.GetFileName(dat["romName"]!.GetValue<string>());
                 target = request.TargetGameId;
-                if (system.DatSource == DatSource.Mame)
+                if (system.DatSource.IsRomset())
                 {
                     // Arcade G5: the queued identity and base title; BIOS from the header, no regions, languages or revision.
                     identification = new(IdentificationMethod.Dat, dat["datName"]!.GetValue<string>(), dat["datVersion"]?.GetValue<string>(), datGameName);

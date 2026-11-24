@@ -33,6 +33,7 @@ public partial class EmulatorEndpointsTests
         _factory.Settings["Emulator:OperaCorePath"] = Path.Combine(_factory.Root, "opera");
         _factory.Settings["Emulator:ViceCorePath"] = Path.Combine(_factory.Root, "vice");
         _factory.Settings["Emulator:Mame2003PlusCorePath"] = Path.Combine(_factory.Root, "mame");
+        _factory.Settings["Emulator:FbneoCorePath"] = Path.Combine(_factory.Root, "fbneo");
         await _factory.StartSharedAsync();
     }
 
@@ -56,6 +57,7 @@ public partial class EmulatorEndpointsTests
         ResetDir(OperaDir);
         ResetDir(ViceDir);
         ResetDir(MameDir);
+        ResetDir(FbneoDir);
         _client = await SignInAsync("player");
     }
 

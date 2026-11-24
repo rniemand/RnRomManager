@@ -32,9 +32,9 @@ public static class LibraryEndpoints
     /// for Sega CD, (TurboGrafx-CD B5) Beetle PCE for TurboGrafx-CD. Eligibility is per core, so Genesis Plus GX also accepts an external primary of Mega Drive, a family that
     /// the registry keeps embedded. S8: DeSmuME plays an external DS release from <c>/download</c>, and (MS-DOS P3) DOSBox Pure an
     /// external DOS game ZIP. 3DS P5: azahar plays an external <c>.3ds</c>/<c>.cci</c> from <c>/download</c>. Arcade P5: MAME 2003-Plus an
-    /// external set ZIP (<c>.mamez</c>), with its parent and BIOS sets from <c>/romset</c>.
+    /// external set ZIP (<c>.mamez</c>), with its parent and BIOS sets from <c>/romset</c>; FBNeo P3 FinalBurn Neo a <c>.fbneoz</c>/<c>.fbneo7z</c> likewise.
     /// </summary>
-    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "desmume", "mednafen_pce", "dosbox_pure", "azahar", "mame2003_plus" };
+    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "desmume", "mednafen_pce", "dosbox_pure", "azahar", "mame2003_plus", "fbneo" };
 
     /// <summary>S8: the cores whose external releases play through <c>play-disc</c>; any other (DS) loads from <c>/download</c>.</summary>
     public static readonly IReadOnlySet<string> PlayDiscCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "mednafen_pce" };
@@ -185,15 +185,15 @@ public static class LibraryEndpoints
             return problem ?? LibraryDownload.Send(ctx, attachment!);
         }).WithMetadata(MaintenanceExempt.Instance);
 
-        // Arcade P2: the parent and BIOS romsets a MAME release needs beside it, from the library.
+        // Arcade P2: the parent and BIOS romsets a MAME or FBNeo release needs beside it, from the library (FBNeo BIOS: by name).
         games.MapGet("/{id:guid}/roms/{romId:long}/romset", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,
             IRomRepository roms, ISystemRegistry systems, DatCache dats) =>
         {
             if (await roms.GetAsync(id, romId, ctx.RequestAborted) is not { } rom
                 || await repository.GetAsync(id, ctx.RequestAborted) is null
-                || systems.ById(rom.SystemId) is not { DatSource: DatSource.Mame })
+                || systems.ById(rom.SystemId)?.DatSource.IsRomset() != true)
                 return Problems.NotFound(ctx);
-            return Results.Ok(await MameRomset.ResolveAsync(rom, dats.For(rom.SystemId), roms, ctx.RequestAborted));
+            return Results.Ok(await MameRomset.ResolveAsync(rom, systems.ById(rom.SystemId)!.DatSource, dats.For(rom.SystemId), roms, ctx.RequestAborted));
         }).WithMetadata(MaintenanceExempt.Instance);
 
         // B20: one file of a set, found by the release it belongs to (another release's file id is a 404).

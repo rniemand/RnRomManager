@@ -1,6 +1,6 @@
 # Default box art
 
-`mame2003.svg` is the source (made for this project, MIT).
+`mame2003.svg` and `fbneo.svg` (the same cabinet in blue) are the sources (made for this project, MIT).
 The embedded PNG is a 512×512 render (spec §6.1). After editing the SVG, re-export it with headless Edge or Chrome:
 
 ```bash

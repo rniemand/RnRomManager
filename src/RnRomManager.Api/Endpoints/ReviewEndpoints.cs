@@ -66,7 +66,7 @@ public static class ReviewEndpoints
                 addOns = systems.ById(item.SystemId)?.DatSource == DatSource.TitleDb, // Attach as DLC is offered for titledb (Switch) items
                 // MS-DOS N5: no Suggestions tab; Manual prefilled. Arcade R1: a set is identified only by its name and CRCs, and a
                 // DAT pick would name the release after a set it doesn't hold.
-                hasDat = systems.ById(item.SystemId)?.DatSource is not (DatSource.None or DatSource.Mame),
+                hasDat = systems.ById(item.SystemId)?.DatSource is not (DatSource.None or DatSource.Mame or DatSource.Fbneo),
                 setMembers = set?.Select(m => new { reviewId = m.Row.Id, fileName = m.Row.OriginalFileName, sizeBytes = m.Row.SizeBytes }),
             });
         });

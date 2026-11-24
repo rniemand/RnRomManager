@@ -2618,11 +2618,14 @@ describe('play page Arcade (MAME 2003-Plus, Arcade P3, P4)', () => {
 			[check]: async () => response(204),
 			[romsetUrl]: romset({
 				setName: 'sf2ua',
+				fileName: 'sf2ua.zip',
 				deps: [
-					{ setName: 'sf2', gameId: parentGame, romId: 40 },
-					{ setName: 'qsound', gameId: parentGame, romId: 41 }
+					{ setName: 'sf2', fileName: 'sf2.zip', gameId: parentGame, romId: 40 },
+					{ setName: 'qsound', fileName: 'qsound.zip', gameId: parentGame, romId: 41 }
 				],
-				missing: []
+				missing: [],
+				bios: [],
+				selfContained: false
 			}),
 			[romUrl]: async () => response(200),
 			[parentUrl]: bytes('parent'),
@@ -2648,7 +2651,14 @@ describe('play page Arcade (MAME 2003-Plus, Arcade P3, P4)', () => {
 	it('sets no external files for a set with no dependencies', async () => {
 		serve({
 			[check]: async () => response(204),
-			[romsetUrl]: romset({ setName: 'puckman', deps: [], missing: [] }),
+			[romsetUrl]: romset({
+				setName: 'puckman',
+				fileName: 'puckman.zip',
+				deps: [],
+				missing: [],
+				bios: [],
+				selfContained: false
+			}),
 			[romUrl]: async () => response(200)
 		});
 
@@ -2708,8 +2718,11 @@ describe('play page Arcade (MAME 2003-Plus, Arcade P3, P4)', () => {
 			[check]: async () => response(204),
 			[romsetUrl]: romset({
 				setName: 'sf2ua',
-				deps: [{ setName: 'sf2', gameId: parentGame, romId: 40 }],
-				missing: []
+				fileName: 'sf2ua.zip',
+				deps: [{ setName: 'sf2', fileName: 'sf2.zip', gameId: parentGame, romId: 40 }],
+				missing: [],
+				bios: [],
+				selfContained: false
 			}),
 			[romUrl]: async () => response(200),
 			[parentUrl]: dep as () => Promise<FakeResponse>
@@ -2719,5 +2732,114 @@ describe('play page Arcade (MAME 2003-Plus, Arcade P3, P4)', () => {
 
 		expect(shown).toBe(message);
 		expect(atLoader).toBeNull();
+	});
+});
+
+describe('play page Arcade (FinalBurn Neo, Arcade P3, P4)', () => {
+	const check = '/api/emulator/cores/fbneo';
+	const romsetUrl = `/api/games/${game}/roms/12/romset`;
+	const parentGame = '22222222-2222-4222-8222-222222222222';
+	const parentUrl = `/api/games/${parentGame}/roms/50/download`;
+	const neogeoUrl = '/api/emulator/bios/neogeo.zip';
+
+	function romset(body: object, status = 200) {
+		return async () => new Response(JSON.stringify(body), { status }) as unknown as FakeResponse;
+	}
+
+	function bytes(text: string) {
+		return async () => ({ ...response(200), blob: async () => new Blob([text]) }) as FakeResponse;
+	}
+
+	const kof97h = {
+		setName: 'kof97h',
+		fileName: 'kof97h.7z',
+		deps: [{ setName: 'kof97', fileName: 'kof97.7z', gameId: parentGame, romId: 50 }],
+		missing: [],
+		bios: ['neogeo'],
+		selfContained: false
+	};
+
+	it('fetches the BIOS before the game, names the game romset.fileName and keys deps by fileName', async () => {
+		serve({
+			[check]: async () => response(204),
+			[romsetUrl]: romset(kof97h),
+			[neogeoUrl]: bytes('bios'),
+			[romUrl]: async () => response(200),
+			[parentUrl]: bytes('parent')
+		});
+
+		await play('fbneo', 'kof97h.fbneo7z');
+
+		expect(urls()).toEqual([check, romsetUrl, neogeoUrl, romUrl, parentUrl]);
+		expect((atLoader?.EJS_gameUrl as File).name).toBe('kof97h.7z');
+		expect(atLoader).toMatchObject({
+			EJS_core: 'fbneo',
+			EJS_hideSettings: ['retroarch_core'],
+			EJS_Buttons: { saveSavFiles: false, loadSavFiles: false }
+		});
+		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
+		expect(Object.keys(files)).toEqual(['/neogeo.zip', '/kof97.7z']);
+		expect(new TextDecoder().decode(files['/neogeo.zip'])).toBe('bios');
+		expect(new TextDecoder().decode(files['/kof97.7z'])).toBe('parent');
+	});
+
+	it('sets EJS_externalFiles for a set with a BIOS and no deps', async () => {
+		serve({
+			[check]: async () => response(204),
+			[romsetUrl]: romset({ ...kof97h, setName: 'kof97', fileName: 'kof97.zip', deps: [] }),
+			[neogeoUrl]: bytes('bios'),
+			[romUrl]: async () => response(200)
+		});
+
+		await play('fbneo', 'kof97.fbneoz');
+
+		expect((atLoader?.EJS_gameUrl as File).name).toBe('kof97.zip');
+		expect(Object.keys(atLoader?.EJS_externalFiles as object)).toEqual(['/neogeo.zip']);
+	});
+
+	it('skips a missing BIOS for a self-contained set and plays on', async () => {
+		serve({
+			[check]: async () => response(204),
+			[romsetUrl]: romset({ ...kof97h, deps: [], selfContained: true }),
+			[neogeoUrl]: async () => response(404),
+			[romUrl]: async () => response(200)
+		});
+
+		await play('fbneo', 'kof97h.fbneo7z');
+
+		expect(urls()).toEqual([check, romsetUrl, neogeoUrl, romUrl]);
+		expect(atLoader?.EJS_externalFiles).toBeUndefined();
+	});
+
+	it.each([
+		[
+			'404',
+			async () => response(404),
+			'This game needs the neogeo BIOS: ask an Admin to put neogeo.zip in the BIOS folder (Paths:Bios).'
+		],
+		['401', async () => response(401), 'Your session has expired. Sign in again.'],
+		['HTTP', async () => response(500), "Couldn't load the neogeo BIOS (HTTP 500)."],
+		['network', () => Promise.reject(new TypeError('offline')), "Couldn't load the neogeo BIOS."]
+	])('stops on a BIOS %s failure before the game', async (_kind, bios, message) => {
+		serve({
+			[check]: async () => response(204),
+			[romsetUrl]: romset(kof97h),
+			[neogeoUrl]: bios as () => Promise<FakeResponse>
+		});
+
+		expect(await play('fbneo', 'kof97h.fbneo7z')).toBe(message);
+		expect(urls()).toEqual([check, romsetUrl, neogeoUrl]);
+		expect(atLoader).toBeNull();
+	});
+
+	it('names the FBNeo system for a missing set', async () => {
+		serve({
+			[check]: async () => response(204),
+			[romsetUrl]: romset({ ...kof97h, deps: [], missing: ['kof97'] })
+		});
+
+		expect(await play('fbneo', 'kof97h.fbneo7z')).toBe(
+			'This game needs the kof97 romset. Import it into Arcade (FinalBurn Neo), then play again.'
+		);
 	});
 });

@@ -34,6 +34,7 @@ public sealed record EffectiveSettings(
         DatBaseUrl = sources.DatBaseUrl,
         TitleDbUrl = sources.TitleDbUrl,
         MameDatUrl = sources.MameDatUrl,
+        FbneoDatUrl = sources.FbneoDatUrl,
         ThumbnailBaseUrl = sources.ThumbnailBaseUrl,
         IgdbClientId = sources.IgdbClientId,
         IgdbClientSecret = SourcesOptions.IsSet(sources.IgdbClientSecret) ? Masked : "",

@@ -49,6 +49,7 @@ public class OptionsRegistrationTests
         Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.ViceCorePath, Is.Empty, "C64 is off by default");
         Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.Mupen64PlusCorePath, Is.Empty, "N64 is off by default");
         Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.Mame2003PlusCorePath, Is.Empty, "Arcade is off by default");
+        Assert.That(services.GetRequiredService<IOptions<EmulatorOptions>>().Value.FbneoCorePath, Is.Empty, "FBNeo is off by default");
     }
 
     [Test]
@@ -131,6 +132,7 @@ public class OptionsRegistrationTests
     [TestCase("Emulator:ViceCorePath", "relative/vice")]
     [TestCase("Emulator:Mupen64PlusCorePath", "relative/n64")]
     [TestCase("Emulator:Mame2003PlusCorePath", "relative/mame")]
+    [TestCase("Emulator:FbneoCorePath", "relative/fbneo")]
     public void InvalidSetting_FailsStartupValidationNamingTheKey(string key, string value)
     {
         var settings = ValidSettings();

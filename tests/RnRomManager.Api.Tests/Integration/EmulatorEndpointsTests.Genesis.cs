@@ -26,6 +26,7 @@ public partial class EmulatorEndpointsTests
         SyntheticCore(OperatorCoreManifest.Opera, SyntheticOpera),
         SyntheticCore(OperatorCoreManifest.Vice, SyntheticVice),
         SyntheticCore(OperatorCoreManifest.Mame2003Plus, SyntheticMame),
+        SyntheticCore(OperatorCoreManifest.Fbneo, SyntheticFbneo),
     ]);
 
     /// <summary>A pinned core with its files replaced by synthetic bytes of the same names.</summary>

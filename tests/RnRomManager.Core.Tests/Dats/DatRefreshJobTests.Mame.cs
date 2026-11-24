@@ -18,8 +18,21 @@ public partial class DatRefreshJobTests
     {
         var handler = Handler(id, DatStore.MameName);
         handler.DatSource.Returns(DatSource.Mame);
+        handler.RomExtensions.Returns([".mamez", ".zip"]);
         return handler;
     }
+
+    private const string FbneoUrl = "https://fbneo.test/fbneo-arcade.dat";
+
+    private static ISystemHandler FbneoHandler(string id, string datName = "FBNeo - Arcade Games")
+    {
+        var handler = Handler(id, datName);
+        handler.DatSource.Returns(DatSource.Fbneo);
+        handler.RomExtensions.Returns([".fbneoz"]);
+        return handler;
+    }
+
+    private bool IsFbneo(HttpRequestMessage request) => request.RequestUri!.AbsoluteUri == FbneoUrl;
 
     private void UseMame(params ISystemHandler[] extra)
     {
@@ -33,7 +46,7 @@ public partial class DatRefreshJobTests
         _override = request => IsMame(request) ? StubHttpHandler.Bytes(Encoding.UTF8.GetBytes(xml)) : null;
 
     private Task<object?> RunMameAsync(StubHttpHandler server, JobProgress? progress = null, TimeProvider? time = null) =>
-        new DatRefreshJob(new HttpClient(server), new SourcesOptions { DatBaseUrl = BaseUrl + "/", MameDatUrl = MameUrl }, _paths, _cache, _systems,
+        new DatRefreshJob(new HttpClient(server), new SourcesOptions { DatBaseUrl = BaseUrl + "/", MameDatUrl = MameUrl, FbneoDatUrl = FbneoUrl }, _paths, _cache, _systems,
                 _audit, time ?? TimeProvider.System, NullLogger<DatRefreshJob>.Instance)
             .RunAsync(new JobContext(Guid.NewGuid(), progress ?? new JobProgress()), default);
 
@@ -84,6 +97,44 @@ public partial class DatRefreshJobTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => RunMameAsync(server));
 
         Assert.That(ex!.Message, Is.EqualTo("Systems 'mame2003' and 'mame2' both use Sources:MameDatUrl; nothing was refreshed."));
+        Assert.That(server.Requests, Is.Empty);
+    }
+
+    // FBNeo D3: each romset handler downloads its own URL, staged under mame/ with its own DatName.
+    [Test]
+    public async Task MameAndFbneo_BothStaged_OneProgressItemEach()
+    {
+        WriteLiveV1();
+        UseMame(FbneoHandler("fbneo"));
+        var fbneoXml = IngestSeeder.MinimalMame["MAME"].Replace("rnmin", "rnfb");
+        _override = request => IsMame(request) ? StubHttpHandler.Bytes(Encoding.UTF8.GetBytes(IngestSeeder.MinimalMame["MAME"]))
+            : IsFbneo(request) ? StubHttpHandler.Bytes(Encoding.UTF8.GetBytes(fbneoXml)) : null;
+        var server = Server();
+        var progress = new JobProgress();
+
+        var result = await RunMameAsync(server, progress);
+
+        Assert.That((server.Requests.Count(IsMame), server.Requests.Count(IsFbneo)), Is.EqualTo((1, 1)));
+        Assert.That((progress.Current, progress.Total), Is.EqualTo((12, 12)), "5 per libretro system + 2");
+        var manifest = DatManifest.Read(Path.Combine(_cache.Directory, DatManifest.FileName));
+        Assert.That(manifest.Where(e => e.File.StartsWith("mame/")).Select(e => (e.File, e.DatName)),
+            Is.EqualTo(new[] { ("mame/MAME.xml", "MAME"), ("mame/FBNeo - Arcade Games.xml", "FBNeo - Arcade Games") }));
+        Assert.That(File.ReadAllText(Path.Combine(_cache.Directory, "mame", "FBNeo - Arcade Games.xml")), Is.EqualTo(fbneoXml));
+        var versions = (IDictionary<string, string?>)result!.GetType().GetProperty("versions")!.GetValue(result)!;
+        Assert.That(versions.Keys, Does.Contain("FBNeo - Arcade Games").And.Contain("MAME"));
+        Assert.That(_cache.For("fbneo")!.BySetName("rnfb"), Is.Not.Null);
+        Assert.That(_cache.For("mame2003")!.BySetName("rnmin"), Is.Not.Null);
+    }
+
+    [Test]
+    public async Task TwoFbneoSystems_AreRefusedBeforeAnyDownload()
+    {
+        UseMame(FbneoHandler("fbneo"), FbneoHandler("fbneo2", "FBNeo 2"));
+        var server = Server();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => RunMameAsync(server));
+
+        Assert.That(ex!.Message, Is.EqualTo("Systems 'fbneo' and 'fbneo2' both use Sources:FbneoDatUrl; nothing was refreshed."));
         Assert.That(server.Requests, Is.Empty);
     }
 

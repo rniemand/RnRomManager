@@ -4,7 +4,7 @@ namespace RnRomManager.Core.Configuration;
 
 /// <summary>
 /// B1: each operator-supplied core path (<c>Emulator:GenesisCorePath</c>, <c>Emulator:PicodriveCorePath</c>,
-/// <c>Emulator:Snes9xCorePath</c>, <c>Emulator:OperaCorePath</c>, <c>Emulator:ViceCorePath</c>, <c>Emulator:Mupen64PlusCorePath</c>, <c>Emulator:Mame2003PlusCorePath</c>) is empty or
+/// <c>Emulator:Snes9xCorePath</c>, <c>Emulator:OperaCorePath</c>, <c>Emulator:ViceCorePath</c>, <c>Emulator:Mupen64PlusCorePath</c>, <c>Emulator:Mame2003PlusCorePath</c>, <c>Emulator:FbneoCorePath</c>) is empty or
 /// absolute. Whether it exists is checked per request.
 /// </summary>
 public sealed class EmulatorOptionsValidator : IValidateOptions<EmulatorOptions>
@@ -21,6 +21,7 @@ public sealed class EmulatorOptionsValidator : IValidateOptions<EmulatorOptions>
             ("Emulator:ViceCorePath", options.ViceCorePath),
             ("Emulator:Mupen64PlusCorePath", options.Mupen64PlusCorePath),
             ("Emulator:Mame2003PlusCorePath", options.Mame2003PlusCorePath),
+            ("Emulator:FbneoCorePath", options.FbneoCorePath),
         })
         {
             if (path.Length != 0 && !Path.IsPathFullyQualified(path))

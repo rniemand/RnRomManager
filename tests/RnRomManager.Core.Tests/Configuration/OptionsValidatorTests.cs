@@ -97,6 +97,22 @@ public class OptionsValidatorTests
         Assert.That(new SourcesOptions().MameDatUrl,
             Is.EqualTo("https://raw.githubusercontent.com/libretro/mame2003-plus-libretro/master/metadata/mame2003-plus.xml"));
 
+    [TestCase("http://localhost:9000/fbneo.dat", true)]
+    [TestCase("", false)]
+    [TestCase("ftp://example.com/fbneo.dat", false)]
+    public void FbneoDatUrl_IsAbsoluteHttpUrl(string value, bool valid)
+    {
+        var result = new SourcesOptionsValidator().Validate(null, new() { FbneoDatUrl = value });
+        Assert.That(result.Succeeded, Is.EqualTo(valid));
+        if (!valid)
+            Assert.That(result.Failures, Does.Contain($"Sources:FbneoDatUrl must be an absolute http(s) URL (got '{value}')."));
+    }
+
+    [Test]
+    public void FbneoDatUrl_DefaultsToTheArcadeOnlyDat() =>
+        Assert.That(new SourcesOptions().FbneoDatUrl,
+            Is.EqualTo("https://raw.githubusercontent.com/libretro/FBNeo/master/dats/FinalBurn%20Neo%20(ClrMame%20Pro%20XML%2C%20Arcade%20only).dat"));
+
     [TestCase("https://thumbnails.libretro.com", true)]
     [TestCase("", true)]
     [TestCase("file:///c:/x", false)]
@@ -236,5 +252,17 @@ public class OptionsValidatorTests
         var relative = new EmulatorOptionsValidator().Validate(null, new() { Mame2003PlusCorePath = "mame" });
         Assert.That(relative.Succeeded, Is.False);
         Assert.That(relative.FailureMessage, Does.Contain("Emulator:Mame2003PlusCorePath must be empty or an absolute path (got 'mame')."));
+    }
+
+    [Test]
+    public void FbneoCorePath_EmptyOrAbsolute()
+    {
+        var absolute = Path.Combine(Path.GetTempPath(), "fbneo");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { FbneoCorePath = "" }).Succeeded, Is.True, "blank disables");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { FbneoCorePath = absolute, Mame2003PlusCorePath = absolute }).Succeeded,
+            Is.True, "may share the other operator cores' folder");
+        var relative = new EmulatorOptionsValidator().Validate(null, new() { FbneoCorePath = "fbneo" });
+        Assert.That(relative.Succeeded, Is.False);
+        Assert.That(relative.FailureMessage, Does.Contain("Emulator:FbneoCorePath must be empty or an absolute path (got 'fbneo')."));
     }
 }

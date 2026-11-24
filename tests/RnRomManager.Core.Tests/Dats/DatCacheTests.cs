@@ -309,18 +309,49 @@ public class DatCacheTests
     }
 
     // Arcade D5: a Mame system's store, and the manifest checks that disable only that system.
-    private DatCache MameCache()
+    private DatCache MameCache(params ISystemHandler[] extra)
     {
-        var mame = Handler("mame2003", DatStore.MameName);
+        var mame = Handler("mame2003", DatStore.MameName, ".mamez");
         mame.DatSource.Returns(DatSource.Mame);
         var registry = Substitute.For<ISystemRegistry>();
-        ISystemHandler[] handlers = [Handler("gb", Gb, ".gb"), mame];
+        ISystemHandler[] handlers = [Handler("gb", Gb, ".gb"), mame, .. extra];
         registry.All.Returns(handlers);
         var cache = new DatCache(Options.Create(new PathsOptions { Cache = _dir.Path }), registry, NullLogger<DatCache>.Instance);
         FixtureDatWriter.Write(cache.Directory,
             new Dictionary<string, IReadOnlyList<FixtureGame>> { [Gb] = [new FixtureGame("Tetris (World) (Rev 1)", "Tetris (World) (Rev 1).gb", _tetris)] },
-            mame: IngestSeeder.MinimalMame);
+            mame: new Dictionary<string, string>(IngestSeeder.MinimalMame) { [FbneoDat] = IngestSeeder.MinimalMame["MAME"] });
         return cache;
+    }
+
+    private const string FbneoDat = "FBNeo - Arcade Games";
+
+    // FBNeo D5: an Fbneo system loads its own mame/<DatName>.xml under its DatName and first ROM extension.
+    [Test]
+    public void Fbneo_LoadsItsFileUnderItsOwnDatName()
+    {
+        var fbneo = Handler("fbneo", FbneoDat, ".fbneoz", ".zip");
+        fbneo.DatSource.Returns(DatSource.Fbneo);
+        var cache = MameCache(fbneo);
+
+        cache.Load();
+
+        var store = cache.For("fbneo")!;
+        Assert.That((store.DatName, store.Version), Is.EqualTo((FbneoDat, FixtureDatWriter.MameVersion)));
+        Assert.That(store.Roms[0].RomName, Is.EqualTo("rnmin.fbneoz"));
+        Assert.That(cache.For("mame2003")!.Roms[0].RomName, Is.EqualTo("rnmin.mamez"));
+    }
+
+    [Test]
+    public void Romset_WithNoRomExtensions_FailsOnlyThatSystem()
+    {
+        var fbneo = Handler("fbneo", FbneoDat);
+        fbneo.DatSource.Returns(DatSource.Fbneo);
+        var cache = MameCache(fbneo);
+
+        cache.Load();
+
+        Assert.That(cache.For("fbneo"), Is.Null);
+        Assert.That(cache.For("mame2003"), Is.Not.Null);
     }
 
     private void EditMameEntry(DatCache cache, Func<DatManifestEntry, DatManifestEntry> change)

@@ -222,7 +222,7 @@ public sealed class IngestPipeline(
 
         // Arcade I2: a set ZIP's file list, from a second checked open of the file that was hashed.
         IReadOnlyList<MameEntry>? mameEntries = null;
-        if (eligible.Any(h => h.DatSource == DatSource.Mame))
+        if (eligible.Any(h => h.DatSource.IsRomset()))
         {
             var opened = ExternalRomPath.OpenRead(root, fresh.Path, FileShare.ReadWrite | FileShare.Delete, snapshot);
             if (opened.Status == ExternalPathStatus.Changed)
@@ -233,7 +233,9 @@ public sealed class IngestPipeline(
             try
             {
                 using var stream = opened.Stream!;
-                (mameEntries, zipError) = MameZip.ReadEntries(stream);
+                (mameEntries, zipError) = Path.GetExtension(file.Name).ToLowerInvariant() is ".7z" or ".fbneo7z"
+                    ? MameZip.ReadSevenZipEntries(stream)
+                    : MameZip.ReadEntries(stream);
                 if (ExternalRomPath.SnapshotOf(stream) != snapshot)
                     return tooRecent;
             }
@@ -339,7 +341,7 @@ public sealed class IngestPipeline(
         var headers = candidates.ToDictionary(h => h.Id, h => h.ReadHeader(headerBytes));
         // T4: a TitleDb system matches by title id (header, else file name); the others by SHA1.
         var match = candidates
-            .Where(h => h.DatSource != DatSource.Mame) // Arcade I4: matched by set name and CRCs below
+            .Where(h => !h.DatSource.IsRomset()) // Arcade I4: matched by set name and CRCs below
             .Select(h => (Handler: h, Store: dats.For(h.Id)))
             .Select(x => (x.Handler, x.Store, Rom: x.Store?.BySha1(hashes.Sha1),
                 Title: x.Handler.DatSource == DatSource.TitleDb && x.Store is { } titles
@@ -359,7 +361,7 @@ public sealed class IngestPipeline(
         MameSet? mameSet = null;
         MameMatch? mameMatch = null;
         if (match.Rom is null && match.Title is null && mameEntries is not null
-            && candidates.FirstOrDefault(h => h.DatSource == DatSource.Mame) is { } arcade && dats.For(arcade.Id) is { } mameStore)
+            && candidates.FirstOrDefault(h => h.DatSource.IsRomset()) is { } arcade && dats.For(arcade.Id) is { } mameStore)
         {
             mameSet = mameStore.BySetName(Path.GetFileNameWithoutExtension(file.Name));
             mameMatch = mameSet is null ? null : MameMatcher.Match(mameSet, mameEntries);
@@ -403,7 +405,7 @@ public sealed class IngestPipeline(
             ? new Release(title.RomFileName, title.BaseTitle, title.GameName, [], title.Languages, title.Revision, title.Flags,
                 IdentificationMethod.TitleDb, TitleDb.MetadataOf(title.Base), title.TitleId)
             : mameSet is not null
-                ? MameRelease(mameSet, store)
+                ? MameRelease(mameSet, store, system.SourceExtension(file.Name)!)
                 : LibretroRelease(match.Rom!, store, file, external, match.Handler.FileSets) with { Method = method };
         // I3/E3: an external release's name is a portable logical name within budget. B10: a FileSets name is kept exactly.
         var romName = external && !system.FileSets ? ExternalRomName.AllocateLogicalName(release.FileName, new ExternalNameReservations([])) : release.FileName;
@@ -810,13 +812,13 @@ public sealed class IngestPipeline(
     }
 
     /// <summary>
-    /// Arcade G1/G3: named <c>&lt;set&gt;.mamez</c> after the DAT's spelling, grouped under the parent's base title when
+    /// Arcade G1/G3: named <c>&lt;set&gt;&lt;extension&gt;</c> (<c>.mamez</c>, <c>.fbneoz</c>, <c>.fbneo7z</c>) after the DAT's spelling, grouped under the parent's base title when
     /// <c>cloneof</c> names a set the DAT has; no regions, languages or revision; a BIOS set is flagged <c>BIOS</c>.
     /// </summary>
-    private static Release MameRelease(MameSet set, DatStore store)
+    private static Release MameRelease(MameSet set, DatStore store, string extension)
     {
         var titled = set.CloneOf is { } parent && store.BySetName(parent) is { } parentSet ? parentSet : set;
-        return new Release(set.Name + ".mamez", NoIntroName.Parse(titled.Description).BaseTitle, set.Description, [], [], null,
+        return new Release(set.Name + extension, NoIntroName.Parse(titled.Description).BaseTitle, set.Description, [], [], null,
             set.IsBios ? ["BIOS"] : [], IdentificationMethod.Dat, store.MetadataForSet(set.Name), null);
     }
 

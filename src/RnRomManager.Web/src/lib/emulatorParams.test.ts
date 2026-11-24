@@ -10,6 +10,7 @@ import {
 	hidesCoreChooser,
 	isOperatorCore,
 	operatorCoreError,
+	romsetMissingError,
 	operatorCorePaths,
 	optionalBiosError,
 	parsePlayParams,
@@ -168,7 +169,8 @@ describe('parsePlayParams', () => {
 		'mednafen_pce',
 		'mednafen_ngp',
 		'mupen64plus_next',
-		'mame2003_plus'
+		'mame2003_plus',
+		'fbneo'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});
@@ -1053,4 +1055,37 @@ describe('Arcade (MAME 2003-Plus)', () => {
 			"The MAME 2003-Plus core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:Mame2003PlusCorePath)."
 		);
 	});
+});
+
+describe('Arcade (FinalBurn Neo)', () => {
+	it('is an operator core whose chooser is hidden', () => {
+		expect(isOperatorCore('fbneo')).toBe(true);
+		expect(hidesCoreChooser('fbneo')).toBe(true);
+		expect(controlSchemeFor('fbneo', 'sf2.fbneoz')).toBeNull();
+		expect(operatorCorePaths('fbneo')).toEqual({
+			'fbneo-wasm.data': '/api/emulator/cores/fbneo/fbneo-wasm.data',
+			'fbneo-legacy-wasm.data': '/api/emulator/cores/fbneo/fbneo-legacy-wasm.data',
+			'fbneo.json': '/api/emulator/cores/fbneo/fbneo.json'
+		});
+		expect(operatorCoreError('fbneo', 404)).toBe(
+			'Arcade (FinalBurn Neo) games need the FinalBurn Neo core files: ask an Admin to set them up (Emulator:FbneoCorePath).'
+		);
+		expect(operatorCoreError('fbneo', 409)).toBe(
+			"The FinalBurn Neo core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:FbneoCorePath)."
+		);
+	});
+});
+
+describe('romsetMissingError', () => {
+	it.each([['Arcade (MAME 2003-Plus)'], ['Arcade (FinalBurn Neo)']])(
+		'names %s, singular and plural',
+		(system) => {
+			expect(romsetMissingError(['sf2'], system)).toBe(
+				`This game needs the sf2 romset. Import it into ${system}, then play again.`
+			);
+			expect(romsetMissingError(['sf2', 'qsound'], system)).toBe(
+				`This game needs the sf2, qsound romsets. Import them into ${system}, then play again.`
+			);
+		}
+	);
 });

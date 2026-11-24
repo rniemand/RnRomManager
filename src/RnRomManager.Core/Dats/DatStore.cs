@@ -57,16 +57,18 @@ public sealed class DatStore
     }
 
     /// <summary>
-    /// Arcade D3: a MAME store. One ROM per set, in file order: <c>GameName</c> the description, <c>RomName</c>
-    /// <c>&lt;set&gt;.mamez</c>, the sum of its ROM sizes and empty hashes, so nothing is in the SHA1 index; sets are
+    /// Arcade D3: a romset (MAME or FBNeo) store. One ROM per set, in file order: <c>GameName</c> the description, <c>RomName</c>
+    /// <c>&lt;set&gt;&lt;romExtension&gt;</c> (FBNeo D5), the sum of its ROM sizes and empty hashes, so nothing is in the SHA1 index; sets are
     /// found by <see cref="BySetName"/>.
     /// </summary>
+    /// <param name="datName">The system's <c>DatName</c> (<see cref="MameName"/> for MAME).</param>
     /// <param name="version">The manifest's download time.</param>
-    public DatStore(MameDat dat, string version)
+    /// <param name="romExtension">The system's first ROM extension (<c>.mamez</c> for MAME).</param>
+    public DatStore(MameDat dat, string datName, string version, string romExtension)
     {
-        DatName = MameName;
+        DatName = datName;
         Version = version;
-        Roms = dat.Sets.Select(s => new DatRom(s.Description, s.Name + ".mamez", s.Roms.Sum(r => r.Size), "", "", "")).ToList();
+        Roms = dat.Sets.Select(s => new DatRom(s.Description, s.Name + romExtension, s.Roms.Sum(r => r.Size), "", "", "")).ToList();
         foreach (var set in dat.Sets)
             _bySetName.Add(set.Name, set); // MameDat.Parse already refused repeats
         BaseTitles = Roms.Select(r => NoIntroName.Parse(r.GameName).BaseTitle).Distinct(StringComparer.Ordinal).ToList();

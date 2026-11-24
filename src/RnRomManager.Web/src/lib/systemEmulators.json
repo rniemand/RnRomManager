@@ -111,6 +111,13 @@
 			"os": ["windows", "macos", "linux"]
 		}
 	],
+	"fbneo": [
+		{
+			"name": "FinalBurn Neo",
+			"url": "https://github.com/finalburnneo/FBNeo",
+			"os": ["windows", "macos", "linux"]
+		}
+	],
 	"fds": [
 		{
 			"name": "Mesen",

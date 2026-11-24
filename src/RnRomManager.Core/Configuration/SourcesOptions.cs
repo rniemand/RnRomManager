@@ -13,6 +13,9 @@ public sealed class SourcesOptions
     /// <summary>Arcade D1: the MAME <c>-listxml</c> DAT for every <c>Mame</c> system; required.</summary>
     public string MameDatUrl { get; set; } = "https://raw.githubusercontent.com/libretro/mame2003-plus-libretro/master/metadata/mame2003-plus.xml";
 
+    /// <summary>FBNeo D2: the FBNeo arcade-only XML DAT for every <c>Fbneo</c> system; required.</summary>
+    public string FbneoDatUrl { get; set; } = "https://raw.githubusercontent.com/libretro/FBNeo/master/dats/FinalBurn%20Neo%20(ClrMame%20Pro%20XML%2C%20Arcade%20only).dat";
+
     /// <summary>Empty = media fetch disabled (default box art only).</summary>
     public string ThumbnailBaseUrl { get; set; } = "https://thumbnails.libretro.com";
 

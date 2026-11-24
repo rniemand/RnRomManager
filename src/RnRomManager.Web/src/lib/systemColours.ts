@@ -26,6 +26,7 @@ export interface SystemColour {
 		| 'tgcd'
 		| 'dos'
 		| 'mame2003'
+		| 'fbneo'
 		| 'ngp'
 		| 'ngpc'
 		| 'switch'
@@ -71,6 +72,7 @@ export const systemColours: Record<string, SystemColour> = {
 	tgcd: { name: 'tgcd', foreground: '#fff' },
 	dos: { name: 'dos', foreground: '#fff' },
 	mame2003: { name: 'mame2003', foreground: '#fff' },
+	fbneo: { name: 'fbneo', foreground: '#fff' },
 	ngp: { name: 'ngp', foreground: '#fff' },
 	ngpc: { name: 'ngpc', foreground: '#000' },
 	switch: { name: 'switch', foreground: '#fff' },

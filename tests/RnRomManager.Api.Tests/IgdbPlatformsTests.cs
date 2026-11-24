@@ -24,7 +24,9 @@ public class IgdbPlatformsTests
         // Satellaview and Sufami Turbo search as SNES (19): their own IGDB platforms weren't looked up (no credentials).
         string[] snesFallbacks = ["satellaview", "sufami"];
         Assert.That(snesFallbacks.Select(id => IgdbPlatforms.ById[id]), Is.All.EqualTo(IgdbPlatforms.ById["snes"]));
-        Assert.That(IgdbPlatforms.ById.Where(p => !snesFallbacks.Contains(p.Key)).Select(p => p.Value), Is.Unique);
+        // Both arcade systems search IGDB's Arcade platform (52).
+        Assert.That(IgdbPlatforms.ById["fbneo"], Is.EqualTo(IgdbPlatforms.ById["mame2003"]));
+        Assert.That(IgdbPlatforms.ById.Where(p => !snesFallbacks.Contains(p.Key) && p.Key != "fbneo").Select(p => p.Value), Is.Unique);
         Assert.That(IgdbPlatforms.ById.Values, Is.All.Positive);
     }
 }

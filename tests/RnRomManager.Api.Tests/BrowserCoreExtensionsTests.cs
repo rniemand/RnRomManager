@@ -59,6 +59,9 @@ public class BrowserCoreExtensionsTests
         // Arcade P1: the NUL-terminated valid_extensions string in mame2003_plus_libretro.wasm is "zip|" (read 2026-11-24), its
         // trailing separator dropped here; core.json says ["zip"].
         ["mame2003_plus"] = "zip",
+        // Arcade (FinalBurn Neo) P1: the NUL-terminated valid_extensions string in fbneo_libretro.wasm is "zip|7z|cue|ccd"
+        // (read 2026-11-24; the cue/ccd are Neo Geo CD).
+        ["fbneo"] = "zip|7z|cue|ccd",
         // Side by side (emulatorjs-next.json, EmulatorJS 4.3.0-pre): tied to its payload by NextCoreSha256.
         ["azahar"] = "3ds|3dsx|z3dsx|elf|axf|cci|zcci|cxi|zcxi|app",
     };
@@ -79,6 +82,7 @@ public class BrowserCoreExtensionsTests
         ["vice_xvic"] = "4c7de6f858e100e9aea93085d5aef01bdfe87399c21c0fde4e1b6c7f1da56316",
         ["mupen64plus_next"] = "2da1cbce9fda395e3ae83ca5787353baa159142d45ef3ea90f108b92524f76cc",
         ["mame2003_plus"] = "cb6d9c80a88b65d1579d16d02128a678f8d1cd3f51de1479e647cea27b13247b",
+        ["fbneo"] = "315a25e0bcd61d58ee0d9e8b1dbf3740b9e0ca4b7d0726f848ce1068de73437c",
     };
 
     /// <summary>
@@ -91,6 +95,8 @@ public class BrowserCoreExtensionsTests
     private static readonly Dictionary<(string System, string Extension), string> Exceptions = new()
     {
         [("mame2003", ".mamez")] = "stored as .mamez and handed to the core as <set>.zip by play.js",
+        [("fbneo", ".fbneoz")] = "stored as .fbneoz and handed to the core as <set>.zip by play.js",
+        [("fbneo", ".fbneo7z")] = "stored as .fbneo7z and handed to the core as <set>.7z by play.js",
         [("saturn", ".bin")] = "play-disc adds a MODE1/2352 cue to a lone .bin, and Yabause opens the cue",
         [("saturn", ".nrg")] = "play-disc sends a cue built from the Nero footer and the image as track-01.bin (N1), never the .nrg as the content",
         [("tgcd", ".bin")] = "a cue set's data track; a lone .bin never plays (canPlay, play-disc)",
@@ -166,7 +172,8 @@ public class BrowserCoreExtensionsTests
         ("DOS games are ingested as one .zip or .dosz; put loose files and disc images inside it", ["dosbox_pure"],
             [".exe", ".com", ".bat", ".iso", ".chd", ".cue", ".ins", ".img", ".ima", ".vhd", ".jrc", ".tc", ".m3u", ".m3u8", ".conf", "./"]),
         ("3DS homebrew and NCCH formats aren't ingested; only .3ds, .cci and .cia dumps are", ["azahar"],
-            [".3dsx", ".z3dsx", ".elf", ".axf", ".zcci", ".cxi", ".zcxi", ".app"]));
+            [".3dsx", ".z3dsx", ".elf", ".axf", ".zcci", ".cxi", ".zcxi", ".app"]),
+        ("Neo Geo CD and other non-arcade content isn't an arcade set; not ingested", ["fbneo"], [".cue", ".ccd"]));
 
     private static Dictionary<(string Core, string Extension), string> Entries(params (string Reason, string[] Cores, string[] Extensions)[] groups)
     {
@@ -252,6 +259,8 @@ public class BrowserCoreExtensionsTests
             "tgcd .mdf: stale exception (no such system)",
             "3ds .cia: stale exception (no such system)",
             "mame2003 .mamez: stale exception (no such system)",
+            "fbneo .fbneoz: stale exception (no such system)",
+            "fbneo .fbneo7z: stale exception (no such system)",
         }));
     }
 

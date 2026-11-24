@@ -881,7 +881,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
             return TitleDb.TitleIdOfGameName(name) is { } titleId && store.ByTitleId(titleId) is { } baseEntry
                 ? TitleDb.MetadataOf(baseEntry) : DatMetadata.Empty;
         // Arcade G4: by the set name kept in the header (a Manual release has none).
-        if (systems.ById(systemId) is { DatSource: DatSource.Mame })
+        if (systems.ById(systemId)?.DatSource.IsRomset() == true)
             return rom.Header?["setName"] is System.Text.Json.Nodes.JsonValue setName && setName.TryGetValue<string>(out var set) ? store.MetadataForSet(set) : DatMetadata.Empty;
         var entry = rom.Identification.Method == IdentificationMethod.Dat
             ? store.BySha1(rom.Metadata.Sha1)

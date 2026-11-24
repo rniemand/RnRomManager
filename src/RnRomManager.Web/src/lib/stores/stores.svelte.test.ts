@@ -216,6 +216,7 @@ describe('icons', () => {
 		expect(iconClass('system-tgcd')).toBe('bi bi-disc');
 		expect(iconClass('system-dos')).toBe('bi bi-terminal');
 		expect(iconClass('system-mame2003')).toBe('bi bi-joystick');
+		expect(iconClass('system-fbneo')).toBe('bi bi-joystick');
 	});
 });
 

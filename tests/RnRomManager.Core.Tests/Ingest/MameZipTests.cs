@@ -2,6 +2,7 @@ using System.IO.Compression;
 using RnRomManager.Core.Storage;
 using System.Text;
 using RnRomManager.Core.Ingest;
+using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Ingest;
 
@@ -57,5 +58,36 @@ public class MameZipTests
 
         Assert.That(entries, Is.Null);
         Assert.That(error, Is.EqualTo("more than 4096 files in the set ZIP"));
+    }
+
+    [Test]
+    public void ReadSevenZipEntries_ReturnsFileNamesAndCrcs()
+    {
+        using var stream = File.OpenRead(TestFixtures.Basic7zPath);
+
+        var (entries, error) = MameZip.ReadSevenZipEntries(stream);
+
+        Assert.That(error, Is.Null);
+        Assert.That(entries, Is.EqualTo(new[] { new MameEntry(TestFixtures.Basic7zEntry, Crc32.ToHex(TestFixtures.Basic7zRom())) }));
+    }
+
+    [Test]
+    public void ReadSevenZipEntries_NotA7z_IsAnError()
+    {
+        var (entries, error) = MameZip.ReadSevenZipEntries(new MemoryStream(Encoding.ASCII.GetBytes("this is not a 7z file at all")));
+
+        Assert.That(entries, Is.Null);
+        Assert.That(error, Does.StartWith("not a readable 7z: "));
+    }
+
+    [Test]
+    public void ReadSevenZipEntries_Truncated_IsAnError_NotAThrow()
+    {
+        var bytes = File.ReadAllBytes(TestFixtures.Basic7zPath);
+
+        var (entries, error) = MameZip.ReadSevenZipEntries(new MemoryStream(bytes[..(bytes.Length / 2)]));
+
+        Assert.That(entries, Is.Null);
+        Assert.That(error, Does.StartWith("not a readable 7z: "));
     }
 }
