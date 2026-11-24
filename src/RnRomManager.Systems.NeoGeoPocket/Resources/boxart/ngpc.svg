@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Neo Geo Pocket Color). Made for this project; MIT licensed like the rest of the repo.
+       Exported to ngpc.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#fbf1d6"/>
+  <!-- short, wide cartridge shell with a rounded grip at the bottom -->
+  <path d="M104 120 H408 Q424 120 424 136 V340 Q424 400 364 400 H148 Q88 400 88 340 V136 Q88 120 104 120 Z"
+        fill="#d4a017" stroke="#6b4e00" stroke-width="4"/>
+  <!-- contact edge -->
+  <rect x="140" y="104" width="232" height="20" rx="4" fill="#6b4e00"/>
+  <!-- label -->
+  <rect x="124" y="152" width="264" height="164" rx="10" fill="#fffdf6"/>
+  <!-- four-colour disc -->
+  <g transform="translate(176 234)">
+    <path d="M0 0 L0 -32 A32 32 0 0 1 32 0 Z" fill="#d62828"/>
+    <path d="M0 0 L32 0 A32 32 0 0 1 0 32 Z" fill="#2a9d8f"/>
+    <path d="M0 0 L0 32 A32 32 0 0 1 -32 0 Z" fill="#3a6ea5"/>
+    <path d="M0 0 L-32 0 A32 32 0 0 1 0 -32 Z" fill="#f4a261"/>
+  </g>
+  <text x="300" y="214" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="28" font-weight="700" fill="#4a3600">NEO GEO</text>
+  <text x="300" y="248" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="28" font-weight="700" fill="#4a3600">POCKET</text>
+  <text x="300" y="282" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="28" font-weight="700" fill="#4a3600">COLOR</text>
+  <!-- grip lines -->
+  <g stroke="#6b4e00" stroke-width="5" stroke-linecap="round" opacity="0.7">
+    <line x1="200" y1="350" x2="312" y2="350"/>
+    <line x1="216" y1="370" x2="296" y2="370"/>
+  </g>
+</svg>
