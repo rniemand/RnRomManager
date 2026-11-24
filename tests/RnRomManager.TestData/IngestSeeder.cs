@@ -64,7 +64,9 @@ public static class IngestSeeder
                 <mame build="0.78">
                 	<game name="rnmin">
                 		<description>Rn Minimal (World)</description>
-                		<rom name="rnmin.bin" size="4" crc="8bb98613"/>
+                		<year>1992</year>
+                		<manufacturer>Rn Co</manufacturer>
+                		<rom name="rnmin.bin" size="4" crc="eef7e520"/> <!-- "RNMN" -->
                 	</game>
                 </mame>
                 """,

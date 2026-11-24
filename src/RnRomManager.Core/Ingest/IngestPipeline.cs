@@ -420,7 +420,8 @@ public sealed class IngestPipeline(
         if (owners.Count > 1)
         {
             // T4: a TitleDb row also keeps the whole identity, so Attach doesn't depend on the DAT loaded later.
-            object queued = release.Method switch
+            // Arcade G5: a MAME release keeps its base title (the parent's) and its G2 header for Attach.
+            object queued = mameSet is not null ? new { datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName, baseTitle } : release.Method switch
             {
                 IdentificationMethod.Serial => new { datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName, method = nameof(IdentificationMethod.Serial) },
                 IdentificationMethod.TitleDb => new
@@ -430,8 +431,8 @@ public sealed class IngestPipeline(
                 },
                 _ => new { datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName },
             };
-            return await QueueReviewAsync(file, file.Name, system.Id, "AmbiguousGroup", hashes, size, headers[system.Id], jobId,
-                [], queued, owners, cancellationToken).ConfigureAwait(false);
+            return await QueueReviewAsync(file, file.Name, system.Id, "AmbiguousGroup", hashes, size,
+                mameSet is not null ? MameHeader(mameSet, mameMatch!) : headers[system.Id], jobId, [], queued, owners, cancellationToken).ConfigureAwait(false);
         }
 
         var now = time.GetUtcNow();
