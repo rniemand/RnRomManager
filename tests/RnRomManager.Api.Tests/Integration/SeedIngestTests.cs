@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 41, 32)]
-    [TestCase(SeedSet.Full, 241, 232)]
+    [TestCase(SeedSet.Basic, 43, 33)]
+    [TestCase(SeedSet.Full, 243, 233)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -64,6 +64,9 @@ public class SeedIngestTests
         Assert.That(Path.GetRelativePath(Path.Combine(factory.Root, "roms", "switch"), switchZip).Replace('\\', '/'), Is.EqualTo("O/Orbit Expedition.zip"));
         using (var zip = System.IO.Compression.ZipFile.OpenRead(switchZip))
             Assert.That(zip.Entries.Where(e => e.FullName.StartsWith("roms/")), Is.Empty);
+        // Arcade: the parent and its split clone are one game, the parent primary.
+        var rnFight = infos.Single(g => g.System == "mame2003");
+        Assert.That((rnFight.Title, rnFight.Roms.Single(r => r.IsPrimary).FileName, rnFight.Roms.Count), Is.EqualTo(("Rn Fight", "rnfight.mamez", 2)));
         var expedition = infos.Single(g => g.System == "switch");
         Assert.That(expedition.Title, Is.EqualTo("Orbit Expedition"));
         var reseeded = Path.Combine(factory.Root, "ingest-copy");

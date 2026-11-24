@@ -227,7 +227,7 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   ).toHaveAttribute("aria-expanded", "false");
   const run = page.getByRole("row").filter({ hasText: "Completed" });
   await expect(run).toContainText(
-    "Ingested 41 · Duplicate 1 · Review 3 · Failed 1",
+    "Ingested 43 · Duplicate 1 · Review 3 · Failed 1",
     {
       timeout: 60_000,
     },
@@ -317,7 +317,7 @@ test("reports and the ingest audit trail", { tag: "@shard-b" }, async () => {
     // B30: the Action cell also holds the system badge, so match its action line.
     .filter({ has: page.getByRole("cell").getByText("Ingested", { exact: true }) });
   // One Ingested event per release: a bin/cue set is one event (B7a).
-  await expect(ingested).toHaveCount(37);
+  await expect(ingested).toHaveCount(39);
   await expect(
     page
       .getByRole("row")
@@ -348,7 +348,7 @@ test("reports and the ingest audit trail", { tag: "@shard-b" }, async () => {
 
 test("browse, search and filter the library", async () => {
   await openLibrary();
-  await expect(page.getByText("32 games")).toBeVisible();
+  await expect(page.getByText("33 games")).toBeVisible();
   await expectAccessible(page, "library grid");
   // S1/L3: systems with ROMs in display-name order after "All systems"; F3/L2: each with its game count, right-aligned.
   await page.getByRole("button", { name: "System: All" }).click();
@@ -359,13 +359,14 @@ test("browse, search and filter the library", async () => {
   );
   await expect(
     systemMenu.locator(".dropdown-item").first().locator(".font-monospace"),
-  ).toHaveText("32");
+  ).toHaveText("33");
   expect(
     await systemMenu
       .locator("[data-value]")
       .evaluateAll((rows) => rows.map((r) => (r as HTMLElement).dataset.value)),
   ).toEqual([
     "s32x",
+    "mame2003",
     "a2600",
     "a5200",
     "a7800",
@@ -578,7 +579,7 @@ test("browse, search and filter the library", async () => {
   }
   await page.setViewportSize(viewport);
   await page.getByRole("button", { name: "Clear all" }).click();
-  await expect(page.getByText("32 games")).toBeVisible();
+  await expect(page.getByText("33 games")).toBeVisible();
   await expect(page.getByRole("button", { name: "Clear all" })).toBeDisabled();
 
   // The card grid fits a 320px phone: no sideways page scroll, and (U6) no card shows its rating row there.
@@ -1712,7 +1713,7 @@ test("Play: Atari 7800, Jaguar and Lynx launch with their bundled cores", { tag:
 test("global search, ratings and favourites", { tag: "@shard-b" }, async () => {
   // Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
   await openLibrary();
-  await expect(page.getByText("32 games")).toBeVisible();
+  await expect(page.getByText("33 games")).toBeVisible();
   await page.keyboard.press("Control+k");
   await expect(dialog()).toBeVisible();
   await expect(dialog().getByRole("combobox")).toBeFocused();
@@ -1905,7 +1906,7 @@ test("collections: create, add from game page and bulk select, search, remove, d
   await expect(page).toHaveURL(/\/collections$/);
   await expect(page.getByText("You have no collections yet.")).toBeVisible();
   await openLibrary();
-  await expect(page.getByText("32 games")).toBeVisible();
+  await expect(page.getByText("33 games")).toBeVisible();
 });
 
 test("collections discovery: browse publishers and genres across systems, share a selection", { tag: "@shard-b" }, async () => {
@@ -2294,6 +2295,29 @@ test("Play: a DOS game ZIP goes through Manual review and opens the isolated DOS
   );
   expect((await download).status()).toBe(200);
   await dos.close();
+});
+
+test("Arcade: a parent set and its clone are one game, and the clone lists its parent", async () => {
+  await openGame("Rn Fight");
+  const parent = page.getByRole("article", { name: "rnfight.mamez" });
+  const clone = page.getByRole("article", { name: "rnfightj.mamez" });
+  await expect(parent.getByText("Primary", { exact: true })).toBeVisible();
+  await expect(clone).toBeVisible();
+
+  // Cards start collapsed; Header details is in the body.
+  await clone
+    .getByRole("button", { name: "Show details for rnfightj.mamez" })
+    .click();
+  await clone.getByRole("button", { name: "Header details" }).click();
+  await expect(dialog()).toHaveAccessibleName("Header — rnfightj.mamez");
+  await expect(
+    dialog().getByRole("row", { name: "Set name rnfightj" }),
+  ).toBeVisible();
+  await expect(
+    dialog().getByRole("row", { name: "Clone of rnfight" }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog()).toBeHidden();
 });
 
 test("Play: a 3DS release opens the isolated 3DS player in a new tab", async () => {

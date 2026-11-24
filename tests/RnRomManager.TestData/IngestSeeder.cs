@@ -77,6 +77,53 @@ public static class IngestSeeder
     /// ROM name: the file name). They are hashed in one streamed read and are not copied into ingest.
     /// </param>
     /// <summary>A DOS game ZIP holding <c>DEMO.COM</c> (<c>mov ah,4Ch; int 21h</c>), over DOS's 64-byte minimum with its headers.</summary>
+    /// <summary>Arcade step 10: the seeded sets' ROM files (name, content); <c>rnfightj</c> merges <c>rnf-b.bin</c> from its parent.</summary>
+    private static readonly (string Name, string Content)[] RnFightRoms = [("rnf-a.bin", "RNFIGHT-A"), ("rnf-b.bin", "RNFIGHT-B")];
+    private static readonly (string Name, string Content)[] RnFightJRoms = [("rnfj-a.bin", "RNFIGHTJ-A")];
+
+    private static string Crc(string content) => RnRomManager.Core.Storage.Crc32.ToHex(System.Text.Encoding.ASCII.GetBytes(content));
+
+    /// <summary>Arcade step 10: the seeded MAME DAT, a parent (<c>rnfight</c>) and its split clone (<c>rnfightj</c>).</summary>
+    public static IReadOnlyDictionary<string, string> SeededMame => new Dictionary<string, string>
+    {
+        ["MAME"] = $"""
+            <?xml version="1.0"?>
+            <mame build="0.78">
+            	<game name="rnfight">
+            		<description>Rn Fight (World)</description>
+            		<year>1991</year>
+            		<manufacturer>RnRom</manufacturer>
+            		<rom name="rnf-a.bin" size="9" crc="{Crc("RNFIGHT-A")}"/>
+            		<rom name="rnf-b.bin" size="9" crc="{Crc("RNFIGHT-B")}"/>
+            	</game>
+            	<game name="rnfightj" cloneof="rnfight" romof="rnfight">
+            		<description>Rn Fight (Japan)</description>
+            		<year>1991</year>
+            		<manufacturer>RnRom</manufacturer>
+            		<rom name="rnfj-a.bin" size="10" crc="{Crc("RNFIGHTJ-A")}"/>
+            		<rom name="rnf-b.bin" merge="rnf-b.bin" size="9" crc="{Crc("RNFIGHT-B")}"/>
+            	</game>
+            </mame>
+            """,
+    };
+
+    /// <summary>A set ZIP of tiny text files, with fixed timestamps.</summary>
+    private static byte[] SetZip((string Name, string Content)[] files)
+    {
+        using var buffer = new MemoryStream();
+        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            foreach (var (name, content) in files)
+            {
+                var entry = zip.CreateEntry(name, CompressionLevel.Optimal);
+                entry.LastWriteTime = new DateTimeOffset(1991, 1, 1, 0, 0, 0, TimeSpan.Zero);
+                using var stream = entry.Open();
+                stream.Write(System.Text.Encoding.ASCII.GetBytes(content));
+            }
+        }
+        return buffer.ToArray();
+    }
+
     private static byte[] DosZip()
     {
         using var buffer = new MemoryStream();
@@ -146,6 +193,7 @@ public static class IngestSeeder
         Directory.CreateDirectory(Path.Combine(ingest, "dos"));
         Directory.CreateDirectory(Path.Combine(ingest, "ngp"));
         Directory.CreateDirectory(Path.Combine(ingest, "ngpc"));
+        Directory.CreateDirectory(Path.Combine(ingest, "mame2003"));
         var files = new List<string>();
         var gb = new List<FixtureGame>();
         var gbc = new List<FixtureGame>();
@@ -351,6 +399,9 @@ public static class IngestSeeder
         Loose("gb", "93-mystery.gb", new SyntheticRomBuilder { Seed = 3193, Title = "MYSTERYCART" }.Build());
         // MS-DOS: one game ZIP holding a tiny program; DOS has no DAT, so it goes to Review and isn't unpacked. e2e resolves it.
         Loose("dos", "Dos Demo (1993)(RnRom).zip", DosZip());
+        // Arcade: a parent set and its split clone, one game (Rn Fight); not unpacked. e2e checks the clone's header.
+        Loose("mame2003", "rnfight.zip", SetZip(RnFightRoms));
+        Loose("mame2003", "rnfightj.zip", SetZip(RnFightJRoms));
         // 3DS: a DAT-matched synthetic card dump flagged NoCrypto, so it gets a Play button (3DS step 5).
         var zephyrGate = new FixtureGame("Zephyr Gate (Europe)", "Zephyr Gate (Europe).3ds", Ncsd3ds(2401));
         Loose("3ds", "01-zephyr-gate.3ds", zephyrGate.Rom);
@@ -367,7 +418,7 @@ public static class IngestSeeder
             }
         }
         FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [VirtualBoyDat] = [redHorizon], [Atari2600Dat] = [lanes], [Atari5200Dat] = [starLattice], [Atari7800Dat] = [canyonGlide], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally], [NintendoDsDat] = dsGames, [SegaCdDat] = [], [ThreeDoDat] = [], [C64Dat] = [pilot], [PetDat] = [], [Vic20Dat] = [], [FdsDat] = [], [SatellaviewDat] = [], [SufamiTurboDat] = [], [AmigaDat] = [], [ThreeDsDat] = [zephyrGate], [TurboGrafxCdDat] = [], [NeoGeoPocketDat] = [lancer], [NeoGeoPocketColorDat] = [pocketPrism] },
-            titleDb: new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = titleDb }, layouts: RedumpLayouts, mame: MinimalMame);
+            titleDb: new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = titleDb }, layouts: RedumpLayouts, mame: SeededMame);
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
     }

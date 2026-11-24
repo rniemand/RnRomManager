@@ -11,16 +11,16 @@ public class IngestSeederTests
     [SetUp] public void SetUp() => _dir = new TempDir();
     [TearDown] public void TearDown() => _dir.Dispose();
 
-    [TestCase(SeedSet.Basic, 46)]
-    [TestCase(SeedSet.Full, 246)]
+    [TestCase(SeedSet.Basic, 48)]
+    [TestCase(SeedSet.Full, 248)]
     public void Sets_HaveExpectedFilesArchivesAndReadyAges(SeedSet set, int count)
     {
         var ingest = _dir.Combine("ingest");
         IngestSeeder.Seed(ingest, _dir.Combine("cache"), set, _time);
         var files = Directory.GetFiles(ingest, "*", SearchOption.AllDirectories);
         Assert.That(files, Has.Length.EqualTo(count));
-        // Archives outside dos/: the DOS game ZIP is a ROM there, not an archive (MS-DOS I1).
-        Assert.That(files.Count(f => Path.GetExtension(f) == ".zip" && Path.GetFileName(Path.GetDirectoryName(f)) != "dos"), Is.EqualTo(1));
+        // Archives outside dos/ and mame2003/: a DOS game ZIP and an arcade set ZIP are ROMs there, not archives (MS-DOS I1, Arcade I1).
+        Assert.That(files.Count(f => Path.GetExtension(f) == ".zip" && Path.GetFileName(Path.GetDirectoryName(f)) is not ("dos" or "mame2003")), Is.EqualTo(1));
         Assert.That(Directory.GetFiles(Path.Combine(ingest, "dos")).Select(Path.GetFileName), Is.EqualTo(new[] { "Dos Demo (1993)(RnRom).zip" }));
         // 3DS step 5: one synthetic NCSD flagged NoCrypto, so it plays.
         var zephyr = File.ReadAllBytes(Path.Combine(ingest, "3ds", "01-zephyr-gate.3ds"));
@@ -70,6 +70,8 @@ public class IngestSeederTests
         Assert.That(Directory.GetFiles(_dir.Combine("cache", "dats"), "*.dat", SearchOption.AllDirectories), Has.Length.EqualTo(146));
         Assert.That(File.Exists(_dir.Combine("cache", "dats", "redump", IngestSeeder.WiiDat + ".dat")), Is.True, "the disc systems' DATs go in redump/");
         Assert.That(File.Exists(_dir.Combine("cache", "dats", "titledb", "Nintendo - Nintendo Switch.json")), Is.True);
+        Assert.That(Directory.GetFiles(Path.Combine(ingest, "mame2003")).Select(Path.GetFileName).Order(StringComparer.Ordinal), Is.EqualTo(new[] { "rnfight.zip", "rnfightj.zip" }));
+        Assert.That(File.ReadAllText(_dir.Combine("cache", "dats", "mame", "MAME.xml")), Does.Contain("<game name=\"rnfightj\" cloneof=\"rnfight\" romof=\"rnfight\">"));
     }
 
     [Test]
