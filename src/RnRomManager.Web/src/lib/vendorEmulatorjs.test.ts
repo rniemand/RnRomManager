@@ -90,6 +90,9 @@ const coreLicenses = [
 	'fceumm-NOTICE.txt',
 	'gearcoleco-LICENSE.txt',
 	'gearcoleco-NOTICE.txt',
+	'mednafen_ngp-LICENSE.txt',
+	'mednafen_ngp-NOTICE.txt',
+	'mednafen_ngp-libretro-common-LICENSE.txt',
 	'mednafen_pce-LICENSE.txt',
 	'mednafen_pce-NOTICE.txt',
 	'mednafen_pce-libchdr-LICENSE.txt',
@@ -357,7 +360,8 @@ describe('vendor-emulatorjs', () => {
 			'yabause',
 			'desmume',
 			'puae',
-			'mednafen_pce'
+			'mednafen_pce',
+			'mednafen_ngp'
 		].flatMap((c) => [
 			`data/cores/${c}-legacy-wasm.data`,
 			`data/cores/${c}-wasm.data`,
@@ -922,6 +926,34 @@ describe('vendor-emulatorjs', () => {
 			[
 				...Object.keys(pinned).map((f) => `data/cores/${f}`),
 				...coreLicenses.filter((f) => f.startsWith('mednafen_pce')).map((f) => `licenses/${f}`)
+			].sort()
+		);
+		for (const [f, [size, sha256]] of Object.entries(pinned)) {
+			const bytes = readFileSync(join(out, 'data', 'cores', f));
+			expect(bytes.length, f).toBe(size);
+			expect(createHash('sha256').update(bytes).digest('hex'), f).toBe(sha256);
+		}
+	});
+
+	it('vendors exactly the pinned Beetle NeoPop files and no threaded payload (Neo Geo Pocket)', () => {
+		const pinned: Record<string, [number, string]> = {
+			'mednafen_ngp-wasm.data': [
+				871904,
+				'cdfe377bd380e418507dccda50d8664eecb06ebe1d2e5fbf5f397be859d1c83d'
+			],
+			'mednafen_ngp-legacy-wasm.data': [
+				872066,
+				'694089f04886d400b3672077ec9f32f408df26a8b204af6b4f3723197ea749c8'
+			],
+			'reports/mednafen_ngp.json': [
+				126,
+				'c47ef44f074a6b67f9f328e8c39bb846fce0ceb0ead1053f59c44360fd722162'
+			]
+		};
+		expect(files(out).filter((f) => f.includes('mednafen_ngp'))).toEqual(
+			[
+				...Object.keys(pinned).map((f) => `data/cores/${f}`),
+				...coreLicenses.filter((f) => f.startsWith('mednafen_ngp')).map((f) => `licenses/${f}`)
 			].sort()
 		);
 		for (const [f, [size, sha256]] of Object.entries(pinned)) {

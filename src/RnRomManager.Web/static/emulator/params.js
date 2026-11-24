@@ -34,6 +34,7 @@ const cores = [
 	'vice_xvic',
 	'puae',
 	'mednafen_pce',
+	'mednafen_ngp',
 	'mupen64plus_next',
 	'azahar'
 ];

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Neo Geo Pocket). Made for this project; MIT licensed like the rest of the repo.
+       Exported to ngp.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#d9dee8"/>
+  <!-- short, wide cartridge shell with a rounded grip at the bottom -->
+  <path d="M104 120 H408 Q424 120 424 136 V340 Q424 400 364 400 H148 Q88 400 88 340 V136 Q88 120 104 120 Z"
+        fill="#2b3a55" stroke="#151d2c" stroke-width="4"/>
+  <!-- contact edge -->
+  <rect x="140" y="104" width="232" height="20" rx="4" fill="#151d2c"/>
+  <!-- label -->
+  <rect x="124" y="152" width="264" height="164" rx="10" fill="#f4f6fa"/>
+  <circle cx="176" cy="234" r="30" fill="none" stroke="#2b3a55" stroke-width="8"/>
+  <text x="300" y="228" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="30" font-weight="700" fill="#2b3a55">NEO GEO</text>
+  <text x="300" y="266" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="30" font-weight="700" fill="#2b3a55">POCKET</text>
+  <!-- grip lines -->
+  <g stroke="#151d2c" stroke-width="5" stroke-linecap="round" opacity="0.7">
+    <line x1="200" y1="350" x2="312" y2="350"/>
+    <line x1="216" y1="370" x2="296" y2="370"/>
+  </g>
+</svg>

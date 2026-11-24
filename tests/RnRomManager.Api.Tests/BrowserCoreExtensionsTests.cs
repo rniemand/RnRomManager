@@ -36,6 +36,7 @@ public class BrowserCoreExtensionsTests
         ["gambatte"] = "gb|gbc|dmg",
         ["gearcoleco"] = "col|cv|bin|rom",
         ["handy"] = "lnx|lyx|o",
+        ["mednafen_ngp"] = "ngp|ngc|ngpc|npc",
         ["mednafen_pce"] = "pce|sgx|cue|ccd|chd|toc|m3u",
         ["mgba"] = "gba|gb|gbc|sgb",
         ["pcsx_rearmed"] = "bin|cue|img|mdf|pbp|toc|cbn|m3u|chd|iso|exe",

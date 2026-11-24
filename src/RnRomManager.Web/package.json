@@ -50,6 +50,7 @@
 		"@emulatorjs/core-gambatte": "4.2.3",
 		"@emulatorjs/core-gearcoleco": "4.2.3",
 		"@emulatorjs/core-handy": "4.2.3",
+		"@emulatorjs/core-mednafen_ngp": "4.2.3",
 		"@emulatorjs/core-mednafen_pce": "4.2.3",
 		"@emulatorjs/core-mgba": "4.2.3",
 		"@emulatorjs/core-pcsx_rearmed": "4.2.3",
