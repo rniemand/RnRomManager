@@ -227,7 +227,7 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   ).toHaveAttribute("aria-expanded", "false");
   const run = page.getByRole("row").filter({ hasText: "Completed" });
   await expect(run).toContainText(
-    "Ingested 38 · Duplicate 1 · Review 2 · Failed 1",
+    "Ingested 38 · Duplicate 1 · Review 3 · Failed 1",
     {
       timeout: 60_000,
     },
@@ -2202,6 +2202,48 @@ test("user management: a Site user's account, private saves and audit trail", { 
     await visitorContext.close();
     await otherSession.userContext.close();
   }
+});
+
+// MS-DOS: untagged and before the review-queue tests, so the DOS item is resolved before "Nothing to review." is
+// asserted. It doesn't wait for the emulator: the seeded DEMO.COM only exits.
+test("Play: a DOS game ZIP goes through Manual review and opens the isolated DOS player in a new tab", async () => {
+  await page.goto("/review");
+  await page.getByRole("link", { name: "Dos Demo (1993)(RnRom).zip" }).click();
+  // N6/N7: no DAT, so no Suggestions tab; Manual is open with the title from the file name.
+  await expect(page.getByRole("tab", { name: "Suggestions" })).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "Manual" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(page.getByLabel("Title")).toHaveValue("Dos Demo");
+  await page.getByRole("button", { name: "Add manually" }).click();
+  await expect(page).toHaveURL(/\/games\//);
+
+  const tab =
+    /\/emulator\/play-dos\.html\?.*core=dosbox_pure&name=Dos%20Demo\.dosz$/;
+  const popup = context.waitForEvent("page");
+  const pageResponse = context.waitForEvent("response", (r) =>
+    tab.test(r.url()),
+  );
+  const download = context.waitForEvent("response", (r) =>
+    /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()),
+  );
+  await page
+    .getByRole("link", { name: "Play Dos Demo.dosz (opens in a new tab)" })
+    .click();
+  const dos = await popup;
+  await expect(page.locator("iframe")).toHaveCount(0); // no modal: the SPA stays as it was
+  expect(dos.url()).toMatch(tab);
+
+  const served = await pageResponse;
+  expect(served.status()).toBe(200);
+  expect(served.headers()["cross-origin-opener-policy"]).toBe("same-origin");
+  expect(served.headers()["cross-origin-embedder-policy"]).toBe("require-corp");
+  expect(served.headers()["content-security-policy"]).toContain(
+    "frame-ancestors 'none'",
+  );
+  expect((await download).status()).toBe(200);
+  await dos.close();
 });
 
 test("review queue: resolve with a suggestion", async () => {

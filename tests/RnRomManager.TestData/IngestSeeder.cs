@@ -57,6 +57,20 @@ public static class IngestSeeder
     /// ROM files the DS No-Intro DAT lists instead of the empty catalog (game name: the file name without its extension;
     /// ROM name: the file name). They are hashed in one streamed read and are not copied into ingest.
     /// </param>
+    /// <summary>A DOS game ZIP holding <c>DEMO.COM</c> (<c>mov ah,4Ch; int 21h</c>), over DOS's 64-byte minimum with its headers.</summary>
+    private static byte[] DosZip()
+    {
+        using var buffer = new MemoryStream();
+        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var entry = zip.CreateEntry("DEMO.COM", CompressionLevel.Optimal);
+            entry.LastWriteTime = new DateTimeOffset(1980, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            using var stream = entry.Open();
+            stream.Write([0xB4, 0x4C, 0xCD, 0x21]);
+        }
+        return buffer.ToArray();
+    }
+
     public static void Seed(string ingest, string cache, SeedSet set, TimeProvider time, IReadOnlyList<string>? ndsDatFiles = null)
     {
         ValidatePaths(ingest, cache);
@@ -95,6 +109,7 @@ public static class IngestSeeder
         Directory.CreateDirectory(Path.Combine(ingest, "sufami"));
         Directory.CreateDirectory(Path.Combine(ingest, "amiga"));
         Directory.CreateDirectory(Path.Combine(ingest, "3ds"));
+        Directory.CreateDirectory(Path.Combine(ingest, "dos"));
         var files = new List<string>();
         var gb = new List<FixtureGame>();
         var gbc = new List<FixtureGame>();
@@ -289,6 +304,8 @@ public static class IngestSeeder
         Loose("gb", "91-unmatched.gb", new SyntheticRomBuilder { Seed = 3191, Title = "ORBITBLOCKS" }.Build());
         // A second review item with nothing like it in the DATs (no suggestions); e2e deletes it.
         Loose("gb", "93-mystery.gb", new SyntheticRomBuilder { Seed = 3193, Title = "MYSTERYCART" }.Build());
+        // MS-DOS: one game ZIP holding a tiny program; DOS has no DAT, so it goes to Review and isn't unpacked. e2e resolves it.
+        Loose("dos", "Dos Demo (1993)(RnRom).zip", DosZip());
         Loose("gb", "92-invalid.gb", new SyntheticRomBuilder { Seed = 3192, CorruptLogo = true, CorruptHeaderChecksum = true }.Build());
 
         if (set == SeedSet.Full)
