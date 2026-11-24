@@ -100,7 +100,9 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 		expect(input().value).toBe('x'.repeat(100));
 		expect(input().getAttribute('maxlength')).toBe('100');
 		expect(
-			screen.getByText('Searches IGDB on Game Boy, then on every platform when that finds nothing.')
+			screen.getByText(
+				'Searches IGDB on Game Boy as you type, then on every platform when that finds nothing.'
+			)
 		).toBeTruthy();
 		expect(searchButton().getAttribute('type')).toBe('submit');
 		expect(calls).toEqual([]);
@@ -123,6 +125,59 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 		await vi.waitFor(() =>
 			expect(calls.map((c) => c.url)).toEqual(['/api/games/g1/igdb-matches?q=Tetris+DX'])
 		);
+	});
+
+	describe('auto-search while typing', () => {
+		beforeEach(() => vi.useFakeTimers());
+		afterEach(() => vi.useRealTimers());
+		const urls = () => calls.map((c) => c.url);
+
+		it('searches the trimmed text 500 ms after the last keystroke, once', async () => {
+			setup();
+			await fireEvent.input(input(), { target: { value: 'Tet' } });
+			await vi.advanceTimersByTimeAsync(300);
+			await fireEvent.input(input(), { target: { value: ' Tetris DX ' } });
+			await vi.advanceTimersByTimeAsync(499);
+			expect(calls).toEqual([]);
+
+			await vi.advanceTimersByTimeAsync(1);
+			expect(urls()).toEqual(['/api/games/g1/igdb-matches?q=Tetris+DX']);
+		});
+
+		it('a blank input sends nothing', async () => {
+			setup();
+			await fireEvent.input(input(), { target: { value: '   ' } });
+			await vi.advanceTimersByTimeAsync(1000);
+			expect(calls).toEqual([]);
+		});
+
+		it('Enter searches at once and cancels the pending auto-search', async () => {
+			setup();
+			await fireEvent.input(input(), { target: { value: 'Tetris DX' } });
+			await fireEvent.submit(input().form!);
+			await vi.advanceTimersByTimeAsync(1000);
+			expect(urls()).toEqual(['/api/games/g1/igdb-matches?q=Tetris+DX']);
+		});
+
+		it('retyping the text already shown sends nothing', async () => {
+			setup({ autostart: true });
+			await vi.advanceTimersByTimeAsync(0);
+			expect(await screen.findByText('No IGDB matches for “Tetris”.')).toBeTruthy();
+			await fireEvent.input(input(), { target: { value: 'Tetri' } });
+			await fireEvent.input(input(), { target: { value: 'Tetris ' } });
+			await vi.advanceTimersByTimeAsync(1000);
+			expect(calls).toHaveLength(1);
+		});
+
+		it('closing before the pause ends sends nothing', async () => {
+			const { unmount } = render(IgdbLookup, {
+				props: { game: game(), form: form(), onapply: vi.fn() }
+			});
+			await fireEvent.input(input(), { target: { value: 'Tetris DX' } });
+			unmount();
+			await vi.advanceTimersByTimeAsync(1000);
+			expect(calls).toEqual([]);
+		});
 	});
 
 	it('autostart searches the prefilled title', async () => {
