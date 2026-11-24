@@ -24,6 +24,7 @@ export interface SystemColour {
 		| 's32x'
 		| 'tg16'
 		| 'tgcd'
+		| 'dos'
 		| 'switch'
 		| 'psx'
 		| 'psp'
@@ -65,6 +66,7 @@ export const systemColours: Record<string, SystemColour> = {
 	s32x: { name: 's32x', foreground: '#000' },
 	tg16: { name: 'tg16', foreground: '#fff' },
 	tgcd: { name: 'tgcd', foreground: '#fff' },
+	dos: { name: 'dos', foreground: '#fff' },
 	switch: { name: 'switch', foreground: '#fff' },
 	psx: { name: 'psx', foreground: '#fff' },
 	psp: { name: 'psp', foreground: '#fff' },

@@ -92,6 +92,18 @@
 			"note": "RetroArch core: Gearcoleco"
 		}
 	],
+	"dos": [
+		{
+			"name": "DOSBox Pure",
+			"url": "https://github.com/schellingb/dosbox-pure",
+			"os": ["windows", "macos", "linux"]
+		},
+		{
+			"name": "DOSBox Staging",
+			"url": "https://www.dosbox-staging.org/",
+			"os": ["windows", "macos", "linux"]
+		}
+	],
 	"fds": [
 		{
 			"name": "Mesen",

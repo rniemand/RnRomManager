@@ -41,6 +41,10 @@ describe('systemColour', () => {
 		expect(systemColour('tgcd')).toEqual({ name: 'tgcd', foreground: '#fff' });
 	});
 
+	it('gives MS-DOS its own slate with white text (MS-DOS S4)', () => {
+		expect(systemColour('dos')).toEqual({ name: 'dos', foreground: '#fff' });
+	});
+
 	it('gives 3DO its own olive with black text (3DO B2)', () => {
 		expect(systemColour('3do')).toEqual({ name: '3do', foreground: '#000' });
 	});

@@ -19,6 +19,7 @@
     <ProjectReference Include="../RnRomManager.Systems.NintendoDs/RnRomManager.Systems.NintendoDs.csproj" />
     <ProjectReference Include="../RnRomManager.Systems.ThreeDo/RnRomManager.Systems.ThreeDo.csproj" />
     <ProjectReference Include="../RnRomManager.Systems.Commodore/RnRomManager.Systems.Commodore.csproj" />
+    <ProjectReference Include="../RnRomManager.Systems.Dos/RnRomManager.Systems.Dos.csproj" />
   </ItemGroup>
 
   <ItemGroup>

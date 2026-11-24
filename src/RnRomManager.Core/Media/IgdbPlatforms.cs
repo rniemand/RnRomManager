@@ -17,6 +17,7 @@ public static class IgdbPlatforms
         ["c64"] = 15,
         ["coleco"] = 68,
         ["fds"] = 51,
+        ["dos"] = 13,
         ["gb"] = 33,
         ["gba"] = 24,
         ["gbc"] = 22,

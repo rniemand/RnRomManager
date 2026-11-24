@@ -249,6 +249,7 @@ Route — file under `src/RnRomManager.Web/src/routes/`.
 - C64Handler `c64` — src/RnRomManager.Systems.Commodore/C64Handler.cs
 - PetHandler `pet` — src/RnRomManager.Systems.Commodore/PetHandler.cs
 - Vic20Handler `vic20` — src/RnRomManager.Systems.Commodore/Vic20Handler.cs
+- DosHandler `dos` — src/RnRomManager.Systems.Dos/DosHandler.cs
 - GameBoyAdvanceHandler — src/RnRomManager.Systems.GameBoy/GameBoyAdvanceHandler.cs
 - GameBoyHandlerBase — src/RnRomManager.Systems.GameBoy/GameBoyHandlerBase.cs
 - Xbox360Handler `x360` — src/RnRomManager.Systems.Microsoft/Xbox360Handler.cs
@@ -330,6 +331,7 @@ File names without extension. System projects (`src/RnRomManager.Systems.*`) are
 - `RnRomManager.Systems.Atari.Tests`: A78HeaderTests, Atari2600HandlerTests, Atari5200HandlerTests, Atari7800HandlerTests, AtariJaguarHandlerTests, AtariLynxHandlerTests, LynxHeaderTests
 - `RnRomManager.Systems.Coleco.Tests`: ColecoVisionHandlerTests
 - `RnRomManager.Systems.Commodore.Tests`: AmigaHandlerTests, C64HandlerTests, C64HeaderTests, PetHandlerTests, Vic20HandlerTests
+- `RnRomManager.Systems.Dos.Tests`: DosHandlerTests
 - `RnRomManager.Systems.GameBoy.Tests`: GameBoyAdvanceHeaderReaderTests, GameBoyHandlerTests, GameBoyHeaderReaderTests, SyntheticGbaRomBuilderTests, SyntheticRomBuilderTests
 - `RnRomManager.Systems.Microsoft.Tests`: Xbox360HandlerTests
 - `RnRomManager.Systems.Nec.Tests`: TurboGrafx16HandlerTests, TurboGrafxCdHandlerTests
@@ -362,6 +364,6 @@ Read a section with offset/limit instead of the whole doc (`features.md` alone i
 
 - `docs/zip-format.md` (284 lines): Layout :7; Naming :89; External ROM files :112; Release notes :123; Saves :132; Writes :146; `info.json` (schema version 8) :154; Game :158; Rom :181; Image :250; Validation :265; Versions :269
 
-- `README.md` (170 lines): Supported systems :26; Quick start :70; Documentation :134; Disclaimer :143; Attribution :147; License :168
+- `README.md` (171 lines): Supported systems :26; Quick start :71; Documentation :135; Disclaimer :144; Attribution :148; License :169
 
 - `CONTRIBUTING.md` (21 lines): Specs, branches and PRs :7; Test rule :17; Doc rule :20

@@ -44,6 +44,7 @@ using RnRomManager.Systems.VirtualBoy;
 using RnRomManager.Systems.NintendoDs;
 using RnRomManager.Systems.ThreeDo;
 using RnRomManager.Systems.Commodore;
+using RnRomManager.Systems.Dos;
 
 namespace RnRomManager.Api;
 
@@ -286,6 +287,7 @@ public static class AppHost
         services.AddSystemHandler<AmigaHandler>();
         services.AddSystemHandler<Nintendo3DsHandler>();
         services.AddSystemHandler<TurboGrafxCdHandler>();
+        services.AddSystemHandler<DosHandler>();
     }
 
     // spec §11: hashed SvelteKit assets are immutable; everything else (index.html, theme.js) must revalidate.

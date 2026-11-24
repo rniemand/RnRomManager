@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (MS-DOS). Made for this project; MIT licensed like the rest of the repo.
+       A generic CRT monitor with a command prompt and a floppy disk: no logo or trade dress. Exported to dos.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#e3e6ea"/>
+  <!-- monitor -->
+  <rect x="86" y="60" width="340" height="270" rx="18" fill="#c8c2b0" stroke="#3f4a56" stroke-width="5"/>
+  <rect x="112" y="84" width="288" height="210" rx="10" fill="#1c2128" stroke="#3f4a56" stroke-width="4"/>
+  <text x="132" y="132" font-family="Consolas, Courier New, monospace" font-size="30" fill="#c9d1d9">C:\&gt;GAME</text>
+  <rect x="132" y="150" width="20" height="5" fill="#c9d1d9"/>
+  <circle cx="392" cy="312" r="6" fill="#7fd08a"/>
+  <!-- stand -->
+  <path d="M216 330 L296 330 L310 362 L202 362 Z" fill="#a9a390" stroke="#3f4a56" stroke-width="4" stroke-linejoin="round"/>
+  <!-- floppy disk -->
+  <g transform="translate(52 352) rotate(-8 55 55)">
+    <rect width="110" height="110" rx="7" fill="#3f4a56" stroke="#22282f" stroke-width="4"/>
+    <rect x="25" width="60" height="34" fill="#b8bec6"/>
+    <rect x="65" y="5" width="12" height="24" fill="#3f4a56"/>
+    <rect x="15" y="56" width="80" height="48" rx="4" fill="#f1f1ec"/>
+  </g>
+  <text x="256" y="476" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="34" font-weight="700" letter-spacing="4" fill="#22282f">MS-DOS</text>
+</svg>
