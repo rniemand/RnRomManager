@@ -67,16 +67,21 @@ jobs:
             echo "No coverage files." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-  # The web unit tests (~115 s) and the lint, type check and build (~45 s) run side by side.
+  # The web unit tests (~115 s, split by file into two shards) and the lint, type check and build (~45 s) run side by side.
   web-test:
+    name: web-test (${{ matrix.shard }}/2)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     defaults:
       run:
         working-directory: src/RnRomManager.Web
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/web-setup
-      - run: npm test
+      - run: npm test -- --shard=${{ matrix.shard }}/2
 
   web-check:
     runs-on: ubuntu-latest
