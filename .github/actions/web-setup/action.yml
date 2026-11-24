@@ -1,0 +1,29 @@
+name: web setup
+description: Node and src/RnRomManager.Web's node_modules, restored from cache when the lock file is unchanged.
+
+# npm's own cache (setup-node `cache: npm`) only saves the downloads: `npm ci` still unpacks ~290 MB of packages
+# (a third of it EmulatorJS cores) every run, ~55 s on CI. Caching node_modules itself skips that when the lock file and
+# Node version are unchanged.
+runs:
+  using: composite
+  steps:
+    - id: node
+      uses: actions/setup-node@v7
+      with:
+        node-version: 24
+        cache: npm
+        cache-dependency-path: src/RnRomManager.Web/package-lock.json
+    - id: modules
+      uses: actions/cache@v6
+      with:
+        path: src/RnRomManager.Web/node_modules
+        key: web-node-modules-${{ runner.os }}-node${{ steps.node.outputs.node-version }}-${{ hashFiles('src/RnRomManager.Web/package-lock.json') }}
+    - if: steps.modules.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: src/RnRomManager.Web
+      run: npm ci
+    # npm ci's `prepare` script does this on a miss.
+    - if: steps.modules.outputs.cache-hit == 'true'
+      shell: bash
+      working-directory: src/RnRomManager.Web
+      run: npx svelte-kit sync
