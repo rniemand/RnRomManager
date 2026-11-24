@@ -88,4 +88,24 @@ public class PrimaryReleaseTests
         Assert.That(PrimaryOf([Update, HackBase], DatSource.Libretro).FileName,
             Is.EqualTo(PrimaryReleaseRanker.Primary([Update, HackBase], PrimaryRelease.Rank).FileName));
     }
+
+    private static InfoJsonRom Set(string name, string? cloneOf, params string[] regions) =>
+        Rom(name + ".mamez", regions) with
+        {
+            Header = new System.Text.Json.Nodes.JsonObject { ["setName"] = name, ["cloneOf"] = cloneOf },
+            Metadata = Rom(name).Metadata with { Sha1 = Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(System.Text.Encoding.ASCII.GetBytes(name))) },
+        };
+
+    [Test]
+    public void Mame_ParentsRankAheadOfClones_ThenTheRanker()
+    {
+        var puckman = Set("puckman", null);
+        var pacman = Set("pacman", "puckman", "World");
+        var manual = Rom("Pac Fan (Unverified).mamez"); // no header: counts as a parent
+
+        Assert.That(PrimaryOf([pacman, puckman], DatSource.Mame).FileName, Is.EqualTo("puckman.mamez"));
+        Assert.That(PrimaryRelease.Order([pacman, manual, puckman], DatSource.Mame).Last().FileName, Is.EqualTo("pacman.mamez"));
+        Assert.That(PrimaryRelease.Apply([pacman, puckman], DatSource.Mame, pacman.Metadata.Sha1).Single(r => r.IsPrimary).FileName,
+            Is.EqualTo("pacman.mamez"), "an Admin's choice still wins");
+    }
 }
