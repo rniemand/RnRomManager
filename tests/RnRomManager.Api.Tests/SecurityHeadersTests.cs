@@ -98,7 +98,6 @@ public class SecurityHeadersTests
 
     [TestCase("/emulator/play-psp.html")]
     [TestCase("/emulator/play-dos.html")]
-    [TestCase("/Emulator/Play-DOS.html")]
     public async Task TheIsolatedDocuments_AreCrossOriginIsolated_AndCannotBeFramed(string path)
     {
         var (factory, client) = EmulatorSite();
@@ -116,6 +115,11 @@ public class SecurityHeadersTests
             + "img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"));
         Assert.That(response.Headers.GetValues("X-Content-Type-Options").Single(), Is.EqualTo("nosniff"));
     }
+
+    // The match ignores case; the static file server doesn't on Linux, so this is checked on the set, not by a request.
+    [Test]
+    public void IsolatedDocumentPaths_IgnoreCase() =>
+        Assert.That(SecurityHeaders.IsolatedDocumentPaths.Contains("/Emulator/Play-DOS.html"), Is.True);
 
     [TestCase("/emulator/play.html", "frame-ancestors 'self'")]
     [TestCase("/emulator/play.css", "frame-ancestors 'self'")]
