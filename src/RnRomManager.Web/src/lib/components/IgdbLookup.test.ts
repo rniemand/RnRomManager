@@ -314,7 +314,8 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 					developers: 'Nintendo',
 					publishers: 'Nintendo\nCapcom',
 					igdbId: 9
-				})
+				}),
+				false
 			);
 		});
 
@@ -325,7 +326,20 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 
 			await fireEvent.click(screen.getByRole('button', { name: 'Use this match' }));
 
-			expect(onapply).toHaveBeenCalledWith(form({ igdbId: 9 }));
+			expect(onapply).toHaveBeenCalledWith(form({ igdbId: 9 }), false);
+		});
+
+		it('Use this match and save copies the ticked fields and asks to save', async () => {
+			const onapply = await pick();
+			await fireEvent.click(box('Title'));
+
+			const save = screen.getByRole('button', { name: 'Use this match and save' });
+			expect(save.getAttribute('type')).toBe('button');
+			await fireEvent.click(save);
+
+			expect(onapply).toHaveBeenCalledTimes(1);
+			expect(onapply.mock.calls[0][1]).toBe(true);
+			expect(onapply.mock.calls[0][0]).toMatchObject({ title: 'Tetris DX', igdbId: 9 });
 		});
 	});
 });

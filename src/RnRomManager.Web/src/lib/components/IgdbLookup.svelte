@@ -19,8 +19,11 @@
 		game: GameDetail;
 		/** The Edit Metadata form; only read here, changed through `onapply`. */
 		form: GameEditForm;
-		/** M3: the new form after Not on IGDB (or Use this match); the modal switches to Details. */
-		onapply: (form: GameEditForm) => void;
+		/**
+		 * M3: the new form after Not on IGDB (or Use this match); the modal switches to Details.
+		 * `save` (Use this match and save) also saves the modal.
+		 */
+		onapply: (form: GameEditForm, save?: boolean) => void;
 		/** M2: search as soon as the panel mounts (IGDB configured only). */
 		autostart?: boolean;
 	}
@@ -72,6 +75,13 @@
 
 	function igdb(match: IgdbMatch, field: CopyField): string {
 		return shown(field, field === 'title' ? match.name : match[field]);
+	}
+
+	/** Copies the ticked fields of the selected match; `save` also saves the modal. */
+	function useMatch(save: boolean): void {
+		if (!chosen || !copy) return;
+		const fields = copyFields.filter((f) => copy![f].checked && !copy![f].disabled);
+		onapply(applyMatch(form, chosen, fields), save);
 	}
 	let controller: AbortController | undefined;
 
@@ -227,18 +237,14 @@
 				<a href={chosen.url} target="_blank" rel="noopener noreferrer">View on IGDB</a>
 			</p>
 		{/if}
-		<button
-			type="button"
-			class="btn btn-primary btn-sm mb-3"
-			onclick={() =>
-				onapply(
-					applyMatch(
-						form,
-						chosen,
-						copyFields.filter((f) => copy![f].checked && !copy![f].disabled)
-					)
-				)}>Use this match</button
-		>
+		<div class="d-flex flex-wrap gap-2 mb-3">
+			<button type="button" class="btn btn-primary btn-sm" onclick={() => useMatch(false)}
+				>Use this match</button
+			>
+			<button type="button" class="btn btn-primary btn-sm" onclick={() => useMatch(true)}
+				>Use this match and save</button
+			>
+		</div>
 	{/if}
 
 	<div>
