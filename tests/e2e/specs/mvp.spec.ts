@@ -317,7 +317,7 @@ test("reports and the ingest audit trail", { tag: "@shard-b" }, async () => {
     // B30: the Action cell also holds the system badge, so match its action line.
     .filter({ has: page.getByRole("cell").getByText("Ingested", { exact: true }) });
   // One Ingested event per release: a bin/cue set is one event (B7a).
-  await expect(ingested).toHaveCount(34);
+  await expect(ingested).toHaveCount(35);
   await expect(
     page
       .getByRole("row")
@@ -348,7 +348,7 @@ test("reports and the ingest audit trail", { tag: "@shard-b" }, async () => {
 
 test("browse, search and filter the library", async () => {
   await openLibrary();
-  await expect(page.getByText("29 games")).toBeVisible();
+  await expect(page.getByText("30 games")).toBeVisible();
   await expectAccessible(page, "library grid");
   // S1/L3: systems with ROMs in display-name order after "All systems"; F3/L2: each with its game count, right-aligned.
   await page.getByRole("button", { name: "System: All" }).click();
@@ -561,7 +561,7 @@ test("browse, search and filter the library", async () => {
   }
   await page.setViewportSize(viewport);
   await page.getByRole("button", { name: "Clear all" }).click();
-  await expect(page.getByText("29 games")).toBeVisible();
+  await expect(page.getByText("30 games")).toBeVisible();
   await expect(page.getByRole("button", { name: "Clear all" })).toBeDisabled();
 
   // The card grid fits a 320px phone: no sideways page scroll, and (U6) no card shows its rating row there.
@@ -1300,8 +1300,8 @@ test("Play: a Saturn set asks for saturn_bios.bin, streams its disc and fetches 
   await closeEmulator();
 });
 
-/** PSP B3: what PPSSPP needs, as the isolated tab actually sees it. */
-async function pspBrowser(psp: Page) {
+/** PSP B3, MS-DOS P5, 3DS G3: what an isolated core needs, as its tab actually sees it. */
+async function isolatedBrowser(psp: Page) {
   return psp.evaluate(() => ({
     secure: isSecureContext,
     isolated: crossOriginIsolated,
@@ -1342,7 +1342,7 @@ test("Play: a PSP UMD image opens the isolated player in a new tab from the deta
   expect(disc.headers()["content-type"]).toBe("application/octet-stream");
   expect(disc.headers()["content-length"]).toBe(String(64 * 1024));
   expect(disc.headers()["accept-ranges"]).toBe("none");
-  expect(await pspBrowser(psp)).toEqual({
+  expect(await isolatedBrowser(psp)).toEqual({
     secure: true,
     isolated: true,
     sharedArrayBuffer: "function",
@@ -1383,7 +1383,7 @@ test("Play: a PSP UMD image opens the isolated player in a new tab from the deta
   const fromLibrary = await second;
   await expect(fromLibrary).toHaveURL(tab);
   await expect(fromLibrary.getByText("Start Game")).toBeVisible();
-  expect((await pspBrowser(fromLibrary)).isolated).toBe(true);
+  expect((await isolatedBrowser(fromLibrary)).isolated).toBe(true);
   await fromLibrary.close();
 });
 
@@ -1662,7 +1662,7 @@ test("Play: Atari 7800, Jaguar and Lynx launch with their bundled cores", { tag:
 test("global search, ratings and favourites", { tag: "@shard-b" }, async () => {
   // Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
   await openLibrary();
-  await expect(page.getByText("29 games")).toBeVisible();
+  await expect(page.getByText("30 games")).toBeVisible();
   await page.keyboard.press("Control+k");
   await expect(dialog()).toBeVisible();
   await expect(dialog().getByRole("combobox")).toBeFocused();
@@ -1855,7 +1855,7 @@ test("collections: create, add from game page and bulk select, search, remove, d
   await expect(page).toHaveURL(/\/collections$/);
   await expect(page.getByText("You have no collections yet.")).toBeVisible();
   await openLibrary();
-  await expect(page.getByText("29 games")).toBeVisible();
+  await expect(page.getByText("30 games")).toBeVisible();
 });
 
 test("collections discovery: browse publishers and genres across systems, share a selection", { tag: "@shard-b" }, async () => {
@@ -2244,6 +2244,57 @@ test("Play: a DOS game ZIP goes through Manual review and opens the isolated DOS
   );
   expect((await download).status()).toBe(200);
   await dos.close();
+});
+
+test("Play: a 3DS release opens the isolated 3DS player in a new tab", async () => {
+  await openGame("Zephyr Gate");
+  const tab =
+    /\/emulator\/play-3ds\.html\?.*core=azahar&name=Zephyr%20Gate%20\(Europe\)\.3ds$/;
+  const popup = context.waitForEvent("page");
+  const pageResponse = context.waitForEvent("response", (r) =>
+    tab.test(r.url()),
+  );
+  const download = context.waitForEvent("response", (r) =>
+    /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()),
+  );
+  await page
+    .getByRole("link", {
+      name: "Play Zephyr Gate (Europe).3ds (opens in a new tab)",
+    })
+    .click();
+  const threeDs = await popup;
+  await expect(page.locator("iframe")).toHaveCount(0); // no modal: the SPA stays as it was
+  expect(threeDs.url()).toMatch(tab);
+
+  const served = await pageResponse;
+  expect(served.status()).toBe(200);
+  expect(served.headers()["cross-origin-opener-policy"]).toBe("same-origin");
+  expect(served.headers()["cross-origin-embedder-policy"]).toBe("require-corp");
+  expect(served.headers()["content-security-policy"]).toContain(
+    "frame-ancestors 'none'",
+  );
+  expect((await download).status()).toBe(200);
+  expect(await isolatedBrowser(threeDs)).toEqual({
+    secure: true,
+    isolated: true,
+    sharedArrayBuffer: "function",
+    webgl2: true,
+  });
+
+  // 3DS G4: the 4.3 copy's core and report, both local (4.3 appends ?v=… to the report). The synthetic dump can't
+  // boot, so nothing past the downloads is asserted.
+  await expect(threeDs.getByText("Start Game")).toBeVisible();
+  const path = (r: { url(): string }) => new URL(r.url()).pathname;
+  const report = threeDs.waitForResponse(
+    (r) => path(r) === "/emulator/vendor/ejs-4.3/data/cores/reports/azahar.json",
+  );
+  const payload = threeDs.waitForResponse(
+    (r) => path(r) === "/emulator/vendor/ejs-4.3/data/cores/azahar-thread-wasm.data",
+  );
+  await threeDs.getByText("Start Game").click();
+  expect((await report).status()).toBe(200);
+  expect((await payload).status()).toBe(200);
+  await threeDs.close();
 });
 
 test("review queue: resolve with a suggestion", async () => {

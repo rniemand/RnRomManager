@@ -11,8 +11,8 @@ public class IngestSeederTests
     [SetUp] public void SetUp() => _dir = new TempDir();
     [TearDown] public void TearDown() => _dir.Dispose();
 
-    [TestCase(SeedSet.Basic, 43)]
-    [TestCase(SeedSet.Full, 243)]
+    [TestCase(SeedSet.Basic, 44)]
+    [TestCase(SeedSet.Full, 244)]
     public void Sets_HaveExpectedFilesArchivesAndReadyAges(SeedSet set, int count)
     {
         var ingest = _dir.Combine("ingest");
@@ -22,6 +22,9 @@ public class IngestSeederTests
         // Archives outside dos/: the DOS game ZIP is a ROM there, not an archive (MS-DOS I1).
         Assert.That(files.Count(f => Path.GetExtension(f) == ".zip" && Path.GetFileName(Path.GetDirectoryName(f)) != "dos"), Is.EqualTo(1));
         Assert.That(Directory.GetFiles(Path.Combine(ingest, "dos")).Select(Path.GetFileName), Is.EqualTo(new[] { "Dos Demo (1993)(RnRom).zip" }));
+        // 3DS step 5: one synthetic NCSD flagged NoCrypto, so it plays.
+        var zephyr = File.ReadAllBytes(Path.Combine(ingest, "3ds", "01-zephyr-gate.3ds"));
+        Assert.That((System.Text.Encoding.ASCII.GetString(zephyr, 0x100, 4), zephyr[0x38F]), Is.EqualTo(("NCSD", (byte)0x04)));
         Assert.That(files.Count(f => Path.GetExtension(f) == ".7z"), Is.EqualTo(1));
         // Switch: a base, its update and a DLC, each a PFS0 of at least 1 KiB naming its ticket, and a ticketless [UPD] update.
         var switchFiles = Directory.GetFiles(Path.Combine(ingest, "switch")).Select(Path.GetFileName).Order(StringComparer.Ordinal);

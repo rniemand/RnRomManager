@@ -71,6 +71,21 @@ public static class IngestSeeder
         return buffer.ToArray();
     }
 
+    /// <summary>3DS: a 16 KiB NCSD (partition 0 at media unit 1, its NCCH flagged NoCrypto) with seeded filler.</summary>
+    private static byte[] Ncsd3ds(int seed)
+    {
+        var rom = new byte[16 * 1024];
+        new Random(seed).NextBytes(rom);
+        rom.AsSpan(0, 4).Clear(); // never the CIA header size
+        "NCSD"u8.CopyTo(rom.AsSpan(0x100));
+        BinaryPrimitives.WriteUInt32LittleEndian(rom.AsSpan(0x120), 1);
+        "NCCH"u8.CopyTo(rom.AsSpan(0x300));
+        rom.AsSpan(0x350, 16).Clear();
+        "CTR-P-ZGTE"u8.CopyTo(rom.AsSpan(0x350));
+        rom[0x38F] = 0x04;
+        return rom;
+    }
+
     public static void Seed(string ingest, string cache, SeedSet set, TimeProvider time, IReadOnlyList<string>? ndsDatFiles = null)
     {
         ValidatePaths(ingest, cache);
@@ -306,6 +321,9 @@ public static class IngestSeeder
         Loose("gb", "93-mystery.gb", new SyntheticRomBuilder { Seed = 3193, Title = "MYSTERYCART" }.Build());
         // MS-DOS: one game ZIP holding a tiny program; DOS has no DAT, so it goes to Review and isn't unpacked. e2e resolves it.
         Loose("dos", "Dos Demo (1993)(RnRom).zip", DosZip());
+        // 3DS: a DAT-matched synthetic card dump flagged NoCrypto, so it gets a Play button (3DS step 5).
+        var zephyrGate = new FixtureGame("Zephyr Gate (Europe)", "Zephyr Gate (Europe).3ds", Ncsd3ds(2401));
+        Loose("3ds", "01-zephyr-gate.3ds", zephyrGate.Rom);
         Loose("gb", "92-invalid.gb", new SyntheticRomBuilder { Seed = 3192, CorruptLogo = true, CorruptHeaderChecksum = true }.Build());
 
         if (set == SeedSet.Full)
@@ -318,7 +336,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [VirtualBoyDat] = [redHorizon], [Atari2600Dat] = [lanes], [Atari5200Dat] = [starLattice], [Atari7800Dat] = [canyonGlide], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally], [NintendoDsDat] = dsGames, [SegaCdDat] = [], [ThreeDoDat] = [], [C64Dat] = [pilot], [PetDat] = [], [Vic20Dat] = [], [FdsDat] = [], [SatellaviewDat] = [], [SufamiTurboDat] = [], [AmigaDat] = [], [ThreeDsDat] = [], [TurboGrafxCdDat] = [] },
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [VirtualBoyDat] = [redHorizon], [Atari2600Dat] = [lanes], [Atari5200Dat] = [starLattice], [Atari7800Dat] = [canyonGlide], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally], [NintendoDsDat] = dsGames, [SegaCdDat] = [], [ThreeDoDat] = [], [C64Dat] = [pilot], [PetDat] = [], [Vic20Dat] = [], [FdsDat] = [], [SatellaviewDat] = [], [SufamiTurboDat] = [], [AmigaDat] = [], [ThreeDsDat] = [zephyrGate], [TurboGrafxCdDat] = [] },
             titleDb: new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = titleDb }, layouts: RedumpLayouts);
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);
