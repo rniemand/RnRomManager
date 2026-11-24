@@ -88,7 +88,7 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
     {
         if (handler.DatSource == DatSource.TitleDb)
             return LoadTitleDb(directory, handler, manifest);
-        if (handler.DatSource == DatSource.Mame)
+        if (handler.DatSource.IsRomset())
             return LoadMame(directory, handler, manifest);
 
         string ReadVerified(string kind)
@@ -157,8 +157,10 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
         var bytes = DatManifest.ReadCheckedBytes(paths.Value.Cache, SafePath.Resolve(directory, file), DatRefreshJob.MaxFileBytes, AfterCompactRead);
         if (!Convert.ToHexStringLower(SHA1.HashData(bytes)).Equals(entry.Sha1, StringComparison.OrdinalIgnoreCase))
             throw new InvalidDataException($"{file} does not match its SHA1 in {DatManifest.FileName}.");
+        if (handler.RomExtensions.Count == 0)
+            throw new InvalidDataException($"{file}: system '{handler.Id}' lists no ROM extensions.");
         using var stream = new MemoryStream(bytes, writable: false);
-        return new DatStore(MameDat.Parse(stream), entry.Version);
+        return new DatStore(MameDat.Parse(stream), handler.DatName, entry.Version, handler.RomExtensions[0]);
     }
 
     private static bool IsDateVersion(string? version) =>

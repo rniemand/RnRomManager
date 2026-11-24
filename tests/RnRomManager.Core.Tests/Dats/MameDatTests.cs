@@ -61,6 +61,51 @@ public class MameDatTests
         Assert.That((dat.Sets[3].IsBios, dat.Sets[3].Roms.Count), Is.EqualTo((true, 0)));
     }
 
+    // FBNeo D4: the FBNeo arcade DAT's Logiqx shape parses with no parser change; its DTD is never fetched.
+    [Test]
+    public void Parse_ReadsAnFbneoLogiqxDatafile()
+    {
+        var dat = Parse("""
+            <?xml version="1.0"?>
+            <!DOCTYPE datafile PUBLIC "-//FB Alpha//DTD ROM Management Datafile//EN" "http://www.logiqx.com/Dats/datafile.dtd">
+            <datafile>
+            	<header>
+            		<name>FinalBurn Neo</name>
+            		<description>FinalBurn Neo v1.0.0.03 Arcade Games</description>
+            		<version>1.0.0.03</version>
+            		<clrmamepro forcenodump="ignore"/>
+            	</header>
+            	<game name="neogeo" isbios="yes" sourcefile="neogeo">
+            		<description>Neo Geo</description>
+            		<year>1990</year>
+            		<manufacturer>SNK</manufacturer>
+            		<rom name="sp-s2.sp1" size="131072" crc="9036d879"/>
+            	</game>
+            	<game name="kof97" romof="neogeo" sourcefile="d_neogeo.cpp">
+            		<description>The King of Fighters '97 (NGM-2320)</description>
+            		<year>1997</year>
+            		<manufacturer>SNK</manufacturer>
+            		<rom name="sp-s2.sp1" merge="sp-s2.sp1" size="131072" crc="9036d879"/>
+            		<rom name="232-p1.p1" size="1048576" crc="7db81ad9"/>
+            		<video type="raster" orientation="horizontal" width="320" height="224" aspectx="4" aspecty="3"/>
+            		<driver status="good"/>
+            	</game>
+            	<game name="kof97h" cloneof="kof97" romof="kof97" sourcefile="d_neogeo.cpp">
+            		<description>The King of Fighters '97 (NGH-2320)</description>
+            		<year>1997</year>
+            		<manufacturer>SNK</manufacturer>
+            		<rom name="232-pg1.p1" size="1048576" crc="5c2400b7"/>
+            	</game>
+            </datafile>
+            """);
+
+        Assert.That(dat.Sets.Select(s => s.Name), Is.EqualTo(new[] { "neogeo", "kof97", "kof97h" }));
+        Assert.That((dat.Sets[0].IsBios, dat.Sets[1].IsBios), Is.EqualTo((true, false)));
+        Assert.That((dat.Sets[1].RomOf, dat.Sets[1].Description, dat.Sets[1].Year), Is.EqualTo(("neogeo", "The King of Fighters '97 (NGM-2320)", "1997")));
+        Assert.That(dat.Sets[1].Roms[0], Is.EqualTo(new MameRom("sp-s2.sp1", 131072, "9036d879", "sp-s2.sp1", null, false)));
+        Assert.That((dat.Sets[2].CloneOf, dat.Sets[2].RomOf, dat.Sets[2].Roms.Count), Is.EqualTo(("kof97", "kof97", 1)));
+    }
+
     [Test]
     public void Parse_AcceptsMachineElements()
     {

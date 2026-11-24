@@ -16,7 +16,7 @@ public static class PrimaryRelease
     public static IOrderedEnumerable<InfoJsonRom> Order(IEnumerable<InfoJsonRom> releases, DatSource source) => source switch
     {
         DatSource.TitleDb => releases.OrderBy(IsAddOn).ThenBy(Rank, PrimaryReleaseRanker.Instance),
-        DatSource.Mame => releases.OrderBy(IsClone).ThenBy(Rank, PrimaryReleaseRanker.Instance),
+        DatSource.Mame or DatSource.Fbneo => releases.OrderBy(IsClone).ThenBy(Rank, PrimaryReleaseRanker.Instance),
         _ => releases.OrderBy(Rank, PrimaryReleaseRanker.Instance),
     };
 

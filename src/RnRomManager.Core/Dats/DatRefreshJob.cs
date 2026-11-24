@@ -46,11 +46,11 @@ public sealed class DatRefreshJob(
     {
         CheckPlan(systems.All);
         var titleDb = systems.All.Where(h => h.DatSource == DatSource.TitleDb).ToList();
-        var mame = systems.All.FirstOrDefault(h => h.DatSource == DatSource.Mame);
+        var romsets = systems.All.Where(h => h.DatSource.IsRomset()).ToList();
         var files = systems.All.Where(h => h.DatSource == DatSource.Libretro)
             .SelectMany(h => new[] { h.DatFolder }.Concat(h.MetadatKinds).Select(kind => (Handler: h, Kind: kind))).ToList();
-        // One download per libretro file, plus one shared titledb download and one MAME download.
-        context.Progress.SetTotal(files.Count + (titleDb.Count > 0 ? 1 : 0) + (mame is null ? 0 : 1));
+        // One download per libretro file, plus one shared titledb download and one per romset DAT (FBNeo D3).
+        context.Progress.SetTotal(files.Count + (titleDb.Count > 0 ? 1 : 0) + romsets.Count);
 
         var work = CreateWork(context.JobId);
         var staged = Path.Combine(work, DatCache.FolderName);
@@ -76,8 +76,9 @@ public sealed class DatRefreshJob(
 
             if (titleDb.Count > 0)
                 manifest.AddRange(await StageTitleDbAsync(titleDb, work, staged, context, cancellationToken).ConfigureAwait(false));
-            if (mame is not null)
-                manifest.Add(await StageMameAsync(mame, staged, context, cancellationToken).ConfigureAwait(false));
+            foreach (var romset in romsets)
+                manifest.Add(await StageMameAsync(romset, romset.DatSource == DatSource.Fbneo ? sources.FbneoDatUrl : sources.MameDatUrl,
+                    staged, context, cancellationToken).ConfigureAwait(false));
 
             cancellationToken.ThrowIfCancellationRequested();
             DatManifest.Write(Path.Combine(staged, DatManifest.FileName), manifest);
@@ -127,23 +128,22 @@ public sealed class DatRefreshJob(
         if (handlers.GroupBy(h => h.DatName, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1) is { } clash)
             throw new InvalidOperationException(
                 $"Systems {string.Join(" and ", clash.Select(h => $"'{h.Id}'"))} share the DAT name '{clash.Key}'; nothing was refreshed.");
-        // Arcade D1: one URL serves every Mame handler.
-        var mame = handlers.Where(h => h.DatSource == DatSource.Mame).ToList();
-        if (mame.Count > 1)
+        // Arcade D1 / FBNeo D3: one URL serves each romset source, so one system per source.
+        foreach (var group in handlers.Where(h => h.DatSource.IsRomset()).GroupBy(h => h.DatSource).Where(g => g.Count() > 1))
             throw new InvalidOperationException(
-                $"Systems {string.Join(" and ", mame.Select(h => $"'{h.Id}'"))} both use Sources:MameDatUrl; nothing was refreshed.");
+                $"Systems {string.Join(" and ", group.Select(h => $"'{h.Id}'"))} both use Sources:{(group.Key == DatSource.Fbneo ? "FbneoDatUrl" : "MameDatUrl")}; nothing was refreshed.");
     }
 
     /// <summary>
-    /// Arcade D4: one capped download of <c>Sources:MameDatUrl</c>, parsed in full (a failure keeps the old set) and staged
+    /// Arcade D4: one capped download of <c>Sources:MameDatUrl</c> (or <c>Sources:FbneoDatUrl</c>, FBNeo D3), parsed in full (a failure keeps the old set) and staged
     /// as <c>mame/&lt;DatName&gt;.xml</c>. The DAT has no version, so the download time (UTC, to the second) is it.
     /// </summary>
-    private async Task<DatManifestEntry> StageMameAsync(ISystemHandler handler, string staged, JobContext context, CancellationToken cancellationToken)
+    private async Task<DatManifestEntry> StageMameAsync(ISystemHandler handler, string url, string staged, JobContext context, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var relative = MameDat.RelativePath(handler.DatName);
         context.Progress.SetCurrentItem(relative);
-        var bytes = await DownloadAsync(sources.MameDatUrl, cancellationToken).ConfigureAwait(false);
+        var bytes = await DownloadAsync(url, cancellationToken).ConfigureAwait(false);
         var downloadedAt = time.GetUtcNow();
         try
         {

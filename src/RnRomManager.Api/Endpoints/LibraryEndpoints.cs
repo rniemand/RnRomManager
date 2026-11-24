@@ -191,7 +191,7 @@ public static class LibraryEndpoints
         {
             if (await roms.GetAsync(id, romId, ctx.RequestAborted) is not { } rom
                 || await repository.GetAsync(id, ctx.RequestAborted) is null
-                || systems.ById(rom.SystemId) is not { DatSource: DatSource.Mame })
+                || systems.ById(rom.SystemId)?.DatSource.IsRomset() != true)
                 return Problems.NotFound(ctx);
             return Results.Ok(await MameRomset.ResolveAsync(rom, dats.For(rom.SystemId), roms, ctx.RequestAborted));
         }).WithMetadata(MaintenanceExempt.Instance);

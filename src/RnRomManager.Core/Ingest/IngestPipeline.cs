@@ -222,7 +222,7 @@ public sealed class IngestPipeline(
 
         // Arcade I2: a set ZIP's file list, from a second checked open of the file that was hashed.
         IReadOnlyList<MameEntry>? mameEntries = null;
-        if (eligible.Any(h => h.DatSource == DatSource.Mame))
+        if (eligible.Any(h => h.DatSource.IsRomset()))
         {
             var opened = ExternalRomPath.OpenRead(root, fresh.Path, FileShare.ReadWrite | FileShare.Delete, snapshot);
             if (opened.Status == ExternalPathStatus.Changed)
@@ -339,7 +339,7 @@ public sealed class IngestPipeline(
         var headers = candidates.ToDictionary(h => h.Id, h => h.ReadHeader(headerBytes));
         // T4: a TitleDb system matches by title id (header, else file name); the others by SHA1.
         var match = candidates
-            .Where(h => h.DatSource != DatSource.Mame) // Arcade I4: matched by set name and CRCs below
+            .Where(h => !h.DatSource.IsRomset()) // Arcade I4: matched by set name and CRCs below
             .Select(h => (Handler: h, Store: dats.For(h.Id)))
             .Select(x => (x.Handler, x.Store, Rom: x.Store?.BySha1(hashes.Sha1),
                 Title: x.Handler.DatSource == DatSource.TitleDb && x.Store is { } titles
@@ -359,7 +359,7 @@ public sealed class IngestPipeline(
         MameSet? mameSet = null;
         MameMatch? mameMatch = null;
         if (match.Rom is null && match.Title is null && mameEntries is not null
-            && candidates.FirstOrDefault(h => h.DatSource == DatSource.Mame) is { } arcade && dats.For(arcade.Id) is { } mameStore)
+            && candidates.FirstOrDefault(h => h.DatSource.IsRomset()) is { } arcade && dats.For(arcade.Id) is { } mameStore)
         {
             mameSet = mameStore.BySetName(Path.GetFileNameWithoutExtension(file.Name));
             mameMatch = mameSet is null ? null : MameMatcher.Match(mameSet, mameEntries);

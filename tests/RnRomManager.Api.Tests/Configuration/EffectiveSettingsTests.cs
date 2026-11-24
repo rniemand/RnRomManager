@@ -84,6 +84,7 @@ public class EffectiveSettingsTests
             DatBaseUrl = "https://dats.example",
             TitleDbUrl = "https://titledb.example",
             MameDatUrl = "https://mame.example",
+            FbneoDatUrl = "https://fbneo.example",
             ThumbnailBaseUrl = "",
             IgdbClientId = "client-id",
             IgdbClientSecret = "s3cret",
@@ -94,6 +95,7 @@ public class EffectiveSettingsTests
         Assert.That(masked.DatBaseUrl, Is.EqualTo("https://dats.example"));
         Assert.That(masked.TitleDbUrl, Is.EqualTo("https://titledb.example"));
         Assert.That(masked.MameDatUrl, Is.EqualTo("https://mame.example"));
+        Assert.That(masked.FbneoDatUrl, Is.EqualTo("https://fbneo.example"));
         Assert.That(masked.ThumbnailBaseUrl, Is.Empty);
     }
 

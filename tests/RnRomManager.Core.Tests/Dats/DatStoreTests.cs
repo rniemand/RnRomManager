@@ -130,7 +130,7 @@ public class DatStoreTests
     [Test]
     public void Mame_OneRomPerSet_NamedBySetWithEmptyHashes()
     {
-        var store = new DatStore(Mame, "2026-01-01T00:00:00Z");
+        var store = new DatStore(Mame, DatStore.MameName, "2026-01-01T00:00:00Z", ".mamez");
 
         Assert.That((store.DatName, store.Version), Is.EqualTo(("MAME", "2026-01-01T00:00:00Z")));
         Assert.That(store.Roms[0], Is.EqualTo(new DatRom("Street Fighter II - The World Warrior (World 910522)", "sf2.mamez", 128, "", "", "")));
@@ -139,10 +139,21 @@ public class DatStoreTests
         Assert.That(store.BySha1(new string('0', 40)), Is.Null);
     }
 
+    // FBNeo D5: the DatName and ROM extension come from the system.
+    [Test]
+    public void Romset_UsesTheGivenDatNameAndRomExtension()
+    {
+        var store = new DatStore(Mame, "FBNeo - Arcade Games", "v", ".fbneoz");
+
+        Assert.That(store.DatName, Is.EqualTo("FBNeo - Arcade Games"));
+        Assert.That(store.Roms.Select(r => r.RomName), Is.EqualTo(new[] { "sf2.fbneoz", "sf2ua.fbneoz", "odd.fbneoz" }));
+        Assert.That(store.BySetName("sf2")?.Name, Is.EqualTo("sf2"));
+    }
+
     [Test]
     public void Mame_BySetName_IgnoresCase()
     {
-        var store = new DatStore(Mame, "v");
+        var store = new DatStore(Mame, DatStore.MameName, "v", ".mamez");
 
         Assert.That(store.BySetName("SF2UA")?.Name, Is.EqualTo("sf2ua"));
         Assert.That(store.BySetName("nope"), Is.Null);
@@ -152,7 +163,7 @@ public class DatStoreTests
     [Test]
     public void Mame_MetadataForSet_YearAndManufacturer()
     {
-        var store = new DatStore(Mame, "v");
+        var store = new DatStore(Mame, DatStore.MameName, "v", ".mamez");
 
         var sf2 = store.MetadataForSet("sf2");
         Assert.That((sf2.ReleaseYear, sf2.Developers, sf2.Publishers, sf2.Genres), Is.EqualTo((1991, new[] { "Capcom" }, new[] { "Capcom" }, Array.Empty<string>())));
