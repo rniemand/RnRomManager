@@ -222,6 +222,18 @@ public class ReviewEndpointsTests
     }
 
     [Test]
+    public async Task AttachDlc_OnANonTitleDbSystem_IsAFlagError_AndKeepsPending()
+    {
+        var target = await KnownGame();
+        var item = await Queue(false, "mystery (Japan).gb");
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Attach", targetGameId = target, flag = "DLC" });
+        Assert.That(response.Code, Is.EqualTo("ValidationFailed"));
+        Assert.That(response.Errors!.Value.TryGetProperty("flag", out _), Is.True);
+        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
+        Assert.That(File.Exists(item.SourcePath), Is.True);
+    }
+
+    [Test]
     public async Task AttachRelease_TagsFromTheFileName_Unverified_NotPrimary_A2()
     {
         var target = await KnownGame();

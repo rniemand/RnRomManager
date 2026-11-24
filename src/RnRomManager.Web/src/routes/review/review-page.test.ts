@@ -73,6 +73,7 @@ const base = {
 	resolvable: true,
 	dismissible: true,
 	fileSets: false,
+	addOns: false,
 	setMembers: null,
 	gameId: null,
 	createdAt: ''
@@ -761,6 +762,37 @@ describe('review detail page', () => {
 		expect(
 			(screen.getAllByRole('radio') as HTMLInputElement[]).map((r) => r.labels![0].textContent)
 		).toEqual(['Release', 'Hack', 'Translated']);
+	});
+
+	it('offers DLC on a titledb (Switch) system and sends flag DLC', async () => {
+		answers['GET /api/review/7'] = {
+			status: 200,
+			body: { ...noMatch, system: 'switch', systemName: 'Nintendo Switch', addOns: true }
+		};
+		answers['GET /api/games?q=Orb&system=switch&pageSize=10'] = {
+			status: 200,
+			body: {
+				items: [{ id: 'g1', displayTitle: 'Orbit', system: 'switch' }],
+				page: 1,
+				pageSize: 10,
+				total: 1
+			}
+		};
+		render(ReviewPage);
+
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Attach' }));
+		expect(
+			(screen.getAllByRole('radio') as HTMLInputElement[]).map((r) => r.labels![0].textContent)
+		).toEqual(['Release', 'Hack', 'Translated', 'DLC']);
+		expect(
+			screen.getByText('Attach to a game as a new release, a hack, a translation or a DLC.')
+		).toBeTruthy();
+		await fireEvent.click(screen.getByLabelText('DLC'));
+		await chooseGame('Orb', 'Orbit');
+		await fireEvent.click(screen.getByRole('button', { name: 'Attach' }));
+		await vi.waitFor(() =>
+			expect(posts[0].body).toEqual({ action: 'Attach', targetGameId: 'g1', flag: 'DLC' })
+		);
 	});
 
 	it.each([

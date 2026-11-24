@@ -522,6 +522,23 @@ public class TitleDbIngestTests
         Assert.That(ReadGame().Roms.Select(r => r.FileName), Does.Contain("mystery (Hack).xci"));
     }
 
+    [TestCase("pack.nsp", "pack (DLC).nsp")]
+    [TestCase("pack (DLC).nsp", "pack (DLC).nsp")]
+    public async Task DlcAttach_JoinsTheGame_AsAnAddOn_WithOnlyTheDlcFlag(string source, string stored)
+    {
+        await StartAsync();
+        var gameId = await IngestBaseAsync();
+        var (item, _) = await QueueAsync(source);
+        var attach = new ReviewResolutionRequest { Action = "Attach", TargetGameId = gameId, Flag = "DLC" };
+
+        var result = await Resolver().ResolveInJobAsync(item.Id, attach, await AdminAsync(), default);
+
+        Assert.That((result.Code, result.GameId), Is.EqualTo(((string?)null, (Guid?)gameId)));
+        var dlc = ReadGame().Roms.Single(r => r.Flags.Contains("DLC"));
+        Assert.That((dlc.FileName, dlc.IsPrimary, string.Join(",", dlc.Flags)), Is.EqualTo((stored, false, "DLC")));
+        Assert.That(ReadGame().Roms.Single(r => r.IsPrimary).Identification.Method, Is.EqualTo(IdentificationMethod.TitleDb));
+    }
+
     [Test]
     public async Task QueuedAttach_KeepsTheWholeIdentity_AfterARefreshDropsTheEntry()
     {

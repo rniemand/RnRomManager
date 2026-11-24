@@ -43,7 +43,7 @@ public class ReviewRequestValidationTests
         Assert.That(ReviewEndpoints.Validate(new ReviewResolutionRequest { Action = "Attach", TargetGameId = Guid.NewGuid(), Flag = "Disc" })["disc"],
             Is.EqualTo(new[] { "A disc number is required." }));
         Assert.That(ReviewEndpoints.Validate(new ReviewResolutionRequest { Action = "Attach", TargetGameId = Guid.NewGuid(), Flag = "X" })["flag"],
-            Is.EqualTo(new[] { "Must be Hack, Translated, None, Disc or Release." }));
+            Is.EqualTo(new[] { "Must be Hack, Translated, None, Disc, Release or DLC." }));
         Assert.That(ReviewEndpoints.Validate(new ReviewResolutionRequest { Action = "Attach", TargetGameId = Guid.NewGuid(), Flag = "Release", Disc = 2 })["disc"],
             Is.EqualTo(new[] { "A disc number needs Manual or Attach as a disc." }));
     }
@@ -65,6 +65,7 @@ public class ReviewRequestValidationTests
             new ReviewResolutionRequest { Action = "Attach", TargetGameId = Guid.NewGuid(), Flag = "Hack" },
             new ReviewResolutionRequest { Action = "Attach", TargetGameId = Guid.NewGuid(), Flag = "Translated" },
             new ReviewResolutionRequest { Action = "Attach", TargetGameId = Guid.NewGuid(), Flag = "Release" },
+            new ReviewResolutionRequest { Action = "Attach", TargetGameId = Guid.NewGuid(), Flag = "DLC" },
             new ReviewResolutionRequest { Action = "Attach", TargetGameId = Guid.NewGuid(), Flag = "Disc", Disc = 2 },
             Manual with { Disc = 1 }, Manual with { Disc = 99 },
         }) Assert.That(ReviewEndpoints.Validate(request), Is.Empty);

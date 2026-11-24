@@ -63,6 +63,7 @@ public static class ReviewEndpoints
                 resolvable = ReviewResolver.IsDismissible(item, systems, set is not null) || set is not null, // B12, from the set already found
                 dismissible = ReviewResolver.IsDismissible(item, systems, set is not null),
                 fileSets = systems.ById(item.SystemId)?.FileSets ?? false,
+                addOns = systems.ById(item.SystemId)?.DatSource == DatSource.TitleDb, // Attach as DLC is offered for titledb (Switch) items
                 setMembers = set?.Select(m => new { reviewId = m.Row.Id, fileName = m.Row.OriginalFileName, sizeBytes = m.Row.SizeBytes }),
             });
         });
@@ -135,7 +136,7 @@ public static class ReviewEndpoints
                 break;
             case "Attach":
                 if (request.TargetGameId is null || request.TargetGameId == Guid.Empty) errors["targetGameId"] = ["A target game is required."];
-                if (request.Flag is not ("Hack" or "Translated" or "None" or "Disc" or "Release")) errors["flag"] = ["Must be Hack, Translated, None, Disc or Release."];
+                if (request.Flag is not ("Hack" or "Translated" or "None" or "Disc" or "Release" or "DLC")) errors["flag"] = ["Must be Hack, Translated, None, Disc, Release or DLC."];
                 break;
             case "Manual":
                 if (string.IsNullOrWhiteSpace(request.Title) || request.Title.Trim().Length > 255 || FileNameSanitizer.Sanitize(request.Title).Length == 0)

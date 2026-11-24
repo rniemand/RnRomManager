@@ -67,15 +67,17 @@
 
 	let attachTarget = $state<GameListItem | null>(null);
 	let attachTargetError = $state<string | undefined>();
-	let attachFlag = $state<'Release' | 'Hack' | 'Translated' | 'Disc'>('Release');
+	let attachFlag = $state<'Release' | 'Hack' | 'Translated' | 'Disc' | 'DLC'>('Release');
 	let attachDisc = $state<number | null>(null);
 	let attachDiscError = $state<string | undefined>();
-	// B16: Disc only on a disc system.
-	const attachFlags = $derived(
-		item?.fileSets
-			? (['Release', 'Hack', 'Translated', 'Disc'] as const)
-			: (['Release', 'Hack', 'Translated'] as const)
-	);
+	// B16: Disc only on a disc system; DLC only on a titledb (Switch) system.
+	const attachFlags = $derived<readonly ('Release' | 'Hack' | 'Translated' | 'Disc' | 'DLC')[]>([
+		'Release',
+		'Hack',
+		'Translated',
+		...(item?.fileSets ? (['Disc'] as const) : []),
+		...(item?.addOns ? (['DLC'] as const) : [])
+	]);
 
 	let manual = $state<ManualForm>(emptyManualForm());
 	let manualErrors = $state<ManualErrors>({});
@@ -277,7 +279,9 @@
 				: { action: 'Attach', targetGameId: attachTarget.id, flag: attachFlag },
 			attachFlag === 'Disc'
 				? `Attached to ${attachTarget.displayTitle} as disc ${attachDisc}.`
-				: `Attached to ${attachTarget.displayTitle}.`
+				: attachFlag === 'DLC'
+					? `Attached to ${attachTarget.displayTitle} as DLC.`
+					: `Attached to ${attachTarget.displayTitle}.`
 		);
 	}
 
@@ -667,7 +671,9 @@
 							<p class="small text-body-secondary">
 								{item.fileSets
 									? 'Attach to a game as a new release, a hack, a translation or another disc.'
-									: 'Attach to a game as a new release, a hack or a translation.'}
+									: item.addOns
+										? 'Attach to a game as a new release, a hack, a translation or a DLC.'
+										: 'Attach to a game as a new release, a hack or a translation.'}
 							</p>
 							<form onsubmit={attach} novalidate>
 								<div class="mb-2">
