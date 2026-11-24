@@ -425,6 +425,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 return ReviewResolutionResult.Invalid("update", ReviewResolutionRequest.UpdateNeedsDat);
             if (request.Disc is not null && !system.FileSets)
                 return ReviewResolutionResult.Invalid("disc", "Disc numbers are for disc systems.");
+            if (request.Action == "Attach" && request.Flag == "DLC" && system.DatSource != DatSource.TitleDb)
+                return ReviewResolutionResult.Invalid("flag", "Only a titledb game can take a DLC.");
             var discFlag = request.Disc is { } disc ? $"Disc {disc}" : null; // B10: the flag NoIntroName.Parse makes from a Redump name
             if (request.Action == "Dat")
             {
@@ -556,8 +558,9 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 }
                 else
                 {
+                    // A DLC is an add-on (not ranked primary, counted as DLC); its source name may already say so.
                     flags = [flag];
-                    if (discFlag is null || !stem.Contains($"({discFlag})", StringComparison.OrdinalIgnoreCase))
+                    if ((discFlag is null && flag != "DLC") || !stem.Contains($"({flag})", StringComparison.OrdinalIgnoreCase))
                         stem += $" ({flag})";
                 }
                 filename = stem + (external || system.KeepsExtension(originalExtension) ? originalExtension : system.RomExtensions[0]);
