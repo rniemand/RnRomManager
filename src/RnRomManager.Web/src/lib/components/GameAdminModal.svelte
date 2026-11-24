@@ -401,10 +401,11 @@
 				{game}
 				{form}
 				autostart={action.lookup}
-				onapply={(next) => {
+				onapply={(next, save) => {
 					form = next;
 					editTab = 'details';
 					igdbApplied = true;
+					if (save) void confirm();
 				}}
 			/>
 		</div>

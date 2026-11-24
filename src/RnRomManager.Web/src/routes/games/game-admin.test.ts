@@ -789,6 +789,52 @@ describe('game detail admin actions', () => {
 			});
 		});
 
+		it('Use this match and save copies the ticked fields and saves', async () => {
+			answers['GET /api/games/g1/igdb-matches?q=Tetris'] = [
+				{
+					status: 200,
+					body: {
+						matches: [
+							{
+								igdbId: 1234,
+								name: 'Tetris DX',
+								releaseYear: 1998,
+								developers: ['Nintendo'],
+								publishers: ['Nintendo', 'Capcom'],
+								genres: ['Puzzle'],
+								description: 'Falling blocks.',
+								coverUrl: null,
+								url: null
+							}
+						]
+					}
+				}
+			];
+			answers['PATCH /api/games/g1'] = [{ status: 200, body: game([1]) }];
+			await openEdit(configured());
+
+			await fireEvent.click(tab('Lookup Info'));
+			await fireEvent.submit(modal().getByLabelText('Search IGDB for').closest('form')!);
+			await fireEvent.click(
+				await modal().findByRole('button', { name: /Tetris DX/, hidden: true })
+			);
+			await fireEvent.click(modal().getByRole('checkbox', { name: 'Copy Title', hidden: true }));
+			await fireEvent.click(
+				modal().getByRole('button', { name: 'Use this match and save', hidden: true })
+			);
+
+			await vi.waitFor(() => expect(calls).toContain('PATCH /api/games/g1'));
+			expect(bodies['PATCH /api/games/g1']).toEqual({
+				title: 'Tetris DX',
+				releaseYear: 1989,
+				developers: ['Nintendo'],
+				publishers: ['Nintendo', 'Capcom'],
+				genres: ['Puzzle'],
+				description: 'Falling blocks.',
+				igdbId: 1234
+			});
+		});
+
 		it('the applied note clears when the modal reopens', async () => {
 			await openEdit(configured());
 			await fireEvent.click(tab('Lookup Info'));
