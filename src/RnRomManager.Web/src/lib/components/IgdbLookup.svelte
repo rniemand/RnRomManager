@@ -191,9 +191,9 @@
 
 	{#if chosen && copy}
 		<div class="table-responsive mb-2">
-			<table class="table table-sm align-middle mb-0">
+			<table class="table table-sm table-striped table-hover align-middle mb-0">
 				<caption class="visually-hidden">Fields to copy from IGDB</caption>
-				<thead>
+				<thead class="table-dark">
 					<tr>
 						<th scope="col"><span class="visually-hidden">Copy</span></th>
 						<th scope="col">Field</th>
