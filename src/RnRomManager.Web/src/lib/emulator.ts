@@ -20,7 +20,8 @@ export const externalBrowserCores: readonly string[] = [
 	'mednafen_pce',
 	'dosbox_pure',
 	'azahar',
-	'mame2003_plus'
+	'mame2003_plus',
+	'fbneo'
 ];
 
 /** S8: the cores whose external releases load through play-disc; DeSmuME loads an external DS ROM from `/download`. */

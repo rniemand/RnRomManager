@@ -350,6 +350,17 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
+    public async Task Fbneo_AnExternalSetIsPlayable_FromDownload_NotPlayDisc()
+    {
+        var release = await IngestFbneo("rnfbp.zip", MameZip("FBP1"));
+
+        Assert.That((await GetJson($"/api/games/{release.GameId}")).GetProperty("browserCore").GetString(), Is.EqualTo("fbneo"));
+        var listed = (await GetJson("/api/games?system=fbneo")).GetProperty("items").EnumerateArray().Single();
+        Assert.That((listed.GetProperty("browserCore").GetString(), listed.GetProperty("playDisc").GetBoolean()), Is.EqualTo(("fbneo", false)));
+        Assert.That(listed.GetProperty("playRomFileName").GetString(), Is.EqualTo("rnfbp.fbneoz"));
+    }
+
+    [Test]
     public void Romset_IsMaintenanceExempt()
     {
         var endpoint = Service<Microsoft.AspNetCore.Routing.EndpointDataSource>().Endpoints.OfType<Microsoft.AspNetCore.Routing.RouteEndpoint>()

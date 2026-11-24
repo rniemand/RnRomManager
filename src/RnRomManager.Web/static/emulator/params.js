@@ -505,12 +505,22 @@ export function contentSize(bytes) {
 }
 
 /**
+ * Arcade P3: the romset cores and the system each one's sets are imported into.
+ * @type {Record<string, string>}
+ */
+export const romsetSystems = {
+	mame2003_plus: 'Arcade (MAME 2003-Plus)',
+	fbneo: 'Arcade (FinalBurn Neo)'
+};
+
+/**
  * Arcade P3: the play error when a clone's parent or a BIOS set isn't in the library (and the set isn't self-contained).
  * @param {string[]} missing the set names, in the server's order
+ * @param {string} system the system's display name, from {@link romsetSystems}
  * @returns {string}
  */
-export function romsetMissingError(missing) {
+export function romsetMissingError(missing, system) {
 	return missing.length === 1
-		? `This game needs the ${missing[0]} romset. Import it into Arcade (MAME 2003-Plus), then play again.`
-		: `This game needs the ${missing.join(', ')} romsets. Import them into Arcade (MAME 2003-Plus), then play again.`;
+		? `This game needs the ${missing[0]} romset. Import it into ${system}, then play again.`
+		: `This game needs the ${missing.join(', ')} romsets. Import them into ${system}, then play again.`;
 }

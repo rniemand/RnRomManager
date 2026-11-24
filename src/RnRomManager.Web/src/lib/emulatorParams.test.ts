@@ -10,6 +10,7 @@ import {
 	hidesCoreChooser,
 	isOperatorCore,
 	operatorCoreError,
+	romsetMissingError,
 	operatorCorePaths,
 	optionalBiosError,
 	parsePlayParams,
@@ -1073,4 +1074,18 @@ describe('Arcade (FinalBurn Neo)', () => {
 			"The FinalBurn Neo core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:FbneoCorePath)."
 		);
 	});
+});
+
+describe('romsetMissingError', () => {
+	it.each([['Arcade (MAME 2003-Plus)'], ['Arcade (FinalBurn Neo)']])(
+		'names %s, singular and plural',
+		(system) => {
+			expect(romsetMissingError(['sf2'], system)).toBe(
+				`This game needs the sf2 romset. Import it into ${system}, then play again.`
+			);
+			expect(romsetMissingError(['sf2', 'qsound'], system)).toBe(
+				`This game needs the sf2, qsound romsets. Import them into ${system}, then play again.`
+			);
+		}
+	);
 });

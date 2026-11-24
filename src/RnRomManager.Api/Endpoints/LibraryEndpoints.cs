@@ -32,9 +32,9 @@ public static class LibraryEndpoints
     /// for Sega CD, (TurboGrafx-CD B5) Beetle PCE for TurboGrafx-CD. Eligibility is per core, so Genesis Plus GX also accepts an external primary of Mega Drive, a family that
     /// the registry keeps embedded. S8: DeSmuME plays an external DS release from <c>/download</c>, and (MS-DOS P3) DOSBox Pure an
     /// external DOS game ZIP. 3DS P5: azahar plays an external <c>.3ds</c>/<c>.cci</c> from <c>/download</c>. Arcade P5: MAME 2003-Plus an
-    /// external set ZIP (<c>.mamez</c>), with its parent and BIOS sets from <c>/romset</c>.
+    /// external set ZIP (<c>.mamez</c>), with its parent and BIOS sets from <c>/romset</c>; FBNeo P3 FinalBurn Neo a <c>.fbneoz</c>/<c>.fbneo7z</c> likewise.
     /// </summary>
-    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "desmume", "mednafen_pce", "dosbox_pure", "azahar", "mame2003_plus" };
+    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "desmume", "mednafen_pce", "dosbox_pure", "azahar", "mame2003_plus", "fbneo" };
 
     /// <summary>S8: the cores whose external releases play through <c>play-disc</c>; any other (DS) loads from <c>/download</c>.</summary>
     public static readonly IReadOnlySet<string> PlayDiscCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "mednafen_pce" };

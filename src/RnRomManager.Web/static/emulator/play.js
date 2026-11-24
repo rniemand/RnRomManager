@@ -40,6 +40,7 @@ import {
 	segaCdBiosSizeError,
 	sessionExpired,
 	romsetMissingError,
+	romsetSystems,
 	threeDoBios,
 	threeDoBiosBytes,
 	threeDoBiosMissing,
@@ -180,12 +181,18 @@ async function loadOptionalBios(name, size, sizeError, exact = true) {
 }
 
 /**
- * Arcade P3: the romsets a MAME release needs beside it, from the server.
+ * @typedef {{ setName: string, fileName: string, gameId: string, romId: number }} RomsetDep
+ * @typedef {{ setName: string, fileName: string, deps: RomsetDep[], missing: string[], bios: string[], selfContained: boolean }} Romset
+ */
+
+/**
+ * Arcade P3: the romsets a MAME or FBNeo release needs beside it, from the server.
  * @param {string} game
  * @param {number} rom
- * @returns {Promise<{ setName: string, deps: { setName: string, gameId: string, romId: number }[] } | { error: string }>}
+ * @param {string} system the system's display name, for the missing-set message
+ * @returns {Promise<Romset | { error: string }>}
  */
-async function loadRomset(game, rom) {
+async function loadRomset(game, rom, system) {
 	try {
 		const response = await fetch(`/api/games/${game}/roms/${rom}/romset`, { credentials: 'same-origin' });
 		if (!response.ok)
@@ -193,7 +200,7 @@ async function loadRomset(game, rom) {
 				error: response.status === 401 ? sessionExpired : `Couldn't load the romset list (HTTP ${response.status}).`
 			};
 		const romset = await response.json();
-		if (romset.missing.length > 0) return { error: romsetMissingError(romset.missing) };
+		if (romset.missing.length > 0) return { error: romsetMissingError(romset.missing, system) };
 		return romset;
 	} catch {
 		return { error: "Couldn't load the romset list." };
@@ -201,8 +208,38 @@ async function loadRomset(game, rom) {
 }
 
 /**
- * Arcade P3: each dependency set from its own `/download`, keyed `/<set>.zip` for EJS_externalFiles.
- * @param {{ setName: string, gameId: string, romId: number }[]} deps
+ * FBNeo P3: each board BIOS set from the BIOS folder, keyed `/<name>.zip` for EJS_externalFiles. A self-contained set
+ * holds the BIOS ROMs itself, so a BIOS file that isn't there is skipped.
+ * @param {string[]} bios
+ * @param {boolean} selfContained
+ * @returns {Promise<{ files: Record<string, ArrayBuffer> } | { error: string }>}
+ */
+async function loadRomsetBios(bios, selfContained) {
+	/** @type {Record<string, ArrayBuffer>} */
+	const files = {};
+	for (const name of bios) {
+		show(`Downloading ${name} BIOS…`);
+		try {
+			const response = await fetch(`/api/emulator/bios/${name}.zip`, { credentials: 'same-origin' });
+			if (response.status === 404) {
+				if (selfContained) continue;
+				return { error: `This game needs the ${name} BIOS: ask an Admin to put ${name}.zip in the BIOS folder (Paths:Bios).` };
+			}
+			if (!response.ok)
+				return {
+					error: response.status === 401 ? sessionExpired : `Couldn't load the ${name} BIOS (HTTP ${response.status}).`
+				};
+			files[`/${name}.zip`] = await (await readContent(response)).arrayBuffer();
+		} catch {
+			return { error: `Couldn't load the ${name} BIOS.` };
+		}
+	}
+	return { files };
+}
+
+/**
+ * Arcade P3: each dependency set from its own `/download`, keyed `/<fileName>` for EJS_externalFiles.
+ * @param {RomsetDep[]} deps
  * @returns {Promise<{ files: Record<string, ArrayBuffer> } | { error: string }>}
  */
 async function loadRomsetDeps(deps) {
@@ -219,7 +256,7 @@ async function loadRomsetDeps(deps) {
 							? sessionExpired
 							: `Couldn't load the ${dep.setName} romset (HTTP ${response.status}).`
 				};
-			files[`/${dep.setName}.zip`] = await (await readContent(response)).arrayBuffer();
+			files[`/${dep.fileName}`] = await (await readContent(response)).arrayBuffer();
 		} catch {
 			return { error: `Couldn't load the ${dep.setName} romset.` };
 		}
@@ -539,7 +576,7 @@ async function start() {
 	const isSegaCd = params.core === 'genesis_plus_gx' && params.disc;
 	const isThreeDo = params.core === 'opera';
 	const isTurboGrafxCd = params.core === 'mednafen_pce' && params.disc;
-	const isMame = params.core === 'mame2003_plus';
+	const isRomset = params.core in romsetSystems;
 	// PSP B3, MS-DOS P7: an isolated page is its own tab, with no modal to talk to.
 	if (player === undefined) listenForMessages(isThreeDo);
 	if (isPsp || isDos || is3ds) {
@@ -553,12 +590,17 @@ async function start() {
 		if (problem) return show(problem);
 	}
 	// Arcade P3: which parent and BIOS sets go beside the game; a missing one stops here, before any download.
-	/** @type {{ setName: string, deps: { setName: string, gameId: string, romId: number }[] } | null} */
+	/** @type {Romset | null} */
 	let romset = null;
-	if (isMame) {
-		const result = await loadRomset(params.game, params.rom);
+	/** @type {Record<string, ArrayBuffer>} */
+	let romsetFiles = {};
+	if (isRomset) {
+		const result = await loadRomset(params.game, params.rom, romsetSystems[params.core]);
 		if ('error' in result) return show(result.error);
 		romset = result;
+		const bios = await loadRomsetBios(romset.bios, romset.selfContained);
+		if ('error' in bios) return show(bios.error);
+		romsetFiles = bios.files;
 	}
 	const bios = biosFor(params.core, params.name);
 	if (bios) {
@@ -649,12 +691,10 @@ async function start() {
 			);
 		content = await readContent(response);
 	}
-	/** @type {Record<string, ArrayBuffer>} */
-	let romsetFiles = {};
 	if (romset) {
 		const deps = await loadRomsetDeps(romset.deps);
 		if ('error' in deps) return show(deps.error);
-		romsetFiles = deps.files;
+		romsetFiles = { ...romsetFiles, ...deps.files };
 	}
 	// Saves B17: the library save comes before the loader; a failure stops the launch here.
 	/** @type {ArrayBuffer | null} */
@@ -666,8 +706,8 @@ async function start() {
 		saveBytes = save.bytes;
 	}
 	show('Starting emulator…');
-	// Arcade P3: MAME finds a set by its ZIP's name, so the game goes in as <set>.zip, whatever it's stored as.
-	const file = new File([content], romset ? `${romset.setName}.zip` : contentFileName(params.core, params.game, params.name));
+	// Arcade P3: the core finds a set by its archive's name, so the game goes in as <set>.zip or <set>.7z, whatever it's stored as.
+	const file = new File([content], romset ? romset.fileName : contentFileName(params.core, params.game, params.name));
 
 	// Module code is strict: the globals loader.js reads must be set on window.
 	const ejs = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (window));
@@ -733,7 +773,7 @@ async function start() {
 		// Nintendo DS B4: the save-file export and import use RetroArch's SRAM path, which DeSmuME never writes; MS-DOS
 		// P7: nor does DOSBox Pure, whose saves are its .pure.zip; 3DS G4: nor azahar, which saves to its virtual SD/NAND;
 		// Arcade P4: nor MAME 2003-Plus, which keeps NVRAM and high scores in its own files.
-		...(isDs || isDos || is3ds || isMame ? { saveSavFiles: false, loadSavFiles: false } : {})
+		...(isDs || isDos || is3ds || isRomset ? { saveSavFiles: false, loadSavFiles: false } : {})
 	};
 	// E1: EmulatorJS shows its virtual gamepad at start only when its Start button saw a touch, and defaults the setting
 	// to enabled only for a mobile user agent; a touch-first device (not a touchscreen laptop with a mouse) gets it.
