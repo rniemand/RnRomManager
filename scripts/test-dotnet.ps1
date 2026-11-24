@@ -4,9 +4,9 @@
     Runs the .NET tests split into shards: separate `dotnet test` processes, each with its own MariaDB container.
 .DESCRIPTION
     The API host's logging (NLog) is process-wide, so API tests can't run in parallel inside one process; this
-    script splits them across processes instead. Shards 1..N-1 are named API test classes, balanced by run time;
-    the last shard is everything else (the rest of the API tests and every other test project), so a new test class
-    always runs somewhere. CI runs one shard per job (.github/workflows/ci.yml); locally, -Shard 0 runs all of them
+    script splits them across processes instead. The first shards are named API test classes, balanced by run time,
+    then whole test projects that get a shard of their own (Data.Tests); the last shard is everything else (the rest
+    of the API tests and every other test project), so a new test class always runs somewhere. CI runs one shard per job (.github/workflows/ci.yml); locally, -Shard 0 runs all of them
     at once.
 .PARAMETER Shard
     1..N runs that shard; 0 (default) builds once and runs every shard in parallel.
@@ -43,39 +43,51 @@ $solution = Join-Path $root 'RnRomManager.slnx'
 
 # API test classes per shard, balanced on CI (ubuntu-latest) class durations from the shards' TRX files: each class
 # counted from the previous class's last test to its own, so fixture setup is included. Local Windows timings differ a
-# lot and aren't a guide. The last shard also runs the other test projects in parallel processes and any API classes
-# unlisted here; on a 4-vCPU runner that contention makes API tests there 2-3x slower, so only small classes stay
-# unlisted.
+# lot and aren't a guide. An API shard only builds the API tests (~60 s on CI), the last shard builds the whole
+# solution (~95 s), so the last shard should carry the least test time. It also runs the other test projects in
+# parallel processes and any API classes unlisted here; on a 4-vCPU runner that contention makes API tests there 2-3x
+# slower, so only small classes stay unlisted.
 $apiShards = @(
     @('IngestPipelineTests'),
-    @('BackupEndpointsTests', 'AuditWriterTests', 'HealthReadyTests', 'JobEndpointsTests', 'DiscoveryEndpointsTests',
-        'ResetPasswordCommandTests', 'CollectionEndpointsTests', 'ExternalZipReadTests', 'IngestDeleteExternalEndpointsTests',
-        'SecurityHeadersTests', 'IntegrityEndpointsTests', 'ImageUrlEndpointsTests', 'IngestEndpointsTests', 'AdminSeedTests'),
-    @('DataProtectionKeysTests', 'AuditEndpointsTests', 'ExternalLibraryTests', 'EmulatorEndpointsTests', 'ReportEndpointsTests',
-        'DatEndpointsTests', 'LegacyStorageTests', 'AuditLibraryEditTests', 'IngestReviewTests', 'EndpointRoleMatrixTests',
-        'ImageEndpointsTests', 'BundleQueueEndpointsTests', 'TitleDbIngestTests', 'NoteEndpointsTests'),
+    @('AuditWriterTests', 'HealthReadyTests', 'JobEndpointsTests', 'DiscoveryEndpointsTests', 'ResetPasswordCommandTests',
+        'CollectionEndpointsTests', 'ExternalZipReadTests', 'IngestDeleteExternalEndpointsTests', 'SecurityHeadersTests',
+        'IntegrityEndpointsTests', 'ImageUrlEndpointsTests', 'IngestEndpointsTests', 'AdminSeedTests', 'ZipEntryEndpointsTests',
+        'StorageMigrationJobTests', 'ZipCompressionEndpointsTests', 'RomStorageEndpointsTests'),
+    @('BackupEndpointsTests', 'DataProtectionKeysTests', 'AuditEndpointsTests', 'ExternalLibraryTests', 'EmulatorEndpointsTests',
+        'ReportEndpointsTests', 'DatEndpointsTests', 'LegacyStorageTests', 'AuditLibraryEditTests', 'IngestReviewTests',
+        'EndpointRoleMatrixTests', 'ImageEndpointsTests', 'BundleQueueEndpointsTests', 'TitleDbIngestTests', 'NoteEndpointsTests'),
     @('BundleDownloadEndpointsTests', 'AppHostTests', 'LibraryEndpointsTests', 'SeedIngestTests', 'LibraryEditTests',
         'IngestArchiveTests', 'LibraryEditorSaveTests', 'LibraryMoveMergeTests', 'BundleFileEndpointsTests',
         'IngestExternalArchiveTests'),
     @('AdminEndpointsTests', 'AuthTests', 'ReviewEndpointsTests', 'SaveEndpointsTests', 'IngestRestoreEndpointsTests',
         'LogStreamTests', 'IngestDeleteEndpointsTests', 'HotkeyEndpointsTests', 'CollectionCoverEndpointsTests',
-        'MediaRetryEndpointsTests')
+        'MediaRetryEndpointsTests', 'ActivityReportEndpointTests', 'SaveCarryTests', 'ReleaseEditTests',
+        'DiscoveryLogoEndpointsTests', 'ImageSuggestionEndpointsTests', 'GamePlayedEndpointTests', 'UserEndpointsTests',
+        'GameInfoLookupEndpointsTests')
 )
-$shardCount = $apiShards.Count + 1
+# Whole test projects that get a shard of their own, after the API shards. Data.Tests (~75 s of MariaDB tests) made
+# the last shard the slowest by far while it ran there alongside the leftover API classes.
+$projectShards = @('tests/RnRomManager.Data.Tests')
+$shardCount = $apiShards.Count + $projectShards.Count + 1
 
 function Get-ShardArgs([int]$n) {
     # `.Name.` matches exactly that class (NUnit's FullyQualifiedName is Namespace.Class.Method(args)).
+    $filter = $null
     if ($n -le $apiShards.Count) {
         $target = $apiTests
         $filter = '(' + (($apiShards[$n - 1] | ForEach-Object { "FullyQualifiedName~.$_." }) -join '|') + ')'
+    } elseif ($n -lt $shardCount) {
+        $target = Join-Path $root $projectShards[$n - $apiShards.Count - 1]
     } else {
         $target = $solution
-        $filter = ($apiShards | ForEach-Object { $_ } | ForEach-Object { "FullyQualifiedName!~.$_." }) -join '&'
+        $filter = (@($apiShards | ForEach-Object { $_ } | ForEach-Object { "FullyQualifiedName!~.$_." }) +
+            @($projectShards | ForEach-Object { "FullyQualifiedName!~$(Split-Path $_ -Leaf)." })) -join '&'
     }
-    if ($SkipIntegration) { $filter = "($filter)&Category!=Integration" }
-    $a = @('test', $target, '-c', $Configuration, '--no-build', '--filter', $filter, '--results-directory', $ResultsDirectory,
+    if ($SkipIntegration) { $filter = if ($filter) { "($filter)&Category!=Integration" } else { 'Category!=Integration' } }
+    $a = @('test', $target, '-c', $Configuration, '--no-build', '--results-directory', $ResultsDirectory,
         # Per-test durations, for balancing $apiShards (CI uploads them with the coverage).
         '--logger', 'trx')
+    if ($filter) { $a += @('--filter', $filter) }
     if ($Coverage) { $a += @('--collect', 'XPlat Code Coverage') }
     return , $a
 }
@@ -86,7 +98,7 @@ if ($ExpectedShards -and $ExpectedShards -ne $shardCount) {
 if ($Shard -lt 0 -or $Shard -gt $shardCount) { throw "-Shard must be 0..$shardCount." }
 
 if (-not $NoBuild) {
-    $buildTarget = if ($Shard -gt 0 -and $Shard -le $apiShards.Count) { $apiTests } else { $solution }
+    $buildTarget = if ($Shard -gt 0 -and $Shard -lt $shardCount) { (Get-ShardArgs $Shard)[1] } else { $solution }
     Write-Host "==> dotnet build ($Configuration)" -ForegroundColor Cyan
     & dotnet build $buildTarget -c $Configuration -warnaserror
     if ($LASTEXITCODE -ne 0) { throw "dotnet build failed (exit $LASTEXITCODE)" }
