@@ -29,7 +29,7 @@ public abstract class NeoGeoPocketHandlerBase : ISystemHandler
     public bool EmbedRomsInZip => true;
 
     /// <inheritdoc />
-    public string? BrowserCore => null;
+    public string? BrowserCore => "mednafen_ngp";
 
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 

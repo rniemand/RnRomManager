@@ -1,0 +1,54 @@
+Beetle NeoPop (EmulatorJS core "mednafen_ngp", Neo Geo Pocket / Neo Geo Pocket Color)
+=====================================================================================
+
+Files: mednafen_ngp-wasm.data, mednafen_ngp-legacy-wasm.data
+       (npm @emulatorjs/core-mednafen_ngp 4.2.3)
+
+Corresponding source:
+- Core: https://github.com/EmulatorJS/beetle-ngp-libretro/tree/10f91c135bb27ce23407fbb1fa2f072794da2fd7
+  (2024-12-10; version string "v1.29.0.0 10f91c1" in both binaries).
+- Built with the cores.json entry {"makescript": "Makefile", "buildpath":
+  "./", "arguments": []} and platform=emscripten, whose Makefile branch sets
+  STATIC_LINKING = 1; the Makefile always sets NEED_BLIP = 1.
+- RetroArch, build scripts and compiler: see COMMON-BUILD.txt.
+
+Beetle NeoPop is a port of the Neo Geo Pocket module of Mednafen, itself
+based on NeoPop, Copyright (c) 2001-2002 by neopop_uk, and the Mednafen team
+(mednafen/ and the per-file headers); the libretro port by its contributors.
+
+Licence: GNU General Public License, version 2 or (at your option) any later
+version (every GPL header under mednafen/ says so). mednafen_ngp-LICENSE.txt
+is the license.txt inside both payloads, identical to the source's COPYING
+(the GPL v2 text). RetroArch: GPL-3.0-or-later (retroarch-LICENSE.txt), so
+the combined binaries are distributed under the GPL, version 3.
+
+Components compiled into this build that carry their own terms:
+
+- mednafen/hw_cpu/z80-fuse: the FUSE Z80 core, Copyright (c) 1999-2003
+  Philip Kendall, GNU General Public License, version 2 or (at your option)
+  any later version (its headers).
+- mednafen/sound/Blip_Buffer.cpp (Blip_Buffer 0.4.1) and
+  mednafen/ngp/T6W28_Apu.cpp: Copyright (C) 2003-2006 Shay Green, GNU Lesser
+  General Public License, version 2.1 or (at your option) any later version.
+  Neither ships a licence file; Blip_Buffer.cpp's header, verbatim:
+
+    Copyright (C) 2003-2006 Shay Green. This module is free software; you
+    can redistribute it and/or modify it under the terms of the GNU Lesser
+    General Public License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version. This
+    module is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+    FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
+    details. You should have received a copy of the GNU Lesser General Public
+    License along with this module; if not, write to the Free Software Foundation,
+    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+  T6W28_Apu.cpp carries the same statement.
+- libretro-common: Copyright (C) 2010-2020 The RetroArch team and others,
+  MIT licence, stated in each file's header
+  (mednafen_ngp-libretro-common-LICENSE.txt).
+
+Licence expression: GPL-2.0-or-later AND LGPL-2.1-or-later AND MIT.
+
+No Neo Geo Pocket BIOS is part of this core or of RnRomManager: the core uses
+its built-in high-level BIOS emulation (mednafen/ngp/biosHLE.c).

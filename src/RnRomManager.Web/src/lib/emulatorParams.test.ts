@@ -166,6 +166,7 @@ describe('parsePlayParams', () => {
 		'vice_xvic',
 		'puae',
 		'mednafen_pce',
+		'mednafen_ngp',
 		'mupen64plus_next'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
@@ -262,6 +263,10 @@ describe('controlSchemeFor', () => {
 	it('keeps the default for mednafen_pce (TurboGrafx-16 / PC Engine)', () => {
 		expect(controlSchemeFor('mednafen_pce', 'X (USA).pce')).toBeNull();
 	});
+
+	it('keeps the default for mednafen_ngp (Neo Geo Pocket)', () => {
+		expect(controlSchemeFor('mednafen_ngp', 'X (World).ngc')).toBeNull();
+	});
 });
 
 describe('hidesCoreChooser', () => {
@@ -269,7 +274,7 @@ describe('hidesCoreChooser', () => {
 		expect(hidesCoreChooser(core)).toBe(true);
 	});
 
-	it.each(['gambatte', 'gearcoleco', 'mednafen_pce'])('keeps it for %s', (core) => {
+	it.each(['gambatte', 'gearcoleco', 'mednafen_pce', 'mednafen_ngp'])('keeps it for %s', (core) => {
 		expect(hidesCoreChooser(core)).toBe(false);
 	});
 });
