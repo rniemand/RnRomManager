@@ -67,23 +67,36 @@ jobs:
             echo "No coverage files." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-  web:
+  # The web unit tests (~115 s) and the lint, type check and build (~45 s) run side by side.
+  web-test:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: src/RnRomManager.Web
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: src/RnRomManager.Web/package-lock.json
-      - run: npm ci
+      - uses: ./.github/actions/web-setup
+      - run: npm test
+
+  web-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src/RnRomManager.Web
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/web-setup
       - run: npm run lint
       - run: npm run check
-      - run: npm test
       - run: npm run build
+
+  # Branch protection requires a check named "web"; this reports the two web jobs as one.
+  web:
+    needs: [web-test, web-check]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - run: test "${{ needs.web-test.result }}" = success && test "${{ needs.web-check.result }}" = success
 
   # docs/codemap.md must match the code (scripts/codemap.ps1 regenerates it; every change commits it).
   codemap:
