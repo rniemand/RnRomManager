@@ -3089,7 +3089,10 @@ test("Missing IGDB IDs report", async () => {
   await expectAccessible(page, "missing igdb ids report");
   await red.click();
   await expect(page.getByRole("heading", { level: 1, name: "Red Horizon" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Next missing IGDB ID" })).toBeVisible();
+  // The action row's button (the footer has one with the same name).
+  await expect(
+    page.getByRole("main").getByRole("button", { name: "Next missing IGDB ID" }),
+  ).toBeVisible();
 });
 
 test("release editing, Games With Hacks, Newly Added and the phone shell", async () => {
@@ -3147,6 +3150,7 @@ test("release editing, Games With Hacks, Newly Added and the phone shell", async
   const viewport = page.viewportSize()!;
   await page.setViewportSize({ width: 375, height: 812 });
   await expect(page.getByRole("button", { name: "Next missing image" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Next missing IGDB ID" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open the first review item" })).toBeVisible();
   await expect(page.locator("#main-nav")).not.toHaveClass(/\bshow\b/);
   await expect(
