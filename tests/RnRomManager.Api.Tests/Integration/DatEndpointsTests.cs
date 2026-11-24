@@ -70,13 +70,15 @@ public class DatEndpointsTests
         };
         _factory.Settings["Sources:DatBaseUrl"] = "https://dats.test/metadat";
         _factory.Settings["Sources:TitleDbUrl"] = "https://dats.test/metadat/US.en.json";
+        _factory.Settings["Sources:MameDatUrl"] = "https://dats.test/metadat/mame.xml";
         _remote = Path.Combine(_factory.Root, "remote");
         FixtureDatWriter.Write(_remote, Games(), version: "2026.11.01", layouts: IngestSeeder.RedumpLayouts);
         // The upstream titledb source is an object keyed by nsuId; refresh turns it into Switch's compact file.
         File.WriteAllText(Path.Combine(_remote, "US.en.json"), "{}", new System.Text.UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(_remote, "mame.xml"), IngestSeeder.MinimalMame["MAME"], new System.Text.UTF8Encoding(false));
         // What a previous refresh left behind; loaded at startup (step 9).
         FixtureDatWriter.Write(Path.Combine(_factory.Root, "cache", DatCache.FolderName), Games(), version: "2026.01.01",
-            downloadedAt: new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero), titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
+            downloadedAt: new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero), titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
         await _factory.StartSharedAsync();
     }
 
@@ -277,8 +279,9 @@ public class DatEndpointsTests
         using var response = await _admin.GetAsync("/api/admin/dats");
         var rows = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
-        Assert.That(rows.Select(r => r.GetProperty("datName").GetString()), Is.EqualTo(new[] { IngestSeeder.Atari2600Dat, IngestSeeder.Atari5200Dat, IngestSeeder.Atari7800Dat, IngestSeeder.JaguarDat, IngestSeeder.LynxDat, IngestSeeder.ColecoVisionDat, IngestSeeder.C64Dat, IngestSeeder.AmigaDat, IngestSeeder.PetDat, IngestSeeder.Vic20Dat, IngestSeeder.Xbox360Dat, IngestSeeder.TurboGrafx16Dat, IngestSeeder.TurboGrafxCdDat, IngestSeeder.FdsDat, Gb, IngestSeeder.GbaDat, Gbc, IngestSeeder.GameCubeDat, IngestSeeder.ThreeDsDat, IngestSeeder.N64Dat, IngestSeeder.NintendoDsDat, IngestSeeder.NesDat, IngestSeeder.SwitchDat, IngestSeeder.SatellaviewDat, IngestSeeder.SufamiTurboDat, IngestSeeder.SnesDat, IngestSeeder.VirtualBoyDat, IngestSeeder.WiiDat, IngestSeeder.NeoGeoPocketDat, IngestSeeder.NeoGeoPocketColorDat, IngestSeeder.Sega32xDat, IngestSeeder.GameGearDat, IngestSeeder.MasterSystemDat, IngestSeeder.MegaDriveDat, IngestSeeder.SegaCdDat, IngestSeeder.SaturnDat, IngestSeeder.PsxDat, IngestSeeder.PspDat, IngestSeeder.ThreeDoDat }));
-        Assert.That(rows.Select(r => r.GetProperty("version").GetString()), Is.All.EqualTo("2026.01.01"));
+        Assert.That(rows.Select(r => r.GetProperty("datName").GetString()), Is.EqualTo(new[] { IngestSeeder.Atari2600Dat, IngestSeeder.Atari5200Dat, IngestSeeder.Atari7800Dat, IngestSeeder.JaguarDat, IngestSeeder.LynxDat, IngestSeeder.ColecoVisionDat, IngestSeeder.C64Dat, IngestSeeder.AmigaDat, IngestSeeder.PetDat, IngestSeeder.Vic20Dat, "MAME", IngestSeeder.Xbox360Dat, IngestSeeder.TurboGrafx16Dat, IngestSeeder.TurboGrafxCdDat, IngestSeeder.FdsDat, Gb, IngestSeeder.GbaDat, Gbc, IngestSeeder.GameCubeDat, IngestSeeder.ThreeDsDat, IngestSeeder.N64Dat, IngestSeeder.NintendoDsDat, IngestSeeder.NesDat, IngestSeeder.SwitchDat, IngestSeeder.SatellaviewDat, IngestSeeder.SufamiTurboDat, IngestSeeder.SnesDat, IngestSeeder.VirtualBoyDat, IngestSeeder.WiiDat, IngestSeeder.NeoGeoPocketDat, IngestSeeder.NeoGeoPocketColorDat, IngestSeeder.Sega32xDat, IngestSeeder.GameGearDat, IngestSeeder.MasterSystemDat, IngestSeeder.MegaDriveDat, IngestSeeder.SegaCdDat, IngestSeeder.SaturnDat, IngestSeeder.PsxDat, IngestSeeder.PspDat, IngestSeeder.ThreeDoDat }));
+        Assert.That(rows.Where(r => r.GetProperty("datName").GetString() != "MAME").Select(r => r.GetProperty("version").GetString()), Is.All.EqualTo("2026.01.01"));
+        Assert.That(rows.Single(r => r.GetProperty("datName").GetString() == "MAME").GetProperty("version").GetString(), Is.EqualTo(FixtureDatWriter.MameVersion));
         Assert.That(rows[0].GetProperty("downloadedAt").GetDateTimeOffset(), Is.EqualTo(new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero)));
     }
 
@@ -360,7 +363,7 @@ public class DatEndpointsTests
         var after = clock.GetUtcNow().UtcDateTime.ToString("yyyy.MM.dd", System.Globalization.CultureInfo.InvariantCulture);
 
         Assert.That(job.Status, Is.EqualTo(JobStatus.Completed), job.Error);
-        Assert.That(_server.Requests, Has.Count.EqualTo(138), "5 per No-Intro libretro system with metadat, 1 for Commodore 64, Commodore PET, Commodore VIC-20, Commodore Amiga and each disc system (no metadat), 4 for Nintendo 3DS (no releaseyear) and one titledb source");
+        Assert.That(_server.Requests, Has.Count.EqualTo(139), "5 per No-Intro libretro system with metadat, 1 for Commodore 64, Commodore PET, Commodore VIC-20, Commodore Amiga and each disc system (no metadat), 4 for Nintendo 3DS (no releaseyear), one titledb source and one MAME DAT");
         Assert.That(_server.Requests.Count(r => r.RequestUri!.AbsoluteUri == "https://dats.test/metadat/US.en.json"), Is.EqualTo(1));
         // titledb is versioned by the UTC date of its download, apart from the libretro fixture version.
         Assert.That(_factory.Services.GetRequiredService<DatCache>().For("switch")!.Version, Is.AnyOf(before, after));

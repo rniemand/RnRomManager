@@ -79,7 +79,7 @@ public class IngestRestoreEndpointsTests
             [IngestSeeder.NintendoDsDat] = [],
             ["Nintendo - Game Boy"] = [],
             ["Nintendo - Game Boy Color"] = [],
-        }, titleDb: withSwitch ? IngestSeeder.EmptySwitch : null, layouts: IngestSeeder.RedumpLayouts);
+        }, titleDb: withSwitch ? IngestSeeder.EmptySwitch : null, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 

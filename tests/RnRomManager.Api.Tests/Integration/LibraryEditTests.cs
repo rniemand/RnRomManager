@@ -82,7 +82,7 @@ public class LibraryEditTests
                 new FixtureGame("Tetris (Japan)", "Tetris (Japan).gb", TetrisJapan),
                 new FixtureGame("Legend of Zelda, The (USA)", "Legend of Zelda, The (USA).gb", Zelda),
             ],
-        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
+        }, titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 

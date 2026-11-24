@@ -215,7 +215,7 @@ public class IngestPipelineTests
             ],
             [LegacyExternalTestHandler.DatNameValue] = [new FixtureGame("Old Ds (Europe)", "Old Ds (Europe).nds", OldDsEurope)],
             [Gbc] = [new FixtureGame("Pokemon - Gold Version (USA, Europe)", "Pokemon - Gold Version (USA, Europe).gbc", Gold) { ReleaseYear = 2000 }],
-        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
+        }, titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 

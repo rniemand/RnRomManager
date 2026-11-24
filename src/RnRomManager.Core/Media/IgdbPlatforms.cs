@@ -25,6 +25,7 @@ public static class IgdbPlatforms
         ["gg"] = 35,
         ["jaguar"] = 62,
         ["lynx"] = 61,
+        ["mame2003"] = 52, // IGDB's Arcade platform
         ["md"] = 29,
         ["n64"] = 4,
         ["nds"] = 20,

@@ -80,7 +80,7 @@ public class GamePlayedEndpointTests
                 new FixtureGame("Tetris (World)", "Tetris (World).gb", Tetris),
                 new FixtureGame("Zelda (USA)", "Zelda (USA).gb", Zelda),
             ],
-        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
+        }, titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
         _tetris = await Ingest("t.gb", Tetris);
         _zelda = await Ingest("z.gb", Zelda);

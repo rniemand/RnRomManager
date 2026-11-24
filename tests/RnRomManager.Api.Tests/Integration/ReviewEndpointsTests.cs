@@ -103,7 +103,7 @@ public class ReviewEndpointsTests
             { ReleaseYear = 1989, Developers = ["Nintendo"], Publishers = ["Nintendo"], Genres = ["Puzzle"] }],
             [LegacyExternalTestHandler.DatNameValue] = [],
             ["Nintendo - Game Boy Color"] = [new FixtureGame("Color Game (World)", "Color Game (World).gbc", Color)],
-        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
+        }, titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 
@@ -1091,7 +1091,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] = Enumerable.Range(1, 25).Select(i => new FixtureGame($"Demo {i} (World)", $"Demo {i} (World).gb", new SyntheticRomBuilder { Seed = 1000 + i }.Build())).ToArray(),
             ["Nintendo - Game Boy Color"] = [],
-        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
+        }, titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
         using var defaults = await _admin.GetAsync("/api/dat/search?system=gb&q=demo");
         Assert.That((await AuthClient.JsonAsync(defaults)).GetArrayLength(), Is.EqualTo(20));
@@ -1142,7 +1142,7 @@ public class ReviewEndpointsTests
                 new FixtureGame("Repeat Two (World)", "Repeat Two (World).gb", new SyntheticRomBuilder { Seed = 2003 }.Build()),
             ],
             ["Nintendo - Game Boy Color"] = [],
-        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
+        }, titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
 
         using var response = await _admin.GetAsync("/api/dat/search?system=gb&q=repeat&limit=2");
