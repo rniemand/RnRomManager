@@ -107,7 +107,7 @@ public class ImageEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] = [new FixtureGame("Tetris (World)", "Tetris (World).gb", Tetris)],
             [ExternalTestHandler.DatNameValue] = [new FixtureGame("Space Game (USA)", "Space Game (USA).nsp", SpaceGame)],

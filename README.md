@@ -49,6 +49,8 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Master System | `sms` | In ZIP | `.sms`, `.sg`, `.bin`, `.rom` | No-Intro | `smsplus` |
 | Mega Drive / Genesis | `md` | In ZIP | `.md`, `.bin`, `.gen`, `.smd` | No-Intro | `genesis_plus_gx` |
 | MS-DOS | `dos` | Next to ZIP | `.dosz`, `.zip` | None | `dosbox_pure` |
+| Neo Geo Pocket | `ngp` | In ZIP | `.ngp` | No-Intro | — |
+| Neo Geo Pocket Color | `ngpc` | In ZIP | `.ngc`, `.ngpc`, `.npc` | No-Intro | — |
 | Nintendo 3DS | `3ds` | Next to ZIP (configurable) | `.3ds`, `.cci`, `.cia` | No-Intro | `azahar` |
 | Nintendo 64 | `n64` | In ZIP | `.z64`, `.v64`, `.n64`, `.bin`, `.u1` | No-Intro | `mupen64plus_next` |
 | Nintendo DS | `nds` | Next to ZIP (configurable) | `.nds`, `.ids` | No-Intro | `desmume` |

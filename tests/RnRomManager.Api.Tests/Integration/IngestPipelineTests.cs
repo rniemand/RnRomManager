@@ -189,6 +189,8 @@ public class IngestPipelineTests
             ],
             // TurboGrafx-CD B3: libretro's DAT lists one track per disc, usually the data track (Track 02).
             [IngestSeeder.TurboGrafxCdDat] = [new FixtureGame("Disc Ninja (Japan)", "Disc Ninja (Japan) (Track 02).bin", NinjaData)],
+            [IngestSeeder.NeoGeoPocketDat] = [],
+            [IngestSeeder.NeoGeoPocketColorDat] = [],
             [IngestSeeder.ThreeDsDat] =
             [
                 new FixtureGame("Cart Quest (USA)", "Cart Quest (USA).3ds", CartQuest),

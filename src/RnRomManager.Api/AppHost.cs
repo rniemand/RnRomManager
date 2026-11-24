@@ -45,6 +45,7 @@ using RnRomManager.Systems.NintendoDs;
 using RnRomManager.Systems.ThreeDo;
 using RnRomManager.Systems.Commodore;
 using RnRomManager.Systems.Dos;
+using RnRomManager.Systems.NeoGeoPocket;
 
 namespace RnRomManager.Api;
 
@@ -288,6 +289,8 @@ public static class AppHost
         services.AddSystemHandler<Nintendo3DsHandler>();
         services.AddSystemHandler<TurboGrafxCdHandler>();
         services.AddSystemHandler<DosHandler>();
+        services.AddSystemHandler<NeoGeoPocketHandler>();
+        services.AddSystemHandler<NeoGeoPocketColorHandler>();
     }
 
     // spec §11: hashed SvelteKit assets are immutable; everything else (index.html, theme.js) must revalidate.

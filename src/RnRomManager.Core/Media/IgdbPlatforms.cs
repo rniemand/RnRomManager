@@ -29,6 +29,8 @@ public static class IgdbPlatforms
         ["n64"] = 4,
         ["nds"] = 20,
         ["nes"] = 18,
+        ["ngp"] = 119,
+        ["ngpc"] = 120,
         ["pet"] = 90,
         ["psp"] = 38,
         ["psx"] = 7,
