@@ -384,6 +384,12 @@
 :root {
 	--rnrm-footer-height: 2.25rem;
 }
+/* Below sm the footer's icon buttons are 2.5rem tap targets (AppFooter), plus the row's padding. */
+@media (max-width: 575.98px) {
+	:root {
+		--rnrm-footer-height: 3rem;
+	}
+}
 .app-footer {
 	min-height: var(--rnrm-footer-height);
 	/* Release editing B28: clear of the phone's home indicator (viewport-fit=cover). */
