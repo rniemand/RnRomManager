@@ -115,9 +115,10 @@ try {
     try {
         & npm ci
         if ($LASTEXITCODE -ne 0) { throw "npm ci failed ($LASTEXITCODE)" }
-        $install = @('playwright', 'install', 'chromium')
-        if ($IsLinux -and $env:CI) { $install += '--with-deps' }
-        & npx @install
+        # No --with-deps: the GitHub runner image already has every library Chromium needs, and on CI it only added
+        # fonts (CJK, unifont, X11) the specs don't use, through an apt-get that took 8 s to 5 min with the mirror. If a
+        # runner image ever lacks a library, Chromium's launch error names it.
+        & npx playwright install chromium
         if ($LASTEXITCODE -ne 0) { throw "playwright install failed ($LASTEXITCODE)" }
         $testArgs = @('playwright', 'test')
         if ($Screenshots) {
