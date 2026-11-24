@@ -227,7 +227,7 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   ).toHaveAttribute("aria-expanded", "false");
   const run = page.getByRole("row").filter({ hasText: "Completed" });
   await expect(run).toContainText(
-    "Ingested 38 · Duplicate 1 · Review 3 · Failed 1",
+    "Ingested 39 · Duplicate 1 · Review 3 · Failed 1",
     {
       timeout: 60_000,
     },
@@ -359,7 +359,7 @@ test("browse, search and filter the library", async () => {
   );
   await expect(
     systemMenu.locator(".dropdown-item").first().locator(".font-monospace"),
-  ).toHaveText("29");
+  ).toHaveText("30");
   expect(
     await systemMenu
       .locator("[data-value]")
@@ -380,6 +380,7 @@ test("browse, search and filter the library", async () => {
     "gc",
     "sms",
     "md",
+    "3ds",
     "n64",
     "nes",
     "switch",
