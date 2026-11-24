@@ -329,7 +329,7 @@
 	async function onAdminDone(outcome: AdminOutcome): Promise<void> {
 		if ('game' in outcome) {
 			game = outcome.game;
-			toasts.show(outcome.message, 'success');
+			toasts.show(outcome.message, outcome.warning ? 'warning' : 'success');
 		} else if ('goTo' in outcome) {
 			toasts.show(outcome.message, 'success');
 			await goto(outcome.goTo ? resolve('/games/[id]', { id: outcome.goTo }) : resolve('/'));

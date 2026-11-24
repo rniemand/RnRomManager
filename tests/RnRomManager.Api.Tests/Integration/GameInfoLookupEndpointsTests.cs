@@ -163,8 +163,9 @@ public class GameInfoLookupEndpointsTests
         _lookup.LookupAsync(default!, default!, default).ReturnsForAnyArgs(new GameInfoLookupResult(
         [
             new GameInfoMatch(1234, "The Legend of Orbit", 1993, ["Nintendo"], ["Nintendo", "Capcom"], ["Adventure"], "A quest.",
-                "https://images.igdb.com/igdb/image/upload/t_cover_small/co1.jpg", "https://www.igdb.com/games/orbit"),
-            new GameInfoMatch(5, "Orbit 2", null, [], [], [], null, null, null),
+                "https://images.igdb.com/igdb/image/upload/t_cover_small/co1.jpg", "https://images.igdb.com/igdb/image/upload/t_1080p/co1.jpg",
+                "https://www.igdb.com/games/orbit"),
+            new GameInfoMatch(5, "Orbit 2", null, [], [], [], null, null, null, null),
         ], null));
 
         using var response = await Get();
@@ -175,13 +176,14 @@ public class GameInfoLookupEndpointsTests
         var first = matches[0];
         Assert.That(first.EnumerateObject().Select(p => p.Name), Is.EqualTo(new[]
         {
-            "igdbId", "name", "releaseYear", "developers", "publishers", "genres", "description", "coverUrl", "url",
+            "igdbId", "name", "releaseYear", "developers", "publishers", "genres", "description", "coverUrl", "coverImageUrl", "url",
         }));
         Assert.That((first.GetProperty("igdbId").GetInt32(), first.GetProperty("name").GetString(), first.GetProperty("releaseYear").GetInt32()),
             Is.EqualTo((1234, "The Legend of Orbit", 1993)));
         Assert.That(first.GetProperty("publishers").EnumerateArray().Select(p => p.GetString()), Is.EqualTo(new[] { "Nintendo", "Capcom" }));
-        Assert.That((first.GetProperty("coverUrl").GetString(), first.GetProperty("url").GetString()),
-            Is.EqualTo(("https://images.igdb.com/igdb/image/upload/t_cover_small/co1.jpg", "https://www.igdb.com/games/orbit")));
+        Assert.That((first.GetProperty("coverUrl").GetString(), first.GetProperty("coverImageUrl").GetString(), first.GetProperty("url").GetString()),
+            Is.EqualTo(("https://images.igdb.com/igdb/image/upload/t_cover_small/co1.jpg", "https://images.igdb.com/igdb/image/upload/t_1080p/co1.jpg",
+                "https://www.igdb.com/games/orbit")));
         Assert.That((matches[1].GetProperty("releaseYear").ValueKind, matches[1].GetProperty("description").ValueKind),
             Is.EqualTo((JsonValueKind.Null, JsonValueKind.Null)));
     }

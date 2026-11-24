@@ -21,9 +21,9 @@
 		form: GameEditForm;
 		/**
 		 * M3: the new form after Not on IGDB (or Use this match); the modal switches to Details.
-		 * `save` (Use this match and save) also saves the modal.
+		 * `match` is the match used (not for Not on IGDB); `save` (Use this match and save) also saves the modal.
 		 */
-		onapply: (form: GameEditForm, save?: boolean) => void;
+		onapply: (form: GameEditForm, options?: { match?: IgdbMatch; save?: boolean }) => void;
 		/** M2: search as soon as the panel mounts (IGDB configured only). */
 		autostart?: boolean;
 	}
@@ -81,7 +81,7 @@
 	function useMatch(save: boolean): void {
 		if (!chosen || !copy) return;
 		const fields = copyFields.filter((f) => copy![f].checked && !copy![f].disabled);
-		onapply(applyMatch(form, chosen, fields), save);
+		onapply(applyMatch(form, chosen, fields), { match: chosen, save });
 	}
 	let controller: AbortController | undefined;
 
