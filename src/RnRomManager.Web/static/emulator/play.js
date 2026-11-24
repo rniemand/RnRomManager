@@ -475,7 +475,8 @@ function listenForMessages(isThreeDo) {
 }
 
 async function start() {
-	// PSP B3, MS-DOS P5: play-psp.html and play-dos.html say which isolated core they play; play.html has no data-player.
+	// PSP B3, MS-DOS P5, 3DS G4: play-psp.html, play-dos.html and play-3ds.html say which isolated core they play;
+	// play.html has no data-player.
 	const player = document.body.dataset.player;
 	const params = parsePlayParams(location.search, player);
 	if (!params) return show('Invalid emulator link.');
@@ -485,12 +486,13 @@ async function start() {
 	const isPsp = params.core === 'ppsspp';
 	const isDos = params.core === 'dosbox_pure';
 	const isDs = params.core === 'desmume';
+	const is3ds = params.core === 'azahar';
 	const isSegaCd = params.core === 'genesis_plus_gx' && params.disc;
 	const isThreeDo = params.core === 'opera';
 	const isTurboGrafxCd = params.core === 'mednafen_pce' && params.disc;
 	// PSP B3, MS-DOS P7: an isolated page is its own tab, with no modal to talk to.
 	if (player === undefined) listenForMessages(isThreeDo);
-	if (isPsp || isDos) {
+	if (isPsp || isDos || is3ds) {
 		const problem = isolatedBrowserError(isolatedBrowser(), params.core);
 		if (problem) return show(problem);
 	}
@@ -607,7 +609,16 @@ async function start() {
 	ejs.EJS_core = params.core;
 	ejs.EJS_gameUrl = file;
 	ejs.EJS_gameName = params.name;
-	ejs.EJS_pathtodata = '/emulator/vendor/data/';
+	// 3DS G4: azahar runs on the side-by-side EmulatorJS 4.3.0-pre copy, which ships no minified build.
+	ejs.EJS_pathtodata = is3ds ? '/emulator/vendor/ejs-4.3/data/' : '/emulator/vendor/data/';
+	if (is3ds) {
+		ejs.EJS_paths = {
+			'emulator.min.js': '/emulator/vendor/ejs-4.3/data/src/emulator.js',
+			'emulator.min.css': '/emulator/vendor/ejs-4.3/data/emulator.css'
+		};
+		// 4.3's download cache defaults to on and ignores EJS_disableDatabases: it would copy every dump into IndexedDB.
+		ejs.EJS_cacheConfig = { enabled: false };
+	}
 	// Keep true: with databases off EmulatorJS skips its cache and always GETs the BIOS (its HEAD gets a 404).
 	ejs.EJS_disableDatabases = true;
 	ejs.EJS_disableAutoLang = false;
@@ -652,8 +663,8 @@ async function start() {
 		// 3DO B11: EmulatorJS's Exit resets Opera, which writes its NVRAM file.
 		exitEmulation: isThreeDo,
 		// Nintendo DS B4: the save-file export and import use RetroArch's SRAM path, which DeSmuME never writes; MS-DOS
-		// P7: nor does DOSBox Pure, whose saves are its .pure.zip.
-		...(isDs || isDos ? { saveSavFiles: false, loadSavFiles: false } : {})
+		// P7: nor does DOSBox Pure, whose saves are its .pure.zip; 3DS G4: nor azahar, which saves to its virtual SD/NAND.
+		...(isDs || isDos || is3ds ? { saveSavFiles: false, loadSavFiles: false } : {})
 	};
 	// E1: EmulatorJS shows its virtual gamepad at start only when its Start button saw a touch, and defaults the setting
 	// to enabled only for a mobile user agent; a touch-first device (not a touchscreen laptop with a mouse) gets it.
@@ -672,9 +683,9 @@ async function start() {
 				}
 			: {})
 	};
-	// PSP B3, MS-DOS P7: PPSSPP and DOSBox Pure have only threaded builds (EmulatorJS refuses them without
-	// EJS_threads); the vendored loader also ignores a saved "threads disabled".
-	if (isPsp || isDos) ejs.EJS_threads = true;
+	// PSP B3, MS-DOS P7, 3DS G4: PPSSPP, DOSBox Pure and azahar have only threaded builds (EmulatorJS refuses them
+	// without EJS_threads); the vendored loader also ignores a saved "threads disabled".
+	if (isPsp || isDos || is3ds) ejs.EJS_threads = true;
 	// Saves B17/B18: loader.js runs this on `start`, once at the end of startGame() (restart() doesn't fire it); the
 	// save goes in 10 ms later, as EmulatorJS's own start state does, and only once.
 	let saveApplied = false;
@@ -700,7 +711,7 @@ async function start() {
 
 	keepDrawingBuffer();
 	const loader = document.createElement('script');
-	loader.src = '/emulator/vendor/data/loader.js';
+	loader.src = is3ds ? '/emulator/vendor/ejs-4.3/data/loader.js' : '/emulator/vendor/data/loader.js';
 	loader.addEventListener('error', () => show("Couldn't load the emulator."));
 	loader.addEventListener('load', () => show(''));
 	document.body.append(loader);

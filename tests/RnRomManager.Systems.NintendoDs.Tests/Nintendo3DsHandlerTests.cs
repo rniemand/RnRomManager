@@ -21,8 +21,10 @@ public class Nintendo3DsHandlerTests
             Is.EqualTo((false, true, false, false)));
         Assert.That((Handler.DatSource, Handler.DatFolder), Is.EqualTo((DatSource.Libretro, DatKind.NoIntro)));
         Assert.That(Handler.MetadatKinds, Is.EqualTo(new[] { DatKind.Developer, DatKind.Publisher, DatKind.Genre }));
-        Assert.That(Handler.BrowserCore, Is.Null);
     }
+
+    [Test]
+    public void BrowserCore_IsAzahar() => Assert.That(Handler.BrowserCore, Is.EqualTo("azahar"));
 
     [Test]
     public void RomStorage_IsConfigurable_DefaultBesideTheZip_FollowsTheOverride()

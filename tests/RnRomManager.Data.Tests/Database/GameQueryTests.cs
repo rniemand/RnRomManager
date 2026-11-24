@@ -495,4 +495,32 @@ public class GameQueryTests
 
         Assert.That((items["Cue Set"].PrimaryHasFiles, items["Lone Disc"].PrimaryHasFiles), Is.EqualTo((true, false)));
     }
+
+    [Test]
+    public async Task ListItem_PrimaryEncrypted_IsTrueOnlyWhenThePrimaryHeaderSaysSo()
+    {
+        var headers = new Dictionary<string, string?>
+        {
+            ["Encrypted"] = """{"format": "NCSD", "encrypted": true}""",
+            ["Decrypted"] = """{"format": "NCSD", "encrypted": false}""",
+            ["Unknown"] = """{"format": "NCSD", "encrypted": null}""",
+            ["Old Header"] = """{"format": "NCSD"}""",
+            ["No Header"] = null,
+        };
+        await using (var connection = _factory.Create())
+            foreach (var (title, header) in headers)
+            {
+                var id = await Add(title, system: "3ds", releases: [["World"], ["Japan"]]);
+                await connection.ExecuteAsync("UPDATE roms SET header = @header WHERE game_id = @id AND is_primary = 1", new { header, id });
+                // A non-primary release's header never counts.
+                await connection.ExecuteAsync("""UPDATE roms SET header = '{"encrypted": true}' WHERE game_id = @id AND is_primary = 0""", new { id });
+            }
+
+        var items = (await _games.ListAsync(new GameQuery(), default)).Items.ToDictionary(i => i.DisplayTitle, i => i.PrimaryEncrypted);
+
+        Assert.That(items, Is.EquivalentTo(new Dictionary<string, bool>
+        {
+            ["Encrypted"] = true, ["Decrypted"] = false, ["Unknown"] = false, ["Old Header"] = false, ["No Header"] = false,
+        }));
+    }
 }

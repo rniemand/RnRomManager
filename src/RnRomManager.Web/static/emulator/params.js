@@ -34,19 +34,21 @@ const cores = [
 	'vice_xvic',
 	'puae',
 	'mednafen_pce',
-	'mupen64plus_next'
+	'mupen64plus_next',
+	'azahar'
 ];
 
 /**
- * PSP B3, MS-DOS P5: the cores that need threads and so run only on their own cross-origin isolated page, keyed to
+ * PSP B3, MS-DOS P5, 3DS G2: the cores that need threads and so run only on their own cross-origin isolated page, keyed to
  * that page's `data-player` (never in the modal's play.html).
  * @type {Record<string, string>}
  */
-export const isolatedPlayers = { ppsspp: 'psp', dosbox_pure: 'dos' };
+export const isolatedPlayers = { ppsspp: 'psp', dosbox_pure: 'dos', azahar: '3ds' };
 
 /**
  * @param {string} search `location.search`
- * @param {string} [player] the page's `data-player`: `psp` (play-psp.html), `dos` (play-dos.html) or undefined
+ * @param {string} [player] the page's `data-player`: `psp` (play-psp.html), `dos` (play-dos.html), `3ds`
+ * (play-3ds.html) or undefined
  * (play.html); each isolated page plays its own core only, and play.html none of them
  * @returns {PlayParams | null} null when any value is missing or invalid, or the core doesn't belong on this page
  */
@@ -411,10 +413,10 @@ export function discError(status, code, core = 'pcsx_rearmed', set = false) {
 /** @typedef {{ secure: boolean, isolated: boolean, sharedArrayBuffer: boolean, webgl2: boolean }} IsolatedBrowser */
 
 /**
- * PSP B3, MS-DOS P6: why this browser context can't run an isolated page's core, checked before the game is fetched,
+ * PSP B3, MS-DOS P6, 3DS G3: why this browser context can't run an isolated page's core, checked before the game is fetched,
  * or null when it can. DOSBox Pure's legacy payload needs no WebGL 2.
  * @param {IsolatedBrowser} browser
- * @param {string} core `ppsspp` or `dosbox_pure`
+ * @param {string} core `ppsspp`, `dosbox_pure` or `azahar`
  * @returns {string | null}
  */
 export function isolatedBrowserError(browser, core) {
@@ -423,6 +425,14 @@ export function isolatedBrowserError(browser, core) {
 			return "DOS games need a secure page: open RnRomManager over HTTPS or on localhost. A plain-HTTP network address can't run them.";
 		if (!browser.isolated || !browser.sharedArrayBuffer)
 			return "This page isn't cross-origin isolated, so DOS games can't use threads. Ask an Admin to check that the proxy keeps the Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers.";
+		return null;
+	}
+	if (core === 'azahar') {
+		if (!browser.secure)
+			return "3DS games need a secure page: open RnRomManager over HTTPS or on localhost. A plain-HTTP network address can't run them.";
+		if (!browser.isolated || !browser.sharedArrayBuffer)
+			return "This page isn't cross-origin isolated, so 3DS games can't use threads. Ask an Admin to check that the proxy keeps the Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers.";
+		if (!browser.webgl2) return "3DS games need WebGL 2, which this browser or graphics driver doesn't provide.";
 		return null;
 	}
 	if (!browser.secure)

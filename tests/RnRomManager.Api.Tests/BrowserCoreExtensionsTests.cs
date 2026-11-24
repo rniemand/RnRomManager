@@ -55,7 +55,13 @@ public class BrowserCoreExtensionsTests
         ["vice_xpet"] = "d64|d71|d80|d81|d82|g64|g41|x64|t64|tap|prg|p00|crt|bin|zip|7z|gz|d6z|d7z|d8z|g6z|g4z|x6z|cmd|m3u|vfl|vsf|nib|nbz|d2m|d4m|tcrt",
         ["vice_xvic"] = "d64|d71|d80|d81|d82|g64|g41|x64|t64|tap|prg|p00|crt|bin|zip|7z|gz|d6z|d7z|d8z|g6z|g4z|x6z|cmd|m3u|vfl|vsf|nib|nbz|d2m|d4m|20|40|60|a0|b0|rom",
         ["mupen64plus_next"] = "n64|v64|z64|bin|u1",
+        // Side by side (emulatorjs-next.json, EmulatorJS 4.3.0-pre): tied to its payload by NextCoreSha256.
+        ["azahar"] = "3ds|3dsx|z3dsx|elf|axf|cci|zcci|cxi|zcxi|app",
     };
+
+    /// <summary>3DS: the <c>emulatorjs-next.json</c> core and the SHA-256 of the payload its list above was read from.</summary>
+    private const string NextCore = "azahar";
+    private const string NextCoreSha256 = "d90696e6ea68c4fc00ef147411ad399962777f07b6c7e73d5537da0eaffc2e3b";
 
     /// <summary>The SHA-256 of the <c>&lt;core&gt;-wasm.data</c> each operator core's list above was read from.</summary>
     private static readonly Dictionary<string, string> OperatorPayloadSha256 = new(StringComparer.Ordinal)
@@ -109,6 +115,7 @@ public class BrowserCoreExtensionsTests
         [("3do", ".toc")] = MdsTocMember,
         [("tgcd", ".mds")] = MdsTocMember,
         [("tgcd", ".mdf")] = MdsTocMember,
+        [("3ds", ".cia")] = "library only: azahar's libretro build can't load a CIA; canPlay and the quick play refuse it",
     };
 
     private const string Archive = "ingest unpacks .zip and .7z; the core never gets one";
@@ -151,7 +158,9 @@ public class BrowserCoreExtensionsTests
         (OtherCommodore, ["vice_xpet"], [".crt", ".bin", ".tcrt", ".nib", ".nbz", ".d2m", ".d4m"]),
         (OtherCommodore, ["vice_xvic"], [".nib", ".nbz", ".d2m", ".d4m", ".d80", ".d82"]),
         ("DOS games are ingested as one .zip or .dosz; put loose files and disc images inside it", ["dosbox_pure"],
-            [".exe", ".com", ".bat", ".iso", ".chd", ".cue", ".ins", ".img", ".ima", ".vhd", ".jrc", ".tc", ".m3u", ".m3u8", ".conf", "./"]));
+            [".exe", ".com", ".bat", ".iso", ".chd", ".cue", ".ins", ".img", ".ima", ".vhd", ".jrc", ".tc", ".m3u", ".m3u8", ".conf", "./"]),
+        ("3DS homebrew and NCCH formats aren't ingested; only .3ds, .cci and .cia dumps are", ["azahar"],
+            [".3dsx", ".z3dsx", ".elf", ".axf", ".zcci", ".cxi", ".zcxi", ".app"]));
 
     private static Dictionary<(string Core, string Extension), string> Entries(params (string Reason, string[] Cores, string[] Extensions)[] groups)
     {
@@ -235,6 +244,7 @@ public class BrowserCoreExtensionsTests
             "3do .toc: stale exception (no such system)",
             "tgcd .mds: stale exception (no such system)",
             "tgcd .mdf: stale exception (no such system)",
+            "3ds .cia: stale exception (no such system)",
         }));
     }
 
@@ -267,7 +277,11 @@ public class BrowserCoreExtensionsTests
             if (!CoreExtensions.ContainsKey(core)) problems.Add($"{core}: no list recorded");
             if (version != CoreVersion) problems.Add($"{core}: {version} is vendored but the list is from {CoreVersion}; re-read it");
         }
-        foreach (var core in CoreExtensions.Keys.Where(c => !operatorIds.Contains(c)).Except(vendored.Select(v => v.Core)))
+        // 3DS: azahar comes from EmulatorJS 4.3.0-pre (emulatorjs-next.json), not npm; its list is tied to the pinned payload.
+        using var next = JsonDocument.Parse(File.ReadAllText(Path.Combine(WebRoot(), "emulatorjs-next.json")));
+        if (next.RootElement.GetProperty("core").GetProperty("sha256").GetString() != NextCoreSha256)
+            problems.Add($"{NextCore}: the pinned payload changed; re-read its valid_extensions and update NextCoreSha256");
+        foreach (var core in CoreExtensions.Keys.Where(c => !operatorIds.Contains(c) && c != NextCore).Except(vendored.Select(v => v.Core)))
             problems.Add($"{core}: neither vendored nor an operator core");
         Assert.That(problems, Is.Empty);
     }

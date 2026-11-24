@@ -327,8 +327,19 @@ public partial class LibraryEndpointsTests
     public Task Games_QuickPlay_AmigaIpf_IsNotPlayable(string fileName, bool playable) =>
         AssertQuickPlayAsync("amiga", false, playable, "puae", fileName, fileName);
 
+    // 3DS P4/P5: azahar plays an external decrypted .3ds/.cci from /download (playDisc false); never a .cia or an encrypted dump.
+    [TestCase("x.3ds", null, true)]
+    [TestCase("x.CCI", """{"encrypted": false}""", true)]
+    [TestCase("x.3ds", """{"format": "NCSD"}""", true)]
+    [TestCase("x.cia", null, false)]
+    [TestCase("x.3ds", """{"encrypted": true}""", false)]
+    public async Task Games_QuickPlay_3ds_DecryptedCardDumpsOnly(string fileName, string? header, bool playable)
+    {
+        await AssertQuickPlayAsync("3ds", true, playable, "azahar", fileName, fileName, header: header, playDisc: false);
+    }
+
     private async Task AssertQuickPlayAsync(string system, bool external, bool playable, string? core,
-        string? fileName = null, string externalName = "x.gb", string? setFile = null)
+        string? fileName = null, string externalName = "x.gb", string? setFile = null, string? header = null, bool? playDisc = null)
     {
         var id = await Tetris();
         long primaryId;
@@ -347,13 +358,15 @@ public partial class LibraryEndpointsTests
                     INSERT INTO rom_files (rom_id, game_id, ordinal, file_name, external_file_name, original_file_name, size_bytes, crc32, md5, sha1)
                     VALUES (@primaryId, @id, 1, @setFile, @setFile, @setFile, 100, '00000000', REPEAT('0', 32), REPEAT('0', 40))
                     """, new { primaryId, id, setFile });
+            if (header is not null)
+                await connection.ExecuteAsync("UPDATE roms SET header = @header WHERE id = @primaryId", new { header, primaryId });
         }
 
         var item = (await GetJson("/api/games")).GetProperty("items")[0];
 
         Assert.That(item.GetProperty("browserCore").GetString(), Is.EqualTo(core));
         // Sega CD B6: true only for a playable external primary (e.g. psx), false for an embedded (gb) or unplayable one.
-        Assert.That(item.GetProperty("playDisc").GetBoolean(), Is.EqualTo(playable && external));
+        Assert.That(item.GetProperty("playDisc").GetBoolean(), Is.EqualTo(playDisc ?? (playable && external)));
         if (playable)
         {
             Assert.That(item.GetProperty("playRomId").GetInt64(), Is.EqualTo(primaryId));

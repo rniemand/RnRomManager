@@ -207,6 +207,7 @@ public sealed class GameRepository : IGameRepository
                    (SELECT r.file_name FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryRomFileName,
                    (SELECT r.external_file_name IS NOT NULL FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryIsExternal,
                    (SELECT EXISTS(SELECT 1 FROM rom_files f WHERE f.rom_id = r.id) FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryHasFiles,
+                   (SELECT JSON_EXTRACT(r.header, '$.encrypted') = 'true' FROM roms r WHERE r.game_id = g.id AND r.is_primary = 1 ORDER BY r.id LIMIT 1) AS PrimaryEncrypted,
                    g.rating AS Rating, g.favourite AS Favourite, g.save_count AS SaveCount, g.title AS Title,
                    g.developers AS Developers, g.publishers AS Publishers, g.genres AS Genres,
                    {(words.Count == 0 ? "NULL" : AddOnNamesJson)} AS AddOns
@@ -218,7 +219,7 @@ public sealed class GameRepository : IGameRepository
         var items = rows.Select(r => new GameListItem(
             r.Id, r.SystemId, r.DisplayTitle, r.ReleaseYear, Regions(r.RegionKeys), (int)r.RomCount, r.BoxArtImageId,
             r.Rating, r.Favourite, r.PrimarySizeBytes, SearchMatch.Find(words, r.Title, r.DisplayTitle, r.Developers, r.Publishers, r.Genres, AddOnNames(r.AddOns)),
-            (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true, r.SaveCount, (int)r.DlcCount, r.PrimaryHasFiles == true)).ToList();
+            (int)r.UpdateCount, r.PrimaryRomId, r.PrimaryRomFileName, r.PrimaryIsExternal == true, r.SaveCount, (int)r.DlcCount, r.PrimaryHasFiles == true, r.PrimaryEncrypted == true)).ToList();
         return new Page<GameListItem>(items, query.Page, query.PageSize, total);
     }
 
@@ -404,6 +405,7 @@ public sealed class GameRepository : IGameRepository
         public string? PrimaryRomFileName { get; init; }
         public bool? PrimaryIsExternal { get; init; }
         public bool? PrimaryHasFiles { get; init; }
+        public bool? PrimaryEncrypted { get; init; }
         public int? Rating { get; init; }
         public bool Favourite { get; init; }
         public string Title { get; init; } = "";

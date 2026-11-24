@@ -978,3 +978,53 @@ describe('DOS page (MS-DOS P5, P6)', () => {
 		);
 	});
 });
+
+describe('3DS page (3DS G2, G3)', () => {
+	it('play-3ds.html accepts only azahar; play-psp.html, play-dos.html and play.html reject it', () => {
+		expect(
+			parsePlayParams(query({ core: 'azahar', name: 'Zephyr Gate (Europe).3ds' }), '3ds')
+		).toEqual({
+			game,
+			rom: 12,
+			core: 'azahar',
+			name: 'Zephyr Gate (Europe).3ds',
+			disc: false,
+			set: false,
+			save: null
+		});
+		expect(parsePlayParams(query({ core: 'azahar' }))).toBeNull();
+		expect(parsePlayParams(query({ core: 'azahar' }), 'psp')).toBeNull();
+		expect(parsePlayParams(query({ core: 'azahar' }), 'dos')).toBeNull();
+		for (const core of ['ppsspp', 'dosbox_pure', 'gambatte', 'desmume'])
+			expect(parsePlayParams(query({ core }), '3ds'), core).toBeNull();
+	});
+
+	const capable = { secure: true, isolated: true, sharedArrayBuffer: true, webgl2: true };
+	const insecure =
+		"3DS games need a secure page: open RnRomManager over HTTPS or on localhost. A plain-HTTP network address can't run them.";
+	const notIsolated =
+		"This page isn't cross-origin isolated, so 3DS games can't use threads. Ask an Admin to check that the proxy keeps the Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers.";
+	const noWebgl2 = "3DS games need WebGL 2, which this browser or graphics driver doesn't provide.";
+
+	it('lets a secure, isolated, WebGL 2 browser go on', () => {
+		expect(isolatedBrowserError(capable, 'azahar')).toBeNull();
+	});
+
+	it.each([
+		[{ secure: false, isolated: false, sharedArrayBuffer: false, webgl2: false }, insecure],
+		[{ isolated: false, webgl2: false }, notIsolated],
+		[{ sharedArrayBuffer: false, webgl2: false }, notIsolated],
+		[{ webgl2: false }, noWebgl2]
+	])('reports %o, in order', (missing, message) => {
+		expect(isolatedBrowserError({ ...capable, ...missing }, 'azahar')).toBe(message);
+	});
+
+	it('leaves the PSP and DOS messages unchanged', () => {
+		expect(isolatedBrowserError({ ...capable, webgl2: false }, 'ppsspp')).toBe(
+			"PSP games need WebGL 2, which this browser or graphics driver doesn't provide."
+		);
+		expect(isolatedBrowserError({ ...capable, isolated: false }, 'dosbox_pure')).toBe(
+			"This page isn't cross-origin isolated, so DOS games can't use threads. Ask an Admin to check that the proxy keeps the Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers."
+		);
+	});
+});

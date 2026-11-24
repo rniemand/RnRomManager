@@ -18,11 +18,11 @@ public static partial class SecurityHeaders
         "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' blob: data:; "
         + "img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'";
 
-    /// <summary>PSP B3, MS-DOS P4: the dedicated top-level PSP and DOS players, the only cross-origin isolated documents.</summary>
+    /// <summary>PSP B3, MS-DOS P4, 3DS G1: the dedicated top-level PSP, DOS and 3DS players, the only cross-origin isolated documents.</summary>
     public static readonly IReadOnlySet<string> IsolatedDocumentPaths =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "/emulator/play-psp.html", "/emulator/play-dos.html" };
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "/emulator/play-psp.html", "/emulator/play-dos.html", "/emulator/play-3ds.html" };
 
-    /// <summary>PSP B3: the emulator policy for the isolated PSP tab, which nothing may frame.</summary>
+    /// <summary>PSP B3, MS-DOS P4, 3DS G1: the emulator policy for the isolated PSP, DOS and 3DS tabs, which nothing may frame.</summary>
     public const string PspEmulatorPolicy =
         "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' blob: data:; "
         + "img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'";
@@ -43,7 +43,7 @@ public static partial class SecurityHeaders
             var headers = ctx.Response.Headers;
             if (ctx.Request.Path.Value is { } path && IsolatedDocumentPaths.Contains(path))
             {
-                // PSP B3, MS-DOS P4: SharedArrayBuffer for PPSSPP's and DOSBox Pure's threads needs a cross-origin isolated
+                // PSP B3, MS-DOS P4, 3DS G1: SharedArrayBuffer for PPSSPP's, DOSBox Pure's and azahar's threads needs a cross-origin isolated
                 // top-level document. Only these documents opt in, so the SPA and the modal player keep working as before.
                 headers.ContentSecurityPolicy = PspEmulatorPolicy;
                 headers["Cross-Origin-Opener-Policy"] = "same-origin";

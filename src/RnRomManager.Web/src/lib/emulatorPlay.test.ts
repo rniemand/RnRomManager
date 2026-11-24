@@ -29,6 +29,7 @@ const ejsGlobals = [
 	'EJS_paths',
 	'EJS_threads',
 	'EJS_disableCue',
+	'EJS_cacheConfig',
 	'EJS_onGameStart'
 ];
 
@@ -2499,6 +2500,100 @@ describe('play page MS-DOS (MS-DOS P5–P8)', () => {
 		);
 		vi.resetModules();
 		expect(await playDos('ppsspp', 'Umd.iso')).toBe('Invalid emulator link.');
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+});
+
+describe('play page Nintendo 3DS (3DS G4)', () => {
+	/** A browser context; each flag defaults to what azahar needs. */
+	function browser({ secure = true, isolated = true, webgl2 = true } = {}) {
+		vi.stubGlobal('isSecureContext', secure);
+		vi.stubGlobal('crossOriginIsolated', isolated);
+		vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(((kind: string) =>
+			kind === 'webgl2' && webgl2 ? ({} as RenderingContext) : null) as never);
+	}
+
+	async function play3ds(core: string, name: string, page = 'play-3ds.html'): Promise<string> {
+		if (page === 'play-3ds.html') document.body.dataset.player = '3ds';
+		const query = new URLSearchParams({ game, rom: '12', core, name });
+		history.replaceState(null, '', `/emulator/${page}?${query}`);
+		const { started } = await import('../../static/emulator/play.js');
+		await started;
+		return document.getElementById('status')!.textContent ?? '';
+	}
+
+	it('checks the browser, loads the dump from /download and starts azahar on the 4.3 copy', async () => {
+		browser();
+		serve({ [romUrl]: async () => response(200) });
+
+		await play3ds('azahar', 'Zephyr Gate (Europe).3ds');
+
+		expect(urls()).toEqual([romUrl]);
+		expect(urls().some((u) => u.includes('play-disc'))).toBe(false);
+		expect(atLoader).toMatchObject({
+			EJS_core: 'azahar',
+			EJS_gameName: 'Zephyr Gate (Europe).3ds',
+			EJS_threads: true,
+			EJS_cacheConfig: { enabled: false },
+			EJS_pathtodata: '/emulator/vendor/ejs-4.3/data/',
+			EJS_paths: {
+				'emulator.min.js': '/emulator/vendor/ejs-4.3/data/src/emulator.js',
+				'emulator.min.css': '/emulator/vendor/ejs-4.3/data/emulator.css'
+			},
+			EJS_disableDatabases: true,
+			EJS_disableAutoLang: false
+		});
+		expect(atLoader?.EJS_Buttons).toMatchObject({ saveSavFiles: false, loadSavFiles: false });
+		expect(atLoader?.EJS_biosUrl).toBeUndefined();
+		expect(atLoader?.EJS_externalFiles).toBeUndefined();
+		expect(document.querySelector('script')?.getAttribute('src')).toBe(
+			'/emulator/vendor/ejs-4.3/data/loader.js'
+		);
+		// No modal to talk to.
+		expect(messageListeners).toHaveLength(0);
+		delete win.EJS_threads;
+	});
+
+	it('keeps every other core on the 4.2.3 copy', async () => {
+		serve({ [romUrl]: async () => response(200) });
+
+		await play('gambatte', 'Tetris.gb');
+
+		expect(atLoader?.EJS_pathtodata).toBe('/emulator/vendor/data/');
+		expect(atLoader?.EJS_paths).toBeUndefined();
+		expect(atLoader?.EJS_cacheConfig).toBeUndefined();
+		expect(document.querySelector('script')?.getAttribute('src')).toBe(
+			'/emulator/vendor/data/loader.js'
+		);
+	});
+
+	it.each([
+		[{ secure: false }, '3DS games need a secure page'],
+		[{ isolated: false }, "This page isn't cross-origin isolated, so 3DS games"],
+		[{ webgl2: false }, '3DS games need WebGL 2']
+	])('stops before any request when the browser lacks %o', async (missing, message) => {
+		browser(missing);
+		serve({});
+
+		expect(await play3ds('azahar', 'Zephyr Gate (Europe).3ds')).toMatch(new RegExp(`^${message}`));
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(atLoader).toBeNull();
+	});
+
+	it('rejects azahar on the modal, PSP and DOS pages, and other cores on the 3DS page', async () => {
+		browser();
+		serve({});
+
+		expect(await play3ds('azahar', 'x.3ds', 'play.html')).toBe('Invalid emulator link.');
+		for (const player of ['psp', 'dos']) {
+			vi.resetModules();
+			document.body.dataset.player = player;
+			expect(await play3ds('azahar', 'x.3ds', `play-${player}.html`)).toBe(
+				'Invalid emulator link.'
+			);
+		}
+		vi.resetModules();
+		expect(await play3ds('dosbox_pure', 'Doom.dosz')).toBe('Invalid emulator link.');
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });

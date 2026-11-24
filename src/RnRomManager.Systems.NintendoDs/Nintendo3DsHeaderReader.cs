@@ -33,6 +33,7 @@ public static class Nintendo3DsHeaderReader
             ["productCode"] = null,
             ["makerCode"] = null,
             ["programId"] = null,
+            ["encrypted"] = null,
         };
 
         var ncch = BinaryPrimitives.ReadUInt32LittleEndian(rom[0x120..]) * MediaUnit;
@@ -42,6 +43,8 @@ public static class Nintendo3DsHeaderReader
             fields["productCode"] = ProductCode(partition.Slice(0x150, 16));
             fields["makerCode"] = Text(partition.Slice(0x110, 2));
             fields["programId"] = BinaryPrimitives.ReadUInt64LittleEndian(partition[0x118..]).ToString("X16");
+            // 3DS H1: NCCH flags[7] (0x18F) bit 2 is NoCrypto.
+            fields["encrypted"] = (partition[0x18F] & 0x04) == 0;
         }
 
         return new RomHeader(Nintendo3DsId, null, true, fields);

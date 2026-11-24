@@ -59,7 +59,7 @@ Short playbooks for the changes this repo gets most often: where each change mus
 - Tests sit next to their source as `*.test.ts` (rune stores: `*.svelte.test.ts`). Run them with `npx vitest run <files>`, plus `npm run lint` and `npm run check`, all in `src/RnRomManager.Web`.
 
 ## Emulator
-- `static/emulator/play.js` configures EmulatorJS (vendored 4.2.3 under `static/emulator/vendor`; do not edit vendor files). It runs in an iframe inside `EmulatorModal.svelte`, and the two talk through `postMessage` (`rnrm-emulator-*` messages). Per-system cores: `lib/systemEmulators.json`.
+- `static/emulator/play.js` configures EmulatorJS (vendored 4.2.3 under `static/emulator/vendor` and, for azahar only, 4.3.0-pre under `static/emulator/vendor/ejs-4.3`; do not edit vendor files). It runs in an iframe inside `EmulatorModal.svelte`, and the two talk through `postMessage` (`rnrm-emulator-*` messages). Per-system cores: `lib/systemEmulators.json`.
 
 ## New system
 - Follow [adding-a-system.md](adding-a-system.md). It also needs the README supported-systems table (checked by `SupportedSystemsTableTests`).

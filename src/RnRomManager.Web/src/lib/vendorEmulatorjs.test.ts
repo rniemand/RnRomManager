@@ -1,6 +1,14 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	readdirSync,
+	rmSync,
+	writeFileSync
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, sep } from 'node:path';
 import { runInNewContext } from 'node:vm';
@@ -46,6 +54,22 @@ function coreResolver(
 // The reviewed notices and licence texts in emulator-licenses/ (2600/Coleco/GG spec step 6, NES/PSX spec step 1).
 const coreLicenses = [
 	'COMMON-BUILD.txt',
+	'azahar-LICENSE.txt',
+	'azahar-NOTICE.txt',
+	'azahar-boost-LICENSE.txt',
+	'azahar-cryptopp-LICENSE.txt',
+	'azahar-dds-ktx-LICENSE.txt',
+	'azahar-faad2-LICENSE.txt',
+	'azahar-fmt-LICENSE.txt',
+	'azahar-httplib-LICENSE.txt',
+	'azahar-json-LICENSE.txt',
+	'azahar-libretro-common-LICENSE.txt',
+	'azahar-lodepng-LICENSE.txt',
+	'azahar-nihstro-LICENSE.txt',
+	'azahar-soundtouch-LICENSE.txt',
+	'azahar-teakra-LICENSE.txt',
+	'azahar-xxhash-LICENSE.txt',
+	'azahar-zstd-LICENSE.txt',
 	'desmume-LICENSE.txt',
 	'desmume-NOTICE.txt',
 	'desmume-emufile-LICENSE.txt',
@@ -180,6 +204,39 @@ const guardedEdits: Record<string, [string, string][]> = {
 		[syncfsAnchor, syncfsEdit]
 	]
 };
+
+// 3DS V2–V3: the EmulatorJS 4.3.0-pre files vendored under ejs-4.3/data/, and its one guarded edit.
+const ejs43Files = [
+	'loader.js',
+	'emulator.css',
+	'version.json',
+	'src/GameManager.js',
+	'src/cache.js',
+	'src/compression.js',
+	'src/consts.js',
+	'src/emulator.js',
+	'src/gamepad.js',
+	'src/license.js',
+	'src/netplay.js',
+	'src/setup.js',
+	'src/shaders.js',
+	'src/storage.js',
+	'src/utils.js',
+	'src/vendor/nipplejs.js',
+	'src/vendor/socket.io.min.js',
+	'compression/extract7z.js',
+	'compression/extractzip.js',
+	'compression/libunrar.js',
+	'compression/libunrar.wasm'
+];
+const fileReadGuard =
+	'                let arrayBuffer;\n' +
+	'                try {\n' +
+	'                    arrayBuffer = await url.arrayBuffer();\n' +
+	'                } catch (e) {\n' +
+	'                    this.startGameError(this.localization("Error reading the game file"));\n' +
+	'                    return;\n' +
+	'                }\n';
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
@@ -325,7 +382,11 @@ describe('vendor-emulatorjs', () => {
 				'data/cores/dosbox_pure-thread-wasm.data',
 				'data/cores/dosbox_pure-thread-legacy-wasm.data',
 				'data/cores/reports/dosbox_pure.json',
+				...ejs43Files.map((f) => `ejs-4.3/data/${f}`),
+				'ejs-4.3/data/cores/azahar-thread-wasm.data',
+				'ejs-4.3/data/cores/reports/azahar.json',
 				'licenses/emulatorjs.txt',
+				'licenses/emulatorjs-4.3.txt',
 				...coreLicenses.map((f) => `licenses/${f}`)
 			].sort()
 		);
@@ -335,12 +396,13 @@ describe('vendor-emulatorjs', () => {
 		expect(files(out).filter((f) => f.includes('opera'))).toEqual([]);
 		// C64 B7: nor VICE.
 		expect(files(out).filter((f) => f.includes('vice'))).toEqual([]);
-		// PSP B3, MS-DOS P1: PPSSPP's and DOSBox Pure's threaded payloads are the only ones; every other core is
-		// single-threaded.
+		// PSP B3, MS-DOS P1, 3DS V2: PPSSPP's, DOSBox Pure's and azahar's threaded payloads are the only ones; every
+		// other core is single-threaded.
 		expect(files(out).filter((f) => f.includes('-thread'))).toEqual([
 			'data/cores/dosbox_pure-thread-legacy-wasm.data',
 			'data/cores/dosbox_pure-thread-wasm.data',
-			'data/cores/ppsspp-thread-wasm.data'
+			'data/cores/ppsspp-thread-wasm.data',
+			'ejs-4.3/data/cores/azahar-thread-wasm.data'
 		]);
 		for (const f of [
 			'dosbox_pure-thread-wasm.data',
@@ -1046,5 +1108,68 @@ describe('vendor-emulatorjs', () => {
 			readFileSync(join('node_modules', '@emulatorjs', 'emulatorjs', 'LICENSE'), 'utf8')
 		);
 		expect(existsSync(join(out, 'data', 'localization'))).toBe(false);
+	});
+
+	it('copies the azahar payload and report byte for byte from the pinned cache (3DS V2)', () => {
+		const pins = JSON.parse(readFileSync('emulatorjs-next.json', 'utf8')) as Record<
+			'source' | 'core' | 'report',
+			{ sha256: string }
+		>;
+		const cache = join('node_modules', '.cache', 'emulatorjs-next');
+		for (const [file, pin] of [
+			['azahar-thread-wasm.data', pins.core],
+			['reports/azahar.json', pins.report]
+		] as const) {
+			const bytes = readFileSync(join(out, 'ejs-4.3', 'data', 'cores', file));
+			expect(bytes.equals(readFileSync(join(cache, pin.sha256))), file).toBe(true);
+			expect(createHash('sha256').update(bytes).digest('hex'), file).toBe(pin.sha256);
+		}
+		expect(readFileSync(join(out, 'licenses', 'emulatorjs-4.3.txt'), 'utf8')).toContain(
+			'GNU GENERAL PUBLIC LICENSE'
+		);
+	});
+
+	it('applies the one edits43 edit to the 4.3 emulator.js (3DS V3)', () => {
+		const source = readFileSync(join(out, 'ejs-4.3', 'data', 'src', 'emulator.js'), 'utf8');
+		expect(source).not.toContain('                const arrayBuffer = await url.arrayBuffer();\n');
+		expect(source.split(fileReadGuard)).toHaveLength(2);
+		// The 4.2.3 edits stay out of the 4.3 copy.
+		expect(source).not.toContain(pinGuard);
+		expect(source).not.toContain(threadOverride);
+	});
+});
+
+describe('vendor-emulatorjs pins (3DS V2)', () => {
+	let dir: string;
+
+	beforeAll(() => {
+		dir = mkdtempSync(join(tmpdir(), 'ejs-next-'));
+	});
+
+	afterAll(() => rmSync(dir, { recursive: true, force: true }));
+
+	it('fails on a cached file whose SHA-256 differs from the pin, and deletes it, offline', () => {
+		const bytes = Buffer.from('not the pinned tarball');
+		const wrong = '0'.repeat(64);
+		const cache = join(dir, 'cache');
+		mkdirSync(cache);
+		writeFileSync(join(cache, wrong), bytes);
+		const url = 'https://example.invalid/emulatorjs.tar.gz';
+		writeFileSync(
+			join(dir, 'next.json'),
+			JSON.stringify({ source: { url, sha256: wrong }, core: {}, report: {} })
+		);
+		let stderr = '';
+		try {
+			execFileSync(process.execPath, ['scripts/vendor-emulatorjs.mjs', join(dir, 'out')], {
+				env: { ...process.env, EJS_NEXT_MANIFEST: join(dir, 'next.json'), EJS_NEXT_CACHE: cache },
+				stdio: 'pipe'
+			});
+		} catch (e) {
+			stderr = String((e as { stderr: Buffer }).stderr);
+		}
+		const actual = createHash('sha256').update(bytes).digest('hex');
+		expect(stderr).toContain(`vendor-emulatorjs: ${url} has SHA-256 ${actual}, expected ${wrong}`);
+		expect(existsSync(join(cache, wrong))).toBe(false);
 	});
 });

@@ -1,8 +1,19 @@
 // Browser emulators B9: copies the pinned EmulatorJS files the play page needs into static/emulator/vendor/
 // (or the given outDir). Runs from predev/prebuild; a missing source file fails it.
-import { copyFileSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	readdirSync,
+	renameSync,
+	rmSync,
+	writeFileSync
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync } from 'node:zlib';
 
 const web = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = resolve(web, process.argv[2] ?? 'static/emulator/vendor');
@@ -158,8 +169,25 @@ const edits = [
 	}
 ];
 
-function applyEdits(file, source) {
-	for (const edit of edits.filter((e) => e.file === file)) {
+// 3DS V3: the one guarded edit of the EmulatorJS 4.3.0-pre copy, which serves only azahar: a File ROM the browser
+// can't buffer (a multi-GiB dump) shows a startup error instead of leaving download() pending.
+const edits43 = [
+	{
+		file: 'src/emulator.js',
+		find: '                const arrayBuffer = await url.arrayBuffer();\n',
+		replace:
+			'                let arrayBuffer;\n' +
+			'                try {\n' +
+			'                    arrayBuffer = await url.arrayBuffer();\n' +
+			'                } catch (e) {\n' +
+			'                    this.startGameError(this.localization("Error reading the game file"));\n' +
+			'                    return;\n' +
+			'                }\n'
+	}
+];
+
+function applyEdits(file, source, list = edits) {
+	for (const edit of list.filter((e) => e.file === file)) {
 		const at = source.indexOf(edit.find);
 		if (at < 0 || source.indexOf(edit.find, at + 1) >= 0)
 			throw new Error(
@@ -242,4 +270,100 @@ copy(join(pkgs, 'emulatorjs', 'LICENSE'), join(outDir, 'licenses', 'emulatorjs.t
 // Reviewed notices, licence texts and source records for cores whose packages ship none (emulator-licenses/).
 for (const file of readdirSync(join(web, 'emulator-licenses')))
 	copy(join(web, 'emulator-licenses', file), join(outDir, 'licenses', file));
+
+// 3DS V1–V2: EmulatorJS 4.3.0-pre's scripts and its azahar core, side by side under ejs-4.3/ for play-3ds.html only.
+// Each pinned download is cached by its SHA-256 and verified on every run.
+const nextManifest = JSON.parse(
+	readFileSync(process.env.EJS_NEXT_MANIFEST ?? join(web, 'emulatorjs-next.json'), 'utf8')
+);
+const nextCache = resolve(
+	process.env.EJS_NEXT_CACHE ?? join(web, 'node_modules', '.cache', 'emulatorjs-next')
+);
+
+async function pinned({ url, sha256 }) {
+	const path = join(nextCache, sha256);
+	if (!existsSync(path)) {
+		let res;
+		try {
+			res = await fetch(url);
+		} catch (e) {
+			throw new Error(`vendor-emulatorjs: couldn't download ${url} (${e.message})`, { cause: e });
+		}
+		if (!res.ok) throw new Error(`vendor-emulatorjs: ${url} returned HTTP ${res.status}`);
+		mkdirSync(nextCache, { recursive: true });
+		// The pid keeps two concurrent runs (npm run build and vitest) from writing the same temporary file.
+		const tmp = `${path}.${process.pid}.tmp`;
+		writeFileSync(tmp, Buffer.from(await res.arrayBuffer()));
+		renameSync(tmp, path);
+	}
+	const bytes = readFileSync(path);
+	const actual = createHash('sha256').update(bytes).digest('hex');
+	if (actual !== sha256) {
+		rmSync(path, { force: true });
+		throw new Error(`vendor-emulatorjs: ${url} has SHA-256 ${actual}, expected ${sha256}`);
+	}
+	return bytes;
+}
+
+/** The regular files of a .tar.gz (ustar, GitHub's pax header skipped), keyed by path without the top folder. */
+function untar(tgz) {
+	const tar = gunzipSync(tgz);
+	const entries = new Map();
+	for (let at = 0; at + 512 <= tar.length;) {
+		const header = tar.subarray(at, at + 512);
+		if (header.every((b) => b === 0)) break;
+		const field = (offset, length) => {
+			const bytes = header.subarray(offset, offset + length);
+			const nul = bytes.indexOf(0);
+			return bytes.subarray(0, nul < 0 ? length : nul).toString('utf8');
+		};
+		const size = parseInt(field(124, 12).trim() || '0', 8);
+		const prefix = field(345, 155);
+		const name = (prefix ? `${prefix}/` : '') + field(0, 100);
+		if (['0', ''].includes(field(156, 1)))
+			entries.set(name.slice(name.indexOf('/') + 1), tar.subarray(at + 512, at + 512 + size));
+		at += 512 + Math.ceil(size / 512) * 512;
+	}
+	return entries;
+}
+
+const next = join(outDir, 'ejs-4.3', 'data');
+const tarball = untar(await pinned(nextManifest.source));
+const nextFiles = [
+	'loader.js',
+	'emulator.css',
+	'version.json',
+	'src/GameManager.js',
+	'src/cache.js',
+	'src/compression.js',
+	'src/consts.js',
+	'src/emulator.js',
+	'src/gamepad.js',
+	'src/license.js',
+	'src/netplay.js',
+	'src/setup.js',
+	'src/shaders.js',
+	'src/storage.js',
+	'src/utils.js',
+	'src/vendor/nipplejs.js',
+	'src/vendor/socket.io.min.js',
+	'compression/extract7z.js',
+	'compression/extractzip.js',
+	'compression/libunrar.js',
+	'compression/libunrar.wasm'
+];
+for (const file of nextFiles) {
+	const bytes = tarball.get(`data/${file}`);
+	if (bytes === undefined)
+		throw new Error(`vendor-emulatorjs: data/${file} is missing from ${nextManifest.source.url}`);
+	mkdirSync(dirname(join(next, file)), { recursive: true });
+	writeFileSync(
+		join(next, file),
+		file.startsWith('src/') ? applyEdits(file, bytes.toString('utf8'), edits43) : bytes
+	);
+}
+writeFileSync(join(outDir, 'licenses', 'emulatorjs-4.3.txt'), tarball.get('LICENSE'));
+mkdirSync(join(next, 'cores', 'reports'), { recursive: true });
+writeFileSync(join(next, 'cores', 'azahar-thread-wasm.data'), await pinned(nextManifest.core));
+writeFileSync(join(next, 'cores', 'reports', 'azahar.json'), await pinned(nextManifest.report));
 console.log(`vendor-emulatorjs: wrote ${outDir}`);

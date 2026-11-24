@@ -88,7 +88,7 @@ public class SecurityHeadersTests
         var emulator = Path.Combine(webRoot, "emulator");
         Directory.CreateDirectory(Path.Combine(emulator, "vendor", "data"));
         var source = Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "src", "RnRomManager.Web", "static", "emulator");
-        foreach (var page in new[] { "play.html", "play-psp.html", "play-dos.html", "play.css" })
+        foreach (var page in new[] { "play.html", "play-psp.html", "play-dos.html", "play-3ds.html", "play.css" })
             File.Copy(Path.Combine(source, page), Path.Combine(emulator, page));
         File.WriteAllText(Path.Combine(emulator, "vendor", "data", "loader.js"), "console.log(1);");
         File.WriteAllText(Path.Combine(webRoot, "index.html"), IndexHtml.ReplaceLineEndings("\n"));
@@ -98,6 +98,7 @@ public class SecurityHeadersTests
 
     [TestCase("/emulator/play-psp.html")]
     [TestCase("/emulator/play-dos.html")]
+    [TestCase("/emulator/play-3ds.html")]
     public async Task TheIsolatedDocuments_AreCrossOriginIsolated_AndCannotBeFramed(string path)
     {
         var (factory, client) = EmulatorSite();

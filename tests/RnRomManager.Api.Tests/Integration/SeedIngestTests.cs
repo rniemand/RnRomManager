@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 38, 29)]
-    [TestCase(SeedSet.Full, 238, 229)]
+    [TestCase(SeedSet.Basic, 39, 30)]
+    [TestCase(SeedSet.Full, 239, 230)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
