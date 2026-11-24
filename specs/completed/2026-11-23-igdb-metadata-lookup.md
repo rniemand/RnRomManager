@@ -1,6 +1,6 @@
 ---
 title: IGDB Metadata Lookup
-status: in-progress # draft | ready | in-progress | completed
+status: completed # draft | ready | in-progress | completed
 created: 2026-11-23
 ---
 
