@@ -128,9 +128,17 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('tests/e2e/package-lock.json') }}
-      # Compiles the seeding tool while the image builds; waited for below. A failed build shows up when seeding runs it.
-      - run: dotnet build tests/RnRomManager.TestData > "$RUNNER_TEMP/seed-build.log" 2>&1 & echo $! > "$RUNNER_TEMP/seed-build.pid"
+      # Compiles the seeding tool and pulls the stacks' MariaDB image while the image builds; both are waited for below.
+      # A failed build shows up when seeding runs it, a failed pull when the stacks start. The pull reads the image from
+      # the compose file, which insists on its variables being set, so placeholders stand in.
+      - run: |
+          dotnet build tests/RnRomManager.TestData > "$RUNNER_TEMP/seed-build.log" 2>&1 & echo $! > "$RUNNER_TEMP/seed-build.pid"
+          E2E_DB_PASSWORD=x E2E_ADMIN_PASSWORD=x E2E_INGEST=. E2E_CACHE=. \
+            docker compose -f tests/e2e/docker-compose.e2e.yml pull --quiet mariadb > "$RUNNER_TEMP/mariadb-pull.log" 2>&1 & echo $! > "$RUNNER_TEMP/mariadb-pull.pid"
+      # No cleanup: removing the builder at the end of the job only costs ~10 s on a runner that is thrown away.
       - uses: docker/setup-buildx-action@v4
+        with:
+          cleanup: false
       # The amd64 image, reusing cached layers (npm ci, dotnet restore) from release builds on main (release.yml's
       # docker-cache job). The version is the Dockerfile default; nothing in e2e reads it.
       - uses: docker/build-push-action@v7
@@ -141,8 +149,10 @@ jobs:
           tags: niemandr/rnrommanager:e2e
           cache-from: type=gha
       - run: |
-          while kill -0 "$(cat "$RUNNER_TEMP/seed-build.pid")" 2>/dev/null; do sleep 1; done
-          tail -n 3 "$RUNNER_TEMP/seed-build.log"
+          for job in seed-build mariadb-pull; do
+            while kill -0 "$(cat "$RUNNER_TEMP/$job.pid")" 2>/dev/null; do sleep 1; done
+            tail -n 3 "$RUNNER_TEMP/$job.log"
+          done
       # Seeds Basic, runs Playwright + axe against docker-compose.e2e.yml, tears down.
       - run: pwsh scripts/test-e2e.ps1 -SkipBuild
       - name: Upload Playwright report

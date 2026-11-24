@@ -268,7 +268,7 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   await expect(failed.getByText("No failed imports.")).toBeVisible();
 });
 
-test("reports and the ingest audit trail", async () => {
+test("reports and the ingest audit trail", { tag: "@shard-b" }, async () => {
   await page.getByRole("link", { name: "Reports", exact: true }).click();
   // Release editing B15: Reports opens Newly Added.
   await expect(page).toHaveURL(/\/reports\/newly-added$/);

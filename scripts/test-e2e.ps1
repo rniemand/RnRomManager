@@ -64,11 +64,10 @@ try {
     }
     & (Join-Path $PSScriptRoot 'seed-ingest.ps1') @seedArgs
     if (-not $Screenshots) {
-        # Stack B gets its own identical seed; it shares the passwords and the image.
-        $seedB = $seedArgs.Clone()
-        $seedB.Path = $env:E2E_INGEST_B
-        $seedB.CachePath = $cacheB
-        & (Join-Path $PSScriptRoot 'seed-ingest.ps1') @seedB
+        # Stack B gets its own identical seed, copied from stack A's (a second seed-ingest run takes ~6 s more on CI, and
+        # the seeded files hold no paths of their own); it shares the passwords and the image.
+        Copy-Item -LiteralPath $env:E2E_INGEST -Destination $env:E2E_INGEST_B -Recurse
+        Copy-Item -LiteralPath $env:E2E_CACHE -Destination $cacheB -Recurse
     }
     # The container runs as UID 1654; a Linux bind mount needs to be writable by it (Docker Desktop maps this itself).
     if ($IsLinux) {
