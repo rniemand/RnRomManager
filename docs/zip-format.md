@@ -60,6 +60,8 @@ roms/
   segacd/               Sega CD (external, exact names: a .cue or .toc with its .bin tracks, a CloneCD .ccd/.img/.sub, an MDS .mds/.mdf, or a .bin, .iso or .chd)
   3do/                  3DO (external, exact names: a .cue or .toc with its .bin tracks, a CloneCD .ccd/.img/.sub, an MDS .mds/.mdf, or a .bin/.iso/.chd)
   tgcd/                 TurboGrafx-CD / PC Engine CD (external, exact names: a .cue or .toc with its .bin tracks, a CloneCD .ccd/.img/.sub, an MDS .mds/.mdf, or a .chd)
+  ngp/                  Neo Geo Pocket (.ngp)
+  ngpc/                 Neo Geo Pocket Color (.ngc)
 ```
 
 Inside a game's ZIP:
@@ -162,7 +164,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 |---|---|---|---|
 | `schemaVersion` | int | ✓ | `8` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c64`, `tgcd`, `dos`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c64`, `tgcd`, `dos`, `ngp`, `ngpc`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
 | `releaseYear` | int? | | from the DAT metadata (titledb's release date for Switch; the disc systems have no metadata DATs) |
@@ -241,6 +243,16 @@ Mega Drive / Genesis `header`, present only when the 16-byte field at 0x100 star
 32X `header`: the same fields and rules as Mega Drive / Genesis (the `SEGA` header at 0x100, system type such as `SEGA 32X`); present only when that field starts with `SEGA`.
 
 TurboGrafx-16 `header`: always null (HuCards have no header).
+
+Neo Geo Pocket / Neo Geo Pocket Color `header`, from the 64-byte cartridge header:
+
+- `title`: bytes 0x24–0x2F up to the first NUL, each byte outside 0x20–0x7E replaced by `?`, trailing spaces trimmed; null when empty.
+- `licence`: `COPYRIGHT BY SNK CORPORATION` or `LICENSED BY SNK CORPORATION`, whichever bytes 0x00–0x1B hold (the second with a leading space); null when neither (the header is then implausible).
+- `catalog`: the little-endian 16-bit catalog number at 0x20.
+- `subCatalog`: byte 0x22.
+- `mode`: byte 0x23 as `"0x"` and two upper-case hex digits, e.g. `"0x10"`.
+- `colour`: true when `mode` is `0x10` (a Neo Geo Pocket Color cart).
+- `startPc`: the little-endian 32-bit start address at 0x1C as `"0x"` and eight upper-case hex digits, e.g. `"0x00200040"`.
 
 PlayStation, PlayStation Portable, Xbox 360, Saturn, Sega CD, 3DO and TurboGrafx-CD `header`: always null.
 
