@@ -35,6 +35,17 @@ public partial class EmulatorEndpointsTests
 
     private string MameDir => _factory.Settings["Emulator:Mame2003PlusCorePath"]!;
 
+    private const string FbneoCore = "/api/emulator/cores/fbneo";
+
+    private static readonly (string Name, byte[] Bytes, string ContentType)[] SyntheticFbneo =
+    [
+        ("fbneo-wasm.data", [.. Enumerable.Range(0, 3600).Select(i => (byte)(i * 41 + 3))], "application/octet-stream"),
+        ("fbneo-legacy-wasm.data", [.. Enumerable.Range(0, 3400).Select(i => (byte)(i * 43 + 11))], "application/octet-stream"),
+        ("fbneo.json", "{\"options\":{\"fbneo\":1}}"u8.ToArray(), "application/json"),
+    ];
+
+    private string FbneoDir => _factory.Settings["Emulator:FbneoCorePath"]!;
+
     private void WriteViceSet(string? except = null)
     {
         foreach (var (name, bytes, _) in SyntheticVice.Where(f => f.Name != except))
@@ -110,11 +121,11 @@ public partial class EmulatorEndpointsTests
         {
             GenesisCorePath = "/cores/genesis", PicodriveCorePath = "/cores/picodrive", Snes9xCorePath = "/cores/snes9x",
             OperaCorePath = "/cores/opera", ViceCorePath = "/cores/vice", Mupen64PlusCorePath = "/cores/n64",
-            Mame2003PlusCorePath = "/cores/mame",
+            Mame2003PlusCorePath = "/cores/mame", FbneoCorePath = "/cores/fbneo",
         };
 
         Assert.That(OperatorCoreManifest.Pinned.Cores.Select(c => c.Id),
-            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x", "opera", "vice_x64sc", "vice_xpet", "vice_xvic", "mupen64plus_next", "mame2003_plus" }));
+            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x", "opera", "vice_x64sc", "vice_xpet", "vice_xvic", "mupen64plus_next", "mame2003_plus", "fbneo" }));
         Assert.That((genesis.DisplayName, genesis.MismatchCode), Is.EqualTo(("Genesis Plus GX", "GenesisCoreMismatch")));
         Assert.That((picodrive.DisplayName, picodrive.MismatchCode), Is.EqualTo(("PicoDrive", "PicodriveCoreMismatch")));
         Assert.That((snes9x.DisplayName, snes9x.MismatchCode), Is.EqualTo(("Snes9x", "Snes9xCoreMismatch")));
@@ -131,6 +142,9 @@ public partial class EmulatorEndpointsTests
         var mame = OperatorCoreManifest.Pinned.Find("mame2003_plus")!;
         Assert.That((mame.DisplayName, mame.MismatchCode, mame.PathOf(options)),
             Is.EqualTo(("MAME 2003-Plus", "Mame2003PlusCoreMismatch", "/cores/mame")));
+        var fbneo = OperatorCoreManifest.Pinned.Find("fbneo")!;
+        Assert.That((fbneo.DisplayName, fbneo.MismatchCode, fbneo.PathOf(options)),
+            Is.EqualTo(("FinalBurn Neo", "FbneoCoreMismatch", "/cores/fbneo")));
         Assert.That((genesis.PathOf(options), picodrive.PathOf(options), snes9x.PathOf(options)),
             Is.EqualTo(("/cores/genesis", "/cores/picodrive", "/cores/snes9x")));
         Assert.That(OperatorCoreManifest.Pinned.Find("GENESIS_PLUS_GX"), Is.Null);
@@ -693,6 +707,43 @@ public partial class EmulatorEndpointsTests
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
         Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo(EmulatorEndpoints.Mame2003PlusCoreMismatch));
         Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("The MAME 2003-Plus core file doesn't match EmulatorJS 4.2.3"));
+    }
+
+    // Arcade (FinalBurn Neo) P1: served by the same verifier; only its pins and its mismatch code are its own.
+
+    [Test]
+    public void PinnedManifest_HoldsExactlyTheFbneo4_2_3Files()
+    {
+        Assert.That(OperatorCoreManifest.Pinned.Find(OperatorCoreManifest.Fbneo)!.Files, Is.EqualTo(new[]
+        {
+            new OperatorCoreFile("fbneo-wasm.data", 8_273_551,
+                "315a25e0bcd61d58ee0d9e8b1dbf3740b9e0ca4b7d0726f848ce1068de73437c", "application/octet-stream"),
+            new OperatorCoreFile("fbneo-legacy-wasm.data", 8_272_960,
+                "9dbb6242c028f4179549f324688b654353881beb552292f939bc6171a0828b5f", "application/octet-stream"),
+            new OperatorCoreFile("fbneo.json", 119,
+                "d2c5e07c2afc2b53937f14b721d7d025ad599d111e9627fc77e9b3fd17450e70", "application/json"),
+        }));
+    }
+
+    [Test]
+    public async Task Fbneo_AMatchingSetIsServed_AndAMismatchIs409FbneoCoreMismatch()
+    {
+        foreach (var (name, bytes, _) in SyntheticFbneo)
+            File.WriteAllBytes(Path.Combine(FbneoDir, name), bytes);
+
+        Assert.That(await HeadAsync(_client, FbneoCore), Is.EqualTo(HttpStatusCode.NoContent));
+        foreach (var (name, bytes, contentType) in SyntheticFbneo)
+        {
+            using var served = await _client.GetAsync($"{FbneoCore}/{name}");
+            Assert.That((served.StatusCode, served.Content.Headers.ContentType?.MediaType), Is.EqualTo((HttpStatusCode.OK, (string?)contentType)), name);
+            Assert.That(await served.Content.ReadAsByteArrayAsync(), Is.EqualTo(bytes), name);
+        }
+
+        File.AppendAllText(Path.Combine(FbneoDir, "fbneo-wasm.data"), "x");
+        using var response = await _client.GetAsync($"{FbneoCore}/fbneo-wasm.data");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo(EmulatorEndpoints.FbneoCoreMismatch));
+        Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("The FinalBurn Neo core file doesn't match EmulatorJS 4.2.3"));
     }
 
     [Test]

@@ -81,6 +81,7 @@ public static partial class EmulatorEndpoints
     public const string ViceCoreMismatch = "ViceCoreMismatch";
     public const string Mupen64PlusCoreMismatch = "Mupen64PlusCoreMismatch";
     public const string Mame2003PlusCoreMismatch = "Mame2003PlusCoreMismatch";
+    public const string FbneoCoreMismatch = "FbneoCoreMismatch";
 
     private enum CoreOutcome { Verified, Unavailable, Mismatch, Unreadable }
 

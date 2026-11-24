@@ -37,7 +37,8 @@ const cores = [
 	'mednafen_ngp',
 	'mupen64plus_next',
 	'azahar',
-	'mame2003_plus'
+	'mame2003_plus',
+	'fbneo'
 ];
 
 /**
@@ -199,6 +200,12 @@ const operatorCores = {
 		display: 'MAME 2003-Plus',
 		short: 'MAME',
 		option: 'Emulator:Mame2003PlusCorePath'
+	},
+	fbneo: {
+		system: 'Arcade (FinalBurn Neo) games',
+		display: 'FinalBurn Neo',
+		short: 'FBNeo',
+		option: 'Emulator:FbneoCorePath'
 	}
 };
 
@@ -272,7 +279,9 @@ export function hidesCoreChooser(core) {
 		'vice_xvic',
 		'mupen64plus_next',
 		// Arcade P1: EmulatorJS's mame group also holds mame2003, which isn't delivered.
-		'mame2003_plus'
+		'mame2003_plus',
+		// Arcade (FinalBurn Neo) P1: the arcade group also holds fbalpha2012_cps1 and fbalpha2012_cps2.
+		'fbneo'
 	].includes(core);
 }
 

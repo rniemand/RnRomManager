@@ -253,4 +253,16 @@ public class OptionsValidatorTests
         Assert.That(relative.Succeeded, Is.False);
         Assert.That(relative.FailureMessage, Does.Contain("Emulator:Mame2003PlusCorePath must be empty or an absolute path (got 'mame')."));
     }
+
+    [Test]
+    public void FbneoCorePath_EmptyOrAbsolute()
+    {
+        var absolute = Path.Combine(Path.GetTempPath(), "fbneo");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { FbneoCorePath = "" }).Succeeded, Is.True, "blank disables");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { FbneoCorePath = absolute, Mame2003PlusCorePath = absolute }).Succeeded,
+            Is.True, "may share the other operator cores' folder");
+        var relative = new EmulatorOptionsValidator().Validate(null, new() { FbneoCorePath = "fbneo" });
+        Assert.That(relative.Succeeded, Is.False);
+        Assert.That(relative.FailureMessage, Does.Contain("Emulator:FbneoCorePath must be empty or an absolute path (got 'fbneo')."));
+    }
 }

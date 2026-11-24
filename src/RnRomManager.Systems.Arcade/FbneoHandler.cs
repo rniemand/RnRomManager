@@ -49,8 +49,11 @@ public sealed class FbneoHandler : ISystemHandler
         _ => null,
     };
 
-    /// <summary>Set in step 5 (P1).</summary>
-    public string? BrowserCore => null;
+    /// <summary>
+    /// P1: FinalBurn Neo, whose files the operator supplies (<c>Emulator:FbneoCorePath</c>); it plays in the modal from
+    /// <c>/download</c>, with its parent sets and board BIOS sets from <c>/romset</c>.
+    /// </summary>
+    public string? BrowserCore => "fbneo";
 
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 

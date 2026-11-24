@@ -21,7 +21,7 @@ public class FbneoHandlerTests
     }
 
     [Test]
-    public void BrowserCore_IsNotSetYet() => Assert.That(Handler.BrowserCore, Is.Null);
+    public void BrowserCore_IsFbneo() => Assert.That(Handler.BrowserCore, Is.EqualTo("fbneo"));
 
     [TestCase("sf2.zip", ".fbneoz")]
     [TestCase("SF2.ZIP", ".fbneoz")]

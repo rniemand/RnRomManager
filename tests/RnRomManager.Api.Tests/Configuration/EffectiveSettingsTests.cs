@@ -48,6 +48,7 @@ public class EffectiveSettingsTests
             ["Emulator:ViceCorePath"] = Path.Combine(root, "vice"),
             ["Emulator:Mupen64PlusCorePath"] = Path.Combine(root, "n64"),
             ["Emulator:Mame2003PlusCorePath"] = Path.Combine(root, "mame"),
+            ["Emulator:FbneoCorePath"] = Path.Combine(root, "fbneo"),
         }).Build();
         using var services = new ServiceCollection().AddAppOptions(config).BuildServiceProvider();
 
@@ -66,13 +67,15 @@ public class EffectiveSettingsTests
         Assert.That(settings.Emulator.ViceCorePath, Is.EqualTo(Path.Combine(root, "vice")));
         Assert.That(settings.Emulator.Mupen64PlusCorePath, Is.EqualTo(Path.Combine(root, "n64")));
         Assert.That(settings.Emulator.Mame2003PlusCorePath, Is.EqualTo(Path.Combine(root, "mame")));
+        Assert.That(settings.Emulator.FbneoCorePath, Is.EqualTo(Path.Combine(root, "fbneo")));
         Assert.That(json, Does.Contain($"\"emulator\":{{\"genesisCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "genesis"))},"
             + $"\"picodriveCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "picodrive"))},"
             + $"\"snes9xCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "snes9x"))},"
             + $"\"operaCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "opera"))},"
             + $"\"viceCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "vice"))},"
             + $"\"mupen64PlusCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "n64"))},"
-            + $"\"mame2003PlusCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "mame"))}}}"));
+            + $"\"mame2003PlusCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "mame"))},"
+            + $"\"fbneoCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "fbneo"))}}}"));
         Assert.That(json, Does.Not.Contain("hunter2"));
     }
 
