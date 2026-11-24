@@ -92,7 +92,7 @@ public partial class LibraryEndpointsTests
                 new FixtureGame("Pokémon Pinball (Europe)", "Pokémon Pinball (Europe).gb", Pinball) { Publishers = ["Nintendo"] },
                 new FixtureGame("3 Choume no Tama (Japan)", "3 Choume no Tama (Japan).gb", Arcade),
             ],
-        }, titleDb: IngestSeeder.EmptySwitch, mame: new Dictionary<string, string> { ["MAME"] = MameDat }, layouts: IngestSeeder.RedumpLayouts);
+        }, titleDb: IngestSeeder.EmptySwitch, mame: new Dictionary<string, string> { ["MAME"] = MameDat, ["FBNeo - Arcade Games"] = FbneoDat }, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 
@@ -108,6 +108,19 @@ public partial class LibraryEndpointsTests
         		<rom name="u.bin" size="4" crc="{MameCrc("FGTU")}"/><rom name="f.bin" merge="f.bin" size="4" crc="{MameCrc("FGHT")}"/></game>
         	<game name="rnsolo"><description>Rn Solo (World)</description><rom name="s.bin" size="4" crc="{MameCrc("SOLO")}"/></game>
         </mame>
+        """;
+
+    // FBNeo P2: a board BIOS, a parent that needs it, a split clone of the parent, and a 7z set (basic.7z's one ROM) on the BIOS.
+    private static readonly string FbneoDat = $"""
+        <?xml version="1.0"?>
+        <datafile>
+        	<game name="rnbios" isbios="yes"><description>Rn Board BIOS</description><rom name="bios.rom" size="4" crc="{MameCrc("FBIO")}"/></game>
+        	<game name="rnfbp" romof="rnbios"><description>Rn FB Parent (World)</description><rom name="p.bin" size="4" crc="{MameCrc("FBP1")}"/></game>
+        	<game name="rnfbc" cloneof="rnfbp" romof="rnfbp"><description>Rn FB Parent (Japan)</description>
+        		<rom name="c.bin" size="4" crc="{MameCrc("FBC1")}"/><rom name="p.bin" merge="p.bin" size="4" crc="{MameCrc("FBP1")}"/></game>
+        	<game name="rnfb7z" romof="rnbios"><description>Rn FB Seven (World)</description>
+        		<rom name="{TestFixtures.Basic7zEntry}" size="{TestFixtures.Basic7zRom().Length}" crc="{Crc32.ToHex(TestFixtures.Basic7zRom())}"/></game>
+        </datafile>
         """;
 
     private static byte[] MameZip(params string[] contents)
@@ -134,6 +147,23 @@ public partial class LibraryEndpointsTests
         var rom = (await Service<IRomRepository>().GetBySha1Async(result.Sha1!, default))!;
         return (rom.GameId, rom.Id);
     }
+
+    /// <summary>FBNeo P2: a set archive dropped in <c>ingest/fbneo/</c> and ingested.</summary>
+    private async Task<(Guid GameId, long RomId)> IngestFbneo(string name, byte[] bytes)
+    {
+        var path = Path.Combine(_factory.Root, "ingest", "fbneo", name);
+        await File.WriteAllBytesAsync(path, bytes);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+        var result = (await Service<IngestPipeline>().ProcessAsync(new IngestFile("fbneo", path, name, bytes.Length, File.GetLastWriteTimeUtc(path)),
+            Guid.NewGuid(), new CircuitBreaker(), default))!;
+        Assert.That(result.Outcome, Is.EqualTo(IngestOutcome.Ingested), result.Details);
+        var rom = (await Service<IRomRepository>().GetBySha1Async(result.Sha1!, default))!;
+        return (rom.GameId, rom.Id);
+    }
+
+    private Task<JsonElement> RomsetJson((Guid GameId, long RomId) release) => GetJson($"/api/games/{release.GameId}/roms/{release.RomId}/romset");
+
+    private static string[] Strings(JsonElement json, string property) => [.. json.GetProperty(property).EnumerateArray().Select(e => e.GetString()!)];
 
     private async Task<(string SetName, (string SetName, Guid GameId, long RomId)[] Deps, string[] Missing)> Romset((Guid GameId, long RomId) release)
     {
@@ -238,6 +268,74 @@ public partial class LibraryEndpointsTests
 
         var (setName, deps, missingSets) = await Romset(clone);
         Assert.That((setName, deps.Length, missingSets.Length), Is.EqualTo(("rnfightu", 0, 0)));
+        Assert.That(Strings(await RomsetJson(clone), "bios"), Is.Empty);
+    }
+
+    [Test]
+    public async Task Romset_Mame_GainsZipFileNames_EmptyBios_AndSelfContained()
+    {
+        await IngestMame("rnbios.zip", "BIOS");
+        await IngestMame("rnfight.zip", "FGHT");
+        var clone = await IngestMame("rnfightu.zip", "FGTU");
+
+        var json = await RomsetJson(clone);
+
+        Assert.That(json.EnumerateObject().Select(p => p.Name), Is.EqualTo(new[] { "setName", "fileName", "deps", "missing", "bios", "selfContained" }));
+        Assert.That(json.GetProperty("fileName").GetString(), Is.EqualTo("rnfightu.zip"));
+        Assert.That(json.GetProperty("deps").EnumerateArray().Select(d => d.GetProperty("fileName").GetString()), Is.EqualTo(new[] { "rnfight.zip", "rnbios.zip" }));
+        Assert.That((Strings(json, "bios").Length, json.GetProperty("selfContained").GetBoolean()), Is.EqualTo((0, false)));
+    }
+
+    [Test]
+    public async Task Romset_Fbneo_ParentInLibrary_IsADep_AndTheBiosIsInBios()
+    {
+        await IngestFbneo("rnbios.zip", MameZip("FBIO"));
+        var parent = await IngestFbneo("rnfbp.zip", MameZip("FBP1"));
+        var clone = await IngestFbneo("rnfbc.zip", MameZip("FBC1"));
+
+        var json = await RomsetJson(clone);
+
+        Assert.That((json.GetProperty("setName").GetString(), json.GetProperty("fileName").GetString()), Is.EqualTo(("rnfbc", "rnfbc.zip")));
+        var dep = json.GetProperty("deps").EnumerateArray().Single();
+        Assert.That((dep.GetProperty("setName").GetString(), dep.GetProperty("fileName").GetString(), dep.GetProperty("gameId").GetGuid(), dep.GetProperty("romId").GetInt64()),
+            Is.EqualTo(("rnfbp", "rnfbp.zip", parent.GameId, parent.RomId)));
+        Assert.That((Strings(json, "missing"), Strings(json, "bios")), Is.EqualTo((Array.Empty<string>(), new[] { "rnbios" })), "the BIOS is never a library dep, even when ingested");
+    }
+
+    [Test]
+    public async Task Romset_Fbneo_MissingParent_IsMissing_AndTheBiosStaysInBios()
+    {
+        var clone = await IngestFbneo("rnfbc.zip", MameZip("FBC1"));
+
+        var json = await RomsetJson(clone);
+
+        Assert.That((json.GetProperty("deps").GetArrayLength(), Strings(json, "missing"), Strings(json, "bios")),
+            Is.EqualTo((0, new[] { "rnfbp" }, new[] { "rnbios" })));
+    }
+
+    [Test]
+    public async Task Romset_Fbneo_A7zRelease_IsNamedSetDot7z()
+    {
+        var release = await IngestFbneo("rnfb7z.7z", File.ReadAllBytes(TestFixtures.Basic7zPath));
+
+        var json = await RomsetJson(release);
+
+        Assert.That((json.GetProperty("fileName").GetString(), Strings(json, "bios")), Is.EqualTo(("rnfb7z.7z", new[] { "rnbios" })));
+    }
+
+    [Test]
+    public async Task Romset_Fbneo_SelfContained_FollowsTheHeader()
+    {
+        var parent = await IngestFbneo("rnfbp.zip", MameZip("FBP1"));
+        var clone = await IngestFbneo("rnfbc.zip", MameZip("FBC1"));
+        var ofParent = await RomsetJson(parent);
+        Assert.That((ofParent.GetProperty("selfContained").GetBoolean(), Strings(ofParent, "bios")), Is.EqualTo((true, new[] { "rnbios" })), "selfContained doesn't empty bios");
+        Assert.That((await RomsetJson(clone)).GetProperty("selfContained").GetBoolean(), Is.False);
+
+        await using (var db = Service<IDbConnectionFactory>().Create())
+            await db.ExecuteAsync("UPDATE roms SET header = NULL WHERE id = @id", new { id = clone.RomId });
+
+        Assert.That((await RomsetJson(clone)).GetProperty("selfContained").GetBoolean(), Is.False, "no header (Manual) is not self-contained");
     }
 
     [Test]

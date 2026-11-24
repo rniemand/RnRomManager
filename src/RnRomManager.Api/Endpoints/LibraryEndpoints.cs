@@ -185,7 +185,7 @@ public static class LibraryEndpoints
             return problem ?? LibraryDownload.Send(ctx, attachment!);
         }).WithMetadata(MaintenanceExempt.Instance);
 
-        // Arcade P2: the parent and BIOS romsets a MAME release needs beside it, from the library.
+        // Arcade P2: the parent and BIOS romsets a MAME or FBNeo release needs beside it, from the library (FBNeo BIOS: by name).
         games.MapGet("/{id:guid}/roms/{romId:long}/romset", async (Guid id, long romId, HttpContext ctx, IGameRepository repository,
             IRomRepository roms, ISystemRegistry systems, DatCache dats) =>
         {
@@ -193,7 +193,7 @@ public static class LibraryEndpoints
                 || await repository.GetAsync(id, ctx.RequestAborted) is null
                 || systems.ById(rom.SystemId)?.DatSource.IsRomset() != true)
                 return Problems.NotFound(ctx);
-            return Results.Ok(await MameRomset.ResolveAsync(rom, dats.For(rom.SystemId), roms, ctx.RequestAborted));
+            return Results.Ok(await MameRomset.ResolveAsync(rom, systems.ById(rom.SystemId)!.DatSource, dats.For(rom.SystemId), roms, ctx.RequestAborted));
         }).WithMetadata(MaintenanceExempt.Instance);
 
         // B20: one file of a set, found by the release it belongs to (another release's file id is a 404).
