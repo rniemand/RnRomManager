@@ -2316,7 +2316,7 @@ test("Arcade: a parent set and its clone are one game, and the clone lists its p
   await expect(
     dialog().getByRole("row", { name: "Clone of rnfight" }),
   ).toBeVisible();
-  await page.keyboard.press("Escape");
+  await dialog().getByRole("button", { name: "Close" }).last().click();
   await expect(dialog()).toBeHidden();
 });
 
