@@ -65,7 +65,7 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
             logger.LogError("DAT cache {Path} is missing or corrupt; no system has DATs until an Admin refreshes them: {Error}", manifestPath, ex.Message);
         }
 
-        foreach (var handler in manifest is null ? [] : systems.All)
+        foreach (var handler in manifest is null ? [] : systems.All.Where(h => h.DatSource != DatSource.None)) // N2: no store, no error
         {
             try
             {

@@ -2440,3 +2440,65 @@ describe('play page Nintendo DS (Nintendo DS B4)', () => {
 		expect(atLoader?.EJS_hideSettings).toBeUndefined();
 	});
 });
+
+describe('play page MS-DOS (MS-DOS P5–P8)', () => {
+	/** A browser context; each flag defaults to what DOSBox Pure needs (no WebGL 2). */
+	function browser({ secure = true, isolated = true } = {}) {
+		vi.stubGlobal('isSecureContext', secure);
+		vi.stubGlobal('crossOriginIsolated', isolated);
+	}
+
+	async function playDos(core: string, name: string, page = 'play-dos.html'): Promise<string> {
+		if (page === 'play-dos.html') document.body.dataset.player = 'dos';
+		const query = new URLSearchParams({ game, rom: '12', core, name });
+		history.replaceState(null, '', `/emulator/${page}?${query}`);
+		const { started } = await import('../../static/emulator/play.js');
+		await started;
+		return document.getElementById('status')!.textContent ?? '';
+	}
+
+	it('checks the browser, loads the game ZIP from /download and starts DOSBox Pure threaded', async () => {
+		browser();
+		serve({ [romUrl]: async () => response(200) });
+
+		await playDos('dosbox_pure', 'Doom #1.dosz');
+
+		expect(urls()).toEqual([romUrl]);
+		expect(urls().some((u) => u.includes('play-disc'))).toBe(false);
+		expect(atLoader).toMatchObject({ EJS_core: 'dosbox_pure', EJS_gameName: 'Doom #1.dosz' });
+		expect(atLoader?.EJS_threads).toBe(true);
+		expect(atLoader?.EJS_Buttons).toMatchObject({ saveSavFiles: false, loadSavFiles: false });
+		expect(atLoader?.EJS_biosUrl).toBeUndefined();
+		expect((atLoader?.EJS_gameUrl as File).name).toBe(`${game}-Doom _1.dosz`);
+		// MS-DOS P7: no modal to talk to.
+		expect(messageListeners).toHaveLength(0);
+		delete win.EJS_threads;
+	});
+
+	it.each([
+		[{ secure: false }, 'DOS games need a secure page'],
+		[{ isolated: false }, "This page isn't cross-origin isolated, so DOS games"]
+	])('stops before any request when the browser lacks %o', async (missing, message) => {
+		browser(missing);
+		serve({});
+
+		expect(await playDos('dosbox_pure', 'Doom.dosz')).toMatch(new RegExp(`^${message}`));
+		expect(fetchMock).not.toHaveBeenCalled();
+		expect(atLoader).toBeNull();
+	});
+
+	it('rejects DOSBox Pure on the modal and PSP pages, and other cores on the DOS page', async () => {
+		browser();
+		serve({});
+
+		expect(await playDos('dosbox_pure', 'Doom.dosz', 'play.html')).toBe('Invalid emulator link.');
+		vi.resetModules();
+		document.body.dataset.player = 'psp';
+		expect(await playDos('dosbox_pure', 'Doom.dosz', 'play-psp.html')).toBe(
+			'Invalid emulator link.'
+		);
+		vi.resetModules();
+		expect(await playDos('ppsspp', 'Umd.iso')).toBe('Invalid emulator link.');
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+});

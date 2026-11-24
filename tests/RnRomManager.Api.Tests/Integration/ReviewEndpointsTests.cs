@@ -1389,6 +1389,61 @@ public class ReviewEndpointsTests
         Assert.That(File.Exists(item.SourcePath), Is.False);
     }
 
+    /// <summary>MS-DOS I2: a game ZIP holding one tiny program; over the 64-byte minimum with its headers.</summary>
+    private static byte[] DosZip(byte seed)
+    {
+        using var buffer = new MemoryStream();
+        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+        using (var entry = zip.CreateEntry("DEMO.COM").Open())
+            entry.Write([0xB4, 0x4C, 0xCD, 0x21, seed]);
+        return buffer.ToArray();
+    }
+
+    [Test]
+    public async Task Detail_HasDat_IsFalseForDos_AndTrueForGb()
+    {
+        var gb = await Queue();
+        var bytes = DosZip(1);
+        var path = DropDisc("dos", "Doom (1993)(id Software).zip", bytes);
+        Assert.That((await Ingest(new IngestFile("dos", path, Path.GetFileName(path), bytes.Length, File.GetLastWriteTimeUtc(path))))!.Outcome,
+            Is.EqualTo(IngestOutcome.Review));
+        var dos = (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(bytes)), default))!;
+
+        using var dosDetail = await _admin.GetAsync($"/api/review/{dos.Id}");
+        using var gbDetail = await _admin.GetAsync($"/api/review/{gb.Id}");
+
+        Assert.That((await AuthClient.JsonAsync(dosDetail)).GetProperty("hasDat").GetBoolean(), Is.False);
+        Assert.That((await AuthClient.JsonAsync(gbDetail)).GetProperty("hasDat").GetBoolean(), Is.True);
+    }
+
+    [Test]
+    public async Task Dos_AZipGoesToReview_AndManualStoresItAsDoszNextToTheZip_WithNoIntegrityIssue()
+    {
+        var bytes = DosZip(2);
+        var path = DropDisc("dos", "Doom (1993)(id Software).zip", bytes);
+        var result = await Ingest(new IngestFile("dos", path, Path.GetFileName(path), bytes.Length, File.GetLastWriteTimeUtc(path)));
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "dos")));
+        var item = (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(bytes)), default))!;
+        Assert.That((item.Suggestions, item.ArchivePath), Is.EqualTo(("[]", (string?)null)));
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "Doom", regions = Array.Empty<string>(), languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+
+        Assert.That(response.Code, Is.Null);
+        var row = (await Service<IGameRepository>().GetAsync(response.GameId!.Value, default))!;
+        var rom = (await ReadGame(row.Id)).Roms.Single();
+        var zipBase = Path.GetFileNameWithoutExtension(row.ZipPath);
+        Assert.That(rom.ExternalFileName, Does.StartWith(zipBase + ".").And.EndWith(".dosz"));
+        var folder = Path.GetDirectoryName(Path.Combine(_factory.Root, "roms", row.ZipPath))!;
+        Assert.That(File.ReadAllBytes(Path.Combine(folder, rom.ExternalFileName!)), Is.EqualTo(bytes));
+        Assert.That(Directory.GetFiles(folder, "*.zip").Select(Path.GetFileName), Is.EqualTo(new[] { Path.GetFileName(row.ZipPath) }));
+        Assert.That(File.Exists(path), Is.False);
+
+        var started = await Service<JobRunner>().StartAsync(Service<RnRomManager.Core.Integrity.IntegrityJobFactory>()(JobMode.Deep, null), JobTrigger.Manual, null, default);
+        await started!.Completion.WaitAsync(TimeSpan.FromSeconds(30));
+        var open = (await Service<RnRomManager.Core.Integrity.IIntegrityIssueRepository>().ListAllOpenAsync(default)).Select(i => i.Type);
+        Assert.That(open, Is.All.EqualTo(RnRomManager.Core.Integrity.IntegrityIssueType.DefaultBoxArt), "only the placeholder box art");
+    }
+
     [Test]
     public async Task TurboGrafxCd_UnmatchedChd_WaitsInReview_AndManualStoresItAsChdNextToTheZip()
     {

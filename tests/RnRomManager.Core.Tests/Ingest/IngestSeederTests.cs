@@ -11,15 +11,17 @@ public class IngestSeederTests
     [SetUp] public void SetUp() => _dir = new TempDir();
     [TearDown] public void TearDown() => _dir.Dispose();
 
-    [TestCase(SeedSet.Basic, 42)]
-    [TestCase(SeedSet.Full, 242)]
+    [TestCase(SeedSet.Basic, 43)]
+    [TestCase(SeedSet.Full, 243)]
     public void Sets_HaveExpectedFilesArchivesAndReadyAges(SeedSet set, int count)
     {
         var ingest = _dir.Combine("ingest");
         IngestSeeder.Seed(ingest, _dir.Combine("cache"), set, _time);
         var files = Directory.GetFiles(ingest, "*", SearchOption.AllDirectories);
         Assert.That(files, Has.Length.EqualTo(count));
-        Assert.That(files.Count(f => Path.GetExtension(f) == ".zip"), Is.EqualTo(1));
+        // Archives outside dos/: the DOS game ZIP is a ROM there, not an archive (MS-DOS I1).
+        Assert.That(files.Count(f => Path.GetExtension(f) == ".zip" && Path.GetFileName(Path.GetDirectoryName(f)) != "dos"), Is.EqualTo(1));
+        Assert.That(Directory.GetFiles(Path.Combine(ingest, "dos")).Select(Path.GetFileName), Is.EqualTo(new[] { "Dos Demo (1993)(RnRom).zip" }));
         Assert.That(files.Count(f => Path.GetExtension(f) == ".7z"), Is.EqualTo(1));
         // Switch: a base, its update and a DLC, each a PFS0 of at least 1 KiB naming its ticket, and a ticketless [UPD] update.
         var switchFiles = Directory.GetFiles(Path.Combine(ingest, "switch")).Select(Path.GetFileName).Order(StringComparer.Ordinal);

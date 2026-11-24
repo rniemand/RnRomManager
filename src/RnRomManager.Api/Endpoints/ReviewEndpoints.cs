@@ -64,6 +64,7 @@ public static class ReviewEndpoints
                 dismissible = ReviewResolver.IsDismissible(item, systems, set is not null),
                 fileSets = systems.ById(item.SystemId)?.FileSets ?? false,
                 addOns = systems.ById(item.SystemId)?.DatSource == DatSource.TitleDb, // Attach as DLC is offered for titledb (Switch) items
+                hasDat = systems.ById(item.SystemId)?.DatSource != DatSource.None, // MS-DOS N5: no Suggestions tab; Manual prefilled
                 setMembers = set?.Select(m => new { reviewId = m.Row.Id, fileName = m.Row.OriginalFileName, sizeBytes = m.Row.SizeBytes }),
             });
         });

@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using Microsoft.Extensions.Logging;
 using RnRomManager.Core.Storage;
+using RnRomManager.Core.Systems;
 using SharpCompress.Archives;
 using SharpCompress.Archives.SevenZip;
 using SharpCompress.Readers;
@@ -62,6 +63,10 @@ public sealed class ArchiveExtractor(ILogger<ArchiveExtractor> logger)
     public Func<string, Stream> CreateOutput { get; init; } = path => new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None);
 
     public static bool IsArchive(string fileName) => Extensions.Contains(Path.GetExtension(fileName), StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>MS-DOS spec I1: an archive is a container unless the folder's system lists its extension as a ROM (DOS's <c>.zip</c>).</summary>
+    public static bool IsArchiveFor(ISystemHandler? handler, string fileName) =>
+        IsArchive(fileName) && !(handler?.RomExtensions.Contains(Path.GetExtension(fileName), StringComparer.OrdinalIgnoreCase) ?? false);
 
     /// <param name="maxRomBytes">For an entry's extension: the ROM size limit, or null when it isn't a ROM extension.</param>
     /// <param name="skipped">When given, receives the path of every entry that wasn't extracted (not a ROM here, or a nested archive).</param>

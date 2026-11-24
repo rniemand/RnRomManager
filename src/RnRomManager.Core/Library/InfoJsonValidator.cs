@@ -106,6 +106,9 @@ public static class InfoJsonValidator
                 return $"rom '{rom.FileName}' externalFileName must be at most {MaxExternalFileNameBytes} UTF-8 bytes";
             if (!HasRomExtension(pointer, handler))
                 return $"rom '{rom.FileName}' externalFileName must end with a ROM extension of system '{game.System}'";
+            // MS-DOS S2: Integrity and DbSync read every .zip under roms/<id>/ as a game ZIP.
+            if (pointer.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                return $"rom '{rom.FileName}' externalFileName must not end with .zip";
             if (!seen.Add(pointer))
                 return $"rom '{rom.FileName}' externalFileName is not unique (case-insensitive)";
 

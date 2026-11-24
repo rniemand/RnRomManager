@@ -25,6 +25,7 @@
 		discError,
 		emptyManualForm,
 		manualFileStem,
+		titleFromFileName,
 		toManualRequest,
 		validateManual,
 		type ManualErrors,
@@ -101,7 +102,11 @@
 	};
 	// AmbiguousGroup items can only be attached to a candidate; the other actions need NoDatMatch.
 	const tabs = $derived<Tab[]>(
-		item?.reason === 'AmbiguousGroup' ? ['matched'] : ['suggestions', 'attach', 'manual']
+		item?.reason === 'AmbiguousGroup'
+			? ['matched']
+			: item?.hasDat === false
+				? ['attach', 'manual'] // MS-DOS N6: nothing to suggest or search
+				: ['suggestions', 'attach', 'manual']
 	);
 	let chosenTab = $state<Tab | null>(null);
 	// Default: Suggestions when there are some, else Manual (nothing close matched).
@@ -110,13 +115,16 @@
 			? chosenTab
 			: item?.reason === 'AmbiguousGroup'
 				? 'matched'
-				: item?.suggestions?.length
+				: item?.hasDat !== false && item?.suggestions?.length
 					? 'suggestions'
 					: 'manual'
 	);
 
 	const id = $derived(page.params.id ?? '');
 	const base = $derived(`/api/review/${encodeURIComponent(id)}`);
+
+	/** MS-DOS N7: the item id whose Manual title was prefilled, so a reload of the same item keeps the Admin's edits. */
+	let prefilledFor: number | null = null;
 
 	$effect(() => {
 		if (!auth.isAdmin) return;
@@ -127,7 +135,13 @@
 		notFound = false;
 		item = null;
 		api.get<ReviewDetail>(url, { signal: controller.signal }).then(
-			(i) => (item = i),
+			(i) => {
+				item = i;
+				if (i.hasDat === false && prefilledFor !== i.id) {
+					manual.title = titleFromFileName(i.originalFileName);
+					prefilledFor = i.id;
+				}
+			},
 			(e) => {
 				if (controller.signal.aborted) return;
 				if (isApiError(e) && e.status === 404) notFound = true;
@@ -285,11 +299,11 @@
 		);
 	}
 
-	function submitManual(event: SubmitEvent): void {
-		event.preventDefault();
+	function submitManual(event: SubmitEvent | null, andNext = false): void {
+		event?.preventDefault();
 		manualErrors = validateManual(manual);
 		if (Object.keys(manualErrors).length) return;
-		void resolveWith(toManualRequest(manual), `Added as ${manual.title.trim()}.`);
+		void resolveWith(toManualRequest(manual), `Added as ${manual.title.trim()}.`, andNext);
 	}
 
 	async function dismiss(): Promise<void> {
@@ -791,6 +805,15 @@
 									<p class="form-text">File name: {manualFileStem(manual)}</p>
 								{/if}
 								<button type="submit" class="btn btn-primary" {disabled}>Add manually</button>
+								{#if item.hasDat === false}
+									<button
+										type="button"
+										class="btn btn-outline-primary ms-1"
+										disabled={disabled || typeof next !== 'number'}
+										title={next === 'none' ? 'No more items in the review queue.' : undefined}
+										onclick={() => submitManual(null, true)}>Add and Next</button
+									>
+								{/if}
 							</form>
 						{/if}
 					</div>

@@ -111,11 +111,12 @@ All releases of a game (regions, revisions) **and** its hacks and translations l
 
 ## External ROM files
 
-For an external system (Nintendo Switch, Nintendo DS, Nintendo 3DS and the disc systems) each release is a file in the ZIP's own folder, and a disc set's release also has its other files (`files`, below) there:
+For an external system (Nintendo Switch, Nintendo DS, Nintendo 3DS, MS-DOS and the disc systems) each release is a file in the ZIP's own folder, and a disc set's release also has its other files (`files`, below) there:
 
 - **Name (E1):** `<ZipBase>.<rom fileName>`, where `<ZipBase>` is the ZIP name without `.zip`, so a game's files sort together. When the rom name starts with `<ZipBase>` and a space (ignoring case) and something other than spaces follows, that repeated title is dropped: `Death's Door` + `Death's Door [0100B31015AF8000][v0].nsp` → `Death's Door.[0100B31015AF8000][v0].nsp`, an update → `Death's Door.[0100B31015AF8800][v0][1.0.1].nsp`. A rom name spelled differently from the title, or a ` (N)` ZIP name, keeps the full form (`Orbit` + `Orbit.nsp` → `Orbit.Orbit.nsp`). Only the file on disk is shorter: the logical `fileName` (info.json, downloads) keeps the full name.
 - **Length and clashes (E2):** the whole name, clash suffix included, is at most 250 UTF-8 bytes (so its `.tmp` staging name still fits a 255-byte file-name limit). A longer name is cut from the end of the rom part's stem (the extension is kept), then from `<ZipBase>` if needed, never splitting a character. A name already used by another file or folder, or by another release of any game in that folder, gets ` (2)`, ` (3)`, … The ZIP name of an external game uses the same 250-byte budget, `.zip` and clash suffix included.
 - **Exact names (disc systems):** E1 and E2 don't apply to the files: each keeps its exact name, with no `<ZipBase>.` prefix and no ` (N)` suffix (a set's cue refers to its tracks byte for byte). A name already used in the folder (on disk, by any game's file, or by the ZIP) stops the write with `NameTaken`, and a name over 250 UTF-8 bytes with `NameTooLong`; nothing is cut or renamed.
+- **MS-DOS:** a DOS game ZIP is stored as `<ZipBase>.<stem>.dosz` (DOSBox Pure mounts a `.dosz` as it does a ZIP), never `.zip`: Integrity and the database repair read every `.zip` under `roms/<system>/` as a game ZIP. So an `externalFileName` ending in `.zip` (any case) is invalid on every system: `rom '<fileName>' externalFileName must not end with .zip`.
 - **Pointer (E3):** `info.json` records the file name in `externalFileName`. A missing or damaged file keeps its pointer: integrity reports it (`EntryMissing`, `EntrySizeMismatch`, `HashMismatch`), and ingesting the same bytes after that puts the file back (self-repair).
 - **Writes:** the file is moved into place before the ZIP is written, and moved back if the ZIP write fails; a disc set's files are placed one by one (cue first) and all moved back on a failure. The ZIP write verifies each file it placed or renamed by its recorded length, a set's files included. A title edit renames the ZIP and every external file together (disc systems keep the file names and move them only to a new letter folder); deleting a release moves its files to `ingest/<system>/_removed/`.
 - **Downloads:** each release downloads from its own file (with range support), and each of a disc set's files from its own download link; Download ZIP returns the metadata ZIP only.
@@ -161,7 +162,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 |---|---|---|---|
 | `schemaVersion` | int | ✓ | `8` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c64`, `tgcd`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c64`, `tgcd`, `dos`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
 | `releaseYear` | int? | | from the DAT metadata (titledb's release date for Switch; the disc systems have no metadata DATs) |

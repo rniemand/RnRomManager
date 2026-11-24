@@ -1,0 +1,46 @@
+DOSBox Pure (EmulatorJS core "dosbox_pure", MS-DOS)
+===================================================
+
+Files: dosbox_pure-thread-wasm.data, dosbox_pure-thread-legacy-wasm.data and
+       reports/dosbox_pure.json
+       (npm @emulatorjs/core-dosbox_pure 4.2.3), copied unchanged. The package
+       has threaded payloads only (its report sets requireThreads), so
+       RnRomManager plays MS-DOS only in a cross-origin isolated page.
+
+Corresponding source:
+- Core: https://github.com/EmulatorJS/dosbox-pure/tree/bdabec1651380f3f736eecff8d859090ae822f9b
+  Fork of https://github.com/schellingb/dosbox-pure. The binaries carry no
+  commit string; the payload's report records a build started at
+  2025-06-14T19:59:34Z, and the fork's main branch was then at bdabec1
+  (2025-06-13). The payload's license.txt is byte-identical to LICENSE at that
+  commit.
+- Built with the cores.json entry {"makescript": "Makefile", "buildpath":
+  "./", "arguments": []} and RetroArch's "build-emulatorjs.sh --threads".
+- RetroArch, build scripts and compiler: see COMMON-BUILD.txt.
+
+DOSBox is Copyright (C) 2002-2021 The DOSBox Team; DOSBox Pure's changes are
+Copyright (C) 2020-2025 Bernhard Schelling; some files carry DOSBox-X code by
+Jonathan Campbell (per-file headers).
+
+Licence: GNU General Public License, version 2 or (at your option) any later
+version (the file headers; dosbox_pure-LICENSE.txt is the license.txt inside
+both payloads). RetroArch: GPL-3.0-or-later (retroarch-LICENSE.txt), so the
+combined binaries are distributed under the GPL, version 3.
+
+Components compiled into this build that carry their own terms:
+
+- src/gui/mt32emu.h: libmt32emu (Munt), LGPL-2.1-or-later
+  (dosbox_pure-mt32emu-LICENSE.txt).
+- src/hardware/nukedopl3.cpp and .h: Nuked OPL3 1.8DBP, LGPL-2.1-or-later
+  (dosbox_pure-nukedopl3-LICENSE.txt).
+- src/hardware/mame/sn76496 and saa1099: MAME sound devices, BSD-3-Clause
+  (dosbox_pure-mame-LICENSE.txt).
+- src/gui/tsf.h: TinySoundFont, MIT (dosbox_pure-tsf-LICENSE.txt).
+- src/dos/stb_vorbis.inl: stb_vorbis 1.22, MIT or public domain, at your
+  choice (dosbox_pure-stb_vorbis-LICENSE.txt).
+- src/dos/drive_zip.cpp: an inflate decoder based on miniz.c 1.15 (public
+  domain), inside a GPL-2.0-or-later file.
+- libretro-common/: libretro.h, retro_timers.h, features_cpu.c and the
+  rthreads headers, MIT (dosbox_pure-libretro-common-LICENSE.txt).
+
+No MT-32 ROM, SoundFont or DOS game is part of this core or of RnRomManager.

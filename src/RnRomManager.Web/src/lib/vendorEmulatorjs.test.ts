@@ -54,6 +54,14 @@ const coreLicenses = [
 	'desmume-mono-LICENSE.txt',
 	'desmume-tinyxml-LICENSE.txt',
 	'desmume-xbrz-LICENSE.txt',
+	'dosbox_pure-LICENSE.txt',
+	'dosbox_pure-NOTICE.txt',
+	'dosbox_pure-libretro-common-LICENSE.txt',
+	'dosbox_pure-mame-LICENSE.txt',
+	'dosbox_pure-mt32emu-LICENSE.txt',
+	'dosbox_pure-nukedopl3-LICENSE.txt',
+	'dosbox_pure-stb_vorbis-LICENSE.txt',
+	'dosbox_pure-tsf-LICENSE.txt',
 	'fceumm-LICENSE.txt',
 	'fceumm-NOTICE.txt',
 	'gearcoleco-LICENSE.txt',
@@ -93,7 +101,7 @@ const pinGuard =
 const legacyAnchor =
 	'            let legacy = (this.supportsWebgl2 && this.webgl2Enabled ? "" : "-legacy");\n';
 const threadOverride =
-	'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
+	'            if (["ppsspp", "dosbox_pure"].includes(this.getCore()) && typeof window.SharedArrayBuffer === "function") {\n' +
 	'                threads = true;\n' +
 	'            }\n' +
 	'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc", "vice_xpet", "vice_xvic", "mupen64plus_next"].includes(this.getCore())) {\n' +
@@ -125,8 +133,18 @@ const m3uFirst =
 	'                    if (m3uFile !== undefined && ["yabause", "genesis_plus_gx"].includes(this.getCore())) {\n' +
 	'                        this.fileName = m3uFile;\n' +
 	'                    } else if (isoFile !== null && (supportsExt("iso") || supportsExt("cso") || supportsExt("chd") || supportsExt("elf"))) {\n';
+// MS-DOS P2: DOSBox Pure mounts the downloaded ZIP whole, so it is written to the content name unpacked.
+const altNameAnchor = '                const altName = this.getBaseFileName(true);\n';
+const dosboxWhole =
+	'                if (this.getCore() === "dosbox_pure") {\n' +
+	'                    this.gameManager.FS.writeFile(altName, new Uint8Array(data));\n' +
+	'                    this.fileName = altName;\n' +
+	'                    resolve();\n' +
+	'                    return;\n' +
+	'                }\n';
 const guardedEdits: Record<string, [string, string][]> = {
 	'emulator.js': [
+		[altNameAnchor, altNameAnchor + dosboxWhole],
 		[getCoreAnchor, pinGuard + getCoreAnchor],
 		[legacyAnchor, threadOverride + legacyAnchor],
 		[cdnAnchor, cdnAnchor + cdnSkip],
@@ -137,7 +155,7 @@ const guardedEdits: Record<string, [string, string][]> = {
 				'                try {\n' +
 				'                    bytes = await data.arrayBuffer();\n' +
 				'                } catch (e) {\n' +
-				'                    if (!["ppsspp", "desmume"].includes(this.getCore())) throw e;\n' +
+				'                    if (!["ppsspp", "desmume", "dosbox_pure"].includes(this.getCore())) throw e;\n' +
 				'                    this.startGameError(this.localization("Error reading the game file"));\n' +
 				'                    return;\n' +
 				'                }\n' +
@@ -195,6 +213,7 @@ async function downloadCore(
 		webgl2Enabled = null as boolean | null,
 		savedThreads = null as string | null,
 		savedCore = null as string | null,
+		threads = false,
 		report = async (): Promise<unknown> => ({ data: { buildStart: 1, options: {} } }),
 		payload = async (): Promise<unknown> => ({ data: new ArrayBuffer(4) })
 	} = {}
@@ -209,7 +228,7 @@ async function downloadCore(
 	}) as Record<string, (this: object, ...args: unknown[]) => unknown>;
 	const run: CoreDownload = { requests: [], errors: [] };
 	const ejs = {
-		config: { system: core, threads: false },
+		config: { system: core, threads },
 		debug: true,
 		ejs_version: '4.2.3',
 		supportsWebgl2,
@@ -303,6 +322,9 @@ describe('vendor-emulatorjs', () => {
 				'data/cores/ppsspp-assets.zip',
 				'data/cores/ppsspp-thread-wasm.data',
 				'data/cores/reports/ppsspp.json',
+				'data/cores/dosbox_pure-thread-wasm.data',
+				'data/cores/dosbox_pure-thread-legacy-wasm.data',
+				'data/cores/reports/dosbox_pure.json',
 				'licenses/emulatorjs.txt',
 				...coreLicenses.map((f) => `licenses/${f}`)
 			].sort()
@@ -313,10 +335,24 @@ describe('vendor-emulatorjs', () => {
 		expect(files(out).filter((f) => f.includes('opera'))).toEqual([]);
 		// C64 B7: nor VICE.
 		expect(files(out).filter((f) => f.includes('vice'))).toEqual([]);
-		// PSP B3: PPSSPP's threaded payload is the only one; every other core is single-threaded.
+		// PSP B3, MS-DOS P1: PPSSPP's and DOSBox Pure's threaded payloads are the only ones; every other core is
+		// single-threaded.
 		expect(files(out).filter((f) => f.includes('-thread'))).toEqual([
+			'data/cores/dosbox_pure-thread-legacy-wasm.data',
+			'data/cores/dosbox_pure-thread-wasm.data',
 			'data/cores/ppsspp-thread-wasm.data'
 		]);
+		for (const f of [
+			'dosbox_pure-thread-wasm.data',
+			'dosbox_pure-thread-legacy-wasm.data',
+			'reports/dosbox_pure.json'
+		])
+			expect(
+				readFileSync(join(out, 'data', 'cores', f)).equals(
+					readFileSync(join('node_modules', '@emulatorjs', 'core-dosbox_pure', f))
+				),
+				f
+			).toBe(true);
 		for (const f of ['ppsspp-thread-wasm.data', 'ppsspp-assets.zip', 'reports/ppsspp.json'])
 			expect(
 				readFileSync(join(out, 'data', 'cores', f)).equals(
@@ -342,7 +378,7 @@ describe('vendor-emulatorjs', () => {
 	});
 
 	it.each(['src/emulator.js', 'emulator.min.js'])(
-		'%s forces the threaded payload for PPSSPP only, despite a saved ejs_threads setting',
+		'%s forces the threaded payload for PPSSPP and DOSBox Pure only, despite a saved ejs_threads setting',
 		(file) => {
 			const source = readFileSync(join(out, 'data', file), 'utf8');
 			const select = source.indexOf(legacyAnchor);
@@ -426,6 +462,34 @@ describe('vendor-emulatorjs', () => {
 			expect(
 				await pickedContent(file, 'genesis_plus_gx', ['Game (USA).cue', 'track-01.bin'], genesis)
 			).toBe('Game (USA).cue');
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s hands DOSBox Pure the whole ZIP under the content name, unpacked for other cores (MS-DOS P2)',
+		async (file) => {
+			const names = ['INSTALL.BAT', 'GAME.EXE'];
+			expect(await pickedContent(file, 'dosbox_pure', names, ['zip', 'dosz', 'exe', 'bat'])).toBe(
+				'game'
+			);
+			expect(await pickedContent(file, 'pcsx_rearmed', ['Game.exe'], ['exe'])).toBe('Game.exe');
+		}
+	);
+
+	it.each(['src/emulator.js', 'emulator.min.js'])(
+		'%s picks a threaded DOSBox Pure payload despite a saved disabled threads setting (MS-DOS P2)',
+		async (file) => {
+			const source = readFileSync(join(out, 'data', file), 'utf8');
+			const run = await downloadCore(source, 'dosbox_pure', {
+				threads: true,
+				savedThreads: 'disabled'
+			});
+			expect(run.errors).toEqual([]);
+			expect(run.requests[1]).toMatch(/^cores\/dosbox_pure-thread-(legacy-)?wasm\.data$/);
+			// Without EJS_threads upstream refuses a core that requires threads (P7 sets it).
+			expect((await downloadCore(source, 'dosbox_pure')).errors).toEqual([
+				'Error for site owner\nCheck console'
+			]);
 		}
 	);
 

@@ -33,6 +33,17 @@ export const emptyManualForm = (): ManualForm => ({
 	disc: null
 });
 
+/**
+ * MS-DOS N7: a Manual title from an eXoDOS/TDC-style file name: no extension, cut at the first ` (` or ` [`,
+ * `_` as spaces, whitespace collapsed. `Doom (1993)(id Software).zip` → `Doom`.
+ */
+export function titleFromFileName(fileName: string): string {
+	const dot = fileName.lastIndexOf('.');
+	const stem = dot >= 0 ? fileName.slice(0, dot) : fileName;
+	const cut = stem.search(/ [([]/);
+	return (cut >= 0 ? stem.slice(0, cut) : stem).replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 /** B9: a disc number is a whole number 1–99; `required` for Attach as a disc. */
 export function discError(disc: number | null | undefined, required = false): string | undefined {
 	if (disc === null || disc === undefined || Number.isNaN(disc))

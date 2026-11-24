@@ -167,6 +167,19 @@ public class IngestJobTests
     }
 
     [Test]
+    public void Preflight_ANoneHandlerWithNoDats_DoesNotBlock()
+    {
+        var none = Handler("dos", "DOS");
+        none.DatSource.Returns(DatSource.None);
+        ISystemHandler[] handlers = [.. _systems.All, none];
+        _systems.All.Returns(handlers);
+
+        LoadDats(Gb, Gbc);
+
+        Assert.That(Job().Preflight(), Is.Null);
+    }
+
+    [Test]
     public async Task PrePass_InsertsAZipWithoutADbRow()
     {
         var game = Game("Tetris", Rom("Tetris.gb", RomBytes(1)));
@@ -304,6 +317,45 @@ public class IngestJobTests
     }
 
     private static ISystemHandler DiscX() => new DiscXHandler();
+
+    /// <summary>MS-DOS spec I1: an external no-DAT system whose ROMs are <c>.zip</c> files.</summary>
+    private sealed class ZipRomHandler : ISystemHandler
+    {
+        public string Id => "zipx";
+        public string DisplayName => "Zip X";
+        public string Family => "zipx";
+        public IReadOnlyList<string> RomExtensions => [".dosz", ".zip"];
+        public long MinRomSizeBytes => 1;
+        public long MaxRomSizeBytes => 1024 * 1024;
+        public string DatName => "Test - Zip X";
+        public bool EmbedRomsInZip => false;
+        public DatSource DatSource => DatSource.None;
+        public IReadOnlyList<string> MetadatKinds => [];
+        public ReadOnlyMemory<byte> DefaultBoxArtPng => ExternalTestHandler.FixtureBoxArtPng;
+        public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
+    }
+
+    [Test]
+    public async Task AZipListedAsARomExtension_IsQueuedAsOneFile_NotUnpacked()
+    {
+        ISystemHandler[] handlers = [.. _systems.All, new ZipRomHandler()];
+        _systems.All.Returns(handlers);
+        _systems.ById(Arg.Any<string>()).Returns(c => handlers.FirstOrDefault(h => h.Id == c.Arg<string>()));
+        _systems.ByFamily("zipx").Returns([handlers[^1]]);
+        LoadDats(Gb, Gbc);
+        var zip = Path.Combine(_paths.Ingest, "zipx", "Game (1993).zip");
+        Directory.CreateDirectory(Path.GetDirectoryName(zip)!);
+        using (var archive = System.IO.Compression.ZipFile.Open(zip, System.IO.Compression.ZipArchiveMode.Create))
+        using (var entry = archive.CreateEntry("GAME.COM").Open())
+            entry.Write(RomBytes(31));
+        File.SetLastWriteTimeUtc(zip, DateTime.UtcNow - TimeSpan.FromMinutes(5));
+
+        await RunAsync();
+
+        var item = Recorded().Single();
+        Assert.That((item.SourcePath, item.ArchiveEntry, item.Outcome), Is.EqualTo((zip, (string?)null, IngestOutcome.Review)));
+        Assert.That(File.Exists(zip), Is.True, "left in place for Review");
+    }
 
     /// <summary>Adds <see cref="ExternalSetTestHandler"/> and <see cref="DiscX"/> to the registry, with their empty Redump DATs.</summary>
     private void LoadDiscDats()

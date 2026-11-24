@@ -74,6 +74,7 @@ const base = {
 	dismissible: true,
 	fileSets: false,
 	addOns: false,
+	hasDat: true,
 	setMembers: null,
 	gameId: null,
 	createdAt: ''
@@ -1035,6 +1036,107 @@ describe('review detail page', () => {
 			expect((screen.getByLabelText(/Search the .* DAT/) as HTMLInputElement).value).toBe('');
 			await fireEvent.click(screen.getByRole('tab', { name: 'Manual' }));
 			expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('');
+		});
+
+		describe('a system with no DAT (MS-DOS N6, N7, N9)', () => {
+			const dos = {
+				...noMatch,
+				system: 'dos',
+				systemName: 'MS-DOS',
+				systemShortName: 'DOS',
+				originalFileName: 'Doom (1993)(id Software).zip',
+				suggestions: [],
+				hasDat: false
+			};
+			const addAndNext = () => screen.getByRole('button', { name: 'Add and Next' });
+			const title = () => (screen.getByLabelText('Title') as HTMLInputElement).value;
+
+			it('has Attach and Manual only, opens on Manual with the title from the file name', async () => {
+				answers['GET /api/review/7'] = { status: 200, body: dos };
+				render(ReviewPage);
+				await screen.findByRole('button', { name: 'Add manually' });
+
+				expect(screen.getAllByRole('tab').map((t) => t.textContent!.trim())).toEqual([
+					'Attach',
+					'Manual'
+				]);
+				expect(screen.queryByLabelText(/Search the .* DAT/)).toBeNull();
+				expect(title()).toBe('Doom');
+				for (const field of ['Regions', 'Languages', 'Revision', 'Flags'])
+					expect((screen.getByLabelText(field) as HTMLInputElement).value).toBe('');
+			});
+
+			it('keeps an edited title when the same item loads again', async () => {
+				answers['GET /api/review/7'] = { status: 200, body: dos };
+				render(ReviewPage);
+				await screen.findByRole('button', { name: 'Add manually' });
+				await fireEvent.input(screen.getByLabelText('Title'), { target: { value: 'Doom II' } });
+
+				auth.set(null);
+				await vi.advanceTimersByTimeAsync(10);
+				auth.set({ id: 1, username: 'admin', roles: ['admin'], mustChangePassword: false });
+				await screen.findByRole('button', { name: 'Add manually' });
+
+				expect(title()).toBe('Doom II');
+			});
+
+			it('prefills from the new item when moving to another one', async () => {
+				answers['GET /api/review/7'] = { status: 200, body: dos };
+				answers['GET /api/review/8'] = {
+					status: 200,
+					body: { ...dos, id: 8, originalFileName: 'Commander_Keen_4.zip' }
+				};
+				render(ReviewPage);
+				await screen.findByRole('button', { name: 'Add manually' });
+
+				navigateTo('/review/8');
+				await vi.waitFor(() => expect(title()).toBe('Commander Keen 4'));
+			});
+
+			it('Add and Next follows Add manually and resolves as Manual, marked next', async () => {
+				answers['GET /api/review/7'] = { status: 200, body: dos };
+				answers[`GET ${nextUrl}`] = queue(8);
+				render(ReviewPage);
+				const add = await screen.findByRole('button', { name: 'Add manually' });
+				expect(add.nextElementSibling).toBe(addAndNext());
+				expect(addAndNext().className).toBe('btn btn-outline-primary ms-1');
+				await vi.waitFor(() => expect((addAndNext() as HTMLButtonElement).disabled).toBe(false));
+
+				await fireEvent.click(addAndNext());
+
+				await vi.waitFor(() => expect(reviewJobs.running).not.toBeNull());
+				expect(posts.find((p) => p.url === '/api/review/7/resolve')!.body).toEqual({
+					action: 'Manual',
+					title: 'Doom',
+					regions: [],
+					languages: [],
+					revision: null,
+					flags: []
+				});
+				expect(reviewJobs.running).toMatchObject({ done: 'Added as Doom.', next: true });
+			});
+
+			it('Add and Next is disabled with a title when no other item is left', async () => {
+				answers['GET /api/review/7'] = { status: 200, body: dos };
+				answers[`GET ${nextUrl}`] = queue(7);
+				render(ReviewPage);
+				await screen.findByRole('button', { name: 'Add manually' });
+
+				await vi.waitFor(() =>
+					expect(addAndNext().getAttribute('title')).toBe('No more items in the review queue.')
+				);
+				expect((addAndNext() as HTMLButtonElement).disabled).toBe(true);
+			});
+
+			it('a system with a DAT keeps the Suggestions tab, an empty title and no Add and Next', async () => {
+				answers['GET /api/review/7'] = { status: 200, body: { ...noMatch, suggestions: [] } };
+				render(ReviewPage);
+				await screen.findByRole('button', { name: 'Add manually' });
+
+				expect(screen.getByRole('tab', { name: 'Suggestions' })).toBeTruthy();
+				expect(title()).toBe('');
+				expect(screen.queryByRole('button', { name: 'Add and Next' })).toBeNull();
+			});
 		});
 
 		it('a DAT search answer for the previous item is ignored (B21)', async () => {

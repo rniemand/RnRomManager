@@ -29,9 +29,10 @@ public static class LibraryEndpoints
     /// Play B1: the browser cores that play a release stored outside the ZIP: through play-disc (<see cref="PlayDiscCores"/>) PCSX ReARMed for
     /// PlayStation, (PSP B1) PPSSPP for PlayStation Portable, (Saturn B6) Yabause for Saturn and (Sega CD B5) Genesis Plus GX
     /// for Sega CD, (TurboGrafx-CD B5) Beetle PCE for TurboGrafx-CD. Eligibility is per core, so Genesis Plus GX also accepts an external primary of Mega Drive, a family that
-    /// the registry keeps embedded. S8: DeSmuME plays an external DS release from <c>/download</c>.
+    /// the registry keeps embedded. S8: DeSmuME plays an external DS release from <c>/download</c>, and (MS-DOS P3) DOSBox Pure an
+    /// external DOS game ZIP.
     /// </summary>
-    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "desmume", "mednafen_pce" };
+    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "desmume", "mednafen_pce", "dosbox_pure" };
 
     /// <summary>S8: the cores whose external releases play through <c>play-disc</c>; any other (DS) loads from <c>/download</c>.</summary>
     public static readonly IReadOnlySet<string> PlayDiscCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "mednafen_pce" };

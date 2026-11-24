@@ -18,7 +18,11 @@ public class InfoJsonTests
 
     private static InfoJsonReader Reader(params IInfoJsonUpgrader[] upgraders)
     {
-        ISystemHandler[] handlers = [Handler("gb"), Handler("gbc"), new ExternalTestHandler(), new ExternalSetTestHandler(), new LegacyExternalTestHandler()];
+        var zipRoms = Substitute.For<ISystemHandler>();
+        zipRoms.Id.Returns("zipx");
+        zipRoms.RomExtensions.Returns([".dosz", ".zip"]);
+        zipRoms.MaxRomSizeBytes.Returns(1L << 30);
+        ISystemHandler[] handlers = [Handler("gb"), Handler("gbc"), new ExternalTestHandler(), new ExternalSetTestHandler(), new LegacyExternalTestHandler(), zipRoms];
         var registry = Substitute.For<ISystemRegistry>();
         registry.All.Returns(handlers);
         return new InfoJsonReader([new InfoJsonUpgraderV1(), new InfoJsonUpgraderV2(), new InfoJsonUpgraderV3(), new InfoJsonUpgraderV4(), new InfoJsonUpgraderV5(), new InfoJsonUpgraderV6(), new InfoJsonUpgraderV7(), .. upgraders], registry);
@@ -521,6 +525,15 @@ public class InfoJsonTests
     [TestCaseSource(nameof(InvalidPointers))]
     public void ExternalFileName_ThatCouldLeaveTheFolderOrIsNotARom_IsInvalid(string pointer, string rule) =>
         Assert.That(RuleOf(ReadGame(ExtGame(ExtRom(pointer)))), Does.Contain("externalFileName").And.Contain(rule));
+
+    [Test]
+    public void ExternalFileName_EndingZip_IsRefused_EvenWhenTheSystemListsZip()
+    {
+        static InfoJsonGame ZipGame(string pointer) => Game() with { System = "zipx", Roms = [ExtRom(pointer, "Game.dosz")] };
+
+        Assert.That(RuleOf(ReadGame(ZipGame("Game.x.ZIP"))), Is.EqualTo("rom 'Game.dosz' externalFileName must not end with .zip"));
+        Assert.That(ReadGame(ZipGame("Game.x.dosz")).Kind, Is.EqualTo(InfoJsonReadResult.Outcome.Ok));
+    }
 
     [Test]
     public void ExternalSystem_WithoutAPointer_IsInvalid() =>

@@ -1,6 +1,8 @@
 using System.IO.Compression;
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using RnRomManager.Core.Ingest;
+using RnRomManager.Core.Systems;
 using RnRomManager.TestData;
 
 namespace RnRomManager.Core.Tests.Ingest;
@@ -26,6 +28,21 @@ public class ArchiveExtractorTests
     private static long? RomLimit(string ext) => ext.Equals(".gb", StringComparison.OrdinalIgnoreCase) || ext == ".gbc" ? MaxRom : null;
 
     private string Work => _dir.Combine("work");
+
+    [Test]
+    public void IsArchiveFor_IsFalseOnlyWhenTheHandlerListsTheExtension()
+    {
+        var plain = Substitute.For<ISystemHandler>();
+        plain.RomExtensions.Returns([".gb"]);
+        var dos = Substitute.For<ISystemHandler>();
+        dos.RomExtensions.Returns([".dosz", ".zip"]);
+
+        Assert.That(ArchiveExtractor.IsArchiveFor(null, "a.zip"), Is.True);
+        Assert.That(ArchiveExtractor.IsArchiveFor(plain, "a.ZIP"), Is.True);
+        Assert.That(ArchiveExtractor.IsArchiveFor(plain, "a.gb"), Is.False);
+        Assert.That(ArchiveExtractor.IsArchiveFor(dos, "a.ZIP"), Is.False);
+        Assert.That(ArchiveExtractor.IsArchiveFor(dos, "a.7z"), Is.True);
+    }
 
     private string Zip(params (string Name, byte[] Bytes)[] entries) => Zip(null, entries);
 

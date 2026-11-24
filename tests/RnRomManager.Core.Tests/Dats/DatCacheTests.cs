@@ -61,6 +61,27 @@ public class DatCacheTests
     });
 
     [Test]
+    public void ANoneHandler_GetsNoStoreAndNoError_StrictOrNot()
+    {
+        var none = Substitute.For<ISystemHandler>();
+        none.Id.Returns("dos");
+        none.DatName.Returns("DOS");
+        none.DatSource.Returns(DatSource.None);
+        ISystemHandler[] handlers = [Handler("gb", Gb, ".gb"), Handler("gbc", Gbc, ".gbc", ".cgb"), none];
+        var registry = Substitute.For<ISystemRegistry>();
+        registry.All.Returns(handlers);
+        var cache = new DatCache(Options.Create(new PathsOptions { Cache = _dir.Path }), registry, NullLogger<DatCache>.Instance);
+        WriteFixtures();
+
+        cache.Load();
+        var prepared = cache.Prepare(cache.Directory);
+
+        Assert.That(cache.For("dos"), Is.Null);
+        Assert.That(cache.For("gb"), Is.Not.Null);
+        Assert.That(prepared.Keys, Is.EquivalentTo(new[] { "gb", "gbc" }));
+    }
+
+    [Test]
     public void WriterThenLoader_RoundTripsHashesVersionAndMetadat()
     {
         WriteFixtures();

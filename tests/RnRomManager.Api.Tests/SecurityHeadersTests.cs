@@ -88,7 +88,7 @@ public class SecurityHeadersTests
         var emulator = Path.Combine(webRoot, "emulator");
         Directory.CreateDirectory(Path.Combine(emulator, "vendor", "data"));
         var source = Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "src", "RnRomManager.Web", "static", "emulator");
-        foreach (var page in new[] { "play.html", "play-psp.html", "play.css" })
+        foreach (var page in new[] { "play.html", "play-psp.html", "play-dos.html", "play.css" })
             File.Copy(Path.Combine(source, page), Path.Combine(emulator, page));
         File.WriteAllText(Path.Combine(emulator, "vendor", "data", "loader.js"), "console.log(1);");
         File.WriteAllText(Path.Combine(webRoot, "index.html"), IndexHtml.ReplaceLineEndings("\n"));
@@ -96,14 +96,15 @@ public class SecurityHeadersTests
         return (factory, factory.CreateClient());
     }
 
-    [Test]
-    public async Task ThePspDocument_IsCrossOriginIsolated_AndCannotBeFramed()
+    [TestCase("/emulator/play-psp.html")]
+    [TestCase("/emulator/play-dos.html")]
+    public async Task TheIsolatedDocuments_AreCrossOriginIsolated_AndCannotBeFramed(string path)
     {
         var (factory, client) = EmulatorSite();
         using var _ = factory;
         using var __ = client;
 
-        using var response = await client.GetAsync("/emulator/play-psp.html");
+        using var response = await client.GetAsync(path);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("play.css").And.Contain("play.js"));
@@ -114,6 +115,11 @@ public class SecurityHeadersTests
             + "img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'"));
         Assert.That(response.Headers.GetValues("X-Content-Type-Options").Single(), Is.EqualTo("nosniff"));
     }
+
+    // The match ignores case; the static file server doesn't on Linux, so this is checked on the set, not by a request.
+    [Test]
+    public void IsolatedDocumentPaths_IgnoreCase() =>
+        Assert.That(SecurityHeaders.IsolatedDocumentPaths.Contains("/Emulator/Play-DOS.html"), Is.True);
 
     [TestCase("/emulator/play.html", "frame-ancestors 'self'")]
     [TestCase("/emulator/play.css", "frame-ancestors 'self'")]

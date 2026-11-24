@@ -31,6 +31,7 @@ public class BrowserCoreExtensionsTests
         ["a5200"] = "a52|bin",
         ["beetle_vb"] = "vb|vboy|bin",
         ["desmume"] = "nds|ids|bin",
+        ["dosbox_pure"] = "zip|dosz|exe|com|bat|iso|chd|cue|ins|img|ima|vhd|jrc|tc|m3u|m3u8|conf|/",
         ["fceumm"] = "fds|nes|unf|unif",
         ["gambatte"] = "gb|gbc|dmg",
         ["gearcoleco"] = "col|cv|bin|rom",
@@ -148,7 +149,9 @@ public class BrowserCoreExtensionsTests
         (NoDat, Vice, [".g41", ".g4z"]),
         ("the DS DAT's .bin entries are save data and seminar demos, which DatStore would match (D1)", ["desmume"], [".bin"]),
         (OtherCommodore, ["vice_xpet"], [".crt", ".bin", ".tcrt", ".nib", ".nbz", ".d2m", ".d4m"]),
-        (OtherCommodore, ["vice_xvic"], [".nib", ".nbz", ".d2m", ".d4m", ".d80", ".d82"]));
+        (OtherCommodore, ["vice_xvic"], [".nib", ".nbz", ".d2m", ".d4m", ".d80", ".d82"]),
+        ("DOS games are ingested as one .zip or .dosz; put loose files and disc images inside it", ["dosbox_pure"],
+            [".exe", ".com", ".bat", ".iso", ".chd", ".cue", ".ins", ".img", ".ima", ".vhd", ".jrc", ".tc", ".m3u", ".m3u8", ".conf", "./"]));
 
     private static Dictionary<(string Core, string Extension), string> Entries(params (string Reason, string[] Cores, string[] Extensions)[] groups)
     {

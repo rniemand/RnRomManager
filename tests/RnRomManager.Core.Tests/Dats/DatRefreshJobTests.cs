@@ -113,6 +113,24 @@ public partial class DatRefreshJobTests
     }
 
     [Test]
+    public async Task ANoneHandler_DownloadsNothing_AndTheRefreshSucceeds()
+    {
+        var none = Substitute.For<ISystemHandler>();
+        none.Id.Returns("dos");
+        none.DatName.Returns("DOS");
+        none.DatSource.Returns(DatSource.None);
+        ISystemHandler[] handlers = [.. _systems.All, none];
+        _systems.All.Returns(handlers);
+        var server = Server();
+
+        await RunAsync(server);
+
+        Assert.That(server.Requests, Has.Count.EqualTo(10), "gb and gbc only");
+        Assert.That(_cache.For("gb")!.Version, Is.EqualTo("v2"));
+        Assert.That(_cache.For("dos"), Is.Null);
+    }
+
+    [Test]
     public async Task Success_RecordsOneDatsRefreshedRow_WithTheJobActorAndDatNames()
     {
         WriteLiveV1();

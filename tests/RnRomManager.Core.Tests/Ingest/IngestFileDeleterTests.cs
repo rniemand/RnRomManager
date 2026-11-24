@@ -31,7 +31,12 @@ public class IngestFileDeleterTests
         gb.EmbedRomsInZip.Returns(true);
         gb.Id.Returns("gb");
         gb.Family.Returns("gameboy");
-        _systems = new SystemRegistry([gb, new ExternalTestHandler()]);
+        var zipRoms = Substitute.For<ISystemHandler>();
+        zipRoms.Id.Returns("zipx");
+        zipRoms.Family.Returns("zipx");
+        zipRoms.RomExtensions.Returns([".dosz", ".zip"]);
+        _systems = new SystemRegistry([gb, new ExternalTestHandler(), zipRoms]);
+        Directory.CreateDirectory(Path.Combine(_paths.Ingest, "zipx"));
         Directory.CreateDirectory(Path.Combine(_paths.Ingest, "ext", "_failed"));
         _lock = new JobLock();
         _reviews = Substitute.For<IIngestReviewRepository>();
@@ -238,6 +243,17 @@ public class IngestFileDeleterTests
         {
             TestLinks.RemoveDirectoryLink(link);
         }
+    }
+
+    [Test]
+    public async Task Pending_AZipTheSystemListsAsARom_DeletesItsOwnRow_NotArchiveRows()
+    {
+        var zip = Write("zipx", "Game.ZIP");
+
+        var result = await _deleter.DeleteAsync([new IngestDeleteRef("zipx", "pending", "Game.ZIP")], Actor, default);
+
+        Assert.That(result.Deleted, Is.EqualTo(1));
+        await _reviews.Received(1).DeletePendingBySourceAsync(zip, null, Arg.Any<CancellationToken>());
     }
 
     [Test]

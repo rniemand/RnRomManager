@@ -24,6 +24,7 @@
   { "name": "@emulatorjs/core-a5200", "license": "GPL-2.0", "url": "https://github.com/EmulatorJS/a5200" },
   { "name": "@emulatorjs/core-beetle_vb", "license": "GPL-2.0", "url": "https://github.com/EmulatorJS/beetle-vb-libretro" },
   { "name": "@emulatorjs/core-desmume", "license": "GPL-2.0-or-later AND GPL-3.0 AND BSD-3-Clause AND Zlib AND MIT, plus public-domain md5.h declarations", "url": "https://github.com/EmulatorJS/desmume" },
+  { "name": "@emulatorjs/core-dosbox_pure", "license": "GPL-2.0-or-later AND LGPL-2.1-or-later AND BSD-3-Clause AND MIT, plus the public-domain stb_vorbis and miniz-based inflate", "url": "https://github.com/EmulatorJS/dosbox-pure" },
   { "name": "@emulatorjs/core-fceumm", "license": "GPL-2.0-or-later AND LGPL-2.1-or-later AND BSD-3-Clause AND MIT", "url": "https://github.com/EmulatorJS/libretro-fceumm" },
   { "name": "@emulatorjs/core-gambatte", "license": "GPL-2.0", "url": "https://github.com/EmulatorJS/gambatte-libretro" },
   { "name": "@emulatorjs/core-gearcoleco", "license": "GPL-3.0-or-later", "url": "https://github.com/EmulatorJS/Gearcoleco" },

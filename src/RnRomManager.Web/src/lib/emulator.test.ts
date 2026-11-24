@@ -231,6 +231,16 @@ describe('playUrl', () => {
 			);
 	});
 
+	it('points DOSBox Pure at the isolated DOS page, without play-disc (MS-DOS P3, P5)', () => {
+		expect(playUrl('g-6', { id: 3, fileName: 'Dos Demo.dosz' }, 'dosbox_pure', false)).toBe(
+			'/emulator/play-dos.html?game=g-6&rom=3&core=dosbox_pure&name=Dos%20Demo.dosz'
+		);
+		expect(usesPlayDisc('dosbox_pure', { externalFileName: 'Dos Demo.dosz' })).toBe(false);
+		expect(canPlay({ browserCore: 'dosbox_pure' }, { externalFileName: 'Dos Demo.dosz' })).toBe(
+			true
+		);
+	});
+
 	it('adds &disc=1 after name only for a disc release (Sega CD B6)', () => {
 		expect(
 			playUrl('g-3', { id: 4, fileName: 'Disc & Co (USA).cue' }, 'genesis_plus_gx', true)
@@ -267,8 +277,9 @@ describe('playUrl', () => {
 });
 
 describe('opensInNewTab', () => {
-	it('is true only for PPSSPP', () => {
+	it('is true only for PPSSPP and DOSBox Pure', () => {
 		expect(opensInNewTab('ppsspp')).toBe(true);
+		expect(opensInNewTab('dosbox_pure')).toBe(true);
 		for (const core of ['pcsx_rearmed', 'gambatte', 'smsplus', null])
 			expect(opensInNewTab(core)).toBe(false);
 	});
