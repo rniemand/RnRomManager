@@ -407,7 +407,8 @@ public class IgdbClientTests
 
         Assert.That(result.Matches!.Select(m => (m.IgdbId, m.Name)), Is.EqualTo(new[] { (3, "B"), (5, "A") }));
         var first = result.Matches![0];
-        Assert.That((first.ReleaseYear, first.Description, first.CoverUrl, first.Url), Is.EqualTo(((int?)null, (string?)null, (string?)null, (string?)null)));
+        Assert.That((first.ReleaseYear, first.Description, first.CoverUrl, first.CoverImageUrl, first.Url),
+            Is.EqualTo(((int?)null, (string?)null, (string?)null, (string?)null, (string?)null)));
         Assert.That(first.Developers.Concat(first.Publishers).Concat(first.Genres), Is.Empty);
     }
 
@@ -484,11 +485,15 @@ public class IgdbClientTests
         Assert.That((await LookupOne("""{"id":1,"name":"A","summary":"   "}""")).Description, Is.Null);
     }
 
-    [TestCase("co1abc", "https://images.igdb.com/igdb/image/upload/t_cover_small/co1abc.jpg")]
-    [TestCase("../x", null)]
-    [TestCase("", null)]
-    public async Task Lookup_CoverUrl_OnlyForSafeImageIds(string imageId, string? expected) =>
-        Assert.That((await LookupOne($$$"""{"id":1,"name":"A","cover":{"image_id":"{{{imageId}}}"}}""")).CoverUrl, Is.EqualTo(expected));
+    [TestCase("co1abc", "https://images.igdb.com/igdb/image/upload/t_cover_small/co1abc.jpg",
+        "https://images.igdb.com/igdb/image/upload/t_1080p/co1abc.jpg")]
+    [TestCase("../x", null, null)]
+    [TestCase("", null, null)]
+    public async Task Lookup_CoverUrls_OnlyForSafeImageIds(string imageId, string? thumbnail, string? full)
+    {
+        var match = await LookupOne($$$"""{"id":1,"name":"A","cover":{"image_id":"{{{imageId}}}"}}""");
+        Assert.That((match.CoverUrl, match.CoverImageUrl), Is.EqualTo((thumbnail, full)));
+    }
 
     [TestCase("https://www.igdb.com/games/orbit", "https://www.igdb.com/games/orbit")]
     [TestCase("https://evil.example/games/orbit", null)]

@@ -12,7 +12,7 @@
 
 	/** What the detail page does next: show this game, go to another game (null = Library), or reload. */
 	export type AdminOutcome =
-		| { game: GameDetail; message: string }
+		| { game: GameDetail; message: string; warning?: boolean }
 		| { goTo: string | null; message: string }
 		| { reload: true; message?: string; warning?: boolean };
 </script>
@@ -63,6 +63,10 @@
 	let editTab = $state<'details' | 'lookup'>('details');
 	/** M4: Lookup Info changed the form; cleared when the modal reopens. */
 	let igdbApplied = $state(false);
+	/** The used match's full-size cover, added as the box art cover after the save; cleared when the modal reopens. */
+	let pendingCover = $state<string | null>(null);
+	/** Only a game without real box art (none, or just the placeholder) takes the match's cover. */
+	const needsCover = $derived(!game.images.some((i) => i.type === 'BoxArt' && !i.isDefault));
 
 	/** GP5: the display title without `(…)`/`[…]` tags, cut to `GameQuery.MaxWords` (8) words. */
 	function mergeTerm(title: string): string {
@@ -118,6 +122,7 @@
 		form = untrack(() => toForm(game));
 		editTab = action.kind === 'edit' && action.lookup ? 'lookup' : 'details';
 		igdbApplied = false;
+		pendingCover = null;
 		suggestionController?.abort();
 		suggestions = [];
 		if (action.kind === 'merge') void untrack(loadSuggestions);
@@ -152,7 +157,10 @@
 					editTab = 'details';
 					return null;
 				}
-				return { game: await api.patch<GameDetail>(base, toPatch(form)), message: 'Saved.' };
+				const saved = await api.patch<GameDetail>(base, toPatch(form));
+				return pendingCover
+					? await addCover(saved, pendingCover)
+					: { game: saved, message: 'Saved.' };
 			}
 			case 'retry':
 				return {
@@ -204,6 +212,29 @@
 					? { goTo: done.targetGameId, message: `${a.rom.fileName} moved.` }
 					: { reload: true, message: `${a.rom.fileName} moved.` };
 			}
+		}
+	}
+
+	/**
+	 * After the metadata save: downloads the match's cover as box art (it replaces the placeholder and takes its cover
+	 * status), then makes it the cover if another image still is. A failure here keeps the saved metadata.
+	 */
+	async function addCover(saved: GameDetail, url: string): Promise<AdminOutcome> {
+		let detail = saved;
+		try {
+			detail = await api.post<GameDetail>(`${base}/images/from-url`, { url, type: 'BoxArt' });
+			// The game had no real box art, so the only one now is the one just added.
+			const added = detail.images.find((i) => i.type === 'BoxArt' && !i.isDefault);
+			if (added && !added.isCover)
+				detail = await api.post<GameDetail>(`${base}/images/${added.id}/cover`);
+			return { game: detail, message: 'Saved, with the IGDB cover.' };
+		} catch (e) {
+			const reason = isApiError(e) ? e.title : 'Something went wrong.';
+			return {
+				game: detail,
+				message: `Saved, but the IGDB cover couldn't be added: ${reason}`,
+				warning: true
+			};
 		}
 	}
 
@@ -296,7 +327,8 @@
 		>
 			{#if igdbApplied}
 				<div class="alert alert-info py-2" role="status">
-					IGDB values applied. Save to keep them.
+					<span>IGDB values applied. Save to keep them.</span>
+					{#if pendingCover}<span>Saving also adds the IGDB cover as the game's cover.</span>{/if}
 				</div>
 			{/if}
 			<!-- The keydown only handles Enter bubbling up from the form's own fields. -->
@@ -380,7 +412,10 @@
 							<button
 								type="button"
 								class="btn btn-link btn-sm p-0 ms-1 align-baseline"
-								onclick={() => (form.igdbId = null)}>Unlink</button
+								onclick={() => {
+									form.igdbId = null;
+									pendingCover = null;
+								}}>Unlink</button
 							>
 						{/if}
 						{#if errors.igdbId}<div class="invalid-feedback d-block">{errors.igdbId}</div>{/if}
@@ -401,11 +436,12 @@
 				{game}
 				{form}
 				autostart={action.lookup}
-				onapply={(next, save) => {
+				onapply={(next, options) => {
 					form = next;
 					editTab = 'details';
 					igdbApplied = true;
-					if (save) void confirm();
+					pendingCover = (needsCover && options?.match?.coverImageUrl) || null;
+					if (options?.save) void confirm();
 				}}
 			/>
 		</div>

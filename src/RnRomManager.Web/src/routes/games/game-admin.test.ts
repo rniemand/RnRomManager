@@ -723,7 +723,7 @@ describe('game detail admin actions', () => {
 
 			expect(tab('Details').getAttribute('aria-selected')).toBe('true');
 			const note = modal().getByText('IGDB values applied. Save to keep them.');
-			expect(note.className).toContain('alert-info');
+			expect(note.closest('.alert-info')).toBeTruthy();
 			expect(note.closest('#edit-details-panel')).toBeTruthy();
 			expect(modal().getByText('IGDB: marked as not on IGDB')).toBeTruthy();
 			expect(calls.some((c) => c.startsWith('PATCH'))).toBe(false);
@@ -747,6 +747,7 @@ describe('game detail admin actions', () => {
 								genres: ['Puzzle'],
 								description: 'Falling blocks.',
 								coverUrl: null,
+								coverImageUrl: null,
 								url: null
 							}
 						]
@@ -804,6 +805,7 @@ describe('game detail admin actions', () => {
 								genres: ['Puzzle'],
 								description: 'Falling blocks.',
 								coverUrl: null,
+								coverImageUrl: null,
 								url: null
 							}
 						]
@@ -832,6 +834,160 @@ describe('game detail admin actions', () => {
 				genres: ['Puzzle'],
 				description: 'Falling blocks.',
 				igdbId: 1234
+			});
+		});
+
+		describe('the IGDB cover', () => {
+			const full = 'https://images.igdb.com/igdb/image/upload/t_1080p/co1.jpg';
+			const image = (id: number, type: 'BoxArt' | 'Snap', changes = {}) => ({
+				id,
+				type,
+				fileName: `${type.toLowerCase()}-${id}.jpg`,
+				source: 'upload',
+				isDefault: false,
+				isCover: false,
+				sizeBytes: 1,
+				width: 1,
+				height: 1,
+				url: `/api/games/g1/images/${id}`,
+				...changes
+			});
+			const placeholder = image(1, 'BoxArt', { source: 'default', isDefault: true, isCover: true });
+
+			/** Opens Lookup Info on a game with these images and selects a match that has a cover. */
+			const pickMatch = async (images: ReturnType<typeof image>[]) => {
+				answers['GET /api/games/g1/igdb-matches?q=Tetris'] = [
+					{
+						status: 200,
+						body: {
+							matches: [
+								{
+									igdbId: 1234,
+									name: 'Tetris DX',
+									releaseYear: 1998,
+									developers: [],
+									publishers: [],
+									genres: [],
+									description: null,
+									coverUrl: 'https://images.igdb.com/igdb/image/upload/t_cover_small/co1.jpg',
+									coverImageUrl: full,
+									url: null
+								}
+							]
+						}
+					}
+				];
+				answers['PATCH /api/games/g1'] = [{ status: 200, body: { ...game([1]), images } }];
+				await openEdit(configured({ images }));
+				await fireEvent.click(tab('Lookup Info'));
+				await fireEvent.submit(modal().getByLabelText('Search IGDB for').closest('form')!);
+				await fireEvent.click(
+					await modal().findByRole('button', { name: /Tetris DX/, hidden: true })
+				);
+			};
+			const useAndSave = () =>
+				fireEvent.click(
+					modal().getByRole('button', { name: 'Use this match and save', hidden: true })
+				);
+
+			beforeEach(() => {
+				toasts.items.length = 0;
+			});
+
+			it('Use this match adds nothing until Save; Save adds the cover as box art after the metadata', async () => {
+				await pickMatch([placeholder]);
+				answers['POST /api/games/g1/images/from-url'] = [
+					{
+						status: 200,
+						body: { ...game([1]), images: [image(2, 'BoxArt', { isCover: true })] }
+					}
+				];
+				await fireEvent.click(
+					modal().getByRole('button', { name: 'Use this match', hidden: true })
+				);
+
+				expect(
+					modal().getByText("Saving also adds the IGDB cover as the game's cover.")
+				).toBeTruthy();
+				expect(calls.some((c) => c.startsWith('POST'))).toBe(false);
+
+				await fireEvent.click(modal().getByRole('button', { name: 'Edit Metadata', hidden: true }));
+				await vi.waitFor(() => expect(calls).toContain('POST /api/games/g1/images/from-url'));
+				expect(calls.indexOf('PATCH /api/games/g1')).toBeLessThan(
+					calls.indexOf('POST /api/games/g1/images/from-url')
+				);
+				expect(bodies['POST /api/games/g1/images/from-url']).toEqual({ url: full, type: 'BoxArt' });
+				// The new box art replaced the placeholder as the cover, so nothing else is called.
+				expect(calls.some((c) => c.endsWith('/cover'))).toBe(false);
+				await vi.waitFor(() =>
+					expect(toasts.items.at(-1)).toMatchObject({
+						text: 'Saved, with the IGDB cover.',
+						kind: 'success'
+					})
+				);
+			});
+
+			it('Use this match and save makes the new box art the cover when another image is', async () => {
+				const snap = image(5, 'Snap', { isCover: true });
+				await pickMatch([snap]);
+				answers['POST /api/games/g1/images/from-url'] = [
+					{
+						status: 200,
+						body: {
+							...game([1]),
+							images: [image(6, 'Snap', { isCover: true }), image(7, 'BoxArt')]
+						}
+					}
+				];
+				answers['POST /api/games/g1/images/7/cover'] = [
+					{
+						status: 200,
+						body: {
+							...game([1]),
+							images: [image(8, 'Snap'), image(9, 'BoxArt', { isCover: true })]
+						}
+					}
+				];
+				await useAndSave();
+
+				await vi.waitFor(() => expect(calls).toContain('POST /api/games/g1/images/7/cover'));
+				expect(calls).toEqual(
+					expect.arrayContaining(['PATCH /api/games/g1', 'POST /api/games/g1/images/from-url'])
+				);
+			});
+
+			it('a game with real box art keeps it', async () => {
+				await pickMatch([image(3, 'BoxArt', { isCover: true })]);
+				await fireEvent.click(
+					modal().getByRole('button', { name: 'Use this match', hidden: true })
+				);
+				expect(
+					modal().queryByText("Saving also adds the IGDB cover as the game's cover.")
+				).toBeNull();
+
+				await fireEvent.click(modal().getByRole('button', { name: 'Edit Metadata', hidden: true }));
+				await vi.waitFor(() => expect(calls).toContain('PATCH /api/games/g1'));
+				await vi.waitFor(() => expect(toasts.items.at(-1)?.text).toBe('Saved.'));
+				expect(calls.some((c) => c.includes('/images'))).toBe(false);
+			});
+
+			it('a failed cover download keeps the saved metadata and warns', async () => {
+				await pickMatch([placeholder]);
+				answers['POST /api/games/g1/images/from-url'] = [
+					{
+						status: 502,
+						body: { code: 'DownloadFailed', title: "The image couldn't be downloaded." }
+					}
+				];
+				await useAndSave();
+
+				await vi.waitFor(() =>
+					expect(toasts.items.at(-1)).toMatchObject({
+						text: "Saved, but the IGDB cover couldn't be added: The image couldn't be downloaded.",
+						kind: 'warning'
+					})
+				);
+				expect(calls).toContain('PATCH /api/games/g1');
 			});
 		});
 

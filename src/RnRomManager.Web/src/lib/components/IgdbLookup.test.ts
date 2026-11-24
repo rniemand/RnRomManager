@@ -35,6 +35,7 @@ const match = (igdbId: number, changes: Partial<IgdbMatch> = {}): IgdbMatch => (
 	genres: [],
 	description: null,
 	coverUrl: `https://images.igdb.com/igdb/image/upload/t_cover_small/co${igdbId}.jpg`,
+	coverImageUrl: `https://images.igdb.com/igdb/image/upload/t_1080p/co${igdbId}.jpg`,
 	url: null,
 	...changes
 });
@@ -315,7 +316,7 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 					publishers: 'Nintendo\nCapcom',
 					igdbId: 9
 				}),
-				false
+				{ match: expect.objectContaining({ igdbId: 9 }), save: false }
 			);
 		});
 
@@ -326,7 +327,10 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 
 			await fireEvent.click(screen.getByRole('button', { name: 'Use this match' }));
 
-			expect(onapply).toHaveBeenCalledWith(form({ igdbId: 9 }), false);
+			expect(onapply).toHaveBeenCalledWith(form({ igdbId: 9 }), {
+				match: expect.objectContaining({ igdbId: 9 }),
+				save: false
+			});
 		});
 
 		it('Use this match and save copies the ticked fields and asks to save', async () => {
@@ -338,7 +342,7 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 			await fireEvent.click(save);
 
 			expect(onapply).toHaveBeenCalledTimes(1);
-			expect(onapply.mock.calls[0][1]).toBe(true);
+			expect(onapply.mock.calls[0][1]).toMatchObject({ match: { igdbId: 9 }, save: true });
 			expect(onapply.mock.calls[0][0]).toMatchObject({ title: 'Tetris DX', igdbId: 9 });
 		});
 	});

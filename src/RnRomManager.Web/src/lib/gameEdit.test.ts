@@ -31,6 +31,7 @@ const match = (changes: Partial<IgdbMatch> = {}): IgdbMatch => ({
 	genres: ['Puzzle'],
 	description: 'Falling blocks.',
 	coverUrl: null,
+	coverImageUrl: null,
 	url: null,
 	...changes
 });
