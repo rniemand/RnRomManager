@@ -21,7 +21,7 @@ public class DosHandlerTests
     }
 
     [Test]
-    public void BrowserCore_IsNotSetUntilTheCoreIsVendored() => Assert.That(Handler.BrowserCore, Is.Null);
+    public void BrowserCore_IsDosboxPure() => Assert.That(Handler.BrowserCore, Is.EqualTo("dosbox_pure"));
 
     [TestCase("Doom (1993).zip", ".dosz")]
     [TestCase("DOOM.ZIP", ".dosz")]

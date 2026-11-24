@@ -41,6 +41,12 @@ public sealed class DosHandler : ISystemHandler
     public string? SourceExtension(string fileName) =>
         Path.GetExtension(fileName).ToLowerInvariant() is ".zip" or ".dosz" ? ".dosz" : null;
 
+    /// <summary>
+    /// MS-DOS P1: DOSBox Pure, vendored. It requires threads, so it plays on the isolated <c>play-dos.html</c> page; the
+    /// whole ZIP is mounted, not unpacked.
+    /// </summary>
+    public string? BrowserCore => "dosbox_pure";
+
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;

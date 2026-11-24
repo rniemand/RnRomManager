@@ -55,6 +55,11 @@ const cores = [
 // /data/saves, which EmulatorJS 4.2.3's IDBFS persists only when a file closes, and saveSaveFiles() never syncs (the
 // call is commented out), so for desmume only it syncs, and the 30-second save interval persists the battery save.
 //
+// MS-DOS P2: DOSBox Pure requires threads, so it gets the threaded payload as PPSSPP does, and a rejected File read
+// shows a startup error. Its game ZIP is written to the content name whole, skipping checkCompression: unpacked,
+// EmulatorJS would boot the ZIP's first supported file (often INSTALL.BAT or SETUP.EXE) instead of DOSBox Pure's
+// start menu for the mounted ZIP. It is the only core in EmulatorJS's dos group, so getCore() needs no pin.
+//
 // Saturn and Sega CD multi-disc S4: downloadRom() prefers an .m3u only for the psx group; for Yabause and Genesis Plus
 // GX an .iso/.chd or a .cue among the unpacked files would win. A play-disc-set ZIP carries the set's .m3u, so for those
 // two cores an unpacked .m3u is the content and the image/cue choice is skipped. Single-disc ZIPs hold no .m3u, so they
@@ -74,7 +79,7 @@ const edits = [
 		file: 'emulator.js',
 		find: '            let legacy = (this.supportsWebgl2 && this.webgl2Enabled ? "" : "-legacy");\n',
 		insertBefore:
-			'            if (this.getCore() === "ppsspp" && typeof window.SharedArrayBuffer === "function") {\n' +
+			'            if (["ppsspp", "dosbox_pure"].includes(this.getCore()) && typeof window.SharedArrayBuffer === "function") {\n' +
 			'                threads = true;\n' +
 			'            }\n' +
 			'            if (["genesis_plus_gx", "picodrive", "yabause", "snes9x", "desmume", "opera", "vice_x64sc", "vice_xpet", "vice_xvic", "mupen64plus_next"].includes(this.getCore())) {\n' +
@@ -100,7 +105,7 @@ const edits = [
 			'                try {\n' +
 			'                    bytes = await data.arrayBuffer();\n' +
 			'                } catch (e) {\n' +
-			'                    if (!["ppsspp", "desmume"].includes(this.getCore())) throw e;\n' +
+			'                    if (!["ppsspp", "desmume", "dosbox_pure"].includes(this.getCore())) throw e;\n' +
 			'                    this.startGameError(this.localization("Error reading the game file"));\n' +
 			'                    return;\n' +
 			'                }\n' +
@@ -114,6 +119,17 @@ const edits = [
 			'                    if (m3uFile !== undefined && ["yabause", "genesis_plus_gx"].includes(this.getCore())) {\n' +
 			'                        this.fileName = m3uFile;\n' +
 			'                    } else if (isoFile !== null && (supportsExt("iso") || supportsExt("cso") || supportsExt("chd") || supportsExt("elf"))) {\n'
+	},
+	{
+		file: 'emulator.js',
+		find: '                const altName = this.getBaseFileName(true);\n',
+		insertAfter:
+			'                if (this.getCore() === "dosbox_pure") {\n' +
+			'                    this.gameManager.FS.writeFile(altName, new Uint8Array(data));\n' +
+			'                    this.fileName = altName;\n' +
+			'                    resolve();\n' +
+			'                    return;\n' +
+			'                }\n'
 	},
 	{
 		file: 'GameManager.js',
@@ -192,6 +208,16 @@ for (const core of cores) {
 	for (const file of ['ppsspp-thread-wasm.data', 'ppsspp-assets.zip'])
 		copy(join(pkg, file), join(data, 'cores', file));
 	copy(join(pkg, 'reports', 'ppsspp.json'), join(data, 'cores', 'reports', 'ppsspp.json'));
+}
+// MS-DOS P1: DOSBox Pure ships threaded payloads only (WebGL 2 and legacy).
+{
+	const pkg = join(pkgs, 'core-dosbox_pure');
+	for (const file of ['dosbox_pure-thread-wasm.data', 'dosbox_pure-thread-legacy-wasm.data'])
+		copy(join(pkg, file), join(data, 'cores', file));
+	copy(
+		join(pkg, 'reports', 'dosbox_pure.json'),
+		join(data, 'cores', 'reports', 'dosbox_pure.json')
+	);
 }
 
 // The package ships no minified build; loader.js tries emulator.min.js first, so build it the way loader.js's
