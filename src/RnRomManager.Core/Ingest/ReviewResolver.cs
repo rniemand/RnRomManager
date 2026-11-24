@@ -280,7 +280,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
     private async Task<ReviewResolutionResult> ResolveExternalAsync(long id, ReviewItem item, IngestFile file, ExternalFileSnapshot snapshot,
         ISystemHandler system, string action, string filename, string title, IReadOnlyList<string> regions, IReadOnlyList<string> languages,
         string? revision, IReadOnlyList<string> flags, InfoJsonIdentification identification, DatMetadata metadata, Guid? target,
-        AuditActor actor, int userId, JobProgress? progress)
+        AuditActor actor, int userId, JobProgress? progress, JsonObject? header)
     {
         var now = time.GetUtcNow();
         var rom = new InfoJsonRom
@@ -288,7 +288,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             FileName = filename, OriginalFileName = item.OriginalFileName, BaseTitle = title,
             Regions = regions, Languages = languages, Revision = revision, Flags = flags, IsPrimary = false,
                 Version = ReleaseVersion.For(flags, item.OriginalFileName),
-            Identification = identification, Header = item.Header is null ? null : JsonNode.Parse(item.Header) as JsonObject,
+            Identification = identification, Header = header,
             Metadata = new InfoJsonRomMetadata(item.SizeBytes, item.Crc32, item.Md5, item.Sha1, now, now, file.SourcePath),
         };
         var result = await pipeline.StoreReleaseAsync(file, system, rom, metadata, null, target,
@@ -421,6 +421,9 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             string filename;
             IReadOnlyList<string> regions = [], languages = [], flags = [];
             string? revision = null;
+            // Arcade R3: a MAME item's header (I5's missingRoms) describes the review, not the release; only the queued
+            // DAT identity of an AmbiguousGroup item (G5) keeps it.
+            var keepHeader = system.DatSource != DatSource.Mame;
             if (request.Update == true && request.Action != "Dat")
                 return ReviewResolutionResult.Invalid("update", ReviewResolutionRequest.UpdateNeedsDat);
             if (request.Disc is not null && !system.FileSets)
@@ -430,6 +433,9 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
             var discFlag = request.Disc is { } disc ? $"Disc {disc}" : null; // B10: the flag NoIntroName.Parse makes from a Redump name
             if (request.Action == "Dat")
             {
+                // Arcade R2: a set is identified only by its name and CRCs; a pick would name it after a set it doesn't hold.
+                if (system.DatSource == DatSource.Mame)
+                    return ReviewResolutionResult.Invalid("action", "Arcade sets can't be resolved from a DAT pick; use Manual or Attach.");
                 if (item.Reason != "NoDatMatch")
                     return ReviewResolutionResult.Invalid("action", "DAT selection requires a NoDatMatch item.");
                 var chosen = systems.ById(request.DatSystem!);
@@ -496,7 +502,18 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 var datGameName = dat["datGameName"]!.GetValue<string>();
                 filename = Path.GetFileName(dat["romName"]!.GetValue<string>());
                 target = request.TargetGameId;
-                if (dat["titleId"] is not null)
+                if (system.DatSource == DatSource.Mame)
+                {
+                    // Arcade G5: the queued identity and base title; BIOS from the header, no regions, languages or revision.
+                    identification = new(IdentificationMethod.Dat, dat["datName"]!.GetValue<string>(), dat["datVersion"]?.GetValue<string>(), datGameName);
+                    title = dat["baseTitle"]!.GetValue<string>();
+                    var header = item.Header is null ? null : JsonNode.Parse(item.Header);
+                    flags = header?["isBios"]?.GetValue<bool>() == true ? ["BIOS"] : [];
+                    metadata = header?["setName"]?.GetValue<string>() is { } setName && dats.For(system.Id) is { } mameStore
+                        ? mameStore.MetadataForSet(setName) : DatMetadata.Empty;
+                    keepHeader = true;
+                }
+                else if (dat["titleId"] is not null)
                 {
                     // T4: the queued titledb identity, whole, so a refresh that drops the entry changes nothing.
                     identification = new(IdentificationMethod.TitleDb, dat["datName"]!.GetValue<string>(), dat["datVersion"]?.GetValue<string>(), datGameName);
@@ -595,7 +612,8 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                     target, actor, userId, progress).ConfigureAwait(false);
             if (external)
                 return await ResolveExternalAsync(id, item, file, preparedSnapshot!, system, request.Action!, filename, title, regions,
-                    languages, revision, flags, identification, metadata, target, actor, userId, progress).ConfigureAwait(false);
+                    languages, revision, flags, identification, metadata, target, actor, userId, progress,
+                    keepHeader && item.Header is not null ? JsonNode.Parse(item.Header) as JsonObject : null).ConfigureAwait(false);
             if (item.ArchivePath is not null)
             {
                 var family = systems.ByFamily(systems.ById(item.SystemId)!.Family);
@@ -619,7 +637,7 @@ public sealed class ReviewResolver(JobLock jobLock, IIngestReviewRepository revi
                 FileName = filename, OriginalFileName = item.OriginalFileName, BaseTitle = title,
                 Regions = regions, Languages = languages, Revision = revision, Flags = flags, IsPrimary = false,
                 Version = ReleaseVersion.For(flags, item.OriginalFileName),
-                Identification = identification, Header = item.Header is null ? null : JsonNode.Parse(item.Header) as JsonObject,
+                Identification = identification, Header = keepHeader && item.Header is not null ? JsonNode.Parse(item.Header) as JsonObject : null,
                 Metadata = new InfoJsonRomMetadata(bytes.Length, item.Crc32, item.Md5, item.Sha1, now, now, file.SourcePath),
             };
             var result = await pipeline.StoreReleaseAsync(file, system, rom, metadata, bytes, target,

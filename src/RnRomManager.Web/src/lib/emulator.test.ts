@@ -3,6 +3,7 @@ import { configureClient, resetClient } from './api/client';
 import {
 	azaharRomLoads,
 	canPlay,
+	externalBrowserCores,
 	opensInNewTab,
 	playLinkEvents,
 	playUrl,
@@ -240,6 +241,19 @@ describe('playUrl', () => {
 		expect(canPlay({ browserCore: 'dosbox_pure' }, { externalFileName: 'Dos Demo.dosz' })).toBe(
 			true
 		);
+	});
+
+	it('plays an external MAME set in the modal from /download (Arcade P5)', () => {
+		expect(externalBrowserCores).toContain('mame2003_plus');
+		expect(playUrl('g-7', { id: 5, fileName: 'sf2.mamez' }, 'mame2003_plus', false)).toBe(
+			'/emulator/play.html?game=g-7&rom=5&core=mame2003_plus&name=sf2.mamez'
+		);
+		expect(usesPlayDisc('mame2003_plus', { externalFileName: 'Street Fighter II.sf2.mamez' })).toBe(
+			false
+		);
+		expect(
+			canPlay({ browserCore: 'mame2003_plus' }, { externalFileName: 'Street Fighter II.sf2.mamez' })
+		).toBe(true);
 	});
 
 	it('adds &disc=1 after name only for a disc release (Sega CD B6)', () => {

@@ -86,7 +86,7 @@ public class ReportEndpointsTests
                 new FixtureGame("Delta (World)", "Delta (World).gb", Delta),
             ],
             [Gbc] = [new FixtureGame("Echo (World)", "Echo (World).gbc", Echo)],
-        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
+        }, titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 

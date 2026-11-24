@@ -24,6 +24,17 @@ public partial class EmulatorEndpointsTests
 
     private string ViceDir => _factory.Settings["Emulator:ViceCorePath"]!;
 
+    private const string MameCore = "/api/emulator/cores/mame2003_plus";
+
+    private static readonly (string Name, byte[] Bytes, string ContentType)[] SyntheticMame =
+    [
+        ("mame2003_plus-wasm.data", [.. Enumerable.Range(0, 3500).Select(i => (byte)(i * 31 + 7))], "application/octet-stream"),
+        ("mame2003_plus-legacy-wasm.data", [.. Enumerable.Range(0, 3300).Select(i => (byte)(i * 37 + 9))], "application/octet-stream"),
+        ("mame2003_plus.json", "{\"options\":{\"mame\":1}}"u8.ToArray(), "application/json"),
+    ];
+
+    private string MameDir => _factory.Settings["Emulator:Mame2003PlusCorePath"]!;
+
     private void WriteViceSet(string? except = null)
     {
         foreach (var (name, bytes, _) in SyntheticVice.Where(f => f.Name != except))
@@ -99,10 +110,11 @@ public partial class EmulatorEndpointsTests
         {
             GenesisCorePath = "/cores/genesis", PicodriveCorePath = "/cores/picodrive", Snes9xCorePath = "/cores/snes9x",
             OperaCorePath = "/cores/opera", ViceCorePath = "/cores/vice", Mupen64PlusCorePath = "/cores/n64",
+            Mame2003PlusCorePath = "/cores/mame",
         };
 
         Assert.That(OperatorCoreManifest.Pinned.Cores.Select(c => c.Id),
-            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x", "opera", "vice_x64sc", "vice_xpet", "vice_xvic", "mupen64plus_next" }));
+            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x", "opera", "vice_x64sc", "vice_xpet", "vice_xvic", "mupen64plus_next", "mame2003_plus" }));
         Assert.That((genesis.DisplayName, genesis.MismatchCode), Is.EqualTo(("Genesis Plus GX", "GenesisCoreMismatch")));
         Assert.That((picodrive.DisplayName, picodrive.MismatchCode), Is.EqualTo(("PicoDrive", "PicodriveCoreMismatch")));
         Assert.That((snes9x.DisplayName, snes9x.MismatchCode), Is.EqualTo(("Snes9x", "Snes9xCoreMismatch")));
@@ -116,6 +128,9 @@ public partial class EmulatorEndpointsTests
         var n64 = OperatorCoreManifest.Pinned.Find("mupen64plus_next")!;
         Assert.That((n64.DisplayName, n64.MismatchCode, n64.PathOf(options)),
             Is.EqualTo(("Mupen64Plus-Next", "Mupen64PlusCoreMismatch", "/cores/n64")));
+        var mame = OperatorCoreManifest.Pinned.Find("mame2003_plus")!;
+        Assert.That((mame.DisplayName, mame.MismatchCode, mame.PathOf(options)),
+            Is.EqualTo(("MAME 2003-Plus", "Mame2003PlusCoreMismatch", "/cores/mame")));
         Assert.That((genesis.PathOf(options), picodrive.PathOf(options), snes9x.PathOf(options)),
             Is.EqualTo(("/cores/genesis", "/cores/picodrive", "/cores/snes9x")));
         Assert.That(OperatorCoreManifest.Pinned.Find("GENESIS_PLUS_GX"), Is.Null);
@@ -641,6 +656,43 @@ public partial class EmulatorEndpointsTests
             new OperatorCoreFile("mupen64plus_next.json", 153,
                 "270105553cec57fd1058c50e0541b8b89dbd30b2323fd70682036f6919b805cc", "application/json"),
         }));
+    }
+
+    // Arcade P1: MAME 2003-Plus, served by the same verifier; only its pins and its mismatch code are its own.
+
+    [Test]
+    public void PinnedManifest_HoldsExactlyTheMame2003Plus4_2_3Files()
+    {
+        Assert.That(OperatorCoreManifest.Pinned.Find(OperatorCoreManifest.Mame2003Plus)!.Files, Is.EqualTo(new[]
+        {
+            new OperatorCoreFile("mame2003_plus-wasm.data", 5_391_355,
+                "cb6d9c80a88b65d1579d16d02128a678f8d1cd3f51de1479e647cea27b13247b", "application/octet-stream"),
+            new OperatorCoreFile("mame2003_plus-legacy-wasm.data", 5_388_568,
+                "a01286082b7b2b83cc10e702afaf730f5effedb49e583a6ca73f59bc28b0c12a", "application/octet-stream"),
+            new OperatorCoreFile("mame2003_plus.json", 127,
+                "bda548626942b8878beb6de3487043eea80e633bd53dd69e7bae7457373a48a1", "application/json"),
+        }));
+    }
+
+    [Test]
+    public async Task Mame_AMatchingSetIsServed_AndAMismatchIs409Mame2003PlusCoreMismatch()
+    {
+        foreach (var (name, bytes, _) in SyntheticMame)
+            File.WriteAllBytes(Path.Combine(MameDir, name), bytes);
+
+        Assert.That(await HeadAsync(_client, MameCore), Is.EqualTo(HttpStatusCode.NoContent));
+        foreach (var (name, bytes, contentType) in SyntheticMame)
+        {
+            using var served = await _client.GetAsync($"{MameCore}/{name}");
+            Assert.That((served.StatusCode, served.Content.Headers.ContentType?.MediaType), Is.EqualTo((HttpStatusCode.OK, (string?)contentType)), name);
+            Assert.That(await served.Content.ReadAsByteArrayAsync(), Is.EqualTo(bytes), name);
+        }
+
+        File.AppendAllText(Path.Combine(MameDir, "mame2003_plus-wasm.data"), "x");
+        using var response = await _client.GetAsync($"{MameCore}/mame2003_plus-wasm.data");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        Assert.That(await AuthClient.CodeAsync(response), Is.EqualTo(EmulatorEndpoints.Mame2003PlusCoreMismatch));
+        Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("The MAME 2003-Plus core file doesn't match EmulatorJS 4.2.3"));
     }
 
     [Test]

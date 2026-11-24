@@ -21,6 +21,7 @@
     <Project Path="src/RnRomManager.Systems.Commodore/RnRomManager.Systems.Commodore.csproj" />
     <Project Path="src/RnRomManager.Systems.Dos/RnRomManager.Systems.Dos.csproj" />
     <Project Path="src/RnRomManager.Systems.NeoGeoPocket/RnRomManager.Systems.NeoGeoPocket.csproj" />
+    <Project Path="src/RnRomManager.Systems.Arcade/RnRomManager.Systems.Arcade.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/RnRomManager.Api.Tests/RnRomManager.Api.Tests.csproj" />
@@ -44,6 +45,7 @@
     <Project Path="tests/RnRomManager.Systems.Commodore.Tests/RnRomManager.Systems.Commodore.Tests.csproj" />
     <Project Path="tests/RnRomManager.Systems.Dos.Tests/RnRomManager.Systems.Dos.Tests.csproj" />
     <Project Path="tests/RnRomManager.Systems.NeoGeoPocket.Tests/RnRomManager.Systems.NeoGeoPocket.Tests.csproj" />
+    <Project Path="tests/RnRomManager.Systems.Arcade.Tests/RnRomManager.Systems.Arcade.Tests.csproj" />
     <Project Path="tests/RnRomManager.TestData/RnRomManager.TestData.csproj" />
   </Folder>
 </Solution>

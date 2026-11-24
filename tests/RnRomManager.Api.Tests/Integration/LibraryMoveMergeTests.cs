@@ -105,7 +105,7 @@ public class LibraryMoveMergeTests
                 new FixtureGame("Zelda (USA)", "Zelda (USA).gb", Zelda) { Genres = ["Action"] },
             ],
             ["Nintendo - Game Boy Color"] = [new FixtureGame("Color Game (World)", "Color Game (World).gbc", Color)],
-        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
+        }, titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 
@@ -251,6 +251,28 @@ public class LibraryMoveMergeTests
         var boxArt = game.Images.Single(i => i.Type == ImageType.BoxArt);
         Assert.That((boxArt.IsDefault, boxArt.Width), Is.EqualTo((false, 300)));
         Assert.That((await ReadGame(tetris)).Roms.Select(r => r.FileName), Is.EqualTo(new[] { "Tetris (World).gb" }));
+    }
+
+    [Test]
+    public async Task MoveToNewGame_AMameRelease_KeepsItsSetMetadata()
+    {
+        using var buffer = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(buffer, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        using (var entry = zip.CreateEntry("rnmin.bin").Open())
+            entry.Write("RNMN"u8);
+        var bytes = buffer.ToArray();
+        var path = Path.Combine(_factory.Root, "ingest", "mame2003", "rnmin.zip");
+        await File.WriteAllBytesAsync(path, bytes);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+        var ingested = (await Service<IngestPipeline>().ProcessAsync(new IngestFile("mame2003", path, "rnmin.zip", bytes.Length, File.GetLastWriteTimeUtc(path)),
+            Guid.NewGuid(), new CircuitBreaker(), default))!;
+        Assert.That(ingested.Outcome, Is.EqualTo(IngestOutcome.Ingested), ingested.Details);
+
+        using var response = await Move(ingested.GameId!.Value, await RomId(ingested.GameId.Value, "rnmin.mamez"), new { newGameTitle = "Rn Moved" });
+
+        var game = await ReadGame(await TargetId(response));
+        Assert.That((game.Title, game.ReleaseYear, game.Developers.Single(), game.Publishers.Single()), Is.EqualTo(("Rn Moved", (int?)1992, "Rn Co", "Rn Co")),
+            "metadata by the set name in the header (Arcade G4)");
     }
 
     [Test]

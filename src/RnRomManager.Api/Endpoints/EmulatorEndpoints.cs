@@ -80,6 +80,7 @@ public static partial class EmulatorEndpoints
     public const string OperaCoreMismatch = "OperaCoreMismatch";
     public const string ViceCoreMismatch = "ViceCoreMismatch";
     public const string Mupen64PlusCoreMismatch = "Mupen64PlusCoreMismatch";
+    public const string Mame2003PlusCoreMismatch = "Mame2003PlusCoreMismatch";
 
     private enum CoreOutcome { Verified, Unavailable, Mismatch, Unreadable }
 

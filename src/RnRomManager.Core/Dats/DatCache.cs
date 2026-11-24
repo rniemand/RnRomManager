@@ -88,6 +88,8 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
     {
         if (handler.DatSource == DatSource.TitleDb)
             return LoadTitleDb(directory, handler, manifest);
+        if (handler.DatSource == DatSource.Mame)
+            return LoadMame(directory, handler, manifest);
 
         string ReadVerified(string kind)
         {
@@ -132,6 +134,31 @@ public sealed class DatCache(IOptions<PathsOptions> paths, ISystemRegistry syste
             throw new InvalidDataException($"{file} does not match its SHA1 in {DatManifest.FileName}.");
         using var stream = new MemoryStream(bytes, writable: false);
         return new DatStore(TitleDb.ReadCompact(stream), entry.Version!);
+    }
+
+    /// <summary>
+    /// Arcade D5: <see cref="LoadTitleDb"/>'s manifest-row checks without its date rule (any non-null version), then
+    /// one checked read capped at <see cref="DatRefreshJob.MaxFileBytes"/>, the SHA1 and the parse.
+    /// </summary>
+    private DatStore LoadMame(string directory, ISystemHandler handler, IReadOnlyList<DatManifestEntry> manifest)
+    {
+        var file = MameDat.RelativePath(handler.DatName);
+        var rows = manifest.Where(e => string.Equals(e.File, file, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (rows.Count != 1)
+            throw new InvalidDataException($"{file} is listed {rows.Count} times in {DatManifest.FileName}.");
+        var entry = rows[0];
+        if (entry.File != file)
+            throw new InvalidDataException($"{DatManifest.FileName} lists {entry.File}, not {file}.");
+        if (entry.DatName != handler.DatName)
+            throw new InvalidDataException($"{file} is listed for '{entry.DatName}'.");
+        if (entry.Version is null)
+            throw new InvalidDataException($"{file} has no version.");
+
+        var bytes = DatManifest.ReadCheckedBytes(paths.Value.Cache, SafePath.Resolve(directory, file), DatRefreshJob.MaxFileBytes, AfterCompactRead);
+        if (!Convert.ToHexStringLower(SHA1.HashData(bytes)).Equals(entry.Sha1, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException($"{file} does not match its SHA1 in {DatManifest.FileName}.");
+        using var stream = new MemoryStream(bytes, writable: false);
+        return new DatStore(MameDat.Parse(stream), entry.Version);
     }
 
     private static bool IsDateVersion(string? version) =>

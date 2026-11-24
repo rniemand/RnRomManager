@@ -81,6 +81,22 @@ public class OptionsValidatorTests
     public void TitleDbUrl_DefaultsToRawUsEnglish() =>
         Assert.That(new SourcesOptions().TitleDbUrl, Is.EqualTo("https://raw.githubusercontent.com/blawar/titledb/master/US.en.json"));
 
+    [TestCase("http://localhost:9000/mame.xml", true)]
+    [TestCase("", false)]
+    [TestCase("ftp://example.com/mame.xml", false)]
+    public void MameDatUrl_IsAbsoluteHttpUrl(string value, bool valid)
+    {
+        var result = new SourcesOptionsValidator().Validate(null, new() { MameDatUrl = value });
+        Assert.That(result.Succeeded, Is.EqualTo(valid));
+        if (!valid)
+            Assert.That(result.Failures, Does.Contain($"Sources:MameDatUrl must be an absolute http(s) URL (got '{value}')."));
+    }
+
+    [Test]
+    public void MameDatUrl_DefaultsToThe2003PlusXml() =>
+        Assert.That(new SourcesOptions().MameDatUrl,
+            Is.EqualTo("https://raw.githubusercontent.com/libretro/mame2003-plus-libretro/master/metadata/mame2003-plus.xml"));
+
     [TestCase("https://thumbnails.libretro.com", true)]
     [TestCase("", true)]
     [TestCase("file:///c:/x", false)]
@@ -208,5 +224,17 @@ public class OptionsValidatorTests
         Assert.That(relative.Succeeded, Is.False);
         Assert.That(relative.FailureMessage, Does.Contain("Emulator:Mupen64PlusCorePath"));
         Assert.That(new EmulatorOptionsValidator().Validate(null, new() { Mupen64PlusCorePath = " " }).Succeeded, Is.False, "whitespace isn't blank");
+    }
+
+    [Test]
+    public void Mame2003PlusCorePath_EmptyOrAbsolute()
+    {
+        var absolute = Path.Combine(Path.GetTempPath(), "mame");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { Mame2003PlusCorePath = "" }).Succeeded, Is.True, "blank disables");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { Mame2003PlusCorePath = absolute, Mupen64PlusCorePath = absolute }).Succeeded,
+            Is.True, "may share the other operator cores' folder");
+        var relative = new EmulatorOptionsValidator().Validate(null, new() { Mame2003PlusCorePath = "mame" });
+        Assert.That(relative.Succeeded, Is.False);
+        Assert.That(relative.FailureMessage, Does.Contain("Emulator:Mame2003PlusCorePath must be empty or an absolute path (got 'mame')."));
     }
 }

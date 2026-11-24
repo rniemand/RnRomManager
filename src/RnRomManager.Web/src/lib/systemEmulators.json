@@ -104,6 +104,13 @@
 			"os": ["windows", "macos", "linux"]
 		}
 	],
+	"mame2003": [
+		{
+			"name": "MAME 2003-Plus",
+			"url": "https://github.com/libretro/mame2003-plus-libretro",
+			"os": ["windows", "macos", "linux"]
+		}
+	],
 	"fds": [
 		{
 			"name": "Mesen",

@@ -8,4 +8,7 @@ public enum DatSource
 
     /// <summary>MS-DOS spec N1: no DAT files; nothing is downloaded or loaded, and every file goes to Review.</summary>
     None = 2,
+
+    /// <summary>Arcade D1: one MAME <c>-listxml</c> file from <c>Sources:MameDatUrl</c>; sets are matched by name and ROM CRCs.</summary>
+    Mame = 3,
 }

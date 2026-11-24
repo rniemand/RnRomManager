@@ -32,6 +32,7 @@ public partial class EmulatorEndpointsTests
         _factory.Settings["Emulator:Snes9xCorePath"] = Path.Combine(_factory.Root, "snes9x");
         _factory.Settings["Emulator:OperaCorePath"] = Path.Combine(_factory.Root, "opera");
         _factory.Settings["Emulator:ViceCorePath"] = Path.Combine(_factory.Root, "vice");
+        _factory.Settings["Emulator:Mame2003PlusCorePath"] = Path.Combine(_factory.Root, "mame");
         await _factory.StartSharedAsync();
     }
 
@@ -54,6 +55,7 @@ public partial class EmulatorEndpointsTests
         ResetDir(Snes9xDir);
         ResetDir(OperaDir);
         ResetDir(ViceDir);
+        ResetDir(MameDir);
         _client = await SignInAsync("player");
     }
 

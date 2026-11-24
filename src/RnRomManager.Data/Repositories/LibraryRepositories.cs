@@ -467,6 +467,20 @@ public sealed class RomRepository : IRomRepository
             new { systemId, baseTitle }, cancellationToken: cancellationToken))).AsList();
     }
 
+    public async Task<IReadOnlyList<RomRow>> ListBySetNamesAsync(string systemId, IReadOnlyCollection<string> setNames, CancellationToken cancellationToken)
+    {
+        if (setNames.Count == 0)
+            return [];
+        await using var connection = _connections.Create();
+        return (await connection.QueryAsync<RomRow>(new CommandDefinition(
+            $"""
+            {Select}
+            WHERE system_id = @systemId AND LOWER(JSON_UNQUOTE(JSON_EXTRACT(header, '$.setName'))) IN @names
+            ORDER BY is_primary DESC, id
+            """,
+            new { systemId, names = setNames.Select(n => n.ToLowerInvariant()).ToArray() }, cancellationToken: cancellationToken))).AsList();
+    }
+
     public async Task<IReadOnlyList<(Guid GameId, string Sha1)>> ListSha1sAsync(CancellationToken cancellationToken)
     {
         await using var connection = _connections.Create();

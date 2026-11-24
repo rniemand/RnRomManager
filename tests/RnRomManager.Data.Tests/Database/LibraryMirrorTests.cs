@@ -388,6 +388,32 @@ public partial class LibraryMirrorTests
         Assert.That(result.Changes.Select(c => c.ZipPath), Is.EqualTo(new[] { "gb/T/Tetris.zip" }));
     }
 
+    // --- Arcade P2: romsets by set name ---
+
+    private static InfoJsonRom SetRom(string fileName, int seed, string? setName, bool isPrimary = true) =>
+        Rom(fileName, RomBytes(seed), isPrimary) with
+        {
+            ExternalFileName = "x." + fileName,
+            Header = setName is null ? null : new System.Text.Json.Nodes.JsonObject { ["setName"] = setName, ["cloneOf"] = null },
+        };
+
+    [Test]
+    public async Task ListBySetNames_MatchesTheHeaderSetName_IgnoringCase_PrimaryFirst_OnlyThatSystem()
+    {
+        var sf2 = Game("Street Fighter II", SetRom("sf2b.mamez", 2, "sf2", isPrimary: false), SetRom("sf2.mamez", 1, "SF2"), SetRom("manual.mamez", 3, null, isPrimary: false))
+            with { System = "mame2003" };
+        var neogeo = Game("Neo-Geo", SetRom("neogeo.mamez", 4, "neogeo")) with { System = "mame2003" };
+        var otherSystem = Game("Elsewhere", SetRom("sf2.nsp", 5, "sf2")) with { System = ExternalTestHandler.SystemId };
+        await _mirror.ReplaceAsync(Entry(sf2, "mame2003/S/Street Fighter II.zip"), CancellationToken.None);
+        await _mirror.ReplaceAsync(Entry(neogeo, "mame2003/N/Neo-Geo.zip"), CancellationToken.None);
+        await _mirror.ReplaceAsync(Entry(otherSystem, "ext/E/Elsewhere.zip"), CancellationToken.None);
+
+        var rows = await _roms.ListBySetNamesAsync("mame2003", ["Sf2", "NEOGEO", "missing"], CancellationToken.None);
+
+        Assert.That(rows.Select(r => r.FileName), Is.EqualTo(new[] { "sf2.mamez", "neogeo.mamez", "sf2b.mamez" }), "primary first, then by id");
+        Assert.That(await _roms.ListBySetNamesAsync("mame2003", [], CancellationToken.None), Is.Empty);
+    }
+
     // --- external ROMs (E4) ---
 
     private static InfoJsonGame ExternalGame(params (string FileName, string Pointer, int Seed)[] roms) =>

@@ -219,8 +219,34 @@ public sealed class IngestPipeline(
         var extension = Path.GetExtension(file.Name);
         var eligible = family.Where(h => h.RomExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase)
             && size >= h.MinRomSizeBytes && size <= h.MaxRomSizeBytes).ToList();
+
+        // Arcade I2: a set ZIP's file list, from a second checked open of the file that was hashed.
+        IReadOnlyList<MameEntry>? mameEntries = null;
+        if (eligible.Any(h => h.DatSource == DatSource.Mame))
+        {
+            var opened = ExternalRomPath.OpenRead(root, fresh.Path, FileShare.ReadWrite | FileShare.Delete, snapshot);
+            if (opened.Status == ExternalPathStatus.Changed)
+                return tooRecent;
+            if (opened.Status != ExternalPathStatus.Found)
+                return IngestItemResult.Error(IngestErrors.IoError, opened.Details, file.SystemId);
+            string? zipError;
+            try
+            {
+                using var stream = opened.Stream!;
+                (mameEntries, zipError) = MameZip.ReadEntries(stream);
+                if (ExternalRomPath.SnapshotOf(stream) != snapshot)
+                    return tooRecent;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return IngestItemResult.Error(IngestErrors.IoError, ex.Message, file.SystemId);
+            }
+            if (zipError is not null)
+                return FailFile(file, actor, IngestFailures.InvalidHeader, zipError, hashed.Sha1, progress);
+        }
+
         return await IdentifyAsync(file, folder, eligible, new RomHashes(hashed.Crc32, hashed.Md5, hashed.Sha1), size, hashed.Header, null,
-            new ExternalSource(root, fresh.Path, snapshot, progress), jobId, actor, breaker, cancellationToken).ConfigureAwait(false);
+            new ExternalSource(root, fresh.Path, snapshot, progress), jobId, actor, breaker, cancellationToken, mameEntries).ConfigureAwait(false);
     }
 
     private enum HashOutcome
@@ -276,9 +302,10 @@ public sealed class IngestPipeline(
     /// <param name="headerBytes">What <c>ReadHeader</c> gets: the whole ROM, or its first MiB for an external one.</param>
     /// <param name="bytes">The ROM to store; null for an external ROM, which is never held in memory.</param>
     /// <param name="source">The checked file an external ROM is moved from; null for an embedded ROM.</param>
+    /// <param name="mameEntries">Arcade I2: the set ZIP's files, for a <c>Mame</c> candidate; null for every other system.</param>
     private async Task<IngestItemResult?> IdentifyAsync(IngestFile file, ISystemHandler folder, IReadOnlyList<ISystemHandler> candidates,
         RomHashes hashes, long size, byte[] headerBytes, byte[]? bytes, ExternalSource? source, Guid jobId, AuditActor actor,
-        CircuitBreaker breaker, CancellationToken cancellationToken)
+        CircuitBreaker breaker, CancellationToken cancellationToken, IReadOnlyList<MameEntry>? mameEntries = null)
     {
         var external = source is not null;
         // Step 3: global dedupe, self-repair, and review-item lifecycle.
@@ -312,6 +339,7 @@ public sealed class IngestPipeline(
         var headers = candidates.ToDictionary(h => h.Id, h => h.ReadHeader(headerBytes));
         // T4: a TitleDb system matches by title id (header, else file name); the others by SHA1.
         var match = candidates
+            .Where(h => h.DatSource != DatSource.Mame) // Arcade I4: matched by set name and CRCs below
             .Select(h => (Handler: h, Store: dats.For(h.Id)))
             .Select(x => (x.Handler, x.Store, Rom: x.Store?.BySha1(hashes.Sha1),
                 Title: x.Handler.DatSource == DatSource.TitleDb && x.Store is { } titles
@@ -327,7 +355,28 @@ public sealed class IngestPipeline(
             match = (wii, wiiDat, serialRom, null);
             method = IdentificationMethod.Serial;
         }
-        if (match.Rom is null && match.Title is null)
+        // Arcade I4/I5: a set ZIP matches when its stem names a DAT set and every required ROM CRC is in it.
+        MameSet? mameSet = null;
+        MameMatch? mameMatch = null;
+        if (match.Rom is null && match.Title is null && mameEntries is not null
+            && candidates.FirstOrDefault(h => h.DatSource == DatSource.Mame) is { } arcade && dats.For(arcade.Id) is { } mameStore)
+        {
+            mameSet = mameStore.BySetName(Path.GetFileNameWithoutExtension(file.Name));
+            mameMatch = mameSet is null ? null : MameMatcher.Match(mameSet, mameEntries);
+            if (mameMatch is not { Complete: true })
+            {
+                var missing = mameSet is null ? null : new RomHeader(null, null, true, new Dictionary<string, object?>
+                {
+                    ["setName"] = mameSet.Name,
+                    ["description"] = mameSet.Description,
+                    ["missingRoms"] = MissingRomList(mameMatch!.Missing),
+                });
+                return await QueueReviewAsync(file, file.Name, arcade.Id, "NoDatMatch", hashes, size, missing, jobId, [], null, null, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            match = (arcade, mameStore, null, null);
+        }
+        if (match.Rom is null && match.Title is null && mameSet is null)
         {
             // Step 5. Every ReadHeader null (headerless system) counts as plausible.
             var found = headers.Values.FirstOrDefault(h => h is not null);
@@ -353,7 +402,9 @@ public sealed class IngestPipeline(
         var release = match.Title is { } title
             ? new Release(title.RomFileName, title.BaseTitle, title.GameName, [], title.Languages, title.Revision, title.Flags,
                 IdentificationMethod.TitleDb, TitleDb.MetadataOf(title.Base), title.TitleId)
-            : LibretroRelease(match.Rom!, store, file, external, match.Handler.FileSets) with { Method = method };
+            : mameSet is not null
+                ? MameRelease(mameSet, store)
+                : LibretroRelease(match.Rom!, store, file, external, match.Handler.FileSets) with { Method = method };
         // I3/E3: an external release's name is a portable logical name within budget. B10: a FileSets name is kept exactly.
         var romName = external && !system.FileSets ? ExternalRomName.AllocateLogicalName(release.FileName, new ExternalNameReservations([])) : release.FileName;
 
@@ -369,7 +420,8 @@ public sealed class IngestPipeline(
         if (owners.Count > 1)
         {
             // T4: a TitleDb row also keeps the whole identity, so Attach doesn't depend on the DAT loaded later.
-            object queued = release.Method switch
+            // Arcade G5: a MAME release keeps its base title (the parent's) and its G2 header for Attach.
+            object queued = mameSet is not null ? new { datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName, baseTitle } : release.Method switch
             {
                 IdentificationMethod.Serial => new { datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName, method = nameof(IdentificationMethod.Serial) },
                 IdentificationMethod.TitleDb => new
@@ -379,8 +431,8 @@ public sealed class IngestPipeline(
                 },
                 _ => new { datName = store.DatName, datVersion = store.Version, datGameName = release.GameName, romName },
             };
-            return await QueueReviewAsync(file, file.Name, system.Id, "AmbiguousGroup", hashes, size, headers[system.Id], jobId,
-                [], queued, owners, cancellationToken).ConfigureAwait(false);
+            return await QueueReviewAsync(file, file.Name, system.Id, "AmbiguousGroup", hashes, size,
+                mameSet is not null ? MameHeader(mameSet, mameMatch!) : headers[system.Id], jobId, [], queued, owners, cancellationToken).ConfigureAwait(false);
         }
 
         var now = time.GetUtcNow();
@@ -396,7 +448,8 @@ public sealed class IngestPipeline(
             Version = ReleaseVersion.For(release.Flags, file.Name),
             IsPrimary = false,
             Identification = new InfoJsonIdentification(release.Method, store.DatName, store.Version, release.GameName),
-            Header = headers[system.Id] is { } header ? JsonSerializer.SerializeToNode(header.Fields) as JsonObject : null,
+            Header = (mameSet is not null ? MameHeader(mameSet, mameMatch!) : headers[system.Id]) is { } header
+                ? JsonSerializer.SerializeToNode(header.Fields) as JsonObject : null,
             Metadata = new InfoJsonRomMetadata(size, hashes.Crc32, hashes.Md5, hashes.Sha1, now, now, file.SourcePath),
         };
         var metadata = release.Metadata;
@@ -755,6 +808,31 @@ public sealed class IngestPipeline(
         return new Release(fileName, NoIntroName.Parse(datRom.GameName).BaseTitle, datRom.GameName, tags.Regions, tags.Languages, tags.Revision,
             tags.Flags, IdentificationMethod.Dat, store.MetadataFor(datRom.Crc32), null);
     }
+
+    /// <summary>
+    /// Arcade G1/G3: named <c>&lt;set&gt;.mamez</c> after the DAT's spelling, grouped under the parent's base title when
+    /// <c>cloneof</c> names a set the DAT has; no regions, languages or revision; a BIOS set is flagged <c>BIOS</c>.
+    /// </summary>
+    private static Release MameRelease(MameSet set, DatStore store)
+    {
+        var titled = set.CloneOf is { } parent && store.BySetName(parent) is { } parentSet ? parentSet : set;
+        return new Release(set.Name + ".mamez", NoIntroName.Parse(titled.Description).BaseTitle, set.Description, [], [], null,
+            set.IsBios ? ["BIOS"] : [], IdentificationMethod.Dat, store.MetadataForSet(set.Name), null);
+    }
+
+    /// <summary>Arcade G2: the release header, where parent/clone and BIOS links are kept.</summary>
+    private static RomHeader MameHeader(MameSet set, MameMatch match) => new(null, null, true, new Dictionary<string, object?>
+    {
+        ["setName"] = set.Name,
+        ["cloneOf"] = set.CloneOf,
+        ["romOf"] = set.RomOf,
+        ["isBios"] = set.IsBios,
+        ["selfContained"] = match.SelfContained,
+    });
+
+    /// <summary>Arcade I5: the missing ROM names, cut after 20.</summary>
+    private static string MissingRomList(IReadOnlyList<string> names) =>
+        string.Join(", ", names.Take(20)) + (names.Count > 20 ? $", … and {names.Count - 20} more" : "");
 
     /// <summary>Shared steps 6–11 for synchronous review resolution; Attach supplies a target and skips grouping.</summary>
     /// <param name="reviewAction">The resolution action (<c>Dat</c>, <c>Attach</c>, <c>Manual</c>), for the audit row's details.</param>

@@ -47,6 +47,7 @@ public class EffectiveSettingsTests
             ["Emulator:OperaCorePath"] = Path.Combine(root, "opera"),
             ["Emulator:ViceCorePath"] = Path.Combine(root, "vice"),
             ["Emulator:Mupen64PlusCorePath"] = Path.Combine(root, "n64"),
+            ["Emulator:Mame2003PlusCorePath"] = Path.Combine(root, "mame"),
         }).Build();
         using var services = new ServiceCollection().AddAppOptions(config).BuildServiceProvider();
 
@@ -64,12 +65,14 @@ public class EffectiveSettingsTests
         Assert.That(settings.Emulator.OperaCorePath, Is.EqualTo(Path.Combine(root, "opera")));
         Assert.That(settings.Emulator.ViceCorePath, Is.EqualTo(Path.Combine(root, "vice")));
         Assert.That(settings.Emulator.Mupen64PlusCorePath, Is.EqualTo(Path.Combine(root, "n64")));
+        Assert.That(settings.Emulator.Mame2003PlusCorePath, Is.EqualTo(Path.Combine(root, "mame")));
         Assert.That(json, Does.Contain($"\"emulator\":{{\"genesisCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "genesis"))},"
             + $"\"picodriveCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "picodrive"))},"
             + $"\"snes9xCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "snes9x"))},"
             + $"\"operaCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "opera"))},"
             + $"\"viceCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "vice"))},"
-            + $"\"mupen64PlusCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "n64"))}}}"));
+            + $"\"mupen64PlusCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "n64"))},"
+            + $"\"mame2003PlusCorePath\":{JsonSerializer.Serialize(Path.Combine(root, "mame"))}}}"));
         Assert.That(json, Does.Not.Contain("hunter2"));
     }
 
@@ -80,6 +83,7 @@ public class EffectiveSettingsTests
         {
             DatBaseUrl = "https://dats.example",
             TitleDbUrl = "https://titledb.example",
+            MameDatUrl = "https://mame.example",
             ThumbnailBaseUrl = "",
             IgdbClientId = "client-id",
             IgdbClientSecret = "s3cret",
@@ -89,6 +93,7 @@ public class EffectiveSettingsTests
         Assert.That(masked.IgdbClientId, Is.EqualTo("client-id"));
         Assert.That(masked.DatBaseUrl, Is.EqualTo("https://dats.example"));
         Assert.That(masked.TitleDbUrl, Is.EqualTo("https://titledb.example"));
+        Assert.That(masked.MameDatUrl, Is.EqualTo("https://mame.example"));
         Assert.That(masked.ThumbnailBaseUrl, Is.Empty);
     }
 

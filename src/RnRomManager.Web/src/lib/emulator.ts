@@ -7,7 +7,8 @@ import type { GameDetail, RomDetail } from './api/types';
  * also plays Mega Drive cartridges from the ZIP: the play URL's `disc` flag tells the two apart. 3DO B7: Opera plays
  * only discs. TurboGrafx-CD B5: Beetle PCE plays TurboGrafx-CD discs and, from the ZIP, TurboGrafx-16 HuCards. MS-DOS
  * P3: DOSBox Pure plays an external game ZIP (`.dosz`), fetched from `/download`. 3DS P5: azahar plays an external
- * `.3ds`/`.cci` from `/download`.
+ * `.3ds`/`.cci` from `/download`. Arcade P5: MAME 2003-Plus plays an external set ZIP (`.mamez`) from `/download`, its parent and
+ * BIOS sets beside it.
  */
 export const externalBrowserCores: readonly string[] = [
 	'pcsx_rearmed',
@@ -18,7 +19,8 @@ export const externalBrowserCores: readonly string[] = [
 	'desmume',
 	'mednafen_pce',
 	'dosbox_pure',
-	'azahar'
+	'azahar',
+	'mame2003_plus'
 ];
 
 /** S8: the cores whose external releases load through play-disc; DeSmuME loads an external DS ROM from `/download`. */

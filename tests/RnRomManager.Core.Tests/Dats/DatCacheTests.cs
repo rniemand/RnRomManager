@@ -307,4 +307,76 @@ public class DatCacheTests
 
         Assert.That(_cache.For("gb"), Is.Not.Null);
     }
+
+    // Arcade D5: a Mame system's store, and the manifest checks that disable only that system.
+    private DatCache MameCache()
+    {
+        var mame = Handler("mame2003", DatStore.MameName);
+        mame.DatSource.Returns(DatSource.Mame);
+        var registry = Substitute.For<ISystemRegistry>();
+        ISystemHandler[] handlers = [Handler("gb", Gb, ".gb"), mame];
+        registry.All.Returns(handlers);
+        var cache = new DatCache(Options.Create(new PathsOptions { Cache = _dir.Path }), registry, NullLogger<DatCache>.Instance);
+        FixtureDatWriter.Write(cache.Directory,
+            new Dictionary<string, IReadOnlyList<FixtureGame>> { [Gb] = [new FixtureGame("Tetris (World) (Rev 1)", "Tetris (World) (Rev 1).gb", _tetris)] },
+            mame: IngestSeeder.MinimalMame);
+        return cache;
+    }
+
+    private void EditMameEntry(DatCache cache, Func<DatManifestEntry, DatManifestEntry> change)
+    {
+        var path = Path.Combine(cache.Directory, DatManifest.FileName);
+        DatManifest.Write(path, [.. DatManifest.Read(path).Select(e => e.File == MameDat.RelativePath("MAME") ? change(e) : e)]);
+    }
+
+    [Test]
+    public void Mame_LoadsTheStore()
+    {
+        var cache = MameCache();
+
+        cache.Load();
+
+        var store = cache.For("mame2003")!;
+        Assert.That((store.DatName, store.Version), Is.EqualTo(("MAME", FixtureDatWriter.MameVersion)));
+        Assert.That(store.BySetName("RNMIN")!.Description, Is.EqualTo("Rn Minimal (World)"));
+    }
+
+    private static readonly object[] BadMame =
+    [
+        new object[] { "missing file", (Action<DatCache>)(c => File.Delete(Path.Combine(c.Directory, "mame", "MAME.xml"))) },
+        new object[] { "SHA1 mismatch", (Action<DatCache>)(c => File.AppendAllText(Path.Combine(c.Directory, "mame", "MAME.xml"), " ")) },
+    ];
+
+    [TestCaseSource(nameof(BadMame))]
+    public void Mame_BadFile_DisablesOnlyMame(string name, Action<DatCache> damage)
+    {
+        var cache = MameCache();
+        damage(cache);
+
+        cache.Load();
+
+        Assert.That(cache.For("mame2003"), Is.Null, name);
+        Assert.That(cache.For("gb"), Is.Not.Null);
+        Assert.Throws<InvalidDataException>(() => cache.Prepare(cache.Directory));
+    }
+
+    [TestCase("wrong DatName")]
+    [TestCase("null version")]
+    [TestCase("not listed")]
+    public void Mame_BadManifestRow_DisablesOnlyMame(string kind)
+    {
+        var cache = MameCache();
+        var path = Path.Combine(cache.Directory, DatManifest.FileName);
+        if (kind == "not listed")
+            DatManifest.Write(path, [.. DatManifest.Read(path).Where(e => !e.File.StartsWith("mame/"))]);
+        else
+            EditMameEntry(cache, e => kind == "wrong DatName" ? e with { DatName = "MAME2" } : e with { Version = null });
+
+        cache.Load();
+
+        Assert.That(cache.For("mame2003"), Is.Null);
+        Assert.That(cache.For("gb"), Is.Not.Null);
+        var ex = Assert.Throws<InvalidDataException>(() => cache.Prepare(cache.Directory));
+        Assert.That(ex!.Message, Does.Contain("mame/MAME.xml"));
+    }
 }

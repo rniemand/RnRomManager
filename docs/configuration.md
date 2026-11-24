@@ -18,6 +18,7 @@ All settings come from `appsettings.json` and can be overridden with environment
 | `Logging:RetentionDays` | `Logging__RetentionDays` | `14` | 1–365. `rnrommanager-*.log` files for UTC days more than this many days before today are deleted at startup and daily at 00:05 UTC. |
 | `Sources:DatBaseUrl` | `Sources__DatBaseUrl` | `https://raw.githubusercontent.com/libretro/libretro-database/master/metadat` | absolute http(s) URL |
 | `Sources:TitleDbUrl` | `Sources__TitleDbUrl` | `https://raw.githubusercontent.com/blawar/titledb/master/US.en.json` | absolute http(s) URL; the [blawar/titledb](https://github.com/blawar/titledb) file a DAT refresh downloads for systems identified by title ID (Nintendo Switch) |
+| `Sources:MameDatUrl` | `Sources__MameDatUrl` | `https://raw.githubusercontent.com/libretro/mame2003-plus-libretro/master/metadata/mame2003-plus.xml` | absolute http(s) URL; the MAME 2003-Plus `-listxml` DAT that identifies Arcade sets (about 25 MB, capped at 64 MiB). Refreshed with the other DATs. |
 | `Sources:ThumbnailBaseUrl` | `Sources__ThumbnailBaseUrl` | `https://thumbnails.libretro.com` | absolute http(s) URL, or empty to disable all media downloads, Switch's titledb images included (default box art only) |
 | `Sources:IgdbClientId` | `Sources__IgdbClientId` | *(empty)* | the Client ID of a Twitch application, for **Suggest Images** on the Game page's Images tab and **Lookup Info** in Edit Metadata. Set it together with `Sources:IgdbClientSecret`: exactly one of the two set fails startup (a blank or whitespace-only value counts as empty). Both empty turns suggestions and the lookup off. To get one, register an application in the Twitch developer console (dev.twitch.tv/console, client type **Confidential**, any OAuth redirect URL such as `http://localhost`), then copy its Client ID and create a secret. The app then talks to `id.twitch.tv` and `api.igdb.com`, and Admins' browsers load previews from `images.igdb.com`. Shown on **Admin → Settings** as `sources.igdbClientId`. |
 | `Sources:IgdbClientSecret` | `Sources__IgdbClientSecret` | *(empty)* | that application's client secret (see `Sources:IgdbClientId`). Never shown or logged: `sources.igdbClientSecret` is `***` when set. |
@@ -27,6 +28,7 @@ All settings come from `appsettings.json` and can be overridden with environment
 | `Emulator:OperaCorePath` | `Emulator__OperaCorePath` | *(empty)* | empty (3DO play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Opera files ([below](#opera-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.operaCorePath`). |
 | `Emulator:ViceCorePath` | `Emulator__ViceCorePath` | *(empty)* | empty (Commodore 64, PET and VIC-20 play off), or an absolute path to a read-only folder holding the EmulatorJS 4.2.3 VICE files ([below](#vice-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.viceCorePath`). |
 | `Emulator:Mupen64PlusCorePath` | `Emulator__Mupen64PlusCorePath` | *(empty)* | empty (Nintendo 64 play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 Mupen64Plus-Next files ([below](#mupen64plus-next-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.mupen64PlusCorePath`). |
+| `Emulator:Mame2003PlusCorePath` | `Emulator__Mame2003PlusCorePath` | *(empty)* | empty (Arcade play off), or an absolute path to a read-only folder holding the three EmulatorJS 4.2.3 MAME 2003-Plus files ([below](#mame-2003-plus-core)). It may be the same folder as the other operator cores, since the file names differ. Validated and shown like `Emulator:GenesisCorePath` (`emulator.mame2003PlusCorePath`). |
 | `Backup:RestoreFrom` | `Backup__RestoreFrom` | *(empty)* | empty, or the bare file name of a backup in `Paths:Backups` to restore at startup (no `/`, `\` or `..`). See [restoring a backup](deployment.md#restoring-a-backup). Remove it once the restore is done. |
 
 ## Paths
@@ -115,6 +117,18 @@ Nintendo 64 plays with Mupen64Plus-Next. Its EmulatorJS build compiles in the GL
 | `mupen64plus_next.json` | 153 | `270105553cec57fd1058c50e0541b8b89dbd30b2323fd70682036f6919b805cc` |
 
 The archive's two `-thread` payloads aren't used. The checks are the same as for Genesis Plus GX (`GET /api/emulator/cores/mupen64plus_next/<file>`); a file that doesn't match is refused with `409 Mupen64PlusCoreMismatch`, and the play page says *The Mupen64Plus-Next core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:Mupen64PlusCorePath).* Without the files it says *Nintendo 64 games need the Mupen64Plus-Next core files: ask an Admin to set them up (Emulator:Mupen64PlusCorePath).* No BIOS is needed in `Paths:Bios`. A browser with WebGL 2 gets the GLES3 payload, any other the legacy GLES2 one.
+
+## MAME 2003-Plus core
+
+Arcade (MAME 2003-Plus) plays with MAME 2003-Plus. MAME's licence forbids commercial use, so the image doesn't contain it. To turn Arcade play on, put these three files from the [`@emulatorjs/core-mame2003_plus@4.2.3`](https://registry.npmjs.org/@emulatorjs/core-mame2003_plus/-/core-mame2003_plus-4.2.3.tgz) npm archive at the root of a folder and set `Emulator:Mame2003PlusCorePath` to it ([deployment](deployment.md#mame-2003-plus-core) shows how to get them and mount the folder):
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `mame2003_plus-wasm.data` | 5,391,355 | `cb6d9c80a88b65d1579d16d02128a678f8d1cd3f51de1479e647cea27b13247b` |
+| `mame2003_plus-legacy-wasm.data` | 5,388,568 | `a01286082b7b2b83cc10e702afaf730f5effedb49e583a6ca73f59bc28b0c12a` |
+| `mame2003_plus.json` | 127 | `bda548626942b8878beb6de3487043eea80e633bd53dd69e7bae7457373a48a1` |
+
+The archive's `-thread` payloads aren't used. The checks are the same as for Genesis Plus GX (`GET /api/emulator/cores/mame2003_plus/<file>`); a file that doesn't match is refused with `409 Mame2003PlusCoreMismatch`, and the play page says *The MAME 2003-Plus core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:Mame2003PlusCorePath).* Without the files it says *Arcade (MAME 2003-Plus) games need the MAME 2003-Plus core files: ask an Admin to set them up (Emulator:Mame2003PlusCorePath).* No BIOS goes in `Paths:Bios`: a BIOS such as `neogeo` is an arcade set in the library, which the play page loads beside the game; when it, or a clone's parent, isn't there, it says *This game needs the &lt;name&gt; romset. Import it into Arcade (MAME 2003-Plus), then play again.*
 
 ## Other settings
 - **Port:** the standard `ASPNETCORE_HTTP_PORTS` (image default `8080`). The container health check reads the first port from it, so don't use `ASPNETCORE_URLS` instead.

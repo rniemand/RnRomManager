@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Arcade, MAME 2003-Plus). Made for this project; MIT licensed like the rest of the repo.
+       A generic arcade cabinet with a joystick and buttons: no logo or trade dress. Exported to mame2003.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#ece3e6"/>
+  <!-- cabinet -->
+  <path d="M166 40 L346 40 L346 120 L376 150 L376 440 L136 440 L136 150 L166 120 Z" fill="#8b1e3f" stroke="#3a0d1b" stroke-width="5" stroke-linejoin="round"/>
+  <!-- marquee -->
+  <rect x="180" y="54" width="152" height="40" rx="6" fill="#f3d36b" stroke="#3a0d1b" stroke-width="4"/>
+  <!-- screen -->
+  <rect x="172" y="132" width="168" height="130" rx="8" fill="#1c2128" stroke="#3a0d1b" stroke-width="4"/>
+  <rect x="196" y="158" width="16" height="16" fill="#7fd08a"/>
+  <rect x="244" y="190" width="16" height="16" fill="#f3d36b"/>
+  <rect x="292" y="222" width="16" height="16" fill="#6bb6f3"/>
+  <!-- control panel -->
+  <path d="M146 290 L366 290 L376 330 L136 330 Z" fill="#5a1229" stroke="#3a0d1b" stroke-width="4" stroke-linejoin="round"/>
+  <rect x="196" y="288" width="8" height="24" fill="#22282f"/>
+  <circle cx="200" cy="284" r="11" fill="#e04848" stroke="#22282f" stroke-width="3"/>
+  <circle cx="270" cy="310" r="9" fill="#f3d36b" stroke="#22282f" stroke-width="3"/>
+  <circle cx="300" cy="310" r="9" fill="#6bb6f3" stroke="#22282f" stroke-width="3"/>
+  <circle cx="330" cy="310" r="9" fill="#7fd08a" stroke="#22282f" stroke-width="3"/>
+  <!-- coin door -->
+  <rect x="226" y="360" width="60" height="56" rx="4" fill="#5a1229" stroke="#3a0d1b" stroke-width="4"/>
+  <rect x="246" y="374" width="20" height="6" fill="#f3d36b"/>
+  <text x="256" y="490" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="34" font-weight="700" letter-spacing="4" fill="#22282f">ARCADE</text>
+</svg>

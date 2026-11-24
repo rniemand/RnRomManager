@@ -68,6 +68,12 @@ public interface IRomRepository
     /// <summary>Games owning a ROM with this system + base title, case-insensitively (§7.2 step 6 grouping).</summary>
     Task<IReadOnlyList<Guid>> ListGameIdsByBaseTitleAsync(string systemId, string baseTitle, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Arcade P2: the system's ROMs whose header <c>setName</c> is one of <paramref name="setNames"/> (compared lower-cased),
+    /// so only DAT-matched releases; per set, the primary release first, then the lowest id.
+    /// </summary>
+    Task<IReadOnlyList<RomRow>> ListBySetNamesAsync(string systemId, IReadOnlyCollection<string> setNames, CancellationToken cancellationToken);
+
     /// <summary>Every ROM's (game, SHA1): the sync's <c>DuplicateSha1</c> check.</summary>
     Task<IReadOnlyList<(Guid GameId, string Sha1)>> ListSha1sAsync(CancellationToken cancellationToken);
 

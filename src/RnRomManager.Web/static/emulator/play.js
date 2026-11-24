@@ -39,6 +39,7 @@ import {
 	segaCdBiosMissing,
 	segaCdBiosSizeError,
 	sessionExpired,
+	romsetMissingError,
 	threeDoBios,
 	threeDoBiosBytes,
 	threeDoBiosMissing,
@@ -176,6 +177,54 @@ async function loadOptionalBios(name, size, sizeError, exact = true) {
 	}
 	if (!exact) return length > 0 ? { bios: bytes.slice(0, length).buffer } : { error: sizeError };
 	return length === size ? { bios: bytes.buffer } : { error: sizeError };
+}
+
+/**
+ * Arcade P3: the romsets a MAME release needs beside it, from the server.
+ * @param {string} game
+ * @param {number} rom
+ * @returns {Promise<{ setName: string, deps: { setName: string, gameId: string, romId: number }[] } | { error: string }>}
+ */
+async function loadRomset(game, rom) {
+	try {
+		const response = await fetch(`/api/games/${game}/roms/${rom}/romset`, { credentials: 'same-origin' });
+		if (!response.ok)
+			return {
+				error: response.status === 401 ? sessionExpired : `Couldn't load the romset list (HTTP ${response.status}).`
+			};
+		const romset = await response.json();
+		if (romset.missing.length > 0) return { error: romsetMissingError(romset.missing) };
+		return romset;
+	} catch {
+		return { error: "Couldn't load the romset list." };
+	}
+}
+
+/**
+ * Arcade P3: each dependency set from its own `/download`, keyed `/<set>.zip` for EJS_externalFiles.
+ * @param {{ setName: string, gameId: string, romId: number }[]} deps
+ * @returns {Promise<{ files: Record<string, ArrayBuffer> } | { error: string }>}
+ */
+async function loadRomsetDeps(deps) {
+	/** @type {Record<string, ArrayBuffer>} */
+	const files = {};
+	for (const dep of deps) {
+		show(`Downloading ${dep.setName}…`);
+		try {
+			const response = await fetch(`/api/games/${dep.gameId}/roms/${dep.romId}/download`, { credentials: 'same-origin' });
+			if (!response.ok)
+				return {
+					error:
+						response.status === 401
+							? sessionExpired
+							: `Couldn't load the ${dep.setName} romset (HTTP ${response.status}).`
+				};
+			files[`/${dep.setName}.zip`] = await (await readContent(response)).arrayBuffer();
+		} catch {
+			return { error: `Couldn't load the ${dep.setName} romset.` };
+		}
+	}
+	return { files };
 }
 
 /**
@@ -490,6 +539,7 @@ async function start() {
 	const isSegaCd = params.core === 'genesis_plus_gx' && params.disc;
 	const isThreeDo = params.core === 'opera';
 	const isTurboGrafxCd = params.core === 'mednafen_pce' && params.disc;
+	const isMame = params.core === 'mame2003_plus';
 	// PSP B3, MS-DOS P7: an isolated page is its own tab, with no modal to talk to.
 	if (player === undefined) listenForMessages(isThreeDo);
 	if (isPsp || isDos || is3ds) {
@@ -501,6 +551,14 @@ async function start() {
 	if (isOperator) {
 		const problem = await checkOperatorCore(params.core);
 		if (problem) return show(problem);
+	}
+	// Arcade P3: which parent and BIOS sets go beside the game; a missing one stops here, before any download.
+	/** @type {{ setName: string, deps: { setName: string, gameId: string, romId: number }[] } | null} */
+	let romset = null;
+	if (isMame) {
+		const result = await loadRomset(params.game, params.rom);
+		if ('error' in result) return show(result.error);
+		romset = result;
 	}
 	const bios = biosFor(params.core, params.name);
 	if (bios) {
@@ -591,6 +649,13 @@ async function start() {
 			);
 		content = await readContent(response);
 	}
+	/** @type {Record<string, ArrayBuffer>} */
+	let romsetFiles = {};
+	if (romset) {
+		const deps = await loadRomsetDeps(romset.deps);
+		if ('error' in deps) return show(deps.error);
+		romsetFiles = deps.files;
+	}
 	// Saves B17: the library save comes before the loader; a failure stops the launch here.
 	/** @type {ArrayBuffer | null} */
 	let saveBytes = null;
@@ -601,7 +666,8 @@ async function start() {
 		saveBytes = save.bytes;
 	}
 	show('Starting emulator…');
-	const file = new File([content], contentFileName(params.core, params.game, params.name));
+	// Arcade P3: MAME finds a set by its ZIP's name, so the game goes in as <set>.zip, whatever it's stored as.
+	const file = new File([content], romset ? `${romset.setName}.zip` : contentFileName(params.core, params.game, params.name));
 
 	// Module code is strict: the globals loader.js reads must be set on window.
 	const ejs = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (window));
@@ -636,6 +702,8 @@ async function start() {
 	// 3DO B8: Opera reads its BIOS from the content root too, and keeps cue handling on by itself; it boots the first
 	// BIOS present in its own order, so no core option is set.
 	if (isThreeDo) ejs.EJS_externalFiles = threeDoFirmware;
+	// Arcade P3: the parent and BIOS ZIPs, written whole beside the game (a key not ending in / isn't unpacked).
+	if (romset && Object.keys(romsetFiles).length > 0) ejs.EJS_externalFiles = romsetFiles;
 	// TurboGrafx-CD B7: Beetle PCE reads its cards from the system directory, the content root here. No core option is
 	// set (EmulatorJS stores options per game, and a stored one would outlive a card swap); pce_cdbios is hidden so no
 	// one picks a card file that isn't there.
@@ -646,7 +714,7 @@ async function start() {
 	// B3/B8: an operator-supplied core loads its payloads and report by name from the API; the vendored loader keeps
 	// them non-threaded.
 	if (isOperator) ejs.EJS_paths = operatorCorePaths(params.core);
-	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX, PicoDrive, Yabause, Snes9x, DeSmuME, Opera, VICE x64sc, xpet and xvic, Mupen64Plus-Next): hide the
+	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX, PicoDrive, Yabause, Snes9x, DeSmuME, Opera, VICE x64sc, xpet and xvic, Mupen64Plus-Next, MAME 2003-Plus): hide the
 	// core selector. DeSmuME gets no EJS_biosUrl or external files: it uses its built-in BIOS and firmware.
 	// Nintendo DS B4: DeSmuME also hides the threads setting; the vendored loader never picks a threaded payload.
 	if (hidesCoreChooser(params.core))
@@ -663,8 +731,9 @@ async function start() {
 		// 3DO B11: EmulatorJS's Exit resets Opera, which writes its NVRAM file.
 		exitEmulation: isThreeDo,
 		// Nintendo DS B4: the save-file export and import use RetroArch's SRAM path, which DeSmuME never writes; MS-DOS
-		// P7: nor does DOSBox Pure, whose saves are its .pure.zip; 3DS G4: nor azahar, which saves to its virtual SD/NAND.
-		...(isDs || isDos || is3ds ? { saveSavFiles: false, loadSavFiles: false } : {})
+		// P7: nor does DOSBox Pure, whose saves are its .pure.zip; 3DS G4: nor azahar, which saves to its virtual SD/NAND;
+		// Arcade P4: nor MAME 2003-Plus, which keeps NVRAM and high scores in its own files.
+		...(isDs || isDos || is3ds || isMame ? { saveSavFiles: false, loadSavFiles: false } : {})
 	};
 	// E1: EmulatorJS shows its virtual gamepad at start only when its Start button saw a touch, and defaults the setting
 	// to enabled only for a mobile user agent; a touch-first device (not a touchscreen laptop with a mouse) gets it.

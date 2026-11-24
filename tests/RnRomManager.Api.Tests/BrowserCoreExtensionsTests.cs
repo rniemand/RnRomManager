@@ -56,6 +56,9 @@ public class BrowserCoreExtensionsTests
         ["vice_xpet"] = "d64|d71|d80|d81|d82|g64|g41|x64|t64|tap|prg|p00|crt|bin|zip|7z|gz|d6z|d7z|d8z|g6z|g4z|x6z|cmd|m3u|vfl|vsf|nib|nbz|d2m|d4m|tcrt",
         ["vice_xvic"] = "d64|d71|d80|d81|d82|g64|g41|x64|t64|tap|prg|p00|crt|bin|zip|7z|gz|d6z|d7z|d8z|g6z|g4z|x6z|cmd|m3u|vfl|vsf|nib|nbz|d2m|d4m|20|40|60|a0|b0|rom",
         ["mupen64plus_next"] = "n64|v64|z64|bin|u1",
+        // Arcade P1: the NUL-terminated valid_extensions string in mame2003_plus_libretro.wasm is "zip|" (read 2026-11-24), its
+        // trailing separator dropped here; core.json says ["zip"].
+        ["mame2003_plus"] = "zip",
         // Side by side (emulatorjs-next.json, EmulatorJS 4.3.0-pre): tied to its payload by NextCoreSha256.
         ["azahar"] = "3ds|3dsx|z3dsx|elf|axf|cci|zcci|cxi|zcxi|app",
     };
@@ -75,6 +78,7 @@ public class BrowserCoreExtensionsTests
         ["vice_xpet"] = "eef0d83f7c1af43d51c3384a07db4196ea7c2bbe1292e9e52fade3d3107513c5",
         ["vice_xvic"] = "4c7de6f858e100e9aea93085d5aef01bdfe87399c21c0fde4e1b6c7f1da56316",
         ["mupen64plus_next"] = "2da1cbce9fda395e3ae83ca5787353baa159142d45ef3ea90f108b92524f76cc",
+        ["mame2003_plus"] = "cb6d9c80a88b65d1579d16d02128a678f8d1cd3f51de1479e647cea27b13247b",
     };
 
     /// <summary>
@@ -86,6 +90,7 @@ public class BrowserCoreExtensionsTests
 
     private static readonly Dictionary<(string System, string Extension), string> Exceptions = new()
     {
+        [("mame2003", ".mamez")] = "stored as .mamez and handed to the core as <set>.zip by play.js",
         [("saturn", ".bin")] = "play-disc adds a MODE1/2352 cue to a lone .bin, and Yabause opens the cue",
         [("saturn", ".nrg")] = "play-disc sends a cue built from the Nero footer and the image as track-01.bin (N1), never the .nrg as the content",
         [("tgcd", ".bin")] = "a cue set's data track; a lone .bin never plays (canPlay, play-disc)",
@@ -246,6 +251,7 @@ public class BrowserCoreExtensionsTests
             "tgcd .mds: stale exception (no such system)",
             "tgcd .mdf: stale exception (no such system)",
             "3ds .cia: stale exception (no such system)",
+            "mame2003 .mamez: stale exception (no such system)",
         }));
     }
 

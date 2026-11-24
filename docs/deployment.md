@@ -85,7 +85,7 @@ On start the app waits up to 60 seconds for the database, then applies its migra
 | Path | Contents |
 |---|---|
 | `/app/roms` | the library: one ZIP per game (see [ZIP format](zip-format.md)), plus the Nintendo Switch ROM files stored next to their ZIPs. A system's folder (`roms/<system>/`) and its letter folders are created when its first ROM is written, not at startup; at each start the app removes letter folders (`#`, `A`–`Z`) that are empty, then the system folder if that leaves it empty. Only plain, empty folders go: a folder holding anything (hidden files included), any other name, and a linked or unreadable folder (logged as a Warning) are left alone. |
-| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64`, `.n64`, `.bin` or `.u1`) `ingest/nds/` (Nintendo DS: `.nds`, stored next to the ZIP; dumps over 256 MiB must be dropped loose, since archives are capped at 256 MiB of ROM data) `ingest/3ds/` (Nintendo 3DS: `.3ds`, `.cci` or `.cia`, stored next to the ZIP) `ingest/nes/` (NES: headered `.nes` only) `ingest/fds/` (Famicom Disk System: `.fds`, fwNES header stripped) `ingest/snes/` (SNES: `.sfc` or `.smc`, copier header stripped) `ingest/satellaview/` (Satellaview: `.bs`) `ingest/sufami/` (Sufami Turbo: `.st`) `ingest/a2600/` (Atari 2600: `.a26` or `.bin`) `ingest/coleco/` (ColecoVision: `.col`, `.rom` or `.bin`) `ingest/gg/` (Game Gear: `.gg`, `.sms`, `.bin` or `.rom`) `ingest/sms/` (Master System: `.sms`, `.sg`, `.bin` or `.rom`) `ingest/md/` (Mega Drive / Genesis: `.md`, `.bin`, `.gen` or `.smd`, interleaved `.smd` deinterleaved) `ingest/s32x/` (32X: `.32x` or `.bin`) `ingest/tg16/` (TurboGrafx-16 / PC Engine: `.pce`, copier header stripped) `ingest/ngp/` or `ingest/ngpc/` (Neo Geo Pocket / Color: `.ngp`, `.ngc`, `.ngpc` or `.npc`; the header decides which) `ingest/switch/` (Nintendo Switch: `.nsp`, `.xci`, `.nsz`, `.xcz` or `.hdf`) `ingest/psx/` (PlayStation: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`/`.img`/`.pbp`) `ingest/psp/` (PSP: `.iso`, `.cso`, `.pbp` or `.chd`) `ingest/gc/` (GameCube: `.iso` or `.gcm`) `ingest/wii/` (Wii: `.iso`) `ingest/x360/` (Xbox 360: `.iso`) `ingest/saturn/` (Saturn: a `.cue` with its `.bin` tracks, or `.nrg`/`.chd`/`.iso`) `ingest/segacd/` (Sega CD: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`) `ingest/tgcd/` (TurboGrafx-CD / PC Engine CD: a `.cue` with its `.bin` tracks, or `.chd`) `ingest/3do/` (3DO: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`) or `ingest/c64/` (Commodore 64: `.crt`, `.tap`, `.nib`, `.nbz`, `.d64`, `.g64`, `.d2m`, `.d4m`, `.t64`, `.prg`, `.tcrt` or `.bin`, or a gzipped disk image: `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z` or `<name>.d64.gz`), `ingest/pet/` (Commodore PET: `.prg` or `.d64`, or a gzipped disk image: `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z` or `<name>.d64.gz`), `ingest/vic20/` (Commodore VIC-20: `.a0`, `.20`, `.40`, `.60` or `.bin`, or a gzipped disk image: `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z` or `<name>.d64.gz`), `ingest/amiga/` (Commodore Amiga: `.adf` or gzipped `.adz`); Switch, Nintendo DS, Nintendo 3DS and the disc systems are stored as files next to the ZIP (see [External ROM storage](#external-rom-storage-nintendo-switch-nintendo-ds-nintendo-3ds-and-disc-systems)), and disc images must be dropped loose, not in archives; MS-DOS games go in `ingest/dos/` as one `.zip` (or `.dosz`) per game, which isn't unpacked and always goes to Review; `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way (`_removed/` is managed on the Admin **Deleted ROMs** page: restore or delete for good) |
+| `/app/ingest` | drop ROMs (and `.zip`/`.7z` archives) into `ingest/gb/` or `ingest/gbc/` (Game Boy / Color) `ingest/gba/` (Game Boy Advance), `ingest/n64/` (Nintendo 64: `.z64`, `.v64`, `.n64`, `.bin` or `.u1`) `ingest/nds/` (Nintendo DS: `.nds`, stored next to the ZIP; dumps over 256 MiB must be dropped loose, since archives are capped at 256 MiB of ROM data) `ingest/3ds/` (Nintendo 3DS: `.3ds`, `.cci` or `.cia`, stored next to the ZIP) `ingest/nes/` (NES: headered `.nes` only) `ingest/fds/` (Famicom Disk System: `.fds`, fwNES header stripped) `ingest/snes/` (SNES: `.sfc` or `.smc`, copier header stripped) `ingest/satellaview/` (Satellaview: `.bs`) `ingest/sufami/` (Sufami Turbo: `.st`) `ingest/a2600/` (Atari 2600: `.a26` or `.bin`) `ingest/coleco/` (ColecoVision: `.col`, `.rom` or `.bin`) `ingest/gg/` (Game Gear: `.gg`, `.sms`, `.bin` or `.rom`) `ingest/sms/` (Master System: `.sms`, `.sg`, `.bin` or `.rom`) `ingest/md/` (Mega Drive / Genesis: `.md`, `.bin`, `.gen` or `.smd`, interleaved `.smd` deinterleaved) `ingest/s32x/` (32X: `.32x` or `.bin`) `ingest/tg16/` (TurboGrafx-16 / PC Engine: `.pce`, copier header stripped) `ingest/ngp/` or `ingest/ngpc/` (Neo Geo Pocket / Color: `.ngp`, `.ngc`, `.ngpc` or `.npc`; the header decides which) `ingest/switch/` (Nintendo Switch: `.nsp`, `.xci`, `.nsz`, `.xcz` or `.hdf`) `ingest/psx/` (PlayStation: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`/`.img`/`.pbp`) `ingest/psp/` (PSP: `.iso`, `.cso`, `.pbp` or `.chd`) `ingest/gc/` (GameCube: `.iso` or `.gcm`) `ingest/wii/` (Wii: `.iso`) `ingest/x360/` (Xbox 360: `.iso`) `ingest/saturn/` (Saturn: a `.cue` with its `.bin` tracks, or `.nrg`/`.chd`/`.iso`) `ingest/segacd/` (Sega CD: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`) `ingest/tgcd/` (TurboGrafx-CD / PC Engine CD: a `.cue` with its `.bin` tracks, or `.chd`) `ingest/3do/` (3DO: a `.cue` with its `.bin` tracks, or `.bin`/`.iso`/`.chd`) or `ingest/c64/` (Commodore 64: `.crt`, `.tap`, `.nib`, `.nbz`, `.d64`, `.g64`, `.d2m`, `.d4m`, `.t64`, `.prg`, `.tcrt` or `.bin`, or a gzipped disk image: `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z` or `<name>.d64.gz`), `ingest/pet/` (Commodore PET: `.prg` or `.d64`, or a gzipped disk image: `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z` or `<name>.d64.gz`), `ingest/vic20/` (Commodore VIC-20: `.a0`, `.20`, `.40`, `.60` or `.bin`, or a gzipped disk image: `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z` or `<name>.d64.gz`), `ingest/amiga/` (Commodore Amiga: `.adf` or gzipped `.adz`); Switch, Nintendo DS, Nintendo 3DS and the disc systems are stored as files next to the ZIP (see [External ROM storage](#external-rom-storage-nintendo-switch-nintendo-ds-nintendo-3ds-and-disc-systems)), and disc images must be dropped loose, not in archives; MS-DOS games go in `ingest/dos/` as one `.zip` (or `.dosz`) per game, which isn't unpacked and always goes to Review; arcade romsets go in `ingest/mame2003/` as one `.zip` per set, named by its MAME set name (`sf2.zip`), which isn't unpacked and is stored next to the ZIP; `_failed/`, `_duplicates/` and `_removed/` hold files taken out of the way (`_removed/` is managed on the Admin **Deleted ROMs** page: restore or delete for good) |
 | `/app/logs` | `rnrommanager-yyyy-MM-dd.log`, kept for `Logging:RetentionDays` |
 | `/app/cache` | downloaded DATs and temporary work folders |
 | `/app/backups` | the daily database backups (see [Backup and restore](#backup-and-restore)); keep it private |
@@ -198,7 +198,7 @@ Sign-in keys created after the backup was taken are gone from the database but m
 
 ## Outbound connections
 
-- **DATs:** the daily automatic refresh (**Admin → DATs**, on by default at 04:00) and **Refresh DATs** download from `Sources:DatBaseUrl` and `Sources:TitleDbUrl` (GitHub by default).
+- **DATs:** the daily automatic refresh (**Admin → DATs**, on by default at 04:00) and **Refresh DATs** download from `Sources:DatBaseUrl`, `Sources:TitleDbUrl` and `Sources:MameDatUrl` (GitHub by default).
 - **Images by URL:** a game image, collection cover or publisher, genre or system logo added from a URL is downloaded by the server, from public addresses only (private, loopback and link-local addresses are refused, redirects included), with a 15-second limit.
 
 ## Upgrades
@@ -304,6 +304,11 @@ Upgrading to the release that adds Neo Geo Pocket and Neo Geo Pocket Color:
 Upgrading to the release that adds Nintendo 64 browser play:
 
 - **For Nintendo 64 browser play,** set up the [Mupen64Plus-Next core](#mupen64plus-next-core) (`Emulator:Mupen64PlusCorePath`). Without it, N64 games show Play, which explains that the core needs setting up.
+
+Upgrading to the release that adds Arcade (MAME 2003-Plus):
+
+- **Refresh DATs after upgrading.** Arcade sets are identified against the MAME 2003-Plus DAT (`Sources:MameDatUrl`). Until **Admin → DATs → Refresh DATs** has downloaded it, every import is refused with `DatsMissing`. `ingest/mame2003/` is created at startup.
+- **For Arcade browser play,** set up the [MAME 2003-Plus core](#mame-2003-plus-core) (`Emulator:Mame2003PlusCorePath`). Without it, arcade games show Play, which explains that the core needs setting up.
 
 Upgrading to the release that adds the footer, group logos, live restore and the DAT schedule:
 
@@ -542,6 +547,38 @@ Then mount the folder read-only and point the setting at it:
 ```
 
 The same advice as for Genesis Plus GX applies (read access for UID 1654, a folder nobody can write to). You may also put the files in another operator core's folder. No BIOS is needed.
+
+## MAME 2003-Plus core
+
+Arcade (MAME 2003-Plus) play needs three MAME 2003-Plus files you supply ([configuration](configuration.md#mame-2003-plus-core) lists their sizes and SHA-256 and why the image doesn't include them). Get the exact archive in a scratch folder outside the app and the repository:
+
+```bash
+mkdir -p ~/mame-core && cd ~/mame-core
+npm pack @emulatorjs/core-mame2003_plus@4.2.3
+tar -xzf emulatorjs-core-mame2003_plus-4.2.3.tgz
+mkdir -p /srv/rnrommanager/mame
+cp package/mame2003_plus-wasm.data package/mame2003_plus-legacy-wasm.data package/reports/mame2003_plus.json /srv/rnrommanager/mame/
+cd /srv/rnrommanager/mame && sha256sum mame2003_plus-wasm.data mame2003_plus-legacy-wasm.data mame2003_plus.json
+```
+
+The output must be exactly:
+
+```
+cb6d9c80a88b65d1579d16d02128a678f8d1cd3f51de1479e647cea27b13247b  mame2003_plus-wasm.data
+a01286082b7b2b83cc10e702afaf730f5effedb49e583a6ca73f59bc28b0c12a  mame2003_plus-legacy-wasm.data
+bda548626942b8878beb6de3487043eea80e633bd53dd69e7bae7457373a48a1  mame2003_plus.json
+```
+
+Then mount the folder read-only and point the setting at it:
+
+```yaml
+    volumes:
+      - /srv/rnrommanager/mame:/app/mame:ro
+    environment:
+      Emulator__Mame2003PlusCorePath: /app/mame
+```
+
+The same advice as for Genesis Plus GX applies (read access for UID 1654, a folder nobody can write to). You may also put the files in another operator core's folder. No BIOS goes in `Paths:Bios`: import BIOS sets such as `neogeo.zip` into `ingest/mame2003/` like any other set.
 
 ## Admin password recovery
 

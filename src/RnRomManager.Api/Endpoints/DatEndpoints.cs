@@ -69,7 +69,7 @@ public static class DatEndpoints
 
     /// <summary>
     /// The live manifest's listed entries, in manifest order: one per system, a no-intro or redump DAT (its metadat files share
-    /// the name and have no version) or a titledb file. T3: only the live set, and only while it is a real directory below the
+    /// the name and have no version), a titledb file or a MAME file (Arcade D4). T3: only the live set, and only while it is a real directory below the
     /// cache root; the manifest is read through the same checked, capped reader as startup. Never cache/dats.previous/, even mid-swap.
     /// </summary>
     private static IEnumerable<DatManifestEntry> ListedDats(DatCache cache, string cacheRoot)
@@ -84,7 +84,8 @@ public static class DatEndpoints
         {
             manifest = []; // no usable DATs; the page offers Refresh
         }
-        return manifest.Where(e => DatKind.IsMainDat(e.File) || e.File.StartsWith(TitleDb.Folder + "/", StringComparison.Ordinal));
+        return manifest.Where(e => DatKind.IsMainDat(e.File) || e.File.StartsWith(TitleDb.Folder + "/", StringComparison.Ordinal)
+            || e.File.StartsWith(MameDat.Folder + "/", StringComparison.Ordinal));
     }
 
     private static async Task<object> SettingsAsync(DatRefreshSettingsService settings, CancellationToken ct)

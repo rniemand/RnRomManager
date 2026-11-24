@@ -10,6 +10,9 @@ public sealed class SourcesOptions
     /// <summary>Spec T2: the blawar/titledb source file for <c>TitleDb</c> systems; required.</summary>
     public string TitleDbUrl { get; set; } = "https://raw.githubusercontent.com/blawar/titledb/master/US.en.json";
 
+    /// <summary>Arcade D1: the MAME <c>-listxml</c> DAT for every <c>Mame</c> system; required.</summary>
+    public string MameDatUrl { get; set; } = "https://raw.githubusercontent.com/libretro/mame2003-plus-libretro/master/metadata/mame2003-plus.xml";
+
     /// <summary>Empty = media fetch disabled (default box art only).</summary>
     public string ThumbnailBaseUrl { get; set; } = "https://thumbnails.libretro.com";
 

@@ -30,6 +30,7 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
     public const string VicePet = "vice_xpet";
     public const string ViceVic = "vice_xvic";
     public const string Mupen64PlusNext = "mupen64plus_next";
+    public const string Mame2003Plus = "mame2003_plus";
 
     /// <summary>The pinned 4.2.3 files of each core (each report is its package's <c>reports/</c> copy).</summary>
     public static OperatorCoreManifest Pinned { get; } = new(
@@ -121,6 +122,18 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
                 "425072f4bf94eec02633cbe9b84f47d6803dc0ec1b3c3b8de3ebbd2eb5617c3f", "application/octet-stream"),
             new("mupen64plus_next.json", 153,
                 "270105553cec57fd1058c50e0541b8b89dbd30b2323fd70682036f6919b805cc", "application/json"),
+        ]),
+        // Arcade P1: https://registry.npmjs.org/@emulatorjs/core-mame2003_plus/-/core-mame2003_plus-4.2.3.tgz (payloads at the
+        // package root, the report from reports/). The MAME licence forbids commercial use, so it's never bundled. The
+        // -thread- payloads aren't used: the core plays in the modal.
+        new(Mame2003Plus, "MAME 2003-Plus", o => o.Mame2003PlusCorePath, EmulatorEndpoints.Mame2003PlusCoreMismatch,
+        [
+            new("mame2003_plus-wasm.data", 5_391_355,
+                "cb6d9c80a88b65d1579d16d02128a678f8d1cd3f51de1479e647cea27b13247b", "application/octet-stream"),
+            new("mame2003_plus-legacy-wasm.data", 5_388_568,
+                "a01286082b7b2b83cc10e702afaf730f5effedb49e583a6ca73f59bc28b0c12a", "application/octet-stream"),
+            new("mame2003_plus.json", 127,
+                "bda548626942b8878beb6de3487043eea80e633bd53dd69e7bae7457373a48a1", "application/json"),
         ]),
     ]);
 

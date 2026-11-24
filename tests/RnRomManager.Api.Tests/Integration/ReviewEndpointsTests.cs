@@ -103,7 +103,7 @@ public class ReviewEndpointsTests
             { ReleaseYear = 1989, Developers = ["Nintendo"], Publishers = ["Nintendo"], Genres = ["Puzzle"] }],
             [LegacyExternalTestHandler.DatNameValue] = [],
             ["Nintendo - Game Boy Color"] = [new FixtureGame("Color Game (World)", "Color Game (World).gbc", Color)],
-        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
+        }, titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
     }
 
@@ -1091,7 +1091,7 @@ public class ReviewEndpointsTests
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] = Enumerable.Range(1, 25).Select(i => new FixtureGame($"Demo {i} (World)", $"Demo {i} (World).gb", new SyntheticRomBuilder { Seed = 1000 + i }.Build())).ToArray(),
             ["Nintendo - Game Boy Color"] = [],
-        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
+        }, titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
         using var defaults = await _admin.GetAsync("/api/dat/search?system=gb&q=demo");
         Assert.That((await AuthClient.JsonAsync(defaults)).GetArrayLength(), Is.EqualTo(20));
@@ -1142,7 +1142,7 @@ public class ReviewEndpointsTests
                 new FixtureGame("Repeat Two (World)", "Repeat Two (World).gb", new SyntheticRomBuilder { Seed = 2003 }.Build()),
             ],
             ["Nintendo - Game Boy Color"] = [],
-        }, titleDb: IngestSeeder.EmptySwitch, layouts: IngestSeeder.RedumpLayouts);
+        }, titleDb: IngestSeeder.EmptySwitch, mame: IngestSeeder.MinimalMame, layouts: IngestSeeder.RedumpLayouts);
         cache.Load();
 
         using var response = await _admin.GetAsync("/api/dat/search?system=gb&q=repeat&limit=2");
@@ -1530,5 +1530,87 @@ public class ReviewEndpointsTests
     {
         for (var i = 0; i < 600 && Service<JobRunner>().Current is not null; i++)
             await Task.Delay(50);
+    }
+
+    // --- Arcade R1–R3, G5: MAME items in Review ---
+
+    private static byte[] MameZip(params (string Name, string Content)[] files)
+    {
+        using var buffer = new MemoryStream();
+        using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+            foreach (var (name, content) in files)
+            {
+                using var entry = zip.CreateEntry(name).Open();
+                entry.Write(System.Text.Encoding.ASCII.GetBytes(content));
+            }
+        return buffer.ToArray();
+    }
+
+    /// <summary>A set ZIP dropped in <c>ingest/mame2003/</c> and ingested.</summary>
+    private async Task<(IngestItemResult Result, byte[] Bytes)> IngestMame(string name, byte[] bytes)
+    {
+        var path = DropDisc("mame2003", name, bytes);
+        return ((await Ingest(new IngestFile("mame2003", path, name, bytes.Length, File.GetLastWriteTimeUtc(path))))!, bytes);
+    }
+
+    private async Task<ReviewItem> QueueMame(string name, byte[] bytes)
+    {
+        var (result, _) = await IngestMame(name, bytes);
+        Assert.That((result.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Review, (string?)"NoDatMatch")), result.Details);
+        return (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(bytes)), default))!;
+    }
+
+    [Test]
+    public async Task Mame_HasDatIsFalse_AndADatPickIsRefused()
+    {
+        var item = await QueueMame("mystery.zip", MameZip(("a.bin", "mystery")));
+
+        using var detail = await _admin.GetAsync($"/api/review/{item.Id}");
+        Assert.That((await AuthClient.JsonAsync(detail)).GetProperty("hasDat").GetBoolean(), Is.False);
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Dat", datSystem = "mame2003", datGameName = "Rn Minimal (World)" });
+
+        Assert.That(response.Code, Is.EqualTo("ValidationFailed"));
+        Assert.That(response.Errors!.Value.GetProperty("action")[0].GetString(), Is.EqualTo("Arcade sets can't be resolved from a DAT pick; use Manual or Attach."));
+        Assert.That((await Reviews.GetAsync(item.Id, default))!.Status, Is.EqualTo("Pending"));
+    }
+
+    [Test]
+    public async Task Mame_ManualOfAnIncompleteSet_StoresTitleDotMamez_WithoutTheReviewHeader()
+    {
+        var item = await QueueMame("rnmin.zip", MameZip(("rnmin.bin", "XXXX")));
+        Assert.That(item.Header, Does.Contain("missingRoms"));
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "Rn Brawler", regions = Array.Empty<string>(), languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+
+        Assert.That(response.Code, Is.Null);
+        var rom = (await ReadGame(response.GameId!.Value)).Roms.Single();
+        Assert.That((rom.FileName, rom.Header, rom.Identification.Method), Is.EqualTo(("Rn Brawler.mamez", (JsonObject?)null, IdentificationMethod.Manual)));
+    }
+
+    [Test]
+    public async Task Mame_AmbiguousGroupAttach_KeepsTheSetHeader_AndTheParentBaseTitle()
+    {
+        // Two games own "Rn Minimal": one by Manual, the other by Manual under another title, then given that base title in the mirror.
+        var first = await _admin.ResolveAsync((await QueueMame("a.zip", MameZip(("a", "first")))).Id,
+            new { action = "Manual", title = "Rn Minimal", regions = Array.Empty<string>(), languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+        var second = await _admin.ResolveAsync((await QueueMame("b.zip", MameZip(("b", "second")))).Id,
+            new { action = "Manual", title = "Rn Elsewhere", regions = Array.Empty<string>(), languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+        await using (var db = Service<IDbConnectionFactory>().Create())
+            await db.ExecuteAsync("UPDATE roms SET base_title = 'Rn Minimal' WHERE game_id = @id", new { id = second.GameId!.Value.ToString() });
+
+        var (result, bytes) = await IngestMame("rnmin.zip", MameZip(("rnmin.bin", "RNMN")));
+        Assert.That((result.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Review, (string?)"AmbiguousGroup")), result.Details);
+        var item = (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(bytes)), default))!;
+        Assert.That(JsonNode.Parse(item.DatIdentification!)!["baseTitle"]!.GetValue<string>(), Is.EqualTo("Rn Minimal"));
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Attach", targetGameId = second.GameId, flag = "None" });
+
+        Assert.That(response.Code, Is.Null);
+        var rom = (await ReadGame(second.GameId!.Value)).Roms.Single(r => r.Metadata.Sha1 == item.Sha1);
+        Assert.That((rom.FileName, rom.BaseTitle, rom.Flags.Count, rom.Regions.Count), Is.EqualTo(("rnmin.mamez", "Rn Minimal", 0, 0)));
+        Assert.That(rom.Identification, Is.EqualTo(new InfoJsonIdentification(IdentificationMethod.Dat, "MAME", FixtureDatWriter.MameVersion, "Rn Minimal (World)")));
+        Assert.That(rom.Header!.ToJsonString(), Is.EqualTo("""{"setName":"rnmin","cloneOf":null,"romOf":null,"isBios":false,"selfContained":true}"""));
+        Assert.That(first.GameId, Is.Not.EqualTo(second.GameId));
     }
 }

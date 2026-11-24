@@ -17,8 +17,12 @@ public static class FixtureDatWriter
     /// <summary>A titledb manifest version: T3 requires <c>yyyy.MM.dd</c>.</summary>
     public const string TitleDbVersion = "2026.01.01";
 
+    /// <summary>A MAME manifest version, in Arcade D4's download-time format.</summary>
+    public const string MameVersion = "2026-01-01T00:00:00Z";
+
     /// <param name="datsDirectory">The <c>cache/dats/</c> folder (created if missing).</param>
     /// <param name="gamesByDatName">Keyed by handler <c>DatName</c>, e.g. <c>Nintendo - Game Boy</c>.</param>
+    /// <param name="mame">Arcade D4: DatName → MAME XML text, written to <c>mame/&lt;DatName&gt;.xml</c>.</param>
     public static void Write(
         string datsDirectory,
         IReadOnlyDictionary<string, IReadOnlyList<FixtureGame>> gamesByDatName,
@@ -26,7 +30,8 @@ public static class FixtureDatWriter
         DateTimeOffset? downloadedAt = null,
         IReadOnlyDictionary<string, IReadOnlyList<TitleDbRow>>? titleDb = null,
         string titleDbVersion = TitleDbVersion,
-        IReadOnlyDictionary<string, FixtureDatLayout>? layouts = null)
+        IReadOnlyDictionary<string, FixtureDatLayout>? layouts = null,
+        IReadOnlyDictionary<string, string>? mame = null)
     {
         var when = downloadedAt ?? new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
         var manifest = new List<DatManifestEntry>();
@@ -54,6 +59,8 @@ public static class FixtureDatWriter
             TitleDb.WriteCompactAsync(compact, rows, default).GetAwaiter().GetResult();
             manifest.Add(WriteBytes(datsDirectory, TitleDb.RelativePath(datName), datName, titleDbVersion, when, compact.ToArray()));
         }
+        foreach (var (datName, xml) in mame ?? new Dictionary<string, string>())
+            manifest.Add(WriteBytes(datsDirectory, MameDat.RelativePath(datName), datName, MameVersion, when, Encoding.UTF8.GetBytes(xml)));
         DatManifest.Write(Path.Combine(datsDirectory, DatManifest.FileName), manifest);
     }
 
