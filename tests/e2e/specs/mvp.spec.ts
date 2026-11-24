@@ -3084,10 +3084,12 @@ test("Missing IGDB IDs report", async () => {
     "page",
   );
   const red = page.getByRole("table").getByRole("link", { name: "Red Horizon", exact: true });
-  await expect(red).toHaveAttribute("href", /\/games\/[0-9a-f-]+$/);
+  // Not linked rows open the game as Next missing IGDB ID does.
+  await expect(red).toHaveAttribute("href", /\/games\/[0-9a-f-]+\?from=missing-igdb$/);
   await expectAccessible(page, "missing igdb ids report");
   await red.click();
   await expect(page.getByRole("heading", { level: 1, name: "Red Horizon" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Next missing IGDB ID" })).toBeVisible();
 });
 
 test("release editing, Games With Hacks, Newly Added and the phone shell", async () => {
