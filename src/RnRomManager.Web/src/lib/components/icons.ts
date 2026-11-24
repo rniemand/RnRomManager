@@ -36,6 +36,7 @@ export const icons: Record<string, string> = {
 	'report-image-resolutions': 'bi bi-aspect-ratio',
 	'report-new-games': 'bi bi-stars',
 	'report-missing-metadata': 'bi bi-card-checklist',
+	'report-missing-igdb': 'bi bi-link-45deg',
 	'review-suggestions': 'bi bi-lightbulb',
 	'review-matched': 'bi bi-bullseye',
 	'review-attach': 'bi bi-paperclip',

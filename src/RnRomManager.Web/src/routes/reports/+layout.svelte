@@ -12,10 +12,11 @@
 	let { children }: { children: Snippet } = $props();
 
 	// RP1: every signed-in user; the actions inside keep their own roles. B20: Activity is Admin-only, its tab hidden.
-	// Missing Metadata M4: Admin-only too.
+	// Missing Metadata M4 and Missing IGDB IDs R2: Admin-only too.
 	const activity = resolve('/reports/activity');
 	const missingMetadata = resolve('/reports/missing-metadata');
-	const adminOnly: string[] = [activity, missingMetadata];
+	const missingIgdbIds = resolve('/reports/missing-igdb-ids');
+	const adminOnly: string[] = [activity, missingMetadata, missingIgdbIds];
 	const tabs = $derived(reportTabs(auth.isAdmin));
 </script>
 

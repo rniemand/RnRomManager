@@ -43,7 +43,7 @@ public class SchemaMigrationTests
             "0010_game_rating", "0011_user_roles", "0012_image_cover", "0013_duplicate_dismissals", "0014_audit_events",
             "0015_app_settings", "0016_user_hotkeys", "0017_collections", "0018_external_roms",
             "0019_release_versions", "0020_rom_files", "0021_publisher_logos", "0022_bundle_queues", "0023_game_save_count",
-            "0024_fold_rom_manager", "0025_game_user_save_counts", "0026_discovery_logos",
+            "0024_fold_rom_manager", "0025_game_user_save_counts", "0026_discovery_logos", "0027_game_igdb_id",
         }));
     }
 
@@ -52,7 +52,7 @@ public class SchemaMigrationTests
     {
         Lifecycle(_cs).Migrate();
 
-        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 26L }));
+        Assert.That(await ColumnAsync<long>(_cs, "SELECT COUNT(*) FROM schema_versions"), Is.EqualTo(new[] { 27L }));
     }
 
     [Test]
@@ -69,7 +69,7 @@ public class SchemaMigrationTests
     // MariaDB reports JSON as longtext (with a json_valid check, tested below).
     [TestCase("users", "id int(11), username varchar(64), password_hash varchar(255), is_disabled tinyint(1) =0, must_change_password tinyint(1) =0, failed_login_count int(11), lockout_until datetime(6) NULL, security_stamp char(32), created_at datetime(6), updated_at datetime(6), last_login_at datetime(6) NULL, hotkeys text NULL")]
     [TestCase("user_roles", "user_id int(11), role varchar(32)")]
-    [TestCase("games", "id char(36), system_id varchar(16), title varchar(255), display_title varchar(255), zip_path varchar(512), bucket char(1), release_year smallint(6) NULL, developers longtext, publishers longtext, genres longtext, description text NULL, has_default_boxart tinyint(1) =0, zip_size_bytes bigint(20), zip_mtime_utc datetime, info_schema_version int(11), created_at datetime(6), updated_at datetime(6), rating tinyint(4) NULL, favourite tinyint(1) =0, save_count int(11) =0")]
+    [TestCase("games", "id char(36), system_id varchar(16), title varchar(255), display_title varchar(255), zip_path varchar(512), bucket char(1), release_year smallint(6) NULL, developers longtext, publishers longtext, genres longtext, description text NULL, has_default_boxart tinyint(1) =0, zip_size_bytes bigint(20), zip_mtime_utc datetime, info_schema_version int(11), created_at datetime(6), updated_at datetime(6), rating tinyint(4) NULL, favourite tinyint(1) =0, save_count int(11) =0, igdb_id int(11) NULL")]
     [TestCase("roms", "id bigint(20), game_id char(36), system_id varchar(16), file_name varchar(255), original_file_name varchar(255), base_title varchar(255), regions longtext, languages longtext, flags longtext, region_key varchar(255), revision varchar(32) NULL, is_primary tinyint(1) =0, id_method varchar(16), dat_name varchar(255) NULL, dat_version varchar(255) NULL, dat_game_name varchar(255) NULL, size_bytes bigint(20), crc32 char(8), md5 char(32), sha1 char(40), header longtext NULL, date_added datetime(6), date_modified datetime(6), external_file_name varchar(255) NULL, version varchar(40) NULL")]
     [TestCase("discovery_logos", "kind varchar(16) ='publishers', key_digest binary(32), media_type varchar(16), bytes mediumblob, updated_by int(11) NULL, updated_at datetime(6)")]
     [TestCase("rom_files", "id bigint(20), rom_id bigint(20), game_id char(36), ordinal int(11), file_name varchar(255), external_file_name varchar(255), original_file_name varchar(255), size_bytes bigint(20), crc32 char(8), md5 char(32), sha1 char(40)")]

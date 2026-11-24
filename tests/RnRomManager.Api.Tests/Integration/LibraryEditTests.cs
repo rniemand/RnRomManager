@@ -1,5 +1,6 @@
 using System.IO.Compression;
 using System.Net;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using RnRomManager.Core.Dats;
@@ -179,6 +180,30 @@ public class LibraryEditTests
         var after = (await Row(id))!;
         Assert.That((after.ZipPath, after.ReleaseYear, after.Description), Is.EqualTo((before.ZipPath, (int?)null, "Falling blocks.")));
         Assert.That(game.Roms.Select(r => r.Metadata.Sha1), Is.EquivalentTo(ReadZip(before.ZipPath).Roms.Select(r => r.Metadata.Sha1)));
+    }
+
+    [Test]
+    public async Task Patch_IgdbId_SetsAndClears_ZipAndDb_AbsentLeavesItUnchanged()
+    {
+        var id = await Tetris();
+        var zipPath = (await Row(id))!.ZipPath;
+
+        using var get = await _admin.GetAsync($"/api/games/{id}");
+        var detail = await AuthClient.JsonAsync(get);
+        Assert.That((detail.GetProperty("igdbId").ValueKind, detail.GetProperty("igdbConfigured").GetBoolean()),
+            Is.EqualTo((JsonValueKind.Null, false)), "the test host sets no IGDB keys");
+
+        using var set = await _admin.PatchAsync($"/api/games/{id}", new { igdbId = 1234 });
+        Assert.That(set.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That((await AuthClient.JsonAsync(set)).GetProperty("igdbId").GetInt32(), Is.EqualTo(1234));
+        Assert.That(((await Row(id))!.IgdbId, ReadZip(zipPath).IgdbId), Is.EqualTo(((int?)1234, (int?)1234)));
+
+        using var other = await _admin.PatchAsync($"/api/games/{id}", new { description = "Falling blocks." });
+        Assert.That(((await Row(id))!.IgdbId, ReadZip(zipPath).IgdbId), Is.EqualTo(((int?)1234, (int?)1234)), "absent = unchanged");
+
+        using var clear = await _admin.PatchAsync($"/api/games/{id}", new { igdbId = (int?)null });
+        Assert.That(clear.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(((await Row(id))!.IgdbId, ReadZip(zipPath).IgdbId), Is.EqualTo(((int?)null, (int?)null)));
     }
 
     private async Task Rate(Guid id, GamePatch patch) =>

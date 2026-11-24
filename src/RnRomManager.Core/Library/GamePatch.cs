@@ -29,4 +29,9 @@ public sealed record GamePatch
     public int? Rating { get; init; }
 
     public bool? Favourite { get; init; }
+
+    public bool SetIgdbId { get; init; }
+
+    /// <summary>null = not linked, 0 = Not on IGDB, else the IGDB game id.</summary>
+    public int? IgdbId { get; init; }
 }

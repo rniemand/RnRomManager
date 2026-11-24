@@ -62,6 +62,19 @@ public partial class ExternalLibraryTests
     }
 
     [Test]
+    public async Task PatchIgdbIdOnExternalGame()
+    {
+        var gameId = await TwoReleaseGameAsync();
+
+        var result = await EditorWith().PatchAsync(gameId, new GamePatch { SetIgdbId = true, IgdbId = 4321 }, Editor, default);
+
+        Assert.That(result.Code, Is.Null);
+        await using var db = Service<IDbConnectionFactory>().Create();
+        var row = await db.QuerySingleAsync<int?>("SELECT igdb_id FROM games WHERE id = @id", new { id = gameId.ToString() });
+        Assert.That((Read(ZipPath).IgdbId, row, await ZipPathAsync(gameId)), Is.EqualTo(((int?)4321, (int?)4321, ZipRelative)));
+    }
+
+    [Test]
     public async Task TitleEdit_MovesTheZipAndEveryFile()
     {
         var gameId = await TwoReleaseGameAsync();

@@ -225,6 +225,19 @@ export interface ImageSuggestions {
 	suggestions: ImageSuggestion[];
 }
 
+/** `GET /api/games/{id}/igdb-matches` (IGDB metadata lookup L1/L4): one IGDB game, mapped to the form's rules. */
+export interface IgdbMatch {
+	igdbId: number;
+	name: string;
+	releaseYear: number | null;
+	developers: string[];
+	publishers: string[];
+	genres: string[];
+	description: string | null;
+	coverUrl: string | null;
+	url: string | null;
+}
+
 /** `GET /api/games/{id}` (spec §23). */
 export interface GameDetail {
 	id: string;
@@ -247,6 +260,10 @@ export interface GameDetail {
 	favourite: boolean;
 	/** Saves in the game's ZIP. */
 	saveCount: number;
+	/** J1: the linked IGDB game id; null = not linked, 0 = marked Not on IGDB. */
+	igdbId: number | null;
+	/** P3: whether the IGDB keys are set (Lookup Info and the banner need them). */
+	igdbConfigured: boolean;
 	metadata: { createdAt: string; updatedAt: string };
 	roms: RomDetail[];
 	images: ImageInfo[];
@@ -623,6 +640,15 @@ export interface MissingMetadataItem {
 	releaseYear: number | null;
 	developers: string[];
 	publishers: string[];
+}
+
+/** Missing IGDB IDs R1: one row of `GET /api/reports/missing-igdb-ids`. */
+export interface MissingIgdbItem {
+	id: string;
+	displayTitle: string;
+	system: string;
+	systemName: string;
+	releaseYear: number | null;
 }
 
 /** Image Resolutions R4: one row of `GET /api/reports/image-resolutions`. */

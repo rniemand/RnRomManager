@@ -558,6 +558,18 @@
 					</tbody>
 				</table>
 			</div>
+			{#if auth.isAdmin && game.igdbConfigured && game.igdbId === null}
+				<!-- IGDB lookup N1: unlinked games only; gone once a save returns the linked detail. -->
+				<div class="alert alert-info d-flex flex-wrap align-items-center gap-2 mb-3" role="status">
+					This game isn't linked to IGDB.
+					<button
+						type="button"
+						class="btn btn-sm btn-outline-primary ms-auto"
+						onclick={() => (action = { kind: 'edit', lookup: true })}
+						><Icon name="search" /> Find on IGDB</button
+					>
+				</div>
+			{/if}
 			{#if game.description}
 				<p style="white-space: pre-line">{game.description}</p>
 			{/if}

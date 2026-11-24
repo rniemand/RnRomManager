@@ -22,6 +22,7 @@ public sealed record GameRow
     public bool HasDefaultBoxArt { get; init; }
     public int? Rating { get; init; }
     public bool Favourite { get; init; }
+    public int? IgdbId { get; init; }
 
     /// <summary>The saves in the ZIP (its <c>saves/</c> entries but the index); set by the mirror, not from <c>info.json</c>.</summary>
     public int SaveCount { get; init; }
@@ -148,6 +149,7 @@ public sealed record MirrorEntry(InfoJsonGame Info, string ZipPath, long ZipSize
             HasDefaultBoxArt = Info.Images.Any(i => i.IsCover && i.IsDefault),
             Rating = Info.Rating,
             Favourite = Info.Favourite,
+            IgdbId = Info.IgdbId,
             ZipSizeBytes = ZipSizeBytes,
             ZipMtimeUtc = WholeSeconds(ZipMtimeUtc),
             InfoSchemaVersion = Info.SchemaVersion,

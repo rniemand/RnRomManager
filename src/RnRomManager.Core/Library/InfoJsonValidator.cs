@@ -32,6 +32,8 @@ public static class InfoJsonValidator
             return $"system '{game.System}' is not a registered system";
         if (game.Rating is < 1 or > 5)
             return "rating must be null or 1-5";
+        if (game.IgdbId < 0)
+            return "igdbId must be null, 0 or positive";
         if (game.Roms.Count == 0)
             return "roms must not be empty";
         if (game.Roms.Count(r => r.IsPrimary) != 1)

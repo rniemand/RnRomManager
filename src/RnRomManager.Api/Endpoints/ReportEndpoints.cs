@@ -85,6 +85,46 @@ public static partial class ReportEndpoints
             }));
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
+        // Missing IGDB IDs R1: validates exactly as /missing-metadata, with status in place of missing.
+        reports.MapGet("/missing-igdb-ids", async (string? system, string? status, string? q, string? sort, string? dir, int? page, int? pageSize,
+            HttpContext ctx, IReportRepository repository, ISystemRegistry systems) =>
+        {
+            var errors = Validate(system, page, pageSize, systems);
+            MissingIgdbStatus? parsed = status?.ToLowerInvariant() switch
+            {
+                null or "missing" => MissingIgdbStatus.Missing,
+                "not-on-igdb" => MissingIgdbStatus.NotOnIgdb,
+                _ => null,
+            };
+            if (parsed is null)
+                errors["status"] = ["Must be missing or not-on-igdb."];
+            q = string.IsNullOrWhiteSpace(q) ? null : q.Trim();
+            if (q?.Length > 100)
+                errors["q"] = ["Must be at most 100 characters."];
+            MissingMetadataSort? sortKey = sort?.ToLowerInvariant() switch
+            {
+                null or "name" => MissingMetadataSort.Name,
+                "system" => MissingMetadataSort.System,
+                "year" => MissingMetadataSort.Year,
+                _ => null,
+            };
+            if (sortKey is null)
+                errors["sort"] = ["Must be name, system or year."];
+            bool? descending = dir?.ToLowerInvariant() switch { null or "asc" => false, "desc" => true, _ => null };
+            if (descending is null)
+                errors["dir"] = ["Must be asc or desc."];
+            if (errors.Count > 0)
+                return Problems.Validation(ctx, errors);
+
+            var result = await repository.ListMissingIgdbIdsAsync(system, parsed!.Value, q, sortKey!.Value, descending!.Value, page ?? 1,
+                pageSize ?? 50, ctx.RequestAborted);
+            return Results.Ok(Paging.ToDto(result, item => new
+            {
+                id = item.Id, displayTitle = item.DisplayTitle, system = item.SystemId, systemName = SystemName(systems, item.SystemId),
+                releaseYear = item.ReleaseYear,
+            }));
+        }).RequireAuthorization(AuthSetup.AdminOnly);
+
         // M3: the next game for the Next missing metadata shortcut, in the unfiltered default order.
         reports.MapGet("/missing-metadata/next", async (string? afterGameId, HttpContext ctx, IReportRepository repository) =>
         {

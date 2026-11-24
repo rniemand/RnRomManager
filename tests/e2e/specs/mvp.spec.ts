@@ -2453,6 +2453,18 @@ test("Admin: edit metadata, move a release, delete a release and a game", async 
   await page.getByRole("button", { name: "Edit Metadata" }).click();
   await expect(dialog()).toBeVisible();
   await expectAccessible(page, "edit metadata modal");
+  // IGDB lookup M1, M3: Details and Lookup Info tabs; e2e sets no IGDB keys, so Lookup Info only explains how to.
+  await expect(dialog().getByRole("tab", { name: "Details" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await dialog().getByRole("tab", { name: "Lookup Info" }).click();
+  await expect(
+    dialog().getByText("Metadata lookup needs an IGDB Client ID and secret."),
+  ).toBeVisible();
+  await expect(dialog().getByLabel("Search IGDB for")).toHaveCount(0);
+  await dialog().getByRole("tab", { name: "Details" }).click();
+  await expect(dialog().getByText("IGDB: not linked")).toBeVisible();
   // M2: Enter in an input saves.
   await dialog().getByLabel("Release year").fill("1995");
   await dialog().getByLabel("Release year").press("Enter");
@@ -3062,6 +3074,20 @@ test("Missing Metadata report, and the phone navbar closes after a link", async 
   await expect(page).toHaveURL(/\/collections$/);
   await expect(menu).not.toHaveClass(/\bshow\b/);
   await page.setViewportSize(viewport);
+});
+
+test("Missing IGDB IDs report", async () => {
+  // IGDB lookup R2, R3: no game is linked in e2e, so the seeded ones are listed.
+  await page.goto("/reports/missing-igdb-ids");
+  await expect(page.getByRole("link", { name: "Missing IGDB IDs" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  const red = page.getByRole("table").getByRole("link", { name: "Red Horizon", exact: true });
+  await expect(red).toHaveAttribute("href", /\/games\/[0-9a-f-]+$/);
+  await expectAccessible(page, "missing igdb ids report");
+  await red.click();
+  await expect(page.getByRole("heading", { level: 1, name: "Red Horizon" })).toBeVisible();
 });
 
 test("release editing, Games With Hacks, Newly Added and the phone shell", async () => {

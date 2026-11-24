@@ -46,6 +46,8 @@ const game = (): GameDetail => ({
 	rating: null,
 	favourite: false,
 	saveCount: 0,
+	igdbId: null,
+	igdbConfigured: false,
 	metadata: { createdAt: '', updatedAt: '' },
 	roms: [],
 	images: []

@@ -113,6 +113,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
             Description = patch.SetDescription ? patch.Description : current.Description,
             Rating = patch.SetRating ? patch.Rating : current.Rating,
             Favourite = patch.Favourite ?? current.Favourite,
+            IgdbId = patch.SetIgdbId ? patch.IgdbId : current.IgdbId,
             Metadata = Touched(current),
         };
     }
@@ -813,6 +814,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         Description = string.IsNullOrEmpty(into.Description) ? from.Description : into.Description,
         Rating = into.Rating ?? from.Rating,
         Favourite = into.Favourite || from.Favourite,
+        IgdbId = into.IgdbId ?? from.IgdbId,
         ChosenPrimarySha1 = into.ChosenPrimarySha1 ?? from.ChosenPrimarySha1,
         Roms = PrimaryRelease.Apply(roms, DatSourceOf(into.System), into.ChosenPrimarySha1 ?? from.ChosenPrimarySha1),
         Images = images,
@@ -1158,6 +1160,7 @@ public sealed partial class LibraryEditor(JobLock jobLock, IGameRepository games
         if (!before.Publishers.SequenceEqual(after.Publishers)) changed.Add("publishers");
         if (!before.Genres.SequenceEqual(after.Genres)) changed.Add("genres");
         if (before.Description != after.Description) changed.Add("description");
+        if (before.IgdbId != after.IgdbId) changed.Add("igdbId");
         return changed;
     }
 

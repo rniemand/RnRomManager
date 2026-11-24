@@ -3,7 +3,10 @@ import { resolve } from '$app/paths';
 /** A Reports tab: the layout's tab strip and Global Search's Reports group (S1) list the same ones. */
 export type ReportTab = { href: string; label: string; icon: string };
 
-/** The report tabs in order; Missing Metadata and Activity are Admin-only (B20, M4). Release editing B15: Newly Added first. */
+/**
+ * The report tabs in order; Missing Metadata, Missing IGDB IDs and Activity are Admin-only (B20, M4, R2). Release editing B15:
+ * Newly Added first.
+ */
 export function reportTabs(isAdmin: boolean): ReportTab[] {
 	return [
 		{ href: resolve('/reports/newly-added'), label: 'Newly Added', icon: 'report-new-games' },
@@ -31,6 +34,11 @@ export function reportTabs(isAdmin: boolean): ReportTab[] {
 						href: resolve('/reports/missing-metadata'),
 						label: 'Missing Metadata',
 						icon: 'report-missing-metadata'
+					},
+					{
+						href: resolve('/reports/missing-igdb-ids'),
+						label: 'Missing IGDB IDs',
+						icon: 'report-missing-igdb'
 					},
 					{ href: resolve('/reports/activity'), label: 'Activity', icon: 'activity' }
 				]

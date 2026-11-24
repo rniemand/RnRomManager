@@ -195,6 +195,16 @@ public class AuditLibraryEditTests
     }
 
     [Test]
+    public async Task Patch_IgdbId_IsListedInTheChangedFields()
+    {
+        var tetris = await Ingest("w.gb", TetrisWorld);
+
+        Ok(await _admin.PatchAsync($"/api/games/{tetris}", new { igdbId = 0 }));
+
+        Assert.That((await EditRows()).Single().Details, Is.EqualTo("igdbId"));
+    }
+
+    [Test]
     public async Task ReleaseDelete_WithTheEntryMissingFromTheZip_HasANullTarget()
     {
         var tetris = await Ingest("w.gb", TetrisWorld);
