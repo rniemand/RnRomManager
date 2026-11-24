@@ -31,6 +31,9 @@ public class IngestPipelineTests
     private static readonly byte[] SeaQuest = new SyntheticRomBuilder { Seed = 3, Title = "SEAQUEST" }.Build();
     private static readonly SyntheticN64RomBuilder Kart = new() { Seed = 64, SizeBytes = 8192, Title = "KART", GameCode = "NKTE" };
     private static readonly byte[] Gold = new SyntheticRomBuilder { Seed = 4, Title = "POKEMON_GLD", CgbFlag = 0xC0 }.Build();
+    private static readonly byte[] PrismTower = new SyntheticNgpRomBuilder { Seed = 1951, Colour = true, Title = "PRISMTOWER" }.Build();
+    /// <summary>A colour header listed in the mono DAT: the DAT decides the system.</summary>
+    private static readonly byte[] DualMode = new SyntheticNgpRomBuilder { Seed = 1952, Colour = true, Title = "DUALMODE" }.Build();
     private static readonly byte[] Pioneer = new SyntheticNesRomBuilder { Seed = 70, Mapper = 1 }.Build();
     /// <summary>The same dump without its 16-byte header: what the DAT's <c>.unh</c> entry hashes.</summary>
     private static readonly byte[] PioneerHeaderless = Pioneer[16..];
@@ -189,8 +192,8 @@ public class IngestPipelineTests
             ],
             // TurboGrafx-CD B3: libretro's DAT lists one track per disc, usually the data track (Track 02).
             [IngestSeeder.TurboGrafxCdDat] = [new FixtureGame("Disc Ninja (Japan)", "Disc Ninja (Japan) (Track 02).bin", NinjaData)],
-            [IngestSeeder.NeoGeoPocketDat] = [],
-            [IngestSeeder.NeoGeoPocketColorDat] = [],
+            [IngestSeeder.NeoGeoPocketDat] = [new FixtureGame("Dual Mode (Japan)", "Dual Mode (Japan).ngp", DualMode)],
+            [IngestSeeder.NeoGeoPocketColorDat] = [new FixtureGame("Prism Tower (World)", "Prism Tower (World).ngc", PrismTower)],
             [IngestSeeder.ThreeDsDat] =
             [
                 new FixtureGame("Cart Quest (USA)", "Cart Quest (USA).3ds", CartQuest),
@@ -1325,6 +1328,86 @@ public class IngestPipelineTests
         var game = ReadZip("gbc/P/Pokemon - Gold Version.zip");
         Assert.That(game.System, Is.EqualTo("gbc"));
         Assert.That(game.ReleaseYear, Is.EqualTo(2000));
+    }
+
+    [Test]
+    public async Task NgpcRomDroppedInNgpFolderUnderAnAlias_LandsUnderNgpc_WithTheDatsName()
+    {
+        var result = await IngestAsync(Drop("ngp", "tower.ngpc", PrismTower));
+
+        Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, "ngpc")), result.Details);
+        var game = ReadZip("ngpc/P/Prism Tower.zip");
+        Assert.That(game.System, Is.EqualTo("ngpc"));
+        var rom = game.Roms.Single();
+        Assert.That(rom.FileName, Is.EqualTo("Prism Tower (World).ngc"));
+        Assert.That(rom.Header!.Select(kv => kv.Key), Is.EqualTo(new[] { "title", "licence", "catalog", "subCatalog", "mode", "colour", "startPc" }));
+        Assert.That((rom.Header!["colour"]!.GetValue<bool>(), rom.Header!["title"]!.GetValue<string>()), Is.EqualTo((true, "PRISMTOWER")));
+    }
+
+    [Test]
+    public async Task ColourHeaderListedInTheMonoDat_LandsUnderNgp()
+    {
+        var result = await IngestAsync(Drop("ngpc", "dual.ngc", DualMode));
+
+        Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, "ngp")), result.Details);
+        Assert.That(ReadZip("ngp/D/Dual Mode.zip").System, Is.EqualTo("ngp"));
+    }
+
+    [Test]
+    public async Task Ngp_UnmatchedColour_IsRenamedToNgcAndWaitsUnderNgpc()
+    {
+        var file = Drop("ngp", "odd.ngp", new SyntheticNgpRomBuilder { Seed = 1953, Colour = true }.Build());
+
+        var result = await IngestAsync(file);
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "ngpc")));
+        Assert.That((File.Exists(file.FullPath), File.Exists(Path.Combine(Ingest("ngp"), "odd.ngc"))), Is.EqualTo((false, true)));
+    }
+
+    [Test]
+    public async Task Ngp_UnmatchedMono_IsRenamedToNgpAndWaitsUnderNgp()
+    {
+        var file = Drop("ngpc", "odd.npc", new SyntheticNgpRomBuilder { Seed = 1954 }.Build());
+
+        var result = await IngestAsync(file);
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "ngp")));
+        Assert.That((File.Exists(file.FullPath), File.Exists(Path.Combine(Ingest("ngpc"), "odd.ngp"))), Is.EqualTo((false, true)));
+    }
+
+    [Test]
+    public async Task Ngp_UnmatchedWithoutTheSnkLicence_IsInvalidHeader()
+    {
+        var bytes = new SyntheticNgpRomBuilder { Seed = 1955, Licence = "COPYRIGHT BY SNK CORPORATIOX" }.Build();
+
+        var result = await IngestAsync(Drop("ngp", "bad.ngp", bytes));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.InvalidHeader)));
+    }
+
+    [Test]
+    public async Task Ngp_UnderTheHeaderSize_IsTooSmall()
+    {
+        var result = await IngestAsync(Drop("ngp", "tiny.ngp", new byte[63]));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooSmall)));
+    }
+
+    [Test]
+    public async Task Ngp_OverFourMiB_IsTooLarge()
+    {
+        var result = await IngestAsync(Drop("ngp", "huge.ngp", new byte[4 * 1024 * 1024 + 1]));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooLarge)));
+    }
+
+    [TestCase("ngp", "other.gb")]
+    [TestCase("gb", "other.ngp")]
+    public async Task OtherFamilysExtension_IsUnsupportedType(string folder, string name)
+    {
+        var result = await IngestAsync(Drop(folder, name, new SyntheticNgpRomBuilder { Seed = 1956 }.Build()));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
     }
 
     [Test]
