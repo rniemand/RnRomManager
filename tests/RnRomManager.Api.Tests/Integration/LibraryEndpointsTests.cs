@@ -241,6 +241,17 @@ public partial class LibraryEndpointsTests
     }
 
     [Test]
+    public async Task Mame_AnExternalSetIsPlayable_FromDownload_NotPlayDisc()
+    {
+        var release = await IngestMame("rnsolo.zip", "SOLO");
+
+        Assert.That((await GetJson($"/api/games/{release.GameId}")).GetProperty("browserCore").GetString(), Is.EqualTo("mame2003_plus"));
+        var listed = (await GetJson("/api/games?system=mame2003")).GetProperty("items").EnumerateArray().Single();
+        Assert.That((listed.GetProperty("browserCore").GetString(), listed.GetProperty("playDisc").GetBoolean()), Is.EqualTo(("mame2003_plus", false)));
+        Assert.That(listed.GetProperty("playRomFileName").GetString(), Is.EqualTo("rnsolo.mamez"));
+    }
+
+    [Test]
     public void Romset_IsMaintenanceExempt()
     {
         var endpoint = Service<Microsoft.AspNetCore.Routing.EndpointDataSource>().Endpoints.OfType<Microsoft.AspNetCore.Routing.RouteEndpoint>()

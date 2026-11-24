@@ -2597,3 +2597,127 @@ describe('play page Nintendo 3DS (3DS G4)', () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });
+
+describe('play page Arcade (MAME 2003-Plus, Arcade P3, P4)', () => {
+	const check = '/api/emulator/cores/mame2003_plus';
+	const romsetUrl = `/api/games/${game}/roms/12/romset`;
+	const parentGame = '11111111-1111-4111-8111-111111111111';
+	const parentUrl = `/api/games/${parentGame}/roms/40/download`;
+	const biosUrl = `/api/games/${parentGame}/roms/41/download`;
+
+	function romset(body: object, status = 200) {
+		return async () => new Response(JSON.stringify(body), { status }) as unknown as FakeResponse;
+	}
+
+	function bytes(text: string) {
+		return async () => ({ ...response(200), blob: async () => new Blob([text]) }) as FakeResponse;
+	}
+
+	it('loads the game as <set>.zip and its parent and BIOS beside it, keyed /<set>.zip', async () => {
+		serve({
+			[check]: async () => response(204),
+			[romsetUrl]: romset({
+				setName: 'sf2ua',
+				deps: [
+					{ setName: 'sf2', gameId: parentGame, romId: 40 },
+					{ setName: 'qsound', gameId: parentGame, romId: 41 }
+				],
+				missing: []
+			}),
+			[romUrl]: async () => response(200),
+			[parentUrl]: bytes('parent'),
+			[biosUrl]: bytes('bios')
+		});
+
+		await play('mame2003_plus', 'sf2ua.mamez');
+
+		expect(urls()).toEqual([check, romsetUrl, romUrl, parentUrl, biosUrl]);
+		expect((atLoader?.EJS_gameUrl as File).name).toBe('sf2ua.zip');
+		expect(atLoader).toMatchObject({
+			EJS_core: 'mame2003_plus',
+			EJS_gameName: 'sf2ua.mamez',
+			EJS_hideSettings: ['retroarch_core'],
+			EJS_Buttons: { saveSavFiles: false, loadSavFiles: false }
+		});
+		const files = atLoader?.EJS_externalFiles as Record<string, ArrayBuffer>;
+		expect(Object.keys(files)).toEqual(['/sf2.zip', '/qsound.zip']);
+		expect(new TextDecoder().decode(files['/sf2.zip'])).toBe('parent');
+		expect(new TextDecoder().decode(files['/qsound.zip'])).toBe('bios');
+	});
+
+	it('sets no external files for a set with no dependencies', async () => {
+		serve({
+			[check]: async () => response(204),
+			[romsetUrl]: romset({ setName: 'puckman', deps: [], missing: [] }),
+			[romUrl]: async () => response(200)
+		});
+
+		await play('mame2003_plus', 'Puck Man.mamez');
+
+		expect((atLoader?.EJS_gameUrl as File).name).toBe('puckman.zip');
+		expect(atLoader?.EJS_externalFiles).toBeUndefined();
+	});
+
+	it.each([
+		[
+			['sf2'],
+			'This game needs the sf2 romset. Import it into Arcade (MAME 2003-Plus), then play again.'
+		],
+		[
+			['sf2', 'qsound'],
+			'This game needs the sf2, qsound romsets. Import them into Arcade (MAME 2003-Plus), then play again.'
+		]
+	])('stops on missing sets %j before any download', async (missing, message) => {
+		serve({
+			[check]: async () => response(204),
+			[romsetUrl]: romset({ setName: 'sf2ua', deps: [], missing })
+		});
+
+		expect(await play('mame2003_plus', 'sf2ua.mamez')).toBe(message);
+		expect(urls()).toEqual([check, romsetUrl]);
+		expect(atLoader).toBeNull();
+	});
+
+	it.each([
+		[401, 'Your session has expired. Sign in again.'],
+		[500, "Couldn't load the romset list (HTTP 500)."]
+	])('shows the romset list error for HTTP %i', async (status, message) => {
+		serve({ [check]: async () => response(204), [romsetUrl]: romset({}, status) });
+
+		const shown = await play('mame2003_plus', 'sf2ua.mamez');
+
+		expect(shown).toBe(message);
+		expect(atLoader).toBeNull();
+	});
+
+	it('shows the romset list network error', async () => {
+		serve({
+			[check]: async () => response(204),
+			[romsetUrl]: () => Promise.reject(new TypeError('offline'))
+		});
+
+		expect(await play('mame2003_plus', 'sf2ua.mamez')).toBe("Couldn't load the romset list.");
+	});
+
+	it.each([
+		['HTTP', async () => response(503), "Couldn't load the sf2 romset (HTTP 503)."],
+		['401', async () => response(401), 'Your session has expired. Sign in again.'],
+		['network', () => Promise.reject(new TypeError('offline')), "Couldn't load the sf2 romset."]
+	])('stops on a dependency %s failure', async (_kind, dep, message) => {
+		serve({
+			[check]: async () => response(204),
+			[romsetUrl]: romset({
+				setName: 'sf2ua',
+				deps: [{ setName: 'sf2', gameId: parentGame, romId: 40 }],
+				missing: []
+			}),
+			[romUrl]: async () => response(200),
+			[parentUrl]: dep as () => Promise<FakeResponse>
+		});
+
+		const shown = await play('mame2003_plus', 'sf2ua.mamez');
+
+		expect(shown).toBe(message);
+		expect(atLoader).toBeNull();
+	});
+});

@@ -494,3 +494,14 @@ export function contentSize(bytes) {
 	if (bytes < 1024 * 1024 * 1024) return `${sizeNumber.format(bytes / (1024 * 1024))} MiB`;
 	return `${sizeNumber.format(bytes / (1024 * 1024 * 1024))} GiB`;
 }
+
+/**
+ * Arcade P3: the play error when a clone's parent or a BIOS set isn't in the library (and the set isn't self-contained).
+ * @param {string[]} missing the set names, in the server's order
+ * @returns {string}
+ */
+export function romsetMissingError(missing) {
+	return missing.length === 1
+		? `This game needs the ${missing[0]} romset. Import it into Arcade (MAME 2003-Plus), then play again.`
+		: `This game needs the ${missing.join(', ')} romsets. Import them into Arcade (MAME 2003-Plus), then play again.`;
+}
