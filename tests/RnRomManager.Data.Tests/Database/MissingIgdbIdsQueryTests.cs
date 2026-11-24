@@ -94,4 +94,28 @@ public class MissingIgdbIdsQueryTests
 
         Assert.That((second.Items.Select(i => i.Id), second.Total), Is.EqualTo((new[] { ids[2] }, 3L)));
     }
+
+    [Test]
+    public async Task Next_FollowsTitleOrder_SkipsLinkedAndNotOnIgdb_Wraps_AndKeepsALinkedAnchorsPlace()
+    {
+        var a = await Add("Alpha");
+        await Add("Bravo", igdbId: 0);
+        await Add("Charlie", igdbId: 77);
+        var d = await Add("Delta");
+
+        Assert.That(await _reports.NextMissingIgdbIdAsync(null, default), Is.EqualTo(new MissingImageSuccessor(a, false)));
+        Assert.That(await _reports.NextMissingIgdbIdAsync(a, default), Is.EqualTo(new MissingImageSuccessor(d, false)));
+        Assert.That(await _reports.NextMissingIgdbIdAsync(d, default), Is.EqualTo(new MissingImageSuccessor(a, false)), "wraps");
+        Assert.That(await _reports.NextMissingIgdbIdAsync(Guid.NewGuid(), default), Is.EqualTo(new MissingImageSuccessor(a, false)));
+    }
+
+    [Test]
+    public async Task Next_CurrentIsOnly_AndNone()
+    {
+        Assert.That(await _reports.NextMissingIgdbIdAsync(null, default), Is.EqualTo(new MissingImageSuccessor(null, false)));
+        var only = await Add("Only");
+        Assert.That(await _reports.NextMissingIgdbIdAsync(only, default), Is.EqualTo(new MissingImageSuccessor(null, true)));
+        var linked = await Add("Linked", igdbId: 5);
+        Assert.That(await _reports.NextMissingIgdbIdAsync(linked, default), Is.EqualTo(new MissingImageSuccessor(only, false)));
+    }
 }

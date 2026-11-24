@@ -33,6 +33,12 @@ public interface IReportRepository
     /// <summary>M3: as <see cref="NextMissingImageAsync"/>, in the unfiltered default order (display title, id).</summary>
     Task<MissingImageSuccessor> NextMissingMetadataAsync(Guid? afterGameId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// As <see cref="NextMissingImageAsync"/>, for games not linked to IGDB (<c>igdb_id IS NULL</c>; Not on IGDB is skipped) in the
+    /// Missing IGDB IDs report's unfiltered default order (display title, id).
+    /// </summary>
+    Task<MissingImageSuccessor> NextMissingIgdbIdAsync(Guid? afterGameId, CancellationToken cancellationToken);
+
     /// <summary>RP2: per system with at least one game, <c>SUM(games.zip_size_bytes)</c>, the game and update-release counts, largest first.</summary>
     Task<IReadOnlyList<SystemSize>> ListSystemSizesAsync(CancellationToken cancellationToken);
 

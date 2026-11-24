@@ -126,18 +126,12 @@ public static partial class ReportEndpoints
         }).RequireAuthorization(AuthSetup.AdminOnly);
 
         // M3: the next game for the Next missing metadata shortcut, in the unfiltered default order.
-        reports.MapGet("/missing-metadata/next", async (string? afterGameId, HttpContext ctx, IReportRepository repository) =>
-        {
-            Guid? after = null;
-            if (afterGameId is not null)
-            {
-                if (!Guid.TryParse(afterGameId, out var parsed))
-                    return Problems.Validation(ctx, new Dictionary<string, string[]> { ["afterGameId"] = ["Must be a game ID."] });
-                after = parsed;
-            }
-            var next = await repository.NextMissingMetadataAsync(after, ctx.RequestAborted);
-            return Results.Ok(new { id = next.Id, currentIsOnly = next.CurrentIsOnly });
-        }).RequireAuthorization(AuthSetup.AdminOnly);
+        reports.MapGet("/missing-metadata/next", (string? afterGameId, HttpContext ctx, IReportRepository repository) =>
+            NextAsync(afterGameId, ctx, repository.NextMissingMetadataAsync)).RequireAuthorization(AuthSetup.AdminOnly);
+
+        // The next unlinked game for the Next missing IGDB ID shortcut, in the Missing IGDB IDs report's default order.
+        reports.MapGet("/missing-igdb-ids/next", (string? afterGameId, HttpContext ctx, IReportRepository repository) =>
+            NextAsync(afterGameId, ctx, repository.NextMissingIgdbIdAsync)).RequireAuthorization(AuthSetup.AdminOnly);
 
         // B21: the Admin-only Activity report (the group itself is any signed-in user). Audit lists cover the 30-day retention.
         reports.MapGet("/activity", async (HttpContext ctx, IReportRepository repository, IAuditRepository audit, IUserRepository users) =>
@@ -417,6 +411,21 @@ public static partial class ReportEndpoints
     }
 
     private static string SystemName(ISystemRegistry systems, string id) => systems.ById(id)?.DisplayName ?? id;
+
+    /// <summary>A "next game" shortcut's answer: <c>afterGameId</c> must be a GUID when given (400 otherwise).</summary>
+    private static async Task<IResult> NextAsync(string? afterGameId, HttpContext ctx,
+        Func<Guid?, CancellationToken, Task<MissingImageSuccessor>> next)
+    {
+        Guid? after = null;
+        if (afterGameId is not null)
+        {
+            if (!Guid.TryParse(afterGameId, out var parsed))
+                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["afterGameId"] = ["Must be a game ID."] });
+            after = parsed;
+        }
+        var found = await next(after, ctx.RequestAborted);
+        return Results.Ok(new { id = found.Id, currentIsOnly = found.CurrentIsOnly });
+    }
 }
 
 /// <summary><c>POST /api/reports/duplicates/dismiss</c> (RP8).</summary>

@@ -1377,7 +1377,7 @@ describe('reports pages', () => {
 			render(MissingIgdbIds);
 
 			const link = await screen.findByRole('link', { name: 'Game g1' });
-			expect(link.getAttribute('href')).toBe('/games/g1');
+			expect(link.getAttribute('href')).toBe('/games/g1?from=missing-igdb');
 			expect(
 				[...document.querySelectorAll('thead th')].map((th) => th.textContent!.trim())
 			).toEqual(['Game', 'System', 'Year']);
@@ -1414,7 +1414,8 @@ describe('reports pages', () => {
 			answers[list('not-on-igdb', 2)] = { status: 200, body: body([item('g1')], 60, 2) };
 			render(MissingIgdbIds);
 
-			await screen.findByRole('link', { name: 'Game g1' });
+			const link = await screen.findByRole('link', { name: 'Game g1' });
+			expect(link.getAttribute('href')).toBe('/games/g1');
 			expect(calls).toContain(list('not-on-igdb', 2));
 			expect((screen.getByLabelText('Show') as HTMLSelectElement).value).toBe('not-on-igdb');
 		});

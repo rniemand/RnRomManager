@@ -246,6 +246,60 @@ describe('game detail page', () => {
 			expect(await modal.findByText('No IGDB matches for “Tetris”.')).toBeTruthy();
 		});
 
+		it('from=missing-igdb opens Lookup Info and searches on arrival, once; with the Next missing IGDB ID button', async () => {
+			const run = vi.spyOn(hotkeys, 'run').mockResolvedValue();
+			navigateTo('/games/g1?from=missing-igdb');
+			// The dialog searches as the page loads, so its answer follows the game's.
+			answers.push(
+				{ status: 200, body: { ...game([1]), igdbConfigured: true, igdbId: null } },
+				{ status: 200, body: { matches: [] } }
+			);
+			render(GamePage);
+			await screen.findByRole('button', { name: 'Download ZIP', hidden: true });
+
+			const modal = within(document.querySelector<HTMLElement>('.modal')!);
+			await vi.waitFor(() =>
+				expect(
+					modal
+						.getByRole('tab', { name: 'Lookup Info', hidden: true })
+						.getAttribute('aria-selected')
+				).toBe('true')
+			);
+			expect(await modal.findByText('No IGDB matches for “Tetris”.')).toBeTruthy();
+
+			const next = screen.getByRole('button', { name: 'Next missing IGDB ID', hidden: true });
+			expect(next.className).toBe('btn btn-sm btn-outline-primary');
+			await fireEvent.click(next);
+			expect(run).toHaveBeenCalledWith('reports.missingIgdbId.next');
+			run.mockRestore();
+		});
+
+		it('from=missing-igdb opens nothing for a linked game, without IGDB keys, or for a Site user', async () => {
+			const lookupTab = () => screen.queryByRole('tab', { name: 'Lookup Info', hidden: true });
+			for (const changes of [{ igdbId: 1234 }, { igdbId: null, igdbConfigured: false }]) {
+				navigateTo('/games/g1?from=missing-igdb');
+				const { unmount } = await show(changes);
+				expect(lookupTab()).toBeNull();
+				unmount();
+			}
+			auth.set({ id: 2, username: 'site', roles: [], mustChangePassword: false });
+			navigateTo('/games/g1?from=missing-igdb');
+			await show({ igdbId: null });
+			expect(lookupTab()).toBeNull();
+			expect(screen.queryByRole('button', { name: 'Next missing IGDB ID' })).toBeNull();
+		});
+
+		it('switching tabs keeps from=missing-igdb', async () => {
+			navigateTo('/games/g1?from=missing-igdb');
+			await show({ igdbId: 1234 });
+
+			await fireEvent.click(screen.getByRole('tab', { name: 'Zip Contents' }));
+			expect(goto).toHaveBeenLastCalledWith('/games/g1?from=missing-igdb&tab=zip', {
+				replace: true,
+				reset: false
+			});
+		});
+
 		it('goes away once a save returns the linked detail', async () => {
 			await show({ igdbId: null });
 			await fireEvent.click(screen.getByRole('button', { name: 'Find on IGDB' }));

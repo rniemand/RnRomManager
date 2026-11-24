@@ -136,7 +136,7 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         // As ListMissingMetadataAsync: the predicate, key and direction come only from the enums and bool.
         var where = "WHERE " + status switch
         {
-            MissingIgdbStatus.Missing => "g.igdb_id IS NULL",
+            MissingIgdbStatus.Missing => MissingIgdbId,
             MissingIgdbStatus.NotOnIgdb => "g.igdb_id = 0",
             _ => throw new ArgumentOutOfRangeException(nameof(status)),
         } + (systemId is null ? "" : " AND g.system_id = @systemId") + (q is null ? "" : " AND g.display_title LIKE @q");
@@ -163,14 +163,24 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         return new Page<MissingIgdbItem>(items, page, pageSize, total);
     }
 
-    public async Task<MissingImageSuccessor> NextMissingMetadataAsync(Guid? afterGameId, CancellationToken cancellationToken)
+    public Task<MissingImageSuccessor> NextMissingMetadataAsync(Guid? afterGameId, CancellationToken cancellationToken) =>
+        NextByTitleAsync(MissingMetadata, afterGameId, cancellationToken);
+
+    /// <summary>Missing IGDB IDs R1's Missing status: not linked and not marked Not on IGDB (<c>igdb_id = 0</c>).</summary>
+    private const string MissingIgdbId = "g.igdb_id IS NULL";
+
+    public Task<MissingImageSuccessor> NextMissingIgdbIdAsync(Guid? afterGameId, CancellationToken cancellationToken) =>
+        NextByTitleAsync(MissingIgdbId, afterGameId, cancellationToken);
+
+    /// <summary>The next game matching <paramref name="predicate"/> (a constant, never input) in (display title, id) order.</summary>
+    private async Task<MissingImageSuccessor> NextByTitleAsync(string predicate, Guid? afterGameId, CancellationToken cancellationToken)
     {
         // As NextMissingImageAsync: the anchor keeps its place even once fixed; rows after it first, then the wrap.
         await using var connection = connections.Create();
         var next = await connection.ExecuteScalarAsync<Guid?>(new CommandDefinition($"""
             SELECT g.id FROM games g
             LEFT JOIN games a ON a.id = @afterGameId
-            WHERE {MissingMetadata} AND (a.id IS NULL OR g.id <> a.id)
+            WHERE {predicate} AND (a.id IS NULL OR g.id <> a.id)
             ORDER BY CASE WHEN a.id IS NULL OR (g.display_title, g.id) > (a.display_title, a.id) THEN 0 ELSE 1 END,
                      {MissingMetadataOrder}
             LIMIT 1
@@ -180,7 +190,7 @@ public sealed class ReportRepository(IDbConnectionFactory connections) : IReport
         if (afterGameId is null)
             return new MissingImageSuccessor(null, false);
         var currentMissing = await connection.ExecuteScalarAsync<long>(new CommandDefinition(
-            $"SELECT COUNT(*) FROM games g WHERE g.id = @afterGameId AND {MissingMetadata}", new { afterGameId },
+            $"SELECT COUNT(*) FROM games g WHERE g.id = @afterGameId AND {predicate}", new { afterGameId },
             cancellationToken: cancellationToken));
         return new MissingImageSuccessor(null, currentMissing > 0);
     }

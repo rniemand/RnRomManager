@@ -18,7 +18,8 @@ export type HotkeyId =
 	| 'nav.admin'
 	| 'nav.deleted'
 	| 'reports.missingImage.next'
-	| 'reports.missingMetadata.next';
+	| 'reports.missingMetadata.next'
+	| 'reports.missingIgdbId.next';
 export type EditableHotkeyId = Exclude<HotkeyId, 'search'>;
 export type Bindings = Record<EditableHotkeyId, string | null>;
 
@@ -115,6 +116,14 @@ export const actions: readonly HotkeyAction[] = [
 		id: 'reports.missingMetadata.next',
 		name: 'Next missing metadata',
 		defaults: [],
+		editable: true,
+		role: 'admin'
+	},
+	{
+		// Opens the next unlinked game on Edit Metadata's Lookup Info.
+		id: 'reports.missingIgdbId.next',
+		name: 'Next missing IGDB ID',
+		defaults: ['Alt+Shift+U'],
 		editable: true,
 		role: 'admin'
 	}

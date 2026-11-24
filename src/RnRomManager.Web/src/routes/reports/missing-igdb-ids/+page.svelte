@@ -246,7 +246,14 @@
 						<tbody>
 							{#each result.items as item (item.id)}
 								<tr>
-									<td><a href={resolve('/games/[id]', { id: item.id })}>{item.displayTitle}</a></td>
+									<td>
+										<!-- Unlinked games open Lookup Info, with Next missing IGDB ID (as Missing Metadata's links). -->
+										<a
+											href="{resolve('/games/[id]', { id: item.id })}{view.status === 'missing'
+												? '?from=missing-igdb'
+												: ''}">{item.displayTitle}</a
+										>
+									</td>
 									<td><SystemBadge system={item.system} name={item.systemName} /></td>
 									<td>{item.releaseYear ?? '—'}</td>
 								</tr>

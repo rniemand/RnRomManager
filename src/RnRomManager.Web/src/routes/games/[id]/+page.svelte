@@ -430,11 +430,28 @@
 
 	/** Missing Metadata M7: opened from that report; kept across tab switches. */
 	const fromMissingMetadata = $derived(page.url.searchParams.get('from') === 'missing-metadata');
+	/** Opened by Next missing IGDB ID or from the Missing IGDB IDs report; kept across tab switches. */
+	const fromMissingIgdb = $derived(page.url.searchParams.get('from') === 'missing-igdb');
+
+	/** The game whose Lookup Info was opened on arrival from missing-igdb: once per game, so closing it sticks. */
+	let lookupOpenedFor: string | null = null;
+	$effect(() => {
+		const current = game;
+		if (!fromMissingIgdb || !auth.isAdmin || !current || current.id !== id) return;
+		untrack(() => {
+			if (lookupOpenedFor === current.id) return;
+			lookupOpenedFor = current.id;
+			// As Find on IGDB: Edit Metadata on Lookup Info, searching at once.
+			if (current.igdbConfigured && current.igdbId === null && action === null)
+				action = { kind: 'edit', lookup: true };
+		});
+	});
 
 	function selectTab(next: Tab): void {
 		const path = resolve('/games/[id]', { id });
 		const query = [
 			fromMissingMetadata && 'from=missing-metadata',
+			fromMissingIgdb && 'from=missing-igdb',
 			next !== 'releases' && `tab=${next}`
 		]
 			.filter(Boolean)
@@ -655,6 +672,15 @@
 						onclick={() => void hotkeys.run('reports.missingMetadata.next')}
 					>
 						<Icon name="report-missing-metadata" /> Next missing metadata
+					</button>
+				{/if}
+				{#if fromMissingIgdb && auth.isAdmin}
+					<button
+						type="button"
+						class="btn btn-sm btn-outline-primary"
+						onclick={() => void hotkeys.run('reports.missingIgdbId.next')}
+					>
+						<Icon name="search" /> Next missing IGDB ID
 					</button>
 				{/if}
 				<!-- B3: Manage, last in the row: View info.json for everyone, then the Admin actions. -->

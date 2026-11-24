@@ -31,6 +31,9 @@ public static class Hotkeys
     /// <summary>Missing Metadata M5: no default key (an empty <c>Defaults</c> is unbound).</summary>
     public const string MissingMetadataNext = "reports.missingMetadata.next";
 
+    /// <summary>Opens the next game not linked to IGDB, on Edit Metadata's Lookup Info.</summary>
+    public const string MissingIgdbIdNext = "reports.missingIgdbId.next";
+
     public const string FormatError = "Use Ctrl, Alt, Shift or Meta plus one key: A–Z, 0–9 or F1–F12.";
     public const string ModifierError = "Include Ctrl, Alt or Meta.";
     public const string AltGrError = "Ctrl+Alt also needs Shift or Meta: on many keyboards it types characters.";
@@ -58,6 +61,7 @@ public static class Hotkeys
         new(NavDeleted, "Go to Deleted ROMs", ["Alt+Shift+D"], true, Roles.Admin),
         new(MissingImageNext, "Next missing image", ["Alt+Shift+M"], true, null),
         new(MissingMetadataNext, "Next missing metadata", [], true, Roles.Admin),
+        new(MissingIgdbIdNext, "Next missing IGDB ID", ["Alt+Shift+U"], true, Roles.Admin),
     ];
 
     /// <summary>
@@ -65,7 +69,7 @@ public static class Hotkeys
     /// library-reset-missing-images B2): with no override of their own, they are unassigned while another allowed action's
     /// override holds their default, so that older override keeps working and saves don't start failing. Older actions keep K1.
     /// </summary>
-    private static readonly HashSet<string> YieldingDefaults = new(StringComparer.Ordinal) { MissingImageNext };
+    private static readonly HashSet<string> YieldingDefaults = new(StringComparer.Ordinal) { MissingImageNext, MissingIgdbIdNext };
 
     /// <summary>Global search's own bindings: no action may take them.</summary>
     public static IReadOnlyList<string> Reserved => Actions[0].Defaults;

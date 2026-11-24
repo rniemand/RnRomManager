@@ -28,6 +28,7 @@ public class HotkeysTests
             ("nav.deleted", "Alt+Shift+D", true, Roles.Admin),
             ("reports.missingImage.next", "Alt+Shift+M", true, null),
             ("reports.missingMetadata.next", "", true, Roles.Admin),
+            ("reports.missingIgdbId.next", "Alt+Shift+U", true, Roles.Admin),
         }));
         Assert.That(Hotkeys.Actions.Skip(1).SelectMany(a => a.Defaults), Has.None.AnyOf(Hotkeys.Reserved.ToArray()));
         Assert.That(Hotkeys.Actions.Skip(1).SelectMany(a => a.Defaults), Is.Unique);
@@ -98,6 +99,18 @@ public class HotkeysTests
 
         Assert.That((merged["nav.library"], merged[Next]), Is.EqualTo(("Alt+Shift+M", (string?)null)));
         Assert.That(Hotkeys.ImplicitUnassigned(stored, User), Is.EqualTo(new[] { Next }));
+    }
+
+    [Test]
+    public void Merge_AnOlderOverrideOnTheNextMissingIgdbIdDefault_LeavesItImplicitlyUnassigned()
+    {
+        var stored = Map(("nav.review", "Alt+Shift+U"));
+
+        var merged = Hotkeys.Merge(stored, Admin);
+
+        Assert.That((merged["nav.review"], merged[Hotkeys.MissingIgdbIdNext]), Is.EqualTo(("Alt+Shift+U", (string?)null)));
+        Assert.That(Hotkeys.ImplicitUnassigned(stored, Admin), Is.EqualTo(new[] { Hotkeys.MissingIgdbIdNext }));
+        Assert.That(Hotkeys.Merge(Map(), Admin)[Hotkeys.MissingIgdbIdNext], Is.EqualTo("Alt+Shift+U"));
     }
 
     [Test]
@@ -247,7 +260,8 @@ public class HotkeysTests
         Assert.That(merged, Is.EqualTo(Map(
             ("nav.library", "Alt+Shift+L"), ("nav.collections", "Alt+Shift+C"), ("nav.ingestion", "Alt+Shift+I"), ("nav.review", "Alt+Shift+L"),
             ("review.next", "Alt+Shift+G"), ("nav.reports", "Alt+Shift+R"), ("nav.integrity", "Alt+Shift+T"), ("nav.admin", "Alt+Shift+A"),
-            ("nav.deleted", "Alt+Shift+D"), ("reports.missingImage.next", "Alt+Shift+M"), ("reports.missingMetadata.next", null))));
+            ("nav.deleted", "Alt+Shift+D"), ("reports.missingImage.next", "Alt+Shift+M"), ("reports.missingMetadata.next", null),
+            ("reports.missingIgdbId.next", "Alt+Shift+U"))));
     }
 
     [Test]
