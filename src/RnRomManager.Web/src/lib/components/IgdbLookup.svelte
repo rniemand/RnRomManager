@@ -55,6 +55,17 @@
 		description: 'Description'
 	};
 
+	/** The rows that can be copied (IGDB has a different, non-empty value). */
+	const enabledFields = $derived(copy ? copyFields.filter((f) => !copy![f].disabled) : []);
+	const tickedCount = $derived(enabledFields.filter((f) => copy![f].checked).length);
+
+	/** Toggle all: ticks every enabled row, or clears them all when every one is already ticked. */
+	function toggleAll(): void {
+		if (!copy) return;
+		const next = tickedCount < enabledFields.length;
+		for (const field of enabledFields) copy[field].checked = next;
+	}
+
 	function select(match: IgdbMatch): void {
 		selected = match.igdbId;
 		copy = defaultCopyFields(form, match);
@@ -222,7 +233,19 @@
 				<caption class="visually-hidden">Fields to copy from IGDB</caption>
 				<thead class="table-dark">
 					<tr>
-						<th scope="col"><span class="visually-hidden">Copy</span></th>
+						<th scope="col">
+							<span class="visually-hidden">Copy</span>
+							<input
+								type="checkbox"
+								class="form-check-input copy-check"
+								aria-label="Toggle all fields"
+								title="Toggle all fields"
+								disabled={enabledFields.length === 0}
+								checked={enabledFields.length > 0 && tickedCount === enabledFields.length}
+								indeterminate={tickedCount > 0 && tickedCount < enabledFields.length}
+								onchange={toggleAll}
+							/>
+						</th>
 						<th scope="col">Field</th>
 						<th scope="col">Current</th>
 						<th scope="col">IGDB</th>
@@ -230,11 +253,11 @@
 				</thead>
 				<tbody>
 					{#each copyFields as field (field)}
-						<tr>
+						<tr class:copy-disabled={copy[field].disabled}>
 							<td>
 								<input
 									type="checkbox"
-									class="form-check-input"
+									class="form-check-input copy-check"
 									aria-label="Copy {fieldLabels[field]}"
 									disabled={copy[field].disabled}
 									bind:checked={copy[field].checked}
@@ -272,3 +295,28 @@
 		>
 	</div>
 {/if}
+
+<style>
+	/* Lookup Info: checkboxes that read clearly on the striped table in both themes. Enabled boxes get a solid, stronger
+	   border; disabled ones are a flat, dashed, faded box with a not-allowed cursor, and their row is muted. */
+	.copy-check {
+		width: 1.25em;
+		height: 1.25em;
+		margin-top: 0;
+		border: 2px solid var(--bs-secondary-color);
+		cursor: pointer;
+	}
+	.copy-check:checked,
+	.copy-check:indeterminate {
+		border-color: var(--bs-primary);
+	}
+	.copy-check:disabled {
+		opacity: 0.4;
+		border-style: dashed;
+		background-color: var(--bs-secondary-bg);
+		cursor: not-allowed;
+	}
+	.copy-disabled > :not(:first-child) {
+		color: var(--bs-secondary-color);
+	}
+</style>

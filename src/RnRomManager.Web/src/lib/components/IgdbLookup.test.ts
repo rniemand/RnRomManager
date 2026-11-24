@@ -341,6 +341,35 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 			expect([box('Description').checked, box('Description').disabled]).toEqual([false, false]);
 		});
 
+		it('Toggle all ticks every enabled row, then clears them, leaving disabled rows alone', async () => {
+			await pick({ form: form({ developers: 'Nintendo', description: 'Mine.' }) });
+			const all = screen.getByRole('checkbox', { name: 'Toggle all fields' }) as HTMLInputElement;
+			const enabled = ['Title', 'Release year', 'Publishers', 'Description'];
+			const ticks = () => enabled.map((f) => box(f).checked);
+
+			// Release year and Publishers start ticked: some, not all.
+			expect([all.checked, all.indeterminate, all.disabled]).toEqual([false, true, false]);
+
+			await fireEvent.click(all);
+			expect(ticks()).toEqual([true, true, true, true]);
+			expect([all.checked, all.indeterminate]).toEqual([true, false]);
+
+			await fireEvent.click(all);
+			expect(ticks()).toEqual([false, false, false, false]);
+			expect([all.checked, all.indeterminate]).toEqual([false, false]);
+			expect([box('Developers').checked, box('Genres').checked]).toEqual([false, false]);
+
+			// Ticking each row by hand checks Toggle all too.
+			for (const f of enabled) await fireEvent.click(box(f));
+			expect([all.checked, all.indeterminate]).toEqual([true, false]);
+		});
+
+		it('Toggle all is disabled when no row can be copied', async () => {
+			await pick({}, match(9, { name: 'Tetris', releaseYear: null, developers: [] }));
+			const all = screen.getByRole('checkbox', { name: 'Toggle all fields' }) as HTMLInputElement;
+			expect([all.disabled, all.checked, all.indeterminate]).toEqual([true, false, false]);
+		});
+
 		it('View on IGDB shows only when the match has a url', async () => {
 			await pick();
 			const link = screen.getByRole('link', { name: 'View on IGDB' });

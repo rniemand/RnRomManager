@@ -54,7 +54,7 @@
 	<div class="container d-flex flex-nowrap align-items-center gap-3 py-1 overflow-hidden">
 		<button
 			type="button"
-			class="btn btn-link btn-sm p-0 link-body-emphasis text-decoration-none"
+			class="btn btn-link btn-sm p-0 footer-action link-body-emphasis text-decoration-none"
 			aria-label="About"
 			title="About"
 			onclick={() => (aboutOpen = true)}
@@ -101,7 +101,7 @@
 		{#if showAdmin}
 			<button
 				type="button"
-				class="btn btn-link btn-sm p-0 {job ? '' : 'ms-auto'} link-body-emphasis"
+				class="btn btn-link btn-sm p-0 footer-action {job ? '' : 'ms-auto'} link-body-emphasis"
 				aria-label="Next missing image"
 				title="Next missing image"
 				onclick={() => void hotkeys.run('reports.missingImage.next')}
@@ -109,7 +109,7 @@
 			>
 			<button
 				type="button"
-				class="btn btn-link btn-sm p-0 link-body-emphasis"
+				class="btn btn-link btn-sm p-0 footer-action link-body-emphasis"
 				aria-label="Open the first review item"
 				title="Open the first review item"
 				onclick={() => void hotkeys.run('review.next')}><Icon name="review" /></button
@@ -118,7 +118,9 @@
 		{#if !me.mustChangePassword}
 			<button
 				type="button"
-				class="btn btn-link btn-sm p-0 {job || showAdmin ? '' : 'ms-auto'} link-body-emphasis"
+				class="btn btn-link btn-sm p-0 footer-action {job || showAdmin
+					? ''
+					: 'ms-auto'} link-body-emphasis"
 				aria-label="Shortcuts"
 				title="Keyboard Shortcuts"
 				onclick={onhotkeys}><Icon name="keyboard" /></button
@@ -133,6 +135,23 @@
 	/* U2: Bootstrap Icons' baseline, so the logo doesn't change the row's height. */
 	.footer-logo {
 		vertical-align: -0.125em;
+	}
+
+	/* Below sm the icon buttons are bigger, easier tap targets (the footer height grows to match in app.css). */
+	@media (max-width: 575.98px) {
+		.footer-action {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			min-width: 2.5rem;
+			min-height: 2.5rem;
+			font-size: 1.25rem;
+		}
+		.footer-logo {
+			width: 1.25rem;
+			height: 1.25rem;
+			vertical-align: 0;
+		}
 	}
 
 	.footer-job .progress {
