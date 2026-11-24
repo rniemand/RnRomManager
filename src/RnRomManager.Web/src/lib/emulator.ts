@@ -5,7 +5,8 @@ import type { GameDetail, RomDetail } from './api/types';
  * Play B1: the cores that play a release stored outside the ZIP through play-disc: a PlayStation disc, (PSP B2) a
  * PlayStation Portable UMD image, (Saturn B6) a Saturn disc and (Sega CD B5) a Sega CD disc on Genesis Plus GX, which
  * also plays Mega Drive cartridges from the ZIP: the play URL's `disc` flag tells the two apart. 3DO B7: Opera plays
- * only discs. TurboGrafx-CD B5: Beetle PCE plays TurboGrafx-CD discs and, from the ZIP, TurboGrafx-16 HuCards.
+ * only discs. TurboGrafx-CD B5: Beetle PCE plays TurboGrafx-CD discs and, from the ZIP, TurboGrafx-16 HuCards. MS-DOS
+ * P3: DOSBox Pure plays an external game ZIP (`.dosz`), fetched from `/download`.
  */
 export const externalBrowserCores: readonly string[] = [
 	'pcsx_rearmed',
@@ -14,7 +15,8 @@ export const externalBrowserCores: readonly string[] = [
 	'genesis_plus_gx',
 	'opera',
 	'desmume',
-	'mednafen_pce'
+	'mednafen_pce',
+	'dosbox_pure'
 ];
 
 /** S8: the cores whose external releases load through play-disc; DeSmuME loads an external DS ROM from `/download`. */
@@ -37,12 +39,15 @@ export function setMedia(core: string | null): 'disks' | 'discs' {
 	return core === 'puae' ? 'disks' : 'discs';
 }
 
-/** PSP B3: the core that plays only in the dedicated, cross-origin isolated tab. */
-export const isolatedBrowserCore = 'ppsspp';
+/** PSP B3, MS-DOS P5: the cores that play only in their own cross-origin isolated tab, and that tab's page. */
+export const isolatedPages: Readonly<Record<string, string>> = {
+	ppsspp: 'play-psp.html',
+	dosbox_pure: 'play-dos.html'
+};
 
-/** PSP B3: whether Play opens the core in its own tab instead of the modal. */
+/** PSP B3, MS-DOS P5: whether Play opens the core in its own tab instead of the modal. */
 export function opensInNewTab(core: string | null): boolean {
-	return core === isolatedBrowserCore;
+	return core !== null && Object.hasOwn(isolatedPages, core);
 }
 
 /**
@@ -102,7 +107,7 @@ export function playUrl(
 	save: PlaySave | null = null,
 	setName: string | null = null
 ): string {
-	const page = opensInNewTab(core) ? 'play-psp.html' : 'play.html';
+	const page = opensInNewTab(core) ? isolatedPages[core] : 'play.html';
 	const name = setName ?? rom.fileName;
 	let url = `/emulator/${page}?game=${gameId}&rom=${rom.id}&core=${core}&name=${encodeURIComponent(name)}`;
 	if (disc) url += '&disc=1';

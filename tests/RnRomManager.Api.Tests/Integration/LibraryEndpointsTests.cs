@@ -162,7 +162,7 @@ public partial class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "s32x", "3do", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "c64", "amiga", "pet", "vic20", "fds", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "3ds", "n64", "nds", "nes", "switch", "psx", "psp", "satellaview", "saturn", "segacd", "sufami", "snes", "tg16", "tgcd", "vb", "wii", "x360" }));
+            Is.EqualTo(new[] { "s32x", "3do", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "c64", "amiga", "pet", "vic20", "fds", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "dos", "3ds", "n64", "nds", "nes", "switch", "psx", "psp", "satellaview", "saturn", "segacd", "sufami", "snes", "tg16", "tgcd", "vb", "wii", "x360" }));
         Assert.That(systems.Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(25).True);
         Assert.That(Find("switch").GetProperty("embedRoms").GetBoolean(), Is.False, "Switch stores its ROMs outside the ZIP");
         JsonElement Find(string id) => systems.Single(s => s.GetProperty("id").GetString() == id);
@@ -186,7 +186,7 @@ public partial class LibraryEndpointsTests
         Assert.That((gbc.GetProperty("gameCount").GetInt32(), gbc.GetProperty("regions").GetArrayLength()), Is.EqualTo((0, 0)));
         Assert.That(systems.Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
-            "32X", "3DO", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Commodore 64", "Commodore Amiga", "Commodore PET", "Commodore VIC-20", "Famicom Disk System", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "Nintendo 3DS", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
+            "32X", "3DO", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Commodore 64", "Commodore Amiga", "Commodore PET", "Commodore VIC-20", "Famicom Disk System", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "MS-DOS", "Nintendo 3DS", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
             "PlayStation", "PlayStation Portable", "Satellaview", "Saturn", "Sega CD", "Sufami Turbo", "Super Nintendo Entertainment System", "TurboGrafx-16 / PC Engine", "TurboGrafx-CD / PC Engine CD", "Virtual Boy", "Wii", "Xbox 360"
         }));
     }
@@ -726,6 +726,38 @@ public partial class LibraryEndpointsTests
         Assert.That(item.GetProperty("playRomFileName").GetString(), Is.EqualTo("Download Quest (USA).nds"));
         Assert.That(item.GetProperty("playDisc").GetBoolean(), Is.False);
         Assert.That((await GetJson($"/api/games/{id}")).GetProperty("roms")[0].GetProperty("externalFileName").GetString(), Is.Not.Null);
+    }
+
+    /// <summary>MS-DOS P3: DOSBox Pure plays an external DOS game ZIP from <c>/download</c>, so <c>playDisc</c> is false.</summary>
+    [Test]
+    public async Task Dos_AnExternalRelease_IsPlayableOnDosboxPure_WithoutPlayDisc()
+    {
+        byte[] bytes;
+        using (var buffer = new MemoryStream())
+        {
+            using (var zip = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
+            using (var entry = zip.CreateEntry("DEMO.COM").Open())
+                entry.Write([0xB4, 0x4C, 0xCD, 0x21]);
+            bytes = buffer.ToArray();
+        }
+        var path = Path.Combine(_factory.Root, "ingest", "dos", "Dos Demo (1993).zip");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        await File.WriteAllBytesAsync(path, bytes);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+        var queued = await Service<IngestPipeline>().ProcessAsync(new IngestFile("dos", path, Path.GetFileName(path), bytes.Length, File.GetLastWriteTimeUtc(path)),
+            Guid.NewGuid(), new CircuitBreaker(), default);
+        Assert.That(queued!.Outcome, Is.EqualTo(IngestOutcome.Review));
+        var item = (await Service<IIngestReviewRepository>().GetBySha1Async(Convert.ToHexStringLower(System.Security.Cryptography.SHA1.HashData(bytes)), default))!;
+        using var admin = await AuthClient.CreateAsync(_factory);
+        await TestUsers.CreateAsync(_factory, "boss", TestUsers.AllRoles);
+        (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
+        var resolved = await admin.ResolveAsync(item.Id, new { action = "Manual", title = "Dos Demo", regions = Array.Empty<string>(), languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+        var id = resolved.GameId!.Value;
+
+        Assert.That((await GetJson($"/api/games/{id}")).GetProperty("browserCore").GetString(), Is.EqualTo("dosbox_pure"));
+        var listed = (await GetJson("/api/games?system=dos")).GetProperty("items").EnumerateArray().Single();
+        Assert.That((listed.GetProperty("browserCore").GetString(), listed.GetProperty("playDisc").GetBoolean()), Is.EqualTo(("dosbox_pure", false)));
+        Assert.That(listed.GetProperty("playRomFileName").GetString(), Does.EndWith(".dosz"));
     }
 
     [Test]

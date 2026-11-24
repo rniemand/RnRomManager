@@ -26,8 +26,7 @@ import {
 	hidesCoreChooser,
 	optionalBiosError,
 	parsePlayParams,
-	pspBrowserError,
-	pspCore,
+	isolatedBrowserError,
 	psxBios,
 	psxBiosBytes,
 	psxBiosSizeError,
@@ -194,10 +193,10 @@ async function checkOperatorCore(core) {
 }
 
 /**
- * PSP B3: what PPSSPP needs from this browser context, read before anything is fetched.
- * @returns {import('./params.js').PspBrowser}
+ * PSP B3, MS-DOS P6: what an isolated core needs from this browser context, read before anything is fetched.
+ * @returns {import('./params.js').IsolatedBrowser}
  */
-function pspBrowser() {
+function isolatedBrowser() {
 	let webgl2 = false;
 	try {
 		webgl2 = !!document.createElement('canvas').getContext('webgl2');
@@ -476,21 +475,23 @@ function listenForMessages(isThreeDo) {
 }
 
 async function start() {
-	const pspPage = document.body.dataset.player === 'psp';
-	const params = parsePlayParams(location.search, pspPage);
+	// PSP B3, MS-DOS P5: play-psp.html and play-dos.html say which isolated core they play; play.html has no data-player.
+	const player = document.body.dataset.player;
+	const params = parsePlayParams(location.search, player);
 	if (!params) return show('Invalid emulator link.');
 
 	const isPsx = params.core === 'pcsx_rearmed';
 	const isSaturn = params.core === 'yabause';
-	const isPsp = params.core === pspCore;
+	const isPsp = params.core === 'ppsspp';
+	const isDos = params.core === 'dosbox_pure';
 	const isDs = params.core === 'desmume';
 	const isSegaCd = params.core === 'genesis_plus_gx' && params.disc;
 	const isThreeDo = params.core === 'opera';
 	const isTurboGrafxCd = params.core === 'mednafen_pce' && params.disc;
-	// PSP B3: play-psp.html is its own tab, with no modal to talk to.
-	if (!pspPage) listenForMessages(isThreeDo);
-	if (isPsp) {
-		const problem = pspBrowserError(pspBrowser());
+	// PSP B3, MS-DOS P7: an isolated page is its own tab, with no modal to talk to.
+	if (player === undefined) listenForMessages(isThreeDo);
+	if (isPsp || isDos) {
+		const problem = isolatedBrowserError(isolatedBrowser(), params.core);
 		if (problem) return show(problem);
 	}
 	show('Preparing emulator…');
@@ -650,8 +651,9 @@ async function start() {
 		cheat: false,
 		// 3DO B11: EmulatorJS's Exit resets Opera, which writes its NVRAM file.
 		exitEmulation: isThreeDo,
-		// Nintendo DS B4: the save-file export and import use RetroArch's SRAM path, which DeSmuME never writes.
-		...(isDs ? { saveSavFiles: false, loadSavFiles: false } : {})
+		// Nintendo DS B4: the save-file export and import use RetroArch's SRAM path, which DeSmuME never writes; MS-DOS
+		// P7: nor does DOSBox Pure, whose saves are its .pure.zip.
+		...(isDs || isDos ? { saveSavFiles: false, loadSavFiles: false } : {})
 	};
 	// E1: EmulatorJS shows its virtual gamepad at start only when its Start button saw a touch, and defaults the setting
 	// to enabled only for a mobile user agent; a touch-first device (not a touchscreen laptop with a mouse) gets it.
@@ -670,8 +672,9 @@ async function start() {
 				}
 			: {})
 	};
-	// PSP B3: PPSSPP has only a threaded build; the vendored loader also ignores a saved "threads disabled".
-	if (isPsp) ejs.EJS_threads = true;
+	// PSP B3, MS-DOS P7: PPSSPP and DOSBox Pure have only threaded builds (EmulatorJS refuses them without
+	// EJS_threads); the vendored loader also ignores a saved "threads disabled".
+	if (isPsp || isDos) ejs.EJS_threads = true;
 	// Saves B17/B18: loader.js runs this on `start`, once at the end of startGame() (restart() doesn't fire it); the
 	// save goes in 10 ms later, as EmulatorJS's own start state does, and only once.
 	let saveApplied = false;

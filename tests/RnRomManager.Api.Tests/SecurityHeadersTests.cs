@@ -88,7 +88,7 @@ public class SecurityHeadersTests
         var emulator = Path.Combine(webRoot, "emulator");
         Directory.CreateDirectory(Path.Combine(emulator, "vendor", "data"));
         var source = Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "..", "src", "RnRomManager.Web", "static", "emulator");
-        foreach (var page in new[] { "play.html", "play-psp.html", "play.css" })
+        foreach (var page in new[] { "play.html", "play-psp.html", "play-dos.html", "play.css" })
             File.Copy(Path.Combine(source, page), Path.Combine(emulator, page));
         File.WriteAllText(Path.Combine(emulator, "vendor", "data", "loader.js"), "console.log(1);");
         File.WriteAllText(Path.Combine(webRoot, "index.html"), IndexHtml.ReplaceLineEndings("\n"));
@@ -96,14 +96,16 @@ public class SecurityHeadersTests
         return (factory, factory.CreateClient());
     }
 
-    [Test]
-    public async Task ThePspDocument_IsCrossOriginIsolated_AndCannotBeFramed()
+    [TestCase("/emulator/play-psp.html")]
+    [TestCase("/emulator/play-dos.html")]
+    [TestCase("/Emulator/Play-DOS.html")]
+    public async Task TheIsolatedDocuments_AreCrossOriginIsolated_AndCannotBeFramed(string path)
     {
         var (factory, client) = EmulatorSite();
         using var _ = factory;
         using var __ = client;
 
-        using var response = await client.GetAsync("/emulator/play-psp.html");
+        using var response = await client.GetAsync(path);
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
         Assert.That(await response.Content.ReadAsStringAsync(), Does.Contain("play.css").And.Contain("play.js"));

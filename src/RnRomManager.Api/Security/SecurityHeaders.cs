@@ -18,8 +18,9 @@ public static partial class SecurityHeaders
         "default-src 'self'; script-src 'self' 'unsafe-eval' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' blob: data:; "
         + "img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; frame-ancestors 'self'";
 
-    /// <summary>PSP B3: the dedicated top-level PSP player, the only cross-origin isolated document.</summary>
-    public const string PspDocumentPath = "/emulator/play-psp.html";
+    /// <summary>PSP B3, MS-DOS P4: the dedicated top-level PSP and DOS players, the only cross-origin isolated documents.</summary>
+    public static readonly IReadOnlySet<string> IsolatedDocumentPaths =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "/emulator/play-psp.html", "/emulator/play-dos.html" };
 
     /// <summary>PSP B3: the emulator policy for the isolated PSP tab, which nothing may frame.</summary>
     public const string PspEmulatorPolicy =
@@ -40,10 +41,10 @@ public static partial class SecurityHeaders
         app.Use((ctx, next) =>
         {
             var headers = ctx.Response.Headers;
-            if (string.Equals(ctx.Request.Path.Value, PspDocumentPath, StringComparison.OrdinalIgnoreCase))
+            if (ctx.Request.Path.Value is { } path && IsolatedDocumentPaths.Contains(path))
             {
-                // PSP B3: SharedArrayBuffer for PPSSPP's threads needs a cross-origin isolated top-level document. Only
-                // this document opts in, so the SPA and the modal player keep working as before.
+                // PSP B3, MS-DOS P4: SharedArrayBuffer for PPSSPP's and DOSBox Pure's threads needs a cross-origin isolated
+                // top-level document. Only these documents opt in, so the SPA and the modal player keep working as before.
                 headers.ContentSecurityPolicy = PspEmulatorPolicy;
                 headers["Cross-Origin-Opener-Policy"] = "same-origin";
                 headers["Cross-Origin-Embedder-Policy"] = "require-corp";

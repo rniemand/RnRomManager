@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>DOS · RnRomManager</title>
+		<link rel="stylesheet" href="play.css" />
+	</head>
+	<!-- MS-DOS P4: served cross-origin isolated (COOP/COEP) as its own tab, for DOSBox Pure's threads. -->
+	<body data-player="dos">
+		<p id="status" role="status"></p>
+		<div id="download-progress">
+			<progress id="loading" aria-label="Game download progress" hidden></progress>
+			<span id="downloaded" hidden></span>
+		</div>
+		<div id="game"></div>
+		<script type="module" src="play.js"></script>
+	</body>
+</html>

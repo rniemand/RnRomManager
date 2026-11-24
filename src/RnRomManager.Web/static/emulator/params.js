@@ -27,6 +27,7 @@ const cores = [
 	'yabause',
 	'snes9x',
 	'desmume',
+	'dosbox_pure',
 	'opera',
 	'vice_x64sc',
 	'vice_xpet',
@@ -36,15 +37,20 @@ const cores = [
 	'mupen64plus_next'
 ];
 
-/** PSP B3: the core that runs only on the isolated play-psp.html page (and never in the modal's play.html). */
-export const pspCore = 'ppsspp';
+/**
+ * PSP B3, MS-DOS P5: the cores that need threads and so run only on their own cross-origin isolated page, keyed to
+ * that page's `data-player` (never in the modal's play.html).
+ * @type {Record<string, string>}
+ */
+export const isolatedPlayers = { ppsspp: 'psp', dosbox_pure: 'dos' };
 
 /**
  * @param {string} search `location.search`
- * @param {boolean} [pspPage] PSP B3: true on play-psp.html, which plays PPSSPP only; play.html rejects PPSSPP
+ * @param {string} [player] the page's `data-player`: `psp` (play-psp.html), `dos` (play-dos.html) or undefined
+ * (play.html); each isolated page plays its own core only, and play.html none of them
  * @returns {PlayParams | null} null when any value is missing or invalid, or the core doesn't belong on this page
  */
-export function parsePlayParams(search, pspPage = false) {
+export function parsePlayParams(search, player) {
 	const query = new URLSearchParams(search);
 	const game = query.get('game') ?? '';
 	const rom = query.get('rom') ?? '';
@@ -52,7 +58,7 @@ export function parsePlayParams(search, pspPage = false) {
 	const name = query.get('name') ?? '';
 	if (!guid.test(game) || !/^[1-9][0-9]{0,15}$/.test(rom) || !cores.includes(core)) return null;
 	if (name.length < 1 || name.length > 255) return null;
-	if ((core === pspCore) !== pspPage) return null;
+	if ((Object.hasOwn(isolatedPlayers, core) ? isolatedPlayers[core] : undefined) !== player) return null;
 	// Sega CD B6: `disc` is absent or exactly `1`, given once.
 	const disc = query.getAll('disc');
 	if (disc.length > 1 || (disc.length === 1 && disc[0] !== '1')) return null;
@@ -382,7 +388,7 @@ export const turboGrafxCdBiosNames = [...turboGrafxCdCards, turboGrafxCdGamesExp
  * @returns {string}
  */
 export function discError(status, code, core = 'pcsx_rearmed', set = false) {
-	const psp = core === pspCore;
+	const psp = core === 'ppsspp';
 	if (status === 401) return sessionExpired;
 	// Amiga F7: a PUAE floppy set (play-disc-set) has disk wording for every other outcome.
 	if (core === 'puae') {
@@ -402,14 +408,23 @@ export function discError(status, code, core = 'pcsx_rearmed', set = false) {
 	return status === null ? "Couldn't load the disc." : `Couldn't load the disc (HTTP ${status}).`;
 }
 
-/** @typedef {{ secure: boolean, isolated: boolean, sharedArrayBuffer: boolean, webgl2: boolean }} PspBrowser */
+/** @typedef {{ secure: boolean, isolated: boolean, sharedArrayBuffer: boolean, webgl2: boolean }} IsolatedBrowser */
 
 /**
- * PSP B3: why this browser context can't run PPSSPP, checked before the ISO is fetched, or null when it can.
- * @param {PspBrowser} browser
+ * PSP B3, MS-DOS P6: why this browser context can't run an isolated page's core, checked before the game is fetched,
+ * or null when it can. DOSBox Pure's legacy payload needs no WebGL 2.
+ * @param {IsolatedBrowser} browser
+ * @param {string} core `ppsspp` or `dosbox_pure`
  * @returns {string | null}
  */
-export function pspBrowserError(browser) {
+export function isolatedBrowserError(browser, core) {
+	if (core === 'dosbox_pure') {
+		if (!browser.secure)
+			return "DOS games need a secure page: open RnRomManager over HTTPS or on localhost. A plain-HTTP network address can't run them.";
+		if (!browser.isolated || !browser.sharedArrayBuffer)
+			return "This page isn't cross-origin isolated, so DOS games can't use threads. Ask an Admin to check that the proxy keeps the Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers.";
+		return null;
+	}
 	if (!browser.secure)
 		return "PSP games need a secure page: open RnRomManager over HTTPS or on localhost. A plain-HTTP network address can't run them.";
 	if (!browser.isolated || !browser.sharedArrayBuffer)
@@ -425,7 +440,9 @@ export function pspBrowserError(browser) {
  * three BIOS names, so the firmware can't overwrite it and Yabause never takes the disc for its BIOS. Sega CD B7: the
  * same for any Genesis Plus GX content named like a Sega CD BIOS, disc or cartridge alike (harmless for a cartridge).
  * 3DO B8: the same for an Opera disc named like any of the five 3DO BIOS files. TurboGrafx-CD B9: the same for any
- * Beetle PCE content named like a System Card or the Games Express card, disc or HuCard alike.
+ * Beetle PCE content named like a System Card or the Games Express card, disc or HuCard alike. MS-DOS P8: every DOSBox
+ * Pure release is scoped to its game, since DOSBox Pure keeps its browser save under the content name and two games
+ * may share a release name.
  * @param {string} core
  * @param {string} game the game id
  * @param {string} name the release's file name
@@ -440,7 +457,7 @@ export function contentFileName(core, game, name) {
 		(core === 'genesis_plus_gx' && segaCdBiosNames.includes(lower)) ||
 		(core === 'opera' && threeDoBiosNames.includes(lower)) ||
 		(core === 'mednafen_pce' && turboGrafxCdBiosNames.includes(lower));
-	return clashes ? `${game}-${safe}` : safe;
+	return clashes || core === 'dosbox_pure' ? `${game}-${safe}` : safe;
 }
 
 const sizeNumber = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1, minimumFractionDigits: 1 });

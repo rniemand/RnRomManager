@@ -13,7 +13,7 @@ import {
 	operatorCorePaths,
 	optionalBiosError,
 	parsePlayParams,
-	pspBrowserError,
+	isolatedBrowserError,
 	psxBiosBytes,
 	saturnBios,
 	saturnBiosBytes,
@@ -94,7 +94,7 @@ describe('parsePlayParams', () => {
 
 	it('reads disc=1 as a disc release (Sega CD B6)', () => {
 		expect(parsePlayParams(query({ core: 'pcsx_rearmed', disc: '1' }))?.disc).toBe(true);
-		expect(parsePlayParams(query({ core: 'ppsspp', disc: '1' }), true)?.disc).toBe(true);
+		expect(parsePlayParams(query({ core: 'ppsspp', disc: '1' }), 'psp')?.disc).toBe(true);
 		expect(parsePlayParams(query({ core: 'genesis_plus_gx' }))?.disc).toBe(false);
 	});
 
@@ -361,11 +361,15 @@ describe('contentFileName', () => {
 	it('leaves the BIOS-like name alone for another core', () => {
 		expect(contentFileName('gambatte', game, 'scph5501.bin')).toBe('scph5501.bin');
 	});
+
+	it('scopes every DOSBox Pure release to its game, so each keeps its own browser save (MS-DOS P8)', () => {
+		expect(contentFileName('dosbox_pure', game, 'A#B.dosz')).toBe(`${game}-A_B.dosz`);
+	});
 });
 
 describe('PSP page (PSP B3)', () => {
 	it('play-psp.html accepts only ppsspp, and play.html rejects it', () => {
-		expect(parsePlayParams(query({ core: 'ppsspp', name: 'Umd (USA).iso' }), true)).toEqual({
+		expect(parsePlayParams(query({ core: 'ppsspp', name: 'Umd (USA).iso' }), 'psp')).toEqual({
 			game,
 			rom: 12,
 			core: 'ppsspp',
@@ -375,9 +379,9 @@ describe('PSP page (PSP B3)', () => {
 			save: null
 		});
 		expect(parsePlayParams(query({ core: 'ppsspp' }))).toBeNull();
-		expect(parsePlayParams(query({ core: 'ppsspp' }), false)).toBeNull();
+		expect(parsePlayParams(query({ core: 'ppsspp' }))).toBeNull();
 		for (const core of ['gambatte', 'pcsx_rearmed', 'smsplus'])
-			expect(parsePlayParams(query({ core }), true), core).toBeNull();
+			expect(parsePlayParams(query({ core }), 'psp'), core).toBeNull();
 	});
 
 	it('names the PSP limits for a too-large or invalid UMD image', () => {
@@ -399,7 +403,7 @@ describe('PSP page (PSP B3)', () => {
 	const capable = { secure: true, isolated: true, sharedArrayBuffer: true, webgl2: true };
 
 	it('lets a secure, isolated, WebGL 2 browser go on', () => {
-		expect(pspBrowserError(capable)).toBeNull();
+		expect(isolatedBrowserError(capable, 'ppsspp')).toBeNull();
 	});
 
 	it.each([
@@ -408,12 +412,17 @@ describe('PSP page (PSP B3)', () => {
 		[{ sharedArrayBuffer: false }, "This page isn't cross-origin isolated"],
 		[{ webgl2: false }, 'PSP games need WebGL 2']
 	])('reports %o', (missing, message) => {
-		expect(pspBrowserError({ ...capable, ...missing })).toMatch(new RegExp(`^${message}`));
+		expect(isolatedBrowserError({ ...capable, ...missing }, 'ppsspp')).toMatch(
+			new RegExp(`^${message}`)
+		);
 	});
 
 	it('reports an insecure context first', () => {
 		expect(
-			pspBrowserError({ secure: false, isolated: false, sharedArrayBuffer: false, webgl2: false })
+			isolatedBrowserError(
+				{ secure: false, isolated: false, sharedArrayBuffer: false, webgl2: false },
+				'ppsspp'
+			)
 		).toBe(
 			"PSP games need a secure page: open RnRomManager over HTTPS or on localhost. A plain-HTTP network address can't run them."
 		);
@@ -425,7 +434,7 @@ describe('Genesis (Genesis B4, B5)', () => {
 		expect(
 			parsePlayParams(query({ core: 'genesis_plus_gx', name: 'Turbo Comet (USA).md' }))?.core
 		).toBe('genesis_plus_gx');
-		expect(parsePlayParams(query({ core: 'genesis_plus_gx' }), true)).toBeNull();
+		expect(parsePlayParams(query({ core: 'genesis_plus_gx' }), 'psp')).toBeNull();
 	});
 
 	it.each(['Turbo Comet (USA).md', 'Turbo Comet (USA).gen', 'Turbo Comet (USA).bin', 'X.GG'])(
@@ -477,7 +486,7 @@ describe('32X (B3)', () => {
 		expect(parsePlayParams(query({ core: 'picodrive', name: 'Star Relay (USA).32x' }))?.core).toBe(
 			'picodrive'
 		);
-		expect(parsePlayParams(query({ core: 'picodrive' }), true)).toBeNull();
+		expect(parsePlayParams(query({ core: 'picodrive' }), 'psp')).toBeNull();
 	});
 
 	it.each(['Star Relay (USA).32x', 'X.GG', 'X.md'])('uses the 32X controls for %s', (name) => {
@@ -519,7 +528,7 @@ describe('Saturn (B6, B7)', () => {
 		expect(
 			parsePlayParams(query({ core: 'yabause', name: 'Sky Rally (USA) (Track 1).bin' }))?.core
 		).toBe('yabause');
-		expect(parsePlayParams(query({ core: 'yabause' }), true)).toBeNull();
+		expect(parsePlayParams(query({ core: 'yabause' }), 'psp')).toBeNull();
 	});
 
 	it('uses the Saturn controls and hides the core chooser', () => {
@@ -572,7 +581,7 @@ describe('SNES (SNES B3)', () => {
 		expect(
 			parsePlayParams(query({ core: 'snes9x', name: 'Mode Seven Rally (USA).sfc' }))?.core
 		).toBe('snes9x');
-		expect(parsePlayParams(query({ core: 'snes9x' }), true)).toBeNull();
+		expect(parsePlayParams(query({ core: 'snes9x' }), 'psp')).toBeNull();
 	});
 
 	it.each(['Mode Seven Rally (USA).sfc', 'Legacy (USA).smc', 'X.GG'])(
@@ -624,7 +633,7 @@ describe('3DO (B6)', () => {
 		expect(parsePlayParams(query({ core: 'opera', name: 'Opal Rally (USA).cue' }))?.core).toBe(
 			'opera'
 		);
-		expect(parsePlayParams(query({ core: 'opera' }), true)).toBeNull();
+		expect(parsePlayParams(query({ core: 'opera' }), 'psp')).toBeNull();
 	});
 
 	it('is an operator core that hides the chooser and keeps upstream controls', () => {
@@ -665,7 +674,7 @@ describe('Commodore 64 (C64 B7)', () => {
 		expect(
 			parsePlayParams(query({ core: 'vice_x64sc', name: 'Pixel Pilot (Europe).crt' }))?.core
 		).toBe('vice_x64sc');
-		expect(parsePlayParams(query({ core: 'vice_x64sc' }), true)).toBeNull();
+		expect(parsePlayParams(query({ core: 'vice_x64sc' }), 'psp')).toBeNull();
 	});
 
 	it('is an operator core that hides the chooser and keeps upstream controls', () => {
@@ -802,7 +811,7 @@ describe('Nintendo DS (Nintendo DS B4)', () => {
 			set: false,
 			save: null
 		});
-		expect(parsePlayParams(query({ core: 'desmume' }), true)).toBeNull();
+		expect(parsePlayParams(query({ core: 'desmume' }), 'psp')).toBeNull();
 	});
 
 	it('needs no BIOS, is vendored and hides the core chooser', () => {
@@ -919,5 +928,53 @@ describe('contentSize (U4)', () => {
 			0, 1, 1023, 1024, 1536, 1048575, 1048576, 1572864, 536870912, 1073741824, 8589934592
 		])
 			expect(contentSize(bytes)).toBe(formatSize(bytes));
+	});
+});
+
+describe('DOS page (MS-DOS P5, P6)', () => {
+	it('play-dos.html accepts only dosbox_pure; play-psp.html and play.html reject it', () => {
+		expect(parsePlayParams(query({ core: 'dosbox_pure', name: 'Doom.dosz' }), 'dos')).toEqual({
+			game,
+			rom: 12,
+			core: 'dosbox_pure',
+			name: 'Doom.dosz',
+			disc: false,
+			set: false,
+			save: null
+		});
+		expect(parsePlayParams(query({ core: 'dosbox_pure' }))).toBeNull();
+		expect(parsePlayParams(query({ core: 'dosbox_pure' }), 'psp')).toBeNull();
+		expect(parsePlayParams(query({ core: 'ppsspp' }), 'dos')).toBeNull();
+		for (const core of ['gambatte', 'pcsx_rearmed', 'desmume'])
+			expect(parsePlayParams(query({ core }), 'dos'), core).toBeNull();
+	});
+
+	const capable = { secure: true, isolated: true, sharedArrayBuffer: true, webgl2: false };
+
+	it('lets a secure, isolated browser go on without WebGL 2', () => {
+		expect(isolatedBrowserError(capable, 'dosbox_pure')).toBeNull();
+	});
+
+	it.each([
+		[
+			{ secure: false, isolated: false },
+			"DOS games need a secure page: open RnRomManager over HTTPS or on localhost. A plain-HTTP network address can't run them."
+		],
+		[
+			{ isolated: false },
+			"This page isn't cross-origin isolated, so DOS games can't use threads. Ask an Admin to check that the proxy keeps the Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers."
+		],
+		[
+			{ sharedArrayBuffer: false },
+			"This page isn't cross-origin isolated, so DOS games can't use threads. Ask an Admin to check that the proxy keeps the Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers."
+		]
+	])('reports %o', (missing, message) => {
+		expect(isolatedBrowserError({ ...capable, ...missing }, 'dosbox_pure')).toBe(message);
+	});
+
+	it('keeps the PSP wording for discError', () => {
+		expect(discError(409, 'PlayDiscTooLarge', 'ppsspp')).toBe(
+			'This UMD image is larger than 2 GiB, too large to play in the browser.'
+		);
 	});
 });
