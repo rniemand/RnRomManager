@@ -166,6 +166,7 @@ public partial class EndpointRoleMatrixTests
         ["GET /api/reports/missing-metadata"] = Role.Admin,
         ["GET /api/reports/missing-metadata/next"] = Role.Admin,
         ["GET /api/reports/missing-igdb-ids"] = Role.Admin,
+        ["GET /api/reports/missing-igdb-ids/next"] = Role.Admin,
         ["GET /api/reports/activity"] = Role.Admin,
         ["GET /api/reports/library-size"] = Role.User,
         ["GET /api/reports/library-size/{system}"] = Role.User,

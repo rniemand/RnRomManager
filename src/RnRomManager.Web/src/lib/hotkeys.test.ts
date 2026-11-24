@@ -44,7 +44,8 @@ describe('hotkey actions (B21)', () => {
 			['nav.admin', 'Alt+Shift+A', true, 'admin'],
 			['nav.deleted', 'Alt+Shift+D', true, 'admin'],
 			['reports.missingImage.next', 'Alt+Shift+M', true, null],
-			['reports.missingMetadata.next', '', true, 'admin']
+			['reports.missingMetadata.next', '', true, 'admin'],
+			['reports.missingIgdbId.next', 'Alt+Shift+U', true, 'admin']
 		]);
 	});
 

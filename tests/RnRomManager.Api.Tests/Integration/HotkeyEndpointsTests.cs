@@ -63,7 +63,7 @@ public class HotkeyEndpointsTests
     {
         ["nav.library"] = "Alt+Shift+L", ["nav.collections"] = "Alt+Shift+C", ["nav.ingestion"] = "Alt+Shift+I", ["nav.review"] = "Alt+Shift+F", ["review.next"] = "Alt+Shift+G",
         ["nav.reports"] = "Alt+Shift+R", ["nav.integrity"] = "Alt+Shift+T", ["nav.admin"] = "Alt+Shift+A", ["nav.deleted"] = "Alt+Shift+D",
-        ["reports.missingImage.next"] = "Alt+Shift+M", ["reports.missingMetadata.next"] = null,
+        ["reports.missingImage.next"] = "Alt+Shift+M", ["reports.missingMetadata.next"] = null, ["reports.missingIgdbId.next"] = "Alt+Shift+U",
     };
 
     [Test]

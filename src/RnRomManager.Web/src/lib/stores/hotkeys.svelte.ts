@@ -24,6 +24,12 @@ export const missingMetadataMessages = {
 	failed: "Couldn't find the next game missing metadata."
 } as const;
 
+export const missingIgdbIdMessages = {
+	onlyCurrent: 'This game is the only one still not linked to IGDB.',
+	none: 'No more games are missing an IGDB ID.',
+	failed: "Couldn't find the next game missing an IGDB ID."
+} as const;
+
 /** The game id when the current page is a game page (`/games/<id>`, under any base path). */
 function currentGameId(): string | null {
 	const m = /\/games\/([0-9a-fA-F-]{36})\/?$/.exec(window.location.pathname);
@@ -39,6 +45,7 @@ class HotkeyStore {
 	/** The in-flight Next missing image request: further presses join it instead of starting another (B3). */
 	#nextMissing: Promise<void> | null = null;
 	#nextMissingMetadata: Promise<void> | null = null;
+	#nextMissingIgdbId: Promise<void> | null = null;
 
 	/**
 	 * Called whenever `me` changes: loads the bindings once a user is signed in and `mustChangePassword` is false (the
@@ -111,6 +118,8 @@ class HotkeyStore {
 				return this.nextMissingImage();
 			case 'reports.missingMetadata.next':
 				return this.nextMissingMetadata();
+			case 'reports.missingIgdbId.next':
+				return this.nextMissingIgdbId();
 			case 'review.next': {
 				let first: ReviewListItem | undefined;
 				try {
@@ -184,6 +193,38 @@ class HotkeyStore {
 		if (next.id) return goto(`${resolve('/games/[id]', { id: next.id })}?from=missing-metadata`);
 		toasts.show(
 			next.currentIsOnly ? missingMetadataMessages.onlyCurrent : missingMetadataMessages.none
+		);
+	}
+
+	/**
+	 * Opens the next game not linked to IGDB (the Missing IGDB IDs report's unfiltered order, after the current game on a game
+	 * page), where the game page opens Edit Metadata on Lookup Info and searches; as `nextMissingImage` otherwise.
+	 */
+	nextMissingIgdbId(): Promise<void> {
+		this.#nextMissingIgdbId ??= this.#fetchNextMissingIgdbId().finally(
+			() => (this.#nextMissingIgdbId = null)
+		);
+		return this.#nextMissingIgdbId;
+	}
+
+	async #fetchNextMissingIgdbId(): Promise<void> {
+		const session = this.#loadedFor;
+		const href = window.location.href;
+		const current = currentGameId();
+		const stale = () => this.#loadedFor !== session || window.location.href !== href;
+		let next: NextMissingImage;
+		try {
+			const query = current ? `?afterGameId=${encodeURIComponent(current)}` : '';
+			next = await api.get<NextMissingImage>(`/api/reports/missing-igdb-ids/next${query}`);
+		} catch {
+			if (!stale()) toasts.show(missingIgdbIdMessages.failed, 'danger');
+			return;
+		}
+		if (stale()) return;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the resolved path plus a query
+		if (next.id) return goto(`${resolve('/games/[id]', { id: next.id })}?from=missing-igdb`);
+		toasts.show(
+			next.currentIsOnly ? missingIgdbIdMessages.onlyCurrent : missingIgdbIdMessages.none
 		);
 	}
 }

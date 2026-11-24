@@ -899,14 +899,32 @@ public class ReportEndpointsTests
         Assert.That((await AuthClient.JsonAsync(badId)).GetProperty("errors").TryGetProperty("afterGameId", out _), Is.True);
     }
 
-    // Missing IGDB IDs R1: GET /api/reports/missing-igdb-ids (Admin only).
+    // Missing IGDB IDs R1: GET /api/reports/missing-igdb-ids and /next (Admin only).
 
     [Test]
     public async Task MissingIgdbIds_UserIs403()
     {
         using var list = await _user.GetAsync("/api/reports/missing-igdb-ids");
+        using var next = await _user.GetAsync("/api/reports/missing-igdb-ids/next");
 
-        Assert.That(list.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
+        Assert.That((list.StatusCode, next.StatusCode), Is.EqualTo((HttpStatusCode.Forbidden, HttpStatusCode.Forbidden)));
+    }
+
+    [Test]
+    public async Task MissingIgdbIds_Next_SkipsNotOnIgdb_AndSaysWhenTheCurrentIsTheOnlyOne()
+    {
+        var alpha = await Ingest("gb", "a.gb", Alpha);
+        var bravo = await Ingest("gb", "b.gb", Bravo);
+        await Sql("UPDATE games SET igdb_id = 0 WHERE id = @bravo", new { bravo });
+        using var admin = await Editor();
+
+        using var first = await admin.GetAsync("/api/reports/missing-igdb-ids/next");
+        Assert.That((await AuthClient.JsonAsync(first)).GetProperty("id").GetGuid(), Is.EqualTo(alpha));
+
+        using var next = await admin.GetAsync($"/api/reports/missing-igdb-ids/next?afterGameId={alpha}");
+        var successor = await AuthClient.JsonAsync(next);
+        Assert.That((successor.GetProperty("id").ValueKind, successor.GetProperty("currentIsOnly").GetBoolean()),
+            Is.EqualTo((JsonValueKind.Null, true)));
     }
 
     [Test]
@@ -951,12 +969,14 @@ public class ReportEndpointsTests
     }
 
     [Test]
-    public async Task MissingIgdbIds_LongQuery_Is400()
+    public async Task MissingIgdbIds_LongQuery_AndBadNextId_Are400()
     {
         using var admin = await Editor();
         using var longQ = await admin.GetAsync("/api/reports/missing-igdb-ids?q=" + new string('x', 101));
+        using var badId = await admin.GetAsync("/api/reports/missing-igdb-ids/next?afterGameId=not-a-guid");
 
         Assert.That((await AuthClient.JsonAsync(longQ)).GetProperty("errors").GetProperty("q")[0].GetString(), Is.EqualTo("Must be at most 100 characters."));
+        Assert.That((await AuthClient.JsonAsync(badId)).GetProperty("errors").TryGetProperty("afterGameId", out _), Is.True);
     }
 
     /// <summary>Image Resolutions: ingested games only have placeholder art, so give some of their image rows real values.</summary>

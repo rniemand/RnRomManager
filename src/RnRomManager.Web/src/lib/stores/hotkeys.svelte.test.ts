@@ -12,7 +12,8 @@ vi.mock('$app/paths', () => ({
 	resolve: (path: string, params?: { id: string }) => path.replace('[id]', params?.id ?? '')
 }));
 
-const { hotkeys, missingImageMessages, missingMetadataMessages } = await import('./hotkeys.svelte');
+const { hotkeys, missingIgdbIdMessages, missingImageMessages, missingMetadataMessages } =
+	await import('./hotkeys.svelte');
 
 const admin: Me = { id: 1, username: 'a', roles: ['admin'], mustChangePassword: false };
 const user: Me = { id: 2, username: 'u', roles: [], mustChangePassword: false };
@@ -245,6 +246,65 @@ describe('hotkeys store (B24)', () => {
 			hotkeys.handle(altShift('KeyG'));
 
 			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/review'));
+		});
+	});
+
+	describe('reports.missingIgdbId.next', () => {
+		const gameA = '11111111-1111-1111-1111-111111111111';
+		const gameB = '22222222-2222-2222-2222-222222222222';
+		const next = (after?: string) =>
+			`GET /api/reports/missing-igdb-ids/next${after ? `?afterGameId=${after}` : ''}`;
+		const toastTexts = () => toasts.items.map((t) => [t.text, t.kind]);
+
+		it('Alt+Shift+U off a game page opens the first unlinked game with from=missing-igdb', async () => {
+			window.history.replaceState({}, '', '/reports/missing-igdb-ids');
+			answers[next()] = { status: 200, body: { id: gameA, currentIsOnly: false } };
+			await signIn(admin);
+
+			expect(hotkeys.handle(altShift('KeyU'))).toBe(true);
+			await vi.waitFor(() =>
+				expect(goto).toHaveBeenCalledWith(`/games/${gameA}?from=missing-igdb`)
+			);
+		});
+
+		it('on a game page asks for the game after it', async () => {
+			window.history.replaceState({}, '', `/games/${gameA}`);
+			answers[next(gameA)] = { status: 200, body: { id: gameB, currentIsOnly: false } };
+			await signIn(admin);
+
+			await hotkeys.run('reports.missingIgdbId.next');
+
+			expect(calls).toContain(next(gameA));
+			expect(goto).toHaveBeenCalledWith(`/games/${gameB}?from=missing-igdb`);
+		});
+
+		it('shows the three toasts', async () => {
+			expect(missingIgdbIdMessages).toEqual({
+				onlyCurrent: 'This game is the only one still not linked to IGDB.',
+				none: 'No more games are missing an IGDB ID.',
+				failed: "Couldn't find the next game missing an IGDB ID."
+			});
+			window.history.replaceState({}, '', `/games/${gameA}`);
+			await signIn(admin);
+			answers[next(gameA)] = { status: 200, body: { id: null, currentIsOnly: true } };
+			await hotkeys.nextMissingIgdbId();
+			answers[next(gameA)] = { status: 200, body: { id: null, currentIsOnly: false } };
+			await hotkeys.nextMissingIgdbId();
+			answers[next(gameA)] = { status: 500, body: { status: 500, code: 'Boom', title: 'Boom' } };
+			await hotkeys.nextMissingIgdbId();
+
+			expect(toastTexts()).toEqual([
+				[missingIgdbIdMessages.onlyCurrent, 'info'],
+				[missingIgdbIdMessages.none, 'info'],
+				[missingIgdbIdMessages.failed, 'danger']
+			]);
+			expect(goto).not.toHaveBeenCalled();
+		});
+
+		it('does nothing for a Site user', async () => {
+			await signIn(user);
+
+			expect(hotkeys.handle(altShift('KeyU'))).toBe(false);
 		});
 	});
 
