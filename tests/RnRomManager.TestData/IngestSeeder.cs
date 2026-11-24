@@ -250,6 +250,15 @@ public static class IngestSeeder
         { ReleaseYear = 1990, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Racing"] };
         // Seeded with a 512-byte copier header: ingestion must strip it to match the DAT (T2).
         Loose("tg16", "01-neon-circuit.pce", [.. new byte[512], .. circuitRom]);
+        var lancerRom = new SyntheticNgpRomBuilder { Seed = 1901, Title = "SHADOWLANCER" }.Build();
+        var lancer = new FixtureGame("Shadow Lancer (Japan)", "Shadow Lancer (Japan).ngp", lancerRom)
+        { ReleaseYear = 1998, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Action"] };
+        Loose("ngp", "01-shadow-lancer.ngp", lancerRom);
+        var pocketPrismRom = new SyntheticNgpRomBuilder { Seed = 1902, Colour = true, Title = "POCKETPRISM" }.Build();
+        var pocketPrism = new FixtureGame("Pocket Prism (World)", "Pocket Prism (World).ngc", pocketPrismRom)
+        { ReleaseYear = 1999, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Puzzle"] };
+        // A colour cart in the mono folder under an alias extension: the DAT decides the system and the stored name.
+        Loose("ngp", "02-pocket-prism.ngpc", pocketPrismRom);
         // A CRT cartridge: 64-byte header, one 16-byte CHIP packet header, 8 KiB of ROM (8,272 bytes, big-endian fields).
         var pilotRom = new byte[64 + 16 + 8192];
         System.Text.Encoding.ASCII.GetBytes("C64 CARTRIDGE   ").CopyTo(pilotRom, 0);
@@ -340,7 +349,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [VirtualBoyDat] = [redHorizon], [Atari2600Dat] = [lanes], [Atari5200Dat] = [starLattice], [Atari7800Dat] = [canyonGlide], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally], [NintendoDsDat] = dsGames, [SegaCdDat] = [], [ThreeDoDat] = [], [C64Dat] = [pilot], [PetDat] = [], [Vic20Dat] = [], [FdsDat] = [], [SatellaviewDat] = [], [SufamiTurboDat] = [], [AmigaDat] = [], [ThreeDsDat] = [zephyrGate], [TurboGrafxCdDat] = [], [NeoGeoPocketDat] = [], [NeoGeoPocketColorDat] = [] },
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [VirtualBoyDat] = [redHorizon], [Atari2600Dat] = [lanes], [Atari5200Dat] = [starLattice], [Atari7800Dat] = [canyonGlide], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally], [NintendoDsDat] = dsGames, [SegaCdDat] = [], [ThreeDoDat] = [], [C64Dat] = [pilot], [PetDat] = [], [Vic20Dat] = [], [FdsDat] = [], [SatellaviewDat] = [], [SufamiTurboDat] = [], [AmigaDat] = [], [ThreeDsDat] = [zephyrGate], [TurboGrafxCdDat] = [], [NeoGeoPocketDat] = [lancer], [NeoGeoPocketColorDat] = [pocketPrism] },
             titleDb: new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = titleDb }, layouts: RedumpLayouts);
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);

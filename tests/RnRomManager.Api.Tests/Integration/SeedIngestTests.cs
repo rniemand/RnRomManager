@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 39, 30)]
-    [TestCase(SeedSet.Full, 239, 230)]
+    [TestCase(SeedSet.Basic, 41, 32)]
+    [TestCase(SeedSet.Full, 241, 232)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -315,6 +315,18 @@ public class SeedIngestTests
             }
             Assert.That(rom.Header, Is.Null);
             Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1990, new[] { "Racing" })));
+        }
+        var pocketPrism = Directory.GetFiles(Path.Combine(factory.Root, "roms", "ngpc", "P"), "*.zip").Single();
+        Assert.That(Path.GetFileName(pocketPrism), Is.EqualTo("Pocket Prism.zip"));
+        using (var zip = LibraryZip.Open(pocketPrism, factory.Services.GetRequiredService<InfoJsonReader>()))
+        {
+            var game = zip.InfoJson!.Game!;
+            var rom = game.Roms.Single();
+            // Dropped in ingest/ngp/ as .ngpc: the colour DAT decides the system and the stored name.
+            Assert.That((game.Title, game.System, rom.FileName, rom.OriginalFileName),
+                Is.EqualTo(("Pocket Prism", "ngpc", "Pocket Prism (World).ngc", "02-pocket-prism.ngpc")));
+            Assert.That(rom.Header!["colour"]!.GetValue<bool>(), Is.True);
+            Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1999, new[] { "Puzzle" })));
         }
         var review = await factory.Services.GetRequiredService<IIngestReviewRepository>().ListAsync("Pending", 1, 48, default);
         Assert.That(review.Total, Is.EqualTo(3));

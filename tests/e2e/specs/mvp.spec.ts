@@ -227,7 +227,7 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   ).toHaveAttribute("aria-expanded", "false");
   const run = page.getByRole("row").filter({ hasText: "Completed" });
   await expect(run).toContainText(
-    "Ingested 39 · Duplicate 1 · Review 3 · Failed 1",
+    "Ingested 41 · Duplicate 1 · Review 3 · Failed 1",
     {
       timeout: 60_000,
     },
@@ -317,7 +317,7 @@ test("reports and the ingest audit trail", { tag: "@shard-b" }, async () => {
     // B30: the Action cell also holds the system badge, so match its action line.
     .filter({ has: page.getByRole("cell").getByText("Ingested", { exact: true }) });
   // One Ingested event per release: a bin/cue set is one event (B7a).
-  await expect(ingested).toHaveCount(35);
+  await expect(ingested).toHaveCount(37);
   await expect(
     page
       .getByRole("row")
@@ -348,7 +348,7 @@ test("reports and the ingest audit trail", { tag: "@shard-b" }, async () => {
 
 test("browse, search and filter the library", async () => {
   await openLibrary();
-  await expect(page.getByText("30 games")).toBeVisible();
+  await expect(page.getByText("32 games")).toBeVisible();
   await expectAccessible(page, "library grid");
   // S1/L3: systems with ROMs in display-name order after "All systems"; F3/L2: each with its game count, right-aligned.
   await page.getByRole("button", { name: "System: All" }).click();
@@ -359,7 +359,7 @@ test("browse, search and filter the library", async () => {
   );
   await expect(
     systemMenu.locator(".dropdown-item").first().locator(".font-monospace"),
-  ).toHaveText("30");
+  ).toHaveText("32");
   expect(
     await systemMenu
       .locator("[data-value]")
@@ -380,6 +380,8 @@ test("browse, search and filter the library", async () => {
     "gc",
     "sms",
     "md",
+    "ngp",
+    "ngpc",
     "3ds",
     "n64",
     "nes",
@@ -505,6 +507,20 @@ test("browse, search and filter the library", async () => {
     page.getByRole("link", { name: "Neon Circuit", exact: true }),
   ).toBeVisible();
 
+  // A mono and a colour Neo Geo Pocket game; Pocket Prism was dropped in ingest/ngp/, the DAT moved it to ngpc.
+  await chooseFilter("System", "ngp");
+  await expect(page).toHaveURL(/system=ngp(&|$)/);
+  await expect(page.getByText("1 game", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Shadow Lancer", exact: true }),
+  ).toBeVisible();
+  await chooseFilter("System", "ngpc");
+  await expect(page).toHaveURL(/system=ngpc/);
+  await expect(page.getByText("1 game", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Pocket Prism", exact: true }),
+  ).toBeVisible();
+
   // "Quest, The" is shown as "The Quest" but filed under Q (§5, §6.1).
   await openLibrary();
   await chooseFilter("Letter", "Q");
@@ -562,7 +578,7 @@ test("browse, search and filter the library", async () => {
   }
   await page.setViewportSize(viewport);
   await page.getByRole("button", { name: "Clear all" }).click();
-  await expect(page.getByText("30 games")).toBeVisible();
+  await expect(page.getByText("32 games")).toBeVisible();
   await expect(page.getByRole("button", { name: "Clear all" })).toBeDisabled();
 
   // The card grid fits a 320px phone: no sideways page scroll, and (U6) no card shows its rating row there.
@@ -1198,6 +1214,39 @@ test("Play: TurboGrafx-16 / PC Engine Quick Play from the library uses the local
   await closeEmulator();
 });
 
+test("Play: Neo Geo Pocket Color Quick Play from the library uses the local Beetle NeoPop core", { tag: "@shard-b" }, async () => {
+  await openLibrary();
+  await page
+    .getByRole("searchbox", { name: "Search", exact: true })
+    .fill("Pocket Prism");
+  await expect(page).toHaveURL(/[?&]q=/);
+  await expect(page.getByText("1 game", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Pocket Prism", exact: true }),
+  ).toBeVisible();
+  const bios: string[] = [];
+  const track = (r: { url: () => string }) => {
+    if (r.url().includes("/api/emulator/bios/")) bios.push(r.url());
+  };
+  page.on("request", track);
+  try {
+    const rom = page.waitForResponse((r) =>
+      /\/api\/games\/[^/]+\/roms\/\d+\/download$/.test(r.url()),
+    );
+    await page.getByRole("button", { name: "Play Pocket Prism" }).click();
+    await expect(dialog().locator("iframe")).toHaveAttribute(
+      "src",
+      /core=mednafen_ngp&name=Pocket%20Prism%20\(World\)\.ngc$/,
+    );
+    expect((await rom).status()).toBe(200);
+    await startEmulator("mednafen_ngp");
+  } finally {
+    page.off("request", track);
+  }
+  expect(bios).toEqual([]);
+  await closeEmulator();
+});
+
 test("Play: a PlayStation set streams its disc ZIP from the detail page and the library", { tag: "@shard-b" }, async () => {
   await openGame("Disc Runner");
   const bios = page.waitForResponse((r) =>
@@ -1663,7 +1712,7 @@ test("Play: Atari 7800, Jaguar and Lynx launch with their bundled cores", { tag:
 test("global search, ratings and favourites", { tag: "@shard-b" }, async () => {
   // Ctrl+K from the library opens the search; part of a title finds it; Enter opens it.
   await openLibrary();
-  await expect(page.getByText("30 games")).toBeVisible();
+  await expect(page.getByText("32 games")).toBeVisible();
   await page.keyboard.press("Control+k");
   await expect(dialog()).toBeVisible();
   await expect(dialog().getByRole("combobox")).toBeFocused();
@@ -1856,7 +1905,7 @@ test("collections: create, add from game page and bulk select, search, remove, d
   await expect(page).toHaveURL(/\/collections$/);
   await expect(page.getByText("You have no collections yet.")).toBeVisible();
   await openLibrary();
-  await expect(page.getByText("30 games")).toBeVisible();
+  await expect(page.getByText("32 games")).toBeVisible();
 });
 
 test("collections discovery: browse publishers and genres across systems, share a selection", { tag: "@shard-b" }, async () => {
