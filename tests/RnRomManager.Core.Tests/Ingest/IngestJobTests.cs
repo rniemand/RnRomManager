@@ -167,6 +167,19 @@ public class IngestJobTests
     }
 
     [Test]
+    public void Preflight_ANoneHandlerWithNoDats_DoesNotBlock()
+    {
+        var none = Handler("dos", "DOS");
+        none.DatSource.Returns(DatSource.None);
+        ISystemHandler[] handlers = [.. _systems.All, none];
+        _systems.All.Returns(handlers);
+
+        LoadDats(Gb, Gbc);
+
+        Assert.That(Job().Preflight(), Is.Null);
+    }
+
+    [Test]
     public async Task PrePass_InsertsAZipWithoutADbRow()
     {
         var game = Game("Tetris", Rom("Tetris.gb", RomBytes(1)));

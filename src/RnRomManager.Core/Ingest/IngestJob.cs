@@ -47,7 +47,7 @@ public sealed class IngestJob(
     public JobMode? Mode => null;
 
     /// <summary>§7.1 step 2: every registered system needs loaded DATs.</summary>
-    public string? Preflight() => systems.All.All(h => dats.For(h.Id) is not null) ? null : DatsMissing;
+    public string? Preflight() => systems.All.All(h => h.DatSource == DatSource.None || dats.For(h.Id) is not null) ? null : DatsMissing;
 
     public async Task<object?> RunAsync(JobContext context, CancellationToken cancellationToken)
     {

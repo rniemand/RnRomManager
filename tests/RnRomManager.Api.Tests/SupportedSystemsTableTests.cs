@@ -36,7 +36,7 @@ public class SupportedSystemsTableTests
     {
         var storage = (handler.DefaultEmbedRomsInZip ? "In ZIP" : "Next to ZIP") + (handler.RomStorageConfigurable ? " (configurable)" : "");
         var formats = string.Join(", ", handler.RomExtensions.Select(extension => $"`{extension}`"));
-        var dat = handler.DatSource == DatSource.TitleDb ? "titledb" : handler.DatFolder == DatKind.Redump ? "Redump" : handler.DatFolder == DatKind.Tosec ? "TOSEC" : "No-Intro";
+        var dat = handler.DatSource == DatSource.None ? "None" : handler.DatSource == DatSource.TitleDb ? "titledb" : handler.DatFolder == DatKind.Redump ? "Redump" : handler.DatFolder == DatKind.Tosec ? "TOSEC" : "No-Intro";
         var core = handler.BrowserCore is { } browserCore ? $"`{browserCore}`" : "—";
         return $"| {handler.DisplayName} | `{handler.Id}` | {storage} | {formats} | {dat} | {core} |";
     }
