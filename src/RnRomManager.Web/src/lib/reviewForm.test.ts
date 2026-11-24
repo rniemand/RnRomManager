@@ -4,6 +4,7 @@ import {
 	emptyManualForm,
 	manualFileStem,
 	splitList,
+	titleFromFileName,
 	toManualRequest,
 	validateManual
 } from './reviewForm';
@@ -58,5 +59,21 @@ describe('manual review form', () => {
 		expect(discError(null, true)).toBe('A disc number is required.');
 		expect(discError(Number.NaN, true)).toBe('A disc number is required.');
 		expect(discError(2, true)).toBeUndefined();
+	});
+});
+
+describe('titleFromFileName (MS-DOS N7)', () => {
+	it.each([
+		['Doom (1993)(id Software).zip', 'Doom'],
+		['Secret of Monkey Island, The (1990)(Lucasfilm)[!].zip', 'Secret of Monkey Island, The'],
+		['Commander_Keen_4.zip', 'Commander Keen 4'],
+		['Prince of Persia [a].dosz', 'Prince of Persia'],
+		['  Wing   Commander  .zip', 'Wing Commander'],
+		['NoTags', 'NoTags'],
+		['.zip', ''],
+		[' (1990).zip', ''],
+		['', '']
+	])('%j → %j', (name, title) => {
+		expect(titleFromFileName(name)).toBe(title);
 	});
 });

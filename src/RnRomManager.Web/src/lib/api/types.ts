@@ -409,6 +409,8 @@ export interface ReviewDetail {
 	fileSets: boolean;
 	/** A titledb (Switch) system: Attach offers DLC. */
 	addOns: boolean;
+	/** MS-DOS N5: false for a system with no DAT (`dos`): no Suggestions tab, and Manual starts with a title from the file name. */
+	hasDat: boolean;
 	/** B13: the unmatched set this item belongs to, cue/`.toc`/`.ccd`/`.mds` first; null when there is none. */
 	setMembers: { reviewId: number; fileName: string; sizeBytes: number }[] | null;
 	/** B15: false for every set member (`.cue`/`.bin`/`.ccd`/`.img`/`.sub`/`.toc`/`.mds`/`.mdf`) on a disc system but a lone PlayStation `.img`; Dismiss is hidden then. */
