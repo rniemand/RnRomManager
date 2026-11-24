@@ -143,7 +143,7 @@ public sealed class IngestFileDeleter(JobLock jobLock, IIngestReviewRepository r
         else if (file.Folder == Pending)
         {
             // External: the file is gone, so its rows are removed even when the request was abandoned meanwhile.
-            await reviews.DeletePendingBySourceAsync(path, ArchiveExtractor.IsArchive(file.Name!) ? path : null,
+            await reviews.DeletePendingBySourceAsync(path, ArchiveExtractor.IsArchiveFor(systems.ById(file.System!), file.Name!) ? path : null,
                 external ? CancellationToken.None : ct).ConfigureAwait(false);
         }
         return true;

@@ -132,7 +132,9 @@ public sealed class IngestJob(
 
             var file = unit.Files[0];
             context.Progress.SetCurrentItem(file.Name);
-            var external = systems.ById(file.SystemId) is { EmbedRomsInZip: false };
+            var handler = systems.ById(file.SystemId);
+            var external = handler is { EmbedRomsInZip: false };
+            var archive = ArchiveExtractor.IsArchiveFor(handler, file.Name);
             if (external && ExternalRomName.Scalars(file.FullPath) > ExternalRomName.MaxSourcePathScalars)
             {
                 // I1: the source_path columns can't hold it, so nothing may refer to this file; it is left untouched.
@@ -140,19 +142,19 @@ public sealed class IngestJob(
                 await ItemAsync(run, file with { FullPath = ExternalRomName.CutScalars(file.FullPath, ExternalRomName.MaxSourcePathScalars) },
                     IngestItemResult.Error(IngestErrors.IoError, $"the path is longer than {ExternalRomName.MaxSourcePathScalars} characters", file.SystemId)).ConfigureAwait(false);
             }
-            else if (systems.ById(file.SystemId) is { FileSets: true } && ArchiveExtractor.IsArchive(file.Name))
+            else if (handler is { FileSets: true } && archive)
             {
                 // B9: disc systems take loose files only; the archive stays where it is.
                 await ItemAsync(run, file, new IngestItemResult(IngestOutcome.Skipped, IngestReason.ArchiveNotSupported, SystemId: file.SystemId))
                     .ConfigureAwait(false);
             }
-            else if (external && ArchiveExtractor.IsArchive(file.Name))
+            else if (external && archive)
                 await ExternalArchiveAsync(run, file, Path.Combine(work, Guid.NewGuid().ToString())).ConfigureAwait(false); // its own fresh age check
             else if (external)
                 await ItemAsync(run, file, null, CancellationToken.None).ConfigureAwait(false); // I2: its own fresh age check; a started item finishes
             else if (now - file.ModifiedAtUtc < MinFileAge)
                 await ItemAsync(run, file, new IngestItemResult(IngestOutcome.Skipped, IngestReason.TooRecent, SystemId: file.SystemId)).ConfigureAwait(false);
-            else if (ArchiveExtractor.IsArchive(file.Name))
+            else if (archive)
                 await ArchiveAsync(run, file, Path.Combine(work, Guid.NewGuid().ToString())).ConfigureAwait(false);
             else
                 await ItemAsync(run, file, null, cancellationToken).ConfigureAwait(false);
