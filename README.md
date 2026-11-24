@@ -30,7 +30,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 |---|---|---|---|---|---|
 | 32X | `s32x` | In ZIP | `.32x`, `.bin` | No-Intro | `picodrive` |
 | 3DO | `3do` | Next to ZIP | `.bin`, `.cue`, `.iso`, `.chd`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | `opera` |
-| Arcade (MAME 2003-Plus) | `mame2003` | Next to ZIP | `.mamez`, `.zip` | MAME XML | — |
+| Arcade (MAME 2003-Plus) | `mame2003` | Next to ZIP | `.mamez`, `.zip` | MAME XML | `mame2003_plus` |
 | Atari 2600 | `a2600` | In ZIP | `.a26`, `.bin` | No-Intro | `stella2014` |
 | Atari 5200 | `a5200` | In ZIP | `.a52`, `.bin` | No-Intro | `a5200` |
 | Atari 7800 | `a7800` | In ZIP | `.a78`, `.bin` | No-Intro | `prosystem` |

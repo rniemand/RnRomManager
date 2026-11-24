@@ -225,4 +225,16 @@ public class OptionsValidatorTests
         Assert.That(relative.FailureMessage, Does.Contain("Emulator:Mupen64PlusCorePath"));
         Assert.That(new EmulatorOptionsValidator().Validate(null, new() { Mupen64PlusCorePath = " " }).Succeeded, Is.False, "whitespace isn't blank");
     }
+
+    [Test]
+    public void Mame2003PlusCorePath_EmptyOrAbsolute()
+    {
+        var absolute = Path.Combine(Path.GetTempPath(), "mame");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { Mame2003PlusCorePath = "" }).Succeeded, Is.True, "blank disables");
+        Assert.That(new EmulatorOptionsValidator().Validate(null, new() { Mame2003PlusCorePath = absolute, Mupen64PlusCorePath = absolute }).Succeeded,
+            Is.True, "may share the other operator cores' folder");
+        var relative = new EmulatorOptionsValidator().Validate(null, new() { Mame2003PlusCorePath = "mame" });
+        Assert.That(relative.Succeeded, Is.False);
+        Assert.That(relative.FailureMessage, Does.Contain("Emulator:Mame2003PlusCorePath must be empty or an absolute path (got 'mame')."));
+    }
 }

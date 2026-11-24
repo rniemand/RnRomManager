@@ -43,8 +43,11 @@ public sealed class Mame2003Handler : ISystemHandler
     public string? SourceExtension(string fileName) =>
         Path.GetExtension(fileName).ToLowerInvariant() is ".zip" or ".mamez" ? ".mamez" : null;
 
-    /// <summary>Set in step 8 (operator-supplied <c>mame2003_plus</c>).</summary>
-    public string? BrowserCore => null;
+    /// <summary>
+    /// P1: MAME 2003-Plus, whose files the operator supplies (<c>Emulator:Mame2003PlusCorePath</c>); it plays in the modal
+    /// (no threads), with the parent and BIOS sets loaded beside the game (P3).
+    /// </summary>
+    public string? BrowserCore => "mame2003_plus";
 
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 

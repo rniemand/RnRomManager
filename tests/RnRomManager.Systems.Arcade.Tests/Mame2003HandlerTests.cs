@@ -22,7 +22,7 @@ public class Mame2003HandlerTests
     }
 
     [Test]
-    public void BrowserCore_IsNullUntilTheOperatorCore() => Assert.That(Handler.BrowserCore, Is.Null);
+    public void BrowserCore_IsMame2003Plus() => Assert.That(Handler.BrowserCore, Is.EqualTo("mame2003_plus"));
 
     [TestCase("sf2.zip", ".mamez")]
     [TestCase("SF2.ZIP", ".mamez")]

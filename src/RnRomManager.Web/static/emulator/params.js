@@ -36,7 +36,8 @@ const cores = [
 	'mednafen_pce',
 	'mednafen_ngp',
 	'mupen64plus_next',
-	'azahar'
+	'azahar',
+	'mame2003_plus'
 ];
 
 /**
@@ -139,7 +140,7 @@ export function controlSchemeFor(core, name) {
 }
 
 /**
- * B3/B8 (SNES B3 adds Snes9x, 3DO B6 Opera, C64 B7 VICE, PET VICE xpet, VIC-20 VICE xvic, N64 Mupen64Plus-Next): the cores whose files the operator supplies, served by the API after a length and hash check, with the
+ * B3/B8 (SNES B3 adds Snes9x, 3DO B6 Opera, C64 B7 VICE, PET VICE xpet, VIC-20 VICE xvic, N64 Mupen64Plus-Next, Arcade P1 MAME 2003-Plus): the cores whose files the operator supplies, served by the API after a length and hash check, with the
  * wording of their messages: the system label, the core's display name, the short name of the fallback message and
  * the option holding the folder.
  * @type {Record<string, { system: string, display: string, short: string, option: string }>}
@@ -192,6 +193,12 @@ const operatorCores = {
 		display: 'Mupen64Plus-Next',
 		short: 'Mupen64Plus',
 		option: 'Emulator:Mupen64PlusCorePath'
+	},
+	mame2003_plus: {
+		system: 'Arcade (MAME 2003-Plus) games',
+		display: 'MAME 2003-Plus',
+		short: 'MAME',
+		option: 'Emulator:Mame2003PlusCorePath'
 	}
 };
 
@@ -263,7 +270,9 @@ export function hidesCoreChooser(core) {
 		'vice_x64sc',
 		'vice_xpet',
 		'vice_xvic',
-		'mupen64plus_next'
+		'mupen64plus_next',
+		// Arcade P1: EmulatorJS's mame group also holds mame2003, which isn't delivered.
+		'mame2003_plus'
 	].includes(core);
 }
 

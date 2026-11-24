@@ -167,7 +167,8 @@ describe('parsePlayParams', () => {
 		'puae',
 		'mednafen_pce',
 		'mednafen_ngp',
-		'mupen64plus_next'
+		'mupen64plus_next',
+		'mame2003_plus'
 	])('accepts the %s core', (core) => {
 		expect(parsePlayParams(query({ core }))?.core).toBe(core);
 	});
@@ -1030,6 +1031,26 @@ describe('3DS page (3DS G2, G3)', () => {
 		);
 		expect(isolatedBrowserError({ ...capable, isolated: false }, 'dosbox_pure')).toBe(
 			"This page isn't cross-origin isolated, so DOS games can't use threads. Ask an Admin to check that the proxy keeps the Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers."
+		);
+	});
+});
+
+describe('Arcade (MAME 2003-Plus)', () => {
+	it('is an operator core whose chooser is hidden', () => {
+		expect(isOperatorCore('mame2003_plus')).toBe(true);
+		expect(hidesCoreChooser('mame2003_plus')).toBe(true);
+		expect(controlSchemeFor('mame2003_plus', 'sf2.mamez')).toBeNull();
+		expect(operatorCorePaths('mame2003_plus')).toEqual({
+			'mame2003_plus-wasm.data': '/api/emulator/cores/mame2003_plus/mame2003_plus-wasm.data',
+			'mame2003_plus-legacy-wasm.data':
+				'/api/emulator/cores/mame2003_plus/mame2003_plus-legacy-wasm.data',
+			'mame2003_plus.json': '/api/emulator/cores/mame2003_plus/mame2003_plus.json'
+		});
+		expect(operatorCoreError('mame2003_plus', 404)).toBe(
+			'Arcade (MAME 2003-Plus) games need the MAME 2003-Plus core files: ask an Admin to set them up (Emulator:Mame2003PlusCorePath).'
+		);
+		expect(operatorCoreError('mame2003_plus', 409)).toBe(
+			"The MAME 2003-Plus core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:Mame2003PlusCorePath)."
 		);
 	});
 });

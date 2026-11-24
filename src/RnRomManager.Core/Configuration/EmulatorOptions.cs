@@ -45,4 +45,11 @@ public sealed class EmulatorOptions
     /// behaves as unavailable without failing startup.
     /// </summary>
     public string Mupen64PlusCorePath { get; set; } = "";
+
+    /// <summary>
+    /// Arcade P1: a fully qualified, read-only directory holding the EmulatorJS 4.2.3 MAME 2003-Plus files at its root (it may
+    /// be shared with the other operator cores). Never bundled: the MAME licence forbids commercial use. Empty disables
+    /// Arcade play; a missing directory behaves as unavailable without failing startup.
+    /// </summary>
+    public string Mame2003PlusCorePath { get; set; } = "";
 }
