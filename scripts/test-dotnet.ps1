@@ -4,7 +4,8 @@
     Runs the .NET tests split into shards: separate `dotnet test` processes, each with its own MariaDB container.
 .DESCRIPTION
     The API host's logging (NLog) is process-wide, so API tests can't run in parallel inside one process; this
-    script splits them across processes instead. The first shards are named API test classes, balanced by run time,
+    script splits them across processes instead. The first shards are named API test classes (or single slow test
+    methods), balanced by run time,
     then whole test projects that get a shard of their own (Data.Tests); the last shard is everything else (the rest
     of the API tests and every other test project), so a new test class always runs somewhere. CI runs one shard per job (.github/workflows/ci.yml); locally, -Shard 0 runs all of them
     at once.
@@ -63,24 +64,32 @@ $apiShards = @(
         'LogStreamTests', 'IngestDeleteEndpointsTests', 'HotkeyEndpointsTests', 'CollectionCoverEndpointsTests',
         'MediaRetryEndpointsTests', 'ActivityReportEndpointTests', 'SaveCarryTests', 'ReleaseEditTests',
         'DiscoveryLogoEndpointsTests', 'ImageSuggestionEndpointsTests', 'GamePlayedEndpointTests', 'UserEndpointsTests',
-        'GameInfoLookupEndpointsTests')
+        'GameInfoLookupEndpointsTests'),
+    # Each case ingests (reads and hashes) a sparse file just over 2 GiB: ~26 s on a fast runner, ~60 s on a slow one,
+    # which made shard 1 the slowest. A `Class.Method` entry takes those tests out of the shard that lists their class.
+    @('IngestPipelineTests.WiiIsoOver2GiB_IsNotTooLarge_AndWaitsInReviewAsWii')
 )
 # Whole test projects that get a shard of their own, after the API shards. Data.Tests (~75 s of MariaDB tests) made
 # the last shard the slowest by far while it ran there alongside the leftover API classes.
 $projectShards = @('tests/RnRomManager.Data.Tests')
 $shardCount = $apiShards.Count + $projectShards.Count + 1
 
+# NUnit's FullyQualifiedName is Namespace.Class.Method(args): `.Class.` matches exactly that class, `.Class.Method`
+# that method's tests (and any method whose name starts with it).
+function Get-EntryMatch([string]$entry) { if ($entry.Contains('.')) { ".$entry" } else { ".$entry." } }
+
 function Get-ShardArgs([int]$n) {
-    # `.Name.` matches exactly that class (NUnit's FullyQualifiedName is Namespace.Class.Method(args)).
     $filter = $null
     if ($n -le $apiShards.Count) {
         $target = $apiTests
-        $filter = '(' + (($apiShards[$n - 1] | ForEach-Object { "FullyQualifiedName~.$_." }) -join '|') + ')'
+        $filter = '(' + (($apiShards[$n - 1] | ForEach-Object { "FullyQualifiedName~$(Get-EntryMatch $_)" }) -join '|') + ')'
+        $elsewhere = 1..$apiShards.Count | Where-Object { $_ -ne $n } | ForEach-Object { $apiShards[$_ - 1] } | Where-Object { $_.Contains('.') }
+        if ($elsewhere) { $filter += '&' + (($elsewhere | ForEach-Object { "FullyQualifiedName!~$(Get-EntryMatch $_)" }) -join '&') }
     } elseif ($n -lt $shardCount) {
         $target = Join-Path $root $projectShards[$n - $apiShards.Count - 1]
     } else {
         $target = $solution
-        $filter = (@($apiShards | ForEach-Object { $_ } | ForEach-Object { "FullyQualifiedName!~.$_." }) +
+        $filter = (@($apiShards | ForEach-Object { $_ } | ForEach-Object { "FullyQualifiedName!~$(Get-EntryMatch $_)" }) +
             @($projectShards | ForEach-Object { "FullyQualifiedName!~$(Split-Path $_ -Leaf)." })) -join '&'
     }
     if ($SkipIntegration) { $filter = if ($filter) { "($filter)&Category!=Integration" } else { 'Category!=Integration' } }
