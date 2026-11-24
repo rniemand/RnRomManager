@@ -55,6 +55,21 @@ public static class IngestSeeder
     public static IReadOnlyDictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> EmptySwitch =>
         new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = [] };
 
+    /// <summary>Arcade D4: a one-set MAME DAT (<c>rnmin</c>): enough for the DAT preflight of a fixture cache.</summary>
+    public static IReadOnlyDictionary<string, string> MinimalMame =>
+        new Dictionary<string, string>
+        {
+            ["MAME"] = """
+                <?xml version="1.0"?>
+                <mame build="0.78">
+                	<game name="rnmin">
+                		<description>Rn Minimal (World)</description>
+                		<rom name="rnmin.bin" size="4" crc="8bb98613"/>
+                	</game>
+                </mame>
+                """,
+        };
+
     /// <param name="ndsDatFiles">
     /// ROM files the DS No-Intro DAT lists instead of the empty catalog (game name: the file name without its extension;
     /// ROM name: the file name). They are hashed in one streamed read and are not copied into ingest.

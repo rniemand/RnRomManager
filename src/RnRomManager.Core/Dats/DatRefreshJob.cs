@@ -17,7 +17,8 @@ namespace RnRomManager.Core.Dats;
 /// (HTTP, parse, wrong DAT, staged validation) or a cancel before the first rename keeps the old files and stores.
 /// Cancel is checked between downloads and once more right before the swap. A <c>TitleDb</c> system (T2) instead
 /// shares one download of <c>Sources:TitleDbUrl</c>, streamed to <c>cache/work/&lt;jobId&gt;/titledb.json</c> and
-/// parsed from there once, and gets its own compact file.
+/// parsed from there once, and gets its own compact file. A <c>Mame</c> system (Arcade D4) gets one download of
+/// <c>Sources:MameDatUrl</c>, staged as <c>mame/&lt;DatName&gt;.xml</c>.
 /// </summary>
 public sealed class DatRefreshJob(
     HttpClient http, SourcesOptions sources, PathsOptions paths, DatCache cache, ISystemRegistry systems, IAuditLog audit,
@@ -45,10 +46,11 @@ public sealed class DatRefreshJob(
     {
         CheckPlan(systems.All);
         var titleDb = systems.All.Where(h => h.DatSource == DatSource.TitleDb).ToList();
+        var mame = systems.All.FirstOrDefault(h => h.DatSource == DatSource.Mame);
         var files = systems.All.Where(h => h.DatSource == DatSource.Libretro)
             .SelectMany(h => new[] { h.DatFolder }.Concat(h.MetadatKinds).Select(kind => (Handler: h, Kind: kind))).ToList();
-        // One download per libretro file, plus one shared titledb download.
-        context.Progress.SetTotal(files.Count + (titleDb.Count > 0 ? 1 : 0));
+        // One download per libretro file, plus one shared titledb download and one MAME download.
+        context.Progress.SetTotal(files.Count + (titleDb.Count > 0 ? 1 : 0) + (mame is null ? 0 : 1));
 
         var work = CreateWork(context.JobId);
         var staged = Path.Combine(work, DatCache.FolderName);
@@ -74,12 +76,15 @@ public sealed class DatRefreshJob(
 
             if (titleDb.Count > 0)
                 manifest.AddRange(await StageTitleDbAsync(titleDb, work, staged, context, cancellationToken).ConfigureAwait(false));
+            if (mame is not null)
+                manifest.Add(await StageMameAsync(mame, staged, context, cancellationToken).ConfigureAwait(false));
 
             cancellationToken.ThrowIfCancellationRequested();
             DatManifest.Write(Path.Combine(staged, DatManifest.FileName), manifest);
             var stores = cache.Prepare(staged);
-            // T3: the result lists each main (no-intro or redump) DAT and each titledb file by DatName.
-            var versions = manifest.Where(e => DatKind.IsMainDat(e.File) || e.File.StartsWith(TitleDb.Folder + "/", StringComparison.Ordinal))
+            // T3: the result lists each main (no-intro or redump) DAT, each titledb file and the MAME file by DatName.
+            var versions = manifest.Where(e => DatKind.IsMainDat(e.File) || e.File.StartsWith(TitleDb.Folder + "/", StringComparison.Ordinal)
+                    || e.File.StartsWith(MameDat.Folder + "/", StringComparison.Ordinal))
                 .ToDictionary(e => e.DatName, e => e.Version);
 
             // The last point a cancel keeps the old set: from the first rename on, publication runs to the end.
@@ -122,6 +127,40 @@ public sealed class DatRefreshJob(
         if (handlers.GroupBy(h => h.DatName, StringComparer.OrdinalIgnoreCase).FirstOrDefault(g => g.Count() > 1) is { } clash)
             throw new InvalidOperationException(
                 $"Systems {string.Join(" and ", clash.Select(h => $"'{h.Id}'"))} share the DAT name '{clash.Key}'; nothing was refreshed.");
+        // Arcade D1: one URL serves every Mame handler.
+        var mame = handlers.Where(h => h.DatSource == DatSource.Mame).ToList();
+        if (mame.Count > 1)
+            throw new InvalidOperationException(
+                $"Systems {string.Join(" and ", mame.Select(h => $"'{h.Id}'"))} both use Sources:MameDatUrl; nothing was refreshed.");
+    }
+
+    /// <summary>
+    /// Arcade D4: one capped download of <c>Sources:MameDatUrl</c>, parsed in full (a failure keeps the old set) and staged
+    /// as <c>mame/&lt;DatName&gt;.xml</c>. The DAT has no version, so the download time (UTC, to the second) is it.
+    /// </summary>
+    private async Task<DatManifestEntry> StageMameAsync(ISystemHandler handler, string staged, JobContext context, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var relative = MameDat.RelativePath(handler.DatName);
+        context.Progress.SetCurrentItem(relative);
+        var bytes = await DownloadAsync(sources.MameDatUrl, cancellationToken).ConfigureAwait(false);
+        var downloadedAt = time.GetUtcNow();
+        try
+        {
+            using var read = new MemoryStream(bytes, writable: false);
+            MameDat.Parse(read);
+        }
+        catch (DatParseException ex)
+        {
+            throw new DatParseException($"{relative}: {ex.Message}");
+        }
+
+        var target = SafePath.Resolve(staged, relative);
+        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+        await File.WriteAllBytesAsync(target, bytes, cancellationToken).ConfigureAwait(false);
+        context.Progress.ItemDone();
+        var version = downloadedAt.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+        return new DatManifestEntry(relative, handler.DatName, version, downloadedAt, Convert.ToHexStringLower(SHA1.HashData(bytes)));
     }
 
     /// <summary>

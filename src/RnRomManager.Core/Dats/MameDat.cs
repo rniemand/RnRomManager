@@ -14,6 +14,12 @@ public sealed record MameSet(
 /// <summary>Arcade D2: a MAME <c>-listxml</c> DAT, sets in file order.</summary>
 public sealed record MameDat(IReadOnlyList<MameSet> Sets)
 {
+    /// <summary>Arcade D4: the folder under <c>cache/dats/</c> that holds MAME DATs.</summary>
+    public const string Folder = "mame";
+
+    /// <summary>Arcade D4: <c>mame/&lt;DatName&gt;.xml</c>.</summary>
+    public static string RelativePath(string datName) => $"{Folder}/{datName}.xml";
+
     /// <exception cref="DatParseException">A set without a name or description, a crc-less ROM that isn't nodump, a duplicate set name, or no sets.</exception>
     public static MameDat Parse(Stream stream)
     {

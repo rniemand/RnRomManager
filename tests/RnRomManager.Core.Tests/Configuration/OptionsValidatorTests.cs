@@ -81,6 +81,22 @@ public class OptionsValidatorTests
     public void TitleDbUrl_DefaultsToRawUsEnglish() =>
         Assert.That(new SourcesOptions().TitleDbUrl, Is.EqualTo("https://raw.githubusercontent.com/blawar/titledb/master/US.en.json"));
 
+    [TestCase("http://localhost:9000/mame.xml", true)]
+    [TestCase("", false)]
+    [TestCase("ftp://example.com/mame.xml", false)]
+    public void MameDatUrl_IsAbsoluteHttpUrl(string value, bool valid)
+    {
+        var result = new SourcesOptionsValidator().Validate(null, new() { MameDatUrl = value });
+        Assert.That(result.Succeeded, Is.EqualTo(valid));
+        if (!valid)
+            Assert.That(result.Failures, Does.Contain($"Sources:MameDatUrl must be an absolute http(s) URL (got '{value}')."));
+    }
+
+    [Test]
+    public void MameDatUrl_DefaultsToThe2003PlusXml() =>
+        Assert.That(new SourcesOptions().MameDatUrl,
+            Is.EqualTo("https://raw.githubusercontent.com/libretro/mame2003-plus-libretro/master/metadata/mame2003-plus.xml"));
+
     [TestCase("https://thumbnails.libretro.com", true)]
     [TestCase("", true)]
     [TestCase("file:///c:/x", false)]

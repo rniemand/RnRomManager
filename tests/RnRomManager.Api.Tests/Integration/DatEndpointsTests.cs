@@ -128,7 +128,7 @@ public class DatEndpointsTests
             {
                 [ExternalTitleDbTestHandler.DatNameValue] = [new("0100000000001000", "The Orbit Expedition", null, null, 2020, [], ["en"], null, null)],
                 [IngestSeeder.SwitchDat] = [],
-            }, layouts: IngestSeeder.RedumpLayouts);
+            }, layouts: IngestSeeder.RedumpLayouts, mame: IngestSeeder.MinimalMame);
         var admin = await AuthClient.CreateAsync(factory);
         await TestUsers.CreateAsync(factory, "boss", TestUsers.AllRoles);
         (await admin.LoginAsync("boss", TestUsers.Password)).Dispose();
@@ -146,11 +146,18 @@ public class DatEndpointsTests
         var rows = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
         var names = rows.Select(r => r.GetProperty("datName").GetString()!).ToList();
-        Assert.That(names, Has.Count.EqualTo(40), "29 libretro systems, the 9 disc systems, Switch and the test titledb system");
+        Assert.That(names, Has.Count.EqualTo(41), "29 libretro systems, the 9 disc systems, Switch, the test titledb system and MAME");
         Assert.That(names, Is.EqualTo(names.Order(StringComparer.Ordinal)));
         var titleDb = rows.Single(r => r.GetProperty("datName").GetString() == ExternalTitleDbTestHandler.DatNameValue);
         Assert.That(titleDb.GetProperty("version").GetString(), Is.EqualTo(FixtureDatWriter.TitleDbVersion));
         Assert.That(titleDb.GetProperty("downloadedAt").GetDateTimeOffset(), Is.EqualTo(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)));
+        var mame = rows.Single(r => r.GetProperty("datName").GetString() == "MAME");
+        Assert.That(mame.GetProperty("version").GetString(), Is.EqualTo(FixtureDatWriter.MameVersion));
+
+        using var download = await admin.GetAsync("/api/admin/dats/MAME/download");
+        Assert.That(download.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(download.Content.Headers.ContentDisposition?.FileNameStar ?? download.Content.Headers.ContentDisposition?.FileName, Is.EqualTo("MAME.xml"));
+        Assert.That(await download.Content.ReadAsStringAsync(), Is.EqualTo(IngestSeeder.MinimalMame["MAME"]));
     }
 
     [TestCase("malformed", TestName = "AdminDats_UnusableLiveCache_IsEmpty malformed manifest")]
