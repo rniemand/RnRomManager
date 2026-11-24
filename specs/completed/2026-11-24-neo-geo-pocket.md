@@ -1,6 +1,6 @@
 ---
 title: Neo Geo Pocket and Neo Geo Pocket Color
-status: in-progress # draft | ready | in-progress | completed
+status: completed # draft | ready | in-progress | completed
 created: 2026-11-24
 ---
 
