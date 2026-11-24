@@ -103,8 +103,9 @@ Adds an arcade system, `mame2003`, for Admins who keep MAME 0.78 / MAME 2003-Plu
 | Tests | `tests/RnRomManager.TestData/FixtureDatWriter.cs` (`mame:` parameter), `IngestSeeder.cs` (`MinimalMame` (new), seeded sets) | fixtures |
 | Docs | `README.md` | systems table row (S5), intro and "identifies each one against …" sentence (arcade sets by set name + CRCs against the MAME 2003-Plus DAT), feature list's Play sentence (Arcade, operator-supplied), operator core attribution (not included), upgrade note (Refresh DATs), quick start (one ZIP per set, named by set) |
 | Docs | `docs/adding-a-system.md` | `DatSource.Mame` in the `DatSource` row, `mame2003_plus` in the `BrowserCore` row and the operator-cores list, Arcade beside MS-DOS in "A `.zip` or `.7z` as a ROM" (`.mamez`) |
-| Docs | `docs/features.md` | Ingestion (I3–I5), Review (R1–R3), Play (P3, P4), External storage list, primary release (G7) |
-| Docs | `docs/configuration.md`, `docs/deployment.md` | `Sources:MameDatUrl`, `Emulator:Mame2003PlusCorePath` and its mount; `ingest/mame2003/` (one `.zip` per set, named by set, not unpacked) in deployment's `/app/ingest` row |
+| Docs | `docs/features.md` | Ingestion (I3–I5), Review (R1–R3), Game detail's **Play** list and an Arcade bullet (P3, P4), External storage list, primary release (G7), `mame2003_plus` and `Emulator:Mame2003PlusCorePath` in the `GET /api/emulator/cores/{core}/{name}` reference, `GET /api/games/{id}/roms/{romId}/romset` (P2) in "Browse the library through the API" |
+| Docs | `docs/configuration.md`, `docs/deployment.md` | `Sources:MameDatUrl` and `Emulator:Mame2003PlusCorePath` option rows; a `## MAME 2003-Plus core` section in each, after `## Mupen64Plus-Next core` and copying it (configuration: the three files, sizes and SHA-256s, `409 Mame2003PlusCoreMismatch` and the P1 play-page messages; deployment: getting the files, the mount, `Emulator__Mame2003PlusCorePath` in the compose example, and a "For Arcade browser play" checklist bullet); `ingest/mame2003/` (one `.zip` per set, named by set, not unpacked) in deployment's `/app/ingest` row |
+| Docs | `docs/development.md` | `mame2003_plus` and Arcade in the "Operator-supplied cores" bullet of Browser emulators |
 | Docs | `docs/zip-format.md` | `mame2003` in the `system` id list, a **MAME** bullet beside the **MS-DOS** one (`<ZipBase>.<set name>.mamez`), the G2 header fields |
 
 No migration: `system_id` is a `VARCHAR` and `roms.header` is already a JSON column. Config keys: `Sources:MameDatUrl`, `Emulator:Mame2003PlusCorePath`. API: new `GET /api/games/{id}/roms/{romId}/romset`; `hasDat` gains a case. Existing data is untouched. After upgrading, an Admin runs Refresh DATs once, or ingestion refuses with `DatsMissing`.
@@ -145,6 +146,7 @@ No migration: `system_id` is a `VARCHAR` and `roms.header` is already a JSON col
 - 2026-11-24 Primary release among clones? → Parents (header `cloneOf` null) first (reviewer)
 - 2026-11-24 Play button on BIOS sets? → Kept; the core reports it can't run (reviewer)
 - 2026-11-24 Review pass 3: core extension list is the wasm's `zip|`, not `core.json`; vendor script path and its three lists; `MinimalMame` callers (`ReviewEndpointsTests` in, `TitleDbIngestTests` out) and moved to step 2; `FixtureDatWriter.MameVersion`; `MaskSources` copy; D5 SHA1 check; R3 names; `ListBySetNamesAsync` return type; broken `Systems_ListsEveryRegisteredSystem…`, `AdminDats_ListsTheTitleDbFile…` and e2e counts named; Header labels; DAT-vs-core-build risk; docs rows → fixed in the spec (reviewer)
+- 2026-11-24 Review pass 4: docs every operator core reaches (`development.md` cores bullet, `features.md` cores and library API references, a `MAME 2003-Plus core` section in `configuration.md` and `deployment.md`) → fixed in the spec (reviewer)
 
 ## Kickoff prompt
 ```text
