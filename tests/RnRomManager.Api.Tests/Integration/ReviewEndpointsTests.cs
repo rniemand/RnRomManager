@@ -1589,6 +1589,25 @@ public class ReviewEndpointsTests
     }
 
     [Test]
+    public async Task Fbneo_HasDatIsFalse_AndManualOfA7z_StoresTitleDotFbneo7z_WithoutAHeader()
+    {
+        var bytes = File.ReadAllBytes(TestFixtures.Basic7zPath);
+        var path = DropDisc("fbneo", "mystery.7z", bytes);
+        var result = (await Ingest(new IngestFile("fbneo", path, "mystery.7z", bytes.Length, File.GetLastWriteTimeUtc(path))))!;
+        Assert.That((result.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Review, (string?)"NoDatMatch")), result.Details);
+        var item = (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(bytes)), default))!;
+
+        using var detail = await _admin.GetAsync($"/api/review/{item.Id}");
+        Assert.That((await AuthClient.JsonAsync(detail)).GetProperty("hasDat").GetBoolean(), Is.False);
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "Rn Mystery", regions = Array.Empty<string>(), languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+
+        Assert.That(response.Code, Is.Null);
+        var rom = (await ReadGame(response.GameId!.Value)).Roms.Single();
+        Assert.That((rom.FileName, rom.Header, rom.Identification.Method), Is.EqualTo(("Rn Mystery.fbneo7z", (JsonObject?)null, IdentificationMethod.Manual)));
+    }
+
+    [Test]
     public async Task Mame_AmbiguousGroupAttach_KeepsTheSetHeader_AndTheParentBaseTitle()
     {
         // Two games own "Rn Minimal": one by Manual, the other by Manual under another title, then given that base title in the mirror.
