@@ -13,9 +13,13 @@ public sealed class DatStore
     private readonly Dictionary<string, DatMetadata> _metadata;
     private readonly Dictionary<string, TitleDbRow> _byTitleId = new(StringComparer.Ordinal);
     private readonly Dictionary<string, List<DatRom>> _bySerialCode = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, MameSet> _bySetName = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The <see cref="DatName"/> of every titledb store (T3).</summary>
     public const string TitleDbName = "titledb";
+
+    /// <summary>The <see cref="DatName"/> of every MAME store (Arcade D3); also the libretro-thumbnails folder.</summary>
+    public const string MameName = "MAME";
 
     /// <param name="romExtensions">
     /// N3: the system's ROM extensions (e.g. <c>.nes</c>); DAT ROMs with any other extension (case-insensitive) are left
@@ -48,6 +52,23 @@ public sealed class DatStore
         Roms = rows.Select(r => new DatRom(TitleDb.GameName(r.Name, r.TitleId), TitleDb.RomFileName(r.Name, r.TitleId, 0, ".nsp"), 0, "", "", "")).ToList();
         foreach (var row in rows)
             _byTitleId.Add(row.TitleId, row); // the compact reader already refused repeats
+        BaseTitles = Roms.Select(r => NoIntroName.Parse(r.GameName).BaseTitle).Distinct(StringComparer.Ordinal).ToList();
+        _metadata = [];
+    }
+
+    /// <summary>
+    /// Arcade D3: a MAME store. One ROM per set, in file order: <c>GameName</c> the description, <c>RomName</c>
+    /// <c>&lt;set&gt;.mamez</c>, the sum of its ROM sizes and empty hashes, so nothing is in the SHA1 index; sets are
+    /// found by <see cref="BySetName"/>.
+    /// </summary>
+    /// <param name="version">The manifest's download time.</param>
+    public DatStore(MameDat dat, string version)
+    {
+        DatName = MameName;
+        Version = version;
+        Roms = dat.Sets.Select(s => new DatRom(s.Description, s.Name + ".mamez", s.Roms.Sum(r => r.Size), "", "", "")).ToList();
+        foreach (var set in dat.Sets)
+            _bySetName.Add(set.Name, set); // MameDat.Parse already refused repeats
         BaseTitles = Roms.Select(r => NoIntroName.Parse(r.GameName).BaseTitle).Distinct(StringComparer.Ordinal).ToList();
         _metadata = [];
     }
@@ -90,6 +111,22 @@ public sealed class DatStore
                     list.Add(rom);
             }
         }
+    }
+
+    /// <summary>Arcade D3: a MAME store's set by name (case-insensitive); null for other stores.</summary>
+    public MameSet? BySetName(string name) => _bySetName.GetValueOrDefault(name);
+
+    /// <summary>
+    /// Arcade D3: <c>ReleaseYear</c> from a 4-digit <c>&lt;year&gt;</c> (<c>19??</c> gives none), the manufacturer as
+    /// both developer and publisher, no genres; <see cref="DatMetadata.Empty"/> for an unknown set.
+    /// </summary>
+    public DatMetadata MetadataForSet(string name)
+    {
+        if (BySetName(name) is not { } set)
+            return DatMetadata.Empty;
+        int? year = set.Year is { Length: 4 } y && int.TryParse(y, NumberStyles.None, CultureInfo.InvariantCulture, out var parsed) ? parsed : null;
+        IReadOnlyList<string> makers = string.IsNullOrEmpty(set.Manufacturer) ? [] : [set.Manufacturer];
+        return new DatMetadata(year, makers, makers, []);
     }
 
     /// <param name="sha1">Lowercase hex.</param>

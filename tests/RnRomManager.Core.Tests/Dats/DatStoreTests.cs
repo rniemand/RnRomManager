@@ -118,4 +118,47 @@ public class DatStoreTests
         Assert.That(store.BySerialCode("FILT"), Is.Empty, "extension-filtered rom isn't indexed");
         Assert.That(store.BySerialCode("NONE"), Is.Empty);
     }
+
+    private static readonly MameDat Mame = new(
+    [
+        new MameSet("sf2", "Street Fighter II - The World Warrior (World 910522)", "1991", "Capcom", null, null, false,
+            [new MameRom("a", 100, "00000001", null, null, false), new MameRom("b", 28, "00000002", null, null, false)]),
+        new MameSet("sf2ua", "Street Fighter II - The World Warrior (US 910206)", "19??", null, "sf2", "sf2", false, []),
+        new MameSet("odd", "Odd Year", "198?", "", null, null, false, []),
+    ]);
+
+    [Test]
+    public void Mame_OneRomPerSet_NamedBySetWithEmptyHashes()
+    {
+        var store = new DatStore(Mame, "2026-01-01T00:00:00Z");
+
+        Assert.That((store.DatName, store.Version), Is.EqualTo(("MAME", "2026-01-01T00:00:00Z")));
+        Assert.That(store.Roms[0], Is.EqualTo(new DatRom("Street Fighter II - The World Warrior (World 910522)", "sf2.mamez", 128, "", "", "")));
+        Assert.That(store.Roms.Select(r => r.RomName), Is.EqualTo(new[] { "sf2.mamez", "sf2ua.mamez", "odd.mamez" }));
+        Assert.That(store.BaseTitles, Is.EqualTo(new[] { "Street Fighter II - The World Warrior", "Odd Year" }));
+        Assert.That(store.BySha1(new string('0', 40)), Is.Null);
+    }
+
+    [Test]
+    public void Mame_BySetName_IgnoresCase()
+    {
+        var store = new DatStore(Mame, "v");
+
+        Assert.That(store.BySetName("SF2UA")?.Name, Is.EqualTo("sf2ua"));
+        Assert.That(store.BySetName("nope"), Is.Null);
+        Assert.That(new DatStore(NoIntro, []).BySetName("sf2"), Is.Null);
+    }
+
+    [Test]
+    public void Mame_MetadataForSet_YearAndManufacturer()
+    {
+        var store = new DatStore(Mame, "v");
+
+        var sf2 = store.MetadataForSet("sf2");
+        Assert.That((sf2.ReleaseYear, sf2.Developers, sf2.Publishers, sf2.Genres), Is.EqualTo((1991, new[] { "Capcom" }, new[] { "Capcom" }, Array.Empty<string>())));
+        var clone = store.MetadataForSet("sf2ua");
+        Assert.That((clone.ReleaseYear, clone.Developers.Count), Is.EqualTo(((int?)null, 0)));
+        Assert.That(store.MetadataForSet("odd").ReleaseYear, Is.Null);
+        Assert.That(store.MetadataForSet("unknown"), Is.SameAs(DatMetadata.Empty));
+    }
 }
