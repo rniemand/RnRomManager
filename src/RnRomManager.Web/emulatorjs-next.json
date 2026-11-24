@@ -1,0 +1,19 @@
+{
+	"version": "4.3.0-pre",
+	"source": {
+		"name": "EmulatorJS 4.3.0-pre",
+		"license": "GPL-3.0",
+		"url": "https://codeload.github.com/EmulatorJS/EmulatorJS/tar.gz/5628818822054610a2f06e61a6dc802fd1a3681f",
+		"sha256": "44a3a5da3566e92d200053b4a7d0e978ac058cade1998a380fb6ee866c35ed16"
+	},
+	"core": {
+		"name": "EmulatorJS azahar core",
+		"license": "GPL-2.0-or-later AND LGPL-2.1-or-later AND BSL-1.0 AND MIT AND BSD-3-Clause AND BSD-2-Clause AND Zlib, plus the public-domain Crypto++ files",
+		"url": "https://cdn.emulatorjs.org/4.3.0-pre/data/cores/azahar-thread-wasm.data",
+		"sha256": "d90696e6ea68c4fc00ef147411ad399962777f07b6c7e73d5537da0eaffc2e3b"
+	},
+	"report": {
+		"url": "https://cdn.emulatorjs.org/4.3.0-pre/data/cores/reports/azahar.json",
+		"sha256": "ae7e1038a2d98910c8bc12accf6f6aa7823233697da9e0bf47cde17e18a48d40"
+	}
+}

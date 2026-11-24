@@ -17,7 +17,7 @@ public class LicenseInfoTests
         throw new InvalidOperationException("Repository root not found.");
     }
 
-    /// <summary>Every NuGet package (central versions) and every npm dependency/devDependency.</summary>
+    /// <summary>Every NuGet package (central versions), every npm dependency/devDependency and the <c>emulatorjs-next.json</c> pins.</summary>
     private static IEnumerable<string> Dependencies()
     {
         var root = RepoRoot();
@@ -27,6 +27,10 @@ public class LicenseInfoTests
         foreach (var section in new[] { "dependencies", "devDependencies" })
             foreach (var dependency in npm.RootElement.GetProperty(section).EnumerateObject())
                 yield return dependency.Name;
+        // 3DS V4: the side-by-side EmulatorJS 4.3.0-pre and its azahar core are pinned downloads, not npm packages.
+        using var next = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "src", "RnRomManager.Web", "emulatorjs-next.json")));
+        foreach (var entry in new[] { "source", "core" })
+            yield return next.RootElement.GetProperty(entry).GetProperty("name").GetString()!;
     }
 
     [Test]
