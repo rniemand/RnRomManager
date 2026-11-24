@@ -1,9 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
 // Run through scripts/test-e2e.ps1 (spec §15.3), which starts docker-compose.e2e.yml and sets these variables.
-// With E2E_BASE_URL_B set, the specs run on two stacks at once: tests tagged @shard-b on the second, the rest on the
-// first, and @both (sign-in, ingest) on each (see specs/mvp.spec.ts).
+// With E2E_BASE_URL_B and E2E_BASE_URL_C set, the specs run on three stacks at once: tests tagged @shard-b on the
+// second, @shard-c on the third, the rest on the first, and @both (sign-in, ingest) on each (see specs/mvp.spec.ts).
 const stackB = process.env.E2E_BASE_URL_B;
+const stackC = process.env.E2E_BASE_URL_C;
+const sharded = /@shard-b|@shard-c/;
 const chromium = {
 	...devices['Desktop Chrome'],
 	// PSP B3: PPSSPP needs WebGL 2; on GPU-less runners Chromium only offers it through SwiftShader. The PSP test still
@@ -14,7 +16,7 @@ const chromium = {
 export default defineConfig({
 	// Each stack's specs share one seeded library and walk through it in order.
 	fullyParallel: false,
-	workers: stackB ? 2 : 1,
+	workers: 1 + (stackB ? 1 : 0) + (stackC ? 1 : 0),
 	retries: 0,
 	forbidOnly: !!process.env.CI,
 	timeout: 60_000,
@@ -29,7 +31,7 @@ export default defineConfig({
 		{
 			name: 'chromium',
 			testDir: './specs',
-			grepInvert: stackB ? /@shard-b/ : undefined,
+			grepInvert: stackB || stackC ? sharded : undefined,
 			metadata: { ingest: process.env.E2E_INGEST },
 			use: chromium
 		},
@@ -41,6 +43,17 @@ export default defineConfig({
 						grep: /@both|@shard-b/,
 						metadata: { ingest: process.env.E2E_INGEST_B },
 						use: { ...chromium, baseURL: stackB }
+					}
+				]
+			: []),
+		...(stackC
+			? [
+					{
+						name: 'chromium-c',
+						testDir: './specs',
+						grep: /@both|@shard-c/,
+						metadata: { ingest: process.env.E2E_INGEST_C },
+						use: { ...chromium, baseURL: stackC }
 					}
 				]
 			: []),

@@ -17,9 +17,12 @@ import { expectRomDownloadProgress, stageRomDownload } from "./rom-progress";
  * ratings → collections → review resolve/delete → images → Admin edit/move/delete → users and logs, with axe on every page and
  * modal visited. The seeded admin is an Admin; Site users are created by the tests that need them.
  *
- * scripts/test-e2e.ps1 runs it on two stacks at once (playwright.config.ts): `@both` tests sign in and ingest on each,
- * `@shard-b` tests run only on the second, the rest only on the first. A `@shard-b` test may only rely on `@both`
- * state, and must leave nothing a later untagged test sees.
+ * scripts/test-e2e.ps1 runs it on three stacks at once (playwright.config.ts): `@both` tests sign in and ingest on each,
+ * `@shard-b` tests run only on the second, `@shard-c` tests only on the third, the rest only on the first. A
+ * `@shard-b` or `@shard-c` test may only rely on `@both` state and on the earlier tests of its own stack, and must leave
+ * nothing a later untagged test sees. On the third stack, "saves" needs the ROM-download staging that "game detail"
+ * installs, so the two move together, and no other test there may play Orbit Blocks (World) (Rev 1).gb after them
+ * (its download would stay held).
  */
 
 const adminPassword = process.env.E2E_ADMIN_PASSWORD;
@@ -268,7 +271,7 @@ test("ingestion of the seeded Basic set", { tag: "@both" }, async () => {
   await expect(failed.getByText("No failed imports.")).toBeVisible();
 });
 
-test("reports and the ingest audit trail", async () => {
+test("reports and the ingest audit trail", { tag: "@shard-c" }, async () => {
   await page.getByRole("link", { name: "Reports", exact: true }).click();
   // Release editing B15: Reports opens Newly Added.
   await expect(page).toHaveURL(/\/reports\/newly-added$/);
@@ -346,7 +349,7 @@ test("reports and the ingest audit trail", async () => {
   await expectAccessible(page, "admin DATs");
 });
 
-test("browse, search and filter the library", async () => {
+test("browse, search and filter the library", { tag: "@shard-c" }, async () => {
   await openLibrary();
   await expect(page.getByText("29 games")).toBeVisible();
   await expectAccessible(page, "library grid");
@@ -581,7 +584,7 @@ test("browse, search and filter the library", async () => {
   await page.setViewportSize(viewport);
 });
 
-test("game detail + downloads + ROM playback progress", async () => {
+test("game detail + downloads + ROM playback progress", { tag: "@shard-c" }, async () => {
   await openGame("Orbit Blocks");
   await expect(page.getByText("Primary", { exact: true })).toBeVisible();
   await expectAccessible(page, "game detail");
@@ -756,7 +759,7 @@ test("game detail + downloads + ROM playback progress", async () => {
   await page.setViewportSize(viewport);
 });
 
-test("saves: upload, rename, save state from Play, play it, delete, audit", async () => {
+test("saves: upload, rename, save state from Play, play it, delete, audit", { tag: "@shard-c" }, async () => {
   await openGame("Orbit Blocks");
   const savesTab = () => page.getByRole("tab", { name: "Saves" });
   const rows = () => page.locator("#saves-panel tbody tr");
@@ -1197,7 +1200,7 @@ test("Play: TurboGrafx-16 / PC Engine Quick Play from the library uses the local
   await closeEmulator();
 });
 
-test("Play: a PlayStation set streams its disc ZIP from the detail page and the library", { tag: "@shard-b" }, async () => {
+test("Play: a PlayStation set streams its disc ZIP from the detail page and the library", { tag: "@shard-c" }, async () => {
   await openGame("Disc Runner");
   const bios = page.waitForResponse((r) =>
     r.url().endsWith("/api/emulator/bios/scph5501.bin"),
@@ -1407,7 +1410,7 @@ async function playWithSmsPlus(
   await closeEmulator();
 }
 
-test("Play: Genesis explains its missing core; Master System and Game Gear start with SMS Plus GX", { tag: "@shard-b" }, async () => {
+test("Play: Genesis explains its missing core; Master System and Game Gear start with SMS Plus GX", { tag: "@shard-c" }, async () => {
   // Genesis B4: the e2e image has no Emulator:GenesisCorePath, so the HEAD check stops before the ROM or loader.
   const genesisRequests: string[] = [];
   const track = (r: { url: () => string }) => {
@@ -1649,7 +1652,7 @@ async function launchBundled(
   await closeEmulator();
 }
 
-test("Play: Atari 7800, Jaguar and Lynx launch with their bundled cores", { tag: "@shard-b" }, async () => {
+test("Play: Atari 7800, Jaguar and Lynx launch with their bundled cores", { tag: "@shard-c" }, async () => {
   await launchBundled("Canyon Glide", "Canyon Glide (USA).a78", "prosystem");
   await launchBundled(
     "Cobalt Drift",

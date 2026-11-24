@@ -3,7 +3,7 @@
 .SYNOPSIS
     End-to-end tests (spec §15.3): builds the image for the local arch, seeds Basic into temp ingest/cache dirs, starts
     tests/e2e/docker-compose.e2e.yml, waits for /health/ready, runs Playwright, and always tears down. The specs run on
-    two stacks at once (ports E2E_PORT and E2E_PORT + 1), split by tag (see tests/e2e/specs/mvp.spec.ts).
+    three stacks at once (ports E2E_PORT to E2E_PORT + 2), split by tag (see tests/e2e/specs/mvp.spec.ts).
 .PARAMETER SkipBuild
     Use the existing niemandr/rnrommanager:e2e image.
 .PARAMETER Headed
@@ -37,16 +37,22 @@ $env:E2E_PORT = $port
 $env:E2E_DB_PASSWORD = New-Secret
 $env:E2E_ADMIN_PASSWORD = New-Secret
 $env:E2E_BASE_URL = "http://localhost:$port"
-# Stack A runs the screenshots or the untagged and @both specs; stack B (not for screenshots) the @both and @shard-b ones.
+# Stack A runs the screenshots or the untagged and @both specs; stacks B and C (not for screenshots) the @both specs and
+# the @shard-b or @shard-c ones.
 $stacks = @([pscustomobject]@{ Project = 'rnrommanager-e2e'; Port = $port; Ingest = $env:E2E_INGEST; Cache = $env:E2E_CACHE })
-if (-not $Screenshots) {
-    $portB = [string]([int]$port + 1)
-    $env:E2E_INGEST_B = Join-Path $work 'ingest-b'
-    $cacheB = Join-Path $work 'cache-b'
-    $env:E2E_BASE_URL_B = "http://localhost:$portB"
-    $stacks += [pscustomobject]@{ Project = 'rnrommanager-e2e-b'; Port = $portB; Ingest = $env:E2E_INGEST_B; Cache = $cacheB }
-} else {
-    Remove-Item Env:E2E_BASE_URL_B, Env:E2E_INGEST_B -ErrorAction SilentlyContinue
+$extraStacks = @(@{ Suffix = 'b'; Offset = 1 }, @{ Suffix = 'c'; Offset = 2 })
+foreach ($extra in $extraStacks) {
+    $s = $extra.Suffix
+    $upper = $s.ToUpperInvariant()
+    if ($Screenshots) {
+        Remove-Item "Env:E2E_BASE_URL_$upper", "Env:E2E_INGEST_$upper" -ErrorAction SilentlyContinue
+        continue
+    }
+    $extraPort = [string]([int]$port + $extra.Offset)
+    $ingest = Join-Path $work "ingest-$s"
+    Set-Item "Env:E2E_INGEST_$upper" $ingest
+    Set-Item "Env:E2E_BASE_URL_$upper" "http://localhost:$extraPort"
+    $stacks += [pscustomobject]@{ Project = "rnrommanager-e2e-$s"; Port = $extraPort; Ingest = $ingest; Cache = Join-Path $work "cache-$s" }
 }
 
 $exitCode = 1
@@ -63,12 +69,12 @@ try {
         $seedArgs.NdsDat = @($env:E2E_STAGED_NDS)
     }
     & (Join-Path $PSScriptRoot 'seed-ingest.ps1') @seedArgs
-    if (-not $Screenshots) {
-        # Stack B gets its own identical seed; it shares the passwords and the image.
-        $seedB = $seedArgs.Clone()
-        $seedB.Path = $env:E2E_INGEST_B
-        $seedB.CachePath = $cacheB
-        & (Join-Path $PSScriptRoot 'seed-ingest.ps1') @seedB
+    # Stacks B and C get their own identical seeds; they share the passwords and the image.
+    foreach ($stack in $stacks | Select-Object -Skip 1) {
+        $seed = $seedArgs.Clone()
+        $seed.Path = $stack.Ingest
+        $seed.CachePath = $stack.Cache
+        & (Join-Path $PSScriptRoot 'seed-ingest.ps1') @seed
     }
     # The container runs as UID 1654; a Linux bind mount needs to be writable by it (Docker Desktop maps this itself).
     if ($IsLinux) {
@@ -125,7 +131,7 @@ try {
             $env:E2E_SCREENSHOTS = '1'
             $testArgs += '--project=screenshots'
         } else {
-            $testArgs += @('--project=chromium', '--project=chromium-b')
+            $testArgs += @('--project=chromium', '--project=chromium-b', '--project=chromium-c')
         }
         if ($Headed) { $testArgs += '--headed' }
         & npx @testArgs
