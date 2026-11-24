@@ -110,6 +110,14 @@
 			<button
 				type="button"
 				class="btn btn-link btn-sm p-0 footer-action link-body-emphasis"
+				aria-label="Next missing IGDB ID"
+				title="Next missing IGDB ID"
+				onclick={() => void hotkeys.run('reports.missingIgdbId.next')}
+				><Icon name="report-missing-igdb" /></button
+			>
+			<button
+				type="button"
+				class="btn btn-link btn-sm p-0 footer-action link-body-emphasis"
 				aria-label="Open the first review item"
 				title="Open the first review item"
 				onclick={() => void hotkeys.run('review.next')}><Icon name="review" /></button
