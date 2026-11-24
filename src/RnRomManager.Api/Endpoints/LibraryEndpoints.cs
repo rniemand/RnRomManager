@@ -30,9 +30,9 @@ public static class LibraryEndpoints
     /// PlayStation, (PSP B1) PPSSPP for PlayStation Portable, (Saturn B6) Yabause for Saturn and (Sega CD B5) Genesis Plus GX
     /// for Sega CD, (TurboGrafx-CD B5) Beetle PCE for TurboGrafx-CD. Eligibility is per core, so Genesis Plus GX also accepts an external primary of Mega Drive, a family that
     /// the registry keeps embedded. S8: DeSmuME plays an external DS release from <c>/download</c>, and (MS-DOS P3) DOSBox Pure an
-    /// external DOS game ZIP.
+    /// external DOS game ZIP. 3DS P5: azahar plays an external <c>.3ds</c>/<c>.cci</c> from <c>/download</c>.
     /// </summary>
-    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "desmume", "mednafen_pce", "dosbox_pure" };
+    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "desmume", "mednafen_pce", "dosbox_pure", "azahar" };
 
     /// <summary>S8: the cores whose external releases play through <c>play-disc</c>; any other (DS) loads from <c>/download</c>.</summary>
     public static readonly IReadOnlySet<string> PlayDiscCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "mednafen_pce" };
@@ -920,6 +920,13 @@ public static class LibraryEndpoints
         return sizeBytes % mib == 0 || sizeBytes == 131072 || (sizeBytes + 8192) % mib == 0;
     }
 
+    /// <summary>
+    /// 3DS P2: azahar plays a <c>.3ds</c> or <c>.cci</c> whose header doesn't say it's encrypted (a missing header or field
+    /// counts as playable); its libretro build can't load a <c>.cia</c>. Mirrors the SPA's <c>azaharRomLoads</c>.
+    /// </summary>
+    public static bool AzaharRomLoads(string fileName, bool encrypted) =>
+        !encrypted && Path.GetExtension(fileName).ToLowerInvariant() is ".3ds" or ".cci";
+
     internal static object ToListItemDto(GameListItem game, ISystemRegistry systems)
     {
         // C2: quick play needs a browser core and a primary release stored in the zip; Play B1 / PSP B1:
@@ -933,7 +940,8 @@ public static class LibraryEndpoints
             // Amiga: PUAE's WebAssembly build has no capsimg, so an .ipf never plays.
             && !(core == "puae" && game.PrimaryRomFileName?.EndsWith(".ipf", StringComparison.OrdinalIgnoreCase) == true)
             && !(core == "virtualjaguar" && game.PrimaryRomFileName is { } name && game.PrimarySizeBytes is { } size
-                 && !JaguarRomLoads(name, size));
+                 && !JaguarRomLoads(name, size))
+            && !(core == "azahar" && game.PrimaryRomFileName is { } file && !AzaharRomLoads(file, game.PrimaryEncrypted));
         return new
         {
             id = game.Id,

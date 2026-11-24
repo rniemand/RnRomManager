@@ -7,7 +7,7 @@ namespace RnRomManager.Systems.NintendoDs;
 /// <summary>
 /// Nintendo 3DS dumps (<c>.3ds</c>, <c>.cci</c>, <c>.cia</c>), stored next to the game's ZIP with the source extension.
 /// Sizes cover the libretro No-Intro <c>Nintendo - Nintendo 3DS</c> DAT (126 MiB–4 GiB), with the minimum left lower for
-/// homebrew. No browser play: EmulatorJS 4.2.3 ships no 3DS core. An Admin may store them inside the ZIP instead
+/// homebrew. Play uses azahar from the side-by-side EmulatorJS 4.3.0-pre (3DS P1). An Admin may store them inside the ZIP instead
 /// (ROM Zip Config, <see cref="RomStorageConfigurable"/>); imports then read each ROM into memory, so dumps over
 /// <see cref="Array.MaxLength"/> bytes (about 2 GiB) are refused as too large until the setting goes back.
 /// </summary>
@@ -26,6 +26,9 @@ public sealed class Nintendo3DsHandler(IRomStorageSettings? settings = null) : I
     public long MaxRomSizeBytes => 4L * 1024 * 1024 * 1024;
 
     public string DatName => "Nintendo - Nintendo 3DS";
+
+    /// <summary>3DS P1/P2: only a decrypted <c>.3ds</c>/<c>.cci</c> plays (<c>LibraryEndpoints.AzaharRomLoads</c>).</summary>
+    public string BrowserCore => "azahar";
 
     /// <summary>libretro has no 3DS <c>releaseyear</c> metadat.</summary>
     public IReadOnlyList<string> MetadatKinds { get; } = [DatKind.Developer, DatKind.Publisher, DatKind.Genre];
