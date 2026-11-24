@@ -207,24 +207,35 @@ describe('AppFooter (B10–B12)', () => {
 			expect(row.querySelectorAll('.footer-label')).toHaveLength(1);
 		});
 
-		it('an Admin gets both buttons before Shortcuts, each running its hotkey', async () => {
+		it('an Admin gets the three buttons before Shortcuts, each running its hotkey', async () => {
 			const run = vi.spyOn(hotkeys, 'run').mockResolvedValue();
 			render(AppFooter, { me: admin(), onhotkeys: vi.fn() });
 
 			const next = screen.getByRole('button', { name: 'Next missing image' });
+			const igdb = screen.getByRole('button', { name: 'Next missing IGDB ID' });
 			const review = screen.getByRole('button', { name: 'Open the first review item' });
-			expect([next.title, review.title]).toEqual([
+			expect([next.title, igdb.title, review.title]).toEqual([
 				'Next missing image',
+				'Next missing IGDB ID',
 				'Open the first review item'
 			]);
 			expect(next.querySelector('i')!.className.trim()).toBe('bi bi-image-alt');
+			expect(igdb.querySelector('i')!.className.trim()).toBe('bi bi-link-45deg');
 			expect(next.classList).toContain('ms-auto');
+			expect(igdb.classList).not.toContain('ms-auto');
+			expect(next.nextElementSibling).toBe(igdb);
+			expect(igdb.nextElementSibling).toBe(review);
 			expect(screen.getByRole('button', { name: 'Shortcuts' }).classList).not.toContain('ms-auto');
 			expect(review.nextElementSibling).toBe(screen.getByRole('button', { name: 'Shortcuts' }));
 
 			await fireEvent.click(next);
+			await fireEvent.click(igdb);
 			await fireEvent.click(review);
-			expect(run.mock.calls).toEqual([['reports.missingImage.next'], ['review.next']]);
+			expect(run.mock.calls).toEqual([
+				['reports.missingImage.next'],
+				['reports.missingIgdbId.next'],
+				['review.next']
+			]);
 			run.mockRestore();
 		});
 
@@ -233,6 +244,7 @@ describe('AppFooter (B10–B12)', () => {
 			render(AppFooter, { me: admin(true), onhotkeys: vi.fn() });
 
 			expect(screen.queryByRole('button', { name: 'Next missing image' })).toBeNull();
+			expect(screen.queryByRole('button', { name: 'Next missing IGDB ID' })).toBeNull();
 			expect(screen.queryByRole('button', { name: 'Open the first review item' })).toBeNull();
 			expect(screen.getByRole('button', { name: 'Shortcuts' }).classList).toContain('ms-auto');
 		});
