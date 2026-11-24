@@ -287,7 +287,7 @@ public class IngestEndpointsTests
         using var response = await _admin.GetAsync("/api/ingest/pending");
         var systems = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
-        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64", "nes", "fds", "snes", "satellaview", "sufami", "vb", "a2600", "a5200", "a7800", "lynx", "jaguar", "coleco", "gg", "sms", "md", "s32x", "tg16", "switch", "psx", "psp", "gc", "wii", "x360", "saturn", "nds", "segacd", "3do", "c64", "pet", "vic20", "amiga", "3ds", "tgcd", "dos", "ngp", "ngpc", "mame2003" }));
+        Assert.That(systems.Select(s => s.GetProperty("system").GetString()), Is.EqualTo(new[] { "gb", "gbc", "gba", "n64", "nes", "fds", "snes", "satellaview", "sufami", "vb", "a2600", "a5200", "a7800", "lynx", "jaguar", "coleco", "gg", "sms", "md", "s32x", "tg16", "switch", "psx", "psp", "gc", "wii", "x360", "saturn", "nds", "segacd", "3do", "c64", "pet", "vic20", "amiga", "3ds", "tgcd", "dos", "ngp", "ngpc", "mame2003", "fbneo" }));
         var gb = systems.Single(s => s.GetProperty("system").GetString() == "gb").GetProperty("files");
         Assert.That(gb.GetArrayLength(), Is.EqualTo(1));
         Assert.That(gb[0].GetProperty("name").GetString(), Is.EqualTo("Tetris.gb"));
@@ -316,9 +316,11 @@ public class IngestEndpointsTests
         factory.Settings["Sources:DatBaseUrl"] = "https://dats.test/metadat";
         factory.Settings["Sources:TitleDbUrl"] = "https://dats.test/metadat/US.en.json";
         factory.Settings["Sources:MameDatUrl"] = "https://dats.test/metadat/mame.xml";
+        factory.Settings["Sources:FbneoDatUrl"] = "https://dats.test/metadat/fbneo.xml";
         FixtureDatWriter.Write(remote, Manifest(), layouts: IngestSeeder.RedumpLayouts);
         File.WriteAllText(Path.Combine(remote, "US.en.json"), "{}", new System.Text.UTF8Encoding(false));
         File.WriteAllText(Path.Combine(remote, "mame.xml"), IngestSeeder.MinimalMame["MAME"], new System.Text.UTF8Encoding(false));
+        File.WriteAllText(Path.Combine(remote, "fbneo.xml"), IngestSeeder.MinimalMame["FBNeo - Arcade Games"], new System.Text.UTF8Encoding(false));
         // What a version without DS left behind, here missing the DS genre metadat file.
         var layouts = new Dictionary<string, FixtureDatLayout>(IngestSeeder.RedumpLayouts)
         {

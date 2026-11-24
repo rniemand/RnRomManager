@@ -70,7 +70,21 @@ public static class IngestSeeder
                 	</game>
                 </mame>
                 """,
+            ["FBNeo - Arcade Games"] = FbneoMinimal,
         };
+
+    /// <summary>Arcade (FinalBurn Neo) step 2: a one-set FBNeo DAT (<c>rnfbmin</c>), in <see cref="MinimalMame"/> and <see cref="SeededMame"/>.</summary>
+    private const string FbneoMinimal = """
+        <?xml version="1.0"?>
+        <datafile>
+        	<game name="rnfbmin">
+        		<description>Rn FB Minimal (World)</description>
+        		<year>1994</year>
+        		<manufacturer>Rn Co</manufacturer>
+        		<rom name="rnfbmin.bin" size="4" crc="04b570c0"/> <!-- "RNFB" -->
+        	</game>
+        </datafile>
+        """;
 
     /// <param name="ndsDatFiles">
     /// ROM files the DS No-Intro DAT lists instead of the empty catalog (game name: the file name without its extension;
@@ -105,6 +119,7 @@ public static class IngestSeeder
             	</game>
             </mame>
             """,
+        ["FBNeo - Arcade Games"] = FbneoMinimal,
     };
 
     /// <summary>A set ZIP of tiny text files, with fixed timestamps.</summary>

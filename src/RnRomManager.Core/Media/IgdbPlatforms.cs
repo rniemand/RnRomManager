@@ -26,6 +26,7 @@ public static class IgdbPlatforms
         ["jaguar"] = 62,
         ["lynx"] = 61,
         ["mame2003"] = 52, // IGDB's Arcade platform
+        ["fbneo"] = 52, // shared with mame2003 (S3)
         ["md"] = 29,
         ["n64"] = 4,
         ["nds"] = 20,

@@ -117,7 +117,8 @@ export const icons: Record<string, string> = {
 	'system-3do': 'bi bi-disc',
 	'system-tgcd': 'bi bi-disc',
 	'system-dos': 'bi bi-terminal',
-	'system-mame2003': 'bi bi-joystick'
+	'system-mame2003': 'bi bi-joystick',
+	'system-fbneo': 'bi bi-joystick'
 };
 
 /** An unmapped `system-<id>` falls back to a controller, so a new system needs no UI change. */
