@@ -49,8 +49,17 @@ public class Nintendo3DsHeaderReaderTests
             ["productCode"] = "CTR-P-ABCE",
             ["makerCode"] = "01",
             ["programId"] = "0004000000ABCD00",
+            ["encrypted"] = true,
         }));
-        Assert.That(header.Fields.Keys, Is.EqualTo(new[] { "format", "mediaId", "productCode", "makerCode", "programId" }));
+        Assert.That(header.Fields.Keys, Is.EqualTo(new[] { "format", "mediaId", "productCode", "makerCode", "programId", "encrypted" }));
+    }
+
+    [Test]
+    public void NoCryptoFlag_IsNotEncrypted()
+    {
+        var rom = Ncsd();
+        rom[Partition + 0x18F] = 0x04;
+        Assert.That(Nintendo3DsHeaderReader.Read(rom)!.Fields["encrypted"], Is.EqualTo(false));
     }
 
     [Test]
@@ -110,7 +119,7 @@ public class Nintendo3DsHeaderReaderTests
     {
         Assert.That(header.IsPlausible, Is.True);
         Assert.That((header.Fields["format"], header.Fields["mediaId"]), Is.EqualTo(("NCSD", "0004000000ABCD00")));
-        Assert.That(new[] { header.Fields["productCode"], header.Fields["makerCode"], header.Fields["programId"] }, Is.All.Null);
-        Assert.That(header.Fields, Has.Count.EqualTo(5));
+        Assert.That(new[] { header.Fields["productCode"], header.Fields["makerCode"], header.Fields["programId"], header.Fields["encrypted"] }, Is.All.Null);
+        Assert.That(header.Fields, Has.Count.EqualTo(6));
     }
 }
