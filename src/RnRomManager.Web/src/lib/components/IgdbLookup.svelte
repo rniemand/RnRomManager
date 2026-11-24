@@ -31,6 +31,8 @@
 	let { game, form, onapply, autostart = false }: Props = $props();
 
 	const maxQuery = 100;
+	/** Typing searches once the input has been still this long (IGDB is rate limited). */
+	const autoSearchDelayMs = 500;
 
 	let q = $state(untrack(() => game.displayTitle.slice(0, maxQuery)));
 	let searching = $state(false);
@@ -84,8 +86,19 @@
 		onapply(applyMatch(form, chosen, fields), { match: chosen, save });
 	}
 	let controller: AbortController | undefined;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+
+	/** Typing searches by itself after a pause; a blank input or the text already shown sends nothing. */
+	function typed(): void {
+		clearTimeout(timer);
+		timer = setTimeout(() => {
+			const term = q.trim();
+			if (term && !(term === searched && matches && !searching)) void search();
+		}, autoSearchDelayMs);
+	}
 
 	async function search(): Promise<void> {
+		clearTimeout(timer);
 		const term = q.trim();
 		if (!term || notConfigured) return;
 		controller?.abort();
@@ -118,7 +131,10 @@
 	});
 
 	// M3: closing the modal unmounts the panel, which aborts a running search.
-	onDestroy(() => controller?.abort());
+	onDestroy(() => {
+		clearTimeout(timer);
+		controller?.abort();
+	});
 </script>
 
 {#if notConfigured}
@@ -145,13 +161,14 @@
 				maxlength={maxQuery}
 				aria-describedby="igdb-q-help"
 				bind:value={q}
+				oninput={typed}
 			/>
 			<button type="submit" class="btn btn-primary text-nowrap" disabled={searching || !q.trim()}
 				><Icon name="search" /> Lookup Info</button
 			>
 		</div>
 		<div id="igdb-q-help" class="form-text">
-			Searches IGDB on {game.systemName}, then on every platform when that finds nothing.
+			Searches IGDB on {game.systemName} as you type, then on every platform when that finds nothing.
 		</div>
 	</form>
 
