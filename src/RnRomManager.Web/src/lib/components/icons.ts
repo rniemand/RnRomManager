@@ -20,6 +20,7 @@ export const icons: Record<string, string> = {
 	'admin-backups': 'bi bi-archive',
 	'admin-logs': 'bi bi-journal-text',
 	'admin-audit': 'bi bi-clock-history',
+	'admin-bios': 'bi bi-cpu',
 	reports: 'bi bi-bar-chart',
 	admin: 'bi bi-gear',
 	user: 'bi bi-person-circle',

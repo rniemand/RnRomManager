@@ -78,6 +78,7 @@ describe('Auditing', () => {
 			'DATs',
 			'Settings',
 			'ROM Zip Config',
+			'BIOS info',
 			'Backups',
 			'Logs',
 			'Auditing'

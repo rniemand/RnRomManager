@@ -15,6 +15,7 @@
 		{ href: resolve('/admin/dats'), label: 'DATs', icon: 'admin-dats' },
 		{ href: resolve('/admin/settings'), label: 'Settings', icon: 'admin-settings' },
 		{ href: resolve('/admin/rom-storage'), label: 'ROM Zip Config', icon: 'storage-in-zip' },
+		{ href: resolve('/admin/bios'), label: 'BIOS info', icon: 'admin-bios' },
 		{ href: resolve('/admin/backups'), label: 'Backups', icon: 'admin-backups' },
 		{ href: resolve('/admin/logs'), label: 'Logs', icon: 'admin-logs' },
 		{ href: resolve('/admin/audit'), label: 'Auditing', icon: 'admin-audit' }

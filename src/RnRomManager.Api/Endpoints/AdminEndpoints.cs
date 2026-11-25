@@ -1,9 +1,11 @@
 using System.Text.Json;
+using Microsoft.Extensions.Options;
 using RnRomManager.Api.Auth;
 using RnRomManager.Api.Configuration;
 using RnRomManager.Api.Logging;
 using RnRomManager.Core.Audit;
 using RnRomManager.Core.Backups;
+using RnRomManager.Core.Configuration;
 using RnRomManager.Core.Jobs;
 using RnRomManager.Core.Library;
 using RnRomManager.Core.Storage;
@@ -20,6 +22,9 @@ public static class AdminEndpoints
 
         // The same redacted model the startup log line uses (§4.1 step 3).
         admin.MapGet("/settings", (IServiceProvider services) => Results.Ok(EffectiveSettings.From(services)));
+
+        // The BIOS info tab: each BIOS file browser play needs, checked in Paths:Bios.
+        admin.MapGet("/bios", (IConfiguration config, IOptions<PathsOptions> paths) => Results.Ok(BiosInfo.Check(paths.Value.Bios, config)));
 
         admin.MapGet("/logs", async (HttpContext ctx, LogArchive archive, TimeProvider time) =>
         {
