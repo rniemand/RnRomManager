@@ -32,6 +32,8 @@ public class IngestPipelineTests
     private static readonly SyntheticN64RomBuilder Kart = new() { Seed = 64, SizeBytes = 8192, Title = "KART", GameCode = "NKTE" };
     private static readonly byte[] Gold = new SyntheticRomBuilder { Seed = 4, Title = "POKEMON_GLD", CgbFlag = 0xC0 }.Build();
     private static readonly byte[] PrismTower = new SyntheticNgpRomBuilder { Seed = 1951, Colour = true, Title = "PRISMTOWER" }.Build();
+    private static readonly byte[] SwanLagoon = new SyntheticWsRomBuilder { Seed = 1961, Colour = true }.Build();
+    private static readonly byte[] MonoFlag = new SyntheticWsRomBuilder { Seed = 1962, Colour = true }.Build();
     /// <summary>A colour header listed in the mono DAT: the DAT decides the system.</summary>
     private static readonly byte[] DualMode = new SyntheticNgpRomBuilder { Seed = 1952, Colour = true, Title = "DUALMODE" }.Build();
     private static readonly byte[] Pioneer = new SyntheticNesRomBuilder { Seed = 70, Mapper = 1 }.Build();
@@ -198,7 +200,7 @@ public class IngestPipelineTests
             // PC-FX X4: the real DAT names a data track too.
             [IngestSeeder.PcfxDat] = [new FixtureGame("Disc Fox (Japan)", "Disc Fox (Japan) (Track 2).bin", FoxData)],
             [IngestSeeder.NeoGeoPocketDat] = [new FixtureGame("Dual Mode (Japan)", "Dual Mode (Japan).ngp", DualMode)],
-            [IngestSeeder.NeoGeoPocketColorDat] = [new FixtureGame("Prism Tower (World)", "Prism Tower (World).ngc", PrismTower)],
+            [IngestSeeder.NeoGeoPocketColorDat] = [new FixtureGame("Prism Tower (World)", "Prism Tower (World).ngc", PrismTower)], [IngestSeeder.WonderSwanDat] = [new FixtureGame("Mono Flag (Japan)", "Mono Flag (Japan).ws", MonoFlag)], [IngestSeeder.WonderSwanColorDat] = [new FixtureGame("Swan Lagoon (Japan)", "Swan Lagoon (Japan).wsc", SwanLagoon)],
             [IngestSeeder.ThreeDsDat] =
             [
                 new FixtureGame("Cart Quest (USA)", "Cart Quest (USA).3ds", CartQuest),
@@ -1466,11 +1468,91 @@ public class IngestPipelineTests
 
     [TestCase("ngp", "other.gb")]
     [TestCase("gb", "other.ngp")]
+    [TestCase("ws", "other.gb")]
+    [TestCase("gb", "other.ws")]
+    [TestCase("ws", "other.pc2")]
     public async Task OtherFamilysExtension_IsUnsupportedType(string folder, string name)
     {
         var result = await IngestAsync(Drop(folder, name, new SyntheticNgpRomBuilder { Seed = 1956 }.Build()));
 
         Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+    }
+
+    [Test]
+    public async Task WscRomDroppedInWsFolder_LandsUnderWsc_WithTheDatsName()
+    {
+        var result = await IngestAsync(Drop("ws", "lagoon.ws", SwanLagoon));
+
+        Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, "wsc")), result.Details);
+        var game = ReadZip("wsc/S/Swan Lagoon.zip");
+        Assert.That(game.System, Is.EqualTo("wsc"));
+        var rom = game.Roms.Single();
+        Assert.That(rom.FileName, Is.EqualTo("Swan Lagoon (Japan).wsc"));
+        Assert.That(rom.Header!.Select(kv => kv.Key), Is.EqualTo(new[] { "publisherId", "colour", "gameId", "version", "romSize", "saveType", "vertical", "mapper", "checksum", "checksumValid" }));
+        Assert.That((rom.Header!["colour"]!.GetValue<bool>(), rom.Header!["checksumValid"]!.GetValue<bool>()), Is.EqualTo((true, true)));
+    }
+
+    [Test]
+    public async Task ColourFooterListedInTheMonoDat_LandsUnderWs()
+    {
+        var result = await IngestAsync(Drop("wsc", "flag.wsc", MonoFlag));
+
+        Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, "ws")), result.Details);
+        Assert.That(ReadZip("ws/M/Mono Flag.zip").System, Is.EqualTo("ws"));
+    }
+
+    [Test]
+    public async Task Ws_UnmatchedColour_IsRenamedToWscAndWaitsUnderWsc()
+    {
+        var file = Drop("ws", "odd.ws", new SyntheticWsRomBuilder { Seed = 1963, Colour = true }.Build());
+
+        var result = await IngestAsync(file);
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "wsc")));
+        Assert.That((File.Exists(file.FullPath), File.Exists(Path.Combine(Ingest("ws"), "odd.wsc"))), Is.EqualTo((false, true)));
+    }
+
+    [Test]
+    public async Task Ws_UnmatchedMono_IsRenamedToWsAndWaitsUnderWs()
+    {
+        var file = Drop("wsc", "odd.wsc", new SyntheticWsRomBuilder { Seed = 1964 }.Build());
+
+        var result = await IngestAsync(file);
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "ws")));
+        Assert.That((File.Exists(file.FullPath), File.Exists(Path.Combine(Ingest("wsc"), "odd.ws"))), Is.EqualTo((false, true)));
+    }
+
+    [Test]
+    public async Task Ws_UnmatchedWithoutTheJump_IsInvalidHeader()
+    {
+        var result = await IngestAsync(Drop("ws", "bad.ws", new SyntheticWsRomBuilder { Seed = 1965, Opcode = 0x00 }.Build()));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.InvalidHeader)));
+    }
+
+    [Test]
+    public async Task Ws_UnmatchedWithABadChecksum_StillGoesToReview()
+    {
+        var result = await IngestAsync(Drop("ws", "sum.ws", new SyntheticWsRomBuilder { Seed = 1966, BadChecksum = true }.Build()));
+
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "ws")));
+    }
+
+    [Test]
+    public async Task Ws_UnderTheFooterSize_IsTooSmall()
+    {
+        var result = await IngestAsync(Drop("ws", "tiny.ws", new byte[15]));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooSmall)));
+    }
+
+    [Test]
+    public async Task Ws_OverSixteenMiB_IsTooLarge()
+    {
+        var result = await IngestAsync(Drop("ws", "huge.ws", new byte[16 * 1024 * 1024 + 1]));
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.TooLarge)));
     }
 
     [Test]

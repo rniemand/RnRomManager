@@ -65,6 +65,8 @@ roms/
   pcfx/                 PC-FX (external, exact names: a .cue or .toc with its .bin tracks, a CloneCD .ccd/.img/.sub, an MDS .mds/.mdf, or a .chd)
   ngp/                  Neo Geo Pocket (.ngp)
   ngpc/                 Neo Geo Pocket Color (.ngc)
+  ws/                   WonderSwan (.ws)
+  wsc/                  WonderSwan Color (.wsc)
 ```
 
 Inside a game's ZIP:
@@ -168,7 +170,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 |---|---|---|---|
 | `schemaVersion` | int | ✓ | `8` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c128`, `c64`, `plus4`, `tgcd`, `pcfx`, `dos`, `ngp`, `ngpc`, `mame2003`, `fbneo`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c128`, `c64`, `plus4`, `tgcd`, `pcfx`, `dos`, `ngp`, `ngpc`, `mame2003`, `fbneo`, `ws`, `wsc`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
 | `releaseYear` | int? | | from the DAT metadata (titledb's release date for Switch; the disc systems have no metadata DATs) |
@@ -261,6 +263,21 @@ Neo Geo Pocket / Neo Geo Pocket Color `header`, from the 64-byte cartridge heade
 - `mode`: byte 0x23 as `"0x"` and two upper-case hex digits, e.g. `"0x10"`.
 - `colour`: true when `mode` is `0x10` (a Neo Geo Pocket Color cart).
 - `startPc`: the little-endian 32-bit start address at 0x1C as `"0x"` and eight upper-case hex digits, e.g. `"0x00200040"`.
+
+WonderSwan / WonderSwan Color `header`, from the 16-byte cartridge footer at the end of the ROM (offsets below are within the footer):
+
+- `publisherId`: byte 0x6 as `"0x"` and two upper-case hex digits, e.g. `"0x01"`.
+- `colour`: true when byte 0x7 is exactly `0x01` (a WonderSwan Color cart).
+- `gameId`: byte 0x8.
+- `version`: byte 0x9.
+- `romSize`: byte 0xA as `"0x"` and two upper-case hex digits.
+- `saveType`: byte 0xB as `"0x"` and two upper-case hex digits.
+- `vertical`: bit 0 of byte 0xC (the game is played with the console held upright).
+- `mapper`: byte 0xD as `"0x"` and two upper-case hex digits.
+- `checksum`: the little-endian 16-bit value at 0xE as `"0x"` and four upper-case hex digits.
+- `checksumValid`: true when the sum of every ROM byte except the last two, modulo 65,536, equals `checksum`.
+
+The footer is plausible when byte 0x0 is `0xEA` (the reset vector's `JMP FAR`).
 
 PlayStation, PlayStation Portable, Xbox 360, Saturn, Sega CD, 3DO, TurboGrafx-CD and PC-FX `header`: always null.
 

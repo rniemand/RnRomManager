@@ -30,6 +30,8 @@ export interface SystemColour {
 		| 'fbneo'
 		| 'ngp'
 		| 'ngpc'
+		| 'ws'
+		| 'wsc'
 		| 'switch'
 		| 'psx'
 		| 'psp'
@@ -79,6 +81,8 @@ export const systemColours: Record<string, SystemColour> = {
 	fbneo: { name: 'fbneo', foreground: '#fff' },
 	ngp: { name: 'ngp', foreground: '#fff' },
 	ngpc: { name: 'ngpc', foreground: '#000' },
+	ws: { name: 'ws', foreground: '#000' },
+	wsc: { name: 'wsc', foreground: '#000' },
 	switch: { name: 'switch', foreground: '#fff' },
 	psx: { name: 'psx', foreground: '#fff' },
 	psp: { name: 'psp', foreground: '#fff' },

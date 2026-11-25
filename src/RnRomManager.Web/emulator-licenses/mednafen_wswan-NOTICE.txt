@@ -1,0 +1,64 @@
+Beetle WonderSwan (EmulatorJS core "mednafen_wswan", WonderSwan / WonderSwan Color)
+==================================================================================
+
+Files: mednafen_wswan-wasm.data, mednafen_wswan-legacy-wasm.data
+       (npm @emulatorjs/core-mednafen_wswan 4.2.3)
+
+Corresponding source:
+- Core: https://github.com/EmulatorJS/beetle-wswan-libretro/tree/fbc945dc10f2ff730c739509fe414dfb2eb5c6ce
+  (2024-12-10; version string "v0.9.35.1 fbc945d" in both binaries).
+- Built with the cores.json entry {"makescript": "Makefile", "buildpath":
+  "./", "arguments": []} and platform=emscripten, whose Makefile branch sets
+  STATIC_LINKING = 1; the Makefile always sets NEED_BLIP = 1.
+- RetroArch, build scripts and compiler: see COMMON-BUILD.txt.
+
+Beetle WonderSwan is a port of the WonderSwan module of Mednafen, itself
+based on Cygne, Copyright (C) 2002 Dox (dox@space.pl), and the Mednafen team
+(mednafen/ and the per-file headers); the libretro port by its contributors.
+
+Licence: GNU General Public License, version 2 or (at your option) any later
+version (every GPL header under mednafen/ says so; libretro.c has no header
+and falls under COPYING). mednafen_wswan-LICENSE.txt is the license.txt
+inside both payloads, identical to the source's COPYING (the GPL v2 text).
+RetroArch: GPL-3.0-or-later (retroarch-LICENSE.txt), so the combined
+binaries are distributed under the GPL, version 3.
+
+Components compiled into this build that carry their own terms:
+
+- mednafen/wswan/ (sound.c, interrupt.c, rtc.c, tcache.c, gfx.c,
+  wswan-memory.c, eeprom.c) and mednafen/state.c, settings.c,
+  mempatcher.cpp: GNU General Public License, version 2 or (at your option)
+  any later version (their headers).
+- mednafen/wswan/v30mz.c: the NEC V30MZ CPU core, (re)written June-September
+  2000 by Bryan McPhail, based on code by Oliver Bergmann, Fabrice Frances
+  and David Hedley; small changes by Dox. It ships no licence file; its
+  notice, verbatim:
+
+    This NEC V30MZ emulator may be used for purposes both commercial and
+    noncommercial if you give the author, Bryan McPhail, a small credit
+    somewhere(such as in the documentation for an executable package).
+
+  Credit: the NEC V30MZ emulator in this build is by Bryan McPhail.
+- mednafen/sound/Blip_Buffer.c (Blip_Buffer 0.4.1): Copyright (C) 2003-2006
+  Shay Green, GNU Lesser General Public License, version 2.1 or (at your
+  option) any later version. It ships no licence file; its header, verbatim:
+
+    Copyright (C) 2003-2006 Shay Green. This module is free software; you
+    can redistribute it and/or modify it under the terms of the GNU Lesser
+    General Public License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version. This
+    module is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+    FOR A PARTICULAR PURPOSE. See the GNU Lesser General Public License for more
+    details. You should have received a copy of the GNU Lesser General Public
+    License along with this module; if not, write to the Free Software Foundation,
+    Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+
+- libretro-common: Copyright (C) 2010-2020 The RetroArch team and others,
+  MIT licence, stated in each file's header
+  (mednafen_wswan-libretro-common-LICENSE.txt).
+
+Licence expression: GPL-2.0-or-later AND LGPL-2.1-or-later AND MIT AND LicenseRef-V30MZ.
+
+No WonderSwan BIOS is part of this core or of RnRomManager: the core boots
+the cartridge directly.

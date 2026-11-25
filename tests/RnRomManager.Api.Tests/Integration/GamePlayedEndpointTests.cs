@@ -73,7 +73,7 @@ public class GamePlayedEndpointTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.Plus4Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [], [IngestSeeder.WonderSwanDat] = [], [IngestSeeder.WonderSwanColorDat] = [],
             [IngestSeeder.NintendoDsDat] = [],
             [Gb] =
             [

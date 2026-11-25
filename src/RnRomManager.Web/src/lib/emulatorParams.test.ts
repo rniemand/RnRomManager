@@ -174,6 +174,7 @@ describe('parsePlayParams', () => {
 		'mednafen_pce',
 		'mednafen_ngp',
 		'mednafen_pcfx',
+		'mednafen_wswan',
 		'mupen64plus_next',
 		'mame2003_plus',
 		'fbneo'
@@ -291,6 +292,10 @@ describe('controlSchemeFor', () => {
 	it('keeps the default for mednafen_pcfx (PC-FX)', () => {
 		expect(controlSchemeFor('mednafen_pcfx', 'X (Japan).cue')).toBeNull();
 	});
+
+	it('keeps the default for mednafen_wswan (WonderSwan)', () => {
+		expect(controlSchemeFor('mednafen_wswan', 'X (Japan).wsc')).toBeNull();
+	});
 });
 
 describe('hidesCoreChooser', () => {
@@ -298,12 +303,16 @@ describe('hidesCoreChooser', () => {
 		expect(hidesCoreChooser(core)).toBe(true);
 	});
 
-	it.each(['gambatte', 'gearcoleco', 'mednafen_pce', 'mednafen_ngp', 'mednafen_pcfx'])(
-		'keeps it for %s',
-		(core) => {
-			expect(hidesCoreChooser(core)).toBe(false);
-		}
-	);
+	it.each([
+		'gambatte',
+		'gearcoleco',
+		'mednafen_pce',
+		'mednafen_ngp',
+		'mednafen_pcfx',
+		'mednafen_wswan'
+	])('keeps it for %s', (core) => {
+		expect(hidesCoreChooser(core)).toBe(false);
+	});
 });
 
 describe('optionalBiosError', () => {

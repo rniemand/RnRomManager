@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (WonderSwan). Made for this project; MIT licensed like the rest of the repo.
+       Exported to ws.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#e9ecef"/>
+  <!-- tall, flat cartridge shell with a clipped top-right corner -->
+  <path d="M140 72 H336 L380 116 V424 Q380 440 364 440 H148 Q132 440 132 424 V88 Q132 72 148 72 Z"
+        fill="#6c757d" stroke="#343a40" stroke-width="4"/>
+  <!-- grip ridges -->
+  <g stroke="#343a40" stroke-width="4" stroke-linecap="round" opacity="0.6">
+    <line x1="176" y1="96" x2="300" y2="96"/>
+    <line x1="176" y1="112" x2="300" y2="112"/>
+  </g>
+  <!-- label -->
+  <rect x="160" y="140" width="192" height="248" rx="10" fill="#f8f9fa"/>
+  <!-- stylised swan: body, neck and head -->
+  <g fill="none" stroke="#343a40" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M206 262 Q256 300 306 262 Q290 236 256 244"/>
+    <path d="M256 244 Q236 220 246 196 Q256 178 272 190"/>
+  </g>
+  <circle cx="276" cy="194" r="6" fill="#343a40"/>
+  <text x="256" y="336" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="22" font-weight="700" fill="#343a40">WONDERSWAN</text>
+</svg>

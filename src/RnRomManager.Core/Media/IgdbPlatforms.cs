@@ -54,6 +54,8 @@ public static class IgdbPlatforms
         ["vb"] = 87,
         ["vic20"] = 71,
         ["wii"] = 5,
+        ["ws"] = 57,
+        ["wsc"] = 123,
         ["x360"] = 12,
     };
 }
