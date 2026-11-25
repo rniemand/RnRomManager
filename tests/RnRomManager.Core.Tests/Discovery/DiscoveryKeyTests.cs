@@ -30,6 +30,7 @@ public class DiscoveryKeyTests
 
     [TestCase("publishers", DiscoveryKind.Publishers)]
     [TestCase("genres", DiscoveryKind.Genres)]
+    [TestCase("developers", DiscoveryKind.Developers)]
     public void TryParse_KnownKind_RoundTripsItsName(string name, DiscoveryKind expected)
     {
         Assert.That(DiscoveryKinds.TryParse(name, out var kind), Is.True);
@@ -39,7 +40,8 @@ public class DiscoveryKeyTests
 
     [TestCase("Publishers")]
     [TestCase("publisher")]
-    [TestCase("developers")]
+    [TestCase("Developers")]
+    [TestCase("studios")]
     [TestCase(" genres")]
     [TestCase("")]
     [TestCase(null)]

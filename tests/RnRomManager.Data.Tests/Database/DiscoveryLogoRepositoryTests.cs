@@ -183,6 +183,7 @@ public class DiscoveryLogoRepositoryTests
         Assert.That(await _repository.GetAsync(LogoKind.Genres, key, default), Is.Null);
         AssertLogo(await _repository.GetAsync(LogoKind.Publishers, key, default), logos[0]);
         AssertLogo(await _repository.GetAsync(LogoKind.Systems, key, default), logos[2]);
-        Assert.That(await RowCountAsync(), Is.EqualTo(2));
+        AssertLogo(await _repository.GetAsync(LogoKind.Developers, key, default), logos[3]);
+        Assert.That(await RowCountAsync(), Is.EqualTo(logos.Count - 1));
     }
 }
