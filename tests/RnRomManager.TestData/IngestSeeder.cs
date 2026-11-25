@@ -200,6 +200,7 @@ public static class IngestSeeder
         Directory.CreateDirectory(Path.Combine(ingest, "c64"));
         Directory.CreateDirectory(Path.Combine(ingest, "pet"));
         Directory.CreateDirectory(Path.Combine(ingest, "vic20"));
+        Directory.CreateDirectory(Path.Combine(ingest, "c128"));
         Directory.CreateDirectory(Path.Combine(ingest, "fds"));
         Directory.CreateDirectory(Path.Combine(ingest, "satellaview"));
         Directory.CreateDirectory(Path.Combine(ingest, "sufami"));

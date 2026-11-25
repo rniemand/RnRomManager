@@ -26,7 +26,9 @@ public class IgdbPlatformsTests
         Assert.That(snesFallbacks.Select(id => IgdbPlatforms.ById[id]), Is.All.EqualTo(IgdbPlatforms.ById["snes"]));
         // Both arcade systems search IGDB's Arcade platform (52).
         Assert.That(IgdbPlatforms.ById["fbneo"], Is.EqualTo(IgdbPlatforms.ById["mame2003"]));
-        Assert.That(IgdbPlatforms.ById.Where(p => !snesFallbacks.Contains(p.Key) && p.Key != "fbneo").Select(p => p.Value), Is.Unique);
+        // Commodore 128 searches IGDB's shared C64/128/MAX platform (15).
+        Assert.That(IgdbPlatforms.ById["c128"], Is.EqualTo(IgdbPlatforms.ById["c64"]));
+        Assert.That(IgdbPlatforms.ById.Where(p => !snesFallbacks.Contains(p.Key) && p.Key != "fbneo" && p.Key != "c128").Select(p => p.Value), Is.Unique);
         Assert.That(IgdbPlatforms.ById.Values, Is.All.Positive);
     }
 }

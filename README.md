@@ -38,6 +38,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Atari Jaguar | `jaguar` | In ZIP | `.j64`, `.jag`, `.rom`, `.abs`, `.cof` | No-Intro | `virtualjaguar` |
 | Atari Lynx | `lynx` | In ZIP | `.lnx`, `.lyx`, `.bll` | No-Intro | `handy` |
 | ColecoVision | `coleco` | In ZIP | `.col`, `.rom`, `.bin`, `.cv` | No-Intro | `gearcoleco` |
+| Commodore 128 | `c128` | In ZIP | `.d64`, `.d71`, `.d81`, `.g64`, `.t64`, `.tap`, `.prg`, `.p00`, `.crt` | None | `vice_x128` |
 | Commodore 64 | `c64` | In ZIP | `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.t64`, `.prg`, `.bin`, `.d71`, `.d81`, `.x64`, `.p00`, `.d80`, `.d82`, `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z`, `.gz`, `.nbz`, `.d2m`, `.d4m`, `.tcrt` | No-Intro | `vice_x64sc` |
 | Commodore Amiga | `amiga` | In ZIP | `.adf`, `.adz`, `.ipf` | TOSEC | `puae` |
 | Commodore PET | `pet` | In ZIP | `.prg`, `.d64`, `.tap`, `.t64`, `.g64`, `.d80`, `.d82`, `.d71`, `.d81`, `.x64`, `.p00`, `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z`, `.gz` | TOSEC | `vice_xpet` |

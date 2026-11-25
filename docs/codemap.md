@@ -249,6 +249,7 @@ Route — file under `src/RnRomManager.Web/src/routes/`.
 - AtariLynxHandler `lynx` — src/RnRomManager.Systems.Atari/AtariLynxHandler.cs
 - ColecoVisionHandler `coleco` — src/RnRomManager.Systems.Coleco/ColecoVisionHandler.cs
 - AmigaHandler `amiga` — src/RnRomManager.Systems.Commodore/AmigaHandler.cs
+- C128Handler `c128` — src/RnRomManager.Systems.Commodore/C128Handler.cs
 - C64Handler `c64` — src/RnRomManager.Systems.Commodore/C64Handler.cs
 - PetHandler `pet` — src/RnRomManager.Systems.Commodore/PetHandler.cs
 - Vic20Handler `vic20` — src/RnRomManager.Systems.Commodore/Vic20Handler.cs
@@ -335,7 +336,7 @@ File names without extension. System projects (`src/RnRomManager.Systems.*`) are
 - `RnRomManager.Systems.Arcade.Tests`: FbneoHandlerTests, Mame2003HandlerTests
 - `RnRomManager.Systems.Atari.Tests`: A78HeaderTests, Atari2600HandlerTests, Atari5200HandlerTests, Atari7800HandlerTests, AtariJaguarHandlerTests, AtariLynxHandlerTests, LynxHeaderTests
 - `RnRomManager.Systems.Coleco.Tests`: ColecoVisionHandlerTests
-- `RnRomManager.Systems.Commodore.Tests`: AmigaHandlerTests, C64HandlerTests, C64HeaderTests, PetHandlerTests, Vic20HandlerTests
+- `RnRomManager.Systems.Commodore.Tests`: AmigaHandlerTests, C128HandlerTests, C64HandlerTests, C64HeaderTests, PetHandlerTests, Vic20HandlerTests
 - `RnRomManager.Systems.Dos.Tests`: DosHandlerTests
 - `RnRomManager.Systems.GameBoy.Tests`: GameBoyAdvanceHeaderReaderTests, GameBoyHandlerTests, GameBoyHeaderReaderTests, SyntheticGbaRomBuilderTests, SyntheticRomBuilderTests
 - `RnRomManager.Systems.Microsoft.Tests`: Xbox360HandlerTests
@@ -370,6 +371,6 @@ Read a section with offset/limit instead of the whole doc (`features.md` alone i
 
 - `docs/zip-format.md` (298 lines): Layout :7; Naming :91; External ROM files :114; Release notes :127; Saves :136; Writes :150; `info.json` (schema version 8) :158; Game :162; Rom :185; Image :264; Validation :279; Versions :283
 
-- `README.md` (178 lines): Supported systems :26; Quick start :75; Documentation :139; Disclaimer :148; Attribution :152; License :176
+- `README.md` (179 lines): Supported systems :26; Quick start :76; Documentation :140; Disclaimer :149; Attribution :153; License :177
 
 - `CONTRIBUTING.md` (21 lines): Specs, branches and PRs :7; Test rule :17; Doc rule :20
