@@ -33,8 +33,8 @@ public class PcfxHandlerTests
         Assert.That(Handler.Family, Is.Not.EqualTo(new TurboGrafxCdHandler().Family));
 
     [Test]
-    public void BrowserCore_IsNull_UntilBeetlePcfxIsVendored() =>
-        Assert.That(Handler.BrowserCore, Is.Null);
+    public void BrowserCore_IsBeetlePcfx() =>
+        Assert.That(Handler.BrowserCore, Is.EqualTo("mednafen_pcfx"));
 
     [TestCase(16)]
     [TestCase(4096)]

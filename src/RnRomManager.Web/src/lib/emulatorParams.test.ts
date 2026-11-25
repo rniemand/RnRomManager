@@ -169,6 +169,7 @@ describe('parsePlayParams', () => {
 		'puae',
 		'mednafen_pce',
 		'mednafen_ngp',
+		'mednafen_pcfx',
 		'mupen64plus_next',
 		'mame2003_plus',
 		'fbneo'
@@ -223,6 +224,17 @@ describe('biosFor', () => {
 		expect(biosFor('snes9x', name)).toBeNull();
 	});
 
+	it.each(['X (Japan).cue', 'X (Japan).chd', 'X (Japan) (Track 2).bin'])(
+		'names pcfx.rom for a Beetle PC-FX %s release',
+		(name) => {
+			expect(biosFor('mednafen_pcfx', name)).toBe('pcfx.rom');
+		}
+	);
+
+	it('needs none for a Beetle PCE disc', () => {
+		expect(biosFor('mednafen_pce', 'X (Japan).cue')).toBeNull();
+	});
+
 	it.each(['gambatte', 'stella2014', 'smsplus', 'prosystem', 'fceumm', 'pcsx_rearmed'])(
 		'needs none for %s',
 		(core) => {
@@ -271,6 +283,10 @@ describe('controlSchemeFor', () => {
 	it('keeps the default for mednafen_ngp (Neo Geo Pocket)', () => {
 		expect(controlSchemeFor('mednafen_ngp', 'X (World).ngc')).toBeNull();
 	});
+
+	it('keeps the default for mednafen_pcfx (PC-FX)', () => {
+		expect(controlSchemeFor('mednafen_pcfx', 'X (Japan).cue')).toBeNull();
+	});
 });
 
 describe('hidesCoreChooser', () => {
@@ -278,9 +294,12 @@ describe('hidesCoreChooser', () => {
 		expect(hidesCoreChooser(core)).toBe(true);
 	});
 
-	it.each(['gambatte', 'gearcoleco', 'mednafen_pce', 'mednafen_ngp'])('keeps it for %s', (core) => {
-		expect(hidesCoreChooser(core)).toBe(false);
-	});
+	it.each(['gambatte', 'gearcoleco', 'mednafen_pce', 'mednafen_ngp', 'mednafen_pcfx'])(
+		'keeps it for %s',
+		(core) => {
+			expect(hidesCoreChooser(core)).toBe(false);
+		}
+	);
 });
 
 describe('optionalBiosError', () => {

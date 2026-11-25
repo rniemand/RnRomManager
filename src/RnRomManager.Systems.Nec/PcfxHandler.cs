@@ -40,7 +40,8 @@ public sealed class PcfxHandler : ISystemHandler
 
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 
-    public string? BrowserCore => null;
+    /// <summary>PC-FX X1: Beetle PC-FX, which needs the operator's <c>pcfx.rom</c> (PC-FX X8).</summary>
+    public string? BrowserCore => "mednafen_pcfx";
 
     public RomHeader? ReadHeader(ReadOnlySpan<byte> rom) => null;
 }

@@ -98,6 +98,12 @@ const coreLicenses = [
 	'mednafen_pce-libchdr-LICENSE.txt',
 	'mednafen_pce-lzma-LICENSE.txt',
 	'mednafen_pce-tremor-LICENSE.txt',
+	'mednafen_pcfx-LICENSE.txt',
+	'mednafen_pcfx-NOTICE.txt',
+	'mednafen_pcfx-libchdr-LICENSE.txt',
+	'mednafen_pcfx-libretro-common-LICENSE.txt',
+	'mednafen_pcfx-lzma-LICENSE.txt',
+	'mednafen_pcfx-tremor-LICENSE.txt',
 	'pcsx_rearmed-LICENSE.txt',
 	'pcsx_rearmed-NOTICE.txt',
 	'pcsx_rearmed-libchdr-LICENSE.txt',
@@ -361,7 +367,8 @@ describe('vendor-emulatorjs', () => {
 			'desmume',
 			'puae',
 			'mednafen_pce',
-			'mednafen_ngp'
+			'mednafen_ngp',
+			'mednafen_pcfx'
 		].flatMap((c) => [
 			`data/cores/${c}-legacy-wasm.data`,
 			`data/cores/${c}-wasm.data`,
@@ -982,6 +989,34 @@ describe('vendor-emulatorjs', () => {
 			[
 				...Object.keys(pinned).map((f) => `data/cores/${f}`),
 				...coreLicenses.filter((f) => f.startsWith('mednafen_ngp')).map((f) => `licenses/${f}`)
+			].sort()
+		);
+		for (const [f, [size, sha256]] of Object.entries(pinned)) {
+			const bytes = readFileSync(join(out, 'data', 'cores', f));
+			expect(bytes.length, f).toBe(size);
+			expect(createHash('sha256').update(bytes).digest('hex'), f).toBe(sha256);
+		}
+	});
+
+	it('vendors exactly the pinned Beetle PC-FX files and no threaded payload (PC-FX)', () => {
+		const pinned: Record<string, [number, string]> = {
+			'mednafen_pcfx-wasm.data': [
+				953008,
+				'7a49a92992d463afc1f414dc5f3eff99613ae9340fbf137a10b6df0ac890f29e'
+			],
+			'mednafen_pcfx-legacy-wasm.data': [
+				951926,
+				'77c01ee45a7c694f8397009636182b2a8b7557b0353c2ea7bade64ab4088ba3a'
+			],
+			'reports/mednafen_pcfx.json': [
+				127,
+				'43404cd63ee017b7a459b1b495af156a6688db74d2285709652c4c8cbdc326d0'
+			]
+		};
+		expect(files(out).filter((f) => f.includes('mednafen_pcfx'))).toEqual(
+			[
+				...Object.keys(pinned).map((f) => `data/cores/${f}`),
+				...coreLicenses.filter((f) => f.startsWith('mednafen_pcfx')).map((f) => `licenses/${f}`)
 			].sort()
 		);
 		for (const [f, [size, sha256]] of Object.entries(pinned)) {

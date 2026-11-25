@@ -36,7 +36,8 @@ const cores = [
 	'desmume',
 	'puae',
 	'mednafen_pce',
-	'mednafen_ngp'
+	'mednafen_ngp',
+	'mednafen_pcfx'
 ];
 
 // Guarded edits of the pinned EmulatorJS scripts: each anchor must occur exactly once, or vendoring fails so the edit
