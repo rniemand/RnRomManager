@@ -962,7 +962,7 @@ public partial class LibraryEndpointsTests
         long primaryId;
         await using (var connection = Service<IDbConnectionFactory>().Create())
         {
-            await connection.ExecuteAsync("UPDATE games SET system_id = 'snes' WHERE id = @id", new { id });
+            await connection.ExecuteAsync("UPDATE games SET system_id = 'snes', igdb_id = 77 WHERE id = @id", new { id });
             primaryId = await connection.QuerySingleAsync<long>(
                 "SELECT id FROM roms WHERE game_id = @id AND is_primary = 1 ORDER BY id LIMIT 1", new { id });
             await connection.ExecuteAsync("UPDATE roms SET file_name = 'legacy.smc', size_bytes = @size WHERE id = @primaryId",
@@ -973,6 +973,7 @@ public partial class LibraryEndpointsTests
         Assert.That(item.GetProperty("browserCore").GetString(), Is.EqualTo("snes9x"));
         Assert.That(item.GetProperty("playRomId").GetInt64(), Is.EqualTo(primaryId));
         Assert.That(item.GetProperty("playRomFileName").GetString(), Is.EqualTo("legacy.smc"));
+        Assert.That(item.GetProperty("igdbId").GetInt32(), Is.EqualTo(77), "Timeline: list items carry the IGDB id");
         Assert.That((await GetJson($"/api/games/{id}")).GetProperty("browserCore").GetString(), Is.EqualTo("snes9x"));
 
         using var response = await _user.GetAsync($"/api/games/{id}/roms/{primaryId}/download");

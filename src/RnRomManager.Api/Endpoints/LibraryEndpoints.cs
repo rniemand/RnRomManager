@@ -978,6 +978,7 @@ public static class LibraryEndpoints
             // Sega CD B6: quick play adds disc=1 for an external primary, since a shared core can't tell on its own.
             playDisc = playable && game.PrimaryIsExternal && PlayDiscCores.Contains(core!),
             browserCore = core,
+            igdbId = game.IgdbId,
         };
     }
 
