@@ -336,6 +336,11 @@
 					onedit={editSystemLogo}
 					find={systemsView.find}
 					onfind={(find) => goSystems({ ...systemsView, find: find || undefined })}
+					sort={systemsView.sort}
+					dir={systemsView.dir}
+					onsort={(sort, dir) => goSystems({ ...systemsView, sort, dir })}
+					onclear={() =>
+						goSystems({ ...systemsView, find: undefined, sort: undefined, dir: undefined })}
 				/>
 			{/if}
 		</div>

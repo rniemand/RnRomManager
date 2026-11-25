@@ -380,7 +380,7 @@ describe('systems tab (Systems tab B1–B6)', () => {
 		expect(current()).toEqual(['Systems']);
 		expect(screen.getByText('Choose a system to see its games and emulators.')).toBeTruthy();
 		expect(screen.queryByRole('list', { name: 'Systems' })).toBeNull();
-		expect(await screen.findByRole('list', { name: 'Systems' })).toBeTruthy();
+		expect(await screen.findByRole('table', { name: 'Systems' })).toBeTruthy();
 		expect(screen.queryByLabelText('Filter collections')).toBeNull();
 		expect(keys().filter((k) => k.startsWith('GET /api/collections'))).toEqual([]);
 		expect(gameRequests()).toEqual([]);
@@ -753,7 +753,7 @@ describe('collections search (B16)', () => {
 			}
 		];
 		render(CollectionsPage);
-		await screen.findByRole('list', { name: 'Systems' });
+		await screen.findByRole('table', { name: 'Systems' });
 
 		await fireEvent.input(screen.getByLabelText('Search systems'), { target: { value: 'game' } });
 		await wait();
@@ -764,10 +764,45 @@ describe('collections search (B16)', () => {
 		});
 		await vi.waitFor(() =>
 			expect(
-				within(screen.getByRole('list', { name: 'Systems' }))
+				within(screen.getByRole('table', { name: 'Systems' }))
 					.getAllByRole('link')
 					.map((l) => l.getAttribute('href'))
 			).toEqual(['/collections?tab=systems&system=gb&find=game'])
 		);
+	});
+
+	it('Systems: sort by Games then Clear, through the URL, keeping the selection (G4, G7)', async () => {
+		navigateTo('/collections?tab=systems&system=gb&gamePage=2&find=n');
+		const system = (id: string, displayName: string, gameCount: number) => ({
+			id,
+			displayName,
+			shortName: id,
+			gameCount,
+			romCount: gameCount,
+			regions: []
+		});
+		answers['GET /api/systems'] = [
+			{ status: 200, body: [system('gb', 'Game Boy', 1), system('nes', 'NES', 5)] }
+		];
+		render(CollectionsPage);
+		const table = await screen.findByRole('table', { name: 'Systems' });
+		const order = () =>
+			within(table)
+				.getAllByRole('link')
+				.map((l) => l.querySelector('span.text-truncate')!.textContent);
+		expect(order()).toEqual(['NES']);
+
+		await fireEvent.click(screen.getByRole('button', { name: /^Games/ }));
+		expect(goto).toHaveBeenLastCalledWith(
+			'/collections?tab=systems&system=gb&gamePage=2&find=n&sort=games',
+			{ replace: true, reset: false }
+		);
+
+		await fireEvent.click(await screen.findByRole('button', { name: /Clear/ }));
+		expect(goto).toHaveBeenLastCalledWith('/collections?tab=systems&system=gb&gamePage=2', {
+			replace: true,
+			reset: false
+		});
+		await vi.waitFor(() => expect(order()).toEqual(['Game Boy', 'NES']));
 	});
 });

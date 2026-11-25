@@ -16,6 +16,9 @@ const shownText = (el: Element) => {
 	return copy.textContent?.replace(/\s+/g, ' ').trim();
 };
 
+/** G2: a row's Games cell (the second). */
+const games = (link: Element) => link.closest('tr')!.cells[1].textContent!.trim();
+
 const system = (id: string, displayName: string, gameCount: number): SystemInfo => ({
 	id,
 	displayName,
@@ -34,26 +37,27 @@ const systems = [
 describe('SystemList (Systems tab B3)', () => {
 	it('lists every system in order, 0 games included, with its count and link', () => {
 		render(SystemList, { systems, selected: null });
-		const links = within(screen.getByRole('list', { name: 'Systems' })).getAllByRole('link');
+		const links = within(screen.getByRole('table', { name: 'Systems' })).getAllByRole('link');
 
 		expect(links.map(shownText)).toEqual([
-			'Atari 2600 0 games',
-			'Game Boy 1 game',
-			'Nintendo Entertainment System 1,250 games'
+			'Atari 2600',
+			'Game Boy',
+			'Nintendo Entertainment System'
 		]);
+		expect(links.map(games)).toEqual(['0', '1', '1,250']);
 		expect(links.map((l) => l.getAttribute('href'))).toEqual([
 			'/collections?tab=systems&system=a2600',
 			'/collections?tab=systems&system=gb',
 			'/collections?tab=systems&system=nes'
 		]);
-		expect(links.some((l) => l.classList.contains('active'))).toBe(false);
+		expect(document.querySelector('.table-primary')).toBeNull();
 	});
 
-	it('marks the selected system active and current', () => {
+	it('marks the selected system row and link current (G3)', () => {
 		render(SystemList, { systems, selected: 'gb' });
-		const selected = screen.getByRole('link', { name: /Game Boy/ });
+		const selected = screen.getByRole('link', { name: 'Game Boy' });
 
-		expect(selected.classList.contains('active')).toBe(true);
+		expect(selected.closest('tr')!.classList).toContain('table-primary');
 		expect(selected.getAttribute('aria-current')).toBe('true');
 		expect(screen.getByRole('link', { name: /Atari/ }).getAttribute('aria-current')).toBeNull();
 	});
@@ -101,27 +105,105 @@ describe('SystemList (Systems tab B3)', () => {
 			.find((el) => !el.classList.contains('group-logo-banner'))!;
 		expect(name.className).toBe('text-truncate');
 		expect(name.parentElement!.classList).toContain('min-w-0');
-		expect(name.closest('a')!.classList).toContain('min-w-0');
+		const cell = name.closest('td')!;
+		expect(cell.className).toBe('w-100 text-truncate');
+		expect(cell.getAttribute('style')).toBe('max-width: 0');
 	});
 
-	it('the selected row is active with a light badge; others get primary count badges (B15)', () => {
-		render(SystemList, { systems, selected: 'gb' });
-		const [atari, gb] = within(screen.getByRole('list', { name: 'Systems' })).getAllByRole('link');
-		expect(gb.classList).toContain('active');
-		expect(gb.querySelector('.count-badge')!.className).toBe(
-			'badge rounded-pill count-badge text-bg-light'
+	it('is a table in the reports style, with an Actions column only for an Admin with onedit (G1, G2)', () => {
+		auth.set({ id: 1, username: 'u', roles: ['admin'], mustChangePassword: false });
+		const { unmount } = render(SystemList, { systems, selected: null });
+		const table = screen.getByRole('table', { name: 'Systems' });
+		expect(table.className).toBe('table table-sm table-striped table-hover align-middle mb-0');
+		expect(table.closest('.card')).not.toBeNull();
+		expect(table.querySelector('thead')!.className).toBe('table-dark');
+		expect(screen.getAllByRole('columnheader')).toHaveLength(2);
+		unmount();
+
+		render(SystemList, { systems, selected: null, onedit: vi.fn() });
+		const headers = screen.getAllByRole('columnheader');
+		expect(headers).toHaveLength(3);
+		expect(headers[2].querySelector('.visually-hidden')!.textContent).toBe('Actions');
+		expect(screen.getByRole('button', { name: 'Change logo for Game Boy' }).className).toBe(
+			'btn btn-link btn-sm p-0'
 		);
-		expect(atari.classList).not.toContain('active');
-		expect(atari.querySelector('.count-badge')!.className).toBe(
-			'badge rounded-pill count-badge text-bg-primary'
-		);
+	});
+
+	it('a filter matching nothing hides the card', () => {
+		render(SystemList, { systems, selected: null, find: 'zzz' });
+		expect(document.querySelector('.card')!.hasAttribute('hidden')).toBe(true);
+	});
+
+	describe('sorting (G4) and Clear (G7)', () => {
+		const tied = [
+			system('b', 'beta', 5),
+			system('a', 'Alpha', 5),
+			system('c', 'Gamma', 9),
+			system('d', 'delta', 1)
+		];
+		const order = () =>
+			within(screen.getByRole('table', { name: 'Systems' }))
+				.getAllByRole('link')
+				.map(shownText);
+		const header = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}`) });
+
+		it.each([
+			[undefined, undefined, ['Alpha', 'beta', 'delta', 'Gamma']],
+			['name', 'desc', ['Gamma', 'delta', 'beta', 'Alpha']],
+			['games', undefined, ['Gamma', 'Alpha', 'beta', 'delta']],
+			['games', 'asc', ['delta', 'Alpha', 'beta', 'Gamma']]
+		] as const)('sort %s %s orders in the browser, games ties by name', (sort, dir, expected) => {
+			render(SystemList, { systems: tied, selected: null, sort, dir });
+			expect(order()).toEqual(expected);
+			const active = header(sort === 'games' ? 'Games' : 'Name').closest('th')!;
+			expect(active.getAttribute('aria-sort')).toBe(
+				(dir ?? (sort === 'games' ? 'desc' : 'asc')) === 'asc' ? 'ascending' : 'descending'
+			);
+			expect(active.querySelector('i')).not.toBeNull();
+		});
+
+		it.each([
+			[{}, 'Name', ['name', 'desc']],
+			[{}, 'Games', ['games', 'desc']],
+			[{ sort: 'games' as const }, 'Games', ['games', 'asc']],
+			[{ sort: 'games' as const, dir: 'asc' as const }, 'Name', ['name', 'asc']]
+		])('from %j clicking %s calls onsort(%j)', async (extra, click, expected) => {
+			const onsort = vi.fn();
+			render(SystemList, { systems, selected: null, onsort, ...extra });
+			await fireEvent.click(header(click));
+			expect(onsort).toHaveBeenCalledWith(...expected);
+		});
+
+		it('keeps sort and dir in the selection links', () => {
+			render(SystemList, { systems, selected: null, sort: 'games', dir: 'asc' });
+			expect(screen.getByRole('link', { name: 'Game Boy' }).getAttribute('href')).toBe(
+				'/collections?tab=systems&system=gb&sort=games&dir=asc'
+			);
+		});
+
+		it('no Clear at the default; Clear cancels a pending search, empties the box and calls onclear', async () => {
+			const { unmount } = render(SystemList, { systems, selected: null });
+			expect(screen.queryByRole('button', { name: /Clear/ })).toBeNull();
+			unmount();
+
+			const onclear = vi.fn();
+			const onfind = vi.fn();
+			render(SystemList, { systems, selected: null, sort: 'games', onclear, onfind });
+			const box = screen.getByLabelText('Search systems') as HTMLInputElement;
+			await fireEvent.input(box, { target: { value: 'nes' } });
+			const button = screen.getByRole('button', { name: /Clear/ });
+			expect(button.className).toBe('btn btn-sm btn-outline-secondary text-nowrap');
+			await fireEvent.click(button);
+			await new Promise((done) => setTimeout(done, 350));
+			expect(onclear).toHaveBeenCalledOnce();
+			expect(onfind).not.toHaveBeenCalled();
+			expect(box.value).toBe('');
+		});
 	});
 
 	describe('search (B16)', () => {
 		const names = () =>
-			[...document.querySelectorAll('ul[aria-label="Systems"] a')].map((l) =>
-				shownText(l)!.replace(/ [\d,]+ games?$/, '')
-			);
+			[...document.querySelectorAll('table[aria-label="Systems"] a')].map((l) => shownText(l));
 
 		it('filters by id, case-insensitive, keeping find in the links', () => {
 			render(SystemList, { systems, selected: null, find: 'NES' });
