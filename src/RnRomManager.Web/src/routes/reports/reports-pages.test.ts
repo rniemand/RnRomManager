@@ -268,7 +268,8 @@ describe('reports pages', () => {
 	});
 
 	describe('Duplicates (RP9)', () => {
-		const list = 'GET /api/reports/duplicates?page=1&pageSize=25';
+		const list = 'GET /api/reports/duplicates?match=igdb&page=1&pageSize=25';
+		const titleList = 'GET /api/reports/duplicates?match=title&page=1&pageSize=25';
 		const game = (id: string, displayTitle: string, romCount: number) => ({
 			id,
 			displayTitle,
@@ -282,8 +283,10 @@ describe('reports pages', () => {
 			systemName: 'Game Boy',
 			baseTitle: 'Quest',
 			gamesKey: 'k'.repeat(64),
+			igdbId: 42 as number | null,
 			games: [game('g1', 'Quest', 2), game('g2', 'Quest DX', 1), game('g3', 'Quest II', 1)]
 		};
+		const matchBy = () => screen.getByLabelText('Match by') as HTMLSelectElement;
 		const page = { items: [group], page: 1, pageSize: 25, total: 1 };
 		const signIn = (roles: 'admin'[]) =>
 			auth.set({ id: 1, username: 'u', roles, mustChangePassword: false });
@@ -368,8 +371,48 @@ describe('reports pages', () => {
 
 			await vi.waitFor(() => expect(calls.filter((c) => c === list)).toHaveLength(2));
 			expect(bodies['POST /api/reports/duplicates/dismiss']).toEqual([
-				{ system: 'gb', baseTitle: 'Quest', gamesKey: group.gamesKey }
+				{ system: 'gb', gamesKey: group.gamesKey, igdbId: 42 }
 			]);
+		});
+
+		it('Match by defaults to IGDB ID; Title requests match=title from page 1 and dismisses by baseTitle (D4)', async () => {
+			signIn(['admin']);
+			answers[list] = { status: 200, body: page };
+			answers[titleList] = { status: 200, body: { ...page, items: [{ ...group, igdbId: null }] } };
+			render(Duplicates);
+			await screen.findByRole('link', { name: 'Quest DX' });
+			expect(matchBy().value).toBe('igdb');
+			expect([...matchBy().options].map((o) => [o.value, o.textContent])).toEqual([
+				['igdb', 'IGDB ID'],
+				['title', 'Title']
+			]);
+			const group$ = matchBy().closest('.input-group')!;
+			expect(group$.className).toBe('input-group input-group-sm w-auto');
+			expect(group$.parentElement!.className).toBe('col-auto');
+			expect(group$.parentElement!.nextElementSibling!.contains(systemToggle())).toBe(true);
+
+			await fireEvent.change(matchBy(), { target: { value: 'title' } });
+
+			await vi.waitFor(() => expect(calls).toContain(titleList));
+			await screen.findByRole('link', { name: 'Quest DX' });
+			expect(screen.queryByText(/^IGDB \d+$/)).toBeNull();
+			await fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+			await vi.waitFor(() =>
+				expect(bodies['POST /api/reports/duplicates/dismiss']).toEqual([
+					{ system: 'gb', baseTitle: 'Quest', gamesKey: group.gamesKey }
+				])
+			);
+		});
+
+		it('an IGDB group shows its id in a badge beside, not inside, the heading (D4)', async () => {
+			answers[list] = { status: 200, body: page };
+			render(Duplicates);
+
+			const heading = await screen.findByRole('heading', { name: 'Quest' });
+			const badge = screen.getByText('IGDB 42');
+			expect(badge.className).toBe('badge text-bg-secondary');
+			expect(heading.contains(badge)).toBe(false);
+			expect(heading.nextElementSibling).toBe(badge);
 		});
 
 		it('a merge that stops part-way toasts the problem and the merged count', async () => {
@@ -411,6 +454,18 @@ describe('reports pages', () => {
 		it('shows the empty state', async () => {
 			answers[list] = { status: 200, body: { items: [], page: 1, pageSize: 25, total: 0 } };
 			render(Duplicates);
+
+			expect(await screen.findByText('No games share an IGDB ID.')).toBeTruthy();
+		});
+
+		it('shows the Title empty state with Match by Title', async () => {
+			const empty = { items: [], page: 1, pageSize: 25, total: 0 };
+			answers[list] = { status: 200, body: empty };
+			answers[titleList] = { status: 200, body: empty };
+			render(Duplicates);
+			await screen.findByText('No games share an IGDB ID.');
+
+			await fireEvent.change(matchBy(), { target: { value: 'title' } });
 
 			expect(await screen.findByText('No duplicate games found.')).toBeTruthy();
 		});
