@@ -6,6 +6,7 @@
 
 import { api } from './api/client';
 import type { DiscoveryGroup, GameListItem, Page } from './api/types';
+import { remembered } from './remembered';
 
 export type DiscoveryKind = 'publishers' | 'developers' | 'genres';
 export type CollectionsTab = 'collections' | DiscoveryKind | 'systems';
@@ -46,7 +47,18 @@ export interface DiscoveryState {
 	gamePage: number;
 	/** B16: the list's search text (URL `find`, since `q` is User collections'); absent = none. */
 	find?: string;
+	/** G5: the sort column; absent = `name`. */
+	sort?: GroupSort;
+	/** G5: the direction; absent = the column's default ({@link defaultDir}). */
+	dir?: SortDir;
 }
+
+/** G4: the group and system tables' sort columns and directions. */
+export type GroupSort = 'name' | 'games';
+export type SortDir = 'asc' | 'desc';
+
+/** G4: Name starts ascending, Games descending. */
+export const defaultDir = (sort: GroupSort): SortDir => (sort === 'games' ? 'desc' : 'asc');
 
 /** B16: the longest search the API accepts. */
 export const maxFind = 100;
@@ -62,6 +74,23 @@ export const isDiscoveryKey = (value: string | null): value is string =>
 function findParam(params: UrlLike['searchParams']): string | undefined {
 	const find = params.get('find')?.trim().slice(0, maxFind).trim();
 	return find || undefined;
+}
+
+/** G5: `sort`/`dir` from exact lowercase values, kept only when not the default, so default states keep their shape. */
+function sortParams(params: UrlLike['searchParams']): { sort?: GroupSort; dir?: SortDir } {
+	const sort: GroupSort = params.get('sort') === 'games' ? 'games' : 'name';
+	const dir = params.get('dir');
+	return {
+		...(sort === 'games' ? { sort } : {}),
+		...((dir === 'asc' || dir === 'desc') && dir !== defaultDir(sort) ? { dir } : {})
+	};
+}
+
+/** G5: writes `sort` only when `games`, and `dir` only when it differs from that column's default. */
+function setSort(params: URLSearchParams, state: { sort?: GroupSort; dir?: SortDir }) {
+	const sort = state.sort ?? 'name';
+	if (sort !== 'name') params.set('sort', sort);
+	if (state.dir && state.dir !== defaultDir(sort)) params.set('dir', state.dir);
 }
 
 function pageParam(params: UrlLike['searchParams'], name: string): number {
@@ -86,7 +115,8 @@ export function discoveryState(url: UrlLike): DiscoveryState | null {
 		key: isDiscoveryKey(key) ? key : null,
 		groupPage: pageParam(url.searchParams, 'groupPage'),
 		gamePage: pageParam(url.searchParams, 'gamePage'),
-		...withFind(findParam(url.searchParams))
+		...withFind(findParam(url.searchParams)),
+		...sortParams(url.searchParams)
 	};
 }
 
@@ -114,6 +144,7 @@ export function discoverySearch(state: DiscoveryState): string {
 	if (state.groupPage > 1) params.set('groupPage', String(state.groupPage));
 	if (state.key && state.gamePage > 1) params.set('gamePage', String(state.gamePage));
 	if (state.find) params.set('find', state.find);
+	setSort(params, state);
 	return `?${params}`;
 }
 
@@ -130,6 +161,9 @@ export interface SystemsState {
 	gamePage: number;
 	/** B16: the list's search text; absent = none. */
 	find?: string;
+	/** G5: as {@link DiscoveryState}'s. */
+	sort?: GroupSort;
+	dir?: SortDir;
 }
 
 /** The Systems tab's state from its URL; an empty or whitespace-only `system` selects nothing. */
@@ -138,7 +172,8 @@ export function systemsState(url: UrlLike): SystemsState {
 	return {
 		system: system?.trim() ? system : null,
 		gamePage: pageParam(url.searchParams, 'gamePage'),
-		...withFind(findParam(url.searchParams))
+		...withFind(findParam(url.searchParams)),
+		...sortParams(url.searchParams)
 	};
 }
 
@@ -148,16 +183,35 @@ export function systemsSearch(state: SystemsState): string {
 	if (state.system) params.set('system', state.system);
 	if (state.system && state.gamePage > 1) params.set('gamePage', String(state.gamePage));
 	if (state.find) params.set('find', state.find);
+	setSort(params, state);
 	return `?${params}`;
 }
 
+/** G8: the tabs whose search and sort are remembered in this browser. */
+export type RememberedTab = DiscoveryKind | 'systems';
+
+const tabMemory = (tab: RememberedTab) => remembered(`rnrm.collections.${tab}`);
+
+/** G8: the tab's saved query string (`find=sega&sort=games`, no `?`); '' when none. */
+export const readCollectionsTab = (tab: RememberedTab): string => tabMemory(tab).read();
+
+/** G8: saves the tab's query string (without `?`); '' forgets it. */
+export const saveCollectionsTab = (tab: RememberedTab, search: string): void =>
+	tabMemory(tab).save(search);
+
 /** B3: `/api/discovery/{kind}` reads. */
 export const discoveryApi = {
-	groups: (kind: DiscoveryKind, params: { page: number; pageSize: number; q?: string }) => {
+	groups: (
+		kind: DiscoveryKind,
+		params: { page: number; pageSize: number; q?: string; sort?: GroupSort; dir?: SortDir }
+	) => {
 		const search = new URLSearchParams();
 		if (params.page > 1) search.set('page', String(params.page));
 		search.set('pageSize', String(params.pageSize));
 		if (params.q) search.set('q', params.q);
+		// A1: sent only when set, so the API's per-sort dir default matches the URL's.
+		if (params.sort) search.set('sort', params.sort);
+		if (params.dir) search.set('dir', params.dir);
 		return api.get<Page<DiscoveryGroup>>(`/api/discovery/${kind}?${search}`);
 	},
 	/** P4: the key of the group named `name`; 404 when no game has it. */
