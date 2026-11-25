@@ -1,6 +1,6 @@
 ---
 title: PC-FX support
-status: in-progress
+status: completed
 created: 2026-11-25
 ---
 
