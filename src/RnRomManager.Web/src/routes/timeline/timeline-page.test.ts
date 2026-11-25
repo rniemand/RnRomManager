@@ -130,32 +130,47 @@ describe('timeline page (T1, T3–T5)', () => {
 		]);
 	});
 
-	it('one tick per year of the data range, zero-count years included, with counts and names', async () => {
+	it('a line with a point per year with games and a tick per empty year, cards alternating', async () => {
 		render(TimelinePage);
 		await screen.findByRole('group', { name: 'Release years' });
 
-		expect(strip().className).toBe('d-flex gap-1 overflow-x-auto pb-2 mb-3');
-		expect(tickNames()).toEqual([
-			'1990: 2 games',
-			'1991: 0 games',
-			'1992: 1 game',
-			'1993: 0 games',
-			'1994: 0 games',
-			'1995: 0 games',
-			'1996: 0 games',
-			'1997: 0 games',
-			'1998: 0 games',
-			'1999: 1,234 games'
+		expect(strip().className).toBe('timeline-line overflow-x-auto pb-2 mb-3');
+		const row = strip().firstElementChild!;
+		expect(row.className).toContain('timeline-row d-flex position-relative');
+		expect(row.children).toHaveLength(10);
+		expect(tickNames()).toEqual(['1990: 2 games', '1992: 1 game', '1999: 1,234 games']);
+		const points = within(strip()).getAllByRole('button');
+		expect(points.map((b) => b.className.replace(/\s*svelte-\S+/g, ''))).toEqual([
+			'timeline-point above',
+			'timeline-point below',
+			'timeline-point above'
 		]);
-		const zero = within(strip()).getByRole('button', { name: '1991: 0 games' });
-		expect(zero.querySelectorAll('span')[1].className).toContain('text-body-secondary');
+		const ticks = [...strip().querySelectorAll('.timeline-tick')];
+		expect(ticks.map((t) => t.getAttribute('title'))).toEqual(
+			[1991, 1993, 1994, 1995, 1996, 1997, 1998].map((y) => `${y}: no games`)
+		);
+		expect(ticks.every((t) => t.getAttribute('aria-hidden') === 'true')).toBe(true);
+		expect(strip().querySelector('.timeline-tick-label')).toBeNull();
 		const many = within(strip()).getByRole('button', { name: '1999: 1,234 games' });
 		expect(many.textContent!.replace(/\s+/g, ' ').trim()).toBe('1999 1,234');
-		expect(many.querySelectorAll('span')[1].className).not.toContain('text-body-secondary');
-		for (const tick of within(strip()).getAllByRole('button')) {
-			expect(tick.getAttribute('aria-pressed')).toBe('false');
-			expect(tick.classList).toContain('btn-outline-secondary');
-		}
+		const card = many.querySelector('.timeline-card')!;
+		for (const name of ['timeline-card', 'border', 'rounded', 'bg-body', 'px-2', 'py-1', 'small'])
+			expect(card.classList).toContain(name);
+		expect(card.firstElementChild!.className).toContain('fw-semibold');
+		expect(many.querySelector('.timeline-dot')!.classList).toContain('bg-primary');
+		for (const point of points) expect(point.getAttribute('aria-pressed')).toBe('false');
+	});
+
+	it('an empty first shown year is a labelled tick', async () => {
+		navigateTo('/timeline?from=1991&to=1992');
+		render(TimelinePage);
+		await screen.findByRole('group', { name: 'Release years' });
+
+		expect(tickNames()).toEqual(['1992: 1 game']);
+		const label = strip().querySelector('.timeline-tick-label')!;
+		expect(label.textContent).toBe('1991');
+		expect(label.className).toContain('small text-body-secondary');
+		expect(label.closest('.timeline-tick')!.getAttribute('title')).toBe('1991: no games');
 	});
 
 	it('a tick selects its year; the single-year tick is pressed', async () => {
@@ -170,7 +185,10 @@ describe('timeline page (T1, T3–T5)', () => {
 			if (tick.getAttribute('aria-pressed') !== 'true') throw new Error('not pressed');
 			return tick;
 		});
-		expect(pressed.classList).toContain('btn-primary');
+		const card = pressed.querySelector('.timeline-card')!;
+		expect(card.classList).toContain('text-bg-primary');
+		expect(card.classList).toContain('border-primary');
+		expect(card.classList).not.toContain('bg-body');
 		expect(tickNames()).toEqual(['1992: 1 game']);
 		expect(document.querySelector('span[aria-live]')!.textContent).toBe('1992');
 	});
@@ -181,7 +199,10 @@ describe('timeline page (T1, T3–T5)', () => {
 		await screen.findByRole('group', { name: 'Release years' });
 
 		expect(tickNames()[0]).toBe('1990: 2 games');
-		expect(tickNames().at(-1)).toBe('1993: 0 games');
+		expect(tickNames().at(-1)).toBe('1992: 1 game');
+		expect([...strip().querySelectorAll('.timeline-tick')].at(-1)!.getAttribute('title')).toBe(
+			'1993: no games'
+		);
 		const label = screen.getByText('1990–1993');
 		expect(label.className).toBe('small text-body-secondary');
 		expect(label.getAttribute('aria-live')).toBe('polite');
