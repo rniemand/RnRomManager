@@ -55,6 +55,7 @@ public class BrowserCoreExtensionsTests
         ["vice_x64sc"] = "d64|d71|d80|d81|d82|g64|g41|x64|t64|tap|prg|p00|crt|bin|zip|7z|gz|d6z|d7z|d8z|g6z|g4z|x6z|cmd|m3u|vfl|vsf|nib|nbz|d2m|d4m|tcrt",
         ["vice_xpet"] = "d64|d71|d80|d81|d82|g64|g41|x64|t64|tap|prg|p00|crt|bin|zip|7z|gz|d6z|d7z|d8z|g6z|g4z|x6z|cmd|m3u|vfl|vsf|nib|nbz|d2m|d4m|tcrt",
         ["vice_xvic"] = "d64|d71|d80|d81|d82|g64|g41|x64|t64|tap|prg|p00|crt|bin|zip|7z|gz|d6z|d7z|d8z|g6z|g4z|x6z|cmd|m3u|vfl|vsf|nib|nbz|d2m|d4m|20|40|60|a0|b0|rom",
+        ["vice_x128"] = "d64|d71|d80|d81|d82|g64|g41|x64|t64|tap|prg|p00|crt|bin|zip|7z|gz|d6z|d7z|d8z|g6z|g4z|x6z|cmd|m3u|vfl|vsf|nib|nbz|d2m|d4m|tcrt",
         ["mupen64plus_next"] = "n64|v64|z64|bin|u1",
         // Arcade P1: the NUL-terminated valid_extensions string in mame2003_plus_libretro.wasm is "zip|" (read 2026-11-24), its
         // trailing separator dropped here; core.json says ["zip"].
@@ -80,6 +81,7 @@ public class BrowserCoreExtensionsTests
         ["vice_x64sc"] = "77f58884c81b58721cbc4754ffc5574838219258e9390630c352a494a3f335ab",
         ["vice_xpet"] = "eef0d83f7c1af43d51c3384a07db4196ea7c2bbe1292e9e52fade3d3107513c5",
         ["vice_xvic"] = "4c7de6f858e100e9aea93085d5aef01bdfe87399c21c0fde4e1b6c7f1da56316",
+        ["vice_x128"] = "dbac85e530b006c2d17e200c445de582c7ea272bacf333e4b4f8c1e391ed8506",
         ["mupen64plus_next"] = "2da1cbce9fda395e3ae83ca5787353baa159142d45ef3ea90f108b92524f76cc",
         ["mame2003_plus"] = "cb6d9c80a88b65d1579d16d02128a678f8d1cd3f51de1479e647cea27b13247b",
         ["fbneo"] = "315a25e0bcd61d58ee0d9e8b1dbf3740b9e0ca4b7d0726f848ce1068de73437c",
@@ -137,7 +139,8 @@ public class BrowserCoreExtensionsTests
     private const string NotAGame = "not a game image (a snapshot, config, command, fliplist or icon file)";
     private const string NoDat = "homebrew or unusual type no DAT lists; left out by the 2026-11-23 audit";
     private const string OtherCommodore = "ingested only on another Commodore system here (the PET has no cartridge port; NIB, D2M/D4M and 8050/8250 images aren't taken for this system)";
-    private static readonly string[] Vice = ["vice_x64sc", "vice_xpet", "vice_xvic"];
+    private const string C128Scope = "left out of Commodore 128 by its spec (Out of scope); ingested on C64";
+    private static readonly string[] Vice = ["vice_x64sc", "vice_xpet", "vice_xvic", "vice_x128"];
 
     /// <summary>
     /// P2: a type a core opens that no system on that core ingests, and why. An entry the core no longer lists, or that a
@@ -169,6 +172,7 @@ public class BrowserCoreExtensionsTests
         ("the DS DAT's .bin entries are save data and seminar demos, which DatStore would match (D1)", ["desmume"], [".bin"]),
         (OtherCommodore, ["vice_xpet"], [".crt", ".bin", ".tcrt", ".nib", ".nbz", ".d2m", ".d4m"]),
         (OtherCommodore, ["vice_xvic"], [".nib", ".nbz", ".d2m", ".d4m", ".d80", ".d82"]),
+        (C128Scope, ["vice_x128"], [".bin", ".x64", ".d80", ".d82", ".nib", ".nbz", ".d2m", ".d4m", ".tcrt", ".gz", ".d6z", ".d7z", ".d8z", ".g6z", ".x6z"]),
         ("DOS games are ingested as one .zip or .dosz; put loose files and disc images inside it", ["dosbox_pure"],
             [".exe", ".com", ".bat", ".iso", ".chd", ".cue", ".ins", ".img", ".ima", ".vhd", ".jrc", ".tc", ".m3u", ".m3u8", ".conf", "./"]),
         ("3DS homebrew and NCCH formats aren't ingested; only .3ds, .cci and .cia dumps are", ["azahar"],

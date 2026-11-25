@@ -32,6 +32,7 @@ const cores = [
 	'vice_x64sc',
 	'vice_xpet',
 	'vice_xvic',
+	'vice_x128',
 	'puae',
 	'mednafen_pce',
 	'mednafen_ngp',
@@ -141,7 +142,7 @@ export function controlSchemeFor(core, name) {
 }
 
 /**
- * B3/B8 (SNES B3 adds Snes9x, 3DO B6 Opera, C64 B7 VICE, PET VICE xpet, VIC-20 VICE xvic, N64 Mupen64Plus-Next, Arcade P1 MAME 2003-Plus): the cores whose files the operator supplies, served by the API after a length and hash check, with the
+ * B3/B8 (SNES B3 adds Snes9x, 3DO B6 Opera, C64 B7 VICE, PET VICE xpet, VIC-20 VICE xvic, C128 VICE x128, N64 Mupen64Plus-Next, Arcade P1 MAME 2003-Plus): the cores whose files the operator supplies, served by the API after a length and hash check, with the
  * wording of their messages: the system label, the core's display name, the short name of the fallback message and
  * the option holding the folder.
  * @type {Record<string, { system: string, display: string, short: string, option: string }>}
@@ -186,6 +187,12 @@ const operatorCores = {
 	vice_xvic: {
 		system: 'Commodore VIC-20 games',
 		display: 'VICE (VIC-20)',
+		short: 'VICE',
+		option: 'Emulator:ViceCorePath'
+	},
+	vice_x128: {
+		system: 'Commodore 128 games',
+		display: 'VICE (C128)',
 		short: 'VICE',
 		option: 'Emulator:ViceCorePath'
 	},
@@ -277,6 +284,7 @@ export function hidesCoreChooser(core) {
 		'vice_x64sc',
 		'vice_xpet',
 		'vice_xvic',
+		'vice_x128',
 		'mupen64plus_next',
 		// Arcade P1: EmulatorJS's mame group also holds mame2003, which isn't delivered.
 		'mame2003_plus',

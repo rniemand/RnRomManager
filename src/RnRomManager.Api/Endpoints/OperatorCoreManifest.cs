@@ -29,6 +29,7 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
     public const string Vice = "vice_x64sc";
     public const string VicePet = "vice_xpet";
     public const string ViceVic = "vice_xvic";
+    public const string ViceC128 = "vice_x128";
     public const string Mupen64PlusNext = "mupen64plus_next";
     public const string Mame2003Plus = "mame2003_plus";
     public const string Fbneo = "fbneo";
@@ -111,6 +112,17 @@ public sealed record OperatorCoreManifest(IReadOnlyList<OperatorCore> Cores)
                 "42067705c2fd9c3861247f0d251a1481a85b5c00fb7ba93798ed0fe65b9fdd70", "application/octet-stream"),
             new("vice_xvic.json", 123,
                 "9c3439164e63320da512deded61cdbfa37ce018eedb3995e9eb0af616a0198fe", "application/json"),
+        ]),
+        // Commodore 128: https://registry.npmjs.org/@emulatorjs/core-vice_x128/-/core-vice_x128-4.2.3.tgz. Embeds the C128's
+        // ROMs like vice_x64sc, so it's never bundled; its files sit in the same folder as the C64 core's.
+        new(ViceC128, "VICE (C128)", o => o.ViceCorePath, EmulatorEndpoints.ViceCoreMismatch,
+        [
+            new("vice_x128-wasm.data", 1_595_414,
+                "dbac85e530b006c2d17e200c445de582c7ea272bacf333e4b4f8c1e391ed8506", "application/octet-stream"),
+            new("vice_x128-legacy-wasm.data", 1_596_799,
+                "71383f4b81943b936c2c0b4258af231f6adcbf3139c2d0a17b8f20a239712c86", "application/octet-stream"),
+            new("vice_x128.json", 146,
+                "bf4d43822a61a423e00e0d2bffd063ca139a77e78b66507aeb90343fcc221af3", "application/json"),
         ]),
         // N64: https://registry.npmjs.org/@emulatorjs/core-mupen64plus_next/-/core-mupen64plus_next-4.2.3.tgz (payloads at
         // the package root, the report from reports/). Its GLideN64 renderer is GPL-2.0-only, linked with GPL-3.0 code,

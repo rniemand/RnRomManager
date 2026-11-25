@@ -1417,6 +1417,27 @@ public class ReviewEndpointsTests
     }
 
     [Test]
+    public async Task C128_APrgGoesToReview_AndManualStoresItInTheZip_KeepingPrg()
+    {
+        byte[] bytes = [0x01, 0x1C, .. Enumerable.Range(0, 298).Select(i => (byte)i)];
+        var path = DropDisc("c128", "Pixel Pilot 128.prg", bytes);
+        var result = await Ingest(new IngestFile("c128", path, Path.GetFileName(path), bytes.Length, File.GetLastWriteTimeUtc(path)));
+        Assert.That((result!.Outcome, result.Reason, result.SystemId), Is.EqualTo((IngestOutcome.Review, "NoDatMatch", "c128")));
+        var item = (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(bytes)), default))!;
+        Assert.That(item.Suggestions, Is.EqualTo("[]"));
+        using (var detail = await _admin.GetAsync($"/api/review/{item.Id}"))
+            Assert.That((await AuthClient.JsonAsync(detail)).GetProperty("hasDat").GetBoolean(), Is.False);
+
+        var response = await _admin.ResolveAsync(item.Id, new { action = "Manual", title = "Pixel Pilot 128", regions = Array.Empty<string>(), languages = Array.Empty<string>(), flags = Array.Empty<string>() });
+
+        Assert.That(response.Code, Is.Null);
+        var rom = (await ReadGame(response.GameId!.Value)).Roms.Single();
+        Assert.That(rom.ExternalFileName, Is.Null, "inside the game ZIP");
+        Assert.That(rom.FileName, Does.EndWith(".prg"));
+        Assert.That(File.Exists(path), Is.False);
+    }
+
+    [Test]
     public async Task Dos_AZipGoesToReview_AndManualStoresItAsDoszNextToTheZip_WithNoIntegrityIssue()
     {
         var bytes = DosZip(2);
