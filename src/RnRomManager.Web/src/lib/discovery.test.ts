@@ -5,9 +5,12 @@ import { describe, expect, it } from 'vitest';
 import {
 	collectionsTab,
 	collectionsTabs,
+	discoveryName,
 	discoverySearch,
 	discoveryState,
+	discoveryText,
 	isDiscoveryKey,
+	nameAsFind,
 	logoSources,
 	logoUrlError,
 	starterGenres,
@@ -28,7 +31,8 @@ describe('collections tab URLs (discovery B1)', () => {
 		['?tab=systems', 'systems'],
 		['?tab=Systems', 'collections'],
 		['?tab=Publishers', 'collections'],
-		['?tab=developers', 'collections'],
+		['?tab=developers', 'developers'],
+		['?tab=Developers', 'collections'],
 		['?tab=', 'collections']
 	])('%s is the %s tab', (search, tab) => {
 		expect(collectionsTab(url(search))).toBe(tab);
@@ -82,13 +86,51 @@ describe('collections tab URLs (discovery B1)', () => {
 		expect(discoveryState(url(discoverySearch(state)))).toEqual(state);
 	});
 
-	it('lists the four tabs in order', () => {
+	it('lists the five tabs in order', () => {
 		expect(collectionsTabs.map((t) => [t.tab, t.label])).toEqual([
 			['collections', 'User collections'],
 			['publishers', 'Publishers'],
+			['developers', 'Developers'],
 			['genres', 'Genres'],
 			['systems', 'Systems']
 		]);
+	});
+});
+
+describe('metadata links (P3) and per-kind text (C1)', () => {
+	it.each([
+		['?tab=developers&name=%20Bullet-Proof%20', 'Bullet-Proof'],
+		['?tab=publishers&name=Nintendo', 'Nintendo'],
+		['?tab=genres&name=Puzzle&find=x', 'Puzzle'],
+		[`?tab=publishers&key=${key}&name=Nintendo`, null],
+		['?tab=publishers&key=bad&name=Nintendo', 'Nintendo'],
+		['?tab=publishers&name=%20%20', null],
+		['?tab=systems&name=gb', null],
+		['?name=Nintendo', null]
+	])('%s asks for %s', (search, name) => {
+		expect(discoveryName(url(search))).toBe(name);
+	});
+
+	it('a name falls back to find cut to the find limit', () => {
+		expect(nameAsFind(' Nintendo ')).toBe('Nintendo');
+		expect(nameAsFind('a'.repeat(150))).toBe('a'.repeat(100));
+		expect(nameAsFind('   ')).toBeUndefined();
+	});
+
+	it('names each kind', () => {
+		expect(discoveryText.developers).toEqual({
+			label: 'Developers',
+			pager: 'Developer pages',
+			singular: 'developer',
+			plural: 'developers'
+		});
+		expect(discoveryText.publishers.pager).toBe('Publisher pages');
+		expect(discoveryText.genres.singular).toBe('genre');
+	});
+
+	it('developers have no starter art: the shared logo or nothing', () => {
+		expect(logoSources('developers', { key: starterPublishers[0].key })).toEqual([]);
+		expect(logoSources('developers', { key, logoUrl: '/x.png' })).toEqual(['/x.png']);
 	});
 });
 

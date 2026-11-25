@@ -1,20 +1,42 @@
 /**
  * Collections discovery B1: the `/collections` tabs and their shareable URL state. User collections keep their own
- * `q` and `page`; the discovery tabs use `tab`, `key` (the selected group), `groupPage` and `gamePage`.
+ * `q` and `page`; the discovery tabs use `tab`, `key` (the selected group), `groupPage` and `gamePage`, and read a
+ * one-off `name` (P3) that the page resolves to a `key`.
  */
 
 import { api } from './api/client';
 import type { DiscoveryGroup, GameListItem, Page } from './api/types';
 
-export type DiscoveryKind = 'publishers' | 'genres';
+export type DiscoveryKind = 'publishers' | 'developers' | 'genres';
 export type CollectionsTab = 'collections' | DiscoveryKind | 'systems';
 
 export const collectionsTabs: readonly { tab: CollectionsTab; label: string }[] = [
 	{ tab: 'collections', label: 'User collections' },
 	{ tab: 'publishers', label: 'Publishers' },
+	{ tab: 'developers', label: 'Developers' },
 	{ tab: 'genres', label: 'Genres' },
 	{ tab: 'systems', label: 'Systems' }
 ];
+
+/** C1: each discovery kind's words: the list's aria-label, its pager's label and the nouns in its texts. */
+export const discoveryText: Record<
+	DiscoveryKind,
+	{ label: string; pager: string; singular: string; plural: string }
+> = {
+	publishers: {
+		label: 'Publishers',
+		pager: 'Publisher pages',
+		singular: 'publisher',
+		plural: 'publishers'
+	},
+	developers: {
+		label: 'Developers',
+		pager: 'Developer pages',
+		singular: 'developer',
+		plural: 'developers'
+	},
+	genres: { label: 'Genres', pager: 'Genre pages', singular: 'genre', plural: 'genres' }
+};
 
 /** A discovery tab's URL state; pages are one-based. */
 export interface DiscoveryState {
@@ -49,7 +71,9 @@ function pageParam(params: UrlLike['searchParams'], name: string): number {
 /** The tab a `/collections` URL shows: a bare URL, or any other `tab` value, is User collections. */
 export function collectionsTab(url: UrlLike): CollectionsTab {
 	const tab = url.searchParams.get('tab');
-	return tab === 'publishers' || tab === 'genres' || tab === 'systems' ? tab : 'collections';
+	return tab === 'publishers' || tab === 'developers' || tab === 'genres' || tab === 'systems'
+		? tab
+		: 'collections';
 }
 
 /** A discovery tab's state from its URL, or null on User collections and Systems. A malformed key selects nothing. */
@@ -65,6 +89,20 @@ export function discoveryState(url: UrlLike): DiscoveryState | null {
 		...withFind(findParam(url.searchParams))
 	};
 }
+
+/**
+ * P3: the metadata value a discovery tab's `?name=` asks for (trimmed), or null without one, on other tabs, or when a
+ * well-formed `key` is already there (the key wins).
+ */
+export function discoveryName(url: UrlLike): string | null {
+	const state = discoveryState(url);
+	const name = url.searchParams.get('name')?.trim();
+	return state && !state.key && name ? name : null;
+}
+
+/** P3: the `find` fallback for a name with no group: cut to {@link maxFind}, as a hand-edited `find` is. */
+export const nameAsFind = (name: string): string | undefined =>
+	name.trim().slice(0, maxFind).trim() || undefined;
 
 /** Adds `find` only when set, so states without a search keep their exact shape. */
 const withFind = (find: string | undefined) => (find ? { find } : {});
@@ -122,6 +160,9 @@ export const discoveryApi = {
 		if (params.q) search.set('q', params.q);
 		return api.get<Page<DiscoveryGroup>>(`/api/discovery/${kind}?${search}`);
 	},
+	/** P4: the key of the group named `name`; 404 when no game has it. */
+	key: (kind: DiscoveryKind, name: string) =>
+		api.get<{ key: string }>(`/api/discovery/${kind}/key?${new URLSearchParams({ name })}`),
 	/** The group's games across systems; 404 when no game has that value any more. */
 	games: (kind: DiscoveryKind, key: string, params: { page: number; pageSize: number }) => {
 		const search = new URLSearchParams({ key });
@@ -288,6 +329,8 @@ export type LogoKind = DiscoveryKind | 'systems';
 const starterByKind: Record<LogoKind, Map<string, string>> = {
 	publishers: new Map(starterPublishers.map((p) => [p.key, `/publishers/${p.file}`])),
 	genres: new Map(starterGenres.map((g) => [g.key, `/genres/${g.file}`])),
+	// C2: no starter art for developers; their shared logo, else the text banner.
+	developers: new Map(),
 	systems: new Map()
 };
 

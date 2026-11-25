@@ -124,6 +124,17 @@ describe('DiscoveryGames (discovery B2)', () => {
 		);
 	});
 
+	it('developers: the heading and the gone-group text name a developer (C1)', async () => {
+		answers[url('developers')] = [{ status: 404, body: { status: 404, code: 'NotFound' } }];
+		render(DiscoveryGames, { view: view({ kind: 'developers' }), name: null, onpage: vi.fn() });
+
+		expect(await screen.findByText('No games have this developer any more.')).toBeTruthy();
+		expect(screen.getByRole('heading', { name: /Selected developer/ })).toBeTruthy();
+		expect(screen.getByRole('link', { name: 'Back to all developers' }).getAttribute('href')).toBe(
+			'/collections?tab=developers'
+		);
+	});
+
 	it('pages through the URL', async () => {
 		const onpage = vi.fn();
 		answers[url('publishers', '&page=2')] = [

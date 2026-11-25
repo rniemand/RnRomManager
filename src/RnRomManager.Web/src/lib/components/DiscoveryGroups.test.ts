@@ -128,6 +128,26 @@ describe('DiscoveryGroups (discovery B2)', () => {
 		expect(banner(/Sega/)).toBe('Sega');
 	});
 
+	it('developers: list and pager labels, search, and no-match text name developers (C1)', async () => {
+		answers['/api/discovery/developers?pageSize=20&q=zz'] = [{ status: 200, body: pageOf([]) }];
+		answers['/api/discovery/developers?pageSize=20'] = [
+			{
+				status: 200,
+				body: pageOf([{ key: keyOf(1), name: 'Bullet-Proof', gameCount: 2, logoUrl: null }])
+			}
+		];
+		const { rerender } = render(DiscoveryGroups, {
+			view: state({ kind: 'developers' }),
+			onpage: vi.fn()
+		});
+
+		expect(await screen.findByRole('list', { name: 'Developers' })).toBeTruthy();
+		expect(screen.getByLabelText('Search developers')).toBeTruthy();
+		expect(screen.getByRole('navigation', { name: 'Developer pages' })).toBeTruthy();
+		await rerender({ view: state({ kind: 'developers', find: 'zz' }), onpage: vi.fn() });
+		expect(await screen.findByText('No developers match “zz”.')).toBeTruthy();
+	});
+
 	it('genres show their shared logo, else starter art, else a text banner', async () => {
 		const puzzle = 'd4fba09b856cc0aa0f2b643f7d9ca20d309dc89b5e562f1229809c51f1e20dcc';
 		const shared = `/api/discovery/genres/logo?key=${keyOf(2)}&v=3`;
@@ -186,6 +206,7 @@ describe('DiscoveryGroups (discovery B2)', () => {
 
 	it.each([
 		['publishers', 'No games have publishers yet.'],
+		['developers', 'No games have developers yet.'],
 		['genres', 'No games have genres yet.']
 	] as const)('an empty %s index says so', async (kind, message) => {
 		answers[`/api/discovery/${kind}?pageSize=20`] = [{ status: 200, body: pageOf([]) }];

@@ -291,6 +291,7 @@ describe('LogoModal (B19)', () => {
 
 	it.each([
 		['genres', hudson],
+		['developers', hudson],
 		['systems', 'gb']
 	] as const)('uploads and removes a %s logo on its own route', async (kind, key) => {
 		const onchanged = vi.fn();
