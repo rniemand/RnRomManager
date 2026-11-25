@@ -189,7 +189,11 @@
 
 <svelte:head><title>{collection?.name ?? 'Collection'} · RnRomManager</title></svelte:head>
 
-<p><a href={resolve('/collections')}>← Collections</a></p>
+<div class="mb-3">
+	<a class="btn btn-sm btn-outline-primary" href={resolve('/collections')}
+		><Icon name="back" /> Back to Collections</a
+	>
+</div>
 
 {#if error}
 	<ErrorAlert {error} onretry={() => reloadDetail++} />
@@ -248,6 +252,7 @@
 					id="add-game"
 					label="Add games"
 					excludeCollection={id}
+					overlay
 					bind:selected={picked}
 				/>
 			{/key}
