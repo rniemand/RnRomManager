@@ -139,7 +139,7 @@ API contracts change only additively: `plus4` appears in `/api/systems` and `/ap
 - **Licensing:** the core embeds Commodore ROMs. It's never bundled, vendored or committed, as for the other VICE cores.
 
 ## Steps
-- [ ] **1. Handler and header**: B1–B4, B6, B7 (`BrowserCore` value only). Files: `Plus4Handler.cs`, `C64Header.cs`, `Resources/boxart/plus4.svg`, `plus4.png`, boxart `README.md`. It isn't registered yet. Tests:
+- [x] **1. Handler and header**: B1–B4, B6, B7 (`BrowserCore` value only). Files: `Plus4Handler.cs`, `C64Header.cs`, `Resources/boxart/plus4.svg`, `plus4.png`, boxart `README.md`. It isn't registered yet. Tests:
   - `tests/RnRomManager.Systems.Commodore.Tests/Plus4HandlerTests.cs` (new, modelled on `C128HandlerTests`):
     - `Plus4_Contract`: `(Id, DisplayName, ShortName, Family, DatName)` = `("plus4", "Commodore Plus/4", "Plus/4", "plus4", "Commodore - Plus-4")`; exact `RomExtensions`; sizes `(256L, 8L * 1024 * 1024)`; `(EmbedRomsInZip, DatSource, DatFolder)` = `(true, DatSource.Libretro, DatKind.NoIntro)`; empty `MetadatKinds`; `(FileSets, LegacyEmbeddedRoms, KeepsSourceExtension)` = `(false, false, true)`; `BrowserCore` `vice_xplus4`.
     - `ReadHeader_ReadsAPlus4Tape`: a 20-byte `C16-TAPE-RAW` with version 1 at 0x0C gives `ClassifiedSystemId` `plus4`, `IsPlausible` true, `format` `tap` and `version` 1.

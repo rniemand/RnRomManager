@@ -4,7 +4,7 @@ using RnRomManager.Core.Systems;
 
 namespace RnRomManager.Systems.Commodore;
 
-/// <summary>Spec B2: the four optional C64 container headers, recognised by their magic at offset 0.</summary>
+/// <summary>Spec B2: the four optional C64 container headers and VICE's C16/Plus/4 tape, recognised by their magic at offset 0.</summary>
 internal static class C64Header
 {
     public static RomHeader? Read(ReadOnlySpan<byte> rom, string systemId)
@@ -26,6 +26,8 @@ internal static class C64Header
             });
         }
         if (rom.Length >= 20 && rom.StartsWith("C64-TAPE-RAW"u8))
+            return Plain(systemId, "tap", rom[0x0C]);
+        if (rom.Length >= 20 && rom.StartsWith("C16-TAPE-RAW"u8))
             return Plain(systemId, "tap", rom[0x0C]);
         if (rom.Length >= 12 && rom.StartsWith("GCR-1541"u8))
             return new RomHeader(systemId, null, true, new Dictionary<string, object?>

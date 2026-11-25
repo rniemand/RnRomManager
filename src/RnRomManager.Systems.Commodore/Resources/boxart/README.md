@@ -1,6 +1,6 @@
 # Default box art
 
-`c64.svg`, `c128.svg`, `pet.svg`, `vic20.svg` and `amiga.svg` are the sources (made for this project, MIT).
+`c64.svg`, `c128.svg`, `pet.svg`, `plus4.svg`, `vic20.svg` and `amiga.svg` are the sources (made for this project, MIT).
 The embedded PNG is a 512×512 render (spec §6.1). After editing the SVG, re-export it with headless Edge or Chrome:
 
 ```bash

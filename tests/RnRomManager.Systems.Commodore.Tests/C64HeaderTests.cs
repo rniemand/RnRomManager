@@ -78,6 +78,19 @@ public class C64HeaderTests
     }
 
     [Test]
+    public void C16Tap_ReadsFormatAndVersion()
+    {
+        var bytes = WithMagic("C16-TAPE-RAW", 20);
+        bytes[0x0C] = 1;
+
+        var header = Handler.ReadHeader(bytes)!;
+
+        Assert.That((header.ClassifiedSystemId, header.Title, header.IsPlausible), Is.EqualTo(("c64", (string?)null, true)));
+        Assert.That(header.Fields, Is.EqualTo(new Dictionary<string, object?> { ["format"] = "tap", ["version"] = 1 }));
+        Assert.That(header.Fields.Keys, Is.EqualTo(new[] { "format", "version" }));
+    }
+
+    [Test]
     public void G64_ReadsFormatVersionAndTracks()
     {
         var bytes = WithMagic("GCR-1541", 12);
@@ -114,6 +127,7 @@ public class C64HeaderTests
 
     [TestCase("C64 CARTRIDGE   ", 63)]
     [TestCase("C64-TAPE-RAW", 19)]
+    [TestCase("C16-TAPE-RAW", 19)]
     [TestCase("GCR-1541", 11)]
     [TestCase("MNIB-1541-RAW", 13)]
     public void OneByteShortOfTheMinimum_IsNull(string magic, int size) =>
