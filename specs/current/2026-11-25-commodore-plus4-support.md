@@ -1,6 +1,6 @@
 ---
 title: Commodore Plus/4 support
-status: ready
+status: in-progress
 created: 2026-11-25
 ---
 
