@@ -264,6 +264,7 @@ API contracts change only additively: `plus4` appears in `/api/systems` and `/ap
 - 2026-11-25 Deep review pass 4: step 1's test inputs pinned (the `.bin` seed, a native `C264 CARTRIDGE  ` `.crt` as C128's test does, `C16Tap_ReadsFormatAndVersion`'s shape); every other test that walks all registered systems derives its list from the registry (reviewer)
 - 2026-11-25 e2e? → none: the e2e stack has no VICE core to play with, the DAT/Review flows are covered by existing e2e, and sets by the Amiga API and vitest cases this spec mirrors (code)
 - 2026-11-25 Step 2: IGDB's platform page refuses automated fetches (403), so the id 94 couldn't be checked; kept as specced, the maintainer to confirm (code)
+- 2026-11-25 Finish: `IngestSeederTests.Sets_HaveExpectedFilesArchivesAndReadyAges` counts the seeded DAT files; the new No-Intro fixture adds 5 (DAT plus its metadat files, as VIC-20's), so 147 → 152 (code)
 
 ## Kickoff prompt
 ```text
