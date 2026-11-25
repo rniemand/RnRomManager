@@ -12,7 +12,9 @@ import {
 	discoveryApi,
 	discoveryText,
 	isDiscoveryKey,
+	listSearch,
 	readCollectionsTab,
+	restoredSearch,
 	saveCollectionsTab,
 	nameAsFind,
 	logoSources,
@@ -489,5 +491,38 @@ describe('remembered collections tabs (G8)', () => {
 		vi.stubGlobal('localStorage', { getItem: fail, setItem: fail, removeItem: fail });
 		expect(() => saveCollectionsTab('developers', 'find=x')).not.toThrow();
 		expect(readCollectionsTab('developers')).toBe('');
+	});
+});
+
+describe('restoring a tab (G8)', () => {
+	const at = (search: string) => new URL(`http://x/collections${search}`);
+
+	it('listSearch keeps only find, sort and dir', () => {
+		expect(listSearch(`?tab=genres&key=${key}&groupPage=2&find=rpg&sort=games`)).toBe(
+			'find=rpg&sort=games'
+		);
+		expect(listSearch('?tab=systems&system=gb')).toBe('');
+	});
+
+	it('rebuilds a bare tab URL with the saved params, at group page 1', () => {
+		expect(restoredSearch('genres', at('?tab=genres&groupPage=3'), 'find=rpg&dir=desc')).toBe(
+			'?tab=genres&find=rpg&dir=desc'
+		);
+		expect(restoredSearch('systems', at('?tab=systems'), 'sort=games&key=x')).toBe(
+			'?tab=systems&sort=games'
+		);
+	});
+
+	it('leaves URLs with their own list params or a selection, and empty saves, alone', () => {
+		for (const search of ['&find=a', '&sort=games', '&dir=desc', `&key=${key}`, '&name=Sega'])
+			expect(
+				restoredSearch('publishers', at(`?tab=publishers${search}`), 'find=x')
+			).toBeUndefined();
+		expect(restoredSearch('systems', at('?tab=systems&system=gb'), 'find=x')).toBeUndefined();
+		expect(restoredSearch('publishers', at('?tab=publishers'), '')).toBeUndefined();
+	});
+
+	it('a saved value that adds nothing is malformed', () => {
+		expect(restoredSearch('publishers', at('?tab=publishers'), 'sort=bogus&dir=asc')).toBe('');
 	});
 });

@@ -199,6 +199,47 @@ export const readCollectionsTab = (tab: RememberedTab): string => tabMemory(tab)
 export const saveCollectionsTab = (tab: RememberedTab, search: string): void =>
 	tabMemory(tab).save(search);
 
+/** G8: the list params a tab remembers. */
+const listParams = ['find', 'sort', 'dir'] as const;
+
+/** G8: just the list params of `search` (a query string, `?` optional), e.g. `find=sega&sort=games`; '' when none. */
+export function listSearch(search: string): string {
+	const all = new URLSearchParams(search);
+	const kept = new URLSearchParams();
+	for (const name of listParams) {
+		const value = all.get(name);
+		if (value) kept.set(name, value);
+	}
+	return String(kept);
+}
+
+/**
+ * G8: the search to restore on `url` from the tab's `saved` value: undefined when the URL has its own list params or a
+ * selection (`key`/`name`, or `system`) or nothing is saved; '' when the saved value adds none of `find`/`sort`/`dir`
+ * (malformed); else the rebuilt query (`?…`), discovery tabs at group page 1.
+ */
+export function restoredSearch(
+	tab: RememberedTab,
+	url: UrlLike & { readonly search: string },
+	saved: string
+): string | undefined {
+	const blockers = tab === 'systems' ? ['system'] : ['key', 'name'];
+	if ([...listParams, ...blockers].some((name) => url.searchParams.get(name) !== null)) return;
+	const savedParams = new URLSearchParams(saved);
+	if (savedParams.size === 0) return;
+	const params = new URLSearchParams(url.search);
+	for (const name of listParams) {
+		const value = savedParams.get(name);
+		if (value !== null) params.set(name, value);
+	}
+	const merged = { searchParams: params };
+	const search =
+		tab === 'systems'
+			? systemsSearch(systemsState(merged))
+			: discoverySearch({ ...discoveryState(merged)!, groupPage: 1 });
+	return listSearch(search) ? search : '';
+}
+
 /** B3: `/api/discovery/{kind}` reads. */
 export const discoveryApi = {
 	groups: (

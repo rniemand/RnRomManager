@@ -17,13 +17,14 @@
 		discoveryState,
 		discoveryText,
 		nameAsFind,
+		listSearch,
 		readCollectionsTab,
+		restoredSearch,
 		saveCollectionsTab,
 		systemsSearch,
 		systemsState,
 		tabSearch,
 		type DiscoveryState,
-		type RememberedTab,
 		type SystemsState
 	} from '#lib/discovery.js';
 	import CollectionModal from '#lib/components/CollectionModal.svelte';
@@ -75,49 +76,21 @@
 	 */
 	function goDiscovery(next: DiscoveryState, remember = false): void {
 		const search = discoverySearch(next);
-		if (remember) rememberTab(next.kind, search);
+		if (remember) saveCollectionsTab(next.kind, listSearch(search));
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
 		void goto(`/collections${search}`, { replace: true, reset: false });
 	}
 
-	/** G8: the list params a tab remembers. */
-	const listParams = ['find', 'sort', 'dir'] as const;
-
-	/** G8: saves just the list params of `search` ('' when it has none, which forgets the tab). */
-	function rememberTab(tab: RememberedTab, search: string): void {
-		const all = new URLSearchParams(search);
-		const kept = new URLSearchParams();
-		for (const name of listParams) {
-			const value = all.get(name);
-			if (value) kept.set(name, value);
-		}
-		saveCollectionsTab(tab, String(kept));
-	}
-
 	/**
-	 * G8: a tab URL without its own list params or selection (`key`/`name`, or `system`) gets the tab's remembered
-	 * search and sort, at group page 1; a saved value that adds none of them is malformed and forgotten.
+	 * G8: a tab URL without its own list params or selection gets the tab's remembered search and sort; a malformed
+	 * saved value is forgotten.
 	 */
 	$effect(() => {
-		const url = page.url;
 		const current = tab;
 		if (current === 'collections') return;
-		const blockers = current === 'systems' ? ['system'] : ['key', 'name'];
-		if ([...listParams, ...blockers].some((name) => url.searchParams.has(name))) return;
-		const saved = new URLSearchParams(readCollectionsTab(current));
-		if (saved.size === 0) return;
-		const params = new URLSearchParams(url.search);
-		for (const name of listParams) {
-			const value = saved.get(name);
-			if (value !== null) params.set(name, value);
-		}
-		const merged = { searchParams: params };
-		const search =
-			current === 'systems'
-				? systemsSearch(systemsState(merged))
-				: discoverySearch({ ...discoveryState(merged)!, groupPage: 1 });
-		const rebuilt = new URLSearchParams(search);
-		if (!listParams.some((name) => rebuilt.has(name))) {
+		const search = restoredSearch(current, page.url, readCollectionsTab(current));
+		if (search === undefined) return;
+		if (!search) {
 			saveCollectionsTab(current, '');
 			return;
 		}
@@ -168,7 +141,7 @@
 
 	function goSystems(next: SystemsState, remember = false): void {
 		const search = systemsSearch(next);
-		if (remember) rememberTab('systems', search);
+		if (remember) saveCollectionsTab('systems', listSearch(search));
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
 		void goto(`/collections${search}`, { replace: true, reset: false });
 	}
