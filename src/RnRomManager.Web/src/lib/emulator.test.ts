@@ -126,6 +126,31 @@ describe('canPlay on mednafen_pce (TurboGrafx-CD B5)', () => {
 	});
 });
 
+describe('canPlay on mednafen_pcfx (PC-FX X6)', () => {
+	const file = { id: 1, fileName: 'Disc (Japan).cue', sizeBytes: 100 } as ReleaseFile;
+
+	it('plays a cue set whose main file is a .bin', () => {
+		expect(
+			canPlay(
+				{ browserCore: 'mednafen_pcfx' },
+				{ externalFileName: 'Disc (Japan) (Track 2).bin', files: [file] }
+			)
+		).toBe(true);
+	});
+
+	it('plays an external .chd', () => {
+		expect(
+			canPlay({ browserCore: 'mednafen_pcfx' }, { externalFileName: 'Disc (Japan).chd' })
+		).toBe(true);
+	});
+
+	it.each([null, []])('refuses a lone external .BIN (files %j)', (files) => {
+		expect(
+			canPlay({ browserCore: 'mednafen_pcfx' }, { externalFileName: 'Disc (Japan).BIN', files })
+		).toBe(false);
+	});
+});
+
 describe('canPlay on virtualjaguar', () => {
 	const jaguar = (fileName: string, sizeBytes: number) =>
 		canPlay({ browserCore: 'virtualjaguar' }, { externalFileName: null, fileName, sizeBytes });
@@ -178,7 +203,7 @@ describe('S8 Nintendo DS', () => {
 		expect(canPlay({ browserCore: 'desmume' }, { externalFileName: 'Quest.(USA).nds' })).toBe(true);
 	});
 
-	it.each(['pcsx_rearmed', 'ppsspp', 'yabause', 'genesis_plus_gx', 'opera'])(
+	it.each(['pcsx_rearmed', 'ppsspp', 'yabause', 'genesis_plus_gx', 'opera', 'mednafen_pcfx'])(
 		'usesPlayDisc is true for an external %s release',
 		(core) => {
 			expect(usesPlayDisc(core, { externalFileName: 'Disc (USA).cue' })).toBe(true);

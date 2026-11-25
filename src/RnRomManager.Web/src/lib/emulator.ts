@@ -21,7 +21,8 @@ export const externalBrowserCores: readonly string[] = [
 	'dosbox_pure',
 	'azahar',
 	'mame2003_plus',
-	'fbneo'
+	'fbneo',
+	'mednafen_pcfx'
 ];
 
 /** S8: the cores whose external releases load through play-disc; DeSmuME loads an external DS ROM from `/download`. */
@@ -31,7 +32,8 @@ export const playDiscCores: readonly string[] = [
 	'yabause',
 	'genesis_plus_gx',
 	'opera',
-	'mednafen_pce'
+	'mednafen_pce',
+	'mednafen_pcfx'
 ];
 
 /** S8: whether the play URL carries `disc=1`: an external release of a play-disc core. */
@@ -61,7 +63,8 @@ export function opensInNewTab(core: string | null): boolean {
  * or PSP release is external and plays anyway, and (Saturn B6) a Saturn bin/cue disc; other external releases (Switch,
  * GameCube…) don't. Browser play format gaps N5: a Saturn .nrg plays (play-disc sends a generated cue). CHD B5: a standalone .chd plays like an .iso (PlayStation, Saturn, Sega CD).
  * TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, so on `mednafen_pce` an external .bin plays only with its
- * set files (the cue); the API's quick play applies the same rule. Jaguar: see `jaguarRomLoads`. Amiga: PUAE's
+ * set files (the cue); the API's quick play applies the same rule. PC-FX X6: Beetle PC-FX can't open a lone .bin
+ * either, so `mednafen_pcfx` follows the same rule. Jaguar: see `jaguarRomLoads`. Amiga: PUAE's
  * WebAssembly build has no capsimg, so an .ipf never plays (the API's quick play agrees). 3DS P3: see `azaharRomLoads`.
  */
 export function canPlay(
@@ -74,7 +77,7 @@ export function canPlay(
 		game.browserCore !== null &&
 		(external === null || externalBrowserCores.includes(game.browserCore)) &&
 		!(
-			game.browserCore === 'mednafen_pce' &&
+			(game.browserCore === 'mednafen_pce' || game.browserCore === 'mednafen_pcfx') &&
 			(external?.endsWith('.bin') ?? false) &&
 			!rom.files?.length
 		) &&

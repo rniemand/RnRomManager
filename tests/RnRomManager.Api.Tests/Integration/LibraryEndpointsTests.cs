@@ -532,6 +532,7 @@ public partial class LibraryEndpointsTests
     [TestCase("segacd", true, true, "genesis_plus_gx")]
     [TestCase("3do", true, true, "opera")]
     [TestCase("tgcd", true, true, "mednafen_pce")]
+    [TestCase("pcfx", true, true, "mednafen_pcfx")]
     [TestCase("c64", false, true, "vice_x64sc")]
     [TestCase("pet", false, true, "vice_xpet")]
     [TestCase("vic20", false, true, "vice_xvic")]
@@ -562,13 +563,17 @@ public partial class LibraryEndpointsTests
     public Task Games_QuickPlay_AChdPrimary_IsPlayable(string system, string core) =>
         AssertQuickPlayAsync(system, true, true, core, "x.chd", "x.chd");
 
-    // TurboGrafx-CD B5: Beetle PCE plays a .bin only as a cue set's data track; a lone .chd plays.
-    [TestCase("x.bin", "x.cue", true)]
-    [TestCase("x.bin", null, false)]
-    [TestCase("x.BIN", null, false)]
-    [TestCase("x.chd", null, true)]
-    public Task Games_QuickPlay_TurboGrafxCd_ALoneBinIsNotPlayable(string fileName, string? setFile, bool playable) =>
-        AssertQuickPlayAsync("tgcd", true, playable, "mednafen_pce", fileName, fileName, setFile);
+    // TurboGrafx-CD B5, PC-FX X6: Beetle PCE and Beetle PC-FX play a .bin only as a cue set's data track; a lone .chd plays.
+    [TestCase("tgcd", "mednafen_pce", "x.bin", "x.cue", true)]
+    [TestCase("tgcd", "mednafen_pce", "x.bin", null, false)]
+    [TestCase("tgcd", "mednafen_pce", "x.BIN", null, false)]
+    [TestCase("tgcd", "mednafen_pce", "x.chd", null, true)]
+    [TestCase("pcfx", "mednafen_pcfx", "x.bin", "x.cue", true)]
+    [TestCase("pcfx", "mednafen_pcfx", "x.bin", null, false)]
+    [TestCase("pcfx", "mednafen_pcfx", "x.BIN", null, false)]
+    [TestCase("pcfx", "mednafen_pcfx", "x.chd", null, true)]
+    public Task Games_QuickPlay_DiscOnlyCores_ALoneBinIsNotPlayable(string system, string core, string fileName, string? setFile, bool playable) =>
+        AssertQuickPlayAsync(system, true, playable, core, fileName, fileName, setFile);
 
     // Amiga: PUAE's WebAssembly build has no capsimg, so an .ipf primary never plays.
     [TestCase("x.ipf", false)]
@@ -756,6 +761,7 @@ public partial class LibraryEndpointsTests
     [TestCase("amiga", "puae")]
     [TestCase("tg16", "mednafen_pce")]
     [TestCase("tgcd", "mednafen_pce")]
+    [TestCase("pcfx", "mednafen_pcfx")]
     [TestCase("ngp", "mednafen_ngp")]
     [TestCase("ngpc", "mednafen_ngp")]
     [TestCase("n64", "mupen64plus_next")]

@@ -29,15 +29,15 @@ public static class LibraryEndpoints
     /// <summary>
     /// Play B1: the browser cores that play a release stored outside the ZIP: through play-disc (<see cref="PlayDiscCores"/>) PCSX ReARMed for
     /// PlayStation, (PSP B1) PPSSPP for PlayStation Portable, (Saturn B6) Yabause for Saturn and (Sega CD B5) Genesis Plus GX
-    /// for Sega CD, (TurboGrafx-CD B5) Beetle PCE for TurboGrafx-CD. Eligibility is per core, so Genesis Plus GX also accepts an external primary of Mega Drive, a family that
+    /// for Sega CD, (TurboGrafx-CD B5) Beetle PCE for TurboGrafx-CD, (PC-FX X6) Beetle PC-FX for PC-FX. Eligibility is per core, so Genesis Plus GX also accepts an external primary of Mega Drive, a family that
     /// the registry keeps embedded. S8: DeSmuME plays an external DS release from <c>/download</c>, and (MS-DOS P3) DOSBox Pure an
     /// external DOS game ZIP. 3DS P5: azahar plays an external <c>.3ds</c>/<c>.cci</c> from <c>/download</c>. Arcade P5: MAME 2003-Plus an
     /// external set ZIP (<c>.mamez</c>), with its parent and BIOS sets from <c>/romset</c>; FBNeo P3 FinalBurn Neo a <c>.fbneoz</c>/<c>.fbneo7z</c> likewise.
     /// </summary>
-    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "desmume", "mednafen_pce", "dosbox_pure", "azahar", "mame2003_plus", "fbneo" };
+    public static readonly IReadOnlySet<string> ExternalBrowserCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "desmume", "mednafen_pce", "dosbox_pure", "azahar", "mame2003_plus", "fbneo", "mednafen_pcfx" };
 
     /// <summary>S8: the cores whose external releases play through <c>play-disc</c>; any other (DS) loads from <c>/download</c>.</summary>
-    public static readonly IReadOnlySet<string> PlayDiscCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "mednafen_pce" };
+    public static readonly IReadOnlySet<string> PlayDiscCores = new HashSet<string>(StringComparer.Ordinal) { "pcsx_rearmed", "ppsspp", "yabause", "genesis_plus_gx", "opera", "mednafen_pce", "mednafen_pcfx" };
 
     /// <summary>B10: <c>&lt;title&gt;-&lt;imageId&gt;.&lt;ext&gt;</c>; the suffix is added after sanitizing (which cuts to 180), so it is never lost.</summary>
     public static string ImageDownloadName(string displayTitle, ImageRow image)
@@ -947,8 +947,8 @@ public static class LibraryEndpoints
         var core = systems.ById(game.SystemId)?.BrowserCore;
         var playable = core is not null && game.PrimaryRomId is not null
             && (!game.PrimaryIsExternal || ExternalBrowserCores.Contains(core))
-            // TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, so only a cue set's .bin plays.
-            && !(core == "mednafen_pce" && game.PrimaryIsExternal && !game.PrimaryHasFiles
+            // TurboGrafx-CD B5: Beetle PCE runs a lone .bin as a HuCard, and (PC-FX X6) Beetle PC-FX can't open one, so only a cue set's .bin plays.
+            && !(core is "mednafen_pce" or "mednafen_pcfx" && game.PrimaryIsExternal && !game.PrimaryHasFiles
                  && game.PrimaryRomFileName?.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) == true)
             // Amiga: PUAE's WebAssembly build has no capsimg, so an .ipf never plays.
             && !(core == "puae" && game.PrimaryRomFileName?.EndsWith(".ipf", StringComparison.OrdinalIgnoreCase) == true)
