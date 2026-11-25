@@ -54,7 +54,7 @@ describe('Navbar', () => {
 		const links = [...document.querySelectorAll('ul.me-auto a.nav-link')].map((a) =>
 			a.textContent?.trim()
 		);
-		expect(links).toEqual(['Library', 'Collections', 'Reports', 'ROM Tools']);
+		expect(links).toEqual(['Library', 'Collections', 'Timeline', 'Reports', 'ROM Tools']);
 		expect(screen.getByRole('link', { name: 'ROM Tools' }).getAttribute('href')).toBe('/ingestion');
 		expect(document.querySelector('ul.me-auto .dropdown-menu')).toBeNull();
 	});
@@ -78,14 +78,14 @@ describe('Navbar', () => {
 		expect(screen.getByRole('link', { name: 'ROM Tools' }).querySelector('.badge')).toBeNull();
 	});
 
-	it('a non-admin sees Library, Collections, and Reports (RP1)', () => {
+	it('a non-admin sees Library, Collections, Timeline and Reports (RP1, T1)', () => {
 		render(Navbar, {
 			me: { id: 1, username: 'u', roles: [], mustChangePassword: false },
 			reviewCount: null,
 			onlogout: () => {}
 		});
 		const links = [...document.querySelectorAll('a.nav-link')].map((a) => a.textContent?.trim());
-		expect(links).toEqual(['Library', 'Collections', 'Reports']);
+		expect(links).toEqual(['Library', 'Collections', 'Timeline', 'Reports']);
 		expect(screen.queryByRole('link', { name: 'ROM Tools' })).toBeNull();
 		expect(screen.getByRole('link', { name: /Reports/ }).getAttribute('href')).toBe('/reports');
 		expect(screen.getByRole('link', { name: /Collections/ }).getAttribute('href')).toBe(
@@ -326,7 +326,7 @@ describe('Navbar', () => {
 			const main = [...document.querySelectorAll('ul.me-auto a.nav-link')].map((a) =>
 				a.textContent?.trim()
 			);
-			expect(main).toEqual(['Library', 'Collections', 'Reports']);
+			expect(main).toEqual(['Library', 'Collections', 'Timeline', 'Reports']);
 		});
 	});
 
