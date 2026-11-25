@@ -165,6 +165,7 @@ describe('parsePlayParams', () => {
 		'vice_x64sc',
 		'vice_xpet',
 		'vice_xvic',
+		'vice_x128',
 		'puae',
 		'mednafen_pce',
 		'mednafen_ngp',
@@ -746,6 +747,25 @@ describe('Commodore VIC-20', () => {
 		});
 		expect(operatorCoreError('vice_xvic', 404)).toBe(
 			'Commodore VIC-20 games need the VICE (VIC-20) core files: ask an Admin to set them up (Emulator:ViceCorePath).'
+		);
+	});
+});
+
+describe('Commodore 128', () => {
+	it('is an operator core sharing the VICE folder', () => {
+		expect(isOperatorCore('vice_x128')).toBe(true);
+		expect(hidesCoreChooser('vice_x128')).toBe(true);
+		expect(controlSchemeFor('vice_x128', 'X.d64')).toBeNull();
+		expect(operatorCorePaths('vice_x128')).toEqual({
+			'vice_x128-wasm.data': '/api/emulator/cores/vice_x128/vice_x128-wasm.data',
+			'vice_x128-legacy-wasm.data': '/api/emulator/cores/vice_x128/vice_x128-legacy-wasm.data',
+			'vice_x128.json': '/api/emulator/cores/vice_x128/vice_x128.json'
+		});
+		expect(operatorCoreError('vice_x128', 404)).toBe(
+			'Commodore 128 games need the VICE (C128) core files: ask an Admin to set them up (Emulator:ViceCorePath).'
+		);
+		expect(operatorCoreError('vice_x128', 409)).toBe(
+			"The VICE (C128) core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:ViceCorePath)."
 		);
 	});
 });
