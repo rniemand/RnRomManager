@@ -463,11 +463,44 @@
 
 <svelte:head><title>{game?.displayTitle ?? 'Game'} · RnRomManager</title></svelte:head>
 
-<p>
+<!-- P2: each value links to its Collections group (resolved by name there); none is a plain dash. -->
+{#snippet metadataLinks(tab: 'developers' | 'publishers' | 'genres', names: string[])}
+	{#each names as name, i (i)}{i > 0 ? ', ' : ''}<a
+			href="{resolve('/collections')}?{new URLSearchParams({ tab, name })}">{name}</a
+		>{:else}—{/each}
+{/snippet}
+
+<!-- P1: the top row; the game's own links follow Back to Library once it has loaded. -->
+<div class="d-flex flex-wrap gap-2 mb-3">
 	<a class="btn btn-sm btn-outline-primary" href={resolve('/')}
 		><Icon name="back" /> Back to Library</a
 	>
-</p>
+	{#if game}
+		<!-- External links: resolve() is for app routes. -->
+		<!-- eslint-disable svelte/no-navigation-without-resolve -->
+		<a
+			class="btn btn-sm btn-outline-secondary"
+			href={googleSearchUrl(gameSearchQuery(game))}
+			target="_blank"
+			rel="noopener noreferrer"><Icon name="google" /> Google</a
+		>
+		<button
+			type="button"
+			class="btn btn-sm btn-outline-secondary"
+			bind:this={emulatorsButton}
+			onclick={() => (emulatorsOpen = true)}><Icon name="emulators" /> Emulators</button
+		>
+		{#if game.igdbConfigured && game.igdbId !== null && game.igdbId > 0}
+			<a
+				class="btn btn-sm btn-outline-secondary"
+				href="/api/igdb/games/{game.igdbId}/page"
+				target="_blank"
+				rel="noopener noreferrer"><Icon name="external" /> View on IGDB</a
+			>
+		{/if}
+		<!-- eslint-enable svelte/no-navigation-without-resolve -->
+	{/if}
+</div>
 
 {#if error}
 	<ErrorAlert {error} onretry={() => reload++} />
@@ -562,15 +595,15 @@
 						</tr>
 						<tr>
 							<th scope="row" class="fw-normal text-body-secondary">Developers</th>
-							<td class="text-break">{list(game.developers)}</td>
+							<td class="text-break">{@render metadataLinks('developers', game.developers)}</td>
 						</tr>
 						<tr>
 							<th scope="row" class="fw-normal text-body-secondary">Publishers</th>
-							<td class="text-break">{list(game.publishers)}</td>
+							<td class="text-break">{@render metadataLinks('publishers', game.publishers)}</td>
 						</tr>
 						<tr>
 							<th scope="row" class="fw-normal text-body-secondary">Genres</th>
-							<td class="text-break">{list(game.genres)}</td>
+							<td class="text-break">{@render metadataLinks('genres', game.genres)}</td>
 						</tr>
 					</tbody>
 				</table>
@@ -643,15 +676,6 @@
 						</ul>
 					</div>
 				{/if}
-				<!-- External link: resolve() is for app routes. -->
-				<!-- eslint-disable svelte/no-navigation-without-resolve -->
-				<a
-					class="btn btn-sm btn-outline-secondary"
-					href={googleSearchUrl(gameSearchQuery(game))}
-					target="_blank"
-					rel="noopener noreferrer"><Icon name="google" /> Google</a
-				>
-				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 				<button
 					type="button"
 					class="btn btn-sm btn-outline-secondary"
@@ -659,12 +683,6 @@
 				>
 					<Icon name="collections" /> Collections
 				</button>
-				<button
-					type="button"
-					class="btn btn-sm btn-outline-secondary"
-					bind:this={emulatorsButton}
-					onclick={() => (emulatorsOpen = true)}><Icon name="emulators" /> Emulators</button
-				>
 				{#if fromMissingMetadata && auth.isAdmin}
 					<button
 						type="button"
