@@ -17,10 +17,13 @@
 		discoveryState,
 		discoveryText,
 		nameAsFind,
+		readCollectionsTab,
+		saveCollectionsTab,
 		systemsSearch,
 		systemsState,
 		tabSearch,
 		type DiscoveryState,
+		type RememberedTab,
 		type SystemsState
 	} from '#lib/discovery.js';
 	import CollectionModal from '#lib/components/CollectionModal.svelte';
@@ -66,11 +69,61 @@
 	/** Group names seen in the group list, by key, for the games heading (the API's games page has none). */
 	const groupNames = $state<Record<string, string>>({});
 
-	/** Paging within a discovery tab replaces the history entry; selecting a group is a link (a new entry). */
-	function goDiscovery(next: DiscoveryState): void {
+	/**
+	 * Paging within a discovery tab replaces the history entry; selecting a group is a link (a new entry). G8: the user's
+	 * own search, sort and Clear pass `remember`, so the tab keeps them in this browser.
+	 */
+	function goDiscovery(next: DiscoveryState, remember = false): void {
+		const search = discoverySearch(next);
+		if (remember) rememberTab(next.kind, search);
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-		void goto(`/collections${discoverySearch(next)}`, { replace: true, reset: false });
+		void goto(`/collections${search}`, { replace: true, reset: false });
 	}
+
+	/** G8: the list params a tab remembers. */
+	const listParams = ['find', 'sort', 'dir'] as const;
+
+	/** G8: saves just the list params of `search` ('' when it has none, which forgets the tab). */
+	function rememberTab(tab: RememberedTab, search: string): void {
+		const all = new URLSearchParams(search);
+		const kept = new URLSearchParams();
+		for (const name of listParams) {
+			const value = all.get(name);
+			if (value) kept.set(name, value);
+		}
+		saveCollectionsTab(tab, String(kept));
+	}
+
+	/**
+	 * G8: a tab URL without its own list params or selection (`key`/`name`, or `system`) gets the tab's remembered
+	 * search and sort, at group page 1; a saved value that adds none of them is malformed and forgotten.
+	 */
+	$effect(() => {
+		const url = page.url;
+		const current = tab;
+		if (current === 'collections') return;
+		const blockers = current === 'systems' ? ['system'] : ['key', 'name'];
+		if ([...listParams, ...blockers].some((name) => url.searchParams.has(name))) return;
+		const saved = new URLSearchParams(readCollectionsTab(current));
+		if (saved.size === 0) return;
+		const params = new URLSearchParams(url.search);
+		for (const name of listParams) {
+			const value = saved.get(name);
+			if (value !== null) params.set(name, value);
+		}
+		const merged = { searchParams: params };
+		const search =
+			current === 'systems'
+				? systemsSearch(systemsState(merged))
+				: discoverySearch({ ...discoveryState(merged)!, groupPage: 1 });
+		const rebuilt = new URLSearchParams(search);
+		if (!listParams.some((name) => rebuilt.has(name))) {
+			saveCollectionsTab(current, '');
+			return;
+		}
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
+		void goto(`/collections${search}`, { replace: true, reset: false });
+	});
 
 	/**
 	 * P3: a game page's metadata link (`?tab=<kind>&name=<value>`) opens the group: the name's key replaces it, or `find`
@@ -113,9 +166,11 @@
 		systemLogoOpen = true;
 	}
 
-	function goSystems(next: SystemsState): void {
+	function goSystems(next: SystemsState, remember = false): void {
+		const search = systemsSearch(next);
+		if (remember) rememberTab('systems', search);
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
-		void goto(`/collections${systemsSearch(next)}`, { replace: true, reset: false });
+		void goto(`/collections${search}`, { replace: true, reset: false });
 	}
 
 	$effect(() => {
@@ -290,16 +345,20 @@
 				view={discovery}
 				onpage={(groupPage) => goDiscovery({ ...discovery, groupPage })}
 				onselected={(group) => (groupNames[group.key] = group.name)}
-				onfind={(find) => goDiscovery({ ...discovery, groupPage: 1, find: find || undefined })}
-				onsort={(sort, dir) => goDiscovery({ ...discovery, groupPage: 1, sort, dir })}
+				onfind={(find) =>
+					goDiscovery({ ...discovery, groupPage: 1, find: find || undefined }, true)}
+				onsort={(sort, dir) => goDiscovery({ ...discovery, groupPage: 1, sort, dir }, true)}
 				onclear={() =>
-					goDiscovery({
-						...discovery,
-						groupPage: 1,
-						find: undefined,
-						sort: undefined,
-						dir: undefined
-					})}
+					goDiscovery(
+						{
+							...discovery,
+							groupPage: 1,
+							find: undefined,
+							sort: undefined,
+							dir: undefined
+						},
+						true
+					)}
 			/>
 		</div>
 		<div class="col-12 col-lg-8">
@@ -335,12 +394,12 @@
 					selected={systemsView.system}
 					onedit={editSystemLogo}
 					find={systemsView.find}
-					onfind={(find) => goSystems({ ...systemsView, find: find || undefined })}
+					onfind={(find) => goSystems({ ...systemsView, find: find || undefined }, true)}
 					sort={systemsView.sort}
 					dir={systemsView.dir}
-					onsort={(sort, dir) => goSystems({ ...systemsView, sort, dir })}
+					onsort={(sort, dir) => goSystems({ ...systemsView, sort, dir }, true)}
 					onclear={() =>
-						goSystems({ ...systemsView, find: undefined, sort: undefined, dir: undefined })}
+						goSystems({ ...systemsView, find: undefined, sort: undefined, dir: undefined }, true)}
 				/>
 			{/if}
 		</div>

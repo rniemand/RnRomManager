@@ -69,7 +69,8 @@ beforeEach(() => {
 	const store = new Map<string, string>();
 	vi.stubGlobal('localStorage', {
 		getItem: (key: string) => store.get(key) ?? null,
-		setItem: (key: string, value: string) => void store.set(key, value)
+		setItem: (key: string, value: string) => void store.set(key, value),
+		removeItem: (key: string) => void store.delete(key)
 	});
 	vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
 		const key = `${init?.method ?? 'GET'} ${url}`;
@@ -804,5 +805,146 @@ describe('collections search (B16)', () => {
 			reset: false
 		});
 		await vi.waitFor(() => expect(order()).toEqual(['Game Boy', 'NES']));
+	});
+});
+
+describe('remembered tab search and sort (G8)', () => {
+	const key = 'c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516';
+	const empty = { status: 200, body: { items: [], page: 1, pageSize: 20, total: 0 } };
+	const one = {
+		status: 200,
+		body: {
+			items: [{ key, name: 'Sega', gameCount: 1, logoUrl: null }],
+			page: 1,
+			pageSize: 20,
+			total: 1
+		}
+	};
+	const gb = {
+		status: 200,
+		body: [
+			{ id: 'gb', displayName: 'Game Boy', shortName: 'GB', gameCount: 1, romCount: 1, regions: [] }
+		]
+	};
+	const wait = () => new Promise((done) => setTimeout(done, 350));
+	const replaced = (url: string) =>
+		expect(goto).toHaveBeenCalledWith(url, { replace: true, reset: false });
+
+	it('a bare tab URL restores the saved search and sort with replace', async () => {
+		localStorage.setItem('rnrm.collections.genres', 'find=rpg&sort=games');
+		navigateTo('/collections?tab=genres');
+		render(CollectionsPage);
+
+		await vi.waitFor(() => replaced('/collections?tab=genres&find=rpg&sort=games'));
+		await vi.waitFor(() =>
+			expect((screen.getByLabelText('Search genres') as HTMLInputElement).value).toBe('rpg')
+		);
+	});
+
+	it('a bare URL with a group page restores at group page 1', async () => {
+		localStorage.setItem('rnrm.collections.publishers', 'sort=games&dir=asc');
+		navigateTo('/collections?tab=publishers&groupPage=3');
+		render(CollectionsPage);
+
+		await vi.waitFor(() => replaced('/collections?tab=publishers&sort=games&dir=asc'));
+	});
+
+	it('Systems restores too, keeping other params', async () => {
+		localStorage.setItem('rnrm.collections.systems', 'find=gb');
+		navigateTo('/collections?tab=systems');
+		answers['GET /api/systems'] = [{ status: 200, body: [] }];
+		render(CollectionsPage);
+
+		await vi.waitFor(() => replaced('/collections?tab=systems&find=gb'));
+	});
+
+	it.each([
+		['/collections?tab=genres&find=puz', 'genres'],
+		['/collections?tab=genres&dir=desc', 'genres'],
+		[`/collections?tab=genres&key=${key}`, 'genres'],
+		['/collections?tab=systems&system=gb', 'systems'],
+		['/collections?tab=systems&sort=games', 'systems']
+	] as const)('%s is left as it is and not overwritten', async (url, tab) => {
+		localStorage.setItem(`rnrm.collections.${tab}`, 'find=rpg');
+		answers['GET /api/systems'] = [{ status: 200, body: [] }];
+		navigateTo(url);
+		render(CollectionsPage);
+
+		await wait();
+		expect(goto).not.toHaveBeenCalled();
+		expect(localStorage.getItem(`rnrm.collections.${tab}`)).toBe('find=rpg');
+	});
+
+	it('a game page name link that resolves to a key is not restored', async () => {
+		localStorage.setItem('rnrm.collections.developers', 'find=zzz');
+		answers['GET /api/discovery/developers/key?name=Nintendo+EAD'] = [
+			{ status: 200, body: { key } }
+		];
+		navigateTo('/collections?tab=developers&name=Nintendo%20EAD');
+		render(CollectionsPage);
+
+		await vi.waitFor(() => replaced(`/collections?tab=developers&key=${key}`));
+		await wait();
+		expect(goto).toHaveBeenCalledOnce();
+		expect(localStorage.getItem('rnrm.collections.developers')).toBe('find=zzz');
+	});
+
+	it('a malformed saved value is forgotten with no navigation', async () => {
+		localStorage.setItem('rnrm.collections.publishers', 'sort=bogus&dir=asc&tab=genres');
+		navigateTo('/collections?tab=publishers');
+		render(CollectionsPage);
+
+		await vi.waitFor(() => expect(localStorage.getItem('rnrm.collections.publishers')).toBeNull());
+		expect(goto).not.toHaveBeenCalled();
+	});
+
+	it('a committed search and a sort click save; Back/Forward does not', async () => {
+		navigateTo('/collections?tab=publishers');
+		answers['GET /api/discovery/publishers?pageSize=20'] = [empty];
+		answers['GET /api/discovery/publishers?pageSize=20&q=sega'] = [one];
+		render(CollectionsPage);
+
+		await fireEvent.input(screen.getByLabelText('Search publishers'), {
+			target: { value: 'sega' }
+		});
+		await wait();
+		expect(localStorage.getItem('rnrm.collections.publishers')).toBe('find=sega');
+
+		await fireEvent.click(await screen.findByRole('button', { name: /^Games/ }));
+		expect(localStorage.getItem('rnrm.collections.publishers')).toBe('find=sega&sort=games');
+
+		navigateTo('/collections?tab=publishers&find=nin');
+		await wait();
+		expect(localStorage.getItem('rnrm.collections.publishers')).toBe('find=sega&sort=games');
+		expect(localStorage.getItem('rnrm.collections.genres')).toBeNull();
+	});
+
+	it('Clear forgets the tab, leaving the others', async () => {
+		localStorage.setItem('rnrm.collections.genres', 'find=rpg');
+		localStorage.setItem('rnrm.collections.systems', 'sort=games');
+		navigateTo('/collections?tab=genres&find=rpg');
+		answers['GET /api/discovery/genres?pageSize=20&q=rpg'] = [empty];
+		render(CollectionsPage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: /Clear/ }));
+
+		replaced('/collections?tab=genres');
+		expect(localStorage.getItem('rnrm.collections.genres')).toBeNull();
+		expect(localStorage.getItem('rnrm.collections.systems')).toBe('sort=games');
+		await wait();
+		expect(goto).toHaveBeenCalledOnce();
+	});
+
+	it('Systems: a search saves under its own key', async () => {
+		navigateTo('/collections?tab=systems');
+		answers['GET /api/systems'] = [gb];
+		render(CollectionsPage);
+
+		await fireEvent.input(await screen.findByLabelText('Search systems'), {
+			target: { value: 'gb' }
+		});
+		await wait();
+		expect(localStorage.getItem('rnrm.collections.systems')).toBe('find=gb');
+		expect(localStorage.getItem('rnrm.collections.publishers')).toBeNull();
 	});
 });
