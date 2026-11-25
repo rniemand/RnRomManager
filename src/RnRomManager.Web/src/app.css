@@ -542,19 +542,6 @@ body:has(.app-footer) .toast-container {
 	min-width: 0;
 }
 
-/* B15: the Collections selector rows are list-group-item-action links without list-group-item, so Bootstrap never
-   fills .active on them. */
-.list-group-item-action.active {
-	color: var(--bs-list-group-active-color);
-	background-color: var(--bs-list-group-active-bg);
-	border-color: var(--bs-list-group-active-border-color);
-}
-/* B15: count badges are text-bg-primary (which sets !important colours); subtler in dark theme off the active row. */
-[data-bs-theme='dark'] .list-group-item-action:not(.active) .count-badge {
-	color: var(--bs-primary-text-emphasis) !important;
-	background-color: var(--bs-primary-bg-subtle) !important;
-}
-
 /* U8: every tab list scrolls sideways instead of wrapping. overflow would clip Bootstrap's -1px link margin that lets the
    active tab cover the list's bottom border, so that border moves inside the list as an inset shadow and the active
    tab's own bottom border (the body colour) still hides it. */

@@ -102,6 +102,19 @@ describe('collection page (B24)', () => {
 		expect((screen.getByLabelText('Sort by') as HTMLSelectElement).value).toBe('added');
 	});
 
+	it('has a Back to Collections button and floating Add games results (C1, C2)', async () => {
+		render(CollectionPage);
+		await screen.findByRole('heading', { name: 'Pokémon' });
+
+		const back = screen.getByRole('link', { name: 'Back to Collections' });
+		expect(back.className).toBe('btn btn-sm btn-outline-primary');
+		expect(back.getAttribute('href')).toBe('/collections');
+		expect(back.querySelector('i')).not.toBeNull();
+		expect(back.parentElement!.className).toBe('mb-3');
+		expect(screen.getByLabelText('Add games').closest('.position-relative')).not.toBeNull();
+		expect(document.getElementById('add-game-help')!.className).toBe('visually-hidden');
+	});
+
 	it('neither restores nor saves the Library filter (L7)', async () => {
 		const setItem = vi.fn();
 		vi.stubGlobal('localStorage', {

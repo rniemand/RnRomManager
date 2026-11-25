@@ -1918,14 +1918,21 @@ test("collections: create, add from game page and bulk select, search, remove, d
 
   // P1–P4: Add games leaves out members; results show a cover and a short system name.
   const addGames = page.getByLabel("Add games");
+  const firstCard = page.getByRole("link", { name: "Orbit Blocks", exact: true });
+  const before = await firstCard.boundingBox();
   await addGames.fill("orbit");
   const results = page.locator(".list-group").getByRole("button");
   // Orbit Expedition is suggested; both members stay excluded.
   await expect(results.filter({ hasText: "Orbit Expedition" })).toBeVisible();
   await expect(results.filter({ hasText: "Orbit Blocks" })).toHaveCount(0);
   await expect(results.filter({ hasText: "Orbit Kart 64" })).toHaveCount(0);
+  // C2: the results float over the games, which stay where they were; Escape closes them, keeping the text.
+  expect(await firstCard.boundingBox()).toEqual(before);
+  await addGames.press("Escape");
+  await expect(results).toHaveCount(0);
+  await expect(addGames).toHaveValue("orbit");
   await addGames.fill("zzz no such game");
-  await expect(page.getByText("No matching games.")).toBeVisible();
+  await expect(page.locator(".list-group").getByText("No matching games.")).toBeVisible();
   await addGames.fill("pocket");
   const drift = results.filter({ hasText: "Pocket Drift" });
   await expect(drift).toBeVisible();
@@ -1980,7 +1987,23 @@ test("collections discovery: browse publishers and genres across systems, share 
   await expectAccessible(page, "publishers tab");
 
   // B2: the seeded publisher groups games from every system.
-  const publishers = page.getByRole("list", { name: "Publishers" });
+  const publishers = page.getByRole("table", { name: "Publishers" });
+
+  // G4, G7: sort by Games (most first), then Clear back to Name A–Z.
+  await publishers.getByRole("button", { name: "Games" }).click();
+  await expect(page).toHaveURL(/\/collections\?tab=publishers&sort=games$/);
+  await expect(publishers.getByRole("columnheader", { name: "Games" })).toHaveAttribute(
+    "aria-sort",
+    "descending",
+  );
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(page).toHaveURL(/\/collections\?tab=publishers$/);
+  await expect(publishers.getByRole("columnheader", { name: "Name" })).toHaveAttribute(
+    "aria-sort",
+    "ascending",
+  );
+  await expect(page.getByRole("button", { name: "Clear" })).toBeHidden();
+
   await publishers.getByRole("link", { name: /Fixture Works/ }).click();
   await expect(page).toHaveURL(/tab=publishers&key=[0-9a-f]{64}$/);
   await expect(
@@ -1995,8 +2018,8 @@ test("collections discovery: browse publishers and genres across systems, share 
   await tabs.getByRole("link", { name: "Genres" }).click();
   await expect(page).toHaveURL(/\/collections\?tab=genres$/);
   await page
-    .getByRole("list", { name: "Genres" })
-    .getByRole("link", { name: /Racing/ })
+    .getByRole("table", { name: "Genres" })
+    .getByRole("link", { name: "Racing", exact: true })
     .click();
   await expect(page.getByRole("heading", { name: /Racing/ })).toBeVisible();
   for (const title of ["Orbit Kart 64", "Mode Seven Rally", "Pocket Drift"])
@@ -2037,6 +2060,21 @@ test("collections discovery: browse publishers and genres across systems, share 
   ).toBeVisible();
   await page.getByRole("link", { name: "Back to all genres" }).click();
   await expect(page).toHaveURL(/\/collections\?tab=genres$/);
+
+  // G8: the Genres search is remembered in this browser and comes back through the tab link.
+  await page.getByLabel("Search genres").fill("rac");
+  await expect(page).toHaveURL(/\/collections\?tab=genres&find=rac$/);
+  const navbar = page.locator("nav.navbar");
+  await navbar.getByRole("link", { name: "Timeline" }).click();
+  await expect(page).toHaveURL(/\/timeline/);
+  await navbar.getByRole("link", { name: "Collections" }).click();
+  await expect(page).toHaveURL(/\/collections$/);
+  await tabs.getByRole("link", { name: "Genres" }).click();
+  await expect(page).toHaveURL(/\/collections\?tab=genres&find=rac$/);
+  await expect(page.getByLabel("Search genres")).toHaveValue("rac");
+  // Clear forgets it, so later tests see a bare Genres tab.
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(page).toHaveURL(/\/collections\?tab=genres$/);
 });
 
 test("collections systems: browse a system's games and its emulator links", { tag: "@shard-b" }, async () => {
@@ -2055,8 +2093,8 @@ test("collections systems: browse a system's games and its emulator links", { ta
 
   // B3/B5: choosing Game Boy shows its games.
   await page
-    .getByRole("list", { name: "Systems" })
-    .getByRole("link", { name: /^Game Boy\s+\d+ games?$/ })
+    .getByRole("table", { name: "Systems" })
+    .getByRole("link", { name: "Game Boy", exact: true })
     .click();
   await expect(page).toHaveURL(/\/collections\?tab=systems&system=gb$/);
   await expect(
@@ -2109,7 +2147,7 @@ test("timeline: an IGDB-linked game by year, and the Developers tab", { tag: "@s
   // C1: the Developers tab groups the seeded developer.
   await page.goto("/collections?tab=developers");
   await expect(
-    page.getByRole("list", { name: "Developers" }).getByRole("link", { name: /Seed Studio/ }),
+    page.getByRole("table", { name: "Developers" }).getByRole("link", { name: /Seed Studio/ }),
   ).toBeVisible();
   await expectAccessible(page, "developers tab");
 });
@@ -2126,7 +2164,7 @@ test("collections discovery: an Admin replaces and removes a publisher logo a Si
   try {
     const logoOf = (p: Page) =>
       p
-        .getByRole("list", { name: "Publishers" })
+        .getByRole("table", { name: "Publishers" })
         .getByRole("link", { name: /Fixture Works/ })
         .locator("img");
     const changeLogo = (p: Page) =>

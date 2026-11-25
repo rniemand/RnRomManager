@@ -113,6 +113,24 @@ public class DiscoveryEndpointsTests
         Assert.That(atLimit, Is.EqualTo(HttpStatusCode.OK));
     }
 
+    /// <summary>A1: sort/dir are case-insensitive; a missing dir is the sort's default (games → descending).</summary>
+    [TestCase("", "Hudson,NINTENDO,Sega")]
+    [TestCase("?sort=name&dir=desc", "Sega,NINTENDO,Hudson")]
+    [TestCase("?SORT=Games", "NINTENDO,Hudson,Sega")]
+    [TestCase("?sort=games&dir=DESC", "NINTENDO,Hudson,Sega")]
+    [TestCase("?sort=games&dir=asc", "Hudson,Sega,NINTENDO")]
+    public async Task Groups_SortAndDir_ChangeTheOrder(string query, string expected)
+    {
+        await AddGameAsync("Tetris", "gb", ["Nintendo"]);
+        await AddGameAsync("Mario", "nes", [" NINTENDO", "Hudson"]);
+        await AddGameAsync("Sonic", "megadrive", ["Sega"]);
+
+        var (status, body) = await GetAsync(_user, "/api/discovery/publishers" + query);
+
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(body.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("name").GetString()), Is.EqualTo(expected.Split(',')));
+    }
+
     [Test]
     public async Task GenreGroups_CarryTheirOwnLogoUrl()
     {
@@ -271,6 +289,8 @@ public class DiscoveryEndpointsTests
     [TestCase("/api/discovery/publishers/games?key=c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516&page=0", "page")]
     [TestCase("/api/discovery/publishers/games?key=c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516&pageSize=201", "pageSize")]
     [TestCase("/api/discovery/publishers?q=%20aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "q")]
+    [TestCase("/api/discovery/publishers?sort=size", "sort")]
+    [TestCase("/api/discovery/genres?dir=up", "dir")]
     public async Task InvalidPaging_Is400(string url, string field)
     {
         var (status, body) = await GetAsync(_user, url);

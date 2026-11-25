@@ -1,15 +1,21 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { api } from './api/client';
 import {
 	collectionsTab,
 	collectionsTabs,
 	discoveryName,
 	discoverySearch,
 	discoveryState,
+	discoveryApi,
 	discoveryText,
 	isDiscoveryKey,
+	listSearch,
+	readCollectionsTab,
+	restoredSearch,
+	saveCollectionsTab,
 	nameAsFind,
 	logoSources,
 	logoUrlError,
@@ -19,6 +25,8 @@ import {
 	systemsState,
 	tabSearch
 } from './discovery';
+
+vi.mock('./api/client', () => ({ api: { get: vi.fn() } }));
 
 const key = 'c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516';
 const url = (search: string) => new URL(`http://localhost/collections${search}`);
@@ -374,5 +382,147 @@ describe('collections search URL state (B16)', () => {
 	it('a state with find reads back the same', () => {
 		const state = { kind: 'genres' as const, key: null, groupPage: 1, gamePage: 1, find: 'rpg' };
 		expect(discoveryState(url(discoverySearch(state)))).toEqual(state);
+	});
+});
+
+describe('collections sort URL state (G5)', () => {
+	const url = (search: string) => new URL(`http://x/collections${search}`);
+	const base = { kind: 'publishers' as const, key: null, groupPage: 1, gamePage: 1 };
+
+	it('omits the defaults: name ascending, and each column’s own direction', () => {
+		expect(discoverySearch(base)).toBe('?tab=publishers');
+		expect(discoverySearch({ ...base, sort: 'name', dir: 'asc' })).toBe('?tab=publishers');
+		expect(discoverySearch({ ...base, sort: 'games', dir: 'desc' })).toBe(
+			'?tab=publishers&sort=games'
+		);
+		expect(discoverySearch({ ...base, sort: 'games', dir: 'asc', find: 'sega' })).toBe(
+			'?tab=publishers&find=sega&sort=games&dir=asc'
+		);
+		expect(discoverySearch({ ...base, dir: 'desc' })).toBe('?tab=publishers&dir=desc');
+		expect(systemsSearch({ system: 'gb', gamePage: 2, sort: 'games' })).toBe(
+			'?tab=systems&system=gb&gamePage=2&sort=games'
+		);
+	});
+
+	it('reads only exact lowercase values; anything else is the default (absent)', () => {
+		expect(discoveryState(url('?tab=genres&sort=games&dir=asc'))).toEqual({
+			...base,
+			kind: 'genres',
+			sort: 'games',
+			dir: 'asc'
+		});
+		expect(discoveryState(url('?tab=genres&sort=games&dir=desc'))).toEqual({
+			...base,
+			kind: 'genres',
+			sort: 'games'
+		});
+		for (const search of ['sort=Games&dir=DESC', 'sort=size&dir=up', 'sort=name&dir=asc'])
+			expect(discoveryState(url(`?tab=publishers&${search}`))).toEqual(base);
+		expect(systemsState(url('?tab=systems&dir=desc'))).toEqual({
+			system: null,
+			gamePage: 1,
+			dir: 'desc'
+		});
+	});
+
+	it('round-trips, and keeps sort when selecting or paging', () => {
+		const state = {
+			...base,
+			key,
+			groupPage: 2,
+			gamePage: 3,
+			sort: 'games' as const,
+			dir: 'asc' as const
+		};
+		expect(discoveryState(url(discoverySearch(state)))).toEqual(state);
+		const systems = {
+			system: 'gb',
+			gamePage: 2,
+			find: 'mario',
+			sort: 'name' as const,
+			dir: 'desc' as const
+		};
+		expect(systemsState(url(systemsSearch(systems)))).toEqual({
+			system: 'gb',
+			gamePage: 2,
+			find: 'mario',
+			dir: 'desc'
+		});
+	});
+});
+
+describe('discovery groups API query (A1)', () => {
+	afterEach(() => vi.mocked(api.get).mockReset());
+
+	it('sends sort and dir only when set', () => {
+		discoveryApi.groups('publishers', { page: 1, pageSize: 48 });
+		discoveryApi.groups('genres', { page: 2, pageSize: 48, q: 'rpg', sort: 'games', dir: 'asc' });
+		expect(vi.mocked(api.get).mock.calls.map((c) => c[0])).toEqual([
+			'/api/discovery/publishers?pageSize=48',
+			'/api/discovery/genres?page=2&pageSize=48&q=rpg&sort=games&dir=asc'
+		]);
+	});
+});
+
+describe('remembered collections tabs (G8)', () => {
+	afterEach(() => vi.unstubAllGlobals());
+
+	it('reads and saves each tab under its own key; empty forgets', () => {
+		const store = new Map<string, string>();
+		vi.stubGlobal('localStorage', {
+			getItem: (k: string) => store.get(k) ?? null,
+			setItem: (k: string, v: string) => store.set(k, v),
+			removeItem: (k: string) => store.delete(k)
+		});
+		expect(readCollectionsTab('genres')).toBe('');
+		saveCollectionsTab('genres', 'find=rpg&sort=games');
+		saveCollectionsTab('systems', 'find=gb');
+		expect(store.get('rnrm.collections.genres')).toBe('find=rpg&sort=games');
+		expect(readCollectionsTab('systems')).toBe('find=gb');
+		expect(readCollectionsTab('publishers')).toBe('');
+		saveCollectionsTab('genres', '');
+		expect(store.has('rnrm.collections.genres')).toBe(false);
+	});
+
+	it('remembers nothing when storage throws', () => {
+		const fail = () => {
+			throw new Error('denied');
+		};
+		vi.stubGlobal('localStorage', { getItem: fail, setItem: fail, removeItem: fail });
+		expect(() => saveCollectionsTab('developers', 'find=x')).not.toThrow();
+		expect(readCollectionsTab('developers')).toBe('');
+	});
+});
+
+describe('restoring a tab (G8)', () => {
+	const at = (search: string) => new URL(`http://x/collections${search}`);
+
+	it('listSearch keeps only find, sort and dir', () => {
+		expect(listSearch(`?tab=genres&key=${key}&groupPage=2&find=rpg&sort=games`)).toBe(
+			'find=rpg&sort=games'
+		);
+		expect(listSearch('?tab=systems&system=gb')).toBe('');
+	});
+
+	it('rebuilds a bare tab URL with the saved params, at group page 1', () => {
+		expect(restoredSearch('genres', at('?tab=genres&groupPage=3'), 'find=rpg&dir=desc')).toBe(
+			'?tab=genres&find=rpg&dir=desc'
+		);
+		expect(restoredSearch('systems', at('?tab=systems'), 'sort=games&key=x')).toBe(
+			'?tab=systems&sort=games'
+		);
+	});
+
+	it('leaves URLs with their own list params or a selection, and empty saves, alone', () => {
+		for (const search of ['&find=a', '&sort=games', '&dir=desc', `&key=${key}`, '&name=Sega'])
+			expect(
+				restoredSearch('publishers', at(`?tab=publishers${search}`), 'find=x')
+			).toBeUndefined();
+		expect(restoredSearch('systems', at('?tab=systems&system=gb'), 'find=x')).toBeUndefined();
+		expect(restoredSearch('publishers', at('?tab=publishers'), '')).toBeUndefined();
+	});
+
+	it('a saved value that adds nothing is malformed', () => {
+		expect(restoredSearch('publishers', at('?tab=publishers'), 'sort=bogus&dir=asc')).toBe('');
 	});
 });

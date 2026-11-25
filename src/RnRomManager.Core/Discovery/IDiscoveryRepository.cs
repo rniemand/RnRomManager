@@ -12,6 +12,9 @@ public sealed record DiscoveryGroup(string Key, string Name, long GameCount)
     public const int MaxNameLength = 255;
 }
 
+/// <summary>The group list's sort column (A1).</summary>
+public enum DiscoveryGroupSort { Name, Games }
+
 /// <summary>
 /// Live publisher and genre indexes built from <c>games.publishers</c> and <c>games.genres</c> (B2, B3). Each kind's
 /// index is computed by MariaDB and kept for up to <see cref="IndexLifetime"/>, so metadata changes show within that.
@@ -22,11 +25,13 @@ public interface IDiscoveryRepository
     static readonly TimeSpan IndexLifetime = TimeSpan.FromSeconds(60);
 
     /// <summary>
-    /// One page of <paramref name="kind"/>'s groups across every system, sorted by normalized name bytes. A non-blank
-    /// <paramref name="q"/> (trimmed) keeps only groups whose <see cref="DiscoveryGroup.Name"/> contains it, ordinal ignore-case,
-    /// before paging (UI polish B16: a display filter; grouping and keys are untouched).
+    /// One page of <paramref name="kind"/>'s groups across every system. A non-blank <paramref name="q"/> (trimmed) keeps only
+    /// groups whose <see cref="DiscoveryGroup.Name"/> contains it, ordinal ignore-case, before paging (UI polish B16: a display
+    /// filter; grouping and keys are untouched). Then sorted (A1): <see cref="DiscoveryGroupSort.Name"/> by normalized name bytes,
+    /// <see cref="DiscoveryGroupSort.Games"/> by game count with ties by normalized name ascending.
     /// </summary>
-    Task<Page<DiscoveryGroup>> ListGroupsAsync(DiscoveryKind kind, int page, int pageSize, string? q, CancellationToken cancellationToken);
+    Task<Page<DiscoveryGroup>> ListGroupsAsync(DiscoveryKind kind, int page, int pageSize, string? q, DiscoveryGroupSort sort, bool descending,
+        CancellationToken cancellationToken);
 
     /// <summary>
     /// P4: the key of the group whose normalized name equals <paramref name="name"/> normalized by MariaDB as B2 does, from

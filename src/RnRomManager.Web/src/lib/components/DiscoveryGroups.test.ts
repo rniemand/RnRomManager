@@ -54,7 +54,9 @@ afterEach(() => {
 	auth.set(null);
 });
 
-const list = (name: string) => within(screen.getByRole('list', { name }));
+const table = (name: string) => within(screen.getByRole('table', { name }));
+/** G2: a row's Games cell (the second). */
+const games = (link: HTMLElement) => link.closest('tr')!.cells[1].textContent!.trim();
 
 describe('DiscoveryGroups (discovery B2)', () => {
 	it.each([
@@ -79,13 +81,51 @@ describe('DiscoveryGroups (discovery B2)', () => {
 		];
 		render(DiscoveryGroups, { view: state({ key: keyOf(2) }), onpage: vi.fn() });
 
-		const nintendo = await screen.findByRole('link', { name: /Nintendo/ });
+		const nintendo = await screen.findByRole('link', { name: 'Nintendo' });
 		expect(nintendo.getAttribute('href')).toBe(`/collections?tab=publishers&key=${keyOf(2)}`);
 		expect(nintendo.getAttribute('aria-current')).toBe('true');
-		expect(nintendo.textContent).toContain('1,250 games');
-		const capcom = list('Publishers').getByRole('link', { name: /Capcom/ });
+		expect(games(nintendo)).toBe('1,250');
+		const capcom = table('Publishers').getByRole('link', { name: 'Capcom' });
 		expect(capcom.getAttribute('aria-current')).toBeNull();
-		expect(capcom.textContent).toContain('1 game');
+		expect(games(capcom)).toBe('1');
+	});
+
+	it('is a table in the reports style: Name and Games columns, no Actions for a user (G1, G2)', async () => {
+		answers['/api/discovery/publishers?pageSize=20'] = [
+			{ status: 200, body: pageOf([group(1, 'Capcom', 1)]) }
+		];
+		render(DiscoveryGroups, { view: state(), onpage: vi.fn() });
+
+		const element = await screen.findByRole('table', { name: 'Publishers' });
+		expect(element.className).toBe('table table-sm table-striped table-hover align-middle mb-0');
+		expect(element.closest('.table-responsive')!.parentElement!.className).toBe('card');
+		expect(element.querySelector('thead')!.className).toBe('table-dark');
+		expect(screen.getAllByRole('columnheader').map((h) => h.textContent!.trim())).toEqual([
+			'Name',
+			'Games'
+		]);
+		const link = screen.getByRole('link', { name: 'Capcom' });
+		expect(link.className).toBe('text-decoration-none d-flex align-items-center gap-2 min-w-0');
+		expect(link.querySelector('.group-logo-banner')).not.toBeNull();
+		const [name, count] = link.closest('tr')!.cells;
+		expect(name.className).toBe('w-100 text-truncate');
+		expect(name.getAttribute('style')).toBe('max-width: 0');
+		expect(count.className).toBe('text-end text-nowrap');
+	});
+
+	it('an Admin gets an Actions column with the pencil (G2)', async () => {
+		auth.set({ id: 1, username: 'a', roles: ['admin'], mustChangePassword: false });
+		answers['/api/discovery/genres?pageSize=20'] = [
+			{ status: 200, body: pageOf([group(1, 'Puzzle', 1)]) }
+		];
+		render(DiscoveryGroups, { view: state({ kind: 'genres' }), onpage: vi.fn() });
+
+		const pencil = await screen.findByRole('button', { name: 'Change logo for Puzzle' });
+		expect(pencil.className).toBe('btn btn-link btn-sm p-0');
+		expect(pencil.title).toBe('Change logo');
+		const headers = screen.getAllByRole('columnheader');
+		expect(headers).toHaveLength(3);
+		expect(headers[2].querySelector('.visually-hidden')!.textContent).toBe('Actions');
 	});
 
 	it('publishers show their override, else starter art, else a text banner', async () => {
@@ -141,7 +181,7 @@ describe('DiscoveryGroups (discovery B2)', () => {
 			onpage: vi.fn()
 		});
 
-		expect(await screen.findByRole('list', { name: 'Developers' })).toBeTruthy();
+		expect(await screen.findByRole('table', { name: 'Developers' })).toBeTruthy();
 		expect(screen.getByLabelText('Search developers')).toBeTruthy();
 		expect(screen.getByRole('navigation', { name: 'Developer pages' })).toBeTruthy();
 		await rerender({ view: state({ kind: 'developers', find: 'zz' }), onpage: vi.fn() });
@@ -256,7 +296,7 @@ describe('DiscoveryGroups (discovery B2)', () => {
 		releasePublishers({ status: 200, body: pageOf([group(1, 'Nintendo')]) });
 		await new Promise((r) => setTimeout(r, 0));
 		expect(screen.queryByRole('link', { name: /Nintendo/ })).toBeNull();
-		expect(screen.getByRole('list', { name: 'Genres' })).toBeTruthy();
+		expect(screen.getByRole('table', { name: 'Genres' })).toBeTruthy();
 
 		await view.rerender({ view: state({ kind: 'genres', groupPage: 2 }), onpage: vi.fn() });
 		expect(screen.queryByRole('link', { name: /Racing/ })).toBeNull();
@@ -268,7 +308,7 @@ describe('DiscoveryGroups (discovery B2)', () => {
 		]);
 	});
 
-	it('truncates names with a title, and highlights the active row with a light badge (B13, B15)', async () => {
+	it('truncates names with a title, and highlights the selected row (B13, G3)', async () => {
 		answers['/api/discovery/publishers?pageSize=20'] = [
 			{ status: 200, body: pageOf([group(1, 'Capcom', 1), group(2, 'Nintendo', 1250)]) }
 		];
@@ -280,13 +320,96 @@ describe('DiscoveryGroups (discovery B2)', () => {
 			.find((el) => !el.classList.contains('group-logo-banner'))!;
 		expect(name.className).toBe('text-truncate');
 		expect(name.parentElement!.classList).toContain('min-w-0');
-		expect(nintendo.classList).toContain('active');
-		expect(nintendo.querySelector('.count-badge')!.className).toBe(
-			'badge rounded-pill count-badge text-bg-light'
-		);
-		const capcom = list('Publishers').getByRole('link', { name: /Capcom/ });
-		expect(capcom.querySelector('.count-badge')!.className).toBe(
-			'badge rounded-pill count-badge text-bg-primary'
+		expect(nintendo.closest('tr')!.classList).toContain('table-primary');
+		// Contrast: the selected link takes the row's text colour, not link blue.
+		expect(nintendo.classList).toContain('text-reset');
+		const capcom = table('Publishers').getByRole('link', { name: /Capcom/ });
+		expect(capcom.closest('tr')!.classList).not.toContain('table-primary');
+		expect(capcom.classList).not.toContain('text-reset');
+	});
+
+	describe('sorting (G4) and Clear (G7)', () => {
+		const header = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}`) });
+		const th = (name: string) => header(name).closest('th')!;
+		const groupsUrl = (kind: string, extra: Record<string, string | undefined>) => {
+			const search = new URLSearchParams({ pageSize: '20' });
+			for (const [k, v] of Object.entries(extra)) if (v) search.set(k === 'find' ? 'q' : k, v);
+			return `/api/discovery/${kind}?${search}`;
+		};
+
+		it('Name ascending by default: aria-sort and icon on Name only, no Clear', async () => {
+			answers['/api/discovery/publishers?pageSize=20'] = [
+				{ status: 200, body: pageOf([group(1, 'Capcom')]) }
+			];
+			render(DiscoveryGroups, { view: state(), onpage: vi.fn() });
+			await screen.findByRole('link', { name: 'Capcom' });
+
+			expect(header('Name').className).toBe(
+				'btn btn-link p-0 text-reset text-decoration-none fw-semibold'
+			);
+			expect(th('Name').getAttribute('aria-sort')).toBe('ascending');
+			expect(th('Name').querySelector('i')).not.toBeNull();
+			expect(th('Games').getAttribute('aria-sort')).toBeNull();
+			expect(th('Games').querySelector('i')).toBeNull();
+			expect(th('Games').className).toContain('text-end');
+			expect(screen.queryByRole('button', { name: /Clear/ })).toBeNull();
+		});
+
+		it.each([
+			[{}, 'Name', ['name', 'desc']],
+			[{}, 'Games', ['games', 'desc']],
+			[{ sort: 'games' as const }, 'Games', ['games', 'asc']],
+			[{ sort: 'games' as const, dir: 'asc' as const }, 'Name', ['name', 'asc']],
+			[{ dir: 'desc' as const }, 'Name', ['name', 'asc']]
+		])('from %j clicking %s calls onsort(%j)', async (extra, click, expected) => {
+			const onsort = vi.fn();
+			answers[groupsUrl('publishers', extra)] = [
+				{ status: 200, body: pageOf([group(1, 'Capcom')]) }
+			];
+			render(DiscoveryGroups, { view: state(extra), onpage: vi.fn(), onsort });
+			await screen.findByRole('link', { name: 'Capcom' });
+
+			await fireEvent.click(header(click));
+			expect(onsort).toHaveBeenCalledWith(...expected);
+		});
+
+		it('sends sort to the API, marks Games descending and keeps it in selection links', async () => {
+			answers['/api/discovery/genres?pageSize=20&sort=games'] = [
+				{ status: 200, body: pageOf([group(1, 'Puzzle')]) }
+			];
+			render(DiscoveryGroups, { view: state({ kind: 'genres', sort: 'games' }), onpage: vi.fn() });
+			await screen.findByRole('link', { name: 'Puzzle' });
+
+			expect(th('Games').getAttribute('aria-sort')).toBe('descending');
+			expect(th('Name').getAttribute('aria-sort')).toBeNull();
+			expect(screen.getByRole('link', { name: 'Puzzle' }).getAttribute('href')).toBe(
+				`/collections?tab=genres&key=${keyOf(1)}&sort=games`
+			);
+		});
+
+		it.each([[{ find: 'cap' }], [{ sort: 'games' as const }], [{ dir: 'desc' as const }]])(
+			'Clear shows for %j, cancels a pending search, empties the box and calls onclear',
+			async (extra) => {
+				const onclear = vi.fn();
+				const onfind = vi.fn();
+				answers[groupsUrl('publishers', extra)] = [{ status: 200, body: pageOf([]) }];
+				render(DiscoveryGroups, { view: state(extra), onpage: vi.fn(), onclear, onfind });
+				const box = screen.getByLabelText('Search publishers') as HTMLInputElement;
+				await fireEvent.input(box, { target: { value: 'sega' } });
+
+				const button = screen.getByRole('button', { name: /Clear/ });
+				expect(button.className).toBe('btn btn-sm btn-outline-secondary text-nowrap');
+				expect(button.textContent!.trim()).toBe('Clear');
+				expect(button.querySelector('i')).not.toBeNull();
+				expect(box.parentElement!.className).toBe('d-flex gap-2 mb-2');
+				expect(box.classList).toContain('flex-grow-1');
+				await fireEvent.click(button);
+				await new Promise((done) => setTimeout(done, 350));
+
+				expect(onclear).toHaveBeenCalledOnce();
+				expect(onfind).not.toHaveBeenCalled();
+				expect(box.value).toBe('');
+			}
 		);
 	});
 

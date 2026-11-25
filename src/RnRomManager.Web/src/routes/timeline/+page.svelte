@@ -52,9 +52,18 @@
 	);
 	const view = $derived(range ? timelineState(page.url, system, range) : null);
 	const disabled = $derived(view && range ? timelineDisabled(view, range) : null);
-	const ticks = $derived(
-		view ? Array.from({ length: view.to - view.from + 1 }, (_, i) => view.from + i) : []
-	);
+	/** T1–T4: each shown year; years with games alternate their card above and below the line. */
+	const ticks = $derived.by(() => {
+		if (!view) return [];
+		let withGames = 0;
+		return Array.from({ length: view.to - view.from + 1 }, (_, i) => {
+			const year = view.from + i;
+			const count = counts.get(year) ?? 0;
+			const side = count > 0 ? (withGames++ % 2 === 0 ? 'above' : 'below') : null;
+			const labelled = year === view.from || year === view.to || year % 10 === 0;
+			return { year, count, side, labelled };
+		});
+	});
 
 	$effect(() => {
 		void reload;
@@ -201,23 +210,40 @@
 	{#if !view}
 		<EmptyState message="No games linked to IGDB have a release year yet." />
 	{:else}
-		<div class="d-flex gap-1 overflow-x-auto pb-2 mb-3" role="group" aria-label="Release years">
-			{#each ticks as year (year)}
-				{@const count = counts.get(year) ?? 0}
-				{@const pressed = view.from === year && view.to === year}
-				<button
-					type="button"
-					class="btn btn-sm text-nowrap {pressed ? 'btn-primary' : 'btn-outline-secondary'}"
-					aria-label="{year}: {gamesLabel(count)}"
-					aria-pressed={pressed}
-					onclick={() => show({ from: year, to: year })}
-				>
-					<span class="d-block">{year}</span>
-					<span class="d-block small" class:text-body-secondary={count === 0}
-						>{formatCount(count)}</span
-					>
-				</button>
-			{/each}
+		<div class="timeline-line overflow-x-auto pb-2 mb-3" role="group" aria-label="Release years">
+			<div class="timeline-row d-flex position-relative">
+				{#each ticks as { year, count, side, labelled } (year)}
+					{@const pressed = view.from === year && view.to === year}
+					<div class="timeline-year">
+						{#if side}
+							<button
+								type="button"
+								class="timeline-point {side}"
+								aria-label="{year}: {gamesLabel(count)}"
+								aria-pressed={pressed}
+								onclick={() => show({ from: year, to: year })}
+							>
+								<span class="timeline-stem"></span>
+								<span class="timeline-dot bg-primary"></span>
+								<span
+									class="timeline-card border rounded px-2 py-1 small {pressed
+										? 'text-bg-primary border-primary'
+										: 'bg-body'}"
+								>
+									<span class="d-block fw-semibold">{year}</span>
+									<span class="d-block">{formatCount(count)}</span>
+								</span>
+							</button>
+						{:else}
+							<span class="timeline-tick" aria-hidden="true" title="{year}: no games">
+								{#if labelled}<span class="timeline-tick-label small text-body-secondary"
+										>{year}</span
+									>{/if}
+							</span>
+						{/if}
+					</div>
+				{/each}
+			</div>
 		</div>
 
 		{#if gamesError}
@@ -256,3 +282,100 @@
 	>
 	<!-- eslint-enable svelte/no-navigation-without-resolve -->
 {/snippet}
+
+<style>
+	/* T1: a horizontal line through the row; few years stretch to fill it, many scroll. */
+	.timeline-row {
+		min-width: 100%;
+		height: 10rem;
+	}
+	.timeline-row::before {
+		content: '';
+		position: absolute;
+		inset-inline: 0;
+		top: calc(50% - 1px);
+		height: 2px;
+		background: var(--bs-border-color);
+	}
+	.timeline-year {
+		position: relative;
+		flex: 1 0 5rem;
+	}
+	/* T2, T6: a point fills its column, with no button chrome. */
+	.timeline-point {
+		position: absolute;
+		inset: 0;
+		background: none;
+		border: 0;
+		padding: 0;
+		color: inherit;
+	}
+	.timeline-point:focus-visible {
+		outline: 2px solid var(--bs-focus-ring-color);
+	}
+	.timeline-dot {
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		width: 0.875rem;
+		height: 0.875rem;
+		border-radius: 50%;
+		transform: translate(-50%, -50%);
+	}
+	/* T5: the pressed year's dot is larger with a ring. */
+	.timeline-point[aria-pressed='true'] .timeline-dot {
+		width: 1.25rem;
+		height: 1.25rem;
+		box-shadow: 0 0 0 0.25rem var(--bs-primary-bg-subtle);
+	}
+	.timeline-stem {
+		position: absolute;
+		left: calc(50% - 0.5px);
+		width: 1px;
+		height: 1.5rem;
+		background: var(--bs-border-color);
+	}
+	.timeline-card {
+		position: absolute;
+		left: 50%;
+		transform: translateX(-50%);
+		white-space: nowrap;
+	}
+	/* T3: cards alternate above and below the line. */
+	.above .timeline-stem {
+		bottom: 50%;
+	}
+	.above .timeline-card {
+		bottom: calc(50% + 1.5rem);
+	}
+	.below .timeline-stem {
+		top: 50%;
+	}
+	.below .timeline-card {
+		top: calc(50% + 1.5rem);
+	}
+	/* bg-body is !important, so the hover colour must be too. */
+	.timeline-point:not([aria-pressed='true']):hover .timeline-card {
+		background-color: var(--bs-tertiary-bg) !important;
+	}
+	/* T4: an empty year is a small tick crossing the line, some labelled underneath. */
+	.timeline-tick {
+		position: absolute;
+		inset: 0;
+	}
+	.timeline-tick::before {
+		content: '';
+		position: absolute;
+		left: calc(50% - 1px);
+		top: calc(50% - 0.25rem);
+		width: 2px;
+		height: 0.5rem;
+		background: var(--bs-border-color);
+	}
+	.timeline-tick-label {
+		position: absolute;
+		left: 50%;
+		top: calc(50% + 0.5rem);
+		transform: translateX(-50%);
+	}
+</style>
