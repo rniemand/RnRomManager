@@ -24,6 +24,7 @@ export interface SystemColour {
 		| 's32x'
 		| 'tg16'
 		| 'tgcd'
+		| 'pcfx'
 		| 'dos'
 		| 'mame2003'
 		| 'fbneo'
@@ -71,6 +72,7 @@ export const systemColours: Record<string, SystemColour> = {
 	s32x: { name: 's32x', foreground: '#000' },
 	tg16: { name: 'tg16', foreground: '#fff' },
 	tgcd: { name: 'tgcd', foreground: '#fff' },
+	pcfx: { name: 'pcfx', foreground: '#fff' },
 	dos: { name: 'dos', foreground: '#fff' },
 	mame2003: { name: 'mame2003', foreground: '#fff' },
 	fbneo: { name: 'fbneo', foreground: '#fff' },

@@ -1391,6 +1391,44 @@ describe('play page TurboGrafx-CD (TurboGrafx-CD B7, B8)', () => {
 	});
 });
 
+describe('play page PC-FX (PC-FX X8)', () => {
+	const pcfxRom = '/api/emulator/bios/pcfx.rom';
+	const discUrl = `/api/games/${game}/roms/12/play-disc`;
+	const disc = new Uint8Array([0x50, 0x4b, 3, 4, 7, 7]);
+	const name = 'Disc Fox (Japan).cue';
+
+	function discResponse(): FakeResponse {
+		return {
+			ok: true,
+			status: 200,
+			body: null,
+			blob: async () => new Blob([disc])
+		} as unknown as FakeResponse;
+	}
+
+	it('checks pcfx.rom before the disc and hands it over as EJS_biosUrl', async () => {
+		serve({ [pcfxRom]: async () => response(200), [discUrl]: async () => discResponse() });
+
+		expect(await play('mednafen_pcfx', name, true)).toBe('Starting emulator…');
+
+		expect(urls()).toEqual([pcfxRom, discUrl]);
+		expect(atLoader?.EJS_biosUrl).toBe(pcfxRom);
+		expect(atLoader?.EJS_externalFiles).toBeUndefined();
+		expect(atLoader?.EJS_disableCue).toBeUndefined();
+		expect((atLoader?.EJS_gameUrl as File).name).toBe(name);
+	});
+
+	it('stops on a missing pcfx.rom, before the disc or the loader', async () => {
+		serve({ [pcfxRom]: async () => response(404), [discUrl]: async () => discResponse() });
+
+		expect(await play('mednafen_pcfx', name, true)).toBe(
+			'This system needs its BIOS: ask an Admin to put pcfx.rom in the BIOS folder (Paths:Bios).'
+		);
+		expect(urls()).toEqual([pcfxRom]);
+		expect(atLoader).toBeNull();
+	});
+});
+
 describe('play page SNES (SNES B3)', () => {
 	const check = '/api/emulator/cores/snes9x';
 

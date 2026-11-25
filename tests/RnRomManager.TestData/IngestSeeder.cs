@@ -43,12 +43,13 @@ public static class IngestSeeder
     public const string AmigaDat = "Commodore - Amiga";
     public const string ThreeDsDat = "Nintendo - Nintendo 3DS";
     public const string TurboGrafxCdDat = "NEC - PC Engine CD - TurboGrafx-CD";
+    public const string PcfxDat = "NEC - PC-FX";
     public const string NeoGeoPocketDat = "SNK - Neo Geo Pocket";
     public const string NeoGeoPocketColorDat = "SNK - Neo Geo Pocket Color";
 
-    /// <summary>The nine disc systems' DATs (disc systems B1/B2): each in <c>redump/</c>, with no metadat; and Commodore PET's and Amiga's in <c>tosec/</c>.</summary>
+    /// <summary>The ten disc systems' DATs (disc systems B1/B2): each in <c>redump/</c>, with no metadat; and Commodore PET's and Amiga's in <c>tosec/</c>.</summary>
     public static IReadOnlyDictionary<string, FixtureDatLayout> RedumpLayouts { get; } =
-        new[] { PsxDat, PspDat, GameCubeDat, WiiDat, Xbox360Dat, SaturnDat, SegaCdDat, ThreeDoDat, TurboGrafxCdDat }.ToDictionary(n => n, _ => FixtureDatLayout.Redump)
+        new[] { PsxDat, PspDat, GameCubeDat, WiiDat, Xbox360Dat, SaturnDat, SegaCdDat, ThreeDoDat, TurboGrafxCdDat, PcfxDat }.ToDictionary(n => n, _ => FixtureDatLayout.Redump)
             .Append(new(PetDat, FixtureDatLayout.Tosec)).Append(new(AmigaDat, FixtureDatLayout.Tosec)).ToDictionary();
 
     /// <summary>An empty titledb compact file for Switch: enough for the DAT preflight of a fixture cache.</summary>
@@ -195,7 +196,7 @@ public static class IngestSeeder
         Directory.CreateDirectory(Path.Combine(ingest, "tg16"));
         Directory.CreateDirectory(Path.Combine(ingest, "switch"));
         Directory.CreateDirectory(Path.Combine(ingest, "nds"));
-        foreach (var disc in new[] { "psx", "psp", "gc", "wii", "x360", "saturn", "segacd", "3do", "tgcd" })
+        foreach (var disc in new[] { "psx", "psp", "gc", "wii", "x360", "saturn", "segacd", "3do", "tgcd", "pcfx" })
             Directory.CreateDirectory(Path.Combine(ingest, disc));
         Directory.CreateDirectory(Path.Combine(ingest, "c64"));
         Directory.CreateDirectory(Path.Combine(ingest, "pet"));
@@ -433,7 +434,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [VirtualBoyDat] = [redHorizon], [Atari2600Dat] = [lanes], [Atari5200Dat] = [starLattice], [Atari7800Dat] = [canyonGlide], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally], [NintendoDsDat] = dsGames, [SegaCdDat] = [], [ThreeDoDat] = [], [C64Dat] = [pilot], [PetDat] = [], [Vic20Dat] = [], [FdsDat] = [], [SatellaviewDat] = [], [SufamiTurboDat] = [], [AmigaDat] = [], [ThreeDsDat] = [zephyrGate], [TurboGrafxCdDat] = [], [NeoGeoPocketDat] = [lancer], [NeoGeoPocketColorDat] = [pocketPrism] },
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [VirtualBoyDat] = [redHorizon], [Atari2600Dat] = [lanes], [Atari5200Dat] = [starLattice], [Atari7800Dat] = [canyonGlide], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally], [NintendoDsDat] = dsGames, [SegaCdDat] = [], [ThreeDoDat] = [], [C64Dat] = [pilot], [PetDat] = [], [Vic20Dat] = [], [FdsDat] = [], [SatellaviewDat] = [], [SufamiTurboDat] = [], [AmigaDat] = [], [ThreeDsDat] = [zephyrGate], [TurboGrafxCdDat] = [], [PcfxDat] = [], [NeoGeoPocketDat] = [lancer], [NeoGeoPocketColorDat] = [pocketPrism] },
             titleDb: new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = titleDb }, layouts: RedumpLayouts, mame: SeededMame);
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);

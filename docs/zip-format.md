@@ -2,7 +2,7 @@
 
 Every game in the library is one ZIP file. The ZIP is the **source of truth**: the database only mirrors its contents for browsing and search, and the integrity checker rebuilds the database from the ZIPs. You can copy, back up or inspect the library with any ZIP tool.
 
-Most systems keep their ROMs inside the ZIP (**embedded**). Systems with multi-GB images (Nintendo Switch, Nintendo 3DS, PlayStation, PlayStation Portable, GameCube, Wii, Xbox 360, Saturn, Sega CD, 3DO and TurboGrafx-CD) store each ROM as a plain file **next to** its game's ZIP (**external**): the ZIP still holds `info.json`, images and notes, and `info.json` names each file. Copy or back up the whole folder, not just the ZIPs, for those systems.
+Most systems keep their ROMs inside the ZIP (**embedded**). Systems with multi-GB images (Nintendo Switch, Nintendo 3DS, PlayStation, PlayStation Portable, GameCube, Wii, Xbox 360, Saturn, Sega CD, 3DO, TurboGrafx-CD and PC-FX) store each ROM as a plain file **next to** its game's ZIP (**external**): the ZIP still holds `info.json`, images and notes, and `info.json` names each file. Copy or back up the whole folder, not just the ZIPs, for those systems.
 
 ## Layout
 
@@ -61,6 +61,7 @@ roms/
   segacd/               Sega CD (external, exact names: a .cue or .toc with its .bin tracks, a CloneCD .ccd/.img/.sub, an MDS .mds/.mdf, or a .bin, .iso or .chd)
   3do/                  3DO (external, exact names: a .cue or .toc with its .bin tracks, a CloneCD .ccd/.img/.sub, an MDS .mds/.mdf, or a .bin/.iso/.chd)
   tgcd/                 TurboGrafx-CD / PC Engine CD (external, exact names: a .cue or .toc with its .bin tracks, a CloneCD .ccd/.img/.sub, an MDS .mds/.mdf, or a .chd)
+  pcfx/                 PC-FX (external, exact names: a .cue or .toc with its .bin tracks, a CloneCD .ccd/.img/.sub, an MDS .mds/.mdf, or a .chd)
   ngp/                  Neo Geo Pocket (.ngp)
   ngpc/                 Neo Geo Pocket Color (.ngc)
 ```
@@ -166,7 +167,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 |---|---|---|---|
 | `schemaVersion` | int | ✓ | `8` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c128`, `c64`, `tgcd`, `dos`, `ngp`, `ngpc`, `mame2003`, `fbneo`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c128`, `c64`, `tgcd`, `pcfx`, `dos`, `ngp`, `ngpc`, `mame2003`, `fbneo`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
 | `releaseYear` | int? | | from the DAT metadata (titledb's release date for Switch; the disc systems have no metadata DATs) |
@@ -258,7 +259,7 @@ Neo Geo Pocket / Neo Geo Pocket Color `header`, from the 64-byte cartridge heade
 - `colour`: true when `mode` is `0x10` (a Neo Geo Pocket Color cart).
 - `startPc`: the little-endian 32-bit start address at 0x1C as `"0x"` and eight upper-case hex digits, e.g. `"0x00200040"`.
 
-PlayStation, PlayStation Portable, Xbox 360, Saturn, Sega CD, 3DO and TurboGrafx-CD `header`: always null.
+PlayStation, PlayStation Portable, Xbox 360, Saturn, Sega CD, 3DO, TurboGrafx-CD and PC-FX `header`: always null.
 
 GameCube / Wii `header`, from the disc header (the GameCube magic `C2 33 9F 3D` at 0x1C, the Wii magic `5D 1C 9E A3` at 0x18; the magic decides the system): `gameId` (6 ASCII bytes at 0x00, null if one isn't printable), `discNumber` (byte 0x06), `version` (byte 0x07) and `title` (Latin-1 from 0x20 up to the first NUL, at most 0x3E0 bytes, trimmed; null when empty or cut off) and `container` (`iso` for a bare disc, `wbfs` for a WBFS file). A WBFS file (ASCII `WBFS` at 0x00, sector shift `hd_sec_sz_s` 9–12 at 0x08) is read from the 0x100-byte disc-header copy at `1 << hd_sec_sz_s` (512 in practice): the same fields at the same offsets within the copy, with a 0xE0-byte title field (0x20–0xFF; a title filling it without a NUL is kept whole). A WBFS file with another shift, or too short for the copy, is not plausible and has only `container`. A field the file is too short for is null.
 

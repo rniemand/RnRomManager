@@ -116,6 +116,7 @@ export const icons: Record<string, string> = {
 	'system-segacd': 'bi bi-disc',
 	'system-3do': 'bi bi-disc',
 	'system-tgcd': 'bi bi-disc',
+	'system-pcfx': 'bi bi-disc',
 	'system-dos': 'bi bi-terminal',
 	'system-mame2003': 'bi bi-joystick',
 	'system-fbneo': 'bi bi-joystick'

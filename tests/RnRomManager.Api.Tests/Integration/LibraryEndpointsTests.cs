@@ -83,7 +83,7 @@ public partial class LibraryEndpointsTests
             [IngestSeeder.C64Dat] = [],
             [IngestSeeder.PetDat] = [],
             [IngestSeeder.Vic20Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [], [IngestSeeder.FdsDat] = [],
-            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [],
+            [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [],
             [IngestSeeder.NintendoDsDat] = [new FixtureGame("Download Quest (USA)", "Download Quest (USA).nds", DsQuest)],
             [Gb] =
             [
@@ -405,7 +405,7 @@ public partial class LibraryEndpointsTests
 
         // S1: ordered by display name.
         Assert.That(systems.Select(s => s.GetProperty("id").GetString()),
-            Is.EqualTo(new[] { "s32x", "3do", "fbneo", "mame2003", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "c128", "c64", "amiga", "pet", "vic20", "fds", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "dos", "ngp", "ngpc", "3ds", "n64", "nds", "nes", "switch", "psx", "psp", "satellaview", "saturn", "segacd", "sufami", "snes", "tg16", "tgcd", "vb", "wii", "x360" }));
+            Is.EqualTo(new[] { "s32x", "3do", "fbneo", "mame2003", "a2600", "a5200", "a7800", "jaguar", "lynx", "coleco", "c128", "c64", "amiga", "pet", "vic20", "fds", "gb", "gba", "gbc", "gg", "gc", "sms", "md", "dos", "ngp", "ngpc", "3ds", "n64", "nds", "nes", "switch", "pcfx", "psx", "psp", "satellaview", "saturn", "segacd", "sufami", "snes", "tg16", "tgcd", "vb", "wii", "x360" }));
         Assert.That(systems.Select(s => s.GetProperty("embedRoms").GetBoolean()), Has.Exactly(28).True);
         Assert.That(Find("switch").GetProperty("embedRoms").GetBoolean(), Is.False, "Switch stores its ROMs outside the ZIP");
         JsonElement Find(string id) => systems.Single(s => s.GetProperty("id").GetString() == id);
@@ -415,6 +415,7 @@ public partial class LibraryEndpointsTests
         Assert.That((Find("nds").GetProperty("displayName").GetString(), Find("nds").GetProperty("shortName").GetString()), Is.EqualTo(("Nintendo DS", "DS")));
         Assert.That((Find("segacd").GetProperty("displayName").GetString(), Find("segacd").GetProperty("shortName").GetString()), Is.EqualTo(("Sega CD", "SCD")));
         Assert.That((Find("tgcd").GetProperty("displayName").GetString(), Find("tgcd").GetProperty("shortName").GetString()), Is.EqualTo(("TurboGrafx-CD / PC Engine CD", "TGCD")));
+        Assert.That((Find("pcfx").GetProperty("displayName").GetString(), Find("pcfx").GetProperty("shortName").GetString()), Is.EqualTo(("PC-FX", "PC-FX")));
         Assert.That((Find("ngp").GetProperty("displayName").GetString(), Find("ngp").GetProperty("shortName").GetString()), Is.EqualTo(("Neo Geo Pocket", "NGP")));
         Assert.That((Find("ngpc").GetProperty("displayName").GetString(), Find("ngpc").GetProperty("shortName").GetString()), Is.EqualTo(("Neo Geo Pocket Color", "NGPC")));
         Assert.That((Find("3do").GetProperty("displayName").GetString(), Find("3do").GetProperty("shortName").GetString()), Is.EqualTo(("3DO", "3DO")));
@@ -433,7 +434,7 @@ public partial class LibraryEndpointsTests
         Assert.That(systems.Select(s => s.GetProperty("displayName").GetString()), Is.EqualTo(new[]
         {
             "32X", "3DO", "Arcade (FinalBurn Neo)", "Arcade (MAME 2003-Plus)", "Atari 2600", "Atari 5200", "Atari 7800", "Atari Jaguar", "Atari Lynx", "ColecoVision", "Commodore 128", "Commodore 64", "Commodore Amiga", "Commodore PET", "Commodore VIC-20", "Famicom Disk System", "Game Boy", "Game Boy Advance", "Game Boy Color", "Game Gear", "GameCube", "Master System", "Mega Drive / Genesis", "MS-DOS", "Neo Geo Pocket", "Neo Geo Pocket Color", "Nintendo 3DS", "Nintendo 64", "Nintendo DS", "Nintendo Entertainment System", "Nintendo Switch",
-            "PlayStation", "PlayStation Portable", "Satellaview", "Saturn", "Sega CD", "Sufami Turbo", "Super Nintendo Entertainment System", "TurboGrafx-16 / PC Engine", "TurboGrafx-CD / PC Engine CD", "Virtual Boy", "Wii", "Xbox 360"
+            "PC-FX", "PlayStation", "PlayStation Portable", "Satellaview", "Saturn", "Sega CD", "Sufami Turbo", "Super Nintendo Entertainment System", "TurboGrafx-16 / PC Engine", "TurboGrafx-CD / PC Engine CD", "Virtual Boy", "Wii", "Xbox 360"
         }));
     }
 
@@ -531,6 +532,7 @@ public partial class LibraryEndpointsTests
     [TestCase("segacd", true, true, "genesis_plus_gx")]
     [TestCase("3do", true, true, "opera")]
     [TestCase("tgcd", true, true, "mednafen_pce")]
+    [TestCase("pcfx", true, true, "mednafen_pcfx")]
     [TestCase("c64", false, true, "vice_x64sc")]
     [TestCase("pet", false, true, "vice_xpet")]
     [TestCase("vic20", false, true, "vice_xvic")]
@@ -561,13 +563,17 @@ public partial class LibraryEndpointsTests
     public Task Games_QuickPlay_AChdPrimary_IsPlayable(string system, string core) =>
         AssertQuickPlayAsync(system, true, true, core, "x.chd", "x.chd");
 
-    // TurboGrafx-CD B5: Beetle PCE plays a .bin only as a cue set's data track; a lone .chd plays.
-    [TestCase("x.bin", "x.cue", true)]
-    [TestCase("x.bin", null, false)]
-    [TestCase("x.BIN", null, false)]
-    [TestCase("x.chd", null, true)]
-    public Task Games_QuickPlay_TurboGrafxCd_ALoneBinIsNotPlayable(string fileName, string? setFile, bool playable) =>
-        AssertQuickPlayAsync("tgcd", true, playable, "mednafen_pce", fileName, fileName, setFile);
+    // TurboGrafx-CD B5, PC-FX X6: Beetle PCE and Beetle PC-FX play a .bin only as a cue set's data track; a lone .chd plays.
+    [TestCase("tgcd", "mednafen_pce", "x.bin", "x.cue", true)]
+    [TestCase("tgcd", "mednafen_pce", "x.bin", null, false)]
+    [TestCase("tgcd", "mednafen_pce", "x.BIN", null, false)]
+    [TestCase("tgcd", "mednafen_pce", "x.chd", null, true)]
+    [TestCase("pcfx", "mednafen_pcfx", "x.bin", "x.cue", true)]
+    [TestCase("pcfx", "mednafen_pcfx", "x.bin", null, false)]
+    [TestCase("pcfx", "mednafen_pcfx", "x.BIN", null, false)]
+    [TestCase("pcfx", "mednafen_pcfx", "x.chd", null, true)]
+    public Task Games_QuickPlay_DiscOnlyCores_ALoneBinIsNotPlayable(string system, string core, string fileName, string? setFile, bool playable) =>
+        AssertQuickPlayAsync(system, true, playable, core, fileName, fileName, setFile);
 
     // Amiga: PUAE's WebAssembly build has no capsimg, so an .ipf primary never plays.
     [TestCase("x.ipf", false)]
@@ -755,6 +761,7 @@ public partial class LibraryEndpointsTests
     [TestCase("amiga", "puae")]
     [TestCase("tg16", "mednafen_pce")]
     [TestCase("tgcd", "mednafen_pce")]
+    [TestCase("pcfx", "mednafen_pcfx")]
     [TestCase("ngp", "mednafen_ngp")]
     [TestCase("ngpc", "mednafen_ngp")]
     [TestCase("n64", "mupen64plus_next")]

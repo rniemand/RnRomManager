@@ -34,6 +34,7 @@ public static class IgdbPlatforms
         ["nes"] = 18,
         ["ngp"] = 119,
         ["ngpc"] = 120,
+        ["pcfx"] = 274,
         ["pet"] = 90,
         ["psp"] = 38,
         ["psx"] = 7,

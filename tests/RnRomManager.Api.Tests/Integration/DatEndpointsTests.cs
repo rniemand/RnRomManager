@@ -51,7 +51,7 @@ public class DatEndpointsTests
         [IngestSeeder.C64Dat] = [],
         [IngestSeeder.PetDat] = [],
         [IngestSeeder.Vic20Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [], [IngestSeeder.FdsDat] = [],
-        [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [],
+        [IngestSeeder.AmigaDat] = [], [IngestSeeder.ThreeDsDat] = [], [IngestSeeder.TurboGrafxCdDat] = [], [IngestSeeder.PcfxDat] = [], [IngestSeeder.NeoGeoPocketDat] = [], [IngestSeeder.NeoGeoPocketColorDat] = [],
         [IngestSeeder.NintendoDsDat] = [],
     };
 
@@ -150,7 +150,7 @@ public class DatEndpointsTests
         var rows = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
         var names = rows.Select(r => r.GetProperty("datName").GetString()!).ToList();
-        Assert.That(names, Has.Count.EqualTo(42), "29 libretro systems, the 9 disc systems, Switch, the test titledb system, MAME and FBNeo");
+        Assert.That(names, Has.Count.EqualTo(43), "29 libretro systems, the 10 disc systems, Switch, the test titledb system, MAME and FBNeo");
         Assert.That(names, Is.EqualTo(names.Order(StringComparer.Ordinal)));
         var titleDb = rows.Single(r => r.GetProperty("datName").GetString() == ExternalTitleDbTestHandler.DatNameValue);
         Assert.That(titleDb.GetProperty("version").GetString(), Is.EqualTo(FixtureDatWriter.TitleDbVersion));
@@ -281,7 +281,7 @@ public class DatEndpointsTests
         using var response = await _admin.GetAsync("/api/admin/dats");
         var rows = (await AuthClient.JsonAsync(response)).EnumerateArray().ToList();
 
-        Assert.That(rows.Select(r => r.GetProperty("datName").GetString()), Is.EqualTo(new[] { IngestSeeder.Atari2600Dat, IngestSeeder.Atari5200Dat, IngestSeeder.Atari7800Dat, IngestSeeder.JaguarDat, IngestSeeder.LynxDat, IngestSeeder.ColecoVisionDat, IngestSeeder.C64Dat, IngestSeeder.AmigaDat, IngestSeeder.PetDat, IngestSeeder.Vic20Dat, "FBNeo - Arcade Games", "MAME", IngestSeeder.Xbox360Dat, IngestSeeder.TurboGrafx16Dat, IngestSeeder.TurboGrafxCdDat, IngestSeeder.FdsDat, Gb, IngestSeeder.GbaDat, Gbc, IngestSeeder.GameCubeDat, IngestSeeder.ThreeDsDat, IngestSeeder.N64Dat, IngestSeeder.NintendoDsDat, IngestSeeder.NesDat, IngestSeeder.SwitchDat, IngestSeeder.SatellaviewDat, IngestSeeder.SufamiTurboDat, IngestSeeder.SnesDat, IngestSeeder.VirtualBoyDat, IngestSeeder.WiiDat, IngestSeeder.NeoGeoPocketDat, IngestSeeder.NeoGeoPocketColorDat, IngestSeeder.Sega32xDat, IngestSeeder.GameGearDat, IngestSeeder.MasterSystemDat, IngestSeeder.MegaDriveDat, IngestSeeder.SegaCdDat, IngestSeeder.SaturnDat, IngestSeeder.PsxDat, IngestSeeder.PspDat, IngestSeeder.ThreeDoDat }));
+        Assert.That(rows.Select(r => r.GetProperty("datName").GetString()), Is.EqualTo(new[] { IngestSeeder.Atari2600Dat, IngestSeeder.Atari5200Dat, IngestSeeder.Atari7800Dat, IngestSeeder.JaguarDat, IngestSeeder.LynxDat, IngestSeeder.ColecoVisionDat, IngestSeeder.C64Dat, IngestSeeder.AmigaDat, IngestSeeder.PetDat, IngestSeeder.Vic20Dat, "FBNeo - Arcade Games", "MAME", IngestSeeder.Xbox360Dat, IngestSeeder.TurboGrafx16Dat, IngestSeeder.TurboGrafxCdDat, IngestSeeder.PcfxDat, IngestSeeder.FdsDat, Gb, IngestSeeder.GbaDat, Gbc, IngestSeeder.GameCubeDat, IngestSeeder.ThreeDsDat, IngestSeeder.N64Dat, IngestSeeder.NintendoDsDat, IngestSeeder.NesDat, IngestSeeder.SwitchDat, IngestSeeder.SatellaviewDat, IngestSeeder.SufamiTurboDat, IngestSeeder.SnesDat, IngestSeeder.VirtualBoyDat, IngestSeeder.WiiDat, IngestSeeder.NeoGeoPocketDat, IngestSeeder.NeoGeoPocketColorDat, IngestSeeder.Sega32xDat, IngestSeeder.GameGearDat, IngestSeeder.MasterSystemDat, IngestSeeder.MegaDriveDat, IngestSeeder.SegaCdDat, IngestSeeder.SaturnDat, IngestSeeder.PsxDat, IngestSeeder.PspDat, IngestSeeder.ThreeDoDat }));
         string[] romsets = ["MAME", "FBNeo - Arcade Games"];
         Assert.That(rows.Where(r => !romsets.Contains(r.GetProperty("datName").GetString())).Select(r => r.GetProperty("version").GetString()), Is.All.EqualTo("2026.01.01"));
         Assert.That(rows.Where(r => romsets.Contains(r.GetProperty("datName").GetString())).Select(r => r.GetProperty("version").GetString()), Is.EqualTo(new[] { FixtureDatWriter.MameVersion, FixtureDatWriter.MameVersion }));
@@ -366,7 +366,7 @@ public class DatEndpointsTests
         var after = clock.GetUtcNow().UtcDateTime.ToString("yyyy.MM.dd", System.Globalization.CultureInfo.InvariantCulture);
 
         Assert.That(job.Status, Is.EqualTo(JobStatus.Completed), job.Error);
-        Assert.That(_server.Requests, Has.Count.EqualTo(140), "5 per No-Intro libretro system with metadat, 1 for Commodore 64, Commodore PET, Commodore VIC-20, Commodore Amiga and each disc system (no metadat), 4 for Nintendo 3DS (no releaseyear), one titledb source, one MAME DAT and one FBNeo DAT");
+        Assert.That(_server.Requests, Has.Count.EqualTo(141), "5 per No-Intro libretro system with metadat, 1 for Commodore 64, Commodore PET, Commodore VIC-20, Commodore Amiga and each disc system (no metadat), 4 for Nintendo 3DS (no releaseyear), one titledb source, one MAME DAT and one FBNeo DAT");
         Assert.That(_server.Requests.Count(r => r.RequestUri!.AbsoluteUri == "https://dats.test/metadat/US.en.json"), Is.EqualTo(1));
         // titledb is versioned by the UTC date of its download, apart from the libretro fixture version.
         Assert.That(_factory.Services.GetRequiredService<DatCache>().For("switch")!.Version, Is.AnyOf(before, after));
