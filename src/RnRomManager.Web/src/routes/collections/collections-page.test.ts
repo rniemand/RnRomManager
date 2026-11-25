@@ -204,6 +204,7 @@ describe('collections tabs (discovery B1)', () => {
 		expect(current()).toEqual(['User collections']);
 		expect(tabLink('User collections').getAttribute('href')).toBe('/collections');
 		expect(tabLink('Publishers').getAttribute('href')).toBe('/collections?tab=publishers');
+		expect(tabLink('Developers').getAttribute('href')).toBe('/collections?tab=developers');
 		expect(tabLink('Genres').getAttribute('href')).toBe('/collections?tab=genres');
 		expect(tabLink('Systems').getAttribute('href')).toBe('/collections?tab=systems');
 		expect(screen.getAllByRole('button', { name: /New collection/ })).toHaveLength(1);
@@ -221,7 +222,7 @@ describe('collections tabs (discovery B1)', () => {
 	});
 
 	it('an unknown tab value is User collections with its legacy query kept', async () => {
-		navigateTo('/collections?tab=developers&q=zel&page=2');
+		navigateTo('/collections?tab=studios&q=zel&page=2');
 		answers['GET /api/collections?q=zel&page=2&pageSize=20'] = [
 			{ status: 200, body: { ...pageOf([item('c1', 'Zelda')], 45), page: 2 } }
 		];
@@ -267,6 +268,66 @@ describe('collections tabs (discovery B1)', () => {
 			await screen.findByText('Choose a genre to see its games across every system.')
 		).toBeTruthy();
 		expect(keys().some((k) => k.includes('/games'))).toBe(false);
+	});
+
+	it('the Developers tab asks for a developer and lists developers', async () => {
+		navigateTo('/collections?tab=developers');
+		answers['GET /api/discovery/developers?pageSize=20'] = [
+			{ status: 200, body: { items: [], page: 1, pageSize: 20, total: 0 } }
+		];
+		render(CollectionsPage);
+
+		expect(
+			await screen.findByText('Choose a developer to see its games across every system.')
+		).toBeTruthy();
+		expect(current()).toEqual(['Developers']);
+		expect(await screen.findByText('No games have developers yet.')).toBeTruthy();
+	});
+
+	it('?name= resolves to the group key, replacing the URL (P3)', async () => {
+		const key = 'c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516';
+		navigateTo('/collections?tab=developers&name=Nintendo%20EAD');
+		answers['GET /api/discovery/developers/key?name=Nintendo+EAD'] = [
+			{ status: 200, body: { key } }
+		];
+		render(CollectionsPage);
+
+		await vi.waitFor(() =>
+			expect(goto).toHaveBeenCalledWith(`/collections?tab=developers&key=${key}`, {
+				replace: true,
+				reset: false
+			})
+		);
+	});
+
+	it.each([
+		[404, { status: 404, code: 'NotFound' }],
+		[500, { status: 500, title: 'Boom' }]
+	])('?name= that fails with %s falls back to find', async (status, body) => {
+		navigateTo(`/collections?tab=publishers&name=${encodeURIComponent('  Hudson Soft ')}`);
+		answers['GET /api/discovery/publishers/key?name=Hudson+Soft'] = [{ status, body }];
+		render(CollectionsPage);
+
+		await vi.waitFor(() =>
+			expect(goto).toHaveBeenCalledWith('/collections?tab=publishers&find=Hudson+Soft', {
+				replace: true,
+				reset: false
+			})
+		);
+	});
+
+	it('a key in the URL wins over ?name=, which is dropped without a request', async () => {
+		const key = 'c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516';
+		navigateTo(`/collections?tab=genres&key=${key}&name=Puzzle`);
+		render(CollectionsPage);
+
+		await vi.waitFor(() =>
+			expect(goto).toHaveBeenCalledWith(`/collections?tab=genres&key=${key}`, {
+				replace: true,
+				reset: false
+			})
+		);
+		expect(keys().some((k) => k.includes('/key?'))).toBe(false);
 	});
 
 	it('back and forward between tabs follow the URL', async () => {

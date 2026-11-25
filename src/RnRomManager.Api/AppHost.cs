@@ -108,6 +108,7 @@ public static class AppHost
             .MapBundleDownloadEndpoints()
             .MapDiscoveryEndpoints()
             .MapDiscoveryLogoEndpoints()
+            .MapTimelineEndpoints()
             .MapEmulatorEndpoints()
             .MapIntegrityEndpoints()
             .MapReportEndpoints()

@@ -11,18 +11,21 @@
 	import Loading from '#lib/components/Loading.svelte';
 	import Pagination from '#lib/components/Pagination.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
-	import { formatDateTime } from '#lib/format.js';
+	import { formatCount, formatDateTime } from '#lib/format.js';
 	import { pageCount } from '#lib/pageSize.js';
 	import { systemFilterOptions } from '#lib/systemFilter.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 
-	/** RP9. The System filter and page are component state only. */
+	/** RP9. The Match by and System filters and the page are component state only. */
 	interface DuplicateGroup {
 		system: string;
 		systemName: string;
+		/** For an IGDB group (D1) the smallest display title of its games. */
 		baseTitle: string;
 		gamesKey: string;
+		/** D1: the shared IGDB id; null for a title group. */
+		igdbId: number | null;
 		/** Suggested target first. */
 		games: {
 			id: string;
@@ -35,6 +38,7 @@
 
 	const pageSize = 25;
 
+	let match = $state<'igdb' | 'title'>('igdb');
 	let system = $state('');
 	let pageNumber = $state(1);
 	let systems = $state<SystemInfo[]>([]);
@@ -58,7 +62,7 @@
 	});
 
 	$effect(() => {
-		let url = `/api/reports/duplicates?page=${pageNumber}&pageSize=${pageSize}`;
+		let url = `/api/reports/duplicates?match=${match}&page=${pageNumber}&pageSize=${pageSize}`;
 		if (system) url += `&system=${encodeURIComponent(system)}`;
 		void reload;
 		const controller = new AbortController();
@@ -105,11 +109,12 @@
 
 	async function dismiss(group: DuplicateGroup): Promise<void> {
 		try {
-			await api.post('/api/reports/duplicates/dismiss', {
-				system: group.system,
-				baseTitle: group.baseTitle,
-				gamesKey: group.gamesKey
-			});
+			await api.post(
+				'/api/reports/duplicates/dismiss',
+				group.igdbId === null
+					? { system: group.system, baseTitle: group.baseTitle, gamesKey: group.gamesKey }
+					: { system: group.system, gamesKey: group.gamesKey, igdbId: group.igdbId }
+			);
 			toasts.show(`Dismissed ${group.baseTitle}.`, 'success');
 			reload++;
 		} catch (e) {
@@ -121,6 +126,23 @@
 <svelte:head><title>Duplicates · RnRomManager</title></svelte:head>
 
 <div class="row g-2 align-items-end mb-3">
+	<div class="col-auto">
+		<div class="input-group input-group-sm w-auto">
+			<label class="input-group-text" for="duplicates-match">Match by</label>
+			<select
+				id="duplicates-match"
+				class="form-select w-auto"
+				value={match}
+				onchange={(e) => {
+					match = e.currentTarget.value === 'title' ? 'title' : 'igdb';
+					pageNumber = 1;
+				}}
+			>
+				<option value="igdb">IGDB ID</option>
+				<option value="title">Title</option>
+			</select>
+		</div>
+	</div>
 	<div class="col-12 col-sm-6 col-md-4">
 		<FilterDropdown
 			label="System"
@@ -141,13 +163,23 @@
 {:else if !result}
 	<Loading />
 {:else if result.items.length === 0}
-	<div class="card"><EmptyState message="No duplicate games found." /></div>
+	<div class="card">
+		<EmptyState
+			message={match === 'igdb' ? 'No games share an IGDB ID.' : 'No duplicate games found.'}
+		/>
+	</div>
 {:else}
+	<p class="small text-body-secondary mb-2">
+		{formatCount(result.total)}
+		{result.total === 1 ? 'group' : 'groups'}
+	</p>
 	{#each result.items as group (group.gamesKey + group.system + group.baseTitle)}
 		<section class="card mb-3" aria-labelledby="group-{group.gamesKey}">
 			<div class="card-header d-flex flex-wrap align-items-center gap-2">
 				<SystemBadge system={group.system} name={group.systemName} />
 				<h2 class="h6 mb-0" id="group-{group.gamesKey}">{group.baseTitle}</h2>
+				{#if group.igdbId !== null}<span class="badge text-bg-secondary">IGDB {group.igdbId}</span
+					>{/if}
 			</div>
 			<div class="table-responsive">
 				<table class="table table-sm table-striped table-hover align-middle mb-0">

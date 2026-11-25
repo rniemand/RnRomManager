@@ -41,6 +41,15 @@ public sealed class DiscoveryRepository(IDbConnectionFactory connections, IGameR
     public async Task<DiscoveryGroup?> GetGroupAsync(DiscoveryKind kind, string key, CancellationToken cancellationToken) =>
         (await IndexAsync(kind, cancellationToken)).ByKey.GetValueOrDefault(key)?.Info;
 
+    public async Task<string?> FindKeyAsync(DiscoveryKind kind, string name, CancellationToken cancellationToken)
+    {
+        string key;
+        await using (var connection = connections.Create())
+            key = await connection.ExecuteScalarAsync<string>(new CommandDefinition(
+                $"SELECT SHA2({DiscoverySql.Norm(DiscoverySql.Trimmed("@name"))}, 256)", new { name }, cancellationToken: cancellationToken)) ?? "";
+        return (await IndexAsync(kind, cancellationToken)).ByKey.ContainsKey(key) ? key : null;
+    }
+
     public async Task<Page<GameListItem>?> ListGamesAsync(
         DiscoveryKind kind, string key, int page, int pageSize, CancellationToken cancellationToken)
     {

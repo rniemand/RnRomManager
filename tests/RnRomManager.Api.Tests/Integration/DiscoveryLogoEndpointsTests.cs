@@ -89,9 +89,9 @@ public class DiscoveryLogoEndpointsTests
         return client;
     }
 
-    private async Task<Guid> AddGameAsync(string title, string[] publishers, string[]? genres = null)
+    private async Task<Guid> AddGameAsync(string title, string[] publishers, string[]? genres = null, string[]? developers = null)
     {
-        var game = Game(title, Rom($"{title}.gb", RomBytes(++_seed))) with { Publishers = publishers, Genres = genres ?? [] };
+        var game = Game(title, Rom($"{title}.gb", RomBytes(++_seed))) with { Publishers = publishers, Genres = genres ?? [], Developers = developers ?? [] };
         await _factory.Services.GetRequiredService<ILibraryMirror>()
             .ReplaceAsync(new MirrorEntry(game, $"gb/{title[0]}/{title}.zip", 100, When.UtcDateTime), default);
         return game.GameId;
@@ -260,26 +260,30 @@ public class DiscoveryLogoEndpointsTests
     }
 
     [TestCase("genres")]
+    [TestCase("developers")]
     [TestCase("systems")]
     public async Task OtherKinds_RoundTrip_AndAreAuditedWithTheirName(string kind)
     {
-        await AddGameAsync("Tetris", ["Nintendo"], ["Puzzle"]);
+        await AddGameAsync("Tetris", ["Nintendo"], ["Puzzle"], ["Bullet-Proof"]);
         ExpireIndex();
-        var key = kind == "genres" ? Key("puzzle") : "gb";
+        var key = kind switch { "genres" => Key("puzzle"), "developers" => Key("bullet-proof"), _ => "gb" };
         var url = $"/api/discovery/{kind}/logo?key={key}";
         var png = Png(30, 30);
 
         Assert.That(await StatusAsync(_alice.SendContentAsync(HttpMethod.Put, url, Form(("file", png)))), Is.EqualTo(HttpStatusCode.NoContent));
         using (var served = await _bob.GetAsync(url))
             Assert.That(await served.Content.ReadAsByteArrayAsync(), Is.EqualTo(png));
-        Assert.That(await StatusAsync(_alice.GetAsync(kind == "genres" ? Url(key) : Url(DiscoveryKey.ForSystem(key)))), Is.EqualTo(HttpStatusCode.NotFound),
+        Assert.That(await StatusAsync(_alice.GetAsync(kind == "systems" ? Url(DiscoveryKey.ForSystem(key)) : Url(key))), Is.EqualTo(HttpStatusCode.NotFound),
             "the publishers kind holds its own logos");
         Assert.That(await StatusAsync(_alice.SendAsync(HttpMethod.Delete, url, null, sendXsrf: true)), Is.EqualTo(HttpStatusCode.NoContent));
         Assert.That(await StatusAsync(_alice.GetAsync(url)), Is.EqualTo(HttpStatusCode.NotFound));
 
-        var (replaced, removed, details, systemId) = kind == "genres"
-            ? (AuditActions.GenreLogoReplaced, AuditActions.GenreLogoRemoved, $"Puzzle (key {key})", (string?)null)
-            : (AuditActions.SystemLogoReplaced, AuditActions.SystemLogoRemoved, $"{SystemName("gb")} (system gb)", "gb");
+        var (replaced, removed, details, systemId) = kind switch
+        {
+            "genres" => (AuditActions.GenreLogoReplaced, AuditActions.GenreLogoRemoved, $"Puzzle (key {key})", (string?)null),
+            "developers" => (AuditActions.DeveloperLogoReplaced, AuditActions.DeveloperLogoRemoved, $"Bullet-Proof (key {key})", null),
+            _ => (AuditActions.SystemLogoReplaced, AuditActions.SystemLogoRemoved, $"{SystemName("gb")} (system gb)", "gb"),
+        };
         Assert.That(await AuditRowsAsync(), Is.EqualTo(new[]
         {
             new AuditRow(replaced, "alice", details),
@@ -318,7 +322,7 @@ public class DiscoveryLogoEndpointsTests
         Assert.That(await AuditRowsAsync(), Is.EqualTo(new[] { new AuditRow(AuditActions.SystemLogoRemoved, "alice", "system zx81") }));
     }
 
-    [TestCase("developers")]
+    [TestCase("studios")]
     [TestCase("Publishers")]
     [TestCase("system")]
     public async Task UnknownKind_Is404(string kind)

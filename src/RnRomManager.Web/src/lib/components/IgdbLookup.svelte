@@ -26,9 +26,20 @@
 		onapply: (form: GameEditForm, options?: { match?: IgdbMatch; save?: boolean }) => void;
 		/** M2: search as soon as the panel mounts (IGDB configured only). */
 		autostart?: boolean;
+		/** M1: the selected match (written here), so the modal footer can show the match buttons. */
+		chosen?: IgdbMatch | null;
+		/** M1: IGDB isn't configured (written here); the footer then hides Not on IGDB. */
+		notConfigured?: boolean;
 	}
 
-	let { game, form, onapply, autostart = false }: Props = $props();
+	let {
+		game,
+		form,
+		onapply,
+		autostart = false,
+		chosen = $bindable(null),
+		notConfigured = $bindable(false)
+	}: Props = $props();
 
 	const maxQuery = 100;
 	/** Typing searches once the input has been still this long (IGDB is rate limited). */
@@ -36,7 +47,7 @@
 
 	let q = $state(untrack(() => game.displayTitle.slice(0, maxQuery)));
 	let searching = $state(false);
-	let notConfigured = $state(untrack(() => !game.igdbConfigured));
+	notConfigured = untrack(() => !game.igdbConfigured);
 	let error = $state<unknown>(null);
 	let matches = $state<IgdbMatch[] | null>(null);
 	/** The query the shown matches (or the empty text) are for. */
@@ -44,7 +55,6 @@
 	let selected = $state<number | null>(null);
 	/** M3: the compare table's rows for the selected match. */
 	let copy = $state<CopyState | null>(null);
-	const chosen = $derived(matches?.find((m) => m.igdbId === selected) ?? null);
 
 	const fieldLabels: Record<CopyField, string> = {
 		title: 'Title',
@@ -68,6 +78,7 @@
 
 	function select(match: IgdbMatch): void {
 		selected = match.igdbId;
+		chosen = match;
 		copy = defaultCopyFields(form, match);
 	}
 
@@ -90,12 +101,18 @@
 		return shown(field, field === 'title' ? match.name : match[field]);
 	}
 
-	/** Copies the ticked fields of the selected match; `save` also saves the modal. */
-	function useMatch(save: boolean): void {
+	/** M1 (the modal footer's buttons): copies the ticked fields of the selected match; `save` also saves the modal. */
+	export function useMatch(save: boolean): void {
 		if (!chosen || !copy) return;
 		const fields = copyFields.filter((f) => copy![f].checked && !copy![f].disabled);
 		onapply(applyMatch(form, chosen, fields), { match: chosen, save });
 	}
+
+	/** M1 Not on IGDB: clears the link; the modal switches to Details. */
+	export function notOnIgdb(): void {
+		onapply({ ...form, igdbId: 0 });
+	}
+
 	let controller: AbortController | undefined;
 	let timer: ReturnType<typeof setTimeout> | undefined;
 
@@ -118,6 +135,7 @@
 		error = null;
 		matches = null;
 		selected = null;
+		chosen = null;
 		copy = null;
 		try {
 			const params = new URLSearchParams({ q: term });
@@ -277,23 +295,7 @@
 				<a href={chosen.url} target="_blank" rel="noopener noreferrer">View on IGDB</a>
 			</p>
 		{/if}
-		<div class="d-flex flex-wrap gap-2 mb-3">
-			<button type="button" class="btn btn-primary btn-sm" onclick={() => useMatch(false)}
-				>Use this match</button
-			>
-			<button type="button" class="btn btn-primary btn-sm" onclick={() => useMatch(true)}
-				>Use this match and save</button
-			>
-		</div>
 	{/if}
-
-	<div>
-		<button
-			type="button"
-			class="btn btn-outline-secondary btn-sm"
-			onclick={() => onapply({ ...form, igdbId: 0 })}>Not on IGDB</button
-		>
-	</div>
 {/if}
 
 <style>

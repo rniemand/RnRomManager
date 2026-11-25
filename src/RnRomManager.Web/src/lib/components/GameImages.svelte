@@ -313,7 +313,12 @@
 		{#each game.images as image (image.id)}
 			<div class="col">
 				<!-- B10: the tile lifts on hover or keyboard focus. -->
-				<div class="card h-100 image-tile">
+				<!-- P6: the cover's card stands out. -->
+				<div
+					class="card h-100 image-tile"
+					class:border-primary={image.isCover}
+					class:border-2={image.isCover}
+				>
 					<!-- B10: the size badge sits over the thumbnail, outside its button. -->
 					<div class="position-relative">
 						<button
@@ -334,7 +339,7 @@
 							><FileSize bytes={image.sizeBytes} /></span
 						>
 					</div>
-					<div class="card-body p-2 small">
+					<div class="card-body p-2 small" class:bg-primary-subtle={image.isCover}>
 						<div class="d-flex flex-wrap gap-1 mb-1">
 							<span class="badge text-bg-secondary">{imageTypeLabels[image.type]}</span>
 							{#if image.isCover}<span class="badge text-bg-primary">Cover</span>{/if}

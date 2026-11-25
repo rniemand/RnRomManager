@@ -3,7 +3,13 @@
 	import { auth } from '../stores/auth.svelte';
 	import { resolve } from '$app/paths';
 	import type { DiscoveryGroup, Page } from '../api/types';
-	import { discoveryApi, discoverySearch, maxFind, type DiscoveryState } from '../discovery';
+	import {
+		discoveryApi,
+		discoverySearch,
+		discoveryText,
+		maxFind,
+		type DiscoveryState
+	} from '../discovery';
 	import { formatCount } from '../format';
 	import { pageCount, readPageSize, writePageSize } from '../pageSize';
 	import EmptyState from './EmptyState.svelte';
@@ -15,7 +21,7 @@
 	import LogoModal from './LogoModal.svelte';
 
 	/**
-	 * Discovery B2: one page of a kind's live groups (publishers or genres across systems), each a link selecting it.
+	 * Discovery B2: one page of a kind's live groups (publishers, developers or genres across systems), each a link selecting it.
 	 * The page number lives in the URL (`groupPage`); the rows per page are remembered in this browser.
 	 */
 	interface Props {
@@ -65,7 +71,8 @@
 	let editing = $state<DiscoveryGroup | null>(null);
 	let logoOpen = $state(false);
 
-	const noun = $derived(view.kind === 'publishers' ? 'publishers' : 'genres');
+	const text = $derived(discoveryText[view.kind]);
+	const noun = $derived(text.plural);
 
 	function setPageSize(size: number): void {
 		pageSize = size;
@@ -124,7 +131,7 @@
 		<EmptyState message="There are no {noun} on this page." />
 	{/if}
 {:else}
-	<ul class="list-group" aria-label={view.kind === 'publishers' ? 'Publishers' : 'Genres'}>
+	<ul class="list-group" aria-label={text.label}>
 		{#each result.items as group (group.key)}
 			<li class="list-group-item p-0 d-flex align-items-stretch">
 				<a
@@ -169,7 +176,7 @@
 		{onpage}
 		{pageSize}
 		onpagesize={setPageSize}
-		label="{view.kind === 'publishers' ? 'Publisher' : 'Genre'} pages"
+		label={text.pager}
 	/>
 {/if}
 

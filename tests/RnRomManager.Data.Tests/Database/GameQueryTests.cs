@@ -34,7 +34,7 @@ public class GameQueryTests
     /// <summary>Inserts a game whose releases have the given region lists; <paramref name="addedMinutes"/> orders <c>created_at</c>.</summary>
     private async Task<Guid> Add(string title, int? year = null, int addedMinutes = 0, string system = "gb", bool boxArt = true,
         string? displayTitle = null, int? rating = null, bool favourite = false, string[]? developers = null,
-        string[]? publishers = null, string[]? genres = null, (string FileName, string[] Flags)[]? addOns = null,
+        string[]? publishers = null, string[]? genres = null, (string FileName, string[] Flags)[]? addOns = null, int? igdbId = null,
         params string[][] releases)
     {
         if (releases.Length == 0)
@@ -48,6 +48,7 @@ public class GameQueryTests
             System = system,
             DisplayTitle = displayTitle ?? title,
             ReleaseYear = year,
+            IgdbId = igdbId,
             Rating = rating,
             Favourite = favourite,
             Developers = developers ?? [],
@@ -265,6 +266,58 @@ public class GameQueryTests
 
         Assert.That(await Titles(new GameQuery { Sort = GameSort.Year }), Is.EqualTo(new[] { "Old", "New", "Unknown" }));
         Assert.That(await Titles(new GameQuery { Sort = GameSort.Year, Descending = true }), Is.EqualTo(new[] { "New", "Old", "Unknown" }));
+    }
+
+    [Test]
+    public async Task Sort_Year_TiesByTitleThenIdInBothDirections()
+    {
+        await Add("Zeta", year: 1990);
+        await Add("Alpha", year: 1990);
+        await Add("Later", year: 1991);
+
+        Assert.That(await Titles(new GameQuery { Sort = GameSort.Year }), Is.EqualTo(new[] { "Alpha", "Zeta", "Later" }));
+        Assert.That(await Titles(new GameQuery { Sort = GameSort.Year, Descending = true }), Is.EqualTo(new[] { "Later", "Alpha", "Zeta" }));
+    }
+
+    [Test]
+    public async Task YearRange_IsInclusive_AndLeavesOutGamesWithoutAYear()
+    {
+        await Add("Before", year: 1989);
+        await Add("From", year: 1990);
+        await Add("To", year: 1992);
+        await Add("After", year: 1993);
+        await Add("Unknown");
+
+        Assert.That(await Titles(new GameQuery { YearFrom = 1990, YearTo = 1992, Sort = GameSort.Year }), Is.EqualTo(new[] { "From", "To" }));
+        Assert.That(await Titles(new GameQuery { YearFrom = 1992 }), Is.EquivalentTo(new[] { "To", "After" }));
+        Assert.That(await Titles(new GameQuery { YearTo = 1989 }), Is.EqualTo(new[] { "Before" }));
+    }
+
+    [Test]
+    public async Task IgdbLinked_LeavesOutNullAndZero_AndListItemsCarryTheId()
+    {
+        await Add("Linked", igdbId: 42);
+        await Add("Zero", igdbId: 0);
+        await Add("None");
+
+        var page = await _games.ListAsync(new GameQuery { IgdbLinked = true }, default);
+        Assert.That(page.Items.Select(i => (i.DisplayTitle, i.IgdbId)), Is.EqualTo(new[] { ("Linked", (int?)42) }));
+        Assert.That((await _games.ListAsync(new GameQuery(), default)).Items.Single(i => i.DisplayTitle == "None").IgdbId, Is.Null);
+    }
+
+    [Test]
+    public async Task ReleaseYearCounts_OnlyLinkedGamesWithAYear_PerSystemOrAll()
+    {
+        await Add("A", year: 1990, igdbId: 1);
+        await Add("B", year: 1990, igdbId: 2, system: "gbc");
+        await Add("C", year: 1985, igdbId: 3);
+        await Add("Unlinked", year: 1990);
+        await Add("Zero", year: 1990, igdbId: 0);
+        await Add("No year", igdbId: 4);
+
+        Assert.That(await _games.ListReleaseYearCountsAsync(null, default), Is.EqualTo(new[] { (1985, 1), (1990, 2) }));
+        Assert.That(await _games.ListReleaseYearCountsAsync("gb", default), Is.EqualTo(new[] { (1985, 1), (1990, 1) }));
+        Assert.That(await _games.ListReleaseYearCountsAsync("nes", default), Is.Empty);
     }
 
     [Test]

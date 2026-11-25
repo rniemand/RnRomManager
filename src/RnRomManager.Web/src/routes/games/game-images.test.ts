@@ -140,6 +140,13 @@ describe('game images', () => {
 		expect(within(cards[1] as HTMLElement).getByText('Cover').className).toContain(
 			'text-bg-primary'
 		);
+		// P6: only the cover's card is highlighted.
+		expect([...cards[1]!.classList]).toEqual(
+			expect.arrayContaining(['border-primary', 'border-2'])
+		);
+		expect(cards[1]!.querySelector('.card-body')!.classList).toContain('bg-primary-subtle');
+		expect(cards[0]!.classList).not.toContain('border-primary');
+		expect(cards[0]!.querySelector('.card-body')!.classList).not.toContain('bg-primary-subtle');
 		// B10: the caption keeps the dimensions; the size is a badge over the thumbnail.
 		const caption = cards[1]!.querySelector('.card-body .text-body-secondary')!;
 		expect(caption.textContent!.trim()).toBe('160×144');

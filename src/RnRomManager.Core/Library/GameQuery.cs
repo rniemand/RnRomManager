@@ -29,6 +29,15 @@ public sealed record GameQuery
     /// <summary>Only these games (a discovery group's page); callers keep the list within <see cref="Database.Page{T}.MaxSize"/>.</summary>
     public IReadOnlyCollection<Guid>? GameIds { get; init; }
 
+    /// <summary>Only games released in or after this year; games without a year are left out (Timeline T9).</summary>
+    public int? YearFrom { get; init; }
+
+    /// <summary>Only games released in or before this year; games without a year are left out (Timeline T9).</summary>
+    public int? YearTo { get; init; }
+
+    /// <summary>true = only games linked to IGDB (<c>igdb_id &gt; 0</c>, Timeline T2).</summary>
+    public bool IgdbLinked { get; init; }
+
     public GameSort Sort { get; init; } = GameSort.Title;
     public bool Descending { get; init; }
     public int Page { get; init; } = 1;

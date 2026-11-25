@@ -48,6 +48,7 @@ function game(id: string, extra: Partial<GameListItem> = {}): GameListItem {
 		playRomFileName: null,
 		playDisc: false,
 		browserCore: null,
+		igdbId: null,
 		...extra
 	};
 }

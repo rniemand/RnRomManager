@@ -36,7 +36,7 @@
 
 	type NavLink = {
 		// The links this bar has: a union of every page route is too wide for resolve()'s overloads.
-		href: '/' | '/collections' | '/reports' | '/ingestion';
+		href: '/' | '/collections' | '/timeline' | '/reports' | '/ingestion';
 		label: string;
 		icon: string;
 		admin?: boolean;
@@ -47,6 +47,7 @@
 	const navigation: NavLink[] = [
 		{ href: '/', label: 'Library', icon: 'library' },
 		{ href: '/collections', label: 'Collections', icon: 'collections' },
+		{ href: '/timeline', label: 'Timeline', icon: 'timeline' },
 		{ href: '/reports', label: 'Reports', icon: 'reports' },
 		{
 			href: '/ingestion',

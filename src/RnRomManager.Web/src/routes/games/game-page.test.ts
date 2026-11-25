@@ -1562,7 +1562,7 @@ describe('game detail page', () => {
 		});
 	});
 
-	it('the action row: ZIP, ROM, Google, Collections, Emulators, then Manage; all btn-sm (B3)', async () => {
+	it('the action row: ZIP, ROM, Collections, then Manage; all btn-sm (B3, P1)', async () => {
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);
 
@@ -1575,9 +1575,7 @@ describe('game detail page', () => {
 		expect(row.map((e) => e.textContent?.trim())).toEqual([
 			'Download ZIP',
 			'Download ROM',
-			'Google',
 			'Collections',
-			'Emulators',
 			'Manage'
 		]);
 		for (const e of row) expect(e.classList).toContain('btn-sm');
@@ -1619,6 +1617,171 @@ describe('game detail page', () => {
 			['Saves (0)', 'bi bi-floppy-fill'],
 			['Zip Contents', 'bi bi-file-zip']
 		]);
+	});
+
+	it('the top row: Back to Library, Google, Emulators, then View on IGDB when linked and configured (P1)', async () => {
+		answers.push({
+			status: 200,
+			body: { ...game([1]), igdbConfigured: true, igdbId: 1234 }
+		});
+		render(GamePage);
+
+		const back = await screen.findByRole('link', { name: 'Back to Library' });
+		await screen.findByRole('link', { name: 'Google' });
+		const top = back.parentElement!;
+		expect(top.tagName).toBe('DIV');
+		expect(top.className).toBe('d-flex flex-wrap gap-2 mb-3');
+		expect([...top.children].map((e) => e.textContent?.trim())).toEqual([
+			'Back to Library',
+			'Google',
+			'Emulators',
+			'View on IGDB'
+		]);
+		const igdb = screen.getByRole('link', { name: 'View on IGDB' });
+		expect(igdb.getAttribute('href')).toBe('/api/igdb/games/1234/page');
+		expect(igdb.className).toBe('btn btn-sm btn-outline-secondary');
+		expect([igdb.getAttribute('target'), igdb.getAttribute('rel')]).toEqual([
+			'_blank',
+			'noopener noreferrer'
+		]);
+		expect(igdb.querySelector('.bi-box-arrow-up-right')).not.toBeNull();
+	});
+
+	it.each([
+		[{ igdbConfigured: true, igdbId: null }],
+		[{ igdbConfigured: true, igdbId: 0 }],
+		[{ igdbConfigured: false, igdbId: 1234 }]
+	])('no View on IGDB for %o', async (changes) => {
+		answers.push({ status: 200, body: { ...game([1]), ...changes } });
+		render(GamePage);
+
+		await screen.findByRole('link', { name: 'Google' });
+		expect(screen.queryByRole('link', { name: 'View on IGDB' })).toBeNull();
+	});
+
+	it('the top row shows only Back to Library until the game loads', () => {
+		render(GamePage);
+
+		expect(screen.getByRole('link', { name: 'Back to Library' })).toBeTruthy();
+		expect(screen.queryByRole('link', { name: 'Google' })).toBeNull();
+		expect(screen.queryByRole('button', { name: 'Emulators' })).toBeNull();
+	});
+
+	it('each developer, publisher and genre links to its Collections group by name (P2)', async () => {
+		answers.push({
+			status: 200,
+			body: {
+				...game([1]),
+				developers: ['Nintendo R&D1', 'Bullet-Proof'],
+				publishers: ['Nintendo'],
+				genres: []
+			}
+		});
+		render(GamePage);
+
+		const cell = (name: string) =>
+			screen.getByRole('rowheader', { name }).nextElementSibling as HTMLElement;
+		await screen.findByRole('link', { name: 'Nintendo R&D1' });
+		expect(
+			[...cell('Developers').querySelectorAll('a')].map((a) => [
+				a.textContent,
+				a.getAttribute('href')
+			])
+		).toEqual([
+			['Nintendo R&D1', '/collections?tab=developers&name=Nintendo+R%26D1'],
+			['Bullet-Proof', '/collections?tab=developers&name=Bullet-Proof']
+		]);
+		expect(cell('Developers').textContent!.replace(/\s+/g, ' ').trim()).toBe(
+			'Nintendo R&D1, Bullet-Proof'
+		);
+		expect(cell('Publishers').querySelector('a')!.getAttribute('href')).toBe(
+			'/collections?tab=publishers&name=Nintendo'
+		);
+		expect(cell('Genres').textContent!.trim()).toBe('—');
+		expect(cell('Genres').querySelector('a')).toBeNull();
+	});
+
+	describe('description clamp (P5)', () => {
+		const text = 'Line one.\nLine two.\nLine three.';
+		/** jsdom has no layout: stub the clamped paragraph's heights. */
+		const heights = (scroll: number, client: number) => {
+			vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(scroll);
+			vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(client);
+		};
+		afterEach(() => vi.restoreAllMocks());
+		const toggle = (name: string) => screen.queryByRole('button', { name });
+
+		it('clamps to two lines and offers Show more when the text overflows', async () => {
+			heights(72, 48);
+			answers.push({ status: 200, body: { ...game([1]), description: text } });
+			render(GamePage);
+
+			const more = await screen.findByRole('button', { name: 'Show more' });
+			const p = document.getElementById('game-description')!;
+			expect(p.tagName).toBe('P');
+			expect(p.textContent).toBe(text);
+			expect(p.classList).toContain('clamped');
+			expect(more.className).toBe('btn btn-link btn-sm p-0 mb-3');
+			expect(more.getAttribute('type')).toBe('button');
+			expect(more.getAttribute('aria-controls')).toBe('game-description');
+			expect(more.getAttribute('aria-expanded')).toBe('false');
+
+			await fireEvent.click(more);
+			expect(p.classList).not.toContain('clamped');
+			const less = toggle('Show less')!;
+			expect(less.getAttribute('aria-expanded')).toBe('true');
+
+			await fireEvent.click(less);
+			expect(p.classList).toContain('clamped');
+			expect(toggle('Show more')).toBeTruthy();
+		});
+
+		it('no toggle when the text fits', async () => {
+			heights(48, 48);
+			answers.push({ status: 200, body: { ...game([1]), description: text } });
+			render(GamePage);
+
+			await screen.findByText(/Line one/);
+			expect(toggle('Show more')).toBeNull();
+			expect(toggle('Show less')).toBeNull();
+		});
+
+		it('collapses again on another game', async () => {
+			heights(72, 48);
+			answers.push(
+				{ status: 200, body: { ...game([1]), description: text } },
+				{ status: 200, body: { ...game([1]), id: 'g2', description: text } }
+			);
+			render(GamePage);
+			await fireEvent.click(await screen.findByRole('button', { name: 'Show more' }));
+			expect(toggle('Show less')).toBeTruthy();
+
+			navigateTo('/games/g2');
+
+			expect(await screen.findByRole('button', { name: 'Show more' })).toBeTruthy();
+			expect(document.getElementById('game-description')!.classList).toContain('clamped');
+		});
+	});
+
+	it('the Year links to its Timeline year only for an IGDB-linked game (P2)', async () => {
+		const yearCell = () =>
+			screen.getByRole('rowheader', { name: 'Year' }).nextElementSibling as HTMLElement;
+		answers.push({ status: 200, body: { ...game([1]), igdbId: 1234 } });
+		const { unmount } = render(GamePage);
+
+		const link = await screen.findByRole('link', { name: '1989' });
+		expect(link.getAttribute('href')).toBe('/timeline?from=1989&to=1989');
+		expect(yearCell().contains(link)).toBe(true);
+		unmount();
+
+		for (const changes of [{ igdbId: null }, { igdbId: 0 }, { igdbId: 1234, releaseYear: null }]) {
+			answers.push({ status: 200, body: { ...game([1]), ...changes } });
+			const view = render(GamePage);
+			await screen.findByRole('link', { name: 'Google' });
+			expect(yearCell().querySelector('a')).toBeNull();
+			expect(yearCell().textContent!.trim()).toBe(changes.releaseYear === null ? '—' : '1989');
+			view.unmount();
+		}
 	});
 
 	it('Back to Library is a small outline button to / (B5)', async () => {

@@ -28,6 +28,12 @@ public interface IDiscoveryRepository
     /// </summary>
     Task<Page<DiscoveryGroup>> ListGroupsAsync(DiscoveryKind kind, int page, int pageSize, string? q, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// P4: the key of the group whose normalized name equals <paramref name="name"/> normalized by MariaDB as B2 does, from
+    /// the same cached index as <see cref="GetGroupAsync"/>; null when no game has it.
+    /// </summary>
+    Task<string?> FindKeyAsync(DiscoveryKind kind, string name, CancellationToken cancellationToken);
+
     /// <summary>The group with <paramref name="key"/>, or null when no game has that value.</summary>
     Task<DiscoveryGroup?> GetGroupAsync(DiscoveryKind kind, string key, CancellationToken cancellationToken);
 

@@ -49,7 +49,8 @@ const game = (id: string, title: string): GameListItem => ({
 	playRomId: null,
 	playRomFileName: null,
 	playDisc: false,
-	browserCore: null
+	browserCore: null,
+	igdbId: null
 });
 const pageOf = (items: GameListItem[], total = items.length, page = 1) => ({
 	items,

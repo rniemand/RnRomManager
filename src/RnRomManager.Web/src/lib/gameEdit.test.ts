@@ -99,17 +99,17 @@ describe('edit metadata form', () => {
 });
 
 describe('IGDB lookup helpers', () => {
-	it('disables rows whose IGDB value is empty or equal, ticks the empty current ones but Title', () => {
+	it('disables rows whose IGDB value is empty or equal, ticks every enabled row', () => {
 		const state = defaultCopyFields(
 			form({ title: 'Tetris DX', developers: ' Nintendo \n', publishers: '', genres: 'Action' }),
 			match({ description: null })
 		);
 		expect(state).toEqual({
-			title: { disabled: false, checked: false },
+			title: { disabled: false, checked: true },
 			releaseYear: { disabled: true, checked: false },
 			developers: { disabled: true, checked: false },
 			publishers: { disabled: false, checked: true },
-			genres: { disabled: false, checked: false },
+			genres: { disabled: false, checked: true },
 			description: { disabled: true, checked: false }
 		});
 	});
@@ -118,9 +118,9 @@ describe('IGDB lookup helpers', () => {
 		expect(defaultCopyFields(form({ title: ' Tetris ' }), match()).title.disabled).toBe(true);
 		expect(defaultCopyFields(form({ title: 'TETRIS' }), match()).title).toEqual({
 			disabled: false,
-			checked: false
+			checked: true
 		});
-		expect(defaultCopyFields(form({ title: '' }), match()).title.checked).toBe(false);
+		expect(defaultCopyFields(form({ title: '' }), match()).title.checked).toBe(true);
 		expect(
 			defaultCopyFields(form({ description: 'Falling blocks.  ' }), match()).description.disabled
 		).toBe(true);
@@ -136,7 +136,7 @@ describe('IGDB lookup helpers', () => {
 		);
 		expect(defaultCopyFields(form({ releaseYear: '1990' }), match()).releaseYear).toEqual({
 			disabled: false,
-			checked: false
+			checked: true
 		});
 		expect(defaultCopyFields(form({ releaseYear: '' }), match()).releaseYear.checked).toBe(true);
 		expect(defaultCopyFields(form(), match({ releaseYear: null })).releaseYear.disabled).toBe(true);
@@ -147,7 +147,7 @@ describe('IGDB lookup helpers', () => {
 			form({ publishers: 'Nintendo\nCapcom' }),
 			match({ publishers: ['Capcom', 'Nintendo'] })
 		);
-		expect(order.publishers).toEqual({ disabled: false, checked: false });
+		expect(order.publishers).toEqual({ disabled: false, checked: true });
 		const same = defaultCopyFields(
 			form({ publishers: 'Nintendo\n\nNintendo\nCapcom' }),
 			match({ publishers: ['Nintendo', 'Capcom'] })

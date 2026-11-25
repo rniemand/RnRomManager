@@ -33,15 +33,15 @@ public partial class DiscoveryRepositoryTests
     }
 
     /// <summary>Inserts a game whose arrays are raw JSON, so tests can store anything MariaDB accepts.</summary>
-    private async Task<Guid> InsertGameAsync(string system, string title, string publishers = "[]", string genres = "[]")
+    private async Task<Guid> InsertGameAsync(string system, string title, string publishers = "[]", string genres = "[]", string developers = "[]")
     {
         var id = Guid.NewGuid();
         await using var connection = new MySqlConnection(_cs);
         await connection.ExecuteAsync("""
             INSERT INTO games (id, system_id, title, display_title, zip_path, bucket, developers, publishers, genres,
                                zip_size_bytes, zip_mtime_utc, info_schema_version, created_at, updated_at)
-            VALUES (@id, @system, @title, @title, @zip, 'T', '[]', @publishers, @genres, 1, @T0, 2, @T0, @T0)
-            """, new { id, system, title, zip = $"{system}/T/{id}.zip", publishers, genres, T0 });
+            VALUES (@id, @system, @title, @title, @zip, 'T', @developers, @publishers, @genres, 1, @T0, 2, @T0, @T0)
+            """, new { id, system, title, zip = $"{system}/T/{id}.zip", developers, publishers, genres, T0 });
         return id;
     }
 
@@ -162,6 +162,30 @@ public partial class DiscoveryRepositoryTests
         await InsertGameAsync("gb", "B", publishers: Json("Caf" + (char)0x00E9));
 
         Assert.That((await AllAsync(DiscoveryKind.Publishers)).Single(), Is.EqualTo(new DiscoveryGroup(Key("café"), "Café", 2)));
+    }
+
+    [Test]
+    public async Task Developers_AreIndexedFromTheDevelopersColumnOnly()
+    {
+        await InsertGameAsync("gb", "A", publishers: Json("Nintendo"), developers: Json("Bullet-Proof", "Nintendo R&D1"));
+        await InsertGameAsync("nes", "B", publishers: Json("Capcom"), developers: Json(" bullet-proof "));
+
+        Assert.That(await AllAsync(DiscoveryKind.Developers), Is.EqualTo(new[]
+        {
+            new DiscoveryGroup(Key("bullet-proof"), "Bullet-Proof", 2), new DiscoveryGroup(Key("nintendo r&d1"), "Nintendo R&D1", 1),
+        }));
+        Assert.That((await AllAsync(DiscoveryKind.Publishers)).Select(g => g.Name), Is.EqualTo(new[] { "Capcom", "Nintendo" }));
+    }
+
+    [Test]
+    public async Task FindKey_NormalizesAsTheIndex_CaseAndUnicodeSpaceInsensitive()
+    {
+        await InsertGameAsync("gb", "A", publishers: Json("Nintendo"), developers: Json("Bullet-Proof"));
+
+        Assert.That(await _repository.FindKeyAsync(DiscoveryKind.Publishers, $"{Nbsp}NINTENDO{IdeographicSpace}", default), Is.EqualTo(Key("nintendo")));
+        Assert.That(await _repository.FindKeyAsync(DiscoveryKind.Developers, "bullet-proof", default), Is.EqualTo(Key("bullet-proof")));
+        Assert.That(await _repository.FindKeyAsync(DiscoveryKind.Publishers, "Bullet-Proof", default), Is.Null, "names belong to their kind");
+        Assert.That(await _repository.FindKeyAsync(DiscoveryKind.Publishers, "Nintend", default), Is.Null);
     }
 
     [Test]

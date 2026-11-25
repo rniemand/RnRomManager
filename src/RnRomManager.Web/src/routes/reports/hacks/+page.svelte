@@ -14,6 +14,7 @@
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { pageCount } from '#lib/pageSize.js';
 	import { systemFilterOptions } from '#lib/systemFilter.js';
+	import { formatCount } from '#lib/format.js';
 
 	/** Release editing B13: Games With Hacks. The system, sort and page are URL state (`?system=&sort=&dir=&page=`). */
 	interface HackedGame {
@@ -145,6 +146,12 @@
 {:else if !result}
 	<Loading />
 {:else}
+	{#if result.total > 0}
+		<p class="small text-body-secondary mb-2">
+			{formatCount(result.total)}
+			{result.total === 1 ? 'game' : 'games'}
+		</p>
+	{/if}
 	<div class="card">
 		<div class="table-responsive">
 			{#if result.total === 0}

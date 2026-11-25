@@ -57,6 +57,13 @@ export interface Page<T> {
 }
 
 /** `GET /api/systems` (spec §23). */
+/** Timeline T8: `GET /api/timeline`, the IGDB-linked games with a year, counted per year (ascending, years with games only). */
+export interface TimelineYears {
+	igdbConfigured: boolean;
+	total: number;
+	years: { year: number; count: number }[];
+}
+
 export interface SystemInfo {
 	id: string;
 	displayName: string;
@@ -126,6 +133,8 @@ export interface GameListItem {
 	playDisc: boolean;
 	/** The system handler's browser core, null when it has none. */
 	browserCore: string | null;
+	/** Timeline T9: the game's IGDB id; null (or 0) when not linked. */
+	igdbId: number | null;
 }
 
 /** One release of `GET /api/games/{id}` (spec §23, §6.2 Rom fields flattened). */
@@ -682,6 +691,8 @@ export interface RomStorageRow {
 	configurable: boolean;
 	/** Games still waiting to be moved to the effective storage. */
 	pendingGames: number;
+	/** Timeline polish Z1: the system's games (0 when none). */
+	gameCount: number;
 	/** ZIP Compression Z6: the system's level (Med when none is stored). */
 	zipCompression: 'Store' | 'Med' | 'High';
 	/** Z5: true while the system's ROMs are stored in the ZIP. */

@@ -113,6 +113,8 @@ public class RomStorageEndpointsTests
         Assert.That(Compression(rows.Single(r => r.GetProperty("id").GetString() == "gba")), Is.EqualTo(("Med", true)), "ZIP Compression Z6");
         Assert.That(Compression(rows.Single(r => r.GetProperty("id").GetString() == "nds")), Is.EqualTo(("Med", false)));
         Assert.That(Compression(rows.Single(r => r.GetProperty("id").GetString() == "switch")), Is.EqualTo(("Med", false)));
+        int GameCount(string id) => rows.Single(r => r.GetProperty("id").GetString() == id).GetProperty("gameCount").GetInt32();
+        Assert.That((GameCount(LegacyExternalTestHandler.SystemId), GameCount("gba")), Is.EqualTo((1, 0)), "Z1: 0 when a system has no games");
     }
 
     [Test]

@@ -77,14 +77,17 @@ public interface IReportRepository
     Task<Page<ImageResolutionItem>> ListImageResolutionsAsync(string? systemId, ImageType? type, int? maxWidth, int? maxHeight, int page,
         int pageSize, CancellationToken cancellationToken);
 
-    /// <summary>RP6–RP8: undismissed duplicate groups, sorted by system then base title; paging and total exclude dismissed ones.</summary>
-    Task<Page<DuplicateGroup>> ListDuplicatesAsync(string? systemId, int page, int pageSize, CancellationToken cancellationToken);
+    /// <summary>
+    /// RP6–RP8: undismissed duplicate groups, sorted by system then base title (D1: then IGDB id); paging and total exclude
+    /// dismissed ones of the same <paramref name="match"/>.
+    /// </summary>
+    Task<Page<DuplicateGroup>> ListDuplicatesAsync(DuplicateMatch match, string? systemId, int page, int pageSize, CancellationToken cancellationToken);
 
     /// <summary>UI polish B21: the newest <paramref name="limit"/> releases by <c>date_added</c> (ties by id), with the release total size.</summary>
     Task<IReadOnlyList<RecentRom>> ListRecentlyAddedRomsAsync(int limit, CancellationToken cancellationToken);
 
-    /// <summary>RP7: stores the dismissal; repeating it is a no-op.</summary>
-    Task DismissDuplicateAsync(string systemId, string baseTitle, string gamesKey, int? userId, DateTime now,
+    /// <summary>RP7: stores the dismissal; repeating it is a no-op. D2: an IGDB dismissal's <paramref name="baseTitle"/> is the IGDB id in decimal.</summary>
+    Task DismissDuplicateAsync(DuplicateMatch match, string systemId, string baseTitle, string gamesKey, int? userId, DateTime now,
         CancellationToken cancellationToken);
 }
 
@@ -151,7 +154,17 @@ public static class MissingImageReasons
     public const string Placeholder = "Placeholder";
 }
 
-/// <summary>RP6: games in one system that own releases with the same base title. <c>Games</c> are in suggested-target order.</summary>
-public sealed record DuplicateGroup(string SystemId, string BaseTitle, string GamesKey, IReadOnlyList<DuplicateGame> Games);
+/// <summary>D1: how duplicate games are grouped: by release base title (RP6), or by a shared IGDB id.</summary>
+public enum DuplicateMatch
+{
+    Title,
+    Igdb,
+}
+
+/// <summary>
+/// RP6: games in one system that own releases with the same base title, or (D1) share <see cref="IgdbId"/>, when
+/// <see cref="BaseTitle"/> is the smallest display title. <c>Games</c> are in suggested-target order.
+/// </summary>
+public sealed record DuplicateGroup(string SystemId, string BaseTitle, string GamesKey, IReadOnlyList<DuplicateGame> Games, int? IgdbId = null);
 
 public sealed record DuplicateGame(Guid Id, string DisplayTitle, int RomCount, long ZipSizeBytes, DateTime CreatedAt, long? BoxArtImageId);

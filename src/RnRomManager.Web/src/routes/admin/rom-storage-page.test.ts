@@ -37,6 +37,7 @@ const rows = (ndsEmbed = false, pending = 0, gbaLevel = 'Med') => [
 		embedRoms: true,
 		configurable: false,
 		pendingGames: 0,
+		gameCount: 1234,
 		zipCompression: gbaLevel,
 		compressionConfigurable: true
 	},
@@ -47,6 +48,7 @@ const rows = (ndsEmbed = false, pending = 0, gbaLevel = 'Med') => [
 		embedRoms: ndsEmbed,
 		configurable: true,
 		pendingGames: pending,
+		gameCount: 0,
 		zipCompression: 'Med',
 		compressionConfigurable: false
 	}
@@ -113,12 +115,24 @@ describe('ROM Zip Config page (ROM Zip Config B15–B16)', () => {
 		expect(headers(1)).toEqual([
 			'System',
 			'Folder',
+			'Games',
 			'Default',
 			'Configured',
 			'Change',
 			'Level',
 			'Repack'
 		]);
+	});
+
+	it('the Games column shows each system count, right-aligned (Z1)', async () => {
+		render(RomStoragePage);
+		const gba = await row('Game Boy Advance');
+		const nds = await row('Nintendo DS');
+		const games = (row: HTMLElement) => row.querySelectorAll('td')[2];
+
+		expect(games(gba).textContent!.trim()).toBe('1,234');
+		expect(games(gba).className).toBe('text-end');
+		expect(games(nds).textContent!.trim()).toBe('0');
 	});
 
 	it('the storage icons carry their tooltips; an intro line explains the page', async () => {

@@ -1,12 +1,19 @@
 <script lang="ts">
 	import { isApiError } from '../api/errors';
-	import { logoApi, logoFileError, logoSources, logoUrlError, type LogoKind } from '../discovery';
+	import {
+		discoveryText,
+		logoApi,
+		logoFileError,
+		logoSources,
+		logoUrlError,
+		type LogoKind
+	} from '../discovery';
 	import { toasts } from '../stores/toasts.svelte';
 	import ConfirmModal from './ConfirmModal.svelte';
 	import Icon from './Icon.svelte';
 
 	/**
-	 * B19: replace or remove a publisher's, genre's or system's shared logo (Admins only; audited, shown for everyone),
+	 * B19: replace or remove a publisher's, developer's, genre's or system's shared logo (Admins only; audited, shown for everyone),
 	 * from an image URL (the default each time it opens) or a file. Removing it brings back the starter art or the name.
 	 */
 	interface Props {
@@ -20,9 +27,7 @@
 
 	let { open = $bindable(), kind, item, onchanged }: Props = $props();
 
-	const noun = $derived(
-		kind === 'publishers' ? 'publisher' : kind === 'genres' ? 'genre' : 'system'
-	);
+	const noun = $derived(kind === 'systems' ? 'system' : discoveryText[kind].singular);
 	const uid = Math.random().toString(36).slice(2);
 	let mode = $state<'url' | 'file'>('url');
 	let url = $state('');

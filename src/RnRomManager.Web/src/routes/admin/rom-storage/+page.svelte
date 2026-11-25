@@ -8,6 +8,7 @@
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
+	import { formatCount } from '#lib/format.js';
 	import { jobs } from '#lib/stores/jobs.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
 	import { tooltip } from '#lib/tooltip.js';
@@ -197,13 +198,14 @@
 			<table class="table table-sm table-striped table-hover align-middle mb-0">
 				<thead class="table-dark">
 					<tr>
-						<th scope="colgroup" colspan="2"><span class="visually-hidden">System</span></th>
+						<th scope="colgroup" colspan="3"><span class="visually-hidden">System</span></th>
 						<th scope="colgroup" colspan="3" class="text-center">ROM storage</th>
 						<th scope="colgroup" colspan="2" class="text-center">ZIP compression</th>
 					</tr>
 					<tr>
 						<th scope="col">System</th>
 						<th scope="col">Folder</th>
+						<th scope="col" class="text-end">Games</th>
 						<th scope="col" class="text-center">Default</th>
 						<th scope="col" class="text-center">Configured</th>
 						<th scope="col" class="text-end">Change</th>
@@ -230,6 +232,7 @@
 									>{row.id}</code
 								>
 							</td>
+							<td class="text-end">{formatCount(row.gameCount)}</td>
 							<td class="text-center">{@render storageIcon(row.defaultEmbedRoms)}</td>
 							<td class="text-center">
 								{@render storageIcon(row.embedRoms)}

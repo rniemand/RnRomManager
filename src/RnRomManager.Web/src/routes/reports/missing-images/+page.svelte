@@ -10,6 +10,7 @@
 	import SystemBadge from '#lib/components/SystemBadge.svelte';
 	import { pageCount } from '#lib/pageSize.js';
 	import { systemFilterOptions } from '#lib/systemFilter.js';
+	import { formatCount } from '#lib/format.js';
 
 	/** RP4/RP5. The System filter and page are component state only. */
 	interface MissingImage {
@@ -77,6 +78,12 @@
 {:else if !result}
 	<Loading />
 {:else}
+	{#if result.total > 0}
+		<p class="small text-body-secondary mb-2">
+			{formatCount(result.total)}
+			{result.total === 1 ? 'game' : 'games'}
+		</p>
+	{/if}
 	<div class="card">
 		<div class="table-responsive">
 			{#if result.items.length === 0}

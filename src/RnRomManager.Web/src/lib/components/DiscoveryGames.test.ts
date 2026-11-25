@@ -40,7 +40,8 @@ const game = (id: string, title: string, system: string, short: string): GameLis
 	playRomId: null,
 	playRomFileName: null,
 	playDisc: false,
-	browserCore: null
+	browserCore: null,
+	igdbId: null
 });
 const pageOf = (items: GameListItem[], total = items.length, page = 1) => ({
 	items,
@@ -121,6 +122,17 @@ describe('DiscoveryGames (discovery B2)', () => {
 		await screen.findByRole('link', { name: 'Tetris' });
 		expect(screen.getByRole('heading', { name: /Selected genre/ }).textContent).toBe(
 			'Selected genre · 1 game'
+		);
+	});
+
+	it('developers: the heading and the gone-group text name a developer (C1)', async () => {
+		answers[url('developers')] = [{ status: 404, body: { status: 404, code: 'NotFound' } }];
+		render(DiscoveryGames, { view: view({ kind: 'developers' }), name: null, onpage: vi.fn() });
+
+		expect(await screen.findByText('No games have this developer any more.')).toBeTruthy();
+		expect(screen.getByRole('heading', { name: /Selected developer/ })).toBeTruthy();
+		expect(screen.getByRole('link', { name: 'Back to all developers' }).getAttribute('href')).toBe(
+			'/collections?tab=developers'
 		);
 	});
 

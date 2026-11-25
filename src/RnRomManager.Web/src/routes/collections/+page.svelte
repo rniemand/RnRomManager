@@ -11,8 +11,12 @@
 	import {
 		collectionsTab,
 		collectionsTabs,
+		discoveryApi,
+		discoveryName,
 		discoverySearch,
 		discoveryState,
+		discoveryText,
+		nameAsFind,
 		systemsSearch,
 		systemsState,
 		tabSearch,
@@ -34,7 +38,7 @@
 
 	/**
 	 * B22: the caller's collections as cards, filtered by `q` and paged; both live in the URL. Discovery B1: link tabs
-	 * switch to the Publishers and Genres indexes and the Systems tab (`?tab=`); a bare URL is User collections.
+	 * switch to the Publishers, Developers and Genres indexes and the Systems tab (`?tab=`); a bare URL is User collections.
 	 */
 	const sizeKey = 'collections';
 	const tab = $derived(collectionsTab(page.url));
@@ -67,6 +71,30 @@
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- same page, query only
 		void goto(`/collections${discoverySearch(next)}`, { replace: true, reset: false });
 	}
+
+	/**
+	 * P3: a game page's metadata link (`?tab=<kind>&name=<value>`) opens the group: the name's key replaces it, or `find`
+	 * when it can't be resolved. A `key` already in the URL wins, and `name` is dropped.
+	 */
+	$effect(() => {
+		const state = discovery;
+		if (!state || !page.url.searchParams.has('name')) return;
+		const name = discoveryName(page.url);
+		if (!name) {
+			goDiscovery(state);
+			return;
+		}
+		let stale = false;
+		discoveryApi.key(state.kind, name).then(
+			({ key }) => {
+				if (!stale) goDiscovery({ ...state, key, gamePage: 1 });
+			},
+			() => {
+				if (!stale) goDiscovery({ ...state, find: nameAsFind(name) });
+			}
+		);
+		return () => (stale = true);
+	});
 
 	/** Systems tab B2/B3: the selection from the URL, and the system list, loaded on entering the tab. */
 	const systemsView = $derived(tab === 'systems' ? systemsState(page.url) : null);
@@ -276,9 +304,8 @@
 				{/key}
 			{:else}
 				<EmptyState
-					message="Choose a {discovery.kind === 'publishers'
-						? 'publisher'
-						: 'genre'} to see its games across every system."
+					message="Choose a {discoveryText[discovery.kind]
+						.singular} to see its games across every system."
 					icon="collections"
 				/>
 			{/if}

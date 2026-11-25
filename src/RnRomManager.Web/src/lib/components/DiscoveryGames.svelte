@@ -2,7 +2,7 @@
 	import { resolve } from '$app/paths';
 	import { ApiError } from '../api/errors';
 	import type { GameListItem, Page } from '../api/types';
-	import { discoveryApi, discoverySearch, type DiscoveryState } from '../discovery';
+	import { discoveryApi, discoverySearch, discoveryText, type DiscoveryState } from '../discovery';
 	import { pageCount, readPageSize, writePageSize } from '../pageSize';
 	import EmptyState from './EmptyState.svelte';
 	import ErrorAlert from './ErrorAlert.svelte';
@@ -31,7 +31,7 @@
 	let error = $state<unknown>(null);
 	let reload = $state(0);
 
-	const noun = $derived(view.kind === 'publishers' ? 'publisher' : 'genre');
+	const noun = $derived(discoveryText[view.kind].singular);
 	const heading = $derived(name ?? `Selected ${noun}`);
 
 	function setPageSize(size: number): void {
@@ -79,7 +79,7 @@
 				<a
 					class="btn btn-outline-primary"
 					href="{resolve('/collections')}{discoverySearch({ ...view, key: null, gamePage: 1 })}"
-					>Back to all {noun}s</a
+					>Back to all {discoveryText[view.kind].plural}</a
 				>
 			{/snippet}
 		</EmptyState>

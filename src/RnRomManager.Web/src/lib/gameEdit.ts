@@ -113,17 +113,14 @@ function sides(form: GameEditForm, match: IgdbMatch, field: CopyField): [string[
 	return [current ? [current] : [], igdb ? [igdb] : []];
 }
 
-/**
- * M3: a row is disabled when the IGDB value is empty or equals the form's; otherwise it starts ticked when the form's value is
- * empty, except Title (renaming also renames the ZIP).
- */
+/** M3: a row is disabled when the IGDB value is empty or equals the form's; M2 (Timeline polish): every other row starts ticked, Title included. */
 export function defaultCopyFields(form: GameEditForm, match: IgdbMatch): CopyState {
 	return Object.fromEntries(
 		copyFields.map((field) => {
 			const [current, igdb] = sides(form, match, field);
 			const equal = current.length === igdb.length && current.every((v, i) => v === igdb[i]);
 			const disabled = !igdb.length || equal;
-			return [field, { disabled, checked: !disabled && !current.length && field !== 'title' }];
+			return [field, { disabled, checked: !disabled }];
 		})
 	) as CopyState;
 }

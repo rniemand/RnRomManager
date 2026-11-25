@@ -14,6 +14,7 @@ internal static class DiscoverySql
     {
         DiscoveryKind.Publishers => "publishers",
         DiscoveryKind.Genres => "genres",
+        DiscoveryKind.Developers => "developers",
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null),
     };
 
@@ -30,19 +31,25 @@ internal static class DiscoverySql
         var entry = $"JSON_EXTRACT({column}, CONCAT('$[', jt.ord - 1, ']'))";
         return $$"""
             discovery_entries AS (
-                SELECT g.id AS game_id,
-                       REGEXP_REPLACE(CONVERT(JSON_UNQUOTE({{entry}}) USING utf8mb4), '^[\\s\\p{Z}]+|[\\s\\p{Z}]+$', '') AS trimmed
+                SELECT g.id AS game_id, {{Trimmed($"JSON_UNQUOTE({entry})")}} AS trimmed
                 FROM games g, JSON_TABLE({{column}}, '$[*]' COLUMNS (ord FOR ORDINALITY)) jt
                 WHERE JSON_TYPE({{entry}}) = 'STRING'
             ),
             discovery_values AS (
-                SELECT game_id, trimmed,
-                       CAST(LOWER(CONVERT(trimmed USING utf8mb4) COLLATE utf8mb4_uca1400_as_cs) AS BINARY) AS norm
+                SELECT game_id, trimmed, {{Norm("trimmed")}} AS norm
                 FROM discovery_entries
                 WHERE trimmed <> ''
             )
             """;
     }
+
+    /// <summary><paramref name="text"/> converted to utf8mb4 without leading and trailing Unicode whitespace (<c>trimmed</c>).</summary>
+    public static string Trimmed(string text) =>
+        $$"""REGEXP_REPLACE(CONVERT({{text}} USING utf8mb4), '^[\\s\\p{Z}]+|[\\s\\p{Z}]+$', '')""";
+
+    /// <summary>A trimmed value's <c>norm</c>: its lowercase bytes under an accent- and case-sensitive collation.</summary>
+    public static string Norm(string trimmed) =>
+        $"CAST(LOWER(CONVERT({trimmed} USING utf8mb4) COLLATE utf8mb4_uca1400_as_cs) AS BINARY)";
 
     /// <summary>The public key of a <c>norm</c>: lowercase hexadecimal SHA-256 of its bytes.</summary>
     public const string Key = "SHA2(norm, 256)";

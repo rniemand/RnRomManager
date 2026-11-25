@@ -36,11 +36,14 @@ public static class AdminEndpoints
         {
             var pending = (await StorageMigrationJob.ListMovesAsync(games, systems, ctx.RequestAborted))
                 .GroupBy(g => g.SystemId, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+            // Timeline polish Z1: each system's game count.
+            var gameCounts = (await games.ListSystemStatsAsync(ctx.RequestAborted)).ToDictionary(s => s.SystemId, s => s.GameCount, StringComparer.OrdinalIgnoreCase);
             return Results.Ok(systems.All.OrderBy(h => h.DisplayName, StringComparer.OrdinalIgnoreCase).Select(h => new
             {
                 id = h.Id, displayName = h.DisplayName, defaultEmbedRoms = h.DefaultEmbedRomsInZip, embedRoms = h.EmbedRomsInZip,
                 configurable = h.RomStorageConfigurable, pendingGames = h.RomStorageConfigurable ? pending.GetValueOrDefault(h.Id) : 0,
                 zipCompression = romStorage.Compression(h.Id).ToString(), compressionConfigurable = h.EmbedRomsInZip,
+                gameCount = gameCounts.GetValueOrDefault(h.Id),
             }));
         });
 

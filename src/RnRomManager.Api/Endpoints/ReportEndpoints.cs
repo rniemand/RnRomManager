@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using RnRomManager.Api.Auth;
 using RnRomManager.Core.Audit;
@@ -191,16 +193,25 @@ public static partial class ReportEndpoints
             });
         });
 
-        reports.MapGet("/duplicates", async (string? system, int? page, int? pageSize, HttpContext ctx, IReportRepository repository,
+        reports.MapGet("/duplicates", async (string? system, string? match, int? page, int? pageSize, HttpContext ctx, IReportRepository repository,
             ISystemRegistry systems) =>
         {
-            if (Validate(system, page, pageSize, systems) is { Count: > 0 } errors)
+            var errors = Validate(system, page, pageSize, systems);
+            DuplicateMatch? matchKind = match?.ToLowerInvariant() switch
+            {
+                null or "title" => DuplicateMatch.Title,
+                "igdb" => DuplicateMatch.Igdb,
+                _ => null,
+            };
+            if (matchKind is null)
+                errors["match"] = ["Must be title or igdb."];
+            if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
-            var result = await repository.ListDuplicatesAsync(system, page ?? 1, pageSize ?? 25, ctx.RequestAborted);
+            var result = await repository.ListDuplicatesAsync(matchKind!.Value, system, page ?? 1, pageSize ?? 25, ctx.RequestAborted);
             return Results.Ok(Paging.ToDto(result, group => new
             {
                 system = group.SystemId, systemName = SystemName(systems, group.SystemId), baseTitle = group.BaseTitle,
-                gamesKey = group.GamesKey,
+                gamesKey = group.GamesKey, igdbId = group.IgdbId,
                 games = group.Games.Select(g => new
                 {
                     id = g.Id, displayTitle = g.DisplayTitle, romCount = g.RomCount, zipSizeBytes = g.ZipSizeBytes, createdAt = g.CreatedAt,
@@ -348,14 +359,22 @@ public static partial class ReportEndpoints
             var errors = new Dictionary<string, string[]>();
             if (string.IsNullOrEmpty(request.System) || systems.ById(request.System) is null)
                 errors["system"] = ["Choose a registered system."];
-            if (string.IsNullOrEmpty(request.BaseTitle) || request.BaseTitle.Length > 255)
+            // D3: a title dismissal gives baseTitle, an IGDB one igdbId ("given" = present and not JSON null).
+            var igdbGiven = request.IgdbId is { ValueKind: not JsonValueKind.Null };
+            int igdbId = 0;
+            if (igdbGiven == (request.BaseTitle is not null))
+                errors["igdbId"] = ["Give baseTitle or igdbId, not both."];
+            else if (igdbGiven && !(request.IgdbId!.Value.ValueKind == JsonValueKind.Number && request.IgdbId.Value.TryGetInt32(out igdbId) && igdbId >= 1))
+                errors["igdbId"] = ["Must be a positive whole number."];
+            else if (!igdbGiven && (request.BaseTitle!.Length is 0 or > 255))
                 errors["baseTitle"] = ["Must contain 1–255 characters."];
             if (request.GamesKey is null || !GamesKeyPattern().IsMatch(request.GamesKey))
                 errors["gamesKey"] = ["Must be 64 lower-case hex characters."];
             if (errors.Count > 0)
                 return Problems.Validation(ctx, errors);
             // A key that matches no current group is stored anyway: the group may have just changed (RP8).
-            await repository.DismissDuplicateAsync(request.System!, request.BaseTitle!, request.GamesKey!, DatEndpoints.UserId(ctx.User),
+            await repository.DismissDuplicateAsync(igdbGiven ? DuplicateMatch.Igdb : DuplicateMatch.Title, request.System!,
+                igdbGiven ? igdbId.ToString(CultureInfo.InvariantCulture) : request.BaseTitle!, request.GamesKey!, DatEndpoints.UserId(ctx.User),
                 time.GetUtcNow().UtcDateTime, ctx.RequestAborted);
             return Results.NoContent();
         }).RequireAuthorization(AuthSetup.AdminOnly);
@@ -428,8 +447,8 @@ public static partial class ReportEndpoints
     }
 }
 
-/// <summary><c>POST /api/reports/duplicates/dismiss</c> (RP8).</summary>
-public sealed record DismissDuplicateRequest(string? System, string? BaseTitle, string? GamesKey);
+/// <summary><c>POST /api/reports/duplicates/dismiss</c> (RP8): a title group's <c>baseTitle</c> or (D3) an IGDB group's <c>igdbId</c>.</summary>
+public sealed record DismissDuplicateRequest(string? System, string? BaseTitle, string? GamesKey, JsonElement? IgdbId = null);
 
 /// <summary><c>POST /api/reports/duplicates/merge</c> (RP8): every source is merged into the target, in order.</summary>
 public sealed record MergeDuplicatesRequest(Guid? TargetGameId, IReadOnlyList<Guid>? SourceGameIds);

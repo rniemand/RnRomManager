@@ -765,7 +765,6 @@ describe('game detail admin actions', () => {
 			const title = modal().getByRole('checkbox', { name: 'Copy Title', hidden: true });
 			await fireEvent.keyDown(title, { key: 'Enter' });
 			expect(calls.some((c) => c.startsWith('PATCH'))).toBe(false);
-			await fireEvent.click(title);
 			await fireEvent.click(modal().getByRole('button', { name: 'Use this match', hidden: true }));
 
 			expect(tab('Details').getAttribute('aria-selected')).toBe('true');
@@ -781,7 +780,7 @@ describe('game detail admin actions', () => {
 			await vi.waitFor(() => expect(calls).toContain('PATCH /api/games/g1'));
 			expect(bodies['PATCH /api/games/g1']).toEqual({
 				title: 'Tetris DX',
-				releaseYear: 1989,
+				releaseYear: 1998,
 				developers: ['Nintendo'],
 				publishers: ['Nintendo', 'Capcom'],
 				genres: ['Puzzle'],
@@ -820,7 +819,6 @@ describe('game detail admin actions', () => {
 			await fireEvent.click(
 				await modal().findByRole('button', { name: /Tetris DX/, hidden: true })
 			);
-			await fireEvent.click(modal().getByRole('checkbox', { name: 'Copy Title', hidden: true }));
 			await fireEvent.click(
 				modal().getByRole('button', { name: 'Use this match and save', hidden: true })
 			);
@@ -828,12 +826,97 @@ describe('game detail admin actions', () => {
 			await vi.waitFor(() => expect(calls).toContain('PATCH /api/games/g1'));
 			expect(bodies['PATCH /api/games/g1']).toEqual({
 				title: 'Tetris DX',
-				releaseYear: 1989,
+				releaseYear: 1998,
 				developers: ['Nintendo'],
 				publishers: ['Nintendo', 'Capcom'],
 				genres: ['Puzzle'],
 				description: 'Falling blocks.',
 				igdbId: 1234
+			});
+		});
+
+		describe('Lookup Info footer (M1)', () => {
+			const tetris = {
+				igdbId: 1234,
+				name: 'Tetris DX',
+				releaseYear: 1998,
+				developers: ['Nintendo'],
+				publishers: [],
+				genres: [],
+				description: null,
+				coverUrl: null,
+				coverImageUrl: null,
+				url: null
+			};
+			const footer = () => within(document.querySelector<HTMLElement>('.modal-footer')!);
+			const footerButton = (name: string) => footer().queryByRole('button', { name, hidden: true });
+
+			it('Not on IGDB sits in the footer only on Lookup Info, left of Cancel and Edit Metadata', async () => {
+				await openEdit(configured());
+				expect(footerButton('Not on IGDB')).toBeNull();
+
+				await fireEvent.click(tab('Lookup Info'));
+
+				const button = footerButton('Not on IGDB')!;
+				expect(button.className).toBe('btn btn-outline-warning');
+				expect(button.getAttribute('type')).toBe('button');
+				expect(button.parentElement!.className).toBe('d-flex flex-wrap gap-2 me-auto');
+				expect(
+					footer()
+						.getAllByRole('button', { hidden: true })
+						.map((b) => b.textContent!.trim())
+				).toEqual(['Not on IGDB', 'Cancel', 'Edit Metadata']);
+				expect(panel('edit-lookup-panel').querySelector('button.btn-outline-warning')).toBeNull();
+
+				await fireEvent.click(tab('Details'));
+				expect(footerButton('Not on IGDB')).toBeNull();
+			});
+
+			it('Not on IGDB clears the link and switches to Details', async () => {
+				await openEdit(configured({ igdbId: 5 }));
+				await fireEvent.click(tab('Lookup Info'));
+
+				await fireEvent.click(footerButton('Not on IGDB')!);
+
+				expect(tab('Details').getAttribute('aria-selected')).toBe('true');
+				expect(calls.some((c) => c.startsWith('PATCH'))).toBe(false);
+			});
+
+			it('without IGDB configured, the footer has no Lookup Info buttons', async () => {
+				await openEdit(configured({ igdbConfigured: false }));
+				await fireEvent.click(tab('Lookup Info'));
+
+				expect(footerButton('Not on IGDB')).toBeNull();
+				expect(footerButton('Use this match')).toBeNull();
+			});
+
+			it('the match buttons show only once a match is selected, as btn-success', async () => {
+				answers['GET /api/games/g1/igdb-matches?q=Tetris'] = [
+					{ status: 200, body: { matches: [tetris] } }
+				];
+				await openEdit(configured());
+				await fireEvent.click(tab('Lookup Info'));
+				await fireEvent.submit(modal().getByLabelText('Search IGDB for').closest('form')!);
+				const match = await modal().findByRole('button', { name: /Tetris DX/, hidden: true });
+				expect(footerButton('Use this match')).toBeNull();
+				expect(footerButton('Use this match and save')).toBeNull();
+
+				await fireEvent.click(match);
+
+				expect(footerButton('Use this match')!.className).toBe('btn btn-success');
+				expect(footerButton('Use this match and save')!.className).toBe('btn btn-success');
+				expect(
+					footer()
+						.getAllByRole('button', { hidden: true })
+						.map((b) => b.textContent!.trim())
+				).toEqual([
+					'Use this match',
+					'Use this match and save',
+					'Not on IGDB',
+					'Cancel',
+					'Edit Metadata'
+				]);
+				expect(panel('edit-lookup-panel').querySelector('.btn-success')).toBeNull();
 			});
 		});
 

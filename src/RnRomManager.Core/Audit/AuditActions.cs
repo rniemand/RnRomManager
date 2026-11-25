@@ -30,6 +30,10 @@ public static class AuditActions
     /// <summary>Collections discovery B5: a publisher's shared logo override was removed.</summary>
     public const string PublisherLogoRemoved = "PublisherLogoRemoved";
 
+    /// <summary>Timeline polish C2: a developer's shared logo was added or replaced, or removed.</summary>
+    public const string DeveloperLogoReplaced = "DeveloperLogoReplaced";
+    public const string DeveloperLogoRemoved = "DeveloperLogoRemoved";
+
     /// <summary>B13–B14: a genre's or system's shared logo was added or replaced, or removed.</summary>
     public const string GenreLogoReplaced = "GenreLogoReplaced";
     public const string GenreLogoRemoved = "GenreLogoRemoved";
@@ -81,7 +85,7 @@ public static class AuditActions
     [
         Ingested, ZipRepaired, ExtensionRenamed, MovedToFailed, MovedToDuplicates, ArchiveDeleted, ReviewDeleted, GameUpdated,
         ReleaseDeleted, GameDeleted, ImageAdded, ImageDeleted, CoverSet, PrimarySet, MediaFetched, ReleaseMoved, GamesMerged, DatsRefreshed,
-        IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved, GenreLogoReplaced, GenreLogoRemoved,
+        IngestFileDeleted, RemovedRestored, PublisherLogoReplaced, PublisherLogoRemoved, DeveloperLogoReplaced, DeveloperLogoRemoved, GenreLogoReplaced, GenreLogoRemoved,
         SystemLogoReplaced, SystemLogoRemoved, BackupRestored, RomsExternalized, RomsEmbedded, RomStorageChanged, ZipCompressionChanged,
         SaveAdded, SaveUpdated, SaveDeleted, UserCreated, UserTypeChanged, UserDisabled, UserEnabled, PasswordReset,
         PasswordChanged, SignedIn, SignInFailed, LockedOut, GamePlayed, ReleaseEdited,

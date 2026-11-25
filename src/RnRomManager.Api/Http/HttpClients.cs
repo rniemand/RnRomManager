@@ -31,6 +31,7 @@ public static class HttpClients
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false }));
         // IGDB suggestions S7: Twitch's token endpoint and the IGDB API (fixed hosts), retried like the thumbnails, no redirects.
         services.AddSingleton<IgdbTokenCache>();
+        services.AddSingleton<IgdbPageUrlCache>();
         Configure(services.AddHttpClient<IgdbClient>(Igdb, client => client.DefaultRequestHeaders.UserAgent.TryParseAdd(UserAgent))
             .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false }));
         services.AddTransient<IImageSuggestions>(sp => sp.GetRequiredService<IgdbClient>());

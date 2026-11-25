@@ -33,6 +33,12 @@ public interface IGameRepository
     /// </summary>
     Task<GameFacets> ListFacetsAsync(GameQuery query, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Timeline T8: per release year, the games linked to IGDB (<c>igdb_id &gt; 0</c>) with a year, of one system or all;
+    /// only years with games, ascending.
+    /// </summary>
+    Task<IReadOnlyList<(int Year, int Count)>> ListReleaseYearCountsAsync(string? systemId, CancellationToken cancellationToken);
+
     /// <summary>Counts and regions for every system that has games (spec §23 <c>/api/systems</c>).</summary>
     Task<IReadOnlyList<SystemStats>> ListSystemStatsAsync(CancellationToken cancellationToken);
 
