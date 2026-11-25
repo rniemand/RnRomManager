@@ -347,6 +347,15 @@ public static class IngestSeeder
         { ReleaseYear = 1999, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Puzzle"] };
         // A colour cart in the mono folder under an alias extension: the DAT decides the system and the stored name.
         Loose("ngp", "02-pocket-prism.ngpc", pocketPrismRom);
+        var striderRom = new SyntheticWsRomBuilder { Seed = 1911 }.Build();
+        var strider = new FixtureGame("Swan Strider (Japan)", "Swan Strider (Japan).ws", striderRom)
+        { ReleaseYear = 1999, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Action"] };
+        Loose("ws", "01-swan-strider.ws", striderRom);
+        var crystalTideRom = new SyntheticWsRomBuilder { Seed = 1912, Colour = true }.Build();
+        var crystalTide = new FixtureGame("Crystal Tide (Japan)", "Crystal Tide (Japan).wsc", crystalTideRom)
+        { ReleaseYear = 2000, Developers = ["Seed Studio"], Publishers = ["Fixture Works"], Genres = ["Puzzle"] };
+        // A colour cart in the mono folder: the DAT decides the system.
+        Loose("ws", "02-crystal-tide.wsc", crystalTideRom);
         // A CRT cartridge: 64-byte header, one 16-byte CHIP packet header, 8 KiB of ROM (8,272 bytes, big-endian fields).
         var pilotRom = new byte[64 + 16 + 8192];
         System.Text.Encoding.ASCII.GetBytes("C64 CARTRIDGE   ").CopyTo(pilotRom, 0);
@@ -440,7 +449,7 @@ public static class IngestSeeder
                 Loose(isColor ? "gbc" : "gb", $"20-generated-{i:D3}" + (isColor ? ".gbc" : ".gb"), game.Rom);
             }
         }
-        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [VirtualBoyDat] = [redHorizon], [Atari2600Dat] = [lanes], [Atari5200Dat] = [starLattice], [Atari7800Dat] = [canyonGlide], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally], [NintendoDsDat] = dsGames, [SegaCdDat] = [], [ThreeDoDat] = [], [C64Dat] = [pilot], [PetDat] = [], [Vic20Dat] = [], [Plus4Dat] = [], [FdsDat] = [], [SatellaviewDat] = [], [SufamiTurboDat] = [], [AmigaDat] = [], [ThreeDsDat] = [zephyrGate], [TurboGrafxCdDat] = [], [PcfxDat] = [], [NeoGeoPocketDat] = [lancer], [NeoGeoPocketColorDat] = [pocketPrism], [WonderSwanDat] = [], [WonderSwanColorDat] = [] },
+        FixtureDatWriter.Write(Path.Combine(cache, "dats"), new Dictionary<string, IReadOnlyList<FixtureGame>> { [GbDat] = gb, [GbcDat] = gbc, [GbaDat] = [courier], [N64Dat] = [kart], [NesDat] = [pioneer], [SnesDat] = [rally], [VirtualBoyDat] = [redHorizon], [Atari2600Dat] = [lanes], [Atari5200Dat] = [starLattice], [Atari7800Dat] = [canyonGlide], [LynxDat] = [prism], [JaguarDat] = [cobalt], [ColecoVisionDat] = [pursuit], [GameGearDat] = [drift], [MasterSystemDat] = [harbor], [MegaDriveDat] = [comet], [Sega32xDat] = [relay], [TurboGrafx16Dat] = [circuit], [PsxDat] = [discRunner], [PspDat] = [pocketNinja], [GameCubeDat] = [cubeKart], [WiiDat] = [waveBowling], [Xbox360Dat] = [arcStrike], [SaturnDat] = [skyRally], [NintendoDsDat] = dsGames, [SegaCdDat] = [], [ThreeDoDat] = [], [C64Dat] = [pilot], [PetDat] = [], [Vic20Dat] = [], [Plus4Dat] = [], [FdsDat] = [], [SatellaviewDat] = [], [SufamiTurboDat] = [], [AmigaDat] = [], [ThreeDsDat] = [zephyrGate], [TurboGrafxCdDat] = [], [PcfxDat] = [], [NeoGeoPocketDat] = [lancer], [NeoGeoPocketColorDat] = [pocketPrism], [WonderSwanDat] = [strider], [WonderSwanColorDat] = [crystalTide] },
             titleDb: new Dictionary<string, IReadOnlyList<RnRomManager.Core.Dats.TitleDbRow>> { [SwitchDat] = titleDb }, layouts: RedumpLayouts, mame: SeededMame);
         // Ready for an immediate ingest, including in tests: no TooRecent items (§7.1).
         foreach (var path in files) File.SetLastWriteTimeUtc(path, time.GetUtcNow().AddMinutes(-1).UtcDateTime);

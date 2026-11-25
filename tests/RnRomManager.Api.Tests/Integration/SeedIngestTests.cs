@@ -15,8 +15,8 @@ namespace RnRomManager.Api.Tests.Integration;
 [Category("Integration")]
 public class SeedIngestTests
 {
-    [TestCase(SeedSet.Basic, 43, 33)]
-    [TestCase(SeedSet.Full, 243, 233)]
+    [TestCase(SeedSet.Basic, 45, 35)]
+    [TestCase(SeedSet.Full, 245, 235)]
     public async Task SeededSet_IngestsWithExpectedOutcomesAndLibrary(SeedSet set, int ingested, int games)
     {
         using var factory = new ApiFactory(await MariaDbServer.CreateDatabaseAsync());
@@ -330,6 +330,18 @@ public class SeedIngestTests
                 Is.EqualTo(("Pocket Prism", "ngpc", "Pocket Prism (World).ngc", "02-pocket-prism.ngpc")));
             Assert.That(rom.Header!["colour"]!.GetValue<bool>(), Is.True);
             Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)1999, new[] { "Puzzle" })));
+        }
+        var crystalTide = Directory.GetFiles(Path.Combine(factory.Root, "roms", "wsc", "C"), "*.zip").Single();
+        Assert.That(Path.GetFileName(crystalTide), Is.EqualTo("Crystal Tide.zip"));
+        using (var zip = LibraryZip.Open(crystalTide, factory.Services.GetRequiredService<InfoJsonReader>()))
+        {
+            var game = zip.InfoJson!.Game!;
+            var rom = game.Roms.Single();
+            // Dropped in ingest/ws/ as .wsc: the colour DAT decides the system.
+            Assert.That((game.Title, game.System, rom.FileName, rom.OriginalFileName),
+                Is.EqualTo(("Crystal Tide", "wsc", "Crystal Tide (Japan).wsc", "02-crystal-tide.wsc")));
+            Assert.That(rom.Header!["colour"]!.GetValue<bool>(), Is.True);
+            Assert.That((game.ReleaseYear, game.Genres), Is.EqualTo(((int?)2000, new[] { "Puzzle" })));
         }
         var review = await factory.Services.GetRequiredService<IIngestReviewRepository>().ListAsync("Pending", 1, 48, default);
         Assert.That(review.Total, Is.EqualTo(3));
