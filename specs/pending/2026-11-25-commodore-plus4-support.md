@@ -143,9 +143,9 @@ API contracts change only additively: `plus4` appears in `/api/systems` and `/ap
   - `tests/RnRomManager.Systems.Commodore.Tests/Plus4HandlerTests.cs` (new, modelled on `C128HandlerTests`):
     - `Plus4_Contract`: `(Id, DisplayName, ShortName, Family, DatName)` = `("plus4", "Commodore Plus/4", "Plus/4", "plus4", "Commodore - Plus-4")`; exact `RomExtensions`; sizes `(256L, 8L * 1024 * 1024)`; `(EmbedRomsInZip, DatSource, DatFolder)` = `(true, DatSource.Libretro, DatKind.NoIntro)`; empty `MetadatKinds`; `(FileSets, LegacyEmbeddedRoms, KeepsSourceExtension)` = `(false, false, true)`; `BrowserCore` `vice_xplus4`.
     - `ReadHeader_ReadsAPlus4Tape`: a 20-byte `C16-TAPE-RAW` with version 1 at 0x0C gives `ClassifiedSystemId` `plus4`, `IsPlausible` true, `format` `tap` and `version` 1.
-    - `ReadHeader_IsNullForOtherFiles`: a 300-byte `[0x01, 0x10, …]` `.prg`-like array, a zeroed 174,848-byte `.d64` and a 16 KiB seeded `.bin` all give null.
+    - `ReadHeader_IsNullForOtherFiles`: a 300-byte `[0x01, 0x10, …]` `.prg`-like array, a zeroed 174,848-byte `.d64` and a 16 KiB `.bin` of `new Random(16).NextBytes` all give null, as does a 64-byte native Plus/4 `.crt` starting `C264 CARTRIDGE  `.
     - `DefaultBoxArt_IsA512x512Png`.
-  - `C64HeaderTests`: `C16Tap_ReadsFormatAndVersion` (new, after `Tap_ReadsFormatAndVersion`) and `[TestCase("C16-TAPE-RAW", 19)]` in `OneByteShortOfTheMinimum_IsNull`.
+  - `C64HeaderTests`: `C16Tap_ReadsFormatAndVersion` (new, after `Tap_ReadsFormatAndVersion`, mirroring it with `WithMagic("C16-TAPE-RAW", 20)`; classified `c64`, the same two fields) and `[TestCase("C16-TAPE-RAW", 19)]` in `OneByteShortOfTheMinimum_IsNull`.
 
   Done when: `Plus4HandlerTests`, `C64HeaderTests`, `C64HandlerTests`, `C128HandlerTests` and `Vic20HandlerTests` pass, and `dotnet build` is warning-free.
 - [ ] **2. Registration, DAT fixtures and operator core**: B5, B8, B10, B16, B17. Files: `AppHost.cs`, `IngestSeeder.cs`, `IgdbPlatforms.cs`, `OperatorCoreManifest.cs`, `systemEmulators.json`, and the `README.md` supported-systems row `` | Commodore Plus/4 | `plus4` | In ZIP | `.d64`, `.t64`, `.tap`, `.prg`, `.crt`, `.bin` | No-Intro | `vice_xplus4` | ``, right after the Commodore PET row (`No-Intro` as on the VIC-20 row). Tests:
@@ -261,6 +261,7 @@ API contracts change only additively: `plus4` appears in `/api/systems` and `/ap
 - 2026-11-25 Deep review: zip-format's `system` list and features' intro, Play and families lists have no PET, so Plus/4 goes after Commodore 64 there; `.g64` dropped from the Plus/4 header text (not a Plus/4 type); the deployment upgrade note mirrors VIC-20's and follows PC-FX's; Dat/Hack/Translated Review naming for disks stated; every step-5 doc edit, the `LibraryEndpoints` and vendor-script comments and the Review tests' bytes, drop path and Manual body pinned (reviewer)
 - 2026-11-25 Deep review pass 2: pinned the Plus/4 detail test's names, `FloppyGame`'s ZIP path and seeds, the `playDisks` core parameter and expected requests, the game-page case's URL, the `setMedia`/`discError` test lines, and `play.js`'s `diskSetCores` import (reviewer)
 - 2026-11-25 Deep review pass 3: B9 gains the 401 and `(HTTP <status>)` texts `operatorCoreError` gives; the deployment note says only `ingest/plus4/` is created at startup, since `SystemStartupTests` pins that `roms/<id>/` isn't (reviewer)
+- 2026-11-25 Deep review pass 4: step 1's test inputs pinned (the `.bin` seed, a native `C264 CARTRIDGE  ` `.crt` as C128's test does, `C16Tap_ReadsFormatAndVersion`'s shape); every other test that walks all registered systems derives its list from the registry (reviewer)
 - 2026-11-25 e2e? → none: the e2e stack has no VICE core to play with, the DAT/Review flows are covered by existing e2e, and sets by the Amiga API and vitest cases this spec mirrors (code)
 
 ## Kickoff prompt
