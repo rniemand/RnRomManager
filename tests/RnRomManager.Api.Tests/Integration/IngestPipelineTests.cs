@@ -72,6 +72,8 @@ public class IngestPipelineTests
     private static readonly byte[] NinjaAudio1 = new SyntheticDiscBuilder { Seed = 2601, Size = 32 * 1024 }.Build();
     private static readonly byte[] NinjaData = new SyntheticDiscBuilder { Seed = 2602 }.Build();
     private static readonly byte[] NinjaAudio3 = new SyntheticDiscBuilder { Seed = 2603, Size = 32 * 1024 }.Build();
+    private static readonly byte[] FoxAudio1 = new SyntheticDiscBuilder { Seed = 2901, Size = 32 * 1024 }.Build();
+    private static readonly byte[] FoxData = new SyntheticDiscBuilder { Seed = 2902 }.Build();
     /// <summary>CloneCD B6: a one-track PlayStation disc whose whole <c>.img</c> is the DAT's data track.</summary>
     private static readonly byte[] CloneStarImage = new SyntheticDiscBuilder { Seed = 2701, Size = 2352 * 28 }.Build();
     private static readonly byte[] CloneCcd = System.Text.Encoding.UTF8.GetBytes("[CloneCD]\nVersion=3\n[Disc]\nSessions=1\nDataTracksScrambled=0\n[TRACK 1]\nMODE=2\nINDEX 1=0\n");
@@ -192,7 +194,8 @@ public class IngestPipelineTests
             ],
             // TurboGrafx-CD B3: libretro's DAT lists one track per disc, usually the data track (Track 02).
             [IngestSeeder.TurboGrafxCdDat] = [new FixtureGame("Disc Ninja (Japan)", "Disc Ninja (Japan) (Track 02).bin", NinjaData)],
-            [IngestSeeder.PcfxDat] = [],
+            // PC-FX X4: the real DAT names a data track too.
+            [IngestSeeder.PcfxDat] = [new FixtureGame("Disc Fox (Japan)", "Disc Fox (Japan) (Track 2).bin", FoxData)],
             [IngestSeeder.NeoGeoPocketDat] = [new FixtureGame("Dual Mode (Japan)", "Dual Mode (Japan).ngp", DualMode)],
             [IngestSeeder.NeoGeoPocketColorDat] = [new FixtureGame("Prism Tower (World)", "Prism Tower (World).ngc", PrismTower)],
             [IngestSeeder.ThreeDsDat] =
@@ -725,6 +728,63 @@ public class IngestPipelineTests
         Assert.That(File.Exists(path), Is.False, "moved to _failed/");
     }
 
+    private const string FoxCue = "Disc Fox (Japan).cue", FoxTrack1 = "Disc Fox (Japan) (Track 1).bin", FoxTrack2 = "Disc Fox (Japan) (Track 2).bin";
+
+    private void DropFoxSet(string system)
+    {
+        var cueText = $"FILE \"{FoxTrack1}\" BINARY\n  TRACK 01 AUDIO\n    INDEX 01 00:00:00\n"
+            + $"FILE \"{FoxTrack2}\" BINARY\n  TRACK 02 MODE1/2352\n    INDEX 01 00:00:00\n";
+        foreach (var (name, bytes) in new[] { (FoxCue, System.Text.Encoding.UTF8.GetBytes(cueText)), (FoxTrack1, FoxAudio1), (FoxTrack2, FoxData) })
+            File.SetLastWriteTimeUtc(Drop(system, name, bytes).FullPath, DateTime.UtcNow.AddMinutes(-1));
+    }
+
+    [Test]
+    public async Task Pcfx_DatMatchedCueWithTwoBins_IsOneRelease_NamedByItsDataTrack()
+    {
+        DropFoxSet("pcfx");
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "pcfx").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome)),
+            Is.EquivalentTo(new[] { (FoxCue, IngestOutcome.Ingested), (FoxTrack1, IngestOutcome.Ingested), (FoxTrack2, IngestOutcome.Ingested) }));
+        var folder = Path.Combine(Roms, "pcfx", "D");
+        Assert.That(Directory.GetFiles(folder).Select(Path.GetFileName).Order(StringComparer.Ordinal),
+            Is.EqualTo(new[] { FoxTrack1, FoxTrack2, FoxCue, "Disc Fox.zip" }));
+        Assert.That(File.ReadAllBytes(Path.Combine(folder, FoxTrack1)), Is.EqualTo(FoxAudio1));
+        var game = ReadZip("pcfx/D/Disc Fox.zip");
+        var rom = game.Roms.Single();
+        Assert.That((game.System, rom.FileName, rom.ExternalFileName, rom.Identification.Method), Is.EqualTo(("pcfx", FoxTrack2, FoxTrack2, IdentificationMethod.Dat)));
+        Assert.That(rom.Header, Is.Null);
+        Assert.That(rom.Files!.Select(f => f.ExternalFileName), Is.EquivalentTo(new[] { FoxCue, FoxTrack1 }));
+        Assert.That(Directory.GetFiles(Ingest("pcfx")), Is.Empty);
+    }
+
+    [Test]
+    public async Task Pcfx_PceInItsFolder_IsUnsupportedType_AndMovedToFailed()
+    {
+        var file = DropAged("pcfx", "card.pce", new SyntheticDiscBuilder { Seed = 2903, Size = 256 * 1024 }.Build());
+
+        var result = await IngestAsync(file);
+
+        Assert.That((result!.Outcome, result.Reason), Is.EqualTo((IngestOutcome.Failed, IngestFailures.UnsupportedType)));
+        Assert.That(File.Exists(file.FullPath), Is.False);
+        Assert.That(File.Exists(Path.Combine(Ingest("pcfx"), "_failed", "card.pce")), Is.True);
+        Assert.That(File.Exists(Path.Combine(Ingest("pcfx"), "_failed", "card.pce.error.txt")), Is.True);
+    }
+
+    [Test]
+    public async Task Pcfx_DatMatchedCueSetInTgcdFolder_GoesToReviewAsThreeNoDatMatchItems()
+    {
+        DropFoxSet("tgcd");
+
+        var items = await RunIngestJobWithItemsAsync();
+
+        Assert.That(items.Where(i => i.SystemId == "tgcd").Select(i => (Path.GetFileName(i.SourcePath), i.Outcome, i.Reason)), Is.EquivalentTo(new[]
+        {
+            (FoxCue, IngestOutcome.Review, (string?)"NoDatMatch"), (FoxTrack1, IngestOutcome.Review, "NoDatMatch"), (FoxTrack2, IngestOutcome.Review, "NoDatMatch"),
+        }));
+    }
+
     /// <summary>CHD B2: synthetic bytes standing in for a CHD (never a real image); the MAME magic only for realism.</summary>
     private static byte[] FakeChd(int seed)
     {
@@ -746,6 +806,7 @@ public class IngestPipelineTests
     [TestCase("segacd")]
     [TestCase("3do")]
     [TestCase("tgcd")]
+    [TestCase("pcfx")]
     public async Task Chd_Lone_GoesToReviewAsNoDatMatch_WithItsFoldersSystem(string system)
     {
         var result = await IngestAsync(DropAged(system, "Mystery Disc.chd", FakeChd(2301)));
