@@ -35,6 +35,7 @@ COPY src/RnRomManager.Systems.ThreeDo/RnRomManager.Systems.ThreeDo.csproj src/Rn
 COPY src/RnRomManager.Systems.Commodore/RnRomManager.Systems.Commodore.csproj src/RnRomManager.Systems.Commodore/
 COPY src/RnRomManager.Systems.Dos/RnRomManager.Systems.Dos.csproj src/RnRomManager.Systems.Dos/
 COPY src/RnRomManager.Systems.NeoGeoPocket/RnRomManager.Systems.NeoGeoPocket.csproj src/RnRomManager.Systems.NeoGeoPocket/
+COPY src/RnRomManager.Systems.WonderSwan/RnRomManager.Systems.WonderSwan.csproj src/RnRomManager.Systems.WonderSwan/
 COPY src/RnRomManager.Systems.Arcade/RnRomManager.Systems.Arcade.csproj src/RnRomManager.Systems.Arcade/
 # Docker's TARGETARCH names -> .NET's (.NET rejects amd64).
 RUN case "$TARGETARCH" in amd64) echo x64 ;; arm64) echo arm64 ;; *) echo "unsupported TARGETARCH '$TARGETARCH'" >&2; exit 1 ;; esac > /tmp/arch \
