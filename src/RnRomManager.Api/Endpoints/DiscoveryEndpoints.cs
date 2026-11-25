@@ -6,9 +6,9 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Api.Endpoints;
 
 /// <summary>
-/// <c>/api/discovery/{kind}*</c> (collections discovery B3): any signed-in user browses the publisher and genre
-/// indexes across systems. <c>kind</c> is exactly <c>publishers</c> or <c>genres</c>; anything else, and a group no
-/// game has, answers 404.
+/// <c>/api/discovery/{kind}*</c> (collections discovery B3): any signed-in user browses the publisher, developer and
+/// genre indexes across systems. <c>kind</c> is exactly <c>publishers</c>, <c>developers</c> or <c>genres</c>; anything
+/// else, and a group no game has, answers 404.
 /// </summary>
 public static class DiscoveryEndpoints
 {
@@ -31,7 +31,12 @@ public static class DiscoveryEndpoints
 
             var result = await repository.ListGroupsAsync(parsed, page ?? 1, pageSize ?? Page<DiscoveryGroup>.DefaultSize, q, ctx.RequestAborted);
             // B6, B15: only the shared logo's URL; the SPA falls back to its starter art, then a text banner.
-            var logoKind = parsed == DiscoveryKind.Publishers ? LogoKind.Publishers : LogoKind.Genres;
+            var logoKind = parsed switch
+            {
+                DiscoveryKind.Publishers => LogoKind.Publishers,
+                DiscoveryKind.Developers => LogoKind.Developers,
+                _ => LogoKind.Genres,
+            };
             var updated = await logos.ListUpdatedAtAsync(logoKind, result.Items.Select(g => g.Key).ToList(), ctx.RequestAborted);
             return Results.Ok(Paging.ToDto(result, g => new
             {
@@ -58,6 +63,18 @@ public static class DiscoveryEndpoints
             return result is null
                 ? Problems.NotFound(ctx)
                 : Results.Ok(Paging.ToDto(await LibraryEndpoints.ForViewerAsync(result, ctx, games), game => LibraryEndpoints.ToListItemDto(game, systems)));
+        });
+
+        // P4: a metadata value's group key, so the game page can link straight to the group.
+        discovery.MapGet("/{kind}/key", async (string kind, string? name, HttpContext ctx, IDiscoveryRepository repository) =>
+        {
+            if (!DiscoveryKinds.TryParse(kind, out var parsed))
+                return Problems.NotFound(ctx);
+            if (name?.Trim() is not { Length: >= 1 and <= 255 })
+                return Problems.Validation(ctx, new Dictionary<string, string[]> { ["name"] = ["Must be 1–255 characters."] });
+            return await repository.FindKeyAsync(parsed, name, ctx.RequestAborted) is { } key
+                ? Results.Ok(new { key })
+                : Problems.NotFound(ctx);
         });
 
         return api;

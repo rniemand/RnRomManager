@@ -75,6 +75,7 @@ To find a route in its file, grep the quoted route string, e.g. `MapPut("/rom-st
 `src/RnRomManager.Api/Endpoints/DiscoveryEndpoints.cs`:
 - `GET /api/discovery/{kind}`
 - `GET /api/discovery/{kind}/games`
+- `GET /api/discovery/{kind}/key`
 
 `src/RnRomManager.Api/Endpoints/EmulatorEndpoints.cs`:
 - `GET /api/emulator/bios/{name}`

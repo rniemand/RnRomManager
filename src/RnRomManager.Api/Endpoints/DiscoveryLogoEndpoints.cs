@@ -10,9 +10,9 @@ using RnRomManager.Core.Systems;
 namespace RnRomManager.Api.Endpoints;
 
 /// <summary>
-/// <c>/api/discovery/{kind}/logo?key=</c> (collections discovery B5, B13–B14): the shared logo of a publisher, genre or
-/// system. Any signed-in user reads it; Admins replace or remove it, and every change is audited. Publishers and genres
-/// are keyed by their group key, systems by their id (stored as <see cref="DiscoveryKey.ForSystem"/>). The bytes live in
+/// <c>/api/discovery/{kind}/logo?key=</c> (collections discovery B5, B13–B14): the shared logo of a publisher, developer,
+/// genre or system. Any signed-in user reads it; Admins replace or remove it, and every change is audited. Publishers, developers and
+/// genres are keyed by their group key, systems by their id (stored as <see cref="DiscoveryKey.ForSystem"/>). The bytes live in
 /// <c>discovery_logos</c>.
 /// </summary>
 public static partial class DiscoveryLogoEndpoints
@@ -35,6 +35,7 @@ public static partial class DiscoveryLogoEndpoints
     {
         ["publishers"] = LogoKind.Publishers,
         ["genres"] = LogoKind.Genres,
+        ["developers"] = LogoKind.Developers,
         ["systems"] = LogoKind.Systems,
     };
 
@@ -143,6 +144,7 @@ public static partial class DiscoveryLogoEndpoints
     {
         LogoKind.Systems => systems.ById(key)?.DisplayName,
         LogoKind.Genres => (await discovery.GetGroupAsync(DiscoveryKind.Genres, key, cancellationToken))?.Name,
+        LogoKind.Developers => (await discovery.GetGroupAsync(DiscoveryKind.Developers, key, cancellationToken))?.Name,
         _ => (await discovery.GetGroupAsync(DiscoveryKind.Publishers, key, cancellationToken))?.Name,
     };
 
@@ -154,6 +156,8 @@ public static partial class DiscoveryLogoEndpoints
             LogoKind.Systems => (replaced ? AuditActions.SystemLogoReplaced : AuditActions.SystemLogoRemoved,
                 name is null ? $"system {key}" : $"{name} (system {key})"),
             LogoKind.Genres => (replaced ? AuditActions.GenreLogoReplaced : AuditActions.GenreLogoRemoved,
+                name is null ? $"key {key}" : $"{name} (key {key})"),
+            LogoKind.Developers => (replaced ? AuditActions.DeveloperLogoReplaced : AuditActions.DeveloperLogoRemoved,
                 name is null ? $"key {key}" : $"{name} (key {key})"),
             _ => (replaced ? AuditActions.PublisherLogoReplaced : AuditActions.PublisherLogoRemoved,
                 name is null ? $"key {key}" : $"{name} (key {key})"),

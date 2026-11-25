@@ -113,6 +113,7 @@ public partial class EndpointRoleMatrixTests
         ["PUT /api/discovery/{kind}/logo"] = Role.Admin,
         ["PUT /api/discovery/{kind}/logo/from-url"] = Role.Admin,
         ["DELETE /api/discovery/{kind}/logo"] = Role.Admin,
+        ["GET /api/discovery/{kind}/key"] = Role.User,
         ["GET /api/timeline"] = Role.User,
         ["GET /api/timeline/games"] = Role.User,
         ["GET /api/igdb/games/{igdbId:int}/page"] = Role.User,

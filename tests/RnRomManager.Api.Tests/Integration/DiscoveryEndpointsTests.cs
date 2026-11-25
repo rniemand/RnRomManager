@@ -52,9 +52,12 @@ public class DiscoveryEndpointsTests
 
     private static string Key(string normalized) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(normalized)));
 
-    private async Task<Guid> AddGameAsync(string title, string system, string[] publishers, string[]? genres = null)
+    private async Task<Guid> AddGameAsync(string title, string system, string[] publishers, string[]? genres = null, string[]? developers = null)
     {
-        var game = Game(title, Rom($"{title}.gb", RomBytes(++_seed))) with { System = system, Publishers = publishers, Genres = genres ?? [] };
+        var game = Game(title, Rom($"{title}.gb", RomBytes(++_seed))) with
+        {
+            System = system, Publishers = publishers, Genres = genres ?? [], Developers = developers ?? [],
+        };
         await _factory.Services.GetRequiredService<ILibraryMirror>()
             .ReplaceAsync(new MirrorEntry(game, $"{system}/{title[0]}/{title}.zip", 100, When.UtcDateTime), default);
         return game.GameId;
@@ -172,13 +175,71 @@ public class DiscoveryEndpointsTests
             Is.EqualTo(new[] { "Game 2", "Game 3" }));
     }
 
-    [TestCase("/api/discovery/developers")]
+    [TestCase("/api/discovery/studios")]
     [TestCase("/api/discovery/Publishers")]
     [TestCase("/api/discovery/publisher")]
-    [TestCase("/api/discovery/developers/games?key=c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516")]
+    [TestCase("/api/discovery/studios/games?key=c0a4942143e872cd1ae29fc759e04526de2e909ac1732734d38550a29c2e2516")]
+    [TestCase("/api/discovery/studios/key?name=Nintendo")]
     public async Task UnknownKind_Is404(string url)
     {
         Assert.That((await GetAsync(_user, url)).Status, Is.EqualTo(HttpStatusCode.NotFound));
+    }
+
+    [Test]
+    public async Task Developers_GroupGamesDevelopers_LikePublishers()
+    {
+        var tetris = await AddGameAsync("Tetris", "gb", ["Nintendo"], developers: ["Bullet-Proof"]);
+        await AddGameAsync("Mario", "nes", ["Nintendo"], developers: [" bullet-proof", "Nintendo R&D1"]);
+
+        var (status, body) = await GetAsync(_user, "/api/discovery/developers");
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        var items = body.GetProperty("items").EnumerateArray().ToList();
+        Assert.That(items.Select(i => (i.GetProperty("name").GetString(), i.GetProperty("gameCount").GetInt64())),
+            Is.EqualTo(new[] { ("Bullet-Proof", 2L), ("Nintendo R&D1", 1L) }));
+
+        var (_, games) = await GetAsync(_user, $"/api/discovery/developers/games?key={Key("bullet-proof")}");
+        Assert.That(games.GetProperty("total").GetInt64(), Is.EqualTo(2));
+        Assert.That(games.GetProperty("items").EnumerateArray().Select(g => g.GetProperty("id").GetGuid()), Does.Contain(tetris));
+    }
+
+    [TestCase("publishers", "nintendo", "nintendo")]
+    [TestCase("developers", "  BULLET-PROOF ", "bullet-proof")]
+    [TestCase("genres", "Puzzle", "puzzle")]
+    public async Task Key_ByName_IsCaseAndSpaceInsensitive(string kind, string name, string normalized)
+    {
+        await AddGameAsync("Tetris", "gb", ["Nintendo"], ["Puzzle"], ["Bullet-Proof"]);
+
+        var (status, body) = await GetAsync(_user, $"/api/discovery/{kind}/key?name={Uri.EscapeDataString(name)}");
+
+        Assert.That(status, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(body.GetProperty("key").GetString(), Is.EqualTo(Key(normalized)));
+    }
+
+    [Test]
+    public async Task Key_ByName_NoGameHasIt_Is404()
+    {
+        await AddGameAsync("Tetris", "gb", ["Nintendo"], ["Puzzle"]);
+
+        Assert.That((await GetAsync(_user, "/api/discovery/publishers/key?name=Sega")).Status, Is.EqualTo(HttpStatusCode.NotFound));
+        Assert.That((await GetAsync(_user, "/api/discovery/genres/key?name=Nintendo")).Status, Is.EqualTo(HttpStatusCode.NotFound),
+            "names belong to their kind");
+    }
+
+    [TestCase("")]
+    [TestCase("?name=")]
+    [TestCase("?name=%20%20")]
+    public async Task Key_ByName_InvalidName_Is400(string query)
+    {
+        var (status, body) = await GetAsync(_user, $"/api/discovery/publishers/key{query}");
+        Assert.That(status, Is.EqualTo(HttpStatusCode.BadRequest));
+        Assert.That(body.GetProperty("errors").GetProperty("name")[0].GetString(), Is.EqualTo("Must be 1–255 characters."));
+    }
+
+    [Test]
+    public async Task Key_ByName_Over255Characters_Is400()
+    {
+        var (status, _) = await GetAsync(_user, $"/api/discovery/publishers/key?name={new string('a', 256)}");
+        Assert.That(status, Is.EqualTo(HttpStatusCode.BadRequest));
     }
 
     [Test]
