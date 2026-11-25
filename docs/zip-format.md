@@ -34,6 +34,7 @@ roms/
   c128/                 Commodore 128 (.d64, .d71, .d81, .g64, .t64, .tap, .prg, .p00, .crt)
   c64/                  Commodore 64 (.crt, .tap, .nib, .d64, .g64, .t64, .prg, .bin, .d71, .d81, .x64, .p00, .d80, .d82, .nbz, .d2m, .d4m, .tcrt)
   pet/                  Commodore PET (.prg, .d64, .tap, .t64, .g64, .d80, .d82)
+  plus4/                Commodore Plus/4 (.d64, .t64, .tap, .prg, .crt, .bin)
   vic20/                Commodore VIC-20 (.a0, .20, .40, .60, .bin, .prg, .d64, .tap, .t64, .crt)
   amiga/                Commodore Amiga (.adf, or .ipf as the DAT names it)
   gg/                   Game Gear (.gg, or .sms for SMS-mode games, as the DAT names it)
@@ -167,7 +168,7 @@ Hashes are lowercase hex everywhere. Times are ISO-8601 UTC.
 |---|---|---|---|
 | `schemaVersion` | int | ✓ | `8` |
 | `gameId` | GUID string | ✓ | stable; the database's primary key |
-| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c128`, `c64`, `tgcd`, `pcfx`, `dos`, `ngp`, `ngpc`, `mame2003`, `fbneo`) |
+| `system` | string | ✓ | system id (`gb`, `gbc`, `gba`, `n64`, `nes`, `snes`, `satellaview`, `sufami`, `a2600`, `coleco`, `gg`, `sms`, `md`, `s32x`, `tg16`, `switch`, `psx`, `psp`, `gc`, `wii`, `x360`, `saturn`, `nds`, `3ds`, `segacd`, `3do`, `c128`, `c64`, `plus4`, `tgcd`, `pcfx`, `dos`, `ngp`, `ngpc`, `mame2003`, `fbneo`) |
 | `title` | string | ✓ | see Naming |
 | `displayTitle` | string | ✓ | see Naming |
 | `releaseYear` | int? | | from the DAT metadata (titledb's release date for Switch; the disc systems have no metadata DATs) |
@@ -240,6 +241,8 @@ ColecoVision `header`: `magic`, the first two bytes as upper-case hex (`AA55` sh
 Commodore 64 `header` is present when the file starts with one of four container magics; `.prg`, `.d64`, `.t64`, `.bin`, `.d71`, `.d81`, `.x64` and `.p00` files (and anything shorter or unrecognised) have `header` null. A `.crt` (at least 64 bytes, `C64 CARTRIDGE   `) has `format` `crt`, `version` (`"<byte 0x14>.<byte 0x15>"`, e.g. `1.0`), `hardwareType` (big-endian unsigned 16-bit at 0x16), `exrom` and `game` (bytes at 0x18 and 0x19) and `title` (32 bytes from 0x20, Latin-1 through the first NUL, trimmed, empty stored as null). A `.tap` (at least 20 bytes, `C64-TAPE-RAW`) has `format` `tap` and `version` (byte 0x0C). A `.g64` (at least 12 bytes, `GCR-1541`) has `format` `g64`, `version` (byte 0x08) and `tracks` (byte 0x09). A `.nib` (at least 14 bytes, `MNIB-1541-RAW`) has `format` `nib` and `version` (byte 0x0D). Numbers are unsigned as read.
 
 Commodore 128 `header` is the same (classified `c128`) for a C64-signature `.crt`, a `.tap` or a `.g64`, and null for every other file, including a native C128 `.crt`.
+
+Commodore Plus/4 `header` is the same (classified `plus4`) for a `.tap` (`C16-TAPE-RAW` or `C64-TAPE-RAW`) or a C64-signature `.crt`, and null for every other file, including a native Plus/4 `.crt`. A `C16-TAPE-RAW` tape gets the same `tap` header on Commodore 64 and 128.
 
 Game Gear `header`, from the optional `TMR SEGA` header (looked for at 0x7FF0, 0x3FF0, then 0x1FF0; without it `header` is null): `offset` (`7FF0`, `3FF0` or `1FF0`), `checksum` (bytes +10–11, little-endian, 4 upper-case hex digits), `productCode` (the BCD product code as hex digits, leading zeros trimmed), `version` (low nibble of +14), `region` (`SMS Japan`, `SMS Export`, `GG Japan`, `GG Export`, `GG International`, or the nibble in hex) and `sizeCode` (low nibble of +15). Master System `header` has the same fields, read the same way.
 

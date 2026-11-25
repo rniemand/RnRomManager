@@ -215,7 +215,7 @@ API contracts change only additively: `plus4` appears in `/api/systems` and `/ap
   - `src/lib/systemColours.test.ts`: in the Commodore case, `expect(systemColour('plus4')).toEqual({ name: 'plus4', foreground: '#fff' });` after the `c128` line.
 
   Done when: those files, `npm run lint` and `npm run check` pass, and `npm run predev` vendors without error.
-- [ ] **5. Docs**: "Commodore Plus/4" goes right after "Commodore PET" in every list that has it, else right after "Commodore 64" (features' intro, **Play** and separate-families lists have no PET; adding the missing PET/VIC-20 there is out of scope), and `vice_xplus4` right after `vice_x128` wherever cores are.
+- [x] **5. Docs**: "Commodore Plus/4" goes right after "Commodore PET" in every list that has it, else right after "Commodore 64" (features' intro, **Play** and separate-families lists have no PET; adding the missing PET/VIC-20 there is out of scope), and `vice_xplus4` right after `vice_x128` wherever cores are.
   - `README.md`:
     - the **Game detail** Play list: "Commodore PET, Commodore Plus/4, Commodore VIC-20"; after "…plays up to 20 disks in one session with in-game disk swapping;" add " Commodore Plus/4 multi-disk `.d64` games get **All disks** the same way;"; the operator-core sentence reads "…Commodore PET, Commodore Plus/4, Commodore VIC-20 and Nintendo 64 need … VICE (`vice_x64sc`, `vice_xpet`, `vice_xvic`, `vice_x128`, `vice_xplus4`) …";
     - the core attribution reads "VICE (Commodore 64, 128, PET, Plus/4 and VIC-20) isn't included either";
