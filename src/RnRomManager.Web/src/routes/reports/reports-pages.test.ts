@@ -394,6 +394,20 @@ describe('reports pages', () => {
 			);
 		});
 
+		it('a count line reads "N groups" / "1 group" above the first group (R1)', async () => {
+			signIn(['admin']);
+			answers[list] = { status: 200, body: { ...page, total: 1234 } };
+			const { unmount } = render(Duplicates);
+			const line = await screen.findByText('1,234 groups');
+			expect(line.className).toBe('small text-body-secondary mb-2');
+			expect(line.nextElementSibling!.tagName).toBe('SECTION');
+			unmount();
+
+			answers[list] = { status: 200, body: page };
+			render(Duplicates);
+			expect(await screen.findByText('1 group')).toBeTruthy();
+		});
+
 		it('shows the empty state', async () => {
 			answers[list] = { status: 200, body: { items: [], page: 1, pageSize: 25, total: 0 } };
 			render(Duplicates);
@@ -461,6 +475,30 @@ describe('reports pages', () => {
 			render(MissingImages);
 
 			expect(await screen.findByText('Every game has a cover image.')).toBeTruthy();
+			expect(screen.queryByText(/\d games?$/)).toBeNull();
+		});
+
+		it('a count line reads "N games" / "1 game" above the table (R1)', async () => {
+			const item = {
+				id: 'g1',
+				displayTitle: 'Alpha',
+				system: 'gb',
+				systemName: 'Game Boy',
+				reason: 'NoCover'
+			};
+			answers[list()] = {
+				status: 200,
+				body: { items: [item], page: 1, pageSize: 50, total: 1234 }
+			};
+			const { unmount } = render(MissingImages);
+			const line = await screen.findByText('1,234 games');
+			expect(line.className).toBe('small text-body-secondary mb-2');
+			expect(line.nextElementSibling!.querySelector('table')).toBeTruthy();
+			unmount();
+
+			answers[list()] = { status: 200, body: { items: [item], page: 1, pageSize: 50, total: 1 } };
+			render(MissingImages);
+			expect(await screen.findByText('1 game')).toBeTruthy();
 		});
 	});
 
@@ -502,6 +540,18 @@ describe('reports pages', () => {
 			const bar = group.parentElement!;
 			expect(bar.className).toBe('d-flex flex-wrap align-items-center gap-2 mb-3');
 			expect(bar.firstElementChild!.contains(systemToggle())).toBe(true);
+		});
+
+		it('a count line reads "N games" / "1 game" above the table (R1)', async () => {
+			answers[list()] = { status: 200, body: body([item('g1')], 1234) };
+			const { unmount } = render(MultipleReleases);
+			const line = await screen.findByText('1,234 games');
+			expect(line.className).toBe('small text-body-secondary mb-2');
+			unmount();
+
+			answers[list()] = { status: 200, body: body([item('g1')]) };
+			render(MultipleReleases);
+			expect(await screen.findByText('1 game')).toBeTruthy();
 		});
 
 		it('lists game, system badge, releases, updates and size; numbers right-aligned (B19)', async () => {
@@ -921,6 +971,19 @@ describe('reports pages', () => {
 			render(Hacks);
 
 			expect(await screen.findByText('No games have hacked releases.')).toBeTruthy();
+			expect(screen.queryByText(/\d games?$/)).toBeNull();
+		});
+
+		it('a count line reads "N games" / "1 game" above the table (R1)', async () => {
+			answers[list()] = { status: 200, body: { ...body([item('g1')]), total: 1234 } };
+			const { unmount } = render(Hacks);
+			const line = await screen.findByText('1,234 games');
+			expect(line.className).toBe('small text-body-secondary mb-2');
+			unmount();
+
+			answers[list()] = { status: 200, body: body([item('g1')]) };
+			render(Hacks);
+			expect(await screen.findByText('1 game')).toBeTruthy();
 		});
 	});
 

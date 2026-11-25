@@ -16,6 +16,7 @@
 	import { systemFilterOptions } from '#lib/systemFilter.js';
 	import { auth } from '#lib/stores/auth.svelte.js';
 	import { toasts } from '#lib/stores/toasts.svelte.js';
+	import { formatCount } from '#lib/format.js';
 
 	/** RP9. The System filter and page are component state only. */
 	interface DuplicateGroup {
@@ -143,6 +144,10 @@
 {:else if result.items.length === 0}
 	<div class="card"><EmptyState message="No duplicate games found." /></div>
 {:else}
+	<p class="small text-body-secondary mb-2">
+		{formatCount(result.total)}
+		{result.total === 1 ? 'group' : 'groups'}
+	</p>
 	{#each result.items as group (group.gamesKey + group.system + group.baseTitle)}
 		<section class="card mb-3" aria-labelledby="group-{group.gamesKey}">
 			<div class="card-header d-flex flex-wrap align-items-center gap-2">
