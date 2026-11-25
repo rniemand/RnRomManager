@@ -39,6 +39,7 @@ public class IngestPipelineTests
     private static readonly byte[] PioneerHeaderless = Pioneer[16..];
     private static readonly byte[] DiskQuest = FdsDisk();
     private static readonly byte[] StarDuel = SufamiCart(2601);
+    private static readonly byte[] Plus4Cart = Atari(16 * 1024, 2711);
     private static readonly SyntheticSnesRomBuilder Rally = new() { Seed = 80, SizeKiB = 64, Title = "MODE SEVEN RALLY" };
 
     private static readonly byte[] Lanes = Atari(4096, 120);
@@ -184,7 +185,7 @@ public class IngestPipelineTests
             [IngestSeeder.ThreeDoDat] = [new FixtureGame("Opal Orbit (USA)", "Opal Orbit (USA) (Track 1).bin", OpalData)],
             [IngestSeeder.C64Dat] = [new FixtureGame("Gzip Orbit (Europe)", "Gzip Orbit (Europe).d64", C64Disk)],
             [IngestSeeder.PetDat] = [],
-            [IngestSeeder.Vic20Dat] = [], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [new FixtureGame("Star Duel (Japan)", "Star Duel (Japan).st", StarDuel)], [IngestSeeder.FdsDat] = [new FixtureGame("Disk Quest (Japan)", "Disk Quest (Japan).fds", DiskQuest)],
+            [IngestSeeder.Vic20Dat] = [], [IngestSeeder.Plus4Dat] = [new FixtureGame("Pixel Pilot (USA, Europe)", "Pixel Pilot (USA, Europe).bin", Plus4Cart)], [IngestSeeder.SatellaviewDat] = [], [IngestSeeder.SufamiTurboDat] = [new FixtureGame("Star Duel (Japan)", "Star Duel (Japan).st", StarDuel)], [IngestSeeder.FdsDat] = [new FixtureGame("Disk Quest (Japan)", "Disk Quest (Japan).fds", DiskQuest)],
             // Amiga F4: libretro's TOSEC game names are "Title (Disk n)[tags]"; the ROM names carry the full TOSEC name.
             [IngestSeeder.AmigaDat] =
             [
@@ -1992,6 +1993,31 @@ public class IngestPipelineTests
         Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, "sufami")), result.Details);
         using var library = LibraryZip.Open(Path.Combine(Roms, "sufami", "S", "Star Duel.zip"), Service<InfoJsonReader>());
         Assert.That(library.InfoJson!.Game!.Roms.Single().FileName, Is.EqualTo("Star Duel (Japan).st"));
+    }
+
+    [Test]
+    public async Task Plus4_ADatMatchedCart_IsStoredUnderTheDatsName()
+    {
+        var result = await IngestAsync(DropAged("plus4", "pilot.bin", Plus4Cart));
+
+        Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Ingested, "plus4")), result.Details);
+        using var library = LibraryZip.Open(Path.Combine(Roms, "plus4", "P", "Pixel Pilot.zip"), Service<InfoJsonReader>());
+        Assert.That(library.InfoJson!.Game!.Roms.Single().FileName, Is.EqualTo("Pixel Pilot (USA, Europe).bin"));
+    }
+
+    [Test]
+    public async Task Plus4_AnUnmatchedTape_GoesToReview_WithItsHeader()
+    {
+        var tap = new byte[300];
+        "C16-TAPE-RAW"u8.CopyTo(tap);
+        tap[0x0C] = 1;
+
+        var result = await IngestAsync(DropAged("plus4", "game.tap", tap));
+
+        Assert.That((result!.Outcome, result.SystemId), Is.EqualTo((IngestOutcome.Review, "plus4")), result.Details);
+        var item = (await Service<IIngestReviewRepository>().GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(tap)), default))!;
+        var header = JsonNode.Parse(item.Header!)!;
+        Assert.That((header["format"]!.GetValue<string>(), header["version"]!.GetValue<int>()), Is.EqualTo(("tap", 1)));
     }
 
     [Test]

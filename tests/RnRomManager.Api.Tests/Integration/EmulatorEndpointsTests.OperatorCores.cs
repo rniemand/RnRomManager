@@ -125,7 +125,7 @@ public partial class EmulatorEndpointsTests
         };
 
         Assert.That(OperatorCoreManifest.Pinned.Cores.Select(c => c.Id),
-            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x", "opera", "vice_x64sc", "vice_xpet", "vice_xvic", "vice_x128", "mupen64plus_next", "mame2003_plus", "fbneo" }));
+            Is.EqualTo(new[] { "genesis_plus_gx", "picodrive", "snes9x", "opera", "vice_x64sc", "vice_xpet", "vice_xvic", "vice_x128", "vice_xplus4", "mupen64plus_next", "mame2003_plus", "fbneo" }));
         Assert.That((genesis.DisplayName, genesis.MismatchCode), Is.EqualTo(("Genesis Plus GX", "GenesisCoreMismatch")));
         Assert.That((picodrive.DisplayName, picodrive.MismatchCode), Is.EqualTo(("PicoDrive", "PicodriveCoreMismatch")));
         Assert.That((snes9x.DisplayName, snes9x.MismatchCode), Is.EqualTo(("Snes9x", "Snes9xCoreMismatch")));
@@ -138,6 +138,8 @@ public partial class EmulatorEndpointsTests
         Assert.That((vic.DisplayName, vic.MismatchCode, vic.PathOf(options)), Is.EqualTo(("VICE (VIC-20)", "ViceCoreMismatch", "/cores/vice")), "shares the C64 folder");
         var c128 = OperatorCoreManifest.Pinned.Find("vice_x128")!;
         Assert.That((c128.DisplayName, c128.MismatchCode, c128.PathOf(options)), Is.EqualTo(("VICE (C128)", "ViceCoreMismatch", "/cores/vice")), "shares the C64 folder");
+        var plus4 = OperatorCoreManifest.Pinned.Find("vice_xplus4")!;
+        Assert.That((plus4.DisplayName, plus4.MismatchCode, plus4.PathOf(options)), Is.EqualTo(("VICE (Plus/4)", "ViceCoreMismatch", "/cores/vice")), "shares the C64 folder");
         var n64 = OperatorCoreManifest.Pinned.Find("mupen64plus_next")!;
         Assert.That((n64.DisplayName, n64.MismatchCode, n64.PathOf(options)),
             Is.EqualTo(("Mupen64Plus-Next", "Mupen64PlusCoreMismatch", "/cores/n64")));
@@ -669,6 +671,20 @@ public partial class EmulatorEndpointsTests
                 "71383f4b81943b936c2c0b4258af231f6adcbf3139c2d0a17b8f20a239712c86", "application/octet-stream"),
             new OperatorCoreFile("vice_x128.json", 146,
                 "bf4d43822a61a423e00e0d2bffd063ca139a77e78b66507aeb90343fcc221af3", "application/json"),
+        }));
+    }
+
+    [Test]
+    public void PinnedManifest_HoldsExactlyTheVicePlus44_2_3Files()
+    {
+        Assert.That(OperatorCoreManifest.Pinned.Find(OperatorCoreManifest.VicePlus4)!.Files, Is.EqualTo(new[]
+        {
+            new OperatorCoreFile("vice_xplus4-wasm.data", 1_413_246,
+                "f96b6660211a403b687e5f905394fda655c60250db7619a335ef2ccc160bfb30", "application/octet-stream"),
+            new OperatorCoreFile("vice_xplus4-legacy-wasm.data", 1_413_262,
+                "568e282a78c363f459f59c32b2745e2c26b245a6e55771edba5028a66a8b4063", "application/octet-stream"),
+            new OperatorCoreFile("vice_xplus4.json", 125,
+                "838318e4ee8d1ad2cfdd9fdf00350f57ea3eed1ca3d84491535f67074774e5d6", "application/json"),
         }));
     }
 

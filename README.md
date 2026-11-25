@@ -42,6 +42,7 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | Commodore 64 | `c64` | In ZIP | `.crt`, `.tap`, `.nib`, `.d64`, `.g64`, `.t64`, `.prg`, `.bin`, `.d71`, `.d81`, `.x64`, `.p00`, `.d80`, `.d82`, `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z`, `.gz`, `.nbz`, `.d2m`, `.d4m`, `.tcrt` | No-Intro | `vice_x64sc` |
 | Commodore Amiga | `amiga` | In ZIP | `.adf`, `.adz`, `.ipf` | TOSEC | `puae` |
 | Commodore PET | `pet` | In ZIP | `.prg`, `.d64`, `.tap`, `.t64`, `.g64`, `.d80`, `.d82`, `.d71`, `.d81`, `.x64`, `.p00`, `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z`, `.gz` | TOSEC | `vice_xpet` |
+| Commodore Plus/4 | `plus4` | In ZIP | `.d64`, `.t64`, `.tap`, `.prg`, `.crt`, `.bin` | No-Intro | `vice_xplus4` |
 | Commodore VIC-20 | `vic20` | In ZIP | `.a0`, `.20`, `.40`, `.60`, `.bin`, `.prg`, `.d64`, `.tap`, `.t64`, `.crt`, `.b0`, `.rom`, `.d71`, `.d81`, `.g64`, `.x64`, `.p00`, `.d6z`, `.d7z`, `.d8z`, `.g6z`, `.x6z`, `.gz` | No-Intro | `vice_xvic` |
 | Famicom Disk System | `fds` | In ZIP | `.fds` | No-Intro | `fceumm` |
 | Game Boy | `gb` | In ZIP | `.gb`, `.dmg` | No-Intro | `gambatte` |

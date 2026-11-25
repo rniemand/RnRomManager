@@ -148,7 +148,7 @@ API contracts change only additively: `plus4` appears in `/api/systems` and `/ap
   - `C64HeaderTests`: `C16Tap_ReadsFormatAndVersion` (new, after `Tap_ReadsFormatAndVersion`, mirroring it with `WithMagic("C16-TAPE-RAW", 20)`; classified `c64`, the same two fields) and `[TestCase("C16-TAPE-RAW", 19)]` in `OneByteShortOfTheMinimum_IsNull`.
 
   Done when: `Plus4HandlerTests`, `C64HeaderTests`, `C64HandlerTests`, `C128HandlerTests` and `Vic20HandlerTests` pass, and `dotnet build` is warning-free.
-- [ ] **2. Registration, DAT fixtures and operator core**: B5, B8, B10, B16, B17. Files: `AppHost.cs`, `IngestSeeder.cs`, `IgdbPlatforms.cs`, `OperatorCoreManifest.cs`, `systemEmulators.json`, and the `README.md` supported-systems row `` | Commodore Plus/4 | `plus4` | In ZIP | `.d64`, `.t64`, `.tap`, `.prg`, `.crt`, `.bin` | No-Intro | `vice_xplus4` | ``, right after the Commodore PET row (`No-Intro` as on the VIC-20 row). Tests:
+- [x] **2. Registration, DAT fixtures and operator core**: B5, B8, B10, B16, B17. Files: `AppHost.cs`, `IngestSeeder.cs`, `IgdbPlatforms.cs`, `OperatorCoreManifest.cs`, `systemEmulators.json`, and the `README.md` supported-systems row `` | Commodore Plus/4 | `plus4` | In ZIP | `.d64`, `.t64`, `.tap`, `.prg`, `.crt`, `.bin` | No-Intro | `vice_xplus4` | ``, right after the Commodore PET row (`No-Intro` as on the VIC-20 row). Tests:
   - Every test file listing `IngestSeeder.Vic20Dat` in a full-registry manifest adds `[IngestSeeder.Plus4Dat] = []` right after it. Today that's `AuditLibraryEditTests`, `DatEndpointsTests`, `GamePlayedEndpointTests`, `ImageEndpointsTests`, `ImageUrlEndpointsTests`, `IngestArchiveTests`, `IngestDeleteEndpointsTests`, `IngestEndpointsTests`, `IngestPipelineTests`, `IngestRestoreEndpointsTests`, `IngestReviewTests` (2), `LibraryEditTests`, `LibraryEndpointsTests`, `LibraryMoveMergeTests`, `MediaRetryEndpointsTests`, `NoteEndpointsTests`, `ReportEndpointsTests`, `ReviewEndpointsTests` (3) and `ZipEntryEndpointsTests`. Grep again when implementing.
   - `DatEndpointsTests`:
     - the names count 43 → 44, with message "30 libretro systems, the 10 disc systems, Switch, the test titledb system, MAME and FBNeo";
@@ -263,6 +263,7 @@ API contracts change only additively: `plus4` appears in `/api/systems` and `/ap
 - 2026-11-25 Deep review pass 3: B9 gains the 401 and `(HTTP <status>)` texts `operatorCoreError` gives; the deployment note says only `ingest/plus4/` is created at startup, since `SystemStartupTests` pins that `roms/<id>/` isn't (reviewer)
 - 2026-11-25 Deep review pass 4: step 1's test inputs pinned (the `.bin` seed, a native `C264 CARTRIDGE  ` `.crt` as C128's test does, `C16Tap_ReadsFormatAndVersion`'s shape); every other test that walks all registered systems derives its list from the registry (reviewer)
 - 2026-11-25 e2e? → none: the e2e stack has no VICE core to play with, the DAT/Review flows are covered by existing e2e, and sets by the Amiga API and vitest cases this spec mirrors (code)
+- 2026-11-25 Step 2: IGDB's platform page refuses automated fetches (403), so the id 94 couldn't be checked; kept as specced, the maintainer to confirm (code)
 
 ## Kickoff prompt
 ```text
