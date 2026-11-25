@@ -78,14 +78,17 @@ public partial class LibraryEndpointsTests
     private Task<(Guid Id, string Zip, IReadOnlyList<long> RomIds, IReadOnlyList<byte[]> Bytes)> AmigaGame(string title,
         int seed, params string[] fileNames) => AmigaGame(title, seed, null, fileNames);
 
+    private Task<(Guid Id, string Zip, IReadOnlyList<long> RomIds, IReadOnlyList<byte[]> Bytes)> AmigaGame(string title,
+        int seed, Func<InfoJsonRom, int, InfoJsonRom>? shape, params string[] fileNames) => FloppyGame("amiga", title, seed, shape, fileNames);
+
     /// <param name="shape">Changes release <c>i</c>'s row in the mirrored database only (the ZIP is written as given).</param>
-    private async Task<(Guid Id, string Zip, IReadOnlyList<long> RomIds, IReadOnlyList<byte[]> Bytes)> AmigaGame(string title,
-        int seed, Func<InfoJsonRom, int, InfoJsonRom>? shape, params string[] fileNames)
+    private async Task<(Guid Id, string Zip, IReadOnlyList<long> RomIds, IReadOnlyList<byte[]> Bytes)> FloppyGame(string system,
+        string title, int seed, Func<InfoJsonRom, int, InfoJsonRom>? shape, params string[] fileNames)
     {
         var seeds = fileNames.Select((_, i) => seed + i).ToArray();
         var game = TestLibrary.Game(title, [.. fileNames.Select((f, i) => TestLibrary.Rom(f, TestLibrary.RomBytes(seeds[i]), isPrimary: i == 0))])
-            with { System = "amiga" };
-        var zipPath = $"amiga/{title[..1]}/{title}.zip";
+            with { System = system };
+        var zipPath = $"{system}/{title[..1]}/{title}.zip";
         var zip = Path.Combine(_factory.Root, "roms", zipPath);
         await TestLibrary.WriteZipAsync(Service<InfoJsonReader>(), zip, game, seeds);
         var file = new FileInfo(zip);
@@ -122,6 +125,20 @@ public partial class LibraryEndpointsTests
             Assert.That(release.GetProperty("discSet").ValueKind, Is.EqualTo(JsonValueKind.Null), release.GetProperty("fileName").GetString());
     }
 
+    [Test]
+    public async Task Detail_DiscSet_IsOnPlus4DiskOne_WithTheNameAndOrderedIds_AndNullElsewhere()
+    {
+        var (id, _, ids, _) = await FloppyGame("plus4", "Pixel Quest", 9301, null,
+            "Pixel Quest (Disk 1 of 2).d64", "Pixel Quest (1986)(Synth)(Disk 2 of 2) (Unverified).d64");
+
+        var detail = await GetJson($"/api/games/{id}");
+
+        var set = DiscSetOf(detail, "Pixel Quest (Disk 1 of 2).d64");
+        Assert.That(set.GetProperty("name").GetString(), Is.EqualTo("Pixel Quest.m3u"));
+        Assert.That(set.GetProperty("romIds").EnumerateArray().Select(e => e.GetInt64()), Is.EqualTo(new[] { ids[0], ids[1] }));
+        Assert.That(DiscSetOf(detail, "Pixel Quest (1986)(Synth)(Disk 2 of 2) (Unverified).d64").ValueKind, Is.EqualTo(JsonValueKind.Null));
+    }
+
     // Amiga F5: play-disc-set for a floppy set inside the game's ZIP.
 
     private static string Twin(string title, int n) => TwinDisk(n).Replace("Twin Disk", title);
@@ -147,6 +164,38 @@ public partial class LibraryEndpointsTests
         Assert.That(ReadEntry(zip, "Disk 2.adf"), Is.EqualTo(bytes[1]));
         var payload = zip.Entries.Sum(e => e.Length);
         Assert.That(response.Headers.GetValues("X-Content-Bytes"), Is.EqualTo(new[] { payload.ToString(CultureInfo.InvariantCulture) }));
+    }
+
+    [Test]
+    public async Task PlayDiscSet_APlus4Set_IsThePlaylist_ThenEachDiskAliased()
+    {
+        var (id, _, ids, bytes) = await FloppyGame("plus4", "Pixel Stream", 9311, null,
+            "Pixel Quest (1986)(Synth)(Disk 1 of 2).d64", "Pixel Quest (1986)(Synth)(Disk 2 of 2).d64");
+
+        using var response = await _user.SendAsync(HttpMethod.Get, PlayDiscSetUrl(id, ids[0]), null, sendXsrf: false,
+            completion: HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Pixel Quest (1986)(Synth).m3u", "Disk 1.d64", "Disk 2.d64" }));
+        Assert.That(ReadEntry(zip, "Pixel Quest (1986)(Synth).m3u"), Is.EqualTo(Encoding.UTF8.GetBytes("Disk 1.d64\nDisk 2.d64\n")));
+        Assert.That(ReadEntry(zip, "Disk 1.d64"), Is.EqualTo(bytes[0]));
+        Assert.That(ReadEntry(zip, "Disk 2.d64"), Is.EqualTo(bytes[1]));
+        var payload = zip.Entries.Sum(e => e.Length);
+        Assert.That(response.Headers.GetValues("X-Content-Bytes"), Is.EqualTo(new[] { payload.ToString(CultureInfo.InvariantCulture) }));
+    }
+
+    [Test]
+    public async Task PlayDiscSet_APlus4SetWithAnExternalDisk_Is404()
+    {
+        var (id, _, ids, _) = await FloppyGame("plus4", "Pixel Away", 9321,
+            (rom, i) => i == 1 ? rom with { ExternalFileName = rom.FileName } : rom,
+            "Pixel Away (Disk 1 of 2).d64", "Pixel Away (Disk 2 of 2).d64");
+
+        using var response = await _user.GetAsync(PlayDiscSetUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.NotFound));
     }
 
     [Test]

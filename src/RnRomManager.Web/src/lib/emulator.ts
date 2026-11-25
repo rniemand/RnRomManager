@@ -41,9 +41,9 @@ export function usesPlayDisc(core: string, rom: Pick<RomDetail, 'externalFileNam
 	return rom.externalFileName !== null && playDiscCores.includes(core);
 }
 
-/** Amiga F8: what a set's All button plays: floppy disks for PUAE, discs for every other core. */
+/** Amiga F8, Plus/4 B14: what a set's All button plays: floppy disks for PUAE and VICE (xplus4), discs for every other core. */
 export function setMedia(core: string | null): 'disks' | 'discs' {
-	return core === 'puae' ? 'disks' : 'discs';
+	return core === 'puae' || core === 'vice_xplus4' ? 'disks' : 'discs';
 }
 
 /** PSP B3, MS-DOS P5, 3DS G1: the cores that play only in their own cross-origin isolated tab, and that tab's page. */

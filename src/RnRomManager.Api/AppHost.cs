@@ -287,6 +287,7 @@ public static class AppHost
         services.AddSystemHandler<PetHandler>();
         services.AddSystemHandler<Vic20Handler>();
         services.AddSystemHandler<C128Handler>();
+        services.AddSystemHandler<Plus4Handler>();
         services.AddSystemHandler<AmigaHandler>();
         services.AddSystemHandler<Nintendo3DsHandler>();
         services.AddSystemHandler<TurboGrafxCdHandler>();

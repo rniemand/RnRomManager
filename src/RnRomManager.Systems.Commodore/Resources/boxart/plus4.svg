@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Default box art for RnRomManager (Commodore Plus/4). Made for this project; MIT licensed like the rest of the repo.
+       A generic 8-bit home computer with a floppy disk and a cartridge: no logo or trade dress. Exported to plus4.png (512x512): see README.md. -->
+  <rect width="512" height="512" fill="#ecebdc"/>
+  <!-- floppy disk behind the computer -->
+  <g transform="rotate(-8 170 160)">
+    <rect x="86" y="70" width="168" height="168" rx="8" fill="#3b3a4a" stroke="#22212c" stroke-width="5"/>
+    <rect x="132" y="70" width="76" height="46" fill="#9a99a8"/>
+    <rect x="182" y="78" width="16" height="30" fill="#3b3a4a"/>
+    <circle cx="170" cy="168" r="26" fill="#22212c"/>
+    <circle cx="170" cy="168" r="9" fill="#9a99a8"/>
+    <rect x="106" y="198" width="128" height="28" rx="3" fill="#f2f0e6"/>
+  </g>
+  <!-- cartridge -->
+  <g transform="rotate(7 350 150)">
+    <rect x="290" y="80" width="130" height="130" rx="8" fill="#5f5a1e" stroke="#33300e" stroke-width="5"/>
+    <rect x="308" y="98" width="94" height="60" rx="4" fill="#f2f0e6"/>
+    <rect x="320" y="112" width="70" height="8" rx="2" fill="#5f5a1e"/>
+    <rect x="320" y="128" width="50" height="8" rx="2" fill="#5f5a1e"/>
+    <g fill="#c9a43a">
+      <rect x="306" y="176" width="10" height="34"/><rect x="324" y="176" width="10" height="34"/>
+      <rect x="342" y="176" width="10" height="34"/><rect x="360" y="176" width="10" height="34"/>
+      <rect x="378" y="176" width="10" height="34"/><rect x="396" y="176" width="10" height="34"/>
+    </g>
+  </g>
+  <!-- computer body -->
+  <path d="M64 290 Q70 266 98 266 L414 266 Q442 266 448 290 L470 398 Q472 416 452 416 L60 416 Q40 416 42 398 Z"
+        fill="#3a3a3e" stroke="#1e1e22" stroke-width="5" stroke-linejoin="round"/>
+  <!-- keyboard -->
+  <rect x="86" y="292" width="340" height="104" rx="8" fill="#232326"/>
+  <g fill="#6a6a70">
+    <rect x="96" y="302" width="28" height="18" rx="3"/><rect x="130" y="302" width="28" height="18" rx="3"/>
+    <rect x="164" y="302" width="28" height="18" rx="3"/><rect x="198" y="302" width="28" height="18" rx="3"/>
+    <rect x="232" y="302" width="28" height="18" rx="3"/><rect x="266" y="302" width="28" height="18" rx="3"/>
+    <rect x="300" y="302" width="28" height="18" rx="3"/><rect x="334" y="302" width="28" height="18" rx="3"/>
+    <rect x="104" y="326" width="28" height="18" rx="3"/><rect x="138" y="326" width="28" height="18" rx="3"/>
+    <rect x="172" y="326" width="28" height="18" rx="3"/><rect x="206" y="326" width="28" height="18" rx="3"/>
+    <rect x="240" y="326" width="28" height="18" rx="3"/><rect x="274" y="326" width="28" height="18" rx="3"/>
+    <rect x="308" y="326" width="28" height="18" rx="3"/><rect x="342" y="326" width="28" height="18" rx="3"/>
+    <rect x="112" y="350" width="28" height="18" rx="3"/><rect x="146" y="350" width="28" height="18" rx="3"/>
+    <rect x="180" y="350" width="28" height="18" rx="3"/><rect x="214" y="350" width="28" height="18" rx="3"/>
+    <rect x="248" y="350" width="28" height="18" rx="3"/><rect x="282" y="350" width="28" height="18" rx="3"/>
+    <rect x="316" y="350" width="28" height="18" rx="3"/><rect x="350" y="350" width="28" height="18" rx="3"/>
+    <rect x="160" y="374" width="170" height="16" rx="3"/>
+  </g>
+  <g fill="#b8b8be">
+    <rect x="380" y="302" width="36" height="18" rx="3"/><rect x="380" y="326" width="36" height="18" rx="3"/>
+    <rect x="388" y="350" width="28" height="18" rx="3"/>
+  </g>
+  <!-- power light -->
+  <circle cx="76" cy="282" r="5" fill="#d9534f"/>
+  <text x="256" y="476" text-anchor="middle" font-family="Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="34" font-weight="700" letter-spacing="4" fill="#5f5a1e">PLUS/4</text>
+</svg>

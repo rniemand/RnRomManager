@@ -133,6 +133,7 @@ public class DiscSetsTests
     [TestCase("saturn", 5)]
     [TestCase("segacd", 4)]
     [TestCase("amiga", 20)]
+    [TestCase("plus4", 20)]
     [TestCase("3do", 0)]
     [TestCase("gb", 0)]
     public void MaxDiscs_IsPerSystem(string systemId, int expected)
@@ -305,4 +306,74 @@ public class DiscSetsTests
 
         Assert.That(DiscSets.Find("psx", [one, Disc(2)], files).Single().Name, Is.EqualTo("Game (USA).m3u"));
     }
+
+    [TestCase("amiga", ".adf")]
+    [TestCase("plus4", ".d64")]
+    [TestCase("psx", null)]
+    [TestCase("c64", null)]
+    public void FloppyExtension_IsPerSystem(string systemId, string? expected) =>
+        Assert.That(DiscSets.FloppyExtension(systemId), Is.EqualTo(expected));
+
+    [Test]
+    public void Plus4_TwoDisks_AreOneSet_NamedFromDiskOne()
+    {
+        var one = Disk("Pixel Quest (1986)(Synth)(Disk 1 of 2).d64");
+        var two = Disk("Pixel Quest (1986)(Synth)(Disk 2 of 2).d64");
+
+        var sets = DiscSets.Find("plus4", [two, one], NoFiles);
+
+        Assert.That(sets, Has.Count.EqualTo(1));
+        Assert.That(sets[0].Discs, Is.EqualTo(new[] { one, two }));
+        Assert.That(sets[0].Name, Is.EqualTo("Pixel Quest (1986)(Synth).m3u"));
+    }
+
+    [Test]
+    public void Plus4_DisksWithDifferentNames_AreOneSet()
+    {
+        var one = Disk("Pixel Quest (Disk 1 of 2).d64");
+        var two = Disk("Pixel Quest (1986)(Synth)(Disk 2 of 2) (Unverified).d64");
+
+        var sets = DiscSets.Find("plus4", [two, one], NoFiles);
+
+        Assert.That(sets, Has.Count.EqualTo(1));
+        Assert.That(sets[0].Discs, Is.EqualTo(new[] { one, two }));
+        Assert.That(sets[0].Name, Is.EqualTo("Pixel Quest.m3u"), "Disk 1's stem without its token, trailing space trimmed");
+    }
+
+    [Test]
+    public void Plus4_TwoDumpsOfOneDisk_AreNoSet()
+    {
+        var disks = new[] { Disk("Pixel Quest (Disk 1 of 2).d64"), Disk("Pixel Quest [a](Disk 1 of 2).d64"), Disk("Pixel Quest (Disk 2 of 2).d64") };
+
+        Assert.That(DiscSets.Find("plus4", disks, NoFiles), Is.Empty);
+    }
+
+    [Test]
+    public void Amiga_DisksWithDifferentNames_AreNoSet()
+    {
+        var disks = new[] { Disk("Pixel Quest (Disk 1 of 2).adf"), Disk("Pixel Quest (1986)(Synth)(Disk 2 of 2) (Unverified).adf") };
+
+        Assert.That(DiscSets.Find("amiga", disks, NoFiles), Is.Empty);
+    }
+
+    [Test]
+    public void Plus4_AdfDisks_AreNoSet() =>
+        Assert.That(DiscSets.Find("plus4", [Disk("Game (Disk 1 of 2).adf"), Disk("Game (Disk 2 of 2).adf")], NoFiles), Is.Empty);
+
+    [Test]
+    public void Amiga_D64Disks_AreNoSet() =>
+        Assert.That(DiscSets.Find("amiga", [Disk("Game (Disk 1 of 2).d64"), Disk("Game (Disk 2 of 2).d64")], NoFiles), Is.Empty);
+
+    [TestCase(20, true)]
+    [TestCase(21, false)]
+    public void Plus4_TakesUpToTwentyDisks(int total, bool isSet)
+    {
+        var disks = Enumerable.Range(1, total).Select(n => Disk($"Game (Disk {n} of {total}).d64")).ToList();
+
+        Assert.That(DiscSets.Find("plus4", disks, NoFiles), Has.Count.EqualTo(isSet ? 1 : 0));
+    }
+
+    [Test]
+    public void C64_DiskTokens_AreNoSet() =>
+        Assert.That(DiscSets.Find("c64", [Disk("Game (Disk 1 of 2).d64"), Disk("Game (Disk 2 of 2).d64")], NoFiles), Is.Empty);
 }

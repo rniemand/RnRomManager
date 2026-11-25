@@ -357,6 +357,15 @@
 	background-color: var(--bs-c128) !important;
 }
 
+/* Commodore Plus/4 system colour: a dark olive, same in both themes; white on it is AAA (~7.1:1). */
+:root {
+	--bs-plus4: #5f5a1e;
+}
+.text-bg-plus4 {
+	color: #fff !important;
+	background-color: var(--bs-plus4) !important;
+}
+
 /* Commodore Amiga system colour: a deep boing-ball blue, same in both themes; white on it is AAA (~10:1). */
 :root {
 	--bs-amiga: #1f3f7a;

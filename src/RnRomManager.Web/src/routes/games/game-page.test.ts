@@ -409,6 +409,25 @@ describe('game detail page', () => {
 		);
 	});
 
+	it('Disk 1 of a Plus/4 disk set has All disks, which plays the set (Plus/4 B14)', async () => {
+		tooltips.length = 0;
+		const plus4 = game([1, 2]);
+		plus4.system = 'plus4';
+		plus4.browserCore = 'vice_xplus4';
+		plus4.roms[0].discSet = { name: 'Pixel Quest.m3u', romIds: [1, 2] };
+		answers.push({ status: 200, body: plus4 });
+		render(GamePage);
+
+		const all = await screen.findByRole('button', { name: 'Play all disks of Pixel Quest.m3u' });
+		expect(all.textContent?.trim()).toBe('All disks');
+
+		await fireEvent.click(all);
+		await vi.waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
+		expect(document.querySelector('iframe')!.getAttribute('src')).toBe(
+			`/emulator/play.html?game=${plus4.id}&rom=1&core=vice_xplus4&name=Pixel%20Quest.m3u&disc=1&set=1`
+		);
+	});
+
 	it('All discs is hidden without a discSet and when Play is hidden (multi-disc M7)', async () => {
 		const plain = psxSet();
 		plain.roms[0].discSet = null;

@@ -36,6 +36,7 @@ public static class IgdbPlatforms
         ["ngpc"] = 120,
         ["pcfx"] = 274,
         ["pet"] = 90,
+        ["plus4"] = 94,
         ["psp"] = 38,
         ["psx"] = 7,
         ["s32x"] = 30,

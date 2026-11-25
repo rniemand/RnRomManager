@@ -538,7 +538,7 @@ public static class LibraryEndpoints
         var systemName = handler?.DisplayName ?? game.SystemId;
         var notes = ctx.RequestServices.GetRequiredService<LibraryFiles>().NoteEntries(game);
         var fileRows = (await roms.ListFilesByGameAsync(id, ctx.RequestAborted)).ToLookup(f => f.RomId);
-        // Multi-disc M3 (Saturn/Sega CD S2, Amiga F3): PlayStation, Saturn, Sega CD and Amiga; other systems have none. Keyed by each set's Disc 1.
+        // Multi-disc M3 (Saturn/Sega CD S2, Amiga F3, Plus/4 B11): PlayStation, Saturn, Sega CD, Amiga and Plus/4; other systems have none. Keyed by each set's Disc 1.
         var discSets = DiscSets.Find(game.SystemId, romRows, fileRows).ToDictionary(s => s.Discs[0].Id);
         var igdbConfigured = SourcesOptions.IgdbConfigured(ctx.RequestServices.GetRequiredService<IOptions<SourcesOptions>>().Value);
         return Results.Ok(ToDetail(game, systemName, handler?.BrowserCore, handler?.FileSets ?? false, romRows, fileRows, imageRows, notes, discSets,
