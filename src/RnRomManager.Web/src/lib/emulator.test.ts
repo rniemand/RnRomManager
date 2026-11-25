@@ -219,6 +219,7 @@ describe('S8 Nintendo DS', () => {
 describe('setMedia (Amiga F8)', () => {
 	it('is disks for PUAE and discs for every other core', () => {
 		expect(setMedia('puae')).toBe('disks');
+		expect(setMedia('vice_xplus4')).toBe('disks');
 		expect(setMedia('pcsx_rearmed')).toBe('discs');
 		expect(setMedia(null)).toBe('discs');
 	});

@@ -200,7 +200,7 @@ API contracts change only additively: `plus4` appears in `/api/systems` and `/ap
   - `ReviewEndpointsTests.Plus4_ManualOnBothDisks_JoinsOneGame_AndMakesASet` (new, right after): the same drops with seeds 962 and 963, both resolved with that Manual body (flags `["Disk 1 of 2"]` then `["Disk 2 of 2"]`, no `targetGameId`), land in one game, and `discSet` on Disk 1 is `Pixel Quest.m3u` with both ids in disk order.
 
   Done when: `DiscSetsTests`, `LibraryEndpointsTests` and `ReviewEndpointsTests` pass.
-- [ ] **4. Web**: B9, B13–B15. Files: `params.js`, `play.js`, `vendor-emulatorjs.mjs`, `emulator.ts`, `systemColours.ts`, `app.css`. Tests:
+- [x] **4. Web**: B9, B13–B15. Files: `params.js`, `play.js`, `vendor-emulatorjs.mjs`, `emulator.ts`, `systemColours.ts`, `app.css`. Tests:
   - `src/lib/emulatorParams.test.ts`:
     - the `accepts the %s core` list (~line 168) gains `'vice_xplus4'` after `'vice_x128'`;
     - `describe('Commodore Plus/4')` (new) right after `describe('Commodore 128')`, mirroring it with the B8 files and B9 texts;

@@ -1598,8 +1598,8 @@ describe('play page Amiga disk sets (Amiga F7)', () => {
 	const setUrl = `/api/games/${game}/roms/12/play-disc-set`;
 	const disks = new Uint8Array([0x50, 0x4b, 3, 4, 2, 2]);
 
-	async function playDisks(name: string): Promise<string> {
-		const query = new URLSearchParams({ game, rom: '12', core: 'puae', name, disc: '1', set: '1' });
+	async function playDisks(name: string, core = 'puae'): Promise<string> {
+		const query = new URLSearchParams({ game, rom: '12', core, name, disc: '1', set: '1' });
 		history.replaceState(null, '', `/emulator/play.html?${query}`);
 		const { started } = await import('../../static/emulator/play.js');
 		await started;
@@ -1646,6 +1646,40 @@ describe('play page Amiga disk sets (Amiga F7)', () => {
 			"These disks can't be played in the browser: one of them is empty."
 		);
 		expect(atLoader).toBeNull();
+	});
+
+	it('loads a Plus/4 set from play-disc-set, saying it downloads disks (Plus/4 B13)', async () => {
+		const check = '/api/emulator/cores/vice_xplus4';
+		let status = '';
+		serve({
+			[check]: async () => response(204),
+			[setUrl]: async () => {
+				status = document.getElementById('status')!.textContent ?? '';
+				return {
+					ok: true,
+					status: 200,
+					headers: new Headers(),
+					body: null,
+					blob: async () => new Blob([disks])
+				} as FakeResponse;
+			}
+		});
+
+		await playDisks('Pixel Quest.m3u', 'vice_xplus4');
+
+		expect(urls()).toEqual([check, setUrl]);
+		expect(status).toBe('Downloading disks…');
+		expect(atLoader).toMatchObject({
+			EJS_core: 'vice_xplus4',
+			EJS_gameName: 'Pixel Quest.m3u',
+			EJS_paths: {
+				'vice_xplus4-wasm.data': '/api/emulator/cores/vice_xplus4/vice_xplus4-wasm.data',
+				'vice_xplus4-legacy-wasm.data':
+					'/api/emulator/cores/vice_xplus4/vice_xplus4-legacy-wasm.data',
+				'vice_xplus4.json': '/api/emulator/cores/vice_xplus4/vice_xplus4.json'
+			}
+		});
+		expect((atLoader?.EJS_gameUrl as File).name).toBe('Pixel Quest.m3u');
 	});
 });
 

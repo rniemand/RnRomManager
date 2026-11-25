@@ -14,6 +14,7 @@
 // takes gexpress.pce when present, then loads from play-disc.
 import {
 	biosError,
+	diskSetCores,
 	biosFor,
 	contentFileName,
 	contentSize,
@@ -674,7 +675,7 @@ async function start() {
 	// Sega CD B6: `disc=1` also loads from play-disc, for a core (Genesis Plus GX) that plays cartridges too.
 	// 3DO B7: Opera plays only discs, so it loads from play-disc with or without `disc=1`, like Yabause.
 	if (isPsx || isPsp || isSaturn || isThreeDo || params.disc) {
-		show(params.core === 'puae' ? 'Downloading disks…' : 'Downloading disc…');
+		show(diskSetCores.includes(params.core) ? 'Downloading disks…' : 'Downloading disc…');
 		// Multi-disc M6: a set loads every disc and its .m3u in one ZIP.
 		const endpoint = params.set ? 'play-disc-set' : 'play-disc';
 		const disc = await loadDisc(`/api/games/${params.game}/roms/${params.rom}/${endpoint}`, params.core, params.set);
@@ -754,7 +755,7 @@ async function start() {
 	// B3/B8: an operator-supplied core loads its payloads and report by name from the API; the vendored loader keeps
 	// them non-threaded.
 	if (isOperator) ejs.EJS_paths = operatorCorePaths(params.core);
-	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX, PicoDrive, Yabause, Snes9x, DeSmuME, Opera, VICE x64sc, xpet, xvic and x128, Mupen64Plus-Next, MAME 2003-Plus): hide the
+	// Pinned cores (SMS Plus GX, FCEUmm, PCSX ReARMed, Genesis Plus GX, PicoDrive, Yabause, Snes9x, DeSmuME, Opera, VICE x64sc, xpet, xvic, x128 and xplus4, Mupen64Plus-Next, MAME 2003-Plus): hide the
 	// core selector. DeSmuME gets no EJS_biosUrl or external files: it uses its built-in BIOS and firmware.
 	// Nintendo DS B4: DeSmuME also hides the threads setting; the vendored loader never picks a threaded payload.
 	if (hidesCoreChooser(params.core))

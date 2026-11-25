@@ -33,6 +33,7 @@ const cores = [
 	'vice_xpet',
 	'vice_xvic',
 	'vice_x128',
+	'vice_xplus4',
 	'puae',
 	'mednafen_pce',
 	'mednafen_ngp',
@@ -42,6 +43,9 @@ const cores = [
 	'mame2003_plus',
 	'fbneo'
 ];
+
+/** Amiga F6, Plus/4 B13: the floppy disk-set cores, which take `set=1` with `disc=1` and get disk wording. */
+export const diskSetCores = ['puae', 'vice_xplus4'];
 
 /**
  * PSP B3, MS-DOS P5, 3DS G2: the cores that need threads and so run only on their own cross-origin isolated page, keyed to
@@ -76,12 +80,12 @@ export function parsePlayParams(search, player) {
 	if (save.length === 1 && (!/^[0-9a-f]{32}$/.test(save[0]) || !['state', 'battery'].includes(saveKind[0])))
 		return null;
 	// Multi-disc M5 (Saturn and Sega CD S5): `set` is absent or exactly `1`, given once, for PCSX ReARMed, Yabause, or
-	// Genesis Plus GX with `disc=1` (it also plays cartridges). Amiga F6: PUAE too, with `disc=1`.
+	// Genesis Plus GX with `disc=1` (it also plays cartridges). Amiga F6, Plus/4 B13: a disk-set core too, with `disc=1`.
 	const set = query.getAll('set');
 	const setCore =
 		core === 'pcsx_rearmed' ||
 		core === 'yabause' ||
-		((core === 'genesis_plus_gx' || core === 'puae') && disc.length === 1);
+		((core === 'genesis_plus_gx' || diskSetCores.includes(core)) && disc.length === 1);
 	if (set.length > 1 || (set.length === 1 && (set[0] !== '1' || !setCore))) return null;
 	return {
 		game,
@@ -144,7 +148,7 @@ export function controlSchemeFor(core, name) {
 }
 
 /**
- * B3/B8 (SNES B3 adds Snes9x, 3DO B6 Opera, C64 B7 VICE, PET VICE xpet, VIC-20 VICE xvic, C128 VICE x128, N64 Mupen64Plus-Next, Arcade P1 MAME 2003-Plus): the cores whose files the operator supplies, served by the API after a length and hash check, with the
+ * B3/B8 (SNES B3 adds Snes9x, 3DO B6 Opera, C64 B7 VICE, PET VICE xpet, VIC-20 VICE xvic, C128 VICE x128, Plus/4 VICE xplus4, N64 Mupen64Plus-Next, Arcade P1 MAME 2003-Plus): the cores whose files the operator supplies, served by the API after a length and hash check, with the
  * wording of their messages: the system label, the core's display name, the short name of the fallback message and
  * the option holding the folder.
  * @type {Record<string, { system: string, display: string, short: string, option: string }>}
@@ -195,6 +199,12 @@ const operatorCores = {
 	vice_x128: {
 		system: 'Commodore 128 games',
 		display: 'VICE (C128)',
+		short: 'VICE',
+		option: 'Emulator:ViceCorePath'
+	},
+	vice_xplus4: {
+		system: 'Commodore Plus/4 games',
+		display: 'VICE (Plus/4)',
 		short: 'VICE',
 		option: 'Emulator:ViceCorePath'
 	},
@@ -287,6 +297,7 @@ export function hidesCoreChooser(core) {
 		'vice_xpet',
 		'vice_xvic',
 		'vice_x128',
+		'vice_xplus4',
 		'mupen64plus_next',
 		// Arcade P1: EmulatorJS's mame group also holds mame2003, which isn't delivered.
 		'mame2003_plus',
@@ -421,8 +432,8 @@ export const turboGrafxCdBiosNames = [...turboGrafxCdCards, turboGrafxCdGamesExp
 export function discError(status, code, core = 'pcsx_rearmed', set = false) {
 	const psp = core === 'ppsspp';
 	if (status === 401) return sessionExpired;
-	// Amiga F7: a PUAE floppy set (play-disc-set) has disk wording for every other outcome.
-	if (core === 'puae') {
+	// Amiga F7, Plus/4 B13: a floppy set (play-disc-set) has disk wording for every other outcome.
+	if (diskSetCores.includes(core)) {
 		if (code === 'InvalidPlayDisc') return "These disks can't be played in the browser: one of them is empty.";
 		return status === null ? "Couldn't load the disks." : `Couldn't load the disks (HTTP ${status}).`;
 	}

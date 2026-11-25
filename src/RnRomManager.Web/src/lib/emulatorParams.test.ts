@@ -133,6 +133,9 @@ describe('parsePlayParams', () => {
 	it('reads set=1 for PUAE only with disc=1 (Amiga F6)', () => {
 		expect(parsePlayParams(query({ core: 'puae', disc: '1', set: '1' }))?.set).toBe(true);
 		expect(parsePlayParams(query({ core: 'puae', set: '1' }))).toBeNull();
+		// Plus/4 B13: VICE (xplus4) is a disk-set core too.
+		expect(parsePlayParams(query({ core: 'vice_xplus4', disc: '1', set: '1' }))?.set).toBe(true);
+		expect(parsePlayParams(query({ core: 'vice_xplus4', set: '1' }))).toBeNull();
 	});
 
 	it('names saturn_bios.bin when a Saturn set has no BIOS (Saturn and Sega CD S6)', () => {
@@ -166,6 +169,7 @@ describe('parsePlayParams', () => {
 		'vice_xpet',
 		'vice_xvic',
 		'vice_x128',
+		'vice_xplus4',
 		'puae',
 		'mednafen_pce',
 		'mednafen_ngp',
@@ -362,6 +366,14 @@ describe('discError', () => {
 		expect(discError(404, 'NotFound', 'puae', true)).toBe("Couldn't load the disks (HTTP 404).");
 		expect(discError(500, 'IoError', 'puae', true)).toBe("Couldn't load the disks (HTTP 500).");
 		expect(discError(null, null, 'puae', true)).toBe("Couldn't load the disks.");
+	});
+
+	it('has disk wording for VICE (Plus/4) sets (Plus/4 B13)', () => {
+		expect(discError(409, 'InvalidPlayDisc', 'vice_xplus4', true)).toBe(
+			"These disks can't be played in the browser: one of them is empty."
+		);
+		expect(discError(null, null, 'vice_xplus4', true)).toBe("Couldn't load the disks.");
+		expect(discError(500, null, 'vice_xplus4', true)).toBe("Couldn't load the disks (HTTP 500).");
 	});
 
 	it('shows a disc-loading message otherwise', () => {
@@ -785,6 +797,26 @@ describe('Commodore 128', () => {
 		);
 		expect(operatorCoreError('vice_x128', 409)).toBe(
 			"The VICE (C128) core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:ViceCorePath)."
+		);
+	});
+});
+
+describe('Commodore Plus/4', () => {
+	it('is an operator core sharing the VICE folder', () => {
+		expect(isOperatorCore('vice_xplus4')).toBe(true);
+		expect(hidesCoreChooser('vice_xplus4')).toBe(true);
+		expect(controlSchemeFor('vice_xplus4', 'X.d64')).toBeNull();
+		expect(operatorCorePaths('vice_xplus4')).toEqual({
+			'vice_xplus4-wasm.data': '/api/emulator/cores/vice_xplus4/vice_xplus4-wasm.data',
+			'vice_xplus4-legacy-wasm.data':
+				'/api/emulator/cores/vice_xplus4/vice_xplus4-legacy-wasm.data',
+			'vice_xplus4.json': '/api/emulator/cores/vice_xplus4/vice_xplus4.json'
+		});
+		expect(operatorCoreError('vice_xplus4', 404)).toBe(
+			'Commodore Plus/4 games need the VICE (Plus/4) core files: ask an Admin to set them up (Emulator:ViceCorePath).'
+		);
+		expect(operatorCoreError('vice_xplus4', 409)).toBe(
+			"The VICE (Plus/4) core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:ViceCorePath)."
 		);
 	});
 });
