@@ -375,6 +375,6 @@ Read a section with offset/limit instead of the whole doc (`features.md` alone i
 
 - `docs/zip-format.md` (305 lines): Layout :7; Naming :94; External ROM files :117; Release notes :130; Saves :139; Writes :153; `info.json` (schema version 8) :161; Game :165; Rom :188; Image :271; Validation :286; Versions :290
 
-- `README.md` (182 lines): Supported systems :26; Quick start :78; Documentation :142; Disclaimer :151; Attribution :155; License :180
+- `README.md` (184 lines): Supported systems :26; Quick start :80; Documentation :144; Disclaimer :153; Attribution :157; License :182
 
 - `CONTRIBUTING.md` (21 lines): Specs, branches and PRs :7; Test rule :17; Doc rule :20

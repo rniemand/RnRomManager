@@ -47,6 +47,7 @@ using RnRomManager.Systems.Commodore;
 using RnRomManager.Systems.Dos;
 using RnRomManager.Systems.NeoGeoPocket;
 using RnRomManager.Systems.Arcade;
+using RnRomManager.Systems.WonderSwan;
 
 namespace RnRomManager.Api;
 
@@ -297,6 +298,8 @@ public static class AppHost
         services.AddSystemHandler<Mame2003Handler>();
         services.AddSystemHandler<FbneoHandler>();
         services.AddSystemHandler<PcfxHandler>();
+        services.AddSystemHandler<WonderSwanHandler>();
+        services.AddSystemHandler<WonderSwanColorHandler>();
     }
 
     // spec §11: hashed SvelteKit assets are immutable; everything else (index.html, theme.js) must revalidate.

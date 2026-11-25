@@ -56,6 +56,11 @@ describe('systemColour', () => {
 		expect(systemColour('ngpc')).toEqual({ name: 'ngpc', foreground: '#000' });
 	});
 
+	it('gives WonderSwan silver and WonderSwan Color light cyan, both with black text', () => {
+		expect(systemColour('ws')).toEqual({ name: 'ws', foreground: '#000' });
+		expect(systemColour('wsc')).toEqual({ name: 'wsc', foreground: '#000' });
+	});
+
 	it('gives 3DO its own olive with black text (3DO B2)', () => {
 		expect(systemColour('3do')).toEqual({ name: '3do', foreground: '#000' });
 	});
