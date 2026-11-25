@@ -291,6 +291,15 @@
 				onpage={(groupPage) => goDiscovery({ ...discovery, groupPage })}
 				onselected={(group) => (groupNames[group.key] = group.name)}
 				onfind={(find) => goDiscovery({ ...discovery, groupPage: 1, find: find || undefined })}
+				onsort={(sort, dir) => goDiscovery({ ...discovery, groupPage: 1, sort, dir })}
+				onclear={() =>
+					goDiscovery({
+						...discovery,
+						groupPage: 1,
+						find: undefined,
+						sort: undefined,
+						dir: undefined
+					})}
 			/>
 		</div>
 		<div class="col-12 col-lg-8">

@@ -683,6 +683,50 @@ describe('collections search (B16)', () => {
 		).toBe('/collections?tab=publishers');
 	});
 
+	it('a sort click writes sort with replace at group page 1, keeping find and the selection (G4, G5)', async () => {
+		navigateTo(`/collections?tab=publishers&key=${key}&groupPage=2&gamePage=3&find=nin`);
+		answers['GET /api/discovery/publishers?page=2&pageSize=20&q=nin'] = [
+			groups([{ key, name: 'Nintendo' }])
+		];
+		answers['GET /api/discovery/publishers?pageSize=20&q=nin&sort=games'] = [
+			groups([{ key, name: 'Nintendo' }])
+		];
+		render(CollectionsPage);
+		await screen.findByRole('link', { name: 'Nintendo' });
+
+		await fireEvent.click(screen.getByRole('button', { name: /^Games/ }));
+
+		expect(goto).toHaveBeenLastCalledWith(
+			`/collections?tab=publishers&key=${key}&gamePage=3&find=nin&sort=games`,
+			{ replace: true, reset: false }
+		);
+		await vi.waitFor(() =>
+			expect(keys()).toContain('GET /api/discovery/publishers?pageSize=20&q=nin&sort=games')
+		);
+		await fireEvent.click(await screen.findByRole('button', { name: /^Games/ }));
+		expect(goto).toHaveBeenLastCalledWith(
+			`/collections?tab=publishers&key=${key}&gamePage=3&find=nin&sort=games&dir=asc`,
+			{ replace: true, reset: false }
+		);
+	});
+
+	it('Clear drops find, sort and dir with replace, keeping the selection and game page (G7)', async () => {
+		navigateTo(
+			`/collections?tab=genres&key=${key}&groupPage=2&gamePage=3&find=rpg&sort=games&dir=asc`
+		);
+		answers['GET /api/discovery/genres?page=2&pageSize=20&q=rpg&sort=games&dir=asc'] = [groups([])];
+		render(CollectionsPage);
+
+		await fireEvent.click(await screen.findByRole('button', { name: /Clear/ }));
+
+		expect(goto).toHaveBeenLastCalledWith(`/collections?tab=genres&key=${key}&gamePage=3`, {
+			replace: true,
+			reset: false
+		});
+		expect((screen.getByLabelText('Search genres') as HTMLInputElement).value).toBe('');
+		await vi.waitFor(() => expect(screen.queryByRole('button', { name: /Clear/ })).toBeNull());
+	});
+
 	it('Systems: typing filters through the URL', async () => {
 		navigateTo('/collections?tab=systems');
 		answers['GET /api/systems'] = [

@@ -4,11 +4,14 @@
 	import { resolve } from '$app/paths';
 	import type { DiscoveryGroup, Page } from '../api/types';
 	import {
+		defaultDir,
 		discoveryApi,
 		discoverySearch,
 		discoveryText,
 		maxFind,
-		type DiscoveryState
+		type DiscoveryState,
+		type GroupSort,
+		type SortDir
 	} from '../discovery';
 	import { formatCount } from '../format';
 	import { pageCount, readPageSize, writePageSize } from '../pageSize';
@@ -32,9 +35,32 @@
 		onselected?: (group: DiscoveryGroup) => void;
 		/** B16: a new search (trimmed, '' for none); the page writes it to the URL with group page 1. */
 		onfind?: (find: string) => void;
+		/** G4: a header click; the page writes the sort to the URL with group page 1. `view.sort`/`view.dir` are the current one. */
+		onsort?: (sort: GroupSort, dir: SortDir) => void;
+		/** G7: Clear; the page drops `find`, `sort` and `dir` from the URL. */
+		onclear?: () => void;
 	}
 
-	let { view, onpage, onselected, onfind }: Props = $props();
+	let { view, onpage, onselected, onfind, onsort, onclear }: Props = $props();
+
+	const sort = $derived<GroupSort>(view.sort ?? 'name');
+	const dir = $derived<SortDir>(view.dir ?? defaultDir(sort));
+	const columns: readonly { sort: GroupSort; label: string; numeric: boolean }[] = [
+		{ sort: 'name', label: 'Name', numeric: false },
+		{ sort: 'games', label: 'Games', numeric: true }
+	];
+
+	/** G4: the active header flips its direction; the other sorts in its own default. */
+	function sortBy(key: GroupSort): void {
+		onsort?.(key, key === sort ? (dir === 'asc' ? 'desc' : 'asc') : defaultDir(key));
+	}
+
+	/** G7: cancels a pending search and empties the box; the page clears the URL. */
+	function clear(): void {
+		clearTimeout(findTimer);
+		findText = '';
+		onclear?.();
+	}
 
 	/** B16: the search box; typing is debounced, and the URL is the source of truth (Back/Forward). */
 	let findText = $state(untrack(() => view.find ?? ''));
@@ -86,7 +112,13 @@
 
 	$effect(() => {
 		const kind = view.kind;
-		const params = { page: view.groupPage, pageSize, q: view.find };
+		const params = {
+			page: view.groupPage,
+			pageSize,
+			q: view.find,
+			sort: view.sort,
+			dir: view.dir
+		};
 		void reload;
 		// A response for an earlier kind or page never replaces the current one.
 		let stale = false;
@@ -105,17 +137,22 @@
 </script>
 
 <!-- B16: outside the loading branch, so it keeps focus while results reload. -->
-<div class="mb-2">
+<div class="d-flex gap-2 mb-2">
 	<label class="visually-hidden" for="find-{view.kind}">Search {noun}</label>
 	<input
 		id="find-{view.kind}"
 		type="search"
-		class="form-control form-control-sm"
+		class="form-control form-control-sm flex-grow-1"
 		placeholder="Search {noun}"
 		maxlength={maxFind}
 		bind:value={findText}
 		oninput={onFindInput}
 	/>
+	{#if view.find || sort !== 'name' || dir !== 'asc'}
+		<button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" onclick={clear}
+			><Icon name="clear" /> Clear</button
+		>
+	{/if}
 </div>
 
 {#if error}
@@ -131,42 +168,74 @@
 		<EmptyState message="There are no {noun} on this page." />
 	{/if}
 {:else}
-	<ul class="list-group" aria-label={text.label}>
-		{#each result.items as group (group.key)}
-			<li class="list-group-item p-0 d-flex align-items-stretch">
-				<a
-					class="list-group-item-action flex-grow-1 min-w-0 d-flex align-items-center justify-content-between gap-2 px-3 py-2 text-decoration-none"
-					class:active={group.key === view.key}
-					aria-current={group.key === view.key ? 'true' : undefined}
-					href="{resolve('/collections')}{selection(group)}"
-				>
-					<span class="d-flex align-items-center gap-2 min-w-0">
-						<GroupLogo kind={view.kind} item={group} />
-						<span class="text-truncate" title={group.name}>{group.name}</span>
-					</span>
-					<span
-						class="badge rounded-pill count-badge {group.key === view.key
-							? 'text-bg-light'
-							: 'text-bg-primary'}"
-						>{formatCount(group.gameCount)} {group.gameCount === 1 ? 'game' : 'games'}</span
-					>
-				</a>
-				{#if auth.isAdmin}
-					<!-- B19: beside the link, not in it (no button inside a link). -->
-					<button
-						type="button"
-						class="btn btn-link btn-sm border-start rounded-0 px-2"
-						aria-label="Change logo for {group.name}"
-						title="Change logo"
-						onclick={() => {
-							editing = group;
-							logoOpen = true;
-						}}><Icon name="edit" /></button
-					>
-				{/if}
-			</li>
-		{/each}
-	</ul>
+	<div class="card">
+		<div class="table-responsive">
+			<table
+				class="table table-sm table-striped table-hover align-middle mb-0"
+				aria-label={text.label}
+			>
+				<thead class="table-dark">
+					<tr>
+						{#each columns as column (column.sort)}
+							<th
+								scope="col"
+								class={column.numeric ? 'text-end text-nowrap' : undefined}
+								aria-sort={column.sort === sort
+									? dir === 'asc'
+										? 'ascending'
+										: 'descending'
+									: undefined}
+							>
+								<button
+									type="button"
+									class="btn btn-link p-0 text-reset text-decoration-none fw-semibold"
+									onclick={() => sortBy(column.sort)}
+									>{column.label}
+									{#if column.sort === sort}<Icon
+											name={dir === 'asc' ? 'sort-asc' : 'sort-desc'}
+										/>{/if}</button
+								>
+							</th>
+						{/each}
+						{#if auth.isAdmin}
+							<th scope="col"><span class="visually-hidden">Actions</span></th>
+						{/if}
+					</tr>
+				</thead>
+				<tbody>
+					{#each result.items as group (group.key)}
+						<tr class:table-primary={group.key === view.key}>
+							<td class="w-100 text-truncate" style="max-width: 0">
+								<a
+									class="text-decoration-none d-flex align-items-center gap-2 min-w-0"
+									aria-current={group.key === view.key ? 'true' : undefined}
+									href="{resolve('/collections')}{selection(group)}"
+								>
+									<GroupLogo kind={view.kind} item={group} />
+									<span class="text-truncate" title={group.name}>{group.name}</span>
+								</a>
+							</td>
+							<td class="text-end text-nowrap">{formatCount(group.gameCount)}</td>
+							{#if auth.isAdmin}
+								<td>
+									<button
+										type="button"
+										class="btn btn-link btn-sm p-0"
+										aria-label="Change logo for {group.name}"
+										title="Change logo"
+										onclick={() => {
+											editing = group;
+											logoOpen = true;
+										}}><Icon name="edit" /></button
+									>
+								</td>
+							{/if}
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	</div>
 {/if}
 
 {#if result}
