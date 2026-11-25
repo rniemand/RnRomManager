@@ -1,0 +1,106 @@
+---
+title: Timeline line and collection tables
+status: ready
+created: 2026-11-25
+---
+
+# Timeline line and collection tables
+
+## Summary
+Three UI changes for every signed-in user. The Timeline's row of year buttons becomes a horizontal line with points and labels that alternate above and below it. On Collections, the Publishers, Developers, Genres and Systems lists become sortable, filterable tables in the reports' table style, with a Clear button, and each tab remembers its filter and sort in this browser. A collection's page gets a real Back button, and its **Add games** results float over the page instead of pushing the games down.
+
+## Out of scope
+- The Timeline's controls (System, zoom, pan, Show all), its URL state (`?system=&from=&to=&page=`), the games list and `/api/timeline*` are unchanged.
+- The **User collections** tab (cards, `q` filter) is unchanged and isn't remembered.
+- The other `GameTypeahead` uses (Move/Merge/Attach in `GameAdminModal`, the Review page) keep their inline result list.
+- No new filters beyond the existing name search; no new columns beyond name, games and the Admin logo action.
+
+## Behaviour
+
+### Timeline (`routes/timeline/+page.svelte`)
+These replace the strip described in `2026-11-25-release-timeline-polish.md` (and `docs/features.md` § Timeline, "Strip").
+- **T1 Shape.** The strip stays the outer `<div role="group" aria-label="Release years">`, now exactly `class="timeline-line overflow-x-auto pb-2 mb-3"`; it scrolls sideways. Inside it is one row, `<div class="timeline-row d-flex position-relative">` (new class, `min-width: 100%`), holding one column per shown year (`view.from`…`view.to`), in order, each `flex: 1 0 5rem` (few years stretch to fill the width; many scroll). A horizontal line (2px, `var(--bs-border-color)`) runs through the vertical middle of the row. Height: 10rem.
+- **T2 Years with games.** A year with count > 0 is a `<button type="button" class="timeline-point">` filling its column, with the unchanged `aria-label="{year}: {n} game(s)"` (`gamesLabel`) and `aria-pressed`. It contains a dot on the line (0.875rem circle, `bg-primary`), a 1px stem from the dot to a label card, and the card (`timeline-card`, `border rounded bg-body px-2 py-1 small`) showing the year (`fw-semibold`) on one line and `formatCount(n)` on the next. Clicking it shows just that year (unchanged `show({ from: year, to: year })`).
+- **T3 Alternation.** Counting only years with games among those shown, the 1st, 3rd, 5th… have the card above the line (button class `above`), the 2nd, 4th… below it (`below`).
+- **T4 Empty years.** A year with count 0 is not a button: a `<span class="timeline-tick" aria-hidden="true" title="{year}: no games">`, a 0.5rem vertical tick crossing the line. When it's the first or last shown year, or its number ends in 0, it also shows its year under the line in small muted text (`timeline-tick-label`, `small text-body-secondary`).
+- **T5 Pressed.** When one year is shown (`view.from === view.to === year`) its button is `aria-pressed="true"`, its card is `text-bg-primary border-primary` instead of `bg-body`, and its dot is 1.25rem with a 0.25rem `var(--bs-primary-bg-subtle)` ring. All other buttons are `aria-pressed="false"`.
+- **T6 Focus and themes.** `.timeline-point` has no button chrome (`background: none; border: 0; padding: 0`) and shows `outline: 2px solid var(--bs-focus-ring-color)` on `:focus-visible`; hovering a point gives its card `var(--bs-tertiary-bg)` (not when pressed). Only Bootstrap variables are used, so light and dark themes both work. Styles live in a `<style>` block in the page.
+
+### Collections tabs: Publishers, Developers, Genres (`DiscoveryGroups.svelte`) and Systems (`SystemList.svelte`)
+- **G1 Table.** The `list-group` becomes `<div class="card"><div class="table-responsive"><table class="table table-sm table-striped table-hover align-middle mb-0" aria-label={…}>`, with `<thead class="table-dark">`, as on the reports (`routes/reports/multiple-releases/+page.svelte`). The table's accessible name is the old list's (`text.label`, e.g. "Publishers"; "Systems").
+- **G2 Columns.** **Name**: the selection link (same `href`, `text-decoration-none d-flex align-items-center gap-2 min-w-0`) holding the logo (`GroupLogo`, unchanged) and then the name in `<span class="text-truncate" title={full name}>`, as today; the link's accessible name is now just the name (no count). The cell is `w-100 text-truncate` with `style="max-width: 0"` so long names cut with `…`. **Games**: `text-end text-nowrap`, `formatCount(n)` as plain text (no badge). **Admin only** (`auth.isAdmin`, and for Systems also `onedit` set): a third column whose header is `<span class="visually-hidden">Actions</span>`, its cell holding the pencil, now `btn btn-link btn-sm p-0` with the unchanged `aria-label="Change logo for {name}"` and `title="Change logo"`.
+- **G3 Selected row.** The selected group's/system's row has class `table-primary`; its link keeps `aria-current="true"`.
+- **G4 Sorting.** The Name and Games headers are sort buttons, exactly as in multiple-releases: `btn btn-link p-0 text-reset text-decoration-none fw-semibold`, the active one followed by `<Icon name="sort-asc">` / `<Icon name="sort-desc">`, and `aria-sort` on its `<th>`. Name starts ascending, Games descending; clicking the active header flips the direction; clicking the other uses its own default. A sort change goes to group page 1 and keeps the search and selection (`key`/`system`, `gamePage`). Default: Name ascending. Games ties are broken by name ascending in either direction.
+  - Publishers/Developers/Genres sort on the server (API below). Systems sort in the browser: Name by `displayName` (`localeCompare(b, undefined, { sensitivity: 'base' })`), Games by `gameCount`.
+- **G5 URL.** `sort` and `dir` join `find` in the URL (`?tab=publishers&find=sega&sort=games&dir=asc`), written only when not the default (`sort=games`; `dir` only when it differs from that column's default), as multiple-releases does. Only the exact lowercase values `name`/`games` and `asc`/`desc` are read; anything else is the default. `DiscoveryState` and `SystemsState` gain optional `sort` and `dir`; `discoveryState`/`systemsState` parse them and `discoverySearch`/`systemsSearch` write them. Selecting a group, paging and the game page keep them.
+- **G6 Filter row.** The search box (unchanged label, placeholder, `maxlength`, 300 ms debounce) sits in `<div class="d-flex gap-2 mb-2">` with the box `flex-grow-1`, followed by the Clear button (G7).
+- **G7 Clear.** Shown only when `find` is set or the sort isn't Name ascending: `<button type="button" class="btn btn-sm btn-outline-secondary text-nowrap"><Icon name="clear" /> Clear</button>`. It cancels a pending search, empties the box, and navigates (`replace`) to the tab without `find`, `sort` and `dir`, group page 1, keeping the selection and `gamePage`. It also forgets the tab's remembered state (G8).
+- **G8 Remembered per tab.** Each of the four tabs remembers its `find`, `sort` and `dir` in this browser with `remembered()` (`lib/remembered.ts`) under `rnrm.collections.publishers`, `rnrm.collections.developers`, `rnrm.collections.genres` and `rnrm.collections.systems` (new keys), as a query string of just those params (`find=sega&sort=games`; `''` removes the key).
+  - **Saved** only by the user's own actions: a committed search (after the debounce), a sort click, and Clear (which saves `''`). Back/Forward and the P3 `name` → `find` fallback don't save.
+  - **Restored** when the page shows one of these tabs, its URL has none of `find`, `sort`, `dir`, `name`, `key` (discovery tabs) or `system` (Systems), and the tab has a saved value. The page parses the saved string with the same state functions (`discoveryState`/`systemsState` over a URL made of the tab, the saved params and the current ones), rebuilds the search with `discoverySearch`/`systemsSearch`, and, if that adds at least one of `find`/`sort`/`dir`, replaces the URL (`goto(…, { replace: true, reset: false })`). If it adds none (a malformed saved value such as `sort=bogus`), it forgets the saved value (saves `''`) and leaves the URL alone. So the navbar link and the tab links bring the filter back; a URL with its own `find`/`sort`/`dir`, a shared group/system link and a game page's `name` link (also after it resolves to a `key`) are left as they are.
+  - `readCollectionsTab(tab)` returns the raw saved query string (`''` when none); `saveCollectionsTab(tab, search)` takes the query string without `?` (`''` forgets).
+  - Storage being unavailable means nothing is remembered (`remembered()` already handles it).
+- **G9 Unchanged.** Loading, error and empty-state texts, the P3 name lookup, pagination and rows-per-page memory stay as they are. The `.count-badge` rule in `app.css` (only these two lists used it) is removed.
+
+### Discovery API
+- **A1.** `GET /api/discovery/{kind}` takes optional `sort` (`name` default, `games`) and `dir` (`asc`, `desc`), case-insensitive. A missing `dir` is the sort's default, as multiple-releases does (`descending ??= …`): `asc` for `name`, `desc` for `games`; so the SPA's G5 URL rule and the API agree, and `discoveryApi.groups` sends `sort`/`dir` only when the URL has them. Invalid → `400 ValidationFailed` with `errors.sort` "Must be name or games." / `errors.dir` "Must be asc or desc.". Name ascending is today's order (normalized-name byte order), descending its reverse; Games sorts by `gameCount`, ties by normalized name ascending. Sorting applies after `q` and before paging. Response shape unchanged.
+
+### Collection page (`routes/collections/[id]/+page.svelte`)
+- **C1 Back button.** `<p><a href={resolve('/collections')}>← Collections</a></p>` becomes `<div class="mb-3"><a class="btn btn-sm btn-outline-primary" href={resolve('/collections')}><Icon name="back" /> Back to Collections</a></div>`, matching the game page's **Back to Library**.
+- **C2 Floating results.** `GameTypeahead` gains `overlay?: boolean` (default `false`); only the collection page's **Add games** passes it. With `overlay`:
+  - The component is wrapped in `<div class="position-relative">`. Results and the status line show in a panel below the input: `<div class="list-group position-absolute start-0 end-0 mt-1 shadow z-3 overflow-y-auto" style="max-height: 50vh">`, over the content beneath, which no longer moves.
+  - The status ("Searching…", "No matching games.") is the panel's first row, a `list-group-item small text-body-secondary` (not a button); the `#{id}-help` div stays for `aria-describedby`/`aria-live` but is `visually-hidden`, so nothing under the input changes height.
+  - The panel closes (results cleared, status hidden, query kept) on Escape in the input (the handler calls `preventDefault()` while the panel is open, so the search field isn't cleared), a `pointerdown` outside the wrapper, or a `focusout` whose `relatedTarget` is non-null and outside the wrapper (a null `relatedTarget`, as Safari gives when a button is clicked, keeps it open; the outside `pointerdown` covers that case); typing again reopens it. Selecting a result closes it (as today).
+  - Without `overlay` nothing changes.
+
+## Changes
+| Area | File(s) | Change |
+|---|---|---|
+| Core | `src/RnRomManager.Core/Discovery/IDiscoveryRepository.cs` | `DiscoveryGroupSort { Name, Games }` (new); `ListGroupsAsync(kind, page, pageSize, q, DiscoveryGroupSort sort, bool descending, ct)` |
+| Data | `src/RnRomManager.Data/Repositories/DiscoveryRepository.cs` | A1 ordering in `ListGroupsAsync` (sort the index groups, which carry `Norm`, before `Select(g => g.Info)`) |
+| Api | `src/RnRomManager.Api/Endpoints/DiscoveryEndpoints.cs` | A1 `sort`/`dir` params and validation |
+| Web | `src/RnRomManager.Web/src/lib/discovery.ts` | G5 state/search; `discoveryApi.groups` sends `sort`/`dir` when not default; G8 helpers `readCollectionsTab(tab)` / `saveCollectionsTab(tab, search)` (new) |
+| Web | `lib/components/DiscoveryGroups.svelte`, `lib/components/SystemList.svelte` | G1–G7 (new props `sort`, `dir`, `onsort(sort, dir)`, `onclear()`; `onfind` unchanged) |
+| Web | `routes/collections/+page.svelte` | G5, G7, G8 wiring (writes URL, saves, restores) |
+| Web | `src/RnRomManager.Web/src/app.css` | remove `.count-badge` rule (G9) |
+| Web | `routes/collections/[id]/+page.svelte`, `lib/components/GameTypeahead.svelte` | C1, C2 |
+| Web | `routes/timeline/+page.svelte` | T1–T6 |
+| Docs | `docs/features.md` | § Timeline "Strip"; § Publishers and genres "List look and search"; § Systems; § Collections (back button, Add games); § Publishers and genres through the API (A1) |
+| e2e | `tests/e2e/specs/mvp.spec.ts` | list → table locators; new sort/clear/remember and floating Add games checks |
+
+No migrations, settings or new storage beyond the four browser `localStorage` keys. API change is additive.
+
+## Risks
+- **Existing tests break by design** (each fixed in its step):
+  - `timeline-page.test.ts`: "one tick per year…" (exact `strip().className`, tick names, `btn-*` classes), "a tick selects its year…" (`btn-primary`), and "reads from and to from the URL, clamped…" (`tickNames().at(-1)` is `'1993: 0 games'`, now a non-button tick: assert the last button `'1992: 1 game'` and the last `.timeline-tick` title `'1993: no games'`).
+  - `DiscoveryGroups.test.ts` / `SystemList.test.ts` / `collections-page.test.ts`: `getByRole('list', …)` → `'table'`; `.count-badge` assertions → the Games cell text; link names with counts (`'Atari 2600 0 games'`, `'Game Boy 1 game'`, `'Nintendo Entertainment System 1,250 games'`) → just the name; `textContent` containing `'1,250 games'` / `'1 game'` → the row's Games cell is `1,250` / `1`.
+  - `DiscoveryRepositoryTests` calls of `ListGroupsAsync` (new arguments).
+  - e2e `mvp.spec.ts`: `getByRole("list", { name: "Publishers" | "Genres" | "Systems" | "Developers" })` → `"table"`; `getByRole("link", { name: /^Game Boy\s+\d+ games?$/ })` → `{ name: "Game Boy", exact: true }` within the Systems table. The e2e "Windows" list in the Emulators modal is not affected. The Timeline e2e (`"1998: 1 game"` `aria-pressed`) keeps working.
+- **Restore loop:** restore only navigates when the rebuilt search adds `find`/`sort`/`dir`, and otherwise forgets the saved value (G8), so it can't loop.
+- **Overlay over a stretched-link grid:** game cards use `stretched-link` (z-index 1); the panel is `z-3`.
+- Performance: sorting ≤ a few thousand in-memory groups per request; negligible.
+
+## Steps
+- [ ] **1. Discovery API sort**: A1. Files: `IDiscoveryRepository.cs`, `DiscoveryRepository.cs`, `DiscoveryEndpoints.cs`, `docs/features.md` (§ Publishers and genres through the API). Tests: `DiscoveryRepositoryTests` (existing calls pass `DiscoveryGroupSort.Name, false`; new: name desc, games desc/asc with name tie-break, sort after `q`, paging over sorted), `DiscoveryEndpointsTests` (sort/dir passed through, case-insensitive; `sort=games` without `dir` is descending; `InvalidPaging_Is400` cases for `sort=size` → `sort`, `dir=up` → `dir`). Done when: both classes pass; omitting `sort`/`dir` returns today's order.
+- [ ] **2. Discovery URL state and memory helpers**: G5 parsing/writing in `discoveryState`/`discoverySearch`/`systemsState`/`systemsSearch`; `discoveryApi.groups` `sort`/`dir`; G8 `readCollectionsTab`/`saveCollectionsTab`. Files: `lib/discovery.ts`. Tests: `lib/discovery.test.ts` (defaults omitted, `dir` only when non-default, bad values → default, round-trip, API query, remembered read/save per tab incl. storage throwing). Done when: vitest, lint, check pass.
+- [ ] **3. Publisher, developer and genre table**: G1–G4, G6, G7 for `DiscoveryGroups` (component side: Clear calls `onclear`). Files: `DiscoveryGroups.svelte`, `routes/collections/+page.svelte` (pass `sort`/`dir`, handle `onsort`/`onclear` by writing the URL), `docs/features.md` (§ Publishers and genres "List look and search"). Tests: `DiscoveryGroups.test.ts`, `routes/collections/collections-page.test.ts` (table name, columns, logo inside the link, Admin actions column only for Admins, selected `table-primary`, header sort buttons/`aria-sort`/icons and direction rules, Clear visibility and effect, page 1 on sort, API called with `sort`/`dir`; the Risks updates). Done when: tests, lint, check pass.
+- [ ] **4. System table**: G1–G4, G6, G7 for `SystemList` (browser sort with tie-break), G9 `.count-badge` removal. Files: `SystemList.svelte`, `app.css`, `routes/collections/+page.svelte` (Systems wiring), `docs/features.md` (§ Systems). Tests: `SystemList.test.ts`, `routes/collections/collections-page.test.ts` (Systems cases, the Risks updates). Done when: tests, lint, check pass.
+- [ ] **5. Remember per tab**: G8 save on search/sort/Clear, restore on bare tab URLs. Files: `routes/collections/+page.svelte` (and the components' `onfind` path), `docs/features.md` (§ Publishers and genres, § Systems: "kept in this browser per tab"). Tests: `routes/collections/collections-page.test.ts` (bare tab URL restores with `replace`; URL with its own `find` wins and isn't overwritten; `key`/`system` URL and the P3 `name` → `key` path aren't restored; malformed saved value is forgotten with no navigation; Back/Forward doesn't save; Clear forgets; each tab separate). Done when: tests, lint, check pass.
+- [ ] **6. Collection page back button and floating Add games**: C1, C2. Files: `routes/collections/[id]/+page.svelte`, `lib/components/GameTypeahead.svelte`, `docs/features.md` (§ Collections). Tests: `routes/collections/collection-page.test.ts` (Back to Collections link with `btn` classes and `/collections` href; Add games passes overlay), `lib/components/GameTypeahead.test.ts` (overlay: panel classes, status row inside panel and help visually hidden, Escape closes and keeps the query, outside pointerdown closes, focusout to an outside element closes, focusout with a null `relatedTarget` keeps it open, retype reopens; without overlay unchanged). Done when: tests, lint, check pass.
+- [ ] **7. Timeline line**: T1–T6. Files: `routes/timeline/+page.svelte`, `docs/features.md` (§ Timeline "Strip"). Tests: `routes/timeline/timeline-page.test.ts` ("one tick per year…" → buttons only for 1990/1992/1999 with unchanged names, seven `.timeline-tick`s with no `.timeline-tick-label` (no empty year there is first, last or ends in 0); new case: `from=1991&to=1992` shows a labelled `1991` tick (empty first shown year); `above`/`below` alternation, card text `1999` / `1,234`; "a tick selects its year…" → pressed card `text-bg-primary`; "reads from and to…" per Risks; the rest unchanged). Done when: tests, lint, check pass.
+- [ ] **8. e2e**: `tests/e2e/specs/mvp.spec.ts`: replace `getByRole("list", { name: … })` for Publishers/Developers/Genres/Systems with `"table"`; add: sort by Games then Clear on Publishers; search on Genres, go to Timeline and back via the navbar, the search is restored; on a collection, typing in Add games leaves the games grid's first card at the same position (bounding box) and Escape closes the results; `expectAccessible(page, "timeline")` still passes. Done when: `pwsh scripts/test-e2e.ps1` passes (run in Finish).
+
+## Decisions
+- 2026-11-25 Timeline shape → horizontal line, label cards alternating above/below (user)
+- 2026-11-25 Years without games → small unlabeled, non-clickable tick keeping their place (user)
+- 2026-11-25 "Filter persists between navigation" → remember find and sort per tab in this browser, URL wins (user)
+- 2026-11-25 Floating results for every game picker? → collection page's Add games only, via an opt-in prop (user)
+- 2026-11-25 Group sort location → server for Publishers/Developers/Genres (paged), browser for Systems (full list loaded) (code)
+- 2026-11-25 Table look → reports' table style (`table-sm table-striped table-hover`, `table-dark` head, in a card) (code)
+- 2026-11-25 Review round 1: API `dir` defaults per sort; restore skips `key`/`system` URLs and forgets malformed saved values; overlay focusout ignores a null `relatedTarget` and Escape prevents the native clear; T1 markup pinned; broken count/link-name assertions listed; step 3 split (reviewer)
+
+## Kickoff prompt
+```text
+/spec implement 2026-11-25-timeline-line-and-collection-tables.md
+```
+Starts the spec, or resumes it at the first unticked step.
