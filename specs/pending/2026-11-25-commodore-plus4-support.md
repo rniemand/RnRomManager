@@ -1,0 +1,267 @@
+---
+title: Commodore Plus/4 support
+status: ready
+created: 2026-11-25
+---
+
+# Commodore Plus/4 support
+
+## Summary
+Adds the `plus4` system (Commodore Plus/4) to `RnRomManager.Systems.Commodore`. Its disk, tape, program and cartridge images are stored in the game ZIP and matched against libretro's No-Intro `Commodore - Plus-4` DAT, which lists five `.bin` cartridges; every other file goes to Review. Games play in the browser with the operator-supplied EmulatorJS `vice_xplus4` core, from the existing `Emulator:ViceCorePath` folder. Multi-disk `.d64` games named `(Disk n of m)` get **All disks**, which plays them through a generated `.m3u` playlist, as Amiga floppy sets do. The handler follows `docs/adding-a-system.md`, reuses `C64Header` (which learns VICE's `C16-TAPE-RAW` tape signature) and copies the VIC-20 and C128 patterns.
+
+## Out of scope
+- Ingesting `.m3u` files. A playlist has nothing to hash, so an `.m3u` dropped into `ingest/plus4/` fails `UnsupportedType`. Sets come from release names (B11), as on Amiga.
+- Sets of tapes or of mixed media. Only `.d64` disks form sets.
+- Other `vice_xplus4` types (`.d71`, `.d81`, `.g64`, `.p00`, `.x64`, the 8050/8250, NIB and D2M/D4M images, `.tcrt`) and gzipped images (`.gz`, `.d6z`, …).
+- Reading VICE's native Plus/4 `.crt` signature. Only the C64 signatures and `C16-TAPE-RAW` are read (B4).
+- Commodore 16 as its own system, and machine options (C16 vs Plus/4 memory, PAL/NTSC). VICE xplus4's defaults and EmulatorJS's own menu apply.
+- Sets for C64, C128 or any other system.
+- A new e2e flow (see Decisions).
+
+## Behaviour
+- **B1 Identity.** `Plus4Handler` (new, `src/RnRomManager.Systems.Commodore/Plus4Handler.cs`):
+  - `Id` `plus4`, `DisplayName` `Commodore Plus/4`, `ShortName` `Plus/4`.
+  - `Family` `plus4` (its own family, like `vic20`).
+  - `DatName` `Commodore - Plus-4`, `DatSource` the default (`Libretro`), `DatFolder` the default (`no-intro`), `MetadatKinds` `[]` (libretro has no Plus/4 metadat).
+  - `EmbedRomsInZip` `true`, `KeepsSourceExtension` `true` (each extension is a distinct format, as on VIC-20 and C128).
+- **B2 Formats.** `RomExtensions`, in this order: `.d64`, `.t64`, `.tap`, `.prg`, `.crt`, `.bin`.
+  - The DAT's five entries are all `.bin`, so the `RomExtensions` DAT filter keeps all of them.
+  - `SourceExtension` and `NormalizeForHashing` keep the interface defaults. There are no gzipped types, so neither `ViceImages` nor `GzipImage` is used.
+  - A `.zip`/`.7z` dropped into `ingest/plus4/` is unpacked (`ArchiveExtractor.IsArchiveFor`).
+  - An `.m3u` or any other unlisted type is listed as pending, then fails `UnsupportedType` (`IngestPipeline` step 1) and moves to `_failed/`, as on C128.
+- **B3 Sizes.** `MinRomSizeBytes` 256 (small `.prg` programs), `MaxRomSizeBytes` 8 MiB (`8 * 1024 * 1024`). Both match VIC-20 and C128. A `.d64` is 174,848–196,608 B and the DAT's carts are 16 KiB.
+- **B4 Header.** `C64Header.Read` gains one branch, after the `C64-TAPE-RAW` one: `rom.Length >= 20 && rom.StartsWith("C16-TAPE-RAW"u8)` returns `Plain(systemId, "tap", rom[0x0C])`. That is the same `format`/`version` fields as a C64 tape; VICE writes this signature for C16/Plus/4 tapes, with the version at 0x0C.
+  - `Plus4Handler.ReadHeader(rom) => C64Header.Read(rom, Id)`.
+  - So a Plus/4 `.tap`, and any C64-signature `.crt`, `.tap` or `.g64`, gets a header classified `plus4`. Every other file returns null: `.d64`, `.t64`, `.prg`, a `.bin` cart, and a native Plus/4 `.crt`.
+  - On `c64` and `c128`, a `C16-TAPE-RAW` file now also gets a `tap` header classified as the caller. That's harmless: it's plausible, so an unmatched file still goes to Review, as it did with a null header.
+- **B5 Ingest.**
+  - A `.bin` whose SHA1 is in the DAT is ingested, stored in the ZIP under the DAT ROM name.
+  - Every other accepted file goes to Review as `NoDatMatch` with the DAT's suggestions (`hasDat` true). A Manual, Flag or Dat resolution keeps the source extension.
+  - A file already in the library or pending review (any system, e.g. a `.d64` under `c64`) is `Duplicate` first, as everywhere.
+  - Ingestion's `DatsMissing` preflight blocks ingestion until an Admin runs **Refresh DATs** after the upgrade. That's the normal rule for a new libretro system; it is documented in deployment (step 5).
+- **B6 Box art.** `DefaultBoxArtPng` loads `boxart.plus4.png` through `EmbeddedResources.Load`. The source is `Resources/boxart/plus4.svg` (new, drawn for this project, MIT, in the style of `c128.svg`), rendered to a 512×512 `plus4.png` (new) as the box-art README describes. The `.csproj` already embeds `Resources/boxart/*.png`. Missing box art is looked up from libretro-thumbnails' `Commodore_-_Plus-4` repo (it exists) through `DatName`, as for every libretro system.
+- **B7 Browser play.** `BrowserCore` is `vice_xplus4`.
+  - Play is offered for releases in the ZIP. It's not in `LibraryEndpoints.ExternalBrowserCores`.
+  - EmulatorJS 4.2.3's `plus4` group holds only `vice_xplus4` (vendored `emulator.js` line 37), and the core is already in its `disableCue` list (line 819).
+  - It doesn't need threads (`requiresThreads` doesn't list it), so it plays in the modal like the other VICE cores, never a threaded payload.
+  - No BIOS: VICE embeds the Plus/4 ROMs (`biosFor` unchanged). `controlSchemeFor` returns null for it.
+- **B8 Operator core.** `OperatorCoreManifest.Pinned` gains `VicePlus4` = `"vice_xplus4"`: display name `VICE (Plus/4)`, `o => o.ViceCorePath`, `EmulatorEndpoints.ViceCoreMismatch`. The files come from `@emulatorjs/core-vice_xplus4@4.2.3` (https://registry.npmjs.org/@emulatorjs/core-vice_xplus4/-/core-vice_xplus4-4.2.3.tgz; payloads at the package root, the report from `reports/`), packed and hashed 2026-11-25:
+
+  | File | Bytes | SHA-256 | Content type |
+  |---|---|---|---|
+  | `vice_xplus4-wasm.data` | 1,413,246 | `f96b6660211a403b687e5f905394fda655c60250db7619a335ef2ccc160bfb30` | `application/octet-stream` |
+  | `vice_xplus4-legacy-wasm.data` | 1,413,262 | `568e282a78c363f459f59c32b2745e2c26b245a6e55771edba5028a66a8b4063` | `application/octet-stream` |
+  | `vice_xplus4.json` | 125 | `838318e4ee8d1ad2cfdd9fdf00350f57ea3eed1ca3d84491535f67074774e5d6` | `application/json` |
+
+  The generic `GET /api/emulator/cores/vice_xplus4/<file>` route serves them from `Emulator:ViceCorePath`; no new option. A mismatch is `409 ViceCoreMismatch`. The two `-thread` payloads aren't used.
+- **B9 Play-page text.** `params.js` `operatorCores.vice_xplus4` = `{ system: 'Commodore Plus/4 games', display: 'VICE (Plus/4)', short: 'VICE', option: 'Emulator:ViceCorePath' }`. Through `operatorCoreError` (unchanged):
+  - a missing core (404) reads *Commodore Plus/4 games need the VICE (Plus/4) core files: ask an Admin to set them up (Emulator:ViceCorePath).*;
+  - a mismatch (409) reads *The VICE (Plus/4) core files don't match EmulatorJS 4.2.3: ask an Admin to replace them (Emulator:ViceCorePath).*;
+  - any other failure reads *Couldn't load the VICE core.*
+- **B10 Core extensions.** The `valid_extensions` compiled into `vice_xplus4_libretro.wasm` (read from `vice_xplus4-wasm.data`, 2026-11-25) are identical to `vice_x64sc`'s and `vice_x128`'s: `d64|d71|d80|d81|d82|g64|g41|x64|t64|tap|prg|p00|crt|bin|zip|7z|gz|d6z|d7z|d8z|g6z|g4z|x6z|cmd|m3u|vfl|vsf|nib|nbz|d2m|d4m|tcrt`. Every B2 type is in it.
+- **B11 Disk sets.** `DiscSets` extends the Amiga floppy rules (Amiga spec F1/F2) to `plus4`, with `.d64` in place of `.adf` and a looser key:
+  - A release's token is the one `(Disk n of m)` in its `FileName` (case ignored), as on Amiga.
+  - The set key on Plus/4 is `m` **alone**: within one game, every tokened release with the same `m` is in one group. Amiga keeps its key (`m` plus the name without the token and every `[…]` group). Plus/4 disks almost all come through Review, which renames them (Manual: `Title (flags).d64`; Attach → Release: source stem + ` (Unverified)`), so names rarely match beyond the token. Inside the floppy finder, `keyByName` is `systemId == "amiga"` (no extra parameter).
+  - A set needs exactly one release per disk `1..m`, `2 ≤ m ≤ 20`, every `FileName` ending in `.d64` (case ignored).
+  - The name is Disk 1's stem without its token, with trailing whitespace trimmed (`TrimEnd()`), plus `.m3u`: `Pixel Quest (Disk 1 of 2).d64` → `Pixel Quest.m3u`. The trim applies to Amiga too; TOSEC names have no space before the token, so Amiga names are unchanged.
+  - **Supported Review paths** (documented in features): every disk's file name must carry its token. **Manual** with the same title and the flag `Disk <n> of <m>` gives `<Title> (Disk <n> of <m>).d64`; with no target it joins the one Plus/4 game that has that base title, creates one if none has it, and fails `AmbiguousGroup` if several do (`IngestPipeline`, `ListGameIdsByBaseTitleAsync`). **Attach → Release** onto the game keeps the source stem plus ` (Unverified)`, so a TOSEC name such as `Pixel Quest (1986)(Synth)(Disk 2 of 2).d64` keeps its token. The two can be mixed.
+  - `MaxDiscs("plus4")` is 20: vice-libretro's `DC_MAX_SIZE` in `libretro/libretro-dc.h`, which is the same as PUAE's.
+  - A new `public static string? FloppyExtension(string systemId)` returns `.adf` for `amiga`, `.d64` for `plus4`, and null for any other system. `Find` sends any system with a floppy extension to the floppy finder, now `FindDisks(string systemId, string extension, IReadOnlyList<RomRow> roms)`, which caps sets at `MaxDiscs(systemId)` (not Amiga's).
+  - `discSet` on `GET /api/games/{id}` (`LibraryEndpoints.DetailAsync`, which already calls `DiscSets.Find` for every game) is filled for Plus/4 Disk 1 releases.
+- **B12 Endpoint.** `GET /api/games/{id}/roms/{romId}/play-disc-set` serves Plus/4 sets exactly as Amiga sets (Amiga F5: access, headers, response shape, errors, no 2 GiB cap).
+  - `HandleSetAsync` routes every game whose `DiscSets.FloppyExtension(game.SystemId)` is non-null to `FloppySetAsync`, passing that extension.
+  - `FloppySetAsync`'s guard becomes `d.SystemId != game.SystemId || d.ExternalFileName is not null` (404). The system half is defensive only: `RomRow.SystemId` always comes from the game (`MirrorEntry.ToRows`), so only the external half is testable.
+  - `PlayDisc.AmigaSystemId` (public const, no other users) is removed; `HandleSetAsync` no longer names a system.
+  - Its entry names become `Disk <n><extension>`. Plus/4 gets `Disk 1.d64`, `Disk 2.d64`…; Amiga is unchanged (`Disk <n>.adf`).
+  - The playlist lists them one per line, LF-terminated, UTF-8 without BOM.
+  - The empty-disk title is unchanged: `The disc can't be played: Disk <n>: '<FileName>' is empty.`
+- **B13 Play URL and player.** `params.js` gains `export const diskSetCores = ['puae', 'vice_xplus4'];` (new). It is used in three places:
+  - `parsePlayParams` accepts `set=1` with a `diskSetCores` core only when `disc=1` is also given. This replaces the `core === 'puae'` test.
+  - `discError` uses the PUAE disk wording for every `diskSetCores` core: *These disks can't be played in the browser: one of them is empty.* for `InvalidPlayDisc`, else *Couldn't load the disks.* / *Couldn't load the disks (HTTP <status>).*; `401` stays the session-expired text.
+  - `play.js` shows `Downloading disks…` for a `diskSetCores` core, else `Downloading disc…`.
+
+  EmulatorJS then unpacks the ZIP and boots the `.m3u`. `vice_xplus4`'s `core.json` lists `m3u`, the ZIP holds no `.cue`/`.ccd`/`.toc`, and the core is in the `disableCue` list, so `downloadRom()` picks the playlist as it does for PUAE. vice-libretro's `dc_parse_m3u` attaches Disk 1 and autostarts it; the **Disks** menu swaps disks. No vendored-loader edit is needed.
+- **B14 Game page.** `emulator.ts`'s `setMedia` returns `'disks'` for `puae` and `vice_xplus4`, else `'discs'`. A Plus/4 set's Disk 1 therefore shows the Amiga button: text `All disks`, `aria-label="Play all disks of <name>"`, tooltip `Play all disks in one session`. The modal (Amiga F9) is unchanged: title `Play <name>`, battery saves on Disk 1, and **Save state to library** is hidden.
+- **B15 UI colour.** System colour `plus4`, in `app.css` after the C128 block, in the sibling pattern:
+
+  ```css
+  /* Commodore Plus/4 system colour: a dark olive, same in both themes; white on it is AAA (~7.1:1). */
+  :root {
+  	--bs-plus4: #5f5a1e;
+  }
+  .text-bg-plus4 {
+  	color: #fff !important;
+  	background-color: var(--bs-plus4) !important;
+  }
+  ```
+
+  `systemColours.ts` adds `'plus4'` to the `SystemColour['name']` union and `plus4: { name: 'plus4', foreground: '#fff' }` to the map, each after `pet`. There's no `icons.ts` entry (controller fallback, as for the other Commodores). The system filter keeps `/api/systems`' `DisplayName` order: `Commodore PET`, `Commodore Plus/4`, `Commodore VIC-20`.
+- **B16 IGDB.** `IgdbPlatforms.ById["plus4"]` = 94 (IGDB's *Commodore Plus/4*), right after `["pet"]`. Implement checks the id at https://www.igdb.com/platforms/commodore-plus-slash-4 before committing; if it differs, use IGDB's id and note it in § Decisions.
+- **B17 Emulator links.** `systemEmulators.json` key `plus4`, right after `pet`: VICE (`https://vice-emu.sourceforge.io/`, windows/macos/linux) and RetroArch (`https://www.retroarch.com/?page=platforms`, windows/macos/linux/android/ios, note `RetroArch core: VICE xplus4`), mirroring `c128`.
+
+## Changes
+| Area | File(s) | Change |
+|---|---|---|
+| Core | `src/RnRomManager.Systems.Commodore/Plus4Handler.cs` (new) | B1–B7. Its summary names the DAT's `.bin` carts, the Review flow and the reused header. |
+| Core | `src/RnRomManager.Systems.Commodore/C64Header.cs` | B4: the `C16-TAPE-RAW` branch; the class summary adds "and VICE's C16/Plus/4 tape". |
+| Core | `src/RnRomManager.Systems.Commodore/Resources/boxart/plus4.svg`, `plus4.png` (new), `Resources/boxart/README.md` | B6. The README's sources sentence reads "`c64.svg`, `c128.svg`, `pet.svg`, `plus4.svg`, `vic20.svg` and `amiga.svg` are the sources (made for this project, MIT)." |
+| Core | `src/RnRomManager.Core/Library/DiscSets.cs` | B11: `FloppyExtension`, `MaxDiscs("plus4")` 20, and the floppy finder takes the extension. The class, `MaxDiscs` and `FindDisks` summaries name Plus/4 and vice-libretro's `DC_MAX_SIZE`. |
+| Core | `src/RnRomManager.Core/Media/IgdbPlatforms.cs` | B16. |
+| Api | `src/RnRomManager.Api/AppHost.cs` | `services.AddSystemHandler<Plus4Handler>();` right after `C128Handler`. The project is already referenced, so there's no `Dockerfile`/`.slnx` change. |
+| Api | `src/RnRomManager.Api/Endpoints/OperatorCoreManifest.cs` | B8: the `VicePlus4` const after `ViceC128`, and the pinned entry after C128's. Its comment: `// Commodore Plus/4: https://registry.npmjs.org/@emulatorjs/core-vice_xplus4/-/core-vice_xplus4-4.2.3.tgz. Embeds the` / `// Plus/4's ROMs like vice_x64sc, so it's never bundled; its files sit in the same folder as the C64 core's.` |
+| Api | `src/RnRomManager.Api/Endpoints/PlayDisc.cs` | B12. The `HandleSetAsync`, `FloppySetAsync` and `FirmwareNames` summaries say "Amiga and Plus/4 floppies". |
+| Api | `src/RnRomManager.Api/Endpoints/LibraryEndpoints.cs` | B11: comment only. The `DiscSets.Find` comment in `DetailAsync` names Plus/4 next to Amiga. |
+| Web | `static/emulator/params.js` | `'vice_xplus4'` after `'vice_x128'` in the `cores` allowlist, in `operatorCores` (B9, entry after `vice_x128`) and in `hidesCoreChooser`. The `operatorCores` JSDoc list adds ", Plus/4 VICE xplus4" after "C128 VICE x128". Also B13 (`diskSetCores`, `parsePlayParams`, `discError`; the set comment reads "Amiga F6, Plus/4 B13: a disk-set core too, with `disc=1`"). |
+| Web | `static/emulator/play.js` | B13 status. The pinned-cores comment (~line 757) reads "VICE x64sc, xpet, xvic, x128 and xplus4". |
+| Web | `scripts/vendor-emulatorjs.mjs` | `"vice_xplus4"` after `"vice_x128"` in the explicit-core patch, the non-threaded guard and the no-CDN guard (~lines 89, 100, 110). Comments: line 53 ends "… vice_x128 of the c128 group and vice_xplus4 of the plus4 group"; line 62 adds "Plus/4" after "C128"; line 63 reads "VICE (x64sc, xpet, xvic, x128 and xplus4)". |
+| Web | `src/lib/emulator.ts` | B14 `setMedia`; its comment adds "Plus/4 B14". |
+| Web | `src/lib/systemColours.ts`, `src/app.css` | B15. |
+| Web | `src/lib/systemEmulators.json` | B17. |
+| Tests | `tests/RnRomManager.TestData/IngestSeeder.cs` | `public const string Plus4Dat = "Commodore - Plus-4";` after `Vic20Dat`; `Directory.CreateDirectory(Path.Combine(ingest, "plus4"));` after the `c128` line; `[Plus4Dat] = []` after `[Vic20Dat] = …` in the `FixtureDatWriter.Write` dictionary (line ~437). |
+| Docs | `README.md`, `docs/adding-a-system.md`, `docs/configuration.md`, `docs/deployment.md`, `docs/development.md`, `docs/features.md`, `docs/zip-format.md` | Step 5. |
+
+The change needs:
+- no migration (`system_id` is a `VARCHAR`);
+- no new config key.
+
+API contracts change only additively: `plus4` appears in `/api/systems` and `/api/admin/dats`, `browserCore` can be `vice_xplus4`, and `discSet` is non-null on Plus/4 Disk 1 releases.
+
+## Risks
+- **Unverified boot:** nothing here has been run with a real dump. These come from reading the code (`emulator.js`'s `plus4` group and `downloadRom()`, `core.json`, vice-libretro's `dc_parse_m3u`):
+  - that `vice_xplus4` autostarts a `.d64`/`.tap`/`.prg` and attaches a `.bin` or `.crt` cart through EmulatorJS 4.2.3;
+  - that it boots a set's `.m3u` and swaps disks.
+
+  Finish includes one manual check (a single `.d64` and a two-disk set) if the maintainer has the core files and dumps; otherwise the PR says so.
+- **Upgrade blocks ingestion until Refresh DATs** (B5), as with every libretro system. The deployment note says so.
+- **Shared header change:** B4 touches `C64Header`, which `c64` and `c128` use. Only files starting `C16-TAPE-RAW` change, from no header to a plausible `tap` header. `C64HeaderTests` pins it.
+- **Shared set code:** B11/B12 generalise the Amiga floppy path. The existing Amiga `DiscSetsTests` and `LibraryEndpointsTests.PlayDiscSet.cs` cases must pass unchanged.
+- **Variant ambiguity:** as on Amiga, a game holding two dumps of one disk gets no All disks. Each disk still plays alone.
+- **Licensing:** the core embeds Commodore ROMs. It's never bundled, vendored or committed, as for the other VICE cores.
+
+## Steps
+- [ ] **1. Handler and header**: B1–B4, B6, B7 (`BrowserCore` value only). Files: `Plus4Handler.cs`, `C64Header.cs`, `Resources/boxart/plus4.svg`, `plus4.png`, boxart `README.md`. It isn't registered yet. Tests:
+  - `tests/RnRomManager.Systems.Commodore.Tests/Plus4HandlerTests.cs` (new, modelled on `C128HandlerTests`):
+    - `Plus4_Contract`: `(Id, DisplayName, ShortName, Family, DatName)` = `("plus4", "Commodore Plus/4", "Plus/4", "plus4", "Commodore - Plus-4")`; exact `RomExtensions`; sizes `(256L, 8L * 1024 * 1024)`; `(EmbedRomsInZip, DatSource, DatFolder)` = `(true, DatSource.Libretro, DatKind.NoIntro)`; empty `MetadatKinds`; `(FileSets, LegacyEmbeddedRoms, KeepsSourceExtension)` = `(false, false, true)`; `BrowserCore` `vice_xplus4`.
+    - `ReadHeader_ReadsAPlus4Tape`: a 20-byte `C16-TAPE-RAW` with version 1 at 0x0C gives `ClassifiedSystemId` `plus4`, `IsPlausible` true, `format` `tap` and `version` 1.
+    - `ReadHeader_IsNullForOtherFiles`: a 300-byte `[0x01, 0x10, …]` `.prg`-like array, a zeroed 174,848-byte `.d64` and a 16 KiB seeded `.bin` all give null.
+    - `DefaultBoxArt_IsA512x512Png`.
+  - `C64HeaderTests`: `C16Tap_ReadsFormatAndVersion` (new, after `Tap_ReadsFormatAndVersion`) and `[TestCase("C16-TAPE-RAW", 19)]` in `OneByteShortOfTheMinimum_IsNull`.
+
+  Done when: `Plus4HandlerTests`, `C64HeaderTests`, `C64HandlerTests`, `C128HandlerTests` and `Vic20HandlerTests` pass, and `dotnet build` is warning-free.
+- [ ] **2. Registration, DAT fixtures and operator core**: B5, B8, B10, B16, B17. Files: `AppHost.cs`, `IngestSeeder.cs`, `IgdbPlatforms.cs`, `OperatorCoreManifest.cs`, `systemEmulators.json`, and the `README.md` supported-systems row `` | Commodore Plus/4 | `plus4` | In ZIP | `.d64`, `.t64`, `.tap`, `.prg`, `.crt`, `.bin` | No-Intro | `vice_xplus4` | ``, right after the Commodore PET row (`No-Intro` as on the VIC-20 row). Tests:
+  - Every test file listing `IngestSeeder.Vic20Dat` in a full-registry manifest adds `[IngestSeeder.Plus4Dat] = []` right after it. Today that's `AuditLibraryEditTests`, `DatEndpointsTests`, `GamePlayedEndpointTests`, `ImageEndpointsTests`, `ImageUrlEndpointsTests`, `IngestArchiveTests`, `IngestDeleteEndpointsTests`, `IngestEndpointsTests`, `IngestPipelineTests`, `IngestRestoreEndpointsTests`, `IngestReviewTests` (2), `LibraryEditTests`, `LibraryEndpointsTests`, `LibraryMoveMergeTests`, `MediaRetryEndpointsTests`, `NoteEndpointsTests`, `ReportEndpointsTests`, `ReviewEndpointsTests` (3) and `ZipEntryEndpointsTests`. Grep again when implementing.
+  - `DatEndpointsTests`:
+    - the names count 43 → 44, with message "30 libretro systems, the 10 disc systems, Switch, the test titledb system, MAME and FBNeo";
+    - the admin-rows list gains `IngestSeeder.Plus4Dat` right after `IngestSeeder.PetDat` (`Commodore - PET` < `Commodore - Plus-4` < `Commodore - VIC-20`);
+    - refresh requests 141 → 142, with message "…, 1 for Commodore 64, Commodore PET, Commodore Plus/4, Commodore VIC-20, Commodore Amiga and each disc system (no metadat), …".
+  - `LibraryEndpointsTests`:
+    - `Systems_ListsEveryRegisteredSystem_WithCountsAndSortedRegions`: `"plus4"` between `"pet"` and `"vic20"` in the id array, and `"Commodore Plus/4"` between `"Commodore PET"` and `"Commodore VIC-20"` in the display-name array; `Has.Exactly(29).True` for `embedRoms` (was 28); and, after the `vic20` assertion, `Assert.That((Find("plus4").GetProperty("displayName").GetString(), Find("plus4").GetProperty("shortName").GetString()), Is.EqualTo(("Commodore Plus/4", "Plus/4")));`.
+    - `[TestCase("plus4", false, true, "vice_xplus4")]` in `Games_QuickPlay_IsThePrimaryReleaseWhenPlayable` and `[TestCase("plus4", "vice_xplus4")]` in `GameDetail_BrowserCore_IsTheSystemHandlers`, each right after its `vic20` case.
+  - `SystemStartupTests.Startup_RegistersEverySystem_AndCreatesTheirIngestFoldersOnly` (both id arrays) and `IngestEndpointsTests.Pending_ListsEverySystem_IgnoringJunk`: `"plus4"` right after `"c128"` (registration order).
+  - `IgdbPlatformsTests.Map_HasEveryRegisteredSystem_AndNothingElse` passes with B16, and `PlatformIds_AreDistinctAndPositive` passes unchanged (94 is unique).
+  - `BrowserCoreExtensionsTests`:
+    - `CoreExtensions["vice_xplus4"]` = the B10 string and `OperatorPayloadSha256["vice_xplus4"]` = `"f96b6660211a403b687e5f905394fda655c60250db7619a335ef2ccc160bfb30"`, each right after its `vice_x128` entry;
+    - `"vice_xplus4"` appended to the `Vice` array, so the `Archive`, `Playlist`, `NotAGame` and `NoDat` rows cover its `.zip`, `.7z`, `.m3u`, `.vsf`, `.cmd`, `.vfl`, `.g41`, `.g4z`;
+    - a new constant `Plus4Scope` = `"left out of Commodore Plus/4 by its spec (Out of scope)"` after `C128Scope`, and the `NotIngested` row `(Plus4Scope, ["vice_xplus4"], [".d71", ".d80", ".d81", ".d82", ".g64", ".x64", ".p00", ".nib", ".nbz", ".d2m", ".d4m", ".tcrt", ".gz", ".d6z", ".d7z", ".d8z", ".g6z", ".x6z"])` after the `C128Scope` row. These 18, the 8 above and the 6 B2 types make the core's 32.
+    - `EveryCoreExtension_IsIngestedOrListed`, `EveryHandlerExtension_IsOpenedByItsBrowserCore` and `OperatorCoreLists_WereReadFromThePinnedPayloads` pass.
+  - `EmulatorEndpointsTests.OperatorCores.cs`:
+    - in `PinnedManifest_NamesEachCore`, the pinned-ids array gains `"vice_xplus4"` after `"vice_x128"`;
+    - after the `c128` assertion, `var plus4 = OperatorCoreManifest.Pinned.Find("vice_xplus4")!;` and `Assert.That((plus4.DisplayName, plus4.MismatchCode, plus4.PathOf(options)), Is.EqualTo(("VICE (Plus/4)", "ViceCoreMismatch", "/cores/vice")), "shares the C64 folder");`;
+    - a new `PinnedManifest_HoldsExactlyTheVicePlus44_2_3Files` after `PinnedManifest_HoldsExactlyTheViceC1284_2_3Files`, asserting the three B8 `OperatorCoreFile`s through `OperatorCoreManifest.VicePlus4`.
+  - `IngestPipelineTests`:
+    - a new field `Plus4Cart = Atari(16 * 1024, 2711)` after `StarDuel` (2711 is unused in the class);
+    - the class manifest's `[IngestSeeder.Plus4Dat] = []` becomes `[new FixtureGame("Pixel Pilot (USA, Europe)", "Pixel Pilot (USA, Europe).bin", Plus4Cart)]`;
+    - `Plus4_ADatMatchedCart_IsStoredUnderTheDatsName` (new, after `Sufami_ADatMatchedCart_IsStoredUnderTheDatsName`, modelled on it): `DropAged("plus4", "pilot.bin", Plus4Cart)` gives `(IngestOutcome.Ingested, "plus4")`, and `roms/plus4/P/Pixel Pilot.zip` holds one release `Pixel Pilot (USA, Europe).bin`;
+    - `Plus4_AnUnmatchedTape_GoesToReview_WithItsHeader` (new, right after): a 300-byte `C16-TAPE-RAW` `game.tap` (version 1 at 0x0C, above the 256 B floor) gives `(IngestOutcome.Review, "plus4")`, and the review item's stored header has `format` `tap` and `version` 1.
+  - `SupportedSystemsTableTests.ReadmeTable_MatchesTheRegisteredHandlers` and `SystemEmulatorsCatalogTests.Catalog_MatchesTheRegisteredHandlers_AndFollowsTheRules` pass.
+
+  Done when: those classes pass (integration ones with Docker), and `dotnet build` is warning-free.
+- [ ] **3. Disk sets (Core + API)**: B11, B12. Files: `DiscSets.cs`, `PlayDisc.cs`, `LibraryEndpoints.cs` (comment). Tests:
+  - `tests/RnRomManager.Core.Tests/Library/DiscSetsTests.cs`:
+    - `[TestCase("plus4", 20)]` in `MaxDiscs_IsPerSystem`;
+    - `FloppyExtension_IsPerSystem` (new): `amiga` → `.adf`, `plus4` → `.d64`, `psx` and `c64` → null;
+    - `Plus4_TwoDisks_AreOneSet_NamedFromDiskOne` (new): `Pixel Quest (1986)(Synth)(Disk 1 of 2).d64` and `…(Disk 2 of 2).d64` form one set named `Pixel Quest (1986)(Synth).m3u`, in disk order;
+    - `Plus4_DisksWithDifferentNames_AreOneSet` (new): `Pixel Quest (Disk 1 of 2).d64` and `Pixel Quest (1986)(Synth)(Disk 2 of 2) (Unverified).d64` form one set named `Pixel Quest.m3u`, in disk order;
+    - `Plus4_TwoDumpsOfOneDisk_AreNoSet` (new): two `(Disk 1 of 2)` releases and one `(Disk 2 of 2)` give no set;
+    - `Amiga_DisksWithDifferentNames_AreNoSet` (new): the same names on `amiga` (as `.adf`) give no set, pinning that Amiga's key is unchanged;
+    - `Plus4_AdfDisks_AreNoSet` and `Amiga_D64Disks_AreNoSet` (new): the wrong system's extension gives no set;
+    - `Plus4_TakesUpToTwentyDisks` (new, mirroring `Amiga_TakesUpToTwentyDisks`): 20 disks form a set, 21 don't;
+    - `C64_DiskTokens_AreNoSet` (new): `Find("c64", …)` on two tokened `.d64`s is empty;
+    - every existing Amiga and disc case passes unchanged.
+  - `tests/RnRomManager.Api.Tests/Integration/LibraryEndpointsTests.PlayDiscSet.cs`:
+    - `AmigaGame` is generalised to a private `FloppyGame(string system, string title, int seed, Func<…>? shape, params string[] fileNames)`. The two `AmigaGame` overloads stay as one-line wrappers, so the Amiga tests are untouched.
+    - `Detail_DiscSet_IsOnPlus4DiskOne_WithTheNameAndOrderedIds_AndNullElsewhere` (new).
+    - `PlayDiscSet_APlus4Set_IsThePlaylist_ThenEachDiskAliased` (new, after the Amiga one): entries `["Pixel Quest (1986)(Synth).m3u", "Disk 1.d64", "Disk 2.d64"]`, playlist bytes `"Disk 1.d64\nDisk 2.d64\n"`, disks byte-exact, `X-Content-Bytes`.
+    - `PlayDiscSet_APlus4SetWithAnExternalDisk_Is404` (new, modelled on `PlayDiscSet_AmigaDiskTwo_AnAmbiguousGame_OrAnExternalDisk_Is404`): Disk 2's mirrored row shaped with an `ExternalFileName` gives 404 (the B12 guard).
+    - The existing Amiga and PlayStation/Saturn/Sega CD set tests pass unchanged.
+
+  - `ReviewEndpointsTests.Plus4_ManualDiskOne_ThenAttachReleaseDiskTwo_MakeASet` (new, after `AttachRelease_TagsFromTheFileName_Unverified_NotPrimary_A2`): two synthetic 174,848-byte `.d64`s dropped as `Pixel Quest (1986)(Synth)(Disk 1 of 2).d64` and `…(Disk 2 of 2).d64` go to Review; Disk 1 resolved with Manual (title `Pixel Quest`, flags `["Disk 1 of 2"]`), Disk 2 with Attach → Release onto that game; `GET /api/games/{id}` has `discSet` on Disk 1 with name `Pixel Quest.m3u` and both ids in disk order.
+
+  - `ReviewEndpointsTests.Plus4_ManualOnBothDisks_JoinsOneGame_AndMakesASet` (new, right after): both disks resolved with Manual (title `Pixel Quest`, flags `["Disk 1 of 2"]` then `["Disk 2 of 2"]`) land in one game, and `discSet` on Disk 1 is `Pixel Quest.m3u` with both ids in disk order.
+
+  Done when: `DiscSetsTests`, `LibraryEndpointsTests` and `ReviewEndpointsTests` pass.
+- [ ] **4. Web**: B9, B13–B15. Files: `params.js`, `play.js`, `vendor-emulatorjs.mjs`, `emulator.ts`, `systemColours.ts`, `app.css`. Tests:
+  - `src/lib/emulatorParams.test.ts`:
+    - the `accepts the %s core` list (~line 168) gains `'vice_xplus4'` after `'vice_x128'`;
+    - `describe('Commodore Plus/4')` (new) right after `describe('Commodore 128')`, mirroring it with the B8 files and B9 texts;
+    - next to the PUAE `set` cases (~line 134), `parsePlayParams` accepts `core: 'vice_xplus4', disc: '1', set: '1'` and refuses it without `disc`;
+    - `discError(409, 'InvalidPlayDisc', 'vice_xplus4', true)` and `discError(500, null, 'vice_xplus4', true)` give the B13 texts.
+  - `src/lib/vendorEmulatorjs.test.ts`:
+    - the three guarded-edit strings (~lines 131, 140, 147) and the two `includes(this.getCore())` expectations (~705, 709) gain `"vice_xplus4"` after `"vice_x128"`;
+    - two new `it.each(['src/emulator.js', 'emulator.min.js'])` cases right after the two `vice_x128` ones (~858–882), mirroring them: `%s pins an explicit vice_xplus4, in the plus4 group` and `%s never picks a threaded VICE (Plus/4) payload, and shows a local error for a failed one`.
+  - `src/lib/emulatorPlay.test.ts`, in `describe('play page Amiga disk sets (Amiga F7)')`: a new `it('loads a Plus/4 set from play-disc-set, saying it downloads disks (Plus/4 B13)')`, with the same query shape using `core: 'vice_xplus4'` and the operator-core files served.
+  - `src/lib/emulator.test.ts`: `setMedia('vice_xplus4')` is `'disks'`.
+  - `src/routes/games/game-page.test.ts`: a Plus/4 Disk 1 with `discSet` and `browserCore` `vice_xplus4` shows `All disks` (after the Amiga case, ~line 389).
+  - `src/lib/systemColours.test.ts`: in the Commodore case, `expect(systemColour('plus4')).toEqual({ name: 'plus4', foreground: '#fff' });` after the `c128` line.
+
+  Done when: those files, `npm run lint` and `npm run check` pass, and `npm run predev` vendors without error.
+- [ ] **5. Docs**: "Commodore Plus/4" goes right after "Commodore PET" wherever systems are listed, and `vice_xplus4` right after `vice_x128` wherever cores are.
+  - `README.md`:
+    - the **Game detail** Play list and its operator-core sentence (VICE gains `vice_xplus4`);
+    - the line mentioning Amiga's **All disks** adds Plus/4 `.d64` sets;
+    - the core attribution reads "VICE (Commodore 64, 128, PET, Plus/4 and VIC-20) isn't included either";
+    - the "Upgrading … Run **Admin → DATs → Refresh DATs** once" sentence names Commodore Plus/4.
+  - `docs/configuration.md`:
+    - the `Emulator:ViceCorePath` row reads "empty (Commodore 64, 128, PET, Plus/4 and VIC-20 play off)";
+    - § VICE core gains, after the C128 table, "Commodore Plus/4 plays with VICE (xplus4), which embeds the Plus/4's ROMs for the same reason. Its three files from [`@emulatorjs/core-vice_xplus4@4.2.3`](https://registry.npmjs.org/@emulatorjs/core-vice_xplus4/-/core-vice_xplus4-4.2.3.tgz) go in the same folder too (`GET /api/emulator/cores/vice_xplus4/<file>`, the same `409 ViceCoreMismatch`):" and the B8 table (File, Bytes, SHA-256).
+  - `docs/deployment.md`:
+    - the `/app/ingest` row gains `ingest/plus4/` (Commodore Plus/4: `.d64`, `.t64`, `.tap`, `.prg`, `.crt` or `.bin`) after `ingest/pet/`;
+    - after the newest upgrade note, "Upgrading to the release that adds Commodore Plus/4:" with two bullets: "**Run Admin → DATs → Refresh DATs once.** Ingestion stays blocked (`DatsMissing`) until the new `Commodore - Plus-4` DAT is downloaded. `ingest/plus4/` is created at startup." and "**For Commodore Plus/4 browser play,** add the `vice_xplus4` files to the [VICE core](#vice-core) folder.";
+    - § VICE core gains "For Commodore Plus/4, likewise with `@emulatorjs/core-vice_xplus4@4.2.3` (`vice_xplus4-wasm.data`, `vice_xplus4-legacy-wasm.data`, `reports/vice_xplus4.json`)."
+  - `docs/features.md`:
+    - the intro system list, the **Play** list and its core list ("VICE (xplus4) for Commodore Plus/4");
+    - a bullet after the C128 one: "**Commodore Plus/4** uses VICE (xplus4), from the same folder; it needs no BIOS and starts a disk image, tape, program or cartridge by its extension. Disk images named `(Disk n of m)` (one `.d64` per disk, 2–20 disks) get **All disks**, which plays them in one session; the player's **Disks** menu swaps them.";
+    - § Ingest, after the C128 drop sentence: "Drop Commodore Plus/4 disk images (`.d64`), tapes (`.t64`, `.tap`), programs (`.prg`) and cartridges (`.crt`, `.bin`), or archives of them, into `ingest/plus4/`: a `.bin` cartridge in the No-Intro DAT is matched; anything else goes to Review and keeps its extension. A `.tap` with VICE's `C16-TAPE-RAW` signature keeps its tape header. A `.m3u` or any other type fails `UnsupportedType`. For **All disks**, every disk's release needs its `(Disk n of m)` token: resolve each disk with **Manual** (the same title and the flag `Disk n of m`) or **Attach → Release** onto Disk 1's game (a source name with the token keeps it).", plus "Commodore Plus/4" in that paragraph's separate-families list and "256 bytes–8 MiB for Commodore Plus/4" in its size list;
+    - the `GET /api/games/{id}` `discSet` sentence and the `play-disc-set` entry name Plus/4 sets (`Disk <n>.d64` entries) next to Amiga.
+  - `docs/development.md`:
+    - the `src/RnRomManager.Systems.Commodore` row adds "the `plus4` (Commodore Plus/4) handler, which reuses it and its `C16-TAPE-RAW` tape signature";
+    - the operator-cores bullet lists Plus/4 and `vice_xplus4`;
+    - the Multi-disc sets bullet adds Plus/4 floppies (`DiscSets.FloppyExtension`, `.d64`, the same aliasing).
+  - `docs/zip-format.md`:
+    - `plus4/                Commodore Plus/4 (.d64, .t64, .tap, .prg, .crt, .bin)` after `pet/`;
+    - `plus4` after `pet` in the `system` id list;
+    - after the Commodore 128 `header` paragraph: "Commodore Plus/4 `header` is the same (classified `plus4`) for a `.tap` (`C16-TAPE-RAW` or `C64-TAPE-RAW`) or a C64-signature `.crt`/`.g64`, and null for every other file. A `C16-TAPE-RAW` tape gets the same `tap` header on Commodore 64 and 128."
+  - `docs/adding-a-system.md`:
+    - the `BrowserCore` row adds "and `plus4` returns `vice_xplus4`" after `c128`'s;
+    - the `DefaultBoxArtPng` list gains `Commodore Plus/4/` after `Commodore PET/`;
+    - the `ReadHeader` row adds "`Plus4Handler` too; `C64Header` also reads VICE's `C16-TAPE-RAW` tape";
+    - § Operator-supplied cores reads "(VICE for `c64`, `c128`, `pet`, `plus4` and `vic20`)".
+
+  Tests: `SupportedSystemsTableTests`. Done when: it passes and `pwsh scripts/codemap.ps1` is committed.
+
+## Decisions
+- 2026-11-25 What do ".m3u sets" mean? → Amiga-style disk sets from `(Disk n of m)` `.d64` releases with **All disks** and a generated playlist; `.m3u` files aren't ingested (user)
+- 2026-11-25 DAT? → libretro No-Intro `Commodore - Plus-4` (5 `.bin` carts, no metadat), so `.bin` joins the requested formats (user)
+- 2026-11-25 Header? → `C64Header` also reads VICE's `C16-TAPE-RAW` tape; Plus/4 reuses it (user)
+- 2026-11-25 Core files, extensions and set limit → `@emulatorjs/core-vice_xplus4@4.2.3` packed and hashed 2026-11-25; its `valid_extensions` equal `vice_x64sc`'s; no threads; vice-libretro `DC_MAX_SIZE` is 20 (code)
+- 2026-11-25 Reviewer round 1: tape test above the 256 B floor with a header assertion; unused seed 2711; the cross-system 404 test is unbuildable (`RomRow.SystemId` comes from the game), replaced by an external-disk 404; `FindDisks` caps by its own system; `PlayDisc.AmigaSystemId` removed; CSS in Prettier form (reviewer)
+- 2026-11-25 Reviewer R3: Review renames Plus/4 disks, so Amiga's name-based key would rarely group → Plus/4 groups tokened releases by `m` alone within a game; supported path is Manual (`Disk 1 of m`) then Attach → Release (user)
+- 2026-11-25 Reviewer round 2: Manual joins the game owning the base title (or creates it; `AmbiguousGroup` if several), so Manual works for every disk; `keyByName` derived from the system id (reviewer)
+- 2026-11-25 Reviewer round 3: the features.md Review-path sentence pinned; review stopped after 3 rounds with nothing open (reviewer)
+- 2026-11-25 e2e? → none: the e2e stack has no VICE core to play with, the DAT/Review flows are covered by existing e2e, and sets by the Amiga API and vitest cases this spec mirrors (code)
+
+## Kickoff prompt
+```text
+/spec implement 2026-11-25-commodore-plus4-support.md
+```
+Starts the spec, or resumes it at the first unticked step.
