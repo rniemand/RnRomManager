@@ -3233,9 +3233,10 @@ test("ROM Zip Config: DS moves into its ZIP and back, the ROM downloading byte-e
     await expectAccessible(page, "jobs");
     await page.goto("/admin/rom-storage");
     await expect(
+      // Cells: System, Folder, Games, Default, Configured.
       row("Nintendo DS")
         .getByRole("cell")
-        .nth(3)
+        .nth(4)
         .getByRole("img", { name: configured }),
     ).toBeVisible();
   };
