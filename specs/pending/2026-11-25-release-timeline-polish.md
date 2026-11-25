@@ -83,7 +83,7 @@ Adds a **Timeline** page (games linked to IGDB, counted per release year, zoomab
 | Web | `routes/admin/rom-storage/+page.svelte` | Z1. |
 | Web | `lib/components/IgdbLookup.svelte`, `GameAdminModal.svelte`, `lib/gameEdit.ts` | M1, M2. |
 | Web | `routes/games/[id]/+page.svelte`, `lib/components/GameImages.svelte` | P1, P2, P5, P6. |
-| Docs | `docs/features.md`: Navigation, Publishers and genres (Developers), Game detail, Reports, Report APIs, Publishers and genres through the API (developers kind, `key?name=`), File action auditing (developer logo actions), ROM Zip Config, new "Timeline" section; `docs/development.md`: Collections discovery (developers logo kind) | Doc rule. |
+| Docs | `docs/features.md`: Navigation, Publishers and genres (Developers), Game detail, Reports, Report APIs, Publishers and genres through the API (developers kind, `key?name=`), File action auditing (developer logo actions), ROM Zip Config, a new `## Timeline` section between `## Collections` and `## Bundle Creator` (navbar order) and a new `### Timeline through the API` (T7–T9) between `### Collections through the API` and `### Bundle Creator through the API`; `docs/development.md`: Collections discovery (developers logo kind) | Doc rule. |
 
 API contract changes are additive except: the Year sort order within a year (G1), and duplicate dismissals' key (D2, migrated in place).
 
@@ -125,6 +125,7 @@ API contract changes are additive except: the Year sort order within a year (G1)
 - 2026-11-25 Review round 4: P2's Year link moves to step 14 because `resolve('/timeline')` doesn't type-check before the route exists; P2 hrefs follow the `{resolve(…)}?…` pattern; T6's View on IGDB markup pinned and the snippet passed only when configured; T8's `igdbConfigured` source and T5's zero-count class pinned (code)
 - 2026-11-25 Review round 5: IgdbLookup tests call the exported functions through `setup()`'s `component` and keep asserting `onapply`, with button-absence checks moved to the footer tests (bound props can't be read without a harness); M1's footer neighbours named; P3's non-404 failures fall back to `find`, `key` wins over `name`, only discovery tabs read it (code)
 - 2026-11-25 Review round 6: P4's `FindKeyAsync` answers from the cached index so a found key always opens a group; Changes table lists `GameSort.cs` and the extra `types.ts` fields (code)
+- 2026-11-25 Review round 7: placement of the new Timeline doc sections pinned (code)
 
 ## Kickoff prompt
 ```text
