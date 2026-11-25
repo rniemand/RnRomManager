@@ -14,7 +14,7 @@ namespace RnRomManager.Api.Endpoints;
 /// <c>.chd</c> (or a PlayStation <c>.img</c>) streams unchanged like an <c>.iso</c>. Every member is opened
 /// and checked before the response starts; nothing is written to disk and nothing is audited. PSP B2: a PlayStation
 /// Portable release streams its standalone <c>.iso</c>, <c>.cso</c>, <c>.pbp</c> or <c>.chd</c> the same way. Saturn, Sega CD and 3DO take PlayStation's disc
-/// shapes; TurboGrafx-CD takes its cue sets and a standalone <c>.chd</c> only. All these systems share the same cap (<see cref="MaxBytes"/>).
+/// shapes; TurboGrafx-CD and PC-FX take their cue sets and a standalone <c>.chd</c> only. All these systems share the same cap (<see cref="MaxBytes"/>).
 /// CloneCD B8: a CloneCD disc (<c>.img</c>, <c>.ccd</c>, optional <c>.sub</c>) on any of the five disc systems streams as a ZIP
 /// holding a cue generated from the <c>.ccd</c> (<see cref="CloneCdSheet.ForPlayback"/>), the <c>.img</c> and the <c>.sub</c>;
 /// the stored <c>.ccd</c> is never sent, since EmulatorJS would boot it instead of the cue. File type gaps D11–D12: a cdrdao TOC
@@ -37,6 +37,9 @@ public static class PlayDisc
 
     public const string TurboGrafxCdSystemId = "tgcd";
 
+    /// <summary>PC-FX X5: takes TurboGrafx-CD's disc shapes.</summary>
+    public const string PcfxSystemId = "pcfx";
+
     /// <summary>Amiga F5: the system whose floppy disk sets <c>play-disc-set</c> serves from inside the game's ZIP.</summary>
     public const string AmigaSystemId = "amiga";
 
@@ -45,7 +48,7 @@ public static class PlayDisc
 
     private static readonly HashSet<string> SupportedSystems = new(StringComparer.Ordinal)
     {
-        SystemId, PspSystemId, SaturnSystemId, SegaCdSystemId, ThreeDoSystemId, TurboGrafxCdSystemId,
+        SystemId, PspSystemId, SaturnSystemId, SegaCdSystemId, ThreeDoSystemId, TurboGrafxCdSystemId, PcfxSystemId,
     };
 
     public const string InvalidPlayDisc = "InvalidPlayDisc";
@@ -371,7 +374,8 @@ public static class PlayDisc
     /// TurboGrafx-CD B4: Beetle PCE boots only a cue or a <c>.chd</c> as a CD (a bare <c>.bin</c> would run as a HuCard), so
     /// a single file must be a <c>.chd</c>. CloneCD B8: or a CloneCD disc on any of the five disc systems (<see cref="IsCloneCd"/>).
     /// D11: or an MDS disc (<see cref="IsMds"/>), and a <c>.toc</c> takes the cue's place in a set. Browser play format gaps
-    /// N1: or a standalone <c>.nrg</c> (<see cref="NrgDiscAsync"/>).
+    /// N1: or a standalone <c>.nrg</c> (<see cref="NrgDiscAsync"/>). PC-FX X5: the same for Beetle PC-FX, which opens only
+    /// <c>cue|ccd|toc|chd</c>.
     /// </summary>
     private static string? ShapeProblem(List<Member> members, string systemId)
     {
@@ -383,9 +387,9 @@ public static class PlayDisc
                 ? null : "a PSP disc must be a single .iso, .cso, .pbp or .chd";
         if (members.Select(m => m.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() != members.Count)
             return "two disc files have the same name ignoring case";
-        if (members.Count == 1 && systemId == TurboGrafxCdSystemId)
+        if (members.Count == 1 && systemId is TurboGrafxCdSystemId or PcfxSystemId)
             return members[0].Name.EndsWith(".chd", StringComparison.OrdinalIgnoreCase)
-                ? null : "a TurboGrafx-CD disc must be a .cue with its .bin tracks, or a .chd";
+                ? null : $"a {(systemId == PcfxSystemId ? "PC-FX" : "TurboGrafx-CD")} disc must be a .cue with its .bin tracks, or a .chd";
         if (members.Count == 1)
             return IsBin(members[0].Name) || members[0].Name.EndsWith(".iso", StringComparison.OrdinalIgnoreCase)
                 || members[0].Name.EndsWith(".chd", StringComparison.OrdinalIgnoreCase)

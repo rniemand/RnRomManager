@@ -632,6 +632,7 @@ public partial class LibraryEndpointsTests
     [TestCase("3do", "Chd Solo (USA).chd")]
     [TestCase("tgcd", "Chd Solo (Japan).chd")]
     [TestCase("tgcd", "Chd Solo (Japan).CHD")]
+    [TestCase("pcfx", "Chd Solo (Japan).chd")]
     [TestCase("saturn", "Chd Solo (USA).iso")]
     [TestCase("psx", "Chd Solo (USA).pbp")]
     [TestCase("psx", "Chd Solo (USA).PBP")]
@@ -860,6 +861,52 @@ public partial class LibraryEndpointsTests
         AssertNotOpen(Path.Combine(folder, name));
     }
 
+    // PC-FX X5: TurboGrafx-CD's shapes; Beetle PC-FX opens only cue|ccd|toc|chd.
+
+    private Task<(Guid Id, string Folder, IReadOnlyList<long> RomIds)> PcfxGame(string title, InfoJsonRom[] roms,
+        params (string Name, byte[] Bytes)[] onDisk) => DiscGame(PlayDisc.PcfxSystemId, title, roms, onDisk);
+
+    [Test]
+    public async Task PlayDisc_APcfxCueSet_IsAStoredZip_WithThePlaybackCue()
+    {
+        var cue = PsxCue("Fx Run (Japan) (Track 1).bin", "Fx Run (Japan) (Track 2).bin");
+        var (id, _, ids) = await PcfxGame("Fx Run",
+            [PsxSolo("Fx Run (Japan) (Track 2).bin", PsxTrack2) with
+            {
+                Files = [SetFile("Fx Run (Japan).cue", cue), SetFile("Fx Run (Japan) (Track 1).bin", PsxTrack1)],
+            }],
+            ("Fx Run (Japan) (Track 2).bin", PsxTrack2), ("Fx Run (Japan).cue", cue), ("Fx Run (Japan) (Track 1).bin", PsxTrack1));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        Assert.That(response.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/zip"));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Fx Run (Japan).cue", "track-01.bin", "track-02.bin" }));
+        Assert.That(zip.Entries.Select(e => e.CompressedLength == e.Length), Has.All.True, "stored, not deflated");
+        Assert.That(ReadEntry(zip, "track-01.bin"), Is.EqualTo(PsxTrack1));
+        Assert.That(ReadEntry(zip, "track-02.bin"), Is.EqualTo(PsxTrack2));
+    }
+
+    [TestCase("Fx Solo (Japan).bin")]
+    [TestCase("Fx Solo (Japan).BIN")]
+    [TestCase("Fx Solo (Japan).iso")]
+    [TestCase("Fx Solo (Japan).img")]
+    public async Task PlayDisc_APcfxSingleFileThatIsNotAChd_Is409InvalidPlayDisc(string name)
+    {
+        var (id, folder, ids) = await PcfxGame("Fx Solo", [PsxSolo(name, PsxTrack1)], (name, PsxTrack1));
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Conflict));
+        var problem = await AuthClient.JsonAsync(response);
+        Assert.That(problem.GetProperty("code").GetString(), Is.EqualTo(PlayDisc.InvalidPlayDisc));
+        Assert.That(problem.GetProperty("title").GetString(),
+            Is.EqualTo("The disc can't be played: a PC-FX disc must be a .cue with its .bin tracks, or a .chd."));
+        AssertNotOpen(Path.Combine(folder, name));
+    }
+
     [Test]
     public async Task PlayDisc_ATurboGrafxCdSetWithTwoCues_Is409InvalidPlayDisc()
     {
@@ -966,6 +1013,19 @@ public partial class LibraryEndpointsTests
         Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Clone Ninja (USA).cue", "track-01.img", "Clone Ninja (USA).sub" }));
     }
 
+    [Test]
+    public async Task PlayDisc_APcfxCloneCdDisc_Plays()
+    {
+        var (id, _, ids) = await CloneCdGame(PlayDisc.PcfxSystemId, "Clone Fox", PsxTrack1, CloneCcd(), CloneSub);
+
+        using var response = await _user.GetAsync(PlayDiscUrl(id, ids[0]));
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        await using var body = new MemoryStream(await response.Content.ReadAsByteArrayAsync());
+        using var zip = new ZipArchive(body, ZipArchiveMode.Read);
+        Assert.That(zip.Entries.Select(e => e.FullName), Is.EqualTo(new[] { "Clone Fox (USA).cue", "track-01.img", "Clone Fox (USA).sub" }));
+    }
+
     // File type gaps D11–D12: a cue generated from the .toc or .mds and the aliased tracks; the stored sheet is never sent.
 
     private static readonly byte[] MdsOneTrack = SyntheticMdsBuilder.OneTrack();
@@ -1016,6 +1076,7 @@ public partial class LibraryEndpointsTests
 
     [TestCase("psx")]
     [TestCase("tgcd")]
+    [TestCase("pcfx")]
     public async Task PlayDisc_ATocSet_IsTheGeneratedCueAndTheAliasedBins_AndNoToc(string system)
     {
         var (id, _, ids) = await TocGame(system, "Toc Star", TocOf("Toc Star (USA) (Track 1).bin", "Toc Star (USA) (Track 2).bin"));
