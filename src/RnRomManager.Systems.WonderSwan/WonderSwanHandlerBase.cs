@@ -29,7 +29,7 @@ public abstract class WonderSwanHandlerBase : ISystemHandler
     public bool EmbedRomsInZip => true;
 
     /// <inheritdoc />
-    public string? BrowserCore => null;
+    public string? BrowserCore => "mednafen_wswan";
 
     public ReadOnlyMemory<byte> DefaultBoxArtPng => _boxArt.Value;
 

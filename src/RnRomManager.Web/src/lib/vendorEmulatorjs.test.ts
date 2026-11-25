@@ -104,6 +104,9 @@ const coreLicenses = [
 	'mednafen_pcfx-libretro-common-LICENSE.txt',
 	'mednafen_pcfx-lzma-LICENSE.txt',
 	'mednafen_pcfx-tremor-LICENSE.txt',
+	'mednafen_wswan-LICENSE.txt',
+	'mednafen_wswan-NOTICE.txt',
+	'mednafen_wswan-libretro-common-LICENSE.txt',
 	'pcsx_rearmed-LICENSE.txt',
 	'pcsx_rearmed-NOTICE.txt',
 	'pcsx_rearmed-libchdr-LICENSE.txt',
@@ -368,7 +371,8 @@ describe('vendor-emulatorjs', () => {
 			'puae',
 			'mednafen_pce',
 			'mednafen_ngp',
-			'mednafen_pcfx'
+			'mednafen_pcfx',
+			'mednafen_wswan'
 		].flatMap((c) => [
 			`data/cores/${c}-legacy-wasm.data`,
 			`data/cores/${c}-wasm.data`,
@@ -1045,6 +1049,34 @@ describe('vendor-emulatorjs', () => {
 			[
 				...Object.keys(pinned).map((f) => `data/cores/${f}`),
 				...coreLicenses.filter((f) => f.startsWith('mednafen_pcfx')).map((f) => `licenses/${f}`)
+			].sort()
+		);
+		for (const [f, [size, sha256]] of Object.entries(pinned)) {
+			const bytes = readFileSync(join(out, 'data', 'cores', f));
+			expect(bytes.length, f).toBe(size);
+			expect(createHash('sha256').update(bytes).digest('hex'), f).toBe(sha256);
+		}
+	});
+
+	it('vendors exactly the pinned Beetle WonderSwan files and no threaded payload (WonderSwan)', () => {
+		const pinned: Record<string, [number, string]> = {
+			'mednafen_wswan-wasm.data': [
+				879301,
+				'234397276e4a8ff01485e0135ea8e89e78e60fc156120e41bd0a4dd3b4c71626'
+			],
+			'mednafen_wswan-legacy-wasm.data': [
+				879089,
+				'5f75fd9d9b93a5e807ef086843c603371eb1a17fed73ff7398e16c5f5ba72605'
+			],
+			'reports/mednafen_wswan.json': [
+				128,
+				'47abb197c89d5af5a1cbbf998e902db3f71f065303f7a2af29f78a9af4695b45'
+			]
+		};
+		expect(files(out).filter((f) => f.includes('mednafen_wswan'))).toEqual(
+			[
+				...Object.keys(pinned).map((f) => `data/cores/${f}`),
+				...coreLicenses.filter((f) => f.startsWith('mednafen_wswan')).map((f) => `licenses/${f}`)
 			].sort()
 		);
 		for (const [f, [size, sha256]] of Object.entries(pinned)) {

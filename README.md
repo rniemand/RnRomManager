@@ -72,8 +72,8 @@ Drop your own ROM files (or `.zip`/`.7z` archives of them) into an ingest folder
 | TurboGrafx-CD / PC Engine CD | `tgcd` | Next to ZIP | `.bin`, `.cue`, `.chd`, `.ccd`, `.img`, `.sub`, `.mds`, `.mdf`, `.toc` | Redump | `mednafen_pce` |
 | Virtual Boy | `vb` | In ZIP | `.vb`, `.vboy`, `.bin` | No-Intro | `beetle_vb` |
 | Wii | `wii` | Next to ZIP | `.iso`, `.wbfs` | Redump | — |
-| WonderSwan | `ws` | In ZIP | `.ws` | No-Intro | — |
-| WonderSwan Color | `wsc` | In ZIP | `.wsc` | No-Intro | — |
+| WonderSwan | `ws` | In ZIP | `.ws` | No-Intro | `mednafen_wswan` |
+| WonderSwan Color | `wsc` | In ZIP | `.wsc` | No-Intro | `mednafen_wswan` |
 | Xbox 360 | `x360` | Next to ZIP | `.iso` | Redump | — |
 <!-- systems:end -->
 

@@ -5,12 +5,13 @@ The npm packages @emulatorjs/core-stella2014, @emulatorjs/core-gearcoleco,
 @emulatorjs/core-smsplus, @emulatorjs/core-fceumm,
 @emulatorjs/core-pcsx_rearmed, @emulatorjs/core-yabause,
 @emulatorjs/core-desmume, @emulatorjs/core-puae,
-@emulatorjs/core-mednafen_pce, @emulatorjs/core-mednafen_ngp and
-@emulatorjs/core-mednafen_pcfx 4.2.3 each contain a "<core>-wasm.data" and a
-"<core>-legacy-wasm.data" file (7z archives). Each archive holds the core's
-WebAssembly binary and JavaScript loader, core.json, build.json and, for
-Gearcoleco, FCEUmm, PCSX ReARMed, PUAE, Beetle PCE, Beetle NeoPop and Beetle
-PC-FX only, license.txt. RnRomManager copies these files unchanged (the packages' "-thread" variants are not copied).
+@emulatorjs/core-mednafen_pce, @emulatorjs/core-mednafen_ngp,
+@emulatorjs/core-mednafen_pcfx and @emulatorjs/core-mednafen_wswan 4.2.3 each
+contain a "<core>-wasm.data" and a "<core>-legacy-wasm.data" file (7z
+archives). Each archive holds the core's WebAssembly binary and JavaScript
+loader, core.json, build.json and, for Gearcoleco, FCEUmm, PCSX ReARMed, PUAE,
+Beetle PCE, Beetle NeoPop, Beetle PC-FX and Beetle WonderSwan only,
+license.txt. RnRomManager copies these files unchanged (the packages' "-thread" variants are not copied).
 @emulatorjs/core-ppsspp and @emulatorjs/core-dosbox_pure 4.2.3 are the
 exceptions: they have only threaded payloads (see ppsspp-NOTICE.txt and
 dosbox_pure-NOTICE.txt).

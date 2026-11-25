@@ -34,7 +34,7 @@ public class WonderSwanHandlerTests
     {
         Assert.That((handler.MinRomSizeBytes, handler.MaxRomSizeBytes), Is.EqualTo((16L, 16L * 1024 * 1024)));
         Assert.That(handler.EmbedRomsInZip, Is.True);
-        Assert.That(handler.BrowserCore, Is.Null);
+        Assert.That(handler.BrowserCore, Is.EqualTo("mednafen_wswan"));
         Assert.That((handler.DatSource, handler.DatFolder), Is.EqualTo((DatSource.Libretro, DatKind.NoIntro)));
         Assert.That(handler.MetadatKinds, Is.EqualTo(DatKind.Metadat));
         Assert.That(handler.KeepsSourceExtension, Is.False);

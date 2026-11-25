@@ -38,6 +38,7 @@ const cores = [
 	'mednafen_pce',
 	'mednafen_ngp',
 	'mednafen_pcfx',
+	'mednafen_wswan',
 	'mupen64plus_next',
 	'azahar',
 	'mame2003_plus',

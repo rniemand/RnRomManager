@@ -545,6 +545,8 @@ public partial class LibraryEndpointsTests
     [TestCase("tg16", false, true, "mednafen_pce")]
     [TestCase("ngp", false, true, "mednafen_ngp")]
     [TestCase("ngpc", false, true, "mednafen_ngp")]
+    [TestCase("ws", false, true, "mednafen_wswan")]
+    [TestCase("wsc", false, true, "mednafen_wswan")]
     [TestCase("n64", false, true, "mupen64plus_next")]
     [TestCase("switch", false, false, null)]
     [TestCase("switch", true, false, null)]
@@ -769,6 +771,8 @@ public partial class LibraryEndpointsTests
     [TestCase("pcfx", "mednafen_pcfx")]
     [TestCase("ngp", "mednafen_ngp")]
     [TestCase("ngpc", "mednafen_ngp")]
+    [TestCase("ws", "mednafen_wswan")]
+    [TestCase("wsc", "mednafen_wswan")]
     [TestCase("n64", "mupen64plus_next")]
     [TestCase("nosuch", null)]
     public async Task GameDetail_BrowserCore_IsTheSystemHandlers(string system, string? expected)
