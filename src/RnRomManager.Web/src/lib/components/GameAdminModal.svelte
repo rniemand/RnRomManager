@@ -21,7 +21,7 @@
 	import { untrack } from 'svelte';
 	import { api } from '../api/client';
 	import { ApiError, isApiError } from '../api/errors';
-	import type { GameListItem, Page } from '../api/types';
+	import type { GameListItem, IgdbMatch, Page } from '../api/types';
 	import {
 		titleError,
 		toForm,
@@ -61,6 +61,10 @@
 	let suggestionController: AbortController | undefined;
 	/** M1: Edit Metadata's tab; M2 opens it on Lookup Info with `lookup: true`. */
 	let editTab = $state<'details' | 'lookup'>('details');
+	/** M1: the Lookup Info panel, and what its footer buttons need from it. */
+	let lookup = $state<ReturnType<typeof IgdbLookup>>();
+	let lookupChosen = $state<IgdbMatch | null>(null);
+	let lookupNotConfigured = $state(false);
 	/** M4: Lookup Info changed the form; cleared when the modal reopens. */
 	let igdbApplied = $state(false);
 	/** The used match's full-size cover, added as the box art cover after the save; cleared when the modal reopens. */
@@ -121,6 +125,7 @@
 		newTitleError = undefined;
 		form = untrack(() => toForm(game));
 		editTab = action.kind === 'edit' && action.lookup ? 'lookup' : 'details';
+		lookupChosen = null;
 		igdbApplied = false;
 		pendingCover = null;
 		suggestionController?.abort();
@@ -290,6 +295,23 @@
 	}
 </script>
 
+<!-- M1: Lookup Info's actions sit in the modal footer, left of Cancel and Edit Metadata. -->
+{#snippet lookupFooter()}
+	{#if lookupChosen}
+		<button type="button" class="btn btn-success" onclick={() => lookup?.useMatch(false)}
+			>Use this match</button
+		>
+		<button type="button" class="btn btn-success" onclick={() => lookup?.useMatch(true)}
+			>Use this match and save</button
+		>
+	{/if}
+	{#if !lookupNotConfigured}
+		<button type="button" class="btn btn-outline-warning" onclick={() => lookup?.notOnIgdb()}
+			>Not on IGDB</button
+		>
+	{/if}
+{/snippet}
+
 <ConfirmModal
 	bind:open
 	{title}
@@ -298,6 +320,7 @@
 	confirmLabel={destructive ? 'Delete' : title.replace('…', '')}
 	confirmClass={destructive ? 'btn-danger' : 'btn-primary'}
 	onconfirm={confirm}
+	footer={action?.kind === 'edit' && editTab === 'lookup' ? lookupFooter : undefined}
 >
 	{#if error}<div class="alert alert-danger py-2" role="alert">{error}</div>{/if}
 
@@ -433,6 +456,9 @@
 			hidden={editTab !== 'lookup'}
 		>
 			<IgdbLookup
+				bind:this={lookup}
+				bind:chosen={lookupChosen}
+				bind:notConfigured={lookupNotConfigured}
 				{game}
 				{form}
 				autostart={action.lookup}

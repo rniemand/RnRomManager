@@ -73,8 +73,11 @@ const setup = (
 	props: Partial<{ game: GameDetail; form: GameEditForm; autostart: boolean }> = {}
 ) => {
 	const onapply = vi.fn();
-	render(IgdbLookup, { props: { game: game(), form: form(), onapply, ...props } });
-	return onapply;
+	const { component } = render(IgdbLookup, {
+		props: { game: game(), form: form(), onapply, ...props }
+	});
+	// M1: the action buttons live in the modal footer, which calls these exports.
+	return { onapply, component };
 };
 const input = () => screen.getByLabelText('Search IGDB for') as HTMLInputElement;
 const searchButton = () => screen.getByRole('button', { name: 'Lookup Info' });
@@ -90,7 +93,6 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 		await Promise.resolve();
 		expect(alertText()).toBe(notConfigured);
 		expect(screen.queryByLabelText('Search IGDB for')).toBeNull();
-		expect(screen.queryByRole('button', { name: 'Not on IGDB' })).toBeNull();
 		expect(calls).toEqual([]);
 	});
 
@@ -266,11 +268,9 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 	});
 
 	it('Not on IGDB applies igdbId 0 to the form', async () => {
-		const onapply = setup({ form: form({ igdbId: 5, title: 'Mine' }) });
+		const { onapply, component } = setup({ form: form({ igdbId: 5, title: 'Mine' }) });
 
-		const button = screen.getByRole('button', { name: 'Not on IGDB' });
-		expect(button.getAttribute('type')).toBe('button');
-		await fireEvent.click(button);
+		component.notOnIgdb();
 
 		expect(onapply).toHaveBeenCalledWith(form({ igdbId: 0, title: 'Mine' }));
 		expect(calls).toEqual([]);
@@ -287,9 +287,9 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 		});
 		const pick = async (props: Parameters<typeof setup>[0] = {}, m: IgdbMatch = full) => {
 			answers = [{ status: 200, body: { matches: [m] } }];
-			const onapply = setup({ autostart: true, ...props });
+			const result = setup({ autostart: true, ...props });
 			await fireEvent.click(await screen.findByRole('button', { name: new RegExp(m.name) }));
-			return onapply;
+			return result;
 		};
 		const box = (field: string) =>
 			screen.getByRole('checkbox', { name: `Copy ${field}` }) as HTMLInputElement;
@@ -304,7 +304,6 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 			await screen.findByRole('button', { name: /Tetris DX/ });
 
 			expect(document.querySelector('table')).toBeNull();
-			expect(screen.queryByRole('button', { name: 'Use this match' })).toBeNull();
 		});
 
 		it('shows Field, Current and IGDB per row, inside table-responsive, with a hidden caption', async () => {
@@ -333,12 +332,12 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 		it('starting ticks and disabled rows follow defaultCopyFields', async () => {
 			await pick({ form: form({ developers: 'Nintendo', description: 'Mine.' }) });
 
-			expect([box('Title').checked, box('Title').disabled]).toEqual([false, false]);
+			expect([box('Title').checked, box('Title').disabled]).toEqual([true, false]);
 			expect([box('Release year').checked, box('Release year').disabled]).toEqual([true, false]);
 			expect(box('Developers').disabled).toBe(true);
 			expect(box('Publishers').checked).toBe(true);
 			expect(box('Genres').disabled).toBe(true);
-			expect([box('Description').checked, box('Description').disabled]).toEqual([false, false]);
+			expect([box('Description').checked, box('Description').disabled]).toEqual([true, false]);
 		});
 
 		it('Toggle all ticks every enabled row, then clears them, leaving disabled rows alone', async () => {
@@ -347,21 +346,22 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 			const enabled = ['Title', 'Release year', 'Publishers', 'Description'];
 			const ticks = () => enabled.map((f) => box(f).checked);
 
-			// Release year and Publishers start ticked: some, not all.
-			expect([all.checked, all.indeterminate, all.disabled]).toEqual([false, true, false]);
-
-			await fireEvent.click(all);
+			// M2: every enabled row starts ticked.
+			expect([all.checked, all.indeterminate, all.disabled]).toEqual([true, false, false]);
 			expect(ticks()).toEqual([true, true, true, true]);
-			expect([all.checked, all.indeterminate]).toEqual([true, false]);
 
 			await fireEvent.click(all);
 			expect(ticks()).toEqual([false, false, false, false]);
 			expect([all.checked, all.indeterminate]).toEqual([false, false]);
 			expect([box('Developers').checked, box('Genres').checked]).toEqual([false, false]);
 
-			// Ticking each row by hand checks Toggle all too.
-			for (const f of enabled) await fireEvent.click(box(f));
+			await fireEvent.click(all);
+			expect(ticks()).toEqual([true, true, true, true]);
 			expect([all.checked, all.indeterminate]).toEqual([true, false]);
+
+			// Unticking each row by hand clears Toggle all too.
+			for (const f of enabled) await fireEvent.click(box(f));
+			expect([all.checked, all.indeterminate]).toEqual([false, false]);
 		});
 
 		it('Toggle all is disabled when no row can be copied', async () => {
@@ -384,13 +384,11 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 		});
 
 		it('Use this match copies the ticked fields and links the id', async () => {
-			const onapply = await pick();
-			await fireEvent.click(box('Title'));
+			const { onapply, component } = await pick();
+			// Every enabled row starts ticked (M2); leave Description out.
 			await fireEvent.click(box('Description'));
 
-			const use = screen.getByRole('button', { name: 'Use this match' });
-			expect(use.getAttribute('type')).toBe('button');
-			await fireEvent.click(use);
+			component.useMatch(false);
 
 			expect(onapply).toHaveBeenCalledWith(
 				form({
@@ -405,11 +403,11 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 		});
 
 		it('Use this match with nothing ticked only links', async () => {
-			const onapply = await pick();
-			for (const field of ['Release year', 'Developers', 'Publishers', 'Description'])
+			const { onapply, component } = await pick();
+			for (const field of ['Title', 'Release year', 'Developers', 'Publishers', 'Description'])
 				if (box(field).checked) await fireEvent.click(box(field));
 
-			await fireEvent.click(screen.getByRole('button', { name: 'Use this match' }));
+			component.useMatch(false);
 
 			expect(onapply).toHaveBeenCalledWith(form({ igdbId: 9 }), {
 				match: expect.objectContaining({ igdbId: 9 }),
@@ -418,12 +416,9 @@ describe('IgdbLookup (IGDB lookup M2, M3)', () => {
 		});
 
 		it('Use this match and save copies the ticked fields and asks to save', async () => {
-			const onapply = await pick();
-			await fireEvent.click(box('Title'));
+			const { onapply, component } = await pick();
 
-			const save = screen.getByRole('button', { name: 'Use this match and save' });
-			expect(save.getAttribute('type')).toBe('button');
-			await fireEvent.click(save);
+			component.useMatch(true);
 
 			expect(onapply).toHaveBeenCalledTimes(1);
 			expect(onapply.mock.calls[0][1]).toMatchObject({ match: { igdbId: 9 }, save: true });
