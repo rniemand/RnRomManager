@@ -1763,6 +1763,27 @@ describe('game detail page', () => {
 		});
 	});
 
+	it('the Year links to its Timeline year only for an IGDB-linked game (P2)', async () => {
+		const yearCell = () =>
+			screen.getByRole('rowheader', { name: 'Year' }).nextElementSibling as HTMLElement;
+		answers.push({ status: 200, body: { ...game([1]), igdbId: 1234 } });
+		const { unmount } = render(GamePage);
+
+		const link = await screen.findByRole('link', { name: '1989' });
+		expect(link.getAttribute('href')).toBe('/timeline?from=1989&to=1989');
+		expect(yearCell().contains(link)).toBe(true);
+		unmount();
+
+		for (const changes of [{ igdbId: null }, { igdbId: 0 }, { igdbId: 1234, releaseYear: null }]) {
+			answers.push({ status: 200, body: { ...game([1]), ...changes } });
+			const view = render(GamePage);
+			await screen.findByRole('link', { name: 'Google' });
+			expect(yearCell().querySelector('a')).toBeNull();
+			expect(yearCell().textContent!.trim()).toBe(changes.releaseYear === null ? '—' : '1989');
+			view.unmount();
+		}
+	});
+
 	it('Back to Library is a small outline button to / (B5)', async () => {
 		answers.push({ status: 200, body: game([1]) });
 		render(GamePage);

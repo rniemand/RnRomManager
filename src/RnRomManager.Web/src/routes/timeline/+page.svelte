@@ -2,14 +2,17 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { api } from '#lib/api/client.js';
-	import type { SystemInfo, TimelineYears } from '#lib/api/types.js';
+	import type { GameListItem, Page, SystemInfo, TimelineYears } from '#lib/api/types.js';
 	import EmptyState from '#lib/components/EmptyState.svelte';
 	import ErrorAlert from '#lib/components/ErrorAlert.svelte';
 	import FilterDropdown from '#lib/components/FilterDropdown.svelte';
+	import GameResults from '#lib/components/GameResults.svelte';
 	import Icon from '#lib/components/Icon.svelte';
 	import Loading from '#lib/components/Loading.svelte';
 	import PageTitle from '#lib/components/PageTitle.svelte';
+	import Pagination from '#lib/components/Pagination.svelte';
 	import { formatCount } from '#lib/format.js';
+	import { pageCount } from '#lib/pageSize.js';
 	import { systemFilterOptions } from '#lib/systemFilter.js';
 	import {
 		pan,
@@ -24,14 +27,19 @@
 	} from '#lib/timeline.js';
 
 	/**
-	 * Timeline T1–T5: IGDB-linked games with a release year, counted per year in a zoomable strip. Systems load first, so
-	 * an unknown `?system=` is told apart from a known one; the counts load per system.
+	 * Timeline T1–T6: IGDB-linked games with a release year, counted per year in a zoomable strip, and the shown years'
+	 * games below. Systems load first, so an unknown `?system=` is told apart from a known one; the counts load per
+	 * system, the games per system, range and page.
 	 */
+	const pageSize = 50;
 	let systems = $state<SystemInfo[] | null>(null);
 	let systemsError = $state<unknown>(null);
 	let timeline = $state<TimelineYears | null>(null);
 	let timelineError = $state<unknown>(null);
 	let reload = $state(0);
+	let games = $state<Page<GameListItem> | null>(null);
+	let gamesError = $state<unknown>(null);
+	let gamesReload = $state(0);
 
 	const system = $derived(
 		systems ? timelineSystem(page.url, (id) => systems!.some((s) => s.id === id)) : null
@@ -78,6 +86,31 @@
 			},
 			(e) => {
 				if (!stale) timelineError = e;
+			}
+		);
+		return () => (stale = true);
+	});
+
+	$effect(() => {
+		if (!view) return;
+		const { system, from, to, page: pageNumber } = view;
+		void gamesReload;
+		let stale = false;
+		gamesError = null;
+		games = null;
+		const params = new URLSearchParams({
+			...(system ? { system } : {}),
+			from: String(from),
+			to: String(to),
+			...(pageNumber > 1 ? { page: String(pageNumber) } : {}),
+			pageSize: String(pageSize)
+		});
+		api.get<Page<GameListItem>>(`/api/timeline/games?${params}`).then(
+			(p) => {
+				if (!stale) games = p;
+			},
+			(e) => {
+				if (!stale) gamesError = e;
 			}
 		);
 		return () => (stale = true);
@@ -186,5 +219,40 @@
 				</button>
 			{/each}
 		</div>
+
+		{#if gamesError}
+			<ErrorAlert error={gamesError} onretry={() => gamesReload++} />
+		{:else if !games}
+			<Loading />
+		{:else if games.total === 0}
+			<EmptyState message="No games in this period." />
+		{:else}
+			<p class="small text-body-secondary mb-2">{gamesLabel(games.total)}</p>
+			<GameResults
+				bind:games={games.items}
+				view="list"
+				action={timeline.igdbConfigured ? viewOnIgdb : undefined}
+			/>
+			<Pagination
+				page={view.page}
+				pages={pageCount(games.total, pageSize)}
+				onpage={(p) => range && go(timelineSearch({ ...view!, page: p }, range))}
+			/>
+		{/if}
 	{/if}
 {/if}
+
+<!-- T6: after the Play button in the actions cell; only when IGDB is configured. -->
+{#snippet viewOnIgdb(game: GameListItem)}
+	<!-- A server redirect to IGDB: resolve() is for app routes. -->
+	<!-- eslint-disable svelte/no-navigation-without-resolve -->
+	<a
+		class="btn btn-sm btn-outline-secondary"
+		href="/api/igdb/games/{game.igdbId}/page"
+		target="_blank"
+		rel="noopener noreferrer"
+		title="View on IGDB"
+		aria-label="View {game.displayTitle} on IGDB"><Icon name="external" /></a
+	>
+	<!-- eslint-enable svelte/no-navigation-without-resolve -->
+{/snippet}

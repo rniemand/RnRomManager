@@ -98,7 +98,11 @@ describe('timeline page (T1, T3–T5)', () => {
 	it('asks for the systems first, then the timeline', async () => {
 		render(TimelinePage);
 		await screen.findByRole('group', { name: 'Release years' });
-		expect(calls).toEqual(['GET /api/systems', 'GET /api/timeline']);
+		expect(calls).toEqual([
+			'GET /api/systems',
+			'GET /api/timeline',
+			'GET /api/timeline/games?from=1990&to=1999&pageSize=50'
+		]);
 	});
 
 	it('a known system filters the counts; an unknown one is ignored', async () => {
@@ -113,7 +117,11 @@ describe('timeline page (T1, T3–T5)', () => {
 		navigateTo('/timeline?system=nope');
 		render(TimelinePage);
 		await screen.findByRole('group', { name: 'Release years' });
-		expect(calls).toEqual(['GET /api/systems', 'GET /api/timeline']);
+		expect(calls).toEqual([
+			'GET /api/systems',
+			'GET /api/timeline',
+			'GET /api/timeline/games?from=1990&to=1999&pageSize=50'
+		]);
 	});
 
 	it('one tick per year of the data range, zero-count years included, with counts and names', async () => {
@@ -249,6 +257,108 @@ describe('timeline page (T1, T3–T5)', () => {
 		).toBeTruthy();
 		expect(screen.queryByRole('group', { name: 'Release years' })).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Zoom in' })).toBeNull();
+	});
+
+	describe('games table (T6)', () => {
+		const item = (id: string, title: string, year: number) => ({
+			id,
+			system: 'gb',
+			systemName: 'Game Boy',
+			systemShortName: 'GB',
+			displayTitle: title,
+			releaseYear: year,
+			regions: ['USA'],
+			romCount: 1,
+			primarySizeBytes: 1024,
+			boxArtUrl: null,
+			rating: null,
+			favourite: false,
+			matchedOn: null,
+			updateCount: 0,
+			dlcCount: 0,
+			saveCount: 0,
+			playRomId: null,
+			playRomFileName: null,
+			playDisc: false,
+			browserCore: null,
+			igdbId: 77
+		});
+		const gamesPage = (items: unknown[], total = items.length, page = 1) => ({
+			items,
+			page,
+			pageSize: 50,
+			total
+		});
+		const all = 'GET /api/timeline/games?from=1990&to=1999&pageSize=50';
+
+		it('requests the shown years and lists the games with a count line', async () => {
+			answers[all] = { status: 200, body: gamesPage([item('g1', 'Orbit Kart', 1990)], 1234) };
+			render(TimelinePage);
+
+			const link = await screen.findByRole('link', { name: 'Orbit Kart' });
+			expect(link.closest('table')).toBeTruthy();
+			const count = screen.getByText('1,234 games');
+			expect(count.className).toBe('small text-body-secondary mb-2');
+			expect(calls).toContain(all);
+		});
+
+		it('sends system and page, and pages through the URL from the current range', async () => {
+			const url = 'GET /api/timeline/games?system=gb&from=1992&to=1996&page=2&pageSize=50';
+			answers['GET /api/timeline?system=gb'] = { status: 200, body: timeline };
+			answers[url] = { status: 200, body: gamesPage([item('g1', 'Orbit Kart', 1992)], 120, 2) };
+			navigateTo('/timeline?system=gb&from=1992&to=1996&page=2');
+			render(TimelinePage);
+
+			await screen.findByRole('link', { name: 'Orbit Kart' });
+			expect(calls).toContain(url);
+			await fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+			expect(pushed()).toEqual(['/timeline?system=gb&from=1992&to=1996&page=3', { reset: false }]);
+		});
+
+		it('one game reads "1 game"', async () => {
+			answers[all] = { status: 200, body: gamesPage([item('g1', 'Orbit Kart', 1990)]) };
+			render(TimelinePage);
+
+			expect(await screen.findByText('1 game')).toBeTruthy();
+		});
+
+		it('View on IGDB follows Play in each row when IGDB is configured', async () => {
+			answers[all] = { status: 200, body: gamesPage([item('g1', 'Orbit Kart', 1990)]) };
+			render(TimelinePage);
+
+			const igdb = await screen.findByRole('link', { name: 'View Orbit Kart on IGDB' });
+			expect(igdb.getAttribute('href')).toBe('/api/igdb/games/77/page');
+			expect(igdb.className).toBe('btn btn-sm btn-outline-secondary');
+			expect(igdb.getAttribute('title')).toBe('View on IGDB');
+			expect([igdb.getAttribute('target'), igdb.getAttribute('rel')]).toEqual([
+				'_blank',
+				'noopener noreferrer'
+			]);
+			expect(igdb.querySelector('.bi-box-arrow-up-right')).not.toBeNull();
+			expect(igdb.closest('td')!.className).toBe('text-end text-nowrap');
+		});
+
+		it('no View on IGDB when IGDB is not configured', async () => {
+			answers['GET /api/timeline'] = { status: 200, body: { ...timeline, igdbConfigured: false } };
+			answers[all] = { status: 200, body: gamesPage([item('g1', 'Orbit Kart', 1990)]) };
+			render(TimelinePage);
+
+			await screen.findByRole('link', { name: 'Orbit Kart' });
+			expect(screen.queryByRole('link', { name: /on IGDB/ })).toBeNull();
+		});
+
+		it('a range with no games keeps the strip and says so', async () => {
+			answers['GET /api/timeline/games?from=1991&to=1991&pageSize=50'] = {
+				status: 200,
+				body: gamesPage([])
+			};
+			navigateTo('/timeline?from=1991&to=1991');
+			render(TimelinePage);
+
+			expect(await screen.findByText('No games in this period.')).toBeTruthy();
+			expect(screen.getByRole('group', { name: 'Release years' })).toBeTruthy();
+			expect(screen.queryByText(/\d games?$/)).toBeNull();
+		});
 	});
 
 	it('a failed timeline shows the error and retries', async () => {

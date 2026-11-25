@@ -614,7 +614,19 @@
 						</tr>
 						<tr>
 							<th scope="row" class="fw-normal text-body-secondary">Year</th>
-							<td class="text-break">{game.releaseYear ?? '—'}</td>
+							<td class="text-break">
+								{#if game.releaseYear !== null && game.igdbId !== null && game.igdbId > 0}
+									<!-- P2: Timeline only shows IGDB-linked games, so only those link there. -->
+									<a
+										href="{resolve('/timeline')}?{new URLSearchParams({
+											from: String(game.releaseYear),
+											to: String(game.releaseYear)
+										})}">{game.releaseYear}</a
+									>
+								{:else}
+									{game.releaseYear ?? '—'}
+								{/if}
+							</td>
 						</tr>
 						<tr>
 							<th scope="row" class="fw-normal text-body-secondary">Developers</th>

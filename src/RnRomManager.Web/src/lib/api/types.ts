@@ -133,6 +133,8 @@ export interface GameListItem {
 	playDisc: boolean;
 	/** The system handler's browser core, null when it has none. */
 	browserCore: string | null;
+	/** Timeline T9: the game's IGDB id; null (or 0) when not linked. */
+	igdbId: number | null;
 }
 
 /** One release of `GET /api/games/{id}` (spec §23, §6.2 Rom fields flattened). */
