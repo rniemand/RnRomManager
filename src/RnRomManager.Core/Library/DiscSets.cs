@@ -7,26 +7,33 @@ namespace RnRomManager.Core.Library;
 public sealed record DiscSet(string Name, IReadOnlyList<RomRow> Discs);
 
 /// <summary>
-/// Multi-disc M1–M2 (Saturn/Sega CD S1; Amiga F1–F2: floppy disk sets): finds a game's disc sets from its releases at
+/// Multi-disc M1–M2 (Saturn/Sega CD S1; Amiga F1–F2 and Plus/4 B11: floppy disk sets): finds a game's disc sets from its releases at
 /// request time; nothing is stored.
 /// </summary>
 public static partial class DiscSets
 {
     /// <summary>
     /// S1: the most discs a set may have, from each pinned core's playlist reader: PCSX ReARMed's <c>disks[8]</c>,
-    /// Yabause's <c>M3U_MAX_FILE</c> (5), Genesis Plus GX's <c>MAX_DISKS</c> (4) and (Amiga F1) PUAE's
-    /// <c>DC_MAX_SIZE</c> (20); 0 (no sets) for any other system.
+    /// Yabause's <c>M3U_MAX_FILE</c> (5), Genesis Plus GX's <c>MAX_DISKS</c> (4), (Amiga F1) PUAE's
+    /// <c>DC_MAX_SIZE</c> (20) and (Plus/4 B11) vice-libretro's <c>DC_MAX_SIZE</c> (20); 0 (no sets) for any other system.
     /// </summary>
     public static int MaxDiscs(string systemId) => systemId switch
     {
         "psx" => 8,
         "saturn" => 5,
         "segacd" => 4,
-        AmigaSystemId => 20,
+        "amiga" => 20,
+        "plus4" => 20,
         _ => 0,
     };
 
-    private const string AmigaSystemId = "amiga";
+    /// <summary>Plus/4 B11: the extension of a floppy-set system's disks (<c>.adf</c> on Amiga, <c>.d64</c> on Plus/4); null for any other system.</summary>
+    public static string? FloppyExtension(string systemId) => systemId switch
+    {
+        "amiga" => ".adf",
+        "plus4" => ".d64",
+        _ => null,
+    };
 
     [GeneratedRegex(@"\(Disk ([0-9]+) of ([0-9]+)\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex DiskToken();
@@ -70,8 +77,8 @@ public static partial class DiscSets
     /// <summary>M1: the sets among <paramref name="roms"/> (one game's releases), each ordered by disc; <paramref name="files"/> gives a cue set's cue (ordinal 0) for M2.</summary>
     public static IReadOnlyList<DiscSet> Find(string systemId, IReadOnlyList<RomRow> roms, ILookup<long, RomFileRow> files)
     {
-        if (systemId == AmigaSystemId)
-            return FindDisks(roms);
+        if (FloppyExtension(systemId) is { } extension)
+            return FindDisks(systemId, extension, roms);
         var sets = new List<DiscSet>();
         var maxDiscs = MaxDiscs(systemId);
         var candidates = roms.Where(r => r.Flags.Count(f => DiscFlag().IsMatch(f)) == 1);
@@ -98,24 +105,28 @@ public static partial class DiscSets
     }
 
     /// <summary>
-    /// Amiga F1–F2: releases with a disk token group by their total and their file name without the token and every
-    /// <c>[…]</c> group; a group is a set when it holds exactly one <c>.adf</c> per disk <c>1..m</c>, 2 ≤ m ≤ 20.
+    /// Amiga F1–F2, Plus/4 B11: releases with a disk token group by their total and (Amiga only) their file name without
+    /// the token and every <c>[…]</c> group; Plus/4 groups by the total alone, since Review renames its disks. A group is a
+    /// set when it holds exactly one <paramref name="extension"/> disk per disk <c>1..m</c>, 2 ≤ m ≤ <see cref="MaxDiscs"/>
+    /// (20: PUAE's and vice-libretro's <c>DC_MAX_SIZE</c>).
     /// </summary>
-    private static List<DiscSet> FindDisks(IReadOnlyList<RomRow> roms)
+    private static List<DiscSet> FindDisks(string systemId, string extension, IReadOnlyList<RomRow> roms)
     {
         var sets = new List<DiscSet>();
+        var keyByName = systemId == "amiga";
         var candidates = roms.Select(r => (Rom: r, Disk: DiskOf(r.FileName))).Where(c => c.Disk is not null)
             .Select(c => (c.Rom, Disk: c.Disk!.Value));
-        foreach (var group in candidates.GroupBy(c => (c.Disk.Total, Key: BracketGroup().Replace(WithoutToken(c.Rom.FileName, c.Disk.Token), ""))))
+        foreach (var group in candidates.GroupBy(c => (c.Disk.Total,
+            Key: keyByName ? BracketGroup().Replace(WithoutToken(c.Rom.FileName, c.Disk.Token), "") : "")))
         {
             var total = group.Key.Total;
             var disks = group.OrderBy(c => c.Disk.Number).ToList();
-            if (total < 2 || total > MaxDiscs(AmigaSystemId) || disks.Count != total
+            if (total < 2 || total > MaxDiscs(systemId) || disks.Count != total
                 || !disks.Select(c => c.Disk.Number).SequenceEqual(Enumerable.Range(1, total))
-                || !disks.All(c => c.Rom.FileName.EndsWith(".adf", StringComparison.OrdinalIgnoreCase)))
+                || !disks.All(c => c.Rom.FileName.EndsWith(extension, StringComparison.OrdinalIgnoreCase)))
                 continue;
             var one = disks[0];
-            sets.Add(new DiscSet(Path.GetFileNameWithoutExtension(WithoutToken(one.Rom.FileName, one.Disk.Token)) + ".m3u",
+            sets.Add(new DiscSet(Path.GetFileNameWithoutExtension(WithoutToken(one.Rom.FileName, one.Disk.Token)).TrimEnd() + ".m3u",
                 disks.Select(c => c.Rom).ToList()));
         }
         return sets;

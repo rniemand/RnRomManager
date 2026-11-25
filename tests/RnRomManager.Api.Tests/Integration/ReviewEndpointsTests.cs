@@ -251,6 +251,67 @@ public class ReviewEndpointsTests
         Assert.That(game.Roms.Single(r => r.IsPrimary).Identification.Method, Is.EqualTo(IdentificationMethod.Dat));
     }
 
+    // Plus/4 B11: the supported Review paths that keep each disk's (Disk n of m) token, so the game gets All disks.
+
+    private async Task<ReviewItem> QueuePlus4Disk(string fileName, int seed)
+    {
+        var bytes = new byte[174_848];
+        new Random(seed).NextBytes(bytes);
+        var path = Path.Combine(_factory.Root, "ingest", "plus4", fileName);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllBytes(path, bytes);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddMinutes(-5));
+        var queued = await Ingest(new IngestFile("plus4", path, fileName, bytes.Length, File.GetLastWriteTimeUtc(path)));
+        Assert.That(queued!.Outcome, Is.EqualTo(IngestOutcome.Review), queued.Details);
+        return (await Reviews.GetBySha1Async(Convert.ToHexStringLower(SHA1.HashData(bytes)), default))!;
+    }
+
+    private static object ManualDisk(int n) => new
+    {
+        action = "Manual", title = "Pixel Quest", regions = Array.Empty<string>(), languages = Array.Empty<string>(), flags = new[] { $"Disk {n} of 2" },
+    };
+
+    private async Task AssertPixelQuestSet(Guid gameId, string diskOne, string diskTwo)
+    {
+        using var response = await _admin.GetAsync($"/api/games/{gameId}");
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+        using var detail = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var roms = detail.RootElement.GetProperty("roms").EnumerateArray().ToList();
+        JsonElement Rom(string fileName) => roms.Single(r => r.GetProperty("fileName").GetString() == fileName);
+        var set = Rom(diskOne).GetProperty("discSet");
+        Assert.That(set.GetProperty("name").GetString(), Is.EqualTo("Pixel Quest.m3u"));
+        Assert.That(set.GetProperty("romIds").EnumerateArray().Select(e => e.GetInt64()),
+            Is.EqualTo(new[] { Rom(diskOne).GetProperty("id").GetInt64(), Rom(diskTwo).GetProperty("id").GetInt64() }));
+    }
+
+    [Test]
+    public async Task Plus4_ManualDiskOne_ThenAttachReleaseDiskTwo_MakeASet()
+    {
+        var one = await QueuePlus4Disk("Pixel Quest (1986)(Synth)(Disk 1 of 2).d64", 960);
+        var two = await QueuePlus4Disk("Pixel Quest (1986)(Synth)(Disk 2 of 2).d64", 961);
+
+        var manual = await _admin.ResolveAsync(one.Id, ManualDisk(1));
+        Assert.That(manual.Code, Is.Null);
+        var attach = await _admin.ResolveAsync(two.Id, new { action = "Attach", targetGameId = manual.GameId!.Value, flag = "Release" });
+        Assert.That(attach.Code, Is.Null);
+
+        await AssertPixelQuestSet(manual.GameId!.Value, "Pixel Quest (Disk 1 of 2).d64", "Pixel Quest (1986)(Synth)(Disk 2 of 2) (Unverified).d64");
+    }
+
+    [Test]
+    public async Task Plus4_ManualOnBothDisks_JoinsOneGame_AndMakesASet()
+    {
+        var one = await QueuePlus4Disk("Pixel Quest (1986)(Synth)(Disk 1 of 2).d64", 962);
+        var two = await QueuePlus4Disk("Pixel Quest (1986)(Synth)(Disk 2 of 2).d64", 963);
+
+        var first = await _admin.ResolveAsync(one.Id, ManualDisk(1));
+        var second = await _admin.ResolveAsync(two.Id, ManualDisk(2));
+
+        Assert.That((first.Code, second.Code), Is.EqualTo(((string?)null, (string?)null)));
+        Assert.That(second.GameId, Is.EqualTo(first.GameId), "one game");
+        await AssertPixelQuestSet(first.GameId!.Value, "Pixel Quest (Disk 1 of 2).d64", "Pixel Quest (Disk 2 of 2).d64");
+    }
+
     [Test]
     public async Task Attach_ToALegacyGame_IsStorageMigrationPending_AndStaysPending()
     {

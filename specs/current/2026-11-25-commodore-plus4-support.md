@@ -176,7 +176,7 @@ API contracts change only additively: `plus4` appears in `/api/systems` and `/ap
   - `SupportedSystemsTableTests.ReadmeTable_MatchesTheRegisteredHandlers` and `SystemEmulatorsCatalogTests.Catalog_MatchesTheRegisteredHandlers_AndFollowsTheRules` pass.
 
   Done when: those classes pass (integration ones with Docker), and `dotnet build` is warning-free.
-- [ ] **3. Disk sets (Core + API)**: B11, B12. Files: `DiscSets.cs`, `PlayDisc.cs`, `LibraryEndpoints.cs` (comment). Tests:
+- [x] **3. Disk sets (Core + API)**: B11, B12. Files: `DiscSets.cs`, `PlayDisc.cs`, `LibraryEndpoints.cs` (comment). Tests:
   - `tests/RnRomManager.Core.Tests/Library/DiscSetsTests.cs`:
     - `[TestCase("plus4", 20)]` in `MaxDiscs_IsPerSystem`;
     - `FloppyExtension_IsPerSystem` (new): `amiga` → `.adf`, `plus4` → `.d64`, `psx` and `c64` → null;
