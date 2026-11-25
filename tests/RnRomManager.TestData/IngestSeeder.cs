@@ -43,12 +43,13 @@ public static class IngestSeeder
     public const string AmigaDat = "Commodore - Amiga";
     public const string ThreeDsDat = "Nintendo - Nintendo 3DS";
     public const string TurboGrafxCdDat = "NEC - PC Engine CD - TurboGrafx-CD";
+    public const string PcfxDat = "NEC - PC-FX";
     public const string NeoGeoPocketDat = "SNK - Neo Geo Pocket";
     public const string NeoGeoPocketColorDat = "SNK - Neo Geo Pocket Color";
 
-    /// <summary>The nine disc systems' DATs (disc systems B1/B2): each in <c>redump/</c>, with no metadat; and Commodore PET's and Amiga's in <c>tosec/</c>.</summary>
+    /// <summary>The ten disc systems' DATs (disc systems B1/B2): each in <c>redump/</c>, with no metadat; and Commodore PET's and Amiga's in <c>tosec/</c>.</summary>
     public static IReadOnlyDictionary<string, FixtureDatLayout> RedumpLayouts { get; } =
-        new[] { PsxDat, PspDat, GameCubeDat, WiiDat, Xbox360Dat, SaturnDat, SegaCdDat, ThreeDoDat, TurboGrafxCdDat }.ToDictionary(n => n, _ => FixtureDatLayout.Redump)
+        new[] { PsxDat, PspDat, GameCubeDat, WiiDat, Xbox360Dat, SaturnDat, SegaCdDat, ThreeDoDat, TurboGrafxCdDat, PcfxDat }.ToDictionary(n => n, _ => FixtureDatLayout.Redump)
             .Append(new(PetDat, FixtureDatLayout.Tosec)).Append(new(AmigaDat, FixtureDatLayout.Tosec)).ToDictionary();
 
     /// <summary>An empty titledb compact file for Switch: enough for the DAT preflight of a fixture cache.</summary>

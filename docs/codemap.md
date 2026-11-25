@@ -257,6 +257,7 @@ Route — file under `src/RnRomManager.Web/src/routes/`.
 - GameBoyAdvanceHandler — src/RnRomManager.Systems.GameBoy/GameBoyAdvanceHandler.cs
 - GameBoyHandlerBase — src/RnRomManager.Systems.GameBoy/GameBoyHandlerBase.cs
 - Xbox360Handler `x360` — src/RnRomManager.Systems.Microsoft/Xbox360Handler.cs
+- PcfxHandler `pcfx` — src/RnRomManager.Systems.Nec/PcfxHandler.cs
 - TurboGrafx16Handler `tg16` — src/RnRomManager.Systems.Nec/TurboGrafx16Handler.cs
 - TurboGrafxCdHandler `tgcd` — src/RnRomManager.Systems.Nec/TurboGrafxCdHandler.cs
 - NeoGeoPocketHandlerBase — src/RnRomManager.Systems.NeoGeoPocket/NeoGeoPocketHandlerBase.cs
@@ -340,7 +341,7 @@ File names without extension. System projects (`src/RnRomManager.Systems.*`) are
 - `RnRomManager.Systems.Dos.Tests`: DosHandlerTests
 - `RnRomManager.Systems.GameBoy.Tests`: GameBoyAdvanceHeaderReaderTests, GameBoyHandlerTests, GameBoyHeaderReaderTests, SyntheticGbaRomBuilderTests, SyntheticRomBuilderTests
 - `RnRomManager.Systems.Microsoft.Tests`: Xbox360HandlerTests
-- `RnRomManager.Systems.Nec.Tests`: TurboGrafx16HandlerTests, TurboGrafxCdHandlerTests
+- `RnRomManager.Systems.Nec.Tests`: PcfxHandlerTests, TurboGrafx16HandlerTests, TurboGrafxCdHandlerTests
 - `RnRomManager.Systems.NeoGeoPocket.Tests`: NeoGeoPocketHandlerTests, NeoGeoPocketHeaderReaderTests
 - `RnRomManager.Systems.Nes.Tests`: FdsHandlerTests, NesHandlerTests, NesHeaderReaderTests, SyntheticNesRomBuilderTests
 - `RnRomManager.Systems.Nintendo64.Tests`: Nintendo64ByteOrderTests, Nintendo64HandlerTests, Nintendo64HeaderReaderTests, SyntheticN64RomBuilderTests

@@ -99,7 +99,7 @@ No migration (`system_id` is a `VARCHAR`). No new config key. API: additive (`/a
 ## Steps
 Steps 2, 3, 4 and 6 run integration tests (category `Integration`), which need Docker. Playwright (`mvp.spec.ts`) runs only in Finish and needs no change.
 
-- [ ] **1. PC-FX handler** (X1): `PcfxHandler` with `BrowserCore` null and its box art. `IngestSeeder.PcfxDat` added to `RedumpLayouts`; the seeder doesn't write it yet. Not registered.
+- [x] **1. PC-FX handler** (X1): `PcfxHandler` with `BrowserCore` null and its box art. `IngestSeeder.PcfxDat` added to `RedumpLayouts`; the seeder doesn't write it yet. Not registered.
   - Files: `PcfxHandler.cs`, `Resources/boxart/pcfx.svg`, `pcfx.png`, `Resources/boxart/README.md`, `tests/RnRomManager.Systems.Nec.Tests/PcfxHandlerTests.cs` (new), `IngestSeeder.cs`.
   - Tests: `PcfxHandlerTests` (new), copying `TurboGrafxCdHandlerTests`: every X1 value, `ReadHeader` null for any bytes, `NormalizeForHashing` unchanged, PNG valid and 512×512 and different from `tgcd.png`; with a registry holding only this handler, `DatCache` loads a Redump fixture catalog with one synthetic cue/bin game and finds its `.bin` by SHA-1, and loads an empty catalog.
   - Done when: `dotnet test tests/RnRomManager.Systems.Nec.Tests` passes (both `PcfxHandlerTests` and `TurboGrafxCdHandlerTests`) and the solution builds with warnings as errors.
