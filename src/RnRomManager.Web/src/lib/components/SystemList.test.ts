@@ -58,6 +58,8 @@ describe('SystemList (Systems tab B3)', () => {
 		const selected = screen.getByRole('link', { name: 'Game Boy' });
 
 		expect(selected.closest('tr')!.classList).toContain('table-primary');
+		expect(selected.classList).toContain('text-reset');
+		expect(screen.getByRole('link', { name: 'Atari 2600' }).classList).not.toContain('text-reset');
 		expect(selected.getAttribute('aria-current')).toBe('true');
 		expect(screen.getByRole('link', { name: /Atari/ }).getAttribute('aria-current')).toBeNull();
 	});

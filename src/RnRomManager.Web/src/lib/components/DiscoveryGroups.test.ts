@@ -321,8 +321,11 @@ describe('DiscoveryGroups (discovery B2)', () => {
 		expect(name.className).toBe('text-truncate');
 		expect(name.parentElement!.classList).toContain('min-w-0');
 		expect(nintendo.closest('tr')!.classList).toContain('table-primary');
+		// Contrast: the selected link takes the row's text colour, not link blue.
+		expect(nintendo.classList).toContain('text-reset');
 		const capcom = table('Publishers').getByRole('link', { name: /Capcom/ });
 		expect(capcom.closest('tr')!.classList).not.toContain('table-primary');
+		expect(capcom.classList).not.toContain('text-reset');
 	});
 
 	describe('sorting (G4) and Clear (G7)', () => {

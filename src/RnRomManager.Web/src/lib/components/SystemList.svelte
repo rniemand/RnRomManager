@@ -145,6 +145,7 @@
 						<td class="w-100 text-truncate" style="max-width: 0">
 							<a
 								class="text-decoration-none d-flex align-items-center gap-2 min-w-0"
+								class:text-reset={system.id === selected}
 								aria-current={system.id === selected ? 'true' : undefined}
 								href="{resolve('/collections')}{systemsSearch({
 									system: system.id,
